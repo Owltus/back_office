@@ -20,6 +20,7 @@ import {
 } from 'date-fns'
 import { fr } from 'date-fns/locale'
 
+import { EmptyCanvas } from '#/components/shared/EmptyCanvas.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { Calendar } from '#/components/ui/calendar.tsx'
 import {
@@ -50,23 +51,26 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '#/components/ui/tooltip.tsx'
-import { cn } from '#/lib/utils.ts'
+import { clamp, cn } from '#/lib/utils.ts'
+import {
+  FIRST_STAFF_SPOT,
+  SLOTS_PER_DAY,
+  SPOTS,
+  SPOTS_LIST,
+  arrivalSlot,
+  hasOverlap,
+} from '#/lib/parking/model.ts'
+import type { Mode, Reservation, Status } from '#/lib/parking/model.ts'
+import { INITIAL } from '#/lib/parking/mock.ts'
 
 /* --------------------------------------------------------------------------
  * Planning parking — v1 (données locales de test, sans Supabase)
- *
- * Modèle "hôtel" : arrivée à 14h (après-midi), départ à 12h (matin).
- * Chaque jour est coupé en 2 demi-journées (SLOTS_PER_DAY).
  *
  * `startDay` d'une réservation = décalage ABSOLU en jours par rapport au
  * lundi de référence (peut être négatif = passé). La fenêtre affichée pane
  * via `offset` (flèches / clavier) → navigation illimitée passé/futur.
  * ------------------------------------------------------------------------ */
 
-const SPOTS = 14
-const FIRST_STAFF_SPOT = 13 // places 13 & 14 = "personnel"
-const SPOTS_LIST = Array.from({ length: SPOTS }, (_, i) => i + 1)
-const SLOTS_PER_DAY = 2 // chaque jour = 2 demi-journées (matin / après-midi)
 const MIN_DAY_W = 140 // largeur minimale d'un jour (les colonnes remplissent la largeur)
 const ROW_H = 44
 const HEADER_H = 52
@@ -74,20 +78,6 @@ const LABEL_W = 56
 const STEP = 3 // pas de navigation (jours)
 const BAR_PAD_X = 2 // marge horizontale d'une barre (px)
 const BAR_PAD_Y = 4 // marge verticale d'une barre (px)
-
-type Status = 'confirme' | 'attente' | 'annule'
-
-interface Reservation {
-  id: string
-  client: string
-  spot: number // 1..14
-  startDay: number // décalage absolu (jours) depuis le lundi de référence
-  nights: number // >= 1
-  status: Status
-  comment: string
-}
-
-type Mode = 'move' | 'resize-left' | 'resize-right'
 
 const STATUS: Record<Status, { label: string; bar: string; dot: string }> = {
   confirme: {
@@ -108,14 +98,6 @@ const STATUS: Record<Status, { label: string; bar: string; dot: string }> = {
 }
 const STATUS_ORDER: Status[] = ['confirme', 'attente', 'annule']
 
-const clamp = (v: number, min: number, max: number) =>
-  Math.min(max, Math.max(min, v))
-
-// Modèle demi-journées : arrivée = après-midi (slot impair), départ = matin (slot pair).
-const arrivalSlot = (startDay: number) => startDay * SLOTS_PER_DAY + 1
-const departureSlot = (startDay: number, nights: number) =>
-  (startDay + nights) * SLOTS_PER_DAY
-
 const fmtWeekday = new Intl.DateTimeFormat('fr-FR', { weekday: 'short' })
 const fmtDay = new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'short' })
 const fmtDayYear = new Intl.DateTimeFormat('fr-FR', {
@@ -123,14 +105,6 @@ const fmtDayYear = new Intl.DateTimeFormat('fr-FR', {
   month: 'short',
   year: 'numeric',
 })
-
-const INITIAL: Reservation[] = [
-  { id: 'r1', client: 'Dupont', spot: 1, startDay: 0, nights: 2, status: 'confirme', comment: 'Arrivée tardive prévue, vers 20h.' },
-  { id: 'r2', client: 'Martin', spot: 3, startDay: 1, nights: 1, status: 'attente', comment: '' },
-  { id: 'r3', client: 'Bernard', spot: 5, startDay: 2, nights: 3, status: 'confirme', comment: '' },
-  { id: 'r4', client: 'Leroy', spot: 8, startDay: 4, nights: 2, status: 'attente', comment: '' },
-  { id: 'r5', client: 'Durand', spot: 13, startDay: 0, nights: 1, status: 'annule', comment: '' },
-]
 
 export function ParkingBoard() {
   const [startDate, setStartDate] = useState<Date | null>(null)
@@ -223,27 +197,8 @@ export function ParkingBoard() {
     return bands
   }, [days])
 
-  // Chevauchement : arrivée = après-midi, départ = matin (mêmes demi-journées).
-  function hasOverlap(
-    spot: number,
-    startDay: number,
-    nights: number,
-    ignoreId?: string,
-    list: Reservation[] = reservations,
-  ) {
-    const start = arrivalSlot(startDay)
-    const end = departureSlot(startDay, nights)
-    return list.some(
-      (r) =>
-        r.id !== ignoreId &&
-        r.spot === spot &&
-        arrivalSlot(r.startDay) <= end &&
-        start <= departureSlot(r.startDay, r.nights),
-    )
-  }
-
   function addReservation(startDay: number, spot: number) {
-    if (hasOverlap(spot, startDay, 1)) return // emplacement déjà occupé
+    if (hasOverlap(reservations, spot, startDay, 1)) return // emplacement déjà occupé
     const id = `res-${(idRef.current += 1)}`
     setReservations((prev) => [
       ...prev,
@@ -308,7 +263,7 @@ export function ParkingBoard() {
       }
       setReservations((prev) => {
         // Geste refusé si la position visée chevauche une autre réservation.
-        if (hasOverlap(spot, startDay, nights, res.id, prev)) return prev
+        if (hasOverlap(prev, spot, startDay, nights, res.id)) return prev
         return prev.map((r) =>
           r.id === res.id ? { ...r, spot, startDay, nights } : r,
         )
@@ -353,9 +308,9 @@ export function ParkingBoard() {
 
   if (!startDate) {
     return (
-      <div className="flex min-h-[300px] flex-1 items-center justify-center rounded-2xl border-2 border-dashed border-border text-sm text-muted-foreground">
+      <EmptyCanvas className="min-h-[300px] text-sm text-muted-foreground">
         Chargement du planning…
-      </div>
+      </EmptyCanvas>
     )
   }
 

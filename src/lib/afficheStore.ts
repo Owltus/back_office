@@ -1,6 +1,6 @@
 import { Store } from '@tanstack/store'
 
-import type { ColorKey } from '#/lib/poster/config.ts'
+import type { PosterContent } from '#/lib/poster/types.ts'
 import { getTemplate, getTemplatesList } from '#/lib/poster/templates.ts'
 
 /* Store module-level : l'état de saisie de l'affiche survit à la navigation
@@ -8,28 +8,11 @@ import { getTemplate, getTemplatesList } from '#/lib/poster/templates.ts'
  * En mémoire uniquement — réinitialisé à un rechargement complet de la page.
  * Calqué sur src/lib/pdjStore.ts : singleton Store + actions exportées. */
 
-/** État complet et sérialisable de l'affiche en cours de saisie. */
-export interface AfficheState {
-  // Contenu textuel
-  titleFr: string
-  messageFr: string
-  titleEn: string
-  messageEn: string
-  // Apparence
-  selectedIcon: string
-  colorKey: ColorKey
+/** État complet et sérialisable de l'affiche en cours de saisie :
+ * le contenu canonique (PosterContent) + les champs propres au store. */
+export interface AfficheState extends PosterContent {
+  /** Clé du template sélectionné ('' dès que le contenu a divergé du modèle). */
   selectedTemplate: string
-  // Dates / horaires (formats natifs des inputs)
-  dateStart: string // 'YYYY-MM-DD'
-  dateEnd: string // 'YYYY-MM-DD'
-  timeStart: string // 'HH:MM'
-  timeEnd: string // 'HH:MM'
-  // Tailles
-  isAutoSizeMode: boolean
-  fontSizeIcon: number
-  fontSizeTitle: number
-  fontSizeMessage: number
-  fontSizeInfo: number
 }
 
 // L'app ne démarre jamais vide : état initial = contenu du PREMIER template

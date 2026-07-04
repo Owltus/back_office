@@ -8,176 +8,38 @@ import {
   Coffee,
   Croissant,
   FileUp,
-  Printer,
   RotateCcw,
   Star,
   Users,
 } from 'lucide-react'
 
+import { EmptyCanvas } from '#/components/shared/EmptyCanvas.tsx'
+import { PageHeader } from '#/components/shared/PageHeader.tsx'
+import { PrintButton } from '#/components/shared/PrintButton.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { cn } from '#/lib/utils.ts'
+import { printWithTitle } from '#/lib/print.ts'
 import {
   pdjStore,
   resetPdjData,
   setPdjData,
 } from '#/lib/pdjStore.ts'
-import type { Guest, GuestMap } from '#/lib/pdjStore.ts'
+import {
+  ALL_ROOMS,
+  dateFromFilename,
+  processCsv,
+} from '#/lib/pdj/csv.ts'
+import type { Guest } from '#/lib/pdj/csv.ts'
 
 /* --------------------------------------------------------------------------
  * Petit-déjeuner (PDJ) — portage de l'app "Breakfast Tracker".
  *
- * À partir d'un export CSV du PMS, on génère la vue du petit-déjeuner :
+ * À partir d'un export CSV du PMS (métier dans #/lib/pdj/csv.ts), on génère
+ * la vue du petit-déjeuner :
  *   - écran : thème sombre de l'app (cartes stats + tableaux par étage) ;
  *   - impression : document blanc A4 portrait, fidèle à l'app d'origine
  *     (grille 3×2, cases à cocher, lignes vertes PDJ, footer stats fixe).
- *
- * Règles métier reprises telles quelles :
- *   - on ne garde que les clients « IN HOUSE » / « DUE OUT » (présents au PDJ) ;
- *   - PDJ inclus ⟺ la colonne `Addons` contient « PDJ » (insensible à la casse) ;
- *   - nb de PDJ inclus = 1 si tarif « BB1PAX », sinon adultes + enfants.
  * ------------------------------------------------------------------------ */
-
-const range = (start: number, end: number) =>
-  Array.from({ length: end - start + 1 }, (_, i) => start + i)
-
-// 80 chambres réparties sur 6 étages (les chambres vides restent affichées).
-const ALL_ROOMS = [
-  ...range(102, 114),
-  ...range(201, 214),
-  ...range(301, 314),
-  ...range(401, 414),
-  ...range(501, 514),
-  ...range(621, 631),
-]
-
-const REQUIRED_COLUMNS = [
-  'Room',
-  'Status',
-  'Guest Name',
-  'VIP',
-  'Adults',
-  'Children',
-  'Addons',
-  'Rate',
-] as const
-
-// Découpe une ligne CSV en gérant les guillemets et guillemets échappés ("").
-function parseCsvLine(line: string, separator: string): string[] {
-  const result: string[] = []
-  let current = ''
-  let inQuotes = false
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i]
-    if (char === '"') {
-      if (inQuotes && line[i + 1] === '"') {
-        current += '"'
-        i++
-      } else {
-        inQuotes = !inQuotes
-      }
-    } else if (char === separator && !inQuotes) {
-      result.push(current)
-      current = ''
-    } else {
-      current += char
-    }
-  }
-  result.push(current)
-  return result
-}
-
-// Date extraite du nom de fichier « In-House Guests _YYYYMMDD…csv » (sinon null).
-function dateFromFilename(filename: string): Date | null {
-  const match = filename.match(/_(\d{8})/)
-  if (!match) return null
-  const s = match[1]
-  return new Date(
-    Number(s.slice(0, 4)),
-    Number(s.slice(4, 6)) - 1,
-    Number(s.slice(6, 8)),
-  )
-}
-
-function processCsv(content: string): GuestMap {
-  const separator = content.split('\n')[0].includes(';') ? ';' : ','
-  const lines = content.split('\n').filter((l) => l.trim())
-  const headers = parseCsvLine(lines[0], separator)
-
-  const col = Object.fromEntries(
-    [
-      ['room', 'Room'],
-      ['status', 'Status'],
-      ['guestName', 'Guest Name'],
-      ['vip', 'VIP'],
-      ['adults', 'Adults'],
-      ['children', 'Children'],
-      ['addons', 'Addons'],
-      ['rate', 'Rate'],
-      ['stayCount', 'Stay Count'], // optionnelle
-    ].map(([key, header]) => [key, headers.indexOf(header)]),
-  ) as Record<string, number>
-
-  const missing = REQUIRED_COLUMNS.filter((c) => headers.indexOf(c) === -1)
-  if (missing.length > 0) {
-    throw new Error(
-      `Le fichier CSV ne contient pas toutes les colonnes requises : ${missing.join(', ')}.`,
-    )
-  }
-
-  // Deux passes : on détecte d'abord la présence de clients actifs.
-  // Fichier « du jour » → on ne garde que IN HOUSE / DUE OUT.
-  // Fichier archive → on garde toute ligne ayant un statut.
-  const rows = lines
-    .slice(1)
-    .map((l) => parseCsvLine(l.trim(), separator))
-    .filter((v) => {
-      const room = v[col.room]?.trim()
-      return room && !isNaN(Number(room)) // un n° de chambre est toujours numérique
-    })
-
-  const hasActiveGuests = rows.some((v) => {
-    const status = v[col.status]?.trim()
-    return status && (status.includes('IN HOUSE') || status.includes('DUE OUT'))
-  })
-
-  const guests: GuestMap = {}
-  for (const v of rows) {
-    const status = v[col.status]?.trim()
-    if (hasActiveGuests) {
-      if (!status || (!status.includes('IN HOUSE') && !status.includes('DUE OUT'))) {
-        continue
-      }
-    } else if (!status) {
-      continue
-    }
-
-    const addons = v[col.addons] ?? ''
-    const rate = v[col.rate] ?? ''
-    const hasPDJ = addons.toUpperCase().includes('PDJ')
-    const numAdults = parseInt(v[col.adults]) || 0
-    const numChildren = parseInt(v[col.children]) || 0
-    const numGuests = numAdults + numChildren
-
-    let breakfastsIncluded = 0
-    if (hasPDJ) {
-      // BB1PAX = 1 seul PDJ ; sinon 1 PDJ par client.
-      breakfastsIncluded = rate.toUpperCase().includes('BB1PAX') ? 1 : numGuests
-    }
-
-    const room = Number(v[col.room].trim())
-    guests[room] = {
-      room,
-      status: status ?? '',
-      guestName: v[col.guestName]?.replace(/"/g, '').trim() || 'Non renseigné',
-      vip: Boolean(v[col.vip]?.trim()),
-      guests: numGuests,
-      breakfastsIncluded,
-      stayCount: col.stayCount !== -1 ? parseInt(v[col.stayCount]) || 0 : 0,
-    }
-  }
-
-  return guests
-}
 
 const fmtDate = new Intl.DateTimeFormat('fr-FR', {
   day: '2-digit',
@@ -284,12 +146,7 @@ export function BreakfastBoard() {
     const d = displayDate
     const dd = String(d.getDate()).padStart(2, '0')
     const mm = String(d.getMonth() + 1).padStart(2, '0')
-    const previousTitle = document.title
-    document.title = `Breakfast_${dd}-${mm}-${d.getFullYear()}`
-    window.print()
-    setTimeout(() => {
-      document.title = previousTitle
-    }, 100)
+    printWithTitle(`Breakfast_${dd}-${mm}-${d.getFullYear()}`)
   }
 
   const dateLabel = fmtDate.format(displayDate)
@@ -306,7 +163,7 @@ export function BreakfastBoard() {
       {!guests ? (
         <>
           {error && <div className="pdj-error print:hidden">{error}</div>}
-          <div
+          <EmptyCanvas
             role="button"
             tabIndex={0}
             onClick={() => inputRef.current?.click()}
@@ -320,7 +177,7 @@ export function BreakfastBoard() {
             onDragLeave={() => setDragging(false)}
             onDrop={onDrop}
             className={cn(
-              'empty-canvas flex min-h-[340px] flex-1 cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border p-10 text-center outline-none transition-colors',
+              'empty-canvas min-h-[340px] cursor-pointer flex-col gap-3 p-10 text-center outline-none transition-colors',
               'hover:border-primary/60 hover:bg-secondary/30 focus-visible:ring-2 focus-visible:ring-ring',
               dragging && 'border-primary bg-secondary/40',
             )}
@@ -341,39 +198,36 @@ export function BreakfastBoard() {
               className="hidden"
               onChange={onInputChange}
             />
-          </div>
+          </EmptyCanvas>
         </>
       ) : (
         <>
           {/* Barre titre + actions (écran uniquement) : tout sur une seule ligne,
               boutons en icône seule pour rester compact en responsive. */}
-          <div className="flex items-center gap-3 print:hidden">
-            <div className="min-w-0 flex-1">
-              <h1 className="text-xl font-semibold">Petit-déjeuner</h1>
-              <p className="truncate text-sm text-muted-foreground">
+          <PageHeader
+            title="Petit-déjeuner"
+            meta={
+              <>
                 {dateLabel} · {fileName}
-              </p>
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <Button
-                variant="outline"
-                onClick={reset}
-                aria-label="Charger un autre fichier"
-                title="Charger un autre fichier"
-              >
-                <RotateCcw />
-                <span className="hidden lg:inline">Charger un autre fichier</span>
-              </Button>
-              <Button
-                onClick={handlePrint}
-                aria-label="Imprimer / PDF"
-                title="Imprimer / PDF"
-              >
-                <Printer />
-                <span className="hidden lg:inline">Imprimer / PDF</span>
-              </Button>
-            </div>
-          </div>
+              </>
+            }
+            actions={
+              <>
+                <Button
+                  variant="outline"
+                  onClick={reset}
+                  aria-label="Charger un autre fichier"
+                  title="Charger un autre fichier"
+                >
+                  <RotateCcw />
+                  <span className="hidden lg:inline">
+                    Charger un autre fichier
+                  </span>
+                </Button>
+                <PrintButton onClick={handlePrint} responsiveLabel />
+              </>
+            }
+          />
 
           {/* Statistiques (footer fixe en impression) */}
           <div className="pdj-stats">

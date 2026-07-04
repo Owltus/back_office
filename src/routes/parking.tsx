@@ -1,13 +1,17 @@
 import { createFileRoute } from '@tanstack/react-router'
 
 import { ParkingBoard } from '#/components/parking/ParkingBoard.tsx'
+import { PageContainer } from '#/components/shared/PageContainer.tsx'
 
-export const Route = createFileRoute('/parking')({ component: ParkingPage })
+export const Route = createFileRoute('/parking')({
+  component: ParkingPage,
+  head: () => ({ meta: [{ title: 'Parking — Back Office' }] }),
+})
 
 function ParkingPage() {
   return (
-    <div className="flex flex-1 flex-col p-4 md:p-6">
+    <PageContainer>
       <ParkingBoard />
-    </div>
+    </PageContainer>
   )
 }

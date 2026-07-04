@@ -1,7 +1,7 @@
 import type { ComponentProps, ReactNode } from 'react'
 import { LogOut, Settings, User } from 'lucide-react'
 
-import { Avatar, AvatarFallback } from '#/components/ui/avatar.tsx'
+import { USER_NAME, UserAvatar } from '#/components/shared/UserAvatar.tsx'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,13 +33,9 @@ export function UserMenu({
       <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
       <DropdownMenuContent align={align} side={side} className="w-56">
         <DropdownMenuLabel className="flex items-center gap-2.5 py-2 font-normal">
-          <Avatar className="size-8">
-            <AvatarFallback className="bg-primary/15 text-xs text-primary">
-              PL
-            </AvatarFallback>
-          </Avatar>
+          <UserAvatar className="size-8" fallbackClassName="text-xs" />
           <div className="grid text-sm leading-tight">
-            <span className="truncate font-medium">Pierre-Louis</span>
+            <span className="truncate font-medium">{USER_NAME}</span>
             <span className="truncate text-xs text-muted-foreground">Compte</span>
           </div>
         </DropdownMenuLabel>

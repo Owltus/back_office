@@ -10,11 +10,11 @@
 
 import { POSTER } from './config.ts'
 
-/** Tailles de police calculées (en px) */
+/** Tailles de police calculées (en px) — nommage aligné sur PosterContent */
 export interface AutoSizes {
-  title: number
-  message: number
-  info: number
+  fontSizeTitle: number
+  fontSizeMessage: number
+  fontSizeInfo: number
 }
 
 /**
@@ -177,9 +177,9 @@ function _findOptimalSizes(
       if (fillRatio > bestFillRatio) {
         bestFillRatio = fillRatio
         bestSizes = {
-          title: titleSize,
-          message: messageSize,
-          info: infoSize,
+          fontSizeTitle: titleSize,
+          fontSizeMessage: messageSize,
+          fontSizeInfo: infoSize,
         }
       }
 
@@ -193,9 +193,9 @@ function _findOptimalSizes(
   // Si aucune taille n'a été trouvée (contenu très long), utiliser les minimums
   if (!bestSizes) {
     bestSizes = {
-      title: titleRange.min,
-      message: messageRange.min,
-      info: infoRange.min,
+      fontSizeTitle: titleRange.min,
+      fontSizeMessage: messageRange.min,
+      fontSizeInfo: infoRange.min,
     }
   }
 

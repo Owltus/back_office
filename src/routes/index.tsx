@@ -1,13 +1,17 @@
 import { createFileRoute } from '@tanstack/react-router'
 
 import { ComingSoon } from '#/components/ComingSoon.tsx'
+import { PageContainer } from '#/components/shared/PageContainer.tsx'
 
-export const Route = createFileRoute('/')({ component: DashboardPage })
+export const Route = createFileRoute('/')({
+  component: DashboardPage,
+  head: () => ({ meta: [{ title: 'Dashboard — Back Office' }] }),
+})
 
 function DashboardPage() {
   return (
-    <div className="flex flex-1 flex-col p-4 md:p-6">
+    <PageContainer>
       <ComingSoon />
-    </div>
+    </PageContainer>
   )
 }

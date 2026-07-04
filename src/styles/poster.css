@@ -1,0 +1,220 @@
+/* ------------------------------------------------------------------ *
+ * Affiche A3 (générateur de poster)                                   *
+ * Portage fidèle du fork (assets/css/poster.css + print.css).         *
+ * Écran : affiche blanche en Poppins, mise à l'échelle dans un         *
+ * passe-partout sombre. Impression : A3 portrait sans marge, échelle   *
+ * réelle 100 %, couleurs/fonds exacts. Les couleurs, les tailles de    *
+ * police (titre/message/info) et l'échelle d'aperçu sont posées en     *
+ * inline par React (Poster.tsx) — on ne les redéfinit pas ici.         *
+ * Tout est scopé sous le préfixe .poster* : rien ne fuit vers les      *
+ * autres pages (PDJ, parking…).                                        *
+ * ------------------------------------------------------------------ */
+
+/* Dimensions physiques A3 (96 DPI) figées en px — ne pas convertir. */
+.poster {
+  width: 1123px;
+  height: 1587px;
+  background: white;
+  font-family: 'Poppins', sans-serif;
+  display: flex;
+  flex-direction: column;
+  padding: 60px 80px;
+  position: relative;
+  flex-shrink: 0;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+  color-adjust: exact;
+}
+
+/* Zone icône (en haut) */
+.poster-zone-icon {
+  text-align: center;
+  margin-bottom: 20px;
+  padding-top: 10px;
+  flex-shrink: 0;
+}
+.poster-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+/* Couleur du SVG définie en inline par React. */
+.poster-icon svg {
+  width: 140px;
+  height: 140px;
+  stroke-width: 1.5;
+  opacity: 0.9;
+}
+
+/* Zone contenu principal */
+.poster-zone-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-evenly;
+  gap: 0;
+  padding-top: 10px;
+  min-height: 0;
+}
+
+/* Zone section (FR / EN) */
+.poster-zone-section {
+  text-align: center;
+  padding: 30px 60px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 25px;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Taille de police (font-size) injectée en inline par React. */
+.poster-section-title {
+  font-weight: 800;
+  line-height: 1.1;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  hyphens: none;
+  margin: 0;
+}
+.poster-section-message {
+  font-weight: 400;
+  line-height: 1.6;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  hyphens: none;
+  margin: 0;
+  max-width: 90%;
+  margin-left: auto;
+  margin-right: auto;
+  text-align: justify;
+  text-align-last: center;
+  white-space: normal;
+}
+.poster-section-info {
+  font-weight: 600;
+  line-height: 2;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  margin: 0;
+  margin-top: 20px;
+}
+.poster-section-info p {
+  margin: 5px 0;
+}
+
+/* Divider (entre FR et EN). La couleur (currentColor) est posée en inline.
+   Le masque central (::before) découvre les étoiles : les étoiles elles-mêmes
+   vivent dans .poster-stars-container, positionné en inline par React. */
+.poster-divider {
+  position: relative;
+  height: 2px;
+  background: currentColor;
+  opacity: 0.75;
+  margin: 40px 120px;
+}
+.poster-divider::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 90px;
+  height: 30px;
+  background: var(--poster-bg, white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Zone bas de page (logo) */
+.poster-zone-footer {
+  text-align: center;
+  padding-top: 40px;
+  flex-shrink: 0;
+  opacity: 0.5;
+  margin-top: auto;
+}
+.poster-zone-footer svg {
+  /* Le preflight Tailwind force `svg { display: block }`, ce qui casse le
+   * centrage par text-align hérité du fork : on rétablit l'inline-block. */
+  display: inline-block;
+  height: 100px;
+  width: auto;
+}
+
+/* --- Écran uniquement : passe-partout sombre + ombre portée --- *
+ * Le transform: scale() de l'aperçu est posé en inline sur .poster-wrapper
+ * par le hook d'échelle (PosterPreview) ; on ne le pose PAS ici pour ne pas
+ * fuir en impression. */
+@media screen {
+  .poster-preview-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* Occupe toute la place allouée par le parent : c'est cette hauteur
+     * contrainte qui permet au calcul d'échelle de tenir dans le viewport. */
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    padding: 20px;
+    /* Tokens du thème (même langage visuel que le panneau bg-card) */
+    background: var(--secondary);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) + 4px);
+  }
+  .poster-wrapper {
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    /* Adoucit les sauts d'échelle au redimensionnement de la fenêtre. */
+    transition: transform 150ms ease-out;
+  }
+
+  /* Responsive (empilement vertical) : la hauteur de l'aperçu suit le ratio
+   * A3 réel de l'affiche — elle remplit sa card sans vide sombre en bas. */
+  @media (max-width: 1023px) {
+    .poster-preview-content {
+      height: auto;
+      aspect-ratio: 1123 / 1587;
+    }
+  }
+}
+
+/* --- Impression : A3 portrait fidèle (recopie de print.css du fork) --- *
+ * @page est nommé et rattaché à .poster via `page:` pour rester scopé :
+ * l'impression du PDJ (A4 portrait, @page anonyme) n'est pas affectée. */
+@media print {
+  .poster,
+  .poster * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  @page posterA3 {
+    size: A3 portrait;
+    margin: 0;
+  }
+
+  /* Neutralise le fond gris du passe-partout (fond blanc à l'impression). */
+  .poster-preview-content {
+    padding: 0;
+    overflow: visible;
+    background: white;
+  }
+
+  /* Échelle réelle 100 % : on annule le scale d'aperçu posé en inline. */
+  .poster-wrapper {
+    transform: none !important;
+    box-shadow: none;
+  }
+
+  .poster {
+    page: posterA3;
+    box-shadow: none;
+    page-break-after: avoid;
+    page-break-inside: avoid;
+  }
+}

@@ -1,13 +1,17 @@
 import { createFileRoute } from '@tanstack/react-router'
 
 import { AffichageBoard } from '#/components/affiche/AffichageBoard.tsx'
+import { PageContainer } from '#/components/shared/PageContainer.tsx'
 
-export const Route = createFileRoute('/affichage')({ component: AffichagePage })
+export const Route = createFileRoute('/affichage')({
+  component: AffichagePage,
+  head: () => ({ meta: [{ title: 'Affichage — Back Office' }] }),
+})
 
 function AffichagePage() {
   return (
-    <div className="flex min-h-0 flex-1 flex-col p-4 md:p-6 print:p-0">
+    <PageContainer printBleed fillHeight>
       <AffichageBoard />
-    </div>
+    </PageContainer>
   )
 }

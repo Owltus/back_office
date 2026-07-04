@@ -16,7 +16,8 @@ import { Fragment, memo, useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 
 import { COLORS, POSTER } from '#/lib/poster/config.ts'
-import type { ColorKey } from '#/lib/poster/config.ts'
+import { hasEnglishContent } from '#/lib/poster/types.ts'
+import type { PosterContent } from '#/lib/poster/types.ts'
 import {
   formatDateEn,
   formatDateFr,
@@ -28,42 +29,9 @@ import {
 import { getIconSvg } from '#/lib/poster/icons.ts'
 import { PosterLogo } from '#/components/affiche/PosterLogo.tsx'
 
-/** État complet de l'affiche reçu par le composant. */
-export interface PosterProps {
-  /** Titre de la section française. */
-  titleFr: string
-  /** Message de la section française (les `\n` sont convertis en `<br />`). */
-  messageFr: string
-  /** Titre de la section anglaise. */
-  titleEn: string
-  /** Message de la section anglaise (les `\n` sont convertis en `<br />`). */
-  messageEn: string
-  /** Clé de l'icône sélectionnée, ou `'none'` pour masquer la zone icône. */
-  selectedIcon: string
-  /** Clé du thème de couleur. */
-  colorKey: ColorKey
-  /** Date de début au format natif `YYYY-MM-DD` (ou chaîne vide). */
-  dateStart: string
-  /** Date de fin au format natif `YYYY-MM-DD` (ou chaîne vide). */
-  dateEnd: string
-  /** Heure de début au format natif `HH:MM` (ou chaîne vide). */
-  timeStart: string
-  /** Heure de fin au format natif `HH:MM` (ou chaîne vide). */
-  timeEnd: string
-  /** Taille (px) de l'icône, appliquée en style inline sur le SVG (mode manuel). */
-  fontSizeIcon: number
-  /**
-   * Mode taille automatique. En auto, l'icône garde la taille CSS par défaut
-   * (140px) comme le fork ; en manuel, la valeur du slider est appliquée inline.
-   */
-  isAutoSizeMode: boolean
-  /** Taille (px) des titres. */
-  fontSizeTitle: number
-  /** Taille (px) des messages. */
-  fontSizeMessage: number
-  /** Taille (px) des infos (dates / horaires). */
-  fontSizeInfo: number
-}
+/** État complet de l'affiche reçu par le composant : le contenu canonique
+ * (PosterContent, src/lib/poster/types.ts) — aucune prop supplémentaire. */
+export type PosterProps = PosterContent
 
 /**
  * Rendu contrôlé d'un message : `text.split('\n')` en intercalant des `<br />`.
@@ -143,7 +111,7 @@ export const Poster = memo(function Poster(props: PosterProps) {
   const iconColor = color.icon || textColor
 
   // Section EN + divider pilotés par la présence de contenu anglais.
-  const showEnglish = titleEn.trim() !== '' || messageEn.trim() !== ''
+  const showEnglish = hasEnglishContent({ titleEn, messageEn })
   const showIcon = selectedIcon !== 'none'
 
   // Dates / heures (reproduction de _getDates / _getHours du fork).

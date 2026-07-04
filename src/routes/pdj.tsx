@@ -1,13 +1,17 @@
 import { createFileRoute } from '@tanstack/react-router'
 
 import { BreakfastBoard } from '#/components/pdj/BreakfastBoard.tsx'
+import { PageContainer } from '#/components/shared/PageContainer.tsx'
 
-export const Route = createFileRoute('/pdj')({ component: PdjPage })
+export const Route = createFileRoute('/pdj')({
+  component: PdjPage,
+  head: () => ({ meta: [{ title: 'PDJ — Back Office' }] }),
+})
 
 function PdjPage() {
   return (
-    <div className="flex flex-1 flex-col p-4 md:p-6 print:p-0">
+    <PageContainer printBleed>
       <BreakfastBoard />
-    </div>
+    </PageContainer>
   )
 }

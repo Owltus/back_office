@@ -14,7 +14,7 @@ import {
 
 import { Logo } from '#/components/Logo.tsx'
 import { UserMenu } from '#/components/UserMenu.tsx'
-import { Avatar, AvatarFallback, AvatarImage } from '#/components/ui/avatar.tsx'
+import { USER_NAME, UserAvatar } from '#/components/shared/UserAvatar.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import {
   Sheet,
@@ -107,14 +107,12 @@ export function Navbar() {
                     type="button"
                     className="flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left outline-none transition-colors hover:bg-secondary/60 focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    <Avatar className="size-9 ring-2 ring-border">
-                      <AvatarImage src="" alt="Profil" />
-                      <AvatarFallback className="bg-primary/15 text-primary">
-                        PL
-                      </AvatarFallback>
-                    </Avatar>
+                    <UserAvatar
+                      withImage
+                      className="size-9 ring-2 ring-border"
+                    />
                     <div className="grid text-sm leading-tight">
-                      <span className="font-medium">Pierre-Louis</span>
+                      <span className="font-medium">{USER_NAME}</span>
                       <span className="text-xs text-muted-foreground">
                         Compte
                       </span>
@@ -169,12 +167,7 @@ export function Navbar() {
                 aria-label="Menu du compte"
                 className="rounded-full outline-none transition-transform hover:scale-105 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               >
-                <Avatar className="size-9 ring-2 ring-border">
-                  <AvatarImage src="" alt="Profil" />
-                  <AvatarFallback className="bg-primary/15 text-primary">
-                    PL
-                  </AvatarFallback>
-                </Avatar>
+                <UserAvatar withImage className="size-9 ring-2 ring-border" />
               </button>
             }
           />

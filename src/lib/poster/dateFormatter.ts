@@ -153,3 +153,17 @@ export function getTimeString(timeStart: string, timeEnd: string): TimeString {
 
   return { full: null, isRange: false }
 }
+
+// 'YYYY-MM-DD' → Date locale (sans passer par le parsing UTC de `new Date(str)`).
+export function parseDateStr(value: string): Date | undefined {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (!m) return undefined
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+}
+
+// Date → 'YYYY-MM-DD' (format de stockage, identique aux inputs natifs).
+export function formatDateStr(d: Date): string {
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${mm}-${dd}`
+}

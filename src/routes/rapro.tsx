@@ -1,13 +1,17 @@
 import { createFileRoute } from '@tanstack/react-router'
 
 import { ComingSoon } from '#/components/ComingSoon.tsx'
+import { PageContainer } from '#/components/shared/PageContainer.tsx'
 
-export const Route = createFileRoute('/rapro')({ component: RaproPage })
+export const Route = createFileRoute('/rapro')({
+  component: RaproPage,
+  head: () => ({ meta: [{ title: 'Rapro — Back Office' }] }),
+})
 
 function RaproPage() {
   return (
-    <div className="flex flex-1 flex-col p-4 md:p-6">
+    <PageContainer>
       <ComingSoon />
-    </div>
+    </PageContainer>
   )
 }
