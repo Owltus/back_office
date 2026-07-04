@@ -6,6 +6,7 @@
 @import 'tw-animate-css';
 @import './styles/pdj.css';
 @import './styles/poster.css';
+@import './styles/repjour.css';
 
 @custom-variant dark (&:is(.dark *));
 

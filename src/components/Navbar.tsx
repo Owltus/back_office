@@ -14,7 +14,8 @@ import {
 
 import { Logo } from '#/components/Logo.tsx'
 import { UserMenu } from '#/components/UserMenu.tsx'
-import { USER_NAME, UserAvatar } from '#/components/shared/UserAvatar.tsx'
+import { UserAvatar } from '#/components/shared/UserAvatar.tsx'
+import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import {
   Sheet,
@@ -29,7 +30,7 @@ const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, exact: true },
   { to: '/repjour', label: 'RepJour', icon: ClipboardList },
   { to: '/parking', label: 'Parking', icon: SquareParking },
-  { to: '/rapro', label: 'Rapro', icon: ArrowLeftRight },
+  { to: '/rapro', label: 'Rapprochement', icon: ArrowLeftRight },
   { to: '/affichage', label: 'Affichage', icon: Monitor },
   { to: '/pdj', label: 'PDJ', icon: Coffee },
   { to: '/caisse', label: 'Caisse', icon: Banknote },
@@ -37,6 +38,8 @@ const NAV_ITEMS = [
 
 export function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false)
+  const { profile, user } = useAuth()
+  const userName = profile?.display_name || profile?.email || user?.email || ''
 
   // En passant en mode desktop (>= md), on ferme le tiroir s'il est ouvert.
   useEffect(() => {
@@ -109,10 +112,13 @@ export function Navbar() {
                   >
                     <UserAvatar
                       withImage
+                      name={userName}
                       className="size-9 ring-2 ring-border"
                     />
                     <div className="grid text-sm leading-tight">
-                      <span className="font-medium">{USER_NAME}</span>
+                      <span className="truncate font-medium">
+                        {userName || 'Utilisateur'}
+                      </span>
                       <span className="text-xs text-muted-foreground">
                         Compte
                       </span>
@@ -167,7 +173,11 @@ export function Navbar() {
                 aria-label="Menu du compte"
                 className="rounded-full outline-none transition-transform hover:scale-105 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               >
-                <UserAvatar withImage className="size-9 ring-2 ring-border" />
+                <UserAvatar
+                  withImage
+                  name={userName}
+                  className="size-9 ring-2 ring-border"
+                />
               </button>
             }
           />

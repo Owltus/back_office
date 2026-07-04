@@ -2,10 +2,10 @@ import {
   HeadContent,
   Scripts,
   createRootRouteWithContext,
-  useRouterState,
 } from '@tanstack/react-router'
 
-import { Navbar } from '../components/Navbar'
+import { AuthProvider } from '#/components/auth/AuthContext.tsx'
+import { AppAuthGate } from '#/components/auth/AppAuthGate.tsx'
 
 import appCss from '../styles.css?url'
 
@@ -45,24 +45,18 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 })
 
 function RootDocument({ children }: { children: React.ReactNode }) {
-  // La clé change à chaque route -> l'animation d'entrée se rejoue.
-  const pathname = useRouterState({ select: (s) => s.location.pathname })
-
+  // L'authentification enveloppe toute l'application : `AppAuthGate` décide, en
+  // fonction de la session, d'afficher la page de connexion, un spinner, ou le
+  // chrome complet (Navbar + contenu). Voir #/components/auth/AppAuthGate.tsx.
   return (
     <html lang="fr" className="dark">
       <head>
         <HeadContent />
       </head>
       <body>
-        <div className="flex h-dvh flex-col overflow-hidden print:h-auto print:overflow-visible">
-          <Navbar />
-          <main
-            key={pathname}
-            className="app-scroll flex flex-1 flex-col overflow-y-auto motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300 print:overflow-visible"
-          >
-            {children}
-          </main>
-        </div>
+        <AuthProvider>
+          <AppAuthGate>{children}</AppAuthGate>
+        </AuthProvider>
         <Scripts />
       </body>
     </html>

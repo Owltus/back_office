@@ -9,7 +9,7 @@ Application web interne de gestion opérationnelle hôtelière : suivi du parkin
 | Dashboard | `/` | À venir |
 | RepJour | `/repjour` | À venir |
 | Parking | `/parking` | ✅ Disponible |
-| Rapro | `/rapro` | À venir |
+| Rapprochement | `/rapro` | À venir |
 | Affichage | `/affichage` | ✅ Disponible — générateur d'affiches A3 bilingues FR/EN |
 | PDJ | `/pdj` | ✅ Disponible |
 | Caisse | `/caisse` | À venir |

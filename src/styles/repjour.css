@@ -1,0 +1,48 @@
+/* ------------------------------------------------------------------ *
+ * Rapport journalier (RepJour)                                        *
+ * Portage de l'app source "repjour-okko-nantes" (thème CLAIR) vers    *
+ * le Back Office (thème DARK navy + shadcn).                          *
+ *                                                                     *
+ * Table de correspondance des tokens — source → cible (D15).          *
+ * Le remapping est une inversion de luminosité, token par token. Les  *
+ * composants portés remplacent les classes source par les tokens de   *
+ * thème shadcn (bg-…, text-…, border-…), jamais des HEX en dur.         *
+ *                                                                     *
+ *   Source (index.css @theme, thème clair)  →  Cible (styles.css)     *
+ *   ---------------------------------------    ---------------------- *
+ *   bg-bg          #F8F9FA  (fond page)     →  bg-background          *
+ *   bg-white       (cartes)                 →  bg-card  (via <Card>)  *
+ *   text-text      #1A1A1A                  →  text-foreground        *
+ *   text-secondary #6B7280                  →  text-muted-foreground  *
+ *   border-gray-100/200                     →  border-border          *
+ *   bg-gray-50/100                          →  bg-muted               *
+ *   primary        #1B3A5C  (navy)          →  primary / accent *     *
+ *   accent         #2E75B6                  →  accent / primary       *
+ *   success        #4CAF50                  →  text-emerald / chart   *
+ *   error          #E53935                  →  destructive            *
+ *   warning        #FF9800                  →  amber / chart          *
+ *                                                                     *
+ *   (*) le navy source #1B3A5C est peu contrasté sur le navy cible :  *
+ *   il bascule vers primary/accent du Back Office selon l'usage.      *
+ *                                                                     *
+ *   Couleurs de graphiques en dur de la source (#f0f0f0 grille,       *
+ *   #1B3A5C / #C0C0C0 / #E53935 courbes) → adaptées au dark à          *
+ *   l'étape 6 (Recharts) via les tokens --chart-*.                    *
+ *                                                                     *
+ *   EXCEPTION (D10) : l'image email (email.ts) conserve ses HEX       *
+ *   clairs d'origine — hors de ce mapping.                            *
+ * ------------------------------------------------------------------ */
+
+/* Recharts : supprime le halo de focus natif sur les éléments SVG.
+   Reporté à l'identique de la source (index.css). */
+.recharts-wrapper *:focus,
+.recharts-wrapper *:active {
+  outline: none !important;
+}
+
+/* Styles spécifiques RepJour : tout est scopé sous le préfixe .repjour-*
+   afin de ne fuir vers aucune autre page (PDJ, parking, affiche…).
+   Les ajustements de densité de tableaux, barres de progression
+   multi-segments, etc. viendront ici — le reste passe en classes
+   Tailwind inline. Aucune règle .repjour-* n'est encore nécessaire à
+   ce stade. */

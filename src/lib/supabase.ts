@@ -26,4 +26,14 @@ if (!supabaseUrl || !supabaseAnonKey) {
 export const supabase = createClient(
   supabaseUrl ?? 'http://localhost:54321',
   supabaseAnonKey ?? 'public-anon-key',
+  {
+    // Session persistée côté navigateur pour l'authentification de l'onglet
+    // /repjour (rôles gérés par les RLS Supabase). Client-only : l'îlot
+    // /repjour est rendu sans SSR.
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+    },
+  },
 )

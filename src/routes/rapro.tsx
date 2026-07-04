@@ -5,7 +5,7 @@ import { PageContainer } from '#/components/shared/PageContainer.tsx'
 
 export const Route = createFileRoute('/rapro')({
   component: RaproPage,
-  head: () => ({ meta: [{ title: 'Rapro — Back Office' }] }),
+  head: () => ({ meta: [{ title: 'Rapprochement — Back Office' }] }),
 })
 
 function RaproPage() {
