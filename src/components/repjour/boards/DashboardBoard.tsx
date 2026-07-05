@@ -197,6 +197,18 @@ export function DashboardBoard() {
   const ecart = pm && budget ? computeEcart(pm, budget) : null
   const hasPartialData = !report && (forecastMonthTotal || budget)
 
+  // Jour futur : impossible d'avoir un rapport pour une date à venir. On ne
+  // bascule donc PAS en « import seul » et on masque la carte d'import (rien à
+  // importer pour le futur) — la projection forecast reste affichée.
+  const now = new Date()
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  const isFuture = selectedDate !== '' && selectedDate > todayStr
+
+  // Jour sans rapport encore importé (aujourd'hui ou passé) pour un rôle
+  // habilité à importer : on n'affiche QUE la zone d'import, pas le tableau.
+  // (utilisateur : jamais d'import → vue inchangée ; futur : exclu.)
+  const importOnly = !report && !isFuture && canImport
+
   const daysInMonthPartial = selectedDate
     ? (() => {
         const d = new Date(selectedDate + 'T00:00:00')
@@ -261,6 +273,12 @@ export function DashboardBoard() {
 
         {loading ? (
           <BoardSkeleton />
+        ) : importOnly ? (
+          // Rapport du jour pas encore importé (rôle habilité) : on n'affiche
+          // rien ici — la carte d'import ci-dessous devient l'unique contenu.
+          <p className="text-sm text-muted-foreground">
+            Aucun rapport importé pour le {displayDate}. Importez-le ci-dessous.
+          </p>
         ) : !report && !hasPartialData ? (
           <div className="rounded-xl border border-border bg-card p-8 text-center">
             <p className="mb-3 text-4xl text-muted-foreground">—</p>
@@ -418,9 +436,10 @@ export function DashboardBoard() {
 
         {/* Import — carte placée en bas du dashboard, réservée aux rôles
             super_utilisateur / admin. Visible dans tous les états (y compris
-            sans données : c'est justement là qu'on importe). Un import réussi
-            recharge le rapport affiché. Masquée en mode détaillé. */}
-        {!loading && !detailMode && canImport && (
+            sans données : c'est justement là qu'on importe), SAUF sur un jour
+            futur (aucun rapport possible pour une date à venir). Un import
+            réussi recharge le rapport affiché. Masquée en mode détaillé. */}
+        {!loading && !detailMode && canImport && !isFuture && (
           <ImportSection
             onImported={() => loadReport(selectedDateRef.current || undefined)}
           />
