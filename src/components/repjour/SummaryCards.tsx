@@ -31,19 +31,17 @@ export function SummaryCards({
 }: SummaryCardsProps) {
   const cards = [
     {
-      label: partial ? 'Revenu hébergement (forecast)' : 'Revenu hébergement',
+      label: 'Revenu hébergement',
       value: fmt.eurInt(projeteMois.roomRevenue),
       budgetValue: fmt.eurInt(budget.room_revenue),
     },
     {
-      label: partial
-        ? 'Revenu moyen par chambre (forecast)'
-        : 'Revenu moyen par chambre',
+      label: 'Revenu moyen par chambre',
       value: fmt.eurInt(projeteMois.revpar),
       budgetValue: fmt.eurInt(budget.revpar),
     },
     {
-      label: partial ? "Taux d'occupation (forecast)" : "Taux d'occupation",
+      label: "Taux d'occupation",
       value: fmt.pct(projeteMois.to),
       budgetValue: fmt.pct(budget.taux_occupation),
     },
