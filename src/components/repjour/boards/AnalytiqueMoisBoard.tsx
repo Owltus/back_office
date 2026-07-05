@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useRouter } from '@tanstack/react-router'
-import { ArrowLeft, Loader2 } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { ArrowLeft } from 'lucide-react'
 
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
 import { Button } from '#/components/ui/button.tsx'
+import { BoardSkeleton } from '#/components/repjour/BoardSkeleton.tsx'
 import { KpiLineChart } from '#/components/repjour/charts/KpiLineChart.tsx'
 import { fetchUnifiedDays } from '#/lib/repjour/services/data.ts'
-import type { UnifiedDayRow } from '#/lib/repjour/services/data.ts'
 import { fetchBudget } from '#/lib/repjour/services/daily.ts'
 import {
   DAY_NAMES,
@@ -14,7 +15,6 @@ import {
   TOTAL_ROOMS,
 } from '#/lib/repjour/constants.ts'
 import { fmt } from '#/lib/repjour/format.ts'
-import type { MonthBudget } from '#/lib/repjour/types.ts'
 
 /*
  * Détail analytique d'un mois, jour par jour — porté de AnalytiqueMoisPage.
@@ -44,25 +44,20 @@ export function AnalytiqueMoisBoard({
   month: number
 }) {
   const router = useRouter()
-  const [rows, setRows] = useState<UnifiedDayRow[]>([])
-  const [budget, setBudget] = useState<MonthBudget | null>(null)
-  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    if (!year || !month) return
-    setLoading(true)
-    Promise.all([fetchUnifiedDays({ year, month }), fetchBudget(year, month)])
-      .then(([r, b]) => {
-        setRows(r)
-        setBudget(b)
-      })
-      .catch((err) => {
-        console.error('[repjour] chargement du détail mensuel échoué', err)
-        setRows([])
-        setBudget(null)
-      })
-      .finally(() => setLoading(false))
-  }, [year, month])
+  // Vue unifiée du mois + budget. Mise en cache : naviguer entre les mois puis
+  // revenir est instantané (plus de refetch systématique).
+  const { data, isPending: loading } = useQuery({
+    queryKey: ['repjour', 'month-detail', year, month],
+    queryFn: () =>
+      Promise.all([
+        fetchUnifiedDays({ year, month }),
+        fetchBudget(year, month),
+      ]),
+    enabled: Number.isFinite(year) && Number.isFinite(month),
+  })
+  const rows = data?.[0] ?? []
+  const budget = data?.[1] ?? null
 
   const now = new Date()
   const currentDay =
@@ -167,9 +162,7 @@ export function AnalytiqueMoisBoard({
         </div>
 
         {loading ? (
-          <div className="flex h-48 items-center justify-center">
-            <Loader2 className="size-8 animate-spin text-primary" />
-          </div>
+          <BoardSkeleton rows={12} />
         ) : (
           <>
             {/* Cartes résumé */}
@@ -375,7 +368,9 @@ export function AnalytiqueMoisBoard({
                         >
                           <td
                             className={`whitespace-nowrap px-3 py-2 text-xs font-medium ${
-                              hasData ? 'text-foreground' : 'text-muted-foreground'
+                              hasData
+                                ? 'text-foreground'
+                                : 'text-muted-foreground'
                             }`}
                           >
                             {dayName} {dayNum}
@@ -393,7 +388,9 @@ export function AnalytiqueMoisBoard({
                                 </span>
                               </>
                             ) : (
-                              <span className="text-muted-foreground/50">—</span>
+                              <span className="text-muted-foreground/50">
+                                —
+                              </span>
                             )}
                           </td>
                           <td
@@ -413,7 +410,9 @@ export function AnalytiqueMoisBoard({
                                 </span>
                               </>
                             ) : (
-                              <span className="text-muted-foreground/50">—</span>
+                              <span className="text-muted-foreground/50">
+                                —
+                              </span>
                             )}
                           </td>
                           <td
@@ -429,7 +428,9 @@ export function AnalytiqueMoisBoard({
                                 </span>
                               </>
                             ) : (
-                              <span className="text-muted-foreground/50">—</span>
+                              <span className="text-muted-foreground/50">
+                                —
+                              </span>
                             )}
                           </td>
                           <td
@@ -445,7 +446,9 @@ export function AnalytiqueMoisBoard({
                                 </span>
                               </>
                             ) : (
-                              <span className="text-muted-foreground/50">—</span>
+                              <span className="text-muted-foreground/50">
+                                —
+                              </span>
                             )}
                           </td>
                           <td
@@ -459,7 +462,9 @@ export function AnalytiqueMoisBoard({
                                 <span className="sm:hidden">{compact(ca)}</span>
                               </>
                             ) : (
-                              <span className="text-muted-foreground/50">—</span>
+                              <span className="text-muted-foreground/50">
+                                —
+                              </span>
                             )}
                           </td>
                         </tr>

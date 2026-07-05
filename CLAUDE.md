@@ -65,6 +65,33 @@ LECTURE SEULE** côté outillage / assistant IA :
 - `/repjour` est en **`ssr: false`** (recharts/html2canvas client-only).
   `/` redirige vers `/repjour` (pas de page Dashboard pour l'instant).
 
+## Performance / chargement (bonnes pratiques)
+
+Le temps de chargement perçu vient surtout de l'auth cliente + du mode SPA. Règles :
+
+- **Auth non bloquante** : la garde ne bloque QUE sur la session (`getSession`,
+  lecture `localStorage`, quasi instantanée), jamais sur un aller-retour réseau.
+  Le profil/rôle se charge EN ARRIÈRE-PLAN, avec cache `localStorage` + un signal
+  `profileLoading` distinct (voir `components/auth/AuthContext.tsx`). Ne JAMAIS
+  remettre un `await fetchProfile` bloquant avant de lever `loading`.
+- **Cache de données = TanStack Query** : toute nouvelle lecture Supabase passe par
+  `useQuery` (jamais `useEffect` + `useState` + fetch manuel). Réglages par défaut
+  dans `lib/query.ts` (`staleTime` 60 s, `gcTime` 5 min, `refetchOnWindowFocus:false`,
+  `retry:1`). `queryKey` en tableau versionné `['<feature>', '<vue>', ...params]`.
+  Le router précharge au survol (`defaultPreload:'intent'` + `defaultPreloadStaleTime`
+  60 s dans `router.tsx`).
+- **Exception assumée — realtime** : les vues avec abonnement `postgres_changes`
+  (`DashboardBoard`, `ParkingBoard`) gardent leur fetch impératif + optimistic ;
+  NE PAS les forcer dans `useQuery` (le temps réel garde déjà la vue à jour).
+- **Lazy-load des grosses libs client-only** : `html2canvas` (et tout poids lourd
+  non nécessaire au premier rendu) est chargé par `import()` DYNAMIQUE au moment de
+  l'usage, jamais en import statique de haut de module (voir `lib/repjour/email.ts`).
+  Le découpage par route est déjà automatique (TanStack Router).
+- **Chargement perçu** : préférer un squelette (`components/repjour/BoardSkeleton.tsx`,
+  primitive `ui/skeleton`) à un spinner plein écran pour les états de chargement.
+- Valider toute modif perf : `pnpm build` (vérifier le découpage des chunks) +
+  `npx tsc --noEmit`.
+
 ## Faits base de données (vérifiés en lecture)
 
 - Tables : profiles, daily_reports, forecast_days, budget, email_recipients,

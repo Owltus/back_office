@@ -9,7 +9,10 @@ interface AuthContextType {
   user: User | null
   profile: Profile | null
   role: UserRole | null
+  /** Résolution de la SESSION (locale via `getSession`, quasi instantanée). */
   loading: boolean
+  /** Résolution du PROFIL (aller-retour réseau), menée EN ARRIÈRE-PLAN. */
+  profileLoading: boolean
   signIn: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
@@ -18,82 +21,147 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null)
 
 /**
+ * Cache local du profil : au rechargement, le rôle est disponible IMMÉDIATEMENT
+ * (pas d'aller-retour réseau bloquant). Le fetch réseau ne fait que réconcilier
+ * la valeur en arrière-plan. Clé versionnée pour pouvoir invalider le format.
+ */
+const PROFILE_CACHE_KEY = 'bo.auth.profile.v1'
+
+function readCachedProfile(): Profile | null {
+  try {
+    const raw = localStorage.getItem(PROFILE_CACHE_KEY)
+    return raw ? (JSON.parse(raw) as Profile) : null
+  } catch {
+    // localStorage indisponible (SSR, mode privé) : non bloquant.
+    return null
+  }
+}
+
+function writeCachedProfile(profile: Profile | null) {
+  try {
+    if (profile) {
+      localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(profile))
+    } else {
+      localStorage.removeItem(PROFILE_CACHE_KEY)
+    }
+  } catch {
+    // Ignoré : le cache n'est qu'une optimisation, jamais une source de vérité.
+  }
+}
+
+/**
  * Fournit la session Supabase et le profil (donc le rôle) à TOUTE l'application.
  *
- * Monté à la racine (`__root.tsx`) : l'authentification protège désormais
- * l'ensemble du Back Office, pas seulement l'îlot `/repjour` (décision D3 =
- * option B, à la demande de l'utilisateur). La garde globale `AppAuthGate`
+ * Monté à la racine (`__root.tsx`) : l'authentification protège l'ensemble du
+ * Back Office, pas seulement l'îlot `/repjour`. La garde globale `AppAuthGate`
  * s'appuie dessus pour rediriger tout visiteur non connecté vers `/login`.
  *
- * Composant 100 % client (effets + `localStorage`). Sous SSR, `loading` reste
- * `true` (les effets ne s'exécutent pas côté serveur) : le rendu serveur et le
- * premier rendu client produisent donc le même DOM (un spinner via
- * `AppAuthGate`), ce qui évite toute divergence d'hydratation. L'effet résout
- * ensuite la session côté client.
+ * OPTIMISATION DU CHARGEMENT — la garde ne bloque PLUS sur le profil :
+ *   - `loading` (session) est levé dès que `getSession()` répond. Or `getSession`
+ *     lit le `localStorage` : c'est quasi instantané → l'app s'affiche sans
+ *     attendre le réseau.
+ *   - le profil (donc le rôle) est chargé EN ARRIÈRE-PLAN. Pour un utilisateur
+ *     déjà venu, il est hydraté depuis le cache local → rôle disponible tout de
+ *     suite, sans aller-retour bloquant.
+ *   - `profileLoading` signale la résolution réseau du profil ; les gardes par
+ *     rôle (`ProtectedRoute`) s'en servent pour ne pas confondre « profil en
+ *     cours de chargement » et « aucun profil » (ex-D13 bug#2).
  *
- * Correction D13 bug#1 (race de chargement du profil) : au montage comme sur les
- * événements d'auth, on ATTEND `fetchProfile` avant de repasser `loading` à
- * `false`, pour que le rôle soit disponible quand la garde s'exécute.
+ * Composant 100 % client. Sous SSR, `loading` reste `true` (les effets ne
+ * s'exécutent pas côté serveur) : le rendu serveur et le premier rendu client
+ * produisent le même DOM (un spinner via `AppAuthGate`) → pas de divergence
+ * d'hydratation. L'effet résout ensuite la session côté client.
  */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
-  const [profile, setProfile] = useState<Profile | null>(null)
+  // Hydratation optimiste du profil depuis le cache local (rôle dispo au boot).
+  const [profile, setProfile] = useState<Profile | null>(() =>
+    readCachedProfile(),
+  )
   const [loading, setLoading] = useState(true)
+  const [profileLoading, setProfileLoading] = useState(false)
 
-  // Id du profil actuellement chargé : sert à ne PAS repasser en `loading` lors
-  // d'un simple rafraîchissement de token (même utilisateur), ce qui éviterait
-  // un flash de spinner sur une page déjà rendue.
-  const profileUserIdRef = useRef<string | null>(null)
-
-  async function fetchProfile(userId: string) {
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .maybeSingle()
-    const nextProfile = (data as Profile | null) ?? null
-    setProfile(nextProfile)
-    profileUserIdRef.current = nextProfile ? userId : null
-  }
+  // Id du profil actuellement chargé : évite un flash de `profileLoading` quand
+  // un profil (cache ou déjà chargé) correspond déjà à l'utilisateur courant.
+  const profileUserIdRef = useRef<string | null>(
+    readCachedProfile()?.id ?? null,
+  )
 
   useEffect(() => {
-    // Session initiale : on ATTEND le profil avant de lever `loading` (D13 bug#1).
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setUser(session?.user ?? null)
-      if (session?.user) {
-        await fetchProfile(session.user.id)
-      }
+    let active = true
+
+    async function resolveProfile(userId: string) {
+      // Le rôle est-il déjà disponible pour cet utilisateur (état ou cache) ?
+      const alreadyHave =
+        profileUserIdRef.current === userId ||
+        readCachedProfile()?.id === userId
+      if (!alreadyHave) setProfileLoading(true)
+
+      const { data } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle()
+      if (!active) return
+
+      const next = (data as Profile | null) ?? null
+      setProfile(next)
+      writeCachedProfile(next)
+      profileUserIdRef.current = next ? userId : null
+      setProfileLoading(false)
+    }
+
+    function clearProfile() {
+      setProfile(null)
+      writeCachedProfile(null)
+      profileUserIdRef.current = null
+      setProfileLoading(false)
+    }
+
+    // Session initiale : résolution RAPIDE (getSession lit le localStorage). On
+    // lève `loading` sans attendre le profil, chargé ensuite en arrière-plan.
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!active) return
+      const nextUser = session?.user ?? null
+      setUser(nextUser)
       setLoading(false)
+      if (nextUser) {
+        // Purge d'un cache appartenant à un autre compte (changement d'utilisateur).
+        const cached = readCachedProfile()
+        if (cached && cached.id !== nextUser.id) clearProfile()
+        resolveProfile(nextUser.id)
+      } else {
+        clearProfile()
+      }
     })
 
-    // Événements d'auth (connexion, déconnexion, refresh de token). On ATTEND le
-    // profil avant de lever `loading` (D13 bug#1), mais uniquement quand un
-    // nouveau profil doit être chargé — un refresh de token du même utilisateur
-    // ne déclenche donc pas de spinner.
+    // Événements d'auth (connexion, déconnexion, refresh de token). Le refresh
+    // de token du même utilisateur ne redéclenche pas de `profileLoading`
+    // visible (alreadyHave === true), donc pas de flash de spinner.
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       const nextUser = session?.user ?? null
       setUser(nextUser)
-
+      setLoading(false)
       if (nextUser) {
-        const needsLoad = profileUserIdRef.current !== nextUser.id
-        if (needsLoad) setLoading(true)
-        fetchProfile(nextUser.id).finally(() => {
-          if (needsLoad) setLoading(false)
-        })
+        resolveProfile(nextUser.id)
       } else {
-        setProfile(null)
-        profileUserIdRef.current = null
-        setLoading(false)
+        clearProfile()
       }
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      active = false
+      subscription.unsubscribe()
+    }
   }, [])
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    })
     if (error) throw error
   }
 
@@ -101,7 +169,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut()
     setUser(null)
     setProfile(null)
+    writeCachedProfile(null)
     profileUserIdRef.current = null
+    setProfileLoading(false)
   }
 
   return (
@@ -111,10 +181,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         profile,
         role: profile?.role ?? null,
         loading,
+        profileLoading,
         signIn,
         signOut,
         refreshProfile: async () => {
-          if (user) await fetchProfile(user.id)
+          if (!user) return
+          const { data } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', user.id)
+            .maybeSingle()
+          const next = (data as Profile | null) ?? null
+          setProfile(next)
+          writeCachedProfile(next)
+          profileUserIdRef.current = next ? user.id : null
         },
       }}
     >

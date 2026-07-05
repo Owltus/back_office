@@ -1,5 +1,3 @@
-import html2canvas from 'html2canvas'
-
 import { fmt } from '#/lib/repjour/format.ts'
 import { DAY_NAMES, MONTHS } from '#/lib/repjour/constants.ts'
 import { fetchRecipients } from '#/lib/repjour/services/recipients.ts'
@@ -44,11 +42,51 @@ function buildTableElement(data: EmailData): HTMLDivElement {
   const { realiseJour, realiseMTD, projeteMois, budget, ecart } = data
 
   const rows = [
-    { label: 'Nuitées', rj: fmt.nuitees(realiseJour.nuitees), mtd: fmt.nuitees(realiseMTD.nuitees), proj: fmt.nuitees(projeteMois.nuitees), bud: fmt.nuitees(budget.nuitees), ec: fmt.ecartNuitees(ecart.nuitees), ecVal: ecart.nuitees },
-    { label: 'Taux occupation', rj: fmt.pct(realiseJour.to), mtd: fmt.pct(realiseMTD.to), proj: fmt.pct(projeteMois.to), bud: fmt.pct(budget.taux_occupation), ec: ecartPctFmt(ecart.to), ecVal: ecart.to },
-    { label: 'Prix moyen', rj: fmt.eur(realiseJour.pm), mtd: fmt.eur(realiseMTD.pm), proj: fmt.eur(projeteMois.pm), bud: fmt.eur(budget.prix_moyen), ec: fmt.ecartEur(ecart.pm), ecVal: ecart.pm },
-    { label: 'RevPAR', rj: fmt.eur(realiseJour.revpar), mtd: fmt.eur(realiseMTD.revpar), proj: fmt.eur(projeteMois.revpar), bud: fmt.eur(budget.revpar), ec: fmt.ecartEur(ecart.revpar), ecVal: ecart.revpar },
-    { label: "Chiffre d'affaires", rj: fmt.eurInt(realiseJour.roomRevenue), mtd: fmt.eurInt(realiseMTD.roomRevenue), proj: fmt.eurInt(projeteMois.roomRevenue), bud: fmt.eurInt(budget.room_revenue), ec: fmt.ecartEurInt(ecart.roomRevenue), ecVal: ecart.roomRevenue },
+    {
+      label: 'Nuitées',
+      rj: fmt.nuitees(realiseJour.nuitees),
+      mtd: fmt.nuitees(realiseMTD.nuitees),
+      proj: fmt.nuitees(projeteMois.nuitees),
+      bud: fmt.nuitees(budget.nuitees),
+      ec: fmt.ecartNuitees(ecart.nuitees),
+      ecVal: ecart.nuitees,
+    },
+    {
+      label: 'Taux occupation',
+      rj: fmt.pct(realiseJour.to),
+      mtd: fmt.pct(realiseMTD.to),
+      proj: fmt.pct(projeteMois.to),
+      bud: fmt.pct(budget.taux_occupation),
+      ec: ecartPctFmt(ecart.to),
+      ecVal: ecart.to,
+    },
+    {
+      label: 'Prix moyen',
+      rj: fmt.eur(realiseJour.pm),
+      mtd: fmt.eur(realiseMTD.pm),
+      proj: fmt.eur(projeteMois.pm),
+      bud: fmt.eur(budget.prix_moyen),
+      ec: fmt.ecartEur(ecart.pm),
+      ecVal: ecart.pm,
+    },
+    {
+      label: 'RevPAR',
+      rj: fmt.eur(realiseJour.revpar),
+      mtd: fmt.eur(realiseMTD.revpar),
+      proj: fmt.eur(projeteMois.revpar),
+      bud: fmt.eur(budget.revpar),
+      ec: fmt.ecartEur(ecart.revpar),
+      ecVal: ecart.revpar,
+    },
+    {
+      label: "Chiffre d'affaires",
+      rj: fmt.eurInt(realiseJour.roomRevenue),
+      mtd: fmt.eurInt(realiseMTD.roomRevenue),
+      proj: fmt.eurInt(projeteMois.roomRevenue),
+      bud: fmt.eurInt(budget.room_revenue),
+      ec: fmt.ecartEurInt(ecart.roomRevenue),
+      ecVal: ecart.roomRevenue,
+    },
   ]
 
   // Calculs barre de progression (même logique que SummaryCards)
@@ -57,10 +95,14 @@ function buildTableElement(data: EmailData): HTMLDivElement {
   const precedent = Math.max(0, acquis - caJour)
   const projete = Math.max(0, projeteMois.roomRevenue - acquis)
   const total = acquis + projete
-  const totalPct = budget.room_revenue > 0 ? (total / budget.room_revenue) * 100 : 0
+  const totalPct =
+    budget.room_revenue > 0 ? (total / budget.room_revenue) * 100 : 0
   const moisOver = totalPct > 100
   const maxScale = moisOver ? totalPct * 1.15 : 100
-  const pctOf = (v: number) => (budget.room_revenue > 0 ? ((v / budget.room_revenue) * 100 / maxScale) * 100 : 0)
+  const pctOf = (v: number) =>
+    budget.room_revenue > 0
+      ? (((v / budget.room_revenue) * 100) / maxScale) * 100
+      : 0
   const precedentW = pctOf(precedent)
   const jourW = pctOf(caJour)
   const projeteW = pctOf(projete)
@@ -75,15 +117,20 @@ function buildTableElement(data: EmailData): HTMLDivElement {
     </td>`
 
   const legendCells: string[] = []
-  if (precedent > 0) legendCells.push(legendCell('#4CAF50', `Acquis ${fmt.eurInt(precedent)}`))
-  if (caJour > 0) legendCells.push(legendCell('#D4A017', `Jour ${fmt.eurInt(caJour)}`))
-  if (projete > 0) legendCells.push(legendCell('#D1D5DB', `Projeté ${fmt.eurInt(projete)}`))
+  if (precedent > 0)
+    legendCells.push(legendCell('#4CAF50', `Acquis ${fmt.eurInt(precedent)}`))
+  if (caJour > 0)
+    legendCells.push(legendCell('#D4A017', `Jour ${fmt.eurInt(caJour)}`))
+  if (projete > 0)
+    legendCells.push(legendCell('#D1D5DB', `Projeté ${fmt.eurInt(projete)}`))
 
-  const card = 'background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border: 1px solid #E5E7EB; overflow: hidden;'
+  const card =
+    'background: #FFFFFF; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border: 1px solid #E5E7EB; overflow: hidden;'
   const sep = 'border-right: 1px solid #E5E7EB;'
 
   const container = document.createElement('div')
-  container.style.cssText = 'font-family: -apple-system, system-ui, sans-serif; background: transparent; padding: 16px; width: 540px;'
+  container.style.cssText =
+    'font-family: -apple-system, system-ui, sans-serif; background: transparent; padding: 16px; width: 540px;'
 
   // Padding top > bottom pour compenser le rendu visuel de la font dans html2canvas
   const cell = (text: string, align: string, color: string, extra = '') =>
@@ -104,10 +151,18 @@ function buildTableElement(data: EmailData): HTMLDivElement {
 
   // Card 2 : Barre — table pour aligner barre + pourcentage, puis table pour légende
   const barSegments = [
-    precedentW > 0 ? `<div style="position: absolute; top: 0; left: 0; width: ${precedentW}%; height: 8px; background: #4CAF50; border-top-left-radius: 4px; border-bottom-left-radius: 4px;"></div>` : '',
-    jourW > 0 ? `<div style="position: absolute; top: 0; left: ${precedentW}%; width: ${jourW}%; height: 8px; background: #D4A017;${precedentW === 0 ? ' border-top-left-radius: 4px; border-bottom-left-radius: 4px;' : ''}"></div>` : '',
-    projeteW > 0 ? `<div style="position: absolute; top: 0; left: ${precedentW + jourW}%; width: ${projeteW}%; height: 8px; background: #D1D5DB; border-top-right-radius: 4px; border-bottom-right-radius: 4px;"></div>` : '',
-    moisOver ? `<div style="position: absolute; top: -4px; left: ${goalPos}%; width: 1px; height: 16px; background: #1A1A1A;"></div>` : '',
+    precedentW > 0
+      ? `<div style="position: absolute; top: 0; left: 0; width: ${precedentW}%; height: 8px; background: #4CAF50; border-top-left-radius: 4px; border-bottom-left-radius: 4px;"></div>`
+      : '',
+    jourW > 0
+      ? `<div style="position: absolute; top: 0; left: ${precedentW}%; width: ${jourW}%; height: 8px; background: #D4A017;${precedentW === 0 ? ' border-top-left-radius: 4px; border-bottom-left-radius: 4px;' : ''}"></div>`
+      : '',
+    projeteW > 0
+      ? `<div style="position: absolute; top: 0; left: ${precedentW + jourW}%; width: ${projeteW}%; height: 8px; background: #D1D5DB; border-top-right-radius: 4px; border-bottom-right-radius: 4px;"></div>`
+      : '',
+    moisOver
+      ? `<div style="position: absolute; top: -4px; left: ${goalPos}%; width: 1px; height: 16px; background: #1A1A1A;"></div>`
+      : '',
   ].join('')
 
   container.innerHTML = `
@@ -158,6 +213,10 @@ export async function captureTableImage(data: EmailData): Promise<boolean> {
   document.body.appendChild(el)
 
   try {
+    // html2canvas est lourd et n'est utile qu'ici (actions admin ponctuelles) :
+    // chargé à la demande (chunk séparé) pour ne pas l'embarquer dans le bundle
+    // du dashboard.
+    const { default: html2canvas } = await import('html2canvas')
     const canvas = await html2canvas(el, {
       backgroundColor: null,
       scale: 1.5,
@@ -200,8 +259,14 @@ async function openMailWithRecipients(data: EmailData): Promise<void> {
 
   const recipients = await fetchRecipients()
   const active = recipients.filter((r) => r.active)
-  const toList = active.filter((r) => r.type === 'to').map((r) => r.email).join(';')
-  const ccList = active.filter((r) => r.type === 'cc').map((r) => r.email).join(';')
+  const toList = active
+    .filter((r) => r.type === 'to')
+    .map((r) => r.email)
+    .join(';')
+  const ccList = active
+    .filter((r) => r.type === 'cc')
+    .map((r) => r.email)
+    .join(';')
 
   let mailto = `mailto:${toList}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
   if (ccList) mailto += `&cc=${encodeURIComponent(ccList)}`

@@ -7,12 +7,12 @@ import {
   HelpCircle,
   Image as ImageIcon,
   LineChart,
-  Loader2,
   Settings,
 } from 'lucide-react'
 
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
 import { Button } from '#/components/ui/button.tsx'
+import { BoardSkeleton } from '#/components/repjour/BoardSkeleton.tsx'
 import { AlertBanner } from '#/components/repjour/AlertBanner.tsx'
 import { KPIDetailPanel } from '#/components/repjour/KPIDetailPanel.tsx'
 import { KPITable } from '#/components/repjour/KPITable.tsx'
@@ -207,8 +207,7 @@ export function DashboardBoard() {
     ? {
         nuitees: forecastMonthTotal.occ,
         roomRevenue: forecastMonthTotal.revTTC,
-        to:
-          (forecastMonthTotal.occ / (TOTAL_ROOMS * daysInMonthPartial)) * 100,
+        to: (forecastMonthTotal.occ / (TOTAL_ROOMS * daysInMonthPartial)) * 100,
         pm:
           forecastMonthTotal.occ > 0
             ? forecastMonthTotal.revTTC / forecastMonthTotal.occ
@@ -276,9 +275,7 @@ export function DashboardBoard() {
         </div>
 
         {loading ? (
-          <div className="flex h-48 items-center justify-center">
-            <Loader2 className="size-8 animate-spin text-primary" />
-          </div>
+          <BoardSkeleton />
         ) : !report && !hasPartialData ? (
           <div className="rounded-xl border border-border bg-card p-8 text-center">
             <p className="mb-3 text-4xl text-muted-foreground">—</p>

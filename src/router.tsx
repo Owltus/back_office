@@ -13,7 +13,11 @@ export function getRouter() {
     context,
     scrollRestoration: true,
     defaultPreload: 'intent',
-    defaultPreloadStaleTime: 0,
+    // Les données préchargées au survol (intent) restent réutilisables 1 min :
+    // la navigation réelle repart alors du cache au lieu de refetch (avant : 0,
+    // ce qui annulait le bénéfice du préchargement). Aligné sur le staleTime
+    // du QueryClient (voir lib/query.ts).
+    defaultPreloadStaleTime: 60_000,
     defaultNotFoundComponent: () => <NotFound />,
   })
 

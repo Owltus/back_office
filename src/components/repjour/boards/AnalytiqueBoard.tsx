@@ -1,18 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { Loader2 } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
 
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
+import { BoardSkeleton } from '#/components/repjour/BoardSkeleton.tsx'
 import { KpiLineChart } from '#/components/repjour/charts/KpiLineChart.tsx'
 import {
   fetchBudgetYears,
   fetchYearAnalytics,
   fetchYearBudget,
 } from '#/lib/repjour/services/daily.ts'
-import type { MonthAnalytics } from '#/lib/repjour/services/daily.ts'
 import { MONTHS_LABELS } from '#/lib/repjour/constants.ts'
 import { fmt } from '#/lib/repjour/format.ts'
-import type { MonthBudget } from '#/lib/repjour/types.ts'
 
 /*
  * Vue analytique annuelle — portée de la source AnalytiquePage.
@@ -45,40 +44,33 @@ interface AnnualSummary {
 export function AnalytiqueBoard() {
   const navigate = useNavigate()
   const [year, setYear] = useState(currentYear)
-  const [years, setYears] = useState<number[]>([])
-  const [analytics, setAnalytics] = useState<MonthAnalytics[]>([])
-  const [budgets, setBudgets] = useState<MonthBudget[]>([])
-  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    fetchBudgetYears()
-      .then((yrs) => {
-        const all = yrs.length > 0 ? yrs : [currentYear]
-        setYears(all)
-        if (!all.includes(year)) setYear(all[all.length - 1])
-      })
-      .catch((err) => {
-        console.error('[repjour] chargement des années budget échoué', err)
-        setYears([currentYear])
-      })
-    // Volontairement au montage uniquement (liste des années disponibles) : la
-    // valeur initiale de `year` (currentYear) est intentionnellement figée ici.
-  }, [])
+  // Liste des années disponibles (budget) — mise en cache par le QueryClient.
+  const { data: years = [] } = useQuery({
+    queryKey: ['repjour', 'budget-years'],
+    queryFn: async () => {
+      const yrs = await fetchBudgetYears()
+      return yrs.length > 0 ? yrs : [currentYear]
+    },
+  })
 
+  // Si l'année sélectionnée n'est pas dans la liste chargée, se caler sur la
+  // plus récente (remplace l'ajustement fait autrefois au montage).
   useEffect(() => {
-    setLoading(true)
-    Promise.all([fetchYearAnalytics(year), fetchYearBudget(year)])
-      .then(([a, b]) => {
-        setAnalytics(a)
-        setBudgets(b)
-      })
-      .catch((err) => {
-        console.error('[repjour] chargement analytique annuelle échoué', err)
-        setAnalytics([])
-        setBudgets([])
-      })
-      .finally(() => setLoading(false))
-  }, [year])
+    if (years.length > 0 && !years.includes(year)) {
+      setYear(years[years.length - 1])
+    }
+  }, [years, year])
+
+  // Agrégation annuelle + budget de l'année. Grâce au cache, revenir sur une
+  // année déjà consultée est instantané (plus de refetch systématique).
+  const { data, isPending: loading } = useQuery({
+    queryKey: ['repjour', 'year-analytics', year],
+    queryFn: () =>
+      Promise.all([fetchYearAnalytics(year), fetchYearBudget(year)]),
+  })
+  const analytics = data?.[0] ?? []
+  const budgets = data?.[1] ?? []
 
   const summary: AnnualSummary = useMemo(() => {
     const mwd = analytics.filter((m) => m.daysWithData > 0)
@@ -109,7 +101,8 @@ export function AnalytiqueBoard() {
     // Dernier mois réalisé/projeté (pas forecast) pour la jonction de courbes.
     let lastRealMonth = 0
     for (const m of analytics) {
-      if (m.source === 'realise' || m.source === 'projete') lastRealMonth = m.month
+      if (m.source === 'realise' || m.source === 'projete')
+        lastRealMonth = m.month
     }
 
     return analytics.map((m) => {
@@ -163,9 +156,7 @@ export function AnalytiqueBoard() {
         </div>
 
         {loading ? (
-          <div className="flex h-48 items-center justify-center">
-            <Loader2 className="size-8 animate-spin text-primary" />
-          </div>
+          <BoardSkeleton rows={12} />
         ) : (
           <>
             {/* Synthèse annuelle */}
@@ -351,7 +342,8 @@ export function AnalytiqueBoard() {
                     {analytics.map((m) => {
                       const b = budgetByMonth.get(m.month)
                       const hasData = m.source !== 'vide'
-                      const ecart = hasData && b ? m.revenue - b.room_revenue : 0
+                      const ecart =
+                        hasData && b ? m.revenue - b.room_revenue : 0
                       const isFuture =
                         (year === currentYear && m.month > currentMonth) ||
                         year > currentYear
@@ -373,7 +365,9 @@ export function AnalytiqueBoard() {
                         >
                           <td
                             className={`whitespace-nowrap px-3 py-2 text-xs font-medium ${
-                              hasData ? 'text-foreground' : 'text-muted-foreground'
+                              hasData
+                                ? 'text-foreground'
+                                : 'text-muted-foreground'
                             }`}
                           >
                             <span className="hidden sm:inline">
@@ -453,7 +447,9 @@ export function AnalytiqueBoard() {
                               </td>
                               <td
                                 className={`whitespace-nowrap px-3 py-2 text-center text-xs font-bold tabular-nums ${
-                                  ecart >= 0 ? 'text-emerald-500' : 'text-destructive'
+                                  ecart >= 0
+                                    ? 'text-emerald-500'
+                                    : 'text-destructive'
                                 } ${isFuture ? 'opacity-25' : ''}`}
                               >
                                 <span className="hidden sm:inline">

@@ -67,7 +67,7 @@ export function ProtectedRoute({
   allowedRoles: UserRole[]
   children: ReactNode
 }) {
-  const { user, role, loading } = useAuth()
+  const { user, role, loading, profileLoading } = useAuth()
 
   // 1. Session en cours de résolution.
   if (loading) return <GuardSpinner />
@@ -75,11 +75,13 @@ export function ProtectedRoute({
   // 2. Non connecté → page de login (normalement déjà intercepté par AppAuthGate).
   if (!user) return <Navigate to="/login" replace />
 
-  // 3. Connecté, session résolue (`loading` déjà false), mais aucun rôle : la
-  //    ligne `profiles` est absente. On NE rend PAS le contenu protégé
-  //    (correction D13 bug#2) et, plutôt qu'un spinner infini, on affiche un
-  //    message avec une sortie vers l'accueil.
-  if (role === null) return <NoRoleNotice />
+  // 3. Connecté, session résolue, mais pas encore de rôle. Deux cas à distinguer
+  //    (le profil est désormais chargé EN ARRIÈRE-PLAN, voir AuthContext) :
+  //    - `profileLoading` → le fetch du profil est en cours : spinner, PAS de
+  //      contenu protégé (ex-D13 bug#2, évite un flash) ;
+  //    - sinon → la ligne `profiles` est réellement absente : notice avec une
+  //      sortie vers l'accueil (plutôt qu'un spinner infini).
+  if (role === null) return profileLoading ? <GuardSpinner /> : <NoRoleNotice />
 
   // 4. Rôle connu mais non autorisé → accueil du rôle.
   if (!allowedRoles.includes(role)) {
