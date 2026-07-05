@@ -47,6 +47,7 @@ function FileDropSlot({
   slot,
   isDragOver,
   inputRef,
+  spacious = false,
   onOpen,
   onClear,
   onFile,
@@ -58,6 +59,8 @@ function FileDropSlot({
   slot: FileSlot
   isDragOver: boolean
   inputRef: RefObject<HTMLInputElement | null>
+  /** Variante agrandie : zone plus haute quand la carte occupe la page seule. */
+  spacious?: boolean
   onOpen: () => void
   onClear: () => void
   onFile: (file: File) => void
@@ -78,7 +81,7 @@ function FileDropSlot({
       onDrop={onDrop}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
-      className={`rounded-lg border-2 p-3 transition-colors ${border}`}
+      className={`rounded-lg border-2 transition-colors ${spacious ? 'p-5' : 'p-3'} ${border}`}
     >
       <div className="mb-1 flex items-center justify-between gap-2">
         <h3 className="truncate text-xs font-semibold text-foreground">
@@ -119,7 +122,7 @@ function FileDropSlot({
         <button
           type="button"
           onClick={onOpen}
-          className="flex w-full items-center justify-center gap-2 py-1.5 text-sm text-muted-foreground transition-colors hover:text-primary"
+          className={`flex w-full items-center justify-center gap-2 text-sm text-muted-foreground transition-colors hover:text-primary ${spacious ? 'py-8' : 'py-1.5'}`}
         >
           <FileUp className="size-4 shrink-0" />
           Déposer ou cliquer
@@ -141,7 +144,18 @@ function FileDropSlot({
   )
 }
 
-export function ImportSection({ onImported }: { onImported: () => void }) {
+export function ImportSection({
+  onImported,
+  spacious = false,
+}: {
+  onImported: () => void
+  /**
+   * Variante agrandie, réservée à l'état « carte seule » (aucune donnée pour le
+   * jour → la carte occupe toute la page). NE PAS activer quand le tableau est
+   * présent : la carte accompagnant le tableau reste compacte (spacious=false).
+   */
+  spacious?: boolean
+}) {
   const { user, role } = useAuth()
   const isAdmin = role === 'admin'
   const [comparison, setComparison] = useState<FileSlot>(EMPTY_SLOT)
@@ -231,11 +245,14 @@ export function ImportSection({ onImported }: { onImported: () => void }) {
     [handleFile],
   )
 
-  const onDragOver = useCallback((e: DragEvent, slot: 'comparison' | 'forecast') => {
-    e.preventDefault()
-    e.stopPropagation()
-    setDragOverSlot(slot)
-  }, [])
+  const onDragOver = useCallback(
+    (e: DragEvent, slot: 'comparison' | 'forecast') => {
+      e.preventDefault()
+      e.stopPropagation()
+      setDragOverSlot(slot)
+    },
+    [],
+  )
 
   const onDragLeave = useCallback((e: DragEvent) => {
     e.preventDefault()
@@ -303,10 +320,16 @@ export function ImportSection({ onImported }: { onImported: () => void }) {
   const canImport = isAdmin ? comparison.status === 'ready' : bothReady
 
   return (
-    <div className="space-y-3 rounded-xl border border-border bg-card p-4">
+    <div
+      className={`rounded-xl border border-border bg-card ${spacious ? 'space-y-5 p-6 sm:p-8' : 'space-y-3 p-4'}`}
+    >
       <div className="flex items-center gap-2">
-        <FileUp className="size-4 shrink-0 text-primary" />
-        <h2 className="text-sm font-semibold text-foreground">
+        <FileUp
+          className={`shrink-0 text-primary ${spacious ? 'size-5' : 'size-4'}`}
+        />
+        <h2
+          className={`font-semibold text-foreground ${spacious ? 'text-base' : 'text-sm'}`}
+        >
           Importer un rapport
         </h2>
         <span className="hidden truncate text-xs text-muted-foreground sm:inline">
@@ -320,12 +343,15 @@ export function ImportSection({ onImported }: { onImported: () => void }) {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div
+        className={`grid grid-cols-1 sm:grid-cols-2 ${spacious ? 'gap-4' : 'gap-3'}`}
+      >
         <FileDropSlot
           title="Comparison By Date"
           slot={comparison}
           isDragOver={dragOverSlot === 'comparison'}
           inputRef={compRef}
+          spacious={spacious}
           onOpen={() => compRef.current?.click()}
           onClear={() => {
             setComparison(EMPTY_SLOT)
@@ -341,6 +367,7 @@ export function ImportSection({ onImported }: { onImported: () => void }) {
           slot={forecast}
           isDragOver={dragOverSlot === 'forecast'}
           inputRef={foreRef}
+          spacious={spacious}
           onOpen={() => foreRef.current?.click()}
           onClear={() => setForecast(EMPTY_SLOT)}
           onFile={(f) => handleFile(f, 'forecast')}
@@ -352,15 +379,17 @@ export function ImportSection({ onImported }: { onImported: () => void }) {
 
       {detectedDate && (
         <p className="text-xs text-muted-foreground">
-          Date du rapport : {detectedDate.dayOfMonth} {MONTHS[detectedDate.month]}{' '}
-          {detectedDate.year} — jour {detectedDate.dayOfMonth}/
-          {detectedDate.daysInMonth}
+          Date du rapport : {detectedDate.dayOfMonth}{' '}
+          {MONTHS[detectedDate.month]} {detectedDate.year} — jour{' '}
+          {detectedDate.dayOfMonth}/{detectedDate.daysInMonth}
         </p>
       )}
 
       {validationErrors.length > 0 && (
         <div className="space-y-2">
-          <p className="text-sm font-medium text-destructive">Import refusé :</p>
+          <p className="text-sm font-medium text-destructive">
+            Import refusé :
+          </p>
           <AlertBanner alerts={validationErrors} />
         </div>
       )}

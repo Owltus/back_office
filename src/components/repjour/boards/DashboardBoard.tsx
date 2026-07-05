@@ -474,6 +474,7 @@ export function DashboardBoard() {
           isImportDay &&
           (isAdmin || !report) && (
             <ImportSection
+              spacious={importOnly}
               onImported={() =>
                 loadReport(selectedDateRef.current || undefined)
               }
