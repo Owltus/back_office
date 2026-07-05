@@ -1,13 +1,61 @@
+# Dépendances
 node_modules
-.DS_Store
+
+# Sorties de build
 dist
 dist-ssr
-*.local
-.env
-.nitro
-.tanstack
-.wrangler
 .output
+.nitro
 .vinxi
+.wrangler
+
+# Caches TanStack / Vite
+.tanstack
+.vite
+
+# Variables d'environnement & secrets
+# (tout .env est ignoré SAUF le modèle .env.example, versionné)
+.env
+.env.*
+!.env.example
+*.local
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Tests / couverture
+coverage
+
+# TypeScript
+*.tsbuildinfo
+
+# Supabase CLI (les fichiers .sql versionnés dans supabase/ restent suivis)
+supabase/.temp
+supabase/.branches
+supabase/.env
+
+# Éditeurs / IDE
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+
+# Fichiers système (OS)
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Divers
 __unconfig*
 todos.json
