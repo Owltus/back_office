@@ -186,7 +186,11 @@
   width: 2.4rem;
   height: 2.4rem;
   color: var(--pdj-accent, var(--primary));
-  background: color-mix(in oklab, var(--pdj-accent, var(--primary)) 16%, transparent);
+  background: color-mix(
+    in oklab,
+    var(--pdj-accent, var(--primary)) 16%,
+    transparent
+  );
   border-radius: calc(var(--radius) - 4px);
 }
 .pdj-stat-body {
@@ -207,6 +211,12 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--muted-foreground);
+}
+
+/* Carte KPI présente dans le PDF uniquement (masquée à l'écran) : conserve
+   une rangée écran équilibrée tout en gardant le footer d'impression complet. */
+.pdj-stat-print-only {
+  display: none;
 }
 
 .pdj-error {
@@ -375,6 +385,11 @@
     background: #fff;
     border: 2px solid #333;
   }
+  /* Case cochée : miroir du « servi » saisi à l'écran (breakfasts_served). */
+  .pdj-checkbox.pdj-checked {
+    background: #333;
+    border-color: #333;
+  }
 
   /* Statistiques en footer fixe */
   .pdj-stats {
@@ -461,5 +476,9 @@
   /* KPI présents à l'écran uniquement (le footer PDF garde ses 5 colonnes) */
   .pdj-stat-extra {
     display: none !important;
+  }
+  /* Carte « impression seule » (ex. Départ) : réaffichée dans le PDF. */
+  .pdj-stat-print-only {
+    display: block !important;
   }
 }
