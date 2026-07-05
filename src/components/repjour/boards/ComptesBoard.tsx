@@ -57,6 +57,7 @@ const ROLES: UserRole[] = ['utilisateur', 'super_utilisateur', 'admin']
 // L'erreur d'une Edge Function (FunctionsHttpError) porte le corps de la réponse
 // dans `context` (un objet Response). On en extrait le message métier `{ error }`
 // pour l'afficher tel quel plutôt qu'un « Edge Function returned a non-2xx… ».
+// Partagé par la création (`create-user`) et la révocation (`delete-user`).
 async function readFunctionError(error: unknown): Promise<string> {
   const ctx = (error as { context?: Response }).context
   if (ctx && typeof ctx.json === 'function') {
@@ -67,7 +68,7 @@ async function readFunctionError(error: unknown): Promise<string> {
       // corps non-JSON : on retombe sur le message générique ci-dessous
     }
   }
-  return error instanceof Error ? error.message : 'Création du compte échouée'
+  return error instanceof Error ? error.message : 'Opération échouée'
 }
 
 function RoleSelect({
@@ -293,23 +294,38 @@ export function ComptesBoard() {
       editProfile.email
     if (
       !window.confirm(
-        `Supprimer le compte de ${name} ? Cela retire son accès au Back Office.`,
+        `Supprimer le compte de ${name} ? Il ne pourra plus se connecter (accès révoqué).`,
       )
     )
       return
     setDeleting(true)
     setMessage('')
-    // Supprime la ligne `profiles` (RLS « Admin manages profiles » FOR ALL) :
-    // l'utilisateur perd son rôle, donc tout accès. NB : l'identifiant de
-    // connexion (auth.users) n'est PAS supprimable avec la clé anon — cela
-    // exigerait la clé service_role (interdite côté client) ou le dashboard.
-    const { error } = await supabase
+    // 1) Révocation de l'accès via l'Edge Function `delete-user` (service_role
+    //    côté serveur) : elle bannit l'identité `auth.users`. Un simple delete de
+    //    `profiles` laisserait l'identifiant de connexion actif → l'utilisateur
+    //    pourrait toujours se connecter (c'était le bug).
+    const { error } = await supabase.functions.invoke('delete-user', {
+      body: { userId: editProfile.id },
+    })
+    if (error) {
+      setMessage('Erreur suppression : ' + (await readFunctionError(error)))
+      setDeleting(false)
+      return
+    }
+    // 2) Accès coupé → on retire la ligne `profiles` sous la session admin (RLS
+    //    « Admin manages profiles »), pour que le compte quitte la gestion. Si ce
+    //    retrait échoue, l'accès reste révoqué (le ban précède) ; un réessai est
+    //    sans danger (ban idempotent).
+    const { error: profileErr } = await supabase
       .from('profiles')
       .delete()
       .eq('id', editProfile.id)
-    if (error) {
-      setMessage('Erreur suppression : ' + error.message)
+    if (profileErr) {
+      setMessage(
+        'Accès révoqué, mais retrait du profil échoué : ' + profileErr.message,
+      )
       setDeleting(false)
+      loadProfiles()
       return
     }
     setDeleting(false)
