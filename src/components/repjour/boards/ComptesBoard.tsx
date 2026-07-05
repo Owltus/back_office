@@ -103,6 +103,7 @@ export function ComptesBoard() {
   const [showCreate, setShowCreate] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [role, setRole] = useState<UserRole>('utilisateur')
@@ -115,6 +116,7 @@ export function ComptesBoard() {
     role: 'utilisateur' as UserRole,
   })
   const [editPassword, setEditPassword] = useState('')
+  const [confirmEditPassword, setConfirmEditPassword] = useState('')
   const [savingEdit, setSavingEdit] = useState(false)
 
   async function loadProfiles() {
@@ -133,6 +135,7 @@ export function ComptesBoard() {
   const resetCreate = () => {
     setEmail('')
     setPassword('')
+    setConfirmPassword('')
     setFirstName('')
     setLastName('')
     setRole('utilisateur')
@@ -146,6 +149,10 @@ export function ComptesBoard() {
     }
     if (!isPasswordValid(password)) {
       setMessage('Le mot de passe ne respecte pas les critères')
+      return
+    }
+    if (password !== confirmPassword) {
+      setMessage('Les mots de passe ne correspondent pas')
       return
     }
     setCreating(true)
@@ -213,6 +220,7 @@ export function ComptesBoard() {
       role: p.role,
     })
     setEditPassword('')
+    setConfirmEditPassword('')
     setMessage('')
   }
 
@@ -244,6 +252,11 @@ export function ComptesBoard() {
     if (editPassword.trim()) {
       if (!isPasswordValid(editPassword)) {
         setMessage('Le mot de passe ne respecte pas les critères')
+        setSavingEdit(false)
+        return
+      }
+      if (editPassword !== confirmEditPassword) {
+        setMessage('Les mots de passe ne correspondent pas')
         setSavingEdit(false)
         return
       }
@@ -450,6 +463,8 @@ export function ComptesBoard() {
             <PasswordInput
               value={password}
               onChange={setPassword}
+              confirmValue={confirmPassword}
+              onConfirmChange={setConfirmPassword}
               placeholder="Mot de passe"
             />
           </div>
@@ -540,6 +555,8 @@ export function ComptesBoard() {
                 <PasswordInput
                   value={editPassword}
                   onChange={setEditPassword}
+                  confirmValue={confirmEditPassword}
+                  onConfirmChange={setConfirmEditPassword}
                   placeholder="Laisser vide pour ne pas changer"
                   optional
                 />

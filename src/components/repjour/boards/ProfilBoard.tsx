@@ -26,10 +26,10 @@ export function ProfilBoard() {
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [newPassword, setNewPassword] = useState('')
+  const [confirmNewPassword, setConfirmNewPassword] = useState('')
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
     if (profile) {
       setFirstName(profile.first_name)
@@ -68,11 +68,17 @@ export function ProfilBoard() {
           setSaving(false)
           return
         }
+        if (newPassword !== confirmNewPassword) {
+          setMessage('Les mots de passe ne correspondent pas')
+          setSaving(false)
+          return
+        }
         const { error: pwError } = await supabase.auth.updateUser({
           password: newPassword,
         })
         if (pwError) throw pwError
         setNewPassword('')
+        setConfirmNewPassword('')
       }
 
       await refreshProfile()
@@ -86,7 +92,10 @@ export function ProfilBoard() {
     }
   }
 
-  const isError = message.includes('Erreur') || message.includes('critères')
+  const isError =
+    message.includes('Erreur') ||
+    message.includes('critères') ||
+    message.includes('correspondent')
 
   return (
     <PageContainer>
@@ -146,6 +155,8 @@ export function ProfilBoard() {
           <PasswordInput
             value={newPassword}
             onChange={setNewPassword}
+            confirmValue={confirmNewPassword}
+            onConfirmChange={setConfirmNewPassword}
             placeholder="Nouveau mot de passe"
             optional
           />
