@@ -56,6 +56,11 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 
+# Exports PMS bruts (données clients / PII : noms, notes, réfs CB…) — JAMAIS
+# versionnés. Servent uniquement aux tests locaux ; la table Supabase ne
+# persiste que des données minimisées (voir src/lib/pdj/).
+csv/
+
 # Divers
 __unconfig*
 todos.json

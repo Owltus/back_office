@@ -7,9 +7,15 @@ import { range } from '#/lib/utils.ts'
  * au petit-déjeuner (fonctions pures, sans React ni rendu).
  *
  * Règles métier reprises telles quelles :
- *   - on ne garde que les clients « IN HOUSE » / « DUE OUT » (présents au PDJ) ;
+ *   - on ne garde que les clients « IN HOUSE » / « DUE OUT » (présents au PDJ)
+ *     pour un fichier « du jour » ; pour un fichier archive (aucun statut actif),
+ *     on garde toute ligne ayant un statut ;
  *   - PDJ inclus ⟺ la colonne `Addons` contient « PDJ » (insensible à la casse) ;
  *   - nb de PDJ inclus = 1 si tarif « BB1PAX », sinon adultes + enfants.
+ *
+ * Deux producteurs partagent le même parsing (`parseGuestRows`) :
+ *   - `processCsv` → `GuestMap` (affichage live historique) ;
+ *   - `csvToDbRows` → lignes DB datées (persistance Supabase, RGPD).
  * ------------------------------------------------------------------------ */
 
 export interface Guest {
@@ -82,7 +88,55 @@ export function dateFromFilename(filename: string): Date | null {
   )
 }
 
-export function processCsv(content: string): GuestMap {
+// 'YYYY-MM-DD' à partir des composantes LOCALES d'une Date (Europe/Paris côté
+// réception) — sert de clé `service_date` et de comparaison RGPD.
+export function localDateStr(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+// '24-04-2026 02:54 PM' → '2026-04-24' (date seule, heure écartée). null sinon.
+export function csvDateToIso(value: string): string | null {
+  const m = value.trim().match(/^(\d{2})-(\d{2})-(\d{4})/)
+  if (!m) return null
+  return `${m[3]}-${m[2]}-${m[1]}`
+}
+
+/** Ligne intermédiaire : tous les champs utiles extraits d'une ligne CSV. */
+export interface ParsedRow {
+  room: number
+  status: string
+  guestName: string
+  vip: boolean
+  adults: number
+  children: number
+  guests: number
+  roomType: string | null
+  nights: number | null
+  ratePlan: string | null
+  channel: string | null
+  company: string | null
+  guarantee: string | null
+  paymentType: string | null
+  addons: string | null
+  adr: number | null
+  arrivalDate: string | null
+  departureDate: string | null
+  stayCount: number
+  breakfastsIncluded: number
+}
+
+/**
+ * Parsing partagé : renvoie les lignes clients retenues, tous champs extraits.
+ *
+ * Ne lit QUE des colonnes situées avant `Res. Notes` (col 26) : les notes
+ * libres contiennent des retours à la ligne dans un champ quoté qui casseraient
+ * un découpage naïf. On ne mappe donc jamais `Guest Notes`/`Party` (après col 26)
+ * ni les colonnes ultra-sensibles (notes, plaque, accompagnants, identifiants).
+ */
+export function parseGuestRows(content: string): ParsedRow[] {
   const separator = content.split('\n')[0].includes(';') ? ';' : ','
   const lines = content.split('\n').filter((l) => l.trim())
   const headers = parseCsvLine(lines[0], separator)
@@ -97,7 +151,16 @@ export function processCsv(content: string): GuestMap {
       ['children', 'Children'],
       ['addons', 'Addons'],
       ['rate', 'Rate'],
-      ['stayCount', 'Stay Count'], // optionnelle
+      ['stayCount', 'Stay Count'],
+      ['roomType', 'Room Type'],
+      ['nights', 'No of Nights'],
+      ['channel', 'TravelAgent'],
+      ['company', 'Company'],
+      ['guarantee', 'Guarantee'],
+      ['paymentType', 'Payment Type'],
+      ['adr', 'Adr'],
+      ['arrival', 'Arrival'],
+      ['departure', 'Departure'],
     ].map(([key, header]) => [key, headers.indexOf(header)]),
   ) as Record<string, number>
 
@@ -108,27 +171,46 @@ export function processCsv(content: string): GuestMap {
     )
   }
 
-  // Deux passes : on détecte d'abord la présence de clients actifs.
-  // Fichier « du jour » → on ne garde que IN HOUSE / DUE OUT.
-  // Fichier archive → on garde toute ligne ayant un statut.
+  // Un n° de chambre est toujours numérique → écarte l'en-tête, le pied de page
+  // « TOTAL ROOMS » et les lignes de continuation des notes multilignes.
   const rows = lines
     .slice(1)
     .map((l) => parseCsvLine(l.trim(), separator))
     .filter((v) => {
       const room = v[col.room]?.trim()
-      return room && !isNaN(Number(room)) // un n° de chambre est toujours numérique
+      return room && !isNaN(Number(room))
     })
 
+  // Fichier « du jour » → seulement IN HOUSE / DUE OUT ; archive → tout statut.
   const hasActiveGuests = rows.some((v) => {
     const status = v[col.status]?.trim()
     return status && (status.includes('IN HOUSE') || status.includes('DUE OUT'))
   })
 
-  const guests: GuestMap = {}
+  const strOrNull = (v: string[], i: number): string | null => {
+    if (i === -1) return null
+    const s = v[i]?.replace(/"/g, '').trim()
+    return s ? s : null
+  }
+  const numOrNull = (v: string[], i: number): number | null => {
+    if (i === -1) return null
+    const n = parseInt(v[i] ?? '')
+    return isNaN(n) ? null : n
+  }
+  const floatOrNull = (v: string[], i: number): number | null => {
+    if (i === -1) return null
+    const n = parseFloat((v[i] ?? '').replace(',', '.'))
+    return isNaN(n) ? null : n
+  }
+
+  const result: ParsedRow[] = []
   for (const v of rows) {
-    const status = v[col.status]?.trim()
+    const status = v[col.status]?.trim() ?? ''
     if (hasActiveGuests) {
-      if (!status || (!status.includes('IN HOUSE') && !status.includes('DUE OUT'))) {
+      if (
+        !status ||
+        (!status.includes('IN HOUSE') && !status.includes('DUE OUT'))
+      ) {
         continue
       }
     } else if (!status) {
@@ -138,27 +220,125 @@ export function processCsv(content: string): GuestMap {
     const addons = v[col.addons] ?? ''
     const rate = v[col.rate] ?? ''
     const hasPDJ = addons.toUpperCase().includes('PDJ')
-    const numAdults = parseInt(v[col.adults]) || 0
-    const numChildren = parseInt(v[col.children]) || 0
-    const numGuests = numAdults + numChildren
+    const adults = parseInt(v[col.adults]) || 0
+    const children = parseInt(v[col.children]) || 0
+    const guests = adults + children
+    const breakfastsIncluded = hasPDJ
+      ? rate.toUpperCase().includes('BB1PAX')
+        ? 1
+        : guests
+      : 0
 
-    let breakfastsIncluded = 0
-    if (hasPDJ) {
-      // BB1PAX = 1 seul PDJ ; sinon 1 PDJ par client.
-      breakfastsIncluded = rate.toUpperCase().includes('BB1PAX') ? 1 : numGuests
-    }
-
-    const room = Number(v[col.room].trim())
-    guests[room] = {
-      room,
-      status: status ?? '',
-      guestName: v[col.guestName]?.replace(/"/g, '').trim() || 'Non renseigné',
+    result.push({
+      room: Number(v[col.room].trim()),
+      status,
+      guestName: v[col.guestName]?.replace(/"/g, '').trim() || '',
       vip: Boolean(v[col.vip]?.trim()),
-      guests: numGuests,
-      breakfastsIncluded,
+      adults,
+      children,
+      guests,
+      roomType: strOrNull(v, col.roomType),
+      nights: numOrNull(v, col.nights),
+      ratePlan: strOrNull(v, col.rate),
+      channel: strOrNull(v, col.channel),
+      company: strOrNull(v, col.company),
+      guarantee: strOrNull(v, col.guarantee),
+      paymentType: strOrNull(v, col.paymentType),
+      addons: strOrNull(v, col.addons),
+      adr: floatOrNull(v, col.adr),
+      arrivalDate: csvDateToIso(v[col.arrival] ?? ''),
+      departureDate: csvDateToIso(v[col.departure] ?? ''),
       stayCount: col.stayCount !== -1 ? parseInt(v[col.stayCount]) || 0 : 0,
-    }
+      breakfastsIncluded,
+    })
   }
 
+  return result
+}
+
+/** Vue par chambre pour l'affichage live (comportement historique conservé). */
+export function processCsv(content: string): GuestMap {
+  const guests: GuestMap = {}
+  for (const r of parseGuestRows(content)) {
+    guests[r.room] = {
+      room: r.room,
+      status: r.status,
+      guestName: r.guestName || 'Non renseigné',
+      vip: r.vip,
+      guests: r.guests,
+      breakfastsIncluded: r.breakfastsIncluded,
+      stayCount: r.stayCount,
+    }
+  }
   return guests
+}
+
+/** Ligne DB écrite à l'import (snake_case). Sans consommation ni id/timestamps. */
+export interface DbPdjRow {
+  service_date: string
+  room: number
+  guest_name: string | null
+  status: string
+  vip: boolean
+  adults: number
+  children: number
+  guests: number
+  no_of_nights: number | null
+  room_type: string | null
+  rate_plan: string | null
+  channel: string | null
+  company: string | null
+  guarantee: string | null
+  payment_type: string | null
+  addons: string | null
+  adr: number | null
+  arrival_date: string | null
+  departure_date: string | null
+  stay_count: number
+  breakfasts_included: number
+  source_file: string
+}
+
+/**
+ * Transforme un CSV en lignes DB datées d'après le nom de fichier.
+ *
+ * RGPD (D2) : le nom du client n'est stocké que si `service_date` est le jour
+ * courant (Europe/Paris) ; tout import d'une date passée écrit `guest_name = null`
+ * mais conserve toutes les stats. Les colonnes ultra-sensibles ne sont jamais
+ * mappées (minimisation « by design »).
+ */
+export function csvToDbRows(content: string, fileName: string): DbPdjRow[] {
+  const date = dateFromFilename(fileName)
+  if (!date) {
+    throw new Error(
+      'Date non extractible du nom de fichier : un export « In-House Guests _YYYYMMDD… » est attendu.',
+    )
+  }
+  const serviceDate = localDateStr(date)
+  const isToday = serviceDate === localDateStr(new Date())
+
+  return parseGuestRows(content).map((r) => ({
+    service_date: serviceDate,
+    room: r.room,
+    guest_name: isToday ? r.guestName || null : null,
+    status: r.status,
+    vip: r.vip,
+    adults: r.adults,
+    children: r.children,
+    guests: r.guests,
+    no_of_nights: r.nights,
+    room_type: r.roomType,
+    rate_plan: r.ratePlan,
+    channel: r.channel,
+    company: r.company,
+    guarantee: r.guarantee,
+    payment_type: r.paymentType,
+    addons: r.addons,
+    adr: r.adr,
+    arrival_date: r.arrivalDate,
+    departure_date: r.departureDate,
+    stay_count: r.stayCount,
+    breakfasts_included: r.breakfastsIncluded,
+    source_file: fileName,
+  }))
 }
