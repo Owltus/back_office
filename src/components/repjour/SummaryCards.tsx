@@ -60,7 +60,7 @@ export function SummaryCards({
   const moisMaxScale = moisOver ? totalProgress * 1.15 : 100
   const pctOf = (v: number) =>
     budget.room_revenue > 0
-      ? ((v / budget.room_revenue) * 100 / moisMaxScale) * 100
+      ? (((v / budget.room_revenue) * 100) / moisMaxScale) * 100
       : 0
   const precedentWidth = pctOf(precedent)
   const jourWidth = pctOf(caJour)
@@ -112,7 +112,8 @@ export function SummaryCards({
                   left: `${precedentWidth}%`,
                   width: `${jourWidth}%`,
                   backgroundColor: COLOR_JOUR,
-                  borderTopLeftRadius: precedentWidth === 0 ? '9999px' : undefined,
+                  borderTopLeftRadius:
+                    precedentWidth === 0 ? '9999px' : undefined,
                   borderBottomLeftRadius:
                     precedentWidth === 0 ? '9999px' : undefined,
                 }}
@@ -149,7 +150,8 @@ export function SummaryCards({
           {precedent > 0 && (
             <span className="flex items-center gap-1.5">
               <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500" />
-              Acquis {fmt.eurInt(precedent)}
+              <span className="hidden sm:inline">Acquis </span>
+              {fmt.eurInt(precedent)}
             </span>
           )}
           {!partial && caJour > 0 && (
@@ -158,19 +160,22 @@ export function SummaryCards({
                 className="inline-block h-2.5 w-2.5 rounded-full"
                 style={{ backgroundColor: COLOR_JOUR }}
               />
-              Jour {fmt.eurInt(caJour)}
+              <span className="hidden sm:inline">Jour </span>
+              {fmt.eurInt(caJour)}
             </span>
           )}
           {projete > 0 && (
             <span className="flex items-center gap-1.5">
               <span className="inline-block h-2.5 w-2.5 rounded-full bg-muted-foreground" />
-              Projeté {fmt.eurInt(projete)}
+              <span className="hidden sm:inline">Projeté </span>
+              {fmt.eurInt(projete)}
             </span>
           )}
           {total < budget.room_revenue && (
             <span className="flex items-center gap-1.5 text-destructive">
               <span className="inline-block h-2.5 w-2.5 rounded-full bg-destructive" />
-              Reste {fmt.eurInt(budget.room_revenue - total)}
+              <span className="hidden sm:inline">Reste </span>
+              {fmt.eurInt(budget.room_revenue - total)}
             </span>
           )}
         </div>
