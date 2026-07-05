@@ -1,15 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '@tanstack/react-store'
-import { ChevronDown } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Pencil, Plus, Trash2 } from 'lucide-react'
 
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
+import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
 import { Label } from '#/components/ui/label.tsx'
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '#/components/ui/popover.tsx'
 import {
   Select,
   SelectContent,
@@ -27,25 +24,31 @@ import {
   TimeField,
 } from '#/components/form/fields.tsx'
 import { PosterPreview } from '#/components/affiche/Poster.tsx'
-import { COLORS } from '#/lib/poster/config.ts'
-import type { ColorKey } from '#/lib/poster/config.ts'
-import {
-  getAvailableIcons,
-  getIconName,
-  getIconSvg,
-} from '#/lib/poster/icons.ts'
+import { IconPicker, ColorPicker } from '#/components/affiche/pickers.tsx'
+import { TemplateDialog } from '#/components/affiche/TemplateDialog.tsx'
 import {
   calculateAutoSizes,
   calculateIconSize,
 } from '#/lib/poster/sizeCalculator.ts'
-import { getTemplatesList } from '#/lib/poster/templates.ts'
 import { hasEnglishContent } from '#/lib/poster/types.ts'
+import { useAuth } from '#/components/auth/AuthContext.tsx'
+import type {
+  AfficheTemplate,
+  AfficheTemplateInput,
+} from '#/lib/affiche/model.ts'
+import {
+  createTemplate,
+  deleteTemplate,
+  fetchTemplates,
+  toDbInsert,
+  toDbPatch,
+  updateTemplate,
+} from '#/lib/affiche/service.ts'
 import {
   afficheStore,
   applyAfficheTemplate,
   setAffiche,
 } from '#/lib/afficheStore.ts'
-import { cn } from '#/lib/utils.ts'
 import { printWithTitle } from '#/lib/print.ts'
 
 /* --------------------------------------------------------------------------
@@ -63,26 +66,6 @@ import { printWithTitle } from '#/lib/print.ts'
  *   - mode manuel → 4 sliders pilotent les tailles, chacun masqué si l'élément
  *     associé est absent (updateVisibleControls du fork).
  * ------------------------------------------------------------------------ */
-
-const TEMPLATES = getTemplatesList()
-const ICON_KEYS = getAvailableIcons()
-// Le thème « OKKO » (défaut) est affiché en premier dans le dropdown.
-const COLOR_KEYS = (Object.keys(COLORS) as ColorKey[]).sort((a, b) =>
-  a === 'okko' ? -1 : b === 'okko' ? 1 : 0,
-)
-
-// Pastille de thème : cercle divisé en deux à 45° — fond du thème en haut à
-// gauche, couleur d'accent en bas à droite. La transition de 1px entre les
-// deux moitiés lisse la frontière (le stop dur du fork crénelait), et le
-// background est clippé au padding-box pour ne pas baver sous le liseré
-// semi-transparent (effet de « zoom » du contenu).
-function colorSwatch(colorKey: ColorKey): React.CSSProperties {
-  const c = COLORS[colorKey]
-  return {
-    background: `linear-gradient(135deg, ${c.bg} calc(50% - 0.5px), ${c.border} calc(50% + 0.5px))`,
-    backgroundClip: 'padding-box',
-  }
-}
 
 export function AffichageBoard() {
   // État persisté dans le store module-level : il survit à la navigation.
@@ -107,8 +90,87 @@ export function AffichageBoard() {
   } = state
 
   // Popovers icône / couleur (état d'UI local, non persisté).
-  const [iconOpen, setIconOpen] = useState(false)
-  const [colorOpen, setColorOpen] = useState(false)
+  const { role } = useAuth()
+  const canEdit = role === 'super_utilisateur' || role === 'admin'
+  const queryClient = useQueryClient()
+
+  // Modèles chargés depuis Supabase (cache TanStack Query) — remplace la
+  // collection en dur.
+  const { data: templates = [] } = useQuery({
+    queryKey: ['affiche', 'templates'],
+    queryFn: fetchTemplates,
+  })
+
+  // Au premier chargement, si l'affiche est encore vierge, on applique le
+  // premier modèle disponible (l'app ne démarre jamais sur une page blanche).
+  const autoAppliedRef = useRef(false)
+  useEffect(() => {
+    if (autoAppliedRef.current || templates.length === 0) return
+    autoAppliedRef.current = true
+    const pristine =
+      selectedTemplate === '' &&
+      titleFr === '' &&
+      messageFr === '' &&
+      titleEn === '' &&
+      messageEn === ''
+    if (pristine) applyAfficheTemplate(templates[0])
+  }, [templates, selectedTemplate, titleFr, messageFr, titleEn, messageEn])
+
+  // Modèle actuellement sélectionné (pour éditer / supprimer).
+  const selected = templates.find((t) => t.id === selectedTemplate) ?? null
+
+  // Dialog de création / édition, réservé aux rôles autorisés (canEdit).
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [editing, setEditing] = useState<AfficheTemplate | null>(null)
+
+  const invalidateTemplates = () =>
+    queryClient.invalidateQueries({ queryKey: ['affiche', 'templates'] })
+
+  async function handleSubmitTemplate(input: AfficheTemplateInput) {
+    if (!canEdit) return
+    try {
+      if (editing) {
+        await updateTemplate(editing.id, toDbPatch(input))
+        // Rafraîchit l'aperçu si le modèle édité est celui affiché.
+        if (selectedTemplate === editing.id) {
+          applyAfficheTemplate({ id: editing.id, ...input })
+        }
+      } else {
+        const created: AfficheTemplate = { id: crypto.randomUUID(), ...input }
+        await createTemplate(toDbInsert(created, templates.length))
+        applyAfficheTemplate(created)
+      }
+      await invalidateTemplates()
+      setDialogOpen(false)
+      setEditing(null)
+    } catch (err) {
+      console.error('[affiche] enregistrement du modèle échoué', err)
+    }
+  }
+
+  async function handleDeleteTemplate() {
+    if (!canEdit || !selected) return
+    if (!window.confirm(`Supprimer le modèle « ${selected.name} » ?`)) return
+    try {
+      await deleteTemplate(selected.id)
+      if (selectedTemplate === selected.id) setAffiche({ selectedTemplate: '' })
+      await invalidateTemplates()
+    } catch (err) {
+      console.error('[affiche] suppression du modèle échouée', err)
+    }
+  }
+
+  function openCreate() {
+    if (!canEdit) return
+    setEditing(null)
+    setDialogOpen(true)
+  }
+
+  function openEdit() {
+    if (!canEdit || !selected) return
+    setEditing(selected)
+    setDialogOpen(true)
+  }
 
   // --- Tailles auto DÉRIVÉES au render (portage de updateSizeMode + adjustIconSize) --
   // Calcul pur (useMemo), plus d'écriture dans le store via effet : chaque frappe
@@ -264,146 +326,86 @@ export function AffichageBoard() {
         {/* Card réglages : modèle, icône, couleur, dates/horaires, tailles.
             flex-1 : elle s'étire jusqu'en bas, comme la card de gauche. */}
         <aside className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto rounded-xl border border-border bg-card p-5">
-          {/* Templates */}
+          {/* Modèles : sélection (tous les rôles) + barre de gestion (création /
+              édition / suppression, réservée aux rôles super_utilisateur / admin).
+              Le Select occupe sa propre ligne ; les actions passent en dessous
+              pour rester visibles dans la colonne étroite. */}
           <Field label="Modèle prédéfini">
-            <Select
-              value={selectedTemplate}
-              onValueChange={applyAfficheTemplate}
-            >
-              <SelectTrigger className="w-full" aria-label="Choisir un modèle">
-                <SelectValue placeholder="Choisir un modèle" />
-              </SelectTrigger>
-              <SelectContent position="popper">
-                {TEMPLATES.map((t) => (
-                  <SelectItem key={t.key} value={t.key}>
-                    {t.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex flex-col gap-2">
+              <Select
+                value={selectedTemplate}
+                onValueChange={(id) => {
+                  const t = templates.find((tpl) => tpl.id === id)
+                  if (t) applyAfficheTemplate(t)
+                }}
+              >
+                <SelectTrigger
+                  className="w-full"
+                  aria-label="Choisir un modèle"
+                >
+                  <SelectValue placeholder="Choisir un modèle" />
+                </SelectTrigger>
+                <SelectContent position="popper">
+                  {templates.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {canEdit && (
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={openCreate}
+                    className="flex-1"
+                    title="Nouveau modèle"
+                  >
+                    <Plus />
+                    Nouveau
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon-sm"
+                    onClick={openEdit}
+                    disabled={!selected}
+                    aria-label="Modifier le modèle"
+                    title="Modifier le modèle"
+                  >
+                    <Pencil />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon-sm"
+                    onClick={handleDeleteTemplate}
+                    disabled={!selected}
+                    aria-label="Supprimer le modèle"
+                    title="Supprimer le modèle"
+                  >
+                    <Trash2 />
+                  </Button>
+                </div>
+              )}
+            </div>
           </Field>
 
           <Separator />
 
           {/* Icône */}
           <Field label="Icône">
-            <Popover open={iconOpen} onOpenChange={setIconOpen}>
-              <PopoverTrigger asChild>
-                <button
-                  type="button"
-                  aria-label="Choisir une icône"
-                  className="flex h-9 w-full items-center gap-2 rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
-                >
-                  <span
-                    className="flex size-5 shrink-0 items-center justify-center text-foreground [&>svg]:size-5"
-                    dangerouslySetInnerHTML={{
-                      __html: getIconSvg(selectedIcon),
-                    }}
-                  />
-                  <span className="truncate">{getIconName(selectedIcon)}</span>
-                  <ChevronDown className="ml-auto size-4 shrink-0 text-muted-foreground" />
-                </button>
-              </PopoverTrigger>
-              {/* Largeur calée sur le champ déclencheur (variable Radix) : le
-                panneau qui s'ouvre fait exactement la largeur de l'input. */}
-              <PopoverContent
-                className="w-[var(--radix-popover-trigger-width)] p-2"
-                align="start"
-              >
-                <div className="app-scroll grid max-h-80 grid-cols-3 gap-1.5 overflow-y-auto pr-1">
-                  {ICON_KEYS.map((key) => {
-                    const selected = key === selectedIcon
-                    return (
-                      <button
-                        type="button"
-                        key={key}
-                        title={getIconName(key)}
-                        // Amène la sélection courante dans la zone visible à l'ouverture.
-                        ref={(el) => {
-                          if (el && selected)
-                            el.scrollIntoView({ block: 'nearest' })
-                        }}
-                        onClick={() => {
-                          setAffiche({ selectedIcon: key })
-                          setIconOpen(false)
-                        }}
-                        className={cn(
-                          'flex flex-col items-center gap-1.5 rounded-lg border p-2 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/50',
-                          selected
-                            ? 'border-primary/50 bg-primary/10 text-primary'
-                            : 'border-transparent text-foreground hover:bg-accent',
-                        )}
-                      >
-                        <span
-                          className="flex size-7 items-center justify-center [&>svg]:size-7"
-                          dangerouslySetInnerHTML={{ __html: getIconSvg(key) }}
-                        />
-                        <span
-                          className={cn(
-                            'w-full truncate text-center text-[11px] leading-tight',
-                            selected ? 'text-primary' : 'text-muted-foreground',
-                          )}
-                        >
-                          {getIconName(key)}
-                        </span>
-                      </button>
-                    )
-                  })}
-                </div>
-              </PopoverContent>
-            </Popover>
+            <IconPicker
+              value={selectedIcon}
+              onChange={(key) => setAffiche({ selectedIcon: key })}
+            />
           </Field>
 
           {/* Couleur */}
           <Field label="Thème de couleur">
-            <Popover open={colorOpen} onOpenChange={setColorOpen}>
-              <PopoverTrigger asChild>
-                <button
-                  type="button"
-                  aria-label="Choisir un thème de couleur"
-                  className="flex h-9 w-full items-center gap-2 rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
-                >
-                  <span
-                    className="size-5 shrink-0 rounded-full border border-border"
-                    style={colorSwatch(colorKey)}
-                  />
-                  <span className="truncate">{COLORS[colorKey].name}</span>
-                  <ChevronDown className="ml-auto size-4 shrink-0 text-muted-foreground" />
-                </button>
-              </PopoverTrigger>
-              <PopoverContent
-                className="w-[var(--radix-popover-trigger-width)] p-2"
-                align="start"
-              >
-                <div className="flex flex-col gap-1">
-                  {COLOR_KEYS.map((key) => {
-                    const selected = key === colorKey
-                    return (
-                      <button
-                        type="button"
-                        key={key}
-                        onClick={() => {
-                          setAffiche({ colorKey: key })
-                          setColorOpen(false)
-                        }}
-                        className={cn(
-                          'flex items-center gap-2.5 rounded-md border px-2.5 py-2 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/50',
-                          selected
-                            ? 'border-primary/50 bg-primary/10 text-primary'
-                            : 'border-transparent hover:bg-accent',
-                        )}
-                      >
-                        <span
-                          className="size-5 shrink-0 rounded-full border border-border"
-                          style={colorSwatch(key)}
-                        />
-                        <span>{COLORS[key].name}</span>
-                      </button>
-                    )
-                  })}
-                </div>
-              </PopoverContent>
-            </Popover>
+            <ColorPicker
+              value={colorKey}
+              onChange={(key) => setAffiche({ colorKey: key })}
+            />
           </Field>
 
           <Separator />
@@ -496,6 +498,18 @@ export function AffichageBoard() {
           )}
         </aside>
       </div>
+
+      {canEdit && (
+        <TemplateDialog
+          open={dialogOpen}
+          onOpenChange={(o) => {
+            setDialogOpen(o)
+            if (!o) setEditing(null)
+          }}
+          initial={editing}
+          onSubmit={handleSubmitTemplate}
+        />
+      )}
     </div>
   )
 }

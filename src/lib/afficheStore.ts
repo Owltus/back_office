@@ -1,34 +1,36 @@
 import { Store } from '@tanstack/store'
 
 import type { PosterContent } from '#/lib/poster/types.ts'
-import { getTemplate, getTemplatesList } from '#/lib/poster/templates.ts'
+import type { AfficheTemplate } from '#/lib/affiche/model.ts'
 
 /* Store module-level : l'état de saisie de l'affiche survit à la navigation
  * (le composant peut se démonter/remonter sans perdre la saisie en cours).
  * En mémoire uniquement — réinitialisé à un rechargement complet de la page.
- * Calqué sur src/lib/pdjStore.ts : singleton Store + actions exportées. */
+ * Calqué sur src/lib/pdjStore.ts : singleton Store + actions exportées.
+ *
+ * Les modèles sont désormais chargés depuis Supabase (table `affiche_templates`),
+ * plus depuis une collection en dur. L'état initial est donc NEUTRE (affiche
+ * vierge) ; le board applique le premier modèle chargé si la saisie est encore
+ * pristine (voir AffichageBoard). */
 
 /** État complet et sérialisable de l'affiche en cours de saisie :
  * le contenu canonique (PosterContent) + les champs propres au store. */
 export interface AfficheState extends PosterContent {
-  /** Clé du template sélectionné ('' dès que le contenu a divergé du modèle). */
+  /** Id du modèle sélectionné ('' dès que le contenu a divergé du modèle). */
   selectedTemplate: string
 }
 
-// L'app ne démarre jamais vide : état initial = contenu du PREMIER template
-// (getTemplatesList()[0] = coffee_broken), couleur 'okko', mode auto activé.
-const firstKey = getTemplatesList()[0].key
-const firstTemplate = getTemplate(firstKey)
-
+/** État initial neutre : affiche vierge, thème OKKO, mode auto. Aucune lecture
+ * synchrone d'une collection en dur (les modèles sont asynchrones désormais). */
 function buildInitialState(): AfficheState {
   return {
-    titleFr: firstTemplate?.titleFr ?? '',
-    messageFr: firstTemplate?.messageFr ?? '',
-    titleEn: firstTemplate?.titleEn ?? '',
-    messageEn: firstTemplate?.messageEn ?? '',
-    selectedIcon: firstTemplate?.icon ?? 'none',
-    colorKey: firstTemplate?.color ?? 'okko',
-    selectedTemplate: firstKey,
+    titleFr: '',
+    messageFr: '',
+    titleEn: '',
+    messageEn: '',
+    selectedIcon: 'none',
+    colorKey: 'okko',
+    selectedTemplate: '',
     dateStart: '',
     dateEnd: '',
     timeStart: '',
@@ -50,13 +52,12 @@ export function setAffiche(patch: Partial<AfficheState>) {
 }
 
 /**
- * Applique un template : remplace les 4 textes + icône + couleur et mémorise
- * la clé du template sélectionné. Le recalcul des tailles est piloté par le
- * composant (effet mode auto), comme dans le fork (applyTemplate + updateSizeMode).
+ * Applique un modèle : remplace les 4 textes + icône + couleur et mémorise
+ * l'id du modèle sélectionné. Reçoit un modèle DÉJÀ RÉSOLU (plus de lecture
+ * d'une collection en dur). Le recalcul des tailles est piloté par le composant
+ * (effet mode auto), comme dans le fork.
  */
-export function applyAfficheTemplate(key: string) {
-  const template = getTemplate(key)
-  if (!template) return
+export function applyAfficheTemplate(template: AfficheTemplate) {
   setAffiche({
     titleFr: template.titleFr,
     messageFr: template.messageFr,
@@ -64,11 +65,11 @@ export function applyAfficheTemplate(key: string) {
     messageEn: template.messageEn,
     selectedIcon: template.icon,
     colorKey: template.color,
-    selectedTemplate: key,
+    selectedTemplate: template.id,
   })
 }
 
-/** Réinitialise l'état à celui du premier template. */
+/** Réinitialise l'état à l'état neutre (affiche vierge). */
 export function resetAffiche() {
   afficheStore.setState(() => buildInitialState())
 }
