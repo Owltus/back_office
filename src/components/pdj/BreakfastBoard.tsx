@@ -53,6 +53,14 @@ const fmtDate = new Intl.DateTimeFormat('fr-FR', {
   year: 'numeric',
 })
 
+// Date longue et lisible pour le titre de page (façon repjour).
+const fmtTitle = new Intl.DateTimeFormat('fr-FR', {
+  weekday: 'long',
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+})
+
 export function BreakfastBoard() {
   const { role } = useAuth()
   const canEdit = role === 'super_utilisateur' || role === 'admin'
@@ -99,7 +107,6 @@ export function BreakfastBoard() {
   }, [dayRows])
 
   const hasData = dayRows.length > 0
-  const sourceFile = dayRows[0]?.source_file ?? ''
 
   const floors = useMemo(() => {
     const map = new Map<number, number[]>()
@@ -144,6 +151,8 @@ export function BreakfastBoard() {
     ? new Date(selectedDate + 'T00:00:00')
     : new Date()
   const dateLabel = fmtDate.format(displayDate)
+  const longDate = fmtTitle.format(displayDate)
+  const titleDate = longDate.charAt(0).toUpperCase() + longDate.slice(1)
 
   // Navigation entre les jours RÉELLEMENT importés (dates triées du + récent au
   // + ancien) : jamais de jour vide, et le contrôle ne grandit pas dans le temps.
@@ -307,13 +316,7 @@ export function BreakfastBoard() {
           {error && <div className="pdj-error print:hidden">{error}</div>}
 
           <PageHeader
-            title="Petit-déjeuner"
-            meta={
-              <>
-                {dateLabel}
-                {sourceFile ? ` · ${sourceFile}` : ''}
-              </>
-            }
+            title={titleDate}
             actions={
               <>
                 {dates.length > 0 && (
@@ -518,12 +521,21 @@ function GuestRow({
   const numBoxes = Math.max(2, numGuests)
   const departing = row?.status.includes('DUE OUT')
   const staying = row?.status.includes('IN HOUSE')
+  // Double-clic sur la ligne (si des couverts existent) : tout servir / annuler.
+  const canServe = canEdit && numGuests > 0
 
   return (
     <tr
+      onDoubleClick={
+        canServe
+          ? () => onServe(room, served === numGuests ? 0 : numGuests)
+          : undefined
+      }
+      title={canServe ? 'Double-clic : tout servir / annuler' : undefined}
       className={cn(
         row && row.breakfasts_included > 0 && 'pdj-included',
         !row && 'pdj-empty',
+        canServe && 'cursor-pointer select-none',
       )}
     >
       <td className="pdj-room">{room}</td>
@@ -568,6 +580,7 @@ function GuestRow({
                 type="button"
                 disabled={!canEdit}
                 onClick={() => onServe(room, served === i + 1 ? i : i + 1)}
+                onDoubleClick={(e) => e.stopPropagation()}
                 aria-label={`Servi ${i + 1} sur ${numGuests}`}
                 title={`${served} / ${numGuests} servis`}
                 className={cn(
