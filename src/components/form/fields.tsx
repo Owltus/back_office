@@ -108,6 +108,45 @@ export function DateField({
   )
 }
 
+/** Bouton icône ouvrant le calendrier shadcn en popover (thème + locale FR).
+ * Variante compacte de DateField pour une navigation par jour ([◀][📅][▶]) :
+ * remplace le <input type="date"> natif (dont le picker n'est pas thémé).
+ * Valeur au format 'YYYY-MM-DD'. */
+export function DatePickerButton({
+  value,
+  onChange,
+  ariaLabel = 'Choisir une date',
+}: {
+  value: string
+  onChange: (value: string) => void
+  ariaLabel?: string
+}) {
+  const [open, setOpen] = useState(false)
+  const date = parseDateStr(value)
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="icon-sm" aria-label={ariaLabel}>
+          <CalendarDays />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="start">
+        <Calendar
+          mode="single"
+          selected={date}
+          defaultMonth={date}
+          locale={fr}
+          onSelect={(d) => {
+            if (d) onChange(formatDateStr(d))
+            setOpen(false)
+          }}
+        />
+      </PopoverContent>
+    </Popover>
+  )
+}
+
 /** Sélecteur d'heure custom (remplace <input type="time"> natif) :
  * deux colonnes défilantes heures / minutes (pas de 5 min).
  * Valeur stockée au même format que l'input natif ('HH:MM' ou ''). */
@@ -128,7 +167,9 @@ export function TimeField({
       <PopoverTrigger asChild>
         <button id={id} type="button" className={PICKER_TRIGGER_CLASS}>
           <Clock className="size-4 shrink-0 text-muted-foreground" />
-          <span className={cn('truncate', value === '' && 'text-muted-foreground')}>
+          <span
+            className={cn('truncate', value === '' && 'text-muted-foreground')}
+          >
             {value !== '' ? `${parseInt(h, 10)}h${m}` : 'Choisir'}
           </span>
         </button>
