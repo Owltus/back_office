@@ -8,18 +8,18 @@
 //   `auth.users` exige l'API Admin d'Auth, donc la clé SERVICE_ROLE — SECRÈTE,
 //   jamais côté navigateur → elle reste ici, côté serveur.
 //
-// CHOIX : RÉVOCATION RÉVERSIBLE (ban), pas suppression dure
-//   Le backend Supabase est PARTAGÉ avec l'app repjour en prod. Un `deleteUser`
-//   effacerait l'identité pour de bon et pourrait casser des données liées de
-//   l'autre app (clés étrangères vers auth.users). On BANNIT donc l'utilisateur
-//   (durée ~100 ans) : la connexion devient impossible partout, sans rien
-//   détruire, et c'est réversible (`ban_duration: 'none'` lève le ban).
+// CHOIX : SUPPRESSION DÉFINITIVE (deleteUser), avec repli sur ban si impossible
+//   L'admin veut que le compte disparaisse de `auth.users` (Authentication →
+//   Users). On supprime donc l'identité pour de bon. Le backend étant PARTAGÉ
+//   avec l'app repjour, la suppression dure peut être bloquée par des données
+//   liées (clés étrangères vers auth.users : rapports, audit…). Dans ce cas on
+//   ne casse RIEN : on REPLIE sur un ban (~100 ans, réversible) pour au moins
+//   couper l'accès, et on le signale à l'appelant.
 //
-// PÉRIMÈTRE : cette fonction ne fait QUE le ban (seule action exigeant le
-//   service_role). Le retrait de la ligne `profiles` reste CÔTÉ FRONT, sous la
-//   session de l'admin (chemin RLS habituel), pour ne pas introduire d'écriture
-//   service_role sur cette table partagée. Comptes/identités étant communs aux
-//   deux apps, le ban révoque l'accès PARTOUT (comportement voulu).
+// ORDRE : on retire d'abord la ligne `profiles` (service_role) — sinon la FK
+//   `profiles → auth.users` bloquerait la suppression de l'identité — PUIS on
+//   supprime `auth.users`. Comptes/identités étant communs aux deux apps, la
+//   suppression vaut PARTOUT.
 //
 // SÉCURITÉ (défense en profondeur) — identique à create-user
 //   1. verify_jwt (passerelle) : requête sans JWT valide rejetée en amont.
@@ -95,9 +95,9 @@ Deno.serve(async (req) => {
     return json({ error: 'Vous ne pouvez pas supprimer votre propre compte' }, 400)
 
   // 3ter. Le compte cible DOIT avoir un profil (compte réellement géré). Empêche
-  //       de bannir un userId sans profil (identité orpheline / inexistante dans
-  //       la gestion des comptes). NB : `profiles` étant partagé, cette garde ne
-  //       distingue pas les deux apps — elle écarte seulement les uid sans profil.
+  //       de supprimer un userId sans profil (identité orpheline / inexistante
+  //       dans la gestion des comptes). NB : `profiles` étant partagé, cette garde
+  //       ne distingue pas les deux apps — elle écarte seulement les uid sans profil.
   const { data: target, error: targetErr } = await admin
     .from('profiles')
     .select('id')
@@ -108,15 +108,36 @@ Deno.serve(async (req) => {
   if (!target)
     return json({ error: 'Compte introuvable dans la gestion des comptes' }, 404)
 
-  // 4. Révocation de l'accès : ban de l'identité (connexion impossible). Le
-  //    retrait de la ligne `profiles` est fait ENSUITE côté front (chemin RLS) ;
-  //    si ce retrait échoue, l'accès est déjà coupé et un réessai est sans risque
-  //    (le ban est idempotent).
-  const { error: banErr } = await admin.auth.admin.updateUserById(userId, {
-    ban_duration: BAN_DURATION,
-  })
-  if (banErr)
-    return json({ error: banErr.message || 'Révocation de l’accès échouée' }, 400)
+  // 4. Retrait de la ligne `profiles` (retire la FK profiles→auth.users qui
+  //    bloquerait la suppression de l'identité ; idempotent). Le compte quitte
+  //    la gestion des comptes.
+  const { error: profDelErr } = await admin
+    .from('profiles')
+    .delete()
+    .eq('id', userId)
+  if (profDelErr)
+    return json({ error: profDelErr.message || 'Suppression du profil échouée' }, 400)
 
-  return json({ revoked: userId }, 200)
+  // 5. Suppression DÉFINITIVE de l'identité auth.users.
+  const { error: delErr } = await admin.auth.admin.deleteUser(userId)
+  if (delErr) {
+    // Des données de l'app repjour (rapports, audit…) sont liées à ce compte et
+    // empêchent la suppression dure. On ne casse rien : on coupe l'accès par un
+    // ban (réversible) et on le signale. `profiles` est déjà retiré → le compte
+    // a bien quitté la gestion, mais son identité subsiste (bannie).
+    await admin.auth.admin
+      .updateUserById(userId, { ban_duration: BAN_DURATION })
+      .catch(() => {})
+    return json(
+      {
+        deleted: userId,
+        mode: 'banned',
+        warning:
+          'Suppression définitive impossible (des données de l’app repjour sont liées à ce compte). Accès révoqué (banni) à la place.',
+      },
+      200,
+    )
+  }
+
+  return json({ deleted: userId, mode: 'deleted' }, 200)
 })

@@ -97,17 +97,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         readCachedProfile()?.id === userId
       if (!alreadyHave) setProfileLoading(true)
 
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .maybeSingle()
       if (!active) return
 
-      const next = (data as Profile | null) ?? null
+      // Erreur réseau/transitoire : on ne touche à RIEN (ni profil, ni session).
+      // Surtout pas d'éjection sur un simple aléa réseau (faux positif).
+      if (error) {
+        setProfileLoading(false)
+        return
+      }
+
+      // Requête aboutie mais AUCUNE ligne : le profil n'existe plus → le compte a
+      // été supprimé/révoqué par un admin. On éjecte la session encore ouverte :
+      // le token JWT reste techniquement valide jusqu'à son expiration (~1 h),
+      // donc c'est CETTE détection qui déconnecte réellement l'utilisateur en
+      // séance (signOut → onAuthStateChange → AppAuthGate renvoie vers /login).
+      if (!data) {
+        clearProfile()
+        await supabase.auth.signOut()
+        return
+      }
+
+      const next = data as Profile
       setProfile(next)
       writeCachedProfile(next)
-      profileUserIdRef.current = next ? userId : null
+      profileUserIdRef.current = userId
       setProfileLoading(false)
     }
 
@@ -151,9 +169,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     })
 
+    // Éjection EN SÉANCE : re-vérifier que le compte existe toujours, au retour
+    // sur l'onglet et à intervalle régulier. Sans cela, un compte supprimé
+    // garderait l'accès jusqu'à l'expiration de son token (~1 h). `resolveProfile`
+    // se charge de l'éjection s'il n'y a plus de profil.
+    async function revalidate() {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const uid = session?.user.id
+      if (uid) void resolveProfile(uid)
+    }
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void revalidate()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    const interval = window.setInterval(() => void revalidate(), 120_000)
+
     return () => {
       active = false
       subscription.unsubscribe()
+      document.removeEventListener('visibilitychange', onVisible)
+      window.clearInterval(interval)
     }
   }, [])
 

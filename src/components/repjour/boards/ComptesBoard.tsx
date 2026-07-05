@@ -300,11 +300,15 @@ export function ComptesBoard() {
       return
     setDeleting(true)
     setMessage('')
-    // 1) Révocation de l'accès via l'Edge Function `delete-user` (service_role
-    //    côté serveur) : elle bannit l'identité `auth.users`. Un simple delete de
-    //    `profiles` laisserait l'identifiant de connexion actif → l'utilisateur
-    //    pourrait toujours se connecter (c'était le bug).
-    const { error } = await supabase.functions.invoke('delete-user', {
+    // Suppression définitive via l'Edge Function `delete-user` (service_role) :
+    // elle retire la ligne `profiles` PUIS supprime l'identité `auth.users`. Un
+    // simple delete de `profiles` laisserait l'identifiant de connexion actif →
+    // l'utilisateur pourrait toujours se connecter (c'était le bug). Si des
+    // données repjour bloquent la suppression dure, elle replie sur un ban et le
+    // signale via `warning`.
+    const { data, error } = await supabase.functions.invoke<{
+      warning?: string
+    }>('delete-user', {
       body: { userId: editProfile.id },
     })
     if (error) {
@@ -312,24 +316,9 @@ export function ComptesBoard() {
       setDeleting(false)
       return
     }
-    // 2) Accès coupé → on retire la ligne `profiles` sous la session admin (RLS
-    //    « Admin manages profiles »), pour que le compte quitte la gestion. Si ce
-    //    retrait échoue, l'accès reste révoqué (le ban précède) ; un réessai est
-    //    sans danger (ban idempotent).
-    const { error: profileErr } = await supabase
-      .from('profiles')
-      .delete()
-      .eq('id', editProfile.id)
-    if (profileErr) {
-      setMessage(
-        'Accès révoqué, mais retrait du profil échoué : ' + profileErr.message,
-      )
-      setDeleting(false)
-      loadProfiles()
-      return
-    }
     setDeleting(false)
     setEditProfile(null)
+    if (data?.warning) setMessage(data.warning)
     loadProfiles()
   }
 
