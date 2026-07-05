@@ -68,12 +68,12 @@ export function SummaryCards({
   const moisGoalPos = (100 / moisMaxScale) * 100
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
         {cards.map((card, i) => (
           <div
             key={card.label}
-            className={`rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5 ${
+            className={`rounded-xl border border-border bg-card p-3 shadow-sm sm:p-4 ${
               i === 0 ? 'col-span-2 sm:col-span-1' : ''
             }`}
           >
@@ -94,7 +94,7 @@ export function SummaryCards({
       </div>
 
       {/* Barre de progression mois : acquis (vert) + projeté (gris) vs budget */}
-      <div className="space-y-2 rounded-xl border border-border bg-card px-4 py-3 shadow-sm sm:px-5">
+      <div className="space-y-2 rounded-xl border border-border bg-card px-4 py-2.5 shadow-sm sm:px-5">
         <div className="flex items-center gap-3">
           <div className="relative h-2 flex-1 rounded-full bg-muted">
             {/* Jours précédents — vert */}

@@ -20,6 +20,7 @@ import {
 } from 'date-fns'
 import { fr } from 'date-fns/locale'
 
+import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { EmptyCanvas } from '#/components/shared/EmptyCanvas.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { Calendar } from '#/components/ui/calendar.tsx'
@@ -61,10 +62,19 @@ import {
   hasOverlap,
 } from '#/lib/parking/model.ts'
 import type { Mode, Reservation, Status } from '#/lib/parking/model.ts'
-import { INITIAL } from '#/lib/parking/mock.ts'
+import { supabase } from '#/lib/supabase.ts'
+import {
+  createReservation,
+  deleteReservation,
+  fetchReservations,
+  startDayToDate,
+  toReservation,
+  updateReservation,
+} from '#/lib/parking/service.ts'
+import type { DbReservation } from '#/lib/parking/service.ts'
 
 /* --------------------------------------------------------------------------
- * Planning parking — v1 (données locales de test, sans Supabase)
+ * Planning parking — persistance Supabase + synchro Realtime.
  *
  * `startDay` d'une réservation = décalage ABSOLU en jours par rapport au
  * lundi de référence (peut être négatif = passé). La fenêtre affichée pane
@@ -107,15 +117,19 @@ const fmtDayYear = new Intl.DateTimeFormat('fr-FR', {
 })
 
 export function ParkingBoard() {
+  const { role } = useAuth()
+  // Seuls super_utilisateur et admin peuvent modifier ; `utilisateur` = lecture seule.
+  const canEdit = role === 'super_utilisateur' || role === 'admin'
   const [startDate, setStartDate] = useState<Date | null>(null)
   const [offset, setOffset] = useState(0)
   const [containerW, setContainerW] = useState(0)
-  const [reservations, setReservations] = useState<Reservation[]>(INITIAL)
+  const [reservations, setReservations] = useState<Reservation[]>([])
   const [editingId, setEditingId] = useState<string | null>(null)
   const [calOpen, setCalOpen] = useState(false)
   const [commentId, setCommentId] = useState<string | null>(null)
   const [commentDraft, setCommentDraft] = useState('')
-  const idRef = useRef(INITIAL.length)
+  // Miroir de `reservations` lisible dans les closures de drag (état le plus récent).
+  const reservationsRef = useRef<Reservation[]>([])
   const timelineRef = useRef<HTMLDivElement>(null)
   // Case visée par le dernier clic droit sur une zone vide (pour "Nouvelle réservation").
   const pendingCell = useRef<{ day: number; spot: number }>({ day: 0, spot: 1 })
@@ -124,6 +138,45 @@ export function ParkingBoard() {
   useEffect(() => {
     setStartDate(startOfWeek(new Date(), { weekStartsOn: 1 }))
   }, [])
+
+  // Miroir à jour pour les handlers de drag (closures figées sur un ancien état).
+  useEffect(() => {
+    reservationsRef.current = reservations
+  }, [reservations])
+
+  // Chargement initial + abonnement Realtime, une fois le lundi de réf. connu.
+  useEffect(() => {
+    if (!startDate) return
+    fetchReservations()
+      .then((rows) => setReservations(rows.map((r) => toReservation(r, startDate))))
+      .catch(console.error)
+
+    const channel = supabase
+      .channel('parking-reservations')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'parking_reservations' },
+        (payload) => {
+          if (payload.eventType === 'DELETE') {
+            const id = (payload.old as { id: string }).id
+            setReservations((prev) => prev.filter((r) => r.id !== id))
+          } else {
+            const res = toReservation(payload.new as DbReservation, startDate)
+            setReservations((prev) => {
+              const i = prev.findIndex((r) => r.id === res.id)
+              if (i === -1) return [...prev, res]
+              const next = prev.slice()
+              next[i] = res
+              return next
+            })
+          }
+        },
+      )
+      .subscribe()
+    return () => {
+      void supabase.removeChannel(channel)
+    }
+  }, [startDate])
 
   // Mesure de la largeur disponible → nombre de jours affichés.
   useEffect(() => {
@@ -198,13 +251,27 @@ export function ParkingBoard() {
   }, [days])
 
   function addReservation(startDay: number, spot: number) {
+    if (!canEdit) return
+    if (!startDate) return
     if (hasOverlap(reservations, spot, startDay, 1)) return // emplacement déjà occupé
-    const id = `res-${(idRef.current += 1)}`
+    const id = crypto.randomUUID()
     setReservations((prev) => [
       ...prev,
       { id, client: '', spot, startDay, nights: 1, status: 'attente', comment: '' },
     ])
     setEditingId(id)
+    createReservation({
+      id,
+      spot,
+      client: '',
+      start_date: startDayToDate(startDay, startDate),
+      nights: 1,
+      status: 'attente',
+      comment: '',
+    }).catch((err) => {
+      console.error(err)
+      setReservations((prev) => prev.filter((r) => r.id !== id))
+    })
   }
 
   function openComment(r: Reservation) {
@@ -213,6 +280,7 @@ export function ParkingBoard() {
   }
 
   function saveComment() {
+    if (!canEdit) return
     if (commentId === null) return
     const id = commentId
     const comment = commentDraft.trim()
@@ -220,26 +288,35 @@ export function ParkingBoard() {
       prev.map((r) => (r.id === id ? { ...r, comment } : r)),
     )
     setCommentId(null)
+    updateReservation(id, { comment }).catch(console.error)
   }
 
   function setStatus(id: string, status: Status) {
+    if (!canEdit) return
     setReservations((prev) =>
       prev.map((r) => (r.id === id ? { ...r, status } : r)),
     )
+    updateReservation(id, { status }).catch(console.error)
   }
 
   function rename(id: string, value: string) {
+    if (!canEdit) return
     const client = value.trim()
     setReservations((prev) =>
       prev.map((r) => (r.id === id ? { ...r, client } : r)),
     )
+    updateReservation(id, { client }).catch(console.error)
   }
 
   function remove(id: string) {
+    if (!canEdit) return
     setReservations((prev) => prev.filter((r) => r.id !== id))
+    deleteReservation(id).catch(console.error)
   }
 
   function startInteraction(e: ReactPointerEvent, res: Reservation, mode: Mode) {
+    if (!canEdit) return
+    if (!startDate) return
     e.preventDefault()
     e.stopPropagation()
     const startX = e.clientX
@@ -272,6 +349,20 @@ export function ParkingBoard() {
     const onUp = () => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
+      // Persiste la position FINALE si elle a changé (lecture de l'état à jour).
+      const r = reservationsRef.current.find((x) => x.id === res.id)
+      if (
+        r &&
+        (r.spot !== orig.spot ||
+          r.startDay !== orig.startDay ||
+          r.nights !== orig.nights)
+      ) {
+        updateReservation(res.id, {
+          spot: r.spot,
+          start_date: startDayToDate(r.startDay, startDate),
+          nights: r.nights,
+        }).catch(console.error)
+      }
     }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
@@ -313,6 +404,23 @@ export function ParkingBoard() {
       </EmptyCanvas>
     )
   }
+
+  // Fond de grille (lignes de jour / midi / rangées). En lecture seule, il est
+  // rendu tel quel ; pour un éditeur, on l'enveloppe dans le menu contextuel
+  // « Nouvelle réservation ».
+  const gridBackground = (
+    <div
+      className="absolute inset-0"
+      onContextMenu={canEdit ? captureCell : undefined}
+      style={{
+        backgroundImage: [
+          `repeating-linear-gradient(to right, rgba(148,163,184,0.18) 0 1px, transparent 1px ${dayW}px)`,
+          `repeating-linear-gradient(to right, transparent 0 ${slotW}px, rgba(148,163,184,0.08) ${slotW}px ${slotW + 1}px, transparent ${slotW + 1}px ${dayW}px)`,
+          `repeating-linear-gradient(to bottom, rgba(148,163,184,0.10) 0 1px, transparent 1px ${ROW_H}px)`,
+        ].join(','),
+      }}
+    />
+  )
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -445,38 +553,32 @@ export function ParkingBoard() {
 
               {/* Grille + réservations */}
               <div className="relative" style={{ height: SPOTS * ROW_H }}>
-                {/* Fond : lignes de jour / midi / rangées + clic droit pour ajouter */}
-                <ContextMenu>
-                  <ContextMenuTrigger asChild>
-                    <div
-                      className="absolute inset-0"
-                      onContextMenu={captureCell}
-                      style={{
-                        backgroundImage: [
-                          `repeating-linear-gradient(to right, rgba(148,163,184,0.18) 0 1px, transparent 1px ${dayW}px)`,
-                          `repeating-linear-gradient(to right, transparent 0 ${slotW}px, rgba(148,163,184,0.08) ${slotW}px ${slotW + 1}px, transparent ${slotW + 1}px ${dayW}px)`,
-                          `repeating-linear-gradient(to bottom, rgba(148,163,184,0.10) 0 1px, transparent 1px ${ROW_H}px)`,
-                        ].join(','),
-                      }}
-                    />
-                  </ContextMenuTrigger>
-                  <ContextMenuContent
-                    className="w-44"
-                    onCloseAutoFocus={(e) => e.preventDefault()}
-                  >
-                    <ContextMenuItem
-                      onSelect={() =>
-                        addReservation(
-                          pendingCell.current.day,
-                          pendingCell.current.spot,
-                        )
-                      }
+                {/* Fond : lignes de jour / midi / rangées + clic droit pour ajouter.
+                    En lecture seule (utilisateur), pas de menu contextuel : on
+                    rend le fond seul (clic droit navigateur inoffensif). */}
+                {canEdit ? (
+                  <ContextMenu>
+                    <ContextMenuTrigger asChild>{gridBackground}</ContextMenuTrigger>
+                    <ContextMenuContent
+                      className="w-44"
+                      onCloseAutoFocus={(e) => e.preventDefault()}
                     >
-                      <Plus />
-                      Nouvelle réservation
-                    </ContextMenuItem>
-                  </ContextMenuContent>
-                </ContextMenu>
+                      <ContextMenuItem
+                        onSelect={() =>
+                          addReservation(
+                            pendingCell.current.day,
+                            pendingCell.current.spot,
+                          )
+                        }
+                      >
+                        <Plus />
+                        Nouvelle réservation
+                      </ContextMenuItem>
+                    </ContextMenuContent>
+                  </ContextMenu>
+                ) : (
+                  gridBackground
+                )}
 
                 {/* Numéro de semaine ISO en filigrane (lundi → vendredi) */}
                 {weekBands.map((b) => (
@@ -524,6 +626,7 @@ export function ParkingBoard() {
                     <ReservationBar
                       key={r.id}
                       r={r}
+                      canEdit={canEdit}
                       offset={offset}
                       slotW={slotW}
                       editing={editingId === r.id}
@@ -574,6 +677,7 @@ export function ParkingBoard() {
 
 interface ReservationBarProps {
   r: Reservation
+  canEdit: boolean
   offset: number
   slotW: number
   editing: boolean
@@ -588,6 +692,7 @@ interface ReservationBarProps {
 
 function ReservationBar({
   r,
+  canEdit,
   offset,
   slotW,
   editing,
@@ -605,76 +710,96 @@ function ReservationBar({
     onStopEdit()
   }
 
+  // La barre elle-même. En lecture seule : ni drag (`onPointerDown`), ni édition
+  // inline (`onDoubleClick`), ni poignées de redimensionnement, ni curseur grab.
+  const bar = (
+    <div
+      role="button"
+      tabIndex={0}
+      onPointerDown={canEdit ? (e) => onStartInteraction(e, r, 'move') : undefined}
+      onDoubleClick={canEdit ? () => onStartEdit(r.id) : undefined}
+      onClick={(e) => e.stopPropagation()}
+      className={cn(
+        'group absolute flex touch-none items-center gap-1.5 rounded-md border px-1.5 text-xs shadow-sm',
+        canEdit && 'cursor-grab active:cursor-grabbing',
+        st.bar,
+      )}
+      style={{
+        left: (arrivalSlot(r.startDay) - offset * SLOTS_PER_DAY) * slotW + BAR_PAD_X,
+        width: r.nights * SLOTS_PER_DAY * slotW - BAR_PAD_X * 2,
+        top: (r.spot - 1) * ROW_H + BAR_PAD_Y,
+        height: ROW_H - BAR_PAD_Y * 2,
+      }}
+    >
+      {canEdit && (
+        <span
+          onPointerDown={(e) => onStartInteraction(e, r, 'resize-left')}
+          className="absolute left-0 top-0 h-full w-1.5 cursor-ew-resize rounded-l-md"
+        />
+      )}
+
+      {editing ? (
+        <input
+          autoFocus
+          onFocus={(e) => e.currentTarget.select()}
+          defaultValue={r.client}
+          placeholder="Nom du client"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          onBlur={(e) => commit(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') commit((e.target as HTMLInputElement).value)
+            else if (e.key === 'Escape') onStopEdit()
+          }}
+          className="w-full min-w-0 bg-transparent font-medium outline-none placeholder:text-current placeholder:opacity-50"
+        />
+      ) : (
+        <span
+          className={cn(
+            'min-w-0 flex-1 truncate font-medium',
+            !r.client && 'opacity-50',
+          )}
+        >
+          {r.client || 'Sans nom'}
+        </span>
+      )}
+
+      {r.comment && (
+        <MessageSquare className="mr-1 size-3 shrink-0 opacity-70" />
+      )}
+
+      {canEdit && (
+        <span
+          onPointerDown={(e) => onStartInteraction(e, r, 'resize-right')}
+          className="absolute right-0 top-0 h-full w-1.5 cursor-ew-resize rounded-r-md"
+        />
+      )}
+    </div>
+  )
+
+  const tip = r.comment && (
+    <TooltipContent side="top" className="max-w-56">
+      {r.comment}
+    </TooltipContent>
+  )
+
+  // Lecture seule : tooltip conservé, mais aucun menu contextuel d'édition.
+  if (!canEdit) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>{bar}</TooltipTrigger>
+        {tip}
+      </Tooltip>
+    )
+  }
+
   return (
     <ContextMenu>
       <Tooltip>
         <ContextMenuTrigger asChild>
-          <TooltipTrigger asChild>
-            <div
-              role="button"
-              tabIndex={0}
-              onPointerDown={(e) => onStartInteraction(e, r, 'move')}
-              onDoubleClick={() => onStartEdit(r.id)}
-              onClick={(e) => e.stopPropagation()}
-              className={cn(
-                'group absolute flex touch-none items-center gap-1.5 rounded-md border px-1.5 text-xs shadow-sm',
-                'cursor-grab active:cursor-grabbing',
-                st.bar,
-              )}
-              style={{
-                left: (arrivalSlot(r.startDay) - offset * SLOTS_PER_DAY) * slotW + BAR_PAD_X,
-                width: r.nights * SLOTS_PER_DAY * slotW - BAR_PAD_X * 2,
-                top: (r.spot - 1) * ROW_H + BAR_PAD_Y,
-                height: ROW_H - BAR_PAD_Y * 2,
-              }}
-            >
-              <span
-                onPointerDown={(e) => onStartInteraction(e, r, 'resize-left')}
-                className="absolute left-0 top-0 h-full w-1.5 cursor-ew-resize rounded-l-md"
-              />
-
-              {editing ? (
-                <input
-                  autoFocus
-                  onFocus={(e) => e.currentTarget.select()}
-                  defaultValue={r.client}
-                  placeholder="Nom du client"
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onClick={(e) => e.stopPropagation()}
-                  onBlur={(e) => commit(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') commit((e.target as HTMLInputElement).value)
-                    else if (e.key === 'Escape') onStopEdit()
-                  }}
-                  className="w-full min-w-0 bg-transparent font-medium outline-none placeholder:text-current placeholder:opacity-50"
-                />
-              ) : (
-                <span
-                  className={cn(
-                    'min-w-0 flex-1 truncate font-medium',
-                    !r.client && 'opacity-50',
-                  )}
-                >
-                  {r.client || 'Sans nom'}
-                </span>
-              )}
-
-              {r.comment && (
-                <MessageSquare className="mr-1 size-3 shrink-0 opacity-70" />
-              )}
-
-              <span
-                onPointerDown={(e) => onStartInteraction(e, r, 'resize-right')}
-                className="absolute right-0 top-0 h-full w-1.5 cursor-ew-resize rounded-r-md"
-              />
-            </div>
-          </TooltipTrigger>
+          <TooltipTrigger asChild>{bar}</TooltipTrigger>
         </ContextMenuTrigger>
-        {r.comment && (
-          <TooltipContent side="top" className="max-w-56">
-            {r.comment}
-          </TooltipContent>
-        )}
+        {tip}
       </Tooltip>
 
       <ContextMenuContent className="w-44" onCloseAutoFocus={(e) => e.preventDefault()}>

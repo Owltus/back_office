@@ -1,17 +1,10 @@
-import { createFileRoute } from '@tanstack/react-router'
-
-import { ComingSoon } from '#/components/ComingSoon.tsx'
-import { PageContainer } from '#/components/shared/PageContainer.tsx'
+import { createFileRoute, redirect } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/')({
-  component: DashboardPage,
-  head: () => ({ meta: [{ title: 'Dashboard — Back Office' }] }),
+  // La page « Dashboard » (ComingSoon) est retirée pour l'instant. La racine
+  // renvoie vers l'onglet RepJour, la page fonctionnelle par défaut.
+  beforeLoad: () => {
+    throw redirect({ to: '/repjour' })
+  },
+  component: () => null,
 })
-
-function DashboardPage() {
-  return (
-    <PageContainer>
-      <ComingSoon />
-    </PageContainer>
-  )
-}

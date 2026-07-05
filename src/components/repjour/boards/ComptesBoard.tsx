@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Loader2, Plus } from 'lucide-react'
+import { Loader2, Plus, Trash2 } from 'lucide-react'
 
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
+import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { supabase } from '#/lib/supabase.ts'
 import { supabaseSignup } from '#/lib/repjour/supabase-signup.ts'
 import { isPasswordValid } from '#/lib/repjour/password.ts'
@@ -75,9 +76,11 @@ function RoleSelect({
 }
 
 export function ComptesBoard() {
+  const { user } = useAuth()
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
+  const [deleting, setDeleting] = useState(false)
 
   const [showCreate, setShowCreate] = useState(false)
   const [email, setEmail] = useState('')
@@ -221,6 +224,45 @@ export function ComptesBoard() {
     }
 
     setSavingEdit(false)
+    setEditProfile(null)
+    loadProfiles()
+  }
+
+  const handleDelete = async () => {
+    if (!editProfile) return
+    // Garde-fou : on ne supprime jamais son propre compte (évite l'auto-exclusion).
+    if (editProfile.id === user?.id) {
+      setMessage('Vous ne pouvez pas supprimer votre propre compte')
+      return
+    }
+    const name =
+      [editProfile.first_name, editProfile.last_name]
+        .filter(Boolean)
+        .join(' ') ||
+      editProfile.display_name ||
+      editProfile.email
+    if (
+      !window.confirm(
+        `Supprimer le compte de ${name} ? Cela retire son accès au Back Office.`,
+      )
+    )
+      return
+    setDeleting(true)
+    setMessage('')
+    // Supprime la ligne `profiles` (RLS « Admin manages profiles » FOR ALL) :
+    // l'utilisateur perd son rôle, donc tout accès. NB : l'identifiant de
+    // connexion (auth.users) n'est PAS supprimable avec la clé anon — cela
+    // exigerait la clé service_role (interdite côté client) ou le dashboard.
+    const { error } = await supabase
+      .from('profiles')
+      .delete()
+      .eq('id', editProfile.id)
+    if (error) {
+      setMessage('Erreur suppression : ' + error.message)
+      setDeleting(false)
+      return
+    }
+    setDeleting(false)
     setEditProfile(null)
     loadProfiles()
   }
@@ -453,13 +495,27 @@ export function ComptesBoard() {
                 />
               </div>
 
-              <DialogFooter className="pt-2">
-                <Button variant="ghost" onClick={() => setEditProfile(null)}>
-                  Annuler
-                </Button>
-                <Button onClick={saveEdit} disabled={savingEdit}>
-                  {savingEdit ? 'Enregistrement...' : 'Enregistrer'}
-                </Button>
+              <DialogFooter className="pt-2 sm:justify-between">
+                {editProfile.id !== user?.id ? (
+                  <Button
+                    variant="destructive"
+                    onClick={handleDelete}
+                    disabled={savingEdit || deleting}
+                  >
+                    <Trash2 />
+                    {deleting ? 'Suppression...' : 'Supprimer'}
+                  </Button>
+                ) : (
+                  <span />
+                )}
+                <div className="flex gap-2">
+                  <Button variant="ghost" onClick={() => setEditProfile(null)}>
+                    Annuler
+                  </Button>
+                  <Button onClick={saveEdit} disabled={savingEdit}>
+                    {savingEdit ? 'Enregistrement...' : 'Enregistrer'}
+                  </Button>
+                </div>
               </DialogFooter>
             </>
           )}

@@ -6,7 +6,6 @@ import {
   ChevronsUpDown,
   ClipboardList,
   Coffee,
-  LayoutDashboard,
   Menu,
   Monitor,
   SquareParking,
@@ -27,7 +26,6 @@ import {
 } from '#/components/ui/sheet.tsx'
 
 const NAV_ITEMS = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard, exact: true },
   { to: '/repjour', label: 'RepJour', icon: ClipboardList },
   { to: '/parking', label: 'Parking', icon: SquareParking },
   { to: '/rapro', label: 'Rapprochement', icon: ArrowLeftRight },
@@ -85,7 +83,7 @@ export function Navbar() {
                   <Link
                     to={item.to}
                     activeOptions={
-                      'exact' in item && item.exact ? { exact: true } : undefined
+                      undefined
                     }
                     className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
                     activeProps={{
@@ -133,9 +131,9 @@ export function Navbar() {
 
         {/* --- Logo / marque (nom affiché en mobile) --- */}
         <Link
-          to="/"
+          to="/repjour"
           className="flex items-center gap-2.5"
-          aria-label="Accueil Back Office"
+          aria-label="Accueil"
         >
           <Logo className="size-7" />
           <span className="text-lg font-bold tracking-tight md:hidden">
@@ -150,7 +148,7 @@ export function Navbar() {
               <Link
                 to={item.to}
                 activeOptions={
-                  'exact' in item && item.exact ? { exact: true } : undefined
+                  undefined
                 }
                 className="rounded-lg px-3.5 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
                 activeProps={{

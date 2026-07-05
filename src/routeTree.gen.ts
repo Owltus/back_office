@@ -11,17 +11,16 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as RepjourRouteImport } from './routes/repjour'
 import { Route as RaproRouteImport } from './routes/rapro'
+import { Route as ProfilRouteImport } from './routes/profil'
 import { Route as PdjRouteImport } from './routes/pdj'
 import { Route as ParkingRouteImport } from './routes/parking'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as GestionRouteImport } from './routes/gestion'
+import { Route as ComptesRouteImport } from './routes/comptes'
 import { Route as CaisseRouteImport } from './routes/caisse'
 import { Route as AffichageRouteImport } from './routes/affichage'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as RepjourIndexRouteImport } from './routes/repjour/index'
-import { Route as RepjourProfilRouteImport } from './routes/repjour/profil'
-import { Route as RepjourImportRouteImport } from './routes/repjour/import'
-import { Route as RepjourGestionRouteImport } from './routes/repjour/gestion'
-import { Route as RepjourComptesRouteImport } from './routes/repjour/comptes'
 import { Route as RepjourAnalytiqueIndexRouteImport } from './routes/repjour/analytique.index'
 import { Route as RepjourAnalytiqueYearMonthRouteImport } from './routes/repjour/analytique.$year.$month'
 
@@ -33,6 +32,11 @@ const RepjourRoute = RepjourRouteImport.update({
 const RaproRoute = RaproRouteImport.update({
   id: '/rapro',
   path: '/rapro',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProfilRoute = ProfilRouteImport.update({
+  id: '/profil',
+  path: '/profil',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PdjRoute = PdjRouteImport.update({
@@ -48,6 +52,16 @@ const ParkingRoute = ParkingRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GestionRoute = GestionRouteImport.update({
+  id: '/gestion',
+  path: '/gestion',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ComptesRoute = ComptesRouteImport.update({
+  id: '/comptes',
+  path: '/comptes',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CaisseRoute = CaisseRouteImport.update({
@@ -70,26 +84,6 @@ const RepjourIndexRoute = RepjourIndexRouteImport.update({
   path: '/',
   getParentRoute: () => RepjourRoute,
 } as any)
-const RepjourProfilRoute = RepjourProfilRouteImport.update({
-  id: '/profil',
-  path: '/profil',
-  getParentRoute: () => RepjourRoute,
-} as any)
-const RepjourImportRoute = RepjourImportRouteImport.update({
-  id: '/import',
-  path: '/import',
-  getParentRoute: () => RepjourRoute,
-} as any)
-const RepjourGestionRoute = RepjourGestionRouteImport.update({
-  id: '/gestion',
-  path: '/gestion',
-  getParentRoute: () => RepjourRoute,
-} as any)
-const RepjourComptesRoute = RepjourComptesRouteImport.update({
-  id: '/comptes',
-  path: '/comptes',
-  getParentRoute: () => RepjourRoute,
-} as any)
 const RepjourAnalytiqueIndexRoute = RepjourAnalytiqueIndexRouteImport.update({
   id: '/analytique/',
   path: '/analytique/',
@@ -106,15 +100,14 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/affichage': typeof AffichageRoute
   '/caisse': typeof CaisseRoute
+  '/comptes': typeof ComptesRoute
+  '/gestion': typeof GestionRoute
   '/login': typeof LoginRoute
   '/parking': typeof ParkingRoute
   '/pdj': typeof PdjRoute
+  '/profil': typeof ProfilRoute
   '/rapro': typeof RaproRoute
   '/repjour': typeof RepjourRouteWithChildren
-  '/repjour/comptes': typeof RepjourComptesRoute
-  '/repjour/gestion': typeof RepjourGestionRoute
-  '/repjour/import': typeof RepjourImportRoute
-  '/repjour/profil': typeof RepjourProfilRoute
   '/repjour/': typeof RepjourIndexRoute
   '/repjour/analytique/': typeof RepjourAnalytiqueIndexRoute
   '/repjour/analytique/$year/$month': typeof RepjourAnalytiqueYearMonthRoute
@@ -123,14 +116,13 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/affichage': typeof AffichageRoute
   '/caisse': typeof CaisseRoute
+  '/comptes': typeof ComptesRoute
+  '/gestion': typeof GestionRoute
   '/login': typeof LoginRoute
   '/parking': typeof ParkingRoute
   '/pdj': typeof PdjRoute
+  '/profil': typeof ProfilRoute
   '/rapro': typeof RaproRoute
-  '/repjour/comptes': typeof RepjourComptesRoute
-  '/repjour/gestion': typeof RepjourGestionRoute
-  '/repjour/import': typeof RepjourImportRoute
-  '/repjour/profil': typeof RepjourProfilRoute
   '/repjour': typeof RepjourIndexRoute
   '/repjour/analytique': typeof RepjourAnalytiqueIndexRoute
   '/repjour/analytique/$year/$month': typeof RepjourAnalytiqueYearMonthRoute
@@ -140,15 +132,14 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/affichage': typeof AffichageRoute
   '/caisse': typeof CaisseRoute
+  '/comptes': typeof ComptesRoute
+  '/gestion': typeof GestionRoute
   '/login': typeof LoginRoute
   '/parking': typeof ParkingRoute
   '/pdj': typeof PdjRoute
+  '/profil': typeof ProfilRoute
   '/rapro': typeof RaproRoute
   '/repjour': typeof RepjourRouteWithChildren
-  '/repjour/comptes': typeof RepjourComptesRoute
-  '/repjour/gestion': typeof RepjourGestionRoute
-  '/repjour/import': typeof RepjourImportRoute
-  '/repjour/profil': typeof RepjourProfilRoute
   '/repjour/': typeof RepjourIndexRoute
   '/repjour/analytique/': typeof RepjourAnalytiqueIndexRoute
   '/repjour/analytique/$year/$month': typeof RepjourAnalytiqueYearMonthRoute
@@ -159,15 +150,14 @@ export interface FileRouteTypes {
     | '/'
     | '/affichage'
     | '/caisse'
+    | '/comptes'
+    | '/gestion'
     | '/login'
     | '/parking'
     | '/pdj'
+    | '/profil'
     | '/rapro'
     | '/repjour'
-    | '/repjour/comptes'
-    | '/repjour/gestion'
-    | '/repjour/import'
-    | '/repjour/profil'
     | '/repjour/'
     | '/repjour/analytique/'
     | '/repjour/analytique/$year/$month'
@@ -176,14 +166,13 @@ export interface FileRouteTypes {
     | '/'
     | '/affichage'
     | '/caisse'
+    | '/comptes'
+    | '/gestion'
     | '/login'
     | '/parking'
     | '/pdj'
+    | '/profil'
     | '/rapro'
-    | '/repjour/comptes'
-    | '/repjour/gestion'
-    | '/repjour/import'
-    | '/repjour/profil'
     | '/repjour'
     | '/repjour/analytique'
     | '/repjour/analytique/$year/$month'
@@ -192,15 +181,14 @@ export interface FileRouteTypes {
     | '/'
     | '/affichage'
     | '/caisse'
+    | '/comptes'
+    | '/gestion'
     | '/login'
     | '/parking'
     | '/pdj'
+    | '/profil'
     | '/rapro'
     | '/repjour'
-    | '/repjour/comptes'
-    | '/repjour/gestion'
-    | '/repjour/import'
-    | '/repjour/profil'
     | '/repjour/'
     | '/repjour/analytique/'
     | '/repjour/analytique/$year/$month'
@@ -210,9 +198,12 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AffichageRoute: typeof AffichageRoute
   CaisseRoute: typeof CaisseRoute
+  ComptesRoute: typeof ComptesRoute
+  GestionRoute: typeof GestionRoute
   LoginRoute: typeof LoginRoute
   ParkingRoute: typeof ParkingRoute
   PdjRoute: typeof PdjRoute
+  ProfilRoute: typeof ProfilRoute
   RaproRoute: typeof RaproRoute
   RepjourRoute: typeof RepjourRouteWithChildren
 }
@@ -231,6 +222,13 @@ declare module '@tanstack/react-router' {
       path: '/rapro'
       fullPath: '/rapro'
       preLoaderRoute: typeof RaproRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/profil': {
+      id: '/profil'
+      path: '/profil'
+      fullPath: '/profil'
+      preLoaderRoute: typeof ProfilRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/pdj': {
@@ -252,6 +250,20 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/gestion': {
+      id: '/gestion'
+      path: '/gestion'
+      fullPath: '/gestion'
+      preLoaderRoute: typeof GestionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/comptes': {
+      id: '/comptes'
+      path: '/comptes'
+      fullPath: '/comptes'
+      preLoaderRoute: typeof ComptesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/caisse': {
@@ -282,34 +294,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RepjourIndexRouteImport
       parentRoute: typeof RepjourRoute
     }
-    '/repjour/profil': {
-      id: '/repjour/profil'
-      path: '/profil'
-      fullPath: '/repjour/profil'
-      preLoaderRoute: typeof RepjourProfilRouteImport
-      parentRoute: typeof RepjourRoute
-    }
-    '/repjour/import': {
-      id: '/repjour/import'
-      path: '/import'
-      fullPath: '/repjour/import'
-      preLoaderRoute: typeof RepjourImportRouteImport
-      parentRoute: typeof RepjourRoute
-    }
-    '/repjour/gestion': {
-      id: '/repjour/gestion'
-      path: '/gestion'
-      fullPath: '/repjour/gestion'
-      preLoaderRoute: typeof RepjourGestionRouteImport
-      parentRoute: typeof RepjourRoute
-    }
-    '/repjour/comptes': {
-      id: '/repjour/comptes'
-      path: '/comptes'
-      fullPath: '/repjour/comptes'
-      preLoaderRoute: typeof RepjourComptesRouteImport
-      parentRoute: typeof RepjourRoute
-    }
     '/repjour/analytique/': {
       id: '/repjour/analytique/'
       path: '/analytique'
@@ -328,20 +312,12 @@ declare module '@tanstack/react-router' {
 }
 
 interface RepjourRouteChildren {
-  RepjourComptesRoute: typeof RepjourComptesRoute
-  RepjourGestionRoute: typeof RepjourGestionRoute
-  RepjourImportRoute: typeof RepjourImportRoute
-  RepjourProfilRoute: typeof RepjourProfilRoute
   RepjourIndexRoute: typeof RepjourIndexRoute
   RepjourAnalytiqueIndexRoute: typeof RepjourAnalytiqueIndexRoute
   RepjourAnalytiqueYearMonthRoute: typeof RepjourAnalytiqueYearMonthRoute
 }
 
 const RepjourRouteChildren: RepjourRouteChildren = {
-  RepjourComptesRoute: RepjourComptesRoute,
-  RepjourGestionRoute: RepjourGestionRoute,
-  RepjourImportRoute: RepjourImportRoute,
-  RepjourProfilRoute: RepjourProfilRoute,
   RepjourIndexRoute: RepjourIndexRoute,
   RepjourAnalytiqueIndexRoute: RepjourAnalytiqueIndexRoute,
   RepjourAnalytiqueYearMonthRoute: RepjourAnalytiqueYearMonthRoute,
@@ -354,9 +330,12 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AffichageRoute: AffichageRoute,
   CaisseRoute: CaisseRoute,
+  ComptesRoute: ComptesRoute,
+  GestionRoute: GestionRoute,
   LoginRoute: LoginRoute,
   ParkingRoute: ParkingRoute,
   PdjRoute: PdjRoute,
+  ProfilRoute: ProfilRoute,
   RaproRoute: RaproRoute,
   RepjourRoute: RepjourRouteWithChildren,
 }

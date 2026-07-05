@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { Link } from '@tanstack/react-router'
 import {
   Calendar,
   ChevronLeft,
   ChevronRight,
   HelpCircle,
   Image as ImageIcon,
+  LineChart,
   Loader2,
   Settings,
 } from 'lucide-react'
@@ -14,6 +16,7 @@ import { Button } from '#/components/ui/button.tsx'
 import { AlertBanner } from '#/components/repjour/AlertBanner.tsx'
 import { KPIDetailPanel } from '#/components/repjour/KPIDetailPanel.tsx'
 import { KPITable } from '#/components/repjour/KPITable.tsx'
+import { ImportSection } from '#/components/repjour/ImportSection.tsx'
 import { RecipientsModal } from '#/components/repjour/RecipientsModal.tsx'
 import { SummaryCards } from '#/components/repjour/SummaryCards.tsx'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
@@ -69,6 +72,7 @@ export function DashboardBoard() {
 
   const { role } = useAuth()
   const isAdmin = role === 'admin'
+  const canImport = role === 'super_utilisateur' || role === 'admin'
 
   // Date courante mémorisée pour le rafraîchissement temps réel (évite une
   // fermeture obsolète dans le handler de l'abonnement).
@@ -216,45 +220,57 @@ export function DashboardBoard() {
 
   return (
     <PageContainer>
-      <div className="mx-auto w-full max-w-5xl space-y-6">
+      <div className="mx-auto w-full max-w-5xl space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-xl font-bold text-foreground">{displayDate}</h1>
 
-          <div className="flex items-center gap-1">
-            <Button
-              variant="outline"
-              size="icon-sm"
-              onClick={() => shiftDate(-1)}
-              aria-label="Jour précédent"
-            >
-              <ChevronLeft />
-            </Button>
-            <div className="relative">
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => handleDateChange(e.target.value)}
-                onClick={(e) => (e.target as HTMLInputElement).showPicker()}
-                aria-label="Choisir une date"
-                className="absolute inset-0 z-10 cursor-pointer opacity-0"
-              />
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
               <Button
                 variant="outline"
                 size="icon-sm"
-                tabIndex={-1}
-                aria-hidden
-                className="pointer-events-none"
+                onClick={() => shiftDate(-1)}
+                aria-label="Jour précédent"
               >
-                <Calendar />
+                <ChevronLeft />
+              </Button>
+              <div className="relative">
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => handleDateChange(e.target.value)}
+                  onClick={(e) => (e.target as HTMLInputElement).showPicker()}
+                  aria-label="Choisir une date"
+                  className="absolute inset-0 z-10 cursor-pointer opacity-0"
+                />
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  tabIndex={-1}
+                  aria-hidden
+                  className="pointer-events-none"
+                >
+                  <Calendar />
+                </Button>
+              </div>
+              <Button
+                variant="outline"
+                size="icon-sm"
+                onClick={() => shiftDate(1)}
+                aria-label="Jour suivant"
+              >
+                <ChevronRight />
               </Button>
             </div>
-            <Button
-              variant="outline"
-              size="icon-sm"
-              onClick={() => shiftDate(1)}
-              aria-label="Jour suivant"
-            >
-              <ChevronRight />
+
+            {/* Accès à la vue analytique — remplace le lien de l'ancienne
+                sous-nav repjour (supprimée). Placé à droite de la navigation
+                des jours. */}
+            <Button asChild variant="outline" size="sm">
+              <Link to="/repjour/analytique" aria-label="Vue analytique">
+                <LineChart />
+                <span className="hidden sm:inline">Analytique</span>
+              </Link>
             </Button>
           </div>
         </div>
@@ -264,7 +280,7 @@ export function DashboardBoard() {
             <Loader2 className="size-8 animate-spin text-primary" />
           </div>
         ) : !report && !hasPartialData ? (
-          <div className="rounded-xl border border-border bg-card p-12 text-center">
+          <div className="rounded-xl border border-border bg-card p-8 text-center">
             <p className="mb-3 text-4xl text-muted-foreground">—</p>
             <p className="text-lg font-medium text-foreground">
               Aucune donnée pour le {displayDate}
@@ -283,7 +299,7 @@ export function DashboardBoard() {
               partial
             />
 
-            <div className="rounded-xl border border-border bg-card p-4 sm:p-6">
+            <div className="rounded-xl border border-border bg-card p-3 sm:p-4">
               <KPITable
                 realiseJour={null}
                 realiseMTD={null}
@@ -331,7 +347,7 @@ export function DashboardBoard() {
               </div>
             ) : (
               <>
-                <div className="relative rounded-xl border border-border bg-card p-4 sm:p-6">
+                <div className="relative rounded-xl border border-border bg-card p-3 sm:p-4">
                   <button
                     type="button"
                     onClick={() => setDetailMode(true)}
@@ -352,11 +368,10 @@ export function DashboardBoard() {
 
                 <AlertBanner alerts={report.alerts || []} />
 
-                {/* Actions email — VISIBLES uniquement pour l'admin. Les
-                    données du rapport courant (rj/rmtd/pm/budget/ecart, tous
-                    non-nuls dans cette branche) sont passées telles quelles à
-                    captureTableImage/sendReport, qui bâtissent l'îlot HEX
-                    autonome de email.ts (jamais le DOM shadcn). */}
+                {/* Actions email — admin, directement SOUS le tableau (comme
+                    avant), au-dessus de la carte d'import. captureTableImage/
+                    sendReport bâtissent l'îlot HEX autonome de email.ts (jamais
+                    le DOM shadcn). */}
                 {isAdmin && (
                   <div className="flex items-center gap-1">
                     <Button
@@ -418,6 +433,16 @@ export function DashboardBoard() {
             )}
           </>
         ) : null}
+
+        {/* Import — carte placée en bas du dashboard, réservée aux rôles
+            super_utilisateur / admin. Visible dans tous les états (y compris
+            sans données : c'est justement là qu'on importe). Un import réussi
+            recharge le rapport affiché. Masquée en mode détaillé. */}
+        {!loading && !detailMode && canImport && (
+          <ImportSection
+            onImported={() => loadReport(selectedDateRef.current || undefined)}
+          />
+        )}
       </div>
 
       {isAdmin && (

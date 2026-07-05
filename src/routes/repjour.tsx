@@ -1,18 +1,16 @@
 import { Outlet, createFileRoute } from '@tanstack/react-router'
 
-import { RepjourNav } from '#/components/repjour/RepjourNav.tsx'
-
 /**
  * Layout de l'onglet `/repjour`.
  *
  * `ssr: false` : cet onglet monte des briques 100 % navigateur (graphiques
- * recharts, et html2canvas aux étapes suivantes). Le rendre sans SSR évite tout
- * crash de rendu serveur.
+ * recharts, html2canvas). Le rendre sans SSR évite tout crash de rendu serveur.
  *
- * L'authentification est fournie plus haut, à la racine (`AuthProvider` dans
- * `__root.tsx`) : elle protège toute l'application. Ce layout n'apporte donc que
- * la sous-navigation d'onglet (`RepjourNav`) et l'`Outlet`. Le gating par RÔLE
- * des sous-pages reste assuré par `ProtectedRoute`.
+ * L'authentification est fournie à la racine (`AppAuthGate` dans `__root.tsx`).
+ * Il n'y a plus de sous-navigation d'onglet : le « Rapport » est le dashboard
+ * lui-même, l'accès à l'« Analytique » se fait par un bouton dans l'en-tête du
+ * dashboard, et le retour au Rapport par le lien « RepJour » de la Navbar
+ * globale. Le gating par rôle des sous-pages reste assuré par `ProtectedRoute`.
  */
 export const Route = createFileRoute('/repjour')({
   component: RepjourLayout,
@@ -21,10 +19,5 @@ export const Route = createFileRoute('/repjour')({
 })
 
 function RepjourLayout() {
-  return (
-    <>
-      <RepjourNav />
-      <Outlet />
-    </>
-  )
+  return <Outlet />
 }

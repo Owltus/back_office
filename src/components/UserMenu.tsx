@@ -1,6 +1,6 @@
 import type { ComponentProps, ReactNode } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { LogOut, Settings, User } from 'lucide-react'
+import { LogOut, User, Users, Wallet } from 'lucide-react'
 
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { ROLE_LABELS } from '#/lib/repjour/roles.ts'
@@ -54,14 +54,20 @@ export function UserMenu({
 
         <DropdownMenuSeparator />
 
-        <DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => navigate({ to: '/profil' })}>
           <User />
           Profil
         </DropdownMenuItem>
-        <DropdownMenuItem>
-          <Settings />
-          Paramètres
+        <DropdownMenuItem onSelect={() => navigate({ to: '/gestion' })}>
+          <Wallet />
+          Gestion budgétaire
         </DropdownMenuItem>
+        {role === 'admin' && (
+          <DropdownMenuItem onSelect={() => navigate({ to: '/comptes' })}>
+            <Users />
+            Gestion des comptes
+          </DropdownMenuItem>
+        )}
 
         <DropdownMenuSeparator />
 

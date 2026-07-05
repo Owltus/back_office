@@ -23,11 +23,11 @@ function LoginPage() {
   const navigate = useNavigate()
 
   // Dès qu'une session existe (déjà connecté au montage, ou après une connexion
-  // réussie), on quitte la page de login vers l'accueil de l'application.
-  // L'authentification globale suffit ici : pas besoin d'attendre le rôle.
+  // réussie), on quitte la page de login vers l'onglet RepJour (page d'accueil
+  // par défaut). L'authentification globale suffit ici : pas besoin du rôle.
   useEffect(() => {
     if (user) {
-      navigate({ to: '/', replace: true })
+      navigate({ to: '/repjour', replace: true })
     }
   }, [user, navigate])
 

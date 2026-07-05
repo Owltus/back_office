@@ -13,13 +13,11 @@ export type { UserRole };
  * qu'un ici et toutes les cibles vivent sous l'îlot `/repjour`.
  */
 export const ROLE_HOME: Record<UserRole, string> = {
+  // Tous les rôles atterrissent sur le dashboard /repjour. L'import est intégré
+  // au dashboard (sous le tableau) pour les rôles autorisés — il n'y a plus de
+  // route /repjour/import dédiée.
   utilisateur: '/repjour',
-  // Le super_utilisateur atterrit sur l'import (sa page « métier » principale).
-  // Invariant anti-boucle : ROLE_HOME[role] doit être accessible au rôle —
-  // /repjour/import autorise `super_utilisateur` ET `admin` (cf. import.tsx),
-  // donc super_utilisateur → /repjour/import ne provoque pas de redirection en
-  // boucle.
-  super_utilisateur: '/repjour/import',
+  super_utilisateur: '/repjour',
   admin: '/repjour',
 };
 
