@@ -435,15 +435,27 @@ export function DashboardBoard() {
         ) : null}
 
         {/* Import — carte placée en bas du dashboard, réservée aux rôles
-            super_utilisateur / admin. Visible dans tous les états (y compris
-            sans données : c'est justement là qu'on importe), SAUF sur un jour
-            futur (aucun rapport possible pour une date à venir). Un import
-            réussi recharge le rapport affiché. Masquée en mode détaillé. */}
-        {!loading && !detailMode && canImport && !isFuture && (
-          <ImportSection
-            onImported={() => loadReport(selectedDateRef.current || undefined)}
-          />
-        )}
+            super_utilisateur / admin. Masquée en mode détaillé et sur un jour
+            futur (aucun rapport possible pour une date à venir).
+            RÈGLE D'AFFICHAGE PAR RÔLE :
+            - super_utilisateur : visible UNIQUEMENT tant qu'aucun rapport
+              n'existe pour le jour affiché. Dès que le rapport est présent, la
+              carte disparaît et il ne voit plus que le tableau (`isAdmin ||
+              !report`) ;
+            - admin : toujours visible (il voit tout, données présentes ou non) ;
+            - utilisateur : jamais (exclu par `canImport`).
+            Un import réussi recharge le rapport affiché. */}
+        {!loading &&
+          !detailMode &&
+          canImport &&
+          !isFuture &&
+          (isAdmin || !report) && (
+            <ImportSection
+              onImported={() =>
+                loadReport(selectedDateRef.current || undefined)
+              }
+            />
+          )}
       </div>
 
       {isAdmin && (
