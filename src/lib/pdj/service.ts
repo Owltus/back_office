@@ -55,15 +55,23 @@ export async function fetchDay(serviceDate: string): Promise<PdjDayRow[]> {
 }
 
 /**
- * Import idempotent d'un fichier (upsert sur la clé métier). Le payload
- * n'inclut PAS les colonnes de consommation → un réimport ne réinitialise pas
- * la saisie du staff (`ON CONFLICT DO UPDATE` ne touche que les colonnes fournies).
+ * Import idempotent (upsert sur la clé métier). Le payload n'inclut PAS les
+ * colonnes de consommation → un réimport ne réinitialise pas la saisie du staff
+ * (`ON CONFLICT DO UPDATE` ne touche que les colonnes fournies).
+ *
+ * Découpé en lots pour encaisser un dépôt en masse (des dizaines de jours d'un
+ * coup) sans payload démesuré. Les lignes doivent être dédoublonnées par
+ * (service_date, room) en amont (cf. `mergeCsvFiles`) : une clé de conflit
+ * répétée dans un même lot ferait échouer l'upsert.
  */
 export async function importRows(rows: DbPdjRow[]): Promise<void> {
-  const { error } = await supabase
-    .from(PDJ_TABLE)
-    .upsert(rows, { onConflict: 'service_date,room' })
-  if (error) throw error
+  const CHUNK = 1000
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const { error } = await supabase
+      .from(PDJ_TABLE)
+      .upsert(rows.slice(i, i + CHUNK), { onConflict: 'service_date,room' })
+    if (error) throw error
+  }
 }
 
 /** Met à jour la consommation d'une chambre pour un jour (saisie staff, D4). */

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { csvToDbRows } from '#/lib/pdj/csv.ts'
+import { csvToDbRows, mergeCsvFiles } from '#/lib/pdj/csv.ts'
 
 /*
  * Vérifie la règle RGPD (D2) et le parsing daté de csvToDbRows.
@@ -81,5 +81,72 @@ describe('csvToDbRows', () => {
     expect(() => csvToDbRows('Room,Status\n', 'export.csv')).toThrow(
       /Date non extractible/,
     )
+  })
+})
+
+describe('mergeCsvFiles', () => {
+  const fileFor = (date: string, stamp: string) => ({
+    name: `In-House Guests _${stamp}.csv`,
+    content:
+      `${HEADER}\n` +
+      `102,IN HOUSE,"X, Y",,2,0,PDJ INCL,BOOKING - NR - BB2PAX,Chambre confort,1,BOOKING.COM,,,Credit Card,90,${date} 02:00 PM,${date} 02:00 PM,0\n`,
+  })
+
+  it('fusionne plusieurs jours et les trie du plus récent au plus ancien', () => {
+    const result = mergeCsvFiles([
+      fileFor('10-01-2020', '20200110120000'),
+      fileFor('12-01-2020', '20200112120000'),
+      fileFor('11-01-2020', '20200111120000'),
+    ])
+
+    expect(result.dates).toEqual(['2020-01-12', '2020-01-11', '2020-01-10'])
+    expect(result.rows).toHaveLength(3)
+    expect(result.imported).toHaveLength(3)
+    expect(result.ignored).toHaveLength(0)
+  })
+
+  it('ignore les fichiers invalides sans bloquer les valides', () => {
+    const result = mergeCsvFiles([
+      fileFor('10-01-2020', '20200110120000'),
+      { name: 'poubelle.csv', content: 'nawak,pas,des,colonnes\n1,2,3,4\n' },
+      { name: 'sans-date.csv', content: `${HEADER}\n` },
+    ])
+
+    expect(result.dates).toEqual(['2020-01-10'])
+    expect(result.rows).toHaveLength(1)
+    expect(result.ignored).toHaveLength(2)
+    expect(result.ignored.map((i) => i.name)).toContain('poubelle.csv')
+  })
+
+  it('même jour en double : la version la plus récente (par nom) gagne', () => {
+    const result = mergeCsvFiles([
+      fileFor('10-01-2020', '20200110080000'),
+      fileFor('10-01-2020', '20200110190000'), // plus tard le même jour
+    ])
+
+    expect(result.dates).toEqual(['2020-01-10'])
+    expect(result.rows).toHaveLength(1)
+    expect(result.imported).toEqual(['In-House Guests _20200110190000.csv'])
+    expect(result.ignored).toHaveLength(1)
+    expect(result.ignored[0].name).toBe('In-House Guests _20200110080000.csv')
+  })
+
+  it('aucune clé (service_date, room) dupliquée dans le payload final', () => {
+    const result = mergeCsvFiles([
+      fileFor('10-01-2020', '20200110080000'),
+      fileFor('10-01-2020', '20200110190000'),
+      fileFor('11-01-2020', '20200111120000'),
+    ])
+
+    const keys = result.rows.map((r) => `${r.service_date}|${r.room}`)
+    expect(new Set(keys).size).toBe(keys.length)
+  })
+
+  it('lot vide → résultat vide', () => {
+    const result = mergeCsvFiles([])
+    expect(result.rows).toHaveLength(0)
+    expect(result.dates).toHaveLength(0)
+    expect(result.imported).toHaveLength(0)
+    expect(result.ignored).toHaveLength(0)
   })
 })

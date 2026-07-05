@@ -342,3 +342,84 @@ export function csvToDbRows(content: string, fileName: string): DbPdjRow[] {
     source_file: fileName,
   }))
 }
+
+/** Fichier candidat à l'import (nom + contenu déjà lu). */
+export interface CsvFileInput {
+  name: string
+  content: string
+}
+
+/** Résultat d'un import multi-fichiers, trié et dédoublonné. */
+export interface MergeCsvResult {
+  /** Lignes DB prêtes à l'upsert, dédoublonnées par (service_date, room). */
+  rows: DbPdjRow[]
+  /** Jours distincts importés, du plus récent au plus ancien. */
+  dates: string[]
+  /** Noms des fichiers retenus (un par jour, la version la plus récente). */
+  imported: string[]
+  /** Fichiers écartés (non exploitables ou doublon plus ancien) + raison. */
+  ignored: { name: string; reason: string }[]
+}
+
+/**
+ * Fusionne un LOT de fichiers CSV en un jeu de lignes DB propre, robuste au
+ * dépôt en masse (dizaines de fichiers hétérogènes) :
+ *
+ *   - chaque fichier est parsé isolément ; un fichier illisible (colonnes
+ *     manquantes, nom sans date, aucune ligne exploitable) est IGNORÉ, pas
+ *     bloquant ;
+ *   - pour un même jour de service, on ne retient qu'UN fichier — le plus
+ *     récent d'après son nom (le timestamp `_YYYYMMDDHHMMSS`) — les autres sont
+ *     écartés comme doublons ;
+ *   - dédoublonnage final par (service_date, room) : garantit qu'aucune clé de
+ *     conflit n'apparaît deux fois dans le payload (sinon l'upsert Postgres
+ *     `ON CONFLICT` échoue).
+ *
+ * Fonction pure : la lecture des fichiers et le filtrage d'extension se font en
+ * amont, côté composant.
+ */
+export function mergeCsvFiles(files: CsvFileInput[]): MergeCsvResult {
+  const ignored: { name: string; reason: string }[] = []
+  const bestByDate = new Map<string, { name: string; rows: DbPdjRow[] }>()
+
+  for (const f of files) {
+    let rows: DbPdjRow[]
+    try {
+      rows = csvToDbRows(f.content, f.name)
+    } catch (err) {
+      ignored.push({
+        name: f.name,
+        reason: err instanceof Error ? err.message : String(err),
+      })
+      continue
+    }
+    if (rows.length === 0) {
+      ignored.push({ name: f.name, reason: 'Aucune ligne client exploitable.' })
+      continue
+    }
+    const date = rows[0].service_date
+    const current = bestByDate.get(date)
+    if (!current) {
+      bestByDate.set(date, { name: f.name, rows })
+    } else if (f.name > current.name) {
+      // Nom « plus grand » = timestamp plus tardif → il remplace l'ancien.
+      ignored.push({ name: current.name, reason: `Doublon du ${date} écarté.` })
+      bestByDate.set(date, { name: f.name, rows })
+    } else {
+      ignored.push({ name: f.name, reason: `Doublon du ${date} écarté.` })
+    }
+  }
+
+  // Dédoublonnage final par (service_date, room), tous fichiers confondus.
+  const byKey = new Map<string, DbPdjRow>()
+  for (const { rows } of bestByDate.values()) {
+    for (const r of rows) byKey.set(`${r.service_date}|${r.room}`, r)
+  }
+
+  return {
+    rows: [...byKey.values()],
+    dates: [...bestByDate.keys()].sort((a, b) => (a > b ? -1 : 1)),
+    imported: [...bestByDate.values()].map((b) => b.name),
+    ignored,
+  }
+}

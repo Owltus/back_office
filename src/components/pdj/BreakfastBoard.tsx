@@ -23,7 +23,7 @@ import { DatePickerButton } from '#/components/form/fields.tsx'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { cn } from '#/lib/utils.ts'
 import { printWithTitle } from '#/lib/print.ts'
-import { ALL_ROOMS, csvToDbRows, localDateStr } from '#/lib/pdj/csv.ts'
+import { ALL_ROOMS, localDateStr, mergeCsvFiles } from '#/lib/pdj/csv.ts'
 import {
   fetchDay,
   fetchServiceDates,
@@ -66,8 +66,15 @@ export function BreakfastBoard() {
   const canEdit = role === 'super_utilisateur' || role === 'admin'
   const queryClient = useQueryClient()
 
-  const [selectedDate, setSelectedDate] = useState('')
+  // Jour courant (Europe/Paris) figé au montage : jour affiché par défaut, repère
+  // RGPD, et borne « la plus récente » de la navigation.
+  const today = useMemo(() => localDateStr(new Date()), [])
+
+  // On affiche TOUJOURS le jour courant par défaut (jamais le dernier jour
+  // importé, qui serait obsolète) ; l'utilisateur peut ensuite remonter le temps.
+  const [selectedDate, setSelectedDate] = useState(today)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
   const [dragging, setDragging] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -83,15 +90,10 @@ export function BreakfastBoard() {
   useEffect(() => {
     if (purgedRef.current || !canEdit) return
     purgedRef.current = true
-    purgeOldGuestNames(localDateStr(new Date()))
+    purgeOldGuestNames(today)
       .then(() => queryClient.invalidateQueries({ queryKey: ['pdj'] }))
       .catch((err) => console.error('[pdj] purge RGPD échouée', err))
-  }, [canEdit, queryClient])
-
-  // Sélection par défaut : le jour le plus récent une fois la liste chargée.
-  useEffect(() => {
-    if (!selectedDate && dates.length > 0) setSelectedDate(dates[0])
-  }, [dates, selectedDate])
+  }, [canEdit, queryClient, today])
 
   // Lignes du jour sélectionné.
   const { data: dayRows = [] } = useQuery({
@@ -154,28 +156,36 @@ export function BreakfastBoard() {
   const longDate = fmtTitle.format(displayDate)
   const titleDate = longDate.charAt(0).toUpperCase() + longDate.slice(1)
 
-  // Navigation entre les jours RÉELLEMENT importés (dates triées du + récent au
-  // + ancien) : jamais de jour vide, et le contrôle ne grandit pas dans le temps.
-  const dateIdx = dates.indexOf(selectedDate)
+  // Jours parcourables : les jours réellement importés PLUS le jour courant
+  // (toujours présent, même sans données, pour pouvoir revenir sur « aujourd'hui »
+  // et son import). Triés du plus récent au plus ancien.
+  const navDates = useMemo(() => {
+    const set = new Set(dates)
+    set.add(today)
+    return [...set].sort((a, b) => (a > b ? -1 : 1))
+  }, [dates, today])
+
+  // Navigation entre ces jours : jamais de jour vide « au milieu », et le contrôle
+  // ne grandit pas dans le temps.
+  const dateIdx = navDates.indexOf(selectedDate)
   const gotoOlder = () => {
-    if (dateIdx >= 0 && dateIdx < dates.length - 1)
-      setSelectedDate(dates[dateIdx + 1])
+    if (dateIdx >= 0 && dateIdx < navDates.length - 1)
+      setSelectedDate(navDates[dateIdx + 1])
   }
   const gotoNewer = () => {
-    if (dateIdx > 0) setSelectedDate(dates[dateIdx - 1])
+    if (dateIdx > 0) setSelectedDate(navDates[dateIdx - 1])
   }
-  // Sélecteur de date : cale sur le jour importé le plus proche (les jours sans
-  // rapport n'existent pas en base).
+  // Sélecteur de date : cale sur le jour parcourable le plus proche.
   function selectNearestDate(target: string) {
-    if (!target || dates.length === 0) return
-    if (dates.includes(target)) {
+    if (!target || navDates.length === 0) return
+    if (navDates.includes(target)) {
       setSelectedDate(target)
       return
     }
     const t = new Date(target + 'T00:00:00').getTime()
-    let best = dates[0]
+    let best = navDates[0]
     let bestDiff = Infinity
-    for (const d of dates) {
+    for (const d of navDates) {
       const diff = Math.abs(new Date(d + 'T00:00:00').getTime() - t)
       if (diff < bestDiff) {
         bestDiff = diff
@@ -185,24 +195,59 @@ export function BreakfastBoard() {
     setSelectedDate(best)
   }
 
-  async function loadFile(file: File) {
-    if (!canEdit) return
-    if (!file.name.toLowerCase().endsWith('.csv')) {
-      setError(
-        "Le fichier sélectionné n'est pas un CSV valide. Veuillez réessayer.",
-      )
+  // Import d'un LOT de fichiers (drop ou sélection multiple). On trie d'abord
+  // sur l'extension, puis `mergeCsvFiles` valide/dédoublonne : les fichiers
+  // illisibles ou en doublon sont ignorés sans bloquer l'import du reste.
+  async function loadFiles(fileList: File[]) {
+    if (!canEdit || fileList.length === 0) return
+    setError('')
+    setNotice('')
+
+    const csvFiles = fileList.filter((f) =>
+      f.name.toLowerCase().endsWith('.csv'),
+    )
+    const nonCsv = fileList.length - csvFiles.length
+    if (csvFiles.length === 0) {
+      setError('Aucun fichier .csv dans la sélection.')
       return
     }
+
     try {
-      const content = await file.text()
-      const rows = csvToDbRows(content, file.name)
-      await importRows(rows)
+      const inputs = await Promise.all(
+        csvFiles.map(async (f) => ({ name: f.name, content: await f.text() })),
+      )
+      const result = mergeCsvFiles(inputs)
+
+      if (result.rows.length === 0) {
+        setError(
+          'Aucune donnée exploitable : fichiers invalides ou mal nommés (attendu « In-House Guests _YYYYMMDD… »).',
+        )
+        return
+      }
+
+      await importRows(result.rows)
       await queryClient.invalidateQueries({ queryKey: ['pdj'] })
-      if (rows[0]) setSelectedDate(rows[0].service_date)
-      setError('')
+
+      // On se place sur le jour le plus pertinent du lot : aujourd'hui s'il en
+      // fait partie, sinon le jour importé le plus récent.
+      setSelectedDate(result.dates.includes(today) ? today : result.dates[0])
+
+      if (result.ignored.length > 0)
+        console.warn('[pdj] fichiers ignorés à l’import', result.ignored)
+
+      const ignored = result.ignored.length + nonCsv
+      const nbFiles = result.imported.length
+      const nbDays = result.dates.length
+      setNotice(
+        `${nbFiles} fichier${nbFiles > 1 ? 's' : ''} importé${nbFiles > 1 ? 's' : ''} ` +
+          `(${nbDays} jour${nbDays > 1 ? 's' : ''})` +
+          (ignored > 0
+            ? ` — ${ignored} ignoré${ignored > 1 ? 's' : ''}.`
+            : '.'),
+      )
     } catch (err) {
       setError(
-        `Erreur lors du traitement du fichier : ${
+        `Erreur lors du traitement des fichiers : ${
           err instanceof Error ? err.message : String(err)
         }`,
       )
@@ -210,16 +255,14 @@ export function BreakfastBoard() {
   }
 
   function onInputChange(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (file) void loadFile(file)
+    void loadFiles(e.target.files ? Array.from(e.target.files) : [])
     e.target.value = ''
   }
 
   function onDrop(e: DragEvent<HTMLDivElement>) {
     e.preventDefault()
     setDragging(false)
-    const file = e.dataTransfer.files.item(0)
-    if (file) void loadFile(file)
+    void loadFiles(Array.from(e.dataTransfer.files))
   }
 
   // Saisie « PDJ servi » d'une chambre : mise à jour optimiste du cache puis
@@ -246,7 +289,10 @@ export function BreakfastBoard() {
     printWithTitle(`Breakfast_${dd}-${mm}-${d.getFullYear()}`)
   }
 
-  const showEmptyState = dates.length === 0 && !hasData
+  // L'en-tête (titre du jour + navigation + import) est présent dès qu'il y a des
+  // données à afficher OU d'autres jours à parcourir. La navigation ne s'affiche
+  // que s'il existe un autre jour que « aujourd'hui » où aller.
+  const canNavigate = navDates.length > 1
 
   return (
     <div className="pdj-doc flex w-full min-w-0 flex-1 flex-col gap-5">
@@ -256,112 +302,123 @@ export function BreakfastBoard() {
         <span className="pdj-date">{dateLabel}</span>
       </div>
 
-      {/* Input fichier caché, déclenché par la zone vide ou le bouton Importer. */}
+      {/* Input fichier caché (multi-fichiers), déclenché par la zone vide ou le
+          bouton Importer. */}
       <input
         ref={inputRef}
         type="file"
         accept=".csv"
+        multiple
         className="hidden"
         onChange={onInputChange}
       />
 
-      {showEmptyState ? (
-        <>
-          {error && <div className="pdj-error print:hidden">{error}</div>}
-          {canEdit ? (
-            <EmptyCanvas
-              role="button"
-              tabIndex={0}
-              onClick={() => inputRef.current?.click()}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ')
-                  inputRef.current?.click()
-              }}
-              onDragOver={(e) => {
-                e.preventDefault()
-                setDragging(true)
-              }}
-              onDragLeave={() => setDragging(false)}
-              onDrop={onDrop}
-              className={cn(
-                'empty-canvas min-h-[340px] cursor-pointer flex-col gap-3 p-10 text-center outline-none transition-colors',
-                'hover:border-primary/60 hover:bg-secondary/30 focus-visible:ring-2 focus-visible:ring-ring',
-                dragging && 'border-primary bg-secondary/40',
-              )}
-            >
-              <div className="rounded-full bg-secondary p-4">
-                <FileUp className="size-8 text-muted-foreground" />
-              </div>
-              <div className="text-base font-medium">
-                Glissez votre fichier CSV ici
-              </div>
-              <div className="text-sm text-muted-foreground">
-                ou cliquez pour sélectionner un fichier (.csv)
-              </div>
-            </EmptyCanvas>
-          ) : (
-            <EmptyCanvas className="empty-canvas min-h-[340px] flex-col gap-3 text-center text-muted-foreground">
-              <Coffee className="size-10 opacity-40" />
-              <p className="text-sm font-medium">
-                Aucune donnée de petit-déjeuner disponible.
-              </p>
-              <p className="text-xs">
-                Un responsable doit importer le rapport du jour.
-              </p>
-            </EmptyCanvas>
-          )}
-        </>
-      ) : (
-        <>
-          {error && <div className="pdj-error print:hidden">{error}</div>}
+      {error && <div className="pdj-error print:hidden">{error}</div>}
+      {notice && (
+        <div className="rounded-lg bg-emerald-500/10 px-4 py-3 text-sm text-emerald-500 print:hidden">
+          {notice}
+        </div>
+      )}
 
-          <PageHeader
-            title={titleDate}
-            actions={
-              <>
-                {dates.length > 0 && (
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="outline"
-                      size="icon-sm"
-                      onClick={gotoOlder}
-                      disabled={dateIdx < 0 || dateIdx >= dates.length - 1}
-                      aria-label="Jour précédent"
-                    >
-                      <ChevronLeft />
-                    </Button>
-                    <DatePickerButton
-                      value={selectedDate}
-                      onChange={selectNearestDate}
-                      ariaLabel="Choisir un jour"
-                    />
-                    <Button
-                      variant="outline"
-                      size="icon-sm"
-                      onClick={gotoNewer}
-                      disabled={dateIdx <= 0}
-                      aria-label="Jour suivant"
-                    >
-                      <ChevronRight />
-                    </Button>
-                  </div>
-                )}
-                {canEdit && (
+      {(hasData || canNavigate) && (
+        <PageHeader
+          title={titleDate}
+          actions={
+            <>
+              {canNavigate && (
+                <div className="flex items-center gap-1">
                   <Button
                     variant="outline"
-                    onClick={() => inputRef.current?.click()}
-                    aria-label="Importer un CSV"
-                    title="Importer un CSV"
+                    size="icon-sm"
+                    onClick={gotoOlder}
+                    disabled={dateIdx < 0 || dateIdx >= navDates.length - 1}
+                    aria-label="Jour précédent"
                   >
-                    <FileUp />
-                    <span className="hidden lg:inline">Importer</span>
+                    <ChevronLeft />
                   </Button>
-                )}
-                <PrintButton onClick={handlePrint} responsiveLabel />
-              </>
-            }
-          />
+                  <DatePickerButton
+                    value={selectedDate}
+                    onChange={selectNearestDate}
+                    ariaLabel="Choisir un jour"
+                  />
+                  <Button
+                    variant="outline"
+                    size="icon-sm"
+                    onClick={gotoNewer}
+                    disabled={dateIdx <= 0}
+                    aria-label="Jour suivant"
+                  >
+                    <ChevronRight />
+                  </Button>
+                </div>
+              )}
+              {canEdit && (
+                <Button
+                  variant="outline"
+                  onClick={() => inputRef.current?.click()}
+                  aria-label="Importer un CSV"
+                  title="Importer un CSV"
+                >
+                  <FileUp />
+                  <span className="hidden lg:inline">Importer</span>
+                </Button>
+              )}
+              <PrintButton
+                onClick={handlePrint}
+                responsiveLabel
+                disabled={!hasData}
+              />
+            </>
+          }
+        />
+      )}
 
+      {!hasData ? (
+        canEdit ? (
+          // Jour courant (ou jour sélectionné) sans rapport : on NE retombe PAS
+          // sur d'anciennes données, on propose l'import.
+          <EmptyCanvas
+            role="button"
+            tabIndex={0}
+            onClick={() => inputRef.current?.click()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') inputRef.current?.click()
+            }}
+            onDragOver={(e) => {
+              e.preventDefault()
+              setDragging(true)
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={onDrop}
+            className={cn(
+              'empty-canvas min-h-[340px] cursor-pointer flex-col gap-3 p-10 text-center outline-none transition-colors',
+              'hover:border-primary/60 hover:bg-secondary/30 focus-visible:ring-2 focus-visible:ring-ring',
+              dragging && 'border-primary bg-secondary/40',
+            )}
+          >
+            <div className="rounded-full bg-secondary p-4">
+              <FileUp className="size-8 text-muted-foreground" />
+            </div>
+            <div className="text-base font-medium">
+              Glissez vos fichiers CSV ici
+            </div>
+            <div className="text-sm text-muted-foreground">
+              un ou plusieurs .csv — les fichiers invalides sont ignorés
+            </div>
+          </EmptyCanvas>
+        ) : (
+          <EmptyCanvas className="empty-canvas min-h-[340px] flex-col gap-3 text-center text-muted-foreground">
+            <Coffee className="size-10 opacity-40" />
+            <p className="text-sm font-medium">
+              Aucune donnée de petit-déjeuner disponible.
+            </p>
+            <p className="text-xs">
+              Un responsable doit importer le rapport du jour.
+            </p>
+          </EmptyCanvas>
+        )
+      ) : (
+        <>
           {/* Statistiques (footer fixe en impression). */}
           <div className="pdj-stats">
             <div className="pdj-stats-grid">

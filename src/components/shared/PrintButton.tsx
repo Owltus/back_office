@@ -9,19 +9,23 @@ import { Button } from '#/components/ui/button.tsx'
  * - `className` : variantes de placement (w-full, lg:hidden, print:hidden…).
  * - `responsiveLabel` : masque le libellé sous lg (icône seule en responsive),
  *   comme sur le board PDJ ; sinon le libellé est toujours visible.
+ * - `disabled` : grise le bouton (ex. aucune donnée à imprimer).
  */
 export function PrintButton({
   onClick,
   className,
   responsiveLabel = false,
+  disabled = false,
 }: {
   onClick: () => void
   className?: string
   responsiveLabel?: boolean
+  disabled?: boolean
 }) {
   return (
     <Button
       onClick={onClick}
+      disabled={disabled}
       className={className}
       aria-label="Imprimer / PDF"
       title="Imprimer / PDF"
