@@ -1,0 +1,188 @@
+/* ------------------------------------------------------------------ *
+ * 404 — glitch chromatique                                            *
+ * Un « 404 » géant en aberration chromatique (RGB split) qui se       *
+ * déchire par bursts, sur fond bleu nuit plat. Ni néon ni écran CRT.  *
+ * Tout est scopé .nf404-* et les @keyframes nf404-* pour ne rien faire *
+ * fuiter dans le reste de l'app.                                       *
+ * ------------------------------------------------------------------ */
+
+/* ---- Racine : plan de composition, couleurs locales ------------------ */
+.nf404-root {
+  --nf404-r: #ff2d55;
+  --nf404-g: #22d3ee;
+  --nf404-ink: #e2e8f0;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: #0b111e;
+}
+
+/* ---- Bloc central --------------------------------------------------- */
+.nf404-stage {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 2rem 1.5rem;
+  animation: nf404-jitter 5.5s steps(1) infinite;
+}
+
+/* ---- Le "404" en aberration chromatique ----------------------------- */
+.nf404-glitch {
+  position: relative;
+  font-weight: 800;
+  line-height: 0.82;
+  letter-spacing: -0.04em;
+  font-size: clamp(6rem, 26vw, 17rem);
+  color: var(--nf404-ink);
+  /* Décalage chromatique permanent, net (pas de halo/blur) */
+  text-shadow:
+    0.02em 0 rgba(255, 45, 85, 0.55),
+    -0.02em 0 rgba(34, 211, 238, 0.55);
+  user-select: none;
+}
+
+/* Deux copies décalées R et C, révélées par bandes (clip) pendant les bursts */
+.nf404-glitch::before,
+.nf404-glitch::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  color: var(--nf404-ink);
+}
+
+.nf404-glitch::before {
+  left: 3px;
+  text-shadow: -0.05em 0 var(--nf404-r);
+  mix-blend-mode: screen;
+  clip-path: inset(0 0 100% 0);
+  animation: nf404-slice-r 5.5s steps(1) infinite;
+}
+
+.nf404-glitch::after {
+  left: -3px;
+  text-shadow: 0.05em 0 var(--nf404-g);
+  mix-blend-mode: screen;
+  clip-path: inset(100% 0 0 0);
+  animation: nf404-slice-c 5.5s steps(1) infinite;
+}
+
+/* ==================================================================== *
+ * Keyframes                                                            *
+ * ==================================================================== */
+
+/* Bursts de découpe RGB — actifs seulement sur de brefs instants,      *
+ * le reste du temps les copies sont hors-champ (inset 100%).           */
+@keyframes nf404-slice-r {
+  0%,
+  8%,
+  100% {
+    clip-path: inset(0 0 100% 0);
+    transform: translate(0, 0);
+  }
+  9% {
+    clip-path: inset(12% 0 74% 0);
+    transform: translate(-0.06em, 0);
+  }
+  11% {
+    clip-path: inset(58% 0 24% 0);
+    transform: translate(0.05em, 0);
+  }
+  12% {
+    clip-path: inset(0 0 100% 0);
+  }
+  46% {
+    clip-path: inset(0 0 100% 0);
+  }
+  47% {
+    clip-path: inset(30% 0 40% 0);
+    transform: translate(0.08em, 0);
+  }
+  49% {
+    clip-path: inset(78% 0 8% 0);
+    transform: translate(-0.05em, 0);
+  }
+  51% {
+    clip-path: inset(0 0 100% 0);
+    transform: translate(0, 0);
+  }
+}
+
+@keyframes nf404-slice-c {
+  0%,
+  8%,
+  100% {
+    clip-path: inset(100% 0 0 0);
+    transform: translate(0, 0);
+  }
+  9% {
+    clip-path: inset(70% 0 12% 0);
+    transform: translate(0.06em, 0);
+  }
+  11% {
+    clip-path: inset(20% 0 62% 0);
+    transform: translate(-0.05em, 0);
+  }
+  12% {
+    clip-path: inset(100% 0 0 0);
+  }
+  46% {
+    clip-path: inset(100% 0 0 0);
+  }
+  47% {
+    clip-path: inset(56% 0 20% 0);
+    transform: translate(-0.08em, 0);
+  }
+  49% {
+    clip-path: inset(6% 0 80% 0);
+    transform: translate(0.05em, 0);
+  }
+  51% {
+    clip-path: inset(100% 0 0 0);
+    transform: translate(0, 0);
+  }
+}
+
+/* Micro-secousse du bloc central, par à-coups */
+@keyframes nf404-jitter {
+  0%,
+  8%,
+  45%,
+  70%,
+  100% {
+    transform: translate(0, 0);
+  }
+  9% {
+    transform: translate(-2px, 1px);
+  }
+  10% {
+    transform: translate(2px, -1px);
+  }
+  47% {
+    transform: translate(1px, 1px);
+  }
+  48% {
+    transform: translate(-1px, 0);
+  }
+}
+
+/* ==================================================================== *
+ * Accessibilité : mouvement réduit → on fige tout, on garde le RGB     *
+ * split statique (lisible) sans aucune animation.                      *
+ * ==================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  .nf404-stage,
+  .nf404-glitch::before,
+  .nf404-glitch::after {
+    animation: none !important;
+  }
+  .nf404-glitch::before {
+    clip-path: inset(0 0 60% 0);
+  }
+  .nf404-glitch::after {
+    clip-path: inset(60% 0 0 0);
+  }
+}

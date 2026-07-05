@@ -4,6 +4,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap');
 @import 'tailwindcss';
 @import 'tw-animate-css';
+@import './styles/not-found.css';
 @import './styles/pdj.css';
 @import './styles/poster.css';
 @import './styles/repjour.css';
@@ -193,4 +194,3 @@
   width: 0;
   height: 0;
 }
-
