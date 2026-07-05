@@ -27,11 +27,11 @@ import {
 
 const NAV_ITEMS = [
   { to: '/repjour', label: 'RepJour', icon: ClipboardList },
+  { to: '/pdj', label: 'PDJ', icon: Coffee },
   { to: '/parking', label: 'Parking', icon: SquareParking },
   { to: '/rapro', label: 'Rapprochement', icon: ArrowLeftRight },
-  { to: '/affichage', label: 'Affichage', icon: Monitor },
-  { to: '/pdj', label: 'PDJ', icon: Coffee },
   { to: '/caisse', label: 'Caisse', icon: Banknote },
+  { to: '/affichage', label: 'Affichage', icon: Monitor },
 ] as const
 
 export function Navbar() {
@@ -82,9 +82,7 @@ export function Navbar() {
                 <SheetClose asChild key={item.to}>
                   <Link
                     to={item.to}
-                    activeOptions={
-                      undefined
-                    }
+                    activeOptions={undefined}
                     className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
                     activeProps={{
                       className:
@@ -147,9 +145,7 @@ export function Navbar() {
             <li key={item.to}>
               <Link
                 to={item.to}
-                activeOptions={
-                  undefined
-                }
+                activeOptions={undefined}
                 className="rounded-lg px-3.5 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
                 activeProps={{
                   className:
