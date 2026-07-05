@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import {
-  Calendar,
   ChevronLeft,
   ChevronRight,
   HelpCircle,
@@ -12,6 +11,7 @@ import {
 
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
 import { Button } from '#/components/ui/button.tsx'
+import { DatePickerButton } from '#/components/form/fields.tsx'
 import { BoardSkeleton } from '#/components/repjour/BoardSkeleton.tsx'
 import { AlertBanner } from '#/components/repjour/AlertBanner.tsx'
 import { KPIDetailPanel } from '#/components/repjour/KPIDetailPanel.tsx'
@@ -233,25 +233,10 @@ export function DashboardBoard() {
               >
                 <ChevronLeft />
               </Button>
-              <div className="relative">
-                <input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => handleDateChange(e.target.value)}
-                  onClick={(e) => (e.target as HTMLInputElement).showPicker()}
-                  aria-label="Choisir une date"
-                  className="absolute inset-0 z-10 cursor-pointer opacity-0"
-                />
-                <Button
-                  variant="outline"
-                  size="icon-sm"
-                  tabIndex={-1}
-                  aria-hidden
-                  className="pointer-events-none"
-                >
-                  <Calendar />
-                </Button>
-              </div>
+              <DatePickerButton
+                value={selectedDate}
+                onChange={handleDateChange}
+              />
               <Button
                 variant="outline"
                 size="icon-sm"
