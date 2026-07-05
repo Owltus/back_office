@@ -281,7 +281,7 @@ export function DashboardBoard() {
               partial
             />
 
-            <div className="rounded-xl border border-border bg-card p-3 sm:p-4">
+            <div className="rounded-xl border border-border bg-card p-2 sm:p-3">
               <KPITable
                 realiseJour={null}
                 realiseMTD={null}
@@ -329,7 +329,7 @@ export function DashboardBoard() {
               </div>
             ) : (
               <>
-                <div className="relative rounded-xl border border-border bg-card p-3 sm:p-4">
+                <div className="relative rounded-xl border border-border bg-card p-2 sm:p-3">
                   <button
                     type="button"
                     onClick={() => setDetailMode(true)}
