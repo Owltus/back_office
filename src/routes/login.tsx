@@ -47,11 +47,18 @@ function LoginPage() {
   return (
     <div className="flex flex-1 items-center justify-center px-4 py-12">
       <div className="w-full max-w-sm">
-        <div className="mb-8 flex flex-col items-center gap-4">
-          <div className="flex size-16 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20">
-            <Logo className="size-8" />
+        <div className="mb-8 flex flex-col items-center gap-4 text-center">
+          <div className="flex size-20 items-center justify-center rounded-2xl bg-primary shadow-lg shadow-primary/25">
+            <Logo className="size-11 text-primary-foreground" />
           </div>
-          <h1 className="text-2xl font-bold text-foreground">Back Office</h1>
+          <div className="space-y-1">
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">
+              Back Office
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Connectez-vous à votre espace
+            </p>
+          </div>
         </div>
 
         <div className="rounded-2xl border border-border bg-card p-7 shadow-sm">
