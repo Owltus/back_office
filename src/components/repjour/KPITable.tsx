@@ -22,9 +22,7 @@ interface KPITableProps {
 }
 
 function ecartColor(val: number) {
-  return val >= 0
-    ? 'text-emerald-400 font-bold'
-    : 'text-destructive font-bold'
+  return val >= 0 ? 'text-emerald-400 font-bold' : 'text-destructive font-bold'
 }
 
 // Format compact sans unités pour mobile
@@ -109,7 +107,7 @@ const ROWS: {
   },
   {
     label: 'RevPAR',
-    labelShort: 'RevPAR',
+    labelShort: 'Rp',
     key: 'revpar',
     budgetKey: 'revpar',
     ecartKey: 'revpar',
@@ -155,24 +153,24 @@ export function KPITable({
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-border">
-            <th className="px-2 py-2 text-left font-medium text-muted-foreground"></th>
-            <th className="px-2 py-2 text-center font-medium text-muted-foreground">
+            <th className="px-1 py-2 text-left font-medium text-muted-foreground"></th>
+            <th className="px-1 py-2 text-center font-medium text-muted-foreground">
               <span className="hidden sm:inline">Jour</span>
               <span className="sm:hidden">J</span>
             </th>
-            <th className="border-r border-border px-2 py-2 text-center font-medium text-muted-foreground">
-              <span className="hidden sm:inline">Cumul mois</span>
+            <th className="border-r border-border px-1 py-2 text-center font-medium text-muted-foreground">
+              <span className="hidden sm:inline">Cumul</span>
               <span className="sm:hidden">Cumul</span>
             </th>
-            <th className="px-2 py-2 text-center font-medium text-muted-foreground">
-              <span className="hidden sm:inline">Projeté mois</span>
+            <th className="px-1 py-2 text-center font-medium text-muted-foreground">
+              <span className="hidden sm:inline">Projeté</span>
               <span className="sm:hidden">Proj.</span>
             </th>
-            <th className="border-r border-border px-2 py-2 text-center font-medium text-muted-foreground">
-              <span className="hidden sm:inline">Budget mois</span>
+            <th className="border-r border-border px-1 py-2 text-center font-medium text-muted-foreground">
+              <span className="hidden sm:inline">Budget</span>
               <span className="sm:hidden">Budg.</span>
             </th>
-            <th className="px-2 py-2 text-center font-medium text-muted-foreground">
+            <th className="px-1 py-2 text-center font-medium text-muted-foreground">
               <span className="hidden sm:inline">Écart</span>
               <span className="sm:hidden">+/-</span>
             </th>
@@ -181,29 +179,29 @@ export function KPITable({
         <tbody>
           {ROWS.map((row) => (
             <tr key={row.key} className="border-b border-border">
-              <td className="px-2 py-2.5 font-semibold whitespace-nowrap text-foreground">
+              <td className="px-1 py-2.5 font-semibold whitespace-nowrap text-foreground">
                 <span className="hidden sm:inline">{row.label}</span>
                 <span className="sm:hidden">{row.labelShort}</span>
               </td>
-              <td className="px-2 py-2.5 text-center tabular-nums whitespace-nowrap">
+              <td className="px-1 py-2.5 text-center tabular-nums whitespace-nowrap">
                 {cell(realiseJour, row)}
               </td>
-              <td className="border-r border-border px-2 py-2.5 text-center tabular-nums whitespace-nowrap">
+              <td className="border-r border-border px-1 py-2.5 text-center tabular-nums whitespace-nowrap">
                 {cell(realiseMTD, row)}
               </td>
-              <td className="px-2 py-2.5 text-center tabular-nums whitespace-nowrap">
+              <td className="px-1 py-2.5 text-center tabular-nums whitespace-nowrap">
                 {cell(projeteMois, row)}
               </td>
-              <td className="border-r border-border px-2 py-2.5 text-center tabular-nums whitespace-nowrap">
+              <td className="border-r border-border px-1 py-2.5 text-center tabular-nums whitespace-nowrap">
                 <span className="hidden sm:inline">
-                  {row.fmtVal(budget[row.budgetKey] as number)}
+                  {row.fmtVal(budget[row.budgetKey])}
                 </span>
                 <span className="sm:hidden">
-                  {row.fmtValCompact(budget[row.budgetKey] as number)}
+                  {row.fmtValCompact(budget[row.budgetKey])}
                 </span>
               </td>
               <td
-                className={`px-2 py-2.5 text-center tabular-nums whitespace-nowrap ${
+                className={`px-1 py-2.5 text-center tabular-nums whitespace-nowrap ${
                   ecart ? ecartColor(ecart[row.ecartKey]) : ''
                 }`}
               >
