@@ -4,7 +4,6 @@ import { Loader2, Plus, Trash2 } from 'lucide-react'
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { supabase } from '#/lib/supabase.ts'
-import { supabaseSignup } from '#/lib/repjour/supabase-signup.ts'
 import { isPasswordValid } from '#/lib/repjour/password.ts'
 import { ROLE_LABELS } from '#/lib/repjour/roles.ts'
 import type { Profile, UserRole } from '#/lib/repjour/types.ts'
@@ -29,10 +28,13 @@ import { Button } from '#/components/ui/button.tsx'
 /*
  * Gestion des comptes (admin) — porté de la source AccountsPage.
  *
- * Trois opérations d'écriture, reprises À L'IDENTIQUE de la source :
- *   1. CRÉATION : `supabaseSignup.auth.signUp()` (second client, storageKey
- *      distinct, cf. supabase-signup.ts) PUIS insert dans `profiles`. Le signUp
- *      passe par le client de signup pour NE PAS écraser la session de l'admin.
+ * Trois opérations d'écriture :
+ *   1. CRÉATION : Edge Function `create-user` (service_role côté serveur) PUIS
+ *      insert dans `profiles`. L'inscription publique Supabase reste DÉSACTIVÉE :
+ *      la fonction crée l'identifiant `auth.users` via l'API Admin et vérifie
+ *      côté serveur que l'appelant est admin (cf. supabase/functions/create-user).
+ *      L'insert `profiles` reste ici, sous la session de l'admin, pour garder le
+ *      trigger anti-escalade de rôle sur son chemin habituel.
  *   2. ÉDITION : update de la ligne `profiles`.
  *   3. MOT DE PASSE : RPC serveur `admin_update_password` (CONSOMMÉE, jamais
  *      redéfinie ; le trigger anti-escalade de rôle reste intact côté base).
@@ -51,6 +53,22 @@ const ROLE_DESCRIPTIONS: Record<UserRole, string> = {
 }
 
 const ROLES: UserRole[] = ['utilisateur', 'super_utilisateur', 'admin']
+
+// L'erreur d'une Edge Function (FunctionsHttpError) porte le corps de la réponse
+// dans `context` (un objet Response). On en extrait le message métier `{ error }`
+// pour l'afficher tel quel plutôt qu'un « Edge Function returned a non-2xx… ».
+async function readFunctionError(error: unknown): Promise<string> {
+  const ctx = (error as { context?: Response }).context
+  if (ctx && typeof ctx.json === 'function') {
+    try {
+      const parsed = (await ctx.json()) as { error?: string }
+      if (parsed.error) return parsed.error
+    } catch {
+      // corps non-JSON : on retombe sur le message générique ci-dessous
+    }
+  }
+  return error instanceof Error ? error.message : 'Création du compte échouée'
+}
 
 function RoleSelect({
   value,
@@ -133,29 +151,48 @@ export function ComptesBoard() {
     setCreating(true)
     setMessage('')
     try {
+      // Email normalisé (minuscule) pour aligner `auth.users` et `profiles`.
+      const normalizedEmail = email.trim().toLowerCase()
       const displayName =
-        [firstName, lastName].filter(Boolean).join(' ') || email.split('@')[0]
+        [firstName, lastName].filter(Boolean).join(' ') ||
+        normalizedEmail.split('@')[0]
 
-      // signUp via le CLIENT DE SIGNUP (storageKey distinct) : ne touche PAS à
-      // la session de l'admin courant.
-      const { data, error } = await supabaseSignup.auth.signUp({
-        email,
-        password,
-        options: { data: { display_name: displayName } },
+      // Création du compte via l'Edge Function admin (service_role côté serveur).
+      // Fonctionne alors que l'inscription publique reste DÉSACTIVÉE, et n'est
+      // accessible qu'aux admins (contrôle côté serveur). `functions.invoke`
+      // transmet automatiquement le JWT de la session de l'admin.
+      const { data, error } = await supabase.functions.invoke<{
+        userId: string
+      }>('create-user', {
+        body: { email: normalizedEmail, password, displayName },
       })
-      if (error) throw error
-      if (!data.user) throw new Error('Utilisateur non créé')
+      if (error) throw new Error(await readFunctionError(error))
+      if (!data?.userId) throw new Error('Utilisateur non créé')
 
       const { error: profileError } = await supabase.from('profiles').insert({
-        id: data.user.id,
-        email,
+        id: data.userId,
+        email: normalizedEmail,
         display_name: displayName,
         first_name: firstName,
         last_name: lastName,
         role,
       })
-      if (profileError)
-        throw new Error('Compte créé mais profil échoué : ' + profileError.message)
+      if (profileError) {
+        // Compte auth créé mais profil KO → on annule le compte orphelin côté
+        // serveur (best-effort) pour ne pas bloquer un nouvel essai (409).
+        try {
+          await supabase.functions.invoke('create-user', {
+            body: { rollbackUserId: data.userId },
+          })
+        } catch {
+          // annulation impossible : l'orphelin persiste, le réessai le signalera
+        }
+        throw new Error(
+          'Profil non créé (' +
+            profileError.message +
+            '). Compte annulé, réessayez.',
+        )
+      }
 
       resetCreate()
       setShowCreate(false)
@@ -274,10 +311,9 @@ export function ComptesBoard() {
         ? 'bg-cyan-400/10 text-cyan-400'
         : 'bg-muted text-muted-foreground'
 
-  const isError =
-    message.includes('Erreur') ||
-    message.includes('requis') ||
-    message.includes('critères')
+  // Le seul message de succès commence par « Compte créé pour » ; tout le reste
+  // (validation, erreurs serveur, annulation) est une erreur → style rouge.
+  const isError = !message.startsWith('Compte créé pour')
 
   return (
     <PageContainer>
@@ -294,6 +330,20 @@ export function ComptesBoard() {
             Ajouter un compte
           </Button>
         </div>
+
+        {/* Feedback hors modale (ex. « Compte créé pour … » après fermeture de
+            la modale de création, dont le message interne n'est plus visible). */}
+        {message && !showCreate && !editProfile && (
+          <div
+            className={`rounded-lg px-4 py-2.5 text-sm ${
+              isError
+                ? 'bg-destructive/10 text-destructive'
+                : 'bg-emerald-500/10 text-emerald-500'
+            }`}
+          >
+            {message}
+          </div>
+        )}
 
         {loading ? (
           <div className="flex justify-center py-12">

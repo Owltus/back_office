@@ -1,3 +1,6 @@
 package-lock.json
 pnpm-lock.yaml
 yarn.lock
+
+# Edge Functions Supabase : runtime Deno, hors périmètre de formatage de l'app
+supabase/functions

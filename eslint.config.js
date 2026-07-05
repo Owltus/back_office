@@ -15,6 +15,8 @@ export default [
     },
   },
   {
-    ignores: ['eslint.config.js', 'prettier.config.js'],
+    // supabase/functions/** : runtime Deno (Deno.serve, imports jsr:) — hors du
+    // périmètre TS/ESLint de l'app pour ne pas casser lint & build.
+    ignores: ['eslint.config.js', 'prettier.config.js', 'supabase/**'],
   },
 ]
