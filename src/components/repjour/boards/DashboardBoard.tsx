@@ -56,6 +56,24 @@ const ZERO_KPI: KPIBlock = {
   roomRevenue: 0,
 }
 
+/** Date locale au format YYYY-MM-DD (sans décalage UTC). */
+function localDateStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+/**
+ * Jour de référence du dashboard = la VEILLE. RepJour fonctionne en J-1 : un
+ * export PMS daté d'aujourd'hui contient les données d'HIER (cf.
+ * extractReportDate). Le rapport le plus récent qu'on puisse avoir est donc
+ * celui d'hier — c'est le jour affiché par défaut à l'ouverture, et le seul
+ * jour importable. Exemple : passé minuit, on est lundi → on affiche dimanche.
+ */
+function getYesterdayStr(): string {
+  const d = new Date()
+  d.setDate(d.getDate() - 1)
+  return localDateStr(d)
+}
+
 export function DashboardBoard() {
   const [report, setReport] = useState<DailyReport | null>(null)
   const [budget, setBudget] = useState<MonthBudget | null>(null)
@@ -148,7 +166,10 @@ export function DashboardBoard() {
   }, [])
 
   useEffect(() => {
-    loadReport()
+    // Ouverture sur le jour de référence (la veille), pas sur le dernier
+    // rapport existant : on veut toujours partir d'hier, puis afficher le
+    // tableau si son rapport existe, ou l'invite d'import sinon.
+    loadReport(getYesterdayStr())
 
     // Abonnement temps réel en LECTURE : recharge la vue lorsque la table
     // daily_reports change (import réalisé ailleurs). N'écrit rien.
@@ -197,17 +218,17 @@ export function DashboardBoard() {
   const ecart = pm && budget ? computeEcart(pm, budget) : null
   const hasPartialData = !report && (forecastMonthTotal || budget)
 
-  // Jour futur : impossible d'avoir un rapport pour une date à venir. On ne
-  // bascule donc PAS en « import seul » et on masque la carte d'import (rien à
-  // importer pour le futur) — la projection forecast reste affichée.
-  const now = new Date()
-  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-  const isFuture = selectedDate !== '' && selectedDate > todayStr
+  // « Jour d'import » = la VEILLE (jour de référence, cf. getYesterdayStr).
+  // L'ImportSection n'accepte QUE des fichiers datés du jour → le seul rapport
+  // qu'on puisse combler par un import est celui d'HIER. C'est donc le seul jour
+  // où l'on propose l'import. Tout autre jour sans rapport (passé plus ancien,
+  // jour courant, futur) affiche le tableau vide / la projection.
+  const isImportDay = selectedDate === getYesterdayStr()
 
-  // Jour sans rapport encore importé (aujourd'hui ou passé) pour un rôle
-  // habilité à importer : on n'affiche QUE la zone d'import, pas le tableau.
-  // (utilisateur : jamais d'import → vue inchangée ; futur : exclu.)
-  const importOnly = !report && !isFuture && canImport
+  // Rapport d'hier pas encore importé, pour un rôle habilité : on n'affiche QUE
+  // la zone d'import, pas le tableau. (utilisateur : jamais d'import → vue
+  // inchangée ; tout jour ≠ hier : on ne propose pas l'import.)
+  const importOnly = !report && isImportDay && canImport
 
   const daysInMonthPartial = selectedDate
     ? (() => {
@@ -435,20 +456,22 @@ export function DashboardBoard() {
         ) : null}
 
         {/* Import — carte placée en bas du dashboard, réservée aux rôles
-            super_utilisateur / admin. Masquée en mode détaillé et sur un jour
-            futur (aucun rapport possible pour une date à venir).
-            RÈGLE D'AFFICHAGE PAR RÔLE :
-            - super_utilisateur : visible UNIQUEMENT tant qu'aucun rapport
-              n'existe pour le jour affiché. Dès que le rapport est présent, la
-              carte disparaît et il ne voit plus que le tableau (`isAdmin ||
-              !report`) ;
-            - admin : toujours visible (il voit tout, données présentes ou non) ;
+            super_utilisateur / admin. Masquée en mode détaillé et sur tout jour
+            AUTRE qu'hier (`isImportDay`) : l'import ne peut combler que le
+            rapport de la veille (J-1), donc on ne le propose que ce jour-là ;
+            partout ailleurs (jour courant, futur, passé plus ancien) on affiche
+            le tableau vide / la projection.
+            RÈGLE D'AFFICHAGE PAR RÔLE (le jour d'import) :
+            - super_utilisateur : visible UNIQUEMENT tant que le rapport d'hier
+              n'existe pas. Dès qu'il est présent, la carte disparaît et il ne
+              voit plus que le tableau (`isAdmin || !report`) ;
+            - admin : toujours visible ce jour-là (données présentes ou non) ;
             - utilisateur : jamais (exclu par `canImport`).
             Un import réussi recharge le rapport affiché. */}
         {!loading &&
           !detailMode &&
           canImport &&
-          !isFuture &&
+          isImportDay &&
           (isAdmin || !report) && (
             <ImportSection
               onImported={() =>
