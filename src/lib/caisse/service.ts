@@ -103,12 +103,19 @@ export async function fetchSheet(date: string, shift: Shift): Promise<CaisseShee
   return data ? toSheet(data as DbCaisseSheet) : null
 }
 
-/** Enregistre un brouillon (upsert idempotent sur la clé métier (date, shift)). */
-export async function upsertSheet(input: CaisseSheetInput): Promise<void> {
-  const { error } = await supabase
+/**
+ * Enregistre un brouillon (upsert idempotent sur la clé métier (date, shift)) et
+ * renvoie la ligne persistée (avec id / horodatage / statut) — utile pour mettre
+ * le cache à jour sans refetch.
+ */
+export async function upsertSheet(input: CaisseSheetInput): Promise<CaisseSheet> {
+  const { data, error } = await supabase
     .from(CAISSE_TABLE)
     .upsert(toDbUpsert(input), { onConflict: 'report_date,shift' })
+    .select()
+    .single()
   if (error) throw error
+  return toSheet(data as DbCaisseSheet)
 }
 
 /** Validation : pose status/validated_at/validated_by. Autorisé par la RLS car
