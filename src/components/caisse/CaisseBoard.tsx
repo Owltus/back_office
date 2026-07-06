@@ -4,7 +4,6 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
-  Loader2,
   Lock,
   LockOpen,
   Minus,
@@ -16,6 +15,15 @@ import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
 import { Textarea } from '#/components/ui/textarea.tsx'
+import { Label } from '#/components/ui/label.tsx'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '#/components/ui/dialog.tsx'
 import { DatePickerButton } from '#/components/form/fields.tsx'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { cn } from '#/lib/utils.ts'
@@ -28,7 +36,8 @@ import {
   isBalanced,
 } from '#/lib/caisse/calc.ts'
 import {
-  DENOMINATION_COLUMNS,
+  DENOMINATIONS,
+  ECART_ABBR,
   ECART_LABELS,
   EPSILON,
   FUND_TARGET,
@@ -40,6 +49,7 @@ import {
 import {
   canEditSheet,
   countersign,
+  fetchPreviousSheet,
   fetchSheet,
   graceDeadline,
   reopenSheet,
@@ -79,6 +89,8 @@ const eur0 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 })
 const fmtEur = (n: number) => eur2.format(n) + ' €'
 const fmtEurInt = (n: number) => eur0.format(n) + ' €'
 const fmtEcart = (n: number) => (n >= 0 ? '+' : '') + eur2.format(n) + ' €'
+/** Écart sans symbole € (colonne compacte du tableau mobile). */
+const fmtEcartBare = (n: number) => (n >= 0 ? '+' : '') + eur2.format(n)
 
 const fmtTitle = new Intl.DateTimeFormat('fr-FR', {
   weekday: 'long',
@@ -146,10 +158,20 @@ export function CaisseBoard() {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
+  const [closeOpen, setCloseOpen] = useState(false)
+  const [hotelierName, setHotelierName] = useState('')
 
   const { data: sheet, isError: sheetError } = useQuery({
     queryKey: ['caisse', 'sheet', selectedDate, selectedShift],
     queryFn: () => fetchSheet(selectedDate, selectedShift),
+  })
+
+  // Fond de caisse à reporter : feuille précédente (uniquement si le couple
+  // courant n'a pas encore de feuille — sinon on hydrate depuis la sienne).
+  const { data: prevSheet, isLoading: prevLoading } = useQuery({
+    queryKey: ['caisse', 'prev', selectedDate, selectedShift],
+    queryFn: () => fetchPreviousSheet(selectedDate, selectedShift),
+    enabled: sheet === null,
   })
 
   const [form, setForm] = useState<CaisseSheetInput>(() =>
@@ -160,7 +182,11 @@ export function CaisseBoard() {
   )
 
   const isValidated = sheet?.status === 'validated'
-  const ready = sheet !== undefined // feuille chargée : évite d'éditer/écraser pendant le fetch
+  // Prêt = feuille chargée ET, pour une nouvelle feuille, le report du fond de
+  // caisse (feuille précédente) réglé — évite d'éditer avant hydratation. On
+  // gate sur le CHARGEMENT (pas la donnée) : une requête « précédente » en échec
+  // n'empêche pas la saisie (on repart alors d'un comptage vide).
+  const ready = sheet !== undefined && !(sheet === null && prevLoading)
   const editable = ready && canEditSheet(sheet ?? null, role)
   const isAdmin = role === 'admin'
   const isWriter = role === 'super_utilisateur' || role === 'admin'
@@ -247,13 +273,20 @@ export function CaisseBoard() {
       setSaveState('idle')
     }
     if (sheet === undefined || hydratedRef.current) return
+    // Nouvelle feuille : attendre la fin du chargement de la feuille précédente
+    // (succès ou échec), puis reporter son fond de caisse s'il existe.
+    if (sheet === null && prevLoading) return
     const next = sheet
       ? sheetToInput(sheet)
-      : emptyInput(selectedDate, selectedShift, emptyCounts())
+      : emptyInput(
+          selectedDate,
+          selectedShift,
+          prevSheet ? { ...prevSheet.counts } : emptyCounts(),
+        )
     setForm(next)
     lastSavedRef.current = JSON.stringify(next)
     hydratedRef.current = true
-  }, [sheet, selectedDate, selectedShift, flush])
+  }, [sheet, prevSheet, prevLoading, selectedDate, selectedShift, flush])
 
   // Débounce : sauvegarde ~700 ms après la dernière frappe (couple courant).
   useEffect(() => {
@@ -335,26 +368,18 @@ export function CaisseBoard() {
     }
   }
 
-  async function handleValidate() {
+  async function handleConfirmClose() {
     if (!user) return
-    if (
-      !balanced &&
-      !window.confirm(
-        'Des écarts ne sont pas à zéro. Valider quand même la caisse ? Pensez à justifier dans les commentaires.',
-      )
-    )
-      return
-    if (
-      !window.confirm(
-        `Valider la caisse ? Après validation, elle ne restera modifiable que ${GRACE_HOURS} h (sauf administrateur).`,
-      )
-    )
-      return
+    const name = hotelierName.trim()
+    if (!name) return
+    setCloseOpen(false)
     await guard(async () => {
-      lastSavedRef.current = JSON.stringify(form) // avant l'await : coupe l'autosave concurrent
-      const saved = await upsertSheet(form)
+      const input = { ...form, operatorInitials: name }
+      setForm(input)
+      lastSavedRef.current = JSON.stringify(input) // avant l'await : coupe l'autosave concurrent
+      const saved = await upsertSheet(input)
       await validateSheet(saved.id, user.id)
-    }, 'Caisse validée.')
+    }, 'Caisse clôturée.')
   }
 
   const handleCountersign = () => {
@@ -396,6 +421,17 @@ export function CaisseBoard() {
             >
               <ChevronRight />
             </Button>
+            {isWriter && editable && !isValidated && (
+              <Button
+                className="ml-1"
+                onClick={() => {
+                  setHotelierName(form.operatorInitials)
+                  setCloseOpen(true)
+                }}
+              >
+                <Check /> Clôturer la caisse
+              </Button>
+            )}
           </>
         }
       />
@@ -404,13 +440,13 @@ export function CaisseBoard() {
       {inGrace && deadline && (
         <div className="flex items-center gap-2 rounded-lg bg-primary/10 px-4 py-3 text-sm text-primary">
           <Lock className="size-4 shrink-0" />
-          Caisse validée. Modifiable encore jusqu'à {fmtTime.format(deadline)} (fenêtre de {GRACE_HOURS} h).
+          Caisse clôturée{sheet?.operatorInitials ? ` par ${sheet.operatorInitials}` : ''}. Modifiable encore jusqu'à {fmtTime.format(deadline)} (fenêtre de {GRACE_HOURS} h).
         </div>
       )}
       {lockedForMe && (
         <div className="flex items-center gap-2 rounded-lg bg-muted px-4 py-3 text-sm text-muted-foreground">
           <Lock className="size-4 shrink-0" />
-          Caisse verrouillée. Contactez un administrateur pour toute correction.
+          Caisse clôturée{sheet?.operatorInitials ? ` par ${sheet.operatorInitials}` : ''} et verrouillée. Contactez un administrateur pour toute correction.
         </div>
       )}
 
@@ -430,29 +466,14 @@ export function CaisseBoard() {
         </div>
       )}
 
-      {/* En-tête de saisie : initiales opérateur. */}
-      <div className="flex flex-wrap items-center gap-3">
-        <label className="flex items-center gap-2 text-sm text-muted-foreground">
-          Dénomination hôtelier
-          <Input
-            value={form.operatorInitials}
-            disabled={!editable}
-            onChange={(e) =>
-              setForm((f) => ({ ...f, operatorInitials: e.target.value }))
-            }
-            className="h-8 w-24"
-          />
-        </label>
-      </div>
-
-      {/* Tableau des montants + écarts. */}
-      <div className="caisse-table overflow-x-auto rounded-xl border border-border bg-card">
+      {/* Tableau des montants + écarts — horizontal (desktop). */}
+      <div className="caisse-table hidden overflow-x-auto rounded-xl border border-border bg-card sm:block">
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-border text-xs uppercase text-muted-foreground">
               <th className="px-3 py-2 text-left font-medium">Source</th>
               {cols.map((c) => (
-                <th key={c} className="px-3 py-2 text-right font-medium">
+                <th key={c} className="px-3 py-2 text-center font-medium">
                   {ECART_LABELS[c]}
                 </th>
               ))}
@@ -505,67 +526,133 @@ export function CaisseBoard() {
         </table>
       </div>
 
-      {/* Comptage du fond de caisse (pleine largeur, 5 colonnes). */}
+      {/* Tableau des montants — vertical/transposé (mobile) : modes en lignes
+          (acronymes), sources en colonnes, pour économiser la largeur. */}
+      <div className="caisse-table rounded-xl border border-border bg-card sm:hidden">
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr className="border-b border-border text-xs uppercase text-muted-foreground">
+              <th className="px-2 py-2 text-left font-medium">Mode</th>
+              <th className="px-1 py-2 text-center font-medium">STAY N' TOUCH</th>
+              <th className="px-1 py-2 text-center font-medium">LIGHTSPEED</th>
+              <th className="px-1 py-2 text-center font-medium">Caisse</th>
+              <th className="px-1 py-2 text-center font-medium">Écart</th>
+            </tr>
+          </thead>
+          <tbody>
+            {cols.map((c) => {
+              const e = ecarts[c]
+              const zero = Math.abs(e) < EPSILON
+              return (
+                <tr key={c} className="border-b border-border/60">
+                  <td className="px-2 py-1 text-xs font-medium uppercase text-muted-foreground">
+                    {ECART_ABBR[c]}
+                  </td>
+                  <td className="px-1 py-1">
+                    <MoneyInput
+                      value={c === 'web' ? form.snt.cbweb : form.snt[c as PayKey]}
+                      disabled={!editable}
+                      onChange={(v) => (c === 'web' ? setSnt('cbweb', v) : setSnt(c as PayKey, v))}
+                    />
+                  </td>
+                  <td className="px-1 py-1">
+                    {c === 'web' ? (
+                      <span className="block text-right text-muted-foreground">—</span>
+                    ) : (
+                      <MoneyInput
+                        value={form.ls[c as PayKey]}
+                        disabled={!editable}
+                        onChange={(v) => setLs(c as PayKey, v)}
+                      />
+                    )}
+                  </td>
+                  <td className="px-1 py-1">
+                    <MoneyInput
+                      value={c === 'web' ? form.caisse.adyen : form.caisse[c as PayKey]}
+                      disabled={!editable}
+                      onChange={(v) =>
+                        c === 'web' ? setCaisse('adyen', v) : setCaisse(c as PayKey, v)
+                      }
+                    />
+                  </td>
+                  <td
+                    className={cn(
+                      'px-1 py-1 text-right text-xs tabular-nums',
+                      zero ? 'text-emerald-500' : 'text-destructive',
+                    )}
+                    title={`Attendu ${fmtEur(expected(form, c))}`}
+                  >
+                    {fmtEcartBare(e)}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Comptage du fond de caisse. Grille responsive : 2 colonnes (mobile),
+          3 (intermédiaire), 5 colonnes-décades en remplissage vertical (≥ lg :
+          grid-flow-col + grid-rows-3 → 500/200/100, 50/20/10, …). */}
       <div className="rounded-xl border border-border bg-card p-4">
         <h2 className="mb-3 text-sm font-semibold">Fond de caisse</h2>
-        <div className="caisse-denoms grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          {DENOMINATION_COLUMNS.map((col, i) => (
-            <div key={i} className="flex flex-col gap-3">
-              {col.map((d) => {
-                const n = form.counts[d.key] ?? 0
-                const filled = n > 0
-                return (
-                  <div
-                    key={d.key}
+        <div className="caisse-denoms grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-flow-col lg:grid-cols-5 lg:grid-rows-3">
+          {DENOMINATIONS.map((d) => {
+            const n = form.counts[d.key] ?? 0
+            const filled = n > 0
+            return (
+              <div
+                key={d.key}
+                className={cn(
+                  'flex items-stretch overflow-hidden rounded-lg border transition-colors',
+                  filled ? 'border-primary/30 bg-primary/5' : 'border-border bg-muted/20',
+                  // 500 € en pleine largeur sur mobile (2 cols) : équilibre les
+                  // 14 cartes restantes en 7 rangées de 2. Sans effet dès sm.
+                  d.key === 'cnt_500' && 'col-span-2 sm:col-span-1',
+                )}
+              >
+                {/* Zone gauche : bouton « − » pleine hauteur */}
+                <button
+                  type="button"
+                  aria-label={`Retirer un ${d.label}`}
+                  disabled={!editable}
+                  onClick={() => bumpCount(d.key, -1)}
+                  className="flex flex-1 items-center justify-center border-r border-border/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
+                >
+                  <Minus className="size-4" />
+                </button>
+                {/* Zone centrale : valeur, quantité, sous-total */}
+                <div className="flex flex-[1.4] flex-col items-center justify-center gap-0.5 px-1 py-2">
+                  <span className="whitespace-nowrap text-xs font-semibold leading-none tabular-nums">
+                    {d.label}
+                  </span>
+                  <CountInput
+                    value={n}
+                    disabled={!editable}
+                    onChange={(v) => setCount(d.key, v)}
+                  />
+                  <span
                     className={cn(
-                      'flex items-stretch overflow-hidden rounded-lg border transition-colors',
-                      filled ? 'border-primary/30 bg-primary/5' : 'border-border bg-muted/20',
+                      'whitespace-nowrap text-[11px] leading-none tabular-nums',
+                      filled ? 'font-medium text-foreground' : 'text-muted-foreground',
                     )}
                   >
-                    {/* Zone gauche : bouton « − » pleine hauteur */}
-                    <button
-                      type="button"
-                      aria-label={`Retirer un ${d.label}`}
-                      disabled={!editable}
-                      onClick={() => bumpCount(d.key, -1)}
-                      className="flex flex-1 items-center justify-center border-r border-border/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
-                    >
-                      <Minus className="size-4" />
-                    </button>
-                    {/* Zone centrale : valeur, quantité, sous-total */}
-                    <div className="flex flex-[1.4] flex-col items-center justify-center gap-0.5 px-1 py-2">
-                      <span className="text-xs font-semibold tabular-nums leading-none">
-                        {d.label}
-                      </span>
-                      <CountInput
-                        value={n}
-                        disabled={!editable}
-                        onChange={(v) => setCount(d.key, v)}
-                      />
-                      <span
-                        className={cn(
-                          'text-[11px] leading-none tabular-nums',
-                          filled ? 'font-medium text-foreground' : 'text-muted-foreground',
-                        )}
-                      >
-                        {d.value < 1 ? fmtEur(d.value * n) : fmtEurInt(d.value * n)}
-                      </span>
-                    </div>
-                    {/* Zone droite : bouton « + » pleine hauteur */}
-                    <button
-                      type="button"
-                      aria-label={`Ajouter un ${d.label}`}
-                      disabled={!editable}
-                      onClick={() => bumpCount(d.key, 1)}
-                      className="flex flex-1 items-center justify-center border-l border-border/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
-                    >
-                      <Plus className="size-4" />
-                    </button>
-                  </div>
-                )
-              })}
-            </div>
-          ))}
+                    {d.value < 1 ? fmtEur(d.value * n) : fmtEurInt(d.value * n)}
+                  </span>
+                </div>
+                {/* Zone droite : bouton « + » pleine hauteur */}
+                <button
+                  type="button"
+                  aria-label={`Ajouter un ${d.label}`}
+                  disabled={!editable}
+                  onClick={() => bumpCount(d.key, 1)}
+                  className="flex flex-1 items-center justify-center border-l border-border/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
+                >
+                  <Plus className="size-4" />
+                </button>
+              </div>
+            )
+          })}
         </div>
         <div className="mt-3 flex items-center justify-between border-t border-border pt-3 text-sm">
           <span className="text-muted-foreground">
@@ -584,9 +671,7 @@ export function CaisseBoard() {
 
       {/* Commentaires (juste en dessous du fond de caisse). */}
       <div className="rounded-xl border border-border bg-card p-4">
-        <h2 className="mb-3 text-sm font-semibold">
-          Commentaires {!balanced && <span className="text-destructive">(écart à justifier)</span>}
-        </h2>
+        <h2 className="mb-3 text-sm font-semibold">Commentaires</h2>
         <Textarea
           value={form.comment}
           disabled={!editable}
@@ -599,27 +684,12 @@ export function CaisseBoard() {
       {/* Actions. */}
       {isWriter && (
         <div className="flex flex-wrap items-center gap-2">
-          {editable && saveState !== 'idle' && (
-            <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-              {saveState === 'saving' && (
-                <>
-                  <Loader2 className="size-3.5 animate-spin" /> Enregistrement…
-                </>
-              )}
-              {saveState === 'saved' && (
-                <>
-                  <Check className="size-3.5 text-emerald-500" /> Enregistré
-                </>
-              )}
-              {saveState === 'error' && (
-                <span className="text-destructive">Échec de l'enregistrement</span>
-              )}
+          {/* Autosave silencieux : on ne signale QUE les échecs (sinon la
+              sauvegarde travaille en arrière-plan, sans mention explicite). */}
+          {editable && saveState === 'error' && (
+            <span className="text-sm text-destructive">
+              Échec de l'enregistrement — vérifiez votre connexion.
             </span>
-          )}
-          {editable && !isValidated && (
-            <Button onClick={handleValidate} disabled={busy}>
-              <Check /> Valider la caisse
-            </Button>
           )}
           {isValidated && editable && !sheet?.countersignedBy && (
             <Button variant="outline" onClick={handleCountersign} disabled={busy}>
@@ -636,6 +706,74 @@ export function CaisseBoard() {
           )}
         </div>
       )}
+
+      {/* Modal de clôture : récapitulatif + nom de l'hôtelier + clôture réelle. */}
+      <Dialog open={closeOpen} onOpenChange={setCloseOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Clôturer la caisse</DialogTitle>
+            <DialogDescription>
+              {titleDate} — {SHIFT_LABELS[form.shift]}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 text-sm">
+            {balanced ? (
+              <div className="flex items-center gap-2 rounded-md bg-emerald-500/10 px-3 py-2 text-emerald-500">
+                <Check className="size-4 shrink-0" />
+                Caisse équilibrée — tous les écarts sont à 0 €.
+              </div>
+            ) : (
+              <div className="rounded-md bg-destructive/10 px-3 py-2 text-destructive">
+                <div className="mb-1 font-medium">Écarts non nuls :</div>
+                <ul className="space-y-0.5">
+                  {cols
+                    .filter((c) => Math.abs(ecarts[c]) >= EPSILON)
+                    .map((c) => (
+                      <li key={c} className="flex justify-between gap-4">
+                        <span>{ECART_LABELS[c]}</span>
+                        <span className="tabular-nums">{fmtEcart(ecarts[c])}</span>
+                      </li>
+                    ))}
+                  {Math.abs(fEcart) >= EPSILON && (
+                    <li className="flex justify-between gap-4">
+                      <span>Fond de caisse</span>
+                      <span className="tabular-nums">{fmtEcart(fEcart)}</span>
+                    </li>
+                  )}
+                </ul>
+                <div className="mt-1 text-xs">À justifier dans les commentaires.</div>
+              </div>
+            )}
+
+            <div className="flex justify-between border-t border-border pt-2 text-muted-foreground">
+              <span>Fond de caisse compté</span>
+              <span className="tabular-nums text-foreground">
+                {fmtEur(total)} / {fmtEur(FUND_TARGET)}
+              </span>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="caisse-hotelier">Nom de l'hôtelier</Label>
+              <Input
+                id="caisse-hotelier"
+                value={hotelierName}
+                onChange={(e) => setHotelierName(e.target.value)}
+                placeholder="Nom / initiales"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCloseOpen(false)}>
+              Annuler
+            </Button>
+            <Button onClick={handleConfirmClose} disabled={busy || !hotelierName.trim()}>
+              <Check /> Clôturer définitivement
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
