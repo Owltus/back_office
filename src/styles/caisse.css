@@ -1,0 +1,27 @@
+/* ------------------------------------------------------------------ *
+ * Caisse — feuille de caisse (préfixe .caisse-*)
+ *
+ * Le gros du style est en Tailwind inline avec les tokens shadcn. Ce fichier
+ * ne porte que les ajustements spécifiques (grille de comptage dense, rendu
+ * d'impression de la feuille).
+ * ------------------------------------------------------------------ */
+
+/* Pas de flèches natives à masquer : tous les champs de la caisse sont des
+   <input type="text"> (inputMode numérique). L'ajustement des montants se fait
+   au clavier, et le comptage des coupures via les boutons +/-. Le masquage CSS
+   des spinners de type="number" était impossible de façon fiable — Lightning CSS
+   (Tailwind v4) retire le `-webkit-appearance: none` requis par WebKit. */
+
+/* Le masquage du placeholder au focus est géré côté React (état focused des
+   champs), pas en CSS : le pseudo `:focus::placeholder` s'est révélé non fiable
+   via le pipeline Tailwind v4 / HMR. */
+
+/* Impression : feuille compacte, noir sur blanc. */
+@media print {
+  .caisse-doc {
+    gap: 0.75rem;
+  }
+  .caisse-table table {
+    font-size: 11px;
+  }
+}

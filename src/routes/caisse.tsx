@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 
-import { ComingSoon } from '#/components/ComingSoon.tsx'
+import { CaisseBoard } from '#/components/caisse/CaisseBoard.tsx'
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
 
 export const Route = createFileRoute('/caisse')({
@@ -10,8 +10,8 @@ export const Route = createFileRoute('/caisse')({
 
 function CaissePage() {
   return (
-    <PageContainer>
-      <ComingSoon />
+    <PageContainer printBleed>
+      <CaisseBoard />
     </PageContainer>
   )
 }
