@@ -1,15 +1,15 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Loader2,
   Lock,
   LockOpen,
   Minus,
   PenLine,
   Plus,
-  Save,
 } from 'lucide-react'
 
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
@@ -102,6 +102,30 @@ function sheetToInput(s: CaisseSheet): CaisseSheetInput {
   }
 }
 
+/** Fusionne une saisie dans la feuille de base (pour un cache optimiste) :
+ * conserve id / statut / validation / horodatage, remplace le contenu saisi. */
+function inputToSheet(input: CaisseSheetInput, base: CaisseSheet | null): CaisseSheet {
+  return {
+    id: base?.id ?? '',
+    reportDate: input.reportDate,
+    shift: input.shift,
+    operatorInitials: input.operatorInitials,
+    snt: input.snt,
+    ls: input.ls,
+    caisse: input.caisse,
+    counts: input.counts,
+    fundOrigin: input.fundOrigin,
+    comment: input.comment,
+    status: base?.status ?? 'draft',
+    validatedAt: base?.validatedAt ?? null,
+    validatedBy: base?.validatedBy ?? null,
+    countersignedBy: base?.countersignedBy ?? null,
+    createdBy: base?.createdBy ?? '',
+    createdAt: base?.createdAt ?? '',
+    updatedAt: base?.updatedAt ?? '',
+  }
+}
+
 export function CaisseBoard() {
   const { user, role } = useAuth()
   const queryClient = useQueryClient()
@@ -123,29 +147,21 @@ export function CaisseBoard() {
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
 
-  const { data: sheet } = useQuery({
+  const { data: sheet, isError: sheetError } = useQuery({
     queryKey: ['caisse', 'sheet', selectedDate, selectedShift],
     queryFn: () => fetchSheet(selectedDate, selectedShift),
   })
 
   const [form, setForm] = useState<CaisseSheetInput>(() =>
-    emptyInput(selectedDate, 'matin', emptyCounts()),
+    emptyInput(selectedDate, selectedShift, emptyCounts()),
+  )
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>(
+    'idle',
   )
 
-  // (Ré)hydrate le formulaire dès que la feuille chargée, la date ou le shift
-  // changent : feuille existante → ses valeurs ; sinon feuille vierge.
-  useEffect(() => {
-    setForm(
-      sheet
-        ? sheetToInput(sheet)
-        : emptyInput(selectedDate, selectedShift, emptyCounts()),
-    )
-    setError('')
-    setNotice('')
-  }, [sheet, selectedDate, selectedShift])
-
   const isValidated = sheet?.status === 'validated'
-  const editable = canEditSheet(sheet ?? null, role)
+  const ready = sheet !== undefined // feuille chargée : évite d'éditer/écraser pendant le fetch
+  const editable = ready && canEditSheet(sheet ?? null, role)
   const isAdmin = role === 'admin'
   const isWriter = role === 'super_utilisateur' || role === 'admin'
   const inGrace = isValidated && editable && !isAdmin
@@ -157,6 +173,122 @@ export function CaisseBoard() {
   const fEcart = fundEcart(form)
   const balanced = isBalanced(form)
   const deadline = graceDeadline(sheet ?? null)
+
+  // --- Sauvegarde automatique (autosave) -----------------------------------
+  // La feuille est persistée à chaque modification (débounce), sans bouton. Le
+  // formulaire est la source de vérité en édition ; on ne le ré-hydrate qu'au
+  // (premier) chargement d'un couple (date, shift). Règles de sûreté :
+  //  - jamais d'écriture avant la première hydratation (hydratedRef) — sinon on
+  //    écraserait un brouillon existant par du vide, ou on créerait une feuille
+  //    fantôme ;
+  //  - l'éditabilité est jugée sur le couple RÉELLEMENT sauvegardé (via le
+  //    cache), pas sur le couple affiché — pour ne pas perdre la saisie d'un
+  //    brouillon quand on vient de naviguer vers une feuille verrouillée ;
+  //  - cache optimiste AVANT l'await — pour qu'un retour sur ce couple pendant
+  //    une sauvegarde en vol lise la dernière saisie, pas une valeur périmée.
+  const formRef = useRef(form)
+  formRef.current = form
+  const keyRef = useRef(`${selectedDate}|${selectedShift}`)
+  const hydratedRef = useRef(false)
+  const lastSavedRef = useRef(JSON.stringify(form))
+  // Incrémenté par chaque action décisive (guard : valider / contre-signer /
+  // rouvrir) : un autosave en vol ne doit pas réécrire le cache par-dessus.
+  const mutationEpochRef = useRef(0)
+
+  const flush = useCallback(
+    async (input: CaisseSheetInput) => {
+      if (!hydratedRef.current) return // jamais avant la première hydratation
+      const snapshot = JSON.stringify(input)
+      if (snapshot === lastSavedRef.current) return
+      const qk = ['caisse', 'sheet', input.reportDate, input.shift] as const
+      const prev = queryClient.getQueryData<CaisseSheet | null>(qk)
+      if (!canEditSheet(prev ?? null, role)) return // éditabilité du couple sauvegardé
+      // Les mutations d'indicateur / de baseline sont scopées au couple ENCORE
+      // actif : la résolution asynchrone d'un flush d'un couple quitté ne doit
+      // ni repeindre l'indicateur ni salir la baseline du couple courant.
+      const inputKey = `${input.reportDate}|${input.shift}`
+      const active = () => keyRef.current === inputKey
+      lastSavedRef.current = snapshot // jalon avant l'await (anti double-envoi)
+      if (active()) setSaveState('saving')
+      // Cache optimiste AVANT l'await : un retour sur ce couple pendant que la
+      // sauvegarde est en vol lit la dernière saisie, pas une valeur périmée.
+      queryClient.setQueryData<CaisseSheet | null>(qk, (old) =>
+        inputToSheet(input, old ?? null),
+      )
+      const epoch = mutationEpochRef.current
+      try {
+        const saved = await upsertSheet(input)
+        // Ne pas écraser une validation/contre-signature survenue pendant l'await.
+        if (mutationEpochRef.current === epoch) queryClient.setQueryData(qk, saved)
+        if (active()) setSaveState('saved')
+      } catch {
+        // Rollback de l'optimiste — sauf si une mutation décisive (validation…)
+        // a mis le cache à jour entre-temps : elle fait autorité.
+        if (mutationEpochRef.current === epoch) queryClient.setQueryData(qk, prev ?? null)
+        if (active()) {
+          lastSavedRef.current = '' // autorise une nouvelle tentative
+          setSaveState('error')
+        }
+      }
+    },
+    [queryClient, role],
+  )
+
+  // Hydratation : uniquement au (premier) chargement d'un couple (date, shift).
+  // Le même couple n'est jamais ré-hydraté (sinon la saisie serait écrasée).
+  useEffect(() => {
+    const key = `${selectedDate}|${selectedShift}`
+    if (keyRef.current !== key) {
+      void flush(formRef.current) // flush la saisie du couple précédent
+      keyRef.current = key
+      hydratedRef.current = false
+      setError('')
+      setNotice('')
+      setSaveState('idle')
+    }
+    if (sheet === undefined || hydratedRef.current) return
+    const next = sheet
+      ? sheetToInput(sheet)
+      : emptyInput(selectedDate, selectedShift, emptyCounts())
+    setForm(next)
+    lastSavedRef.current = JSON.stringify(next)
+    hydratedRef.current = true
+  }, [sheet, selectedDate, selectedShift, flush])
+
+  // Débounce : sauvegarde ~700 ms après la dernière frappe (couple courant).
+  useEffect(() => {
+    if (!editable || !hydratedRef.current) return
+    if (JSON.stringify(form) === lastSavedRef.current) return
+    const snapshot = form
+    const t = setTimeout(() => void flush(snapshot), 700)
+    return () => clearTimeout(t)
+  }, [form, editable, flush])
+
+  // Flush au démontage (changement de route) et quand l'onglet passe en arrière-
+  // plan (visibilitychange « hidden »). Best-effort : sur une fermeture d'onglet
+  // très rapide (< délai de débounce) le dernier caractère peut ne pas partir.
+  useEffect(() => {
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') void flush(formRef.current)
+    }
+    document.addEventListener('visibilitychange', onHide)
+    return () => {
+      document.removeEventListener('visibilitychange', onHide)
+      void flush(formRef.current)
+    }
+  }, [flush])
+
+  // Re-rendu à l'expiration de la fenêtre de grâce : bascule editable → false
+  // pour aligner l'UI sur la RLS (bannière périmée + écritures vouées au refus).
+  const deadlineMs = deadline ? deadline.getTime() : null
+  const [, forceTick] = useState(0)
+  useEffect(() => {
+    if (deadlineMs === null) return
+    const ms = deadlineMs - Date.now()
+    if (ms <= 0) return
+    const t = setTimeout(() => forceTick((x) => x + 1), ms + 500)
+    return () => clearTimeout(t)
+  }, [deadlineMs])
 
   const displayDate = new Date(selectedDate + 'T00:00:00')
   const longDate = fmtTitle.format(displayDate)
@@ -183,6 +315,7 @@ export function CaisseBoard() {
     queryClient.invalidateQueries({ queryKey: ['caisse'] })
 
   async function guard(action: () => Promise<void>, ok: string) {
+    mutationEpochRef.current += 1 // invalide tout autosave en vol (anti-clobber)
     setBusy(true)
     setError('')
     setNotice('')
@@ -202,8 +335,6 @@ export function CaisseBoard() {
     }
   }
 
-  const handleSave = () => guard(() => upsertSheet(form), 'Brouillon enregistré.')
-
   async function handleValidate() {
     if (!user) return
     if (
@@ -220,9 +351,9 @@ export function CaisseBoard() {
     )
       return
     await guard(async () => {
-      await upsertSheet(form)
-      const fresh = await fetchSheet(form.reportDate, form.shift)
-      if (fresh) await validateSheet(fresh.id, user.id)
+      lastSavedRef.current = JSON.stringify(form) // avant l'await : coupe l'autosave concurrent
+      const saved = await upsertSheet(form)
+      await validateSheet(saved.id, user.id)
     }, 'Caisse validée.')
   }
 
@@ -283,6 +414,11 @@ export function CaisseBoard() {
         </div>
       )}
 
+      {sheetError && (
+        <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          Impossible de charger cette feuille (connexion ?). Réessayez en changeant de shift puis en revenant.
+        </div>
+      )}
       {error && (
         <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {error}
@@ -297,14 +433,13 @@ export function CaisseBoard() {
       {/* En-tête de saisie : initiales opérateur. */}
       <div className="flex flex-wrap items-center gap-3">
         <label className="flex items-center gap-2 text-sm text-muted-foreground">
-          Initiales / poste
+          Dénomination hôtelier
           <Input
             value={form.operatorInitials}
             disabled={!editable}
             onChange={(e) =>
               setForm((f) => ({ ...f, operatorInitials: e.target.value }))
             }
-            placeholder="cbs"
             className="h-8 w-24"
           />
         </label>
@@ -464,10 +599,22 @@ export function CaisseBoard() {
       {/* Actions. */}
       {isWriter && (
         <div className="flex flex-wrap items-center gap-2">
-          {editable && (
-            <Button variant="outline" onClick={handleSave} disabled={busy}>
-              <Save /> Enregistrer
-            </Button>
+          {editable && saveState !== 'idle' && (
+            <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              {saveState === 'saving' && (
+                <>
+                  <Loader2 className="size-3.5 animate-spin" /> Enregistrement…
+                </>
+              )}
+              {saveState === 'saved' && (
+                <>
+                  <Check className="size-3.5 text-emerald-500" /> Enregistré
+                </>
+              )}
+              {saveState === 'error' && (
+                <span className="text-destructive">Échec de l'enregistrement</span>
+              )}
+            </span>
           )}
           {editable && !isValidated && (
             <Button onClick={handleValidate} disabled={busy}>
