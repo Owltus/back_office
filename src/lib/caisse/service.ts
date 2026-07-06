@@ -103,6 +103,40 @@ export async function fetchSheet(date: string, shift: Shift): Promise<CaisseShee
   return data ? toSheet(data as DbCaisseSheet) : null
 }
 
+/** Rang chronologique d'un shift dans une journée (matin < soir < nuit). */
+const SHIFT_RANK: Record<Shift, number> = { matin: 0, soir: 1, nuit: 2 }
+const chronoKey = (date: string, shift: Shift) => `${date}#${SHIFT_RANK[shift]}`
+
+/**
+ * Feuille existante immédiatement AVANT (date, shift) dans la timeline, ou null.
+ * Sert à reporter le fond de caisse (comptage des coupures) sur la feuille
+ * suivante — le float physique est le même d'un shift à l'autre.
+ */
+export async function fetchPreviousSheet(
+  date: string,
+  shift: Shift,
+): Promise<CaisseSheet | null> {
+  const { data, error } = await supabase
+    .from(CAISSE_TABLE)
+    .select('*')
+    .lte('report_date', date)
+    .order('report_date', { ascending: false })
+    .limit(12)
+  if (error) throw error
+  const cur = chronoKey(date, shift)
+  let best: CaisseSheet | null = null
+  let bestKey = ''
+  for (const row of data as DbCaisseSheet[]) {
+    const s = toSheet(row)
+    const k = chronoKey(s.reportDate, s.shift)
+    if (k < cur && k > bestKey) {
+      best = s
+      bestKey = k
+    }
+  }
+  return best
+}
+
 /**
  * Enregistre un brouillon (upsert idempotent sur la clé métier (date, shift)) et
  * renvoie la ligne persistée (avec id / horodatage / statut) — utile pour mettre
