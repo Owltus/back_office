@@ -90,23 +90,23 @@ const BAR_PAD_X = 2 // marge horizontale d'une barre (px)
 const BAR_PAD_Y = 4 // marge verticale d'une barre (px)
 
 const STATUS: Record<Status, { label: string; bar: string; dot: string }> = {
-  confirme: {
-    label: 'Confirmé',
+  reserve: {
+    label: 'Réservé',
+    bar: 'border-slate-400/50 bg-slate-400/15 text-slate-100',
+    dot: 'bg-slate-400',
+  },
+  paye: {
+    label: 'Payé',
     bar: 'border-emerald-500/50 bg-emerald-500/15 text-emerald-100',
     dot: 'bg-emerald-500',
   },
-  attente: {
-    label: 'En attente',
-    bar: 'border-amber-500/50 bg-amber-500/15 text-amber-100',
-    dot: 'bg-amber-500',
-  },
-  annule: {
-    label: 'Annulé',
-    bar: 'border-rose-500/50 bg-rose-500/10 text-rose-200/80',
-    dot: 'bg-rose-500',
+  checkout: {
+    label: 'Non payé',
+    bar: 'border-orange-500/50 bg-orange-500/15 text-orange-100',
+    dot: 'bg-orange-500',
   },
 }
-const STATUS_ORDER: Status[] = ['confirme', 'attente', 'annule']
+const STATUS_ORDER: Status[] = ['reserve', 'paye', 'checkout']
 
 const fmtWeekday = new Intl.DateTimeFormat('fr-FR', { weekday: 'short' })
 const fmtDay = new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'short' })
@@ -257,7 +257,7 @@ export function ParkingBoard() {
     const id = crypto.randomUUID()
     setReservations((prev) => [
       ...prev,
-      { id, client: '', spot, startDay, nights: 1, status: 'attente', comment: '' },
+      { id, client: '', spot, startDay, nights: 1, status: 'reserve', comment: '' },
     ])
     setEditingId(id)
     createReservation({
@@ -266,7 +266,7 @@ export function ParkingBoard() {
       client: '',
       start_date: startDayToDate(startDay, startDate),
       nights: 1,
-      status: 'attente',
+      status: 'reserve',
       comment: '',
     }).catch((err) => {
       console.error(err)

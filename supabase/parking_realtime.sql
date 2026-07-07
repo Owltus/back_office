@@ -15,8 +15,8 @@ create table if not exists public.parking_reservations (
   client     text        not null default '',
   start_date date        not null,
   nights     smallint    not null default 1 check (nights >= 1),
-  status     text        not null default 'attente'
-                         check (status in ('confirme', 'attente', 'annule')),
+  status     text        not null default 'reserve'
+                         check (status in ('reserve', 'paye', 'checkout')),
   comment    text        not null default '',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -79,5 +79,38 @@ begin
   alter publication supabase_realtime add table public.parking_reservations;
 exception
   when duplicate_object then null;
+end
+$$;
+
+-- ============================================================================
+-- MIGRATION statuts (table DÉJÀ existante en prod)
+--
+-- Anciens statuts : 'confirme' (vert) / 'attente' (défaut) / 'annule' (rouge).
+-- Nouveaux         : 'reserve'  (gris, défaut) / 'paye' (vert) / 'checkout' (orange).
+--
+-- Le `create table if not exists` plus haut NE modifie PAS une table existante :
+-- ce bloc est nécessaire pour faire évoluer la contrainte + les données en place.
+-- Idempotent : ré-exécutable sans dommage (les UPDATE deviennent des no-op).
+-- ============================================================================
+do $$
+begin
+  -- On lève d'abord la contrainte pour pouvoir réécrire les valeurs.
+  alter table public.parking_reservations
+    drop constraint if exists parking_reservations_status_check;
+
+  update public.parking_reservations set status = 'paye'    where status = 'confirme';
+  update public.parking_reservations set status = 'reserve' where status = 'attente';
+  -- 'annule' n'a plus d'équivalent : annuler == supprimer. On retire ces lignes.
+  -- (Pour les CONSERVER en 'reserve' à la place, commenter la ligne ci-dessous
+  --  et décommenter l'UPDATE juste après.)
+  delete from public.parking_reservations where status = 'annule';
+  -- update public.parking_reservations set status = 'reserve' where status = 'annule';
+
+  alter table public.parking_reservations
+    alter column status set default 'reserve';
+
+  alter table public.parking_reservations
+    add constraint parking_reservations_status_check
+    check (status in ('reserve', 'paye', 'checkout'));
 end
 $$;
