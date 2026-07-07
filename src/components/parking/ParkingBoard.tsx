@@ -705,6 +705,28 @@ function ReservationBar({
   onRemove,
 }: ReservationBarProps) {
   const st = STATUS[r.status]
+  const inputRef = useRef<HTMLInputElement>(null)
+  // « Renommer » du menu contextuel : on diffère l'entrée en édition à la
+  // fermeture du menu (onCloseAutoFocus), pour que l'input monte APRÈS la gestion
+  // de focus de Radix — le curseur s'y pose alors sans lutte, comme à la création.
+  const pendingEditRef = useRef(false)
+  // À l'ouverture de l'édition (double-clic OU menu contextuel « Renommer »), on
+  // pose explicitement focus + sélection dans le champ. Indispensable via le menu
+  // contextuel : Radix restitue le focus à sa fermeture, ce qui volait le curseur
+  // du champ ; on le (re)pose au frame suivant pour gagner la course.
+  useEffect(() => {
+    if (!editing) return
+    const raf = requestAnimationFrame(() => {
+      const el = inputRef.current
+      if (!el) return
+      el.focus()
+      // Curseur en fin de texte, sans sélection : taper une lettre n'efface pas
+      // le nom existant — on écrit à la suite, comme à la création.
+      const end = el.value.length
+      el.setSelectionRange(end, end)
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [editing])
   const commit = (value: string) => {
     onRename(r.id, value)
     onStopEdit()
@@ -740,8 +762,7 @@ function ReservationBar({
 
       {editing ? (
         <input
-          autoFocus
-          onFocus={(e) => e.currentTarget.select()}
+          ref={inputRef}
           defaultValue={r.client}
           placeholder="Nom du client"
           onPointerDown={(e) => e.stopPropagation()}
@@ -802,8 +823,21 @@ function ReservationBar({
         {tip}
       </Tooltip>
 
-      <ContextMenuContent className="w-44" onCloseAutoFocus={(e) => e.preventDefault()}>
-        <ContextMenuItem onSelect={() => onStartEdit(r.id)}>
+      <ContextMenuContent
+        className="w-44"
+        onCloseAutoFocus={(e) => {
+          e.preventDefault()
+          if (pendingEditRef.current) {
+            pendingEditRef.current = false
+            onStartEdit(r.id)
+          }
+        }}
+      >
+        <ContextMenuItem
+          onSelect={() => {
+            pendingEditRef.current = true
+          }}
+        >
           <Pencil />
           Renommer
         </ContextMenuItem>
