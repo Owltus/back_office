@@ -20,14 +20,8 @@ import {
   PAY_KEYS,
   SHIFT_LABELS,
 } from '#/lib/caisse/constants.ts'
+import { fmtEcart, fmtEur, fmtEurInt } from '#/lib/caisse/format.ts'
 import type { CaisseSheetInput, EcartKey } from '#/lib/caisse/types.ts'
-
-const eur = new Intl.NumberFormat('fr-FR', {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-})
-const fmtEur = (n: number) => `${eur.format(n)} €`
-const fmtEcart = (n: number) => `${n >= 0 ? '+' : ''}${eur.format(n)} €`
 
 /** Couleur DOM d'un écart : vert si équilibré (≈ 0), rouge sinon. */
 function setBalanceColor(pdf: jsPDF, balanced: boolean): void {
@@ -101,10 +95,10 @@ function renderCaisseDocument(
   // Styles intervertis : titre plus petit (dessus), date plus grande (dessous).
   pdf.setFont('helvetica', 'normal').setFontSize(14)
   pdf.text('FEUILLE DE CAISSE', CENTER, y, { align: 'center' })
-  y += 7
+  y += 14
   pdf.setFont('helvetica', 'bold').setFontSize(22)
   pdf.text(titleDate, CENTER, y, { align: 'center' })
-  y += 7
+  y += 13
   pdf.setFont('helvetica', 'normal').setFontSize(10).setTextColor(90)
   pdf.text(SHIFT_LABELS[form.shift].toUpperCase(), CENTER, y, { align: 'center' })
   y += 5
@@ -133,7 +127,7 @@ function renderCaisseDocument(
   const sources: Array<{ label: string; key: 'snt' | 'ls' | 'caisse' }> = [
     { label: "STAY N'TOUCH", key: 'snt' },
     { label: 'LIGHTSPEED', key: 'ls' },
-    { label: 'CAISSE', key: 'caisse' },
+    { label: 'CAISSE/TPE', key: 'caisse' },
   ]
   pdf.setFontSize(9).setTextColor(26)
   sources.forEach((s) => {
@@ -199,17 +193,15 @@ function renderCaisseDocument(
   })
   y += 5 * cellH + 3
 
-  // Total du fond
+  // Total du fond — même mise en page que la page : à gauche « Fond de caisse
+  // 150 € » (muté), à droite « total (écart) » coloré (vert si équilibré).
   const total = fundTotal(form)
   const fe = fundEcart(form)
-  pdf.setFont('helvetica', 'normal').setFontSize(9).setTextColor(26)
-  pdf.text(
-    `Total compté : ${fmtEur(total)} / attendu ${fmtEur(form.fundOrigin || FUND_TARGET)}`,
-    LEFT,
-    y,
-  )
+  pdf.setFont('helvetica', 'normal').setFontSize(9).setTextColor(110)
+  pdf.text(`Fond de caisse ${fmtEurInt(FUND_TARGET)}`, LEFT, y)
+  pdf.setFont('helvetica', 'bold')
   setBalanceColor(pdf, Math.abs(fe) < EPS)
-  pdf.text(`écart ${fmtEcart(fe)}`, RIGHT, y, { align: 'right' })
+  pdf.text(`${fmtEur(total)} (${fmtEcart(fe)})`, RIGHT, y, { align: 'right' })
   pdf.setTextColor(26)
   y += 9
 
