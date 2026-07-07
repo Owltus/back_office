@@ -98,13 +98,14 @@ function renderCaisseDocument(
 
   // --- En-tête : titre, date, shift (empilés, centrés) ---------------------
   pdf.setTextColor(26)
-  pdf.setFont('helvetica', 'bold').setFontSize(22)
-  pdf.text('FEUILLE DE CAISSE', CENTER, y, { align: 'center' })
-  y += 8
+  // Styles intervertis : titre plus petit (dessus), date plus grande (dessous).
   pdf.setFont('helvetica', 'normal').setFontSize(14)
+  pdf.text('FEUILLE DE CAISSE', CENTER, y, { align: 'center' })
+  y += 7
+  pdf.setFont('helvetica', 'bold').setFontSize(22)
   pdf.text(titleDate, CENTER, y, { align: 'center' })
-  y += 6
-  pdf.setFontSize(10).setTextColor(90)
+  y += 7
+  pdf.setFont('helvetica', 'normal').setFontSize(10).setTextColor(90)
   pdf.text(SHIFT_LABELS[form.shift].toUpperCase(), CENTER, y, { align: 'center' })
   y += 5
   pdf.setDrawColor(51).setLineWidth(0.4).line(LEFT, y, RIGHT, y)
@@ -163,30 +164,38 @@ function renderCaisseDocument(
   pdf.text('FOND DE CAISSE', LEFT, y)
   y += 5
   const cellW = CONTENT_W / 3
-  const cellH = 13
+  const cellH = 12
   DENOMINATIONS.forEach((d, idx) => {
-    // 3 colonnes de 5 : chaque colonne est un groupe de 5, rempli de haut en
-    // bas, du plus grand au plus petit (DENOMINATIONS est ordonné 500→0,01 €).
+    // Grille : 3 colonnes de 5 cartes, du plus grand au plus petit (remplies de
+    // haut en bas ; DENOMINATIONS est ordonné 500 € → 0,01 €).
     const cx = LEFT + Math.floor(idx / 5) * cellW
     const cy = y + (idx % 5) * cellH
     const w = cellW - 3
+    const h = cellH - 2
     const qty = form.counts[d.key] ?? 0
     const filled = qty > 0
-    // Bordure colorée (indigo) sur les cartes où une valeur a été saisie.
+    // Cadre (indigo si saisi) + 2 séparateurs → 3 colonnes RIGIDES et alignées :
+    // coupure | nombre | sous-total, chaque valeur CENTRÉE dans sa colonne
+    // (placement fixe, quelle que soit la longueur des chaînes).
     if (filled) pdf.setDrawColor(79, 70, 229).setLineWidth(0.5)
     else pdf.setDrawColor(210).setLineWidth(0.2)
-    pdf.rect(cx, cy, w, cellH - 2)
-    // Coupure (identifiant de la carte).
-    pdf.setFont('helvetica', 'bold').setFontSize(8.5).setTextColor(filled ? 26 : 110)
-    pdf.text(d.label, cx + 3, cy + 5)
-    // Nombre de billets / pièces : gras, indigo si rempli (sobrement mis en
-    // avant), avec le sous-total discret à droite.
+    pdf.rect(cx, cy, w, h)
+    pdf.setDrawColor(222).setLineWidth(0.2)
+    pdf.line(cx + w / 3, cy, cx + w / 3, cy + h)
+    pdf.line(cx + (2 * w) / 3, cy, cx + (2 * w) / 3, cy + h)
+    const ty = cy + h / 2 + 1.2
+    pdf.setFontSize(8.5)
+    // Colonne 1 : la coupure.
+    pdf.setFont('helvetica', 'bold').setTextColor(filled ? 26 : 110)
+    pdf.text(d.label, cx + w / 6, ty, { align: 'center' })
+    // Colonne 2 : le nombre de billets/pièces (mis en avant, indigo si saisi).
+    pdf.setFont('helvetica', 'bold')
     if (filled) pdf.setTextColor(79, 70, 229)
     else pdf.setTextColor(150)
-    pdf.setFont('helvetica', 'bold').setFontSize(9)
-    pdf.text(`× ${qty}`, cx + 3, cy + 9.8)
-    pdf.setFont('helvetica', 'normal').setFontSize(7.5).setTextColor(filled ? 90 : 160)
-    pdf.text(fmtEur(d.value * qty), cx + w - 2, cy + 9.8, { align: 'right' })
+    pdf.text(`× ${qty}`, cx + w / 2, ty, { align: 'center' })
+    // Colonne 3 : le sous-total.
+    pdf.setFont('helvetica', 'normal').setTextColor(filled ? 26 : 150)
+    pdf.text(fmtEur(d.value * qty), cx + (5 * w) / 6, ty, { align: 'center' })
   })
   y += 5 * cellH + 3
 
@@ -226,10 +235,8 @@ function renderCaisseDocument(
   pdf.rect(LEFT, sigY, boxW, boxH)
   pdf.rect(RIGHT - boxW, sigY, boxW, boxH)
   pdf.setFont('helvetica', 'bold').setFontSize(8).setTextColor(90)
-  pdf.text('SIGNATURE', LEFT + 3, sigY + 5)
+  // Nom saisi au modal de clôture, ajouté entre parenthèses au libellé.
+  const signLabel = operatorInitials ? `SIGNATURE (${operatorInitials})` : 'SIGNATURE'
+  pdf.text(signLabel, LEFT + 3, sigY + 5)
   pdf.text('CONTRE-SIGNATURE', RIGHT - boxW + 3, sigY + 5)
-  if (operatorInitials) {
-    pdf.setFont('helvetica', 'normal').setFontSize(12).setTextColor(26)
-    pdf.text(operatorInitials, LEFT + 3, sigY + boxH - 4)
-  }
 }
