@@ -209,7 +209,6 @@ export function CaisseBoard() {
   // n'empêche pas la saisie (on repart alors d'un comptage vide).
   const ready = sheet !== undefined && !(sheet === null && prevLoading)
   const editable = ready && canEditSheet(sheet ?? null, role)
-  const isAdmin = role === 'admin'
   const isWriter = role === 'super_utilisateur' || role === 'admin'
   // Champs éditables UNIQUEMENT sur un brouillon : une caisse clôturée est
   // verrouillée (valeurs figées) pour tous, admin compris — il faut la réouvrir
@@ -426,9 +425,9 @@ export function CaisseBoard() {
         title={`${titleDate} (${SHIFT_LABELS[form.shift].toLowerCase()})`}
         actions={
           <>
-            {/* 1) Bouton d'état : Clôturer (brouillon), Réouvrir (admin sur une
-                caisse clôturée) ou Verrouillé (non-admin sur une caisse
-                clôturée — la réouverture est réservée à l'admin). */}
+            {/* 1) Bouton d'état sur une caisse clôturée : Réouvrir si `editable`
+                (admin à tout moment, OU super_utilisateur dans la fenêtre de
+                grâce), sinon Verrouillé (super hors grâce). Brouillon : Clôturer. */}
             {isWriter &&
               (!isValidated ? (
                 editable && (
@@ -441,7 +440,7 @@ export function CaisseBoard() {
                     <Check /> Clôturer la caisse
                   </Button>
                 )
-              ) : isAdmin ? (
+              ) : editable ? (
                 <Button variant="outline" onClick={handleReopen} disabled={busy}>
                   <LockOpen /> Réouvrir la caisse
                 </Button>
@@ -454,12 +453,11 @@ export function CaisseBoard() {
                   <Lock /> Verrouillé
                 </Button>
               ))}
-            {/* 2) Impression, réservée à une feuille clôturée (document final). */}
-            <PrintButton
-              onClick={handleGeneratePdf}
-              iconOnly
-              disabled={pdfBusy || !isValidated}
-            />
+            {/* 2) Impression : présent UNIQUEMENT sur une feuille clôturée
+                (le document ne s'imprime qu'une fois la caisse validée). */}
+            {isValidated && (
+              <PrintButton onClick={handleGeneratePdf} iconOnly disabled={pdfBusy} />
+            )}
             {/* 3) Navigation : shift précédent / jour / shift suivant. */}
             <Button
               variant="outline"
