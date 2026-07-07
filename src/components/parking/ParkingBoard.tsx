@@ -117,6 +117,42 @@ const fmtDayYear = new Intl.DateTimeFormat('fr-FR', {
   year: 'numeric',
 })
 
+// Géométrie (pixels) d'une barre sur la grille — partagée par ReservationBar et
+// le fantôme de placement. Reste côté présentation (dépend des constantes de
+// layout locales ROW_H / BAR_PAD_*), le domaine « slots » vivant dans model.ts.
+function barRect(
+  startDay: number,
+  spot: number,
+  nights: number,
+  offset: number,
+  slotW: number,
+) {
+  return {
+    left: (arrivalSlot(startDay) - offset * SLOTS_PER_DAY) * slotW + BAR_PAD_X,
+    width: nights * SLOTS_PER_DAY * slotW - BAR_PAD_X * 2,
+    top: (spot - 1) * ROW_H + BAR_PAD_Y,
+    height: ROW_H - BAR_PAD_Y * 2,
+  }
+}
+
+// Convertit un évènement souris en case de grille { day (absolu), spot }.
+// Partagé par captureCell (clic droit) et l'overlay de placement.
+function pointerToCell(
+  e: ReactMouseEvent<HTMLDivElement>,
+  dayW: number,
+  offset: number,
+  visibleDays: number,
+) {
+  const rect = e.currentTarget.getBoundingClientRect()
+  const dayIndex = clamp(
+    Math.floor((e.clientX - rect.left) / dayW),
+    0,
+    Math.max(0, visibleDays - 1),
+  )
+  const spot = clamp(Math.floor((e.clientY - rect.top) / ROW_H) + 1, 1, SPOTS)
+  return { day: offset + dayIndex, spot }
+}
+
 export function ParkingBoard() {
   const { role } = useAuth()
   // Seuls super_utilisateur et admin peuvent modifier ; `utilisateur` = lecture seule.
@@ -129,16 +165,15 @@ export function ParkingBoard() {
   const [calOpen, setCalOpen] = useState(false)
   const [commentId, setCommentId] = useState<string | null>(null)
   const [commentDraft, setCommentDraft] = useState('')
-  // Presse-papier local : copie (nom, durée, statut) d'une résa. « Copier »
-  // enclenche le mode placement : un fantôme suit le curseur et un clic pose la
-  // copie sur la case visée (cf. `placing` / `ghost`).
+  // Presse-papier local = mode placement : dès qu'une copie (nom, durée, statut)
+  // y est posée par « Copier », un fantôme suit le curseur et un clic pose la
+  // copie. `clipboard !== null` EST l'état « placement en cours » ; `ghost` est la
+  // case survolée (null tant que la souris n'a pas bougé sur la grille).
   const [clipboard, setClipboard] = useState<{
     client: string
     nights: number
     status: Status
   } | null>(null)
-  // Mode placement actif (fantôme accroché au curseur) + case survolée courante.
-  const [placing, setPlacing] = useState(false)
   const [ghost, setGhost] = useState<{ day: number; spot: number } | null>(null)
   // Miroir de `reservations` lisible dans les closures de drag (état le plus récent).
   const reservationsRef = useRef<Reservation[]>([])
@@ -158,16 +193,16 @@ export function ParkingBoard() {
 
   // Échap annule le mode placement (copie accrochée au curseur).
   useEffect(() => {
-    if (!placing) return
+    if (!clipboard) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        setPlacing(false)
+        setClipboard(null)
         setGhost(null)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [placing])
+  }, [clipboard])
 
   // Chargement initial + abonnement Realtime, une fois le lundi de réf. connu.
   useEffect(() => {
@@ -275,45 +310,20 @@ export function ParkingBoard() {
     return bands
   }, [days])
 
-  function addReservation(startDay: number, spot: number) {
-    if (!canEdit) return
-    if (!startDate) return
-    if (hasOverlap(reservations, spot, startDay, 1)) return // emplacement déjà occupé
+  // Insertion optimiste d'une résa (UUID + ajout local + persistance + rollback).
+  // Partagée par addReservation et pasteReservation ; retourne l'id créé.
+  function insertReservation(
+    fields: {
+      client: string
+      spot: number
+      startDay: number
+      nights: number
+      status: Status
+    },
+    ref: Date,
+  ) {
     const id = crypto.randomUUID()
-    setReservations((prev) => [
-      ...prev,
-      { id, client: '', spot, startDay, nights: 1, status: 'reserve', comment: '' },
-    ])
-    setEditingId(id)
-    createReservation({
-      id,
-      spot,
-      client: '',
-      start_date: startDayToDate(startDay, startDate),
-      nights: 1,
-      status: 'reserve',
-      comment: '',
-    }).catch((err) => {
-      console.error(err)
-      setReservations((prev) => prev.filter((r) => r.id !== id))
-    })
-  }
-
-  function copyReservation(r: Reservation) {
-    if (!canEdit) return
-    setClipboard({ client: r.client, nights: r.nights, status: r.status })
-    // Accroche aussitôt la copie au curseur : un clic sur une case la posera.
-    setGhost(null)
-    setPlacing(true)
-  }
-
-  // Colle le presse-papier à la case visée : nom + durée + statut copiés ; la
-  // place et le jour viennent de la case, le commentaire repart vide.
-  function pasteReservation(startDay: number, spot: number) {
-    if (!canEdit || !startDate || !clipboard) return
-    if (hasOverlap(reservations, spot, startDay, clipboard.nights)) return
-    const id = crypto.randomUUID()
-    const { client, nights, status } = clipboard
+    const { client, spot, startDay, nights, status } = fields
     setReservations((prev) => [
       ...prev,
       { id, client, spot, startDay, nights, status, comment: '' },
@@ -322,7 +332,7 @@ export function ParkingBoard() {
       id,
       spot,
       client,
-      start_date: startDayToDate(startDay, startDate),
+      start_date: startDayToDate(startDay, ref),
       nights,
       status,
       comment: '',
@@ -330,6 +340,47 @@ export function ParkingBoard() {
       console.error(err)
       setReservations((prev) => prev.filter((r) => r.id !== id))
     })
+    return id
+  }
+
+  function addReservation(startDay: number, spot: number) {
+    if (!canEdit || !startDate) return
+    if (hasOverlap(reservations, spot, startDay, 1)) return // emplacement déjà occupé
+    const id = insertReservation(
+      { client: '', spot, startDay, nights: 1, status: 'reserve' },
+      startDate,
+    )
+    setEditingId(id)
+  }
+
+  // « Copier » (menu contextuel ou Ctrl/Cmd+clic) : pose la copie au curseur.
+  function copyReservation(r: Reservation) {
+    if (!canEdit) return
+    setClipboard({ client: r.client, nights: r.nights, status: r.status })
+    setGhost(null)
+  }
+
+  // Sortie du mode placement (collage effectué, Échap, ou clic droit).
+  function cancelPlacing() {
+    setClipboard(null)
+    setGhost(null)
+  }
+
+  // Colle le presse-papier à la case visée : nom + durée + statut copiés ; la
+  // place et le jour viennent de la case, le commentaire repart vide. Le
+  // chevauchement est déjà écarté par l'appelant (clic sur l'overlay).
+  function pasteReservation(startDay: number, spot: number) {
+    if (!canEdit || !startDate || !clipboard) return
+    insertReservation(
+      {
+        client: clipboard.client,
+        spot,
+        startDay,
+        nights: clipboard.nights,
+        status: clipboard.status,
+      },
+      startDate,
+    )
   }
 
   function openComment(r: Reservation) {
@@ -436,14 +487,7 @@ export function ParkingBoard() {
   // Au clic droit sur une zone vide, on mémorise la case visée ;
   // "Nouvelle réservation" du menu contextuel l'utilise ensuite.
   function captureCell(e: ReactMouseEvent<HTMLDivElement>) {
-    const rect = e.currentTarget.getBoundingClientRect()
-    const dayIndex = clamp(
-      Math.floor((e.clientX - rect.left) / dayW),
-      0,
-      Math.max(0, visibleDays - 1),
-    )
-    const spot = clamp(Math.floor((e.clientY - rect.top) / ROW_H) + 1, 1, SPOTS)
-    pendingCell.current = { day: offset + dayIndex, spot }
+    pendingCell.current = pointerToCell(e, dayW, offset, visibleDays)
   }
 
   // Aller directement à une date choisie dans le calendrier (devient le 1er jour affiché).
@@ -469,6 +513,13 @@ export function ParkingBoard() {
       </EmptyCanvas>
     )
   }
+
+  // Chevauchement de la case survolée pendant un placement — calculé une seule
+  // fois par render (réutilisé par le clic ET le rendu rouge/normal du fantôme).
+  const ghostInvalid =
+    ghost && clipboard
+      ? hasOverlap(reservations, ghost.spot, ghost.day, clipboard.nights)
+      : false
 
   // Fond de grille (lignes de jour / midi / rangées). En lecture seule, il est
   // rendu tel quel ; pour un éditeur, on l'enveloppe dans le menu contextuel
@@ -709,80 +760,50 @@ export function ParkingBoard() {
                 {/* Mode placement : overlay capturant la souris + fantôme suivant
                     le curseur. Un clic pose la copie sur la case visée ; il
                     devient rouge (et le clic est sans effet) si elle est occupée. */}
-                {placing && clipboard && (
+                {clipboard && (
                   <>
                     <div
                       className="absolute inset-0 z-20 cursor-copy"
                       onMouseMove={(e) => {
-                        const rect = e.currentTarget.getBoundingClientRect()
-                        const dayIndex = clamp(
-                          Math.floor((e.clientX - rect.left) / dayW),
-                          0,
-                          Math.max(0, visibleDays - 1),
+                        const cell = pointerToCell(e, dayW, offset, visibleDays)
+                        // Ne re-render que si la case change (pas à chaque pixel).
+                        setGhost((prev) =>
+                          prev && prev.day === cell.day && prev.spot === cell.spot
+                            ? prev
+                            : cell,
                         )
-                        const spot = clamp(
-                          Math.floor((e.clientY - rect.top) / ROW_H) + 1,
-                          1,
-                          SPOTS,
-                        )
-                        setGhost({ day: offset + dayIndex, spot })
                       }}
                       onClick={() => {
-                        if (!ghost) return
-                        if (
-                          hasOverlap(
-                            reservations,
-                            ghost.spot,
-                            ghost.day,
-                            clipboard.nights,
-                          )
-                        )
-                          return
+                        if (!ghost || ghostInvalid) return
                         pasteReservation(ghost.day, ghost.spot)
-                        setPlacing(false)
-                        setGhost(null)
+                        cancelPlacing()
                       }}
                       onContextMenu={(e) => {
                         e.preventDefault()
-                        setPlacing(false)
-                        setGhost(null)
+                        cancelPlacing()
                       }}
                     />
-                    {ghost &&
-                      (() => {
-                        const invalid = hasOverlap(
-                          reservations,
-                          ghost.spot,
+                    {ghost && (
+                      <div
+                        className={cn(
+                          'pointer-events-none absolute z-30 flex items-center rounded-md border px-1.5 text-xs shadow-lg',
+                          ghostInvalid
+                            ? 'border-rose-500 bg-rose-500/25 text-rose-50'
+                            : STATUS[clipboard.status].bar,
+                        )}
+                        style={barRect(
                           ghost.day,
+                          ghost.spot,
                           clipboard.nights,
-                        )
-                        return (
-                          <div
-                            className={cn(
-                              'pointer-events-none absolute z-30 flex items-center rounded-md border px-1.5 text-xs shadow-lg',
-                              invalid
-                                ? 'border-rose-500 bg-rose-500/25 text-rose-50'
-                                : STATUS[clipboard.status].bar,
-                            )}
-                            style={{
-                              left:
-                                (arrivalSlot(ghost.day) -
-                                  offset * SLOTS_PER_DAY) *
-                                  slotW +
-                                BAR_PAD_X,
-                              width:
-                                clipboard.nights * SLOTS_PER_DAY * slotW -
-                                BAR_PAD_X * 2,
-                              top: (ghost.spot - 1) * ROW_H + BAR_PAD_Y,
-                              height: ROW_H - BAR_PAD_Y * 2,
-                            }}
-                          >
-                            <span className="min-w-0 flex-1 truncate font-medium">
-                              {clipboard.client || 'Sans nom'}
-                            </span>
-                          </div>
-                        )
-                      })()}
+                          offset,
+                          slotW,
+                        )}
+                      >
+                        <span className="min-w-0 flex-1 truncate font-medium">
+                          {clipboard.client || 'Sans nom'}
+                        </span>
+                      </div>
+                    )}
                   </>
                 )}
               </div>
@@ -894,12 +915,7 @@ function ReservationBar({
         canEdit && 'cursor-grab active:cursor-grabbing',
         st.bar,
       )}
-      style={{
-        left: (arrivalSlot(r.startDay) - offset * SLOTS_PER_DAY) * slotW + BAR_PAD_X,
-        width: r.nights * SLOTS_PER_DAY * slotW - BAR_PAD_X * 2,
-        top: (r.spot - 1) * ROW_H + BAR_PAD_Y,
-        height: ROW_H - BAR_PAD_Y * 2,
-      }}
+      style={barRect(r.startDay, r.spot, r.nights, offset, slotW)}
     >
       {canEdit && (
         <span
