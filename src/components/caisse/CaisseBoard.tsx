@@ -7,7 +7,6 @@ import {
   Lock,
   LockOpen,
   Minus,
-  PenLine,
   Plus,
 } from 'lucide-react'
 
@@ -37,27 +36,26 @@ import {
   fundTotal,
   isBalanced,
 } from '#/lib/caisse/calc.ts'
+import { fmtEcart, fmtEcartBare, fmtEur, fmtEurInt } from '#/lib/caisse/format.ts'
 import {
   DENOMINATIONS,
   ECART_LABELS,
   EPSILON,
   FUND_TARGET,
-  GRACE_HOURS,
   PAY_KEYS,
   SHIFT_LABELS,
   emptyCounts,
 } from '#/lib/caisse/constants.ts'
 import {
   canEditSheet,
-  countersign,
+  fetchOldestSlot,
   fetchPreviousSheet,
   fetchSheet,
-  graceDeadline,
   reopenSheet,
   upsertSheet,
   validateSheet,
 } from '#/lib/caisse/service.ts'
-import { currentSlot, stepSlot } from '#/lib/caisse/shift.ts'
+import { currentSlot, slotKey, stepSlot } from '#/lib/caisse/shift.ts'
 import {
   amountText,
   amountValue,
@@ -77,19 +75,11 @@ import type {
  * Caisse — feuille de caisse numérique (table caisse_sheets), persistée par
  * couple (date, shift). Confronte les montants attendus (StayNTouch + Lightspeed)
  * aux réels comptés, calcule les écarts en temps réel (cible 0 €), détaille le
- * fond de caisse (150 €), et gère la VALIDATION verrouillée : une feuille validée
- * n'est plus modifiable, sauf pendant la fenêtre de grâce (GRACE_HOURS) ou par un
- * admin. La RLS (supabase/caisse_sheets.sql) reste l'autorité ; l'UI la reflète.
+ * fond de caisse (150 €), et gère la VALIDATION verrouillée : une feuille
+ * clôturée est en LECTURE SEULE (champs figés) pour tous ; il faut la réouvrir
+ * (admin) pour la modifier. La RLS (supabase/caisse_sheets.sql) reste
+ * l'autorité ; l'UI la reflète.
  * ------------------------------------------------------------------------ */
-
-const eur2 = new Intl.NumberFormat('fr-FR', {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-})
-const eur0 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 })
-const fmtEur = (n: number) => eur2.format(n) + ' €'
-const fmtEurInt = (n: number) => eur0.format(n) + ' €'
-const fmtEcart = (n: number) => (n >= 0 ? '+' : '') + eur2.format(n) + ' €'
 
 const fmtTitle = new Intl.DateTimeFormat('fr-FR', {
   weekday: 'long',
@@ -97,7 +87,6 @@ const fmtTitle = new Intl.DateTimeFormat('fr-FR', {
   month: 'long',
   year: 'numeric',
 })
-const fmtTime = new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' })
 
 function sheetToInput(s: CaisseSheet): CaisseSheetInput {
   return {
@@ -148,14 +137,47 @@ export function CaisseBoard() {
     () => currentSlot(new Date()).shift,
   )
 
-  // Navigation shift par shift : matin → soir → nuit → matin du lendemain.
-  const goStep = (delta: number) => {
-    const s = stepSlot(selectedDate, selectedShift, delta)
+  // Bornes de navigation. Haute : jamais au-delà du shift EN COURS. Basse : le
+  // plus ancien enregistrement, ou — s'il n'existe pas ou n'est pas plus ancien
+  // — le shift JUSTE AVANT le shift courant (base vide : on peut remonter d'un
+  // cran pour amorcer le fond, ex. matin → nuit de la veille, soir → matin).
+  const nowSlot = currentSlot(new Date())
+  const nowKey = slotKey(nowSlot.date, nowSlot.shift)
+  const { data: oldestSlot } = useQuery({
+    queryKey: ['caisse', 'oldest'],
+    queryFn: fetchOldestSlot,
+  })
+  const prevSlot = stepSlot(nowSlot.date, nowSlot.shift, -1)
+  const prevKey = slotKey(prevSlot.date, prevSlot.shift)
+  const lowerSlot =
+    oldestSlot && slotKey(oldestSlot.date, oldestSlot.shift) < prevKey ? oldestSlot : prevSlot
+  const lowerKey = slotKey(lowerSlot.date, lowerSlot.shift)
+  const curKey = slotKey(selectedDate, selectedShift)
+  const atLatestSlot = curKey >= nowKey
+  const atLowerBound = curKey <= lowerKey
+
+  const setSlot = (s: { date: string; shift: Shift }) => {
     setSelectedDate(s.date)
     setSelectedShift(s.shift)
   }
+
+  // Navigation shift par shift : matin → soir → nuit → matin du lendemain.
+  const goStep = (delta: number) => {
+    if (delta > 0 && atLatestSlot) return // pas de shift futur
+    if (delta < 0 && atLowerBound) return // pas avant la borne basse
+    setSlot(stepSlot(selectedDate, selectedShift, delta))
+  }
+
+  // Sélection d'un jour bornée aux mêmes limites (clamp si le shift courant
+  // sortirait de l'intervalle sur la date choisie).
+  const goDate = (v: string) => {
+    if (!v) return
+    const k = slotKey(v, selectedShift)
+    if (k > nowKey) setSlot(nowSlot)
+    else if (k < lowerKey) setSlot(lowerSlot)
+    else setSelectedDate(v)
+  }
   const [error, setError] = useState('')
-  const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
   const [closeOpen, setCloseOpen] = useState(false)
   const [hotelierName, setHotelierName] = useState('')
@@ -189,15 +211,16 @@ export function CaisseBoard() {
   const editable = ready && canEditSheet(sheet ?? null, role)
   const isAdmin = role === 'admin'
   const isWriter = role === 'super_utilisateur' || role === 'admin'
-  const inGrace = isValidated && editable && !isAdmin
-  const lockedForMe = isValidated && !editable
+  // Champs éditables UNIQUEMENT sur un brouillon : une caisse clôturée est
+  // verrouillée (valeurs figées) pour tous, admin compris — il faut la réouvrir
+  // pour la modifier.
+  const canEditFields = editable && !isValidated
   const showWeb = form.shift === 'soir'
 
   const ecarts = useMemo(() => computeEcarts(form), [form])
   const total = fundTotal(form)
   const fEcart = fundEcart(form)
   const balanced = isBalanced(form)
-  const deadline = graceDeadline(sheet ?? null)
 
   // --- Sauvegarde automatique (autosave) -----------------------------------
   // La feuille est persistée à chaque modification (débounce), sans bouton. Le
@@ -216,8 +239,8 @@ export function CaisseBoard() {
   const keyRef = useRef(`${selectedDate}|${selectedShift}`)
   const hydratedRef = useRef(false)
   const lastSavedRef = useRef(JSON.stringify(form))
-  // Incrémenté par chaque action décisive (guard : valider / contre-signer /
-  // rouvrir) : un autosave en vol ne doit pas réécrire le cache par-dessus.
+  // Incrémenté par chaque action décisive (guard : clôturer / réouvrir) : un
+  // autosave en vol ne doit pas réécrire le cache par-dessus.
   const mutationEpochRef = useRef(0)
 
   const flush = useCallback(
@@ -243,7 +266,7 @@ export function CaisseBoard() {
       const epoch = mutationEpochRef.current
       try {
         const saved = await upsertSheet(input)
-        // Ne pas écraser une validation/contre-signature survenue pendant l'await.
+        // Ne pas écraser une validation/réouverture survenue pendant l'await.
         if (mutationEpochRef.current === epoch) queryClient.setQueryData(qk, saved)
         if (active()) setSaveState('saved')
       } catch {
@@ -268,7 +291,6 @@ export function CaisseBoard() {
       keyRef.current = key
       hydratedRef.current = false
       setError('')
-      setNotice('')
       setSaveState('idle')
     }
     if (sheet === undefined || hydratedRef.current) return
@@ -310,18 +332,6 @@ export function CaisseBoard() {
     }
   }, [flush])
 
-  // Re-rendu à l'expiration de la fenêtre de grâce : bascule editable → false
-  // pour aligner l'UI sur la RLS (bannière périmée + écritures vouées au refus).
-  const deadlineMs = deadline ? deadline.getTime() : null
-  const [, forceTick] = useState(0)
-  useEffect(() => {
-    if (deadlineMs === null) return
-    const ms = deadlineMs - Date.now()
-    if (ms <= 0) return
-    const t = setTimeout(() => forceTick((x) => x + 1), ms + 500)
-    return () => clearTimeout(t)
-  }, [deadlineMs])
-
   const displayDate = new Date(selectedDate + 'T00:00:00')
   const longDate = fmtTitle.format(displayDate)
   const titleDate = longDate.charAt(0).toUpperCase() + longDate.slice(1)
@@ -346,15 +356,13 @@ export function CaisseBoard() {
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: ['caisse'] })
 
-  async function guard(action: () => Promise<void>, ok: string) {
+  async function guard(action: () => Promise<void>) {
     mutationEpochRef.current += 1 // invalide tout autosave en vol (anti-clobber)
     setBusy(true)
     setError('')
-    setNotice('')
     try {
       await action()
       await invalidate()
-      setNotice(ok)
     } catch (err) {
       // Un refus RLS (ex. feuille verrouillée hors fenêtre) arrive ici : on
       // resynchronise l'état réel plutôt que de présumer le succès.
@@ -378,18 +386,13 @@ export function CaisseBoard() {
       lastSavedRef.current = JSON.stringify(input) // avant l'await : coupe l'autosave concurrent
       const saved = await upsertSheet(input)
       await validateSheet(saved.id, user.id)
-    }, 'Caisse clôturée.')
-  }
-
-  const handleCountersign = () => {
-    if (!user || !sheet) return
-    return guard(() => countersign(sheet.id, user.id), 'Caisse contre-signée.')
+    })
   }
 
   function handleReopen() {
     if (!sheet) return
-    if (!window.confirm('Rouvrir cette caisse validée (déverrouillage admin) ?')) return
-    return guard(() => reopenSheet(sheet.id), 'Caisse rouverte (brouillon).')
+    if (!window.confirm('Réouvrir cette caisse clôturée ?')) return
+    return guard(() => reopenSheet(sheet.id))
   }
 
   // Génère un VRAI document PDF (jsPDF) et ouvre la fenêtre d'impression du
@@ -423,61 +426,70 @@ export function CaisseBoard() {
         title={`${titleDate} (${SHIFT_LABELS[form.shift].toLowerCase()})`}
         actions={
           <>
+            {/* 1) Bouton d'état : Clôturer (brouillon), Réouvrir (admin sur une
+                caisse clôturée) ou Verrouillé (non-admin sur une caisse
+                clôturée — la réouverture est réservée à l'admin). */}
+            {isWriter &&
+              (!isValidated ? (
+                editable && (
+                  <Button
+                    onClick={() => {
+                      setHotelierName(form.operatorInitials)
+                      setCloseOpen(true)
+                    }}
+                  >
+                    <Check /> Clôturer la caisse
+                  </Button>
+                )
+              ) : isAdmin ? (
+                <Button variant="outline" onClick={handleReopen} disabled={busy}>
+                  <LockOpen /> Réouvrir la caisse
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  disabled
+                  className="border-destructive/50 text-destructive disabled:opacity-100"
+                >
+                  <Lock /> Verrouillé
+                </Button>
+              ))}
+            {/* 2) Impression, réservée à une feuille clôturée (document final). */}
+            <PrintButton
+              onClick={handleGeneratePdf}
+              responsiveLabel
+              disabled={pdfBusy || !isValidated}
+            />
+            {/* 3) Navigation : shift précédent / jour / shift suivant. */}
             <Button
               variant="outline"
               size="icon-sm"
+              className="ml-1"
               onClick={() => goStep(-1)}
+              disabled={atLowerBound}
               aria-label="Shift précédent"
             >
               <ChevronLeft />
             </Button>
             <DatePickerButton
               value={selectedDate}
-              onChange={(v) => v && setSelectedDate(v)}
+              onChange={goDate}
+              min={lowerSlot.date}
+              max={nowSlot.date}
               ariaLabel="Choisir un jour"
             />
             <Button
               variant="outline"
               size="icon-sm"
               onClick={() => goStep(1)}
+              disabled={atLatestSlot}
               aria-label="Shift suivant"
             >
               <ChevronRight />
             </Button>
-            <PrintButton
-              onClick={handleGeneratePdf}
-              responsiveLabel
-              disabled={pdfBusy}
-              className="ml-1"
-            />
-            {isWriter && editable && !isValidated && (
-              <Button
-                className="ml-1"
-                onClick={() => {
-                  setHotelierName(form.operatorInitials)
-                  setCloseOpen(true)
-                }}
-              >
-                <Check /> Clôturer la caisse
-              </Button>
-            )}
           </>
         }
       />
-
-      {/* Bandeaux d'état du verrou. */}
-      {inGrace && deadline && (
-        <div className="flex items-center gap-2 rounded-lg bg-primary/10 px-4 py-3 text-sm text-primary">
-          <Lock className="size-4 shrink-0" />
-          Caisse clôturée{sheet?.operatorInitials ? ` par ${sheet.operatorInitials}` : ''}. Modifiable encore jusqu'à {fmtTime.format(deadline)} (fenêtre de {GRACE_HOURS} h).
-        </div>
-      )}
-      {lockedForMe && (
-        <div className="flex items-center gap-2 rounded-lg bg-muted px-4 py-3 text-sm text-muted-foreground">
-          <Lock className="size-4 shrink-0" />
-          Caisse clôturée{sheet?.operatorInitials ? ` par ${sheet.operatorInitials}` : ''} et verrouillée. Contactez un administrateur pour toute correction.
-        </div>
-      )}
 
       {sheetError && (
         <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
@@ -489,21 +501,23 @@ export function CaisseBoard() {
           {error}
         </div>
       )}
-      {notice && (
-        <div className="rounded-lg bg-emerald-500/10 px-4 py-3 text-sm text-emerald-500">
-          {notice}
-        </div>
-      )}
 
       {/* Tableau des montants + écarts (défile horizontalement si étroit). */}
       <div className="caisse-table overflow-x-auto rounded-xl border border-border bg-card">
-        <table className="w-full border-collapse text-sm">
+        <table className="w-full table-fixed border-collapse text-sm">
           <thead>
             <tr className="border-b border-border text-xs uppercase text-muted-foreground">
-              <th className="px-3 py-2 text-left font-medium">Source</th>
+              <th className="w-32 px-3 py-2 text-left font-medium">Source</th>
               {cols.map((c) => (
                 <th key={c} className="px-3 py-2 text-center font-medium">
-                  {ECART_LABELS[c]}
+                  {c === 'web' ? (
+                    <>
+                      <span className="max-sm:hidden">{ECART_LABELS.web}</span>
+                      <span className="sm:hidden">Adyen</span>
+                    </>
+                  ) : (
+                    ECART_LABELS[c]
+                  )}
                 </th>
               ))}
             </tr>
@@ -512,21 +526,21 @@ export function CaisseBoard() {
             <AmountRow
               label="STAY N' TOUCH"
               cols={cols}
-              disabled={!editable}
+              disabled={!canEditFields}
               value={(c) => (c === 'web' ? form.snt.cbweb : form.snt[c as PayKey])}
               onChange={(c, v) => (c === 'web' ? setSnt('cbweb', v) : setSnt(c as PayKey, v))}
             />
             <AmountRow
               label="LIGHTSPEED"
               cols={cols}
-              disabled={!editable}
+              disabled={!canEditFields}
               value={(c) => (c === 'web' ? null : form.ls[c as PayKey])}
               onChange={(c, v) => c !== 'web' && setLs(c as PayKey, v)}
             />
             <AmountRow
-              label="CAISSE"
+              label="CAISSE/TPE"
               cols={cols}
-              disabled={!editable}
+              disabled={!canEditFields}
               value={(c) => (c === 'web' ? form.caisse.adyen : form.caisse[c as PayKey])}
               onChange={(c, v) =>
                 c === 'web' ? setCaisse('adyen', v) : setCaisse(c as PayKey, v)
@@ -546,7 +560,8 @@ export function CaisseBoard() {
                     )}
                     title={`Attendu ${fmtEur(expected(form, c))}`}
                   >
-                    {fmtEcart(v)}
+                    {fmtEcartBare(v)}
+                    <span className="max-sm:hidden"> €</span>
                   </td>
                 )
               })}
@@ -579,7 +594,7 @@ export function CaisseBoard() {
                 <button
                   type="button"
                   aria-label={`Retirer un ${d.label}`}
-                  disabled={!editable}
+                  disabled={!canEditFields}
                   onClick={() => bumpCount(d.key, -1)}
                   className="flex flex-1 items-center justify-center border-r border-border/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
                 >
@@ -592,7 +607,7 @@ export function CaisseBoard() {
                   </span>
                   <CountInput
                     value={n}
-                    disabled={!editable}
+                    disabled={!canEditFields}
                     onChange={(v) => setCount(d.key, v)}
                   />
                   <span
@@ -608,7 +623,7 @@ export function CaisseBoard() {
                 <button
                   type="button"
                   aria-label={`Ajouter un ${d.label}`}
-                  disabled={!editable}
+                  disabled={!canEditFields}
                   onClick={() => bumpCount(d.key, 1)}
                   className="flex flex-1 items-center justify-center border-l border-border/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
                 >
@@ -620,7 +635,7 @@ export function CaisseBoard() {
         </div>
         <div className="mt-3 flex items-center justify-between border-t border-border pt-3 text-sm">
           <span className="text-muted-foreground">
-            Total compté / attendu {fmtEur(FUND_TARGET)}
+            Fond de caisse {fmtEurInt(FUND_TARGET)}
           </span>
           <span
             className={cn(
@@ -635,10 +650,17 @@ export function CaisseBoard() {
 
       {/* Commentaires (juste en dessous du fond de caisse). */}
       <div className="rounded-xl border border-border bg-card p-4">
-        <h2 className="mb-3 text-sm font-semibold">Commentaires</h2>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold">Commentaires</h2>
+          {isValidated && sheet?.operatorInitials && (
+            <span className="text-sm font-medium text-muted-foreground">
+              {sheet.operatorInitials}
+            </span>
+          )}
+        </div>
         <Textarea
           value={form.comment}
-          disabled={!editable}
+          disabled={!canEditFields}
           onChange={(e) => setForm((f) => ({ ...f, comment: e.target.value }))}
           placeholder="Justification d'un éventuel écart…"
           className="min-h-32"
@@ -654,19 +676,6 @@ export function CaisseBoard() {
             <span className="text-sm text-destructive">
               Échec de l'enregistrement — vérifiez votre connexion.
             </span>
-          )}
-          {isValidated && editable && !sheet?.countersignedBy && (
-            <Button variant="outline" onClick={handleCountersign} disabled={busy}>
-              <PenLine /> Contre-signer
-            </Button>
-          )}
-          {isAdmin && isValidated && (
-            <Button variant="outline" onClick={handleReopen} disabled={busy}>
-              <LockOpen /> Rouvrir (admin)
-            </Button>
-          )}
-          {balanced && (
-            <span className="text-sm text-emerald-500">Caisse équilibrée.</span>
           )}
         </div>
       )}
@@ -835,7 +844,7 @@ function AmountRow({
 }) {
   return (
     <tr className="border-b border-border/60">
-      <td className="px-3 py-2 text-xs font-medium uppercase text-muted-foreground">
+      <td className="px-3 py-2 text-xs font-medium uppercase text-muted-foreground max-sm:whitespace-nowrap">
         {label}
       </td>
       {cols.map((c) => {

@@ -116,13 +116,24 @@ export function DatePickerButton({
   value,
   onChange,
   ariaLabel = 'Choisir une date',
+  min,
+  max,
 }: {
   value: string
   onChange: (value: string) => void
   ariaLabel?: string
+  /** Bornes sélectionnables ('YYYY-MM-DD') : les jours hors [min, max] sont grisés. */
+  min?: string
+  max?: string
 }) {
   const [open, setOpen] = useState(false)
   const date = parseDateStr(value)
+  const minDate = min ? parseDateStr(min) : undefined
+  const maxDate = max ? parseDateStr(max) : undefined
+  const disabledDays = [
+    ...(minDate ? [{ before: minDate }] : []),
+    ...(maxDate ? [{ after: maxDate }] : []),
+  ]
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -137,6 +148,7 @@ export function DatePickerButton({
           selected={date}
           defaultMonth={date}
           locale={fr}
+          disabled={disabledDays.length ? disabledDays : undefined}
           onSelect={(d) => {
             if (d) onChange(formatDateStr(d))
             setOpen(false)

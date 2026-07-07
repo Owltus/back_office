@@ -17,6 +17,13 @@ import type { Shift } from '#/lib/caisse/types.ts'
 /** Ordre chronologique des shifts dans une journée. */
 export const SHIFT_ORDER: ReadonlyArray<Shift> = ['matin', 'soir', 'nuit']
 
+/** Clé chronologique d'un couple (date, shift), comparable lexicalement
+ * ('YYYY-MM-DD#rang') : rang unique dans la timeline pour comparer / trier /
+ * borner des slots. Source unique du « rang de shift » (cf. service.ts). */
+export function slotKey(date: string, shift: Shift): string {
+  return `${date}#${SHIFT_ORDER.indexOf(shift)}`
+}
+
 /** Date locale au format 'YYYY-MM-DD'. */
 export function dateStr(d: Date): string {
   const m = String(d.getMonth() + 1).padStart(2, '0')

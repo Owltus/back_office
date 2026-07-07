@@ -1,5 +1,6 @@
 import { supabase } from '#/lib/supabase.ts'
 import { DENOMINATIONS, GRACE_HOURS } from '#/lib/caisse/constants.ts'
+import { slotKey } from '#/lib/caisse/shift.ts'
 import type {
   CaisseSheet,
   CaisseSheetInput,
@@ -101,10 +102,6 @@ export async function fetchSheet(date: string, shift: Shift): Promise<CaisseShee
   return data ? toSheet(data as DbCaisseSheet) : null
 }
 
-/** Rang chronologique d'un shift dans une journée (matin < soir < nuit). */
-const SHIFT_RANK: Record<Shift, number> = { matin: 0, soir: 1, nuit: 2 }
-const chronoKey = (date: string, shift: Shift) => `${date}#${SHIFT_RANK[shift]}`
-
 /**
  * Feuille existante immédiatement AVANT (date, shift) dans la timeline, ou null.
  * Sert à reporter le fond de caisse (comptage des coupures) sur la feuille
@@ -121,15 +118,35 @@ export async function fetchPreviousSheet(
     .order('report_date', { ascending: false })
     .limit(12)
   if (error) throw error
-  const cur = chronoKey(date, shift)
+  const cur = slotKey(date, shift)
   let best: CaisseSheet | null = null
   let bestKey = ''
   for (const row of data as DbCaisseSheet[]) {
     const s = toSheet(row)
-    const k = chronoKey(s.reportDate, s.shift)
+    const k = slotKey(s.reportDate, s.shift)
     if (k < cur && k > bestKey) {
       best = s
       bestKey = k
+    }
+  }
+  return best
+}
+
+/** Slot (date, shift) le plus ancien enregistré, ou null si aucune feuille.
+ * Sert à borner la navigation vers le passé (on ne remonte pas plus loin). */
+export async function fetchOldestSlot(): Promise<{ date: string; shift: Shift } | null> {
+  const { data, error } = await supabase
+    .from(CAISSE_TABLE)
+    .select('report_date, shift')
+    .order('report_date', { ascending: true })
+    .limit(3) // au plus 3 shifts pour le jour le plus ancien
+  if (error) throw error
+  const rows = (data ?? []) as Array<{ report_date: string; shift: Shift }>
+  if (!rows.length) return null
+  let best = { date: rows[0].report_date, shift: rows[0].shift }
+  for (const r of rows) {
+    if (slotKey(r.report_date, r.shift) < slotKey(best.date, best.shift)) {
+      best = { date: r.report_date, shift: r.shift }
     }
   }
   return best
@@ -160,15 +177,6 @@ export async function validateSheet(id: string, userId: string): Promise<void> {
   if (error) throw error
 }
 
-/** Contre-signature (D5) : pose `countersigned_by`. */
-export async function countersign(id: string, userId: string): Promise<void> {
-  const { error } = await supabase
-    .from(CAISSE_TABLE)
-    .update({ countersigned_by: userId })
-    .eq('id', id)
-  if (error) throw error
-}
-
 /** Déverrouillage admin : remet la feuille en brouillon. Hors fenêtre de grâce,
  * la RLS ne laisse passer cet UPDATE que pour un admin. */
 export async function reopenSheet(id: string): Promise<void> {
@@ -190,10 +198,4 @@ export function canEditSheet(sheet: CaisseSheet | null, role: UserRole | null): 
   if (role === 'admin') return true
   const graceEnd = new Date(sheet.validatedAt).getTime() + GRACE_HOURS * 3_600_000
   return Date.now() < graceEnd
-}
-
-/** Fin de la fenêtre de grâce (Date) pour une feuille validée, sinon null. */
-export function graceDeadline(sheet: CaisseSheet | null): Date | null {
-  if (!sheet?.validatedAt || sheet.status !== 'validated') return null
-  return new Date(new Date(sheet.validatedAt).getTime() + GRACE_HOURS * 3_600_000)
 }
