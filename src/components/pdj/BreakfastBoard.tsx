@@ -135,8 +135,11 @@ export function BreakfastBoard() {
       total += g.guests
       breakfasts += g.breakfasts_included
       served += g.breakfasts_served
-      if (g.status.includes('DUE OUT')) departing++
-      else if (g.status.includes('IN HOUSE')) staying++
+      // Départ = va partir (DUE OUT) OU déjà parti ce matin (CHECKED OUT du
+      // jour, conservé à l'import) ; recouche = IN HOUSE.
+      if (g.status.includes('IN HOUSE')) staying++
+      else if (g.status.includes('DUE OUT') || g.status.includes('CHECKED OUT'))
+        departing++
     }
     return {
       rooms,
@@ -576,7 +579,10 @@ function GuestRow({
   const served = row?.breakfasts_served ?? 0
   // Minimum 2 cases pour une grille visuellement régulière (impression papier).
   const numBoxes = Math.max(2, numGuests)
-  const departing = row?.status.includes('DUE OUT')
+  // Départ = DUE OUT (va partir) ou CHECKED OUT (déjà parti ce matin) ; les deux
+  // portent la flèche « départ ». Recouche = IN HOUSE.
+  const departing =
+    row?.status.includes('DUE OUT') || row?.status.includes('CHECKED OUT')
   const staying = row?.status.includes('IN HOUSE')
   // Double-clic sur la ligne (si des couverts existent) : tout servir / annuler.
   const canServe = canEdit && numGuests > 0

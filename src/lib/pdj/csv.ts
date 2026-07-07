@@ -7,9 +7,11 @@ import { range } from '#/lib/utils.ts'
  * au petit-déjeuner (fonctions pures, sans React ni rendu).
  *
  * Règles métier reprises telles quelles :
- *   - on ne garde que les clients « IN HOUSE » / « DUE OUT » (présents au PDJ)
- *     pour un fichier « du jour » ; pour un fichier archive (aucun statut actif),
- *     on garde toute ligne ayant un statut ;
+ *   - pour un fichier « du jour », on garde les clients « IN HOUSE » / « DUE OUT »
+ *     (présents au PDJ) ET les « CHECKED OUT » partis le jour même du service —
+ *     départs anticipés du matin quand le rapport est tiré tard (cf.
+ *     parseGuestRows) ; pour un fichier archive (aucun statut actif), on garde
+ *     toute ligne ayant un statut ;
  *   - PDJ inclus ⟺ la colonne `Addons` contient « PDJ » (insensible à la casse) ;
  *   - nb de PDJ inclus = 1 si tarif « BB1PAX », sinon adultes + enfants.
  *
@@ -131,12 +133,22 @@ export interface ParsedRow {
 /**
  * Parsing partagé : renvoie les lignes clients retenues, tous champs extraits.
  *
+ * `serviceDate` ('YYYY-MM-DD', jour du rapport) affine le filtre du fichier « du
+ * jour » : un client parti tôt le matin apparaît déjà « CHECKED OUT » sur un
+ * rapport tiré tard (au lieu de « DUE OUT » sur le rapport de 2 h). Comme il a
+ * dormi la nuit passée, il compte au petit-déjeuner : on le garde si son départ
+ * réel tombe le jour du service. Sans `serviceDate`, comportement historique
+ * (seuls IN HOUSE / DUE OUT).
+ *
  * Ne lit QUE des colonnes situées avant `Res. Notes` (col 26) : les notes
  * libres contiennent des retours à la ligne dans un champ quoté qui casseraient
  * un découpage naïf. On ne mappe donc jamais `Guest Notes`/`Party` (après col 26)
  * ni les colonnes ultra-sensibles (notes, plaque, accompagnants, identifiants).
  */
-export function parseGuestRows(content: string): ParsedRow[] {
+export function parseGuestRows(
+  content: string,
+  serviceDate?: string | null,
+): ParsedRow[] {
   const separator = content.split('\n')[0].includes(';') ? ';' : ','
   const lines = content.split('\n').filter((l) => l.trim())
   const headers = parseCsvLine(lines[0], separator)
@@ -206,13 +218,20 @@ export function parseGuestRows(content: string): ParsedRow[] {
   const result: ParsedRow[] = []
   for (const v of rows) {
     const status = v[col.status]?.trim() ?? ''
+    const departureDate = csvDateToIso(v[col.departure] ?? '')
     if (hasActiveGuests) {
-      if (
-        !status ||
-        (!status.includes('IN HOUSE') && !status.includes('DUE OUT'))
-      ) {
-        continue
-      }
+      const present = status.includes('IN HOUSE') || status.includes('DUE OUT')
+      // Départ anticipé du matin : le client a fait son check-out avant que le
+      // rapport soit tiré, donc il est déjà « CHECKED OUT » (au lieu de « DUE
+      // OUT »). S'il est parti LE JOUR DU SERVICE, il a dormi la nuit passée et
+      // compte au PDJ — on le garde comme un départ. Pour un CHECKED OUT, la
+      // colonne Departure porte l'heure RÉELLE du check-out (fiable), là où un
+      // DUE OUT porte l'horaire théorique (02:00 PM).
+      const leftOnServiceDay =
+        !!serviceDate &&
+        status.includes('CHECKED OUT') &&
+        departureDate === serviceDate
+      if (!present && !leftOnServiceDay) continue
     } else if (!status) {
       continue
     }
@@ -247,7 +266,7 @@ export function parseGuestRows(content: string): ParsedRow[] {
       addons: strOrNull(v, col.addons),
       adr: floatOrNull(v, col.adr),
       arrivalDate: csvDateToIso(v[col.arrival] ?? ''),
-      departureDate: csvDateToIso(v[col.departure] ?? ''),
+      departureDate,
       stayCount: col.stayCount !== -1 ? parseInt(v[col.stayCount]) || 0 : 0,
       breakfastsIncluded,
     })
@@ -317,7 +336,7 @@ export function csvToDbRows(content: string, fileName: string): DbPdjRow[] {
   const serviceDate = localDateStr(date)
   const isToday = serviceDate === localDateStr(new Date())
 
-  return parseGuestRows(content).map((r) => ({
+  return parseGuestRows(content, serviceDate).map((r) => ({
     service_date: serviceDate,
     room: r.room,
     guest_name: isToday ? r.guestName || null : null,

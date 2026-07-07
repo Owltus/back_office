@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { csvToDbRows, mergeCsvFiles } from '#/lib/pdj/csv.ts'
+import { csvToDbRows, mergeCsvFiles, parseGuestRows } from '#/lib/pdj/csv.ts'
 
 /*
  * Vérifie la règle RGPD (D2) et le parsing daté de csvToDbRows.
@@ -148,5 +148,50 @@ describe('mergeCsvFiles', () => {
     expect(result.dates).toHaveLength(0)
     expect(result.imported).toHaveLength(0)
     expect(result.ignored).toHaveLength(0)
+  })
+})
+
+describe('parseGuestRows — départs anticipés (rapport tiré tard)', () => {
+  // Fichier du 10-01-2020 : 102 recouche, 205 va partir, 306 déjà parti CE
+  // MATIN (départ 10-01), 307 parti la VEILLE (départ 09-01).
+  const CSV =
+    `${HEADER}\n` +
+    '102,IN HOUSE,"KEEP, In",,1,0,PDJ INCL,BOOKING - NR - BB1PAX,Chambre confort,3,BOOKING.COM,,,Credit Card,96,08-01-2020 02:00 PM,12-01-2020 02:00 PM,0\n' +
+    '205,DUE OUT,"KEEP, Due",,2,0,PDJ INCL,CLUB - NR - BB2PAX,Chambre classique,1,EXPEDIA,,,Credit Card,82,09-01-2020 03:00 PM,10-01-2020 02:00 PM,0\n' +
+    '306,CHECKED OUT,"KEEP, Early",,1,0,PDJ INCL,EBR - FLEX - PDJ INCLUS,Chambre classique,1,EXPEDIA,,,Credit Card,90,09-01-2020 05:00 PM,10-01-2020 05:20 AM,0\n' +
+    '307,CHECKED OUT,"DROP, Late",,2,0,PDJ INCL,BOOKING - NR - BB2PAX,Chambre classique,1,BOOKING.COM,,,Credit Card,90,08-01-2020 05:00 PM,09-01-2020 10:00 AM,0\n'
+
+  it('garde le CHECKED OUT parti le jour du service, jette celui de la veille', () => {
+    const rows = parseGuestRows(CSV, '2020-01-10')
+    const rooms = rows.map((r) => r.room)
+
+    expect(rooms).toContain(306) // parti ce matin -> compte au PDJ
+    expect(rooms).not.toContain(307) // parti la veille -> service d'hier
+    expect(rows).toHaveLength(3)
+
+    const early = rows.find((r) => r.room === 306)!
+    expect(early.status).toBe('CHECKED OUT')
+    expect(early.breakfastsIncluded).toBe(1)
+  })
+
+  it('sans serviceDate : comportement historique (aucun CHECKED OUT gardé)', () => {
+    const rooms = parseGuestRows(CSV).map((r) => r.room)
+    expect(rooms).toEqual([102, 205])
+  })
+
+  it('csvToDbRows applique la règle via la date du nom de fichier', () => {
+    const rows = csvToDbRows(CSV, 'In-House Guests _20200110120000.csv')
+    expect(rows.map((r) => r.room).sort((a, b) => a - b)).toEqual([
+      102, 205, 306,
+    ])
+  })
+
+  it('fichier archive (aucun statut actif) : tous les statuts conservés', () => {
+    const archive =
+      `${HEADER}\n` +
+      '306,CHECKED OUT,"A, A",,1,0,PDJ INCL,EBR - FLEX - PDJ INCLUS,Chambre classique,1,EXPEDIA,,,Credit Card,90,09-01-2020 05:00 PM,10-01-2020 05:20 AM,0\n' +
+      '307,CHECKED OUT,"B, B",,1,0,PDJ INCL,EBR - FLEX - PDJ INCLUS,Chambre classique,1,EXPEDIA,,,Credit Card,90,03-01-2020 05:00 PM,05-01-2020 10:00 AM,0\n'
+    const rooms = parseGuestRows(archive, '2020-01-10').map((r) => r.room)
+    expect(rooms.sort((a, b) => a - b)).toEqual([306, 307])
   })
 })
