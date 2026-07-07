@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
+import { PrintButton } from '#/components/shared/PrintButton.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
 import { Textarea } from '#/components/ui/textarea.tsx'
@@ -27,6 +28,7 @@ import {
 import { DatePickerButton } from '#/components/form/fields.tsx'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { cn } from '#/lib/utils.ts'
+import { printCaisseSheet } from '#/lib/caisse/pdf.ts'
 import {
   computeEcarts,
   emptyInput,
@@ -390,6 +392,31 @@ export function CaisseBoard() {
     return guard(() => reopenSheet(sheet.id), 'Caisse rouverte (brouillon).')
   }
 
+  // Génère un VRAI document PDF (jsPDF) et ouvre la fenêtre d'impression du
+  // navigateur — pas de téléchargement. Cf. src/lib/caisse/pdf.ts.
+  const [pdfBusy, setPdfBusy] = useState(false)
+  const handleGeneratePdf = async () => {
+    setPdfBusy(true)
+    setError('')
+    try {
+      const [yr, mo, da] = selectedDate.split('-')
+      await printCaisseSheet(
+        {
+          titleDate,
+          form,
+          operatorInitials: sheet?.operatorInitials || form.operatorInitials,
+        },
+        `Caisse_${da}-${mo}-${yr}_${form.shift}`,
+      )
+    } catch (err) {
+      setError(
+        `Impression du PDF impossible : ${err instanceof Error ? err.message : String(err)}`,
+      )
+    } finally {
+      setPdfBusy(false)
+    }
+  }
+
   return (
     <div className="caisse-doc flex w-full min-w-0 flex-1 flex-col gap-4">
       <PageHeader
@@ -417,6 +444,12 @@ export function CaisseBoard() {
             >
               <ChevronRight />
             </Button>
+            <PrintButton
+              onClick={handleGeneratePdf}
+              responsiveLabel
+              disabled={pdfBusy}
+              className="ml-1"
+            />
             {isWriter && editable && !isValidated && (
               <Button
                 className="ml-1"
