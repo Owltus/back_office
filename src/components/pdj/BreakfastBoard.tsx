@@ -577,7 +577,7 @@ function GuestRow({
     <tr
       onDoubleClick={
         canServe
-          ? () => onServe(room, served === numGuests ? 0 : numGuests)
+          ? () => onServe(room, served >= numGuests ? 0 : numGuests)
           : undefined
       }
       title={canServe ? 'Double-clic : tout servir / annuler' : undefined}
@@ -620,29 +620,47 @@ function GuestRow({
             />
           ))}
         </span>
-        {/* Écran : contrôle interactif « servi / attendu » (persisté). */}
+        {/* Écran : contrôle interactif « servi / attendu » (persisté), calqué
+            sur les cases du PDF — toujours 2 cases mini. Bordure pleine en gras
+            = client attendu (1 ou 2) ; bordure fine en pointillés = place
+            supplémentaire (cochable à la main pour un PDJ « en plus », mais JAMAIS
+            remplie par le double-clic de la ligne) ; case pleine = servi. */}
         {numGuests > 0 && (
           <span className="inline-flex items-center gap-1 print:hidden">
-            {Array.from({ length: numGuests }, (_, i) => (
-              <button
-                key={i}
-                type="button"
-                disabled={!canEdit}
-                onClick={() => onServe(room, served === i + 1 ? i : i + 1)}
-                onDoubleClick={(e) => e.stopPropagation()}
-                aria-label={`Servi ${i + 1} sur ${numGuests}`}
-                title={`${served} / ${numGuests} servis`}
-                className={cn(
-                  'size-3.5 rounded-[3px] border transition-colors',
-                  i < served
-                    ? 'border-emerald-500 bg-emerald-500'
-                    : 'border-muted-foreground/40 bg-transparent',
-                  canEdit
-                    ? 'cursor-pointer hover:border-emerald-400'
-                    : 'cursor-default',
-                )}
-              />
-            ))}
+            {Array.from({ length: numBoxes }, (_, i) => {
+              const expected = i < numGuests
+              const isServed = i < served
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  disabled={!canEdit}
+                  onClick={() => onServe(room, served === i + 1 ? i : i + 1)}
+                  onDoubleClick={(e) => e.stopPropagation()}
+                  aria-label={
+                    expected
+                      ? `Servi ${i + 1} sur ${numGuests}`
+                      : `Servi ${i + 1} (supplémentaire)`
+                  }
+                  title={
+                    expected
+                      ? `${served} / ${numGuests} servis`
+                      : 'PDJ supplémentaire (au-delà des clients attendus)'
+                  }
+                  className={cn(
+                    'size-3.5 rounded-[3px] transition-colors',
+                    isServed
+                      ? 'border-2 border-emerald-500 bg-emerald-500'
+                      : expected
+                        ? 'border-2 border-foreground/70 bg-transparent'
+                        : 'border border-dashed border-muted-foreground/40 bg-transparent',
+                    canEdit
+                      ? 'cursor-pointer hover:border-emerald-400'
+                      : 'cursor-default',
+                  )}
+                />
+              )
+            })}
           </span>
         )}
       </td>
