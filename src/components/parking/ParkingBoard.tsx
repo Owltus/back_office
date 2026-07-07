@@ -7,6 +7,7 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
+  Copy,
   MessageSquare,
   Pencil,
   Plus,
@@ -128,6 +129,17 @@ export function ParkingBoard() {
   const [calOpen, setCalOpen] = useState(false)
   const [commentId, setCommentId] = useState<string | null>(null)
   const [commentDraft, setCommentDraft] = useState('')
+  // Presse-papier local : copie (nom, durée, statut) d'une résa. « Copier »
+  // enclenche le mode placement : un fantôme suit le curseur et un clic pose la
+  // copie sur la case visée (cf. `placing` / `ghost`).
+  const [clipboard, setClipboard] = useState<{
+    client: string
+    nights: number
+    status: Status
+  } | null>(null)
+  // Mode placement actif (fantôme accroché au curseur) + case survolée courante.
+  const [placing, setPlacing] = useState(false)
+  const [ghost, setGhost] = useState<{ day: number; spot: number } | null>(null)
   // Miroir de `reservations` lisible dans les closures de drag (état le plus récent).
   const reservationsRef = useRef<Reservation[]>([])
   const timelineRef = useRef<HTMLDivElement>(null)
@@ -143,6 +155,19 @@ export function ParkingBoard() {
   useEffect(() => {
     reservationsRef.current = reservations
   }, [reservations])
+
+  // Échap annule le mode placement (copie accrochée au curseur).
+  useEffect(() => {
+    if (!placing) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setPlacing(false)
+        setGhost(null)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [placing])
 
   // Chargement initial + abonnement Realtime, une fois le lundi de réf. connu.
   useEffect(() => {
@@ -274,6 +299,39 @@ export function ParkingBoard() {
     })
   }
 
+  function copyReservation(r: Reservation) {
+    if (!canEdit) return
+    setClipboard({ client: r.client, nights: r.nights, status: r.status })
+    // Accroche aussitôt la copie au curseur : un clic sur une case la posera.
+    setGhost(null)
+    setPlacing(true)
+  }
+
+  // Colle le presse-papier à la case visée : nom + durée + statut copiés ; la
+  // place et le jour viennent de la case, le commentaire repart vide.
+  function pasteReservation(startDay: number, spot: number) {
+    if (!canEdit || !startDate || !clipboard) return
+    if (hasOverlap(reservations, spot, startDay, clipboard.nights)) return
+    const id = crypto.randomUUID()
+    const { client, nights, status } = clipboard
+    setReservations((prev) => [
+      ...prev,
+      { id, client, spot, startDay, nights, status, comment: '' },
+    ])
+    createReservation({
+      id,
+      spot,
+      client,
+      start_date: startDayToDate(startDay, startDate),
+      nights,
+      status,
+      comment: '',
+    }).catch((err) => {
+      console.error(err)
+      setReservations((prev) => prev.filter((r) => r.id !== id))
+    })
+  }
+
   function openComment(r: Reservation) {
     setCommentDraft(r.comment)
     setCommentId(r.id)
@@ -317,6 +375,13 @@ export function ParkingBoard() {
   function startInteraction(e: ReactPointerEvent, res: Reservation, mode: Mode) {
     if (!canEdit) return
     if (!startDate) return
+    // Ctrl/Cmd + clic = copie rapide (accroche au curseur), sans déplacement.
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault()
+      e.stopPropagation()
+      copyReservation(res)
+      return
+    }
     e.preventDefault()
     e.stopPropagation()
     const startX = e.clientX
@@ -636,9 +701,90 @@ export function ParkingBoard() {
                       onRename={rename}
                       onStatus={setStatus}
                       onComment={openComment}
+                      onCopy={copyReservation}
                       onRemove={remove}
                     />
                   ))}
+
+                {/* Mode placement : overlay capturant la souris + fantôme suivant
+                    le curseur. Un clic pose la copie sur la case visée ; il
+                    devient rouge (et le clic est sans effet) si elle est occupée. */}
+                {placing && clipboard && (
+                  <>
+                    <div
+                      className="absolute inset-0 z-20 cursor-copy"
+                      onMouseMove={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect()
+                        const dayIndex = clamp(
+                          Math.floor((e.clientX - rect.left) / dayW),
+                          0,
+                          Math.max(0, visibleDays - 1),
+                        )
+                        const spot = clamp(
+                          Math.floor((e.clientY - rect.top) / ROW_H) + 1,
+                          1,
+                          SPOTS,
+                        )
+                        setGhost({ day: offset + dayIndex, spot })
+                      }}
+                      onClick={() => {
+                        if (!ghost) return
+                        if (
+                          hasOverlap(
+                            reservations,
+                            ghost.spot,
+                            ghost.day,
+                            clipboard.nights,
+                          )
+                        )
+                          return
+                        pasteReservation(ghost.day, ghost.spot)
+                        setPlacing(false)
+                        setGhost(null)
+                      }}
+                      onContextMenu={(e) => {
+                        e.preventDefault()
+                        setPlacing(false)
+                        setGhost(null)
+                      }}
+                    />
+                    {ghost &&
+                      (() => {
+                        const invalid = hasOverlap(
+                          reservations,
+                          ghost.spot,
+                          ghost.day,
+                          clipboard.nights,
+                        )
+                        return (
+                          <div
+                            className={cn(
+                              'pointer-events-none absolute z-30 flex items-center rounded-md border px-1.5 text-xs shadow-lg',
+                              invalid
+                                ? 'border-rose-500 bg-rose-500/25 text-rose-50'
+                                : STATUS[clipboard.status].bar,
+                            )}
+                            style={{
+                              left:
+                                (arrivalSlot(ghost.day) -
+                                  offset * SLOTS_PER_DAY) *
+                                  slotW +
+                                BAR_PAD_X,
+                              width:
+                                clipboard.nights * SLOTS_PER_DAY * slotW -
+                                BAR_PAD_X * 2,
+                              top: (ghost.spot - 1) * ROW_H + BAR_PAD_Y,
+                              height: ROW_H - BAR_PAD_Y * 2,
+                            }}
+                          >
+                            <span className="min-w-0 flex-1 truncate font-medium">
+                              {clipboard.client || 'Sans nom'}
+                            </span>
+                          </div>
+                        )
+                      })()}
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -687,6 +833,7 @@ interface ReservationBarProps {
   onRename: (id: string, value: string) => void
   onStatus: (id: string, status: Status) => void
   onComment: (r: Reservation) => void
+  onCopy: (r: Reservation) => void
   onRemove: (id: string) => void
 }
 
@@ -702,6 +849,7 @@ function ReservationBar({
   onRename,
   onStatus,
   onComment,
+  onCopy,
   onRemove,
 }: ReservationBarProps) {
   const st = STATUS[r.status]
@@ -844,6 +992,10 @@ function ReservationBar({
         <ContextMenuItem onSelect={() => onComment(r)}>
           <MessageSquare />
           Commentaire
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={() => onCopy(r)}>
+          <Copy />
+          Copier
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuRadioGroup
