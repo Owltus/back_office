@@ -37,7 +37,6 @@ import {
 } from '#/lib/caisse/calc.ts'
 import {
   DENOMINATIONS,
-  ECART_ABBR,
   ECART_LABELS,
   EPSILON,
   FUND_TARGET,
@@ -89,8 +88,6 @@ const eur0 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 })
 const fmtEur = (n: number) => eur2.format(n) + ' €'
 const fmtEurInt = (n: number) => eur0.format(n) + ' €'
 const fmtEcart = (n: number) => (n >= 0 ? '+' : '') + eur2.format(n) + ' €'
-/** Écart sans symbole € (colonne compacte du tableau mobile). */
-const fmtEcartBare = (n: number) => (n >= 0 ? '+' : '') + eur2.format(n)
 
 const fmtTitle = new Intl.DateTimeFormat('fr-FR', {
   weekday: 'long',
@@ -397,7 +394,6 @@ export function CaisseBoard() {
     <div className="caisse-doc flex w-full min-w-0 flex-1 flex-col gap-4">
       <PageHeader
         title={`${titleDate} (${SHIFT_LABELS[form.shift].toLowerCase()})`}
-        meta="Feuille de caisse"
         actions={
           <>
             <Button
@@ -466,8 +462,8 @@ export function CaisseBoard() {
         </div>
       )}
 
-      {/* Tableau des montants + écarts — horizontal (desktop). */}
-      <div className="caisse-table hidden overflow-x-auto rounded-xl border border-border bg-card sm:block">
+      {/* Tableau des montants + écarts (défile horizontalement si étroit). */}
+      <div className="caisse-table overflow-x-auto rounded-xl border border-border bg-card">
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-border text-xs uppercase text-muted-foreground">
@@ -522,71 +518,6 @@ export function CaisseBoard() {
                 )
               })}
             </tr>
-          </tbody>
-        </table>
-      </div>
-
-      {/* Tableau des montants — vertical/transposé (mobile) : modes en lignes
-          (acronymes), sources en colonnes, pour économiser la largeur. */}
-      <div className="caisse-table rounded-xl border border-border bg-card sm:hidden">
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr className="border-b border-border text-xs uppercase text-muted-foreground">
-              <th className="px-2 py-2 text-left font-medium">Mode</th>
-              <th className="px-1 py-2 text-center font-medium">STAY N' TOUCH</th>
-              <th className="px-1 py-2 text-center font-medium">LIGHTSPEED</th>
-              <th className="px-1 py-2 text-center font-medium">Caisse</th>
-              <th className="px-1 py-2 text-center font-medium">Écart</th>
-            </tr>
-          </thead>
-          <tbody>
-            {cols.map((c) => {
-              const e = ecarts[c]
-              const zero = Math.abs(e) < EPSILON
-              return (
-                <tr key={c} className="border-b border-border/60">
-                  <td className="px-2 py-1 text-xs font-medium uppercase text-muted-foreground">
-                    {ECART_ABBR[c]}
-                  </td>
-                  <td className="px-1 py-1">
-                    <MoneyInput
-                      value={c === 'web' ? form.snt.cbweb : form.snt[c as PayKey]}
-                      disabled={!editable}
-                      onChange={(v) => (c === 'web' ? setSnt('cbweb', v) : setSnt(c as PayKey, v))}
-                    />
-                  </td>
-                  <td className="px-1 py-1">
-                    {c === 'web' ? (
-                      <span className="block text-right text-muted-foreground">—</span>
-                    ) : (
-                      <MoneyInput
-                        value={form.ls[c as PayKey]}
-                        disabled={!editable}
-                        onChange={(v) => setLs(c as PayKey, v)}
-                      />
-                    )}
-                  </td>
-                  <td className="px-1 py-1">
-                    <MoneyInput
-                      value={c === 'web' ? form.caisse.adyen : form.caisse[c as PayKey]}
-                      disabled={!editable}
-                      onChange={(v) =>
-                        c === 'web' ? setCaisse('adyen', v) : setCaisse(c as PayKey, v)
-                      }
-                    />
-                  </td>
-                  <td
-                    className={cn(
-                      'px-1 py-1 text-right text-xs tabular-nums',
-                      zero ? 'text-emerald-500' : 'text-destructive',
-                    )}
-                    title={`Attendu ${fmtEur(expected(form, c))}`}
-                  >
-                    {fmtEcartBare(e)}
-                  </td>
-                </tr>
-              )
-            })}
           </tbody>
         </table>
       </div>

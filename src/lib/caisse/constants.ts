@@ -69,14 +69,6 @@ export const ECART_LABELS: Record<EcartKey, string> = {
   web: 'Carte web / Adyen',
 }
 
-/** Acronymes courts des modes (affichage responsive compact, cf. feuille papier). */
-export const ECART_ABBR: Record<EcartKey, string> = {
-  cash: 'CASH',
-  cb: 'CB',
-  cvac: 'CVAC',
-  web: 'WEB',
-}
-
 /** Modes de paiement communs (hors web). */
 export const PAY_KEYS: ReadonlyArray<PayKey> = ['cash', 'cb', 'cvac']
 
