@@ -10,9 +10,9 @@ import type { CaisseSheet } from '#/lib/caisse/types.ts'
  */
 
 const base = (): Pick<CaisseSheet, 'snt' | 'ls' | 'caisse' | 'counts' | 'fundOrigin'> => ({
-  snt: { cash: 0, cb: 0, ax: 0, cheq: 0, cvac: 0, cbweb: 0 },
-  ls: { cash: 0, cb: 0, ax: 0, cheq: 0, cvac: 0 },
-  caisse: { cash: 0, cb: 0, ax: 0, cheq: 0, cvac: 0, adyen: 0 },
+  snt: { cash: 0, cb: 0, cvac: 0, cbweb: 0 },
+  ls: { cash: 0, cb: 0, cvac: 0 },
+  caisse: { cash: 0, cb: 0, cvac: 0, adyen: 0 },
   counts: emptyCounts(),
   fundOrigin: 150,
 })

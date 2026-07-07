@@ -32,24 +32,18 @@ create table if not exists public.caisse_sheets (
 
   -- STAY N' TOUCH (réception) — montants attendus
   snt_cash          numeric(10, 2) not null default 0,
-  snt_cb            numeric(10, 2) not null default 0,          -- CB sauf AX
-  snt_ax            numeric(10, 2) not null default 0,
-  snt_cheq          numeric(10, 2) not null default 0,
+  snt_cb            numeric(10, 2) not null default 0,          -- carte bancaire
   snt_cvac          numeric(10, 2) not null default 0,
   snt_cbweb         numeric(10, 2) not null default 0,          -- CB WEB (toutes) — soir
 
   -- LIGHTSPEED (club) — montants attendus
   ls_cash           numeric(10, 2) not null default 0,
   ls_cb             numeric(10, 2) not null default 0,
-  ls_ax             numeric(10, 2) not null default 0,
-  ls_cheq           numeric(10, 2) not null default 0,
   ls_cvac           numeric(10, 2) not null default 0,
 
   -- CAISSE — montants réels comptés
   caisse_cash       numeric(10, 2) not null default 0,
   caisse_cb         numeric(10, 2) not null default 0,
-  caisse_ax         numeric(10, 2) not null default 0,
-  caisse_cheq       numeric(10, 2) not null default 0,
   caisse_cvac       numeric(10, 2) not null default 0,
   caisse_adyen      numeric(10, 2) not null default 0,          -- ADYEN — soir
 
@@ -151,3 +145,15 @@ create policy "caisse delete (admin)"
   on public.caisse_sheets for delete
   to authenticated
   using (get_user_role() = 'admin');
+
+-- ---- Migration : retrait des modes American Express (AX) et Chèques (CHEQ) ---
+-- Ces deux modes de paiement ne sont pas utilisés en réalité. On supprime les
+-- colonnes correspondantes des trois blocs (StayNTouch, Lightspeed, Caisse).
+-- Idempotent (drop column if exists) : sans effet sur une base déjà migrée ou
+-- fraîchement créée sans ces colonnes.
+alter table public.caisse_sheets drop column if exists snt_ax;
+alter table public.caisse_sheets drop column if exists snt_cheq;
+alter table public.caisse_sheets drop column if exists ls_ax;
+alter table public.caisse_sheets drop column if exists ls_cheq;
+alter table public.caisse_sheets drop column if exists caisse_ax;
+alter table public.caisse_sheets drop column if exists caisse_cheq;

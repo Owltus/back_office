@@ -11,7 +11,7 @@ export type Shift = 'matin' | 'soir' | 'nuit'
 export type SheetStatus = 'draft' | 'validated'
 
 /** Modes de paiement communs aux trois blocs (colonnes du tableau). */
-export type PayKey = 'cash' | 'cb' | 'ax' | 'cheq' | 'cvac'
+export type PayKey = 'cash' | 'cb' | 'cvac'
 /** Modes présents dans la ligne d'écarts (+ web = CB WEB attendu / ADYEN réel). */
 export type EcartKey = PayKey | 'web'
 
@@ -25,15 +25,15 @@ export type Counts = Record<DenomKey, number>
 
 /** Montants attendus StayNTouch (réception). `cbweb` = CB WEB (toutes), soir. */
 export interface SntAmounts {
-  cash: number; cb: number; ax: number; cheq: number; cvac: number; cbweb: number
+  cash: number; cb: number; cvac: number; cbweb: number
 }
 /** Montants attendus Lightspeed (club). */
 export interface LsAmounts {
-  cash: number; cb: number; ax: number; cheq: number; cvac: number
+  cash: number; cb: number; cvac: number
 }
 /** Montants réels comptés dans la caisse. `adyen` = CB WEB réel, soir. */
 export interface CaisseAmounts {
-  cash: number; cb: number; ax: number; cheq: number; cvac: number; adyen: number
+  cash: number; cb: number; cvac: number; adyen: number
 }
 
 /** Modèle app d'une feuille de caisse. */
@@ -69,11 +69,9 @@ export interface DbCaisseSheet {
   report_date: string
   shift: Shift
   operator_initials: string
-  snt_cash: number; snt_cb: number; snt_ax: number
-  snt_cheq: number; snt_cvac: number; snt_cbweb: number
-  ls_cash: number; ls_cb: number; ls_ax: number; ls_cheq: number; ls_cvac: number
-  caisse_cash: number; caisse_cb: number; caisse_ax: number
-  caisse_cheq: number; caisse_cvac: number; caisse_adyen: number
+  snt_cash: number; snt_cb: number; snt_cvac: number; snt_cbweb: number
+  ls_cash: number; ls_cb: number; ls_cvac: number
+  caisse_cash: number; caisse_cb: number; caisse_cvac: number; caisse_adyen: number
   cnt_500: number; cnt_200: number; cnt_100: number; cnt_50: number; cnt_20: number
   cnt_10: number; cnt_5: number; cnt_2: number; cnt_1: number
   cnt_050: number; cnt_020: number; cnt_010: number

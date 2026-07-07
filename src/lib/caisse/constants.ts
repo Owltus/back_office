@@ -64,9 +64,7 @@ export const SHIFT_LABELS: Record<Shift, string> = {
 /** Libellés complets des colonnes de paiement (tableau des montants / écarts). */
 export const ECART_LABELS: Record<EcartKey, string> = {
   cash: 'Espèces',
-  cb: 'Carte bancaire (sauf Amex)',
-  ax: 'American Express',
-  cheq: 'Chèques',
+  cb: 'Carte bancaire',
   cvac: 'Chèques vacances',
   web: 'Carte web / Adyen',
 }
@@ -75,14 +73,12 @@ export const ECART_LABELS: Record<EcartKey, string> = {
 export const ECART_ABBR: Record<EcartKey, string> = {
   cash: 'CASH',
   cb: 'CB',
-  ax: 'AX',
-  cheq: 'CHEQ',
   cvac: 'CVAC',
   web: 'WEB',
 }
 
 /** Modes de paiement communs (hors web). */
-export const PAY_KEYS: ReadonlyArray<PayKey> = ['cash', 'cb', 'ax', 'cheq', 'cvac']
+export const PAY_KEYS: ReadonlyArray<PayKey> = ['cash', 'cb', 'cvac']
 
 /** CB WEB (StayNTouch) / ADYEN (caisse) ne concernent que le shift du soir. */
 export const isWebRelevant = (shift: Shift): boolean => shift === 'soir'
