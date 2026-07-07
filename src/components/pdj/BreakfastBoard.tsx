@@ -11,7 +11,6 @@ import {
   Croissant,
   FileUp,
   Star,
-  UtensilsCrossed,
   Users,
 } from 'lucide-react'
 
@@ -125,7 +124,6 @@ export function BreakfastBoard() {
     let rooms = 0
     let total = 0
     let breakfasts = 0
-    let served = 0
     let staying = 0
     let departing = 0
     for (const room of ALL_ROOMS) {
@@ -134,7 +132,6 @@ export function BreakfastBoard() {
       rooms++
       total += g.guests
       breakfasts += g.breakfasts_included
-      served += g.breakfasts_served
       // Départ = va partir (DUE OUT) OU déjà parti ce matin (CHECKED OUT du
       // jour, conservé à l'import) ; recouche = IN HOUSE.
       if (g.status.includes('IN HOUSE')) staying++
@@ -145,7 +142,6 @@ export function BreakfastBoard() {
       rooms,
       guests: total,
       breakfasts,
-      served,
       potential: Math.max(0, total - breakfasts),
       staying,
       departing,
@@ -444,13 +440,6 @@ export function BreakfastBoard() {
                 accent="#34d399"
               />
               <Stat
-                value={stats.served}
-                label="PDJ servis"
-                icon={UtensilsCrossed}
-                accent="#22d3ee"
-                printHidden
-              />
-              <Stat
                 value={stats.potential}
                 label="PDJ non inclus"
                 icon={Croissant}
@@ -468,8 +457,6 @@ export function BreakfastBoard() {
                 icon={ArrowDown}
                 accent="#60a5fa"
               />
-              {/* « Départ » : dans le PDF uniquement (masquée à l'écran pour
-                  garder une rangée de KPI équilibrée). */}
               <Stat
                 value={stats.departing}
                 label={
@@ -480,7 +467,6 @@ export function BreakfastBoard() {
                 }
                 icon={ArrowUp}
                 accent="#fb7185"
-                printOnly
               />
             </div>
             {/* Cases « € » à remplir à la main — impression uniquement. */}
