@@ -457,7 +457,7 @@ export function CaisseBoard() {
             {/* 2) Impression, réservée à une feuille clôturée (document final). */}
             <PrintButton
               onClick={handleGeneratePdf}
-              responsiveLabel
+              iconOnly
               disabled={pdfBusy || !isValidated}
             />
             {/* 3) Navigation : shift précédent / jour / shift suivant. */}
@@ -601,7 +601,7 @@ export function CaisseBoard() {
                   <Minus className="size-4" />
                 </button>
                 {/* Zone centrale : valeur, quantité, sous-total */}
-                <div className="flex flex-[1.4] flex-col items-center justify-center gap-0.5 px-1 py-2">
+                <div className="flex flex-[1.4] flex-col items-center justify-center gap-2 px-1 py-2">
                   <span className="whitespace-nowrap text-xs font-semibold leading-none tabular-nums">
                     {d.label}
                   </span>
@@ -663,7 +663,7 @@ export function CaisseBoard() {
           disabled={!canEditFields}
           onChange={(e) => setForm((f) => ({ ...f, comment: e.target.value }))}
           placeholder="Justification d'un éventuel écart…"
-          className="min-h-32"
+          className="min-h-24"
         />
       </div>
 
