@@ -12,7 +12,7 @@
 -- commentaire, et l'état de validation.
 --
 -- VERROU (D1) : une feuille « validée » n'est plus modifiable, SAUF (a) pendant
--- une fenêtre de grâce de 3 h après validation, et (b) pour un admin (jamais
+-- une fenêtre de grâce de 24 h après validation, et (b) pour un admin (jamais
 -- bloqué). Ce verrou est appliqué par la RLS (autorité réelle) ; l'UI n'en est
 -- que le reflet ergonomique. Si la durée change, ajuster À LA FOIS l'interval
 -- ci-dessous ET la constante GRACE_HOURS dans src/lib/caisse/constants.ts.
@@ -116,7 +116,7 @@ create policy "caisse insert (super/admin)"
 -- UPDATE : super/admin ET (admin OU pas encore validé OU dans la fenêtre de grâce)
 -- La clause `using` s'évalue sur la ligne EXISTANTE : au moment où un
 -- super_utilisateur valide, validated_at est encore NULL → l'UPDATE passe. Les
--- corrections ultérieures passent tant que now() < validated_at + 3h. Ensuite,
+-- corrections ultérieures passent tant que now() < validated_at + 24h. Ensuite,
 -- seul l'admin peut modifier (correction ou remise en brouillon = déverrouillage).
 drop policy if exists "caisse update (role + verrou)" on public.caisse_sheets;
 create policy "caisse update (role + verrou)"
@@ -127,7 +127,7 @@ create policy "caisse update (role + verrou)"
     and (
       get_user_role() = 'admin'
       or validated_at is null
-      or now() < validated_at + interval '3 hours'
+      or now() < validated_at + interval '24 hours'
     )
   )
   with check (
@@ -135,7 +135,7 @@ create policy "caisse update (role + verrou)"
     and (
       get_user_role() = 'admin'
       or validated_at is null
-      or now() < validated_at + interval '3 hours'
+      or now() < validated_at + interval '24 hours'
     )
   );
 

@@ -48,7 +48,7 @@ export const FUND_TARGET = 150
  * DOIT rester égale à l'`interval` de la policy RLS UPDATE
  * (supabase/caisse_sheets.sql). Changer l'un impose de changer l'autre.
  */
-export const GRACE_HOURS = 3
+export const GRACE_HOURS = 24
 
 /** Tolérance d'égalité pour considérer un écart « à zéro » (arrondis centime). */
 export const EPSILON = 0.005
