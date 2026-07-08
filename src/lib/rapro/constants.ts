@@ -27,6 +27,12 @@ export function statusOf(
   return statuses.get(room) ?? 'non_nettoyee'
 }
 
+/** Statuts HORS CHARGE (aucun ménage dû) : ils sortent de la balance et NE
+ * roulent PAS d'un jour à l'autre — `refus` (client en séjour qui décline) et
+ * `noshow` (vendue mais client absent). Tout le reste (`non_nettoyee`, la
+ * « Bloquée ») = dû non fait → reste dans la balance et roule jusqu'à résolution. */
+export const JUSTIFIED_STATUSES = ['refus', 'noshow'] as const
+
 /**
  * État VISUEL d'une case (5 valeurs), dérivé du statut + de l'occupation :
  * `non_nettoyee` se scinde en `todo` (occupée, à faire) ou `empty` (non vendue).
