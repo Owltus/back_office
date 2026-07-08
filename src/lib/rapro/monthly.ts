@@ -1,72 +1,69 @@
 /*
- * Récap mensuel des chambres NETTOYÉES (facturable ELIOR) — métier + accès
- * Supabase en LECTURE. Les nettoyées sont stockées dans rapro_rooms
- * (`status='nettoyee'`) → une requête par plage de dates suffit (rapro_rooms n'a
- * que `report_date`, d'où le filtre `.gte/.lte`, pas `.eq('year'/'month')`).
- * L'agrégation « chaque jour du mois + trous à 0 » se fait côté client.
+ * Récap ménage (facturable ELIOR) — métier + accès Supabase en LECTURE. Les
+ * statuts non-défaut (nettoyee / refus / noshow) sont stockés dans rapro_rooms →
+ * une requête par plage de dates suffit (rapro_rooms n'a que `report_date`, d'où
+ * `.gte/.lte`). L'agrégation « par jour / par mois » se fait côté client.
  */
 
 import { supabase } from '#/lib/supabase.ts'
 
-export interface MonthlyRow {
-  /** 'YYYY-MM-DD'. */
-  date: string
-  /** Jour du mois (1..N). */
-  day: number
-  /** Nombre de chambres nettoyées ce jour (facturable). */
-  cleaned: number
+/** Décompte des statuts « traités » d'un jour (mêmes 3 que les cards principales,
+ * hors occupation PDJ). */
+export interface DayStatusCounts {
+  nettoyee: number
+  refus: number
+  noshow: number
 }
 
+const emptyCounts = (): DayStatusCounts => ({ nettoyee: 0, refus: 0, noshow: 0 })
+
 /**
- * Nombre de chambres nettoyées par jour sur `[from, to]` (bornes incluses).
- * PAGINÉ : une ligne = une chambre nettoyée, un mois plein peut dépasser 2000
- * lignes (80 chambres × ~31 j), au-delà du plafond « Max rows » de l'API
- * Supabase (1000 par défaut). On boucle jusqu'au `count` exact, en avançant du
- * nombre de lignes réellement renvoyées (robuste même si le plafond est < PAGE).
+ * Comptage par jour des statuts nettoyee / refus / noshow sur `[from, to]`.
+ * PAGINÉ jusqu'au count exact (un mois plein peut dépasser le plafond de 1000
+ * lignes de l'API), en avançant du nombre de lignes réellement renvoyées.
  */
-export async function fetchCleanedByRange(
+export async function fetchStatusCountsByRange(
   from: string,
   to: string,
-): Promise<Map<string, number>> {
-  const byDay = new Map<string, number>()
+): Promise<Map<string, DayStatusCounts>> {
+  const byDay = new Map<string, DayStatusCounts>()
   const PAGE = 1000
   let offset = 0
   let expected = Infinity
   while (offset < expected) {
     const { data, error, count } = await supabase
       .from('rapro_rooms')
-      .select('report_date', { count: 'exact' })
-      .eq('status', 'nettoyee')
+      .select('report_date, status', { count: 'exact' })
+      .in('status', ['nettoyee', 'refus', 'noshow'])
       .gte('report_date', from)
       .lte('report_date', to)
       .order('report_date', { ascending: true })
       .range(offset, offset + PAGE - 1)
     if (error) throw error
     if (count != null) expected = count
-    const rows = (data ?? []) as { report_date: string }[]
+    const rows = (data ?? []) as { report_date: string; status: string }[]
     if (rows.length === 0) break
     for (const r of rows) {
-      byDay.set(r.report_date, (byDay.get(r.report_date) ?? 0) + 1)
+      const c = byDay.get(r.report_date) ?? emptyCounts()
+      if (r.status === 'nettoyee') c.nettoyee++
+      else if (r.status === 'refus') c.refus++
+      else if (r.status === 'noshow') c.noshow++
+      byDay.set(r.report_date, c)
     }
     offset += rows.length
   }
   return byDay
 }
 
-/** Nombre total de chambres nettoyées sur `[from, to]`. Count SERVEUR (head:true),
- * sans transfert de lignes — idéal pour la vue annuelle (12 comptages légers). */
-export async function fetchCleanedCount(
-  from: string,
-  to: string,
-): Promise<number> {
-  const { count, error } = await supabase
-    .from('rapro_rooms')
-    .select('*', { count: 'exact', head: true })
-    .eq('status', 'nettoyee')
-    .gte('report_date', from)
-    .lte('report_date', to)
-  if (error) throw error
-  return count ?? 0
+/** Somme des décomptes d'un ensemble de jours. */
+export function sumCounts(byDay: Map<string, DayStatusCounts>): DayStatusCounts {
+  const t = emptyCounts()
+  for (const c of byDay.values()) {
+    t.nettoyee += c.nettoyee
+    t.refus += c.refus
+    t.noshow += c.noshow
+  }
+  return t
 }
 
 /** Premier et dernier jour du mois, en 'YYYY-MM-DD'. */
@@ -82,21 +79,30 @@ export function monthBounds(
   }
 }
 
-/** Une ligne par jour du mois (trous à 0) + total du mois. */
+export interface MonthlyRow extends DayStatusCounts {
+  /** 'YYYY-MM-DD'. */
+  date: string
+  /** Jour du mois (1..N). */
+  day: number
+}
+
+/** Une ligne par jour du mois (trous à 0) + totaux du mois. */
 export function monthlyRows(
   year: number,
   month: number,
-  byDay: Map<string, number>,
-): { rows: MonthlyRow[]; total: number } {
+  byDay: Map<string, DayStatusCounts>,
+): { rows: MonthlyRow[]; totals: DayStatusCounts } {
   const days = new Date(year, month, 0).getDate()
   const mm = String(month).padStart(2, '0')
   const rows: MonthlyRow[] = []
-  let total = 0
+  const totals = emptyCounts()
   for (let d = 1; d <= days; d++) {
     const date = `${year}-${mm}-${String(d).padStart(2, '0')}`
-    const cleaned = byDay.get(date) ?? 0
-    total += cleaned
-    rows.push({ date, day: d, cleaned })
+    const c = byDay.get(date) ?? emptyCounts()
+    totals.nettoyee += c.nettoyee
+    totals.refus += c.refus
+    totals.noshow += c.noshow
+    rows.push({ date, day: d, ...c })
   }
-  return { rows, total }
+  return { rows, totals }
 }
