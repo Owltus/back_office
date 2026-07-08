@@ -69,7 +69,7 @@ export function RaproMonthlyBoard({
   return (
     <div className="flex flex-1 flex-col gap-4">
       <PageHeader
-        title={`Ménage, ${monthLabel}`}
+        title={`Rapprochement, ${monthLabel}`}
         actions={
           <>
             <Button
