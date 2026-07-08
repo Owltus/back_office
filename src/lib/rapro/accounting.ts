@@ -13,7 +13,15 @@
  *
  * Distinct de `reconcile()` (balance + roulement, sur le dû élargi) : ici c'est
  * le comptable du jour, on ne mélange pas.
+ *
+ * IMPORTANT : clean/refus/blocked sont comptés SUR LES OCCUPÉES DU JOUR
+ * uniquement. Une chambre reportée nettoyée aujourd'hui (hors occupation du jour)
+ * n'entre PAS dans les Étages du jour — c'est le « déduire les bloquées de la
+ * veille » de la procédure : elle appartient à l'occupation de son jour d'origine.
  */
+
+import { statusOf } from '#/lib/rapro/constants.ts'
+import type { RoomStatus } from '#/lib/rapro/types.ts'
 
 export interface Accounting {
   // --- Réception (1) ---
@@ -42,28 +50,40 @@ export interface Accounting {
   occGap: number | null
 }
 
-/** Calcule le rapprochement du jour. `officialOcc` optionnel = ligne de contrôle. */
+/** Calcule le rapprochement du jour à partir des statuts et de l'occupation PDJ.
+ * clean/refus/blocked comptés PARMI LES OCCUPÉES. `officialOcc` = ligne de
+ * contrôle optionnelle (n'entre pas dans l'écart). */
 export function reconcileAccounting(input: {
-  occupancy: number
+  statuses: ReadonlyMap<number, RoomStatus>
+  occupied: ReadonlySet<number>
   lateArrivals: number
   corrections: number
-  clean: number
-  refus: number
-  blocked: number
   officialOcc?: number | null
 }): Accounting {
-  const reception = input.occupancy + input.lateArrivals + input.corrections
-  const etages = input.clean + input.refus + input.blocked
+  let clean = 0
+  let refus = 0
+  let blocked = 0
+  for (const room of input.occupied) {
+    const s = statusOf(input.statuses, room)
+    if (s === 'nettoyee') clean++
+    else if (s === 'refus') refus++
+    else if (s === 'non_nettoyee') blocked++
+    // `noshow` parmi les occupées : exclu des Étages (rien à nettoyer) — rare, et
+    // un tel cas fait légitimement apparaître un écart (à investiguer).
+  }
+  const occupancy = input.occupied.size
+  const reception = occupancy + input.lateArrivals + input.corrections
+  const etages = clean + refus + blocked
   const officialOcc = input.officialOcc ?? null
-  const occGap = officialOcc === null ? null : input.occupancy - officialOcc
+  const occGap = officialOcc === null ? null : occupancy - officialOcc
   return {
-    occupancy: input.occupancy,
+    occupancy,
     lateArrivals: input.lateArrivals,
     corrections: input.corrections,
     reception,
-    clean: input.clean,
-    refus: input.refus,
-    blocked: input.blocked,
+    clean,
+    refus,
+    blocked,
     etages,
     ecart: reception - etages,
     officialOcc,

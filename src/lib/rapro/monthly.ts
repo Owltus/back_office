@@ -17,21 +17,38 @@ export interface MonthlyRow {
   cleaned: number
 }
 
-/** Nombre de chambres nettoyées par jour sur `[from, to]` (bornes incluses). */
+/**
+ * Nombre de chambres nettoyées par jour sur `[from, to]` (bornes incluses).
+ * PAGINÉ : une ligne = une chambre nettoyée, un mois plein peut dépasser 2000
+ * lignes (80 chambres × ~31 j), au-delà du plafond « Max rows » de l'API
+ * Supabase (1000 par défaut). On boucle jusqu'au `count` exact, en avançant du
+ * nombre de lignes réellement renvoyées (robuste même si le plafond est < PAGE).
+ */
 export async function fetchCleanedByRange(
   from: string,
   to: string,
 ): Promise<Map<string, number>> {
-  const { data, error } = await supabase
-    .from('rapro_rooms')
-    .select('report_date')
-    .eq('status', 'nettoyee')
-    .gte('report_date', from)
-    .lte('report_date', to)
-  if (error) throw error
   const byDay = new Map<string, number>()
-  for (const r of (data ?? []) as { report_date: string }[]) {
-    byDay.set(r.report_date, (byDay.get(r.report_date) ?? 0) + 1)
+  const PAGE = 1000
+  let offset = 0
+  let expected = Infinity
+  while (offset < expected) {
+    const { data, error, count } = await supabase
+      .from('rapro_rooms')
+      .select('report_date', { count: 'exact' })
+      .eq('status', 'nettoyee')
+      .gte('report_date', from)
+      .lte('report_date', to)
+      .order('report_date', { ascending: true })
+      .range(offset, offset + PAGE - 1)
+    if (error) throw error
+    if (count != null) expected = count
+    const rows = (data ?? []) as { report_date: string }[]
+    if (rows.length === 0) break
+    for (const r of rows) {
+      byDay.set(r.report_date, (byDay.get(r.report_date) ?? 0) + 1)
+    }
+    offset += rows.length
   }
   return byDay
 }

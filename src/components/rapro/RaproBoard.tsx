@@ -194,15 +194,13 @@ export function RaproBoard() {
   const windowError =
     raproWindow.some((q) => q.isError) || pdjWindow.some((q) => q.isError)
 
-  // Rapprochement comptable DU JOUR (Réception vs Étages) — bloquées = jour seul
-  // (stats.todo, hors roulement) ; l'OCC officiel n'est qu'une ligne de contrôle.
+  // Rapprochement comptable DU JOUR (Réception vs Étages) — clean/refus/bloquées
+  // comptés PARMI LES OCCUPÉES (hors roulement) ; l'OCC officiel = ligne de contrôle.
   const acct = reconcileAccounting({
-    occupancy: occupied.size,
+    statuses,
+    occupied,
     lateArrivals,
     corrections,
-    clean: stats.clean,
-    refus: stats.refus,
-    blocked: stats.todo,
     officialOcc: officialOcc ?? null,
   })
 
