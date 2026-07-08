@@ -1,5 +1,3 @@
-import { range } from '#/lib/utils.ts'
-
 /* --------------------------------------------------------------------------
  * Petit-déjeuner (PDJ) — métier CSV du portage de l'app "Breakfast Tracker".
  *
@@ -33,14 +31,8 @@ export interface Guest {
 export type GuestMap = Record<number, Guest>
 
 // 80 chambres réparties sur 6 étages (les chambres vides restent affichées).
-export const ALL_ROOMS = [
-  ...range(102, 114),
-  ...range(201, 214),
-  ...range(301, 314),
-  ...range(401, 414),
-  ...range(501, 514),
-  ...range(621, 631),
-]
+// Inventaire remonté dans un module partagé (réutilisé par le Rapprochement).
+export { ALL_ROOMS } from '#/lib/hotel/rooms.ts'
 
 export const REQUIRED_COLUMNS = [
   'Room',
