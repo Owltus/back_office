@@ -417,42 +417,42 @@ export function RaproBoard() {
             label="Vendues"
             icon={BedDouble}
             accent="#818cf8"
-            hint="Chambres occupées cette nuit, le total à traiter au ménage aujourd'hui."
+            hint="Chambres occupées à traiter aujourd'hui."
           />
           <Stat
             value={stats.clean}
             label="Nettoyées"
             icon={Sparkles}
             accent="#34d399"
-            hint="Chambres dont le ménage a été fait aujourd'hui. Base de la facturation du prestataire."
+            hint="Chambres nettoyées aujourd'hui (facturées)."
           />
           <Stat
             value={hasDue ? rec.pending : '—'}
             label="Reste à faire"
             icon={Scale}
             accent={reconciled ? '#34d399' : '#fbbf24'}
-            hint="Chambres encore à nettoyer aujourd'hui, reportées comprises. À zéro (vert), tout est fait ou justifié."
+            hint="Chambres encore à nettoyer. Zéro = tout est fait."
           />
           <Stat
             value={carried.size}
             label="Reportées"
             icon={History}
             accent="#fb923c"
-            hint="Chambres non faites un jour précédent, encore à traiter. Elles restent affichées jusqu'à être nettoyées, refusées ou en no-show."
+            hint="Restées à faire depuis un jour précédent."
           />
           <Stat
             value={stats.refus}
             label="Refus"
             icon={Ban}
             accent="#fbbf24"
-            hint="Client présent ayant refusé le ménage. Chambre non faite mais justifiée."
+            hint="Client a refusé le ménage."
           />
           <Stat
             value={stats.noshow}
             label="No-show"
             icon={UserX}
             accent="#64748b"
-            hint="Chambre réservée mais client jamais arrivé, rien à nettoyer."
+            hint="Client jamais arrivé, rien à nettoyer."
           />
         </div>
       </TooltipProvider>
@@ -623,7 +623,9 @@ function Stat({
   return (
     <Tooltip>
       <TooltipTrigger asChild>{card}</TooltipTrigger>
-      <TooltipContent className="max-w-64">{hint}</TooltipContent>
+      <TooltipContent className="max-w-56 text-center leading-snug">
+        {hint}
+      </TooltipContent>
     </Tooltip>
   )
 }
