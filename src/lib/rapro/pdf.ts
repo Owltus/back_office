@@ -14,6 +14,13 @@ import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import type { jsPDF } from 'jspdf'
 
+import {
+  CELL_STATES,
+  cellState,
+  LEGEND_ORDER,
+  statusOf,
+  type CellState,
+} from '#/lib/rapro/constants.ts'
 import { FLOORS } from '#/lib/rapro/rooms.ts'
 import type { RoomStatus } from '#/lib/rapro/types.ts'
 
@@ -59,18 +66,16 @@ const CONTENT_W = RIGHT - LEFT
 
 type RGB = [number, number, number]
 
-/** Couleur de fond (ou aucune) et de texte d'une case chambre, en couleurs
- * douces adaptées au papier blanc. */
-function cellStyle(
-  status: RoomStatus,
-  isEmpty: boolean,
-): { fill: RGB | null; text: RGB } {
-  if (status === 'nettoyee') return { fill: [110, 231, 183], text: [6, 78, 59] }
-  if (status === 'refus') return { fill: [252, 211, 77], text: [120, 53, 15] }
-  if (status === 'noshow') return { fill: [221, 214, 254], text: [76, 29, 149] }
-  // non_nettoyee : grisé si non vendue, sinon rouge (occupée à faire).
-  if (isEmpty) return { fill: [241, 245, 249], text: [148, 163, 184] }
-  return { fill: [254, 202, 202], text: [127, 29, 29] }
+/** Couleurs (fond + texte) d'une case chambre par état visuel — teintes douces
+ * adaptées au papier blanc. Même partition que les classes web (`CELL_STATES`),
+ * mais en RGB littéraux car jsPDF ne lit pas les tokens CSS. Alimente et les
+ * cases de la grille et la légende → une seule source de couleur PDF. */
+const CELL_FILL: Record<CellState, { fill: RGB; text: RGB }> = {
+  clean: { fill: [110, 231, 183], text: [6, 78, 59] },
+  refus: { fill: [252, 211, 77], text: [120, 53, 15] },
+  noshow: { fill: [221, 214, 254], text: [76, 29, 149] },
+  empty: { fill: [241, 245, 249], text: [148, 163, 184] },
+  todo: { fill: [254, 202, 202], text: [127, 29, 29] },
 }
 
 function renderRaproDocument(
@@ -122,19 +127,16 @@ function renderRaproDocument(
     pdf.setFont('helvetica', 'bold').setFontSize(7.5).setTextColor(90)
     pdf.text(`Étage ${floor}`, cx + colW / 2, gridTop, { align: 'center' })
     rooms.forEach((room, j) => {
-      const status = statuses.get(room) ?? 'non_nettoyee'
-      const isEmpty = hasOccupancy && !occupied.has(room)
-      const { fill, text } = cellStyle(status, isEmpty)
+      const state = cellState(
+        statusOf(statuses, room),
+        hasOccupancy && !occupied.has(room),
+      )
+      const { fill, text } = CELL_FILL[state]
       const w = colW - 2
       const h = cellH - 0.8
       const cellY = gridTop + 3 + j * cellH
-      if (fill) {
-        pdf.setFillColor(fill[0], fill[1], fill[2])
-        pdf.rect(cx + 1, cellY, w, h, 'F')
-      } else {
-        pdf.setDrawColor(205).setLineWidth(0.2)
-        pdf.rect(cx + 1, cellY, w, h)
-      }
+      pdf.setFillColor(fill[0], fill[1], fill[2])
+      pdf.rect(cx + 1, cellY, w, h, 'F')
       pdf.setFont('helvetica', 'normal').setFontSize(7.5)
       pdf.setTextColor(text[0], text[1], text[2])
       pdf.text(String(room), cx + 1 + w / 2, cellY + h / 2 + 1.1, {
@@ -145,14 +147,10 @@ function renderRaproDocument(
   const maxRooms = FLOORS.reduce((m, f) => Math.max(m, f.rooms.length), 0)
   y = gridTop + 3 + maxRooms * cellH + 6
 
-  // --- Légende des statuts (même code couleur que les cases) ----------------
-  const legend: Array<[string, RGB]> = [
-    ['Nettoyée', [110, 231, 183]],
-    ['Bloquée', [254, 202, 202]],
-    ['Refus', [252, 211, 77]],
-    ['No-show', [221, 214, 254]],
-    ['Non vendue', [241, 245, 249]],
-  ]
+  // --- Légende des statuts (dérivée de la même partition que les cases) ------
+  const legend = LEGEND_ORDER.map(
+    (st) => [CELL_STATES[st].label, CELL_FILL[st].fill] as const,
+  )
   pdf.setFont('helvetica', 'normal').setFontSize(7.5)
   const legendGap = 7
   const itemW = legend.map(([lbl]) => 4 + pdf.getTextWidth(lbl))
