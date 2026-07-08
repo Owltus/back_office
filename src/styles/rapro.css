@@ -43,11 +43,22 @@
 
 /* Colonnes d'étages : gap de 1px sur fond « bordure » + colonnes en fond
    « carte » → fins filets de séparation verticaux entre étages. */
-/* Une carte par étage (grille responsive de cartes). */
+/* Une carte par étage — 6 étages → toujours 2, 3 ou 6 colonnes (diviseurs de 6)
+   pour des rangées toujours complètes, jamais de mise en page bâtarde. */
 .rapro-floors {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(2, 1fr);
   gap: 0.75rem;
+}
+@media (min-width: 700px) {
+  .rapro-floors {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+@media (min-width: 1200px) {
+  .rapro-floors {
+    grid-template-columns: repeat(6, 1fr);
+  }
 }
 
 .rapro-floor {
@@ -187,10 +198,21 @@
 }
 
 /* --- Cards de synthèse (KPI), calquées sur .pdj-stat --------------------- */
+/* 6 cards → toujours 2, 3 ou 6 colonnes (diviseurs de 6) : rangées complètes. */
 .rapro-stats {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(2, 1fr);
   gap: 0.75rem;
+}
+@media (min-width: 640px) {
+  .rapro-stats {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+@media (min-width: 1024px) {
+  .rapro-stats {
+    grid-template-columns: repeat(6, 1fr);
+  }
 }
 .rapro-stat {
   display: flex;
