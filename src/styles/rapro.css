@@ -273,16 +273,6 @@
   color: var(--muted-foreground);
 }
 
-/* Avertissement de clôture NON bloquant (balance ≠ 0), affiché dans le header. */
-.rapro-close-warn {
-  align-self: center;
-  padding: 0 0.3rem;
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: #fbbf24;
-  white-space: nowrap;
-}
-
 /* --- Zone commentaire (clôture) ----------------------------------------- */
 .rapro-comment {
   display: flex;

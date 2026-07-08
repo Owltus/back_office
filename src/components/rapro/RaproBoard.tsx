@@ -297,30 +297,21 @@ export function RaproBoard() {
             {isWriter &&
               (!isValidated ? (
                 // Jour éditable → cadenas OUVERT (état courant) ; l'action clôture.
-                // Avertissement non bloquant (D5) si la balance n'est pas à zéro.
-                <>
-                  {rec.pending > 0 && (
-                    <span
-                      className="rapro-close-warn"
-                      title="Chambres encore à faire (reportées incluses)"
-                    >
-                      {rec.pending} à faire
-                    </span>
-                  )}
-                  <Button
-                    variant="outline"
-                    size="icon-sm"
-                    onClick={handleClose}
-                    aria-label="Clôturer le rapprochement"
-                    title={
-                      rec.pending > 0
-                        ? `Clôturer (${rec.pending} chambre(s) encore à faire)`
-                        : 'Clôturer'
-                    }
-                  >
-                    <LockOpen />
-                  </Button>
-                </>
+                // Avertissement non bloquant (D5) au survol si la balance n'est pas
+                // à zéro ; le compteur visible vit dans la card « Reste à faire ».
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  onClick={handleClose}
+                  aria-label="Clôturer le rapprochement"
+                  title={
+                    rec.pending > 0
+                      ? `Clôturer (${rec.pending} chambre(s) encore à faire)`
+                      : 'Clôturer'
+                  }
+                >
+                  <LockOpen />
+                </Button>
               ) : (
                 // Jour clôturé → cadenas FERMÉ (état courant) ; l'action réouvre.
                 <Button
