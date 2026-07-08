@@ -159,3 +159,21 @@ export async function reopenSheet(reportDate: string): Promise<void> {
     .eq('report_date', reportDate)
   if (error) throw error
 }
+
+/**
+ * OCC officiel du PMS (nuitées vendues) pour une date `daily_reports`, ou null.
+ * LECTURE SEULE sur la table PARTAGÉE `daily_reports` (feature repjour) — sert de
+ * ligne de contrôle du rapprochement. Attention au décalage de datage : le jour
+ * rapro D correspond à `daily_reports.date = D − 1` (voir l'appelant).
+ */
+export async function fetchOfficialOcc(date: string): Promise<number | null> {
+  const { data, error } = await supabase
+    .from('daily_reports')
+    .select('rj_nuitees')
+    .eq('date', date)
+    .limit(1)
+    .maybeSingle()
+  if (error) throw error
+  const n = data?.rj_nuitees
+  return typeof n === 'number' ? n : null
+}

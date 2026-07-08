@@ -34,6 +34,7 @@ import {
   fetchServiceDates,
 } from '#/lib/pdj/service.ts'
 import { parseDateStr } from '#/lib/poster/dateFormatter.ts'
+import { isEcartNul, reconcileAccounting } from '#/lib/rapro/accounting.ts'
 import {
   carryOver,
   carryoverWindow,
@@ -54,10 +55,12 @@ import { isReconciled, reconcile } from '#/lib/rapro/reconcile.ts'
 import { FLOORS } from '#/lib/rapro/rooms.ts'
 import {
   fetchDay,
+  fetchOfficialOcc,
   fetchOldestDay,
   fetchSheet,
   reopenSheet,
   saveComment,
+  saveSheetNumbers,
   setStatus,
   validateSheet,
 } from '#/lib/rapro/service.ts'
@@ -124,7 +127,21 @@ export function RaproBoard() {
   useEffect(() => {
     setComment(sheet?.comment ?? '')
   }, [sheet?.reportDate, sheet?.comment])
+  // Nombres saisis côté Réception (mêmes patrons que le commentaire).
+  const [lateArrivals, setLateArrivals] = useState(0)
+  const [corrections, setCorrections] = useState(0)
+  useEffect(() => {
+    setLateArrivals(sheet?.lateArrivals ?? 0)
+    setCorrections(sheet?.corrections ?? 0)
+  }, [sheet?.reportDate, sheet?.lateArrivals, sheet?.corrections])
   const [pdfBusy, setPdfBusy] = useState(false)
+
+  // OCC officiel du PMS à J-1 (décalage de datage) — ligne de contrôle informative,
+  // absente si le RepJour n'a pas été importé ce jour-là.
+  const { data: officialOcc } = useQuery({
+    queryKey: ['rapro', 'occ-control', addDays(selectedDate, -1)],
+    queryFn: () => fetchOfficialOcc(addDays(selectedDate, -1)),
+  })
 
   // Occupation PAR CHAMBRE (PDJ) : source unique des chambres vendues + du grisé.
   const { data: pdjRows } = useQuery({
@@ -173,6 +190,18 @@ export function RaproBoard() {
   // incomplet : on le signale via la bannière d'erreur (pas de sous-comptage muet).
   const windowError =
     raproWindow.some((q) => q.isError) || pdjWindow.some((q) => q.isError)
+
+  // Rapprochement comptable DU JOUR (Réception vs Étages) — bloquées = jour seul
+  // (stats.todo, hors roulement) ; l'OCC officiel n'est qu'une ligne de contrôle.
+  const acct = reconcileAccounting({
+    occupancy: occupied.size,
+    lateArrivals,
+    corrections,
+    clean: stats.clean,
+    refus: stats.refus,
+    blocked: stats.todo,
+    officialOcc: officialOcc ?? null,
+  })
 
   function goStep(delta: number) {
     setSelectedDate((cur) => clampDay(addDays(cur, delta), lowerDay, todayStr))
@@ -251,6 +280,29 @@ export function RaproBoard() {
   }
   function handleReopen() {
     refreshSheet(() => reopenSheet(selectedDate))
+  }
+  // Sauvegarde des nombres Réception (au blur) : maj optimiste du cache sheet
+  // (sinon l'hydratation ré-injecte l'ancienne valeur), puis upsert partiel.
+  function saveNumbers() {
+    if (!canEditFields) return
+    queryClient.setQueryData<RaproSheet | null>(
+      ['rapro', 'sheet', selectedDate],
+      (prev) =>
+        prev
+          ? { ...prev, lateArrivals, corrections }
+          : {
+              reportDate: selectedDate,
+              status: 'draft',
+              comment: '',
+              lateArrivals,
+              corrections,
+              validatedAt: null,
+            },
+    )
+    saveSheetNumbers(selectedDate, {
+      late_arrivals: lateArrivals,
+      corrections,
+    }).catch(() => {})
   }
   async function handleGeneratePdf() {
     setPdfBusy(true)
@@ -501,6 +553,84 @@ export function RaproBoard() {
           </span>
         </div>
       )}
+
+      <div className="rapro-recap">
+        <div className="rapro-recap-col">
+          <h3 className="rapro-recap-title">Réception</h3>
+          <div className="rapro-recap-line">
+            <span>Occupées</span>
+            <span className="rapro-recap-num">{occupied.size}</span>
+          </div>
+          <div className="rapro-recap-line">
+            <span>+ Arrivées après clôture</span>
+            <input
+              type="number"
+              className="rapro-recap-input"
+              value={lateArrivals}
+              disabled={!canEditFields}
+              onChange={(e) => setLateArrivals(Number(e.target.value) || 0)}
+              onBlur={saveNumbers}
+              aria-label="Arrivées après clôture"
+            />
+          </div>
+          <div className="rapro-recap-line">
+            <span>± Corrections</span>
+            <input
+              type="number"
+              className="rapro-recap-input"
+              value={corrections}
+              disabled={!canEditFields}
+              onChange={(e) => setCorrections(Number(e.target.value) || 0)}
+              onBlur={saveNumbers}
+              aria-label="Corrections"
+            />
+          </div>
+          <div className="rapro-recap-total">
+            <span>Total Réception</span>
+            <span className="rapro-recap-num">{acct.reception}</span>
+          </div>
+          {acct.officialOcc !== null && (
+            <div className="rapro-recap-control">
+              OCC PMS (J-1) : {acct.officialOcc}
+              {acct.occGap !== null && acct.occGap !== 0
+                ? ` · écart ${acct.occGap > 0 ? '+' : ''}${acct.occGap}`
+                : ''}
+            </div>
+          )}
+        </div>
+
+        <div className="rapro-recap-col">
+          <h3 className="rapro-recap-title">Étages</h3>
+          <div className="rapro-recap-line">
+            <span>Nettoyées</span>
+            <span className="rapro-recap-num">{acct.clean}</span>
+          </div>
+          <div className="rapro-recap-line">
+            <span>Refus</span>
+            <span className="rapro-recap-num">{acct.refus}</span>
+          </div>
+          <div className="rapro-recap-line">
+            <span>Bloquées (jour)</span>
+            <span className="rapro-recap-num">{acct.blocked}</span>
+          </div>
+          <div className="rapro-recap-total">
+            <span>Total Étages</span>
+            <span className="rapro-recap-num">{acct.etages}</span>
+          </div>
+        </div>
+
+        <div
+          className={cn('rapro-recap-ecart', isEcartNul(acct) && 'is-ok')}
+          title={
+            isEcartNul(acct)
+              ? 'Réception = Étages'
+              : 'Écart : vérifier arrivées après clôture, bloquées, ou échanger Réception/Gouvernante'
+          }
+        >
+          <span className="rapro-recap-ecart-label">Écart</span>
+          <span className="rapro-recap-ecart-value">{acct.ecart}</span>
+        </div>
+      </div>
 
       <div className="rapro-comment">
         <h2 className="rapro-comment-title">Commentaires</h2>
