@@ -169,6 +169,10 @@ export function RaproBoard() {
   // État vide seulement si aucune occupation ce jour ET aucune reportée.
   const showEmptyState = noOccupancy && carried.size === 0
   const isDue = (room: number) => occupied.has(room) || carried.has(room)
+  // Erreur réseau persistante sur un jour de la fenêtre → roulement possiblement
+  // incomplet : on le signale via la bannière d'erreur (pas de sous-comptage muet).
+  const windowError =
+    raproWindow.some((q) => q.isError) || pdjWindow.some((q) => q.isError)
 
   function goStep(delta: number) {
     setSelectedDate((cur) => clampDay(addDays(cur, delta), lowerDay, todayStr))
@@ -365,7 +369,7 @@ export function RaproBoard() {
         }
       />
 
-      {(isError || oldestError) && (
+      {(isError || oldestError || windowError) && (
         <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
           Impossible de charger les données (connexion ?). La navigation dans
           l'historique peut être limitée ; réessayez en changeant de jour puis
