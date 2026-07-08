@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useNavigate } from '@tanstack/react-router'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft } from 'lucide-react'
 
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
@@ -17,17 +18,18 @@ import { printRaproMonthly } from '#/lib/rapro/pdf.ts'
 import { cn } from '#/lib/utils.ts'
 
 /**
- * Récap mensuel ELIOR : nombre de chambres nettoyées jour par jour + total du
- * mois (facturable). Navigation par mois ; export PDF. Les données viennent de
- * rapro_rooms (status='nettoyee'), agrégées par jour.
+ * Détail d'un MOIS : nombre de chambres nettoyées jour par jour + total du mois
+ * (facturable ELIOR), export PDF. Le mois vient des params de route ; retour à la
+ * vue annuelle par le bouton chevron.
  */
-export function RaproMonthlyBoard() {
-  const now = new Date()
-  const [ym, setYm] = useState({
-    year: now.getFullYear(),
-    month: now.getMonth() + 1,
-  })
-  const { year, month } = ym
+export function RaproMonthlyBoard({
+  year,
+  month,
+}: {
+  year: number
+  month: number
+}) {
+  const navigate = useNavigate()
   const bounds = monthBounds(year, month)
 
   const { data: byDay } = useQuery({
@@ -40,21 +42,6 @@ export function RaproMonthlyBoard() {
     locale: fr,
   })
   const monthLabel = rawLabel.charAt(0).toUpperCase() + rawLabel.slice(1)
-
-  // Pas de navigation dans le futur (mois courant = borne haute).
-  const atLatest =
-    year > now.getFullYear() ||
-    (year === now.getFullYear() && month >= now.getMonth() + 1)
-
-  function step(delta: number) {
-    setYm((cur) => {
-      const m0 = cur.month - 1 + delta
-      return {
-        year: cur.year + Math.floor(m0 / 12),
-        month: ((m0 % 12) + 12) % 12 + 1,
-      }
-    })
-  }
 
   const [busy, setBusy] = useState(false)
   async function exportPdf() {
@@ -74,25 +61,16 @@ export function RaproMonthlyBoard() {
   return (
     <div className="flex flex-1 flex-col gap-4">
       <PageHeader
-        title={`Récap ménage — ${monthLabel}`}
+        title={`Ménage, ${monthLabel}`}
         actions={
           <>
             <Button
               variant="outline"
               size="icon-sm"
-              onClick={() => step(-1)}
-              aria-label="Mois précédent"
+              onClick={() => navigate({ to: '/rapro-mois' })}
+              aria-label="Retour au récap annuel"
             >
               <ChevronLeft />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon-sm"
-              onClick={() => step(1)}
-              disabled={atLatest}
-              aria-label="Mois suivant"
-            >
-              <ChevronRight />
             </Button>
             <PrintButton onClick={exportPdf} disabled={busy} />
           </>

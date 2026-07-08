@@ -10,7 +10,6 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as RepjourRouteImport } from './routes/repjour'
-import { Route as RaproMoisRouteImport } from './routes/rapro-mois'
 import { Route as RaproRouteImport } from './routes/rapro'
 import { Route as ProfilRouteImport } from './routes/profil'
 import { Route as PdjRouteImport } from './routes/pdj'
@@ -22,17 +21,14 @@ import { Route as CaisseRouteImport } from './routes/caisse'
 import { Route as AffichageRouteImport } from './routes/affichage'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as RepjourIndexRouteImport } from './routes/repjour/index'
+import { Route as RaproMoisIndexRouteImport } from './routes/rapro-mois/index'
 import { Route as RepjourAnalytiqueIndexRouteImport } from './routes/repjour/analytique.index'
+import { Route as RaproMoisYearMonthRouteImport } from './routes/rapro-mois/$year.$month'
 import { Route as RepjourAnalytiqueYearMonthRouteImport } from './routes/repjour/analytique.$year.$month'
 
 const RepjourRoute = RepjourRouteImport.update({
   id: '/repjour',
   path: '/repjour',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RaproMoisRoute = RaproMoisRouteImport.update({
-  id: '/rapro-mois',
-  path: '/rapro-mois',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RaproRoute = RaproRouteImport.update({
@@ -90,10 +86,20 @@ const RepjourIndexRoute = RepjourIndexRouteImport.update({
   path: '/',
   getParentRoute: () => RepjourRoute,
 } as any)
+const RaproMoisIndexRoute = RaproMoisIndexRouteImport.update({
+  id: '/rapro-mois/',
+  path: '/rapro-mois/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RepjourAnalytiqueIndexRoute = RepjourAnalytiqueIndexRouteImport.update({
   id: '/analytique/',
   path: '/analytique/',
   getParentRoute: () => RepjourRoute,
+} as any)
+const RaproMoisYearMonthRoute = RaproMoisYearMonthRouteImport.update({
+  id: '/rapro-mois/$year/$month',
+  path: '/rapro-mois/$year/$month',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const RepjourAnalytiqueYearMonthRoute =
   RepjourAnalytiqueYearMonthRouteImport.update({
@@ -113,9 +119,10 @@ export interface FileRoutesByFullPath {
   '/pdj': typeof PdjRoute
   '/profil': typeof ProfilRoute
   '/rapro': typeof RaproRoute
-  '/rapro-mois': typeof RaproMoisRoute
   '/repjour': typeof RepjourRouteWithChildren
+  '/rapro-mois/': typeof RaproMoisIndexRoute
   '/repjour/': typeof RepjourIndexRoute
+  '/rapro-mois/$year/$month': typeof RaproMoisYearMonthRoute
   '/repjour/analytique/': typeof RepjourAnalytiqueIndexRoute
   '/repjour/analytique/$year/$month': typeof RepjourAnalytiqueYearMonthRoute
 }
@@ -130,8 +137,9 @@ export interface FileRoutesByTo {
   '/pdj': typeof PdjRoute
   '/profil': typeof ProfilRoute
   '/rapro': typeof RaproRoute
-  '/rapro-mois': typeof RaproMoisRoute
+  '/rapro-mois': typeof RaproMoisIndexRoute
   '/repjour': typeof RepjourIndexRoute
+  '/rapro-mois/$year/$month': typeof RaproMoisYearMonthRoute
   '/repjour/analytique': typeof RepjourAnalytiqueIndexRoute
   '/repjour/analytique/$year/$month': typeof RepjourAnalytiqueYearMonthRoute
 }
@@ -147,9 +155,10 @@ export interface FileRoutesById {
   '/pdj': typeof PdjRoute
   '/profil': typeof ProfilRoute
   '/rapro': typeof RaproRoute
-  '/rapro-mois': typeof RaproMoisRoute
   '/repjour': typeof RepjourRouteWithChildren
+  '/rapro-mois/': typeof RaproMoisIndexRoute
   '/repjour/': typeof RepjourIndexRoute
+  '/rapro-mois/$year/$month': typeof RaproMoisYearMonthRoute
   '/repjour/analytique/': typeof RepjourAnalytiqueIndexRoute
   '/repjour/analytique/$year/$month': typeof RepjourAnalytiqueYearMonthRoute
 }
@@ -166,9 +175,10 @@ export interface FileRouteTypes {
     | '/pdj'
     | '/profil'
     | '/rapro'
-    | '/rapro-mois'
     | '/repjour'
+    | '/rapro-mois/'
     | '/repjour/'
+    | '/rapro-mois/$year/$month'
     | '/repjour/analytique/'
     | '/repjour/analytique/$year/$month'
   fileRoutesByTo: FileRoutesByTo
@@ -185,6 +195,7 @@ export interface FileRouteTypes {
     | '/rapro'
     | '/rapro-mois'
     | '/repjour'
+    | '/rapro-mois/$year/$month'
     | '/repjour/analytique'
     | '/repjour/analytique/$year/$month'
   id:
@@ -199,9 +210,10 @@ export interface FileRouteTypes {
     | '/pdj'
     | '/profil'
     | '/rapro'
-    | '/rapro-mois'
     | '/repjour'
+    | '/rapro-mois/'
     | '/repjour/'
+    | '/rapro-mois/$year/$month'
     | '/repjour/analytique/'
     | '/repjour/analytique/$year/$month'
   fileRoutesById: FileRoutesById
@@ -217,8 +229,9 @@ export interface RootRouteChildren {
   PdjRoute: typeof PdjRoute
   ProfilRoute: typeof ProfilRoute
   RaproRoute: typeof RaproRoute
-  RaproMoisRoute: typeof RaproMoisRoute
   RepjourRoute: typeof RepjourRouteWithChildren
+  RaproMoisIndexRoute: typeof RaproMoisIndexRoute
+  RaproMoisYearMonthRoute: typeof RaproMoisYearMonthRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -228,13 +241,6 @@ declare module '@tanstack/react-router' {
       path: '/repjour'
       fullPath: '/repjour'
       preLoaderRoute: typeof RepjourRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/rapro-mois': {
-      id: '/rapro-mois'
-      path: '/rapro-mois'
-      fullPath: '/rapro-mois'
-      preLoaderRoute: typeof RaproMoisRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/rapro': {
@@ -314,12 +320,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RepjourIndexRouteImport
       parentRoute: typeof RepjourRoute
     }
+    '/rapro-mois/': {
+      id: '/rapro-mois/'
+      path: '/rapro-mois'
+      fullPath: '/rapro-mois/'
+      preLoaderRoute: typeof RaproMoisIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/repjour/analytique/': {
       id: '/repjour/analytique/'
       path: '/analytique'
       fullPath: '/repjour/analytique/'
       preLoaderRoute: typeof RepjourAnalytiqueIndexRouteImport
       parentRoute: typeof RepjourRoute
+    }
+    '/rapro-mois/$year/$month': {
+      id: '/rapro-mois/$year/$month'
+      path: '/rapro-mois/$year/$month'
+      fullPath: '/rapro-mois/$year/$month'
+      preLoaderRoute: typeof RaproMoisYearMonthRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/repjour/analytique/$year/$month': {
       id: '/repjour/analytique/$year/$month'
@@ -357,8 +377,9 @@ const rootRouteChildren: RootRouteChildren = {
   PdjRoute: PdjRoute,
   ProfilRoute: ProfilRoute,
   RaproRoute: RaproRoute,
-  RaproMoisRoute: RaproMoisRoute,
   RepjourRoute: RepjourRouteWithChildren,
+  RaproMoisIndexRoute: RaproMoisIndexRoute,
+  RaproMoisYearMonthRoute: RaproMoisYearMonthRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

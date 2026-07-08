@@ -53,6 +53,22 @@ export async function fetchCleanedByRange(
   return byDay
 }
 
+/** Nombre total de chambres nettoyées sur `[from, to]`. Count SERVEUR (head:true),
+ * sans transfert de lignes — idéal pour la vue annuelle (12 comptages légers). */
+export async function fetchCleanedCount(
+  from: string,
+  to: string,
+): Promise<number> {
+  const { count, error } = await supabase
+    .from('rapro_rooms')
+    .select('*', { count: 'exact', head: true })
+    .eq('status', 'nettoyee')
+    .gte('report_date', from)
+    .lte('report_date', to)
+  if (error) throw error
+  return count ?? 0
+}
+
 /** Premier et dernier jour du mois, en 'YYYY-MM-DD'. */
 export function monthBounds(
   year: number,
