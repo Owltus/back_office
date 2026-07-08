@@ -5,7 +5,7 @@ import {
   type CSSProperties,
 } from 'react'
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from '@tanstack/react-router'
+import { Link } from '@tanstack/react-router'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import {
@@ -90,7 +90,6 @@ export function RaproBoard() {
   const { user, role } = useAuth()
   const isWriter = role === 'super_utilisateur' || role === 'admin'
   const queryClient = useQueryClient()
-  const navigate = useNavigate()
 
   const [selectedDate, setSelectedDate] = useState(() => today())
   const todayStr = today()
@@ -341,14 +340,11 @@ export function RaproBoard() {
         title={title}
         actions={
           <>
-            <Button
-              variant="outline"
-              size="icon-sm"
-              onClick={() => navigate({ to: '/rapro-mois' })}
-              aria-label="Récap mensuel (ELIOR)"
-              title="Récap mensuel (ELIOR)"
-            >
-              <CalendarDays />
+            <Button asChild variant="outline" size="sm">
+              <Link to="/rapro-mois" aria-label="Récap mensuel">
+                <CalendarDays />
+                <span className="hidden sm:inline">Récap</span>
+              </Link>
             </Button>
             {isWriter &&
               (!isValidated ? (
