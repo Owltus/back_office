@@ -34,7 +34,15 @@ import {
   fetchServiceDates,
 } from '#/lib/pdj/service.ts'
 import { parseDateStr } from '#/lib/poster/dateFormatter.ts'
-import { STATUS_LABEL, nextStatus } from '#/lib/rapro/constants.ts'
+import {
+  CELL_STATES,
+  cellState,
+  countStats,
+  LEGEND_ORDER,
+  nextStatus,
+  STATUS_LABEL,
+  statusOf,
+} from '#/lib/rapro/constants.ts'
 import { addDays, clampDay, today } from '#/lib/rapro/day.ts'
 import { printRaproSheet } from '#/lib/rapro/pdf.ts'
 import { FLOORS } from '#/lib/rapro/rooms.ts'
@@ -51,36 +59,6 @@ import type { RaproDay, RaproSheet, RoomStatus } from '#/lib/rapro/types.ts'
 import { cn } from '#/lib/utils.ts'
 
 const EMPTY: ReadonlyMap<number, RoomStatus> = new Map()
-
-/** Légende des couleurs de statut, affichée en bas du tableau. */
-const LEGEND: Array<{ mod?: string; label: string }> = [
-  { mod: 'is-clean', label: 'Nettoyée' },
-  { mod: 'is-todo', label: 'Bloquée' },
-  { mod: 'is-refus', label: 'Refus' },
-  { mod: 'is-noshow', label: 'No-show' },
-  { mod: 'is-empty', label: 'Non vendue' },
-]
-
-/** Décompte d'un jour : nettoyées / refus / no-show (tous), et « à faire »
- * (chambres occupées encore non nettoyées — a besoin de l'occupation). */
-function countStats(
-  statuses: ReadonlyMap<number, RoomStatus>,
-  occupied: Set<number>,
-): { clean: number; refus: number; noshow: number; todo: number } {
-  let clean = 0
-  let refus = 0
-  let noshow = 0
-  for (const s of statuses.values()) {
-    if (s === 'nettoyee') clean++
-    else if (s === 'refus') refus++
-    else if (s === 'noshow') noshow++
-  }
-  let todo = 0
-  for (const room of occupied) {
-    if ((statuses.get(room) ?? 'non_nettoyee') === 'non_nettoyee') todo++
-  }
-  return { clean, refus, noshow, todo }
-}
 
 /**
  * Rapprochement de chambres — suivi ménage par chambre et par jour.
@@ -176,58 +154,18 @@ export function RaproBoard() {
     setSelectedDate(clampDay(value, lowerDay, todayStr))
   }
 
-  // Fait défiler le statut d'une chambre (optimiste + persistance par chambre).
-  async function cycle(room: number) {
-    if (!canEditFields || !isSuccess) return
-    const key = ['rapro', 'day', selectedDate]
-    await queryClient.cancelQueries({ queryKey: key })
-    const prev = queryClient.getQueryData<RaproDay>(key)
-    const current = statuses.get(room) ?? 'non_nettoyee'
-    const next = nextStatus(current)
-    const nextStatuses = new Map(statuses)
-    if (next === 'non_nettoyee') nextStatuses.delete(room)
-    else nextStatuses.set(room, next)
-    queryClient.setQueryData<RaproDay>(key, {
-      reportDate: selectedDate,
-      statuses: nextStatuses,
-    })
-    try {
-      await setStatus(selectedDate, room, next)
-    } catch {
-      // Rollback réel : on restaure l'état d'avant (fiable même hors ligne).
-      queryClient.setQueryData(
-        key,
-        prev ?? { reportDate: selectedDate, statuses: new Map() },
-      )
-    }
-  }
-
-  // Bouton d'en-tête d'étage, À BASCULE : s'il reste des chambres OCCUPÉES à
-  // faire → toutes en « nettoyée » (laisse refus / no-show en l'état) ; sinon
-  // (rien à faire) → RETOUR ARRIÈRE : toute chambre de l'étage ayant un statut
-  // (nettoyée, refus, no-show — occupée OU non vendue) repasse en « non
-  // nettoyée » (une non vendue redevient alors grisée).
-  async function toggleFloor(rooms: number[]) {
-    if (!canEditFields || !isSuccess) return
-    const occRooms = rooms.filter((r) => occupied.has(r))
-    const toDo = occRooms.filter(
-      (r) => (statuses.get(r) ?? 'non_nettoyee') === 'non_nettoyee',
-    )
-    const forward = toDo.length > 0
-    const targets = forward
-      ? toDo
-      : rooms.filter(
-          (r) => (statuses.get(r) ?? 'non_nettoyee') !== 'non_nettoyee',
-        )
-    if (targets.length === 0) return
-    const newStatus: RoomStatus = forward ? 'nettoyee' : 'non_nettoyee'
+  // Écriture optimiste d'un lot de statuts (jour courant) : snapshot → maj cache
+  // → persistance parallèle → rollback réel par snapshot en cas d'échec (fiable
+  // même hors ligne). Chemin unique partagé par la chambre seule et l'étage.
+  async function applyStatuses(changes: Array<[number, RoomStatus]>) {
+    if (!canEditFields || !isSuccess || changes.length === 0) return
     const key = ['rapro', 'day', selectedDate]
     await queryClient.cancelQueries({ queryKey: key })
     const prev = queryClient.getQueryData<RaproDay>(key)
     const nextStatuses = new Map(statuses)
-    for (const r of targets) {
-      if (newStatus === 'non_nettoyee') nextStatuses.delete(r)
-      else nextStatuses.set(r, newStatus)
+    for (const [room, status] of changes) {
+      if (status === 'non_nettoyee') nextStatuses.delete(room)
+      else nextStatuses.set(room, status)
     }
     queryClient.setQueryData<RaproDay>(key, {
       reportDate: selectedDate,
@@ -235,7 +173,7 @@ export function RaproBoard() {
     })
     try {
       await Promise.all(
-        targets.map((r) => setStatus(selectedDate, r, newStatus)),
+        changes.map(([room, status]) => setStatus(selectedDate, room, status)),
       )
     } catch {
       queryClient.setQueryData(
@@ -245,30 +183,47 @@ export function RaproBoard() {
     }
   }
 
-  // --- Clôture / réouverture / impression (feuille jour) -------------------
-  async function handleClose() {
-    if (!user) return
-    try {
-      await saveComment(selectedDate, comment)
-      await validateSheet(selectedDate, user.id)
-    } catch {
-      // Échec silencieux : l'invalidation ci-dessous rétablit l'état réel.
-    } finally {
-      queryClient.invalidateQueries({
-        queryKey: ['rapro', 'sheet', selectedDate],
-      })
-    }
+  // Fait défiler le statut d'une chambre au clic.
+  function cycle(room: number) {
+    return applyStatuses([[room, nextStatus(statusOf(statuses, room))]])
   }
-  async function handleReopen() {
-    try {
-      await reopenSheet(selectedDate)
-    } catch {
-      // Échec silencieux : l'invalidation ci-dessous rétablit l'état réel.
-    } finally {
-      queryClient.invalidateQueries({
-        queryKey: ['rapro', 'sheet', selectedDate],
-      })
-    }
+
+  // Bouton d'en-tête d'étage, À BASCULE : s'il reste des chambres OCCUPÉES à
+  // faire → toutes en « nettoyée » (laisse refus / no-show en l'état) ; sinon
+  // (rien à faire) → RETOUR ARRIÈRE : toute chambre de l'étage ayant un statut
+  // (nettoyée, refus, no-show — occupée OU non vendue) repasse en « non
+  // nettoyée » (une non vendue redevient alors grisée).
+  function toggleFloor(rooms: number[]) {
+    const toDo = rooms.filter(
+      (r) => occupied.has(r) && statusOf(statuses, r) === 'non_nettoyee',
+    )
+    const forward = toDo.length > 0
+    const targets = forward
+      ? toDo
+      : rooms.filter((r) => statusOf(statuses, r) !== 'non_nettoyee')
+    const newStatus: RoomStatus = forward ? 'nettoyee' : 'non_nettoyee'
+    return applyStatuses(targets.map((r): [number, RoomStatus] => [r, newStatus]))
+  }
+
+  // --- Clôture / réouverture / impression (feuille jour) -------------------
+  // Exécute une mutation de feuille puis resynchronise le cache (échec
+  // silencieux : l'invalidation rétablit l'état réel du serveur).
+  function refreshSheet(run: () => Promise<void>) {
+    run()
+      .catch(() => {})
+      .finally(() =>
+        queryClient.invalidateQueries({
+          queryKey: ['rapro', 'sheet', selectedDate],
+        }),
+      )
+  }
+  function handleClose() {
+    if (!user) return
+    // Commentaire écrit dans le même upsert que la clôture (une seule requête).
+    refreshSheet(() => validateSheet(selectedDate, user.id, comment))
+  }
+  function handleReopen() {
+    refreshSheet(() => reopenSheet(selectedDate))
   }
   async function handleGeneratePdf() {
     setPdfBusy(true)
@@ -427,12 +382,10 @@ export function RaproBoard() {
         <div className={cn('rapro-floors', !canEditFields && 'is-locked')}>
           {FLOORS.map(({ floor, rooms }) => {
             const hasToDo = rooms.some(
-              (r) =>
-                occupied.has(r) &&
-                (statuses.get(r) ?? 'non_nettoyee') === 'non_nettoyee',
+              (r) => occupied.has(r) && statusOf(statuses, r) === 'non_nettoyee',
             )
             const hasResolved = rooms.some(
-              (r) => (statuses.get(r) ?? 'non_nettoyee') !== 'non_nettoyee',
+              (r) => statusOf(statuses, r) !== 'non_nettoyee',
             )
             // Icône ↺ (retour arrière) dès qu'il n'y a plus rien à nettoyer mais
             // qu'il reste des statuts à réinitialiser (y compris non vendues).
@@ -468,18 +421,9 @@ export function RaproBoard() {
                 </div>
                 <div className="rapro-rooms">
                   {rooms.map((room) => {
-                    const status = statuses.get(room) ?? 'non_nettoyee'
+                    const status = statusOf(statuses, room)
                     const isEmpty = hasOccupancy && !occupied.has(room)
-                    const cls =
-                      status === 'nettoyee'
-                        ? 'rapro-room-clean'
-                        : status === 'refus'
-                          ? 'rapro-room-refus'
-                          : status === 'noshow'
-                            ? 'rapro-room-noshow'
-                            : isEmpty
-                              ? 'rapro-room-empty'
-                              : 'rapro-room-todo'
+                    const cls = CELL_STATES[cellState(status, isEmpty)].webClass
                     return (
                       <button
                         key={room}
@@ -503,10 +447,12 @@ export function RaproBoard() {
 
       {!noOccupancy && (
         <div className="rapro-legend">
-          {LEGEND.map((it) => (
-            <span key={it.label} className="rapro-legend-item">
-              <span className={cn('rapro-legend-dot', it.mod)} />
-              {it.label}
+          {LEGEND_ORDER.map((st) => (
+            <span key={st} className="rapro-legend-item">
+              <span
+                className={cn('rapro-legend-dot', CELL_STATES[st].legendMod)}
+              />
+              {CELL_STATES[st].label}
             </span>
           ))}
         </div>
