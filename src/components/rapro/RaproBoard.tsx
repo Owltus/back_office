@@ -417,42 +417,42 @@ export function RaproBoard() {
             label="Vendues"
             icon={BedDouble}
             accent="#818cf8"
-            hint="Chambres occupées cette nuit selon le PDJ. C'est le « dû » du jour : ce qu'il y a à traiter. « — » si le rapport PDJ du jour n'est pas importé."
+            hint="Chambres occupées cette nuit : le total à traiter au ménage aujourd'hui."
           />
           <Stat
             value={stats.clean}
             label="Nettoyées"
             icon={Sparkles}
             accent="#34d399"
-            hint="Chambres marquées « nettoyée » aujourd'hui. C'est ce qui est facturable par ELIOR (peu importe le jour où le ménage est fait)."
+            hint="Chambres dont le ménage a été fait aujourd'hui — la base de la facturation du prestataire."
           />
           <Stat
             value={hasDue ? rec.pending : '—'}
             label="Reste à faire"
             icon={Scale}
             accent={reconciled ? '#34d399' : '#fbbf24'}
-            hint="Chambres occupées encore à nettoyer aujourd'hui, reportées comprises. À 0 (vert) = tout est nettoyé ou justifié : journée équilibrée."
+            hint="Chambres encore à nettoyer aujourd'hui, reportées comprises. À zéro (vert) : tout est fait ou justifié."
           />
           <Stat
             value={carried.size}
             label="Reportées"
             icon={History}
             accent="#fb923c"
-            hint="Chambres non faites un jour précédent, jamais résolues depuis : elles « roulent » et réapparaissent ici jusqu'à être nettoyées, en refus ou en no-show."
+            hint="Chambres non faites un jour précédent, encore à traiter : elles restent affichées jusqu'à être nettoyées, refusées ou en no-show."
           />
           <Stat
             value={stats.refus}
             label="Refus"
             icon={Ban}
             accent="#fbbf24"
-            hint="Client présent ayant refusé le ménage. La chambre n'a pas de ménage dû ce jour → non facturée."
+            hint="Client présent ayant refusé le ménage : chambre non faite, mais justifiée."
           />
           <Stat
             value={stats.noshow}
             label="No-show"
             icon={UserX}
             accent="#64748b"
-            hint="Chambre vendue mais client jamais venu : rien à nettoyer. Hors facturation."
+            hint="Chambre réservée mais client jamais arrivé : rien à nettoyer."
           />
         </div>
       </TooltipProvider>
