@@ -417,42 +417,42 @@ export function RaproBoard() {
             label="Vendues"
             icon={BedDouble}
             accent="#818cf8"
-            hint="Chambres occupées cette nuit : le total à traiter au ménage aujourd'hui."
+            hint="Chambres occupées cette nuit, le total à traiter au ménage aujourd'hui."
           />
           <Stat
             value={stats.clean}
             label="Nettoyées"
             icon={Sparkles}
             accent="#34d399"
-            hint="Chambres dont le ménage a été fait aujourd'hui — la base de la facturation du prestataire."
+            hint="Chambres dont le ménage a été fait aujourd'hui. Base de la facturation du prestataire."
           />
           <Stat
             value={hasDue ? rec.pending : '—'}
             label="Reste à faire"
             icon={Scale}
             accent={reconciled ? '#34d399' : '#fbbf24'}
-            hint="Chambres encore à nettoyer aujourd'hui, reportées comprises. À zéro (vert) : tout est fait ou justifié."
+            hint="Chambres encore à nettoyer aujourd'hui, reportées comprises. À zéro (vert), tout est fait ou justifié."
           />
           <Stat
             value={carried.size}
             label="Reportées"
             icon={History}
             accent="#fb923c"
-            hint="Chambres non faites un jour précédent, encore à traiter : elles restent affichées jusqu'à être nettoyées, refusées ou en no-show."
+            hint="Chambres non faites un jour précédent, encore à traiter. Elles restent affichées jusqu'à être nettoyées, refusées ou en no-show."
           />
           <Stat
             value={stats.refus}
             label="Refus"
             icon={Ban}
             accent="#fbbf24"
-            hint="Client présent ayant refusé le ménage : chambre non faite, mais justifiée."
+            hint="Client présent ayant refusé le ménage. Chambre non faite mais justifiée."
           />
           <Stat
             value={stats.noshow}
             label="No-show"
             icon={UserX}
             accent="#64748b"
-            hint="Chambre réservée mais client jamais arrivé : rien à nettoyer."
+            hint="Chambre réservée mais client jamais arrivé, rien à nettoyer."
           />
         </div>
       </TooltipProvider>
