@@ -4,7 +4,7 @@ import {
   type ComponentType,
   type CSSProperties,
 } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import {
@@ -13,12 +13,12 @@ import {
   CheckCheck,
   ChevronLeft,
   ChevronRight,
-  Clock,
   History,
   Info,
   Lock,
   LockOpen,
   RotateCcw,
+  Scale,
   Sparkles,
   UserX,
 } from 'lucide-react'
@@ -35,6 +35,11 @@ import {
 } from '#/lib/pdj/service.ts'
 import { parseDateStr } from '#/lib/poster/dateFormatter.ts'
 import {
+  carryOver,
+  carryoverWindow,
+  type DaySnapshot,
+} from '#/lib/rapro/carryover.ts'
+import {
   CELL_STATES,
   cellState,
   countStats,
@@ -45,6 +50,7 @@ import {
 } from '#/lib/rapro/constants.ts'
 import { addDays, clampDay, today } from '#/lib/rapro/day.ts'
 import { printRaproSheet } from '#/lib/rapro/pdf.ts'
+import { isReconciled, reconcile } from '#/lib/rapro/reconcile.ts'
 import { FLOORS } from '#/lib/rapro/rooms.ts'
 import {
   fetchDay,
@@ -77,7 +83,6 @@ export function RaproBoard() {
 
   const [selectedDate, setSelectedDate] = useState(() => today())
   const todayStr = today()
-  const yesterday = addDays(selectedDate, -1)
 
   const { data: oldestDay, isError: oldestError } = useQuery({
     queryKey: ['rapro', 'oldest'],
@@ -121,12 +126,6 @@ export function RaproBoard() {
   }, [sheet?.reportDate, sheet?.comment])
   const [pdfBusy, setPdfBusy] = useState(false)
 
-  // Veille (card « … hier ») : mêmes clés → cache partagé avec la navigation.
-  const { data: yDay } = useQuery({
-    queryKey: ['rapro', 'day', yesterday],
-    queryFn: () => fetchDay(yesterday),
-  })
-
   // Occupation PAR CHAMBRE (PDJ) : source unique des chambres vendues + du grisé.
   const { data: pdjRows } = useQuery({
     queryKey: ['pdj', 'day', selectedDate],
@@ -137,15 +136,39 @@ export function RaproBoard() {
   // Requête PDJ résolue mais vide → occupation indisponible ce jour (≠ chargement).
   const noOccupancy = pdjRows !== undefined && occupied.size === 0
 
-  const { data: yPdj } = useQuery({
-    queryKey: ['pdj', 'day', yesterday],
-    queryFn: () => fetchPdjDay(yesterday),
-  })
-  const yOccupied = new Set((yPdj ?? []).map((r) => r.room))
-  const hasYOccupancy = yOccupied.size > 0
-
   const stats = countStats(statuses, occupied)
-  const yStats = countStats(yDay?.statuses ?? EMPTY, yOccupied)
+
+  // Roulement (report) DÉRIVÉ : on relit une fenêtre bornée de jours précédents
+  // (statuts rapro + occupation PDJ), mêmes clés → cache partagé avec la
+  // navigation. `carried` = chambres dues antérieurement, jamais résolues depuis.
+  const windowDays = carryoverWindow(selectedDate, lowerDay)
+  const raproWindow = useQueries({
+    queries: windowDays.map((d) => ({
+      queryKey: ['rapro', 'day', d],
+      queryFn: () => fetchDay(d),
+    })),
+  })
+  const pdjWindow = useQueries({
+    queries: windowDays.map((d) => ({
+      queryKey: ['pdj', 'day', d],
+      queryFn: () => fetchPdjDay(d),
+    })),
+  })
+  const past: DaySnapshot[] = windowDays.map((_, i) => ({
+    statuses: raproWindow[i]?.data?.statuses ?? EMPTY,
+    occupied: new Set((pdjWindow[i]?.data ?? []).map((r) => r.room)),
+  }))
+  const carried = carryOver(past, { statuses, occupied })
+
+  // Réconciliation sur le DÛ ÉLARGI (occupées du jour ∪ reportées).
+  const dueSet = new Set(occupied)
+  for (const r of carried) dueSet.add(r)
+  const rec = reconcile(statuses, dueSet)
+  const reconciled = isReconciled(rec)
+  const hasDue = dueSet.size > 0
+  // État vide seulement si aucune occupation ce jour ET aucune reportée.
+  const showEmptyState = noOccupancy && carried.size === 0
+  const isDue = (room: number) => occupied.has(room) || carried.has(room)
 
   function goStep(delta: number) {
     setSelectedDate((cur) => clampDay(addDays(cur, delta), lowerDay, todayStr))
@@ -195,7 +218,7 @@ export function RaproBoard() {
   // nettoyée » (une non vendue redevient alors grisée).
   function toggleFloor(rooms: number[]) {
     const toDo = rooms.filter(
-      (r) => occupied.has(r) && statusOf(statuses, r) === 'non_nettoyee',
+      (r) => isDue(r) && statusOf(statuses, r) === 'non_nettoyee',
     )
     const forward = toDo.length > 0
     const targets = forward
@@ -268,15 +291,30 @@ export function RaproBoard() {
             {isWriter &&
               (!isValidated ? (
                 // Jour éditable → cadenas OUVERT (état courant) ; l'action clôture.
-                <Button
-                  variant="outline"
-                  size="icon-sm"
-                  onClick={handleClose}
-                  aria-label="Clôturer le rapprochement"
-                  title="Clôturer"
-                >
-                  <LockOpen />
-                </Button>
+                // Avertissement non bloquant (D5) si la balance n'est pas à zéro.
+                <>
+                  {rec.pending > 0 && (
+                    <span
+                      className="rapro-close-warn"
+                      title="Chambres encore à faire (reportées incluses)"
+                    >
+                      {rec.pending} à faire
+                    </span>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="icon-sm"
+                    onClick={handleClose}
+                    aria-label="Clôturer le rapprochement"
+                    title={
+                      rec.pending > 0
+                        ? `Clôturer (${rec.pending} chambre(s) encore à faire)`
+                        : 'Clôturer'
+                    }
+                  >
+                    <LockOpen />
+                  </Button>
+                </>
               ) : (
                 // Jour clôturé → cadenas FERMÉ (état courant) ; l'action réouvre.
                 <Button
@@ -347,14 +385,14 @@ export function RaproBoard() {
           accent="#34d399"
         />
         <Stat
-          value={hasOccupancy ? stats.todo : '—'}
-          label="Bloquées"
-          icon={Clock}
-          accent="#f87171"
+          value={hasDue ? rec.pending : '—'}
+          label="Reste à faire"
+          icon={Scale}
+          accent={reconciled ? '#34d399' : '#fbbf24'}
         />
         <Stat
-          value={hasYOccupancy ? yStats.todo : '—'}
-          label="Bloquées de la veille"
+          value={carried.size}
+          label="Reportées"
           icon={History}
           accent="#fb923c"
         />
@@ -367,7 +405,7 @@ export function RaproBoard() {
         />
       </div>
 
-      {noOccupancy ? (
+      {showEmptyState ? (
         <div className="rapro-card">
           <div className="rapro-empty">
             <Info className="rapro-empty-icon" />
@@ -382,7 +420,7 @@ export function RaproBoard() {
         <div className={cn('rapro-floors', !canEditFields && 'is-locked')}>
           {FLOORS.map(({ floor, rooms }) => {
             const hasToDo = rooms.some(
-              (r) => occupied.has(r) && statusOf(statuses, r) === 'non_nettoyee',
+              (r) => isDue(r) && statusOf(statuses, r) === 'non_nettoyee',
             )
             const hasResolved = rooms.some(
               (r) => statusOf(statuses, r) !== 'non_nettoyee',
@@ -422,7 +460,8 @@ export function RaproBoard() {
                 <div className="rapro-rooms">
                   {rooms.map((room) => {
                     const status = statusOf(statuses, room)
-                    const isEmpty = hasOccupancy && !occupied.has(room)
+                    const isEmpty = hasDue && !isDue(room)
+                    const isCarried = carried.has(room)
                     const cls = CELL_STATES[cellState(status, isEmpty)].webClass
                     return (
                       <button
@@ -430,9 +469,13 @@ export function RaproBoard() {
                         type="button"
                         onClick={() => cycle(room)}
                         disabled={!isSuccess}
-                        aria-label={`Chambre ${room} — ${STATUS_LABEL[status]}${isEmpty ? ' — non vendue' : ''}`}
-                        title={`${STATUS_LABEL[status]}${isEmpty ? ' · non vendue' : ''}`}
-                        className={cn('rapro-room', cls)}
+                        aria-label={`Chambre ${room} — ${STATUS_LABEL[status]}${isEmpty ? ' — non vendue' : ''}${isCarried ? ' — reportée' : ''}`}
+                        title={`${STATUS_LABEL[status]}${isEmpty ? ' · non vendue' : ''}${isCarried ? ' · reportée' : ''}`}
+                        className={cn(
+                          'rapro-room',
+                          cls,
+                          isCarried && 'rapro-room-reportee',
+                        )}
                       >
                         {room}
                       </button>
@@ -445,7 +488,7 @@ export function RaproBoard() {
         </div>
       )}
 
-      {!noOccupancy && (
+      {!showEmptyState && (
         <div className="rapro-legend">
           {LEGEND_ORDER.map((st) => (
             <span key={st} className="rapro-legend-item">
@@ -455,6 +498,10 @@ export function RaproBoard() {
               {CELL_STATES[st].label}
             </span>
           ))}
+          <span className="rapro-legend-item">
+            <span className="rapro-legend-dot is-reportee" />
+            Reportée
+          </span>
         </div>
       )}
 

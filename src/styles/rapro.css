@@ -190,6 +190,21 @@
   background: color-mix(in oklab, #a78bfa 18%, transparent);
   border-color: color-mix(in oklab, #a78bfa 45%, transparent);
 }
+/* Reportée (dûe un jour précédent, jamais résolue) : marqueur ADDITIF (pastille
+   d'angle orange), superposé à la couleur de statut — garde son état visuel. */
+.rapro-room-reportee {
+  position: relative;
+}
+.rapro-room-reportee::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: #fb923c;
+}
 .rapro-room-clean:hover:not(:disabled),
 .rapro-room-refus:hover:not(:disabled),
 .rapro-room-noshow:hover:not(:disabled),
@@ -258,6 +273,16 @@
   color: var(--muted-foreground);
 }
 
+/* Avertissement de clôture NON bloquant (balance ≠ 0), affiché dans le header. */
+.rapro-close-warn {
+  align-self: center;
+  padding: 0 0.3rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #fbbf24;
+  white-space: nowrap;
+}
+
 /* --- Zone commentaire (clôture) ----------------------------------------- */
 .rapro-comment {
   display: flex;
@@ -302,6 +327,9 @@
 }
 .rapro-legend-dot.is-noshow {
   background: #a78bfa;
+}
+.rapro-legend-dot.is-reportee {
+  background: #fb923c;
 }
 .rapro-legend-dot.is-empty {
   background: transparent;
