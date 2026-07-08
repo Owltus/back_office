@@ -1,0 +1,287 @@
+/* ------------------------------------------------------------------ *
+ * Rapprochement de chambres — suivi ménage compact (housekeeping)      *
+ * UNE carte par étage (titre centré + bouton « tout nettoyer ») ; les  *
+ * chambres y sont EMPILÉES en pastilles. Un clic fait défiler le       *
+ * statut ; la couleur = le statut.                                     *
+ *   vert    = nettoyée                                                  *
+ *   ambre   = refus de service                                         *
+ *   ardoise = no-show (vendue mais client absent)                      *
+ *   grisé   = non vendue ce jour (occupation reprise du PDJ)            *
+ *   neutre  = vendue, non nettoyée (à faire)                           *
+ * ------------------------------------------------------------------ */
+
+.rapro-card {
+  overflow: hidden;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+}
+
+/* État vide de la carte tableau (pas de rapport PDJ pour ce jour) : prend la
+   place de la grille, icône centrée + message. */
+.rapro-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.85rem;
+  padding: 3rem 1.5rem;
+  text-align: center;
+  color: var(--muted-foreground);
+}
+.rapro-empty-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  opacity: 0.55;
+}
+.rapro-empty p {
+  max-width: 34rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+/* Colonnes d'étages : gap de 1px sur fond « bordure » + colonnes en fond
+   « carte » → fins filets de séparation verticaux entre étages. */
+/* Une carte par étage (grille responsive de cartes). */
+.rapro-floors {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+}
+
+.rapro-floor {
+  overflow: hidden;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+}
+/* En-tête d'étage : titre centré + bouton d'action à droite (ancien compteur). */
+.rapro-floor-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+.rapro-floor-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+/* Bouton « marquer l'étage nettoyé », à la place de l'ancien « 0/13 ». */
+.rapro-floor-action {
+  position: absolute;
+  top: 50%;
+  right: 0.35rem;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  color: var(--muted-foreground);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 5px);
+  cursor: pointer;
+  transition:
+    color 0.12s ease,
+    border-color 0.12s ease,
+    background-color 0.12s ease;
+}
+.rapro-floor-action:hover:not(:disabled) {
+  color: #16a34a;
+  border-color: #16a34a;
+}
+.rapro-floor-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Pastilles empilées verticalement, pleine largeur de la colonne. */
+.rapro-rooms {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0 0.4rem 0.5rem;
+}
+.rapro-room {
+  width: 100%;
+  padding: 0.2rem 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--foreground);
+  background: color-mix(in oklab, var(--foreground) 4%, transparent);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 5px);
+  cursor: pointer;
+  transition:
+    background-color 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
+}
+.rapro-room:hover:not(:disabled) {
+  border-color: var(--ring);
+}
+.rapro-room:focus-visible {
+  outline: none;
+  border-color: var(--ring);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--ring) 45%, transparent);
+}
+.rapro-room:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+/* Verrouillé (clôturé ou lecture seule) : non interactif mais SANS grisage —
+   les pastilles gardent leurs couleurs, elles ne sont juste plus cliquables. */
+.rapro-floors.is-locked .rapro-room {
+  cursor: default;
+  pointer-events: none;
+}
+
+/* Non vendue ce jour (occupation PDJ), encore au statut par défaut : grisée
+   — mais reste cliquable (une non vendue peut malgré tout recevoir un statut). */
+.rapro-room-empty {
+  color: var(--muted-foreground);
+  background: transparent;
+  border-color: color-mix(in oklab, var(--border) 60%, transparent);
+  opacity: 0.5;
+}
+
+/* Statuts intégrés à la palette de l'app (tokens --chart-* / --muted-foreground),
+   sur le principe du fond des icônes des cards : fond en teinte douce (~18 %) +
+   numéro en couleur d'accent + bordure ~45 %. Discret, non flashy. */
+/* Nettoyée → vert (chart-5). */
+.rapro-room-clean {
+  color: var(--chart-5);
+  background: color-mix(in oklab, var(--chart-5) 18%, transparent);
+  border-color: color-mix(in oklab, var(--chart-5) 45%, transparent);
+}
+/* Refus de service → ambre (chart-3). */
+.rapro-room-refus {
+  color: var(--chart-3);
+  background: color-mix(in oklab, var(--chart-3) 18%, transparent);
+  border-color: color-mix(in oklab, var(--chart-3) 45%, transparent);
+}
+/* Non nettoyée (occupée, à faire) → rouge. */
+.rapro-room-todo {
+  color: #f87171;
+  background: color-mix(in oklab, #f87171 18%, transparent);
+  border-color: color-mix(in oklab, #f87171 45%, transparent);
+}
+/* No-show (vendue mais client absent) → violet. */
+.rapro-room-noshow {
+  color: #a78bfa;
+  background: color-mix(in oklab, #a78bfa 18%, transparent);
+  border-color: color-mix(in oklab, #a78bfa 45%, transparent);
+}
+.rapro-room-clean:hover:not(:disabled),
+.rapro-room-refus:hover:not(:disabled),
+.rapro-room-noshow:hover:not(:disabled),
+.rapro-room-todo:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+/* --- Cards de synthèse (KPI), calquées sur .pdj-stat --------------------- */
+.rapro-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.75rem;
+}
+.rapro-stat {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.9rem 1rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.rapro-stat-icon {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  color: var(--rapro-accent, var(--primary));
+  background: color-mix(
+    in oklab,
+    var(--rapro-accent, var(--primary)) 16%,
+    transparent
+  );
+  border-radius: calc(var(--radius) - 4px);
+}
+.rapro-stat-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.rapro-stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.rapro-stat-label {
+  margin-top: 0.3rem;
+  font-size: 0.66rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted-foreground);
+}
+
+/* --- Zone commentaire (clôture) ----------------------------------------- */
+.rapro-comment {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.rapro-comment-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+/* --- Légende des statuts (bas du tableau, alignée à droite, petits dots) - */
+.rapro-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.4rem 1rem;
+  font-size: 0.72rem;
+  color: var(--muted-foreground);
+}
+.rapro-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.rapro-legend-dot {
+  display: inline-block;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--foreground) 25%, transparent);
+}
+.rapro-legend-dot.is-clean {
+  background: var(--chart-5);
+}
+.rapro-legend-dot.is-refus {
+  background: var(--chart-3);
+}
+.rapro-legend-dot.is-todo {
+  background: #f87171;
+}
+.rapro-legend-dot.is-noshow {
+  background: #a78bfa;
+}
+.rapro-legend-dot.is-empty {
+  background: transparent;
+  border: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+}

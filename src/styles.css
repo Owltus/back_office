@@ -8,6 +8,7 @@
 @import './styles/not-found.css';
 @import './styles/pdj.css';
 @import './styles/poster.css';
+@import './styles/rapro.css';
 @import './styles/repjour.css';
 
 @custom-variant dark (&:is(.dark *));

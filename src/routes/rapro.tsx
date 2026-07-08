@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 
-import { ComingSoon } from '#/components/ComingSoon.tsx'
+import { RaproBoard } from '#/components/rapro/RaproBoard.tsx'
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
 
 export const Route = createFileRoute('/rapro')({
@@ -11,7 +11,7 @@ export const Route = createFileRoute('/rapro')({
 function RaproPage() {
   return (
     <PageContainer>
-      <ComingSoon />
+      <RaproBoard />
     </PageContainer>
   )
 }
