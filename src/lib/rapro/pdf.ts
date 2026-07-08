@@ -94,7 +94,7 @@ function renderRaproDocument(
   const cells: Array<[string, number]> = [
     ['Vendues', counts.sold],
     ['Nettoyées', counts.clean],
-    ['Non nettoyées', counts.todo],
+    ['Bloquées', counts.todo],
     ['Refus', counts.refus],
     ['No-show', counts.noshow],
   ]
@@ -148,7 +148,7 @@ function renderRaproDocument(
   // --- Légende des statuts (même code couleur que les cases) ----------------
   const legend: Array<[string, RGB]> = [
     ['Nettoyée', [110, 231, 183]],
-    ['Non nettoyée', [254, 202, 202]],
+    ['Bloquée', [254, 202, 202]],
     ['Refus', [252, 211, 77]],
     ['No-show', [221, 214, 254]],
     ['Non vendue', [241, 245, 249]],

@@ -167,7 +167,7 @@
   background: color-mix(in oklab, var(--chart-3) 18%, transparent);
   border-color: color-mix(in oklab, var(--chart-3) 45%, transparent);
 }
-/* Non nettoyée (occupée, à faire) → rouge. */
+/* Bloquée (occupée non nettoyée, à faire) → rouge. */
 .rapro-room-todo {
   color: #f87171;
   background: color-mix(in oklab, #f87171 18%, transparent);

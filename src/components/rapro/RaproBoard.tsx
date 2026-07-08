@@ -55,7 +55,7 @@ const EMPTY: ReadonlyMap<number, RoomStatus> = new Map()
 /** Légende des couleurs de statut, affichée en bas du tableau. */
 const LEGEND: Array<{ mod?: string; label: string }> = [
   { mod: 'is-clean', label: 'Nettoyée' },
-  { mod: 'is-todo', label: 'Non nettoyée' },
+  { mod: 'is-todo', label: 'Bloquée' },
   { mod: 'is-refus', label: 'Refus' },
   { mod: 'is-noshow', label: 'No-show' },
   { mod: 'is-empty', label: 'Non vendue' },
@@ -393,13 +393,13 @@ export function RaproBoard() {
         />
         <Stat
           value={hasOccupancy ? stats.todo : '—'}
-          label="Non nettoyées"
+          label="Bloquées"
           icon={Clock}
           accent="#f87171"
         />
         <Stat
           value={hasYOccupancy ? yStats.todo : '—'}
-          label="Non nettoyées hier"
+          label="Bloquées de la veille"
           icon={History}
           accent="#fb923c"
         />

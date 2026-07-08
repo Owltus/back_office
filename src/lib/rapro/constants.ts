@@ -11,7 +11,8 @@ export const STATUS_CYCLE: RoomStatus[] = [
 
 /** Libellés lisibles des statuts. */
 export const STATUS_LABEL: Record<RoomStatus, string> = {
-  non_nettoyee: 'Non nettoyée',
+  // `non_nettoyee` = terme technique interne ; affiché « Bloquée » (usage hôtelier).
+  non_nettoyee: 'Bloquée',
   nettoyee: 'Nettoyée',
   refus: 'Refus',
   noshow: 'No-show',
