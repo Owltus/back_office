@@ -32,6 +32,12 @@ import { PrintButton } from '#/components/shared/PrintButton.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { Textarea } from '#/components/ui/textarea.tsx'
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '#/components/ui/tooltip.tsx'
+import {
   fetchDay as fetchPdjDay,
   fetchServiceDates,
 } from '#/lib/pdj/service.ts'
@@ -404,39 +410,52 @@ export function RaproBoard() {
         </div>
       )}
 
-      <div className="rapro-stats">
-        <Stat
-          value={hasOccupancy ? occupied.size : '—'}
-          label="Vendues"
-          icon={BedDouble}
-          accent="#818cf8"
-        />
-        <Stat
-          value={stats.clean}
-          label="Nettoyées"
-          icon={Sparkles}
-          accent="#34d399"
-        />
-        <Stat
-          value={hasDue ? rec.pending : '—'}
-          label="Reste à faire"
-          icon={Scale}
-          accent={reconciled ? '#34d399' : '#fbbf24'}
-        />
-        <Stat
-          value={carried.size}
-          label="Reportées"
-          icon={History}
-          accent="#fb923c"
-        />
-        <Stat value={stats.refus} label="Refus" icon={Ban} accent="#fbbf24" />
-        <Stat
-          value={stats.noshow}
-          label="No-show"
-          icon={UserX}
-          accent="#64748b"
-        />
-      </div>
+      <TooltipProvider>
+        <div className="rapro-stats">
+          <Stat
+            value={hasOccupancy ? occupied.size : '—'}
+            label="Vendues"
+            icon={BedDouble}
+            accent="#818cf8"
+            hint="Chambres occupées cette nuit selon le PDJ. C'est le « dû » du jour : ce qu'il y a à traiter. « — » si le rapport PDJ du jour n'est pas importé."
+          />
+          <Stat
+            value={stats.clean}
+            label="Nettoyées"
+            icon={Sparkles}
+            accent="#34d399"
+            hint="Chambres marquées « nettoyée » aujourd'hui. C'est ce qui est facturable par ELIOR (peu importe le jour où le ménage est fait)."
+          />
+          <Stat
+            value={hasDue ? rec.pending : '—'}
+            label="Reste à faire"
+            icon={Scale}
+            accent={reconciled ? '#34d399' : '#fbbf24'}
+            hint="Chambres occupées encore à nettoyer aujourd'hui, reportées comprises. À 0 (vert) = tout est nettoyé ou justifié : journée équilibrée."
+          />
+          <Stat
+            value={carried.size}
+            label="Reportées"
+            icon={History}
+            accent="#fb923c"
+            hint="Chambres non faites un jour précédent, jamais résolues depuis : elles « roulent » et réapparaissent ici jusqu'à être nettoyées, en refus ou en no-show."
+          />
+          <Stat
+            value={stats.refus}
+            label="Refus"
+            icon={Ban}
+            accent="#fbbf24"
+            hint="Client présent ayant refusé le ménage. La chambre n'a pas de ménage dû ce jour → non facturée."
+          />
+          <Stat
+            value={stats.noshow}
+            label="No-show"
+            icon={UserX}
+            accent="#64748b"
+            hint="Chambre vendue mais client jamais venu : rien à nettoyer. Hors facturation."
+          />
+        </div>
+      </TooltipProvider>
 
       {showEmptyState ? (
         <div className="rapro-card">
@@ -571,21 +590,24 @@ export function RaproBoard() {
   )
 }
 
-/** Carte KPI (style PDJ) : icône teintée + valeur + libellé. */
+/** Carte KPI (style PDJ) : icône teintée + valeur + libellé. `hint` = explication
+ * au survol (tooltip), pour comprendre d'où vient la donnée. */
 function Stat({
   value,
   label,
   icon: Icon,
   accent,
+  hint,
 }: {
   value: number | string
   label: string
   icon: ComponentType<{ className?: string }>
   accent: string
+  hint?: string
 }) {
-  return (
+  const card = (
     <div
-      className="rapro-stat"
+      className={cn('rapro-stat', hint && 'cursor-help')}
       style={{ '--rapro-accent': accent } as CSSProperties}
     >
       <span className="rapro-stat-icon">
@@ -596,5 +618,12 @@ function Stat({
         <span className="rapro-stat-label">{label}</span>
       </span>
     </div>
+  )
+  if (!hint) return card
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{card}</TooltipTrigger>
+      <TooltipContent className="max-w-64">{hint}</TooltipContent>
+    </Tooltip>
   )
 }
