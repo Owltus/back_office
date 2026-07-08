@@ -390,6 +390,47 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* --- Récap mensuel ELIOR (tableau jour → nettoyées + total) ---------------- */
+.rapro-month {
+  overflow: hidden;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.rapro-month-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.rapro-month-table th,
+.rapro-month-table td {
+  padding: 0.4rem 1rem;
+  text-align: left;
+}
+.rapro-month-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.rapro-month-table thead th {
+  font-size: 0.66rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted-foreground);
+  border-bottom: 1px solid var(--border);
+}
+.rapro-month-table tbody tr:nth-child(even) {
+  background: color-mix(in oklab, var(--foreground) 3%, transparent);
+}
+.rapro-month-zero {
+  color: var(--muted-foreground);
+}
+.rapro-month-table tfoot td {
+  font-weight: 700;
+  border-top: 1px solid var(--border);
+  background: color-mix(in oklab, var(--foreground) 5%, transparent);
+}
+
 /* --- Légende des statuts (bas du tableau, alignée à droite, petits dots) - */
 .rapro-legend {
   display: flex;

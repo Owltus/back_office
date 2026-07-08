@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as RepjourRouteImport } from './routes/repjour'
+import { Route as RaproMoisRouteImport } from './routes/rapro-mois'
 import { Route as RaproRouteImport } from './routes/rapro'
 import { Route as ProfilRouteImport } from './routes/profil'
 import { Route as PdjRouteImport } from './routes/pdj'
@@ -27,6 +28,11 @@ import { Route as RepjourAnalytiqueYearMonthRouteImport } from './routes/repjour
 const RepjourRoute = RepjourRouteImport.update({
   id: '/repjour',
   path: '/repjour',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RaproMoisRoute = RaproMoisRouteImport.update({
+  id: '/rapro-mois',
+  path: '/rapro-mois',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RaproRoute = RaproRouteImport.update({
@@ -107,6 +113,7 @@ export interface FileRoutesByFullPath {
   '/pdj': typeof PdjRoute
   '/profil': typeof ProfilRoute
   '/rapro': typeof RaproRoute
+  '/rapro-mois': typeof RaproMoisRoute
   '/repjour': typeof RepjourRouteWithChildren
   '/repjour/': typeof RepjourIndexRoute
   '/repjour/analytique/': typeof RepjourAnalytiqueIndexRoute
@@ -123,6 +130,7 @@ export interface FileRoutesByTo {
   '/pdj': typeof PdjRoute
   '/profil': typeof ProfilRoute
   '/rapro': typeof RaproRoute
+  '/rapro-mois': typeof RaproMoisRoute
   '/repjour': typeof RepjourIndexRoute
   '/repjour/analytique': typeof RepjourAnalytiqueIndexRoute
   '/repjour/analytique/$year/$month': typeof RepjourAnalytiqueYearMonthRoute
@@ -139,6 +147,7 @@ export interface FileRoutesById {
   '/pdj': typeof PdjRoute
   '/profil': typeof ProfilRoute
   '/rapro': typeof RaproRoute
+  '/rapro-mois': typeof RaproMoisRoute
   '/repjour': typeof RepjourRouteWithChildren
   '/repjour/': typeof RepjourIndexRoute
   '/repjour/analytique/': typeof RepjourAnalytiqueIndexRoute
@@ -157,6 +166,7 @@ export interface FileRouteTypes {
     | '/pdj'
     | '/profil'
     | '/rapro'
+    | '/rapro-mois'
     | '/repjour'
     | '/repjour/'
     | '/repjour/analytique/'
@@ -173,6 +183,7 @@ export interface FileRouteTypes {
     | '/pdj'
     | '/profil'
     | '/rapro'
+    | '/rapro-mois'
     | '/repjour'
     | '/repjour/analytique'
     | '/repjour/analytique/$year/$month'
@@ -188,6 +199,7 @@ export interface FileRouteTypes {
     | '/pdj'
     | '/profil'
     | '/rapro'
+    | '/rapro-mois'
     | '/repjour'
     | '/repjour/'
     | '/repjour/analytique/'
@@ -205,6 +217,7 @@ export interface RootRouteChildren {
   PdjRoute: typeof PdjRoute
   ProfilRoute: typeof ProfilRoute
   RaproRoute: typeof RaproRoute
+  RaproMoisRoute: typeof RaproMoisRoute
   RepjourRoute: typeof RepjourRouteWithChildren
 }
 
@@ -215,6 +228,13 @@ declare module '@tanstack/react-router' {
       path: '/repjour'
       fullPath: '/repjour'
       preLoaderRoute: typeof RepjourRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/rapro-mois': {
+      id: '/rapro-mois'
+      path: '/rapro-mois'
+      fullPath: '/rapro-mois'
+      preLoaderRoute: typeof RaproMoisRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/rapro': {
@@ -337,6 +357,7 @@ const rootRouteChildren: RootRouteChildren = {
   PdjRoute: PdjRoute,
   ProfilRoute: ProfilRoute,
   RaproRoute: RaproRoute,
+  RaproMoisRoute: RaproMoisRoute,
   RepjourRoute: RepjourRouteWithChildren,
 }
 export const routeTree = rootRouteImport
