@@ -22,6 +22,3 @@ export const FLOORS: Floor[] = (() => {
       rooms: [...rooms].sort((a, b) => a - b),
     }))
 })()
-
-/** Nombre total de chambres (80). */
-export const ROOM_COUNT = ALL_ROOMS.length

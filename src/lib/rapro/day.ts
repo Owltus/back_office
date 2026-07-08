@@ -5,18 +5,18 @@
  * rang. Tout est calculé en heure locale du navigateur (comme la caisse).
  */
 
+import { formatDateStr } from '#/lib/poster/dateFormatter.ts'
+
 /** Date locale au format 'YYYY-MM-DD' (aujourd'hui par défaut). */
 export function today(now = new Date()): string {
-  const m = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  return `${now.getFullYear()}-${m}-${day}`
+  return formatDateStr(now)
 }
 
 /** 'YYYY-MM-DD' décalé de `delta` jours. */
 export function addDays(date: string, delta: number): string {
   const d = new Date(date + 'T00:00:00')
   d.setDate(d.getDate() + delta)
-  return today(d)
+  return formatDateStr(d)
 }
 
 /** Contraint une date dans [min, max] (comparaison lexicale = chronologique). */
