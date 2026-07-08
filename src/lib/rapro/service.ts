@@ -12,6 +12,7 @@ import type {
   RaproDay,
   RaproSheet,
   RoomStatus,
+  SheetStatus,
 } from '#/lib/rapro/types.ts'
 
 export const RAPRO_TABLE = 'rapro_rooms'
@@ -104,20 +105,30 @@ export async function saveComment(
   if (error) throw error
 }
 
-/** Clôture le jour (status validated + qui/quand). Crée la ligne au besoin. */
+/** Clôture le jour (status validated + qui/quand). Crée la ligne au besoin.
+ * Le commentaire, s'il est fourni, est écrit dans le même upsert → une seule
+ * requête pour clôturer (pas de saveComment séparé). */
 export async function validateSheet(
   reportDate: string,
   userId: string,
+  comment?: string,
 ): Promise<void> {
-  const { error } = await supabase.from(RAPRO_SHEETS_TABLE).upsert(
-    {
-      report_date: reportDate,
-      status: 'validated',
-      validated_at: new Date().toISOString(),
-      validated_by: userId,
-    },
-    { onConflict: 'report_date' },
-  )
+  const row: {
+    report_date: string
+    status: SheetStatus
+    validated_at: string
+    validated_by: string
+    comment?: string
+  } = {
+    report_date: reportDate,
+    status: 'validated',
+    validated_at: new Date().toISOString(),
+    validated_by: userId,
+  }
+  if (comment !== undefined) row.comment = comment
+  const { error } = await supabase
+    .from(RAPRO_SHEETS_TABLE)
+    .upsert(row, { onConflict: 'report_date' })
   if (error) throw error
 }
 
