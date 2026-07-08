@@ -158,3 +158,19 @@ export async function fetchOfficialOcc(date: string): Promise<number | null> {
   const n = data?.rj_nuitees
   return typeof n === 'number' ? n : null
 }
+
+/** Ensemble des jours CLÔTURÉS (rapprochement validé) sur `[from, to]`. Sert au
+ * roulement : seuls les jours clôturés font rouler leurs chambres non faites. */
+export async function fetchValidatedDays(
+  from: string,
+  to: string,
+): Promise<Set<string>> {
+  const { data, error } = await supabase
+    .from(RAPRO_SHEETS_TABLE)
+    .select('report_date')
+    .eq('status', 'validated')
+    .gte('report_date', from)
+    .lte('report_date', to)
+  if (error) throw error
+  return new Set((data ?? []).map((r) => r.report_date as string))
+}

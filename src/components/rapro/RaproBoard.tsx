@@ -65,6 +65,7 @@ import {
   fetchOfficialOcc,
   fetchOldestDay,
   fetchSheet,
+  fetchValidatedDays,
   reopenSheet,
   saveComment,
   setStatus,
@@ -172,11 +173,28 @@ export function RaproBoard() {
       queryFn: () => fetchPdjDay(d),
     })),
   })
-  const past: DaySnapshot[] = windowDays.map((_, i) => ({
+  // Jours CLÔTURÉS de la fenêtre : seuls eux font rouler leurs chambres non faites.
+  const { data: validatedDays } = useQuery({
+    queryKey: [
+      'rapro',
+      'validated-window',
+      windowDays[0] ?? selectedDate,
+      windowDays[windowDays.length - 1] ?? selectedDate,
+    ],
+    queryFn: () =>
+      fetchValidatedDays(
+        windowDays[0] ?? selectedDate,
+        windowDays[windowDays.length - 1] ?? selectedDate,
+      ),
+    enabled: windowDays.length > 0,
+  })
+  const closedDays = validatedDays ?? new Set<string>()
+  const past: DaySnapshot[] = windowDays.map((d, i) => ({
     statuses: raproWindow[i]?.data?.statuses ?? EMPTY,
     occupied: new Set((pdjWindow[i]?.data ?? []).map((r) => r.room)),
+    closed: closedDays.has(d),
   }))
-  const carried = carryOver(past, { statuses, occupied })
+  const carried = carryOver(past, { statuses, occupied, closed: isValidated })
 
   // Réconciliation sur le DÛ ÉLARGI (occupées du jour ∪ reportées).
   const dueSet = new Set(occupied)
@@ -192,10 +210,14 @@ export function RaproBoard() {
   const windowError =
     raproWindow.some((q) => q.isError) || pdjWindow.some((q) => q.isError)
 
-  // Contrôle comptable : écart entre l'occupation PDJ (base de la grille) et
-  // l'OCC officiel du PMS. Non nul = arrivées tardives / correction à vérifier.
+  // Contrôle comptable, UNIQUEMENT sur un jour clôturé (données finales) : écart
+  // entre l'occupation In-House (base de la grille) et Comparison (chiffre
+  // officiel). Non nul = arrivées après clôture / correction à vérifier.
   const occGap =
-    hasOccupancy && officialOcc != null && officialOcc !== occupied.size
+    isValidated &&
+    hasOccupancy &&
+    officialOcc != null &&
+    officialOcc !== occupied.size
       ? officialOcc - occupied.size
       : null
 
@@ -404,9 +426,9 @@ export function RaproBoard() {
 
       {occGap !== null && (
         <div className="rapro-occ-alert">
-          Contrôle : occupation PDJ {occupied.size} vs réception PMS {officialOcc}{' '}
-          — écart de {Math.abs(occGap)} chambre(s) à vérifier (arrivées après
-          clôture, correction…).
+          Occupation In-House {occupied.size} et Comparison {officialOcc} ne
+          concordent pas. Écart de {Math.abs(occGap)}{' '}
+          {Math.abs(occGap) > 1 ? 'chambres' : 'chambre'} à vérifier.
         </div>
       )}
 
@@ -462,9 +484,8 @@ export function RaproBoard() {
           <div className="rapro-empty">
             <Info className="rapro-empty-icon" />
             <p>
-              Occupation par chambre indisponible pour ce jour. Importez le
-              rapport PDJ de cette date dans l'onglet PDJ pour afficher les
-              chambres et leur suivi ménage.
+              Aucune occupation pour ce jour. Importez le rapport In-House de
+              cette date pour afficher les chambres et leur suivi ménage.
             </p>
           </div>
         </div>
