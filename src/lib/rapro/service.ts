@@ -79,8 +79,6 @@ function toRaproSheet(row: DbRaproSheet): RaproSheet {
     reportDate: row.report_date,
     status: row.status,
     comment: row.comment,
-    lateArrivals: row.late_arrivals,
-    corrections: row.corrections,
     validatedAt: row.validated_at,
   }
 }
@@ -89,9 +87,7 @@ function toRaproSheet(row: DbRaproSheet): RaproSheet {
 export async function fetchSheet(reportDate: string): Promise<RaproSheet | null> {
   const { data, error } = await supabase
     .from(RAPRO_SHEETS_TABLE)
-    .select(
-      'report_date, status, comment, late_arrivals, corrections, validated_at, validated_by',
-    )
+    .select('report_date, status, comment, validated_at, validated_by')
     .eq('report_date', reportDate)
     .maybeSingle()
   if (error) throw error
@@ -106,21 +102,6 @@ export async function saveComment(
   const { error } = await supabase
     .from(RAPRO_SHEETS_TABLE)
     .upsert({ report_date: reportDate, comment }, { onConflict: 'report_date' })
-  if (error) throw error
-}
-
-/** Enregistre les nombres saisis côté Réception (arrivées après clôture,
- * corrections). Upsert partiel : ne touche ni le commentaire ni le statut. */
-export async function saveSheetNumbers(
-  reportDate: string,
-  numbers: { late_arrivals: number; corrections: number },
-): Promise<void> {
-  const { error } = await supabase
-    .from(RAPRO_SHEETS_TABLE)
-    .upsert(
-      { report_date: reportDate, ...numbers },
-      { onConflict: 'report_date' },
-    )
   if (error) throw error
 }
 

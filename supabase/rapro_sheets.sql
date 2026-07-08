@@ -11,22 +11,12 @@ create table if not exists public.rapro_sheets (
   status       text not null default 'draft'
                  check (status in ('draft', 'validated')),
   comment      text not null default '',
-  late_arrivals integer not null default 0,      -- arrivées après clôture (saisie Réception)
-  corrections  integer not null default 0,       -- corrections/délogements, peut être NÉGATIF
   validated_at timestamptz,
   validated_by uuid,
   created_by   uuid default auth.uid(),
   created_at   timestamptz not null default now(),
   updated_at   timestamptz not null default now()
 );
-
--- Migration ADDITIVE (tables déjà créées) : colonnes du rapprochement comptable.
--- `create table if not exists` n'ajoute pas de colonnes à une table existante,
--- d'où ces ALTER idempotents. `corrections` reste signé (pas de check >= 0).
-alter table public.rapro_sheets
-  add column if not exists late_arrivals integer not null default 0;
-alter table public.rapro_sheets
-  add column if not exists corrections integer not null default 0;
 
 -- Fonction trigger générique (déjà déployée avec rapro_rooms ; idempotente).
 create or replace function public.rapro_set_updated_at()

@@ -9,11 +9,9 @@ import { useNavigate } from '@tanstack/react-router'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import {
-  AlertTriangle,
   Ban,
   BedDouble,
   CalendarDays,
-  Check,
   CheckCheck,
   ChevronLeft,
   ChevronRight,
@@ -38,7 +36,6 @@ import {
   fetchServiceDates,
 } from '#/lib/pdj/service.ts'
 import { parseDateStr } from '#/lib/poster/dateFormatter.ts'
-import { isEcartNul, reconcileAccounting } from '#/lib/rapro/accounting.ts'
 import {
   carryOver,
   carryoverWindow,
@@ -64,7 +61,6 @@ import {
   fetchSheet,
   reopenSheet,
   saveComment,
-  saveSheetNumbers,
   setStatus,
   validateSheet,
 } from '#/lib/rapro/service.ts'
@@ -132,17 +128,11 @@ export function RaproBoard() {
   useEffect(() => {
     setComment(sheet?.comment ?? '')
   }, [sheet?.reportDate, sheet?.comment])
-  // Nombres saisis côté Réception (mêmes patrons que le commentaire).
-  const [lateArrivals, setLateArrivals] = useState(0)
-  const [corrections, setCorrections] = useState(0)
-  useEffect(() => {
-    setLateArrivals(sheet?.lateArrivals ?? 0)
-    setCorrections(sheet?.corrections ?? 0)
-  }, [sheet?.reportDate, sheet?.lateArrivals, sheet?.corrections])
   const [pdfBusy, setPdfBusy] = useState(false)
 
-  // OCC officiel du PMS à J-1 (décalage de datage) — ligne de contrôle informative,
-  // absente si le RepJour n'a pas été importé ce jour-là.
+  // OCC officiel du PMS à J-1 (décalage de datage). Sert d'unique CONTRÔLE
+  // comptable : si l'occupation PDJ diffère du PMS, on l'alerte (c'est là que les
+  // arrivées tardives / corrections apparaissent). Absent si RepJour non importé.
   const { data: officialOcc } = useQuery({
     queryKey: ['rapro', 'occ-control', addDays(selectedDate, -1)],
     queryFn: () => fetchOfficialOcc(addDays(selectedDate, -1)),
@@ -196,15 +186,12 @@ export function RaproBoard() {
   const windowError =
     raproWindow.some((q) => q.isError) || pdjWindow.some((q) => q.isError)
 
-  // Rapprochement comptable DU JOUR (Réception vs Étages) — clean/refus/bloquées
-  // comptés PARMI LES OCCUPÉES (hors roulement) ; l'OCC officiel = ligne de contrôle.
-  const acct = reconcileAccounting({
-    statuses,
-    occupied,
-    lateArrivals,
-    corrections,
-    officialOcc: officialOcc ?? null,
-  })
+  // Contrôle comptable : écart entre l'occupation PDJ (base de la grille) et
+  // l'OCC officiel du PMS. Non nul = arrivées tardives / correction à vérifier.
+  const occGap =
+    hasOccupancy && officialOcc != null && officialOcc !== occupied.size
+      ? officialOcc - occupied.size
+      : null
 
   function goStep(delta: number) {
     setSelectedDate((cur) => clampDay(addDays(cur, delta), lowerDay, todayStr))
@@ -283,29 +270,6 @@ export function RaproBoard() {
   }
   function handleReopen() {
     refreshSheet(() => reopenSheet(selectedDate))
-  }
-  // Sauvegarde des nombres Réception (au blur) : maj optimiste du cache sheet
-  // (sinon l'hydratation ré-injecte l'ancienne valeur), puis upsert partiel.
-  function saveNumbers() {
-    if (!canEditFields) return
-    queryClient.setQueryData<RaproSheet | null>(
-      ['rapro', 'sheet', selectedDate],
-      (prev) =>
-        prev
-          ? { ...prev, lateArrivals, corrections }
-          : {
-              reportDate: selectedDate,
-              status: 'draft',
-              comment: '',
-              lateArrivals,
-              corrections,
-              validatedAt: null,
-            },
-    )
-    saveSheetNumbers(selectedDate, {
-      late_arrivals: lateArrivals,
-      corrections,
-    }).catch(() => {})
   }
   async function handleGeneratePdf() {
     setPdfBusy(true)
@@ -429,6 +393,14 @@ export function RaproBoard() {
           Impossible de charger les données (connexion ?). La navigation dans
           l'historique peut être limitée ; réessayez en changeant de jour puis
           en revenant.
+        </div>
+      )}
+
+      {occGap !== null && (
+        <div className="rapro-occ-alert">
+          Contrôle : occupation PDJ {occupied.size} vs réception PMS {officialOcc}{' '}
+          — écart de {Math.abs(occGap)} chambre(s) à vérifier (arrivées après
+          clôture, correction…).
         </div>
       )}
 
@@ -566,62 +538,6 @@ export function RaproBoard() {
         </div>
       )}
 
-      <div
-        className={cn('rapro-recap', isEcartNul(acct) ? 'is-ok' : 'is-warn')}
-      >
-        <span className="rapro-recap-icon">
-          {isEcartNul(acct) ? (
-            <Check className="size-5" />
-          ) : (
-            <AlertTriangle className="size-5" />
-          )}
-        </span>
-        <div className="rapro-recap-body">
-          <span className="rapro-recap-value">
-            {isEcartNul(acct)
-              ? 'Équilibré'
-              : `Écart ${acct.ecart > 0 ? '+' : ''}${acct.ecart}`}
-          </span>
-          <span className="rapro-recap-label">
-            {isEcartNul(acct)
-              ? 'Réception et étages concordent'
-              : `Réception ${acct.reception} · Étages ${acct.etages}`}
-            {acct.officialOcc !== null &&
-              ` · OCC PMS ${acct.officialOcc}${
-                acct.occGap
-                  ? ` (${acct.occGap > 0 ? '+' : ''}${acct.occGap})`
-                  : ''
-              }`}
-          </span>
-        </div>
-        <div className="rapro-recap-adjust">
-          <label className="rapro-recap-field">
-            <span>Arrivées ap. clôture</span>
-            <input
-              type="number"
-              className="rapro-recap-input"
-              value={lateArrivals}
-              disabled={!canEditFields}
-              onChange={(e) => setLateArrivals(Number(e.target.value) || 0)}
-              onBlur={saveNumbers}
-              aria-label="Arrivées après clôture"
-            />
-          </label>
-          <label className="rapro-recap-field">
-            <span>Corrections</span>
-            <input
-              type="number"
-              className="rapro-recap-input"
-              value={corrections}
-              disabled={!canEditFields}
-              onChange={(e) => setCorrections(Number(e.target.value) || 0)}
-              onBlur={saveNumbers}
-              aria-label="Corrections"
-            />
-          </label>
-        </div>
-      </div>
-
       <div className="rapro-comment">
         <h2 className="rapro-comment-title">Commentaires</h2>
         <Textarea
@@ -641,8 +557,6 @@ export function RaproBoard() {
                       reportDate: selectedDate,
                       status: 'draft',
                       comment,
-                      lateArrivals: 0,
-                      corrections: 0,
                       validatedAt: null,
                     },
             )
