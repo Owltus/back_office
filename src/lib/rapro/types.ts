@@ -26,14 +26,20 @@ export interface DbRaproSheet {
   report_date: string
   status: SheetStatus
   comment: string
+  late_arrivals: number
+  corrections: number
   validated_at: string | null
   validated_by: string | null
 }
 
-/** Feuille jour (clôture + commentaire) du rapprochement. */
+/** Feuille jour (clôture + commentaire + nombres saisis) du rapprochement. */
 export interface RaproSheet {
   reportDate: string
   status: SheetStatus
   comment: string
+  /** Arrivées après clôture (saisie Réception, ≥ 0). */
+  lateArrivals: number
+  /** Corrections/délogements (saisie Réception, peut être négatif). */
+  corrections: number
   validatedAt: string | null
 }

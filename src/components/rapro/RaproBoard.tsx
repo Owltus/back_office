@@ -521,6 +521,8 @@ export function RaproBoard() {
                       reportDate: selectedDate,
                       status: 'draft',
                       comment,
+                      lateArrivals: 0,
+                      corrections: 0,
                       validatedAt: null,
                     },
             )
