@@ -28,10 +28,13 @@ export interface RaproPdfData {
   titleDate: string
   statuses: ReadonlyMap<number, RoomStatus>
   occupied: ReadonlySet<number>
+  /** Chambres reportées (dues antérieurement, jamais résolues) — marquées. */
+  carried: ReadonlySet<number>
   counts: {
     sold: number
     clean: number
-    todo: number
+    balance: number
+    carried: number
     refus: number
     noshow: number
   }
@@ -80,7 +83,15 @@ const CELL_FILL: Record<CellState, { fill: RGB; text: RGB }> = {
 
 function renderRaproDocument(
   pdf: jsPDF,
-  { titleDate, statuses, occupied, counts, comment, validatedAt }: RaproPdfData,
+  {
+    titleDate,
+    statuses,
+    occupied,
+    carried,
+    counts,
+    comment,
+    validatedAt,
+  }: RaproPdfData,
 ): void {
   let y = 20
 
@@ -99,7 +110,8 @@ function renderRaproDocument(
   const cells: Array<[string, number]> = [
     ['Vendues', counts.sold],
     ['Nettoyées', counts.clean],
-    ['Bloquées', counts.todo],
+    ['À faire', counts.balance],
+    ['Reportées', counts.carried],
     ['Refus', counts.refus],
     ['No-show', counts.noshow],
   ]
@@ -129,7 +141,7 @@ function renderRaproDocument(
     rooms.forEach((room, j) => {
       const state = cellState(
         statusOf(statuses, room),
-        hasOccupancy && !occupied.has(room),
+        hasOccupancy && !occupied.has(room) && !carried.has(room),
       )
       const { fill, text } = CELL_FILL[state]
       const w = colW - 2
@@ -142,15 +154,24 @@ function renderRaproDocument(
       pdf.text(String(room), cx + 1 + w / 2, cellY + h / 2 + 1.1, {
         align: 'center',
       })
+      // Reportée : pastille d'angle orange (marqueur additif, garde la couleur).
+      if (carried.has(room)) {
+        pdf.setFillColor(251, 146, 60)
+        pdf.circle(cx + 1 + w - 1, cellY + 1, 0.7, 'F')
+      }
     })
   })
   const maxRooms = FLOORS.reduce((m, f) => Math.max(m, f.rooms.length), 0)
   y = gridTop + 3 + maxRooms * cellH + 6
 
   // --- Légende des statuts (dérivée de la même partition que les cases) ------
-  const legend = LEGEND_ORDER.map(
-    (st) => [CELL_STATES[st].label, CELL_FILL[st].fill] as const,
-  )
+  const legend: Array<[string, RGB]> = [
+    ...LEGEND_ORDER.map((st): [string, RGB] => [
+      CELL_STATES[st].label,
+      CELL_FILL[st].fill,
+    ]),
+    ['Reportée', [251, 146, 60]],
+  ]
   pdf.setFont('helvetica', 'normal').setFontSize(7.5)
   const legendGap = 7
   const itemW = legend.map(([lbl]) => 4 + pdf.getTextWidth(lbl))

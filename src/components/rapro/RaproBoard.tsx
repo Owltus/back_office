@@ -257,10 +257,12 @@ export function RaproBoard() {
           titleDate: title,
           statuses,
           occupied,
+          carried,
           counts: {
             sold: occupied.size,
             clean: stats.clean,
-            todo: stats.todo,
+            balance: rec.pending,
+            carried: carried.size,
             refus: stats.refus,
             noshow: stats.noshow,
           },
