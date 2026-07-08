@@ -569,10 +569,12 @@ export function RaproBoard() {
       <div className="rapro-recap">
         <div className="rapro-recap-head">
           <div>
-            <h2 className="rapro-recap-heading">Rapprochement du jour</h2>
-            <p className="rapro-recap-sub">
-              Chambres vendues (réception) contre chambres traitées (étages)
-            </p>
+            <h2 className="rapro-recap-heading">Rapprochement réception / étages</h2>
+            {!isEcartNul(acct) && (
+              <p className="rapro-recap-sub">
+                Réception {acct.reception} · Étages {acct.etages}
+              </p>
+            )}
           </div>
           <span
             className={cn(
@@ -598,62 +600,32 @@ export function RaproBoard() {
           </span>
         </div>
 
-        <div className="rapro-recap-body">
-          <div className="rapro-recap-side">
-            <span className="rapro-recap-side-title">Réception</span>
-            <div className="rapro-recap-row">
-              <span>Chambres occupées</span>
-              <span className="rapro-recap-num">{occupied.size}</span>
-            </div>
-            <label className="rapro-recap-row rapro-recap-field">
-              <span>Arrivées après clôture</span>
-              <input
-                type="number"
-                className="rapro-recap-input"
-                value={lateArrivals}
-                disabled={!canEditFields}
-                onChange={(e) => setLateArrivals(Number(e.target.value) || 0)}
-                onBlur={saveNumbers}
-                aria-label="Arrivées après clôture"
-              />
-            </label>
-            <label className="rapro-recap-row rapro-recap-field">
-              <span>Corrections</span>
-              <input
-                type="number"
-                className="rapro-recap-input"
-                value={corrections}
-                disabled={!canEditFields}
-                onChange={(e) => setCorrections(Number(e.target.value) || 0)}
-                onBlur={saveNumbers}
-                aria-label="Corrections"
-              />
-            </label>
-            <div className="rapro-recap-row is-total">
-              <span>Total réception</span>
-              <span className="rapro-recap-num">{acct.reception}</span>
-            </div>
-          </div>
-
-          <div className="rapro-recap-side">
-            <span className="rapro-recap-side-title">Étages</span>
-            <div className="rapro-recap-row">
-              <span>Nettoyées</span>
-              <span className="rapro-recap-num">{acct.clean}</span>
-            </div>
-            <div className="rapro-recap-row">
-              <span>Refus</span>
-              <span className="rapro-recap-num">{acct.refus}</span>
-            </div>
-            <div className="rapro-recap-row">
-              <span>Bloquées</span>
-              <span className="rapro-recap-num">{acct.blocked}</span>
-            </div>
-            <div className="rapro-recap-row is-total">
-              <span>Total étages</span>
-              <span className="rapro-recap-num">{acct.etages}</span>
-            </div>
-          </div>
+        <div className="rapro-recap-adjust">
+          <span className="rapro-recap-adjust-label">Ajustements réception</span>
+          <label className="rapro-recap-field">
+            <span>Arrivées après clôture</span>
+            <input
+              type="number"
+              className="rapro-recap-input"
+              value={lateArrivals}
+              disabled={!canEditFields}
+              onChange={(e) => setLateArrivals(Number(e.target.value) || 0)}
+              onBlur={saveNumbers}
+              aria-label="Arrivées après clôture"
+            />
+          </label>
+          <label className="rapro-recap-field">
+            <span>Corrections</span>
+            <input
+              type="number"
+              className="rapro-recap-input"
+              value={corrections}
+              disabled={!canEditFields}
+              onChange={(e) => setCorrections(Number(e.target.value) || 0)}
+              onBlur={saveNumbers}
+              aria-label="Corrections"
+            />
+          </label>
         </div>
 
         {acct.officialOcc !== null && (
