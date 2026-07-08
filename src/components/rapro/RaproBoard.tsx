@@ -9,9 +9,11 @@ import { useNavigate } from '@tanstack/react-router'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import {
+  AlertTriangle,
   Ban,
   BedDouble,
   CalendarDays,
+  Check,
   CheckCheck,
   ChevronLeft,
   ChevronRight,
@@ -565,81 +567,103 @@ export function RaproBoard() {
       )}
 
       <div className="rapro-recap">
-        <div className="rapro-recap-col">
-          <h3 className="rapro-recap-title">Réception</h3>
-          <div className="rapro-recap-line">
-            <span>Occupées</span>
-            <span className="rapro-recap-num">{occupied.size}</span>
+        <div className="rapro-recap-head">
+          <div>
+            <h2 className="rapro-recap-heading">Rapprochement du jour</h2>
+            <p className="rapro-recap-sub">
+              Chambres vendues (réception) contre chambres traitées (étages)
+            </p>
           </div>
-          <div className="rapro-recap-line">
-            <span>+ Arrivées après clôture</span>
-            <input
-              type="number"
-              className="rapro-recap-input"
-              value={lateArrivals}
-              disabled={!canEditFields}
-              onChange={(e) => setLateArrivals(Number(e.target.value) || 0)}
-              onBlur={saveNumbers}
-              aria-label="Arrivées après clôture"
-            />
-          </div>
-          <div className="rapro-recap-line">
-            <span>± Corrections</span>
-            <input
-              type="number"
-              className="rapro-recap-input"
-              value={corrections}
-              disabled={!canEditFields}
-              onChange={(e) => setCorrections(Number(e.target.value) || 0)}
-              onBlur={saveNumbers}
-              aria-label="Corrections"
-            />
-          </div>
-          <div className="rapro-recap-total">
-            <span>Total Réception</span>
-            <span className="rapro-recap-num">{acct.reception}</span>
-          </div>
-          {acct.officialOcc !== null && (
-            <div className="rapro-recap-control">
-              OCC PMS (J-1) : {acct.officialOcc}
-              {acct.occGap !== null && acct.occGap !== 0
-                ? ` · écart ${acct.occGap > 0 ? '+' : ''}${acct.occGap}`
-                : ''}
+          <span
+            className={cn(
+              'rapro-recap-verdict',
+              isEcartNul(acct) ? 'is-ok' : 'is-warn',
+            )}
+            title={
+              isEcartNul(acct)
+                ? 'Réception et Étages concordent'
+                : 'Écart à justifier : arrivées après clôture, corrections, ou à voir avec la gouvernante'
+            }
+          >
+            {isEcartNul(acct) ? (
+              <>
+                <Check className="size-4" /> Équilibré
+              </>
+            ) : (
+              <>
+                <AlertTriangle className="size-4" /> Écart&nbsp;
+                {acct.ecart > 0 ? `+${acct.ecart}` : acct.ecart}
+              </>
+            )}
+          </span>
+        </div>
+
+        <div className="rapro-recap-body">
+          <div className="rapro-recap-side">
+            <span className="rapro-recap-side-title">Réception</span>
+            <div className="rapro-recap-row">
+              <span>Chambres occupées</span>
+              <span className="rapro-recap-num">{occupied.size}</span>
             </div>
-          )}
+            <label className="rapro-recap-row rapro-recap-field">
+              <span>Arrivées après clôture</span>
+              <input
+                type="number"
+                className="rapro-recap-input"
+                value={lateArrivals}
+                disabled={!canEditFields}
+                onChange={(e) => setLateArrivals(Number(e.target.value) || 0)}
+                onBlur={saveNumbers}
+                aria-label="Arrivées après clôture"
+              />
+            </label>
+            <label className="rapro-recap-row rapro-recap-field">
+              <span>Corrections</span>
+              <input
+                type="number"
+                className="rapro-recap-input"
+                value={corrections}
+                disabled={!canEditFields}
+                onChange={(e) => setCorrections(Number(e.target.value) || 0)}
+                onBlur={saveNumbers}
+                aria-label="Corrections"
+              />
+            </label>
+            <div className="rapro-recap-row is-total">
+              <span>Total réception</span>
+              <span className="rapro-recap-num">{acct.reception}</span>
+            </div>
+          </div>
+
+          <div className="rapro-recap-side">
+            <span className="rapro-recap-side-title">Étages</span>
+            <div className="rapro-recap-row">
+              <span>Nettoyées</span>
+              <span className="rapro-recap-num">{acct.clean}</span>
+            </div>
+            <div className="rapro-recap-row">
+              <span>Refus</span>
+              <span className="rapro-recap-num">{acct.refus}</span>
+            </div>
+            <div className="rapro-recap-row">
+              <span>Bloquées</span>
+              <span className="rapro-recap-num">{acct.blocked}</span>
+            </div>
+            <div className="rapro-recap-row is-total">
+              <span>Total étages</span>
+              <span className="rapro-recap-num">{acct.etages}</span>
+            </div>
+          </div>
         </div>
 
-        <div className="rapro-recap-col">
-          <h3 className="rapro-recap-title">Étages</h3>
-          <div className="rapro-recap-line">
-            <span>Nettoyées</span>
-            <span className="rapro-recap-num">{acct.clean}</span>
-          </div>
-          <div className="rapro-recap-line">
-            <span>Refus</span>
-            <span className="rapro-recap-num">{acct.refus}</span>
-          </div>
-          <div className="rapro-recap-line">
-            <span>Bloquées (jour)</span>
-            <span className="rapro-recap-num">{acct.blocked}</span>
-          </div>
-          <div className="rapro-recap-total">
-            <span>Total Étages</span>
-            <span className="rapro-recap-num">{acct.etages}</span>
-          </div>
-        </div>
-
-        <div
-          className={cn('rapro-recap-ecart', isEcartNul(acct) && 'is-ok')}
-          title={
-            isEcartNul(acct)
-              ? 'Réception = Étages'
-              : 'Écart : vérifier arrivées après clôture, bloquées, ou échanger Réception/Gouvernante'
-          }
-        >
-          <span className="rapro-recap-ecart-label">Écart</span>
-          <span className="rapro-recap-ecart-value">{acct.ecart}</span>
-        </div>
+        {acct.officialOcc !== null && (
+          <p className="rapro-recap-foot">
+            Contrôle OCC (PMS, veille) : {acct.officialOcc}
+            {acct.occGap !== null && acct.occGap !== 0
+              ? ` — écart PDJ ${acct.occGap > 0 ? '+' : ''}${acct.occGap}`
+              : ' — concorde'}
+          </p>
+        )}
       </div>
 
       <div className="rapro-comment">

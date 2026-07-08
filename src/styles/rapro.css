@@ -284,110 +284,123 @@
   font-weight: 600;
 }
 
-/* --- Rapprochement comptable du jour (Réception vs Étages + écart) --------- */
+/* --- Rapprochement comptable du jour (card : verdict + Réception / Étages) -- */
 .rapro-recap {
-  display: grid;
-  grid-template-columns: 1fr 1fr auto;
-  gap: 0.75rem;
-  align-items: stretch;
-  padding: 0.9rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding: 1rem 1.1rem;
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }
-@media (max-width: 640px) {
-  .rapro-recap {
+.rapro-recap-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.rapro-recap-heading {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+.rapro-recap-sub {
+  margin-top: 0.15rem;
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+/* Verdict = l'info principale : pastille verte « Équilibré » ou ambre « Écart ». */
+.rapro-recap-verdict {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.32rem 0.7rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+  border-radius: 999px;
+}
+.rapro-recap-verdict.is-ok {
+  color: var(--chart-5);
+  background: color-mix(in oklab, var(--chart-5) 15%, transparent);
+}
+.rapro-recap-verdict.is-warn {
+  color: #f59e0b;
+  background: color-mix(in oklab, #f59e0b 15%, transparent);
+}
+.rapro-recap-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+@media (max-width: 560px) {
+  .rapro-recap-body {
     grid-template-columns: 1fr;
   }
 }
-.rapro-recap-col {
+.rapro-recap-side {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
-  min-width: 0;
+  gap: 0.4rem;
+  padding: 0.7rem 0.85rem;
+  background: color-mix(in oklab, var(--foreground) 3%, transparent);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 3px);
 }
-.rapro-recap-title {
+.rapro-recap-side-title {
   margin-bottom: 0.15rem;
-  font-size: 0.7rem;
+  font-size: 0.66rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   color: var(--muted-foreground);
 }
-.rapro-recap-line,
-.rapro-recap-total {
+.rapro-recap-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
   font-size: 0.85rem;
 }
-.rapro-recap-total {
-  margin-top: 0.25rem;
-  padding-top: 0.35rem;
-  border-top: 1px solid var(--border);
+.rapro-recap-row.is-total {
+  margin-top: 0.2rem;
+  padding-top: 0.45rem;
   font-weight: 700;
+  border-top: 1px solid var(--border);
 }
 .rapro-recap-num {
   font-variant-numeric: tabular-nums;
 }
+.rapro-recap-field {
+  cursor: text;
+}
+.rapro-recap-field > span {
+  color: var(--muted-foreground);
+}
 .rapro-recap-input {
-  width: 4rem;
-  padding: 0.15rem 0.4rem;
+  width: 3.75rem;
+  padding: 0.2rem 0.45rem;
   font-size: 0.85rem;
   text-align: right;
   font-variant-numeric: tabular-nums;
   color: var(--foreground);
-  background: color-mix(in oklab, var(--foreground) 4%, transparent);
+  background: var(--background);
   border: 1px solid var(--border);
   border-radius: calc(var(--radius) - 5px);
 }
 .rapro-recap-input:focus-visible {
   outline: none;
   border-color: var(--ring);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--ring) 40%, transparent);
 }
 .rapro-recap-input:disabled {
   cursor: not-allowed;
-  opacity: 0.6;
+  opacity: 0.55;
 }
-.rapro-recap-control {
-  margin-top: 0.35rem;
-  font-size: 0.72rem;
+.rapro-recap-foot {
+  font-size: 0.73rem;
   color: var(--muted-foreground);
-}
-/* Écart : gros chiffre, rouge par défaut, vert quand nul (Réception = Étages). */
-.rapro-recap-ecart {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.15rem;
-  min-width: 5.5rem;
-  padding: 0 1rem;
-  color: #f87171;
-  border-left: 1px solid var(--border);
-}
-.rapro-recap-ecart.is-ok {
-  color: var(--chart-5);
-}
-@media (max-width: 640px) {
-  .rapro-recap-ecart {
-    padding: 0.5rem 0 0;
-    border-top: 1px solid var(--border);
-    border-left: none;
-  }
-}
-.rapro-recap-ecart-label {
-  font-size: 0.66rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-.rapro-recap-ecart-value {
-  font-size: 1.6rem;
-  font-weight: 700;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
 }
 
 /* --- Récap mensuel ELIOR (tableau jour → nettoyées + total) ---------------- */
