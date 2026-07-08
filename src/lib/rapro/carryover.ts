@@ -6,6 +6,11 @@
  * précédents (pas de propagation en base). Résolu = `nettoyee` OU hors charge
  * (`refus`/`noshow`) ; tout le reste roule.
  *
+ * Un jour SANS aucune saisie rapro (aucun statut enregistré) est traité comme
+ * « pas de données », PAS comme « tout bloqué » : il est ignoré du roulement.
+ * Sinon tout jour antérieur non suivi (avant qu'on commence à saisir) ferait
+ * rouler toutes ses chambres occupées → faux reportées en masse.
+ *
  * Les lectures elles-mêmes (statuts rapro + occupation PDJ par jour) sont faites
  * côté composant via les queries existantes (mêmes clés → cache partagé) ; ici on
  * ne manipule que les instantanés déjà chargés.
@@ -54,7 +59,8 @@ export function carryoverWindow(
 /**
  * Chambres reportées au jour courant : dues (occupées) un jour antérieur de la
  * fenêtre, non résolues ce jour-là ET jamais résolues depuis (jusqu'au jour
- * courant inclus). `past` = instantanés du plus ancien au plus récent (< J).
+ * courant inclus). Les jours sans aucune saisie rapro sont ignorés (pas de
+ * données ≠ tout bloqué). `past` = instantanés du plus ancien au plus récent (< J).
  */
 export function carryOver(
   past: DaySnapshot[],
@@ -68,6 +74,9 @@ export function carryOver(
     return isResolved(statusOf(current.statuses, room))
   }
   past.forEach((snap, i) => {
+    // Jour non suivi (aucun statut saisi) = pas de données → ignoré, sinon toutes
+    // ses chambres occupées rouleraient à tort (chaos en phase d'exportation).
+    if (snap.statuses.size === 0) return
     for (const room of snap.occupied) {
       if (isResolved(statusOf(snap.statuses, room))) continue
       if (!resolvedSince(room, i + 1)) carried.add(room)
