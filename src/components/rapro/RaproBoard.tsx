@@ -566,44 +566,37 @@ export function RaproBoard() {
         </div>
       )}
 
-      <div className="rapro-recap">
-        <div className="rapro-recap-head">
-          <div>
-            <h2 className="rapro-recap-heading">Rapprochement réception / étages</h2>
-            {!isEcartNul(acct) && (
-              <p className="rapro-recap-sub">
-                Réception {acct.reception} · Étages {acct.etages}
-              </p>
-            )}
-          </div>
-          <span
-            className={cn(
-              'rapro-recap-verdict',
-              isEcartNul(acct) ? 'is-ok' : 'is-warn',
-            )}
-            title={
-              isEcartNul(acct)
-                ? 'Réception et Étages concordent'
-                : 'Écart à justifier : arrivées après clôture, corrections, ou à voir avec la gouvernante'
-            }
-          >
-            {isEcartNul(acct) ? (
-              <>
-                <Check className="size-4" /> Équilibré
-              </>
-            ) : (
-              <>
-                <AlertTriangle className="size-4" /> Écart&nbsp;
-                {acct.ecart > 0 ? `+${acct.ecart}` : acct.ecart}
-              </>
-            )}
+      <div
+        className={cn('rapro-recap', isEcartNul(acct) ? 'is-ok' : 'is-warn')}
+      >
+        <span className="rapro-recap-icon">
+          {isEcartNul(acct) ? (
+            <Check className="size-5" />
+          ) : (
+            <AlertTriangle className="size-5" />
+          )}
+        </span>
+        <div className="rapro-recap-body">
+          <span className="rapro-recap-value">
+            {isEcartNul(acct)
+              ? 'Équilibré'
+              : `Écart ${acct.ecart > 0 ? '+' : ''}${acct.ecart}`}
+          </span>
+          <span className="rapro-recap-label">
+            {isEcartNul(acct)
+              ? 'Réception et étages concordent'
+              : `Réception ${acct.reception} · Étages ${acct.etages}`}
+            {acct.officialOcc !== null &&
+              ` · OCC PMS ${acct.officialOcc}${
+                acct.occGap
+                  ? ` (${acct.occGap > 0 ? '+' : ''}${acct.occGap})`
+                  : ''
+              }`}
           </span>
         </div>
-
         <div className="rapro-recap-adjust">
-          <span className="rapro-recap-adjust-label">Ajustements réception</span>
           <label className="rapro-recap-field">
-            <span>Arrivées après clôture</span>
+            <span>Arrivées ap. clôture</span>
             <input
               type="number"
               className="rapro-recap-input"
@@ -627,15 +620,6 @@ export function RaproBoard() {
             />
           </label>
         </div>
-
-        {acct.officialOcc !== null && (
-          <p className="rapro-recap-foot">
-            Contrôle OCC (PMS, veille) : {acct.officialOcc}
-            {acct.occGap !== null && acct.occGap !== 0
-              ? ` — écart PDJ ${acct.occGap > 0 ? '+' : ''}${acct.occGap}`
-              : ' — concorde'}
-          </p>
-        )}
       </div>
 
       <div className="rapro-comment">
