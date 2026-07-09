@@ -1,8 +1,15 @@
 import type { ComponentProps, ReactNode } from 'react'
+import { useSyncExternalStore } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { LogOut, User, Users, Wallet } from 'lucide-react'
+import { LogOut, Moon, Sun, User, Users, Wallet } from 'lucide-react'
 
 import { useAuth } from '#/components/auth/AuthContext.tsx'
+import {
+  getServerTheme,
+  getTheme,
+  setTheme,
+  subscribeTheme,
+} from '#/lib/theme.ts'
 import { ROLE_LABELS } from '#/lib/repjour/roles.ts'
 import { UserAvatar } from '#/components/shared/UserAvatar.tsx'
 import {
@@ -27,9 +34,12 @@ export function UserMenu({
 }) {
   const { profile, user, role, signOut } = useAuth()
   const navigate = useNavigate()
+  const theme = useSyncExternalStore(subscribeTheme, getTheme, getServerTheme)
 
   const name = profile?.display_name || profile?.email || user?.email || ''
   const subtitle = role ? ROLE_LABELS[role] : 'Compte'
+  // L'item nomme la destination, pas l'état courant : en sombre, il propose « Mode clair ».
+  const nextTheme = theme === 'dark' ? 'light' : 'dark'
 
   async function handleSignOut() {
     await signOut()
@@ -68,6 +78,13 @@ export function UserMenu({
             Gestion des comptes
           </DropdownMenuItem>
         )}
+
+        <DropdownMenuSeparator />
+
+        <DropdownMenuItem onSelect={() => setTheme(nextTheme)}>
+          {nextTheme === 'dark' ? <Moon /> : <Sun />}
+          {nextTheme === 'dark' ? 'Mode sombre' : 'Mode clair'}
+        </DropdownMenuItem>
 
         <DropdownMenuSeparator />
 

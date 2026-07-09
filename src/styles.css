@@ -17,6 +17,9 @@
  * Design tokens (shadcn/ui) — thème "navy / indigo"                   *
  * ------------------------------------------------------------------ */
 :root {
+  /* Pendant clair de `.dark` : widgets natifs (input date/time, scrollbars…)
+   * rendus en clair quand l'utilisateur bascule le thème. */
+  color-scheme: light;
   --background: #f8fafc;
   --foreground: #0f172a;
   --card: #ffffff;
