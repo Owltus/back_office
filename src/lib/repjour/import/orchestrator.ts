@@ -1,9 +1,11 @@
 import { supabase } from '#/lib/supabase.ts'
 import { TOTAL_ROOMS, MONTHS } from '#/lib/repjour/constants.ts'
 import { parseComparison } from '#/lib/repjour/parse/comparison.ts'
+import { parseComparisonMetrics } from '#/lib/repjour/parse/metrics.ts'
 import { parseForecast, parseForecastAll } from '#/lib/repjour/parse/forecast.ts'
 import { extractReportDate } from '#/lib/repjour/parse/date.ts'
 import { detectFileType } from '#/lib/repjour/parse/detect.ts'
+import { upsertDailyMetrics } from '#/lib/repjour/services/metrics.ts'
 import {
   computeRealiseJour,
   computeRealiseMTD,
@@ -118,6 +120,29 @@ export async function preValidateForecast(
   }
 }
 
+/**
+ * Convertit tout le CSV Comparison en lignes de `pms_daily_metrics` (aucun
+ * fichier stocké). Volontairement NON BLOQUANT : l'import du rapport journalier
+ * reste la fonction critique et doit aboutir même si la table n'est pas encore
+ * déployée. L'échec remonte en alerte visible — pas en silence, contrairement à
+ * l'archivage Storage historique dont le bucket n'a jamais existé.
+ */
+async function saveComparisonMetrics(
+  comparisonText: string,
+  dateStr: string,
+  alerts: Alert[],
+): Promise<void> {
+  try {
+    await upsertDailyMetrics(dateStr, parseComparisonMetrics(comparisonText))
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err)
+    alerts.push({
+      type: 'warning',
+      message: `Métriques PMS non enregistrées (non bloquant) : ${reason}`,
+    })
+  }
+}
+
 export async function processComparisonOnly(
   comparisonFile: File,
   userId: string,
@@ -190,6 +215,9 @@ export async function processComparisonOnly(
   alerts.push(...coherenceAlerts)
 
   const dateStr = `${reportDate.year}-${String(reportDate.month).padStart(2, '0')}-${String(reportDate.dayOfMonth).padStart(2, '0')}`
+
+  // Avant l'upsert du rapport : une alerte éventuelle est ainsi persistée avec lui.
+  await saveComparisonMetrics(comparisonText, dateStr, alerts)
 
   const reportData = {
     date: dateStr,
@@ -333,6 +361,9 @@ export async function processImport(
 
   // Formater la date en YYYY-MM-DD
   const dateStr = `${reportDate.year}-${String(reportDate.month).padStart(2, '0')}-${String(reportDate.dayOfMonth).padStart(2, '0')}`
+
+  // Avant l'upsert du rapport : une alerte éventuelle est ainsi persistée avec lui.
+  await saveComparisonMetrics(comparisonText, dateStr, alerts)
 
   // UPSERT daily_report
   const reportData = {

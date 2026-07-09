@@ -159,6 +159,14 @@ export async function fetchOfficialOcc(date: string): Promise<number | null> {
   return typeof n === 'number' ? n : null
 }
 
+/*
+ * Le no-show du PMS n'est PAS lu ici (card retirée le 2026-07-09 : pas utile
+ * pour l'instant). Il continue d'être stocké à chaque import dans
+ * `pms_daily_metrics`, ligne « No Show Rooms », prêt à être affiché plus tard.
+ * Rappel : le rapport en donne le NOMBRE, jamais la chambre — un no-show n'ayant
+ * jamais occupé de chambre, aucune case de la grille ne peut le porter.
+ */
+
 /** Ensemble des jours CLÔTURÉS (rapprochement validé) sur `[from, to]`. Sert au
  * roulement : seuls les jours clôturés font rouler leurs chambres non faites. */
 export async function fetchValidatedDays(
