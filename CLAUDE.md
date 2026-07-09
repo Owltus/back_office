@@ -80,13 +80,27 @@ Le temps de chargement perçu vient surtout de l'auth cliente + du mode SPA. Rè
   `retry:1`). `queryKey` en tableau versionné `['<feature>', '<vue>', ...params]`.
   Le router précharge au survol (`defaultPreload:'intent'` + `defaultPreloadStaleTime`
   60 s dans `router.tsx`).
-- **Exception assumée — realtime** : les vues avec abonnement `postgres_changes`
-  (`DashboardBoard`, `ParkingBoard`) gardent leur fetch impératif + optimistic ;
-  NE PAS les forcer dans `useQuery` (le temps réel garde déjà la vue à jour).
+- **Realtime + cache, pas realtime SEUL** : `DashboardBoard` et `ParkingBoard`
+  ont un abonnement `postgres_changes`. Le temps réel garantit la FRAÎCHEUR tant
+  que la page est montée, mais pas la latence AU MONTAGE : sans cache, chaque
+  visite repayait tout le réseau (c'était la première cause de lenteur perçue).
+  Les deux passent donc par `useQuery` :
+  - `DashboardBoard` : 4 lectures parallèles (jamais en cascade — l'année et le
+    mois se déduisent de la date choisie). Le canal `invalidateQueries` au lieu
+    de recharger à la main.
+  - `ParkingBoard` : seul le chargement INITIAL est mis en cache (lignes brutes,
+    `staleTime: 0` → stale-while-revalidate au retour). Le canal continue de
+    patcher l'état LOCAL ligne à ligne : dériver l'affichage du cache effacerait
+    les mises à jour optimistes encore en vol (drag, copie).
 - **Lazy-load des grosses libs client-only** : `html2canvas` (et tout poids lourd
   non nécessaire au premier rendu) est chargé par `import()` DYNAMIQUE au moment de
   l'usage, jamais en import statique de haut de module (voir `lib/repjour/email.ts`).
   Le découpage par route est déjà automatique (TanStack Router).
+- **Polices : jamais d'`@import url(…)` dans le CSS.** Un `@import` ne se
+  parallélise pas — le navigateur doit recevoir la feuille, y découvrir la ligne,
+  puis ouvrir une connexion tierce, texte invisible pendant ce temps. Inter est
+  chargée par `<link>` + `preconnect` dans `routes/__root.tsx` ; Poppins, qui ne
+  sert qu'à l'affiche A3, uniquement par `routes/affichage.tsx`.
 - **Chargement perçu** : préférer un squelette (`components/repjour/BoardSkeleton.tsx`,
   primitive `ui/skeleton`) à un spinner plein écran pour les états de chargement.
 - Valider toute modif perf : `pnpm build` (vérifier le découpage des chunks) +

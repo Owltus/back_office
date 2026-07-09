@@ -37,6 +37,20 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
         type: 'image/svg+xml',
         href: '/favicon.svg',
       },
+      // Inter, police de toute l'app. Les deux `preconnect` ouvrent la
+      // connexion (DNS + TLS) vers Google Fonts pendant que le reste se
+      // télécharge, au lieu d'attendre la découverte du <link>. `gstatic`
+      // sert les fichiers .woff2 et exige `crossorigin`.
+      { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
+      {
+        rel: 'preconnect',
+        href: 'https://fonts.gstatic.com',
+        crossOrigin: 'anonymous',
+      },
+      {
+        rel: 'stylesheet',
+        href: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap',
+      },
       {
         rel: 'stylesheet',
         href: appCss,

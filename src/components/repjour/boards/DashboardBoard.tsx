@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import {
   HelpCircle,
@@ -25,13 +26,14 @@ import { supabase } from '#/lib/supabase.ts'
 import { captureTableImage, sendReport } from '#/lib/repjour/email.ts'
 import {
   fetchBudget,
-  fetchLatestReport,
+  fetchForecastMonthTotal,
+  fetchLatestReportOfMonth,
   fetchReportByDate,
 } from '#/lib/repjour/services/daily.ts'
 import { reportToKPI } from '#/lib/repjour/calc/kpi.ts'
 import { computeEcart } from '#/lib/repjour/calc/ecart.ts'
 import { DAY_NAMES, MONTHS, TOTAL_ROOMS } from '#/lib/repjour/constants.ts'
-import type { DailyReport, KPIBlock, MonthBudget } from '#/lib/repjour/types.ts'
+import type { KPIBlock } from '#/lib/repjour/types.ts'
 
 /*
  * Board du dashboard journalier — porté de la source DashboardPage.
@@ -40,13 +42,12 @@ import type { DailyReport, KPIBlock, MonthBudget } from '#/lib/repjour/types.ts'
  * le forecast du mois, calcule les KPI et écarts (lib/repjour/calc), puis rend
  * SummaryCards + KPITable + AlertBanner + KPIDetailPanel.
  *
- * Étape 9 : câblage des actions email réservées à l'admin — « Copier l'image »
- * (captureTableImage), « Envoyer par email » (sendReport) et « Gérer les
- * destinataires » (RecipientsModal). captureTableImage/sendReport n'écrivent
- * PAS en base (image via html2canvas sur l'îlot HEX autonome de email.ts, copie
- * presse-papier, mailto) ; seules les écritures de la modale destinataires
- * (email_recipients) touchent la base. Le reste du board n'effectue que des
- * `select` (+ un abonnement temps réel en lecture).
+ * Actions email : « Copier l'image » (captureTableImage) et « Envoyer par email »
+ * (sendReport) sont ouvertes à TOUS les rôles — elles n'écrivent PAS en base
+ * (image via html2canvas sur l'îlot HEX autonome de email.ts, copie
+ * presse-papier, mailto). Seule « Gérer les destinataires » (RecipientsModal)
+ * écrit (`email_recipients`) et reste réservée à l'admin. Le reste du board
+ * n'effectue que des `select` (+ un abonnement temps réel en lecture).
  */
 
 const ZERO_KPI: KPIBlock = {
@@ -76,111 +77,78 @@ function getYesterdayStr(): string {
 }
 
 export function DashboardBoard() {
-  const [report, setReport] = useState<DailyReport | null>(null)
-  const [budget, setBudget] = useState<MonthBudget | null>(null)
-  const [forecastMonthTotal, setForecastMonthTotal] = useState<{
-    occ: number
-    revTTC: number
-  } | null>(null)
-  const [latestMTD, setLatestMTD] = useState<DailyReport | null>(null)
-  const [loading, setLoading] = useState(true)
   const [detailMode, setDetailMode] = useState(false)
-  const [selectedDate, setSelectedDate] = useState('')
+  // Ouverture sur le jour de référence (la veille), jamais sur le dernier
+  // rapport existant : on part toujours d'hier, puis on affiche le tableau si
+  // son rapport existe, ou l'invite d'import sinon.
+  const [selectedDate, setSelectedDate] = useState(getYesterdayStr)
   const [sending, setSending] = useState(false)
   const [showRecipients, setShowRecipients] = useState(false)
 
   const { role } = useAuth()
+  const queryClient = useQueryClient()
   const isAdmin = role === 'admin'
   const canImport = role === 'super_utilisateur' || role === 'admin'
 
-  // Date courante mémorisée pour le rafraîchissement temps réel (évite une
-  // fermeture obsolète dans le handler de l'abonnement).
-  const selectedDateRef = useRef('')
+  const d = new Date(selectedDate + 'T00:00:00')
+  const year = d.getFullYear()
+  const month = d.getMonth() + 1
+
+  /*
+   * Quatre lectures INDÉPENDANTES, donc parallèles. L'ancien code enchaînait
+   * le rapport PUIS le reste, alors que l'année et le mois se déduisent de la
+   * date choisie : la cascade coûtait un aller-retour réseau pour rien.
+   *
+   * Passer par `useQuery` donne surtout le cache (60 s) : revenir sur RepJour
+   * réaffiche instantanément, sans repayer le réseau. Voir lib/query.ts.
+   */
+  const {
+    data: report,
+    isPending: reportPending,
+    isError: reportError,
+    error: reportErrorObj,
+  } = useQuery({
+    queryKey: ['repjour', 'report', selectedDate],
+    queryFn: () => fetchReportByDate(selectedDate),
+  })
+  const { data: budget } = useQuery({
+    queryKey: ['repjour', 'budget', year, month],
+    queryFn: () => fetchBudget(year, month),
+  })
+  const { data: forecastMonthTotal } = useQuery({
+    queryKey: ['repjour', 'forecast-month', year, month],
+    queryFn: () => fetchForecastMonthTotal(year, month),
+  })
+  const { data: latestOfMonth } = useQuery({
+    queryKey: ['repjour', 'latest-of-month', year, month],
+    queryFn: () => fetchLatestReportOfMonth(year, month),
+  })
+
+  // Repli MTD : n'a de sens que si le jour affiché n'a PAS de rapport.
+  const latestMTD = report ? null : (latestOfMonth ?? null)
+  // Une erreur réseau laisse `report` à `undefined` : on rend l'état vide
+  // plutôt que de faire tourner le squelette indéfiniment.
+  const loading = reportPending && !reportError
+
+  // `useQuery` n'écrit rien dans la console : sans cela une panne réseau
+  // deviendrait un écran vide muet, alors que l'ancien code la journalisait.
   useEffect(() => {
-    selectedDateRef.current = selectedDate
-  }, [selectedDate])
-
-  const loadReport = useCallback(async (date?: string) => {
-    setLoading(true)
-    try {
-      const r = date ? await fetchReportByDate(date) : await fetchLatestReport()
-      setReport(r)
-
-      const targetDate = r?.date || date
-      if (targetDate) setSelectedDate(targetDate)
-
-      if (targetDate) {
-        const d = new Date(targetDate + 'T00:00:00')
-        const year = d.getFullYear()
-        const month = d.getMonth() + 1
-        const [b, fcMonth, latestReport] = await Promise.all([
-          fetchBudget(year, month),
-          supabase
-            .from('forecast_days')
-            .select('occ, rev_ttc')
-            .eq('year', year)
-            .eq('month', month),
-          supabase
-            .from('daily_reports')
-            .select('*')
-            .eq('year', year)
-            .eq('month', month)
-            .order('day_of_month', { ascending: false })
-            .limit(1)
-            .maybeSingle(),
-        ])
-        if (fcMonth.error) throw fcMonth.error
-        if (latestReport.error) throw latestReport.error
-        setBudget(b)
-        setLatestMTD(
-          !r && latestReport.data ? (latestReport.data as DailyReport) : null,
-        )
-        if (fcMonth.data && fcMonth.data.length > 0) {
-          const occ = fcMonth.data.reduce(
-            (s: number, f: { occ: number }) => s + f.occ,
-            0,
-          )
-          const revTTC = fcMonth.data.reduce(
-            (s: number, f: { rev_ttc: number }) => s + f.rev_ttc,
-            0,
-          )
-          setForecastMonthTotal({ occ, revTTC })
-        } else {
-          setForecastMonthTotal(null)
-        }
-      } else {
-        setBudget(null)
-        setForecastMonthTotal(null)
-        setLatestMTD(null)
-      }
-    } catch (err) {
-      // La source avalait les erreurs ; ici on les journalise et on retombe sur
-      // un état vide plutôt que de laisser le spinner tourner indéfiniment.
-      console.error('[repjour] chargement du rapport échoué', err)
-      setReport(null)
-      setBudget(null)
-      setForecastMonthTotal(null)
-      setLatestMTD(null)
-    } finally {
-      setLoading(false)
+    if (reportError) {
+      console.error('[repjour] chargement du rapport échoué', reportErrorObj)
     }
-  }, [])
+  }, [reportError, reportErrorObj])
 
   useEffect(() => {
-    // Ouverture sur le jour de référence (la veille), pas sur le dernier
-    // rapport existant : on veut toujours partir d'hier, puis afficher le
-    // tableau si son rapport existe, ou l'invite d'import sinon.
-    loadReport(getYesterdayStr())
-
-    // Abonnement temps réel en LECTURE : recharge la vue lorsque la table
-    // daily_reports change (import réalisé ailleurs). N'écrit rien.
+    // Abonnement temps réel en LECTURE : un import fait ailleurs invalide le
+    // cache, et TanStack Query refetche ce qui est monté. On ne recharge plus
+    // à la main — sinon le cache serait court-circuité à chaque montage.
     const channel = supabase
       .channel('repjour-daily-reports')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'daily_reports' },
         () => {
-          loadReport(selectedDateRef.current || undefined)
+          void queryClient.invalidateQueries({ queryKey: ['repjour'] })
         },
       )
       .subscribe()
@@ -188,11 +156,10 @@ export function DashboardBoard() {
     return () => {
       void supabase.removeChannel(channel)
     }
-  }, [loadReport])
+  }, [queryClient])
 
   const handleDateChange = (date: string) => {
     setSelectedDate(date)
-    loadReport(date)
   }
 
   const shiftDate = (days: number) => {
@@ -382,57 +349,58 @@ export function DashboardBoard() {
 
                 <AlertBanner alerts={report.alerts || []} />
 
-                {/* Actions email — admin, directement SOUS le tableau (comme
-                    avant), au-dessus de la carte d'import. captureTableImage/
-                    sendReport bâtissent l'îlot HEX autonome de email.ts (jamais
-                    le DOM shadcn). */}
-                {isAdmin && (
-                  <div className="flex items-center gap-1">
-                    <Tip label="Copier le tableau en image">
-                      <Button
-                        variant="outline"
-                        size="icon-sm"
-                        aria-label="Copier le tableau en image"
-                        onClick={() =>
-                          captureTableImage({
-                            realiseJour: rj,
-                            realiseMTD: rmtd,
-                            projeteMois: pm,
-                            budget,
-                            ecart,
-                            dayOfMonth: report.day_of_month,
-                            month: report.month,
-                            year: report.year,
-                          })
-                        }
-                      >
-                        <ImageIcon />
-                      </Button>
-                    </Tip>
+                {/* Actions email, directement SOUS le tableau, au-dessus de la
+                    carte d'import. Visibles par TOUS les rôles : captureTableImage
+                    et sendReport n'écrivent rien en base (îlot HEX autonome de
+                    email.ts, presse-papier, mailto). Seule « Gérer les
+                    destinataires » écrit (email_recipients) et reste admin. */}
+                <div className="flex items-center gap-1">
+                  <Tip label="Copier le tableau en image">
                     <Button
                       variant="outline"
-                      className="flex-1"
-                      disabled={sending}
-                      onClick={async () => {
-                        setSending(true)
-                        try {
-                          await sendReport({
-                            realiseJour: rj,
-                            realiseMTD: rmtd,
-                            projeteMois: pm,
-                            budget,
-                            ecart,
-                            dayOfMonth: report.day_of_month,
-                            month: report.month,
-                            year: report.year,
-                          })
-                        } finally {
-                          setSending(false)
-                        }
-                      }}
+                      size="icon-sm"
+                      aria-label="Copier le tableau en image"
+                      onClick={() =>
+                        captureTableImage({
+                          realiseJour: rj,
+                          realiseMTD: rmtd,
+                          projeteMois: pm,
+                          budget,
+                          ecart,
+                          dayOfMonth: report.day_of_month,
+                          month: report.month,
+                          year: report.year,
+                        })
+                      }
                     >
-                      {sending ? 'Préparation...' : 'Envoyer par email'}
+                      <ImageIcon />
                     </Button>
+                  </Tip>
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    disabled={sending}
+                    onClick={async () => {
+                      setSending(true)
+                      try {
+                        await sendReport({
+                          realiseJour: rj,
+                          realiseMTD: rmtd,
+                          projeteMois: pm,
+                          budget,
+                          ecart,
+                          dayOfMonth: report.day_of_month,
+                          month: report.month,
+                          year: report.year,
+                        })
+                      } finally {
+                        setSending(false)
+                      }
+                    }}
+                  >
+                    {sending ? 'Préparation...' : 'Envoyer par email'}
+                  </Button>
+                  {isAdmin && (
                     <Tip label="Gérer les destinataires">
                       <Button
                         variant="outline"
@@ -443,8 +411,8 @@ export function DashboardBoard() {
                         <Settings />
                       </Button>
                     </Tip>
-                  </div>
-                )}
+                  )}
+                </div>
               </>
             )}
           </>
@@ -471,7 +439,7 @@ export function DashboardBoard() {
             <ImportSection
               spacious={importOnly}
               onImported={() =>
-                loadReport(selectedDateRef.current || undefined)
+                void queryClient.invalidateQueries({ queryKey: ['repjour'] })
               }
             />
           )}

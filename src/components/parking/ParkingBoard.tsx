@@ -3,6 +3,7 @@ import type {
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
 } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import {
   CalendarDays,
   Copy,
@@ -211,14 +212,38 @@ export function ParkingBoard() {
     return () => window.removeEventListener('keydown', onKey)
   }, [clipboard])
 
-  // Chargement initial + abonnement Realtime, une fois le lundi de réf. connu.
+  /*
+   * Chargement initial mis en CACHE (lib/query.ts) : revenir sur le planning
+   * réaffiche les réservations sans attendre le réseau. La requête ne dépend
+   * pas de `startDate`, elle part donc dès le premier rendu, sans attendre le
+   * cycle qui pose le lundi de référence.
+   *
+   * `staleTime: 0` : le temps réel ne tient la vue à jour que TANT QUE la page
+   * est montée. Au retour, il faut rattraper ce qui a changé entre-temps — les
+   * données du cache s'affichent aussitôt, le refetch les corrige derrière.
+   */
+  const { data: rows, error: rowsError } = useQuery({
+    queryKey: ['parking', 'reservations'],
+    queryFn: fetchReservations,
+    staleTime: 0,
+  })
+
+  useEffect(() => {
+    if (rowsError) console.error(rowsError)
+  }, [rowsError])
+
+  // Le cache stocke les lignes BRUTES : leur conversion dépend de `startDate`,
+  // qui est propre à l'affichage, pas à la donnée.
+  useEffect(() => {
+    if (!rows || !startDate) return
+    setReservations(rows.map((r) => toReservation(r, startDate)))
+  }, [rows, startDate])
+
+  // Abonnement Realtime, une fois le lundi de réf. connu. Il patche l'état
+  // LOCAL ligne à ligne, sans toucher au cache : dériver l'affichage du cache
+  // effacerait les mises à jour optimistes encore en vol (drag, copie).
   useEffect(() => {
     if (!startDate) return
-    fetchReservations()
-      .then((rows) =>
-        setReservations(rows.map((r) => toReservation(r, startDate))),
-      )
-      .catch(console.error)
 
     const channel = supabase
       .channel('parking-reservations')

@@ -82,6 +82,47 @@ export async function fetchBudget(
   return data
 }
 
+/** Total des prévisions d'un mois (occupation, CA TTC), ou `null` si aucune. */
+export async function fetchForecastMonthTotal(
+  year: number,
+  month: number,
+): Promise<{ occ: number; revTTC: number } | null> {
+  const { data, error } = await supabase
+    .from('forecast_days')
+    .select('occ, rev_ttc')
+    .eq('year', year)
+    .eq('month', month)
+  if (error) throw error
+  if (!data || data.length === 0) return null
+  return {
+    occ: data.reduce((s: number, f: { occ: number }) => s + f.occ, 0),
+    revTTC: data.reduce(
+      (s: number, f: { rev_ttc: number }) => s + f.rev_ttc,
+      0,
+    ),
+  }
+}
+
+/**
+ * Dernier rapport importé d'un mois. Sert de repli au dashboard : quand le jour
+ * affiché n'a pas de rapport, on montre tout de même le MTD du mois en cours.
+ */
+export async function fetchLatestReportOfMonth(
+  year: number,
+  month: number,
+): Promise<DailyReport | null> {
+  const { data, error } = await supabase
+    .from('daily_reports')
+    .select('*')
+    .eq('year', year)
+    .eq('month', month)
+    .order('day_of_month', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) throw error
+  return data
+}
+
 /*
  * ---------------------------------------------------------------------------
  * Analytique annuelle (étape 6) — LECTURE seule.

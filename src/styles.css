@@ -1,7 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-/* Poppins : police de l'affiche A3 (générateur) uniquement — le reste de
-   l'app reste en Inter. Poids utilisés : 400 (message), 600 (info), 800 (titre). */
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap');
+/* Les polices ne sont PAS importées ici. Un `@import url(…)` CSS ne se
+   parallélise pas : le navigateur doit d'abord recevoir CETTE feuille, y
+   découvrir la ligne, ouvrir une connexion vers un domaine tiers, et attendre —
+   le texte ne s'affiche pas pendant ce temps.
+   Inter est donc chargée par un <link> + preconnect dans routes/__root.tsx, et
+   Poppins seulement par routes/affichage.tsx, seule page qui s'en serve
+   (voir styles/poster.css). */
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import './styles/caisse.css';
