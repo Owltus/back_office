@@ -295,6 +295,36 @@
   border-radius: var(--radius);
 }
 
+/* Exports PMS manquants : nommer le fichier et l'onglet plutôt que laisser une
+   grille vide. Rendu dans l'état vide (.rapro-empty). */
+.rapro-missing {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  width: 100%;
+  max-width: 34rem;
+  text-align: left;
+}
+.rapro-missing-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.7rem 0.9rem;
+  background: color-mix(in oklab, var(--muted) 40%, transparent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.rapro-missing-file {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--foreground);
+}
+.rapro-missing-how {
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--muted-foreground);
+}
+
 /* --- Récap mensuel ELIOR (tableau jour → nettoyées + total) ---------------- */
 .rapro-month {
   overflow: hidden;

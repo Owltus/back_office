@@ -60,6 +60,7 @@ import { addDays, clampDay, today } from '#/lib/rapro/day.ts'
 import { printRaproSheet } from '#/lib/rapro/pdf.ts'
 import { isReconciled, reconcile } from '#/lib/rapro/reconcile.ts'
 import { FLOORS } from '#/lib/rapro/rooms.ts'
+import { missingSources, type MissingSource } from '#/lib/rapro/sources.ts'
 import {
   fetchDay,
   fetchOfficialOcc,
@@ -139,7 +140,7 @@ export function RaproBoard() {
   // OCC officiel du PMS à J-1 (décalage de datage). Sert d'unique CONTRÔLE
   // comptable : si l'occupation PDJ diffère du PMS, on l'alerte (c'est là que les
   // arrivées tardives / corrections apparaissent). Absent si RepJour non importé.
-  const { data: officialOcc } = useQuery({
+  const { data: officialOcc, isSuccess: occControlLoaded } = useQuery({
     queryKey: ['rapro', 'occ-control', addDays(selectedDate, -1)],
     queryFn: () => fetchOfficialOcc(addDays(selectedDate, -1)),
   })
@@ -153,6 +154,20 @@ export function RaproBoard() {
   const hasOccupancy = occupied.size > 0
   // Requête PDJ résolue mais vide → occupation indisponible ce jour (≠ chargement).
   const noOccupancy = pdjRows !== undefined && occupied.size === 0
+
+  // Exports PMS manquants. Calculés seulement une fois les DEUX requêtes
+  // résolues : pendant le chargement, tout paraîtrait manquant.
+  const sourcesLoaded = pdjRows !== undefined && occControlLoaded
+  const missing = sourcesLoaded
+    ? missingSources({
+        hasOccupancy,
+        hasOfficialOcc: officialOcc != null,
+        date: selectedDate,
+        previousDate: addDays(selectedDate, -1),
+      })
+    : []
+  // Le Comparison ne bloque rien : il se signale à côté de la grille, pas à sa place.
+  const optionalMissing = missing.filter((m) => !m.required)
 
   const stats = countStats(statuses, occupied)
 
@@ -470,19 +485,28 @@ export function RaproBoard() {
             label="No-show"
             icon={UserX}
             accent="#64748b"
-            hint="Client jamais arrivé, rien à nettoyer."
+            hint="Chambre marquée à la main dans la grille."
           />
         </div>
       </TooltipProvider>
+
+      {!showEmptyState && optionalMissing.length > 0 && (
+        <div className="rapro-occ-alert">
+          {optionalMissing.map((m) => (
+            <p key={m.file}>
+              {m.file} du {sourceDate(m.date)} non importé (onglet {m.tab}).
+              Indisponible : {m.impact}.
+            </p>
+          ))}
+        </div>
+      )}
 
       {showEmptyState ? (
         <div className="rapro-card">
           <div className="rapro-empty">
             <Info className="rapro-empty-icon" />
-            <p>
-              Aucune occupation pour ce jour. Importez le rapport In-House de
-              cette date pour afficher les chambres et leur suivi ménage.
-            </p>
+            <p>Aucune occupation pour le {sourceDate(selectedDate)}.</p>
+            {missing.length > 0 && <MissingList items={missing} />}
           </div>
         </div>
       ) : (
@@ -604,6 +628,32 @@ export function RaproBoard() {
         />
       </div>
     </div>
+  )
+}
+
+/** 'YYYY-MM-DD' → « 9 juillet 2026 » (jour de l'export à importer). */
+function sourceDate(date: string): string {
+  const d = parseDateStr(date)
+  return d ? format(d, 'd MMMM yyyy', { locale: fr }) : date
+}
+
+/** Exports PMS à importer pour débloquer la page : nom du fichier, jour, onglet,
+ * et ce que son absence coûte. Le requis d'abord (cf. `missingSources`). */
+function MissingList({ items }: { items: MissingSource[] }) {
+  return (
+    <ul className="rapro-missing">
+      {items.map((m) => (
+        <li key={m.file} className="rapro-missing-item">
+          <span className="rapro-missing-file">
+            {m.file} — {sourceDate(m.date)}
+          </span>
+          <span className="rapro-missing-how">
+            {m.required ? 'Requis' : 'Facultatif'}. À importer dans l'onglet{' '}
+            {m.tab} pour afficher {m.impact}.
+          </span>
+        </li>
+      ))}
+    </ul>
   )
 }
 
