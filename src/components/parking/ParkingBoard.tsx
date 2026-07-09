@@ -90,20 +90,24 @@ const STEP = 3 // pas de navigation (jours)
 const BAR_PAD_X = 2 // marge horizontale d'une barre (px)
 const BAR_PAD_Y = 4 // marge verticale d'une barre (px)
 
+/* Le fond d'une barre n'est qu'une teinte à 15 % : il vaut presque le fond de la
+ * page. Le texte doit donc contraster avec CE fond-là, pas avec la teinte —
+ * d'où une encre foncée en clair et claire en sombre, jamais l'une des deux
+ * seule (un texte clair sur fond clair devient invisible, et réciproquement). */
 const STATUS: Record<Status, { label: string; bar: string; dot: string }> = {
   reserve: {
     label: 'Réservé',
-    bar: 'border-slate-400/50 bg-slate-400/15 text-slate-100',
+    bar: 'border-slate-400/50 bg-slate-400/15 text-slate-700 dark:text-slate-100',
     dot: 'bg-slate-400',
   },
   paye: {
     label: 'Payé',
-    bar: 'border-emerald-500/50 bg-emerald-500/15 text-emerald-100',
+    bar: 'border-emerald-500/50 bg-emerald-500/15 text-emerald-700 dark:text-emerald-100',
     dot: 'bg-emerald-500',
   },
   checkout: {
     label: 'Non payé',
-    bar: 'border-orange-500/50 bg-orange-500/15 text-orange-100',
+    bar: 'border-orange-500/50 bg-orange-500/15 text-orange-700 dark:text-orange-100',
     dot: 'bg-orange-500',
   },
 }
@@ -788,7 +792,7 @@ export function ParkingBoard() {
                         className={cn(
                           'pointer-events-none absolute z-30 flex items-center rounded-md border px-1.5 text-xs shadow-lg',
                           ghostInvalid
-                            ? 'border-rose-500 bg-rose-500/25 text-rose-50'
+                            ? 'border-rose-500 bg-rose-500/25 text-rose-700 dark:text-rose-50'
                             : STATUS[clipboard.status].bar,
                         )}
                         style={barRect(
