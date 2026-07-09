@@ -11,6 +11,7 @@ import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { CalendarDays, Clock } from 'lucide-react'
 
+import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { Calendar } from '#/components/ui/calendar.tsx'
 import { Label } from '#/components/ui/label.tsx'
@@ -137,11 +138,13 @@ export function DatePickerButton({
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button variant="outline" size="icon-sm" aria-label={ariaLabel}>
-          <CalendarDays />
-        </Button>
-      </PopoverTrigger>
+      <Tip label={ariaLabel}>
+        <PopoverTrigger asChild>
+          <Button variant="outline" size="icon-sm" aria-label={ariaLabel}>
+            <CalendarDays />
+          </Button>
+        </PopoverTrigger>
+      </Tip>
       <PopoverContent className="w-auto p-0" align="start">
         <Calendar
           mode="single"

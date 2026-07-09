@@ -3,6 +3,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
+import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { BoardSkeleton } from '#/components/repjour/BoardSkeleton.tsx'
 import { KpiLineChart } from '#/components/repjour/charts/KpiLineChart.tsx'
 import {
@@ -139,21 +140,23 @@ export function AnalytiqueBoard() {
   return (
     <PageContainer>
       <div className="mx-auto w-full max-w-5xl space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold text-foreground">Analytique</h1>
-          <select
-            value={year}
-            onChange={(e) => setYear(Number(e.target.value))}
-            aria-label="Choisir une année"
-            className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground"
-          >
-            {years.map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
-            ))}
-          </select>
-        </div>
+        <PageHeader
+          title="Analytique"
+          actions={
+            <select
+              value={year}
+              onChange={(e) => setYear(Number(e.target.value))}
+              aria-label="Choisir une année"
+              className="h-8 rounded-lg border border-border bg-card px-3 text-sm text-foreground"
+            >
+              {years.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
+          }
+        />
 
         {loading ? (
           <BoardSkeleton rows={12} />

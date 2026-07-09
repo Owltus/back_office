@@ -169,47 +169,56 @@
 .pdj-stats-revenue {
   display: none;
 }
+/* Titre en haut, puis une rangée « icône à gauche / valeur à droite ».
+ *
+ * Carte compacte : les libellés sont longs et ne sont pas tronqués — c'est donc
+ * tout le reste qui se resserre. Mêmes proportions qu'au rapprochement.
+ *
+ * `margin-top: auto` colle la rangée en bas : la grille étire les cartes à
+ * hauteur égale, et un libellé sur deux lignes désalignerait sinon sa valeur. */
 .pdj-stat {
   display: flex;
-  align-items: center;
-  gap: 0.8rem;
-  padding: 0.9rem 1rem;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.55rem 0.7rem;
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
+}
+.pdj-stat-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  margin-top: auto;
 }
 .pdj-stat-icon {
   display: flex;
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  width: 2.4rem;
-  height: 2.4rem;
+  width: 1.65rem;
+  height: 1.65rem;
   color: var(--pdj-accent, var(--primary));
   background: color-mix(
     in oklab,
     var(--pdj-accent, var(--primary)) 16%,
     transparent
   );
-  border-radius: calc(var(--radius) - 4px);
-}
-.pdj-stat-body {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
+  border-radius: calc(var(--radius) - 6px);
 }
 .pdj-stat-value {
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   font-weight: 700;
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
 .pdj-stat-label {
-  margin-top: 0.3rem;
-  font-size: 0.66rem;
+  font-size: 0.6rem;
   font-weight: 500;
+  line-height: 1.15;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.02em;
   color: var(--muted-foreground);
 }
 
@@ -409,8 +418,11 @@
     grid-template-columns: repeat(5, 1fr);
     gap: 10px;
   }
+  /* Le DOM porte le libellé en PREMIER (mise en page écran). Le footer du PDF
+     le veut sous la valeur : `column-reverse` inverse l'affichage seul. */
   .pdj-stat {
-    display: block;
+    display: flex;
+    flex-direction: column-reverse;
     gap: 0;
     padding: 3px 6px;
     text-align: center;
@@ -444,8 +456,11 @@
     color: #666;
     text-transform: uppercase;
   }
-  .pdj-stat-body {
+  /* L'icône étant masquée plus bas, la rangée ne porte plus que la valeur :
+     un bloc centré, sans la marge auto qui la collait en bas à l'écran. */
+  .pdj-stat-row {
     display: block;
+    margin-top: 0;
   }
   .pdj-stat-value {
     display: block;
@@ -458,6 +473,7 @@
     display: block;
     margin-top: 0;
     font-size: 5.5px;
+    line-height: normal;
     letter-spacing: 0.4px;
     color: #666;
   }

@@ -4,6 +4,8 @@ import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft } from 'lucide-react'
 
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
+import { PageHeader } from '#/components/shared/PageHeader.tsx'
+import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { BoardSkeleton } from '#/components/repjour/BoardSkeleton.tsx'
 import { KpiLineChart } from '#/components/repjour/charts/KpiLineChart.tsx'
@@ -147,19 +149,21 @@ export function AnalytiqueMoisBoard({
   return (
     <PageContainer>
       <div className="mx-auto w-full max-w-5xl space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold text-foreground">
-            {monthLabel} {year}
-          </h1>
-          <Button
-            variant="outline"
-            size="icon-sm"
-            onClick={() => router.history.back()}
-            aria-label="Retour à l'analytique"
-          >
-            <ArrowLeft />
-          </Button>
-        </div>
+        <PageHeader
+          title={`${monthLabel} ${year}`}
+          actions={
+            <Tip label="Retour à l'analytique">
+              <Button
+                variant="outline"
+                size="icon-sm"
+                onClick={() => router.history.back()}
+                aria-label="Retour à l'analytique"
+              >
+                <ArrowLeft />
+              </Button>
+            </Tip>
+          }
+        />
 
         {loading ? (
           <BoardSkeleton rows={12} />

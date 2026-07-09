@@ -5,8 +5,6 @@ import {
   ArrowDown,
   ArrowUp,
   BedDouble,
-  ChevronLeft,
-  ChevronRight,
   Coffee,
   Croissant,
   FileUp,
@@ -17,6 +15,8 @@ import {
 import { EmptyCanvas } from '#/components/shared/EmptyCanvas.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
+import { StepNav } from '#/components/shared/StepNav.tsx'
+import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { DatePickerButton } from '#/components/form/fields.tsx'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
@@ -294,7 +294,9 @@ export function BreakfastBoard() {
   const canNavigate = navDates.length > 1
 
   return (
-    <div className="pdj-doc flex w-full min-w-0 flex-1 flex-col gap-5">
+    // `max-w-5xl` centre le contenu comme sur RepJour. Neutralisé à
+    // l'impression : la feuille A4 impose déjà sa largeur (voir pdj.css).
+    <div className="pdj-doc mx-auto flex w-full min-w-0 max-w-5xl flex-1 flex-col gap-5 print:max-w-none">
       {/* En-tête compact (impression uniquement). */}
       <div className="pdj-header">
         <h1>Breakfast</h1>
@@ -324,49 +326,41 @@ export function BreakfastBoard() {
           title={titleDate}
           actions={
             <>
-              {canNavigate && (
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="outline"
-                    size="icon-sm"
-                    onClick={gotoOlder}
-                    disabled={dateIdx < 0 || dateIdx >= navDates.length - 1}
-                    aria-label="Jour précédent"
-                  >
-                    <ChevronLeft />
-                  </Button>
-                  <DatePickerButton
-                    value={selectedDate}
-                    onChange={selectNearestDate}
-                    ariaLabel="Choisir un jour"
-                  />
-                  <Button
-                    variant="outline"
-                    size="icon-sm"
-                    onClick={gotoNewer}
-                    disabled={dateIdx <= 0}
-                    aria-label="Jour suivant"
-                  >
-                    <ChevronRight />
-                  </Button>
-                </div>
-              )}
               {canEdit && (
-                <Button
-                  variant="outline"
-                  onClick={() => inputRef.current?.click()}
-                  aria-label="Importer un CSV"
-                  title="Importer un CSV"
-                >
-                  <FileUp />
-                  <span className="hidden lg:inline">Importer</span>
-                </Button>
+                <Tip label="Importer un CSV In-House Guests">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => inputRef.current?.click()}
+                    aria-label="Importer un CSV"
+                  >
+                    <FileUp />
+                    <span className="hidden lg:inline">Importer</span>
+                  </Button>
+                </Tip>
               )}
               <PrintButton
                 onClick={handlePrint}
                 responsiveLabel
                 disabled={!hasData}
               />
+              {/* Navigation en dernier : collée au bord droit, comme partout. */}
+              {canNavigate && (
+                <StepNav
+                  onPrev={gotoOlder}
+                  onNext={gotoNewer}
+                  prevLabel="Jour précédent"
+                  nextLabel="Jour suivant"
+                  prevDisabled={dateIdx < 0 || dateIdx >= navDates.length - 1}
+                  nextDisabled={dateIdx <= 0}
+                >
+                  <DatePickerButton
+                    value={selectedDate}
+                    onChange={selectNearestDate}
+                    ariaLabel="Choisir un jour"
+                  />
+                </StepNav>
+              )}
             </>
           }
         />
@@ -539,12 +533,15 @@ function Stat({
       )}
       style={{ '--pdj-accent': accent } as React.CSSProperties}
     >
-      <span className="pdj-stat-icon">
-        <Icon className="size-5" />
-      </span>
-      <span className="pdj-stat-body">
+      {/* Libellé d'abord dans le DOM : à l'écran il coiffe la carte. Le PDF le
+          veut SOUS la valeur — `flex-direction: column-reverse` en @media print
+          rétablit cet ordre sans dupliquer le balisage (voir pdj.css). */}
+      <span className="pdj-stat-label">{label}</span>
+      <span className="pdj-stat-row">
+        <span className="pdj-stat-icon">
+          <Icon className="size-3.5" />
+        </span>
         <span className="pdj-stat-value">{value}</span>
-        <span className="pdj-stat-label">{label}</span>
       </span>
     </div>
   )

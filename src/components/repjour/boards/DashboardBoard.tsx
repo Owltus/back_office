@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import {
-  ChevronLeft,
-  ChevronRight,
   HelpCircle,
   Image as ImageIcon,
   LineChart,
@@ -10,6 +8,9 @@ import {
 } from 'lucide-react'
 
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
+import { PageHeader } from '#/components/shared/PageHeader.tsx'
+import { StepNav } from '#/components/shared/StepNav.tsx'
+import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { DatePickerButton } from '#/components/form/fields.tsx'
 import { BoardSkeleton } from '#/components/repjour/BoardSkeleton.tsx'
@@ -253,44 +254,35 @@ export function DashboardBoard() {
   return (
     <PageContainer>
       <div className="mx-auto w-full max-w-5xl space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-xl font-bold text-foreground">{displayDate}</h1>
-
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1">
-              <Button
-                variant="outline"
-                size="icon-sm"
-                onClick={() => shiftDate(-1)}
-                aria-label="Jour précédent"
+        <PageHeader
+          title={displayDate}
+          actions={
+            <>
+              {/* Accès à la vue analytique — remplace le lien de l'ancienne
+                  sous-nav repjour (supprimée). */}
+              <Tip label="Vue analytique">
+                <Button asChild variant="outline" size="sm">
+                  <Link to="/repjour/analytique" aria-label="Vue analytique">
+                    <LineChart />
+                    <span className="hidden sm:inline">Analytique</span>
+                  </Link>
+                </Button>
+              </Tip>
+              {/* Navigation en dernier : collée au bord droit, comme partout. */}
+              <StepNav
+                onPrev={() => shiftDate(-1)}
+                onNext={() => shiftDate(1)}
+                prevLabel="Jour précédent"
+                nextLabel="Jour suivant"
               >
-                <ChevronLeft />
-              </Button>
-              <DatePickerButton
-                value={selectedDate}
-                onChange={handleDateChange}
-              />
-              <Button
-                variant="outline"
-                size="icon-sm"
-                onClick={() => shiftDate(1)}
-                aria-label="Jour suivant"
-              >
-                <ChevronRight />
-              </Button>
-            </div>
-
-            {/* Accès à la vue analytique — remplace le lien de l'ancienne
-                sous-nav repjour (supprimée). Placé à droite de la navigation
-                des jours. */}
-            <Button asChild variant="outline" size="sm">
-              <Link to="/repjour/analytique" aria-label="Vue analytique">
-                <LineChart />
-                <span className="hidden sm:inline">Analytique</span>
-              </Link>
-            </Button>
-          </div>
-        </div>
+                <DatePickerButton
+                  value={selectedDate}
+                  onChange={handleDateChange}
+                />
+              </StepNav>
+            </>
+          }
+        />
 
         {loading ? (
           <BoardSkeleton />
@@ -369,15 +361,16 @@ export function DashboardBoard() {
             ) : (
               <>
                 <div className="relative rounded-xl border border-border bg-card p-2 sm:p-3">
-                  <button
-                    type="button"
-                    onClick={() => setDetailMode(true)}
-                    title="Mode détaillé"
-                    aria-label="Ouvrir le mode détaillé"
-                    className="absolute top-3 left-3 flex size-6 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:border-primary hover:text-primary"
-                  >
-                    <HelpCircle className="size-3.5" />
-                  </button>
+                  <Tip label="Mode détaillé" side="right">
+                    <button
+                      type="button"
+                      onClick={() => setDetailMode(true)}
+                      aria-label="Ouvrir le mode détaillé"
+                      className="absolute top-3 left-3 flex size-6 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+                    >
+                      <HelpCircle className="size-3.5" />
+                    </button>
+                  </Tip>
                   <KPITable
                     realiseJour={rj}
                     realiseMTD={rmtd}
@@ -395,26 +388,27 @@ export function DashboardBoard() {
                     le DOM shadcn). */}
                 {isAdmin && (
                   <div className="flex items-center gap-1">
-                    <Button
-                      variant="outline"
-                      size="icon-sm"
-                      title="Copier le tableau en image"
-                      aria-label="Copier le tableau en image"
-                      onClick={() =>
-                        captureTableImage({
-                          realiseJour: rj,
-                          realiseMTD: rmtd,
-                          projeteMois: pm,
-                          budget,
-                          ecart,
-                          dayOfMonth: report.day_of_month,
-                          month: report.month,
-                          year: report.year,
-                        })
-                      }
-                    >
-                      <ImageIcon />
-                    </Button>
+                    <Tip label="Copier le tableau en image">
+                      <Button
+                        variant="outline"
+                        size="icon-sm"
+                        aria-label="Copier le tableau en image"
+                        onClick={() =>
+                          captureTableImage({
+                            realiseJour: rj,
+                            realiseMTD: rmtd,
+                            projeteMois: pm,
+                            budget,
+                            ecart,
+                            dayOfMonth: report.day_of_month,
+                            month: report.month,
+                            year: report.year,
+                          })
+                        }
+                      >
+                        <ImageIcon />
+                      </Button>
+                    </Tip>
                     <Button
                       variant="outline"
                       className="flex-1"
@@ -439,15 +433,16 @@ export function DashboardBoard() {
                     >
                       {sending ? 'Préparation...' : 'Envoyer par email'}
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="icon-sm"
-                      title="Gérer les destinataires"
-                      aria-label="Gérer les destinataires"
-                      onClick={() => setShowRecipients(true)}
-                    >
-                      <Settings />
-                    </Button>
+                    <Tip label="Gérer les destinataires">
+                      <Button
+                        variant="outline"
+                        size="icon-sm"
+                        aria-label="Gérer les destinataires"
+                        onClick={() => setShowRecipients(true)}
+                      >
+                        <Settings />
+                      </Button>
+                    </Tip>
                   </div>
                 )}
               </>

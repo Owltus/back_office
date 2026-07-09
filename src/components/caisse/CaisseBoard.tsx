@@ -1,17 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  Check,
-  ChevronLeft,
-  ChevronRight,
-  Lock,
-  LockOpen,
-  Minus,
-  Plus,
-} from 'lucide-react'
+import { Check, Lock, LockOpen, Minus, Plus } from 'lucide-react'
 
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
+import { StepNav } from '#/components/shared/StepNav.tsx'
+import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
 import { Textarea } from '#/components/ui/textarea.tsx'
@@ -420,7 +414,7 @@ export function CaisseBoard() {
   }
 
   return (
-    <div className="caisse-doc flex w-full min-w-0 flex-1 flex-col gap-4">
+    <div className="caisse-doc mx-auto flex w-full min-w-0 max-w-5xl flex-1 flex-col gap-4 print:max-w-none">
       <PageHeader
         title={`${titleDate} (${SHIFT_LABELS[form.shift].toLowerCase()})`}
         actions={
@@ -431,60 +425,71 @@ export function CaisseBoard() {
             {isWriter &&
               (!isValidated ? (
                 editable && (
-                  <Button
-                    onClick={() => {
-                      setHotelierName(form.operatorInitials)
-                      setCloseOpen(true)
-                    }}
-                  >
-                    <Check /> Clôturer la caisse
-                  </Button>
+                  <Tip label="Fige les montants de ce shift">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setHotelierName(form.operatorInitials)
+                        setCloseOpen(true)
+                      }}
+                    >
+                      <Check /> Clôturer la caisse
+                    </Button>
+                  </Tip>
                 )
               ) : editable ? (
-                <Button variant="outline" onClick={handleReopen} disabled={busy}>
-                  <LockOpen /> Réouvrir la caisse
-                </Button>
+                <Tip label="Rend les montants modifiables">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleReopen}
+                    disabled={busy}
+                  >
+                    <LockOpen /> Réouvrir la caisse
+                  </Button>
+                </Tip>
               ) : (
-                <Button
-                  variant="outline"
-                  disabled
-                  className="border-destructive/50 text-destructive disabled:opacity-100"
-                >
-                  <Lock /> Verrouillé
-                </Button>
+                // Bouton désactivé : Radix ne verrait aucun survol dessus, d'où
+                // le span porteur. C'est ici que l'infobulle compte le plus —
+                // elle est la seule à dire POURQUOI la réouverture est refusée.
+                <Tip label="Réouverture réservée à un administrateur">
+                  <span tabIndex={0}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled
+                      className="border-destructive/50 text-destructive disabled:opacity-100"
+                    >
+                      <Lock /> Verrouillé
+                    </Button>
+                  </span>
+                </Tip>
               ))}
             {/* 2) Impression : présent UNIQUEMENT sur une feuille clôturée
                 (le document ne s'imprime qu'une fois la caisse validée). */}
             {isValidated && (
               <PrintButton onClick={handleGeneratePdf} iconOnly disabled={pdfBusy} />
             )}
-            {/* 3) Navigation : shift précédent / jour / shift suivant. */}
-            <Button
-              variant="outline"
-              size="icon-sm"
+            {/* 3) Navigation, en dernier : elle est collée au bord droit sur
+                toutes les pages (cf. PageHeader). */}
+            <StepNav
               className="ml-1"
-              onClick={() => goStep(-1)}
-              disabled={atLowerBound}
-              aria-label="Shift précédent"
+              onPrev={() => goStep(-1)}
+              onNext={() => goStep(1)}
+              prevLabel="Shift précédent"
+              nextLabel="Shift suivant"
+              prevDisabled={atLowerBound}
+              nextDisabled={atLatestSlot}
             >
-              <ChevronLeft />
-            </Button>
-            <DatePickerButton
-              value={selectedDate}
-              onChange={goDate}
-              min={lowerSlot.date}
-              max={nowSlot.date}
-              ariaLabel="Choisir un jour"
-            />
-            <Button
-              variant="outline"
-              size="icon-sm"
-              onClick={() => goStep(1)}
-              disabled={atLatestSlot}
-              aria-label="Shift suivant"
-            >
-              <ChevronRight />
-            </Button>
+              <DatePickerButton
+                value={selectedDate}
+                onChange={goDate}
+                min={lowerSlot.date}
+                max={nowSlot.date}
+                ariaLabel="Choisir un jour"
+              />
+            </StepNav>
           </>
         }
       />

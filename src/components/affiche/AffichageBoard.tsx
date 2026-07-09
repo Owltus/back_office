@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Pencil, Plus, Trash2 } from 'lucide-react'
 
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
+import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
 import { Label } from '#/components/ui/label.tsx'
@@ -355,36 +356,39 @@ export function AffichageBoard() {
               </Select>
               {canEdit && (
                 <div className="flex items-center gap-1.5">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={openCreate}
-                    className="flex-1"
-                    title="Nouveau modèle"
-                  >
-                    <Plus />
-                    Nouveau
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="icon-sm"
-                    onClick={openEdit}
-                    disabled={!selected}
-                    aria-label="Modifier le modèle"
-                    title="Modifier le modèle"
-                  >
-                    <Pencil />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="icon-sm"
-                    onClick={handleDeleteTemplate}
-                    disabled={!selected}
-                    aria-label="Supprimer le modèle"
-                    title="Supprimer le modèle"
-                  >
-                    <Trash2 />
-                  </Button>
+                  <Tip label="Nouveau modèle">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={openCreate}
+                      className="flex-1"
+                    >
+                      <Plus />
+                      Nouveau
+                    </Button>
+                  </Tip>
+                  <Tip label="Modifier le modèle">
+                    <Button
+                      variant="outline"
+                      size="icon-sm"
+                      onClick={openEdit}
+                      disabled={!selected}
+                      aria-label="Modifier le modèle"
+                    >
+                      <Pencil />
+                    </Button>
+                  </Tip>
+                  <Tip label="Supprimer le modèle">
+                    <Button
+                      variant="outline"
+                      size="icon-sm"
+                      onClick={handleDeleteTemplate}
+                      disabled={!selected}
+                      aria-label="Supprimer le modèle"
+                    >
+                      <Trash2 />
+                    </Button>
+                  </Tip>
                 </div>
               )}
             </div>

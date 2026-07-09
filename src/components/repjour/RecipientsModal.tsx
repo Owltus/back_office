@@ -7,6 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '#/components/ui/dialog.tsx'
+import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
 import { cn } from '#/lib/utils.ts'
@@ -207,22 +208,26 @@ export function RecipientsModal({ open, onClose }: Props) {
           </div>
         </div>
         <div className="ml-2 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-          <button
-            type="button"
-            onClick={() => startEdit(r)}
-            title="Modifier"
-            className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          >
-            <Pencil className="size-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => handleDelete(r.id)}
-            title="Supprimer"
-            className="rounded p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-          >
-            <Trash2 className="size-3.5" />
-          </button>
+          <Tip label="Modifier">
+            <button
+              type="button"
+              onClick={() => startEdit(r)}
+              aria-label="Modifier"
+              className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            >
+              <Pencil className="size-3.5" />
+            </button>
+          </Tip>
+          <Tip label="Supprimer">
+            <button
+              type="button"
+              onClick={() => handleDelete(r.id)}
+              aria-label="Supprimer"
+              className="rounded p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+            >
+              <Trash2 className="size-3.5" />
+            </button>
+          </Tip>
         </div>
       </div>
     )

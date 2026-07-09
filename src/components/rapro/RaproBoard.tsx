@@ -13,8 +13,6 @@ import {
   BedDouble,
   CalendarDays,
   CheckCheck,
-  ChevronLeft,
-  ChevronRight,
   History,
   Info,
   Lock,
@@ -29,12 +27,13 @@ import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { DatePickerButton } from '#/components/form/fields.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
+import { StepNav } from '#/components/shared/StepNav.tsx'
+import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { Textarea } from '#/components/ui/textarea.tsx'
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
 } from '#/components/ui/tooltip.tsx'
 import {
@@ -356,46 +355,53 @@ export function RaproBoard() {
   const title = label.charAt(0).toUpperCase() + label.slice(1)
 
   return (
-    <div className="flex flex-1 flex-col gap-4">
+    // Le PDF passe par jsPDF, pas par le DOM : rien à neutraliser en impression.
+    <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4">
       <PageHeader
         title={title}
         actions={
           <>
-            <Button asChild variant="outline" size="sm">
-              <Link to="/rapro-mois" aria-label="Récap mensuel">
-                <CalendarDays />
-                <span className="hidden sm:inline">Récap</span>
-              </Link>
-            </Button>
+            <Tip label="Récap mensuel">
+              <Button asChild variant="outline" size="sm">
+                <Link to="/rapro-mois" aria-label="Récap mensuel">
+                  <CalendarDays />
+                  <span className="hidden sm:inline">Récap</span>
+                </Link>
+              </Button>
+            </Tip>
             {isWriter &&
               (!isValidated ? (
                 // Jour éditable → cadenas OUVERT (état courant) ; l'action clôture.
                 // Avertissement non bloquant (D5) au survol si la balance n'est pas
                 // à zéro ; le compteur visible vit dans la card « Reste à faire ».
-                <Button
-                  variant="outline"
-                  size="icon-sm"
-                  onClick={handleClose}
-                  aria-label="Clôturer le rapprochement"
-                  title={
+                <Tip
+                  label={
                     rec.pending > 0
                       ? `Clôturer (${rec.pending} chambre(s) encore à faire)`
                       : 'Clôturer'
                   }
                 >
-                  <LockOpen />
-                </Button>
+                  <Button
+                    variant="outline"
+                    size="icon-sm"
+                    onClick={handleClose}
+                    aria-label="Clôturer le rapprochement"
+                  >
+                    <LockOpen />
+                  </Button>
+                </Tip>
               ) : (
                 // Jour clôturé → cadenas FERMÉ (état courant) ; l'action réouvre.
-                <Button
-                  variant="outline"
-                  size="icon-sm"
-                  onClick={handleReopen}
-                  aria-label="Réouvrir le rapprochement"
-                  title="Réouvrir"
-                >
-                  <Lock />
-                </Button>
+                <Tip label="Réouvrir">
+                  <Button
+                    variant="outline"
+                    size="icon-sm"
+                    onClick={handleReopen}
+                    aria-label="Réouvrir le rapprochement"
+                  >
+                    <Lock />
+                  </Button>
+                </Tip>
               ))}
             {isValidated && (
               <PrintButton
@@ -404,31 +410,22 @@ export function RaproBoard() {
                 disabled={pdfBusy}
               />
             )}
-            <Button
-              variant="outline"
-              size="icon-sm"
-              onClick={() => goStep(-1)}
-              disabled={atLower}
-              aria-label="Jour précédent"
+            <StepNav
+              onPrev={() => goStep(-1)}
+              onNext={() => goStep(1)}
+              prevLabel="Jour précédent"
+              nextLabel="Jour suivant"
+              prevDisabled={atLower}
+              nextDisabled={atLatest}
             >
-              <ChevronLeft />
-            </Button>
-            <DatePickerButton
-              value={selectedDate}
-              onChange={goDate}
-              min={lowerDay}
-              max={todayStr}
-              ariaLabel="Choisir un jour"
-            />
-            <Button
-              variant="outline"
-              size="icon-sm"
-              onClick={() => goStep(1)}
-              disabled={atLatest}
-              aria-label="Jour suivant"
-            >
-              <ChevronRight />
-            </Button>
+              <DatePickerButton
+                value={selectedDate}
+                onChange={goDate}
+                min={lowerDay}
+                max={todayStr}
+                ariaLabel="Choisir un jour"
+              />
+            </StepNav>
           </>
         }
       />
@@ -449,52 +446,50 @@ export function RaproBoard() {
         </div>
       )}
 
-      <TooltipProvider>
-        <div className="rapro-stats">
-          <Stat
-            value={hasOccupancy ? occupied.size : '—'}
-            label="Vendues"
-            icon={BedDouble}
-            accent="#818cf8"
-            hint="Chambres occupées à traiter aujourd'hui."
-          />
-          <Stat
-            value={stats.clean}
-            label="Nettoyées"
-            icon={Sparkles}
-            accent="#34d399"
-            hint="Chambres nettoyées aujourd'hui (facturées)."
-          />
-          <Stat
-            value={hasDue ? rec.pending : '—'}
-            label="Reste à faire"
-            icon={Scale}
-            accent={reconciled ? '#34d399' : '#fbbf24'}
-            hint="Chambres encore à nettoyer. Zéro = tout est fait."
-          />
-          <Stat
-            value={carried.size}
-            label="Reportées"
-            icon={History}
-            accent="#fb923c"
-            hint="Restées à faire depuis un jour précédent."
-          />
-          <Stat
-            value={stats.refus}
-            label="Refus"
-            icon={Ban}
-            accent="#fbbf24"
-            hint="Client a refusé le ménage."
-          />
-          <Stat
-            value={stats.noshow}
-            label="No-show"
-            icon={UserX}
-            accent="#64748b"
-            hint="Chambre marquée à la main dans la grille."
-          />
-        </div>
-      </TooltipProvider>
+      <div className="rapro-stats">
+        <Stat
+          value={hasOccupancy ? occupied.size : '—'}
+          label="Vendues"
+          icon={BedDouble}
+          accent="#818cf8"
+          hint="Chambres occupées à traiter aujourd'hui."
+        />
+        <Stat
+          value={stats.clean}
+          label="Nettoyées"
+          icon={Sparkles}
+          accent="#34d399"
+          hint="Chambres nettoyées aujourd'hui (facturées)."
+        />
+        <Stat
+          value={hasDue ? rec.pending : '—'}
+          label="Reste à faire"
+          icon={Scale}
+          accent={reconciled ? '#34d399' : '#fbbf24'}
+          hint="Chambres encore à nettoyer. Zéro = tout est fait."
+        />
+        <Stat
+          value={carried.size}
+          label="Reportées"
+          icon={History}
+          accent="#fb923c"
+          hint="Restées à faire depuis un jour précédent."
+        />
+        <Stat
+          value={stats.refus}
+          label="Refus"
+          icon={Ban}
+          accent="#fbbf24"
+          hint="Client a refusé le ménage."
+        />
+        <Stat
+          value={stats.noshow}
+          label="No-show"
+          icon={UserX}
+          accent="#64748b"
+          hint="Chambre marquée à la main dans la grille."
+        />
+      </div>
 
       {!showEmptyState && optionalMissing.length > 0 && (
         <div className="rapro-occ-alert">
@@ -683,12 +678,12 @@ function Stat({
       className={cn('rapro-stat', hint && 'cursor-help')}
       style={{ '--rapro-accent': accent } as CSSProperties}
     >
-      <span className="rapro-stat-icon">
-        <Icon className="size-5" />
-      </span>
-      <span className="rapro-stat-body">
+      <span className="rapro-stat-label">{label}</span>
+      <span className="rapro-stat-row">
+        <span className="rapro-stat-icon">
+          <Icon className="size-3.5" />
+        </span>
         <span className="rapro-stat-value">{value}</span>
-        <span className="rapro-stat-label">{label}</span>
       </span>
     </div>
   )

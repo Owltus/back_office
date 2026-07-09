@@ -5,8 +5,6 @@ import type {
 } from 'react'
 import {
   CalendarDays,
-  ChevronLeft,
-  ChevronRight,
   Copy,
   MessageSquare,
   Pencil,
@@ -23,6 +21,9 @@ import { fr } from 'date-fns/locale'
 
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { EmptyCanvas } from '#/components/shared/EmptyCanvas.tsx'
+import { PageHeader } from '#/components/shared/PageHeader.tsx'
+import { StepNav } from '#/components/shared/StepNav.tsx'
+import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { Calendar } from '#/components/ui/calendar.tsx'
 import {
@@ -50,7 +51,6 @@ import { Textarea } from '#/components/ui/textarea.tsx'
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
 } from '#/components/ui/tooltip.tsx'
 import { clamp, cn } from '#/lib/utils.ts'
@@ -564,59 +564,55 @@ export function ParkingBoard() {
   )
 
   return (
-    <TooltipProvider delayDuration={300}>
-      <div className="flex min-w-0 flex-1 flex-col gap-4">
-        {/* En-tête : navigation + légende */}
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+    <div className="flex min-w-0 flex-1 flex-col gap-4">
+      {/* En-tête : navigation + légende. Seule page où la navigation reste à
+            GAUCHE (slot `leading`) : elle pilote un planning qui se lit de
+            gauche à droite, et il n'y a pas de titre à sa place. */}
+      <PageHeader
+        leading={
           <div className="flex w-full items-center justify-between gap-1.5 md:w-auto md:justify-start">
-            <Button
-              variant="outline"
-              size="icon"
-              aria-label="Reculer de 3 jours"
-              onClick={() => setOffset((o) => o - STEP)}
+            <StepNav
+              onPrev={() => setOffset((o) => o - STEP)}
+              onNext={() => setOffset((o) => o + STEP)}
+              prevLabel="Reculer de 3 jours"
+              nextLabel="Avancer de 3 jours"
             >
-              <ChevronLeft />
-            </Button>
-            <Popover open={calOpen} onOpenChange={setCalOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="ghost"
-                  className="min-w-[13rem] text-sm font-medium tabular-nums"
-                >
-                  {rangeLabel}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="center">
-                <Calendar
-                  mode="single"
-                  locale={fr}
-                  selected={days[0]}
-                  defaultMonth={days[0]}
-                  onSelect={goToDate}
-                />
-              </PopoverContent>
-            </Popover>
-            <Button
-              variant="outline"
-              size="icon"
-              aria-label="Avancer de 3 jours"
-              onClick={() => setOffset((o) => o + STEP)}
-            >
-              <ChevronRight />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              aria-label="Aujourd'hui"
-              title="Aujourd'hui (Alt)"
-              onClick={() => setOffset(framedOffset)}
-              disabled={offset === framedOffset}
-            >
-              <CalendarDays />
-            </Button>
+              <Popover open={calOpen} onOpenChange={setCalOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="min-w-[13rem] text-sm font-medium tabular-nums"
+                  >
+                    {rangeLabel}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="center">
+                  <Calendar
+                    mode="single"
+                    locale={fr}
+                    selected={days[0]}
+                    defaultMonth={days[0]}
+                    onSelect={goToDate}
+                  />
+                </PopoverContent>
+              </Popover>
+            </StepNav>
+            <Tip label="Aujourd'hui (Alt)">
+              <Button
+                variant="outline"
+                size="icon-sm"
+                aria-label="Aujourd'hui"
+                onClick={() => setOffset(framedOffset)}
+                disabled={offset === framedOffset}
+              >
+                <CalendarDays />
+              </Button>
+            </Tip>
           </div>
-
-          <div className="ml-auto hidden flex-wrap items-center gap-3 text-xs md:flex">
+        }
+        actions={
+          <div className="hidden flex-wrap items-center gap-3 text-xs md:flex">
             {STATUS_ORDER.map((s) => (
               <span key={s} className="flex items-center gap-1.5">
                 <span className={cn('size-2.5 rounded-full', STATUS[s].dot)} />
@@ -628,249 +624,247 @@ export function ParkingBoard() {
               Commentaire
             </span>
           </div>
+        }
+      />
+
+      {/* Planning */}
+      <div className="flex overflow-hidden rounded-2xl border border-border bg-card">
+        {/* Colonne fixe des places */}
+        <div
+          className="shrink-0 border-r border-border"
+          style={{ width: LABEL_W }}
+        >
+          <div
+            className="flex items-center justify-center text-xs font-medium text-muted-foreground"
+            style={{ height: HEADER_H }}
+          >
+            Place
+          </div>
+          {SPOTS_LIST.map((s) => (
+            <div
+              key={s}
+              className={cn(
+                'flex items-center justify-center border-t border-border text-sm',
+                s >= FIRST_STAFF_SPOT && 'bg-primary/5',
+              )}
+              style={{ height: ROW_H }}
+            >
+              <span className="font-medium tabular-nums">{s}</span>
+            </div>
+          ))}
         </div>
 
-        {/* Planning */}
-        <div className="flex overflow-hidden rounded-2xl border border-border bg-card">
-          {/* Colonne fixe des places */}
-          <div
-            className="shrink-0 border-r border-border"
-            style={{ width: LABEL_W }}
-          >
-            <div
-              className="flex items-center justify-center text-xs font-medium text-muted-foreground"
-              style={{ height: HEADER_H }}
-            >
-              Place
+        {/* Zone des jours (sans scrollbar : navigation par flèches) */}
+        <div ref={timelineRef} className="min-w-0 flex-1 overflow-hidden">
+          <div className="relative" style={{ width: '100%' }}>
+            {/* Bordures des week-ends, continues sur en-tête + grille */}
+            {days.map((d, i) => {
+              const day = d.getDay()
+              if (day !== 6 && day !== 0) return null
+              const left = day === 6 ? i * dayW : (i + 1) * dayW
+              return (
+                <div
+                  key={`we-${i}`}
+                  className="pointer-events-none absolute bottom-0 top-0 w-px bg-foreground/15"
+                  style={{ left }}
+                />
+              )
+            })}
+
+            {/* En-tête des jours */}
+            <div className="flex" style={{ height: HEADER_H }}>
+              {days.map((d, i) => (
+                <div
+                  key={i}
+                  className={cn(
+                    'flex flex-col items-center justify-center border-l border-border first:border-l-0',
+                    i === todayIndex && 'bg-primary/5',
+                  )}
+                  style={{ width: dayW }}
+                >
+                  <span className="text-xs font-medium capitalize">
+                    {fmtWeekday.format(d)}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {fmtDay.format(d)}
+                  </span>
+                </div>
+              ))}
             </div>
-            {SPOTS_LIST.map((s) => (
-              <div
-                key={s}
-                className={cn(
-                  'flex items-center justify-center border-t border-border text-sm',
-                  s >= FIRST_STAFF_SPOT && 'bg-primary/5',
-                )}
-                style={{ height: ROW_H }}
-              >
-                <span className="font-medium tabular-nums">{s}</span>
-              </div>
-            ))}
-          </div>
 
-          {/* Zone des jours (sans scrollbar : navigation par flèches) */}
-          <div ref={timelineRef} className="min-w-0 flex-1 overflow-hidden">
-            <div className="relative" style={{ width: '100%' }}>
-              {/* Bordures des week-ends, continues sur en-tête + grille */}
-              {days.map((d, i) => {
-                const day = d.getDay()
-                if (day !== 6 && day !== 0) return null
-                const left = day === 6 ? i * dayW : (i + 1) * dayW
-                return (
-                  <div
-                    key={`we-${i}`}
-                    className="pointer-events-none absolute bottom-0 top-0 w-px bg-foreground/15"
-                    style={{ left }}
-                  />
-                )
-              })}
-
-              {/* En-tête des jours */}
-              <div className="flex" style={{ height: HEADER_H }}>
-                {days.map((d, i) => (
-                  <div
-                    key={i}
-                    className={cn(
-                      'flex flex-col items-center justify-center border-l border-border first:border-l-0',
-                      i === todayIndex && 'bg-primary/5',
-                    )}
-                    style={{ width: dayW }}
-                  >
-                    <span className="text-xs font-medium capitalize">
-                      {fmtWeekday.format(d)}
-                    </span>
-                    <span className="text-[11px] text-muted-foreground">
-                      {fmtDay.format(d)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-
-              {/* Grille + réservations */}
-              <div className="relative" style={{ height: SPOTS * ROW_H }}>
-                {/* Fond : lignes de jour / midi / rangées + clic droit pour ajouter.
+            {/* Grille + réservations */}
+            <div className="relative" style={{ height: SPOTS * ROW_H }}>
+              {/* Fond : lignes de jour / midi / rangées + clic droit pour ajouter.
                     En lecture seule (utilisateur), pas de menu contextuel : on
                     rend le fond seul (clic droit navigateur inoffensif). */}
-                {canEdit ? (
-                  <ContextMenu>
-                    <ContextMenuTrigger asChild>
-                      {gridBackground}
-                    </ContextMenuTrigger>
-                    <ContextMenuContent
-                      className="w-44"
-                      onCloseAutoFocus={(e) => e.preventDefault()}
-                    >
-                      <ContextMenuItem
-                        onSelect={() =>
-                          addReservation(
-                            pendingCell.current.day,
-                            pendingCell.current.spot,
-                          )
-                        }
-                      >
-                        <Plus />
-                        Nouvelle réservation
-                      </ContextMenuItem>
-                    </ContextMenuContent>
-                  </ContextMenu>
-                ) : (
-                  gridBackground
-                )}
-
-                {/* Numéro de semaine ISO en filigrane (lundi → vendredi) */}
-                {weekBands.map((b) => (
-                  <div
-                    key={`wk-${b.index}`}
-                    className="pointer-events-none absolute bottom-0 top-0 flex select-none items-center justify-center"
-                    style={{ left: b.index * dayW, width: b.span * dayW }}
+              {canEdit ? (
+                <ContextMenu>
+                  <ContextMenuTrigger asChild>
+                    {gridBackground}
+                  </ContextMenuTrigger>
+                  <ContextMenuContent
+                    className="w-44"
+                    onCloseAutoFocus={(e) => e.preventDefault()}
                   >
-                    <span className="text-8xl font-bold text-foreground/[0.06]">
-                      {b.week}
-                    </span>
-                  </div>
-                ))}
+                    <ContextMenuItem
+                      onSelect={() =>
+                        addReservation(
+                          pendingCell.current.day,
+                          pendingCell.current.spot,
+                        )
+                      }
+                    >
+                      <Plus />
+                      Nouvelle réservation
+                    </ContextMenuItem>
+                  </ContextMenuContent>
+                </ContextMenu>
+              ) : (
+                gridBackground
+              )}
 
-                {/* Colonne du jour actuel (s'arrête avant les places personnel
+              {/* Numéro de semaine ISO en filigrane (lundi → vendredi) */}
+              {weekBands.map((b) => (
+                <div
+                  key={`wk-${b.index}`}
+                  className="pointer-events-none absolute bottom-0 top-0 flex select-none items-center justify-center"
+                  style={{ left: b.index * dayW, width: b.span * dayW }}
+                >
+                  <span className="text-8xl font-bold text-foreground/[0.06]">
+                    {b.week}
+                  </span>
+                </div>
+              ))}
+
+              {/* Colonne du jour actuel (s'arrête avant les places personnel
                     pour ne pas superposer les deux fonds) */}
-                {todayIndex >= 0 && (
-                  <div
-                    className="pointer-events-none absolute top-0 bg-primary/5"
-                    style={{
-                      left: todayIndex * dayW,
-                      width: dayW,
-                      height: (FIRST_STAFF_SPOT - 1) * ROW_H,
-                    }}
-                  />
-                )}
+              {todayIndex >= 0 && (
+                <div
+                  className="pointer-events-none absolute top-0 bg-primary/5"
+                  style={{
+                    left: todayIndex * dayW,
+                    width: dayW,
+                    height: (FIRST_STAFF_SPOT - 1) * ROW_H,
+                  }}
+                />
+              )}
 
-                {/* Bandes des places personnel */}
-                {SPOTS_LIST.filter((s) => s >= FIRST_STAFF_SPOT).map((s) => (
-                  <div
-                    key={s}
-                    className="pointer-events-none absolute left-0 right-0 bg-primary/5"
-                    style={{ top: (s - 1) * ROW_H, height: ROW_H }}
+              {/* Bandes des places personnel */}
+              {SPOTS_LIST.filter((s) => s >= FIRST_STAFF_SPOT).map((s) => (
+                <div
+                  key={s}
+                  className="pointer-events-none absolute left-0 right-0 bg-primary/5"
+                  style={{ top: (s - 1) * ROW_H, height: ROW_H }}
+                />
+              ))}
+
+              {/* Réservations (uniquement celles visibles dans la fenêtre) */}
+              {reservations
+                .filter(
+                  (r) =>
+                    r.startDay + r.nights >= offset &&
+                    r.startDay <= offset + visibleDays,
+                )
+                .map((r) => (
+                  <ReservationBar
+                    key={r.id}
+                    r={r}
+                    canEdit={canEdit}
+                    offset={offset}
+                    slotW={slotW}
+                    editing={editingId === r.id}
+                    onStartInteraction={startInteraction}
+                    onStartEdit={setEditingId}
+                    onStopEdit={() => setEditingId(null)}
+                    onRename={rename}
+                    onStatus={setStatus}
+                    onComment={openComment}
+                    onCopy={copyReservation}
+                    onRemove={remove}
                   />
                 ))}
 
-                {/* Réservations (uniquement celles visibles dans la fenêtre) */}
-                {reservations
-                  .filter(
-                    (r) =>
-                      r.startDay + r.nights >= offset &&
-                      r.startDay <= offset + visibleDays,
-                  )
-                  .map((r) => (
-                    <ReservationBar
-                      key={r.id}
-                      r={r}
-                      canEdit={canEdit}
-                      offset={offset}
-                      slotW={slotW}
-                      editing={editingId === r.id}
-                      onStartInteraction={startInteraction}
-                      onStartEdit={setEditingId}
-                      onStopEdit={() => setEditingId(null)}
-                      onRename={rename}
-                      onStatus={setStatus}
-                      onComment={openComment}
-                      onCopy={copyReservation}
-                      onRemove={remove}
-                    />
-                  ))}
-
-                {/* Mode placement : overlay capturant la souris + fantôme suivant
+              {/* Mode placement : overlay capturant la souris + fantôme suivant
                     le curseur. Un clic pose la copie sur la case visée ; il
                     devient rouge (et le clic est sans effet) si elle est occupée. */}
-                {clipboard && (
-                  <>
+              {clipboard && (
+                <>
+                  <div
+                    className="absolute inset-0 z-20 cursor-copy"
+                    onMouseMove={(e) => {
+                      const cell = pointerToCell(e, dayW, offset, visibleDays)
+                      // Ne re-render que si la case change (pas à chaque pixel).
+                      setGhost((prev) =>
+                        prev && prev.day === cell.day && prev.spot === cell.spot
+                          ? prev
+                          : cell,
+                      )
+                    }}
+                    onClick={() => {
+                      if (!ghost || ghostInvalid) return
+                      pasteReservation(ghost.day, ghost.spot)
+                      cancelPlacing()
+                    }}
+                    onContextMenu={(e) => {
+                      e.preventDefault()
+                      cancelPlacing()
+                    }}
+                  />
+                  {ghost && (
                     <div
-                      className="absolute inset-0 z-20 cursor-copy"
-                      onMouseMove={(e) => {
-                        const cell = pointerToCell(e, dayW, offset, visibleDays)
-                        // Ne re-render que si la case change (pas à chaque pixel).
-                        setGhost((prev) =>
-                          prev &&
-                          prev.day === cell.day &&
-                          prev.spot === cell.spot
-                            ? prev
-                            : cell,
-                        )
-                      }}
-                      onClick={() => {
-                        if (!ghost || ghostInvalid) return
-                        pasteReservation(ghost.day, ghost.spot)
-                        cancelPlacing()
-                      }}
-                      onContextMenu={(e) => {
-                        e.preventDefault()
-                        cancelPlacing()
-                      }}
-                    />
-                    {ghost && (
-                      <div
-                        className={cn(
-                          'pointer-events-none absolute z-30 flex items-center rounded-md border px-1.5 text-xs shadow-lg',
-                          ghostInvalid
-                            ? 'border-rose-500 bg-rose-500/25 text-rose-700 dark:text-rose-50'
-                            : STATUS[clipboard.status].bar,
-                        )}
-                        style={barRect(
-                          ghost.day,
-                          ghost.spot,
-                          clipboard.nights,
-                          offset,
-                          slotW,
-                        )}
-                      >
-                        <span className="min-w-0 flex-1 truncate font-medium">
-                          {clipboard.client || 'Sans nom'}
-                        </span>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
+                      className={cn(
+                        'pointer-events-none absolute z-30 flex items-center rounded-md border px-1.5 text-xs shadow-lg',
+                        ghostInvalid
+                          ? 'border-rose-500 bg-rose-500/25 text-rose-700 dark:text-rose-50'
+                          : STATUS[clipboard.status].bar,
+                      )}
+                      style={barRect(
+                        ghost.day,
+                        ghost.spot,
+                        clipboard.nights,
+                        offset,
+                        slotW,
+                      )}
+                    >
+                      <span className="min-w-0 flex-1 truncate font-medium">
+                        {clipboard.client || 'Sans nom'}
+                      </span>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           </div>
         </div>
-
-        {/* Modale d'édition du commentaire */}
-        <Dialog
-          open={commentId !== null}
-          onOpenChange={(open) => {
-            if (!open) setCommentId(null)
-          }}
-        >
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Commentaire</DialogTitle>
-            </DialogHeader>
-            <Textarea
-              autoFocus
-              rows={4}
-              value={commentDraft}
-              onChange={(e) => setCommentDraft(e.target.value)}
-              placeholder="Ajouter un commentaire…"
-            />
-            <DialogFooter>
-              <Button variant="ghost" onClick={() => setCommentId(null)}>
-                Annuler
-              </Button>
-              <Button onClick={saveComment}>Enregistrer</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </div>
-    </TooltipProvider>
+
+      {/* Modale d'édition du commentaire */}
+      <Dialog
+        open={commentId !== null}
+        onOpenChange={(open) => {
+          if (!open) setCommentId(null)
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Commentaire</DialogTitle>
+          </DialogHeader>
+          <Textarea
+            autoFocus
+            rows={4}
+            value={commentDraft}
+            onChange={(e) => setCommentDraft(e.target.value)}
+            placeholder="Ajouter un commentaire…"
+          />
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setCommentId(null)}>
+              Annuler
+            </Button>
+            <Button onClick={saveComment}>Enregistrer</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   )
 }
 

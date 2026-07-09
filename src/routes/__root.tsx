@@ -6,6 +6,7 @@ import {
 
 import { AuthProvider } from '#/components/auth/AuthContext.tsx'
 import { AppAuthGate } from '#/components/auth/AppAuthGate.tsx'
+import { TooltipProvider } from '#/components/ui/tooltip.tsx'
 import { THEME_INIT_SCRIPT } from '#/lib/theme.ts'
 
 import appCss from '../styles.css?url'
@@ -61,9 +62,14 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body>
-        <AuthProvider>
-          <AppAuthGate>{children}</AppAuthGate>
-        </AuthProvider>
+        {/* Un seul provider d'infobulles pour toute l'app : les boards en
+            montaient chacun un, avec des délais divergents. 300 ms laisse le
+            temps de survoler un bouton sans le déclencher. */}
+        <TooltipProvider delayDuration={300}>
+          <AuthProvider>
+            <AppAuthGate>{children}</AppAuthGate>
+          </AuthProvider>
+        </TooltipProvider>
         <Scripts />
       </body>
     </html>

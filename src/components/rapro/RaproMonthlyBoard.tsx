@@ -3,10 +3,11 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import { ChevronLeft } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
+import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { parseDateStr } from '#/lib/poster/dateFormatter.ts'
 import {
@@ -67,19 +68,23 @@ export function RaproMonthlyBoard({
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-4">
+    <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4">
       <PageHeader
         title={`Rapprochement, ${monthLabel}`}
         actions={
           <>
-            <Button
-              variant="outline"
-              size="icon-sm"
-              onClick={() => navigate({ to: '/rapro-mois' })}
-              aria-label="Retour au récap annuel"
-            >
-              <ChevronLeft />
-            </Button>
+            {/* Retour = flèche pleine ; les chevrons sont réservés au pas
+                temporel, pour qu'on ne confonde pas les deux gestes. */}
+            <Tip label="Retour au récap annuel">
+              <Button
+                variant="outline"
+                size="icon-sm"
+                onClick={() => navigate({ to: '/rapro-mois' })}
+                aria-label="Retour au récap annuel"
+              >
+                <ArrowLeft />
+              </Button>
+            </Tip>
             <PrintButton onClick={exportPdf} disabled={busy} />
           </>
         }

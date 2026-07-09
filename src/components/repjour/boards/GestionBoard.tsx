@@ -1,6 +1,7 @@
 import { useState } from 'react'
 
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
+import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { DataContent } from '#/components/repjour/boards/DataContent.tsx'
 import { BudgetContent } from '#/components/repjour/boards/BudgetContent.tsx'
@@ -33,31 +34,35 @@ export function GestionBoard() {
   return (
     <PageContainer>
       <div className="mx-auto w-full max-w-5xl space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-xl font-bold text-foreground">Gestion</h1>
-          <div className="flex gap-1 rounded-lg bg-muted p-1">
-            <button
-              onClick={() => setTab('donnees')}
-              className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-                tab === 'donnees'
-                  ? 'bg-card text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              Données
-            </button>
-            <button
-              onClick={() => setTab('budget')}
-              className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-                tab === 'budget'
-                  ? 'bg-card text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              Budget
-            </button>
-          </div>
-        </div>
+        <PageHeader
+          title="Gestion"
+          actions={
+            // Sélecteur d'onglet, pas des boutons d'action : il garde son fond
+            // plein. Hauteur alignée sur les boutons `sm` des autres barres.
+            <div className="flex gap-1 rounded-lg bg-muted p-1">
+              <button
+                onClick={() => setTab('donnees')}
+                className={`h-8 rounded-md px-3 text-sm font-medium transition-colors ${
+                  tab === 'donnees'
+                    ? 'bg-card text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Données
+              </button>
+              <button
+                onClick={() => setTab('budget')}
+                className={`h-8 rounded-md px-3 text-sm font-medium transition-colors ${
+                  tab === 'budget'
+                    ? 'bg-card text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Budget
+              </button>
+            </div>
+          }
+        />
 
         {tab === 'donnees' ? (
           <DataContent readOnly={readOnly} />

@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { Loader2, Plus, Trash2 } from 'lucide-react'
 
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
+import { PageHeader } from '#/components/shared/PageHeader.tsx'
+import { Tip } from '#/components/shared/Tip.tsx'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { supabase } from '#/lib/supabase.ts'
 import { isPasswordValid } from '#/lib/repjour/password.ts'
@@ -336,18 +338,24 @@ export function ComptesBoard() {
   return (
     <PageContainer>
       <div className="mx-auto w-full max-w-3xl space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold text-foreground">Comptes</h1>
-          <Button
-            onClick={() => {
-              resetCreate()
-              setShowCreate(true)
-            }}
-          >
-            <Plus />
-            Ajouter un compte
-          </Button>
-        </div>
+        <PageHeader
+          title="Comptes"
+          actions={
+            <Tip label="Créer un compte utilisateur">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  resetCreate()
+                  setShowCreate(true)
+                }}
+              >
+                <Plus />
+                Ajouter un compte
+              </Button>
+            </Tip>
+          }
+        />
 
         {/* Feedback hors modale (ex. « Compte créé pour … » après fermeture de
             la modale de création, dont le message interne n'est plus visible). */}

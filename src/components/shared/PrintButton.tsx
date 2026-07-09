@@ -1,9 +1,14 @@
 import { Printer } from 'lucide-react'
 
+import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
 
 /**
  * Bouton « Imprimer / PDF » commun aux boards (icône Printer + libellé).
+ *
+ * `outline` comme tous les boutons de barre : le plein est réservé à l'action
+ * principale d'un formulaire ou d'une confirmation, où il se distingue d'un
+ * « Annuler ». Dans une barre, il n'a rien à trancher.
  *
  * - `onClick` : chaque board garde son handlePrint (nom de document compris).
  * - `className` : variantes de placement (w-full, lg:hidden, print:hidden…).
@@ -26,21 +31,23 @@ export function PrintButton({
   disabled?: boolean
 }) {
   return (
-    <Button
-      onClick={onClick}
-      disabled={disabled}
-      size={iconOnly ? 'icon-sm' : undefined}
-      className={className}
-      aria-label="Imprimer / PDF"
-      title="Imprimer / PDF"
-    >
-      <Printer />
-      {!iconOnly &&
-        (responsiveLabel ? (
-          <span className="hidden lg:inline">Imprimer / PDF</span>
-        ) : (
-          'Imprimer / PDF'
-        ))}
-    </Button>
+    <Tip label="Imprimer / PDF">
+      <Button
+        variant="outline"
+        onClick={onClick}
+        disabled={disabled}
+        size={iconOnly ? 'icon-sm' : 'sm'}
+        className={className}
+        aria-label="Imprimer / PDF"
+      >
+        <Printer />
+        {!iconOnly &&
+          (responsiveLabel ? (
+            <span className="hidden lg:inline">Imprimer / PDF</span>
+          ) : (
+            'Imprimer / PDF'
+          ))}
+      </Button>
+    </Tip>
   )
 }

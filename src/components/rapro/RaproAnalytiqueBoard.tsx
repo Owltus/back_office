@@ -3,9 +3,8 @@ import { useQueries } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
-
-import { Button } from '#/components/ui/button.tsx'
+import { PageHeader } from '#/components/shared/PageHeader.tsx'
+import { StepNav } from '#/components/shared/StepNav.tsx'
 import {
   fetchStatusCountsByRange,
   monthBounds,
@@ -56,33 +55,22 @@ export function RaproAnalytiqueBoard() {
 
   return (
     <div className="mx-auto w-full max-w-2xl space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-foreground">
-          Rapprochement, récap {year}
-        </h1>
-        <div className="flex items-center gap-1">
-          <Button
-            variant="outline"
-            size="icon-sm"
-            onClick={() => setYear((y) => y - 1)}
-            aria-label="Année précédente"
+      <PageHeader
+        title={`Rapprochement, récap ${year}`}
+        actions={
+          <StepNav
+            onPrev={() => setYear((y) => y - 1)}
+            onNext={() => setYear((y) => y + 1)}
+            prevLabel="Année précédente"
+            nextLabel="Année suivante"
+            nextDisabled={atLatestYear}
           >
-            <ChevronLeft />
-          </Button>
-          <span className="w-12 text-center text-sm font-medium tabular-nums">
-            {year}
-          </span>
-          <Button
-            variant="outline"
-            size="icon-sm"
-            onClick={() => setYear((y) => y + 1)}
-            disabled={atLatestYear}
-            aria-label="Année suivante"
-          >
-            <ChevronRight />
-          </Button>
-        </div>
-      </div>
+            <span className="w-12 text-center text-sm font-medium tabular-nums">
+              {year}
+            </span>
+          </StepNav>
+        }
+      />
 
       {/* KPI de synthèse annuelle */}
       <div className="grid grid-cols-2 gap-3">
