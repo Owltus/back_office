@@ -413,65 +413,73 @@ export function CaisseBoard() {
     }
   }
 
+  /* Bouton d'état de la feuille, rendu en bas de page (sous les commentaires),
+     là où se termine la saisie : Réouvrir si la feuille est clôturée et
+     `editable` (admin à tout moment, OU super_utilisateur dans la fenêtre de
+     grâce), Verrouillé sinon (super hors grâce), Clôturer sur un brouillon. */
+  const stateAction = !isWriter ? null : !isValidated ? (
+    editable && (
+      <Tip label="Fige les montants de ce shift">
+        <Button
+          variant="outline"
+          className="w-full"
+          onClick={() => {
+            setHotelierName(form.operatorInitials)
+            setCloseOpen(true)
+          }}
+        >
+          <Check /> Clôturer la caisse
+        </Button>
+      </Tip>
+    )
+  ) : editable ? (
+    <Tip label="Rend les montants modifiables">
+      <Button
+        variant="outline"
+        className="w-full"
+        onClick={handleReopen}
+        disabled={busy}
+      >
+        <LockOpen /> Réouvrir la caisse
+      </Button>
+    </Tip>
+  ) : (
+    // Bouton désactivé : Radix ne verrait aucun survol dessus, d'où le span
+    // porteur. C'est ici que l'infobulle compte le plus — elle est la seule à
+    // dire POURQUOI la réouverture est refusée.
+    <Tip label="Réouverture réservée à un administrateur">
+      <span tabIndex={0} className="block w-full">
+        <Button
+          variant="outline"
+          disabled
+          className="w-full border-destructive/50 text-destructive disabled:opacity-100"
+        >
+          <Lock /> Verrouillé
+        </Button>
+      </span>
+    </Tip>
+  )
+
   return (
     <div className="caisse-doc mx-auto flex w-full min-w-0 max-w-5xl flex-1 flex-col gap-4 print:max-w-none">
       <PageHeader
         title={`${titleDate} (${SHIFT_LABELS[form.shift].toLowerCase()})`}
         actions={
           <>
-            {/* 1) Bouton d'état sur une caisse clôturée : Réouvrir si `editable`
-                (admin à tout moment, OU super_utilisateur dans la fenêtre de
-                grâce), sinon Verrouillé (super hors grâce). Brouillon : Clôturer. */}
-            {isWriter &&
-              (!isValidated ? (
-                editable && (
-                  <Tip label="Fige les montants de ce shift">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setHotelierName(form.operatorInitials)
-                        setCloseOpen(true)
-                      }}
-                    >
-                      <Check /> Clôturer la caisse
-                    </Button>
-                  </Tip>
-                )
-              ) : editable ? (
-                <Tip label="Rend les montants modifiables">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleReopen}
-                    disabled={busy}
-                  >
-                    <LockOpen /> Réouvrir la caisse
-                  </Button>
-                </Tip>
-              ) : (
-                // Bouton désactivé : Radix ne verrait aucun survol dessus, d'où
-                // le span porteur. C'est ici que l'infobulle compte le plus —
-                // elle est la seule à dire POURQUOI la réouverture est refusée.
-                <Tip label="Réouverture réservée à un administrateur">
-                  <span tabIndex={0}>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled
-                      className="border-destructive/50 text-destructive disabled:opacity-100"
-                    >
-                      <Lock /> Verrouillé
-                    </Button>
-                  </span>
-                </Tip>
-              ))}
-            {/* 2) Impression : présent UNIQUEMENT sur une feuille clôturée
-                (le document ne s'imprime qu'une fois la caisse validée). */}
-            {isValidated && (
-              <PrintButton onClick={handleGeneratePdf} iconOnly disabled={pdfBusy} />
-            )}
-            {/* 3) Navigation, en dernier : elle est collée au bord droit sur
+            {/* 1) Impression : toujours présente, mais désactivée tant que la
+                caisse n'est pas clôturée — le document ne s'imprime qu'une fois
+                les montants figés. L'infobulle porte alors la raison. */}
+            <PrintButton
+              onClick={handleGeneratePdf}
+              iconOnly
+              disabled={!isValidated || pdfBusy}
+              tipLabel={
+                isValidated
+                  ? 'Imprimer / PDF'
+                  : 'Clôturez la caisse pour imprimer la feuille'
+              }
+            />
+            {/* 2) Navigation, en dernier : elle est collée au bord droit sur
                 toutes les pages (cf. PageHeader). */}
             <StepNav
               className="ml-1"
@@ -510,9 +518,9 @@ export function CaisseBoard() {
         <table className="w-full table-fixed border-collapse text-sm">
           <thead>
             <tr className="border-b border-border text-xs uppercase text-muted-foreground">
-              <th className="w-32 px-3 py-2 text-left font-medium">Source</th>
+              <th className="w-32 px-3 py-1.5 text-left font-medium">Source</th>
               {cols.map((c) => (
-                <th key={c} className="px-3 py-2 text-center font-medium">
+                <th key={c} className="px-3 py-1.5 text-center font-medium">
                   {c === 'web' ? (
                     <>
                       <span className="max-sm:hidden">{ECART_LABELS.web}</span>
@@ -550,7 +558,7 @@ export function CaisseBoard() {
               }
             />
             <tr className="border-t border-border bg-muted/30 font-medium">
-              <td className="px-3 py-2">ÉCARTS</td>
+              <td className="px-3 py-1.5">ÉCARTS</td>
               {cols.map((c) => {
                 const v = ecarts[c]
                 const zero = Math.abs(v) < EPSILON
@@ -558,7 +566,7 @@ export function CaisseBoard() {
                   <td
                     key={c}
                     className={cn(
-                      'px-3 py-2 text-right tabular-nums',
+                      'px-3 py-1.5 text-right tabular-nums',
                       zero ? 'text-emerald-500' : 'text-destructive',
                     )}
                     title={`Attendu ${fmtEur(expected(form, c))}`}
@@ -576,9 +584,9 @@ export function CaisseBoard() {
       {/* Comptage du fond de caisse. Grille responsive : 2 colonnes (mobile),
           3 (intermédiaire), 5 colonnes-décades en remplissage vertical (≥ lg :
           grid-flow-col + grid-rows-3 → 500/200/100, 50/20/10, …). */}
-      <div className="rounded-xl border border-border bg-card p-4">
-        <h2 className="mb-3 text-sm font-semibold">Fond de caisse</h2>
-        <div className="caisse-denoms grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-flow-col lg:grid-cols-5 lg:grid-rows-3">
+      <div className="rounded-xl border border-border bg-card p-3">
+        <h2 className="mb-2 text-sm font-semibold">Fond de caisse</h2>
+        <div className="caisse-denoms grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-flow-col lg:grid-cols-5 lg:grid-rows-3">
           {DENOMINATIONS.map((d) => {
             const n = form.counts[d.key] ?? 0
             const filled = n > 0
@@ -604,7 +612,7 @@ export function CaisseBoard() {
                   <Minus className="size-4" />
                 </button>
                 {/* Zone centrale : valeur, quantité, sous-total */}
-                <div className="flex flex-[1.4] flex-col items-center justify-center gap-2 px-1 py-2">
+                <div className="flex flex-[1.4] flex-col items-center justify-center gap-1 px-1 py-1.5">
                   <span className="whitespace-nowrap text-xs font-semibold leading-none tabular-nums">
                     {d.label}
                   </span>
@@ -636,7 +644,7 @@ export function CaisseBoard() {
             )
           })}
         </div>
-        <div className="mt-3 flex items-center justify-between border-t border-border pt-3 text-sm">
+        <div className="mt-2 flex items-center justify-between border-t border-border pt-2 text-sm">
           <span className="text-muted-foreground">
             Fond de caisse {fmtEurInt(FUND_TARGET)}
           </span>
@@ -652,8 +660,8 @@ export function CaisseBoard() {
       </div>
 
       {/* Commentaires (juste en dessous du fond de caisse). */}
-      <div className="rounded-xl border border-border bg-card p-4">
-        <div className="mb-3 flex items-center justify-between gap-2">
+      <div className="rounded-xl border border-border bg-card p-3">
+        <div className="mb-2 flex items-center justify-between gap-2">
           <h2 className="text-sm font-semibold">Commentaires</h2>
           {isValidated && sheet?.operatorInitials && (
             <span className="text-sm font-medium text-muted-foreground">
@@ -670,9 +678,9 @@ export function CaisseBoard() {
         />
       </div>
 
-      {/* Actions. */}
+      {/* Actions — le bouton d'état ferme la page, sous la saisie. */}
       {isWriter && (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-col gap-2">
           {/* Autosave silencieux : on ne signale QUE les échecs (sinon la
               sauvegarde travaille en arrière-plan, sans mention explicite). */}
           {editable && saveState === 'error' && (
@@ -680,6 +688,7 @@ export function CaisseBoard() {
               Échec de l'enregistrement — vérifiez votre connexion.
             </span>
           )}
+          {stateAction}
         </div>
       )}
 
@@ -827,7 +836,7 @@ function CountInput({
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
       placeholder={focused ? '' : '0'}
-      className="h-7 w-4/5 px-1 text-center text-sm tabular-nums"
+      className="h-6 w-4/5 px-1 text-center text-sm tabular-nums"
     />
   )
 }

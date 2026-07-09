@@ -343,6 +343,7 @@ export function BreakfastBoard() {
                 onClick={handlePrint}
                 responsiveLabel
                 disabled={!hasData}
+                tipLabel={hasData ? 'Imprimer / PDF' : 'Aucune donnée à imprimer'}
               />
               {/* Navigation en dernier : collée au bord droit, comme partout. */}
               {canNavigate && (

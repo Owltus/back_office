@@ -18,15 +18,27 @@
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
 }
 
-/* État vide de la carte tableau (pas de rapport PDJ pour ce jour) : prend la
-   place de la grille, icône centrée + message. */
+/* État vide de la carte tableau (pas d'occupation importée pour ce jour) : prend
+   la place de la grille, icône centrée + titre + actions d'import.
+
+   La carte RÉSERVE tout ce qu'un jour rempli affiche sous les cards de synthèse :
+   la grille et sa légende (≈ 29rem), mais aussi le commentaire et le bouton de
+   clôture, tous deux masqués ici (≈ 12.5rem, gaps compris). Sans quoi un jour
+   vide se terminerait bien plus haut qu'un jour rempli, et que la feuille de
+   caisse. Une hauteur fixe, et non un `flex: 1` : ce dernier étirerait la carte
+   jusqu'au bas de la fenêtre, donc à une taille différente sur chaque écran. */
+.rapro-empty-card {
+  display: flex;
+  min-height: 41.5rem;
+}
 .rapro-empty {
   display: flex;
+  flex: 1;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.85rem;
-  padding: 3rem 1.5rem;
+  gap: 1.15rem;
+  padding: 2rem 1.5rem;
   text-align: center;
   color: var(--muted-foreground);
 }
@@ -35,9 +47,15 @@
   height: 2.5rem;
   opacity: 0.55;
 }
-.rapro-empty p {
+.rapro-empty-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--foreground);
+}
+.rapro-empty-lead {
   max-width: 34rem;
-  font-size: 0.9rem;
+  margin-top: 0.3rem;
+  font-size: 0.88rem;
   line-height: 1.5;
 }
 
@@ -111,17 +129,25 @@
   opacity: 0.5;
 }
 
-/* Pastilles empilées verticalement, pleine largeur de la colonne. */
+/* Pastilles empilées verticalement, pleine largeur de la colonne.
+ *
+ * C'est ici que se joue la hauteur de la page : une colonne porte jusqu'à
+ * quatorze pastilles, donc chaque pixel retiré à l'une compte quatorze fois.
+ * `line-height` est fixé plutôt que laissé à l'héritage : sans lui la pastille
+ * prenait le 1.5 de Tailwind, soit une bande d'interligne de 3 px qu'aucun
+ * rognage de padding ne récupère. C'est ce réglage, à lui seul, qui aligne la
+ * hauteur de cette page sur celle de la feuille de caisse. */
 .rapro-rooms {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  padding: 0 0.4rem 0.5rem;
+  padding: 0 0.4rem 0.4rem;
 }
 .rapro-room {
   width: 100%;
   padding: 0.2rem 0.35rem;
   font-size: 0.78rem;
+  line-height: 1.25;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   text-align: center;
@@ -308,32 +334,16 @@
 
 /* Exports PMS manquants : nommer le fichier et l'onglet plutôt que laisser une
    grille vide. Rendu dans l'état vide (.rapro-empty). */
+/* Les fichiers à importer, en une phrase. Le texte hérite du centrage et de la
+   couleur atténuée de `.rapro-empty` ; seuls les noms de fichiers ressortent. */
 .rapro-missing {
-  display: flex;
-  flex-direction: column;
-  gap: 0.7rem;
-  width: 100%;
-  max-width: 34rem;
-  text-align: left;
+  max-width: 32rem;
+  font-size: 0.88rem;
+  line-height: 1.5;
 }
-.rapro-missing-item {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  padding: 0.7rem 0.9rem;
-  background: color-mix(in oklab, var(--muted) 40%, transparent);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-}
-.rapro-missing-file {
-  font-size: 0.86rem;
+.rapro-missing strong {
   font-weight: 600;
   color: var(--foreground);
-}
-.rapro-missing-how {
-  font-size: 0.8rem;
-  line-height: 1.45;
-  color: var(--muted-foreground);
 }
 
 /* --- Récap mensuel ELIOR (tableau jour → nettoyées + total) ---------------- */

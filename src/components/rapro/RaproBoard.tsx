@@ -12,10 +12,10 @@ import {
   Ban,
   BedDouble,
   CalendarDays,
+  Check,
   CheckCheck,
   History,
   Info,
-  Lock,
   LockOpen,
   RotateCcw,
   Scale,
@@ -221,6 +221,10 @@ export function RaproBoard() {
   const hasDue = dueSet.size > 0
   // État vide seulement si aucune occupation ce jour ET aucune reportée.
   const showEmptyState = noOccupancy && carried.size === 0
+  /* Sans la moindre donnée, aucun compteur ne veut rien dire : les six cards
+     affichent « — ». Un zéro se lirait « rien à faire », alors qu'il faut lire
+     « rien de connu » — la nuance sépare une journée réglée d'un import oublié. */
+  const dash = (v: number | string) => (showEmptyState ? '—' : v)
   const isDue = (room: number) => occupied.has(room) || carried.has(room)
   // Erreur réseau persistante sur un jour de la fenêtre → roulement possiblement
   // incomplet : on le signale via la bannière d'erreur (pas de sous-comptage muet).
@@ -354,6 +358,36 @@ export function RaproBoard() {
     : selectedDate
   const title = label.charAt(0).toUpperCase() + label.slice(1)
 
+  /* Bouton d'état du jour, rendu en bas de page (sous les commentaires), là où
+     se termine la saisie — comme sur la feuille de caisse. L'icône illustre
+     l'ACTION (clôturer / réouvrir), pas l'état courant : avec un libellé à
+     côté, un cadenas ouvert sur « Clôturer » se lisait à contresens.
+
+     Sans occupation il n'y a rien à clôturer : le bouton disparaît, comme le
+     commentaire. Clôturer un jour vide n'aurait figé que du vide, et aurait
+     surtout fait croire que le ménage du jour était traité. */
+  const stateAction = !isWriter || showEmptyState ? null : !isValidated ? (
+    // Avertissement non bloquant (D5) au survol si la balance n'est pas à zéro ;
+    // le compteur visible vit dans la card « Reste à faire ».
+    <Tip
+      label={
+        rec.pending > 0
+          ? `${rec.pending} chambre(s) encore à faire`
+          : 'Fige la grille et le commentaire du jour'
+      }
+    >
+      <Button variant="outline" className="w-full" onClick={handleClose}>
+        <Check /> Clôturer le rapprochement
+      </Button>
+    </Tip>
+  ) : (
+    <Tip label="Rend la grille et le commentaire modifiables">
+      <Button variant="outline" className="w-full" onClick={handleReopen}>
+        <LockOpen /> Réouvrir le rapprochement
+      </Button>
+    </Tip>
+  )
+
   return (
     // Le PDF passe par jsPDF, pas par le DOM : rien à neutraliser en impression.
     <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4">
@@ -369,47 +403,19 @@ export function RaproBoard() {
                 </Link>
               </Button>
             </Tip>
-            {isWriter &&
-              (!isValidated ? (
-                // Jour éditable → cadenas OUVERT (état courant) ; l'action clôture.
-                // Avertissement non bloquant (D5) au survol si la balance n'est pas
-                // à zéro ; le compteur visible vit dans la card « Reste à faire ».
-                <Tip
-                  label={
-                    rec.pending > 0
-                      ? `Clôturer (${rec.pending} chambre(s) encore à faire)`
-                      : 'Clôturer'
-                  }
-                >
-                  <Button
-                    variant="outline"
-                    size="icon-sm"
-                    onClick={handleClose}
-                    aria-label="Clôturer le rapprochement"
-                  >
-                    <LockOpen />
-                  </Button>
-                </Tip>
-              ) : (
-                // Jour clôturé → cadenas FERMÉ (état courant) ; l'action réouvre.
-                <Tip label="Réouvrir">
-                  <Button
-                    variant="outline"
-                    size="icon-sm"
-                    onClick={handleReopen}
-                    aria-label="Réouvrir le rapprochement"
-                  >
-                    <Lock />
-                  </Button>
-                </Tip>
-              ))}
-            {isValidated && (
-              <PrintButton
-                onClick={handleGeneratePdf}
-                iconOnly
-                disabled={pdfBusy}
-              />
-            )}
+            {/* Impression : toujours présente, mais désactivée tant que le jour
+                n'est pas clôturé — l'infobulle porte alors la raison. Le bouton
+                de clôture, lui, ferme la page (sous les commentaires). */}
+            <PrintButton
+              onClick={handleGeneratePdf}
+              iconOnly
+              disabled={!isValidated || pdfBusy}
+              tipLabel={
+                isValidated
+                  ? 'Imprimer / PDF'
+                  : 'Clôturez le rapprochement pour imprimer la feuille'
+              }
+            />
             <StepNav
               onPrev={() => goStep(-1)}
               onNext={() => goStep(1)}
@@ -448,42 +454,42 @@ export function RaproBoard() {
 
       <div className="rapro-stats">
         <Stat
-          value={hasOccupancy ? occupied.size : '—'}
+          value={dash(hasOccupancy ? occupied.size : '—')}
           label="Vendues"
           icon={BedDouble}
           accent="#818cf8"
           hint="Chambres occupées à traiter aujourd'hui."
         />
         <Stat
-          value={stats.clean}
+          value={dash(stats.clean)}
           label="Nettoyées"
           icon={Sparkles}
           accent="#34d399"
           hint="Chambres nettoyées aujourd'hui (facturées)."
         />
         <Stat
-          value={hasDue ? rec.pending : '—'}
+          value={dash(hasDue ? rec.pending : '—')}
           label="Reste à faire"
           icon={Scale}
           accent={reconciled ? '#34d399' : '#fbbf24'}
           hint="Chambres encore à nettoyer. Zéro = tout est fait."
         />
         <Stat
-          value={carried.size}
+          value={dash(carried.size)}
           label="Reportées"
           icon={History}
           accent="#fb923c"
           hint="Restées à faire depuis un jour précédent."
         />
         <Stat
-          value={stats.refus}
+          value={dash(stats.refus)}
           label="Refus"
           icon={Ban}
           accent="#fbbf24"
           hint="Client a refusé le ménage."
         />
         <Stat
-          value={stats.noshow}
+          value={dash(stats.noshow)}
           label="No-show"
           icon={UserX}
           accent="#64748b"
@@ -503,10 +509,15 @@ export function RaproBoard() {
       )}
 
       {showEmptyState ? (
-        <div className="rapro-card">
+        // `rapro-empty-card` s'étire pour occuper la hauteur laissée libre :
+        // sans occupation, la page se terminerait sinon bien plus haut que la
+        // feuille de caisse, et le bouton de clôture flotterait au milieu.
+        <div className="rapro-card rapro-empty-card">
           <div className="rapro-empty">
             <Info className="rapro-empty-icon" />
-            <p>Aucune occupation pour le {sourceDate(selectedDate)}.</p>
+            <h2 className="rapro-empty-title">
+              Aucune donnée pour le {sourceDate(selectedDate)}
+            </h2>
             {missing.length > 0 && <MissingList items={missing} />}
           </div>
         </div>
@@ -599,6 +610,9 @@ export function RaproBoard() {
         </div>
       )}
 
+      {/* Un jour sans occupation n'a rien à commenter ni à clôturer : l'écran se
+          réduit à l'état vide, qui absorbe la place laissée libre. */}
+      {!showEmptyState && (
       <div className="rapro-comment">
         <h2 className="rapro-comment-title">Commentaires</h2>
         <Textarea
@@ -628,6 +642,9 @@ export function RaproBoard() {
           className="min-h-24"
         />
       </div>
+      )}
+
+      {stateAction}
     </div>
   )
 }
@@ -638,23 +655,21 @@ function sourceDate(date: string): string {
   return d ? format(d, 'd MMMM yyyy', { locale: fr }) : date
 }
 
-/** Exports PMS à importer pour débloquer la page : nom du fichier, jour, onglet,
- * et ce que son absence coûte. Le requis d'abord (cf. `missingSources`). */
+/** Exports PMS à importer pour débloquer la page (cf. `missingSources`), en une
+ * phrase. Ni date — celle du titre suffit —, ni onglet, ni encadré : nommer les
+ * fichiers suffit à savoir quoi faire. */
 function MissingList({ items }: { items: MissingSource[] }) {
   return (
-    <ul className="rapro-missing">
-      {items.map((m) => (
-        <li key={m.file} className="rapro-missing-item">
-          <span className="rapro-missing-file">
-            {m.file} — {sourceDate(m.date)}
-          </span>
-          <span className="rapro-missing-how">
-            {m.required ? 'Requis' : 'Facultatif'}. À importer dans l'onglet{' '}
-            {m.tab} pour afficher {m.impact}.
-          </span>
-        </li>
+    <p className="rapro-missing">
+      Importez{' '}
+      {items.map((m, i) => (
+        <span key={m.file}>
+          {i > 0 && (i === items.length - 1 ? ' et ' : ', ')}
+          <strong>{m.file}</strong>
+        </span>
       ))}
-    </ul>
+      .
+    </p>
   )
 }
 
