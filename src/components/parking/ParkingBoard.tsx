@@ -114,7 +114,10 @@ const STATUS: Record<Status, { label: string; bar: string; dot: string }> = {
 const STATUS_ORDER: Status[] = ['reserve', 'paye', 'checkout']
 
 const fmtWeekday = new Intl.DateTimeFormat('fr-FR', { weekday: 'short' })
-const fmtDay = new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'short' })
+const fmtDay = new Intl.DateTimeFormat('fr-FR', {
+  day: '2-digit',
+  month: 'short',
+})
 const fmtDayYear = new Intl.DateTimeFormat('fr-FR', {
   day: '2-digit',
   month: 'short',
@@ -212,7 +215,9 @@ export function ParkingBoard() {
   useEffect(() => {
     if (!startDate) return
     fetchReservations()
-      .then((rows) => setReservations(rows.map((r) => toReservation(r, startDate))))
+      .then((rows) =>
+        setReservations(rows.map((r) => toReservation(r, startDate))),
+      )
       .catch(console.error)
 
     const channel = supabase
@@ -254,12 +259,15 @@ export function ParkingBoard() {
     return () => ro.disconnect()
   }, [startDate])
 
-  const visibleDays = containerW > 0 ? Math.max(1, Math.floor(containerW / MIN_DAY_W)) : 0
+  const visibleDays =
+    containerW > 0 ? Math.max(1, Math.floor(containerW / MIN_DAY_W)) : 0
   const dayW = visibleDays > 0 ? containerW / visibleDays : MIN_DAY_W
   const slotW = dayW / SLOTS_PER_DAY
 
   // Décalage (en jours) du jour actuel par rapport au lundi de référence.
-  const todayOffset = startDate ? differenceInCalendarDays(new Date(), startDate) : 0
+  const todayOffset = startDate
+    ? differenceInCalendarDays(new Date(), startDate)
+    : 0
   // Cadrage "aujourd'hui" : idéalement 2 jours de passé (aujourd'hui en 3e
   // position), mais borné pour ne jamais sortir aujourd'hui de l'écran étroit.
   const framedOffset = todayOffset - Math.min(2, Math.max(0, visibleDays - 1))
@@ -294,7 +302,9 @@ export function ParkingBoard() {
 
   const days = useMemo(() => {
     if (!startDate || visibleDays <= 0) return [] as Date[]
-    return Array.from({ length: visibleDays }, (_, i) => addDays(startDate, offset + i))
+    return Array.from({ length: visibleDays }, (_, i) =>
+      addDays(startDate, offset + i),
+    )
   }, [startDate, offset, visibleDays])
 
   // Plages de jours ouvrés (lundi→vendredi) visibles, pour le n° de semaine ISO.
@@ -307,7 +317,11 @@ export function ParkingBoard() {
       if (weekday && start === -1) start = i
       if (start !== -1 && (!weekday || i === days.length - 1)) {
         const end = weekday ? i : i - 1
-        bands.push({ index: start, span: end - start + 1, week: getISOWeek(days[start]) })
+        bands.push({
+          index: start,
+          span: end - start + 1,
+          week: getISOWeek(days[start]),
+        })
         start = -1
       }
     }
@@ -427,7 +441,11 @@ export function ParkingBoard() {
     deleteReservation(id).catch(console.error)
   }
 
-  function startInteraction(e: ReactPointerEvent, res: Reservation, mode: Mode) {
+  function startInteraction(
+    e: ReactPointerEvent,
+    res: Reservation,
+    mode: Mode,
+  ) {
     if (!canEdit) return
     if (!startDate) return
     // Ctrl/Cmd + clic = copie rapide (accroche au curseur), sans déplacement.
@@ -455,7 +473,10 @@ export function ParkingBoard() {
       } else if (mode === 'resize-right') {
         nights = Math.max(1, orig.nights + dDay)
       } else {
-        startDay = Math.min(orig.startDay + dDay, orig.startDay + orig.nights - 1)
+        startDay = Math.min(
+          orig.startDay + dDay,
+          orig.startDay + orig.nights - 1,
+        )
         nights = orig.nights - (startDay - orig.startDay)
       }
       setReservations((prev) => {
@@ -612,7 +633,10 @@ export function ParkingBoard() {
         {/* Planning */}
         <div className="flex overflow-hidden rounded-2xl border border-border bg-card">
           {/* Colonne fixe des places */}
-          <div className="shrink-0 border-r border-border" style={{ width: LABEL_W }}>
+          <div
+            className="shrink-0 border-r border-border"
+            style={{ width: LABEL_W }}
+          >
             <div
               className="flex items-center justify-center text-xs font-medium text-muted-foreground"
               style={{ height: HEADER_H }}
@@ -678,7 +702,9 @@ export function ParkingBoard() {
                     rend le fond seul (clic droit navigateur inoffensif). */}
                 {canEdit ? (
                   <ContextMenu>
-                    <ContextMenuTrigger asChild>{gridBackground}</ContextMenuTrigger>
+                    <ContextMenuTrigger asChild>
+                      {gridBackground}
+                    </ContextMenuTrigger>
                     <ContextMenuContent
                       className="w-44"
                       onCloseAutoFocus={(e) => e.preventDefault()}
@@ -772,7 +798,9 @@ export function ParkingBoard() {
                         const cell = pointerToCell(e, dayW, offset, visibleDays)
                         // Ne re-render que si la case change (pas à chaque pixel).
                         setGhost((prev) =>
-                          prev && prev.day === cell.day && prev.spot === cell.spot
+                          prev &&
+                          prev.day === cell.day &&
+                          prev.spot === cell.spot
                             ? prev
                             : cell,
                         )
@@ -911,7 +939,9 @@ function ReservationBar({
     <div
       role="button"
       tabIndex={0}
-      onPointerDown={canEdit ? (e) => onStartInteraction(e, r, 'move') : undefined}
+      onPointerDown={
+        canEdit ? (e) => onStartInteraction(e, r, 'move') : undefined
+      }
       onDoubleClick={canEdit ? () => onStartEdit(r.id) : undefined}
       onClick={(e) => e.stopPropagation()}
       className={cn(
@@ -1024,7 +1054,9 @@ function ReservationBar({
         >
           {STATUS_ORDER.map((s) => (
             <ContextMenuRadioItem key={s} value={s}>
-              <span className={cn('mr-2 size-2.5 rounded-full', STATUS[s].dot)} />
+              <span
+                className={cn('mr-2 size-2.5 rounded-full', STATUS[s].dot)}
+              />
               {STATUS[s].label}
             </ContextMenuRadioItem>
           ))}

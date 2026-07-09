@@ -117,7 +117,11 @@ export function RaproBoard() {
   const atLatest = selectedDate >= todayStr
   const atLower = selectedDate <= lowerDay
 
-  const { data: day, isError, isSuccess } = useQuery({
+  const {
+    data: day,
+    isError,
+    isSuccess,
+  } = useQuery({
     queryKey: ['rapro', 'day', selectedDate],
     queryFn: () => fetchDay(selectedDate),
   })
@@ -290,7 +294,9 @@ export function RaproBoard() {
       ? toDo
       : rooms.filter((r) => statusOf(statuses, r) !== 'non_nettoyee')
     const newStatus: RoomStatus = forward ? 'nettoyee' : 'non_nettoyee'
-    return applyStatuses(targets.map((r): [number, RoomStatus] => [r, newStatus]))
+    return applyStatuses(
+      targets.map((r): [number, RoomStatus] => [r, newStatus]),
+    )
   }
 
   // --- Clôture / réouverture / impression (feuille jour) -------------------
