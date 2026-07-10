@@ -4,8 +4,16 @@
 
 import type { Counts, DenomKey, EcartKey, PayKey, Shift } from '#/lib/caisse/types.ts'
 
-/** Coupures / pièces, dans l'ordre de la feuille papier (500 € → 0,01 €). */
-export const DENOMINATIONS: ReadonlyArray<{ key: DenomKey; value: number; label: string }> = [
+/**
+ * Coupures / pièces, dans l'ordre de la feuille papier (500 € → 0,01 €).
+ * Donnée métier pure : le visuel (SVG) vit dans `assets/euros` (présentation),
+ * et billet vs pièce se dérive de `value` (≥ 5 € = billet).
+ */
+export const DENOMINATIONS: ReadonlyArray<{
+  key: DenomKey
+  value: number
+  label: string
+}> = [
   { key: 'cnt_500', value: 500, label: '500 €' },
   { key: 'cnt_200', value: 200, label: '200 €' },
   { key: 'cnt_100', value: 100, label: '100 €' },

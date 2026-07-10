@@ -12,6 +12,7 @@
 
 import type { jsPDF } from 'jspdf'
 
+import { DENOM_SVG } from '#/assets/euros/index.ts'
 import { computeEcarts, fundEcart, fundTotal } from '#/lib/caisse/calc.ts'
 import {
   DENOMINATIONS,
@@ -21,12 +22,105 @@ import {
   SHIFT_LABELS,
 } from '#/lib/caisse/constants.ts'
 import { fmtEcart, fmtEur, fmtEurInt } from '#/lib/caisse/format.ts'
-import type { CaisseSheetInput, EcartKey } from '#/lib/caisse/types.ts'
+import type { CaisseSheetInput, DenomKey, EcartKey } from '#/lib/caisse/types.ts'
 
 /** Couleur DOM d'un écart : vert si équilibré (≈ 0), rouge sinon. */
 function setBalanceColor(pdf: jsPDF, balanced: boolean): void {
   if (balanced) pdf.setTextColor(18, 122, 46)
   else pdf.setTextColor(180, 35, 24)
+}
+
+/** PNG (data URI) d'une coupure par clé, rasterisé depuis le SVG réel. */
+type DenomImages = Map<DenomKey, { dataUrl: string; ratio: number }>
+
+/**
+ * Rasterise un SVG (assets/euros) en PNG data URI haute résolution, pour
+ * l'intégrer tel quel dans le PDF via addImage — on garde EXACTEMENT le visuel
+ * de l'écran (mêmes billets / pièces), pas une reconstitution. Retourne aussi le
+ * ratio largeur/hauteur pour préserver les proportions à l'insertion.
+ */
+async function rasterizeSvg(url: string): Promise<{ dataUrl: string; ratio: number }> {
+  const svgText = await (await fetch(url)).text()
+  const blob = new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' })
+  const objUrl = URL.createObjectURL(blob)
+  try {
+    const img = new Image()
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve()
+      img.onerror = () => reject(new Error(`SVG illisible : ${url}`))
+      img.src = objUrl
+    })
+    const scale = 4 // ~4× la taille native → net à l'impression
+    const w = (img.naturalWidth || 300) * scale
+    const h = (img.naturalHeight || 160) * scale
+    const canvas = document.createElement('canvas')
+    canvas.width = w
+    canvas.height = h
+    const ctx = canvas.getContext('2d')
+    if (!ctx) throw new Error('canvas 2d indisponible')
+    ctx.drawImage(img, 0, 0, w, h)
+    return { dataUrl: canvas.toDataURL('image/png'), ratio: w / h }
+  } finally {
+    URL.revokeObjectURL(objUrl)
+  }
+}
+
+/**
+ * Précharge et rasterise les visuels de toutes les coupures (en parallèle),
+ * mémoïsé au niveau module : les SVG sont des assets immuables, la rasterisation
+ * n'est payée qu'une fois pour toutes les impressions de la session.
+ */
+let denomImagesPromise: Promise<DenomImages> | undefined
+function loadDenomImages(): Promise<DenomImages> {
+  if (!denomImagesPromise) {
+    denomImagesPromise = Promise.all(
+      DENOMINATIONS.map(
+        async (d) => [d.key, await rasterizeSvg(DENOM_SVG[d.key])] as const,
+      ),
+    ).then((entries) => new Map(entries))
+  }
+  return denomImagesPromise
+}
+
+/** jsPDF n'expose pas `GState` dans ses types : le cast est isolé ici. Applique
+ * `opacity` le temps du dessin puis restaure toujours l'opacité pleine — le
+ * appelant ne peut pas oublier de réinitialiser. */
+type JsPdfGState = { GState: new (p: { opacity: number }) => unknown }
+function withOpacity(pdf: jsPDF, opacity: number, draw: () => void): void {
+  const set = (o: number) =>
+    pdf.setGState(new (pdf as unknown as JsPdfGState).GState({ opacity: o }) as never)
+  if (opacity < 1) set(opacity)
+  draw()
+  if (opacity < 1) set(1)
+}
+
+/**
+ * Insère le visuel réel d'une coupure (PNG rasterisé du SVG), centré sur
+ * (cx, cy) et borné à (maxW, maxH) en gardant ses proportions. Estompé
+ * (opacité) tant que rien n'est compté. Remplace l'ancien libellé texte.
+ */
+function drawDenomIcon(
+  pdf: jsPDF,
+  key: DenomKey,
+  images: DenomImages,
+  cx: number,
+  cy: number,
+  maxW: number,
+  maxH: number,
+  filled: boolean,
+): void {
+  const img = images.get(key)
+  if (!img) return
+  // Ajuster à la boîte (maxW × maxH) en respectant le ratio du visuel.
+  let w = maxW
+  let h = w / img.ratio
+  if (h > maxH) {
+    h = maxH
+    w = h * img.ratio
+  }
+  withOpacity(pdf, filled ? 1 : 0.4, () =>
+    pdf.addImage(img.dataUrl, 'PNG', cx - w / 2, cy - h / 2, w, h),
+  )
 }
 
 export interface CaissePdfData {
@@ -36,16 +130,26 @@ export interface CaissePdfData {
   operatorInitials: string
 }
 
+/** Construit le document PDF (jsPDF) de la feuille de caisse, sans l'imprimer.
+ * Séparé de l'impression pour être réutilisable (aperçu, test). */
+export async function buildCaissePdf(
+  data: CaissePdfData,
+  title: string,
+): Promise<jsPDF> {
+  const [{ jsPDF }, images] = await Promise.all([import('jspdf'), loadDenomImages()])
+  const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  pdf.setProperties({ title })
+  renderCaisseDocument(pdf, data, images)
+  return pdf
+}
+
 /** Génère le PDF de la feuille de caisse et ouvre la fenêtre d'impression du
  * navigateur (via autoPrint dans un iframe caché — pas de téléchargement). */
 export async function printCaisseSheet(
   data: CaissePdfData,
   title: string,
 ): Promise<void> {
-  const { jsPDF } = await import('jspdf')
-  const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-  pdf.setProperties({ title })
-  renderCaisseDocument(pdf, data)
+  const pdf = await buildCaissePdf(data, title)
   pdf.autoPrint()
   // Le PDF (avec action « imprimer » intégrée) est chargé dans un iframe caché :
   // le navigateur ouvre alors sa fenêtre d'impression, sans télécharger ni
@@ -87,6 +191,7 @@ function sourceAmount(
 function renderCaisseDocument(
   pdf: jsPDF,
   { titleDate, form, operatorInitials }: CaissePdfData,
+  images: DenomImages,
 ): void {
   let y = 22
 
@@ -174,14 +279,17 @@ function renderCaisseDocument(
     if (filled) pdf.setDrawColor(79, 70, 229).setLineWidth(0.5)
     else pdf.setDrawColor(210).setLineWidth(0.2)
     pdf.rect(cx, cy, w, h)
+    // Séparateurs rentrés d'une petite marge haut/bas : sinon leurs extrémités
+    // mordent sur la bordure (surtout la bleue, épaisse) et débordent.
     pdf.setDrawColor(222).setLineWidth(0.2)
-    pdf.line(cx + w / 3, cy, cx + w / 3, cy + h)
-    pdf.line(cx + (2 * w) / 3, cy, cx + (2 * w) / 3, cy + h)
+    const sep = 0.9
+    pdf.line(cx + w / 3, cy + sep, cx + w / 3, cy + h - sep)
+    pdf.line(cx + (2 * w) / 3, cy + sep, cx + (2 * w) / 3, cy + h - sep)
     const ty = cy + h / 2 + 1.2
+    // Colonne 1 : visuel réel de la coupure (PNG rasterisé du SVG écran), borné
+    // à la première colonne, centré. Estompé tant que rien n'est compté.
+    drawDenomIcon(pdf, d.key, images, cx + w / 6, cy + h / 2, w / 3 - 2, h - 2, filled)
     pdf.setFontSize(8.5)
-    // Colonne 1 : la coupure.
-    pdf.setFont('helvetica', 'bold').setTextColor(filled ? 26 : 110)
-    pdf.text(d.label, cx + w / 6, ty, { align: 'center' })
     // Colonne 2 : le nombre de billets/pièces (mis en avant, indigo si saisi).
     pdf.setFont('helvetica', 'bold')
     if (filled) pdf.setTextColor(79, 70, 229)

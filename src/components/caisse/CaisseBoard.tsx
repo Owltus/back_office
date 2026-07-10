@@ -23,6 +23,7 @@ import {
 } from '#/components/ui/dialog.tsx'
 import { DatePickerButton } from '#/components/form/fields.tsx'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
+import { DENOM_SVG } from '#/assets/euros/index.ts'
 import { cn } from '#/lib/utils.ts'
 import { errorMessage } from '#/lib/errors.ts'
 import { printCaisseSheet } from '#/lib/caisse/pdf.ts'
@@ -675,7 +676,6 @@ export function CaisseBoard() {
           3 (intermédiaire), 5 colonnes-décades en remplissage vertical (≥ lg :
           grid-flow-col + grid-rows-3 → 500/200/100, 50/20/10, …). */}
       <div className="rounded-xl border border-border bg-card p-3">
-        <h2 className="mb-2 text-sm font-semibold">Fond de caisse</h2>
         <div className="caisse-denoms grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-flow-col lg:grid-cols-5 lg:grid-rows-3">
           {DENOMINATIONS.map((d) => {
             const n = form.counts[d.key] ?? 0
@@ -685,13 +685,13 @@ export function CaisseBoard() {
                 key={d.key}
                 className={cn(
                   'flex items-stretch overflow-hidden rounded-lg border transition-colors',
-                  filled ? 'border-primary/30 bg-primary/5' : 'border-border bg-muted/20',
+                  filled ? 'border-primary/40 bg-primary/5' : 'border-border bg-muted/20',
                   // 500 € en pleine largeur sur mobile (2 cols) : équilibre les
                   // 14 cartes restantes en 7 rangées de 2. Sans effet dès sm.
                   d.key === 'cnt_500' && 'col-span-2 sm:col-span-1',
                 )}
               >
-                {/* Zone gauche : bouton « − » pleine hauteur */}
+                {/* Bouton « − » pleine hauteur, à gauche */}
                 <button
                   type="button"
                   aria-label={`Retirer un ${d.label}`}
@@ -701,16 +701,27 @@ export function CaisseBoard() {
                 >
                   <Minus className="size-4" />
                 </button>
-                {/* Zone centrale : valeur, quantité, sous-total */}
-                <div className="flex flex-[1.4] flex-col items-center justify-center gap-1 px-1 py-1.5">
-                  <span className="whitespace-nowrap text-xs font-semibold leading-none tabular-nums">
-                    {d.label}
-                  </span>
+                {/* Colonne centrale : quantité, puis visuel du billet / de la
+                    pièce (estompé tant que rien n'est compté), puis sous-total. */}
+                <div className="flex flex-[1.6] flex-col items-center justify-center gap-1.5 px-1 py-1">
                   <CountInput
                     value={n}
                     disabled={!canEditFields}
                     onChange={(v) => setCount(d.key, v)}
                   />
+                  <div className="flex h-8 items-center justify-center">
+                    <img
+                      src={DENOM_SVG[d.key]}
+                      alt={d.label}
+                      draggable={false}
+                      className={cn(
+                        'max-h-full w-auto select-none drop-shadow-sm transition-opacity',
+                        // Pièce (< 5 €) un peu plus haute que le billet pour l'équilibre.
+                        d.value < 5 ? 'h-8' : 'h-7',
+                        !filled && 'opacity-40',
+                      )}
+                    />
+                  </div>
                   <span
                     className={cn(
                       'whitespace-nowrap text-[11px] leading-none tabular-nums',
@@ -720,7 +731,7 @@ export function CaisseBoard() {
                     {d.value < 1 ? fmtEur(d.value * n) : fmtEurInt(d.value * n)}
                   </span>
                 </div>
-                {/* Zone droite : bouton « + » pleine hauteur */}
+                {/* Bouton « + » pleine hauteur, à droite */}
                 <button
                   type="button"
                   aria-label={`Ajouter un ${d.label}`}
@@ -734,7 +745,7 @@ export function CaisseBoard() {
             )
           })}
         </div>
-        <div className="mt-2 flex items-center justify-between border-t border-border pt-2 text-sm">
+        <div className="mt-2 flex items-center justify-between text-sm">
           <span className="text-muted-foreground">
             Fond de caisse {fmtEurInt(FUND_TARGET)}
           </span>
@@ -764,10 +775,10 @@ export function CaisseBoard() {
           disabled={!canEditFields}
           onChange={(e) => setForm((f) => ({ ...f, comment: e.target.value }))}
           placeholder="Justification d'un éventuel écart…"
-          // Hauteur figée : `resize-none` retire la poignée, `h-24` neutralise
+          // Hauteur figée : `resize-none` retire la poignée, `h-16` neutralise
           // le `field-sizing-content` de la primitive (qui étirait le champ à
           // mesure qu'on écrivait). Au-delà, le texte défile dans le champ.
-          className="h-24 resize-none"
+          className="h-16 resize-none"
         />
       </div>
 
