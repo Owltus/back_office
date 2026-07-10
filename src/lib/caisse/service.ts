@@ -132,6 +132,25 @@ export async function fetchPreviousSheet(
   return best
 }
 
+/** Slots (date, shift) VALIDÉS les plus récents. Sert à choisir le shift à
+ * afficher au chargement : on saute ceux déjà clôturés (cf. resolveDisplaySlot).
+ * Limité aux derniers : seuls le shift courant et son voisinage comptent. */
+export async function fetchRecentValidatedSlots(): Promise<
+  Array<{ date: string; shift: Shift }>
+> {
+  const { data, error } = await supabase
+    .from(CAISSE_TABLE)
+    .select('report_date, shift')
+    .eq('status', 'validated')
+    .order('report_date', { ascending: false })
+    .limit(6)
+  if (error) throw error
+  return (data ?? []).map((r) => ({
+    date: (r as { report_date: string }).report_date,
+    shift: (r as { shift: Shift }).shift,
+  }))
+}
+
 /** Slot (date, shift) le plus ancien enregistré, ou null si aucune feuille.
  * Sert à borner la navigation vers le passé (on ne remonte pas plus loin). */
 export async function fetchOldestSlot(): Promise<{ date: string; shift: Shift } | null> {

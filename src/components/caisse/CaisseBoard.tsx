@@ -48,12 +48,18 @@ import {
   canEditSheet,
   fetchOldestSlot,
   fetchPreviousSheet,
+  fetchRecentValidatedSlots,
   fetchSheet,
   reopenSheet,
   upsertSheet,
   validateSheet,
 } from '#/lib/caisse/service.ts'
-import { currentSlot, slotKey, stepSlot } from '#/lib/caisse/shift.ts'
+import {
+  currentSlot,
+  resolveDisplaySlot,
+  slotKey,
+  stepSlot,
+} from '#/lib/caisse/shift.ts'
 import {
   amountText,
   amountValue,
@@ -128,18 +134,41 @@ export function CaisseBoard() {
   const { user, role } = useAuth()
   const queryClient = useQueryClient()
 
-  // Slot initial (date + shift) déduit de l'heure : matin 08–15, soir 15–23,
-  // nuit 23–07 (rattachée au jour où elle commence).
-  const [selectedDate, setSelectedDate] = useState(() => currentSlot(new Date()).date)
+  // Instant de référence figé au montage : le shift courant et les bornes se
+  // recalculent au même « maintenant », sans dériver d'un rendu à l'autre.
+  const [now] = useState(() => new Date())
+
+  // Slot initial (date + shift) déduit de l'heure : nuit 02–12, matin 12–21,
+  // soir 21–02. Corrigé juste après par l'auto-sélection (shift déjà clôturé →
+  // le suivant), une fois connue la liste des shifts validés.
+  const [selectedDate, setSelectedDate] = useState(() => currentSlot(now).date)
   const [selectedShift, setSelectedShift] = useState<Shift>(
-    () => currentSlot(new Date()).shift,
+    () => currentSlot(now).shift,
   )
 
-  // Bornes de navigation. Haute : jamais au-delà du shift EN COURS. Basse : le
-  // plus ancien enregistrement, ou — s'il n'existe pas ou n'est pas plus ancien
-  // — le shift JUSTE AVANT le shift courant (base vide : on peut remonter d'un
-  // cran pour amorcer le fond, ex. matin → nuit de la veille, soir → matin).
-  const nowSlot = currentSlot(new Date())
+  // Shifts déjà clôturés (récents) : permet de sauter, au chargement, ceux qui
+  // sont faits — l'hôtelier tombe sur celui qu'il doit remplir.
+  const { data: validatedSlots } = useQuery({
+    queryKey: ['caisse', 'validated-recent'],
+    queryFn: fetchRecentValidatedSlots,
+  })
+  const validatedKeys = useMemo(
+    () => new Set((validatedSlots ?? []).map((s) => slotKey(s.date, s.shift))),
+    [validatedSlots],
+  )
+  // Slot à afficher : le courant, ou le suivant s'il est clôturé (jamais en
+  // arrière — une nuit oubliée n'est pas reprise au chargement).
+  const displaySlot = useMemo(
+    () => resolveDisplaySlot(now, (d, s) => validatedKeys.has(slotKey(d, s))),
+    [now, validatedKeys],
+  )
+
+  // Bornes de navigation. Haute : le slot à afficher (= le courant, ou le
+  // suivant si le courant est clôturé) — on peut donc atteindre le shift à
+  // remplir même s'il n'a pas encore commencé, mais pas au-delà. Basse : le plus
+  // ancien enregistrement, ou — s'il n'existe pas ou n'est pas plus ancien — le
+  // shift JUSTE AVANT (base vide : on remonte d'un cran pour amorcer le fond).
+  const nowSlot = displaySlot
   const nowKey = slotKey(nowSlot.date, nowSlot.shift)
   const { data: oldestSlot } = useQuery({
     queryKey: ['caisse', 'oldest'],
@@ -159,10 +188,25 @@ export function CaisseBoard() {
     setSelectedShift(s.shift)
   }
 
+  // L'hôtelier a-t-il déjà choisi un shift ? Alors l'auto-sélection ne le lui
+  // arrache plus. Posé par toute navigation manuelle (flèches, calendrier).
+  const userNavigatedRef = useRef(false)
+  const autoPickedRef = useRef(false)
+  // Auto-sélection UNE fois, au premier chargement de la liste des shifts
+  // validés : on avance sur le slot à remplir. Après ça (ou après une action de
+  // l'hôtelier), on ne touche plus à sa sélection.
+  useEffect(() => {
+    if (autoPickedRef.current || userNavigatedRef.current) return
+    if (validatedSlots === undefined) return // attendre la donnée
+    autoPickedRef.current = true
+    if (slotKey(displaySlot.date, displaySlot.shift) !== curKey) setSlot(displaySlot)
+  }, [validatedSlots, displaySlot, curKey])
+
   // Navigation shift par shift : matin → soir → nuit → matin du lendemain.
   const goStep = (delta: number) => {
-    if (delta > 0 && atLatestSlot) return // pas de shift futur
+    if (delta > 0 && atLatestSlot) return // pas au-delà du shift à remplir
     if (delta < 0 && atLowerBound) return // pas avant la borne basse
+    userNavigatedRef.current = true
     setSlot(stepSlot(selectedDate, selectedShift, delta))
   }
 
@@ -170,6 +214,7 @@ export function CaisseBoard() {
   // sortirait de l'intervalle sur la date choisie).
   const goDate = (v: string) => {
     if (!v) return
+    userNavigatedRef.current = true
     const k = slotKey(v, selectedShift)
     if (k > nowKey) setSlot(nowSlot)
     else if (k < lowerKey) setSlot(lowerSlot)

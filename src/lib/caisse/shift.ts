@@ -3,13 +3,19 @@
  * la timeline (date, shift).
  *
  * Cycle d'une journée, dans l'ordre chronologique :
- *   matin  08h → 15h
- *   soir   15h → 23h
- *   nuit   23h → 07h (du lendemain)
+ *   matin  12h → 21h
+ *   soir   21h → 02h (du lendemain)
+ *   nuit   02h → 12h (du lendemain)
  *
- * La nuit est RATTACHÉE au jour où elle commence (23h de J). Ainsi 02h du matin
- * relève de la nuit de J-1. La tranche 07h → 08h (creux entre la fin de nuit et
- * le début du matin) est encore comptée comme la nuit précédente.
+ * Les créneaux d'AFFICHAGE (quel shift on montre selon l'heure) découpent la
+ * pendule sans trou : nuit 02h→12h, matin 12h→21h, soir 21h→02h. C'est ce qui
+ * fait tomber l'hôtelier sur le bon shift sans avoir à le choisir.
+ *
+ * Le RATTACHEMENT de date suit le shift, pas la pendule : le soir de J débute à
+ * 21h de J et se prolonge jusqu'à 02h de J+1 ; la nuit de J le suit, de 02h à
+ * 12h de J+1. Ainsi la nuit de J (l'audit qui clôt la journée J) se remplit le
+ * matin de J+1 mais reste datée J — comme le soir et le matin du même bloc.
+ * L'ordre chronologique matin < soir < nuit (dans la date J) est donc conservé.
  */
 
 import type { Shift } from '#/lib/caisse/types.ts'
@@ -42,11 +48,33 @@ export function addDays(date: string, delta: number): string {
 export function currentSlot(now: Date): { date: string; shift: Shift } {
   const h = now.getHours()
   const today = dateStr(now)
-  if (h >= 8 && h < 15) return { date: today, shift: 'matin' }
-  if (h >= 15 && h < 23) return { date: today, shift: 'soir' }
-  if (h >= 23) return { date: today, shift: 'nuit' }
-  // 00h–07h59 : nuit commencée la veille à 23h.
+  if (h >= 12 && h < 21) return { date: today, shift: 'matin' }
+  if (h >= 21) return { date: today, shift: 'soir' }
+  // 00h–01h59 : soir de la veille (débuté à 21h, il court jusqu'à 02h).
+  if (h < 2) return { date: addDays(today, -1), shift: 'soir' }
+  // 02h–11h59 : nuit de la veille (elle suit ce soir-là et se remplit au matin).
   return { date: addDays(today, -1), shift: 'nuit' }
+}
+
+/**
+ * Slot à AFFICHER au chargement : le shift courant (selon l'heure), ou — s'il
+ * est déjà clôturé — le SUIVANT, pour que l'hôtelier tombe sur celui qu'il doit
+ * remplir plutôt que sur un travail déjà fait.
+ *
+ * On n'avance QUE vers l'avant : jamais on ne le renvoie en arrière sur une nuit
+ * oubliée. La nuit est souvent non faite ; la reprendre est une démarche
+ * délibérée (navigation manuelle), pas ce qu'on impose au chargement. Borné à un
+ * cycle complet (3) pour ne jamais boucler.
+ */
+export function resolveDisplaySlot(
+  now: Date,
+  isValidated: (date: string, shift: Shift) => boolean,
+): { date: string; shift: Shift } {
+  let slot = currentSlot(now)
+  for (let i = 0; i < 3 && isValidated(slot.date, slot.shift); i++) {
+    slot = stepSlot(slot.date, slot.shift, 1)
+  }
+  return slot
 }
 
 /**
