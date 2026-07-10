@@ -60,6 +60,11 @@ Desktop.ini
 # versionnés. Servent uniquement aux tests locaux ; la table Supabase ne
 # persiste que des données minimisées (voir src/lib/pdj/).
 csv/
+doc/
+
+# Captures d'écran de travail : elles montrent des écrans peuplés de vraies
+# données (noms de clients, montants), et n'ont pas leur place dans l'historique.
+screenshot/
 
 # Divers
 __unconfig*
