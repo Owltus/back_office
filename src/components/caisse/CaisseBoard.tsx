@@ -692,7 +692,10 @@ export function CaisseBoard() {
           disabled={!canEditFields}
           onChange={(e) => setForm((f) => ({ ...f, comment: e.target.value }))}
           placeholder="Justification d'un éventuel écart…"
-          className="min-h-24"
+          // Hauteur figée : `resize-none` retire la poignée, `h-24` neutralise
+          // le `field-sizing-content` de la primitive (qui étirait le champ à
+          // mesure qu'on écrivait). Au-delà, le texte défile dans le champ.
+          className="h-24 resize-none"
         />
       </div>
 

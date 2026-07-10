@@ -664,7 +664,9 @@ export function RaproBoard() {
           }}
           disabled={!canEditFields}
           placeholder="Remarques du jour…"
-          className="min-h-24"
+          // Hauteur figée, comme la feuille de caisse : les deux pages sont
+          // alignées, un champ qui s'étire les désynchroniserait.
+          className="h-24 resize-none"
         />
       </div>
       )}
