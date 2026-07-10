@@ -4,9 +4,11 @@ import { Check, Minus, Plus } from 'lucide-react'
 
 import { LockBadge } from '#/components/shared/LockBadge.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
+import { PrintBlockedDialog } from '#/components/shared/PrintBlockedDialog.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
 import { StepNav } from '#/components/shared/StepNav.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
+import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
 import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
 import { Textarea } from '#/components/ui/textarea.tsx'
@@ -412,6 +414,19 @@ export function CaisseBoard() {
     }
   }
 
+  // Ctrl+P emprunte la même porte que le bouton : le PDF jsPDF, jamais le rendu
+  // brut du DOM. Feuille non clôturée, le raccourci explique son refus — là où
+  // le bouton se contente d'être désactivé, infobulle à l'appui.
+  const [printBlocked, setPrintBlocked] = useState(false)
+  usePrintShortcut(() => {
+    if (pdfBusy) return
+    if (!isValidated) {
+      setPrintBlocked(true)
+      return
+    }
+    void handleGeneratePdf()
+  })
+
   /* Bouton d'état de la feuille, rendu en bas de page (sous les commentaires),
      là où se termine la saisie : Réouvrir si la feuille est clôturée et
      `editable` (admin à tout moment, OU super_utilisateur dans la fenêtre de
@@ -712,6 +727,12 @@ export function CaisseBoard() {
           {stateAction}
         </div>
       )}
+
+      <PrintBlockedDialog
+        open={printBlocked}
+        onOpenChange={setPrintBlocked}
+        reason="La caisse n'est pas clôturée. Clôturez-la pour imprimer la feuille."
+      />
 
       {/* Modal de clôture : récapitulatif + nom de l'hôtelier + clôture réelle. */}
       <Dialog open={closeOpen} onOpenChange={setCloseOpen}>

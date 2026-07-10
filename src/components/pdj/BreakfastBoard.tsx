@@ -14,7 +14,9 @@ import {
 
 import { EmptyCanvas } from '#/components/shared/EmptyCanvas.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
+import { PrintBlockedDialog } from '#/components/shared/PrintBlockedDialog.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
+import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
 import { StepNav } from '#/components/shared/StepNav.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
@@ -285,6 +287,18 @@ export function BreakfastBoard() {
     printWithTitle(`Breakfast_${dd}-${mm}-${d.getFullYear()}`)
   }
 
+  // Ctrl+P passe par le bouton : même document (feuille A4 mise en forme par
+  // pdj.css), même nom de fichier. Sur un jour sans données, il n'y aurait
+  // qu'un écran vide à imprimer — on le dit plutôt que de ne rien faire.
+  const [printBlocked, setPrintBlocked] = useState(false)
+  usePrintShortcut(() => {
+    if (!hasData) {
+      setPrintBlocked(true)
+      return
+    }
+    handlePrint()
+  })
+
   // L'en-tête (titre du jour + navigation + import) est présent dès qu'il y a des
   // données à afficher OU d'autres jours à parcourir. La navigation ne s'affiche
   // que s'il existe un autre jour que « aujourd'hui » où aller.
@@ -503,6 +517,12 @@ export function BreakfastBoard() {
           </div>
         </>
       )}
+
+      <PrintBlockedDialog
+        open={printBlocked}
+        onOpenChange={setPrintBlocked}
+        reason="Aucune donnée pour ce jour. Importez le CSV In-House Guests."
+      />
     </div>
   )
 }

@@ -25,9 +25,11 @@ import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { DatePickerButton } from '#/components/form/fields.tsx'
 import { LockBadge } from '#/components/shared/LockBadge.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
+import { PrintBlockedDialog } from '#/components/shared/PrintBlockedDialog.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
 import { StepNav } from '#/components/shared/StepNav.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
+import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
 import { Button } from '#/components/ui/button.tsx'
 import { Textarea } from '#/components/ui/textarea.tsx'
 import {
@@ -351,6 +353,26 @@ export function RaproBoard() {
     }
   }
 
+  /* Ctrl+P emprunte la même porte que le bouton : le PDF jsPDF, jamais le rendu
+     brut du DOM. Deux refus possibles, et ils ne se confondent pas — sans
+     données, dire « clôturez » serait un cul-de-sac, puisque le bouton de
+     clôture est justement absent ce jour-là. */
+  const [printBlocked, setPrintBlocked] = useState('')
+  usePrintShortcut(() => {
+    if (pdfBusy) return
+    if (showEmptyState) {
+      setPrintBlocked('Aucune donnée pour ce jour. Importez les exports du PMS.')
+      return
+    }
+    if (!isValidated) {
+      setPrintBlocked(
+        "Le rapprochement n'est pas clôturé. Clôturez-le pour imprimer la feuille.",
+      )
+      return
+    }
+    void handleGeneratePdf()
+  })
+
   const parsed = parseDateStr(selectedDate)
   const label = parsed
     ? format(parsed, 'EEEE d MMMM yyyy', { locale: fr })
@@ -672,6 +694,12 @@ export function RaproBoard() {
       )}
 
       {stateAction}
+
+      <PrintBlockedDialog
+        open={printBlocked !== ''}
+        onOpenChange={(open) => !open && setPrintBlocked('')}
+        reason={printBlocked}
+      />
     </div>
   )
 }
