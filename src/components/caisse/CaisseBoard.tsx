@@ -32,6 +32,7 @@ import {
   expected,
   fundEcart,
   fundTotal,
+  hasCountedFund,
   isBalanced,
 } from '#/lib/caisse/calc.ts'
 import { fmtEcart, fmtEcartBare, fmtEur, fmtEurInt } from '#/lib/caisse/format.ts'
@@ -230,12 +231,21 @@ export function CaisseBoard() {
     queryFn: () => fetchSheet(selectedDate, selectedShift),
   })
 
-  // Fond de caisse à reporter : feuille précédente (uniquement si le couple
-  // courant n'a pas encore de feuille — sinon on hydrate depuis la sienne).
+  // Brouillon jamais compté (fond vide) : à traiter comme une feuille neuve pour
+  // le report du fond — il doit hériter du dernier shift réel, pas rester vide.
+  const emptyDraft =
+    sheet != null && sheet.status === 'draft' && !hasCountedFund(sheet)
+  // Le couple courant attend un report du fond : aucune feuille, ou brouillon
+  // vide. Pilote UNIFORMÉMENT le chargement de la précédente, l'attente
+  // d'hydratation et l'état « prêt » (sinon la condition se réécrit à 3 endroits).
+  const needsCarry = sheet === null || emptyDraft
+
+  // Fond de caisse à reporter : feuille précédente RÉELLE, chargée seulement
+  // quand le couple courant attend un report ; sinon on hydrate depuis la sienne.
   const { data: prevSheet, isLoading: prevLoading } = useQuery({
     queryKey: ['caisse', 'prev', selectedDate, selectedShift],
     queryFn: () => fetchPreviousSheet(selectedDate, selectedShift),
-    enabled: sheet === null,
+    enabled: needsCarry,
   })
 
   const [form, setForm] = useState<CaisseSheetInput>(() =>
@@ -250,7 +260,7 @@ export function CaisseBoard() {
   // caisse (feuille précédente) réglé — évite d'éditer avant hydratation. On
   // gate sur le CHARGEMENT (pas la donnée) : une requête « précédente » en échec
   // n'empêche pas la saisie (on repart alors d'un comptage vide).
-  const ready = sheet !== undefined && !(sheet === null && prevLoading)
+  const ready = sheet !== undefined && !(needsCarry && prevLoading)
   const editable = ready && canEditSheet(sheet ?? null, role)
   const isWriter = role === 'super_utilisateur' || role === 'admin'
   // Champs éditables UNIQUEMENT sur un brouillon : une caisse clôturée est
@@ -336,20 +346,22 @@ export function CaisseBoard() {
       setSaveState('idle')
     }
     if (sheet === undefined || hydratedRef.current) return
-    // Nouvelle feuille : attendre la fin du chargement de la feuille précédente
-    // (succès ou échec), puis reporter son fond de caisse s'il existe.
-    if (sheet === null && prevLoading) return
-    const next = sheet
-      ? sheetToInput(sheet)
-      : emptyInput(
-          selectedDate,
-          selectedShift,
-          prevSheet ? { ...prevSheet.counts } : emptyCounts(),
-        )
+    // Nouvelle feuille OU brouillon au fond vide : attendre la fin du chargement
+    // de la feuille précédente (succès ou échec), puis reporter son fond compté.
+    if (needsCarry && prevLoading) return
+    // `carry` retombe sur un comptage vide sans précédente : pour un brouillon
+    // vide, réappliquer un comptage vide est neutre, d'où le simple `emptyDraft`.
+    const carry = prevSheet ? { ...prevSheet.counts } : emptyCounts()
+    const next =
+      sheet === null
+        ? emptyInput(selectedDate, selectedShift, carry)
+        : emptyDraft
+          ? { ...sheetToInput(sheet), counts: carry }
+          : sheetToInput(sheet)
     setForm(next)
     lastSavedRef.current = JSON.stringify(next)
     hydratedRef.current = true
-  }, [sheet, prevSheet, prevLoading, selectedDate, selectedShift, flush])
+  }, [sheet, needsCarry, emptyDraft, prevSheet, prevLoading, selectedDate, selectedShift, flush])
 
   // Débounce : sauvegarde ~700 ms après la dernière frappe (couple courant).
   useEffect(() => {

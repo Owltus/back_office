@@ -1,4 +1,5 @@
 import { supabase } from '#/lib/supabase.ts'
+import { hasCountedFund } from '#/lib/caisse/calc.ts'
 import { DENOMINATIONS, GRACE_HOURS } from '#/lib/caisse/constants.ts'
 import { slotKey } from '#/lib/caisse/shift.ts'
 import type {
@@ -103,9 +104,14 @@ export async function fetchSheet(date: string, shift: Shift): Promise<CaisseShee
 }
 
 /**
- * Feuille existante immédiatement AVANT (date, shift) dans la timeline, ou null.
+ * Feuille RÉELLE (fond compté) la plus proche AVANT (date, shift), ou null.
  * Sert à reporter le fond de caisse (comptage des coupures) sur la feuille
  * suivante — le float physique est le même d'un shift à l'autre.
+ *
+ * On SAUTE les shifts sans fond compté (nuit non faite, brouillon vide) : ils ne
+ * représentent aucun rapport, donc ne doivent pas exporter un fond vide. On
+ * remonte alors au dernier shift réellement compté (une nuit oubliée → le fond
+ * du soir se reporte directement sur le matin).
  */
 export async function fetchPreviousSheet(
   date: string,
@@ -123,6 +129,7 @@ export async function fetchPreviousSheet(
   let bestKey = ''
   for (const row of data as DbCaisseSheet[]) {
     const s = toSheet(row)
+    if (!hasCountedFund(s)) continue // shift sans rapport : pas une source
     const k = slotKey(s.reportDate, s.shift)
     if (k < cur && k > bestKey) {
       best = s

@@ -38,6 +38,13 @@ export function fundEcart(s: Pick<CaisseSheet, 'counts' | 'fundOrigin'>): number
   return round2(fundTotal(s) - (s.fundOrigin || FUND_TARGET))
 }
 
+/** Vrai si le fond a été compté (au moins une coupure > 0) — donc un « vrai
+ * rapport ». Un shift sans fond compté (nuit non faite) n'est pas une source de
+ * report valable : on remonte au dernier shift réellement compté. */
+export function hasCountedFund(s: Pick<CaisseSheet, 'counts'>): boolean {
+  return fundTotal(s) > 0
+}
+
 /** Vrai si tous les écarts (paiements + fond) sont à zéro à la tolérance près. */
 export function isBalanced(s: SheetAmounts & Pick<CaisseSheet, 'counts' | 'fundOrigin'>): boolean {
   const ecarts = computeEcarts(s)
