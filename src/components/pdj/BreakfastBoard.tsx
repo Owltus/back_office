@@ -21,6 +21,7 @@ import { Button } from '#/components/ui/button.tsx'
 import { DatePickerButton } from '#/components/form/fields.tsx'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { cn } from '#/lib/utils.ts'
+import { errorMessage } from '#/lib/errors.ts'
 import { printWithTitle } from '#/lib/print.ts'
 import { ALL_ROOMS, localDateStr, mergeCsvFiles } from '#/lib/pdj/csv.ts'
 import {
@@ -245,11 +246,7 @@ export function BreakfastBoard() {
             : '.'),
       )
     } catch (err) {
-      setError(
-        `Erreur lors du traitement des fichiers : ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      )
+      setError(`Erreur lors du traitement des fichiers : ${errorMessage(err)}`)
     }
   }
 

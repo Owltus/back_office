@@ -1,4 +1,5 @@
 import { supabase } from '#/lib/supabase.ts'
+import { errorMessage } from '#/lib/errors.ts'
 import { TOTAL_ROOMS, MONTHS } from '#/lib/repjour/constants.ts'
 import { parseComparison } from '#/lib/repjour/parse/comparison.ts'
 import { parseComparisonMetrics } from '#/lib/repjour/parse/metrics.ts'
@@ -135,10 +136,11 @@ async function saveComparisonMetrics(
   try {
     await upsertDailyMetrics(dateStr, parseComparisonMetrics(comparisonText))
   } catch (err) {
-    const reason = err instanceof Error ? err.message : String(err)
+    // `errorMessage`, pas `String(err)` : Supabase lève un objet ordinaire, pas
+    // une Error. L'alerte affichait « [object Object] » au lieu de la cause.
     alerts.push({
       type: 'warning',
-      message: `Métriques PMS non enregistrées (non bloquant) : ${reason}`,
+      message: `Le détail du Comparison n'a pas été archivé. Votre rapport est bien enregistré. Cause : ${errorMessage(err)}`,
     })
   }
 }

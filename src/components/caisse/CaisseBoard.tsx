@@ -21,6 +21,7 @@ import {
 import { DatePickerButton } from '#/components/form/fields.tsx'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { cn } from '#/lib/utils.ts'
+import { errorMessage } from '#/lib/errors.ts'
 import { printCaisseSheet } from '#/lib/caisse/pdf.ts'
 import {
   computeEcarts,
@@ -358,10 +359,9 @@ export function CaisseBoard() {
       await invalidate()
     } catch (err) {
       // Un refus RLS (ex. feuille verrouillée hors fenêtre) arrive ici : on
-      // resynchronise l'état réel plutôt que de présumer le succès.
-      setError(
-        `Action refusée ou échouée : ${err instanceof Error ? err.message : String(err)}`,
-      )
+      // resynchronise l'état réel plutôt que de présumer le succès. `errorMessage`
+      // et non `String(err)` : un refus RLS est un objet, pas une Error.
+      setError(`Action refusée ou échouée : ${errorMessage(err)}`)
       await invalidate()
     } finally {
       setBusy(false)
@@ -405,9 +405,7 @@ export function CaisseBoard() {
         `Caisse_${da}-${mo}-${yr}_${form.shift}`,
       )
     } catch (err) {
-      setError(
-        `Impression du PDF impossible : ${err instanceof Error ? err.message : String(err)}`,
-      )
+      setError(`Impression du PDF impossible : ${errorMessage(err)}`)
     } finally {
       setPdfBusy(false)
     }
