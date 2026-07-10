@@ -1084,7 +1084,7 @@ function ReservationBar({
   )
 
   const tip = r.comment && (
-    <TooltipContent side="top" className="max-w-56">
+    <TooltipContent side="top" className="max-w-56 select-none">
       {r.comment}
     </TooltipContent>
   )

@@ -35,31 +35,44 @@ export function StepNav({
   children?: ReactNode
   className?: string
 }) {
+  const arrow = (
+    icon: ReactNode,
+    onClick: () => void,
+    label: string,
+    disabled: boolean,
+  ) => {
+    const button = (
+      <Button
+        variant="outline"
+        size="icon-sm"
+        onClick={onClick}
+        disabled={disabled}
+        aria-label={label}
+      >
+        {icon}
+      </Button>
+    )
+    return (
+      <Tip label={label}>
+        {disabled ? (
+          // Un bouton nativement désactivé n'émet aucun événement de survol :
+          // sans ce span porteur, l'infobulle qui dit POURQUOI la flèche est en
+          // bout de course ne s'ouvrirait jamais. Même pattern que PrintButton.
+          <span tabIndex={0} className="inline-flex">
+            {button}
+          </span>
+        ) : (
+          button
+        )}
+      </Tip>
+    )
+  }
+
   return (
     <div className={cn('flex items-center gap-1', className)}>
-      <Tip label={prevLabel}>
-        <Button
-          variant="outline"
-          size="icon-sm"
-          onClick={onPrev}
-          disabled={prevDisabled}
-          aria-label={prevLabel}
-        >
-          <ChevronLeft />
-        </Button>
-      </Tip>
+      {arrow(<ChevronLeft />, onPrev, prevLabel, prevDisabled)}
       {children}
-      <Tip label={nextLabel}>
-        <Button
-          variant="outline"
-          size="icon-sm"
-          onClick={onNext}
-          disabled={nextDisabled}
-          aria-label={nextLabel}
-        >
-          <ChevronRight />
-        </Button>
-      </Tip>
+      {arrow(<ChevronRight />, onNext, nextLabel, nextDisabled)}
     </div>
   )
 }

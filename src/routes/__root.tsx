@@ -78,8 +78,11 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       <body>
         {/* Un seul provider d'infobulles pour toute l'app : les boards en
             montaient chacun un, avec des délais divergents. 300 ms laisse le
-            temps de survoler un bouton sans le déclencher. */}
-        <TooltipProvider delayDuration={300}>
+            temps de survoler un bouton sans le déclencher.
+            `disableHoverableContent` : la bulle n'est PAS survolable — dès que la
+            souris quitte le déclencheur elle se ferme (on ne peut ni la garder
+            ouverte en glissant dessus, ni sélectionner son texte). */}
+        <TooltipProvider delayDuration={300} disableHoverableContent>
           <AuthProvider>
             <AppAuthGate>{children}</AppAuthGate>
           </AuthProvider>

@@ -761,7 +761,7 @@ function Stat({
   return (
     <Tooltip>
       <TooltipTrigger asChild>{card}</TooltipTrigger>
-      <TooltipContent className="max-w-56 text-center leading-snug">
+      <TooltipContent className="max-w-56 select-none text-center leading-snug">
         {hint}
       </TooltipContent>
     </Tooltip>
