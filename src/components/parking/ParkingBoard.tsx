@@ -178,14 +178,19 @@ export function ParkingBoard() {
   // motif. Non nul ⇒ la modale de commentaire s'ouvre en mode obligatoire, et
   // le statut ne partira en base qu'à l'enregistrement.
   const [pendingStatus, setPendingStatus] = useState<Status | null>(null)
-  // Presse-papier local = mode placement : dès qu'une copie (nom, durée, statut)
-  // y est posée par « Copier », un fantôme suit le curseur et un clic pose la
-  // copie. `clipboard !== null` EST l'état « placement en cours » ; `ghost` est la
-  // case survolée (null tant que la souris n'a pas bougé sur la grille).
+  // Presse-papier local = mode placement : dès qu'une copie (nom, durée, statut,
+  // commentaire) y est posée par « Copier », un fantôme suit le curseur et un
+  // clic pose la copie. `clipboard !== null` EST l'état « placement en cours » ;
+  // `ghost` est la case survolée (null tant que la souris n'a pas bougé).
+  //
+  // Le commentaire fait partie de la copie : c'est ce qui permet à un collage en
+  // « Non payé » de porter son motif, sans redemander la justification qu'exige
+  // `setStatus`. Le copier sans lui créerait un impayé muet.
   const [clipboard, setClipboard] = useState<{
     client: string
     nights: number
     status: Status
+    comment: string
   } | null>(null)
   const [ghost, setGhost] = useState<{ day: number; spot: number } | null>(null)
   // Miroir de `reservations` lisible dans les closures de drag (état le plus récent).
@@ -367,14 +372,15 @@ export function ParkingBoard() {
       startDay: number
       nights: number
       status: Status
+      comment: string
     },
     ref: Date,
   ) {
     const id = crypto.randomUUID()
-    const { client, spot, startDay, nights, status } = fields
+    const { client, spot, startDay, nights, status, comment } = fields
     setReservations((prev) => [
       ...prev,
-      { id, client, spot, startDay, nights, status, comment: '' },
+      { id, client, spot, startDay, nights, status, comment },
     ])
     createReservation({
       id,
@@ -383,7 +389,7 @@ export function ParkingBoard() {
       start_date: startDayToDate(startDay, ref),
       nights,
       status,
-      comment: '',
+      comment,
     }).catch((err) => {
       console.error(err)
       setReservations((prev) => prev.filter((r) => r.id !== id))
@@ -395,7 +401,7 @@ export function ParkingBoard() {
     if (!canEdit || !startDate) return
     if (hasOverlap(reservations, spot, startDay, 1)) return // emplacement déjà occupé
     const id = insertReservation(
-      { client: '', spot, startDay, nights: 1, status: 'reserve' },
+      { client: '', spot, startDay, nights: 1, status: 'reserve', comment: '' },
       startDate,
     )
     setEditingId(id)
@@ -404,7 +410,12 @@ export function ParkingBoard() {
   // « Copier » (menu contextuel ou Ctrl/Cmd+clic) : pose la copie au curseur.
   function copyReservation(r: Reservation) {
     if (!canEdit) return
-    setClipboard({ client: r.client, nights: r.nights, status: r.status })
+    setClipboard({
+      client: r.client,
+      nights: r.nights,
+      status: r.status,
+      comment: r.comment,
+    })
     setGhost(null)
   }
 
@@ -414,9 +425,9 @@ export function ParkingBoard() {
     setGhost(null)
   }
 
-  // Colle le presse-papier à la case visée : nom + durée + statut copiés ; la
-  // place et le jour viennent de la case, le commentaire repart vide. Le
-  // chevauchement est déjà écarté par l'appelant (clic sur l'overlay).
+  // Colle le presse-papier à la case visée : nom, durée, statut ET commentaire
+  // copiés ; seuls la place et le jour viennent de la case. Le chevauchement est
+  // déjà écarté par l'appelant (clic sur l'overlay).
   function pasteReservation(startDay: number, spot: number) {
     if (!canEdit || !startDate || !clipboard) return
     insertReservation(
@@ -426,6 +437,7 @@ export function ParkingBoard() {
         startDay,
         nights: clipboard.nights,
         status: clipboard.status,
+        comment: clipboard.comment,
       },
       startDate,
     )
@@ -888,6 +900,11 @@ export function ParkingBoard() {
                       <span className="min-w-0 flex-1 truncate font-medium">
                         {clipboard.client || 'Sans nom'}
                       </span>
+                      {/* Le commentaire fait partie de la copie : l'annoncer
+                          avant le clic, comme sur une barre posée. */}
+                      {clipboard.comment && (
+                        <MessageSquare className="ml-1 size-3 shrink-0 opacity-70" />
+                      )}
                     </div>
                   )}
                 </>
