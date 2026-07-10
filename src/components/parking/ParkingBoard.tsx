@@ -44,6 +44,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -173,6 +174,10 @@ export function ParkingBoard() {
   const [calOpen, setCalOpen] = useState(false)
   const [commentId, setCommentId] = useState<string | null>(null)
   const [commentDraft, setCommentDraft] = useState('')
+  // Statut en attente de justification : « Non payé » ne s'écrit qu'avec un
+  // motif. Non nul ⇒ la modale de commentaire s'ouvre en mode obligatoire, et
+  // le statut ne partira en base qu'à l'enregistrement.
+  const [pendingStatus, setPendingStatus] = useState<Status | null>(null)
   // Presse-papier local = mode placement : dès qu'une copie (nom, durée, statut)
   // y est posée par « Copier », un fantôme suit le curseur et un clic pose la
   // copie. `clipboard !== null` EST l'état « placement en cours » ; `ghost` est la
@@ -428,7 +433,15 @@ export function ParkingBoard() {
 
   function openComment(r: Reservation) {
     setCommentDraft(r.comment)
+    setPendingStatus(null)
     setCommentId(r.id)
+  }
+
+  function closeComment() {
+    // Fermeture sans enregistrer : un statut en attente est abandonné, la
+    // réservation garde donc celui qu'elle avait.
+    setCommentId(null)
+    setPendingStatus(null)
   }
 
   function saveComment() {
@@ -436,15 +449,36 @@ export function ParkingBoard() {
     if (commentId === null) return
     const id = commentId
     const comment = commentDraft.trim()
+    const status = pendingStatus
+    if (status && !comment) return // justification obligatoire
     setReservations((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, comment } : r)),
+      prev.map((r) =>
+        r.id === id ? { ...r, comment, status: status ?? r.status } : r,
+      ),
     )
     setCommentId(null)
-    updateReservation(id, { comment }).catch(console.error)
+    setPendingStatus(null)
+    updateReservation(id, status ? { comment, status } : { comment }).catch(
+      console.error,
+    )
   }
 
   function setStatus(id: string, status: Status) {
     if (!canEdit) return
+    const current = reservations.find((r) => r.id === id)
+    if (!current || current.status === status) return
+    /* « Non payé » exige un motif écrit. On ouvre la modale AVANT toute
+       écriture : appliquer le statut d'abord, quitte à le retirer si l'hôtelier
+       annule, l'aurait diffusé en base — donc, par le temps réel, sur l'écran
+       des collègues — le temps de l'aller-retour. Ici, rien ne bouge tant que
+       la justification n'est pas saisie ; statut et commentaire partent alors
+       ensemble, en une seule requête. */
+    if (status === 'checkout') {
+      setCommentDraft(current.comment)
+      setPendingStatus(status)
+      setCommentId(id)
+      return
+    }
     setReservations((prev) =>
       prev.map((r) => (r.id === id ? { ...r, status } : r)),
     )
@@ -863,29 +897,46 @@ export function ParkingBoard() {
         </div>
       </div>
 
-      {/* Modale d'édition du commentaire */}
+      {/* Modale du commentaire. Double emploi : édition libre depuis le menu
+          contextuel, ou justification OBLIGATOIRE d'un passage en « Non payé »
+          (`pendingStatus`) — le statut n'est alors écrit qu'avec le motif. */}
       <Dialog
         open={commentId !== null}
         onOpenChange={(open) => {
-          if (!open) setCommentId(null)
+          if (!open) closeComment()
         }}
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Commentaire</DialogTitle>
+            <DialogTitle>
+              {pendingStatus ? 'Justifier le non-paiement' : 'Commentaire'}
+            </DialogTitle>
+            {pendingStatus && (
+              <DialogDescription>
+                Indiquez pourquoi ce client passe en « Non payé ». Sans motif, le
+                statut n'est pas modifié.
+              </DialogDescription>
+            )}
           </DialogHeader>
           <Textarea
             autoFocus
             rows={4}
             value={commentDraft}
             onChange={(e) => setCommentDraft(e.target.value)}
-            placeholder="Ajouter un commentaire…"
+            placeholder={
+              pendingStatus ? 'Motif du non-paiement…' : 'Ajouter un commentaire…'
+            }
           />
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setCommentId(null)}>
+            <Button variant="ghost" onClick={closeComment}>
               Annuler
             </Button>
-            <Button onClick={saveComment}>Enregistrer</Button>
+            <Button
+              onClick={saveComment}
+              disabled={pendingStatus !== null && !commentDraft.trim()}
+            >
+              Enregistrer
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
