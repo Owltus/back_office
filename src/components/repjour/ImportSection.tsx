@@ -17,6 +17,7 @@ import {
 } from '#/lib/repjour/import/orchestrator.ts'
 import { detectFileType } from '#/lib/repjour/parse/detect.ts'
 import { extractReportDate } from '#/lib/repjour/parse/date.ts'
+import { businessNow } from '#/lib/businessDay.ts'
 import { MONTHS } from '#/lib/repjour/constants.ts'
 import type { Alert, ReportDate } from '#/lib/repjour/types.ts'
 
@@ -187,20 +188,37 @@ export function ImportSection({
       clearValidation()
       const dateMatch = file.name.match(/(\d{4})(\d{2})(\d{2})/)
       if (dateMatch) {
-        const now = new Date()
+        // La journée hôtelière bascule à 02h, pas à minuit (`businessNow`) : le
+        // fichier d'une nuit n'est tiré qu'à partir de 02h. On n'accepte donc que
+        // le fichier du JOUR HÔTELIER courant. Voir #/lib/businessDay.ts.
+        //
+        // Exception ADMIN : il conserve l'ancien comportement (horloge civile) et
+        // peut donc importer dès minuit, sans attendre 02h.
+        const ref = isAdmin ? new Date() : businessNow()
         const fileYear = parseInt(dateMatch[1], 10)
         const fileMonth = parseInt(dateMatch[2], 10)
         const fileDay = parseInt(dateMatch[3], 10)
-        if (
-          fileYear !== now.getFullYear() ||
-          fileMonth !== now.getMonth() + 1 ||
-          fileDay !== now.getDate()
-        ) {
+        const isRefToday =
+          fileYear === ref.getFullYear() &&
+          fileMonth === ref.getMonth() + 1 &&
+          fileDay === ref.getDate()
+        if (!isRefToday) {
+          // Distinguer « trop tôt » (fichier daté d'aujourd'hui CIVIL déposé
+          // avant 02h : le rapport de la nuit n'existe pas encore) du simple
+          // mauvais jour, pour ne pas dire « extrayez le fichier du jour » alors
+          // qu'il vient bien d'être extrait.
+          const civil = new Date()
+          const isCivilToday =
+            fileYear === civil.getFullYear() &&
+            fileMonth === civil.getMonth() + 1 &&
+            fileDay === civil.getDate()
           const slot: FileSlot = {
             file: null,
             name: file.name,
             status: 'error',
-            errorMsg: `Ce fichier date du ${fileDay}/${String(fileMonth).padStart(2, '0')}/${fileYear}. Veuillez extraire les fichiers du jour depuis votre PMS avant de les importer.`,
+            errorMsg: isCivilToday
+              ? 'Le rapport de cette nuit n’est disponible qu’à partir de 02h00 (clôture de la journée). Réessayez après cette heure.'
+              : `Ce fichier date du ${fileDay}/${String(fileMonth).padStart(2, '0')}/${fileYear}. Veuillez extraire les fichiers du jour depuis votre PMS avant de les importer.`,
           }
           if (expectedType === 'comparison') setComparison(slot)
           else setForecast(slot)
@@ -227,7 +245,7 @@ export function ImportSection({
         else setForecast(slot)
       }
     },
-    [clearValidation],
+    [clearValidation, isAdmin],
   )
 
   const onDrop = useCallback(

@@ -26,6 +26,7 @@ import { cn } from '#/lib/utils.ts'
 import { errorMessage } from '#/lib/errors.ts'
 import { printWithTitle } from '#/lib/print.ts'
 import { ALL_ROOMS, localDateStr, mergeCsvFiles } from '#/lib/pdj/csv.ts'
+import { businessDateStr, businessNow } from '#/lib/businessDay.ts'
 import {
   fetchDay,
   fetchServiceDates,
@@ -66,11 +67,14 @@ const fmtTitle = new Intl.DateTimeFormat('fr-FR', {
 export function BreakfastBoard() {
   const { role } = useAuth()
   const canEdit = role === 'super_utilisateur' || role === 'admin'
+  const isAdmin = role === 'admin'
   const queryClient = useQueryClient()
 
-  // Jour courant (Europe/Paris) figé au montage : jour affiché par défaut, repère
-  // RGPD, et borne « la plus récente » de la navigation.
-  const today = useMemo(() => localDateStr(new Date()), [])
+  // Jour hôtelier courant (Europe/Paris) figé au montage : jour affiché par
+  // défaut, repère RGPD, et borne « la plus récente » de la navigation. La
+  // bascule se fait à 02h et non à minuit (`businessNow`) : entre minuit et 02h
+  // on reste sur la veille, dont le rapport est le dernier disponible.
+  const today = useMemo(() => localDateStr(businessNow()), [])
 
   // On affiche TOUJOURS le jour courant par défaut (jamais le dernier jour
   // importé, qui serait obsolète) ; l'utilisateur peut ensuite remonter le temps.
@@ -223,6 +227,16 @@ export function BreakfastBoard() {
       if (result.rows.length === 0) {
         setError(
           'Aucune donnée exploitable : fichiers invalides ou mal nommés (attendu « In-House Guests _YYYYMMDD… »).',
+        )
+        return
+      }
+
+      // Blocage avant 02h (sauf admin) : un fichier daté d'un jour hôtelier non
+      // encore ouvert — le rapport In-House n'est tiré qu'à partir de 02h — est
+      // refusé. L'admin garde l'accès immédiat. Voir #/lib/businessDay.ts.
+      if (!isAdmin && result.dates.some((d) => d > businessDateStr())) {
+        setError(
+          'Le rapport de cette nuit n’est disponible qu’à partir de 02h00 (clôture de la journée). Réessayez après cette heure.',
         )
         return
       }

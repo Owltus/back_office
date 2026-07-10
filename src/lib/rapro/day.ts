@@ -6,10 +6,16 @@
  */
 
 import { formatDateStr } from '#/lib/poster/dateFormatter.ts'
+import { businessNow } from '#/lib/businessDay.ts'
 
-/** Date locale au format 'YYYY-MM-DD' (aujourd'hui par défaut). */
+/**
+ * Jour hôtelier courant au format 'YYYY-MM-DD'. La journée bascule à 02h et non à
+ * minuit (`businessNow`) : entre minuit et 02h, on reste sur la veille — c'est
+ * encore elle qu'on rapproche, et le jour suivant n'est pas « ouvert ». Sert de
+ * jour affiché par défaut ET de borne la plus récente de la navigation.
+ */
 export function today(now = new Date()): string {
-  return formatDateStr(now)
+  return formatDateStr(businessNow(now))
 }
 
 /** 'YYYY-MM-DD' décalé de `delta` jours. */

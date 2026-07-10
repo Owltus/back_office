@@ -23,6 +23,7 @@ import { RecipientsModal } from '#/components/repjour/RecipientsModal.tsx'
 import { SummaryCards } from '#/components/repjour/SummaryCards.tsx'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { supabase } from '#/lib/supabase.ts'
+import { businessNow } from '#/lib/businessDay.ts'
 import { captureTableImage, sendReport } from '#/lib/repjour/email.ts'
 import {
   fetchBudget,
@@ -64,14 +65,35 @@ function localDateStr(d: Date): string {
 }
 
 /**
- * Jour de référence du dashboard = la VEILLE. RepJour fonctionne en J-1 : un
- * export PMS daté d'aujourd'hui contient les données d'HIER (cf.
+ * Jour de référence du dashboard = la VEILLE CIVILE. RepJour fonctionne en J-1 :
+ * un export PMS daté d'aujourd'hui contient les données d'HIER (cf.
  * extractReportDate). Le rapport le plus récent qu'on puisse avoir est donc
- * celui d'hier — c'est le jour affiché par défaut à l'ouverture, et le seul
- * jour importable. Exemple : passé minuit, on est lundi → on affiche dimanche.
+ * celui d'hier — c'est le jour affiché par défaut à l'ouverture.
+ *
+ * NB : c'est bien la veille CIVILE (bascule à minuit), pas le jour hôtelier. La
+ * frontière de 02h ne concerne QUE l'import (le fichier d'une nuit n'est tiré
+ * qu'à partir de 02h) : ce verrou est porté par ImportSection (`businessNow`),
+ * pas par le jour affiché. Ainsi, passé minuit, on montre déjà la veille (samedi
+ * 00h30 → vendredi), mais son fichier reste refusé à l'import avant 02h.
  */
 function getYesterdayStr(): string {
   const d = new Date()
+  d.setDate(d.getDate() - 1)
+  return localDateStr(d)
+}
+
+/**
+ * Jour dont on PROPOSE l'import — distinct du jour affiché. Le fichier d'une nuit
+ * n'est tiré qu'à partir de 02h : la journée hôtelière ne bascule donc pas à
+ * minuit mais à 02h (`businessNow`). C'est le J-1 de ce jour hôtelier.
+ *
+ * Conséquence voulue : entre minuit et 02h, l'import de la veille n'est PAS
+ * encore proposé (son rapport n'existe pas). Exemple : samedi 00h30, on affiche
+ * bien vendredi (getYesterdayStr) mais le jour d'import est encore jeudi ; à
+ * samedi 02h, il passe à vendredi et la zone d'import de vendredi apparaît.
+ */
+function getImportDayStr(): string {
+  const d = businessNow()
   d.setDate(d.getDate() - 1)
   return localDateStr(d)
 }
@@ -186,17 +208,25 @@ export function DashboardBoard() {
   const ecart = pm && budget ? computeEcart(pm, budget) : null
   const hasPartialData = !report && (forecastMonthTotal || budget)
 
-  // « Jour d'import » = la VEILLE (jour de référence, cf. getYesterdayStr).
-  // L'ImportSection n'accepte QUE des fichiers datés du jour → le seul rapport
-  // qu'on puisse combler par un import est celui d'HIER. C'est donc le seul jour
-  // où l'on propose l'import. Tout autre jour sans rapport (passé plus ancien,
-  // jour courant, futur) affiche le tableau vide / la projection.
-  const isImportDay = selectedDate === getYesterdayStr()
+  // « Jour d'import » = le J-1 du jour HÔTELIER (cf. getImportDayStr), et non le
+  // jour affiché : entre minuit et 02h, on regarde la veille (getYesterdayStr)
+  // mais son rapport n'est pas encore tiré, donc la zone d'import reste masquée
+  // jusqu'à 02h. Tout autre jour sans rapport (passé plus ancien, jour courant,
+  // futur, ou la veille avant 02h) affiche le tableau vide / la projection.
+  //
+  // Exception ADMIN : il garde l'ancien comportement (veille CIVILE), donc la
+  // zone d'import s'ouvre dès minuit, sans attendre 02h.
+  const isImportDay =
+    selectedDate === (isAdmin ? getYesterdayStr() : getImportDayStr())
 
-  // Rapport d'hier pas encore importé, pour un rôle habilité : on n'affiche QUE
-  // la zone d'import, pas le tableau. (utilisateur : jamais d'import → vue
-  // inchangée ; tout jour ≠ hier : on ne propose pas l'import.)
-  const importOnly = !report && isImportDay && canImport
+  // Rapport d'hier pas encore importé : on n'affiche QUE la zone d'import, pas le
+  // tableau. (utilisateur : jamais d'import → vue inchangée ; tout jour ≠ hier :
+  // on ne propose pas l'import.)
+  //
+  // Exception ADMIN : jamais ce mode « import seul ». Il garde la vue de journée
+  // — le tableau (ou la projection / l'état vide) PLUS la carte d'import compacte
+  // en bas — même quand le rapport n'est pas encore là.
+  const importOnly = !report && isImportDay && canImport && !isAdmin
 
   const daysInMonthPartial = selectedDate
     ? (() => {
