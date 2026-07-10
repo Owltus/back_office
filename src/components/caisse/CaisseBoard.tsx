@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, Lock, LockOpen, Minus, Plus } from 'lucide-react'
+import { Check, Minus, Plus } from 'lucide-react'
 
+import { LockBadge } from '#/components/shared/LockBadge.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
 import { StepNav } from '#/components/shared/StepNav.tsx'
@@ -414,19 +415,23 @@ export function CaisseBoard() {
   /* Bouton d'état de la feuille, rendu en bas de page (sous les commentaires),
      là où se termine la saisie : Réouvrir si la feuille est clôturée et
      `editable` (admin à tout moment, OU super_utilisateur dans la fenêtre de
-     grâce), Verrouillé sinon (super hors grâce), Clôturer sur un brouillon. */
+     grâce), Verrouillé sinon (super hors grâce), Clôturer sur un brouillon.
+
+     Le poids visuel suit l'intention : clôturer est la SUITE du travail (bouton
+     plein), réouvrir en est le RETOUR EN ARRIÈRE (contour vert, comme la
+     pastille d'en-tête), verrouillé en est le refus (contour rouge). Texte seul :
+     le libellé dit déjà l'action, une icône n'y ajoutait rien. */
   const stateAction = !isWriter ? null : !isValidated ? (
     editable && (
       <Tip label="Fige les montants de ce shift">
         <Button
-          variant="outline"
           className="w-full"
           onClick={() => {
             setHotelierName(form.operatorInitials)
             setCloseOpen(true)
           }}
         >
-          <Check /> Clôturer la caisse
+          Clôturer la caisse
         </Button>
       </Tip>
     )
@@ -434,11 +439,11 @@ export function CaisseBoard() {
     <Tip label="Rend les montants modifiables">
       <Button
         variant="outline"
-        className="w-full"
+        className="w-full border-emerald-500/40 text-emerald-500 hover:bg-emerald-500/10 hover:text-emerald-500 dark:hover:bg-emerald-500/10"
         onClick={handleReopen}
         disabled={busy}
       >
-        <LockOpen /> Réouvrir la caisse
+        Réouvrir la caisse
       </Button>
     </Tip>
   ) : (
@@ -452,7 +457,7 @@ export function CaisseBoard() {
           disabled
           className="w-full border-destructive/50 text-destructive disabled:opacity-100"
         >
-          <Lock /> Verrouillé
+          Verrouillé
         </Button>
       </span>
     </Tip>
@@ -462,6 +467,21 @@ export function CaisseBoard() {
     <div className="caisse-doc mx-auto flex w-full min-w-0 max-w-5xl flex-1 flex-col gap-4 print:max-w-none">
       <PageHeader
         title={`${titleDate} (${SHIFT_LABELS[form.shift].toLowerCase()})`}
+        // Attendre `ready` : sans feuille chargée, `isValidated` vaut faux par
+        // défaut et la pastille afficherait « Ouverte » avant de se contredire.
+        badge={
+          ready && (
+            <LockBadge
+              locked={isValidated}
+              label={isValidated ? 'Clôturée' : 'Ouverte'}
+              hint={
+                isValidated
+                  ? 'Montants figés. Réouvrez la feuille pour les modifier.'
+                  : 'Saisie en cours, enregistrée automatiquement.'
+              }
+            />
+          )
+        }
         actions={
           <>
             {/* 1) Impression : toujours présente, mais désactivée tant que la
@@ -752,7 +772,7 @@ export function CaisseBoard() {
               Annuler
             </Button>
             <Button onClick={handleConfirmClose} disabled={busy || !hotelierName.trim()}>
-              <Check /> Clôturer définitivement
+              Clôturer définitivement
             </Button>
           </DialogFooter>
         </DialogContent>

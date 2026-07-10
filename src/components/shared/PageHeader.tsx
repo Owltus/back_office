@@ -14,18 +14,22 @@ import { cn } from '#/lib/utils.ts'
  * - `leading` : bloc optionnel avant le titre (navigation du parking).
  * - `title` : titre principal (h1). Omis, la colonne sert d'espaceur — c'est ce
  *   qui pousse `actions` à droite quand la page n'a pas de titre.
+ * - `badge` : pastille d'état posée juste après le titre, sur la même ligne
+ *   (voir `LockBadge`). Hors du h1 : c'est un état, pas un bout de titre.
  * - `meta` : ligne secondaire sous le titre (date, nom de fichier…).
  * - `actions` : zone de boutons alignée à droite.
  */
 export function PageHeader({
   leading,
   title,
+  badge,
   meta,
   actions,
   className,
 }: {
   leading?: ReactNode
   title?: ReactNode
+  badge?: ReactNode
   meta?: ReactNode
   actions?: ReactNode
   className?: string
@@ -39,7 +43,12 @@ export function PageHeader({
     >
       {leading}
       <div className="min-w-0 flex-1">
-        {title != null && <h1 className="text-xl font-semibold">{title}</h1>}
+        {(title != null || badge != null) && (
+          <div className="flex flex-wrap items-center gap-2">
+            {title != null && <h1 className="text-xl font-semibold">{title}</h1>}
+            {badge}
+          </div>
+        )}
         {meta != null && (
           <p className="truncate text-sm text-muted-foreground">{meta}</p>
         )}

@@ -12,11 +12,9 @@ import {
   Ban,
   BedDouble,
   CalendarDays,
-  Check,
   CheckCheck,
   History,
   Info,
-  LockOpen,
   RotateCcw,
   Scale,
   Sparkles,
@@ -25,6 +23,7 @@ import {
 
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { DatePickerButton } from '#/components/form/fields.tsx'
+import { LockBadge } from '#/components/shared/LockBadge.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
 import { StepNav } from '#/components/shared/StepNav.tsx'
@@ -359,13 +358,17 @@ export function RaproBoard() {
   const title = label.charAt(0).toUpperCase() + label.slice(1)
 
   /* Bouton d'état du jour, rendu en bas de page (sous les commentaires), là où
-     se termine la saisie — comme sur la feuille de caisse. L'icône illustre
-     l'ACTION (clôturer / réouvrir), pas l'état courant : avec un libellé à
-     côté, un cadenas ouvert sur « Clôturer » se lisait à contresens.
+     se termine la saisie — comme sur la feuille de caisse. Texte seul : le
+     libellé dit déjà l'action, et un cadenas y ajoutait surtout une ambiguïté
+     (illustre-t-il l'état courant, ou celui qu'on va atteindre ?).
 
      Sans occupation il n'y a rien à clôturer : le bouton disparaît, comme le
      commentaire. Clôturer un jour vide n'aurait figé que du vide, et aurait
-     surtout fait croire que le ménage du jour était traité. */
+     surtout fait croire que le ménage du jour était traité.
+
+     Le poids visuel suit l'intention, comme sur la feuille de caisse : clôturer
+     est la SUITE du travail (bouton plein), réouvrir en est le RETOUR EN ARRIÈRE
+     (contour vert, accordé à la pastille d'en-tête). */
   const stateAction = !isWriter || showEmptyState ? null : !isValidated ? (
     // Avertissement non bloquant (D5) au survol si la balance n'est pas à zéro ;
     // le compteur visible vit dans la card « Reste à faire ».
@@ -376,14 +379,18 @@ export function RaproBoard() {
           : 'Fige la grille et le commentaire du jour'
       }
     >
-      <Button variant="outline" className="w-full" onClick={handleClose}>
-        <Check /> Clôturer le rapprochement
+      <Button className="w-full" onClick={handleClose}>
+        Clôturer le rapprochement
       </Button>
     </Tip>
   ) : (
     <Tip label="Rend la grille et le commentaire modifiables">
-      <Button variant="outline" className="w-full" onClick={handleReopen}>
-        <LockOpen /> Réouvrir le rapprochement
+      <Button
+        variant="outline"
+        className="w-full border-emerald-500/40 text-emerald-500 hover:bg-emerald-500/10 hover:text-emerald-500 dark:hover:bg-emerald-500/10"
+        onClick={handleReopen}
+      >
+        Réouvrir le rapprochement
       </Button>
     </Tip>
   )
@@ -393,6 +400,24 @@ export function RaproBoard() {
     <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4">
       <PageHeader
         title={title}
+        // Rien à verrouiller sans donnée, et rien à annoncer avant que
+        // l'occupation et la feuille soient chargées : la pastille se
+        // contredirait le temps d'un rendu.
+        badge={
+          pdjRows !== undefined &&
+          sheet !== undefined &&
+          !showEmptyState && (
+            <LockBadge
+              locked={isValidated}
+              label={isValidated ? 'Clôturé' : 'Ouvert'}
+              hint={
+                isValidated
+                  ? 'Grille et commentaire figés. Réouvrez le rapprochement pour les modifier.'
+                  : 'Saisie en cours, enregistrée à chaque clic.'
+              }
+            />
+          )
+        }
         actions={
           <>
             <Tip label="Récap mensuel">
