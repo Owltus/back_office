@@ -104,6 +104,33 @@ export async function fetchForecastMonthTotal(
 }
 
 /**
+ * Dernier rapport importé ANTÉRIEUR à `date`, dans le MÊME mois. Sert à la carte
+ * « Pris depuis la veille » : on y soustrait le projeté fin de mois d'un jour à
+ * l'autre. La contrainte « même mois » est essentielle — le projeté est un total
+ * MENSUEL, donc comparer au 30 du mois précédent soustrairait deux mois
+ * différents (résultat aberrant). Au 1er du mois, renvoie donc `null` (rien à
+ * comparer). En cas de trou dans la série (jour sans rapport), on remonte au
+ * dernier rapport réellement présent au lieu de masquer la carte.
+ */
+export async function fetchPreviousReportInMonth(
+  date: string,
+  year: number,
+  month: number,
+): Promise<DailyReport | null> {
+  const { data, error } = await supabase
+    .from('daily_reports')
+    .select('*')
+    .eq('year', year)
+    .eq('month', month)
+    .lt('date', date)
+    .order('date', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) throw error
+  return data
+}
+
+/**
  * Dernier rapport importé d'un mois. Sert de repli au dashboard : quand le jour
  * affiché n'a pas de rapport, on montre tout de même le MTD du mois en cours.
  */

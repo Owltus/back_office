@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import {
@@ -26,9 +26,11 @@ import { supabase } from '#/lib/supabase.ts'
 import { businessNow } from '#/lib/businessDay.ts'
 import { captureTableImage, sendReport } from '#/lib/repjour/email.ts'
 import {
+  fetchAvailableDates,
   fetchBudget,
   fetchForecastMonthTotal,
   fetchLatestReportOfMonth,
+  fetchPreviousReportInMonth,
   fetchReportByDate,
 } from '#/lib/repjour/services/daily.ts'
 import { reportToKPI } from '#/lib/repjour/calc/kpi.ts'
@@ -65,16 +67,9 @@ function localDateStr(d: Date): string {
 }
 
 /**
- * Jour de référence du dashboard = la VEILLE CIVILE. RepJour fonctionne en J-1 :
- * un export PMS daté d'aujourd'hui contient les données d'HIER (cf.
- * extractReportDate). Le rapport le plus récent qu'on puisse avoir est donc
- * celui d'hier — c'est le jour affiché par défaut à l'ouverture.
- *
- * NB : c'est bien la veille CIVILE (bascule à minuit), pas le jour hôtelier. La
- * frontière de 02h ne concerne QUE l'import (le fichier d'une nuit n'est tiré
- * qu'à partir de 02h) : ce verrou est porté par ImportSection (`businessNow`),
- * pas par le jour affiché. Ainsi, passé minuit, on montre déjà la veille (samedi
- * 00h30 → vendredi), mais son fichier reste refusé à l'import avant 02h.
+ * Veille CIVILE (bascule à minuit). Ne sert PLUS de jour affiché par défaut
+ * (voir getImportDayStr) : uniquement de référence pour l'EXCEPTION admin de la
+ * zone d'import — l'admin peut importer dès minuit, sans attendre 02h.
  */
 function getYesterdayStr(): string {
   const d = new Date()
@@ -83,14 +78,15 @@ function getYesterdayStr(): string {
 }
 
 /**
- * Jour dont on PROPOSE l'import — distinct du jour affiché. Le fichier d'une nuit
- * n'est tiré qu'à partir de 02h : la journée hôtelière ne bascule donc pas à
- * minuit mais à 02h (`businessNow`). C'est le J-1 de ce jour hôtelier.
- *
- * Conséquence voulue : entre minuit et 02h, l'import de la veille n'est PAS
- * encore proposé (son rapport n'existe pas). Exemple : samedi 00h30, on affiche
- * bien vendredi (getYesterdayStr) mais le jour d'import est encore jeudi ; à
- * samedi 02h, il passe à vendredi et la zone d'import de vendredi apparaît.
+ * J-1 du jour HÔTELIER (bascule à 02h via `businessNow`, pas à minuit). RepJour
+ * est en J-1 : le rapport d'une nuit n'est tiré qu'à partir de 02h. Ce jour sert
+ * à la fois de :
+ *  - jour AFFICHÉ par défaut : le dernier jour réellement CLÔTURÉ dont le rapport
+ *    est disponible. Avant 02h → J-2 (la veille civile n'a pas encore de données) ;
+ *    après 02h → J-1 ; en journée les deux coïncident. Sans ça, entre minuit et
+ *    02h on ouvrait sur un jour vide (samedi 01h52 → vendredi pas encore tiré) ;
+ *  - jour dont on PROPOSE l'import.
+ * Ainsi l'affichage ET l'import basculent à 02h, jamais à minuit.
  */
 function getImportDayStr(): string {
   const d = businessNow()
@@ -100,10 +96,11 @@ function getImportDayStr(): string {
 
 export function DashboardBoard() {
   const [detailMode, setDetailMode] = useState(false)
-  // Ouverture sur le jour de référence (la veille), jamais sur le dernier
-  // rapport existant : on part toujours d'hier, puis on affiche le tableau si
-  // son rapport existe, ou l'invite d'import sinon.
-  const [selectedDate, setSelectedDate] = useState(getYesterdayStr)
+  // Ouverture sur le dernier jour CLÔTURÉ (J-1 du jour hôtelier, bascule à 02h) :
+  // avant 02h → avant-veille (la veille civile n'a pas encore de rapport tiré),
+  // après 02h → veille, en journée les deux coïncident. Puis on affiche le tableau
+  // si son rapport existe, ou l'invite d'import sinon. (Cf. getImportDayStr.)
+  const [selectedDate, setSelectedDate] = useState(getImportDayStr)
   const [sending, setSending] = useState(false)
   const [showRecipients, setShowRecipients] = useState(false)
 
@@ -144,6 +141,17 @@ export function DashboardBoard() {
   const { data: latestOfMonth } = useQuery({
     queryKey: ['repjour', 'latest-of-month', year, month],
     queryFn: () => fetchLatestReportOfMonth(year, month),
+  })
+  const { data: prevReport } = useQuery({
+    queryKey: ['repjour', 'prev-report', year, month, selectedDate],
+    queryFn: () => fetchPreviousReportInMonth(selectedDate, year, month),
+  })
+  // Toutes les dates ayant un rapport en base — sert à griser dans le sélecteur
+  // les jours « qu'on ne possède pas » (sans donnée). Une seule lecture, mise en
+  // cache : la liste bouge peu (un import par jour).
+  const { data: availableDates } = useQuery({
+    queryKey: ['repjour', 'available-dates'],
+    queryFn: fetchAvailableDates,
   })
 
   // Repli MTD : n'a de sens que si le jour affiché n'a PAS de rapport.
@@ -208,16 +216,37 @@ export function DashboardBoard() {
   const ecart = pm && budget ? computeEcart(pm, budget) : null
   const hasPartialData = !report && (forecastMonthTotal || budget)
 
-  // « Jour d'import » = le J-1 du jour HÔTELIER (cf. getImportDayStr), et non le
-  // jour affiché : entre minuit et 02h, on regarde la veille (getYesterdayStr)
-  // mais son rapport n'est pas encore tiré, donc la zone d'import reste masquée
-  // jusqu'à 02h. Tout autre jour sans rapport (passé plus ancien, jour courant,
-  // futur, ou la veille avant 02h) affiche le tableau vide / la projection.
-  //
-  // Exception ADMIN : il garde l'ancien comportement (veille CIVILE), donc la
-  // zone d'import s'ouvre dès minuit, sans attendre 02h.
-  const isImportDay =
-    selectedDate === (isAdmin ? getYesterdayStr() : getImportDayStr())
+  // « Pris depuis la veille » : soustraction du Revenu hébergement projeté fin de
+  // mois entre le jour affiché et le dernier rapport ANTÉRIEUR du même mois
+  // (fetchPreviousReportInMonth). Positif = réservations nettes prises, négatif =
+  // annulations nettes. `null` (carte masquée) quand il n'y a pas de rapport
+  // antérieur dans le mois (1er du mois) ou pas de rapport pour le jour affiché.
+  const prevPm = prevReport ? reportToKPI(prevReport, 'pm') : null
+  const pickup = pm && prevPm ? pm.roomRevenue - prevPm.roomRevenue : null
+
+  // Jour le plus récent ATTEIGNABLE = le jour d'import du rôle. C'est le dernier
+  // jour utile : le J-1 hôtelier (getImportDayStr, bascule à 02h) pour tous, sauf
+  // l'admin qui peut importer dès minuit → veille CIVILE (getYesterdayStr).
+  // Au-delà, ce ne sont que des jours FUTURS sans données (RepJour est en J-1) :
+  // la navigation est bornée à ce jour (bouton « suivant » + sélecteur de date).
+  const maxDate = isAdmin ? getYesterdayStr() : getImportDayStr()
+
+  // Jours sélectionnables dans le calendrier = ceux qu'on POSSÈDE (un rapport en
+  // base). Tant que la liste n'est pas chargée, on laisse `undefined` (le picker
+  // ne borne alors que par `max`, sans tout griser). Les rôles habilités gardent
+  // le jour d'import atteignable même sans rapport encore présent (pour importer).
+  const pickerDates = useMemo(() => {
+    if (!availableDates) return undefined
+    return canImport && !availableDates.includes(maxDate)
+      ? [...availableDates, maxDate]
+      : availableDates
+  }, [availableDates, canImport, maxDate])
+
+  // « Jour d'import » = ce jour max. Entre minuit et 02h, la veille civile n'est
+  // pas encore tirée, donc la zone d'import reste masquée jusqu'à 02h (sauf admin).
+  // Tout autre jour sans rapport (passé plus ancien, ou la veille avant 02h)
+  // affiche le tableau vide / la projection.
+  const isImportDay = selectedDate === maxDate
 
   // Rapport d'hier pas encore importé : on n'affiche QUE la zone d'import, pas le
   // tableau. (utilisateur : jamais d'import → vue inchangée ; tout jour ≠ hier :
@@ -271,10 +300,13 @@ export function DashboardBoard() {
                 onNext={() => shiftDate(1)}
                 prevLabel="Jour précédent"
                 nextLabel="Jour suivant"
+                nextDisabled={selectedDate >= maxDate}
               >
                 <DatePickerButton
                   value={selectedDate}
                   onChange={handleDateChange}
+                  max={maxDate}
+                  enabledDates={pickerDates}
                 />
               </StepNav>
             </>
@@ -327,6 +359,7 @@ export function DashboardBoard() {
               projeteMois={pm}
               budget={budget}
               ecart={ecart}
+              pickup={pickup}
             />
 
             {detailMode ? (

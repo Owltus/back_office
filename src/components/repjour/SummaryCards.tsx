@@ -20,6 +20,12 @@ interface SummaryCardsProps {
   budget: MonthBudget
   ecart: Ecart
   partial?: boolean
+  /**
+   * « Pris depuis la veille » : écart du Revenu hébergement projeté entre le jour
+   * affiché et la veille (en euros). Positif = réservations nettes prises,
+   * négatif = annulations nettes. `null`/absent → carte masquée (pas de veille).
+   */
+  pickup?: number | null
 }
 
 export function SummaryCards({
@@ -28,6 +34,7 @@ export function SummaryCards({
   projeteMois,
   budget,
   partial = false,
+  pickup = null,
 }: SummaryCardsProps) {
   const cards = [
     {
@@ -65,9 +72,15 @@ export function SummaryCards({
   const projeteWidth = pctOf(projete)
   const moisGoalPos = (100 / moisMaxScale) * 100
 
+  const hasPickup = typeof pickup === 'number'
+
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
+      <div
+        className={`grid grid-cols-2 gap-3 sm:gap-4 ${
+          hasPickup ? 'sm:grid-cols-4' : 'sm:grid-cols-3'
+        }`}
+      >
         {cards.map((card, i) => (
           <div
             key={card.label}
@@ -89,6 +102,28 @@ export function SummaryCards({
             </div>
           </div>
         ))}
+
+        {/* « Pris depuis la veille » — 4ᵉ carte sur la même ligne que les KPI.
+            Simple soustraction du Revenu hébergement projeté d'un jour à l'autre :
+            combien de réservations nettes on a prises (vert) ou perdues (rouge)
+            depuis le dernier rapport du mois. Masquée quand il n'y a rien à
+            comparer (1er du mois, ou jour sans rapport). */}
+        {hasPickup && (
+          <div className="rounded-xl border border-border bg-card p-3 shadow-sm sm:p-4">
+            <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              Pris depuis la veille
+            </p>
+            <div className="mt-1">
+              <span
+                className={`text-2xl font-bold ${
+                  pickup >= 0 ? 'text-emerald-500' : 'text-destructive'
+                }`}
+              >
+                {fmt.ecartEurInt(pickup)}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Barre de progression mois : acquis (vert) + projeté (gris) vs budget */}
