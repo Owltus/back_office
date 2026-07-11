@@ -13,9 +13,11 @@
  * Usages :
  *   - PDJ : jour de service affiché par défaut (BreakfastBoard) → passé minuit,
  *     on reste sur la veille jusqu'à 02h.
- *   - RepJour : verrou d'IMPORT uniquement (ImportSection). Le jour AFFICHÉ y
- *     reste la veille CIVILE (le J-1 est déjà porté par la date des données) ;
- *     seul le fichier fraîchement exporté est refusé à l'import avant 02h.
+ *   - RepJour : jour AFFICHÉ par défaut ET verrou d'import. Le jour affiché suit
+ *     la frontière 02h (getImportDayStr = dernier jour clôturé) : entre minuit et
+ *     02h, le rapport de la veille n'est pas encore tiré, on ouvre donc sur
+ *     l'avant-veille. Le fichier fraîchement exporté est de même refusé à
+ *     l'import avant 02h.
  */
 
 /** Heure locale à laquelle la journée hôtelière bascule (02h00). */
