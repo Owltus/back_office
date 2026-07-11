@@ -119,6 +119,7 @@ export function DatePickerButton({
   ariaLabel = 'Choisir une date',
   min,
   max,
+  enabledDates,
 }: {
   value: string
   onChange: (value: string) => void
@@ -126,14 +127,24 @@ export function DatePickerButton({
   /** Bornes sélectionnables ('YYYY-MM-DD') : les jours hors [min, max] sont grisés. */
   min?: string
   max?: string
+  /**
+   * Liste blanche de jours sélectionnables ('YYYY-MM-DD'). Si fournie, tout jour
+   * ABSENT de la liste est grisé (jours sans donnée), en plus des bornes min/max.
+   * Laisser indéfini pour n'appliquer que min/max.
+   */
+  enabledDates?: string[]
 }) {
   const [open, setOpen] = useState(false)
   const date = parseDateStr(value)
   const minDate = min ? parseDateStr(min) : undefined
   const maxDate = max ? parseDateStr(max) : undefined
+  const enabledSet = enabledDates ? new Set(enabledDates) : undefined
   const disabledDays = [
     ...(minDate ? [{ before: minDate }] : []),
     ...(maxDate ? [{ after: maxDate }] : []),
+    // Liste blanche : tout jour hors liste est grisé. Matcher fonction —
+    // react-day-picker l'accepte dans le même tableau que les intervalles.
+    ...(enabledSet ? [(day: Date) => !enabledSet.has(formatDateStr(day))] : []),
   ]
 
   return (
