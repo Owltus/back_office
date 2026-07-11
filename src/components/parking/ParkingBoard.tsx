@@ -4,14 +4,7 @@ import type {
   PointerEvent as ReactPointerEvent,
 } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import {
-  CalendarDays,
-  Copy,
-  MessageSquare,
-  Pencil,
-  Plus,
-  Trash2,
-} from 'lucide-react'
+import { Copy, MessageSquare, Pencil, Plus, Trash2 } from 'lucide-react'
 import {
   addDays,
   differenceInCalendarDays,
@@ -24,7 +17,6 @@ import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { EmptyCanvas } from '#/components/shared/EmptyCanvas.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { StepNav } from '#/components/shared/StepNav.tsx'
-import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { Calendar } from '#/components/ui/calendar.tsx'
 import {
@@ -666,20 +658,23 @@ export function ParkingBoard() {
                     defaultMonth={days[0]}
                     onSelect={goToDate}
                   />
+                  <div className="border-t border-border p-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => {
+                        setOffset(framedOffset)
+                        setCalOpen(false)
+                      }}
+                      disabled={offset === framedOffset}
+                    >
+                      Aujourd’hui
+                    </Button>
+                  </div>
                 </PopoverContent>
               </Popover>
             </StepNav>
-            <Tip label="Aujourd'hui (Alt)">
-              <Button
-                variant="outline"
-                size="icon-sm"
-                aria-label="Aujourd'hui"
-                onClick={() => setOffset(framedOffset)}
-                disabled={offset === framedOffset}
-              >
-                <CalendarDays />
-              </Button>
-            </Tip>
           </div>
         }
         actions={
