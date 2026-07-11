@@ -4,7 +4,14 @@ import type {
   PointerEvent as ReactPointerEvent,
 } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Copy, MessageSquare, Pencil, Plus, Trash2 } from 'lucide-react'
+import {
+  CalendarDays,
+  Copy,
+  MessageSquare,
+  Pencil,
+  Plus,
+  Trash2,
+} from 'lucide-react'
 import {
   addDays,
   differenceInCalendarDays,
@@ -585,6 +592,7 @@ export function ParkingBoard() {
     setCalOpen(false)
   }
 
+  // Plage de dates affichée en titre (haut à gauche), façon autres pages.
   const rangeLabel = (() => {
     if (days.length === 0) return ''
     const first = days[0]
@@ -628,68 +636,53 @@ export function ParkingBoard() {
 
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-4">
-      {/* En-tête : navigation + légende. Seule page où la navigation reste à
-            GAUCHE (slot `leading`) : elle pilote un planning qui se lit de
-            gauche à droite, et il n'y a pas de titre à sa place. */}
+      {/* En-tête façon standard : plage de dates à GAUCHE (titre), navigation
+          temporelle à DROITE (icône calendrier). La légende est passée sous le
+          planning. */}
       <PageHeader
-        leading={
-          <div className="flex w-full items-center justify-between gap-1.5 md:w-auto md:justify-start">
-            <StepNav
-              onPrev={() => setOffset((o) => o - STEP)}
-              onNext={() => setOffset((o) => o + STEP)}
-              prevLabel="Reculer de 3 jours"
-              nextLabel="Avancer de 3 jours"
-            >
-              <Popover open={calOpen} onOpenChange={setCalOpen}>
-                <PopoverTrigger asChild>
+        title={rangeLabel}
+        actions={
+          <StepNav
+            onPrev={() => setOffset((o) => o - STEP)}
+            onNext={() => setOffset((o) => o + STEP)}
+            prevLabel="Reculer de 3 jours"
+            nextLabel="Avancer de 3 jours"
+          >
+            <Popover open={calOpen} onOpenChange={setCalOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  aria-label="Choisir une date"
+                >
+                  <CalendarDays />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="end">
+                <Calendar
+                  mode="single"
+                  locale={fr}
+                  selected={days[0]}
+                  defaultMonth={days[0]}
+                  onSelect={goToDate}
+                />
+                <div className="border-t border-border p-2">
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="min-w-[13rem] text-sm font-medium tabular-nums"
+                    className="w-full"
+                    onClick={() => {
+                      setOffset(framedOffset)
+                      setCalOpen(false)
+                    }}
+                    disabled={offset === framedOffset}
                   >
-                    {rangeLabel}
+                    Aujourd’hui
                   </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="center">
-                  <Calendar
-                    mode="single"
-                    locale={fr}
-                    selected={days[0]}
-                    defaultMonth={days[0]}
-                    onSelect={goToDate}
-                  />
-                  <div className="border-t border-border p-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="w-full"
-                      onClick={() => {
-                        setOffset(framedOffset)
-                        setCalOpen(false)
-                      }}
-                      disabled={offset === framedOffset}
-                    >
-                      Aujourd’hui
-                    </Button>
-                  </div>
-                </PopoverContent>
-              </Popover>
-            </StepNav>
-          </div>
-        }
-        actions={
-          <div className="hidden flex-wrap items-center gap-3 text-xs md:flex">
-            {STATUS_ORDER.map((s) => (
-              <span key={s} className="flex items-center gap-1.5">
-                <span className={cn('size-2.5 rounded-full', STATUS[s].dot)} />
-                {STATUS[s].label}
-              </span>
-            ))}
-            <span className="flex items-center gap-1.5 text-muted-foreground">
-              <MessageSquare className="size-3" />
-              Commentaire
-            </span>
-          </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+          </StepNav>
         }
       />
 
@@ -907,6 +900,20 @@ export function ParkingBoard() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Légende — sous le planning, alignée à droite (déplacée de l'en-tête). */}
+      <div className="flex flex-wrap items-center justify-end gap-3 text-xs">
+        {STATUS_ORDER.map((s) => (
+          <span key={s} className="flex items-center gap-1.5">
+            <span className={cn('size-2.5 rounded-full', STATUS[s].dot)} />
+            {STATUS[s].label}
+          </span>
+        ))}
+        <span className="flex items-center gap-1.5 text-muted-foreground">
+          <MessageSquare className="size-3" />
+          Commentaire
+        </span>
       </div>
 
       {/* Modale du commentaire. Double emploi : édition libre depuis le menu
