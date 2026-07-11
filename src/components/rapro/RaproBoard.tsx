@@ -117,6 +117,16 @@ export function RaproBoard() {
   const atLatest = selectedDate >= todayStr
   const atLower = selectedDate <= lowerDay
 
+  // Jours sélectionnables dans le calendrier = ceux qu'on POSSÈDE (données PDJ),
+  // plus le jour courant (toujours atteignable, même sans données). Les autres —
+  // trous dans l'historique, futur — sont grisés. `undefined` tant que la liste
+  // n'est pas chargée (on ne grise rien, on garde min/max).
+  const pickerDates = serviceDates
+    ? serviceDates.includes(todayStr)
+      ? serviceDates
+      : [...serviceDates, todayStr]
+    : undefined
+
   const {
     data: day,
     isError,
@@ -476,6 +486,7 @@ export function RaproBoard() {
                 onChange={goDate}
                 min={lowerDay}
                 max={todayStr}
+                enabledDates={pickerDates}
                 ariaLabel="Choisir un jour"
               />
             </StepNav>

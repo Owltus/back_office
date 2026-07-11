@@ -384,6 +384,8 @@ export function BreakfastBoard() {
                     value={selectedDate}
                     onChange={selectNearestDate}
                     ariaLabel="Choisir un jour"
+                    max={today}
+                    enabledDates={navDates}
                   />
                 </StepNav>
               )}
