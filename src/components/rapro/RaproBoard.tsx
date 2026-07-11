@@ -487,6 +487,7 @@ export function RaproBoard() {
                 min={lowerDay}
                 max={todayStr}
                 enabledDates={pickerDates}
+                todayValue={todayStr}
                 ariaLabel="Choisir un jour"
               />
             </StepNav>

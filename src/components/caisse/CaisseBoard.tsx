@@ -586,6 +586,7 @@ export function CaisseBoard() {
                 onChange={goDate}
                 min={lowerSlot.date}
                 max={nowSlot.date}
+                todayValue={nowSlot.date}
                 ariaLabel="Choisir un jour"
               />
             </StepNav>

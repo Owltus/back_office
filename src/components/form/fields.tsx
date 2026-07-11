@@ -120,6 +120,7 @@ export function DatePickerButton({
   min,
   max,
   enabledDates,
+  todayValue,
 }: {
   value: string
   onChange: (value: string) => void
@@ -133,6 +134,12 @@ export function DatePickerButton({
    * Laisser indéfini pour n'appliquer que min/max.
    */
   enabledDates?: string[]
+  /**
+   * Jour « actuel » de la page ('YYYY-MM-DD'). Si fourni, un bouton « Aujourd'hui »
+   * en pied du calendrier y ramène en un clic. Chaque page a sa propre notion de
+   * jour courant (RepJour : dernier jour clôturé ; PDJ/Rapro : jour hôtelier).
+   */
+  todayValue?: string
 }) {
   const [open, setOpen] = useState(false)
   const date = parseDateStr(value)
@@ -168,6 +175,21 @@ export function DatePickerButton({
             setOpen(false)
           }}
         />
+        {todayValue && (
+          <div className="border-t border-border p-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full"
+              onClick={() => {
+                onChange(todayValue)
+                setOpen(false)
+              }}
+            >
+              Aujourd’hui
+            </Button>
+          </div>
+        )}
       </PopoverContent>
     </Popover>
   )

@@ -307,6 +307,7 @@ export function DashboardBoard() {
                   onChange={handleDateChange}
                   max={maxDate}
                   enabledDates={pickerDates}
+                  todayValue={maxDate}
                 />
               </StepNav>
             </>

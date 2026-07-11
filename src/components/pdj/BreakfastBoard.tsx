@@ -386,6 +386,7 @@ export function BreakfastBoard() {
                     ariaLabel="Choisir un jour"
                     max={today}
                     enabledDates={navDates}
+                    todayValue={today}
                   />
                 </StepNav>
               )}
