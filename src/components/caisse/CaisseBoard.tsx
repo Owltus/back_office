@@ -9,6 +9,7 @@ import { PrintBlockedDialog } from '#/components/shared/PrintBlockedDialog.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
 import { SkeletonBlock } from '#/components/shared/skeleton/SkeletonBlock.tsx'
 import { SkeletonTable } from '#/components/shared/skeleton/SkeletonTable.tsx'
+import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { StepNav } from '#/components/shared/StepNav.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
@@ -581,31 +582,32 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
         }
         actions={
           <>
-            {/* 0) Vue analytique : synthèse mensuelle en lecture (tous rôles). */}
-            <Tip label="Vue analytique">
-              <Button asChild variant="outline" size="icon-sm">
-                <Link to="/caisse/analytique" aria-label="Vue analytique">
-                  <LineChart />
-                </Link>
-              </Button>
-            </Tip>
-            {/* 1) Impression : toujours présente, mais désactivée tant que la
-                caisse n'est pas clôturée — le document ne s'imprime qu'une fois
-                les montants figés. L'infobulle porte alors la raison. */}
-            <PrintButton
-              onClick={handleGeneratePdf}
-              iconOnly
-              disabled={!isValidated || pdfBusy}
-              tipLabel={
-                isValidated
-                  ? 'Imprimer / PDF'
-                  : 'Clôturez la caisse pour imprimer la feuille'
-              }
-            />
-            {/* 2) Navigation, en dernier : elle est collée au bord droit sur
-                toutes les pages (cf. PageHeader). */}
+            {/* Groupe « actions de page » : vue analytique + impression. */}
+            <ButtonGroup>
+              {/* 0) Vue analytique : synthèse mensuelle en lecture (tous rôles). */}
+              <Tip label="Vue analytique">
+                <Button asChild variant="outline" size="icon-sm">
+                  <Link to="/caisse/analytique" aria-label="Vue analytique">
+                    <LineChart />
+                  </Link>
+                </Button>
+              </Tip>
+              {/* 1) Impression : toujours présente, mais désactivée tant que la
+                  caisse n'est pas clôturée — le document ne s'imprime qu'une fois
+                  les montants figés. L'infobulle porte alors la raison. */}
+              <PrintButton
+                onClick={handleGeneratePdf}
+                iconOnly
+                disabled={!isValidated || pdfBusy}
+                tipLabel={
+                  isValidated
+                    ? 'Imprimer / PDF'
+                    : 'Clôturez la caisse pour imprimer la feuille'
+                }
+              />
+            </ButtonGroup>
+            {/* Groupe « navigation temporelle », collé au bord droit. */}
             <StepNav
-              className="ml-1"
               onPrev={() => goStep(-1)}
               onNext={() => goStep(1)}
               prevLabel="Shift précédent"

@@ -29,6 +29,7 @@ import { PrintBlockedDialog } from '#/components/shared/PrintBlockedDialog.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
 import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { SkeletonBlock } from '#/components/shared/skeleton/SkeletonBlock.tsx'
+import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { StepNav } from '#/components/shared/StepNav.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
@@ -479,28 +480,31 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
         }
         actions={
           <>
-            <Tip label="Vue analytique">
-              <Button asChild variant="outline" size="icon-sm">
-                <Link to="/rapro/analytique" aria-label="Vue analytique">
-                  <LineChart />
-                </Link>
-              </Button>
-            </Tip>
-            {/* Impression : toujours présente, mais désactivée tant que le jour
-                n'est pas clôturé — l'infobulle porte alors la raison. Le bouton
-                de clôture, lui, ferme la page (sous les commentaires). */}
-            <PrintButton
-              onClick={handleGeneratePdf}
-              iconOnly
-              disabled={!isValidated || pdfBusy}
-              tipLabel={
-                isValidated
-                  ? 'Imprimer / PDF'
-                  : 'Clôturez le rapprochement pour imprimer la feuille'
-              }
-            />
+            {/* Groupe « actions de page » : vue analytique + impression. */}
+            <ButtonGroup>
+              <Tip label="Vue analytique">
+                <Button asChild variant="outline" size="icon-sm">
+                  <Link to="/rapro/analytique" aria-label="Vue analytique">
+                    <LineChart />
+                  </Link>
+                </Button>
+              </Tip>
+              {/* Impression : toujours présente, mais désactivée tant que le jour
+                  n'est pas clôturé — l'infobulle porte alors la raison. Le bouton
+                  de clôture, lui, ferme la page (sous les commentaires). */}
+              <PrintButton
+                onClick={handleGeneratePdf}
+                iconOnly
+                disabled={!isValidated || pdfBusy}
+                tipLabel={
+                  isValidated
+                    ? 'Imprimer / PDF'
+                    : 'Clôturez le rapprochement pour imprimer la feuille'
+                }
+              />
+            </ButtonGroup>
+            {/* Groupe « navigation temporelle », collé au bord droit. */}
             <StepNav
-              className="ml-1"
               onPrev={() => goStep(-1)}
               onNext={() => goStep(1)}
               prevLabel="Jour précédent"

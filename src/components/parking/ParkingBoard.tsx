@@ -27,6 +27,7 @@ import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { SkeletonBlock } from '#/components/shared/skeleton/SkeletonBlock.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
+import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { StepNav } from '#/components/shared/StepNav.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
@@ -714,20 +715,23 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
         title={rangeLabel}
         actions={
           <>
-            <Tip label="Vue analytique">
-              <Button asChild variant="outline" size="icon-sm">
-                <Link to="/parking/analytique" aria-label="Vue analytique">
-                  <LineChart />
-                </Link>
-              </Button>
-            </Tip>
-            <PrintButton
-              onClick={handleGeneratePdf}
-              iconOnly
-              tipLabel="Imprimer les feuilles de suivi (4 jours)"
-            />
+            {/* Groupe « actions de page » : vue analytique + impression. */}
+            <ButtonGroup>
+              <Tip label="Vue analytique">
+                <Button asChild variant="outline" size="icon-sm">
+                  <Link to="/parking/analytique" aria-label="Vue analytique">
+                    <LineChart />
+                  </Link>
+                </Button>
+              </Tip>
+              <PrintButton
+                onClick={handleGeneratePdf}
+                iconOnly
+                tipLabel="Imprimer les feuilles de suivi (4 jours)"
+              />
+            </ButtonGroup>
+            {/* Groupe « navigation temporelle », collé au bord droit. */}
             <StepNav
-              className="ml-1"
               onPrev={() => setOffset((o) => o - STEP)}
               onNext={() => setOffset((o) => o + STEP)}
               prevLabel="Reculer de 3 jours"

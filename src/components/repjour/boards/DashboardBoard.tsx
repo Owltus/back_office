@@ -12,6 +12,7 @@ import { PageContainer } from '#/components/shared/PageContainer.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { PrintBlockedDialog } from '#/components/shared/PrintBlockedDialog.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
+import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { StepNav } from '#/components/shared/StepNav.tsx'
 import { useStepNavKeys } from '#/components/shared/useStepNavKeys.ts'
 import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
@@ -351,30 +352,32 @@ export function DashboardBoard() {
           title={displayDate}
           actions={
             <>
-              {/* Accès à la vue analytique — remplace le lien de l'ancienne
-                  sous-nav repjour (supprimée). */}
-              <Tip label="Vue analytique">
-                <Button asChild variant="outline" size="icon-sm">
-                  <Link to="/repjour/analytique" aria-label="Vue analytique">
-                    <LineChart />
-                  </Link>
-                </Button>
-              </Tip>
-              {/* Impression : toujours présente, désactivée tant qu'il n'y a rien
-                  à imprimer (jour vide) — l'infobulle porte alors la raison. */}
-              <PrintButton
-                onClick={handleGeneratePdf}
-                iconOnly
-                disabled={!canPrint || pdfBusy}
-                tipLabel={
-                  canPrint
-                    ? 'Imprimer / PDF'
-                    : 'Aucune donnée à imprimer pour ce jour'
-                }
-              />
-              {/* Navigation en dernier : collée au bord droit, comme partout. */}
+              {/* Groupe « actions de page » : vue analytique + impression. */}
+              <ButtonGroup>
+                {/* Accès à la vue analytique — remplace le lien de l'ancienne
+                    sous-nav repjour (supprimée). */}
+                <Tip label="Vue analytique">
+                  <Button asChild variant="outline" size="icon-sm">
+                    <Link to="/repjour/analytique" aria-label="Vue analytique">
+                      <LineChart />
+                    </Link>
+                  </Button>
+                </Tip>
+                {/* Impression : toujours présente, désactivée tant qu'il n'y a
+                    rien à imprimer (jour vide) — l'infobulle porte la raison. */}
+                <PrintButton
+                  onClick={handleGeneratePdf}
+                  iconOnly
+                  disabled={!canPrint || pdfBusy}
+                  tipLabel={
+                    canPrint
+                      ? 'Imprimer / PDF'
+                      : 'Aucune donnée à imprimer pour ce jour'
+                  }
+                />
+              </ButtonGroup>
+              {/* Groupe « navigation temporelle », collé au bord droit. */}
               <StepNav
-                className="ml-1"
                 onPrev={() => shiftDate(-1)}
                 onNext={() => shiftDate(1)}
                 prevLabel="Jour précédent"
@@ -497,7 +500,11 @@ export function DashboardBoard() {
                     et sendReport n'écrivent rien en base (îlot HEX autonome de
                     email.ts, presse-papier, mailto). Seule « Gérer les
                     destinataires » écrit (email_recipients) et reste admin. */}
-                <div className="flex items-center gap-1">
+                {/* Groupe segmenté (cf. ButtonGroup) : copier l'image / envoyer
+                    / (admin) gérer les destinataires. 2 ou 3 boutons selon le
+                    rôle. `flex w-full` pour que « Envoyer » (flex-1) occupe la
+                    largeur restante entre les icônes. */}
+                <ButtonGroup className="flex w-full">
                   <Tip label="Copier le tableau en image">
                     <Button
                       variant="outline"
@@ -555,7 +562,7 @@ export function DashboardBoard() {
                       </Button>
                     </Tip>
                   )}
-                </div>
+                </ButtonGroup>
               </>
             )}
           </>

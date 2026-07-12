@@ -21,6 +21,7 @@ import { SkeletonTable } from '#/components/shared/skeleton/SkeletonTable.tsx'
 import { PrintBlockedDialog } from '#/components/shared/PrintBlockedDialog.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
 import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
+import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { StepNav } from '#/components/shared/StepNav.tsx'
 import { useStepNavKeys } from '#/components/shared/useStepNavKeys.ts'
 import { Tip } from '#/components/shared/Tip.tsx'
@@ -384,36 +385,39 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
         title={titleDate}
         actions={
             <>
-              <Tip label="Vue analytique">
-                <Button asChild variant="outline" size="icon-sm">
-                  <Link to="/pdj/analytique" aria-label="Vue analytique">
-                    <LineChart />
-                  </Link>
-                </Button>
-              </Tip>
-              {canEdit && (
-                <Tip label="Importer un CSV In-House Guests">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => inputRef.current?.click()}
-                    aria-label="Importer un CSV"
-                  >
-                    <FileUp />
-                    <span className="hidden lg:inline">Importer</span>
+              {/* Groupe « actions de page » : analytique + import + impression. */}
+              <ButtonGroup>
+                <Tip label="Vue analytique">
+                  <Button asChild variant="outline" size="icon-sm">
+                    <Link to="/pdj/analytique" aria-label="Vue analytique">
+                      <LineChart />
+                    </Link>
                   </Button>
                 </Tip>
-              )}
-              <PrintButton
-                onClick={handlePrint}
-                iconOnly
-                disabled={!hasData}
-                tipLabel={hasData ? 'Imprimer / PDF' : 'Aucune donnée à imprimer'}
-              />
-              {/* Navigation en dernier : collée au bord droit, comme partout. */}
+                {canEdit && (
+                  <Tip label="Importer un CSV In-House Guests">
+                    <Button
+                      variant="outline"
+                      size="icon-sm"
+                      onClick={() => inputRef.current?.click()}
+                      aria-label="Importer un CSV"
+                    >
+                      <FileUp />
+                    </Button>
+                  </Tip>
+                )}
+                <PrintButton
+                  onClick={handlePrint}
+                  iconOnly
+                  disabled={!hasData}
+                  tipLabel={
+                    hasData ? 'Imprimer / PDF' : 'Aucune donnée à imprimer'
+                  }
+                />
+              </ButtonGroup>
+              {/* Groupe « navigation temporelle », collé au bord droit. */}
               {canNavigate && (
                 <StepNav
-                  className="ml-1"
                   onPrev={gotoOlder}
                   onNext={gotoNewer}
                   prevLabel="Jour précédent"
