@@ -50,7 +50,11 @@ export function YearNav(props: YearNavProps) {
       prevDisabled={prevDisabled}
       nextDisabled={nextDisabled}
     >
-      <span className="w-12 text-center text-sm font-medium tabular-nums">
+      {/* Segment d'affichage de l'année : même habillage que les boutons outline
+          du groupe (bordure, fond, hauteur, ombre) pour s'intégrer au triptyque
+          segmenté — mais SANS être un bouton (pas de hover, curseur par défaut).
+          Le ButtonGroup carre déjà ses coins internes (segment du milieu). */}
+      <span className="inline-flex h-8 items-center justify-center border bg-background px-3 text-sm font-medium tabular-nums shadow-xs dark:border-input dark:bg-input/30">
         {props.year}
       </span>
     </StepNav>
