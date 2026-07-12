@@ -9,6 +9,7 @@ import { PrintButton } from '#/components/shared/PrintButton.tsx'
 import { StepNav } from '#/components/shared/StepNav.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
+import { useStepNavKeys } from '#/components/shared/useStepNavKeys.ts'
 import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
 import { Textarea } from '#/components/ui/textarea.tsx'
@@ -222,6 +223,18 @@ export function CaisseBoard() {
     else if (k < lowerKey) setSlot(lowerSlot)
     else setSelectedDate(v)
   }
+
+  // ← / → naviguent shift par shift (bornés), Alt revient au shift courant.
+  useStepNavKeys({
+    onPrev: () => goStep(-1),
+    onNext: () => goStep(1),
+    onToday: () => {
+      userNavigatedRef.current = true
+      setSlot(nowSlot)
+    },
+    prevDisabled: atLowerBound,
+    nextDisabled: atLatestSlot,
+  })
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [closeOpen, setCloseOpen] = useState(false)

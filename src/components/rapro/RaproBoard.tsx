@@ -11,10 +11,10 @@ import { fr } from 'date-fns/locale'
 import {
   Ban,
   BedDouble,
-  CalendarDays,
   CheckCheck,
   History,
   Info,
+  LineChart,
   RotateCcw,
   Scale,
   Sparkles,
@@ -30,6 +30,7 @@ import { PrintButton } from '#/components/shared/PrintButton.tsx'
 import { StepNav } from '#/components/shared/StepNav.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
+import { useStepNavKeys } from '#/components/shared/useStepNavKeys.ts'
 import { Button } from '#/components/ui/button.tsx'
 import { Textarea } from '#/components/ui/textarea.tsx'
 import {
@@ -260,6 +261,15 @@ export function RaproBoard() {
     setSelectedDate(clampDay(value, lowerDay, todayStr))
   }
 
+  // ← / → parcourent les jours (bornés), Alt revient sur aujourd'hui.
+  useStepNavKeys({
+    onPrev: () => goStep(-1),
+    onNext: () => goStep(1),
+    onToday: () => goDate(todayStr),
+    prevDisabled: atLower,
+    nextDisabled: atLatest,
+  })
+
   // Écriture optimiste d'un lot de statuts (jour courant) : snapshot → maj cache
   // → persistance parallèle → rollback réel par snapshot en cas d'échec (fiable
   // même hors ligne). Chemin unique partagé par la chambre seule et l'étage.
@@ -452,11 +462,10 @@ export function RaproBoard() {
         }
         actions={
           <>
-            <Tip label="Récap mensuel">
-              <Button asChild variant="outline" size="sm">
-                <Link to="/rapro-mois" aria-label="Récap mensuel">
-                  <CalendarDays />
-                  <span className="hidden sm:inline">Récap</span>
+            <Tip label="Vue analytique">
+              <Button asChild variant="outline" size="icon-sm">
+                <Link to="/rapro-mois" aria-label="Vue analytique">
+                  <LineChart />
                 </Link>
               </Button>
             </Tip>
@@ -474,6 +483,7 @@ export function RaproBoard() {
               }
             />
             <StepNav
+              className="ml-1"
               onPrev={() => goStep(-1)}
               onNext={() => goStep(1)}
               prevLabel="Jour précédent"

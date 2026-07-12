@@ -18,6 +18,7 @@ import { PrintBlockedDialog } from '#/components/shared/PrintBlockedDialog.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
 import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
 import { StepNav } from '#/components/shared/StepNav.tsx'
+import { useStepNavKeys } from '#/components/shared/useStepNavKeys.ts'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { DatePickerButton } from '#/components/form/fields.tsx'
@@ -181,6 +182,15 @@ export function BreakfastBoard() {
   const gotoNewer = () => {
     if (dateIdx > 0) setSelectedDate(navDates[dateIdx - 1])
   }
+  // ← / → parcourent les jours, Alt revient sur « aujourd'hui ».
+  useStepNavKeys({
+    onPrev: gotoOlder,
+    onNext: gotoNewer,
+    onToday: () => setSelectedDate(today),
+    prevDisabled: dateIdx < 0 || dateIdx >= navDates.length - 1,
+    nextDisabled: dateIdx <= 0,
+  })
+
   // Sélecteur de date : cale sur le jour parcourable le plus proche.
   function selectNearestDate(target: string) {
     if (!target || navDates.length === 0) return
@@ -366,13 +376,14 @@ export function BreakfastBoard() {
               )}
               <PrintButton
                 onClick={handlePrint}
-                responsiveLabel
+                iconOnly
                 disabled={!hasData}
                 tipLabel={hasData ? 'Imprimer / PDF' : 'Aucune donnée à imprimer'}
               />
               {/* Navigation en dernier : collée au bord droit, comme partout. */}
               {canNavigate && (
                 <StepNav
+                  className="ml-1"
                   onPrev={gotoOlder}
                   onNext={gotoNewer}
                   prevLabel="Jour précédent"
