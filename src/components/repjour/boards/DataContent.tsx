@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { Loader2 } from 'lucide-react'
 
 import {
   fetchUnifiedDays,
@@ -9,6 +8,7 @@ import {
   deleteMonthData,
   type UnifiedDayRow,
 } from '#/lib/repjour/services/data.ts'
+import { SkeletonTable } from '#/components/shared/skeleton/SkeletonTable.tsx'
 import { fmt } from '#/lib/repjour/format.ts'
 import { MONTHS_LABELS } from '#/lib/repjour/constants.ts'
 import type { DailyReport } from '#/lib/repjour/types.ts'
@@ -356,9 +356,7 @@ export function DataContent({ readOnly = false }: { readOnly?: boolean }) {
       )}
 
       {loading ? (
-        <div className="flex justify-center py-12">
-          <Loader2 className="size-8 animate-spin text-primary" />
-        </div>
+        <SkeletonTable cols={8} rows={10} bounded={false} />
       ) : (
         <div className="overflow-hidden rounded-xl border border-border bg-card">
           <div className="overflow-x-auto">

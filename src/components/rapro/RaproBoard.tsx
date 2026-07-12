@@ -27,6 +27,8 @@ import { LockBadge } from '#/components/shared/LockBadge.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { PrintBlockedDialog } from '#/components/shared/PrintBlockedDialog.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
+import { SkeletonBlock } from '#/components/shared/skeleton/SkeletonBlock.tsx'
+import { SkeletonCardsRow } from '#/components/shared/skeleton/SkeletonCardsRow.tsx'
 import { StepNav } from '#/components/shared/StepNav.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
@@ -169,6 +171,13 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   const hasOccupancy = occupied.size > 0
   // Requête PDJ résolue mais vide → occupation indisponible ce jour (≠ chargement).
   const noOccupancy = pdjRows !== undefined && occupied.size === 0
+
+  // Gate d'affichage : tant que l'occupation (PDJ) OU la feuille du jour n'est pas
+  // résolue, cartes et grille afficheraient des valeurs par défaut puis se
+  // corrigeraient (flash staggered). On rend un squelette-reflet à la place. Seules
+  // ces deux sources conditionnent la première peinture ; les fenêtres de report,
+  // le contrôle comptable et le plus ancien jour s'hydratent après, sans bloquer.
+  const loading = pdjRows === undefined || sheet === undefined
 
   // Exports PMS manquants. Calculés seulement une fois les DEUX requêtes
   // résolues : pendant le chargement, tout paraîtrait manquant.
@@ -513,6 +522,20 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
         </div>
       )}
 
+      {loading ? (
+        <>
+          {/* Squelette-reflet : la rangée de six cartes de synthèse puis la grille
+              des étages (une colonne par étage), aux mêmes gabarits que le contenu
+              réel pour ne rien décaler à l'arrivée des données. */}
+          <SkeletonCardsRow count={6} />
+          <div className="rapro-floors" aria-hidden="true">
+            {FLOORS.map(({ floor }) => (
+              <SkeletonBlock key={floor} className="h-72 rounded-xl" />
+            ))}
+          </div>
+        </>
+      ) : (
+        <>
       {occGap !== null && (
         <div className="rapro-occ-alert">
           Occupation In-House {occupied.size} et Comparison {officialOcc} ne
@@ -716,6 +739,8 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
       )}
 
       {stateAction}
+        </>
+      )}
 
       <PrintBlockedDialog
         open={printBlocked !== ''}

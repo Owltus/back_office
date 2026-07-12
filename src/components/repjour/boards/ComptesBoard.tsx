@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Loader2, Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2 } from 'lucide-react'
 
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
+import { SkeletonList } from '#/components/shared/skeleton/SkeletonList.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { supabase } from '#/lib/supabase.ts'
@@ -372,9 +373,7 @@ export function ComptesBoard() {
         )}
 
         {loading ? (
-          <div className="flex justify-center py-12">
-            <Loader2 className="size-8 animate-spin text-primary" />
-          </div>
+          <SkeletonList rows={6} />
         ) : profiles.length === 0 ? (
           <div className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground">
             Aucun compte. Cliquez sur « Ajouter un compte » pour commencer.

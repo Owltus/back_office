@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
+import { SkeletonForm } from '#/components/shared/skeleton/SkeletonForm.tsx'
 import { PasswordInput } from '#/components/repjour/PasswordInput.tsx'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { supabase } from '#/lib/supabase.ts'
@@ -9,6 +10,7 @@ import { isPasswordValid } from '#/lib/repjour/password.ts'
 import { ROLE_LABELS } from '#/lib/repjour/roles.ts'
 import { Input } from '#/components/ui/input.tsx'
 import { Button } from '#/components/ui/button.tsx'
+import { Skeleton } from '#/components/ui/skeleton.tsx'
 
 /*
  * Profil personnel (tous rôles) — porté de la source ProfilePage.
@@ -23,8 +25,11 @@ import { Button } from '#/components/ui/button.tsx'
  */
 export function ProfilBoard() {
   const { user, profile, refreshProfile } = useAuth()
-  const [firstName, setFirstName] = useState('')
-  const [lastName, setLastName] = useState('')
+  // Hydratation immédiate depuis le profil déjà en cache (évite le flash de
+  // formulaire vide au premier frame) ; l'effet ci-dessous re-synchronise si le
+  // profil arrive après coup (chargement en arrière-plan).
+  const [firstName, setFirstName] = useState(() => profile?.first_name ?? '')
+  const [lastName, setLastName] = useState(() => profile?.last_name ?? '')
   const [newPassword, setNewPassword] = useState('')
   const [confirmNewPassword, setConfirmNewPassword] = useState('')
   const [saving, setSaving] = useState(false)
@@ -96,6 +101,30 @@ export function ProfilBoard() {
     message.includes('Erreur') ||
     message.includes('critères') ||
     message.includes('correspondent')
+
+  // Profil pas encore chargé (chargement en arrière-plan) : squelette-reflet
+  // plutôt qu'une carte d'identité vide (initiales « ? », nom « — »).
+  if (!profile) {
+    return (
+      <PageContainer>
+        <div className="mx-auto w-full max-w-lg space-y-6">
+          <div
+            className="flex items-center gap-4 rounded-xl border border-border bg-card p-6"
+            aria-hidden="true"
+          >
+            <Skeleton className="size-14 shrink-0 rounded-full" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <Skeleton className="h-5 w-40" />
+              <Skeleton className="h-4 w-52" />
+              <Skeleton className="h-4 w-20 rounded-full" />
+            </div>
+          </div>
+          <SkeletonForm fields={2} />
+          <SkeletonForm fields={1} />
+        </div>
+      </PageContainer>
+    )
+  }
 
   return (
     <PageContainer>

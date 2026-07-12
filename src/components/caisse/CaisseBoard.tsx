@@ -7,6 +7,8 @@ import { LockBadge } from '#/components/shared/LockBadge.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { PrintBlockedDialog } from '#/components/shared/PrintBlockedDialog.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
+import { SkeletonBlock } from '#/components/shared/skeleton/SkeletonBlock.tsx'
+import { SkeletonTable } from '#/components/shared/skeleton/SkeletonTable.tsx'
 import { StepNav } from '#/components/shared/StepNav.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
@@ -635,6 +637,24 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
         </div>
       )}
 
+      {!ready ? (
+        // Squelette-reflet pendant le chargement : approxime le tableau des
+        // montants, la grille des dénominations et la zone commentaires. Rendre
+        // le corps seulement une fois `ready` supprime le flash « valeurs vides
+        // → hydratées ». En-tête et LockBadge restent gérés au-dessus.
+        <>
+          <SkeletonTable cols={3} rows={4} bounded={false} />
+          <div className="rounded-xl border border-border bg-card p-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+              {Array.from({ length: 15 }).map((_, i) => (
+                <SkeletonBlock key={i} className="h-24" />
+              ))}
+            </div>
+          </div>
+          <SkeletonBlock className="h-24" />
+        </>
+      ) : (
+        <>
       {/* Tableau des montants + écarts (défile horizontalement si étroit). */}
       <div className="caisse-table overflow-x-auto rounded-xl border border-border bg-card">
         <table className="w-full table-fixed border-collapse text-sm">
@@ -825,6 +845,8 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
           )}
           {stateAction}
         </div>
+      )}
+        </>
       )}
 
       <PrintBlockedDialog

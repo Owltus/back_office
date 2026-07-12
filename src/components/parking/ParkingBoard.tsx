@@ -24,8 +24,8 @@ import {
 import { fr } from 'date-fns/locale'
 
 import { useAuth } from '#/components/auth/AuthContext.tsx'
-import { EmptyCanvas } from '#/components/shared/EmptyCanvas.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
+import { SkeletonBlock } from '#/components/shared/skeleton/SkeletonBlock.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
 import { StepNav } from '#/components/shared/StepNav.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
@@ -672,13 +672,14 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
       : `${fmtDayYear.format(first)} – ${fmtDayYear.format(last)}`
   })()
 
-  if (!startDate) {
-    return (
-      <EmptyCanvas className="min-h-[300px] text-sm text-muted-foreground">
-        Chargement du planning…
-      </EmptyCanvas>
-    )
-  }
+  // Gate de PREMIER affichage seulement : l'en-tête et la colonne des places
+  // sont rendus tout de suite, seul le corps du planning part en squelette tant
+  // que le lundi de réf. (`startDate`), le cache (`rows`) ou la mesure de largeur
+  // (`visibleDays`, via le ResizeObserver sur `timelineRef`) manquent. Une fois
+  // les trois prêts, `loading` retombe à false — aucun squelette persistant, et
+  // les patchs realtime/optimistes de l'état local `reservations` ne passent
+  // jamais par ici.
+  const loading = !startDate || rows === undefined || visibleDays === 0
 
   // Chevauchement de la case survolée pendant un placement — calculé une seule
   // fois par render (réutilisé par le clic ET le rendu rouge/normal du fantôme).
@@ -798,8 +799,22 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
           ))}
         </div>
 
-        {/* Zone des jours (sans scrollbar : navigation par flèches) */}
+        {/* Zone des jours (sans scrollbar : navigation par flèches). Le conteneur
+            porteur de `timelineRef` reste TOUJOURS monté — c'est lui que mesure
+            le ResizeObserver ; seul son contenu bascule en squelette pendant le
+            chargement, sinon la largeur ne serait jamais mesurée et le gate
+            resterait bloqué. */}
         <div ref={timelineRef} className="min-w-0 flex-1 overflow-hidden">
+          {loading ? (
+            // Reflet du corps : même hauteur que la colonne des places (en-tête
+            // + rangées) pour ne pas provoquer de saut au passage au planning.
+            <div
+              className="p-3"
+              style={{ height: HEADER_H + SPOTS * ROW_H }}
+            >
+              <SkeletonBlock className="h-full rounded-xl" />
+            </div>
+          ) : (
           <div className="relative" style={{ width: '100%' }}>
             {/* Bordures des week-ends, continues sur en-tête + grille */}
             {days.map((d, i) => {
@@ -984,6 +999,7 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
               )}
             </div>
           </div>
+          )}
         </div>
       </div>
 

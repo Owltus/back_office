@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Pencil, Plus, Trash2 } from 'lucide-react'
 
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
+import { SkeletonBlock } from '#/components/shared/skeleton/SkeletonBlock.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
@@ -96,11 +97,21 @@ export function AffichageBoard() {
   const queryClient = useQueryClient()
 
   // Modèles chargés depuis Supabase (cache TanStack Query) — remplace la
-  // collection en dur.
-  const { data: templates = [] } = useQuery({
+  // collection en dur. `isPending` distingue le chargement (aucune donnée encore)
+  // de la liste vide résolue (`[]`), pour piloter le squelette de l'aperçu.
+  const { data: templates = [], isPending: templatesPending } = useQuery({
     queryKey: ['affiche', 'templates'],
     queryFn: fetchTemplates,
   })
+
+  // Affiche encore vierge : aucun modèle sélectionné et aucun texte saisi. Le
+  // store survit à la navigation, donc ceci n'est vrai qu'au démarrage à froid.
+  const isPristine =
+    selectedTemplate === '' &&
+    titleFr === '' &&
+    messageFr === '' &&
+    titleEn === '' &&
+    messageEn === ''
 
   // Au premier chargement, si l'affiche est encore vierge, on applique le
   // premier modèle disponible (l'app ne démarre jamais sur une page blanche).
@@ -108,14 +119,8 @@ export function AffichageBoard() {
   useEffect(() => {
     if (autoAppliedRef.current || templates.length === 0) return
     autoAppliedRef.current = true
-    const pristine =
-      selectedTemplate === '' &&
-      titleFr === '' &&
-      messageFr === '' &&
-      titleEn === '' &&
-      messageEn === ''
-    if (pristine) applyAfficheTemplate(templates[0])
-  }, [templates, selectedTemplate, titleFr, messageFr, titleEn, messageEn])
+    if (isPristine) applyAfficheTemplate(templates[0])
+  }, [templates, isPristine])
 
   // Modèle actuellement sélectionné (pour éditer / supprimer).
   const selected = templates.find((t) => t.id === selectedTemplate) ?? null
@@ -248,6 +253,12 @@ export function AffichageBoard() {
     printWithTitle(`Affiche_${stamp}`)
   }
 
+  // Squelette de l'aperçu : uniquement au démarrage à froid, tant que les
+  // modèles ne sont pas chargés ET que le store est encore vierge (aucun modèle
+  // à afficher). Dès qu'un modèle est appliqué (store hydraté) ou que la liste
+  // est résolue, on rend l'aperçu réel — évite le flash affiche blanche→modèle.
+  const previewLoading = templatesPending && isPristine
+
   return (
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-4 lg:flex-row lg:gap-6">
       {/* PANNEAU TEXTES (gauche, écran uniquement) : titres + messages FR/EN */}
@@ -307,7 +318,14 @@ export function AffichageBoard() {
           en bas — order-last — accompagné d'un bouton Imprimer mobile). */}
       <div className="order-last flex min-w-0 flex-1 flex-col gap-3 lg:order-none lg:min-h-0">
         <div className="min-h-0 min-w-0 flex-1">
-          <PosterPreview {...state} {...effectiveSizes} />
+          {previewLoading ? (
+            // Reflet de l'affiche A3 (ratio 1123 × 1587) centré comme l'aperçu.
+            <div className="flex h-full w-full items-center justify-center">
+              <SkeletonBlock className="h-full w-auto max-w-full rounded-xl aspect-[1123/1587]" />
+            </div>
+          ) : (
+            <PosterPreview {...state} {...effectiveSizes} />
+          )}
         </div>
         {/* Bouton Imprimer sous l'aperçu, uniquement en responsive. */}
         <PrintButton

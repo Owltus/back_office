@@ -16,6 +16,8 @@ import {
 
 import { EmptyCanvas } from '#/components/shared/EmptyCanvas.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
+import { SkeletonCardsRow } from '#/components/shared/skeleton/SkeletonCardsRow.tsx'
+import { SkeletonTable } from '#/components/shared/skeleton/SkeletonTable.tsx'
 import { PrintBlockedDialog } from '#/components/shared/PrintBlockedDialog.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
 import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
@@ -116,20 +118,25 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
       .catch((err) => console.error('[pdj] purge RGPD échouée', err))
   }, [canEdit, queryClient, yesterday])
 
-  // Lignes du jour sélectionné.
-  const { data: dayRows = [] } = useQuery({
+  // Lignes du jour sélectionné. On NE met PAS de défaut `= []` : il masquerait
+  // l'état `undefined` (chargement) en le confondant avec « aucune donnée » (vide
+  // réel) et ferait flasher la dropzone pendant le fetch. `isPending` distingue
+  // les deux. `enabled` est toujours vrai (selectedDate a une valeur par défaut :
+  // aujourd'hui) → pas de squelette éternel.
+  const { data: dayRows, isPending } = useQuery({
     queryKey: ['pdj', 'day', selectedDate],
     queryFn: () => fetchDay(selectedDate),
     enabled: !!selectedDate,
   })
+  const loading = isPending
 
   const byRoom = useMemo(() => {
     const map = new Map<number, PdjDayRow>()
-    for (const r of dayRows) map.set(r.room, r)
+    for (const r of dayRows ?? []) map.set(r.room, r)
     return map
   }, [dayRows])
 
-  const hasData = dayRows.length > 0
+  const hasData = (dayRows?.length ?? 0) > 0
 
   const floors = useMemo(() => {
     const map = new Map<number, number[]>()
@@ -370,10 +377,12 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
         </div>
       )}
 
-      {(hasData || canNavigate) && (
-        <PageHeader
-          title={titleDate}
-          actions={
+      {/* En-tête TOUJOURS rendu : le titre du jour est connu d'emblée, il ne doit
+          pas apparaître après coup. Seule la navigation (StepNav) reste
+          conditionnée à `canNavigate` À L'INTÉRIEUR des actions. */}
+      <PageHeader
+        title={titleDate}
+        actions={
             <>
               <Tip label="Vue analytique">
                 <Button asChild variant="outline" size="icon-sm">
@@ -425,9 +434,12 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
             </>
           }
         />
-      )}
 
-      {!hasData ? (
+      {/* Un seul gate bascule le corps : squelette pendant le fetch (jamais la
+          dropzone), contenu si données, sinon l'EmptyCanvas (vide réel). */}
+      {loading ? (
+        <BoardSkeleton />
+      ) : !hasData ? (
         canEdit ? (
           // Jour courant (ou jour sélectionné) sans rapport : on NE retombe PAS
           // sur d'anciennes données, on propose l'import.
@@ -573,6 +585,24 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
         reason="Aucune donnée pour ce jour. Importez le CSV In-House Guests."
       />
     </div>
+  )
+}
+
+/*
+ * Squelette-reflet du corps pendant le chargement du jour : la rangée de 6 stats
+ * puis les 6 tableaux par étage, dans la même grille `pdj-floors` que le contenu
+ * réel — aucun saut de layout à l'arrivée des données. Purement décoratif ;
+ * l'en-tête, lui, est déjà rendu au-dessus. */
+function BoardSkeleton() {
+  return (
+    <>
+      <SkeletonCardsRow count={6} />
+      <div className="pdj-floors">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <SkeletonTable key={i} cols={4} rows={12} bounded={false} />
+        ))}
+      </div>
+    </>
   )
 }
 

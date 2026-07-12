@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { Loader2 } from 'lucide-react'
 
 import {
   fetchYearBudget,
@@ -7,6 +6,7 @@ import {
   upsertBudget,
   deleteYearBudget,
 } from '#/lib/repjour/services/daily.ts'
+import { SkeletonTable } from '#/components/shared/skeleton/SkeletonTable.tsx'
 import { MONTHS_LABELS } from '#/lib/repjour/constants.ts'
 import { fmt } from '#/lib/repjour/format.ts'
 import type { MonthBudget } from '#/lib/repjour/types.ts'
@@ -175,13 +175,18 @@ export function BudgetContent({ readOnly = false }: { readOnly?: boolean }) {
             value={year}
             onChange={(e) => setYear(Number(e.target.value))}
             aria-label="Choisir une année"
-            className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground"
+            disabled={years.length === 0}
+            className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground disabled:opacity-50"
           >
-            {years.map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
-            ))}
+            {years.length === 0 ? (
+              <option value={year}>{year}</option>
+            ) : (
+              years.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))
+            )}
           </select>
 
           {!readOnly &&
@@ -227,9 +232,7 @@ export function BudgetContent({ readOnly = false }: { readOnly?: boolean }) {
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-12">
-          <Loader2 className="size-8 animate-spin text-primary" />
-        </div>
+        <SkeletonTable cols={5} rows={12} bounded={false} />
       ) : (
         <>
           <div className="overflow-x-auto rounded-xl border border-border bg-card p-4">
