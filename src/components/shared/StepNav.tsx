@@ -1,12 +1,15 @@
 import type { ReactNode } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
+import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
-import { cn } from '#/lib/utils.ts'
 
 /**
- * Navigation par pas : [◀] centre [▶].
+ * Navigation par pas : [◀] centre [▶], en groupe de boutons segmenté — les trois
+ * éléments se touchent, bordures mitoyennes fusionnées (cf. `ButtonGroup`). C'est
+ * le groupe « navigation temporelle » de la barre d'action, distinct du groupe
+ * des autres actions (analytique, import, impression), lui aussi segmenté.
  *
  * Le triptyque était réécrit à l'identique dans six boards, avec des tailles de
  * flèches divergentes. Le centraliser garantit qu'ils restent alignés, et que
@@ -69,10 +72,10 @@ export function StepNav({
   }
 
   return (
-    <div className={cn('flex items-center gap-1', className)}>
+    <ButtonGroup className={className}>
       {arrow(<ChevronLeft />, onPrev, prevLabel, prevDisabled)}
       {children}
       {arrow(<ChevronRight />, onNext, nextLabel, nextDisabled)}
-    </div>
+    </ButtonGroup>
   )
 }
