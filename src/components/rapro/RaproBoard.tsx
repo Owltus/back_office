@@ -88,12 +88,12 @@ const EMPTY: ReadonlyMap<number, RoomStatus> = new Map()
  * no-show) que l'on fait défiler au clic ; l'état est persisté par (jour,
  * chambre), en optimiste. Écriture super/admin — RLS.
  */
-export function RaproBoard() {
+export function RaproBoard({ initialDate }: { initialDate?: string }) {
   const { user, role } = useAuth()
   const isWriter = role === 'super_utilisateur' || role === 'admin'
   const queryClient = useQueryClient()
 
-  const [selectedDate, setSelectedDate] = useState(() => today())
+  const [selectedDate, setSelectedDate] = useState(() => initialDate ?? today())
   const todayStr = today()
 
   const { data: oldestDay, isError: oldestError } = useQuery({
@@ -464,7 +464,7 @@ export function RaproBoard() {
           <>
             <Tip label="Vue analytique">
               <Button asChild variant="outline" size="icon-sm">
-                <Link to="/rapro-mois" aria-label="Vue analytique">
+                <Link to="/rapro/analytique" aria-label="Vue analytique">
                   <LineChart />
                 </Link>
               </Button>
