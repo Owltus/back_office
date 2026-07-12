@@ -30,9 +30,10 @@ export function AnalytiqueSkeleton({
         ))}
       </div>
 
-      {/* Tableau borné */}
+      {/* Tableau : reflet du bornage responsive d'AnalytiqueTable (naturel sous
+          lg, borné à partir de lg). */}
       <div
-        className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card"
+        className="overflow-hidden rounded-xl border border-border bg-card lg:flex lg:min-h-0 lg:flex-1 lg:flex-col"
         aria-hidden="true"
       >
         <div className="flex shrink-0 items-center gap-4 border-b border-border bg-muted px-3 py-2.5">
@@ -41,7 +42,7 @@ export function AnalytiqueSkeleton({
             <Skeleton key={i} className="ml-auto h-3 w-10" />
           ))}
         </div>
-        <div className="no-scrollbar min-h-0 flex-1 overflow-hidden">
+        <div className="no-scrollbar lg:min-h-0 lg:flex-1 lg:overflow-hidden">
           <div className="divide-y divide-border/50">
             {Array.from({ length: rows }).map((_, i) => (
               <div key={i} className="flex items-center gap-4 px-3 py-2.5">
