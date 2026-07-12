@@ -92,16 +92,18 @@ export async function setServed(
 }
 
 /**
- * Purge RGPD : efface les noms de tous les jours antérieurs à `todayParis`
- * ('YYYY-MM-DD' calculé côté client pour éviter le piège du fuseau UTC en base),
- * en conservant toutes les stats. Idempotent (ne touche que les lignes encore
- * nommées). Barré par la RLS pour le rôle `utilisateur`.
+ * Purge RGPD : anonymise (guest_name = null) tous les jours STRICTEMENT
+ * antérieurs à `oldestKept` ('YYYY-MM-DD' calculé côté client pour éviter le
+ * piège du fuseau UTC en base), en conservant toutes les stats. En passant LA
+ * VEILLE, on garde les noms d'aujourd'hui ET de J-1 (fenêtre nécessaire au
+ * rapprochement parking↔PDJ) et on purge à partir de J-2. Idempotent (ne touche
+ * que les lignes encore nommées). Barré par la RLS pour le rôle `utilisateur`.
  */
-export async function purgeOldGuestNames(todayParis: string): Promise<void> {
+export async function purgeOldGuestNames(oldestKept: string): Promise<void> {
   const { error } = await supabase
     .from(PDJ_TABLE)
     .update({ guest_name: null, purged_at: new Date().toISOString() })
-    .lt('service_date', todayParis)
+    .lt('service_date', oldestKept)
     .not('guest_name', 'is', null)
   if (error) throw error
 }

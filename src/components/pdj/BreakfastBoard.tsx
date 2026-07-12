@@ -77,6 +77,15 @@ export function BreakfastBoard() {
   // on reste sur la veille, dont le rapport est le dernier disponible.
   const today = useMemo(() => localDateStr(businessNow()), [])
 
+  // Veille (J-1) : borne de conservation RGPD des noms. On garde les noms
+  // d'aujourd'hui ET de J-1 (nécessaire au rapprochement parking↔PDJ) ; la purge
+  // n'anonymise donc qu'à partir de J-2.
+  const yesterday = useMemo(() => {
+    const d = businessNow()
+    d.setDate(d.getDate() - 1)
+    return localDateStr(d)
+  }, [])
+
   // On affiche TOUJOURS le jour courant par défaut (jamais le dernier jour
   // importé, qui serait obsolète) ; l'utilisateur peut ensuite remonter le temps.
   const [selectedDate, setSelectedDate] = useState(today)
@@ -91,16 +100,17 @@ export function BreakfastBoard() {
     queryFn: fetchServiceDates,
   })
 
-  // Purge RGPD au montage (une seule fois, rôles habilités) : efface les noms
-  // des jours écoulés, garde les stats. Idempotent, silencieux si rien à purger.
+  // Purge RGPD au montage (une seule fois, rôles habilités) : anonymise les noms
+  // à partir de J-2 (aujourd'hui et J-1 conservés), garde les stats. Idempotent,
+  // silencieux si rien à purger.
   const purgedRef = useRef(false)
   useEffect(() => {
     if (purgedRef.current || !canEdit) return
     purgedRef.current = true
-    purgeOldGuestNames(today)
+    purgeOldGuestNames(yesterday)
       .then(() => queryClient.invalidateQueries({ queryKey: ['pdj'] }))
       .catch((err) => console.error('[pdj] purge RGPD échouée', err))
-  }, [canEdit, queryClient, today])
+  }, [canEdit, queryClient, yesterday])
 
   // Lignes du jour sélectionné.
   const { data: dayRows = [] } = useQuery({

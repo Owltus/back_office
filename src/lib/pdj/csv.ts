@@ -313,10 +313,11 @@ export interface DbPdjRow {
 /**
  * Transforme un CSV en lignes DB datées d'après le nom de fichier.
  *
- * RGPD (D2) : le nom du client n'est stocké que si `service_date` est le jour
- * courant (Europe/Paris) ; tout import d'une date passée écrit `guest_name = null`
- * mais conserve toutes les stats. Les colonnes ultra-sensibles ne sont jamais
- * mappées (minimisation « by design »).
+ * RGPD (D2) : le nom du client n'est stocké que pour AUJOURD'HUI et LA VEILLE
+ * (J-1, Europe/Paris) — fenêtre nécessaire au rapprochement parking↔PDJ ; tout
+ * import d'une date plus ancienne écrit `guest_name = null` mais conserve toutes
+ * les stats. Les colonnes ultra-sensibles ne sont jamais mappées (minimisation
+ * « by design »).
  */
 export function csvToDbRows(content: string, fileName: string): DbPdjRow[] {
   const date = dateFromFilename(fileName)
@@ -326,12 +327,17 @@ export function csvToDbRows(content: string, fileName: string): DbPdjRow[] {
     )
   }
   const serviceDate = localDateStr(date)
-  const isToday = serviceDate === localDateStr(new Date())
+  // Fenêtre de conservation du nom : aujourd'hui ou la veille.
+  const now = new Date()
+  const yesterday = new Date(now)
+  yesterday.setDate(now.getDate() - 1)
+  const keepName =
+    serviceDate === localDateStr(now) || serviceDate === localDateStr(yesterday)
 
   return parseGuestRows(content, serviceDate).map((r) => ({
     service_date: serviceDate,
     room: r.room,
-    guest_name: isToday ? r.guestName || null : null,
+    guest_name: keepName ? r.guestName || null : null,
     status: r.status,
     vip: r.vip,
     adults: r.adults,

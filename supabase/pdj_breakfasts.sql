@@ -7,9 +7,10 @@
 -- sur celles-ci). get_user_role() est supposée déjà déployée.
 --
 -- RGPD : `guest_name` est la SEULE donnée nominative, NULLABLE. Elle n'est
--- stockée que pour le jour de service (règle appliquée à l'import) et effacée
--- ensuite (purge). Aucune colonne ultra-sensible du CSV (réfs CB des notes,
--- plaque, accompagnants, identifiants de résa, balance) n'est persistée.
+-- conservée que pour AUJOURD'HUI et LA VEILLE (J-1) — fenêtre nécessaire au
+-- rapprochement parking↔PDJ — (règle appliquée à l'import) puis anonymisée à
+-- partir de J-2 (purge). Aucune colonne ultra-sensible du CSV (réfs CB des
+-- notes, plaque, accompagnants, identifiants de résa, balance) n'est persistée.
 --
 -- Droits (D6) : lecture pour tous les authentifiés ; écriture (import + saisie
 -- « servi » + purge) réservée à super_utilisateur / admin.
@@ -96,14 +97,15 @@ create policy "pdj delete (super/admin)"
   using (get_user_role() in ('super_utilisateur', 'admin'));
 
 -- ---- Purge RGPD manuelle (référence) ----------------------------------------
--- Anonymise les noms des jours écoulés en gardant toutes les stats. Cette même
--- requête est jouée par l'app au chargement (voir src/lib/pdj/service.ts,
--- purgeOldGuestNames) en passant « aujourd'hui Europe/Paris » côté client (car
--- current_date est en UTC en base). À exécuter à la main au besoin :
+-- Anonymise les noms à partir de J-2 (aujourd'hui et J-1 conservés) en gardant
+-- toutes les stats. Cette même requête est jouée par l'app au chargement (voir
+-- src/lib/pdj/service.ts, purgeOldGuestNames) en passant « la veille
+-- Europe/Paris » côté client (car current_date est en UTC en base). À exécuter
+-- à la main au besoin :
 --
 --   update public.pdj_breakfasts
 --      set guest_name = null, purged_at = now()
---    where service_date < current_date and guest_name is not null;
+--    where service_date < current_date - 1 and guest_name is not null;
 
 -- ---- Purge RGPD automatique via pg_cron (D1, filet nocturne) -----------------
 -- Nécessite l'extension `pg_cron` ACTIVÉE (Database → Extensions). Le bloc est
@@ -118,7 +120,7 @@ begin
     $job$
       update public.pdj_breakfasts
          set guest_name = null, purged_at = now()
-       where service_date < current_date and guest_name is not null
+       where service_date < current_date - 1 and guest_name is not null
     $job$
   );
   raise notice 'pg_cron: job "pdj_purge_names" planifié (03:00 quotidien).';

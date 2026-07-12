@@ -65,6 +65,24 @@ describe('csvToDbRows', () => {
     expect(rows[0].breakfasts_included).toBe(2)
   })
 
+  it('veille (J-1) : le nom est conservé, mais J-2 est anonymisé', () => {
+    const stampFor = (d: Date) =>
+      `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`
+    const yesterday = new Date()
+    yesterday.setDate(yesterday.getDate() - 1)
+    const twoDaysAgo = new Date()
+    twoDaysAgo.setDate(twoDaysAgo.getDate() - 2)
+    const mini =
+      'Room,Status,Guest Name,VIP,Adults,Children,Addons,Rate\n' +
+      '102,IN HOUSE,"DOE, John",,2,0,PDJ INCL,BOOKING - NR - BB2PAX\n'
+
+    const j1 = csvToDbRows(mini, `In-House Guests _${stampFor(yesterday)}.csv`)
+    expect(j1[0].guest_name).toBe('DOE, John')
+
+    const j2 = csvToDbRows(mini, `In-House Guests _${stampFor(twoDaysAgo)}.csv`)
+    expect(j2[0].guest_name).toBeNull()
+  })
+
   it('tarif BB1PAX : un seul PDJ inclus', () => {
     const now = new Date()
     const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
