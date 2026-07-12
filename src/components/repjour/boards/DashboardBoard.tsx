@@ -508,7 +508,7 @@ export function DashboardBoard() {
                   <Tip label="Copier le tableau en image">
                     <Button
                       variant="outline"
-                      size="icon-sm"
+                      size="icon"
                       aria-label="Copier le tableau en image"
                       onClick={() =>
                         captureTableImage({
@@ -554,7 +554,7 @@ export function DashboardBoard() {
                     <Tip label="Gérer les destinataires">
                       <Button
                         variant="outline"
-                        size="icon-sm"
+                        size="icon"
                         aria-label="Gérer les destinataires"
                         onClick={() => setShowRecipients(true)}
                       >
