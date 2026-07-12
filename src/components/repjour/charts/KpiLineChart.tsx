@@ -47,12 +47,16 @@ interface KpiLineChartProps {
   xKey: string
   /** Clé de la courbe « réalisé ». */
   realKey: string
-  /** Clé de la courbe « projeté / forecast ». */
-  projKey: string
-  /** Clé de la courbe « budget ». */
-  budgetKey: string
+  /** Clé de la courbe « projeté / forecast » (optionnelle). */
+  projKey?: string
+  /** Clé de la courbe « budget » (optionnelle). */
+  budgetKey?: string
+  /** Libellé de la courbe réalisée (défaut « Réalisé »). */
+  realName?: string
   /** Libellé de la courbe projetée : « Projeté » (annuel) ou « Forecast » (mensuel). */
-  projName: string
+  projName?: string
+  /** Libellé de la courbe budget (défaut « Budget »). */
+  budgetName?: string
   /** Rayon des points de la courbe réalisée (3 en annuel, 2 en mensuel). */
   realDotRadius?: number
   /** Domaine fixe de l'axe Y (ex. [0, 100] pour un taux d'occupation). */
@@ -70,7 +74,9 @@ export function KpiLineChart({
   realKey,
   projKey,
   budgetKey,
-  projName,
+  realName = 'Réalisé',
+  projName = 'Projeté',
+  budgetName = 'Budget',
   realDotRadius = 3,
   yDomain,
   yTickFormatter,
@@ -109,30 +115,34 @@ export function KpiLineChart({
           <Line
             type="monotone"
             dataKey={realKey}
-            name="Réalisé"
+            name={realName}
             stroke={KPI_CHART_COLORS.real}
             strokeWidth={2}
             dot={{ r: realDotRadius }}
             connectNulls={false}
           />
-          <Line
-            type="monotone"
-            dataKey={projKey}
-            name={projName}
-            stroke={KPI_CHART_COLORS.proj}
-            strokeWidth={2}
-            dot={false}
-            connectNulls={false}
-          />
-          <Line
-            type="monotone"
-            dataKey={budgetKey}
-            name="Budget"
-            stroke={KPI_CHART_COLORS.budget}
-            strokeWidth={1}
-            strokeDasharray="5 5"
-            dot={false}
-          />
+          {projKey && (
+            <Line
+              type="monotone"
+              dataKey={projKey}
+              name={projName}
+              stroke={KPI_CHART_COLORS.proj}
+              strokeWidth={2}
+              dot={false}
+              connectNulls={false}
+            />
+          )}
+          {budgetKey && (
+            <Line
+              type="monotone"
+              dataKey={budgetKey}
+              name={budgetName}
+              stroke={KPI_CHART_COLORS.budget}
+              strokeWidth={1}
+              strokeDasharray="5 5"
+              dot={false}
+            />
+          )}
         </LineChart>
       </ResponsiveContainer>
     </div>

@@ -202,3 +202,16 @@
   width: 0;
   height: 0;
 }
+
+/* Zone qui défile SANS barre visible (le comportement de scroll est conservé).
+ * Utilisée sur les tables mensuelles analytiques, où la barre parasitait la mise
+ * en page. */
+.no-scrollbar {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* Edge / IE legacy */
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none; /* WebKit : barre masquée, scroll conservé */
+  width: 0;
+  height: 0;
+}
