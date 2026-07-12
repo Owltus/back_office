@@ -15,6 +15,7 @@ import {
 import {
   addDays,
   differenceInCalendarDays,
+  format,
   getISOWeek,
   startOfWeek,
 } from 'date-fns'
@@ -23,7 +24,9 @@ import { fr } from 'date-fns/locale'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { EmptyCanvas } from '#/components/shared/EmptyCanvas.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
+import { PrintButton } from '#/components/shared/PrintButton.tsx'
 import { StepNav } from '#/components/shared/StepNav.tsx'
+import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
 import { Button } from '#/components/ui/button.tsx'
 import { Calendar } from '#/components/ui/calendar.tsx'
 import {
@@ -74,6 +77,9 @@ import {
   updateReservation,
 } from '#/lib/parking/service.ts'
 import type { DbReservation } from '#/lib/parking/service.ts'
+import { printParkingSheets } from '#/lib/parking/pdf.ts'
+import { matchRoom } from '#/lib/parking/pdjMatch.ts'
+import { fetchDay as fetchPdjDay } from '#/lib/pdj/service.ts'
 
 /* --------------------------------------------------------------------------
  * Planning parking — persistance Supabase + synchro Realtime.
@@ -340,6 +346,51 @@ export function ParkingBoard() {
       addDays(startDate, offset + i),
     )
   }, [startDate, offset, visibleDays])
+
+  // Impression : 4 feuilles de suivi, TOUJOURS J-1 / aujourd'hui / J+1 / J+2
+  // (relatif au jour réel, indépendant de la fenêtre affichée), 2 tableaux par
+  // page en paysage. Chaque feuille est pré-remplie avec les ARRIVÉES du jour
+  // (réservation dont l'arrivée == ce jour). Cf. lib/parking/pdf.ts.
+  //
+  // Rapprochement PDJ (lecture seule) : on essaie de retrouver le n° de chambre
+  // de chaque arrivée via le nom, dans les lignes PDJ du même jour. En pratique
+  // ça n'aboutit qu'AUJOURD'HUI : la purge RGPD du PDJ efface le nom des jours
+  // passés (guest_name = null) — J-1 restera donc vide tant que la rétention PDJ
+  // n'aura pas été revue. Correspondance conservatrice (cf. matchRoom).
+  //
+  // Ctrl+P emprunte la même porte que le bouton (PDF vectoriel, pas le DOM brut).
+  async function handleGeneratePdf() {
+    const ref = startDate ?? new Date()
+    const todayOff = differenceInCalendarDays(new Date(), ref)
+    const offsets = [-1, 0, 1, 2].map((k) => todayOff + k)
+    const dates = offsets.map((o) => addDays(ref, o))
+    // Lignes PDJ des 4 jours (tolérant : un échec/jour vide → pas de matching).
+    const pdjByDay = await Promise.all(
+      dates.map((d) => fetchPdjDay(format(d, 'yyyy-MM-dd')).catch(() => [])),
+    )
+    const days = dates.map((date, i) => {
+      const pdjRows = pdjByDay[i]
+      const rows = reservations
+        .filter((r) => r.startDay === offsets[i])
+        .map((r) => {
+          const room = matchRoom(r.client, pdjRows)
+          return {
+            spot: r.spot,
+            nom: r.client,
+            numero: room != null ? String(room) : '',
+            facture:
+              r.status === 'paye' || r.status === 'checkout' ? 'Oui' : '',
+            checkIn: format(date, 'dd/MM'),
+            checkOut: format(addDays(date, r.nights), 'dd/MM'),
+          }
+        })
+      return { date, rows }
+    })
+    const d = days[0].date
+    const stamp = `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`
+    void printParkingSheets({ days }, `Feuille_parking_${stamp}`)
+  }
+  usePrintShortcut(() => void handleGeneratePdf())
 
   // Plages de jours ouvrés (lundi→vendredi) visibles, pour le n° de semaine ISO.
   const weekBands = useMemo(() => {
@@ -642,12 +693,19 @@ export function ParkingBoard() {
       <PageHeader
         title={rangeLabel}
         actions={
-          <StepNav
-            onPrev={() => setOffset((o) => o - STEP)}
-            onNext={() => setOffset((o) => o + STEP)}
-            prevLabel="Reculer de 3 jours"
-            nextLabel="Avancer de 3 jours"
-          >
+          <>
+            <PrintButton
+              onClick={handleGeneratePdf}
+              iconOnly
+              tipLabel="Imprimer les feuilles de suivi (4 jours)"
+            />
+            <StepNav
+              className="ml-1"
+              onPrev={() => setOffset((o) => o - STEP)}
+              onNext={() => setOffset((o) => o + STEP)}
+              prevLabel="Reculer de 3 jours"
+              nextLabel="Avancer de 3 jours"
+            >
             <Popover open={calOpen} onOpenChange={setCalOpen}>
               <PopoverTrigger asChild>
                 <Button
@@ -682,7 +740,8 @@ export function ParkingBoard() {
                 </div>
               </PopoverContent>
             </Popover>
-          </StepNav>
+            </StepNav>
+          </>
         }
       />
 
