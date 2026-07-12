@@ -3,6 +3,7 @@ import { useStore } from '@tanstack/react-store'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Pencil, Plus, Trash2 } from 'lucide-react'
 
+import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
 import { SkeletonBlock } from '#/components/shared/skeleton/SkeletonBlock.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
@@ -330,6 +331,7 @@ export function AffichageBoard() {
         {/* Bouton Imprimer sous l'aperçu, uniquement en responsive. */}
         <PrintButton
           onClick={handlePrint}
+          label="Imprimer"
           className="w-full lg:hidden print:hidden"
         />
       </div>
@@ -339,7 +341,7 @@ export function AffichageBoard() {
         {/* Card impression (desktop uniquement : en responsive le bouton vit
             sous l'aperçu, en bas de page). */}
         <div className="hidden shrink-0 rounded-xl border border-border bg-card p-4 lg:block">
-          <PrintButton onClick={handlePrint} className="w-full" />
+          <PrintButton onClick={handlePrint} label="Imprimer" className="w-full" />
         </div>
 
         {/* Card réglages : modèle, icône, couleur, dates/horaires, tailles.
@@ -373,7 +375,11 @@ export function AffichageBoard() {
                 </SelectContent>
               </Select>
               {canEdit && (
-                <div className="flex items-center gap-1.5">
+                // Groupe segmenté (cf. ButtonGroup) : nouveau / éditer /
+                // supprimer forment un seul bloc. `flex w-full` (au lieu de
+                // l'inline-flex par défaut) pour que « Nouveau » (flex-1)
+                // occupe la largeur restante, éditer/supprimer collés à droite.
+                <ButtonGroup className="flex w-full">
                   <Tip label="Nouveau modèle">
                     <Button
                       variant="outline"
@@ -407,7 +413,7 @@ export function AffichageBoard() {
                       <Trash2 />
                     </Button>
                   </Tip>
-                </div>
+                </ButtonGroup>
               )}
             </div>
           </Field>

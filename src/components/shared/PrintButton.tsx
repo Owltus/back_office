@@ -14,6 +14,9 @@ import { Button } from '#/components/ui/button.tsx'
  * - `className` : variantes de placement (w-full, lg:hidden, print:hidden…).
  * - `responsiveLabel` : masque le libellé sous lg (icône seule en responsive),
  *   comme sur le board PDJ ; sinon le libellé est toujours visible.
+ * - `label` : libellé visible ET aria-label. Défaut « Imprimer / PDF », commun
+ *   aux boards ; la page affichage passe « Imprimer » (document A3, pas un PDF
+ *   de rapport). Sert aussi de repli à l'infobulle quand `tipLabel` est absent.
  * - `disabled` : grise le bouton (ex. aucune donnée à imprimer).
  * - `tipLabel` : infobulle. À personnaliser quand le bouton est désactivé —
  *   c'est alors la seule chose qui dise POURQUOI on ne peut pas imprimer.
@@ -24,7 +27,8 @@ export function PrintButton({
   responsiveLabel = false,
   iconOnly = false,
   disabled = false,
-  tipLabel = 'Imprimer / PDF',
+  label = 'Imprimer / PDF',
+  tipLabel,
 }: {
   onClick: () => void
   className?: string
@@ -32,6 +36,7 @@ export function PrintButton({
   /** N'affiche que l'icône (aucun libellé), en bouton carré `icon-sm`. */
   iconOnly?: boolean
   disabled?: boolean
+  label?: string
   tipLabel?: string
 }) {
   const button = (
@@ -41,20 +46,20 @@ export function PrintButton({
       disabled={disabled}
       size={iconOnly ? 'icon-sm' : 'sm'}
       className={className}
-      aria-label="Imprimer / PDF"
+      aria-label={label}
     >
       <Printer />
       {!iconOnly &&
         (responsiveLabel ? (
-          <span className="hidden lg:inline">Imprimer / PDF</span>
+          <span className="hidden lg:inline">{label}</span>
         ) : (
-          'Imprimer / PDF'
+          label
         ))}
     </Button>
   )
 
   return (
-    <Tip label={tipLabel}>
+    <Tip label={tipLabel ?? label}>
       {disabled ? (
         // Un bouton désactivé n'émet aucun événement de survol : sans ce span
         // porteur, Radix n'ouvrirait jamais l'infobulle — précisément dans le
