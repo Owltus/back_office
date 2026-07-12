@@ -10,7 +10,11 @@ import {
 
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
+import { PrintBlockedDialog } from '#/components/shared/PrintBlockedDialog.tsx'
+import { PrintButton } from '#/components/shared/PrintButton.tsx'
 import { StepNav } from '#/components/shared/StepNav.tsx'
+import { useStepNavKeys } from '#/components/shared/useStepNavKeys.ts'
+import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { DatePickerButton } from '#/components/form/fields.tsx'
@@ -35,6 +39,8 @@ import {
 } from '#/lib/repjour/services/daily.ts'
 import { reportToKPI } from '#/lib/repjour/calc/kpi.ts'
 import { computeEcart } from '#/lib/repjour/calc/ecart.ts'
+import { printRepjourReport } from '#/lib/repjour/pdf.ts'
+import type { RepjourPdfData } from '#/lib/repjour/pdf.ts'
 import { DAY_NAMES, MONTHS, TOTAL_ROOMS } from '#/lib/repjour/constants.ts'
 import type { KPIBlock } from '#/lib/repjour/types.ts'
 
@@ -103,6 +109,8 @@ export function DashboardBoard() {
   const [selectedDate, setSelectedDate] = useState(getImportDayStr)
   const [sending, setSending] = useState(false)
   const [showRecipients, setShowRecipients] = useState(false)
+  const [pdfBusy, setPdfBusy] = useState(false)
+  const [printBlocked, setPrintBlocked] = useState(false)
 
   const { role } = useAuth()
   const queryClient = useQueryClient()
@@ -231,6 +239,15 @@ export function DashboardBoard() {
   // la navigation est bornée à ce jour (bouton « suivant » + sélecteur de date).
   const maxDate = isAdmin ? getYesterdayStr() : getImportDayStr()
 
+  // ← / → décalent d'un jour, Alt ramène au jour d'import (le « aujourd'hui »
+  // atteignable de RepJour, en J-1). Bornée en haut par maxDate, comme la flèche.
+  useStepNavKeys({
+    onPrev: () => shiftDate(-1),
+    onNext: () => shiftDate(1),
+    onToday: () => handleDateChange(maxDate),
+    nextDisabled: selectedDate >= maxDate,
+  })
+
   // Jours sélectionnables dans le calendrier = ceux qu'on POSSÈDE (un rapport en
   // base). Tant que la liste n'est pas chargée, on laisse `undefined` (le picker
   // ne borne alors que par `max`, sans tout griser). Les rôles habilités gardent
@@ -277,6 +294,56 @@ export function DashboardBoard() {
     : null
   const fcEcart = fcMoisKPI && budget ? computeEcart(fcMoisKPI, budget) : null
 
+  // Impression : possible dès qu'un tableau KPI est affiché — rapport complet du
+  // jour, OU données partielles (projection + budget) — jamais sur un jour vide.
+  const canPrint =
+    !!budget && ((!!report && !!rj && !!rmtd && !!pm && !!ecart) || !!hasPartialData)
+
+  async function handleGeneratePdf() {
+    if (!budget) return
+    setPdfBusy(true)
+    try {
+      const data: RepjourPdfData =
+        report && rj && rmtd && pm && ecart
+          ? {
+              titleDate: displayDate,
+              realiseJour: rj,
+              realiseMTD: rmtd,
+              projeteMois: pm,
+              budget,
+              ecart,
+              pickup,
+              alerts: report.alerts || [],
+              importedAt: report.imported_at,
+            }
+          : {
+              titleDate: displayDate,
+              realiseJour: null,
+              realiseMTD: null,
+              projeteMois: fcMoisKPI,
+              budget,
+              ecart: fcEcart,
+            }
+      const [yr, mo, da] = selectedDate.split('-')
+      await printRepjourReport(data, `Rapport_${da}-${mo}-${yr}`)
+    } catch {
+      // Silencieux : l'impression est un confort, pas un flux critique.
+    } finally {
+      setPdfBusy(false)
+    }
+  }
+
+  // Ctrl+P emprunte la même porte que le bouton : le PDF jsPDF, jamais le rendu
+  // brut du DOM. Sans données imprimables, le raccourci explique son refus.
+  usePrintShortcut(() => {
+    if (pdfBusy) return
+    if (!canPrint) {
+      setPrintBlocked(true)
+      return
+    }
+    void handleGeneratePdf()
+  })
+
   return (
     <PageContainer>
       <div className="mx-auto w-full max-w-5xl space-y-4">
@@ -287,15 +354,27 @@ export function DashboardBoard() {
               {/* Accès à la vue analytique — remplace le lien de l'ancienne
                   sous-nav repjour (supprimée). */}
               <Tip label="Vue analytique">
-                <Button asChild variant="outline" size="sm">
+                <Button asChild variant="outline" size="icon-sm">
                   <Link to="/repjour/analytique" aria-label="Vue analytique">
                     <LineChart />
-                    <span className="hidden sm:inline">Analytique</span>
                   </Link>
                 </Button>
               </Tip>
+              {/* Impression : toujours présente, désactivée tant qu'il n'y a rien
+                  à imprimer (jour vide) — l'infobulle porte alors la raison. */}
+              <PrintButton
+                onClick={handleGeneratePdf}
+                iconOnly
+                disabled={!canPrint || pdfBusy}
+                tipLabel={
+                  canPrint
+                    ? 'Imprimer / PDF'
+                    : 'Aucune donnée à imprimer pour ce jour'
+                }
+              />
               {/* Navigation en dernier : collée au bord droit, comme partout. */}
               <StepNav
+                className="ml-1"
                 onPrev={() => shiftDate(-1)}
                 onNext={() => shiftDate(1)}
                 prevLabel="Jour précédent"
@@ -515,6 +594,12 @@ export function DashboardBoard() {
           onClose={() => setShowRecipients(false)}
         />
       )}
+
+      <PrintBlockedDialog
+        open={printBlocked}
+        onOpenChange={setPrintBlocked}
+        reason="Aucune donnée pour ce jour. Choisissez une date avec un rapport ou une prévision."
+      />
     </PageContainer>
   )
 }
