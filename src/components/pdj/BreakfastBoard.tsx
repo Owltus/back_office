@@ -16,7 +16,7 @@ import {
 
 import { EmptyCanvas } from '#/components/shared/EmptyCanvas.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
-import { SkeletonCardsRow } from '#/components/shared/skeleton/SkeletonCardsRow.tsx'
+import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { SkeletonTable } from '#/components/shared/skeleton/SkeletonTable.tsx'
 import { PrintBlockedDialog } from '#/components/shared/PrintBlockedDialog.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
@@ -596,7 +596,19 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
 function BoardSkeleton() {
   return (
     <>
-      <SkeletonCardsRow count={6} />
+      {/* Rangée de 6 stats dans LEUR vraie grille (`pdj-stats-grid`, 6 colonnes)
+          et avec les cartes compactes `.pdj-stat`, pour coller au réel (pas la
+          grille analytique 4 colonnes) et ne rien décaler. */}
+      <div className="pdj-stats" aria-hidden="true">
+        <div className="pdj-stats-grid">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="pdj-stat">
+              <Skeleton className="h-2.5 w-2/3" />
+              <Skeleton className="mt-2 h-6 w-1/2" />
+            </div>
+          ))}
+        </div>
+      </div>
       <div className="pdj-floors">
         {Array.from({ length: 6 }).map((_, i) => (
           <SkeletonTable key={i} cols={4} rows={12} bounded={false} />

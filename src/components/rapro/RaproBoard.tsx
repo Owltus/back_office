@@ -27,8 +27,8 @@ import { LockBadge } from '#/components/shared/LockBadge.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { PrintBlockedDialog } from '#/components/shared/PrintBlockedDialog.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
+import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { SkeletonBlock } from '#/components/shared/skeleton/SkeletonBlock.tsx'
-import { SkeletonCardsRow } from '#/components/shared/skeleton/SkeletonCardsRow.tsx'
 import { StepNav } from '#/components/shared/StepNav.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
@@ -527,7 +527,17 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
           {/* Squelette-reflet : la rangée de six cartes de synthèse puis la grille
               des étages (une colonne par étage), aux mêmes gabarits que le contenu
               réel pour ne rien décaler à l'arrivée des données. */}
-          <SkeletonCardsRow count={6} />
+          <div className="rapro-stats" aria-hidden="true">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="rapro-stat">
+                <Skeleton className="h-2.5 w-2/3" />
+                <div className="rapro-stat-row">
+                  <Skeleton className="size-6 rounded-md" />
+                  <Skeleton className="ml-auto h-5 w-8" />
+                </div>
+              </div>
+            ))}
+          </div>
           <div className="rapro-floors" aria-hidden="true">
             {FLOORS.map(({ floor }) => (
               <SkeletonBlock key={floor} className="h-72 rounded-xl" />
