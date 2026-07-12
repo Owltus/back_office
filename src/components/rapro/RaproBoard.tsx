@@ -457,7 +457,11 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
 
   return (
     // Le PDF passe par jsPDF, pas par le DOM : rien à neutraliser en impression.
-    <div className="mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col gap-4">
+    // Pas de `min-h-0` : la page suit son flux (flex-1 la fait remplir le viewport
+    // quand tout tient — bouton de clôture collé en bas), mais dès que le contenu
+    // dépasse (fenêtre courte, alerte multi-lignes), elle grandit et `main` défile,
+    // plutôt que d'écraser la zone commentaire jusqu'à la faire disparaître.
+    <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4">
       <PageHeader
         title={title}
         // Rien à verrouiller sans donnée, et rien à annoncer avant que
@@ -730,7 +734,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
       {/* Un jour sans occupation n'a rien à commenter ni à clôturer : l'écran se
           réduit à l'état vide, qui absorbe la place laissée libre. */}
       {!showEmptyState && (
-      <div className="rapro-comment min-h-0 flex-1">
+      <div className="rapro-comment flex-1">
         <h2 className="rapro-comment-title">Commentaires</h2>
         <Textarea
           value={comment}
@@ -757,10 +761,11 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
           disabled={!canEditFields}
           placeholder="Remarques du jour…"
           // Hauteur FLEXIBLE : la zone commentaires absorbe la place restante et
-          // sert de variable d'ajustement. Ainsi, quand le message de contrôle
-          // d'occupation passe sur plusieurs lignes, c'est ce champ qui se réduit —
-          // le bas de page (bouton de clôture) ne se décale pas. Plancher `min-h-16`
-          // pour rester utilisable ; la page est bornée au viewport (route fillHeight).
+          // sert de variable d'ajustement. Quand l'alerte de contrôle d'occupation
+          // passe sur plusieurs lignes, c'est ce champ qui se réduit — le bouton de
+          // clôture ne se décale pas. `min-h-16` est un PLANCHER : le champ absorbe
+          // jusqu'à cette hauteur puis s'arrête (jamais 0, jamais invisible) ; passé
+          // ce point, c'est la page qui défile (cf. conteneur racine sans min-h-0).
           className="min-h-16 flex-1 resize-none"
         />
       </div>
