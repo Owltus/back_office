@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, Minus, Plus } from 'lucide-react'
+import { Check, LineChart, Minus, Plus } from 'lucide-react'
 
 import { LockBadge } from '#/components/shared/LockBadge.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
@@ -44,6 +45,7 @@ import {
   EPSILON,
   FUND_TARGET,
   PAY_KEYS,
+  SHIFTS,
   SHIFT_LABELS,
   emptyCounts,
 } from '#/lib/caisse/constants.ts'
@@ -133,7 +135,7 @@ function inputToSheet(input: CaisseSheetInput, base: CaisseSheet | null): Caisse
   }
 }
 
-export function CaisseBoard() {
+export function CaisseBoard({ initialDate }: { initialDate?: string }) {
   const { user, role } = useAuth()
   const queryClient = useQueryClient()
 
@@ -144,9 +146,14 @@ export function CaisseBoard() {
   // Slot initial (date + shift) déduit de l'heure : nuit 02–12, matin 12–21,
   // soir 21–02. Corrigé juste après par l'auto-sélection (shift déjà clôturé →
   // le suivant), une fois connue la liste des shifts validés.
-  const [selectedDate, setSelectedDate] = useState(() => currentSlot(now).date)
-  const [selectedShift, setSelectedShift] = useState<Shift>(
-    () => currentSlot(now).shift,
+  //
+  // Arrivée via lien (`initialDate` fourni) : on cale sur cette date et un shift
+  // stable (le premier), et l'auto-sélection est neutralisée (voir autoPickedRef).
+  const [selectedDate, setSelectedDate] = useState(
+    () => initialDate ?? currentSlot(now).date,
+  )
+  const [selectedShift, setSelectedShift] = useState<Shift>(() =>
+    initialDate ? SHIFTS[0] : currentSlot(now).shift,
   )
 
   // Shifts déjà clôturés (récents) : permet de sauter, au chargement, ceux qui
@@ -194,7 +201,9 @@ export function CaisseBoard() {
   // L'hôtelier a-t-il déjà choisi un shift ? Alors l'auto-sélection ne le lui
   // arrache plus. Posé par toute navigation manuelle (flèches, calendrier).
   const userNavigatedRef = useRef(false)
-  const autoPickedRef = useRef(false)
+  // Arrivée via lien : l'auto-sélection est déjà « consommée » au montage, elle
+  // ne déplacera pas le slot vers le shift à remplir (on reste sur la date liée).
+  const autoPickedRef = useRef(Boolean(initialDate))
   // Auto-sélection UNE fois, au premier chargement de la liste des shifts
   // validés : on avance sur le slot à remplir. Après ça (ou après une action de
   // l'hôtelier), on ne touche plus à sa sélection.
@@ -570,6 +579,14 @@ export function CaisseBoard() {
         }
         actions={
           <>
+            {/* 0) Vue analytique : synthèse mensuelle en lecture (tous rôles). */}
+            <Tip label="Vue analytique">
+              <Button asChild variant="outline" size="icon-sm">
+                <Link to="/caisse/analytique" aria-label="Vue analytique">
+                  <LineChart />
+                </Link>
+              </Button>
+            </Tip>
             {/* 1) Impression : toujours présente, mais désactivée tant que la
                 caisse n'est pas clôturée — le document ne s'imprime qu'une fois
                 les montants figés. L'infobulle porte alors la raison. */}
