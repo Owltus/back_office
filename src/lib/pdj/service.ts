@@ -55,6 +55,25 @@ export async function fetchDay(serviceDate: string): Promise<PdjDayRow[]> {
 }
 
 /**
+ * Toutes les lignes sur une plage de jours (bornes incluses), triées par date.
+ * Lecture seule dédiée à la vue analytique : agrégation ensuite côté client
+ * (par mois). Bornes au format 'YYYY-MM-DD'.
+ */
+export async function fetchRange(
+  from: string,
+  to: string,
+): Promise<PdjDayRow[]> {
+  const { data, error } = await supabase
+    .from(PDJ_TABLE)
+    .select('*')
+    .gte('service_date', from)
+    .lte('service_date', to)
+    .order('service_date', { ascending: true })
+  if (error) throw error
+  return (data ?? []) as PdjDayRow[]
+}
+
+/**
  * Import idempotent (upsert sur la clé métier). Le payload n'inclut PAS les
  * colonnes de consommation → un réimport ne réinitialise pas la saisie du staff
  * (`ON CONFLICT DO UPDATE` ne touche que les colonnes fournies).

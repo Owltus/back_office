@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent, DragEvent } from 'react'
+import { Link } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowDown,
@@ -8,6 +9,7 @@ import {
   Coffee,
   Croissant,
   FileUp,
+  LineChart,
   Star,
   Users,
 } from 'lucide-react'
@@ -65,7 +67,7 @@ const fmtTitle = new Intl.DateTimeFormat('fr-FR', {
   year: 'numeric',
 })
 
-export function BreakfastBoard() {
+export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
   const { role } = useAuth()
   const canEdit = role === 'super_utilisateur' || role === 'admin'
   const isAdmin = role === 'admin'
@@ -88,7 +90,9 @@ export function BreakfastBoard() {
 
   // On affiche TOUJOURS le jour courant par défaut (jamais le dernier jour
   // importé, qui serait obsolète) ; l'utilisateur peut ensuite remonter le temps.
-  const [selectedDate, setSelectedDate] = useState(today)
+  // `initialDate` (lien « jour » depuis le rapport mensuel) ouvre directement ce
+  // jour-là ; absent, le comportement reste identique (aujourd'hui).
+  const [selectedDate, setSelectedDate] = useState(initialDate ?? today)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [dragging, setDragging] = useState(false)
@@ -371,6 +375,13 @@ export function BreakfastBoard() {
           title={titleDate}
           actions={
             <>
+              <Tip label="Vue analytique">
+                <Button asChild variant="outline" size="icon-sm">
+                  <Link to="/pdj/analytique" aria-label="Vue analytique">
+                    <LineChart />
+                  </Link>
+                </Button>
+              </Tip>
               {canEdit && (
                 <Tip label="Importer un CSV In-House Guests">
                   <Button
