@@ -147,8 +147,8 @@ export function AnalytiqueMoisBoard({
   const monthLabel = MONTHS_LABELS[month - 1] || ''
 
   return (
-    <PageContainer>
-      <div className="mx-auto w-full max-w-5xl space-y-6">
+    <PageContainer fillHeight>
+      <div className="mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col gap-6">
         <PageHeader
           title={`${monthLabel} ${year}`}
           actions={
@@ -170,7 +170,7 @@ export function AnalytiqueMoisBoard({
         ) : (
           <>
             {/* Cartes résumé */}
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="grid shrink-0 grid-cols-2 gap-3 sm:grid-cols-4">
               {(() => {
                 const pct =
                   budget && budget.nuitees > 0
@@ -310,12 +310,12 @@ export function AnalytiqueMoisBoard({
               })()}
             </div>
 
-            {/* Tableau jour par jour */}
-            <div className="overflow-hidden rounded-xl border border-border bg-card">
-              <div className="overflow-x-auto">
+            {/* Tableau jour par jour (défile en interne, en-tête collant) */}
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card">
+              <div className="no-scrollbar min-h-0 flex-1 overflow-auto">
                 <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border bg-muted/50">
+                  <thead className="sticky top-0 z-10">
+                    <tr className="border-b border-border bg-muted">
                       <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">
                         Jour
                       </th>
@@ -480,7 +480,7 @@ export function AnalytiqueMoisBoard({
             </div>
 
             {/* Graphiques */}
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div className="grid shrink-0 grid-cols-1 gap-4 lg:grid-cols-2">
               <KpiLineChart
                 title="Chiffre d'affaires par jour"
                 data={chartData}

@@ -4,6 +4,8 @@ import { useQuery } from '@tanstack/react-query'
 
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
+import { StepNav } from '#/components/shared/StepNav.tsx'
+import { useStepNavKeys } from '#/components/shared/useStepNavKeys.ts'
 import { BoardSkeleton } from '#/components/repjour/BoardSkeleton.tsx'
 import { KpiLineChart } from '#/components/repjour/charts/KpiLineChart.tsx'
 import {
@@ -137,24 +139,42 @@ export function AnalytiqueBoard() {
     [budgets],
   )
 
+  const minYear = years[0] ?? currentYear
+  const maxYear = years[years.length - 1] ?? currentYear
+  const prevYearDisabled = year <= minYear
+  const nextYearDisabled = year >= maxYear
+  const goPrevYear = () => {
+    if (year > minYear) setYear((y) => y - 1)
+  }
+  const goNextYear = () => {
+    if (year < maxYear) setYear((y) => y + 1)
+  }
+  useStepNavKeys({
+    onPrev: goPrevYear,
+    onNext: goNextYear,
+    onToday: () => setYear(currentYear),
+    prevDisabled: prevYearDisabled,
+    nextDisabled: nextYearDisabled,
+  })
+
   return (
-    <PageContainer>
-      <div className="mx-auto w-full max-w-5xl space-y-6">
+    <PageContainer fillHeight>
+      <div className="mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col gap-6">
         <PageHeader
           title="Analytique"
           actions={
-            <select
-              value={year}
-              onChange={(e) => setYear(Number(e.target.value))}
-              aria-label="Choisir une année"
-              className="h-8 rounded-lg border border-border bg-card px-3 text-sm text-foreground"
+            <StepNav
+              onPrev={goPrevYear}
+              onNext={goNextYear}
+              prevLabel="Année précédente"
+              nextLabel="Année suivante"
+              prevDisabled={prevYearDisabled}
+              nextDisabled={nextYearDisabled}
             >
-              {years.map((y) => (
-                <option key={y} value={y}>
-                  {y}
-                </option>
-              ))}
-            </select>
+              <span className="w-12 text-center text-sm font-medium tabular-nums">
+                {year}
+              </span>
+            </StepNav>
           }
         />
 
@@ -163,7 +183,7 @@ export function AnalytiqueBoard() {
         ) : (
           <>
             {/* Synthèse annuelle */}
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="grid shrink-0 grid-cols-2 gap-3 sm:grid-cols-4">
               {(() => {
                 const pctNuit =
                   summary.budgetTotalNuitees > 0
@@ -308,11 +328,11 @@ export function AnalytiqueBoard() {
             </div>
 
             {/* Tableau mois par mois */}
-            <div className="overflow-hidden rounded-xl border border-border bg-card">
-              <div className="overflow-x-auto">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card">
+              <div className="no-scrollbar min-h-0 flex-1 overflow-auto">
                 <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border bg-muted/50">
+                  <thead className="sticky top-0 z-10">
+                    <tr className="border-b border-border bg-muted">
                       <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">
                         Mois
                       </th>
@@ -512,7 +532,7 @@ export function AnalytiqueBoard() {
             </div>
 
             {/* Graphiques */}
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div className="grid shrink-0 grid-cols-1 gap-4 lg:grid-cols-2">
               <KpiLineChart
                 title="Chiffre d'affaires par mois"
                 data={chartData}
