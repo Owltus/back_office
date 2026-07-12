@@ -3,10 +3,12 @@ import type {
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
 } from 'react'
+import { Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import {
   CalendarDays,
   Copy,
+  LineChart,
   MessageSquare,
   Pencil,
   Plus,
@@ -26,6 +28,7 @@ import { EmptyCanvas } from '#/components/shared/EmptyCanvas.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
 import { StepNav } from '#/components/shared/StepNav.tsx'
+import { Tip } from '#/components/shared/Tip.tsx'
 import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
 import { Button } from '#/components/ui/button.tsx'
 import { Calendar } from '#/components/ui/calendar.tsx'
@@ -167,7 +170,7 @@ function pointerToCell(
   return { day: offset + dayIndex, spot }
 }
 
-export function ParkingBoard() {
+export function ParkingBoard({ initialDate }: { initialDate?: string }) {
   const { role } = useAuth()
   // Seuls super_utilisateur et admin peuvent modifier ; `utilisateur` = lecture seule.
   const canEdit = role === 'super_utilisateur' || role === 'admin'
@@ -316,13 +319,29 @@ export function ParkingBoard() {
   const todayIndex =
     rawTodayIndex >= 0 && rawTodayIndex < visibleDays ? rawTodayIndex : -1
 
+  // Positionnement initial sur un jour ciblé par lien (?date=YYYY-MM-DD, p. ex.
+  // depuis le rapport mensuel). Ne s'exécute QU'UNE fois et SEULEMENT si
+  // `initialDate` est fourni — l'offset est absolu (jours depuis le lundi de
+  // réf.), il n'attend donc pas la mesure de largeur. Sans `initialDate`, ce
+  // bloc est inerte et le cadrage « aujourd'hui » ci-dessous reste seul maître.
+  const initApplied = useRef(false)
+  useEffect(() => {
+    if (!startDate || initApplied.current || !initialDate) return
+    initApplied.current = true
+    const target = new Date(initialDate + 'T00:00:00')
+    setOffset(differenceInCalendarDays(target, startDate))
+  }, [startDate, initialDate])
+
   // Cadrage initial appliqué une fois la largeur mesurée (avant toute navigation).
+  // Ignoré si un jour a été ciblé par lien (`initialDate`) : il écraserait sinon
+  // la semaine visée. Le comportement par défaut (sans lien) est inchangé.
   const framedInit = useRef(false)
   useEffect(() => {
+    if (initialDate) return
     if (!startDate || visibleDays <= 0 || framedInit.current) return
     framedInit.current = true
     setOffset(framedOffset)
-  }, [startDate, visibleDays, framedOffset])
+  }, [startDate, visibleDays, framedOffset, initialDate])
 
   // Raccourcis clavier : ← / → naviguent, Alt ramène à aujourd'hui.
   useEffect(() => {
@@ -694,6 +713,13 @@ export function ParkingBoard() {
         title={rangeLabel}
         actions={
           <>
+            <Tip label="Vue analytique">
+              <Button asChild variant="outline" size="icon-sm">
+                <Link to="/parking/analytique" aria-label="Vue analytique">
+                  <LineChart />
+                </Link>
+              </Button>
+            </Tip>
             <PrintButton
               onClick={handleGeneratePdf}
               iconOnly
