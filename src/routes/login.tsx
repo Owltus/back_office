@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
 
 import { useAuth } from '#/components/auth/AuthContext.tsx'
+import { supabase } from '#/lib/supabase.ts'
 import { Logo } from '#/components/Logo.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
@@ -12,6 +13,15 @@ import { Label } from '#/components/ui/label.tsx'
 export const Route = createFileRoute('/login')({
   component: LoginPage,
   head: () => ({ meta: [{ title: 'Connexion — Back Office' }] }),
+  // Un utilisateur déjà connecté ne doit jamais voir le formulaire : on redirige
+  // AVANT le rendu (lecture de session locale, rapide) plutôt qu'après coup via un
+  // `useEffect` (qui laissait flasher le formulaire).
+  beforeLoad: async () => {
+    const { data } = await supabase.auth.getSession()
+    if (data.session) {
+      throw redirect({ to: '/repjour' })
+    }
+  },
 })
 
 function LoginPage() {

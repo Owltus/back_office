@@ -1,18 +1,28 @@
 import type { ReactNode } from 'react'
 import { Link, Navigate } from '@tanstack/react-router'
-import { Loader2, ShieldAlert } from 'lucide-react'
+import { ShieldAlert } from 'lucide-react'
 
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { ROLE_HOME } from '#/lib/repjour/roles.ts'
 import type { UserRole } from '#/lib/repjour/roles.ts'
 import { Button } from '#/components/ui/button.tsx'
+import { PageContainer } from '#/components/shared/PageContainer.tsx'
+import { SkeletonCardsRow } from '#/components/shared/skeleton/SkeletonCardsRow.tsx'
+import { SkeletonTable } from '#/components/shared/skeleton/SkeletonTable.tsx'
 
-/** Spinner plein écran affiché tant que la session/le rôle ne sont pas résolus. */
-function GuardSpinner() {
+/**
+ * Squelette de page affiché tant que la session/le rôle ne sont pas résolus —
+ * réserve la place du board (cartes + tableau) au lieu d'un spinner recentré, pour
+ * supprimer le saut spinner → contenu au premier accès.
+ */
+function GuardSkeleton() {
   return (
-    <div className="flex flex-1 items-center justify-center py-24">
-      <Loader2 className="size-8 animate-spin text-primary" />
-    </div>
+    <PageContainer>
+      <div className="mx-auto w-full max-w-5xl space-y-4">
+        <SkeletonCardsRow count={4} />
+        <SkeletonTable cols={4} rows={8} bounded={false} />
+      </div>
+    </PageContainer>
   )
 }
 
@@ -70,7 +80,7 @@ export function ProtectedRoute({
   const { user, role, loading, profileLoading } = useAuth()
 
   // 1. Session en cours de résolution.
-  if (loading) return <GuardSpinner />
+  if (loading) return <GuardSkeleton />
 
   // 2. Non connecté → page de login (normalement déjà intercepté par AppAuthGate).
   if (!user) return <Navigate to="/login" replace />
@@ -81,7 +91,7 @@ export function ProtectedRoute({
   //      contenu protégé (ex-D13 bug#2, évite un flash) ;
   //    - sinon → la ligne `profiles` est réellement absente : notice avec une
   //      sortie vers l'accueil (plutôt qu'un spinner infini).
-  if (role === null) return profileLoading ? <GuardSpinner /> : <NoRoleNotice />
+  if (role === null) return profileLoading ? <GuardSkeleton /> : <NoRoleNotice />
 
   // 4. Rôle connu mais non autorisé → accueil du rôle.
   if (!allowedRoles.includes(role)) {

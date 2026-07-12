@@ -1,16 +1,48 @@
 import type { ReactNode } from 'react'
 import { Navigate, useRouterState } from '@tanstack/react-router'
-import { Loader2 } from 'lucide-react'
 
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { Navbar } from '#/components/Navbar.tsx'
+import { Skeleton } from '#/components/ui/skeleton.tsx'
+import { SkeletonCardsRow } from '#/components/shared/skeleton/SkeletonCardsRow.tsx'
+import { SkeletonTable } from '#/components/shared/skeleton/SkeletonTable.tsx'
+
+/**
+ * Squelette de démarrage : silhouette de barre de navigation + zone de contenu en
+ * squelette, au lieu d'un spinner nu. Déterministe → rendu à l'identique en SSR et
+ * au premier rendu client (pas de divergence d'hydratation), et l'arrivée du chrome
+ * réel ne déplace rien (même hauteur de barre, même zone de contenu).
+ */
+function BootSkeleton() {
+  return (
+    <div className="flex h-dvh flex-col overflow-hidden" aria-hidden="true">
+      <header className="sticky top-0 z-40 border-b border-border bg-card/80 backdrop-blur-md">
+        <div className="flex h-16 items-center gap-3 px-4">
+          <Skeleton className="size-7 rounded-md" />
+          <div className="ml-2 hidden items-center gap-2 md:flex">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-6 w-20 rounded-lg" />
+            ))}
+          </div>
+          <Skeleton className="ml-auto size-9 rounded-full" />
+        </div>
+      </header>
+      <main className="flex flex-1 flex-col overflow-y-auto">
+        <div className="mx-auto w-full max-w-5xl space-y-4 p-4 md:p-6">
+          <SkeletonCardsRow count={4} />
+          <SkeletonTable cols={4} rows={8} bounded={false} />
+        </div>
+      </main>
+    </div>
+  )
+}
 
 /**
  * Garde d'authentification GLOBALE de l'application.
  *
  * Toute page exige une session (décision D3 = option B) :
  *   - route `/login` → toujours accessible, rendue sans le chrome (Navbar) ;
- *   - `loading` → spinner plein écran (état rendu aussi côté SSR, donc pas de
+ *   - `loading` → squelette de layout (état rendu aussi côté SSR, donc pas de
  *     divergence d'hydratation : serveur et premier rendu client sont identiques) ;
  *   - pas de session → redirection vers `/login` (aucun contenu protégé rendu) ;
  *   - session présente → chrome complet (Navbar + contenu).
@@ -29,13 +61,10 @@ export function AppAuthGate({ children }: { children: ReactNode }) {
     )
   }
 
-  // Session pas encore résolue : spinner (identique SSR ↔ premier rendu client).
+  // Session pas encore résolue : squelette de layout (identique SSR ↔ premier
+  // rendu client), plutôt qu'un spinner nu.
   if (loading) {
-    return (
-      <div className="flex h-dvh items-center justify-center">
-        <Loader2 className="size-8 animate-spin text-primary" />
-      </div>
-    )
+    return <BootSkeleton />
   }
 
   // Non connecté : aucune page protégée n'est rendue, on renvoie vers /login.
@@ -43,14 +72,13 @@ export function AppAuthGate({ children }: { children: ReactNode }) {
     return <Navigate to="/login" replace />
   }
 
-  // Connecté : chrome complet.
+  // Connecté : chrome complet. `<main>` n'est PLUS remonté sur `pathname` : le
+  // fondu d'entrée ne rejoue donc plus à chaque navigation (fini le flash d'écran
+  // vide transparent entre deux pages) ; il ne joue qu'une fois, au premier montage.
   return (
     <div className="flex h-dvh flex-col overflow-hidden print:h-auto print:overflow-visible">
       <Navbar />
-      <main
-        key={pathname}
-        className="app-scroll flex flex-1 flex-col overflow-y-auto motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300 print:overflow-visible"
-      >
+      <main className="app-scroll flex flex-1 flex-col overflow-y-auto motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300 print:overflow-visible">
         {children}
       </main>
     </div>
