@@ -253,14 +253,22 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
     raproWindow.some((q) => q.isError) || pdjWindow.some((q) => q.isError)
 
   // Contrôle comptable, UNIQUEMENT sur un jour clôturé (données finales) : écart
-  // entre l'occupation In-House (base de la grille) et Comparison (chiffre
-  // officiel). Non nul = arrivées après clôture / correction à vérifier.
+  // entre le rooming In-House (base de la grille) et l'officiel (Comparison /
+  // rj_nuitees). Les chambres OFFERTES (tarif 0 : gratuité, house-use) comptent
+  // dans le rooming mais PAS dans l'officiel (« Occupied Rooms hors complimentary »)
+  // — on les retire AVANT de comparer, pour ne pas alerter sur un écart qui n'est
+  // qu'une gratuité (comportement attendu). Un écart résiduel = arrivée / annulation
+  // de dernière minute présente dans un seul des deux rapports, à vérifier.
+  const freeRooms = (pdjRows ?? []).filter(
+    (r) => r.adr != null && Number(r.adr) === 0,
+  ).length
+  const inHouseExclComp = occupied.size - freeRooms
   const occGap =
     isValidated &&
     hasOccupancy &&
     officialOcc != null &&
-    officialOcc !== occupied.size
-      ? officialOcc - occupied.size
+    officialOcc !== inHouseExclComp
+      ? inHouseExclComp - officialOcc
       : null
 
   function goStep(delta: number) {
@@ -448,7 +456,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
 
   return (
     // Le PDF passe par jsPDF, pas par le DOM : rien à neutraliser en impression.
-    <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4">
+    <div className="mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col gap-4">
       <PageHeader
         title={title}
         // Rien à verrouiller sans donnée, et rien à annoncer avant que
@@ -548,9 +556,12 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
         <>
       {occGap !== null && (
         <div className="rapro-occ-alert">
-          Occupation In-House {occupied.size} et Comparison {officialOcc} ne
-          concordent pas. Écart de {Math.abs(occGap)}{' '}
-          {Math.abs(occGap) > 1 ? 'chambres' : 'chambre'} à vérifier.
+          Écart d'{Math.abs(occGap)}{' '}
+          {Math.abs(occGap) > 1 ? 'chambres' : 'chambre'} : {inHouseExclComp}{' '}
+          {inHouseExclComp > 1 ? 'occupées' : 'occupée'} cette nuit d'après le
+          rooming, mais {officialOcc} d'après le rapport comptable. Ce n'est pas une
+          gratuité — à vérifier (souvent une arrivée ou une annulation de dernière
+          minute présente dans un seul des deux rapports).
         </div>
       )}
 
@@ -715,7 +726,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
       {/* Un jour sans occupation n'a rien à commenter ni à clôturer : l'écran se
           réduit à l'état vide, qui absorbe la place laissée libre. */}
       {!showEmptyState && (
-      <div className="rapro-comment">
+      <div className="rapro-comment min-h-0 flex-1">
         <h2 className="rapro-comment-title">Commentaires</h2>
         <Textarea
           value={comment}
@@ -741,9 +752,12 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
           }}
           disabled={!canEditFields}
           placeholder="Remarques du jour…"
-          // Hauteur figée, comme la feuille de caisse : les deux pages sont
-          // alignées, un champ qui s'étire les désynchroniserait.
-          className="h-24 resize-none"
+          // Hauteur FLEXIBLE : la zone commentaires absorbe la place restante et
+          // sert de variable d'ajustement. Ainsi, quand le message de contrôle
+          // d'occupation passe sur plusieurs lignes, c'est ce champ qui se réduit —
+          // le bas de page (bouton de clôture) ne se décale pas. Plancher `min-h-16`
+          // pour rester utilisable ; la page est bornée au viewport (route fillHeight).
+          className="min-h-16 flex-1 resize-none"
         />
       </div>
       )}

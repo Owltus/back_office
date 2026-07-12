@@ -14,7 +14,7 @@ export const Route = createFileRoute('/rapro/')({
 function RaproPage() {
   const { date } = Route.useSearch()
   return (
-    <PageContainer>
+    <PageContainer fillHeight>
       <RaproBoard initialDate={date} />
     </PageContainer>
   )
