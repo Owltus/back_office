@@ -1,14 +1,16 @@
 import { useMemo } from 'react'
-import { Link, useRouter } from '@tanstack/react-router'
+import { Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft } from 'lucide-react'
 
-import { PageContainer } from '#/components/shared/PageContainer.tsx'
-import { PageHeader } from '#/components/shared/PageHeader.tsx'
-import { Tip } from '#/components/shared/Tip.tsx'
-import { Button } from '#/components/ui/button.tsx'
-import { BoardSkeleton } from '#/components/repjour/BoardSkeleton.tsx'
-import { KpiLineChart } from '#/components/repjour/charts/KpiLineChart.tsx'
+import { AnalytiqueShell } from '#/components/analytique/AnalytiqueShell.tsx'
+import {
+  AnalytiqueCardsGrid,
+  StatCard,
+} from '#/components/analytique/AnalytiqueCards.tsx'
+import { AnalytiqueTable } from '#/components/analytique/AnalytiqueTable.tsx'
+import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
+import { AnalytiqueBackButton } from '#/components/analytique/AnalytiqueBackButton.tsx'
+import { KpiLineChart } from '#/components/analytique/KpiLineChart.tsx'
 import { fetchReservations } from '#/lib/parking/service.ts'
 import { aggregateParkingDaily } from '#/lib/parking/analytics.ts'
 
@@ -50,8 +52,6 @@ export function ParkingAnalytiqueMoisBoard({
   year: number
   month: number
 }) {
-  const router = useRouter()
-
   // Toutes les réservations (une seule lecture, mise en cache et partagée avec
   // la vue annuelle). L'agrégation par jour se fait ensuite en mémoire.
   const { data: reservations = [], isPending: loading } = useQuery({
@@ -95,182 +95,135 @@ export function ParkingAnalytiqueMoisBoard({
   const monthLabel = `${MONTHS[month - 1] || ''} ${year}`
 
   return (
-    <PageContainer fillHeight>
-      <div className="mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col gap-6">
-        <PageHeader
-          title={monthLabel}
-          actions={
-            <Tip label="Retour à l'analytique">
-              <Button
-                variant="outline"
-                size="icon-sm"
-                onClick={() => router.history.back()}
-                aria-label="Retour à l'analytique"
-              >
-                <ArrowLeft />
-              </Button>
-            </Tip>
+    <AnalytiqueShell
+      title={monthLabel}
+      actions={<AnalytiqueBackButton />}
+      loading={loading}
+      skeleton={{ cols: 4, charts: 2 }}
+    >
+      {/* Cartes du mois */}
+      <AnalytiqueCardsGrid>
+        <StatCard
+          label="Occupation moyenne"
+          value={fmtPct(summary.avgOccupancy)}
+          sub={
+            <p className="mt-2 text-xs text-muted-foreground">
+              Moyenne des jours du mois
+            </p>
           }
         />
+        <StatCard
+          label="Arrivées"
+          value={fmtInt(summary.arrivals)}
+          sub={
+            <p className="mt-2 text-xs text-muted-foreground">sur le mois</p>
+          }
+        />
+        <StatCard
+          label="Départs"
+          value={fmtInt(summary.departures)}
+          sub={
+            <p className="mt-2 text-xs text-muted-foreground">sur le mois</p>
+          }
+        />
+        <StatCard
+          label="Impayés"
+          value={fmtInt(summary.unpaid)}
+          sub={
+            <p className="mt-2 text-xs text-muted-foreground">
+              réservations non payées
+            </p>
+          }
+        />
+      </AnalytiqueCardsGrid>
 
-        {loading ? (
-          <BoardSkeleton rows={12} />
-        ) : (
-          <>
-            {/* Cartes du mois */}
-            <div className="grid shrink-0 grid-cols-2 gap-3 sm:grid-cols-4">
-              <div className="rounded-xl border border-border bg-card p-4">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Occupation moyenne
-                </p>
-                <div className="mt-1">
-                  <span className="text-2xl font-bold text-foreground">
-                    {fmtPct(summary.avgOccupancy)}
-                  </span>
-                </div>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Moyenne des jours du mois
-                </p>
-              </div>
+      {/* Tableau jour par jour */}
+      <AnalytiqueTable
+        head={
+          <tr className="border-b border-border bg-muted">
+            <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">
+              Jour
+            </th>
+            <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
+              <span className="hidden sm:inline">Occupation</span>
+              <span className="sm:hidden">Occ.</span>
+            </th>
+            <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
+              <span className="hidden sm:inline">Occupées</span>
+              <span className="sm:hidden">Occ.</span>
+            </th>
+            <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
+              Arrivées
+            </th>
+            <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground">
+              Départs
+            </th>
+          </tr>
+        }
+      >
+        <tbody>
+          {days.map((d) => {
+            const hasData = d.occupiedClient > 0
+            return (
+              <tr
+                key={d.date}
+                className={`border-b border-border/50 ${
+                  hasData ? '' : 'bg-muted/20'
+                }`}
+              >
+                <td
+                  className={`whitespace-nowrap px-3 py-2 text-xs font-medium ${
+                    hasData ? 'text-foreground' : 'text-muted-foreground'
+                  }`}
+                >
+                  <Link
+                    to="/parking"
+                    search={{ date: d.date }}
+                    className="hover:text-primary hover:underline"
+                  >
+                    {d.day}
+                  </Link>
+                </td>
+                <td className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums">
+                  {fmtPct(d.occupancy)}
+                </td>
+                <td className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums">
+                  {fmtInt(d.occupiedClient)}
+                </td>
+                <td className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums text-muted-foreground">
+                  {fmtInt(d.arrivals)}
+                </td>
+                <td className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums text-muted-foreground">
+                  {fmtInt(d.departures)}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </AnalytiqueTable>
 
-              <div className="rounded-xl border border-border bg-card p-4">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Arrivées
-                </p>
-                <div className="mt-1">
-                  <span className="text-2xl font-bold text-foreground">
-                    {fmtInt(summary.arrivals)}
-                  </span>
-                </div>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  sur le mois
-                </p>
-              </div>
-
-              <div className="rounded-xl border border-border bg-card p-4">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Départs
-                </p>
-                <div className="mt-1">
-                  <span className="text-2xl font-bold text-foreground">
-                    {fmtInt(summary.departures)}
-                  </span>
-                </div>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  sur le mois
-                </p>
-              </div>
-
-              <div className="rounded-xl border border-border bg-card p-4">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Impayés
-                </p>
-                <div className="mt-1">
-                  <span className="text-2xl font-bold text-foreground">
-                    {fmtInt(summary.unpaid)}
-                  </span>
-                </div>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  réservations non payées
-                </p>
-              </div>
-            </div>
-
-            {/* Tableau jour par jour */}
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card">
-              <div className="no-scrollbar min-h-0 flex-1 overflow-auto">
-                <table className="w-full text-sm">
-                  <thead className="sticky top-0 z-10">
-                    <tr className="border-b border-border bg-muted">
-                      <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">
-                        Jour
-                      </th>
-                      <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
-                        <span className="hidden sm:inline">Occupation</span>
-                        <span className="sm:hidden">Occ.</span>
-                      </th>
-                      <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
-                        <span className="hidden sm:inline">Occupées</span>
-                        <span className="sm:hidden">Occ.</span>
-                      </th>
-                      <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
-                        Arrivées
-                      </th>
-                      <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground">
-                        Départs
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {days.map((d) => {
-                      const hasData = d.occupiedClient > 0
-                      return (
-                        <tr
-                          key={d.date}
-                          className={`border-b border-border/50 ${
-                            hasData ? '' : 'bg-muted/20'
-                          }`}
-                        >
-                          <td
-                            className={`whitespace-nowrap px-3 py-2 text-xs font-medium ${
-                              hasData
-                                ? 'text-foreground'
-                                : 'text-muted-foreground'
-                            }`}
-                          >
-                            <Link
-                              to="/parking"
-                              search={{ date: d.date }}
-                              className="hover:text-primary hover:underline"
-                            >
-                              {d.day}
-                            </Link>
-                          </td>
-                          <td className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums">
-                            {fmtPct(d.occupancy)}
-                          </td>
-                          <td className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums">
-                            {fmtInt(d.occupiedClient)}
-                          </td>
-                          <td className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums text-muted-foreground">
-                            {fmtInt(d.arrivals)}
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums text-muted-foreground">
-                            {fmtInt(d.departures)}
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Graphiques */}
-            <div className="grid shrink-0 grid-cols-1 gap-4 lg:grid-cols-2">
-              <KpiLineChart
-                title="Occupation du parking par jour"
-                data={chartData}
-                xKey="jour"
-                realKey="occ"
-                realName="Occupation"
-                realDotRadius={2}
-                yDomain={[0, 100]}
-                tooltipFormatter={fmtPct}
-              />
-              <KpiLineChart
-                title="Arrivées par jour"
-                data={chartData}
-                xKey="jour"
-                realKey="arrivals"
-                realName="Arrivées"
-                realDotRadius={2}
-                tooltipFormatter={fmtInt}
-              />
-            </div>
-          </>
-        )}
-      </div>
-    </PageContainer>
+      {/* Graphiques */}
+      <AnalytiqueCharts>
+        <KpiLineChart
+          title="Occupation du parking par jour"
+          data={chartData}
+          xKey="jour"
+          realKey="occ"
+          realName="Occupation"
+          realDotRadius={2}
+          yDomain={[0, 100]}
+          tooltipFormatter={fmtPct}
+        />
+        <KpiLineChart
+          title="Arrivées par jour"
+          data={chartData}
+          xKey="jour"
+          realKey="arrivals"
+          realName="Arrivées"
+          realDotRadius={2}
+          tooltipFormatter={fmtInt}
+        />
+      </AnalytiqueCharts>
+    </AnalytiqueShell>
   )
 }

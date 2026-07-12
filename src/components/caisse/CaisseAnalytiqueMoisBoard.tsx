@@ -1,14 +1,16 @@
 import { useMemo } from 'react'
-import { Link, useRouter } from '@tanstack/react-router'
+import { Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft } from 'lucide-react'
 
-import { PageContainer } from '#/components/shared/PageContainer.tsx'
-import { PageHeader } from '#/components/shared/PageHeader.tsx'
-import { Tip } from '#/components/shared/Tip.tsx'
-import { Button } from '#/components/ui/button.tsx'
-import { BoardSkeleton } from '#/components/repjour/BoardSkeleton.tsx'
-import { KpiLineChart } from '#/components/repjour/charts/KpiLineChart.tsx'
+import { AnalytiqueShell } from '#/components/analytique/AnalytiqueShell.tsx'
+import {
+  AnalytiqueCardsGrid,
+  StatCard,
+} from '#/components/analytique/AnalytiqueCards.tsx'
+import { AnalytiqueTable } from '#/components/analytique/AnalytiqueTable.tsx'
+import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
+import { AnalytiqueBackButton } from '#/components/analytique/AnalytiqueBackButton.tsx'
+import { KpiLineChart } from '#/components/analytique/KpiLineChart.tsx'
 import { fetchSheets } from '#/lib/caisse/service.ts'
 import { aggregateCaisseDaily } from '#/lib/caisse/analytics.ts'
 import { fmtEcart, fmtEur } from '#/lib/caisse/format.ts'
@@ -50,8 +52,6 @@ export function CaisseAnalytiqueMoisBoard({
   year: number
   month: number
 }) {
-  const router = useRouter()
-
   const mm = String(month).padStart(2, '0')
   const lastDay = new Date(year, month, 0).getDate()
 
@@ -97,226 +97,184 @@ export function CaisseAnalytiqueMoisBoard({
   const monthLabel = MOIS[month - 1] || ''
 
   return (
-    <PageContainer fillHeight>
-      <div className="mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col gap-6">
-        <PageHeader
-          title={`${monthLabel} ${year}`}
-          actions={
-            <Tip label="Retour à l'analytique">
-              <Button
-                variant="outline"
-                size="icon-sm"
-                onClick={() => router.history.back()}
-                aria-label="Retour à l'analytique"
-              >
-                <ArrowLeft />
-              </Button>
-            </Tip>
+    <AnalytiqueShell
+      title={`${monthLabel} ${year}`}
+      actions={<AnalytiqueBackButton />}
+      loading={loading}
+      skeleton={{ cols: 4, charts: 2 }}
+    >
+      {/* Synthèse du mois */}
+      <AnalytiqueCardsGrid>
+        <StatCard label="Feuilles saisies" value={fmtInt(summary.totalSheets)}>
+          <p className="mt-2 text-xs text-muted-foreground">
+            {days.length} jour{days.length > 1 ? 's' : ''} saisi
+            {days.length > 1 ? 's' : ''}
+          </p>
+        </StatCard>
+
+        <StatCard label="Total encaissé" value={fmtEur(summary.totalEncaisse)}>
+          <p className="mt-2 text-xs text-muted-foreground">
+            réel compté, tous modes
+          </p>
+        </StatCard>
+
+        <StatCard
+          label="Écart total"
+          value={
+            <span
+              className={
+                summary.totalEcart >= EPSILON ? 'text-destructive' : undefined
+              }
+            >
+              {fmtEcart(summary.totalEcart)}
+            </span>
           }
+        >
+          <p className="mt-2 text-xs text-muted-foreground">
+            cumul des écarts de paiement
+          </p>
+        </StatCard>
+
+        <StatCard
+          label="Écart de fond"
+          value={
+            <span
+              className={
+                Math.abs(summary.totalFundEcart) >= EPSILON
+                  ? 'text-destructive'
+                  : undefined
+              }
+            >
+              {fmtEcart(summary.totalFundEcart)}
+            </span>
+          }
+        >
+          <p className="mt-2 text-xs text-muted-foreground">
+            cumul sur le fond de caisse
+          </p>
+        </StatCard>
+      </AnalytiqueCardsGrid>
+
+      {/* Tableau jour par jour */}
+      <AnalytiqueTable
+        head={
+          <tr className="border-b border-border bg-muted">
+            <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">
+              Jour
+            </th>
+            <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
+              Feuilles
+            </th>
+            <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground">
+              Encaissé
+            </th>
+            <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground">
+              Écart
+            </th>
+            <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">
+              Fond
+            </th>
+          </tr>
+        }
+      >
+        <tbody>
+          {dayNums.map((day) => {
+            const d = byDay.get(day)
+            const hasData = !!d
+            const dayName =
+              DAY_NAMES_SHORT[new Date(year, month - 1, day).getDay()]
+            const date = `${year}-${mm}-${String(day).padStart(2, '0')}`
+            const ecartOff = d ? d.ecartTotal >= EPSILON : false
+            const fundOff = d ? Math.abs(d.fundEcart) >= EPSILON : false
+            return (
+              <tr
+                key={day}
+                className={`border-b border-border/50 ${
+                  hasData ? '' : 'bg-muted/20'
+                }`}
+              >
+                <td
+                  className={`whitespace-nowrap px-3 py-2 text-xs font-medium ${
+                    hasData ? 'text-foreground' : 'text-muted-foreground'
+                  }`}
+                >
+                  <Link
+                    to="/caisse"
+                    search={{ date }}
+                    className="hover:text-primary hover:underline"
+                  >
+                    {dayName} {day}
+                  </Link>
+                </td>
+                {hasData ? (
+                  <>
+                    <td className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums">
+                      {fmtInt(d.sheets)}
+                    </td>
+                    <td className="whitespace-nowrap px-2 py-2 text-right text-xs font-medium tabular-nums text-foreground">
+                      {fmtEur(d.encaisse)}
+                    </td>
+                    <td
+                      className={`whitespace-nowrap px-2 py-2 text-right text-xs tabular-nums ${
+                        ecartOff ? 'text-destructive' : 'text-muted-foreground'
+                      }`}
+                    >
+                      {fmtEur(d.ecartTotal)}
+                    </td>
+                    <td
+                      className={`whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums ${
+                        fundOff ? 'text-destructive' : 'text-muted-foreground'
+                      }`}
+                    >
+                      {fmtEcart(d.fundEcart)}
+                    </td>
+                  </>
+                ) : (
+                  <>
+                    <td className="px-2 py-2 text-center text-xs text-muted-foreground/50">
+                      —
+                    </td>
+                    <td className="px-2 py-2 text-right text-xs text-muted-foreground/50">
+                      —
+                    </td>
+                    <td className="px-2 py-2 text-right text-xs text-muted-foreground/50">
+                      —
+                    </td>
+                    <td className="px-3 py-2 text-right text-xs text-muted-foreground/50">
+                      —
+                    </td>
+                  </>
+                )}
+              </tr>
+            )
+          })}
+        </tbody>
+      </AnalytiqueTable>
+
+      {/* Graphiques */}
+      <AnalytiqueCharts>
+        <KpiLineChart
+          title="Encaissé par jour"
+          data={chartData}
+          xKey="jour"
+          realKey="encaisse"
+          realName="Encaissé"
+          realDotRadius={2}
+          yTickFormatter={(v) =>
+            v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)
+          }
+          tooltipFormatter={fmtEur}
         />
-
-        {loading ? (
-          <BoardSkeleton rows={12} />
-        ) : (
-          <>
-            {/* Synthèse du mois */}
-            <div className="grid shrink-0 grid-cols-2 gap-3 sm:grid-cols-4">
-              <div className="rounded-xl border border-border bg-card p-4">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Feuilles saisies
-                </p>
-                <div className="mt-1">
-                  <span className="text-2xl font-bold text-foreground">
-                    {fmtInt(summary.totalSheets)}
-                  </span>
-                </div>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  {days.length} jour{days.length > 1 ? 's' : ''} saisi
-                  {days.length > 1 ? 's' : ''}
-                </p>
-              </div>
-
-              <div className="rounded-xl border border-border bg-card p-4">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Total encaissé
-                </p>
-                <div className="mt-1">
-                  <span className="text-2xl font-bold text-foreground">
-                    {fmtEur(summary.totalEncaisse)}
-                  </span>
-                </div>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  réel compté, tous modes
-                </p>
-              </div>
-
-              <div className="rounded-xl border border-border bg-card p-4">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Écart total
-                </p>
-                <div className="mt-1">
-                  <span
-                    className={
-                      summary.totalEcart >= EPSILON
-                        ? 'text-2xl font-bold text-destructive'
-                        : 'text-2xl font-bold text-foreground'
-                    }
-                  >
-                    {fmtEcart(summary.totalEcart)}
-                  </span>
-                </div>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  cumul des écarts de paiement
-                </p>
-              </div>
-
-              <div className="rounded-xl border border-border bg-card p-4">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Écart de fond
-                </p>
-                <div className="mt-1">
-                  <span
-                    className={
-                      Math.abs(summary.totalFundEcart) >= EPSILON
-                        ? 'text-2xl font-bold text-destructive'
-                        : 'text-2xl font-bold text-foreground'
-                    }
-                  >
-                    {fmtEcart(summary.totalFundEcart)}
-                  </span>
-                </div>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  cumul sur le fond de caisse
-                </p>
-              </div>
-            </div>
-
-            {/* Tableau jour par jour */}
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card">
-              <div className="no-scrollbar min-h-0 flex-1 overflow-auto">
-                <table className="w-full text-sm">
-                  <thead className="sticky top-0 z-10">
-                    <tr className="border-b border-border bg-muted">
-                      <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">
-                        Jour
-                      </th>
-                      <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
-                        Feuilles
-                      </th>
-                      <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground">
-                        Encaissé
-                      </th>
-                      <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground">
-                        Écart
-                      </th>
-                      <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">
-                        Fond
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {dayNums.map((day) => {
-                      const d = byDay.get(day)
-                      const hasData = !!d
-                      const dayName =
-                        DAY_NAMES_SHORT[new Date(year, month - 1, day).getDay()]
-                      const date = `${year}-${mm}-${String(day).padStart(2, '0')}`
-                      const ecartOff = d ? d.ecartTotal >= EPSILON : false
-                      const fundOff = d ? Math.abs(d.fundEcart) >= EPSILON : false
-                      return (
-                        <tr
-                          key={day}
-                          className={`border-b border-border/50 ${
-                            hasData ? '' : 'bg-muted/20'
-                          }`}
-                        >
-                          <td
-                            className={`whitespace-nowrap px-3 py-2 text-xs font-medium ${
-                              hasData ? 'text-foreground' : 'text-muted-foreground'
-                            }`}
-                          >
-                            <Link
-                              to="/caisse"
-                              search={{ date }}
-                              className="hover:text-primary hover:underline"
-                            >
-                              {dayName} {day}
-                            </Link>
-                          </td>
-                          {hasData ? (
-                            <>
-                              <td className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums">
-                                {fmtInt(d.sheets)}
-                              </td>
-                              <td className="whitespace-nowrap px-2 py-2 text-right text-xs font-medium tabular-nums text-foreground">
-                                {fmtEur(d.encaisse)}
-                              </td>
-                              <td
-                                className={`whitespace-nowrap px-2 py-2 text-right text-xs tabular-nums ${
-                                  ecartOff ? 'text-destructive' : 'text-muted-foreground'
-                                }`}
-                              >
-                                {fmtEur(d.ecartTotal)}
-                              </td>
-                              <td
-                                className={`whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums ${
-                                  fundOff ? 'text-destructive' : 'text-muted-foreground'
-                                }`}
-                              >
-                                {fmtEcart(d.fundEcart)}
-                              </td>
-                            </>
-                          ) : (
-                            <>
-                              <td className="px-2 py-2 text-center text-xs text-muted-foreground/50">
-                                —
-                              </td>
-                              <td className="px-2 py-2 text-right text-xs text-muted-foreground/50">
-                                —
-                              </td>
-                              <td className="px-2 py-2 text-right text-xs text-muted-foreground/50">
-                                —
-                              </td>
-                              <td className="px-3 py-2 text-right text-xs text-muted-foreground/50">
-                                —
-                              </td>
-                            </>
-                          )}
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Graphiques */}
-            <div className="grid shrink-0 grid-cols-1 gap-4 lg:grid-cols-2">
-              <KpiLineChart
-                title="Encaissé par jour"
-                data={chartData}
-                xKey="jour"
-                realKey="encaisse"
-                realName="Encaissé"
-                realDotRadius={2}
-                yTickFormatter={(v) =>
-                  v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)
-                }
-                tooltipFormatter={fmtEur}
-              />
-              <KpiLineChart
-                title="Écart par jour"
-                data={chartData}
-                xKey="jour"
-                realKey="ecart"
-                realName="Écart"
-                realDotRadius={2}
-                tooltipFormatter={fmtEcart}
-              />
-            </div>
-          </>
-        )}
-      </div>
-    </PageContainer>
+        <KpiLineChart
+          title="Écart par jour"
+          data={chartData}
+          xKey="jour"
+          realKey="ecart"
+          realName="Écart"
+          realDotRadius={2}
+          tooltipFormatter={fmtEcart}
+        />
+      </AnalytiqueCharts>
+    </AnalytiqueShell>
   )
 }

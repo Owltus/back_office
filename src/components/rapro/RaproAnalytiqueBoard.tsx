@@ -4,11 +4,15 @@ import { useNavigate } from '@tanstack/react-router'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 
-import { PageHeader } from '#/components/shared/PageHeader.tsx'
-import { StepNav } from '#/components/shared/StepNav.tsx'
-import { useStepNavKeys } from '#/components/shared/useStepNavKeys.ts'
-import { BoardSkeleton } from '#/components/repjour/BoardSkeleton.tsx'
-import { KpiLineChart } from '#/components/repjour/charts/KpiLineChart.tsx'
+import { AnalytiqueShell } from '#/components/analytique/AnalytiqueShell.tsx'
+import {
+  AnalytiqueCardsGrid,
+  StatCard,
+} from '#/components/analytique/AnalytiqueCards.tsx'
+import { AnalytiqueTable } from '#/components/analytique/AnalytiqueTable.tsx'
+import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
+import { YearNav } from '#/components/analytique/YearNav.tsx'
+import { KpiLineChart } from '#/components/analytique/KpiLineChart.tsx'
 import { fetchOldestDay } from '#/lib/rapro/service.ts'
 import {
   fetchStatusCountsByRange,
@@ -17,7 +21,7 @@ import {
 } from '#/lib/rapro/monthly.ts'
 
 /*
- * Récap ménage ANNUEL — harmonisé sur le gabarit analytique (repjour / PDJ).
+ * Récap ménage ANNUEL — harmonisé sur le socle analytique partagé (repjour / PDJ).
  * Vue année : sélecteur d'année, 4 cartes de synthèse, tableau mois par mois
  * (nettoyées / refus / no-show, clic → détail du mois) et deux graphiques. Un
  * fetch borné par mois (12 lectures mises en cache). Aucune écriture.
@@ -108,178 +112,117 @@ export function RaproAnalytiqueBoard() {
     [totals, year],
   )
 
-  const minYear = years[0] ?? currentYear
-  const maxYear = years[years.length - 1] ?? currentYear
-  const prevYearDisabled = year <= minYear
-  const nextYearDisabled = year >= maxYear
-  const goPrevYear = () => {
-    if (year > minYear) setYear((y) => y - 1)
-  }
-  const goNextYear = () => {
-    if (year < maxYear) setYear((y) => y + 1)
-  }
-  useStepNavKeys({
-    onPrev: goPrevYear,
-    onNext: goNextYear,
-    onToday: () => setYear(currentYear),
-    prevDisabled: prevYearDisabled,
-    nextDisabled: nextYearDisabled,
-  })
-
   return (
-    <div className="mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col gap-6">
-      <PageHeader
-        title="Analytique"
-        actions={
-          <StepNav
-            onPrev={goPrevYear}
-            onNext={goNextYear}
-            prevLabel="Année précédente"
-            nextLabel="Année suivante"
-            prevDisabled={prevYearDisabled}
-            nextDisabled={nextYearDisabled}
-          >
-            <span className="w-12 text-center text-sm font-medium tabular-nums">
-              {year}
-            </span>
-          </StepNav>
+    <AnalytiqueShell
+      title="Analytique"
+      actions={
+        <YearNav
+          year={year}
+          setYear={setYear}
+          years={years}
+          currentYear={currentYear}
+        />
+      }
+      loading={loading}
+      skeleton={{ cols: 3, charts: 2 }}
+    >
+      {/* Synthèse annuelle */}
+      <AnalytiqueCardsGrid>
+        <StatCard label="Nettoyées sur l'année" value={yearNettoyee} />
+        <StatCard label="Moyenne par mois" value={avgNettoyee} />
+        <StatCard label="Refus sur l'année" value={yearRefus} />
+        <StatCard label="No-shows sur l'année" value={yearNoshow} />
+      </AnalytiqueCardsGrid>
+
+      {/* Tableau mois par mois (clic = détail du mois) */}
+      <AnalytiqueTable
+        head={
+          <tr className="border-b border-border bg-muted">
+            <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">
+              Mois
+            </th>
+            <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground">
+              Nettoyées
+            </th>
+            <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground">
+              Refus
+            </th>
+            <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground">
+              No-show
+            </th>
+          </tr>
         }
-      />
+      >
+        <tbody>
+          {MONTHS.map((m, i) => {
+            const t = totals[i]
+            const future = isFutureMonth(m)
+            return (
+              <tr
+                key={m}
+                onClick={() =>
+                  navigate({
+                    to: '/rapro/analytique/$year/$month',
+                    params: { year: String(year), month: String(m) },
+                  })
+                }
+                className={`cursor-pointer border-b border-border/50 transition-colors hover:bg-accent/40 ${
+                  future ? 'opacity-40' : ''
+                }`}
+              >
+                <td className="whitespace-nowrap px-4 py-2 text-xs font-medium text-foreground">
+                  {monthLabel(year, m)}
+                </td>
+                <td className="whitespace-nowrap px-3 py-2 text-center text-xs font-medium tabular-nums">
+                  {t.nettoyee}
+                </td>
+                <td className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums text-muted-foreground">
+                  {t.refus}
+                </td>
+                <td className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums text-muted-foreground">
+                  {t.noshow}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+        <tfoot>
+          <tr className="border-t border-border bg-muted/50 font-medium">
+            <td className="px-4 py-2 text-xs">Total {year}</td>
+            <td className="px-3 py-2 text-center text-xs tabular-nums">
+              {yearNettoyee}
+            </td>
+            <td className="px-3 py-2 text-center text-xs tabular-nums">
+              {yearRefus}
+            </td>
+            <td className="px-3 py-2 text-center text-xs tabular-nums">
+              {yearNoshow}
+            </td>
+          </tr>
+        </tfoot>
+      </AnalytiqueTable>
 
-      {loading ? (
-        <BoardSkeleton rows={12} />
-      ) : (
-        <>
-          {/* Synthèse annuelle */}
-          <div className="grid shrink-0 grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="rounded-xl border border-border bg-card p-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Nettoyées sur l'année
-              </p>
-              <span className="mt-1 block text-2xl font-bold tabular-nums text-foreground">
-                {yearNettoyee}
-              </span>
-            </div>
-            <div className="rounded-xl border border-border bg-card p-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Moyenne par mois
-              </p>
-              <span className="mt-1 block text-2xl font-bold tabular-nums text-foreground">
-                {avgNettoyee}
-              </span>
-            </div>
-            <div className="rounded-xl border border-border bg-card p-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Refus sur l'année
-              </p>
-              <span className="mt-1 block text-2xl font-bold tabular-nums text-foreground">
-                {yearRefus}
-              </span>
-            </div>
-            <div className="rounded-xl border border-border bg-card p-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                No-shows sur l'année
-              </p>
-              <span className="mt-1 block text-2xl font-bold tabular-nums text-foreground">
-                {yearNoshow}
-              </span>
-            </div>
-          </div>
-
-          {/* Tableau mois par mois (clic = détail du mois) */}
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card">
-            <div className="no-scrollbar min-h-0 flex-1 overflow-auto">
-              <table className="w-full text-sm">
-                <thead className="sticky top-0 z-10">
-                  <tr className="border-b border-border bg-muted">
-                    <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">
-                      Mois
-                    </th>
-                    <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground">
-                      Nettoyées
-                    </th>
-                    <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground">
-                      Refus
-                    </th>
-                    <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground">
-                      No-show
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {MONTHS.map((m, i) => {
-                    const t = totals[i]
-                    const future = isFutureMonth(m)
-                    return (
-                      <tr
-                        key={m}
-                        onClick={() =>
-                          navigate({
-                            to: '/rapro/analytique/$year/$month',
-                            params: { year: String(year), month: String(m) },
-                          })
-                        }
-                        className={`cursor-pointer border-b border-border/50 transition-colors hover:bg-accent/40 ${
-                          future ? 'opacity-40' : ''
-                        }`}
-                      >
-                        <td className="whitespace-nowrap px-4 py-2 text-xs font-medium text-foreground">
-                          {monthLabel(year, m)}
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-2 text-center text-xs font-medium tabular-nums">
-                          {t.nettoyee}
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums text-muted-foreground">
-                          {t.refus}
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums text-muted-foreground">
-                          {t.noshow}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t border-border bg-muted/50 font-medium">
-                    <td className="px-4 py-2 text-xs">Total {year}</td>
-                    <td className="px-3 py-2 text-center text-xs tabular-nums">
-                      {yearNettoyee}
-                    </td>
-                    <td className="px-3 py-2 text-center text-xs tabular-nums">
-                      {yearRefus}
-                    </td>
-                    <td className="px-3 py-2 text-center text-xs tabular-nums">
-                      {yearNoshow}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </div>
-
-          {/* Graphiques */}
-          <div className="grid shrink-0 grid-cols-1 gap-4 lg:grid-cols-2">
-            <KpiLineChart
-              title="Chambres nettoyées par mois"
-              data={chartData}
-              xKey="mois"
-              realKey="nettoyee"
-              realName="Nettoyées"
-              tooltipFormatter={(v) => String(v)}
-            />
-            <KpiLineChart
-              title="Refus et no-shows par mois"
-              data={chartData}
-              xKey="mois"
-              realKey="refus"
-              projKey="noshow"
-              realName="Refus"
-              projName="No-show"
-              tooltipFormatter={(v) => String(v)}
-            />
-          </div>
-        </>
-      )}
-    </div>
+      {/* Graphiques */}
+      <AnalytiqueCharts>
+        <KpiLineChart
+          title="Chambres nettoyées par mois"
+          data={chartData}
+          xKey="mois"
+          realKey="nettoyee"
+          realName="Nettoyées"
+          tooltipFormatter={(v) => String(v)}
+        />
+        <KpiLineChart
+          title="Refus et no-shows par mois"
+          data={chartData}
+          xKey="mois"
+          realKey="refus"
+          projKey="noshow"
+          realName="Refus"
+          projName="No-show"
+          tooltipFormatter={(v) => String(v)}
+        />
+      </AnalytiqueCharts>
+    </AnalytiqueShell>
   )
 }
