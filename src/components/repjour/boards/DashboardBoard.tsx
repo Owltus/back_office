@@ -150,11 +150,11 @@ export function DashboardBoard() {
     queryKey: ['repjour', 'report', selectedDate],
     queryFn: () => fetchReportByDate(selectedDate),
   })
-  const { data: budget } = useQuery({
+  const { data: budget, isPending: budgetPending } = useQuery({
     queryKey: ['repjour', 'budget', year, month],
     queryFn: () => fetchBudget(year, month),
   })
-  const { data: forecastMonthTotal } = useQuery({
+  const { data: forecastMonthTotal, isPending: forecastPending } = useQuery({
     queryKey: ['repjour', 'forecast-month', year, month],
     queryFn: () => fetchForecastMonthTotal(year, month),
   })
@@ -178,7 +178,15 @@ export function DashboardBoard() {
   const latestMTD = report ? null : (latestOfMonth ?? null)
   // Une erreur réseau laisse `report` à `undefined` : on rend l'état vide
   // plutôt que de faire tourner le squelette indéfiniment.
-  const loading = reportPending && !reportError
+  //
+  // La porte attend le rapport MAIS AUSSI le budget et le forecast : le choix de
+  // branche (vide / partielle / complète) en dépend. Les gater seulement sur le
+  // rapport laissait passer un rendu intermédiaire — flash « Aucune donnée » sur
+  // un jour partiel (budget/forecast arrivés après), ou trou blanc sur un jour
+  // complet (l'écart, qui a besoin du budget, encore `null`). Requêtes parallèles
+  // + cache 60 s : à la revisite d'un mois, aucune n'est `pending`, pas de flash.
+  const loading =
+    (reportPending || budgetPending || forecastPending) && !reportError
 
   // `useQuery` n'écrit rien dans la console : sans cela une panne réseau
   // deviendrait un écran vide muet, alors que l'ancien code la journalisait.

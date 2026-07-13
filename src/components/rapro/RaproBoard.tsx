@@ -173,12 +173,17 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   // Requête PDJ résolue mais vide → occupation indisponible ce jour (≠ chargement).
   const noOccupancy = pdjRows !== undefined && occupied.size === 0
 
-  // Gate d'affichage : tant que l'occupation (PDJ) OU la feuille du jour n'est pas
-  // résolue, cartes et grille afficheraient des valeurs par défaut puis se
-  // corrigeraient (flash staggered). On rend un squelette-reflet à la place. Seules
-  // ces deux sources conditionnent la première peinture ; les fenêtres de report,
-  // le contrôle comptable et le plus ancien jour s'hydratent après, sans bloquer.
-  const loading = pdjRows === undefined || sheet === undefined
+  // Gate d'affichage : tant que l'occupation (PDJ), la feuille du jour OU les
+  // statuts ménage (`day`) ne sont pas résolus, cartes et grille afficheraient des
+  // valeurs par défaut puis se corrigeraient (flash staggered). Sans `day`, la
+  // grille se peignait « toutes chambres non nettoyées » (couleurs + compteurs
+  // faux) une fraction de seconde avant de se recolorer — c'était le défaut le plus
+  // visible. On rend un squelette-reflet à la place. La fenêtre de report (jusqu'à
+  // 7 jours) ne bloque PAS ici — trop coûteux au premier rendu ; elle est gérée
+  // plus bas par une garde ciblée sur l'état vide. Le contrôle comptable et le plus
+  // ancien jour s'hydratent après, sans bloquer.
+  const loading =
+    pdjRows === undefined || sheet === undefined || day === undefined
 
   // Exports PMS manquants. Calculés seulement une fois les DEUX requêtes
   // résolues : pendant le chargement, tout paraîtrait manquant.
@@ -241,8 +246,16 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   const rec = reconcile(statuses, dueSet)
   const reconciled = isReconciled(rec)
   const hasDue = dueSet.size > 0
-  // État vide seulement si aucune occupation ce jour ET aucune reportée.
-  const showEmptyState = noOccupancy && carried.size === 0
+  // Fenêtre de report résolue ? Tant qu'une requête de la fenêtre est en vol,
+  // `carried` est incomplet : afficher « Aucune donnée » sur un jour sans
+  // occupation directe mais À REPORTS serait un faux vide, effacé une fraction de
+  // seconde après. On attend donc la fenêtre AVANT de conclure au vide (la grille,
+  // elle, n'est pas bloquée : elle se colore au fur et à mesure).
+  const windowResolved =
+    raproWindow.every((q) => !q.isPending) && pdjWindow.every((q) => !q.isPending)
+  // État vide seulement si aucune occupation ce jour ET aucune reportée (fenêtre
+  // résolue).
+  const showEmptyState = noOccupancy && windowResolved && carried.size === 0
   /* Sans la moindre donnée, aucun compteur ne veut rien dire : les six cards
      affichent « — ». Un zéro se lirait « rien à faire », alors qu'il faut lire
      « rien de connu » — la nuance sépare une journée réglée d'un import oublié. */
