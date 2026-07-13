@@ -414,33 +414,11 @@ export function DashboardBoard() {
           title={displayDate}
           actions={
             <>
-              {/* Groupe « actions de page » : vue analytique + impression. */}
+              {/* Groupe « actions de page » : aide + vue analytique + impression. */}
               <ButtonGroup>
-                {/* Accès à la vue analytique — remplace le lien de l'ancienne
-                    sous-nav repjour (supprimée). */}
-                <Tip label="Vue analytique">
-                  <Button asChild variant="outline" size="icon-sm">
-                    <Link to="/repjour/analytique" aria-label="Vue analytique">
-                      <LineChart />
-                    </Link>
-                  </Button>
-                </Tip>
-                {/* Impression : toujours présente, désactivée tant qu'il n'y a
-                    rien à imprimer (jour vide) — l'infobulle porte la raison. */}
-                <PrintButton
-                  onClick={handleGeneratePdf}
-                  iconOnly
-                  disabled={!canPrint || pdfBusy}
-                  tipLabel={
-                    canPrint
-                      ? 'Imprimer / PDF'
-                      : 'Aucune donnée à imprimer pour ce jour'
-                  }
-                />
                 {/* Aide « détail des calculs » : bascule le mode détaillé.
                     Présente seulement avec un rapport complet (sinon rien à
-                    détailler). Déplacée ici depuis un bouton flottant sur la
-                    carte KPI. */}
+                    détailler). Placée en tête du groupe (tout à gauche). */}
                 {hasFullReport ? (
                   <Tip
                     label={
@@ -476,6 +454,27 @@ export function DashboardBoard() {
                     </Button>
                   </Tip>
                 ) : null}
+                {/* Accès à la vue analytique — remplace le lien de l'ancienne
+                    sous-nav repjour (supprimée). */}
+                <Tip label="Vue analytique">
+                  <Button asChild variant="outline" size="icon-sm">
+                    <Link to="/repjour/analytique" aria-label="Vue analytique">
+                      <LineChart />
+                    </Link>
+                  </Button>
+                </Tip>
+                {/* Impression : toujours présente, désactivée tant qu'il n'y a
+                    rien à imprimer (jour vide) — l'infobulle porte la raison. */}
+                <PrintButton
+                  onClick={handleGeneratePdf}
+                  iconOnly
+                  disabled={!canPrint || pdfBusy}
+                  tipLabel={
+                    canPrint
+                      ? 'Imprimer / PDF'
+                      : 'Aucune donnée à imprimer pour ce jour'
+                  }
+                />
               </ButtonGroup>
               {/* Groupe « navigation temporelle », collé au bord droit. */}
               <StepNav
