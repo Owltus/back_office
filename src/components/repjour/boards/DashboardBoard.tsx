@@ -5,6 +5,7 @@ import {
   HelpCircle,
   Image as ImageIcon,
   LineChart,
+  Send,
   Settings,
 } from 'lucide-react'
 
@@ -30,6 +31,7 @@ import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { supabase } from '#/lib/supabase.ts'
 import { businessNow } from '#/lib/businessDay.ts'
 import { captureTableImage, sendReport } from '#/lib/repjour/email.ts'
+import { sendReportViaServer } from '#/lib/repjour/sendServer.ts'
 import {
   fetchAvailableDates,
   fetchBudget,
@@ -43,7 +45,7 @@ import { computeEcart } from '#/lib/repjour/calc/ecart.ts'
 import { printRepjourReport } from '#/lib/repjour/pdf.ts'
 import type { RepjourPdfData } from '#/lib/repjour/pdf.ts'
 import { DAY_NAMES, MONTHS, TOTAL_ROOMS } from '#/lib/repjour/constants.ts'
-import type { KPIBlock } from '#/lib/repjour/types.ts'
+import type { KPIBlock, MonthBudget } from '#/lib/repjour/types.ts'
 
 /*
  * Board du dashboard journalier — porté de la source DashboardPage.
@@ -109,9 +111,18 @@ export function DashboardBoard() {
   // si son rapport existe, ou l'invite d'import sinon. (Cf. getImportDayStr.)
   const [selectedDate, setSelectedDate] = useState(getImportDayStr)
   const [sending, setSending] = useState(false)
+  // Flux dev (envoi serveur Resend) : état d'envoi + message de retour transitoire.
+  const [serverSending, setServerSending] = useState(false)
+  const [serverNote, setServerNote] = useState<string | null>(null)
   const [showRecipients, setShowRecipients] = useState(false)
   const [pdfBusy, setPdfBusy] = useState(false)
   const [printBlocked, setPrintBlocked] = useState(false)
+
+  useEffect(() => {
+    if (!serverNote) return
+    const t = setTimeout(() => setServerNote(null), 15000)
+    return () => clearTimeout(t)
+  }, [serverNote])
 
   const { role } = useAuth()
   const queryClient = useQueryClient()
@@ -300,37 +311,74 @@ export function DashboardBoard() {
   const canPrint =
     !!budget && ((!!report && !!rj && !!rmtd && !!pm && !!ecart) || !!hasPartialData)
 
+  // Données du document PDF — partagées par la fonction Imprimer ET l'envoi
+  // serveur (le rapport joint est exactement le PDF imprimé). Variante complète
+  // si le jour est réalisé, partielle (prévision seule) sinon.
+  function buildPdfData(budgetSafe: MonthBudget): RepjourPdfData {
+    return report && rj && rmtd && pm && ecart
+      ? {
+          titleDate: displayDate,
+          realiseJour: rj,
+          realiseMTD: rmtd,
+          projeteMois: pm,
+          budget: budgetSafe,
+          ecart,
+          pickup,
+          alerts: report.alerts || [],
+          importedAt: report.imported_at,
+        }
+      : {
+          titleDate: displayDate,
+          realiseJour: null,
+          realiseMTD: null,
+          projeteMois: fcMoisKPI,
+          budget: budgetSafe,
+          ecart: fcEcart,
+        }
+  }
+
   async function handleGeneratePdf() {
     if (!budget) return
     setPdfBusy(true)
     try {
-      const data: RepjourPdfData =
-        report && rj && rmtd && pm && ecart
-          ? {
-              titleDate: displayDate,
-              realiseJour: rj,
-              realiseMTD: rmtd,
-              projeteMois: pm,
-              budget,
-              ecart,
-              pickup,
-              alerts: report.alerts || [],
-              importedAt: report.imported_at,
-            }
-          : {
-              titleDate: displayDate,
-              realiseJour: null,
-              realiseMTD: null,
-              projeteMois: fcMoisKPI,
-              budget,
-              ecart: fcEcart,
-            }
+      const data = buildPdfData(budget)
       const [yr, mo, da] = selectedDate.split('-')
       await printRepjourReport(data, `Rapport_${da}-${mo}-${yr}`)
     } catch {
       // Silencieux : l'impression est un confort, pas un flux critique.
     } finally {
       setPdfBusy(false)
+    }
+  }
+
+  // --- Envoi serveur (dev, admin-only) : PDF joint + corps HTML via Resend ----
+  async function handleSendServer() {
+    if (!budget || !report || !rj || !rmtd || !pm || !ecart) return
+    setServerSending(true)
+    setServerNote(null)
+    try {
+      const [yr, mo, da] = selectedDate.split('-')
+      const result = await sendReportViaServer({
+        emailData: {
+          realiseJour: rj,
+          realiseMTD: rmtd,
+          projeteMois: pm,
+          budget,
+          ecart,
+          dayOfMonth: report.day_of_month,
+          month: report.month,
+          year: report.year,
+        },
+        pdfData: buildPdfData(budget),
+        pdfTitle: `Rapport_${da}-${mo}-${yr}`,
+      })
+      setServerNote(result.message)
+    } catch (err) {
+      setServerNote(
+        `Erreur inattendue : ${err instanceof Error ? err.message : String(err)}`,
+      )
+    } finally {
+      setServerSending(false)
     }
   }
 
@@ -563,6 +611,33 @@ export function DashboardBoard() {
                     </Tip>
                   )}
                 </ButtonGroup>
+
+                {/* Flux DEV (admin-only) : envoi serveur via Resend — PDF en
+                    pièce jointe + corps HTML, en un clic. Séparé et en pointillés
+                    tant qu'il n'est pas stabilisé (Edge Function à déployer,
+                    domaine d'expéditeur à vérifier). N'altère pas l'envoi
+                    existant au-dessus. */}
+                {isAdmin && (
+                  <div className="flex flex-col gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full border-dashed"
+                      disabled={serverSending}
+                      onClick={handleSendServer}
+                    >
+                      <Send />
+                      {serverSending
+                        ? 'Envoi en cours…'
+                        : 'Envoyer via serveur (dev)'}
+                    </Button>
+                    {serverNote && (
+                      <p className="text-xs leading-relaxed text-muted-foreground">
+                        {serverNote}
+                      </p>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </>
