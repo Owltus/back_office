@@ -101,7 +101,7 @@ export function CaisseAnalytiqueMoisBoard({
       title={`${monthLabel} ${year}`}
       actions={<AnalytiqueBackButton />}
       loading={loading}
-      skeleton={{ cols: 4, charts: 2 }}
+      skeleton={{ cols: 4, charts: 2, rows: new Date(year, month, 0).getDate() }}
     >
       {/* Synthèse du mois */}
       <AnalytiqueCardsGrid>

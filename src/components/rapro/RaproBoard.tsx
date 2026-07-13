@@ -28,7 +28,6 @@ import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { PrintBlockedDialog } from '#/components/shared/PrintBlockedDialog.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
 import { Skeleton } from '#/components/ui/skeleton.tsx'
-import { SkeletonBlock } from '#/components/shared/skeleton/SkeletonBlock.tsx'
 import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { StepNav } from '#/components/shared/StepNav.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
@@ -567,9 +566,25 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
               </div>
             ))}
           </div>
+          {/* Grille des étages : même structure que le vrai (`rapro-floor` >
+              en-tête + `rapro-rooms`), une pastille par chambre. Les numéros de
+              chambre sont invariants (seule la COULEUR de statut change au
+              chargement) : reproduire la vraie grille donne une hauteur identique
+              au pixel, quel que soit l'étage (13/14/14/14/14/11 chambres). */}
           <div className="rapro-floors" aria-hidden="true">
-            {FLOORS.map(({ floor }) => (
-              <SkeletonBlock key={floor} className="h-72 rounded-xl" />
+            {FLOORS.map(({ floor, rooms }) => (
+              <div key={floor} className="rapro-floor">
+                <div className="rapro-floor-head">
+                  <span className="rapro-floor-title">Étage {floor}</span>
+                </div>
+                <div className="rapro-rooms">
+                  {rooms.map((room) => (
+                    <div key={room} className="rapro-room">
+                      <Skeleton className="mx-auto h-4 w-7" />
+                    </div>
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         </>

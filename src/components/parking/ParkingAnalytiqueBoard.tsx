@@ -120,7 +120,7 @@ export function ParkingAnalytiqueBoard() {
         />
       }
       loading={loading}
-      skeleton={{ cols: 6, charts: 2 }}
+      skeleton={{ cols: 6, charts: 2, rows: 12 }}
     >
       {/* Synthèse annuelle */}
       <AnalytiqueCardsGrid>

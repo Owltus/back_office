@@ -7,8 +7,7 @@ import { LockBadge } from '#/components/shared/LockBadge.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { PrintBlockedDialog } from '#/components/shared/PrintBlockedDialog.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
-import { SkeletonBlock } from '#/components/shared/skeleton/SkeletonBlock.tsx'
-import { SkeletonTable } from '#/components/shared/skeleton/SkeletonTable.tsx'
+import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { StepNav } from '#/components/shared/StepNav.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
@@ -640,20 +639,93 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
       )}
 
       {!ready ? (
-        // Squelette-reflet pendant le chargement : approxime le tableau des
-        // montants, la grille des dénominations et la zone commentaires. Rendre
-        // le corps seulement une fois `ready` supprime le flash « valeurs vides
-        // → hydratées ». En-tête et LockBadge restent gérés au-dessus.
+        // Squelette-reflet pendant le chargement : reprend la VRAIE ossature du
+        // tableau des montants (en-têtes invariants + `cols`, qui inclut la
+        // colonne « web » du soir), la vraie grille des dénominations et la carte
+        // commentaires — mêmes paddings, mêmes hauteurs d'input, même 500 € pleine
+        // largeur sur mobile — pour ne rien décaler. Rendre le corps seulement une
+        // fois `ready` supprime le flash « valeurs vides → hydratées ». En-tête et
+        // LockBadge restent gérés au-dessus.
         <>
-          <SkeletonTable cols={3} rows={4} bounded={false} />
-          <div className="rounded-xl border border-border bg-card p-3">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-              {Array.from({ length: 15 }).map((_, i) => (
-                <SkeletonBlock key={i} className="h-24" />
+          <div
+            className="caisse-table overflow-x-auto rounded-xl border border-border bg-card"
+            aria-hidden="true"
+          >
+            <table className="w-full table-fixed border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-border text-xs uppercase text-muted-foreground">
+                  <th className="w-32 px-3 py-1.5 text-left font-medium">
+                    Source
+                  </th>
+                  {cols.map((c) => (
+                    <th key={c} className="px-3 py-1.5 text-center font-medium">
+                      {c === 'web' ? (
+                        <>
+                          <span className="max-sm:hidden">{ECART_LABELS.web}</span>
+                          <span className="sm:hidden">Adyen</span>
+                        </>
+                      ) : (
+                        ECART_LABELS[c]
+                      )}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: 3 }).map((_, r) => (
+                  <tr key={r} className="border-b border-border/60">
+                    <td className="px-3 py-2">
+                      <Skeleton className="h-4 w-24" />
+                    </td>
+                    {cols.map((c) => (
+                      <td key={c} className="px-2 py-1">
+                        <Skeleton className="h-9 w-full rounded-md" />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+                <tr className="border-t border-border bg-muted/30">
+                  <td className="px-3 py-1.5">
+                    <Skeleton className="h-4 w-16" />
+                  </td>
+                  {cols.map((c) => (
+                    <td key={c} className="px-3 py-1.5">
+                      <Skeleton className="ml-auto h-4 w-12" />
+                    </td>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div
+            className="rounded-xl border border-border bg-card p-3"
+            aria-hidden="true"
+          >
+            <div className="caisse-denoms grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-flow-col lg:grid-cols-5 lg:grid-rows-3">
+              {DENOMINATIONS.map((d) => (
+                <Skeleton
+                  key={d.key}
+                  className={cn(
+                    'h-[5.5rem] rounded-lg',
+                    d.key === 'cnt_500' && 'col-span-2 sm:col-span-1',
+                  )}
+                />
               ))}
             </div>
+            <div className="mt-2 flex items-center justify-between">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-4 w-24" />
+            </div>
           </div>
-          <SkeletonBlock className="h-24" />
+
+          <div
+            className="rounded-xl border border-border bg-card p-3"
+            aria-hidden="true"
+          >
+            <Skeleton className="mb-2 h-4 w-28" />
+            <Skeleton className="h-16 w-full rounded-md" />
+          </div>
         </>
       ) : (
         <>

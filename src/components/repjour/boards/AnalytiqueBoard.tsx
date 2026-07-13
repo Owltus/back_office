@@ -154,7 +154,7 @@ export function AnalytiqueBoard() {
         />
       }
       loading={loading}
-      skeleton={{ cols: 7, charts: 2 }}
+      skeleton={{ cols: 7, charts: 2, rows: 12 }}
     >
       {/* Synthèse annuelle */}
       <AnalytiqueCardsGrid>

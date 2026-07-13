@@ -29,7 +29,13 @@ export function AnalytiqueShell({
   title: ReactNode
   actions?: ReactNode
   loading?: boolean
-  skeleton?: { cols?: number; charts?: number; rows?: number }
+  skeleton?: {
+    cols?: number
+    charts?: number
+    rows?: number
+    cards?: number
+    cardLines?: number
+  }
   children: ReactNode
 }) {
   return (

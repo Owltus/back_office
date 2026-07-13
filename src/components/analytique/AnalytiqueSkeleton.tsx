@@ -12,23 +12,35 @@ export function AnalytiqueSkeleton({
   cols = 5,
   charts = 2,
   rows = 10,
+  cards = 4,
+  cardLines = 3,
 }: {
   cols?: number
   charts?: number
   rows?: number
+  /** Nombre de cartes de synthèse. 0 = pas de rangée de cartes (ex. Rapro mensuel,
+   * qui n'affiche aucune carte — en dessiner 4 les faisait « disparaître » à
+   * l'arrivée des données). */
+  cards?: number
+  /** Lignes par carte : 3 (label + valeur + sous-texte, cas courant) ou 2 (label +
+   * valeur seule, ex. cartes Rapro). Évite qu'une carte squelette soit plus haute
+   * que la vraie. */
+  cardLines?: number
 }) {
   return (
     <>
-      {/* Cartes de synthèse */}
-      <div className="grid shrink-0 grid-cols-2 gap-3 sm:grid-cols-4" aria-hidden="true">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="rounded-xl border border-border bg-card p-4">
-            <Skeleton className="h-3 w-24" />
-            <Skeleton className="mt-2 h-7 w-20" />
-            <Skeleton className="mt-3 h-3 w-28" />
-          </div>
-        ))}
-      </div>
+      {/* Cartes de synthèse (masquées si `cards === 0`) */}
+      {cards > 0 && (
+        <div className="grid shrink-0 grid-cols-2 gap-3 sm:grid-cols-4" aria-hidden="true">
+          {Array.from({ length: cards }).map((_, i) => (
+            <div key={i} className="rounded-xl border border-border bg-card p-4">
+              <Skeleton className="h-3 w-24" />
+              <Skeleton className="mt-2 h-7 w-20" />
+              {cardLines >= 3 && <Skeleton className="mt-3 h-3 w-28" />}
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Tableau : reflet du bornage responsive d'AnalytiqueTable (naturel sous
           lg, borné à partir de lg). */}

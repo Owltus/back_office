@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
-import { SkeletonForm } from '#/components/shared/skeleton/SkeletonForm.tsx'
 import { PasswordInput } from '#/components/repjour/PasswordInput.tsx'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { supabase } from '#/lib/supabase.ts'
@@ -107,11 +106,12 @@ export function ProfilBoard() {
   if (!profile) {
     return (
       <PageContainer>
-        <div className="mx-auto w-full max-w-lg space-y-6">
-          <div
-            className="flex items-center gap-4 rounded-xl border border-border bg-card p-6"
-            aria-hidden="true"
-          >
+        <div
+          className="mx-auto w-full max-w-lg space-y-6"
+          aria-hidden="true"
+        >
+          {/* Identité */}
+          <div className="flex items-center gap-4 rounded-xl border border-border bg-card p-6">
             <Skeleton className="size-14 shrink-0 rounded-full" />
             <div className="min-w-0 flex-1 space-y-2">
               <Skeleton className="h-5 w-40" />
@@ -119,8 +119,37 @@ export function ProfilBoard() {
               <Skeleton className="h-4 w-20 rounded-full" />
             </div>
           </div>
-          <SkeletonForm fields={2} />
-          <SkeletonForm fields={1} />
+
+          {/* Informations personnelles : titre + Prénom / Nom */}
+          <div className="space-y-4 rounded-xl border border-border bg-card p-6">
+            <Skeleton className="h-4 w-44" />
+            <div className="grid grid-cols-2 gap-3">
+              {Array.from({ length: 2 }).map((_, i) => (
+                <div key={i} className="space-y-1">
+                  <Skeleton className="h-3 w-16" />
+                  <Skeleton className="h-9 w-full rounded-md" />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Mot de passe : titre + deux champs + rappel + 5 critères (grille 2 col) */}
+          <div className="space-y-4 rounded-xl border border-border bg-card p-6">
+            <Skeleton className="h-4 w-48" />
+            <div className="space-y-2">
+              <Skeleton className="h-9 w-full rounded-md" />
+              <Skeleton className="h-9 w-full rounded-md" />
+              <Skeleton className="h-3 w-52" />
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <Skeleton key={i} className="h-3 w-32" />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Bouton Enregistrer */}
+          <Skeleton className="h-11 w-full rounded-md" />
         </div>
       </PageContainer>
     )

@@ -124,7 +124,7 @@ export function RaproAnalytiqueBoard() {
         />
       }
       loading={loading}
-      skeleton={{ cols: 3, charts: 2 }}
+      skeleton={{ cols: 3, charts: 2, cardLines: 2, rows: 13 }}
     >
       {/* Synthèse annuelle */}
       <AnalytiqueCardsGrid>

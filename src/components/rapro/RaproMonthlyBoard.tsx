@@ -82,7 +82,12 @@ export function RaproMonthlyBoard({
         </>
       }
       loading={loading}
-      skeleton={{ cols: 3, charts: 1 }}
+      skeleton={{
+        cols: 3,
+        charts: 1,
+        cards: 0,
+        rows: new Date(year, month, 0).getDate(),
+      }}
     >
       {/* Tableau jour par jour */}
       <AnalytiqueTable

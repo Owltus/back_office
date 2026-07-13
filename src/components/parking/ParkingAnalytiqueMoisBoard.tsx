@@ -99,7 +99,7 @@ export function ParkingAnalytiqueMoisBoard({
       title={monthLabel}
       actions={<AnalytiqueBackButton />}
       loading={loading}
-      skeleton={{ cols: 4, charts: 2 }}
+      skeleton={{ cols: 4, charts: 2, rows: new Date(year, month, 0).getDate() }}
     >
       {/* Cartes du mois */}
       <AnalytiqueCardsGrid>

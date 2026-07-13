@@ -17,7 +17,6 @@ import {
 import { EmptyCanvas } from '#/components/shared/EmptyCanvas.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { Skeleton } from '#/components/ui/skeleton.tsx'
-import { SkeletonTable } from '#/components/shared/skeleton/SkeletonTable.tsx'
 import { PrintBlockedDialog } from '#/components/shared/PrintBlockedDialog.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
 import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
@@ -593,10 +592,21 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
 }
 
 /*
+ * Nombre de chambres par étage, dans l'ordre d'affichage, DÉRIVÉ de l'inventaire
+ * réel (ALL_ROOMS). Chaque étage a un compte inégal (13/14/14/14/14/11) : coder
+ * un `rows` fixe faisait grandir ou rétrécir chaque tableau à l'arrivée des
+ * données. On calcule ici la vraie hauteur de chaque étage.
+ */
+const FLOOR_ROOM_COUNTS = [
+  ...new Set(ALL_ROOMS.map((r) => Math.floor(r / 100))),
+].map((floor) => ALL_ROOMS.filter((r) => Math.floor(r / 100) === floor).length)
+
+/*
  * Squelette-reflet du corps pendant le chargement du jour : la rangée de 6 stats
- * puis les 6 tableaux par étage, dans la même grille `pdj-floors` que le contenu
- * réel — aucun saut de layout à l'arrivée des données. Purement décoratif ;
- * l'en-tête, lui, est déjà rendu au-dessus. */
+ * puis les 6 tableaux par étage. Les DEUX réutilisent le vrai markup (`pdj-stats`,
+ * `pdj-floor > table`) et donc le vrai CSS — mêmes paddings, mêmes hauteurs de
+ * ligne, même nombre de lignes par étage — pour ne rien décaler à l'arrivée des
+ * données. Purement décoratif ; l'en-tête, lui, est déjà rendu au-dessus. */
 function BoardSkeleton() {
   return (
     <>
@@ -613,9 +623,44 @@ function BoardSkeleton() {
           ))}
         </div>
       </div>
-      <div className="pdj-floors">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <SkeletonTable key={i} cols={4} rows={12} bounded={false} />
+      {/* Tableaux par étage : même structure que le vrai (`pdj-floor > table`),
+          en-têtes réels (invariants), et autant de lignes que de chambres. */}
+      <div className="pdj-floors" aria-hidden="true">
+        {FLOOR_ROOM_COUNTS.map((count, i) => (
+          <div key={i} className="pdj-floor">
+            <table>
+              <thead>
+                <tr>
+                  <th>Chambre</th>
+                  <th>Nom</th>
+                  <th className="pdj-c">Statut</th>
+                  <th className="pdj-c">Visites</th>
+                  <th className="pdj-c">Clients</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: count }).map((_, r) => (
+                  <tr key={r}>
+                    <td className="pdj-room">
+                      <Skeleton className="h-3 w-8" />
+                    </td>
+                    <td>
+                      <Skeleton className="h-3 w-24" />
+                    </td>
+                    <td className="pdj-c">
+                      <Skeleton className="mx-auto h-3 w-10" />
+                    </td>
+                    <td className="pdj-c">
+                      <Skeleton className="mx-auto h-3 w-6" />
+                    </td>
+                    <td className="pdj-c">
+                      <Skeleton className="mx-auto h-3 w-6" />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ))}
       </div>
     </>

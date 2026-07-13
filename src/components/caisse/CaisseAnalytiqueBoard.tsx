@@ -106,7 +106,7 @@ export function CaisseAnalytiqueBoard() {
         />
       }
       loading={loading}
-      skeleton={{ cols: 4, charts: 2 }}
+      skeleton={{ cols: 4, charts: 2, rows: 12 }}
     >
       {/* Synthèse annuelle */}
       <AnalytiqueCardsGrid>
