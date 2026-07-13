@@ -83,19 +83,51 @@ create table if not exists public.caisse_sheets (
 create index if not exists caisse_sheets_report_date_idx
   on public.caisse_sheets (report_date desc);
 
--- ---- Trigger updated_at (fonction DÉDIÉE, ne rien écraser d'existant) --------
-create or replace function public.caisse_set_updated_at()
+-- ---- Trigger d'estampillage SERVEUR (updated_at + identité + validation) -----
+-- SÉCURITÉ : validated_at, validated_by et created_by sont posés ICI, côté
+-- serveur, et JAMAIS acceptés du client. Sans cela, un super_utilisateur pouvait
+-- (a) post-dater `validated_at` pour que la fenêtre de grâce de 24 h ne se ferme
+-- jamais (verrou D1 contourné), et (b) signer une feuille sous l'UUID d'un tiers.
+-- Le trigger écrase toute valeur envoyée par le client → la policy temporelle
+-- ci-dessous redevient fiable, et la signature reflète l'appelant réel.
+create or replace function public.caisse_stamp()
 returns trigger language plpgsql as $$
 begin
-  new.updated_at = now();
+  new.updated_at := now();
+  if tg_op = 'INSERT' then
+    new.created_by := auth.uid();                     -- création figée à l'appelant
+    if new.status = 'validated' then
+      new.validated_at := now();                      -- horodatage SERVEUR
+      new.validated_by := auth.uid();                 -- signature = appelant réel
+    else
+      new.validated_at := null;
+      new.validated_by := null;
+    end if;
+  else -- UPDATE
+    new.created_by := old.created_by;                 -- created_by non réécrivable
+    if new.status = 'validated' then
+      if old.status is distinct from 'validated' then
+        new.validated_at := now();                    -- (re)validation → maintenant
+        new.validated_by := auth.uid();
+      else
+        new.validated_at := old.validated_at;         -- déjà validée : figée (pas de post-datage)
+        new.validated_by := old.validated_by;
+      end if;
+    else -- réouverture (retour en 'draft')
+      new.validated_at := null;
+      new.validated_by := null;
+    end if;
+  end if;
   return new;
 end;
 $$;
 
+-- Remplace l'ancien trigger updated_at seul (caisse_stamp() couvre updated_at).
 drop trigger if exists caisse_sheets_set_updated_at on public.caisse_sheets;
-create trigger caisse_sheets_set_updated_at
-  before update on public.caisse_sheets
-  for each row execute function public.caisse_set_updated_at();
+drop trigger if exists caisse_sheets_stamp on public.caisse_sheets;
+create trigger caisse_sheets_stamp
+  before insert or update on public.caisse_sheets
+  for each row execute function public.caisse_stamp();
 
 -- ---- RLS --------------------------------------------------------------------
 alter table public.caisse_sheets enable row level security;

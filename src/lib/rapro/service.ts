@@ -105,25 +105,22 @@ export async function saveComment(
   if (error) throw error
 }
 
-/** Clôture le jour (status validated + qui/quand). Crée la ligne au besoin.
- * Le commentaire, s'il est fourni, est écrit dans le même upsert → une seule
- * requête pour clôturer (pas de saveComment séparé). */
+/** Clôture le jour (status validated). Crée la ligne au besoin. Le commentaire,
+ * s'il est fourni, est écrit dans le même upsert → une seule requête pour clôturer
+ * (pas de saveComment séparé). `validated_at` et `validated_by` sont posés CÔTÉ
+ * SERVEUR par le trigger `rapro_sheets_stamp` (jamais par le client) — signature
+ * fiable, non falsifiable. */
 export async function validateSheet(
   reportDate: string,
-  userId: string,
   comment?: string,
 ): Promise<void> {
   const row: {
     report_date: string
     status: SheetStatus
-    validated_at: string
-    validated_by: string
     comment?: string
   } = {
     report_date: reportDate,
     status: 'validated',
-    validated_at: new Date().toISOString(),
-    validated_by: userId,
   }
   if (comment !== undefined) row.comment = comment
   const { error } = await supabase

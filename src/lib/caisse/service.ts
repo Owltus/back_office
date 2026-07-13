@@ -193,12 +193,13 @@ export async function upsertSheet(input: CaisseSheetInput): Promise<CaisseSheet>
   return toSheet(data as DbCaisseSheet)
 }
 
-/** Validation : pose status/validated_at/validated_by. Autorisé par la RLS car
- * `validated_at` était encore NULL au moment de l'UPDATE. */
-export async function validateSheet(id: string, userId: string): Promise<void> {
+/** Validation : passe la feuille en `validated`. `validated_at` et `validated_by`
+ * sont posés CÔTÉ SERVEUR par le trigger `caisse_stamp` (jamais par le client) —
+ * c'est ce qui rend le verrou 24 h infalsifiable et la signature fiable. */
+export async function validateSheet(id: string): Promise<void> {
   const { error } = await supabase
     .from(CAISSE_TABLE)
-    .update({ status: 'validated', validated_at: new Date().toISOString(), validated_by: userId })
+    .update({ status: 'validated' })
     .eq('id', id)
   if (error) throw error
 }

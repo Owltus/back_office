@@ -368,7 +368,8 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   function handleClose() {
     if (!user) return
     // Commentaire écrit dans le même upsert que la clôture (une seule requête).
-    refreshSheet(() => validateSheet(selectedDate, user.id, comment))
+    // Le signataire (validated_by) est posé côté serveur par le trigger.
+    refreshSheet(() => validateSheet(selectedDate, comment))
   }
   function handleReopen() {
     refreshSheet(() => reopenSheet(selectedDate))

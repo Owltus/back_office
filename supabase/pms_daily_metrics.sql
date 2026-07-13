@@ -42,19 +42,25 @@ create table if not exists public.pms_daily_metrics (
 create index if not exists pms_daily_metrics_date_section
   on public.pms_daily_metrics (report_date, section);
 
--- Fonction trigger générique (déjà déployée avec rapro_rooms ; idempotente).
-create or replace function public.rapro_set_updated_at()
+-- Trigger d'estampillage SERVEUR (updated_at + imported_by).
+-- SÉCURITÉ : imported_by est posé ICI (auth.uid()), jamais accepté du client, et
+-- figé après création — l'import ne peut pas être attribué à l'UUID d'un tiers.
+create or replace function public.pms_daily_metrics_stamp()
 returns trigger language plpgsql as $$
 begin
-  new.updated_at = now();
+  new.updated_at := now();
+  -- imported_by = l'appelant réel, à CHAQUE écriture : non falsifiable, et
+  -- reflète le dernier importeur (l'import est un upsert réécrit à chaque fois).
+  new.imported_by := auth.uid();
   return new;
 end;
 $$;
 
 drop trigger if exists pms_daily_metrics_set_updated_at on public.pms_daily_metrics;
-create trigger pms_daily_metrics_set_updated_at
-  before update on public.pms_daily_metrics
-  for each row execute function public.rapro_set_updated_at();
+drop trigger if exists pms_daily_metrics_stamp on public.pms_daily_metrics;
+create trigger pms_daily_metrics_stamp
+  before insert or update on public.pms_daily_metrics
+  for each row execute function public.pms_daily_metrics_stamp();
 
 -- RLS : lecture pour tout authentifié, écriture réservée aux rôles qui importent.
 alter table public.pms_daily_metrics enable row level security;

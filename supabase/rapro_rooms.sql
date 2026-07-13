@@ -22,19 +22,27 @@ create table public.rapro_rooms (
   unique (report_date, room)
 );
 
--- Trigger updated_at dédié (nom rapro_* pour éviter toute collision).
-create or replace function public.rapro_set_updated_at()
+-- Trigger d'estampillage SERVEUR (updated_at + created_by).
+-- SÉCURITÉ : created_by est posé ICI (auth.uid()), jamais accepté du client, et
+-- figé après création — pas d'attribution d'une écriture à l'UUID d'un tiers.
+create or replace function public.rapro_rooms_stamp()
 returns trigger language plpgsql as $$
 begin
-  new.updated_at = now();
+  new.updated_at := now();
+  if tg_op = 'INSERT' then
+    new.created_by := auth.uid();
+  else
+    new.created_by := old.created_by;
+  end if;
   return new;
 end;
 $$;
 
 drop trigger if exists rapro_rooms_set_updated_at on public.rapro_rooms;
-create trigger rapro_rooms_set_updated_at
-  before update on public.rapro_rooms
-  for each row execute function public.rapro_set_updated_at();
+drop trigger if exists rapro_rooms_stamp on public.rapro_rooms;
+create trigger rapro_rooms_stamp
+  before insert or update on public.rapro_rooms
+  for each row execute function public.rapro_rooms_stamp();
 
 -- RLS : lecture pour tout authentifié, écriture réservée super_utilisateur/admin.
 -- get_user_role() est supposée DÉJÀ déployée (partagée avec caisse/pdj).
