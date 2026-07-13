@@ -1,13 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import {
-  HelpCircle,
-  Image as ImageIcon,
-  LineChart,
-  Send,
-  Settings,
-} from 'lucide-react'
+import { Image as ImageIcon, LineChart, Send, Settings } from 'lucide-react'
 
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
@@ -19,6 +13,13 @@ import { useStepNavKeys } from '#/components/shared/useStepNavKeys.ts'
 import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '#/components/ui/dialog.tsx'
 import { DatePickerButton } from '#/components/form/fields.tsx'
 import { BoardSkeleton } from '#/components/repjour/BoardSkeleton.tsx'
 import { AlertBanner } from '#/components/repjour/AlertBanner.tsx'
@@ -218,6 +219,7 @@ export function DashboardBoard() {
 
   const handleDateChange = (date: string) => {
     setSelectedDate(date)
+    setDetailMode(false)
   }
 
   const shiftDate = (days: number) => {
@@ -318,6 +320,10 @@ export function DashboardBoard() {
   // jour, OU données partielles (projection + budget) — jamais sur un jour vide.
   const canPrint =
     !!budget && ((!!report && !!rj && !!rmtd && !!pm && !!ecart) || !!hasPartialData)
+
+  // Le mode détaillé (aide expliquant tous les calculs) n'a de sens qu'avec un
+  // rapport complet du jour ; son bouton bascule vit dans la barre d'actions.
+  const hasFullReport = !!report && !!rj && !!rmtd && !!pm && !!budget && !!ecart
 
   // Données du document PDF — partagées par la fonction Imprimer ET l'envoi
   // serveur (le rapport joint est exactement le PDF imprimé). Variante complète
@@ -431,6 +437,45 @@ export function DashboardBoard() {
                       : 'Aucune donnée à imprimer pour ce jour'
                   }
                 />
+                {/* Aide « détail des calculs » : bascule le mode détaillé.
+                    Présente seulement avec un rapport complet (sinon rien à
+                    détailler). Déplacée ici depuis un bouton flottant sur la
+                    carte KPI. */}
+                {hasFullReport ? (
+                  <Tip
+                    label={
+                      detailMode
+                        ? 'Fermer le détail des calculs'
+                        : 'Détail des calculs'
+                    }
+                  >
+                    <Button
+                      variant={detailMode ? 'default' : 'outline'}
+                      size="icon-sm"
+                      onClick={() => setDetailMode((v) => !v)}
+                      aria-label="Détail des calculs"
+                      aria-pressed={detailMode}
+                    >
+                      {/* « ? » nu (sans cercle), tracé ÉPAIS remplissant la boîte
+                          24×24. Exception de taille : 20 px (vs 16 px pour les
+                          voisines lucide) pour bien le mettre en avant — ratio
+                          préservé, donc aucune déformation. */}
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={2.75}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                        className="size-5"
+                      >
+                        <path d="M7.4 7.4a4.7 4.7 0 0 1 9 1.6c0 3.1-4.5 4.6-4.5 4.6" />
+                        <path d="M12 20h.01" />
+                      </svg>
+                    </Button>
+                  </Tip>
+                ) : null}
               </ButtonGroup>
               {/* Groupe « navigation temporelle », collé au bord droit. */}
               <StepNav
@@ -501,15 +546,17 @@ export function DashboardBoard() {
               pickup={pickup}
             />
 
-            {detailMode ? (
-              <div className="space-y-4">
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => setDetailMode(false)}
-                >
-                  Fermer le mode détaillé
-                </Button>
+            {/* Détail des calculs : ouvert en MODALE depuis le bouton « ? » de
+                la barre d'actions (`detailMode`). Le contenu de la page reste en
+                place dessous. */}
+            <Dialog open={detailMode} onOpenChange={setDetailMode}>
+              <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
+                <DialogHeader>
+                  <DialogTitle>Détail des calculs — {displayDate}</DialogTitle>
+                  <DialogDescription>
+                    Comment chaque indicateur du rapport est obtenu.
+                  </DialogDescription>
+                </DialogHeader>
                 <KPIDetailPanel
                   realiseJour={rj}
                   realiseMTD={rmtd}
@@ -519,37 +566,20 @@ export function DashboardBoard() {
                   dayOfMonth={report.day_of_month}
                   daysInMonth={report.days_in_month}
                 />
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => setDetailMode(false)}
-                >
-                  Fermer le mode détaillé
-                </Button>
-              </div>
-            ) : (
-              <>
-                <div className="relative rounded-xl border border-border bg-card p-2 sm:p-3">
-                  <Tip label="Mode détaillé" side="right">
-                    <button
-                      type="button"
-                      onClick={() => setDetailMode(true)}
-                      aria-label="Ouvrir le mode détaillé"
-                      className="absolute top-3 left-3 flex size-6 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:border-primary hover:text-primary"
-                    >
-                      <HelpCircle className="size-3.5" />
-                    </button>
-                  </Tip>
-                  <KPITable
-                    realiseJour={rj}
-                    realiseMTD={rmtd}
-                    projeteMois={pm}
-                    budget={budget}
-                    ecart={ecart}
-                  />
-                </div>
+              </DialogContent>
+            </Dialog>
 
-                <AlertBanner alerts={report.alerts || []} />
+            <div className="rounded-xl border border-border bg-card p-2 sm:p-3">
+              <KPITable
+                realiseJour={rj}
+                realiseMTD={rmtd}
+                projeteMois={pm}
+                budget={budget}
+                ecart={ecart}
+              />
+            </div>
+
+            <AlertBanner alerts={report.alerts || []} />
 
                 {/* Actions email, directement SOUS le tableau, au-dessus de la
                     carte d'import. Visibles par TOUS les rôles : captureTableImage
@@ -646,13 +676,11 @@ export function DashboardBoard() {
                     )}
                   </div>
                 )}
-              </>
-            )}
           </>
         ) : null}
 
         {/* Import — carte placée en bas du dashboard, réservée aux rôles
-            super_utilisateur / admin. Masquée en mode détaillé et sur tout jour
+            super_utilisateur / admin. Masquée sur tout jour
             AUTRE qu'hier (`isImportDay`) : l'import ne peut combler que le
             rapport de la veille (J-1), donc on ne le propose que ce jour-là ;
             partout ailleurs (jour courant, futur, passé plus ancien) on affiche
@@ -664,11 +692,7 @@ export function DashboardBoard() {
             - admin : toujours visible ce jour-là (données présentes ou non) ;
             - utilisateur : jamais (exclu par `canImport`).
             Un import réussi recharge le rapport affiché. */}
-        {!loading &&
-          !detailMode &&
-          canImport &&
-          isImportDay &&
-          (isAdmin || !report) && (
+        {!loading && canImport && isImportDay && (isAdmin || !report) && (
             <ImportSection
               spacious={importOnly}
               onImported={() =>
