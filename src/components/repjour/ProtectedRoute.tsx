@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Link, Navigate } from '@tanstack/react-router'
+import { Link, Navigate, useRouterState } from '@tanstack/react-router'
 import { ShieldAlert } from 'lucide-react'
 
 import { useAuth } from '#/components/auth/AuthContext.tsx'
@@ -7,21 +7,19 @@ import { ROLE_HOME } from '#/lib/repjour/roles.ts'
 import type { UserRole } from '#/lib/repjour/roles.ts'
 import { Button } from '#/components/ui/button.tsx'
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
-import { SkeletonCardsRow } from '#/components/shared/skeleton/SkeletonCardsRow.tsx'
-import { SkeletonTable } from '#/components/shared/skeleton/SkeletonTable.tsx'
+import { RouteSkeleton } from '#/components/shared/skeleton/RouteSkeleton.tsx'
 
 /**
  * Squelette de page affiché tant que la session/le rôle ne sont pas résolus —
- * réserve la place du board (cartes + tableau) au lieu d'un spinner recentré, pour
- * supprimer le saut spinner → contenu au premier accès.
+ * réserve la place du board (barre PageHeader + contenu) au lieu d'un spinner
+ * recentré, pour supprimer le saut spinner → contenu au premier accès. La forme
+ * suit la route gardée (`RouteSkeleton`) : un formulaire pour `/profil`, une liste
+ * pour `/comptes`, etc. — plus de large « dashboard » plaqué sur une page étroite.
  */
-function GuardSkeleton() {
+function GuardSkeleton({ pathname }: { pathname: string }) {
   return (
     <PageContainer>
-      <div className="mx-auto w-full max-w-5xl space-y-4">
-        <SkeletonCardsRow count={4} />
-        <SkeletonTable cols={4} rows={8} bounded={false} />
-      </div>
+      <RouteSkeleton pathname={pathname} />
     </PageContainer>
   )
 }
@@ -78,9 +76,10 @@ export function ProtectedRoute({
   children: ReactNode
 }) {
   const { user, role, loading, profileLoading } = useAuth()
+  const pathname = useRouterState({ select: (s) => s.location.pathname })
 
   // 1. Session en cours de résolution.
-  if (loading) return <GuardSkeleton />
+  if (loading) return <GuardSkeleton pathname={pathname} />
 
   // 2. Non connecté → page de login (normalement déjà intercepté par AppAuthGate).
   if (!user) return <Navigate to="/login" replace />
@@ -91,7 +90,12 @@ export function ProtectedRoute({
   //      contenu protégé (ex-D13 bug#2, évite un flash) ;
   //    - sinon → la ligne `profiles` est réellement absente : notice avec une
   //      sortie vers l'accueil (plutôt qu'un spinner infini).
-  if (role === null) return profileLoading ? <GuardSkeleton /> : <NoRoleNotice />
+  if (role === null)
+    return profileLoading ? (
+      <GuardSkeleton pathname={pathname} />
+    ) : (
+      <NoRoleNotice />
+    )
 
   // 4. Rôle connu mais non autorisé → accueil du rôle.
   if (!allowedRoles.includes(role)) {

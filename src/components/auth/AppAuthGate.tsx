@@ -4,16 +4,20 @@ import { Navigate, useRouterState } from '@tanstack/react-router'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { Navbar } from '#/components/Navbar.tsx'
 import { Skeleton } from '#/components/ui/skeleton.tsx'
-import { SkeletonCardsRow } from '#/components/shared/skeleton/SkeletonCardsRow.tsx'
-import { SkeletonTable } from '#/components/shared/skeleton/SkeletonTable.tsx'
+import { RouteSkeleton } from '#/components/shared/skeleton/RouteSkeleton.tsx'
 
 /**
  * Squelette de démarrage : silhouette de barre de navigation + zone de contenu en
  * squelette, au lieu d'un spinner nu. Déterministe → rendu à l'identique en SSR et
  * au premier rendu client (pas de divergence d'hydratation), et l'arrivée du chrome
  * réel ne déplace rien (même hauteur de barre, même zone de contenu).
+ *
+ * Le corps est délégué à `RouteSkeleton`, qui réserve la barre PageHeader et
+ * adapte sa forme à la route d'atterrissage (formulaire, liste, analytique ou
+ * board) — le `<main>` et le padding reprennent EXACTEMENT ceux du chrome réel
+ * (`app-scroll`, `flex flex-1 flex-col p-4 md:p-6`) pour ne rien décaler.
  */
-function BootSkeleton() {
+function BootSkeleton({ pathname }: { pathname: string }) {
   return (
     <div className="flex h-dvh flex-col overflow-hidden" aria-hidden="true">
       <header className="sticky top-0 z-40 border-b border-border bg-card/80 backdrop-blur-md">
@@ -27,10 +31,9 @@ function BootSkeleton() {
           <Skeleton className="ml-auto size-9 rounded-full" />
         </div>
       </header>
-      <main className="flex flex-1 flex-col overflow-y-auto">
-        <div className="mx-auto w-full max-w-5xl space-y-4 p-4 md:p-6">
-          <SkeletonCardsRow count={4} />
-          <SkeletonTable cols={4} rows={8} bounded={false} />
+      <main className="app-scroll flex flex-1 flex-col overflow-y-auto">
+        <div className="flex flex-1 flex-col p-4 md:p-6">
+          <RouteSkeleton pathname={pathname} />
         </div>
       </main>
     </div>
@@ -65,9 +68,9 @@ export function AppAuthGate({ children }: { children: ReactNode }) {
   }
 
   // Session pas encore résolue : squelette de layout (identique SSR ↔ premier
-  // rendu client), plutôt qu'un spinner nu.
+  // rendu client), plutôt qu'un spinner nu. La forme suit la route d'atterrissage.
   if (loading) {
-    return <BootSkeleton />
+    return <BootSkeleton pathname={pathname} />
   }
 
   // Non connecté : aucune page protégée n'est rendue, on renvoie vers /login.
