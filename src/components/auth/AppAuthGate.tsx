@@ -54,11 +54,14 @@ export function AppAuthGate({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth()
   const pathname = useRouterState({ select: (s) => s.location.pathname })
 
-  // La page de connexion est toujours accessible, sans Navbar.
+  // La page de connexion est toujours accessible, sans Navbar. `main` en BLOC
+  // (pas flex) + `overflow-y-auto` : sur une fenêtre très courte, le formulaire
+  // centré défile au lieu d'être rogné en haut/bas. Le centrage anti-rognage vit
+  // dans login.tsx (wrapper `min-h-full` qui grandit jusqu'au contenu — ce qui
+  // n'est possible QUE si le parent est en bloc ; en flex-col il serait plafonné
+  // à 100 % et le contenu déborderait sans défiler).
   if (pathname === '/login') {
-    return (
-      <main className="flex h-dvh flex-col overflow-hidden">{children}</main>
-    )
+    return <main className="h-dvh overflow-y-auto">{children}</main>
   }
 
   // Session pas encore résolue : squelette de layout (identique SSR ↔ premier

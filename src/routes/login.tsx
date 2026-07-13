@@ -55,7 +55,7 @@ function LoginPage() {
   }
 
   return (
-    <div className="flex flex-1 items-center justify-center px-4 py-12">
+    <div className="flex min-h-full flex-col items-center justify-center px-4 py-12">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center gap-4 text-center">
           <div className="flex size-20 items-center justify-center rounded-2xl bg-primary shadow-lg shadow-primary/25">
