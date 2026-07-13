@@ -177,6 +177,9 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
   const canEdit = role === 'super_utilisateur' || role === 'admin'
   const [startDate, setStartDate] = useState<Date | null>(null)
   const [offset, setOffset] = useState(0)
+  // Défilement au clic-glissé (drag-to-scroll) : vrai le temps d'un panoramique,
+  // pour le curseur « grabbing » et la neutralisation de la sélection de texte.
+  const [panning, setPanning] = useState(false)
   const [containerW, setContainerW] = useState(0)
   const [reservations, setReservations] = useState<Reservation[]>([])
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -601,10 +604,35 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
     const startX = e.clientX
     const startY = e.clientY
     const orig = { ...res }
+    const w = dayW
+    const startOffset = offset
 
-    const onMove = (ev: PointerEvent) => {
-      const dDay = Math.round((ev.clientX - startX) / dayW)
-      const dRow = Math.round((ev.clientY - startY) / ROW_H)
+    /*
+     * Auto-défilement au bord (edge auto-scroll) : quand le curseur atteint le
+     * bord gauche/droit du planning pendant un geste, la vue AVANCE toute seule
+     * dans les jours — on étend ou déplace un séjour AU-DELÀ de la fenêtre visible
+     * sans lâcher la souris.
+     *
+     * Le planning panoramique en changeant `offset` ; la position d'une barre se
+     * déduisait jusqu'ici du seul déplacement du curseur. Il faut donc AJOUTER les
+     * jours auto-défilés (`panSteps`) au delta, sinon la barre décrocherait du
+     * curseur à chaque cran de défilement.
+     */
+    const timelineEl = timelineRef.current
+    const EDGE = 48 // largeur de la zone-bord déclenchant l'auto-défilement (px)
+    const PAN_MS = 100 // cadence de l'auto-défilement (~10 jours/s)
+    let lastX = e.clientX
+    let lastY = e.clientY
+    let panSteps = 0 // jours défilés par l'auto-scroll depuis le début du geste
+    let panDir = 0 // -1 (passé), 0 (aucun), +1 (futur)
+    let rafId = 0
+    let lastTick = 0
+
+    // Applique la position visée depuis la DERNIÈRE position du curseur + les
+    // jours auto-défilés. Appelé au déplacement ET à chaque tick d'auto-scroll.
+    const applyPosition = () => {
+      const dDay = Math.round((lastX - startX) / w) + panSteps
+      const dRow = Math.round((lastY - startY) / ROW_H)
       let spot = orig.spot
       let startDay = orig.startDay
       let nights = orig.nights
@@ -628,9 +656,49 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
         )
       })
     }
+
+    // Boucle d'auto-défilement : tant que le curseur reste sur un bord, on avance
+    // d'un jour toutes les PAN_MS et on réapplique la position (curseur immobile
+    // sur le bord → la barre suit le défilement, le séjour s'étend).
+    const tick = (t: number) => {
+      if (panDir === 0) {
+        rafId = 0
+        return
+      }
+      if (lastTick === 0 || t - lastTick >= PAN_MS) {
+        lastTick = t
+        panSteps += panDir
+        setOffset(startOffset + panSteps)
+        applyPosition()
+      }
+      rafId = requestAnimationFrame(tick)
+    }
+
+    // Détermine la direction d'auto-défilement selon la proximité des bords.
+    const updatePanDir = () => {
+      if (!timelineEl) {
+        panDir = 0
+        return
+      }
+      const rect = timelineEl.getBoundingClientRect()
+      panDir =
+        lastX < rect.left + EDGE ? -1 : lastX > rect.right - EDGE ? 1 : 0
+      if (panDir !== 0 && rafId === 0) {
+        lastTick = 0
+        rafId = requestAnimationFrame(tick)
+      }
+    }
+
+    const onMove = (ev: PointerEvent) => {
+      lastX = ev.clientX
+      lastY = ev.clientY
+      applyPosition()
+      updatePanDir()
+    }
     const onUp = () => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
+      if (rafId) cancelAnimationFrame(rafId)
       // Persiste la position FINALE si elle a changé (lecture de l'état à jour).
       const r = reservationsRef.current.find((x) => x.id === res.id)
       if (
@@ -654,6 +722,42 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
   // "Nouvelle réservation" du menu contextuel l'utilise ensuite.
   function captureCell(e: ReactMouseEvent<HTMLDivElement>) {
     pendingCell.current = pointerToCell(e, dayW, offset, visibleDays)
+  }
+
+  /*
+   * Défilement au clic-glissé (drag-to-scroll), sur une zone vide du planning.
+   *
+   * Changement de paradigme demandé — SANS scrollbar et SANS conteneur défilant :
+   * le planning n'a pas de vrai scroll (fenêtre de `visibleDays` colonnes qui
+   * remplit la largeur), il PANORAMIQUE en changeant `offset` (jours depuis le
+   * lundi de réf.). Le glissé pilote donc ce MÊME `offset` — la logique de base
+   * (flèches, clavier, calendrier) reste intacte et fonctionne en parallèle ;
+   * on ne fait qu'ajouter une nouvelle entrée sur le même mécanisme.
+   *
+   * Le pas est le jour (largeur d'une colonne) : « attraper » la grille et tirer
+   * vers la droite révèle le passé (offset diminue), tirer à gauche, le futur.
+   * Disponible à TOUS les rôles (c'est de la navigation, pas de l'édition). Les
+   * barres, poignées et champ d'édition arrêtent la propagation de leur propre
+   * `pointerdown` → aucun conflit avec le déplacement d'une réservation.
+   */
+  function startPan(e: ReactPointerEvent<HTMLDivElement>) {
+    if (e.button !== 0) return // bouton gauche seulement (le droit ouvre le menu)
+    if (clipboard) return // pas pendant un placement (copie accrochée au curseur)
+    const startX = e.clientX
+    const startOffset = offset
+    const w = dayW
+    setPanning(true)
+    const onMove = (ev: PointerEvent) => {
+      // `dDay` absolu depuis le point de départ → insensible aux re-rendus.
+      setOffset(startOffset + Math.round((startX - ev.clientX) / w))
+    }
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      setPanning(false)
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
   }
 
   // Aller directement à une date choisie dans le calendrier (devient le 1er jour affiché).
@@ -819,7 +923,16 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
               <SkeletonBlock className="h-full rounded-xl" />
             </div>
           ) : (
-          <div className="relative" style={{ width: '100%' }}>
+          <div
+            className={cn(
+              'relative',
+              panning ? 'cursor-grabbing select-none' : 'cursor-grab',
+            )}
+            // `touch-action: pan-y` : le glissé HORIZONTAL nous revient (panoramique),
+            // le défilement VERTICAL de la page reste au navigateur (tactile).
+            style={{ width: '100%', touchAction: 'pan-y' }}
+            onPointerDown={startPan}
+          >
             {/* Bordures des week-ends, continues sur en-tête + grille */}
             {days.map((d, i) => {
               const day = d.getDay()
