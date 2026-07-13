@@ -463,7 +463,7 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
       setForm(input)
       lastSavedRef.current = JSON.stringify(input) // avant l'await : coupe l'autosave concurrent
       const saved = await upsertSheet(input)
-      await validateSheet(saved.id, user.id)
+      await validateSheet(saved.id)
     })
   }
 
@@ -719,12 +719,14 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
             </div>
           </div>
 
+          {/* Zone commentaire FLEXIBLE : même bornage que le contenu réel
+              (flex-1 + plancher) pour ne rien décaler au passage au contenu. */}
           <div
-            className="rounded-xl border border-border bg-card p-3"
+            className="flex flex-1 flex-col rounded-xl border border-border bg-card p-3"
             aria-hidden="true"
           >
             <Skeleton className="mb-2 h-4 w-28" />
-            <Skeleton className="h-16 w-full rounded-md" />
+            <Skeleton className="min-h-16 w-full flex-1 rounded-md" />
           </div>
         </>
       ) : (
@@ -885,8 +887,14 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
         </div>
       </div>
 
-      {/* Commentaires (juste en dessous du fond de caisse). */}
-      <div className="rounded-xl border border-border bg-card p-3">
+      {/* Commentaires (juste en dessous du fond de caisse).
+          Carte FLEXIBLE : elle absorbe la place restante de la page et sert de
+          variable d'ajustement, comme le Rapprochement. `flex flex-1 flex-col`
+          la fait grandir et empile titre + champ ; le bouton de clôture reste
+          collé en bas quand tout tient. Sur une fenêtre courte, le champ se
+          réduit jusqu'à son plancher `min-h-16` (jamais 0, jamais invisible),
+          puis c'est la page qui défile (conteneur racine sans `min-h-0`). */}
+      <div className="flex flex-1 flex-col rounded-xl border border-border bg-card p-3">
         <div className="mb-2 flex items-center justify-between gap-2">
           <h2 className="text-sm font-semibold">Commentaires</h2>
           {isValidated && sheet?.operatorInitials && (
@@ -900,10 +908,11 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
           disabled={!canEditFields}
           onChange={(e) => setForm((f) => ({ ...f, comment: e.target.value }))}
           placeholder="Justification d'un éventuel écart…"
-          // Hauteur figée : `resize-none` retire la poignée, `h-16` neutralise
-          // le `field-sizing-content` de la primitive (qui étirait le champ à
-          // mesure qu'on écrivait). Au-delà, le texte défile dans le champ.
-          className="h-16 resize-none"
+          // Hauteur FLEXIBLE : `flex-1` fait absorber la place restante de la
+          // carte, `min-h-16` est le plancher, `resize-none` retire la poignée
+          // (et neutralise le `field-sizing-content` de la primitive, qui
+          // étirait le champ à mesure qu'on écrivait).
+          className="min-h-16 flex-1 resize-none"
         />
       </div>
 
