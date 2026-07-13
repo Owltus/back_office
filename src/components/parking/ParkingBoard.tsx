@@ -372,11 +372,16 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
 
   // Impression : 4 feuilles de suivi, TOUJOURS J-1 / aujourd'hui / J+1 / J+2
   // (relatif au jour réel, indépendant de la fenêtre affichée), 2 tableaux par
-  // page en paysage. Chaque feuille est pré-remplie avec les ARRIVÉES du jour
-  // (réservation dont l'arrivée == ce jour). Cf. lib/parking/pdf.ts.
+  // page en paysage. Chaque feuille est pré-remplie avec les clients PRÉSENTS ce
+  // jour-là — pas seulement les arrivées : un séjour de plusieurs nuits occupe sa
+  // place tous les jours, du jour d'arrivée jusqu'à la veille du départ (une résa
+  // de `nights` nuits à partir de `startDay` occupe les jours startDay …
+  // startDay+nights-1, comme la barre à l'écran). Check-in / check-out affichent
+  // les VRAIES dates d'arrivée et de départ du séjour (pas le jour de la feuille),
+  // pour qu'un client déjà là se lise comme tel. Cf. lib/parking/pdf.ts.
   //
   // Rapprochement PDJ (lecture seule) : on essaie de retrouver le n° de chambre
-  // de chaque arrivée via le nom, dans les lignes PDJ du même jour. En pratique
+  // de chaque client via le nom, dans les lignes PDJ du même jour. En pratique
   // ça n'aboutit qu'AUJOURD'HUI : la purge RGPD du PDJ efface le nom des jours
   // passés (guest_name = null) — J-1 restera donc vide tant que la rétention PDJ
   // n'aura pas été revue. Correspondance conservatrice (cf. matchRoom).
@@ -394,7 +399,11 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
     const days = dates.map((date, i) => {
       const pdjRows = pdjByDay[i]
       const rows = reservations
-        .filter((r) => r.startDay === offsets[i])
+        // Présent ce jour-là : arrivé au plus tard ce jour, pas encore reparti.
+        .filter(
+          (r) =>
+            r.startDay <= offsets[i] && offsets[i] < r.startDay + r.nights,
+        )
         .map((r) => {
           const room = matchRoom(r.client, pdjRows)
           return {
@@ -403,8 +412,9 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
             numero: room != null ? String(room) : '',
             facture:
               r.status === 'paye' || r.status === 'checkout' ? 'Oui' : '',
-            checkIn: format(date, 'dd/MM'),
-            checkOut: format(addDays(date, r.nights), 'dd/MM'),
+            // Vraies dates du séjour (indépendantes du jour de la feuille).
+            checkIn: format(addDays(ref, r.startDay), 'dd/MM'),
+            checkOut: format(addDays(ref, r.startDay + r.nights), 'dd/MM'),
           }
         })
       return { date, rows }

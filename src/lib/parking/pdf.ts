@@ -2,8 +2,10 @@
  * Génération d'un document PDF « Feuille de suivi parking » — une grille par
  * jour, calquée sur le formulaire papier existant (colonnes Place / NOM /
  * N°de # / Facturé? / Check in / Check out, 14 places, 13 & 14 = personnel,
- * grisées). Chaque grille est PRÉ-REMPLIE avec les ARRIVÉES du jour (une ligne
- * sur la place réservée), les cellules restantes vides à compléter à la main.
+ * grisées). Chaque grille est PRÉ-REMPLIE avec les clients PRÉSENTS ce jour-là
+ * (une ligne sur la place occupée — pas seulement les arrivées : un séjour de
+ * plusieurs nuits reste présent chaque jour), les cellules restantes vides à
+ * compléter à la main.
  *
  * Mode PAYSAGE, deux tableaux par page → quatre jours sur deux pages. Rendu
  * VECTORIEL via jsPDF, chargé en import() DYNAMIQUE (lib lourde, hors du premier
@@ -17,7 +19,7 @@ import type { jsPDF } from 'jspdf'
 
 import { FIRST_STAFF_SPOT, SPOTS_LIST } from '#/lib/parking/model.ts'
 
-/** Une ligne pré-remplie (une arrivée) d'une feuille de suivi. */
+/** Une ligne pré-remplie (un client présent) d'une feuille de suivi. */
 export interface ParkingSheetRow {
   spot: number
   nom: string
@@ -183,7 +185,7 @@ function drawSheet(pdf: jsPDF, x: number, day: ParkingSheetDay): void {
     else pdf.text(c.label, xs[i] + c.w / 2, ty, { align: 'center' })
   })
 
-  // Lignes : n° de place + arrivées pré-remplies.
+  // Lignes : n° de place + clients présents pré-remplis.
   SPOTS_LIST.forEach((spot, r) => {
     const ty = headY + headH + r * rowH + rowH / 2 + 1.4
     setText(pdf, INK)
