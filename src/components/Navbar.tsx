@@ -27,8 +27,6 @@ import {
 } from '#/components/ui/sheet.tsx'
 
 const NAV_ITEMS = [
-  // Page TEMPORAIRE — galerie de propositions de cartes (à retirer après choix).
-  { to: '/artefact', label: 'Artefact', icon: Palette },
   { to: '/repjour', label: 'RepJour', icon: ClipboardList },
   { to: '/pdj', label: 'PDJ', icon: Coffee },
   { to: '/parking', label: 'Parking', icon: SquareParking },
@@ -37,10 +35,16 @@ const NAV_ITEMS = [
   { to: '/affichage', label: 'Affichage', icon: Monitor },
 ] as const
 
+// Page TEMPORAIRE — galerie de propositions de cartes. En FIN de ligne et
+// réservée aux ADMINS (à retirer une fois la direction de carte choisie).
+const ARTEFACT_ITEM = { to: '/artefact', label: 'Artefact', icon: Palette } as const
+
 export function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false)
-  const { profile, user } = useAuth()
+  const { profile, user, role } = useAuth()
   const userName = profile?.display_name || profile?.email || user?.email || ''
+  // « Artefact » (page temporaire) : uniquement pour les admins, en fin de ligne.
+  const navItems = role === 'admin' ? [...NAV_ITEMS, ARTEFACT_ITEM] : NAV_ITEMS
 
   // En passant en mode desktop (>= md), on ferme le tiroir s'il est ouvert.
   useEffect(() => {
@@ -81,7 +85,7 @@ export function Navbar() {
               </SheetTitle>
             </SheetHeader>
             <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-3">
-              {NAV_ITEMS.map((item) => (
+              {navItems.map((item) => (
                 <SheetClose asChild key={item.to}>
                   <Link
                     to={item.to}
@@ -144,7 +148,7 @@ export function Navbar() {
 
         {/* --- Liens inline (>= md) --- */}
         <ul className="ml-2 hidden items-center gap-1 md:flex">
-          {NAV_ITEMS.map((item) => (
+          {navItems.map((item) => (
             <li key={item.to}>
               <Link
                 to={item.to}

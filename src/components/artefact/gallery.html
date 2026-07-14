@@ -129,6 +129,12 @@
   .chip svg { width: 0.9rem; height: 0.9rem; }
   .chip.tint { background: color-mix(in oklab, var(--c) 16%, transparent); }
   .sub { font-size: 0.72rem; color: var(--muted); font-weight: 500; }
+  /* Comparaison « valeur vs référence » : séparateur en BARRE VERTICALE, les
+     deux données centrées l'une par rapport à l'autre (align-items:center). */
+  .pair { display: inline-flex; align-items: center; gap: 0.55rem; }
+  .pair .p1 { font-weight: 700; }
+  .pair .vbar { width: 1px; align-self: stretch; min-height: 1.15em; background: color-mix(in oklab, var(--muted) 48%, transparent); }
+  .pair .p2 { font-size: 0.62em; font-weight: 600; color: var(--muted); }
   .delta {
     font-size: 0.66rem; font-weight: 700; border-radius: 999px; padding: 0.08rem 0.4rem;
     background: color-mix(in oklab, var(--c-net) 16%, transparent); color: var(--c-net);
@@ -278,7 +284,8 @@
     { label: 'Valeur seule',       value: '80',        c: 'var(--c-vendu)' },
     { label: 'Avec icône',         value: '74',        c: 'var(--c-net)',   icon: 'sparkle' },
     { label: "Taux d'occupation",  value: '92 %',      c: 'var(--c-net)',   icon: 'percent', delta: '+4 pts' },
-    { label: 'Revenu / objectif',  value: '12 480 €',  c: 'var(--c-vendu)', icon: 'euro',    sub: '/ 13 000 €' },
+    { label: 'Revenu / objectif',  value: '12 480 €',  c: 'var(--c-vendu)', icon: 'euro',    ref: '13 000 €' },
+    { label: 'Nettoyées / vendues', value: '74',       c: 'var(--c-net)',   icon: 'sparkle', ref: '80' },
     { label: 'Écart de fond',      value: '-6 €',      c: 'var(--c-bloq)',  icon: 'euro',    delta: '-6 €', deltaNeg: true },
     { label: 'Progression mois',   value: '86 %',      c: 'var(--c-net)',   icon: 'trend',   progress: 86 },
     { label: 'Encaissé · 7 j',     value: '8 210 €',   c: 'var(--c-refus)', icon: 'euro',    spark: SPARK },
@@ -293,6 +300,12 @@
       return `${x.toFixed(1)},${y.toFixed(1)}`;
     }).join(' ');
     return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  }
+  /* Valeur d'une carte : simple, ou paire « valeur │ référence » (barre
+     verticale, données centrées) quand un champ `ref` est fourni. */
+  function valHtml(s) {
+    if (!s.ref) return s.value;
+    return `<span class="pair"><span class="p1">${s.value}</span><span class="vbar"></span><span class="p2">${s.ref}</span></span>`;
   }
   function extras(s) {
     let h = '';
@@ -309,26 +322,26 @@
   const RENDER = {
     v1: (s) => `<div class="card v1" style="--c:${s.c}">
         <span class="lbl">${s.label}</span>
-        <div class="row"><span class="val">${s.value}</span>${chip(s, 'tint')}</div>
+        <div class="row"><span class="val">${valHtml(s)}</span>${chip(s, 'tint')}</div>
         ${extras(s)}
       </div>`,
     v2: (s) => `<div class="card v2" style="--c:${s.c}">
         <div class="top">${chip(s)}<span class="lbl">${s.label}</span></div>
-        <span class="val">${s.value}</span>
+        <span class="val">${valHtml(s)}</span>
         ${extras(s)}
       </div>`,
     v3: (s) => `<div class="card v3" style="--c:${s.c}">
         <div class="top"><span class="lbl">${s.label}</span>${chip(s, 'tint')}</div>
-        <div class="foot"><span class="val">${s.value}</span></div>
+        <div class="foot"><span class="val">${valHtml(s)}</span></div>
         ${extras(s)}
       </div>`,
     v4: (s) => `<div class="card v4" style="--c:${s.c}">
         <span class="iconpane">${s.icon ? ICON[s.icon] : ''}</span>
-        <div class="body"><span class="lbl">${s.label}</span><span class="val">${s.value}</span>${extras(s)}</div>
+        <div class="body"><span class="lbl">${s.label}</span><span class="val">${valHtml(s)}</span>${extras(s)}</div>
       </div>`,
     v5: (s) => `<div class="card v5" style="--c:${s.c}">
         ${s.icon ? `<span class="ghost">${ICON[s.icon]}</span>` : ''}
-        <span class="val">${s.value}</span>
+        <span class="val">${valHtml(s)}</span>
         <span class="lbl">${s.label}</span>
         ${extras(s)}
       </div>`,
