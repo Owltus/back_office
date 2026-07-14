@@ -141,9 +141,16 @@ export function parseGuestRows(
   content: string,
   serviceDate?: string | null,
 ): ParsedRow[] {
-  const separator = content.split('\n')[0].includes(';') ? ';' : ','
-  const lines = content.split('\n').filter((l) => l.trim())
-  const headers = parseCsvLine(lines[0], separator)
+  // Robustesse aux exports PMS/Windows : on retire un éventuel BOM en tête (sinon
+  // il se colle au premier en-tête « Room » et fait échouer la détection des
+  // colonnes → 0 ligne, faux problème « fichier invalide »).
+  const clean =
+    content.charCodeAt(0) === 0xfeff ? content.slice(1) : content
+  const separator = clean.split('\n')[0].includes(';') ? ';' : ','
+  const lines = clean.split('\n').filter((l) => l.trim())
+  // En-têtes normalisés : `trim()` retire les espaces, le `\r` de fin de ligne
+  // (CRLF) et un BOM résiduel — pour que `indexOf('Room')` etc. matchent.
+  const headers = parseCsvLine(lines[0], separator).map((h) => h.trim())
 
   const col = Object.fromEntries(
     [
