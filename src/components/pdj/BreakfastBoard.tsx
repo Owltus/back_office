@@ -18,6 +18,7 @@ import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { ConfirmDialog } from '#/components/shared/ConfirmDialog.tsx'
 import { PrintBlockedDialog } from '#/components/shared/PrintBlockedDialog.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
+import { StatTile } from '#/components/shared/StatTile.tsx'
 import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
 import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { StepNav } from '#/components/shared/StepNav.tsx'
@@ -533,28 +534,28 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
           {/* Statistiques (footer fixe en impression). */}
           <div className="pdj-stats">
             <div className="pdj-stats-grid">
-              <Stat
+              <StatTile
                 value={stats.rooms}
                 label="Chambres occupées"
                 accent="#818cf8"
               />
-              <Stat
+              <StatTile
                 value={stats.guests}
                 label="Clients"
                 accent="#38bdf8"
               />
-              <Stat
+              <StatTile
                 value={stats.breakfasts}
                 label="PDJ inclus"
                 accent="#34d399"
               />
-              <Stat
+              <StatTile
                 value={stats.potential}
                 label="PDJ non inclus"
                 accent="#fbbf24"
                 printHidden
               />
-              <Stat
+              <StatTile
                 value={stats.staying}
                 label={
                   <>
@@ -564,7 +565,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                 }
                 accent="#60a5fa"
               />
-              <Stat
+              <StatTile
                 value={stats.departing}
                 label={
                   <>
@@ -656,15 +657,21 @@ const FLOOR_ROOM_COUNTS = [
 function BoardSkeleton() {
   return (
     <>
-      {/* Rangée de 6 stats dans LEUR vraie grille (`pdj-stats-grid`, 6 colonnes)
-          et avec les cartes compactes `.pdj-stat`, pour coller au réel (pas la
-          grille analytique 4 colonnes) et ne rien décaler. */}
+      {/* Rangée de 6 tuiles dans LEUR vraie grille (`pdj-stats-grid`, 6 colonnes),
+          à la forme du composant StatTile (liseré + libellé + valeur) pour coller
+          au réel et ne rien décaler. */}
       <div className="pdj-stats" aria-hidden="true">
         <div className="pdj-stats-grid">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="pdj-stat">
-              <Skeleton className="h-2.5 w-2/3" />
-              <Skeleton className="mt-2 h-6 w-1/2" />
+            <div
+              key={i}
+              className="flex items-stretch overflow-hidden rounded-xl border border-border bg-card"
+            >
+              <span className="w-2 shrink-0 bg-muted" aria-hidden="true" />
+              <div className="flex flex-col justify-center gap-2 px-3 py-[0.55rem]">
+                <Skeleton className="h-2.5 w-16" />
+                <Skeleton className="h-6 w-10" />
+              </div>
             </div>
           ))}
         </div>
@@ -710,40 +717,6 @@ function BoardSkeleton() {
         ))}
       </div>
     </>
-  )
-}
-
-function Stat({
-  value,
-  label,
-  accent,
-  printHidden,
-  printOnly,
-}: {
-  value: number
-  label: React.ReactNode
-  accent: string
-  printHidden?: boolean
-  printOnly?: boolean
-}) {
-  return (
-    <div
-      className={cn(
-        'pdj-stat',
-        printHidden && 'pdj-stat-extra',
-        printOnly && 'pdj-stat-print-only',
-      )}
-      style={{ '--pdj-accent': accent } as React.CSSProperties}
-    >
-      {/* Style « Tuile, valeur seule » : liseré d'accent (CSS ::before) + libellé
-          + valeur, SANS icône. Libellé d'abord dans le DOM : à l'écran il coiffe
-          la carte. Le PDF le veut SOUS la valeur — `flex-direction: column-reverse`
-          en @media print rétablit cet ordre sans dupliquer le balisage. */}
-      <span className="pdj-stat-label">{label}</span>
-      <span className="pdj-stat-row">
-        <span className="pdj-stat-value">{value}</span>
-      </span>
-    </div>
   )
 }
 

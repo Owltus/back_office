@@ -614,7 +614,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
                 key={i}
                 className="flex items-stretch overflow-hidden rounded-xl border border-border bg-card"
               >
-                <span className="w-1.5 shrink-0 bg-muted" aria-hidden="true" />
+                <span className="w-2 shrink-0 bg-muted" aria-hidden="true" />
                 <div className="flex flex-col justify-center gap-2 px-3 py-2.5">
                   <Skeleton className="h-2.5 w-16" />
                   <Skeleton className="h-5 w-10" />

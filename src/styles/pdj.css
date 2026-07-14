@@ -169,62 +169,9 @@
 .pdj-stats-revenue {
   display: none;
 }
-/* Style « Tuile, valeur seule » (composant partagé StatTile) : liseré d'accent à
- * gauche, libellé en haut, valeur en bas. SANS icône.
- *
- * Carte compacte : les libellés sont longs et ne sont pas tronqués — c'est donc
- * tout le reste qui se resserre. Mêmes proportions qu'au rapprochement.
- *
- * `margin-top: auto` colle la valeur en bas : la grille étire les cartes à
- * hauteur égale, et un libellé sur deux lignes désalignerait sinon sa valeur. */
-.pdj-stat {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  padding: 0.55rem 0.7rem;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-}
-/* Liseré d'accent à gauche — écran uniquement (masqué en @media print). */
-.pdj-stat::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: 3px;
-  background: var(--pdj-accent, var(--primary));
-  border-radius: var(--radius) 0 0 var(--radius);
-}
-.pdj-stat-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.4rem;
-  margin-top: auto;
-}
-.pdj-stat-value {
-  font-size: 1.25rem;
-  font-weight: 700;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-}
-.pdj-stat-label {
-  font-size: 0.6rem;
-  font-weight: 500;
-  line-height: 1.15;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-  color: var(--muted-foreground);
-}
-
-/* Carte KPI présente dans le PDF uniquement (masquée à l'écran) : conserve
-   une rangée écran équilibrée tout en gardant le footer d'impression complet. */
-.pdj-stat-print-only {
-  display: none;
-}
+/* Les KPI utilisent le composant partagé StatTile (style Tuile). Rien à styler
+   ici pour l'écran ; seule l'IMPRESSION recible `.stat-tile*` (voir @media print
+   plus bas) pour retrouver le footer compact du rapport. */
 
 .pdj-error {
   padding: 0.75rem 1rem;
@@ -416,17 +363,23 @@
     grid-template-columns: repeat(5, 1fr);
     gap: 10px;
   }
-  /* Le DOM porte le libellé en PREMIER (mise en page écran). Le footer du PDF
-     le veut sous la valeur : `column-reverse` inverse l'affichage seul. */
-  .pdj-stat {
-    display: flex;
+  /* Les KPI sont des StatTile : on APLATIT la tuile pour le footer du PDF —
+     liseré masqué, fond clair, corps compact, valeur AU-DESSUS du libellé
+     (column-reverse). On recible les classes stables du composant. */
+  .pdj-stats .stat-tile {
+    background: #fafafa;
+    border: 1px solid #e0e0e0;
+    border-radius: 1px;
+  }
+  .pdj-stats .stat-tile__rail {
+    display: none;
+  }
+  .pdj-stats .stat-tile__body {
     flex-direction: column-reverse;
     gap: 0;
     padding: 3px 6px;
     text-align: center;
-    background: #fafafa;
-    border: 1px solid #e0e0e0;
-    border-radius: 1px;
+    align-items: center;
   }
   /* 2e rangée : cases « € » à remplir à la main (comme l'app d'origine) */
   .pdj-stats-revenue {
@@ -454,22 +407,14 @@
     color: #666;
     text-transform: uppercase;
   }
-  /* L'icône étant masquée plus bas, la rangée ne porte plus que la valeur :
-     un bloc centré, sans la marge auto qui la collait en bas à l'écran. */
-  .pdj-stat-row {
-    display: block;
-    margin-top: 0;
-  }
-  .pdj-stat-value {
-    display: block;
+  .pdj-stats .stat-tile__value {
     margin-bottom: 1px;
     font-size: 10px;
     font-weight: 400;
+    line-height: normal;
     color: #1a1a1a;
   }
-  .pdj-stat-label {
-    display: block;
-    margin-top: 0;
+  .pdj-stats .stat-tile__label {
     font-size: 5.5px;
     line-height: normal;
     letter-spacing: 0.4px;
@@ -482,17 +427,12 @@
     margin-left: 2px;
     vertical-align: middle;
   }
-  /* Décorations écran masquées à l'impression (liseré d'accent + étoile) */
-  .pdj-stat::before,
+  /* Étoile VIP masquée à l'impression (le liseré de la tuile l'est déjà). */
   .pdj-name-star {
     display: none !important;
   }
-  /* KPI présents à l'écran uniquement (le footer PDF garde ses 5 colonnes) */
-  .pdj-stat-extra {
+  /* KPI présents à l'écran uniquement (le footer PDF garde ses 5 colonnes). */
+  .pdj-stats .stat-tile--print-hidden {
     display: none !important;
-  }
-  /* Carte « impression seule » (ex. Départ) : réaffichée dans le PDF. */
-  .pdj-stat-print-only {
-    display: block !important;
   }
 }
