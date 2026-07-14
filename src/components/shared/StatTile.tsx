@@ -65,18 +65,14 @@ export function StatTile({
         className="stat-tile__rail w-2 shrink-0"
         style={{ background: 'var(--tile)' }}
       />
-      <div
-        className={cn(
-          'stat-tile__body flex min-w-0 flex-1 flex-col justify-center gap-1 px-3 py-[0.55rem]',
-          reference != null && 'items-center text-center',
-        )}
-      >
+      <div className="stat-tile__body flex min-w-0 flex-1 flex-col justify-center gap-1 px-3 py-[0.55rem]">
         <span className="stat-tile__label text-[0.6rem] font-semibold uppercase leading-[1.15] tracking-[0.03em] text-muted-foreground">
           {label}
         </span>
         {reference != null ? (
-          // Fraction : valeur / barre horizontale / référence, centrées.
-          <span className="stat-tile__value inline-flex flex-col items-center gap-[0.18rem] leading-[1.1]">
+          // Fraction : valeur / barre horizontale / référence — centrée dans la
+          // carte (self-center), MAIS le libellé reste en haut à gauche.
+          <span className="stat-tile__value inline-flex flex-col items-center gap-[0.18rem] self-center text-center leading-[1.1]">
             <span className="text-[1.4rem] font-bold tabular-nums text-foreground">
               {value}
             </span>
