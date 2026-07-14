@@ -399,15 +399,24 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   }
 
   // --- Clôture / réouverture / impression (feuille jour) -------------------
+  // Clôturer ou réouvrir un jour change l'ensemble des jours CLÔTURÉS, seule base
+  // de l'analytique (récap facturable). On invalide donc son cache (préfixe
+  // `monthly-counts` → vues annuelle ET mensuelle) pour qu'il se resynchronise
+  // sans rechargement complet de la page.
+  const invalidateAnalytique = () =>
+    queryClient.invalidateQueries({ queryKey: ['rapro', 'monthly-counts'] })
   // Exécute une mutation de feuille puis resynchronise le cache (échec
   // silencieux : l'invalidation rétablit l'état réel du serveur).
   function refreshSheet(run: () => Promise<void>) {
     run()
       .catch(() => {})
       .finally(() =>
-        queryClient.invalidateQueries({
-          queryKey: ['rapro', 'sheet', selectedDate],
-        }),
+        Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: ['rapro', 'sheet', selectedDate],
+          }),
+          invalidateAnalytique(),
+        ]),
       )
   }
   function handleClose() {
@@ -415,7 +424,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
     // Matérialise les chambres vendues encore au défaut (nettoyée implicite, sans
     // ligne) pour que le récap facturable les compte, PUIS clôture (commentaire
     // dans le même upsert ; signataire posé serveur). On invalide aussi le jour,
-    // qui gagne de nouvelles lignes nettoyée.
+    // qui gagne de nouvelles lignes nettoyée, et l'analytique (nouveau jour clôturé).
     const toMaterialize = [...occupied].filter((r) => !statuses.has(r))
     materializeCleaned(selectedDate, toMaterialize)
       .then(() => validateSheet(selectedDate, comment))
@@ -428,6 +437,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
           queryClient.invalidateQueries({
             queryKey: ['rapro', 'day', selectedDate],
           }),
+          invalidateAnalytique(),
         ]),
       )
   }
