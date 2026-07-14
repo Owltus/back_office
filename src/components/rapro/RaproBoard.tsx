@@ -13,6 +13,7 @@ import {
   BedDouble,
   Info,
   LineChart,
+  Lock,
   RotateCcw,
   Scale,
   Sparkles,
@@ -627,7 +628,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
               grille des étages (une colonne par étage), aux mêmes gabarits que le
               contenu réel pour ne rien décaler à l'arrivée des données. */}
           <div className="rapro-stats" aria-hidden="true">
-            {Array.from({ length: 5 }).map((_, i) => (
+            {Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="rapro-stat">
                 <Skeleton className="h-2.5 w-2/3" />
                 <div className="rapro-stat-row">
@@ -688,11 +689,11 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
           hint="Chambres nettoyées aujourd'hui (facturées)."
         />
         <Stat
-          value={dash(hasDue ? rec.pending : '—')}
-          label="Reste à faire"
-          icon={Scale}
-          accent={reconciled ? '#34d399' : '#fbbf24'}
-          hint="Chambres encore à nettoyer (bloquées). Zéro = tout est fait."
+          value={dash(stats.todo)}
+          label="Bloquées"
+          icon={Lock}
+          accent="#f87171"
+          hint="Chambres occupées non nettoyées (bloquées, restent dues)."
         />
         <Stat
           value={dash(stats.refus)}
@@ -707,6 +708,13 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
           icon={UserX}
           accent="#a78bfa"
           hint="Vendue mais client absent (hors charge)."
+        />
+        <Stat
+          value={dash(hasDue ? rec.pending : '—')}
+          label="Reste à faire"
+          icon={Scale}
+          accent={reconciled ? '#34d399' : '#fbbf24'}
+          hint="Chambres encore à nettoyer (bloquées du jour + reportées). Zéro = tout est fait."
         />
       </div>
 
