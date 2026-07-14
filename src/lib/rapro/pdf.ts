@@ -22,11 +22,20 @@ import {
   type CellState,
 } from '#/lib/rapro/constants.ts'
 import { FLOORS } from '#/lib/rapro/rooms.ts'
-import type { RoomStatus } from '#/lib/rapro/types.ts'
+import type { Qualifier, RoomStatus } from '#/lib/rapro/types.ts'
+
+/** Glyphe (lettre) d'un sur-statut, dessiné en coin de case au PDF (jsPDF ne rend
+ * pas de SVG lucide) : F = faux no-show, A = départ anticipé, D = délogement. */
+const QUALIFIER_GLYPH: Record<Qualifier, string> = {
+  faux_noshow: 'F',
+  depart_anticipe: 'A',
+  delogement: 'D',
+}
 
 export interface RaproPdfData {
   titleDate: string
   statuses: ReadonlyMap<number, RoomStatus>
+  qualifiers: ReadonlyMap<number, Qualifier>
   occupied: ReadonlySet<number>
   /** Chambres reportées (dues antérieurement, jamais résolues) — marquées. */
   carried: ReadonlySet<number>
@@ -111,6 +120,7 @@ function renderRaproDocument(
   {
     titleDate,
     statuses,
+    qualifiers,
     occupied,
     carried,
     counts,
@@ -179,10 +189,17 @@ function renderRaproDocument(
       pdf.text(String(room), cx + 1 + w / 2, cellY + h / 2 + 1.1, {
         align: 'center',
       })
-      // Reportée : pastille d'angle orange (marqueur additif, garde la couleur).
+      // Reportée : pastille d'angle orange (haut-droite, marqueur additif).
       if (carried.has(room)) {
         pdf.setFillColor(251, 146, 60)
         pdf.circle(cx + 1 + w - 1, cellY + 1, 0.7, 'F')
+      }
+      // Sur-statut : glyphe en coin HAUT-GAUCHE (opposé à la reportée).
+      const q = qualifiers.get(room)
+      if (q) {
+        pdf.setFont('helvetica', 'bold').setFontSize(5)
+        pdf.setTextColor(text[0], text[1], text[2])
+        pdf.text(QUALIFIER_GLYPH[q], cx + 1.6, cellY + 2, { align: 'left' })
       }
     })
   })
@@ -211,7 +228,17 @@ function renderRaproDocument(
     pdf.text(lbl, lx + 4, y)
     lx += itemW[i] + legendGap
   })
-  y += 8
+  y += 5
+
+  // Rappel des sur-statuts (glyphes dessinés en coin de case).
+  pdf.setFont('helvetica', 'normal').setFontSize(6.5).setTextColor(110)
+  pdf.text(
+    'Sur-statuts : F = Faux no-show   A = Départ anticipé   D = Délogement',
+    RIGHT,
+    y,
+    { align: 'right' },
+  )
+  y += 6
 
   // --- Commentaire : cadre pleine largeur jusqu'aux signatures --------------
   const sigY = 255

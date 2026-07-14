@@ -34,8 +34,9 @@ export interface DaySnapshot {
   closed: boolean
 }
 
-/** Une chambre est « résolue » (cesse de rouler) si elle est nettoyée ou hors
- * charge (`refus`/`noshow`). */
+/** Une chambre est « résolue » (cesse de rouler) si son statut de base est
+ * nettoyée ou hors charge (`refus`/`noshow`). Seule `non_nettoyee` (« Bloquée »)
+ * roule. Le sur-statut n'entre pas en compte (orthogonal). */
 function isResolved(status: RoomStatus): boolean {
   return (
     status === 'nettoyee' ||

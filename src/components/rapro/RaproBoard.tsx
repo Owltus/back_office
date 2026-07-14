@@ -9,15 +9,17 @@ import { Link } from '@tanstack/react-router'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import {
+  ArrowRightLeft,
   Ban,
   BedDouble,
-  CheckCheck,
   History,
   Info,
   LineChart,
+  LogOut,
   RotateCcw,
   Scale,
   Sparkles,
+  UserCheck,
   UserX,
 } from 'lucide-react'
 
@@ -34,6 +36,15 @@ import { Tip } from '#/components/shared/Tip.tsx'
 import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
 import { useStepNavKeys } from '#/components/shared/useStepNavKeys.ts'
 import { Button } from '#/components/ui/button.tsx'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuLabel,
+  ContextMenuRadioGroup,
+  ContextMenuRadioItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from '#/components/ui/context-menu.tsx'
 import { Textarea } from '#/components/ui/textarea.tsx'
 import {
   Tooltip,
@@ -53,11 +64,15 @@ import {
 import {
   CELL_STATES,
   cellState,
+  countQualifiers,
   countStats,
   LEGEND_ORDER,
-  nextStatus,
+  QUALIFIER_LABEL,
+  QUALIFIER_ORDER,
+  qualifierOf,
   STATUS_LABEL,
   statusOf,
+  toggleClean,
 } from '#/lib/rapro/constants.ts'
 import { addDays, clampDay, today } from '#/lib/rapro/day.ts'
 import { printRaproSheet } from '#/lib/rapro/pdf.ts'
@@ -65,20 +80,39 @@ import { isReconciled, reconcile } from '#/lib/rapro/reconcile.ts'
 import { FLOORS } from '#/lib/rapro/rooms.ts'
 import { missingSources, type MissingSource } from '#/lib/rapro/sources.ts'
 import {
+  clearRoom,
   fetchDay,
   fetchOfficialOcc,
   fetchOldestDay,
   fetchSheet,
   fetchValidatedDays,
+  materializeCleaned,
   reopenSheet,
   saveComment,
   setStatus,
   validateSheet,
 } from '#/lib/rapro/service.ts'
-import type { RaproDay, RaproSheet, RoomStatus } from '#/lib/rapro/types.ts'
+import type {
+  Qualifier,
+  RaproDay,
+  RaproSheet,
+  RoomStatus,
+} from '#/lib/rapro/types.ts'
 import { cn } from '#/lib/utils.ts'
 
 const EMPTY: ReadonlyMap<number, RoomStatus> = new Map()
+const EMPTY_QUAL: ReadonlyMap<number, Qualifier> = new Map()
+
+/** Statuts de BASE d'exception du menu contextuel (clic droit). « Nettoyée » et
+ * « Refus » n'y figurent PAS : ils s'appliquent au clic gauche (bascule). */
+const ROOM_STATUS_ORDER: RoomStatus[] = ['non_nettoyee', 'noshow']
+
+/** Icône affichée en case pour chaque sur-statut (rendu par icône, pas couleur). */
+const QUALIFIER_ICON: Record<Qualifier, ComponentType<{ className?: string }>> = {
+  faux_noshow: UserCheck,
+  depart_anticipe: LogOut,
+  delogement: ArrowRightLeft,
+}
 
 /**
  * Rapprochement de chambres — suivi ménage par chambre et par jour.
@@ -86,9 +120,11 @@ const EMPTY: ReadonlyMap<number, RoomStatus> = new Map()
  * Cards de synthèse (style PDJ) + grille étages → chambres. L'occupation (donc
  * le nombre de chambres vendues ET le grisé des non vendues) vient du PDJ, une
  * seule et même source → tout reste synchro avec ce qu'on voit dans la grille.
- * Chaque chambre porte un statut ménage (nettoyée / non nettoyée / refus /
- * no-show) que l'on fait défiler au clic ; l'état est persisté par (jour,
- * chambre), en optimiste. Écriture super/admin — RLS.
+ * Postulat : une chambre vendue est NETTOYÉE par défaut. Le CLIC GAUCHE bascule
+ * entre nettoyée et refus (geste courant) ; le CLIC DROIT ouvre un menu pour les
+ * statuts d'exception (à nettoyer / bloquée / no-show / faux no-show). L'état est
+ * persisté par (jour, chambre), en optimiste — seules les exceptions sont
+ * stockées. Écriture super/admin — RLS.
  */
 export function RaproBoard({ initialDate }: { initialDate?: string }) {
   const { user, role } = useAuth()
@@ -139,6 +175,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
     queryFn: () => fetchDay(selectedDate),
   })
   const statuses = day?.statuses ?? EMPTY
+  const qualifiers = day?.qualifiers ?? EMPTY_QUAL
 
   // Feuille jour : clôture + commentaire (table rapro_sheets, au niveau jour).
   const { data: sheet } = useQuery({
@@ -153,6 +190,8 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
     setComment(sheet?.comment ?? '')
   }, [sheet?.reportDate, sheet?.comment])
   const [pdfBusy, setPdfBusy] = useState(false)
+  // Chambre dont le menu contextuel est ouvert : on lui garde le style de survol.
+  const [menuRoom, setMenuRoom] = useState<number | null>(null)
 
   // OCC officiel du PMS à J-1 (décalage de datage). Sert d'unique CONTRÔLE
   // comptable : si l'occupation PDJ diffère du PMS, on l'alerte (c'est là que les
@@ -199,6 +238,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   const optionalMissing = missing.filter((m) => !m.required)
 
   const stats = countStats(statuses, occupied)
+  const qualCounts = countQualifiers(qualifiers, occupied)
 
   // Roulement (report) DÉRIVÉ : on relit une fenêtre bornée de jours précédents
   // (statuts rapro + occupation PDJ), mêmes clés → cache partagé avec la
@@ -303,54 +343,112 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   // Écriture optimiste d'un lot de statuts (jour courant) : snapshot → maj cache
   // → persistance parallèle → rollback réel par snapshot en cas d'échec (fiable
   // même hors ligne). Chemin unique partagé par la chambre seule et l'étage.
-  async function applyStatuses(changes: Array<[number, RoomStatus]>) {
+  async function applyStatuses(
+    changes: Array<[number, RoomStatus, Qualifier | null]>,
+  ) {
     if (!canEditFields || !isSuccess || changes.length === 0) return
     const key = ['rapro', 'day', selectedDate]
     await queryClient.cancelQueries({ queryKey: key })
     const prev = queryClient.getQueryData<RaproDay>(key)
     const nextStatuses = new Map(statuses)
-    for (const [room, status] of changes) {
-      if (status === 'non_nettoyee') nextStatuses.delete(room)
-      else nextStatuses.set(room, status)
+    const nextQualifiers = new Map(qualifiers)
+    // On stocke l'état posé (base + sur-statut), y compris `nettoyee`. Le retour à
+    // l'origine passe par `clearRooms`, pas par ici.
+    for (const [room, base, qual] of changes) {
+      nextStatuses.set(room, base)
+      if (qual) nextQualifiers.set(room, qual)
+      else nextQualifiers.delete(room)
     }
     queryClient.setQueryData<RaproDay>(key, {
       reportDate: selectedDate,
       statuses: nextStatuses,
+      qualifiers: nextQualifiers,
     })
     try {
       await Promise.all(
-        changes.map(([room, status]) => setStatus(selectedDate, room, status)),
+        changes.map(([room, base, qual]) =>
+          setStatus(selectedDate, room, base, qual),
+        ),
       )
     } catch {
       queryClient.setQueryData(
         key,
-        prev ?? { reportDate: selectedDate, statuses: new Map() },
+        prev ?? {
+          reportDate: selectedDate,
+          statuses: new Map(),
+          qualifiers: new Map(),
+        },
       )
     }
   }
 
-  // Fait défiler le statut d'une chambre au clic.
-  function cycle(room: number) {
-    return applyStatuses([[room, nextStatus(statusOf(statuses, room))]])
+  // Efface l'état de chambres (retour à l'ORIGINE : ligne supprimée → base et
+  // sur-statut effacés). Même patron optimiste + rollback. Sert au rollback
+  // d'étage et à repasser une chambre non vendue en grisé.
+  async function clearRooms(rooms: number[]) {
+    if (!canEditFields || !isSuccess || rooms.length === 0) return
+    const key = ['rapro', 'day', selectedDate]
+    await queryClient.cancelQueries({ queryKey: key })
+    const prev = queryClient.getQueryData<RaproDay>(key)
+    const nextStatuses = new Map(statuses)
+    const nextQualifiers = new Map(qualifiers)
+    for (const room of rooms) {
+      nextStatuses.delete(room)
+      nextQualifiers.delete(room)
+    }
+    queryClient.setQueryData<RaproDay>(key, {
+      reportDate: selectedDate,
+      statuses: nextStatuses,
+      qualifiers: nextQualifiers,
+    })
+    try {
+      await Promise.all(rooms.map((room) => clearRoom(selectedDate, room)))
+    } catch {
+      queryClient.setQueryData(
+        key,
+        prev ?? {
+          reportDate: selectedDate,
+          statuses: new Map(),
+          qualifiers: new Map(),
+        },
+      )
+    }
   }
 
-  // Bouton d'en-tête d'étage, À BASCULE : s'il reste des chambres OCCUPÉES à
-  // faire → toutes en « nettoyée » (laisse refus / no-show en l'état) ; sinon
-  // (rien à faire) → RETOUR ARRIÈRE : toute chambre de l'étage ayant un statut
-  // (nettoyée, refus, no-show — occupée OU non vendue) repasse en « non
-  // nettoyée » (une non vendue redevient alors grisée).
-  function toggleFloor(rooms: number[]) {
-    const toDo = rooms.filter(
-      (r) => isDue(r) && statusOf(statuses, r) === 'non_nettoyee',
-    )
-    const forward = toDo.length > 0
-    const targets = forward
-      ? toDo
-      : rooms.filter((r) => statusOf(statuses, r) !== 'non_nettoyee')
-    const newStatus: RoomStatus = forward ? 'nettoyee' : 'non_nettoyee'
-    return applyStatuses(
-      targets.map((r): [number, RoomStatus] => [r, newStatus]),
-    )
+  // Clic gauche = bascule du BASE (le sur-statut est préservé). Vendue : nettoyée
+  // ↔ refus. Non vendue : ROTATION non vendue (grise) → nettoyée → refus → non
+  // vendue. (Bloquée / no-show + sur-statuts restent au clic droit.)
+  function toggle(room: number) {
+    const q = qualifierOf(qualifiers, room)
+    if (isDue(room)) {
+      return applyStatuses([[room, toggleClean(statusOf(statuses, room)), q]])
+    }
+    if (!statuses.has(room)) return applyStatuses([[room, 'nettoyee', q]])
+    if (statusOf(statuses, room) === 'nettoyee') {
+      return applyStatuses([[room, 'refus', q]])
+    }
+    return clearRooms([room])
+  }
+
+  // Clic droit — statut de BASE choisi (sur-statut préservé).
+  function setBase(room: number, base: RoomStatus) {
+    return applyStatuses([[room, base, qualifierOf(qualifiers, room)]])
+  }
+
+  // Clic droit — sur-statut choisi (base préservé). D4 : poser « faux no-show »
+  // sur un no-show fait sortir le base du no-show (client présent → nettoyée).
+  function setQualifier(room: number, qual: Qualifier | null) {
+    let base = statusOf(statuses, room)
+    if (qual === 'faux_noshow' && base === 'noshow') base = 'nettoyee'
+    return applyStatuses([[room, base, qual]])
+  }
+
+  // Bouton d'en-tête d'étage : ROLLBACK à l'état d'origine. Toute chambre de
+  // l'étage ayant reçu un statut (bloquée, refus, no-show, faux no-show) repasse
+  // en « nettoyée » (le défaut : suppression de la ligne). Sert à annuler d'un
+  // geste les saisies erronées d'un étage.
+  function resetFloor(rooms: number[]) {
+    return clearRooms(rooms.filter((r) => statuses.has(r)))
   }
 
   // --- Clôture / réouverture / impression (feuille jour) -------------------
@@ -367,9 +465,24 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   }
   function handleClose() {
     if (!user) return
-    // Commentaire écrit dans le même upsert que la clôture (une seule requête).
-    // Le signataire (validated_by) est posé côté serveur par le trigger.
-    refreshSheet(() => validateSheet(selectedDate, comment))
+    // Matérialise les chambres vendues encore au défaut (nettoyée implicite, sans
+    // ligne) pour que le récap facturable les compte, PUIS clôture (commentaire
+    // dans le même upsert ; signataire posé serveur). On invalide aussi le jour,
+    // qui gagne de nouvelles lignes nettoyée.
+    const toMaterialize = [...occupied].filter((r) => !statuses.has(r))
+    materializeCleaned(selectedDate, toMaterialize)
+      .then(() => validateSheet(selectedDate, comment))
+      .catch(() => {})
+      .finally(() =>
+        Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: ['rapro', 'sheet', selectedDate],
+          }),
+          queryClient.invalidateQueries({
+            queryKey: ['rapro', 'day', selectedDate],
+          }),
+        ]),
+      )
   }
   function handleReopen() {
     refreshSheet(() => reopenSheet(selectedDate))
@@ -382,6 +495,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
         {
           titleDate: title,
           statuses,
+          qualifiers,
           occupied,
           carried,
           counts: {
@@ -643,7 +757,28 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
           label="No-show"
           icon={UserX}
           accent="#64748b"
-          hint="Chambre marquée à la main dans la grille."
+          hint="Vendue mais client absent (hors charge)."
+        />
+        <Stat
+          value={dash(qualCounts.faux_noshow)}
+          label="Faux no-show"
+          icon={UserCheck}
+          accent="#2dd4bf"
+          hint="Sur-statut : déclaré absent par le PMS mais en réalité présent."
+        />
+        <Stat
+          value={dash(qualCounts.depart_anticipe)}
+          label="Départ anticipé"
+          icon={LogOut}
+          accent="#38bdf8"
+          hint="Sur-statut : client parti tôt le matin."
+        />
+        <Stat
+          value={dash(qualCounts.delogement)}
+          label="Délogement"
+          icon={ArrowRightLeft}
+          accent="#c084fc"
+          hint="Sur-statut : client changé de chambre / recouche."
         />
       </div>
 
@@ -674,15 +809,9 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
       ) : (
         <div className={cn('rapro-floors', !canEditFields && 'is-locked')}>
           {FLOORS.map(({ floor, rooms }) => {
-            const hasToDo = rooms.some(
-              (r) => isDue(r) && statusOf(statuses, r) === 'non_nettoyee',
-            )
-            const hasResolved = rooms.some(
-              (r) => statusOf(statuses, r) !== 'non_nettoyee',
-            )
-            // Icône ↺ (retour arrière) dès qu'il n'y a plus rien à nettoyer mais
-            // qu'il reste des statuts à réinitialiser (y compris non vendues).
-            const floorDone = !hasToDo && hasResolved
+            // Bouton de rollback actif seulement si au moins une chambre de
+            // l'étage porte un statut (≠ nettoyée par défaut) à annuler.
+            const hasStatus = rooms.some((r) => statuses.has(r))
             return (
               <div key={floor} className="rapro-floor">
                 <div className="rapro-floor-head">
@@ -691,49 +820,102 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
                     <button
                       type="button"
                       className="rapro-floor-action"
-                      onClick={() => toggleFloor(rooms)}
-                      disabled={!isSuccess}
-                      title={
-                        floorDone
-                          ? "Repasser l'étage en non nettoyé"
-                          : "Marquer l'étage nettoyé"
-                      }
-                      aria-label={
-                        floorDone
-                          ? `Repasser l'étage ${floor} en non nettoyé`
-                          : `Marquer l'étage ${floor} nettoyé`
-                      }
+                      onClick={() => resetFloor(rooms)}
+                      disabled={!isSuccess || !hasStatus}
+                      title="Rétablir l'état d'origine de l'étage"
+                      aria-label={`Rétablir l'état d'origine de l'étage ${floor}`}
                     >
-                      {floorDone ? (
-                        <RotateCcw className="size-4" />
-                      ) : (
-                        <CheckCheck className="size-4" />
-                      )}
+                      <RotateCcw className="size-4" />
                     </button>
                   )}
                 </div>
                 <div className="rapro-rooms">
                   {rooms.map((room) => {
                     const status = statusOf(statuses, room)
-                    const isEmpty = hasDue && !isDue(room)
+                    const qual = qualifierOf(qualifiers, room)
+                    const QualIcon = qual ? QUALIFIER_ICON[qual] : null
+                    // Grisée seulement si NON touchée (pas de ligne) ET non vendue.
+                    // Une chambre non vendue explicitement marquée montre sa couleur.
+                    const isEmpty = !statuses.has(room) && !isDue(room)
                     const isCarried = carried.has(room)
                     const cls = CELL_STATES[cellState(status, isEmpty)].webClass
-                    return (
+                    const label = `Chambre ${room} — ${STATUS_LABEL[status]}${qual ? ` — ${QUALIFIER_LABEL[qual]}` : ''}${isEmpty ? ' — non vendue' : ''}${isCarried ? ' — reportée' : ''}`
+                    const btn = (
                       <button
                         key={room}
                         type="button"
-                        onClick={() => cycle(room)}
+                        onClick={() => toggle(room)}
                         disabled={!isSuccess}
-                        aria-label={`Chambre ${room} — ${STATUS_LABEL[status]}${isEmpty ? ' — non vendue' : ''}${isCarried ? ' — reportée' : ''}`}
-                        title={`${STATUS_LABEL[status]}${isEmpty ? ' · non vendue' : ''}${isCarried ? ' · reportée' : ''}`}
+                        aria-label={label}
+                        title={label}
                         className={cn(
                           'rapro-room',
                           cls,
                           isCarried && 'rapro-room-reportee',
+                          menuRoom === room && 'is-active',
                         )}
                       >
+                        {QualIcon && (
+                          <QualIcon className="rapro-room-qual-icon" />
+                        )}
                         {room}
                       </button>
+                    )
+                    // Jour clôturé / lecture seule : bouton simple, sans menu.
+                    if (!canEditFields) return btn
+                    return (
+                      <ContextMenu
+                        key={room}
+                        onOpenChange={(open) =>
+                          setMenuRoom(open ? room : null)
+                        }
+                      >
+                        <ContextMenuTrigger asChild>{btn}</ContextMenuTrigger>
+                        <ContextMenuContent className="w-48">
+                          {/* Statut de BASE (exceptions ; nettoyée/refus = clic gauche). */}
+                          <ContextMenuRadioGroup
+                            value={status}
+                            onValueChange={(v) => setBase(room, v as RoomStatus)}
+                          >
+                            {ROOM_STATUS_ORDER.map((s) => (
+                              <ContextMenuRadioItem key={s} value={s}>
+                                <span
+                                  className={cn(
+                                    'rapro-legend-dot',
+                                    CELL_STATES[cellState(s, false)].legendMod,
+                                  )}
+                                />
+                                {STATUS_LABEL[s]}
+                              </ContextMenuRadioItem>
+                            ))}
+                          </ContextMenuRadioGroup>
+                          <ContextMenuSeparator />
+                          <ContextMenuLabel>Sur-statut</ContextMenuLabel>
+                          {/* Sur-statut (au plus un) : « Aucun » + les qualificatifs. */}
+                          <ContextMenuRadioGroup
+                            value={qual ?? 'none'}
+                            onValueChange={(v) =>
+                              setQualifier(
+                                room,
+                                v === 'none' ? null : (v as Qualifier),
+                              )
+                            }
+                          >
+                            <ContextMenuRadioItem value="none">
+                              Aucun
+                            </ContextMenuRadioItem>
+                            {QUALIFIER_ORDER.map((q) => {
+                              const Icon = QUALIFIER_ICON[q]
+                              return (
+                                <ContextMenuRadioItem key={q} value={q}>
+                                  <Icon className="size-3.5" />
+                                  {QUALIFIER_LABEL[q]}
+                                </ContextMenuRadioItem>
+                              )
+                            })}
+                          </ContextMenuRadioGroup>
+                        </ContextMenuContent>
+                      </ContextMenu>
                     )
                   })}
                 </div>
@@ -757,6 +939,16 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
             <span className="rapro-legend-dot is-reportee" />
             Reportée
           </span>
+          {/* Sur-statuts : affichés par ICÔNE (pas par couleur). */}
+          {QUALIFIER_ORDER.map((q) => {
+            const Icon = QUALIFIER_ICON[q]
+            return (
+              <span key={q} className="rapro-legend-item">
+                <Icon className="rapro-legend-icon" />
+                {QUALIFIER_LABEL[q]}
+              </span>
+            )
+          })}
         </div>
       )}
 

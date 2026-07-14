@@ -1,14 +1,17 @@
 /*
  * Accès Supabase du Rapprochement — suivi ménage par (jour, chambre).
- * Une ligne = une chambre à un statut non-défaut (nettoyee / refus) un jour
- * donné ; l'absence de ligne vaut `non_nettoyee`. Convention d'erreur maison :
- * { data, error } → if (error) throw error, l'appelant .catch().
+ * Postulat : une chambre vendue est NETTOYÉE par défaut. On stocke tout statut
+ * POSÉ explicitement (y compris `nettoyee`, ex. une chambre non vendue qu'on
+ * marque nettoyée) ; l'absence de ligne = chambre NON TOUCHÉE (nettoyée par défaut
+ * si vendue, grisée sinon). `clearRoom` efface la ligne (retour à l'origine).
+ * Convention d'erreur maison : { data, error } → if (error) throw error.
  */
 
 import { supabase } from '#/lib/supabase.ts'
 import type {
   DbRaproRoom,
   DbRaproSheet,
+  Qualifier,
   RaproDay,
   RaproSheet,
   RoomStatus,
@@ -18,18 +21,24 @@ import type {
 export const RAPRO_TABLE = 'rapro_rooms'
 export const RAPRO_SHEETS_TABLE = 'rapro_sheets'
 
-/** Statuts d'un jour (Map chambre→statut ; défaut non_nettoyee = absent). */
+/** État d'un jour : Map chambre→statut de base (défaut nettoyee = absent) +
+ * Map chambre→sur-statut (absent = aucun), dérivées des mêmes lignes. */
 export async function fetchDay(reportDate: string): Promise<RaproDay> {
   const { data, error } = await supabase
     .from(RAPRO_TABLE)
-    .select('room, status')
+    .select('room, status, qualifier')
     .eq('report_date', reportDate)
   if (error) throw error
   const statuses = new Map<number, RoomStatus>()
-  for (const r of (data ?? []) as Pick<DbRaproRoom, 'room' | 'status'>[]) {
+  const qualifiers = new Map<number, Qualifier>()
+  for (const r of (data ?? []) as Pick<
+    DbRaproRoom,
+    'room' | 'status' | 'qualifier'
+  >[]) {
     statuses.set(r.room, r.status)
+    if (r.qualifier) qualifiers.set(r.room, r.qualifier)
   }
-  return { reportDate, statuses }
+  return { reportDate, statuses, qualifiers }
 }
 
 /** Jour le plus ancien enregistré (borne basse de navigation), ou null. */
@@ -45,30 +54,61 @@ export async function fetchOldestDay(): Promise<string | null> {
 }
 
 /**
- * Fixe le statut d'une chambre pour un jour. Le statut par défaut
- * (`non_nettoyee`) n'est pas stocké : on supprime la ligne pour rester au plus
- * juste ; sinon upsert sur la clé (report_date, room).
+ * Pose l'état d'une chambre pour un jour (upsert sur la clé report_date, room) :
+ * statut de base + sur-statut. Tout est stocké, y compris `nettoyee` posée à la
+ * main (chambre non vendue marquée nettoyée). Le `qualifier` (nullable) est la 2e
+ * dimension orthogonale.
  */
 export async function setStatus(
   reportDate: string,
   room: number,
   status: RoomStatus,
+  qualifier: Qualifier | null,
 ): Promise<void> {
-  if (status === 'non_nettoyee') {
-    const { error } = await supabase
-      .from(RAPRO_TABLE)
-      .delete()
-      .eq('report_date', reportDate)
-      .eq('room', room)
-    if (error) throw error
-    return
-  }
   const { error } = await supabase
     .from(RAPRO_TABLE)
     .upsert(
-      { report_date: reportDate, room, status },
+      { report_date: reportDate, room, status, qualifier },
       { onConflict: 'report_date,room' },
     )
+  if (error) throw error
+}
+
+/**
+ * Efface le statut d'une chambre (retour à l'ORIGINE) : la ligne est supprimée,
+ * l'absence valant « non touchée » (nettoyée par défaut si vendue, grisée sinon).
+ * Utilisé par le rollback d'étage et la bascule des chambres non vendues.
+ */
+export async function clearRoom(reportDate: string, room: number): Promise<void> {
+  const { error } = await supabase
+    .from(RAPRO_TABLE)
+    .delete()
+    .eq('report_date', reportDate)
+    .eq('room', room)
+  if (error) throw error
+}
+
+/**
+ * Matérialise à la CLÔTURE une ligne `nettoyee` pour les chambres vendues encore
+ * au défaut implicite (aucune ligne stockée). Sans cela, une chambre nettoyée par
+ * défaut n'existerait pas en base et échapperait au récap facturable ELIOR (qui
+ * compte des lignes réelles). Les chambres portant déjà une exception ne sont PAS
+ * touchées : on n'insère QUE les `rooms` fournies (l'appelant transmet les
+ * occupées SANS ligne). Bulk insert ; `created_by`/`updated_at` posés par le
+ * trigger serveur.
+ */
+export async function materializeCleaned(
+  reportDate: string,
+  rooms: number[],
+): Promise<void> {
+  if (rooms.length === 0) return
+  // `ignoreDuplicates` → INSERT ... ON CONFLICT DO NOTHING : on n'écrase JAMAIS
+  // une ligne existante (une exception déjà posée reste intacte), on ne fait
+  // qu'ajouter les chambres au défaut implicite.
+  const { error } = await supabase.from(RAPRO_TABLE).upsert(
+    rooms.map((room) => ({ report_date: reportDate, room, status: 'nettoyee' })),
+    { onConflict: 'report_date,room', ignoreDuplicates: true },
+  )
   if (error) throw error
 }
 

@@ -1,50 +1,86 @@
-import type { RoomStatus } from '#/lib/rapro/types.ts'
+import type { Qualifier, RoomStatus } from '#/lib/rapro/types.ts'
 
-/** Ordre de défilement du statut au clic
- * (défaut → nettoyée → refus → no-show → défaut). */
-const STATUS_CYCLE: RoomStatus[] = ['non_nettoyee', 'nettoyee', 'refus', 'noshow']
-
-/** Libellés lisibles des statuts stockés. */
+/** Libellés lisibles des statuts de base. */
 export const STATUS_LABEL: Record<RoomStatus, string> = {
-  // `non_nettoyee` = terme technique interne ; affiché « Bloquée » (usage hôtelier).
-  non_nettoyee: 'Bloquée',
   nettoyee: 'Nettoyée',
+  // « Bloquée » = utilisée mais non nettoyée (reste due, roule). Le défaut est
+  // `nettoyee` (absence de ligne), donc `non_nettoyee` est toujours explicite.
+  non_nettoyee: 'Bloquée',
   refus: 'Refus',
   noshow: 'No-show',
 }
 
-/** Statut suivant dans le cycle. */
-export function nextStatus(status: RoomStatus): RoomStatus {
-  return STATUS_CYCLE[(STATUS_CYCLE.indexOf(status) + 1) % STATUS_CYCLE.length]
+/** Libellés des sur-statuts (qualificatifs), affichés par icône (cf. RaproBoard). */
+export const QUALIFIER_LABEL: Record<Qualifier, string> = {
+  faux_noshow: 'Faux no-show',
+  depart_anticipe: 'Départ anticipé',
+  delogement: 'Délogement',
 }
 
-/** Statut d'une chambre, avec la convention « absence de ligne = non_nettoyee ».
+/** Ordre d'affichage des sur-statuts (menu contextuel, légende). */
+export const QUALIFIER_ORDER: Qualifier[] = [
+  'faux_noshow',
+  'depart_anticipe',
+  'delogement',
+]
+
+/** Bascule du CLIC GAUCHE (geste courant) : entre nettoyée et refus, sans jamais
+ * passer par les statuts d'exception (réservés au menu contextuel). */
+export function toggleClean(status: RoomStatus): RoomStatus {
+  return status === 'refus' ? 'nettoyee' : 'refus'
+}
+
+/** Statut d'une chambre, avec la convention « absence de ligne = nettoyee ».
+ * Postulat : tout est nettoyé par défaut ; seules les exceptions sont stockées.
  * Source unique de cette règle — à utiliser partout plutôt que `?? …`. */
 export function statusOf(
   statuses: ReadonlyMap<number, RoomStatus>,
   room: number,
 ): RoomStatus {
-  return statuses.get(room) ?? 'non_nettoyee'
+  return statuses.get(room) ?? 'nettoyee'
 }
 
-/** Statuts HORS CHARGE (aucun ménage dû) : ils sortent de la balance et NE
- * roulent PAS d'un jour à l'autre — `refus` (client en séjour qui décline) et
- * `noshow` (vendue mais client absent). Tout le reste (`non_nettoyee`, la
- * « Bloquée ») = dû non fait → reste dans la balance et roule jusqu'à résolution. */
+/** Sur-statut d'une chambre (ou `null` si aucun). Dimension orthogonale au base. */
+export function qualifierOf(
+  qualifiers: ReadonlyMap<number, Qualifier>,
+  room: number,
+): Qualifier | null {
+  return qualifiers.get(room) ?? null
+}
+
+/** Statuts de BASE hors charge (aucun ménage dû, NON facturables) : ils sortent
+ * de la balance et NE roulent PAS d'un jour à l'autre — `refus` (client en séjour
+ * qui décline) et `noshow` (vendue mais client absent). `non_nettoyee`
+ * (« Bloquée ») = dû non fait → reste dans la balance et roule. Le sur-statut
+ * (qualifier) n'entre pas en compte : la facturation/balance suit le base. */
 export const JUSTIFIED_STATUSES = ['refus', 'noshow'] as const
 
 /**
- * État VISUEL d'une case (5 valeurs), dérivé du statut + de l'occupation :
- * `non_nettoyee` se scinde en `todo` (occupée, à faire) ou `empty` (non vendue).
- * C'est la clé du rendu couleur/libellé, côté écran comme PDF.
+ * État VISUEL d'une case, dérivé du statut + de l'occupation : le défaut
+ * `nettoyee` se rend `clean` si la chambre est vendue, `empty` (grisée) sinon ;
+ * `non_nettoyee` (à nettoyer) devient `todo` sur une chambre vendue. C'est la clé
+ * du rendu couleur/libellé, côté écran comme PDF.
  */
 export type CellState = 'clean' | 'todo' | 'refus' | 'noshow' | 'empty'
 
 export function cellState(status: RoomStatus, isEmpty: boolean): CellState {
-  if (status === 'nettoyee') return 'clean'
-  if (status === 'refus') return 'refus'
-  if (status === 'noshow') return 'noshow'
-  return isEmpty ? 'empty' : 'todo'
+  switch (status) {
+    case 'refus':
+      return 'refus'
+    case 'noshow':
+      return 'noshow'
+    // Défaut : grisé si la chambre n'est pas vendue, nettoyé sinon.
+    case 'nettoyee':
+      return isEmpty ? 'empty' : 'clean'
+    // « Bloquée » : grisée si non vendue, rouge « à faire » sinon.
+    case 'non_nettoyee':
+      return isEmpty ? 'empty' : 'todo'
+    default: {
+      // Garde d'exhaustivité : un nouveau RoomStatus non traité casse la compilation.
+      const _exhaustive: never = status
+      return _exhaustive
+    }
+  }
 }
 
 /** Descripteur d'affichage par état visuel : libellé, classe web, modif. de dot
@@ -70,23 +106,56 @@ export const LEGEND_ORDER: CellState[] = [
   'empty',
 ]
 
-/** Décompte d'un jour : nettoyées / refus / no-show (tous statuts), et « à faire »
- * (chambres occupées encore non nettoyées — a besoin de l'occupation). */
+/** Décompte des statuts de BASE sur les chambres DUES (occupées), en PARTITION
+ * (aucun recouvrement) : nettoyées, bloquées (`non_nettoyee`), refus, no-show.
+ * Chaque chambre due tombe dans exactement une catégorie. */
 export function countStats(
   statuses: ReadonlyMap<number, RoomStatus>,
   occupied: ReadonlySet<number>,
-): { clean: number; refus: number; noshow: number; todo: number } {
+): {
+  clean: number
+  todo: number
+  refus: number
+  noshow: number
+} {
   let clean = 0
+  let todo = 0
   let refus = 0
   let noshow = 0
-  for (const s of statuses.values()) {
-    if (s === 'nettoyee') clean++
-    else if (s === 'refus') refus++
-    else if (s === 'noshow') noshow++
-  }
-  let todo = 0
   for (const room of occupied) {
-    if (statusOf(statuses, room) === 'non_nettoyee') todo++
+    switch (statusOf(statuses, room)) {
+      case 'nettoyee':
+        clean++
+        break
+      case 'refus':
+        refus++
+        break
+      case 'noshow':
+        noshow++
+        break
+      case 'non_nettoyee':
+        todo++
+        break
+    }
   }
-  return { clean, refus, noshow, todo }
+  return { clean, todo, refus, noshow }
+}
+
+/** Décompte des sur-statuts sur les chambres DUES (occupées) : un compteur par
+ * qualificatif. Orthogonal à `countStats` (un qualificatif ne retire pas la
+ * chambre de sa catégorie de base). */
+export function countQualifiers(
+  qualifiers: ReadonlyMap<number, Qualifier>,
+  occupied: ReadonlySet<number>,
+): Record<Qualifier, number> {
+  const counts: Record<Qualifier, number> = {
+    faux_noshow: 0,
+    depart_anticipe: 0,
+    delogement: 0,
+  }
+  for (const room of occupied) {
+    const q = qualifiers.get(room)
+    if (q) counts[q]++
+  }
+  return counts
 }

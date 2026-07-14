@@ -1,8 +1,10 @@
 /*
- * Récap ménage (facturable ELIOR) — métier + accès Supabase en LECTURE. Les
- * statuts non-défaut (nettoyee / refus / noshow) sont stockés dans rapro_rooms →
- * une requête par plage de dates suffit (rapro_rooms n'a que `report_date`, d'où
- * `.gte/.lte`). L'agrégation « par jour / par mois » se fait côté client.
+ * Récap ménage (facturable ELIOR) — métier + accès Supabase en LECTURE. On
+ * compte les LIGNES stockées : les jours clôturés matérialisent une ligne
+ * `nettoyee` par chambre vendue facturée (cf. `materializeCleaned`). La
+ * facturation suit le statut de BASE (`nettoyee`) ; le sur-statut (`qualifier`,
+ * ex. faux no-show) est orthogonal et n'entre PAS dans le comptage facturable.
+ * L'agrégation « par jour / par mois » se fait côté client.
  */
 
 import { supabase } from '#/lib/supabase.ts'
@@ -45,6 +47,7 @@ export async function fetchStatusCountsByRange(
     if (rows.length === 0) break
     for (const r of rows) {
       const c = byDay.get(r.report_date) ?? emptyCounts()
+      // Facturable = statut de base `nettoyee` (le sur-statut est orthogonal).
       if (r.status === 'nettoyee') c.nettoyee++
       else if (r.status === 'refus') c.refus++
       else if (r.status === 'noshow') c.noshow++
