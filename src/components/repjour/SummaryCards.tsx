@@ -88,14 +88,8 @@ export function SummaryCards({
             label={card.label}
             accent="var(--primary)"
             className={i === 0 ? 'col-span-2 sm:col-span-1' : undefined}
-            value={
-              <>
-                {card.value}{' '}
-                <span className="text-sm font-medium text-muted-foreground">
-                  / {card.budgetValue}
-                </span>
-              </>
-            }
+            value={card.value}
+            reference={card.budgetValue}
           />
         ))}
 

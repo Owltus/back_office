@@ -152,28 +152,32 @@ export function AnalytiqueMoisBoard({
       loading={loading}
       skeleton={{ cols: 5, charts: 2, rows: new Date(year, month, 0).getDate() }}
     >
-      {/* Cartes résumé — libellé + valeur seuls (comme l'analytique
-          rapprochement). Le budget / objectif reste visible dans le tableau. */}
+      {/* Cartes résumé — réalisé / objectif en FRACTION (barre horizontale) quand
+          un budget existe pour le mois ; sinon valeur seule. */}
       <AnalytiqueCardsGrid>
         <StatCard
           label="Nuitées"
           accent="#818cf8"
           value={fmt.nuitees(summary.totalNuitees)}
+          reference={budget ? fmt.nuitees(budget.nuitees) : undefined}
         />
         <StatCard
           label="Taux d'occupation moyen"
           accent="#38bdf8"
           value={fmt.pct(summary.avgTO)}
+          reference={budget ? fmt.pct(budget.taux_occupation) : undefined}
         />
         <StatCard
           label="Revenu moyen par chambre"
           accent="#34d399"
           value={fmt.eur(summary.avgRevPAR)}
+          reference={budget ? fmt.eur(budget.revpar) : undefined}
         />
         <StatCard
           label="Chiffre d'affaires"
           accent="#fbbf24"
           value={fmt.eurInt(summary.totalRevenue)}
+          reference={budget ? fmt.eurInt(budget.room_revenue) : undefined}
         />
       </AnalytiqueCardsGrid>
 

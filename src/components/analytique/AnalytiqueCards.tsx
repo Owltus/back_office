@@ -22,18 +22,27 @@ export function StatCard({
   label,
   value,
   sub,
+  reference,
   accent = 'var(--primary)',
   children,
 }: {
   label: ReactNode
   value: ReactNode
   sub?: ReactNode
+  /** Référence de comparaison (budget / objectif) → valeur affichée en fraction. */
+  reference?: ReactNode
   /** Couleur du liseré (défaut primary). */
   accent?: string
   children?: ReactNode
 }) {
   return (
-    <StatTile label={label} value={value} accent={accent} sub={sub}>
+    <StatTile
+      label={label}
+      value={value}
+      accent={accent}
+      reference={reference}
+      sub={sub}
+    >
       {children}
     </StatTile>
   )

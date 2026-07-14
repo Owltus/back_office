@@ -156,28 +156,31 @@ export function AnalytiqueBoard() {
       loading={loading}
       skeleton={{ cols: 7, charts: 2, rows: 12 }}
     >
-      {/* Synthèse annuelle — libellé + valeur seuls (comme l'analytique
-          rapprochement). Le budget / objectif reste visible dans le tableau. */}
+      {/* Synthèse annuelle — réalisé / objectif en FRACTION (barre horizontale). */}
       <AnalytiqueCardsGrid>
         <StatCard
           label="Nuitées"
           accent="#818cf8"
           value={fmt.nuitees(summary.totalNuitees)}
+          reference={fmt.nuitees(summary.budgetTotalNuitees)}
         />
         <StatCard
           label="Taux d'occupation moyen"
           accent="#38bdf8"
           value={fmt.pct(summary.avgTO)}
+          reference={fmt.pct(summary.budgetAvgTO)}
         />
         <StatCard
           label="Revenu par chambre moyen"
           accent="#34d399"
           value={fmt.eur(summary.avgRevPAR)}
+          reference={fmt.eur(summary.budgetAvgRevPAR)}
         />
         <StatCard
           label="Chiffre d'affaires total"
           accent="#fbbf24"
           value={fmt.eurInt(summary.totalRevenue)}
+          reference={fmt.eurInt(summary.budgetTotalRevenue)}
         />
       </AnalytiqueCardsGrid>
 

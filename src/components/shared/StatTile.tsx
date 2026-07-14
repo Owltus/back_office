@@ -26,6 +26,7 @@ export function StatTile({
   value,
   accent,
   hint,
+  reference,
   sub,
   children,
   printHidden,
@@ -37,7 +38,11 @@ export function StatTile({
   accent: string
   /** Explication au survol (tooltip). */
   hint?: string
-  /** Ligne secondaire sous la valeur (ex. « / budget », « validées »). */
+  /** Référence de comparaison (ex. budget / objectif). Si fournie, la valeur
+   * s'affiche en FRACTION : valeur au-dessus, barre horizontale, référence en
+   * dessous — le tout centré (contenu plus haut). */
+  reference?: ReactNode
+  /** Ligne secondaire sous la valeur (ex. « validées »). */
   sub?: ReactNode
   /** Contenu libre sous la valeur (ex. barre de progression budget). */
   children?: ReactNode
@@ -60,13 +65,38 @@ export function StatTile({
         className="stat-tile__rail w-2 shrink-0"
         style={{ background: 'var(--tile)' }}
       />
-      <div className="stat-tile__body flex min-w-0 flex-1 flex-col justify-center gap-1 px-3 py-[0.55rem]">
+      <div
+        className={cn(
+          'stat-tile__body flex min-w-0 flex-1 flex-col justify-center gap-1 px-3 py-[0.55rem]',
+          reference != null && 'items-center text-center',
+        )}
+      >
         <span className="stat-tile__label text-[0.6rem] font-semibold uppercase leading-[1.15] tracking-[0.03em] text-muted-foreground">
           {label}
         </span>
-        <span className="stat-tile__value text-[1.4rem] font-bold leading-none tabular-nums text-foreground">
-          {value}
-        </span>
+        {reference != null ? (
+          // Fraction : valeur / barre horizontale / référence, centrées.
+          <span className="stat-tile__value inline-flex flex-col items-center gap-[0.18rem] leading-[1.1]">
+            <span className="text-[1.4rem] font-bold tabular-nums text-foreground">
+              {value}
+            </span>
+            <span
+              aria-hidden="true"
+              className="h-px w-full min-w-[1.6em]"
+              style={{
+                background:
+                  'color-mix(in oklab, var(--muted-foreground) 48%, transparent)',
+              }}
+            />
+            <span className="text-[0.85rem] font-semibold tabular-nums text-muted-foreground">
+              {reference}
+            </span>
+          </span>
+        ) : (
+          <span className="stat-tile__value text-[1.4rem] font-bold leading-none tabular-nums text-foreground">
+            {value}
+          </span>
+        )}
         {sub}
         {children}
       </div>
