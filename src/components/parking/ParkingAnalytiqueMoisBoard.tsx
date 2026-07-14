@@ -105,35 +105,23 @@ export function ParkingAnalytiqueMoisBoard({
       <AnalytiqueCardsGrid>
         <StatCard
           label="Occupation moyenne"
+          accent="#38bdf8"
           value={fmtPct(summary.avgOccupancy)}
-          sub={
-            <p className="mt-2 text-xs text-muted-foreground">
-              Moyenne des jours du mois
-            </p>
-          }
         />
         <StatCard
           label="Arrivées"
+          accent="#818cf8"
           value={fmtInt(summary.arrivals)}
-          sub={
-            <p className="mt-2 text-xs text-muted-foreground">sur le mois</p>
-          }
         />
         <StatCard
           label="Départs"
+          accent="#34d399"
           value={fmtInt(summary.departures)}
-          sub={
-            <p className="mt-2 text-xs text-muted-foreground">sur le mois</p>
-          }
         />
         <StatCard
           label="Impayés"
+          accent="#f87171"
           value={fmtInt(summary.unpaid)}
-          sub={
-            <p className="mt-2 text-xs text-muted-foreground">
-              réservations non payées
-            </p>
-          }
         />
       </AnalytiqueCardsGrid>
 

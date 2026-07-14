@@ -113,47 +113,29 @@ export function PdjAnalytiqueBoard() {
       loading={loading}
       skeleton={{ cols: 6, charts: 2, rows: 12 }}
     >
-      {/* Synthèse annuelle */}
+      {/* Synthèse annuelle — libellé + valeur seuls (comme l'analytique
+          rapprochement). Le détail (inclus, potentiel…) vit dans le tableau. */}
       <AnalytiqueCardsGrid>
         <StatCard
           label="Jours couverts"
+          accent="#818cf8"
           value={fmtInt(summary.totalDays)}
-        >
-          <p className="mt-2 text-xs text-muted-foreground">
-            {fmtInt(summary.totalGuests)} clients cumulés
-          </p>
-        </StatCard>
-
+        />
         <StatCard
           label="Taux d'occupation moyen"
+          accent="#38bdf8"
           value={fmtPct(summary.avgOccupancy)}
-        >
-          <p className="mt-2 text-xs text-muted-foreground">
-            Moyenne des jours renseignés
-          </p>
-        </StatCard>
-
+        />
         <StatCard
           label="PDJ servis"
+          accent="#34d399"
           value={fmtInt(summary.totalServed)}
-          sub={
-            <span className="text-sm text-muted-foreground">
-              {' '}
-              / {fmtInt(summary.totalIncluded)}
-            </span>
-          }
-        >
-          <p className="mt-2 text-xs text-muted-foreground">servis / inclus</p>
-        </StatCard>
-
+        />
         <StatCard
           label="Potentiel non inclus"
+          accent="#fbbf24"
           value={fmtInt(Math.max(0, summary.totalGuests - summary.totalIncluded))}
-        >
-          <p className="mt-2 text-xs text-muted-foreground">
-            clients sans PDJ inclus
-          </p>
-        </StatCard>
+        />
       </AnalytiqueCardsGrid>
 
       {/* Tableau mois par mois */}

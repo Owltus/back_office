@@ -105,21 +105,19 @@ export function CaisseAnalytiqueMoisBoard({
     >
       {/* Synthèse du mois */}
       <AnalytiqueCardsGrid>
-        <StatCard label="Feuilles clôturées" value={fmtInt(summary.totalSheets)}>
-          <p className="mt-2 text-xs text-muted-foreground">
-            {days.length} jour{days.length > 1 ? 's' : ''} clôturé
-            {days.length > 1 ? 's' : ''}
-          </p>
-        </StatCard>
-
-        <StatCard label="Total encaissé" value={fmtEur(summary.totalEncaisse)}>
-          <p className="mt-2 text-xs text-muted-foreground">
-            réel compté, tous modes
-          </p>
-        </StatCard>
-
+        <StatCard
+          label="Feuilles clôturées"
+          accent="#818cf8"
+          value={fmtInt(summary.totalSheets)}
+        />
+        <StatCard
+          label="Total encaissé"
+          accent="#34d399"
+          value={fmtEur(summary.totalEncaisse)}
+        />
         <StatCard
           label="Écart total"
+          accent="#fbbf24"
           value={
             <span
               className={
@@ -129,14 +127,10 @@ export function CaisseAnalytiqueMoisBoard({
               {fmtEcart(summary.totalEcart)}
             </span>
           }
-        >
-          <p className="mt-2 text-xs text-muted-foreground">
-            cumul des écarts de paiement
-          </p>
-        </StatCard>
-
+        />
         <StatCard
           label="Écart de fond"
+          accent="#fb7185"
           value={
             <span
               className={
@@ -148,11 +142,7 @@ export function CaisseAnalytiqueMoisBoard({
               {fmtEcart(summary.totalFundEcart)}
             </span>
           }
-        >
-          <p className="mt-2 text-xs text-muted-foreground">
-            cumul sur le fond de caisse
-          </p>
-        </StatCard>
+        />
       </AnalytiqueCardsGrid>
 
       {/* Tableau jour par jour */}

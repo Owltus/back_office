@@ -122,43 +122,24 @@ export function PdjAnalytiqueMoisBoard({
       <AnalytiqueCardsGrid>
         <StatCard
           label="Jours couverts"
+          accent="#818cf8"
           value={fmtInt(summary.coveredDays)}
-        >
-          <p className="mt-2 text-xs text-muted-foreground">
-            {fmtInt(summary.totalGuests)} clients cumulés
-          </p>
-        </StatCard>
-
+        />
         <StatCard
           label="Taux d'occupation moyen"
+          accent="#38bdf8"
           value={fmtPct(summary.avgOccupancy)}
-        >
-          <p className="mt-2 text-xs text-muted-foreground">
-            Moyenne des jours renseignés
-          </p>
-        </StatCard>
-
+        />
         <StatCard
           label="PDJ servis"
+          accent="#34d399"
           value={fmtInt(summary.totalServed)}
-          sub={
-            <span className="text-sm text-muted-foreground">
-              {' '}
-              / {fmtInt(summary.totalIncluded)}
-            </span>
-          }
-        >
-          <p className="mt-2 text-xs text-muted-foreground">servis / inclus</p>
-        </StatCard>
-
+        />
         <StatCard
           label="Potentiel non inclus"
+          accent="#fbbf24"
           value={fmtInt(summary.totalPotential)}
-        >
-          <p className="mt-2 text-xs text-muted-foreground">
-            clients sans PDJ inclus
-          </p>
-        </StatCard>
+        />
       </AnalytiqueCardsGrid>
 
       {/* Tableau jour par jour (défile en interne, en-tête collant) */}

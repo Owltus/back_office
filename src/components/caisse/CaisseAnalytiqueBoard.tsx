@@ -107,16 +107,17 @@ export function CaisseAnalytiqueBoard() {
       loading={loading}
       skeleton={{ cols: 4, charts: 2, rows: 12 }}
     >
-      {/* Synthèse annuelle */}
+      {/* Synthèse annuelle — libellé + valeur seuls (comme l'analytique
+          rapprochement). Le détail vit dans le tableau. */}
       <AnalytiqueCardsGrid>
-        <StatCard label="Feuilles clôturées" value={fmtInt(summary.totalSheets)}>
-          <p className="mt-2 text-xs text-muted-foreground">
-            validées sur l'année
-          </p>
-        </StatCard>
-
+        <StatCard
+          label="Feuilles clôturées"
+          accent="#818cf8"
+          value={fmtInt(summary.totalSheets)}
+        />
         <StatCard
           label="Écart total"
+          accent="#fbbf24"
           value={
             <span
               className={
@@ -126,14 +127,10 @@ export function CaisseAnalytiqueBoard() {
               {fmtEur(summary.totalEcart)}
             </span>
           }
-        >
-          <p className="mt-2 text-xs text-muted-foreground">
-            cumul des écarts de paiement
-          </p>
-        </StatCard>
-
+        />
         <StatCard
           label="Écart de fond"
+          accent="#fb7185"
           value={
             <span
               className={
@@ -145,17 +142,12 @@ export function CaisseAnalytiqueBoard() {
               {fmtEcart(summary.totalFundEcart)}
             </span>
           }
-        >
-          <p className="mt-2 text-xs text-muted-foreground">
-            cumul sur le fond de caisse
-          </p>
-        </StatCard>
-
-        <StatCard label="Total encaissé" value={fmtEur(summary.totalEncaisse)}>
-          <p className="mt-2 text-xs text-muted-foreground">
-            réel compté, tous modes
-          </p>
-        </StatCard>
+        />
+        <StatCard
+          label="Total encaissé"
+          accent="#34d399"
+          value={fmtEur(summary.totalEncaisse)}
+        />
       </AnalytiqueCardsGrid>
 
       {/* Tableau mois par mois */}

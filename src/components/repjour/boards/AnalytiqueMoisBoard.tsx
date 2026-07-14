@@ -152,129 +152,29 @@ export function AnalytiqueMoisBoard({
       loading={loading}
       skeleton={{ cols: 5, charts: 2, rows: new Date(year, month, 0).getDate() }}
     >
-      {/* Cartes résumé */}
+      {/* Cartes résumé — libellé + valeur seuls (comme l'analytique
+          rapprochement). Le budget / objectif reste visible dans le tableau. */}
       <AnalytiqueCardsGrid>
-        {(() => {
-          const pct =
-            budget && budget.nuitees > 0
-              ? (summary.totalNuitees / budget.nuitees) * 100
-              : 0
-          const over = pct > 100
-          const max = over ? pct * 1.15 : 100
-          const bar = (pct / max) * 100
-          const goal = (100 / max) * 100
-          return (
-            <StatCard
-              label="Nuitées"
-              value={fmt.nuitees(summary.totalNuitees)}
-              sub={
-                budget && (
-                  <span className="text-sm text-muted-foreground">
-                    {' '}
-                    / {fmt.nuitees(budget.nuitees)}
-                  </span>
-                )
-              }
-            >
-              {budget && (
-                <div className="relative mt-2 h-1.5 rounded-full bg-muted">
-                  {over ? (
-                    <>
-                      <div
-                        className="absolute inset-y-0 left-0 rounded-l-full bg-emerald-500 transition-all duration-700"
-                        style={{ width: `${goal}%` }}
-                      />
-                      <div
-                        className="absolute inset-y-0 rounded-r-full bg-amber-500 transition-all duration-700"
-                        style={{
-                          left: `${goal}%`,
-                          width: `${bar - goal}%`,
-                        }}
-                      />
-                    </>
-                  ) : (
-                    <div
-                      className="absolute inset-y-0 left-0 rounded-full bg-primary/60 transition-all duration-700"
-                      style={{ width: `${bar}%` }}
-                    />
-                  )}
-                </div>
-              )}
-            </StatCard>
-          )
-        })()}
-
+        <StatCard
+          label="Nuitées"
+          accent="#818cf8"
+          value={fmt.nuitees(summary.totalNuitees)}
+        />
         <StatCard
           label="Taux d'occupation moyen"
+          accent="#38bdf8"
           value={fmt.pct(summary.avgTO)}
-        >
-          {budget && (
-            <p className="mt-2 text-xs text-muted-foreground">
-              Objectif {fmt.pct(budget.taux_occupation)}
-            </p>
-          )}
-        </StatCard>
-
+        />
         <StatCard
           label="Revenu moyen par chambre"
+          accent="#34d399"
           value={fmt.eur(summary.avgRevPAR)}
-        >
-          {budget && (
-            <p className="mt-2 text-xs text-muted-foreground">
-              Objectif {fmt.eur(budget.revpar)}
-            </p>
-          )}
-        </StatCard>
-
-        {(() => {
-          const pct =
-            budget && budget.room_revenue > 0
-              ? (summary.totalRevenue / budget.room_revenue) * 100
-              : 0
-          const over = pct > 100
-          const max = over ? pct * 1.15 : 100
-          const bar = (pct / max) * 100
-          const goal = (100 / max) * 100
-          return (
-            <StatCard
-              label="Chiffre d'affaires"
-              value={fmt.eurInt(summary.totalRevenue)}
-              sub={
-                budget && (
-                  <span className="text-sm text-muted-foreground">
-                    {' '}
-                    / {fmt.eurInt(budget.room_revenue)}
-                  </span>
-                )
-              }
-            >
-              {budget && (
-                <div className="relative mt-2 h-1.5 rounded-full bg-muted">
-                  {over ? (
-                    <>
-                      <div
-                        className="absolute inset-y-0 left-0 rounded-l-full bg-emerald-500 transition-all duration-700"
-                        style={{ width: `${goal}%` }}
-                      />
-                      <div
-                        className="absolute inset-y-0 rounded-r-full bg-amber-500 transition-all duration-700"
-                        style={{
-                          left: `${goal}%`,
-                          width: `${bar - goal}%`,
-                        }}
-                      />
-                    </>
-                  ) : (
-                    <div
-                      className="absolute inset-y-0 left-0 rounded-full bg-primary/60 transition-all duration-700"
-                      style={{ width: `${bar}%` }}
-                    />
-                  )}
-                </div>
-              )}
-            </StatCard>
-          )
-        })()}
+        />
+        <StatCard
+          label="Chiffre d'affaires"
+          accent="#fbbf24"
+          value={fmt.eurInt(summary.totalRevenue)}
+        />
       </AnalytiqueCardsGrid>
 
       {/* Tableau jour par jour (défile en interne, en-tête collant) */}

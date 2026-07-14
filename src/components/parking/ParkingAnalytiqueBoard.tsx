@@ -46,9 +46,7 @@ const MONTHS_SHORT = [
 ]
 
 const nf0 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 })
-const nf1 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 })
 const fmtInt = (n: number) => nf0.format(n)
-const fmtDec = (n: number) => nf1.format(n)
 const fmtPct = (n: number) => `${n.toFixed(1).replace('.', ',')} %`
 
 export function ParkingAnalytiqueBoard() {
@@ -126,39 +124,23 @@ export function ParkingAnalytiqueBoard() {
       <AnalytiqueCardsGrid>
         <StatCard
           label="Réservations"
+          accent="#818cf8"
           value={fmtInt(summary.totalReservations)}
-          sub={
-            <p className="mt-2 text-xs text-muted-foreground">
-              {fmtDec(summary.avgNights)} nuits en moyenne
-            </p>
-          }
         />
         <StatCard
           label="Taux d'occupation moyen"
+          accent="#38bdf8"
           value={fmtPct(summary.avgOccupancy)}
-          sub={
-            <p className="mt-2 text-xs text-muted-foreground">
-              Moyenne des mois renseignés
-            </p>
-          }
         />
         <StatCard
           label="Nuits totales"
+          accent="#34d399"
           value={fmtInt(summary.totalNights)}
-          sub={
-            <p className="mt-2 text-xs text-muted-foreground">
-              places-nuits sur l'année
-            </p>
-          }
         />
         <StatCard
           label="Impayés"
+          accent="#f87171"
           value={fmtInt(summary.totalUnpaid)}
-          sub={
-            <p className="mt-2 text-xs text-muted-foreground">
-              réservations non payées
-            </p>
-          }
         />
       </AnalytiqueCardsGrid>
 
