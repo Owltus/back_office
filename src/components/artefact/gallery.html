@@ -184,12 +184,12 @@
   .v4 .val { font-size: 1.4rem; }
   .v4 .extras { display: flex; flex-direction: column; gap: 0.3rem; }
 
-  /* --- V5 · Épuré (valeur d'abord) ----------------------------- */
-  .v5 { padding: 0.7rem 0.8rem; gap: 0.2rem; position: relative; }
+  /* --- V5 · Épuré (libellé en haut, grande valeur) ------------- */
+  .v5 { padding: 0.7rem 0.8rem; gap: 0.35rem; position: relative; }
   .v5 .ghost { position: absolute; top: 0.55rem; right: 0.6rem; color: var(--c); opacity: 0.16; }
   .v5 .ghost svg { width: 1.5rem; height: 1.5rem; }
-  .v5 .val { font-size: 1.7rem; font-weight: 750; letter-spacing: -0.015em; }
-  .v5 .lbl { margin-top: auto; letter-spacing: 0.05em; }
+  .v5 .lbl { letter-spacing: 0.05em; padding-right: 1.5rem; }
+  .v5 .val { font-size: 1.7rem; font-weight: 750; letter-spacing: -0.015em; margin-top: auto; }
   .v5 .extras { display: flex; flex-direction: column; gap: 0.3rem; margin-top: 0.4rem; }
 
   /* --- Note de bas de page --- */
@@ -342,8 +342,8 @@
       </div>`,
     v5: (s) => `<div class="card v5" style="--c:${s.c}">
         ${s.icon ? `<span class="ghost">${ICON[s.icon]}</span>` : ''}
-        <span class="val">${valHtml(s)}</span>
         <span class="lbl">${s.label}</span>
+        <span class="val">${valHtml(s)}</span>
         ${extras(s)}
       </div>`,
   };
@@ -357,8 +357,8 @@
       desc: "Le chiffre domine, la pastille passe en haut à droite, un delta coloré se loge sous la valeur. Pour peu de KPI à forte valeur (revenus, occupation, écarts)." },
     { id: 'v4', name: 'Tuile', tags: ['icône pleine', 'très scannable'],
       desc: "Bandeau d'icône plein hauteur à gauche, contenu à droite. Lecture immédiate, hauteur uniforme naturelle. Le plus « tableau de bord »." },
-    { id: 'v5', name: 'Épuré', tags: ['valeur d\'abord', 'minimal'],
-      desc: "La valeur en premier, le libellé dessous, l'icône en filigrane discret. Respire quand une page n'affiche que des nombres." },
+    { id: 'v5', name: 'Épuré', tags: ['libellé en haut', 'minimal'],
+      desc: "Libellé sur la ligne du haut, grande valeur en dessous, icône en filigrane discret. Respire quand une page n'affiche que des nombres." },
   ];
 
   const app = document.getElementById('app');
