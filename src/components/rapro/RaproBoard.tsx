@@ -19,13 +19,6 @@ import { Tip } from '#/components/shared/Tip.tsx'
 import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
 import { useStepNavKeys } from '#/components/shared/useStepNavKeys.ts'
 import { Button } from '#/components/ui/button.tsx'
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuRadioGroup,
-  ContextMenuRadioItem,
-  ContextMenuTrigger,
-} from '#/components/ui/context-menu.tsx'
 import { Textarea } from '#/components/ui/textarea.tsx'
 import {
   fetchDay as fetchPdjDay,
@@ -42,9 +35,9 @@ import {
   cellState,
   countStats,
   LEGEND_ORDER,
+  nextStatus,
   STATUS_LABEL,
   statusOf,
-  toggleClean,
 } from '#/lib/rapro/constants.ts'
 import { addDays, clampDay, today } from '#/lib/rapro/day.ts'
 import { printRaproSheet } from '#/lib/rapro/pdf.ts'
@@ -68,10 +61,6 @@ import type { RaproDay, RaproSheet, RoomStatus } from '#/lib/rapro/types.ts'
 import { cn } from '#/lib/utils.ts'
 
 const EMPTY: ReadonlyMap<number, RoomStatus> = new Map()
-
-/** Statuts d'exception du menu contextuel (clic droit). « Nettoyée » et « Refus »
- * n'y figurent PAS : ils s'appliquent au clic gauche (bascule). */
-const ROOM_STATUS_ORDER: RoomStatus[] = ['non_nettoyee', 'noshow']
 
 /**
  * Rapprochement de chambres — suivi ménage par chambre et par jour.
@@ -148,9 +137,6 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
     setComment(sheet?.comment ?? '')
   }, [sheet?.reportDate, sheet?.comment])
   const [pdfBusy, setPdfBusy] = useState(false)
-  // Chambre dont le menu contextuel est ouvert : on lui garde le style de survol.
-  const [menuRoom, setMenuRoom] = useState<number | null>(null)
-
   // OCC officiel du PMS à J-1 (décalage de datage). Sert d'unique CONTRÔLE
   // comptable : si l'occupation PDJ diffère du PMS, on l'alerte (c'est là que les
   // arrivées tardives / corrections apparaissent). Absent si RepJour non importé.
@@ -353,23 +339,22 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
     }
   }
 
-  // Clic gauche = bascule. Vendue : nettoyée ↔ refus. Non vendue : ROTATION non
-  // vendue (grise) → nettoyée → refus → non vendue. (« Bloquée » reste au clic
-  // droit.)
+  // Clic sur une chambre = cycle des couleurs. Vendue : nettoyée (défaut) → refus
+  // → no-show → bloquée → nettoyée (le retour à nettoyée efface la ligne). Non
+  // vendue : rotation grise → nettoyée → refus → grise (les exceptions n'ont pas
+  // de sens sur une chambre non occupée).
   function toggle(room: number) {
     if (isDue(room)) {
-      return applyStatuses([[room, toggleClean(statusOf(statuses, room))]])
+      const next = nextStatus(statusOf(statuses, room))
+      return next === 'nettoyee'
+        ? clearRooms([room])
+        : applyStatuses([[room, next]])
     }
     if (!statuses.has(room)) return applyStatuses([[room, 'nettoyee']])
     if (statusOf(statuses, room) === 'nettoyee') {
       return applyStatuses([[room, 'refus']])
     }
     return clearRooms([room])
-  }
-
-  // Clic droit — statut choisi.
-  function setBase(room: number, base: RoomStatus) {
-    return applyStatuses([[room, base]])
   }
 
   // Bouton d'en-tête d'étage : ROLLBACK à l'état d'origine. Toute chambre de
@@ -751,7 +736,10 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
                     const isCarried = carried.has(room)
                     const cls = CELL_STATES[cellState(status, isEmpty)].webClass
                     const label = `Chambre ${room} — ${STATUS_LABEL[status]}${isEmpty ? ' — non vendue' : ''}${isCarried ? ' — bloquée la veille' : ''}`
-                    const btn = (
+                    // Clic = cycle des statuts (plus de menu contextuel). Un jour
+                    // clôturé reste figé : les mutations sont gardées par
+                    // `canEditFields`, le clic n'a alors aucun effet.
+                    return (
                       <button
                         key={room}
                         type="button"
@@ -763,42 +751,10 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
                           'rapro-room',
                           cls,
                           isCarried && 'rapro-room-carried',
-                          menuRoom === room && 'is-active',
                         )}
                       >
                         {room}
                       </button>
-                    )
-                    // Jour clôturé / lecture seule : bouton simple, sans menu.
-                    if (!canEditFields) return btn
-                    return (
-                      <ContextMenu
-                        key={room}
-                        onOpenChange={(open) =>
-                          setMenuRoom(open ? room : null)
-                        }
-                      >
-                        <ContextMenuTrigger asChild>{btn}</ContextMenuTrigger>
-                        <ContextMenuContent className="w-48">
-                          {/* Statut d'exception (« Bloquée ») ; nettoyée/refus = clic gauche. */}
-                          <ContextMenuRadioGroup
-                            value={status}
-                            onValueChange={(v) => setBase(room, v as RoomStatus)}
-                          >
-                            {ROOM_STATUS_ORDER.map((s) => (
-                              <ContextMenuRadioItem key={s} value={s}>
-                                <span
-                                  className={cn(
-                                    'rapro-legend-dot',
-                                    CELL_STATES[cellState(s, false)].legendMod,
-                                  )}
-                                />
-                                {STATUS_LABEL[s]}
-                              </ContextMenuRadioItem>
-                            ))}
-                          </ContextMenuRadioGroup>
-                        </ContextMenuContent>
-                      </ContextMenu>
                     )
                   })}
                 </div>

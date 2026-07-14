@@ -222,26 +222,19 @@
 /* « Bloquée la veille » : la case garde le FOND de son statut du jour (nettoyée,
  * refus, no-show…) et reçoit un liseré rouge net PAR-DESSUS (box-shadow inset →
  * 0 décalage). Fait sur la veille, toujours présent quel que soit le statut.
- * Au survol / menu ouvert, le hover générique passe la bordure en violet
- * (`--ring`) : on la garde ROUGE ici pour rester cohérent avec le liseré. */
+ * Au survol, le hover générique passe la bordure en violet (`--ring`) : on la
+ * garde ROUGE ici pour rester cohérent avec le liseré. */
 .rapro-room-carried {
   border-color: #f87171;
   box-shadow: inset 0 0 0 1.25px #f87171;
 }
-.rapro-room-carried:hover:not(:disabled),
-.rapro-room-carried.is-active {
+.rapro-room-carried:hover:not(:disabled) {
   border-color: #f87171;
 }
 .rapro-room-clean:hover:not(:disabled),
 .rapro-room-refus:hover:not(:disabled),
 .rapro-room-noshow:hover:not(:disabled),
 .rapro-room-todo:hover:not(:disabled) {
-  filter: brightness(1.08);
-}
-/* Menu contextuel ouvert sur la chambre : on conserve le rendu de survol
-   (bordure d'anneau + léger éclaircissement) pour repérer la case ciblée. */
-.rapro-room.is-active {
-  border-color: var(--ring);
   filter: brightness(1.08);
 }
 

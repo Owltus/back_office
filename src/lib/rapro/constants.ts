@@ -10,10 +10,19 @@ export const STATUS_LABEL: Record<RoomStatus, string> = {
   noshow: 'No-show',
 }
 
-/** Bascule du CLIC GAUCHE (geste courant) : entre nettoyée et refus, sans jamais
- * passer par les statuts d'exception (réservés au menu contextuel). */
-export function toggleClean(status: RoomStatus): RoomStatus {
-  return status === 'refus' ? 'nettoyee' : 'refus'
+/** Cycle du CLIC sur une chambre due : nettoyée (défaut) → refus → no-show →
+ * bloquée → nettoyée. Le défaut (absence de ligne) est `nettoyee`. */
+export const CLICK_CYCLE: readonly RoomStatus[] = [
+  'nettoyee',
+  'refus',
+  'noshow',
+  'non_nettoyee',
+]
+
+/** Statut suivant dans le cycle du clic (cf. `CLICK_CYCLE`). */
+export function nextStatus(status: RoomStatus): RoomStatus {
+  const i = CLICK_CYCLE.indexOf(status)
+  return CLICK_CYCLE[(i + 1) % CLICK_CYCLE.length]
 }
 
 /** Statut d'une chambre, avec la convention « absence de ligne = nettoyee ».
@@ -74,12 +83,13 @@ export const CELL_STATES: Record<
   empty: { label: 'Non vendue', webClass: 'rapro-room-empty', legendMod: 'is-empty' },
 }
 
-/** Ordre d'affichage de la légende (bas de grille + PDF). */
+/** Ordre d'affichage de la légende (bas de grille + PDF) : nettoyée, refus,
+ * no-show, bloquée. « empty » (non vendue) reste en fin — masqué à l'écran. */
 export const LEGEND_ORDER: CellState[] = [
   'clean',
-  'todo',
   'refus',
   'noshow',
+  'todo',
   'empty',
 ]
 
