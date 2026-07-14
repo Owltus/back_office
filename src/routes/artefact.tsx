@@ -4,12 +4,10 @@ import { ProtectedRoute } from '#/components/repjour/ProtectedRoute.tsx'
 import { ArtefactBoard } from '#/components/artefact/ArtefactBoard.tsx'
 
 /**
- * Route TEMPORAIRE `/artefact` — galerie de propositions de cartes de synthèse
- * (repli au service d'artefacts en ligne). Réservée aux ADMINS (garde
- * `ProtectedRoute`, comme /comptes) : le lien Navbar n'apparaît que pour eux et
- * l'accès direct par URL redirige les autres. `ssr: false` : la maquette est
- * 100 % navigateur (iframe srcDoc + script client). À supprimer une fois la
- * direction de carte retenue.
+ * Route `/artefact` — REGISTRE des éléments d'interface retenus (trace de ce qui
+ * a été conçu). Réservée aux ADMINS (garde `ProtectedRoute`, comme /comptes) : le
+ * lien Navbar n'apparaît que pour eux et l'accès direct par URL redirige les
+ * autres. `ssr: false` : la maquette est 100 % navigateur (iframe srcDoc).
  */
 export const Route = createFileRoute('/artefact')({
   component: ArtefactPage,

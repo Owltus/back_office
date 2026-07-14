@@ -1,410 +1,269 @@
-<title>Système de cartes — propositions</title>
+<title>Artefacts — Back Office</title>
 <style>
-  /* ============================================================
-     Tokens — fidèles à l'app (dark navy forcé). Aperçu « Clair »
-     dispo via le bouton (data-theme), mais le défaut = le vrai rendu.
-     ============================================================ */
+  /* Registre d'artefacts — fidèle au thème dark navy de l'app (le vrai rendu).
+     Chaque « artefact » = une section numérotée ; on en ajoute d'autres à la
+     suite plus tard. */
   :root {
     --bg: #0b111e;
     --panel: #0e1626;
     --fg: #e2e8f0;
-    --card: #141d2e;
     --muted: #94a3b8;
+    --card: #141d2e;
     --primary: #6366f1;
     --border: rgba(148, 163, 184, 0.12);
-    --border-strong: rgba(148, 163, 184, 0.2);
     --radius: 0.75rem;
-    /* accents catégoriels de la grille rapprochement */
+    /* Accents catégoriels (code couleur de la grille rapprochement). */
     --c-vendu: #818cf8;
     --c-net: #34d399;
     --c-bloq: #f87171;
     --c-refus: #fbbf24;
     --c-noshow: #a78bfa;
   }
-  :root[data-theme='light'] {
-    --bg: #f1f5f9;
-    --panel: #ffffff;
-    --fg: #0f172a;
-    --card: #ffffff;
-    --muted: #64748b;
-    --primary: #4f46e5;
-    --border: rgba(15, 23, 42, 0.1);
-    --border-strong: rgba(15, 23, 42, 0.16);
-    --c-vendu: #6366f1;
-    --c-net: #10b981;
-    --c-bloq: #ef4444;
-    --c-refus: #f59e0b;
-    --c-noshow: #8b5cf6;
-  }
-
   * { box-sizing: border-box; }
   body {
     margin: 0;
     background:
-      radial-gradient(1200px 500px at 80% -10%, color-mix(in oklab, var(--primary) 14%, transparent), transparent 60%),
+      radial-gradient(900px 420px at 82% -12%, color-mix(in oklab, var(--primary) 12%, transparent), transparent 60%),
       var(--bg);
     color: var(--fg);
     font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
   }
-  .wrap { max-width: 1120px; margin: 0 auto; padding: clamp(1.2rem, 4vw, 3rem) clamp(1rem, 3vw, 2rem) 4rem; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: clamp(1.2rem, 4vw, 2.8rem) clamp(1rem, 3vw, 2rem) 3.5rem; }
 
   /* --- Hero --- */
-  .hero { margin-bottom: 2rem; }
   .kicker {
     font-size: 0.72rem; letter-spacing: 0.18em; text-transform: uppercase;
     color: var(--primary); font-weight: 700; margin: 0 0 0.6rem;
   }
   h1 {
-    font-size: clamp(1.7rem, 4.5vw, 2.7rem); line-height: 1.05; margin: 0 0 0.7rem;
+    font-size: clamp(1.6rem, 4vw, 2.3rem); line-height: 1.06; margin: 0 0 0.7rem;
     letter-spacing: -0.02em; font-weight: 800; text-wrap: balance;
   }
-  .lede { color: var(--muted); max-width: 62ch; font-size: 1rem; margin: 0; }
-  .facts { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1.1rem; }
-  .fact {
-    font-size: 0.74rem; color: var(--fg); background: var(--card);
-    border: 1px solid var(--border); border-radius: 999px; padding: 0.3rem 0.7rem;
-  }
-  .fact b { color: var(--primary); }
+  .lede { color: var(--muted); max-width: 62ch; font-size: 0.98rem; margin: 0; }
 
-  /* --- Barre de contrôles (sticky) --- */
-  .controls {
-    position: sticky; top: 0; z-index: 20;
-    display: flex; flex-wrap: wrap; gap: 0.9rem 1.4rem; align-items: center;
-    padding: 0.7rem 0.9rem; margin: 1.6rem 0 2.4rem;
-    background: color-mix(in oklab, var(--panel) 86%, transparent);
-    backdrop-filter: blur(10px);
-    border: 1px solid var(--border); border-radius: var(--radius);
+  /* --- Section artefact --- */
+  .artefact {
+    margin-top: 2.6rem; padding-top: 1.8rem;
+    border-top: 1px solid var(--border);
   }
-  .ctl { display: flex; align-items: center; gap: 0.5rem; }
-  .ctl > span { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); font-weight: 600; }
-  .seg { display: inline-flex; background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 2px; }
-  .seg button {
-    font: inherit; font-size: 0.78rem; font-weight: 600; cursor: pointer;
-    border: 0; background: transparent; color: var(--muted);
-    padding: 0.28rem 0.6rem; border-radius: 6px; transition: all 0.15s;
-  }
-  .seg button:hover { color: var(--fg); }
-  .seg button[aria-pressed='true'] { background: var(--primary); color: #fff; }
-
-  /* --- Sections version --- */
-  .version { margin: 2.6rem 0; }
-  .vhead { display: flex; align-items: baseline; gap: 0.7rem; flex-wrap: wrap; margin-bottom: 0.2rem; }
-  .vnum {
+  .a-head { display: flex; align-items: baseline; gap: 0.7rem; flex-wrap: wrap; }
+  .a-num {
     font-size: 0.72rem; font-weight: 800; letter-spacing: 0.1em;
     color: var(--primary); font-variant-numeric: tabular-nums;
   }
-  .vname { font-size: 1.15rem; font-weight: 750; letter-spacing: -0.01em; margin: 0; }
-  .vtags { display: flex; gap: 0.35rem; flex-wrap: wrap; }
-  .tag {
-    font-size: 0.66rem; color: var(--muted); border: 1px solid var(--border);
-    border-radius: 999px; padding: 0.12rem 0.5rem;
+  .a-name { font-size: 1.2rem; font-weight: 750; letter-spacing: -0.01em; margin: 0; }
+  .a-file {
+    margin-left: auto; font-size: 0.72rem; color: var(--muted);
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 999px; padding: 0.15rem 0.6rem;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   }
-  .vdesc { color: var(--muted); font-size: 0.88rem; margin: 0.35rem 0 1rem; max-width: 70ch; }
-
-  .stage { max-width: var(--stage, 100%); margin-inline: auto; transition: max-width 0.3s ease; }
-  .stagelabel {
-    font-size: 0.66rem; color: var(--muted); text-align: center; margin: 0 0 0.5rem;
-    letter-spacing: 0.04em;
+  .a-desc { color: var(--muted); font-size: 0.9rem; margin: 0.5rem 0 1.4rem; max-width: 68ch; }
+  .a-sub {
+    font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--muted); font-weight: 600; margin: 1.5rem 0 0.6rem;
   }
   .grid { display: grid; gap: 0.7rem; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
-  .subhead { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 1.3rem 0 0.55rem; font-weight: 600; }
 
   /* ============================================================
-     CARTE — base commune : hauteur uniforme garantie par
-     flex-column + margin-top:auto, alignées par le grid (stretch).
+     Carte de synthèse — reproduction FIDÈLE de StatTile.
      ============================================================ */
-  .card {
-    background: var(--card); border: 1px solid var(--border);
-    border-radius: var(--radius); display: flex; flex-direction: column;
-    --c: var(--primary);
+  .tile {
+    display: flex; align-items: stretch; overflow: hidden;
+    border-radius: var(--radius); border: 1px solid var(--border);
+    background: var(--card); --c: var(--primary);
   }
-  .lbl {
-    font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.03em;
-    color: var(--muted); font-weight: 600; line-height: 1.15;
+  .tile-rail { width: 0.5rem; flex-shrink: 0; background: var(--c); }
+  .tile-body {
+    display: flex; flex-direction: column; gap: 0.25rem;
+    padding: 0.55rem 0.75rem; min-width: 0; flex: 1;
   }
-  .val { font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
-  .chip { display: grid; place-items: center; flex-shrink: 0; color: var(--c); }
-  .chip svg { width: 0.9rem; height: 0.9rem; }
-  .chip.tint { background: color-mix(in oklab, var(--c) 16%, transparent); }
-  .sub { font-size: 0.72rem; color: var(--muted); font-weight: 500; }
-  /* Comparaison « valeur vs référence » : séparateur en BARRE HORIZONTALE, les
-     deux données empilées et centrées l'une par rapport à l'autre (une barre de
-     fraction). */
-  .pair { display: inline-flex; flex-direction: column; align-items: center; gap: 0.18rem; line-height: 1.1; }
-  .pair .p1 { font-weight: 700; }
-  .pair .hbar { height: 1px; width: 100%; min-width: 1.6em; background: color-mix(in oklab, var(--muted) 48%, transparent); }
-  .pair .p2 { font-size: 0.62em; font-weight: 600; color: var(--muted); }
-  .delta {
-    font-size: 0.66rem; font-weight: 700; border-radius: 999px; padding: 0.08rem 0.4rem;
-    background: color-mix(in oklab, var(--c-net) 16%, transparent); color: var(--c-net);
-    white-space: nowrap;
+  /* Libellé : EN-TÊTE fixe, en haut à gauche, sur toutes les cartes. */
+  .tile-label {
+    font-size: 0.6rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.03em; line-height: 1.15; color: var(--muted);
   }
-  .delta.neg { background: color-mix(in oklab, var(--c-bloq) 16%, transparent); color: var(--c-bloq); }
-  .bar { height: 5px; border-radius: 999px; background: color-mix(in oklab, var(--muted) 22%, transparent); overflow: hidden; }
-  .bar > i { display: block; height: 100%; border-radius: 999px; background: var(--c); }
-  .spark { width: 100%; height: 22px; display: block; color: var(--c); }
-  /* masquer les icônes (aperçu « valeur seule ») */
-  body.no-icons .chip, body.no-icons .iconpane svg { display: none; }
-  body.no-icons .v4 .iconpane { width: 0.5rem; }
-
-  /* --- V1 · Appui (baseline raffiné) --------------------------- */
-  .v1 { padding: 0.6rem 0.7rem; gap: 0.4rem; }
-  .v1 .row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-top: auto; }
-  .v1 .chip { width: 1.75rem; height: 1.75rem; border-radius: calc(var(--radius) - 6px); }
-  .v1 .val { font-size: 1.4rem; }
-  .v1 .extras { display: flex; flex-direction: column; gap: 0.3rem; margin-top: 0.45rem; }
-
-  /* --- V2 · Rail (liseré accent) ------------------------------- */
-  .v2 { padding: 0.6rem 0.7rem 0.6rem 0.85rem; gap: 0.4rem; position: relative; overflow: hidden; }
-  .v2::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--c); }
-  .v2 .top { display: flex; align-items: center; gap: 0.4rem; }
-  .v2 .chip { width: 1.05rem; height: 1.05rem; }
-  .v2 .chip svg { width: 0.85rem; height: 0.85rem; }
-  .v2 .val { font-size: 1.45rem; margin-top: auto; }
-  .v2 .extras { display: flex; flex-direction: column; gap: 0.3rem; }
-
-  /* --- V3 · Grand nombre (éditorial) --------------------------- */
-  .v3 { padding: 0.8rem 0.8rem 0.75rem; gap: 0.5rem; }
-  .v3 .top { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; }
-  .v3 .chip { width: 1.9rem; height: 1.9rem; border-radius: 999px; }
-  .v3 .foot { margin-top: auto; display: flex; align-items: flex-end; gap: 0.5rem; flex-wrap: wrap; }
-  .v3 .val { font-size: 2.05rem; font-weight: 800; letter-spacing: -0.02em; }
-  .v3 .extras { display: flex; flex-direction: column; gap: 0.35rem; width: 100%; }
-
-  /* --- V4 · Tuile (icône pleine à gauche) ---------------------- */
-  .v4 { flex-direction: row; align-items: stretch; padding: 0; overflow: hidden; }
-  .v4 .iconpane {
-    width: 3rem; flex-shrink: 0; display: grid; place-items: center;
-    color: var(--c); background: color-mix(in oklab, var(--c) 15%, transparent);
+  /* Valeur (+ sparkline) centrée dans la hauteur restante. */
+  .tile-fill {
+    display: flex; flex-direction: column; justify-content: center;
+    gap: 0.25rem; flex: 1;
   }
-  .v4 .iconpane svg { width: 1.15rem; height: 1.15rem; }
-  .v4 .body { display: flex; flex-direction: column; justify-content: center; gap: 0.25rem; padding: 0.55rem 0.75rem; min-width: 0; flex: 1; }
-  .v4 .val { font-size: 1.4rem; }
-  .v4 .extras { display: flex; flex-direction: column; gap: 0.3rem; }
-
-  /* --- V5 · Épuré (libellé + icône en haut, grande valeur) ----- */
-  .v5 { padding: 0.7rem 0.8rem; gap: 0.35rem; }
-  /* Titre et SVG sur une même rangée, alignés (align-items:center) — plus de
-     décalage entre le libellé et l'icône. */
-  .v5 .head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
-  .v5 .ghost { display: flex; flex-shrink: 0; color: var(--c); opacity: 0.5; }
-  .v5 .ghost svg { width: 1rem; height: 1rem; display: block; }
-  .v5 .lbl { letter-spacing: 0.05em; }
-  .v5 .val { font-size: 1.7rem; font-weight: 750; letter-spacing: -0.015em; margin-top: auto; }
-  .v5 .extras { display: flex; flex-direction: column; gap: 0.3rem; margin-top: 0.4rem; }
-
-  /* --- Valeur FRACTIONNÉE → contenu centré dans la carte ------- */
-  /* Cartes en colonne : on centre libellé + valeur. Les rangées internes
-     (icône/valeur) repassent en justify-content:center. La Tuile (V4) garde
-     son bandeau d'icône pleine hauteur : on ne centre que son corps. */
-  .v1:has(.pair),
-  .v2:has(.pair),
-  .v3:has(.pair),
-  .v5:has(.pair) { align-items: center; text-align: center; }
-  .v1:has(.pair) .row,
-  .v3:has(.pair) .top,
-  .v5:has(.pair) .head { justify-content: center; }
-  .v4:has(.pair) .body { align-items: center; text-align: center; }
-
-  /* --- Note de bas de page --- */
-  .note {
-    margin-top: 3rem; padding: 1.2rem 1.3rem; background: var(--panel);
-    border: 1px solid var(--border); border-radius: var(--radius); color: var(--muted);
-    font-size: 0.9rem;
+  .tile-value {
+    font-size: 1.4rem; font-weight: 700; line-height: 1;
+    font-variant-numeric: tabular-nums; color: var(--fg);
   }
-  .note b { color: var(--fg); }
-  .note code { background: var(--card); border: 1px solid var(--border); border-radius: 5px; padding: 0.05rem 0.35rem; font-size: 0.85em; color: var(--fg); }
-  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+  /* Fraction : valeur / barre horizontale / référence, centrée. */
+  .tile-pair {
+    display: inline-flex; flex-direction: column; align-items: center;
+    align-self: center; gap: 0.18rem; line-height: 1.1; text-align: center;
+  }
+  .tile-hbar {
+    height: 1px; width: 100%; min-width: 1.6em;
+    background: color-mix(in oklab, var(--muted) 48%, transparent);
+  }
+  .tile-ref {
+    font-size: 0.85rem; font-weight: 600; color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .spark { display: block; width: 100%; height: 22px; color: var(--c); margin-top: 0.5rem; }
+
+  /* --- Anatomie (specs) --- */
+  .specs {
+    margin-top: 1.6rem; padding: 1rem 1.2rem;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .specs h3 { margin: 0 0 0.6rem; font-size: 0.82rem; font-weight: 700; }
+  .specs ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 0.35rem; }
+  .specs li { font-size: 0.82rem; color: var(--muted); display: flex; gap: 0.5rem; }
+  .specs li b { color: var(--fg); font-weight: 600; min-width: 6.5rem; }
+
+  /* --- Placeholder futur --- */
+  .future {
+    margin-top: 2.4rem; padding: 1.4rem; text-align: center;
+    color: var(--muted); font-size: 0.85rem;
+    border: 1px dashed var(--border); border-radius: var(--radius);
+  }
 </style>
 
 <div class="wrap">
-  <header class="hero">
-    <p class="kicker">Back Office · Système de cartes</p>
-    <h1>Unifier les cartes de synthèse</h1>
+  <header>
+    <p class="kicker">Back Office · Registre</p>
+    <h1>Bibliothèque d'artefacts</h1>
     <p class="lede">
-      Aujourd'hui les cartes de stats vivent en trois familles divergentes (rapprochement/PDJ dupliqués,
-      analytique, dashboard) avec des hauteurs et des grilles responsives différentes. Voici cinq directions
-      pour un composant <b style="color:var(--fg)">unique, exportable</b> — modèle de départ : les cartes du
-      rapprochement. Chaque version est testée sur les 6 KPI <em>et</em> sur un banc d'essai qui mélange les
-      types de contenu, pour prouver la hauteur uniforme et l'alignement.
+      Trace des éléments d'interface retenus et en service dans l'app. Chaque section
+      documente un composant : son rendu réel, où il vit dans le code, et ses règles.
+      D'autres artefacts s'ajouteront ici au fil du temps.
     </p>
-    <div class="facts">
-      <span class="fact"><b>Hauteur</b> alignée par ligne</span>
-      <span class="fact"><b>Responsive</b> une seule grille</span>
-      <span class="fact"><b>Contenus</b> valeur · icône · comparaison · barre</span>
-      <span class="fact"><b>Tokens</b> couleurs de la grille rapro</span>
-    </div>
   </header>
 
-  <div class="controls" role="group" aria-label="Contrôles d'aperçu">
-    <label class="ctl"><span>Thème</span>
-      <span class="seg" id="seg-theme">
-        <button data-theme-val="dark" aria-pressed="true">Sombre</button>
-        <button data-theme-val="light" aria-pressed="false">Clair</button>
-      </span>
-    </label>
-    <label class="ctl"><span>Aperçu</span>
-      <span class="seg" id="seg-stage">
-        <button data-stage="375px" aria-pressed="false">Mobile</button>
-        <button data-stage="768px" aria-pressed="false">Tablette</button>
-        <button data-stage="100%" aria-pressed="true">Bureau</button>
-      </span>
-    </label>
-    <label class="ctl"><span>Icônes</span>
-      <span class="seg" id="seg-icons">
-        <button data-icons="on" aria-pressed="true">Avec</button>
-        <button data-icons="off" aria-pressed="false">Valeur seule</button>
-      </span>
-    </label>
-  </div>
+  <section class="artefact">
+    <div class="a-head">
+      <span class="a-num">01</span>
+      <h2 class="a-name">Carte de synthèse</h2>
+      <span class="a-file">components/shared/StatTile.tsx</span>
+    </div>
+    <p class="a-desc">
+      Style « Tuile, valeur seule » : un liseré de couleur à gauche (le code couleur
+      de la donnée), un libellé en en-tête et une grande valeur. Composant UNIQUE,
+      réutilisé partout — rapprochement, PDJ, les vues analytiques et le dashboard.
+      Une seule modif du composant se répercute sur toutes les pages.
+    </p>
 
-  <main id="app"></main>
+    <p class="a-sub">Valeur seule</p>
+    <div class="grid">
+      <div class="tile" style="--c: var(--c-vendu)">
+        <span class="tile-rail"></span>
+        <div class="tile-body">
+          <span class="tile-label">Vendues</span>
+          <div class="tile-fill"><span class="tile-value">80</span></div>
+        </div>
+      </div>
+      <div class="tile" style="--c: var(--c-net)">
+        <span class="tile-rail"></span>
+        <div class="tile-body">
+          <span class="tile-label">Nettoyées</span>
+          <div class="tile-fill"><span class="tile-value">74</span></div>
+        </div>
+      </div>
+      <div class="tile" style="--c: var(--c-refus)">
+        <span class="tile-rail"></span>
+        <div class="tile-body">
+          <span class="tile-label">Refus</span>
+          <div class="tile-fill"><span class="tile-value">2</span></div>
+        </div>
+      </div>
+      <div class="tile" style="--c: var(--c-noshow)">
+        <span class="tile-rail"></span>
+        <div class="tile-body">
+          <span class="tile-label">No-show</span>
+          <div class="tile-fill"><span class="tile-value">1</span></div>
+        </div>
+      </div>
+      <div class="tile" style="--c: var(--c-bloq)">
+        <span class="tile-rail"></span>
+        <div class="tile-body">
+          <span class="tile-label">Bloquées</span>
+          <div class="tile-fill"><span class="tile-value">3</span></div>
+        </div>
+      </div>
+    </div>
 
-  <div class="note">
-    <b>Comment ça s'exporte.</b> Une fois la direction choisie, tout passe par un seul composant
-    <code>&lt;Stat&gt;</code> + une grille <code>.stats-grid</code> partagée (métier inchangé). Les couleurs
-    restent des tokens (accents catégoriels), les libellés/valeurs restent fournis par chaque page, et les
-    cas « riches » (sous-valeur, delta, barre) sont des props optionnelles — exactement comme
-    <code>StatCard.children</code> aujourd'hui. Les breakpoints de grille deviennent uniques :
-    <code>2 → 3 → 6</code> colonnes selon la largeur, partout.
-  </div>
+    <p class="a-sub">Fraction — réalisé / objectif</p>
+    <div class="grid">
+      <div class="tile" style="--c: var(--c-vendu)">
+        <span class="tile-rail"></span>
+        <div class="tile-body">
+          <span class="tile-label">Nuitées</span>
+          <div class="tile-fill">
+            <span class="tile-pair">
+              <span class="tile-value">1 842</span>
+              <span class="tile-hbar"></span>
+              <span class="tile-ref">2 100</span>
+            </span>
+          </div>
+        </div>
+      </div>
+      <div class="tile" style="--c: var(--c-net)">
+        <span class="tile-rail"></span>
+        <div class="tile-body">
+          <span class="tile-label">Taux d'occupation</span>
+          <div class="tile-fill">
+            <span class="tile-pair">
+              <span class="tile-value">88 %</span>
+              <span class="tile-hbar"></span>
+              <span class="tile-ref">92 %</span>
+            </span>
+          </div>
+        </div>
+      </div>
+      <div class="tile" style="--c: var(--c-refus)">
+        <span class="tile-rail"></span>
+        <div class="tile-body">
+          <span class="tile-label">Chiffre d'affaires</span>
+          <div class="tile-fill">
+            <span class="tile-pair">
+              <span class="tile-value">12 480 €</span>
+              <span class="tile-hbar"></span>
+              <span class="tile-ref">13 000 €</span>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="a-sub">Avec sparkline</p>
+    <div class="grid">
+      <div class="tile" style="--c: var(--c-net)">
+        <span class="tile-rail"></span>
+        <div class="tile-body">
+          <span class="tile-label">Pris depuis la veille</span>
+          <div class="tile-fill">
+            <span class="tile-value" style="color: var(--c-net)">+1 240 €</span>
+            <svg class="spark" viewBox="0 0 100 22" preserveAspectRatio="none" aria-hidden="true">
+              <polyline points="0,18 12,16.5 25,17 37,12.5 50,13.5 62,9 75,10 87,5 100,3.5"
+                fill="none" stroke="currentColor" stroke-width="1.6"
+                stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="specs">
+      <h3>Anatomie</h3>
+      <ul>
+        <li><b>Liseré</b> 0,5 rem à gauche, couleur d'accent = code couleur de la donnée.</li>
+        <li><b>Libellé</b> 0,6 rem, majuscules, en-tête fixe en haut à gauche (identique partout).</li>
+        <li><b>Valeur</b> 1,4 rem, centrée dans la hauteur restante.</li>
+        <li><b>Fraction</b> valeur / barre horizontale / référence, centrée (réalisé / objectif).</li>
+        <li><b>Sparkline</b> une ligne seule, 22 px (mini-graphe léger sans dépendance).</li>
+        <li><b>Hauteur</b> uniforme par rangée (grille), aucune icône.</li>
+      </ul>
+    </div>
+  </section>
+
+  <div class="future">D'autres artefacts s'ajouteront ici.</div>
 </div>
-
-<script>
-  /* ---------- Icônes (SVG inline, style trait) ---------- */
-  const P = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
-  const ICON = {
-    bed: P('<path d="M3 7v11"/><path d="M3 13h18v5"/><path d="M3 13a4 4 0 0 1 4-4h5a4 4 0 0 1 4 4"/>'),
-    sparkle: P('<path d="M12 3l1.7 4.8L18.5 9.5 13.7 11.2 12 16l-1.7-4.8L5.5 9.5l4.8-1.7z"/>'),
-    lock: P('<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>'),
-    ban: P('<circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/>'),
-    userx: P('<circle cx="9" cy="8" r="3.3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16.5 8l4 4M20.5 8l-4 4"/>'),
-    scale: P('<path d="M12 4v16"/><path d="M7 20h10"/><path d="M4 8h16"/><path d="M4 8l-2 5a3.5 3.5 0 0 0 7 0z"/><path d="M20 8l2 5a3.5 3.5 0 0 1-7 0z"/>'),
-    percent: P('<circle cx="7" cy="7" r="2.3"/><circle cx="17" cy="17" r="2.3"/><path d="M18 6L6 18"/>'),
-    euro: P('<path d="M17 6.3A6 6 0 1 0 17 17.7"/><path d="M5 10.3h8"/><path d="M5 13.7h8"/>'),
-    trend: P('<path d="M3 17l6-6 4 4 8-8"/><path d="M16 7h5v5"/>'),
-  };
-
-  /* ---------- Données ---------- */
-  const KPIS = [
-    { label: 'Vendues',       value: '80', c: 'var(--c-vendu)',  icon: 'bed' },
-    { label: 'Nettoyées',     value: '74', c: 'var(--c-net)',    icon: 'sparkle' },
-    { label: 'Bloquées',      value: '3',  c: 'var(--c-bloq)',   icon: 'lock' },
-    { label: 'Refus',         value: '2',  c: 'var(--c-refus)',  icon: 'ban' },
-    { label: 'No-show',       value: '1',  c: 'var(--c-noshow)', icon: 'userx' },
-    { label: 'Reste à faire', value: '5',  c: 'var(--c-net)',    icon: 'scale' },
-  ];
-  const SPARK = [4, 6, 5, 8, 7, 9, 8, 11, 10, 12];
-  const RICH = [
-    { label: 'Valeur seule',       value: '80',        c: 'var(--c-vendu)' },
-    { label: 'Avec icône',         value: '74',        c: 'var(--c-net)',   icon: 'sparkle' },
-    { label: "Taux d'occupation",  value: '92 %',      c: 'var(--c-net)',   icon: 'percent', delta: '+4 pts' },
-    { label: 'Revenu / objectif',  value: '12 480 €',  c: 'var(--c-vendu)', icon: 'euro',    ref: '13 000 €' },
-    { label: 'Nettoyées / vendues', value: '74',       c: 'var(--c-net)',   icon: 'sparkle', ref: '80' },
-    { label: 'Écart de fond',      value: '-6 €',      c: 'var(--c-bloq)',  icon: 'euro',    delta: '-6 €', deltaNeg: true },
-    { label: 'Progression mois',   value: '86 %',      c: 'var(--c-net)',   icon: 'trend',   progress: 86 },
-    { label: 'Encaissé · 7 j',     value: '8 210 €',   c: 'var(--c-refus)', icon: 'euro',    spark: SPARK },
-  ];
-
-  function sparkSvg(data) {
-    const w = 100, h = 22, max = Math.max(...data), min = Math.min(...data);
-    const rng = max - min || 1;
-    const pts = data.map((v, i) => {
-      const x = (i / (data.length - 1)) * w;
-      const y = h - 2 - ((v - min) / rng) * (h - 4);
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    }).join(' ');
-    return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-  }
-  /* Valeur d'une carte : simple, ou paire « valeur │ référence » (barre
-     verticale, données centrées) quand un champ `ref` est fourni. */
-  function valHtml(s) {
-    if (!s.ref) return s.value;
-    return `<span class="pair"><span class="p1">${s.value}</span><span class="hbar"></span><span class="p2">${s.ref}</span></span>`;
-  }
-  function extras(s) {
-    let h = '';
-    if (s.sub) h += `<span class="sub">${s.sub}</span>`;
-    if (s.delta) h += `<span class="delta ${s.deltaNeg ? 'neg' : ''}">${s.delta}</span>`;
-    if (s.progress != null) h += `<div class="bar"><i style="width:${s.progress}%"></i></div>`;
-    if (s.spark) h += sparkSvg(s.spark);
-    return h ? `<div class="extras">${h}</div>` : '';
-  }
-
-  /* ---------- Rendu par version ---------- */
-  const chip = (s, cls) => s.icon ? `<span class="chip ${cls || ''}">${ICON[s.icon]}</span>` : (cls && cls.includes('tint') ? `<span class="chip ${cls}"></span>` : '');
-
-  const RENDER = {
-    v1: (s) => `<div class="card v1" style="--c:${s.c}">
-        <span class="lbl">${s.label}</span>
-        <div class="row"><span class="val">${valHtml(s)}</span>${chip(s, 'tint')}</div>
-        ${extras(s)}
-      </div>`,
-    v2: (s) => `<div class="card v2" style="--c:${s.c}">
-        <div class="top">${chip(s)}<span class="lbl">${s.label}</span></div>
-        <span class="val">${valHtml(s)}</span>
-        ${extras(s)}
-      </div>`,
-    v3: (s) => `<div class="card v3" style="--c:${s.c}">
-        <div class="top"><span class="lbl">${s.label}</span>${chip(s, 'tint')}</div>
-        <div class="foot"><span class="val">${valHtml(s)}</span></div>
-        ${extras(s)}
-      </div>`,
-    v4: (s) => `<div class="card v4" style="--c:${s.c}">
-        <span class="iconpane">${s.icon ? ICON[s.icon] : ''}</span>
-        <div class="body"><span class="lbl">${s.label}</span><span class="val">${valHtml(s)}</span>${extras(s)}</div>
-      </div>`,
-    v5: (s) => `<div class="card v5" style="--c:${s.c}">
-        <div class="head"><span class="lbl">${s.label}</span>${s.icon ? `<span class="ghost">${ICON[s.icon]}</span>` : ''}</div>
-        <span class="val">${valHtml(s)}</span>
-        ${extras(s)}
-      </div>`,
-  };
-
-  const VERSIONS = [
-    { id: 'v1', name: 'Appui', tags: ['compact', 'icône à droite', 'baseline rapro'],
-      desc: "L'évolution directe des cartes actuelles : libellé en haut, valeur et pastille d'icône teintée alignées en bas. Le plus fidèle à l'existant, le plus dense." },
-    { id: 'v2', name: 'Rail', tags: ['liseré couleur', 'code catégoriel'],
-      desc: "Un filet vertical à la couleur de la catégorie porte tout le code couleur — idéal quand la couleur EST l'information (Nettoyée/Bloquée/Refus…). Icône fine près du libellé." },
-    { id: 'v3', name: 'Grand nombre', tags: ['éditorial', 'delta', 'aéré'],
-      desc: "Le chiffre domine, la pastille passe en haut à droite, un delta coloré se loge sous la valeur. Pour peu de KPI à forte valeur (revenus, occupation, écarts)." },
-    { id: 'v4', name: 'Tuile', tags: ['icône pleine', 'très scannable'],
-      desc: "Bandeau d'icône plein hauteur à gauche, contenu à droite. Lecture immédiate, hauteur uniforme naturelle. Le plus « tableau de bord »." },
-    { id: 'v5', name: 'Épuré', tags: ['libellé en haut', 'minimal'],
-      desc: "Libellé sur la ligne du haut, grande valeur en dessous, icône en filigrane discret. Respire quand une page n'affiche que des nombres." },
-  ];
-
-  const app = document.getElementById('app');
-  app.innerHTML = VERSIONS.map((v, i) => `
-    <section class="version">
-      <div class="vhead">
-        <span class="vnum">${String(i + 1).padStart(2, '0')}</span>
-        <h2 class="vname">${v.name}</h2>
-        <div class="vtags">${v.tags.map((t) => `<span class="tag">${t}</span>`).join('')}</div>
-      </div>
-      <p class="vdesc">${v.desc}</p>
-      <div class="stage">
-        <p class="subhead">Rangée KPI — rapprochement</p>
-        <div class="grid">${KPIS.map(RENDER[v.id]).join('')}</div>
-        <p class="subhead">Banc d'essai — hauteur uniforme sur contenus mixtes</p>
-        <div class="grid">${RICH.map(RENDER[v.id]).join('')}</div>
-      </div>
-    </section>`).join('');
-
-  /* ---------- Contrôles ---------- */
-  function wireSeg(id, apply) {
-    const seg = document.getElementById(id);
-    seg.addEventListener('click', (e) => {
-      const btn = e.target.closest('button');
-      if (!btn) return;
-      [...seg.children].forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
-      apply(btn);
-    });
-  }
-  wireSeg('seg-theme', (b) => document.documentElement.setAttribute('data-theme', b.dataset.themeVal));
-  wireSeg('seg-stage', (b) => document.documentElement.style.setProperty('--stage', b.dataset.stage));
-  wireSeg('seg-icons', (b) => document.body.classList.toggle('no-icons', b.dataset.icons === 'off'));
-  document.documentElement.setAttribute('data-theme', 'dark');
-</script>

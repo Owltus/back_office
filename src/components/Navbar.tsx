@@ -35,8 +35,7 @@ const NAV_ITEMS = [
   { to: '/affichage', label: 'Affichage', icon: Monitor },
 ] as const
 
-// Page TEMPORAIRE — galerie de propositions de cartes. En FIN de ligne et
-// réservée aux ADMINS (à retirer une fois la direction de carte choisie).
+// Registre des éléments d'interface retenus. En FIN de ligne, réservé aux ADMINS.
 const ARTEFACT_ITEM = { to: '/artefact', label: 'Artefact', icon: Palette } as const
 
 export function Navbar() {
