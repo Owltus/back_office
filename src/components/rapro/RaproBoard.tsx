@@ -653,12 +653,6 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
           hint="Chambres nettoyées aujourd'hui (facturées)."
         />
         <StatTile
-          value={dash(stats.todo)}
-          label="Bloquées"
-          accent="#f87171"
-          hint="Chambres occupées non nettoyées (bloquées, restent dues)."
-        />
-        <StatTile
           value={dash(stats.refus)}
           label="Refus"
           accent="#fbbf24"
@@ -669,6 +663,12 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
           label="No-show"
           accent="#a78bfa"
           hint="Vendue mais client absent (hors charge)."
+        />
+        <StatTile
+          value={dash(stats.todo)}
+          label="Bloquées"
+          accent="#f87171"
+          hint="Chambres occupées non nettoyées (bloquées, restent dues)."
         />
       </div>
 

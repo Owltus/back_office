@@ -135,9 +135,9 @@ function renderRaproDocument(
   const cells: Array<[string, number]> = [
     ['Vendues', counts.sold],
     ['Nettoyées', counts.clean],
-    ['Bloquées', counts.bloquee],
     ['Refus', counts.refus],
     ['No-show', counts.noshow],
+    ['Bloquées', counts.bloquee],
   ]
   const cw = CONTENT_W / cells.length
   cells.forEach(([lbl, val], i) => {
