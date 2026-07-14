@@ -439,8 +439,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
           counts: {
             sold: occupied.size,
             clean: stats.clean,
-            balance: rec.pending,
-            carried: carried.size,
+            bloquee: stats.todo,
             refus: stats.refus,
             noshow: stats.noshow,
           },

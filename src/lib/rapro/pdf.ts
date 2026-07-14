@@ -33,8 +33,7 @@ export interface RaproPdfData {
   counts: {
     sold: number
     clean: number
-    balance: number
-    carried: number
+    bloquee: number
     refus: number
     noshow: number
   }
@@ -131,11 +130,12 @@ function renderRaproDocument(
   pdf.setDrawColor(51).setLineWidth(0.4).line(LEFT, y, RIGHT, y)
   y += 8
 
-  // --- Bandeau de compteurs (5 cases) --------------------------------------
+  // --- Bandeau de compteurs (5 cases) — mêmes catégories que la page (hors
+  //     « Reste à faire ») : Vendues / Nettoyées / Bloquées / Refus / No-show.
   const cells: Array<[string, number]> = [
     ['Vendues', counts.sold],
     ['Nettoyées', counts.clean],
-    ['À faire', counts.balance],
+    ['Bloquées', counts.bloquee],
     ['Refus', counts.refus],
     ['No-show', counts.noshow],
   ]
