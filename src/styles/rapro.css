@@ -219,9 +219,8 @@
   background: color-mix(in oklab, #a78bfa 18%, transparent);
   border-color: color-mix(in oklab, #a78bfa 45%, transparent);
 }
-/* Marqueurs d'icône dans la pastille (horizontale) : le NUMÉRO reste centré, un
-   marqueur de chaque côté, centrés verticalement — jamais de couleur de fond. */
-/* Sur-statut : icône à GAUCHE (couleur du texte de la case, cohérente). */
+/* Sur-statut : icône à GAUCHE de la pastille, centrée verticalement (couleur du
+   texte de la case, cohérente), SANS fond → le numéro reste centré. */
 .rapro-room-qual-icon {
   position: absolute;
   left: 0.3rem;
@@ -230,17 +229,6 @@
   width: 0.72rem;
   height: 0.72rem;
   opacity: 0.85;
-  pointer-events: none;
-}
-/* Reportée (due un jour précédent, jamais résolue) : icône à DROITE, orange. */
-.rapro-room-carried-icon {
-  position: absolute;
-  right: 0.3rem;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 0.72rem;
-  height: 0.72rem;
-  color: #fb923c;
   pointer-events: none;
 }
 .rapro-room-clean:hover:not(:disabled),
@@ -257,7 +245,7 @@
 }
 
 /* --- Cards de synthèse (KPI), calquées sur .pdj-stat --------------------- */
-/* 7 cards (6 base + 1 sur-statut) : 2 colonnes en petit, 4 en large. */
+/* 6 cards (5 base + 1 sur-statut) : 2 colonnes en petit, 3 en large. */
 .rapro-stats {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -265,7 +253,7 @@
 }
 @media (min-width: 640px) {
   .rapro-stats {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
   }
 }
 /* Titre en haut, puis une rangée « icône à gauche / valeur à droite ».
@@ -438,14 +426,9 @@
   background: transparent;
   border: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
 }
-/* Icône de marqueur dans la légende (sur-statuts + reportée, mêmes icônes que
-   les cases). */
+/* Icône de sur-statut dans la légende (mêmes icônes que les cases). */
 .rapro-legend-icon {
   width: 0.8rem;
   height: 0.8rem;
   opacity: 0.85;
-}
-.rapro-legend-icon.is-reportee {
-  color: #fb923c;
-  opacity: 1;
 }

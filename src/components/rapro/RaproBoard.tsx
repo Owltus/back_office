@@ -11,7 +11,6 @@ import { fr } from 'date-fns/locale'
 import {
   Ban,
   BedDouble,
-  History,
   Info,
   LineChart,
   RotateCcw,
@@ -732,14 +731,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
           label="Reste à faire"
           icon={Scale}
           accent={reconciled ? '#34d399' : '#fbbf24'}
-          hint="Chambres encore à nettoyer. Zéro = tout est fait."
-        />
-        <Stat
-          value={dash(carried.size)}
-          label="Reportées"
-          icon={History}
-          accent="#fb923c"
-          hint="Restées à faire depuis un jour précédent."
+          hint="Chambres encore à nettoyer (bloquées). Zéro = tout est fait."
         />
         <Stat
           value={dash(stats.refus)}
@@ -819,9 +811,8 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
                     // Grisée seulement si NON touchée (pas de ligne) ET non vendue.
                     // Une chambre non vendue explicitement marquée montre sa couleur.
                     const isEmpty = !statuses.has(room) && !isDue(room)
-                    const isCarried = carried.has(room)
                     const cls = CELL_STATES[cellState(status, isEmpty)].webClass
-                    const label = `Chambre ${room} — ${STATUS_LABEL[status]}${qual ? ` — ${QUALIFIER_LABEL[qual]}` : ''}${isEmpty ? ' — non vendue' : ''}${isCarried ? ' — reportée' : ''}`
+                    const label = `Chambre ${room} — ${STATUS_LABEL[status]}${qual ? ` — ${QUALIFIER_LABEL[qual]}` : ''}${isEmpty ? ' — non vendue' : ''}`
                     const btn = (
                       <button
                         key={room}
@@ -840,9 +831,6 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
                           <QualIcon className="rapro-room-qual-icon" />
                         )}
                         {room}
-                        {isCarried && (
-                          <History className="rapro-room-carried-icon" />
-                        )}
                       </button>
                     )
                     // Jour clôturé / lecture seule : bouton simple, sans menu.
@@ -919,10 +907,6 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
               {CELL_STATES[st].label}
             </span>
           ))}
-          <span className="rapro-legend-item">
-            <History className="rapro-legend-icon is-reportee" />
-            Reportée
-          </span>
           {/* Sur-statuts : affichés par ICÔNE (pas par couleur). */}
           {QUALIFIER_ORDER.map((q) => {
             const Icon = QUALIFIER_ICON[q]

@@ -144,7 +144,6 @@ function renderRaproDocument(
     ['Vendues', counts.sold],
     ['Nettoyées', counts.clean],
     ['À faire', counts.balance],
-    ['Reportées', counts.carried],
     ['Refus', counts.refus],
     ['No-show', counts.noshow],
   ]
@@ -187,12 +186,7 @@ function renderRaproDocument(
       pdf.text(String(room), cx + 1 + w / 2, cellY + h / 2 + 1.1, {
         align: 'center',
       })
-      // Reportée : pastille d'angle orange (haut-droite, marqueur additif).
-      if (carried.has(room)) {
-        pdf.setFillColor(251, 146, 60)
-        pdf.circle(cx + 1 + w - 1, cellY + 1, 0.7, 'F')
-      }
-      // Sur-statut : glyphe en coin HAUT-GAUCHE (opposé à la reportée).
+      // Sur-statut : glyphe en coin HAUT-GAUCHE.
       const q = qualifiers.get(room)
       if (q) {
         pdf.setFont('helvetica', 'bold').setFontSize(5)
@@ -205,13 +199,10 @@ function renderRaproDocument(
   y = gridTop + 3 + maxRooms * cellH + 6
 
   // --- Légende des statuts (dérivée de la même partition que les cases) ------
-  const legend: Array<[string, RGB]> = [
-    ...LEGEND_ORDER.map((st): [string, RGB] => [
-      CELL_STATES[st].label,
-      CELL_FILL[st].fill,
-    ]),
-    ['Reportée', [251, 146, 60]],
-  ]
+  const legend: Array<[string, RGB]> = LEGEND_ORDER.map((st): [string, RGB] => [
+    CELL_STATES[st].label,
+    CELL_FILL[st].fill,
+  ])
   pdf.setFont('helvetica', 'normal').setFontSize(7.5)
   const legendGap = 7
   const itemW = legend.map(([lbl]) => 4 + pdf.getTextWidth(lbl))
