@@ -41,7 +41,7 @@ import {
 } from '#/lib/rapro/constants.ts'
 import { addDays, clampDay, today } from '#/lib/rapro/day.ts'
 import { printRaproSheet } from '#/lib/rapro/pdf.ts'
-import { isReconciled, reconcile } from '#/lib/rapro/reconcile.ts'
+import { reconcile } from '#/lib/rapro/reconcile.ts'
 import { FLOORS } from '#/lib/rapro/rooms.ts'
 import { missingSources, type MissingSource } from '#/lib/rapro/sources.ts'
 import {
@@ -226,8 +226,6 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   const dueSet = new Set(occupied)
   for (const r of carried) dueSet.add(r)
   const rec = reconcile(statuses, dueSet)
-  const reconciled = isReconciled(rec)
-  const hasDue = dueSet.size > 0
   // Fenêtre de report résolue ? Tant qu'une requête de la fenêtre est en vol,
   // `carried` est incomplet : afficher « Aucune donnée » sur un jour sans
   // occupation directe mais À REPORTS serait un faux vide, effacé une fraction de
@@ -593,7 +591,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
               grille des étages (une colonne par étage), aux mêmes gabarits que le
               contenu réel pour ne rien décaler à l'arrivée des données. */}
           <div className="rapro-stats" aria-hidden="true">
-            {Array.from({ length: 6 }).map((_, i) => (
+            {Array.from({ length: 5 }).map((_, i) => (
               <div
                 key={i}
                 className="flex items-stretch overflow-hidden rounded-xl border border-border bg-card"
@@ -671,12 +669,6 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
           label="No-show"
           accent="#a78bfa"
           hint="Vendue mais client absent (hors charge)."
-        />
-        <StatTile
-          value={dash(hasDue ? rec.pending : '—')}
-          label="Reste à faire"
-          accent={reconciled ? '#34d399' : '#fbbf24'}
-          hint="Chambres encore à nettoyer (bloquées du jour + reportées). Zéro = tout est fait."
         />
       </div>
 
