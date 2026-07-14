@@ -118,12 +118,11 @@ export function SummaryCards({
             }
           >
             {pickupSeries.length >= 2 && (
-              <div className="mt-1.5">
-                <Sparkline data={pickupSeries} color="#34d399" />
-                <p className="mt-0.5 text-[0.6rem] text-muted-foreground">
-                  CA pris depuis le 1<sup>er</sup>
-                </p>
-              </div>
+              <Sparkline
+                data={pickupSeries}
+                color="#34d399"
+                className="mt-2"
+              />
             )}
           </StatTile>
         )}
