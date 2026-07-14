@@ -93,6 +93,18 @@ export async function importRows(rows: DbPdjRow[]): Promise<void> {
   }
 }
 
+/**
+ * Supprime toutes les lignes d'UN jour de service (ce jour uniquement, via
+ * `.eq('service_date', …)` — jamais un autre jour). Réservé super/admin (RLS).
+ */
+export async function deleteDay(serviceDate: string): Promise<void> {
+  const { error } = await supabase
+    .from(PDJ_TABLE)
+    .delete()
+    .eq('service_date', serviceDate)
+  if (error) throw error
+}
+
 /** Met à jour la consommation d'une chambre pour un jour (saisie staff, D4). */
 export async function setServed(
   serviceDate: string,

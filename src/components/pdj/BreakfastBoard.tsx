@@ -11,6 +11,7 @@ import {
   FileUp,
   LineChart,
   Star,
+  Trash2,
   Users,
 } from 'lucide-react'
 
@@ -33,6 +34,7 @@ import { printWithTitle } from '#/lib/print.ts'
 import { ALL_ROOMS, localDateStr, mergeCsvFiles } from '#/lib/pdj/csv.ts'
 import { businessDateStr, businessNow } from '#/lib/businessDay.ts'
 import {
+  deleteDay,
   fetchDay,
   fetchServiceDates,
   importRows,
@@ -332,6 +334,27 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
     printWithTitle(`Breakfast_${dd}-${mm}-${d.getFullYear()}`)
   }
 
+  // Suppression des données du jour AFFICHÉ uniquement (ce service_date). Confirme
+  // avant, comme les suppressions de la gestion RepJour. Réservé super/admin (RLS).
+  async function handleDeleteDay() {
+    if (!canEdit || !hasData || !selectedDate) return
+    if (
+      !window.confirm(
+        `Supprimer toutes les données du petit-déjeuner du ${titleDate} ? Cette action est irréversible et ne touche que ce jour.`,
+      )
+    )
+      return
+    try {
+      await deleteDay(selectedDate)
+      await queryClient.invalidateQueries({ queryKey: ['pdj'] })
+    } catch (err) {
+      window.alert(
+        'Suppression impossible : ' +
+          (err instanceof Error ? err.message : 'erreur inconnue'),
+      )
+    }
+  }
+
   // Ctrl+P passe par le bouton : même document (feuille A4 mise en forme par
   // pdj.css), même nom de fichier. Sur un jour sans données, il n'y aurait
   // qu'un écran vide à imprimer — on le dit plutôt que de ne rien faire.
@@ -413,6 +436,20 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                     hasData ? 'Imprimer / PDF' : 'Aucune donnée à imprimer'
                   }
                 />
+                {/* Suppression des données de CE jour (rouge, destructive) —
+                    super/admin uniquement, et seulement s'il y a des données. */}
+                {canEdit && hasData && (
+                  <Tip label="Supprimer les données de ce jour">
+                    <Button
+                      variant="destructive"
+                      size="icon-sm"
+                      onClick={handleDeleteDay}
+                      aria-label="Supprimer les données de ce jour"
+                    >
+                      <Trash2 />
+                    </Button>
+                  </Tip>
+                )}
               </ButtonGroup>
               {/* Groupe « navigation temporelle », collé au bord droit. */}
               {canNavigate && (

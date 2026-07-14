@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { Image as ImageIcon, LineChart, Send, Settings } from 'lucide-react'
+import {
+  Image as ImageIcon,
+  LineChart,
+  Send,
+  Settings,
+  Trash2,
+} from 'lucide-react'
 
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
@@ -41,6 +47,7 @@ import {
   fetchPreviousReportInMonth,
   fetchReportByDate,
 } from '#/lib/repjour/services/daily.ts'
+import { deleteDayData } from '#/lib/repjour/services/data.ts'
 import { reportToKPI } from '#/lib/repjour/calc/kpi.ts'
 import { computeEcart } from '#/lib/repjour/calc/ecart.ts'
 import { printRepjourReport } from '#/lib/repjour/pdf.ts'
@@ -220,6 +227,30 @@ export function DashboardBoard() {
   const handleDateChange = (date: string) => {
     setSelectedDate(date)
     setDetailMode(false)
+  }
+
+  // Suppression des données du jour AFFICHÉ uniquement : `deleteDayData` cible
+  // `.eq('date', selectedDate)` sur daily_reports ET forecast_days → jamais un
+  // autre jour ni le mois. Confirme avant (comme la gestion). Réservé super/admin
+  // (RLS + assertWriteRole).
+  const handleDeleteDay = async () => {
+    if (!report) return
+    if (
+      !window.confirm(
+        `Supprimer toutes les données du ${displayDate} ? Cette action est irréversible et ne touche que ce jour.`,
+      )
+    )
+      return
+    try {
+      await deleteDayData(selectedDate)
+      setDetailMode(false)
+      await queryClient.invalidateQueries({ queryKey: ['repjour'] })
+    } catch (err) {
+      window.alert(
+        'Suppression impossible : ' +
+          (err instanceof Error ? err.message : 'erreur inconnue'),
+      )
+    }
   }
 
   const shiftDate = (days: number) => {
@@ -475,6 +506,20 @@ export function DashboardBoard() {
                       : 'Aucune donnée à imprimer pour ce jour'
                   }
                 />
+                {/* Suppression des données de CE jour (rouge, destructive) —
+                    super/admin uniquement, et seulement s'il y a un rapport. */}
+                {canImport && report && (
+                  <Tip label="Supprimer les données de ce jour">
+                    <Button
+                      variant="destructive"
+                      size="icon-sm"
+                      onClick={handleDeleteDay}
+                      aria-label="Supprimer les données de ce jour"
+                    >
+                      <Trash2 />
+                    </Button>
+                  </Tip>
+                )}
               </ButtonGroup>
               {/* Groupe « navigation temporelle », collé au bord droit. */}
               <StepNav
