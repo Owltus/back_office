@@ -184,13 +184,29 @@
   .v4 .val { font-size: 1.4rem; }
   .v4 .extras { display: flex; flex-direction: column; gap: 0.3rem; }
 
-  /* --- V5 · Épuré (libellé en haut, grande valeur) ------------- */
-  .v5 { padding: 0.7rem 0.8rem; gap: 0.35rem; position: relative; }
-  .v5 .ghost { position: absolute; top: 0.55rem; right: 0.6rem; color: var(--c); opacity: 0.16; }
-  .v5 .ghost svg { width: 1.5rem; height: 1.5rem; }
-  .v5 .lbl { letter-spacing: 0.05em; padding-right: 1.5rem; }
+  /* --- V5 · Épuré (libellé + icône en haut, grande valeur) ----- */
+  .v5 { padding: 0.7rem 0.8rem; gap: 0.35rem; }
+  /* Titre et SVG sur une même rangée, alignés (align-items:center) — plus de
+     décalage entre le libellé et l'icône. */
+  .v5 .head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+  .v5 .ghost { display: flex; flex-shrink: 0; color: var(--c); opacity: 0.5; }
+  .v5 .ghost svg { width: 1rem; height: 1rem; display: block; }
+  .v5 .lbl { letter-spacing: 0.05em; }
   .v5 .val { font-size: 1.7rem; font-weight: 750; letter-spacing: -0.015em; margin-top: auto; }
   .v5 .extras { display: flex; flex-direction: column; gap: 0.3rem; margin-top: 0.4rem; }
+
+  /* --- Valeur FRACTIONNÉE → contenu centré dans la carte ------- */
+  /* Cartes en colonne : on centre libellé + valeur. Les rangées internes
+     (icône/valeur) repassent en justify-content:center. La Tuile (V4) garde
+     son bandeau d'icône pleine hauteur : on ne centre que son corps. */
+  .v1:has(.pair),
+  .v2:has(.pair),
+  .v3:has(.pair),
+  .v5:has(.pair) { align-items: center; text-align: center; }
+  .v1:has(.pair) .row,
+  .v3:has(.pair) .top,
+  .v5:has(.pair) .head { justify-content: center; }
+  .v4:has(.pair) .body { align-items: center; text-align: center; }
 
   /* --- Note de bas de page --- */
   .note {
@@ -341,8 +357,7 @@
         <div class="body"><span class="lbl">${s.label}</span><span class="val">${valHtml(s)}</span>${extras(s)}</div>
       </div>`,
     v5: (s) => `<div class="card v5" style="--c:${s.c}">
-        ${s.icon ? `<span class="ghost">${ICON[s.icon]}</span>` : ''}
-        <span class="lbl">${s.label}</span>
+        <div class="head"><span class="lbl">${s.label}</span>${s.icon ? `<span class="ghost">${ICON[s.icon]}</span>` : ''}</div>
         <span class="val">${valHtml(s)}</span>
         ${extras(s)}
       </div>`,
