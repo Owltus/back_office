@@ -248,7 +248,7 @@ function renderRaproDocument(
   pdf.rect(RIGHT - boxW, sigY, boxW, boxH)
   pdf.setFont('helvetica', 'bold').setFontSize(8).setTextColor(90)
   pdf.text('SIGNATURE OKKO', LEFT + 3, sigY + 5)
-  pdf.text('SIGNATURE ÉLIS', RIGHT - boxW + 3, sigY + 5)
+  pdf.text('SIGNATURE ÉLIOR', RIGHT - boxW + 3, sigY + 5)
 }
 
 /** Récap mensuel ELIOR : en-tête + tableau jour → nettoyées + total. Tient sur
