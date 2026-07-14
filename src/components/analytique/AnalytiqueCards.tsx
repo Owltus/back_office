@@ -1,10 +1,16 @@
 import type { ReactNode } from 'react'
 
+import { StatTile } from '#/components/shared/StatTile.tsx'
+
 /*
- * Grille et carte de synthèse des pages analytique. La grille (`shrink-0`, 4
- * colonnes) et le gabarit de carte sont partagés ; chaque board fournit ses
- * libellés/valeurs. `StatCard.children` reste libre pour les cartes enrichies
- * (barre de progression budget de repjour, par exemple).
+ * Grille et carte de synthèse des pages analytique. La grille (`shrink-0`,
+ * jusqu'à 4 colonnes) est partagée ; chaque board fournit ses libellés/valeurs.
+ *
+ * `StatCard` délègue au composant unifié `StatTile` (style « Tuile, valeur
+ * seule ») : liseré de couleur à gauche + libellé + valeur, `sub`/`children`
+ * pour les cartes enrichies (note secondaire, barre de progression budget de
+ * repjour…). `accent` par défaut = primary (les pages qui codent une couleur —
+ * ex. rapro — la passent explicitement).
  */
 export function AnalytiqueCardsGrid({ children }: { children: ReactNode }) {
   return (
@@ -16,23 +22,19 @@ export function StatCard({
   label,
   value,
   sub,
+  accent = 'var(--primary)',
   children,
 }: {
   label: ReactNode
   value: ReactNode
   sub?: ReactNode
+  /** Couleur du liseré (défaut primary). */
+  accent?: string
   children?: ReactNode
 }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4">
-      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        {label}
-      </p>
-      <div className="mt-1">
-        <span className="text-2xl font-bold text-foreground">{value}</span>
-        {sub}
-      </div>
+    <StatTile label={label} value={value} accent={accent} sub={sub}>
       {children}
-    </div>
+    </StatTile>
   )
 }

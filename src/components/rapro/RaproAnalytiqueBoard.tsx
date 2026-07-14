@@ -146,18 +146,22 @@ export function RaproAnalytiqueBoard() {
       <AnalytiqueCardsGrid>
         <StatCard
           label="Nettoyées sur l'année"
+          accent={CAT_COLOR.nettoyee}
           value={<span style={{ color: CAT_COLOR.nettoyee }}>{yearNettoyee}</span>}
         />
         <StatCard
           label="Bloquées sur l'année"
+          accent={CAT_COLOR.bloquee}
           value={<span style={{ color: CAT_COLOR.bloquee }}>{yearBloquee}</span>}
         />
         <StatCard
           label="Refus sur l'année"
+          accent={CAT_COLOR.refus}
           value={<span style={{ color: CAT_COLOR.refus }}>{yearRefus}</span>}
         />
         <StatCard
           label="No-shows sur l'année"
+          accent={CAT_COLOR.noshow}
           value={<span style={{ color: CAT_COLOR.noshow }}>{yearNoshow}</span>}
         />
       </AnalytiqueCardsGrid>
