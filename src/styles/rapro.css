@@ -231,17 +231,18 @@
   opacity: 0.85;
   pointer-events: none;
 }
-/* Bloquée de la VEILLE (roulée depuis un jour clôturé précédent, pas encore
-   traitée) : toute la case passe en ROUGE CLAIR (fond teinté + numéro + liseré),
-   cohérente avec la bordure. Rouge un peu plus léger que la bloquée du jour
-   (#fca5a5 vs #f87171). Le liseré vient d'un box-shadow INTERNE (fin, 1.5px) : il
-   ne prend aucune place (pas de décalage) et n'est jamais écrasé par le hover. */
 /* « Bloquée la veille » : la case garde le FOND de son statut du jour (nettoyée,
- * refus, no-show…) et reçoit un liseré rouge net PAR-DESSUS (box-shadow inset → 0
- * décalage). Fait sur la veille, toujours présent quel que soit le statut. */
+ * refus, no-show…) et reçoit un liseré rouge net PAR-DESSUS (box-shadow inset →
+ * 0 décalage). Fait sur la veille, toujours présent quel que soit le statut.
+ * Au survol / menu ouvert, le hover générique passe la bordure en violet
+ * (`--ring`) : on la garde ROUGE ici pour rester cohérent avec le liseré. */
 .rapro-room-carried {
   border-color: #f87171;
-  box-shadow: inset 0 0 0 1.5px #f87171;
+  box-shadow: inset 0 0 0 1.25px #f87171;
+}
+.rapro-room-carried:hover:not(:disabled),
+.rapro-room-carried.is-active {
+  border-color: #f87171;
 }
 .rapro-room-clean:hover:not(:disabled),
 .rapro-room-refus:hover:not(:disabled),
