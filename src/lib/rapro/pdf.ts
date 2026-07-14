@@ -25,11 +25,9 @@ import { FLOORS } from '#/lib/rapro/rooms.ts'
 import type { Qualifier, RoomStatus } from '#/lib/rapro/types.ts'
 
 /** Glyphe (lettre) d'un sur-statut, dessiné en coin de case au PDF (jsPDF ne rend
- * pas de SVG lucide) : F = faux no-show, A = départ anticipé, D = délogement. */
+ * pas de SVG lucide) : F = faux no-show. */
 const QUALIFIER_GLYPH: Record<Qualifier, string> = {
   faux_noshow: 'F',
-  depart_anticipe: 'A',
-  delogement: 'D',
 }
 
 export interface RaproPdfData {
@@ -232,12 +230,7 @@ function renderRaproDocument(
 
   // Rappel des sur-statuts (glyphes dessinés en coin de case).
   pdf.setFont('helvetica', 'normal').setFontSize(6.5).setTextColor(110)
-  pdf.text(
-    'Sur-statuts : F = Faux no-show   A = Départ anticipé   D = Délogement',
-    RIGHT,
-    y,
-    { align: 'right' },
-  )
+  pdf.text('Sur-statut : F = Faux no-show', RIGHT, y, { align: 'right' })
   y += 6
 
   // --- Commentaire : cadre pleine largeur jusqu'aux signatures --------------

@@ -219,27 +219,28 @@
   background: color-mix(in oklab, #a78bfa 18%, transparent);
   border-color: color-mix(in oklab, #a78bfa 45%, transparent);
 }
-/* Reportée (dûe un jour précédent, jamais résolue) : marqueur ADDITIF (pastille
-   d'angle orange, en HAUT-DROITE), superposé à la couleur de statut. */
-.rapro-room-reportee::after {
-  content: '';
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  width: 5px;
-  height: 5px;
-  border-radius: 999px;
-  background: #fb923c;
-}
-/* Sur-statut : ICÔNE en coin HAUT-GAUCHE (opposé à la pastille reportée), SANS
-   couleur de fond → ne masque pas la couleur du statut de base. */
+/* Marqueurs d'icône dans la pastille (horizontale) : le NUMÉRO reste centré, un
+   marqueur de chaque côté, centrés verticalement — jamais de couleur de fond. */
+/* Sur-statut : icône à GAUCHE (couleur du texte de la case, cohérente). */
 .rapro-room-qual-icon {
   position: absolute;
-  top: 1px;
-  left: 2px;
-  width: 0.7rem;
-  height: 0.7rem;
-  opacity: 0.9;
+  left: 0.3rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0.72rem;
+  height: 0.72rem;
+  opacity: 0.85;
+  pointer-events: none;
+}
+/* Reportée (due un jour précédent, jamais résolue) : icône à DROITE, orange. */
+.rapro-room-carried-icon {
+  position: absolute;
+  right: 0.3rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0.72rem;
+  height: 0.72rem;
+  color: #fb923c;
   pointer-events: none;
 }
 .rapro-room-clean:hover:not(:disabled),
@@ -256,7 +257,7 @@
 }
 
 /* --- Cards de synthèse (KPI), calquées sur .pdj-stat --------------------- */
-/* 9 cards (6 base + 3 sur-statuts) : 2 colonnes en petit, 4 en large. */
+/* 7 cards (6 base + 1 sur-statut) : 2 colonnes en petit, 4 en large. */
 .rapro-stats {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -433,16 +434,18 @@
 .rapro-legend-dot.is-noshow {
   background: #a78bfa;
 }
-.rapro-legend-dot.is-reportee {
-  background: #fb923c;
-}
 .rapro-legend-dot.is-empty {
   background: transparent;
   border: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
 }
-/* Icône de sur-statut dans la légende (mêmes icônes que les cases). */
+/* Icône de marqueur dans la légende (sur-statuts + reportée, mêmes icônes que
+   les cases). */
 .rapro-legend-icon {
   width: 0.8rem;
   height: 0.8rem;
   opacity: 0.85;
+}
+.rapro-legend-icon.is-reportee {
+  color: #fb923c;
+  opacity: 1;
 }

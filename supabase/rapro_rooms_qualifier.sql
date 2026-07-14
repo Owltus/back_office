@@ -7,9 +7,7 @@
 --   - `status`    : statut de BASE, terminal (nettoyee / non_nettoyee / refus /
 --                   noshow) — le « circuit classique ». Inchangé.
 --   - `qualifier` : SUR-STATUT optionnel (cas particulier), au plus un par chambre.
---                   'faux_noshow'      : PMS a déclaré le client absent, il est présent.
---                   'depart_anticipe'  : client parti tôt le matin.
---                   'delogement'       : client changé de chambre / recouche.
+--                   'faux_noshow' : PMS a déclaré le client absent, il est présent.
 --
 -- Ce script est ADDITIF, IDEMPOTENT, et NE MODIFIE AUCUNE LIGNE (qualifier NULL
 -- par défaut → satisfait le CHECK, aucune migration). La clé unique
@@ -26,5 +24,4 @@ alter table public.rapro_rooms
   drop constraint if exists rapro_rooms_qualifier_check;
 alter table public.rapro_rooms
   add constraint rapro_rooms_qualifier_check
-  check (qualifier is null
-         or qualifier in ('faux_noshow', 'depart_anticipe', 'delogement'));
+  check (qualifier is null or qualifier in ('faux_noshow'));

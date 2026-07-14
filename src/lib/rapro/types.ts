@@ -9,10 +9,8 @@ export type RoomStatus = 'nettoyee' | 'non_nettoyee' | 'refus' | 'noshow'
 /** SUR-STATUT / qualificatif : dimension ORTHOGONALE au statut de base, pour les
  * cas particuliers. Une chambre en porte au plus un ; il s'affiche par une ICÔNE
  * (pas une couleur) et n'influe PAS sur la facturation/balance (le base décide).
- * - `faux_noshow` : PMS a déclaré le client absent, il est en réalité présent.
- * - `depart_anticipe` : client parti tôt le matin.
- * - `delogement` : client changé de chambre / recouche. */
-export type Qualifier = 'faux_noshow' | 'depart_anticipe' | 'delogement'
+ * - `faux_noshow` : PMS a déclaré le client absent, il est en réalité présent. */
+export type Qualifier = 'faux_noshow'
 
 /** Ligne DB (miroir de public.rapro_rooms) — une ligne par (jour, chambre). */
 export interface DbRaproRoom {

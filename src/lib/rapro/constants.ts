@@ -13,16 +13,10 @@ export const STATUS_LABEL: Record<RoomStatus, string> = {
 /** Libellés des sur-statuts (qualificatifs), affichés par icône (cf. RaproBoard). */
 export const QUALIFIER_LABEL: Record<Qualifier, string> = {
   faux_noshow: 'Faux no-show',
-  depart_anticipe: 'Départ anticipé',
-  delogement: 'Délogement',
 }
 
 /** Ordre d'affichage des sur-statuts (menu contextuel, légende). */
-export const QUALIFIER_ORDER: Qualifier[] = [
-  'faux_noshow',
-  'depart_anticipe',
-  'delogement',
-]
+export const QUALIFIER_ORDER: Qualifier[] = ['faux_noshow']
 
 /** Bascule du CLIC GAUCHE (geste courant) : entre nettoyée et refus, sans jamais
  * passer par les statuts d'exception (réservés au menu contextuel). */
@@ -150,8 +144,6 @@ export function countQualifiers(
 ): Record<Qualifier, number> {
   const counts: Record<Qualifier, number> = {
     faux_noshow: 0,
-    depart_anticipe: 0,
-    delogement: 0,
   }
   for (const room of occupied) {
     const q = qualifiers.get(room)

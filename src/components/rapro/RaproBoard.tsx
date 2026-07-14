@@ -9,13 +9,11 @@ import { Link } from '@tanstack/react-router'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import {
-  ArrowRightLeft,
   Ban,
   BedDouble,
   History,
   Info,
   LineChart,
-  LogOut,
   RotateCcw,
   Scale,
   Sparkles,
@@ -110,8 +108,6 @@ const ROOM_STATUS_ORDER: RoomStatus[] = ['non_nettoyee', 'noshow']
 /** Icône affichée en case pour chaque sur-statut (rendu par icône, pas couleur). */
 const QUALIFIER_ICON: Record<Qualifier, ComponentType<{ className?: string }>> = {
   faux_noshow: UserCheck,
-  depart_anticipe: LogOut,
-  delogement: ArrowRightLeft,
 }
 
 /**
@@ -766,20 +762,6 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
           accent="#2dd4bf"
           hint="Sur-statut : déclaré absent par le PMS mais en réalité présent."
         />
-        <Stat
-          value={dash(qualCounts.depart_anticipe)}
-          label="Départ anticipé"
-          icon={LogOut}
-          accent="#38bdf8"
-          hint="Sur-statut : client parti tôt le matin."
-        />
-        <Stat
-          value={dash(qualCounts.delogement)}
-          label="Délogement"
-          icon={ArrowRightLeft}
-          accent="#c084fc"
-          hint="Sur-statut : client changé de chambre / recouche."
-        />
       </div>
 
       {!showEmptyState && optionalMissing.length > 0 && (
@@ -851,7 +833,6 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
                         className={cn(
                           'rapro-room',
                           cls,
-                          isCarried && 'rapro-room-reportee',
                           menuRoom === room && 'is-active',
                         )}
                       >
@@ -859,6 +840,9 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
                           <QualIcon className="rapro-room-qual-icon" />
                         )}
                         {room}
+                        {isCarried && (
+                          <History className="rapro-room-carried-icon" />
+                        )}
                       </button>
                     )
                     // Jour clôturé / lecture seule : bouton simple, sans menu.
@@ -936,7 +920,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
             </span>
           ))}
           <span className="rapro-legend-item">
-            <span className="rapro-legend-dot is-reportee" />
+            <History className="rapro-legend-icon is-reportee" />
             Reportée
           </span>
           {/* Sur-statuts : affichés par ICÔNE (pas par couleur). */}
