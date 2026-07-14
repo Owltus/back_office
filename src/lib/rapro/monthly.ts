@@ -14,22 +14,28 @@
 import { supabase } from '#/lib/supabase.ts'
 import { fetchValidatedDays } from '#/lib/rapro/service.ts'
 
-/** Décompte des statuts « traités » d'un jour (nettoyée / refus / no-show, hors
- * occupation PDJ). */
+/** Décompte des statuts stockés d'un jour (nettoyée / bloquée / refus / no-show,
+ * hors occupation PDJ) — mêmes catégories que la grille du rapprochement. */
 export interface DayStatusCounts {
   nettoyee: number
+  bloquee: number
   refus: number
   noshow: number
 }
 
-const emptyCounts = (): DayStatusCounts => ({ nettoyee: 0, refus: 0, noshow: 0 })
+const emptyCounts = (): DayStatusCounts => ({
+  nettoyee: 0,
+  bloquee: 0,
+  refus: 0,
+  noshow: 0,
+})
 
 /**
- * Comptage par jour des statuts nettoyee / refus / noshow sur `[from, to]`,
- * RESTREINT aux jours dont le rapprochement est CLÔTURÉ (validé). PAGINÉ jusqu'au
- * count exact (un mois plein peut dépasser le plafond de 1000 lignes de l'API),
- * en avançant du nombre de lignes réellement renvoyées ; les lignes d'un jour non
- * clôturé sont ignorées au comptage.
+ * Comptage par jour des statuts nettoyee / non_nettoyee / refus / noshow sur
+ * `[from, to]`, RESTREINT aux jours dont le rapprochement est CLÔTURÉ (validé).
+ * PAGINÉ jusqu'au count exact (un mois plein peut dépasser le plafond de 1000
+ * lignes de l'API), en avançant du nombre de lignes réellement renvoyées ; les
+ * lignes d'un jour non clôturé sont ignorées au comptage.
  */
 export async function fetchStatusCountsByRange(
   from: string,
@@ -46,7 +52,7 @@ export async function fetchStatusCountsByRange(
     const { data, error, count } = await supabase
       .from('rapro_rooms')
       .select('report_date, status', { count: 'exact' })
-      .in('status', ['nettoyee', 'refus', 'noshow'])
+      .in('status', ['nettoyee', 'non_nettoyee', 'refus', 'noshow'])
       .gte('report_date', from)
       .lte('report_date', to)
       .order('report_date', { ascending: true })
@@ -59,8 +65,9 @@ export async function fetchStatusCountsByRange(
       // Jour non clôturé → hors analytique (statuts encore provisoires).
       if (!validated.has(r.report_date)) continue
       const c = byDay.get(r.report_date) ?? emptyCounts()
-      // Facturable = statut `nettoyee`.
+      // Facturable = statut `nettoyee` ; `non_nettoyee` = « Bloquée ».
       if (r.status === 'nettoyee') c.nettoyee++
+      else if (r.status === 'non_nettoyee') c.bloquee++
       else if (r.status === 'refus') c.refus++
       else if (r.status === 'noshow') c.noshow++
       byDay.set(r.report_date, c)
@@ -75,6 +82,7 @@ export function sumCounts(byDay: Map<string, DayStatusCounts>): DayStatusCounts 
   const t = emptyCounts()
   for (const c of byDay.values()) {
     t.nettoyee += c.nettoyee
+    t.bloquee += c.bloquee
     t.refus += c.refus
     t.noshow += c.noshow
   }
@@ -115,6 +123,7 @@ export function monthlyRows(
     const date = `${year}-${mm}-${String(d).padStart(2, '0')}`
     const c = byDay.get(date) ?? emptyCounts()
     totals.nettoyee += c.nettoyee
+    totals.bloquee += c.bloquee
     totals.refus += c.refus
     totals.noshow += c.noshow
     rows.push({ date, day: d, ...c })

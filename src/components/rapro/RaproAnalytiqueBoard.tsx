@@ -27,6 +27,26 @@ import {
  * fetch borné par mois (12 lectures mises en cache). Aucune écriture.
  */
 
+/** Code couleur des catégories, identique à la grille du rapprochement (cf.
+ * rapro.css : légende + cases). Nettoyée=vert, Bloquée=rouge, Refus=ambre,
+ * No-show=violet. */
+const CAT_COLOR = {
+  nettoyee: 'var(--chart-5)',
+  bloquee: '#f87171',
+  refus: 'var(--chart-3)',
+  noshow: '#a78bfa',
+} as const
+
+/** Compteur au code couleur de la catégorie ; un zéro reste discret (grisé),
+ * comme sur la grille du rapprochement où un 0 ne s'accentue pas. */
+function coloredCount(n: number, color: string) {
+  return n === 0 ? (
+    <span className="text-muted-foreground/40">0</span>
+  ) : (
+    <span style={{ color }}>{n}</span>
+  )
+}
+
 const MONTHS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
 
 const MONTHS_SHORT = [
@@ -84,13 +104,9 @@ export function RaproAnalytiqueBoard() {
     sumCounts(monthQueries[i]?.data ?? new Map()),
   )
   const yearNettoyee = totals.reduce((s, t) => s + t.nettoyee, 0)
+  const yearBloquee = totals.reduce((s, t) => s + t.bloquee, 0)
   const yearRefus = totals.reduce((s, t) => s + t.refus, 0)
   const yearNoshow = totals.reduce((s, t) => s + t.noshow, 0)
-  const monthsWithData = totals.filter(
-    (t) => t.nettoyee + t.refus + t.noshow > 0,
-  ).length
-  const avgNettoyee =
-    monthsWithData > 0 ? Math.round(yearNettoyee / monthsWithData) : 0
 
   const currentMonth = now.getMonth() + 1
   const isFutureMonth = (m: number) =>
@@ -124,14 +140,26 @@ export function RaproAnalytiqueBoard() {
         />
       }
       loading={loading}
-      skeleton={{ cols: 3, charts: 2, cardLines: 2, rows: 13 }}
+      skeleton={{ cols: 4, charts: 2, cardLines: 2, rows: 13 }}
     >
-      {/* Synthèse annuelle */}
+      {/* Synthèse annuelle — 4 catégories, code couleur de la grille rapprochement */}
       <AnalytiqueCardsGrid>
-        <StatCard label="Nettoyées sur l'année" value={yearNettoyee} />
-        <StatCard label="Moyenne par mois" value={avgNettoyee} />
-        <StatCard label="Refus sur l'année" value={yearRefus} />
-        <StatCard label="No-shows sur l'année" value={yearNoshow} />
+        <StatCard
+          label="Nettoyées sur l'année"
+          value={<span style={{ color: CAT_COLOR.nettoyee }}>{yearNettoyee}</span>}
+        />
+        <StatCard
+          label="Bloquées sur l'année"
+          value={<span style={{ color: CAT_COLOR.bloquee }}>{yearBloquee}</span>}
+        />
+        <StatCard
+          label="Refus sur l'année"
+          value={<span style={{ color: CAT_COLOR.refus }}>{yearRefus}</span>}
+        />
+        <StatCard
+          label="No-shows sur l'année"
+          value={<span style={{ color: CAT_COLOR.noshow }}>{yearNoshow}</span>}
+        />
       </AnalytiqueCardsGrid>
 
       {/* Tableau mois par mois (clic = détail du mois) */}
@@ -141,13 +169,28 @@ export function RaproAnalytiqueBoard() {
             <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">
               Mois
             </th>
-            <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground">
-              Nettoyées
+            <th
+              className="px-3 py-2 text-center text-xs font-medium"
+              style={{ color: CAT_COLOR.nettoyee }}
+            >
+              Nettoyée
             </th>
-            <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground">
+            <th
+              className="px-3 py-2 text-center text-xs font-medium"
+              style={{ color: CAT_COLOR.bloquee }}
+            >
+              Bloquée
+            </th>
+            <th
+              className="px-3 py-2 text-center text-xs font-medium"
+              style={{ color: CAT_COLOR.refus }}
+            >
               Refus
             </th>
-            <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground">
+            <th
+              className="px-3 py-2 text-center text-xs font-medium"
+              style={{ color: CAT_COLOR.noshow }}
+            >
               No-show
             </th>
           </tr>
@@ -174,13 +217,16 @@ export function RaproAnalytiqueBoard() {
                   {monthLabel(year, m)}
                 </td>
                 <td className="whitespace-nowrap px-3 py-2 text-center text-xs font-medium tabular-nums">
-                  {t.nettoyee}
+                  {coloredCount(t.nettoyee, CAT_COLOR.nettoyee)}
                 </td>
-                <td className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums text-muted-foreground">
-                  {t.refus}
+                <td className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums">
+                  {coloredCount(t.bloquee, CAT_COLOR.bloquee)}
                 </td>
-                <td className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums text-muted-foreground">
-                  {t.noshow}
+                <td className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums">
+                  {coloredCount(t.refus, CAT_COLOR.refus)}
+                </td>
+                <td className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums">
+                  {coloredCount(t.noshow, CAT_COLOR.noshow)}
                 </td>
               </tr>
             )
@@ -190,13 +236,16 @@ export function RaproAnalytiqueBoard() {
           <tr className="border-t border-border bg-muted/50 font-medium">
             <td className="px-4 py-2 text-xs">Total {year}</td>
             <td className="px-3 py-2 text-center text-xs tabular-nums">
-              {yearNettoyee}
+              {coloredCount(yearNettoyee, CAT_COLOR.nettoyee)}
             </td>
             <td className="px-3 py-2 text-center text-xs tabular-nums">
-              {yearRefus}
+              {coloredCount(yearBloquee, CAT_COLOR.bloquee)}
             </td>
             <td className="px-3 py-2 text-center text-xs tabular-nums">
-              {yearNoshow}
+              {coloredCount(yearRefus, CAT_COLOR.refus)}
+            </td>
+            <td className="px-3 py-2 text-center text-xs tabular-nums">
+              {coloredCount(yearNoshow, CAT_COLOR.noshow)}
             </td>
           </tr>
         </tfoot>

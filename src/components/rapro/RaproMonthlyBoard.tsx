@@ -20,10 +20,29 @@ import { printRaproMonthly } from '#/lib/rapro/pdf.ts'
 
 /**
  * Détail d'un MOIS — harmonisé sur le socle analytique partagé. Par jour :
- * chambres nettoyées / refus / no-show + totaux du mois, tableau au style socle
- * et un graphique des nettoyées par jour. Export PDF (base de facturation ELIOR).
- * Le mois vient des params de route ; retour à la vue annuelle par le chevron.
+ * chambres nettoyées / bloquées / refus / no-show + totaux du mois, tableau au
+ * style socle et un graphique des nettoyées par jour. Export PDF (base de
+ * facturation ELIOR). Le mois vient des params de route ; retour à la vue
+ * annuelle par le chevron.
  */
+
+/** Code couleur des catégories, identique à la grille du rapprochement (cf.
+ * rapro.css). Nettoyée=vert, Bloquée=rouge, Refus=ambre, No-show=violet. */
+const CAT_COLOR = {
+  nettoyee: 'var(--chart-5)',
+  bloquee: '#f87171',
+  refus: 'var(--chart-3)',
+  noshow: '#a78bfa',
+} as const
+
+/** Compteur au code couleur ; un zéro reste discret (grisé). */
+function coloredCount(n: number, color: string) {
+  return n === 0 ? (
+    <span className="text-muted-foreground/40">0</span>
+  ) : (
+    <span style={{ color }}>{n}</span>
+  )
+}
 export function RaproMonthlyBoard({
   year,
   month,
@@ -83,7 +102,7 @@ export function RaproMonthlyBoard({
       }
       loading={loading}
       skeleton={{
-        cols: 3,
+        cols: 4,
         charts: 1,
         cards: 0,
         rows: new Date(year, month, 0).getDate(),
@@ -96,13 +115,28 @@ export function RaproMonthlyBoard({
             <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">
               Jour
             </th>
-            <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground">
-              Nettoyées
+            <th
+              className="px-3 py-2 text-center text-xs font-medium"
+              style={{ color: CAT_COLOR.nettoyee }}
+            >
+              Nettoyée
             </th>
-            <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground">
+            <th
+              className="px-3 py-2 text-center text-xs font-medium"
+              style={{ color: CAT_COLOR.bloquee }}
+            >
+              Bloquée
+            </th>
+            <th
+              className="px-3 py-2 text-center text-xs font-medium"
+              style={{ color: CAT_COLOR.refus }}
+            >
               Refus
             </th>
-            <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground">
+            <th
+              className="px-3 py-2 text-center text-xs font-medium"
+              style={{ color: CAT_COLOR.noshow }}
+            >
               No-show
             </th>
           </tr>
@@ -126,25 +160,16 @@ export function RaproMonthlyBoard({
                   </Link>
                 </td>
                 <td className="whitespace-nowrap px-3 py-2 text-center text-xs font-medium tabular-nums">
-                  {r.nettoyee === 0 ? (
-                    <span className="text-muted-foreground/40">0</span>
-                  ) : (
-                    r.nettoyee
-                  )}
+                  {coloredCount(r.nettoyee, CAT_COLOR.nettoyee)}
                 </td>
-                <td className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums text-muted-foreground">
-                  {r.refus === 0 ? (
-                    <span className="text-muted-foreground/40">0</span>
-                  ) : (
-                    r.refus
-                  )}
+                <td className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums">
+                  {coloredCount(r.bloquee, CAT_COLOR.bloquee)}
                 </td>
-                <td className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums text-muted-foreground">
-                  {r.noshow === 0 ? (
-                    <span className="text-muted-foreground/40">0</span>
-                  ) : (
-                    r.noshow
-                  )}
+                <td className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums">
+                  {coloredCount(r.refus, CAT_COLOR.refus)}
+                </td>
+                <td className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums">
+                  {coloredCount(r.noshow, CAT_COLOR.noshow)}
                 </td>
               </tr>
             )
@@ -154,13 +179,16 @@ export function RaproMonthlyBoard({
           <tr className="border-t border-border bg-muted/50 font-medium">
             <td className="px-4 py-2 text-xs">Total du mois</td>
             <td className="px-3 py-2 text-center text-xs tabular-nums">
-              {totals.nettoyee}
+              {coloredCount(totals.nettoyee, CAT_COLOR.nettoyee)}
             </td>
             <td className="px-3 py-2 text-center text-xs tabular-nums">
-              {totals.refus}
+              {coloredCount(totals.bloquee, CAT_COLOR.bloquee)}
             </td>
             <td className="px-3 py-2 text-center text-xs tabular-nums">
-              {totals.noshow}
+              {coloredCount(totals.refus, CAT_COLOR.refus)}
+            </td>
+            <td className="px-3 py-2 text-center text-xs tabular-nums">
+              {coloredCount(totals.noshow, CAT_COLOR.noshow)}
             </td>
           </tr>
         </tfoot>
