@@ -70,21 +70,24 @@ export function carryoverWindow(
 }
 
 /**
- * Chambres reportées au jour courant : dues (occupées) un jour antérieur de la
- * fenêtre, non résolues ce jour-là ET jamais résolues depuis (jusqu'au jour
- * courant inclus). Seuls les jours CLÔTURÉS originent des reportées (un jour non
- * clôturé est ignoré). `past` = instantanés du plus ancien au plus récent (< J).
+ * Chambres reportées au jour courant : bloquées (`non_nettoyee`) un jour clôturé
+ * antérieur de la fenêtre, et jamais résolues sur un jour INTERMÉDIAIRE clôturé
+ * depuis. On NE regarde PAS le statut du jour courant : le liseré « bloquée la
+ * veille » est un fait sur la veille — il reste présent aujourd'hui QUEL QUE SOIT
+ * le statut du jour (nettoyée, refus…) et même après un reset de la case. Seuls
+ * les jours CLÔTURÉS originent des reportées. `past` = instantanés du plus ancien
+ * au plus récent (< J).
  */
-export function carryOver(
-  past: DaySnapshot[],
-  current: DaySnapshot,
-): Set<number> {
+export function carryOver(past: DaySnapshot[]): Set<number> {
   const carried = new Set<number>()
+  // Résolu sur un jour INTERMÉDIAIRE clôturé (entre l'origine et J-1) : la chambre
+  // a été traitée entre-temps, elle cesse de rouler. Le jour COURANT n'entre pas
+  // dans ce test (cf. doc) → le liseré ne dépend jamais du statut du jour.
   const resolvedSince = (room: number, from: number): boolean => {
     for (let i = from; i < past.length; i++) {
       if (isResolved(past[i].statuses, room)) return true
     }
-    return isResolved(current.statuses, room)
+    return false
   }
   past.forEach((snap, i) => {
     // Seuls les jours CLÔTURÉS originent des reportées (anti-chaos, cf. en-tête).

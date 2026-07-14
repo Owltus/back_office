@@ -272,7 +272,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
     occupied: new Set((pdjWindow[i]?.data ?? []).map((r) => r.room)),
     closed: closedDays.has(d),
   }))
-  const carried = carryOver(past, { statuses, occupied, closed: isValidated })
+  const carried = carryOver(past)
 
   // Réconciliation sur le DÛ ÉLARGI (occupées du jour ∪ reportées).
   const dueSet = new Set(occupied)

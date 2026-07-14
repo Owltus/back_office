@@ -175,11 +175,11 @@ function renderRaproDocument(
         statusOf(statuses, room),
         hasOccupancy && !occupied.has(room) && !carried.has(room),
       )
-      // Bloquée de la veille : toute la case en rouge CLAIR (fond + texte),
-      // cohérente avec le liseré ; sinon la couleur du statut.
+      // Bloquée de la veille : la case garde le fond de son STATUT, un liseré
+      // rouge net est tracé par-dessus (cf. plus bas) — fait sur la veille.
       const isCarriedRoom = carried.has(room)
-      const fill = isCarriedRoom ? ([254, 216, 216] as RGB) : CELL_FILL[state].fill
-      const text = isCarriedRoom ? ([200, 70, 70] as RGB) : CELL_FILL[state].text
+      const fill = CELL_FILL[state].fill
+      const text = CELL_FILL[state].text
       const w = colW - 2
       const h = cellH - 0.8
       const cellY = gridTop + 3 + j * cellH
@@ -190,9 +190,9 @@ function renderRaproDocument(
       pdf.text(String(room), cx + 1 + w / 2, cellY + h / 2 + 1.1, {
         align: 'center',
       })
-      // Liseré rouge clair, fin, autour de la case reportée.
+      // Liseré rouge net autour de la case reportée (bloquée la veille).
       if (isCarriedRoom) {
-        pdf.setDrawColor(252, 165, 165).setLineWidth(0.35)
+        pdf.setDrawColor(248, 113, 113).setLineWidth(0.5)
         pdf.rect(cx + 1, cellY, w, h)
       }
       // Sur-statut : glyphe en coin HAUT-GAUCHE.
