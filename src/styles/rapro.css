@@ -232,10 +232,12 @@
   pointer-events: none;
 }
 /* Bloquée de la VEILLE (roulée depuis un jour clôturé précédent, pas encore
-   traitée) : bordure ÉPAISSE rouge pour la repérer le lendemain. */
+   traitée) : liseré rouge ÉPAIS via box-shadow INTERNE. On n'utilise PAS
+   border-width (qui agrandirait la case de 2px → décalage de la colonne) ni
+   border-color (qui serait écrasé par le statut/hover) : le box-shadow ne prend
+   aucune place et persiste QUEL QUE SOIT le statut de fond. */
 .rapro-room-carried {
-  border-width: 2px;
-  border-color: #f87171;
+  box-shadow: inset 0 0 0 2px #f87171;
 }
 .rapro-room-clean:hover:not(:disabled),
 .rapro-room-refus:hover:not(:disabled),
