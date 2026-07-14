@@ -45,6 +45,7 @@ import {
   fetchBudget,
   fetchForecastMonthTotal,
   fetchLatestReportOfMonth,
+  fetchMonthReports,
   fetchPreviousReportInMonth,
   fetchReportByDate,
 } from '#/lib/repjour/services/daily.ts'
@@ -176,6 +177,12 @@ export function DashboardBoard() {
     queryKey: ['repjour', 'prev-report', year, month, selectedDate],
     queryFn: () => fetchPreviousReportInMonth(selectedDate, year, month),
   })
+  // Rapports du mois (jour par jour) → sparkline du CA projeté « pris depuis le
+  // début du mois » sur la carte pickup. Une lecture, mise en cache par mois.
+  const { data: monthReports } = useQuery({
+    queryKey: ['repjour', 'month-reports', year, month],
+    queryFn: () => fetchMonthReports(year, month),
+  })
   // Toutes les dates ayant un rapport en base — sert à griser dans le sélecteur
   // les jours « qu'on ne possède pas » (sans donnée). Une seule lecture, mise en
   // cache : la liste bouge peu (un import par jour).
@@ -280,6 +287,16 @@ export function DashboardBoard() {
   // antérieur dans le mois (1er du mois) ou pas de rapport pour le jour affiché.
   const prevPm = prevReport ? reportToKPI(prevReport, 'pm') : null
   const pickup = pm && prevPm ? pm.roomRevenue - prevPm.roomRevenue : null
+
+  // Série du CA projeté fin de mois, jour par jour jusqu'au jour affiché : la
+  // sparkline de la carte pickup montre le CA « pris depuis le début du mois ».
+  const pickupSeries = useMemo(() => {
+    if (!selectedDate) return []
+    const selDay = Number(selectedDate.slice(8, 10))
+    return (monthReports ?? [])
+      .filter((r) => r.day_of_month <= selDay)
+      .map((r) => r.pm_room_revenue)
+  }, [monthReports, selectedDate])
 
   // Jour le plus récent ATTEIGNABLE = le jour d'import du rôle. C'est le dernier
   // jour utile : le J-1 hôtelier (getImportDayStr, bascule à 02h) pour tous, sauf
@@ -588,6 +605,7 @@ export function DashboardBoard() {
               budget={budget}
               ecart={ecart}
               pickup={pickup}
+              pickupSeries={pickupSeries}
             />
 
             {/* Détail des calculs : ouvert en MODALE depuis le bouton « ? » de

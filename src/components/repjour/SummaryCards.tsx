@@ -1,3 +1,4 @@
+import { Sparkline } from '#/components/shared/Sparkline.tsx'
 import { StatTile } from '#/components/shared/StatTile.tsx'
 import { fmt } from '#/lib/repjour/format.ts'
 import type { Ecart, KPIBlock, MonthBudget } from '#/lib/repjour/types.ts'
@@ -27,6 +28,11 @@ interface SummaryCardsProps {
    * négatif = annulations nettes. `null`/absent → carte masquée (pas de veille).
    */
   pickup?: number | null
+  /**
+   * Série du CA projeté fin de mois, jour par jour depuis le 1er → sparkline
+   * « CA pris depuis le début du mois » dans la carte pickup.
+   */
+  pickupSeries?: number[]
 }
 
 export function SummaryCards({
@@ -36,6 +42,7 @@ export function SummaryCards({
   budget,
   partial = false,
   pickup = null,
+  pickupSeries = [],
 }: SummaryCardsProps) {
   const cards = [
     {
@@ -109,7 +116,16 @@ export function SummaryCards({
                 {fmt.ecartEurInt(pickup)}
               </span>
             }
-          />
+          >
+            {pickupSeries.length >= 2 && (
+              <div className="mt-1.5">
+                <Sparkline data={pickupSeries} color="#34d399" />
+                <p className="mt-0.5 text-[0.6rem] text-muted-foreground">
+                  CA pris depuis le 1<sup>er</sup>
+                </p>
+              </div>
+            )}
+          </StatTile>
         )}
       </div>
 
