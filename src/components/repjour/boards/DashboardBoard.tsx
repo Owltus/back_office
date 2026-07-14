@@ -234,7 +234,7 @@ export function DashboardBoard() {
   // autre jour ni le mois. Confirme avant (comme la gestion). Réservé super/admin
   // (RLS + assertWriteRole).
   const handleDeleteDay = async () => {
-    if (!report) return
+    if (!isAdmin || !report) return
     if (
       !window.confirm(
         `Supprimer toutes les données du ${displayDate} ? Cette action est irréversible et ne touche que ce jour.`,
@@ -445,6 +445,24 @@ export function DashboardBoard() {
           title={displayDate}
           actions={
             <>
+              {/* Groupe « suppression » (ADMIN uniquement), isolé et à gauche :
+                  supprime les données du seul jour affiché. Bouton outline, icône
+                  rouge (pas de fond plein). Présent seulement s'il y a un rapport. */}
+              {isAdmin && report && (
+                <ButtonGroup>
+                  <Tip label="Supprimer les données de ce jour">
+                    <Button
+                      variant="outline"
+                      size="icon-sm"
+                      onClick={handleDeleteDay}
+                      aria-label="Supprimer les données de ce jour"
+                      className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    >
+                      <Trash2 />
+                    </Button>
+                  </Tip>
+                </ButtonGroup>
+              )}
               {/* Groupe « actions de page » : aide + vue analytique + impression. */}
               <ButtonGroup>
                 {/* Aide « détail des calculs » : bascule le mode détaillé.
@@ -506,20 +524,6 @@ export function DashboardBoard() {
                       : 'Aucune donnée à imprimer pour ce jour'
                   }
                 />
-                {/* Suppression des données de CE jour (rouge, destructive) —
-                    super/admin uniquement, et seulement s'il y a un rapport. */}
-                {canImport && report && (
-                  <Tip label="Supprimer les données de ce jour">
-                    <Button
-                      variant="destructive"
-                      size="icon-sm"
-                      onClick={handleDeleteDay}
-                      aria-label="Supprimer les données de ce jour"
-                    >
-                      <Trash2 />
-                    </Button>
-                  </Tip>
-                )}
               </ButtonGroup>
               {/* Groupe « navigation temporelle », collé au bord droit. */}
               <StepNav

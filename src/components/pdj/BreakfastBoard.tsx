@@ -337,7 +337,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
   // Suppression des données du jour AFFICHÉ uniquement (ce service_date). Confirme
   // avant, comme les suppressions de la gestion RepJour. Réservé super/admin (RLS).
   async function handleDeleteDay() {
-    if (!canEdit || !hasData || !selectedDate) return
+    if (!isAdmin || !hasData || !selectedDate) return
     if (
       !window.confirm(
         `Supprimer toutes les données du petit-déjeuner du ${titleDate} ? Cette action est irréversible et ne touche que ce jour.`,
@@ -407,6 +407,24 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
         title={titleDate}
         actions={
             <>
+              {/* Groupe « suppression » (ADMIN uniquement), isolé et à gauche :
+                  supprime les données du seul jour affiché. Bouton outline, icône
+                  rouge (pas de fond plein). Présent seulement s'il y a des données. */}
+              {isAdmin && hasData && (
+                <ButtonGroup>
+                  <Tip label="Supprimer les données de ce jour">
+                    <Button
+                      variant="outline"
+                      size="icon-sm"
+                      onClick={handleDeleteDay}
+                      aria-label="Supprimer les données de ce jour"
+                      className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    >
+                      <Trash2 />
+                    </Button>
+                  </Tip>
+                </ButtonGroup>
+              )}
               {/* Groupe « actions de page » : analytique + import + impression. */}
               <ButtonGroup>
                 <Tip label="Vue analytique">
@@ -436,20 +454,6 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                     hasData ? 'Imprimer / PDF' : 'Aucune donnée à imprimer'
                   }
                 />
-                {/* Suppression des données de CE jour (rouge, destructive) —
-                    super/admin uniquement, et seulement s'il y a des données. */}
-                {canEdit && hasData && (
-                  <Tip label="Supprimer les données de ce jour">
-                    <Button
-                      variant="destructive"
-                      size="icon-sm"
-                      onClick={handleDeleteDay}
-                      aria-label="Supprimer les données de ce jour"
-                    >
-                      <Trash2 />
-                    </Button>
-                  </Tip>
-                )}
               </ButtonGroup>
               {/* Groupe « navigation temporelle », collé au bord droit. */}
               {canNavigate && (
