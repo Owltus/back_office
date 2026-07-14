@@ -22,18 +22,11 @@ import {
   type CellState,
 } from '#/lib/rapro/constants.ts'
 import { FLOORS } from '#/lib/rapro/rooms.ts'
-import type { Qualifier, RoomStatus } from '#/lib/rapro/types.ts'
-
-/** Glyphe (lettre) d'un sur-statut, dessiné en coin de case au PDF (jsPDF ne rend
- * pas de SVG lucide) : F = faux no-show. */
-const QUALIFIER_GLYPH: Record<Qualifier, string> = {
-  faux_noshow: 'F',
-}
+import type { RoomStatus } from '#/lib/rapro/types.ts'
 
 export interface RaproPdfData {
   titleDate: string
   statuses: ReadonlyMap<number, RoomStatus>
-  qualifiers: ReadonlyMap<number, Qualifier>
   occupied: ReadonlySet<number>
   /** Chambres reportées (dues antérieurement, jamais résolues) — marquées. */
   carried: ReadonlySet<number>
@@ -43,7 +36,6 @@ export interface RaproPdfData {
     balance: number
     carried: number
     refus: number
-    noshow: number
   }
   comment: string
   validatedAt: string | null
@@ -108,7 +100,6 @@ type RGB = [number, number, number]
 const CELL_FILL: Record<CellState, { fill: RGB; text: RGB }> = {
   clean: { fill: [110, 231, 183], text: [6, 78, 59] },
   refus: { fill: [252, 211, 77], text: [120, 53, 15] },
-  noshow: { fill: [221, 214, 254], text: [76, 29, 149] },
   empty: { fill: [241, 245, 249], text: [148, 163, 184] },
   todo: { fill: [254, 202, 202], text: [127, 29, 29] },
 }
@@ -118,7 +109,6 @@ function renderRaproDocument(
   {
     titleDate,
     statuses,
-    qualifiers,
     occupied,
     carried,
     counts,
@@ -139,13 +129,12 @@ function renderRaproDocument(
   pdf.setDrawColor(51).setLineWidth(0.4).line(LEFT, y, RIGHT, y)
   y += 8
 
-  // --- Bandeau de compteurs (5 cases) --------------------------------------
+  // --- Bandeau de compteurs (4 cases) --------------------------------------
   const cells: Array<[string, number]> = [
     ['Vendues', counts.sold],
     ['Nettoyées', counts.clean],
     ['À faire', counts.balance],
     ['Refus', counts.refus],
-    ['No-show', counts.noshow],
   ]
   const cw = CONTENT_W / cells.length
   cells.forEach(([lbl, val], i) => {
@@ -195,13 +184,6 @@ function renderRaproDocument(
         pdf.setDrawColor(248, 113, 113).setLineWidth(0.5)
         pdf.rect(cx + 1, cellY, w, h)
       }
-      // Sur-statut : glyphe en coin HAUT-GAUCHE.
-      const q = qualifiers.get(room)
-      if (q) {
-        pdf.setFont('helvetica', 'bold').setFontSize(5)
-        pdf.setTextColor(text[0], text[1], text[2])
-        pdf.text(QUALIFIER_GLYPH[q], cx + 1.6, cellY + 2, { align: 'left' })
-      }
     })
   })
   const maxRooms = FLOORS.reduce((m, f) => Math.max(m, f.rooms.length), 0)
@@ -228,14 +210,9 @@ function renderRaproDocument(
   })
   y += 5
 
-  // Rappel des sur-statuts (glyphes dessinés en coin de case).
+  // Rappel du marquage « bloquée la veille » (liseré rouge autour de la case).
   pdf.setFont('helvetica', 'normal').setFontSize(6.5).setTextColor(110)
-  pdf.text(
-    'Bloquée la veille = bordure rouge   ·   Sur-statut : F = Faux no-show',
-    RIGHT,
-    y,
-    { align: 'right' },
-  )
+  pdf.text('Bloquée la veille = bordure rouge', RIGHT, y, { align: 'right' })
   y += 6
 
   // --- Commentaire : cadre pleine largeur jusqu'aux signatures --------------

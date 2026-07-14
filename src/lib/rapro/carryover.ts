@@ -4,7 +4,7 @@
  * jours suivants jusqu'à résolution (nettoyée ou passée hors charge), y compris
  * à travers une clôture. On le DÉRIVE en relisant une fenêtre bornée de jours
  * précédents (pas de propagation en base). Résolu = `nettoyee` OU hors charge
- * (`refus`/`noshow`) ; tout le reste roule.
+ * (`refus`) ; tout le reste roule.
  *
  * ANTI-CHAOS : seuls les jours dont le rapprochement est VERROUILLÉ (clôturé)
  * comptent pour le roulement. Un jour non clôturé (en cours, ou jamais rempli
@@ -35,12 +35,11 @@ export interface DaySnapshot {
 }
 
 /** Une chambre est « résolue » (cesse de rouler) si elle a été EXPLICITEMENT
- * traitée : une VRAIE ligne stockée qui est nettoyée ou hors charge
- * (`refus`/`noshow`). L'ABSENCE de ligne (chambre non touchée) ne résout PAS —
- * une bloquée de la veille non touchée continue de rouler jusqu'à ce qu'on la
- * traite. (Les jours clôturés ont toutes leurs occupées matérialisées, donc une
- * ligne ; seul le jour courant a des chambres sans ligne.) Le sur-statut n'entre
- * pas en compte (orthogonal). */
+ * traitée : une VRAIE ligne stockée qui est nettoyée ou hors charge (`refus`).
+ * L'ABSENCE de ligne (chambre non touchée) ne résout PAS — une bloquée de la
+ * veille non touchée continue de rouler jusqu'à ce qu'on la traite. (Les jours
+ * clôturés ont toutes leurs occupées matérialisées, donc une ligne ; seul le jour
+ * courant a des chambres sans ligne.) */
 function isResolved(
   statuses: ReadonlyMap<number, RoomStatus>,
   room: number,

@@ -16,8 +16,6 @@ import {
   RotateCcw,
   Scale,
   Sparkles,
-  UserCheck,
-  UserX,
 } from 'lucide-react'
 
 import { useAuth } from '#/components/auth/AuthContext.tsx'
@@ -36,10 +34,8 @@ import { Button } from '#/components/ui/button.tsx'
 import {
   ContextMenu,
   ContextMenuContent,
-  ContextMenuLabel,
   ContextMenuRadioGroup,
   ContextMenuRadioItem,
-  ContextMenuSeparator,
   ContextMenuTrigger,
 } from '#/components/ui/context-menu.tsx'
 import { Textarea } from '#/components/ui/textarea.tsx'
@@ -61,12 +57,8 @@ import {
 import {
   CELL_STATES,
   cellState,
-  countQualifiers,
   countStats,
   LEGEND_ORDER,
-  QUALIFIER_LABEL,
-  QUALIFIER_ORDER,
-  qualifierOf,
   STATUS_LABEL,
   statusOf,
   toggleClean,
@@ -89,25 +81,14 @@ import {
   setStatus,
   validateSheet,
 } from '#/lib/rapro/service.ts'
-import type {
-  Qualifier,
-  RaproDay,
-  RaproSheet,
-  RoomStatus,
-} from '#/lib/rapro/types.ts'
+import type { RaproDay, RaproSheet, RoomStatus } from '#/lib/rapro/types.ts'
 import { cn } from '#/lib/utils.ts'
 
 const EMPTY: ReadonlyMap<number, RoomStatus> = new Map()
-const EMPTY_QUAL: ReadonlyMap<number, Qualifier> = new Map()
 
-/** Statuts de BASE d'exception du menu contextuel (clic droit). « Nettoyée » et
- * « Refus » n'y figurent PAS : ils s'appliquent au clic gauche (bascule). */
-const ROOM_STATUS_ORDER: RoomStatus[] = ['non_nettoyee', 'noshow']
-
-/** Icône affichée en case pour chaque sur-statut (rendu par icône, pas couleur). */
-const QUALIFIER_ICON: Record<Qualifier, ComponentType<{ className?: string }>> = {
-  faux_noshow: UserCheck,
-}
+/** Statuts d'exception du menu contextuel (clic droit). « Nettoyée » et « Refus »
+ * n'y figurent PAS : ils s'appliquent au clic gauche (bascule). */
+const ROOM_STATUS_ORDER: RoomStatus[] = ['non_nettoyee']
 
 /**
  * Rapprochement de chambres — suivi ménage par chambre et par jour.
@@ -116,10 +97,9 @@ const QUALIFIER_ICON: Record<Qualifier, ComponentType<{ className?: string }>> =
  * le nombre de chambres vendues ET le grisé des non vendues) vient du PDJ, une
  * seule et même source → tout reste synchro avec ce qu'on voit dans la grille.
  * Postulat : une chambre vendue est NETTOYÉE par défaut. Le CLIC GAUCHE bascule
- * entre nettoyée et refus (geste courant) ; le CLIC DROIT ouvre un menu pour les
- * statuts d'exception (à nettoyer / bloquée / no-show / faux no-show). L'état est
- * persisté par (jour, chambre), en optimiste — seules les exceptions sont
- * stockées. Écriture super/admin — RLS.
+ * entre nettoyée et refus (geste courant) ; le CLIC DROIT ouvre un menu pour le
+ * statut « Bloquée ». L'état est persisté par (jour, chambre), en optimiste —
+ * seules les exceptions sont stockées. Écriture super/admin — RLS.
  */
 export function RaproBoard({ initialDate }: { initialDate?: string }) {
   const { user, role } = useAuth()
@@ -170,7 +150,6 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
     queryFn: () => fetchDay(selectedDate),
   })
   const statuses = day?.statuses ?? EMPTY
-  const qualifiers = day?.qualifiers ?? EMPTY_QUAL
 
   // Feuille jour : clôture + commentaire (table rapro_sheets, au niveau jour).
   const { data: sheet } = useQuery({
@@ -233,7 +212,6 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   const optionalMissing = missing.filter((m) => !m.required)
 
   const stats = countStats(statuses, occupied)
-  const qualCounts = countQualifiers(qualifiers, occupied)
 
   // Roulement (report) DÉRIVÉ : on relit une fenêtre bornée de jours précédents
   // (statuts rapro + occupation PDJ), mêmes clés → cache partagé avec la
@@ -338,110 +316,82 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   // Écriture optimiste d'un lot de statuts (jour courant) : snapshot → maj cache
   // → persistance parallèle → rollback réel par snapshot en cas d'échec (fiable
   // même hors ligne). Chemin unique partagé par la chambre seule et l'étage.
-  async function applyStatuses(
-    changes: Array<[number, RoomStatus, Qualifier | null]>,
-  ) {
+  async function applyStatuses(changes: Array<[number, RoomStatus]>) {
     if (!canEditFields || !isSuccess || changes.length === 0) return
     const key = ['rapro', 'day', selectedDate]
     await queryClient.cancelQueries({ queryKey: key })
     const prev = queryClient.getQueryData<RaproDay>(key)
     const nextStatuses = new Map(statuses)
-    const nextQualifiers = new Map(qualifiers)
-    // On stocke l'état posé (base + sur-statut), y compris `nettoyee`. Le retour à
-    // l'origine passe par `clearRooms`, pas par ici.
-    for (const [room, base, qual] of changes) {
-      nextStatuses.set(room, base)
-      if (qual) nextQualifiers.set(room, qual)
-      else nextQualifiers.delete(room)
+    // On stocke le statut posé, y compris `nettoyee`. Le retour à l'origine passe
+    // par `clearRooms`, pas par ici.
+    for (const [room, status] of changes) {
+      nextStatuses.set(room, status)
     }
     queryClient.setQueryData<RaproDay>(key, {
       reportDate: selectedDate,
       statuses: nextStatuses,
-      qualifiers: nextQualifiers,
     })
     try {
       await Promise.all(
-        changes.map(([room, base, qual]) =>
-          setStatus(selectedDate, room, base, qual),
-        ),
+        changes.map(([room, status]) => setStatus(selectedDate, room, status)),
       )
     } catch {
       queryClient.setQueryData(
         key,
-        prev ?? {
-          reportDate: selectedDate,
-          statuses: new Map(),
-          qualifiers: new Map(),
-        },
+        prev ?? { reportDate: selectedDate, statuses: new Map() },
       )
     }
   }
 
-  // Efface l'état de chambres (retour à l'ORIGINE : ligne supprimée → base et
-  // sur-statut effacés). Même patron optimiste + rollback. Sert au rollback
-  // d'étage et à repasser une chambre non vendue en grisé.
+  // Efface l'état de chambres (retour à l'ORIGINE : ligne supprimée). Même patron
+  // optimiste + rollback. Sert au rollback d'étage et à repasser une chambre non
+  // vendue en grisé.
   async function clearRooms(rooms: number[]) {
     if (!canEditFields || !isSuccess || rooms.length === 0) return
     const key = ['rapro', 'day', selectedDate]
     await queryClient.cancelQueries({ queryKey: key })
     const prev = queryClient.getQueryData<RaproDay>(key)
     const nextStatuses = new Map(statuses)
-    const nextQualifiers = new Map(qualifiers)
     for (const room of rooms) {
       nextStatuses.delete(room)
-      nextQualifiers.delete(room)
     }
     queryClient.setQueryData<RaproDay>(key, {
       reportDate: selectedDate,
       statuses: nextStatuses,
-      qualifiers: nextQualifiers,
     })
     try {
       await Promise.all(rooms.map((room) => clearRoom(selectedDate, room)))
     } catch {
       queryClient.setQueryData(
         key,
-        prev ?? {
-          reportDate: selectedDate,
-          statuses: new Map(),
-          qualifiers: new Map(),
-        },
+        prev ?? { reportDate: selectedDate, statuses: new Map() },
       )
     }
   }
 
-  // Clic gauche = bascule du BASE (le sur-statut est préservé). Vendue : nettoyée
-  // ↔ refus. Non vendue : ROTATION non vendue (grise) → nettoyée → refus → non
-  // vendue. (Bloquée / no-show + sur-statuts restent au clic droit.)
+  // Clic gauche = bascule. Vendue : nettoyée ↔ refus. Non vendue : ROTATION non
+  // vendue (grise) → nettoyée → refus → non vendue. (« Bloquée » reste au clic
+  // droit.)
   function toggle(room: number) {
-    const q = qualifierOf(qualifiers, room)
     if (isDue(room)) {
-      return applyStatuses([[room, toggleClean(statusOf(statuses, room)), q]])
+      return applyStatuses([[room, toggleClean(statusOf(statuses, room))]])
     }
-    if (!statuses.has(room)) return applyStatuses([[room, 'nettoyee', q]])
+    if (!statuses.has(room)) return applyStatuses([[room, 'nettoyee']])
     if (statusOf(statuses, room) === 'nettoyee') {
-      return applyStatuses([[room, 'refus', q]])
+      return applyStatuses([[room, 'refus']])
     }
     return clearRooms([room])
   }
 
-  // Clic droit — statut de BASE choisi (sur-statut préservé).
+  // Clic droit — statut choisi.
   function setBase(room: number, base: RoomStatus) {
-    return applyStatuses([[room, base, qualifierOf(qualifiers, room)]])
-  }
-
-  // Clic droit — sur-statut choisi (base préservé). D4 : poser « faux no-show »
-  // sur un no-show fait sortir le base du no-show (client présent → nettoyée).
-  function setQualifier(room: number, qual: Qualifier | null) {
-    let base = statusOf(statuses, room)
-    if (qual === 'faux_noshow' && base === 'noshow') base = 'nettoyee'
-    return applyStatuses([[room, base, qual]])
+    return applyStatuses([[room, base]])
   }
 
   // Bouton d'en-tête d'étage : ROLLBACK à l'état d'origine. Toute chambre de
-  // l'étage ayant reçu un statut (bloquée, refus, no-show, faux no-show) repasse
-  // en « nettoyée » (le défaut : suppression de la ligne). Sert à annuler d'un
-  // geste les saisies erronées d'un étage.
+  // l'étage ayant reçu un statut (bloquée, refus) repasse en « nettoyée » (le
+  // défaut : suppression de la ligne). Sert à annuler d'un geste les saisies
+  // erronées d'un étage.
   function resetFloor(rooms: number[]) {
     return clearRooms(rooms.filter((r) => statuses.has(r)))
   }
@@ -490,7 +440,6 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
         {
           titleDate: title,
           statuses,
-          qualifiers,
           occupied,
           carried,
           counts: {
@@ -499,7 +448,6 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
             balance: rec.pending,
             carried: carried.size,
             refus: stats.refus,
-            noshow: stats.noshow,
           },
           comment,
           validatedAt: sheet?.validatedAt ?? null,
@@ -662,11 +610,11 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
 
       {loading ? (
         <>
-          {/* Squelette-reflet : la rangée de six cartes de synthèse puis la grille
-              des étages (une colonne par étage), aux mêmes gabarits que le contenu
-              réel pour ne rien décaler à l'arrivée des données. */}
+          {/* Squelette-reflet : la rangée de quatre cartes de synthèse puis la
+              grille des étages (une colonne par étage), aux mêmes gabarits que le
+              contenu réel pour ne rien décaler à l'arrivée des données. */}
           <div className="rapro-stats" aria-hidden="true">
-            {Array.from({ length: 6 }).map((_, i) => (
+            {Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="rapro-stat">
                 <Skeleton className="h-2.5 w-2/3" />
                 <div className="rapro-stat-row">
@@ -738,21 +686,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
           label="Refus"
           icon={Ban}
           accent="#fbbf24"
-          hint="Client a refusé le ménage."
-        />
-        <Stat
-          value={dash(stats.noshow)}
-          label="No-show"
-          icon={UserX}
-          accent="#64748b"
-          hint="Vendue mais client absent (hors charge)."
-        />
-        <Stat
-          value={dash(qualCounts.faux_noshow)}
-          label="Faux no-show"
-          icon={UserCheck}
-          accent="#2dd4bf"
-          hint="Sur-statut : déclaré absent par le PMS mais en réalité présent."
+          hint="Hors charge (client a refusé le ménage, ou rien à facturer)."
         />
       </div>
 
@@ -806,14 +740,12 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
                 <div className="rapro-rooms">
                   {rooms.map((room) => {
                     const status = statusOf(statuses, room)
-                    const qual = qualifierOf(qualifiers, room)
-                    const QualIcon = qual ? QUALIFIER_ICON[qual] : null
                     // Grisée seulement si NON touchée (pas de ligne) ET non vendue.
                     // Une chambre non vendue explicitement marquée montre sa couleur.
                     const isEmpty = !statuses.has(room) && !isDue(room)
                     const isCarried = carried.has(room)
                     const cls = CELL_STATES[cellState(status, isEmpty)].webClass
-                    const label = `Chambre ${room} — ${STATUS_LABEL[status]}${qual ? ` — ${QUALIFIER_LABEL[qual]}` : ''}${isEmpty ? ' — non vendue' : ''}${isCarried ? ' — bloquée la veille' : ''}`
+                    const label = `Chambre ${room} — ${STATUS_LABEL[status]}${isEmpty ? ' — non vendue' : ''}${isCarried ? ' — bloquée la veille' : ''}`
                     const btn = (
                       <button
                         key={room}
@@ -829,9 +761,6 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
                           menuRoom === room && 'is-active',
                         )}
                       >
-                        {QualIcon && (
-                          <QualIcon className="rapro-room-qual-icon" />
-                        )}
                         {room}
                       </button>
                     )
@@ -846,7 +775,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
                       >
                         <ContextMenuTrigger asChild>{btn}</ContextMenuTrigger>
                         <ContextMenuContent className="w-48">
-                          {/* Statut de BASE (exceptions ; nettoyée/refus = clic gauche). */}
+                          {/* Statut d'exception (« Bloquée ») ; nettoyée/refus = clic gauche. */}
                           <ContextMenuRadioGroup
                             value={status}
                             onValueChange={(v) => setBase(room, v as RoomStatus)}
@@ -862,31 +791,6 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
                                 {STATUS_LABEL[s]}
                               </ContextMenuRadioItem>
                             ))}
-                          </ContextMenuRadioGroup>
-                          <ContextMenuSeparator />
-                          <ContextMenuLabel>Sur-statut</ContextMenuLabel>
-                          {/* Sur-statut (au plus un) : « Aucun » + les qualificatifs. */}
-                          <ContextMenuRadioGroup
-                            value={qual ?? 'none'}
-                            onValueChange={(v) =>
-                              setQualifier(
-                                room,
-                                v === 'none' ? null : (v as Qualifier),
-                              )
-                            }
-                          >
-                            <ContextMenuRadioItem value="none">
-                              Aucun
-                            </ContextMenuRadioItem>
-                            {QUALIFIER_ORDER.map((q) => {
-                              const Icon = QUALIFIER_ICON[q]
-                              return (
-                                <ContextMenuRadioItem key={q} value={q}>
-                                  <Icon className="size-3.5" />
-                                  {QUALIFIER_LABEL[q]}
-                                </ContextMenuRadioItem>
-                              )
-                            })}
                           </ContextMenuRadioGroup>
                         </ContextMenuContent>
                       </ContextMenu>
@@ -913,16 +817,6 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
             <span className="rapro-legend-box is-carried" />
             Bloquée la veille
           </span>
-          {/* Sur-statuts : affichés par ICÔNE (pas par couleur). */}
-          {QUALIFIER_ORDER.map((q) => {
-            const Icon = QUALIFIER_ICON[q]
-            return (
-              <span key={q} className="rapro-legend-item">
-                <Icon className="rapro-legend-icon" />
-                {QUALIFIER_LABEL[q]}
-              </span>
-            )
-          })}
         </div>
       )}
 

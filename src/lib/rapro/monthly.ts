@@ -2,27 +2,25 @@
  * Récap ménage (facturable ELIOR) — métier + accès Supabase en LECTURE. On
  * compte les LIGNES stockées : les jours clôturés matérialisent une ligne
  * `nettoyee` par chambre vendue facturée (cf. `materializeCleaned`). La
- * facturation suit le statut de BASE (`nettoyee`) ; le sur-statut (`qualifier`,
- * ex. faux no-show) est orthogonal et n'entre PAS dans le comptage facturable.
- * L'agrégation « par jour / par mois » se fait côté client.
+ * facturation suit le statut `nettoyee`. L'agrégation « par jour / par mois » se
+ * fait côté client.
  */
 
 import { supabase } from '#/lib/supabase.ts'
 
-/** Décompte des statuts « traités » d'un jour (mêmes 3 que les cards principales,
- * hors occupation PDJ). */
+/** Décompte des statuts « traités » d'un jour (nettoyée / refus, hors occupation
+ * PDJ). */
 export interface DayStatusCounts {
   nettoyee: number
   refus: number
-  noshow: number
 }
 
-const emptyCounts = (): DayStatusCounts => ({ nettoyee: 0, refus: 0, noshow: 0 })
+const emptyCounts = (): DayStatusCounts => ({ nettoyee: 0, refus: 0 })
 
 /**
- * Comptage par jour des statuts nettoyee / refus / noshow sur `[from, to]`.
- * PAGINÉ jusqu'au count exact (un mois plein peut dépasser le plafond de 1000
- * lignes de l'API), en avançant du nombre de lignes réellement renvoyées.
+ * Comptage par jour des statuts nettoyee / refus sur `[from, to]`. PAGINÉ jusqu'au
+ * count exact (un mois plein peut dépasser le plafond de 1000 lignes de l'API), en
+ * avançant du nombre de lignes réellement renvoyées.
  */
 export async function fetchStatusCountsByRange(
   from: string,
@@ -36,7 +34,7 @@ export async function fetchStatusCountsByRange(
     const { data, error, count } = await supabase
       .from('rapro_rooms')
       .select('report_date, status', { count: 'exact' })
-      .in('status', ['nettoyee', 'refus', 'noshow'])
+      .in('status', ['nettoyee', 'refus'])
       .gte('report_date', from)
       .lte('report_date', to)
       .order('report_date', { ascending: true })
@@ -47,10 +45,9 @@ export async function fetchStatusCountsByRange(
     if (rows.length === 0) break
     for (const r of rows) {
       const c = byDay.get(r.report_date) ?? emptyCounts()
-      // Facturable = statut de base `nettoyee` (le sur-statut est orthogonal).
+      // Facturable = statut `nettoyee`.
       if (r.status === 'nettoyee') c.nettoyee++
       else if (r.status === 'refus') c.refus++
-      else if (r.status === 'noshow') c.noshow++
       byDay.set(r.report_date, c)
     }
     offset += rows.length
@@ -64,7 +61,6 @@ export function sumCounts(byDay: Map<string, DayStatusCounts>): DayStatusCounts 
   for (const c of byDay.values()) {
     t.nettoyee += c.nettoyee
     t.refus += c.refus
-    t.noshow += c.noshow
   }
   return t
 }
@@ -104,7 +100,6 @@ export function monthlyRows(
     const c = byDay.get(date) ?? emptyCounts()
     totals.nettoyee += c.nettoyee
     totals.refus += c.refus
-    totals.noshow += c.noshow
     rows.push({ date, day: d, ...c })
   }
   return { rows, totals }

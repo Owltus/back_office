@@ -11,7 +11,6 @@ import { supabase } from '#/lib/supabase.ts'
 import type {
   DbRaproRoom,
   DbRaproSheet,
-  Qualifier,
   RaproDay,
   RaproSheet,
   RoomStatus,
@@ -21,24 +20,24 @@ import type {
 export const RAPRO_TABLE = 'rapro_rooms'
 export const RAPRO_SHEETS_TABLE = 'rapro_sheets'
 
-/** État d'un jour : Map chambre→statut de base (défaut nettoyee = absent) +
- * Map chambre→sur-statut (absent = aucun), dérivées des mêmes lignes. */
+/** Statuts encore valides après le retrait de 'noshow' (cf.
+ * rapro_rooms_drop_noshow_qualifier.sql). */
+const KNOWN_STATUSES = new Set<RoomStatus>(['nettoyee', 'non_nettoyee', 'refus'])
+
+/** État d'un jour : Map chambre→statut (défaut nettoyee = absence de ligne).
+ * TOLÉRANT : une valeur héritée non reconnue (ex. 'noshow' avant la migration)
+ * est ramenée à 'refus' — même sens comptable — plutôt que de casser le rendu. */
 export async function fetchDay(reportDate: string): Promise<RaproDay> {
   const { data, error } = await supabase
     .from(RAPRO_TABLE)
-    .select('room, status, qualifier')
+    .select('room, status')
     .eq('report_date', reportDate)
   if (error) throw error
   const statuses = new Map<number, RoomStatus>()
-  const qualifiers = new Map<number, Qualifier>()
-  for (const r of (data ?? []) as Pick<
-    DbRaproRoom,
-    'room' | 'status' | 'qualifier'
-  >[]) {
-    statuses.set(r.room, r.status)
-    if (r.qualifier) qualifiers.set(r.room, r.qualifier)
+  for (const r of (data ?? []) as Pick<DbRaproRoom, 'room' | 'status'>[]) {
+    statuses.set(r.room, KNOWN_STATUSES.has(r.status) ? r.status : 'refus')
   }
-  return { reportDate, statuses, qualifiers }
+  return { reportDate, statuses }
 }
 
 /** Jour le plus ancien enregistré (borne basse de navigation), ou null. */
@@ -54,21 +53,19 @@ export async function fetchOldestDay(): Promise<string | null> {
 }
 
 /**
- * Pose l'état d'une chambre pour un jour (upsert sur la clé report_date, room) :
- * statut de base + sur-statut. Tout est stocké, y compris `nettoyee` posée à la
- * main (chambre non vendue marquée nettoyée). Le `qualifier` (nullable) est la 2e
- * dimension orthogonale.
+ * Pose le statut d'une chambre pour un jour (upsert sur la clé report_date, room).
+ * Tout est stocké, y compris `nettoyee` posée à la main (chambre non vendue
+ * marquée nettoyée).
  */
 export async function setStatus(
   reportDate: string,
   room: number,
   status: RoomStatus,
-  qualifier: Qualifier | null,
 ): Promise<void> {
   const { error } = await supabase
     .from(RAPRO_TABLE)
     .upsert(
-      { report_date: reportDate, room, status, qualifier },
+      { report_date: reportDate, room, status },
       { onConflict: 'report_date,room' },
     )
   if (error) throw error

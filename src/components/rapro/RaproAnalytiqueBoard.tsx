@@ -22,9 +22,9 @@ import {
 
 /*
  * Récap ménage ANNUEL — harmonisé sur le socle analytique partagé (repjour / PDJ).
- * Vue année : sélecteur d'année, 4 cartes de synthèse, tableau mois par mois
- * (nettoyées / refus / no-show, clic → détail du mois) et deux graphiques. Un
- * fetch borné par mois (12 lectures mises en cache). Aucune écriture.
+ * Vue année : sélecteur d'année, 3 cartes de synthèse, tableau mois par mois
+ * (nettoyées / refus, clic → détail du mois) et deux graphiques. Un fetch borné
+ * par mois (12 lectures mises en cache). Aucune écriture.
  */
 
 const MONTHS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
@@ -85,10 +85,7 @@ export function RaproAnalytiqueBoard() {
   )
   const yearNettoyee = totals.reduce((s, t) => s + t.nettoyee, 0)
   const yearRefus = totals.reduce((s, t) => s + t.refus, 0)
-  const yearNoshow = totals.reduce((s, t) => s + t.noshow, 0)
-  const monthsWithData = totals.filter(
-    (t) => t.nettoyee + t.refus + t.noshow > 0,
-  ).length
+  const monthsWithData = totals.filter((t) => t.nettoyee + t.refus > 0).length
   const avgNettoyee =
     monthsWithData > 0 ? Math.round(yearNettoyee / monthsWithData) : 0
 
@@ -105,7 +102,6 @@ export function RaproAnalytiqueBoard() {
           mois: MONTHS_SHORT[m - 1],
           nettoyee: future ? null : t.nettoyee,
           refus: future ? null : t.refus,
-          noshow: future ? null : t.noshow,
         }
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -124,14 +120,13 @@ export function RaproAnalytiqueBoard() {
         />
       }
       loading={loading}
-      skeleton={{ cols: 3, charts: 2, cardLines: 2, rows: 13 }}
+      skeleton={{ cols: 2, charts: 2, cardLines: 2, rows: 13 }}
     >
       {/* Synthèse annuelle */}
       <AnalytiqueCardsGrid>
         <StatCard label="Nettoyées sur l'année" value={yearNettoyee} />
         <StatCard label="Moyenne par mois" value={avgNettoyee} />
         <StatCard label="Refus sur l'année" value={yearRefus} />
-        <StatCard label="No-shows sur l'année" value={yearNoshow} />
       </AnalytiqueCardsGrid>
 
       {/* Tableau mois par mois (clic = détail du mois) */}
@@ -146,9 +141,6 @@ export function RaproAnalytiqueBoard() {
             </th>
             <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground">
               Refus
-            </th>
-            <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground">
-              No-show
             </th>
           </tr>
         }
@@ -179,9 +171,6 @@ export function RaproAnalytiqueBoard() {
                 <td className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums text-muted-foreground">
                   {t.refus}
                 </td>
-                <td className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums text-muted-foreground">
-                  {t.noshow}
-                </td>
               </tr>
             )
           })}
@@ -194,9 +183,6 @@ export function RaproAnalytiqueBoard() {
             </td>
             <td className="px-3 py-2 text-center text-xs tabular-nums">
               {yearRefus}
-            </td>
-            <td className="px-3 py-2 text-center text-xs tabular-nums">
-              {yearNoshow}
             </td>
           </tr>
         </tfoot>
@@ -213,13 +199,11 @@ export function RaproAnalytiqueBoard() {
           tooltipFormatter={(v) => String(v)}
         />
         <KpiLineChart
-          title="Refus et no-shows par mois"
+          title="Refus par mois"
           data={chartData}
           xKey="mois"
           realKey="refus"
-          projKey="noshow"
           realName="Refus"
-          projName="No-show"
           tooltipFormatter={(v) => String(v)}
         />
       </AnalytiqueCharts>
