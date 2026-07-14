@@ -130,8 +130,9 @@ function renderRaproDocument(
   pdf.setDrawColor(51).setLineWidth(0.4).line(LEFT, y, RIGHT, y)
   y += 8
 
-  // --- Bandeau de compteurs (5 cases) — mêmes catégories que la page (hors
-  //     « Reste à faire ») : Vendues / Nettoyées / Bloquées / Refus / No-show.
+  // --- Bandeau de compteurs — mêmes catégories que la page (hors « Reste à
+  //     faire ») : Vendues / Nettoyées / Refus / No-show / Bloquées, + une case
+  //     « Bloq. veille » AJOUTÉE seulement s'il y a des chambres reportées.
   const cells: Array<[string, number]> = [
     ['Vendues', counts.sold],
     ['Nettoyées', counts.clean],
@@ -139,6 +140,7 @@ function renderRaproDocument(
     ['No-show', counts.noshow],
     ['Bloquées', counts.bloquee],
   ]
+  if (carried.size > 0) cells.push(['Bloq. veille', carried.size])
   const cw = CONTENT_W / cells.length
   cells.forEach(([lbl, val], i) => {
     const cx = LEFT + i * cw

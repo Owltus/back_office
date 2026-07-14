@@ -670,6 +670,15 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
           accent="#f87171"
           hint="Chambres occupées non nettoyées (bloquées, restent dues)."
         />
+        {/* Bloquées la veille (reportées) : carte affichée SEULEMENT s'il y en a. */}
+        {carried.size > 0 && (
+          <StatTile
+            value={carried.size}
+            label="Bloquées la veille"
+            accent="#f87171"
+            hint="Chambres bloquées un jour précédent, non encore résolues (liseré rouge)."
+          />
+        )}
       </div>
 
       {!showEmptyState && optionalMissing.length > 0 && (

@@ -240,23 +240,13 @@
 
 /* --- Tuiles de synthèse (KPI) — composant partagé StatTile ---------------- */
 /* Grille seule (le style de carte vit dans components/shared/StatTile.tsx).
- * Responsive homogène : 2 colonnes en petit, 3 en moyen, 5 en large (une
- * rangée de 5 tuiles). Les tuiles (liseré + libellé + valeur) ont besoin de plus
- * de largeur que l'ancienne carte compacte, d'où le palier intermédiaire à 3. */
+ * `auto-fit` : la rangée reste PLEINE avec 5 tuiles OU 6 (quand la carte
+ * « Bloquées la veille » apparaît). Chaque tuile fait au moins 150px puis
+ * s'étire ; 2 colonnes en petit, jusqu'à 5-6 en large, selon la place. */
 .rapro-stats {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 0.6rem;
-}
-@media (min-width: 640px) {
-  .rapro-stats {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-@media (min-width: 1024px) {
-  .rapro-stats {
-    grid-template-columns: repeat(5, 1fr);
-  }
 }
 
 /* --- Zone commentaire (clôture) ----------------------------------------- */
