@@ -259,8 +259,16 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
       const result = mergeCsvFiles(inputs)
 
       if (result.rows.length === 0) {
+        // On remonte la RAISON précise par fichier (colonnes manquantes, nom sans
+        // date, aucune ligne exploitable) au lieu d'un message générique opaque :
+        // c'est ce qui permet de comprendre pourquoi un fichier est refusé.
+        const why = result.ignored
+          .map((i) => `« ${i.name} » : ${i.reason}`)
+          .join(' ; ')
         setError(
-          'Aucune donnée exploitable : fichiers invalides ou mal nommés (attendu « In-House Guests _YYYYMMDD… »).',
+          'Aucune donnée exploitable. ' +
+            (why ||
+              'Fichier invalide ou mal nommé (attendu « In-House Guests _YYYYMMDD… »).'),
         )
         return
       }
