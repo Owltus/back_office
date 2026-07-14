@@ -11,6 +11,7 @@ import {
 
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
+import { ConfirmDialog } from '#/components/shared/ConfirmDialog.tsx'
 import { PrintBlockedDialog } from '#/components/shared/PrintBlockedDialog.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
 import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
@@ -125,6 +126,7 @@ export function DashboardBoard() {
   const [showRecipients, setShowRecipients] = useState(false)
   const [pdfBusy, setPdfBusy] = useState(false)
   const [printBlocked, setPrintBlocked] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   useEffect(() => {
     if (!serverNote) return
@@ -231,16 +233,10 @@ export function DashboardBoard() {
 
   // Suppression des données du jour AFFICHÉ uniquement : `deleteDayData` cible
   // `.eq('date', selectedDate)` sur daily_reports ET forecast_days → jamais un
-  // autre jour ni le mois. Confirme avant (comme la gestion). Réservé super/admin
-  // (RLS + assertWriteRole).
+  // autre jour ni le mois. Confirmation via modale (ConfirmDialog). Réservé
+  // super/admin côté service (RLS + assertWriteRole), admin côté UI.
   const handleDeleteDay = async () => {
     if (!isAdmin || !report) return
-    if (
-      !window.confirm(
-        `Supprimer toutes les données du ${displayDate} ? Cette action est irréversible et ne touche que ce jour.`,
-      )
-    )
-      return
     try {
       await deleteDayData(selectedDate)
       setDetailMode(false)
@@ -454,7 +450,7 @@ export function DashboardBoard() {
                     <Button
                       variant="outline"
                       size="icon-sm"
-                      onClick={handleDeleteDay}
+                      onClick={() => setConfirmDelete(true)}
                       aria-label="Supprimer les données de ce jour"
                       className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                     >
@@ -761,6 +757,16 @@ export function DashboardBoard() {
         open={printBlocked}
         onOpenChange={setPrintBlocked}
         reason="Aucune donnée pour ce jour. Choisissez une date avec un rapport ou une prévision."
+      />
+
+      <ConfirmDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title="Supprimer les données de ce jour ?"
+        description={`Toutes les données du ${displayDate} seront supprimées. Cette action est irréversible et ne touche que ce jour.`}
+        confirmLabel="Supprimer"
+        destructive
+        onConfirm={handleDeleteDay}
       />
     </PageContainer>
   )

@@ -18,6 +18,7 @@ import {
 import { EmptyCanvas } from '#/components/shared/EmptyCanvas.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { Skeleton } from '#/components/ui/skeleton.tsx'
+import { ConfirmDialog } from '#/components/shared/ConfirmDialog.tsx'
 import { PrintBlockedDialog } from '#/components/shared/PrintBlockedDialog.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
 import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
@@ -334,16 +335,10 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
     printWithTitle(`Breakfast_${dd}-${mm}-${d.getFullYear()}`)
   }
 
-  // Suppression des données du jour AFFICHÉ uniquement (ce service_date). Confirme
-  // avant, comme les suppressions de la gestion RepJour. Réservé super/admin (RLS).
+  // Suppression des données du jour AFFICHÉ uniquement (ce service_date).
+  // Confirmation via modale (ConfirmDialog). Réservé admin (UI) / super+admin (RLS).
   async function handleDeleteDay() {
     if (!isAdmin || !hasData || !selectedDate) return
-    if (
-      !window.confirm(
-        `Supprimer toutes les données du petit-déjeuner du ${titleDate} ? Cette action est irréversible et ne touche que ce jour.`,
-      )
-    )
-      return
     try {
       await deleteDay(selectedDate)
       await queryClient.invalidateQueries({ queryKey: ['pdj'] })
@@ -359,6 +354,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
   // pdj.css), même nom de fichier. Sur un jour sans données, il n'y aurait
   // qu'un écran vide à imprimer — on le dit plutôt que de ne rien faire.
   const [printBlocked, setPrintBlocked] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   usePrintShortcut(() => {
     if (!hasData) {
       setPrintBlocked(true)
@@ -416,7 +412,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                     <Button
                       variant="outline"
                       size="icon-sm"
-                      onClick={handleDeleteDay}
+                      onClick={() => setConfirmDelete(true)}
                       aria-label="Supprimer les données de ce jour"
                       className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                     >
@@ -627,6 +623,16 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
         open={printBlocked}
         onOpenChange={setPrintBlocked}
         reason="Aucune donnée pour ce jour. Importez le CSV In-House Guests."
+      />
+
+      <ConfirmDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title="Supprimer les données de ce jour ?"
+        description={`Toutes les données du petit-déjeuner du ${titleDate} seront supprimées. Cette action est irréversible et ne touche que ce jour.`}
+        confirmLabel="Supprimer"
+        destructive
+        onConfirm={handleDeleteDay}
       />
     </div>
   )
