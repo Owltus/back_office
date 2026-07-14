@@ -1,24 +1,9 @@
-import {
-  useEffect,
-  useState,
-  type ComponentType,
-  type CSSProperties,
-} from 'react'
+import { useEffect, useState } from 'react'
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import {
-  Ban,
-  BedDouble,
-  Info,
-  LineChart,
-  Lock,
-  RotateCcw,
-  Scale,
-  Sparkles,
-  UserX,
-} from 'lucide-react'
+import { Info, LineChart, RotateCcw } from 'lucide-react'
 
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { DatePickerButton } from '#/components/form/fields.tsx'
@@ -26,6 +11,7 @@ import { LockBadge } from '#/components/shared/LockBadge.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { PrintBlockedDialog } from '#/components/shared/PrintBlockedDialog.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
+import { StatTile } from '#/components/shared/StatTile.tsx'
 import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { StepNav } from '#/components/shared/StepNav.tsx'
@@ -41,11 +27,6 @@ import {
   ContextMenuTrigger,
 } from '#/components/ui/context-menu.tsx'
 import { Textarea } from '#/components/ui/textarea.tsx'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '#/components/ui/tooltip.tsx'
 import {
   fetchDay as fetchPdjDay,
   fetchServiceDates,
@@ -624,16 +605,19 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
 
       {loading ? (
         <>
-          {/* Squelette-reflet : la rangée de cinq cartes de synthèse puis la
+          {/* Squelette-reflet : la rangée de six tuiles de synthèse puis la
               grille des étages (une colonne par étage), aux mêmes gabarits que le
               contenu réel pour ne rien décaler à l'arrivée des données. */}
           <div className="rapro-stats" aria-hidden="true">
             {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="rapro-stat">
-                <Skeleton className="h-2.5 w-2/3" />
-                <div className="rapro-stat-row">
-                  <Skeleton className="size-6 rounded-md" />
-                  <Skeleton className="ml-auto h-5 w-8" />
+              <div
+                key={i}
+                className="flex items-stretch overflow-hidden rounded-xl border border-border bg-card"
+              >
+                <span className="w-1.5 shrink-0 bg-muted" aria-hidden="true" />
+                <div className="flex flex-col justify-center gap-2 px-3 py-2.5">
+                  <Skeleton className="h-2.5 w-16" />
+                  <Skeleton className="h-5 w-10" />
                 </div>
               </div>
             ))}
@@ -674,45 +658,39 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
       )}
 
       <div className="rapro-stats">
-        <Stat
+        <StatTile
           value={dash(hasOccupancy ? occupied.size : '—')}
           label="Vendues"
-          icon={BedDouble}
           accent="#818cf8"
           hint="Chambres occupées à traiter aujourd'hui."
         />
-        <Stat
+        <StatTile
           value={dash(stats.clean)}
           label="Nettoyées"
-          icon={Sparkles}
           accent="#34d399"
           hint="Chambres nettoyées aujourd'hui (facturées)."
         />
-        <Stat
+        <StatTile
           value={dash(stats.todo)}
           label="Bloquées"
-          icon={Lock}
           accent="#f87171"
           hint="Chambres occupées non nettoyées (bloquées, restent dues)."
         />
-        <Stat
+        <StatTile
           value={dash(stats.refus)}
           label="Refus"
-          icon={Ban}
           accent="#fbbf24"
           hint="Client a refusé le ménage."
         />
-        <Stat
+        <StatTile
           value={dash(stats.noshow)}
           label="No-show"
-          icon={UserX}
           accent="#a78bfa"
           hint="Vendue mais client absent (hors charge)."
         />
-        <Stat
+        <StatTile
           value={dash(hasDue ? rec.pending : '—')}
           label="Reste à faire"
-          icon={Scale}
           accent={reconciled ? '#34d399' : '#fbbf24'}
           hint="Chambres encore à nettoyer (bloquées du jour + reportées). Zéro = tout est fait."
         />
@@ -920,45 +898,5 @@ function MissingList({ items }: { items: MissingSource[] }) {
       ))}
       .
     </p>
-  )
-}
-
-/** Carte KPI (style PDJ) : icône teintée + valeur + libellé. `hint` = explication
- * au survol (tooltip), pour comprendre d'où vient la donnée. */
-function Stat({
-  value,
-  label,
-  icon: Icon,
-  accent,
-  hint,
-}: {
-  value: number | string
-  label: string
-  icon: ComponentType<{ className?: string }>
-  accent: string
-  hint?: string
-}) {
-  const card = (
-    <div
-      className={cn('rapro-stat', hint && 'cursor-help')}
-      style={{ '--rapro-accent': accent } as CSSProperties}
-    >
-      <span className="rapro-stat-label">{label}</span>
-      <span className="rapro-stat-row">
-        <span className="rapro-stat-icon">
-          <Icon className="size-3.5" />
-        </span>
-        <span className="rapro-stat-value">{value}</span>
-      </span>
-    </div>
-  )
-  if (!hint) return card
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>{card}</TooltipTrigger>
-      <TooltipContent className="max-w-56 select-none text-center leading-snug">
-        {hint}
-      </TooltipContent>
-    </Tooltip>
   )
 }
