@@ -232,11 +232,13 @@
   pointer-events: none;
 }
 /* Bloquée de la VEILLE (roulée depuis un jour clôturé précédent, pas encore
-   traitée) : liseré rouge ÉPAIS via box-shadow INTERNE. On n'utilise PAS
-   border-width (qui agrandirait la case de 2px → décalage de la colonne) ni
-   border-color (qui serait écrasé par le statut/hover) : le box-shadow ne prend
-   aucune place et persiste QUEL QUE SOIT le statut de fond. */
+   traitée) : liseré ROUGE autour de la case, QUEL QUE SOIT le statut à
+   l'intérieur. Le rouge vient d'un box-shadow INTERNE (2px) — il ne prend AUCUNE
+   place (pas de décalage, contrairement à border-width) et n'est jamais écrasé
+   par la couleur de fond/hover. On teinte aussi le bord 1px en rouge (bonus hors
+   survol). Le fond garde la couleur du statut (nettoyée/refus/no-show…). */
 .rapro-room-carried {
+  border-color: #f87171;
   box-shadow: inset 0 0 0 2px #f87171;
 }
 .rapro-room-clean:hover:not(:disabled),
