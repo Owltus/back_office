@@ -6,11 +6,15 @@
  * précédents (pas de propagation en base). Résolu = `nettoyee` OU hors charge
  * (`refus`/`noshow`) ; tout le reste roule.
  *
- * ANTI-CHAOS : seuls les jours dont le rapprochement est VERROUILLÉ (clôturé)
- * comptent pour le roulement. Un jour non clôturé (en cours, ou jamais rempli
- * avant qu'on commence à utiliser l'outil) est ignoré → aucune fausse reportée,
- * plus d'ambiguïté. Concrètement : une chambre bloquée ne « roule » qu'une fois
- * son jour clôturé.
+ * DEUX ORIGINES :
+ *  - EXPLICITE : une chambre marquée « Bloquée » (`non_nettoyee`) un jour donné
+ *    roule le(s) jour(s) suivant(s) — que ce jour soit clôturé ou NON. C'est une
+ *    action délibérée de l'utilisateur : le liseré « bloquée la veille » doit
+ *    apparaître le lendemain quoi qu'il arrive.
+ *  - IMPLICITE (occupée SANS ligne = pas encore traitée) : ANTI-CHAOS, ne compte
+ *    que sur un jour VERROUILLÉ (clôturé). Un jour en cours a des chambres non
+ *    encore traitées qui ne sont PAS des reportées → on l'ignore pour cette
+ *    origine (mais ses blocages explicites, eux, roulent).
  *
  * Les lectures elles-mêmes (statuts rapro + occupation PDJ par jour) sont faites
  * côté composant via les queries existantes (mêmes clés → cache partagé) ; ici on
@@ -69,13 +73,14 @@ export function carryoverWindow(
 }
 
 /**
- * Chambres reportées au jour courant : bloquées (`non_nettoyee`) un jour clôturé
- * antérieur de la fenêtre, et jamais résolues sur un jour INTERMÉDIAIRE clôturé
- * depuis. On NE regarde PAS le statut du jour courant : le liseré « bloquée la
- * veille » est un fait sur la veille — il reste présent aujourd'hui QUEL QUE SOIT
- * le statut du jour (nettoyée, refus…) et même après un reset de la case. Seuls
- * les jours CLÔTURÉS originent des reportées. `past` = instantanés du plus ancien
- * au plus récent (< J).
+ * Chambres reportées au jour courant. Deux origines (cf. en-tête) : (1) toute
+ * chambre EXPLICITEMENT bloquée (`non_nettoyee`) un jour antérieur, clôturé ou
+ * non ; (2) les occupées non traitées d'un jour CLÔTURÉ. Dans les deux cas, une
+ * chambre cesse de rouler dès qu'elle est résolue sur un jour INTERMÉDIAIRE. On
+ * NE regarde PAS le statut du jour courant : le liseré « bloquée la veille » est
+ * un fait sur la veille — il reste présent aujourd'hui QUEL QUE SOIT le statut du
+ * jour (nettoyée, refus…) et même après un reset de la case. `past` = instantanés
+ * du plus ancien au plus récent (< J).
  */
 export function carryOver(past: DaySnapshot[]): Set<number> {
   const carried = new Set<number>()
@@ -89,15 +94,19 @@ export function carryOver(past: DaySnapshot[]): Set<number> {
     return false
   }
   past.forEach((snap, i) => {
-    // Seuls les jours CLÔTURÉS originent des reportées (anti-chaos, cf. en-tête).
-    if (!snap.closed) return
-    // Jour clôturé SANS AUCUNE ligne stockée = anomalie (données absentes, ex.
-    // table réinitialisée) : on n'en fait rien rouler. Sinon TOUTES ses occupées
-    // « rouleraient », faute de trace de nettoyage — un jour clôturé normal a ses
-    // occupées matérialisées (≥ 1 ligne, cf. `materializeCleaned`).
-    if (snap.statuses.size === 0) return
+    // (1) Origine EXPLICITE : toute chambre marquée « Bloquée » (`non_nettoyee`)
+    // ce jour-là roule tant qu'elle n'est pas résolue depuis — que le jour soit
+    // clôturé ou NON (cf. en-tête : le liseré doit apparaître le lendemain).
+    for (const [room, status] of snap.statuses) {
+      if (status !== 'non_nettoyee') continue
+      if (!resolvedSince(room, i + 1)) carried.add(room)
+    }
+    // (2) Origine IMPLICITE (occupée SANS ligne) : uniquement sur un jour CLÔTURÉ
+    // (anti-chaos). Un jour clôturé VIDE de lignes (données absentes, ex. table
+    // réinitialisée) est ignoré — sinon toutes ses occupées « rouleraient »,
+    // faute de trace ; un jour clôturé normal a ses occupées matérialisées.
+    if (!snap.closed || snap.statuses.size === 0) return
     for (const room of snap.occupied) {
-      // Origine = chambre bloquée ce jour-là (ligne `non_nettoyee`, non résolue).
       if (isResolved(snap.statuses, room)) continue
       if (!resolvedSince(room, i + 1)) carried.add(room)
     }
