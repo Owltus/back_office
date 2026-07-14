@@ -50,6 +50,7 @@ import {
   SHIFTS,
   SHIFT_LABELS,
   emptyCounts,
+  isWebRelevant,
 } from '#/lib/caisse/constants.ts'
 import {
   canEditSheet,
@@ -292,7 +293,7 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
   // verrouillée (valeurs figées) pour tous, admin compris — il faut la réouvrir
   // pour la modifier.
   const canEditFields = editable && !isValidated
-  const showWeb = form.shift === 'soir'
+  const showWeb = isWebRelevant(form.shift)
 
   const ecarts = useMemo(() => computeEcarts(form), [form])
   const total = fundTotal(form)

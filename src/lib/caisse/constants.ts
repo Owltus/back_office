@@ -80,5 +80,7 @@ export const ECART_LABELS: Record<EcartKey, string> = {
 /** Modes de paiement communs (hors web). */
 export const PAY_KEYS: ReadonlyArray<PayKey> = ['cash', 'cb', 'cvac']
 
-/** CB WEB (StayNTouch) / ADYEN (caisse) ne concernent que le shift du soir. */
-export const isWebRelevant = (shift: Shift): boolean => shift === 'soir'
+/** CB WEB (StayNTouch) / ADYEN (caisse) concernent les shifts du matin ET du soir
+ * (pas la nuit). Source unique de la règle : l'UI et le PDF s'y réfèrent. */
+export const isWebRelevant = (shift: Shift): boolean =>
+  shift === 'matin' || shift === 'soir'

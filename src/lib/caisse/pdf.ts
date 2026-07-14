@@ -20,6 +20,7 @@ import {
   FUND_TARGET,
   PAY_KEYS,
   SHIFT_LABELS,
+  isWebRelevant,
 } from '#/lib/caisse/constants.ts'
 import { fmtEcart, fmtEur, fmtEurInt } from '#/lib/caisse/format.ts'
 import type { CaisseSheetInput, DenomKey, EcartKey } from '#/lib/caisse/types.ts'
@@ -211,8 +212,9 @@ function renderCaisseDocument(
   y += 9
 
   // --- Tableau des montants / écarts ---------------------------------------
-  const modes: EcartKey[] =
-    form.shift === 'soir' ? [...PAY_KEYS, 'web'] : [...PAY_KEYS]
+  const modes: EcartKey[] = isWebRelevant(form.shift)
+    ? [...PAY_KEYS, 'web']
+    : [...PAY_KEYS]
   const ecarts = computeEcarts(form)
   const amountsLeft = LEFT + 32
   const colW = (RIGHT - amountsLeft) / modes.length
