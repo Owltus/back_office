@@ -232,14 +232,15 @@
   pointer-events: none;
 }
 /* Bloquée de la VEILLE (roulée depuis un jour clôturé précédent, pas encore
-   traitée) : liseré ROUGE autour de la case, QUEL QUE SOIT le statut à
-   l'intérieur. Le rouge vient d'un box-shadow INTERNE (2px) — il ne prend AUCUNE
-   place (pas de décalage, contrairement à border-width) et n'est jamais écrasé
-   par la couleur de fond/hover. On teinte aussi le bord 1px en rouge (bonus hors
-   survol). Le fond garde la couleur du statut (nettoyée/refus/no-show…). */
+   traitée) : toute la case passe en ROUGE CLAIR (fond teinté + numéro + liseré),
+   cohérente avec la bordure. Rouge un peu plus léger que la bloquée du jour
+   (#fca5a5 vs #f87171). Le liseré vient d'un box-shadow INTERNE (fin, 1.5px) : il
+   ne prend aucune place (pas de décalage) et n'est jamais écrasé par le hover. */
 .rapro-room-carried {
-  border-color: #f87171;
-  box-shadow: inset 0 0 0 2px #f87171;
+  color: #fca5a5;
+  background: color-mix(in oklab, #fca5a5 16%, transparent);
+  border-color: #fca5a5;
+  box-shadow: inset 0 0 0 1.5px #fca5a5;
 }
 .rapro-room-clean:hover:not(:disabled),
 .rapro-room-refus:hover:not(:disabled),
@@ -442,11 +443,12 @@
   height: 0.8rem;
   opacity: 0.85;
 }
-/* Bloquée la veille : petite case à BORDURE ÉPAISSE rouge (comme la grille). */
+/* Bloquée la veille : petite case rouge clair à liseré fin (comme la grille). */
 .rapro-legend-box.is-carried {
   display: inline-block;
   width: 0.85rem;
   height: 0.6rem;
-  border: 2px solid #f87171;
+  border: 1.5px solid #fca5a5;
   border-radius: 3px;
+  background: color-mix(in oklab, #fca5a5 16%, transparent);
 }
