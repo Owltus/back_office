@@ -10,6 +10,11 @@ import type { CaisseSheet, EcartKey } from '#/lib/caisse/types.ts'
  * Aucune écriture, aucun accès réseau ici — les feuilles sont lues en amont par
  * `fetchSheets`. On ne s'appuie QUE sur les champs existants de `CaisseSheet`
  * (report_date, status, bloc `caisse`, écarts calculés, écart de fond).
+ *
+ * SEULES LES FEUILLES CLÔTURÉES COMPTENT : l'analytique n'agrège que les feuilles
+ * `validated`. Un brouillon (`draft`) porte des montants encore provisoires
+ * (comptage en cours, écarts non figés) qui fausseraient les cumuls ; on l'ignore
+ * tant qu'il n'est pas clôturé.
  */
 
 /** Colonnes d'écart agrégées (paiements + web). */
@@ -18,12 +23,8 @@ const ECART_COLS: ReadonlyArray<EcartKey> = [...PAY_KEYS, 'web']
 /** Synthèse d'un mois (indices 1..12). */
 export interface CaisseMonthStats {
   month: number
-  /** Feuilles saisies (toutes, brouillon compris) sur le mois. */
+  /** Feuilles CLÔTURÉES (validated) sur le mois — seule base de l'analytique. */
   sheets: number
-  /** Feuilles clôturées (status validated). */
-  validated: number
-  /** Feuilles encore en brouillon (status draft). */
-  draft: number
   /** Écart de paiement cumulé, en valeur absolue, tous modes confondus. */
   ecartTotal: number
   /** Écart de fond de caisse cumulé (signé). */
@@ -45,8 +46,6 @@ function emptyMonth(month: number): CaisseMonthStats {
   return {
     month,
     sheets: 0,
-    validated: 0,
-    draft: 0,
     ecartTotal: 0,
     fundEcart: 0,
     cash: 0,
@@ -59,9 +58,10 @@ function emptyMonth(month: number): CaisseMonthStats {
 
 /**
  * Agrège les feuilles d'une année en 12 synthèses mensuelles. Les feuilles hors
- * `year` sont ignorées. L'écart total agrège la valeur absolue de chaque mode
- * (`computeEcarts`) — un écart positif et un négatif ne se compensent pas ; le
- * réel encaissé provient du bloc `caisse` (montants réellement comptés).
+ * `year` OU non clôturées (brouillon) sont ignorées. L'écart total agrège la
+ * valeur absolue de chaque mode (`computeEcarts`) — un écart positif et un
+ * négatif ne se compensent pas ; le réel encaissé provient du bloc `caisse`
+ * (montants réellement comptés).
  */
 export function aggregateCaisseMonthly(
   sheets: CaisseSheet[],
@@ -71,14 +71,13 @@ export function aggregateCaisseMonthly(
 
   const prefix = `${year}-`
   for (const s of sheets) {
+    if (s.status !== 'validated') continue // seules les feuilles clôturées comptent
     if (!s.reportDate.startsWith(prefix)) continue
     const m = Number(s.reportDate.slice(5, 7)) - 1
     if (m < 0 || m > 11) continue
 
     const t = months[m]
     t.sheets += 1
-    if (s.status === 'validated') t.validated += 1
-    else t.draft += 1
 
     const ecarts = computeEcarts(s)
     for (const c of ECART_COLS) t.ecartTotal += Math.abs(ecarts[c])
@@ -113,9 +112,10 @@ export interface CaisseDayStats {
 /**
  * Agrège les feuilles d'un mois en synthèses journalières — même logique que
  * `aggregateCaisseMonthly` mais groupée par jour. Ne renvoie QUE les jours où au
- * moins une feuille existe (triés par date croissante). L'écart total agrège la
- * valeur absolue de chaque mode (`computeEcarts`) ; le réel encaissé provient du
- * bloc `caisse` (montants réellement comptés).
+ * moins une feuille CLÔTURÉE existe (triés par date croissante) ; les brouillons
+ * sont ignorés. L'écart total agrège la valeur absolue de chaque mode
+ * (`computeEcarts`) ; le réel encaissé provient du bloc `caisse` (montants
+ * réellement comptés).
  */
 export function aggregateCaisseDaily(
   sheets: CaisseSheet[],
@@ -126,6 +126,7 @@ export function aggregateCaisseDaily(
   const byDate = new Map<string, CaisseDayStats>()
 
   for (const s of sheets) {
+    if (s.status !== 'validated') continue // seules les feuilles clôturées comptent
     if (!s.reportDate.startsWith(prefix)) continue
 
     let t = byDate.get(s.reportDate)

@@ -76,7 +76,6 @@ export function CaisseAnalytiqueBoard() {
   const summary = useMemo(
     () => ({
       totalSheets: months.reduce((s, m) => s + m.sheets, 0),
-      totalValidated: months.reduce((s, m) => s + m.validated, 0),
       totalEcart: months.reduce((s, m) => s + m.ecartTotal, 0),
       totalFundEcart: months.reduce((s, m) => s + m.fundEcart, 0),
       totalEncaisse: months.reduce((s, m) => s + m.encaisse, 0),
@@ -110,10 +109,9 @@ export function CaisseAnalytiqueBoard() {
     >
       {/* Synthèse annuelle */}
       <AnalytiqueCardsGrid>
-        <StatCard label="Feuilles saisies" value={fmtInt(summary.totalSheets)}>
+        <StatCard label="Feuilles clôturées" value={fmtInt(summary.totalSheets)}>
           <p className="mt-2 text-xs text-muted-foreground">
-            {fmtInt(summary.totalValidated)} clôturée
-            {summary.totalValidated > 1 ? 's' : ''}
+            validées sur l'année
           </p>
         </StatCard>
 

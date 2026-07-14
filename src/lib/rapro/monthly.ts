@@ -4,9 +4,15 @@
  * `nettoyee` par chambre vendue facturée (cf. `materializeCleaned`). La
  * facturation suit le statut `nettoyee`. L'agrégation « par jour / par mois » se
  * fait côté client.
+ *
+ * SEULS LES JOURS CLÔTURÉS COMPTENT : l'analytique n'agrège que les
+ * rapprochements validés (cf. `fetchValidatedDays`). Un jour en brouillon a des
+ * statuts encore provisoires (occupées non matérialisées, exceptions non figées)
+ * qui fausseraient le récap ; on l'ignore tant qu'il n'est pas clôturé.
  */
 
 import { supabase } from '#/lib/supabase.ts'
+import { fetchValidatedDays } from '#/lib/rapro/service.ts'
 
 /** Décompte des statuts « traités » d'un jour (nettoyée / refus / no-show, hors
  * occupation PDJ). */
@@ -19,15 +25,20 @@ export interface DayStatusCounts {
 const emptyCounts = (): DayStatusCounts => ({ nettoyee: 0, refus: 0, noshow: 0 })
 
 /**
- * Comptage par jour des statuts nettoyee / refus / noshow sur `[from, to]`.
- * PAGINÉ jusqu'au count exact (un mois plein peut dépasser le plafond de 1000
- * lignes de l'API), en avançant du nombre de lignes réellement renvoyées.
+ * Comptage par jour des statuts nettoyee / refus / noshow sur `[from, to]`,
+ * RESTREINT aux jours dont le rapprochement est CLÔTURÉ (validé). PAGINÉ jusqu'au
+ * count exact (un mois plein peut dépasser le plafond de 1000 lignes de l'API),
+ * en avançant du nombre de lignes réellement renvoyées ; les lignes d'un jour non
+ * clôturé sont ignorées au comptage.
  */
 export async function fetchStatusCountsByRange(
   from: string,
   to: string,
 ): Promise<Map<string, DayStatusCounts>> {
   const byDay = new Map<string, DayStatusCounts>()
+  // Jours clôturés de la fenêtre : hors de cet ensemble, rien ne compte.
+  const validated = await fetchValidatedDays(from, to)
+  if (validated.size === 0) return byDay
   const PAGE = 1000
   let offset = 0
   let expected = Infinity
@@ -45,6 +56,8 @@ export async function fetchStatusCountsByRange(
     const rows = (data ?? []) as { report_date: string; status: string }[]
     if (rows.length === 0) break
     for (const r of rows) {
+      // Jour non clôturé → hors analytique (statuts encore provisoires).
+      if (!validated.has(r.report_date)) continue
       const c = byDay.get(r.report_date) ?? emptyCounts()
       // Facturable = statut `nettoyee`.
       if (r.status === 'nettoyee') c.nettoyee++

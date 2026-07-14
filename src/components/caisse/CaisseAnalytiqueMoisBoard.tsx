@@ -105,9 +105,9 @@ export function CaisseAnalytiqueMoisBoard({
     >
       {/* Synthèse du mois */}
       <AnalytiqueCardsGrid>
-        <StatCard label="Feuilles saisies" value={fmtInt(summary.totalSheets)}>
+        <StatCard label="Feuilles clôturées" value={fmtInt(summary.totalSheets)}>
           <p className="mt-2 text-xs text-muted-foreground">
-            {days.length} jour{days.length > 1 ? 's' : ''} saisi
+            {days.length} jour{days.length > 1 ? 's' : ''} clôturé
             {days.length > 1 ? 's' : ''}
           </p>
         </StatCard>
