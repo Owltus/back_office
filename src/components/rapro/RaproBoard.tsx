@@ -815,7 +815,9 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
 
       {!showEmptyState && (
         <div className="rapro-legend">
-          {LEGEND_ORDER.map((st) => (
+          {/* « Non vendue » (empty) masquée de la légende à la demande — le rendu
+              grisé des cases non vendues, lui, reste (via CELL_STATES/cellState). */}
+          {LEGEND_ORDER.filter((st) => st !== 'empty').map((st) => (
             <span key={st} className="rapro-legend-item">
               <span
                 className={cn('rapro-legend-dot', CELL_STATES[st].legendMod)}
@@ -823,10 +825,6 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
               {CELL_STATES[st].label}
             </span>
           ))}
-          <span className="rapro-legend-item">
-            <span className="rapro-legend-box is-carried" />
-            Bloquée la veille
-          </span>
         </div>
       )}
 
