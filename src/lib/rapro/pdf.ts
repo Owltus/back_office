@@ -192,30 +192,42 @@ function renderRaproDocument(
   const maxRooms = FLOORS.reduce((m, f) => Math.max(m, f.rooms.length), 0)
   y = gridTop + 3 + maxRooms * cellH + 6
 
-  // --- Légende des statuts (dérivée de la même partition que les cases) ------
-  const legend: Array<[string, RGB]> = LEGEND_ORDER.map((st): [string, RGB] => [
-    CELL_STATES[st].label,
-    CELL_FILL[st].fill,
-  ])
+  // --- Légende des statuts (même partition que les cases). « Non vendue »
+  //     (grisé) est masquée ; on ajoute une case témoin « Bloquée la veille »
+  //     = liseré rouge, au lieu d'un simple texte. -----------------------------
+  type LegendItem = { label: string; fill: RGB; border?: RGB }
+  const CARRIED_BORDER: RGB = [248, 113, 113]
+  const legend: LegendItem[] = [
+    ...LEGEND_ORDER.filter((st) => st !== 'empty').map(
+      (st): LegendItem => ({
+        label: CELL_STATES[st].label,
+        fill: CELL_FILL[st].fill,
+      }),
+    ),
+    { label: 'Bloquée la veille', fill: [255, 255, 255], border: CARRIED_BORDER },
+  ]
   pdf.setFont('helvetica', 'normal').setFontSize(7.5)
   const legendGap = 7
-  const itemW = legend.map(([lbl]) => 4 + pdf.getTextWidth(lbl))
+  const itemW = legend.map(({ label }) => 4 + pdf.getTextWidth(label))
   const legendW =
     itemW.reduce((a, b) => a + b, 0) + legendGap * (legend.length - 1)
   let lx = RIGHT - legendW // aligné à droite (bord droit = marge RIGHT)
-  legend.forEach(([lbl, rgb], i) => {
-    pdf.setFillColor(rgb[0], rgb[1], rgb[2])
-    pdf.setDrawColor(170).setLineWidth(0.2)
-    pdf.rect(lx, y - 2.6, 3, 3, 'FD')
+  legend.forEach(({ label, fill, border }, i) => {
+    pdf.setFillColor(fill[0], fill[1], fill[2])
+    if (border) {
+      // Témoin du marquage « bloquée la veille » : même liseré rouge net que
+      // dans la grille (couleur + épaisseur identiques).
+      pdf.rect(lx, y - 2.6, 3, 3, 'F')
+      pdf.setDrawColor(border[0], border[1], border[2]).setLineWidth(0.5)
+      pdf.rect(lx, y - 2.6, 3, 3)
+    } else {
+      pdf.setDrawColor(170).setLineWidth(0.2)
+      pdf.rect(lx, y - 2.6, 3, 3, 'FD')
+    }
     pdf.setTextColor(80)
-    pdf.text(lbl, lx + 4, y)
+    pdf.text(label, lx + 4, y)
     lx += itemW[i] + legendGap
   })
-  y += 5
-
-  // Rappel du marquage « bloquée la veille » (liseré rouge autour de la case).
-  pdf.setFont('helvetica', 'normal').setFontSize(6.5).setTextColor(110)
-  pdf.text('Bloquée la veille = bordure rouge', RIGHT, y, { align: 'right' })
   y += 6
 
   // --- Commentaire : cadre pleine largeur jusqu'aux signatures --------------
