@@ -186,6 +186,11 @@ function renderRaproDocument(
       pdf.text(String(room), cx + 1 + w / 2, cellY + h / 2 + 1.1, {
         align: 'center',
       })
+      // Bloquée de la veille : bordure rouge autour de la case.
+      if (carried.has(room)) {
+        pdf.setDrawColor(248, 113, 113).setLineWidth(0.5)
+        pdf.rect(cx + 1, cellY, w, h)
+      }
       // Sur-statut : glyphe en coin HAUT-GAUCHE.
       const q = qualifiers.get(room)
       if (q) {
@@ -221,7 +226,12 @@ function renderRaproDocument(
 
   // Rappel des sur-statuts (glyphes dessinés en coin de case).
   pdf.setFont('helvetica', 'normal').setFontSize(6.5).setTextColor(110)
-  pdf.text('Sur-statut : F = Faux no-show', RIGHT, y, { align: 'right' })
+  pdf.text(
+    'Bloquée la veille = bordure rouge   ·   Sur-statut : F = Faux no-show',
+    RIGHT,
+    y,
+    { align: 'right' },
+  )
   y += 6
 
   // --- Commentaire : cadre pleine largeur jusqu'aux signatures --------------

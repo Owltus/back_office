@@ -17,7 +17,7 @@
  * ne manipule que les instantanés déjà chargés.
  */
 
-import { JUSTIFIED_STATUSES, statusOf } from '#/lib/rapro/constants.ts'
+import { JUSTIFIED_STATUSES } from '#/lib/rapro/constants.ts'
 import { addDays } from '#/lib/rapro/day.ts'
 import type { RoomStatus } from '#/lib/rapro/types.ts'
 
@@ -34,13 +34,21 @@ export interface DaySnapshot {
   closed: boolean
 }
 
-/** Une chambre est « résolue » (cesse de rouler) si son statut de base est
- * nettoyée ou hors charge (`refus`/`noshow`). Seule `non_nettoyee` (« Bloquée »)
- * roule. Le sur-statut n'entre pas en compte (orthogonal). */
-function isResolved(status: RoomStatus): boolean {
+/** Une chambre est « résolue » (cesse de rouler) si elle a été EXPLICITEMENT
+ * traitée : une VRAIE ligne stockée qui est nettoyée ou hors charge
+ * (`refus`/`noshow`). L'ABSENCE de ligne (chambre non touchée) ne résout PAS —
+ * une bloquée de la veille non touchée continue de rouler jusqu'à ce qu'on la
+ * traite. (Les jours clôturés ont toutes leurs occupées matérialisées, donc une
+ * ligne ; seul le jour courant a des chambres sans ligne.) Le sur-statut n'entre
+ * pas en compte (orthogonal). */
+function isResolved(
+  statuses: ReadonlyMap<number, RoomStatus>,
+  room: number,
+): boolean {
+  const s = statuses.get(room)
   return (
-    status === 'nettoyee' ||
-    (JUSTIFIED_STATUSES as readonly string[]).includes(status)
+    s !== undefined &&
+    (s === 'nettoyee' || (JUSTIFIED_STATUSES as readonly string[]).includes(s))
   )
 }
 
@@ -74,15 +82,16 @@ export function carryOver(
   const carried = new Set<number>()
   const resolvedSince = (room: number, from: number): boolean => {
     for (let i = from; i < past.length; i++) {
-      if (isResolved(statusOf(past[i].statuses, room))) return true
+      if (isResolved(past[i].statuses, room)) return true
     }
-    return isResolved(statusOf(current.statuses, room))
+    return isResolved(current.statuses, room)
   }
   past.forEach((snap, i) => {
     // Seuls les jours CLÔTURÉS originent des reportées (anti-chaos, cf. en-tête).
     if (!snap.closed) return
     for (const room of snap.occupied) {
-      if (isResolved(statusOf(snap.statuses, room))) continue
+      // Origine = chambre bloquée ce jour-là (ligne `non_nettoyee`, non résolue).
+      if (isResolved(snap.statuses, room)) continue
       if (!resolvedSince(room, i + 1)) carried.add(room)
     }
   })

@@ -811,8 +811,9 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
                     // Grisée seulement si NON touchée (pas de ligne) ET non vendue.
                     // Une chambre non vendue explicitement marquée montre sa couleur.
                     const isEmpty = !statuses.has(room) && !isDue(room)
+                    const isCarried = carried.has(room)
                     const cls = CELL_STATES[cellState(status, isEmpty)].webClass
-                    const label = `Chambre ${room} — ${STATUS_LABEL[status]}${qual ? ` — ${QUALIFIER_LABEL[qual]}` : ''}${isEmpty ? ' — non vendue' : ''}`
+                    const label = `Chambre ${room} — ${STATUS_LABEL[status]}${qual ? ` — ${QUALIFIER_LABEL[qual]}` : ''}${isEmpty ? ' — non vendue' : ''}${isCarried ? ' — bloquée la veille' : ''}`
                     const btn = (
                       <button
                         key={room}
@@ -824,6 +825,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
                         className={cn(
                           'rapro-room',
                           cls,
+                          isCarried && 'rapro-room-carried',
                           menuRoom === room && 'is-active',
                         )}
                       >
@@ -907,6 +909,10 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
               {CELL_STATES[st].label}
             </span>
           ))}
+          <span className="rapro-legend-item">
+            <span className="rapro-legend-box is-carried" />
+            Bloquée la veille
+          </span>
           {/* Sur-statuts : affichés par ICÔNE (pas par couleur). */}
           {QUALIFIER_ORDER.map((q) => {
             const Icon = QUALIFIER_ICON[q]
