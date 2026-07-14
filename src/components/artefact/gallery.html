@@ -129,11 +129,12 @@
   .chip svg { width: 0.9rem; height: 0.9rem; }
   .chip.tint { background: color-mix(in oklab, var(--c) 16%, transparent); }
   .sub { font-size: 0.72rem; color: var(--muted); font-weight: 500; }
-  /* Comparaison « valeur vs référence » : séparateur en BARRE VERTICALE, les
-     deux données centrées l'une par rapport à l'autre (align-items:center). */
-  .pair { display: inline-flex; align-items: center; gap: 0.55rem; }
+  /* Comparaison « valeur vs référence » : séparateur en BARRE HORIZONTALE, les
+     deux données empilées et centrées l'une par rapport à l'autre (une barre de
+     fraction). */
+  .pair { display: inline-flex; flex-direction: column; align-items: center; gap: 0.18rem; line-height: 1.1; }
   .pair .p1 { font-weight: 700; }
-  .pair .vbar { width: 1px; align-self: stretch; min-height: 1.15em; background: color-mix(in oklab, var(--muted) 48%, transparent); }
+  .pair .hbar { height: 1px; width: 100%; min-width: 1.6em; background: color-mix(in oklab, var(--muted) 48%, transparent); }
   .pair .p2 { font-size: 0.62em; font-weight: 600; color: var(--muted); }
   .delta {
     font-size: 0.66rem; font-weight: 700; border-radius: 999px; padding: 0.08rem 0.4rem;
@@ -305,7 +306,7 @@
      verticale, données centrées) quand un champ `ref` est fourni. */
   function valHtml(s) {
     if (!s.ref) return s.value;
-    return `<span class="pair"><span class="p1">${s.value}</span><span class="vbar"></span><span class="p2">${s.ref}</span></span>`;
+    return `<span class="pair"><span class="p1">${s.value}</span><span class="hbar"></span><span class="p2">${s.ref}</span></span>`;
   }
   function extras(s) {
     let h = '';
