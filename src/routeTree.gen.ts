@@ -18,6 +18,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as GestionRouteImport } from './routes/gestion'
 import { Route as ComptesRouteImport } from './routes/comptes'
 import { Route as CaisseRouteImport } from './routes/caisse'
+import { Route as ArtefactRouteImport } from './routes/artefact'
 import { Route as AffichageRouteImport } from './routes/affichage'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as RepjourIndexRouteImport } from './routes/repjour/index'
@@ -79,6 +80,11 @@ const ComptesRoute = ComptesRouteImport.update({
 const CaisseRoute = CaisseRouteImport.update({
   id: '/caisse',
   path: '/caisse',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ArtefactRoute = ArtefactRouteImport.update({
+  id: '/artefact',
+  path: '/artefact',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AffichageRoute = AffichageRouteImport.update({
@@ -174,6 +180,7 @@ const CaisseAnalytiqueYearMonthRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/affichage': typeof AffichageRoute
+  '/artefact': typeof ArtefactRoute
   '/caisse': typeof CaisseRouteWithChildren
   '/comptes': typeof ComptesRoute
   '/gestion': typeof GestionRoute
@@ -202,6 +209,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/affichage': typeof AffichageRoute
+  '/artefact': typeof ArtefactRoute
   '/comptes': typeof ComptesRoute
   '/gestion': typeof GestionRoute
   '/login': typeof LoginRoute
@@ -226,6 +234,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/affichage': typeof AffichageRoute
+  '/artefact': typeof ArtefactRoute
   '/caisse': typeof CaisseRouteWithChildren
   '/comptes': typeof ComptesRoute
   '/gestion': typeof GestionRoute
@@ -256,6 +265,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/affichage'
+    | '/artefact'
     | '/caisse'
     | '/comptes'
     | '/gestion'
@@ -284,6 +294,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/affichage'
+    | '/artefact'
     | '/comptes'
     | '/gestion'
     | '/login'
@@ -307,6 +318,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/affichage'
+    | '/artefact'
     | '/caisse'
     | '/comptes'
     | '/gestion'
@@ -336,6 +348,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AffichageRoute: typeof AffichageRoute
+  ArtefactRoute: typeof ArtefactRoute
   CaisseRoute: typeof CaisseRouteWithChildren
   ComptesRoute: typeof ComptesRoute
   GestionRoute: typeof GestionRoute
@@ -410,6 +423,13 @@ declare module '@tanstack/react-router' {
       path: '/caisse'
       fullPath: '/caisse'
       preLoaderRoute: typeof CaisseRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/artefact': {
+      id: '/artefact'
+      path: '/artefact'
+      fullPath: '/artefact'
+      preLoaderRoute: typeof ArtefactRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/affichage': {
@@ -610,6 +630,7 @@ const RepjourRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AffichageRoute: AffichageRoute,
+  ArtefactRoute: ArtefactRoute,
   CaisseRoute: CaisseRouteWithChildren,
   ComptesRoute: ComptesRoute,
   GestionRoute: GestionRoute,

@@ -8,6 +8,7 @@ import {
   Coffee,
   Menu,
   Monitor,
+  Palette,
   SquareParking,
 } from 'lucide-react'
 
@@ -26,6 +27,8 @@ import {
 } from '#/components/ui/sheet.tsx'
 
 const NAV_ITEMS = [
+  // Page TEMPORAIRE — galerie de propositions de cartes (à retirer après choix).
+  { to: '/artefact', label: 'Artefact', icon: Palette },
   { to: '/repjour', label: 'RepJour', icon: ClipboardList },
   { to: '/pdj', label: 'PDJ', icon: Coffee },
   { to: '/parking', label: 'Parking', icon: SquareParking },
