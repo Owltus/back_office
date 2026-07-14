@@ -114,22 +114,22 @@ export function PdjAnalytiqueBoard() {
       skeleton={{ cols: 6, charts: 2, rows: 12 }}
     >
       {/* Synthèse annuelle — libellé + valeur seuls (comme l'analytique
-          rapprochement). Le détail (inclus, potentiel…) vit dans le tableau. */}
+          rapprochement). Le détail vit dans le tableau. */}
       <AnalytiqueCardsGrid>
         <StatCard
-          label="Jours couverts"
-          accent="#818cf8"
-          value={fmtInt(summary.totalDays)}
-        />
-        <StatCard
-          label="Taux d'occupation moyen"
+          label="Taux d'occupation"
           accent="#38bdf8"
           value={fmtPct(summary.avgOccupancy)}
         />
         <StatCard
-          label="PDJ servis"
+          label="Nombre de clients"
+          accent="#818cf8"
+          value={fmtInt(summary.totalGuests)}
+        />
+        <StatCard
+          label="Clients inclus"
           accent="#34d399"
-          value={fmtInt(summary.totalServed)}
+          value={fmtInt(summary.totalIncluded)}
         />
         <StatCard
           label="Potentiel non inclus"
