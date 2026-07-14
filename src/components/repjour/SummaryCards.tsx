@@ -1,3 +1,4 @@
+import { StatTile } from '#/components/shared/StatTile.tsx'
 import { fmt } from '#/lib/repjour/format.ts'
 import type { Ecart, KPIBlock, MonthBudget } from '#/lib/repjour/types.ts'
 
@@ -82,25 +83,20 @@ export function SummaryCards({
         }`}
       >
         {cards.map((card, i) => (
-          <div
+          <StatTile
             key={card.label}
-            className={`rounded-xl border border-border bg-card p-3 shadow-sm sm:p-4 ${
-              i === 0 ? 'col-span-2 sm:col-span-1' : ''
-            }`}
-          >
-            <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-              {card.label}
-            </p>
-            <div className="mt-1">
-              <span className="text-2xl font-bold text-foreground">
-                {card.value}
-              </span>
-              <span className="text-sm text-muted-foreground">
-                {' '}
-                / {card.budgetValue}
-              </span>
-            </div>
-          </div>
+            label={card.label}
+            accent="var(--primary)"
+            className={i === 0 ? 'col-span-2 sm:col-span-1' : undefined}
+            value={
+              <>
+                {card.value}{' '}
+                <span className="text-sm font-medium text-muted-foreground">
+                  / {card.budgetValue}
+                </span>
+              </>
+            }
+          />
         ))}
 
         {/* « Pris depuis la veille » — 4ᵉ carte sur la même ligne que les KPI.
@@ -109,20 +105,17 @@ export function SummaryCards({
             depuis le dernier rapport du mois. Masquée quand il n'y a rien à
             comparer (1er du mois, ou jour sans rapport). */}
         {hasPickup && (
-          <div className="rounded-xl border border-border bg-card p-3 shadow-sm sm:p-4">
-            <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-              Pris depuis la veille
-            </p>
-            <div className="mt-1">
+          <StatTile
+            label="Pris depuis la veille"
+            accent={pickup >= 0 ? '#34d399' : 'var(--destructive)'}
+            value={
               <span
-                className={`text-2xl font-bold ${
-                  pickup >= 0 ? 'text-emerald-500' : 'text-destructive'
-                }`}
+                className={pickup >= 0 ? 'text-emerald-500' : 'text-destructive'}
               >
                 {fmt.ecartEurInt(pickup)}
               </span>
-            </div>
-          </div>
+            }
+          />
         )}
       </div>
 
