@@ -5,14 +5,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowDown,
   ArrowUp,
-  BedDouble,
   Coffee,
-  Croissant,
   FileUp,
   LineChart,
   Star,
   Trash2,
-  Users,
 } from 'lucide-react'
 
 import { EmptyCanvas } from '#/components/shared/EmptyCanvas.tsx'
@@ -539,25 +536,21 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
               <Stat
                 value={stats.rooms}
                 label="Chambres occupées"
-                icon={BedDouble}
                 accent="#818cf8"
               />
               <Stat
                 value={stats.guests}
                 label="Clients"
-                icon={Users}
                 accent="#38bdf8"
               />
               <Stat
                 value={stats.breakfasts}
                 label="PDJ inclus"
-                icon={Coffee}
                 accent="#34d399"
               />
               <Stat
                 value={stats.potential}
                 label="PDJ non inclus"
-                icon={Croissant}
                 accent="#fbbf24"
                 printHidden
               />
@@ -569,7 +562,6 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                     <ArrowDown className="pdj-label-arrow" />
                   </>
                 }
-                icon={ArrowDown}
                 accent="#60a5fa"
               />
               <Stat
@@ -580,7 +572,6 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                     <ArrowUp className="pdj-label-arrow" />
                   </>
                 }
-                icon={ArrowUp}
                 accent="#fb7185"
               />
             </div>
@@ -725,14 +716,12 @@ function BoardSkeleton() {
 function Stat({
   value,
   label,
-  icon: Icon,
   accent,
   printHidden,
   printOnly,
 }: {
   value: number
   label: React.ReactNode
-  icon: React.ComponentType<{ className?: string }>
   accent: string
   printHidden?: boolean
   printOnly?: boolean
@@ -746,14 +735,12 @@ function Stat({
       )}
       style={{ '--pdj-accent': accent } as React.CSSProperties}
     >
-      {/* Libellé d'abord dans le DOM : à l'écran il coiffe la carte. Le PDF le
-          veut SOUS la valeur — `flex-direction: column-reverse` en @media print
-          rétablit cet ordre sans dupliquer le balisage (voir pdj.css). */}
+      {/* Style « Tuile, valeur seule » : liseré d'accent (CSS ::before) + libellé
+          + valeur, SANS icône. Libellé d'abord dans le DOM : à l'écran il coiffe
+          la carte. Le PDF le veut SOUS la valeur — `flex-direction: column-reverse`
+          en @media print rétablit cet ordre sans dupliquer le balisage. */}
       <span className="pdj-stat-label">{label}</span>
       <span className="pdj-stat-row">
-        <span className="pdj-stat-icon">
-          <Icon className="size-3.5" />
-        </span>
         <span className="pdj-stat-value">{value}</span>
       </span>
     </div>

@@ -169,14 +169,16 @@
 .pdj-stats-revenue {
   display: none;
 }
-/* Titre en haut, puis une rangée « icône à gauche / valeur à droite ».
+/* Style « Tuile, valeur seule » (composant partagé StatTile) : liseré d'accent à
+ * gauche, libellé en haut, valeur en bas. SANS icône.
  *
  * Carte compacte : les libellés sont longs et ne sont pas tronqués — c'est donc
  * tout le reste qui se resserre. Mêmes proportions qu'au rapprochement.
  *
- * `margin-top: auto` colle la rangée en bas : la grille étire les cartes à
+ * `margin-top: auto` colle la valeur en bas : la grille étire les cartes à
  * hauteur égale, et un libellé sur deux lignes désalignerait sinon sa valeur. */
 .pdj-stat {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
@@ -185,27 +187,23 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }
+/* Liseré d'accent à gauche — écran uniquement (masqué en @media print). */
+.pdj-stat::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: var(--pdj-accent, var(--primary));
+  border-radius: var(--radius) 0 0 var(--radius);
+}
 .pdj-stat-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.4rem;
   margin-top: auto;
-}
-.pdj-stat-icon {
-  display: flex;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  width: 1.65rem;
-  height: 1.65rem;
-  color: var(--pdj-accent, var(--primary));
-  background: color-mix(
-    in oklab,
-    var(--pdj-accent, var(--primary)) 16%,
-    transparent
-  );
-  border-radius: calc(var(--radius) - 6px);
 }
 .pdj-stat-value {
   font-size: 1.25rem;
@@ -484,8 +482,8 @@
     margin-left: 2px;
     vertical-align: middle;
   }
-  /* Décorations écran masquées à l'impression */
-  .pdj-stat-icon,
+  /* Décorations écran masquées à l'impression (liseré d'accent + étoile) */
+  .pdj-stat::before,
   .pdj-name-star {
     display: none !important;
   }
