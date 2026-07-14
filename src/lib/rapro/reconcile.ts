@@ -1,9 +1,9 @@
 /*
  * Réconciliation comptable d'un jour de ménage — métier pur (sans React ni
  * Supabase). Sur les chambres DUES (occupées, reprises du PDJ), on répartit en
- * trois familles : fait (`nettoyee`), hors charge (`refus`, aucun ménage dû) et
- * dû non fait (la « Bloquée » = utilisée mais non nettoyée). La balance = le dû
- * non fait ; « à zéro » = plus aucune chambre due ne reste à nettoyer.
+ * trois familles : fait (`nettoyee`), hors charge (`refus`/`noshow`, aucun ménage
+ * dû) et dû non fait (la « Bloquée » = utilisée mais non nettoyée). La balance =
+ * le dû non fait ; « à zéro » = plus aucune chambre due ne reste à nettoyer.
  *
  * Calqué sur `isBalanced` de la caisse (prédicat pur consommé par l'UI), sans
  * EPSILON : ici tout est entier.
@@ -17,7 +17,7 @@ export interface Reconciliation {
   due: number
   /** Nettoyées parmi les dues (fait). */
   clean: number
-  /** Hors charge (`refus`) parmi les dues. */
+  /** Hors charge (`refus`/`noshow`) parmi les dues. */
   settled: number
   /** Reste à nettoyer = `due − clean − settled` (la balance ; roule). */
   pending: number

@@ -8,19 +8,20 @@
 
 import { supabase } from '#/lib/supabase.ts'
 
-/** Décompte des statuts « traités » d'un jour (nettoyée / refus, hors occupation
- * PDJ). */
+/** Décompte des statuts « traités » d'un jour (nettoyée / refus / no-show, hors
+ * occupation PDJ). */
 export interface DayStatusCounts {
   nettoyee: number
   refus: number
+  noshow: number
 }
 
-const emptyCounts = (): DayStatusCounts => ({ nettoyee: 0, refus: 0 })
+const emptyCounts = (): DayStatusCounts => ({ nettoyee: 0, refus: 0, noshow: 0 })
 
 /**
- * Comptage par jour des statuts nettoyee / refus sur `[from, to]`. PAGINÉ jusqu'au
- * count exact (un mois plein peut dépasser le plafond de 1000 lignes de l'API), en
- * avançant du nombre de lignes réellement renvoyées.
+ * Comptage par jour des statuts nettoyee / refus / noshow sur `[from, to]`.
+ * PAGINÉ jusqu'au count exact (un mois plein peut dépasser le plafond de 1000
+ * lignes de l'API), en avançant du nombre de lignes réellement renvoyées.
  */
 export async function fetchStatusCountsByRange(
   from: string,
@@ -34,7 +35,7 @@ export async function fetchStatusCountsByRange(
     const { data, error, count } = await supabase
       .from('rapro_rooms')
       .select('report_date, status', { count: 'exact' })
-      .in('status', ['nettoyee', 'refus'])
+      .in('status', ['nettoyee', 'refus', 'noshow'])
       .gte('report_date', from)
       .lte('report_date', to)
       .order('report_date', { ascending: true })
@@ -48,6 +49,7 @@ export async function fetchStatusCountsByRange(
       // Facturable = statut `nettoyee`.
       if (r.status === 'nettoyee') c.nettoyee++
       else if (r.status === 'refus') c.refus++
+      else if (r.status === 'noshow') c.noshow++
       byDay.set(r.report_date, c)
     }
     offset += rows.length
@@ -61,6 +63,7 @@ export function sumCounts(byDay: Map<string, DayStatusCounts>): DayStatusCounts 
   for (const c of byDay.values()) {
     t.nettoyee += c.nettoyee
     t.refus += c.refus
+    t.noshow += c.noshow
   }
   return t
 }
@@ -100,6 +103,7 @@ export function monthlyRows(
     const c = byDay.get(date) ?? emptyCounts()
     totals.nettoyee += c.nettoyee
     totals.refus += c.refus
+    totals.noshow += c.noshow
     rows.push({ date, day: d, ...c })
   }
   return { rows, totals }

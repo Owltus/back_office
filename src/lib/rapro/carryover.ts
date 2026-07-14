@@ -4,7 +4,7 @@
  * jours suivants jusqu'à résolution (nettoyée ou passée hors charge), y compris
  * à travers une clôture. On le DÉRIVE en relisant une fenêtre bornée de jours
  * précédents (pas de propagation en base). Résolu = `nettoyee` OU hors charge
- * (`refus`) ; tout le reste roule.
+ * (`refus`/`noshow`) ; tout le reste roule.
  *
  * ANTI-CHAOS : seuls les jours dont le rapprochement est VERROUILLÉ (clôturé)
  * comptent pour le roulement. Un jour non clôturé (en cours, ou jamais rempli
@@ -35,8 +35,8 @@ export interface DaySnapshot {
 }
 
 /** Une chambre est « résolue » (cesse de rouler) si elle a été EXPLICITEMENT
- * traitée : une VRAIE ligne stockée qui est nettoyée ou hors charge (`refus`).
- * L'ABSENCE de ligne (chambre non touchée) ne résout PAS — une bloquée de la
+ * traitée : une VRAIE ligne stockée qui est nettoyée ou hors charge
+ * (`refus`/`noshow`). L'ABSENCE de ligne (chambre non touchée) ne résout PAS — une bloquée de la
  * veille non touchée continue de rouler jusqu'à ce qu'on la traite. (Les jours
  * clôturés ont toutes leurs occupées matérialisées, donc une ligne ; seul le jour
  * courant a des chambres sans ligne.) */
@@ -91,6 +91,11 @@ export function carryOver(past: DaySnapshot[]): Set<number> {
   past.forEach((snap, i) => {
     // Seuls les jours CLÔTURÉS originent des reportées (anti-chaos, cf. en-tête).
     if (!snap.closed) return
+    // Jour clôturé SANS AUCUNE ligne stockée = anomalie (données absentes, ex.
+    // table réinitialisée) : on n'en fait rien rouler. Sinon TOUTES ses occupées
+    // « rouleraient », faute de trace de nettoyage — un jour clôturé normal a ses
+    // occupées matérialisées (≥ 1 ligne, cf. `materializeCleaned`).
+    if (snap.statuses.size === 0) return
     for (const room of snap.occupied) {
       // Origine = chambre bloquée ce jour-là (ligne `non_nettoyee`, non résolue).
       if (isResolved(snap.statuses, room)) continue

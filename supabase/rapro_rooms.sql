@@ -6,10 +6,12 @@
 -- vaut « non_nettoyee ». Remplace la version précédente (jamais déployée) qui
 -- stockait une ligne par jour → d'où le drop initial.
 --
--- Statuts (3) : nettoyee | non_nettoyee (« Bloquée ») | refus (hors charge). Le
--- 'noshow' et la colonne `qualifier` ont été retirés (cf.
--- rapro_rooms_drop_noshow_qualifier.sql) — le seul livrable est la liste des
--- chambres nettoyées.
+-- Statuts (4) : nettoyee | non_nettoyee (« Bloquée ») | refus | noshow. La 2e
+-- dimension `qualifier` (sur-statut « faux no-show ») a été abandonnée — retrait
+-- non destructif via rapro_rooms_drop_qualifier.sql (ce script-ci ne la crée pas).
+--
+-- ⚠ Script de PREMIER déploiement : `drop table … cascade` ci-dessous EFFACE
+--   toute donnée existante. NE PAS le rejouer sur une base en service.
 
 drop table if exists public.rapro_rooms cascade;
 
@@ -18,7 +20,7 @@ create table public.rapro_rooms (
   report_date date not null,
   room        smallint not null,
   status      text not null default 'non_nettoyee'
-                check (status in ('nettoyee', 'non_nettoyee', 'refus')),
+                check (status in ('nettoyee', 'non_nettoyee', 'refus', 'noshow')),
   created_by  uuid default auth.uid(),
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now(),

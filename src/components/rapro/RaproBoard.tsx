@@ -16,6 +16,7 @@ import {
   RotateCcw,
   Scale,
   Sparkles,
+  UserX,
 } from 'lucide-react'
 
 import { useAuth } from '#/components/auth/AuthContext.tsx'
@@ -88,7 +89,7 @@ const EMPTY: ReadonlyMap<number, RoomStatus> = new Map()
 
 /** Statuts d'exception du menu contextuel (clic droit). « Nettoyée » et « Refus »
  * n'y figurent PAS : ils s'appliquent au clic gauche (bascule). */
-const ROOM_STATUS_ORDER: RoomStatus[] = ['non_nettoyee']
+const ROOM_STATUS_ORDER: RoomStatus[] = ['non_nettoyee', 'noshow']
 
 /**
  * Rapprochement de chambres — suivi ménage par chambre et par jour.
@@ -97,9 +98,10 @@ const ROOM_STATUS_ORDER: RoomStatus[] = ['non_nettoyee']
  * le nombre de chambres vendues ET le grisé des non vendues) vient du PDJ, une
  * seule et même source → tout reste synchro avec ce qu'on voit dans la grille.
  * Postulat : une chambre vendue est NETTOYÉE par défaut. Le CLIC GAUCHE bascule
- * entre nettoyée et refus (geste courant) ; le CLIC DROIT ouvre un menu pour le
- * statut « Bloquée ». L'état est persisté par (jour, chambre), en optimiste —
- * seules les exceptions sont stockées. Écriture super/admin — RLS.
+ * entre nettoyée et refus (geste courant) ; le CLIC DROIT ouvre un menu pour les
+ * statuts d'exception (Bloquée / No-show). L'état est persisté par (jour,
+ * chambre), en optimiste — seules les exceptions sont stockées. Écriture
+ * super/admin — RLS.
  */
 export function RaproBoard({ initialDate }: { initialDate?: string }) {
   const { user, role } = useAuth()
@@ -448,6 +450,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
             balance: rec.pending,
             carried: carried.size,
             refus: stats.refus,
+            noshow: stats.noshow,
           },
           comment,
           validatedAt: sheet?.validatedAt ?? null,
@@ -610,11 +613,11 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
 
       {loading ? (
         <>
-          {/* Squelette-reflet : la rangée de quatre cartes de synthèse puis la
+          {/* Squelette-reflet : la rangée de cinq cartes de synthèse puis la
               grille des étages (une colonne par étage), aux mêmes gabarits que le
               contenu réel pour ne rien décaler à l'arrivée des données. */}
           <div className="rapro-stats" aria-hidden="true">
-            {Array.from({ length: 4 }).map((_, i) => (
+            {Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="rapro-stat">
                 <Skeleton className="h-2.5 w-2/3" />
                 <div className="rapro-stat-row">
@@ -686,7 +689,14 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
           label="Refus"
           icon={Ban}
           accent="#fbbf24"
-          hint="Hors charge (client a refusé le ménage, ou rien à facturer)."
+          hint="Client a refusé le ménage."
+        />
+        <Stat
+          value={dash(stats.noshow)}
+          label="No-show"
+          icon={UserX}
+          accent="#a78bfa"
+          hint="Vendue mais client absent (hors charge)."
         />
       </div>
 

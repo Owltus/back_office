@@ -20,13 +20,17 @@ import type {
 export const RAPRO_TABLE = 'rapro_rooms'
 export const RAPRO_SHEETS_TABLE = 'rapro_sheets'
 
-/** Statuts encore valides après le retrait de 'noshow' (cf.
- * rapro_rooms_drop_noshow_qualifier.sql). */
-const KNOWN_STATUSES = new Set<RoomStatus>(['nettoyee', 'non_nettoyee', 'refus'])
+/** Statuts valides. Une valeur inconnue en base est ramenée à un statut sûr
+ * plutôt que de casser le rendu (défense ; ne devrait pas arriver). */
+const KNOWN_STATUSES = new Set<RoomStatus>([
+  'nettoyee',
+  'non_nettoyee',
+  'refus',
+  'noshow',
+])
 
 /** État d'un jour : Map chambre→statut (défaut nettoyee = absence de ligne).
- * TOLÉRANT : une valeur héritée non reconnue (ex. 'noshow' avant la migration)
- * est ramenée à 'refus' — même sens comptable — plutôt que de casser le rendu. */
+ * TOLÉRANT : une valeur non reconnue est ramenée à 'refus' (hors charge). */
 export async function fetchDay(reportDate: string): Promise<RaproDay> {
   const { data, error } = await supabase
     .from(RAPRO_TABLE)
