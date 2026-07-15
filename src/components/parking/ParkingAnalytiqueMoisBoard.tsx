@@ -35,12 +35,13 @@ export function ParkingAnalytiqueMoisBoard({
   year: number
   month: number
 }) {
-  // Toutes les réservations (une seule lecture, mise en cache et partagée avec
-  // la vue annuelle). L'agrégation par jour se fait ensuite en mémoire.
+  // MÊME clé que la vue annuelle (`['parking','analytics']`) : toutes les
+  // réservations sont lues une seule fois et partagées entre les deux vues (hit
+  // de cache instantané au passage annuel → mois, et entre mois). L'agrégation
+  // par jour est un calcul client négligeable, dérivé du cache.
   const { data: reservations = [], isPending: loading } = useQuery({
-    queryKey: ['parking', 'analytics-month', year, month],
+    queryKey: ['parking', 'analytics'],
     queryFn: fetchReservations,
-    enabled: Number.isFinite(year) && Number.isFinite(month),
   })
 
   const days = useMemo(
