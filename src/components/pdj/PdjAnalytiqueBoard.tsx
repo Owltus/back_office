@@ -11,6 +11,10 @@ import { AnalytiqueTable } from '#/components/analytique/AnalytiqueTable.tsx'
 import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
 import { YearNav } from '#/components/analytique/YearNav.tsx'
 import { KpiLineChart } from '#/components/analytique/KpiLineChart.tsx'
+import {
+  PdjStatCells,
+  PdjStatsHead,
+} from '#/components/pdj/PdjAnalytiqueParts.tsx'
 import { fetchRange, fetchServiceDates } from '#/lib/pdj/service.ts'
 import { aggregatePdjMonthly, yearsFromDates } from '#/lib/pdj/analytics.ts'
 import { fmtInt, fmtPct } from '#/lib/pdj/format.ts'
@@ -134,34 +138,7 @@ export function PdjAnalytiqueBoard() {
       </AnalytiqueCardsGrid>
 
       {/* Tableau mois par mois */}
-      <AnalytiqueTable
-        head={
-          <tr className="border-b border-border bg-muted">
-            <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">
-              Mois
-            </th>
-            <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
-              Jours
-            </th>
-            <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
-              <span className="hidden sm:inline">Occupation</span>
-              <span className="sm:hidden">Occ.</span>
-            </th>
-            <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
-              Clients
-            </th>
-            <th className="hidden px-2 py-2 text-center text-xs font-medium text-muted-foreground sm:table-cell">
-              Inclus
-            </th>
-            <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
-              Servis
-            </th>
-            <th className="hidden px-3 py-2 text-center text-xs font-medium text-muted-foreground sm:table-cell">
-              Potentiel
-            </th>
-          </tr>
-        }
-      >
+      <AnalytiqueTable head={<PdjStatsHead firstLabel="Mois" withDays />}>
         <tbody>
           {months.map((m) => {
             const hasData = m.days > 0
@@ -188,43 +165,21 @@ export function PdjAnalytiqueBoard() {
                 >
                   {MONTHS_SHORT[m.month - 1]}
                 </td>
-                {hasData ? (
-                  <>
-                    <td className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums">
-                      {fmtInt(m.days)}
-                    </td>
-                    <td className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums">
-                      {fmtPct(m.avgOccupancy)}
-                    </td>
-                    <td className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums">
-                      {fmtInt(m.guests)}
-                    </td>
-                    <td className="hidden whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums sm:table-cell">
-                      {fmtInt(m.included)}
-                    </td>
-                    <td className="whitespace-nowrap px-2 py-2 text-center text-xs font-medium tabular-nums text-foreground">
-                      {fmtInt(m.served)}
-                    </td>
-                    <td className="hidden whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums text-muted-foreground sm:table-cell">
-                      {fmtInt(m.potential)}
-                    </td>
-                  </>
-                ) : (
-                  <>
-                    <td
-                      colSpan={4}
-                      className="px-2 py-2 text-center text-xs text-muted-foreground/50"
-                    >
-                      —
-                    </td>
-                    <td className="px-2 py-2 text-center text-xs text-muted-foreground/50">
-                      —
-                    </td>
-                    <td className="hidden px-3 py-2 text-center text-xs text-muted-foreground/50 sm:table-cell">
-                      —
-                    </td>
-                  </>
-                )}
+                <PdjStatCells
+                  withDays
+                  stats={
+                    hasData
+                      ? {
+                          days: m.days,
+                          occupancy: m.avgOccupancy,
+                          guests: m.guests,
+                          included: m.included,
+                          served: m.served,
+                          potential: m.potential,
+                        }
+                      : undefined
+                  }
+                />
               </tr>
             )
           })}

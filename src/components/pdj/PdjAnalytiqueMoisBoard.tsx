@@ -11,6 +11,10 @@ import { AnalytiqueTable } from '#/components/analytique/AnalytiqueTable.tsx'
 import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
 import { AnalytiqueBackButton } from '#/components/analytique/AnalytiqueBackButton.tsx'
 import { KpiLineChart } from '#/components/analytique/KpiLineChart.tsx'
+import {
+  PdjStatCells,
+  PdjStatsHead,
+} from '#/components/pdj/PdjAnalytiqueParts.tsx'
 import { fetchRange } from '#/lib/pdj/service.ts'
 import { aggregatePdjDaily } from '#/lib/pdj/analytics.ts'
 import { fmtInt, fmtPct } from '#/lib/pdj/format.ts'
@@ -128,31 +132,7 @@ export function PdjAnalytiqueMoisBoard({
       </AnalytiqueCardsGrid>
 
       {/* Tableau jour par jour (défile en interne, en-tête collant) */}
-      <AnalytiqueTable
-        head={
-          <tr className="border-b border-border bg-muted">
-            <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">
-              Jour
-            </th>
-            <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
-              <span className="hidden sm:inline">Occupation</span>
-              <span className="sm:hidden">Occ.</span>
-            </th>
-            <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
-              Clients
-            </th>
-            <th className="hidden px-2 py-2 text-center text-xs font-medium text-muted-foreground sm:table-cell">
-              Inclus
-            </th>
-            <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
-              Servis
-            </th>
-            <th className="hidden px-3 py-2 text-center text-xs font-medium text-muted-foreground sm:table-cell">
-              Potentiel
-            </th>
-          </tr>
-        }
-      >
+      <AnalytiqueTable head={<PdjStatsHead firstLabel="Jour" />}>
         <tbody>
           {days.map((day) => {
             const s = byDay.get(day)
@@ -180,43 +160,7 @@ export function PdjAnalytiqueMoisBoard({
                     {dayName} {day}
                   </Link>
                 </td>
-                {hasData ? (
-                  <>
-                    <td className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums">
-                      {fmtPct(s.occupancy)}
-                    </td>
-                    <td className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums">
-                      {fmtInt(s.guests)}
-                    </td>
-                    <td className="hidden whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums sm:table-cell">
-                      {fmtInt(s.included)}
-                    </td>
-                    <td className="whitespace-nowrap px-2 py-2 text-center text-xs font-medium tabular-nums text-foreground">
-                      {fmtInt(s.served)}
-                    </td>
-                    <td className="hidden whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums text-muted-foreground sm:table-cell">
-                      {fmtInt(s.potential)}
-                    </td>
-                  </>
-                ) : (
-                  <>
-                    <td
-                      colSpan={3}
-                      className="px-2 py-2 text-center text-xs text-muted-foreground/50"
-                    >
-                      —
-                    </td>
-                    <td className="hidden px-2 py-2 text-center text-xs text-muted-foreground/50 sm:table-cell">
-                      —
-                    </td>
-                    <td className="px-2 py-2 text-center text-xs text-muted-foreground/50">
-                      —
-                    </td>
-                    <td className="hidden px-3 py-2 text-center text-xs text-muted-foreground/50 sm:table-cell">
-                      —
-                    </td>
-                  </>
-                )}
+                <PdjStatCells stats={s} />
               </tr>
             )
           })}
