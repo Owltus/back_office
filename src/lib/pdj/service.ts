@@ -58,19 +58,36 @@ export async function fetchDay(serviceDate: string): Promise<PdjDayRow[]> {
  * Toutes les lignes sur une plage de jours (bornes incluses), triées par date.
  * Lecture seule dédiée à la vue analytique : agrégation ensuite côté client
  * (par mois). Bornes au format 'YYYY-MM-DD'.
+ *
+ * PAGINÉ : une ligne par (jour, chambre) → une plage large (un mois, a fortiori
+ * une année) dépasse vite le plafond de 1000 lignes de l'API. Sans pagination,
+ * on ne récupérait que les 1000 premières dates (⇒ seuls les premiers mois
+ * apparaissaient dans l'analytique). On lit page par page jusqu'à une page
+ * incomplète.
  */
 export async function fetchRange(
   from: string,
   to: string,
 ): Promise<PdjDayRow[]> {
-  const { data, error } = await supabase
-    .from(PDJ_TABLE)
-    .select('*')
-    .gte('service_date', from)
-    .lte('service_date', to)
-    .order('service_date', { ascending: true })
-  if (error) throw error
-  return (data ?? []) as PdjDayRow[]
+  const PAGE = 1000
+  const all: PdjDayRow[] = []
+  let offset = 0
+  for (;;) {
+    const { data, error } = await supabase
+      .from(PDJ_TABLE)
+      .select('*')
+      .gte('service_date', from)
+      .lte('service_date', to)
+      .order('service_date', { ascending: true })
+      .order('room', { ascending: true })
+      .range(offset, offset + PAGE - 1)
+    if (error) throw error
+    const rows = (data ?? []) as PdjDayRow[]
+    all.push(...rows)
+    if (rows.length < PAGE) break
+    offset += rows.length
+  }
+  return all
 }
 
 /**
