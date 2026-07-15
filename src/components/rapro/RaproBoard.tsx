@@ -3,7 +3,7 @@ import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import { Info, LineChart, RotateCcw } from 'lucide-react'
+import { LineChart, RotateCcw } from 'lucide-react'
 
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { DatePickerButton } from '#/components/form/fields.tsx'
@@ -43,7 +43,7 @@ import { addDays, clampDay, today } from '#/lib/rapro/day.ts'
 import { printRaproSheet } from '#/lib/rapro/pdf.ts'
 import { reconcile } from '#/lib/rapro/reconcile.ts'
 import { FLOORS } from '#/lib/rapro/rooms.ts'
-import { missingSources, type MissingSource } from '#/lib/rapro/sources.ts'
+import { missingSources } from '#/lib/rapro/sources.ts'
 import {
   clearRoom,
   fetchDay,
@@ -237,14 +237,20 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   // seconde après. On attend donc la fenêtre AVANT de conclure au vide (la grille,
   // elle, n'est pas bloquée : elle se colore au fur et à mesure).
   const windowResolved =
-    raproWindow.every((q) => !q.isPending) && pdjWindow.every((q) => !q.isPending)
-  // État vide seulement si aucune occupation ce jour ET aucune reportée (fenêtre
-  // résolue).
-  const showEmptyState = noOccupancy && windowResolved && carried.size === 0
-  /* Sans la moindre donnée, aucun compteur ne veut rien dire : les six cards
-     affichent « — ». Un zéro se lirait « rien à faire », alors qu'il faut lire
-     « rien de connu » — la nuance sépare une journée réglée d'un import oublié. */
-  const dash = (v: number | string) => (showEmptyState ? '—' : v)
+    raproWindow.every((q) => !q.isPending) &&
+    pdjWindow.every((q) => !q.isPending)
+  // Aucune occupation ce jour ET aucune reportée (fenêtre résolue) : In-House
+  // n'est pas importé (ou jour sans client). On NE bloque plus l'écran — on rend
+  // une GRILLE DE SECOURS où chaque chambre est non vendue (grisée) et saisissable
+  // à la main : un pansement pour que l'hôtelier travaille malgré l'export manquant.
+  // L'affichage normal (occupation, vendues, roulement) revient dès l'import.
+  const fallbackMode = noOccupancy && windowResolved && carried.size === 0
+  /* En secours SANS la moindre saisie, aucun compteur ne veut rien dire : les
+     cards affichent « — » (rien de connu), pas un « 0 » qui se lirait « rien à
+     faire ». Dès la première chambre marquée à la main, les vrais compteurs
+     reviennent. */
+  const showDash = fallbackMode && effectiveSold.size === 0
+  const dash = (v: number | string) => (showDash ? '—' : v)
   const isDue = (room: number) => occupied.has(room) || carried.has(room)
   // Erreur réseau persistante sur un jour de la fenêtre → roulement possiblement
   // incomplet : on le signale via la bannière d'erreur (pas de sous-comptage muet).
@@ -447,8 +453,10 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   const [printBlocked, setPrintBlocked] = useState('')
   usePrintShortcut(() => {
     if (pdfBusy) return
-    if (showEmptyState) {
-      setPrintBlocked('Aucune donnée pour ce jour. Importez les exports du PMS.')
+    if (fallbackMode) {
+      setPrintBlocked(
+        'Aucune donnée pour ce jour. Importez les exports du PMS.',
+      )
       return
     }
     if (!isValidated) {
@@ -471,14 +479,14 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
      libellé dit déjà l'action, et un cadenas y ajoutait surtout une ambiguïté
      (illustre-t-il l'état courant, ou celui qu'on va atteindre ?).
 
-     Sans occupation il n'y a rien à clôturer : le bouton disparaît, comme le
-     commentaire. Clôturer un jour vide n'aurait figé que du vide, et aurait
-     surtout fait croire que le ménage du jour était traité.
+     Présent de base, y compris en mode secours (In-House manquant) : l'hôtelier
+     doit pouvoir clôturer le jour qu'il vient de saisir à la main, sans attendre
+     un import qui ne viendra peut-être pas.
 
      Le poids visuel suit l'intention, comme sur la feuille de caisse : clôturer
      est la SUITE du travail (bouton plein), réouvrir en est le RETOUR EN ARRIÈRE
      (contour vert, accordé à la pastille d'en-tête). */
-  const stateAction = !isWriter || showEmptyState ? null : !isValidated ? (
+  const stateAction = !isWriter ? null : !isValidated ? (
     // Avertissement non bloquant (D5) au survol si la balance n'est pas à zéro ;
     // le compteur visible vit dans la card « Reste à faire ».
     <Tip
@@ -513,13 +521,12 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
     <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4">
       <PageHeader
         title={title}
-        // Rien à verrouiller sans donnée, et rien à annoncer avant que
-        // l'occupation et la feuille soient chargées : la pastille se
-        // contredirait le temps d'un rendu.
+        // Rien à annoncer avant que l'occupation et la feuille soient chargées :
+        // la pastille se contredirait le temps d'un rendu. En secours, on affiche
+        // « Ouvert » de base (grille de secours exploitable, clôturable).
         badge={
           pdjRows !== undefined &&
-          sheet !== undefined &&
-          !showEmptyState && (
+          sheet !== undefined && (
             <LockBadge
               locked={isValidated}
               label={isValidated ? 'Clôturé' : 'Ouvert'}
@@ -630,199 +637,198 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
         </>
       ) : (
         <>
-      {occGap !== null && (
-        <div className="rapro-occ-alert">
-          Écart d'{Math.abs(occGap)}{' '}
-          {Math.abs(occGap) > 1 ? 'chambres' : 'chambre'} : {inHouseExclComp}{' '}
-          {inHouseExclComp > 1 ? 'occupées' : 'occupée'} cette nuit d'après le
-          rooming, mais {officialOcc} d'après le rapport comptable. Ce n'est pas une
-          gratuité — à vérifier (souvent une arrivée ou une annulation de dernière
-          minute présente dans un seul des deux rapports).
-        </div>
-      )}
+          {occGap !== null && (
+            <div className="rapro-occ-alert">
+              Écart d'{Math.abs(occGap)}{' '}
+              {Math.abs(occGap) > 1 ? 'chambres' : 'chambre'} :{' '}
+              {inHouseExclComp} {inHouseExclComp > 1 ? 'occupées' : 'occupée'}{' '}
+              cette nuit d'après le rooming, mais {officialOcc} d'après le
+              rapport comptable. Ce n'est pas une gratuité — à vérifier (souvent
+              une arrivée ou une annulation de dernière minute présente dans un
+              seul des deux rapports).
+            </div>
+          )}
 
-      <div className="rapro-stats">
-        <StatTile
-          value={dash(hasOccupancy ? effectiveSold.size : '—')}
-          label="Vendues"
-          accent="#818cf8"
-          hint="Chambres occupées à traiter aujourd'hui."
-        />
-        <StatTile
-          value={dash(stats.clean)}
-          label="Nettoyées"
-          accent="#34d399"
-          hint="Chambres nettoyées aujourd'hui (facturées)."
-        />
-        <StatTile
-          value={dash(stats.refus)}
-          label="Refus"
-          accent="#fbbf24"
-          hint="Client a refusé le ménage."
-        />
-        <StatTile
-          value={dash(stats.noshow)}
-          label="No-show"
-          accent="#a78bfa"
-          hint="Vendue mais client absent (hors charge)."
-        />
-        <StatTile
-          value={dash(stats.todo)}
-          label="Bloquées"
-          accent="#f87171"
-          hint="Chambres occupées non nettoyées (bloquées, restent dues)."
-        />
-        {/* Bloquées la veille (reportées) : carte affichée SEULEMENT s'il y en a. */}
-        {carried.size > 0 && (
-          <StatTile
-            value={carried.size}
-            label="Bloquées la veille"
-            accent="#f87171"
-            hint="Chambres bloquées un jour précédent, non encore résolues (liseré rouge)."
-          />
-        )}
-      </div>
-
-      {!showEmptyState && optionalMissing.length > 0 && (
-        <div className="rapro-occ-alert">
-          {optionalMissing.map((m) => (
-            <p key={m.file}>
-              {m.file} du {sourceDate(m.date)} non importé (onglet {m.tab}).
-              Indisponible : {m.impact}.
-            </p>
-          ))}
-        </div>
-      )}
-
-      {showEmptyState ? (
-        // `rapro-empty-card` s'étire pour occuper la hauteur laissée libre :
-        // sans occupation, la page se terminerait sinon bien plus haut que la
-        // feuille de caisse, et le bouton de clôture flotterait au milieu.
-        <div className="rapro-card rapro-empty-card">
-          <div className="rapro-empty">
-            <Info className="rapro-empty-icon" />
-            <h2 className="rapro-empty-title">
-              Aucune donnée pour le {sourceDate(selectedDate)}
-            </h2>
-            {missing.length > 0 && <MissingList items={missing} />}
-          </div>
-        </div>
-      ) : (
-        <div className={cn('rapro-floors', !canEditFields && 'is-locked')}>
-          {FLOORS.map(({ floor, rooms }) => {
-            // Bouton de rollback actif seulement si au moins une chambre de
-            // l'étage porte un statut (≠ nettoyée par défaut) à annuler.
-            const hasStatus = rooms.some((r) => statuses.has(r))
-            return (
-              <div key={floor} className="rapro-floor">
-                <div className="rapro-floor-head">
-                  <span className="rapro-floor-title">Étage {floor}</span>
-                  {canEditFields && (
-                    <button
-                      type="button"
-                      className="rapro-floor-action"
-                      onClick={() => resetFloor(rooms)}
-                      disabled={!isSuccess || !hasStatus}
-                      title="Rétablir l'état d'origine de l'étage"
-                      aria-label={`Rétablir l'état d'origine de l'étage ${floor}`}
-                    >
-                      <RotateCcw className="size-4" />
-                    </button>
-                  )}
-                </div>
-                <div className="rapro-rooms">
-                  {rooms.map((room) => {
-                    const status = statusOf(statuses, room)
-                    // Grisée seulement si NON touchée (pas de ligne) ET non vendue.
-                    // Une chambre non vendue explicitement marquée montre sa couleur.
-                    const isEmpty = !statuses.has(room) && !isDue(room)
-                    const isCarried = carried.has(room)
-                    const cls = CELL_STATES[cellState(status, isEmpty)].webClass
-                    const label = `Chambre ${room} — ${STATUS_LABEL[status]}${isEmpty ? ' — non vendue' : ''}${isCarried ? ' — bloquée la veille' : ''}`
-                    // Clic = cycle des statuts (plus de menu contextuel). Un jour
-                    // clôturé reste figé : les mutations sont gardées par
-                    // `canEditFields`, le clic n'a alors aucun effet.
-                    return (
-                      <button
-                        key={room}
-                        type="button"
-                        onClick={() => toggle(room)}
-                        disabled={!isSuccess}
-                        aria-label={label}
-                        title={label}
-                        className={cn(
-                          'rapro-room',
-                          cls,
-                          isCarried && 'rapro-room-carried',
-                        )}
-                      >
-                        {room}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
-
-      {!showEmptyState && (
-        <div className="rapro-legend">
-          {/* « Non vendue » (empty) masquée de la légende à la demande — le rendu
-              grisé des cases non vendues, lui, reste (via CELL_STATES/cellState). */}
-          {LEGEND_ORDER.filter((st) => st !== 'empty').map((st) => (
-            <span key={st} className="rapro-legend-item">
-              <span
-                className={cn('rapro-legend-dot', CELL_STATES[st].legendMod)}
+          <div className="rapro-stats">
+            <StatTile
+              value={dash(effectiveSold.size)}
+              label="Vendues"
+              accent="#818cf8"
+              hint="Chambres occupées à traiter aujourd'hui."
+            />
+            <StatTile
+              value={dash(stats.clean)}
+              label="Nettoyées"
+              accent="#34d399"
+              hint="Chambres nettoyées aujourd'hui (facturées)."
+            />
+            <StatTile
+              value={dash(stats.refus)}
+              label="Refus"
+              accent="#fbbf24"
+              hint="Client a refusé le ménage."
+            />
+            <StatTile
+              value={dash(stats.noshow)}
+              label="No-show"
+              accent="#a78bfa"
+              hint="Vendue mais client absent (hors charge)."
+            />
+            <StatTile
+              value={dash(stats.todo)}
+              label="Bloquées"
+              accent="#f87171"
+              hint="Chambres occupées non nettoyées (bloquées, restent dues)."
+            />
+            {/* Bloquées la veille (reportées) : carte affichée SEULEMENT s'il y en a. */}
+            {carried.size > 0 && (
+              <StatTile
+                value={carried.size}
+                label="Bloquées la veille"
+                accent="#f87171"
+                hint="Chambres bloquées un jour précédent, non encore résolues (liseré rouge)."
               />
-              {CELL_STATES[st].label}
-            </span>
-          ))}
-        </div>
-      )}
+            )}
+          </div>
 
-      {/* Un jour sans occupation n'a rien à commenter ni à clôturer : l'écran se
-          réduit à l'état vide, qui absorbe la place laissée libre. */}
-      {!showEmptyState && (
-      <div className="rapro-comment flex-1">
-        <h2 className="rapro-comment-title">Commentaires</h2>
-        <Textarea
-          value={comment}
-          onChange={(e) => setComment(e.target.value)}
-          onBlur={() => {
-            if (!canEditFields) return
-            // Garde le cache sheet en phase avec la valeur persistée : sinon
-            // l'effet d'hydratation ré-injecterait une valeur périmée au retour
-            // sur le jour (staleTime 60 s), faisant « disparaître » le commentaire.
-            queryClient.setQueryData<RaproSheet | null>(
-              ['rapro', 'sheet', selectedDate],
-              (prev) =>
-                prev
-                  ? { ...prev, comment }
-                  : {
-                      reportDate: selectedDate,
-                      status: 'draft',
-                      comment,
-                      validatedAt: null,
-                    },
-            )
-            saveComment(selectedDate, comment).catch(() => {})
-          }}
-          disabled={!canEditFields}
-          placeholder="Remarques du jour…"
-          // Hauteur FLEXIBLE : la zone commentaires absorbe la place restante et
-          // sert de variable d'ajustement. Quand l'alerte de contrôle d'occupation
-          // passe sur plusieurs lignes, c'est ce champ qui se réduit — le bouton de
-          // clôture ne se décale pas. `min-h-16` est un PLANCHER : le champ absorbe
-          // jusqu'à cette hauteur puis s'arrête (jamais 0, jamais invisible) ; passé
-          // ce point, c'est la page qui défile (cf. conteneur racine sans min-h-0).
-          className="min-h-16 flex-1 resize-none"
-        />
-      </div>
-      )}
+          {!fallbackMode && optionalMissing.length > 0 && (
+            <div className="rapro-occ-alert">
+              {optionalMissing.map((m) => (
+                <p key={m.file}>
+                  {m.file} du {sourceDate(m.date)} non importé (onglet {m.tab}).
+                  Indisponible : {m.impact}.
+                </p>
+              ))}
+            </div>
+          )}
 
-      {stateAction}
+          {/* Mode secours : In-House manquant → bannière d'explication au-dessus de
+          la grille (elle-même rendue toutes chambres non vendues). On nomme
+          l'export à importer pour lever le secours ; entre-temps l'hôtelier
+          saisit les statuts à la main. */}
+          {fallbackMode && (
+            <div className="rapro-occ-alert">
+              <p>
+                Rooming <strong>In-House Guests</strong> non importé pour le{' '}
+                {sourceDate(selectedDate)} : grille de secours, toutes les
+                chambres sont considérées comme non vendues. Vous pouvez saisir
+                les statuts à la main ; l'affichage normal revient dès l'import.
+              </p>
+            </div>
+          )}
+
+          <div className={cn('rapro-floors', !canEditFields && 'is-locked')}>
+            {FLOORS.map(({ floor, rooms }) => {
+              // Bouton de rollback actif seulement si au moins une chambre de
+              // l'étage porte un statut (≠ nettoyée par défaut) à annuler.
+              const hasStatus = rooms.some((r) => statuses.has(r))
+              return (
+                <div key={floor} className="rapro-floor">
+                  <div className="rapro-floor-head">
+                    <span className="rapro-floor-title">Étage {floor}</span>
+                    {canEditFields && (
+                      <button
+                        type="button"
+                        className="rapro-floor-action"
+                        onClick={() => resetFloor(rooms)}
+                        disabled={!isSuccess || !hasStatus}
+                        title="Rétablir l'état d'origine de l'étage"
+                        aria-label={`Rétablir l'état d'origine de l'étage ${floor}`}
+                      >
+                        <RotateCcw className="size-4" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="rapro-rooms">
+                    {rooms.map((room) => {
+                      const status = statusOf(statuses, room)
+                      // Grisée seulement si NON touchée (pas de ligne) ET non vendue.
+                      // Une chambre non vendue explicitement marquée montre sa couleur.
+                      const isEmpty = !statuses.has(room) && !isDue(room)
+                      const isCarried = carried.has(room)
+                      const cls =
+                        CELL_STATES[cellState(status, isEmpty)].webClass
+                      const label = `Chambre ${room} — ${STATUS_LABEL[status]}${isEmpty ? ' — non vendue' : ''}${isCarried ? ' — bloquée la veille' : ''}`
+                      // Clic = cycle des statuts (plus de menu contextuel). Un jour
+                      // clôturé reste figé : les mutations sont gardées par
+                      // `canEditFields`, le clic n'a alors aucun effet.
+                      return (
+                        <button
+                          key={room}
+                          type="button"
+                          onClick={() => toggle(room)}
+                          disabled={!isSuccess}
+                          aria-label={label}
+                          title={label}
+                          className={cn(
+                            'rapro-room',
+                            cls,
+                            isCarried && 'rapro-room-carried',
+                          )}
+                        >
+                          {room}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          <div className="rapro-legend">
+            {/* « Non vendue » (empty) masquée de la légende à la demande — le rendu
+              grisé des cases non vendues, lui, reste (via CELL_STATES/cellState). */}
+            {LEGEND_ORDER.filter((st) => st !== 'empty').map((st) => (
+              <span key={st} className="rapro-legend-item">
+                <span
+                  className={cn('rapro-legend-dot', CELL_STATES[st].legendMod)}
+                />
+                {CELL_STATES[st].label}
+              </span>
+            ))}
+          </div>
+
+          {/* Zone commentaire présente de base, y compris en mode secours :
+              l'hôtelier peut annoter le jour dès l'arrivée (ex. « In-House
+              manquant, saisie manuelle »), avant même toute saisie de statut. */}
+          <div className="rapro-comment flex-1">
+            <h2 className="rapro-comment-title">Commentaires</h2>
+            <Textarea
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              onBlur={() => {
+                if (!canEditFields) return
+                // Garde le cache sheet en phase avec la valeur persistée : sinon
+                // l'effet d'hydratation ré-injecterait une valeur périmée au retour
+                // sur le jour (staleTime 60 s), faisant « disparaître » le commentaire.
+                queryClient.setQueryData<RaproSheet | null>(
+                  ['rapro', 'sheet', selectedDate],
+                  (prev) =>
+                    prev
+                      ? { ...prev, comment }
+                      : {
+                          reportDate: selectedDate,
+                          status: 'draft',
+                          comment,
+                          validatedAt: null,
+                        },
+                )
+                saveComment(selectedDate, comment).catch(() => {})
+              }}
+              disabled={!canEditFields}
+              placeholder="Remarques du jour…"
+              // Hauteur FLEXIBLE : la zone commentaires absorbe la place restante et
+              // sert de variable d'ajustement. Quand l'alerte de contrôle d'occupation
+              // passe sur plusieurs lignes, c'est ce champ qui se réduit — le bouton de
+              // clôture ne se décale pas. `min-h-16` est un PLANCHER : le champ absorbe
+              // jusqu'à cette hauteur puis s'arrête (jamais 0, jamais invisible) ; passé
+              // ce point, c'est la page qui défile (cf. conteneur racine sans min-h-0).
+              className="min-h-16 flex-1 resize-none"
+            />
+          </div>
+
+          {stateAction}
         </>
       )}
 
@@ -839,22 +845,4 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
 function sourceDate(date: string): string {
   const d = parseDateStr(date)
   return d ? format(d, 'd MMMM yyyy', { locale: fr }) : date
-}
-
-/** Exports PMS à importer pour débloquer la page (cf. `missingSources`), en une
- * phrase. Ni date — celle du titre suffit —, ni onglet, ni encadré : nommer les
- * fichiers suffit à savoir quoi faire. */
-function MissingList({ items }: { items: MissingSource[] }) {
-  return (
-    <p className="rapro-missing">
-      Importez{' '}
-      {items.map((m, i) => (
-        <span key={m.file}>
-          {i > 0 && (i === items.length - 1 ? ' et ' : ', ')}
-          <strong>{m.file}</strong>
-        </span>
-      ))}
-      .
-    </p>
-  )
 }
