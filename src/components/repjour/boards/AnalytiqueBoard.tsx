@@ -68,12 +68,16 @@ export function AnalytiqueBoard() {
     }
   }, [years, year])
 
-  // Agrégation annuelle + budget de l'année. Grâce au cache, revenir sur une
-  // année déjà consultée est instantané (plus de refetch systématique).
+  // Agrégation annuelle + budget de l'année. Le cache affiche instantanément,
+  // mais on REFETCH à chaque ouverture (`refetchOnMount: 'always'`) : après un
+  // import de rapports (fait ailleurs, sur le dashboard), la vue annuelle doit
+  // refléter les nouveaux mois sans dépendre d'une invalidation qui aurait pu ne
+  // pas la couvrir. Rafraîchissement en arrière-plan, sans écran de chargement.
   const { data, isPending: loading } = useQuery({
     queryKey: ['repjour', 'year-analytics', year],
     queryFn: () =>
       Promise.all([fetchYearAnalytics(year), fetchYearBudget(year)]),
+    refetchOnMount: 'always',
   })
   const analytics = data?.[0] ?? []
   const budgets = data?.[1] ?? []

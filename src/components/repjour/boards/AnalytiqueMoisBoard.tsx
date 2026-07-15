@@ -56,6 +56,8 @@ export function AnalytiqueMoisBoard({
         fetchBudget(year, month),
       ]),
     enabled: Number.isFinite(year) && Number.isFinite(month),
+    // Refetch à l'ouverture : reflète un import récent sans dépendre du cache.
+    refetchOnMount: 'always',
   })
   const rows = data?.[0] ?? []
   const budget = data?.[1] ?? null
