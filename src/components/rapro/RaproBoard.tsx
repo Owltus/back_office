@@ -337,22 +337,19 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
     }
   }
 
-  // Clic sur une chambre = cycle des couleurs. Vendue : nettoyée (défaut) → refus
-  // → no-show → bloquée → nettoyée (le retour à nettoyée efface la ligne). Non
-  // vendue : rotation grise → nettoyée → refus → grise (les exceptions n'ont pas
-  // de sens sur une chambre non occupée).
+  // Clic sur une chambre = cycle des couleurs, IDENTIQUE pour les vendues et les
+  // non vendues : Nettoyée → Refus → No-show → Bloquée → défaut. Le « défaut »
+  // efface la ligne — vendue : redevient Nettoyée (verte) ; non vendue : redevient
+  // grisée. Cas particulier : une non vendue SANS ligne part du gris, son premier
+  // clic pose Nettoyée (sinon `nextStatus(nettoyee)` sauterait directement à Refus).
   function toggle(room: number) {
-    if (isDue(room)) {
-      const next = nextStatus(statusOf(statuses, room))
-      return next === 'nettoyee'
-        ? clearRooms([room])
-        : applyStatuses([[room, next]])
+    if (!isDue(room) && !statuses.has(room)) {
+      return applyStatuses([[room, 'nettoyee']])
     }
-    if (!statuses.has(room)) return applyStatuses([[room, 'nettoyee']])
-    if (statusOf(statuses, room) === 'nettoyee') {
-      return applyStatuses([[room, 'refus']])
-    }
-    return clearRooms([room])
+    const next = nextStatus(statusOf(statuses, room))
+    return next === 'nettoyee'
+      ? clearRooms([room])
+      : applyStatuses([[room, next]])
   }
 
   // Bouton d'en-tête d'étage : ROLLBACK à l'état d'origine. Toute chambre de
