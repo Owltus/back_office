@@ -1,6 +1,6 @@
 import { computeEcarts, fundEcart } from '#/lib/caisse/calc.ts'
-import { PAY_KEYS } from '#/lib/caisse/constants.ts'
-import type { CaisseSheet, EcartKey } from '#/lib/caisse/types.ts'
+import { ECART_KEYS } from '#/lib/caisse/constants.ts'
+import type { CaisseSheet } from '#/lib/caisse/types.ts'
 
 /*
  * Agrégation analytique des feuilles de caisse (métier pur, sans React).
@@ -16,9 +16,6 @@ import type { CaisseSheet, EcartKey } from '#/lib/caisse/types.ts'
  * (comptage en cours, écarts non figés) qui fausseraient les cumuls ; on l'ignore
  * tant qu'il n'est pas clôturé.
  */
-
-/** Colonnes d'écart agrégées (paiements + web). */
-const ECART_COLS: ReadonlyArray<EcartKey> = [...PAY_KEYS, 'web']
 
 /** Synthèse d'un mois (indices 1..12). */
 export interface CaisseMonthStats {
@@ -80,7 +77,7 @@ export function aggregateCaisseMonthly(
     t.sheets += 1
 
     const ecarts = computeEcarts(s)
-    for (const c of ECART_COLS) t.ecartTotal += Math.abs(ecarts[c])
+    for (const c of ECART_KEYS) t.ecartTotal += Math.abs(ecarts[c])
     t.fundEcart += fundEcart(s)
 
     t.cash += s.caisse.cash
@@ -145,7 +142,7 @@ export function aggregateCaisseDaily(
     t.sheets += 1
 
     const ecarts = computeEcarts(s)
-    for (const c of ECART_COLS) t.ecartTotal += Math.abs(ecarts[c])
+    for (const c of ECART_KEYS) t.ecartTotal += Math.abs(ecarts[c])
     t.fundEcart += fundEcart(s)
 
     t.encaisse += s.caisse.cash + s.caisse.cb + s.caisse.cvac + s.caisse.adyen

@@ -17,10 +17,10 @@ import { computeEcarts, fundEcart, fundTotal } from '#/lib/caisse/calc.ts'
 import {
   DENOMINATIONS,
   ECART_LABELS,
+  EPSILON,
   FUND_TARGET,
-  PAY_KEYS,
   SHIFT_LABELS,
-  isWebRelevant,
+  paymentColumns,
 } from '#/lib/caisse/constants.ts'
 import { fmtEcart, fmtEur, fmtEurInt } from '#/lib/caisse/format.ts'
 import type { CaisseSheetInput, DenomKey, EcartKey } from '#/lib/caisse/types.ts'
@@ -173,7 +173,6 @@ const LEFT = 15
 const RIGHT = 195
 const CENTER = 105
 const CONTENT_W = RIGHT - LEFT
-const EPS = 0.005
 
 /** Montant d'une source (StayNTouch / Lightspeed / Caisse) pour un mode donné. */
 function sourceAmount(
@@ -212,9 +211,7 @@ function renderCaisseDocument(
   y += 9
 
   // --- Tableau des montants / écarts ---------------------------------------
-  const modes: EcartKey[] = isWebRelevant(form.shift)
-    ? [...PAY_KEYS, 'web']
-    : [...PAY_KEYS]
+  const modes = paymentColumns(form.shift)
   const ecarts = computeEcarts(form)
   const amountsLeft = LEFT + 32
   const colW = (RIGHT - amountsLeft) / modes.length
@@ -254,7 +251,7 @@ function renderCaisseDocument(
   pdf.text('ÉCARTS', LEFT, y)
   modes.forEach((m, i) => {
     const v = ecarts[m]
-    setBalanceColor(pdf, Math.abs(v) < EPS)
+    setBalanceColor(pdf, Math.abs(v) < EPSILON)
     pdf.text(fmtEcart(v), colCenter(i), y, { align: 'center' })
   })
   pdf.setTextColor(26)
@@ -310,7 +307,7 @@ function renderCaisseDocument(
   pdf.setFont('helvetica', 'normal').setFontSize(9).setTextColor(110)
   pdf.text(`Fond de caisse ${fmtEurInt(FUND_TARGET)}`, LEFT, y)
   pdf.setFont('helvetica', 'bold')
-  setBalanceColor(pdf, Math.abs(fe) < EPS)
+  setBalanceColor(pdf, Math.abs(fe) < EPSILON)
   pdf.text(`${fmtEur(total)} (${fmtEcart(fe)})`, RIGHT, y, { align: 'right' })
   pdf.setTextColor(26)
   y += 9

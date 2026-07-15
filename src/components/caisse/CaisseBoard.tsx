@@ -47,11 +47,10 @@ import {
   ECART_LABELS,
   EPSILON,
   FUND_TARGET,
-  PAY_KEYS,
   SHIFTS,
   SHIFT_LABELS,
   emptyCounts,
-  isWebRelevant,
+  paymentColumns,
 } from '#/lib/caisse/constants.ts'
 import {
   canEditSheet,
@@ -308,7 +307,6 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
   // verrouillée (valeurs figées) pour tous, admin compris — il faut la réouvrir
   // pour la modifier.
   const canEditFields = editable && !isValidated
-  const showWeb = isWebRelevant(form.shift)
 
   const ecarts = useMemo(() => computeEcarts(form), [form])
   const total = fundTotal(form)
@@ -432,7 +430,7 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
   const titleDate = longDate.charAt(0).toUpperCase() + longDate.slice(1)
 
   // Colonnes du tableau des paiements (web au matin et au soir, pas la nuit).
-  const cols: EcartKey[] = showWeb ? [...PAY_KEYS, 'web'] : [...PAY_KEYS]
+  const cols = paymentColumns(form.shift)
 
   const setSnt = (k: keyof CaisseSheetInput['snt'], v: number) =>
     setForm((f) => ({ ...f, snt: { ...f.snt, [k]: v } }))

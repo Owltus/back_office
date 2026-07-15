@@ -67,7 +67,18 @@ export const ECART_LABELS: Record<EcartKey, string> = {
 /** Modes de paiement communs (hors web). */
 export const PAY_KEYS: ReadonlyArray<PayKey> = ['cash', 'cb', 'cvac']
 
+/** Toutes les colonnes d'écart (paiements + web). Base de l'agrégation analytique
+ * (tous shifts confondus) ; l'UI et le PDF en prennent le sous-ensemble du shift
+ * via `paymentColumns`. */
+export const ECART_KEYS: ReadonlyArray<EcartKey> = [...PAY_KEYS, 'web']
+
 /** CB WEB (StayNTouch) / ADYEN (caisse) concernent les shifts du matin ET du soir
  * (pas la nuit). Source unique de la règle : l'UI et le PDF s'y réfèrent. */
 export const isWebRelevant = (shift: Shift): boolean =>
   shift === 'matin' || shift === 'soir'
+
+/** Colonnes de paiement affichées pour un shift : web ajouté matin et soir, pas
+ * la nuit. Source unique de la composition — board et PDF s'y réfèrent au lieu de
+ * recomposer `[...PAY_KEYS, 'web']` chacun de leur côté. */
+export const paymentColumns = (shift: Shift): EcartKey[] =>
+  isWebRelevant(shift) ? [...ECART_KEYS] : [...PAY_KEYS]
