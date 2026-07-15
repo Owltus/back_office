@@ -126,24 +126,6 @@
   display: none;
 }
 
-/* Compteur de clients : badge à l'écran (les cases à cocher sont pour l'impression) */
-.pdj-count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 1.4rem;
-  height: 1.4rem;
-  padding: 0 0.4rem;
-  font-size: 0.72rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: var(--muted-foreground);
-  background: var(--secondary);
-  border-radius: 9999px;
-}
-.pdj-count:empty {
-  display: none;
-}
 .pdj-checkboxes {
   display: none;
 }
@@ -317,10 +299,7 @@
     height: 16px;
   }
 
-  /* Cases à cocher visibles, compteur masqué */
-  .pdj-count {
-    display: none !important;
-  }
+  /* Cases à cocher visibles à l'impression */
   .pdj-checkboxes {
     display: inline-flex;
     gap: 5px;

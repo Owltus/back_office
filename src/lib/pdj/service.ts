@@ -1,5 +1,5 @@
 import { supabase } from '#/lib/supabase.ts'
-import type { DbPdjRow, Guest } from '#/lib/pdj/csv.ts'
+import type { DbPdjRow } from '#/lib/pdj/csv.ts'
 
 /*
  * Service d'accès Supabase pour les petits-déjeuners (table `pdj_breakfasts`).
@@ -19,20 +19,6 @@ export interface PdjDayRow extends DbPdjRow {
   served: boolean
 }
 
-/** DB → modèle d'affichage du board. Nom purgé (null) → tiret. */
-export function toGuest(row: PdjDayRow): Guest {
-  return {
-    room: row.room,
-    status: row.status,
-    guestName: row.guest_name ?? '—',
-    vip: row.vip,
-    guests: row.guests,
-    breakfastsIncluded: row.breakfasts_included,
-    stayCount: row.stay_count,
-  }
-}
-
-/** Jours de service disponibles, du plus récent au plus ancien (distinct). */
 /** Dates de service DISTINCTES (années dispo de l'analytique, sélecteur de jour
  * du board). PAGINÉ : une ligne par (jour, chambre) → non paginé, l'API tronquait
  * à 1000 room-jours (≈ les 20 derniers jours), masquant les dates/années plus

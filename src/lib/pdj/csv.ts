@@ -13,22 +13,9 @@
  *   - PDJ inclus ⟺ la colonne `Addons` contient « PDJ » (insensible à la casse) ;
  *   - nb de PDJ inclus = 1 si tarif « BB1PAX », sinon adultes + enfants.
  *
- * Deux producteurs partagent le même parsing (`parseGuestRows`) :
- *   - `processCsv` → `GuestMap` (affichage live historique) ;
- *   - `csvToDbRows` → lignes DB datées (persistance Supabase, RGPD).
+ * Le parsing (`parseGuestRows`) alimente `csvToDbRows` → lignes DB datées
+ * (persistance Supabase, RGPD).
  * ------------------------------------------------------------------------ */
-
-export interface Guest {
-  room: number
-  status: string
-  guestName: string
-  vip: boolean
-  guests: number // adultes + enfants (bébés exclus côté PMS)
-  breakfastsIncluded: number
-  stayCount: number
-}
-
-export type GuestMap = Record<number, Guest>
 
 // 80 chambres réparties sur 6 étages (les chambres vides restent affichées).
 // Inventaire remonté dans un module partagé (réutilisé par le Rapprochement).
@@ -144,8 +131,7 @@ export function parseGuestRows(
   // Robustesse aux exports PMS/Windows : on retire un éventuel BOM en tête (sinon
   // il se colle au premier en-tête « Room » et fait échouer la détection des
   // colonnes → 0 ligne, faux problème « fichier invalide »).
-  const clean =
-    content.charCodeAt(0) === 0xfeff ? content.slice(1) : content
+  const clean = content.charCodeAt(0) === 0xfeff ? content.slice(1) : content
   const separator = clean.split('\n')[0].includes(';') ? ';' : ','
   const lines = clean.split('\n').filter((l) => l.trim())
   // En-têtes normalisés : `trim()` retire les espaces, le `\r` de fin de ligne
@@ -272,23 +258,6 @@ export function parseGuestRows(
   }
 
   return result
-}
-
-/** Vue par chambre pour l'affichage live (comportement historique conservé). */
-export function processCsv(content: string): GuestMap {
-  const guests: GuestMap = {}
-  for (const r of parseGuestRows(content)) {
-    guests[r.room] = {
-      room: r.room,
-      status: r.status,
-      guestName: r.guestName || 'Non renseigné',
-      vip: r.vip,
-      guests: r.guests,
-      breakfastsIncluded: r.breakfastsIncluded,
-      stayCount: r.stayCount,
-    }
-  }
-  return guests
 }
 
 /** Ligne DB écrite à l'import (snake_case). Sans consommation ni id/timestamps. */
