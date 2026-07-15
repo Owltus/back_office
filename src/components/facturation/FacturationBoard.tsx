@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
-import { AlertTriangle, FileText, Loader2, UploadCloud } from 'lucide-react'
+import { AlertTriangle, FileText, FileUp, Loader2 } from 'lucide-react'
 
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
 import { InvoiceList } from '#/components/facturation/InvoiceList.tsx'
@@ -7,6 +7,7 @@ import { InvoicePanel } from '#/components/facturation/InvoicePanel.tsx'
 import { StampPreview } from '#/components/facturation/StampPreview.tsx'
 import { detect } from '#/lib/facturation/detect.ts'
 import { budgetLabel } from '#/lib/facturation/constants.ts'
+import { cn } from '#/lib/utils.ts'
 import type {
   Detection,
   ExtractMethod,
@@ -167,16 +168,7 @@ export function FacturationBoard() {
     })
   }, [])
 
-  // --- Dépôt au niveau de la page (provisoire : déplacé en colonne gauche à l'étape 2)
-  const onDragOver = (e: React.DragEvent) => {
-    e.preventDefault()
-    setDragging(true)
-  }
-  const onDragLeave = (e: React.DragEvent) => {
-    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
-      setDragging(false)
-    }
-  }
+  // Dépôt limité à la dropzone de la colonne gauche (style PDJ).
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault()
     setDragging(false)
@@ -187,12 +179,7 @@ export function FacturationBoard() {
 
   return (
     <PageContainer fillHeight>
-      <div
-        className="relative flex min-h-0 w-full min-w-0 flex-1 flex-col gap-4 lg:flex-row lg:gap-6"
-        onDragOver={onDragOver}
-        onDragLeave={onDragLeave}
-        onDrop={onDrop}
-      >
+      <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-4 lg:flex-row lg:gap-6">
         <input
           ref={inputRef}
           type="file"
@@ -205,8 +192,40 @@ export function FacturationBoard() {
           }}
         />
 
-        {/* COLONNE GAUCHE : file des factures (dropzone ajoutée à l'étape 2) */}
+        {/* COLONNE GAUCHE : dropzone (style PDJ) + file des factures */}
         <aside className="flex min-h-0 w-full shrink-0 flex-col gap-4 rounded-xl border border-border bg-card p-4 lg:max-h-full lg:w-80 lg:overflow-y-auto">
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => inputRef.current?.click()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') inputRef.current?.click()
+            }}
+            onDragOver={(e) => {
+              e.preventDefault()
+              setDragging(true)
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={onDrop}
+            className={cn(
+              'empty-canvas flex shrink-0 cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border p-6 text-center outline-none transition-colors',
+              'hover:border-primary/60 hover:bg-secondary/30 focus-visible:ring-2 focus-visible:ring-ring',
+              dragging && 'border-primary bg-secondary/40',
+              records.length ? 'min-h-[130px]' : 'min-h-[260px]',
+            )}
+          >
+            <div className="rounded-full bg-secondary p-4">
+              <FileUp className="size-8 text-muted-foreground" />
+            </div>
+            <div className="text-base font-medium">
+              Glissez vos factures PDF ici
+            </div>
+            <div className="text-sm text-muted-foreground">
+              un ou plusieurs .pdf — scan ou PDF natif, rien ne quitte votre
+              navigateur
+            </div>
+          </div>
+
           <InvoiceList
             records={records}
             selectedId={selectedId}
@@ -214,11 +233,6 @@ export function FacturationBoard() {
             onRemove={removeRecord}
             className="flex-col"
           />
-          {records.length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              Déposez des factures PDF pour commencer.
-            </p>
-          )}
         </aside>
 
         {/* CENTRE : grand aperçu + tampon */}
@@ -257,18 +271,6 @@ export function FacturationBoard() {
             </p>
           )}
         </aside>
-
-        {/* Voile de dépôt (provisoire, retiré à l'étape 2) */}
-        {dragging && (
-          <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-xl border-2 border-dashed border-primary bg-primary/10 backdrop-blur-sm">
-            <div className="flex flex-col items-center gap-2 text-primary">
-              <UploadCloud className="size-10" />
-              <span className="text-base font-medium">
-                Déposez vos factures PDF
-              </span>
-            </div>
-          </div>
-        )}
       </div>
     </PageContainer>
   )
