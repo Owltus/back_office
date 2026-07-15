@@ -68,11 +68,10 @@ const EMPTY: ReadonlyMap<number, RoomStatus> = new Map()
  * Cards de synthèse (style PDJ) + grille étages → chambres. L'occupation (donc
  * le nombre de chambres vendues ET le grisé des non vendues) vient du PDJ, une
  * seule et même source → tout reste synchro avec ce qu'on voit dans la grille.
- * Postulat : une chambre vendue est NETTOYÉE par défaut. Le CLIC GAUCHE bascule
- * entre nettoyée et refus (geste courant) ; le CLIC DROIT ouvre un menu pour les
- * statuts d'exception (Bloquée / No-show). L'état est persisté par (jour,
- * chambre), en optimiste — seules les exceptions sont stockées. Écriture
- * super/admin — RLS.
+ * Postulat : une chambre vendue est NETTOYÉE par défaut. Un CLIC fait défiler le
+ * cycle des statuts (nettoyée → refus → no-show → bloquée → défaut). L'état est
+ * persisté par (jour, chambre), en optimiste — seules les exceptions sont
+ * stockées. Écriture super/admin — RLS.
  */
 export function RaproBoard({ initialDate }: { initialDate?: string }) {
   const { user, role } = useAuth()
