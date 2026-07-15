@@ -27,7 +27,7 @@ import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { DatePickerButton } from '#/components/form/fields.tsx'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
-import { cn } from '#/lib/utils.ts'
+import { capitalize, cn } from '#/lib/utils.ts'
 import { errorMessage } from '#/lib/errors.ts'
 import { printWithTitle } from '#/lib/print.ts'
 import { ALL_ROOMS, localDateStr, mergeCsvFiles } from '#/lib/pdj/csv.ts'
@@ -178,12 +178,15 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
     }
   }, [byRoom])
 
-  const displayDate = selectedDate
-    ? new Date(selectedDate + 'T00:00:00')
-    : new Date()
-  const dateLabel = fmtDate.format(displayDate)
-  const longDate = fmtTitle.format(displayDate)
-  const titleDate = longDate.charAt(0).toUpperCase() + longDate.slice(1)
+  // Libellés datés mémoïsés sur la seule date : deux formatages Intl (coûteux)
+  // qui, sinon, se rejouaient à chaque re-render (dont chaque clic « servi »).
+  const { dateLabel, titleDate } = useMemo(() => {
+    const d = selectedDate ? new Date(selectedDate + 'T00:00:00') : new Date()
+    return {
+      dateLabel: fmtDate.format(d),
+      titleDate: capitalize(fmtTitle.format(d)),
+    }
+  }, [selectedDate])
 
   // Jours parcourables : les jours réellement importés PLUS le jour courant
   // (toujours présent, même sans données, pour pouvoir revenir sur « aujourd'hui »
@@ -335,7 +338,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
   }
 
   function handlePrint() {
-    const d = displayDate
+    const d = selectedDate ? new Date(selectedDate + 'T00:00:00') : new Date()
     const dd = String(d.getDate()).padStart(2, '0')
     const mm = String(d.getMonth() + 1).padStart(2, '0')
     printWithTitle(`Breakfast_${dd}-${mm}-${d.getFullYear()}`)
@@ -408,78 +411,78 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
       <PageHeader
         title={titleDate}
         actions={
-            <>
-              {/* Groupe « suppression » (ADMIN uniquement), isolé et à gauche :
+          <>
+            {/* Groupe « suppression » (ADMIN uniquement), isolé et à gauche :
                   supprime les données du seul jour affiché. Bouton outline, icône
                   rouge (pas de fond plein). Présent seulement s'il y a des données. */}
-              {isAdmin && hasData && (
-                <ButtonGroup>
-                  <Tip label="Supprimer les données de ce jour">
-                    <Button
-                      variant="outline"
-                      size="icon-sm"
-                      onClick={() => setConfirmDelete(true)}
-                      aria-label="Supprimer les données de ce jour"
-                      className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                    >
-                      <Trash2 />
-                    </Button>
-                  </Tip>
-                </ButtonGroup>
-              )}
-              {/* Groupe « actions de page » : analytique + import + impression. */}
+            {isAdmin && hasData && (
               <ButtonGroup>
-                <Tip label="Vue analytique">
-                  <Button asChild variant="outline" size="icon-sm">
-                    <Link to="/pdj/analytique" aria-label="Vue analytique">
-                      <LineChart />
-                    </Link>
+                <Tip label="Supprimer les données de ce jour">
+                  <Button
+                    variant="outline"
+                    size="icon-sm"
+                    onClick={() => setConfirmDelete(true)}
+                    aria-label="Supprimer les données de ce jour"
+                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  >
+                    <Trash2 />
                   </Button>
                 </Tip>
-                {canEdit && (
-                  <Tip label="Importer un CSV In-House Guests">
-                    <Button
-                      variant="outline"
-                      size="icon-sm"
-                      onClick={() => inputRef.current?.click()}
-                      aria-label="Importer un CSV"
-                    >
-                      <FileUp />
-                    </Button>
-                  </Tip>
-                )}
-                <PrintButton
-                  onClick={handlePrint}
-                  iconOnly
-                  disabled={!hasData}
-                  tipLabel={
-                    hasData ? 'Imprimer / PDF' : 'Aucune donnée à imprimer'
-                  }
-                />
               </ButtonGroup>
-              {/* Groupe « navigation temporelle », collé au bord droit. */}
-              {canNavigate && (
-                <StepNav
-                  onPrev={gotoOlder}
-                  onNext={gotoNewer}
-                  prevLabel="Jour précédent"
-                  nextLabel="Jour suivant"
-                  prevDisabled={dateIdx < 0 || dateIdx >= navDates.length - 1}
-                  nextDisabled={dateIdx <= 0}
-                >
-                  <DatePickerButton
-                    value={selectedDate}
-                    onChange={selectNearestDate}
-                    ariaLabel="Choisir un jour"
-                    max={today}
-                    enabledDates={navDates}
-                    todayValue={today}
-                  />
-                </StepNav>
+            )}
+            {/* Groupe « actions de page » : analytique + import + impression. */}
+            <ButtonGroup>
+              <Tip label="Vue analytique">
+                <Button asChild variant="outline" size="icon-sm">
+                  <Link to="/pdj/analytique" aria-label="Vue analytique">
+                    <LineChart />
+                  </Link>
+                </Button>
+              </Tip>
+              {canEdit && (
+                <Tip label="Importer un CSV In-House Guests">
+                  <Button
+                    variant="outline"
+                    size="icon-sm"
+                    onClick={() => inputRef.current?.click()}
+                    aria-label="Importer un CSV"
+                  >
+                    <FileUp />
+                  </Button>
+                </Tip>
               )}
-            </>
-          }
-        />
+              <PrintButton
+                onClick={handlePrint}
+                iconOnly
+                disabled={!hasData}
+                tipLabel={
+                  hasData ? 'Imprimer / PDF' : 'Aucune donnée à imprimer'
+                }
+              />
+            </ButtonGroup>
+            {/* Groupe « navigation temporelle », collé au bord droit. */}
+            {canNavigate && (
+              <StepNav
+                onPrev={gotoOlder}
+                onNext={gotoNewer}
+                prevLabel="Jour précédent"
+                nextLabel="Jour suivant"
+                prevDisabled={dateIdx < 0 || dateIdx >= navDates.length - 1}
+                nextDisabled={dateIdx <= 0}
+              >
+                <DatePickerButton
+                  value={selectedDate}
+                  onChange={selectNearestDate}
+                  ariaLabel="Choisir un jour"
+                  max={today}
+                  enabledDates={navDates}
+                  todayValue={today}
+                />
+              </StepNav>
+            )}
+          </>
+        }
+      />
 
       {/* Un seul gate bascule le corps : squelette pendant le fetch (jamais la
           dropzone), contenu si données, sinon l'EmptyCanvas (vide réel). */}
@@ -539,11 +542,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                 label="Chambres occupées"
                 accent="#818cf8"
               />
-              <StatTile
-                value={stats.guests}
-                label="Clients"
-                accent="#38bdf8"
-              />
+              <StatTile value={stats.guests} label="Clients" accent="#38bdf8" />
               <StatTile
                 value={stats.breakfasts}
                 label="PDJ inclus"

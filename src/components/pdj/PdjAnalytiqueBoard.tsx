@@ -13,6 +13,7 @@ import { YearNav } from '#/components/analytique/YearNav.tsx'
 import { KpiLineChart } from '#/components/analytique/KpiLineChart.tsx'
 import { fetchRange, fetchServiceDates } from '#/lib/pdj/service.ts'
 import { aggregatePdjMonthly, yearsFromDates } from '#/lib/pdj/analytics.ts'
+import { fmtInt, fmtPct } from '#/lib/pdj/format.ts'
 
 /*
  * Vue analytique PDJ — gabarit calqué sur repjour/AnalytiqueBoard.
@@ -40,10 +41,6 @@ const MONTHS_SHORT = [
   'Nov',
   'Déc',
 ]
-
-const nf0 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 })
-const fmtInt = (n: number) => nf0.format(n)
-const fmtPct = (n: number) => `${n.toFixed(1).replace('.', ',')} %`
 
 export function PdjAnalytiqueBoard() {
   const navigate = useNavigate()
@@ -81,9 +78,7 @@ export function PdjAnalytiqueBoard() {
       totalServed: months.reduce((s, m) => s + m.served, 0),
       totalIncluded: months.reduce((s, m) => s + m.included, 0),
       avgOccupancy:
-        count > 0
-          ? active.reduce((s, m) => s + m.avgOccupancy, 0) / count
-          : 0,
+        count > 0 ? active.reduce((s, m) => s + m.avgOccupancy, 0) / count : 0,
     }
   }, [months])
 
@@ -134,7 +129,9 @@ export function PdjAnalytiqueBoard() {
         <StatCard
           label="Potentiel non inclus"
           accent="#fbbf24"
-          value={fmtInt(Math.max(0, summary.totalGuests - summary.totalIncluded))}
+          value={fmtInt(
+            Math.max(0, summary.totalGuests - summary.totalIncluded),
+          )}
         />
       </AnalytiqueCardsGrid>
 

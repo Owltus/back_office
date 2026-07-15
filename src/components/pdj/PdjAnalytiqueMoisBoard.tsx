@@ -13,6 +13,8 @@ import { AnalytiqueBackButton } from '#/components/analytique/AnalytiqueBackButt
 import { KpiLineChart } from '#/components/analytique/KpiLineChart.tsx'
 import { fetchRange } from '#/lib/pdj/service.ts'
 import { aggregatePdjDaily } from '#/lib/pdj/analytics.ts'
+import { fmtInt, fmtPct } from '#/lib/pdj/format.ts'
+import { MONTHS_LABELS } from '#/lib/repjour/constants.ts'
 
 /*
  * Détail analytique PDJ d'un mois, jour par jour — calqué sur le gabarit
@@ -25,26 +27,7 @@ import { aggregatePdjDaily } from '#/lib/pdj/analytics.ts'
  * — uniquement des `select`.
  */
 
-const MONTHS_LABELS = [
-  'Janvier',
-  'Février',
-  'Mars',
-  'Avril',
-  'Mai',
-  'Juin',
-  'Juillet',
-  'Août',
-  'Septembre',
-  'Octobre',
-  'Novembre',
-  'Décembre',
-]
-
 const DAY_NAMES_SHORT = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam']
-
-const nf0 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 })
-const fmtInt = (n: number) => nf0.format(n)
-const fmtPct = (n: number) => `${n.toFixed(1).replace('.', ',')} %`
 
 export function PdjAnalytiqueMoisBoard({
   year,
@@ -116,7 +99,11 @@ export function PdjAnalytiqueMoisBoard({
       title={`${monthLabel} ${year}`}
       actions={<AnalytiqueBackButton />}
       loading={loading}
-      skeleton={{ cols: 5, charts: 2, rows: new Date(year, month, 0).getDate() }}
+      skeleton={{
+        cols: 5,
+        charts: 2,
+        rows: new Date(year, month, 0).getDate(),
+      }}
     >
       {/* Synthèse du mois */}
       <AnalytiqueCardsGrid>
