@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { format } from 'date-fns'
@@ -50,10 +50,12 @@ export function RaproMonthlyBoard({
   })
   const monthLabel = rawLabel.charAt(0).toUpperCase() + rawLabel.slice(1)
 
-  const chartData = useMemo(
-    () => rows.map((r) => ({ jour: String(r.day), nettoyee: r.nettoyee })),
-    [rows],
-  )
+  // Recalcul direct : `rows` est reconstruit à chaque render (monthlyRows), un
+  // useMemo sur `[rows]` n'aurait jamais mémoïsé.
+  const chartData = rows.map((r) => ({
+    jour: String(r.day),
+    nettoyee: r.nettoyee,
+  }))
 
   const [busy, setBusy] = useState(false)
   async function exportPdf() {

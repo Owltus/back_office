@@ -102,21 +102,18 @@ export function RaproAnalytiqueBoard() {
   const isFutureMonth = (m: number) =>
     year > currentYear || (year === currentYear && m > currentMonth)
 
-  const chartData = useMemo(
-    () =>
-      MONTHS.map((m, i) => {
-        const t = totals[i]
-        const future = isFutureMonth(m)
-        return {
-          mois: MONTHS_SHORT[m - 1],
-          nettoyee: future ? null : t.nettoyee,
-          refus: future ? null : t.refus,
-          noshow: future ? null : t.noshow,
-        }
-      }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [totals, year],
-  )
+  // Séries des graphiques. Recalcul direct (12 points) : `totals` est reconstruit
+  // à chaque render, un useMemo n'aurait rien mémoïsé (deps toujours neuves).
+  const chartData = MONTHS.map((m, i) => {
+    const t = totals[i]
+    const future = isFutureMonth(m)
+    return {
+      mois: MONTHS_SHORT[m - 1],
+      nettoyee: future ? null : t.nettoyee,
+      refus: future ? null : t.refus,
+      noshow: future ? null : t.noshow,
+    }
+  })
 
   return (
     <AnalytiqueShell
