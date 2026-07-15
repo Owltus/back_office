@@ -181,7 +181,12 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   // Le Comparison ne bloque rien : il se signale à côté de la grille, pas à sa place.
   const optionalMissing = missing.filter((m) => !m.required)
 
-  const stats = countStats(statuses, occupied)
+  // « Vendues » EFFECTIVES : l'occupation PDJ + les chambres NON vendues
+  // auxquelles on a posé un statut à la main. Une non vendue marquée compte alors
+  // comme vendue (carte Vendues) ET dans sa carte de statut (Nettoyées/Refus/…).
+  const effectiveSold = new Set(occupied)
+  for (const room of statuses.keys()) effectiveSold.add(room)
+  const stats = countStats(statuses, effectiveSold)
 
   // Roulement (report) DÉRIVÉ : on relit une fenêtre bornée de jours précédents
   // (statuts rapro + occupation PDJ), mêmes clés → cache partagé avec la
@@ -417,7 +422,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
           occupied,
           carried,
           counts: {
-            sold: occupied.size,
+            sold: effectiveSold.size,
             clean: stats.clean,
             bloquee: stats.todo,
             refus: stats.refus,
@@ -638,7 +643,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
 
       <div className="rapro-stats">
         <StatTile
-          value={dash(hasOccupancy ? occupied.size : '—')}
+          value={dash(hasOccupancy ? effectiveSold.size : '—')}
           label="Vendues"
           accent="#818cf8"
           hint="Chambres occupées à traiter aujourd'hui."
