@@ -292,28 +292,27 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
     nextDisabled: atLatest,
   })
 
-  // Écriture optimiste d'un lot de statuts (jour courant) : snapshot → maj cache
-  // → persistance parallèle → rollback réel par snapshot en cas d'échec (fiable
-  // même hors ligne). Chemin unique partagé par la chambre seule et l'étage.
-  async function applyStatuses(changes: Array<[number, RoomStatus]>) {
-    if (!canEditFields || !isSuccess || changes.length === 0) return
+  // Cœur d'écriture optimiste (jour courant), partagé par la pose de statut et
+  // l'effacement : snapshot → mutation locale de la Map → maj cache → persistance
+  // parallèle → rollback réel par snapshot en cas d'échec (fiable même hors ligne).
+  // `editDraft` décrit la mutation locale d'un item, `persistOne` sa persistance.
+  async function mutateRooms<T>(
+    items: T[],
+    editDraft: (draft: Map<number, RoomStatus>, item: T) => void,
+    persistOne: (item: T) => Promise<void>,
+  ) {
+    if (!canEditFields || !isSuccess || items.length === 0) return
     const key = ['rapro', 'day', selectedDate]
     await queryClient.cancelQueries({ queryKey: key })
     const prev = queryClient.getQueryData<RaproDay>(key)
     const nextStatuses = new Map(statuses)
-    // On stocke le statut posé, y compris `nettoyee`. Le retour à l'origine passe
-    // par `clearRooms`, pas par ici.
-    for (const [room, status] of changes) {
-      nextStatuses.set(room, status)
-    }
+    for (const item of items) editDraft(nextStatuses, item)
     queryClient.setQueryData<RaproDay>(key, {
       reportDate: selectedDate,
       statuses: nextStatuses,
     })
     try {
-      await Promise.all(
-        changes.map(([room, status]) => setStatus(selectedDate, room, status)),
-      )
+      await Promise.all(items.map(persistOne))
     } catch {
       queryClient.setQueryData(
         key,
@@ -322,31 +321,23 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
     }
   }
 
-  // Efface l'état de chambres (retour à l'ORIGINE : ligne supprimée). Même patron
-  // optimiste + rollback. Sert au rollback d'étage et à repasser une chambre non
-  // vendue en grisé.
-  async function clearRooms(rooms: number[]) {
-    if (!canEditFields || !isSuccess || rooms.length === 0) return
-    const key = ['rapro', 'day', selectedDate]
-    await queryClient.cancelQueries({ queryKey: key })
-    const prev = queryClient.getQueryData<RaproDay>(key)
-    const nextStatuses = new Map(statuses)
-    for (const room of rooms) {
-      nextStatuses.delete(room)
-    }
-    queryClient.setQueryData<RaproDay>(key, {
-      reportDate: selectedDate,
-      statuses: nextStatuses,
-    })
-    try {
-      await Promise.all(rooms.map((room) => clearRoom(selectedDate, room)))
-    } catch {
-      queryClient.setQueryData(
-        key,
-        prev ?? { reportDate: selectedDate, statuses: new Map() },
-      )
-    }
-  }
+  // Pose un lot de statuts (on stocke le statut posé, y compris `nettoyee` ; le
+  // retour à l'origine passe par `clearRooms`).
+  const applyStatuses = (changes: Array<[number, RoomStatus]>) =>
+    mutateRooms(
+      changes,
+      (draft, [room, status]) => draft.set(room, status),
+      ([room, status]) => setStatus(selectedDate, room, status),
+    )
+
+  // Efface l'état de chambres (retour à l'ORIGINE : ligne supprimée). Sert au
+  // rollback d'étage et à repasser une chambre non vendue en grisé.
+  const clearRooms = (rooms: number[]) =>
+    mutateRooms(
+      rooms,
+      (draft, room) => draft.delete(room),
+      (room) => clearRoom(selectedDate, room),
+    )
 
   // Clic sur une chambre = cycle des couleurs, IDENTIQUE pour les vendues et les
   // non vendues : Nettoyée → Refus → No-show → Bloquée → défaut. Le « défaut »
