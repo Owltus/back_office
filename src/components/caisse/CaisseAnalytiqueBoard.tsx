@@ -3,18 +3,22 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 
 import { AnalytiqueShell } from '#/components/analytique/AnalytiqueShell.tsx'
-import {
-  AnalytiqueCardsGrid,
-  StatCard,
-} from '#/components/analytique/AnalytiqueCards.tsx'
 import { AnalytiqueTable } from '#/components/analytique/AnalytiqueTable.tsx'
 import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
 import { YearNav } from '#/components/analytique/YearNav.tsx'
 import { KpiLineChart } from '#/components/analytique/KpiLineChart.tsx'
+import {
+  CaisseAnalytiqueCards,
+  CaisseStatCells,
+  CaisseStatsHead,
+} from '#/components/caisse/CaisseAnalytiqueParts.tsx'
 import { fetchSheets } from '#/lib/caisse/service.ts'
-import { aggregateCaisseMonthly, yearsFromSheets } from '#/lib/caisse/analytics.ts'
+import {
+  aggregateCaisseMonthly,
+  summarize,
+  yearsFromSheets,
+} from '#/lib/caisse/analytics.ts'
 import { fmtEcart, fmtEur } from '#/lib/caisse/format.ts'
-import { EPSILON } from '#/lib/caisse/constants.ts'
 
 /*
  * Vue analytique Caisse — gabarit calqué sur pdj/PdjAnalytiqueBoard.
@@ -44,9 +48,6 @@ const MONTHS_SHORT = [
   'Déc',
 ]
 
-const nf0 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 })
-const fmtInt = (n: number) => nf0.format(n)
-
 export function CaisseAnalytiqueBoard() {
   const navigate = useNavigate()
   const [year, setYear] = useState(currentYear)
@@ -73,15 +74,7 @@ export function CaisseAnalytiqueBoard() {
     [sheets, year],
   )
 
-  const summary = useMemo(
-    () => ({
-      totalSheets: months.reduce((s, m) => s + m.sheets, 0),
-      totalEcart: months.reduce((s, m) => s + m.ecartTotal, 0),
-      totalFundEcart: months.reduce((s, m) => s + m.fundEcart, 0),
-      totalEncaisse: months.reduce((s, m) => s + m.encaisse, 0),
-    }),
-    [months],
-  )
+  const summary = useMemo(() => summarize(months), [months])
 
   const chartData = useMemo(
     () =>
@@ -107,77 +100,14 @@ export function CaisseAnalytiqueBoard() {
       loading={loading}
       skeleton={{ cols: 4, charts: 2, rows: 12 }}
     >
-      {/* Synthèse annuelle — libellé + valeur seuls (comme l'analytique
-          rapprochement). Le détail vit dans le tableau. */}
-      <AnalytiqueCardsGrid>
-        <StatCard
-          label="Feuilles clôturées"
-          accent="#818cf8"
-          value={fmtInt(summary.totalSheets)}
-        />
-        <StatCard
-          label="Écart total"
-          accent="#fbbf24"
-          value={
-            <span
-              className={
-                summary.totalEcart >= EPSILON ? 'text-destructive' : undefined
-              }
-            >
-              {fmtEur(summary.totalEcart)}
-            </span>
-          }
-        />
-        <StatCard
-          label="Écart de fond"
-          accent="#fb7185"
-          value={
-            <span
-              className={
-                Math.abs(summary.totalFundEcart) >= EPSILON
-                  ? 'text-destructive'
-                  : undefined
-              }
-            >
-              {fmtEcart(summary.totalFundEcart)}
-            </span>
-          }
-        />
-        <StatCard
-          label="Total encaissé"
-          accent="#34d399"
-          value={fmtEur(summary.totalEncaisse)}
-        />
-      </AnalytiqueCardsGrid>
+      {/* Synthèse annuelle — cartes partagées avec le détail mensuel. */}
+      <CaisseAnalytiqueCards summary={summary} />
 
       {/* Tableau mois par mois */}
-      <AnalytiqueTable
-        head={
-          <tr className="border-b border-border bg-muted">
-            <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">
-              Mois
-            </th>
-            <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
-              Feuilles
-            </th>
-            <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground">
-              <span className="hidden sm:inline">Total encaissé</span>
-              <span className="sm:hidden">Encaissé</span>
-            </th>
-            <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground">
-              Écart
-            </th>
-            <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">
-              Fond
-            </th>
-          </tr>
-        }
-      >
+      <AnalytiqueTable head={<CaisseStatsHead firstLabel="Mois" />}>
         <tbody>
           {months.map((m) => {
             const hasData = m.sheets > 0
-            const ecartOff = m.ecartTotal >= EPSILON
-            const fundOff = Math.abs(m.fundEcart) >= EPSILON
             return (
               <tr
                 key={m.month}
@@ -201,45 +131,7 @@ export function CaisseAnalytiqueBoard() {
                 >
                   {MONTHS_SHORT[m.month - 1]}
                 </td>
-                {hasData ? (
-                  <>
-                    <td className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums">
-                      {fmtInt(m.sheets)}
-                    </td>
-                    <td className="whitespace-nowrap px-2 py-2 text-right text-xs font-medium tabular-nums text-foreground">
-                      {fmtEur(m.encaisse)}
-                    </td>
-                    <td
-                      className={`whitespace-nowrap px-2 py-2 text-right text-xs tabular-nums ${
-                        ecartOff ? 'text-destructive' : 'text-muted-foreground'
-                      }`}
-                    >
-                      {fmtEur(m.ecartTotal)}
-                    </td>
-                    <td
-                      className={`whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums ${
-                        fundOff ? 'text-destructive' : 'text-muted-foreground'
-                      }`}
-                    >
-                      {fmtEcart(m.fundEcart)}
-                    </td>
-                  </>
-                ) : (
-                  <>
-                    <td
-                      colSpan={2}
-                      className="px-2 py-2 text-center text-xs text-muted-foreground/50"
-                    >
-                      —
-                    </td>
-                    <td className="px-2 py-2 text-right text-xs text-muted-foreground/50">
-                      —
-                    </td>
-                    <td className="px-3 py-2 text-right text-xs text-muted-foreground/50">
-                      —
-                    </td>
-                  </>
-                )}
+                <CaisseStatCells stats={hasData ? m : undefined} />
               </tr>
             )
           })}

@@ -15,7 +15,10 @@ const eur0 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 })
 export const fmtEur = (n: number) => `${eur.format(n)} €`
 /** Montant en euros, entier (ex. « 150 € »). */
 export const fmtEurInt = (n: number) => `${eur0.format(n)} €`
+/** Entier nu, sans symbole (ex. « 12 » — nombre de feuilles). */
+export const fmtInt = (n: number) => eur0.format(n)
 /** Écart signé, 2 décimales (ex. « +12,50 € » / « -3,00 € »). */
 export const fmtEcart = (n: number) => `${n >= 0 ? '+' : ''}${eur.format(n)} €`
 /** Écart signé SANS le symbole € (colonne compacte, responsive). */
-export const fmtEcartBare = (n: number) => `${n >= 0 ? '+' : ''}${eur.format(n)}`
+export const fmtEcartBare = (n: number) =>
+  `${n >= 0 ? '+' : ''}${eur.format(n)}`

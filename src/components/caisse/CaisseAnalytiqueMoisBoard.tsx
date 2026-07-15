@@ -3,18 +3,19 @@ import { Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 
 import { AnalytiqueShell } from '#/components/analytique/AnalytiqueShell.tsx'
-import {
-  AnalytiqueCardsGrid,
-  StatCard,
-} from '#/components/analytique/AnalytiqueCards.tsx'
 import { AnalytiqueTable } from '#/components/analytique/AnalytiqueTable.tsx'
 import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
 import { AnalytiqueBackButton } from '#/components/analytique/AnalytiqueBackButton.tsx'
 import { KpiLineChart } from '#/components/analytique/KpiLineChart.tsx'
+import {
+  CaisseAnalytiqueCards,
+  CaisseStatCells,
+  CaisseStatsHead,
+} from '#/components/caisse/CaisseAnalytiqueParts.tsx'
 import { fetchSheets } from '#/lib/caisse/service.ts'
-import { aggregateCaisseDaily } from '#/lib/caisse/analytics.ts'
+import { aggregateCaisseDaily, summarize } from '#/lib/caisse/analytics.ts'
 import { fmtEcart, fmtEur } from '#/lib/caisse/format.ts'
-import { EPSILON } from '#/lib/caisse/constants.ts'
+import { MONTHS_LABELS } from '#/lib/repjour/constants.ts'
 
 /*
  * Détail analytique Caisse d'un MOIS, jour par jour — gabarit calqué sur
@@ -25,25 +26,7 @@ import { EPSILON } from '#/lib/caisse/constants.ts'
  * route ; retour à la vue annuelle par la flèche.
  */
 
-const MOIS = [
-  'Janvier',
-  'Février',
-  'Mars',
-  'Avril',
-  'Mai',
-  'Juin',
-  'Juillet',
-  'Août',
-  'Septembre',
-  'Octobre',
-  'Novembre',
-  'Décembre',
-]
-
 const DAY_NAMES_SHORT = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam']
-
-const nf0 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 })
-const fmtInt = (n: number) => nf0.format(n)
 
 export function CaisseAnalytiqueMoisBoard({
   year,
@@ -74,15 +57,7 @@ export function CaisseAnalytiqueMoisBoard({
     [lastDay],
   )
 
-  const summary = useMemo(
-    () => ({
-      totalSheets: days.reduce((s, d) => s + d.sheets, 0),
-      totalEncaisse: days.reduce((s, d) => s + d.encaisse, 0),
-      totalEcart: days.reduce((s, d) => s + d.ecartTotal, 0),
-      totalFundEcart: days.reduce((s, d) => s + d.fundEcart, 0),
-    }),
-    [days],
-  )
+  const summary = useMemo(() => summarize(days), [days])
 
   const chartData = useMemo(
     () =>
@@ -94,79 +69,24 @@ export function CaisseAnalytiqueMoisBoard({
     [days],
   )
 
-  const monthLabel = MOIS[month - 1] || ''
+  const monthLabel = MONTHS_LABELS[month - 1] || ''
 
   return (
     <AnalytiqueShell
       title={`${monthLabel} ${year}`}
       actions={<AnalytiqueBackButton />}
       loading={loading}
-      skeleton={{ cols: 4, charts: 2, rows: new Date(year, month, 0).getDate() }}
+      skeleton={{
+        cols: 4,
+        charts: 2,
+        rows: new Date(year, month, 0).getDate(),
+      }}
     >
-      {/* Synthèse du mois */}
-      <AnalytiqueCardsGrid>
-        <StatCard
-          label="Feuilles clôturées"
-          accent="#818cf8"
-          value={fmtInt(summary.totalSheets)}
-        />
-        <StatCard
-          label="Total encaissé"
-          accent="#34d399"
-          value={fmtEur(summary.totalEncaisse)}
-        />
-        <StatCard
-          label="Écart total"
-          accent="#fbbf24"
-          value={
-            <span
-              className={
-                summary.totalEcart >= EPSILON ? 'text-destructive' : undefined
-              }
-            >
-              {fmtEcart(summary.totalEcart)}
-            </span>
-          }
-        />
-        <StatCard
-          label="Écart de fond"
-          accent="#fb7185"
-          value={
-            <span
-              className={
-                Math.abs(summary.totalFundEcart) >= EPSILON
-                  ? 'text-destructive'
-                  : undefined
-              }
-            >
-              {fmtEcart(summary.totalFundEcart)}
-            </span>
-          }
-        />
-      </AnalytiqueCardsGrid>
+      {/* Synthèse du mois — cartes partagées avec la vue annuelle. */}
+      <CaisseAnalytiqueCards summary={summary} />
 
       {/* Tableau jour par jour */}
-      <AnalytiqueTable
-        head={
-          <tr className="border-b border-border bg-muted">
-            <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">
-              Jour
-            </th>
-            <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
-              Feuilles
-            </th>
-            <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground">
-              Encaissé
-            </th>
-            <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground">
-              Écart
-            </th>
-            <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">
-              Fond
-            </th>
-          </tr>
-        }
-      >
+      <AnalytiqueTable head={<CaisseStatsHead firstLabel="Jour" />}>
         <tbody>
           {dayNums.map((day) => {
             const d = byDay.get(day)
@@ -174,8 +94,6 @@ export function CaisseAnalytiqueMoisBoard({
             const dayName =
               DAY_NAMES_SHORT[new Date(year, month - 1, day).getDay()]
             const date = `${year}-${mm}-${String(day).padStart(2, '0')}`
-            const ecartOff = d ? d.ecartTotal >= EPSILON : false
-            const fundOff = d ? Math.abs(d.fundEcart) >= EPSILON : false
             return (
               <tr
                 key={day}
@@ -196,45 +114,7 @@ export function CaisseAnalytiqueMoisBoard({
                     {dayName} {day}
                   </Link>
                 </td>
-                {hasData ? (
-                  <>
-                    <td className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums">
-                      {fmtInt(d.sheets)}
-                    </td>
-                    <td className="whitespace-nowrap px-2 py-2 text-right text-xs font-medium tabular-nums text-foreground">
-                      {fmtEur(d.encaisse)}
-                    </td>
-                    <td
-                      className={`whitespace-nowrap px-2 py-2 text-right text-xs tabular-nums ${
-                        ecartOff ? 'text-destructive' : 'text-muted-foreground'
-                      }`}
-                    >
-                      {fmtEur(d.ecartTotal)}
-                    </td>
-                    <td
-                      className={`whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums ${
-                        fundOff ? 'text-destructive' : 'text-muted-foreground'
-                      }`}
-                    >
-                      {fmtEcart(d.fundEcart)}
-                    </td>
-                  </>
-                ) : (
-                  <>
-                    <td className="px-2 py-2 text-center text-xs text-muted-foreground/50">
-                      —
-                    </td>
-                    <td className="px-2 py-2 text-right text-xs text-muted-foreground/50">
-                      —
-                    </td>
-                    <td className="px-2 py-2 text-right text-xs text-muted-foreground/50">
-                      —
-                    </td>
-                    <td className="px-3 py-2 text-right text-xs text-muted-foreground/50">
-                      —
-                    </td>
-                  </>
-                )}
+                <CaisseStatCells stats={d} />
               </tr>
             )
           })}

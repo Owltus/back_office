@@ -151,8 +151,33 @@ export function aggregateCaisseDaily(
   return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date))
 }
 
+/** Cumul de synthèse (cartes analytique) : les 4 métriques communes aux vues
+ * annuelle et mensuelle. `CaisseMonthStats` comme `CaisseDayStats` les portent. */
+export interface CaisseSummary {
+  sheets: number
+  encaisse: number
+  ecartTotal: number
+  fundEcart: number
+}
+
+/** Somme des 4 métriques de synthèse sur un ensemble de lignes (mois ou jours). */
+export function summarize(rows: ReadonlyArray<CaisseSummary>): CaisseSummary {
+  return rows.reduce(
+    (a, r) => ({
+      sheets: a.sheets + r.sheets,
+      encaisse: a.encaisse + r.encaisse,
+      ecartTotal: a.ecartTotal + r.ecartTotal,
+      fundEcart: a.fundEcart + r.fundEcart,
+    }),
+    { sheets: 0, encaisse: 0, ecartTotal: 0, fundEcart: 0 },
+  )
+}
+
 /** Années présentes dans une liste de feuilles (croissant), fallback inclus. */
-export function yearsFromSheets(sheets: CaisseSheet[], fallback: number): number[] {
+export function yearsFromSheets(
+  sheets: CaisseSheet[],
+  fallback: number,
+): number[] {
   const set = new Set<number>()
   for (const s of sheets) {
     const y = Number(s.reportDate.slice(0, 4))
