@@ -58,6 +58,21 @@ export async function fetchServiceDates(): Promise<string[]> {
   return [...new Set(dates)]
 }
 
+/** Date de service la plus ANCIENNE (In-House), ou null si aucune. Sert à borner
+ * d'autres features sur la disponibilité des rapports In-House — la caisse
+ * remonte jusque-là (on peut saisir une caisse pour tout jour ayant un In-House).
+ * Une seule ligne lue (LIMIT 1). */
+export async function fetchOldestServiceDate(): Promise<string | null> {
+  const { data, error } = await supabase
+    .from(PDJ_TABLE)
+    .select('service_date')
+    .order('service_date', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  if (error) throw error
+  return data ? (data as { service_date: string }).service_date : null
+}
+
 /** Toutes les lignes d'un jour de service, triées par chambre. */
 export async function fetchDay(serviceDate: string): Promise<PdjDayRow[]> {
   const { data, error } = await supabase

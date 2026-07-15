@@ -74,6 +74,7 @@ import {
   countValue,
   sanitizeAmount,
 } from '#/lib/caisse/input.ts'
+import { fetchOldestServiceDate } from '#/lib/pdj/service.ts'
 import type {
   CaisseSheet,
   CaisseSheetInput,
@@ -187,10 +188,23 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
     queryKey: ['caisse', 'oldest'],
     queryFn: fetchOldestSlot,
   })
+  // Plus ancien jour ayant un rapport In-House (PDJ) : la caisse doit pouvoir
+  // remonter jusque-là pour saisir les caisses historiques, même sans caisse
+  // encore créée sur ces jours (le contenu de la caisse suit la dispo In-House).
+  const { data: oldestServiceDate } = useQuery({
+    queryKey: ['pdj', 'oldest-service-date'],
+    queryFn: fetchOldestServiceDate,
+  })
   const prevSlot = stepSlot(nowSlot.date, nowSlot.shift, -1)
-  const prevKey = slotKey(prevSlot.date, prevSlot.shift)
-  const lowerSlot =
-    oldestSlot && slotKey(oldestSlot.date, oldestSlot.shift) < prevKey ? oldestSlot : prevSlot
+  // Borne basse = le PLUS ANCIEN parmi : le shift juste avant (amorçage du fond),
+  // le slot de caisse le plus ancien, et le 1er shift du plus ancien jour In-House.
+  const lowerCandidates: Array<{ date: string; shift: Shift }> = [prevSlot]
+  if (oldestSlot) lowerCandidates.push(oldestSlot)
+  if (oldestServiceDate)
+    lowerCandidates.push({ date: oldestServiceDate, shift: SHIFTS[0] })
+  const lowerSlot = lowerCandidates.reduce((min, s) =>
+    slotKey(s.date, s.shift) < slotKey(min.date, min.shift) ? s : min,
+  )
   const lowerKey = slotKey(lowerSlot.date, lowerSlot.shift)
   const curKey = slotKey(selectedDate, selectedShift)
   const atLatestSlot = curKey >= nowKey
