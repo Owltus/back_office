@@ -41,7 +41,12 @@ import {
   hasCountedFund,
   isBalanced,
 } from '#/lib/caisse/calc.ts'
-import { fmtEcart, fmtEcartBare, fmtEur, fmtEurInt } from '#/lib/caisse/format.ts'
+import {
+  fmtEcart,
+  fmtEcartBare,
+  fmtEur,
+  fmtEurInt,
+} from '#/lib/caisse/format.ts'
 import {
   DENOMINATIONS,
   ECART_LABELS,
@@ -117,7 +122,10 @@ function sheetToInput(s: CaisseSheet): CaisseSheetInput {
 
 /** Fusionne une saisie dans la feuille de base (pour un cache optimiste) :
  * conserve id / statut / validation / horodatage, remplace le contenu saisi. */
-function inputToSheet(input: CaisseSheetInput, base: CaisseSheet | null): CaisseSheet {
+function inputToSheet(
+  input: CaisseSheetInput,
+  base: CaisseSheet | null,
+): CaisseSheet {
   return {
     id: base?.id ?? '',
     reportDate: input.reportDate,
@@ -228,7 +236,8 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
     if (autoPickedRef.current || userNavigatedRef.current) return
     if (validatedSlots === undefined) return // attendre la donnée
     autoPickedRef.current = true
-    if (slotKey(displaySlot.date, displaySlot.shift) !== curKey) setSlot(displaySlot)
+    if (slotKey(displaySlot.date, displaySlot.shift) !== curKey)
+      setSlot(displaySlot)
   }, [validatedSlots, displaySlot, curKey])
 
   // Navigation shift par shift : matin → soir → nuit → matin du lendemain.
@@ -291,9 +300,9 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
   const [form, setForm] = useState<CaisseSheetInput>(() =>
     emptyInput(selectedDate, selectedShift, emptyCounts()),
   )
-  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>(
-    'idle',
-  )
+  const [saveState, setSaveState] = useState<
+    'idle' | 'saving' | 'saved' | 'error'
+  >('idle')
 
   const isValidated = sheet?.status === 'validated'
   // Prêt = feuille chargée ET, pour une nouvelle feuille, le report du fond de
@@ -358,12 +367,14 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
       try {
         const saved = await upsertSheet(input)
         // Ne pas écraser une validation/réouverture survenue pendant l'await.
-        if (mutationEpochRef.current === epoch) queryClient.setQueryData(qk, saved)
+        if (mutationEpochRef.current === epoch)
+          queryClient.setQueryData(qk, saved)
         if (active()) setSaveState('saved')
       } catch {
         // Rollback de l'optimiste — sauf si une mutation décisive (validation…)
         // a mis le cache à jour entre-temps : elle fait autorité.
-        if (mutationEpochRef.current === epoch) queryClient.setQueryData(qk, prev ?? null)
+        if (mutationEpochRef.current === epoch)
+          queryClient.setQueryData(qk, prev ?? null)
         if (active()) {
           lastSavedRef.current = '' // autorise une nouvelle tentative
           setSaveState('error')
@@ -400,7 +411,16 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
     setForm(next)
     lastSavedRef.current = JSON.stringify(next)
     hydratedRef.current = true
-  }, [sheet, needsCarry, emptyDraft, prevSheet, prevLoading, selectedDate, selectedShift, flush])
+  }, [
+    sheet,
+    needsCarry,
+    emptyDraft,
+    prevSheet,
+    prevLoading,
+    selectedDate,
+    selectedShift,
+    flush,
+  ])
 
   // Débounce : sauvegarde ~700 ms après la dernière frappe (couple courant).
   useEffect(() => {
@@ -677,7 +697,8 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
 
       {sheetError && (
         <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          Impossible de charger cette feuille (connexion ?). Réessayez en changeant de shift puis en revenant.
+          Impossible de charger cette feuille (connexion ?). Réessayez en
+          changeant de shift puis en revenant.
         </div>
       )}
       {error && (
@@ -701,23 +722,7 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
           >
             <table className="w-full table-fixed border-collapse text-sm">
               <thead>
-                <tr className="border-b border-border text-xs uppercase text-muted-foreground">
-                  <th className="w-32 px-3 py-1.5 text-left font-medium">
-                    Source
-                  </th>
-                  {cols.map((c) => (
-                    <th key={c} className="px-3 py-1.5 text-center font-medium">
-                      {c === 'web' ? (
-                        <>
-                          <span className="max-sm:hidden">{ECART_LABELS.web}</span>
-                          <span className="sm:hidden">Adyen</span>
-                        </>
-                      ) : (
-                        ECART_LABELS[c]
-                      )}
-                    </th>
-                  ))}
-                </tr>
+                <AmountsThead cols={cols} />
               </thead>
               <tbody>
                 {Array.from({ length: 3 }).map((_, r) => (
@@ -779,228 +784,232 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
         </>
       ) : (
         <>
-      {/* Tableau des montants + écarts (défile horizontalement si étroit).
+          {/* Tableau des montants + écarts (défile horizontalement si étroit).
           `data-money-grid` : périmètre de la tabulation en colonne (handleGridTab). */}
-      <div
-        data-money-grid
-        className="caisse-table overflow-x-auto rounded-xl border border-border bg-card"
-      >
-        <table className="w-full table-fixed border-collapse text-sm">
-          <thead>
-            <tr className="border-b border-border text-xs uppercase text-muted-foreground">
-              <th className="w-32 px-3 py-1.5 text-left font-medium">Source</th>
-              {cols.map((c) => (
-                <th key={c} className="px-3 py-1.5 text-center font-medium">
-                  {c === 'web' ? (
-                    <>
-                      <span className="max-sm:hidden">{ECART_LABELS.web}</span>
-                      <span className="sm:hidden">Adyen</span>
-                    </>
-                  ) : (
-                    ECART_LABELS[c]
-                  )}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            <AmountRow
-              label="STAY N' TOUCH"
-              rowIndex={0}
-              onCellKeyDown={handleGridTab}
-              cols={cols}
-              disabled={!canEditFields}
-              value={(c) => (c === 'web' ? form.snt.cbweb : form.snt[c as PayKey])}
-              onChange={(c, v) => (c === 'web' ? setSnt('cbweb', v) : setSnt(c as PayKey, v))}
-            />
-            <AmountRow
-              label="LIGHTSPEED"
-              rowIndex={1}
-              onCellKeyDown={handleGridTab}
-              cols={cols}
-              disabled={!canEditFields}
-              value={(c) => (c === 'web' ? null : form.ls[c as PayKey])}
-              onChange={(c, v) => c !== 'web' && setLs(c as PayKey, v)}
-            />
-            <AmountRow
-              label="CAISSE/TPE"
-              rowIndex={2}
-              onCellKeyDown={handleGridTab}
-              cols={cols}
-              disabled={!canEditFields}
-              value={(c) => (c === 'web' ? form.caisse.adyen : form.caisse[c as PayKey])}
-              onChange={(c, v) =>
-                c === 'web' ? setCaisse('adyen', v) : setCaisse(c as PayKey, v)
-              }
-              // Double-clic : reporte la somme des deux lignes du dessus
-              // (StayNTouch + Lightspeed) pour la colonne — Lightspeed n'a pas
-              // de « web », la somme s'y résume au cbweb de StayNTouch.
-              onFill={(c) =>
-                c === 'web'
-                  ? form.snt.cbweb
-                  : form.snt[c as PayKey] + form.ls[c as PayKey]
-              }
-            />
-            <tr className="border-t border-border bg-muted/30 font-medium">
-              <td className="px-3 py-1.5">ÉCARTS</td>
-              {cols.map((c) => {
-                const v = ecarts[c]
-                const zero = Math.abs(v) < EPSILON
-                return (
-                  <td
-                    key={c}
-                    className={cn(
-                      'px-3 py-1.5 text-right tabular-nums',
-                      zero ? 'text-emerald-500' : 'text-destructive',
-                    )}
-                    title={`Attendu ${fmtEur(expected(form, c))}`}
-                  >
-                    {fmtEcartBare(v)}
-                    <span className="max-sm:hidden"> €</span>
-                  </td>
-                )
-              })}
-            </tr>
-          </tbody>
-        </table>
-      </div>
+          <div
+            data-money-grid
+            className="caisse-table overflow-x-auto rounded-xl border border-border bg-card"
+          >
+            <table className="w-full table-fixed border-collapse text-sm">
+              <thead>
+                <AmountsThead cols={cols} />
+              </thead>
+              <tbody>
+                <AmountRow
+                  label="STAY N' TOUCH"
+                  rowIndex={0}
+                  onCellKeyDown={handleGridTab}
+                  cols={cols}
+                  disabled={!canEditFields}
+                  value={(c) =>
+                    c === 'web' ? form.snt.cbweb : form.snt[c as PayKey]
+                  }
+                  onChange={(c, v) =>
+                    c === 'web' ? setSnt('cbweb', v) : setSnt(c as PayKey, v)
+                  }
+                />
+                <AmountRow
+                  label="LIGHTSPEED"
+                  rowIndex={1}
+                  onCellKeyDown={handleGridTab}
+                  cols={cols}
+                  disabled={!canEditFields}
+                  value={(c) => (c === 'web' ? null : form.ls[c as PayKey])}
+                  onChange={(c, v) => c !== 'web' && setLs(c as PayKey, v)}
+                />
+                <AmountRow
+                  label="CAISSE/TPE"
+                  rowIndex={2}
+                  onCellKeyDown={handleGridTab}
+                  cols={cols}
+                  disabled={!canEditFields}
+                  value={(c) =>
+                    c === 'web' ? form.caisse.adyen : form.caisse[c as PayKey]
+                  }
+                  onChange={(c, v) =>
+                    c === 'web'
+                      ? setCaisse('adyen', v)
+                      : setCaisse(c as PayKey, v)
+                  }
+                  // Double-clic : reporte la somme des deux lignes du dessus
+                  // (StayNTouch + Lightspeed) pour la colonne — Lightspeed n'a pas
+                  // de « web », la somme s'y résume au cbweb de StayNTouch.
+                  onFill={(c) =>
+                    c === 'web'
+                      ? form.snt.cbweb
+                      : form.snt[c as PayKey] + form.ls[c as PayKey]
+                  }
+                />
+                <tr className="border-t border-border bg-muted/30 font-medium">
+                  <td className="px-3 py-1.5">ÉCARTS</td>
+                  {cols.map((c) => {
+                    const v = ecarts[c]
+                    const zero = Math.abs(v) < EPSILON
+                    return (
+                      <td
+                        key={c}
+                        className={cn(
+                          'px-3 py-1.5 text-right tabular-nums',
+                          zero ? 'text-emerald-500' : 'text-destructive',
+                        )}
+                        title={`Attendu ${fmtEur(expected(form, c))}`}
+                      >
+                        {fmtEcartBare(v)}
+                        <span className="max-sm:hidden"> €</span>
+                      </td>
+                    )
+                  })}
+                </tr>
+              </tbody>
+            </table>
+          </div>
 
-      {/* Comptage du fond de caisse. Grille responsive : 2 colonnes (mobile),
+          {/* Comptage du fond de caisse. Grille responsive : 2 colonnes (mobile),
           3 (intermédiaire), 5 colonnes-décades en remplissage vertical (≥ lg :
           grid-flow-col + grid-rows-3 → 500/200/100, 50/20/10, …). */}
-      <div className="rounded-xl border border-border bg-card p-3">
-        <div
-          data-denom-grid
-          className="caisse-denoms grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-flow-col lg:grid-cols-5 lg:grid-rows-3"
-        >
-          {DENOMINATIONS.map((d) => {
-            const n = form.counts[d.key] ?? 0
-            const filled = n > 0
-            return (
-              <div
-                key={d.key}
-                className={cn(
-                  'flex items-stretch overflow-hidden rounded-lg border transition-colors',
-                  filled ? 'border-primary/40 bg-primary/5' : 'border-border bg-muted/20',
-                  // 500 € en pleine largeur sur mobile (2 cols) : équilibre les
-                  // 14 cartes restantes en 7 rangées de 2. Sans effet dès sm.
-                  d.key === 'cnt_500' && 'col-span-2 sm:col-span-1',
-                )}
-              >
-                {/* Bouton « − » pleine hauteur, à gauche */}
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  aria-label={`Retirer un ${d.label}`}
-                  disabled={!canEditFields}
-                  onClick={() => bumpCount(d.key, -1)}
-                  className="flex flex-1 items-center justify-center border-r border-border/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
-                >
-                  <Minus className="size-4" />
-                </button>
-                {/* Colonne centrale : quantité, puis visuel du billet / de la
-                    pièce (estompé tant que rien n'est compté), puis sous-total. */}
-                <div className="flex flex-[1.6] flex-col items-center justify-center gap-1.5 px-1 py-1">
-                  <CountInput
-                    value={n}
-                    disabled={!canEditFields}
-                    onChange={(v) => setCount(d.key, v)}
-                    onKeyDown={handleDenomTab}
-                  />
-                  <div className="flex h-8 items-center justify-center">
-                    <img
-                      src={DENOM_SVG[d.key]}
-                      alt={d.label}
-                      draggable={false}
-                      className={cn(
-                        'max-h-full w-auto select-none drop-shadow-sm transition-opacity',
-                        // Pièce (< 5 €) un peu plus haute que le billet pour l'équilibre.
-                        d.value < 5 ? 'h-8' : 'h-7',
-                        !filled && 'opacity-40',
-                      )}
-                    />
-                  </div>
-                  <span
+          <div className="rounded-xl border border-border bg-card p-3">
+            <div
+              data-denom-grid
+              className="caisse-denoms grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-flow-col lg:grid-cols-5 lg:grid-rows-3"
+            >
+              {DENOMINATIONS.map((d) => {
+                const n = form.counts[d.key] ?? 0
+                const filled = n > 0
+                return (
+                  <div
+                    key={d.key}
                     className={cn(
-                      'whitespace-nowrap text-[11px] leading-none tabular-nums',
-                      filled ? 'font-medium text-foreground' : 'text-muted-foreground',
+                      'flex items-stretch overflow-hidden rounded-lg border transition-colors',
+                      filled
+                        ? 'border-primary/40 bg-primary/5'
+                        : 'border-border bg-muted/20',
+                      // 500 € en pleine largeur sur mobile (2 cols) : équilibre les
+                      // 14 cartes restantes en 7 rangées de 2. Sans effet dès sm.
+                      d.key === 'cnt_500' && 'col-span-2 sm:col-span-1',
                     )}
                   >
-                    {d.value < 1 ? fmtEur(d.value * n) : fmtEurInt(d.value * n)}
-                  </span>
-                </div>
-                {/* Bouton « + » pleine hauteur, à droite */}
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  aria-label={`Ajouter un ${d.label}`}
-                  disabled={!canEditFields}
-                  onClick={() => bumpCount(d.key, 1)}
-                  className="flex flex-1 items-center justify-center border-l border-border/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
-                >
-                  <Plus className="size-4" />
-                </button>
-              </div>
-            )
-          })}
-        </div>
-        <div className="mt-2 flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">
-            Fond de caisse {fmtEurInt(FUND_TARGET)}
-          </span>
-          <span
-            className={cn(
-              'tabular-nums font-medium',
-              Math.abs(fEcart) < EPSILON ? 'text-emerald-500' : 'text-destructive',
-            )}
-          >
-            {fmtEur(total)} ({fmtEcart(fEcart)})
-          </span>
-        </div>
-      </div>
+                    {/* Bouton « − » pleine hauteur, à gauche */}
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      aria-label={`Retirer un ${d.label}`}
+                      disabled={!canEditFields}
+                      onClick={() => bumpCount(d.key, -1)}
+                      className="flex flex-1 items-center justify-center border-r border-border/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
+                    >
+                      <Minus className="size-4" />
+                    </button>
+                    {/* Colonne centrale : quantité, puis visuel du billet / de la
+                    pièce (estompé tant que rien n'est compté), puis sous-total. */}
+                    <div className="flex flex-[1.6] flex-col items-center justify-center gap-1.5 px-1 py-1">
+                      <CountInput
+                        value={n}
+                        disabled={!canEditFields}
+                        onChange={(v) => setCount(d.key, v)}
+                        onKeyDown={handleDenomTab}
+                      />
+                      <div className="flex h-8 items-center justify-center">
+                        <img
+                          src={DENOM_SVG[d.key]}
+                          alt={d.label}
+                          draggable={false}
+                          className={cn(
+                            'max-h-full w-auto select-none drop-shadow-sm transition-opacity',
+                            // Pièce (< 5 €) un peu plus haute que le billet pour l'équilibre.
+                            d.value < 5 ? 'h-8' : 'h-7',
+                            !filled && 'opacity-40',
+                          )}
+                        />
+                      </div>
+                      <span
+                        className={cn(
+                          'whitespace-nowrap text-[11px] leading-none tabular-nums',
+                          filled
+                            ? 'font-medium text-foreground'
+                            : 'text-muted-foreground',
+                        )}
+                      >
+                        {d.value < 1
+                          ? fmtEur(d.value * n)
+                          : fmtEurInt(d.value * n)}
+                      </span>
+                    </div>
+                    {/* Bouton « + » pleine hauteur, à droite */}
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      aria-label={`Ajouter un ${d.label}`}
+                      disabled={!canEditFields}
+                      onClick={() => bumpCount(d.key, 1)}
+                      className="flex flex-1 items-center justify-center border-l border-border/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
+                    >
+                      <Plus className="size-4" />
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+            <div className="mt-2 flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">
+                Fond de caisse {fmtEurInt(FUND_TARGET)}
+              </span>
+              <span
+                className={cn(
+                  'tabular-nums font-medium',
+                  Math.abs(fEcart) < EPSILON
+                    ? 'text-emerald-500'
+                    : 'text-destructive',
+                )}
+              >
+                {fmtEur(total)} ({fmtEcart(fEcart)})
+              </span>
+            </div>
+          </div>
 
-      {/* Commentaires (juste en dessous du fond de caisse).
+          {/* Commentaires (juste en dessous du fond de caisse).
           Carte FLEXIBLE : elle absorbe la place restante de la page et sert de
           variable d'ajustement, comme le Rapprochement. `flex flex-1 flex-col`
           la fait grandir et empile titre + champ ; le bouton de clôture reste
           collé en bas quand tout tient. Sur une fenêtre courte, le champ se
           réduit jusqu'à son plancher `min-h-16` (jamais 0, jamais invisible),
           puis c'est la page qui défile (conteneur racine sans `min-h-0`). */}
-      <div className="flex flex-1 flex-col rounded-xl border border-border bg-card p-3">
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold">Commentaires</h2>
-          {isValidated && sheet?.operatorInitials && (
-            <span className="text-sm font-medium text-muted-foreground">
-              {sheet.operatorInitials}
-            </span>
-          )}
-        </div>
-        <Textarea
-          value={form.comment}
-          disabled={!canEditFields}
-          onChange={(e) => setForm((f) => ({ ...f, comment: e.target.value }))}
-          placeholder="Justification d'un éventuel écart…"
-          // Hauteur FLEXIBLE : `flex-1` fait absorber la place restante de la
-          // carte, `min-h-16` est le plancher, `resize-none` retire la poignée
-          // (et neutralise le `field-sizing-content` de la primitive, qui
-          // étirait le champ à mesure qu'on écrivait).
-          className="min-h-16 flex-1 resize-none"
-        />
-      </div>
+          <div className="flex flex-1 flex-col rounded-xl border border-border bg-card p-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold">Commentaires</h2>
+              {isValidated && sheet?.operatorInitials && (
+                <span className="text-sm font-medium text-muted-foreground">
+                  {sheet.operatorInitials}
+                </span>
+              )}
+            </div>
+            <Textarea
+              value={form.comment}
+              disabled={!canEditFields}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, comment: e.target.value }))
+              }
+              placeholder="Justification d'un éventuel écart…"
+              // Hauteur FLEXIBLE : `flex-1` fait absorber la place restante de la
+              // carte, `min-h-16` est le plancher, `resize-none` retire la poignée
+              // (et neutralise le `field-sizing-content` de la primitive, qui
+              // étirait le champ à mesure qu'on écrivait).
+              className="min-h-16 flex-1 resize-none"
+            />
+          </div>
 
-      {/* Actions — le bouton d'état ferme la page, sous la saisie. */}
-      {isWriter && (
-        <div className="flex flex-col gap-2">
-          {/* Autosave silencieux : on ne signale QUE les échecs (sinon la
+          {/* Actions — le bouton d'état ferme la page, sous la saisie. */}
+          {isWriter && (
+            <div className="flex flex-col gap-2">
+              {/* Autosave silencieux : on ne signale QUE les échecs (sinon la
               sauvegarde travaille en arrière-plan, sans mention explicite). */}
-          {editable && saveState === 'error' && (
-            <span className="text-sm text-destructive">
-              Échec de l'enregistrement — vérifiez votre connexion.
-            </span>
+              {editable && saveState === 'error' && (
+                <span className="text-sm text-destructive">
+                  Échec de l'enregistrement — vérifiez votre connexion.
+                </span>
+              )}
+              {stateAction}
+            </div>
           )}
-          {stateAction}
-        </div>
-      )}
         </>
       )}
 
@@ -1035,7 +1044,9 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
                     .map((c) => (
                       <li key={c} className="flex justify-between gap-4">
                         <span>{ECART_LABELS[c]}</span>
-                        <span className="tabular-nums">{fmtEcart(ecarts[c])}</span>
+                        <span className="tabular-nums">
+                          {fmtEcart(ecarts[c])}
+                        </span>
                       </li>
                     ))}
                   {Math.abs(fEcart) >= EPSILON && (
@@ -1045,7 +1056,9 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
                     </li>
                   )}
                 </ul>
-                <div className="mt-1 text-xs">À justifier dans les commentaires.</div>
+                <div className="mt-1 text-xs">
+                  À justifier dans les commentaires.
+                </div>
               </div>
             )}
 
@@ -1071,7 +1084,10 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
             <Button variant="outline" onClick={() => setCloseOpen(false)}>
               Annuler
             </Button>
-            <Button onClick={handleConfirmClose} disabled={busy || !hotelierName.trim()}>
+            <Button
+              onClick={handleConfirmClose}
+              disabled={busy || !hotelierName.trim()}
+            >
               Clôturer définitivement
             </Button>
           </DialogFooter>
@@ -1147,7 +1163,11 @@ function MoneyInput({
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         placeholder={focused ? '' : '0'}
-        title={onFill ? 'Double-clic : additionne Stay N’ Touch + Lightspeed' : undefined}
+        title={
+          onFill
+            ? 'Double-clic : additionne Stay N’ Touch + Lightspeed'
+            : undefined
+        }
         data-taborder={tabOrder}
         className="h-8 pr-6 text-right tabular-nums"
       />
@@ -1189,6 +1209,29 @@ function CountInput({
       data-denom-cell
       className="h-6 w-4/5 px-1 text-center text-sm tabular-nums"
     />
+  )
+}
+
+/** En-tête du tableau des montants (Source + une colonne par mode, « web »
+ * responsive → « Adyen » en étroit). Partagé par le squelette de chargement et le
+ * tableau réel, pour qu'ils ne divergent pas. */
+function AmountsThead({ cols }: { cols: EcartKey[] }) {
+  return (
+    <tr className="border-b border-border text-xs uppercase text-muted-foreground">
+      <th className="w-32 px-3 py-1.5 text-left font-medium">Source</th>
+      {cols.map((c) => (
+        <th key={c} className="px-3 py-1.5 text-center font-medium">
+          {c === 'web' ? (
+            <>
+              <span className="max-sm:hidden">{ECART_LABELS.web}</span>
+              <span className="sm:hidden">Adyen</span>
+            </>
+          ) : (
+            ECART_LABELS[c]
+          )}
+        </th>
+      ))}
+    </tr>
   )
 }
 
