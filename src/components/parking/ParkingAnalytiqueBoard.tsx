@@ -78,13 +78,10 @@ export function ParkingAnalytiqueBoard() {
   const summary = useMemo(() => {
     const active = months.filter((m) => m.reservations > 0)
     const count = active.length
-    const totalReservations = months.reduce((s, m) => s + m.reservations, 0)
-    const totalNights = months.reduce((s, m) => s + m.nights, 0)
     return {
-      totalReservations,
-      totalNights,
+      totalReservations: months.reduce((s, m) => s + m.reservations, 0),
+      totalNights: months.reduce((s, m) => s + m.nights, 0),
       totalUnpaid: months.reduce((s, m) => s + m.unpaid, 0),
-      avgNights: totalReservations > 0 ? totalNights / totalReservations : 0,
       avgOccupancy:
         count > 0 ? active.reduce((s, m) => s + m.occupancyRate, 0) / count : 0,
     }
