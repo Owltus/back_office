@@ -29,7 +29,7 @@ import {
 import { DatePickerButton } from '#/components/form/fields.tsx'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { DENOM_SVG } from '#/assets/euros/index.ts'
-import { cn } from '#/lib/utils.ts'
+import { capitalize, cn } from '#/lib/utils.ts'
 import { errorMessage } from '#/lib/errors.ts'
 import { printCaisseSheet } from '#/lib/caisse/pdf.ts'
 import {
@@ -151,8 +151,7 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
   // remplir même s'il n'a pas encore commencé, mais pas au-delà. Basse : le plus
   // ancien enregistrement, ou — s'il n'existe pas ou n'est pas plus ancien — le
   // shift JUSTE AVANT (base vide : on remonte d'un cran pour amorcer le fond).
-  const nowSlot = displaySlot
-  const nowKey = slotKey(nowSlot.date, nowSlot.shift)
+  const nowKey = slotKey(displaySlot.date, displaySlot.shift)
   const { data: oldestSlot } = useQuery({
     queryKey: ['caisse', 'oldest'],
     queryFn: fetchOldestSlot,
@@ -164,7 +163,7 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
     queryKey: ['pdj', 'oldest-service-date'],
     queryFn: fetchOldestServiceDate,
   })
-  const prevSlot = stepSlot(nowSlot.date, nowSlot.shift, -1)
+  const prevSlot = stepSlot(displaySlot.date, displaySlot.shift, -1)
   // Borne basse = le PLUS ANCIEN parmi : le shift juste avant (amorçage du fond),
   // le slot de caisse le plus ancien, et le 1er shift du plus ancien jour In-House.
   const lowerCandidates: Array<{ date: string; shift: Shift }> = [prevSlot]
@@ -215,7 +214,7 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
     if (!v) return
     userNavigatedRef.current = true
     const k = slotKey(v, selectedShift)
-    if (k > nowKey) setSlot(nowSlot)
+    if (k > nowKey) setSlot(displaySlot)
     else if (k < lowerKey) setSlot(lowerSlot)
     else setSelectedDate(v)
   }
@@ -226,7 +225,7 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
     onNext: () => goStep(1),
     onToday: () => {
       userNavigatedRef.current = true
-      setSlot(nowSlot)
+      setSlot(displaySlot)
     },
     prevDisabled: atLowerBound,
     nextDisabled: atLatestSlot,
@@ -279,9 +278,17 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
   const canEditFields = editable && !isValidated
 
   const ecarts = useMemo(() => computeEcarts(form), [form])
-  const total = fundTotal(form)
-  const fEcart = fundEcart(form)
-  const balanced = isBalanced(form)
+  // Dérivés du fond, mémoïsés ensemble : chaque frappe re-render le board, et
+  // sans mémo ces trois calculs (dont `fundTotal`, une réduction sur 15 coupures)
+  // se rejouaient à chaque touche. `isBalanced` reste la source unique de la règle.
+  const { total, fEcart, balanced } = useMemo(
+    () => ({
+      total: fundTotal(form),
+      fEcart: fundEcart(form),
+      balanced: isBalanced(form),
+    }),
+    [form],
+  )
 
   // --- Sauvegarde automatique (autosave) -----------------------------------
   // La feuille est persistée à chaque modification (débounce), sans bouton. Le
@@ -406,12 +413,15 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
     }
   }, [flush])
 
-  const displayDate = new Date(selectedDate + 'T00:00:00')
-  const longDate = fmtTitle.format(displayDate)
-  const titleDate = longDate.charAt(0).toUpperCase() + longDate.slice(1)
+  // Titre daté : formatage Intl (relativement coûteux) mémoïsé sur la seule date,
+  // pas rejoué à chaque frappe dans un champ.
+  const titleDate = useMemo(
+    () => capitalize(fmtTitle.format(new Date(selectedDate + 'T00:00:00'))),
+    [selectedDate],
+  )
 
   // Colonnes du tableau des paiements (web au matin et au soir, pas la nuit).
-  const cols = paymentColumns(form.shift)
+  const cols = useMemo(() => paymentColumns(form.shift), [form.shift])
 
   const setSnt = (k: keyof CaisseSheetInput['snt'], v: number) =>
     setForm((f) => ({ ...f, snt: { ...f.snt, [k]: v } }))
@@ -658,8 +668,8 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
                 value={selectedDate}
                 onChange={goDate}
                 min={lowerSlot.date}
-                max={nowSlot.date}
-                todayValue={nowSlot.date}
+                max={displaySlot.date}
+                todayValue={displaySlot.date}
                 ariaLabel="Choisir un jour"
               />
             </StepNav>
