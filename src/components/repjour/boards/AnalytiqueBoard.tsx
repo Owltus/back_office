@@ -105,9 +105,12 @@ export function AnalytiqueBoard() {
 
   const currentMonth = new Date().getMonth() + 1
 
-  const chartData = useMemo(() => {
-    const budgetMap = new Map(budgets.map((b) => [b.month, b]))
+  const budgetByMonth = useMemo(
+    () => new Map(budgets.map((b) => [b.month, b])),
+    [budgets],
+  )
 
+  const chartData = useMemo(() => {
     // Dernier mois réalisé/projeté (pas forecast) pour la jonction de courbes.
     let lastRealMonth = 0
     for (const m of analytics) {
@@ -116,7 +119,7 @@ export function AnalytiqueBoard() {
     }
 
     return analytics.map((m) => {
-      const b = budgetMap.get(m.month)
+      const b = budgetByMonth.get(m.month)
       const hasData = m.source !== 'vide'
       const isReal = m.source === 'realise' || m.source === 'projete'
       return {
@@ -139,12 +142,7 @@ export function AnalytiqueBoard() {
         budgetTO: b?.taux_occupation ?? 0,
       }
     })
-  }, [analytics, budgets])
-
-  const budgetByMonth = useMemo(
-    () => new Map(budgets.map((b) => [b.month, b])),
-    [budgets],
-  )
+  }, [analytics, budgetByMonth])
 
   return (
     <AnalytiqueShell
