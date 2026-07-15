@@ -96,19 +96,22 @@ export async function buildStampedPdf(
     borderWidth: 1.4,
   })
 
-  const innerW = box.width - STAMP_PAD * 2
-  let cursor = y + box.height - STAMP_PAD
+  // Même facteur d'échelle que la boîte, appliqué aux marges/tailles de texte.
+  const s = data.scale || 1
+  const innerW = box.width - STAMP_PAD * 2 * s
+  let cursor = y + box.height - STAMP_PAD * s
   for (const line of stampLines(data)) {
     const f = line.bold ? bold : font
-    cursor -= line.size
-    page.drawText(fit(line.text, f, line.size, innerW), {
-      x: x + STAMP_PAD,
+    const size = line.size * s
+    cursor -= size
+    page.drawText(fit(line.text, f, size, innerW), {
+      x: x + STAMP_PAD * s,
       y: cursor,
-      size: line.size,
+      size,
       font: f,
       color: COLOR_RGB[line.color],
     })
-    cursor -= STAMP_LINE_GAP
+    cursor -= STAMP_LINE_GAP * s
   }
 
   return pdf.save()

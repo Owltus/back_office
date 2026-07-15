@@ -87,4 +87,6 @@ export interface StampData {
   comment: string
   invoiceDate: string
   processedDate: string
+  /** Facteur d'échelle du cartouche (1 = taille par défaut). */
+  scale: number
 }

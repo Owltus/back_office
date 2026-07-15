@@ -3,8 +3,18 @@ import { PDFDocument, StandardFonts } from 'pdf-lib'
 
 import { detect, normalize } from '#/lib/facturation/detect.ts'
 import { buildStampedPdf } from '#/lib/facturation/stamp.ts'
+import { stampBoxSize } from '#/lib/facturation/stampLayout.ts'
 import { SEED_RULES, budgetLabel } from '#/lib/facturation/constants.ts'
-import type { SupplierRule } from '#/lib/facturation/types.ts'
+import type { StampData, SupplierRule } from '#/lib/facturation/types.ts'
+
+const STAMP: StampData = {
+  code: '606110',
+  label: 'Électricité',
+  comment: 'Contrôlé — juin 2026',
+  invoiceDate: '2026-07-12',
+  processedDate: '2026-07-15',
+  scale: 1,
+}
 
 /*
  * Vérifie la brique métier du prototype Facturation, hors navigateur :
@@ -81,16 +91,29 @@ describe('buildStampedPdf', () => {
       .drawText('Facture test', { x: 50, y: 800, size: 12, font })
     const srcBytes = await src.save()
 
-    const stamped = await buildStampedPdf(srcBytes, {
-      code: '606110',
-      label: 'Électricité',
-      comment: 'Contrôlé — juin 2026',
-      invoiceDate: '2026-07-12',
-      processedDate: '2026-07-15',
-    })
+    const stamped = await buildStampedPdf(srcBytes, STAMP)
 
     expect(stamped.byteLength).toBeGreaterThan(srcBytes.byteLength)
     const reloaded = await PDFDocument.load(stamped)
     expect(reloaded.getPageCount()).toBe(1)
+  })
+
+  it('accepte une échelle de tampon et reste valide', async () => {
+    const src = await PDFDocument.create()
+    src.addPage([595, 842])
+    const srcBytes = await src.save()
+
+    const stamped = await buildStampedPdf(srcBytes, { ...STAMP, scale: 2 })
+    const reloaded = await PDFDocument.load(stamped)
+    expect(reloaded.getPageCount()).toBe(1)
+  })
+})
+
+describe('stampBoxSize', () => {
+  it('met la boîte à l’échelle proportionnellement', () => {
+    const base = stampBoxSize(STAMP)
+    const twice = stampBoxSize({ ...STAMP, scale: 2 })
+    expect(twice.width).toBeCloseTo(base.width * 2)
+    expect(twice.height).toBeCloseTo(base.height * 2)
   })
 })

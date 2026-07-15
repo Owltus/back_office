@@ -3,7 +3,10 @@ import { useEffect, useRef, useState } from 'react'
 import {
   STAMP_COLORS,
   STAMP_LINE_GAP,
+  STAMP_MAX_SCALE,
+  STAMP_MIN_SCALE,
   STAMP_PAD,
+  STAMP_BOX_W,
   clampStampPosition,
   defaultStampPosition,
   stampBoxSize,
@@ -50,11 +53,13 @@ export function StampPreview({
   data,
   position,
   onPositionChange,
+  onScaleChange,
 }: {
   previews: PagePreview[]
   data: StampData
   position: StampPosition | null
   onPositionChange: (pos: StampPosition) => void
+  onScaleChange: (scale: number) => void
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
@@ -70,7 +75,8 @@ export function StampPreview({
     return () => observer.disconnect()
   }, [])
 
-  const box = stampBoxSize(data)
+  const box = stampBoxSize(data) // dimensions déjà à l'échelle du tampon (data.scale)
+  const ss = data.scale || 1 // échelle intrinsèque du tampon (redimensionnement)
   const maxW = Math.max(...previews.map((p) => p.width))
   const maxH = Math.max(...previews.map((p) => p.height))
 
@@ -185,6 +191,77 @@ export function StampPreview({
     )
   }
 
+  // --- Redimensionnement par les coins ---------------------------------------
+  // Le coin OPPOSÉ à celui saisi sert d'ancre (reste fixe). L'échelle est
+  // déduite de la largeur entre l'ancre et le curseur (proportions conservées).
+  const resize = useRef<{
+    page: number
+    anchorX: number
+    anchorY: number
+    isLeft: boolean
+    isTop: boolean
+  } | null>(null)
+  function onResizeDown(
+    e: React.PointerEvent,
+    isLeft: boolean,
+    isTop: boolean,
+  ) {
+    e.preventDefault()
+    e.stopPropagation()
+    e.currentTarget.setPointerCapture(e.pointerId)
+    resize.current = {
+      page: pos.page,
+      anchorX: isLeft ? pos.x + box.width : pos.x,
+      anchorY: isTop ? pos.y + box.height : pos.y,
+      isLeft,
+      isTop,
+    }
+  }
+  function onResizeMove(e: React.PointerEvent) {
+    const r = resize.current
+    if (!r || scale === 0 || !contentRef.current) return
+    e.stopPropagation()
+    const rect = contentRef.current.getBoundingClientRect()
+    const px = (e.clientX - rect.left - boxes[r.page].left) / scale
+    const width = r.isLeft ? r.anchorX - px : px - r.anchorX
+    const nextScale = clamp(
+      width / STAMP_BOX_W,
+      STAMP_MIN_SCALE,
+      STAMP_MAX_SCALE,
+    )
+    const scaled: StampData = { ...data, scale: nextScale }
+    const nb = stampBoxSize(scaled)
+    const dims = previews[r.page]
+    onScaleChange(nextScale)
+    onPositionChange(
+      clampStampPosition(
+        {
+          page: r.page,
+          x: r.isLeft ? r.anchorX - nb.width : r.anchorX,
+          y: r.isTop ? r.anchorY - nb.height : r.anchorY,
+        },
+        dims.width,
+        dims.height,
+        scaled,
+      ),
+    )
+  }
+  function onResizeUp(e: React.PointerEvent) {
+    resize.current = null
+    e.currentTarget.releasePointerCapture(e.pointerId)
+  }
+
+  const HANDLES = [
+    { isLeft: true, isTop: true, cls: '-top-1 -left-1 cursor-nwse-resize' },
+    { isLeft: false, isTop: true, cls: '-top-1 -right-1 cursor-nesw-resize' },
+    { isLeft: true, isTop: false, cls: '-bottom-1 -left-1 cursor-nesw-resize' },
+    {
+      isLeft: false,
+      isTop: false,
+      cls: '-bottom-1 -right-1 cursor-nwse-resize',
+    },
+  ]
+
   const lines = stampLines(data)
 
   return (
@@ -218,7 +295,7 @@ export function StampPreview({
             />
           ))}
 
-          {/* Cartouche déplaçable — réplique HTML de ce que dessine pdf-lib. */}
+          {/* Cartouche déplaçable ET redimensionnable — réplique HTML de pdf-lib. */}
           <div
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
@@ -229,7 +306,7 @@ export function StampPreview({
               top: boxes[pos.page].top + pos.y * scale,
               width: box.width * scale,
               height: box.height * scale,
-              padding: STAMP_PAD * scale,
+              padding: STAMP_PAD * ss * scale,
               backgroundColor: 'rgba(255,255,255,0.92)',
               border: `1.4px solid ${STAMP_COLORS.red}`,
               touchAction: 'none',
@@ -240,9 +317,9 @@ export function StampPreview({
               <span
                 key={i}
                 style={{
-                  fontSize: line.size * scale,
+                  fontSize: line.size * ss * scale,
                   lineHeight: 1,
-                  marginTop: i ? STAMP_LINE_GAP * scale : 0,
+                  marginTop: i ? STAMP_LINE_GAP * ss * scale : 0,
                   fontWeight: line.bold ? 700 : 400,
                   color: STAMP_COLORS[line.color],
                   fontFamily: 'Helvetica, Arial, sans-serif',
@@ -253,6 +330,21 @@ export function StampPreview({
               >
                 {line.text}
               </span>
+            ))}
+
+            {/* Poignées de redimensionnement (coins) */}
+            {HANDLES.map((h, i) => (
+              <div
+                key={i}
+                onPointerDown={(e) => onResizeDown(e, h.isLeft, h.isTop)}
+                onPointerMove={onResizeMove}
+                onPointerUp={onResizeUp}
+                className={cn(
+                  'absolute size-2.5 rounded-sm border border-white bg-primary shadow',
+                  h.cls,
+                )}
+                style={{ touchAction: 'none' }}
+              />
             ))}
           </div>
         </div>

@@ -41,6 +41,7 @@ export interface InvoiceRecord {
   detection: Detection | null
   previews: PagePreview[]
   position: StampPosition | null
+  stampScale: number
   code: string
   supplierName: string
   comment: string
@@ -62,6 +63,7 @@ function stampDataOf(record: InvoiceRecord): StampData {
     comment: record.comment,
     invoiceDate: record.invoiceDate,
     processedDate: record.processedDate,
+    scale: record.stampScale,
   }
 }
 
@@ -146,6 +148,7 @@ export function FacturationBoard() {
         detection: null,
         previews: [],
         position: null,
+        stampScale: 1,
         code: '',
         supplierName: '',
         comment: '',
@@ -247,6 +250,7 @@ export function FacturationBoard() {
                 data={stampDataOf(selected)}
                 position={selected.position}
                 onPositionChange={(p) => patch(selected.id, { position: p })}
+                onScaleChange={(sc) => patch(selected.id, { stampScale: sc })}
               />
             ) : (
               <CenterPlaceholder record={selected} />

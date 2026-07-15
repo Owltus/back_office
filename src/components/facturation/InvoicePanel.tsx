@@ -130,6 +130,7 @@ export function InvoicePanel({
     comment: record.comment,
     invoiceDate: record.invoiceDate,
     processedDate: record.processedDate,
+    scale: record.stampScale,
   }
 
   async function handleStamp() {

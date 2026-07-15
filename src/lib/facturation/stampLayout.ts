@@ -13,6 +13,10 @@ export const STAMP_PAD = 12
 export const STAMP_LINE_GAP = 6
 export const STAMP_MARGIN = 24
 
+/** Bornes du facteur d'échelle du tampon (redimensionnement par les coins). */
+export const STAMP_MIN_SCALE = 0.6
+export const STAMP_MAX_SCALE = 2.5
+
 /** Couleurs en hex (l'aperçu HTML les prend telles quelles ; pdf-lib les convertit). */
 export const STAMP_COLORS = {
   red: '#b81c1c',
@@ -68,16 +72,20 @@ export function stampLines(data: StampData): StampLine[] {
   return lines
 }
 
-/** Dimensions du cartouche (largeur fixe, hauteur dérivée des lignes présentes). */
+/**
+ * Dimensions du cartouche à l'échelle `data.scale` : largeur = `STAMP_BOX_W × s`,
+ * hauteur dérivée des lignes présentes (elle aussi × s). Même facteur partout →
+ * proportions conservées.
+ */
 export function stampBoxSize(data: StampData): {
   width: number
   height: number
 } {
+  const s = data.scale || 1
   const height =
-    stampLines(data).reduce((h, l) => h + l.size + STAMP_LINE_GAP, 0) +
-    STAMP_PAD * 2 -
-    STAMP_LINE_GAP
-  return { width: STAMP_BOX_W, height }
+    stampLines(data).reduce((h, l) => h + (l.size + STAMP_LINE_GAP) * s, 0) +
+    (STAMP_PAD * 2 - STAMP_LINE_GAP) * s
+  return { width: STAMP_BOX_W * s, height }
 }
 
 /** Position par défaut : première page, coin haut-droit, à `STAMP_MARGIN` des bords. */
