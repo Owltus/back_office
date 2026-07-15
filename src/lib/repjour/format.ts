@@ -1,46 +1,29 @@
-const nuitees = (n: number) =>
-  new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(n);
+// Instances Intl créées UNE fois au niveau module et réutilisées : construire un
+// `Intl.NumberFormat` est coûteux (résolution locale + options), et ces
+// formatters sont appelés des centaines de fois par render (tableaux analytique,
+// KPI). `nf0` = entier, `nf1` = 1 décimale.
+const nf0 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
+const nf1 = new Intl.NumberFormat('fr-FR', {
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+});
+const sign = (n: number) => (n >= 0 ? '+' : '');
 
-const pct = (n: number) =>
-  new Intl.NumberFormat('fr-FR', {
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1,
-  }).format(n) + '%';
+const nuitees = (n: number) => nf0.format(n);
 
-const eur = (n: number) =>
-  new Intl.NumberFormat('fr-FR', {
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1,
-  }).format(n) + ' €';
+const pct = (n: number) => nf1.format(n) + '%';
 
-const eurInt = (n: number) =>
-  new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(n) +
-  ' €';
+const eur = (n: number) => nf1.format(n) + ' €';
 
-const ecartNuitees = (n: number) =>
-  (n >= 0 ? '+' : '') +
-  new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(n);
+const eurInt = (n: number) => nf0.format(n) + ' €';
 
-const ecartPts = (n: number) =>
-  (n >= 0 ? '+' : '') +
-  new Intl.NumberFormat('fr-FR', {
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1,
-  }).format(n) +
-  ' pts';
+const ecartNuitees = (n: number) => sign(n) + nf0.format(n);
 
-const ecartEur = (n: number) =>
-  (n >= 0 ? '+' : '') +
-  new Intl.NumberFormat('fr-FR', {
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1,
-  }).format(n) +
-  ' €';
+const ecartPts = (n: number) => sign(n) + nf1.format(n) + ' pts';
 
-const ecartEurInt = (n: number) =>
-  (n >= 0 ? '+' : '') +
-  new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(n) +
-  ' €';
+const ecartEur = (n: number) => sign(n) + nf1.format(n) + ' €';
+
+const ecartEurInt = (n: number) => sign(n) + nf0.format(n) + ' €';
 
 const dateFr = (isoDate: string) => {
   const d = new Date(isoDate + 'T00:00:00');
@@ -53,14 +36,14 @@ const dayName = (isoDate: string) => {
 };
 
 // Formatters compacts sans unités (mobile)
-const compact = (n: number) =>
-  new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(n);
+const compact = (n: number) => nf0.format(n);
 
-const compactDec = (n: number) =>
-  new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(n);
+const compactDec = (n: number) => nf1.format(n);
 
-const compactEcart = (n: number) =>
-  (n >= 0 ? '+' : '') + compact(n);
+const compactEcart = (n: number) => sign(n) + nf0.format(n);
+
+// Écart compact à 1 décimale, signé et sans unité (TO / RevPAR mobile).
+const compactEcartDec = (n: number) => sign(n) + nf1.format(n);
 
 export const fmt = {
   nuitees,
@@ -76,4 +59,5 @@ export const fmt = {
   compact,
   compactDec,
   compactEcart,
+  compactEcartDec,
 };
