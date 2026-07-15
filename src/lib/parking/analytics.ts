@@ -136,20 +136,26 @@ export function aggregateParkingDaily(
   month: number,
 ): ParkingDayStats[] {
   const nDays = new Date(year, month, 0).getDate()
+  const mm = String(month).padStart(2, '0')
+  const firstStr = `${year}-${mm}-01`
+  const lastStr = `${year}-${mm}-${String(nDays).padStart(2, '0')}`
 
   // Fenêtre de chaque réservation : bornes en chaînes 'YYYY-MM-DD'. La borne de
   // fin (départ) est exclusive côté occupation, inclusive côté « départs ».
-  const enriched = reservations.map((r) => {
-    const [sy, sm, sd] = r.start_date.split('-').map(Number)
-    const end = new Date(sy, sm - 1, sd + r.nights)
-    return { spot: r.spot, start: r.start_date, end: ymd(end) }
-  })
+  // On BORNE au mois : une résa dont la fenêtre [start, end] ne touche pas
+  // [firstStr, lastStr] ne peut occuper, arriver ni partir aucun jour du mois —
+  // inutile de la balayer nDays fois (la lecture charge tout l'historique).
+  const enriched = reservations
+    .map((r) => {
+      const [sy, sm, sd] = r.start_date.split('-').map(Number)
+      const end = new Date(sy, sm - 1, sd + r.nights)
+      return { spot: r.spot, start: r.start_date, end: ymd(end) }
+    })
+    .filter((e) => e.start <= lastStr && e.end >= firstStr)
 
   const result: ParkingDayStats[] = []
   for (let day = 1; day <= nDays; day++) {
-    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(
-      day,
-    ).padStart(2, '0')}`
+    const dateStr = `${year}-${mm}-${String(day).padStart(2, '0')}`
     const spots = new Set<number>()
     let arrivals = 0
     let departures = 0
