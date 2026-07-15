@@ -49,7 +49,7 @@ export function InvoiceList({
       {records.map((r) => {
         const selected = r.id === selectedId
         return (
-          <div key={r.id} className="relative w-32 shrink-0 lg:w-full">
+          <div key={r.id} className="relative w-full">
             <button
               type="button"
               onClick={() => onSelect(r.id)}

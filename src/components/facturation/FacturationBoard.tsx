@@ -1,9 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
-import { AlertTriangle, Loader2, Plus, UploadCloud } from 'lucide-react'
+import { AlertTriangle, FileText, Loader2, UploadCloud } from 'lucide-react'
 
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
-import { PageHeader } from '#/components/shared/PageHeader.tsx'
-import { Button } from '#/components/ui/button.tsx'
 import { InvoiceList } from '#/components/facturation/InvoiceList.tsx'
 import { InvoicePanel } from '#/components/facturation/InvoicePanel.tsx'
 import { StampPreview } from '#/components/facturation/StampPreview.tsx'
@@ -19,16 +17,15 @@ import type {
 
 /*
  * Prototype « Facturation » — page de TEST, réservée aux admins, SANS base de
- * données. Atelier en trois panneaux : file des factures (gauche), grand aperçu
- * de la page avec tampon déplaçable (centre), imputation comptable (droite).
+ * données. Charpente calquée sur la page Affichage : trois panneaux en carte
+ * TOUJOURS visibles (file des factures à gauche, grand aperçu au centre,
+ * imputation à droite), sans barre d'en-tête.
  *
- * TOUTE la page est une zone de dépôt : glisser des PDF n'importe où les ajoute
- * (voile de survol). Le clic reste possible via le prompt de l'état vide et le
- * bouton « Ajouter » de l'en-tête. On lit le PDF (texte natif pdf.js, ou OCR
- * Tesseract si c'est un scan), on en déduit un code comptable par règles
- * déterministes, puis on appose un tampon vectoriel (pdf-lib) là où on l'a posé.
- * Rien n'est envoyé au réseau applicatif ; seules les « règles apprises » vivent
- * dans localStorage. Les libs lourdes sont chargées par import() dynamique.
+ * On lit le PDF (texte natif pdf.js, ou OCR Tesseract si c'est un scan), on en
+ * déduit un code comptable par règles déterministes, puis on appose un tampon
+ * vectoriel (pdf-lib) là où on l'a posé et à la taille choisie. Rien n'est envoyé
+ * au réseau applicatif ; seules les « règles apprises » vivent dans localStorage.
+ * Les libs lourdes sont chargées par import() dynamique.
  */
 
 /** État d'une facture chargée : lecture en cours, prête, ou en erreur. */
@@ -67,8 +64,16 @@ function stampDataOf(record: InvoiceRecord): StampData {
   }
 }
 
-/** Ce qui s'affiche au centre tant que la facture n'est pas prête. */
-function CenterPlaceholder({ record }: { record: InvoiceRecord }) {
+/** Ce qui s'affiche au centre selon l'état de la facture sélectionnée. */
+function CenterPlaceholder({ record }: { record: InvoiceRecord | null }) {
+  if (!record) {
+    return (
+      <div className="m-auto flex flex-col items-center gap-2 text-muted-foreground">
+        <FileText className="size-8 opacity-60" />
+        <p className="text-sm">Déposez une facture pour commencer.</p>
+      </div>
+    )
+  }
   if (record.status === 'error') {
     return (
       <div className="m-auto flex flex-col items-center gap-2 text-destructive">
@@ -162,16 +167,12 @@ export function FacturationBoard() {
     })
   }, [])
 
-  const openPicker = () => inputRef.current?.click()
-
-  // --- Dépôt au niveau de TOUTE la page --------------------------------------
+  // --- Dépôt au niveau de la page (provisoire : déplacé en colonne gauche à l'étape 2)
   const onDragOver = (e: React.DragEvent) => {
     e.preventDefault()
     setDragging(true)
   }
   const onDragLeave = (e: React.DragEvent) => {
-    // Ignore les passages d'un enfant à l'autre : on ne masque le voile que
-    // lorsque le curseur quitte réellement la zone (relatedTarget hors du board).
     if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
       setDragging(false)
     }
@@ -183,12 +184,11 @@ export function FacturationBoard() {
   }
 
   const selected = records.find((r) => r.id === selectedId) ?? null
-  const hasRecords = records.length > 0
 
   return (
     <PageContainer fillHeight>
       <div
-        className="relative flex min-h-0 flex-1 flex-col"
+        className="relative flex min-h-0 w-full min-w-0 flex-1 flex-col gap-4 lg:flex-row lg:gap-6"
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
         onDrop={onDrop}
@@ -205,87 +205,60 @@ export function FacturationBoard() {
           }}
         />
 
-        <PageHeader
-          title="Facturation"
-          meta="Prototype — lecture PDF, imputation comptable et tampon, 100 % local"
-          actions={
-            hasRecords ? (
-              <Button variant="outline" size="sm" onClick={openPicker}>
-                <Plus className="size-4" />
-                Ajouter
-              </Button>
-            ) : undefined
-          }
-        />
+        {/* COLONNE GAUCHE : file des factures (dropzone ajoutée à l'étape 2) */}
+        <aside className="flex min-h-0 w-full shrink-0 flex-col gap-4 rounded-xl border border-border bg-card p-4 lg:max-h-full lg:w-80 lg:overflow-y-auto">
+          <InvoiceList
+            records={records}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+            onRemove={removeRecord}
+            className="flex-col"
+          />
+          {records.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              Déposez des factures PDF pour commencer.
+            </p>
+          )}
+        </aside>
 
-        {!hasRecords ? (
-          <div className="mt-4 flex min-h-0 flex-1 items-center justify-center">
-            <button
-              type="button"
-              onClick={openPicker}
-              className="flex w-full max-w-xl flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-card/40 px-6 py-16 text-center transition-colors hover:border-primary/60 hover:bg-secondary/40"
-            >
-              <UploadCloud className="size-10 text-muted-foreground" />
-              <span className="text-base font-medium text-foreground">
-                Glissez vos factures PDF n'importe où, ou cliquez pour les
-                choisir
-              </span>
-              <span className="text-xs text-muted-foreground">
-                Plusieurs fichiers acceptés · scan ou PDF natif · rien ne quitte
-                votre navigateur
-              </span>
-            </button>
+        {/* CENTRE : grand aperçu + tampon */}
+        <section className="order-last flex min-h-[55vh] min-w-0 flex-1 flex-col lg:order-none lg:min-h-0">
+          <div className="flex min-h-0 flex-1 rounded-xl border border-border bg-muted/30 p-3">
+            {selected &&
+            selected.status === 'ready' &&
+            selected.previews.length > 0 ? (
+              <StampPreview
+                key={selected.id}
+                previews={selected.previews}
+                data={stampDataOf(selected)}
+                position={selected.position}
+                onPositionChange={(p) => patch(selected.id, { position: p })}
+              />
+            ) : (
+              <CenterPlaceholder record={selected} />
+            )}
           </div>
-        ) : (
-          <div className="mt-4 flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
-            {/* Rail gauche : file des factures */}
-            <InvoiceList
-              records={records}
-              selectedId={selectedId}
-              onSelect={setSelectedId}
-              onRemove={removeRecord}
-              className="shrink-0 overflow-x-auto pb-1 lg:w-52 lg:min-h-0 lg:flex-col lg:overflow-x-visible lg:overflow-y-auto lg:pr-1"
+        </section>
+
+        {/* COLONNE DROITE : imputation comptable */}
+        <aside className="flex min-h-0 w-full shrink-0 flex-col gap-4 rounded-xl border border-border bg-card p-4 lg:max-h-full lg:w-80 lg:overflow-y-auto">
+          <h2 className="text-sm font-semibold text-foreground">
+            Imputation comptable
+          </h2>
+          {selected ? (
+            <InvoicePanel
+              key={selected.id}
+              record={selected}
+              onPatch={(n) => patch(selected.id, n)}
             />
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Aucune facture sélectionnée.
+            </p>
+          )}
+        </aside>
 
-            {/* Centre : grand aperçu + tampon déplaçable */}
-            <section className="flex min-h-[55vh] min-w-0 flex-1 flex-col lg:min-h-0">
-              {selected && (
-                <div className="flex min-h-0 flex-1 rounded-xl border border-border bg-muted/30 p-3">
-                  {selected.status === 'ready' &&
-                  selected.previews.length > 0 ? (
-                    <StampPreview
-                      key={selected.id}
-                      previews={selected.previews}
-                      data={stampDataOf(selected)}
-                      position={selected.position}
-                      onPositionChange={(p) =>
-                        patch(selected.id, { position: p })
-                      }
-                    />
-                  ) : (
-                    <CenterPlaceholder record={selected} />
-                  )}
-                </div>
-              )}
-            </section>
-
-            {/* Rail droit : imputation comptable */}
-            <aside className="w-full shrink-0 overflow-y-auto rounded-xl border border-border bg-card p-4 lg:max-h-full lg:w-80">
-              <h2 className="mb-3 text-sm font-semibold text-foreground">
-                Imputation comptable
-              </h2>
-              {selected && (
-                <InvoicePanel
-                  key={selected.id}
-                  record={selected}
-                  onPatch={(n) => patch(selected.id, n)}
-                />
-              )}
-            </aside>
-          </div>
-        )}
-
-        {/* Voile de dépôt (couvre toute la page pendant le survol d'un fichier) */}
+        {/* Voile de dépôt (provisoire, retiré à l'étape 2) */}
         {dragging && (
           <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-xl border-2 border-dashed border-primary bg-primary/10 backdrop-blur-sm">
             <div className="flex flex-col items-center gap-2 text-primary">
