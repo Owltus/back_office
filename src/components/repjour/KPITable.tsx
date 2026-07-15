@@ -25,42 +25,6 @@ function ecartColor(val: number) {
   return val >= 0 ? 'text-emerald-400 font-bold' : 'text-destructive font-bold'
 }
 
-// Format compact sans unités pour mobile
-const fmtCompact = {
-  nuitees: (n: number) =>
-    new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(n),
-  pct: (n: number) =>
-    new Intl.NumberFormat('fr-FR', {
-      minimumFractionDigits: 1,
-      maximumFractionDigits: 1,
-    }).format(n),
-  eur: (n: number) =>
-    new Intl.NumberFormat('fr-FR', {
-      minimumFractionDigits: 1,
-      maximumFractionDigits: 1,
-    }).format(n),
-  eurInt: (n: number) =>
-    new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(n),
-  ecartNuitees: (n: number) =>
-    (n >= 0 ? '+' : '') +
-    new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(n),
-  ecartPct: (n: number) =>
-    (n >= 0 ? '+' : '') +
-    new Intl.NumberFormat('fr-FR', {
-      minimumFractionDigits: 1,
-      maximumFractionDigits: 1,
-    }).format(n),
-  ecartEur: (n: number) =>
-    (n >= 0 ? '+' : '') +
-    new Intl.NumberFormat('fr-FR', {
-      minimumFractionDigits: 1,
-      maximumFractionDigits: 1,
-    }).format(n),
-  ecartEurInt: (n: number) =>
-    (n >= 0 ? '+' : '') +
-    new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(n),
-}
-
 const ROWS: {
   label: string
   labelShort: string
@@ -79,9 +43,9 @@ const ROWS: {
     budgetKey: 'nuitees',
     ecartKey: 'nuitees',
     fmtVal: fmt.nuitees,
-    fmtValCompact: fmtCompact.nuitees,
+    fmtValCompact: fmt.compact,
     fmtEcart: fmt.ecartNuitees,
-    fmtEcartCompact: fmtCompact.ecartNuitees,
+    fmtEcartCompact: fmt.compactEcart,
   },
   {
     label: 'Taux occupation',
@@ -90,9 +54,9 @@ const ROWS: {
     budgetKey: 'taux_occupation',
     ecartKey: 'to',
     fmtVal: fmt.pct,
-    fmtValCompact: fmtCompact.pct,
+    fmtValCompact: fmt.compactDec,
     fmtEcart: (n) => (n >= 0 ? '+' : '') + fmt.pct(n),
-    fmtEcartCompact: fmtCompact.ecartPct,
+    fmtEcartCompact: fmt.compactEcartDec,
   },
   {
     label: 'Prix moyen',
@@ -101,9 +65,9 @@ const ROWS: {
     budgetKey: 'prix_moyen',
     ecartKey: 'pm',
     fmtVal: fmt.eur,
-    fmtValCompact: fmtCompact.eur,
+    fmtValCompact: fmt.compactDec,
     fmtEcart: fmt.ecartEur,
-    fmtEcartCompact: fmtCompact.ecartEur,
+    fmtEcartCompact: fmt.compactEcartDec,
   },
   {
     label: 'RevPAR',
@@ -112,9 +76,9 @@ const ROWS: {
     budgetKey: 'revpar',
     ecartKey: 'revpar',
     fmtVal: fmt.eur,
-    fmtValCompact: fmtCompact.eur,
+    fmtValCompact: fmt.compactDec,
     fmtEcart: fmt.ecartEur,
-    fmtEcartCompact: fmtCompact.ecartEur,
+    fmtEcartCompact: fmt.compactEcartDec,
   },
   {
     label: "Chiffre d'affaires",
@@ -123,9 +87,9 @@ const ROWS: {
     budgetKey: 'room_revenue',
     ecartKey: 'roomRevenue',
     fmtVal: fmt.eurInt,
-    fmtValCompact: fmtCompact.eurInt,
+    fmtValCompact: fmt.compact,
     fmtEcart: fmt.ecartEurInt,
-    fmtEcartCompact: fmtCompact.ecartEurInt,
+    fmtEcartCompact: fmt.compactEcart,
   },
 ]
 
