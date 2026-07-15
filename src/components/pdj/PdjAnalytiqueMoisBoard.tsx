@@ -43,17 +43,18 @@ export function PdjAnalytiqueMoisBoard({
   const mm = String(month).padStart(2, '0')
   const lastDay = new Date(year, month, 0).getDate()
 
-  // Lignes du mois → agrégation par jour. Cache par (année, mois) : naviguer
-  // puis revenir est instantané.
-  const { data: stats = [], isPending: loading } = useQuery({
-    queryKey: ['pdj', 'analytics-month', year, month],
-    queryFn: () =>
-      fetchRange(
-        `${year}-${mm}-01`,
-        `${year}-${mm}-${String(lastDay).padStart(2, '0')}`,
-      ).then((rows) => aggregatePdjDaily(rows, year, month)),
-    enabled: Number.isFinite(year) && Number.isFinite(month),
+  // MÊME clé que la vue annuelle (`['pdj','analytics', year]`) : les lignes de
+  // l'année sont lues une seule fois et partagées entre les deux vues (hit de
+  // cache instantané au passage annuel → mois, et entre mois). L'agrégation par
+  // jour est un calcul client négligeable, dérivé du cache.
+  const { data: rows = [], isPending: loading } = useQuery({
+    queryKey: ['pdj', 'analytics', year],
+    queryFn: () => fetchRange(`${year}-01-01`, `${year}-12-31`),
   })
+  const stats = useMemo(
+    () => aggregatePdjDaily(rows, year, month),
+    [rows, year, month],
+  )
 
   // Index par numéro de jour pour peupler un tableau plein mois (1..lastDay),
   // les jours sans donnée restant en tirets grisés.
