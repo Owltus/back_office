@@ -431,7 +431,7 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
   const longDate = fmtTitle.format(displayDate)
   const titleDate = longDate.charAt(0).toUpperCase() + longDate.slice(1)
 
-  // Colonnes du tableau des paiements (web seulement le soir).
+  // Colonnes du tableau des paiements (web au matin et au soir, pas la nuit).
   const cols: EcartKey[] = showWeb ? [...PAY_KEYS, 'web'] : [...PAY_KEYS]
 
   const setSnt = (k: keyof CaisseSheetInput['snt'], v: number) =>

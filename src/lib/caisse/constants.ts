@@ -35,19 +35,6 @@ export const DENOMINATIONS: ReadonlyArray<{
 export const emptyCounts = (): Counts =>
   DENOMINATIONS.reduce((acc, d) => ({ ...acc, [d.key]: 0 }), {} as Counts)
 
-/**
- * Coupures groupées par colonne pour l'affichage (remplissage vertical) :
- * chaque colonne est une « décade » — 500/200/100, 50/20/10, 5/2/1,
- * 0,50/0,20/0,10, 0,05/0,02/0,01.
- */
-export const DENOMINATION_COLUMNS = [
-  DENOMINATIONS.slice(0, 3),
-  DENOMINATIONS.slice(3, 6),
-  DENOMINATIONS.slice(6, 9),
-  DENOMINATIONS.slice(9, 12),
-  DENOMINATIONS.slice(12, 15),
-]
-
 /** Fond de caisse d'origine attendu (€). */
 export const FUND_TARGET = 150
 

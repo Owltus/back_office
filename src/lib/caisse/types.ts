@@ -23,7 +23,7 @@ export type DenomKey =
 
 export type Counts = Record<DenomKey, number>
 
-/** Montants attendus StayNTouch (réception). `cbweb` = CB WEB (toutes), soir. */
+/** Montants attendus StayNTouch (réception). `cbweb` = CB WEB, matin et soir. */
 export interface SntAmounts {
   cash: number; cb: number; cvac: number; cbweb: number
 }
@@ -31,7 +31,7 @@ export interface SntAmounts {
 export interface LsAmounts {
   cash: number; cb: number; cvac: number
 }
-/** Montants réels comptés dans la caisse. `adyen` = CB WEB réel, soir. */
+/** Montants réels comptés dans la caisse. `adyen` = CB WEB réel, matin et soir. */
 export interface CaisseAmounts {
   cash: number; cb: number; cvac: number; adyen: number
 }
