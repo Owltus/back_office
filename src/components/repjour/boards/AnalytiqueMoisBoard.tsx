@@ -10,6 +10,7 @@ import { AnalytiqueTable } from '#/components/analytique/AnalytiqueTable.tsx'
 import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
 import { AnalytiqueBackButton } from '#/components/analytique/AnalytiqueBackButton.tsx'
 import { KpiLineChart } from '#/components/analytique/KpiLineChart.tsx'
+import { KpiCell } from '#/components/analytique/KpiCell.tsx'
 import { fetchUnifiedDays } from '#/lib/repjour/services/data.ts'
 import { fetchBudget } from '#/lib/repjour/services/daily.ts'
 import {
@@ -152,7 +153,11 @@ export function AnalytiqueMoisBoard({
       title={`${monthLabel} ${year}`}
       actions={<AnalytiqueBackButton />}
       loading={loading}
-      skeleton={{ cols: 5, charts: 2, rows: new Date(year, month, 0).getDate() }}
+      skeleton={{
+        cols: 5,
+        charts: 2,
+        rows: new Date(year, month, 0).getDate(),
+      }}
     >
       {/* Cartes résumé — réalisé / objectif en FRACTION (barre horizontale) quand
           un budget existe pour le mois ; sinon valeur seule. */}
@@ -221,16 +226,8 @@ export function AnalytiqueMoisBoard({
 
             const nuitees = r ? r.rj_nuitees : f ? f.occ : null
             const to = r ? r.rj_to : f ? f.occ_percent : null
-            const pm = r
-              ? r.rj_pm
-              : f && f.occ > 0
-                ? f.rev_ttc / f.occ
-                : null
-            const revpar = r
-              ? r.rj_revpar
-              : f
-                ? f.rev_ttc / TOTAL_ROOMS
-                : null
+            const pm = r ? r.rj_pm : f && f.occ > 0 ? f.rev_ttc / f.occ : null
+            const revpar = r ? r.rj_revpar : f ? f.rev_ttc / TOTAL_ROOMS : null
             const ca = r ? r.rj_room_revenue : f ? f.rev_ttc : null
 
             const opacity = isFuture && !r ? 'opacity-25' : ''
@@ -249,76 +246,40 @@ export function AnalytiqueMoisBoard({
                 >
                   {dayName} {dayNum}
                 </td>
-                <td
-                  className={`whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums ${opacity}`}
-                >
-                  {nuitees != null ? (
-                    <>
-                      <span className="hidden sm:inline">
-                        {fmt.nuitees(nuitees)}
-                      </span>
-                      <span className="sm:hidden">{compact(nuitees)}</span>
-                    </>
-                  ) : (
-                    <span className="text-muted-foreground/50">—</span>
-                  )}
-                </td>
-                <td
-                  className={`whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums ${
+                <KpiCell
+                  value={nuitees}
+                  full={fmt.nuitees}
+                  compact={compact}
+                  className={opacity}
+                />
+                <KpiCell
+                  value={to}
+                  full={fmt.pct}
+                  compact={compactDec}
+                  className={
                     to != null && to > 100
                       ? 'font-bold text-destructive'
                       : opacity
-                  }`}
-                >
-                  {to != null ? (
-                    <>
-                      <span className="hidden sm:inline">{fmt.pct(to)}</span>
-                      <span className="sm:hidden">{compactDec(to)}</span>
-                    </>
-                  ) : (
-                    <span className="text-muted-foreground/50">—</span>
-                  )}
-                </td>
-                <td
-                  className={`whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums ${opacity}`}
-                >
-                  {pm != null ? (
-                    <>
-                      <span className="hidden sm:inline">{fmt.eur(pm)}</span>
-                      <span className="sm:hidden">{compactDec(pm)}</span>
-                    </>
-                  ) : (
-                    <span className="text-muted-foreground/50">—</span>
-                  )}
-                </td>
-                <td
-                  className={`whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums ${opacity}`}
-                >
-                  {revpar != null ? (
-                    <>
-                      <span className="hidden sm:inline">
-                        {fmt.eur(revpar)}
-                      </span>
-                      <span className="sm:hidden">{compactDec(revpar)}</span>
-                    </>
-                  ) : (
-                    <span className="text-muted-foreground/50">—</span>
-                  )}
-                </td>
-                <td
-                  className={`whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums ${opacity}`}
-                >
-                  {ca != null ? (
-                    <>
-                      <span className="hidden sm:inline">
-                        {fmt.eurInt(ca)}
-                      </span>
-                      <span className="sm:hidden">{compact(ca)}</span>
-                    </>
-                  ) : (
-                    <span className="text-muted-foreground/50">—</span>
-                  )}
-                </td>
+                  }
+                />
+                <KpiCell
+                  value={pm}
+                  full={fmt.eur}
+                  compact={compactDec}
+                  className={opacity}
+                />
+                <KpiCell
+                  value={revpar}
+                  full={fmt.eur}
+                  compact={compactDec}
+                  className={opacity}
+                />
+                <KpiCell
+                  value={ca}
+                  full={fmt.eurInt}
+                  compact={compact}
+                  className={opacity}
+                />
               </tr>
             )
           })}
