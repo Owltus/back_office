@@ -59,7 +59,7 @@ import {
   validateSheet,
 } from '#/lib/rapro/service.ts'
 import type { RaproDay, RaproSheet, RoomStatus } from '#/lib/rapro/types.ts'
-import { cn } from '#/lib/utils.ts'
+import { capitalize, cn } from '#/lib/utils.ts'
 
 const EMPTY: ReadonlyMap<number, RoomStatus> = new Map()
 
@@ -227,18 +227,17 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
     })),
   })
   // Jours CLÔTURÉS de la fenêtre : seuls eux font rouler leurs chambres non faites.
+  // `enabled` exclut la fenêtre vide → les bornes [0]/[dernier] sont toujours
+  // définies quand la requête tourne (pas de repli `?? selectedDate` nécessaire).
   const { data: validatedDays } = useQuery({
     queryKey: [
       'rapro',
       'validated-window',
-      windowDays[0] ?? selectedDate,
-      windowDays[windowDays.length - 1] ?? selectedDate,
+      windowDays[0],
+      windowDays[windowDays.length - 1],
     ],
     queryFn: () =>
-      fetchValidatedDays(
-        windowDays[0] ?? selectedDate,
-        windowDays[windowDays.length - 1] ?? selectedDate,
-      ),
+      fetchValidatedDays(windowDays[0], windowDays[windowDays.length - 1]),
     enabled: windowDays.length > 0,
   })
   const closedDays = validatedDays ?? new Set<string>()
@@ -485,7 +484,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   const label = parsed
     ? format(parsed, 'EEEE d MMMM yyyy', { locale: fr })
     : selectedDate
-  const title = label.charAt(0).toUpperCase() + label.slice(1)
+  const title = capitalize(label)
 
   /* Bouton d'état du jour, rendu en bas de page (sous les commentaires), là où
      se termine la saisie — comme sur la feuille de caisse. Texte seul : le

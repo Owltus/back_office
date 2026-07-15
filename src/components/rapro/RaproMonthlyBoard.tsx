@@ -15,6 +15,7 @@ import {
   RaproCatHead,
 } from '#/components/rapro/RaproCatColumns.tsx'
 import { parseDateStr } from '#/lib/poster/dateFormatter.ts'
+import { capitalize } from '#/lib/utils.ts'
 import {
   fetchStatusCountsByRange,
   monthBounds,
@@ -45,10 +46,9 @@ export function RaproMonthlyBoard({
   })
   const { rows, totals } = monthlyRows(year, month, byDay ?? new Map())
 
-  const rawLabel = format(new Date(year, month - 1, 1), 'MMMM yyyy', {
-    locale: fr,
-  })
-  const monthLabel = rawLabel.charAt(0).toUpperCase() + rawLabel.slice(1)
+  const monthLabel = capitalize(
+    format(new Date(year, month - 1, 1), 'MMMM yyyy', { locale: fr }),
+  )
 
   // Recalcul direct : `rows` est reconstruit à chaque render (monthlyRows), un
   // useMemo sur `[rows]` n'aurait jamais mémoïsé.

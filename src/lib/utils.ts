@@ -11,3 +11,7 @@ export const clamp = (v: number, min: number, max: number) =>
 
 export const range = (start: number, end: number) =>
   Array.from({ length: end - start + 1 }, (_, i) => start + i)
+
+/** Première lettre en capitale, le reste inchangé (ex. « juillet » → « Juillet »).
+ * Idiome courant sur les libellés date-fns, qui sortent en minuscule. */
+export const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)

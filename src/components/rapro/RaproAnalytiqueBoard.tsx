@@ -19,6 +19,7 @@ import {
 } from '#/components/rapro/RaproCatColumns.tsx'
 import { fetchOldestDay } from '#/lib/rapro/service.ts'
 import { CATEGORY_COLOR as CAT_COLOR } from '#/lib/rapro/constants.ts'
+import { capitalize } from '#/lib/utils.ts'
 import {
   fetchStatusCountsByRange,
   monthBounds,
@@ -52,8 +53,7 @@ const MONTHS_SHORT = [
 const currentYear = new Date().getFullYear()
 
 function monthLabel(year: number, m: number): string {
-  const l = format(new Date(year, m - 1, 1), 'MMMM', { locale: fr })
-  return l.charAt(0).toUpperCase() + l.slice(1)
+  return capitalize(format(new Date(year, m - 1, 1), 'MMMM', { locale: fr }))
 }
 
 export function RaproAnalytiqueBoard() {
