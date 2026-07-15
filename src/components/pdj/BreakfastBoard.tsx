@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent, DragEvent } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -322,20 +322,27 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
 
   // Saisie « PDJ servi » d'une chambre : mise à jour optimiste du cache puis
   // persistance ; en cas d'échec (ex. RLS), on resynchronise.
-  function handleServe(room: number, n: number) {
-    if (!canEdit || !selectedDate) return
-    queryClient.setQueryData<PdjDayRow[]>(['pdj', 'day', selectedDate], (old) =>
-      old?.map((r) =>
-        r.room === room ? { ...r, breakfasts_served: n, served: n > 0 } : r,
-      ),
-    )
-    setServed(selectedDate, room, n).catch((err) => {
-      console.error('[pdj] enregistrement de la consommation échoué', err)
-      void queryClient.invalidateQueries({
-        queryKey: ['pdj', 'day', selectedDate],
+  // Stable (useCallback) : passé à chaque GuestRow mémoïsé, sinon une nouvelle
+  // identité à chaque render annulerait le memo et re-rendrait les 80 lignes.
+  const handleServe = useCallback(
+    (room: number, n: number) => {
+      if (!canEdit || !selectedDate) return
+      queryClient.setQueryData<PdjDayRow[]>(
+        ['pdj', 'day', selectedDate],
+        (old) =>
+          old?.map((r) =>
+            r.room === room ? { ...r, breakfasts_served: n, served: n > 0 } : r,
+          ),
+      )
+      setServed(selectedDate, room, n).catch((err) => {
+        console.error('[pdj] enregistrement de la consommation échoué', err)
+        void queryClient.invalidateQueries({
+          queryKey: ['pdj', 'day', selectedDate],
+        })
       })
-    })
-  }
+    },
+    [canEdit, selectedDate, queryClient],
+  )
 
   function handlePrint() {
     const d = selectedDate ? new Date(selectedDate + 'T00:00:00') : new Date()
@@ -719,7 +726,10 @@ function BoardSkeleton() {
   )
 }
 
-function GuestRow({
+// Mémoïsé : sur un clic « servi », seule la chambre modifiée reçoit un nouvel
+// objet `row` (maj optimiste par référence) — les 79 autres lignes gardent leur
+// référence et ne se re-rendent pas (avec `onServe` stable, cf. useCallback).
+const GuestRow = memo(function GuestRow({
   room,
   row,
   canEdit,
@@ -835,4 +845,4 @@ function GuestRow({
       </td>
     </tr>
   )
-}
+})
