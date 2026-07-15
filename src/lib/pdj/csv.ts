@@ -32,6 +32,16 @@ export const REQUIRED_COLUMNS = [
   'Rate',
 ] as const
 
+/** Nature du séjour d'après le statut PMS — SOURCE UNIQUE de la règle : recouche
+ * (IN HOUSE), départ (DUE OUT = va partir, ou CHECKED OUT = déjà parti ce matin),
+ * ou null (autre). Consommée par les compteurs et la flèche de la grille. */
+export function stayKind(status: string): 'staying' | 'departing' | null {
+  if (status.includes('IN HOUSE')) return 'staying'
+  if (status.includes('DUE OUT') || status.includes('CHECKED OUT'))
+    return 'departing'
+  return null
+}
+
 // Découpe une ligne CSV en gérant les guillemets et guillemets échappés ("").
 export function parseCsvLine(line: string, separator: string): string[] {
   const result: string[] = []

@@ -30,7 +30,12 @@ import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { capitalize, cn } from '#/lib/utils.ts'
 import { errorMessage } from '#/lib/errors.ts'
 import { printWithTitle } from '#/lib/print.ts'
-import { ALL_ROOMS, localDateStr, mergeCsvFiles } from '#/lib/pdj/csv.ts'
+import {
+  ALL_ROOMS,
+  localDateStr,
+  mergeCsvFiles,
+  stayKind,
+} from '#/lib/pdj/csv.ts'
 import { businessDateStr, businessNow } from '#/lib/businessDay.ts'
 import {
   deleteDay,
@@ -162,11 +167,9 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
       rooms++
       total += g.guests
       breakfasts += g.breakfasts_included
-      // Départ = va partir (DUE OUT) OU déjà parti ce matin (CHECKED OUT du
-      // jour, conservé à l'import) ; recouche = IN HOUSE.
-      if (g.status.includes('IN HOUSE')) staying++
-      else if (g.status.includes('DUE OUT') || g.status.includes('CHECKED OUT'))
-        departing++
+      const kind = stayKind(g.status)
+      if (kind === 'staying') staying++
+      else if (kind === 'departing') departing++
     }
     return {
       rooms,
@@ -744,11 +747,10 @@ const GuestRow = memo(function GuestRow({
   const served = row?.breakfasts_served ?? 0
   // Minimum 2 cases pour une grille visuellement régulière (impression papier).
   const numBoxes = Math.max(2, numGuests)
-  // Départ = DUE OUT (va partir) ou CHECKED OUT (déjà parti ce matin) ; les deux
-  // portent la flèche « départ ». Recouche = IN HOUSE.
-  const departing =
-    row?.status.includes('DUE OUT') || row?.status.includes('CHECKED OUT')
-  const staying = row?.status.includes('IN HOUSE')
+  // Flèche selon la nature du séjour (source unique `stayKind`) : départ vs recouche.
+  const kind = row ? stayKind(row.status) : null
+  const departing = kind === 'departing'
+  const staying = kind === 'staying'
   // Double-clic sur la ligne (si des couverts existent) : tout servir / annuler.
   const canServe = canEdit && numGuests > 0
 
