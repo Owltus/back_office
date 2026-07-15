@@ -10,8 +10,11 @@ import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
 import { AnalytiqueBackButton } from '#/components/analytique/AnalytiqueBackButton.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
 import { KpiLineChart } from '#/components/analytique/KpiLineChart.tsx'
+import {
+  RaproCatCells,
+  RaproCatHead,
+} from '#/components/rapro/RaproCatColumns.tsx'
 import { parseDateStr } from '#/lib/poster/dateFormatter.ts'
-import { CATEGORY_COLOR as CAT_COLOR } from '#/lib/rapro/constants.ts'
 import {
   fetchStatusCountsByRange,
   monthBounds,
@@ -27,14 +30,6 @@ import { printRaproMonthly } from '#/lib/rapro/pdf.ts'
  * annuelle par le chevron.
  */
 
-/** Compteur au code couleur ; un zéro reste discret (grisé). */
-function coloredCount(n: number, color: string) {
-  return n === 0 ? (
-    <span className="text-muted-foreground/40">0</span>
-  ) : (
-    <span style={{ color }}>{n}</span>
-  )
-}
 export function RaproMonthlyBoard({
   year,
   month,
@@ -101,45 +96,11 @@ export function RaproMonthlyBoard({
       }}
     >
       {/* Tableau jour par jour */}
-      <AnalytiqueTable
-        head={
-          <tr className="border-b border-border bg-muted">
-            <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">
-              Jour
-            </th>
-            <th
-              className="px-3 py-2 text-center text-xs font-medium"
-              style={{ color: CAT_COLOR.nettoyee }}
-            >
-              Nettoyée
-            </th>
-            <th
-              className="px-3 py-2 text-center text-xs font-medium"
-              style={{ color: CAT_COLOR.bloquee }}
-            >
-              Bloquée
-            </th>
-            <th
-              className="px-3 py-2 text-center text-xs font-medium"
-              style={{ color: CAT_COLOR.refus }}
-            >
-              Refus
-            </th>
-            <th
-              className="px-3 py-2 text-center text-xs font-medium"
-              style={{ color: CAT_COLOR.noshow }}
-            >
-              No-show
-            </th>
-          </tr>
-        }
-      >
+      <AnalytiqueTable head={<RaproCatHead firstLabel="Jour" />}>
         <tbody>
           {rows.map((r) => {
             const d = parseDateStr(r.date)
-            const lbl = d
-              ? format(d, 'EEE d', { locale: fr })
-              : String(r.day)
+            const lbl = d ? format(d, 'EEE d', { locale: fr }) : String(r.day)
             return (
               <tr key={r.date} className="border-b border-border/50">
                 <td className="whitespace-nowrap px-4 py-2 text-xs font-medium text-foreground">
@@ -151,18 +112,7 @@ export function RaproMonthlyBoard({
                     {lbl}
                   </Link>
                 </td>
-                <td className="whitespace-nowrap px-3 py-2 text-center text-xs font-medium tabular-nums">
-                  {coloredCount(r.nettoyee, CAT_COLOR.nettoyee)}
-                </td>
-                <td className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums">
-                  {coloredCount(r.bloquee, CAT_COLOR.bloquee)}
-                </td>
-                <td className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums">
-                  {coloredCount(r.refus, CAT_COLOR.refus)}
-                </td>
-                <td className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums">
-                  {coloredCount(r.noshow, CAT_COLOR.noshow)}
-                </td>
+                <RaproCatCells counts={r} />
               </tr>
             )
           })}
@@ -170,18 +120,7 @@ export function RaproMonthlyBoard({
         <tfoot>
           <tr className="border-t border-border bg-muted/50 font-medium">
             <td className="px-4 py-2 text-xs">Total du mois</td>
-            <td className="px-3 py-2 text-center text-xs tabular-nums">
-              {coloredCount(totals.nettoyee, CAT_COLOR.nettoyee)}
-            </td>
-            <td className="px-3 py-2 text-center text-xs tabular-nums">
-              {coloredCount(totals.bloquee, CAT_COLOR.bloquee)}
-            </td>
-            <td className="px-3 py-2 text-center text-xs tabular-nums">
-              {coloredCount(totals.refus, CAT_COLOR.refus)}
-            </td>
-            <td className="px-3 py-2 text-center text-xs tabular-nums">
-              {coloredCount(totals.noshow, CAT_COLOR.noshow)}
-            </td>
+            <RaproCatCells counts={totals} />
           </tr>
         </tfoot>
       </AnalytiqueTable>
