@@ -46,10 +46,30 @@ export function startDayToDate(startDay: number, refMonday: Date): string {
   return format(addDays(refMonday, startDay), 'yyyy-MM-dd')
 }
 
+/**
+ * Toutes les réservations. PAGINÉ : le board comme l'analytique lisent TOUTES
+ * les lignes (filtrage/agrégation côté client) ; au-delà de 1000 réservations,
+ * l'API en tronquait silencieusement une partie (mois/années manquants dans
+ * l'analytique). Lecture page par page jusqu'à une page incomplète, ordre stable
+ * par `id`.
+ */
 export async function fetchReservations(): Promise<DbReservation[]> {
-  const { data, error } = await supabase.from(PARKING_TABLE).select('*')
-  if (error) throw error
-  return (data ?? []) as DbReservation[]
+  const PAGE = 1000
+  const all: DbReservation[] = []
+  let offset = 0
+  for (;;) {
+    const { data, error } = await supabase
+      .from(PARKING_TABLE)
+      .select('*')
+      .order('id', { ascending: true })
+      .range(offset, offset + PAGE - 1)
+    if (error) throw error
+    const rows = (data ?? []) as DbReservation[]
+    all.push(...rows)
+    if (rows.length < PAGE) break
+    offset += rows.length
+  }
+  return all
 }
 
 export async function createReservation(row: DbReservation): Promise<void> {

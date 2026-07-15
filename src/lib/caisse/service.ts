@@ -81,14 +81,31 @@ export function toDbUpsert(s: CaisseSheetInput): Partial<DbCaisseSheet> {
   }
 }
 
-/** Feuilles existantes, de la plus récente à la plus ancienne. */
+/** Feuilles existantes, de la plus récente à la plus ancienne.
+ *
+ * PAGINÉ : jusqu'à 3 feuilles/jour (matin/soir/nuit) → au-delà d'une petite
+ * année de données on dépasse le plafond de 1000 lignes de l'API. Sans
+ * pagination, l'analytique (qui lit TOUTES les feuilles puis filtre par année)
+ * perdait silencieusement les années les plus anciennes. Lecture page par page
+ * jusqu'à une page incomplète ; tri secondaire par `shift` pour un ordre stable. */
 export async function fetchSheets(): Promise<CaisseSheet[]> {
-  const { data, error } = await supabase
-    .from(CAISSE_TABLE)
-    .select('*')
-    .order('report_date', { ascending: false })
-  if (error) throw error
-  return (data as DbCaisseSheet[]).map(toSheet)
+  const PAGE = 1000
+  const all: DbCaisseSheet[] = []
+  let offset = 0
+  for (;;) {
+    const { data, error } = await supabase
+      .from(CAISSE_TABLE)
+      .select('*')
+      .order('report_date', { ascending: false })
+      .order('shift', { ascending: true })
+      .range(offset, offset + PAGE - 1)
+    if (error) throw error
+    const rows = (data ?? []) as DbCaisseSheet[]
+    all.push(...rows)
+    if (rows.length < PAGE) break
+    offset += rows.length
+  }
+  return all.map(toSheet)
 }
 
 /** Feuille d'un couple (date, shift), ou null si aucune. */

@@ -33,13 +33,28 @@ export function toGuest(row: PdjDayRow): Guest {
 }
 
 /** Jours de service disponibles, du plus récent au plus ancien (distinct). */
+/** Dates de service DISTINCTES (années dispo de l'analytique, sélecteur de jour
+ * du board). PAGINÉ : une ligne par (jour, chambre) → non paginé, l'API tronquait
+ * à 1000 room-jours (≈ les 20 derniers jours), masquant les dates/années plus
+ * anciennes. On lit la seule colonne `service_date` page par page (payload
+ * minime), puis on déduplique. */
 export async function fetchServiceDates(): Promise<string[]> {
-  const { data, error } = await supabase
-    .from(PDJ_TABLE)
-    .select('service_date')
-    .order('service_date', { ascending: false })
-  if (error) throw error
-  const dates = (data as { service_date: string }[]).map((r) => r.service_date)
+  const PAGE = 1000
+  const dates: string[] = []
+  let offset = 0
+  for (;;) {
+    const { data, error } = await supabase
+      .from(PDJ_TABLE)
+      .select('service_date')
+      .order('service_date', { ascending: false })
+      .order('room', { ascending: true })
+      .range(offset, offset + PAGE - 1)
+    if (error) throw error
+    const rows = (data ?? []) as { service_date: string }[]
+    dates.push(...rows.map((r) => r.service_date))
+    if (rows.length < PAGE) break
+    offset += rows.length
+  }
   return [...new Set(dates)]
 }
 
