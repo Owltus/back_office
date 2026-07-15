@@ -77,6 +77,48 @@ export function emptyInput(
   }
 }
 
+/** Feuille chargée → saisie (copie profonde des blocs éditables). */
+export function sheetToInput(s: CaisseSheet): CaisseSheetInput {
+  return {
+    reportDate: s.reportDate,
+    shift: s.shift,
+    operatorInitials: s.operatorInitials,
+    snt: { ...s.snt },
+    ls: { ...s.ls },
+    caisse: { ...s.caisse },
+    counts: { ...s.counts },
+    fundOrigin: s.fundOrigin,
+    comment: s.comment,
+  }
+}
+
+/** Fusionne une saisie dans la feuille de base (pour un cache optimiste) :
+ * conserve id / statut / validation / horodatage, remplace le contenu saisi. */
+export function inputToSheet(
+  input: CaisseSheetInput,
+  base: CaisseSheet | null,
+): CaisseSheet {
+  return {
+    id: base?.id ?? '',
+    reportDate: input.reportDate,
+    shift: input.shift,
+    operatorInitials: input.operatorInitials,
+    snt: input.snt,
+    ls: input.ls,
+    caisse: input.caisse,
+    counts: input.counts,
+    fundOrigin: input.fundOrigin,
+    comment: input.comment,
+    status: base?.status ?? 'draft',
+    validatedAt: base?.validatedAt ?? null,
+    validatedBy: base?.validatedBy ?? null,
+    countersignedBy: base?.countersignedBy ?? null,
+    createdBy: base?.createdBy ?? '',
+    createdAt: base?.createdAt ?? '',
+    updatedAt: base?.updatedAt ?? '',
+  }
+}
+
 function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100
 }

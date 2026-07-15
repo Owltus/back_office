@@ -39,7 +39,9 @@ import {
   fundEcart,
   fundTotal,
   hasCountedFund,
+  inputToSheet,
   isBalanced,
+  sheetToInput,
 } from '#/lib/caisse/calc.ts'
 import {
   fmtEcart,
@@ -105,47 +107,6 @@ const fmtTitle = new Intl.DateTimeFormat('fr-FR', {
   month: 'long',
   year: 'numeric',
 })
-
-function sheetToInput(s: CaisseSheet): CaisseSheetInput {
-  return {
-    reportDate: s.reportDate,
-    shift: s.shift,
-    operatorInitials: s.operatorInitials,
-    snt: { ...s.snt },
-    ls: { ...s.ls },
-    caisse: { ...s.caisse },
-    counts: { ...s.counts },
-    fundOrigin: s.fundOrigin,
-    comment: s.comment,
-  }
-}
-
-/** Fusionne une saisie dans la feuille de base (pour un cache optimiste) :
- * conserve id / statut / validation / horodatage, remplace le contenu saisi. */
-function inputToSheet(
-  input: CaisseSheetInput,
-  base: CaisseSheet | null,
-): CaisseSheet {
-  return {
-    id: base?.id ?? '',
-    reportDate: input.reportDate,
-    shift: input.shift,
-    operatorInitials: input.operatorInitials,
-    snt: input.snt,
-    ls: input.ls,
-    caisse: input.caisse,
-    counts: input.counts,
-    fundOrigin: input.fundOrigin,
-    comment: input.comment,
-    status: base?.status ?? 'draft',
-    validatedAt: base?.validatedAt ?? null,
-    validatedBy: base?.validatedBy ?? null,
-    countersignedBy: base?.countersignedBy ?? null,
-    createdBy: base?.createdBy ?? '',
-    createdAt: base?.createdAt ?? '',
-    updatedAt: base?.updatedAt ?? '',
-  }
-}
 
 export function CaisseBoard({ initialDate }: { initialDate?: string }) {
   const { user, role } = useAuth()
