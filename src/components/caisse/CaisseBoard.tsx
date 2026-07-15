@@ -586,47 +586,58 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
      plein), réouvrir en est le RETOUR EN ARRIÈRE (contour vert, comme la
      pastille d'en-tête), verrouillé en est le refus (contour rouge). Texte seul :
      le libellé dit déjà l'action, une icône n'y ajoutait rien. */
-  const stateAction = !isWriter ? null : !isValidated ? (
-    editable && (
-      <Tip label="Fige les montants de ce shift">
-        <Button
-          className="w-full"
-          onClick={() => {
-            setHotelierName(form.operatorInitials)
-            setCloseOpen(true)
-          }}
-        >
-          Clôturer la caisse
-        </Button>
-      </Tip>
-    )
-  ) : editable ? (
-    <Tip label="Rend les montants modifiables">
-      <Button
-        variant="outline"
-        className="w-full border-emerald-500/40 text-emerald-500 hover:bg-emerald-500/10 hover:text-emerald-500 dark:hover:bg-emerald-500/10"
-        onClick={handleReopen}
-        disabled={busy}
-      >
-        Réouvrir la caisse
-      </Button>
-    </Tip>
-  ) : (
+  // Échelle des quatre issues (au lieu d'un ternaire imbriqué) : non-rédacteur →
+  // rien ; brouillon éditable → Clôturer ; clôturée + éditable → Réouvrir ;
+  // clôturée hors droits → Verrouillé.
+  const stateAction = (() => {
+    if (!isWriter) return null
+    if (!isValidated) {
+      if (!editable) return null
+      return (
+        <Tip label="Fige les montants de ce shift">
+          <Button
+            className="w-full"
+            onClick={() => {
+              setHotelierName(form.operatorInitials)
+              setCloseOpen(true)
+            }}
+          >
+            Clôturer la caisse
+          </Button>
+        </Tip>
+      )
+    }
+    if (editable) {
+      return (
+        <Tip label="Rend les montants modifiables">
+          <Button
+            variant="outline"
+            className="w-full border-emerald-500/40 text-emerald-500 hover:bg-emerald-500/10 hover:text-emerald-500 dark:hover:bg-emerald-500/10"
+            onClick={handleReopen}
+            disabled={busy}
+          >
+            Réouvrir la caisse
+          </Button>
+        </Tip>
+      )
+    }
     // Bouton désactivé : Radix ne verrait aucun survol dessus, d'où le span
     // porteur. C'est ici que l'infobulle compte le plus — elle est la seule à
     // dire POURQUOI la réouverture est refusée.
-    <Tip label="Réouverture réservée à un administrateur">
-      <span tabIndex={0} className="block w-full">
-        <Button
-          variant="outline"
-          disabled
-          className="w-full border-destructive/50 text-destructive disabled:opacity-100"
-        >
-          Verrouillé
-        </Button>
-      </span>
-    </Tip>
-  )
+    return (
+      <Tip label="Réouverture réservée à un administrateur">
+        <span tabIndex={0} className="block w-full">
+          <Button
+            variant="outline"
+            disabled
+            className="w-full border-destructive/50 text-destructive disabled:opacity-100"
+          >
+            Verrouillé
+          </Button>
+        </span>
+      </Tip>
+    )
+  })()
 
   return (
     <div className="caisse-doc mx-auto flex w-full min-w-0 max-w-5xl flex-1 flex-col gap-4 print:max-w-none">
