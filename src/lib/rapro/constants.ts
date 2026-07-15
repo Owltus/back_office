@@ -76,11 +76,27 @@ export const CELL_STATES: Record<
   CellState,
   { label: string; webClass: string; legendMod: string }
 > = {
-  clean: { label: 'Nettoyée', webClass: 'rapro-room-clean', legendMod: 'is-clean' },
+  clean: {
+    label: 'Nettoyée',
+    webClass: 'rapro-room-clean',
+    legendMod: 'is-clean',
+  },
   todo: { label: 'Bloquée', webClass: 'rapro-room-todo', legendMod: 'is-todo' },
-  refus: { label: 'Refus', webClass: 'rapro-room-refus', legendMod: 'is-refus' },
-  noshow: { label: 'No-show', webClass: 'rapro-room-noshow', legendMod: 'is-noshow' },
-  empty: { label: 'Non vendue', webClass: 'rapro-room-empty', legendMod: 'is-empty' },
+  refus: {
+    label: 'Refus',
+    webClass: 'rapro-room-refus',
+    legendMod: 'is-refus',
+  },
+  noshow: {
+    label: 'No-show',
+    webClass: 'rapro-room-noshow',
+    legendMod: 'is-noshow',
+  },
+  empty: {
+    label: 'Non vendue',
+    webClass: 'rapro-room-empty',
+    legendMod: 'is-empty',
+  },
 }
 
 /** Couleur d'accent par catégorie de ménage, ALIGNÉE sur la grille (rapro.css) :
@@ -97,14 +113,9 @@ export const CATEGORY_COLOR = {
 } as const
 
 /** Ordre d'affichage de la légende (bas de grille + PDF) : nettoyée, refus,
- * no-show, bloquée. « empty » (non vendue) reste en fin — masqué à l'écran. */
-export const LEGEND_ORDER: CellState[] = [
-  'clean',
-  'refus',
-  'noshow',
-  'todo',
-  'empty',
-]
+ * no-show, bloquée. « empty » (non vendue) n'y figure pas — le grisé des cases
+ * non vendues se lit sans légende (rendu par CELL_STATES/cellState). */
+export const LEGEND_ORDER: CellState[] = ['clean', 'refus', 'noshow', 'todo']
 
 /** Décompte des statuts sur les chambres DUES (occupées), en PARTITION (aucun
  * recouvrement) : nettoyées, bloquées (`non_nettoyee`), refus, no-show. Chaque

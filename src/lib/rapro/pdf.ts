@@ -144,7 +144,10 @@ function renderRaproDocument(
   const cw = CONTENT_W / cells.length
   cells.forEach(([lbl, val], i) => {
     const cx = LEFT + i * cw
-    pdf.setDrawColor(210).setLineWidth(0.2).rect(cx, y, cw - 2, 15)
+    pdf
+      .setDrawColor(210)
+      .setLineWidth(0.2)
+      .rect(cx, y, cw - 2, 15)
     pdf.setFont('helvetica', 'bold').setFontSize(14).setTextColor(26)
     pdf.text(String(val), cx + (cw - 2) / 2, y + 7.5, { align: 'center' })
     pdf.setFont('helvetica', 'normal').setFontSize(6.5).setTextColor(110)
@@ -200,13 +203,15 @@ function renderRaproDocument(
   type LegendItem = { label: string; fill: RGB; border?: RGB }
   const CARRIED_BORDER: RGB = [248, 113, 113]
   const legend: LegendItem[] = [
-    ...LEGEND_ORDER.filter((st) => st !== 'empty').map(
-      (st): LegendItem => ({
-        label: CELL_STATES[st].label,
-        fill: CELL_FILL[st].fill,
-      }),
-    ),
-    { label: 'Bloquée la veille', fill: [255, 255, 255], border: CARRIED_BORDER },
+    ...LEGEND_ORDER.map((st): LegendItem => ({
+      label: CELL_STATES[st].label,
+      fill: CELL_FILL[st].fill,
+    })),
+    {
+      label: 'Bloquée la veille',
+      fill: [255, 255, 255],
+      border: CARRIED_BORDER,
+    },
   ]
   pdf.setFont('helvetica', 'normal').setFontSize(7.5)
   const legendGap = 7

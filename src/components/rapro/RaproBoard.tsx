@@ -777,9 +777,9 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
           </div>
 
           <div className="rapro-legend">
-            {/* « Non vendue » (empty) masquée de la légende à la demande — le rendu
+            {/* « Non vendue » (empty) ne figure pas dans LEGEND_ORDER ; le rendu
               grisé des cases non vendues, lui, reste (via CELL_STATES/cellState). */}
-            {LEGEND_ORDER.filter((st) => st !== 'empty').map((st) => (
+            {LEGEND_ORDER.map((st) => (
               <span key={st} className="rapro-legend-item">
                 <span
                   className={cn('rapro-legend-dot', CELL_STATES[st].legendMod)}
