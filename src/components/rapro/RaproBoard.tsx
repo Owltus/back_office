@@ -132,10 +132,32 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   const isValidated = sheet?.status === 'validated'
   // Verrou : dès qu'un jour est clôturé, tout est figé (grille + commentaire).
   const canEditFields = isWriter && !isValidated
+  // Commentaire COMMITÉ (hydraté depuis la feuille, mis à jour au blur du champ ;
+  // la frappe vit dans RaproCommentCard). Lu par le PDF et la clôture.
   const [comment, setComment] = useState('')
   useEffect(() => {
     setComment(sheet?.comment ?? '')
   }, [sheet?.reportDate, sheet?.comment])
+  // Persiste le commentaire au blur : maj de l'état parent + du cache sheet (sinon
+  // l'hydratation ré-injecterait une valeur périmée au retour sur le jour, staleTime
+  // 60 s, faisant « disparaître » le commentaire) + écriture serveur best-effort.
+  function commitComment(next: string) {
+    if (!canEditFields) return
+    setComment(next)
+    queryClient.setQueryData<RaproSheet | null>(
+      ['rapro', 'sheet', selectedDate],
+      (prev) =>
+        prev
+          ? { ...prev, comment: next }
+          : {
+              reportDate: selectedDate,
+              status: 'draft',
+              comment: next,
+              validatedAt: null,
+            },
+    )
+    saveComment(selectedDate, next).catch(() => {})
+  }
   const [pdfBusy, setPdfBusy] = useState(false)
   // OCC officiel du PMS à J-1 (décalage de datage). Sert d'unique CONTRÔLE
   // comptable : si l'occupation PDJ diffère du PMS, on l'alerte (c'est là que les
@@ -782,42 +804,16 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
 
           {/* Zone commentaire présente de base, y compris en mode secours :
               l'hôtelier peut annoter le jour dès l'arrivée (ex. « In-House
-              manquant, saisie manuelle »), avant même toute saisie de statut. */}
-          <div className="rapro-comment flex-1">
-            <h2 className="rapro-comment-title">Commentaires</h2>
-            <Textarea
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              onBlur={() => {
-                if (!canEditFields) return
-                // Garde le cache sheet en phase avec la valeur persistée : sinon
-                // l'effet d'hydratation ré-injecterait une valeur périmée au retour
-                // sur le jour (staleTime 60 s), faisant « disparaître » le commentaire.
-                queryClient.setQueryData<RaproSheet | null>(
-                  ['rapro', 'sheet', selectedDate],
-                  (prev) =>
-                    prev
-                      ? { ...prev, comment }
-                      : {
-                          reportDate: selectedDate,
-                          status: 'draft',
-                          comment,
-                          validatedAt: null,
-                        },
-                )
-                saveComment(selectedDate, comment).catch(() => {})
-              }}
-              disabled={!canEditFields}
-              placeholder="Remarques du jour…"
-              // Hauteur FLEXIBLE : la zone commentaires absorbe la place restante et
-              // sert de variable d'ajustement. Quand l'alerte de contrôle d'occupation
-              // passe sur plusieurs lignes, c'est ce champ qui se réduit — le bouton de
-              // clôture ne se décale pas. `min-h-16` est un PLANCHER : le champ absorbe
-              // jusqu'à cette hauteur puis s'arrête (jamais 0, jamais invisible) ; passé
-              // ce point, c'est la page qui défile (cf. conteneur racine sans min-h-0).
-              className="min-h-16 flex-1 resize-none"
-            />
-          </div>
+              manquant, saisie manuelle »), avant même toute saisie de statut.
+              Champ ISOLÉ dans son propre composant : la frappe n'y re-render plus
+              tout le board (donc pas de reconstruction des Set ni de la fenêtre de
+              report à chaque touche) ; la valeur ne remonte qu'au blur. */}
+          <RaproCommentCard
+            reportDate={selectedDate}
+            initialComment={comment}
+            disabled={!canEditFields}
+            onCommit={commitComment}
+          />
 
           {stateAction}
         </>
@@ -836,4 +832,47 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
 function sourceDate(date: string): string {
   const d = parseDateStr(date)
   return d ? format(d, 'd MMMM yyyy', { locale: fr }) : date
+}
+
+/**
+ * Carte commentaire du jour, à état LOCAL : la frappe reste dans ce composant et
+ * ne re-render pas le board (donc pas de reconstruction des dérivations à chaque
+ * touche). La valeur ne remonte au parent qu'au blur (`onCommit`) — la persistance
+ * au blur, déjà en place, en fait le moment naturel. Le texte se resynchronise sur
+ * `initialComment` au changement de jour et à l'hydratation de la feuille.
+ */
+function RaproCommentCard({
+  reportDate,
+  initialComment,
+  disabled,
+  onCommit,
+}: {
+  reportDate: string
+  initialComment: string
+  disabled: boolean
+  onCommit: (comment: string) => void
+}) {
+  const [text, setText] = useState(initialComment)
+  useEffect(() => {
+    setText(initialComment)
+  }, [reportDate, initialComment])
+  return (
+    <div className="rapro-comment flex-1">
+      <h2 className="rapro-comment-title">Commentaires</h2>
+      <Textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={() => onCommit(text)}
+        disabled={disabled}
+        placeholder="Remarques du jour…"
+        // Hauteur FLEXIBLE : la zone commentaires absorbe la place restante et
+        // sert de variable d'ajustement. Quand l'alerte de contrôle d'occupation
+        // passe sur plusieurs lignes, c'est ce champ qui se réduit — le bouton de
+        // clôture ne se décale pas. `min-h-16` est un PLANCHER : le champ absorbe
+        // jusqu'à cette hauteur puis s'arrête (jamais 0, jamais invisible) ; passé
+        // ce point, c'est la page qui défile (cf. conteneur racine sans min-h-0).
+        className="min-h-16 flex-1 resize-none"
+      />
+    </div>
+  )
 }
