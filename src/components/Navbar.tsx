@@ -10,6 +10,7 @@ import {
   Monitor,
   Palette,
   SquareParking,
+  Stamp,
 } from 'lucide-react'
 
 import { Logo } from '#/components/Logo.tsx'
@@ -35,15 +36,18 @@ const NAV_ITEMS = [
   { to: '/affichage', label: 'Affichage', icon: Monitor },
 ] as const
 
-// Registre des éléments d'interface retenus. En FIN de ligne, réservé aux ADMINS.
-const ARTEFACT_ITEM = { to: '/artefact', label: 'Artefact', icon: Palette } as const
+// Éléments réservés aux ADMINS, en FIN de ligne (prototypes / registre).
+const ADMIN_ITEMS = [
+  { to: '/facturation', label: 'Facturation', icon: Stamp },
+  { to: '/artefact', label: 'Artefact', icon: Palette },
+] as const
 
 export function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false)
   const { profile, user, role } = useAuth()
   const userName = profile?.display_name || profile?.email || user?.email || ''
-  // « Artefact » (page temporaire) : uniquement pour les admins, en fin de ligne.
-  const navItems = role === 'admin' ? [...NAV_ITEMS, ARTEFACT_ITEM] : NAV_ITEMS
+  // Prototypes admin (Facturation, Artefact) : uniquement pour les admins, en fin de ligne.
+  const navItems = role === 'admin' ? [...NAV_ITEMS, ...ADMIN_ITEMS] : NAV_ITEMS
 
   // En passant en mode desktop (>= md), on ferme le tiroir s'il est ouvert.
   useEffect(() => {

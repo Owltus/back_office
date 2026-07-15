@@ -1,0 +1,96 @@
+import { describe, expect, it } from 'vitest'
+import { PDFDocument, StandardFonts } from 'pdf-lib'
+
+import { detect, normalize } from '#/lib/facturation/detect.ts'
+import { buildStampedPdf } from '#/lib/facturation/stamp.ts'
+import { SEED_RULES, budgetLabel } from '#/lib/facturation/constants.ts'
+import type { SupplierRule } from '#/lib/facturation/types.ts'
+
+/*
+ * Vérifie la brique métier du prototype Facturation, hors navigateur :
+ *  - détection déterministe fournisseur → code (robuste aux accents),
+ *  - extraction best-effort des indices (date, montant, n° de facture),
+ *  - bump de confiance d'une règle apprise,
+ *  - construction d'un PDF tamponné valide (pdf-lib tourne en Node).
+ * L'extraction PDF/OCR (pdf.js + Tesseract) est browser-only et n'est pas couverte ici.
+ */
+
+const EDF_TEXT = [
+  'EDF Entreprises',
+  'Facture d’électricité',
+  'Facture n° FR-2026-004512',
+  'Date : 12/07/2026',
+  'Consommation électricité - Juin 2026',
+  'Total TTC 1 488,60 €',
+].join('\n')
+
+describe('detect', () => {
+  it('reconnaît EDF → 606110 malgré les accents', () => {
+    const d = detect(EDF_TEXT, SEED_RULES)
+    expect(d.supplier).toBe('EDF')
+    expect(d.code).toBe('606110')
+    expect(d.matchedKeyword).toBe('edf')
+    expect(d.confidence).toBeGreaterThan(0.6)
+    expect(budgetLabel(d.code!)).toBe('Électricité')
+  })
+
+  it('extrait les indices date / montant / numéro', () => {
+    const d = detect(EDF_TEXT, SEED_RULES)
+    expect(d.hints.date).toBe('2026-07-12')
+    expect(d.hints.amount).toBe('1 488,60')
+    expect(d.hints.invoiceNumber).toBe('FR-2026-004512')
+  })
+
+  it('retourne un résultat vide quand rien ne matche', () => {
+    const d = detect('Boulangerie du coin — baguette', SEED_RULES)
+    expect(d.supplier).toBeNull()
+    expect(d.code).toBeNull()
+    expect(d.confidence).toBe(0)
+  })
+
+  it('une règle apprise démarre avec une confiance plus haute', () => {
+    const learned: SupplierRule[] = [
+      {
+        id: 'learned:acme',
+        supplier: 'ACME Traiteur',
+        code: '602600',
+        keywords: ['acme'],
+        learned: true,
+      },
+    ]
+    const d = detect('Facture ACME Traiteur', learned)
+    expect(d.supplier).toBe('ACME Traiteur')
+    expect(d.learned).toBe(true)
+    expect(d.confidence).toBeGreaterThanOrEqual(0.75)
+  })
+})
+
+describe('normalize', () => {
+  it('minuscule et retire les accents', () => {
+    expect(normalize('Électricité GÉNÉRALE')).toBe('electricite generale')
+  })
+})
+
+describe('buildStampedPdf', () => {
+  it('produit un PDF valide, plus lourd, sans perdre de page', async () => {
+    const src = await PDFDocument.create()
+    src.addPage([595, 842])
+    const font = await src.embedFont(StandardFonts.Helvetica)
+    src
+      .getPages()[0]
+      .drawText('Facture test', { x: 50, y: 800, size: 12, font })
+    const srcBytes = await src.save()
+
+    const stamped = await buildStampedPdf(srcBytes, {
+      code: '606110',
+      label: 'Électricité',
+      comment: 'Contrôlé — juin 2026',
+      invoiceDate: '2026-07-12',
+      processedDate: '2026-07-15',
+    })
+
+    expect(stamped.byteLength).toBeGreaterThan(srcBytes.byteLength)
+    const reloaded = await PDFDocument.load(stamped)
+    expect(reloaded.getPageCount()).toBe(1)
+  })
+})

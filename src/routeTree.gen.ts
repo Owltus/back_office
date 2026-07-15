@@ -16,6 +16,7 @@ import { Route as PdjRouteImport } from './routes/pdj'
 import { Route as ParkingRouteImport } from './routes/parking'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as GestionRouteImport } from './routes/gestion'
+import { Route as FacturationRouteImport } from './routes/facturation'
 import { Route as ComptesRouteImport } from './routes/comptes'
 import { Route as CaisseRouteImport } from './routes/caisse'
 import { Route as ArtefactRouteImport } from './routes/artefact'
@@ -70,6 +71,11 @@ const LoginRoute = LoginRouteImport.update({
 const GestionRoute = GestionRouteImport.update({
   id: '/gestion',
   path: '/gestion',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FacturationRoute = FacturationRouteImport.update({
+  id: '/facturation',
+  path: '/facturation',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ComptesRoute = ComptesRouteImport.update({
@@ -183,6 +189,7 @@ export interface FileRoutesByFullPath {
   '/artefact': typeof ArtefactRoute
   '/caisse': typeof CaisseRouteWithChildren
   '/comptes': typeof ComptesRoute
+  '/facturation': typeof FacturationRoute
   '/gestion': typeof GestionRoute
   '/login': typeof LoginRoute
   '/parking': typeof ParkingRouteWithChildren
@@ -211,6 +218,7 @@ export interface FileRoutesByTo {
   '/affichage': typeof AffichageRoute
   '/artefact': typeof ArtefactRoute
   '/comptes': typeof ComptesRoute
+  '/facturation': typeof FacturationRoute
   '/gestion': typeof GestionRoute
   '/login': typeof LoginRoute
   '/profil': typeof ProfilRoute
@@ -237,6 +245,7 @@ export interface FileRoutesById {
   '/artefact': typeof ArtefactRoute
   '/caisse': typeof CaisseRouteWithChildren
   '/comptes': typeof ComptesRoute
+  '/facturation': typeof FacturationRoute
   '/gestion': typeof GestionRoute
   '/login': typeof LoginRoute
   '/parking': typeof ParkingRouteWithChildren
@@ -268,6 +277,7 @@ export interface FileRouteTypes {
     | '/artefact'
     | '/caisse'
     | '/comptes'
+    | '/facturation'
     | '/gestion'
     | '/login'
     | '/parking'
@@ -296,6 +306,7 @@ export interface FileRouteTypes {
     | '/affichage'
     | '/artefact'
     | '/comptes'
+    | '/facturation'
     | '/gestion'
     | '/login'
     | '/profil'
@@ -321,6 +332,7 @@ export interface FileRouteTypes {
     | '/artefact'
     | '/caisse'
     | '/comptes'
+    | '/facturation'
     | '/gestion'
     | '/login'
     | '/parking'
@@ -351,6 +363,7 @@ export interface RootRouteChildren {
   ArtefactRoute: typeof ArtefactRoute
   CaisseRoute: typeof CaisseRouteWithChildren
   ComptesRoute: typeof ComptesRoute
+  FacturationRoute: typeof FacturationRoute
   GestionRoute: typeof GestionRoute
   LoginRoute: typeof LoginRoute
   ParkingRoute: typeof ParkingRouteWithChildren
@@ -409,6 +422,13 @@ declare module '@tanstack/react-router' {
       path: '/gestion'
       fullPath: '/gestion'
       preLoaderRoute: typeof GestionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/facturation': {
+      id: '/facturation'
+      path: '/facturation'
+      fullPath: '/facturation'
+      preLoaderRoute: typeof FacturationRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/comptes': {
@@ -633,6 +653,7 @@ const rootRouteChildren: RootRouteChildren = {
   ArtefactRoute: ArtefactRoute,
   CaisseRoute: CaisseRouteWithChildren,
   ComptesRoute: ComptesRoute,
+  FacturationRoute: FacturationRoute,
   GestionRoute: GestionRoute,
   LoginRoute: LoginRoute,
   ParkingRoute: ParkingRouteWithChildren,
