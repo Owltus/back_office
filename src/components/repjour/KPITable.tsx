@@ -159,8 +159,7 @@ export function KPITable({
               <span className="sm:hidden">J</span>
             </th>
             <th className="border-r border-border px-1 py-2 text-center font-medium text-muted-foreground">
-              <span className="hidden sm:inline">Cumul</span>
-              <span className="sm:hidden">Cumul</span>
+              Cumul
             </th>
             <th className="px-1 py-2 text-center font-medium text-muted-foreground">
               <span className="hidden sm:inline">Projeté</span>
