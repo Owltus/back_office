@@ -83,6 +83,19 @@ export const CELL_STATES: Record<
   empty: { label: 'Non vendue', webClass: 'rapro-room-empty', legendMod: 'is-empty' },
 }
 
+/** Couleur d'accent par catégorie de ménage, ALIGNÉE sur la grille (rapro.css) :
+ * nettoyée=vert (chart-5), bloquée=rouge, refus=ambre (chart-3), no-show=violet.
+ * SOURCE UNIQUE (theme-aware via les tokens) partagée par les cards du board,
+ * l'analytique annuelle et le détail mensuel. Les couleurs web de la grille
+ * (rapro.css) et les RGB du PDF (pdf.ts) en sont les miroirs par nature (autres
+ * encodages). */
+export const CATEGORY_COLOR = {
+  nettoyee: 'var(--chart-5)',
+  bloquee: '#f87171',
+  refus: 'var(--chart-3)',
+  noshow: '#a78bfa',
+} as const
+
 /** Ordre d'affichage de la légende (bas de grille + PDF) : nettoyée, refus,
  * no-show, bloquée. « empty » (non vendue) reste en fin — masqué à l'écran. */
 export const LEGEND_ORDER: CellState[] = [

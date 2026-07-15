@@ -31,6 +31,7 @@ import {
   type DaySnapshot,
 } from '#/lib/rapro/carryover.ts'
 import {
+  CATEGORY_COLOR,
   CELL_STATES,
   cellState,
   countStats,
@@ -658,25 +659,25 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
             <StatTile
               value={dash(stats.clean)}
               label="Nettoyées"
-              accent="#34d399"
+              accent={CATEGORY_COLOR.nettoyee}
               hint="Chambres nettoyées aujourd'hui (facturées)."
             />
             <StatTile
               value={dash(stats.refus)}
               label="Refus"
-              accent="#fbbf24"
+              accent={CATEGORY_COLOR.refus}
               hint="Client a refusé le ménage."
             />
             <StatTile
               value={dash(stats.noshow)}
               label="No-show"
-              accent="#a78bfa"
+              accent={CATEGORY_COLOR.noshow}
               hint="Vendue mais client absent (hors charge)."
             />
             <StatTile
               value={dash(stats.todo)}
               label="Bloquées"
-              accent="#f87171"
+              accent={CATEGORY_COLOR.bloquee}
               hint="Chambres occupées non nettoyées (bloquées, restent dues)."
             />
             {/* Bloquées la veille (reportées) : carte affichée SEULEMENT s'il y en a. */}
@@ -684,7 +685,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
               <StatTile
                 value={carried.size}
                 label="Bloquées la veille"
-                accent="#f87171"
+                accent={CATEGORY_COLOR.bloquee}
                 hint="Chambres bloquées un jour précédent, non encore résolues (liseré rouge)."
               />
             )}

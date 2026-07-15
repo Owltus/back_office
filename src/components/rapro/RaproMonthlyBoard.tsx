@@ -11,6 +11,7 @@ import { AnalytiqueBackButton } from '#/components/analytique/AnalytiqueBackButt
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
 import { KpiLineChart } from '#/components/analytique/KpiLineChart.tsx'
 import { parseDateStr } from '#/lib/poster/dateFormatter.ts'
+import { CATEGORY_COLOR as CAT_COLOR } from '#/lib/rapro/constants.ts'
 import {
   fetchStatusCountsByRange,
   monthBounds,
@@ -25,15 +26,6 @@ import { printRaproMonthly } from '#/lib/rapro/pdf.ts'
  * facturation ELIOR). Le mois vient des params de route ; retour à la vue
  * annuelle par le chevron.
  */
-
-/** Code couleur des catégories, identique à la grille du rapprochement (cf.
- * rapro.css). Nettoyée=vert, Bloquée=rouge, Refus=ambre, No-show=violet. */
-const CAT_COLOR = {
-  nettoyee: 'var(--chart-5)',
-  bloquee: '#f87171',
-  refus: 'var(--chart-3)',
-  noshow: '#a78bfa',
-} as const
 
 /** Compteur au code couleur ; un zéro reste discret (grisé). */
 function coloredCount(n: number, color: string) {

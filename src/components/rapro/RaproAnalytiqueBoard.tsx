@@ -14,6 +14,7 @@ import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
 import { YearNav } from '#/components/analytique/YearNav.tsx'
 import { KpiLineChart } from '#/components/analytique/KpiLineChart.tsx'
 import { fetchOldestDay } from '#/lib/rapro/service.ts'
+import { CATEGORY_COLOR as CAT_COLOR } from '#/lib/rapro/constants.ts'
 import {
   fetchStatusCountsByRange,
   monthBounds,
@@ -26,16 +27,6 @@ import {
  * (nettoyées / refus / no-show, clic → détail du mois) et deux graphiques. Un
  * fetch borné par mois (12 lectures mises en cache). Aucune écriture.
  */
-
-/** Code couleur des catégories, identique à la grille du rapprochement (cf.
- * rapro.css : légende + cases). Nettoyée=vert, Bloquée=rouge, Refus=ambre,
- * No-show=violet. */
-const CAT_COLOR = {
-  nettoyee: 'var(--chart-5)',
-  bloquee: '#f87171',
-  refus: 'var(--chart-3)',
-  noshow: '#a78bfa',
-} as const
 
 /** Compteur au code couleur de la catégorie ; un zéro reste discret (grisé),
  * comme sur la grille du rapprochement où un 0 ne s'accentue pas. */
