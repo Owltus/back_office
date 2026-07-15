@@ -18,6 +18,7 @@ import { fr } from 'date-fns/locale'
 import type { jsPDF } from 'jspdf'
 
 import { FIRST_STAFF_SPOT, SPOTS_LIST } from '#/lib/parking/model.ts'
+import { capitalize } from '#/lib/utils.ts'
 
 /** Une ligne pré-remplie (un client présent) d'une feuille de suivi. */
 export interface ParkingSheetRow {
@@ -87,7 +88,12 @@ const BAND: RGB = [216, 216, 216] // bandeau titre gris
 const HEAD: RGB = [238, 238, 238] // fond des en-têtes de colonnes
 const STAFF: RGB = [223, 223, 223] // lignes 13 & 14 (personnel)
 
-const COLS: { key: keyof ParkingSheetRow | null; label: string; w: number; align: 'left' | 'center' }[] = [
+const COLS: {
+  key: keyof ParkingSheetRow | null
+  label: string
+  w: number
+  align: 'left' | 'center'
+}[] = [
   { key: null, label: 'Place', w: 14, align: 'center' },
   { key: 'nom', label: 'NOM', w: 44, align: 'left' },
   { key: 'numero', label: 'N°de #', w: 21, align: 'center' },
@@ -116,8 +122,9 @@ function drawSheet(pdf: jsPDF, x: number, day: ParkingSheetDay): void {
   day.rows.forEach((r) => bySpot.set(r.spot, r))
 
   // --- « Date : <jour> » ---------------------------------------------------
-  const label = format(day.date, 'EEEE d MMMM yyyy', { locale: fr })
-  const dateLabel = label.charAt(0).toUpperCase() + label.slice(1)
+  const dateLabel = capitalize(
+    format(day.date, 'EEEE d MMMM yyyy', { locale: fr }),
+  )
   setText(pdf, INK)
   pdf.setFont('helvetica', 'normal').setFontSize(11)
   pdf.text('Date : ', x, 13)

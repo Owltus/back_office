@@ -13,6 +13,8 @@ import { AnalytiqueBackButton } from '#/components/analytique/AnalytiqueBackButt
 import { KpiLineChart } from '#/components/analytique/KpiLineChart.tsx'
 import { fetchReservations } from '#/lib/parking/service.ts'
 import { aggregateParkingDaily } from '#/lib/parking/analytics.ts'
+import { fmtInt, fmtPct } from '#/lib/parking/format.ts'
+import { MONTHS_LABELS } from '#/lib/repjour/constants.ts'
 
 /*
  * Détail analytique d'un MOIS de parking, jour par jour — gabarit calqué sur
@@ -25,25 +27,6 @@ import { aggregateParkingDaily } from '#/lib/parking/analytics.ts'
  * écriture Supabase — uniquement des `select`. Aucun montant € (la table n'a
  * pas de tarif). `year` / `month` viennent des params de route.
  */
-
-const MONTHS = [
-  'Janvier',
-  'Février',
-  'Mars',
-  'Avril',
-  'Mai',
-  'Juin',
-  'Juillet',
-  'Août',
-  'Septembre',
-  'Octobre',
-  'Novembre',
-  'Décembre',
-]
-
-const nf0 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 })
-const fmtInt = (n: number) => nf0.format(n)
-const fmtPct = (n: number) => `${n.toFixed(1).replace('.', ',')} %`
 
 export function ParkingAnalytiqueMoisBoard({
   year,
@@ -92,14 +75,18 @@ export function ParkingAnalytiqueMoisBoard({
     [days],
   )
 
-  const monthLabel = `${MONTHS[month - 1] || ''} ${year}`
+  const monthLabel = `${MONTHS_LABELS[month - 1] || ''} ${year}`
 
   return (
     <AnalytiqueShell
       title={monthLabel}
       actions={<AnalytiqueBackButton />}
       loading={loading}
-      skeleton={{ cols: 4, charts: 2, rows: new Date(year, month, 0).getDate() }}
+      skeleton={{
+        cols: 4,
+        charts: 2,
+        rows: new Date(year, month, 0).getDate(),
+      }}
     >
       {/* Cartes du mois */}
       <AnalytiqueCardsGrid>

@@ -16,6 +16,7 @@ import {
   aggregateParkingMonthly,
   yearsFromReservations,
 } from '#/lib/parking/analytics.ts'
+import { fmtInt, fmtPct } from '#/lib/parking/format.ts'
 
 /*
  * Vue analytique Parking — gabarit calqué sur pdj/PdjAnalytiqueBoard.
@@ -44,10 +45,6 @@ const MONTHS_SHORT = [
   'Nov',
   'Déc',
 ]
-
-const nf0 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 })
-const fmtInt = (n: number) => nf0.format(n)
-const fmtPct = (n: number) => `${n.toFixed(1).replace('.', ',')} %`
 
 export function ParkingAnalytiqueBoard() {
   const navigate = useNavigate()
@@ -89,9 +86,7 @@ export function ParkingAnalytiqueBoard() {
       totalUnpaid: months.reduce((s, m) => s + m.unpaid, 0),
       avgNights: totalReservations > 0 ? totalNights / totalReservations : 0,
       avgOccupancy:
-        count > 0
-          ? active.reduce((s, m) => s + m.occupancyRate, 0) / count
-          : 0,
+        count > 0 ? active.reduce((s, m) => s + m.occupancyRate, 0) / count : 0,
     }
   }, [months])
 
