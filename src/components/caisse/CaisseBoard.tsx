@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, LineChart, Minus, Plus } from 'lucide-react'
@@ -447,6 +448,40 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
       counts: { ...f.counts, [k]: Math.max(0, (f.counts[k] ?? 0) + delta) },
     }))
 
+  // Tabulation en COLONNE (haut→bas, puis colonne suivante) au lieu de l'ordre
+  // DOM d'un tableau (ligne par ligne). Chaque champ de montant porte un
+  // `data-taborder` = colonne × 3 + ligne ; sur Tab / Shift+Tab on trie ces
+  // index et on cycle au voisin. Le focus BOUCLE dans la carte (après le
+  // dernier champ on revient au premier, et inversement) : la tabulation reste
+  // piégée dans la grille des montants, sans partir ailleurs dans la page.
+  // Robuste aux cellules absentes (Lightspeed n'a pas de « web ») et aux champs
+  // désactivés (feuille clôturée) : simplement filtrés.
+  const handleGridTab = (e: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'Tab') return
+    const host = e.currentTarget.closest('[data-money-grid]')
+    if (!host) return
+    const inputs = Array.from(
+      host.querySelectorAll<HTMLInputElement>('input[data-taborder]'),
+    )
+      .filter((el) => !el.disabled)
+      .sort((a, b) => Number(a.dataset.taborder) - Number(b.dataset.taborder))
+    cycleFocus(e, inputs)
+  }
+
+  // Même principe pour la grille des coupures (billets & pièces) : le focus
+  // boucle dans la carte et ne visite que les champs de comptage — les boutons
+  // +/− sont hors tabulation (tabIndex -1). L'ordre suit le DOM, qui reproduit
+  // déjà l'ordre visuel colonne par colonne du gabarit bureau (grid-flow-col).
+  const handleDenomTab = (e: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'Tab') return
+    const host = e.currentTarget.closest('[data-denom-grid]')
+    if (!host) return
+    const inputs = Array.from(
+      host.querySelectorAll<HTMLInputElement>('input[data-denom-cell]'),
+    ).filter((el) => !el.disabled)
+    cycleFocus(e, inputs)
+  }
+
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: ['caisse'] })
 
@@ -746,8 +781,12 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
         </>
       ) : (
         <>
-      {/* Tableau des montants + écarts (défile horizontalement si étroit). */}
-      <div className="caisse-table overflow-x-auto rounded-xl border border-border bg-card">
+      {/* Tableau des montants + écarts (défile horizontalement si étroit).
+          `data-money-grid` : périmètre de la tabulation en colonne (handleGridTab). */}
+      <div
+        data-money-grid
+        className="caisse-table overflow-x-auto rounded-xl border border-border bg-card"
+      >
         <table className="w-full table-fixed border-collapse text-sm">
           <thead>
             <tr className="border-b border-border text-xs uppercase text-muted-foreground">
@@ -769,6 +808,8 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
           <tbody>
             <AmountRow
               label="STAY N' TOUCH"
+              rowIndex={0}
+              onCellKeyDown={handleGridTab}
               cols={cols}
               disabled={!canEditFields}
               value={(c) => (c === 'web' ? form.snt.cbweb : form.snt[c as PayKey])}
@@ -776,6 +817,8 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
             />
             <AmountRow
               label="LIGHTSPEED"
+              rowIndex={1}
+              onCellKeyDown={handleGridTab}
               cols={cols}
               disabled={!canEditFields}
               value={(c) => (c === 'web' ? null : form.ls[c as PayKey])}
@@ -783,11 +826,21 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
             />
             <AmountRow
               label="CAISSE/TPE"
+              rowIndex={2}
+              onCellKeyDown={handleGridTab}
               cols={cols}
               disabled={!canEditFields}
               value={(c) => (c === 'web' ? form.caisse.adyen : form.caisse[c as PayKey])}
               onChange={(c, v) =>
                 c === 'web' ? setCaisse('adyen', v) : setCaisse(c as PayKey, v)
+              }
+              // Double-clic : reporte la somme des deux lignes du dessus
+              // (StayNTouch + Lightspeed) pour la colonne — Lightspeed n'a pas
+              // de « web », la somme s'y résume au cbweb de StayNTouch.
+              onFill={(c) =>
+                c === 'web'
+                  ? form.snt.cbweb
+                  : form.snt[c as PayKey] + form.ls[c as PayKey]
               }
             />
             <tr className="border-t border-border bg-muted/30 font-medium">
@@ -818,7 +871,10 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
           3 (intermédiaire), 5 colonnes-décades en remplissage vertical (≥ lg :
           grid-flow-col + grid-rows-3 → 500/200/100, 50/20/10, …). */}
       <div className="rounded-xl border border-border bg-card p-3">
-        <div className="caisse-denoms grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-flow-col lg:grid-cols-5 lg:grid-rows-3">
+        <div
+          data-denom-grid
+          className="caisse-denoms grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-flow-col lg:grid-cols-5 lg:grid-rows-3"
+        >
           {DENOMINATIONS.map((d) => {
             const n = form.counts[d.key] ?? 0
             const filled = n > 0
@@ -836,6 +892,7 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
                 {/* Bouton « − » pleine hauteur, à gauche */}
                 <button
                   type="button"
+                  tabIndex={-1}
                   aria-label={`Retirer un ${d.label}`}
                   disabled={!canEditFields}
                   onClick={() => bumpCount(d.key, -1)}
@@ -850,6 +907,7 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
                     value={n}
                     disabled={!canEditFields}
                     onChange={(v) => setCount(d.key, v)}
+                    onKeyDown={handleDenomTab}
                   />
                   <div className="flex h-8 items-center justify-center">
                     <img
@@ -876,6 +934,7 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
                 {/* Bouton « + » pleine hauteur, à droite */}
                 <button
                   type="button"
+                  tabIndex={-1}
                   aria-label={`Ajouter un ${d.label}`}
                   disabled={!canEditFields}
                   onClick={() => bumpCount(d.key, 1)}
@@ -1024,6 +1083,22 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
   )
 }
 
+/** Déplace le focus au champ voisin en BOUCLE (ne sort jamais de la liste
+ *  fournie, triée dans l'ordre de tabulation voulu). Partagé par la grille des
+ *  montants et celle des coupures : après le dernier champ on revient au
+ *  premier, et Shift+Tab depuis le premier saute au dernier. */
+function cycleFocus(
+  e: ReactKeyboardEvent<HTMLInputElement>,
+  inputs: HTMLInputElement[],
+) {
+  const i = inputs.indexOf(e.currentTarget)
+  if (i === -1 || inputs.length === 0) return
+  e.preventDefault()
+  const next = (i + (e.shiftKey ? -1 : 1) + inputs.length) % inputs.length
+  inputs[next].focus()
+  inputs[next].select()
+}
+
 /**
  * Champ monétaire : <Input> shadcn en type="text" (pas de flèches natives),
  * suffixe « € ». Garde un état texte interne pour préserver la frappe décimale
@@ -1034,10 +1109,18 @@ function MoneyInput({
   value,
   onChange,
   disabled,
+  onFill,
+  tabOrder,
+  onKeyDown,
 }: {
   value: number
   onChange: (v: number) => void
   disabled: boolean
+  // Double-clic : remplit le champ (report d'une somme). Absent = pas d'action.
+  onFill?: () => void
+  // Rang pour la tabulation en colonne (lu par handleGridTab via data-taborder).
+  tabOrder?: number
+  onKeyDown?: (e: ReactKeyboardEvent<HTMLInputElement>) => void
 }) {
   const [text, setText] = useState(() => amountText(value))
   const [focused, setFocused] = useState(false)
@@ -1061,9 +1144,13 @@ function MoneyInput({
           setText(t)
           onChange(amountValue(t))
         }}
+        onDoubleClick={onFill}
+        onKeyDown={onKeyDown}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         placeholder={focused ? '' : '0'}
+        title={onFill ? 'Double-clic : additionne Stay N’ Touch + Lightspeed' : undefined}
+        data-taborder={tabOrder}
         className="h-8 pr-6 text-right tabular-nums"
       />
       <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-muted-foreground">
@@ -1081,10 +1168,13 @@ function CountInput({
   value,
   onChange,
   disabled,
+  onKeyDown,
 }: {
   value: number
   onChange: (v: number) => void
   disabled: boolean
+  // Tabulation en boucle dans la carte des coupures (handleDenomTab).
+  onKeyDown?: (e: ReactKeyboardEvent<HTMLInputElement>) => void
 }) {
   const [focused, setFocused] = useState(false)
   return (
@@ -1094,9 +1184,11 @@ function CountInput({
       disabled={disabled}
       value={value === 0 ? '' : String(value)}
       onChange={(e) => onChange(countValue(e.target.value))}
+      onKeyDown={onKeyDown}
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
       placeholder={focused ? '' : '0'}
+      data-denom-cell
       className="h-6 w-4/5 px-1 text-center text-sm tabular-nums"
     />
   )
@@ -1104,30 +1196,49 @@ function CountInput({
 
 function AmountRow({
   label,
+  rowIndex,
   cols,
   value,
   onChange,
   disabled,
+  onFill,
+  onCellKeyDown,
 }: {
   label: string
+  // Rang de la ligne (0 = 1re) : sert à ordonner la tabulation en colonne.
+  rowIndex: number
   cols: EcartKey[]
   value: (c: EcartKey) => number | null
   onChange: (c: EcartKey, v: number) => void
   disabled: boolean
+  // Valeur de report calculée par colonne (double-clic). Absent = pas de report.
+  onFill?: (c: EcartKey) => number
+  // Tabulation pilotée (colonne par colonne), partagée par toutes les lignes.
+  onCellKeyDown?: (e: ReactKeyboardEvent<HTMLInputElement>) => void
 }) {
   return (
     <tr className="border-b border-border/60">
       <td className="px-3 py-2 text-xs font-medium uppercase text-muted-foreground max-sm:whitespace-nowrap">
         {label}
       </td>
-      {cols.map((c) => {
+      {cols.map((c, colIndex) => {
         const v = value(c)
         return (
           <td key={c} className="px-2 py-1">
             {v === null ? (
               <span className="block text-right text-muted-foreground">—</span>
             ) : (
-              <MoneyInput value={v} disabled={disabled} onChange={(nv) => onChange(c, nv)} />
+              <MoneyInput
+                value={v}
+                disabled={disabled}
+                onChange={(nv) => onChange(c, nv)}
+                onFill={
+                  onFill && !disabled ? () => onChange(c, onFill(c)) : undefined
+                }
+                // Ordre colonne-major : colonne × 3 lignes + rang de la ligne.
+                tabOrder={colIndex * 3 + rowIndex}
+                onKeyDown={onCellKeyDown}
+              />
             )}
           </td>
         )
