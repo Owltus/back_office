@@ -38,11 +38,18 @@ export function CaisseAnalytiqueMoisBoard({
   const mm = String(month).padStart(2, '0')
   const lastDay = new Date(year, month, 0).getDate()
 
-  const { data: days = [], isPending: loading } = useQuery({
-    queryKey: ['caisse', 'analytics-month', year, month],
-    queryFn: async () => aggregateCaisseDaily(await fetchSheets(), year, month),
-    enabled: Number.isFinite(year) && Number.isFinite(month),
+  // MÊME clé que la vue annuelle (`['caisse','analytics']`) : les feuilles sont
+  // lues une seule fois et partagées entre les deux vues (hit de cache instantané
+  // au passage annuel → mois, et entre mois). L'agrégation par jour est un calcul
+  // client négligeable, dérivé du cache.
+  const { data: sheets = [], isPending: loading } = useQuery({
+    queryKey: ['caisse', 'analytics'],
+    queryFn: fetchSheets,
   })
+  const days = useMemo(
+    () => aggregateCaisseDaily(sheets, year, month),
+    [sheets, year, month],
+  )
 
   // Index par numéro de jour pour peupler un tableau plein mois (1..lastDay),
   // les jours sans feuille restant en tirets grisés.
