@@ -68,9 +68,7 @@ export function PdjAnalytiqueMoisBoard({
     const count = stats.length
     return {
       coveredDays: count,
-      totalGuests: stats.reduce((s, d) => s + d.guests, 0),
       totalServed: stats.reduce((s, d) => s + d.served, 0),
-      totalIncluded: stats.reduce((s, d) => s + d.included, 0),
       totalPotential: stats.reduce((s, d) => s + d.potential, 0),
       avgOccupancy:
         count > 0 ? stats.reduce((s, d) => s + d.occupancy, 0) / count : 0,

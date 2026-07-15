@@ -73,9 +73,7 @@ export function PdjAnalytiqueBoard() {
     const active = months.filter((m) => m.days > 0)
     const count = active.length
     return {
-      totalDays: months.reduce((s, m) => s + m.days, 0),
       totalGuests: months.reduce((s, m) => s + m.guests, 0),
-      totalServed: months.reduce((s, m) => s + m.served, 0),
       totalIncluded: months.reduce((s, m) => s + m.included, 0),
       avgOccupancy:
         count > 0 ? active.reduce((s, m) => s + m.avgOccupancy, 0) / count : 0,
