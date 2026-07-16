@@ -52,7 +52,10 @@ export function InvoiceList({
           <div key={r.id} className="relative w-full">
             <button
               type="button"
-              onClick={() => onSelect(r.id)}
+              onClick={(e) => {
+                e.stopPropagation()
+                onSelect(r.id)
+              }}
               className={cn(
                 'flex w-full flex-col gap-1.5 rounded-lg border p-2 text-left transition-colors',
                 selected
@@ -69,7 +72,10 @@ export function InvoiceList({
             </button>
             <button
               type="button"
-              onClick={() => onRemove(r.id)}
+              onClick={(e) => {
+                e.stopPropagation()
+                onRemove(r.id)
+              }}
               aria-label="Retirer"
               className="absolute top-1 right-1 rounded bg-background/80 p-0.5 text-muted-foreground backdrop-blur-sm transition-colors hover:bg-background hover:text-destructive"
             >

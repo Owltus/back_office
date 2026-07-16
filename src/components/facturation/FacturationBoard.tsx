@@ -163,8 +163,9 @@ export function FacturationBoard() {
           }}
         />
 
-        {/* COLONNE GAUCHE : dropzone (style PDJ) + file des factures */}
-        <aside className="flex min-h-0 w-full shrink-0 flex-col gap-4 rounded-xl border border-border bg-card p-4 lg:max-h-full lg:w-80 lg:overflow-y-auto">
+        {/* COLONNE GAUCHE : une seule zone de dépôt (style PDJ) qui remplit la
+            carte et contient les miniatures une fois des factures chargées. */}
+        <aside className="flex min-h-0 w-full shrink-0 flex-col gap-3 rounded-xl border border-border bg-card p-3 lg:max-h-full lg:w-80">
           <div
             role="button"
             tabIndex={0}
@@ -179,37 +180,44 @@ export function FacturationBoard() {
             onDragLeave={() => setDragging(false)}
             onDrop={onDrop}
             className={cn(
-              'empty-canvas flex shrink-0 cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border p-6 text-center outline-none transition-colors',
-              'hover:border-primary/60 hover:bg-secondary/30 focus-visible:ring-2 focus-visible:ring-ring',
-              dragging && 'border-primary bg-secondary/40',
-              records.length ? 'min-h-[130px]' : 'min-h-[260px]',
+              'empty-canvas flex min-h-[240px] flex-1 cursor-pointer flex-col gap-2 overflow-y-auto rounded-2xl border-2 border-dashed border-border p-3 outline-none transition-colors lg:min-h-0',
+              'hover:border-primary/60 focus-visible:ring-2 focus-visible:ring-ring',
+              dragging
+                ? 'border-primary bg-secondary/40'
+                : 'hover:bg-secondary/10',
+              records.length === 0 &&
+                'items-center justify-center gap-3 text-center',
             )}
           >
-            <div className="rounded-full bg-secondary p-4">
-              <FileUp className="size-8 text-muted-foreground" />
-            </div>
-            <div className="text-base font-medium">
-              Glissez vos factures PDF ici
-            </div>
-            <div className="text-sm text-muted-foreground">
-              un ou plusieurs .pdf — scan ou PDF natif, rien ne quitte votre
-              navigateur
-            </div>
+            {records.length === 0 ? (
+              <>
+                <div className="rounded-full bg-secondary p-4">
+                  <FileUp className="size-8 text-muted-foreground" />
+                </div>
+                <div className="text-base font-medium">
+                  Glissez vos factures PDF ici
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  un ou plusieurs .pdf — scan ou PDF natif, rien ne quitte votre
+                  navigateur
+                </div>
+              </>
+            ) : (
+              <InvoiceList
+                records={records}
+                selectedId={selectedId}
+                onSelect={selectInvoice}
+                onRemove={removeInvoice}
+                className="flex-col"
+              />
+            )}
           </div>
-
-          <InvoiceList
-            records={records}
-            selectedId={selectedId}
-            onSelect={selectInvoice}
-            onRemove={removeInvoice}
-            className="flex-col"
-          />
 
           {records.length > 0 && (
             <button
               type="button"
               onClick={clearFacturation}
-              className="mt-auto inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
+              className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
             >
               <Trash2 className="size-4" />
               Tout effacer
