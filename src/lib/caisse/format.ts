@@ -17,8 +17,15 @@ export const fmtEur = (n: number) => `${eur.format(n)} €`
 export const fmtEurInt = (n: number) => `${eur0.format(n)} €`
 /** Entier nu, sans symbole (ex. « 12 » — nombre de feuilles). */
 export const fmtInt = (n: number) => eur0.format(n)
+// Écart signé : « +12,50 », « -3,00 », mais « 0,00 » NU dès que ça arrondit à
+// zéro — jamais « +0,00 » ni le trompeur « -0,00 » / « +-0,00 » du zéro négatif
+// flottant (où -0 >= 0 est vrai en JS, donc « + », mais Intl rend « -0,00 »).
+const signEcart = (n: number): string => {
+  const r = Math.round(n * 100) / 100
+  if (r === 0) return eur.format(0)
+  return `${r > 0 ? '+' : ''}${eur.format(r)}`
+}
 /** Écart signé, 2 décimales (ex. « +12,50 € » / « -3,00 € »). */
-export const fmtEcart = (n: number) => `${n >= 0 ? '+' : ''}${eur.format(n)} €`
+export const fmtEcart = (n: number) => `${signEcart(n)} €`
 /** Écart signé SANS le symbole € (colonne compacte, responsive). */
-export const fmtEcartBare = (n: number) =>
-  `${n >= 0 ? '+' : ''}${eur.format(n)}`
+export const fmtEcartBare = (n: number) => signEcart(n)

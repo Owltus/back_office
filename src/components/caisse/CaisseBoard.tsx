@@ -813,14 +813,11 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
                       ? setCaisse('adyen', v)
                       : setCaisse(c as PayKey, v)
                   }
-                  // Double-clic : reporte la somme des deux lignes du dessus
-                  // (StayNTouch + Lightspeed) pour la colonne — Lightspeed n'a pas
-                  // de « web », la somme s'y résume au cbweb de StayNTouch.
-                  onFill={(c) =>
-                    c === 'web'
-                      ? form.snt.cbweb
-                      : form.snt[c as PayKey] + form.ls[c as PayKey]
-                  }
+                  // Double-clic : reporte la somme attendue des deux lignes du
+                  // dessus (StayNTouch + Lightspeed) pour la colonne. `expected`
+                  // arrondit au centime (pas d'addition flottante brute → plus de
+                  // « 0,30000000000000004 ») et gère le cas « web » (cbweb seul).
+                  onFill={(c) => expected(form, c)}
                 />
                 <tr className="border-t border-border bg-muted/30 font-medium">
                   <td className="px-3 py-1.5">ÉCARTS</td>
