@@ -90,3 +90,28 @@ export interface StampData {
   /** Facteur d'échelle du cartouche (1 = taille par défaut). */
   scale: number
 }
+
+/**
+ * Une facture chargée dans l'atelier : le fichier, son état de lecture, l'aperçu
+ * multi-pages, et les champs d'imputation/tampon éditables. Vit dans le store
+ * module-level `facturationStore` (survit à la navigation ; en mémoire de session).
+ */
+export interface InvoiceRecord {
+  id: string
+  file: File
+  fileName: string
+  status: 'processing' | 'ready' | 'error'
+  method: ExtractMethod | null
+  pageCount: number
+  text: string
+  detection: Detection | null
+  previews: PagePreview[]
+  position: StampPosition | null
+  stampScale: number
+  code: string
+  supplierName: string
+  comment: string
+  invoiceDate: string
+  processedDate: string
+  error: string | null
+}

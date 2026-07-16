@@ -21,10 +21,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '#/components/ui/select.tsx'
-import type { InvoiceRecord } from '#/components/facturation/FacturationBoard.tsx'
 import { BUDGET_LINES, budgetLabel } from '#/lib/facturation/constants.ts'
 import { rememberRule } from '#/lib/facturation/detect.ts'
-import type { BudgetLine, StampData } from '#/lib/facturation/types.ts'
+import type {
+  BudgetLine,
+  InvoiceRecord,
+  StampData,
+} from '#/lib/facturation/types.ts'
 import { cn } from '#/lib/utils.ts'
 
 /*

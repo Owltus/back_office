@@ -1,6 +1,6 @@
 import { AlertTriangle, FileText, Loader2, X } from 'lucide-react'
 
-import type { InvoiceRecord } from '#/components/facturation/FacturationBoard.tsx'
+import type { InvoiceRecord } from '#/lib/facturation/types.ts'
 import { cn } from '#/lib/utils.ts'
 
 /*
