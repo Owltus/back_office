@@ -1,6 +1,13 @@
 import { useRef, useState } from 'react'
 import { useStore } from '@tanstack/react-store'
-import { AlertTriangle, FileText, FileUp, Loader2, Trash2 } from 'lucide-react'
+import {
+  AlertTriangle,
+  FileText,
+  FileUp,
+  Loader2,
+  Plus,
+  Trash2,
+} from 'lucide-react'
 
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
 import { InvoiceList } from '#/components/facturation/InvoiceList.tsx'
@@ -139,7 +146,18 @@ export function FacturationBoard() {
     created.forEach(processInvoice)
   }
 
-  // Dépôt limité à la dropzone de la colonne gauche (style PDJ).
+  const openPicker = () => inputRef.current?.click()
+
+  // Dépôt : toute la colonne gauche est une cible (surlignée au survol).
+  const onDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    setDragging(true)
+  }
+  const onDragLeave = (e: React.DragEvent) => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+      setDragging(false)
+    }
+  }
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault()
     setDragging(false)
@@ -163,65 +181,64 @@ export function FacturationBoard() {
           }}
         />
 
-        {/* COLONNE GAUCHE : une seule zone de dépôt (style PDJ) qui remplit la
-            carte et contient les miniatures une fois des factures chargées. */}
-        <aside className="flex min-h-0 w-full shrink-0 flex-col gap-3 rounded-xl border border-border bg-card p-3 lg:max-h-full lg:w-80">
-          <div
-            role="button"
-            tabIndex={0}
-            onClick={() => inputRef.current?.click()}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') inputRef.current?.click()
-            }}
-            onDragOver={(e) => {
-              e.preventDefault()
-              setDragging(true)
-            }}
-            onDragLeave={() => setDragging(false)}
-            onDrop={onDrop}
-            className={cn(
-              'empty-canvas flex min-h-[240px] flex-1 cursor-pointer flex-col gap-2 overflow-y-auto rounded-2xl border-2 border-dashed border-border p-3 outline-none transition-colors lg:min-h-0',
-              'hover:border-primary/60 focus-visible:ring-2 focus-visible:ring-ring',
-              dragging
-                ? 'border-primary bg-secondary/40'
-                : 'hover:bg-secondary/10',
-              records.length === 0 &&
-                'items-center justify-center gap-3 text-center',
-            )}
-          >
-            {records.length === 0 ? (
-              <>
-                <div className="rounded-full bg-secondary p-4">
-                  <FileUp className="size-8 text-muted-foreground" />
-                </div>
-                <div className="text-base font-medium">
-                  Glissez vos factures PDF ici
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  un ou plusieurs .pdf — scan ou PDF natif, rien ne quitte votre
-                  navigateur
-                </div>
-              </>
-            ) : (
+        {/* COLONNE GAUCHE : toute la carte est une cible de dépôt (surlignée au
+            survol). À vide → grande invitation ; avec factures → les miniatures
+            prennent le dessus et le dépôt reste dispo, discret. */}
+        <aside
+          onDragOver={onDragOver}
+          onDragLeave={onDragLeave}
+          onDrop={onDrop}
+          className={cn(
+            'flex min-h-0 w-full shrink-0 flex-col gap-3 rounded-xl border bg-card p-3 transition-colors lg:max-h-full lg:w-80',
+            dragging ? 'border-primary ring-1 ring-primary' : 'border-border',
+          )}
+        >
+          {records.length === 0 ? (
+            <button
+              type="button"
+              onClick={openPicker}
+              className={cn(
+                'empty-canvas flex min-h-[240px] flex-1 cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border p-6 text-center outline-none transition-colors lg:min-h-0',
+                'hover:border-primary/60 hover:bg-secondary/30 focus-visible:ring-2 focus-visible:ring-ring',
+              )}
+            >
+              <div className="rounded-full bg-secondary p-4">
+                <FileUp className="size-8 text-muted-foreground" />
+              </div>
+              <div className="text-base font-medium">
+                Glissez vos factures PDF ici
+              </div>
+              <div className="text-sm text-muted-foreground">
+                un ou plusieurs .pdf — scan ou PDF natif, rien ne quitte votre
+                navigateur
+              </div>
+            </button>
+          ) : (
+            <>
               <InvoiceList
                 records={records}
                 selectedId={selectedId}
                 onSelect={selectInvoice}
                 onRemove={removeInvoice}
-                className="flex-col"
+                className="min-h-0 flex-1 flex-col overflow-y-auto"
               />
-            )}
-          </div>
-
-          {records.length > 0 && (
-            <button
-              type="button"
-              onClick={clearFacturation}
-              className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
-            >
-              <Trash2 className="size-4" />
-              Tout effacer
-            </button>
+              <button
+                type="button"
+                onClick={openPicker}
+                className="flex shrink-0 items-center justify-center gap-2 rounded-lg border border-dashed border-border p-2.5 text-sm text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground"
+              >
+                <Plus className="size-4" />
+                Ajouter des PDF
+              </button>
+              <button
+                type="button"
+                onClick={clearFacturation}
+                className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
+              >
+                <Trash2 className="size-4" />
+                Tout effacer
+              </button>
+            </>
           )}
         </aside>
 
