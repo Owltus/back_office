@@ -99,3 +99,10 @@ export const SEED_RULES: SupplierRule[] = [
 
 /** Nombre de caractères (hors espaces) par page en-dessous duquel on bascule OCR. */
 export const OCR_CHAR_THRESHOLD = 24
+
+/**
+ * Échelle de rasterisation des aperçus de page (au-delà de 1 pour rester net).
+ * Sert AUSSI de plafond d'agrandissement à l'écran : zoomer au-delà flouterait,
+ * en-deçà gâcherait de la netteté disponible. Une seule valeur pour les deux.
+ */
+export const PREVIEW_RASTER_SCALE = 1.5

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useStore } from '@tanstack/react-store'
 import {
   AlertTriangle,
@@ -155,6 +155,19 @@ export function FacturationBoard() {
 
   const selected = records.find((r) => r.id === selectedId) ?? null
 
+  // Données du tampon mémoïsées : identité stable tant que ces champs ne changent
+  // pas, pour que les useMemo de StampPreview tiennent pendant un glisser.
+  const stampData = useMemo(
+    () => (selected ? stampDataOf(selected) : null),
+    [
+      selected?.code,
+      selected?.comment,
+      selected?.invoiceDate,
+      selected?.processedDate,
+      selected?.stampScale,
+    ],
+  )
+
   return (
     <PageContainer fillHeight>
       <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-4 lg:flex-row lg:gap-6">
@@ -240,7 +253,7 @@ export function FacturationBoard() {
               <StampPreview
                 key={selected.id}
                 previews={selected.previews}
-                data={stampDataOf(selected)}
+                data={stampData!}
                 position={selected.position}
                 onPositionChange={(p) =>
                   patchInvoice(selected.id, { position: p })

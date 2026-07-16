@@ -4,8 +4,15 @@ import { PDFDocument, StandardFonts } from 'pdf-lib'
 import { detect, normalize } from '#/lib/facturation/detect.ts'
 import { buildStampedPdf } from '#/lib/facturation/stamp.ts'
 import { stampBoxSize } from '#/lib/facturation/stampLayout.ts'
+import { computeGrid, pageAt } from '#/lib/facturation/grid.ts'
 import { SEED_RULES, budgetLabel } from '#/lib/facturation/constants.ts'
-import type { StampData, SupplierRule } from '#/lib/facturation/types.ts'
+import type {
+  PagePreview,
+  StampData,
+  SupplierRule,
+} from '#/lib/facturation/types.ts'
+
+const A4 = (): PagePreview => ({ dataUrl: '', width: 595, height: 842 })
 
 const STAMP: StampData = {
   code: '606110',
@@ -114,5 +121,38 @@ describe('stampBoxSize', () => {
     const twice = stampBoxSize({ ...STAMP, scale: 2 })
     expect(twice.width).toBeCloseTo(base.width * 2)
     expect(twice.height).toBeCloseTo(base.height * 2)
+  })
+})
+
+describe('computeGrid', () => {
+  it('page seule : une colonne, tenue en hauteur, centrée en (0,0)', () => {
+    const g = computeGrid([A4()], 1000, 700, 1.5)
+    expect(g.cols).toBe(1)
+    expect(g.boxes).toHaveLength(1)
+    expect(g.boxes[0].left).toBe(0)
+    expect(g.boxes[0].top).toBe(0)
+    // 676/842 borne l'échelle (plus contraignant que 976/595).
+    expect(g.scale).toBeCloseTo(676 / 842)
+  })
+
+  it('plusieurs pages sur un large écran : deux colonnes côte à côte', () => {
+    const g = computeGrid([A4(), A4()], 1400, 800, 1.5)
+    expect(g.cols).toBe(2)
+    expect(g.boxes[1].left).toBeGreaterThan(g.boxes[0].left)
+    expect(g.boxes[1].top).toBe(g.boxes[0].top) // même rangée
+  })
+
+  it('taille inconnue → échelle 0 (rien à rendre)', () => {
+    expect(computeGrid([A4()], 0, 0, 1.5).scale).toBe(0)
+  })
+})
+
+describe('pageAt', () => {
+  it('retourne l’index de la cellule sous le point', () => {
+    const g = computeGrid([A4(), A4()], 1400, 800, 1.5)
+    expect(pageAt(g, 10, 10)).toBe(0)
+    expect(pageAt(g, g.boxes[1].left + 10, 10)).toBe(1)
+    // hors grille → borné à une page existante.
+    expect(pageAt(g, 99999, 99999)).toBe(1)
   })
 })

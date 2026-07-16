@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   STAMP_COLORS,
@@ -12,6 +12,8 @@ import {
   stampBoxSize,
   stampLines,
 } from '#/lib/facturation/stampLayout.ts'
+import { computeGrid, pageAt } from '#/lib/facturation/grid.ts'
+import { PREVIEW_RASTER_SCALE } from '#/lib/facturation/constants.ts'
 import type {
   PagePreview,
   StampData,
@@ -31,18 +33,6 @@ import { clamp, cn } from '#/lib/utils.ts'
  * boîte 2D (left/top en px) qui sert au placement du tampon et à la détection de
  * la page survolée au glisser / cliquée.
  */
-
-const GAP = 12 // écart (px) entre pages
-const PAD = 24 // marge (px) autour de la grille
-const TARGET_COL = 560 // largeur cible (px) d'une colonne : plus c'est haut, moins il y a de colonnes (donc des pages plus grosses)
-const MAX_SCALE = 1.5 // borne d'agrandissement = échelle de rendu des aperçus (au-delà, ça flouterait)
-
-interface PageBox {
-  left: number
-  top: number
-  w: number
-  h: number
-}
 
 // Poignées de redimensionnement, une par coin (hissé : constant, sans dépendance).
 const HANDLES = [
@@ -79,50 +69,17 @@ export function StampPreview({
     return () => observer.disconnect()
   }, [])
 
-  const box = stampBoxSize(data) // dimensions déjà à l'échelle du tampon (data.scale)
+  const box = useMemo(() => stampBoxSize(data), [data]) // à l'échelle du tampon
+  const lines = useMemo(() => stampLines(data), [data])
   const ss = data.scale || 1 // échelle intrinsèque du tampon (redimensionnement)
-  const maxW = Math.max(...previews.map((p) => p.width))
-  const maxH = Math.max(...previews.map((p) => p.height))
 
-  // --- Agencement (colonnes + échelle) selon la place disponible -------------
-  const availW = size.w - PAD
-  const availH = size.h - PAD
-  let cols = 1
-  let scale = 0
-  if (availW > 0 && availH > 0) {
-    if (previews.length <= 1) {
-      // Page seule : plein cadre (largeur ET hauteur).
-      scale = Math.min(availW / maxW, availH / maxH, 1)
-    } else {
-      // Grille : autant de colonnes que la largeur en autorise (largeur de
-      // colonne cible), puis chaque page est mise à l'échelle de sa colonne.
-      cols = clamp(
-        Math.floor((availW + GAP) / (TARGET_COL + GAP)),
-        1,
-        previews.length,
-      )
-      const colW = (availW - (cols - 1) * GAP) / cols
-      scale = Math.min(colW / maxW, MAX_SCALE)
-    }
-  }
-
-  const cellW = maxW * scale
-  const cellH = maxH * scale
-  const rows = Math.ceil(previews.length / cols)
-  const contentW = cols * cellW + (cols - 1) * GAP
-  const contentH = rows * cellH + (rows - 1) * GAP
-
-  // Boîte 2D de chaque page (gauche→droite, haut→bas).
-  const boxes: PageBox[] = previews.map((pg, i) => {
-    const c = i % cols
-    const r = Math.floor(i / cols)
-    return {
-      left: c * (cellW + GAP),
-      top: r * (cellH + GAP),
-      w: pg.width * scale,
-      h: pg.height * scale,
-    }
-  })
+  // Agencement responsive des pages (logique pure, mémoïsée : stable pendant un
+  // glisser de position — seul `position` change alors, pas la grille).
+  const grid = useMemo(
+    () => computeGrid(previews, size.w, size.h, PREVIEW_RASTER_SCALE),
+    [previews, size.w, size.h],
+  )
+  const { scale, boxes, contentW, contentH } = grid
 
   // Page + coordonnées effectives du tampon (bornées à la page).
   const raw = position ?? defaultStampPosition(previews[0].width, data)
@@ -134,13 +91,6 @@ export function StampPreview({
     pageDims.height,
     data,
   )
-
-  // Détecte la page (cellule de la grille) sous un point du contenu (px).
-  function pageAt(px: number, py: number): number {
-    const c = clamp(Math.floor(px / (cellW + GAP)), 0, cols - 1)
-    const r = clamp(Math.floor(py / (cellH + GAP)), 0, rows - 1)
-    return clamp(r * cols + c, 0, previews.length - 1)
-  }
 
   // --- Glisser : le point saisi reste sous le curseur ------------------------
   const grab = useRef<{ gx: number; gy: number } | null>(null)
@@ -155,7 +105,7 @@ export function StampPreview({
     const rect = contentRef.current.getBoundingClientRect()
     const px = e.clientX - rect.left
     const py = e.clientY - rect.top
-    const p = pageAt(px, py)
+    const p = pageAt(grid, px, py)
     const dims = previews[p]
     onPositionChange(
       clampStampPosition(
@@ -254,8 +204,6 @@ export function StampPreview({
     resize.current = null
     e.currentTarget.releasePointerCapture(e.pointerId)
   }
-
-  const lines = stampLines(data)
 
   return (
     <div
