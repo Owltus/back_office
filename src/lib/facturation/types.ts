@@ -80,10 +80,9 @@ export interface Detection {
   hints: InvoiceHints
 }
 
-/** Données apposées dans le cartouche du tampon. */
+/** Données apposées dans le cartouche du tampon (le libellé se dérive du code). */
 export interface StampData {
   code: string
-  label: string
   comment: string
   invoiceDate: string
   processedDate: string

@@ -21,13 +21,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '#/components/ui/select.tsx'
-import { BUDGET_LINES, budgetLabel } from '#/lib/facturation/constants.ts'
+import { BUDGET_LINES } from '#/lib/facturation/constants.ts'
 import { rememberRule } from '#/lib/facturation/detect.ts'
-import type {
-  BudgetLine,
-  InvoiceRecord,
-  StampData,
-} from '#/lib/facturation/types.ts'
+import { stampDataOf } from '#/lib/facturation/stampLayout.ts'
+import type { BudgetLine, InvoiceRecord } from '#/lib/facturation/types.ts'
 import { cn } from '#/lib/utils.ts'
 
 /*
@@ -127,14 +124,7 @@ export function InvoicePanel({
   const canStamp = !!record.code
   const canRemember = !!record.code && !!record.supplierName.trim()
 
-  const stampData: StampData = {
-    code: record.code,
-    label: budgetLabel(record.code),
-    comment: record.comment,
-    invoiceDate: record.invoiceDate,
-    processedDate: record.processedDate,
-    scale: record.stampScale,
-  }
+  const stampData = stampDataOf(record)
 
   async function handleStamp() {
     setStamping(true)

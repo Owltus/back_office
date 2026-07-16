@@ -14,7 +14,7 @@ import { InvoiceList } from '#/components/facturation/InvoiceList.tsx'
 import { InvoicePanel } from '#/components/facturation/InvoicePanel.tsx'
 import { StampPreview } from '#/components/facturation/StampPreview.tsx'
 import { detect } from '#/lib/facturation/detect.ts'
-import { budgetLabel } from '#/lib/facturation/constants.ts'
+import { stampDataOf } from '#/lib/facturation/stampLayout.ts'
 import {
   addInvoices,
   clearFacturation,
@@ -23,7 +23,7 @@ import {
   removeInvoice,
   selectInvoice,
 } from '#/lib/facturationStore.ts'
-import type { InvoiceRecord, StampData } from '#/lib/facturation/types.ts'
+import type { InvoiceRecord } from '#/lib/facturation/types.ts'
 import { cn } from '#/lib/utils.ts'
 
 /*
@@ -48,17 +48,6 @@ function todayIso(): string {
   const d = new Date()
   const p = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
-}
-
-function stampDataOf(record: InvoiceRecord): StampData {
-  return {
-    code: record.code,
-    label: budgetLabel(record.code),
-    comment: record.comment,
-    invoiceDate: record.invoiceDate,
-    processedDate: record.processedDate,
-    scale: record.stampScale,
-  }
 }
 
 /** Lecture d'un PDF puis mise à jour du store (continue même après démontage). */

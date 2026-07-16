@@ -9,7 +9,6 @@ import type { StampData, SupplierRule } from '#/lib/facturation/types.ts'
 
 const STAMP: StampData = {
   code: '606110',
-  label: 'Électricité',
   comment: 'Contrôlé — juin 2026',
   invoiceDate: '2026-07-12',
   processedDate: '2026-07-15',

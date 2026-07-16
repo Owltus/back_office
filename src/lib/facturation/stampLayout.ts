@@ -1,5 +1,9 @@
 import { budgetLabel } from '#/lib/facturation/constants.ts'
-import type { StampData, StampPosition } from '#/lib/facturation/types.ts'
+import type {
+  InvoiceRecord,
+  StampData,
+  StampPosition,
+} from '#/lib/facturation/types.ts'
 
 /*
  * Géométrie du cartouche de tampon — SOURCE UNIQUE partagée par l'aperçu HTML
@@ -31,6 +35,18 @@ export interface StampLine {
   color: keyof typeof STAMP_COLORS
 }
 
+/** Projection d'une facture vers les données du tampon (source unique, partagée
+ *  par le board et le panneau d'imputation). Le libellé est dérivé du code. */
+export function stampDataOf(record: InvoiceRecord): StampData {
+  return {
+    code: record.code,
+    comment: record.comment,
+    invoiceDate: record.invoiceDate,
+    processedDate: record.processedDate,
+    scale: record.stampScale,
+  }
+}
+
 /** jj/mm/aaaa à partir d'un aaaa-mm-jj (input date) ; renvoie l'entrée sinon. */
 export function frDate(iso: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
@@ -40,7 +56,7 @@ export function frDate(iso: string): string {
 /** Lignes du cartouche, de haut en bas. Textes complets (la troncature au besoin
  *  est gérée à l'affichage : ellipsis en HTML, `fit()` en pdf-lib). */
 export function stampLines(data: StampData): StampLine[] {
-  const label = data.label || budgetLabel(data.code)
+  const label = budgetLabel(data.code)
   const lines: StampLine[] = [
     { text: 'IMPUTATION COMPTABLE', size: 8, bold: true, color: 'red' },
     {
