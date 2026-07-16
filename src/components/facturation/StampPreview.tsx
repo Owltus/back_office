@@ -17,7 +17,7 @@ import type {
   StampData,
   StampPosition,
 } from '#/lib/facturation/types.ts'
-import { cn } from '#/lib/utils.ts'
+import { clamp, cn } from '#/lib/utils.ts'
 
 /*
  * Aperçu des pages de la facture avec le tampon DÉPLAÇABLE à la souris.
@@ -44,9 +44,13 @@ interface PageBox {
   h: number
 }
 
-function clamp(v: number, lo: number, hi: number) {
-  return Math.max(lo, Math.min(v, hi))
-}
+// Poignées de redimensionnement, une par coin (hissé : constant, sans dépendance).
+const HANDLES = [
+  { isLeft: true, isTop: true, cls: '-top-1 -left-1 cursor-nwse-resize' },
+  { isLeft: false, isTop: true, cls: '-top-1 -right-1 cursor-nesw-resize' },
+  { isLeft: true, isTop: false, cls: '-bottom-1 -left-1 cursor-nesw-resize' },
+  { isLeft: false, isTop: false, cls: '-bottom-1 -right-1 cursor-nwse-resize' },
+]
 
 export function StampPreview({
   previews,
@@ -250,17 +254,6 @@ export function StampPreview({
     resize.current = null
     e.currentTarget.releasePointerCapture(e.pointerId)
   }
-
-  const HANDLES = [
-    { isLeft: true, isTop: true, cls: '-top-1 -left-1 cursor-nwse-resize' },
-    { isLeft: false, isTop: true, cls: '-top-1 -right-1 cursor-nesw-resize' },
-    { isLeft: true, isTop: false, cls: '-bottom-1 -left-1 cursor-nesw-resize' },
-    {
-      isLeft: false,
-      isTop: false,
-      cls: '-bottom-1 -right-1 cursor-nwse-resize',
-    },
-  ]
 
   const lines = stampLines(data)
 
