@@ -83,8 +83,10 @@ function extractHints(rawText: string): InvoiceHints {
  *  1. Règles déterministes (mot-clé → code) : PRIORITAIRES, jamais diluées.
  *  2. Nuages de mots (si `pool` fourni) : vraie probabilité, codes supplémentaires
  *     au-dessus du seuil, mots ayant voté, et abstention si preuve mince.
- * Quand une règle tranche, ses codes restent en tête et la confiance reste haute ;
- * sinon les nuages pilotent. `codes` = union (règles d'abord) ∪ nuages seuillés.
+ * Quand une règle tranche (mot-clé précis), ses codes SEULS sont retenus (signal
+ * fiable, non dilué par les nuages encore bruités). Sinon les nuages pilotent, mais
+ * de façon PARCIMONIEUSE : le meilleur code, plus un 2e/3e seulement s'ils sont
+ * comparables. « Souvent une seule imputation, parfois plusieurs. »
  */
 export function detect(
   rawText: string,
@@ -111,22 +113,18 @@ export function detect(
   const ruleCodes = [...new Set(matches.map((m) => m.rule.code))]
   const best = matches[0]
 
-  // Couche 2 : nuages de mots.
+  // Couche 2 : nuages de mots (parcimonieux).
   const scored = pool ? scoreInvoice(rawText, pool) : []
-  const cloudCodes = preselect(scored)
   const scores = scored.slice(0, 5)
 
-  // Union : codes des règles (prioritaires, en tête) ∪ codes nuages seuillés.
-  const codes = [...new Set([...ruleCodes, ...cloudCodes])]
-
   if (best) {
-    // Une règle tranche → priorité, confiance haute (non diluée par les nuages).
+    // Une règle tranche → ses codes SEULS (pas de dilution par les nuages).
     const base = best.rule.learned ? 0.75 : 0.6
     const confidence = Math.min(0.97, base + 0.12 * (best.score - 1))
     return {
       supplier: best.rule.supplier,
       code: best.rule.code,
-      codes,
+      codes: ruleCodes,
       matchedKeyword: best.keyword,
       confidence,
       learned: !!best.rule.learned,
@@ -136,12 +134,12 @@ export function detect(
     }
   }
 
-  // Aucune règle → les nuages pilotent (proba réelle, mots votants).
+  // Aucune règle → les nuages pilotent (proba réelle, mots votants), parcimonieux.
   const top = scored[0]
   return {
     supplier: null,
     code: top?.code ?? null,
-    codes,
+    codes: preselect(scored),
     matchedKeyword: top?.words[0] ?? null,
     confidence: top?.proba ?? 0,
     learned: false,

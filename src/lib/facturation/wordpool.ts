@@ -95,6 +95,11 @@ const STOPWORDS = new Set([
 export const STORAGE_TOP_K = 300
 /** Cosinus minimal pour proposer un code (sinon abstention). */
 export const CLOUD_MIN = 0.15
+/** Un 2e/3e code n'est pré-sélectionné que si son score atteint cette fraction du
+ *  MEILLEUR — sinon une seule imputation. « Souvent un, parfois plusieurs. » */
+export const CLOUD_KEEP_RATIO = 0.75
+/** Nombre maximal de codes pré-sélectionnés (borne dure). */
+export const CLOUD_MAX = 3
 const BM25_K = 1.5
 const SEED_WEIGHT = 4 // mot-clé livré : graine forte (survit au filtre hapax)
 const HINT_WEIGHT = 2 // mot d'un `hint` : graine plus faible
@@ -220,9 +225,16 @@ function softmaxInto(scored: Scored[]): void {
   })
 }
 
-/** Codes à pré-sélectionner (un-contre-tous : tous ceux au-dessus du seuil). */
+/** Codes à pré-sélectionner : le MEILLEUR (s'il dépasse le seuil), plus les
+ *  suivants seulement s'ils sont PROCHES du meilleur (≥ CLOUD_KEEP_RATIO × top).
+ *  Un vainqueur net → un seul code ; deux comparables → deux. Borné à CLOUD_MAX. */
 export function preselect(scored: Scored[]): string[] {
-  return scored.filter((x) => x.score >= CLOUD_MIN).map((x) => x.code)
+  if (scored.length === 0 || scored[0].score < CLOUD_MIN) return []
+  const top = scored[0].score
+  return scored
+    .filter((x) => x.score >= top * CLOUD_KEEP_RATIO)
+    .slice(0, CLOUD_MAX)
+    .map((x) => x.code)
 }
 
 /** Vrai si la preuve est trop mince pour trancher (à imputer à la main). */

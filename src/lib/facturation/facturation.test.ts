@@ -4,6 +4,7 @@ import { PDFDocument, StandardFonts } from 'pdf-lib'
 import { detect, normalize } from '#/lib/facturation/detect.ts'
 import {
   abstains,
+  preselect,
   scoreInvoice,
   seedPool,
   tokenize,
@@ -120,6 +121,24 @@ describe('wordpool', () => {
 
   it('abstention quand aucun mot informatif', () => {
     expect(abstains(scoreInvoice('xyzzy plughx', POOL))).toBe(true)
+  })
+
+  it('pré-sélectionne le SEUL meilleur code quand il domine', () => {
+    expect(preselect(scoreInvoice('reparation ascenseur panne', POOL))).toEqual(
+      ['TECH'],
+    )
+  })
+
+  it('garde plusieurs codes seulement s’ils sont comparables', () => {
+    const pool3 = {
+      perCode: {
+        A: { alpha: 5, xray: 3 },
+        B: { alpha: 5, yoyo: 3 },
+        C: { zeta: 5, whis: 3 },
+      },
+    }
+    // « alpha » est partagé par A et B (scores égaux), absent de C.
+    expect(preselect(scoreInvoice('alpha', pool3)).sort()).toEqual(['A', 'B'])
   })
 
   it('la graine amorce le nuage OTA depuis « booking »', () => {
