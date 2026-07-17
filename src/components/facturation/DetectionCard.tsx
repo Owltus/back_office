@@ -8,11 +8,13 @@ import { cn } from '#/lib/utils.ts'
  * elle-même est déjà pré-sélectionnée dans la liste ; la carte dit à quel point s'y fier.
  */
 
-/** Palette selon le niveau de confiance (texte + barre). */
+/** Palette selon le niveau de confiance (texte + barre). Paliers volontairement
+ *  humbles : la confiance des nuages est absolue (force × corroboration), donc
+ *  basse tant qu'il y a peu de données — le gris « pas sûr » est un état normal. */
 function confidenceTone(confidence: number): { text: string; bar: string } {
-  if (confidence >= 0.6)
+  if (confidence >= 0.5)
     return { text: 'text-emerald-500', bar: 'bg-emerald-500' }
-  if (confidence >= 0.35) return { text: 'text-amber-500', bar: 'bg-amber-500' }
+  if (confidence >= 0.25) return { text: 'text-amber-500', bar: 'bg-amber-500' }
   return { text: 'text-muted-foreground', bar: 'bg-muted-foreground' }
 }
 

@@ -144,6 +144,19 @@ describe('wordpool', () => {
   it('la graine amorce le nuage OTA depuis « booking »', () => {
     expect(seedPool().perCode['HECOMMOTAo']?.booking).toBeGreaterThan(0)
   })
+
+  it('confiance BASSE quand peu de mots votent (pas de sur-confiance)', () => {
+    const pool = {
+      perCode: {
+        A: { castalie: 5, autre: 3 },
+        B: { zzz: 5, www: 3 },
+      },
+    }
+    const s = scoreInvoice('castalie', pool)
+    expect(s[0].code).toBe('A')
+    // Un seul mot vote : même si le cosinus est élevé, la proba reste modeste.
+    expect(s[0].proba).toBeLessThan(0.4)
+  })
 })
 
 describe('matchIssuer', () => {

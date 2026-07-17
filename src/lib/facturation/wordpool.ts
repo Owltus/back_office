@@ -16,7 +16,7 @@ export interface WordPool {
 
 export interface Scored {
   code: string
-  proba: number // softmax des scores (affichage), somme ≈ 1 sur les candidats
+  proba: number // confiance ABSOLUE 0..1 (force × corroboration), pas relative
   score: number // cosinus brut (présélection / abstention)
   words: string[] // mots ayant le plus contribué (explicabilité)
 }
@@ -101,6 +101,8 @@ export const CLOUD_KEEP_RATIO = 0.75
 /** Nombre maximal de codes pré-sélectionnés (borne dure). */
 export const CLOUD_MAX = 3
 const BM25_K = 1.5
+/** Corroboration : `n / (n + K)` mots votants. 1 mot → 0,25 ; 3 → 0,5 ; 9 → 0,75. */
+const EVIDENCE_K = 3
 const SEED_WEIGHT = 4 // mot-clé livré : graine forte (survit au filtre hapax)
 const HINT_WEIGHT = 2 // mot d'un `hint` : graine plus faible
 
@@ -198,31 +200,19 @@ export function scoreInvoice(rawText: string, pool: WordPool): Scored[] {
       }
     }
     if (dot <= 0) continue
+    const cos = dot / (qn * vn)
     const words = contrib
       .sort((a, b) => b[1] - a[1])
       .slice(0, 4)
       .map((x) => x[0])
-    scored.push({ code: c, score: dot / (qn * vn), proba: 0, words })
+    // Confiance HONNÊTE et ABSOLUE : force du match (cosinus) × corroboration
+    // (combien de mots ont voté). Peu de mots OU match faible → % bas. Jamais
+    // gonflé par une normalisation relative — « ne pas savoir est une donnée ».
+    const evidence = contrib.length / (contrib.length + EVIDENCE_K)
+    scored.push({ code: c, score: cos, proba: cos * evidence, words })
   }
 
-  softmaxInto(scored)
   return scored.sort((a, b) => b.score - a.score)
-}
-
-/** Renseigne `proba` = softmax des scores (température basse → écarts marqués). */
-function softmaxInto(scored: Scored[]): void {
-  if (scored.length === 0) return
-  const T = 0.15
-  const max = Math.max(...scored.map((x) => x.score))
-  let sum = 0
-  const exps = scored.map((x) => {
-    const e = Math.exp((x.score - max) / T)
-    sum += e
-    return e
-  })
-  scored.forEach((x, i) => {
-    x.proba = sum > 0 ? exps[i] / sum : 0
-  })
 }
 
 /** Codes à pré-sélectionner : le MEILLEUR (s'il dépasse le seuil), plus les
