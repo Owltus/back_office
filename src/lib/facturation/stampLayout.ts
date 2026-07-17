@@ -39,7 +39,7 @@ export interface StampLine {
  *  par le board et le panneau d'imputation). Le libellé est dérivé du code. */
 export function stampDataOf(record: InvoiceRecord): StampData {
   return {
-    code: record.code,
+    codes: record.codes,
     comment: record.comment,
     invoiceDate: record.invoiceDate,
     processedDate: record.processedDate,
@@ -56,16 +56,28 @@ export function frDate(iso: string): string {
 /** Lignes du cartouche, de haut en bas. Textes complets (la troncature au besoin
  *  est gérée à l'affichage : ellipsis en HTML, `fit()` en pdf-lib). */
 export function stampLines(data: StampData): StampLine[] {
-  const label = budgetLabel(data.code)
+  const codes = data.codes.filter((c) => c.trim())
   const lines: StampLine[] = [
-    { text: 'IMPUTATION COMPTABLE', size: 8, bold: true, color: 'red' },
     {
-      text: `${data.code}  ${label}`.trim(),
+      text:
+        codes.length > 1 ? 'IMPUTATIONS COMPTABLES' : 'IMPUTATION COMPTABLE',
+      size: 8,
+      bold: true,
+      color: 'red',
+    },
+  ]
+  // Une ligne par code : « CODE  Libellé ». Placeholder si aucun code encore.
+  if (codes.length === 0) {
+    lines.push({ text: '— à imputer —', size: 10, bold: true, color: 'grey' })
+  }
+  for (const code of codes) {
+    lines.push({
+      text: `${code}  ${budgetLabel(code)}`.trim(),
       size: 10,
       bold: true,
       color: 'ink',
-    },
-  ]
+    })
+  }
   if (data.comment.trim()) {
     lines.push({
       text: data.comment.trim(),

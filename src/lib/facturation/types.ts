@@ -1,17 +1,23 @@
 /*
  * Types du prototype « Facturation » — suivi/tamponnage des factures fournisseurs.
  *
- * Tout est CÔTÉ NAVIGATEUR et SANS IA : la lecture du PDF (texte natif ou OCR),
- * la détection du code comptable (matching déterministe par règles) et le tampon
- * (dessin vectoriel sur le PDF) ne touchent jamais le réseau applicatif ni la
- * base Supabase. Page de test : rien n'est persisté hors `localStorage`.
+ * SANS IA : lecture du PDF (texte natif ou OCR), détection en deux couches (règles
+ * déterministes + nuages de mots statistiques) et tampon vectoriel se font côté
+ * navigateur. Seule donnée serveur : les nuages de mots d'imputation, agrégés
+ * (compteurs de tokens) dans Supabase — ni PDF ni texte de facture n'y sont stockés.
  */
 
-/** Une ligne budgétaire = un code comptable + son libellé, rangé par catégorie. */
+/** Une ligne budgétaire = un code comptable + son libellé, rangé par catégorie.
+ * `hint` = descriptions/fournisseurs agrégés du plan, texte de RECHERCHE seul
+ * (jamais affiché) pour retrouver une ligne par son fournisseur dans le modal.
+ * `tags` = domaines transversaux (Technique, Hébergement…) affichés et filtrables
+ * dans le modal, au-delà de la section comptable. */
 export interface BudgetLine {
   code: string
   label: string
   category: string
+  hint?: string
+  tags: string[]
 }
 
 /**
@@ -70,19 +76,26 @@ export interface InvoiceHints {
   amount: string | null
 }
 
-/** Résultat de la détection déterministe pour une facture. */
+/** Résultat de la détection. `code`/`supplier`/`confidence` = meilleur candidat ;
+ *  `codes` = tous les codes retenus (règles + nuages), pré-sélectionnés.
+ *  `scores` = candidats des nuages avec proba et mots votants (explicabilité) ;
+ *  `abstained` = preuve trop mince, à imputer à la main. */
 export interface Detection {
   supplier: string | null
   code: string | null
+  codes: string[]
   matchedKeyword: string | null
   confidence: number
   learned: boolean
   hints: InvoiceHints
+  scores?: { code: string; proba: number; words: string[] }[]
+  abstained?: boolean
 }
 
-/** Données apposées dans le cartouche du tampon (le libellé se dérive du code). */
+/** Données apposées dans le cartouche du tampon. Plusieurs imputations possibles
+ *  (une ligne par code) ; le libellé de chaque code se dérive du plan. */
 export interface StampData {
-  code: string
+  codes: string[]
   comment: string
   invoiceDate: string
   processedDate: string
@@ -107,8 +120,10 @@ export interface InvoiceRecord {
   previews: PagePreview[]
   position: StampPosition | null
   stampScale: number
-  code: string
+  codes: string[]
   supplierName: string
+  /** Vrai une fois la facture apprise (au tamponnage) — garde anti-double-comptage. */
+  learned: boolean
   comment: string
   invoiceDate: string
   processedDate: string

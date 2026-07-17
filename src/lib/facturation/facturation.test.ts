@@ -2,8 +2,15 @@ import { describe, expect, it } from 'vitest'
 import { PDFDocument, StandardFonts } from 'pdf-lib'
 
 import { detect, normalize } from '#/lib/facturation/detect.ts'
+import {
+  abstains,
+  scoreInvoice,
+  seedPool,
+  tokenize,
+} from '#/lib/facturation/wordpool.ts'
+import { matchIssuer } from '#/lib/facturation/issuers.ts'
 import { buildStampedPdf } from '#/lib/facturation/stamp.ts'
-import { stampBoxSize } from '#/lib/facturation/stampLayout.ts'
+import { stampBoxSize, stampLines } from '#/lib/facturation/stampLayout.ts'
 import { computeGrid, pageAt } from '#/lib/facturation/grid.ts'
 import { SEED_RULES, budgetLabel } from '#/lib/facturation/constants.ts'
 import type {
@@ -15,7 +22,7 @@ import type {
 const A4 = (): PagePreview => ({ dataUrl: '', width: 595, height: 842 })
 
 const STAMP: StampData = {
-  code: '606110',
+  codes: ['FMELECoooo'],
   comment: 'Contrôlé — juin 2026',
   invoiceDate: '2026-07-12',
   processedDate: '2026-07-15',
@@ -41,13 +48,20 @@ const EDF_TEXT = [
 ].join('\n')
 
 describe('detect', () => {
-  it('reconnaît EDF → 606110 malgré les accents', () => {
+  it('reconnaît l’électricité → code analytique malgré les accents', () => {
     const d = detect(EDF_TEXT, SEED_RULES)
-    expect(d.supplier).toBe('EDF')
-    expect(d.code).toBe('606110')
-    expect(d.matchedKeyword).toBe('edf')
-    expect(d.confidence).toBeGreaterThan(0.6)
-    expect(budgetLabel(d.code!)).toBe('Électricité')
+    expect(d.supplier).toBe('Électricité')
+    expect(d.code).toBe('FMELECoooo')
+    expect(d.matchedKeyword).toBe('electricite')
+    expect(d.codes).toEqual(['FMELECoooo'])
+    expect(d.confidence).toBeGreaterThan(0.5)
+    expect(budgetLabel(d.code!)).toBe('Electricité')
+  })
+
+  it('pré-sélectionne TOUS les codes dont un mot-clé matche', () => {
+    const d = detect('Facture booking.com et commission adyen', SEED_RULES)
+    expect(d.codes).toContain('HECOMMOTAo') // booking → OTA
+    expect(d.codes).toContain('FACOMMENCo') // adyen → encaissement
   })
 
   it('extrait les indices date / montant / numéro', () => {
@@ -61,6 +75,7 @@ describe('detect', () => {
     const d = detect('Boulangerie du coin — baguette', SEED_RULES)
     expect(d.supplier).toBeNull()
     expect(d.code).toBeNull()
+    expect(d.codes).toEqual([])
     expect(d.confidence).toBe(0)
   })
 
@@ -69,7 +84,7 @@ describe('detect', () => {
       {
         id: 'learned:acme',
         supplier: 'ACME Traiteur',
-        code: '602600',
+        code: 'RESSTFBooo',
         keywords: ['acme'],
         learned: true,
       },
@@ -78,6 +93,65 @@ describe('detect', () => {
     expect(d.supplier).toBe('ACME Traiteur')
     expect(d.learned).toBe(true)
     expect(d.confidence).toBeGreaterThanOrEqual(0.75)
+  })
+})
+
+describe('wordpool', () => {
+  const POOL = {
+    perCode: {
+      TECH: { ascenseur: 5, reparation: 3, panne: 2 },
+      OTA: { booking: 5, sejour: 3, nuitee: 2 },
+    },
+  }
+
+  it('tokenize retire chiffres, mots courts et mots vides', () => {
+    const t = tokenize('Facture 12/07/2026 réparation ASCENSEUR TTC 150')
+    expect(t).toContain('reparation')
+    expect(t).toContain('ascenseur')
+    expect(t).not.toContain('facture') // mot vide
+    expect(t.some((x) => /\d/.test(x))).toBe(false) // aucun token avec chiffre
+  })
+
+  it('les mots concentrés votent le bon code', () => {
+    const s = scoreInvoice('intervention reparation ascenseur en panne', POOL)
+    expect(s[0].code).toBe('TECH')
+    expect(s[0].words).toContain('ascenseur')
+  })
+
+  it('abstention quand aucun mot informatif', () => {
+    expect(abstains(scoreInvoice('xyzzy plughx', POOL))).toBe(true)
+  })
+
+  it('la graine amorce le nuage OTA depuis « booking »', () => {
+    expect(seedPool().perCode['HECOMMOTAo']?.booking).toBeGreaterThan(0)
+  })
+})
+
+describe('matchIssuer', () => {
+  it('reconnaît un émetteur connu par sous-chaîne', () => {
+    const list = [{ name: 'martin', display: 'Entreprise Martin', count: 3 }]
+    expect(matchIssuer('facture MARTIN sarl 2026', list)?.display).toBe(
+      'Entreprise Martin',
+    )
+  })
+
+  it('retourne null si aucun émetteur connu', () => {
+    const list = [{ name: 'martin', display: 'M', count: 1 }]
+    expect(matchIssuer('facture dupont', list)).toBeNull()
+  })
+
+  it('préfère l’émetteur le plus confirmé', () => {
+    const list = [
+      { name: 'martins', display: 'A', count: 1 },
+      { name: 'martin', display: 'B', count: 9 },
+    ]
+    // « martins » contient « martin » → les deux matchent ; le plus confirmé gagne.
+    expect(matchIssuer('facture martins', list)?.display).toBe('B')
+  })
+
+  it('ignore un nom trop court', () => {
+    const list = [{ name: 'sa', display: 'SA', count: 5 }]
+    expect(matchIssuer('facture sa', list)).toBeNull()
   })
 })
 
@@ -121,6 +195,23 @@ describe('stampBoxSize', () => {
     const twice = stampBoxSize({ ...STAMP, scale: 2 })
     expect(twice.width).toBeCloseTo(base.width * 2)
     expect(twice.height).toBeCloseTo(base.height * 2)
+  })
+})
+
+describe('stampLines', () => {
+  it('émet une ligne par code d’imputation', () => {
+    const lines = stampLines({ ...STAMP, codes: ['FMELECoooo', 'FMGAZooooo'] })
+    expect(lines[0].text).toBe('IMPUTATIONS COMPTABLES')
+    const codeLines = lines.filter((l) => /^FM/.test(l.text))
+    expect(codeLines).toHaveLength(2)
+    expect(codeLines[0].text).toContain('Electricité')
+    expect(codeLines[1].text).toContain('Gaz')
+  })
+
+  it('affiche un placeholder quand aucun code', () => {
+    const lines = stampLines({ ...STAMP, codes: [] })
+    expect(lines[0].text).toBe('IMPUTATION COMPTABLE')
+    expect(lines[1].text).toBe('— à imputer —')
   })
 })
 

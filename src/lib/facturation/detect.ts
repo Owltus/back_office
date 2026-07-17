@@ -1,88 +1,40 @@
 import { SEED_RULES } from '#/lib/facturation/constants.ts'
+import { normalize } from '#/lib/facturation/text.ts'
+import {
+  abstains,
+  preselect,
+  scoreInvoice,
+  type WordPool,
+} from '#/lib/facturation/wordpool.ts'
 import type {
   Detection,
   InvoiceHints,
   SupplierRule,
 } from '#/lib/facturation/types.ts'
 
+export { normalize }
+
 /*
- * Détection SANS IA : matching déterministe de mots-clés fournisseur → code
- * comptable. Aucune magie — chaque suggestion est traçable à une règle et à un
- * mot-clé précis (explicable, auditable). Les règles « apprises » par
- * l'utilisateur sont persistées en `localStorage` : à la première rencontre d'un
- * fournisseur, l'humain assigne le code ; les fois suivantes, il est proposé seul.
+ * Détection SANS IA, en DEUX couches, toutes deux explicables :
+ *  1. Matching déterministe de mots-clés (SEED_RULES) → couche prioritaire.
+ *  2. Nuages de mots (wordpool) → vraie probabilité, multi-imputation, abstention.
+ * Chaque suggestion reste traçable (règle+mot-clé, ou mots ayant voté). Plus de
+ * persistance localStorage : l'apprentissage vit dans les nuages (Supabase).
  */
 
-const LS_KEY = 'facturation:regles-apprises'
-
-/** Minuscules + suppression des accents, pour un matching robuste. */
-export function normalize(s: string): string {
-  return s
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[^\x00-\x7f]/g, '')
-}
-
-/** Règles apprises lues depuis `localStorage` (jamais d'exception propagée). */
-export function loadLearnedRules(): SupplierRule[] {
-  if (typeof window === 'undefined') return []
-  try {
-    const raw = window.localStorage.getItem(LS_KEY)
-    if (!raw) return []
-    const parsed = JSON.parse(raw) as SupplierRule[]
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return []
-  }
-}
-
-/** Ensemble courant des règles : livrées + apprises. */
+/** Règles de matching déterministe livrées (couche prioritaire). Plus de règles
+ *  apprises en localStorage : l'apprentissage vit dans les nuages (Supabase). */
 export function allRules(): SupplierRule[] {
-  return [...SEED_RULES, ...loadLearnedRules()]
+  return SEED_RULES
 }
 
-/**
- * Mémorise une correspondance fournisseur → code. Écrase toute règle apprise du
- * même fournisseur (normalisé) pour éviter les doublons. Retourne la liste à jour.
- */
-export function rememberRule(supplier: string, code: string): SupplierRule[] {
-  const key = normalize(supplier).trim()
-  if (!key) return loadLearnedRules()
-  const kept = loadLearnedRules().filter(
-    (r) => normalize(r.supplier).trim() !== key,
-  )
-  const next: SupplierRule[] = [
-    ...kept,
-    {
-      id: `learned:${key}`,
-      supplier: supplier.trim(),
-      code,
-      keywords: [key],
-      learned: true,
-    },
-  ]
-  if (typeof window !== 'undefined') {
-    try {
-      window.localStorage.setItem(LS_KEY, JSON.stringify(next))
-    } catch {
-      /* quota / mode privé : on ignore, la règle vivra le temps de la session */
-    }
-  }
-  return next
-}
+/** Longueur minimale d'un nom d'émetteur normalisé pour être exploité — en deçà,
+ *  le matching par sous-chaîne (« sa », « or ») ferait des faux positifs. */
+export const MIN_LEARN_LEN = 4
 
-/** Oublie une règle apprise (par id). Retourne la liste à jour. */
-export function forgetRule(id: string): SupplierRule[] {
-  const next = loadLearnedRules().filter((r) => r.id !== id)
-  if (typeof window !== 'undefined') {
-    try {
-      window.localStorage.setItem(LS_KEY, JSON.stringify(next))
-    } catch {
-      /* ignore */
-    }
-  }
-  return next
-}
+/** Vrai si un nom d'émetteur est assez long pour servir de token fort. */
+export const canLearn = (supplier: string): boolean =>
+  normalize(supplier).trim().length >= MIN_LEARN_LEN
 
 // --- Indices best-effort (montrés en aide, jamais critiques) --------------
 
@@ -127,22 +79,23 @@ function extractHints(rawText: string): InvoiceHints {
 }
 
 /**
- * Détecte le fournisseur et le code comptable suggéré à partir du texte.
- * Score = nombre de mots-clés d'une règle présents dans le texte ; on retient la
- * règle au meilleur score. La confiance grimpe avec le nombre de mots-clés
- * confirmés et pour une règle apprise (correspondance déjà validée par l'humain).
+ * Détecte les imputations en DEUX couches :
+ *  1. Règles déterministes (mot-clé → code) : PRIORITAIRES, jamais diluées.
+ *  2. Nuages de mots (si `pool` fourni) : vraie probabilité, codes supplémentaires
+ *     au-dessus du seuil, mots ayant voté, et abstention si preuve mince.
+ * Quand une règle tranche, ses codes restent en tête et la confiance reste haute ;
+ * sinon les nuages pilotent. `codes` = union (règles d'abord) ∪ nuages seuillés.
  */
 export function detect(
   rawText: string,
   rules: SupplierRule[] = allRules(),
+  pool?: WordPool,
 ): Detection {
   const text = normalize(rawText)
   const hints = extractHints(rawText)
 
-  let bestRule: SupplierRule | null = null
-  let bestScore = 0
-  let bestKeyword: string | null = null
-
+  // Couche 1 : règles dont au moins un mot-clé apparaît, meilleur score d'abord.
+  const matches: { rule: SupplierRule; score: number; keyword: string }[] = []
   for (const rule of rules) {
     let score = 0
     let firstHit: string | null = null
@@ -152,32 +105,48 @@ export function detect(
         if (!firstHit) firstHit = kw
       }
     }
-    if (score > bestScore) {
-      bestScore = score
-      bestRule = rule
-      bestKeyword = firstHit
-    }
+    if (score > 0 && firstHit) matches.push({ rule, score, keyword: firstHit })
   }
+  matches.sort((a, b) => b.score - a.score)
+  const ruleCodes = [...new Set(matches.map((m) => m.rule.code))]
+  const best = matches[0]
 
-  if (!bestRule) {
+  // Couche 2 : nuages de mots.
+  const scored = pool ? scoreInvoice(rawText, pool) : []
+  const cloudCodes = preselect(scored)
+  const scores = scored.slice(0, 5)
+
+  // Union : codes des règles (prioritaires, en tête) ∪ codes nuages seuillés.
+  const codes = [...new Set([...ruleCodes, ...cloudCodes])]
+
+  if (best) {
+    // Une règle tranche → priorité, confiance haute (non diluée par les nuages).
+    const base = best.rule.learned ? 0.75 : 0.6
+    const confidence = Math.min(0.97, base + 0.12 * (best.score - 1))
     return {
-      supplier: null,
-      code: null,
-      matchedKeyword: null,
-      confidence: 0,
-      learned: false,
+      supplier: best.rule.supplier,
+      code: best.rule.code,
+      codes,
+      matchedKeyword: best.keyword,
+      confidence,
+      learned: !!best.rule.learned,
       hints,
+      scores,
+      abstained: false,
     }
   }
 
-  const base = bestRule.learned ? 0.75 : 0.6
-  const confidence = Math.min(0.97, base + 0.12 * (bestScore - 1))
+  // Aucune règle → les nuages pilotent (proba réelle, mots votants).
+  const top = scored[0]
   return {
-    supplier: bestRule.supplier,
-    code: bestRule.code,
-    matchedKeyword: bestKeyword,
-    confidence,
-    learned: !!bestRule.learned,
+    supplier: null,
+    code: top?.code ?? null,
+    codes,
+    matchedKeyword: top?.words[0] ?? null,
+    confidence: top?.proba ?? 0,
+    learned: false,
     hints,
+    scores,
+    abstained: abstains(scored),
   }
 }

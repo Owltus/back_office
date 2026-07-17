@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { useStore } from '@tanstack/react-store'
+import { useQuery } from '@tanstack/react-query'
 import {
   AlertTriangle,
   FileText,
@@ -11,9 +12,19 @@ import {
 
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
 import { InvoiceList } from '#/components/facturation/InvoiceList.tsx'
-import { InvoicePanel } from '#/components/facturation/InvoicePanel.tsx'
+import {
+  EmptyImputation,
+  InvoicePanel,
+} from '#/components/facturation/InvoicePanel.tsx'
 import { StampPreview } from '#/components/facturation/StampPreview.tsx'
 import { detect } from '#/lib/facturation/detect.ts'
+import { fetchClouds, fetchIssuers } from '#/lib/facturation/cloudService.ts'
+import {
+  mergePools,
+  seedPool,
+  type WordPool,
+} from '#/lib/facturation/wordpool.ts'
+import { matchIssuer, type Issuer } from '#/lib/facturation/issuers.ts'
 import { stampDataOf } from '#/lib/facturation/stampLayout.ts'
 import {
   addInvoices,
@@ -27,8 +38,10 @@ import type { InvoiceRecord } from '#/lib/facturation/types.ts'
 import { cn } from '#/lib/utils.ts'
 
 /*
- * Prototype « Facturation » — page de TEST, réservée aux admins, SANS base de
- * données. Charpente calquée sur la page Affichage : trois panneaux en carte
+ * Prototype « Facturation » — page réservée aux admins. Données serveur : les
+ * « nuages de mots » d'imputation (facturation_wordpool, agrégés) et le dictionnaire
+ * des émetteurs connus (facturation_issuers) — ni PDF ni texte de facture stockés.
+ * Charpente calquée sur la page Affichage : trois panneaux en carte
  * TOUJOURS visibles (file des factures à gauche, grand aperçu au centre,
  * imputation à droite), sans barre d'en-tête.
  *
@@ -38,10 +51,10 @@ import { cn } from '#/lib/utils.ts'
  * « Tout effacer » clôt la session.
  *
  * On lit le PDF (texte natif pdf.js, ou OCR Tesseract si c'est un scan), on en
- * déduit un code comptable par règles déterministes, puis on appose un tampon
- * vectoriel (pdf-lib) là où on l'a posé et à la taille choisie. Rien n'est envoyé
- * au réseau applicatif ; seules les « règles apprises » vivent dans localStorage.
- * Les libs lourdes sont chargées par import() dynamique.
+ * déduit les imputations par DEUX couches (règles déterministes + nuages de mots),
+ * puis on appose un tampon vectoriel (pdf-lib). Les nuages sont lus une fois
+ * (TanStack Query) et fusionnés avec la graine client ; l'apprentissage se fait au
+ * tamponnage. Les libs lourdes sont chargées par import() dynamique.
  */
 
 function todayIso(): string {
@@ -50,13 +63,22 @@ function todayIso(): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
 }
 
-/** Lecture d'un PDF puis mise à jour du store (continue même après démontage). */
-async function processInvoice(record: InvoiceRecord) {
+/** Lecture d'un PDF puis mise à jour du store (continue même après démontage).
+ *  `pool` (graine + nuages serveur) est passé explicitement car cette fonction vit
+ *  hors composant et ne peut pas lire le cache TanStack Query. */
+async function processInvoice(
+  record: InvoiceRecord,
+  pool: WordPool,
+  issuers: Issuer[],
+) {
   try {
     // pdf.js (+ Tesseract au besoin) chargés seulement maintenant.
     const { extractPdf } = await import('#/lib/facturation/extract.ts')
     const res = await extractPdf(record.file)
-    const d = detect(res.text)
+    const d = detect(res.text, undefined, pool)
+    // Pré-remplissage de l'émetteur, par priorité : émetteur DÉJÀ appris présent
+    // dans le texte > mot-clé d'une règle reconnue > vide (jamais deviné).
+    const known = matchIssuer(res.text, issuers)
     patchInvoice(record.id, {
       status: 'ready',
       method: res.method,
@@ -64,8 +86,9 @@ async function processInvoice(record: InvoiceRecord) {
       text: res.text,
       detection: d,
       previews: res.previews,
-      code: d.code ?? '',
-      supplierName: d.supplier ?? '',
+      codes: d.codes,
+      supplierName:
+        known?.display ?? (d.supplier ? (d.matchedKeyword ?? '') : ''),
       invoiceDate: d.hints.date ?? '',
     })
   } catch (e) {
@@ -107,6 +130,26 @@ export function FacturationBoard() {
   const [dragging, setDragging] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
+  // Nuages de mots : lus une fois (cache TanStack Query), fusionnés avec la graine
+  // (toujours dispo). Sans table Supabase, la lecture échoue silencieusement et on
+  // retombe sur la seule graine (dégradation gracieuse, pas de retry).
+  const { data: serverPool } = useQuery({
+    queryKey: ['facturation', 'clouds'],
+    queryFn: fetchClouds,
+    retry: false,
+  })
+  const pool = useMemo(
+    () => mergePools(seedPool(), serverPool ?? { perCode: {} }),
+    [serverPool],
+  )
+
+  // Dictionnaire des émetteurs connus (petit, lu une fois, dégradation gracieuse).
+  const { data: issuers } = useQuery({
+    queryKey: ['facturation', 'issuers'],
+    queryFn: fetchIssuers,
+    retry: false,
+  })
+
   function addFiles(files: FileList | File[]) {
     const pdfs = Array.from(files).filter(
       (f) => f.type === 'application/pdf' || /\.pdf$/i.test(f.name),
@@ -124,15 +167,16 @@ export function FacturationBoard() {
       previews: [],
       position: null,
       stampScale: 1,
-      code: '',
+      codes: [],
       supplierName: '',
+      learned: false,
       comment: '',
       invoiceDate: '',
       processedDate: todayIso(),
       error: null,
     }))
     addInvoices(created)
-    created.forEach(processInvoice)
+    created.forEach((r) => processInvoice(r, pool, issuers ?? []))
   }
 
   const openPicker = () => inputRef.current?.click()
@@ -160,7 +204,7 @@ export function FacturationBoard() {
   const stampData = useMemo(
     () => (selected ? stampDataOf(selected) : null),
     [
-      selected?.code,
+      selected?.codes,
       selected?.comment,
       selected?.invoiceDate,
       selected?.processedDate,
@@ -280,9 +324,7 @@ export function FacturationBoard() {
               onPatch={(n) => patchInvoice(selected.id, n)}
             />
           ) : (
-            <p className="text-sm text-muted-foreground">
-              Aucune facture sélectionnée.
-            </p>
+            <EmptyImputation />
           )}
         </aside>
       </div>
