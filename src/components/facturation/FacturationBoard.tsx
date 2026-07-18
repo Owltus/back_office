@@ -18,7 +18,7 @@ import {
 import { StampPreview } from '#/components/facturation/StampPreview.tsx'
 import { GalaxyCard } from '#/components/facturation/GalaxyCard.tsx'
 import { useFacturationModel } from '#/components/facturation/useFacturationModel.ts'
-import { detect, redetect } from '#/lib/facturation/detect.ts'
+import { detect, redetect, type IssuerHint } from '#/lib/facturation/detect.ts'
 import {
   maturity,
   mergePools,
@@ -26,6 +26,16 @@ import {
   type WordPool,
 } from '#/lib/facturation/wordpool.ts'
 import { matchIssuer, type Issuer } from '#/lib/facturation/issuers.ts'
+import {
+  issuerMaturity,
+  issuerPrior,
+  type IssuerCodes,
+} from '#/lib/facturation/issuerCodes.ts'
+import {
+  deniedCodes,
+  type IssuerDenylist,
+} from '#/lib/facturation/issuerDenylist.ts'
+import { reviewQueue } from '#/lib/facturation/anomalies.ts'
 import { stampDataOf } from '#/lib/facturation/stampLayout.ts'
 import {
   addInvoices,
@@ -64,22 +74,52 @@ function todayIso(): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
 }
 
+/** Indice émetteur pour la détection : reconnaît l'émetteur dans le texte, puis fournit son
+ *  PRIOR (uniquement si le modèle est assez MÛR — filtre prudent) et sa DENYLIST (toujours,
+ *  indépendante de la maturité : une interdiction s'applique dès qu'elle existe). Renvoie
+ *  `undefined` si aucun signal (émetteur inconnu, ni prior fort ni interdiction). */
+function issuerHintFor(
+  text: string,
+  issuers: Issuer[],
+  model: IssuerCodes,
+  denylist: IssuerDenylist,
+): IssuerHint | undefined {
+  const known = matchIssuer(text, issuers)
+  if (!known) return undefined
+  const deny = deniedCodes(denylist, known.name)
+  const mat = issuerMaturity(model, known.name)
+  if (!mat.strong && deny.size === 0) return undefined // aucun signal → mots seuls
+  return {
+    prior: mat.strong ? issuerPrior(model, known.name) : {},
+    concentrated: mat.strong ? mat.concentrated : false,
+    deny: deny.size ? deny : undefined,
+  }
+}
+
 /** Lecture d'un PDF puis mise à jour du store (continue même après démontage).
- *  `pool` (graine + nuages serveur) est passé explicitement car cette fonction vit
- *  hors composant et ne peut pas lire le cache TanStack Query. */
+ *  `pool` (graine + nuages serveur) et `issuerCodes` sont passés explicitement car cette
+ *  fonction vit hors composant et ne peut pas lire le cache TanStack Query. */
 async function processInvoice(
   record: InvoiceRecord,
   pool: WordPool,
   issuers: Issuer[],
+  issuerCodes: IssuerCodes,
+  issuerDenylist: IssuerDenylist,
 ) {
   try {
     // pdf.js (+ Tesseract au besoin) chargés seulement maintenant.
     const { extractPdf } = await import('#/lib/facturation/extract.ts')
     const res = await extractPdf(record.file)
-    const d = detect(res.text, undefined, pool)
     // Pré-remplissage de l'émetteur, par priorité : émetteur DÉJÀ appris présent
-    // dans le texte > mot-clé d'une règle reconnue > vide (jamais deviné).
+    // dans le texte > mot-clé d'une règle reconnue > vide (jamais deviné). Résolu AVANT
+    // la détection pour en dériver le prior émetteur (filtre fort) et sa denylist.
     const known = matchIssuer(res.text, issuers)
+    const d = detect(
+      res.text,
+      undefined,
+      pool,
+      issuerHintFor(res.text, issuers, issuerCodes, issuerDenylist),
+    )
     patchInvoice(record.id, {
       status: 'ready',
       method: res.method,
@@ -133,7 +173,8 @@ export function FacturationBoard() {
 
   // Lectures Supabase (nuages appris + émetteurs), en cache et dégradation gracieuse
   // (voir useFacturationModel). Le pool de scoring fusionne la graine avec l'appris.
-  const { serverPool, issuers } = useFacturationModel()
+  const { serverPool, issuers, issuerCodes, issuerDenylist } =
+    useFacturationModel()
   const pool = useMemo(() => mergePools(seedPool(), serverPool), [serverPool])
 
   // Maturité du modèle APPRIS (serveur) : quand la base est vide/pauvre, on prévient
@@ -141,21 +182,33 @@ export function FacturationBoard() {
   const model = useMemo(() => maturity(serverPool), [serverPool])
   const immature = model.level !== 'ok'
 
-  // Re-détection en séance : quand le pool s'enrichit (après un tamponnage), on
-  // ré-impute les factures ouvertes NON tamponnées et NON éditées à la main, depuis
-  // leur texte déjà lu (pas de ré-extraction PDF). On ne patche que si l'imputation
-  // change réellement → pas de rendu en boucle. Dépendance sur `pool` seul :
-  // volontaire (les changements de `records` ne doivent pas relancer la re-détection).
+  // Anomalies détectées à la volée (outliers émetteur, codes confusables) → badge de
+  // curation dans la GalaxyCard, résolution sur /facturation/revue.
+  const anomalyCount = useMemo(
+    () => reviewQueue(serverPool, issuerCodes).length,
+    [serverPool, issuerCodes],
+  )
+
+  // Re-détection en séance : quand le modèle appris évolue (pool enrichi après un
+  // tamponnage, ou denylist/co-occurrence modifiées par la curation), on ré-impute les
+  // factures ouvertes NON tamponnées et NON éditées à la main, depuis leur texte déjà
+  // lu (pas de ré-extraction PDF). On ne patche que si l'imputation change réellement
+  // → pas de rendu en boucle. Deps = modèle appris uniquement (jamais `records`, dont
+  // les changements ne doivent pas relancer la re-détection).
   useEffect(() => {
     for (const r of facturationStore.state.records) {
       if (r.status !== 'ready' || r.learned || r.userEdited || !r.text) continue
-      const { detection, codes } = redetect(r.text, pool)
+      const { detection, codes } = redetect(
+        r.text,
+        pool,
+        issuerHintFor(r.text, issuers, issuerCodes, issuerDenylist),
+      )
       const same =
         codes.length === r.codes.length &&
         codes.every((c, i) => c === r.codes[i])
       if (!same) patchInvoice(r.id, { detection, codes })
     }
-  }, [pool])
+  }, [pool, issuers, issuerCodes, issuerDenylist])
 
   function addFiles(files: FileList | File[]) {
     const pdfs = Array.from(files).filter(
@@ -183,7 +236,9 @@ export function FacturationBoard() {
       error: null,
     }))
     addInvoices(created)
-    created.forEach((r) => processInvoice(r, pool, issuers))
+    created.forEach((r) =>
+      processInvoice(r, pool, issuers, issuerCodes, issuerDenylist),
+    )
   }
 
   const openPicker = () => inputRef.current?.click()
@@ -322,7 +377,7 @@ export function FacturationBoard() {
         {/* COLONNE DROITE : galaxie (prévisualisation) au-dessus de l'imputation. */}
         <div className="flex min-h-0 w-full shrink-0 flex-col gap-4 lg:max-h-full lg:w-80">
           {/* La galaxie montre les données APPRISES (serveur), pas la graine. */}
-          <GalaxyCard pool={serverPool} />
+          <GalaxyCard pool={serverPool} anomalyCount={anomalyCount} />
           <aside className="flex min-h-0 flex-1 flex-col gap-4 rounded-xl border border-border bg-card p-4">
             <h2 className="shrink-0 text-sm font-semibold text-foreground">
               Imputation comptable

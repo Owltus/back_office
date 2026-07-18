@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   AlertTriangle,
+  Ban,
   ListPlus,
   Loader2,
   RotateCcw,
@@ -15,9 +16,12 @@ import { Label } from '#/components/ui/label.tsx'
 import { Textarea } from '#/components/ui/textarea.tsx'
 import { CodePicker } from '#/components/facturation/CodePicker.tsx'
 import { IssuerCombobox } from '#/components/facturation/IssuerCombobox.tsx'
+import { useFacturationCuration } from '#/components/facturation/useFacturationCuration.ts'
 import {
   confidenceTone,
+  needsReview,
   probaFor,
+  sourceFor,
 } from '#/components/facturation/confidence.ts'
 import { budgetLabel } from '#/lib/facturation/constants.ts'
 import { canLearn } from '#/lib/facturation/detect.ts'
@@ -25,27 +29,24 @@ import { normalize } from '#/lib/facturation/text.ts'
 import {
   learnClouds,
   learnIssuer,
+  learnIssuerCodes,
   unlearnClouds,
   unlearnIssuer,
+  unlearnIssuerCodes,
 } from '#/lib/facturation/cloudService.ts'
 import {
-  addStrong,
+  mergeIssuerCodes,
+  type IssuerCodes,
+} from '#/lib/facturation/issuerCodes.ts'
+import {
   countTokens,
   mergePools,
-  tokenize,
   type WordPool,
 } from '#/lib/facturation/wordpool.ts'
 import { type Issuer } from '#/lib/facturation/issuers.ts'
 import { stampDataOf } from '#/lib/facturation/stampLayout.ts'
 import type { InvoiceRecord } from '#/lib/facturation/types.ts'
 import { cn } from '#/lib/utils.ts'
-
-// Poids du nom d'émetteur comme token appris. VOLONTAIREMENT MODÉRÉ (anti-« collapse ») :
-// un poids trop élevé donne au token d'émetteur un idf/tf dominant, qui rappelle ensuite
-// systématiquement l'imputation historique de ce fournisseur et écrase les autres
-// (problème quand un même émetteur livre des articles à imputations différentes). Il
-// doit INFORMER, pas verrouiller — les mots de l'article gardent la main.
-const SUPPLIER_WEIGHT = 2
 
 /*
  * Panneau d'imputation (rail droit de l'atelier) pour la facture sélectionnée :
@@ -67,11 +68,16 @@ function ImputationList({
   detection,
   immature,
   onRemove,
+  onBan,
+  banningCode,
 }: {
   codes: string[]
   detection: InvoiceRecord['detection']
   immature: boolean
   onRemove: (code: string) => void
+  /** Bannir ce code pour l'émetteur (denylist) — absent si aucun émetteur nommé. */
+  onBan?: (code: string) => void
+  banningCode?: string | null
 }) {
   if (codes.length === 0) {
     return (
@@ -90,6 +96,8 @@ function ImputationList({
         const tone = confidenceTone(
           raw === undefined ? 0 : immature ? Math.min(raw, 0.45) : raw,
         )
+        const viaIssuer = sourceFor(code, detection) === 'issuer'
+        const review = needsReview(detection)
         return (
           <div
             key={code}
@@ -101,8 +109,18 @@ function ImputationList({
                 <span className="truncate text-sm text-foreground">
                   {budgetLabel(code)}
                 </span>
-                <span className="font-mono text-[11px] text-muted-foreground">
+                <span className="flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground">
                   {code}
+                  {viaIssuer && (
+                    <span className="rounded bg-primary/10 px-1 font-sans text-[10px] text-primary">
+                      via émetteur
+                    </span>
+                  )}
+                  {review && (
+                    <span className="rounded bg-amber-500/10 px-1 font-sans text-[10px] text-amber-600">
+                      à vérifier
+                    </span>
+                  )}
                 </span>
               </div>
 
@@ -124,14 +142,32 @@ function ImputationList({
                 )}
               </div>
 
-              <button
-                type="button"
-                onClick={() => onRemove(code)}
-                aria-label={`Retirer ${code}`}
-                className="shrink-0 self-start rounded p-0.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-              >
-                <X className="size-3.5" />
-              </button>
+              <div className="flex shrink-0 items-center gap-0.5 self-start">
+                {onBan && (
+                  <button
+                    type="button"
+                    onClick={() => onBan(code)}
+                    disabled={banningCode === code}
+                    aria-label={`Ne plus jamais imputer cet émetteur sur ${code}`}
+                    title="Ne plus jamais imputer cet émetteur sur ce code"
+                    className="rounded p-0.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+                  >
+                    {banningCode === code ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <Ban className="size-3.5" />
+                    )}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => onRemove(code)}
+                  aria-label={`Retirer ${code}`}
+                  className="rounded p-0.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </div>
             </div>
 
             {/* Bas : barre de progression sur TOUTE la largeur de la card. */}
@@ -192,15 +228,9 @@ export function EmptyImputation() {
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div className="flex flex-col gap-1.5">
-            <Label>Date de facture</Label>
-            <Input type="date" disabled />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Date de traitement</Label>
-            <Input type="date" disabled />
-          </div>
+        <div className="flex flex-col gap-1.5">
+          <Label>Date de traitement</Label>
+          <Input type="date" disabled />
         </div>
 
         <Button disabled className="w-full">
@@ -227,9 +257,11 @@ export function InvoicePanel({
   const [stamping, setStamping] = useState(false)
   const [stampError, setStampError] = useState<string | null>(null)
   const [learnWarning, setLearnWarning] = useState(false)
-  const [remember, setRemember] = useState(true)
   const [undoing, setUndoing] = useState(false)
+  const [banningCode, setBanningCode] = useState<string | null>(null)
+  const [banWarning, setBanWarning] = useState(false)
   const queryClient = useQueryClient()
+  const { banIssuerCode } = useFacturationCuration()
 
   if (record.status === 'processing') {
     return (
@@ -263,15 +295,17 @@ export function InvoicePanel({
         record.fileName,
         record.position,
       )
+      // PDF tamponné + téléchargé → marqueur « validé » (même si « mémoriser » décoché).
+      onPatch({ stamped: true })
       // Apprentissage au tamponnage (vérité terrain = record.codes après édition
-      // humaine), une seule fois, ET seulement si l'utilisateur choisit de mémoriser
-      // (garde-fou contre une mauvaise imputation qui polluerait durablement la base).
+      // humaine), une seule fois. Réversible via « Annuler l'apprentissage ».
       // Best-effort : un échec RPC ne bloque pas le PDF déjà tamponné/téléchargé.
-      if (remember && !record.learned && record.codes.length > 0) {
+      if (!record.learned && record.codes.length > 0) {
+        // Le pull de mots appris = UNIQUEMENT le contenu de la facture. Le nom d'émetteur
+        // n'est PLUS injecté dans les nuages : son signal vit dans le modèle séparé
+        // émetteur→codes (learnIssuerCodes ci-dessous), ce qui garde les nuages propres.
         const deltas = countTokens(record.text)
         const learnSupplier = canLearn(record.supplierName)
-        if (learnSupplier)
-          addStrong(deltas, tokenize(record.supplierName), SUPPLIER_WEIGHT)
         try {
           await learnClouds(record.codes, deltas)
           onPatch({ learned: true })
@@ -301,6 +335,17 @@ export function InvoicePanel({
                 return list
               },
             )
+            // Co-occurrence émetteur → codes (le « filtre fort » : +1 par code validé).
+            await learnIssuerCodes(name, record.codes)
+            queryClient.setQueryData<IssuerCodes>(
+              ['facturation', 'issuerCodes'],
+              (old) =>
+                mergeIssuerCodes(old ?? { perIssuer: {} }, {
+                  perIssuer: {
+                    [name]: Object.fromEntries(record.codes.map((c) => [c, 1])),
+                  },
+                }),
+            )
           }
         } catch {
           // Apprentissage best-effort : le PDF reste tamponné/téléchargé. On le
@@ -323,21 +368,47 @@ export function InvoicePanel({
     setUndoing(true)
     setLearnWarning(false)
     try {
+      // Symétrique du tamponnage : le nom d'émetteur n'est plus dans les nuages.
       const deltas = countTokens(record.text)
       const learnSupplier = canLearn(record.supplierName)
-      if (learnSupplier)
-        addStrong(deltas, tokenize(record.supplierName), SUPPLIER_WEIGHT)
       await unlearnClouds(record.codes, deltas)
-      if (learnSupplier)
-        await unlearnIssuer(normalize(record.supplierName).trim())
+      if (learnSupplier) {
+        const name = normalize(record.supplierName).trim()
+        await unlearnIssuer(name)
+        await unlearnIssuerCodes(name, record.codes)
+      }
       onPatch({ learned: false })
       // Le serveur fait foi après correction : on resynchronise le cache.
       queryClient.invalidateQueries({ queryKey: ['facturation', 'clouds'] })
       queryClient.invalidateQueries({ queryKey: ['facturation', 'issuers'] })
+      queryClient.invalidateQueries({
+        queryKey: ['facturation', 'issuerCodes'],
+      })
     } catch {
       setLearnWarning(true)
     } finally {
       setUndoing(false)
+    }
+  }
+
+  // Bannir un couple émetteur↔code depuis l'atelier : « ne plus JAMAIS imputer cet émetteur
+  // sur ce code » (denylist). Nécessite un émetteur nommé (assez long pour servir de clé).
+  // Retire aussi le code de la facture courante. Best-effort (droits, table absente).
+  const canBan = canLearn(record.supplierName)
+  async function handleBan(code: string) {
+    if (!canBan) return
+    setBanningCode(code)
+    setBanWarning(false)
+    try {
+      await banIssuerCode(normalize(record.supplierName).trim(), code)
+      onPatch({
+        codes: record.codes.filter((c) => c !== code),
+        userEdited: true,
+      })
+    } catch {
+      setBanWarning(true)
+    } finally {
+      setBanningCode(null)
     }
   }
 
@@ -368,6 +439,8 @@ export function InvoicePanel({
                 userEdited: true,
               })
             }
+            onBan={canBan ? handleBan : undefined}
+            banningCode={banningCode}
           />
         </div>
         <Button
@@ -394,25 +467,13 @@ export function InvoicePanel({
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div className="flex flex-col gap-1.5">
-            <Label>Date de facture</Label>
-            <Input
-              type="date"
-              value={record.invoiceDate}
-              onChange={(e) =>
-                onPatch({ invoiceDate: e.target.value, userEdited: true })
-              }
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Date de traitement</Label>
-            <Input
-              type="date"
-              value={record.processedDate}
-              onChange={(e) => onPatch({ processedDate: e.target.value })}
-            />
-          </div>
+        <div className="flex flex-col gap-1.5">
+          <Label>Date de traitement</Label>
+          <Input
+            type="date"
+            value={record.processedDate}
+            onChange={(e) => onPatch({ processedDate: e.target.value })}
+          />
         </div>
 
         {stampError && (
@@ -430,34 +491,11 @@ export function InvoicePanel({
           </div>
         )}
 
-        {/* Confirmation d'apprentissage : on voit ce qui partira en base, et on peut
-            refuser (une mauvaise imputation ne doit pas polluer la base). */}
-        {!record.learned && (
-          <label className="flex cursor-pointer items-start gap-2 text-xs text-muted-foreground">
-            <input
-              type="checkbox"
-              checked={remember}
-              onChange={(e) => setRemember(e.target.checked)}
-              className="mt-0.5 size-3.5 shrink-0 accent-primary"
-            />
-            <span>
-              Mémoriser cette imputation.
-              {remember && record.codes.length > 0 && (
-                <>
-                  {' '}
-                  Sera appris :{' '}
-                  <span className="text-foreground">
-                    {record.supplierName.trim() || 'émetteur non renseigné'}
-                  </span>{' '}
-                  →{' '}
-                  <span className="text-foreground">
-                    {record.codes.map((c) => budgetLabel(c)).join(', ')}
-                  </span>
-                  .
-                </>
-              )}
-            </span>
-          </label>
+        {banWarning && (
+          <div className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+            <AlertTriangle className="size-3.5 shrink-0" />
+            Interdiction non enregistrée (droits ou base indisponibles).
+          </div>
         )}
 
         {/* Déjà appris → annuler l'apprentissage (désapprentissage) en cas d'erreur. */}
