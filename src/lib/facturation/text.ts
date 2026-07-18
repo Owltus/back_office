@@ -12,3 +12,32 @@ export function normalize(s: string): string {
     .normalize('NFD')
     .replace(/[^\x00-\x7f]/g, '')
 }
+
+/** Suffixes juridiques ignorés lors de la COMPARAISON de noms d'émetteurs. */
+const LEGAL_SUFFIXES = new Set([
+  'sarl',
+  'sas',
+  'sasu',
+  'sa',
+  'eurl',
+  'sci',
+  'snc',
+  'sce',
+])
+
+/**
+ * Normalisation RENFORCÉE, réservée à la COMPARAISON de noms d'émetteurs (dédup /
+ * suggestion floue) : `normalize` + ponctuation → espace, espaces compactés, retrait
+ * des suffixes juridiques finaux (« Martin SARL » ≈ « Martin »). SÉPARÉE de `normalize`
+ * (partagée avec la tokenisation des nuages) pour ne pas altérer le scoring.
+ */
+export function normalizeIssuer(s: string): string {
+  const words = normalize(s)
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+  while (words.length > 1 && LEGAL_SUFFIXES.has(words[words.length - 1])) {
+    words.pop()
+  }
+  return words.join(' ')
+}

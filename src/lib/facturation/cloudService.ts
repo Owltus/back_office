@@ -1,5 +1,5 @@
 import { supabase } from '#/lib/supabase.ts'
-import type { WordPool } from '#/lib/facturation/wordpool.ts'
+import { STORAGE_TOP_K, type WordPool } from '#/lib/facturation/wordpool.ts'
 import type { Issuer } from '#/lib/facturation/issuers.ts'
 
 /*
@@ -47,6 +47,24 @@ export async function learnClouds(
   if (error) throw error
 }
 
+/**
+ * MAINTENANCE de la rétention : retire les hapax (`count < p_min_count`) puis plafonne
+ * à `p_top_k` tokens par code (RPC SECURITY DEFINER `facturation_wordpool_prune`, garde
+ * de rôle interne). À appeler à un moment MAÎTRISÉ (action d'admin, jamais en boucle,
+ * jamais par tamponnage) : `p_min_count = 2` supprimerait tout mot vu une seule fois,
+ * or un mot rare peut devenir utile à la 2e occurrence. Purge lourde, occasionnelle.
+ */
+export async function pruneClouds(
+  minCount = 2,
+  topK = STORAGE_TOP_K,
+): Promise<void> {
+  const { error } = await supabase.rpc('facturation_wordpool_prune', {
+    p_min_count: minCount,
+    p_top_k: topK,
+  })
+  if (error) throw error
+}
+
 /** Dictionnaire des émetteurs connus (petit → pas de pagination). */
 export async function fetchIssuers(): Promise<Issuer[]> {
   const { data, error } = await supabase
@@ -64,6 +82,66 @@ export async function learnIssuer(
   const { error } = await supabase.rpc('facturation_issuer_learn', {
     p_name: name,
     p_display: display,
+  })
+  if (error) throw error
+}
+
+// --- Correction / désapprentissage (RPC de facturation_corrections.sql) -------
+// Requièrent l'exécution préalable du SQL par l'utilisateur ; sinon l'appel échoue
+// (propagé), l'appelant gère en best-effort (dégradation gracieuse).
+
+/** Désapprend une facture : décrément symétrique des `codes` par `deltas` (borné à 0). */
+export async function unlearnClouds(
+  codes: string[],
+  deltas: Record<string, number>,
+): Promise<void> {
+  const { error } = await supabase.rpc('facturation_wordpool_unlearn', {
+    p_codes: codes,
+    p_deltas: deltas,
+  })
+  if (error) throw error
+}
+
+/** Renomme un émetteur (corrige une faute de frappe sur la clé). */
+export async function renameIssuer(
+  oldName: string,
+  newName: string,
+  display: string,
+): Promise<void> {
+  const { error } = await supabase.rpc('facturation_issuer_rename', {
+    p_old_name: oldName,
+    p_new_name: newName,
+    p_display: display,
+  })
+  if (error) throw error
+}
+
+/** Fusionne deux émetteurs (doublon d'orthographe) vers `toName`. */
+export async function mergeIssuer(
+  fromName: string,
+  toName: string,
+  display: string,
+): Promise<void> {
+  const { error } = await supabase.rpc('facturation_issuer_merge', {
+    p_from_name: fromName,
+    p_to_name: toName,
+    p_display: display,
+  })
+  if (error) throw error
+}
+
+/** Supprime un émetteur erroné du dictionnaire. */
+export async function deleteIssuer(name: string): Promise<void> {
+  const { error } = await supabase.rpc('facturation_issuer_delete', {
+    p_name: name,
+  })
+  if (error) throw error
+}
+
+/** Décrémente un émetteur de 1 (undo d'une confirmation) ; supprimé à 0. */
+export async function unlearnIssuer(name: string): Promise<void> {
+  const { error } = await supabase.rpc('facturation_issuer_unlearn', {
+    p_name: name,
   })
   if (error) throw error
 }
