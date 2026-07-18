@@ -31,6 +31,18 @@ function Thumb({ record }: { record: InvoiceRecord }) {
   return <div className="flex h-full items-center justify-center">{icon}</div>
 }
 
+/* Marqueur « validé » : voile vert léger + cartouche en diagonale (façon coup de
+ * tampon), posé sur la miniature d'une facture déjà tamponnée. Non interactif. */
+function ValidatedStamp() {
+  return (
+    <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-emerald-500/10">
+      <span className="-rotate-[22deg] rounded-md border-2 border-emerald-500/80 bg-background/50 px-2 py-0.5 text-xl font-extrabold tracking-[0.1em] text-emerald-500 uppercase shadow-sm backdrop-blur-[1px]">
+        Validé
+      </span>
+    </div>
+  )
+}
+
 export function InvoiceList({
   records,
   selectedId,
@@ -62,6 +74,7 @@ export function InvoiceList({
             >
               <div className="relative aspect-[3/4] w-full overflow-hidden rounded bg-muted">
                 <Thumb record={r} />
+                {r.stamped && <ValidatedStamp />}
               </div>
               <span className="truncate text-xs font-medium text-foreground">
                 {r.fileName}

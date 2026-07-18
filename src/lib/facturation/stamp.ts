@@ -1,9 +1,22 @@
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
+import {
+  PDFDocument,
+  PDFDict,
+  PDFName,
+  PDFOperator,
+  PDFOperatorNames,
+  PDFString,
+  StandardFonts,
+  rgb,
+} from 'pdf-lib'
 import type { PDFFont } from 'pdf-lib'
 
 import {
+  STAMP_BORDER,
   STAMP_COLORS,
+  STAMP_INNER_BORDER,
+  STAMP_INNER_GAP,
   STAMP_LINE_GAP,
+  STAMP_LINE_H,
   STAMP_PAD,
   clampStampPosition,
   defaultStampPosition,
@@ -85,34 +98,89 @@ export async function buildStampedPdf(
   const x = topLeft.x
   const y = pageH - topLeft.y - box.height
 
+  // Même facteur d'échelle que la boîte, appliqué aux marges/tailles de texte.
+  const s = data.scale || 1
+
+  // --- Calque optionnel « Tampon » (OCG) --------------------------------------
+  // Le tampon est posé dans une couche de contenu optionnel : un lecteur PDF qui
+  // gère les calques (Acrobat…) peut la MASQUER / la retirer sans toucher au reste.
+  // pdf-lib n'a pas d'API dédiée → on construit l'OCG à la main puis on enveloppe
+  // tout le dessin du tampon dans une séquence marquée `/OC … BDC … EMC`.
+  const ocg = pdf.context.register(
+    pdf.context.obj({ Type: 'OCG', Name: PDFString.of('Tampon') }),
+  )
+  pdf.catalog.set(
+    PDFName.of('OCProperties'),
+    pdf.context.obj({
+      OCGs: [ocg],
+      D: pdf.context.obj({ Order: [ocg], ON: [ocg] }),
+    }),
+  )
+  let resources = page.node.Resources()
+  if (!resources) {
+    resources = pdf.context.obj({})
+    page.node.set(PDFName.of('Resources'), resources)
+  }
+  let properties = resources.lookupMaybe(PDFName.of('Properties'), PDFDict)
+  if (!properties) {
+    properties = pdf.context.obj({})
+    resources.set(PDFName.of('Properties'), properties)
+  }
+  properties.set(PDFName.of('MC0'), ocg)
+  page.pushOperators(
+    PDFOperator.of(PDFOperatorNames.BeginMarkedContentSequence, [
+      PDFName.of('OC'),
+      PDFName.of('MC0'),
+    ]),
+  )
+
+  // Tampon vectoriel : fond blanc dépoli + double filet rouge (cadre extérieur épais,
+  // cadre intérieur fin décalé) + texte rouge (une ligne par code, date à droite).
   page.drawRectangle({
     x,
     y,
     width: box.width,
     height: box.height,
     color: rgb(1, 1, 1),
-    opacity: 0.9,
+    opacity: 0.33,
     borderColor: COLOR_RGB.red,
-    borderWidth: 1.4,
+    borderWidth: STAMP_BORDER * s,
   })
-
-  // Même facteur d'échelle que la boîte, appliqué aux marges/tailles de texte.
-  const s = data.scale || 1
+  const gap = STAMP_INNER_GAP * s
+  page.drawRectangle({
+    x: x + gap,
+    y: y + gap,
+    width: box.width - gap * 2,
+    height: box.height - gap * 2,
+    borderColor: COLOR_RGB.red,
+    borderWidth: STAMP_INNER_BORDER * s,
+  })
   const innerW = box.width - STAMP_PAD * 2 * s
-  let cursor = y + box.height - STAMP_PAD * s
-  for (const line of stampLines(data)) {
+  // Interligne partagé (STAMP_LINE_H) + prise en compte du filet, comme l'aperçu HTML :
+  // chaque ligne occupe un pavé de hauteur `size × interligne`, la baseline au 4/5.
+  let top = y + box.height - (STAMP_PAD + STAMP_BORDER) * s
+  stampLines(data).forEach((line, i) => {
     const f = line.bold ? bold : font
     const size = line.size * s
-    cursor -= size
-    page.drawText(fit(line.text, f, size, innerW), {
-      x: x + STAMP_PAD * s,
-      y: cursor,
+    if (i > 0) top -= STAMP_LINE_GAP * s
+    const baseline = top - (0.8 + (STAMP_LINE_H - 1) / 2) * size
+    const txt = fit(line.text, f, size, innerW)
+    const xText =
+      line.align === 'right'
+        ? x + STAMP_PAD * s + (innerW - f.widthOfTextAtSize(txt, size))
+        : x + STAMP_PAD * s
+    page.drawText(txt, {
+      x: xText,
+      y: baseline,
       size,
       font: f,
       color: COLOR_RGB[line.color],
     })
-    cursor -= STAMP_LINE_GAP * s
-  }
+    top -= size * STAMP_LINE_H
+  })
+
+  // Ferme le calque optionnel : tout ce qui précède depuis le BDC en fait partie.
+  page.pushOperators(PDFOperator.of(PDFOperatorNames.EndMarkedContent))
 
   return pdf.save()
 }

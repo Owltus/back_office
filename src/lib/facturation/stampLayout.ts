@@ -1,4 +1,3 @@
-import { budgetLabel } from '#/lib/facturation/constants.ts'
 import type {
   InvoiceRecord,
   StampData,
@@ -16,23 +15,35 @@ export const STAMP_BOX_W = 236
 export const STAMP_PAD = 12
 export const STAMP_LINE_GAP = 6
 export const STAMP_MARGIN = 24
+/** Interligne (hauteur de ligne / taille de police). > 1 pour ne pas rogner le haut/bas
+ *  des glyphes. Partagé par la hauteur de boîte, l'aperçu HTML et le PDF → placement
+ *  identique et contenu qui tient toujours dans le cartouche. */
+export const STAMP_LINE_H = 1.15
 
 /** Bornes du facteur d'échelle du tampon (redimensionnement par les coins). */
 export const STAMP_MIN_SCALE = 0.6
 export const STAMP_MAX_SCALE = 2.5
 
-/** Couleurs en hex (l'aperçu HTML les prend telles quelles ; pdf-lib les convertit). */
+/** Encre du tampon (hex) — MONOCHROME comme un vrai coup de tampon : une seule
+ *  encre rouge, déclinée en pleine intensité et en version atténuée pour le secondaire.
+ *  L'aperçu HTML les prend telles quelles ; pdf-lib les convertit. */
 export const STAMP_COLORS = {
-  red: '#b81c1c',
-  ink: '#1f1f1f',
-  grey: '#6b6b6b',
+  red: '#b81c1c', // encre principale (titre, codes)
+  ink: '#b81c1c', // même encre pour les codes (plus de noir)
+  grey: '#c98a8a', // encre atténuée pour le secondaire (date)
 } as const
+
+/** Cadre « coup de tampon » : double filet (extérieur épais + intérieur fin, décalé). */
+export const STAMP_BORDER = 2
+export const STAMP_INNER_GAP = 3
+export const STAMP_INNER_BORDER = 0.8
 
 export interface StampLine {
   text: string
   size: number
   bold: boolean
   color: keyof typeof STAMP_COLORS
+  align?: 'left' | 'right' // défaut : gauche
 }
 
 /** Projection d'une facture vers les données du tampon (source unique, partagée
@@ -57,26 +68,14 @@ export function frDate(iso: string): string {
  *  est gérée à l'affichage : ellipsis en HTML, `fit()` en pdf-lib). */
 export function stampLines(data: StampData): StampLine[] {
   const codes = data.codes.filter((c) => c.trim())
-  const lines: StampLine[] = [
-    {
-      text:
-        codes.length > 1 ? 'IMPUTATIONS COMPTABLES' : 'IMPUTATION COMPTABLE',
-      size: 8,
-      bold: true,
-      color: 'red',
-    },
-  ]
-  // Une ligne par code : « CODE  Libellé ». Placeholder si aucun code encore.
+  const lines: StampLine[] = []
+  // Une ligne par imputation : le CODE comptable SEUL (pas de libellé).
+  // Placeholder si aucun code encore.
   if (codes.length === 0) {
     lines.push({ text: '— à imputer —', size: 10, bold: true, color: 'grey' })
   }
   for (const code of codes) {
-    lines.push({
-      text: `${code}  ${budgetLabel(code)}`.trim(),
-      size: 10,
-      bold: true,
-      color: 'ink',
-    })
+    lines.push({ text: code, size: 10, bold: true, color: 'ink' })
   }
   if (data.comment.trim()) {
     lines.push({
@@ -86,15 +85,13 @@ export function stampLines(data: StampData): StampLine[] {
       color: 'ink',
     })
   }
-  const dateBits: string[] = []
-  if (data.invoiceDate) dateBits.push(`Facture ${frDate(data.invoiceDate)}`)
-  if (data.processedDate) dateBits.push(`Traitée ${frDate(data.processedDate)}`)
-  if (dateBits.length) {
+  if (data.processedDate) {
     lines.push({
-      text: dateBits.join('  ·  '),
+      text: `Traitée ${frDate(data.processedDate)}`,
       size: 8,
       bold: false,
       color: 'grey',
+      align: 'right',
     })
   }
   return lines
@@ -110,9 +107,13 @@ export function stampBoxSize(data: StampData): {
   height: number
 } {
   const s = data.scale || 1
-  const height =
-    stampLines(data).reduce((h, l) => h + (l.size + STAMP_LINE_GAP) * s, 0) +
-    (STAMP_PAD * 2 - STAMP_LINE_GAP) * s
+  const lines = stampLines(data)
+  // Hauteur du texte : chaque ligne occupe `size × interligne`, plus un gap entre lignes.
+  const textH =
+    lines.reduce((h, l) => h + l.size * STAMP_LINE_H, 0) +
+    Math.max(0, lines.length - 1) * STAMP_LINE_GAP
+  // + padding haut/bas + les DEUX filets (le cadre grignote l'intérieur en box-border).
+  const height = (textH + STAMP_PAD * 2 + STAMP_BORDER * 2) * s
   return { width: STAMP_BOX_W * s, height }
 }
 

@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import {
+  STAMP_BORDER,
   STAMP_COLORS,
+  STAMP_INNER_BORDER,
+  STAMP_INNER_GAP,
   STAMP_LINE_GAP,
+  STAMP_LINE_H,
   STAMP_MAX_SCALE,
   STAMP_MIN_SCALE,
   STAMP_PAD,
@@ -241,25 +245,36 @@ export function StampPreview({
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
-            className="absolute flex cursor-move flex-col ring-1 ring-black/10"
+            className="absolute flex cursor-move flex-col"
             style={{
               left: boxes[pos.page].left + pos.x * scale,
               top: boxes[pos.page].top + pos.y * scale,
               width: box.width * scale,
               height: box.height * scale,
               padding: STAMP_PAD * ss * scale,
-              backgroundColor: 'rgba(255,255,255,0.92)',
-              border: `1.4px solid ${STAMP_COLORS.red}`,
+              backgroundColor: 'rgba(255,255,255,0.33)',
+              backdropFilter: `blur(${2 * scale}px)`,
+              WebkitBackdropFilter: `blur(${2 * scale}px)`,
+              border: `${STAMP_BORDER * ss * scale}px solid ${STAMP_COLORS.red}`,
               touchAction: 'none',
               boxSizing: 'border-box',
             }}
           >
+            {/* Cadre intérieur (double filet du cartouche). */}
+            <div
+              className="pointer-events-none absolute"
+              style={{
+                inset: STAMP_INNER_GAP * ss * scale,
+                border: `${STAMP_INNER_BORDER * ss * scale}px solid ${STAMP_COLORS.red}`,
+              }}
+            />
             {lines.map((line, i) => (
               <span
                 key={i}
                 style={{
                   fontSize: line.size * ss * scale,
-                  lineHeight: 1,
+                  lineHeight: STAMP_LINE_H,
+                  flexShrink: 0,
                   marginTop: i ? STAMP_LINE_GAP * ss * scale : 0,
                   fontWeight: line.bold ? 700 : 400,
                   color: STAMP_COLORS[line.color],
@@ -267,6 +282,7 @@ export function StampPreview({
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
+                  textAlign: line.align === 'right' ? 'right' : 'left',
                 }}
               >
                 {line.text}
