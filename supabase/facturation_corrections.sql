@@ -87,6 +87,26 @@ begin
                 updated_at = now();
 
   delete from public.facturation_issuers where name = p_old_name;
+
+  -- Propager la co-occurrence émetteur→codes (si la table est déployée).
+  if to_regclass('public.facturation_issuer_codes') is not null then
+    insert into public.facturation_issuer_codes (issuer, code, count)
+    select p_new_name, code, count
+    from public.facturation_issuer_codes where issuer = p_old_name
+    on conflict (issuer, code)
+    do update set count = facturation_issuer_codes.count + excluded.count,
+                  updated_at = now();
+    delete from public.facturation_issuer_codes where issuer = p_old_name;
+  end if;
+
+  -- Propager la denylist émetteur↔code (si la table est déployée).
+  if to_regclass('public.facturation_issuer_denylist') is not null then
+    insert into public.facturation_issuer_denylist (issuer, code)
+    select p_new_name, code
+    from public.facturation_issuer_denylist where issuer = p_old_name
+    on conflict (issuer, code) do nothing;
+    delete from public.facturation_issuer_denylist where issuer = p_old_name;
+  end if;
 end;
 $$;
 
@@ -113,6 +133,26 @@ begin
   where t.name = p_to_name and f.name = p_from_name;
 
   delete from public.facturation_issuers where name = p_from_name;
+
+  -- Propager la co-occurrence émetteur→codes (si la table est déployée).
+  if to_regclass('public.facturation_issuer_codes') is not null then
+    insert into public.facturation_issuer_codes (issuer, code, count)
+    select p_to_name, code, count
+    from public.facturation_issuer_codes where issuer = p_from_name
+    on conflict (issuer, code)
+    do update set count = facturation_issuer_codes.count + excluded.count,
+                  updated_at = now();
+    delete from public.facturation_issuer_codes where issuer = p_from_name;
+  end if;
+
+  -- Propager la denylist émetteur↔code (si la table est déployée).
+  if to_regclass('public.facturation_issuer_denylist') is not null then
+    insert into public.facturation_issuer_denylist (issuer, code)
+    select p_to_name, code
+    from public.facturation_issuer_denylist where issuer = p_from_name
+    on conflict (issuer, code) do nothing;
+    delete from public.facturation_issuer_denylist where issuer = p_from_name;
+  end if;
 end;
 $$;
 
@@ -130,6 +170,16 @@ begin
   end if;
 
   delete from public.facturation_issuers where name = p_name;
+
+  -- Oublier aussi la co-occurrence émetteur→codes (si la table est déployée).
+  if to_regclass('public.facturation_issuer_codes') is not null then
+    delete from public.facturation_issuer_codes where issuer = p_name;
+  end if;
+
+  -- Oublier aussi la denylist émetteur↔code (si la table est déployée).
+  if to_regclass('public.facturation_issuer_denylist') is not null then
+    delete from public.facturation_issuer_denylist where issuer = p_name;
+  end if;
 end;
 $$;
 
