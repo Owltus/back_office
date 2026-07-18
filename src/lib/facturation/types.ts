@@ -124,6 +124,9 @@ export interface InvoiceRecord {
   supplierName: string
   /** Vrai une fois la facture apprise (au tamponnage) — garde anti-double-comptage. */
   learned: boolean
+  /** Vrai dès que l'utilisateur a modifié l'imputation/émetteur/date à la main — la
+   *  re-détection en séance ne doit alors plus écraser ses choix. */
+  userEdited?: boolean
   comment: string
   invoiceDate: string
   processedDate: string

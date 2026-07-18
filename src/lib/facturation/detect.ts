@@ -2,6 +2,9 @@ import { SEED_RULES } from '#/lib/facturation/constants.ts'
 import { normalize } from '#/lib/facturation/text.ts'
 import {
   abstains,
+  CLOUD_MAX,
+  CLOUD_STRONG,
+  maturity,
   preselect,
   scoreInvoice,
   type WordPool,
@@ -83,10 +86,12 @@ function extractHints(rawText: string): InvoiceHints {
  *  1. Règles déterministes (mot-clé → code) : PRIORITAIRES, jamais diluées.
  *  2. Nuages de mots (si `pool` fourni) : vraie probabilité, codes supplémentaires
  *     au-dessus du seuil, mots ayant voté, et abstention si preuve mince.
- * Quand une règle tranche (mot-clé précis), ses codes SEULS sont retenus (signal
- * fiable, non dilué par les nuages encore bruités). Sinon les nuages pilotent, mais
- * de façon PARCIMONIEUSE : le meilleur code, plus un 2e/3e seulement s'ils sont
- * comparables. « Souvent une seule imputation, parfois plusieurs. »
+ * Quand une règle tranche (mot-clé précis), ses codes priment — mais si les nuages sont
+ * MÛRS et soutiennent FORTEMENT un autre code (proba ≥ CLOUD_STRONG), on le propose AUSSI
+ * (une règle peut viser un code que le corps de la facture dément : mot-clé « martin » →
+ * code A à 3 %, alors que le texte ressemble à B à 72 %). Les codes retenus sont ordonnés
+ * par confiance, donc le plus probable remonte en tête. Sinon les nuages pilotent, de
+ * façon PARCIMONIEUSE : le meilleur, plus un 2e/3e seulement s'ils sont comparables.
  */
 export function detect(
   rawText: string,
@@ -113,18 +118,32 @@ export function detect(
   const ruleCodes = [...new Set(matches.map((m) => m.rule.code))]
   const best = matches[0]
 
-  // Couche 2 : nuages de mots (parcimonieux).
+  // Couche 2 : nuages de mots (parcimonieux), triés par proba (confiance affichée).
   const scored = pool ? scoreInvoice(rawText, pool) : []
   const scores = scored.slice(0, 5)
 
   if (best) {
-    // Une règle tranche → ses codes SEULS (pas de dilution par les nuages).
     const base = best.rule.learned ? 0.75 : 0.6
     const confidence = Math.min(0.97, base + 0.12 * (best.score - 1))
+    // Les nuages MÛRS peuvent corriger/compléter la règle : on ajoute tout code de
+    // nuage FORT (proba ≥ CLOUD_STRONG) absent des codes de la règle. Puis on ordonne
+    // par confiance (proba du nuage, sinon la confiance de règle) pour que le plus
+    // probable remonte en tête. Base immature → la règle reste seule (nuages bruités).
+    const mature = pool ? maturity(pool).level === 'ok' : false
+    const strong = mature
+      ? scored
+          .filter((s) => s.proba >= CLOUD_STRONG && !ruleCodes.includes(s.code))
+          .map((s) => s.code)
+      : []
+    const confOf = (code: string): number =>
+      scored.find((s) => s.code === code)?.proba ?? confidence
+    const codes = [...new Set([...ruleCodes, ...strong])]
+      .sort((a, b) => confOf(b) - confOf(a))
+      .slice(0, CLOUD_MAX)
     return {
       supplier: best.rule.supplier,
       code: best.rule.code,
-      codes: ruleCodes,
+      codes,
       matchedKeyword: best.keyword,
       confidence,
       learned: !!best.rule.learned,
@@ -147,4 +166,18 @@ export function detect(
     scores,
     abstained: abstains(scored),
   }
+}
+
+/**
+ * Re-score une facture DÉJÀ lue à partir de son texte, sans ré-extraire le PDF.
+ * Sert à ré-imputer en séance les factures ouvertes quand le pool s'enrichit (après
+ * le tamponnage d'une autre facture). On garde `rules = undefined` pour ne rien
+ * changer au comportement de la couche 1.
+ */
+export function redetect(
+  text: string,
+  pool: WordPool,
+): { detection: Detection; codes: string[] } {
+  const detection = detect(text, undefined, pool)
+  return { detection, codes: detection.codes }
 }

@@ -1,15 +1,23 @@
 import { describe, expect, it } from 'vitest'
 import { PDFDocument, StandardFonts } from 'pdf-lib'
 
-import { detect, normalize } from '#/lib/facturation/detect.ts'
+import { detect, normalize, redetect } from '#/lib/facturation/detect.ts'
+import { normalizeIssuer } from '#/lib/facturation/text.ts'
+import {
+  closestName,
+  levenshtein,
+  similarity,
+} from '#/lib/facturation/similarity.ts'
 import {
   abstains,
+  maturity,
   preselect,
   scoreInvoice,
   seedPool,
   tokenize,
 } from '#/lib/facturation/wordpool.ts'
 import { matchIssuer } from '#/lib/facturation/issuers.ts'
+import { buildGalaxy } from '#/lib/facturation/galaxy.ts'
 import { buildStampedPdf } from '#/lib/facturation/stamp.ts'
 import { stampBoxSize, stampLines } from '#/lib/facturation/stampLayout.ts'
 import { computeGrid, pageAt } from '#/lib/facturation/grid.ts'
@@ -48,6 +56,38 @@ const EDF_TEXT = [
   'Total TTC 1 488,60 €',
 ].join('\n')
 
+describe('similarity', () => {
+  it('levenshtein compte les éditions', () => {
+    expect(levenshtein('booking', 'bookng')).toBe(1)
+    expect(levenshtein('abc', 'abc')).toBe(0)
+    expect(levenshtein('', 'abc')).toBe(3)
+  })
+
+  it('similarity : 1 identique, décroît avec la distance', () => {
+    expect(similarity('abc', 'abc')).toBe(1)
+    expect(similarity('booking', 'bookng')).toBeGreaterThan(0.8)
+    expect(similarity('booking', 'xyzzy')).toBeLessThan(0.5)
+  })
+
+  it('closestName suggère un proche, ignore l’identique et le lointain', () => {
+    expect(closestName('bookng', ['booking', 'adyen'])).toBe('booking')
+    expect(closestName('booking', ['booking', 'adyen'])).toBeNull() // identique
+    expect(closestName('zzzzz', ['booking', 'adyen'])).toBeNull() // trop loin
+  })
+})
+
+describe('normalizeIssuer', () => {
+  it('compacte espaces et retire les suffixes juridiques', () => {
+    expect(normalizeIssuer('Martin SARL')).toBe('martin')
+    expect(normalizeIssuer('Martin SA')).toBe(normalizeIssuer('martin sa'))
+    expect(normalizeIssuer('  Booking.com  ')).toBe('booking com')
+  })
+
+  it('ne vide jamais un nom réduit à un seul mot-suffixe', () => {
+    expect(normalizeIssuer('SA')).toBe('sa') // garde-fou words.length > 1
+  })
+})
+
 describe('detect', () => {
   it('reconnaît l’électricité → code analytique malgré les accents', () => {
     const d = detect(EDF_TEXT, SEED_RULES)
@@ -80,6 +120,38 @@ describe('detect', () => {
     expect(d.confidence).toBe(0)
   })
 
+  it('un nuage MÛR et FORT est proposé même si une règle tranche ailleurs', () => {
+    // Règle : mot-clé « martin » → code A (curé). Mais le corps de la facture ressemble
+    // fortement au nuage de HECOMMOTAo (B). Base mûre (3 codes, > 60 tokens) → B proposé.
+    const rules: SupplierRule[] = [
+      {
+        id: 'r:martin',
+        supplier: 'Martin',
+        code: 'RESSTFBooo',
+        keywords: ['martin'],
+        learned: false,
+      },
+    ]
+    const pool = {
+      perCode: {
+        HECOMMOTAo: {
+          booking: 20,
+          sejour: 15,
+          nuitee: 12,
+          reservation: 10,
+          commission: 8,
+        },
+        FMELECoooo: { edf: 3, kwh: 2 },
+        RESSTFBooo: { autre: 2, chose: 1 },
+      },
+    }
+    const text = 'Facture Martin — booking sejour nuitee reservation commission'
+    const d = detect(text, rules, pool)
+    expect(d.codes).toContain('HECOMMOTAo') // le nuage fort remonte…
+    expect(d.codes[0]).toBe('HECOMMOTAo') // …et passe en tête (ordonné par confiance)
+    expect(d.codes).toContain('RESSTFBooo') // la règle reste proposée
+  })
+
   it('une règle apprise démarre avec une confiance plus haute', () => {
     const learned: SupplierRule[] = [
       {
@@ -94,6 +166,50 @@ describe('detect', () => {
     expect(d.supplier).toBe('ACME Traiteur')
     expect(d.learned).toBe(true)
     expect(d.confidence).toBeGreaterThanOrEqual(0.75)
+  })
+})
+
+describe('redetect', () => {
+  it('ré-impute depuis le texte quand le pool s’enrichit', () => {
+    const text = 'intervention reparation ascenseur en panne'
+    const froid = redetect(text, { perCode: {} })
+    // Deux codes : l'idf est non nul (pouvoir discriminant), condition d'un score.
+    const chaud = redetect(text, {
+      perCode: {
+        TECH: { ascenseur: 5, reparation: 3, panne: 2 },
+        OTA: { booking: 5, sejour: 3, nuitee: 2 },
+      },
+    })
+    expect(froid.codes).toEqual([]) // base vide → aucune imputation par les nuages
+    expect(chaud.codes).toContain('TECH') // pool enrichi → imputation trouvée
+    expect(chaud.codes).not.toEqual(froid.codes)
+  })
+})
+
+describe('maturity', () => {
+  it('base vide → niveau « vide »', () => {
+    const m = maturity({ perCode: {} })
+    expect(m.tokens).toBe(0)
+    expect(m.level).toBe('vide')
+  })
+
+  it('peu de codes/tokens → « faible »', () => {
+    const m = maturity({ perCode: { A: { x: 2, y: 1 } } })
+    expect(m.codes).toBe(1)
+    expect(m.level).toBe('faible')
+  })
+
+  it('assez de codes et de volume → « ok »', () => {
+    const m = maturity({
+      perCode: {
+        A: { a: 30, b: 20 },
+        B: { c: 15 },
+        C: { d: 10 },
+      },
+    })
+    expect(m.codes).toBe(3)
+    expect(m.tokens).toBe(75)
+    expect(m.level).toBe('ok')
   })
 })
 
@@ -184,6 +300,65 @@ describe('matchIssuer', () => {
   it('ignore un nom trop court', () => {
     const list = [{ name: 'sa', display: 'SA', count: 5 }]
     expect(matchIssuer('facture sa', list)).toBeNull()
+  })
+})
+
+describe('buildGalaxy', () => {
+  it('construit le graphe émetteur → code → mots', () => {
+    const pool = { perCode: { FMELECoooo: { edf: 5, kwh: 3, releve: 2 } } }
+    const issuers = [{ name: 'edf', display: 'EDF', count: 4 }]
+    const g = buildGalaxy(pool, issuers, 5)
+    expect(g.nodes.filter((n) => n.type === 'code')).toHaveLength(1)
+    expect(g.nodes.filter((n) => n.type === 'issuer')).toHaveLength(1) // edf
+    expect(g.nodes.filter((n) => n.type === 'word')).toHaveLength(2) // kwh, releve
+    expect(g.links).toContainEqual({
+      source: 'issuer:edf',
+      target: 'code:FMELECoooo',
+      weight: 5,
+    })
+    const code = g.nodes.find((n) => n.type === 'code')!
+    expect(code.category).toBe('Énergie & fluides')
+  })
+
+  it('un émetteur partagé entre plusieurs codes = un seul nœud', () => {
+    const pool = { perCode: { A: { edf: 5 }, B: { edf: 4 } } }
+    const g = buildGalaxy(pool, [{ name: 'edf', display: 'EDF', count: 9 }], 5)
+    expect(g.nodes.filter((n) => n.type === 'issuer')).toHaveLength(1)
+    expect(g.links.filter((l) => l.source === 'issuer:edf')).toHaveLength(2)
+  })
+
+  it('ignore un code sans mot', () => {
+    expect(buildGalaxy({ perCode: { FMELECoooo: {} } }, []).nodes).toHaveLength(
+      0,
+    )
+  })
+
+  it('minCount masque le bruit à faible count (hygiène)', () => {
+    const pool = { perCode: { FMELECoooo: { edf: 5, kwh: 3, typo: 1 } } }
+    const g = buildGalaxy(pool, [], 5) // minCount défaut = 2
+    const words = g.nodes.filter((n) => n.type === 'word').map((n) => n.label)
+    expect(words).toContain('kwh')
+    expect(words).not.toContain('typo') // count 1 → écarté
+    // minCount = 1 le laisse passer.
+    const all = buildGalaxy(pool, [], 5, 1)
+    expect(all.nodes.some((n) => n.label === 'typo')).toBe(true)
+  })
+
+  it('attribue une position logique finie et déterministe à chaque nœud', () => {
+    const pool = { perCode: { FMELECoooo: { edf: 5, kwh: 3 } } }
+    const issuers = [{ name: 'edf', display: 'EDF', count: 4 }]
+    const a = buildGalaxy(pool, issuers, 5)
+    const b = buildGalaxy(pool, issuers, 5)
+    for (const n of a.nodes) {
+      expect(Number.isFinite(n.x)).toBe(true)
+      expect(Number.isFinite(n.y)).toBe(true)
+    }
+    // Le layout a écarté les nœuds (pas tous à l'origine)…
+    expect(a.nodes.some((n) => n.x !== 0 || n.y !== 0)).toBe(true)
+    // …et reste reproductible d'un appel à l'autre.
+    expect(a.nodes.map((n) => [n.x, n.y])).toEqual(
+      b.nodes.map((n) => [n.x, n.y]),
+    )
   })
 })
 
