@@ -2,6 +2,7 @@ import { SEED_RULES } from '#/lib/facturation/constants.ts'
 import { normalize } from '#/lib/facturation/text.ts'
 import {
   abstains,
+  CLOUD_KEEP_RATIO,
   CLOUD_MAX,
   CLOUD_STRONG,
   maturity,
@@ -14,6 +15,35 @@ import type {
   InvoiceHints,
   SupplierRule,
 } from '#/lib/facturation/types.ts'
+
+/**
+ * Signal ÉMETTEUR pour l'attribution (filtre fort). `prior` = P(code | émetteur) issu du
+ * modèle appris (issuerCodes.ts) ; `concentrated` = l'émetteur pointe nettement un code
+ * (mûr + mono-code) et autorise donc un filtre DUR / une proposition même si les mots sont
+ * muets. Fourni par l'appelant SEULEMENT si l'émetteur est assez mûr (sinon `undefined` →
+ * aucun effet, l'attribution reste 100 % pilotée par les mots).
+ */
+export interface IssuerHint {
+  prior: Record<string, number>
+  concentrated: boolean
+  /** Codes interdits pour cet émetteur (denylist) : retirés de tous les candidats. */
+  deny?: Set<string>
+}
+
+/** Plancher du prior : un code non vu chez l'émetteur (prior 0) est moins favorisé, pas
+ *  annulé — départage, pas exclusion (sauf émetteur concentré). Valeur de départ. */
+const EPS_PRIOR = 0.15
+
+/** Code(s) dominant(s) d'un prior émetteur (pour le cas « mots muets, émetteur fort »). */
+function topPriorCodes(prior: Record<string, number>): string[] {
+  const e = Object.entries(prior).sort((a, b) => b[1] - a[1])
+  if (!e.length) return []
+  const top = e[0][1]
+  return e
+    .filter(([, p]) => p >= top * CLOUD_KEEP_RATIO)
+    .slice(0, CLOUD_MAX)
+    .map(([c]) => c)
+}
 
 export { normalize }
 
@@ -97,6 +127,7 @@ export function detect(
   rawText: string,
   rules: SupplierRule[] = allRules(),
   pool?: WordPool,
+  issuer?: IssuerHint,
 ): Detection {
   const text = normalize(rawText)
   const hints = extractHints(rawText)
@@ -114,29 +145,61 @@ export function detect(
     }
     if (score > 0 && firstHit) matches.push({ rule, score, keyword: firstHit })
   }
-  matches.sort((a, b) => b.score - a.score)
-  const ruleCodes = [...new Set(matches.map((m) => m.rule.code))]
-  const best = matches[0]
+  // DENYLIST : « cet émetteur ne va JAMAIS sur ce code » → on retire les codes bannis de
+  // TOUTES les sources (règles, nuages, prior), sinon une couche les ré-injecterait.
+  const deny = issuer?.deny
+  const allowed = (code: string): boolean => !deny?.has(code)
 
-  // Couche 2 : nuages de mots (parcimonieux), triés par proba (confiance affichée).
-  const scored = pool ? scoreInvoice(rawText, pool) : []
-  const scores = scored.slice(0, 5)
+  matches.sort((a, b) => b.score - a.score)
+  const ruleCodes = [...new Set(matches.map((m) => m.rule.code))].filter(
+    allowed,
+  )
+  const best = matches.find((m) => allowed(m.rule.code)) // meilleure règle NON bannie
+
+  // Couche 2 : nuages de mots (parcimonieux). L'abstention est jugée sur les MOTS SEULS
+  // (cosinus), avant tout effet émetteur — on ne laisse pas le prior « inventer » un code.
+  const scoredRaw = pool ? scoreInvoice(rawText, pool) : []
+  const scored = deny ? scoredRaw.filter((s) => allowed(s.code)) : scoredRaw
+  const wordsAbstain = abstains(scored)
+
+  // FILTRE ÉMETTEUR : re-pondère la proba de chaque code par le prior P(code|émetteur)
+  // (départage), puis re-trie. Un code non vu chez l'émetteur reste possible (plancher
+  // EPS_PRIOR). Uniquement si un prior NON VIDE existe : un émetteur immature (prior {}, le
+  // hint ne portant qu'une denylist) déflaterait sinon TOUTES les probas ×EPS_PRIOR de façon
+  // uniforme — inoffensif pour le classement mais fatal au chemin `strong` (seuil CLOUD_STRONG
+  // devenu inatteignable) et trompeur pour les confiances affichées. Le filtrage `deny` reste,
+  // lui, appliqué en amont sur `scored`.
+  const hasPrior = !!issuer && Object.keys(issuer.prior).length > 0
+  const weighted = hasPrior
+    ? scored
+        .map((s) => ({
+          ...s,
+          proba: s.proba * (EPS_PRIOR + (issuer!.prior[s.code] ?? 0)),
+        }))
+        .sort((a, b) => b.proba - a.proba)
+    : scored
+
+  // `scores` (affichage) avec l'origine de chaque suggestion.
+  const scores = weighted.slice(0, 5).map((s) => ({
+    code: s.code,
+    proba: s.proba,
+    words: s.words,
+    source: (issuer && (issuer.prior[s.code] ?? 0) > 0 ? 'issuer' : 'words') as
+      'issuer' | 'words',
+  }))
 
   if (best) {
     const base = best.rule.learned ? 0.75 : 0.6
     const confidence = Math.min(0.97, base + 0.12 * (best.score - 1))
-    // Les nuages MÛRS peuvent corriger/compléter la règle : on ajoute tout code de
-    // nuage FORT (proba ≥ CLOUD_STRONG) absent des codes de la règle. Puis on ordonne
-    // par confiance (proba du nuage, sinon la confiance de règle) pour que le plus
-    // probable remonte en tête. Base immature → la règle reste seule (nuages bruités).
+    // Les nuages MÛRS (re-pondérés émetteur) peuvent corriger/compléter la règle.
     const mature = pool ? maturity(pool).level === 'ok' : false
     const strong = mature
-      ? scored
+      ? weighted
           .filter((s) => s.proba >= CLOUD_STRONG && !ruleCodes.includes(s.code))
           .map((s) => s.code)
       : []
     const confOf = (code: string): number =>
-      scored.find((s) => s.code === code)?.proba ?? confidence
+      weighted.find((s) => s.code === code)?.proba ?? confidence
     const codes = [...new Set([...ruleCodes, ...strong])]
       .sort((a, b) => confOf(b) - confOf(a))
       .slice(0, CLOUD_MAX)
@@ -153,18 +216,36 @@ export function detect(
     }
   }
 
-  // Aucune règle → les nuages pilotent (proba réelle, mots votants), parcimonieux.
-  const top = scored[0]
+  // Aucune règle → les nuages pilotent. Les MOTS priment : l'émetteur a déjà re-pondéré
+  // `weighted` (départage), mais il ne FILTRE JAMAIS un code soutenu par les mots (pas de
+  // filtre dur). Seule exception : mots muets → l'émetteur concentré propose son code, mais
+  // marqué « à vérifier » (fromIssuerOnly), jamais comme une suggestion normale.
+  const top = weighted[0]
+  let codes: string[]
+  let issuerOnly = false
+  if (!wordsAbstain) {
+    codes = preselect(weighted)
+  } else if (issuer?.concentrated) {
+    codes = topPriorCodes(issuer.prior).filter(allowed) // denylist respectée
+    issuerOnly = codes.length > 0
+  } else {
+    codes = [] // abstention (comportement historique)
+  }
+
+  const abstained = wordsAbstain && codes.length === 0
   return {
     supplier: null,
-    code: top?.code ?? null,
-    codes: preselect(scored),
+    // `code` suit le 1er code RETENU (codes[0]) : dans le cas « mots muets + émetteur
+    // concentré », `top` pointerait un code-mot pourtant rejeté, désaligné de `codes`.
+    code: codes[0] ?? top?.code ?? null,
+    codes,
     matchedKeyword: top?.words[0] ?? null,
-    confidence: top?.proba ?? 0,
+    confidence: top?.proba ?? (codes[0] ? (issuer?.prior[codes[0]] ?? 0) : 0),
     learned: false,
     hints,
     scores,
-    abstained: abstains(scored),
+    abstained,
+    fromIssuerOnly: issuerOnly,
   }
 }
 
@@ -177,7 +258,8 @@ export function detect(
 export function redetect(
   text: string,
   pool: WordPool,
+  issuer?: IssuerHint,
 ): { detection: Detection; codes: string[] } {
-  const detection = detect(text, undefined, pool)
+  const detection = detect(text, undefined, pool, issuer)
   return { detection, codes: detection.codes }
 }
