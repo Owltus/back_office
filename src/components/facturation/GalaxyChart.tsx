@@ -222,9 +222,20 @@ interface RoamParam {
   zoom?: number
 }
 
-export function GalaxyChart({ graph }: { graph: GalaxyGraph }) {
+export function GalaxyChart({
+  graph,
+  onSelectCode,
+}: {
+  graph: GalaxyGraph
+  /** Appelé au clic sur une nébuleuse (code d'imputation) ; `null` si clic dans le vide. */
+  onSelectCode?: (code: string | null) => void
+}) {
   const ref = useRef<HTMLDivElement>(null)
   const nebulaRef = useRef<HTMLCanvasElement>(null)
+  // Réf tenue à jour à chaque rendu : le handler de clic (lié une fois) appelle toujours
+  // la dernière version sans relancer l'effet (deps [graph]).
+  const onSelectRef = useRef(onSelectCode)
+  onSelectRef.current = onSelectCode
 
   useEffect(() => {
     const el = ref.current
@@ -257,6 +268,7 @@ export function GalaxyChart({ graph }: { graph: GalaxyGraph }) {
       string,
       {
         codeId: string
+        code: string
         cx: number
         cy: number
         color: string
@@ -267,6 +279,7 @@ export function GalaxyChart({ graph }: { graph: GalaxyGraph }) {
       if (n.type === 'code' && n.code) {
         clusterByCode.set(n.code, {
           codeId: n.id,
+          code: n.code,
           cx: n.x * SCALE,
           cy: n.y * SCALE,
           color: colorFor(n.category),
@@ -489,6 +502,8 @@ export function GalaxyChart({ graph }: { graph: GalaxyGraph }) {
     // position logique après un délai. Re-saisir un nœud annule le retour en attente.
     let returnTimer = 0
     let dragging = false
+    let downX = 0
+    let downY = 0
     const onDown = (p: { dataType?: string }) => {
       if (p?.dataType === 'node') {
         dragging = true
@@ -498,15 +513,39 @@ export function GalaxyChart({ graph }: { graph: GalaxyGraph }) {
         }
       }
     }
-    const onUp = () => {
-      if (!dragging) return
-      dragging = false
-      returnTimer = window.setTimeout(() => {
-        returnTimer = 0
-        applyNodes(true)
-      }, RETURN_DELAY)
+    // Position du mousedown (pour distinguer un CLIC d'un pan/glisser). Le roam d'ECharts
+    // absorbe l'événement 'click', d'où cette détection maison au mouseup.
+    const onZrDown = (e: { offsetX: number; offsetY: number }) => {
+      downX = e.offsetX
+      downY = e.offsetY
+    }
+    const onUp = (e?: { offsetX: number; offsetY: number }) => {
+      const mx = e?.offsetX ?? downX
+      const my = e?.offsetY ?? downY
+      if (dragging) {
+        // Retour élastique d'un nœud déplacé.
+        dragging = false
+        returnTimer = window.setTimeout(() => {
+          returnTimer = 0
+          applyNodes(true)
+        }, RETURN_DELAY)
+        return
+      }
+      // Pas de glisser de nœud : si peu de mouvement → CLIC. Nébuleuse sous le curseur →
+      // sélection (remonte le code) ; sinon désélection.
+      if (Math.hypot(mx - downX, my - downY) < 5) {
+        let picked: string | null = null
+        for (const cl of clusterHit) {
+          if (Math.hypot(cl.cx - mx, cl.cy - my) <= cl.r) {
+            picked = cl.code
+            break
+          }
+        }
+        onSelectRef.current?.(picked)
+      }
     }
     chart.on('mousedown', onDown as (p: unknown) => void)
+    chart.getZr().on('mousedown', onZrDown)
     chart.getZr().on('mouseup', onUp)
 
     // --- Nébuleuse : UNE surface pleine par imputation, recalée sur la vue ECharts
@@ -524,7 +563,13 @@ export function GalaxyChart({ graph }: { graph: GalaxyGraph }) {
     const outY = new Float64Array(B)
     // Zones écran des nébuleuses et positions écran des émetteurs, recalculées à chaque
     // rendu — servent au hit-test du survol (sans convertToPixel par événement souris).
-    let clusterHit: { codeId: string; cx: number; cy: number; r: number }[] = []
+    let clusterHit: {
+      codeId: string
+      code: string
+      cx: number
+      cy: number
+      r: number
+    }[] = []
     let issuerScreen: { id: string; x: number; y: number; r: number }[] = []
     const drawNebula = () => {
       nebulaFrame = 0
@@ -612,7 +657,7 @@ export function GalaxyChart({ graph }: { graph: GalaxyGraph }) {
         octx.beginPath()
         closedCurve(octx, outX, outY, B)
         octx.fill()
-        clusterHit.push({ codeId: cl.codeId, cx, cy, r: maxR })
+        clusterHit.push({ codeId: cl.codeId, code: cl.code, cx, cy, r: maxR })
       }
       // Positions écran des émetteurs (pour le hit-test du survol, sans convertToPixel).
       issuerScreen = issuerHits.map((it) => ({
@@ -702,6 +747,8 @@ export function GalaxyChart({ graph }: { graph: GalaxyGraph }) {
       chart.off('rendered', scheduleNebula)
       zr.off('mousemove', onMove)
       zr.off('globalout', onOut)
+      zr.off('mousedown', onZrDown)
+      zr.off('mouseup', onUp)
       chart.dispose()
     }
   }, [graph])

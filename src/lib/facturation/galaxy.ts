@@ -1,5 +1,6 @@
 import { BUDGET_LINES, budgetLabel } from '#/lib/facturation/constants.ts'
 import type { WordPool } from '#/lib/facturation/wordpool.ts'
+import type { IssuerCodes } from '#/lib/facturation/issuerCodes.ts'
 import type { Issuer } from '#/lib/facturation/issuers.ts'
 
 /*
@@ -638,18 +639,22 @@ const TAG_BY_CODE = new Map(BUDGET_LINES.map((l) => [l.code, l.tags[0] ?? '']))
 
 /**
  * Construit le graphe émetteurs → codes → mots à partir des nuages appris.
- * `topWordsPerCode` borne les mots par code pour rester lisible.
+ * `topWordsPerCode` borne les mots par code pour rester lisible. Les nœuds/liens ÉMETTEUR
+ * viennent du modèle de co-occurrence `issuerCodes` (émetteur → codes), PAS des tokens du
+ * pool : le nom d'émetteur n'est plus injecté dans les nuages (pull de mots = contenu
+ * métier seul). Si `issuerCodes` est absent, la galaxie n'affiche que codes + mots.
  */
 export function buildGalaxy(
   pool: WordPool,
   issuers: Issuer[],
   topWordsPerCode = 12,
   minCount = 2,
+  issuerCodes?: IssuerCodes,
 ): GalaxyGraph {
   const issuerName = new Map(issuers.map((i) => [i.name, i.display]))
   const nodes: GalaxyNode[] = []
   const links: GalaxyLink[] = []
-  const issuerNodes = new Map<string, GalaxyNode>()
+  const codePresent = new Set<string>()
 
   for (const [code, cell] of Object.entries(pool.perCode)) {
     // Seuil d'AFFICHAGE : on écarte le bruit à faible count (fautes de frappe, mots
@@ -663,6 +668,7 @@ export function buildGalaxy(
 
     const domain = TAG_BY_CODE.get(code) || 'Autre'
     const codeId = `code:${code}`
+    codePresent.add(code)
     nodes.push({
       id: codeId,
       type: 'code',
@@ -674,40 +680,44 @@ export function buildGalaxy(
       y: 0,
     })
 
+    // Tous les tokens sont des MOTS (l'émetteur vit dans le modèle séparé, voir plus bas).
     for (const [token, count] of top) {
-      const display = issuerName.get(token)
-      if (display !== undefined) {
-        // Émetteur connu → nœud partagé, relié à ce code.
-        const issuerId = `issuer:${token}`
-        let node = issuerNodes.get(issuerId)
-        if (!node) {
-          node = {
-            id: issuerId,
-            type: 'issuer',
-            label: display,
-            weight: 0,
-            category: ISSUER_CATEGORY,
-            x: 0,
-            y: 0,
-          }
-          issuerNodes.set(issuerId, node)
-          nodes.push(node)
-        }
-        node.weight += count
-        links.push({ source: issuerId, target: codeId, weight: count })
-      } else {
-        const wordId = `word:${code}:${token}`
-        nodes.push({
-          id: wordId,
-          type: 'word',
-          label: token,
-          weight: count,
-          category: domain,
-          code,
-          x: 0,
-          y: 0,
-        })
-        links.push({ source: codeId, target: wordId, weight: count })
+      const wordId = `word:${code}:${token}`
+      nodes.push({
+        id: wordId,
+        type: 'word',
+        label: token,
+        weight: count,
+        category: domain,
+        code,
+        x: 0,
+        y: 0,
+      })
+      links.push({ source: codeId, target: wordId, weight: count })
+    }
+  }
+
+  // Émetteurs : depuis la co-occurrence apprise (issuerCodes), reliés aux codes PRÉSENTS.
+  if (issuerCodes) {
+    for (const [key, codesCell] of Object.entries(issuerCodes.perIssuer)) {
+      const linked = Object.entries(codesCell).filter(
+        ([code, n]) => n > 0 && codePresent.has(code),
+      )
+      if (linked.length === 0) continue
+      const issuerId = `issuer:${key}`
+      const node: GalaxyNode = {
+        id: issuerId,
+        type: 'issuer',
+        label: issuerName.get(key) ?? key,
+        weight: 0,
+        category: ISSUER_CATEGORY,
+        x: 0,
+        y: 0,
+      }
+      nodes.push(node)
+      for (const [code, n] of linked) {
+        node.weight += n
+        links.push({ source: issuerId, target: `code:${code}`, weight: n })
       }
     }
   }
