@@ -10,6 +10,7 @@ import {
 } from '#/lib/facturation/similarity.ts'
 import {
   abstains,
+  confusableCodes,
   maturity,
   preselect,
   scoreInvoice,
@@ -17,6 +18,14 @@ import {
   tokenize,
 } from '#/lib/facturation/wordpool.ts'
 import { matchIssuer } from '#/lib/facturation/issuers.ts'
+import {
+  bumpIssuerCodes,
+  issuerMaturity,
+  issuerOutliers,
+  issuerPrior,
+  mergeIssuerCodes,
+} from '#/lib/facturation/issuerCodes.ts'
+import { reviewQueue } from '#/lib/facturation/anomalies.ts'
 import { buildGalaxy } from '#/lib/facturation/galaxy.ts'
 import { buildStampedPdf } from '#/lib/facturation/stamp.ts'
 import { stampBoxSize, stampLines } from '#/lib/facturation/stampLayout.ts'
@@ -89,14 +98,21 @@ describe('normalizeIssuer', () => {
 })
 
 describe('detect', () => {
-  it('reconnaît l’électricité → code analytique malgré les accents', () => {
-    const d = detect(EDF_TEXT, SEED_RULES)
-    expect(d.supplier).toBe('Électricité')
-    expect(d.code).toBe('FMELECoooo')
-    expect(d.matchedKeyword).toBe('electricite')
-    expect(d.codes).toEqual(['FMELECoooo'])
-    expect(d.confidence).toBeGreaterThan(0.5)
-    expect(budgetLabel(d.code!)).toBe('Electricité')
+  it('électricité : plus de règle mot-clé générique → détection par le pull APPRIS', () => {
+    // Plus de règle « electricite » (mot générique = libellé) : sans éducation, on
+    // s'abstient plutôt que d'imputer par le nom de la ligne.
+    const cold = detect(EDF_TEXT, SEED_RULES)
+    expect(cold.code).toBeNull()
+    // Avec un pull APPRIS (mots d'une vraie facture d'électricité), le contexte tranche.
+    const pool = {
+      perCode: {
+        FMELECoooo: { electricite: 5, consommation: 4, releve: 3, edf: 3 },
+        HECOMMOTAo: { booking: 5, sejour: 3, nuitee: 2 },
+      },
+    }
+    const warm = detect(EDF_TEXT, SEED_RULES, pool)
+    expect(warm.codes).toContain('FMELECoooo')
+    expect(budgetLabel('FMELECoooo')).toBe('Electricité')
   })
 
   it('pré-sélectionne TOUS les codes dont un mot-clé matche', () => {
@@ -110,6 +126,18 @@ describe('detect', () => {
     expect(d.hints.date).toBe('2026-07-12')
     expect(d.hints.amount).toBe('1 488,60')
     expect(d.hints.invoiceNumber).toBe('FR-2026-004512')
+  })
+
+  it('mots génériques = libellé retirés → imputation laissée à l’éducation', () => {
+    // alcool / chauffage urbain / blanchissage / gardiennage ne sont plus des règles :
+    // sans pull appris, on s'abstient au lieu d'imputer par le nom de la ligne.
+    expect(
+      detect('Facture achat alcool — vins et spiritueux', SEED_RULES).code,
+    ).toBeNull()
+    expect(detect('Facture chauffage urbain', SEED_RULES).code).toBeNull()
+    expect(
+      detect('Prestation gardiennage nocturne', SEED_RULES).code,
+    ).toBeNull()
   })
 
   it('retourne un résultat vide quand rien ne matche', () => {
@@ -166,6 +194,97 @@ describe('detect', () => {
     expect(d.supplier).toBe('ACME Traiteur')
     expect(d.learned).toBe(true)
     expect(d.confidence).toBeGreaterThanOrEqual(0.75)
+  })
+})
+
+describe('detect + filtre émetteur', () => {
+  const POOL = {
+    perCode: {
+      TECH: { ascenseur: 5, reparation: 3, panne: 2 },
+      OTA: { booking: 5, sejour: 3, nuitee: 2 },
+    },
+  }
+
+  it('sans émetteur : mots muets → abstention (comportement inchangé)', () => {
+    const d = detect('xyzzy plughx sans rapport', undefined, POOL)
+    expect(d.codes).toEqual([])
+    expect(d.abstained).toBe(true)
+  })
+
+  it('émetteur concentré + mots muets : propose son code, marqué « à vérifier »', () => {
+    const d = detect('xyzzy plughx sans rapport', undefined, POOL, {
+      prior: { TECH: 1 },
+      concentrated: true,
+    })
+    expect(d.codes).toContain('TECH')
+    expect(d.abstained).toBe(false)
+    expect(d.fromIssuerOnly).toBe(true) // suggestion émetteur seul → à confirmer
+  })
+
+  it('les mots priment : un code voté par les mots n’est jamais « à vérifier »', () => {
+    const d = detect('reparation ascenseur panne', undefined, POOL, {
+      prior: { TECH: 1 },
+      concentrated: true,
+    })
+    expect(d.codes).toContain('TECH')
+    expect(d.fromIssuerOnly).toBeFalsy() // les mots soutiennent → pas un simple « à vérifier »
+  })
+
+  it('émetteur re-pondère le départage entre codes soutenus par les mots', () => {
+    const pool2 = {
+      perCode: {
+        A: { alpha: 5, xray: 3 },
+        B: { alpha: 5, yoyo: 3 },
+        C: { zeta: 5, whis: 3 },
+      },
+    }
+    // « alpha » soutient A et B à égalité ; le prior émetteur départage vers B.
+    const d = detect('alpha', undefined, pool2, {
+      prior: { B: 1 },
+      concentrated: false,
+    })
+    expect(d.codes[0]).toBe('B')
+  })
+
+  it('denylist : un code interdit disparaît même si les mots le soutiennent', () => {
+    // « ascenseur/reparation » vote TECH, mais l'émetteur a TECH banni → OTA sinon rien.
+    const d = detect('reparation ascenseur panne', undefined, POOL, {
+      prior: {},
+      concentrated: false,
+      deny: new Set(['TECH']),
+    })
+    expect(d.codes).not.toContain('TECH')
+  })
+
+  it('denylist : ne bloque pas un émetteur immature sur les autres codes', () => {
+    // Émetteur non mûr (prior vide, non concentré) mais avec une interdiction : les mots
+    // continuent de piloter, seul le code banni est retiré.
+    const d = detect('booking sejour nuitee', [], POOL, {
+      prior: {},
+      concentrated: false,
+      deny: new Set(['TECH']),
+    })
+    expect(d.codes).toContain('OTA')
+    expect(d.codes).not.toContain('TECH')
+  })
+
+  it('denylist : retire aussi un code issu de la couche 1 (règle déterministe)', () => {
+    const rules = [
+      {
+        id: 'r-widget',
+        supplier: 'Widget SA',
+        code: 'BANNI',
+        keywords: ['widget'],
+      },
+    ]
+    const allowed = detect('facture widget', rules)
+    expect(allowed.codes).toContain('BANNI') // sans denylist, la règle vote
+    const denied = detect('facture widget', rules, undefined, {
+      prior: {},
+      concentrated: false,
+      deny: new Set(['BANNI']),
+    })
+    expect(denied.codes).not.toContain('BANNI') // la règle bannie ne remonte plus
   })
 })
 
@@ -235,6 +354,28 @@ describe('wordpool', () => {
     expect(s[0].words).toContain('ascenseur')
   })
 
+  it('max_df : un mot transverse (≥60% des codes, base ≥8) est ignoré au scoring', () => {
+    // 8 codes : « commun » présent dans 6/8 (75% ≥ 60%) → idf 0 → n'aide pas à trancher ;
+    // « special » présent dans 1 code → discrimine.
+    const cell = (extra: Record<string, number>) => ({ commun: 3, ...extra })
+    const big = {
+      perCode: {
+        C1: cell({ special: 5 }),
+        C2: cell({}),
+        C3: cell({}),
+        C4: cell({}),
+        C5: cell({}),
+        C6: cell({}),
+        C7: { autre: 4 },
+        C8: { encore: 4 },
+      },
+    }
+    // Un doc qui ne contient QUE le mot transverse → aucun signal → abstention.
+    expect(abstains(scoreInvoice('commun', big))).toBe(true)
+    // Le mot rare, lui, vote pour son code.
+    expect(scoreInvoice('special', big)[0]?.code).toBe('C1')
+  })
+
   it('abstention quand aucun mot informatif', () => {
     expect(abstains(scoreInvoice('xyzzy plughx', POOL))).toBe(true)
   })
@@ -275,6 +416,86 @@ describe('wordpool', () => {
   })
 })
 
+describe('issuerCodes (modèle émetteur→codes)', () => {
+  const M = {
+    perIssuer: {
+      martin: { HECOMMOTAo: 5, FMELECoooo: 1 }, // concentré (5/6 ≥ 0.8)
+      dupont: { A: 2, B: 2 }, // multi-codes, immature (total 4 mais 50/50)
+      neuf: { A: 1 }, // immature (total 1)
+    },
+  }
+
+  it('issuerPrior : distribution sommant à 1, {} si inconnu', () => {
+    const p = issuerPrior(M, 'martin')
+    expect(p.HECOMMOTAo).toBeCloseTo(5 / 6)
+    expect(Object.values(p).reduce((a, b) => a + b, 0)).toBeCloseTo(1)
+    expect(issuerPrior(M, 'inconnu')).toEqual({})
+  })
+
+  it('issuerMaturity : fort au-delà du seuil, concentré si un code domine', () => {
+    expect(issuerMaturity(M, 'neuf').strong).toBe(false) // total 1 < 5 (seuil)
+    expect(issuerMaturity(M, 'martin').strong).toBe(true) // total 6 ≥ 5
+    expect(issuerMaturity(M, 'martin').concentrated).toBe(true) // 5/6 ≥ 0.8
+    expect(issuerMaturity(M, 'dupont').concentrated).toBe(false) // 2/4 < 0.8
+  })
+
+  it('bumpIssuerCodes incrémente sans muter la source', () => {
+    const next = bumpIssuerCodes(M, 'martin', ['HECOMMOTAo', 'ZZ'])
+    expect(next.perIssuer.martin.HECOMMOTAo).toBe(6)
+    expect(next.perIssuer.martin.ZZ).toBe(1)
+    expect(M.perIssuer.martin.HECOMMOTAo).toBe(5) // source intacte
+  })
+
+  it('mergeIssuerCodes additionne les compteurs', () => {
+    const merged = mergeIssuerCodes(M, {
+      perIssuer: { martin: { HECOMMOTAo: 2 } },
+    })
+    expect(merged.perIssuer.martin.HECOMMOTAo).toBe(7)
+    expect(merged.perIssuer.dupont.A).toBe(2)
+  })
+})
+
+describe('anomalies', () => {
+  it('issuerOutliers : isole une imputation marginale chez un émetteur mûr', () => {
+    const model = {
+      perIssuer: {
+        ramery: { FMPONCTUEL: 12, HECOMMOTAo: 1 }, // Z marginal (1/13) → suspect
+        petit: { A: 2 }, // total 2 < 5 → pas mûr → ignoré
+      },
+    }
+    const out = issuerOutliers(model)
+    expect(out).toHaveLength(1)
+    expect(out[0].code).toBe('HECOMMOTAo')
+    expect(out[0].dominant).toBe('FMPONCTUEL')
+  })
+
+  it('confusableCodes : remonte deux nuages qui se ressemblent (pas les autres)', () => {
+    // 3 codes (N≥3 pour que l'idf des tokens partagés soit > 0). A et B ont le MÊME
+    // vocabulaire → cosinus élevé ; C est disjoint.
+    const pool = {
+      perCode: {
+        A: { alpha: 5, beta: 5, gamma: 5 },
+        B: { alpha: 5, beta: 5, gamma: 5 },
+        C: { zeta: 5, whis: 5 },
+      },
+    }
+    const pairs = confusableCodes(pool, 0.6)
+    expect(pairs).toHaveLength(1)
+    expect([pairs[0].a, pairs[0].b].sort()).toEqual(['A', 'B'])
+    expect(pairs[0].cosine).toBeGreaterThan(0.9)
+  })
+
+  it('reviewQueue agrège outliers + confusables', () => {
+    const pool = {
+      perCode: { A: { x: 3, y: 3 }, B: { x: 3, y: 3 }, C: { z: 3 } },
+    }
+    const model = { perIssuer: { acme: { A: 10, B: 1 } } }
+    const q = reviewQueue(pool, model)
+    expect(q.some((a) => a.kind === 'issuer-outlier')).toBe(true)
+    expect(q.some((a) => a.kind === 'confusable-codes')).toBe(true)
+  })
+})
+
 describe('matchIssuer', () => {
   it('reconnaît un émetteur connu par sous-chaîne', () => {
     const list = [{ name: 'martin', display: 'Entreprise Martin', count: 3 }]
@@ -304,27 +525,41 @@ describe('matchIssuer', () => {
 })
 
 describe('buildGalaxy', () => {
-  it('construit le graphe émetteur → code → mots', () => {
+  it('construit le graphe émetteur → code → mots (émetteur depuis issuerCodes)', () => {
     const pool = { perCode: { FMELECoooo: { edf: 5, kwh: 3, releve: 2 } } }
     const issuers = [{ name: 'edf', display: 'EDF', count: 4 }]
-    const g = buildGalaxy(pool, issuers, 5)
+    const issuerCodes = { perIssuer: { edf: { FMELECoooo: 5 } } }
+    const g = buildGalaxy(pool, issuers, 5, 2, issuerCodes)
     expect(g.nodes.filter((n) => n.type === 'code')).toHaveLength(1)
-    expect(g.nodes.filter((n) => n.type === 'issuer')).toHaveLength(1) // edf
-    expect(g.nodes.filter((n) => n.type === 'word')).toHaveLength(2) // kwh, releve
+    expect(g.nodes.filter((n) => n.type === 'issuer')).toHaveLength(1) // edf (issuerCodes)
+    // Tous les tokens du pool sont des MOTS désormais (edf, kwh, releve).
+    expect(g.nodes.filter((n) => n.type === 'word')).toHaveLength(3)
     expect(g.links).toContainEqual({
       source: 'issuer:edf',
       target: 'code:FMELECoooo',
       weight: 5,
     })
+    expect(g.nodes.find((n) => n.type === 'issuer')?.label).toBe('EDF')
     const code = g.nodes.find((n) => n.type === 'code')!
     expect(code.category).toBe('Énergie & fluides')
   })
 
   it('un émetteur partagé entre plusieurs codes = un seul nœud', () => {
     const pool = { perCode: { A: { edf: 5 }, B: { edf: 4 } } }
-    const g = buildGalaxy(pool, [{ name: 'edf', display: 'EDF', count: 9 }], 5)
+    const issuers = [{ name: 'edf', display: 'EDF', count: 9 }]
+    const g = buildGalaxy(pool, issuers, 5, 2, {
+      perIssuer: { edf: { A: 5, B: 4 } },
+    })
     expect(g.nodes.filter((n) => n.type === 'issuer')).toHaveLength(1)
     expect(g.links.filter((l) => l.source === 'issuer:edf')).toHaveLength(2)
+  })
+
+  it('un émetteur dont le code n’est pas présent n’ajoute pas de nœud', () => {
+    const pool = { perCode: { A: { edf: 5 } } }
+    const g = buildGalaxy(pool, [], 5, 2, {
+      perIssuer: { edf: { Z: 3 } }, // code Z absent du pool → aucun lien/nœud émetteur
+    })
+    expect(g.nodes.filter((n) => n.type === 'issuer')).toHaveLength(0)
   })
 
   it('ignore un code sans mot', () => {
@@ -406,19 +641,17 @@ describe('stampBoxSize', () => {
 })
 
 describe('stampLines', () => {
-  it('émet une ligne par code d’imputation', () => {
+  it('émet une ligne par code d’imputation (code seul, sans en-tête ni libellé)', () => {
     const lines = stampLines({ ...STAMP, codes: ['FMELECoooo', 'FMGAZooooo'] })
-    expect(lines[0].text).toBe('IMPUTATIONS COMPTABLES')
     const codeLines = lines.filter((l) => /^FM/.test(l.text))
-    expect(codeLines).toHaveLength(2)
-    expect(codeLines[0].text).toContain('Electricité')
-    expect(codeLines[1].text).toContain('Gaz')
+    expect(codeLines.map((l) => l.text)).toEqual(['FMELECoooo', 'FMGAZooooo'])
+    // Plus d'en-tête « IMPUTATION(S) COMPTABLE(S) ».
+    expect(lines.some((l) => /IMPUTATION/.test(l.text))).toBe(false)
   })
 
   it('affiche un placeholder quand aucun code', () => {
     const lines = stampLines({ ...STAMP, codes: [] })
-    expect(lines[0].text).toBe('IMPUTATION COMPTABLE')
-    expect(lines[1].text).toBe('— à imputer —')
+    expect(lines[0].text).toBe('— à imputer —')
   })
 })
 
