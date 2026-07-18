@@ -1,5 +1,7 @@
 import { supabase } from '#/lib/supabase.ts'
 import { STORAGE_TOP_K, type WordPool } from '#/lib/facturation/wordpool.ts'
+import type { IssuerCodes } from '#/lib/facturation/issuerCodes.ts'
+import type { IssuerDenylist } from '#/lib/facturation/issuerDenylist.ts'
 import type { Issuer } from '#/lib/facturation/issuers.ts'
 
 /*
@@ -82,6 +84,106 @@ export async function learnIssuer(
   const { error } = await supabase.rpc('facturation_issuer_learn', {
     p_name: name,
     p_display: display,
+  })
+  if (error) throw error
+}
+
+// --- Co-occurrence émetteur → codes (filtre fort par émetteur) ----------------
+// Requiert facturation_issuer_codes.sql exécuté par l'utilisateur ; sinon la lecture
+// échoue → modèle vide (dégradation gracieuse) et l'écriture est signalée à l'appelant.
+
+const ISSUER_CODES_TABLE = 'facturation_issuer_codes'
+
+/** Lit tout le modèle émetteur→codes. Propage l'erreur (table absente, etc.). */
+export async function fetchIssuerCodes(): Promise<IssuerCodes> {
+  const perIssuer: IssuerCodes['perIssuer'] = {}
+  let from = 0
+  for (;;) {
+    const { data, error } = await supabase
+      .from(ISSUER_CODES_TABLE)
+      .select('issuer, code, count')
+      .range(from, from + 999)
+    if (error) throw error
+    const rows = (data ?? []) as {
+      issuer: string
+      code: string
+      count: number
+    }[]
+    for (const r of rows) (perIssuer[r.issuer] ??= {})[r.code] = r.count
+    if (rows.length < 1000) break
+    from += 1000
+  }
+  return { perIssuer }
+}
+
+/** Apprentissage : +1 sur chaque code validé pour l'émetteur (RPC SECURITY DEFINER). */
+export async function learnIssuerCodes(
+  issuer: string,
+  codes: string[],
+): Promise<void> {
+  const { error } = await supabase.rpc('facturation_issuer_codes_learn', {
+    p_issuer: issuer,
+    p_codes: codes,
+  })
+  if (error) throw error
+}
+
+/** Désapprentissage symétrique (décrément borné à 0, purge des lignes vidées). */
+export async function unlearnIssuerCodes(
+  issuer: string,
+  codes: string[],
+): Promise<void> {
+  const { error } = await supabase.rpc('facturation_issuer_codes_unlearn', {
+    p_issuer: issuer,
+    p_codes: codes,
+  })
+  if (error) throw error
+}
+
+// --- Denylist émetteur↔code (« ne va jamais sur ce code ») --------------------
+// Requiert facturation_issuer_denylist.sql exécuté par l'utilisateur ; sinon la lecture
+// échoue → denylist vide (dégradation gracieuse, aucun code exclu).
+
+const ISSUER_DENYLIST_TABLE = 'facturation_issuer_denylist'
+
+/** Lit toute la denylist → { perIssuer: { issuer: Set<code> } }. Propage l'erreur. */
+export async function fetchIssuerDenylist(): Promise<IssuerDenylist> {
+  const perIssuer: IssuerDenylist['perIssuer'] = {}
+  let from = 0
+  for (;;) {
+    const { data, error } = await supabase
+      .from(ISSUER_DENYLIST_TABLE)
+      .select('issuer, code')
+      .range(from, from + 999)
+    if (error) throw error
+    const rows = (data ?? []) as { issuer: string; code: string }[]
+    for (const r of rows) (perIssuer[r.issuer] ??= new Set()).add(r.code)
+    if (rows.length < 1000) break
+    from += 1000
+  }
+  return { perIssuer }
+}
+
+/** Pose une interdiction émetteur↔code (idempotent, RPC). */
+export async function addIssuerDeny(
+  issuer: string,
+  code: string,
+): Promise<void> {
+  const { error } = await supabase.rpc('facturation_issuer_denylist_add', {
+    p_issuer: issuer,
+    p_code: code,
+  })
+  if (error) throw error
+}
+
+/** Lève une interdiction émetteur↔code (undo, RPC). */
+export async function removeIssuerDeny(
+  issuer: string,
+  code: string,
+): Promise<void> {
+  const { error } = await supabase.rpc('facturation_issuer_denylist_remove', {
+    p_issuer: issuer,
+    p_code: code,
   })
   if (error) throw error
 }
