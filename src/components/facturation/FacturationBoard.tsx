@@ -1,6 +1,5 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '@tanstack/react-store'
-import { useQuery } from '@tanstack/react-query'
 import {
   AlertTriangle,
   FileText,
@@ -17,9 +16,11 @@ import {
   InvoicePanel,
 } from '#/components/facturation/InvoicePanel.tsx'
 import { StampPreview } from '#/components/facturation/StampPreview.tsx'
-import { detect } from '#/lib/facturation/detect.ts'
-import { fetchClouds, fetchIssuers } from '#/lib/facturation/cloudService.ts'
+import { GalaxyCard } from '#/components/facturation/GalaxyCard.tsx'
+import { useFacturationModel } from '#/components/facturation/useFacturationModel.ts'
+import { detect, redetect } from '#/lib/facturation/detect.ts'
 import {
+  maturity,
   mergePools,
   seedPool,
   type WordPool,
@@ -130,25 +131,31 @@ export function FacturationBoard() {
   const [dragging, setDragging] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Nuages de mots : lus une fois (cache TanStack Query), fusionnés avec la graine
-  // (toujours dispo). Sans table Supabase, la lecture échoue silencieusement et on
-  // retombe sur la seule graine (dégradation gracieuse, pas de retry).
-  const { data: serverPool } = useQuery({
-    queryKey: ['facturation', 'clouds'],
-    queryFn: fetchClouds,
-    retry: false,
-  })
-  const pool = useMemo(
-    () => mergePools(seedPool(), serverPool ?? { perCode: {} }),
-    [serverPool],
-  )
+  // Lectures Supabase (nuages appris + émetteurs), en cache et dégradation gracieuse
+  // (voir useFacturationModel). Le pool de scoring fusionne la graine avec l'appris.
+  const { serverPool, issuers } = useFacturationModel()
+  const pool = useMemo(() => mergePools(seedPool(), serverPool), [serverPool])
 
-  // Dictionnaire des émetteurs connus (petit, lu une fois, dégradation gracieuse).
-  const { data: issuers } = useQuery({
-    queryKey: ['facturation', 'issuers'],
-    queryFn: fetchIssuers,
-    retry: false,
-  })
+  // Maturité du modèle APPRIS (serveur) : quand la base est vide/pauvre, on prévient
+  // et on tempère la confiance affichée (les suggestions restent indicatives).
+  const model = useMemo(() => maturity(serverPool), [serverPool])
+  const immature = model.level !== 'ok'
+
+  // Re-détection en séance : quand le pool s'enrichit (après un tamponnage), on
+  // ré-impute les factures ouvertes NON tamponnées et NON éditées à la main, depuis
+  // leur texte déjà lu (pas de ré-extraction PDF). On ne patche que si l'imputation
+  // change réellement → pas de rendu en boucle. Dépendance sur `pool` seul :
+  // volontaire (les changements de `records` ne doivent pas relancer la re-détection).
+  useEffect(() => {
+    for (const r of facturationStore.state.records) {
+      if (r.status !== 'ready' || r.learned || r.userEdited || !r.text) continue
+      const { detection, codes } = redetect(r.text, pool)
+      const same =
+        codes.length === r.codes.length &&
+        codes.every((c, i) => c === r.codes[i])
+      if (!same) patchInvoice(r.id, { detection, codes })
+    }
+  }, [pool])
 
   function addFiles(files: FileList | File[]) {
     const pdfs = Array.from(files).filter(
@@ -176,7 +183,7 @@ export function FacturationBoard() {
       error: null,
     }))
     addInvoices(created)
-    created.forEach((r) => processInvoice(r, pool, issuers ?? []))
+    created.forEach((r) => processInvoice(r, pool, issuers))
   }
 
   const openPicker = () => inputRef.current?.click()
@@ -312,21 +319,34 @@ export function FacturationBoard() {
           </div>
         </section>
 
-        {/* COLONNE DROITE : imputation comptable */}
-        <aside className="flex min-h-0 w-full shrink-0 flex-col gap-4 rounded-xl border border-border bg-card p-4 lg:max-h-full lg:w-80 lg:overflow-y-auto">
-          <h2 className="text-sm font-semibold text-foreground">
-            Imputation comptable
-          </h2>
-          {selected ? (
-            <InvoicePanel
-              key={selected.id}
-              record={selected}
-              onPatch={(n) => patchInvoice(selected.id, n)}
-            />
-          ) : (
-            <EmptyImputation />
-          )}
-        </aside>
+        {/* COLONNE DROITE : galaxie (prévisualisation) au-dessus de l'imputation. */}
+        <div className="flex min-h-0 w-full shrink-0 flex-col gap-4 lg:max-h-full lg:w-80">
+          {/* La galaxie montre les données APPRISES (serveur), pas la graine. */}
+          <GalaxyCard pool={serverPool} />
+          <aside className="flex min-h-0 flex-1 flex-col gap-4 rounded-xl border border-border bg-card p-4">
+            <h2 className="shrink-0 text-sm font-semibold text-foreground">
+              Imputation comptable
+            </h2>
+            {immature && (
+              <p className="rounded-lg border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                {model.level === 'vide'
+                  ? 'Base d’apprentissage vide — les suggestions ne sont pas encore fiables. Tamponnez quelques factures pour l’alimenter.'
+                  : 'Modèle encore peu alimenté — les suggestions sont indicatives.'}
+              </p>
+            )}
+            {selected ? (
+              <InvoicePanel
+                key={selected.id}
+                record={selected}
+                onPatch={(n) => patchInvoice(selected.id, n)}
+                immature={immature}
+                issuers={issuers}
+              />
+            ) : (
+              <EmptyImputation />
+            )}
+          </aside>
+        </div>
       </div>
     </PageContainer>
   )
