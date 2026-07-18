@@ -1,5 +1,5 @@
 import { normalize } from '#/lib/facturation/text.ts'
-import { BUDGET_LINES, SEED_RULES } from '#/lib/facturation/constants.ts'
+import { SEED_RULES } from '#/lib/facturation/constants.ts'
 
 /*
  * Nuages de mots pour l'imputation comptable — logique PURE (aucun React/DOM/
@@ -89,6 +89,32 @@ const STOPWORDS = new Set([
   'moins',
   'okko',
   'nantes', // nom + ville de l'hôtel : présents sur toutes les factures
+  // Boilerplate de facture (mentions légales / bancaires / adresse) — transverse, aucun
+  // pouvoir discriminant. Complète le max_df pour les tokens fréquents mais non ubiquitaires.
+  'siret',
+  'siren',
+  'rcs',
+  'ape',
+  'naf',
+  'iban',
+  'bic',
+  'sas',
+  'sarl',
+  'sasu',
+  'eurl',
+  'sci',
+  'cedex',
+  'rue',
+  'avenue',
+  'boulevard',
+  'tel',
+  'fax',
+  'mail',
+  'email',
+  'www',
+  'http',
+  'https',
+  'france',
 ])
 
 /** Plafond de tokens conservés par code (bornage — voir aussi l'élagage SQL). */
@@ -105,10 +131,15 @@ export const CLOUD_MAX = 3
  *  « fiable » (vert) de l'affichage → « ce que l'UI colorerait en vert compte ». */
 export const CLOUD_STRONG = 0.5
 const BM25_K = 1.5
+/** max_df ADAPTATIF : un token présent dans une FRACTION ≥ ce seuil des codes est jugé
+ *  transverse (boilerplate) → poids 0. Complète l'idf (qui n'annule QUE l'ubiquité totale
+ *  df=N). S'active seulement au-delà de MAXDF_MIN_CODES codes (sinon il fausserait les
+ *  petites bases / fixtures de test). Auto-nettoyant à mesure que la base grandit. */
+const MAX_DF_RATIO = 0.6
+const MAXDF_MIN_CODES = 8
 /** Corroboration : `n / (n + K)` mots votants. 1 mot → 0,25 ; 3 → 0,5 ; 9 → 0,75. */
 const EVIDENCE_K = 3
 const SEED_WEIGHT = 4 // mot-clé livré : graine forte (survit au filtre hapax)
-const HINT_WEIGHT = 2 // mot d'un `hint` : graine plus faible
 
 /** Seuils de MATURITÉ du modèle APPRIS (serveur, hors graine). En dessous, la base
  *  manque de références fiables et le système ne doit pas se prononcer avec assurance.
@@ -182,10 +213,12 @@ function computeStats(pool: WordPool): Stats {
 }
 
 /** Poids automatique : mot présent partout → 0 ; rare+concentré → fort ; vu une
- *  seule fois (cf < 2) → 0 (bruit ignoré). */
+ *  seule fois (cf < 2) → 0 (bruit ignoré) ; présent dans ≥ MAX_DF_RATIO des codes (base
+ *  assez large) → 0 (parasite transverse : adresse, mentions légales, banque…). */
 function idf(t: string, s: Stats): number {
   if ((s.cf[t] ?? 0) < 2) return 0
   const df = s.df[t] ?? s.N
+  if (s.N >= MAXDF_MIN_CODES && df / s.N >= MAX_DF_RATIO) return 0 // max_df adaptatif
   return Math.log(s.N / df)
 }
 
@@ -294,13 +327,64 @@ export function countTokens(rawText: string): Record<string, number> {
   return out
 }
 
-/** Ajoute des tokens forts (ex. nom d'émetteur) à un delta d'apprentissage. */
-export function addStrong(
-  deltas: Record<string, number>,
-  tokens: string[],
-  weight: number,
-): void {
-  for (const t of tokens) deltas[t] = (deltas[t] ?? 0) + weight
+/** Cosinus minimal entre deux nuages de codes pour les juger CONFUSABLES (candidats à la
+ *  revue). À affiner : sous TF-IDF, deux codes très proches plafonnent car les tokens
+ *  partagés voient leur idf baisser. */
+export const CONFUSABLE_MIN = 0.6
+
+export interface CodePair {
+  a: string
+  b: string
+  cosine: number
+}
+
+/** Cosinus TF-IDF entre les nuages de deux codes (même métrique que le scoring, mais
+ *  nuage-vs-nuage). 0 si l'un est vide. */
+export function codeCosine(pool: WordPool, a: string, b: string): number {
+  const s = computeStats(pool)
+  const va = vectorize(pool.perCode[a] ?? {}, s)
+  const vb = vectorize(pool.perCode[b] ?? {}, s)
+  const na = l2(va)
+  const nb = l2(vb)
+  if (na === 0 || nb === 0) return 0
+  let dot = 0
+  for (const [t, x] of Object.entries(va)) {
+    const y = vb[t]
+    if (y) dot += x * y
+  }
+  return dot / (na * nb)
+}
+
+/** Paires de codes dont le cosinus ≥ `minCosine`, triées décroissant — « codes qui se
+ *  ressemblent trop » (à inspecter). Un seul `computeStats` partagé. */
+export function confusableCodes(
+  pool: WordPool,
+  minCosine = CONFUSABLE_MIN,
+): CodePair[] {
+  const s = computeStats(pool)
+  const codes = s.codes
+  const vecs = new Map(codes.map((c) => [c, vectorize(pool.perCode[c], s)]))
+  const norms = new Map(codes.map((c) => [c, l2(vecs.get(c)!)]))
+  const out: CodePair[] = []
+  for (let i = 0; i < codes.length; i++) {
+    for (let j = i + 1; j < codes.length; j++) {
+      const a = codes[i]
+      const b = codes[j]
+      const na = norms.get(a)!
+      const nb = norms.get(b)!
+      if (na === 0 || nb === 0) continue
+      const va = vecs.get(a)!
+      const vb = vecs.get(b)!
+      let dot = 0
+      for (const [t, x] of Object.entries(va)) {
+        const y = vb[t]
+        if (y) dot += x * y
+      }
+      const cosine = dot / (na * nb)
+      if (cosine >= minCosine) out.push({ a, b, cosine })
+    }
+  }
+  return out.sort((x, y) => y.cosine - x.cosine)
 }
 
 /** Fusionne deux pools (somme des comptes) — graine + serveur. */
@@ -315,8 +399,12 @@ export function mergePools(a: WordPool, b: WordPool): WordPool {
 }
 
 /**
- * Pool de départ (amorçage à froid), TOUJOURS disponible côté client : mots-clés
- * des SEED_RULES (poids fort) + `hint` et `label` des BUDGET_LINES (poids faible).
+ * Pool de départ (amorçage à froid), TOUJOURS disponible côté client : UNIQUEMENT les
+ * mots-clés des SEED_RULES (noms de FOURNISSEURS spécifiques : booking, mazars, adyen…).
+ * On n'amorce PLUS le pull avec le `hint`/`label` des BUDGET_LINES : ce sont les intitulés
+ * des imputations, et laisser le libellé « Gaz » injecter « gaz » dans le nuage ferait
+ * imputer par le NOM de la ligne au lieu de l'ÉDUCATION (contexte réel appris). Les
+ * hint/label restent utilisés pour la RECHERCHE du modal (CodePicker), pas l'attribution.
  * Fusionné avec le pool serveur au chargement.
  */
 export function seedPool(): WordPool {
@@ -327,9 +415,5 @@ export function seedPool(): WordPool {
   }
   for (const r of SEED_RULES)
     for (const kw of r.keywords) add(r.code, kw, SEED_WEIGHT)
-  for (const l of BUDGET_LINES) {
-    if (l.hint) add(l.code, l.hint, HINT_WEIGHT)
-    add(l.code, l.label, HINT_WEIGHT)
-  }
   return { perCode }
 }

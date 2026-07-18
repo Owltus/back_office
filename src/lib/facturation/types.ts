@@ -88,8 +88,17 @@ export interface Detection {
   confidence: number
   learned: boolean
   hints: InvoiceHints
-  scores?: { code: string; proba: number; words: string[] }[]
+  scores?: {
+    code: string
+    proba: number
+    words: string[]
+    /** Origine de la suggestion : prior émetteur, mots du document, ou règle. */
+    source?: 'issuer' | 'words' | 'rule'
+  }[]
   abstained?: boolean
+  /** Vrai quand l'imputation vient du SEUL prior émetteur (mots muets) : proposée par
+   *  habitude, À VÉRIFIER par un humain (badge). Alimente la future file de revue. */
+  fromIssuerOnly?: boolean
 }
 
 /** Données apposées dans le cartouche du tampon. Plusieurs imputations possibles
@@ -122,6 +131,9 @@ export interface InvoiceRecord {
   stampScale: number
   codes: string[]
   supplierName: string
+  /** Vrai une fois le PDF tamponné + téléchargé (indépendant de l'apprentissage :
+   *  reste vrai même si l'utilisateur décoche « mémoriser »). Sert au marqueur « validé ». */
+  stamped?: boolean
   /** Vrai une fois la facture apprise (au tamponnage) — garde anti-double-comptage. */
   learned: boolean
   /** Vrai dès que l'utilisateur a modifié l'imputation/émetteur/date à la main — la

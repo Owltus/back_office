@@ -470,24 +470,12 @@ export const SEED_RULES: SupplierRule[] = [
     code: 'FACOMMENCo',
     keywords: ['adyen', 'amex', 'ancv'],
   },
-  {
-    id: 'electricite',
-    supplier: 'Électricité',
-    code: 'FMELECoooo',
-    keywords: ['electricite'],
-  },
-  {
-    id: 'gaz',
-    supplier: 'Gaz',
-    code: 'FMGAZooooo',
-    keywords: ['gaz'],
-  },
-  {
-    id: 'chauffage',
-    supplier: 'Chauffage urbain',
-    code: 'FMCHAUFFUo',
-    keywords: ['chauffage urbain'],
-  },
+  // Pas de règle mot-clé GÉNÉRIQUE recoupant le LIBELLÉ de l'imputation : « electricite »,
+  // « gaz », « chauffage urbain », « alcool », « blanchissage »/« location linge »,
+  // « gardiennage » ont été retirés. Ces mots provoquent des attributions incohérentes
+  // (« gaz » frigorigène de clim → conso gaz de ville) : on impute par le NOM de la ligne
+  // au lieu de l'ÉDUCATION du pull de mots. Ces cas sont laissés au contexte appris d'une
+  // vraie facture. Ne restent ici que des noms de FOURNISSEURS spécifiques (marques).
   {
     id: 'telecom',
     supplier: 'Téléphonie / Internet',
@@ -516,19 +504,7 @@ export const SEED_RULES: SupplierRule[] = [
     id: 'prestataires',
     supplier: 'Sous-traitance / Prestataires',
     code: 'FESSTDIVoo',
-    keywords: ['loomis', 'gardiennage'],
-  },
-  {
-    id: 'alcool',
-    supplier: 'Alcool',
-    code: 'REBEALCOOL',
-    keywords: ['alcool'],
-  },
-  {
-    id: 'linge',
-    supplier: 'Linge / Blanchissage',
-    code: 'HELINGEooo',
-    keywords: ['blanchissage', 'location linge'],
+    keywords: ['loomis'],
   },
 ]
 
