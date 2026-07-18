@@ -27,6 +27,7 @@ import { Route as PdjIndexRouteImport } from './routes/pdj/index'
 import { Route as ParkingIndexRouteImport } from './routes/parking/index'
 import { Route as FacturationIndexRouteImport } from './routes/facturation/index'
 import { Route as CaisseIndexRouteImport } from './routes/caisse/index'
+import { Route as FacturationRevueRouteImport } from './routes/facturation/revue'
 import { Route as FacturationGalaxieRouteImport } from './routes/facturation/galaxie'
 import { Route as RepjourAnalytiqueIndexRouteImport } from './routes/repjour/analytique.index'
 import { Route as RaproAnalytiqueIndexRouteImport } from './routes/rapro/analytique.index'
@@ -129,6 +130,11 @@ const CaisseIndexRoute = CaisseIndexRouteImport.update({
   path: '/',
   getParentRoute: () => CaisseRoute,
 } as any)
+const FacturationRevueRoute = FacturationRevueRouteImport.update({
+  id: '/facturation/revue',
+  path: '/facturation/revue',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const FacturationGalaxieRoute = FacturationGalaxieRouteImport.update({
   id: '/facturation/galaxie',
   path: '/facturation/galaxie',
@@ -203,6 +209,7 @@ export interface FileRoutesByFullPath {
   '/rapro': typeof RaproRouteWithChildren
   '/repjour': typeof RepjourRouteWithChildren
   '/facturation/galaxie': typeof FacturationGalaxieRoute
+  '/facturation/revue': typeof FacturationRevueRoute
   '/caisse/': typeof CaisseIndexRoute
   '/facturation/': typeof FacturationIndexRoute
   '/parking/': typeof ParkingIndexRoute
@@ -229,6 +236,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/profil': typeof ProfilRoute
   '/facturation/galaxie': typeof FacturationGalaxieRoute
+  '/facturation/revue': typeof FacturationRevueRoute
   '/caisse': typeof CaisseIndexRoute
   '/facturation': typeof FacturationIndexRoute
   '/parking': typeof ParkingIndexRoute
@@ -261,6 +269,7 @@ export interface FileRoutesById {
   '/rapro': typeof RaproRouteWithChildren
   '/repjour': typeof RepjourRouteWithChildren
   '/facturation/galaxie': typeof FacturationGalaxieRoute
+  '/facturation/revue': typeof FacturationRevueRoute
   '/caisse/': typeof CaisseIndexRoute
   '/facturation/': typeof FacturationIndexRoute
   '/parking/': typeof ParkingIndexRoute
@@ -294,6 +303,7 @@ export interface FileRouteTypes {
     | '/rapro'
     | '/repjour'
     | '/facturation/galaxie'
+    | '/facturation/revue'
     | '/caisse/'
     | '/facturation/'
     | '/parking/'
@@ -320,6 +330,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/profil'
     | '/facturation/galaxie'
+    | '/facturation/revue'
     | '/caisse'
     | '/facturation'
     | '/parking'
@@ -351,6 +362,7 @@ export interface FileRouteTypes {
     | '/rapro'
     | '/repjour'
     | '/facturation/galaxie'
+    | '/facturation/revue'
     | '/caisse/'
     | '/facturation/'
     | '/parking/'
@@ -383,6 +395,7 @@ export interface RootRouteChildren {
   RaproRoute: typeof RaproRouteWithChildren
   RepjourRoute: typeof RepjourRouteWithChildren
   FacturationGalaxieRoute: typeof FacturationGalaxieRoute
+  FacturationRevueRoute: typeof FacturationRevueRoute
   FacturationIndexRoute: typeof FacturationIndexRoute
 }
 
@@ -513,6 +526,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/caisse/'
       preLoaderRoute: typeof CaisseIndexRouteImport
       parentRoute: typeof CaisseRoute
+    }
+    '/facturation/revue': {
+      id: '/facturation/revue'
+      path: '/facturation/revue'
+      fullPath: '/facturation/revue'
+      preLoaderRoute: typeof FacturationRevueRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/facturation/galaxie': {
       id: '/facturation/galaxie'
@@ -681,6 +701,7 @@ const rootRouteChildren: RootRouteChildren = {
   RaproRoute: RaproRouteWithChildren,
   RepjourRoute: RepjourRouteWithChildren,
   FacturationGalaxieRoute: FacturationGalaxieRoute,
+  FacturationRevueRoute: FacturationRevueRoute,
   FacturationIndexRoute: FacturationIndexRoute,
 }
 export const routeTree = rootRouteImport

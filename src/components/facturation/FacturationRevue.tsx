@@ -1,0 +1,225 @@
+import { useMemo, useState } from 'react'
+import { Link } from '@tanstack/react-router'
+import {
+  ArrowLeft,
+  Ban,
+  CheckCircle2,
+  Loader2,
+  RotateCcw,
+  Sparkles,
+} from 'lucide-react'
+
+import { PageContainer } from '#/components/shared/PageContainer.tsx'
+import { Button } from '#/components/ui/button.tsx'
+import { useFacturationModel } from '#/components/facturation/useFacturationModel.ts'
+import { useFacturationCuration } from '#/components/facturation/useFacturationCuration.ts'
+import { reviewQueue, type Anomaly } from '#/lib/facturation/anomalies.ts'
+import { budgetLabel } from '#/lib/facturation/constants.ts'
+
+/*
+ * Page pleine « Revue des anomalies » : file de curation calculée À LA VOLÉE depuis les
+ * modèles appris en cache (aucune table dédiée). Le système DÉTECTE et PROPOSE ; l'utilisateur
+ * VALIDE (human-in-the-loop). Deux familles :
+ *   - outlier émetteur→code : une imputation marginale chez un émetteur mûr (probable erreur)
+ *     → « désapprendre » (retire la confirmation) ou « bannir » (denylist définitive) ;
+ *   - codes confusables : deux nuages qui se ressemblent trop → inspection dans la galaxie.
+ * Admin-only (garde à la route). Lecture seule du modèle sauf actions explicites.
+ */
+
+const pct = (x: number): string => `${Math.round(x * 100)} %`
+
+function OutlierCard({
+  data,
+  issuerName,
+  busy,
+  onUnlearn,
+  onBan,
+}: {
+  data: Extract<Anomaly, { kind: 'issuer-outlier' }>['data']
+  issuerName: string
+  busy: 'unlearn' | 'ban' | null
+  onUnlearn: () => void
+  onBan: () => void
+}) {
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
+      <div className="flex flex-col gap-1">
+        <span className="text-[10px] tracking-[0.2em] text-muted-foreground uppercase">
+          Imputation marginale
+        </span>
+        <p className="text-sm text-foreground">
+          <span className="font-semibold">{issuerName}</span> a été imputé{' '}
+          <span className="font-semibold">{budgetLabel(data.code)}</span> une
+          seule fois ({pct(data.share)}), alors qu'il va d'habitude sur{' '}
+          <span className="font-semibold">{budgetLabel(data.dominant)}</span>.
+        </p>
+        <p className="font-mono text-[11px] text-muted-foreground">
+          {data.code} · {data.count} confirmation · dominant {data.dominant}
+        </p>
+      </div>
+      <div className="flex gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onUnlearn}
+          disabled={busy !== null}
+        >
+          {busy === 'unlearn' ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <RotateCcw className="size-4" />
+          )}
+          Désapprendre
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onBan}
+          disabled={busy !== null}
+          className="text-destructive hover:text-destructive"
+        >
+          {busy === 'ban' ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Ban className="size-4" />
+          )}
+          Bannir ce couple
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+function ConfusableCard({
+  data,
+}: {
+  data: Extract<Anomaly, { kind: 'confusable-codes' }>['data']
+}) {
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
+      <div className="flex flex-col gap-1">
+        <span className="text-[10px] tracking-[0.2em] text-muted-foreground uppercase">
+          Nuages ressemblants
+        </span>
+        <p className="text-sm text-foreground">
+          <span className="font-semibold">{budgetLabel(data.a)}</span> et{' '}
+          <span className="font-semibold">{budgetLabel(data.b)}</span> partagent{' '}
+          {pct(data.cosine)} de vocabulaire — risque de confusion à
+          l'imputation.
+        </p>
+        <p className="font-mono text-[11px] text-muted-foreground">
+          {data.a} · {data.b}
+        </p>
+      </div>
+      <Button asChild variant="outline" size="sm" className="w-fit">
+        <Link to="/facturation/galaxie">
+          <Sparkles className="size-4" />
+          Inspecter dans la galaxie
+        </Link>
+      </Button>
+    </div>
+  )
+}
+
+export function FacturationRevue() {
+  const { serverPool, issuers, issuerCodes } = useFacturationModel()
+  const { banIssuerCode, unlearnIssuerCode } = useFacturationCuration()
+
+  const issuerName = useMemo(() => {
+    const m = new Map(issuers.map((i) => [i.name, i.display]))
+    return (key: string): string => m.get(key) ?? key
+  }, [issuers])
+
+  const anomalies = useMemo(
+    () => reviewQueue(serverPool, issuerCodes),
+    [serverPool, issuerCodes],
+  )
+
+  // État par carte : action en cours, ou erreur d'action. Clé = identité de l'anomalie.
+  const [busy, setBusy] = useState<Record<string, 'unlearn' | 'ban'>>({})
+  const [errors, setErrors] = useState<Record<string, boolean>>({})
+
+  async function run(
+    id: string,
+    kind: 'unlearn' | 'ban',
+    fn: () => Promise<void>,
+  ) {
+    setBusy((b) => ({ ...b, [id]: kind }))
+    setErrors((e) => ({ ...e, [id]: false }))
+    try {
+      await fn()
+    } catch {
+      setErrors((e) => ({ ...e, [id]: true }))
+    } finally {
+      setBusy((b) => {
+        const { [id]: _drop, ...rest } = b
+        return rest
+      })
+    }
+  }
+
+  return (
+    <PageContainer fillHeight className="gap-4">
+      <div className="flex shrink-0 flex-col gap-1">
+        <Link
+          to="/facturation"
+          className="inline-flex w-fit items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ArrowLeft className="size-3.5" />
+          Retour à l'atelier
+        </Link>
+        <h1 className="text-lg font-bold text-foreground">
+          Revue des anomalies
+        </h1>
+        <p className="text-xs text-muted-foreground tabular-nums">
+          {anomalies.length === 0
+            ? 'Aucune anomalie détectée'
+            : `${anomalies.length} cas à examiner`}
+        </p>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {anomalies.length === 0 ? (
+          <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-sm text-muted-foreground">
+            <CheckCircle2 className="size-8 text-emerald-500/70" />
+            Le modèle appris est cohérent — rien à corriger pour l'instant.
+          </div>
+        ) : (
+          <div className="grid gap-3 md:grid-cols-2">
+            {anomalies.map((a) => {
+              if (a.kind === 'issuer-outlier') {
+                const id = `outlier:${a.data.issuerKey}:${a.data.code}`
+                return (
+                  <div key={id} className="flex flex-col gap-1">
+                    <OutlierCard
+                      data={a.data}
+                      issuerName={issuerName(a.data.issuerKey)}
+                      busy={busy[id] ?? null}
+                      onUnlearn={() =>
+                        run(id, 'unlearn', () =>
+                          unlearnIssuerCode(a.data.issuerKey, a.data.code),
+                        )
+                      }
+                      onBan={() =>
+                        run(id, 'ban', () =>
+                          banIssuerCode(a.data.issuerKey, a.data.code),
+                        )
+                      }
+                    />
+                    {errors[id] && (
+                      <p className="px-1 text-[11px] text-destructive">
+                        Action impossible (droits ou base indisponibles).
+                      </p>
+                    )}
+                  </div>
+                )
+              }
+              const id = `confusable:${a.data.a}:${a.data.b}`
+              return <ConfusableCard key={id} data={a.data} />
+            })}
+          </div>
+        )}
+      </div>
+    </PageContainer>
+  )
+}
