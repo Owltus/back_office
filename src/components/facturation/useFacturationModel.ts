@@ -5,11 +5,13 @@ import {
   fetchIssuerCodes,
   fetchIssuerDenylist,
   fetchIssuers,
+  fetchJournal,
 } from '#/lib/facturation/cloudService.ts'
 import type { WordPool } from '#/lib/facturation/wordpool.ts'
 import type { IssuerCodes } from '#/lib/facturation/issuerCodes.ts'
 import type { IssuerDenylist } from '#/lib/facturation/issuerDenylist.ts'
 import type { Issuer } from '#/lib/facturation/issuers.ts'
+import type { JournalEntry } from '#/lib/facturation/types.ts'
 
 /**
  * Lectures Supabase de la facturation, en cache (nuages de mots appris + dictionnaire
@@ -23,6 +25,7 @@ export function useFacturationModel(): {
   issuers: Issuer[]
   issuerCodes: IssuerCodes
   issuerDenylist: IssuerDenylist
+  journal: { entries: JournalEntry[] }
 } {
   const { data: pool } = useQuery({
     queryKey: ['facturation', 'clouds'],
@@ -44,10 +47,16 @@ export function useFacturationModel(): {
     queryFn: fetchIssuerDenylist,
     retry: false,
   })
+  const { data: journal } = useQuery({
+    queryKey: ['facturation', 'journal'],
+    queryFn: fetchJournal,
+    retry: false,
+  })
   return {
     serverPool: pool ?? { perCode: {} },
     issuers: issuers ?? [],
     issuerCodes: issuerCodes ?? { perIssuer: {} },
     issuerDenylist: issuerDenylist ?? { perIssuer: {} },
+    journal: journal ?? { entries: [] },
   }
 }

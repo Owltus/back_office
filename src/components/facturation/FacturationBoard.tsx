@@ -40,6 +40,7 @@ import {
   deniedCodes,
   type IssuerDenylist,
 } from '#/lib/facturation/issuerDenylist.ts'
+import { hashDocument } from '#/lib/facturation/hash.ts'
 import { reviewQueue } from '#/lib/facturation/anomalies.ts'
 import { stampDataOf } from '#/lib/facturation/stampLayout.ts'
 import {
@@ -110,11 +111,15 @@ async function processInvoice(
   issuers: Issuer[],
   issuerCodes: IssuerCodes,
   issuerDenylist: IssuerDenylist,
+  knownHashes: Set<string>,
 ) {
   try {
     // pdf.js (+ Tesseract au besoin) chargés seulement maintenant.
     const { extractPdf } = await import('#/lib/facturation/extract.ts')
     const res = await extractPdf(record.file)
+    // Empreinte du document (natif → texte, OCR → octets) : identifie le PDF pour la détection
+    // de doublon (déjà appris ?) et le journal d'apprentissage.
+    const hash = await hashDocument(res.method, res.text, record.file)
     // Pré-remplissage de l'émetteur, par priorité : émetteur DÉJÀ appris présent
     // dans le texte > mot-clé d'une règle reconnue > vide (jamais deviné). Résolu AVANT
     // la détection pour en dériver le prior émetteur (filtre fort) et sa denylist.
@@ -133,6 +138,8 @@ async function processInvoice(
       detection: d,
       previews: res.previews,
       codes: d.codes,
+      hash,
+      duplicate: knownHashes.has(hash),
       supplierName:
         known?.display ?? (d.supplier ? (d.matchedKeyword ?? '') : ''),
       invoiceDate: d.hints.date ?? '',
@@ -178,9 +185,15 @@ export function FacturationBoard() {
 
   // Lectures Supabase (nuages appris + émetteurs), en cache et dégradation gracieuse
   // (voir useFacturationModel). Le pool de scoring fusionne la graine avec l'appris.
-  const { serverPool, issuers, issuerCodes, issuerDenylist } =
+  const { serverPool, issuers, issuerCodes, issuerDenylist, journal } =
     useFacturationModel()
   const pool = useMemo(() => mergePools(seedPool(), serverPool), [serverPool])
+  // Hash déjà présents au journal → détection de doublon au dépôt. Recalculé quand le journal
+  // change ; le Set est passé à processInvoice (fonction hors composant, ne lit pas le cache).
+  const knownHashes = useMemo(
+    () => new Set(journal.entries.map((e) => e.hash)),
+    [journal],
+  )
 
   // Maturité du modèle APPRIS (serveur) : quand la base est vide/pauvre, on prévient
   // et on tempère la confiance affichée (les suggestions restent indicatives).
@@ -235,7 +248,14 @@ export function FacturationBoard() {
     }))
     addInvoices(created)
     created.forEach((r) =>
-      processInvoice(r, pool, issuers, issuerCodes, issuerDenylist),
+      processInvoice(
+        r,
+        pool,
+        issuers,
+        issuerCodes,
+        issuerDenylist,
+        knownHashes,
+      ),
     )
   }
 

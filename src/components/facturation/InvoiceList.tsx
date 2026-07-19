@@ -75,6 +75,11 @@ export function InvoiceList({
               <div className="relative aspect-[3/4] w-full overflow-hidden rounded bg-muted">
                 <Thumb record={r} />
                 {r.stamped && <ValidatedStamp />}
+                {r.duplicate && !r.stamped && (
+                  <span className="absolute top-1 right-1 rounded bg-amber-500/90 px-1 text-[9px] font-bold tracking-wide text-white uppercase">
+                    Doublon
+                  </span>
+                )}
               </div>
               <span className="truncate text-xs font-medium text-foreground">
                 {r.fileName}

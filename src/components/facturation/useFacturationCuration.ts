@@ -4,6 +4,7 @@ import {
   addIssuerDeny,
   forgetCloudCode,
   forgetIssuerCode as forgetIssuerCodeApi,
+  forgetLearnedDoc,
   removeIssuerDeny,
 } from '#/lib/facturation/cloudService.ts'
 import {
@@ -16,6 +17,7 @@ import {
   type IssuerDenylist,
 } from '#/lib/facturation/issuerDenylist.ts'
 import type { WordPool } from '#/lib/facturation/wordpool.ts'
+import type { JournalEntry } from '#/lib/facturation/types.ts'
 
 /*
  * Actions de CURATION du modèle facturation, partagées par l'atelier (InvoicePanel) et le
@@ -106,5 +108,27 @@ export function useFacturationCuration() {
     )
   }
 
-  return { banIssuerCode, forgetIssuerCode, resetCodeCloud, unbanIssuerCode }
+  /** Désapprend EXACTEMENT une facture du journal (par hash) : le serveur rejoue ses deltas
+   *  figés en soustraction puis retire l'entrée. Pas besoin de re-déposer le PDF. */
+  async function unlearnDocByHash(hash: string): Promise<void> {
+    await forgetLearnedDoc(hash)
+    queryClient.setQueryData<{ entries: JournalEntry[] }>(
+      ['facturation', 'journal'],
+      (old) => ({
+        entries: (old?.entries ?? []).filter((e) => e.hash !== hash),
+      }),
+    )
+    // Le serveur a décrémenté les compteurs partagés → resynchroniser.
+    queryClient.invalidateQueries({ queryKey: ['facturation', 'clouds'] })
+    queryClient.invalidateQueries({ queryKey: ['facturation', 'issuers'] })
+    queryClient.invalidateQueries({ queryKey: ['facturation', 'issuerCodes'] })
+  }
+
+  return {
+    banIssuerCode,
+    forgetIssuerCode,
+    resetCodeCloud,
+    unbanIssuerCode,
+    unlearnDocByHash,
+  }
 }

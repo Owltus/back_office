@@ -31,9 +31,11 @@ import { budgetLabel } from '#/lib/facturation/constants.ts'
 import { canLearn } from '#/lib/facturation/detect.ts'
 import { issuerKey } from '#/lib/facturation/text.ts'
 import {
+  deleteLearnedDoc,
   learnClouds,
   learnIssuer,
   learnIssuerCodes,
+  recordLearnedDoc,
   unlearnClouds,
   unlearnIssuer,
   unlearnIssuerCodes,
@@ -49,7 +51,7 @@ import {
 } from '#/lib/facturation/wordpool.ts'
 import { type Issuer } from '#/lib/facturation/issuers.ts'
 import { stampDataOf } from '#/lib/facturation/stampLayout.ts'
-import type { InvoiceRecord } from '#/lib/facturation/types.ts'
+import type { InvoiceRecord, JournalEntry } from '#/lib/facturation/types.ts'
 import { cn } from '#/lib/utils.ts'
 
 /*
@@ -289,6 +291,18 @@ export function InvoicePanel({
   const { banIssuerCode } = useFacturationCuration()
   const { confirm, confirmDialog } = useConfirm()
 
+  // Présence LIVE d'un hash au journal (cache Query), à l'instant T — plus fiable que le flag
+  // `record.duplicate` figé au dépôt : couvre le cas de deux dépôts du même PDF dans la séance
+  // (le 2e voit l'entrée écrite par le tampon du 1er).
+  const journalHasHash = (h?: string): boolean =>
+    !!h &&
+    (
+      queryClient.getQueryData<{ entries: JournalEntry[] }>([
+        'facturation',
+        'journal',
+      ])?.entries ?? []
+    ).some((e) => e.hash === h)
+
   if (record.status === 'processing') {
     return (
       <p className="text-sm text-muted-foreground">
@@ -326,7 +340,15 @@ export function InvoicePanel({
       // Apprentissage au tamponnage (vérité terrain = record.codes après édition
       // humaine), une seule fois. Réversible via « Annuler l'apprentissage ».
       // Best-effort : un échec RPC ne bloque pas le PDF déjà tamponné/téléchargé.
-      if (!record.learned && record.codes.length > 0) {
+      // Garde anti-DOUBLON (D4) : un PDF déjà appris (présent au journal) ne réapprend PAS —
+      // le tampon + téléchargement se font quand même, mais sans ré-incrémenter les nuages.
+      // On teste la présence LIVE au journal (pas le flag figé au dépôt) pour couvrir deux
+      // dépôts du même PDF dans la séance : le 2e voit l'entrée écrite par le 1er.
+      if (
+        !record.learned &&
+        record.codes.length > 0 &&
+        !journalHasHash(record.hash)
+      ) {
         // Le pull de mots appris = UNIQUEMENT le contenu de la facture. Le nom d'émetteur
         // n'est PLUS injecté dans les nuages : son signal vit dans le modèle séparé
         // émetteur→codes (learnIssuerCodes ci-dessous), ce qui garde les nuages propres.
@@ -387,6 +409,28 @@ export function InvoicePanel({
           // learned + INSTANTANÉ posés en DERNIER, une fois l'apprentissage réel connu :
           // un échec émetteur laisse learnedIssuer=null → l'undo ne touchera pas l'émetteur.
           onPatch({ learned: true, learnedCodes, learnedIssuer })
+          // JOURNAL : trace persistante de CE document (hash → instantané figé). Permet la
+          // détection de doublon et le désapprentissage EXACT sans re-déposer le PDF.
+          // Best-effort : un échec (table absente, droits) ne bloque pas le PDF déjà tamponné.
+          if (record.hash) {
+            const entry: JournalEntry = {
+              hash: record.hash,
+              issuerKey: learnedIssuer,
+              codes: learnedCodes,
+              deltas,
+              method: record.method ?? 'native',
+              learnedAt: record.processedDate,
+            }
+            try {
+              await recordLearnedDoc(entry)
+              queryClient.setQueryData<{ entries: JournalEntry[] }>(
+                ['facturation', 'journal'],
+                (old) => ({ entries: [...(old?.entries ?? []), entry] }),
+              )
+            } catch {
+              // Journal non écrit (best-effort) ; l'apprentissage reste fait.
+            }
+          }
         } catch {
           // Même les nuages ont échoué → rien appris, learned reste false (pas d'undo
           // asymétrique). On SIGNALE (rôle, table, réseau) au lieu du silence.
@@ -429,6 +473,18 @@ export function InvoicePanel({
     setUndoing(true)
     setLearnWarning(false)
     try {
+      // Si cette facture (journalisée) a DÉJÀ été désapprise ailleurs (modal « Factures
+      // apprises » → forgetLearnedDoc) → son hash a disparu du journal : les compteurs sont
+      // déjà décrémentés. On ne re-décrémente PAS (sinon on éroderait d'autres factures) : on
+      // se contente de refermer l'état local.
+      if (record.hash && !journalHasHash(record.hash)) {
+        onPatch({
+          learned: false,
+          learnedCodes: undefined,
+          learnedIssuer: null,
+        })
+        return
+      }
       const codes = record.learnedCodes ?? record.codes
       const issuerName =
         record.learnedIssuer !== undefined
@@ -437,6 +493,23 @@ export function InvoicePanel({
             ? issuerKey(record.supplierName)
             : null
       await unlearnInvoiceCore(codes, issuerName)
+      // Retirer l'entrée du journal SANS rejeu (le décrément vient d'être fait ci-dessus) —
+      // sinon un désapprentissage par hash ultérieur re-soustrairait. Best-effort.
+      if (record.hash) {
+        try {
+          await deleteLearnedDoc(record.hash)
+          queryClient.setQueryData<{ entries: JournalEntry[] }>(
+            ['facturation', 'journal'],
+            (old) => ({
+              entries: (old?.entries ?? []).filter(
+                (e) => e.hash !== record.hash,
+              ),
+            }),
+          )
+        } catch {
+          // Entrée non retirée (best-effort) ; resync à la prochaine lecture.
+        }
+      }
       onPatch({ learned: false, learnedCodes: undefined, learnedIssuer: null })
     } catch {
       setLearnWarning(true)
@@ -655,9 +728,20 @@ export function InvoicePanel({
           </Button>
         )}
 
+        {/* Doublon : ce PDF a déjà été appris (présent au journal). Non bloquant — on peut
+            re-tamponner pour ré-obtenir le PDF, mais l'apprentissage sera SAUTÉ (anti double
+            comptage, cf. handleStamp). */}
+        {record.duplicate && !record.learned && (
+          <p className="flex items-start gap-2 rounded-lg bg-amber-500/10 px-3 py-2 text-[11px] text-amber-700">
+            <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+            Facture déjà apprise. La re-tamponner télécharge le PDF mais ne
+            réapprend pas (évite le double comptage).
+          </p>
+        )}
+
         {/* Avertissements AVANT le tampon : rendre visible que « tamponner = apprendre » et
             signaler quand l'apprentissage sera partiel ou bruité (facteur humain). */}
-        {!record.learned && canStamp && (
+        {!record.learned && canStamp && !record.duplicate && (
           <div className="flex flex-col gap-1.5">
             {canBan ? (
               <p className="px-1 text-[11px] text-muted-foreground">
@@ -697,10 +781,13 @@ export function InvoicePanel({
         </Button>
 
         {/* Correction d'une erreur PASSÉE (facture DÉJÀ tamponnée puis RE-DÉPOSÉE) : action
-            OPT-IN, masquée par défaut pour ne pas s'afficher sur une facture neuve à tamponner.
-            On règle l'émetteur + les codes fautifs, puis on désapprend, sans re-tamponner. */}
+            OPT-IN, masquée par défaut. REPLI seulement pour une facture apprise AVANT le journal
+            (sans entrée = non `duplicate`) : une facture journalisée se désapprend exactement
+            depuis « Contrôle des imputations → Factures apprises ». On règle l'émetteur + les
+            codes fautifs, puis on désapprend, sans re-tamponner. */}
         {!record.learned &&
           canStamp &&
+          !record.duplicate &&
           (replayDone ? (
             <p className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
               <RotateCcw className="size-3.5 shrink-0" />

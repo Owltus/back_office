@@ -36,7 +36,7 @@ import { budgetLabel } from '#/lib/facturation/constants.ts'
  * Aucun SQL requis côté utilisateur. Ouvert depuis l'atelier. Lecture seule sauf actions.
  */
 
-type Kind = 'forget' | 'ban' | 'unban' | 'reset'
+type Kind = 'forget' | 'ban' | 'unban' | 'reset' | 'unlearn-doc'
 
 const pct = (x: number): string => `${Math.round(x * 100)} %`
 
@@ -259,6 +259,49 @@ function CloudRow({
   )
 }
 
+/* Ligne compacte : une FACTURE apprise (journal), identifiée par son empreinte, avec
+ * « Désapprendre » (rejeu EXACT des deltas figés, sans re-déposer le PDF). */
+function DocRow({
+  date,
+  hash,
+  codes,
+  busy,
+  onForget,
+}: {
+  date: string
+  hash: string
+  codes: string[]
+  busy: boolean
+  onForget: () => void
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm text-foreground">
+          {codes.map((c) => budgetLabel(c)).join(', ') || '—'}
+        </p>
+        <p className="font-mono text-[11px] text-muted-foreground">
+          {date} · {hash.slice(0, 8)}
+        </p>
+      </div>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={onForget}
+        disabled={busy}
+        className="shrink-0 text-muted-foreground hover:text-destructive"
+      >
+        {busy ? (
+          <Loader2 className="size-4 animate-spin" />
+        ) : (
+          <RotateCcw className="size-4" />
+        )}
+        Désapprendre
+      </Button>
+    </div>
+  )
+}
+
 export function RevueDialog({
   open,
   onOpenChange,
@@ -272,10 +315,15 @@ export function RevueDialog({
   /** Nom lisible de l'émetteur courant (affiché en sous-titre). */
   issuerLabel: string
 }) {
-  const { serverPool, issuers, issuerCodes, issuerDenylist } =
+  const { serverPool, issuers, issuerCodes, issuerDenylist, journal } =
     useFacturationModel()
-  const { banIssuerCode, forgetIssuerCode, resetCodeCloud, unbanIssuerCode } =
-    useFacturationCuration()
+  const {
+    banIssuerCode,
+    forgetIssuerCode,
+    resetCodeCloud,
+    unbanIssuerCode,
+    unlearnDocByHash,
+  } = useFacturationCuration()
   const { confirm, confirmDialog } = useConfirm()
 
   const hasIssuer = issuerKey.length > 0
@@ -370,12 +418,40 @@ export function RevueDialog({
     return out.sort((a, b) => b.words - a.words || a.code.localeCompare(b.code))
   }, [serverPool, issuerCodes])
 
+  // Factures apprises de CET émetteur (journal), plus récentes d'abord, bornées à l'affichage.
+  const MAX_DOCS = 30
+  const docs = useMemo(() => {
+    return journal.entries
+      .filter((e) => e.issuerKey === issuerKey)
+      .sort((a, b) => b.learnedAt.localeCompare(a.learnedAt))
+      .slice(0, MAX_DOCS)
+  }, [journal, issuerKey])
+  const docsTotal = useMemo(
+    () => journal.entries.filter((e) => e.issuerKey === issuerKey).length,
+    [journal, issuerKey],
+  )
+
+  // Factures apprises SANS émetteur (issuerKey null) : hors contexte, listées à part pour rester
+  // désapprenables EXACTEMENT (sinon invisibles dans tout modal scopé émetteur).
+  const orphanDocs = useMemo(
+    () =>
+      journal.entries
+        .filter((e) => e.issuerKey === null)
+        .sort((a, b) => b.learnedAt.localeCompare(a.learnedAt))
+        .slice(0, MAX_DOCS),
+    [journal],
+  )
+
   const nothing =
     anomalies.length === 0 &&
     assocs.length === 0 &&
     clouds.length === 0 &&
-    denies.length === 0
-  const allEmpty = (!hasIssuer || nothing) && orphanClouds.length === 0
+    denies.length === 0 &&
+    docs.length === 0
+  const allEmpty =
+    (!hasIssuer || nothing) &&
+    orphanClouds.length === 0 &&
+    orphanDocs.length === 0
 
   // État par carte : action en cours, ou erreur d'action. Clé = identité de la ligne.
   const [busy, setBusy] = useState<Record<string, Kind>>({})
@@ -510,6 +586,62 @@ export function RevueDialog({
                     </section>
                   )}
 
+                  {/* Section Factures apprises (journal) : désapprentissage EXACT par hash. */}
+                  {docs.length > 0 && (
+                    <section className="flex flex-col gap-2">
+                      <h2 className="text-sm font-semibold text-foreground">
+                        Factures apprises
+                      </h2>
+                      <p className="-mt-1 text-xs text-muted-foreground">
+                        Chaque facture tamponnée pour cet émetteur. «
+                        Désapprendre » retire exactement ce qu'elle avait appris
+                        — sans re-déposer le PDF.
+                        {docsTotal > docs.length
+                          ? ` (${docs.length} sur ${docsTotal} affichées)`
+                          : ''}
+                      </p>
+                      <div className="flex flex-col gap-2">
+                        {docs.map((e) => {
+                          const id = `doc:${e.hash}`
+                          return (
+                            <div key={id} className="flex flex-col gap-1">
+                              <DocRow
+                                date={e.learnedAt.slice(0, 10)}
+                                hash={e.hash}
+                                codes={e.codes}
+                                busy={busy[id] === 'unlearn-doc'}
+                                onForget={() =>
+                                  confirm({
+                                    title: 'Désapprendre cette facture ?',
+                                    description: (
+                                      <>
+                                        Retire EXACTEMENT ce que cette facture
+                                        avait appris (mots + émetteur). Précis
+                                        et sans risque pour les autres factures.
+                                      </>
+                                    ),
+                                    confirmLabel: 'Désapprendre',
+                                  }).then((ok) => {
+                                    if (ok)
+                                      run(id, 'unlearn-doc', () =>
+                                        unlearnDocByHash(e.hash),
+                                      )
+                                  })
+                                }
+                              />
+                              {errors[id] && (
+                                <p className="px-1 text-[11px] text-destructive">
+                                  Action impossible (droits ou base
+                                  indisponibles).
+                                </p>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </section>
+                  )}
+
                   {/* Section Associations apprises (émetteur→code) : liste complète. */}
                   {assocs.length > 0 && (
                     <section className="flex flex-col gap-2">
@@ -630,6 +762,58 @@ export function RevueDialog({
                     </section>
                   )}
                 </>
+              )}
+
+              {/* Section Factures sans émetteur : entrées de journal à émetteur null, listées
+                  hors contexte pour rester désapprenables EXACTEMENT (sinon inatteignables). */}
+              {orphanDocs.length > 0 && (
+                <section className="flex flex-col gap-2">
+                  <h2 className="text-sm font-semibold text-foreground">
+                    Factures sans émetteur
+                  </h2>
+                  <p className="-mt-1 text-xs text-muted-foreground">
+                    Factures apprises sans nom d'émetteur. « Désapprendre »
+                    retire exactement ce qu'elles avaient appris.
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    {orphanDocs.map((e) => {
+                      const id = `doc:${e.hash}`
+                      return (
+                        <div key={id} className="flex flex-col gap-1">
+                          <DocRow
+                            date={e.learnedAt.slice(0, 10)}
+                            hash={e.hash}
+                            codes={e.codes}
+                            busy={busy[id] === 'unlearn-doc'}
+                            onForget={() =>
+                              confirm({
+                                title: 'Désapprendre cette facture ?',
+                                description: (
+                                  <>
+                                    Retire EXACTEMENT ce que cette facture avait
+                                    appris. Précis et sans risque pour les
+                                    autres factures.
+                                  </>
+                                ),
+                                confirmLabel: 'Désapprendre',
+                              }).then((ok) => {
+                                if (ok)
+                                  run(id, 'unlearn-doc', () =>
+                                    unlearnDocByHash(e.hash),
+                                  )
+                              })
+                            }
+                          />
+                          {errors[id] && (
+                            <p className="px-1 text-[11px] text-destructive">
+                              Action impossible (droits ou base indisponibles).
+                            </p>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </section>
               )}
 
               {/* Section Nuages orphelins : rattachés à aucun émetteur, listés hors contexte
