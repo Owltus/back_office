@@ -7,6 +7,7 @@ import { GalaxyChart } from '#/components/facturation/GalaxyChart.tsx'
 import { Starfield } from '#/components/facturation/Starfield.tsx'
 import { useFacturationModel } from '#/components/facturation/useFacturationModel.ts'
 import { buildGalaxy, type GalaxyNodeType } from '#/lib/facturation/galaxy.ts'
+import { visibleWords } from '#/lib/facturation/wordpool.ts'
 import { budgetLabel } from '#/lib/facturation/constants.ts'
 
 /*
@@ -24,24 +25,32 @@ const NEBULAE = [
 ]
 
 export function FacturationGalaxie() {
-  const { serverPool, issuers, issuerCodes } = useFacturationModel()
+  const { serverPool, issuers, issuerCodes, stoplist } = useFacturationModel()
   const { graph, counts } = useMemo(() => {
-    const g = buildGalaxy(serverPool, issuers, WORDS_PER_CODE, 2, issuerCodes)
+    const g = buildGalaxy(
+      serverPool,
+      issuers,
+      WORDS_PER_CODE,
+      2,
+      issuerCodes,
+      stoplist,
+    )
     const c: Record<GalaxyNodeType, number> = { issuer: 0, code: 0, word: 0 }
     for (const n of g.nodes) c[n.type]++
     return { graph: g, counts: c }
-  }, [serverPool, issuers, issuerCodes])
+  }, [serverPool, issuers, issuerCodes, stoplist])
   const empty = graph.nodes.length === 0
 
-  // Code sélectionné (clic sur une nébuleuse) → panneau latéral listant SES mots appris.
+  // Code sélectionné (clic sur une nébuleuse) → panneau latéral listant SES mots appris
+  // (parasites masqués via la même stoplist que le scoring → cohérence).
   const [selectedCode, setSelectedCode] = useState<string | null>(null)
   const selected = useMemo(() => {
     const cell = selectedCode ? serverPool.perCode[selectedCode] : undefined
     if (!selectedCode || !cell) return null
-    const words = Object.entries(cell).sort((a, b) => b[1] - a[1])
+    const words = visibleWords(cell, stoplist)
     const total = words.reduce((s, [, n]) => s + n, 0)
     return { code: selectedCode, words, total }
-  }, [selectedCode, serverPool])
+  }, [selectedCode, serverPool, stoplist])
 
   return (
     <PageContainer fillHeight>
