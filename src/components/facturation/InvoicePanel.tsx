@@ -454,13 +454,19 @@ export function InvoicePanel({
             size="icon"
             onClick={() => setRevueOpen(true)}
             aria-label="Revue et interdictions"
-            title="Revue des anomalies et interdictions"
-            className="relative -ml-px shrink-0 rounded-l-none"
+            title={
+              anomalyCount > 0
+                ? `${anomalyCount} anomalie${anomalyCount > 1 ? 's' : ''} à examiner`
+                : 'Revue des anomalies et interdictions'
+            }
+            className={cn(
+              '-ml-px shrink-0 rounded-l-none',
+              // Anomalie(s) en attente → bouton orange pour attirer l'œil.
+              anomalyCount > 0 &&
+                'border-amber-500 text-amber-600 hover:bg-amber-500/10 hover:text-amber-600',
+            )}
           >
             <Settings2 className="size-4" />
-            {anomalyCount > 0 && (
-              <span className="absolute -top-1 -right-1 size-2 rounded-full bg-amber-500 ring-2 ring-card" />
-            )}
           </Button>
         </div>
       </div>
