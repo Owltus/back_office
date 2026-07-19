@@ -182,8 +182,8 @@ export function FacturationBoard() {
   const model = useMemo(() => maturity(serverPool), [serverPool])
   const immature = model.level !== 'ok'
 
-  // Anomalies détectées à la volée (outliers émetteur, codes confusables) → badge de
-  // curation dans la GalaxyCard, résolution sur /facturation/revue.
+  // Anomalies détectées à la volée (outliers émetteur, codes confusables) → pastille sur
+  // le bouton engrenage de l'émetteur, résolution dans le modal de revue (InvoicePanel).
   const anomalyCount = useMemo(
     () => reviewQueue(serverPool, issuerCodes).length,
     [serverPool, issuerCodes],
@@ -377,7 +377,7 @@ export function FacturationBoard() {
         {/* COLONNE DROITE : galaxie (prévisualisation) au-dessus de l'imputation. */}
         <div className="flex min-h-0 w-full shrink-0 flex-col gap-4 lg:max-h-full lg:w-80">
           {/* La galaxie montre les données APPRISES (serveur), pas la graine. */}
-          <GalaxyCard pool={serverPool} anomalyCount={anomalyCount} />
+          <GalaxyCard pool={serverPool} />
           <aside className="flex min-h-0 flex-1 flex-col gap-4 rounded-xl border border-border bg-card p-4">
             <h2 className="shrink-0 text-sm font-semibold text-foreground">
               Imputation comptable
@@ -396,6 +396,7 @@ export function FacturationBoard() {
                 onPatch={(n) => patchInvoice(selected.id, n)}
                 immature={immature}
                 issuers={issuers}
+                anomalyCount={anomalyCount}
               />
             ) : (
               <EmptyImputation />

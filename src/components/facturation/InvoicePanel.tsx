@@ -6,6 +6,7 @@ import {
   ListPlus,
   Loader2,
   RotateCcw,
+  Settings2,
   Stamp,
   X,
 } from 'lucide-react'
@@ -16,6 +17,7 @@ import { Label } from '#/components/ui/label.tsx'
 import { Textarea } from '#/components/ui/textarea.tsx'
 import { CodePicker } from '#/components/facturation/CodePicker.tsx'
 import { IssuerCombobox } from '#/components/facturation/IssuerCombobox.tsx'
+import { RevueDialog } from '#/components/facturation/FacturationRevue.tsx'
 import { useFacturationCuration } from '#/components/facturation/useFacturationCuration.ts'
 import {
   confidenceTone,
@@ -193,10 +195,25 @@ function ImputationList({
 export function EmptyImputation() {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
-      {/* Émetteur : tout en haut (même charpente que le panneau actif). */}
+      {/* Émetteur : tout en haut (même charpente que le panneau actif : input group). */}
       <div className="flex shrink-0 flex-col gap-1.5">
         <Label>Émetteur</Label>
-        <Input disabled placeholder="Nom de l'émetteur (ex. Martin)" />
+        <div className="flex items-stretch">
+          <Input
+            disabled
+            placeholder="Nom de l'émetteur (ex. Martin)"
+            className="rounded-r-none"
+          />
+          <Button
+            variant="outline"
+            size="icon"
+            disabled
+            aria-label="Revue et interdictions"
+            className="-ml-px shrink-0 rounded-l-none"
+          >
+            <Settings2 className="size-4" />
+          </Button>
+        </div>
       </div>
 
       {/* Imputations : zone libre. */}
@@ -247,13 +264,16 @@ export function InvoicePanel({
   onPatch,
   immature = false,
   issuers = [],
+  anomalyCount = 0,
 }: {
   record: InvoiceRecord
   onPatch: (next: Partial<InvoiceRecord>) => void
   immature?: boolean
   issuers?: Issuer[]
+  anomalyCount?: number
 }) {
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [revueOpen, setRevueOpen] = useState(false)
   const [stamping, setStamping] = useState(false)
   const [stampError, setStampError] = useState<string | null>(null)
   const [learnWarning, setLearnWarning] = useState(false)
@@ -414,15 +434,35 @@ export function InvoicePanel({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
-      {/* Émetteur : tout en haut, combobox des émetteurs connus (saisie libre). */}
+      {/* Émetteur : combobox des émetteurs connus + bouton engrenage (revue / curation)
+          en input group. La pastille ambre signale des anomalies à examiner. */}
       <div className="flex shrink-0 flex-col gap-1.5">
         <Label>Émetteur</Label>
-        <IssuerCombobox
-          value={record.supplierName}
-          onChange={(v) => onPatch({ supplierName: v, userEdited: true })}
-          issuers={issuers}
-          placeholder="Nom de l'émetteur (ex. Martin)"
-        />
+        <div className="flex items-stretch">
+          <div className="min-w-0 flex-1">
+            <IssuerCombobox
+              value={record.supplierName}
+              onChange={(v) => onPatch({ supplierName: v, userEdited: true })}
+              issuers={issuers}
+              placeholder="Nom de l'émetteur (ex. Martin)"
+              inputClassName="rounded-r-none"
+            />
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={() => setRevueOpen(true)}
+            aria-label="Revue et interdictions"
+            title="Revue des anomalies et interdictions"
+            className="relative -ml-px shrink-0 rounded-l-none"
+          >
+            <Settings2 className="size-4" />
+            {anomalyCount > 0 && (
+              <span className="absolute -top-1 -right-1 size-2 rounded-full bg-amber-500 ring-2 ring-card" />
+            )}
+          </Button>
+        </div>
       </div>
 
       {/* Imputations : zone LIBRE qui prend le max de place et défile si besoin. */}
@@ -538,6 +578,8 @@ export function InvoicePanel({
         detection={record.detection}
         immature={immature}
       />
+
+      <RevueDialog open={revueOpen} onOpenChange={setRevueOpen} />
     </div>
   )
 }

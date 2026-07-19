@@ -32,11 +32,14 @@ export function IssuerCombobox({
   onChange,
   issuers,
   placeholder,
+  inputClassName,
 }: {
   value: string
   onChange: (value: string) => void
   issuers: Issuer[]
   placeholder?: string
+  /** Classes fusionnées sur l'input (ex. `rounded-r-none` pour un input group). */
+  inputClassName?: string
 }) {
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState(0)
@@ -108,7 +111,7 @@ export function IssuerCombobox({
             onKeyDown={onKeyDown}
             placeholder={placeholder}
             autoComplete="off"
-            className="pr-8"
+            className={cn('pr-8', inputClassName)}
           />
           <button
             type="button"
