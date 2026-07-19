@@ -445,7 +445,8 @@ export function RevueDialog({
                   </h2>
                   <p className="-mt-1 text-xs text-muted-foreground">
                     Ce que cet émetteur a appris à imputer. « Désapprendre »
-                    efface l'association — utile si elle a été créée par erreur.
+                    efface l'association ; si plus aucun émetteur n'utilise ce
+                    code, son vocabulaire est aussi réinitialisé.
                   </p>
                   <div className="flex flex-col gap-2">
                     {assocs.map(({ code, count }) => {

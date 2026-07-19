@@ -52,16 +52,31 @@ export function useFacturationCuration() {
     queryClient.invalidateQueries({ queryKey: ['facturation', 'issuerCodes'] })
   }
 
-  /** Oubli COMPLET d'une association émetteur→code apprise (supprime toute la co-occurrence). */
+  /** Oubli COMPLET d'une association émetteur→code apprise. Retire la co-occurrence, PUIS,
+   *  si plus AUCUN émetteur n'utilise ce code (nuage devenu orphelin), réinitialise aussi son
+   *  vocabulaire — sinon le code garderait des mots sans plus être rattaché à personne. Un
+   *  code encore partagé par d'autres émetteurs conserve son nuage (nettoyage best-effort). */
   async function forgetIssuerCode(
     issuerKey: string,
     code: string,
   ): Promise<void> {
     await forgetIssuerCodeApi(issuerKey, code)
-    queryClient.setQueryData<IssuerCodes>(
+    const next = queryClient.setQueryData<IssuerCodes>(
       ['facturation', 'issuerCodes'],
       (old) => removeIssuerCode(old ?? { perIssuer: {} }, issuerKey, code),
     )
+    const stillUsed = next
+      ? Object.values(next.perIssuer).some((cell) => (cell[code] ?? 0) > 0)
+      : true
+    if (!stillUsed) {
+      // Nuage orphelin → on l'efface. Best-effort : l'association est déjà retirée, un échec
+      // laisse juste un nuage nettoyable à la main (bouton « Réinitialiser »).
+      try {
+        await resetCodeCloud(code)
+      } catch {
+        // Ignoré volontairement.
+      }
+    }
   }
 
   /** Réinitialise le vocabulaire appris d'un code (efface tout son nuage de mots). */
