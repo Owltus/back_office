@@ -382,11 +382,10 @@ export function FacturationBoard() {
             <h2 className="shrink-0 text-sm font-semibold text-foreground">
               Imputation comptable
             </h2>
-            {immature && (
+            {model.level === 'vide' && (
               <p className="rounded-lg border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-                {model.level === 'vide'
-                  ? 'Base d’apprentissage vide — les suggestions ne sont pas encore fiables. Tamponnez quelques factures pour l’alimenter.'
-                  : 'Modèle encore peu alimenté — les suggestions sont indicatives.'}
+                Base d’apprentissage vide — les suggestions ne sont pas encore
+                fiables. Tamponnez quelques factures pour l’alimenter.
               </p>
             )}
             {selected ? (
