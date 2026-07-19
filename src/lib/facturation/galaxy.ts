@@ -1,5 +1,5 @@
 import { BUDGET_LINES, budgetLabel } from '#/lib/facturation/constants.ts'
-import type { WordPool } from '#/lib/facturation/wordpool.ts'
+import { visibleWords, type WordPool } from '#/lib/facturation/wordpool.ts'
 import type { IssuerCodes } from '#/lib/facturation/issuerCodes.ts'
 import type { Issuer } from '#/lib/facturation/issuers.ts'
 
@@ -661,9 +661,10 @@ export function buildGalaxy(
     // Seuil d'AFFICHAGE : on écarte le bruit à faible count (fautes de frappe, mots
     // OCR parasites) pour ne pas créer de nœuds/liens sans queue ni tête. Purement
     // visuel — la base n'est pas touchée (le nettoyage réel = pruneClouds).
-    const top = Object.entries(cell)
-      .filter(([token, count]) => count >= minCount && !stop?.has(token))
-      .sort((a, b) => b[1] - a[1])
+    // visibleWords masque stopwords statiques + stoplist adaptative, trié desc ; on borne
+    // ensuite au seuil d'affichage (bruit faible count) et au top-K.
+    const top = visibleWords(cell, stop)
+      .filter(([, count]) => count >= minCount)
       .slice(0, topWordsPerCode)
     if (top.length === 0) continue
 

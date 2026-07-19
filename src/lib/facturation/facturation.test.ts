@@ -531,13 +531,15 @@ describe('wordpool', () => {
     expect(scoreInvoice('alpha', pool, new Set(['alpha']))).toHaveLength(0)
   })
 
-  it('visibleWords : masque la stoplist, trie par fréquence décroissante', () => {
-    const cell = { legallais: 9, scie: 2, lame: 5 }
+  it('visibleWords : masque stopwords statiques + stoplist, trie par fréquence', () => {
+    const cell = { legallais: 9, scie: 2, lame: 5, livraison: 8 }
+    // « livraison » est un stopword statique → masqué même sans stoplist adaptative.
     expect(visibleWords(cell)).toEqual([
       ['legallais', 9],
       ['lame', 5],
       ['scie', 2],
     ])
+    // + stoplist adaptative « legallais ».
     expect(visibleWords(cell, new Set(['legallais']))).toEqual([
       ['lame', 5],
       ['scie', 2],

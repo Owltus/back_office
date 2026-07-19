@@ -337,15 +337,16 @@ export function countTokens(rawText: string): Record<string, number> {
   return out
 }
 
-/** Mots VISIBLES d'un code (hors stoplist adaptative), triés par fréquence décroissante. Le
- *  masquage à l'affichage rejoue la MÊME stoplist que le scoring → l'UI (galaxie, revue) montre
- *  exactement ce qui peut voter. `stop` vide → tous les mots visibles (comportement inchangé). */
+/** Mots VISIBLES d'un code, triés par fréquence décroissante. Masque à la fois les STOPWORDS
+ *  statiques (couche 1 — utile pour le vocabulaire DÉJÀ stocké avant leur ajout) ET la stoplist
+ *  adaptative (couche 2). L'UI (galaxie, revue) montre ainsi exactement ce qui peut voter.
+ *  `stop` vide → seuls les stopwords statiques sont masqués. */
 export function visibleWords(
   cell: Record<string, number>,
   stop?: ReadonlySet<string>,
 ): Array<[string, number]> {
   return Object.entries(cell)
-    .filter(([t]) => !stop?.has(t))
+    .filter(([t]) => !STOPWORDS.has(t) && !stop?.has(t))
     .sort((a, b) => b[1] - a[1])
 }
 
