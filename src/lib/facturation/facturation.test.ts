@@ -46,12 +46,29 @@ import { buildGalaxy } from '#/lib/facturation/galaxy.ts'
 import { buildStampedPdf } from '#/lib/facturation/stamp.ts'
 import { stampBoxSize, stampLines } from '#/lib/facturation/stampLayout.ts'
 import { computeGrid, pageAt } from '#/lib/facturation/grid.ts'
-import { SEED_RULES, budgetLabel } from '#/lib/facturation/constants.ts'
+import { SEED_RULES } from '#/lib/facturation/constants.ts'
+import {
+  budgetLabel,
+  setBudgetLines,
+} from '#/lib/facturation/budgetRegistry.ts'
 import type {
   PagePreview,
   StampData,
   SupplierRule,
 } from '#/lib/facturation/types.ts'
+
+// Référentiel minimal pour les tests : le vrai vit en base (facturation_budget_lines) et n'est
+// plus importable en dur. On seed le registre synchrone une fois → budgetLabel/budgetTag résolvent.
+const BUDGET_FIXTURE = [
+  {
+    code: 'FMELECoooo',
+    label: 'Electricité',
+    category: 'FRAIS EXPLOITATION / OPERATION',
+    hint: 'electricité',
+    tags: ['Énergie & fluides'],
+  },
+]
+setBudgetLines(BUDGET_FIXTURE)
 
 const A4 = (): PagePreview => ({ dataUrl: '', width: 595, height: 842 })
 
@@ -473,8 +490,11 @@ describe('wordpool', () => {
   it('amorçage : le générique NON universel n’est plus effacé en dur (data-driven)', () => {
     // reglement/livraison/mentions ne sont PLUS des stopwords : ils passent tokenize et seront
     // dévalués par le poids de discriminance (disc), à partir des données — pas d'une liste en dur.
-    const t = tokenize('Règlement par chèque, bon de livraison, mentions légales')
-    for (const w of ['reglement', 'livraison', 'mentions']) expect(t).toContain(w)
+    const t = tokenize(
+      'Règlement par chèque, bon de livraison, mentions légales',
+    )
+    for (const w of ['reglement', 'livraison', 'mentions'])
+      expect(t).toContain(w)
     // Seul le squelette universel disparaît.
     expect(countTokens('facture total gaz')).toEqual({ gaz: 1 })
   })
@@ -709,7 +729,7 @@ describe('buildGalaxy', () => {
     const pool = { perCode: { FMELECoooo: { edf: 5, kwh: 3, releve: 2 } } }
     const issuers = [{ name: 'edf', display: 'EDF', count: 4 }]
     const issuerCodes = { perIssuer: { edf: { FMELECoooo: 5 } } }
-    const g = buildGalaxy(pool, issuers, 5, 2, issuerCodes)
+    const g = buildGalaxy(pool, issuers, 5, 2, issuerCodes, BUDGET_FIXTURE)
     expect(g.nodes.filter((n) => n.type === 'code')).toHaveLength(1)
     expect(g.nodes.filter((n) => n.type === 'issuer')).toHaveLength(1) // edf (issuerCodes)
     // Tous les tokens du pool sont des MOTS désormais (edf, kwh, releve).

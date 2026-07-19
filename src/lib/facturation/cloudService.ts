@@ -3,7 +3,7 @@ import { STORAGE_TOP_K, type WordPool } from '#/lib/facturation/wordpool.ts'
 import type { IssuerCodes } from '#/lib/facturation/issuerCodes.ts'
 import type { IssuerDenylist } from '#/lib/facturation/issuerDenylist.ts'
 import type { Issuer } from '#/lib/facturation/issuers.ts'
-import type { JournalEntry } from '#/lib/facturation/types.ts'
+import type { BudgetLine, JournalEntry } from '#/lib/facturation/types.ts'
 
 /*
  * Accès Supabase aux nuages de mots (table facturation_wordpool). Lecture = tout
@@ -75,6 +75,59 @@ export async function fetchIssuers(): Promise<Issuer[]> {
     .select('name, display, count')
   if (error) throw error
   return (data ?? []) as Issuer[]
+}
+
+// --- Référentiel des imputations (facturation_budget_lines) ------------------
+// Lecture ouverte aux authentifiés ; écritures via RPC SECURITY DEFINER (garde de rôle).
+const BUDGET_TABLE = 'facturation_budget_lines'
+
+/** Référentiel des imputations (petit → pas de pagination), ordonné par le plan analytique. */
+export async function fetchBudgetLines(): Promise<BudgetLine[]> {
+  const { data, error } = await supabase
+    .from(BUDGET_TABLE)
+    .select('code, label, category, hint, tags')
+    .order('sort_order', { ascending: true })
+  if (error) throw error
+  const rows = (data ?? []) as {
+    code: string
+    label: string
+    category: string
+    hint: string | null
+    tags: string[] | null
+  }[]
+  return rows.map((r) => ({
+    code: r.code,
+    label: r.label,
+    category: r.category,
+    hint: r.hint ?? '',
+    tags: r.tags ?? [],
+  }))
+}
+
+/** Crée ou met à jour une imputation (RPC ; code IMMUABLE, garde de rôle interne). `create:true`
+ *  refuse d'écraser un code déjà en base (unicité SERVEUR à la création, SQLSTATE 23505). */
+export async function upsertBudgetLine(
+  line: BudgetLine,
+  opts?: { sort?: number; create?: boolean },
+): Promise<void> {
+  const { error } = await supabase.rpc('facturation_budget_line_upsert', {
+    p_code: line.code,
+    p_label: line.label,
+    p_category: line.category,
+    p_hint: line.hint ?? '',
+    p_tags: line.tags,
+    p_sort: opts?.sort ?? null,
+    p_create: opts?.create ?? false,
+  })
+  if (error) throw error
+}
+
+/** Supprime une imputation NON utilisée (RPC). Refuse (SQLSTATE 23503) si déjà référencée. */
+export async function deleteBudgetLine(code: string): Promise<void> {
+  const { error } = await supabase.rpc('facturation_budget_line_delete', {
+    p_code: code,
+  })
+  if (error) throw error
 }
 
 /** Enregistre / confirme un émetteur (upsert +1, côté serveur). */

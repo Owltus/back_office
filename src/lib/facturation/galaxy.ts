@@ -1,4 +1,5 @@
-import { BUDGET_LINES, budgetLabel } from '#/lib/facturation/constants.ts'
+import { budgetLabel } from '#/lib/facturation/budgetRegistry.ts'
+import type { BudgetLine } from '#/lib/facturation/types.ts'
 import {
   computeStats,
   rankWords,
@@ -639,14 +640,14 @@ export interface GalaxyGraph {
   links: GalaxyLink[]
 }
 
-const TAG_BY_CODE = new Map(BUDGET_LINES.map((l) => [l.code, l.tags[0] ?? '']))
-
 /**
  * Construit le graphe émetteurs → codes → mots à partir des nuages appris.
  * `topWordsPerCode` borne les mots par code pour rester lisible. Les nœuds/liens ÉMETTEUR
  * viennent du modèle de co-occurrence `issuerCodes` (émetteur → codes), PAS des tokens du
  * pool : le nom d'émetteur n'est plus injecté dans les nuages (pull de mots = contenu
  * métier seul). Si `issuerCodes` est absent, la galaxie n'affiche que codes + mots.
+ * `lines` = référentiel des imputations (Supabase) : sert le domaine (tag) de chaque code —
+ * passé en paramètre (pas de global) pour rester pur et éviter toute course au chargement.
  */
 export function buildGalaxy(
   pool: WordPool,
@@ -654,8 +655,10 @@ export function buildGalaxy(
   topWordsPerCode = 12,
   minCount = 2,
   issuerCodes?: IssuerCodes,
+  lines: BudgetLine[] = [],
 ): GalaxyGraph {
   const issuerName = new Map(issuers.map((i) => [i.name, i.display]))
+  const tagByCode = new Map(lines.map((l) => [l.code, l.tags[0] ?? '']))
   const nodes: GalaxyNode[] = []
   const links: GalaxyLink[] = []
   const codePresent = new Set<string>()
@@ -673,7 +676,7 @@ export function buildGalaxy(
       .map((w) => [w.token, w.count] as [string, number])
     if (top.length === 0) continue
 
-    const domain = TAG_BY_CODE.get(code) || 'Autre'
+    const domain = tagByCode.get(code) || 'Autre'
     const codeId = `code:${code}`
     codePresent.add(code)
     nodes.push({
