@@ -11,21 +11,27 @@ Parking, PDJ, Affichage, Rapprochement/Caisse (à venir).
 - **Supabase** (Auth + PostgreSQL + RLS + Storage)
 - Recharts, papaparse, html2canvas (pour l'onglet RepJour)
 
-## ⚠️ CONTRAINTE CRITIQUE — backend Supabase PARTAGÉ, LECTURE SEULE
+## Backend Supabase — DÉDIÉ à cette app (prod live)
 
-Le projet Supabase est **partagé** avec une autre application en production
-(l'app standalone `repjour-okko-nantes`). **Toutes les tables sont à traiter en
-LECTURE SEULE** côté outillage / assistant IA :
-`profiles`, `daily_reports`, `forecast_days`, `budget`, `email_recipients`,
-`hotel_config`, `audit_log`.
+Le projet Supabase est désormais **dédié à cette application** : il n'est **plus
+partagé** avec `repjour-okko-nantes` (le partage a pris fin). L'ancien principe
+« tout en LECTURE SEULE parce qu'une autre app en dépend » **ne s'applique plus**.
 
-- **Aucune écriture directe** (INSERT/UPDATE/DELETE), aucun DDL, aucune migration,
-  aucun seed contre cette base.
-- Les fonctionnalités d'écriture de l'app (import CSV, gestion, comptes) ne sont
-  testées QUE par l'utilisateur via l'app avec un vrai compte — **jamais**
-  exécutées automatiquement contre la prod.
-- Toute écriture éventuelle exige une **demande + confirmation explicite** de
-  l'utilisateur, à chaque fois. (Transition assumée : ce n'est pas la cible finale.)
+Mais c'est **toujours une base de PRODUCTION avec de vrais utilisateurs** (l'app
+tourne dessus) : la prudence reste de mise.
+
+- **Écritures et migrations désormais légitimes** sur les tables de l'app
+  (`profiles`, `daily_reports`, `forecast_days`, `budget`, `email_recipients`,
+  `hotel_config`, `audit_log`, `facturation_*`, `rapro_*`, `caisse_*`, `pms_*`…).
+- **Opérations destructrices = confirmation explicite à chaque fois** : `DROP`,
+  `TRUNCATE`, `DELETE`/`UPDATE` de masse (sans `WHERE` ciblé), suppression de
+  colonnes, réécriture de données. Ne jamais les lancer par réflexe.
+- **Exécution du SQL** : par l'**utilisateur** dans Supabase → SQL Editor (setup
+  actuel, aucun outil d'exécution direct branché côté assistant). L'assistant
+  **propose** le SQL (fichiers `supabase/*.sql`), l'utilisateur l'exécute.
+- Les écritures via l'app (RPC `SECURITY DEFINER` à garde de rôle + RLS) restent
+  le canal normal pour les features ; l'assistant ne teste pas les écritures
+  applicatives contre la prod à la place de l'utilisateur.
 
 ## Clés Supabase (`.env`, jamais committé, gitignoré)
 
@@ -33,10 +39,11 @@ LECTURE SEULE** côté outillage / assistant IA :
   bundle navigateur, protégées par les RLS).
 - `SUPABASE_SERVICE_ROLE_KEY` : **SECRÈTE**, contourne toute la RLS (accès total).
   - **Jamais** de préfixe `VITE_` (sinon fuite dans le bundle = faille critique).
-  - **Jamais** committée, **jamais** en code client.
-  - Usage autorisé : **inspection LECTURE SEULE** en local, ou fonction serveur
-    (Edge Function). Pour supprimer un `auth.users` (suppression totale d'un
-    compte) → Edge Function serveur, pas le client.
+  - **Jamais** committée, **jamais** en code client. (Ces deux règles restent
+    absolues, indépendamment de la fin du partage.)
+  - Usage : inspection / maintenance en local, ou fonction serveur (Edge Function).
+    Pour supprimer un `auth.users` (suppression totale d'un compte) → Edge Function
+    serveur, jamais le client.
 
 ## Authentification (applicative, globale)
 
