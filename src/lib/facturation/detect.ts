@@ -1,5 +1,5 @@
 import { SEED_RULES } from '#/lib/facturation/constants.ts'
-import { normalize } from '#/lib/facturation/text.ts'
+import { issuerKey, normalize } from '#/lib/facturation/text.ts'
 import {
   abstains,
   CLOUD_KEEP_RATIO,
@@ -45,7 +45,7 @@ function topPriorCodes(prior: Record<string, number>): string[] {
     .map(([c]) => c)
 }
 
-export { normalize }
+export { normalize, issuerKey }
 
 /*
  * Détection SANS IA, en DEUX couches, toutes deux explicables :
@@ -61,13 +61,14 @@ export function allRules(): SupplierRule[] {
   return SEED_RULES
 }
 
-/** Longueur minimale d'un nom d'émetteur normalisé pour être exploité — en deçà,
+/** Longueur minimale de la CLÉ CANONIQUE d'un émetteur pour être exploité — en deçà,
  *  le matching par sous-chaîne (« sa », « or ») ferait des faux positifs. */
 export const MIN_LEARN_LEN = 4
 
-/** Vrai si un nom d'émetteur est assez long pour servir de token fort. */
+/** Vrai si l'émetteur est assez long (sur sa clé canonique, suffixes juridiques retirés)
+ *  pour être mémorisé et servir de filtre. Aligné sur `issuerKey` (identité unique). */
 export const canLearn = (supplier: string): boolean =>
-  normalize(supplier).trim().length >= MIN_LEARN_LEN
+  issuerKey(supplier).length >= MIN_LEARN_LEN
 
 // --- Indices best-effort (montrés en aide, jamais critiques) --------------
 

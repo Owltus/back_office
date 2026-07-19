@@ -17,6 +17,7 @@ import {
   DialogTitle,
 } from '#/components/ui/dialog.tsx'
 import { Button } from '#/components/ui/button.tsx'
+import { useConfirm } from '#/components/shared/ConfirmDialog.tsx'
 import { useFacturationModel } from '#/components/facturation/useFacturationModel.ts'
 import { useFacturationCuration } from '#/components/facturation/useFacturationCuration.ts'
 import { reviewQueue, type Anomaly } from '#/lib/facturation/anomalies.ts'
@@ -275,8 +276,38 @@ export function RevueDialog({
     useFacturationModel()
   const { banIssuerCode, forgetIssuerCode, resetCodeCloud, unbanIssuerCode } =
     useFacturationCuration()
+  const { confirm, confirmDialog } = useConfirm()
 
   const hasIssuer = issuerKey.length > 0
+
+  // Confirmations des gestes IRRÉVERSIBLES ou à portée LARGE (le facteur humain n°1 : le clic
+  // destructeur anodin). Chaque message nomme précisément la portée réelle.
+  const confirmBan = (issuerK: string, code: string) =>
+    confirm({
+      title: 'Bannir ce couple ?',
+      description: (
+        <>
+          Ne plus JAMAIS imputer <b>{issuerName(issuerK)}</b> sur{' '}
+          <b>{budgetLabel(code)}</b>. Interdiction permanente : « Lever
+          l'interdiction » ne restaurera pas l'historique appris.
+        </>
+      ),
+      confirmLabel: 'Bannir',
+      destructive: true,
+    })
+  const confirmReset = (code: string) =>
+    confirm({
+      title: 'Réinitialiser ce vocabulaire ?',
+      description: (
+        <>
+          Efface tout le vocabulaire appris de <b>{budgetLabel(code)}</b> (
+          {code}) — pour <b>TOUS les émetteurs</b>, pas seulement celui-ci.
+          Irréversible.
+        </>
+      ),
+      confirmLabel: 'Réinitialiser',
+      destructive: true,
+    })
 
   const issuerName = useMemo(() => {
     const m = new Map(issuers.map((i) => [i.name, i.display]))
@@ -443,12 +474,18 @@ export function RevueDialog({
                                     )
                                   }
                                   onBan={() =>
-                                    run(id, 'ban', () =>
-                                      banIssuerCode(
-                                        a.data.issuerKey,
-                                        a.data.code,
-                                      ),
-                                    )
+                                    confirmBan(
+                                      a.data.issuerKey,
+                                      a.data.code,
+                                    ).then((ok) => {
+                                      if (ok)
+                                        run(id, 'ban', () =>
+                                          banIssuerCode(
+                                            a.data.issuerKey,
+                                            a.data.code,
+                                          ),
+                                        )
+                                    })
                                   }
                                 />
                                 {errors[id] && (
@@ -534,7 +571,12 @@ export function RevueDialog({
                                 words={words}
                                 busy={busy[id] === 'reset'}
                                 onReset={() =>
-                                  run(id, 'reset', () => resetCodeCloud(code))
+                                  confirmReset(code).then((ok) => {
+                                    if (ok)
+                                      run(id, 'reset', () =>
+                                        resetCodeCloud(code),
+                                      )
+                                  })
                                 }
                               />
                               {errors[id] && (
@@ -611,7 +653,10 @@ export function RevueDialog({
                             words={words}
                             busy={busy[id] === 'reset'}
                             onReset={() =>
-                              run(id, 'reset', () => resetCodeCloud(code))
+                              confirmReset(code).then((ok) => {
+                                if (ok)
+                                  run(id, 'reset', () => resetCodeCloud(code))
+                              })
                             }
                           />
                           {errors[id] && (
@@ -628,6 +673,7 @@ export function RevueDialog({
             </>
           )}
         </div>
+        {confirmDialog}
       </DialogContent>
     </Dialog>
   )

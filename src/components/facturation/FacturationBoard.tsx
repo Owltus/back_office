@@ -20,7 +20,7 @@ import { GalaxyCard } from '#/components/facturation/GalaxyCard.tsx'
 import { useFacturationModel } from '#/components/facturation/useFacturationModel.ts'
 import {
   detect,
-  normalize,
+  issuerKey,
   redetect,
   type IssuerHint,
 } from '#/lib/facturation/detect.ts'
@@ -262,7 +262,7 @@ export function FacturationBoard() {
   // Anomalies de l'émetteur SÉLECTIONNÉ (outliers) → pastille orange sur l'engrenage.
   // Contextuel : le badge suit l'émetteur affiché, comme le modal de contrôle.
   const anomalyCount = useMemo(() => {
-    const key = selected ? normalize(selected.supplierName).trim() : ''
+    const key = selected ? issuerKey(selected.supplierName) : ''
     if (!key) return 0
     return reviewQueue(serverPool, issuerCodes).filter(
       (a) => a.kind === 'issuer-outlier' && a.data.issuerKey === key,

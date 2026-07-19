@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { PDFDocument, StandardFonts } from 'pdf-lib'
 
-import { detect, normalize, redetect } from '#/lib/facturation/detect.ts'
-import { normalizeIssuer } from '#/lib/facturation/text.ts'
+import {
+  canLearn,
+  detect,
+  normalize,
+  redetect,
+} from '#/lib/facturation/detect.ts'
+import { issuerKey, normalizeIssuer } from '#/lib/facturation/text.ts'
 import {
   closestName,
   levenshtein,
@@ -100,6 +105,24 @@ describe('normalizeIssuer', () => {
 
   it('ne vide jamais un nom réduit à un seul mot-suffixe', () => {
     expect(normalizeIssuer('SA')).toBe('sa') // garde-fou words.length > 1
+  })
+})
+
+describe('issuerKey (clé émetteur canonique, anti-fragmentation)', () => {
+  it('unifie les variantes d’un même émetteur sous une seule clé', () => {
+    const k = issuerKey('Martin')
+    expect(issuerKey('Martin SARL')).toBe(k)
+    expect(issuerKey('MARTIN,')).toBe(k)
+    expect(issuerKey('Martin  ')).toBe(k) // double espace
+    expect(k).toBe('martin')
+  })
+
+  it('canLearn juge la LONGUEUR de la clé canonique (suffixe retiré)', () => {
+    expect(canLearn('Martin')).toBe(true)
+    // « EDF SAS » → clé « edf » (3 car.) → NON mémorisable, cohérent avec « EDF ».
+    expect(canLearn('EDF')).toBe(false)
+    expect(canLearn('EDF SAS')).toBe(false)
+    expect(canLearn('EDF SAS')).toBe(canLearn('EDF'))
   })
 })
 

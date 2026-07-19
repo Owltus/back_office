@@ -8,6 +8,7 @@ import {
   PopoverContent,
 } from '#/components/ui/popover.tsx'
 import { normalizeIssuer } from '#/lib/facturation/text.ts'
+import { canLearn } from '#/lib/facturation/detect.ts'
 import { similarity } from '#/lib/facturation/similarity.ts'
 import type { Issuer } from '#/lib/facturation/issuers.ts'
 import { cn } from '#/lib/utils.ts'
@@ -69,6 +70,9 @@ export function IssuerCombobox({
   // Nom tapé absent du dictionnaire (ni exact, ni sous-chaîne) → futur nouvel émetteur.
   const isNew =
     q.length > 0 && !issuers.some((i) => normalizeIssuer(i.display) === q)
+  // Sera-t-il RÉELLEMENT mémorisé au tamponnage ? (clé canonique assez longue). Sinon la
+  // promesse « créé au tamponnage » serait un mensonge silencieux (ex. « EDF », « SFR »).
+  const learnable = canLearn(value)
   const activeIdx = Math.min(active, Math.max(0, options.length - 1))
   const hasContent = options.length > 0 || isNew
 
@@ -175,8 +179,10 @@ export function IssuerCombobox({
         {isNew && (
           <p className="border-t border-border px-2 py-1.5 text-[11px] text-muted-foreground">
             {options.length > 0 ? 'Ou conserver' : 'Nouvel émetteur'} «{' '}
-            <span className="text-foreground">{value.trim()}</span> » — créé au
-            tamponnage.
+            <span className="text-foreground">{value.trim()}</span> » —{' '}
+            {learnable
+              ? 'mémorisé au tamponnage.'
+              : 'trop court pour être mémorisé (filtre émetteur inactif).'}
           </p>
         )}
       </PopoverContent>

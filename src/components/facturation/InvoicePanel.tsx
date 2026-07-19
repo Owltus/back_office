@@ -16,6 +16,7 @@ import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
 import { Label } from '#/components/ui/label.tsx'
 import { Textarea } from '#/components/ui/textarea.tsx'
+import { useConfirm } from '#/components/shared/ConfirmDialog.tsx'
 import { CodePicker } from '#/components/facturation/CodePicker.tsx'
 import { IssuerCombobox } from '#/components/facturation/IssuerCombobox.tsx'
 import { RevueDialog } from '#/components/facturation/FacturationRevue.tsx'
@@ -28,7 +29,7 @@ import {
 } from '#/components/facturation/confidence.ts'
 import { budgetLabel } from '#/lib/facturation/constants.ts'
 import { canLearn } from '#/lib/facturation/detect.ts'
-import { normalize } from '#/lib/facturation/text.ts'
+import { issuerKey } from '#/lib/facturation/text.ts'
 import {
   learnClouds,
   learnIssuer,
@@ -160,8 +161,8 @@ function ImputationList({
                     onClick={() => onBan(code)}
                     disabled={banningCode === code}
                     aria-label={`Ne plus jamais imputer cet émetteur sur ${code}`}
-                    title="Ne plus jamais imputer cet émetteur sur ce code"
-                    className="rounded p-0.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+                    title="Ne plus jamais imputer cet émetteur sur ce code (interdiction)"
+                    className="rounded p-0.5 text-destructive/50 transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
                   >
                     {banningCode === code ? (
                       <Loader2 className="size-3.5 animate-spin" />
@@ -285,6 +286,7 @@ export function InvoicePanel({
   const [replayDone, setReplayDone] = useState(false)
   const queryClient = useQueryClient()
   const { banIssuerCode } = useFacturationCuration()
+  const { confirm, confirmDialog } = useConfirm()
 
   if (record.status === 'processing') {
     return (
@@ -349,7 +351,7 @@ export function InvoicePanel({
           // nuages déjà appris (sinon l'instantané ne refléterait pas la réalité).
           if (learnSupplier) {
             try {
-              const name = normalize(record.supplierName).trim()
+              const name = issuerKey(record.supplierName)
               const display = record.supplierName.trim()
               await learnIssuer(name, display)
               queryClient.setQueryData<Issuer[]>(
@@ -431,7 +433,7 @@ export function InvoicePanel({
         record.learnedIssuer !== undefined
           ? record.learnedIssuer
           : canLearn(record.supplierName)
-            ? normalize(record.supplierName).trim()
+            ? issuerKey(record.supplierName)
             : null
       await unlearnInvoiceCore(codes, issuerName)
       onPatch({ learned: false, learnedCodes: undefined, learnedIssuer: null })
@@ -452,7 +454,7 @@ export function InvoicePanel({
     setReplayDone(false)
     try {
       const issuerName = canLearn(record.supplierName)
-        ? normalize(record.supplierName).trim()
+        ? issuerKey(record.supplierName)
         : null
       await unlearnInvoiceCore(record.codes, issuerName)
       setReplayDone(true)
@@ -469,10 +471,26 @@ export function InvoicePanel({
   const canBan = canLearn(record.supplierName)
   async function handleBan(code: string) {
     if (!canBan) return
+    // Confirmation : geste IRRÉVERSIBLE facile à confondre avec un simple retrait.
+    const ok = await confirm({
+      title: 'Bannir cet émetteur sur ce code ?',
+      description: (
+        <>
+          Ne plus JAMAIS imputer{' '}
+          <b>{record.supplierName.trim() || 'cet émetteur'}</b> sur{' '}
+          <b>{budgetLabel(code)}</b>. Interdiction permanente ; « Lever
+          l'interdiction » (dans Contrôle des imputations) ne restaure pas
+          l'historique appris.
+        </>
+      ),
+      confirmLabel: 'Bannir',
+      destructive: true,
+    })
+    if (!ok) return
     setBanningCode(code)
     setBanWarning(false)
     try {
-      await banIssuerCode(normalize(record.supplierName).trim(), code)
+      await banIssuerCode(issuerKey(record.supplierName), code)
       onPatch({
         codes: record.codes.filter((c) => c !== code),
         userEdited: true,
@@ -614,6 +632,34 @@ export function InvoicePanel({
           </Button>
         )}
 
+        {/* Avertissements AVANT le tampon : rendre visible que « tamponner = apprendre » et
+            signaler quand l'apprentissage sera partiel ou bruité (facteur humain). */}
+        {!record.learned && canStamp && (
+          <div className="flex flex-col gap-1.5">
+            {canBan ? (
+              <p className="px-1 text-[11px] text-muted-foreground">
+                En tamponnant, l'imputation sera mémorisée pour «{' '}
+                {record.supplierName.trim()} ».
+              </p>
+            ) : (
+              <p className="flex items-start gap-2 rounded-lg bg-muted/40 px-3 py-2 text-[11px] text-muted-foreground">
+                <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                Facture tamponnée, mais l'émetteur ne sera pas mémorisé (nom
+                vide ou trop court) : le filtre émetteur ne progressera pas pour
+                lui.
+              </p>
+            )}
+            {record.codes.length > 1 && (
+              <p className="flex items-start gap-2 rounded-lg bg-muted/40 px-3 py-2 text-[11px] text-muted-foreground">
+                <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                Les {record.codes.length} imputations apprendront le même
+                vocabulaire (facture mixte) — retirez un code accessoire si son
+                imputation n'est pas à mémoriser.
+              </p>
+            )}
+          </div>
+        )}
+
         <Button
           onClick={handleStamp}
           disabled={!canStamp || stamping}
@@ -669,9 +715,10 @@ export function InvoicePanel({
       <RevueDialog
         open={revueOpen}
         onOpenChange={setRevueOpen}
-        issuerKey={normalize(record.supplierName).trim()}
+        issuerKey={issuerKey(record.supplierName)}
         issuerLabel={record.supplierName.trim()}
       />
+      {confirmDialog}
     </div>
   )
 }

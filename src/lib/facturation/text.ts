@@ -41,3 +41,13 @@ export function normalizeIssuer(s: string): string {
   }
   return words.join(' ')
 }
+
+/**
+ * CLÉ CANONIQUE d'un émetteur — l'IDENTITÉ unique utilisée pour APPRENDRE, CURER et DÉTECTER.
+ * C'est EXACTEMENT la normalisation que le combobox emploie déjà pour dédupliquer à l'écran
+ * (`normalizeIssuer`) : « Martin », « Martin SARL », « MARTIN, » et « Martin  » (double espace)
+ * donnent tous la même clé. Toute dérivation de clé émetteur DOIT passer par ici — sinon le
+ * même fournisseur se fragmente en sous-comptes (l'UI le montre « connu » mais l'apprend
+ * ailleurs), et le filtre émetteur n'atteint jamais son seuil de maturité.
+ */
+export const issuerKey = (supplier: string): string => normalizeIssuer(supplier)

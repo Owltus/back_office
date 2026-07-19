@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useCallback, useState, type ReactNode } from 'react'
 
 import { Button } from '#/components/ui/button.tsx'
 import {
@@ -60,4 +60,67 @@ export function ConfirmDialog({
       </DialogContent>
     </Dialog>
   )
+}
+
+export interface ConfirmRequest {
+  title: ReactNode
+  description?: ReactNode
+  confirmLabel?: string
+  cancelLabel?: string
+  destructive?: boolean
+}
+
+/**
+ * Variante PROMISE de la confirmation, pratique dans les listes où chaque ligne a sa propre
+ * action : `if (await confirm({ … })) { … }`. Renvoie `confirm` et l'élément `confirmDialog`
+ * à monter une seule fois dans l'arbre. Ergonomique (attraper le mesclic destructeur), pas
+ * sécuritaire : l'autorité reste côté serveur (RPC + RLS).
+ */
+export function useConfirm() {
+  const [req, setReq] = useState<ConfirmRequest | null>(null)
+  const [resolver, setResolver] = useState<((v: boolean) => void) | null>(null)
+
+  const confirm = useCallback((request: ConfirmRequest) => {
+    setReq(request)
+    return new Promise<boolean>((resolve) => setResolver(() => resolve))
+  }, [])
+
+  const close = (value: boolean) => {
+    resolver?.(value)
+    setResolver(null)
+    setReq(null)
+  }
+
+  const confirmDialog = (
+    <Dialog
+      open={!!req}
+      onOpenChange={(open) => {
+        if (!open) close(false)
+      }}
+    >
+      {req && (
+        <DialogContent className="sm:max-w-md" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>{req.title}</DialogTitle>
+            {req.description != null && (
+              <DialogDescription>{req.description}</DialogDescription>
+            )}
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => close(false)}>
+              {req.cancelLabel ?? 'Annuler'}
+            </Button>
+            <Button
+              variant={req.destructive ? 'destructive' : 'default'}
+              onClick={() => close(true)}
+            >
+              {req.confirmLabel ?? 'Confirmer'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      )}
+    </Dialog>
+  )
+
+  return { confirm, confirmDialog }
 }
