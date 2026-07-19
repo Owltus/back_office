@@ -3,6 +3,7 @@ import { STORAGE_TOP_K, type WordPool } from '#/lib/facturation/wordpool.ts'
 import type { IssuerCodes } from '#/lib/facturation/issuerCodes.ts'
 import type { IssuerDenylist } from '#/lib/facturation/issuerDenylist.ts'
 import type { Issuer } from '#/lib/facturation/issuers.ts'
+import type { JournalEntry } from '#/lib/facturation/types.ts'
 
 /*
  * Accès Supabase aux nuages de mots (table facturation_wordpool). Lecture = tout
@@ -264,6 +265,73 @@ export async function deleteIssuer(name: string): Promise<void> {
 export async function unlearnIssuer(name: string): Promise<void> {
   const { error } = await supabase.rpc('facturation_issuer_unlearn', {
     p_name: name,
+  })
+  if (error) throw error
+}
+
+// --- Journal d'apprentissage par document (empreinte / hash) ------------------
+// Requiert facturation_learned_docs.sql exécuté par l'utilisateur ; sinon la lecture échoue
+// → journal vide (dégradation gracieuse : aucun doublon détecté, aucune facture listée).
+
+const JOURNAL_TABLE = 'facturation_learned_docs'
+
+/** Lit tout le journal d'apprentissage → { entries }. Propage l'erreur (table absente, etc.). */
+export async function fetchJournal(): Promise<{ entries: JournalEntry[] }> {
+  const entries: JournalEntry[] = []
+  let from = 0
+  for (;;) {
+    const { data, error } = await supabase
+      .from(JOURNAL_TABLE)
+      .select('hash, issuer, codes, deltas, method, created_at')
+      .range(from, from + 999)
+    if (error) throw error
+    const rows = (data ?? []) as {
+      hash: string
+      issuer: string | null
+      codes: string[] | null
+      deltas: Record<string, number> | null
+      method: string
+      created_at: string
+    }[]
+    for (const r of rows)
+      entries.push({
+        hash: r.hash,
+        issuerKey: r.issuer,
+        codes: r.codes ?? [],
+        deltas: r.deltas ?? {},
+        method: r.method === 'ocr' ? 'ocr' : 'native',
+        learnedAt: r.created_at,
+      })
+    if (rows.length < 1000) break
+    from += 1000
+  }
+  return { entries }
+}
+
+/** Enregistre un document appris (idempotent côté serveur : on conflict do nothing). */
+export async function recordLearnedDoc(entry: JournalEntry): Promise<void> {
+  const { error } = await supabase.rpc('facturation_learned_docs_record', {
+    p_hash: entry.hash,
+    p_issuer: entry.issuerKey ?? '',
+    p_codes: entry.codes,
+    p_deltas: entry.deltas,
+    p_method: entry.method,
+  })
+  if (error) throw error
+}
+
+/** Désapprend EXACTEMENT le document `hash` (rejeu serveur des deltas) puis retire l'entrée. */
+export async function forgetLearnedDoc(hash: string): Promise<void> {
+  const { error } = await supabase.rpc('facturation_learned_docs_forget', {
+    p_hash: hash,
+  })
+  if (error) throw error
+}
+
+/** Retire une entrée du journal SANS rejeu (undo en séance, où le décrément est déjà fait). */
+export async function deleteLearnedDoc(hash: string): Promise<void> {
+  const { error } = await supabase.rpc('facturation_learned_docs_delete', {
+    p_hash: hash,
   })
   if (error) throw error
 }

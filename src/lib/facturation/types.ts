@@ -58,6 +58,17 @@ export interface StampPosition {
   y: number
 }
 
+/** Une entrée du JOURNAL D'APPRENTISSAGE : ce qu'un PDF (identifié par son `hash`) a appris,
+ *  figé au tampon, pour pouvoir le désapprendre EXACTEMENT plus tard sans re-déposer le PDF. */
+export interface JournalEntry {
+  hash: string // SHA-256 hex (texte normalisé si natif, octets si OCR)
+  issuerKey: string | null // clé émetteur canonique apprise (= learnedIssuer), ou null
+  codes: string[] // codes validés (instantané figé au tampon, = learnedCodes)
+  deltas: Record<string, number> // { token: increment } → rejeu exact de unlearnClouds
+  method: ExtractMethod // 'native' | 'ocr' — trace la fiabilité du hash (D1)
+  learnedAt: string // ISO date (record.processedDate)
+}
+
 /** Résultat brut de la lecture d'un PDF. */
 export interface ExtractResult {
   text: string
@@ -131,6 +142,11 @@ export interface InvoiceRecord {
   stampScale: number
   codes: string[]
   supplierName: string
+  /** Empreinte SHA-256 du document (cf. hashDocument), calculée au dépôt. Identifie le PDF
+   *  pour la détection de doublon et le journal d'apprentissage. */
+  hash?: string
+  /** Vrai si ce hash est déjà présent au journal (facture déjà apprise) → doublon signalé. */
+  duplicate?: boolean
   /** Vrai une fois le PDF tamponné + téléchargé (indépendant de l'apprentissage :
    *  reste vrai même si l'utilisateur décoche « mémoriser »). Sert au marqueur « validé ». */
   stamped?: boolean

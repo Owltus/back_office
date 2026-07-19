@@ -8,6 +8,7 @@ import {
   redetect,
 } from '#/lib/facturation/detect.ts'
 import { issuerKey, normalizeIssuer } from '#/lib/facturation/text.ts'
+import { hashText, hashBytes } from '#/lib/facturation/hash.ts'
 import {
   closestName,
   levenshtein,
@@ -123,6 +124,28 @@ describe('issuerKey (clé émetteur canonique, anti-fragmentation)', () => {
     expect(canLearn('EDF')).toBe(false)
     expect(canLearn('EDF SAS')).toBe(false)
     expect(canLearn('EDF SAS')).toBe(canLearn('EDF'))
+  })
+})
+
+describe('hash (empreinte de document)', () => {
+  it('hashText est déterministe, normalisé (casse/accents) et long de 64 hex', async () => {
+    const h = await hashText('Facture ACME')
+    expect(h).toMatch(/^[0-9a-f]{64}$/)
+    expect(await hashText('facture acme')).toBe(h) // normalize absorbe la casse
+    expect(await hashText('Facture ACMÉ')).toBe(h) // et les accents
+  })
+
+  it('hashText distingue deux textes différents', async () => {
+    expect(await hashText('alpha')).not.toBe(await hashText('beta'))
+  })
+
+  it('hashBytes est déterministe sur les mêmes octets', async () => {
+    const a = new TextEncoder().encode('xyz').buffer
+    const b = new TextEncoder().encode('xyz').buffer
+    expect(await hashBytes(a)).toBe(await hashBytes(b))
+    expect(await hashBytes(new TextEncoder().encode('zzz').buffer)).not.toBe(
+      await hashBytes(a),
+    )
   })
 })
 
