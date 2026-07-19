@@ -34,14 +34,6 @@ export function probaFor(
   return undefined
 }
 
-/** Origine de la suggestion pour `code` : prior émetteur, mots du document, ou rien. */
-export function sourceFor(
-  code: string,
-  d: Detection | null | undefined,
-): 'issuer' | 'words' | 'rule' | undefined {
-  return d?.scores?.find((s) => s.code === code)?.source
-}
-
 /** Vrai quand l'imputation provient du SEUL émetteur (mots muets) → à confirmer (badge). */
 export function needsReview(d: Detection | null | undefined): boolean {
   return !!d?.fromIssuerOnly

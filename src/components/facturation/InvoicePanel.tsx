@@ -25,7 +25,6 @@ import {
   confidenceTone,
   needsReview,
   probaFor,
-  sourceFor,
 } from '#/components/facturation/confidence.ts'
 import { budgetLabel } from '#/lib/facturation/constants.ts'
 import { canLearn } from '#/lib/facturation/detect.ts'
@@ -102,7 +101,6 @@ function ImputationList({
         const tone = confidenceTone(
           raw === undefined ? 0 : immature ? Math.min(raw, 0.45) : raw,
         )
-        const viaIssuer = sourceFor(code, detection) === 'issuer'
         const review = needsReview(detection)
         return (
           <div
@@ -117,11 +115,6 @@ function ImputationList({
                 </span>
                 <span className="flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground">
                   {code}
-                  {viaIssuer && (
-                    <span className="rounded bg-primary/10 px-1 font-sans text-[10px] text-primary">
-                      via émetteur
-                    </span>
-                  )}
                   {review && (
                     <span className="rounded bg-amber-500/10 px-1 font-sans text-[10px] text-amber-600">
                       à vérifier
