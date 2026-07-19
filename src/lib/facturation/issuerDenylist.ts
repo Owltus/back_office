@@ -31,10 +31,31 @@ export function mergeDenylist(
   b: IssuerDenylist,
 ): IssuerDenylist {
   const perIssuer: Record<string, Set<string>> = {}
-  for (const [k, set] of Object.entries(a.perIssuer)) perIssuer[k] = new Set(set)
+  for (const [k, set] of Object.entries(a.perIssuer))
+    perIssuer[k] = new Set(set)
   for (const [k, set] of Object.entries(b.perIssuer)) {
     const dst = (perIssuer[k] ??= new Set())
     for (const c of set) dst.add(c)
+  }
+  return { perIssuer }
+}
+
+/** Retire une interdiction (immuable) — patch optimiste du cache après un « unban ».
+ *  Une entrée d'émetteur vidée de tous ses codes disparaît (pas de coquille vide). */
+export function removeDeny(
+  model: IssuerDenylist,
+  issuerKey: string,
+  code: string,
+): IssuerDenylist {
+  const perIssuer: Record<string, Set<string>> = {}
+  for (const [k, set] of Object.entries(model.perIssuer)) {
+    if (k !== issuerKey) {
+      perIssuer[k] = new Set(set)
+      continue
+    }
+    const next = new Set(set)
+    next.delete(code)
+    if (next.size) perIssuer[k] = next
   }
   return { perIssuer }
 }

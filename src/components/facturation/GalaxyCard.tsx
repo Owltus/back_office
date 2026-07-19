@@ -37,22 +37,22 @@ export function GalaxyCard({
         </Button>
       )}
 
-      {anomalyCount > 0 ? (
-        <Button asChild variant="outline" size="sm" className="w-full">
-          <Link to="/facturation/revue">
-            <ShieldAlert className="size-4 text-amber-500" />
-            Revue des anomalies
+      {/* Toujours accessible : la revue héberge aussi la gestion des interdictions
+          (lever un ban), pas seulement les anomalies. Le badge ambre ne s'affiche
+          que s'il reste des anomalies à examiner. */}
+      <Button asChild variant="outline" size="sm" className="w-full">
+        <Link to="/facturation/revue">
+          <ShieldAlert
+            className={anomalyCount > 0 ? 'size-4 text-amber-500' : 'size-4'}
+          />
+          Revue
+          {anomalyCount > 0 && (
             <span className="ml-auto rounded-full bg-amber-500/15 px-1.5 text-[11px] text-amber-600 tabular-nums">
               {anomalyCount}
             </span>
-          </Link>
-        </Button>
-      ) : (
-        <Button variant="outline" size="sm" className="w-full" disabled>
-          <ShieldAlert className="size-4" />
-          Aucune anomalie
-        </Button>
-      )}
+          )}
+        </Link>
+      </Button>
     </div>
   )
 }

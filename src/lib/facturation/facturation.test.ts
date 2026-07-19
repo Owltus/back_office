@@ -26,6 +26,11 @@ import {
   mergeIssuerCodes,
 } from '#/lib/facturation/issuerCodes.ts'
 import { reviewQueue } from '#/lib/facturation/anomalies.ts'
+import {
+  deniedCodes,
+  mergeDenylist,
+  removeDeny,
+} from '#/lib/facturation/issuerDenylist.ts'
 import { buildGalaxy } from '#/lib/facturation/galaxy.ts'
 import { buildStampedPdf } from '#/lib/facturation/stamp.ts'
 import { stampBoxSize, stampLines } from '#/lib/facturation/stampLayout.ts'
@@ -285,6 +290,42 @@ describe('detect + filtre émetteur', () => {
       deny: new Set(['BANNI']),
     })
     expect(denied.codes).not.toContain('BANNI') // la règle bannie ne remonte plus
+  })
+})
+
+describe('denylist (modèle pur)', () => {
+  it('mergeDenylist fait l’union et removeDeny retire un seul code', () => {
+    const base = mergeDenylist(
+      { perIssuer: {} },
+      { perIssuer: { martin: new Set(['A']) } },
+    )
+    const twoCodes = mergeDenylist(base, {
+      perIssuer: { martin: new Set(['B']) },
+    })
+    expect([...deniedCodes(twoCodes, 'martin')].sort()).toEqual(['A', 'B'])
+
+    const afterUnban = removeDeny(twoCodes, 'martin', 'A')
+    expect(deniedCodes(afterUnban, 'martin').has('A')).toBe(false)
+    expect(deniedCodes(afterUnban, 'martin').has('B')).toBe(true)
+  })
+
+  it('removeDeny supprime l’entrée émetteur une fois vidée de tous ses codes', () => {
+    const one = mergeDenylist(
+      { perIssuer: {} },
+      { perIssuer: { dupont: new Set(['X']) } },
+    )
+    const empty = removeDeny(one, 'dupont', 'X')
+    expect(empty.perIssuer.dupont).toBeUndefined() // pas de coquille vide
+    expect(deniedCodes(empty, 'dupont').size).toBe(0)
+  })
+
+  it('removeDeny est immuable (n’altère pas l’entrée d’origine)', () => {
+    const src = mergeDenylist(
+      { perIssuer: {} },
+      { perIssuer: { martin: new Set(['A', 'B']) } },
+    )
+    removeDeny(src, 'martin', 'A')
+    expect(deniedCodes(src, 'martin').has('A')).toBe(true) // source intacte
   })
 })
 

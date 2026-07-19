@@ -2,10 +2,12 @@ import { useQueryClient } from '@tanstack/react-query'
 
 import {
   addIssuerDeny,
+  removeIssuerDeny,
   unlearnIssuerCodes,
 } from '#/lib/facturation/cloudService.ts'
 import {
   mergeDenylist,
+  removeDeny,
   type IssuerDenylist,
 } from '#/lib/facturation/issuerDenylist.ts'
 
@@ -51,5 +53,17 @@ export function useFacturationCuration() {
     queryClient.invalidateQueries({ queryKey: ['facturation', 'issuerCodes'] })
   }
 
-  return { banIssuerCode, unlearnIssuerCode }
+  /** Lève une interdiction émetteur↔code (undo d'un ban) → le code redevient candidat. */
+  async function unbanIssuerCode(
+    issuerKey: string,
+    code: string,
+  ): Promise<void> {
+    await removeIssuerDeny(issuerKey, code)
+    queryClient.setQueryData<IssuerDenylist>(
+      ['facturation', 'issuerDenylist'],
+      (old) => removeDeny(old ?? { perIssuer: {} }, issuerKey, code),
+    )
+  }
+
+  return { banIssuerCode, unlearnIssuerCode, unbanIssuerCode }
 }
