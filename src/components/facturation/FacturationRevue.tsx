@@ -324,11 +324,27 @@ export function RevueDialog({
       : []
   }, [issuerDenylist, issuerKey])
 
+  // Nuages ORPHELINS : codes ayant un vocabulaire mais rattachés à AUCUN émetteur (appris via
+  // une facture à émetteur vide/court). Non contextuels (indépendants de l'émetteur courant) →
+  // affichés à part pour rester nettoyables, sinon ils s'accumuleraient hors de portée de l'UI.
+  const orphanClouds = useMemo(() => {
+    const linked = new Set<string>()
+    for (const cell of Object.values(issuerCodes.perIssuer))
+      for (const [code, n] of Object.entries(cell)) if (n > 0) linked.add(code)
+    const out: { code: string; words: number }[] = []
+    for (const [code, cell] of Object.entries(serverPool.perCode)) {
+      const words = Object.keys(cell).length
+      if (words > 0 && !linked.has(code)) out.push({ code, words })
+    }
+    return out.sort((a, b) => b.words - a.words || a.code.localeCompare(b.code))
+  }, [serverPool, issuerCodes])
+
   const nothing =
     anomalies.length === 0 &&
     assocs.length === 0 &&
     clouds.length === 0 &&
     denies.length === 0
+  const allEmpty = (!hasIssuer || nothing) && orphanClouds.length === 0
 
   // État par carte : action en cours, ou erreur d'action. Clé = identité de la ligne.
   const [busy, setBusy] = useState<Record<string, Kind>>({})
@@ -373,123 +389,221 @@ export function RevueDialog({
         </DialogHeader>
 
         <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4">
-          {!hasIssuer ? (
+          {allEmpty ? (
             <div className="flex flex-col items-center justify-center gap-2 py-12 text-center text-sm text-muted-foreground">
-              Aucun émetteur sélectionné — saisissez-en un dans le champ «
-              Émetteur » pour gérer ce qu'il a appris.
-            </div>
-          ) : nothing ? (
-            <div className="flex flex-col items-center justify-center gap-2 py-12 text-center text-sm text-muted-foreground">
-              <CheckCircle2 className="size-8 text-emerald-500/70" />
-              Rien d'appris pour cet émetteur — aucune imputation à corriger.
+              {hasIssuer ? (
+                <>
+                  <CheckCircle2 className="size-8 text-emerald-500/70" />
+                  Rien d'appris pour cet émetteur — aucune imputation à
+                  corriger.
+                </>
+              ) : (
+                "Aucun émetteur sélectionné — saisissez-en un dans le champ « Émetteur » pour gérer ce qu'il a appris."
+              )}
             </div>
           ) : (
             <>
-              {/* Section Anomalies. */}
-              {anomalies.length > 0 && (
-                <section className="flex flex-col gap-3">
-                  <h2 className="text-sm font-semibold text-foreground">
-                    Anomalies à examiner
-                  </h2>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    {anomalies.map((a) => {
-                      if (a.kind === 'issuer-outlier') {
-                        const id = `outlier:${a.data.issuerKey}:${a.data.code}`
-                        return (
-                          <div key={id} className="flex flex-col gap-1">
-                            <OutlierCard
+              {!hasIssuer && (
+                <p className="text-xs text-muted-foreground">
+                  Aucun émetteur sélectionné : seuls les nuages sans émetteur
+                  (ci-dessous) sont listés. Saisissez un émetteur pour gérer ses
+                  imputations.
+                </p>
+              )}
+              {hasIssuer && nothing && (
+                <p className="text-sm text-muted-foreground">
+                  Rien d'appris pour cet émetteur.
+                </p>
+              )}
+
+              {hasIssuer && !nothing && (
+                <>
+                  {/* Section Anomalies. */}
+                  {anomalies.length > 0 && (
+                    <section className="flex flex-col gap-3">
+                      <h2 className="text-sm font-semibold text-foreground">
+                        Anomalies à examiner
+                      </h2>
+                      <div className="grid gap-3 md:grid-cols-2">
+                        {anomalies.map((a) => {
+                          if (a.kind === 'issuer-outlier') {
+                            const id = `outlier:${a.data.issuerKey}:${a.data.code}`
+                            return (
+                              <div key={id} className="flex flex-col gap-1">
+                                <OutlierCard
+                                  data={a.data}
+                                  issuerName={issuerName(a.data.issuerKey)}
+                                  busy={busy[id] ?? null}
+                                  onUnlearn={() =>
+                                    run(id, 'forget', () =>
+                                      forgetIssuerCode(
+                                        a.data.issuerKey,
+                                        a.data.code,
+                                      ),
+                                    )
+                                  }
+                                  onBan={() =>
+                                    run(id, 'ban', () =>
+                                      banIssuerCode(
+                                        a.data.issuerKey,
+                                        a.data.code,
+                                      ),
+                                    )
+                                  }
+                                />
+                                {errors[id] && (
+                                  <p className="px-1 text-[11px] text-destructive">
+                                    Action impossible (droits ou base
+                                    indisponibles).
+                                  </p>
+                                )}
+                              </div>
+                            )
+                          }
+                          const id = `confusable:${a.data.a}:${a.data.b}`
+                          return (
+                            <ConfusableCard
+                              key={id}
                               data={a.data}
-                              issuerName={issuerName(a.data.issuerKey)}
-                              busy={busy[id] ?? null}
-                              onUnlearn={() =>
-                                run(id, 'forget', () =>
-                                  forgetIssuerCode(
-                                    a.data.issuerKey,
-                                    a.data.code,
-                                  ),
-                                )
-                              }
-                              onBan={() =>
-                                run(id, 'ban', () =>
-                                  banIssuerCode(a.data.issuerKey, a.data.code),
-                                )
-                              }
+                              onClose={() => onOpenChange(false)}
                             />
-                            {errors[id] && (
-                              <p className="px-1 text-[11px] text-destructive">
-                                Action impossible (droits ou base
-                                indisponibles).
-                              </p>
-                            )}
-                          </div>
-                        )
-                      }
-                      const id = `confusable:${a.data.a}:${a.data.b}`
-                      return (
-                        <ConfusableCard
-                          key={id}
-                          data={a.data}
-                          onClose={() => onOpenChange(false)}
-                        />
-                      )
-                    })}
-                  </div>
-                </section>
+                          )
+                        })}
+                      </div>
+                    </section>
+                  )}
+
+                  {/* Section Associations apprises (émetteur→code) : liste complète. */}
+                  {assocs.length > 0 && (
+                    <section className="flex flex-col gap-2">
+                      <h2 className="text-sm font-semibold text-foreground">
+                        Associations apprises
+                      </h2>
+                      <p className="-mt-1 text-xs text-muted-foreground">
+                        Ce que cet émetteur a appris à imputer. « Désapprendre »
+                        efface l'association ; si plus aucun émetteur n'utilise
+                        ce code, son vocabulaire est aussi réinitialisé.
+                      </p>
+                      <div className="flex flex-col gap-2">
+                        {assocs.map(({ code, count }) => {
+                          const id = `assoc:${issuerKey}:${code}`
+                          return (
+                            <div key={id} className="flex flex-col gap-1">
+                              <AssocRow
+                                issuerName={issuerName(issuerKey)}
+                                code={code}
+                                count={count}
+                                busy={busy[id] === 'forget'}
+                                onForget={() =>
+                                  run(id, 'forget', () =>
+                                    forgetIssuerCode(issuerKey, code),
+                                  )
+                                }
+                              />
+                              {errors[id] && (
+                                <p className="px-1 text-[11px] text-destructive">
+                                  Action impossible (droits ou base
+                                  indisponibles).
+                                </p>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </section>
+                  )}
+
+                  {/* Section Vocabulaire appris par code (nuages de mots). */}
+                  {clouds.length > 0 && (
+                    <section className="flex flex-col gap-2">
+                      <h2 className="text-sm font-semibold text-foreground">
+                        Vocabulaire appris
+                      </h2>
+                      <p className="-mt-1 text-xs text-muted-foreground">
+                        Les mots retenus par code. « Réinitialiser » efface tout
+                        le vocabulaire d'un code (remise à zéro d'une imputation
+                        polluée).
+                      </p>
+                      <div className="flex flex-col gap-2">
+                        {clouds.map(({ code, words }) => {
+                          const id = `cloud:${code}`
+                          return (
+                            <div key={id} className="flex flex-col gap-1">
+                              <CloudRow
+                                code={code}
+                                words={words}
+                                busy={busy[id] === 'reset'}
+                                onReset={() =>
+                                  run(id, 'reset', () => resetCodeCloud(code))
+                                }
+                              />
+                              {errors[id] && (
+                                <p className="px-1 text-[11px] text-destructive">
+                                  Action impossible (droits ou base
+                                  indisponibles).
+                                </p>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </section>
+                  )}
+
+                  {/* Section Interdictions en vigueur (denylist). */}
+                  {denies.length > 0 && (
+                    <section className="flex flex-col gap-3">
+                      <h2 className="text-sm font-semibold text-foreground">
+                        Interdictions en vigueur
+                      </h2>
+                      <p className="-mt-1 text-xs text-muted-foreground">
+                        Codes que cet émetteur ne peut jamais recevoir. Lever
+                        l'interdiction rend l'imputation de nouveau possible.
+                      </p>
+                      <div className="grid gap-3 md:grid-cols-2">
+                        {denies.map(({ code }) => {
+                          const id = `unban:${issuerKey}:${code}`
+                          return (
+                            <div key={id} className="flex flex-col gap-1">
+                              <DenyCard
+                                issuerName={issuerName(issuerKey)}
+                                code={code}
+                                busy={busy[id] === 'unban'}
+                                onUnban={() =>
+                                  run(id, 'unban', () =>
+                                    unbanIssuerCode(issuerKey, code),
+                                  )
+                                }
+                              />
+                              {errors[id] && (
+                                <p className="px-1 text-[11px] text-destructive">
+                                  Action impossible (droits ou base
+                                  indisponibles).
+                                </p>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </section>
+                  )}
+                </>
               )}
 
-              {/* Section Associations apprises (émetteur→code) : liste complète. */}
-              {assocs.length > 0 && (
+              {/* Section Nuages orphelins : rattachés à aucun émetteur, listés hors contexte
+                  pour rester nettoyables (sinon inatteignables depuis l'UI). */}
+              {orphanClouds.length > 0 && (
                 <section className="flex flex-col gap-2">
                   <h2 className="text-sm font-semibold text-foreground">
-                    Associations apprises
+                    Nuages sans émetteur
                   </h2>
                   <p className="-mt-1 text-xs text-muted-foreground">
-                    Ce que cet émetteur a appris à imputer. « Désapprendre »
-                    efface l'association ; si plus aucun émetteur n'utilise ce
-                    code, son vocabulaire est aussi réinitialisé.
+                    Vocabulaire appris sans émetteur rattaché (facture tamponnée
+                    sans nom d'émetteur). « Réinitialiser » l'efface.
                   </p>
                   <div className="flex flex-col gap-2">
-                    {assocs.map(({ code, count }) => {
-                      const id = `assoc:${issuerKey}:${code}`
-                      return (
-                        <div key={id} className="flex flex-col gap-1">
-                          <AssocRow
-                            issuerName={issuerName(issuerKey)}
-                            code={code}
-                            count={count}
-                            busy={busy[id] === 'forget'}
-                            onForget={() =>
-                              run(id, 'forget', () =>
-                                forgetIssuerCode(issuerKey, code),
-                              )
-                            }
-                          />
-                          {errors[id] && (
-                            <p className="px-1 text-[11px] text-destructive">
-                              Action impossible (droits ou base indisponibles).
-                            </p>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                </section>
-              )}
-
-              {/* Section Vocabulaire appris par code (nuages de mots). */}
-              {clouds.length > 0 && (
-                <section className="flex flex-col gap-2">
-                  <h2 className="text-sm font-semibold text-foreground">
-                    Vocabulaire appris
-                  </h2>
-                  <p className="-mt-1 text-xs text-muted-foreground">
-                    Les mots retenus par code. « Réinitialiser » efface tout le
-                    vocabulaire d'un code (remise à zéro d'une imputation
-                    polluée).
-                  </p>
-                  <div className="flex flex-col gap-2">
-                    {clouds.map(({ code, words }) => {
-                      const id = `cloud:${code}`
+                    {orphanClouds.map(({ code, words }) => {
+                      const id = `orphan:${code}`
                       return (
                         <div key={id} className="flex flex-col gap-1">
                           <CloudRow
@@ -498,43 +612,6 @@ export function RevueDialog({
                             busy={busy[id] === 'reset'}
                             onReset={() =>
                               run(id, 'reset', () => resetCodeCloud(code))
-                            }
-                          />
-                          {errors[id] && (
-                            <p className="px-1 text-[11px] text-destructive">
-                              Action impossible (droits ou base indisponibles).
-                            </p>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                </section>
-              )}
-
-              {/* Section Interdictions en vigueur (denylist). */}
-              {denies.length > 0 && (
-                <section className="flex flex-col gap-3">
-                  <h2 className="text-sm font-semibold text-foreground">
-                    Interdictions en vigueur
-                  </h2>
-                  <p className="-mt-1 text-xs text-muted-foreground">
-                    Codes que cet émetteur ne peut jamais recevoir. Lever
-                    l'interdiction rend l'imputation de nouveau possible.
-                  </p>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    {denies.map(({ code }) => {
-                      const id = `unban:${issuerKey}:${code}`
-                      return (
-                        <div key={id} className="flex flex-col gap-1">
-                          <DenyCard
-                            issuerName={issuerName(issuerKey)}
-                            code={code}
-                            busy={busy[id] === 'unban'}
-                            onUnban={() =>
-                              run(id, 'unban', () =>
-                                unbanIssuerCode(issuerKey, code),
-                              )
                             }
                           />
                           {errors[id] && (

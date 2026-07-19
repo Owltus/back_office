@@ -327,11 +327,14 @@ export function InvoicePanel({
         // Le pull de mots appris = UNIQUEMENT le contenu de la facture. Le nom d'émetteur
         // n'est PLUS injecté dans les nuages : son signal vit dans le modèle séparé
         // émetteur→codes (learnIssuerCodes ci-dessous), ce qui garde les nuages propres.
+        // INSTANTANÉ figé ICI : le désapprentissage retirera EXACTEMENT ces codes/émetteur,
+        // même si l'utilisateur ré-édite ensuite l'imputation (compteurs partagés → symétrie).
+        const learnedCodes = [...record.codes]
         const deltas = countTokens(record.text)
         const learnSupplier = canLearn(record.supplierName)
+        let learnedIssuer: string | null = null
         try {
-          await learnClouds(record.codes, deltas)
-          onPatch({ learned: true })
+          await learnClouds(learnedCodes, deltas)
           // Patch optimiste du cache (mêmes deltas), sans refetch du modèle.
           // NOTE (D5) : le MÊME delta est appliqué à TOUS les codes retenus (miroir
           // fidèle de la RPC). Pour un article multi-imputé, cela gonfle identiquement
@@ -339,41 +342,51 @@ export function InvoicePanel({
           // le poids par code) toucherait aussi la RPC → différé, hors de ce lot.
           queryClient.setQueryData<WordPool>(['facturation', 'clouds'], (old) =>
             mergePools(old ?? { perCode: {} }, {
-              perCode: Object.fromEntries(record.codes.map((c) => [c, deltas])),
+              perCode: Object.fromEntries(learnedCodes.map((c) => [c, deltas])),
             }),
           )
-          // Apprentissage de l'émetteur (dictionnaire) : reconnu au prochain dépôt.
+          // Apprentissage de l'émetteur, ISOLÉ : un échec ici ne doit pas invalider les
+          // nuages déjà appris (sinon l'instantané ne refléterait pas la réalité).
           if (learnSupplier) {
-            const name = normalize(record.supplierName).trim()
-            const display = record.supplierName.trim()
-            await learnIssuer(name, display)
-            queryClient.setQueryData<Issuer[]>(
-              ['facturation', 'issuers'],
-              (old) => {
-                const list = old ? [...old] : []
-                const i = list.findIndex((x) => x.name === name)
-                if (i >= 0)
-                  list[i] = { ...list[i], display, count: list[i].count + 1 }
-                else list.push({ name, display, count: 1 })
-                return list
-              },
-            )
-            // Co-occurrence émetteur → codes (le « filtre fort » : +1 par code validé).
-            await learnIssuerCodes(name, record.codes)
-            queryClient.setQueryData<IssuerCodes>(
-              ['facturation', 'issuerCodes'],
-              (old) =>
-                mergeIssuerCodes(old ?? { perIssuer: {} }, {
-                  perIssuer: {
-                    [name]: Object.fromEntries(record.codes.map((c) => [c, 1])),
-                  },
-                }),
-            )
+            try {
+              const name = normalize(record.supplierName).trim()
+              const display = record.supplierName.trim()
+              await learnIssuer(name, display)
+              queryClient.setQueryData<Issuer[]>(
+                ['facturation', 'issuers'],
+                (old) => {
+                  const list = old ? [...old] : []
+                  const i = list.findIndex((x) => x.name === name)
+                  if (i >= 0)
+                    list[i] = { ...list[i], display, count: list[i].count + 1 }
+                  else list.push({ name, display, count: 1 })
+                  return list
+                },
+              )
+              // Co-occurrence émetteur → codes (le « filtre fort » : +1 par code validé).
+              await learnIssuerCodes(name, learnedCodes)
+              queryClient.setQueryData<IssuerCodes>(
+                ['facturation', 'issuerCodes'],
+                (old) =>
+                  mergeIssuerCodes(old ?? { perIssuer: {} }, {
+                    perIssuer: {
+                      [name]: Object.fromEntries(
+                        learnedCodes.map((c) => [c, 1]),
+                      ),
+                    },
+                  }),
+              )
+              learnedIssuer = name // n'est figé QUE si l'émetteur a bien été mémorisé
+            } catch {
+              setLearnWarning(true) // émetteur non mémorisé, mais les nuages, si
+            }
           }
+          // learned + INSTANTANÉ posés en DERNIER, une fois l'apprentissage réel connu :
+          // un échec émetteur laisse learnedIssuer=null → l'undo ne touchera pas l'émetteur.
+          onPatch({ learned: true, learnedCodes, learnedIssuer })
         } catch {
-          // Apprentissage best-effort : le PDF reste tamponné/téléchargé. On le
-          // SIGNALE (rôle insuffisant, table absente, réseau) au lieu du silence,
-          // pour que l'utilisateur sache que rien n'a été mémorisé.
+          // Même les nuages ont échoué → rien appris, learned reste false (pas d'undo
+          // asymétrique). On SIGNALE (rôle, table, réseau) au lieu du silence.
           setLearnWarning(true)
         }
       }
@@ -384,18 +397,20 @@ export function InvoicePanel({
     }
   }
 
-  // Cœur du désapprentissage : reconstitue le MÊME delta qu'au tamponnage (D5) et le rejoue
-  // en soustraction (borné à 0). Exact tant que la facture n'a pas été rééditée depuis.
-  // Requiert les RPC de facturation_corrections.sql ; sinon l'appel échoue (propagé).
-  async function unlearnInvoiceCore() {
-    // Symétrique du tamponnage : le nom d'émetteur n'est plus dans les nuages.
+  // Cœur du désapprentissage : retire EXACTEMENT `codes` (+ `issuerName` s'il est fourni)
+  // du modèle, en rejouant en soustraction le même delta que le texte a produit à l'apprentissage
+  // (borné à 0 côté RPC). Le texte est stable → deltas identiques ; les CODES et l'ÉMETTEUR sont
+  // passés explicitement (instantané d'apprentissage), jamais l'état courant éventuellement
+  // réédité. Requiert les RPC de facturation_corrections.sql ; sinon l'appel échoue (propagé).
+  async function unlearnInvoiceCore(
+    codes: string[],
+    issuerName: string | null,
+  ) {
     const deltas = countTokens(record.text)
-    const learnSupplier = canLearn(record.supplierName)
-    await unlearnClouds(record.codes, deltas)
-    if (learnSupplier) {
-      const name = normalize(record.supplierName).trim()
-      await unlearnIssuer(name)
-      await unlearnIssuerCodes(name, record.codes)
+    await unlearnClouds(codes, deltas)
+    if (issuerName) {
+      await unlearnIssuer(issuerName)
+      await unlearnIssuerCodes(issuerName, codes)
     }
     // Le serveur fait foi après correction : on resynchronise le cache.
     queryClient.invalidateQueries({ queryKey: ['facturation', 'clouds'] })
@@ -403,13 +418,23 @@ export function InvoicePanel({
     queryClient.invalidateQueries({ queryKey: ['facturation', 'issuerCodes'] })
   }
 
-  // Annuler l'apprentissage d'une facture apprise DANS LA SÉANCE (juste tamponnée).
+  // Annuler l'apprentissage d'une facture apprise DANS LA SÉANCE (juste tamponnée) : on rejoue
+  // l'INSTANTANÉ figé au tamponnage (learnedCodes/learnedIssuer), pas l'état courant — sinon une
+  // édition depuis le tampon ferait décrémenter des codes/émetteurs jamais appris (compteurs
+  // partagés). Repli sur l'état courant pour d'anciennes factures sans instantané.
   async function handleUndoLearn() {
     setUndoing(true)
     setLearnWarning(false)
     try {
-      await unlearnInvoiceCore()
-      onPatch({ learned: false })
+      const codes = record.learnedCodes ?? record.codes
+      const issuerName =
+        record.learnedIssuer !== undefined
+          ? record.learnedIssuer
+          : canLearn(record.supplierName)
+            ? normalize(record.supplierName).trim()
+            : null
+      await unlearnInvoiceCore(codes, issuerName)
+      onPatch({ learned: false, learnedCodes: undefined, learnedIssuer: null })
     } catch {
       setLearnWarning(true)
     } finally {
@@ -417,16 +442,19 @@ export function InvoicePanel({
     }
   }
 
-  // Désapprendre une facture REJOUÉE : re-déposée exprès pour effacer une erreur passée
-  // (imputée à tort sur un code). On règle l'émetteur + les codes fautifs, puis on retire
-  // exactement ce que cette facture aurait appris. Sans effet si rien n'avait été appris
-  // (décrément borné à 0). Distinct de « Annuler l'apprentissage » (facture de la séance).
+  // Désapprendre une facture REJOUÉE : re-déposée exprès pour effacer une erreur passée. Ici il
+  // n'existe PAS d'instantané (facture fraîche, non apprise) → on retire ce que l'état COURANT
+  // aurait appris. ⚠ Cela décrémente des compteurs PARTAGÉS : l'utilisateur doit régler l'émetteur
+  // et les codes EXACTEMENT comme lors du tamponnage fautif (sinon il érode un autre apprentissage).
   async function handleReplayUnlearn() {
     setReplayUndoing(true)
     setLearnWarning(false)
     setReplayDone(false)
     try {
-      await unlearnInvoiceCore()
+      const issuerName = canLearn(record.supplierName)
+        ? normalize(record.supplierName).trim()
+        : null
+      await unlearnInvoiceCore(record.codes, issuerName)
       setReplayDone(true)
     } catch {
       setLearnWarning(true)

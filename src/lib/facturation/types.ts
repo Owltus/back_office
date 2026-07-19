@@ -136,6 +136,12 @@ export interface InvoiceRecord {
   stamped?: boolean
   /** Vrai une fois la facture apprise (au tamponnage) — garde anti-double-comptage. */
   learned: boolean
+  /** INSTANTANÉ de ce qui a été RÉELLEMENT appris au tamponnage (figé à ce moment). Le
+   *  désapprentissage retire EXACTEMENT ceci, jamais l'état courant (que l'utilisateur a pu
+   *  ré-éditer entre-temps) — garantit la symétrie learn/unlearn sur des compteurs PARTAGÉS.
+   *  `learnedIssuer` = clé émetteur apprise, ou null si l'émetteur n'a pas été mémorisé. */
+  learnedCodes?: string[]
+  learnedIssuer?: string | null
   /** Vrai dès que l'utilisateur a modifié l'imputation/émetteur/date à la main — la
    *  re-détection en séance ne doit alors plus écraser ses choix. */
   userEdited?: boolean

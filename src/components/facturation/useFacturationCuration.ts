@@ -5,7 +5,6 @@ import {
   forgetCloudCode,
   forgetIssuerCode as forgetIssuerCodeApi,
   removeIssuerDeny,
-  unlearnIssuerCodes,
 } from '#/lib/facturation/cloudService.ts'
 import {
   removeIssuerCode,
@@ -42,14 +41,19 @@ export function useFacturationCuration() {
           perIssuer: { [issuerKey]: new Set([code]) },
         }),
     )
-    // Nettoyer le signal fréquentiel (le prior ne doit plus proposer le code) — best-effort :
-    // la denylist suffit déjà à l'exclure, ce décrément n'est qu'un ménage du modèle.
+    // Oublier TOUTE la co-occurrence (pas un simple -1) : un couple banni ne doit plus peser
+    // dans la maturité ni les anomalies, ni ressusciter avec son historique à l'unban. On ne
+    // touche PAS au nuage du code (la denylist suffit à l'exclure ; le vocabulaire peut servir
+    // à d'autres émetteurs). Best-effort : l'exclusion est déjà garantie par la denylist posée.
     try {
-      await unlearnIssuerCodes(issuerKey, [code])
+      await forgetIssuerCodeApi(issuerKey, code)
+      queryClient.setQueryData<IssuerCodes>(
+        ['facturation', 'issuerCodes'],
+        (old) => removeIssuerCode(old ?? { perIssuer: {} }, issuerKey, code),
+      )
     } catch {
-      // Ignoré volontairement : l'exclusion est garantie par la denylist déjà posée.
+      // Ignoré volontairement.
     }
-    queryClient.invalidateQueries({ queryKey: ['facturation', 'issuerCodes'] })
   }
 
   /** Oubli COMPLET d'une association émetteur→code apprise. Retire la co-occurrence, PUIS,
