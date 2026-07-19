@@ -17,12 +17,18 @@ import {
 import {
   abstains,
   confusableCodes,
+  countTokens,
   maturity,
   preselect,
   scoreInvoice,
   seedPool,
   tokenize,
+  visibleWords,
 } from '#/lib/facturation/wordpool.ts'
+import {
+  INVOICE_STOPWORDS,
+  documentStoplist,
+} from '#/lib/facturation/stopwords.ts'
 import { matchIssuer } from '#/lib/facturation/issuers.ts'
 import {
   bumpIssuerCodes,
@@ -436,6 +442,59 @@ describe('wordpool', () => {
     expect(t.some((x) => /\d/.test(x))).toBe(false) // aucun token avec chiffre
   })
 
+  it('couche 1 : filtre le générique de facture (paiement/légal/logistique)', () => {
+    const t = tokenize(
+      'Règlement par chèque, bon de livraison, échéance 30 jours, mentions légales',
+    )
+    for (const w of [
+      'reglement',
+      'cheque',
+      'livraison',
+      'echeance',
+      'mentions',
+    ])
+      expect(t).not.toContain(w)
+  })
+
+  it('couche 1 : conserve les mots de NATURE produit', () => {
+    const t = tokenize(
+      'Livraison de gaz et alcool, consommation electricite, réparation',
+    )
+    for (const w of [
+      'gaz',
+      'alcool',
+      'consommation',
+      'electricite',
+      'reparation',
+    ])
+      expect(t).toContain(w)
+  })
+
+  it('couche 1 : la liste est pré-normalisée (sans accents) et n’apprend pas le générique', () => {
+    for (const w of INVOICE_STOPWORDS) expect(normalize(w)).toBe(w)
+    expect(countTokens('reglement livraison gaz')).toEqual({ gaz: 1 })
+  })
+
+  it('couche 2 : documentStoplist retient les tokens trop fréquents, garde le cold-start', () => {
+    const doc = (tokens: string[]) => ({
+      hash: '',
+      issuerKey: null,
+      codes: [],
+      deltas: Object.fromEntries(tokens.map((t) => [t, 1])),
+      method: 'native' as const,
+      learnedAt: '',
+    })
+    // Sous le seuil minDocs → inerte, quel que soit le contenu.
+    expect(documentStoplist([doc(['legallais'])], 0.5, 8).size).toBe(0)
+    // 10 documents : « legallais » sur 9/10 (≥ 0.5) → parasite ; « scie » sur 1/10 → conservé.
+    const entries = Array.from({ length: 10 }, (_, i) =>
+      doc(i < 9 ? ['legallais', `mot${i}`] : ['scie']),
+    )
+    const stop = documentStoplist(entries, 0.5, 8)
+    expect(stop.has('legallais')).toBe(true)
+    expect(stop.has('scie')).toBe(false)
+  })
+
   it('les mots concentrés votent le bon code', () => {
     const s = scoreInvoice('intervention reparation ascenseur en panne', POOL)
     expect(s[0].code).toBe('TECH')
@@ -462,6 +521,27 @@ describe('wordpool', () => {
     expect(abstains(scoreInvoice('commun', big))).toBe(true)
     // Le mot rare, lui, vote pour son code.
     expect(scoreInvoice('special', big)[0]?.code).toBe('C1')
+  })
+
+  it('stoplist adaptative : un token dénié ne vote plus au scoring', () => {
+    const pool = { perCode: { A: { alpha: 5, xray: 3 }, B: { yoyo: 5 } } }
+    // Sans stoplist : « alpha » vote pour A.
+    expect(scoreInvoice('alpha', pool)[0]?.code).toBe('A')
+    // Avec « alpha » en stoplist : plus aucun vote → abstention.
+    expect(scoreInvoice('alpha', pool, new Set(['alpha']))).toHaveLength(0)
+  })
+
+  it('visibleWords : masque la stoplist, trie par fréquence décroissante', () => {
+    const cell = { legallais: 9, scie: 2, lame: 5 }
+    expect(visibleWords(cell)).toEqual([
+      ['legallais', 9],
+      ['lame', 5],
+      ['scie', 2],
+    ])
+    expect(visibleWords(cell, new Set(['legallais']))).toEqual([
+      ['lame', 5],
+      ['scie', 2],
+    ])
   })
 
   it('abstention quand aucun mot informatif', () => {

@@ -650,6 +650,7 @@ export function buildGalaxy(
   topWordsPerCode = 12,
   minCount = 2,
   issuerCodes?: IssuerCodes,
+  stop?: ReadonlySet<string>,
 ): GalaxyGraph {
   const issuerName = new Map(issuers.map((i) => [i.name, i.display]))
   const nodes: GalaxyNode[] = []
@@ -661,7 +662,7 @@ export function buildGalaxy(
     // OCR parasites) pour ne pas créer de nœuds/liens sans queue ni tête. Purement
     // visuel — la base n'est pas touchée (le nettoyage réel = pruneClouds).
     const top = Object.entries(cell)
-      .filter(([, count]) => count >= minCount)
+      .filter(([token, count]) => count >= minCount && !stop?.has(token))
       .sort((a, b) => b[1] - a[1])
       .slice(0, topWordsPerCode)
     if (top.length === 0) continue

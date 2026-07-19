@@ -1,5 +1,6 @@
 import { normalize } from '#/lib/facturation/text.ts'
 import { SEED_RULES } from '#/lib/facturation/constants.ts'
+import { INVOICE_STOPWORDS } from '#/lib/facturation/stopwords.ts'
 
 /*
  * Nuages de mots pour l'imputation comptable — logique PURE (aucun React/DOM/
@@ -115,6 +116,8 @@ const STOPWORDS = new Set([
   'http',
   'https',
   'france',
+  // Couche 1 « facture » élargie (paiement, légal, admin, logistique, politesse) — cf. stopwords.ts.
+  ...INVOICE_STOPWORDS,
 ])
 
 /** Plafond de tokens conservés par code (bornage — voir aussi l'élagage SQL). */
@@ -198,9 +201,10 @@ interface Stats {
   df: Record<string, number> // nb de codes contenant le token
   cf: Record<string, number> // fréquence globale (anti-hapax)
   codes: string[]
+  stop?: ReadonlySet<string> // denylist adaptative (fréquence-document) → idf 0
 }
 
-function computeStats(pool: WordPool): Stats {
+function computeStats(pool: WordPool, stop?: ReadonlySet<string>): Stats {
   const codes = Object.keys(pool.perCode)
   const df: Record<string, number> = {}
   const cf: Record<string, number> = {}
@@ -209,13 +213,15 @@ function computeStats(pool: WordPool): Stats {
       df[t] = (df[t] ?? 0) + 1
       cf[t] = (cf[t] ?? 0) + n
     }
-  return { N: codes.length, df, cf, codes }
+  return { N: codes.length, df, cf, codes, stop }
 }
 
-/** Poids automatique : mot présent partout → 0 ; rare+concentré → fort ; vu une
- *  seule fois (cf < 2) → 0 (bruit ignoré) ; présent dans ≥ MAX_DF_RATIO des codes (base
- *  assez large) → 0 (parasite transverse : adresse, mentions légales, banque…). */
+/** Poids automatique : token de la stoplist adaptative → 0 (parasite propre au contexte :
+ *  nom du fournisseur/client, adresse) ; mot présent partout → 0 ; rare+concentré → fort ;
+ *  vu une seule fois (cf < 2) → 0 (bruit ignoré) ; présent dans ≥ MAX_DF_RATIO des codes
+ *  (base assez large) → 0 (parasite transverse : adresse, mentions légales, banque…). */
 function idf(t: string, s: Stats): number {
+  if (s.stop?.has(t)) return 0 // denylist adaptative (jumeau du max_df)
   if ((s.cf[t] ?? 0) < 2) return 0
   const df = s.df[t] ?? s.N
   if (s.N >= MAXDF_MIN_CODES && df / s.N >= MAX_DF_RATIO) return 0 // max_df adaptatif
@@ -249,8 +255,12 @@ function vectorize(
  * (cosinus élevé mais un seul mot votant) alors qu'un code à 72 % existe » : le tri et
  * l'affichage parlent enfin de la même chose. Liste vide si rien d'informatif.
  */
-export function scoreInvoice(rawText: string, pool: WordPool): Scored[] {
-  const s = computeStats(pool)
+export function scoreInvoice(
+  rawText: string,
+  pool: WordPool,
+  stop?: ReadonlySet<string>,
+): Scored[] {
+  const s = computeStats(pool, stop)
   if (s.N === 0) return []
 
   const tf: Record<string, number> = {}
@@ -325,6 +335,18 @@ export function countTokens(rawText: string): Record<string, number> {
   const out: Record<string, number> = {}
   for (const t of tokenize(rawText)) out[t] = (out[t] ?? 0) + 1
   return out
+}
+
+/** Mots VISIBLES d'un code (hors stoplist adaptative), triés par fréquence décroissante. Le
+ *  masquage à l'affichage rejoue la MÊME stoplist que le scoring → l'UI (galaxie, revue) montre
+ *  exactement ce qui peut voter. `stop` vide → tous les mots visibles (comportement inchangé). */
+export function visibleWords(
+  cell: Record<string, number>,
+  stop?: ReadonlySet<string>,
+): Array<[string, number]> {
+  return Object.entries(cell)
+    .filter(([t]) => !stop?.has(t))
+    .sort((a, b) => b[1] - a[1])
 }
 
 /** Cosinus minimal entre deux nuages de codes pour les juger CONFUSABLES (candidats à la
