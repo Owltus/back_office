@@ -144,7 +144,15 @@ function ImputationList({
                 )}
               </div>
 
-              <div className="flex shrink-0 items-center gap-0.5 self-start">
+              <div className="flex shrink-0 flex-col items-center gap-0.5 self-start">
+                <button
+                  type="button"
+                  onClick={() => onRemove(code)}
+                  aria-label={`Retirer ${code}`}
+                  className="rounded p-0.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <X className="size-3.5" />
+                </button>
                 {onBan && (
                   <button
                     type="button"
@@ -161,14 +169,6 @@ function ImputationList({
                     )}
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={() => onRemove(code)}
-                  aria-label={`Retirer ${code}`}
-                  className="rounded p-0.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                >
-                  <X className="size-3.5" />
-                </button>
               </div>
             </div>
 
