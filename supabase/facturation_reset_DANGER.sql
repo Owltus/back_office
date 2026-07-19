@@ -11,9 +11,9 @@
 --   • « Annuler l'apprentissage » sur une facture de la séance.
 -- Ces outils réparent une erreur SANS jeter l'apprentissage de toute l'équipe.
 --
--- Ce script `truncate` les 4 tables facturation (wordpool, issuers, issuer_codes,
--- denylist). IRRÉVERSIBLE. Tout ce que l'équipe a appris est perdu (précédent réel :
--- rapro_rooms vidée en prod = données perdues). Ne touche à AUCUNE table partagée.
+-- Ce script `truncate` les 5 tables facturation (wordpool, issuers, issuer_codes,
+-- denylist, learned_docs). IRRÉVERSIBLE. Tout ce que l'équipe a appris est perdu (précédent
+-- réel : rapro_rooms vidée en prod = données perdues). Ne touche à AUCUNE table partagée.
 --
 -- GARDE-FOU : le reset est BLOQUÉ tant qu'un jeton de confirmation n'est pas posé dans
 -- la MÊME session SQL. Pour confirmer, exécute d'abord CETTE ligne, seule, puis ce script :
@@ -40,6 +40,9 @@ begin
   end if;
   if to_regclass('public.facturation_issuer_denylist') is not null then
     truncate table public.facturation_issuer_denylist;
+  end if;
+  if to_regclass('public.facturation_learned_docs') is not null then
+    truncate table public.facturation_learned_docs;
   end if;
 
   -- Consommer le jeton : un second lancement redemandera une confirmation explicite.
