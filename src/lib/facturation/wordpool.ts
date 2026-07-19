@@ -1,14 +1,16 @@
 import { normalize } from '#/lib/facturation/text.ts'
 import { SEED_RULES } from '#/lib/facturation/constants.ts'
-import { INVOICE_STOPWORDS } from '#/lib/facturation/stopwords.ts'
 
 /*
  * Nuages de mots pour l'imputation comptable — logique PURE (aucun React/DOM/
  * Supabase), testable en Node. Chaque code d'imputation a un sac de mots
- * (fréquences). Les poids sont 100 % AUTOMATIQUES (IDF au niveau des codes : un
- * mot répandu partout vaut ~0, un mot rare et concentré vaut fort). Le scoring
- * TF-IDF/cosinus produit une vraie probabilité ; on s'abstient si la preuve est
- * mince. Sans IA / sans embeddings — que de la statistique de fréquences.
+ * (fréquences). Les poids sont 100 % AUTOMATIQUES et APPRIS DES DONNÉES : le
+ * « poids de discriminance » (disc) mesure à quel point un mot est CONCENTRÉ sur
+ * une imputation plutôt qu'étalé sur toutes (idf normalisé au nombre de codes).
+ * Un mot répandu partout tombe au PLANCHER (jamais 0 : « filtrer, pas ignorer »),
+ * un mot concentré vaut ~1. Le scoring TF-IDF/cosinus produit une vraie
+ * probabilité ; on s'abstient si la preuve est mince. Sans IA / sans embeddings —
+ * que de la statistique de fréquences, comparée d'une imputation à l'autre.
  */
 
 export interface WordPool {
@@ -22,8 +24,14 @@ export interface Scored {
   words: string[] // mots ayant le plus contribué (explicabilité)
 }
 
-// Mots vides FR + termes de facture ubiquitaires (aucun pouvoir discriminant).
+// Amorçage « à froid » — liste VOLONTAIREMENT TRÈS COURTE : uniquement la grammaire FR, le
+// squelette universel d'une facture et l'identité de l'hôtel — des mots sans AUCUN pouvoir
+// discriminant quel que soit le fournisseur. Tout le RESTE (paiement, mentions légales, adresse,
+// nom du fournisseur, du client…) n'est PLUS listé en dur : c'est le poids de discriminance appris
+// (disc, cf. computeStats) qui le dévalue tout seul à partir des données, à mesure que la base
+// grandit. On n'efface donc qu'un socle minimal ; on ne « décide » plus du bruit à la main.
 const STOPWORDS = new Set([
+  // Squelette universel d'une facture (jamais discriminant)
   'facture',
   'total',
   'ttc',
@@ -48,6 +56,7 @@ const STOPWORDS = new Set([
   'page',
   'code',
   'article',
+  // Grammaire FR (mots vides)
   'de',
   'des',
   'du',
@@ -88,36 +97,9 @@ const STOPWORDS = new Set([
   'sont',
   'plus',
   'moins',
+  // Identité de l'hôtel : sur TOUTES les factures, jamais discriminant
   'okko',
-  'nantes', // nom + ville de l'hôtel : présents sur toutes les factures
-  // Boilerplate de facture (mentions légales / bancaires / adresse) — transverse, aucun
-  // pouvoir discriminant. Complète le max_df pour les tokens fréquents mais non ubiquitaires.
-  'siret',
-  'siren',
-  'rcs',
-  'ape',
-  'naf',
-  'iban',
-  'bic',
-  'sas',
-  'sarl',
-  'sasu',
-  'eurl',
-  'sci',
-  'cedex',
-  'rue',
-  'avenue',
-  'boulevard',
-  'tel',
-  'fax',
-  'mail',
-  'email',
-  'www',
-  'http',
-  'https',
-  'france',
-  // Couche 1 « facture » élargie (paiement, légal, admin, logistique, politesse) — cf. stopwords.ts.
-  ...INVOICE_STOPWORDS,
+  'nantes',
 ])
 
 /** Plafond de tokens conservés par code (bornage — voir aussi l'élagage SQL). */
@@ -134,12 +116,10 @@ export const CLOUD_MAX = 3
  *  « fiable » (vert) de l'affichage → « ce que l'UI colorerait en vert compte ». */
 export const CLOUD_STRONG = 0.5
 const BM25_K = 1.5
-/** max_df ADAPTATIF : un token présent dans une FRACTION ≥ ce seuil des codes est jugé
- *  transverse (boilerplate) → poids 0. Complète l'idf (qui n'annule QUE l'ubiquité totale
- *  df=N). S'active seulement au-delà de MAXDF_MIN_CODES codes (sinon il fausserait les
- *  petites bases / fixtures de test). Auto-nettoyant à mesure que la base grandit. */
-const MAX_DF_RATIO = 0.6
-const MAXDF_MIN_CODES = 8
+/** PLANCHER du poids de discriminance : un mot totalement transverse (présent dans TOUTES les
+ *  imputations) ne vaut PAS 0 mais ce plancher — il pèse peu, mais n'est jamais effacé. Incarne
+ *  le choix « réduire le poids, jamais ignorer ». Réglable à l'usage. */
+export const DISC_FLOOR = 0.12
 /** Corroboration : `n / (n + K)` mots votants. 1 mot → 0,25 ; 3 → 0,5 ; 9 → 0,75. */
 const EVIDENCE_K = 3
 const SEED_WEIGHT = 4 // mot-clé livré : graine forte (survit au filtre hapax)
@@ -196,16 +176,24 @@ export function tokenize(rawText: string): string[] {
     )
 }
 
-interface Stats {
+export interface Stats {
   N: number
-  df: Record<string, number> // nb de codes contenant le token
   cf: Record<string, number> // fréquence globale (anti-hapax)
+  disc: Record<string, number> // poids de discriminance ∈ [DISC_FLOOR, 1], appris inter-codes
   codes: string[]
-  stop?: ReadonlySet<string> // denylist adaptative (fréquence-document) → idf 0
 }
 
-function computeStats(pool: WordPool, stop?: ReadonlySet<string>): Stats {
+/**
+ * Statistiques du pool : fréquence globale (cf) et surtout le POIDS DE DISCRIMINANCE (disc) de
+ * chaque token, appris de sa répartition d'une imputation à l'autre — le cœur du « comparer les
+ * pools d'une imputation à l'autre ». concentration = log(N/df)/log(N) ∈ [0,1] : 1 = le token
+ * n'apparaît que dans UN code (signal fort), 0 = il est dans TOUS (transverse : adresse, paiement,
+ * mentions…). disc = DISC_FLOOR + (1-DISC_FLOOR)·concentration → jamais 0. Avec un seul code (N≤1)
+ * aucune discrimination possible → disc = 1 partout.
+ */
+export function computeStats(pool: WordPool): Stats {
   const codes = Object.keys(pool.perCode)
+  const N = codes.length
   const df: Record<string, number> = {}
   const cf: Record<string, number> = {}
   for (const c of codes)
@@ -213,19 +201,21 @@ function computeStats(pool: WordPool, stop?: ReadonlySet<string>): Stats {
       df[t] = (df[t] ?? 0) + 1
       cf[t] = (cf[t] ?? 0) + n
     }
-  return { N: codes.length, df, cf, codes, stop }
+  const disc: Record<string, number> = {}
+  const lnN = N > 1 ? Math.log(N) : 0
+  for (const [t, d] of Object.entries(df)) {
+    const conc = lnN > 0 ? Math.min(1, Math.max(0, Math.log(N / d) / lnN)) : 1
+    disc[t] = DISC_FLOOR + (1 - DISC_FLOOR) * conc
+  }
+  return { N, cf, disc, codes }
 }
 
-/** Poids automatique : token de la stoplist adaptative → 0 (parasite propre au contexte :
- *  nom du fournisseur/client, adresse) ; mot présent partout → 0 ; rare+concentré → fort ;
- *  vu une seule fois (cf < 2) → 0 (bruit ignoré) ; présent dans ≥ MAX_DF_RATIO des codes
- *  (base assez large) → 0 (parasite transverse : adresse, mentions légales, banque…). */
-function idf(t: string, s: Stats): number {
-  if (s.stop?.has(t)) return 0 // denylist adaptative (jumeau du max_df)
+/** Poids d'un token au scoring = sa DISCRIMINANCE apprise (disc). SEUL effacement : l'hapax global
+ *  (cf < 2 = vu une unique fois dans TOUTE la base → bruit OCR/typo, jamais un signal) ne vote pas.
+ *  Aucun autre poids nul : un mot transverse pèse le PLANCHER, il n'est pas ignoré. */
+function tokenWeight(t: string, s: Stats): number {
   if ((s.cf[t] ?? 0) < 2) return 0
-  const df = s.df[t] ?? s.N
-  if (s.N >= MAXDF_MIN_CODES && df / s.N >= MAX_DF_RATIO) return 0 // max_df adaptatif
-  return Math.log(s.N / df)
+  return s.disc[t] ?? DISC_FLOOR
 }
 
 function l2(vec: Record<string, number>): number {
@@ -241,7 +231,7 @@ function vectorize(
 ): Record<string, number> {
   const v: Record<string, number> = {}
   for (const [t, n] of Object.entries(counts)) {
-    const w = satTf(n) * idf(t, s)
+    const w = satTf(n) * tokenWeight(t, s)
     if (w > 0) v[t] = w
   }
   return v
@@ -255,12 +245,8 @@ function vectorize(
  * (cosinus élevé mais un seul mot votant) alors qu'un code à 72 % existe » : le tri et
  * l'affichage parlent enfin de la même chose. Liste vide si rien d'informatif.
  */
-export function scoreInvoice(
-  rawText: string,
-  pool: WordPool,
-  stop?: ReadonlySet<string>,
-): Scored[] {
-  const s = computeStats(pool, stop)
+export function scoreInvoice(rawText: string, pool: WordPool): Scored[] {
+  const s = computeStats(pool)
   if (s.N === 0) return []
 
   const tf: Record<string, number> = {}
@@ -337,37 +323,32 @@ export function countTokens(rawText: string): Record<string, number> {
   return out
 }
 
-/** Un token est-il « parasite » à l'affichage : stopword statique (couche 1) ou de la stoplist
- *  adaptative (couche 2) — donc non discriminant, ne devant pas peser dans le scoring. */
-function isParasite(t: string, stop?: ReadonlySet<string>): boolean {
-  return STOPWORDS.has(t) || (stop?.has(t) ?? false)
+export interface RankedWord {
+  token: string
+  count: number
+  /** Pouvoir votant RÉEL = satTf(count) × discriminance. 0 = hapax (bruit) ; faible = transverse
+   *  (adresse, paiement…) ; fort = discriminant. Sert à la fois à trier l'affichage et il reflète
+   *  EXACTEMENT ce qui pèse au scoring. */
+  weight: number
 }
 
-/** Mots VISIBLES d'un code (hors parasites), triés par fréquence décroissante. L'UI (galaxie,
- *  revue) montre ainsi exactement ce qui peut voter. `stop` vide → seuls les stopwords statiques
- *  sont masqués. */
-export function visibleWords(
+/**
+ * Mots d'un code CLASSÉS par pouvoir discriminant réel (fort d'abord). RIEN n'est masqué : un mot
+ * transverse descend et pèse le plancher, il n'est jamais retiré. Le poids se JUGE sur TOUT le pool
+ * (`stats = computeStats(pool)`), donc en comparant les imputations entre elles — pas sur la seule
+ * cellule. Source UNIQUE partagée par l'affichage (galaxie, revue) et fidèle au scoring.
+ */
+export function rankWords(
   cell: Record<string, number>,
-  stop?: ReadonlySet<string>,
-): Array<[string, number]> {
+  stats: Stats,
+): RankedWord[] {
   return Object.entries(cell)
-    .filter(([t]) => !isParasite(t, stop))
-    .sort((a, b) => b[1] - a[1])
-}
-
-/** Partitionne les mots d'un code en `kept` (importants, discriminants) et `hidden` (parasites :
- *  stopwords + stoplist), chacun trié par fréquence décroissante. Sert à AFFICHER les deux
- *  groupes distinctement (mots forts en avant, parasites estompés) plutôt que de masquer. */
-export function partitionWords(
-  cell: Record<string, number>,
-  stop?: ReadonlySet<string>,
-): { kept: Array<[string, number]>; hidden: Array<[string, number]> } {
-  const kept: Array<[string, number]> = []
-  const hidden: Array<[string, number]> = []
-  for (const [t, n] of Object.entries(cell))
-    (isParasite(t, stop) ? hidden : kept).push([t, n])
-  const byCount = (a: [string, number], b: [string, number]) => b[1] - a[1]
-  return { kept: kept.sort(byCount), hidden: hidden.sort(byCount) }
+    .map(([token, count]) => ({
+      token,
+      count,
+      weight: satTf(count) * tokenWeight(token, stats),
+    }))
+    .sort((a, b) => b.weight - a.weight || b.count - a.count)
 }
 
 /** Cosinus minimal entre deux nuages de codes pour les juger CONFUSABLES (candidats à la

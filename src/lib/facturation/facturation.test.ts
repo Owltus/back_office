@@ -16,20 +16,17 @@ import {
 } from '#/lib/facturation/similarity.ts'
 import {
   abstains,
+  computeStats,
   confusableCodes,
   countTokens,
+  DISC_FLOOR,
   maturity,
-  partitionWords,
   preselect,
+  rankWords,
   scoreInvoice,
   seedPool,
   tokenize,
-  visibleWords,
 } from '#/lib/facturation/wordpool.ts'
-import {
-  INVOICE_STOPWORDS,
-  documentStoplist,
-} from '#/lib/facturation/stopwords.ts'
 import { matchIssuer } from '#/lib/facturation/issuers.ts'
 import {
   bumpIssuerCodes,
@@ -443,21 +440,23 @@ describe('wordpool', () => {
     expect(t.some((x) => /\d/.test(x))).toBe(false) // aucun token avec chiffre
   })
 
-  it('couche 1 : filtre le générique de facture (paiement/légal/logistique)', () => {
-    const t = tokenize(
-      'Règlement par chèque, bon de livraison, échéance 30 jours, mentions légales',
-    )
+  it('amorçage : socle TRÈS court — squelette de facture + grammaire + identité hôtel', () => {
+    // Le squelette universel (facture, total, tva…) + l'identité hôtel sont filtrés dès tokenize.
+    const t = tokenize('Facture total TTC TVA montant OKKO Nantes réparation')
     for (const w of [
-      'reglement',
-      'cheque',
-      'livraison',
-      'echeance',
-      'mentions',
+      'facture',
+      'total',
+      'ttc',
+      'tva',
+      'montant',
+      'okko',
+      'nantes',
     ])
       expect(t).not.toContain(w)
+    expect(t).toContain('reparation')
   })
 
-  it('couche 1 : conserve les mots de NATURE produit', () => {
+  it('amorçage : les mots de NATURE produit passent (jamais filtrés en dur)', () => {
     const t = tokenize(
       'Livraison de gaz et alcool, consommation electricite, réparation',
     )
@@ -471,48 +470,29 @@ describe('wordpool', () => {
       expect(t).toContain(w)
   })
 
-  it('couche 1 : la liste est pré-normalisée (sans accents) et n’apprend pas le générique', () => {
-    for (const w of INVOICE_STOPWORDS) expect(normalize(w)).toBe(w)
-    expect(countTokens('reglement livraison gaz')).toEqual({ gaz: 1 })
+  it('amorçage : le générique NON universel n’est plus effacé en dur (data-driven)', () => {
+    // reglement/livraison/mentions ne sont PLUS des stopwords : ils passent tokenize et seront
+    // dévalués par le poids de discriminance (disc), à partir des données — pas d'une liste en dur.
+    const t = tokenize('Règlement par chèque, bon de livraison, mentions légales')
+    for (const w of ['reglement', 'livraison', 'mentions']) expect(t).toContain(w)
+    // Seul le squelette universel disparaît.
+    expect(countTokens('facture total gaz')).toEqual({ gaz: 1 })
   })
 
-  it('couche 2 : documentStoplist retient les parasites TRANSVERSES, garde le cold-start', () => {
-    const doc = (tokens: string[], codes: string[]) => ({
-      hash: '',
-      issuerKey: null,
-      codes,
-      deltas: Object.fromEntries(tokens.map((t) => [t, 1])),
-      method: 'native' as const,
-      learnedAt: '',
-    })
-    // Sous le seuil minDocs → inerte, quel que soit le contenu.
-    expect(documentStoplist([doc(['legallais'], ['A'])], 0.5, 8).size).toBe(0)
-    // 10 docs : « legallais » sur 9/10 ET réparti sur 3 imputations (A,B,C) → parasite ;
-    // « scie » sur 1/10, une seule imputation → conservé.
-    const entries = Array.from({ length: 10 }, (_, i) =>
-      i < 9
-        ? doc(['legallais', `mot${i}`], [['A', 'B', 'C'][i % 3]])
-        : doc(['scie'], ['A']),
-    )
-    const stop = documentStoplist(entries, 0.5, 8)
-    expect(stop.has('legallais')).toBe(true)
-    expect(stop.has('scie')).toBe(false)
-  })
-
-  it('couche 2 : transversalité — un mot propre à UNE imputation dominante est protégé', () => {
-    const doc = (tokens: string[], codes: string[]) => ({
-      hash: '',
-      issuerKey: null,
-      codes,
-      deltas: Object.fromEntries(tokens.map((t) => [t, 1])),
-      method: 'native' as const,
-      learnedAt: '',
-    })
-    // « foret » sur 8/10 docs (fréquent) MAIS tous sur l'imputation A → mot-signal, PAS écarté.
-    const entries = Array.from({ length: 10 }, (_, i) =>
-      i < 8 ? doc(['foret', `x${i}`], ['A']) : doc(['autre'], ['B']),
-    )
-    expect(documentStoplist(entries, 0.5, 8).has('foret')).toBe(false)
+  it('discriminance : un mot concentré sur une imputation pèse plus qu’un mot transverse', () => {
+    // « legallais » est présent dans les 3 codes (transverse) ; « scie » dans un seul (concentré).
+    const pool = {
+      perCode: {
+        A: { legallais: 9, scie: 4 },
+        B: { legallais: 8, lame: 5 },
+        C: { legallais: 7, vis: 3 },
+      },
+    }
+    const s = computeStats(pool)
+    expect(s.disc['scie']).toBeGreaterThan(s.disc['legallais'])
+    // Transverse (présent PARTOUT) → au plancher, mais JAMAIS 0 (« filtrer, pas ignorer »).
+    expect(s.disc['legallais']).toBeCloseTo(DISC_FLOOR, 5)
+    expect(s.disc['legallais']).toBeGreaterThan(0)
   })
 
   it('les mots concentrés votent le bon code', () => {
@@ -521,9 +501,7 @@ describe('wordpool', () => {
     expect(s[0].words).toContain('ascenseur')
   })
 
-  it('max_df : un mot transverse (≥60% des codes, base ≥8) est ignoré au scoring', () => {
-    // 8 codes : « commun » présent dans 6/8 (75% ≥ 60%) → idf 0 → n'aide pas à trancher ;
-    // « special » présent dans 1 code → discrimine.
+  it('scoring : un mot rare vote son code ; un mot transverse est dévalué mais jamais effacé', () => {
     const cell = (extra: Record<string, number>) => ({ commun: 3, ...extra })
     const big = {
       perCode: {
@@ -537,47 +515,33 @@ describe('wordpool', () => {
         C8: { encore: 4 },
       },
     }
-    // Un doc qui ne contient QUE le mot transverse → aucun signal → abstention.
-    expect(abstains(scoreInvoice('commun', big))).toBe(true)
-    // Le mot rare, lui, vote pour son code.
+    // Le mot rare et concentré vote pour son code.
     expect(scoreInvoice('special', big)[0]?.code).toBe('C1')
+    // « commun » (6/8 codes) est dévalué SOUS « special », mais son poids reste > 0 (plancher).
+    const s = computeStats(big)
+    expect(s.disc['special']).toBeGreaterThan(s.disc['commun'])
+    expect(s.disc['commun']).toBeGreaterThan(0)
   })
 
-  it('stoplist adaptative : un token dénié ne vote plus au scoring', () => {
-    const pool = { perCode: { A: { alpha: 5, xray: 3 }, B: { yoyo: 5 } } }
-    // Sans stoplist : « alpha » vote pour A.
-    expect(scoreInvoice('alpha', pool)[0]?.code).toBe('A')
-    // Avec « alpha » en stoplist : plus aucun vote → abstention.
-    expect(scoreInvoice('alpha', pool, new Set(['alpha']))).toHaveLength(0)
-  })
-
-  it('visibleWords : masque stopwords statiques + stoplist, trie par fréquence', () => {
-    const cell = { legallais: 9, scie: 2, lame: 5, livraison: 8 }
-    // « livraison » est un stopword statique → masqué même sans stoplist adaptative.
-    expect(visibleWords(cell)).toEqual([
-      ['legallais', 9],
-      ['lame', 5],
-      ['scie', 2],
+  it('rankWords : classe par pouvoir discriminant (concentré d’abord), sans rien masquer', () => {
+    const pool = {
+      perCode: {
+        A: { legallais: 9, scie: 2, lame: 5 },
+        B: { legallais: 8, autre: 4 },
+      },
+    }
+    const s = computeStats(pool)
+    const ranked = rankWords(pool.perCode['A'], s)
+    // Rien n'est retiré : les 3 mots de la cellule sont présents.
+    expect(ranked.map((w) => w.token).sort()).toEqual([
+      'lame',
+      'legallais',
+      'scie',
     ])
-    // + stoplist adaptative « legallais ».
-    expect(visibleWords(cell, new Set(['legallais']))).toEqual([
-      ['lame', 5],
-      ['scie', 2],
-    ])
-  })
-
-  it('partitionWords : sépare mots retenus et parasites (stopwords + stoplist)', () => {
-    const cell = { legallais: 9, scie: 2, lame: 5, livraison: 8 }
-    const { kept, hidden } = partitionWords(cell, new Set(['legallais']))
-    expect(kept).toEqual([
-      ['lame', 5],
-      ['scie', 2],
-    ])
-    // « livraison » (stopword statique) + « legallais » (stoplist) → dans hidden, triés.
-    expect(hidden).toEqual([
-      ['legallais', 9],
-      ['livraison', 8],
-    ])
+    // « legallais » (dans A ET B → transverse) passe DERRIÈRE les mots propres à A, malgré son
+    // count le plus élevé : le tri suit le pouvoir votant, pas la fréquence brute.
+    expect(ranked[ranked.length - 1].token).toBe('legallais')
+    expect(ranked[0].token).toBe('lame') // concentré (A seul) + count le plus fort
   })
 
   it('abstention quand aucun mot informatif', () => {

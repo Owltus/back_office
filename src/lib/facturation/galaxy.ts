@@ -1,5 +1,9 @@
 import { BUDGET_LINES, budgetLabel } from '#/lib/facturation/constants.ts'
-import { visibleWords, type WordPool } from '#/lib/facturation/wordpool.ts'
+import {
+  computeStats,
+  rankWords,
+  type WordPool,
+} from '#/lib/facturation/wordpool.ts'
 import type { IssuerCodes } from '#/lib/facturation/issuerCodes.ts'
 import type { Issuer } from '#/lib/facturation/issuers.ts'
 
@@ -650,22 +654,23 @@ export function buildGalaxy(
   topWordsPerCode = 12,
   minCount = 2,
   issuerCodes?: IssuerCodes,
-  stop?: ReadonlySet<string>,
 ): GalaxyGraph {
   const issuerName = new Map(issuers.map((i) => [i.name, i.display]))
   const nodes: GalaxyNode[] = []
   const links: GalaxyLink[] = []
   const codePresent = new Set<string>()
+  // Poids de discriminance jugé sur TOUT le pool (comparaison inter-imputations), calculé une fois.
+  const stats = computeStats(pool)
 
   for (const [code, cell] of Object.entries(pool.perCode)) {
-    // Seuil d'AFFICHAGE : on écarte le bruit à faible count (fautes de frappe, mots
-    // OCR parasites) pour ne pas créer de nœuds/liens sans queue ni tête. Purement
-    // visuel — la base n'est pas touchée (le nettoyage réel = pruneClouds).
-    // visibleWords masque stopwords statiques + stoplist adaptative, trié desc ; on borne
-    // ensuite au seuil d'affichage (bruit faible count) et au top-K.
-    const top = visibleWords(cell, stop)
-      .filter(([, count]) => count >= minCount)
+    // On garde les mots les plus DISCRIMINANTS (rankWords : tri par pouvoir votant réel, pas par
+    // fréquence brute) : les transverses (adresse, paiement…) descendent d'eux-mêmes et sortent du
+    // top. Seuil de count : écarte le bruit OCR à faible occurrence. Purement visuel — la base
+    // n'est pas touchée (le nettoyage réel = pruneClouds).
+    const top = rankWords(cell, stats)
+      .filter((w) => w.count >= minCount)
       .slice(0, topWordsPerCode)
+      .map((w) => [w.token, w.count] as [string, number])
     if (top.length === 0) continue
 
     const domain = TAG_BY_CODE.get(code) || 'Autre'

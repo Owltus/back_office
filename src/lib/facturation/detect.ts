@@ -129,7 +129,6 @@ export function detect(
   rules: SupplierRule[] = allRules(),
   pool?: WordPool,
   issuer?: IssuerHint,
-  stop?: ReadonlySet<string>,
 ): Detection {
   const text = normalize(rawText)
   const hints = extractHints(rawText)
@@ -160,7 +159,7 @@ export function detect(
 
   // Couche 2 : nuages de mots (parcimonieux). L'abstention est jugée sur les MOTS SEULS
   // (cosinus), avant tout effet émetteur — on ne laisse pas le prior « inventer » un code.
-  const scoredRaw = pool ? scoreInvoice(rawText, pool, stop) : []
+  const scoredRaw = pool ? scoreInvoice(rawText, pool) : []
   const scored = deny ? scoredRaw.filter((s) => allowed(s.code)) : scoredRaw
   const wordsAbstain = abstains(scored)
 
@@ -261,8 +260,7 @@ export function redetect(
   text: string,
   pool: WordPool,
   issuer?: IssuerHint,
-  stop?: ReadonlySet<string>,
 ): { detection: Detection; codes: string[] } {
-  const detection = detect(text, undefined, pool, issuer, stop)
+  const detection = detect(text, undefined, pool, issuer)
   return { detection, codes: detection.codes }
 }
