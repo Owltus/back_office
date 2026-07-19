@@ -16,7 +16,8 @@ import { reviewQueue, type Anomaly } from '#/lib/facturation/anomalies.ts'
 import { budgetLabel } from '#/lib/facturation/constants.ts'
 
 /*
- * Modal « Revue » : deux tâches de curation, calculées À LA VOLÉE depuis les modèles appris
+ * Modal « Contrôle des imputations » : deux tâches de curation, calculées À LA VOLÉE depuis
+ * les modèles appris
  * en cache. Le système DÉTECTE et PROPOSE ; l'utilisateur VALIDE (human-in-the-loop).
  *   - Anomalies : outlier émetteur→code (imputation marginale, probable erreur) → désapprendre
  *     ou bannir ; codes confusables (nuages trop proches) → inspection dans la galaxie.
@@ -223,7 +224,9 @@ export function RevueDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[85vh] max-w-[46rem] flex-col gap-0 overflow-hidden p-0">
         <DialogHeader className="border-b border-border px-4 py-3">
-          <DialogTitle className="text-base">Revue</DialogTitle>
+          <DialogTitle className="text-base">
+            Contrôle des imputations
+          </DialogTitle>
           <DialogDescription className="text-xs tabular-nums">
             {anomalies.length} anomalie{anomalies.length > 1 ? 's' : ''} ·{' '}
             {denies.length} interdiction{denies.length > 1 ? 's' : ''}

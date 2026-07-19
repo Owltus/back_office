@@ -208,7 +208,7 @@ export function EmptyImputation() {
             variant="outline"
             size="icon"
             disabled
-            aria-label="Revue et interdictions"
+            aria-label="Contrôle des imputations"
             className="-ml-px shrink-0 rounded-l-none"
           >
             <Settings2 className="size-4" />
@@ -453,11 +453,11 @@ export function InvoicePanel({
             variant="outline"
             size="icon"
             onClick={() => setRevueOpen(true)}
-            aria-label="Revue et interdictions"
+            aria-label="Contrôle des imputations"
             title={
               anomalyCount > 0
                 ? `${anomalyCount} anomalie${anomalyCount > 1 ? 's' : ''} à examiner`
-                : 'Revue des anomalies et interdictions'
+                : 'Contrôle des imputations'
             }
             className={cn(
               '-ml-px shrink-0 rounded-l-none',
