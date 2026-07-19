@@ -710,9 +710,9 @@ export function InvoicePanel({
             <button
               type="button"
               onClick={() => setShowReplay(true)}
-              className="self-center text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+              className="self-center text-center text-[10px] leading-tight text-wrap whitespace-normal text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
             >
-              Cette facture corrige une erreur déjà tamponnée ?
+              Corriger une facture déjà tamponnée&nbsp;?
             </button>
           ) : (
             <div className="flex flex-col gap-1.5 rounded-lg border border-border bg-muted/20 px-3 py-2.5">
