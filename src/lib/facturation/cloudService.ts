@@ -140,6 +140,26 @@ export async function unlearnIssuerCodes(
   if (error) throw error
 }
 
+/** Oubli COMPLET d'un couple émetteur→code (supprime toute la co-occurrence apprise). */
+export async function forgetIssuerCode(
+  issuer: string,
+  code: string,
+): Promise<void> {
+  const { error } = await supabase.rpc('facturation_issuer_codes_forget', {
+    p_issuer: issuer,
+    p_code: code,
+  })
+  if (error) throw error
+}
+
+/** Réinitialise le nuage de mots d'un code (efface tout son vocabulaire appris). */
+export async function forgetCloudCode(code: string): Promise<void> {
+  const { error } = await supabase.rpc('facturation_wordpool_forget_code', {
+    p_code: code,
+  })
+  if (error) throw error
+}
+
 // --- Denylist émetteur↔code (« ne va jamais sur ce code ») --------------------
 // Requiert facturation_issuer_denylist.sql exécuté par l'utilisateur ; sinon la lecture
 // échoue → denylist vide (dégradation gracieuse, aucun code exclu).

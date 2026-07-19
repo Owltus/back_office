@@ -112,6 +112,26 @@ export function issuerOutliers(
   return out
 }
 
+/** Retire COMPLÈTEMENT un couple émetteur→code (immuable) — patch optimiste après un
+ *  « désapprendre ». Une entrée d'émetteur vidée de tous ses codes disparaît. */
+export function removeIssuerCode(
+  model: IssuerCodes,
+  issuerKey: string,
+  code: string,
+): IssuerCodes {
+  const perIssuer: IssuerCodes['perIssuer'] = {}
+  for (const [k, cell] of Object.entries(model.perIssuer)) {
+    if (k !== issuerKey) {
+      perIssuer[k] = { ...cell }
+      continue
+    }
+    const next = { ...cell }
+    delete next[code]
+    if (Object.keys(next).length) perIssuer[k] = next
+  }
+  return { perIssuer }
+}
+
 /** Fusion additive de deux modèles (patch optimiste du cache). */
 export function mergeIssuerCodes(a: IssuerCodes, b: IssuerCodes): IssuerCodes {
   const perIssuer: IssuerCodes['perIssuer'] = {}

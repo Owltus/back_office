@@ -1,6 +1,13 @@
 import { useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { Ban, CheckCircle2, Loader2, RotateCcw, Sparkles } from 'lucide-react'
+import {
+  Ban,
+  CheckCircle2,
+  Eraser,
+  Loader2,
+  RotateCcw,
+  Sparkles,
+} from 'lucide-react'
 
 import {
   Dialog,
@@ -16,17 +23,19 @@ import { reviewQueue, type Anomaly } from '#/lib/facturation/anomalies.ts'
 import { budgetLabel } from '#/lib/facturation/constants.ts'
 
 /*
- * Modal « Contrôle des imputations » : deux tâches de curation, calculées À LA VOLÉE depuis
- * les modèles appris
- * en cache. Le système DÉTECTE et PROPOSE ; l'utilisateur VALIDE (human-in-the-loop).
- *   - Anomalies : outlier émetteur→code (imputation marginale, probable erreur) → désapprendre
- *     ou bannir ; codes confusables (nuages trop proches) → inspection dans la galaxie.
- *   - Interdictions en vigueur : les couples émetteur↔code déjà bannis (denylist), avec un
- *     bouton pour LEVER l'interdiction (aucun SQL requis côté utilisateur).
- * Ouvert depuis l'atelier (GalaxyCard). Lecture seule du modèle sauf actions explicites.
+ * Modal « Contrôle des imputations » : curation du modèle appris, calculée À LA VOLÉE depuis
+ * le cache. Le système DÉTECTE et PROPOSE ; l'utilisateur VALIDE (human-in-the-loop). Sections :
+ *   - Anomalies : outlier émetteur→code (imputation marginale) → désapprendre ou bannir ;
+ *     codes confusables (nuages trop proches) → inspection dans la galaxie.
+ *   - Associations apprises : TOUS les couples émetteur→code, avec « Désapprendre » (oubli
+ *     complet de l'association) — pour corriger une imputation faite par erreur.
+ *   - Vocabulaire appris : les codes ayant un nuage de mots, avec « Réinitialiser » (efface
+ *     tout le vocabulaire d'un code pollué).
+ *   - Interdictions en vigueur : couples déjà bannis (denylist), avec « Lever l'interdiction ».
+ * Aucun SQL requis côté utilisateur. Ouvert depuis l'atelier. Lecture seule sauf actions.
  */
 
-type Kind = 'unlearn' | 'ban' | 'unban'
+type Kind = 'forget' | 'ban' | 'unban' | 'reset'
 
 const pct = (x: number): string => `${Math.round(x * 100)} %`
 
@@ -66,7 +75,7 @@ function OutlierCard({
           onClick={onUnlearn}
           disabled={busy !== null}
         >
-          {busy === 'unlearn' ? (
+          {busy === 'forget' ? (
             <Loader2 className="size-4 animate-spin" />
           ) : (
             <RotateCcw className="size-4" />
@@ -166,6 +175,89 @@ function DenyCard({
   )
 }
 
+/* Ligne compacte : une association émetteur→code apprise, avec « Désapprendre » (oubli
+ * complet). Sert à corriger une imputation faite par erreur (ex. maintenance → alimentaire). */
+function AssocRow({
+  issuerName,
+  code,
+  count,
+  busy,
+  onForget,
+}: {
+  issuerName: string
+  code: string
+  count: number
+  busy: boolean
+  onForget: () => void
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm text-foreground">
+          <span className="font-semibold">{issuerName}</span> →{' '}
+          {budgetLabel(code)}
+        </p>
+        <p className="font-mono text-[11px] text-muted-foreground">
+          {code} · {count}×
+        </p>
+      </div>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={onForget}
+        disabled={busy}
+        className="shrink-0 text-muted-foreground hover:text-destructive"
+      >
+        {busy ? (
+          <Loader2 className="size-4 animate-spin" />
+        ) : (
+          <RotateCcw className="size-4" />
+        )}
+        Désapprendre
+      </Button>
+    </div>
+  )
+}
+
+/* Ligne compacte : le vocabulaire appris d'un code, avec « Réinitialiser » (efface tout le
+ * nuage de mots du code — remise à zéro d'une imputation polluée). */
+function CloudRow({
+  code,
+  words,
+  busy,
+  onReset,
+}: {
+  code: string
+  words: number
+  busy: boolean
+  onReset: () => void
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm text-foreground">{budgetLabel(code)}</p>
+        <p className="font-mono text-[11px] text-muted-foreground">
+          {code} · {words} mot{words > 1 ? 's' : ''}
+        </p>
+      </div>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={onReset}
+        disabled={busy}
+        className="shrink-0 text-muted-foreground hover:text-destructive"
+      >
+        {busy ? (
+          <Loader2 className="size-4 animate-spin" />
+        ) : (
+          <Eraser className="size-4" />
+        )}
+        Réinitialiser
+      </Button>
+    </div>
+  )
+}
+
 export function RevueDialog({
   open,
   onOpenChange,
@@ -175,7 +267,7 @@ export function RevueDialog({
 }) {
   const { serverPool, issuers, issuerCodes, issuerDenylist } =
     useFacturationModel()
-  const { banIssuerCode, unlearnIssuerCode, unbanIssuerCode } =
+  const { banIssuerCode, forgetIssuerCode, resetCodeCloud, unbanIssuerCode } =
     useFacturationCuration()
 
   const issuerName = useMemo(() => {
@@ -188,6 +280,27 @@ export function RevueDialog({
     [serverPool, issuerCodes],
   )
 
+  // Toutes les associations émetteur→code apprises (aplaties), plus fréquentes d'abord.
+  const assocs = useMemo(() => {
+    const out: { issuer: string; code: string; count: number }[] = []
+    for (const [issuer, cell] of Object.entries(issuerCodes.perIssuer))
+      for (const [code, count] of Object.entries(cell))
+        if (count > 0) out.push({ issuer, code, count })
+    return out.sort(
+      (a, b) => b.count - a.count || a.issuer.localeCompare(b.issuer),
+    )
+  }, [issuerCodes])
+
+  // Codes ayant un vocabulaire appris (nuage de mots), les plus riches d'abord.
+  const clouds = useMemo(() => {
+    const out: { code: string; words: number }[] = []
+    for (const [code, cell] of Object.entries(serverPool.perCode)) {
+      const words = Object.keys(cell).length
+      if (words > 0) out.push({ code, words })
+    }
+    return out.sort((a, b) => b.words - a.words || a.code.localeCompare(b.code))
+  }, [serverPool])
+
   // Interdictions en vigueur (denylist aplatie), triées pour un ordre stable.
   const denies = useMemo(() => {
     const out: { issuer: string; code: string }[] = []
@@ -199,7 +312,11 @@ export function RevueDialog({
     )
   }, [issuerDenylist])
 
-  const nothing = anomalies.length === 0 && denies.length === 0
+  const nothing =
+    anomalies.length === 0 &&
+    assocs.length === 0 &&
+    clouds.length === 0 &&
+    denies.length === 0
 
   // État par carte : action en cours, ou erreur d'action. Clé = identité de la ligne.
   const [busy, setBusy] = useState<Record<string, Kind>>({})
@@ -258,8 +375,8 @@ export function RevueDialog({
                               issuerName={issuerName(a.data.issuerKey)}
                               busy={busy[id] ?? null}
                               onUnlearn={() =>
-                                run(id, 'unlearn', () =>
-                                  unlearnIssuerCode(
+                                run(id, 'forget', () =>
+                                  forgetIssuerCode(
                                     a.data.issuerKey,
                                     a.data.code,
                                   ),
@@ -287,6 +404,80 @@ export function RevueDialog({
                           data={a.data}
                           onClose={() => onOpenChange(false)}
                         />
+                      )
+                    })}
+                  </div>
+                </section>
+              )}
+
+              {/* Section Associations apprises (émetteur→code) : liste complète. */}
+              {assocs.length > 0 && (
+                <section className="flex flex-col gap-2">
+                  <h2 className="text-sm font-semibold text-foreground">
+                    Associations apprises
+                  </h2>
+                  <p className="-mt-1 text-xs text-muted-foreground">
+                    Ce que chaque émetteur a appris à imputer. « Désapprendre »
+                    efface l'association — utile si elle a été créée par erreur.
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    {assocs.map(({ issuer, code, count }) => {
+                      const id = `assoc:${issuer}:${code}`
+                      return (
+                        <div key={id} className="flex flex-col gap-1">
+                          <AssocRow
+                            issuerName={issuerName(issuer)}
+                            code={code}
+                            count={count}
+                            busy={busy[id] === 'forget'}
+                            onForget={() =>
+                              run(id, 'forget', () =>
+                                forgetIssuerCode(issuer, code),
+                              )
+                            }
+                          />
+                          {errors[id] && (
+                            <p className="px-1 text-[11px] text-destructive">
+                              Action impossible (droits ou base indisponibles).
+                            </p>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </section>
+              )}
+
+              {/* Section Vocabulaire appris par code (nuages de mots). */}
+              {clouds.length > 0 && (
+                <section className="flex flex-col gap-2">
+                  <h2 className="text-sm font-semibold text-foreground">
+                    Vocabulaire appris
+                  </h2>
+                  <p className="-mt-1 text-xs text-muted-foreground">
+                    Les mots retenus par code. « Réinitialiser » efface tout le
+                    vocabulaire d'un code (remise à zéro d'une imputation
+                    polluée).
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    {clouds.map(({ code, words }) => {
+                      const id = `cloud:${code}`
+                      return (
+                        <div key={id} className="flex flex-col gap-1">
+                          <CloudRow
+                            code={code}
+                            words={words}
+                            busy={busy[id] === 'reset'}
+                            onReset={() =>
+                              run(id, 'reset', () => resetCodeCloud(code))
+                            }
+                          />
+                          {errors[id] && (
+                            <p className="px-1 text-[11px] text-destructive">
+                              Action impossible (droits ou base indisponibles).
+                            </p>
+                          )}
+                        </div>
                       )
                     })}
                   </div>

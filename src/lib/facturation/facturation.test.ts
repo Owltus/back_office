@@ -24,6 +24,7 @@ import {
   issuerOutliers,
   issuerPrior,
   mergeIssuerCodes,
+  removeIssuerCode,
 } from '#/lib/facturation/issuerCodes.ts'
 import { reviewQueue } from '#/lib/facturation/anomalies.ts'
 import {
@@ -493,6 +494,18 @@ describe('issuerCodes (modèle émetteur→codes)', () => {
     })
     expect(merged.perIssuer.martin.HECOMMOTAo).toBe(7)
     expect(merged.perIssuer.dupont.A).toBe(2)
+  })
+
+  it('removeIssuerCode retire un couple, purge l’émetteur vidé, sans muter', () => {
+    const m = {
+      perIssuer: { martin: { A: 3, B: 2 }, dupont: { A: 1 } },
+    }
+    const afterA = removeIssuerCode(m, 'martin', 'A')
+    expect(afterA.perIssuer.martin).toEqual({ B: 2 }) // A retiré, B conservé
+    expect(m.perIssuer.martin.A).toBe(3) // source intacte
+
+    const gone = removeIssuerCode(afterA, 'dupont', 'A')
+    expect(gone.perIssuer.dupont).toBeUndefined() // émetteur vidé → supprimé
   })
 })
 

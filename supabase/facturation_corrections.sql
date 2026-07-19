@@ -62,6 +62,30 @@ begin
 end;
 $$;
 
+-- ---- RPC : oubli complet d'un couple émetteur→code --------------------------
+-- Supprime toute la co-occurrence (issuer, code) apprise — « cette association est
+-- fausse, enlève-la » (distinct de _unlearn qui ne décrémente que de 1). Garde to_regclass
+-- au cas où issuer_codes ne serait pas déployé.
+create or replace function public.facturation_issuer_codes_forget(
+  p_issuer text,
+  p_code   text
+) returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if get_user_role() not in ('super_utilisateur', 'admin') then
+    raise exception 'not authorized';
+  end if;
+
+  if to_regclass('public.facturation_issuer_codes') is not null then
+    delete from public.facturation_issuer_codes
+     where issuer = p_issuer and code = p_code;
+  end if;
+end;
+$$;
+
 -- ---- RPC : renommage d'un émetteur (name = clé primaire) --------------------
 -- Fusion additive vers la nouvelle clé puis suppression de l'ancienne (atomique).
 create or replace function public.facturation_issuer_rename(

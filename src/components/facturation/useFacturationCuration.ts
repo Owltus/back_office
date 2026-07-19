@@ -2,22 +2,30 @@ import { useQueryClient } from '@tanstack/react-query'
 
 import {
   addIssuerDeny,
+  forgetCloudCode,
+  forgetIssuerCode as forgetIssuerCodeApi,
   removeIssuerDeny,
   unlearnIssuerCodes,
 } from '#/lib/facturation/cloudService.ts'
+import {
+  removeIssuerCode,
+  type IssuerCodes,
+} from '#/lib/facturation/issuerCodes.ts'
 import {
   mergeDenylist,
   removeDeny,
   type IssuerDenylist,
 } from '#/lib/facturation/issuerDenylist.ts'
+import type { WordPool } from '#/lib/facturation/wordpool.ts'
 
 /*
- * Actions de CURATION du modèle facturation (bannir / désapprendre un couple émetteur↔code),
- * partagées par l'atelier (InvoicePanel) et la page de revue. Chaque action écrit côté serveur
- * (RPC SECURITY DEFINER) puis synchronise le cache TanStack Query : patch optimiste de la
- * denylist (union → code exclu tout de suite de la détection) et invalidation de la
- * co-occurrence émetteur→codes (le serveur fait foi après décrément). Best-effort : une erreur
- * (droits insuffisants, table absente, réseau) est PROPAGÉE à l'appelant pour affichage.
+ * Actions de CURATION du modèle facturation, partagées par l'atelier (InvoicePanel) et le
+ * modal « Contrôle des imputations ». Chaque action écrit côté serveur (RPC SECURITY DEFINER)
+ * puis synchronise le cache TanStack Query (patch optimiste). Best-effort : une erreur (droits
+ * insuffisants, table absente, réseau) est PROPAGÉE à l'appelant pour affichage.
+ *   - banIssuerCode / unbanIssuerCode : interdiction émetteur↔code (denylist) et son undo.
+ *   - forgetIssuerCode : oubli COMPLET d'une association émetteur→code apprise (le prior).
+ *   - resetCodeCloud : réinitialise tout le vocabulaire appris d'un code (le nuage de mots).
  */
 export function useFacturationCuration() {
   const queryClient = useQueryClient()
@@ -44,13 +52,27 @@ export function useFacturationCuration() {
     queryClient.invalidateQueries({ queryKey: ['facturation', 'issuerCodes'] })
   }
 
-  /** Retire une confirmation erronée émetteur↔code SANS bannir (simple décrément). */
-  async function unlearnIssuerCode(
+  /** Oubli COMPLET d'une association émetteur→code apprise (supprime toute la co-occurrence). */
+  async function forgetIssuerCode(
     issuerKey: string,
     code: string,
   ): Promise<void> {
-    await unlearnIssuerCodes(issuerKey, [code])
-    queryClient.invalidateQueries({ queryKey: ['facturation', 'issuerCodes'] })
+    await forgetIssuerCodeApi(issuerKey, code)
+    queryClient.setQueryData<IssuerCodes>(
+      ['facturation', 'issuerCodes'],
+      (old) => removeIssuerCode(old ?? { perIssuer: {} }, issuerKey, code),
+    )
+  }
+
+  /** Réinitialise le vocabulaire appris d'un code (efface tout son nuage de mots). */
+  async function resetCodeCloud(code: string): Promise<void> {
+    await forgetCloudCode(code)
+    queryClient.setQueryData<WordPool>(['facturation', 'clouds'], (old) => {
+      if (!old) return { perCode: {} }
+      const perCode = { ...old.perCode }
+      delete perCode[code]
+      return { perCode }
+    })
   }
 
   /** Lève une interdiction émetteur↔code (undo d'un ban) → le code redevient candidat. */
@@ -65,5 +87,5 @@ export function useFacturationCuration() {
     )
   }
 
-  return { banIssuerCode, unlearnIssuerCode, unbanIssuerCode }
+  return { banIssuerCode, forgetIssuerCode, resetCodeCloud, unbanIssuerCode }
 }

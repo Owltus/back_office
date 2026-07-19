@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import {
   AlertTriangle,
   Ban,
+  Eraser,
   ListPlus,
   Loader2,
   RotateCcw,
@@ -280,6 +281,8 @@ export function InvoicePanel({
   const [undoing, setUndoing] = useState(false)
   const [banningCode, setBanningCode] = useState<string | null>(null)
   const [banWarning, setBanWarning] = useState(false)
+  const [replayUndoing, setReplayUndoing] = useState(false)
+  const [replayDone, setReplayDone] = useState(false)
   const queryClient = useQueryClient()
   const { banIssuerCode } = useFacturationCuration()
 
@@ -381,33 +384,54 @@ export function InvoicePanel({
     }
   }
 
-  // Annuler l'apprentissage : reconstitue le MÊME delta qu'au tamponnage (D5) et le
-  // rejoue en soustraction. Exact tant que la facture n'a pas été rééditée depuis.
-  // Requiert les RPC de facturation_corrections.sql ; sinon l'appel échoue (signalé).
+  // Cœur du désapprentissage : reconstitue le MÊME delta qu'au tamponnage (D5) et le rejoue
+  // en soustraction (borné à 0). Exact tant que la facture n'a pas été rééditée depuis.
+  // Requiert les RPC de facturation_corrections.sql ; sinon l'appel échoue (propagé).
+  async function unlearnInvoiceCore() {
+    // Symétrique du tamponnage : le nom d'émetteur n'est plus dans les nuages.
+    const deltas = countTokens(record.text)
+    const learnSupplier = canLearn(record.supplierName)
+    await unlearnClouds(record.codes, deltas)
+    if (learnSupplier) {
+      const name = normalize(record.supplierName).trim()
+      await unlearnIssuer(name)
+      await unlearnIssuerCodes(name, record.codes)
+    }
+    // Le serveur fait foi après correction : on resynchronise le cache.
+    queryClient.invalidateQueries({ queryKey: ['facturation', 'clouds'] })
+    queryClient.invalidateQueries({ queryKey: ['facturation', 'issuers'] })
+    queryClient.invalidateQueries({ queryKey: ['facturation', 'issuerCodes'] })
+  }
+
+  // Annuler l'apprentissage d'une facture apprise DANS LA SÉANCE (juste tamponnée).
   async function handleUndoLearn() {
     setUndoing(true)
     setLearnWarning(false)
     try {
-      // Symétrique du tamponnage : le nom d'émetteur n'est plus dans les nuages.
-      const deltas = countTokens(record.text)
-      const learnSupplier = canLearn(record.supplierName)
-      await unlearnClouds(record.codes, deltas)
-      if (learnSupplier) {
-        const name = normalize(record.supplierName).trim()
-        await unlearnIssuer(name)
-        await unlearnIssuerCodes(name, record.codes)
-      }
+      await unlearnInvoiceCore()
       onPatch({ learned: false })
-      // Le serveur fait foi après correction : on resynchronise le cache.
-      queryClient.invalidateQueries({ queryKey: ['facturation', 'clouds'] })
-      queryClient.invalidateQueries({ queryKey: ['facturation', 'issuers'] })
-      queryClient.invalidateQueries({
-        queryKey: ['facturation', 'issuerCodes'],
-      })
     } catch {
       setLearnWarning(true)
     } finally {
       setUndoing(false)
+    }
+  }
+
+  // Désapprendre une facture REJOUÉE : re-déposée exprès pour effacer une erreur passée
+  // (imputée à tort sur un code). On règle l'émetteur + les codes fautifs, puis on retire
+  // exactement ce que cette facture aurait appris. Sans effet si rien n'avait été appris
+  // (décrément borné à 0). Distinct de « Annuler l'apprentissage » (facture de la séance).
+  async function handleReplayUnlearn() {
+    setReplayUndoing(true)
+    setLearnWarning(false)
+    setReplayDone(false)
+    try {
+      await unlearnInvoiceCore()
+      setReplayDone(true)
+    } catch {
+      setLearnWarning(true)
+    } finally {
+      setReplayUndoing(false)
     }
   }
 
@@ -574,6 +598,35 @@ export function InvoicePanel({
           )}
           Apposer le tampon & télécharger
         </Button>
+
+        {/* Correction d'une erreur passée : facture RE-DÉPOSÉE (donc non apprise ici). On
+            règle l'émetteur + les codes fautifs puis on désapprend, sans re-tamponner. */}
+        {!record.learned && canStamp && (
+          <>
+            {replayDone ? (
+              <p className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                <RotateCcw className="size-3.5 shrink-0" />
+                Imputation désapprise pour cet émetteur.
+              </p>
+            ) : (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleReplayUnlearn}
+                disabled={replayUndoing}
+                title="Re-déposez la facture, réglez l'émetteur et les codes imputés par erreur, puis désapprenez"
+                className="w-full text-muted-foreground hover:text-destructive"
+              >
+                {replayUndoing ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Eraser className="size-4" />
+                )}
+                Corriger une erreur : désapprendre cette facture
+              </Button>
+            )}
+          </>
+        )}
       </div>
 
       <CodePicker
