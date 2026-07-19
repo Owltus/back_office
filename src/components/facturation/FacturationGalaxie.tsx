@@ -8,7 +8,7 @@ import { Starfield } from '#/components/facturation/Starfield.tsx'
 import { useFacturationModel } from '#/components/facturation/useFacturationModel.ts'
 import { buildGalaxy, type GalaxyNodeType } from '#/lib/facturation/galaxy.ts'
 import { computeStats, rankWords } from '#/lib/facturation/wordpool.ts'
-import { budgetLabel } from '#/lib/facturation/constants.ts'
+import { budgetLabel } from '#/lib/facturation/budgetRegistry.ts'
 
 /*
  * Page pleine « Galaxie des imputations » : graphe ECharts (émetteurs → imputations
@@ -25,15 +25,23 @@ const NEBULAE = [
 ]
 
 export function FacturationGalaxie() {
-  const { serverPool, issuers, issuerCodes } = useFacturationModel()
+  const { serverPool, issuers, issuerCodes, budgetLines } =
+    useFacturationModel()
   // Poids de discriminance jugé sur TOUT le pool (comparaison inter-imputations), calculé une fois.
   const stats = useMemo(() => computeStats(serverPool), [serverPool])
   const { graph, counts } = useMemo(() => {
-    const g = buildGalaxy(serverPool, issuers, WORDS_PER_CODE, 2, issuerCodes)
+    const g = buildGalaxy(
+      serverPool,
+      issuers,
+      WORDS_PER_CODE,
+      2,
+      issuerCodes,
+      budgetLines,
+    )
     const c: Record<GalaxyNodeType, number> = { issuer: 0, code: 0, word: 0 }
     for (const n of g.nodes) c[n.type]++
     return { graph: g, counts: c }
-  }, [serverPool, issuers, issuerCodes])
+  }, [serverPool, issuers, issuerCodes, budgetLines])
   const empty = graph.nodes.length === 0
 
   // Code sélectionné (clic sur une nébuleuse) → panneau latéral listant SES mots, CLASSÉS par

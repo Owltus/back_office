@@ -6,6 +6,7 @@ import {
   Eraser,
   ListPlus,
   Loader2,
+  Pencil,
   RotateCcw,
   Settings2,
   Stamp,
@@ -18,6 +19,7 @@ import { Label } from '#/components/ui/label.tsx'
 import { Textarea } from '#/components/ui/textarea.tsx'
 import { useConfirm } from '#/components/shared/ConfirmDialog.tsx'
 import { CodePicker } from '#/components/facturation/CodePicker.tsx'
+import { BudgetLinesManager } from '#/components/facturation/BudgetLinesManager.tsx'
 import { IssuerCombobox } from '#/components/facturation/IssuerCombobox.tsx'
 import { RevueDialog } from '#/components/facturation/FacturationRevue.tsx'
 import { useFacturationCuration } from '#/components/facturation/useFacturationCuration.ts'
@@ -26,7 +28,7 @@ import {
   needsReview,
   probaFor,
 } from '#/components/facturation/confidence.ts'
-import { budgetLabel } from '#/lib/facturation/constants.ts'
+import { budgetLabel } from '#/lib/facturation/budgetRegistry.ts'
 import { canLearn } from '#/lib/facturation/detect.ts'
 import { issuerKey } from '#/lib/facturation/text.ts'
 import {
@@ -270,6 +272,7 @@ export function InvoicePanel({
   anomalyCount?: number
 }) {
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [managerOpen, setManagerOpen] = useState(false)
   const [revueOpen, setRevueOpen] = useState(false)
   const [stamping, setStamping] = useState(false)
   const [stampError, setStampError] = useState<string | null>(null)
@@ -657,6 +660,15 @@ export function InvoicePanel({
           <ListPlus className="size-4" />
           Choisir les imputations
         </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setManagerOpen(true)}
+          className="w-full shrink-0 text-muted-foreground"
+        >
+          <Pencil className="size-4" />
+          Gérer les imputations
+        </Button>
       </div>
 
       {/* Bas ÉPINGLÉ : commentaire (taille figée), dates, tampon. */}
@@ -838,6 +850,8 @@ export function InvoicePanel({
         detection={record.detection}
         immature={immature}
       />
+
+      <BudgetLinesManager open={managerOpen} onOpenChange={setManagerOpen} />
 
       <RevueDialog
         open={revueOpen}

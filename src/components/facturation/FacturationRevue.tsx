@@ -22,7 +22,7 @@ import { useFacturationModel } from '#/components/facturation/useFacturationMode
 import { useFacturationCuration } from '#/components/facturation/useFacturationCuration.ts'
 import { reviewQueue, type Anomaly } from '#/lib/facturation/anomalies.ts'
 import { computeStats, rankWords } from '#/lib/facturation/wordpool.ts'
-import { budgetLabel } from '#/lib/facturation/constants.ts'
+import { budgetLabel } from '#/lib/facturation/budgetRegistry.ts'
 
 /*
  * Modal « Contrôle des imputations » : curation du modèle appris, calculée À LA VOLÉE depuis
@@ -316,13 +316,8 @@ export function RevueDialog({
   /** Nom lisible de l'émetteur courant (affiché en sous-titre). */
   issuerLabel: string
 }) {
-  const {
-    serverPool,
-    issuers,
-    issuerCodes,
-    issuerDenylist,
-    journal,
-  } = useFacturationModel()
+  const { serverPool, issuers, issuerCodes, issuerDenylist, journal } =
+    useFacturationModel()
   // Poids de discriminance jugé sur TOUT le pool (comparaison inter-imputations).
   const stats = useMemo(() => computeStats(serverPool), [serverPool])
   const {

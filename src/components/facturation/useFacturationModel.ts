@@ -1,17 +1,19 @@
 import { useQuery } from '@tanstack/react-query'
 
 import {
+  fetchBudgetLines,
   fetchClouds,
   fetchIssuerCodes,
   fetchIssuerDenylist,
   fetchIssuers,
   fetchJournal,
 } from '#/lib/facturation/cloudService.ts'
+import { setBudgetLines } from '#/lib/facturation/budgetRegistry.ts'
 import type { WordPool } from '#/lib/facturation/wordpool.ts'
 import type { IssuerCodes } from '#/lib/facturation/issuerCodes.ts'
 import type { IssuerDenylist } from '#/lib/facturation/issuerDenylist.ts'
 import type { Issuer } from '#/lib/facturation/issuers.ts'
-import type { JournalEntry } from '#/lib/facturation/types.ts'
+import type { BudgetLine, JournalEntry } from '#/lib/facturation/types.ts'
 
 /**
  * Lectures Supabase de la facturation, en cache (nuages de mots appris + dictionnaire
@@ -26,6 +28,9 @@ export function useFacturationModel(): {
   issuerCodes: IssuerCodes
   issuerDenylist: IssuerDenylist
   journal: { entries: JournalEntry[] }
+  /** Référentiel des imputations (Supabase). Aussi injecté dans budgetRegistry pour les
+   *  accès synchrones (budgetLabel/budgetHint). Vide tant que la query n'a pas résolu. */
+  budgetLines: BudgetLine[]
 } {
   const { data: pool } = useQuery({
     queryKey: ['facturation', 'clouds'],
@@ -52,11 +57,21 @@ export function useFacturationModel(): {
     queryFn: fetchJournal,
     retry: false,
   })
+  const { data: budgetLinesData } = useQuery({
+    queryKey: ['facturation', 'budgetLines'],
+    queryFn: fetchBudgetLines,
+    retry: false,
+  })
+  // Peuple le registre synchrone (budgetLabel/budgetHint/budgetTag) AU RENDU — avant les
+  // useMemo enfants (buildGalaxy…) → aucune course. Idempotent, sans état ; repli code si vide.
+  const budgetLines = budgetLinesData ?? []
+  setBudgetLines(budgetLines)
   return {
     serverPool: pool ?? { perCode: {} },
     issuers: issuers ?? [],
     issuerCodes: issuerCodes ?? { perIssuer: {} },
     issuerDenylist: issuerDenylist ?? { perIssuer: {} },
     journal: journal ?? { entries: [] },
+    budgetLines,
   }
 }

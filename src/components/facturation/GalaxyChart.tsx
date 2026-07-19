@@ -12,7 +12,8 @@ import {
   type GalaxyNode,
   type GalaxyNodeType,
 } from '#/lib/facturation/galaxy.ts'
-import { budgetHint, type Tag } from '#/lib/facturation/constants.ts'
+import { budgetHint } from '#/lib/facturation/budgetRegistry.ts'
+import type { Tag } from '#/lib/facturation/constants.ts'
 import { clamp } from '#/lib/utils.ts'
 
 /*

@@ -27,9 +27,10 @@ import {
   confidenceTone,
   probaFor,
 } from '#/components/facturation/confidence.ts'
-import { BUDGET_LINES, TAGS } from '#/lib/facturation/constants.ts'
+import { TAGS } from '#/lib/facturation/constants.ts'
+import { useFacturationModel } from '#/components/facturation/useFacturationModel.ts'
 import { normalize } from '#/lib/facturation/detect.ts'
-import type { Detection } from '#/lib/facturation/types.ts'
+import type { BudgetLine, Detection } from '#/lib/facturation/types.ts'
 import { cn } from '#/lib/utils.ts'
 
 /*
@@ -39,14 +40,6 @@ import { cn } from '#/lib/utils.ts'
  * (champ `hint`, invisible) — taper « booking » trouve la ligne OTA, « adyen »
  * la ligne commissions. Insensible à la casse et aux accents (normalize).
  */
-
-// Texte de recherche normalisé, pré-calculé une fois (module-level).
-const INDEX = BUDGET_LINES.map((l) => ({
-  line: l,
-  search: normalize(
-    `${l.code} ${l.label} ${l.category} ${l.hint ?? ''} ${l.tags.join(' ')}`,
-  ),
-}))
 
 export function CodePicker({
   open,
@@ -63,15 +56,29 @@ export function CodePicker({
   detection?: Detection | null
   immature?: boolean
 }) {
+  const { budgetLines } = useFacturationModel()
   const [q, setQ] = useState('')
   const [activeTag, setActiveTag] = useState<string | null>(null)
+
+  // Index de recherche normalisé (code + libellé + section + hint + tags), recalculé quand le
+  // référentiel change (chargé depuis Supabase — plus de constante module-level figée).
+  const index = useMemo(
+    () =>
+      budgetLines.map((l) => ({
+        line: l,
+        search: normalize(
+          `${l.code} ${l.label} ${l.category} ${l.hint ?? ''} ${l.tags.join(' ')}`,
+        ),
+      })),
+    [budgetLines],
+  )
 
   // Filtre = tag actif (si présent) ET tous les mots de la requête présents,
   // puis regroupé par section dans l'ordre du plan.
   const groups = useMemo(() => {
     const tokens = normalize(q).split(/\s+/).filter(Boolean)
-    const out: { category: string; lines: typeof BUDGET_LINES }[] = []
-    for (const it of INDEX) {
+    const out: { category: string; lines: BudgetLine[] }[] = []
+    for (const it of index) {
       if (activeTag && !it.line.tags.includes(activeTag)) continue
       if (!tokens.every((t) => it.search.includes(t))) continue
       let g = out.find((x) => x.category === it.line.category)
@@ -82,7 +89,7 @@ export function CodePicker({
       g.lines.push(it.line)
     }
     return out
-  }, [q, activeTag])
+  }, [q, activeTag, index])
 
   const toggle = (code: string) =>
     onChange(
