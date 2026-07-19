@@ -122,26 +122,39 @@ export const INVOICE_STOPWORDS: string[] = [
 ]
 
 /** Seuils du filtre adaptatif (couche 2). Réglables à l'usage. */
-export const DOC_STOP_RATIO = 0.5 // token présent sur ≥ 50 % des documents → parasite
+export const DOC_STOP_RATIO = 0.5 // token présent sur ≥ 50 % des documents → candidat parasite
 export const DOC_STOP_MIN_DOCS = 8 // garde cold-start (réf. MAXDF_MIN_CODES)
+export const DOC_STOP_MIN_CODES = 3 // TRANSVERSALITÉ : parasite = présent dans ≥ 3 imputations
 
 /**
- * Couche 2 — denylist ADAPTATIVE : tokens présents sur une trop grande PART des DOCUMENTS du
- * journal (quel que soit le code d'imputation) → boilerplate / noms / adresses propres au
- * contexte, à ne plus faire voter ni afficher. `Set` vide tant que le journal est trop petit
- * (< minDocs) → totalement inerte (dégradation gracieuse, aucun risque de sur-filtrage à froid).
+ * Couche 2 — denylist ADAPTATIVE. Un token est parasite s'il est À LA FOIS :
+ *  - présent sur ≥ `ratio` des DOCUMENTS du journal (fréquent), ET
+ *  - TRANSVERSE : présent dans ≥ `minCodes` imputations DISTINCTES.
+ * La transversalité PROTÈGE les mots propres à UNE imputation, même si elle domine le journal
+ * (ex. 30 factures sur un seul code) : ce sont ses mots-signaux, pas du bruit. Seuls les mots
+ * vraiment transverses (adresse, nom du client, termes de paiement…) sont écartés. `Set` vide
+ * tant que le journal est trop petit (< minDocs) → inerte (dégradation gracieuse).
  */
 export function documentStoplist(
   entries: JournalEntry[],
   ratio: number = DOC_STOP_RATIO,
   minDocs: number = DOC_STOP_MIN_DOCS,
+  minCodes: number = DOC_STOP_MIN_CODES,
 ): Set<string> {
   const n = entries.length
   if (n < minDocs) return new Set()
-  const df: Record<string, number> = {}
-  for (const e of entries)
-    for (const t of Object.keys(e.deltas ?? {})) df[t] = (df[t] ?? 0) + 1
+  const df: Record<string, number> = {} // nb de documents contenant le token
+  const codes: Record<string, Set<string>> = {} // imputations distinctes où il apparaît
+  for (const e of entries) {
+    const cs = e.codes ?? []
+    for (const t of Object.keys(e.deltas ?? {})) {
+      df[t] = (df[t] ?? 0) + 1
+      const set = (codes[t] ??= new Set())
+      for (const c of cs) set.add(c)
+    }
+  }
   const out = new Set<string>()
-  for (const [t, c] of Object.entries(df)) if (c / n >= ratio) out.add(t)
+  for (const [t, c] of Object.entries(df))
+    if (c / n >= ratio && (codes[t]?.size ?? 0) >= minCodes) out.add(t)
   return out
 }

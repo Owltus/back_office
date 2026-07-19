@@ -7,7 +7,7 @@ import { GalaxyChart } from '#/components/facturation/GalaxyChart.tsx'
 import { Starfield } from '#/components/facturation/Starfield.tsx'
 import { useFacturationModel } from '#/components/facturation/useFacturationModel.ts'
 import { buildGalaxy, type GalaxyNodeType } from '#/lib/facturation/galaxy.ts'
-import { visibleWords } from '#/lib/facturation/wordpool.ts'
+import { partitionWords } from '#/lib/facturation/wordpool.ts'
 import { budgetLabel } from '#/lib/facturation/constants.ts'
 
 /*
@@ -41,15 +41,15 @@ export function FacturationGalaxie() {
   }, [serverPool, issuers, issuerCodes, stoplist])
   const empty = graph.nodes.length === 0
 
-  // Code sélectionné (clic sur une nébuleuse) → panneau latéral listant SES mots appris
-  // (parasites masqués via la même stoplist que le scoring → cohérence).
+  // Code sélectionné (clic sur une nébuleuse) → panneau latéral listant SES mots appris,
+  // SÉPARÉS : mots retenus (discriminants, en avant) vs parasites (stopwords + stoplist, estompés).
   const [selectedCode, setSelectedCode] = useState<string | null>(null)
   const selected = useMemo(() => {
     const cell = selectedCode ? serverPool.perCode[selectedCode] : undefined
     if (!selectedCode || !cell) return null
-    const words = visibleWords(cell, stoplist)
-    const total = words.reduce((s, [, n]) => s + n, 0)
-    return { code: selectedCode, words, total }
+    const { kept, hidden } = partitionWords(cell, stoplist)
+    const total = kept.reduce((s, [, n]) => s + n, 0)
+    return { code: selectedCode, kept, hidden, total }
   }, [selectedCode, serverPool, stoplist])
 
   return (
@@ -97,7 +97,10 @@ export function FacturationGalaxie() {
                   {selected.code}
                 </p>
                 <p className="mt-1 text-xs text-slate-400 tabular-nums">
-                  {selected.words.length} mots · {selected.total} occurrences
+                  {selected.kept.length} mots retenus
+                  {selected.hidden.length > 0
+                    ? ` · ${selected.hidden.length} ignorés`
+                    : ''}
                 </p>
               </div>
               <button
@@ -110,8 +113,9 @@ export function FacturationGalaxie() {
               </button>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-3">
+              {/* Mots RETENUS : discriminants, en avant. */}
               <div className="flex flex-wrap gap-1.5">
-                {selected.words.map(([token, n]) => (
+                {selected.kept.map(([token, n]) => (
                   <span
                     key={token}
                     className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-xs text-slate-200"
@@ -122,7 +126,34 @@ export function FacturationGalaxie() {
                     </span>
                   </span>
                 ))}
+                {selected.kept.length === 0 && (
+                  <p className="text-xs text-slate-500">
+                    Aucun mot discriminant retenu.
+                  </p>
+                )}
               </div>
+
+              {/* Mots IGNORÉS : génériques (stopwords) + parasites (stoplist), estompés. */}
+              {selected.hidden.length > 0 && (
+                <>
+                  <p className="mt-4 mb-1.5 text-[10px] tracking-[0.18em] text-slate-500 uppercase">
+                    Ignorés · génériques / parasites
+                  </p>
+                  <div className="flex flex-wrap gap-1.5 opacity-45">
+                    {selected.hidden.map(([token, n]) => (
+                      <span
+                        key={token}
+                        className="inline-flex items-center gap-1 rounded-full border border-white/5 bg-white/[0.03] px-2 py-0.5 text-xs text-slate-400 line-through decoration-slate-600"
+                      >
+                        {token}
+                        <span className="text-[10px] text-slate-600 tabular-nums no-underline">
+                          {n}
+                        </span>
+                      </span>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}

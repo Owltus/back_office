@@ -337,17 +337,37 @@ export function countTokens(rawText: string): Record<string, number> {
   return out
 }
 
-/** Mots VISIBLES d'un code, triés par fréquence décroissante. Masque à la fois les STOPWORDS
- *  statiques (couche 1 — utile pour le vocabulaire DÉJÀ stocké avant leur ajout) ET la stoplist
- *  adaptative (couche 2). L'UI (galaxie, revue) montre ainsi exactement ce qui peut voter.
- *  `stop` vide → seuls les stopwords statiques sont masqués. */
+/** Un token est-il « parasite » à l'affichage : stopword statique (couche 1) ou de la stoplist
+ *  adaptative (couche 2) — donc non discriminant, ne devant pas peser dans le scoring. */
+function isParasite(t: string, stop?: ReadonlySet<string>): boolean {
+  return STOPWORDS.has(t) || (stop?.has(t) ?? false)
+}
+
+/** Mots VISIBLES d'un code (hors parasites), triés par fréquence décroissante. L'UI (galaxie,
+ *  revue) montre ainsi exactement ce qui peut voter. `stop` vide → seuls les stopwords statiques
+ *  sont masqués. */
 export function visibleWords(
   cell: Record<string, number>,
   stop?: ReadonlySet<string>,
 ): Array<[string, number]> {
   return Object.entries(cell)
-    .filter(([t]) => !STOPWORDS.has(t) && !stop?.has(t))
+    .filter(([t]) => !isParasite(t, stop))
     .sort((a, b) => b[1] - a[1])
+}
+
+/** Partitionne les mots d'un code en `kept` (importants, discriminants) et `hidden` (parasites :
+ *  stopwords + stoplist), chacun trié par fréquence décroissante. Sert à AFFICHER les deux
+ *  groupes distinctement (mots forts en avant, parasites estompés) plutôt que de masquer. */
+export function partitionWords(
+  cell: Record<string, number>,
+  stop?: ReadonlySet<string>,
+): { kept: Array<[string, number]>; hidden: Array<[string, number]> } {
+  const kept: Array<[string, number]> = []
+  const hidden: Array<[string, number]> = []
+  for (const [t, n] of Object.entries(cell))
+    (isParasite(t, stop) ? hidden : kept).push([t, n])
+  const byCount = (a: [string, number], b: [string, number]) => b[1] - a[1]
+  return { kept: kept.sort(byCount), hidden: hidden.sort(byCount) }
 }
 
 /** Cosinus minimal entre deux nuages de codes pour les juger CONFUSABLES (candidats à la

@@ -19,6 +19,7 @@ import {
   confusableCodes,
   countTokens,
   maturity,
+  partitionWords,
   preselect,
   scoreInvoice,
   seedPool,
@@ -475,24 +476,43 @@ describe('wordpool', () => {
     expect(countTokens('reglement livraison gaz')).toEqual({ gaz: 1 })
   })
 
-  it('couche 2 : documentStoplist retient les tokens trop fréquents, garde le cold-start', () => {
-    const doc = (tokens: string[]) => ({
+  it('couche 2 : documentStoplist retient les parasites TRANSVERSES, garde le cold-start', () => {
+    const doc = (tokens: string[], codes: string[]) => ({
       hash: '',
       issuerKey: null,
-      codes: [],
+      codes,
       deltas: Object.fromEntries(tokens.map((t) => [t, 1])),
       method: 'native' as const,
       learnedAt: '',
     })
     // Sous le seuil minDocs → inerte, quel que soit le contenu.
-    expect(documentStoplist([doc(['legallais'])], 0.5, 8).size).toBe(0)
-    // 10 documents : « legallais » sur 9/10 (≥ 0.5) → parasite ; « scie » sur 1/10 → conservé.
+    expect(documentStoplist([doc(['legallais'], ['A'])], 0.5, 8).size).toBe(0)
+    // 10 docs : « legallais » sur 9/10 ET réparti sur 3 imputations (A,B,C) → parasite ;
+    // « scie » sur 1/10, une seule imputation → conservé.
     const entries = Array.from({ length: 10 }, (_, i) =>
-      doc(i < 9 ? ['legallais', `mot${i}`] : ['scie']),
+      i < 9
+        ? doc(['legallais', `mot${i}`], [['A', 'B', 'C'][i % 3]])
+        : doc(['scie'], ['A']),
     )
     const stop = documentStoplist(entries, 0.5, 8)
     expect(stop.has('legallais')).toBe(true)
     expect(stop.has('scie')).toBe(false)
+  })
+
+  it('couche 2 : transversalité — un mot propre à UNE imputation dominante est protégé', () => {
+    const doc = (tokens: string[], codes: string[]) => ({
+      hash: '',
+      issuerKey: null,
+      codes,
+      deltas: Object.fromEntries(tokens.map((t) => [t, 1])),
+      method: 'native' as const,
+      learnedAt: '',
+    })
+    // « foret » sur 8/10 docs (fréquent) MAIS tous sur l'imputation A → mot-signal, PAS écarté.
+    const entries = Array.from({ length: 10 }, (_, i) =>
+      i < 8 ? doc(['foret', `x${i}`], ['A']) : doc(['autre'], ['B']),
+    )
+    expect(documentStoplist(entries, 0.5, 8).has('foret')).toBe(false)
   })
 
   it('les mots concentrés votent le bon code', () => {
@@ -543,6 +563,20 @@ describe('wordpool', () => {
     expect(visibleWords(cell, new Set(['legallais']))).toEqual([
       ['lame', 5],
       ['scie', 2],
+    ])
+  })
+
+  it('partitionWords : sépare mots retenus et parasites (stopwords + stoplist)', () => {
+    const cell = { legallais: 9, scie: 2, lame: 5, livraison: 8 }
+    const { kept, hidden } = partitionWords(cell, new Set(['legallais']))
+    expect(kept).toEqual([
+      ['lame', 5],
+      ['scie', 2],
+    ])
+    // « livraison » (stopword statique) + « legallais » (stoplist) → dans hidden, triés.
+    expect(hidden).toEqual([
+      ['legallais', 9],
+      ['livraison', 8],
     ])
   })
 
