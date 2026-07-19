@@ -18,7 +18,12 @@ import {
 import { StampPreview } from '#/components/facturation/StampPreview.tsx'
 import { GalaxyCard } from '#/components/facturation/GalaxyCard.tsx'
 import { useFacturationModel } from '#/components/facturation/useFacturationModel.ts'
-import { detect, redetect, type IssuerHint } from '#/lib/facturation/detect.ts'
+import {
+  detect,
+  normalize,
+  redetect,
+  type IssuerHint,
+} from '#/lib/facturation/detect.ts'
 import {
   maturity,
   mergePools,
@@ -182,13 +187,6 @@ export function FacturationBoard() {
   const model = useMemo(() => maturity(serverPool), [serverPool])
   const immature = model.level !== 'ok'
 
-  // Anomalies détectées à la volée (outliers émetteur, codes confusables) → pastille sur
-  // le bouton engrenage de l'émetteur, résolution dans le modal de revue (InvoicePanel).
-  const anomalyCount = useMemo(
-    () => reviewQueue(serverPool, issuerCodes).length,
-    [serverPool, issuerCodes],
-  )
-
   // Re-détection en séance : quand le modèle appris évolue (pool enrichi après un
   // tamponnage, ou denylist/co-occurrence modifiées par la curation), on ré-impute les
   // factures ouvertes NON tamponnées et NON éditées à la main, depuis leur texte déjà
@@ -260,6 +258,16 @@ export function FacturationBoard() {
   }
 
   const selected = records.find((r) => r.id === selectedId) ?? null
+
+  // Anomalies de l'émetteur SÉLECTIONNÉ (outliers) → pastille orange sur l'engrenage.
+  // Contextuel : le badge suit l'émetteur affiché, comme le modal de contrôle.
+  const anomalyCount = useMemo(() => {
+    const key = selected ? normalize(selected.supplierName).trim() : ''
+    if (!key) return 0
+    return reviewQueue(serverPool, issuerCodes).filter(
+      (a) => a.kind === 'issuer-outlier' && a.data.issuerKey === key,
+    ).length
+  }, [serverPool, issuerCodes, selected])
 
   // Données du tampon mémoïsées : identité stable tant que ces champs ne changent
   // pas, pour que les useMemo de StampPreview tiennent pendant un glisser.

@@ -261,56 +261,68 @@ function CloudRow({
 export function RevueDialog({
   open,
   onOpenChange,
+  issuerKey,
+  issuerLabel,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** Émetteur courant (clé normalisée) : le modal ne montre QUE ses données. */
+  issuerKey: string
+  /** Nom lisible de l'émetteur courant (affiché en sous-titre). */
+  issuerLabel: string
 }) {
   const { serverPool, issuers, issuerCodes, issuerDenylist } =
     useFacturationModel()
   const { banIssuerCode, forgetIssuerCode, resetCodeCloud, unbanIssuerCode } =
     useFacturationCuration()
 
+  const hasIssuer = issuerKey.length > 0
+
   const issuerName = useMemo(() => {
     const m = new Map(issuers.map((i) => [i.name, i.display]))
     return (key: string): string => m.get(key) ?? key
   }, [issuers])
 
+  // Toutes les listes sont CONTEXTUELLES à l'émetteur courant (issuerKey).
+
+  // Anomalies : uniquement les outliers de cet émetteur (les codes confusables sont
+  // globaux, non liés à un émetteur → hors de ce modal contextuel).
   const anomalies = useMemo(
-    () => reviewQueue(serverPool, issuerCodes),
-    [serverPool, issuerCodes],
+    () =>
+      reviewQueue(serverPool, issuerCodes).filter(
+        (a) => a.kind === 'issuer-outlier' && a.data.issuerKey === issuerKey,
+      ),
+    [serverPool, issuerCodes, issuerKey],
   )
 
-  // Toutes les associations émetteur→code apprises (aplaties), plus fréquentes d'abord.
+  // Associations apprises de CET émetteur, plus fréquentes d'abord.
   const assocs = useMemo(() => {
-    const out: { issuer: string; code: string; count: number }[] = []
-    for (const [issuer, cell] of Object.entries(issuerCodes.perIssuer))
-      for (const [code, count] of Object.entries(cell))
-        if (count > 0) out.push({ issuer, code, count })
-    return out.sort(
-      (a, b) => b.count - a.count || a.issuer.localeCompare(b.issuer),
-    )
-  }, [issuerCodes])
+    const cell = issuerCodes.perIssuer[issuerKey] ?? {}
+    return Object.entries(cell)
+      .filter(([, count]) => count > 0)
+      .map(([code, count]) => ({ code, count }))
+      .sort((a, b) => b.count - a.count || a.code.localeCompare(b.code))
+  }, [issuerCodes, issuerKey])
 
-  // Codes ayant un vocabulaire appris (nuage de mots), les plus riches d'abord.
+  // Vocabulaire appris des codes de CET émetteur (les nuages restent globaux par code).
   const clouds = useMemo(() => {
-    const out: { code: string; words: number }[] = []
-    for (const [code, cell] of Object.entries(serverPool.perCode)) {
-      const words = Object.keys(cell).length
-      if (words > 0) out.push({ code, words })
-    }
-    return out.sort((a, b) => b.words - a.words || a.code.localeCompare(b.code))
-  }, [serverPool])
+    const codes = Object.keys(issuerCodes.perIssuer[issuerKey] ?? {})
+    return codes
+      .map((code) => ({
+        code,
+        words: Object.keys(serverPool.perCode[code] ?? {}).length,
+      }))
+      .filter((c) => c.words > 0)
+      .sort((a, b) => b.words - a.words || a.code.localeCompare(b.code))
+  }, [serverPool, issuerCodes, issuerKey])
 
-  // Interdictions en vigueur (denylist aplatie), triées pour un ordre stable.
+  // Interdictions en vigueur de CET émetteur.
   const denies = useMemo(() => {
-    const out: { issuer: string; code: string }[] = []
-    for (const [issuer, set] of Object.entries(issuerDenylist.perIssuer))
-      for (const code of set) out.push({ issuer, code })
-    return out.sort(
-      (a, b) =>
-        a.issuer.localeCompare(b.issuer) || a.code.localeCompare(b.code),
-    )
-  }, [issuerDenylist])
+    const set = issuerDenylist.perIssuer[issuerKey]
+    return set
+      ? [...set].sort((a, b) => a.localeCompare(b)).map((code) => ({ code }))
+      : []
+  }, [issuerDenylist, issuerKey])
 
   const nothing =
     anomalies.length === 0 &&
@@ -344,17 +356,32 @@ export function RevueDialog({
           <DialogTitle className="text-base">
             Contrôle des imputations
           </DialogTitle>
-          <DialogDescription className="text-xs tabular-nums">
-            {anomalies.length} anomalie{anomalies.length > 1 ? 's' : ''} ·{' '}
-            {denies.length} interdiction{denies.length > 1 ? 's' : ''}
+          <DialogDescription className="text-xs">
+            {hasIssuer ? (
+              <span className="tabular-nums">
+                Émetteur{' '}
+                <span className="font-medium text-foreground">
+                  {issuerLabel}
+                </span>{' '}
+                · {assocs.length} association{assocs.length > 1 ? 's' : ''} ·{' '}
+                {denies.length} interdiction{denies.length > 1 ? 's' : ''}
+              </span>
+            ) : (
+              'Renseignez un émetteur pour voir ses imputations apprises.'
+            )}
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4">
-          {nothing ? (
+          {!hasIssuer ? (
+            <div className="flex flex-col items-center justify-center gap-2 py-12 text-center text-sm text-muted-foreground">
+              Aucun émetteur sélectionné — saisissez-en un dans le champ «
+              Émetteur » pour gérer ce qu'il a appris.
+            </div>
+          ) : nothing ? (
             <div className="flex flex-col items-center justify-center gap-2 py-12 text-center text-sm text-muted-foreground">
               <CheckCircle2 className="size-8 text-emerald-500/70" />
-              Le modèle appris est cohérent — rien à corriger pour l'instant.
+              Rien d'appris pour cet émetteur — aucune imputation à corriger.
             </div>
           ) : (
             <>
@@ -417,22 +444,22 @@ export function RevueDialog({
                     Associations apprises
                   </h2>
                   <p className="-mt-1 text-xs text-muted-foreground">
-                    Ce que chaque émetteur a appris à imputer. « Désapprendre »
+                    Ce que cet émetteur a appris à imputer. « Désapprendre »
                     efface l'association — utile si elle a été créée par erreur.
                   </p>
                   <div className="flex flex-col gap-2">
-                    {assocs.map(({ issuer, code, count }) => {
-                      const id = `assoc:${issuer}:${code}`
+                    {assocs.map(({ code, count }) => {
+                      const id = `assoc:${issuerKey}:${code}`
                       return (
                         <div key={id} className="flex flex-col gap-1">
                           <AssocRow
-                            issuerName={issuerName(issuer)}
+                            issuerName={issuerName(issuerKey)}
                             code={code}
                             count={count}
                             busy={busy[id] === 'forget'}
                             onForget={() =>
                               run(id, 'forget', () =>
-                                forgetIssuerCode(issuer, code),
+                                forgetIssuerCode(issuerKey, code),
                               )
                             }
                           />
@@ -491,21 +518,21 @@ export function RevueDialog({
                     Interdictions en vigueur
                   </h2>
                   <p className="-mt-1 text-xs text-muted-foreground">
-                    Couples émetteur↔code que vous avez bannis. Lever
+                    Codes que cet émetteur ne peut jamais recevoir. Lever
                     l'interdiction rend l'imputation de nouveau possible.
                   </p>
                   <div className="grid gap-3 md:grid-cols-2">
-                    {denies.map(({ issuer, code }) => {
-                      const id = `unban:${issuer}:${code}`
+                    {denies.map(({ code }) => {
+                      const id = `unban:${issuerKey}:${code}`
                       return (
                         <div key={id} className="flex flex-col gap-1">
                           <DenyCard
-                            issuerName={issuerName(issuer)}
+                            issuerName={issuerName(issuerKey)}
                             code={code}
                             busy={busy[id] === 'unban'}
                             onUnban={() =>
                               run(id, 'unban', () =>
-                                unbanIssuerCode(issuer, code),
+                                unbanIssuerCode(issuerKey, code),
                               )
                             }
                           />

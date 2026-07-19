@@ -638,7 +638,12 @@ export function InvoicePanel({
         immature={immature}
       />
 
-      <RevueDialog open={revueOpen} onOpenChange={setRevueOpen} />
+      <RevueDialog
+        open={revueOpen}
+        onOpenChange={setRevueOpen}
+        issuerKey={normalize(record.supplierName).trim()}
+        issuerLabel={record.supplierName.trim()}
+      />
     </div>
   )
 }
