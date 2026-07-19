@@ -29,12 +29,15 @@ import { clamp } from '#/lib/utils.ts'
  * DÉPLACEMENT : on peut glisser un nœud ; sitôt relâché (court délai), il revient à
  * sa place logique avec un petit rebond (setOption ciblé, `elasticOut`).
  *
- * SURVOL : au repos, ni noms ni liens (carte épurée → aucune route superposée).
- * Survoler un émetteur révèle son nom + ses liens vers ses imputations ; survoler une
- * nébuleuse révèle son imputation + ses émetteurs (et voisines partageant un émetteur)
- * + les liens correspondants. Les liens montrés ne s'entrelacent jamais (rayons d'un
- * même soleil, ou liens d'un même émetteur). Le setOption ne part qu'au CHANGEMENT de
- * cible. Client-only, lecture seule.
+ * NOMS : affichés en PERMANENCE (émetteurs + imputations) ; `labelLayout.hideOverlap`
+ * masque les chevauchements en dézoomé et les révèle au zoom. Les MOTS n'ont pas de label
+ * (ils sont la nébuleuse).
+ *
+ * SURVOL : ne pilote plus que les LIENS (au repos, aucune route superposée). Survoler un
+ * émetteur allume ses liens vers ses imputations ; survoler une nébuleuse allume ses
+ * émetteurs (et voisines partageant un émetteur). Les liens montrés ne s'entrelacent jamais
+ * (rayons d'un même soleil, ou liens d'un même émetteur). Le setOption ne part qu'au
+ * CHANGEMENT de cible. Client-only, lecture seule.
  */
 
 echarts.use([GraphChart, TooltipComponent, LegendComponent, CanvasRenderer])
@@ -369,7 +372,7 @@ export function GalaxyChart({
               size,
             ),
             label: {
-              show: revealed.has(n.id), // révélé au survol uniquement
+              show: true, // noms TOUJOURS affichés (hideOverlap dé-encombre en dézoomé)
               position: 'right' as const,
               distance: 6,
               // Couleurs = tokens de l'app (foreground / muted-foreground) ; léger halo
