@@ -21,7 +21,7 @@ import { useConfirm } from '#/components/shared/ConfirmDialog.tsx'
 import { useFacturationModel } from '#/components/facturation/useFacturationModel.ts'
 import { useFacturationCuration } from '#/components/facturation/useFacturationCuration.ts'
 import { reviewQueue, type Anomaly } from '#/lib/facturation/anomalies.ts'
-import { visibleWords } from '#/lib/facturation/wordpool.ts'
+import { computeStats, rankWords } from '#/lib/facturation/wordpool.ts'
 import { budgetLabel } from '#/lib/facturation/constants.ts'
 
 /*
@@ -322,8 +322,9 @@ export function RevueDialog({
     issuerCodes,
     issuerDenylist,
     journal,
-    stoplist,
   } = useFacturationModel()
+  // Poids de discriminance jugé sur TOUT le pool (comparaison inter-imputations).
+  const stats = useMemo(() => computeStats(serverPool), [serverPool])
   const {
     banIssuerCode,
     forgetIssuerCode,
@@ -396,11 +397,13 @@ export function RevueDialog({
     return codes
       .map((code) => ({
         code,
-        words: visibleWords(serverPool.perCode[code] ?? {}, stoplist).length,
+        words: rankWords(serverPool.perCode[code] ?? {}, stats).filter(
+          (w) => w.weight > 0,
+        ).length,
       }))
       .filter((c) => c.words > 0)
       .sort((a, b) => b.words - a.words || a.code.localeCompare(b.code))
-  }, [serverPool, issuerCodes, issuerKey, stoplist])
+  }, [serverPool, issuerCodes, issuerKey, stats])
 
   // Interdictions en vigueur de CET émetteur.
   const denies = useMemo(() => {
@@ -419,11 +422,11 @@ export function RevueDialog({
       for (const [code, n] of Object.entries(cell)) if (n > 0) linked.add(code)
     const out: { code: string; words: number }[] = []
     for (const [code, cell] of Object.entries(serverPool.perCode)) {
-      const words = visibleWords(cell, stoplist).length
+      const words = rankWords(cell, stats).filter((w) => w.weight > 0).length
       if (words > 0 && !linked.has(code)) out.push({ code, words })
     }
     return out.sort((a, b) => b.words - a.words || a.code.localeCompare(b.code))
-  }, [serverPool, issuerCodes, stoplist])
+  }, [serverPool, issuerCodes, stats])
 
   // Factures apprises de CET émetteur (journal), plus récentes d'abord, bornées à l'affichage.
   const MAX_DOCS = 30

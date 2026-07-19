@@ -112,7 +112,6 @@ async function processInvoice(
   issuerCodes: IssuerCodes,
   issuerDenylist: IssuerDenylist,
   knownHashes: Set<string>,
-  stop: ReadonlySet<string>,
 ) {
   try {
     // pdf.js (+ Tesseract au besoin) chargés seulement maintenant.
@@ -130,7 +129,6 @@ async function processInvoice(
       undefined,
       pool,
       issuerHintFor(res.text, issuers, issuerCodes, issuerDenylist),
-      stop,
     )
     patchInvoice(record.id, {
       status: 'ready',
@@ -193,7 +191,6 @@ export function FacturationBoard() {
     issuerCodes,
     issuerDenylist,
     journal,
-    stoplist,
   } = useFacturationModel()
   const pool = useMemo(() => mergePools(seedPool(), serverPool), [serverPool])
   // Hash déjà présents au journal → détection de doublon au dépôt. Recalculé quand le journal
@@ -221,14 +218,13 @@ export function FacturationBoard() {
         r.text,
         pool,
         issuerHintFor(r.text, issuers, issuerCodes, issuerDenylist),
-        stoplist,
       )
       const same =
         codes.length === r.codes.length &&
         codes.every((c, i) => c === r.codes[i])
       if (!same) patchInvoice(r.id, { detection, codes })
     }
-  }, [pool, issuers, issuerCodes, issuerDenylist, stoplist])
+  }, [pool, issuers, issuerCodes, issuerDenylist])
 
   function addFiles(files: FileList | File[]) {
     const pdfs = Array.from(files).filter(
@@ -264,7 +260,6 @@ export function FacturationBoard() {
         issuerCodes,
         issuerDenylist,
         knownHashes,
-        stoplist,
       ),
     )
   }

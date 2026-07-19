@@ -1,4 +1,3 @@
-import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 
 import {
@@ -8,7 +7,6 @@ import {
   fetchIssuers,
   fetchJournal,
 } from '#/lib/facturation/cloudService.ts'
-import { documentStoplist } from '#/lib/facturation/stopwords.ts'
 import type { WordPool } from '#/lib/facturation/wordpool.ts'
 import type { IssuerCodes } from '#/lib/facturation/issuerCodes.ts'
 import type { IssuerDenylist } from '#/lib/facturation/issuerDenylist.ts'
@@ -28,9 +26,6 @@ export function useFacturationModel(): {
   issuerCodes: IssuerCodes
   issuerDenylist: IssuerDenylist
   journal: { entries: JournalEntry[] }
-  /** Denylist adaptative (fréquence-document) dérivée du journal — SOURCE UNIQUE, partagée par
-   *  le scoring (board) et l'affichage (galaxie, revue). Vide si journal trop petit. */
-  stoplist: Set<string>
 } {
   const { data: pool } = useQuery({
     queryKey: ['facturation', 'clouds'],
@@ -57,18 +52,11 @@ export function useFacturationModel(): {
     queryFn: fetchJournal,
     retry: false,
   })
-  // Mémoïsé sur `journal` (référence de cache stable) et non sur un `entries` recréé à chaque
-  // rendu, pour ne pas relancer inutilement la re-détection / buildGalaxy.
-  const stoplist = useMemo(
-    () => documentStoplist(journal?.entries ?? []),
-    [journal],
-  )
   return {
     serverPool: pool ?? { perCode: {} },
     issuers: issuers ?? [],
     issuerCodes: issuerCodes ?? { perIssuer: {} },
     issuerDenylist: issuerDenylist ?? { perIssuer: {} },
     journal: journal ?? { entries: [] },
-    stoplist,
   }
 }

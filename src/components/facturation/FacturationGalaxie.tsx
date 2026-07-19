@@ -7,7 +7,7 @@ import { GalaxyChart } from '#/components/facturation/GalaxyChart.tsx'
 import { Starfield } from '#/components/facturation/Starfield.tsx'
 import { useFacturationModel } from '#/components/facturation/useFacturationModel.ts'
 import { buildGalaxy, type GalaxyNodeType } from '#/lib/facturation/galaxy.ts'
-import { partitionWords } from '#/lib/facturation/wordpool.ts'
+import { computeStats, rankWords } from '#/lib/facturation/wordpool.ts'
 import { budgetLabel } from '#/lib/facturation/constants.ts'
 
 /*
@@ -25,32 +25,28 @@ const NEBULAE = [
 ]
 
 export function FacturationGalaxie() {
-  const { serverPool, issuers, issuerCodes, stoplist } = useFacturationModel()
+  const { serverPool, issuers, issuerCodes } = useFacturationModel()
+  // Poids de discriminance jugé sur TOUT le pool (comparaison inter-imputations), calculé une fois.
+  const stats = useMemo(() => computeStats(serverPool), [serverPool])
   const { graph, counts } = useMemo(() => {
-    const g = buildGalaxy(
-      serverPool,
-      issuers,
-      WORDS_PER_CODE,
-      2,
-      issuerCodes,
-      stoplist,
-    )
+    const g = buildGalaxy(serverPool, issuers, WORDS_PER_CODE, 2, issuerCodes)
     const c: Record<GalaxyNodeType, number> = { issuer: 0, code: 0, word: 0 }
     for (const n of g.nodes) c[n.type]++
     return { graph: g, counts: c }
-  }, [serverPool, issuers, issuerCodes, stoplist])
+  }, [serverPool, issuers, issuerCodes])
   const empty = graph.nodes.length === 0
 
-  // Code sélectionné (clic sur une nébuleuse) → panneau latéral listant SES mots appris,
-  // SÉPARÉS : mots retenus (discriminants, en avant) vs parasites (stopwords + stoplist, estompés).
+  // Code sélectionné (clic sur une nébuleuse) → panneau latéral listant SES mots, CLASSÉS par
+  // pouvoir discriminant (fort d'abord). Rien n'est masqué : les mots transverses (adresse,
+  // paiement…) descendent et s'estompent (opacité ∝ poids), au lieu d'être cachés.
   const [selectedCode, setSelectedCode] = useState<string | null>(null)
   const selected = useMemo(() => {
     const cell = selectedCode ? serverPool.perCode[selectedCode] : undefined
     if (!selectedCode || !cell) return null
-    const { kept, hidden } = partitionWords(cell, stoplist)
-    const total = kept.reduce((s, [, n]) => s + n, 0)
-    return { code: selectedCode, kept, hidden, total }
-  }, [selectedCode, serverPool, stoplist])
+    const ranked = rankWords(cell, stats)
+    const maxWeight = ranked.reduce((m, w) => Math.max(m, w.weight), 0)
+    return { code: selectedCode, ranked, maxWeight }
+  }, [selectedCode, serverPool, stats])
 
   return (
     <PageContainer fillHeight>
@@ -97,10 +93,7 @@ export function FacturationGalaxie() {
                   {selected.code}
                 </p>
                 <p className="mt-1 text-xs text-slate-400 tabular-nums">
-                  {selected.kept.length} mots retenus
-                  {selected.hidden.length > 0
-                    ? ` · ${selected.hidden.length} ignorés`
-                    : ''}
+                  {selected.ranked.length} mots · les plus discriminants en tête
                 </p>
               </div>
               <button
@@ -113,47 +106,29 @@ export function FacturationGalaxie() {
               </button>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-3">
-              {/* Mots RETENUS : discriminants, en avant. */}
               <div className="flex flex-wrap gap-1.5">
-                {selected.kept.map(([token, n]) => (
-                  <span
-                    key={token}
-                    className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-xs text-slate-200"
-                  >
-                    {token}
-                    <span className="text-[10px] text-slate-500 tabular-nums">
-                      {n}
+                {selected.ranked.map(({ token, count, weight }) => {
+                  // Opacité ∝ pouvoir discriminant : les mots forts ressortent, les transverses
+                  // (adresse, paiement…) s'estompent — jamais cachés (« filtrer, pas ignorer »).
+                  const rel =
+                    selected.maxWeight > 0 ? weight / selected.maxWeight : 0
+                  return (
+                    <span
+                      key={token}
+                      style={{ opacity: 0.28 + 0.72 * rel }}
+                      className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-xs text-slate-200"
+                    >
+                      {token}
+                      <span className="text-[10px] text-slate-500 tabular-nums">
+                        {count}
+                      </span>
                     </span>
-                  </span>
-                ))}
-                {selected.kept.length === 0 && (
-                  <p className="text-xs text-slate-500">
-                    Aucun mot discriminant retenu.
-                  </p>
+                  )
+                })}
+                {selected.ranked.length === 0 && (
+                  <p className="text-xs text-slate-500">Aucun mot appris.</p>
                 )}
               </div>
-
-              {/* Mots IGNORÉS : génériques (stopwords) + parasites (stoplist), estompés. */}
-              {selected.hidden.length > 0 && (
-                <>
-                  <p className="mt-4 mb-1.5 text-[10px] tracking-[0.18em] text-slate-500 uppercase">
-                    Ignorés · génériques / parasites
-                  </p>
-                  <div className="flex flex-wrap gap-1.5 opacity-45">
-                    {selected.hidden.map(([token, n]) => (
-                      <span
-                        key={token}
-                        className="inline-flex items-center gap-1 rounded-full border border-white/5 bg-white/[0.03] px-2 py-0.5 text-xs text-slate-400 line-through decoration-slate-600"
-                      >
-                        {token}
-                        <span className="text-[10px] text-slate-600 tabular-nums no-underline">
-                          {n}
-                        </span>
-                      </span>
-                    ))}
-                  </div>
-                </>
-              )}
             </div>
           </div>
         )}
