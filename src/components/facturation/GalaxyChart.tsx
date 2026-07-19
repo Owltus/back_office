@@ -29,14 +29,10 @@ import { clamp } from '#/lib/utils.ts'
  * DÉPLACEMENT : on peut glisser un nœud ; sitôt relâché (court délai), il revient à
  * sa place logique avec un petit rebond (setOption ciblé, `elasticOut`).
  *
- * NOMS : affichés en PERMANENCE (émetteurs + imputations) ; `labelLayout.hideOverlap`
- * masque les chevauchements en dézoomé et les révèle au zoom. Les MOTS n'ont pas de label
- * (ils sont la nébuleuse).
- *
- * SURVOL : ne pilote plus que les LIENS (au repos, aucune route superposée). Survoler un
- * émetteur allume ses liens vers ses imputations ; survoler une nébuleuse allume ses
- * émetteurs (et voisines partageant un émetteur). Les liens montrés ne s'entrelacent jamais
- * (rayons d'un même soleil, ou liens d'un même émetteur). Le setOption ne part qu'au
+ * LIENS : TOUJOURS visibles (émetteur→imputation), discrets au repos.
+ * NOMS : au SURVOL seulement (carte épurée côté texte). Survoler un émetteur révèle son nom
+ * + met ses liens en avant (les autres s'estompent) ; survoler une nébuleuse révèle son
+ * imputation + ses émetteurs (et voisines partageant un émetteur). Le setOption ne part qu'au
  * CHANGEMENT de cible. Client-only, lecture seule.
  */
 
@@ -372,7 +368,7 @@ export function GalaxyChart({
               size,
             ),
             label: {
-              show: true, // noms TOUJOURS affichés (hideOverlap dé-encombre en dézoomé)
+              show: revealed.has(n.id), // noms révélés au survol uniquement
               position: 'right' as const,
               distance: 6,
               // Couleurs = tokens de l'app (foreground / muted-foreground) ; léger halo
@@ -391,11 +387,12 @@ export function GalaxyChart({
             },
           }
         })
-    // Liens émetteur→imputation, PILOTÉS PAR LE SURVOL comme les libellés : un lien
-    // n'apparaît que si ses DEUX extrémités sont révélées. Au repos (rien de survolé),
-    // aucun trait → carte épurée, aucune route superposée. Au survol, seuls les liens
-    // de l'élément pointé s'allument (rayons d'un même soleil, ou les liens d'un même
-    // émetteur — jamais un entrelacement).
+    // Liens émetteur→imputation : TOUJOURS visibles (discrets au repos), mis en avant quand
+    // leurs DEUX extrémités sont survolées (le sous-ensemble pointé ressort ; les autres
+    // s'estompent). Rayons d'un même soleil / liens d'un même émetteur → pas d'entrelacement.
+    const LINK_REST = 0.22 // opacité au repos (tous les liens présents mais légers)
+    const LINK_ON = 0.7 // opacité du lien survolé
+    const LINK_DIM = 0.06 // opacité des autres liens pendant un survol
     const buildLinks = () =>
       graph.links
         .filter((l) => l.source.startsWith('issuer:'))
@@ -404,7 +401,12 @@ export function GalaxyChart({
           target: l.target,
           lineStyle: {
             color: colorById.get(l.target) ?? '#94a3b8',
-            opacity: revealed.has(l.source) && revealed.has(l.target) ? 0.6 : 0,
+            opacity:
+              revealed.size === 0
+                ? LINK_REST
+                : revealed.has(l.source) && revealed.has(l.target)
+                  ? LINK_ON
+                  : LINK_DIM,
             width: 1.2,
             curveness: 0,
           },
