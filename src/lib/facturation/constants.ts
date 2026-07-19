@@ -438,6 +438,16 @@ export function budgetLabel(code: string): string {
   return LABEL_BY_CODE.get(code) ?? code
 }
 
+/** Index code → description « en clair » (exemples concrets de dépenses couvertes). */
+const HINT_BY_CODE = new Map(BUDGET_LINES.map((l) => [l.code, l.hint]))
+
+/** Description « en clair » d'une imputation — les exemples concrets qu'elle couvre (issus de
+ *  `BUDGET_LINES.hint`). Sert à EXPLIQUER une imputation dans les tooltips de la galaxie. '' si
+ *  inconnue. */
+export function budgetHint(code: string): string {
+  return HINT_BY_CODE.get(code) ?? ''
+}
+
 /**
  * Règles fournisseur → code analytique livrées avec l'app, DÉRIVÉES des
  * fournisseurs cités dans les `description` du plan analytique. Le matching

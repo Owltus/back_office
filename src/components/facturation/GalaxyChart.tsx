@@ -12,7 +12,7 @@ import {
   type GalaxyNode,
   type GalaxyNodeType,
 } from '#/lib/facturation/galaxy.ts'
-import type { Tag } from '#/lib/facturation/constants.ts'
+import { budgetHint, type Tag } from '#/lib/facturation/constants.ts'
 import { clamp } from '#/lib/utils.ts'
 
 /*
@@ -206,6 +206,14 @@ const starStyle = (type: 'issuer' | 'code', hex: string, size: number) =>
         opacity: 1,
       }
 
+/** Échappe le HTML injecté dans les tooltips (les descriptions peuvent contenir & < >). */
+const escapeHtml = (s: string): string =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+/** Tronque proprement une description trop longue pour un tooltip. */
+const truncate = (s: string, n: number): string =>
+  s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s
+
 interface TooltipParam {
   dataType?: string
   data: {
@@ -215,6 +223,7 @@ interface TooltipParam {
     value?: number
     typeLabel?: string
     deg?: number
+    hint?: string
   }
 }
 interface RoamParam {
@@ -357,6 +366,8 @@ export function GalaxyChart({
             symbolSize: size,
             typeLabel: TYPE_LABEL[n.type],
             deg: deg[n.id] ?? 0,
+            // Description « en clair » de l'imputation (le tooltip explique ce qu'elle couvre).
+            hint: n.type === 'code' && n.code ? budgetHint(n.code) : undefined,
             // Position logique : en layout 'none' les x/y des données SONT le layout ;
             // un glisser écarte le nœud, réappliquer ces mêmes x/y l'anime au retour.
             x: n.x * SCALE,
@@ -460,13 +471,25 @@ export function GalaxyChart({
           if (p.dataType === 'edge') {
             const s = labelById.get(p.data.source ?? '') ?? p.data.source
             const t = labelById.get(p.data.target ?? '') ?? p.data.target
-            return `<span style="color:#94a3b8">Lien</span> · ${s} → ${t}`
+            return `<span style="color:#94a3b8">Fournisseur → imputation</span><br>${s} → ${t}`
           }
           const d = p.data
-          return (
-            `<b style="font-size:13px">${d.name}</b><br>` +
-            `<span style="color:#94a3b8">${d.typeLabel}</span> · ${d.value}× · ${d.deg} liens`
-          )
+          const title = `<b style="font-size:13px">${escapeHtml(d.name ?? '')}</b>`
+          // IMPUTATION : on EXPLIQUE d'abord ce qu'elle couvre (description en clair) — le sujet
+          // que l'utilisateur veut comprendre au survol. Le détail technique passe au second plan.
+          if (d.typeLabel === TYPE_LABEL.code) {
+            const desc = d.hint
+              ? `<div style="margin-top:5px;max-width:260px;white-space:normal;color:#cbd5e1;line-height:1.45">${escapeHtml(truncate(d.hint, 220))}</div>`
+              : `<div style="margin-top:4px;color:#64748b">Pas de description</div>`
+            return `${title}<br><span style="color:#94a3b8">Imputation comptable</span>${desc}`
+          }
+          // ÉMETTEUR : fournisseur + nombre d'imputations qu'il alimente.
+          if (d.typeLabel === TYPE_LABEL.issuer) {
+            const n = d.deg ?? 0
+            return `${title}<br><span style="color:#94a3b8">Fournisseur</span> · relié à ${n} imputation${n > 1 ? 's' : ''}`
+          }
+          // Repli (mot ou autre) : format compact.
+          return `${title}<br><span style="color:#94a3b8">${d.typeLabel}</span> · ${d.value}×`
         },
       },
       series: [
