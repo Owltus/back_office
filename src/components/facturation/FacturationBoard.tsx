@@ -185,13 +185,8 @@ export function FacturationBoard() {
 
   // Lectures Supabase (nuages appris + émetteurs), en cache et dégradation gracieuse
   // (voir useFacturationModel). Le pool de scoring fusionne la graine avec l'appris.
-  const {
-    serverPool,
-    issuers,
-    issuerCodes,
-    issuerDenylist,
-    journal,
-  } = useFacturationModel()
+  const { serverPool, issuers, issuerCodes, issuerDenylist, journal } =
+    useFacturationModel()
   const pool = useMemo(() => mergePools(seedPool(), serverPool), [serverPool])
   // Hash déjà présents au journal → détection de doublon au dépôt. Recalculé quand le journal
   // change ; le Set est passé à processInvoice (fonction hors composant, ne lit pas le cache).

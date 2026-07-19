@@ -28,11 +28,13 @@ export function reviewQueue(
   issuerCodes: IssuerCodes,
 ): Anomaly[] {
   return [
-    ...issuerOutliers(issuerCodes).map(
-      (data): Anomaly => ({ kind: 'issuer-outlier', data }),
-    ),
-    ...confusableCodes(pool).map(
-      (data): Anomaly => ({ kind: 'confusable-codes', data }),
-    ),
+    ...issuerOutliers(issuerCodes).map((data): Anomaly => ({
+      kind: 'issuer-outlier',
+      data,
+    })),
+    ...confusableCodes(pool).map((data): Anomaly => ({
+      kind: 'confusable-codes',
+      data,
+    })),
   ]
 }
