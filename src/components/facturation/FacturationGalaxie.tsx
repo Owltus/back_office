@@ -75,7 +75,7 @@ export function FacturationGalaxie() {
 
         {/* Panneau latéral droit : mots appris de la nébuleuse sélectionnée. */}
         {selected && (
-          <div className="absolute top-4 right-4 bottom-10 z-10 flex w-72 max-w-[calc(100%-2rem)] flex-col rounded-2xl border border-white/10 bg-[#0a0d1c]/80 backdrop-blur">
+          <div className="absolute top-4 right-4 bottom-10 z-10 flex w-72 max-w-[calc(100%-2rem)] flex-col rounded-2xl border border-white/10 bg-[#0a0d1c] shadow-xl">
             <div className="flex items-start justify-between gap-2 border-b border-white/10 p-4">
               <div className="min-w-0">
                 <p className="text-[10px] tracking-[0.22em] text-slate-400 uppercase">
@@ -118,8 +118,9 @@ export function FacturationGalaxie() {
           </div>
         )}
 
-        {/* Panneau (au-dessus du graphe). */}
-        <div className="absolute top-4 left-4 z-10 w-64 max-w-[calc(100%-2rem)] rounded-2xl border border-white/10 bg-[#0a0d1c]/70 p-4 backdrop-blur">
+        {/* Panneau (au-dessus du graphe). Opaque : la nébuleuse ne doit pas transparaître à
+            travers (le fond flou translucide donnait un rendu « à travers la carte »). */}
+        <div className="absolute top-4 left-4 z-10 w-64 max-w-[calc(100%-2rem)] rounded-2xl border border-white/10 bg-[#0a0d1c] p-4 shadow-xl">
           <Link
             to="/facturation"
             className="mb-2 inline-flex items-center gap-1 text-xs text-slate-400 transition-colors hover:text-slate-200"
@@ -140,7 +141,7 @@ export function FacturationGalaxie() {
         </div>
 
         {!empty && (
-          <div className="pointer-events-none absolute right-4 bottom-3 z-10 rounded-full border border-white/10 bg-[#0a0d1c]/70 px-3 py-1 text-[11px] text-slate-400">
+          <div className="pointer-events-none absolute right-4 bottom-3 z-10 rounded-full border border-white/10 bg-[#0a0d1c] px-3 py-1 text-[11px] text-slate-400">
             molette : zoom · glisser : déplacer · survoler : voisins · cliquer :
             mots · légende : filtrer
           </div>
