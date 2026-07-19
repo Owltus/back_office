@@ -284,6 +284,7 @@ export function InvoicePanel({
   const [banWarning, setBanWarning] = useState(false)
   const [replayUndoing, setReplayUndoing] = useState(false)
   const [replayDone, setReplayDone] = useState(false)
+  const [showReplay, setShowReplay] = useState(false)
   const queryClient = useQueryClient()
   const { banIssuerCode } = useFacturationCuration()
   const { confirm, confirmDialog } = useConfirm()
@@ -449,13 +450,35 @@ export function InvoicePanel({
   // aurait appris. ⚠ Cela décrémente des compteurs PARTAGÉS : l'utilisateur doit régler l'émetteur
   // et les codes EXACTEMENT comme lors du tamponnage fautif (sinon il érode un autre apprentissage).
   async function handleReplayUnlearn() {
+    const issuerName = canLearn(record.supplierName)
+      ? issuerKey(record.supplierName)
+      : null
+    // Récap + confirmation : on décrémente des compteurs PARTAGÉS d'après l'état COURANT.
+    // L'utilisateur doit vérifier que codes + émetteur reproduisent le tampon fautif.
+    const ok = await confirm({
+      title: 'Désapprendre cette facture ?',
+      description: (
+        <>
+          Retire du modèle ce que cette facture apprendrait pour{' '}
+          <b>{record.codes.map((c) => budgetLabel(c)).join(', ')}</b>
+          {issuerName ? (
+            <>
+              {' '}
+              (émetteur <b>{record.supplierName.trim()}</b>)
+            </>
+          ) : null}
+          . Vérifiez que l'émetteur et les codes reproduisent EXACTEMENT le
+          tampon fautif — sinon vous effacez un autre apprentissage.
+        </>
+      ),
+      confirmLabel: 'Désapprendre',
+      destructive: true,
+    })
+    if (!ok) return
     setReplayUndoing(true)
     setLearnWarning(false)
     setReplayDone(false)
     try {
-      const issuerName = canLearn(record.supplierName)
-        ? issuerKey(record.supplierName)
-        : null
       await unlearnInvoiceCore(record.codes, issuerName)
       setReplayDone(true)
     } catch {
@@ -673,34 +696,58 @@ export function InvoicePanel({
           Apposer le tampon & télécharger
         </Button>
 
-        {/* Correction d'une erreur passée : facture RE-DÉPOSÉE (donc non apprise ici). On
-            règle l'émetteur + les codes fautifs puis on désapprend, sans re-tamponner. */}
-        {!record.learned && canStamp && (
-          <>
-            {replayDone ? (
-              <p className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-                <RotateCcw className="size-3.5 shrink-0" />
-                Imputation désapprise pour cet émetteur.
+        {/* Correction d'une erreur PASSÉE (facture DÉJÀ tamponnée puis RE-DÉPOSÉE) : action
+            OPT-IN, masquée par défaut pour ne pas s'afficher sur une facture neuve à tamponner.
+            On règle l'émetteur + les codes fautifs, puis on désapprend, sans re-tamponner. */}
+        {!record.learned &&
+          canStamp &&
+          (replayDone ? (
+            <p className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+              <RotateCcw className="size-3.5 shrink-0" />
+              Imputation désapprise pour cet émetteur.
+            </p>
+          ) : !showReplay ? (
+            <button
+              type="button"
+              onClick={() => setShowReplay(true)}
+              className="self-center text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+            >
+              Cette facture corrige une erreur déjà tamponnée ?
+            </button>
+          ) : (
+            <div className="flex flex-col gap-1.5 rounded-lg border border-border bg-muted/20 px-3 py-2.5">
+              <p className="text-[11px] text-muted-foreground">
+                Réglez l'émetteur et les codes{' '}
+                <b>exactement comme le tampon fautif</b>, puis désapprenez.
+                N'utilisez ceci que pour une facture <b>déjà tamponnée</b> par
+                le passé.
               </p>
-            ) : (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleReplayUnlearn}
-                disabled={replayUndoing}
-                title="Re-déposez la facture, réglez l'émetteur et les codes imputés par erreur, puis désapprenez"
-                className="w-full text-muted-foreground hover:text-destructive"
-              >
-                {replayUndoing ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <Eraser className="size-4" />
-                )}
-                Corriger une erreur : désapprendre cette facture
-              </Button>
-            )}
-          </>
-        )}
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowReplay(false)}
+                  className="flex-1"
+                >
+                  Annuler
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleReplayUnlearn}
+                  disabled={replayUndoing}
+                  className="flex-1 text-destructive hover:text-destructive"
+                >
+                  {replayUndoing ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Eraser className="size-4" />
+                  )}
+                  Désapprendre
+                </Button>
+              </div>
+            </div>
+          ))}
       </div>
 
       <CodePicker
