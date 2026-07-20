@@ -3,6 +3,7 @@ import * as echarts from 'echarts/core'
 import { GraphChart } from 'echarts/charts'
 import { LegendComponent, TooltipComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
+import { Locate, Minus, Plus } from 'lucide-react'
 
 import {
   ISSUER_CATEGORY,
@@ -27,8 +28,9 @@ import { clamp } from '#/lib/utils.ts'
  * ils forment une NÉBULEUSE (surface pleine par imputation) dessinée sur un canvas
  * dédié derrière le graphe (voir drawNebula), recalée sur la vue via convertToPixel.
  *
- * DÉPLACEMENT : on peut glisser un nœud ; sitôt relâché (court délai), il revient à
- * sa place logique avec un petit rebond (setOption ciblé, `elasticOut`).
+ * DÉPLACEMENT : on peut glisser un nœud ; sitôt relâché (court délai), il revient en
+ * douceur à sa place logique (setOption ciblé, `cubicOut`). Zoom molette OU boutons +/−,
+ * recentrage, double-clic pour zoomer sur une nébuleuse ; clic sur un émetteur = épingle.
  *
  * LIENS : TOUJOURS visibles (émetteur→imputation), discrets au repos.
  * NOMS : au SURVOL seulement (carte épurée côté texte). Survoler un émetteur révèle son nom
@@ -245,6 +247,11 @@ export function GalaxyChart({
   // la dernière version sans relancer l'effet (deps [graph]).
   const onSelectRef = useRef(onSelectCode)
   onSelectRef.current = onSelectCode
+  // API impérative des boutons de vue (zoom / recentrer), branchée dans l'effet.
+  const apiRef = useRef<{
+    zoomBy: (factor: number) => void
+    reset: () => void
+  } | null>(null)
 
   useEffect(() => {
     const el = ref.current
@@ -349,6 +356,8 @@ export function GalaxyChart({
 
     // Ensemble des ids dont le libellé est révélé (vide = carte au repos).
     let revealed = new Set<string>()
+    // Mise en avant ÉPINGLÉE (clic sur un émetteur) : persiste tant qu'on ne clique pas ailleurs.
+    let pinned = new Set<string>()
 
     // Nœuds ECharts = SOLEILS (imputations) + PLANÈTES (émetteurs). Les mots sont la
     // nébuleuse, pas des nœuds. Construits FRAIS à chaque appel (ECharts mutile les
@@ -431,7 +440,7 @@ export function GalaxyChart({
         series: [
           {
             animationDurationUpdate: animate ? RETURN_DURATION : 0,
-            animationEasingUpdate: 'elasticOut',
+            animationEasingUpdate: 'cubicOut',
             data: buildNodes(),
             links: buildLinks(),
           },
@@ -440,7 +449,7 @@ export function GalaxyChart({
 
     let zoom = 1
 
-    chart.setOption({
+    const option = {
       // Animation active pour le retour élastique, mais durées à 0 au montage et sur
       // les updates ordinaires (labels) → aucun coût tant qu'on n'anime pas un retour.
       animation: true,
@@ -515,7 +524,8 @@ export function GalaxyChart({
           label: { show: false },
         },
       ],
-    } as echarts.EChartsCoreOption)
+    } as echarts.EChartsCoreOption
+    chart.setOption(option)
 
     // Suivi du zoom (accumulation des facteurs de l'événement roam) → sert au rayon de
     // la nébuleuse. Pas de setOption ici : un setOption pendant une rafale de molette
@@ -560,18 +570,38 @@ export function GalaxyChart({
         }, RETURN_DELAY)
         return
       }
-      // Pas de glisser de nœud : si peu de mouvement → CLIC. Nébuleuse sous le curseur →
-      // sélection (remonte le code) ; sinon désélection.
-      if (Math.hypot(mx - downX, my - downY) < 5) {
-        let picked: string | null = null
-        for (const cl of clusterHit) {
-          if (Math.hypot(cl.cx - mx, cl.cy - my) <= cl.r) {
-            picked = cl.code
-            break
+      // Trop de mouvement = pan, pas un clic (tolérance élargie → moins capricieux).
+      if (Math.hypot(mx - downX, my - downY) >= 8) return
+      // 1) Émetteur cliqué ? → ÉPINGLE sa mise en avant (ses imputations restent révélées) ;
+      //    re-cliquer dessus désépingle. Rend enfin le clic sur un émetteur utile.
+      for (const it of issuerScreen) {
+        if (Math.hypot(it.x - mx, it.y - my) <= it.r + 3) {
+          const wasPinned = pinned.has(it.id)
+          pinned = new Set()
+          if (!wasPinned) {
+            pinned.add(it.id)
+            for (const c of issuerToCodes.get(it.id) ?? []) pinned.add(c)
           }
+          revealed = pinned
+          applyNodes(false)
+          return
         }
-        onSelectRef.current?.(picked)
       }
+      // 2) Nébuleuse cliquée → ouvre le panneau des mots ; clic dans le vide → désélection
+      //    ET désépinglage.
+      let picked: string | null = null
+      for (const cl of clusterHit) {
+        if (Math.hypot(cl.cx - mx, cl.cy - my) <= cl.r) {
+          picked = cl.code
+          break
+        }
+      }
+      if (!picked && pinned.size) {
+        pinned = new Set()
+        revealed = new Set()
+        applyNodes(false)
+      }
+      onSelectRef.current?.(picked)
     }
     chart.on('mousedown', onDown as (p: unknown) => void)
     chart.getZr().on('mousedown', onZrDown)
@@ -748,29 +778,70 @@ export function GalaxyChart({
       }
       if (key !== hoveredKey) {
         hoveredKey = key
-        revealed = next
+        revealed = next.size ? next : pinned // rien sous le curseur → on garde l'épinglé
         applyNodes(false)
       }
     }
     const onOut = () => {
       if (hoveredKey) {
         hoveredKey = ''
-        revealed = new Set()
+        revealed = pinned // retour à l'épinglé (vide si rien d'épinglé)
         applyNodes(false)
       }
     }
     zr.on('mousemove', onMove)
     zr.on('globalout', onOut)
 
-    const ro = new ResizeObserver(() => {
-      chart.resize()
+    // --- Contrôles de vue (boutons + double-clic) ---
+    // dispatchAction('graphRoam') emprunte le MÊME chemin que la molette (onRoam met `zoom` à
+    // jour, 'rendered' recale la nébuleuse) → pas de setOption brut pendant l'interaction, pas de gel.
+    const roam = (factor: number, originX: number, originY: number) =>
+      chart.dispatchAction({
+        type: 'graphRoam',
+        zoom: factor,
+        originX,
+        originY,
+      } as unknown as Parameters<typeof chart.dispatchAction>[0])
+    const zoomBy = (factor: number) =>
+      roam(factor, (el.clientWidth || 1) / 2, (el.clientHeight || 1) / 2)
+    const resetView = () => {
+      zoom = 1
+      pinned = new Set()
+      revealed = new Set()
+      hoveredKey = ''
+      chart.setOption(option, true) // notMerge → recrée la série, réinitialise pan/zoom
       scheduleNebula()
+    }
+    apiRef.current = { zoomBy, reset: resetView }
+
+    // Double-clic sur une nébuleuse → zoom dessus (centré sur elle).
+    const onDblClick = (e: { offsetX: number; offsetY: number }) => {
+      for (const cl of clusterHit) {
+        if (Math.hypot(cl.cx - e.offsetX, cl.cy - e.offsetY) <= cl.r) {
+          roam(1.8, cl.cx, cl.cy)
+          break
+        }
+      }
+    }
+    zr.on('dblclick', onDblClick)
+
+    // Resize débouncé (un seul recalcul par frame) → pas de saccade au redimensionnement.
+    let resizeRaf = 0
+    const ro = new ResizeObserver(() => {
+      if (resizeRaf) return
+      resizeRaf = requestAnimationFrame(() => {
+        resizeRaf = 0
+        chart.resize()
+        scheduleNebula()
+      })
     })
     ro.observe(el)
     return () => {
       ro.disconnect()
+      if (resizeRaf) cancelAnimationFrame(resizeRaf)
       if (returnTimer) clearTimeout(returnTimer)
       if (nebulaFrame) cancelAnimationFrame(nebulaFrame)
+      apiRef.current = null
       chart.off('graphroam', onRoam as (p: unknown) => void)
       chart.off('mousedown', onDown as (p: unknown) => void)
       chart.off('rendered', scheduleNebula)
@@ -778,6 +849,7 @@ export function GalaxyChart({
       zr.off('globalout', onOut)
       zr.off('mousedown', onZrDown)
       zr.off('mouseup', onUp)
+      zr.off('dblclick', onDblClick)
       chart.dispose()
     }
   }, [graph])
@@ -792,6 +864,38 @@ export function GalaxyChart({
         className="pointer-events-none absolute inset-0 h-full w-full"
       />
       <div ref={ref} className="absolute inset-0" />
+
+      {/* Contrôles de vue : zoom + / − et recentrer (le glisser + molette restent dispo). */}
+      <div className="absolute bottom-3 left-4 z-10 flex flex-col gap-1">
+        {[
+          {
+            icon: Plus,
+            label: 'Zoomer',
+            onClick: () => apiRef.current?.zoomBy(1.35),
+          },
+          {
+            icon: Minus,
+            label: 'Dézoomer',
+            onClick: () => apiRef.current?.zoomBy(1 / 1.35),
+          },
+          {
+            icon: Locate,
+            label: 'Recentrer',
+            onClick: () => apiRef.current?.reset(),
+          },
+        ].map(({ icon: Icon, label, onClick }) => (
+          <button
+            key={label}
+            type="button"
+            onClick={onClick}
+            aria-label={label}
+            title={label}
+            className="rounded-md border border-white/10 bg-[#0a0d1c]/90 p-1.5 text-slate-400 shadow-sm backdrop-blur transition-colors hover:bg-white/10 hover:text-slate-200"
+          >
+            <Icon className="size-4" />
+          </button>
+        ))}
+      </div>
     </div>
   )
 }
