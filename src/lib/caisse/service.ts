@@ -9,7 +9,8 @@ import type {
   DbCaisseSheet,
   Shift,
 } from '#/lib/caisse/types.ts'
-import type { UserRole } from '#/lib/repjour/types.ts'
+import { levelRank } from '#/lib/permissions/index.ts'
+import type { PageLevel } from '#/lib/permissions/index.ts'
 
 /*
  * Service d'accès Supabase pour les feuilles de caisse (table `caisse_sheets`).
@@ -233,13 +234,13 @@ export async function reopenSheet(id: string): Promise<void> {
 
 /**
  * Garde d'édition ERGONOMIQUE — reflète la policy RLS UPDATE (l'autorité réelle).
- * Autorise si : rôle super/admin ET (admin, OU feuille non validée, OU dans la
- * fenêtre de grâce). Sert à griser l'UI sans aller-retour serveur.
+ * Autorise si : niveau caisse >= Écriture ET (Gestion, OU feuille non validée, OU
+ * dans la fenêtre de grâce). Sert à griser l'UI sans aller-retour serveur.
  */
-export function canEditSheet(sheet: CaisseSheet | null, role: UserRole | null): boolean {
-  if (role !== 'super_utilisateur' && role !== 'admin') return false
+export function canEditSheet(sheet: CaisseSheet | null, level: PageLevel | null): boolean {
+  if (levelRank(level) < 2) return false
   if (!sheet || sheet.status !== 'validated' || !sheet.validatedAt) return true
-  if (role === 'admin') return true
+  if (level === 'gestion') return true
   const graceEnd = new Date(sheet.validatedAt).getTime() + GRACE_HOURS * 3_600_000
   return Date.now() < graceEnd
 }

@@ -172,9 +172,9 @@ function pointerToCell(
 }
 
 export function ParkingBoard({ initialDate }: { initialDate?: string }) {
-  const { role } = useAuth()
-  // Seuls super_utilisateur et admin peuvent modifier ; `utilisateur` = lecture seule.
-  const canEdit = role === 'super_utilisateur' || role === 'admin'
+  const { can } = useAuth()
+  // Seuls les niveaux Écriture / Gestion peuvent modifier ; Lecture = consultation.
+  const canEdit = can('parking', 'ecriture')
   const [startDate, setStartDate] = useState<Date | null>(null)
   const [offset, setOffset] = useState(0)
   // Défilement au clic-glissé (drag-to-scroll) : vrai le temps d'un panoramique,

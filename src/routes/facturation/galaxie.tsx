@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 
-import { ProtectedRoute } from '#/components/repjour/ProtectedRoute.tsx'
+import { PageGuard } from '#/components/auth/PageGuard.tsx'
 import { FacturationGalaxie } from '#/components/facturation/FacturationGalaxie.tsx'
 
 /**
@@ -16,8 +16,8 @@ export const Route = createFileRoute('/facturation/galaxie')({
 
 function GalaxiePage() {
   return (
-    <ProtectedRoute allowedRoles={['admin']}>
+    <PageGuard page="facturation">
       <FacturationGalaxie />
-    </ProtectedRoute>
+    </PageGuard>
   )
 }

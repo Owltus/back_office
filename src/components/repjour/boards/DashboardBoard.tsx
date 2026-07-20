@@ -135,10 +135,10 @@ export function DashboardBoard() {
     return () => clearTimeout(t)
   }, [serverNote])
 
-  const { role } = useAuth()
+  const { can } = useAuth()
   const queryClient = useQueryClient()
-  const isAdmin = role === 'admin'
-  const canImport = role === 'super_utilisateur' || role === 'admin'
+  const isAdmin = can('repjour', 'gestion')
+  const canImport = can('repjour', 'ecriture')
 
   const d = new Date(selectedDate + 'T00:00:00')
   const year = d.getFullYear()

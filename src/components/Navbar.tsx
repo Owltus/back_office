@@ -1,22 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import {
-  ArrowLeftRight,
-  Banknote,
-  ChevronsUpDown,
-  ClipboardList,
-  Coffee,
-  Menu,
-  Monitor,
-  Palette,
-  SquareParking,
-  Stamp,
-} from 'lucide-react'
+import { ChevronsUpDown, Menu } from 'lucide-react'
 
 import { Logo } from '#/components/Logo.tsx'
 import { UserMenu } from '#/components/UserMenu.tsx'
 import { UserAvatar } from '#/components/shared/UserAvatar.tsx'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
+import { PAGES } from '#/lib/permissions/index.ts'
 import { Button } from '#/components/ui/button.tsx'
 import {
   Sheet,
@@ -27,27 +17,17 @@ import {
   SheetTrigger,
 } from '#/components/ui/sheet.tsx'
 
-const NAV_ITEMS = [
-  { to: '/repjour', label: 'RepJour', icon: ClipboardList },
-  { to: '/pdj', label: 'PDJ', icon: Coffee },
-  { to: '/parking', label: 'Parking', icon: SquareParking },
-  { to: '/rapro', label: 'Rapprochement', icon: ArrowLeftRight },
-  { to: '/caisse', label: 'Caisse', icon: Banknote },
-  { to: '/affichage', label: 'Affichage', icon: Monitor },
-] as const
-
-// Éléments réservés aux ADMINS, en FIN de ligne (prototypes / registre).
-const ADMIN_ITEMS = [
-  { to: '/facturation', label: 'Facturation', icon: Stamp },
-  { to: '/artefact', label: 'Artefact', icon: Palette },
-] as const
-
 export function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false)
-  const { profile, user, role } = useAuth()
+  const { profile, user, can } = useAuth()
   const userName = profile?.display_name || profile?.email || user?.email || ''
-  // Prototypes admin (Facturation, Artefact) : uniquement pour les admins, en fin de ligne.
-  const navItems = role === 'admin' ? [...NAV_ITEMS, ...ADMIN_ITEMS] : NAV_ITEMS
+  // Une seule liste, dérivée des droits par page : l'utilisateur ne voit QUE les
+  // pages auxquelles on lui a donné au moins la Lecture (un admin les voit toutes).
+  const navItems = PAGES.filter((p) => can(p.key, 'lecture')).map((p) => ({
+    to: p.route,
+    label: p.label,
+    icon: p.icon,
+  }))
 
   // En passant en mode desktop (>= md), on ferme le tiroir s'il est ouvert.
   useEffect(() => {

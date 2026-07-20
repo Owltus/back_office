@@ -75,8 +75,8 @@ const EMPTY: ReadonlyMap<number, RoomStatus> = new Map()
  * stockées. Écriture super/admin — RLS.
  */
 export function RaproBoard({ initialDate }: { initialDate?: string }) {
-  const { user, role } = useAuth()
-  const isWriter = role === 'super_utilisateur' || role === 'admin'
+  const { user, can } = useAuth()
+  const isWriter = can('rapro', 'ecriture')
   const queryClient = useQueryClient()
 
   const [selectedDate, setSelectedDate] = useState(() => initialDate ?? today())

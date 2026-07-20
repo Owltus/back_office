@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 
-import { ProtectedRoute } from '#/components/repjour/ProtectedRoute.tsx'
+import { PageGuard } from '#/components/auth/PageGuard.tsx'
 import { RaproMonthlyBoard } from '#/components/rapro/RaproMonthlyBoard.tsx'
 
 export const Route = createFileRoute('/rapro/analytique/$year/$month')({
@@ -11,8 +11,8 @@ export const Route = createFileRoute('/rapro/analytique/$year/$month')({
 function RaproAnalytiqueDetailPage() {
   const { year, month } = Route.useParams()
   return (
-    <ProtectedRoute allowedRoles={['utilisateur', 'super_utilisateur', 'admin']}>
+    <PageGuard page="rapro">
       <RaproMonthlyBoard year={Number(year)} month={Number(month)} />
-    </ProtectedRoute>
+    </PageGuard>
   )
 }

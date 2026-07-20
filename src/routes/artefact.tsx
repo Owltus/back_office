@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 
-import { ProtectedRoute } from '#/components/repjour/ProtectedRoute.tsx'
+import { PageGuard } from '#/components/auth/PageGuard.tsx'
 import { ArtefactBoard } from '#/components/artefact/ArtefactBoard.tsx'
 
 /**
@@ -17,8 +17,8 @@ export const Route = createFileRoute('/artefact')({
 
 function ArtefactPage() {
   return (
-    <ProtectedRoute allowedRoles={['admin']}>
+    <PageGuard page="artefact">
       <ArtefactBoard />
-    </ProtectedRoute>
+    </PageGuard>
   )
 }

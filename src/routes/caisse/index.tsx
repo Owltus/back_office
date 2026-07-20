@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 
+import { PageGuard } from '#/components/auth/PageGuard.tsx'
 import { CaisseBoard } from '#/components/caisse/CaisseBoard.tsx'
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
 
@@ -14,8 +15,10 @@ export const Route = createFileRoute('/caisse/')({
 function CaissePage() {
   const { date } = Route.useSearch()
   return (
-    <PageContainer printBleed>
-      <CaisseBoard initialDate={date} />
-    </PageContainer>
+    <PageGuard page="caisse">
+      <PageContainer printBleed>
+        <CaisseBoard initialDate={date} />
+      </PageContainer>
+    </PageGuard>
   )
 }

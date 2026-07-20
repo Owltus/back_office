@@ -4,18 +4,36 @@ import type { User } from '@supabase/supabase-js'
 
 import { supabase } from '#/lib/supabase.ts'
 import type { Profile, UserRole } from '#/lib/repjour/types.ts'
+import { atLeast, gradeOf, levelOf } from '#/lib/permissions/index.ts'
+import type {
+  Grade,
+  PageKey,
+  PageLevel,
+  PagePermissions,
+} from '#/lib/permissions/index.ts'
 
 interface AuthContextType {
   user: User | null
   profile: Profile | null
   role: UserRole | null
+  /** Grade dérivé du rôle : 'admin' (tout) ou 'utilisateur' (droits par page). */
+  grade: Grade
+  /** Droits par page de l'utilisateur (page absente = aucun accès). */
+  permissions: PagePermissions
   /** Résolution de la SESSION (locale via `getSession`, quasi instantanée). */
   loading: boolean
   /** Résolution du PROFIL (aller-retour réseau), menée EN ARRIÈRE-PLAN. */
   profileLoading: boolean
+  /** Résolution des PERMISSIONS (réseau), EN ARRIÈRE-PLAN, distincte du profil. */
+  permissionsLoading: boolean
+  /** L'utilisateur a-t-il au moins le niveau `min` sur cette page ? */
+  can: (page: PageKey, min: PageLevel) => boolean
+  /** Niveau effectif de l'utilisateur sur cette page (null = aucun accès). */
+  pageLevel: (page: PageKey) => PageLevel | null
   signIn: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
+  refreshPermissions: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
@@ -50,6 +68,41 @@ function writeCachedProfile(profile: Profile | null) {
 }
 
 /**
+ * Cache local des permissions par page — même principe que le profil : au
+ * rechargement, les droits sont disponibles IMMÉDIATEMENT, le fetch ne fait que
+ * réconcilier en arrière-plan. Stocké avec l'`userId` pour ne jamais servir les
+ * droits d'un autre compte (poste partagé).
+ */
+const PERMS_CACHE_KEY = 'bo.auth.perms.v1'
+
+function readCachedPerms(userId: string): PagePermissions {
+  try {
+    const raw = localStorage.getItem(PERMS_CACHE_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as { userId: string; perms: PagePermissions }
+    return parsed.userId === userId ? parsed.perms : {}
+  } catch {
+    return {}
+  }
+}
+
+function writeCachedPerms(userId: string, perms: PagePermissions) {
+  try {
+    localStorage.setItem(PERMS_CACHE_KEY, JSON.stringify({ userId, perms }))
+  } catch {
+    // Ignoré : cache = optimisation, jamais source de vérité.
+  }
+}
+
+function clearCachedPerms() {
+  try {
+    localStorage.removeItem(PERMS_CACHE_KEY)
+  } catch {
+    // Ignoré.
+  }
+}
+
+/**
  * Fournit la session Supabase et le profil (donc le rôle) à TOUTE l'application.
  *
  * Monté à la racine (`__root.tsx`) : l'authentification protège l'ensemble du
@@ -60,12 +113,12 @@ function writeCachedProfile(profile: Profile | null) {
  *   - `loading` (session) est levé dès que `getSession()` répond. Or `getSession`
  *     lit le `localStorage` : c'est quasi instantané → l'app s'affiche sans
  *     attendre le réseau.
- *   - le profil (donc le rôle) est chargé EN ARRIÈRE-PLAN. Pour un utilisateur
- *     déjà venu, il est hydraté depuis le cache local → rôle disponible tout de
- *     suite, sans aller-retour bloquant.
- *   - `profileLoading` signale la résolution réseau du profil ; les gardes par
- *     rôle (`ProtectedRoute`) s'en servent pour ne pas confondre « profil en
- *     cours de chargement » et « aucun profil » (ex-D13 bug#2).
+ *   - le profil (donc le rôle) ET les permissions par page sont chargés EN
+ *     ARRIÈRE-PLAN. Pour un utilisateur déjà venu, ils sont hydratés depuis le
+ *     cache local → rôle et droits disponibles tout de suite, sans blocage.
+ *   - `profileLoading` / `permissionsLoading` signalent ces résolutions réseau ;
+ *     les gardes (`PageGuard`) s'en servent pour ne pas confondre « en cours de
+ *     chargement » et « aucun accès ».
  *
  * Composant 100 % client. Sous SSR, `loading` reste `true` (les effets ne
  * s'exécutent pas côté serveur) : le rendu serveur et le premier rendu client
@@ -78,14 +131,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(() =>
     readCachedProfile(),
   )
+  // Hydratation optimiste des permissions depuis le cache (droits dispo au boot).
+  const [permissions, setPermissions] = useState<PagePermissions>(() => {
+    const cached = readCachedProfile()
+    return cached ? readCachedPerms(cached.id) : {}
+  })
   const [loading, setLoading] = useState(true)
   const [profileLoading, setProfileLoading] = useState(false)
+  const [permissionsLoading, setPermissionsLoading] = useState(false)
 
   // Id du profil actuellement chargé : évite un flash de `profileLoading` quand
   // un profil (cache ou déjà chargé) correspond déjà à l'utilisateur courant.
   const profileUserIdRef = useRef<string | null>(
     readCachedProfile()?.id ?? null,
   )
+  // Idem pour les permissions (évite un flash de `permissionsLoading`).
+  const permsUserIdRef = useRef<string | null>(readCachedProfile()?.id ?? null)
 
   useEffect(() => {
     let active = true
@@ -129,6 +190,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfileLoading(false)
     }
 
+    // Charge les droits par page. Contrairement au profil, « 0 permission » est un
+    // état LÉGITIME (utilisateur sans page accordée) : ne JAMAIS éjecter ici.
+    async function resolvePermissions(userId: string) {
+      const alreadyHave =
+        permsUserIdRef.current === userId ||
+        Object.keys(readCachedPerms(userId)).length > 0
+      if (!alreadyHave) setPermissionsLoading(true)
+
+      const { data, error } = await supabase
+        .from('user_page_permissions')
+        .select('page, level')
+        .eq('user_id', userId)
+      if (!active) return
+
+      // Aléa réseau : on garde le cache tel quel, aucune éjection.
+      if (error) {
+        setPermissionsLoading(false)
+        return
+      }
+
+      const map: PagePermissions = {}
+      for (const row of (data ?? []) as Array<{ page: PageKey; level: PageLevel }>) {
+        map[row.page] = row.level
+      }
+      setPermissions(map)
+      writeCachedPerms(userId, map)
+      permsUserIdRef.current = userId
+      setPermissionsLoading(false)
+    }
+
     function clearProfile() {
       setProfile(null)
       writeCachedProfile(null)
@@ -136,8 +227,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfileLoading(false)
     }
 
+    function clearPerms() {
+      setPermissions({})
+      clearCachedPerms()
+      permsUserIdRef.current = null
+      setPermissionsLoading(false)
+    }
+
     // Session initiale : résolution RAPIDE (getSession lit le localStorage). On
-    // lève `loading` sans attendre le profil, chargé ensuite en arrière-plan.
+    // lève `loading` sans attendre le profil ni les permissions (arrière-plan).
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!active) return
       const nextUser = session?.user ?? null
@@ -146,16 +244,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (nextUser) {
         // Purge d'un cache appartenant à un autre compte (changement d'utilisateur).
         const cached = readCachedProfile()
-        if (cached && cached.id !== nextUser.id) clearProfile()
+        if (cached && cached.id !== nextUser.id) {
+          clearProfile()
+          clearPerms()
+        }
         resolveProfile(nextUser.id)
+        resolvePermissions(nextUser.id)
       } else {
         clearProfile()
+        clearPerms()
       }
     })
 
     // Événements d'auth (connexion, déconnexion, refresh de token). Le refresh
-    // de token du même utilisateur ne redéclenche pas de `profileLoading`
-    // visible (alreadyHave === true), donc pas de flash de spinner.
+    // de token du même utilisateur ne redéclenche pas de spinner visible
+    // (alreadyHave === true).
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -164,21 +267,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false)
       if (nextUser) {
         resolveProfile(nextUser.id)
+        resolvePermissions(nextUser.id)
       } else {
         clearProfile()
+        clearPerms()
       }
     })
 
-    // Éjection EN SÉANCE : re-vérifier que le compte existe toujours, au retour
-    // sur l'onglet et à intervalle régulier. Sans cela, un compte supprimé
-    // garderait l'accès jusqu'à l'expiration de son token (~1 h). `resolveProfile`
-    // se charge de l'éjection s'il n'y a plus de profil.
+    // Éjection / mise à jour EN SÉANCE : re-vérifier compte + droits au retour sur
+    // l'onglet et à intervalle régulier. Propage un changement de droits fait par
+    // un admin sans attendre une reconnexion ; `resolveProfile` éjecte si le
+    // compte a disparu.
     async function revalidate() {
       const {
         data: { session },
       } = await supabase.auth.getSession()
       const uid = session?.user.id
-      if (uid) void resolveProfile(uid)
+      if (uid) {
+        void resolveProfile(uid)
+        void resolvePermissions(uid)
+      }
     }
 
     const onVisible = () => {
@@ -210,7 +318,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     writeCachedProfile(null)
     profileUserIdRef.current = null
     setProfileLoading(false)
+    setPermissions({})
+    clearCachedPerms()
+    permsUserIdRef.current = null
+    setPermissionsLoading(false)
   }
+
+  const grade = gradeOf(profile?.role)
 
   return (
     <AuthContext.Provider
@@ -218,8 +332,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         profile,
         role: profile?.role ?? null,
+        grade,
+        permissions,
         loading,
         profileLoading,
+        permissionsLoading,
+        can: (page, min) => atLeast(permissions, grade, page, min),
+        pageLevel: (page) => levelOf(permissions, grade, page),
         signIn,
         signOut,
         refreshProfile: async () => {
@@ -233,6 +352,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setProfile(next)
           writeCachedProfile(next)
           profileUserIdRef.current = next ? user.id : null
+        },
+        refreshPermissions: async () => {
+          if (!user) return
+          const { data } = await supabase
+            .from('user_page_permissions')
+            .select('page, level')
+            .eq('user_id', user.id)
+          const map: PagePermissions = {}
+          for (const row of (data ?? []) as Array<{ page: PageKey; level: PageLevel }>) {
+            map[row.page] = row.level
+          }
+          setPermissions(map)
+          writeCachedPerms(user.id, map)
+          permsUserIdRef.current = user.id
         },
       }}
     >

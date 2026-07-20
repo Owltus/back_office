@@ -1,5 +1,5 @@
 import { supabase } from '#/lib/supabase.ts'
-import type { DailyReport, ForecastDay, UserRole } from '#/lib/repjour/types.ts'
+import type { DailyReport, ForecastDay } from '#/lib/repjour/types.ts'
 
 /*
  * Vue unifiée jour par jour (rapport réalisé + prévision) d'un mois donné, plus
@@ -88,24 +88,19 @@ export async function fetchUnifiedDays(monthFilter: {
  * ---------------------------------------------------------------------------
  */
 
-/** Rôles habilités à écrire/supprimer (identique à la source). */
-export const WRITE_ROLES: UserRole[] = ['super_utilisateur', 'admin']
-
 /**
- * Lève une erreur si l'utilisateur courant n'a pas un rôle d'écriture.
- * Filet de sécurité ergonomique — la protection réelle est la RLS Supabase.
+ * Filet de sécurité ERGONOMIQUE : vérifie qu'une session existe. L'autorisation
+ * FINE est désormais assurée par la RLS Supabase, table par table (daily_reports
+ * / forecast_days = niveau `repjour` ; budget = grade admin — voir
+ * supabase/page_permissions_rls*.sql). L'UI masque déjà ces actions aux comptes
+ * non habilités ; ce garde-fou n'empêche que l'appel sans session.
  */
 export async function assertWriteRole(): Promise<void> {
   const {
     data: { user },
   } = await supabase.auth.getUser()
-  const { data } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user?.id ?? '')
-    .single()
-  if (!data || !WRITE_ROLES.includes(data.role as UserRole)) {
-    throw new Error('Accès refusé : rôle insuffisant pour cette opération')
+  if (!user) {
+    throw new Error('Accès refusé : session requise pour cette opération')
   }
 }
 

@@ -157,8 +157,8 @@ export function ImportSection({
    */
   spacious?: boolean
 }) {
-  const { user, role } = useAuth()
-  const isAdmin = role === 'admin'
+  const { user, can } = useAuth()
+  const isAdmin = can('repjour', 'gestion')
   const [comparison, setComparison] = useState<FileSlot>(EMPTY_SLOT)
   const [forecast, setForecast] = useState<FileSlot>(EMPTY_SLOT)
   const [importing, setImporting] = useState(false)

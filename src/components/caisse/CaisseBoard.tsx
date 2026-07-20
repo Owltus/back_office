@@ -109,7 +109,7 @@ const fmtTitle = new Intl.DateTimeFormat('fr-FR', {
 })
 
 export function CaisseBoard({ initialDate }: { initialDate?: string }) {
-  const { user, role } = useAuth()
+  const { user, can, pageLevel } = useAuth()
   const queryClient = useQueryClient()
 
   // Instant de référence figé au montage : le shift courant et les bornes se
@@ -270,8 +270,9 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
   // gate sur le CHARGEMENT (pas la donnée) : une requête « précédente » en échec
   // n'empêche pas la saisie (on repart alors d'un comptage vide).
   const ready = sheet !== undefined && !(needsCarry && prevLoading)
-  const editable = ready && canEditSheet(sheet ?? null, role)
-  const isWriter = role === 'super_utilisateur' || role === 'admin'
+  const caisseLevel = pageLevel('caisse')
+  const editable = ready && canEditSheet(sheet ?? null, caisseLevel)
+  const isWriter = can('caisse', 'ecriture')
   // Champs éditables UNIQUEMENT sur un brouillon : une caisse clôturée est
   // verrouillée (valeurs figées) pour tous, admin compris — il faut la réouvrir
   // pour la modifier.
@@ -318,7 +319,7 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
       if (snapshot === lastSavedRef.current) return
       const qk = ['caisse', 'sheet', input.reportDate, input.shift] as const
       const prev = queryClient.getQueryData<CaisseSheet | null>(qk)
-      if (!canEditSheet(prev ?? null, role)) return // éditabilité du couple sauvegardé
+      if (!canEditSheet(prev ?? null, caisseLevel)) return // éditabilité du couple sauvegardé
       // Les mutations d'indicateur / de baseline sont scopées au couple ENCORE
       // actif : la résolution asynchrone d'un flush d'un couple quitté ne doit
       // ni repeindre l'indicateur ni salir la baseline du couple courant.
@@ -349,7 +350,7 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
         }
       }
     },
-    [queryClient, role],
+    [queryClient, caisseLevel],
   )
 
   // Hydratation : uniquement au (premier) chargement d'un couple (date, shift).

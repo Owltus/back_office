@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 
-import { ProtectedRoute } from '#/components/repjour/ProtectedRoute.tsx'
+import { PageGuard } from '#/components/auth/PageGuard.tsx'
 import { RaproAnalytiqueBoard } from '#/components/rapro/RaproAnalytiqueBoard.tsx'
 
 export const Route = createFileRoute('/rapro/analytique/')({
@@ -14,8 +14,8 @@ export const Route = createFileRoute('/rapro/analytique/')({
  */
 function RaproAnalytiqueIndexPage() {
   return (
-    <ProtectedRoute allowedRoles={['utilisateur', 'super_utilisateur', 'admin']}>
+    <PageGuard page="rapro">
       <RaproAnalytiqueBoard />
-    </ProtectedRoute>
+    </PageGuard>
   )
 }

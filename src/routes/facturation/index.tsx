@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 
-import { ProtectedRoute } from '#/components/repjour/ProtectedRoute.tsx'
+import { PageGuard } from '#/components/auth/PageGuard.tsx'
 import { FacturationBoard } from '#/components/facturation/FacturationBoard.tsx'
 
 /**
@@ -17,8 +17,8 @@ export const Route = createFileRoute('/facturation/')({
 
 function FacturationPage() {
   return (
-    <ProtectedRoute allowedRoles={['admin']}>
+    <PageGuard page="facturation">
       <FacturationBoard />
-    </ProtectedRoute>
+    </PageGuard>
   )
 }

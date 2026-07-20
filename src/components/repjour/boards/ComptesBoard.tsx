@@ -8,8 +8,20 @@ import { Tip } from '#/components/shared/Tip.tsx'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { supabase } from '#/lib/supabase.ts'
 import { isPasswordValid } from '#/lib/repjour/password.ts'
-import { ROLE_LABELS } from '#/lib/repjour/roles.ts'
-import type { Profile, UserRole } from '#/lib/repjour/types.ts'
+import type { Profile } from '#/lib/repjour/types.ts'
+import {
+  GRADES,
+  GRADE_LABELS,
+  LEVEL_LABELS,
+  PAGES,
+  gradeOf,
+} from '#/lib/permissions/index.ts'
+import type {
+  Grade,
+  PageKey,
+  PageLevel,
+  PagePermissions,
+} from '#/lib/permissions/index.ts'
 import { PasswordInput } from '#/components/repjour/PasswordInput.tsx'
 import {
   Dialog,
@@ -29,38 +41,34 @@ import { Input } from '#/components/ui/input.tsx'
 import { Button } from '#/components/ui/button.tsx'
 
 /*
- * Gestion des comptes (admin) — porté de la source AccountsPage.
+ * Gestion des comptes (admin) — grades + droits PAR PAGE.
  *
- * Trois opérations d'écriture :
- *   1. CRÉATION : Edge Function `create-user` (service_role côté serveur) PUIS
- *      insert dans `profiles`. L'inscription publique Supabase reste DÉSACTIVÉE :
- *      la fonction crée l'identifiant `auth.users` via l'API Admin et vérifie
- *      côté serveur que l'appelant est admin (cf. supabase/functions/create-user).
- *      L'insert `profiles` reste ici, sous la session de l'admin, pour garder le
- *      trigger anti-escalade de rôle sur son chemin habituel.
- *   2. ÉDITION : update de la ligne `profiles`.
- *   3. MOT DE PASSE : RPC serveur `admin_update_password` (CONSOMMÉE, jamais
- *      redéfinie ; le trigger anti-escalade de rôle reste intact côté base).
+ * Deux grades : `admin` (accès total partout + administration) et `utilisateur`
+ * (accès défini page par page). Pour un utilisateur, l'admin ouvre chaque page
+ * de la navbar à un niveau (Lecture / Écriture / Gestion) via la matrice.
  *
- * Aucun DDL. La clé anon reste soumise aux RLS ; le gating admin de la route est
- * ergonomique, la sécurité réelle est la RLS Supabase.
+ * Écritures :
+ *   1. CRÉATION : Edge Function `create-user` (service_role) PUIS insert
+ *      `profiles` (grade `utilisateur` par défaut, AUCUNE permission — l'admin
+ *      les ouvre ensuite en modifiant le compte). L'inscription publique reste
+ *      DÉSACTIVÉE.
+ *   2. GRADE : RPC serveur `set_user_grade` (gardée admin). Les noms restent un
+ *      update direct de `profiles`.
+ *   3. DROITS PAR PAGE : RPC `set_page_permission` / `remove_page_permission`
+ *      (gardées admin), appliquées IMMÉDIATEMENT à chaque changement.
+ *   4. MOT DE PASSE : RPC serveur `admin_update_password` (consommée).
  *
- * Restylé du thème CLAIR source vers le thème DARK du Back Office (tokens shadcn,
- * modale custom → shadcn Dialog, <select> → shadcn Select).
+ * La sécurité réelle est la RLS Supabase ; ce gating d'UI est ergonomique.
  */
 
-const ROLE_DESCRIPTIONS: Record<UserRole, string> = {
-  utilisateur: 'Lecture seule',
-  super_utilisateur: 'Import + lecture',
-  admin: 'Accès complet',
+const GRADE_DESCRIPTIONS: Record<Grade, string> = {
+  utilisateur: 'Accès défini page par page',
+  admin: 'Accès total à toutes les pages',
 }
-
-const ROLES: UserRole[] = ['utilisateur', 'super_utilisateur', 'admin']
 
 // L'erreur d'une Edge Function (FunctionsHttpError) porte le corps de la réponse
 // dans `context` (un objet Response). On en extrait le message métier `{ error }`
 // pour l'afficher tel quel plutôt qu'un « Edge Function returned a non-2xx… ».
-// Partagé par la création (`create-user`) et la révocation (`delete-user`).
 async function readFunctionError(error: unknown): Promise<string> {
   const ctx = (error as { context?: Response }).context
   if (ctx && typeof ctx.json === 'function') {
@@ -74,26 +82,63 @@ async function readFunctionError(error: unknown): Promise<string> {
   return error instanceof Error ? error.message : 'Opération échouée'
 }
 
-function RoleSelect({
+function GradeSelect({
   value,
   onChange,
 }: {
-  value: UserRole
-  onChange: (v: UserRole) => void
+  value: Grade
+  onChange: (v: Grade) => void
 }) {
   return (
-    <Select value={value} onValueChange={(v) => onChange(v as UserRole)}>
+    <Select value={value} onValueChange={(v) => onChange(v as Grade)}>
       <SelectTrigger className="w-full">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        {ROLES.map((r) => (
-          <SelectItem key={r} value={r}>
-            {ROLE_LABELS[r]} — {ROLE_DESCRIPTIONS[r]}
+        {GRADES.map((g) => (
+          <SelectItem key={g} value={g}>
+            {GRADE_LABELS[g]} — {GRADE_DESCRIPTIONS[g]}
           </SelectItem>
         ))}
       </SelectContent>
     </Select>
+  )
+}
+
+/** Une ligne de la matrice : une page + un sélecteur de niveau (ou « aucun »). */
+function PermRow({
+  page,
+  level,
+  disabled,
+  onChange,
+}: {
+  page: (typeof PAGES)[number]
+  level: PageLevel | undefined
+  disabled: boolean
+  onChange: (next: PageLevel | null) => void
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div className="flex min-w-0 items-center gap-2">
+        <page.icon className="size-4 shrink-0 text-muted-foreground" />
+        <span className="truncate text-sm text-foreground">{page.label}</span>
+      </div>
+      <Select
+        value={level ?? 'none'}
+        disabled={disabled}
+        onValueChange={(v) => onChange(v === 'none' ? null : (v as PageLevel))}
+      >
+        <SelectTrigger className="w-40 shrink-0">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="none">Aucun accès</SelectItem>
+          <SelectItem value="lecture">{LEVEL_LABELS.lecture}</SelectItem>
+          <SelectItem value="ecriture">{LEVEL_LABELS.ecriture}</SelectItem>
+          <SelectItem value="gestion">{LEVEL_LABELS.gestion}</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
   )
 }
 
@@ -110,15 +155,17 @@ export function ComptesBoard() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
-  const [role, setRole] = useState<UserRole>('utilisateur')
+  const [grade, setGrade] = useState<Grade>('utilisateur')
   const [creating, setCreating] = useState(false)
 
   const [editProfile, setEditProfile] = useState<Profile | null>(null)
   const [editForm, setEditForm] = useState({
     first_name: '',
     last_name: '',
-    role: 'utilisateur' as UserRole,
+    grade: 'utilisateur' as Grade,
   })
+  const [editPerms, setEditPerms] = useState<PagePermissions>({})
+  const [permBusy, setPermBusy] = useState<PageKey | null>(null)
   const [editPassword, setEditPassword] = useState('')
   const [confirmEditPassword, setConfirmEditPassword] = useState('')
   const [savingEdit, setSavingEdit] = useState(false)
@@ -142,7 +189,7 @@ export function ComptesBoard() {
     setConfirmPassword('')
     setFirstName('')
     setLastName('')
-    setRole('utilisateur')
+    setGrade('utilisateur')
     setMessage('')
   }
 
@@ -180,13 +227,15 @@ export function ComptesBoard() {
       if (error) throw new Error(await readFunctionError(error))
       if (!data?.userId) throw new Error('Utilisateur non créé')
 
+      // Grade à la création (aucune permission par page : l'admin les ouvre
+      // ensuite en modifiant le compte).
       const { error: profileError } = await supabase.from('profiles').insert({
         id: data.userId,
         email: normalizedEmail,
         display_name: displayName,
         first_name: firstName,
         last_name: lastName,
-        role,
+        role: grade,
       })
       if (profileError) {
         // Compte auth créé mais profil KO → on annule le compte orphelin côté
@@ -216,16 +265,56 @@ export function ComptesBoard() {
     }
   }
 
-  const openEdit = (p: Profile) => {
+  const openEdit = async (p: Profile) => {
     setEditProfile(p)
     setEditForm({
       first_name: p.first_name || '',
       last_name: p.last_name || '',
-      role: p.role,
+      grade: gradeOf(p.role),
     })
+    setEditPerms({})
     setEditPassword('')
     setConfirmEditPassword('')
     setMessage('')
+    // Droits par page du compte (l'admin les voit via la policy SELECT self-or-admin).
+    const { data } = await supabase
+      .from('user_page_permissions')
+      .select('page, level')
+      .eq('user_id', p.id)
+    const map: PagePermissions = {}
+    for (const row of (data ?? []) as Array<{ page: PageKey; level: PageLevel }>) {
+      map[row.page] = row.level
+    }
+    setEditPerms(map)
+  }
+
+  // Applique IMMÉDIATEMENT un changement de droit sur une page (RPC serveur).
+  const changePerm = async (pageKey: PageKey, next: PageLevel | null) => {
+    if (!editProfile) return
+    setPermBusy(pageKey)
+    setMessage('')
+    const { error } =
+      next === null
+        ? await supabase.rpc('remove_page_permission', {
+            p_user: editProfile.id,
+            p_page: pageKey,
+          })
+        : await supabase.rpc('set_page_permission', {
+            p_user: editProfile.id,
+            p_page: pageKey,
+            p_level: next,
+          })
+    if (error) {
+      setMessage('Erreur droits : ' + error.message)
+    } else {
+      setEditPerms((prev) => {
+        const nextPerms = { ...prev }
+        if (next === null) delete nextPerms[pageKey]
+        else nextPerms[pageKey] = next
+        return nextPerms
+      })
+    }
+    setPermBusy(null)
   }
 
   const saveEdit = async () => {
@@ -237,13 +326,13 @@ export function ComptesBoard() {
       [editForm.first_name, editForm.last_name].filter(Boolean).join(' ') ||
       editProfile.display_name
 
+    // 1. Noms (update direct de profiles).
     const { error } = await supabase
       .from('profiles')
       .update({
         first_name: editForm.first_name,
         last_name: editForm.last_name,
         display_name: displayName,
-        role: editForm.role,
       })
       .eq('id', editProfile.id)
 
@@ -253,6 +342,20 @@ export function ComptesBoard() {
       return
     }
 
+    // 2. Grade (canal serveur gardé) — seulement s'il a changé.
+    if (gradeOf(editProfile.role) !== editForm.grade) {
+      const { error: gradeError } = await supabase.rpc('set_user_grade', {
+        p_user: editProfile.id,
+        p_grade: editForm.grade,
+      })
+      if (gradeError) {
+        setMessage('Erreur grade : ' + gradeError.message)
+        setSavingEdit(false)
+        return
+      }
+    }
+
+    // 3. Mot de passe (optionnel).
     if (editPassword.trim()) {
       if (!isPasswordValid(editPassword)) {
         setMessage('Le mot de passe ne respecte pas les critères')
@@ -264,8 +367,6 @@ export function ComptesBoard() {
         setSavingEdit(false)
         return
       }
-      // Changement de mot de passe par un admin : RPC serveur consommée
-      // (jamais redéfinie ici).
       const { error: pwError } = await supabase.rpc('admin_update_password', {
         target_user_id: editProfile.id,
         new_password: editPassword,
@@ -325,12 +426,8 @@ export function ComptesBoard() {
     loadProfiles()
   }
 
-  const badgeClass = (r: UserRole) =>
-    r === 'admin'
-      ? 'bg-primary/10 text-primary'
-      : r === 'super_utilisateur'
-        ? 'bg-cyan-400/10 text-cyan-400'
-        : 'bg-muted text-muted-foreground'
+  const badgeClass = (g: Grade) =>
+    g === 'admin' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
 
   // Le seul message de succès commence par « Compte créé pour » ; tout le reste
   // (validation, erreurs serveur, annulation) est une erreur → style rouge.
@@ -398,10 +495,10 @@ export function ComptesBoard() {
                 </div>
                 <span
                   className={`ml-3 rounded-full px-2.5 py-1 text-xs font-medium whitespace-nowrap ${badgeClass(
-                    p.role,
+                    gradeOf(p.role),
                   )}`}
                 >
-                  {ROLE_LABELS[p.role]}
+                  {GRADE_LABELS[gradeOf(p.role)]}
                 </span>
               </button>
             ))}
@@ -482,9 +579,13 @@ export function ComptesBoard() {
           </div>
           <div>
             <label className="mb-1 block text-sm text-muted-foreground">
-              Rôle d'accès
+              Grade du compte
             </label>
-            <RoleSelect value={role} onChange={setRole} />
+            <GradeSelect value={grade} onChange={setGrade} />
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              Les accès aux pages se règlent après création, en modifiant le
+              compte.
+            </p>
           </div>
 
           <DialogFooter className="pt-2">
@@ -553,13 +654,42 @@ export function ComptesBoard() {
               </div>
               <div>
                 <label className="mb-1 block text-sm text-muted-foreground">
-                  Rôle d'accès
+                  Grade du compte
                 </label>
-                <RoleSelect
-                  value={editForm.role}
-                  onChange={(v) => setEditForm({ ...editForm, role: v })}
+                <GradeSelect
+                  value={editForm.grade}
+                  onChange={(v) => setEditForm({ ...editForm, grade: v })}
                 />
               </div>
+
+              {/* Matrice des droits par page — uniquement pour un grade utilisateur
+                  (un admin a « Gestion » partout par nature). Appliquée en direct. */}
+              {editForm.grade === 'admin' ? (
+                <div className="rounded-lg bg-primary/5 px-4 py-3 text-sm text-muted-foreground">
+                  Accès total à toutes les pages (administrateur).
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  <label className="block text-sm text-muted-foreground">
+                    Accès par page
+                    <span className="ml-1 text-xs">
+                      (appliqué immédiatement)
+                    </span>
+                  </label>
+                  <div className="space-y-2 rounded-lg border border-border p-3">
+                    {PAGES.map((page) => (
+                      <PermRow
+                        key={page.key}
+                        page={page}
+                        level={editPerms[page.key]}
+                        disabled={permBusy === page.key}
+                        onChange={(next) => changePerm(page.key, next)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="mb-1 block text-sm text-muted-foreground">
                   Nouveau mot de passe

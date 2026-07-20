@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 
-import { ProtectedRoute } from '#/components/repjour/ProtectedRoute.tsx'
+import { PageGuard } from '#/components/auth/PageGuard.tsx'
 import { CaisseAnalytiqueMoisBoard } from '#/components/caisse/CaisseAnalytiqueMoisBoard.tsx'
 
 export const Route = createFileRoute('/caisse/analytique/$year/$month')({
@@ -15,8 +15,8 @@ export const Route = createFileRoute('/caisse/analytique/$year/$month')({
 function CaisseAnalytiqueDetailPage() {
   const { year, month } = Route.useParams()
   return (
-    <ProtectedRoute allowedRoles={['utilisateur', 'super_utilisateur', 'admin']}>
+    <PageGuard page="caisse">
       <CaisseAnalytiqueMoisBoard year={Number(year)} month={Number(month)} />
-    </ProtectedRoute>
+    </PageGuard>
   )
 }

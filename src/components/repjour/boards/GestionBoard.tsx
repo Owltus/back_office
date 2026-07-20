@@ -27,8 +27,8 @@ import { BudgetContent } from '#/components/repjour/boards/BudgetContent.tsx'
 type Tab = 'donnees' | 'budget'
 
 export function GestionBoard() {
-  const { role } = useAuth()
-  const readOnly = role !== 'admin'
+  const { grade } = useAuth()
+  const readOnly = grade !== 'admin'
   const [tab, setTab] = useState<Tab>('budget')
 
   return (

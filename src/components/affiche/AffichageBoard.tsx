@@ -93,8 +93,8 @@ export function AffichageBoard() {
   } = state
 
   // Popovers icône / couleur (état d'UI local, non persisté).
-  const { role } = useAuth()
-  const canEdit = role === 'super_utilisateur' || role === 'admin'
+  const { can } = useAuth()
+  const canEdit = can('affichage', 'ecriture')
   const queryClient = useQueryClient()
 
   // Modèles chargés depuis Supabase (cache TanStack Query) — remplace la

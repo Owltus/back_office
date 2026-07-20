@@ -76,9 +76,9 @@ const fmtTitle = new Intl.DateTimeFormat('fr-FR', {
 })
 
 export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
-  const { role } = useAuth()
-  const canEdit = role === 'super_utilisateur' || role === 'admin'
-  const isAdmin = role === 'admin'
+  const { can } = useAuth()
+  const canEdit = can('pdj', 'ecriture')
+  const isAdmin = can('pdj', 'gestion')
   const queryClient = useQueryClient()
 
   // Jour hôtelier courant (Europe/Paris) figé au montage : jour affiché par
