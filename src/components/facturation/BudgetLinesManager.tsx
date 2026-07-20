@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Loader2, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Loader2, Lock, Pencil, Plus, Search, Trash2 } from 'lucide-react'
 
 import {
   Dialog,
@@ -12,19 +12,26 @@ import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
 import { Label } from '#/components/ui/label.tsx'
 import { Textarea } from '#/components/ui/textarea.tsx'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '#/components/ui/tooltip.tsx'
 import { useConfirm } from '#/components/shared/ConfirmDialog.tsx'
-import { Tag } from '#/components/facturation/Tag.tsx'
 import { useFacturationModel } from '#/components/facturation/useFacturationModel.ts'
 import { useBudgetLinesCuration } from '#/components/facturation/useBudgetLinesCuration.ts'
-import { TAGS } from '#/lib/facturation/constants.ts'
 import type { BudgetLine } from '#/lib/facturation/types.ts'
 
 /*
  * Modal « Gérer les imputations » — CRUD du référentiel (table facturation_budget_lines) via RPC.
- * Distinct du CodePicker (qui SÉLECTIONNE). Règles :
+ * Habillage ÉPURÉ calqué sur le CodePicker : recherche à la loupe, groupes par section, footer.
+ * Actions en ICÔNES seules + tooltips de l'app (crayon = modifier, poubelle = supprimer, cadenas
+ * = déjà utilisée). Les DOMAINES (tags) ne sont pas affichés (jugés confusants) mais restent
+ * CHERCHABLES et préservés à l'édition (pass-through). Règles métier :
  *  - le `code` est IMMUABLE en édition (PK + FK dans wordpool/issuer_codes/denylist/learned_docs) ;
- *  - SUPPRESSION BLOQUÉE si l'imputation est déjà utilisée (bouton désactivé + motif) ; la RPC
- *    reste le garde-fou serveur de dernier recours.
+ *  - SUPPRESSION BLOQUÉE si l'imputation est déjà utilisée ; sinon confirmation (irréversible) ;
+ *    la RPC reste le garde-fou serveur.
  * Admin-only (hérité de la route /facturation).
  */
 
@@ -33,7 +40,7 @@ interface Draft {
   label: string
   category: string
   hint: string
-  tags: string[]
+  tags: string[] // préservés à l'édition (non éditables ici), vides à la création
 }
 
 const EMPTY: Draft = { code: '', label: '', category: '', hint: '', tags: [] }
@@ -86,15 +93,28 @@ export function BudgetLinesManager({
       .join(', ')
   }
 
-  const filtered = useMemo(() => {
+  // Filtre puis groupage par section (ordre du plan préservé), façon CodePicker. La recherche
+  // couvre AUSSI les domaines (tags) même s'ils ne sont pas affichés → on les retrouve.
+  const groups = useMemo(() => {
     const needle = q.trim().toLowerCase()
-    if (!needle) return budgetLines
-    return budgetLines.filter(
-      (l) =>
-        l.code.toLowerCase().includes(needle) ||
-        l.label.toLowerCase().includes(needle) ||
-        l.category.toLowerCase().includes(needle),
-    )
+    const out: { category: string; lines: BudgetLine[] }[] = []
+    for (const l of budgetLines) {
+      if (
+        needle &&
+        !l.code.toLowerCase().includes(needle) &&
+        !l.label.toLowerCase().includes(needle) &&
+        !l.category.toLowerCase().includes(needle) &&
+        !l.tags.some((t) => t.toLowerCase().includes(needle))
+      )
+        continue
+      let g = out.find((x) => x.category === l.category)
+      if (!g) {
+        g = { category: l.category, lines: [] }
+        out.push(g)
+      }
+      g.lines.push(l)
+    }
+    return out
   }, [budgetLines, q])
 
   const categories = useMemo(
@@ -149,7 +169,7 @@ export function BudgetLinesManager({
           label: draft.label.trim(),
           category: draft.category.trim(),
           hint: draft.hint.trim(),
-          tags: draft.tags,
+          tags: draft.tags, // inchangés (préservés à l'édition)
         },
         { create: isNew },
       )
@@ -171,11 +191,12 @@ export function BudgetLinesManager({
       title: 'Supprimer cette imputation ?',
       description: (
         <>
-          Supprime définitivement <b>{code}</b> du référentiel. Sans effet sur
+          Supprime <b>définitivement</b> l'imputation <b>{code}</b> du
+          référentiel. Action <b>irréversible</b> — sans effet, en revanche, sur
           les factures déjà tamponnées.
         </>
       ),
-      confirmLabel: 'Supprimer',
+      confirmLabel: 'Supprimer définitivement',
       destructive: true,
     })
     if (!ok) return
@@ -193,113 +214,86 @@ export function BudgetLinesManager({
     }
   }
 
-  const toggleTag = (t: string) =>
-    setDraft(
-      (d) =>
-        d && {
-          ...d,
-          tags: d.tags.includes(t)
-            ? d.tags.filter((x) => x !== t)
-            : [...d.tags, t],
-        },
-    )
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[85vh] max-w-[44rem] flex-col gap-0 overflow-hidden p-0">
-        <DialogHeader className="flex-row items-start justify-between gap-3 space-y-0 border-b border-border px-4 py-3">
-          <div className="min-w-0">
-            <DialogTitle className="text-base">
-              Gérer les imputations
-            </DialogTitle>
-            <DialogDescription className="text-xs">
-              Créez, modifiez ou supprimez une imputation. Le code n'est pas
-              modifiable ; une imputation déjà utilisée ne peut pas être
-              supprimée.
-            </DialogDescription>
-          </div>
-          {!draft && (
-            <Button size="sm" onClick={openNew} className="shrink-0">
-              <Plus className="size-4" />
-              Ajouter
-            </Button>
-          )}
+      <DialogContent className="flex max-h-[85vh] max-w-[38rem] flex-col gap-0 overflow-hidden p-0">
+        <DialogHeader className="border-b border-border px-4 py-3">
+          <DialogTitle className="text-base">Gérer les imputations</DialogTitle>
+          <DialogDescription className="text-xs">
+            {draft
+              ? isNew
+                ? 'Nouvelle imputation.'
+                : 'Modifier une imputation — le code n’est pas modifiable.'
+              : 'Cliquez le crayon pour modifier. Une imputation déjà utilisée ne peut pas être supprimée.'}
+          </DialogDescription>
         </DialogHeader>
 
         {draft ? (
-          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
-            <div className="flex flex-col gap-1">
-              <Label htmlFor="bl-code">
-                Code {isNew ? '(unique, non modifiable ensuite)' : '(immuable)'}
-              </Label>
-              <Input
-                id="bl-code"
-                value={draft.code}
-                disabled={!isNew}
-                onChange={(e) =>
-                  setDraft((d) => d && { ...d, code: e.target.value })
-                }
-                placeholder="ex. FMELECoooo"
-                className="font-mono"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <Label htmlFor="bl-label">Libellé</Label>
-              <Input
-                id="bl-label"
-                value={draft.label}
-                onChange={(e) =>
-                  setDraft((d) => d && { ...d, label: e.target.value })
-                }
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <Label htmlFor="bl-cat">Section</Label>
-              <Input
-                id="bl-cat"
-                list="bl-cats"
-                value={draft.category}
-                onChange={(e) =>
-                  setDraft((d) => d && { ...d, category: e.target.value })
-                }
-                placeholder="ex. RESTAURATION"
-              />
-              <datalist id="bl-cats">
-                {categories.map((c) => (
-                  <option key={c} value={c} />
-                ))}
-              </datalist>
-            </div>
-            <div className="flex flex-col gap-1">
-              <Label htmlFor="bl-hint">
-                Description (exemples de dépenses)
-              </Label>
-              <Textarea
-                id="bl-hint"
-                value={draft.hint}
-                rows={3}
-                onChange={(e) =>
-                  setDraft((d) => d && { ...d, hint: e.target.value })
-                }
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>Domaines</Label>
-              <div className="flex flex-wrap gap-1.5">
-                {TAGS.map((t) => (
-                  <Tag
-                    key={t}
-                    label={t}
-                    active={draft.tags.includes(t)}
-                    onClick={() => toggleTag(t)}
-                  />
-                ))}
+          /* --- Formulaire création / édition --- */
+          <>
+            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-3">
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="bl-code">
+                  Code{' '}
+                  {isNew ? '(unique, non modifiable ensuite)' : '(immuable)'}
+                </Label>
+                <Input
+                  id="bl-code"
+                  value={draft.code}
+                  disabled={!isNew}
+                  onChange={(e) =>
+                    setDraft((d) => d && { ...d, code: e.target.value })
+                  }
+                  placeholder="ex. FMELECoooo"
+                  className="font-mono"
+                />
               </div>
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="bl-label">Libellé</Label>
+                <Input
+                  id="bl-label"
+                  value={draft.label}
+                  onChange={(e) =>
+                    setDraft((d) => d && { ...d, label: e.target.value })
+                  }
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="bl-cat">Section</Label>
+                <Input
+                  id="bl-cat"
+                  list="bl-cats"
+                  value={draft.category}
+                  onChange={(e) =>
+                    setDraft((d) => d && { ...d, category: e.target.value })
+                  }
+                  placeholder="ex. RESTAURATION"
+                />
+                <datalist id="bl-cats">
+                  {categories.map((c) => (
+                    <option key={c} value={c} />
+                  ))}
+                </datalist>
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="bl-hint">
+                  Description (exemples de dépenses)
+                </Label>
+                <Textarea
+                  id="bl-hint"
+                  value={draft.hint}
+                  rows={3}
+                  className="resize-none"
+                  onChange={(e) =>
+                    setDraft((d) => d && { ...d, hint: e.target.value })
+                  }
+                />
+              </div>
+              {formError && (
+                <p className="text-xs text-destructive">{formError}</p>
+              )}
             </div>
-            {formError && (
-              <p className="text-xs text-destructive">{formError}</p>
-            )}
-            <div className="mt-1 flex justify-end gap-2">
+            <div className="flex items-center justify-end gap-2 border-t border-border px-4 py-2.5">
               <Button
                 variant="ghost"
                 size="sm"
@@ -313,93 +307,119 @@ export function BudgetLinesManager({
                 Enregistrer
               </Button>
             </div>
-          </div>
+          </>
         ) : (
+          /* --- Liste épurée (façon CodePicker) --- */
           <>
-            <div className="border-b border-border px-4 py-2.5">
+            <div className="relative border-b border-border px-4 py-2.5">
+              <Search className="pointer-events-none absolute top-1/2 left-6 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder="Rechercher (code, libellé, section)…"
-                className="h-9"
+                placeholder="Rechercher (code, libellé, section, domaine)…"
+                className="h-9 pl-8"
               />
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-2">
-              {filtered.length === 0 ? (
-                <p className="px-2 py-8 text-center text-sm text-muted-foreground">
-                  Aucune imputation.
-                </p>
-              ) : (
-                filtered.map((l) => {
-                  const used = usage.has(l.code)
-                  return (
+            <TooltipProvider delayDuration={300}>
+              <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+                {groups.length === 0 ? (
+                  <p className="px-2 py-8 text-center text-sm text-muted-foreground">
+                    Aucune imputation ne correspond.
+                  </p>
+                ) : (
+                  groups.map((g) => (
                     <div
-                      key={l.code}
-                      className="flex flex-col gap-1 rounded-md px-2 py-2 hover:bg-secondary/50"
+                      key={g.category}
+                      className="mb-2 flex flex-col gap-0.5"
                     >
-                      <div className="flex items-center gap-2">
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm text-foreground">
-                            {l.label}
-                          </p>
-                          <p className="truncate font-mono text-[11px] text-muted-foreground">
-                            {l.code} · {l.category}
-                          </p>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openEdit(l)}
-                          className="shrink-0"
-                        >
-                          <Pencil className="size-4" />
-                          Éditer
-                        </Button>
-                        {used ? (
-                          <span title={`Utilisée : ${usageLabel(l.code)}`}>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              disabled
-                              className="shrink-0 text-muted-foreground"
-                            >
-                              <Trash2 className="size-4" />
-                              Utilisée
-                            </Button>
-                          </span>
-                        ) : (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => del(l.code)}
-                            disabled={busy === l.code}
-                            className="shrink-0 text-muted-foreground hover:text-destructive"
-                          >
-                            {busy === l.code ? (
-                              <Loader2 className="size-4 animate-spin" />
-                            ) : (
-                              <Trash2 className="size-4" />
-                            )}
-                            Supprimer
-                          </Button>
-                        )}
+                      <div className="flex items-center gap-2 px-2 py-1">
+                        <span className="h-px flex-1 bg-primary/20" />
+                        <span className="text-[11px] font-semibold tracking-[0.12em] text-primary/80 uppercase">
+                          {g.category}
+                        </span>
+                        <span className="h-px flex-1 bg-primary/20" />
                       </div>
-                      {l.tags.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {l.tags.map((t) => (
-                            <Tag key={t} label={t} />
-                          ))}
-                        </div>
-                      )}
-                      {rowError[l.code] && (
-                        <p className="text-[11px] text-destructive">
-                          {rowError[l.code]}
-                        </p>
-                      )}
+                      {g.lines.map((l) => {
+                        const used = usage.has(l.code)
+                        return (
+                          <div key={l.code}>
+                            <div className="group flex items-center gap-1 rounded-md px-2 py-1.5 transition-colors hover:bg-secondary/60">
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm text-foreground">
+                                  {l.label}
+                                </p>
+                                <p className="truncate font-mono text-[11px] text-muted-foreground">
+                                  {l.code}
+                                </p>
+                              </div>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    type="button"
+                                    onClick={() => openEdit(l)}
+                                    aria-label={`Modifier ${l.code}`}
+                                    className="shrink-0 rounded p-1 text-muted-foreground opacity-60 transition-colors group-hover:opacity-100 hover:text-foreground"
+                                  >
+                                    <Pencil className="size-3.5" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent>Modifier</TooltipContent>
+                              </Tooltip>
+                              {used ? (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className="shrink-0 p-1 text-muted-foreground/40">
+                                      <Lock className="size-3.5" />
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent className="max-w-xs whitespace-normal">
+                                    Déjà utilisée ({usageLabel(l.code)}) —
+                                    suppression impossible.
+                                  </TooltipContent>
+                                </Tooltip>
+                              ) : (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <button
+                                      type="button"
+                                      onClick={() => del(l.code)}
+                                      disabled={busy === l.code}
+                                      aria-label={`Supprimer ${l.code}`}
+                                      className="shrink-0 rounded p-1 text-muted-foreground opacity-60 transition-colors group-hover:opacity-100 hover:text-destructive"
+                                    >
+                                      {busy === l.code ? (
+                                        <Loader2 className="size-3.5 animate-spin" />
+                                      ) : (
+                                        <Trash2 className="size-3.5" />
+                                      )}
+                                    </button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Supprimer</TooltipContent>
+                                </Tooltip>
+                              )}
+                            </div>
+                            {rowError[l.code] && (
+                              <p className="px-2 text-[11px] text-destructive">
+                                {rowError[l.code]}
+                              </p>
+                            )}
+                          </div>
+                        )
+                      })}
                     </div>
-                  )
-                })
-              )}
+                  ))
+                )}
+              </div>
+            </TooltipProvider>
+            <div className="flex items-center justify-between border-t border-border px-4 py-2.5">
+              <span className="text-sm text-muted-foreground tabular-nums">
+                {budgetLines.length} imputation
+                {budgetLines.length > 1 ? 's' : ''}
+              </span>
+              <Button size="sm" onClick={openNew}>
+                <Plus className="size-4" />
+                Ajouter
+              </Button>
             </div>
           </>
         )}
