@@ -6,6 +6,7 @@ import {
 
 import { AuthProvider } from '#/components/auth/AuthContext.tsx'
 import { AppAuthGate } from '#/components/auth/AppAuthGate.tsx'
+import { SecretFireworks } from '#/components/shared/SecretFireworks.tsx'
 import { TooltipProvider } from '#/components/ui/tooltip.tsx'
 import { THEME_INIT_SCRIPT } from '#/lib/theme.ts'
 
@@ -87,6 +88,8 @@ function RootDocument({ children }: { children: React.ReactNode }) {
             <AppAuthGate>{children}</AppAuthGate>
           </AuthProvider>
         </TooltipProvider>
+        {/* Easter egg : taper « chloé » n'importe où → feu d'artifice. */}
+        <SecretFireworks />
         <Scripts />
       </body>
     </html>
