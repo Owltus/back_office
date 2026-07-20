@@ -403,10 +403,12 @@ export function FacturationBoard() {
         </section>
 
         {/* COLONNE DROITE : galaxie (prévisualisation) au-dessus de l'imputation. */}
-        <div className="flex min-h-0 w-full shrink-0 flex-col gap-4 lg:max-h-full lg:w-80">
+        <div className="flex min-h-0 w-full shrink-0 flex-col gap-3 lg:max-h-full lg:w-80">
           {/* La galaxie montre les données APPRISES (serveur), pas la graine. */}
           <GalaxyCard pool={serverPool} />
-          <aside className="flex min-h-0 flex-1 flex-col gap-4 rounded-xl border border-border bg-card p-4">
+          {/* Conteneur TRANSPARENT : l'imputation apporte ses PROPRES cards (émetteur+imputations,
+              commentaire+dates+tampon) — pas de card externe, sinon card-dans-card (double marge). */}
+          <aside className="flex min-h-0 flex-1 flex-col gap-3">
             {model.level === 'vide' && (
               <p className="rounded-lg border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
                 Base d’apprentissage vide — les suggestions ne sont pas encore

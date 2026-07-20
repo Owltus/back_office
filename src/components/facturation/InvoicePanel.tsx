@@ -193,47 +193,60 @@ function ImputationList({
  */
 export function EmptyImputation() {
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4">
-      {/* Émetteur : tout en haut (même charpente que le panneau actif : input group). */}
-      <div className="flex shrink-0 flex-col gap-1.5">
-        <Label>Émetteur</Label>
-        <div className="flex items-stretch">
-          <Input
-            disabled
-            placeholder="Nom de l'émetteur (ex. Martin)"
-            className="rounded-r-none"
-          />
-          <Button
-            variant="outline"
-            size="icon"
-            disabled
-            aria-label="Contrôle des imputations"
-            className="-ml-px shrink-0 rounded-l-none"
-          >
-            <Settings2 className="size-4" />
-          </Button>
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      {/* CARD 1 — Émetteur + imputations probables. */}
+      <div className="flex min-h-0 flex-1 flex-col gap-3 rounded-xl border border-border bg-card p-3">
+        {/* Émetteur : tout en haut (même charpente que le panneau actif : input group). */}
+        <div className="flex shrink-0 flex-col gap-1.5">
+          <Label>Émetteur</Label>
+          <div className="flex items-stretch">
+            <Input
+              disabled
+              placeholder="Nom de l'émetteur (ex. Martin)"
+              className="rounded-r-none"
+            />
+            <Button
+              variant="outline"
+              size="icon"
+              disabled
+              aria-label="Contrôle des imputations"
+              className="-ml-px shrink-0 rounded-l-none"
+            >
+              <Settings2 className="size-4" />
+            </Button>
+          </div>
+        </div>
+
+        {/* Imputations : zone libre. */}
+        <div className="flex min-h-0 flex-1 flex-col gap-1.5">
+          <Label>Imputations probables</Label>
+          <p className="min-h-0 flex-1 text-xs text-muted-foreground">
+            Déposez une facture pour l'imputer.
+          </p>
+          <div className="flex shrink-0 items-stretch">
+            <Button
+              variant="outline"
+              disabled
+              className="min-w-0 flex-1 justify-start rounded-r-none"
+            >
+              <ListPlus className="size-4" />
+              Choisir une imputation
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              disabled
+              aria-label="Gérer les imputations"
+              className="-ml-px shrink-0 rounded-l-none"
+            >
+              <Pencil className="size-4" />
+            </Button>
+          </div>
         </div>
       </div>
 
-      {/* Imputations : zone libre. */}
-      <div className="flex min-h-0 flex-1 flex-col gap-1.5">
-        <Label>Imputations probables</Label>
-        <p className="min-h-0 flex-1 text-xs text-muted-foreground">
-          Déposez une facture pour l'imputer.
-        </p>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled
-          className="w-full shrink-0"
-        >
-          <ListPlus className="size-4" />
-          Choisir les imputations
-        </Button>
-      </div>
-
-      {/* Bas épinglé : commentaire, dates, tampon. */}
-      <div className="flex shrink-0 flex-col gap-4">
+      {/* CARD 2 — Commentaire, date de traitement, tampon. */}
+      <div className="flex shrink-0 flex-col gap-3 rounded-xl border border-border bg-card p-3">
         <div className="flex flex-col gap-1.5">
           <Label>Commentaire</Label>
           <Textarea
@@ -595,84 +608,93 @@ export function InvoicePanel({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4">
-      {/* Émetteur : combobox des émetteurs connus + bouton engrenage (revue / curation)
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      {/* CARD 1 — Émetteur + imputations probables. */}
+      <div className="flex min-h-0 flex-1 flex-col gap-3 rounded-xl border border-border bg-card p-3">
+        {/* Émetteur : combobox des émetteurs connus + bouton engrenage (revue / curation)
           en input group. La pastille ambre signale des anomalies à examiner. */}
-      <div className="flex shrink-0 flex-col gap-1.5">
-        <Label>Émetteur</Label>
-        <div className="flex items-stretch">
-          <div className="min-w-0 flex-1">
-            <IssuerCombobox
-              value={record.supplierName}
-              onChange={(v) => onPatch({ supplierName: v, userEdited: true })}
-              issuers={issuers}
-              placeholder="Nom de l'émetteur (ex. Martin)"
-              inputClassName="rounded-r-none"
+        <div className="flex shrink-0 flex-col gap-1.5">
+          <Label>Émetteur</Label>
+          <div className="flex items-stretch">
+            <div className="min-w-0 flex-1">
+              <IssuerCombobox
+                value={record.supplierName}
+                onChange={(v) => onPatch({ supplierName: v, userEdited: true })}
+                issuers={issuers}
+                placeholder="Nom de l'émetteur (ex. Martin)"
+                inputClassName="rounded-r-none"
+              />
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={() => setRevueOpen(true)}
+              aria-label="Contrôle des imputations"
+              title={
+                anomalyCount > 0
+                  ? `${anomalyCount} anomalie${anomalyCount > 1 ? 's' : ''} à examiner`
+                  : 'Contrôle des imputations'
+              }
+              className={cn(
+                '-ml-px shrink-0 rounded-l-none',
+                // Anomalie(s) en attente → bouton orange pour attirer l'œil.
+                anomalyCount > 0 &&
+                  'border-amber-500 text-amber-600 hover:bg-amber-500/10 hover:text-amber-600',
+              )}
+            >
+              <Settings2 className="size-4" />
+            </Button>
+          </div>
+        </div>
+
+        {/* Imputations : zone LIBRE qui prend le max de place et défile si besoin. */}
+        <div className="flex min-h-0 flex-1 flex-col gap-1.5">
+          <Label>Imputations probables</Label>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <ImputationList
+              codes={record.codes}
+              detection={record.detection}
+              immature={immature}
+              onRemove={(code) =>
+                onPatch({
+                  codes: record.codes.filter((c) => c !== code),
+                  userEdited: true,
+                })
+              }
+              onBan={canBan ? handleBan : undefined}
+              banningCode={banningCode}
             />
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            onClick={() => setRevueOpen(true)}
-            aria-label="Contrôle des imputations"
-            title={
-              anomalyCount > 0
-                ? `${anomalyCount} anomalie${anomalyCount > 1 ? 's' : ''} à examiner`
-                : 'Contrôle des imputations'
-            }
-            className={cn(
-              '-ml-px shrink-0 rounded-l-none',
-              // Anomalie(s) en attente → bouton orange pour attirer l'œil.
-              anomalyCount > 0 &&
-                'border-amber-500 text-amber-600 hover:bg-amber-500/10 hover:text-amber-600',
-            )}
-          >
-            <Settings2 className="size-4" />
-          </Button>
+          {/* Sélection + gestion, en input group (même charpente que l'émetteur) : « Choisir une
+            imputation » (ouvre le sélecteur) + bouton engrenage/crayon accolé (gérer le référentiel). */}
+          <div className="flex shrink-0 items-stretch">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setPickerOpen(true)}
+              className="min-w-0 flex-1 justify-start rounded-r-none"
+            >
+              <ListPlus className="size-4" />
+              Choisir une imputation
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={() => setManagerOpen(true)}
+              aria-label="Gérer les imputations"
+              title="Gérer les imputations"
+              className="-ml-px shrink-0 rounded-l-none"
+            >
+              <Pencil className="size-4" />
+            </Button>
+          </div>
         </div>
       </div>
 
-      {/* Imputations : zone LIBRE qui prend le max de place et défile si besoin. */}
-      <div className="flex min-h-0 flex-1 flex-col gap-1.5">
-        <Label>Imputations probables</Label>
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <ImputationList
-            codes={record.codes}
-            detection={record.detection}
-            immature={immature}
-            onRemove={(code) =>
-              onPatch({
-                codes: record.codes.filter((c) => c !== code),
-                userEdited: true,
-              })
-            }
-            onBan={canBan ? handleBan : undefined}
-            banningCode={banningCode}
-          />
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setPickerOpen(true)}
-          className="w-full shrink-0"
-        >
-          <ListPlus className="size-4" />
-          Choisir les imputations
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setManagerOpen(true)}
-          className="w-full shrink-0 text-muted-foreground"
-        >
-          <Pencil className="size-4" />
-          Gérer les imputations
-        </Button>
-      </div>
-
-      {/* Bas ÉPINGLÉ : commentaire (taille figée), dates, tampon. */}
-      <div className="flex shrink-0 flex-col gap-4">
+      {/* CARD 2 — Commentaire, date de traitement, avertissements & tampon. */}
+      <div className="flex shrink-0 flex-col gap-3 rounded-xl border border-border bg-card p-3">
         <div className="flex flex-col gap-1.5">
           <Label>Commentaire</Label>
           <Textarea
