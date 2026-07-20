@@ -1,3 +1,5 @@
 # https://www.robotstxt.org/robotstxt.html
+# Back-office interne : ne pas indexer. L'authentification + les RLS restent la
+# vraie barrière ; ceci évite seulement l'indexation des routes publiques.
 User-agent: *
-Disallow:
+Disallow: /
