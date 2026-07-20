@@ -43,7 +43,7 @@ security definer
 set search_path = public
 as $$
 begin
-  if get_user_role() not in ('super_utilisateur', 'admin') then
+  if public.page_level_rank(public.get_page_level('facturation')) < 2 then
     raise exception 'not authorized';
   end if;
   if char_length(coalesce(p_issuer, '')) < 4 then
@@ -69,7 +69,7 @@ security definer
 set search_path = public
 as $$
 begin
-  if get_user_role() not in ('super_utilisateur', 'admin') then
+  if public.page_level_rank(public.get_page_level('facturation')) < 2 then
     raise exception 'not authorized';
   end if;
 
@@ -92,7 +92,7 @@ security definer
 set search_path = public
 as $$
 begin
-  if get_user_role() not in ('super_utilisateur', 'admin') then
+  if public.page_level_rank(public.get_page_level('facturation')) < 2 then
     raise exception 'not authorized';
   end if;
 

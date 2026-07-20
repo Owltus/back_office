@@ -1,0 +1,24 @@
+-- =============================================================================
+-- page_permissions_backfill — alignement des grades existants (OPTIONNEL)
+--
+-- ⚠ OPÉRATION D'ÉCRITURE DE MASSE — À N'EXÉCUTER QU'APRÈS CONFIRMATION EXPLICITE.
+--
+-- Le nouveau modèle ne connaît que 2 grades : 'admin' et 'utilisateur'. La valeur
+-- 'super_utilisateur' devient legacy (plus attribuable dans l'UI). Ce script la
+-- vide en la ramenant à 'utilisateur'. Les comptes 'admin' ne sont PAS touchés.
+--
+-- Sans effet sur get_page_level (qui ne regarde que le grade 'admin') : un
+-- super_utilisateur est déjà traité comme non-admin. Ce backfill est donc du
+-- NETTOYAGE de cohérence, pas un changement de comportement.
+--
+-- ORDRE DE BASCULE RECOMMANDÉ (voir plan/droits-par-page/8-validation-golive.md) :
+--   1. page_permissions.sql (socle)         → aucun impact fonctionnel
+--   2. pré-remplissage des permissions       → chacun reçoit ses droits par page
+--   3. page_permissions_rls.sql (durcissement)→ bascule des règles (pas de coupure
+--      car les droits sont déjà en place à l'étape 2)
+--   4. CE script (nettoyage des grades)       → à tout moment après
+--
+-- Vérifier d'abord qui est concerné :
+--   select id, email, role from public.profiles where role = 'super_utilisateur';
+
+-- update public.profiles set role = 'utilisateur' where role = 'super_utilisateur';
