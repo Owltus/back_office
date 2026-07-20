@@ -66,6 +66,12 @@ doc/
 # données (noms de clients, montants), et n'ont pas leur place dans l'historique.
 screenshot/
 
+# OCR tesseract : les binaires du moteur (~12 Mo) sont copiés depuis
+# node_modules au build par scripts/prepare-tesseract.mjs — inutile de les
+# versionner. En revanche public/tesseract/lang/fra.traineddata.gz (707 Ko) EST
+# versionné : il vient du réseau, et le figer évite de dépendre d'un CDN au build.
+public/tesseract/*.js
+
 # Divers
 __unconfig*
 todos.json

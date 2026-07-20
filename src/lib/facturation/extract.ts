@@ -64,8 +64,20 @@ async function renderPages(
 ): Promise<{ previews: PagePreview[]; ocrText: string }> {
   const previews: PagePreview[] = []
   let ocrText = ''
+  // Chemins LOCAUX : par défaut tesseract.js télécharge son worker, son moteur
+  // WASM et son modèle de langue depuis le CDN jsdelivr au premier OCR, ce que
+  // la CSP de vercel.json bloque (`script-src 'self'`). Les binaires sont copiés
+  // depuis node_modules au build par scripts/prepare-tesseract.mjs ; le modèle
+  // `fra` est versionné dans public/tesseract/lang/. `corePath` doit désigner un
+  // RÉPERTOIRE : tesseract y choisit lui-même la variante selon le support SIMD.
   const worker = withOcr
-    ? await import('tesseract.js').then((m) => m.createWorker('fra'))
+    ? await import('tesseract.js').then((m) =>
+        m.createWorker('fra', undefined, {
+          workerPath: '/tesseract/worker.min.js',
+          corePath: '/tesseract/',
+          langPath: '/tesseract/lang',
+        }),
+      )
     : null
   try {
     for (let i = 1; i <= pdf.numPages; i++) {
