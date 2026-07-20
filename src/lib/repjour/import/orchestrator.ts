@@ -254,25 +254,23 @@ export async function processComparisonOnly(
     throw new Error(`Erreur sauvegarde rapport : ${upsertError.message}`)
 
   /*
-   * ARCHIVAGE — le try/catch d'origine ne pouvait jamais se déclencher.
-   * `supabase.storage.upload()` ne LÈVE pas d'exception sur erreur applicative :
-   * il résout avec `{ data, error }`. La valeur de retour étant ignorée, un
-   * bucket absent (404 « Bucket not found ») passait pour un archivage réussi,
-   * et l'import se rapportait `success: true` sans le moindre avertissement.
-   * Constaté au pentest du 2026-07-20 : le bucket `csv-archive` n'existe pas —
-   * autrement dit, RIEN n'a jamais été archivé depuis la mise en service, et
-   * l'interface affirmait le contraire à chaque import.
-   * L'échec reste NON BLOQUANT (intention d'origine), mais il se voit.
+   * PAS D'ARCHIVAGE DES CSV — décision du 2026-07-21, ne pas le réintroduire.
+   *
+   * Un upload vers un bucket `csv-archive` figurait ici. Il n'a jamais rien
+   * archivé : le bucket n'a jamais existé (404, constaté au pentest du
+   * 2026-07-20), et l'échec était invisible — `supabase.storage.upload()` ne
+   * lève pas d'exception sur erreur applicative, il résout avec
+   * `{ data, error }`, si bien que le try/catch qui l'entourait ne pouvait pas
+   * se déclencher. Chaque import se rapportait donc `success: true` en n'ayant
+   * rien archivé du tout.
+   *
+   * Plutôt que de créer le bucket, l'archivage est abandonné : personne ne
+   * relisait ces fichiers (aucun `getPublicUrl` ni `createSignedUrl` dans le
+   * code), et les CSV du PMS contiennent des données clients — les conserver
+   * créait une obligation RGPD sans usage identifié. Les données utiles sont
+   * de toute façon persistées, minimisées, dans `daily_reports` et
+   * `pms_daily_metrics`.
    */
-  const { error: archiveError } = await supabase.storage
-    .from('csv-archive')
-    .upload(`${dateStr}/comparison.csv`, comparisonFile, { upsert: true })
-  if (archiveError) {
-    alerts.push({
-      type: 'warning',
-      message: `Archivage CSV non effectué : ${archiveError.message}`,
-    })
-  }
 
   return {
     success: true,
@@ -435,26 +433,8 @@ export async function processImport(
     }
   }
 
-  // Archiver les CSV — même correction qu'au premier site d'archivage : le
-  // try/catch ne se déclenchait jamais, supabase-js résolvant avec { error }.
-  // Les deux envois partent en parallèle, ils sont indépendants.
-  const compFile = type1 === 'comparison' ? file1 : file2
-  const foreFile = type1 === 'forecast' ? file1 : file2
-  const [comparisonUpload, forecastUpload] = await Promise.all([
-    supabase.storage
-      .from('csv-archive')
-      .upload(`${dateStr}/comparison.csv`, compFile, { upsert: true }),
-    supabase.storage
-      .from('csv-archive')
-      .upload(`${dateStr}/forecast.csv`, foreFile, { upsert: true }),
-  ])
-  const archiveError = comparisonUpload.error ?? forecastUpload.error
-  if (archiveError) {
-    alerts.push({
-      type: 'warning',
-      message: `Archivage CSV non effectué : ${archiveError.message}`,
-    })
-  }
+  // Pas d'archivage des CSV ici non plus — voir le commentaire du premier site
+  // d'import (décision du 2026-07-21).
 
   return {
     success: true,

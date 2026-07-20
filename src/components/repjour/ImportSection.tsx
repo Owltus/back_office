@@ -28,9 +28,11 @@ import type { Alert, ReportDate } from '#/lib/repjour/types.ts'
  * (ajustement J-1), pré-validation du forecast, bandeau d'alertes et
  * confirmation avant l'écriture.
  *
- * Écritures idempotentes (upsert `onConflict` sur `date`) + archivage dans le
- * bucket `csv-archive`. Après un import réussi, `onImported` recharge le rapport
- * affiché. Réservée aux rôles super_utilisateur / admin.
+ * Écritures idempotentes (upsert `onConflict` sur `date`). Les CSV source ne
+ * sont PAS archivés : l'upload prévu ne fonctionnait pas et a été retiré le
+ * 2026-07-21 (voir `lib/repjour/import/orchestrator.ts`). Après un import
+ * réussi, `onImported` recharge le rapport affiché. Réservée aux rôles
+ * super_utilisateur / admin.
  */
 
 interface FileSlot {
