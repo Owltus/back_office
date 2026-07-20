@@ -43,6 +43,19 @@ function ValidatedStamp() {
   )
 }
 
+/* Marqueur « doublon » : MÊME traitement « coup de tampon » que « validé », en ambre —
+ * posé sur la miniature d'une facture déjà présente au journal (PDF déjà appris). Non
+ * interactif. */
+function DuplicateStamp() {
+  return (
+    <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-amber-500/10">
+      <span className="-rotate-[22deg] rounded-md border-2 border-amber-500/80 bg-background/50 px-2 py-0.5 text-xl font-extrabold tracking-[0.1em] text-amber-500 uppercase shadow-sm backdrop-blur-[1px]">
+        Doublon
+      </span>
+    </div>
+  )
+}
+
 export function InvoiceList({
   records,
   selectedId,
@@ -75,11 +88,7 @@ export function InvoiceList({
               <div className="relative aspect-[3/4] w-full overflow-hidden rounded bg-muted">
                 <Thumb record={r} />
                 {r.stamped && <ValidatedStamp />}
-                {r.duplicate && !r.stamped && (
-                  <span className="absolute top-1 right-1 rounded bg-amber-500/90 px-1 text-[9px] font-bold tracking-wide text-white uppercase">
-                    Doublon
-                  </span>
-                )}
+                {r.duplicate && !r.stamped && <DuplicateStamp />}
               </div>
               <span className="truncate text-xs font-medium text-foreground">
                 {r.fileName}
