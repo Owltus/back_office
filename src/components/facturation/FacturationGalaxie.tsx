@@ -114,22 +114,20 @@ export function FacturationGalaxie() {
               </button>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-3">
+              {/* Nuage de mots trié par POIDS (pouvoir discriminant), fort d'abord. Aucun chiffre :
+                  le classement + l'opacité (∝ poids) suffisent — les transverses (parasites)
+                  finissent en bas, estompés. */}
               <div className="flex flex-wrap gap-1.5">
-                {selected.ranked.map(({ token, count, weight }) => {
-                  // Opacité ∝ pouvoir discriminant : les mots forts ressortent, les transverses
-                  // (adresse, paiement…) s'estompent — jamais cachés (« filtrer, pas ignorer »).
+                {selected.ranked.map(({ token, weight }) => {
                   const rel =
                     selected.maxWeight > 0 ? weight / selected.maxWeight : 0
                   return (
                     <span
                       key={token}
-                      style={{ opacity: 0.28 + 0.72 * rel }}
-                      className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-xs text-slate-200"
+                      style={{ opacity: 0.3 + 0.7 * rel }}
+                      className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-xs text-slate-200"
                     >
                       {token}
-                      <span className="text-[10px] text-slate-500 tabular-nums">
-                        {count}
-                      </span>
                     </span>
                   )
                 })}
@@ -162,13 +160,6 @@ export function FacturationGalaxie() {
             {counts.word} mots
           </p>
         </div>
-
-        {!empty && (
-          <div className="pointer-events-none absolute right-4 bottom-3 z-10 rounded-full border border-white/10 bg-[#0a0d1c] px-3 py-1 text-[11px] text-slate-400">
-            molette : zoom · glisser : déplacer · survoler : voisins · cliquer :
-            mots · légende : filtrer
-          </div>
-        )}
       </div>
     </PageContainer>
   )
