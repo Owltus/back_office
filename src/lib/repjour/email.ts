@@ -1,5 +1,7 @@
 import { DAY_NAMES, MONTHS } from '#/lib/repjour/constants.ts'
 import { fetchRecipients } from '#/lib/repjour/services/recipients.ts'
+import type { RecipientType } from '#/lib/repjour/services/recipients.ts'
+import { isValidEmail } from '#/lib/shared/email.ts'
 import {
   buildReportHtml,
   REPORT_CONTAINER_STYLE,
@@ -82,17 +84,36 @@ async function openMailWithRecipients(data: EmailData): Promise<void> {
 
   const recipients = await fetchRecipients()
   const active = recipients.filter((r) => r.active)
-  const toList = active
-    .filter((r) => r.type === 'to')
-    .map((r) => r.email)
-    .join(';')
-  const ccList = active
-    .filter((r) => r.type === 'cc')
-    .map((r) => r.email)
-    .join(';')
 
+  /*
+   * Construction de la liste d'adresses (pentest 2026-07-20, finding 5).
+   * Trois corrections par rapport à la version d'origine :
+   *   - séparateur VIRGULE et non « ; » : la RFC 6068 impose la virgule ; le
+   *     point-virgule est une convention Outlook que Thunderbird et Apple Mail
+   *     lisent comme UNE seule adresse malformée (c'était un bug fonctionnel) ;
+   *   - chaque adresse est VALIDÉE : une valeur douteuse est écartée plutôt que
+   *     d'atterrir dans l'URL (défense en profondeur — la base porte déjà un
+   *     CHECK, mais une ligne écrite via la service_role y échapperait) ;
+   *   - encodage adresse PAR adresse, jamais sur la liste jointe : encoder
+   *     après le join transformerait la virgule séparatrice en %2C, ce qui
+   *     refusionnerait tous les destinataires en une seule adresse.
+   */
+  const listOf = (type: RecipientType) =>
+    active
+      .filter((r) => r.type === type)
+      .map((r) => r.email.trim())
+      .filter(isValidEmail)
+      .map(encodeURIComponent)
+      .join(',')
+
+  const toList = listOf('to')
+  const ccList = listOf('cc')
+
+  // `subject` et `body` restent en encodeURIComponent (et non URLSearchParams,
+  // qui encode l'espace en « + » — un mailto: attend %20, sinon des « + »
+  // s'affichent dans le corps du message chez plusieurs clients).
   let mailto = `mailto:${toList}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
-  if (ccList) mailto += `&cc=${encodeURIComponent(ccList)}`
+  if (ccList) mailto += `&cc=${ccList}`
 
   window.location.href = mailto
 }

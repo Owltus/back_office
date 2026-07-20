@@ -11,6 +11,7 @@ import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
 import { cn } from '#/lib/utils.ts'
+import { isValidEmail } from '#/lib/shared/email.ts'
 import {
   addRecipient,
   deleteRecipient,
@@ -90,8 +91,11 @@ export function RecipientsModal({ open, onClose }: Props) {
   }, [open])
 
   const handleAdd = async () => {
-    if (!newEmail) {
-      setMessage('Email requis')
+    // Les champs sont hors <form> et personne n'appelle checkValidity() : le
+    // `type="email"` du <Input> ne déclenche AUCUNE validation native. Le
+    // contrôle doit donc être explicite.
+    if (!isValidEmail(newEmail)) {
+      setMessage('Adresse email invalide')
       return
     }
     try {
@@ -119,6 +123,10 @@ export function RecipientsModal({ open, onClose }: Props) {
 
   const saveEdit = async () => {
     if (!editingId) return
+    if (!isValidEmail(editForm.email)) {
+      setMessage('Adresse email invalide')
+      return
+    }
     try {
       await updateRecipient(editingId, editForm)
       setEditingId(null)
