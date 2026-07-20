@@ -3,13 +3,11 @@ import { createFileRoute } from '@tanstack/react-router'
 import { PageGuard } from '#/components/auth/PageGuard.tsx'
 import { CaisseBoard } from '#/components/caisse/CaisseBoard.tsx'
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
+import { parseDateSearch } from '#/lib/shared/searchParams.ts'
 
 export const Route = createFileRoute('/caisse/')({
   component: CaissePage,
-  validateSearch: (search: Record<string, unknown>): { date?: string } => {
-    const d = search.date
-    return typeof d === 'string' ? { date: d } : {}
-  },
+  validateSearch: parseDateSearch,
 })
 
 function CaissePage() {
