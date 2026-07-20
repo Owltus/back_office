@@ -253,14 +253,24 @@ export async function processComparisonOnly(
   if (upsertError)
     throw new Error(`Erreur sauvegarde rapport : ${upsertError.message}`)
 
-  try {
-    await supabase.storage
-      .from('csv-archive')
-      .upload(`${dateStr}/comparison.csv`, comparisonFile, { upsert: true })
-  } catch {
+  /*
+   * ARCHIVAGE — le try/catch d'origine ne pouvait jamais se déclencher.
+   * `supabase.storage.upload()` ne LÈVE pas d'exception sur erreur applicative :
+   * il résout avec `{ data, error }`. La valeur de retour étant ignorée, un
+   * bucket absent (404 « Bucket not found ») passait pour un archivage réussi,
+   * et l'import se rapportait `success: true` sans le moindre avertissement.
+   * Constaté au pentest du 2026-07-20 : le bucket `csv-archive` n'existe pas —
+   * autrement dit, RIEN n'a jamais été archivé depuis la mise en service, et
+   * l'interface affirmait le contraire à chaque import.
+   * L'échec reste NON BLOQUANT (intention d'origine), mais il se voit.
+   */
+  const { error: archiveError } = await supabase.storage
+    .from('csv-archive')
+    .upload(`${dateStr}/comparison.csv`, comparisonFile, { upsert: true })
+  if (archiveError) {
     alerts.push({
       type: 'warning',
-      message: 'Erreur archivage CSV (non bloquant)',
+      message: `Archivage CSV non effectué : ${archiveError.message}`,
     })
   }
 
@@ -425,20 +435,24 @@ export async function processImport(
     }
   }
 
-  // Archiver les CSV
-  try {
-    const compFile = type1 === 'comparison' ? file1 : file2
-    const foreFile = type1 === 'forecast' ? file1 : file2
-    await supabase.storage
+  // Archiver les CSV — même correction qu'au premier site d'archivage : le
+  // try/catch ne se déclenchait jamais, supabase-js résolvant avec { error }.
+  // Les deux envois partent en parallèle, ils sont indépendants.
+  const compFile = type1 === 'comparison' ? file1 : file2
+  const foreFile = type1 === 'forecast' ? file1 : file2
+  const [comparisonUpload, forecastUpload] = await Promise.all([
+    supabase.storage
       .from('csv-archive')
-      .upload(`${dateStr}/comparison.csv`, compFile, { upsert: true })
-    await supabase.storage
+      .upload(`${dateStr}/comparison.csv`, compFile, { upsert: true }),
+    supabase.storage
       .from('csv-archive')
-      .upload(`${dateStr}/forecast.csv`, foreFile, { upsert: true })
-  } catch {
+      .upload(`${dateStr}/forecast.csv`, foreFile, { upsert: true }),
+  ])
+  const archiveError = comparisonUpload.error ?? forecastUpload.error
+  if (archiveError) {
     alerts.push({
       type: 'warning',
-      message: 'Erreur archivage CSV (non bloquant)',
+      message: `Archivage CSV non effectué : ${archiveError.message}`,
     })
   }
 
