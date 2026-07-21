@@ -25,11 +25,8 @@ import {
   fetchServiceDates,
 } from '#/lib/pdj/service.ts'
 import { parseDateStr } from '#/lib/poster/dateFormatter.ts'
-import {
-  carryOver,
-  carryoverWindow,
-  type DaySnapshot,
-} from '#/lib/rapro/carryover.ts'
+import { carryOver, carryoverWindow } from '#/lib/rapro/carryover.ts'
+import type { DaySnapshot } from '#/lib/rapro/carryover.ts'
 import {
   CATEGORY_COLOR,
   CELL_STATES,
@@ -51,7 +48,6 @@ import {
   fetchOfficialOcc,
   fetchOldestDay,
   fetchSheet,
-  fetchValidatedDays,
   materializeCleaned,
   reopenSheet,
   saveComment,
@@ -211,8 +207,9 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   const stats = countStats(statuses, effectiveSold)
 
   // Roulement (report) DÉRIVÉ : on relit une fenêtre bornée de jours précédents
-  // (statuts rapro + occupation PDJ), mêmes clés → cache partagé avec la
-  // navigation. `carried` = chambres dues antérieurement, jamais résolues depuis.
+  // (statuts rapro SEULS — le roulement ne dépend PAS de l'occupation PDJ), mêmes
+  // clés → cache partagé avec la navigation. `carried` = chambres bloquées un jour
+  // antérieur, encore marquées bloquées jusqu'à la veille incluse.
   const windowDays = carryoverWindow(selectedDate, lowerDay)
   const raproWindow = useQueries({
     queries: windowDays.map((d) => ({
@@ -220,31 +217,8 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
       queryFn: () => fetchDay(d),
     })),
   })
-  const pdjWindow = useQueries({
-    queries: windowDays.map((d) => ({
-      queryKey: ['pdj', 'day', d],
-      queryFn: () => fetchPdjDay(d),
-    })),
-  })
-  // Jours CLÔTURÉS de la fenêtre : seuls eux font rouler leurs chambres non faites.
-  // `enabled` exclut la fenêtre vide → les bornes [0]/[dernier] sont toujours
-  // définies quand la requête tourne (pas de repli `?? selectedDate` nécessaire).
-  const { data: validatedDays } = useQuery({
-    queryKey: [
-      'rapro',
-      'validated-window',
-      windowDays[0],
-      windowDays[windowDays.length - 1],
-    ],
-    queryFn: () =>
-      fetchValidatedDays(windowDays[0], windowDays[windowDays.length - 1]),
-    enabled: windowDays.length > 0,
-  })
-  const closedDays = validatedDays ?? new Set<string>()
-  const past: DaySnapshot[] = windowDays.map((d, i) => ({
+  const past: DaySnapshot[] = windowDays.map((_, i) => ({
     statuses: raproWindow[i]?.data?.statuses ?? EMPTY,
-    occupied: new Set((pdjWindow[i]?.data ?? []).map((r) => r.room)),
-    closed: closedDays.has(d),
   }))
   const carried = carryOver(past)
 
@@ -257,9 +231,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   // occupation directe mais À REPORTS serait un faux vide, effacé une fraction de
   // seconde après. On attend donc la fenêtre AVANT de conclure au vide (la grille,
   // elle, n'est pas bloquée : elle se colore au fur et à mesure).
-  const windowResolved =
-    raproWindow.every((q) => !q.isPending) &&
-    pdjWindow.every((q) => !q.isPending)
+  const windowResolved = raproWindow.every((q) => !q.isPending)
   // Aucune occupation ce jour ET aucune reportée (fenêtre résolue) : In-House
   // n'est pas importé (ou jour sans client). On NE bloque plus l'écran — on rend
   // une GRILLE DE SECOURS où chaque chambre est non vendue (grisée) et saisissable
@@ -275,8 +247,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   const isDue = (room: number) => occupied.has(room) || carried.has(room)
   // Erreur réseau persistante sur un jour de la fenêtre → roulement possiblement
   // incomplet : on le signale via la bannière d'erreur (pas de sous-comptage muet).
-  const windowError =
-    raproWindow.some((q) => q.isError) || pdjWindow.some((q) => q.isError)
+  const windowError = raproWindow.some((q) => q.isError)
 
   // Contrôle comptable, UNIQUEMENT sur un jour clôturé (données finales) : écart
   // entre le rooming In-House (base de la grille) et l'officiel (Comparison /
