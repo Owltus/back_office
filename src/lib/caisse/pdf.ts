@@ -35,13 +35,30 @@ function setBalanceColor(pdf: jsPDF, balanced: boolean): void {
 type DenomImages = Map<DenomKey, { dataUrl: string; ratio: number }>
 
 /**
+ * Texte SVG d'un asset euro, SANS `fetch`. En build de PROD, Vite inline ces
+ * petits SVG en `data:` URI base64 : `fetch('data:…')` est alors bloqué par la
+ * CSP `connect-src` (durcie au pentest, limitée à self + Supabase) — on DÉCODE
+ * donc le data URI en mémoire. En dev, ou si l'asset dépassait la limite d'inline
+ * (fichier hashé), `url` est same-origin → `fetch` autorisé par `connect-src 'self'`.
+ */
+async function loadSvgText(url: string): Promise<string> {
+  if (!url.startsWith('data:')) return (await fetch(url)).text()
+  const comma = url.indexOf(',')
+  const payload = url.slice(comma + 1)
+  if (!url.slice(0, comma).includes(';base64')) return decodeURIComponent(payload)
+  // base64 → octets → texte UTF-8 (robuste si un SVG contient € ou des accents).
+  const bytes = Uint8Array.from(atob(payload), (c) => c.charCodeAt(0))
+  return new TextDecoder().decode(bytes)
+}
+
+/**
  * Rasterise un SVG (assets/euros) en PNG data URI haute résolution, pour
  * l'intégrer tel quel dans le PDF via addImage — on garde EXACTEMENT le visuel
  * de l'écran (mêmes billets / pièces), pas une reconstitution. Retourne aussi le
  * ratio largeur/hauteur pour préserver les proportions à l'insertion.
  */
 async function rasterizeSvg(url: string): Promise<{ dataUrl: string; ratio: number }> {
-  const svgText = await (await fetch(url)).text()
+  const svgText = await loadSvgText(url)
   const blob = new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' })
   const objUrl = URL.createObjectURL(blob)
   try {
