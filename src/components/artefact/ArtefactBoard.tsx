@@ -4,44 +4,59 @@ import {
   TabsList,
   TabsTrigger,
 } from '#/components/ui/tabs.tsx'
+import { PageContainer } from '#/components/shared/PageContainer.tsx'
+import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { EffectsPanel } from './EffectsPanel.tsx'
 import galleryHtml from './gallery.html?raw'
 
 /*
- * Page « Artefact » — bac à sable admin, à des fins de test. Deux onglets :
+ * Page « Artefact » — bac à sable admin, à des fins de test. Mise en page
+ * STANDARD (comme toutes les autres routes) : `PageContainer` + `PageHeader` +
+ * conteneur centré `max-w-5xl`, avec deux onglets posés sous l'en-tête.
  *
- * - « Registre » : la trace des éléments d'interface retenus. Maquette autonome
- *   (HTML/CSS self-contained) rendue dans un <iframe srcDoc> ISOLÉ — ses propres
- *   tokens de couleur, sans interférer avec le thème de l'app. Importée en `?raw`.
- * - « Effets » : dix effets visuels canvas déclenchés au clic (voir
- *   `EffectsPanel`). Pendant longtemps le seul effet du projet était l'easter
- *   egg `SecretFireworks`, déclenché à la frappe d'un mot ; cet onglet en
- *   généralise l'idée à des déclencheurs par bouton.
+ * - « Registre » : maquette autonome (`gallery.html`) rendue dans un <iframe
+ *   srcDoc> ISOLÉ — ses propres tokens de couleur, sans toucher au thème de
+ *   l'app — encadrée comme une carte. Importée en `?raw`.
+ * - « Effets » : des effets visuels canvas déclenchés au clic (cf. `EffectsPanel`).
  *
  * Réservé aux admins (cf. route + lien Navbar).
  */
 export function ArtefactBoard() {
   return (
-    <Tabs defaultValue="registre" className="flex flex-1 flex-col gap-0">
-      <div className="border-b px-4 pt-3">
-        <TabsList>
-          <TabsTrigger value="registre">Registre</TabsTrigger>
-          <TabsTrigger value="effets">Effets</TabsTrigger>
-        </TabsList>
-      </div>
+    <Tabs defaultValue="registre" className="flex flex-1 flex-col">
+      <PageContainer>
+        <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
+          <PageHeader
+            title="Artefact"
+            meta="Bac à sable admin — registre d'interface et effets visuels"
+          />
 
-      <TabsContent value="registre" className="flex flex-col">
-        <iframe
-          title="Registre d'artefacts"
-          srcDoc={galleryHtml}
-          className="w-full flex-1 border-0"
-          style={{ minHeight: 'calc(100dvh - 7rem)' }}
-        />
-      </TabsContent>
+          {/* Pleine largeur : les deux onglets se partagent toute la barre
+              (les `TabsTrigger` sont `flex-1`). */}
+          <TabsList className="w-full">
+            <TabsTrigger value="registre">Registre</TabsTrigger>
+            <TabsTrigger value="effets">Effets</TabsTrigger>
+          </TabsList>
 
-      <TabsContent value="effets">
-        <EffectsPanel />
-      </TabsContent>
+          {/* Registre : la maquette isolée (iframe) encadrée comme une carte,
+              pour qu'elle s'intègre au layout au lieu de déborder pleine largeur. */}
+          <TabsContent
+            value="registre"
+            className="overflow-hidden rounded-xl border border-border bg-card"
+          >
+            <iframe
+              title="Registre d'artefacts"
+              srcDoc={galleryHtml}
+              className="block w-full border-0"
+              style={{ height: 'calc(100dvh - 13rem)', minHeight: '30rem' }}
+            />
+          </TabsContent>
+
+          <TabsContent value="effets">
+            <EffectsPanel />
+          </TabsContent>
+        </div>
+      </PageContainer>
     </Tabs>
   )
 }
