@@ -1,14 +1,23 @@
 import { auroraEffect } from './aurora.ts'
+import { autumnEffect } from './autumn.ts'
+import { balloonsEffect } from './balloons.ts'
 import { blackholeEffect } from './blackhole.ts'
 import { boidsEffect } from './boids.ts'
+import { bubblesEffect } from './bubbles.ts'
+import { confettiEffect } from './confetti.ts'
 import { disintegrateEffect } from './disintegrate.ts'
 import { fireworksEffect } from './fireworks.ts'
 import { glitchEffect } from './glitch.ts'
+import { heartEffect } from './heart.ts'
+import { heartSwarmEffect } from './heartswarm.ts'
 import { kaleidoscopeEffect } from './kaleidoscope.ts'
 import { lightningEffect } from './lightning.ts'
 import { matrixEffect } from './matrix.ts'
+import { moneyRainEffect } from './moneyrain.ts'
+import { sakuraEffect } from './sakura.ts'
 import { shockwaveEffect } from './shockwave.ts'
 import { shootingStarsEffect } from './shootingstars.ts'
+import { snowEffect } from './snow.ts'
 import { vortexEffect } from './vortex.ts'
 import type { EffectDefinition } from './types.ts'
 
@@ -28,6 +37,15 @@ export const EFFECTS: readonly EffectDefinition[] = [
   auroraEffect,
   shootingStarsEffect,
   fireworksEffect,
+  moneyRainEffect,
+  heartEffect,
+  snowEffect,
+  sakuraEffect,
+  autumnEffect,
+  confettiEffect,
+  bubblesEffect,
+  balloonsEffect,
+  heartSwarmEffect,
   lightningEffect,
   glitchEffect,
   disintegrateEffect,
@@ -42,4 +60,13 @@ export const EFFECTS: readonly EffectDefinition[] = [
 export const VALIDATED_EFFECT_IDS: ReadonlySet<string> = new Set([
   'fireworks',
   'shootingstars',
+  'moneyrain',
+  'heart',
+  'snow',
+  'sakura',
+  'autumn',
+  'confetti',
+  'bubbles',
+  'balloons',
+  'heartswarm',
 ])
