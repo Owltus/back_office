@@ -8,8 +8,8 @@
  * qu'il peint image par image.
  *
  * Le canvas est superposé à la page en `pointer-events: none` : un effet
- * n'intercepte jamais un clic. C'est le même principe que l'easter egg
- * `components/shared/SecretFireworks.tsx`, dont ce module généralise l'idée.
+ * n'intercepte jamais un clic. C'est le même principe que les easter eggs
+ * clavier (`components/shared/SecretEffect.tsx`), qui rejouent ces définitions.
  *
  * L'EFFACEMENT EST À LA CHARGE DE L'EFFET : certains veulent un fond net à
  * chaque image, d'autres vivent de leurs traînées (`destination-out` avec un

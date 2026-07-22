@@ -3,13 +3,14 @@ import { useEffect, useRef, useState } from 'react'
 import type { EffectDefinition } from '#/lib/artefact/effects/index.ts'
 
 /*
- * Moteur de rendu commun à tous les effets de la page Artefact.
+ * Moteur de rendu commun à TOUS les effets visuels : la page Artefact (boutons)
+ * comme les easter eggs clavier (`components/shared/SecretEffect.tsx`).
  *
- * Généralise la mécanique de `components/shared/SecretFireworks.tsx` — canvas
- * plein écran en `pointer-events: none`, boucle `requestAnimationFrame`, densité
- * de pixels bornée, nettoyage strict — mais la sépare de tout effet particulier :
- * l'effet à jouer arrive par la prop `effect`, chaque définition ne décrivant
- * que ce qu'elle peint image par image (voir `lib/artefact/effects/types.ts`).
+ * Canvas plein écran en `pointer-events: none`, boucle `requestAnimationFrame`,
+ * densité de pixels bornée, nettoyage strict — le tout séparé de tout effet
+ * particulier : l'effet à jouer arrive par la prop `effect`, chaque définition ne
+ * décrivant que ce qu'elle peint image par image (voir
+ * `lib/artefact/effects/types.ts`).
  *
  * On passe la définition en prop plutôt que de la sélectionner par une clé : le
  * parent garde la maîtrise du cycle « armer / rejouer / arrêter » via la `key`
