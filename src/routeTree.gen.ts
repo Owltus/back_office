@@ -16,6 +16,7 @@ import { Route as PdjRouteImport } from './routes/pdj'
 import { Route as ParkingRouteImport } from './routes/parking'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as GestionRouteImport } from './routes/gestion'
+import { Route as EasterEggsRouteImport } from './routes/easter-eggs'
 import { Route as ComptesRouteImport } from './routes/comptes'
 import { Route as CaisseRouteImport } from './routes/caisse'
 import { Route as ArtefactRouteImport } from './routes/artefact'
@@ -72,6 +73,11 @@ const LoginRoute = LoginRouteImport.update({
 const GestionRoute = GestionRouteImport.update({
   id: '/gestion',
   path: '/gestion',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EasterEggsRoute = EasterEggsRouteImport.update({
+  id: '/easter-eggs',
+  path: '/easter-eggs',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ComptesRoute = ComptesRouteImport.update({
@@ -195,6 +201,7 @@ export interface FileRoutesByFullPath {
   '/artefact': typeof ArtefactRoute
   '/caisse': typeof CaisseRouteWithChildren
   '/comptes': typeof ComptesRoute
+  '/easter-eggs': typeof EasterEggsRoute
   '/gestion': typeof GestionRoute
   '/login': typeof LoginRoute
   '/parking': typeof ParkingRouteWithChildren
@@ -225,6 +232,7 @@ export interface FileRoutesByTo {
   '/affichage': typeof AffichageRoute
   '/artefact': typeof ArtefactRoute
   '/comptes': typeof ComptesRoute
+  '/easter-eggs': typeof EasterEggsRoute
   '/gestion': typeof GestionRoute
   '/login': typeof LoginRoute
   '/profil': typeof ProfilRoute
@@ -253,6 +261,7 @@ export interface FileRoutesById {
   '/artefact': typeof ArtefactRoute
   '/caisse': typeof CaisseRouteWithChildren
   '/comptes': typeof ComptesRoute
+  '/easter-eggs': typeof EasterEggsRoute
   '/gestion': typeof GestionRoute
   '/login': typeof LoginRoute
   '/parking': typeof ParkingRouteWithChildren
@@ -286,6 +295,7 @@ export interface FileRouteTypes {
     | '/artefact'
     | '/caisse'
     | '/comptes'
+    | '/easter-eggs'
     | '/gestion'
     | '/login'
     | '/parking'
@@ -316,6 +326,7 @@ export interface FileRouteTypes {
     | '/affichage'
     | '/artefact'
     | '/comptes'
+    | '/easter-eggs'
     | '/gestion'
     | '/login'
     | '/profil'
@@ -343,6 +354,7 @@ export interface FileRouteTypes {
     | '/artefact'
     | '/caisse'
     | '/comptes'
+    | '/easter-eggs'
     | '/gestion'
     | '/login'
     | '/parking'
@@ -375,6 +387,7 @@ export interface RootRouteChildren {
   ArtefactRoute: typeof ArtefactRoute
   CaisseRoute: typeof CaisseRouteWithChildren
   ComptesRoute: typeof ComptesRoute
+  EasterEggsRoute: typeof EasterEggsRoute
   GestionRoute: typeof GestionRoute
   LoginRoute: typeof LoginRoute
   ParkingRoute: typeof ParkingRouteWithChildren
@@ -435,6 +448,13 @@ declare module '@tanstack/react-router' {
       path: '/gestion'
       fullPath: '/gestion'
       preLoaderRoute: typeof GestionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/easter-eggs': {
+      id: '/easter-eggs'
+      path: '/easter-eggs'
+      fullPath: '/easter-eggs'
+      preLoaderRoute: typeof EasterEggsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/comptes': {
@@ -673,6 +693,7 @@ const rootRouteChildren: RootRouteChildren = {
   ArtefactRoute: ArtefactRoute,
   CaisseRoute: CaisseRouteWithChildren,
   ComptesRoute: ComptesRoute,
+  EasterEggsRoute: EasterEggsRoute,
   GestionRoute: GestionRoute,
   LoginRoute: LoginRoute,
   ParkingRoute: ParkingRouteWithChildren,

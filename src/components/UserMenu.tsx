@@ -23,6 +23,27 @@ import {
 
 type ContentProps = ComponentProps<typeof DropdownMenuContent>
 
+/*
+ * Icône « œuf » (lucide n'en fournit pas) pour l'entrée admin Easter eggs. SVG
+ * stroke-based au style lucide ; premier enfant du DropdownMenuItem, il hérite
+ * de `size-4` et `text-muted-foreground` comme les autres icônes du menu.
+ */
+function EggIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 3c-3.5 0-6 5-6 9.5a6 6 0 0 0 12 0C18 8 15.5 3 12 3Z" />
+    </svg>
+  )
+}
+
 export function UserMenu({
   trigger,
   align = 'end',
@@ -53,9 +74,15 @@ export function UserMenu({
       <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
       <DropdownMenuContent align={align} side={side} className="w-56">
         <DropdownMenuLabel className="flex items-center gap-2.5 py-2 font-normal">
-          <UserAvatar name={name} className="size-8" fallbackClassName="text-xs" />
+          <UserAvatar
+            name={name}
+            className="size-8"
+            fallbackClassName="text-xs"
+          />
           <div className="grid text-sm leading-tight">
-            <span className="truncate font-medium">{name || 'Utilisateur'}</span>
+            <span className="truncate font-medium">
+              {name || 'Utilisateur'}
+            </span>
             <span className="truncate text-xs text-muted-foreground">
               {subtitle}
             </span>
@@ -78,6 +105,12 @@ export function UserMenu({
             Gestion des comptes
           </DropdownMenuItem>
         )}
+        {role === 'admin' && (
+          <DropdownMenuItem onSelect={() => navigate({ to: '/easter-eggs' })}>
+            <EggIcon />
+            Easter eggs
+          </DropdownMenuItem>
+        )}
 
         <DropdownMenuSeparator />
 
@@ -88,7 +121,10 @@ export function UserMenu({
 
         <DropdownMenuSeparator />
 
-        <DropdownMenuItem variant="destructive" onSelect={() => handleSignOut()}>
+        <DropdownMenuItem
+          variant="destructive"
+          onSelect={() => handleSignOut()}
+        >
           <LogOut />
           Déconnexion
         </DropdownMenuItem>
