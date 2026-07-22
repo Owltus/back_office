@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { format } from 'date-fns'
@@ -399,35 +399,6 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
     )
   }
 
-  // --- Distinction clic / double-clic sur une chambre -----------------------
-  // Un double-clic émet aussi deux `click` : on TEMPORISE le clic simple (~250 ms)
-  // et on l'annule si un double-clic suit. `pendingClick` retient la chambre visée
-  // — cliquer une AUTRE chambre exécute d'abord le clic en attente (jamais perdu).
-  const pendingClick = useRef<{ room: number; timer: number } | null>(null)
-  function onRoomClick(room: number) {
-    // 2e clic d'un double sur la MÊME chambre : ignoré (le dblclick suit).
-    if (pendingClick.current?.room === room) return
-    // Clic sur une AUTRE chambre : exécuter tout de suite le clic en attente.
-    const prev = pendingClick.current
-    if (prev) {
-      clearTimeout(prev.timer)
-      pendingClick.current = null
-      toggle(prev.room)
-    }
-    const timer = window.setTimeout(() => {
-      pendingClick.current = null
-      toggle(room)
-    }, 250)
-    pendingClick.current = { room, timer }
-  }
-  function onRoomDoubleClick(room: number) {
-    if (pendingClick.current) {
-      clearTimeout(pendingClick.current.timer)
-      pendingClick.current = null
-    }
-    toggleManual(room)
-  }
-
   // --- Clôture / réouverture / impression (feuille jour) -------------------
   // Clôturer ou réouvrir un jour change l'ensemble des jours CLÔTURÉS, seule base
   // de l'analytique (récap facturable). On invalide donc son cache (préfixe
@@ -799,16 +770,18 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
                       const cls =
                         CELL_STATES[cellState(status, isEmpty)].webClass
                       const label = `Chambre ${room} — ${STATUS_LABEL[status]}${isEmpty ? ' — non vendue' : ''}${isCarried ? ' — bloquée la veille' : ''}`
-                      // Clic = cycle des couleurs (temporisé pour le distinguer du
-                      // double-clic) ; double-clic = pose/retire le liseré « bloquée
-                      // la veille » À LA MAIN. Un jour clôturé reste figé (mutations
-                      // gardées par `canEditFields`).
+                      // Clic GAUCHE = cycle des couleurs (instantané) ; clic DROIT
+                      // = pose/retire le liseré « bloquée la veille » À LA MAIN. Un
+                      // jour clôturé reste figé (mutations gardées par `canEditFields`).
                       return (
                         <button
                           key={room}
                           type="button"
-                          onClick={() => onRoomClick(room)}
-                          onDoubleClick={() => onRoomDoubleClick(room)}
+                          onClick={() => toggle(room)}
+                          onContextMenu={(e) => {
+                            e.preventDefault()
+                            toggleManual(room)
+                          }}
                           disabled={!isSuccess}
                           aria-label={label}
                           title={label}
