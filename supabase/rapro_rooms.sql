@@ -21,6 +21,10 @@ create table public.rapro_rooms (
   room        smallint not null,
   status      text not null default 'non_nettoyee'
                 check (status in ('nettoyee', 'non_nettoyee', 'refus')),
+  -- Sur-statut « bloquée la veille » POSÉ À LA MAIN (orthogonal au status) :
+  -- permet de marquer un report tardif directement sur le jour courant. Traité
+  -- par le roulement comme une origine (cf. lib/rapro/carryover.ts).
+  carried_manual boolean not null default false,
   created_by  uuid default auth.uid(),
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now(),

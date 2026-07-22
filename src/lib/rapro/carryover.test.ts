@@ -4,11 +4,14 @@ import { carryOver, carryoverWindow } from '#/lib/rapro/carryover.ts'
 import type { DaySnapshot } from '#/lib/rapro/carryover.ts'
 import type { RoomStatus } from '#/lib/rapro/types.ts'
 
-/** Instantané d'un jour : uniquement les lignes de statut posées. Une chambre
- * absente est au défaut « nettoyée » (aucune ligne), exactement comme en base. Le
- * roulement ne regarde QUE ça — pas l'occupation. */
-function snap(statuses: Array<[number, RoomStatus]>): DaySnapshot {
-  return { statuses: new Map(statuses) }
+/** Instantané d'un jour : lignes de statut posées + chambres marquées « bloquée
+ * la veille » à la main. Une chambre absente des statuts est au défaut « nettoyée »
+ * (aucune ligne). Le roulement ne regarde QUE ça — pas l'occupation. */
+function snap(
+  statuses: Array<[number, RoomStatus]>,
+  carriedManual: number[] = [],
+): DaySnapshot {
+  return { statuses: new Map(statuses), carriedManual: new Set(carriedManual) }
 }
 
 describe('carryOver — roulement des chambres bloquées', () => {
@@ -75,6 +78,39 @@ describe('carryOver — roulement des chambres bloquées', () => {
 
   it('une fenêtre vide ne reporte rien', () => {
     expect(carryOver([])).toEqual(new Set())
+  })
+})
+
+describe('carryOver — sur-statut « bloquée la veille » posé à la main', () => {
+  it('reporte une chambre marquée à la main la veille', () => {
+    // J-1 : 305 marquée « bloquée la veille » (flag manuel), quelle que soit sa couleur.
+    expect(carryOver([snap([], [305])])).toEqual(new Set([305]))
+  })
+
+  it('roule comme un vrai blocage tant que la chambre reste due', () => {
+    const past = [
+      snap([], [305]), // J-2 : flag manuel
+      snap([[305, 'non_nettoyee']]), // J-1 : encore bloquée
+    ]
+    expect(carryOver(past)).toEqual(new Set([305]))
+  })
+
+  it('cesse de rouler dès que la chambre est nettoyée', () => {
+    const past = [
+      snap([], [305]), // J-2 : flag manuel
+      snap([]), // J-1 : nettoyée par défaut → résolue
+    ]
+    expect(carryOver(past)).toEqual(new Set())
+  })
+
+  it('un refus le lendemain résout aussi le flag manuel', () => {
+    const past = [snap([], [305]), snap([[305, 'refus']])]
+    expect(carryOver(past)).toEqual(new Set())
+  })
+
+  it('le flag re-posé chaque jour continue de rouler', () => {
+    const past = [snap([], [305]), snap([], [305])]
+    expect(carryOver(past)).toEqual(new Set([305]))
   })
 })
 

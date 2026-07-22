@@ -29,14 +29,19 @@ const KNOWN_STATUSES = new Set<RoomStatus>(['nettoyee', 'non_nettoyee', 'refus']
 export async function fetchDay(reportDate: string): Promise<RaproDay> {
   const { data, error } = await supabase
     .from(RAPRO_TABLE)
-    .select('room, status')
+    .select('room, status, carried_manual')
     .eq('report_date', reportDate)
   if (error) throw error
   const statuses = new Map<number, RoomStatus>()
-  for (const r of (data ?? []) as Pick<DbRaproRoom, 'room' | 'status'>[]) {
+  const carriedManual = new Set<number>()
+  for (const r of (data ?? []) as Pick<
+    DbRaproRoom,
+    'room' | 'status' | 'carried_manual'
+  >[]) {
     statuses.set(r.room, KNOWN_STATUSES.has(r.status) ? r.status : 'refus')
+    if (r.carried_manual) carriedManual.add(r.room)
   }
-  return { reportDate, statuses }
+  return { reportDate, statuses, carriedManual }
 }
 
 /** Jour le plus ancien enregistré (borne basse de navigation), ou null. */
@@ -81,6 +86,30 @@ export async function clearRoom(reportDate: string, room: number): Promise<void>
     .delete()
     .eq('report_date', reportDate)
     .eq('room', room)
+  if (error) throw error
+}
+
+/**
+ * Pose l'état COMPLET d'une chambre : statut (couleur) + sur-statut « bloquée la
+ * veille » posé à la main. Le défaut PROPRE (nettoyée sans flag) n'a pas de ligne
+ * → on la supprime (comme `clearRoom`). Sinon upsert des deux colonnes. En les
+ * fournissant TOUJOURS ensemble, une écriture de couleur (clic) et une de liseré
+ * (double-clic) préservent chacune l'autre dimension, sans dépendre d'un merge
+ * implicite côté PostgREST.
+ */
+export async function setRoom(
+  reportDate: string,
+  room: number,
+  status: RoomStatus,
+  carriedManual: boolean,
+): Promise<void> {
+  if (status === 'nettoyee' && !carriedManual) {
+    return clearRoom(reportDate, room)
+  }
+  const { error } = await supabase.from(RAPRO_TABLE).upsert(
+    { report_date: reportDate, room, status, carried_manual: carriedManual },
+    { onConflict: 'report_date,room' },
+  )
   if (error) throw error
 }
 

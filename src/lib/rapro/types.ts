@@ -10,15 +10,19 @@ export interface DbRaproRoom {
   report_date: string
   room: number
   status: RoomStatus
+  /** Sur-statut « bloquée la veille » posé à la main (orthogonal au status). */
+  carried_manual: boolean
 }
 
 /**
  * État ménage d'un jour : `statuses` = statut par chambre (absence de ligne =
- * `nettoyee`, défaut), dérivé des lignes DB.
+ * `nettoyee`, défaut), dérivé des lignes DB. `carriedManual` = chambres portant
+ * le sur-statut « bloquée la veille » posé à la main ce jour-là.
  */
 export interface RaproDay {
   reportDate: string
   statuses: Map<number, RoomStatus>
+  carriedManual: Set<number>
 }
 
 /** État de clôture d'une feuille jour. */

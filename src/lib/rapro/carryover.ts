@@ -1,24 +1,21 @@
 /*
  * Roulement (report) calculé des chambres bloquées — métier pur, aucun stockage.
- * Une chambre « Bloquée » (`non_nettoyee`) doit rester signalée les jours suivants
- * (liseré « bloquée la veille ») jusqu'à ce qu'elle soit résolue, y compris à
- * travers une clôture. On le DÉRIVE en relisant une fenêtre bornée de jours
- * précédents (pas de propagation en base).
+ * Une chambre due mais non résolue doit rester signalée les jours suivants
+ * (liseré « bloquée la veille ») jusqu'à résolution, y compris à travers une
+ * clôture. On le DÉRIVE en relisant une fenêtre bornée de jours précédents.
  *
- * ORIGINE : une chambre marquée « Bloquée » (`non_nettoyee`) un jour donné — un
- * geste DÉLIBÉRÉ qui pose une ligne — roule le(s) jour(s) suivant(s), que ce jour
- * soit clôturé ou non, jusqu'à résolution.
+ * DEUX ORIGINES de roulement :
+ *  - une chambre EXPLICITEMENT bloquée (`non_nettoyee`) un jour donné ;
+ *  - une chambre marquée « bloquée la veille » À LA MAIN (`carriedManual`, double-
+ *    clic) — cas d'un report tardif après clôture, posé directement sur le jour
+ *    courant sans rouvrir le passé. Orthogonal à la couleur : la chambre garde
+ *    son statut (nettoyée/refus/bloquée), mais roule comme un blocage.
  *
- * RÉSOLUTION : une chambre roule TANT QU'elle porte explicitement une ligne
- * `non_nettoyee`. Dès qu'un jour ultérieur ne la montre PLUS bloquée, elle cesse
- * de rouler — que ce soit parce qu'on l'a repassée au vert (ligne effacée →
- * défaut « nettoyée »), passée hors charge (`refus`), ou que le client
- * est parti (plus de ligne). La convention « absence de ligne = nettoyée par
- * défaut » vaut donc résolution : on NE regarde PAS l'occupation PDJ (une chambre
- * repassée au vert un jour est résolue, occupée ou non). C'était le bug : exiger
- * une trace stockée du nettoyage faisait rouler indéfiniment une bloquée
- * simplement repassée au vert (le clic « nettoyer » EFFACE la ligne, cf.
- * `clearRoom`).
+ * RÉSOLUTION : une chambre roule tant qu'elle reste un dû-non-fait — bloquée OU
+ * marquée à la main. Dès qu'un jour intermédiaire elle n'est plus ni l'un ni
+ * l'autre (nettoyée par défaut/explicite, ou hors charge), elle cesse de rouler.
+ * Le nettoyage par défaut (occupée sans exception) vaut donc résolution ; on NE
+ * regarde PAS l'occupation PDJ.
  *
  * Les statuts par jour sont lus côté composant via les queries existantes (mêmes
  * clés → cache partagé) ; ici on ne manipule que les instantanés déjà chargés.
@@ -32,19 +29,19 @@ import type { RoomStatus } from '#/lib/rapro/types.ts'
 export const CARRYOVER_WINDOW_DAYS = 7
 
 /** Instantané d'un jour : statuts par chambre (absence de ligne = nettoyée par
- * défaut). L'occupation PDJ n'entre PAS dans le roulement (cf. en-tête). */
+ * défaut) + chambres portant le sur-statut « bloquée la veille » posé à la main.
+ * Les deux sont des origines de roulement ; l'occupation PDJ n'entre pas en jeu. */
 export interface DaySnapshot {
   statuses: ReadonlyMap<number, RoomStatus>
+  carriedManual: ReadonlySet<number>
 }
 
-/** Une chambre est « résolue » (cesse de rouler) un jour donné dès qu'elle n'est
- * plus explicitement bloquée : seul `non_nettoyee` roule. Tout le reste — ligne
- * `nettoyee`/`refus` OU absence de ligne (défaut « nettoyée ») — résout. */
-function isResolved(
-  statuses: ReadonlyMap<number, RoomStatus>,
-  room: number,
-): boolean {
-  return statuses.get(room) !== 'non_nettoyee'
+/** Une chambre est « résolue » (cesse de rouler) un jour donné si elle n'est plus
+ * un dû-non-fait : ni bloquée (`non_nettoyee`), ni marquée « bloquée la veille » à
+ * la main. Tout le reste — nettoyée par défaut/explicite, refus — résout. */
+function isResolved(snap: DaySnapshot, room: number): boolean {
+  if (snap.carriedManual.has(room)) return false
+  return snap.statuses.get(room) !== 'non_nettoyee'
 }
 
 /**
@@ -65,13 +62,14 @@ export function carryoverWindow(
 }
 
 /**
- * Chambres reportées au jour courant. Origine : toute chambre EXPLICITEMENT
- * bloquée (`non_nettoyee`) un jour antérieur roule tant qu'elle n'est pas résolue
- * sur un jour INTERMÉDIAIRE (cf. `isResolved` : elle n'est plus bloquée ce
- * jour-là). On NE regarde PAS le statut du jour courant : le liseré « bloquée la
- * veille » est un fait sur la veille — il reste présent aujourd'hui QUEL QUE SOIT
- * le statut du jour (nettoyée, refus…) et même après un reset de la case. `past` =
- * instantanés du plus ancien au plus récent (< J).
+ * Chambres reportées au jour courant. Origines (un jour antérieur) : chambre
+ * EXPLICITEMENT bloquée (`non_nettoyee`) OU marquée « bloquée la veille » à la
+ * main (`carriedManual`). Chacune roule tant qu'elle n'est pas résolue sur un
+ * jour INTERMÉDIAIRE (cf. `isResolved`). On NE regarde PAS le statut du jour
+ * courant : le liseré est un fait sur la veille — il reste présent aujourd'hui
+ * quel que soit le statut du jour. `past` = instantanés du plus ancien au plus
+ * récent (< J). NB : le flag manuel du jour COURANT lui-même (liseré posé
+ * aujourd'hui) est ajouté côté composant, PAS ici.
  */
 export function carryOver(past: DaySnapshot[]): Set<number> {
   const carried = new Set<number>()
@@ -80,13 +78,17 @@ export function carryOver(past: DaySnapshot[]): Set<number> {
   // `past` → le liseré ne dépend jamais du statut du jour courant.
   const resolvedSince = (room: number, from: number): boolean => {
     for (let i = from; i < past.length; i++) {
-      if (isResolved(past[i].statuses, room)) return true
+      if (isResolved(past[i], room)) return true
     }
     return false
   }
   past.forEach((snap, i) => {
+    // Origines du jour : bloquées explicites + marquées « la veille » à la main.
+    const origins = new Set<number>(snap.carriedManual)
     for (const [room, status] of snap.statuses) {
-      if (status !== 'non_nettoyee') continue
+      if (status === 'non_nettoyee') origins.add(room)
+    }
+    for (const room of origins) {
       if (!resolvedSince(room, i + 1)) carried.add(room)
     }
   })

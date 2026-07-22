@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { format } from 'date-fns'
@@ -43,7 +43,6 @@ import { reconcile } from '#/lib/rapro/reconcile.ts'
 import { FLOORS } from '#/lib/rapro/rooms.ts'
 import { missingSources } from '#/lib/rapro/sources.ts'
 import {
-  clearRoom,
   fetchDay,
   fetchOfficialOcc,
   fetchOldestDay,
@@ -51,13 +50,14 @@ import {
   materializeCleaned,
   reopenSheet,
   saveComment,
-  setStatus,
+  setRoom,
   validateSheet,
 } from '#/lib/rapro/service.ts'
 import type { RaproDay, RaproSheet, RoomStatus } from '#/lib/rapro/types.ts'
 import { capitalize, cn } from '#/lib/utils.ts'
 
 const EMPTY: ReadonlyMap<number, RoomStatus> = new Map()
+const EMPTY_MANUAL: ReadonlySet<number> = new Set()
 
 /**
  * Rapprochement de chambres — suivi ménage par chambre et par jour.
@@ -119,6 +119,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
     queryFn: () => fetchDay(selectedDate),
   })
   const statuses = day?.statuses ?? EMPTY
+  const dayCarriedManual = day?.carriedManual ?? EMPTY_MANUAL
 
   // Feuille jour : clôture + commentaire (table rapro_sheets, au niveau jour).
   const { data: sheet } = useQuery({
@@ -218,8 +219,13 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   })
   const past: DaySnapshot[] = windowDays.map((_, i) => ({
     statuses: raproWindow[i]?.data?.statuses ?? EMPTY,
+    carriedManual: raproWindow[i]?.data?.carriedManual ?? EMPTY_MANUAL,
   }))
-  const carried = carryOver(past)
+  // Liseré « bloquée la veille » = roulement DÉRIVÉ du passé (intouchable) ∪ flag
+  // MANUEL posé aujourd'hui même (modifiable / retirable au double-clic).
+  const carriedDerived = carryOver(past)
+  const carried = new Set(carriedDerived)
+  for (const r of dayCarriedManual) carried.add(r)
 
   // Réconciliation sur le DÛ ÉLARGI (occupées du jour ∪ reportées).
   const dueSet = new Set(occupied)
@@ -297,70 +303,129 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   // l'effacement : snapshot → mutation locale de la Map → maj cache → persistance
   // parallèle → rollback réel par snapshot en cas d'échec (fiable même hors ligne).
   // `editDraft` décrit la mutation locale d'un item, `persistOne` sa persistance.
-  async function mutateRooms<T>(
-    items: T[],
-    editDraft: (draft: Map<number, RoomStatus>, item: T) => void,
-    persistOne: (item: T) => Promise<void>,
+  async function mutateDay(
+    edit: (statuses: Map<number, RoomStatus>, manual: Set<number>) => void,
+    persist: () => Promise<void>,
   ) {
-    if (!canEditFields || !isSuccess || items.length === 0) return
+    if (!canEditFields || !isSuccess) return
     const key = ['rapro', 'day', selectedDate]
     await queryClient.cancelQueries({ queryKey: key })
     const prev = queryClient.getQueryData<RaproDay>(key)
     const nextStatuses = new Map(statuses)
-    for (const item of items) editDraft(nextStatuses, item)
+    const nextManual = new Set(dayCarriedManual)
+    edit(nextStatuses, nextManual)
     queryClient.setQueryData<RaproDay>(key, {
       reportDate: selectedDate,
       statuses: nextStatuses,
+      carriedManual: nextManual,
     })
     try {
-      await Promise.all(items.map(persistOne))
+      await persist()
     } catch {
       queryClient.setQueryData(
         key,
-        prev ?? { reportDate: selectedDate, statuses: new Map() },
+        prev ?? {
+          reportDate: selectedDate,
+          statuses: new Map(),
+          carriedManual: new Set(),
+        },
       )
     }
   }
 
-  // Pose un lot de statuts (on stocke le statut posé, y compris `nettoyee` ; le
-  // retour à l'origine passe par `clearRooms`).
-  const applyStatuses = (changes: Array<[number, RoomStatus]>) =>
-    mutateRooms(
-      changes,
-      (draft, [room, status]) => draft.set(room, status),
-      ([room, status]) => setStatus(selectedDate, room, status),
+  // Pose la COULEUR (statut) d'une chambre en PRÉSERVANT son liseré manuel. Le
+  // défaut propre (nettoyée SANS liseré manuel) n'a pas de ligne → on l'efface ;
+  // sinon on la stocke. `setRoom` applique la même règle côté base.
+  function setColor(room: number, status: RoomStatus) {
+    const manual = dayCarriedManual.has(room)
+    return mutateDay(
+      (st) => {
+        if (status === 'nettoyee' && !manual) st.delete(room)
+        else st.set(room, status)
+      },
+      () => setRoom(selectedDate, room, status, manual),
     )
-
-  // Efface l'état de chambres (retour à l'ORIGINE : ligne supprimée). Sert au
-  // rollback d'étage et à repasser une chambre non vendue en grisé.
-  const clearRooms = (rooms: number[]) =>
-    mutateRooms(
-      rooms,
-      (draft, room) => draft.delete(room),
-      (room) => clearRoom(selectedDate, room),
-    )
-
-  // Clic sur une chambre = cycle des couleurs, IDENTIQUE pour les vendues et les
-  // non vendues : Nettoyée → Refus → Bloquée → défaut. Le « défaut »
-  // efface la ligne — vendue : redevient Nettoyée (verte) ; non vendue : redevient
-  // grisée. Cas particulier : une non vendue SANS ligne part du gris, son premier
-  // clic pose Nettoyée (sinon `nextStatus(nettoyee)` sauterait directement à Refus).
-  function toggle(room: number) {
-    if (!isDue(room) && !statuses.has(room)) {
-      return applyStatuses([[room, 'nettoyee']])
-    }
-    const next = nextStatus(statusOf(statuses, room))
-    return next === 'nettoyee'
-      ? clearRooms([room])
-      : applyStatuses([[room, next]])
   }
 
-  // Bouton d'en-tête d'étage : ROLLBACK à l'état d'origine. Toute chambre de
-  // l'étage ayant reçu un statut (bloquée, refus) repasse en « nettoyée » (le
-  // défaut : suppression de la ligne). Sert à annuler d'un geste les saisies
-  // erronées d'un étage.
+  // Clic sur une chambre = cycle des COULEURS : Nettoyée → Refus → Bloquée →
+  // défaut, IDENTIQUE pour vendues et non vendues. Le liseré « bloquée la veille »
+  // manuel (double-clic) est ORTHOGONAL et préservé. Cas particulier : une non
+  // vendue SANS ligne part du gris, son premier clic pose Nettoyée (sinon
+  // `nextStatus(nettoyee)` sauterait directement à Refus).
+  function toggle(room: number) {
+    if (!isDue(room) && !statuses.has(room)) {
+      return setColor(room, 'nettoyee')
+    }
+    return setColor(room, nextStatus(statusOf(statuses, room)))
+  }
+
+  // Double-clic = pose / retire le sur-statut « bloquée la veille » À LA MAIN sur
+  // le jour courant. INTOUCHABLE si le liseré vient du roulement AUTOMATIQUE
+  // (dérivé du passé) : seul le flag posé aujourd'hui se bascule. Orthogonal à la
+  // couleur — `setRoom` garde le statut de la chambre.
+  function toggleManual(room: number) {
+    if (carriedDerived.has(room)) return
+    const next = !dayCarriedManual.has(room)
+    const status = statusOf(statuses, room)
+    return mutateDay(
+      (_st, mn) => {
+        if (next) mn.add(room)
+        else mn.delete(room)
+      },
+      () => setRoom(selectedDate, room, status, next),
+    )
+  }
+
+  // Bouton d'en-tête d'étage : ROLLBACK total à l'origine. Toute chambre de
+  // l'étage portant un statut OU un liseré manuel repasse au défaut (ligne
+  // supprimée). Sert à annuler d'un geste les saisies erronées d'un étage.
   function resetFloor(rooms: number[]) {
-    return clearRooms(rooms.filter((r) => statuses.has(r)))
+    const toReset = rooms.filter(
+      (r) => statuses.has(r) || dayCarriedManual.has(r),
+    )
+    if (toReset.length === 0) return
+    return mutateDay(
+      (st, mn) => {
+        for (const r of toReset) {
+          st.delete(r)
+          mn.delete(r)
+        }
+      },
+      async () => {
+        await Promise.all(
+          toReset.map((r) => setRoom(selectedDate, r, 'nettoyee', false)),
+        )
+      },
+    )
+  }
+
+  // --- Distinction clic / double-clic sur une chambre -----------------------
+  // Un double-clic émet aussi deux `click` : on TEMPORISE le clic simple (~250 ms)
+  // et on l'annule si un double-clic suit. `pendingClick` retient la chambre visée
+  // — cliquer une AUTRE chambre exécute d'abord le clic en attente (jamais perdu).
+  const pendingClick = useRef<{ room: number; timer: number } | null>(null)
+  function onRoomClick(room: number) {
+    // 2e clic d'un double sur la MÊME chambre : ignoré (le dblclick suit).
+    if (pendingClick.current?.room === room) return
+    // Clic sur une AUTRE chambre : exécuter tout de suite le clic en attente.
+    const prev = pendingClick.current
+    if (prev) {
+      clearTimeout(prev.timer)
+      pendingClick.current = null
+      toggle(prev.room)
+    }
+    const timer = window.setTimeout(() => {
+      pendingClick.current = null
+      toggle(room)
+    }, 250)
+    pendingClick.current = { room, timer }
+  }
+  function onRoomDoubleClick(room: number) {
+    if (pendingClick.current) {
+      clearTimeout(pendingClick.current.timer)
+      pendingClick.current = null
+    }
+    toggleManual(room)
   }
 
   // --- Clôture / réouverture / impression (feuille jour) -------------------
@@ -734,14 +799,16 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
                       const cls =
                         CELL_STATES[cellState(status, isEmpty)].webClass
                       const label = `Chambre ${room} — ${STATUS_LABEL[status]}${isEmpty ? ' — non vendue' : ''}${isCarried ? ' — bloquée la veille' : ''}`
-                      // Clic = cycle des statuts (plus de menu contextuel). Un jour
-                      // clôturé reste figé : les mutations sont gardées par
-                      // `canEditFields`, le clic n'a alors aucun effet.
+                      // Clic = cycle des couleurs (temporisé pour le distinguer du
+                      // double-clic) ; double-clic = pose/retire le liseré « bloquée
+                      // la veille » À LA MAIN. Un jour clôturé reste figé (mutations
+                      // gardées par `canEditFields`).
                       return (
                         <button
                           key={room}
                           type="button"
-                          onClick={() => toggle(room)}
+                          onClick={() => onRoomClick(room)}
+                          onDoubleClick={() => onRoomDoubleClick(room)}
                           disabled={!isSuccess}
                           aria-label={label}
                           title={label}
