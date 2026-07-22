@@ -35,7 +35,6 @@ export interface RaproPdfData {
     clean: number
     bloquee: number
     refus: number
-    noshow: number
   }
   comment: string
   validatedAt: string | null
@@ -100,7 +99,6 @@ type RGB = [number, number, number]
 const CELL_FILL: Record<CellState, { fill: RGB; text: RGB }> = {
   clean: { fill: [110, 231, 183], text: [6, 78, 59] },
   refus: { fill: [252, 211, 77], text: [120, 53, 15] },
-  noshow: { fill: [221, 214, 254], text: [76, 29, 149] },
   empty: { fill: [241, 245, 249], text: [148, 163, 184] },
   todo: { fill: [254, 202, 202], text: [127, 29, 29] },
 }
@@ -131,13 +129,12 @@ function renderRaproDocument(
   y += 8
 
   // --- Bandeau de compteurs — mêmes catégories que la page (hors « Reste à
-  //     faire ») : Vendues / Nettoyées / Refus / No-show / Bloquées, + une case
+  //     faire ») : Vendues / Nettoyées / Refus / Bloquées, + une case
   //     « Bloq. veille » AJOUTÉE seulement s'il y a des chambres reportées.
   const cells: Array<[string, number]> = [
     ['Vendues', counts.sold],
     ['Nettoyées', counts.clean],
     ['Refus', counts.refus],
-    ['No-show', counts.noshow],
     ['Bloquées', counts.bloquee],
   ]
   if (carried.size > 0) cells.push(['Bloq. veille', carried.size])

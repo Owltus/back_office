@@ -12,7 +12,7 @@
  * RÉSOLUTION : une chambre roule TANT QU'elle porte explicitement une ligne
  * `non_nettoyee`. Dès qu'un jour ultérieur ne la montre PLUS bloquée, elle cesse
  * de rouler — que ce soit parce qu'on l'a repassée au vert (ligne effacée →
- * défaut « nettoyée »), passée hors charge (`refus`/`noshow`), ou que le client
+ * défaut « nettoyée »), passée hors charge (`refus`), ou que le client
  * est parti (plus de ligne). La convention « absence de ligne = nettoyée par
  * défaut » vaut donc résolution : on NE regarde PAS l'occupation PDJ (une chambre
  * repassée au vert un jour est résolue, occupée ou non). C'était le bug : exiger
@@ -39,7 +39,7 @@ export interface DaySnapshot {
 
 /** Une chambre est « résolue » (cesse de rouler) un jour donné dès qu'elle n'est
  * plus explicitement bloquée : seul `non_nettoyee` roule. Tout le reste — ligne
- * `nettoyee`/`refus`/`noshow` OU absence de ligne (défaut « nettoyée ») — résout. */
+ * `nettoyee`/`refus` OU absence de ligne (défaut « nettoyée ») — résout. */
 function isResolved(
   statuses: ReadonlyMap<number, RoomStatus>,
   room: number,

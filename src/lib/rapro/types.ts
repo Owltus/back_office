@@ -2,9 +2,8 @@
  * `nettoyee` ; on n'applique un statut qu'en exception.
  * - `nettoyee` : défaut d'une chambre vendue (facturable).
  * - `non_nettoyee` : « Bloquée » — utilisée mais non nettoyée, reste due et roule.
- * - `refus` : client en séjour qui décline le ménage (hors charge).
- * - `noshow` : vendue mais client absent → pas de ménage (hors charge). */
-export type RoomStatus = 'nettoyee' | 'non_nettoyee' | 'refus' | 'noshow'
+ * - `refus` : client en séjour qui décline le ménage (hors charge). */
+export type RoomStatus = 'nettoyee' | 'non_nettoyee' | 'refus'
 
 /** Ligne DB (miroir de public.rapro_rooms) — une ligne par (jour, chambre). */
 export interface DbRaproRoom {

@@ -2,11 +2,10 @@
  * Rapprochement de chambres — suivi ménage compact (housekeeping)      *
  * UNE carte par étage (titre + bouton de rollback) ; les chambres y    *
  * sont EMPILÉES en pastilles. Vendue = NETTOYÉE par défaut.            *
- * Clic = cycle de statut : nettoyée → refus → no-show → bloquée →      *
+ * Clic = cycle de statut : nettoyée → refus → bloquée →                *
  * (défaut). La couleur = le statut.                                    *
  *   vert        = nettoyée (défaut, facturée)                          *
  *   ambre       = refus de service                                     *
- *   violet      = no-show (vendue mais client absent)                  *
  *   rouge       = bloquée (utilisée, non nettoyée : due, roule)        *
  *   grisé       = non vendue ce jour (occupation reprise du PDJ)       *
  *   liseré rouge = bloquée la veille (reportée, non résolue)           *
@@ -163,14 +162,8 @@
   background: color-mix(in oklab, #f87171 18%, transparent);
   border-color: color-mix(in oklab, #f87171 45%, transparent);
 }
-/* No-show (vendue mais client absent) → violet. */
-.rapro-room-noshow {
-  color: #a78bfa;
-  background: color-mix(in oklab, #a78bfa 18%, transparent);
-  border-color: color-mix(in oklab, #a78bfa 45%, transparent);
-}
 /* « Bloquée la veille » : la case garde le FOND de son statut du jour (nettoyée,
- * refus, no-show…) et reçoit un liseré rouge net PAR-DESSUS (box-shadow inset →
+ * refus…) et reçoit un liseré rouge net PAR-DESSUS (box-shadow inset →
  * 0 décalage). Fait sur la veille, toujours présent quel que soit le statut.
  * Au survol, le hover générique passe la bordure en violet (`--ring`) : on la
  * garde ROUGE ici pour rester cohérent avec le liseré. */
@@ -183,16 +176,15 @@
 }
 .rapro-room-clean:hover:not(:disabled),
 .rapro-room-refus:hover:not(:disabled),
-.rapro-room-noshow:hover:not(:disabled),
 .rapro-room-todo:hover:not(:disabled) {
   filter: brightness(1.08);
 }
 
 /* --- Tuiles de synthèse (KPI) — composant partagé StatTile ---------------- */
 /* Grille seule (le style de carte vit dans components/shared/StatTile.tsx).
- * `auto-fit` : la rangée reste PLEINE avec 5 tuiles OU 6 (quand la carte
+ * `auto-fit` : la rangée reste PLEINE avec 4 tuiles OU 5 (quand la carte
  * « Bloquées la veille » apparaît). Chaque tuile fait au moins 150px puis
- * s'étire ; 2 colonnes en petit, jusqu'à 5-6 en large, selon la place. */
+ * s'étire ; 2 colonnes en petit, jusqu'à 4-5 en large, selon la place. */
 .rapro-stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -251,7 +243,4 @@
 }
 .rapro-legend-dot.is-todo {
   background: #f87171;
-}
-.rapro-legend-dot.is-noshow {
-  background: #a78bfa;
 }

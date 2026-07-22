@@ -22,12 +22,7 @@ export const RAPRO_SHEETS_TABLE = 'rapro_sheets'
 
 /** Statuts valides. Une valeur inconnue en base est ramenée à un statut sûr
  * plutôt que de casser le rendu (défense ; ne devrait pas arriver). */
-const KNOWN_STATUSES = new Set<RoomStatus>([
-  'nettoyee',
-  'non_nettoyee',
-  'refus',
-  'noshow',
-])
+const KNOWN_STATUSES = new Set<RoomStatus>(['nettoyee', 'non_nettoyee', 'refus'])
 
 /** État d'un jour : Map chambre→statut (défaut nettoyee = absence de ligne).
  * TOLÉRANT : une valeur non reconnue est ramenée à 'refus' (hors charge). */

@@ -6,7 +6,7 @@
 -- vaut « non_nettoyee ». Remplace la version précédente (jamais déployée) qui
 -- stockait une ligne par jour → d'où le drop initial.
 --
--- Statuts (4) : nettoyee | non_nettoyee (« Bloquée ») | refus | noshow. La 2e
+-- Statuts (3) : nettoyee | non_nettoyee (« Bloquée ») | refus. La 2e
 -- dimension `qualifier` (sur-statut « faux no-show ») a été abandonnée — retrait
 -- non destructif via rapro_rooms_drop_qualifier.sql (ce script-ci ne la crée pas).
 --
@@ -20,7 +20,7 @@ create table public.rapro_rooms (
   report_date date not null,
   room        smallint not null,
   status      text not null default 'non_nettoyee'
-                check (status in ('nettoyee', 'non_nettoyee', 'refus', 'noshow')),
+                check (status in ('nettoyee', 'non_nettoyee', 'refus')),
   created_by  uuid default auth.uid(),
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now(),

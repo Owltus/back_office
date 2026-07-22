@@ -25,7 +25,7 @@ import { printRaproMonthly } from '#/lib/rapro/pdf.ts'
 
 /**
  * Détail d'un MOIS — harmonisé sur le socle analytique partagé. Par jour :
- * chambres nettoyées / bloquées / refus / no-show + totaux du mois, tableau au
+ * chambres nettoyées / bloquées / refus + totaux du mois, tableau au
  * style socle et un graphique des nettoyées par jour. Export PDF (base de
  * facturation ELIOR). Le mois vient des params de route ; retour à la vue
  * annuelle par le chevron.
@@ -91,7 +91,7 @@ export function RaproMonthlyBoard({
       }
       loading={loading}
       skeleton={{
-        cols: 4,
+        cols: 3,
         charts: 1,
         cards: 0,
         rows: new Date(year, month, 0).getDate(),

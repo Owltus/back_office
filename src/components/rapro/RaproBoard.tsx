@@ -66,7 +66,7 @@ const EMPTY: ReadonlyMap<number, RoomStatus> = new Map()
  * le nombre de chambres vendues ET le grisé des non vendues) vient du PDJ, une
  * seule et même source → tout reste synchro avec ce qu'on voit dans la grille.
  * Postulat : une chambre vendue est NETTOYÉE par défaut. Un CLIC fait défiler le
- * cycle des statuts (nettoyée → refus → no-show → bloquée → défaut). L'état est
+ * cycle des statuts (nettoyée → refus → bloquée → défaut). L'état est
  * persisté par (jour, chambre), en optimiste — seules les exceptions sont
  * stockées. Écriture super/admin — RLS.
  */
@@ -332,7 +332,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
     )
 
   // Clic sur une chambre = cycle des couleurs, IDENTIQUE pour les vendues et les
-  // non vendues : Nettoyée → Refus → No-show → Bloquée → défaut. Le « défaut »
+  // non vendues : Nettoyée → Refus → Bloquée → défaut. Le « défaut »
   // efface la ligne — vendue : redevient Nettoyée (verte) ; non vendue : redevient
   // grisée. Cas particulier : une non vendue SANS ligne part du gris, son premier
   // clic pose Nettoyée (sinon `nextStatus(nettoyee)` sauterait directement à Refus).
@@ -415,7 +415,6 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
             clean: stats.clean,
             bloquee: stats.todo,
             refus: stats.refus,
-            noshow: stats.noshow,
           },
           comment,
           validatedAt: sheet?.validatedAt ?? null,
@@ -583,7 +582,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
               grille des étages (une colonne par étage), aux mêmes gabarits que le
               contenu réel pour ne rien décaler à l'arrivée des données. */}
           <div className="rapro-stats" aria-hidden="true">
-            {Array.from({ length: 5 }).map((_, i) => (
+            {Array.from({ length: 4 }).map((_, i) => (
               <div
                 key={i}
                 className="flex items-stretch overflow-hidden rounded-xl border border-border bg-card"
@@ -650,12 +649,6 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
               label="Refus"
               accent={CATEGORY_COLOR.refus}
               hint="Client a refusé le ménage."
-            />
-            <StatTile
-              value={dash(stats.noshow)}
-              label="No-show"
-              accent={CATEGORY_COLOR.noshow}
-              hint="Vendue mais client absent (hors charge)."
             />
             <StatTile
               value={dash(stats.todo)}

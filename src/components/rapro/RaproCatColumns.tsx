@@ -6,9 +6,9 @@ import type { DayStatusCounts } from '#/lib/rapro/monthly.ts'
 /*
  * Colonnes de catégorie partagées par les deux vues analytique du rapprochement
  * (annuelle et détail mensuel) : en-tête coloré, cellules de comptage et helper
- * de compteur. Une seule source pour les 4 catégories (nettoyée / bloquée /
- * refus / no-show), au code couleur de `CATEGORY_COLOR`. La 1re colonne (Mois /
- * Jour) reste à la charge de l'appelant — elle diffère (libellé, lien).
+ * de compteur. Une seule source pour les 3 catégories (nettoyée / bloquée /
+ * refus), au code couleur de `CATEGORY_COLOR`. La 1re colonne (Mois / Jour) reste
+ * à la charge de l'appelant — elle diffère (libellé, lien).
  */
 
 /** Compteur au code couleur de la catégorie ; un zéro reste discret (grisé),
@@ -21,7 +21,7 @@ export function coloredCount(n: number, color: string): ReactNode {
   )
 }
 
-/** En-tête des 4 colonnes de catégorie. `firstLabel` = titre de la 1re colonne. */
+/** En-tête des 3 colonnes de catégorie. `firstLabel` = titre de la 1re colonne. */
 export function RaproCatHead({ firstLabel }: { firstLabel: string }) {
   return (
     <tr className="border-b border-border bg-muted">
@@ -46,17 +46,11 @@ export function RaproCatHead({ firstLabel }: { firstLabel: string }) {
       >
         Refus
       </th>
-      <th
-        className="px-3 py-2 text-center text-xs font-medium"
-        style={{ color: CATEGORY_COLOR.noshow }}
-      >
-        No-show
-      </th>
     </tr>
   )
 }
 
-/** Les 4 cellules de comptage colorées d'une ligne (corps ou total). L'appelant
+/** Les 3 cellules de comptage colorées d'une ligne (corps ou total). L'appelant
  * fournit la 1re cellule (jour / mois) avant celles-ci. */
 export function RaproCatCells({ counts }: { counts: DayStatusCounts }) {
   return (
@@ -69,9 +63,6 @@ export function RaproCatCells({ counts }: { counts: DayStatusCounts }) {
       </td>
       <td className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums">
         {coloredCount(counts.refus, CATEGORY_COLOR.refus)}
-      </td>
-      <td className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums">
-        {coloredCount(counts.noshow, CATEGORY_COLOR.noshow)}
       </td>
     </>
   )

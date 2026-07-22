@@ -41,11 +41,6 @@ describe('carryOver — roulement des chambres bloquées', () => {
     expect(carryOver(past)).toEqual(new Set())
   })
 
-  it('un no-show le lendemain résout (hors charge, ne roule pas)', () => {
-    const past = [snap([[305, 'non_nettoyee']]), snap([[305, 'noshow']])]
-    expect(carryOver(past)).toEqual(new Set())
-  })
-
   it('une ligne nettoyée explicite le lendemain résout', () => {
     const past = [snap([[305, 'non_nettoyee']]), snap([[305, 'nettoyee']])]
     expect(carryOver(past)).toEqual(new Set())

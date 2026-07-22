@@ -28,8 +28,8 @@ import {
 
 /*
  * Récap ménage ANNUEL — harmonisé sur le socle analytique partagé (repjour / PDJ).
- * Vue année : sélecteur d'année, 4 cartes de synthèse, tableau mois par mois
- * (nettoyées / refus / no-show, clic → détail du mois) et deux graphiques. Un
+ * Vue année : sélecteur d'année, 3 cartes de synthèse, tableau mois par mois
+ * (nettoyées / bloquées / refus, clic → détail du mois) et deux graphiques. Un
  * fetch borné par mois (12 lectures mises en cache). Aucune écriture.
  */
 
@@ -93,9 +93,8 @@ export function RaproAnalytiqueBoard() {
       nettoyee: a.nettoyee + t.nettoyee,
       bloquee: a.bloquee + t.bloquee,
       refus: a.refus + t.refus,
-      noshow: a.noshow + t.noshow,
     }),
-    { nettoyee: 0, bloquee: 0, refus: 0, noshow: 0 },
+    { nettoyee: 0, bloquee: 0, refus: 0 },
   )
 
   const currentMonth = now.getMonth() + 1
@@ -111,7 +110,6 @@ export function RaproAnalytiqueBoard() {
       mois: MONTHS_SHORT[m - 1],
       nettoyee: future ? null : t.nettoyee,
       refus: future ? null : t.refus,
-      noshow: future ? null : t.noshow,
     }
   })
 
@@ -127,7 +125,7 @@ export function RaproAnalytiqueBoard() {
         />
       }
       loading={loading}
-      skeleton={{ cols: 4, charts: 2, cardLines: 2, rows: 13 }}
+      skeleton={{ cols: 3, charts: 2, cardLines: 2, rows: 13 }}
     >
       {/* Synthèse annuelle — 4 catégories, code couleur de la grille rapprochement */}
       <AnalytiqueCardsGrid>
@@ -154,13 +152,6 @@ export function RaproAnalytiqueBoard() {
           accent={CAT_COLOR.refus}
           value={
             <span style={{ color: CAT_COLOR.refus }}>{yearTotals.refus}</span>
-          }
-        />
-        <StatCard
-          label="No-shows sur l'année"
-          accent={CAT_COLOR.noshow}
-          value={
-            <span style={{ color: CAT_COLOR.noshow }}>{yearTotals.noshow}</span>
           }
         />
       </AnalytiqueCardsGrid>
@@ -210,13 +201,11 @@ export function RaproAnalytiqueBoard() {
           tooltipFormatter={(v) => String(v)}
         />
         <KpiLineChart
-          title="Refus et no-shows par mois"
+          title="Refus par mois"
           data={chartData}
           xKey="mois"
           realKey="refus"
-          projKey="noshow"
           realName="Refus"
-          projName="No-show"
           tooltipFormatter={(v) => String(v)}
         />
       </AnalytiqueCharts>

@@ -7,15 +7,13 @@ export const STATUS_LABEL: Record<RoomStatus, string> = {
   // `nettoyee` (absence de ligne), donc `non_nettoyee` est toujours explicite.
   non_nettoyee: 'Bloquée',
   refus: 'Refus',
-  noshow: 'No-show',
 }
 
-/** Cycle du CLIC sur une chambre due : nettoyée (défaut) → refus → no-show →
- * bloquée → nettoyée. Le défaut (absence de ligne) est `nettoyee`. */
+/** Cycle du CLIC sur une chambre due : nettoyée (défaut) → refus → bloquée →
+ * nettoyée. Le défaut (absence de ligne) est `nettoyee`. */
 export const CLICK_CYCLE: readonly RoomStatus[] = [
   'nettoyee',
   'refus',
-  'noshow',
   'non_nettoyee',
 ]
 
@@ -37,9 +35,9 @@ export function statusOf(
 
 /** Statuts hors charge (aucun ménage dû, NON facturables) : ils sortent de la
  * balance et NE roulent PAS d'un jour à l'autre — `refus` (client en séjour qui
- * décline) et `noshow` (vendue mais client absent). `non_nettoyee` (« Bloquée »)
- * = dû non fait → reste dans la balance et roule. */
-export const JUSTIFIED_STATUSES = ['refus', 'noshow'] as const
+ * décline le ménage). `non_nettoyee` (« Bloquée ») = dû non fait → reste dans la
+ * balance et roule. */
+export const JUSTIFIED_STATUSES = ['refus'] as const
 
 /**
  * État VISUEL d'une case, dérivé du statut + de l'occupation : le défaut
@@ -47,14 +45,12 @@ export const JUSTIFIED_STATUSES = ['refus', 'noshow'] as const
  * `non_nettoyee` (à nettoyer) devient `todo` sur une chambre vendue. C'est la clé
  * du rendu couleur/libellé, côté écran comme PDF.
  */
-export type CellState = 'clean' | 'todo' | 'refus' | 'noshow' | 'empty'
+export type CellState = 'clean' | 'todo' | 'refus' | 'empty'
 
 export function cellState(status: RoomStatus, isEmpty: boolean): CellState {
   switch (status) {
     case 'refus':
       return 'refus'
-    case 'noshow':
-      return 'noshow'
     // Défaut : grisé si la chambre n'est pas vendue, nettoyé sinon.
     case 'nettoyee':
       return isEmpty ? 'empty' : 'clean'
@@ -87,11 +83,6 @@ export const CELL_STATES: Record<
     webClass: 'rapro-room-refus',
     legendMod: 'is-refus',
   },
-  noshow: {
-    label: 'No-show',
-    webClass: 'rapro-room-noshow',
-    legendMod: 'is-noshow',
-  },
   empty: {
     label: 'Non vendue',
     webClass: 'rapro-room-empty',
@@ -100,26 +91,24 @@ export const CELL_STATES: Record<
 }
 
 /** Couleur d'accent par catégorie de ménage, ALIGNÉE sur la grille (rapro.css) :
- * nettoyée=vert (chart-5), bloquée=rouge, refus=ambre (chart-3), no-show=violet.
- * SOURCE UNIQUE (theme-aware via les tokens) partagée par les cards du board,
- * l'analytique annuelle et le détail mensuel. Les couleurs web de la grille
- * (rapro.css) et les RGB du PDF (pdf.ts) en sont les miroirs par nature (autres
- * encodages). */
+ * nettoyée=vert (chart-5), bloquée=rouge, refus=ambre (chart-3). SOURCE UNIQUE
+ * (theme-aware via les tokens) partagée par les cards du board, l'analytique
+ * annuelle et le détail mensuel. Les couleurs web de la grille (rapro.css) et les
+ * RGB du PDF (pdf.ts) en sont les miroirs par nature (autres encodages). */
 export const CATEGORY_COLOR = {
   nettoyee: 'var(--chart-5)',
   bloquee: '#f87171',
   refus: 'var(--chart-3)',
-  noshow: '#a78bfa',
 } as const
 
 /** Ordre d'affichage de la légende (bas de grille + PDF) : nettoyée, refus,
- * no-show, bloquée. « empty » (non vendue) n'y figure pas — le grisé des cases
- * non vendues se lit sans légende (rendu par CELL_STATES/cellState). */
-export const LEGEND_ORDER: CellState[] = ['clean', 'refus', 'noshow', 'todo']
+ * bloquée. « empty » (non vendue) n'y figure pas — le grisé des cases non vendues
+ * se lit sans légende (rendu par CELL_STATES/cellState). */
+export const LEGEND_ORDER: CellState[] = ['clean', 'refus', 'todo']
 
 /** Décompte des statuts sur les chambres DUES (occupées), en PARTITION (aucun
- * recouvrement) : nettoyées, bloquées (`non_nettoyee`), refus, no-show. Chaque
- * chambre due tombe dans exactement une catégorie. */
+ * recouvrement) : nettoyées, bloquées (`non_nettoyee`), refus. Chaque chambre due
+ * tombe dans exactement une catégorie. */
 export function countStats(
   statuses: ReadonlyMap<number, RoomStatus>,
   occupied: ReadonlySet<number>,
@@ -127,12 +116,10 @@ export function countStats(
   clean: number
   todo: number
   refus: number
-  noshow: number
 } {
   let clean = 0
   let todo = 0
   let refus = 0
-  let noshow = 0
   for (const room of occupied) {
     switch (statusOf(statuses, room)) {
       case 'nettoyee':
@@ -141,13 +128,10 @@ export function countStats(
       case 'refus':
         refus++
         break
-      case 'noshow':
-        noshow++
-        break
       case 'non_nettoyee':
         todo++
         break
     }
   }
-  return { clean, todo, refus, noshow }
+  return { clean, todo, refus }
 }
