@@ -6,10 +6,7 @@ import {
 
 import { AuthProvider } from '#/components/auth/AuthContext.tsx'
 import { AppAuthGate } from '#/components/auth/AppAuthGate.tsx'
-import { SecretEffect } from '#/components/shared/SecretEffect.tsx'
 import { TooltipProvider } from '#/components/ui/tooltip.tsx'
-import { fireworksEffect } from '#/lib/artefact/effects/fireworks.ts'
-import { shootingStarsEffect } from '#/lib/artefact/effects/shootingstars.ts'
 import { THEME_INIT_SCRIPT } from '#/lib/theme.ts'
 
 import appCss from '../styles.css?url'
@@ -90,10 +87,6 @@ function RootDocument({ children }: { children: React.ReactNode }) {
             <AppAuthGate>{children}</AppAuthGate>
           </AuthProvider>
         </TooltipProvider>
-        {/* Easter eggs clavier (n'importe où, à la Konami) : taper « chloé »
-            → feu d'artifice, « claudia » → étoiles filantes. */}
-        <SecretEffect keyword="chloé" effect={fireworksEffect} />
-        <SecretEffect keyword="claudia" effect={shootingStarsEffect} />
         <Scripts />
       </body>
     </html>

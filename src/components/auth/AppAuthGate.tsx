@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Navigate, useRouterState } from '@tanstack/react-router'
 
 import { useAuth } from '#/components/auth/AuthContext.tsx'
+import { EasterEggs } from '#/components/shared/EasterEggs.tsx'
 import { Navbar } from '#/components/Navbar.tsx'
 import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { RouteSkeleton } from '#/components/shared/skeleton/RouteSkeleton.tsx'
@@ -87,6 +88,9 @@ export function AppAuthGate({ children }: { children: ReactNode }) {
       <main className="app-scroll flex flex-1 flex-col overflow-y-auto motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300 print:overflow-visible">
         {children}
       </main>
+      {/* Easter eggs clavier configurables (table `easter_eggs`) — montés une
+          fois connecté : lecture RLS et cache Query disponibles ici. */}
+      <EasterEggs />
     </div>
   )
 }
