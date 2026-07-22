@@ -28,8 +28,9 @@ import {
 
 /*
  * Récap ménage ANNUEL — harmonisé sur le socle analytique partagé (repjour / PDJ).
- * Vue année : sélecteur d'année, 3 cartes de synthèse, tableau mois par mois
- * (nettoyées / bloquées / refus, clic → détail du mois) et deux graphiques. Un
+ * Vue année : sélecteur d'année, 4 cartes de synthèse (dont la moyenne / jour
+ * travaillé), tableau mois par mois (nettoyées / bloquées / refus, clic → détail
+ * du mois) et deux graphiques. Un
  * fetch borné par mois (12 lectures mises en cache). Aucune écriture.
  */
 
@@ -96,6 +97,15 @@ export function RaproAnalytiqueBoard() {
     }),
     { nettoyee: 0, bloquee: 0, refus: 0 },
   )
+  // Moyenne de chambres nettoyées par JOUR travaillé sur l'année — PAS par mois :
+  // avec un seul mois saisi, « /mois » égalait le total (inutile). Dénominateur =
+  // nombre de jours CLÔTURÉS ayant des données ; `fetchStatusCountsByRange` ne
+  // renvoie que ceux-là (jours non clôturés exclus), donc c'est la somme des
+  // tailles des Map mensuelles. Numérateur (`yearTotals`) déjà borné aux clôturés.
+  const activeDays = monthQueries.reduce((n, q) => n + (q.data?.size ?? 0), 0)
+  const avgCleanedPerDay = activeDays
+    ? Math.round(yearTotals.nettoyee / activeDays)
+    : 0
 
   const currentMonth = now.getMonth() + 1
   const isFutureMonth = (m: number) =>
@@ -127,7 +137,7 @@ export function RaproAnalytiqueBoard() {
       loading={loading}
       skeleton={{ cols: 3, charts: 2, cardLines: 2, rows: 13 }}
     >
-      {/* Synthèse annuelle — 4 catégories, code couleur de la grille rapprochement */}
+      {/* Synthèse annuelle — 3 totaux + moyenne / jour, code couleur rapprochement */}
       <AnalytiqueCardsGrid>
         <StatCard
           label="Nettoyées sur l'année"
@@ -153,6 +163,11 @@ export function RaproAnalytiqueBoard() {
           value={
             <span style={{ color: CAT_COLOR.refus }}>{yearTotals.refus}</span>
           }
+        />
+        <StatCard
+          label="Moyenne nettoyées / jour"
+          accent="#818cf8"
+          value={<span style={{ color: '#818cf8' }}>{avgCleanedPerDay}</span>}
         />
       </AnalytiqueCardsGrid>
 
@@ -182,12 +197,6 @@ export function RaproAnalytiqueBoard() {
             )
           })}
         </tbody>
-        <tfoot>
-          <tr className="border-t border-border bg-muted/50 font-medium">
-            <td className="px-4 py-2 text-xs">Total {year}</td>
-            <RaproCatCells counts={yearTotals} />
-          </tr>
-        </tfoot>
       </AnalytiqueTable>
 
       {/* Graphiques */}

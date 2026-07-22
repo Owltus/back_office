@@ -5,6 +5,10 @@ import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 
 import { AnalytiqueShell } from '#/components/analytique/AnalytiqueShell.tsx'
+import {
+  AnalytiqueCardsGrid,
+  StatCard,
+} from '#/components/analytique/AnalytiqueCards.tsx'
 import { AnalytiqueTable } from '#/components/analytique/AnalytiqueTable.tsx'
 import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
 import { AnalytiqueBackButton } from '#/components/analytique/AnalytiqueBackButton.tsx'
@@ -15,6 +19,7 @@ import {
   RaproCatHead,
 } from '#/components/rapro/RaproCatColumns.tsx'
 import { parseDateStr } from '#/lib/poster/dateFormatter.ts'
+import { CATEGORY_COLOR } from '#/lib/rapro/constants.ts'
 import { capitalize } from '#/lib/utils.ts'
 import {
   fetchStatusCountsByRange,
@@ -24,9 +29,9 @@ import {
 import { printRaproMonthly } from '#/lib/rapro/pdf.ts'
 
 /**
- * Détail d'un MOIS — harmonisé sur le socle analytique partagé. Par jour :
- * chambres nettoyées / bloquées / refus + totaux du mois, tableau au
- * style socle et un graphique des nettoyées par jour. Export PDF (base de
+ * Détail d'un MOIS — harmonisé sur le socle analytique partagé. 4 cartes de
+ * synthèse (nettoyées / bloquées / refus + moyenne journalière), puis le détail
+ * jour par jour et un graphique des nettoyées par jour. Export PDF (base de
  * facturation ELIOR). Le mois vient des params de route ; retour à la vue
  * annuelle par le chevron.
  */
@@ -45,6 +50,14 @@ export function RaproMonthlyBoard({
     queryFn: () => fetchStatusCountsByRange(bounds.from, bounds.to),
   })
   const { rows, totals } = monthlyRows(year, month, byDay ?? new Map())
+  // Moyenne de chambres nettoyées par jour ACTIF (au moins une donnée) : diviser
+  // par tous les jours du mois fausserait la moyenne (jours vides / à venir).
+  const activeDays = rows.filter(
+    (r) => r.nettoyee + r.bloquee + r.refus > 0,
+  ).length
+  const avgCleanedPerDay = activeDays
+    ? Math.round(totals.nettoyee / activeDays)
+    : 0
 
   const monthLabel = capitalize(
     format(new Date(year, month - 1, 1), 'MMMM yyyy', { locale: fr }),
@@ -93,10 +106,45 @@ export function RaproMonthlyBoard({
       skeleton={{
         cols: 3,
         charts: 1,
-        cards: 0,
+        cards: 4,
+        cardLines: 2,
         rows: new Date(year, month, 0).getDate(),
       }}
     >
+      {/* Synthèse du mois — 3 totaux + moyenne journalière, mêmes couleurs. */}
+      <AnalytiqueCardsGrid>
+        <StatCard
+          label="Nettoyées"
+          accent={CATEGORY_COLOR.nettoyee}
+          value={
+            <span style={{ color: CATEGORY_COLOR.nettoyee }}>
+              {totals.nettoyee}
+            </span>
+          }
+        />
+        <StatCard
+          label="Bloquées"
+          accent={CATEGORY_COLOR.bloquee}
+          value={
+            <span style={{ color: CATEGORY_COLOR.bloquee }}>
+              {totals.bloquee}
+            </span>
+          }
+        />
+        <StatCard
+          label="Refus"
+          accent={CATEGORY_COLOR.refus}
+          value={
+            <span style={{ color: CATEGORY_COLOR.refus }}>{totals.refus}</span>
+          }
+        />
+        <StatCard
+          label="Moyenne nettoyées / jour"
+          accent="#818cf8"
+          value={<span style={{ color: '#818cf8' }}>{avgCleanedPerDay}</span>}
+        />
+      </AnalytiqueCardsGrid>
+
       {/* Tableau jour par jour */}
       <AnalytiqueTable head={<RaproCatHead firstLabel="Jour" />}>
         <tbody>
@@ -119,12 +167,6 @@ export function RaproMonthlyBoard({
             )
           })}
         </tbody>
-        <tfoot>
-          <tr className="border-t border-border bg-muted/50 font-medium">
-            <td className="px-4 py-2 text-xs">Total du mois</td>
-            <RaproCatCells counts={totals} />
-          </tr>
-        </tfoot>
       </AnalytiqueTable>
 
       {/* Graphique */}
