@@ -204,7 +204,6 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   // comme vendue (carte Vendues) ET dans sa carte de statut (Nettoyées/Refus/…).
   const effectiveSold = new Set(occupied)
   for (const room of statuses.keys()) effectiveSold.add(room)
-  const stats = countStats(statuses, effectiveSold)
 
   // Roulement (report) DÉRIVÉ : on relit une fenêtre bornée de jours précédents
   // (statuts rapro SEULS — le roulement ne dépend PAS de l'occupation PDJ), mêmes
@@ -226,6 +225,16 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   const dueSet = new Set(occupied)
   for (const r of carried) dueSet.add(r)
   const rec = reconcile(statuses, dueSet)
+  // Décompte des statuts (cards Nettoyées / Refus / Bloquées) sur TOUTES les
+  // chambres affichées, REPORTÉES COMPRISES : vendues effectives ∪ « bloquées la
+  // veille ». Une reportée nettoyée aujourd'hui (rendue verte + liseré) est un
+  // ménage facturable ELIOR : elle DOIT compter dans « Nettoyées », même
+  // inoccupée au PDJ du jour (client parti) — sinon la grille la peint en vert
+  // sans que le compteur la voie. (« Vendues » reste `effectiveSold`, hors
+  // reportées : une reportée inoccupée n'est pas une vente du jour.)
+  const countedRooms = new Set(effectiveSold)
+  for (const r of carried) countedRooms.add(r)
+  const stats = countStats(statuses, countedRooms)
   // Fenêtre de report résolue ? Tant qu'une requête de la fenêtre est en vol,
   // `carried` est incomplet : afficher « Aucune donnée » sur un jour sans
   // occupation directe mais À REPORTS serait un faux vide, effacé une fraction de
