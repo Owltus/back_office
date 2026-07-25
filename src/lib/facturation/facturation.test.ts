@@ -54,6 +54,7 @@ import {
   setBudgetLines,
 } from '#/lib/facturation/budgetRegistry.ts'
 import {
+  issuerCandidates,
   preferredCompte,
   type IssuerMemory,
 } from '#/lib/facturation/issuerMemory.ts'
@@ -746,15 +747,18 @@ describe('matchIssuer', () => {
     const list = [{ name: 'siren:552081317', display: 'EDF', count: 2 }]
     // Aucun match par sous-chaîne possible (« edf » n'est pas dans le texte, et la clé
     // « siren:… » ne l'est pas non plus) : c'est le SIREN qui identifie l'émetteur.
-    expect(matchIssuer('facture electricite 552 081 317', list, '552081317')
-      ?.display).toBe('EDF')
+    expect(
+      matchIssuer('facture electricite 552 081 317', list, '552081317')
+        ?.display,
+    ).toBe('EDF')
   })
 
   it('repli sur le nom quand le SIREN ne correspond à aucun émetteur connu', () => {
     const list = [{ name: 'martin', display: 'Entreprise Martin', count: 3 }]
     // SIREN fourni mais inconnu du dictionnaire → comportement historique (sous-chaîne de nom).
-    expect(matchIssuer('facture MARTIN 999 999 999', list, '380129866')
-      ?.display).toBe('Entreprise Martin')
+    expect(
+      matchIssuer('facture MARTIN 999 999 999', list, '380129866')?.display,
+    ).toBe('Entreprise Martin')
   })
 })
 
@@ -996,7 +1000,9 @@ describe('preferredCompte + fillComptes (compte habituel de l’émetteur)', () 
   afterAll(() => setBudgetLines(BUDGET_FIXTURE))
 
   it('renvoie le compte le plus fréquent de l’émetteur', () => {
-    expect(preferredCompte(mem, 'siren:552081317', 'FMGAZooooo')).toBe('60613200')
+    expect(preferredCompte(mem, 'siren:552081317', 'FMGAZooooo')).toBe(
+      '60613200',
+    )
   })
   it('renvoie vide si émetteur inconnu ou clé vide', () => {
     expect(preferredCompte(mem, 'siren:000000000', 'FMGAZooooo')).toBe('')
@@ -1027,5 +1033,37 @@ describe('preferredCompte + fillComptes (compte habituel de l’émetteur)', () 
     expect(
       fillComptes(['FMGAZooooo'], { FMGAZooooo: '60613100' }, pref),
     ).toEqual({ FMGAZooooo: '60613100' })
+  })
+})
+
+describe('issuerCandidates (couples déjà utilisés par un émetteur)', () => {
+  const mem: IssuerMemory = {
+    perIssuer: {
+      'siren:552081317': {
+        FMELECoooo: { '60612100': 2 },
+        FMGAZooooo: { '60613200': 5, '60613100': 1 },
+      },
+      histo_sans_compte: {
+        FMGAZooooo: { '': 3 }, // seul historique sans compte → aucun candidat
+      },
+    },
+  }
+
+  it('classe les couples par fréquence décroissante', () => {
+    const c = issuerCandidates(mem, 'siren:552081317')
+    expect(c.map((x) => [x.code, x.compte, x.n])).toEqual([
+      ['FMGAZooooo', '60613200', 5],
+      ['FMELECoooo', '60612100', 2],
+      ['FMGAZooooo', '60613100', 1],
+    ])
+  })
+
+  it('ignore les comptes vides (historique pré-migration)', () => {
+    expect(issuerCandidates(mem, 'histo_sans_compte')).toEqual([])
+  })
+
+  it('renvoie [] pour un émetteur inconnu ou une clé vide', () => {
+    expect(issuerCandidates(mem, 'siren:000000000')).toEqual([])
+    expect(issuerCandidates(mem, '')).toEqual([])
   })
 })

@@ -1,5 +1,13 @@
 import { useMemo, useState } from 'react'
-import { Loader2, Lock, Pencil, Plus, Search, Trash2 } from 'lucide-react'
+import {
+  Loader2,
+  Lock,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+  Upload,
+} from 'lucide-react'
 
 import {
   Dialog,
@@ -19,6 +27,7 @@ import {
   TooltipTrigger,
 } from '#/components/ui/tooltip.tsx'
 import { useConfirm } from '#/components/shared/ConfirmDialog.tsx'
+import { ReferentielImport } from '#/components/facturation/ReferentielImport.tsx'
 import { useFacturationModel } from '#/components/facturation/useFacturationModel.ts'
 import { useBudgetLinesCuration } from '#/components/facturation/useBudgetLinesCuration.ts'
 import { imputationKey } from '#/lib/facturation/budgetRegistry.ts'
@@ -66,6 +75,7 @@ export function BudgetLinesManager({
   const [formError, setFormError] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null) // couple en cours de suppression
   const [rowError, setRowError] = useState<Record<string, string>>({})
+  const [importOpen, setImportOpen] = useState(false) // dialog de réimport en masse
 
   // Croise le cache déjà chargé pour savoir quels CODES sont UTILISÉS (le blocage de suppression
   // se joue au niveau du code, cf. la garde serveur : dernier compte d'un code utilisé).
@@ -211,7 +221,8 @@ export function BudgetLinesManager({
           Supprime <b>définitivement</b> l'imputation <b>{code}</b>
           {compte ? (
             <>
-              {' '}/ <b>{compte}</b>
+              {' '}
+              / <b>{compte}</b>
             </>
           ) : null}{' '}
           du référentiel. Action <b>irréversible</b>, sans effet en revanche sur
@@ -238,239 +249,256 @@ export function BudgetLinesManager({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[85vh] max-w-[38rem] flex-col gap-0 overflow-hidden p-0">
-        <DialogHeader className="border-b border-border px-4 py-3">
-          <DialogTitle className="text-base">Gérer les imputations</DialogTitle>
-          <DialogDescription className="text-xs">
-            {draft
-              ? isNew
-                ? 'Nouvelle imputation (code + compte).'
-                : 'Modifier une imputation (code et compte non modifiables).'
-              : 'Cliquez le crayon pour modifier. Le dernier compte d’un code utilisé ne peut pas être supprimé.'}
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="flex max-h-[85vh] max-w-[38rem] flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="border-b border-border px-4 py-3">
+            <DialogTitle className="text-base">
+              Gérer les imputations
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              {draft
+                ? isNew
+                  ? 'Nouvelle imputation (code + compte).'
+                  : 'Modifier une imputation (code et compte non modifiables).'
+                : 'Cliquez le crayon pour modifier. Le dernier compte d’un code utilisé ne peut pas être supprimé.'}
+            </DialogDescription>
+          </DialogHeader>
 
-        {draft ? (
-          /* --- Formulaire création / édition --- */
-          <>
-            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-3">
-              <div className="grid grid-cols-2 gap-3">
+          {draft ? (
+            /* --- Formulaire création / édition --- */
+            <>
+              <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1">
+                    <Label htmlFor="bl-code">
+                      Code {isNew ? '(non modifiable ensuite)' : '(immuable)'}
+                    </Label>
+                    <Input
+                      id="bl-code"
+                      value={draft.code}
+                      disabled={!isNew}
+                      onChange={(e) =>
+                        setDraft((d) => d && { ...d, code: e.target.value })
+                      }
+                      placeholder="ex. FMELECoooo"
+                      className="font-mono"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <Label htmlFor="bl-compte">
+                      Compte {isNew ? '(non modifiable ensuite)' : '(immuable)'}
+                    </Label>
+                    <Input
+                      id="bl-compte"
+                      value={draft.compte}
+                      disabled={!isNew}
+                      onChange={(e) =>
+                        setDraft((d) => d && { ...d, compte: e.target.value })
+                      }
+                      placeholder="ex. 60610000"
+                      className="font-mono"
+                    />
+                  </div>
+                </div>
                 <div className="flex flex-col gap-1">
-                  <Label htmlFor="bl-code">
-                    Code {isNew ? '(non modifiable ensuite)' : '(immuable)'}
-                  </Label>
+                  <Label htmlFor="bl-label">Libellé</Label>
                   <Input
-                    id="bl-code"
-                    value={draft.code}
-                    disabled={!isNew}
+                    id="bl-label"
+                    value={draft.label}
                     onChange={(e) =>
-                      setDraft((d) => d && { ...d, code: e.target.value })
+                      setDraft((d) => d && { ...d, label: e.target.value })
                     }
-                    placeholder="ex. FMELECoooo"
-                    className="font-mono"
                   />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <Label htmlFor="bl-compte">
-                    Compte {isNew ? '(non modifiable ensuite)' : '(immuable)'}
-                  </Label>
+                  <Label htmlFor="bl-cat">Section</Label>
                   <Input
-                    id="bl-compte"
-                    value={draft.compte}
-                    disabled={!isNew}
+                    id="bl-cat"
+                    list="bl-cats"
+                    value={draft.category}
                     onChange={(e) =>
-                      setDraft((d) => d && { ...d, compte: e.target.value })
+                      setDraft((d) => d && { ...d, category: e.target.value })
                     }
-                    placeholder="ex. 60610000"
-                    className="font-mono"
+                    placeholder="ex. RESTAURATION"
+                  />
+                  <datalist id="bl-cats">
+                    {categories.map((c) => (
+                      <option key={c} value={c} />
+                    ))}
+                  </datalist>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="bl-hint">
+                    Description (exemples de dépenses)
+                  </Label>
+                  <Textarea
+                    id="bl-hint"
+                    value={draft.hint}
+                    rows={3}
+                    className="resize-none"
+                    onChange={(e) =>
+                      setDraft((d) => d && { ...d, hint: e.target.value })
+                    }
                   />
                 </div>
+                {formError && (
+                  <p className="text-xs text-destructive">{formError}</p>
+                )}
               </div>
-              <div className="flex flex-col gap-1">
-                <Label htmlFor="bl-label">Libellé</Label>
+              <div className="flex items-center justify-end gap-2 border-t border-border px-4 py-2.5">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={closeForm}
+                  disabled={saving}
+                >
+                  Annuler
+                </Button>
+                <Button size="sm" onClick={save} disabled={saving}>
+                  {saving && <Loader2 className="size-4 animate-spin" />}
+                  Enregistrer
+                </Button>
+              </div>
+            </>
+          ) : (
+            /* --- Liste épurée (façon CodePicker) --- */
+            <>
+              <div className="relative border-b border-border px-4 py-2.5">
+                <Search className="pointer-events-none absolute top-1/2 left-6 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  id="bl-label"
-                  value={draft.label}
-                  onChange={(e) =>
-                    setDraft((d) => d && { ...d, label: e.target.value })
-                  }
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder="Rechercher (code, compte, libellé, section)…"
+                  className="h-9 pl-8"
                 />
               </div>
-              <div className="flex flex-col gap-1">
-                <Label htmlFor="bl-cat">Section</Label>
-                <Input
-                  id="bl-cat"
-                  list="bl-cats"
-                  value={draft.category}
-                  onChange={(e) =>
-                    setDraft((d) => d && { ...d, category: e.target.value })
-                  }
-                  placeholder="ex. RESTAURATION"
-                />
-                <datalist id="bl-cats">
-                  {categories.map((c) => (
-                    <option key={c} value={c} />
-                  ))}
-                </datalist>
-              </div>
-              <div className="flex flex-col gap-1">
-                <Label htmlFor="bl-hint">
-                  Description (exemples de dépenses)
-                </Label>
-                <Textarea
-                  id="bl-hint"
-                  value={draft.hint}
-                  rows={3}
-                  className="resize-none"
-                  onChange={(e) =>
-                    setDraft((d) => d && { ...d, hint: e.target.value })
-                  }
-                />
-              </div>
-              {formError && (
-                <p className="text-xs text-destructive">{formError}</p>
-              )}
-            </div>
-            <div className="flex items-center justify-end gap-2 border-t border-border px-4 py-2.5">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={closeForm}
-                disabled={saving}
-              >
-                Annuler
-              </Button>
-              <Button size="sm" onClick={save} disabled={saving}>
-                {saving && <Loader2 className="size-4 animate-spin" />}
-                Enregistrer
-              </Button>
-            </div>
-          </>
-        ) : (
-          /* --- Liste épurée (façon CodePicker) --- */
-          <>
-            <div className="relative border-b border-border px-4 py-2.5">
-              <Search className="pointer-events-none absolute top-1/2 left-6 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Rechercher (code, compte, libellé, section)…"
-                className="h-9 pl-8"
-              />
-            </div>
-            <TooltipProvider delayDuration={300}>
-              <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
-                {groups.length === 0 ? (
-                  <p className="px-2 py-8 text-center text-sm text-muted-foreground">
-                    Aucune imputation ne correspond.
-                  </p>
-                ) : (
-                  groups.map((g) => (
-                    <div
-                      key={g.category}
-                      className="mb-2 flex flex-col gap-0.5"
-                    >
-                      <div className="flex items-center gap-2 px-2 py-1">
-                        <span className="h-px flex-1 bg-primary/20" />
-                        <span className="text-[11px] font-semibold tracking-[0.12em] text-primary/80 uppercase">
-                          {g.category}
-                        </span>
-                        <span className="h-px flex-1 bg-primary/20" />
-                      </div>
-                      {g.lines.map((l) => {
-                        const key = imputationKey(l.code, l.compte)
-                        const locked =
-                          usage.has(l.code) && (countByCode.get(l.code) ?? 0) <= 1
-                        return (
-                          <div key={key}>
-                            <div className="group flex items-center gap-1 rounded-md px-2 py-1.5 transition-colors hover:bg-secondary/60">
-                              <div className="min-w-0 flex-1">
-                                <p className="truncate text-sm text-foreground">
-                                  {l.label}
-                                </p>
-                                <p className="truncate font-mono text-[11px] text-muted-foreground">
-                                  {l.code}
-                                  {l.compte && (
-                                    <span className="ml-2 text-muted-foreground/60">
-                                      {l.compte}
-                                    </span>
-                                  )}
-                                </p>
-                              </div>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <button
-                                    type="button"
-                                    onClick={() => openEdit(l)}
-                                    aria-label={`Modifier ${l.code} ${l.compte}`}
-                                    className="shrink-0 rounded p-1 text-muted-foreground opacity-60 transition-colors group-hover:opacity-100 hover:text-foreground"
-                                  >
-                                    <Pencil className="size-3.5" />
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent>Modifier</TooltipContent>
-                              </Tooltip>
-                              {locked ? (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <span className="shrink-0 p-1 text-muted-foreground/40">
-                                      <Lock className="size-3.5" />
-                                    </span>
-                                  </TooltipTrigger>
-                                  <TooltipContent className="max-w-xs whitespace-normal">
-                                    Seul compte d’un code déjà utilisé (
-                                    {usageLabel(l.code)}). Suppression impossible.
-                                  </TooltipContent>
-                                </Tooltip>
-                              ) : (
+              <TooltipProvider delayDuration={300}>
+                <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+                  {groups.length === 0 ? (
+                    <p className="px-2 py-8 text-center text-sm text-muted-foreground">
+                      Aucune imputation ne correspond.
+                    </p>
+                  ) : (
+                    groups.map((g) => (
+                      <div
+                        key={g.category}
+                        className="mb-2 flex flex-col gap-0.5"
+                      >
+                        <div className="flex items-center gap-2 px-2 py-1">
+                          <span className="h-px flex-1 bg-primary/20" />
+                          <span className="text-[11px] font-semibold tracking-[0.12em] text-primary/80 uppercase">
+                            {g.category}
+                          </span>
+                          <span className="h-px flex-1 bg-primary/20" />
+                        </div>
+                        {g.lines.map((l) => {
+                          const key = imputationKey(l.code, l.compte)
+                          const locked =
+                            usage.has(l.code) &&
+                            (countByCode.get(l.code) ?? 0) <= 1
+                          return (
+                            <div key={key}>
+                              <div className="group flex items-center gap-1 rounded-md px-2 py-1.5 transition-colors hover:bg-secondary/60">
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate text-sm text-foreground">
+                                    {l.label}
+                                  </p>
+                                  <p className="truncate font-mono text-[11px] text-muted-foreground">
+                                    {l.code}
+                                    {l.compte && (
+                                      <span className="ml-2 text-muted-foreground/60">
+                                        {l.compte}
+                                      </span>
+                                    )}
+                                  </p>
+                                </div>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <button
                                       type="button"
-                                      onClick={() => del(l.code, l.compte)}
-                                      disabled={busy === key}
-                                      aria-label={`Supprimer ${l.code} ${l.compte}`}
-                                      className="shrink-0 rounded p-1 text-muted-foreground opacity-60 transition-colors group-hover:opacity-100 hover:text-destructive"
+                                      onClick={() => openEdit(l)}
+                                      aria-label={`Modifier ${l.code} ${l.compte}`}
+                                      className="shrink-0 rounded p-1 text-muted-foreground opacity-60 transition-colors group-hover:opacity-100 hover:text-foreground"
                                     >
-                                      {busy === key ? (
-                                        <Loader2 className="size-3.5 animate-spin" />
-                                      ) : (
-                                        <Trash2 className="size-3.5" />
-                                      )}
+                                      <Pencil className="size-3.5" />
                                     </button>
                                   </TooltipTrigger>
-                                  <TooltipContent>Supprimer</TooltipContent>
+                                  <TooltipContent>Modifier</TooltipContent>
                                 </Tooltip>
+                                {locked ? (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className="shrink-0 p-1 text-muted-foreground/40">
+                                        <Lock className="size-3.5" />
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-xs whitespace-normal">
+                                      Seul compte d’un code déjà utilisé (
+                                      {usageLabel(l.code)}). Suppression
+                                      impossible.
+                                    </TooltipContent>
+                                  </Tooltip>
+                                ) : (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <button
+                                        type="button"
+                                        onClick={() => del(l.code, l.compte)}
+                                        disabled={busy === key}
+                                        aria-label={`Supprimer ${l.code} ${l.compte}`}
+                                        className="shrink-0 rounded p-1 text-muted-foreground opacity-60 transition-colors group-hover:opacity-100 hover:text-destructive"
+                                      >
+                                        {busy === key ? (
+                                          <Loader2 className="size-3.5 animate-spin" />
+                                        ) : (
+                                          <Trash2 className="size-3.5" />
+                                        )}
+                                      </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Supprimer</TooltipContent>
+                                  </Tooltip>
+                                )}
+                              </div>
+                              {rowError[key] && (
+                                <p className="px-2 text-[11px] text-destructive">
+                                  {rowError[key]}
+                                </p>
                               )}
                             </div>
-                            {rowError[key] && (
-                              <p className="px-2 text-[11px] text-destructive">
-                                {rowError[key]}
-                              </p>
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  ))
-                )}
+                          )
+                        })}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </TooltipProvider>
+              <div className="flex items-center justify-between border-t border-border px-4 py-2.5">
+                <span className="text-sm text-muted-foreground tabular-nums">
+                  {budgetLines.length} imputation
+                  {budgetLines.length > 1 ? 's' : ''}
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setImportOpen(true)}
+                  >
+                    <Upload className="size-4" />
+                    Réimporter
+                  </Button>
+                  <Button size="sm" onClick={openNew}>
+                    <Plus className="size-4" />
+                    Ajouter
+                  </Button>
+                </div>
               </div>
-            </TooltipProvider>
-            <div className="flex items-center justify-between border-t border-border px-4 py-2.5">
-              <span className="text-sm text-muted-foreground tabular-nums">
-                {budgetLines.length} imputation
-                {budgetLines.length > 1 ? 's' : ''}
-              </span>
-              <Button size="sm" onClick={openNew}>
-                <Plus className="size-4" />
-                Ajouter
-              </Button>
-            </div>
-          </>
-        )}
-        {confirmDialog}
-      </DialogContent>
-    </Dialog>
+            </>
+          )}
+          {confirmDialog}
+        </DialogContent>
+      </Dialog>
+      <ReferentielImport open={importOpen} onOpenChange={setImportOpen} />
+    </>
   )
 }

@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   FileText,
   FileUp,
+  History,
   Loader2,
   Plus,
   Trash2,
@@ -15,6 +16,7 @@ import {
   EmptyImputation,
   InvoicePanel,
 } from '#/components/facturation/InvoicePanel.tsx'
+import { HistoriqueDialog } from '#/components/facturation/HistoriqueDialog.tsx'
 import { StampPreview } from '#/components/facturation/StampPreview.tsx'
 import { GalaxyCard } from '#/components/facturation/GalaxyCard.tsx'
 import { useFacturationModel } from '#/components/facturation/useFacturationModel.ts'
@@ -203,6 +205,7 @@ function CenterPlaceholder({ record }: { record: InvoiceRecord | null }) {
 export function FacturationBoard() {
   const { records, selectedId } = useStore(facturationStore)
   const [dragging, setDragging] = useState(false)
+  const [histOpen, setHistOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   // Lectures Supabase (nuages appris + émetteurs), en cache et dégradation gracieuse
@@ -418,6 +421,15 @@ export function FacturationBoard() {
               </button>
             </>
           )}
+          {/* Consultation de l'historique des factures apprises (toujours accessible). */}
+          <button
+            type="button"
+            onClick={() => setHistOpen(true)}
+            className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
+          >
+            <History className="size-4" />
+            Historique
+          </button>
         </aside>
 
         {/* CENTRE : grand aperçu + tampon */}
@@ -464,6 +476,7 @@ export function FacturationBoard() {
                 onPatch={(n) => patchInvoice(selected.id, n)}
                 immature={immature}
                 issuers={issuers}
+                issuerMemory={issuerMemory}
                 anomalyCount={anomalyCount}
               />
             ) : (
@@ -472,6 +485,8 @@ export function FacturationBoard() {
           </aside>
         </div>
       </div>
+
+      <HistoriqueDialog open={histOpen} onOpenChange={setHistOpen} />
     </PageContainer>
   )
 }

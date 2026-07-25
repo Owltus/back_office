@@ -37,3 +37,30 @@ export function preferredCompte(
   }
   return best
 }
+
+/** Tous les couples (code, compte) déjà utilisés par `issuer`, classés du plus fréquent au
+ *  moins fréquent (départage stable : code puis compte). Les comptes vides (historique
+ *  pré-migration) sont ignorés. Renvoie `[]` si l'émetteur est vide ou inconnu. Sert à
+ *  PROPOSER les imputations habituelles d'un émetteur dans l'atelier (jamais à les imposer). */
+export function issuerCandidates(
+  mem: IssuerMemory,
+  issuer: string,
+): { code: string; compte: string; n: number }[] {
+  if (!issuer) return []
+  const byCode = mem.perIssuer[issuer]
+  if (!byCode) return []
+  const out: { code: string; compte: string; n: number }[] = []
+  for (const [code, byCompte] of Object.entries(byCode)) {
+    for (const [compte, n] of Object.entries(byCompte)) {
+      if (!compte) continue // ignore l'historique sans compte
+      out.push({ code, compte, n })
+    }
+  }
+  out.sort(
+    (a, b) =>
+      b.n - a.n ||
+      a.code.localeCompare(b.code) ||
+      a.compte.localeCompare(b.compte),
+  )
+  return out
+}

@@ -7,6 +7,7 @@ import {
   ListPlus,
   Loader2,
   Pencil,
+  Plus,
   RotateCcw,
   Settings2,
   Stamp,
@@ -35,7 +36,10 @@ import {
   needsReview,
   probaFor,
 } from '#/components/facturation/confidence.ts'
-import { budgetLabel, comptesForCode } from '#/lib/facturation/budgetRegistry.ts'
+import {
+  budgetLabel,
+  comptesForCode,
+} from '#/lib/facturation/budgetRegistry.ts'
 import { canLearn } from '#/lib/facturation/detect.ts'
 import { issuerKey } from '#/lib/facturation/text.ts'
 import {
@@ -58,6 +62,10 @@ import {
   type WordPool,
 } from '#/lib/facturation/wordpool.ts'
 import { type Issuer } from '#/lib/facturation/issuers.ts'
+import {
+  issuerCandidates,
+  type IssuerMemory,
+} from '#/lib/facturation/issuerMemory.ts'
 import { stampDataOf } from '#/lib/facturation/stampLayout.ts'
 import type { InvoiceRecord, JournalEntry } from '#/lib/facturation/types.ts'
 import { cn } from '#/lib/utils.ts'
@@ -314,12 +322,15 @@ export function InvoicePanel({
   onPatch,
   immature = false,
   issuers = [],
+  issuerMemory = { perIssuer: {} },
   anomalyCount = 0,
 }: {
   record: InvoiceRecord
   onPatch: (next: Partial<InvoiceRecord>) => void
   immature?: boolean
   issuers?: Issuer[]
+  /** Mémoire émetteur -> (code, compte) : alimente les candidats proposés en tête. */
+  issuerMemory?: IssuerMemory
   anomalyCount?: number
 }) {
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -369,6 +380,21 @@ export function InvoicePanel({
   }
 
   const canStamp = record.codes.length > 0
+
+  // Candidats appris pour l'émetteur courant : couples (code, compte) déjà utilisés, du plus
+  // fréquent au moins fréquent. Proposition cliquable en tête, jamais une auto-validation.
+  const currentIssuerKey = issuerKey(record.supplierName, record.siren)
+  const candidates = issuerCandidates(issuerMemory, currentIssuerKey)
+
+  // Ajoute un couple candidat à l'imputation, sans doublonner un code déjà présent.
+  function addCandidate(code: string, compte: string) {
+    if (record.codes.includes(code)) return
+    onPatch({
+      codes: [...record.codes, code],
+      comptes: { ...record.comptes, [code]: compte },
+      userEdited: true,
+    })
+  }
 
   async function handleStamp() {
     setStamping(true)
@@ -687,6 +713,48 @@ export function InvoicePanel({
             </Button>
           </div>
         </div>
+
+        {/* Candidats appris pour l'émetteur : couples déjà utilisés, cliquables. Simple
+            proposition (jamais validée d'office) ; masquée sans émetteur ou sans historique. */}
+        {currentIssuerKey && candidates.length > 0 && (
+          <div className="flex shrink-0 flex-col gap-1.5">
+            <Label>Déjà utilisé pour cet émetteur</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {candidates.map(({ code, compte }) => {
+                const already = record.codes.includes(code)
+                return (
+                  <button
+                    key={`${code}|${compte}`}
+                    type="button"
+                    disabled={already}
+                    onClick={() => addCandidate(code, compte)}
+                    title={
+                      already
+                        ? 'Déjà dans les imputations'
+                        : `Ajouter ${budgetLabel(code)} (${compte})`
+                    }
+                    className={cn(
+                      'flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-left text-xs transition-colors',
+                      already
+                        ? 'cursor-default border-border bg-secondary/40 text-muted-foreground/60'
+                        : 'border-border bg-secondary/60 text-foreground hover:border-primary/60 hover:bg-secondary',
+                    )}
+                  >
+                    {!already && (
+                      <Plus className="size-3 shrink-0 text-muted-foreground" />
+                    )}
+                    <span className="max-w-[10rem] truncate">
+                      {budgetLabel(code)}
+                    </span>
+                    <span className="font-mono text-[10px] text-muted-foreground">
+                      {compte}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Imputations : zone LIBRE qui prend le max de place et défile si besoin. */}
         <div className="flex min-h-0 flex-1 flex-col gap-1.5">

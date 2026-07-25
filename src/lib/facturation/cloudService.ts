@@ -94,7 +94,9 @@ export async function fetchBudgetLines(): Promise<BudgetLine[]> {
   for (;;) {
     const { data, error } = await supabase
       .from(BUDGET_TABLE)
-      .select('code_analytique, compte, section, libelle, description, sort_order')
+      .select(
+        'code_analytique, compte, section, libelle, description, sort_order',
+      )
       .order('sort_order', { ascending: true })
       .order('code_analytique', { ascending: true })
       .order('compte', { ascending: true })
@@ -153,6 +155,27 @@ export async function deleteBudgetLine(
     p_compte: compte,
   })
   if (error) throw error
+}
+
+/** Réimport EN MASSE du référentiel (RPC `facturation_ref_reimport`, upsert ADDITIF : jamais de
+ *  suppression). Chaque ligne = un COUPLE (code_analytique + compte) et ses libellés. Propage
+ *  l'erreur (droits, format), renvoie le nombre de lignes traitées côté serveur. Le mode
+ *  « remplaçant » n'est pas exposé au client (réservé au SQL Editor). */
+export async function reimportRefImputations(
+  rows: {
+    code_analytique: string
+    compte: string
+    section?: string
+    libelle?: string
+    description?: string
+    sort_order?: number
+  }[],
+): Promise<number> {
+  const { data, error } = await supabase.rpc('facturation_ref_reimport', {
+    p_rows: rows,
+  })
+  if (error) throw error
+  return (data as number | null) ?? 0
 }
 
 /** Enregistre / confirme un émetteur (upsert +1, côté serveur). */
