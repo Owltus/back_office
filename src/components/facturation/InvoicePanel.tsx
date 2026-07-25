@@ -17,6 +17,13 @@ import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
 import { Label } from '#/components/ui/label.tsx'
 import { Textarea } from '#/components/ui/textarea.tsx'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '#/components/ui/select.tsx'
 import { useConfirm } from '#/components/shared/ConfirmDialog.tsx'
 import { CodePicker } from '#/components/facturation/CodePicker.tsx'
 import { BudgetLinesManager } from '#/components/facturation/BudgetLinesManager.tsx'
@@ -28,7 +35,7 @@ import {
   needsReview,
   probaFor,
 } from '#/components/facturation/confidence.ts'
-import { budgetLabel } from '#/lib/facturation/budgetRegistry.ts'
+import { budgetLabel, comptesForCode } from '#/lib/facturation/budgetRegistry.ts'
 import { canLearn } from '#/lib/facturation/detect.ts'
 import { issuerKey } from '#/lib/facturation/text.ts'
 import {
@@ -72,6 +79,8 @@ import { cn } from '#/lib/utils.ts'
  */
 function ImputationList({
   codes,
+  comptes,
+  onCompteChange,
   detection,
   immature,
   onRemove,
@@ -79,6 +88,9 @@ function ImputationList({
   banningCode,
 }: {
   codes: string[]
+  /** Compte choisi par code (code → compte) ; affiché et modifiable si le code a plusieurs comptes. */
+  comptes: Record<string, string>
+  onCompteChange: (code: string, compte: string) => void
   detection: InvoiceRecord['detection']
   immature: boolean
   onRemove: (code: string) => void
@@ -104,12 +116,13 @@ function ImputationList({
           raw === undefined ? 0 : immature ? Math.min(raw, 0.45) : raw,
         )
         const review = needsReview(detection)
+        const comptesList = comptesForCode(code)
         return (
           <div
             key={code}
             className="flex flex-col gap-2 rounded-md border border-border bg-secondary/40 px-2.5 py-2"
           >
-            {/* Haut : description + code à gauche, le % à droite, retrait au bout. */}
+            {/* Haut : description + code (et compte) à gauche, le % à droite, retrait au bout. */}
             <div className="flex items-center gap-3">
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span className="truncate text-sm text-foreground">
@@ -123,6 +136,31 @@ function ImputationList({
                     </span>
                   )}
                 </span>
+                {/* Compte du couple : Select si plusieurs comptes, sinon le compte affiché. */}
+                {comptesList.length > 1 ? (
+                  <Select
+                    value={comptes[code] ?? ''}
+                    onValueChange={(v) => onCompteChange(code, v)}
+                  >
+                    <SelectTrigger
+                      size="sm"
+                      className="mt-0.5 h-7 w-full font-mono text-[11px]"
+                    >
+                      <SelectValue placeholder="Choisir un compte" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {comptesList.map((c) => (
+                        <SelectItem key={c} value={c} className="font-mono">
+                          {c}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : comptesList.length === 1 ? (
+                  <span className="font-mono text-[11px] text-muted-foreground/70">
+                    {comptes[code] || comptesList[0]}
+                  </span>
+                ) : null}
               </div>
 
               <div className="shrink-0 text-right">
@@ -654,6 +692,13 @@ export function InvoicePanel({
           <div className="min-h-0 flex-1 overflow-y-auto">
             <ImputationList
               codes={record.codes}
+              comptes={record.comptes}
+              onCompteChange={(code, compte) =>
+                onPatch({
+                  comptes: { ...record.comptes, [code]: compte },
+                  userEdited: true,
+                })
+              }
               detection={record.detection}
               immature={immature}
               onRemove={(code) =>
@@ -868,7 +913,10 @@ export function InvoicePanel({
         open={pickerOpen}
         onOpenChange={setPickerOpen}
         selected={record.codes}
-        onChange={(codes) => onPatch({ codes, userEdited: true })}
+        comptes={record.comptes}
+        onChange={(codes, comptes) =>
+          onPatch({ codes, comptes, userEdited: true })
+        }
         detection={record.detection}
         immature={immature}
       />

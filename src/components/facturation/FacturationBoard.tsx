@@ -42,6 +42,7 @@ import {
 } from '#/lib/facturation/issuerDenylist.ts'
 import { hashDocument } from '#/lib/facturation/hash.ts'
 import { reviewQueue } from '#/lib/facturation/anomalies.ts'
+import { fillComptes } from '#/lib/facturation/budgetRegistry.ts'
 import { stampDataOf } from '#/lib/facturation/stampLayout.ts'
 import {
   addInvoices,
@@ -138,6 +139,8 @@ async function processInvoice(
       detection: d,
       previews: res.previews,
       codes: d.codes,
+      // Compte pré-rempli quand le code n'en a qu'un ; à choisir sinon (couple code+compte).
+      comptes: fillComptes(d.codes),
       hash,
       duplicate: knownHashes.has(hash),
       supplierName:
@@ -217,7 +220,12 @@ export function FacturationBoard() {
       const same =
         codes.length === r.codes.length &&
         codes.every((c, i) => c === r.codes[i])
-      if (!same) patchInvoice(r.id, { detection, codes })
+      if (!same)
+        patchInvoice(r.id, {
+          detection,
+          codes,
+          comptes: fillComptes(codes, r.comptes),
+        })
     }
   }, [pool, issuers, issuerCodes, issuerDenylist])
 
@@ -239,6 +247,7 @@ export function FacturationBoard() {
       position: null,
       stampScale: 1,
       codes: [],
+      comptes: {},
       supplierName: '',
       learned: false,
       comment: '',
@@ -295,6 +304,7 @@ export function FacturationBoard() {
     () => (selected ? stampDataOf(selected) : null),
     [
       selected?.codes,
+      selected?.comptes,
       selected?.comment,
       selected?.invoiceDate,
       selected?.processedDate,

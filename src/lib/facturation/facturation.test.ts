@@ -62,6 +62,7 @@ import type {
 const BUDGET_FIXTURE = [
   {
     code: 'FMELECoooo',
+    compte: '60612100',
     label: 'Electricité',
     category: 'FRAIS EXPLOITATION / OPERATION',
     hint: 'electricité',
@@ -74,6 +75,7 @@ const A4 = (): PagePreview => ({ dataUrl: '', width: 595, height: 842 })
 
 const STAMP: StampData = {
   codes: ['FMELECoooo'],
+  comptes: {},
   comment: 'Contrôlé — juin 2026',
   invoiceDate: '2026-07-12',
   processedDate: '2026-07-15',
@@ -852,6 +854,15 @@ describe('stampLines', () => {
   it('affiche un placeholder quand aucun code', () => {
     const lines = stampLines({ ...STAMP, codes: [] })
     expect(lines[0].text).toBe('— à imputer —')
+  })
+
+  it('accole le compte au code quand il est renseigné (couple code+compte)', () => {
+    const lines = stampLines({
+      ...STAMP,
+      codes: ['FMELECoooo'],
+      comptes: { FMELECoooo: '60612100' },
+    })
+    expect(lines.some((l) => l.text === 'FMELECoooo   60612100')).toBe(true)
   })
 })
 

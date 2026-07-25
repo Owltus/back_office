@@ -7,13 +7,16 @@
  * (compteurs de tokens) dans Supabase — ni PDF ni texte de facture n'y sont stockés.
  */
 
-/** Une ligne budgétaire = un code comptable + son libellé, rangé par catégorie.
- * `hint` = descriptions/fournisseurs agrégés du plan, texte de RECHERCHE seul
- * (jamais affiché) pour retrouver une ligne par son fournisseur dans le modal.
- * `tags` = domaines transversaux (Technique, Hébergement…) affichés et filtrables
- * dans le modal, au-delà de la section comptable. */
+/** Une ligne du référentiel = un COUPLE (code analytique + compte comptable).
+ * Un même `code` peut porter PLUSIEURS comptes → plusieurs BudgetLine partagent le
+ * code, une par compte. `label`, `category` et `tags` dépendent du CODE (identiques
+ * sur tous ses comptes) ; `hint` (descriptions/fournisseurs, texte de RECHERCHE) et
+ * `compte` sont propres au couple. Le code reste l'unité pilote de l'imputation ; le
+ * compte est une précision choisie/apprise au moment de valider. */
 export interface BudgetLine {
   code: string
+  /** Compte comptable (ex. '62810000'). Vide toléré (référentiel legacy sans compte). */
+  compte: string
   label: string
   category: string
   hint?: string
@@ -116,6 +119,9 @@ export interface Detection {
  *  (une ligne par code) ; le libellé de chaque code se dérive du plan. */
 export interface StampData {
   codes: string[]
+  /** Compte comptable choisi pour chaque code (code → compte) ; accolé au code sur le
+   *  cartouche. Un code absent de la table = compte non précisé (rien n'est accolé). */
+  comptes: Record<string, string>
   comment: string
   invoiceDate: string
   processedDate: string
@@ -141,6 +147,10 @@ export interface InvoiceRecord {
   position: StampPosition | null
   stampScale: number
   codes: string[]
+  /** Compte comptable choisi pour chaque code retenu (code → compte). Pré-rempli à la
+   *  détection quand le code n'a qu'un seul compte ; à choisir sinon. Le code reste la
+   *  clé de l'apprentissage — le compte ne l'encode jamais (précision orthogonale). */
+  comptes: Record<string, string>
   supplierName: string
   /** Empreinte SHA-256 du document (cf. hashDocument), calculée au dépôt. Identifie le PDF
    *  pour la détection de doublon et le journal d'apprentissage. */

@@ -51,6 +51,7 @@ export interface StampLine {
 export function stampDataOf(record: InvoiceRecord): StampData {
   return {
     codes: record.codes,
+    comptes: record.comptes,
     comment: record.comment,
     invoiceDate: record.invoiceDate,
     processedDate: record.processedDate,
@@ -69,13 +70,19 @@ export function frDate(iso: string): string {
 export function stampLines(data: StampData): StampLine[] {
   const codes = data.codes.filter((c) => c.trim())
   const lines: StampLine[] = []
-  // Une ligne par imputation : le CODE comptable SEUL (pas de libellé).
+  // Une ligne par imputation : le CODE puis son COMPTE (précision du couple), sans libellé.
   // Placeholder si aucun code encore.
   if (codes.length === 0) {
     lines.push({ text: '— à imputer —', size: 10, bold: true, color: 'grey' })
   }
   for (const code of codes) {
-    lines.push({ text: code, size: 10, bold: true, color: 'ink' })
+    const compte = data.comptes[code]?.trim()
+    lines.push({
+      text: compte ? `${code}   ${compte}` : code,
+      size: 10,
+      bold: true,
+      color: 'ink',
+    })
   }
   if (data.comment.trim()) {
     lines.push({

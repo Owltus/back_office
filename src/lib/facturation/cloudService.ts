@@ -77,32 +77,55 @@ export async function fetchIssuers(): Promise<Issuer[]> {
   return (data ?? []) as Issuer[]
 }
 
-// --- Référentiel des imputations (facturation_budget_lines) ------------------
-// Lecture ouverte aux authentifiés ; écritures via RPC SECURITY DEFINER (garde de rôle).
-const BUDGET_TABLE = 'facturation_budget_lines'
+// --- Référentiel des imputations (facturation_ref_imputations) ----------------
+// Une ligne = un COUPLE (code_analytique, compte). Lecture ouverte aux authentifiés ;
+// écritures via RPC (réimport en masse, cf. facturation_ref_imputations_rpc.sql).
+const BUDGET_TABLE = 'facturation_ref_imputations'
 
-/** Référentiel des imputations (petit → pas de pagination), ordonné par le plan analytique. */
+/** Référentiel des imputations : une entrée par COUPLE (code + compte), ordonné par le plan
+ *  analytique. Mappe les colonnes de la table vers BudgetLine (code_analytique→code,
+ *  section→category, libelle→label, description→hint) ; les `tags` n'existent plus en base → [].
+ *  Paginé par `range` (le couplage multiplie les lignes) ; tri secondaire pour une pagination
+ *  déterministe. */
 export async function fetchBudgetLines(): Promise<BudgetLine[]> {
-  const { data, error } = await supabase
-    .from(BUDGET_TABLE)
-    .select('code, label, category, hint, tags')
-    .order('sort_order', { ascending: true })
-  if (error) throw error
-  const rows = (data ?? []) as {
-    code: string
-    label: string
-    category: string
-    hint: string | null
-    tags: string[] | null
-  }[]
-  return rows.map((r) => ({
-    code: r.code,
-    label: r.label,
-    category: r.category,
-    hint: r.hint ?? '',
-    tags: r.tags ?? [],
-  }))
+  const lines: BudgetLine[] = []
+  let from = 0
+  for (;;) {
+    const { data, error } = await supabase
+      .from(BUDGET_TABLE)
+      .select('code_analytique, compte, section, libelle, description, sort_order')
+      .order('sort_order', { ascending: true })
+      .order('code_analytique', { ascending: true })
+      .order('compte', { ascending: true })
+      .range(from, from + 999)
+    if (error) throw error
+    const rows = (data ?? []) as {
+      code_analytique: string
+      compte: string | null
+      section: string | null
+      libelle: string | null
+      description: string | null
+      sort_order: number | null
+    }[]
+    for (const r of rows)
+      lines.push({
+        code: r.code_analytique,
+        compte: r.compte ?? '',
+        label: r.libelle ?? '',
+        category: r.section ?? '',
+        hint: r.description ?? '',
+        tags: [],
+      })
+    if (rows.length < 1000) break
+    from += 1000
+  }
+  return lines
 }
+
+// TODO(compte) : ce CRUD unitaire écrit encore l'ANCIENNE table (RPC facturation_budget_line_*)
+// et ne propage PAS le `compte` (le référentiel « couple » se réimporte en masse via
+// facturation_ref_reimport). Conservé tel quel pour compiler / ne pas régresser le gestionnaire
+// existant ; à réécrire sur facturation_ref_imputations dans un lot ultérieur.
 
 /** Crée ou met à jour une imputation (RPC ; code IMMUABLE, garde de rôle interne). `create:true`
  *  refuse d'écraser un code déjà en base (unicité SERVEUR à la création, SQLSTATE 23505). */

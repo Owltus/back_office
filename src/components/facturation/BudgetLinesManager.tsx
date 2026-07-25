@@ -93,12 +93,21 @@ export function BudgetLinesManager({
       .join(', ')
   }
 
+  // Le référentiel a désormais une ligne par COUPLE (code+compte) ; ce gestionnaire (CRUD legacy
+  // par code) raisonne par CODE → on déduplique par code (1re occurrence = ordre du plan) pour
+  // garder l'affichage « une ligne par imputation » d'avant la migration au couple.
+  const codeLines = useMemo(() => {
+    const seen = new Map<string, BudgetLine>()
+    for (const l of budgetLines) if (!seen.has(l.code)) seen.set(l.code, l)
+    return [...seen.values()]
+  }, [budgetLines])
+
   // Filtre puis groupage par section (ordre du plan préservé), façon CodePicker. La recherche
   // couvre AUSSI les domaines (tags) même s'ils ne sont pas affichés → on les retrouve.
   const groups = useMemo(() => {
     const needle = q.trim().toLowerCase()
     const out: { category: string; lines: BudgetLine[] }[] = []
-    for (const l of budgetLines) {
+    for (const l of codeLines) {
       if (
         needle &&
         !l.code.toLowerCase().includes(needle) &&
@@ -115,14 +124,14 @@ export function BudgetLinesManager({
       g.lines.push(l)
     }
     return out
-  }, [budgetLines, q])
+  }, [codeLines, q])
 
   const categories = useMemo(
-    () => [...new Set(budgetLines.map((l) => l.category))].sort(),
-    [budgetLines],
+    () => [...new Set(codeLines.map((l) => l.category))].sort(),
+    [codeLines],
   )
   const codeExists = (code: string): boolean =>
-    budgetLines.some((l) => l.code === code)
+    codeLines.some((l) => l.code === code)
 
   function openNew() {
     setDraft(EMPTY)
@@ -166,6 +175,9 @@ export function BudgetLinesManager({
       await saveLine(
         {
           code,
+          // compte non géré par ce CRUD legacy (référentiel couplé réimporté en masse) — cf. le
+          // TODO(compte) de cloudService.upsertBudgetLine ; posé vide pour satisfaire BudgetLine.
+          compte: '',
           label: draft.label.trim(),
           category: draft.category.trim(),
           hint: draft.hint.trim(),
@@ -413,8 +425,8 @@ export function BudgetLinesManager({
             </TooltipProvider>
             <div className="flex items-center justify-between border-t border-border px-4 py-2.5">
               <span className="text-sm text-muted-foreground tabular-nums">
-                {budgetLines.length} imputation
-                {budgetLines.length > 1 ? 's' : ''}
+                {codeLines.length} imputation
+                {codeLines.length > 1 ? 's' : ''}
               </span>
               <Button size="sm" onClick={openNew}>
                 <Plus className="size-4" />
