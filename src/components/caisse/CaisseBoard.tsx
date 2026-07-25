@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, LineChart, Minus, Plus } from 'lucide-react'
+import { LineChart, Minus, Plus } from 'lucide-react'
 
 import { LockBadge } from '#/components/shared/LockBadge.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
@@ -17,15 +17,8 @@ import { useStepNavKeys } from '#/components/shared/useStepNavKeys.ts'
 import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
 import { Textarea } from '#/components/ui/textarea.tsx'
-import { Label } from '#/components/ui/label.tsx'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '#/components/ui/dialog.tsx'
+import { CloseSheetDialog } from '#/components/shared/CloseSheetDialog.tsx'
+import type { CloseIssue } from '#/components/shared/CloseSheetDialog.tsx'
 import { DatePickerButton } from '#/components/form/fields.tsx'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { DENOM_SVG } from '#/assets/euros/index.ts'
@@ -40,7 +33,6 @@ import {
   fundTotal,
   hasCountedFund,
   inputToSheet,
-  isBalanced,
   sheetToInput,
 } from '#/lib/caisse/calc.ts'
 import {
@@ -279,14 +271,13 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
   const canEditFields = editable && !isValidated
 
   const ecarts = useMemo(() => computeEcarts(form), [form])
-  // Dérivés du fond, mémoïsés ensemble : chaque frappe re-render le board, et
-  // sans mémo ces trois calculs (dont `fundTotal`, une réduction sur 15 coupures)
-  // se rejouaient à chaque touche. `isBalanced` reste la source unique de la règle.
-  const { total, fEcart, balanced } = useMemo(
+  // Dérivés du fond, mémoïsés ensemble : chaque frappe re-render le board, et sans
+  // mémo ces calculs (dont `fundTotal`, une réduction sur 15 coupures) se rejouaient
+  // à chaque touche. L'équilibre se lit désormais via `closeIssues` (verdict modal).
+  const { total, fEcart } = useMemo(
     () => ({
       total: fundTotal(form),
       fEcart: fundEcart(form),
-      balanced: isBalanced(form),
     }),
     [form],
   )
@@ -423,6 +414,37 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
 
   // Colonnes du tableau des paiements (web au matin et au soir, pas la nuit).
   const cols = useMemo(() => paymentColumns(form.shift), [form.shift])
+
+  // Verdict du modal de clôture : une anomalie par écart non nul (paiements puis
+  // fond), chacune expliquée pour un débutant. Non bloquant — cf. CloseSheetDialog.
+  const closeIssues: CloseIssue[] = []
+  for (const c of cols) {
+    const gap = ecarts[c]
+    if (Math.abs(gap) < EPSILON) continue
+    closeIssues.push({
+      title: `${ECART_LABELS[c]} : ${fmtEcart(gap)}`,
+      detail:
+        gap > 0
+          ? `Il manque ${fmtEur(Math.abs(gap))} par rapport au montant attendu.`
+          : `Il y a ${fmtEur(Math.abs(gap))} de trop par rapport au montant attendu.`,
+    })
+  }
+  if (Math.abs(fEcart) >= EPSILON) {
+    closeIssues.push({
+      title: `Fond de caisse : ${fmtEcart(fEcart)}`,
+      detail: !hasCountedFund(form)
+        ? `Le fond n'a pas été compté. Il devrait être à ${fmtEurInt(FUND_TARGET)}.`
+        : fEcart > 0
+          ? `Le fond compté dépasse de ${fmtEur(Math.abs(fEcart))} le niveau normal (${fmtEurInt(FUND_TARGET)}).`
+          : `Il manque ${fmtEur(Math.abs(fEcart))} dans le fond (${fmtEurInt(FUND_TARGET)} attendus).`,
+    })
+  }
+  // Un écart sans commentaire est la seule anomalie invisible ailleurs : on invite
+  // à l'expliquer (sans bloquer la clôture).
+  const closeHint =
+    closeIssues.length > 0 && form.comment.trim() === ''
+      ? 'Pense à justifier ces écarts dans le commentaire.'
+      : undefined
 
   const setSnt = (k: keyof CaisseSheetInput['snt'], v: number) =>
     setForm((f) => ({ ...f, snt: { ...f.snt, [k]: v } }))
@@ -999,79 +1021,21 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
         reason="La caisse n'est pas clôturée. Clôturez-la pour imprimer la feuille."
       />
 
-      {/* Modal de clôture : récapitulatif + nom de l'hôtelier + clôture réelle. */}
-      <Dialog open={closeOpen} onOpenChange={setCloseOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Clôturer la caisse</DialogTitle>
-            <DialogDescription>
-              {titleDate} — {SHIFT_LABELS[form.shift]}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-3 text-sm">
-            {balanced ? (
-              <div className="flex items-center gap-2 rounded-md bg-emerald-500/10 px-3 py-2 text-emerald-500">
-                <Check className="size-4 shrink-0" />
-                Caisse équilibrée — tous les écarts sont à 0 €.
-              </div>
-            ) : (
-              <div className="rounded-md bg-destructive/10 px-3 py-2 text-destructive">
-                <div className="mb-1 font-medium">Écarts non nuls :</div>
-                <ul className="space-y-0.5">
-                  {cols
-                    .filter((c) => Math.abs(ecarts[c]) >= EPSILON)
-                    .map((c) => (
-                      <li key={c} className="flex justify-between gap-4">
-                        <span>{ECART_LABELS[c]}</span>
-                        <span className="tabular-nums">
-                          {fmtEcart(ecarts[c])}
-                        </span>
-                      </li>
-                    ))}
-                  {Math.abs(fEcart) >= EPSILON && (
-                    <li className="flex justify-between gap-4">
-                      <span>Fond de caisse</span>
-                      <span className="tabular-nums">{fmtEcart(fEcart)}</span>
-                    </li>
-                  )}
-                </ul>
-                <div className="mt-1 text-xs">
-                  À justifier dans les commentaires.
-                </div>
-              </div>
-            )}
-
-            <div className="flex justify-between border-t border-border pt-2 text-muted-foreground">
-              <span>Fond de caisse compté</span>
-              <span className="tabular-nums text-foreground">
-                {fmtEur(total)} / {fmtEur(FUND_TARGET)}
-              </span>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="caisse-hotelier">Nom de l'hôtelier</Label>
-              <Input
-                id="caisse-hotelier"
-                value={hotelierName}
-                onChange={(e) => setHotelierName(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCloseOpen(false)}>
-              Annuler
-            </Button>
-            <Button
-              onClick={handleConfirmClose}
-              disabled={busy || !hotelierName.trim()}
-            >
-              Clôturer définitivement
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Modal de clôture : verdict didactique + nom de l'hôtelier + clôture. */}
+      <CloseSheetDialog
+        open={closeOpen}
+        onOpenChange={setCloseOpen}
+        title="Clôturer la caisse"
+        subtitle={`${titleDate} — ${SHIFT_LABELS[form.shift]}`}
+        issues={closeIssues}
+        okTitle="Caisse équilibrée"
+        okReason={`Les montants comptés correspondent aux encaissements attendus, et le fond est à ${fmtEurInt(FUND_TARGET)}.`}
+        hint={closeHint}
+        hotelierName={hotelierName}
+        onHotelierNameChange={setHotelierName}
+        onConfirm={handleConfirmClose}
+        busy={busy}
+      />
     </div>
   )
 }

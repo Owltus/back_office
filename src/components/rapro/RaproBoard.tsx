@@ -3,7 +3,7 @@ import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import { Check, LineChart, RotateCcw } from 'lucide-react'
+import { LineChart, RotateCcw } from 'lucide-react'
 
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { DatePickerButton } from '#/components/form/fields.tsx'
@@ -19,16 +19,8 @@ import { Tip } from '#/components/shared/Tip.tsx'
 import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
 import { useStepNavKeys } from '#/components/shared/useStepNavKeys.ts'
 import { Button } from '#/components/ui/button.tsx'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '#/components/ui/dialog.tsx'
-import { Input } from '#/components/ui/input.tsx'
-import { Label } from '#/components/ui/label.tsx'
+import { CloseSheetDialog } from '#/components/shared/CloseSheetDialog.tsx'
+import type { CloseIssue } from '#/components/shared/CloseSheetDialog.tsx'
 import { Textarea } from '#/components/ui/textarea.tsx'
 import {
   fetchDay as fetchPdjDay,
@@ -296,6 +288,53 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
     officialOcc !== inHouseExclComp
       ? inHouseExclComp - officialOcc
       : null
+  // Même écart, mais calculé AUSSI en brouillon : le modal de clôture doit le
+  // montrer AVANT de figer (occGap ci-dessus reste réservé à la bannière du jour
+  // déjà clôturé). officialOcc est re-testé pour que TS le sache non nul.
+  const occGapDraft =
+    hasOccupancy && officialOcc != null && officialOcc !== inHouseExclComp
+      ? inHouseExclComp - officialOcc
+      : null
+
+  // Verdict du modal de clôture : on agrège TOUS les contrôles (pas seulement les
+  // chambres à faire), chacun expliqué pour un débutant. Non bloquant.
+  const closeIssues: CloseIssue[] = []
+  if (rec.pending > 0) {
+    const many = rec.pending > 1
+    closeIssues.push({
+      title: `${rec.pending} chambre${many ? 's' : ''} bloquée${many ? 's' : ''} non traitée${many ? 's' : ''}`,
+      detail: many
+        ? 'Elles restent dues et réapparaîtront demain (report). Elles ne sont pas facturées comme nettoyées.'
+        : "Elle reste due et réapparaîtra demain (report). Elle n'est pas facturée comme nettoyée.",
+    })
+  }
+  if (occGapDraft !== null && officialOcc != null) {
+    const many = Math.abs(occGapDraft) > 1
+    closeIssues.push({
+      title: `Écart d'occupation : ${Math.abs(occGapDraft)} chambre${many ? 's' : ''}`,
+      detail: `${inHouseExclComp} occupée${inHouseExclComp > 1 ? 's' : ''} d'après le rooming, ${officialOcc} d'après le rapport comptable. Souvent une arrivée ou une annulation de dernière minute, à vérifier.`,
+    })
+  }
+  for (const m of optionalMissing) {
+    closeIssues.push({
+      title: `${m.file} non importé`,
+      detail: `Sans lui, ${m.impact} n'est pas possible. Le reste du rapprochement reste valable.`,
+    })
+  }
+  if (fallbackMode) {
+    closeIssues.push({
+      title: 'Rooming non importé (mode secours)',
+      detail:
+        "Le rapport In-House n'a pas été importé, les chambres ont été saisies à la main. Vérifie qu'aucune n'a été oubliée.",
+    })
+  }
+  if (windowError) {
+    closeIssues.push({
+      title: 'Vérification des reports incomplète',
+      detail:
+        'Le calcul des chambres reportées des jours précédents a échoué (réseau). Recharge la page avant de clôturer.',
+    })
+  }
 
   function goStep(delta: number) {
     setSelectedDate((cur) => clampDay(addDays(cur, delta), lowerDay, todayStr))
@@ -862,58 +901,19 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
         reason={printBlocked}
       />
 
-      {/* Modal de clôture : récap du jour + nom de l'hôtelier + clôture réelle
-          (même schéma que la feuille de caisse). */}
-      <Dialog open={closeOpen} onOpenChange={setCloseOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Clôturer le rapprochement</DialogTitle>
-            <DialogDescription>{title}</DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-3 text-sm">
-            {rec.pending > 0 ? (
-              <div className="rounded-md bg-destructive/10 px-3 py-2 text-destructive">
-                {rec.pending} chambre(s) encore à faire — elles seront comptées
-                comme nettoyées.
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 rounded-md bg-emerald-500/10 px-3 py-2 text-emerald-500">
-                <Check className="size-4 shrink-0" />
-                Toutes les chambres sont traitées.
-              </div>
-            )}
-
-            <div className="flex justify-between border-t border-border pt-2 text-muted-foreground">
-              <span>Nettoyées / Bloquées / Refus</span>
-              <span className="tabular-nums text-foreground">
-                {stats.clean} / {stats.todo} / {stats.refus}
-              </span>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="rapro-hotelier">Nom de l'hôtelier</Label>
-              <Input
-                id="rapro-hotelier"
-                value={hotelierName}
-                onChange={(e) => setHotelierName(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCloseOpen(false)}>
-              Annuler
-            </Button>
-            <Button
-              onClick={handleConfirmClose}
-              disabled={!hotelierName.trim()}
-            >
-              Clôturer définitivement
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Modal de clôture : verdict didactique + nom de l'hôtelier + clôture. */}
+      <CloseSheetDialog
+        open={closeOpen}
+        onOpenChange={setCloseOpen}
+        title="Clôturer le rapprochement"
+        subtitle={title}
+        issues={closeIssues}
+        okTitle="Rapprochement complet"
+        okReason="Toutes les chambres occupées sont traitées, et l'occupation correspond au rapport comptable."
+        hotelierName={hotelierName}
+        onHotelierNameChange={setHotelierName}
+        onConfirm={handleConfirmClose}
+      />
     </div>
   )
 }
