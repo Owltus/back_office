@@ -5,9 +5,10 @@ import { FacturationBoard } from '#/components/facturation/FacturationBoard.tsx'
 
 /**
  * Route `/facturation` — atelier de suivi/tamponnage des factures. Réservée aux
- * ADMINS (garde `ProtectedRoute`). `ssr: false` : lecture PDF, OCR et pdf-lib sont
- * 100 % navigateur. Seule donnée serveur : les nuages de mots + le dictionnaire
- * d'émetteurs (tables facturation_*). Vue graphique sur `/facturation/galaxie`.
+ * ADMINS (garde `PageGuard`). `ssr: false` : lecture PDF, OCR et pdf-lib sont
+ * 100 % navigateur. Données serveur : référentiel des imputations (couple code + compte),
+ * nuages de mots, dictionnaire d'émetteurs et journal (tables facturation_*). Vue
+ * graphique sur `/facturation/galaxie`.
  */
 export const Route = createFileRoute('/facturation/')({
   component: FacturationPage,
