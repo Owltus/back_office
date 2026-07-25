@@ -3,7 +3,7 @@ import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import { LineChart, RotateCcw } from 'lucide-react'
+import { Check, LineChart, RotateCcw } from 'lucide-react'
 
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { DatePickerButton } from '#/components/form/fields.tsx'
@@ -19,6 +19,16 @@ import { Tip } from '#/components/shared/Tip.tsx'
 import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
 import { useStepNavKeys } from '#/components/shared/useStepNavKeys.ts'
 import { Button } from '#/components/ui/button.tsx'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '#/components/ui/dialog.tsx'
+import { Input } from '#/components/ui/input.tsx'
+import { Label } from '#/components/ui/label.tsx'
 import { Textarea } from '#/components/ui/textarea.tsx'
 import {
   fetchDay as fetchPdjDay,
@@ -150,12 +160,16 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
               reportDate: selectedDate,
               status: 'draft',
               comment: next,
+              operatorName: '',
               validatedAt: null,
             },
     )
     saveComment(selectedDate, next).catch(() => {})
   }
   const [pdfBusy, setPdfBusy] = useState(false)
+  // Modal de clôture : nom de l'hôtelier saisi avant de figer le jour (comme caisse).
+  const [closeOpen, setCloseOpen] = useState(false)
+  const [hotelierName, setHotelierName] = useState('')
   // OCC officiel du PMS à J-1 (décalage de datage). Sert d'unique CONTRÔLE
   // comptable : si l'occupation PDJ diffère du PMS, on l'alerte (c'est là que les
   // arrivées tardives / corrections apparaissent). Absent si RepJour non importé.
@@ -420,15 +434,24 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
         ]),
       )
   }
-  function handleClose() {
+  // Ouvre le modal de clôture, en pré-remplissant le nom déjà posé (cas d'une
+  // réouverture puis re-clôture).
+  function openCloseModal() {
+    setHotelierName(sheet?.operatorName ?? '')
+    setCloseOpen(true)
+  }
+  function handleConfirmClose() {
     if (!user) return
+    const name = hotelierName.trim()
+    if (!name) return
+    setCloseOpen(false)
     // Matérialise les chambres vendues encore au défaut (nettoyée implicite, sans
-    // ligne) pour que le récap facturable les compte, PUIS clôture (commentaire
-    // dans le même upsert ; signataire posé serveur). On invalide aussi le jour,
-    // qui gagne de nouvelles lignes nettoyée, et l'analytique (nouveau jour clôturé).
+    // ligne) pour que le récap facturable les compte, PUIS clôture (commentaire +
+    // nom de l'hôtelier dans le même upsert ; validated_by posé serveur). On
+    // invalide aussi le jour (nouvelles lignes nettoyée) et l'analytique.
     const toMaterialize = [...occupied].filter((r) => !statuses.has(r))
     materializeCleaned(selectedDate, toMaterialize)
-      .then(() => validateSheet(selectedDate, comment))
+      .then(() => validateSheet(selectedDate, comment, name))
       .catch(() => {})
       .finally(() =>
         Promise.all([
@@ -462,6 +485,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
             refus: stats.refus,
           },
           comment,
+          operatorName: sheet?.operatorName ?? '',
           validatedAt: sheet?.validatedAt ?? null,
         },
         `Rapprochement_${dd}-${mm}-${yy}`,
@@ -523,7 +547,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
           : 'Fige la grille et le commentaire du jour'
       }
     >
-      <Button className="w-full" onClick={handleClose}>
+      <Button className="w-full" onClick={openCloseModal}>
         Clôturer le rapprochement
       </Button>
     </Tip>
@@ -824,6 +848,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
             reportDate={selectedDate}
             initialComment={comment}
             disabled={!canEditFields}
+            operatorName={isValidated ? sheet.operatorName : ''}
             onCommit={commitComment}
           />
 
@@ -836,6 +861,59 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
         onOpenChange={(open) => !open && setPrintBlocked('')}
         reason={printBlocked}
       />
+
+      {/* Modal de clôture : récap du jour + nom de l'hôtelier + clôture réelle
+          (même schéma que la feuille de caisse). */}
+      <Dialog open={closeOpen} onOpenChange={setCloseOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Clôturer le rapprochement</DialogTitle>
+            <DialogDescription>{title}</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 text-sm">
+            {rec.pending > 0 ? (
+              <div className="rounded-md bg-destructive/10 px-3 py-2 text-destructive">
+                {rec.pending} chambre(s) encore à faire — elles seront comptées
+                comme nettoyées.
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 rounded-md bg-emerald-500/10 px-3 py-2 text-emerald-500">
+                <Check className="size-4 shrink-0" />
+                Toutes les chambres sont traitées.
+              </div>
+            )}
+
+            <div className="flex justify-between border-t border-border pt-2 text-muted-foreground">
+              <span>Nettoyées / Bloquées / Refus</span>
+              <span className="tabular-nums text-foreground">
+                {stats.clean} / {stats.todo} / {stats.refus}
+              </span>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="rapro-hotelier">Nom de l'hôtelier</Label>
+              <Input
+                id="rapro-hotelier"
+                value={hotelierName}
+                onChange={(e) => setHotelierName(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCloseOpen(false)}>
+              Annuler
+            </Button>
+            <Button
+              onClick={handleConfirmClose}
+              disabled={!hotelierName.trim()}
+            >
+              Clôturer définitivement
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -857,11 +935,13 @@ function RaproCommentCard({
   reportDate,
   initialComment,
   disabled,
+  operatorName,
   onCommit,
 }: {
   reportDate: string
   initialComment: string
   disabled: boolean
+  operatorName: string
   onCommit: (comment: string) => void
 }) {
   const [text, setText] = useState(initialComment)
@@ -870,7 +950,14 @@ function RaproCommentCard({
   }, [reportDate, initialComment])
   return (
     <div className="rapro-comment flex-1">
-      <h2 className="rapro-comment-title">Commentaires</h2>
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="rapro-comment-title">Commentaires</h2>
+        {operatorName && (
+          <span className="text-sm font-medium text-muted-foreground">
+            {operatorName}
+          </span>
+        )}
+      </div>
       <Textarea
         value={text}
         onChange={(e) => setText(e.target.value)}

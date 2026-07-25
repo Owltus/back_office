@@ -22,7 +22,11 @@ export const RAPRO_SHEETS_TABLE = 'rapro_sheets'
 
 /** Statuts valides. Une valeur inconnue en base est ramenée à un statut sûr
  * plutôt que de casser le rendu (défense ; ne devrait pas arriver). */
-const KNOWN_STATUSES = new Set<RoomStatus>(['nettoyee', 'non_nettoyee', 'refus'])
+const KNOWN_STATUSES = new Set<RoomStatus>([
+  'nettoyee',
+  'non_nettoyee',
+  'refus',
+])
 
 /** État d'un jour : Map chambre→statut (défaut nettoyee = absence de ligne).
  * TOLÉRANT : une valeur non reconnue est ramenée à 'refus' (hors charge). */
@@ -80,7 +84,10 @@ export async function setStatus(
  * l'absence valant « non touchée » (nettoyée par défaut si vendue, grisée sinon).
  * Utilisé par le rollback d'étage et la bascule des chambres non vendues.
  */
-export async function clearRoom(reportDate: string, room: number): Promise<void> {
+export async function clearRoom(
+  reportDate: string,
+  room: number,
+): Promise<void> {
   const { error } = await supabase
     .from(RAPRO_TABLE)
     .delete()
@@ -106,10 +113,12 @@ export async function setRoom(
   if (status === 'nettoyee' && !carriedManual) {
     return clearRoom(reportDate, room)
   }
-  const { error } = await supabase.from(RAPRO_TABLE).upsert(
-    { report_date: reportDate, room, status, carried_manual: carriedManual },
-    { onConflict: 'report_date,room' },
-  )
+  const { error } = await supabase
+    .from(RAPRO_TABLE)
+    .upsert(
+      { report_date: reportDate, room, status, carried_manual: carriedManual },
+      { onConflict: 'report_date,room' },
+    )
   if (error) throw error
 }
 
@@ -131,7 +140,11 @@ export async function materializeCleaned(
   // une ligne existante (une exception déjà posée reste intacte), on ne fait
   // qu'ajouter les chambres au défaut implicite.
   const { error } = await supabase.from(RAPRO_TABLE).upsert(
-    rooms.map((room) => ({ report_date: reportDate, room, status: 'nettoyee' })),
+    rooms.map((room) => ({
+      report_date: reportDate,
+      room,
+      status: 'nettoyee',
+    })),
     { onConflict: 'report_date,room', ignoreDuplicates: true },
   )
   if (error) throw error
@@ -144,19 +157,24 @@ function toRaproSheet(row: DbRaproSheet): RaproSheet {
     reportDate: row.report_date,
     status: row.status,
     comment: row.comment,
+    operatorName: row.operator_name,
     validatedAt: row.validated_at,
   }
 }
 
 /** Feuille jour (null si aucune ligne encore créée → brouillon vide). */
-export async function fetchSheet(reportDate: string): Promise<RaproSheet | null> {
+export async function fetchSheet(
+  reportDate: string,
+): Promise<RaproSheet | null> {
   const { data, error } = await supabase
     .from(RAPRO_SHEETS_TABLE)
-    .select('report_date, status, comment, validated_at, validated_by')
+    .select(
+      'report_date, status, comment, operator_name, validated_at, validated_by',
+    )
     .eq('report_date', reportDate)
     .maybeSingle()
   if (error) throw error
-  return data ? toRaproSheet(data as DbRaproSheet) : null
+  return data ? toRaproSheet(data) : null
 }
 
 /** Enregistre le commentaire du jour (upsert ; ne touche pas le status). */
@@ -178,16 +196,19 @@ export async function saveComment(
 export async function validateSheet(
   reportDate: string,
   comment?: string,
+  operatorName?: string,
 ): Promise<void> {
   const row: {
     report_date: string
     status: SheetStatus
     comment?: string
+    operator_name?: string
   } = {
     report_date: reportDate,
     status: 'validated',
   }
   if (comment !== undefined) row.comment = comment
+  if (operatorName !== undefined) row.operator_name = operatorName
   const { error } = await supabase
     .from(RAPRO_SHEETS_TABLE)
     .upsert(row, { onConflict: 'report_date' })

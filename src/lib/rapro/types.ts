@@ -33,6 +33,7 @@ export interface DbRaproSheet {
   report_date: string
   status: SheetStatus
   comment: string
+  operator_name: string
   validated_at: string | null
   validated_by: string | null
 }
@@ -42,5 +43,6 @@ export interface RaproSheet {
   reportDate: string
   status: SheetStatus
   comment: string
+  operatorName: string
   validatedAt: string | null
 }

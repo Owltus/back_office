@@ -18,9 +18,10 @@ import {
   CELL_STATES,
   cellState,
   LEGEND_ORDER,
-  statusOf,
-  type CellState,
+  statusOf
+  
 } from '#/lib/rapro/constants.ts'
+import type {CellState} from '#/lib/rapro/constants.ts';
 import { FLOORS } from '#/lib/rapro/rooms.ts'
 import type { RoomStatus } from '#/lib/rapro/types.ts'
 
@@ -37,6 +38,8 @@ export interface RaproPdfData {
     refus: number
   }
   comment: string
+  /** Nom de l'hôtelier saisi à la clôture (ajouté au cadre signature OKKO). */
+  operatorName: string
   validatedAt: string | null
 }
 
@@ -112,6 +115,7 @@ function renderRaproDocument(
     carried,
     counts,
     comment,
+    operatorName,
     validatedAt,
   }: RaproPdfData,
 ): void {
@@ -256,14 +260,17 @@ function renderRaproDocument(
     pdf.text(`Clôturé le ${when}`, RIGHT, sigY - 3, { align: 'right' })
   }
 
-  // --- Signatures : deux cadres, libellés fixes (non nominatifs) ------------
+  // --- Signatures : cadre OKKO nominatif (hôtelier), cadre ÉLIOR fixe -------
   const boxW = 85
   const boxH = 28
   pdf.setDrawColor(51).setLineWidth(0.3)
   pdf.rect(LEFT, sigY, boxW, boxH)
   pdf.rect(RIGHT - boxW, sigY, boxW, boxH)
   pdf.setFont('helvetica', 'bold').setFontSize(8).setTextColor(90)
-  pdf.text('SIGNATURE OKKO', LEFT + 3, sigY + 5)
+  const okkoLabel = operatorName
+    ? `SIGNATURE OKKO (${operatorName})`
+    : 'SIGNATURE OKKO'
+  pdf.text(okkoLabel, LEFT + 3, sigY + 5)
   pdf.text('SIGNATURE ÉLIOR', RIGHT - boxW + 3, sigY + 5)
 }
 

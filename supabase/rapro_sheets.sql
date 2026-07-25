@@ -11,6 +11,7 @@ create table if not exists public.rapro_sheets (
   status       text not null default 'draft'
                  check (status in ('draft', 'validated')),
   comment      text not null default '',
+  operator_name text not null default '',        -- nom de l'hôtelier (saisi à la clôture)
   validated_at timestamptz,
   validated_by uuid,
   created_by   uuid default auth.uid(),
