@@ -3,6 +3,7 @@ import { STORAGE_TOP_K, type WordPool } from '#/lib/facturation/wordpool.ts'
 import type { IssuerCodes } from '#/lib/facturation/issuerCodes.ts'
 import type { IssuerDenylist } from '#/lib/facturation/issuerDenylist.ts'
 import type { Issuer } from '#/lib/facturation/issuers.ts'
+import type { IssuerMemory } from '#/lib/facturation/issuerMemory.ts'
 import type { BudgetLine, JournalEntry } from '#/lib/facturation/types.ts'
 
 /*
@@ -393,8 +394,38 @@ export async function recordLearnedDoc(entry: JournalEntry): Promise<void> {
     p_codes: entry.codes,
     p_deltas: entry.deltas,
     p_method: entry.method,
+    p_comptes: entry.comptes ?? {},
   })
   if (error) throw error
+}
+
+/** Mémoire émetteur → (code, compte) dérivée de l'historique (vue facturation_issuer_memory).
+ *  Alimente la pré-sélection du compte habituel d'un émetteur. Propage l'erreur (vue absente
+ *  → modèle vide côté appelant, dégradation gracieuse). */
+export async function fetchIssuerMemory(): Promise<IssuerMemory> {
+  const perIssuer: IssuerMemory['perIssuer'] = {}
+  let from = 0
+  for (;;) {
+    const { data, error } = await supabase
+      .from('facturation_issuer_memory')
+      .select('issuer, code_analytique, compte, n')
+      .range(from, from + 999)
+    if (error) throw error
+    const rows = (data ?? []) as {
+      issuer: string
+      code_analytique: string
+      compte: string
+      n: number
+    }[]
+    for (const r of rows) {
+      const byCode = (perIssuer[r.issuer] ??= {})
+      const byCompte = (byCode[r.code_analytique] ??= {})
+      byCompte[r.compte] = r.n
+    }
+    if (rows.length < 1000) break
+    from += 1000
+  }
+  return { perIssuer }
 }
 
 /** Désapprend EXACTEMENT le document `hash` (rejeu serveur des deltas) puis retire l'entrée. */

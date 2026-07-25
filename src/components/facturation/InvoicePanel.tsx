@@ -464,6 +464,7 @@ export function InvoicePanel({
               hash: record.hash,
               issuerKey: learnedIssuer,
               codes: learnedCodes,
+              comptes: { ...record.comptes }, // compte choisi par code, figé au tampon
               deltas,
               method: record.method ?? 'native',
               learnedAt: record.processedDate,
@@ -920,6 +921,7 @@ export function InvoicePanel({
         }
         detection={record.detection}
         immature={immature}
+        issuer={issuerKey(record.supplierName, record.siren)}
       />
 
       <BudgetLinesManager open={managerOpen} onOpenChange={setManagerOpen} />

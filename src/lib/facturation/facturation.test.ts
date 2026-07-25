@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { PDFDocument, StandardFonts } from 'pdf-lib'
 
 import {
@@ -50,8 +50,13 @@ import { computeGrid, pageAt } from '#/lib/facturation/grid.ts'
 import { SEED_RULES } from '#/lib/facturation/constants.ts'
 import {
   budgetLabel,
+  fillComptes,
   setBudgetLines,
 } from '#/lib/facturation/budgetRegistry.ts'
+import {
+  preferredCompte,
+  type IssuerMemory,
+} from '#/lib/facturation/issuerMemory.ts'
 import type {
   PagePreview,
   StampData,
@@ -950,5 +955,77 @@ describe('pageAt', () => {
     expect(pageAt(g, g.boxes[1].left + 10, 10)).toBe(1)
     // hors grille → borné à une page existante.
     expect(pageAt(g, 99999, 99999)).toBe(1)
+  })
+})
+
+describe('preferredCompte + fillComptes (compte habituel de l’émetteur)', () => {
+  const mem: IssuerMemory = {
+    perIssuer: {
+      'siren:552081317': {
+        FMGAZooooo: { '60613200': 4, '60613100': 1 }, // le compte …200 domine
+      },
+      histo_sans_compte: {
+        FMGAZooooo: { '': 3 }, // factures apprises avant l’ajout du compte
+      },
+    },
+  }
+
+  // FMGAZooooo porte DEUX comptes (code multi-comptes) le temps de ces tests, puis on
+  // restaure la fixture globale (état module partagé par les autres describes).
+  beforeAll(() =>
+    setBudgetLines([
+      ...BUDGET_FIXTURE,
+      {
+        code: 'FMGAZooooo',
+        compte: '60613100',
+        label: 'Gaz',
+        category: 'FRAIS EXPLOITATION / OPERATION',
+        hint: 'gaz ville',
+        tags: [],
+      },
+      {
+        code: 'FMGAZooooo',
+        compte: '60613200',
+        label: 'Gaz',
+        category: 'FRAIS EXPLOITATION / OPERATION',
+        hint: 'gaz clim',
+        tags: [],
+      },
+    ]),
+  )
+  afterAll(() => setBudgetLines(BUDGET_FIXTURE))
+
+  it('renvoie le compte le plus fréquent de l’émetteur', () => {
+    expect(preferredCompte(mem, 'siren:552081317', 'FMGAZooooo')).toBe('60613200')
+  })
+  it('renvoie vide si émetteur inconnu ou clé vide', () => {
+    expect(preferredCompte(mem, 'siren:000000000', 'FMGAZooooo')).toBe('')
+    expect(preferredCompte(mem, '', 'FMGAZooooo')).toBe('')
+  })
+  it('ignore un historique sans compte (pré-migration)', () => {
+    expect(preferredCompte(mem, 'histo_sans_compte', 'FMGAZooooo')).toBe('')
+  })
+  it('fillComptes : compte unique pré-rempli, multi-comptes vide sans mémoire', () => {
+    expect(fillComptes(['FMELECoooo', 'FMGAZooooo'])).toEqual({
+      FMELECoooo: '60612100',
+      FMGAZooooo: '',
+    })
+  })
+  it('fillComptes : applique le compte habituel de l’émetteur sur un multi-comptes', () => {
+    const pref = (code: string) => preferredCompte(mem, 'siren:552081317', code)
+    expect(fillComptes(['FMGAZooooo'], {}, pref)).toEqual({
+      FMGAZooooo: '60613200',
+    })
+  })
+  it('fillComptes : ignore un compte préféré absent du référentiel', () => {
+    expect(fillComptes(['FMGAZooooo'], {}, () => '99999999')).toEqual({
+      FMGAZooooo: '',
+    })
+  })
+  it('fillComptes : un choix déjà fait (prev) est prioritaire', () => {
+    const pref = (code: string) => preferredCompte(mem, 'siren:552081317', code)
+    expect(
+      fillComptes(['FMGAZooooo'], { FMGAZooooo: '60613100' }, pref),
+    ).toEqual({ FMGAZooooo: '60613100' })
   })
 })

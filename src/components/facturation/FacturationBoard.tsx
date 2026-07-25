@@ -33,6 +33,10 @@ import {
 import { matchIssuer, type Issuer } from '#/lib/facturation/issuers.ts'
 import { extractSiren } from '#/lib/facturation/siret.ts'
 import {
+  preferredCompte,
+  type IssuerMemory,
+} from '#/lib/facturation/issuerMemory.ts'
+import {
   issuerMaturity,
   issuerPrior,
   type IssuerCodes,
@@ -114,6 +118,7 @@ async function processInvoice(
   issuers: Issuer[],
   issuerCodes: IssuerCodes,
   issuerDenylist: IssuerDenylist,
+  issuerMemory: IssuerMemory,
   knownHashes: Set<string>,
 ) {
   try {
@@ -145,8 +150,15 @@ async function processInvoice(
       detection: d,
       previews: res.previews,
       codes: d.codes,
-      // Compte pré-rempli quand le code n'en a qu'un ; à choisir sinon (couple code+compte).
-      comptes: fillComptes(d.codes),
+      // Compte : compte HABITUEL de l'émetteur (mémoire) s'il existe pour ce code, sinon compte
+      // unique du code, sinon à choisir (couple code+compte).
+      comptes: fillComptes(d.codes, {}, (code) =>
+        preferredCompte(
+          issuerMemory,
+          issuerKey(known?.display ?? '', siren),
+          code,
+        ),
+      ),
       hash,
       siren,
       duplicate: knownHashes.has(hash),
@@ -195,8 +207,14 @@ export function FacturationBoard() {
 
   // Lectures Supabase (nuages appris + émetteurs), en cache et dégradation gracieuse
   // (voir useFacturationModel). Le pool de scoring fusionne la graine avec l'appris.
-  const { serverPool, issuers, issuerCodes, issuerDenylist, journal } =
-    useFacturationModel()
+  const {
+    serverPool,
+    issuers,
+    issuerCodes,
+    issuerDenylist,
+    issuerMemory,
+    journal,
+  } = useFacturationModel()
   const pool = useMemo(() => mergePools(seedPool(), serverPool), [serverPool])
   // Hash déjà présents au journal → détection de doublon au dépôt. Recalculé quand le journal
   // change ; le Set est passé à processInvoice (fonction hors composant, ne lit pas le cache).
@@ -231,10 +249,16 @@ export function FacturationBoard() {
         patchInvoice(r.id, {
           detection,
           codes,
-          comptes: fillComptes(codes, r.comptes),
+          comptes: fillComptes(codes, r.comptes, (code) =>
+            preferredCompte(
+              issuerMemory,
+              issuerKey(r.supplierName, r.siren),
+              code,
+            ),
+          ),
         })
     }
-  }, [pool, issuers, issuerCodes, issuerDenylist])
+  }, [pool, issuers, issuerCodes, issuerDenylist, issuerMemory])
 
   function addFiles(files: FileList | File[]) {
     const pdfs = Array.from(files).filter(
@@ -270,6 +294,7 @@ export function FacturationBoard() {
         issuers,
         issuerCodes,
         issuerDenylist,
+        issuerMemory,
         knownHashes,
       ),
     )

@@ -29,6 +29,7 @@ import {
 } from '#/components/facturation/confidence.ts'
 import { useFacturationModel } from '#/components/facturation/useFacturationModel.ts'
 import { fillComptes } from '#/lib/facturation/budgetRegistry.ts'
+import { preferredCompte } from '#/lib/facturation/issuerMemory.ts'
 import { normalize } from '#/lib/facturation/detect.ts'
 import type { BudgetLine, Detection } from '#/lib/facturation/types.ts'
 import { cn } from '#/lib/utils.ts'
@@ -59,6 +60,7 @@ export function CodePicker({
   onChange,
   detection,
   immature = false,
+  issuer,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -67,8 +69,10 @@ export function CodePicker({
   onChange: (codes: string[], comptes: Record<string, string>) => void
   detection?: Detection | null
   immature?: boolean
+  /** Clé de l'émetteur courant (issuerKey) → pré-sélection de son compte habituel à l'ajout d'un code. */
+  issuer?: string
 }) {
-  const { budgetLines } = useFacturationModel()
+  const { budgetLines, issuerMemory } = useFacturationModel()
   const [q, setQ] = useState('')
   const [activeSection, setActiveSection] = useState<string | null>(null)
 
@@ -126,7 +130,12 @@ export function CodePicker({
     const nextCodes = selected.includes(code)
       ? selected.filter((c) => c !== code)
       : [...selected, code]
-    onChange(nextCodes, fillComptes(nextCodes, comptes))
+    onChange(
+      nextCodes,
+      fillComptes(nextCodes, comptes, (c) =>
+        preferredCompte(issuerMemory, issuer ?? '', c),
+      ),
+    )
   }
 
   const setCompte = (code: string, compte: string) =>

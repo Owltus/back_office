@@ -76,13 +76,15 @@ export const budgetHint = (code: string, compte = ''): string => {
   return HINT.get(imputationKey(code, '')) ?? ''
 }
 
-/** Complète une table `code → compte` pour l'ensemble `codes` : conserve les choix déjà faits,
- *  pré-remplit le compte des codes qui n'en ont qu'UN (les autres restent vides, à choisir), et
- *  laisse tomber les codes absents de `codes` (table toujours alignée sur la sélection). Pure ;
+/** Complète une table `code → compte` pour l'ensemble `codes` : conserve les choix déjà faits ;
+ *  pour un code non encore résolu, prend le compte HABITUEL de l'émetteur (`preferred`, mémoire
+ *  émetteur→compte) s'il est valide pour ce code, sinon le compte UNIQUE du code, sinon rien (à
+ *  choisir) ; laisse tomber les codes absents de `codes` (table alignée sur la sélection). Pure ;
  *  utilisée à la détection (pré-remplissage) et au choix d'imputation. */
 export function fillComptes(
   codes: string[],
   prev: Record<string, string> = {},
+  preferred?: (code: string) => string,
 ): Record<string, string> {
   const next: Record<string, string> = {}
   for (const code of codes) {
@@ -91,7 +93,9 @@ export function fillComptes(
       continue
     }
     const list = comptesForCode(code)
-    next[code] = list.length === 1 ? list[0] : ''
+    const pref = preferred?.(code) ?? ''
+    if (pref && list.includes(pref)) next[code] = pref
+    else next[code] = list.length === 1 ? list[0] : ''
   }
   return next
 }

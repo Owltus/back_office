@@ -67,6 +67,7 @@ export interface JournalEntry {
   hash: string // SHA-256 hex (texte normalisé si natif, octets si OCR)
   issuerKey: string | null // clé émetteur canonique apprise (= learnedIssuer), ou null
   codes: string[] // codes validés (instantané figé au tampon, = learnedCodes)
+  comptes?: Record<string, string> // compte choisi par code (précision) → mémoire émetteur→compte
   deltas: Record<string, number> // { token: increment } → rejeu exact de unlearnClouds
   method: ExtractMethod // 'native' | 'ocr' — trace la fiabilité du hash (D1)
   learnedAt: string // ISO date (record.processedDate)

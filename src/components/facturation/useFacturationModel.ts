@@ -5,6 +5,7 @@ import {
   fetchClouds,
   fetchIssuerCodes,
   fetchIssuerDenylist,
+  fetchIssuerMemory,
   fetchIssuers,
   fetchJournal,
 } from '#/lib/facturation/cloudService.ts'
@@ -12,21 +13,23 @@ import { setBudgetLines } from '#/lib/facturation/budgetRegistry.ts'
 import type { WordPool } from '#/lib/facturation/wordpool.ts'
 import type { IssuerCodes } from '#/lib/facturation/issuerCodes.ts'
 import type { IssuerDenylist } from '#/lib/facturation/issuerDenylist.ts'
+import type { IssuerMemory } from '#/lib/facturation/issuerMemory.ts'
 import type { Issuer } from '#/lib/facturation/issuers.ts'
 import type { BudgetLine, JournalEntry } from '#/lib/facturation/types.ts'
 
 /**
- * Lectures Supabase de la facturation, en cache (nuages de mots appris + dictionnaire
- * d'émetteurs). Partagé par l'atelier et la page galaxie. Dégradation gracieuse :
- * `retry:false` et valeurs par défaut vides si la table n'existe pas / réseau KO.
- * La POLITIQUE d'usage reste à l'appelant (le board fusionne avec la graine, la
- * galaxie garde l'appris brut).
+ * Lectures Supabase de la facturation, en cache (nuages de mots appris, dictionnaire
+ * d'émetteurs, mémoire émetteur→compte, référentiel). Partagé par l'atelier et la page
+ * galaxie. Dégradation gracieuse : `retry:false` et valeurs par défaut vides si la table
+ * n'existe pas / réseau KO. La POLITIQUE d'usage reste à l'appelant (le board fusionne
+ * avec la graine, la galaxie garde l'appris brut).
  */
 export function useFacturationModel(): {
   serverPool: WordPool
   issuers: Issuer[]
   issuerCodes: IssuerCodes
   issuerDenylist: IssuerDenylist
+  issuerMemory: IssuerMemory
   journal: { entries: JournalEntry[] }
   /** Référentiel des imputations (Supabase). Aussi injecté dans budgetRegistry pour les
    *  accès synchrones (budgetLabel/budgetHint). Vide tant que la query n'a pas résolu. */
@@ -52,6 +55,11 @@ export function useFacturationModel(): {
     queryFn: fetchIssuerDenylist,
     retry: false,
   })
+  const { data: issuerMemory } = useQuery({
+    queryKey: ['facturation', 'issuerMemory'],
+    queryFn: fetchIssuerMemory,
+    retry: false,
+  })
   const { data: journal } = useQuery({
     queryKey: ['facturation', 'journal'],
     queryFn: fetchJournal,
@@ -71,6 +79,7 @@ export function useFacturationModel(): {
     issuers: issuers ?? [],
     issuerCodes: issuerCodes ?? { perIssuer: {} },
     issuerDenylist: issuerDenylist ?? { perIssuer: {} },
+    issuerMemory: issuerMemory ?? { perIssuer: {} },
     journal: journal ?? { entries: [] },
     budgetLines,
   }
