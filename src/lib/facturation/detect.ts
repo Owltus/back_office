@@ -65,10 +65,12 @@ export function allRules(): SupplierRule[] {
  *  le matching par sous-chaîne (« sa », « or ») ferait des faux positifs. */
 export const MIN_LEARN_LEN = 4
 
-/** Vrai si l'émetteur est assez long (sur sa clé canonique, suffixes juridiques retirés)
- *  pour être mémorisé et servir de filtre. Aligné sur `issuerKey` (identité unique). */
-export const canLearn = (supplier: string): boolean =>
-  issuerKey(supplier).length >= MIN_LEARN_LEN
+/** Vrai si l'émetteur peut être mémorisé et servir de filtre, jugé sur sa CLÉ CANONIQUE
+ *  (`issuerKey`, identité unique). Avec un `siren` la clé est « siren:<9 chiffres> » (toujours
+ *  assez longue) : un nom court comme EDF/RTE/SFR devient donc mémorisable dès qu'un SIREN est
+ *  lu. Sans SIREN, repli INCHANGÉ sur la longueur du nom normalisé (suffixes juridiques retirés). */
+export const canLearn = (supplier: string, siren?: string): boolean =>
+  issuerKey(supplier, siren).length >= MIN_LEARN_LEN
 
 // --- Indices best-effort (montrés en aide, jamais critiques) --------------
 

@@ -9,14 +9,30 @@ import { normalize } from '#/lib/facturation/text.ts'
  */
 
 export interface Issuer {
-  name: string // nom normalisé (clé)
+  name: string // clé canonique (issuerKey) : « siren:<9 chiffres> » ou nom normalisé
   display: string // nom lisible à afficher
   count: number // nombre de confirmations
 }
 
-/** Émetteur connu présent dans le texte (sous-chaîne, nom ≥ 4 car.), le plus
- *  confirmé d'abord (puis le nom le plus long). null si aucun. */
-export function matchIssuer(rawText: string, issuers: Issuer[]): Issuer | null {
+/**
+ * Émetteur connu reconnu sur la facture. Deux voies, par ordre de fiabilité :
+ *  1. `siren` lu sur la facture (cf. siret.ts) → on retourne l'émetteur dont la clé est
+ *     `siren:<siren>` (identité forte, insensible à l'OCR du nom). Priorité absolue.
+ *  2. Repli (comportement historique INCHANGÉ) : nom connu présent dans le texte en
+ *     sous-chaîne (clé ≥ 4 car.), le plus confirmé d'abord (puis le nom le plus long).
+ * null si aucun.
+ */
+export function matchIssuer(
+  rawText: string,
+  issuers: Issuer[],
+  siren?: string,
+): Issuer | null {
+  if (siren) {
+    // Clé SIREN (miroir de `issuerKey(_, siren)` dans text.ts) : match direct par identité.
+    const key = `siren:${siren}`
+    const bySiren = issuers.find((it) => it.name === key)
+    if (bySiren) return bySiren
+  }
   const text = normalize(rawText)
   let best: Issuer | null = null
   for (const it of issuers) {

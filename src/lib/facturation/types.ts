@@ -152,6 +152,10 @@ export interface InvoiceRecord {
    *  clé de l'apprentissage — le compte ne l'encode jamais (précision orthogonale). */
   comptes: Record<string, string>
   supplierName: string
+  /** SIREN (9 chiffres) lu sur la facture (cf. extractSiren), calculé à la lecture. Quand il
+   *  est présent, il sert de CLÉ ÉMETTEUR canonique (siren:<siren>) pour apprendre/curer/détecter,
+   *  bien plus fiable que le nom. Absent (undefined) si aucun SIRET/SIREN valide n'a été lu. */
+  siren?: string
   /** Empreinte SHA-256 du document (cf. hashDocument), calculée au dépôt. Identifie le PDF
    *  pour la détection de doublon et le journal d'apprentissage. */
   hash?: string

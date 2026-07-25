@@ -28,6 +28,7 @@ import {
   tokenize,
 } from '#/lib/facturation/wordpool.ts'
 import { matchIssuer } from '#/lib/facturation/issuers.ts'
+import { extractSiren } from '#/lib/facturation/siret.ts'
 import {
   bumpIssuerCodes,
   issuerMaturity,
@@ -141,12 +142,23 @@ describe('issuerKey (clé émetteur canonique, anti-fragmentation)', () => {
     expect(k).toBe('martin')
   })
 
+  it('privilégie le SIREN quand il est fourni, repli sur le nom sinon', () => {
+    // SIREN présent → clé « siren:<9 chiffres> », indépendante du nom (même court, même mal saisi).
+    expect(issuerKey('EDF', '552081317')).toBe('siren:552081317')
+    expect(issuerKey('E.D.F. mal océrisé', '552081317')).toBe('siren:552081317')
+    // Sans SIREN (ou SIREN vide) → repli STRICTEMENT inchangé sur normalizeIssuer(nom).
+    expect(issuerKey('EDF')).toBe(normalizeIssuer('EDF'))
+    expect(issuerKey('EDF', '')).toBe(normalizeIssuer('EDF'))
+  })
+
   it('canLearn juge la LONGUEUR de la clé canonique (suffixe retiré)', () => {
     expect(canLearn('Martin')).toBe(true)
     // « EDF SAS » → clé « edf » (3 car.) → NON mémorisable, cohérent avec « EDF ».
     expect(canLearn('EDF')).toBe(false)
     expect(canLearn('EDF SAS')).toBe(false)
     expect(canLearn('EDF SAS')).toBe(canLearn('EDF'))
+    // …mais un SIREN rend le nom court mémorisable (clé siren:… toujours assez longue).
+    expect(canLearn('EDF', '552081317')).toBe(true)
   })
 })
 
@@ -723,6 +735,48 @@ describe('matchIssuer', () => {
   it('ignore un nom trop court', () => {
     const list = [{ name: 'sa', display: 'SA', count: 5 }]
     expect(matchIssuer('facture sa', list)).toBeNull()
+  })
+
+  it('reconnaît par SIREN en priorité (nom trop court pour un match par nom)', () => {
+    const list = [{ name: 'siren:552081317', display: 'EDF', count: 2 }]
+    // Aucun match par sous-chaîne possible (« edf » n'est pas dans le texte, et la clé
+    // « siren:… » ne l'est pas non plus) : c'est le SIREN qui identifie l'émetteur.
+    expect(matchIssuer('facture electricite 552 081 317', list, '552081317')
+      ?.display).toBe('EDF')
+  })
+
+  it('repli sur le nom quand le SIREN ne correspond à aucun émetteur connu', () => {
+    const list = [{ name: 'martin', display: 'Entreprise Martin', count: 3 }]
+    // SIREN fourni mais inconnu du dictionnaire → comportement historique (sous-chaîne de nom).
+    expect(matchIssuer('facture MARTIN 999 999 999', list, '380129866')
+      ?.display).toBe('Entreprise Martin')
+  })
+})
+
+describe('extractSiren (identité émetteur fiable)', () => {
+  it('reconnaît un SIREN valide (9 chiffres, tolérant aux espaces)', () => {
+    expect(extractSiren('SIREN 552 081 317 — EDF')).toBe('552081317')
+    expect(extractSiren('siren: 552081317')).toBe('552081317')
+  })
+
+  it('extrait le SIREN (9 premiers chiffres) d’un SIRET (14 chiffres) valide', () => {
+    expect(extractSiren('SIRET 552 081 317 00018')).toBe('552081317')
+    expect(extractSiren('SIRET55208131700018 (compact)')).toBe('552081317')
+  })
+
+  it('ignore un numéro dont la clé de Luhn est invalide (faux positif)', () => {
+    // 123456789 : 9 chiffres mais Luhn KO → écarté (ni SIREN, ni numéro de facture).
+    expect(extractSiren('facture n° 123456789 du jour')).toBeNull()
+    expect(extractSiren('montant 1 234,56 EUR TTC')).toBeNull()
+    expect(extractSiren('aucun numero ici')).toBeNull()
+  })
+
+  it('accepte les séparateurs points et les espaces insécables', () => {
+    expect(extractSiren('SIREN 784.824.153')).toBe('784824153')
+    // Insécables écrites en échappement explicite (aucun caractère invisible en source) :
+    // fine U+202F (séparateur de milliers français) et insécable U+00A0.
+    expect(extractSiren('SIREN 784\u202f824\u202f153')).toBe('784824153')
+    expect(extractSiren('SIREN 784\u00a0824\u00a0153')).toBe('784824153')
   })
 })
 

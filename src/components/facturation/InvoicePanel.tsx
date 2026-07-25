@@ -403,7 +403,7 @@ export function InvoicePanel({
         // même si l'utilisateur ré-édite ensuite l'imputation (compteurs partagés → symétrie).
         const learnedCodes = [...record.codes]
         const deltas = countTokens(record.text)
-        const learnSupplier = canLearn(record.supplierName)
+        const learnSupplier = canLearn(record.supplierName, record.siren)
         let learnedIssuer: string | null = null
         try {
           await learnClouds(learnedCodes, deltas)
@@ -421,7 +421,7 @@ export function InvoicePanel({
           // nuages déjà appris (sinon l'instantané ne refléterait pas la réalité).
           if (learnSupplier) {
             try {
-              const name = issuerKey(record.supplierName)
+              const name = issuerKey(record.supplierName, record.siren)
               const display = record.supplierName.trim()
               await learnIssuer(name, display)
               queryClient.setQueryData<Issuer[]>(
@@ -536,8 +536,8 @@ export function InvoicePanel({
       const issuerName =
         record.learnedIssuer !== undefined
           ? record.learnedIssuer
-          : canLearn(record.supplierName)
-            ? issuerKey(record.supplierName)
+          : canLearn(record.supplierName, record.siren)
+            ? issuerKey(record.supplierName, record.siren)
             : null
       await unlearnInvoiceCore(codes, issuerName)
       // Retirer l'entrée du journal SANS rejeu (le décrément vient d'être fait ci-dessus) —
@@ -570,8 +570,8 @@ export function InvoicePanel({
   // aurait appris. ⚠ Cela décrémente des compteurs PARTAGÉS : l'utilisateur doit régler l'émetteur
   // et les codes EXACTEMENT comme lors du tamponnage fautif (sinon il érode un autre apprentissage).
   async function handleReplayUnlearn() {
-    const issuerName = canLearn(record.supplierName)
-      ? issuerKey(record.supplierName)
+    const issuerName = canLearn(record.supplierName, record.siren)
+      ? issuerKey(record.supplierName, record.siren)
       : null
     // Récap + confirmation : on décrémente des compteurs PARTAGÉS d'après l'état COURANT.
     // L'utilisateur doit vérifier que codes + émetteur reproduisent le tampon fautif.
@@ -611,7 +611,7 @@ export function InvoicePanel({
   // Bannir un couple émetteur↔code depuis l'atelier : « ne plus JAMAIS imputer cet émetteur
   // sur ce code » (denylist). Nécessite un émetteur nommé (assez long pour servir de clé).
   // Retire aussi le code de la facture courante. Best-effort (droits, table absente).
-  const canBan = canLearn(record.supplierName)
+  const canBan = canLearn(record.supplierName, record.siren)
   async function handleBan(code: string) {
     if (!canBan) return
     // Confirmation : geste IRRÉVERSIBLE facile à confondre avec un simple retrait.
@@ -633,7 +633,7 @@ export function InvoicePanel({
     setBanningCode(code)
     setBanWarning(false)
     try {
-      await banIssuerCode(issuerKey(record.supplierName), code)
+      await banIssuerCode(issuerKey(record.supplierName, record.siren), code)
       onPatch({
         codes: record.codes.filter((c) => c !== code),
         userEdited: true,
@@ -657,6 +657,7 @@ export function InvoicePanel({
             <div className="min-w-0 flex-1">
               <IssuerCombobox
                 value={record.supplierName}
+                siren={record.siren}
                 onChange={(v) => onPatch({ supplierName: v, userEdited: true })}
                 issuers={issuers}
                 placeholder="Nom de l'émetteur (ex. Martin)"
@@ -926,7 +927,7 @@ export function InvoicePanel({
       <RevueDialog
         open={revueOpen}
         onOpenChange={setRevueOpen}
-        issuerKey={issuerKey(record.supplierName)}
+        issuerKey={issuerKey(record.supplierName, record.siren)}
         issuerLabel={record.supplierName.trim()}
       />
       {confirmDialog}

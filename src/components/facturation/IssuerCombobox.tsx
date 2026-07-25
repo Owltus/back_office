@@ -30,12 +30,16 @@ type Option = { issuer: Issuer; near: boolean }
 
 export function IssuerCombobox({
   value,
+  siren,
   onChange,
   issuers,
   placeholder,
   inputClassName,
 }: {
   value: string
+  /** SIREN lu sur la facture, s'il y en a un : rend l'émetteur mémorisable même si son nom
+   *  est court (la clé devient siren:<siren>). Aligne le message « mémorisé » sur la réalité. */
+  siren?: string
   onChange: (value: string) => void
   issuers: Issuer[]
   placeholder?: string
@@ -72,7 +76,8 @@ export function IssuerCombobox({
     q.length > 0 && !issuers.some((i) => normalizeIssuer(i.display) === q)
   // Sera-t-il RÉELLEMENT mémorisé au tamponnage ? (clé canonique assez longue). Sinon la
   // promesse « créé au tamponnage » serait un mensonge silencieux (ex. « EDF », « SFR »).
-  const learnable = canLearn(value)
+  // Un SIREN lu sur la facture rend l'émetteur mémorisable même si le nom est court.
+  const learnable = canLearn(value, siren)
   const activeIdx = Math.min(active, Math.max(0, options.length - 1))
   const hasContent = options.length > 0 || isNew
 

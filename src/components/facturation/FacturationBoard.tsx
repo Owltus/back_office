@@ -31,6 +31,7 @@ import {
   type WordPool,
 } from '#/lib/facturation/wordpool.ts'
 import { matchIssuer, type Issuer } from '#/lib/facturation/issuers.ts'
+import { extractSiren } from '#/lib/facturation/siret.ts'
 import {
   issuerMaturity,
   issuerPrior,
@@ -90,8 +91,9 @@ function issuerHintFor(
   issuers: Issuer[],
   model: IssuerCodes,
   denylist: IssuerDenylist,
+  siren?: string,
 ): IssuerHint | undefined {
-  const known = matchIssuer(text, issuers)
+  const known = matchIssuer(text, issuers, siren)
   if (!known) return undefined
   const deny = deniedCodes(denylist, known.name)
   const mat = issuerMaturity(model, known.name)
@@ -121,15 +123,19 @@ async function processInvoice(
     // Empreinte du document (natif → texte, OCR → octets) : identifie le PDF pour la détection
     // de doublon (déjà appris ?) et le journal d'apprentissage.
     const hash = await hashDocument(res.method, res.text, record.file)
-    // Pré-remplissage de l'émetteur, par priorité : émetteur DÉJÀ appris présent
-    // dans le texte > mot-clé d'une règle reconnue > vide (jamais deviné). Résolu AVANT
-    // la détection pour en dériver le prior émetteur (filtre fort) et sa denylist.
-    const known = matchIssuer(res.text, issuers)
+    // SIREN lu sur la facture (SIRET/SIREN validé Luhn) : identité émetteur fiable, calculée
+    // UNE fois ici puis portée par le record → clé canonique cohérente pour reconnaître,
+    // apprendre et curer. undefined si aucun numéro valide (repli nom).
+    const siren = extractSiren(res.text) ?? undefined
+    // Pré-remplissage de l'émetteur, par priorité : émetteur DÉJÀ appris (reconnu par SIREN
+    // d'abord, sinon par son nom dans le texte) > mot-clé d'une règle reconnue > vide (jamais
+    // deviné). Résolu AVANT la détection pour en dériver le prior émetteur et sa denylist.
+    const known = matchIssuer(res.text, issuers, siren)
     const d = detect(
       res.text,
       undefined,
       pool,
-      issuerHintFor(res.text, issuers, issuerCodes, issuerDenylist),
+      issuerHintFor(res.text, issuers, issuerCodes, issuerDenylist, siren),
     )
     patchInvoice(record.id, {
       status: 'ready',
@@ -142,6 +148,7 @@ async function processInvoice(
       // Compte pré-rempli quand le code n'en a qu'un ; à choisir sinon (couple code+compte).
       comptes: fillComptes(d.codes),
       hash,
+      siren,
       duplicate: knownHashes.has(hash),
       supplierName:
         known?.display ?? (d.supplier ? (d.matchedKeyword ?? '') : ''),
@@ -215,7 +222,7 @@ export function FacturationBoard() {
       const { detection, codes } = redetect(
         r.text,
         pool,
-        issuerHintFor(r.text, issuers, issuerCodes, issuerDenylist),
+        issuerHintFor(r.text, issuers, issuerCodes, issuerDenylist, r.siren),
       )
       const same =
         codes.length === r.codes.length &&
@@ -291,7 +298,7 @@ export function FacturationBoard() {
   // Anomalies de l'émetteur SÉLECTIONNÉ (outliers) → pastille orange sur l'engrenage.
   // Contextuel : le badge suit l'émetteur affiché, comme le modal de contrôle.
   const anomalyCount = useMemo(() => {
-    const key = selected ? issuerKey(selected.supplierName) : ''
+    const key = selected ? issuerKey(selected.supplierName, selected.siren) : ''
     if (!key) return 0
     return reviewQueue(serverPool, issuerCodes).filter(
       (a) => a.kind === 'issuer-outlier' && a.data.issuerKey === key,
