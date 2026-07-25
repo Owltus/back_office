@@ -5,7 +5,7 @@ export const STATUS_LABEL: Record<RoomStatus, string> = {
   nettoyee: 'Nettoyée',
   // « Bloquée » = utilisée mais non nettoyée (reste due, roule). Le défaut est
   // `nettoyee` (absence de ligne), donc `non_nettoyee` est toujours explicite.
-  non_nettoyee: 'Bloquée',
+  non_nettoyee: 'Bloquée du jour',
   refus: 'Refus',
 }
 
@@ -77,7 +77,11 @@ export const CELL_STATES: Record<
     webClass: 'rapro-room-clean',
     legendMod: 'is-clean',
   },
-  todo: { label: 'Bloquée', webClass: 'rapro-room-todo', legendMod: 'is-todo' },
+  todo: {
+    label: 'Bloquée du jour',
+    webClass: 'rapro-room-todo',
+    legendMod: 'is-todo',
+  },
   refus: {
     label: 'Refus',
     webClass: 'rapro-room-refus',

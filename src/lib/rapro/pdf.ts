@@ -18,10 +18,9 @@ import {
   CELL_STATES,
   cellState,
   LEGEND_ORDER,
-  statusOf
-  
+  statusOf,
 } from '#/lib/rapro/constants.ts'
-import type {CellState} from '#/lib/rapro/constants.ts';
+import type { CellState } from '#/lib/rapro/constants.ts'
 import { FLOORS } from '#/lib/rapro/rooms.ts'
 import type { RoomStatus } from '#/lib/rapro/types.ts'
 
@@ -139,9 +138,9 @@ function renderRaproDocument(
     ['Vendues', counts.sold],
     ['Nettoyées', counts.clean],
     ['Refus', counts.refus],
-    ['Bloquées', counts.bloquee],
+    ['Bloquées du jour', counts.bloquee],
   ]
-  if (carried.size > 0) cells.push(['Bloq. veille', carried.size])
+  if (carried.size > 0) cells.push(['Bloquées de la veille', carried.size])
   const cw = CONTENT_W / cells.length
   cells.forEach(([lbl, val], i) => {
     const cx = LEFT + i * cw
@@ -209,7 +208,7 @@ function renderRaproDocument(
       fill: CELL_FILL[st].fill,
     })),
     {
-      label: 'Bloquée la veille',
+      label: 'Bloquée de la veille',
       fill: [255, 255, 255],
       border: CARRIED_BORDER,
     },

@@ -760,17 +760,17 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
             />
             <StatTile
               value={dash(stats.todo)}
-              label="Bloquées"
+              label="Bloquées du jour"
               accent={CATEGORY_COLOR.bloquee}
-              hint="Chambres occupées non nettoyées (bloquées, restent dues)."
+              hint="Chambres occupées non nettoyées ce jour (restent dues)."
             />
-            {/* Bloquées la veille (reportées) : carte affichée SEULEMENT s'il y en a. */}
+            {/* Bloquées de la veille (reportées) : carte affichée SEULEMENT s'il y en a. */}
             {carried.size > 0 && (
               <StatTile
                 value={carried.size}
-                label="Bloquées la veille"
+                label="Bloquées de la veille"
                 accent={CATEGORY_COLOR.bloquee}
-                hint="Chambres bloquées un jour précédent, non encore résolues (liseré rouge)."
+                hint="Chambres bloquées depuis la veille, pas encore résolues (liseré rouge)."
               />
             )}
           </div>
@@ -832,7 +832,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
                       const isCarried = carried.has(room)
                       const cls =
                         CELL_STATES[cellState(status, isEmpty)].webClass
-                      const label = `Chambre ${room} — ${STATUS_LABEL[status]}${isEmpty ? ' — non vendue' : ''}${isCarried ? ' — bloquée la veille' : ''}`
+                      const label = `Chambre ${room} — ${STATUS_LABEL[status]}${isEmpty ? ' — non vendue' : ''}${isCarried ? ' — bloquée de la veille' : ''}`
                       // Clic GAUCHE = cycle des couleurs (instantané) ; clic DROIT
                       // = pose/retire le liseré « bloquée la veille » À LA MAIN. Un
                       // jour clôturé reste figé (mutations gardées par `canEditFields`).
