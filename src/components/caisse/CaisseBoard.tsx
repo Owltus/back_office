@@ -1055,7 +1055,6 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
                 id="caisse-hotelier"
                 value={hotelierName}
                 onChange={(e) => setHotelierName(e.target.value)}
-                placeholder="Nom / initiales"
               />
             </div>
           </div>
