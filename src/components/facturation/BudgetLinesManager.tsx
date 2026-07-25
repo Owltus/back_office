@@ -21,29 +21,31 @@ import {
 import { useConfirm } from '#/components/shared/ConfirmDialog.tsx'
 import { useFacturationModel } from '#/components/facturation/useFacturationModel.ts'
 import { useBudgetLinesCuration } from '#/components/facturation/useBudgetLinesCuration.ts'
+import { imputationKey } from '#/lib/facturation/budgetRegistry.ts'
 import type { BudgetLine } from '#/lib/facturation/types.ts'
 
 /*
- * Modal « Gérer les imputations » — CRUD du référentiel (table facturation_budget_lines) via RPC.
- * Habillage ÉPURÉ calqué sur le CodePicker : recherche à la loupe, groupes par section, footer.
- * Actions en ICÔNES seules + tooltips de l'app (crayon = modifier, poubelle = supprimer, cadenas
- * = déjà utilisée). Les DOMAINES (tags) ne sont pas affichés (jugés confusants) mais restent
- * CHERCHABLES et préservés à l'édition (pass-through). Règles métier :
- *  - le `code` est IMMUABLE en édition (PK + FK dans wordpool/issuer_codes/denylist/learned_docs) ;
- *  - SUPPRESSION BLOQUÉE si l'imputation est déjà utilisée ; sinon confirmation (irréversible) ;
- *    la RPC reste le garde-fou serveur.
+ * Modal « Gérer les imputations » — CRUD du référentiel (table facturation_ref_imputations) via RPC.
+ * Une imputation = un COUPLE (code analytique + compte) : c'est la granularité de la liste, de
+ * l'édition et de la suppression. Habillage ÉPURÉ calqué sur le CodePicker : recherche à la loupe,
+ * groupes par section, footer. Actions en ICÔNES seules + tooltips (crayon = modifier, poubelle =
+ * supprimer, cadenas = protégée). Règles métier :
+ *  - le code ET le compte forment la clé (PK) : immuables en édition (renommer = supprimer/recréer) ;
+ *  - SUPPRESSION BLOQUÉE seulement pour le DERNIER compte d'un code encore utilisé (sa suppression
+ *    effacerait un libellé actif) ; retirer un compte d'un code multi-comptes reste permis ;
+ *    la RPC reste le garde-fou serveur. Le réimport en masse reste le canal d'édition global.
  * Admin-only (hérité de la route /facturation).
  */
 
 interface Draft {
   code: string
+  compte: string
   label: string
   category: string
   hint: string
-  tags: string[] // préservés à l'édition (non éditables ici), vides à la création
 }
 
-const EMPTY: Draft = { code: '', label: '', category: '', hint: '', tags: [] }
+const EMPTY: Draft = { code: '', compte: '', label: '', category: '', hint: '' }
 
 export function BudgetLinesManager({
   open,
@@ -62,10 +64,11 @@ export function BudgetLinesManager({
   const [isNew, setIsNew] = useState(false)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
-  const [busy, setBusy] = useState<string | null>(null) // code en cours de suppression
+  const [busy, setBusy] = useState<string | null>(null) // couple en cours de suppression
   const [rowError, setRowError] = useState<Record<string, string>>({})
 
-  // Croise le cache déjà chargé pour savoir quels codes sont UTILISÉS (→ suppression bloquée).
+  // Croise le cache déjà chargé pour savoir quels CODES sont UTILISÉS (le blocage de suppression
+  // se joue au niveau du code, cf. la garde serveur : dernier compte d'un code utilisé).
   const usage = useMemo(() => {
     const detail = new Map<string, Map<string, number>>()
     const mark = (code: string, where: string) => {
@@ -93,27 +96,26 @@ export function BudgetLinesManager({
       .join(', ')
   }
 
-  // Le référentiel a désormais une ligne par COUPLE (code+compte) ; ce gestionnaire (CRUD legacy
-  // par code) raisonne par CODE → on déduplique par code (1re occurrence = ordre du plan) pour
-  // garder l'affichage « une ligne par imputation » d'avant la migration au couple.
-  const codeLines = useMemo(() => {
-    const seen = new Map<string, BudgetLine>()
-    for (const l of budgetLines) if (!seen.has(l.code)) seen.set(l.code, l)
-    return [...seen.values()]
+  // Nombre de comptes par code → distingue le DERNIER compte (suppression protégée si code utilisé)
+  // d'un compte parmi plusieurs (toujours supprimable).
+  const countByCode = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const l of budgetLines) m.set(l.code, (m.get(l.code) ?? 0) + 1)
+    return m
   }, [budgetLines])
 
-  // Filtre puis groupage par section (ordre du plan préservé), façon CodePicker. La recherche
-  // couvre AUSSI les domaines (tags) même s'ils ne sont pas affichés → on les retrouve.
+  // Filtre puis groupage par section (ordre du plan préservé), façon CodePicker. Une ligne par
+  // COUPLE ; la recherche couvre code, compte, libellé et section.
   const groups = useMemo(() => {
     const needle = q.trim().toLowerCase()
     const out: { category: string; lines: BudgetLine[] }[] = []
-    for (const l of codeLines) {
+    for (const l of budgetLines) {
       if (
         needle &&
         !l.code.toLowerCase().includes(needle) &&
+        !l.compte.toLowerCase().includes(needle) &&
         !l.label.toLowerCase().includes(needle) &&
-        !l.category.toLowerCase().includes(needle) &&
-        !l.tags.some((t) => t.toLowerCase().includes(needle))
+        !l.category.toLowerCase().includes(needle)
       )
         continue
       let g = out.find((x) => x.category === l.category)
@@ -124,14 +126,14 @@ export function BudgetLinesManager({
       g.lines.push(l)
     }
     return out
-  }, [codeLines, q])
+  }, [budgetLines, q])
 
   const categories = useMemo(
-    () => [...new Set(codeLines.map((l) => l.category))].sort(),
-    [codeLines],
+    () => [...new Set(budgetLines.map((l) => l.category))].sort(),
+    [budgetLines],
   )
-  const codeExists = (code: string): boolean =>
-    codeLines.some((l) => l.code === code)
+  const coupleExists = (code: string, compte: string): boolean =>
+    budgetLines.some((l) => l.code === code && l.compte === compte)
 
   function openNew() {
     setDraft(EMPTY)
@@ -141,10 +143,10 @@ export function BudgetLinesManager({
   function openEdit(l: BudgetLine) {
     setDraft({
       code: l.code,
+      compte: l.compte,
       label: l.label,
       category: l.category,
       hint: l.hint ?? '',
-      tags: l.tags,
     })
     setIsNew(false)
     setFormError(null)
@@ -157,16 +159,21 @@ export function BudgetLinesManager({
   async function save() {
     if (!draft) return
     const code = draft.code.trim()
+    const compte = draft.compte.trim()
     if (code.length < 3) {
       setFormError('Le code doit faire au moins 3 caractères.')
+      return
+    }
+    if (compte.length < 1) {
+      setFormError('Le compte est requis.')
       return
     }
     if (draft.label.trim().length < 1) {
       setFormError('Le libellé est requis.')
       return
     }
-    if (isNew && codeExists(code)) {
-      setFormError(`Le code « ${code} » existe déjà.`)
+    if (isNew && coupleExists(code, compte)) {
+      setFormError(`L'imputation ${code} / ${compte} existe déjà.`)
       return
     }
     setSaving(true)
@@ -175,13 +182,11 @@ export function BudgetLinesManager({
       await saveLine(
         {
           code,
-          // compte non géré par ce CRUD legacy (référentiel couplé réimporté en masse) — cf. le
-          // TODO(compte) de cloudService.upsertBudgetLine ; posé vide pour satisfaire BudgetLine.
-          compte: '',
+          compte,
           label: draft.label.trim(),
           category: draft.category.trim(),
           hint: draft.hint.trim(),
-          tags: draft.tags, // inchangés (préservés à l'édition)
+          tags: [], // le référentiel au couple ne porte plus de domaines (tags)
         },
         { create: isNew },
       )
@@ -190,7 +195,7 @@ export function BudgetLinesManager({
       const errCode = (e as { code?: string })?.code
       setFormError(
         errCode === '23505'
-          ? 'Ce code existe déjà en base (rafraîchissez le référentiel).'
+          ? 'Cette imputation existe déjà en base (rafraîchissez le référentiel).'
           : 'Enregistrement impossible (droits ou base indisponibles).',
       )
     } finally {
@@ -198,13 +203,18 @@ export function BudgetLinesManager({
     }
   }
 
-  async function del(code: string) {
+  async function del(code: string, compte: string) {
     const ok = await confirm({
       title: 'Supprimer cette imputation ?',
       description: (
         <>
-          Supprime <b>définitivement</b> l'imputation <b>{code}</b> du
-          référentiel. Action <b>irréversible</b> — sans effet, en revanche, sur
+          Supprime <b>définitivement</b> l'imputation <b>{code}</b>
+          {compte ? (
+            <>
+              {' '}/ <b>{compte}</b>
+            </>
+          ) : null}{' '}
+          du référentiel. Action <b>irréversible</b>, sans effet en revanche sur
           les factures déjà tamponnées.
         </>
       ),
@@ -212,14 +222,15 @@ export function BudgetLinesManager({
       destructive: true,
     })
     if (!ok) return
-    setBusy(code)
-    setRowError((e) => ({ ...e, [code]: '' }))
+    const key = imputationKey(code, compte)
+    setBusy(key)
+    setRowError((e) => ({ ...e, [key]: '' }))
     try {
-      await removeLine(code)
+      await removeLine(code, compte)
     } catch {
       setRowError((e) => ({
         ...e,
-        [code]: 'Suppression refusée (imputation utilisée ou droits).',
+        [key]: 'Suppression refusée (dernier compte actif du code, ou droits).',
       }))
     } finally {
       setBusy(null)
@@ -234,9 +245,9 @@ export function BudgetLinesManager({
           <DialogDescription className="text-xs">
             {draft
               ? isNew
-                ? 'Nouvelle imputation.'
-                : 'Modifier une imputation — le code n’est pas modifiable.'
-              : 'Cliquez le crayon pour modifier. Une imputation déjà utilisée ne peut pas être supprimée.'}
+                ? 'Nouvelle imputation (code + compte).'
+                : 'Modifier une imputation (code et compte non modifiables).'
+              : 'Cliquez le crayon pour modifier. Le dernier compte d’un code utilisé ne peut pas être supprimé.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -244,21 +255,37 @@ export function BudgetLinesManager({
           /* --- Formulaire création / édition --- */
           <>
             <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-3">
-              <div className="flex flex-col gap-1">
-                <Label htmlFor="bl-code">
-                  Code{' '}
-                  {isNew ? '(unique, non modifiable ensuite)' : '(immuable)'}
-                </Label>
-                <Input
-                  id="bl-code"
-                  value={draft.code}
-                  disabled={!isNew}
-                  onChange={(e) =>
-                    setDraft((d) => d && { ...d, code: e.target.value })
-                  }
-                  placeholder="ex. FMELECoooo"
-                  className="font-mono"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="bl-code">
+                    Code {isNew ? '(non modifiable ensuite)' : '(immuable)'}
+                  </Label>
+                  <Input
+                    id="bl-code"
+                    value={draft.code}
+                    disabled={!isNew}
+                    onChange={(e) =>
+                      setDraft((d) => d && { ...d, code: e.target.value })
+                    }
+                    placeholder="ex. FMELECoooo"
+                    className="font-mono"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="bl-compte">
+                    Compte {isNew ? '(non modifiable ensuite)' : '(immuable)'}
+                  </Label>
+                  <Input
+                    id="bl-compte"
+                    value={draft.compte}
+                    disabled={!isNew}
+                    onChange={(e) =>
+                      setDraft((d) => d && { ...d, compte: e.target.value })
+                    }
+                    placeholder="ex. 60610000"
+                    className="font-mono"
+                  />
+                </div>
               </div>
               <div className="flex flex-col gap-1">
                 <Label htmlFor="bl-label">Libellé</Label>
@@ -328,7 +355,7 @@ export function BudgetLinesManager({
               <Input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder="Rechercher (code, libellé, section, domaine)…"
+                placeholder="Rechercher (code, compte, libellé, section)…"
                 className="h-9 pl-8"
               />
             </div>
@@ -352,9 +379,11 @@ export function BudgetLinesManager({
                         <span className="h-px flex-1 bg-primary/20" />
                       </div>
                       {g.lines.map((l) => {
-                        const used = usage.has(l.code)
+                        const key = imputationKey(l.code, l.compte)
+                        const locked =
+                          usage.has(l.code) && (countByCode.get(l.code) ?? 0) <= 1
                         return (
-                          <div key={l.code}>
+                          <div key={key}>
                             <div className="group flex items-center gap-1 rounded-md px-2 py-1.5 transition-colors hover:bg-secondary/60">
                               <div className="min-w-0 flex-1">
                                 <p className="truncate text-sm text-foreground">
@@ -362,6 +391,11 @@ export function BudgetLinesManager({
                                 </p>
                                 <p className="truncate font-mono text-[11px] text-muted-foreground">
                                   {l.code}
+                                  {l.compte && (
+                                    <span className="ml-2 text-muted-foreground/60">
+                                      {l.compte}
+                                    </span>
+                                  )}
                                 </p>
                               </div>
                               <Tooltip>
@@ -369,7 +403,7 @@ export function BudgetLinesManager({
                                   <button
                                     type="button"
                                     onClick={() => openEdit(l)}
-                                    aria-label={`Modifier ${l.code}`}
+                                    aria-label={`Modifier ${l.code} ${l.compte}`}
                                     className="shrink-0 rounded p-1 text-muted-foreground opacity-60 transition-colors group-hover:opacity-100 hover:text-foreground"
                                   >
                                     <Pencil className="size-3.5" />
@@ -377,7 +411,7 @@ export function BudgetLinesManager({
                                 </TooltipTrigger>
                                 <TooltipContent>Modifier</TooltipContent>
                               </Tooltip>
-                              {used ? (
+                              {locked ? (
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <span className="shrink-0 p-1 text-muted-foreground/40">
@@ -385,8 +419,8 @@ export function BudgetLinesManager({
                                     </span>
                                   </TooltipTrigger>
                                   <TooltipContent className="max-w-xs whitespace-normal">
-                                    Déjà utilisée ({usageLabel(l.code)}) —
-                                    suppression impossible.
+                                    Seul compte d’un code déjà utilisé (
+                                    {usageLabel(l.code)}). Suppression impossible.
                                   </TooltipContent>
                                 </Tooltip>
                               ) : (
@@ -394,12 +428,12 @@ export function BudgetLinesManager({
                                   <TooltipTrigger asChild>
                                     <button
                                       type="button"
-                                      onClick={() => del(l.code)}
-                                      disabled={busy === l.code}
-                                      aria-label={`Supprimer ${l.code}`}
+                                      onClick={() => del(l.code, l.compte)}
+                                      disabled={busy === key}
+                                      aria-label={`Supprimer ${l.code} ${l.compte}`}
                                       className="shrink-0 rounded p-1 text-muted-foreground opacity-60 transition-colors group-hover:opacity-100 hover:text-destructive"
                                     >
-                                      {busy === l.code ? (
+                                      {busy === key ? (
                                         <Loader2 className="size-3.5 animate-spin" />
                                       ) : (
                                         <Trash2 className="size-3.5" />
@@ -410,9 +444,9 @@ export function BudgetLinesManager({
                                 </Tooltip>
                               )}
                             </div>
-                            {rowError[l.code] && (
+                            {rowError[key] && (
                               <p className="px-2 text-[11px] text-destructive">
-                                {rowError[l.code]}
+                                {rowError[key]}
                               </p>
                             )}
                           </div>
@@ -425,8 +459,8 @@ export function BudgetLinesManager({
             </TooltipProvider>
             <div className="flex items-center justify-between border-t border-border px-4 py-2.5">
               <span className="text-sm text-muted-foreground tabular-nums">
-                {codeLines.length} imputation
-                {codeLines.length > 1 ? 's' : ''}
+                {budgetLines.length} imputation
+                {budgetLines.length > 1 ? 's' : ''}
               </span>
               <Button size="sm" onClick={openNew}>
                 <Plus className="size-4" />

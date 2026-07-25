@@ -122,33 +122,34 @@ export async function fetchBudgetLines(): Promise<BudgetLine[]> {
   return lines
 }
 
-// TODO(compte) : ce CRUD unitaire écrit encore l'ANCIENNE table (RPC facturation_budget_line_*)
-// et ne propage PAS le `compte` (le référentiel « couple » se réimporte en masse via
-// facturation_ref_reimport). Conservé tel quel pour compiler / ne pas régresser le gestionnaire
-// existant ; à réécrire sur facturation_ref_imputations dans un lot ultérieur.
-
-/** Crée ou met à jour une imputation (RPC ; code IMMUABLE, garde de rôle interne). `create:true`
- *  refuse d'écraser un code déjà en base (unicité SERVEUR à la création, SQLSTATE 23505). */
+/** Crée ou met à jour une imputation au COUPLE (code + compte ; RPC, garde de rôle interne).
+ *  `create:true` refuse d'écraser un couple déjà en base (unicité SERVEUR, SQLSTATE 23505).
+ *  section/libelle/description sont portés PAR COUPLE ; le réimport reste le canal de masse. */
 export async function upsertBudgetLine(
   line: BudgetLine,
   opts?: { sort?: number; create?: boolean },
 ): Promise<void> {
-  const { error } = await supabase.rpc('facturation_budget_line_upsert', {
+  const { error } = await supabase.rpc('facturation_ref_upsert', {
     p_code: line.code,
-    p_label: line.label,
-    p_category: line.category,
-    p_hint: line.hint ?? '',
-    p_tags: line.tags,
+    p_compte: line.compte,
+    p_section: line.category,
+    p_libelle: line.label,
+    p_description: line.hint ?? '',
     p_sort: opts?.sort ?? null,
     p_create: opts?.create ?? false,
   })
   if (error) throw error
 }
 
-/** Supprime une imputation NON utilisée (RPC). Refuse (SQLSTATE 23503) si déjà référencée. */
-export async function deleteBudgetLine(code: string): Promise<void> {
-  const { error } = await supabase.rpc('facturation_budget_line_delete', {
+/** Supprime une imputation (couple code + compte ; RPC). Refuse (SQLSTATE 23503) si c'est le
+ *  DERNIER compte d'un code encore utilisé (sa suppression effacerait un libellé actif). */
+export async function deleteBudgetLine(
+  code: string,
+  compte: string,
+): Promise<void> {
+  const { error } = await supabase.rpc('facturation_ref_delete', {
     p_code: code,
+    p_compte: compte,
   })
   if (error) throw error
 }
