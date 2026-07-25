@@ -762,7 +762,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
               value={dash(stats.todo)}
               label="Bloquées du jour"
               accent={CATEGORY_COLOR.bloquee}
-              hint="Chambres occupées non nettoyées ce jour (restent dues)."
+              hint="Chambres non nettoyées aujourd'hui, reportées à demain."
             />
             {/* Bloquées de la veille (reportées) : carte affichée SEULEMENT s'il y en a. */}
             {carried.size > 0 && (
@@ -770,7 +770,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
                 value={carried.size}
                 label="Bloquées de la veille"
                 accent={CATEGORY_COLOR.bloquee}
-                hint="Chambres bloquées depuis la veille, pas encore résolues (liseré rouge)."
+                hint="Chambres bloquées hier, encore à nettoyer aujourd'hui."
               />
             )}
           </div>
