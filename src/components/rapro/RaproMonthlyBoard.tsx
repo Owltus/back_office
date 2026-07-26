@@ -169,8 +169,8 @@ export function RaproMonthlyBoard({
         </tbody>
       </AnalytiqueTable>
 
-      {/* Graphique */}
-      <AnalytiqueCharts>
+      {/* Graphique unique, pleine largeur */}
+      <AnalytiqueCharts cols={1}>
         <KpiLineChart
           title="Chambres nettoyées par jour"
           data={chartData}
