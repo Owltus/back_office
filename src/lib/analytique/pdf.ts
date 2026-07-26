@@ -366,32 +366,29 @@ function renderDocument(
     y += 4
   }
 
-  // Graphes EN BAS : deux colonnes côte à côte (une seule colonne si un graphe).
+  // Graphes EN BAS, côte à côte (une seule colonne si un seul graphe). On n'AJOUTE
+  // JAMAIS de page pour eux : s'ils ne tiennent pas sous le tableau sur la page
+  // courante, on les OMET — le document doit rester d'une seule page (cartes +
+  // tableau priment). Ils reviennent dès que la place le permet (vues annuelles).
   if (charts.length > 0) {
     const gap = 6
     const maxH = 55
-    if (charts.length === 1) {
-      const need = 4 + Math.min(CONTENT_W / charts[0].ratio, maxH)
-      if (y + need > PAGE_BOTTOM) {
-        pdf.addPage()
-        y = 18
-      }
-      y += drawChartBlock(pdf, charts[0], LEFT, y, CONTENT_W, maxH) + 6
-    } else {
-      const colW = (CONTENT_W - gap) / 2
+    const colW = charts.length === 1 ? CONTENT_W : (CONTENT_W - gap) / 2
+    const rowHeight = (a: PdfChart, b?: PdfChart) =>
+      4 +
+      Math.max(
+        Math.min(colW / a.ratio, maxH),
+        b ? Math.min(colW / b.ratio, maxH) : 0,
+      ) +
+      6
+    let need = 0
+    for (let i = 0; i < charts.length; i += 2)
+      need += rowHeight(charts[i], charts[i + 1])
+
+    if (y + need <= PAGE_BOTTOM) {
       for (let i = 0; i < charts.length; i += 2) {
         const a = charts[i]
         const b = charts[i + 1]
-        const need =
-          4 +
-          Math.max(
-            Math.min(colW / a.ratio, maxH),
-            b ? Math.min(colW / b.ratio, maxH) : 0,
-          )
-        if (y + need > PAGE_BOTTOM) {
-          pdf.addPage()
-          y = 18
-        }
         const dA = drawChartBlock(pdf, a, LEFT, y, colW, maxH)
         const dB = b
           ? drawChartBlock(pdf, b, LEFT + colW + gap, y, colW, maxH)
