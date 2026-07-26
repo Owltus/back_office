@@ -11,6 +11,13 @@ import {
 } from 'lucide-react'
 
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
+import { Button } from '#/components/ui/button.tsx'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '#/components/ui/tooltip.tsx'
 import { InvoiceList } from '#/components/facturation/InvoiceList.tsx'
 import {
   EmptyImputation,
@@ -396,41 +403,65 @@ export function FacturationBoard() {
               </div>
             </button>
           ) : (
-            <>
-              <InvoiceList
-                records={records}
-                selectedId={selectedId}
-                onSelect={selectInvoice}
-                onRemove={removeInvoice}
-                className="min-h-0 flex-1 flex-col overflow-y-auto"
-              />
-              <button
-                type="button"
-                onClick={openPicker}
-                className="flex shrink-0 items-center justify-center gap-2 rounded-lg border border-dashed border-border p-2.5 text-sm text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground"
-              >
-                <Plus className="size-4" />
-                Ajouter des PDF
-              </button>
-              <button
-                type="button"
-                onClick={clearFacturation}
-                className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
-              >
-                <Trash2 className="size-4" />
-                Tout effacer
-              </button>
-            </>
+            <InvoiceList
+              records={records}
+              selectedId={selectedId}
+              onSelect={selectInvoice}
+              onRemove={removeInvoice}
+              className="min-h-0 flex-1 flex-col overflow-y-auto"
+            />
           )}
-          {/* Consultation de l'historique des factures apprises (toujours accessible). */}
-          <button
-            type="button"
-            onClick={() => setHistOpen(true)}
-            className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
-          >
-            <History className="size-4" />
-            Historique
-          </button>
+
+          {/* Actions groupées : « Ajouter » en bouton prioritaire, les fonctions secondaires en
+              icônes seules (avec tooltip). À vide, seul l'historique a du sens (le grand dépôt
+              ci-dessus sert déjà à ajouter). */}
+          <TooltipProvider delayDuration={300}>
+            {records.length === 0 ? (
+              <Button
+                variant="outline"
+                onClick={() => setHistOpen(true)}
+                className="shrink-0"
+              >
+                <History className="size-4" />
+                Historique
+              </Button>
+            ) : (
+              <div className="flex shrink-0 items-stretch gap-px overflow-hidden rounded-lg bg-border">
+                <Button onClick={openPicker} className="flex-1 rounded-none">
+                  <Plus className="size-4" />
+                  Ajouter des PDF
+                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="secondary"
+                      size="icon"
+                      onClick={clearFacturation}
+                      className="rounded-none"
+                      aria-label="Tout effacer"
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Tout effacer</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="secondary"
+                      size="icon"
+                      onClick={() => setHistOpen(true)}
+                      className="rounded-none"
+                      aria-label="Historique"
+                    >
+                      <History className="size-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Historique</TooltipContent>
+                </Tooltip>
+              </div>
+            )}
+          </TooltipProvider>
         </aside>
 
         {/* CENTRE : grand aperçu + zone d'informations sous le PDF. */}
