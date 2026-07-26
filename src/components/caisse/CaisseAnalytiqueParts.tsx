@@ -2,6 +2,7 @@ import {
   AnalytiqueCardsGrid,
   StatCard,
 } from '#/components/analytique/AnalytiqueCards.tsx'
+import { Tip } from '#/components/shared/Tip.tsx'
 import { fmtEur, fmtInt } from '#/lib/caisse/format.ts'
 import type { CaisseSummary } from '#/lib/caisse/analytics.ts'
 import { cn } from '#/lib/utils.ts'
@@ -21,7 +22,17 @@ import { cn } from '#/lib/utils.ts'
  * Cartes : Total encaissé, Espèces et Carte (part du total en sous-titre), et le
  * nombre d'écarts. La carte « Carte » cumule CB (TPE) et Adyen (web) ; le tableau,
  * lui, les détaille colonne par colonne.
+ *
+ * « Écarts » est un SEUL nombre volontairement combiné (écart d'encaissement OU
+ * écart de fond de caisse), explicité au survol (ECARTS_HINT) sur la carte comme
+ * sur l'en-tête du tableau — le détail de CE qui a divergé se lit sur la feuille
+ * du jour, pas ici.
  */
+
+/** Explication de « Écarts », partagée par la carte (hint) et l'en-tête du tableau
+ * (infobulle) — un libellé unique, jamais divergent entre les deux. */
+const ECARTS_HINT =
+  'Feuilles clôturées présentant un écart : soit la recette comptée diffère de l’attendu (espèces, CB, chèques vacances ou Adyen), soit le fond de caisse n’est pas à 150 €.'
 
 /** Part d'un mode dans le total encaissé, en sous-titre de carte (« 38 % du total »).
  *  Rien si le total est nul (période sans encaissement). */
@@ -67,7 +78,7 @@ export function CaisseAnalytiqueCards({
       <StatCard
         label="Écarts"
         accent="#fbbf24"
-        hint="Nombre de feuilles clôturées présentant un écart (de paiement ou de fond de caisse)."
+        hint={ECARTS_HINT}
         value={fmtInt(summary.anomalies)}
       />
     </AnalytiqueCardsGrid>
@@ -99,7 +110,14 @@ export function CaisseStatsHead({ firstLabel }: { firstLabel: string }) {
         <span className="sm:hidden">Total</span>
       </th>
       <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">
-        Écarts
+        <Tip label={ECARTS_HINT}>
+          <span
+            tabIndex={0}
+            className="cursor-help underline decoration-dotted decoration-muted-foreground/40 underline-offset-2"
+          >
+            Écarts
+          </span>
+        </Tip>
       </th>
     </tr>
   )
