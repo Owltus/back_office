@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Link } from '@tanstack/react-router'
+import { useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 
 import { AnalytiqueShell } from '#/components/analytique/AnalytiqueShell.tsx'
@@ -80,6 +80,8 @@ export function CaisseAnalytiqueMoisBoard({
 
   const monthLabel = MONTHS_LABELS[month - 1] || ''
 
+  const navigate = useNavigate()
+
   return (
     <AnalytiqueShell
       title={`${monthLabel} ${year}`}
@@ -107,7 +109,8 @@ export function CaisseAnalytiqueMoisBoard({
             return (
               <tr
                 key={day}
-                className={`border-b border-border/50 ${
+                onClick={() => navigate({ to: '/caisse', search: { date } })}
+                className={`cursor-pointer border-b border-border/50 transition-colors hover:bg-accent/40 ${
                   hasData ? '' : 'bg-muted/20'
                 }`}
               >
@@ -116,13 +119,7 @@ export function CaisseAnalytiqueMoisBoard({
                     hasData ? 'text-foreground' : 'text-muted-foreground'
                   }`}
                 >
-                  <Link
-                    to="/caisse"
-                    search={{ date }}
-                    className="hover:text-primary hover:underline"
-                  >
-                    {dayName} {day}
-                  </Link>
+                  {dayName} {day}
                 </td>
                 <CaisseStatCells stats={d} />
               </tr>

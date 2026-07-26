@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Link } from '@tanstack/react-router'
+import { useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 
 import { AnalytiqueShell } from '#/components/analytique/AnalytiqueShell.tsx'
@@ -78,6 +78,8 @@ export function ParkingAnalytiqueMoisBoard({
 
   const monthLabel = `${MONTHS_LABELS[month - 1] || ''} ${year}`
 
+  const navigate = useNavigate()
+
   return (
     <AnalytiqueShell
       title={monthLabel}
@@ -144,7 +146,8 @@ export function ParkingAnalytiqueMoisBoard({
             return (
               <tr
                 key={d.date}
-                className={`border-b border-border/50 ${
+                onClick={() => navigate({ to: '/parking', search: { date: d.date } })}
+                className={`cursor-pointer border-b border-border/50 transition-colors hover:bg-accent/40 ${
                   hasData ? '' : 'bg-muted/20'
                 }`}
               >
@@ -153,13 +156,7 @@ export function ParkingAnalytiqueMoisBoard({
                     hasData ? 'text-foreground' : 'text-muted-foreground'
                   }`}
                 >
-                  <Link
-                    to="/parking"
-                    search={{ date: d.date }}
-                    className="hover:text-primary hover:underline"
-                  >
-                    {d.day}
-                  </Link>
+                  {d.day}
                 </td>
                 <td className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums">
                   {fmtPct(d.occupancy)}

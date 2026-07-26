@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
+import { useNavigate } from '@tanstack/react-router'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 
@@ -68,6 +68,8 @@ export function RaproMonthlyBoard({
     nettoyee: r.nettoyee,
   }))
 
+  const navigate = useNavigate()
+
   return (
     <AnalytiqueShell
       title={monthLabel}
@@ -130,15 +132,13 @@ export function RaproMonthlyBoard({
             const d = parseDateStr(r.date)
             const lbl = d ? format(d, 'EEE d', { locale: fr }) : String(r.day)
             return (
-              <tr key={r.date} className="border-b border-border/50">
+              <tr
+                key={r.date}
+                onClick={() => navigate({ to: '/rapro', search: { date: r.date } })}
+                className="cursor-pointer border-b border-border/50 transition-colors hover:bg-accent/40"
+              >
                 <td className="whitespace-nowrap px-4 py-2 text-xs font-medium text-foreground">
-                  <Link
-                    to="/rapro"
-                    search={{ date: r.date }}
-                    className="hover:text-primary hover:underline"
-                  >
-                    {lbl}
-                  </Link>
+                  {lbl}
                 </td>
                 <RaproCatCells counts={r} />
               </tr>

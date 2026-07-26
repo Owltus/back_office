@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Link } from '@tanstack/react-router'
+import { useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 
 import { AnalytiqueShell } from '#/components/analytique/AnalytiqueShell.tsx'
@@ -97,6 +97,8 @@ export function PdjAnalytiqueMoisBoard({
 
   const monthLabel = MONTHS_LABELS[month - 1] || ''
 
+  const navigate = useNavigate()
+
   return (
     <AnalytiqueShell
       title={`${monthLabel} ${year}`}
@@ -145,7 +147,8 @@ export function PdjAnalytiqueMoisBoard({
             return (
               <tr
                 key={day}
-                className={`border-b border-border/50 ${
+                onClick={() => navigate({ to: '/pdj', search: { date } })}
+                className={`cursor-pointer border-b border-border/50 transition-colors hover:bg-accent/40 ${
                   hasData ? '' : 'bg-muted/20'
                 }`}
               >
@@ -154,13 +157,7 @@ export function PdjAnalytiqueMoisBoard({
                     hasData ? 'text-foreground' : 'text-muted-foreground'
                   }`}
                 >
-                  <Link
-                    to="/pdj"
-                    search={{ date }}
-                    className="hover:text-primary hover:underline"
-                  >
-                    {dayName} {day}
-                  </Link>
+                  {dayName} {day}
                 </td>
                 <PdjStatCells stats={s} />
               </tr>
