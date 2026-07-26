@@ -1,19 +1,18 @@
 /*
- * Messages d'information sur l'état d'une facture — logique PURE (aucun React/DOM). Alimente la
- * zone « Informations » affichée au CENTRE, sous l'aperçu du PDF : ce qui se passe (lecture,
- * erreur), ce que le tampon va faire (mémorisation par émetteur) et les points de vigilance
- * (aucune imputation, doublon, émetteur non mémorisable, facture mixte). Pensé pour un lecteur
- * non initié : une idée par message, peu de jargon.
+ * Message d'information sur l'état d'une facture — logique PURE (aucun React/DOM). Alimente la
+ * zone affichée au CENTRE, sous l'aperçu du PDF. On ne renvoie QUE l'information qui a du sens
+ * pour l'utilisateur : ce qui se passe, ce qu'il doit faire, ou ce que le tampon va retenir.
+ * Un seul message à la fois, court et sans jargon.
  *
- * Ne contient QUE des messages DÉRIVÉS du record : les erreurs d'ACTION transitoires (échec du
- * tampon ou de la mémorisation) restent dans le panneau de droite, près du bouton qui les
- * déclenche.
+ * `tone` porte le code couleur de la zone : ok (vert), info (neutre), warn (ambre), error (rouge).
+ * Les erreurs d'ACTION transitoires (échec du tampon ou de la mémorisation) restent dans le
+ * panneau de droite, près du bouton qui les déclenche.
  */
 
 import { canLearn } from '#/lib/facturation/detect.ts'
 import type { InvoiceRecord } from '#/lib/facturation/types.ts'
 
-export type NoticeTone = 'info' | 'warn' | 'error'
+export type NoticeTone = 'ok' | 'info' | 'warn' | 'error'
 
 export interface Notice {
   id: string
@@ -21,69 +20,58 @@ export interface Notice {
   text: string
 }
 
-/** Messages à afficher pour une facture, le plus utile d'abord. Vide possible (rien à dire). */
+/** Messages à afficher pour une facture, le plus important d'abord. En pratique un seul. */
 export function invoiceNotices(record: InvoiceRecord): Notice[] {
   if (record.status === 'processing')
-    return [
-      { id: 'processing', tone: 'info', text: 'Lecture de la facture en cours.' },
-    ]
+    return [{ id: 'processing', tone: 'info', text: 'Lecture de la facture en cours.' }]
+
   if (record.status === 'error')
     return [
       {
         id: 'error',
         tone: 'error',
-        text: record.error ?? 'Lecture de la facture impossible.',
+        text: record.error ?? 'La lecture de la facture a échoué.',
       },
     ]
 
-  // Facture déjà tamponnée : état factuel, plus d'action attendue.
   if (record.learned)
     return [
-      { id: 'learned', tone: 'info', text: 'Facture tamponnée et mémorisée.' },
+      { id: 'learned', tone: 'ok', text: 'Facture tamponnée et téléchargée.' },
     ]
 
-  // Pas encore d'imputation : rien à tamponner tant qu'aucun code n'est choisi.
   if (record.codes.length === 0)
     return [
       {
         id: 'no-code',
         tone: 'warn',
-        text: 'Aucune imputation choisie pour le moment. Sélectionnez au moins un code pour pouvoir tamponner.',
+        text: 'Choisissez au moins une imputation pour pouvoir tamponner.',
       },
     ]
 
-  // Doublon : ce PDF a déjà été appris (présent au journal). Non bloquant.
   if (record.duplicate)
     return [
       {
         id: 'duplicate',
         tone: 'warn',
-        text: 'Cette facture a déjà été apprise. La re-tamponner retélécharge le PDF mais ne réapprend pas, pour éviter de compter deux fois.',
+        text: 'Cette facture a déjà été tamponnée. La tamponner à nouveau ne la réapprendra pas.',
       },
     ]
 
-  // Facture prête : on explique en clair ce que le tampon va faire.
-  const out: Notice[] = []
-  const supplier = record.supplierName.trim()
+  // Facture prête : on dit ce que le tampon va retenir, ou ce qui manque pour qu'il retienne.
   if (canLearn(record.supplierName, record.siren))
-    out.push({
-      id: 'will-learn',
-      tone: 'info',
-      text: `En tamponnant, l'imputation sera mémorisée pour ${supplier}. La prochaine facture de cet émetteur la proposera d'office.`,
-    })
-  else
-    out.push({
+    return [
+      {
+        id: 'will-learn',
+        tone: 'ok',
+        text: `L'imputation sera mémorisée pour ${record.supplierName.trim()}.`,
+      },
+    ]
+
+  return [
+    {
       id: 'no-issuer',
       tone: 'warn',
-      text: "L'émetteur ne sera pas mémorisé (nom absent ou trop court) : le filtre par émetteur ne progressera pas pour lui.",
-    })
-
-  if (record.codes.length > 1)
-    out.push({
-      id: 'mixed',
-      tone: 'warn',
-      text: `Les ${record.codes.length} imputations apprendront le même vocabulaire (facture mixte). Retirez un code accessoire si son imputation n'est pas à mémoriser.`,
-    })
-
-  return out
+      text: "Renseignez le nom de l'émetteur pour que l'imputation soit mémorisée.",
+    },
+  ]
 }
