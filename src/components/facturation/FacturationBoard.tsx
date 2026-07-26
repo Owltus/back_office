@@ -427,7 +427,11 @@ export function FacturationBoard() {
               </Button>
             ) : (
               <div className="flex shrink-0 items-stretch gap-px overflow-hidden rounded-lg bg-border">
-                <Button onClick={openPicker} className="flex-1 rounded-none">
+                <Button
+                  variant="secondary"
+                  onClick={openPicker}
+                  className="flex-1 rounded-none"
+                >
                   <Plus className="size-4" />
                   Ajouter des PDF
                 </Button>
