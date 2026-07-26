@@ -111,7 +111,7 @@ export function RaproAnalytiqueBoard() {
   const isFutureMonth = (m: number) =>
     year > currentYear || (year === currentYear && m > currentMonth)
 
-  // Séries des graphiques. Recalcul direct (12 points) : `totals` est reconstruit
+  // Série du graphique. Recalcul direct (12 points) : `totals` est reconstruit
   // à chaque render, un useMemo n'aurait rien mémoïsé (deps toujours neuves).
   const chartData = MONTHS.map((m, i) => {
     const t = totals[i]
@@ -119,7 +119,6 @@ export function RaproAnalytiqueBoard() {
     return {
       mois: MONTHS_SHORT[m - 1],
       nettoyee: future ? null : t.nettoyee,
-      refus: future ? null : t.refus,
     }
   })
 
@@ -136,10 +135,16 @@ export function RaproAnalytiqueBoard() {
       }
       loading={loading}
       printTitle={`Rapprochement · ${year}`}
-      skeleton={{ cols: 3, charts: 2, cardLines: 2, rows: 13 }}
+      skeleton={{ cols: 3, charts: 1, cardLines: 2, rows: 13 }}
     >
-      {/* Synthèse annuelle — 3 totaux + moyenne / jour, code couleur rapprochement */}
+      {/* Synthèse annuelle — moyenne / jour en tête, puis 3 totaux, code couleur
+          rapprochement */}
       <AnalytiqueCardsGrid>
+        <StatCard
+          label="Moyenne nettoyées / jour"
+          accent="#818cf8"
+          value={<span style={{ color: '#818cf8' }}>{avgCleanedPerDay}</span>}
+        />
         <StatCard
           label="Nettoyées sur l'année"
           accent={CAT_COLOR.nettoyee}
@@ -164,11 +169,6 @@ export function RaproAnalytiqueBoard() {
           value={
             <span style={{ color: CAT_COLOR.refus }}>{yearTotals.refus}</span>
           }
-        />
-        <StatCard
-          label="Moyenne nettoyées / jour"
-          accent="#818cf8"
-          value={<span style={{ color: '#818cf8' }}>{avgCleanedPerDay}</span>}
         />
       </AnalytiqueCardsGrid>
 
@@ -200,22 +200,14 @@ export function RaproAnalytiqueBoard() {
         </tbody>
       </AnalytiqueTable>
 
-      {/* Graphiques */}
-      <AnalytiqueCharts>
+      {/* Graphique unique, pleine largeur */}
+      <AnalytiqueCharts cols={1}>
         <KpiLineChart
           title="Chambres nettoyées par mois"
           data={chartData}
           xKey="mois"
           realKey="nettoyee"
           realName="Nettoyées"
-          tooltipFormatter={(v) => String(v)}
-        />
-        <KpiLineChart
-          title="Refus par mois"
-          data={chartData}
-          xKey="mois"
-          realKey="refus"
-          realName="Refus"
           tooltipFormatter={(v) => String(v)}
         />
       </AnalytiqueCharts>
