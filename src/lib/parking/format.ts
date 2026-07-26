@@ -11,3 +11,7 @@ export const fmtInt = (n: number) => int0.format(n)
 
 /** Pourcentage, 1 décimale, virgule française (ex. « 72,5 % » — occupation). */
 export const fmtPct = (n: number) => `${n.toFixed(1).replace('.', ',')} %`
+
+/** Pourcentage ARRONDI, sans décimale (ex. « 72 % » — affichage compact, en-tête
+ * du planning parking). */
+export const fmtPctInt = (n: number) => `${int0.format(n)} %`

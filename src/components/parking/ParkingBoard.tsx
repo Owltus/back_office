@@ -82,7 +82,7 @@ import {
 } from '#/lib/parking/service.ts'
 import type { DbReservation } from '#/lib/parking/service.ts'
 import { printParkingSheets } from '#/lib/parking/pdf.ts'
-import { fmtPct } from '#/lib/parking/format.ts'
+import { fmtPctInt } from '#/lib/parking/format.ts'
 import { matchRoom } from '#/lib/parking/pdjMatch.ts'
 import { fetchDay as fetchPdjDay } from '#/lib/pdj/service.ts'
 
@@ -993,9 +993,9 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
                   <span className="text-[11px] text-muted-foreground">
                     {fmtDay.format(d)}
                   </span>
-                  {/* Taux d'occupation client du jour (places 1-12). */}
+                  {/* Taux d'occupation client du jour (places 1-12), arrondi. */}
                   <span className="text-[10px] font-medium tabular-nums text-sky-400">
-                    {fmtPct(dayOccupancy[i])}
+                    {fmtPctInt(dayOccupancy[i])}
                   </span>
                 </div>
               ))}
