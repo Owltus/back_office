@@ -5,72 +5,99 @@ import type { CaisseSheet } from '#/lib/caisse/types.ts'
 /*
  * Agrégation analytique des feuilles de caisse (métier pur, sans React).
  *
- * Alimente `CaisseAnalytiqueBoard` : à partir des feuilles brutes (une par
- * couple (report_date, shift)), produit une synthèse mensuelle sur une année.
- * Aucune écriture, aucun accès réseau ici — les feuilles sont lues en amont par
- * `fetchSheets`. On ne s'appuie QUE sur les champs existants de `CaisseSheet`
- * (report_date, status, bloc `caisse`, écarts calculés, écart de fond).
+ * Alimente les deux vues analytique caisse (annuelle et détail mensuel) : à partir
+ * des feuilles brutes (une par couple (report_date, shift)), produit des synthèses
+ * par mois ou par jour. Aucune écriture ni accès réseau — les feuilles sont lues en
+ * amont par `fetchSheets`.
  *
- * SEULES LES FEUILLES CLÔTURÉES COMPTENT : l'analytique n'agrège que les feuilles
- * `validated`. Un brouillon (`draft`) porte des montants encore provisoires
- * (comptage en cours, écarts non figés) qui fausseraient les cumuls ; on l'ignore
- * tant qu'il n'est pas clôturé.
+ * PARTI PRIS ANALYTIQUE : on ne remonte que le SIGNAL MÉTIER — l'argent réellement
+ * encaissé, ventilé par moyen de paiement (espèces, CB, chèques vacances, Adyen),
+ * plus une simple FRÉQUENCE d'anomalies (nombre de feuilles présentant un écart).
+ * Le détail du rapprochement (attendu StayNTouch / Lightspeed, montant des écarts
+ * par mode, écart de fond signé) reste OPÉRATIONNEL : sa place est la feuille du
+ * jour, pas l'analytique. Un écart justifié étant normal, le cumul des montants
+ * d'écart n'apporte rien d'exploitable à cette maille ; le nombre de fois où un
+ * écart survient, si.
+ *
+ * SEULES LES FEUILLES CLÔTURÉES COMPTENT : on n'agrège que les feuilles `validated`.
+ * Un brouillon (`draft`) porte des montants provisoires (comptage en cours) qui
+ * fausseraient les cumuls ; on l'ignore tant qu'il n'est pas clôturé.
  */
 
-/** Synthèse d'un mois (indices 1..12). */
-export interface CaisseMonthStats {
-  month: number
-  /** Feuilles CLÔTURÉES (validated) sur le mois — seule base de l'analytique. */
-  sheets: number
-  /** Écart de paiement cumulé, en valeur absolue, tous modes confondus. */
-  ecartTotal: number
-  /** Feuilles clôturées présentant au moins un écart de paiement (un mode ≥ EPSILON). */
-  ecartCount: number
-  /** Écart de fond de caisse cumulé (signé). */
-  fundEcart: number
-  /** Feuilles clôturées, fond réellement compté, présentant un écart de fond. */
-  fundEcartCount: number
-  /** Réel encaissé cumulé — espèces. */
-  cash: number
-  /** Réel encaissé cumulé — carte bancaire. */
-  cb: number
-  /** Réel encaissé cumulé — chèques vacances. */
-  cvac: number
-  /** Réel encaissé cumulé — carte web / Adyen. */
-  adyen: number
-  /** Total réel encaissé cumulé (cash + cb + cvac + adyen). */
-  encaisse: number
+/**
+ * Vrai si une feuille clôturée présente une ANOMALIE : soit un écart de paiement
+ * (un mode ≥ EPSILON entre attendu et réel), soit un écart de fond de caisse (fond
+ * réellement compté et différent de l'origine). Un fond NON compté (nuit non faite)
+ * ne compte pas — c'est une absence de comptage, pas un écart.
+ */
+function hasAnomaly(s: CaisseSheet): boolean {
+  const ecarts = computeEcarts(s)
+  if (ECART_KEYS.some((c) => Math.abs(ecarts[c]) >= EPSILON)) return true
+  return hasCountedFund(s) && Math.abs(fundEcart(s)) >= EPSILON
 }
 
-/** Un mois vide (aucune feuille). */
-function emptyMonth(month: number): CaisseMonthStats {
-  return {
-    month,
-    sheets: 0,
-    ecartTotal: 0,
-    ecartCount: 0,
-    fundEcart: 0,
-    fundEcartCount: 0,
-    cash: 0,
-    cb: 0,
-    cvac: 0,
-    adyen: 0,
-    encaisse: 0,
-  }
+/** Réel encaissé (ventilé par moyen de paiement) + fréquence d'anomalies. Métriques
+ * communes aux deux vues — portées aussi bien par `CaisseMonthStats` que par
+ * `CaisseDayStats`, et sommées par `summarize` pour les cartes de synthèse. */
+export interface CaisseSummary {
+  /** Feuilles CLÔTURÉES agrégées — sert à distinguer une période sans donnée. */
+  sheets: number
+  /** Réel encaissé — espèces. */
+  cash: number
+  /** Réel encaissé — carte bancaire (TPE). */
+  cb: number
+  /** Réel encaissé — chèques vacances. */
+  cvac: number
+  /** Réel encaissé — carte web / Adyen. */
+  adyen: number
+  /** Total réel encaissé (cash + cb + cvac + adyen). */
+  encaisse: number
+  /** Feuilles clôturées présentant une anomalie (écart de paiement ou de fond). */
+  anomalies: number
+}
+
+/** Synthèse d'un mois (indices 1..12). */
+export interface CaisseMonthStats extends CaisseSummary {
+  month: number
+}
+
+/** Synthèse d'un jour du mois. */
+export interface CaisseDayStats extends CaisseSummary {
+  /** Date du jour, format YYYY-MM-DD. */
+  date: string
+  /** Numéro du jour dans le mois (1..31). */
+  day: number
+}
+
+/** Cumul vierge des métriques de synthèse. */
+function emptySummary(): CaisseSummary {
+  return { sheets: 0, cash: 0, cb: 0, cvac: 0, adyen: 0, encaisse: 0, anomalies: 0 }
+}
+
+/** Ajoute une feuille clôturée à un cumul de synthèse (mutation en place). */
+function addSheet(t: CaisseSummary, s: CaisseSheet): void {
+  t.sheets += 1
+  t.cash += s.caisse.cash
+  t.cb += s.caisse.cb
+  t.cvac += s.caisse.cvac
+  t.adyen += s.caisse.adyen
+  t.encaisse += s.caisse.cash + s.caisse.cb + s.caisse.cvac + s.caisse.adyen
+  if (hasAnomaly(s)) t.anomalies += 1
 }
 
 /**
  * Agrège les feuilles d'une année en 12 synthèses mensuelles. Les feuilles hors
- * `year` OU non clôturées (brouillon) sont ignorées. L'écart total agrège la
- * valeur absolue de chaque mode (`computeEcarts`) — un écart positif et un
- * négatif ne se compensent pas ; le réel encaissé provient du bloc `caisse`
- * (montants réellement comptés).
+ * `year` OU non clôturées (brouillon) sont ignorées. Le réel encaissé provient du
+ * bloc `caisse` (montants réellement comptés), ventilé par moyen de paiement.
  */
 export function aggregateCaisseMonthly(
   sheets: CaisseSheet[],
   year: number,
 ): CaisseMonthStats[] {
-  const months = Array.from({ length: 12 }, (_, i) => emptyMonth(i + 1))
+  const months: CaisseMonthStats[] = Array.from({ length: 12 }, (_, i) => ({
+    month: i + 1,
+    ...emptySummary(),
+  }))
 
   const prefix = `${year}-`
   for (const s of sheets) {
@@ -78,57 +105,16 @@ export function aggregateCaisseMonthly(
     if (!s.reportDate.startsWith(prefix)) continue
     const m = Number(s.reportDate.slice(5, 7)) - 1
     if (m < 0 || m > 11) continue
-
-    const t = months[m]
-    t.sheets += 1
-
-    const ecarts = computeEcarts(s)
-    for (const c of ECART_KEYS) t.ecartTotal += Math.abs(ecarts[c])
-    if (ECART_KEYS.some((c) => Math.abs(ecarts[c]) >= EPSILON)) t.ecartCount += 1
-
-    const fe = fundEcart(s)
-    t.fundEcart += fe
-    // Un fond NON compté (nuit non faite) donne fe = -fond d'origine : ce n'est pas
-    // un écart réel, on ne le compte pas (mais il reste dans le montant du tableau).
-    if (hasCountedFund(s) && Math.abs(fe) >= EPSILON) t.fundEcartCount += 1
-
-    t.cash += s.caisse.cash
-    t.cb += s.caisse.cb
-    t.cvac += s.caisse.cvac
-    t.adyen += s.caisse.adyen
-    t.encaisse += s.caisse.cash + s.caisse.cb + s.caisse.cvac + s.caisse.adyen
+    addSheet(months[m], s)
   }
 
   return months
 }
 
-/** Synthèse d'un jour — une entrée par date du mois où au moins une feuille existe. */
-export interface CaisseDayStats {
-  /** Date du jour, format YYYY-MM-DD. */
-  date: string
-  /** Numéro du jour dans le mois (1..31). */
-  day: number
-  /** Feuilles saisies ce jour, tous shifts confondus. */
-  sheets: number
-  /** Écart de paiement cumulé du jour, en valeur absolue, tous modes. */
-  ecartTotal: number
-  /** Feuilles clôturées du jour présentant au moins un écart de paiement. */
-  ecartCount: number
-  /** Écart de fond de caisse cumulé du jour (signé). */
-  fundEcart: number
-  /** Feuilles du jour, fond réellement compté, présentant un écart de fond. */
-  fundEcartCount: number
-  /** Total réel encaissé du jour (cash + cb + cvac + adyen). */
-  encaisse: number
-}
-
 /**
  * Agrège les feuilles d'un mois en synthèses journalières — même logique que
- * `aggregateCaisseMonthly` mais groupée par jour. Ne renvoie QUE les jours où au
- * moins une feuille CLÔTURÉE existe (triés par date croissante) ; les brouillons
- * sont ignorés. L'écart total agrège la valeur absolue de chaque mode
- * (`computeEcarts`) ; le réel encaissé provient du bloc `caisse` (montants
- * réellement comptés).
+ * `aggregateCaisseMonthly`, groupée par jour. Ne renvoie QUE les jours où au moins
+ * une feuille CLÔTURÉE existe (triés par date croissante).
  */
 export function aggregateCaisseDaily(
   sheets: CaisseSheet[],
@@ -147,65 +133,28 @@ export function aggregateCaisseDaily(
       t = {
         date: s.reportDate,
         day: Number(s.reportDate.slice(8, 10)),
-        sheets: 0,
-        ecartTotal: 0,
-        ecartCount: 0,
-        fundEcart: 0,
-        fundEcartCount: 0,
-        encaisse: 0,
+        ...emptySummary(),
       }
       byDate.set(s.reportDate, t)
     }
-
-    t.sheets += 1
-
-    const ecarts = computeEcarts(s)
-    for (const c of ECART_KEYS) t.ecartTotal += Math.abs(ecarts[c])
-    if (ECART_KEYS.some((c) => Math.abs(ecarts[c]) >= EPSILON)) t.ecartCount += 1
-
-    const fe = fundEcart(s)
-    t.fundEcart += fe
-    // Un fond NON compté (nuit non faite) donne fe = -fond d'origine : ce n'est pas
-    // un écart réel, on ne le compte pas (mais il reste dans le montant du tableau).
-    if (hasCountedFund(s) && Math.abs(fe) >= EPSILON) t.fundEcartCount += 1
-
-    t.encaisse += s.caisse.cash + s.caisse.cb + s.caisse.cvac + s.caisse.adyen
+    addSheet(t, s)
   }
 
   return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date))
 }
 
-/** Cumul de synthèse (cartes analytique) : les 4 métriques communes aux vues
- * annuelle et mensuelle. `CaisseMonthStats` comme `CaisseDayStats` les portent. */
-export interface CaisseSummary {
-  sheets: number
-  encaisse: number
-  ecartTotal: number
-  ecartCount: number
-  fundEcart: number
-  fundEcartCount: number
-}
-
-/** Somme des 4 métriques de synthèse sur un ensemble de lignes (mois ou jours). */
+/** Somme les métriques de synthèse sur un ensemble de lignes (mois ou jours). */
 export function summarize(rows: ReadonlyArray<CaisseSummary>): CaisseSummary {
-  return rows.reduce(
-    (a, r) => ({
-      sheets: a.sheets + r.sheets,
-      encaisse: a.encaisse + r.encaisse,
-      ecartTotal: a.ecartTotal + r.ecartTotal,
-      ecartCount: a.ecartCount + r.ecartCount,
-      fundEcart: a.fundEcart + r.fundEcart,
-      fundEcartCount: a.fundEcartCount + r.fundEcartCount,
-    }),
-    {
-      sheets: 0,
-      encaisse: 0,
-      ecartTotal: 0,
-      ecartCount: 0,
-      fundEcart: 0,
-      fundEcartCount: 0,
-    },
-  )
+  return rows.reduce((a, r) => {
+    a.sheets += r.sheets
+    a.cash += r.cash
+    a.cb += r.cb
+    a.cvac += r.cvac
+    a.adyen += r.adyen
+    a.encaisse += r.encaisse
+    a.anomalies += r.anomalies
+    return a
+  }, emptySummary())
 }
 
 /** Années présentes dans une liste de feuilles (croissant), fallback inclus. */

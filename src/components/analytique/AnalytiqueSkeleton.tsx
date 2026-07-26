@@ -14,7 +14,6 @@ export function AnalytiqueSkeleton({
   charts = 2,
   rows = 10,
   cards = 4,
-  cardCols = 4,
   cardLines = 3,
 }: {
   cols?: number
@@ -24,10 +23,6 @@ export function AnalytiqueSkeleton({
    * qui n'affiche aucune carte — en dessiner 4 les faisait « disparaître » à
    * l'arrivée des données). */
   cards?: number
-  /** Colonnes de la grille de cartes — miroir du board. 4 par défaut ; 3 pour la
-   * Caisse. Doit refléter la vraie grille sinon les cartes se redimensionnent à
-   * l'arrivée des données. */
-  cardCols?: number
   /** Lignes par carte : 3 (label + valeur + sous-texte, cas courant) ou 2 (label +
    * valeur seule, ex. cartes Rapro). Évite qu'une carte squelette soit plus haute
    * que la vraie. */
@@ -38,12 +33,7 @@ export function AnalytiqueSkeleton({
       {/* Cartes de synthèse (masquées si `cards === 0`) */}
       {cards > 0 && (
         <div
-          className={cn(
-            'grid shrink-0 gap-3',
-            cardCols === 3
-              ? 'grid-cols-1 sm:grid-cols-3'
-              : 'grid-cols-2 sm:grid-cols-4',
-          )}
+          className="grid shrink-0 grid-cols-2 gap-3 sm:grid-cols-4"
           aria-hidden="true"
         >
           {Array.from({ length: cards }).map((_, i) => (

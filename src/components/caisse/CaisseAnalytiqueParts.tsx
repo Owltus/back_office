@@ -1,29 +1,40 @@
-import { StatCard } from '#/components/analytique/AnalytiqueCards.tsx'
-import { EPSILON } from '#/lib/caisse/constants.ts'
-import { fmtEcart, fmtEur, fmtInt } from '#/lib/caisse/format.ts'
+import {
+  AnalytiqueCardsGrid,
+  StatCard,
+} from '#/components/analytique/AnalytiqueCards.tsx'
+import { fmtEur, fmtInt } from '#/lib/caisse/format.ts'
 import type { CaisseSummary } from '#/lib/caisse/analytics.ts'
 import { cn } from '#/lib/utils.ts'
 
 /*
  * Briques d'affichage partagées par les deux vues analytique caisse (annuelle et
- * détail mensuel) : les 3 cartes de synthèse, l'en-tête du tableau et les
- * cellules de valeur (ou tirets). Une seule définition — l'ordre des cartes, le
- * formatage des écarts et le rendu « pas de données » ne peuvent plus diverger
- * entre les deux vues.
+ * détail mensuel) : les cartes de synthèse, l'en-tête du tableau et les cellules de
+ * valeur (ou tirets). Une seule définition — l'ordre des colonnes et le rendu « pas
+ * de données » ne peuvent pas diverger entre les deux vues.
  *
- * Cartes : le TOTAL ENCAISSÉ sur la période, puis DEUX compteurs d'occurrences —
- * le nombre de feuilles avec un écart de paiement et le nombre de feuilles avec
- * un écart de fond. On compte les OCCURRENCES plutôt qu'un montant cumulé : un
- * écart justifié étant normal, le cumul des montants ne dit rien d'exploitable ;
- * savoir combien de fois un écart est survenu est plus parlant. Neutre par choix
- * (pas de rouge d'alarme sur un simple décompte).
+ * On expose l'ARGENT réellement encaissé, ventilé par moyen de paiement (espèces,
+ * CB, chèques vacances, Adyen), et une simple FRÉQUENCE d'anomalies (feuilles avec
+ * un écart de paiement ou de fond). Les montants d'écart / de fond, eux, restent
+ * sur la feuille du jour (rapprochement opérationnel) : un écart justifié étant
+ * normal, leur cumul n'apporte rien d'exploitable à la maille mois / année.
  *
- * Le tableau, lui, garde les MONTANTS par mois / jour : l'« Écart » est une somme
- * de valeurs absolues (fmtEur) et le « Fond » est signé (fmtEcart, rouge au-delà
- * d'EPSILON) — utile à la maille fine, contrairement au cumul annuel.
+ * Cartes : Total encaissé, Espèces et Carte (part du total en sous-titre), et le
+ * nombre d'écarts. La carte « Carte » cumule CB (TPE) et Adyen (web) ; le tableau,
+ * lui, les détaille colonne par colonne.
  */
 
-/** Les 3 cartes de synthèse (Total encaissé / Écarts de paiement / Écarts de fond).
+/** Part d'un mode dans le total encaissé, en sous-titre de carte (« 38 % du total »).
+ *  Rien si le total est nul (période sans encaissement). */
+function shareSub(part: number, total: number) {
+  if (total <= 0) return undefined
+  return (
+    <span className="text-[0.7rem] font-medium text-muted-foreground">
+      {`${Math.round((part / total) * 100)} % du total`}
+    </span>
+  )
+}
+
+/** Cartes de synthèse : Total encaissé / Espèces / Carte / Écarts.
  *  `periodLabel` complète l'intitulé encaissé (« sur l'année » / « sur le mois »). */
 export function CaisseAnalytiqueCards({
   summary,
@@ -32,26 +43,34 @@ export function CaisseAnalytiqueCards({
   summary: CaisseSummary
   periodLabel: string
 }) {
+  const carte = summary.cb + summary.adyen
   return (
-    <div className="grid shrink-0 grid-cols-1 gap-3 sm:grid-cols-3">
+    <AnalytiqueCardsGrid>
       <StatCard
         label={`Total encaissé ${periodLabel}`}
         accent="#34d399"
         value={fmtEur(summary.encaisse)}
       />
       <StatCard
-        label="Écarts de paiement"
-        accent="#fbbf24"
-        hint="Nombre de feuilles clôturées présentant au moins un écart de paiement (attendu contre réel compté)."
-        value={fmtInt(summary.ecartCount)}
+        label="Espèces"
+        accent="#38bdf8"
+        value={fmtEur(summary.cash)}
+        sub={shareSub(summary.cash, summary.encaisse)}
       />
       <StatCard
-        label="Écarts de fond"
-        accent="#fb7185"
-        hint="Nombre de feuilles clôturées présentant un écart de fond de caisse."
-        value={fmtInt(summary.fundEcartCount)}
+        label="Carte"
+        accent="#818cf8"
+        hint="Carte bancaire (TPE) et carte web (Adyen) cumulées."
+        value={fmtEur(carte)}
+        sub={shareSub(carte, summary.encaisse)}
       />
-    </div>
+      <StatCard
+        label="Écarts"
+        accent="#fbbf24"
+        hint="Nombre de feuilles clôturées présentant un écart (de paiement ou de fond de caisse)."
+        value={fmtInt(summary.anomalies)}
+      />
+    </AnalytiqueCardsGrid>
   )
 }
 
@@ -62,26 +81,33 @@ export function CaisseStatsHead({ firstLabel }: { firstLabel: string }) {
       <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">
         {firstLabel}
       </th>
-      <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
-        Feuilles
+      <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground">
+        Espèces
+      </th>
+      <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground">
+        CB
+      </th>
+      <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground">
+        <span className="hidden sm:inline">Chèques vac.</span>
+        <span className="sm:hidden">Ch. vac.</span>
+      </th>
+      <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground">
+        Adyen
       </th>
       <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground">
         <span className="hidden sm:inline">Total encaissé</span>
-        <span className="sm:hidden">Encaissé</span>
-      </th>
-      <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground">
-        Écart
+        <span className="sm:hidden">Total</span>
       </th>
       <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">
-        Fond
+        Écarts
       </th>
     </tr>
   )
 }
 
-/** Les 4 cellules de valeur d'une ligne (Feuilles / Encaissé / Écart / Fond), ou
- * quatre tirets grisés si le jour/mois n'a aucune feuille. L'appelant fournit la
- * 1re cellule (mois / jour) avant celles-ci. */
+/** Les 6 cellules de valeur d'une ligne (Espèces / CB / Chèques vac. / Adyen /
+ * Total encaissé / Écarts), ou six tirets grisés si le mois / jour n'a aucune
+ * feuille. L'appelant fournit la 1re cellule (mois / jour) avant celles-ci. */
 export function CaisseStatCells({
   stats,
 }: {
@@ -90,46 +116,37 @@ export function CaisseStatCells({
   if (!stats) {
     return (
       <>
-        <td className="px-2 py-2 text-center text-xs text-muted-foreground/50">
-          —
-        </td>
-        <td className="px-2 py-2 text-right text-xs text-muted-foreground/50">
-          —
-        </td>
-        <td className="px-2 py-2 text-right text-xs text-muted-foreground/50">
-          —
-        </td>
-        <td className="px-3 py-2 text-right text-xs text-muted-foreground/50">
-          —
-        </td>
+        {Array.from({ length: 6 }).map((_, i) => (
+          <td
+            key={i}
+            className={cn(
+              'py-2 text-right text-xs text-muted-foreground/50',
+              i === 5 ? 'px-3' : 'px-2',
+            )}
+          >
+            —
+          </td>
+        ))}
       </>
     )
   }
-  const ecartOff = stats.ecartTotal >= EPSILON
-  const fundOff = Math.abs(stats.fundEcart) >= EPSILON
+  const mode = 'whitespace-nowrap px-2 py-2 text-right text-xs tabular-nums text-muted-foreground'
   return (
     <>
-      <td className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums">
-        {fmtInt(stats.sheets)}
-      </td>
+      <td className={mode}>{fmtEur(stats.cash)}</td>
+      <td className={mode}>{fmtEur(stats.cb)}</td>
+      <td className={mode}>{fmtEur(stats.cvac)}</td>
+      <td className={mode}>{fmtEur(stats.adyen)}</td>
       <td className="whitespace-nowrap px-2 py-2 text-right text-xs font-medium tabular-nums text-foreground">
         {fmtEur(stats.encaisse)}
       </td>
       <td
         className={cn(
-          'whitespace-nowrap px-2 py-2 text-right text-xs tabular-nums',
-          ecartOff ? 'text-destructive' : 'text-muted-foreground',
-        )}
-      >
-        {fmtEur(stats.ecartTotal)}
-      </td>
-      <td
-        className={cn(
           'whitespace-nowrap px-3 py-2 text-right text-xs tabular-nums',
-          fundOff ? 'text-destructive' : 'text-muted-foreground',
+          stats.anomalies > 0 ? 'text-amber-500' : 'text-muted-foreground',
         )}
       >
-        {fmtEcart(stats.fundEcart)}
+        {fmtInt(stats.anomalies)}
       </td>
     </>
   )

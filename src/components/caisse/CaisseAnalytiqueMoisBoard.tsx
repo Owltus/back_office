@@ -86,11 +86,9 @@ export function CaisseAnalytiqueMoisBoard({
       actions={<AnalytiqueBackButton />}
       loading={loading}
       skeleton={{
-        cols: 4,
+        cols: 6,
         charts: 1,
         rows: new Date(year, month, 0).getDate(),
-        cards: 3,
-        cardCols: 3,
       }}
     >
       {/* Synthèse du mois — cartes partagées avec la vue annuelle. */}
