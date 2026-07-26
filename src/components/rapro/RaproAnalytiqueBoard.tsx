@@ -24,6 +24,7 @@ import {
   fetchStatusCountsByRange,
   monthBounds,
   sumCounts,
+  vendues,
 } from '#/lib/rapro/monthly.ts'
 
 /*
@@ -135,15 +136,20 @@ export function RaproAnalytiqueBoard() {
       }
       loading={loading}
       printTitle={`Rapprochement · ${year}`}
-      skeleton={{ cols: 3, charts: 1, cardLines: 2, rows: 13 }}
+      skeleton={{ cols: 4, charts: 1, cards: 5, cardCols: 5, cardLines: 2, rows: 13 }}
     >
-      {/* Synthèse annuelle — moyenne / jour en tête, puis 3 totaux, code couleur
-          rapprochement */}
-      <AnalytiqueCardsGrid>
+      {/* Synthèse annuelle — moyenne / jour, puis vendues (total) et les 3 totaux
+          par catégorie, code couleur rapprochement */}
+      <AnalytiqueCardsGrid cols={5}>
         <StatCard
           label="Moyenne nettoyées / jour"
           accent="#818cf8"
           value={<span style={{ color: '#818cf8' }}>{avgCleanedPerDay}</span>}
+        />
+        <StatCard
+          label="Vendues sur l'année"
+          accent="#94a3b8"
+          value={vendues(yearTotals)}
         />
         <StatCard
           label="Nettoyées sur l'année"

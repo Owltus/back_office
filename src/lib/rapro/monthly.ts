@@ -74,6 +74,14 @@ export async function fetchStatusCountsByRange(
   return byDay
 }
 
+/** Chambres VENDUES d'un décompte = total des chambres suivies (nettoyées +
+ * bloquées + refus). Chaque statut matérialise une chambre occupée ce jour-là
+ * (nettoyée = vendue facturée, bloquée = à nettoyer, refus = client présent) :
+ * leur somme est le nombre de chambres vendues. */
+export function vendues(c: DayStatusCounts): number {
+  return c.nettoyee + c.bloquee + c.refus
+}
+
 /** Somme des décomptes d'un ensemble de jours. */
 export function sumCounts(byDay: Map<string, DayStatusCounts>): DayStatusCounts {
   const t = emptyCounts()

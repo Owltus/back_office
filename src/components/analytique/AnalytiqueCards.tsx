@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 
 import { StatTile } from '#/components/shared/StatTile.tsx'
+import { cn } from '#/lib/utils.ts'
 
 /*
  * Grille et carte de synthèse des pages analytique. La grille (`shrink-0`,
@@ -12,9 +13,23 @@ import { StatTile } from '#/components/shared/StatTile.tsx'
  * repjour…). `accent` par défaut = primary (les pages qui codent une couleur —
  * ex. rapro — la passent explicitement).
  */
-export function AnalytiqueCardsGrid({ children }: { children: ReactNode }) {
+export function AnalytiqueCardsGrid({
+  children,
+  cols = 4,
+}: {
+  children: ReactNode
+  /** Colonnes à partir de `sm` : 4 (défaut) ou 5 (ex. Rapro avec « Vendues »). */
+  cols?: 4 | 5
+}) {
   return (
-    <div className="grid shrink-0 grid-cols-2 gap-3 sm:grid-cols-4">{children}</div>
+    <div
+      className={cn(
+        'grid shrink-0 grid-cols-2 gap-3',
+        cols === 5 ? 'sm:grid-cols-5' : 'sm:grid-cols-4',
+      )}
+    >
+      {children}
+    </div>
   )
 }
 

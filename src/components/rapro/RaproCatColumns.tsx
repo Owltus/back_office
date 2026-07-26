@@ -1,14 +1,15 @@
 import type { ReactNode } from 'react'
 
 import { CATEGORY_COLOR } from '#/lib/rapro/constants.ts'
-import type { DayStatusCounts } from '#/lib/rapro/monthly.ts'
+import { vendues, type DayStatusCounts } from '#/lib/rapro/monthly.ts'
 
 /*
  * Colonnes de catégorie partagées par les deux vues analytique du rapprochement
- * (annuelle et détail mensuel) : en-tête coloré, cellules de comptage et helper
- * de compteur. Une seule source pour les 3 catégories (nettoyée / bloquée /
- * refus), au code couleur de `CATEGORY_COLOR`. La 1re colonne (Mois / Jour) reste
- * à la charge de l'appelant — elle diffère (libellé, lien).
+ * (annuelle et détail mensuel) : en-tête, cellules de comptage et helper de
+ * compteur. Une seule source pour la colonne VENDUES (total des chambres suivies)
+ * puis les 3 catégories (nettoyée / bloquée / refus), au code couleur de
+ * `CATEGORY_COLOR`. La 1re colonne (Mois / Jour) reste à la charge de l'appelant —
+ * elle diffère (libellé, lien).
  */
 
 /** Compteur au code couleur de la catégorie ; un zéro reste discret (grisé),
@@ -21,12 +22,16 @@ export function coloredCount(n: number, color: string): ReactNode {
   )
 }
 
-/** En-tête des 3 colonnes de catégorie. `firstLabel` = titre de la 1re colonne. */
+/** En-tête : colonne VENDUES (total) + 3 colonnes de catégorie. `firstLabel` =
+ * titre de la 1re colonne. */
 export function RaproCatHead({ firstLabel }: { firstLabel: string }) {
   return (
     <tr className="border-b border-border bg-muted">
       <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">
         {firstLabel}
+      </th>
+      <th className="px-3 py-2 text-center text-xs font-medium text-foreground">
+        Vendues
       </th>
       <th
         className="px-3 py-2 text-center text-xs font-medium"
@@ -50,11 +55,19 @@ export function RaproCatHead({ firstLabel }: { firstLabel: string }) {
   )
 }
 
-/** Les 3 cellules de comptage colorées d'une ligne (corps ou total). L'appelant
- * fournit la 1re cellule (jour / mois) avant celles-ci. */
+/** Les cellules d'une ligne : VENDUES (total, neutre) + les 3 comptages colorés.
+ * L'appelant fournit la 1re cellule (jour / mois) avant celles-ci. */
 export function RaproCatCells({ counts }: { counts: DayStatusCounts }) {
+  const sold = vendues(counts)
   return (
     <>
+      <td className="whitespace-nowrap px-3 py-2 text-center text-xs font-semibold tabular-nums">
+        {sold === 0 ? (
+          <span className="text-muted-foreground/40">0</span>
+        ) : (
+          <span className="text-foreground">{sold}</span>
+        )}
+      </td>
       <td className="whitespace-nowrap px-3 py-2 text-center text-xs font-medium tabular-nums">
         {coloredCount(counts.nettoyee, CATEGORY_COLOR.nettoyee)}
       </td>

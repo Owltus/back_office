@@ -44,6 +44,7 @@ export function AnalytiqueShell({
     charts?: number
     rows?: number
     cards?: number
+    cardCols?: number
     cardLines?: number
   }
   /** Active le bouton « Imprimer / PDF » et sert de titre au document

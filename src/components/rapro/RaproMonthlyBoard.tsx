@@ -25,6 +25,7 @@ import {
   fetchStatusCountsByRange,
   monthBounds,
   monthlyRows,
+  vendues,
 } from '#/lib/rapro/monthly.ts'
 import { printRaproMonthly } from '#/lib/rapro/pdf.ts'
 
@@ -104,15 +105,21 @@ export function RaproMonthlyBoard({
       }
       loading={loading}
       skeleton={{
-        cols: 3,
+        cols: 4,
         charts: 1,
-        cards: 4,
+        cards: 5,
+        cardCols: 5,
         cardLines: 2,
         rows: new Date(year, month, 0).getDate(),
       }}
     >
-      {/* Synthèse du mois — 3 totaux + moyenne journalière, mêmes couleurs. */}
-      <AnalytiqueCardsGrid>
+      {/* Synthèse du mois — vendues (total) + 3 totaux + moyenne journalière. */}
+      <AnalytiqueCardsGrid cols={5}>
+        <StatCard
+          label="Vendues"
+          accent="#94a3b8"
+          value={vendues(totals)}
+        />
         <StatCard
           label="Nettoyées"
           accent={CATEGORY_COLOR.nettoyee}
