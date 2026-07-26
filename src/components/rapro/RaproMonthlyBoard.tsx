@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { format } from 'date-fns'
@@ -12,7 +11,6 @@ import {
 import { AnalytiqueTable } from '#/components/analytique/AnalytiqueTable.tsx'
 import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
 import { AnalytiqueBackButton } from '#/components/analytique/AnalytiqueBackButton.tsx'
-import { PrintButton } from '#/components/shared/PrintButton.tsx'
 import { KpiLineChart } from '#/components/analytique/KpiLineChart.tsx'
 import {
   RaproCatCells,
@@ -27,7 +25,6 @@ import {
   monthlyRows,
   vendues,
 } from '#/lib/rapro/monthly.ts'
-import { printRaproMonthly } from '#/lib/rapro/pdf.ts'
 
 /**
  * Détail d'un MOIS — harmonisé sur le socle analytique partagé. 4 cartes de
@@ -71,39 +68,12 @@ export function RaproMonthlyBoard({
     nettoyee: r.nettoyee,
   }))
 
-  const [busy, setBusy] = useState(false)
-  async function exportPdf() {
-    setBusy(true)
-    try {
-      await printRaproMonthly(
-        {
-          title: monthLabel,
-          rows: rows.map((r) => ({
-            date: r.date,
-            day: r.day,
-            cleaned: r.nettoyee,
-          })),
-          total: totals.nettoyee,
-        },
-        `Recap_ELIOR_${year}-${String(month).padStart(2, '0')}`,
-      )
-    } catch {
-      // Silencieux : l'impression est un confort, pas un flux critique.
-    } finally {
-      setBusy(false)
-    }
-  }
-
   return (
     <AnalytiqueShell
       title={monthLabel}
-      actions={
-        <>
-          <AnalytiqueBackButton />
-          <PrintButton onClick={exportPdf} disabled={busy} />
-        </>
-      }
+      actions={<AnalytiqueBackButton />}
       loading={loading}
+      printTitle={`Rapprochement · ${monthLabel}`}
       skeleton={{
         cols: 4,
         charts: 1,
@@ -113,8 +83,14 @@ export function RaproMonthlyBoard({
         rows: new Date(year, month, 0).getDate(),
       }}
     >
-      {/* Synthèse du mois — vendues (total) + 3 totaux + moyenne journalière. */}
+      {/* Synthèse du mois — même ordre que la vue annuelle : moyenne / jour, puis
+          vendues (total) et les 3 totaux par catégorie. */}
       <AnalytiqueCardsGrid cols={5}>
+        <StatCard
+          label="Moyenne nettoyées / jour"
+          accent="#818cf8"
+          value={<span style={{ color: '#818cf8' }}>{avgCleanedPerDay}</span>}
+        />
         <StatCard
           label="Vendues"
           accent="#94a3b8"
@@ -144,11 +120,6 @@ export function RaproMonthlyBoard({
           value={
             <span style={{ color: CATEGORY_COLOR.refus }}>{totals.refus}</span>
           }
-        />
-        <StatCard
-          label="Moyenne nettoyées / jour"
-          accent="#818cf8"
-          value={<span style={{ color: '#818cf8' }}>{avgCleanedPerDay}</span>}
         />
       </AnalytiqueCardsGrid>
 
