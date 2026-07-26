@@ -1,9 +1,8 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { useRef, type ReactNode } from 'react'
 
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
-import { PrintBlockedDialog } from '#/components/shared/PrintBlockedDialog.tsx'
 import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
 import { AnalytiqueSkeleton } from '#/components/analytique/AnalytiqueSkeleton.tsx'
 import { printAnalytique } from '#/lib/analytique/pdf.ts'
@@ -16,11 +15,11 @@ import { printAnalytique } from '#/lib/analytique/pdf.ts'
  * ne fournit QUE son contenu (cartes, tableau, graphiques) via `children` — une
  * modification de mise en page se fait donc ici, une seule fois, pour les 10 pages.
  *
- * IMPRESSION : `printTitle` active le bouton « Imprimer / PDF » (et Ctrl/Cmd+P),
- * commun aux boards. Le PDF est bâti par `printAnalytique`, qui LIT le contenu déjà
- * rendu sous `rootRef` (cartes, tableau, graphes) — une seule mécanique pour toutes
- * les pages analytique, présentes et futures. Sans données, une modale explique le
- * refus (même patron que les autres impressions de l'app).
+ * IMPRESSION : `printTitle` active le bouton « Imprimer / PDF » (icône seule, et
+ * Ctrl/Cmd+P), commun aux boards. Le PDF est bâti par `printAnalytique`, qui LIT le
+ * contenu déjà rendu sous `rootRef` (cartes → tableau → graphes) — une seule
+ * mécanique pour toutes les pages analytique, présentes et futures. Le document
+ * reflète la page : cartes, puis TOUS les mois / jours, puis le(s) graphe(s).
  *
  * Bornage RESPONSIVE (`lg:min-h-0`) : sous `lg`, la page suit son flux naturel et
  * défile normalement (le tableau prend toute sa hauteur, tous les mois visibles) ;
@@ -53,14 +52,11 @@ export function AnalytiqueShell({
   children: ReactNode
 }) {
   const rootRef = useRef<HTMLDivElement>(null)
-  const [blocked, setBlocked] = useState(false)
 
   const handlePrint = () => {
     const root = rootRef.current
     if (!printTitle || loading || !root) return
-    void printAnalytique(root, printTitle).then((ok) => {
-      if (!ok) setBlocked(true)
-    })
+    void printAnalytique(root, printTitle)
   }
   usePrintShortcut(handlePrint)
 
@@ -72,7 +68,7 @@ export function AnalytiqueShell({
         <PrintButton
           onClick={handlePrint}
           disabled={loading}
-          responsiveLabel
+          iconOnly
           tipLabel={loading ? 'Chargement des données…' : 'Imprimer / PDF'}
         />
         {actions}
@@ -90,11 +86,6 @@ export function AnalytiqueShell({
         <PageHeader title={title} actions={headerActions} />
         {loading ? <AnalytiqueSkeleton {...skeleton} /> : children}
       </div>
-      <PrintBlockedDialog
-        open={blocked}
-        onOpenChange={setBlocked}
-        reason="Aucune donnée à imprimer pour cette période."
-      />
     </PageContainer>
   )
 }

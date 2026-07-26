@@ -157,8 +157,8 @@ function readText(el: Element | null | undefined): string {
 }
 
 /** Lit les éléments analytique rendus sous `root` (cartes, tableau, graphes) et
- * en fait une structure prête pour le PDF. Les lignes entièrement « — » (mois /
- * jours sans donnée) sont écartées : inutiles sur un document. */
+ * en fait une structure prête pour le PDF. TOUTES les lignes sont conservées
+ * (mois / jours sans donnée compris, en « — ») : le document reflète l'écran. */
 export async function extractAnalytique(
   root: HTMLElement,
 ): Promise<AnalytiqueExtract> {
@@ -194,14 +194,13 @@ export async function extractAnalytique(
     for (const tr of Array.from(tableEl.querySelectorAll('tbody tr'))) {
       const tds = Array.from(tr.querySelectorAll('td'))
       if (tds.length === 0) continue
-      const cells: PdfCell[] = tds.map((td, i) => ({
-        text: readText(td),
-        tone: i === 0 ? 'ink' : toneOf(td),
-        bold: i === 0 ? true : isBold(td),
-      }))
-      // Ligne vide (toutes les valeurs à « — ») : écartée.
-      const hasData = cells.slice(1).some((c) => c.text !== '—' && c.text !== '')
-      if (hasData) rows.push(cells)
+      rows.push(
+        tds.map((td, i) => ({
+          text: readText(td),
+          tone: i === 0 ? 'ink' : toneOf(td),
+          bold: i === 0 ? true : isBold(td),
+        })),
+      )
     }
     table = { columns, rows }
   }
@@ -248,6 +247,33 @@ function toneColor(t: Tone): RGB {
   }
 }
 
+/** Dessine un graphe (titre + image rasterisée) dans la boîte (x, y, w) et renvoie
+ * la hauteur totale consommée. L'image est bornée à `maxH` (centrée si bornée). */
+function drawChartBlock(
+  pdf: jsPDF,
+  chart: PdfChart,
+  x: number,
+  y: number,
+  w: number,
+  maxH: number,
+): number {
+  let ty = y
+  if (chart.title) {
+    setText(pdf, GRAY2)
+    pdf.setFont('helvetica', 'bold').setFontSize(7.5)
+    pdf.text(chart.title.toUpperCase(), x, ty, { charSpace: 0.3, maxWidth: w })
+    ty += 3.5
+  }
+  let iw = w
+  let ih = iw / chart.ratio
+  if (ih > maxH) {
+    ih = maxH
+    iw = ih * chart.ratio
+  }
+  pdf.addImage(chart.dataUrl, 'PNG', x + (w - iw) / 2, ty, iw, ih)
+  return ty - y + ih
+}
+
 function renderDocument(
   pdf: jsPDF,
   printTitle: string,
@@ -292,26 +318,7 @@ function renderDocument(
     y += ch + 9
   }
 
-  // Graphes (images rasterisées).
-  for (const chart of charts) {
-    if (chart.title) {
-      setText(pdf, GRAY2)
-      pdf.setFont('helvetica', 'bold').setFontSize(8)
-      pdf.text(chart.title.toUpperCase(), LEFT, y, { charSpace: 0.4 })
-      y += 3
-    }
-    let w = CONTENT_W
-    let h = w / chart.ratio
-    const maxH = 52
-    if (h > maxH) {
-      h = maxH
-      w = h * chart.ratio
-    }
-    pdf.addImage(chart.dataUrl, 'PNG', LEFT, y, w, h)
-    y += h + 7
-  }
-
-  // Tableau.
+  // Tableau : TOUS les mois / jours (avec données ou non), comme à l'écran.
   if (table && table.columns.length > 0) {
     const firstW = 26
     const valCols = Math.max(1, table.columns.length - 1)
@@ -356,6 +363,42 @@ function renderDocument(
       pdf.setLineWidth(0.15).line(LEFT, y + 2.3, RIGHT, y + 2.3)
       y += rowH
     }
+    y += 4
+  }
+
+  // Graphes EN BAS : deux colonnes côte à côte (une seule colonne si un graphe).
+  if (charts.length > 0) {
+    const gap = 6
+    const maxH = 55
+    if (charts.length === 1) {
+      const need = 4 + Math.min(CONTENT_W / charts[0].ratio, maxH)
+      if (y + need > PAGE_BOTTOM) {
+        pdf.addPage()
+        y = 18
+      }
+      y += drawChartBlock(pdf, charts[0], LEFT, y, CONTENT_W, maxH) + 6
+    } else {
+      const colW = (CONTENT_W - gap) / 2
+      for (let i = 0; i < charts.length; i += 2) {
+        const a = charts[i]
+        const b = charts[i + 1]
+        const need =
+          4 +
+          Math.max(
+            Math.min(colW / a.ratio, maxH),
+            b ? Math.min(colW / b.ratio, maxH) : 0,
+          )
+        if (y + need > PAGE_BOTTOM) {
+          pdf.addPage()
+          y = 18
+        }
+        const dA = drawChartBlock(pdf, a, LEFT, y, colW, maxH)
+        const dB = b
+          ? drawChartBlock(pdf, b, LEFT + colW + gap, y, colW, maxH)
+          : 0
+        y += Math.max(dA, dB) + 6
+      }
+    }
   }
 }
 
@@ -374,17 +417,12 @@ export async function buildAnalytiquePdf(
 /**
  * Lit la page analytique sous `root`, en construit le PDF et ouvre la fenêtre
  * d'impression du navigateur (autoPrint + iframe caché, aucun téléchargement).
- * Renvoie `false` si rien d'imprimable (aucune donnée) — l'appelant montre alors
- * la modale de refus.
  */
 export async function printAnalytique(
   root: HTMLElement,
   printTitle: string,
-): Promise<boolean> {
+): Promise<void> {
   const extract = await extractAnalytique(root)
-  const empty = !extract.table || extract.table.rows.length === 0
-  if (empty && extract.cards.length === 0) return false
-
   const pdf = await buildAnalytiquePdf(extract, printTitle)
   pdf.autoPrint()
   const blobUrl = pdf.output('bloburl').toString()
@@ -394,5 +432,4 @@ export async function printAnalytique(
   iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0'
   iframe.src = blobUrl
   document.body.appendChild(iframe)
-  return true
 }
