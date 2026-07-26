@@ -1,4 +1,5 @@
 import { Skeleton } from '#/components/ui/skeleton.tsx'
+import { cn } from '#/lib/utils.ts'
 
 /*
  * Squelette de chargement des pages analytique — reflet 1:1 du layout construit
@@ -13,6 +14,7 @@ export function AnalytiqueSkeleton({
   charts = 2,
   rows = 10,
   cards = 4,
+  cardCols = 4,
   cardLines = 3,
 }: {
   cols?: number
@@ -22,6 +24,10 @@ export function AnalytiqueSkeleton({
    * qui n'affiche aucune carte — en dessiner 4 les faisait « disparaître » à
    * l'arrivée des données). */
   cards?: number
+  /** Colonnes de la grille de cartes — miroir du board. 4 par défaut ; 3 pour la
+   * Caisse. Doit refléter la vraie grille sinon les cartes se redimensionnent à
+   * l'arrivée des données. */
+  cardCols?: number
   /** Lignes par carte : 3 (label + valeur + sous-texte, cas courant) ou 2 (label +
    * valeur seule, ex. cartes Rapro). Évite qu'une carte squelette soit plus haute
    * que la vraie. */
@@ -31,7 +37,15 @@ export function AnalytiqueSkeleton({
     <>
       {/* Cartes de synthèse (masquées si `cards === 0`) */}
       {cards > 0 && (
-        <div className="grid shrink-0 grid-cols-2 gap-3 sm:grid-cols-4" aria-hidden="true">
+        <div
+          className={cn(
+            'grid shrink-0 gap-3',
+            cardCols === 3
+              ? 'grid-cols-1 sm:grid-cols-3'
+              : 'grid-cols-2 sm:grid-cols-4',
+          )}
+          aria-hidden="true"
+        >
           {Array.from({ length: cards }).map((_, i) => (
             <div key={i} className="rounded-xl border border-border bg-card p-4">
               <Skeleton className="h-3 w-24" />
@@ -68,8 +82,14 @@ export function AnalytiqueSkeleton({
         </div>
       </div>
 
-      {/* Graphiques */}
-      <div className="grid shrink-0 grid-cols-1 gap-4 lg:grid-cols-2" aria-hidden="true">
+      {/* Graphiques (un seul → pleine largeur, comme le board) */}
+      <div
+        className={cn(
+          'grid shrink-0 grid-cols-1 gap-4',
+          charts > 1 && 'lg:grid-cols-2',
+        )}
+        aria-hidden="true"
+      >
         {Array.from({ length: charts }).map((_, i) => (
           <div key={i} className="rounded-xl border border-border bg-card p-4">
             <Skeleton className="h-3 w-40" />

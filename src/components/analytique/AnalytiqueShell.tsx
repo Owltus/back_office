@@ -34,6 +34,7 @@ export function AnalytiqueShell({
     charts?: number
     rows?: number
     cards?: number
+    cardCols?: number
     cardLines?: number
   }
   children: ReactNode

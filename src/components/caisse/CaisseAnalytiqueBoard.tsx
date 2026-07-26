@@ -18,7 +18,7 @@ import {
   summarize,
   yearsFromSheets,
 } from '#/lib/caisse/analytics.ts'
-import { fmtEcart, fmtEur } from '#/lib/caisse/format.ts'
+import { fmtEur } from '#/lib/caisse/format.ts'
 
 /*
  * Vue analytique Caisse — gabarit calqué sur pdj/PdjAnalytiqueBoard.
@@ -81,7 +81,6 @@ export function CaisseAnalytiqueBoard() {
       months.map((m) => ({
         mois: MONTHS_SHORT[m.month - 1],
         encaisse: m.sheets > 0 ? m.encaisse : null,
-        ecart: m.sheets > 0 ? m.ecartTotal : null,
       })),
     [months],
   )
@@ -98,10 +97,10 @@ export function CaisseAnalytiqueBoard() {
         />
       }
       loading={loading}
-      skeleton={{ cols: 4, charts: 2, rows: 12 }}
+      skeleton={{ cols: 4, charts: 1, rows: 12, cards: 3, cardCols: 3 }}
     >
       {/* Synthèse annuelle — cartes partagées avec le détail mensuel. */}
-      <CaisseAnalytiqueCards summary={summary} />
+      <CaisseAnalytiqueCards summary={summary} periodLabel="sur l'année" />
 
       {/* Tableau mois par mois */}
       <AnalytiqueTable head={<CaisseStatsHead firstLabel="Mois" />}>
@@ -138,8 +137,8 @@ export function CaisseAnalytiqueBoard() {
         </tbody>
       </AnalytiqueTable>
 
-      {/* Graphiques */}
-      <AnalytiqueCharts>
+      {/* Graphique unique, pleine largeur */}
+      <AnalytiqueCharts cols={1}>
         <KpiLineChart
           title="Total encaissé par mois"
           data={chartData}
@@ -147,14 +146,6 @@ export function CaisseAnalytiqueBoard() {
           realKey="encaisse"
           realName="Encaissé"
           tooltipFormatter={fmtEur}
-        />
-        <KpiLineChart
-          title="Écart par mois"
-          data={chartData}
-          xKey="mois"
-          realKey="ecart"
-          realName="Écart"
-          tooltipFormatter={fmtEcart}
         />
       </AnalytiqueCharts>
     </AnalytiqueShell>

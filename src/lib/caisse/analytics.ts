@@ -1,5 +1,5 @@
-import { computeEcarts, fundEcart } from '#/lib/caisse/calc.ts'
-import { ECART_KEYS } from '#/lib/caisse/constants.ts'
+import { computeEcarts, fundEcart, hasCountedFund } from '#/lib/caisse/calc.ts'
+import { ECART_KEYS, EPSILON } from '#/lib/caisse/constants.ts'
 import type { CaisseSheet } from '#/lib/caisse/types.ts'
 
 /*
@@ -24,8 +24,12 @@ export interface CaisseMonthStats {
   sheets: number
   /** Écart de paiement cumulé, en valeur absolue, tous modes confondus. */
   ecartTotal: number
+  /** Feuilles clôturées présentant au moins un écart de paiement (un mode ≥ EPSILON). */
+  ecartCount: number
   /** Écart de fond de caisse cumulé (signé). */
   fundEcart: number
+  /** Feuilles clôturées, fond réellement compté, présentant un écart de fond. */
+  fundEcartCount: number
   /** Réel encaissé cumulé — espèces. */
   cash: number
   /** Réel encaissé cumulé — carte bancaire. */
@@ -44,7 +48,9 @@ function emptyMonth(month: number): CaisseMonthStats {
     month,
     sheets: 0,
     ecartTotal: 0,
+    ecartCount: 0,
     fundEcart: 0,
+    fundEcartCount: 0,
     cash: 0,
     cb: 0,
     cvac: 0,
@@ -78,7 +84,13 @@ export function aggregateCaisseMonthly(
 
     const ecarts = computeEcarts(s)
     for (const c of ECART_KEYS) t.ecartTotal += Math.abs(ecarts[c])
-    t.fundEcart += fundEcart(s)
+    if (ECART_KEYS.some((c) => Math.abs(ecarts[c]) >= EPSILON)) t.ecartCount += 1
+
+    const fe = fundEcart(s)
+    t.fundEcart += fe
+    // Un fond NON compté (nuit non faite) donne fe = -fond d'origine : ce n'est pas
+    // un écart réel, on ne le compte pas (mais il reste dans le montant du tableau).
+    if (hasCountedFund(s) && Math.abs(fe) >= EPSILON) t.fundEcartCount += 1
 
     t.cash += s.caisse.cash
     t.cb += s.caisse.cb
@@ -100,8 +112,12 @@ export interface CaisseDayStats {
   sheets: number
   /** Écart de paiement cumulé du jour, en valeur absolue, tous modes. */
   ecartTotal: number
+  /** Feuilles clôturées du jour présentant au moins un écart de paiement. */
+  ecartCount: number
   /** Écart de fond de caisse cumulé du jour (signé). */
   fundEcart: number
+  /** Feuilles du jour, fond réellement compté, présentant un écart de fond. */
+  fundEcartCount: number
   /** Total réel encaissé du jour (cash + cb + cvac + adyen). */
   encaisse: number
 }
@@ -133,7 +149,9 @@ export function aggregateCaisseDaily(
         day: Number(s.reportDate.slice(8, 10)),
         sheets: 0,
         ecartTotal: 0,
+        ecartCount: 0,
         fundEcart: 0,
+        fundEcartCount: 0,
         encaisse: 0,
       }
       byDate.set(s.reportDate, t)
@@ -143,7 +161,13 @@ export function aggregateCaisseDaily(
 
     const ecarts = computeEcarts(s)
     for (const c of ECART_KEYS) t.ecartTotal += Math.abs(ecarts[c])
-    t.fundEcart += fundEcart(s)
+    if (ECART_KEYS.some((c) => Math.abs(ecarts[c]) >= EPSILON)) t.ecartCount += 1
+
+    const fe = fundEcart(s)
+    t.fundEcart += fe
+    // Un fond NON compté (nuit non faite) donne fe = -fond d'origine : ce n'est pas
+    // un écart réel, on ne le compte pas (mais il reste dans le montant du tableau).
+    if (hasCountedFund(s) && Math.abs(fe) >= EPSILON) t.fundEcartCount += 1
 
     t.encaisse += s.caisse.cash + s.caisse.cb + s.caisse.cvac + s.caisse.adyen
   }
@@ -157,7 +181,9 @@ export interface CaisseSummary {
   sheets: number
   encaisse: number
   ecartTotal: number
+  ecartCount: number
   fundEcart: number
+  fundEcartCount: number
 }
 
 /** Somme des 4 métriques de synthèse sur un ensemble de lignes (mois ou jours). */
@@ -167,9 +193,18 @@ export function summarize(rows: ReadonlyArray<CaisseSummary>): CaisseSummary {
       sheets: a.sheets + r.sheets,
       encaisse: a.encaisse + r.encaisse,
       ecartTotal: a.ecartTotal + r.ecartTotal,
+      ecartCount: a.ecartCount + r.ecartCount,
       fundEcart: a.fundEcart + r.fundEcart,
+      fundEcartCount: a.fundEcartCount + r.fundEcartCount,
     }),
-    { sheets: 0, encaisse: 0, ecartTotal: 0, fundEcart: 0 },
+    {
+      sheets: 0,
+      encaisse: 0,
+      ecartTotal: 0,
+      ecartCount: 0,
+      fundEcart: 0,
+      fundEcartCount: 0,
+    },
   )
 }
 

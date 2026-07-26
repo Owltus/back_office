@@ -24,6 +24,7 @@ export function StatCard({
   sub,
   reference,
   accent = 'var(--primary)',
+  hint,
   children,
 }: {
   label: ReactNode
@@ -33,6 +34,8 @@ export function StatCard({
   reference?: ReactNode
   /** Couleur du liseré (défaut primary). */
   accent?: string
+  /** Explication au survol (tooltip). */
+  hint?: string
   children?: ReactNode
 }) {
   return (
@@ -42,6 +45,7 @@ export function StatCard({
       accent={accent}
       reference={reference}
       sub={sub}
+      hint={hint}
     >
       {children}
     </StatTile>

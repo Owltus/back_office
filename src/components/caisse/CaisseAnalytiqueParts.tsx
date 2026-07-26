@@ -1,7 +1,4 @@
-import {
-  AnalytiqueCardsGrid,
-  StatCard,
-} from '#/components/analytique/AnalytiqueCards.tsx'
+import { StatCard } from '#/components/analytique/AnalytiqueCards.tsx'
 import { EPSILON } from '#/lib/caisse/constants.ts'
 import { fmtEcart, fmtEur, fmtInt } from '#/lib/caisse/format.ts'
 import type { CaisseSummary } from '#/lib/caisse/analytics.ts'
@@ -9,60 +6,52 @@ import { cn } from '#/lib/utils.ts'
 
 /*
  * Briques d'affichage partagées par les deux vues analytique caisse (annuelle et
- * détail mensuel) : les 4 cartes de synthèse, l'en-tête du tableau et les
+ * détail mensuel) : les 3 cartes de synthèse, l'en-tête du tableau et les
  * cellules de valeur (ou tirets). Une seule définition — l'ordre des cartes, le
  * formatage des écarts et le rendu « pas de données » ne peuvent plus diverger
- * entre les deux vues (cf. dérives constatées : ordre des cartes, « Écart total »
- * formaté +/- ici et sans signe là).
+ * entre les deux vues.
  *
- * L'« Écart total » est une somme de VALEURS ABSOLUES (toujours ≥ 0) → formaté
- * sans signe (fmtEur) ; l'« Écart de fond » est SIGNÉ → formaté avec signe
- * (fmtEcart). Rouge dès qu'il dépasse EPSILON.
+ * Cartes : le TOTAL ENCAISSÉ sur la période, puis DEUX compteurs d'occurrences —
+ * le nombre de feuilles avec un écart de paiement et le nombre de feuilles avec
+ * un écart de fond. On compte les OCCURRENCES plutôt qu'un montant cumulé : un
+ * écart justifié étant normal, le cumul des montants ne dit rien d'exploitable ;
+ * savoir combien de fois un écart est survenu est plus parlant. Neutre par choix
+ * (pas de rouge d'alarme sur un simple décompte).
+ *
+ * Le tableau, lui, garde les MONTANTS par mois / jour : l'« Écart » est une somme
+ * de valeurs absolues (fmtEur) et le « Fond » est signé (fmtEcart, rouge au-delà
+ * d'EPSILON) — utile à la maille fine, contrairement au cumul annuel.
  */
 
-/** Les 4 cartes de synthèse (Feuilles / Encaissé / Écart total / Écart de fond). */
-export function CaisseAnalytiqueCards({ summary }: { summary: CaisseSummary }) {
+/** Les 3 cartes de synthèse (Total encaissé / Écarts de paiement / Écarts de fond).
+ *  `periodLabel` complète l'intitulé encaissé (« sur l'année » / « sur le mois »). */
+export function CaisseAnalytiqueCards({
+  summary,
+  periodLabel,
+}: {
+  summary: CaisseSummary
+  periodLabel: string
+}) {
   return (
-    <AnalytiqueCardsGrid>
+    <div className="grid shrink-0 grid-cols-1 gap-3 sm:grid-cols-3">
       <StatCard
-        label="Feuilles clôturées"
-        accent="#818cf8"
-        value={fmtInt(summary.sheets)}
-      />
-      <StatCard
-        label="Total encaissé"
+        label={`Total encaissé ${periodLabel}`}
         accent="#34d399"
         value={fmtEur(summary.encaisse)}
       />
       <StatCard
-        label="Écart total"
+        label="Écarts de paiement"
         accent="#fbbf24"
-        value={
-          <span
-            className={
-              summary.ecartTotal >= EPSILON ? 'text-destructive' : undefined
-            }
-          >
-            {fmtEur(summary.ecartTotal)}
-          </span>
-        }
+        hint="Nombre de feuilles clôturées présentant au moins un écart de paiement (attendu contre réel compté)."
+        value={fmtInt(summary.ecartCount)}
       />
       <StatCard
-        label="Écart de fond"
+        label="Écarts de fond"
         accent="#fb7185"
-        value={
-          <span
-            className={
-              Math.abs(summary.fundEcart) >= EPSILON
-                ? 'text-destructive'
-                : undefined
-            }
-          >
-            {fmtEcart(summary.fundEcart)}
-          </span>
-        }
+        hint="Nombre de feuilles clôturées présentant un écart de fond de caisse."
+        value={fmtInt(summary.fundEcartCount)}
       />
-    </AnalytiqueCardsGrid>
+    </div>
   )
 }
 

@@ -14,7 +14,7 @@ import {
 } from '#/components/caisse/CaisseAnalytiqueParts.tsx'
 import { fetchSheets } from '#/lib/caisse/service.ts'
 import { aggregateCaisseDaily, summarize } from '#/lib/caisse/analytics.ts'
-import { fmtEcart, fmtEur } from '#/lib/caisse/format.ts'
+import { fmtEur } from '#/lib/caisse/format.ts'
 import { MONTHS_LABELS } from '#/lib/repjour/constants.ts'
 
 /*
@@ -66,14 +66,16 @@ export function CaisseAnalytiqueMoisBoard({
 
   const summary = useMemo(() => summarize(days), [days])
 
+  // Tous les jours du mois (1..lastDay), pas seulement ceux qui portent des
+  // données : l'axe couvre le mois entier, les jours sans feuille sont des trous
+  // (`null` + connectNulls=false), comme la vue annuelle affiche les 12 mois.
   const chartData = useMemo(
     () =>
-      days.map((d) => ({
-        jour: d.day,
-        encaisse: d.encaisse,
-        ecart: d.ecartTotal,
+      dayNums.map((day) => ({
+        jour: day,
+        encaisse: byDay.get(day)?.encaisse ?? null,
       })),
-    [days],
+    [dayNums, byDay],
   )
 
   const monthLabel = MONTHS_LABELS[month - 1] || ''
@@ -85,12 +87,14 @@ export function CaisseAnalytiqueMoisBoard({
       loading={loading}
       skeleton={{
         cols: 4,
-        charts: 2,
+        charts: 1,
         rows: new Date(year, month, 0).getDate(),
+        cards: 3,
+        cardCols: 3,
       }}
     >
       {/* Synthèse du mois — cartes partagées avec la vue annuelle. */}
-      <CaisseAnalytiqueCards summary={summary} />
+      <CaisseAnalytiqueCards summary={summary} periodLabel="sur le mois" />
 
       {/* Tableau jour par jour */}
       <AnalytiqueTable head={<CaisseStatsHead firstLabel="Jour" />}>
@@ -128,8 +132,8 @@ export function CaisseAnalytiqueMoisBoard({
         </tbody>
       </AnalytiqueTable>
 
-      {/* Graphiques */}
-      <AnalytiqueCharts>
+      {/* Graphique unique, pleine largeur */}
+      <AnalytiqueCharts cols={1}>
         <KpiLineChart
           title="Encaissé par jour"
           data={chartData}
@@ -141,15 +145,6 @@ export function CaisseAnalytiqueMoisBoard({
             v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)
           }
           tooltipFormatter={fmtEur}
-        />
-        <KpiLineChart
-          title="Écart par jour"
-          data={chartData}
-          xKey="jour"
-          realKey="ecart"
-          realName="Écart"
-          realDotRadius={2}
-          tooltipFormatter={fmtEcart}
         />
       </AnalytiqueCharts>
     </AnalytiqueShell>
