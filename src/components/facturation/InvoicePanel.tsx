@@ -291,7 +291,7 @@ export function EmptyImputation() {
         </div>
       </div>
 
-      {/* CARD 2 — Commentaire, date de traitement, tampon. */}
+      {/* CARD 2 — Commentaire, tampon. */}
       <div className="flex shrink-0 flex-col gap-3 rounded-xl border border-border bg-card p-3">
         <div className="flex flex-col gap-1.5">
           <Label>Commentaire</Label>
@@ -301,11 +301,6 @@ export function EmptyImputation() {
             rows={2}
             className="resize-none"
           />
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <Label>Date de traitement</Label>
-          <Input type="date" disabled />
         </div>
 
         <Button disabled className="w-full">
@@ -808,7 +803,7 @@ export function InvoicePanel({
         </div>
       </div>
 
-      {/* CARD 2 — Commentaire, date de traitement, avertissements & tampon. */}
+      {/* CARD 2 — Commentaire, avertissements & tampon. */}
       <div className="flex shrink-0 flex-col gap-3 rounded-xl border border-border bg-card p-3">
         <div className="flex flex-col gap-1.5">
           <Label>Commentaire</Label>
@@ -818,15 +813,6 @@ export function InvoicePanel({
             placeholder="Note libre apposée sur le tampon"
             rows={2}
             className="resize-none"
-          />
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <Label>Date de traitement</Label>
-          <Input
-            type="date"
-            value={record.processedDate}
-            onChange={(e) => onPatch({ processedDate: e.target.value })}
           />
         </div>
 
