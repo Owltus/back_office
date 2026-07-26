@@ -355,30 +355,21 @@ function renderDocument(
   // Tableau : TOUS les mois / jours (avec données ou non), comme à l'écran.
   //
   // Alignement — 1re colonne (Mois / Jour) à GAUCHE, contenu comme en-tête ;
-  // colonnes MONÉTAIRES (une cellule contient « € ») à DROITE ; toutes les autres
-  // colonnes de valeur CENTRÉES. Les en-têtes sont TOUS centrés sauf le premier.
+  // TOUTES les autres colonnes de valeur CENTRÉES (contenu ET en-tête), y compris
+  // les colonnes monétaires : un tableau homogène plutôt que des alignements panachés.
   if (table && table.columns.length > 0) {
     const firstW = 26
     const valCols = Math.max(1, table.columns.length - 1)
     const colW = (RIGHT - (LEFT + firstW)) / valCols
-    // Repères d'une colonne de valeur j (0-based, = colonne j+1 du tableau).
+    // Centre d'une colonne de valeur j (0-based, = colonne j+1 du tableau).
     const colMid = (j: number) => LEFT + firstW + colW * j + colW / 2
-    const colRightX = (j: number) => LEFT + firstW + colW * (j + 1) - 2
-
-    // Colonne monétaire = au moins une cellule affiche « € ».
-    const isMoney = Array.from({ length: valCols }, (_, j) =>
-      table.rows.some((r) => (r[j + 1]?.text ?? '').includes('€')),
-    )
-    const valX = (j: number) => (isMoney[j] ? colRightX(j) : colMid(j))
-    const valAlign = (j: number): 'right' | 'center' =>
-      isMoney[j] ? 'right' : 'center'
 
     const header = () => {
       setText(pdf, GRAY2)
       pdf.setFont('helvetica', 'bold').setFontSize(7)
       // 1re colonne (Mois / Jour) : en-tête à gauche.
       pdf.text((table.columns[0] ?? '').toUpperCase(), LEFT, y)
-      // Autres en-têtes : toujours centrés.
+      // Autres en-têtes : centrés.
       for (let j = 0; j < valCols; j++) {
         pdf.text((table.columns[j + 1] ?? '').toUpperCase(), colMid(j), y, {
           align: 'center',
@@ -404,13 +395,13 @@ function renderDocument(
       setText(pdf, INK)
       pdf.setFont('helvetica', first?.bold ? 'bold' : 'normal').setFontSize(8)
       pdf.text(first?.text ?? '', LEFT, y)
-      // Colonnes de valeur : monétaire → droite, sinon centré.
+      // Colonnes de valeur : toutes centrées.
       for (let j = 0; j < valCols; j++) {
         const cell = row[j + 1]
         if (!cell) continue
         setText(pdf, toneColor(cell.tone))
         pdf.setFont('helvetica', cell.bold ? 'bold' : 'normal').setFontSize(8)
-        pdf.text(cell.text, valX(j), y, { align: valAlign(j) })
+        pdf.text(cell.text, colMid(j), y, { align: 'center' })
       }
       setDraw(pdf, HAIR)
       pdf.setLineWidth(0.15).line(LEFT, y + 2.3, RIGHT, y + 2.3)
