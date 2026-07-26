@@ -274,6 +274,25 @@ function drawChartBlock(
   return ty - y + ih
 }
 
+/** Pose un texte CENTRÉ sur (cx, y), garanti sur UNE seule ligne : la police
+ * démarre à `base` et est réduite (jusqu'à `min`) pour tenir dans `maxW`. jsPDF
+ * étant linéaire en taille, `base * maxW / largeur` donne la taille exacte qui
+ * remplit la largeur ; on la borne à `min` (léger débord toléré au pire). */
+function fitCenteredText(
+  pdf: jsPDF,
+  text: string,
+  cx: number,
+  y: number,
+  maxW: number,
+  base: number,
+  min: number,
+): void {
+  pdf.setFontSize(base)
+  const w = pdf.getTextWidth(text)
+  if (w > maxW) pdf.setFontSize(Math.max(min, (base * maxW) / w))
+  pdf.text(text, cx, y, { align: 'center' })
+}
+
 function renderDocument(
   pdf: jsPDF,
   printTitle: string,
@@ -294,25 +313,40 @@ function renderDocument(
   pdf.setLineWidth(0.4).line(LEFT, y, RIGHT, y)
   y += 9
 
-  // Cartes de synthèse (cellules bordées).
+  // Cartes de synthèse (cellules bordées) : tout CENTRÉ — titre sur une seule
+  // ligne en haut, valeur au centre, sous-texte dessous.
   if (cards.length > 0) {
     const gap = 3
     const cw = (CONTENT_W - gap * (cards.length - 1)) / cards.length
     const ch = 18
+    const usable = cw - 4 // marge latérale intérieure
+    // Taille de titre UNIFORME sur toute la rangée = celle qui fait tenir le titre
+    // le plus long sur une ligne (rangée homogène plutôt que des tailles panachées).
+    pdf.setFont('helvetica', 'bold')
+    let titleSize = 6.4
+    for (const c of cards) {
+      pdf.setFontSize(6.4)
+      const w = pdf.getTextWidth(c.label.toUpperCase())
+      if (w > usable) titleSize = Math.min(titleSize, Math.max(4.4, (6.4 * usable) / w))
+    }
     cards.forEach((c, i) => {
       const cx = LEFT + i * (cw + gap)
+      const mid = cx + cw / 2
       setDraw(pdf, BORDER)
       pdf.setLineWidth(0.25).rect(cx, y, cw, ch)
+      // Titre centré, une seule ligne, taille uniforme.
       setText(pdf, GRAY)
-      pdf.setFont('helvetica', 'normal').setFontSize(6.2)
-      pdf.text(c.label.toUpperCase(), cx + 3, y + 4.6, { maxWidth: cw - 5 })
+      pdf.setFont('helvetica', 'bold').setFontSize(titleSize)
+      pdf.text(c.label.toUpperCase(), mid, y + 5, { align: 'center' })
+      // Valeur centrée, en gras (réduite si très longue, ex. « 1 469 736 € »).
       setText(pdf, INK)
-      pdf.setFont('helvetica', 'bold').setFontSize(12)
-      pdf.text(c.value, cx + 3, y + 11.5, { maxWidth: cw - 5 })
+      pdf.setFont('helvetica', 'bold')
+      fitCenteredText(pdf, c.value, mid, c.sub ? y + 11.8 : y + 12.6, usable, 12, 8)
+      // Sous-texte centré (part du total / objectif).
       if (c.sub) {
         setText(pdf, GRAY)
-        pdf.setFont('helvetica', 'normal').setFontSize(6.8)
-        pdf.text(c.sub, cx + 3, y + 15.4, { maxWidth: cw - 5 })
+        pdf.setFont('helvetica', 'normal')
+        fitCenteredText(pdf, c.sub, mid, y + 15.6, usable, 6.8, 5)
       }
     })
     y += ch + 9
