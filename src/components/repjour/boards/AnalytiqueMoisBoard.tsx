@@ -153,6 +153,7 @@ export function AnalytiqueMoisBoard({
       title={`${monthLabel} ${year}`}
       actions={<AnalytiqueBackButton />}
       loading={loading}
+      printTitle={`RepJour · ${monthLabel} ${year}`}
       skeleton={{
         cols: 5,
         charts: 2,

@@ -90,6 +90,7 @@ export function CaisseAnalytiqueMoisBoard({
         charts: 1,
         rows: new Date(year, month, 0).getDate(),
       }}
+      printTitle={`Caisse · ${monthLabel} ${year}`}
     >
       {/* Synthèse du mois — cartes partagées avec la vue annuelle. */}
       <CaisseAnalytiqueCards summary={summary} periodLabel="sur le mois" />

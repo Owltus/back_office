@@ -110,6 +110,7 @@ export function ParkingAnalytiqueBoard() {
         />
       }
       loading={loading}
+      printTitle={`Parking · ${year}`}
       skeleton={{ cols: 6, charts: 2, rows: 12 }}
     >
       {/* Synthèse annuelle */}

@@ -156,6 +156,7 @@ export function AnalytiqueBoard() {
         />
       }
       loading={loading}
+      printTitle={`RepJour · ${year}`}
       skeleton={{ cols: 7, charts: 2, rows: 12 }}
     >
       {/* Synthèse annuelle — réalisé / objectif en FRACTION (barre horizontale). */}

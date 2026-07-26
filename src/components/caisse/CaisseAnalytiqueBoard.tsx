@@ -98,6 +98,7 @@ export function CaisseAnalytiqueBoard() {
       }
       loading={loading}
       skeleton={{ cols: 6, charts: 1, rows: 12 }}
+      printTitle={`Caisse · ${year}`}
     >
       {/* Synthèse annuelle — cartes partagées avec le détail mensuel. */}
       <CaisseAnalytiqueCards summary={summary} periodLabel="sur l'année" />

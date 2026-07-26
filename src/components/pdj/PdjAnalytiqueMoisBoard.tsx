@@ -102,6 +102,7 @@ export function PdjAnalytiqueMoisBoard({
       title={`${monthLabel} ${year}`}
       actions={<AnalytiqueBackButton />}
       loading={loading}
+      printTitle={`PDJ · ${monthLabel} ${year}`}
       skeleton={{
         cols: 5,
         charts: 2,

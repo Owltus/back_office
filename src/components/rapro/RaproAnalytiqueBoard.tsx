@@ -135,6 +135,7 @@ export function RaproAnalytiqueBoard() {
         />
       }
       loading={loading}
+      printTitle={`Rapprochement · ${year}`}
       skeleton={{ cols: 3, charts: 2, cardLines: 2, rows: 13 }}
     >
       {/* Synthèse annuelle — 3 totaux + moyenne / jour, code couleur rapprochement */}

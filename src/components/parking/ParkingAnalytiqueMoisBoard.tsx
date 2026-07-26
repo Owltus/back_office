@@ -83,6 +83,7 @@ export function ParkingAnalytiqueMoisBoard({
       title={monthLabel}
       actions={<AnalytiqueBackButton />}
       loading={loading}
+      printTitle={`Parking · ${monthLabel} ${year}`}
       skeleton={{
         cols: 4,
         charts: 2,

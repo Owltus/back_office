@@ -108,6 +108,7 @@ export function PdjAnalytiqueBoard() {
         />
       }
       loading={loading}
+      printTitle={`PDJ · ${year}`}
       skeleton={{ cols: 6, charts: 2, rows: 12 }}
     >
       {/* Synthèse annuelle — libellé + valeur seuls (comme l'analytique
