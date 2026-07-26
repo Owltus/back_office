@@ -430,7 +430,7 @@ export function FacturationBoard() {
                 <Button
                   variant="secondary"
                   onClick={openPicker}
-                  className="flex-1 rounded-none"
+                  className="flex-1 rounded-none hover:bg-slate-700"
                 >
                   <Plus className="size-4" />
                   Ajouter des PDF
@@ -441,7 +441,7 @@ export function FacturationBoard() {
                       variant="secondary"
                       size="icon"
                       onClick={clearFacturation}
-                      className="rounded-none"
+                      className="rounded-none hover:bg-slate-700"
                       aria-label="Tout effacer"
                     >
                       <Trash2 className="size-4" />
@@ -455,7 +455,7 @@ export function FacturationBoard() {
                       variant="secondary"
                       size="icon"
                       onClick={() => setHistOpen(true)}
-                      className="rounded-none"
+                      className="rounded-none hover:bg-slate-700"
                       aria-label="Historique"
                     >
                       <History className="size-4" />
