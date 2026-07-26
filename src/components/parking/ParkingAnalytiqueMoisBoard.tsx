@@ -88,7 +88,7 @@ export function ParkingAnalytiqueMoisBoard({
       printTitle={`Parking · ${monthLabel} ${year}`}
       skeleton={{
         cols: 4,
-        charts: 2,
+        charts: 1,
         rows: new Date(year, month, 0).getDate(),
       }}
     >
@@ -176,8 +176,8 @@ export function ParkingAnalytiqueMoisBoard({
         </tbody>
       </AnalytiqueTable>
 
-      {/* Graphiques */}
-      <AnalytiqueCharts>
+      {/* Graphique unique, pleine largeur : le taux d'occupation. */}
+      <AnalytiqueCharts cols={1}>
         <KpiLineChart
           title="Occupation du parking par jour"
           data={chartData}
@@ -187,15 +187,6 @@ export function ParkingAnalytiqueMoisBoard({
           realDotRadius={2}
           yDomain={[0, 100]}
           tooltipFormatter={fmtPct}
-        />
-        <KpiLineChart
-          title="Arrivées par jour"
-          data={chartData}
-          xKey="jour"
-          realKey="arrivals"
-          realName="Arrivées"
-          realDotRadius={2}
-          tooltipFormatter={fmtInt}
         />
       </AnalytiqueCharts>
     </AnalytiqueShell>

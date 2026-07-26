@@ -111,7 +111,7 @@ export function ParkingAnalytiqueBoard() {
       }
       loading={loading}
       printTitle={`Parking · ${year}`}
-      skeleton={{ cols: 6, charts: 2, rows: 12 }}
+      skeleton={{ cols: 6, charts: 1, rows: 12 }}
     >
       {/* Synthèse annuelle */}
       <AnalytiqueCardsGrid>
@@ -238,8 +238,8 @@ export function ParkingAnalytiqueBoard() {
         </tbody>
       </AnalytiqueTable>
 
-      {/* Graphiques */}
-      <AnalytiqueCharts>
+      {/* Graphique unique, pleine largeur : le taux d'occupation. */}
+      <AnalytiqueCharts cols={1}>
         <KpiLineChart
           title="Taux d'occupation par mois"
           data={chartData}
@@ -248,16 +248,6 @@ export function ParkingAnalytiqueBoard() {
           realName="Occupation"
           yDomain={[0, 100]}
           tooltipFormatter={fmtPct}
-        />
-        <KpiLineChart
-          title="Réservations par mois"
-          data={chartData}
-          xKey="mois"
-          realKey="resas"
-          projKey="payees"
-          realName="Réservations"
-          projName="Payées"
-          tooltipFormatter={fmtInt}
         />
       </AnalytiqueCharts>
     </AnalytiqueShell>
