@@ -17,6 +17,7 @@ import {
   InvoicePanel,
 } from '#/components/facturation/InvoicePanel.tsx'
 import { HistoriqueDialog } from '#/components/facturation/HistoriqueDialog.tsx'
+import { InvoiceNotices } from '#/components/facturation/InvoiceNotices.tsx'
 import { StampPreview } from '#/components/facturation/StampPreview.tsx'
 import { GalaxyCard } from '#/components/facturation/GalaxyCard.tsx'
 import { useFacturationModel } from '#/components/facturation/useFacturationModel.ts'
@@ -432,8 +433,8 @@ export function FacturationBoard() {
           </button>
         </aside>
 
-        {/* CENTRE : grand aperçu + tampon */}
-        <section className="order-last flex min-h-[55vh] min-w-0 flex-1 flex-col lg:order-none lg:min-h-0">
+        {/* CENTRE : grand aperçu + zone d'informations sous le PDF. */}
+        <section className="order-last flex min-h-[55vh] min-w-0 flex-1 flex-col gap-3 lg:order-none lg:min-h-0">
           <div className="flex min-h-0 flex-1 rounded-xl border border-border bg-muted/30 p-3">
             {selected &&
             selected.status === 'ready' &&
@@ -454,6 +455,7 @@ export function FacturationBoard() {
               <CenterPlaceholder record={selected} />
             )}
           </div>
+          {selected && <InvoiceNotices record={selected} />}
         </section>
 
         {/* COLONNE DROITE : galaxie (prévisualisation) au-dessus de l'imputation. */}

@@ -856,45 +856,6 @@ export function InvoicePanel({
           </Button>
         )}
 
-        {/* Doublon : ce PDF a déjà été appris (présent au journal). Non bloquant — on peut
-            re-tamponner pour ré-obtenir le PDF, mais l'apprentissage sera SAUTÉ (anti double
-            comptage, cf. handleStamp). */}
-        {record.duplicate && !record.learned && (
-          <p className="flex items-start gap-2 rounded-lg bg-amber-500/10 px-3 py-2 text-[11px] text-amber-700">
-            <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-            Facture déjà apprise. La re-tamponner télécharge le PDF mais ne
-            réapprend pas (évite le double comptage).
-          </p>
-        )}
-
-        {/* Avertissements AVANT le tampon : rendre visible que « tamponner = apprendre » et
-            signaler quand l'apprentissage sera partiel ou bruité (facteur humain). */}
-        {!record.learned && canStamp && !record.duplicate && (
-          <div className="flex flex-col gap-1.5">
-            {canBan ? (
-              <p className="px-1 text-[11px] text-muted-foreground">
-                En tamponnant, l'imputation sera mémorisée pour «{' '}
-                {record.supplierName.trim()} ».
-              </p>
-            ) : (
-              <p className="flex items-start gap-2 rounded-lg bg-muted/40 px-3 py-2 text-[11px] text-muted-foreground">
-                <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-                Facture tamponnée, mais l'émetteur ne sera pas mémorisé (nom
-                vide ou trop court) : le filtre émetteur ne progressera pas pour
-                lui.
-              </p>
-            )}
-            {record.codes.length > 1 && (
-              <p className="flex items-start gap-2 rounded-lg bg-muted/40 px-3 py-2 text-[11px] text-muted-foreground">
-                <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-                Les {record.codes.length} imputations apprendront le même
-                vocabulaire (facture mixte) — retirez un code accessoire si son
-                imputation n'est pas à mémoriser.
-              </p>
-            )}
-          </div>
-        )}
-
         <Button
           onClick={handleStamp}
           disabled={!canStamp || stamping}
