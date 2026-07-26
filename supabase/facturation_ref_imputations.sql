@@ -28,11 +28,15 @@ create table if not exists public.facturation_ref_imputations (
 create index if not exists facturation_ref_imp_compte_idx
   on public.facturation_ref_imputations (compte);
 
--- 2) RLS : lecture authentifiée, aucune policy d'écriture (write = RPC only) --
+-- 2) RLS : lecture PAR PAGE (facturation), aucune policy d'écriture (write = RPC only) --
+-- Durci (H2) : le SELECT était `using(true)` — lisible par tout compte connecté.
+-- Aligné sur les autres facturation_* : lecture réservée au niveau `facturation`.
 alter table public.facturation_ref_imputations enable row level security;
 drop policy if exists "ref_imputations read (authenticated)" on public.facturation_ref_imputations;
-create policy "ref_imputations read (authenticated)" on public.facturation_ref_imputations
-  for select to authenticated using (true);
+drop policy if exists "ref_imputations read (page:facturation)" on public.facturation_ref_imputations;
+create policy "ref_imputations read (page:facturation)" on public.facturation_ref_imputations
+  for select to authenticated
+  using ((select public.page_level_rank(public.get_page_level('facturation'))) >= 1);
 
 -- 3) Trigger updated_at ------------------------------------------------------
 create or replace function public.facturation_ref_imputations_touch()

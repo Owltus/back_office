@@ -163,6 +163,15 @@ create policy "wordpool read (page:facturation)"
   on public.facturation_wordpool for select to authenticated
   using ((select public.page_level_rank(public.get_page_level('facturation'))) >= 1);
 
+-- facturation_ref_imputations — table AJOUTÉE après le durcissement initial, elle
+-- était restée en `using(true)` (H2). On la ferme comme les autres facturation_*.
+-- (Les deux noms de policy plausibles sont couverts par les drop.)
+drop policy if exists "ref_imputations read (authenticated)" on public.facturation_ref_imputations;
+drop policy if exists "facturation_ref_imputations read (authenticated)" on public.facturation_ref_imputations;
+create policy "ref_imputations read (page:facturation)"
+  on public.facturation_ref_imputations for select to authenticated
+  using ((select public.page_level_rank(public.get_page_level('facturation'))) >= 1);
+
 -- =============================================================================
 -- VÉRIFICATIONS APRÈS EXÉCUTION (lecture seule)
 --

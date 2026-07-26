@@ -104,6 +104,16 @@ Deno.serve(async (req) => {
   if (!subject || !htmlBody)
     return json({ error: 'Sujet ou corps manquant' }, 400)
 
+  // Durcissement (B2) : le contenu est piloté par l'appelant (admin), on le borne.
+  //   - pdfName : nom de fichier simple .pdf, jamais de chemin (../, /).
+  //   - tailles plafonnées (charge mémoire / Resend).
+  if (!/^[\w .()-]+\.pdf$/i.test(pdfName))
+    return json({ error: 'Nom de pièce jointe invalide' }, 400)
+  if (subject.length > 300 || htmlBody.length > 200_000)
+    return json({ error: 'Contenu trop volumineux' }, 413)
+  if (pdfBase64.length > 8_000_000)
+    return json({ error: 'Pièce jointe trop volumineuse' }, 413)
+
   // 4. Destinataires.
   //   GARDE-FOU LISTE BLANCHE : si le secret REPORT_TEST_TO est défini, on IGNORE
   //   TOTALEMENT `email_recipients` et on n'envoie QU'AUX adresses de ce secret

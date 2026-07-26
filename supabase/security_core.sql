@@ -1,0 +1,41 @@
+-- ============================================================================
+-- security_core — fonctions de sécurité critiques (C1) : rapatriement + garde.
+--
+-- À EXÉCUTER PAR L'UTILISATEUR dans Supabase → SQL Editor, APRÈS le diagnostic
+-- (Étape 1). `admin_update_password` et `get_user_role` viennent de l'app repjour
+-- ex-co-hébergée et ne sont PAS versionnées. Ce fichier documente comment les
+-- confirmer et les durcir sans en inventer le corps.
+--
+-- ⚠ NE PAS COLLER DE CORPS DEVINÉ. Récupérer la définition RÉELLE via l'Étape 1 :
+--     select pg_get_functiondef('public.admin_update_password'::regprocedure);
+--   puis la coller ci-dessous (source de vérité versionnée), en s'assurant des
+--   4 invariants — sinon C1 reste ouvert (un non-admin réinitialise un mot de
+--   passe admin → prise de contrôle totale).
+-- ============================================================================
+
+-- === admin_update_password — invariants OBLIGATOIRES =========================
+--   (1) security definer
+--   (2) set search_path = public   (fige le schéma, empêche le détournement)
+--   (3) 1re ligne = garde de rôle :
+--         if public.get_user_role() <> 'admin' then
+--           raise exception 'forbidden' using errcode = '42501';
+--         end if;
+--   (4) exécution refusée à anon.
+--
+-- >>> COLLER ICI la définition confirmée (create or replace function ...), en
+--     vérifiant/ajoutant la garde (3) si le dump montre qu'elle manque. <<<
+--
+-- Verrouillage des droits d'exécution (ADAPTER la signature exacte au dump —
+-- souvent (uuid, text)). Sûr et idempotent :
+--   revoke all    on function public.admin_update_password(uuid, text) from anon;
+--   grant execute on function public.admin_update_password(uuid, text) to authenticated;
+
+-- === get_user_role — invariants ==============================================
+--   security definer + set search_path = public. Sert de garde à de nombreuses
+--   policies/RPC : à versionner à l'identique (coller la définition confirmée).
+--
+-- >>> COLLER ICI la définition confirmée de get_user_role(). <<<
+
+-- === VÉRIFICATION (compte jetable, JWT non-admin) ============================
+--   rpc/admin_update_password  →  doit renvoyer 403 / 'forbidden'.
+--   La requête (f) du diagnostic ne doit PAS lister `anon` en granted_to.

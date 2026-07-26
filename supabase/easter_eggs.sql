@@ -6,7 +6,7 @@
 -- « claudia ») par une configuration gérée depuis la page admin /easter-eggs.
 --
 --   Lecture  : tout utilisateur authentifié (le runtime monte les effets actifs).
---   Écriture : admin uniquement — via get_user_role() = 'admin' (RPC déjà
+--   Écriture : admin uniquement — via public.is_admin() (RPC déjà
 --              déployée, même garde que caisse_sheets « delete (admin) »).
 -- ============================================================================
 
@@ -50,22 +50,22 @@ drop policy if exists "easter_eggs insert (admin)" on public.easter_eggs;
 create policy "easter_eggs insert (admin)"
   on public.easter_eggs for insert
   to authenticated
-  with check (get_user_role() = 'admin');
+  with check (public.is_admin());
 
 -- UPDATE : admin seulement.
 drop policy if exists "easter_eggs update (admin)" on public.easter_eggs;
 create policy "easter_eggs update (admin)"
   on public.easter_eggs for update
   to authenticated
-  using (get_user_role() = 'admin')
-  with check (get_user_role() = 'admin');
+  using (public.is_admin())
+  with check (public.is_admin());
 
 -- DELETE : admin seulement.
 drop policy if exists "easter_eggs delete (admin)" on public.easter_eggs;
 create policy "easter_eggs delete (admin)"
   on public.easter_eggs for delete
   to authenticated
-  using (get_user_role() = 'admin');
+  using (public.is_admin());
 
 -- ---- Seed : migre les easter eggs jusqu'ici codés en dur -------------------
 -- Les `effect_id` doivent correspondre aux `id` du registre EFFECTS (front).

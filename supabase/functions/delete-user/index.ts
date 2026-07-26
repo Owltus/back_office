@@ -100,13 +100,22 @@ Deno.serve(async (req) => {
   //       ne distingue pas les deux apps — elle écarte seulement les uid sans profil.
   const { data: target, error: targetErr } = await admin
     .from('profiles')
-    .select('id')
+    .select('id, role')
     .eq('id', userId)
     .maybeSingle()
   if (targetErr)
     return json({ error: targetErr.message || 'Vérification du compte échouée' }, 400)
   if (!target)
     return json({ error: 'Compte introuvable dans la gestion des comptes' }, 404)
+
+  // 3quater. Ne jamais supprimer un autre ADMIN (donc jamais le dernier admin) :
+  //          empêche un admin de purger les autres / de se retrouver seul maître,
+  //          et bloque un compte auto-promu qui viendrait décapiter les admins.
+  if (target.role === 'admin')
+    return json(
+      { error: 'Impossible de supprimer un compte administrateur.' },
+      403,
+    )
 
   // 4. Retrait de la ligne `profiles` (retire la FK profiles→auth.users qui
   //    bloquerait la suppression de l'identité ; idempotent). Le compte quitte

@@ -44,9 +44,13 @@ export function ArtefactBoard() {
             value="registre"
             className="overflow-hidden rounded-xl border border-border bg-card"
           >
+            {/* `sandbox` : la maquette est statique et de confiance, mais on
+                l'isole par principe. `allow-scripts` seul (PAS allow-same-origin)
+                pour les animations, sans accès à l'origine de l'app. */}
             <iframe
               title="Registre d'artefacts"
               srcDoc={galleryHtml}
+              sandbox="allow-scripts"
               className="block w-full border-0"
               style={{ height: 'calc(100dvh - 13rem)', minHeight: '30rem' }}
             />

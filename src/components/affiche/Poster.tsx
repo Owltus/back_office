@@ -134,12 +134,16 @@ export const Poster = memo(function Poster(props: PosterProps) {
   // la taille du slider n'est appliquée qu'en mode MANUEL, et en STYLE INLINE
   // (qui bat la règle CSS `.poster-icon svg { width:140px }`). En mode auto, on
   // n'injecte rien : le SVG retombe sur le 140px du CSS, comme le fork.
+  // Clamp défensif avant interpolation dans la chaîne SVG : la taille vient d'un
+  // slider numérique, mais on la borne quand même (défense en profondeur contre
+  // une régression de typage d'une valeur importée/chargée un jour).
+  const iconPx = Math.round(Math.max(0, Number(fontSizeIcon) || 0))
   const iconSvg = showIcon
     ? isAutoSizeMode
       ? getIconSvg(selectedIcon)
       : getIconSvg(selectedIcon).replace(
           '<svg',
-          `<svg style="width:${fontSizeIcon}px;height:${fontSizeIcon}px"`,
+          `<svg style="width:${iconPx}px;height:${iconPx}px"`,
         )
     : ''
 
