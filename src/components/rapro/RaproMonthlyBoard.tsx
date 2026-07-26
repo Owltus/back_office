@@ -88,13 +88,13 @@ export function RaproMonthlyBoard({
       <AnalytiqueCardsGrid cols={5}>
         <StatCard
           label="Moyenne nettoyées / jour"
-          accent="#818cf8"
-          value={<span style={{ color: '#818cf8' }}>{avgCleanedPerDay}</span>}
+          accent="#94a3b8"
+          value={<span style={{ color: '#94a3b8' }}>{avgCleanedPerDay}</span>}
         />
         <StatCard
           label="Vendues"
-          accent="#94a3b8"
-          value={vendues(totals)}
+          accent="#818cf8"
+          value={<span style={{ color: '#818cf8' }}>{vendues(totals)}</span>}
         />
         <StatCard
           label="Nettoyées"
