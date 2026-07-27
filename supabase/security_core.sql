@@ -13,22 +13,72 @@
 --   passe admin → prise de contrôle totale).
 -- ============================================================================
 
--- === admin_update_password — invariants OBLIGATOIRES =========================
---   (1) security definer
---   (2) set search_path = public   (fige le schéma, empêche le détournement)
---   (3) 1re ligne = garde de rôle :
---         if public.get_user_role() <> 'admin' then
---           raise exception 'forbidden' using errcode = '42501';
---         end if;
---   (4) exécution refusée à anon.
+-- === 0) VERROU IMMÉDIAT : retirer l'exécution à `anon` =======================
+-- Diagnostic (f) du 2026-07-27 : `anon` peut EXÉCUTER admin_update_password,
+-- set_user_grade, set_page_permission, remove_page_permission. Ces RPC sont donc
+-- appelables SANS session (clé anon publique) ; seule leur garde interne bloque.
+-- On retire ce droit : les admins connectés passent par `authenticated` (intact).
+-- SÛR et idempotent — la boucle résout les signatures via l'OID (aucune devinette).
 --
--- >>> COLLER ICI la définition confirmée (create or replace function ...), en
---     vérifiant/ajoutant la garde (3) si le dump montre qu'elle manque. <<<
+-- >>> Exécutable tel quel, indépendamment du reste de ce fichier. <<<
+do $$
+declare r record;
+begin
+  for r in
+    select p.oid::regprocedure as sig
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.proname in ('admin_update_password', 'set_user_grade',
+                        'set_page_permission', 'remove_page_permission')
+  loop
+    execute format('revoke execute on function %s from anon;', r.sig);
+  end loop;
+end $$;
+
+-- Contrôle après exécution : la requête (f) du diagnostic ne doit PLUS lister
+-- `anon` pour aucune de ces quatre fonctions.
+
+-- === admin_update_password — définition versionnée + search_path figé =========
+-- État prod du 2026-07-27 : garde de rôle présente en 1re ligne (OK), complexité
+-- du mot de passe solide (OK), mais `config = null` → search_path NON figé (le
+-- « Function Search Path Mutable » du linter Supabase). Corps IDENTIQUE, on ajoute
+-- seulement `set search_path = public, extensions` (profiles vit dans public,
+-- pgcrypto dans extensions) et on qualifie `public.profiles`.
 --
--- Verrouillage des droits d'exécution (ADAPTER la signature exacte au dump —
--- souvent (uuid, text)). Sûr et idempotent :
---   revoke all    on function public.admin_update_password(uuid, text) from anon;
---   grant execute on function public.admin_update_password(uuid, text) to authenticated;
+-- ⚠ APRÈS exécution : tester UN changement de mot de passe (page /comptes). Si
+--   « function crypt does not exist » apparaît, pgcrypto est dans un autre schéma
+--   → me le dire pour ajuster le search_path.
+create or replace function public.admin_update_password(target_user_id uuid, new_password text)
+returns void
+language plpgsql
+security definer
+set search_path = public, extensions
+as $function$
+begin
+  if (select role from public.profiles where id = auth.uid()) <> 'admin' then
+    raise exception 'Accès refusé : rôle admin requis';
+  end if;
+  if length(new_password) < 12 then
+    raise exception 'Le mot de passe doit faire au moins 12 caractères';
+  end if;
+  if new_password !~ '[A-Z]' then
+    raise exception 'Le mot de passe doit contenir au moins une majuscule';
+  end if;
+  if new_password !~ '[a-z]' then
+    raise exception 'Le mot de passe doit contenir au moins une minuscule';
+  end if;
+  if new_password !~ '[0-9]' then
+    raise exception 'Le mot de passe doit contenir au moins un chiffre';
+  end if;
+  if new_password !~ '[^a-zA-Z0-9]' then
+    raise exception 'Le mot de passe doit contenir au moins un caractère spécial';
+  end if;
+  update auth.users
+  set encrypted_password = crypt(new_password, gen_salt('bf'))
+  where id = target_user_id;
+end;
+$function$;
 
 -- === get_user_role — invariants ==============================================
 --   security definer + set search_path = public. Sert de garde à de nombreuses

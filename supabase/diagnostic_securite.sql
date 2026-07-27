@@ -23,11 +23,22 @@ where relnamespace = 'public'::regnamespace and relkind = 'r'
   and not relrowsecurity
 order by relname;
 
--- (c) C1 — corps des fonctions critiques (garde de rôle en 1re ligne attendue,
---     SECURITY DEFINER, search_path figé).
-select pg_get_functiondef('public.admin_update_password'::regprocedure);
-select pg_get_functiondef('public.get_user_role'::regprocedure);
-select pg_get_functiondef('public.is_admin'::regprocedure);
+-- (c) C1 — corps des fonctions critiques + invariants, par OID (pas de cast
+--     regprocedure qui exigerait la signature). Vérifier pour chacune :
+--       prosecdef = true          → SECURITY DEFINER
+--       proconfig contient search_path=public → schéma figé
+--       la définition a une garde de rôle EN 1re LIGNE
+select n.nspname,
+       p.proname,
+       pg_get_function_identity_arguments(p.oid) as args,
+       p.prosecdef                                as security_definer,
+       p.proconfig                                as config,
+       pg_get_functiondef(p.oid)                  as definition
+from pg_proc p
+join pg_namespace n on n.oid = p.pronamespace
+where n.nspname = 'public'
+  and p.proname in ('admin_update_password', 'get_user_role', 'is_admin')
+order by p.proname;
 
 -- (d) G1/G2 — anti-escalade de profiles : policies + trigger.
 select policyname, cmd, qual, with_check
