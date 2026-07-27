@@ -121,6 +121,52 @@ export async function preValidateForecast(
   }
 }
 
+export interface ForecastImportSummary {
+  /** Nombre de jours (lignes) écrits. */
+  rows: number
+  /** Nombre de mois distincts couverts. */
+  months: number
+  /** Années couvertes, triées. */
+  years: number[]
+}
+
+/**
+ * Import STANDALONE d'un Forecast (page analytique, admin) : écrit TOUTES les
+ * lignes du CSV dans `forecast_days`, quels que soient le nombre de mois et
+ * d'années — `parseForecastAll` ne filtre rien, l'upsert (`onConflict: 'date'`)
+ * est idempotent. Ne touche NI `daily_reports` NI le budget : c'est une injection
+ * de projeté sur une plage libre (plusieurs mois, l'année). La pré-validation
+ * (`preValidateForecast`) est à jouer AVANT côté appelant.
+ */
+export async function importForecastDays(
+  file: File,
+): Promise<ForecastImportSummary> {
+  const text = await file.text()
+  const rows = parseForecastAll(text)
+  if (rows.length === 0) {
+    throw new Error('Aucune donnée forecast dans le fichier')
+  }
+  const data = rows.map((r) => ({
+    date: r.date,
+    month: r.month,
+    year: r.year,
+    occ: r.occ,
+    rev_ht: r.revHT,
+    rev_ttc: r.revTTC,
+    adr_ttc: r.occ > 0 ? r.revTTC / r.occ : 0,
+    occ_percent: (r.occ / TOTAL_ROOMS) * 100,
+  }))
+  const { error } = await supabase
+    .from('forecast_days')
+    .upsert(data, { onConflict: 'date' })
+  if (error) {
+    throw new Error(`Erreur sauvegarde forecast : ${error.message}`)
+  }
+  const monthKeys = new Set(rows.map((r) => `${r.year}-${r.month}`))
+  const years = [...new Set(rows.map((r) => r.year))].sort((a, b) => a - b)
+  return { rows: rows.length, months: monthKeys.size, years }
+}
+
 /**
  * Convertit tout le CSV Comparison en lignes de `pms_daily_metrics` (aucun
  * fichier stocké). Volontairement NON BLOQUANT : l'import du rapport journalier

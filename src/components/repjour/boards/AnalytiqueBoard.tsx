@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 
+import { ForecastImportButton } from '#/components/repjour/ForecastImportButton.tsx'
 import { AnalytiqueShell } from '#/components/analytique/AnalytiqueShell.tsx'
 import {
   AnalytiqueCardsGrid,
@@ -27,10 +28,12 @@ import { fmt } from '#/lib/repjour/format.ts'
  * tableau mois par mois (clic → détail du mois) et deux graphiques (CA/mois,
  * TO/mois).
  *
- * OMIS volontairement (réservé étape 7) : l'import Forecast par glisser-déposer
- * réservé à l'admin (drag-drop CSV → upsert forecast_days) présent dans la
- * source. Aucune écriture Supabase ici — uniquement des `select`. Tous les
- * rôles accèdent à cette vue en lecture.
+ * IMPORT FORECAST (admin) : un bouton à côté de l'impression permet de déposer un
+ * CSV « Forecast By Date Range » couvrant une plage libre (plusieurs mois / l'année)
+ * → upsert `forecast_days` via `ForecastImportButton` (parse/validation multi-mois
+ * réutilisés, commit en masse `importForecastDays`). C'est la SEULE écriture de la
+ * vue ; tout le reste est en lecture. Les non-admins n'ont pas le bouton mais lisent
+ * la vue.
  */
 
 const currentYear = new Date().getFullYear()
@@ -49,6 +52,7 @@ interface AnnualSummary {
 
 export function AnalytiqueBoard() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [year, setYear] = useState(currentYear)
 
   // Liste des années disponibles (budget) — mise en cache par le QueryClient.
@@ -148,12 +152,24 @@ export function AnalytiqueBoard() {
     <AnalytiqueShell
       title="Analytique"
       actions={
-        <YearNav
-          year={year}
-          setYear={setYear}
-          years={years}
-          currentYear={currentYear}
-        />
+        <>
+          {/* Import Forecast (admin) accolé à l'impression : dépôt d'un CSV
+              couvrant une plage libre (plusieurs mois / l'année) → upsert
+              forecast_days. Invalide toutes les années pour refléter l'ajout. */}
+          <ForecastImportButton
+            onImported={() =>
+              queryClient.invalidateQueries({
+                queryKey: ['repjour', 'year-analytics'],
+              })
+            }
+          />
+          <YearNav
+            year={year}
+            setYear={setYear}
+            years={years}
+            currentYear={currentYear}
+          />
+        </>
       }
       loading={loading}
       printTitle={`RepJour · ${year}`}
