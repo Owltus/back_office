@@ -1,6 +1,6 @@
 import { supabase } from '#/lib/supabase.ts'
 import { errorMessage } from '#/lib/errors.ts'
-import { TOTAL_ROOMS, MONTHS } from '#/lib/repjour/constants.ts'
+import { TOTAL_ROOMS } from '#/lib/repjour/constants.ts'
 import { parseComparison } from '#/lib/repjour/parse/comparison.ts'
 import { parseComparisonMetrics } from '#/lib/repjour/parse/metrics.ts'
 import { parseForecast, parseForecastAll } from '#/lib/repjour/parse/forecast.ts'
@@ -91,7 +91,6 @@ export async function preValidateForecast(
     budgetMap.set(`${b.year}-${b.month}`, b)
   }
 
-  const multiMonth = monthGroups.size > 1
   const allAlerts: Alert[] = []
 
   for (const [key, rows] of monthGroups) {
@@ -101,23 +100,23 @@ export async function preValidateForecast(
     const daysInMonth = new Date(year, month, 0).getDate()
     const existing = existingMap.get(key) || null
     const budget = budgetMap.get(key) || null
-
-    const monthAlerts = validateForecast(rows, budget, daysInMonth, existing)
-
-    // Préfixer avec le mois si multi-mois
-    if (multiMonth) {
-      const prefix = `[${MONTHS[month]} ${year}]`
-      for (const alert of monthAlerts) {
-        allAlerts.push({ type: alert.type, message: `${prefix} ${alert.message}` })
-      }
-    } else {
-      allAlerts.push(...monthAlerts)
-    }
+    allAlerts.push(...validateForecast(rows, budget, daysInMonth, existing))
   }
 
+  // UN seul message par souci : les alertes sont sans chiffre et identiques d'un
+  // mois à l'autre → on dédoublonne par (type, message). Plusieurs mois « pas de
+  // TVA » ne donnent donc qu'UNE ligne.
+  const seen = new Set<string>()
+  const deduped = allAlerts.filter((a) => {
+    const k = `${a.type}::${a.message}`
+    if (seen.has(k)) return false
+    seen.add(k)
+    return true
+  })
+
   return {
-    errors: allAlerts.filter((a) => a.type === 'error'),
-    warnings: allAlerts.filter((a) => a.type === 'warning'),
+    errors: deduped.filter((a) => a.type === 'error'),
+    warnings: deduped.filter((a) => a.type === 'warning'),
   }
 }
 

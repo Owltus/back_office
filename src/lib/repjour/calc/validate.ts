@@ -16,9 +16,30 @@ function stddev(values: number[]): number {
   return Math.sqrt(variance);
 }
 
+/*
+ * Messages de validation forecast — VOLONTAIREMENT sans chiffres et CONSTANTS
+ * (identiques d'un mois à l'autre) : `preValidateForecast` les dédoublonne, si
+ * bien qu'un même souci sur plusieurs mois ne donne QU'UN message. Phrases
+ * simples, tutoiement, on dit juste ce qui cloche et quoi faire.
+ */
+const MSG = {
+  empty:
+    'Ce mois est vide dans le fichier. Vérifie que tu as exporté la bonne période.',
+  incomplete:
+    "Il manque des jours dans le fichier. Si le mois n'est pas terminé c'est normal, sinon réexporte le mois complet.",
+  impossible:
+    'Le fichier contient des valeurs impossibles (du revenu sans chambre vendue, ou des valeurs négatives). Il a mal été exporté, reprends-le depuis le PMS.',
+  adrWeird:
+    "Le prix par chambre a l'air anormal. Vérifie que c'est le bon fichier.",
+  tvaMissing:
+    "Le fichier ne contient sûrement pas la TVA (les revenus sont trop bas). Dans le PMS, coche l'option Select All avant d'exporter, puis réimporte.",
+  tvaHigh:
+    "Les revenus sont plus hauts que d'habitude : soit la TVA est comptée deux fois, soit ce fichier corrige un ancien import fait sans TVA. Si tu corriges, tu peux importer ; sinon vérifie tes options d'export.",
+} as const
+
 /**
- * Valide les données forecast avant import.
- * Retourne des alertes (error = bloquant, warning = informatif).
+ * Valide les données forecast d'UN mois avant import. Retourne des alertes
+ * (error = bloquant, warning = informatif), au plus UNE par souci et sans chiffre.
  */
 export function validateForecast(
   rows: ForecastRow[],
@@ -29,24 +50,23 @@ export function validateForecast(
   const alerts: Alert[] = [];
 
   if (rows.length === 0) {
-    alerts.push({ type: 'error', message: 'Ce mois est vide dans le fichier (aucune prévision dedans). Vérifie que tu as exporté la bonne période.' });
+    alerts.push({ type: 'error', message: MSG.empty });
     return alerts;
   }
 
   // Jours manquants
   if (rows.length < daysInMonth) {
-    alerts.push({ type: 'warning', message: `Il manque des jours : le fichier ne couvre que ${rows.length} jours sur ${daysInMonth}. Si c'est normal (mois en cours), tu peux continuer. Sinon, réexporte le mois complet.` });
+    alerts.push({ type: 'warning', message: MSG.incomplete });
   }
 
-  // Vérifications par jour
-  for (const row of rows) {
-    // Occupation > TOTAL_ROOMS = overbooking (over), données valides, pas d'alerte
-    if (row.occ < 0 || row.revTTC < 0) {
-      alerts.push({ type: 'error', message: `Le ${row.date}, une valeur est négative (occupation ou revenu). C'est impossible dans un vrai rapport : le fichier a mal été exporté, reprends-le depuis le PMS.` });
-    }
-    if (row.occ === 0 && row.revTTC > 0) {
-      alerts.push({ type: 'error', message: `Le ${row.date}, il y a du revenu (${row.revTTC.toFixed(2)} €) mais aucune chambre vendue. C'est incohérent : vérifie ce fichier avant de l'importer.` });
-    }
+  // UNE seule alerte si au moins une ligne est impossible (valeur négative, ou
+  // revenu sans occupation) — pas une par jour. Occ > TOTAL_ROOMS = overbooking,
+  // valide, pas d'alerte.
+  const hasImpossible = rows.some(
+    (r) => r.occ < 0 || r.revTTC < 0 || (r.occ === 0 && r.revTTC > 0),
+  );
+  if (hasImpossible) {
+    alerts.push({ type: 'error', message: MSG.impossible });
   }
 
   // ADR moyen sur le mois
@@ -54,31 +74,24 @@ export function validateForecast(
   const totalRev = rows.reduce((s, r) => s + r.revTTC, 0);
   const avgADR = totalOcc > 0 ? totalRev / totalOcc : 0;
 
-  if (avgADR > 0 && avgADR < 30) {
-    alerts.push({ type: 'warning', message: `Le prix moyen par chambre du mois est très bas (${avgADR.toFixed(2)} €). Vérifie que c'est le bon fichier (bon hôtel, bonne période).` });
-  }
-  if (avgADR > 300) {
-    alerts.push({ type: 'warning', message: `Le prix moyen par chambre du mois est très élevé (${avgADR.toFixed(2)} €). Vérifie que c'est le bon fichier.` });
+  if (avgADR > 0 && (avgADR < 30 || avgADR > 300)) {
+    alerts.push({ type: 'warning', message: MSG.adrWeird });
   }
 
-  // Détection TTC/HT par croisement avec le budget
+  // Signaux TVA : « manque la TVA » (revenus trop bas) vs « TVA trop haute »
+  // (deux fois, ou correction d'un ancien import HT). Le budget ET l'import
+  // précédent alimentent le MÊME signal → un seul message chacun.
+  let tvaMissing = false;
+  let tvaHigh = false;
+
+  // Détection par croisement avec le budget.
   if (budget && budget.prix_moyen > 0 && avgADR > 0) {
     const ratio = avgADR / budget.prix_moyen;
-    if (ratio > 0.88 && ratio < 0.93) {
-      alerts.push({
-        type: 'warning',
-        message: `Ton prix moyen par chambre (${avgADR.toFixed(2)} €) tombe pile 10% sous ton budget (${budget.prix_moyen.toFixed(2)} €). Presque toujours, ça veut dire que le fichier a été sorti sans la TVA. Pour corriger : dans le PMS, coche "Select All" avant d'exporter, puis réimporte.`,
-      });
-    }
-    if (ratio > 1.07 && ratio < 1.13) {
-      alerts.push({
-        type: 'warning',
-        message: `Ton prix moyen par chambre (${avgADR.toFixed(2)} €) dépasse ton budget (${budget.prix_moyen.toFixed(2)} €) de pile 10%. Souvent, c'est que la TVA a été comptée deux fois à l'export. Vérifie les options du rapport dans le PMS avant de réimporter.`,
-      });
-    }
+    if (ratio > 0.88 && ratio < 0.93) tvaMissing = true;
+    if (ratio > 1.07 && ratio < 1.13) tvaHigh = true;
   }
 
-  // Détection TTC/HT par comparaison avec l'import précédent
+  // Détection par comparaison avec l'import précédent (mêmes jours, même occ).
   if (existingDays && existingDays.length > 0) {
     const existingMap = new Map<string, ForecastDay>();
     for (const day of existingDays) {
@@ -96,21 +109,13 @@ export function validateForecast(
     if (ratios.length >= 5) {
       const med = median(ratios);
       const sd = stddev(ratios);
-
-      if (med > 1.08 && med < 1.12 && sd < 0.02) {
-        alerts.push({
-          type: 'warning',
-          message: `Les revenus de ce fichier sont pile 10% plus hauts que ton dernier import (sur ${ratios.length} jours, même occupation). Deux cas : soit c'est le bon fichier (avec la TVA) qui remplace un ancien import fait sans TVA, et tu peux importer. Soit il compte la TVA en trop. Pour trancher, regarde s'il colle à ton budget.`,
-        });
-      }
-      if (med > 0.89 && med < 0.93 && sd < 0.02) {
-        alerts.push({
-          type: 'warning',
-          message: `Les revenus de ce fichier sont pile 10% plus bas que ton dernier import (sur ${ratios.length} jours, même occupation). Ce fichier a sûrement été sorti sans la TVA. Reprends l'export dans le PMS avec "Select All" coché, puis réimporte.`,
-        });
-      }
+      if (med > 1.08 && med < 1.12 && sd < 0.02) tvaHigh = true;
+      if (med > 0.89 && med < 0.93 && sd < 0.02) tvaMissing = true;
     }
   }
+
+  if (tvaMissing) alerts.push({ type: 'warning', message: MSG.tvaMissing });
+  if (tvaHigh) alerts.push({ type: 'warning', message: MSG.tvaHigh });
 
   return alerts;
 }
