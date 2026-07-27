@@ -129,7 +129,11 @@ Le temps de chargement perçu vient surtout de l'auth cliente + du mode SPA. Rè
   `profiles` (policy self-update figeant `role` + trigger `protect_role_escalation`) ;
   contrainte de format sur `email_recipients`. Objets désormais **versionnés** :
   `supabase/{profiles,security_core,page_permissions_rls_lectures,verif_securite}.sql`.
-  Reste hors base : déploiement des Edge Functions durcies + rotation `service_role`.
+- **Clés API migrées le 2026-07-27** : le projet est passé du legacy (anon/service_role
+  JWT) au **nouveau système** — client sur `sb_publishable` (`VITE_SUPABASE_ANON_KEY`
+  local + Vercel), Edge Functions sur `sb_secret` (secret `SB_SECRET_KEY`, lu avec repli
+  legacy dans le code), puis **legacy JWT-based keys DÉSACTIVÉ** dans le dashboard. La
+  `service_role` legacy est donc révoquée. Rollback = « Re-enable JWT-based API keys ».
 
 ## Commandes
 
