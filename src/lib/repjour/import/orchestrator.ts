@@ -73,10 +73,11 @@ export async function preValidateForecast(
   // Fetch données existantes et budgets pour les années concernées
   const years = [...new Set(allRows.map((r) => r.year))]
 
-  const [{ data: existingAll }, { data: budgetsAll }] = await Promise.all([
-    supabase.from('forecast_days').select('*').in('year', years),
-    supabase.from('budget').select('*').in('year', years),
-  ])
+  const [{ data: existingAll, error: existingErr }, { data: budgetsAll }] =
+    await Promise.all([
+      supabase.from('forecast_days').select('*').in('year', years),
+      supabase.from('budget').select('*').in('year', years),
+    ])
 
   // Indexer par {year, month}
   const existingMap = new Map<string, ForecastDay[]>()
@@ -98,7 +99,9 @@ export async function preValidateForecast(
     const year = parseInt(yearStr, 10)
     const month = parseInt(monthStr, 10)
     const daysInMonth = new Date(year, month, 0).getDate()
-    const existing = existingMap.get(key) || null
+    // Lecture échouée → `undefined` (historique INCONNU : ni détection précédent ni
+    // secours budget). Lecture OK sans ligne pour ce mois → `[]` (1er import confirmé).
+    const existing = existingErr ? undefined : (existingMap.get(key) ?? [])
     const budget = budgetMap.get(key) || null
     allAlerts.push(...validateForecast(rows, budget, daysInMonth, existing))
   }
@@ -400,11 +403,23 @@ export async function processImport(
   const coherenceAlerts = validateCoherence(realiseJour)
   alerts.push(...coherenceAlerts)
 
-  // Contrôles de cohérence — forecast
+  // Historique du mois AVANT écriture : sert à la détection TVA par comparaison à
+  // l'import précédent, et évite que le secours budget ne rejoue un faux positif à
+  // CHAQUE réimport (cf. validateForecast). Miroir de preValidateForecast — sans lui,
+  // `existingDays` restait absent ici et le fallback budget tournait toujours.
+  const { data: existingForecast, error: existingErr } = await supabase
+    .from('forecast_days')
+    .select('*')
+    .eq('year', reportDate.year)
+    .eq('month', reportDate.month)
+
+  // Contrôles de cohérence — forecast. Lecture échouée → `undefined` (historique
+  // INCONNU : on ne persiste PAS un faux positif budget). Lecture OK sans ligne → `[]`.
   const forecastAlerts = validateForecast(
     forecastRows,
     budget,
     reportDate.daysInMonth,
+    existingErr ? undefined : (existingForecast as ForecastDay[]),
   )
   const blockingErrors = forecastAlerts.filter((a) => a.type === 'error')
   if (blockingErrors.length > 0) {

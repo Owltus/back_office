@@ -78,21 +78,24 @@ export function validateForecast(
     alerts.push({ type: 'warning', message: MSG.adrWeird });
   }
 
-  // Signaux TVA : « manque la TVA » (revenus trop bas) vs « TVA trop haute »
-  // (deux fois, ou correction d'un ancien import HT). Le budget ET l'import
-  // précédent alimentent le MÊME signal → un seul message chacun.
+  // Signaux TVA : « manque la TVA » (revenus trop bas) vs « TVA trop haute » (deux
+  // fois, ou correction d'un ancien import HT). Deux détecteurs, MÊME message. Le 4e
+  // argument porte l'ÉTAT de l'historique du mois, en TROIS cas :
+  //   • absent (null/undefined) = historique INCONNU (lecture échouée) → on ne tente
+  //     RIEN, surtout pas le secours budget qui rejouerait un faux positif ;
+  //   • tableau VIDE = 1er import CONFIRMÉ du mois → secours budget (un objectif,
+  //     pas une vérité, mais faute de mieux au tout premier import) ;
+  //   • tableau NON vide = déjà importé → comparaison à l'import précédent, précise
+  //     et SILENCIEUSE au réimport du même fichier (ratio ~1) → jamais de nag.
   let tvaMissing = false;
   let tvaHigh = false;
 
-  // Détection par croisement avec le budget.
-  if (budget && budget.prix_moyen > 0 && avgADR > 0) {
-    const ratio = avgADR / budget.prix_moyen;
-    if (ratio > 0.88 && ratio < 0.93) tvaMissing = true;
-    if (ratio > 1.07 && ratio < 1.13) tvaHigh = true;
-  }
-
-  // Détection par comparaison avec l'import précédent (mêmes jours, même occ).
-  if (existingDays && existingDays.length > 0) {
+  if (!existingDays) {
+    // Historique inconnu (lecture en échec, ou non fournie) → aucune détection TVA.
+  } else if (existingDays.length > 0) {
+    // Comparaison à l'import précédent (mêmes jours, même occupation). Il faut au
+    // moins 5 jours comparables pour que la médiane soit fiable ; en dessous, on ne
+    // signale rien (et on ne retombe PAS sur le budget — pas de nag).
     const existingMap = new Map<string, ForecastDay>();
     for (const day of existingDays) {
       existingMap.set(day.date, day);
@@ -112,6 +115,11 @@ export function validateForecast(
       if (med > 1.08 && med < 1.12 && sd < 0.02) tvaHigh = true;
       if (med > 0.89 && med < 0.93 && sd < 0.02) tvaMissing = true;
     }
+  } else if (budget && budget.prix_moyen > 0 && avgADR > 0) {
+    // Tableau vide = 1er import confirmé du mois → secours budget.
+    const ratio = avgADR / budget.prix_moyen;
+    if (ratio > 0.88 && ratio < 0.93) tvaMissing = true;
+    if (ratio > 1.07 && ratio < 1.13) tvaHigh = true;
   }
 
   if (tvaMissing) alerts.push({ type: 'warning', message: MSG.tvaMissing });

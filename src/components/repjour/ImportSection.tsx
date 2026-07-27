@@ -469,16 +469,17 @@ export function ImportSection({
             <div className="space-y-4 px-6 py-4">
               <AlertBanner alerts={validationWarnings} />
               <p className="text-xs leading-relaxed text-muted-foreground">
-                Si tes données sont bonnes (bon fichier, TVA incluse), tu peux
-                importer. Sinon, annule et ré-exporte depuis le PMS.
+                Si tes données sont bonnes, tu peux forcer l'import. Sinon,
+                recommence l'export : forcer un mauvais fichier écrit de fausses
+                valeurs et fausse tes calculs.
               </p>
             </div>
             <div className="flex justify-end gap-3 border-t border-border bg-muted/40 px-6 py-4">
               <Button variant="outline" onClick={() => setShowConfirmModal(false)}>
-                Annuler
+                Je recommence
               </Button>
               <Button onClick={executeImport} disabled={importing}>
-                {importing ? 'Import...' : 'Importer quand même'}
+                {importing ? 'Import...' : "Forcer l'import"}
               </Button>
             </div>
           </div>

@@ -1,8 +1,7 @@
 import { useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
-import { Upload } from 'lucide-react'
+import { Check, Upload } from 'lucide-react'
 
-import { AlertBanner } from '#/components/repjour/AlertBanner.tsx'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
@@ -21,25 +20,23 @@ import {
 import type { Alert } from '#/lib/repjour/types.ts'
 
 /**
- * État du dialogue de retour (une seule modale, contenu selon l'issue). On garde
- * les `Alert` (avec leur `type`) plutôt que des chaînes → rendu par `AlertBanner`,
- * le MÊME que l'import journalier du dashboard (erreur rouge / avertissement ambre).
+ * Verdict de l'import (une seule modale, contenu selon l'issue) — même esprit que
+ * la clôture caisse/rapprochement (CloseSheetDialog) : un retour CLAIR, jamais
+ * aveugle. Vert = c'est bon ; ambre = à vérifier, tu choisis ; rouge = refusé,
+ * données intactes.
  */
 type Feedback =
   | { kind: 'errors'; alerts: Alert[] }
   | { kind: 'confirm'; alerts: Alert[]; file: File }
-  | { kind: 'success'; summary: string; warnings: Alert[] }
+  | { kind: 'success'; summary: string }
   | null
 
 /**
  * Bouton (ADMIN) d'import STANDALONE d'un Forecast dans la page analytique, à
  * placer à côté de l'impression. Dépôt d'un CSV « Forecast By Date Range » couvrant
- * une plage libre (plusieurs mois, l'année) → pré-validation PAR MOIS (TTC/HT,
- * budget) → upsert de TOUTES les lignes dans `forecast_days`. Rien d'autre n'est
- * touché ; `onImported` rafraîchit la vue.
+ * une plage libre (plusieurs mois, l'année) → pré-validation → upsert de toutes les
+ * lignes dans `forecast_days`. `onImported` rafraîchit la vue.
  *
- * Affichage des messages HARMONISÉ avec le dashboard : erreurs = bloquantes
- * (rouge), avertissements = informatifs (ambre), on peut « Importer quand même ».
  * Rendu NUL pour les non-admins (garde ergonomique ; la RLS reste la sécurité
  * réelle). Le fichier n'est jamais stocké — seulement parsé puis écrit ligne à ligne.
  */
@@ -67,15 +64,14 @@ export function ForecastImportButton({
     })
   }
 
-  async function runImport(file: File, warnings: Alert[]) {
+  async function runImport(file: File) {
     setBusy(true)
     try {
       const s = await importForecastDays(file)
       const monthLabel = s.months > 1 ? `${s.months} mois` : '1 mois'
       setFeedback({
         kind: 'success',
-        summary: `${s.rows} jour(s) importé(s) sur ${monthLabel} (${s.years.join(', ')}).`,
-        warnings,
+        summary: `${s.rows} prévisions enregistrées (${monthLabel}, ${s.years.join(', ')}).`,
       })
       onImported()
     } catch (err) {
@@ -88,9 +84,8 @@ export function ForecastImportButton({
   async function handleFile(file: File) {
     setBusy(true)
     try {
-      // Pré-validation multi-mois (mêmes contrôles TTC/HT et budget que le
-      // dashboard, préfixés par mois). Les erreurs bloquent, les avertissements
-      // (informatifs, souvent faux positifs) demandent confirmation.
+      // Pré-validation. Les erreurs bloquent (rien n'est écrit), les avertissements
+      // (informatifs) laissent le choix : recommencer, ou forcer.
       const { errors, warnings } = await preValidateForecast(file)
       if (errors.length > 0) {
         setFeedback({ kind: 'errors', alerts: errors })
@@ -100,7 +95,7 @@ export function ForecastImportButton({
         setFeedback({ kind: 'confirm', alerts: warnings, file })
         return
       }
-      await runImport(file, [])
+      await runImport(file)
     } catch (err) {
       fail(err)
     } finally {
@@ -141,16 +136,20 @@ export function ForecastImportButton({
         onOpenChange={(open) => !open && setFeedback(null)}
       >
         <DialogContent className="sm:max-w-md">
-          {feedback?.kind === 'errors' && (
+          {feedback?.kind === 'success' && (
             <>
               <DialogHeader>
-                <DialogTitle>Import refusé</DialogTitle>
-                <DialogDescription>
-                  Aucune donnée n'a été écrite. Corrige le fichier puis réessaie.
-                </DialogDescription>
+                <DialogTitle>Import du forecast</DialogTitle>
+                <DialogDescription>Voici le résultat.</DialogDescription>
               </DialogHeader>
-              <div className="max-h-72 overflow-y-auto">
-                <AlertBanner alerts={feedback.alerts} />
+              <div className="flex gap-2 rounded-md bg-emerald-500/10 px-3 py-2 text-sm text-emerald-500">
+                <Check className="mt-0.5 size-4 shrink-0" />
+                <div className="space-y-0.5">
+                  <div className="font-medium">
+                    C'est bon, tes données sont en place
+                  </div>
+                  <p className="text-emerald-500/80">{feedback.summary}</p>
+                </div>
               </div>
               <DialogFooter>
                 <Button onClick={() => setFeedback(null)}>Fermer</Button>
@@ -161,44 +160,60 @@ export function ForecastImportButton({
           {feedback?.kind === 'confirm' && (
             <>
               <DialogHeader>
-                <DialogTitle>Quelques points à vérifier</DialogTitle>
+                <DialogTitle>À vérifier avant d'importer</DialogTitle>
                 <DialogDescription>
-                  Ces contrôles sont informatifs, pas forcément un problème. Si
-                  tes données sont bonnes, tu peux importer.
+                  Un contrôle a repéré quelque chose. À toi de voir.
                 </DialogDescription>
               </DialogHeader>
-              <div className="max-h-72 overflow-y-auto">
-                <AlertBanner alerts={feedback.alerts} />
+              <div className="space-y-2 rounded-md bg-amber-500/10 px-3 py-2 text-sm text-amber-500">
+                <ul className="space-y-1">
+                  {feedback.alerts.map((a, i) => (
+                    <li key={i} className="text-amber-500/90">
+                      {a.message}
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-xs text-amber-500/70">
+                  Si tes données sont bonnes, tu peux forcer l'import. Sinon,
+                  recommence l'export : forcer un mauvais fichier écrit de fausses
+                  valeurs et fausse tes calculs.
+                </p>
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setFeedback(null)}>
-                  Annuler
+                  Je recommence
                 </Button>
                 <Button
                   disabled={busy}
                   onClick={() => {
-                    const { file, alerts } = feedback
+                    const { file } = feedback
                     setFeedback(null)
-                    void runImport(file, alerts)
+                    void runImport(file)
                   }}
                 >
-                  Importer quand même
+                  Forcer l'import
                 </Button>
               </DialogFooter>
             </>
           )}
 
-          {feedback?.kind === 'success' && (
+          {feedback?.kind === 'errors' && (
             <>
               <DialogHeader>
-                <DialogTitle>Forecast importé</DialogTitle>
-                <DialogDescription>{feedback.summary}</DialogDescription>
+                <DialogTitle>Import refusé</DialogTitle>
+                <DialogDescription>Rien n'a été écrit.</DialogDescription>
               </DialogHeader>
-              {feedback.warnings.length > 0 && (
-                <div className="max-h-72 overflow-y-auto">
-                  <AlertBanner alerts={feedback.warnings} />
-                </div>
-              )}
+              <div className="space-y-2 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                <ul className="space-y-1">
+                  {feedback.alerts.map((a, i) => (
+                    <li key={i}>{a.message}</li>
+                  ))}
+                </ul>
+                <p className="text-xs text-destructive/80">
+                  Tes données actuelles sont intactes. Corrige le fichier, puis
+                  recommence.
+                </p>
+              </div>
               <DialogFooter>
                 <Button onClick={() => setFeedback(null)}>Fermer</Button>
               </DialogFooter>
