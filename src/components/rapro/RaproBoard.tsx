@@ -866,12 +866,26 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
             })}
           </div>
 
-          <div className="rapro-legend">
-            {/* Indice d'interaction, poussé à gauche (les deux gestes du board) :
-                lève la confusion clic / clic droit. */}
-            <span className="rapro-hint">
-              Clic : couleur · Clic droit : bloquée de la veille
+          {/* Aide « comment ça marche » : les deux gestes, illustrés par une
+              souris dont le bouton concerné est surligné. Une phrase simple par
+              geste — répond au « ultra confusant ». */}
+          <div className="rapro-help">
+            <span className="rapro-help-item">
+              <MouseGlyph side="left" />
+              <span>
+                <strong>Clic gauche</strong> : la couleur (nettoyée → refus →
+                bloquée)
+              </span>
             </span>
+            <span className="rapro-help-item">
+              <MouseGlyph side="right" />
+              <span>
+                <strong>Clic droit</strong> : le liseré « bloquée de la veille »
+              </span>
+            </span>
+          </div>
+
+          <div className="rapro-legend">
             {/* « Non vendue » (empty) ne figure pas dans LEGEND_ORDER ; le rendu
               grisé des cases non vendues, lui, reste (via CELL_STATES/cellState). */}
             {LEGEND_ORDER.map((st) => (
@@ -935,6 +949,59 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
 function sourceDate(date: string): string {
   const d = parseDateStr(date)
   return d ? format(d, 'd MMMM yyyy', { locale: fr }) : date
+}
+
+/**
+ * Petite souris SVG avec le bouton GAUCHE ou DROIT surligné — illustre les deux
+ * gestes de la grille. Le surlignage est un rectangle CLIPPÉ au corps arrondi, si
+ * bien qu'il épouse le coin du bouton sans path manuel. Bouton gauche en teinte
+ * neutre (il pose des couleurs variées), bouton droit en rouge (le liseré).
+ */
+function MouseGlyph({ side }: { side: 'left' | 'right' }) {
+  const clipId = `rapro-mouse-${side}`
+  const btnX = side === 'left' ? 3 : 10
+  return (
+    <svg
+      className={cn('rapro-mouse', side === 'right' && 'rapro-mouse-right')}
+      viewBox="0 0 20 28"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <defs>
+        <clipPath id={clipId}>
+          <rect x="3" y="2" width="14" height="24" rx="7" />
+        </clipPath>
+      </defs>
+      {/* Bouton surligné (moitié haute, gauche ou droite), clippé au corps. */}
+      <rect
+        x={btnX}
+        y="2"
+        width="7"
+        height="11"
+        className="rapro-mouse-btn"
+        clipPath={`url(#${clipId})`}
+      />
+      {/* Corps + séparation des deux boutons. */}
+      <rect
+        x="3"
+        y="2"
+        width="14"
+        height="24"
+        rx="7"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+      <line
+        x1="10"
+        y1="2"
+        x2="10"
+        y2="13"
+        stroke="currentColor"
+        strokeWidth="1.2"
+      />
+    </svg>
+  )
 }
 
 /**
