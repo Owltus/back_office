@@ -121,6 +121,15 @@ Le temps de chargement perçu vient surtout de l'auth cliente + du mode SPA. Rè
 - Table **`postes` : n'existe PAS** → feature volontairement différée, non portée.
 - Hôtel unique : **80 chambres, TVA 10 %** (constantes en dur dans
   `lib/repjour/constants.ts`).
+- **Durcissement sécurité vérifié le 2026-07-27** (dashboard `supabase/verif_securite.sql`,
+  8/8 OK) : lectures **par page** (un compte sans permission sur une page lit 0 ligne
+  de ses tables, PII incluse) ; `anon` **ne peut plus exécuter** `admin_update_password`
+  / `set_user_grade` / `set_page_permission` / `remove_page_permission` ;
+  `admin_update_password` a une garde admin + `search_path` figé ; anti-escalade
+  `profiles` (policy self-update figeant `role` + trigger `protect_role_escalation`) ;
+  contrainte de format sur `email_recipients`. Objets désormais **versionnés** :
+  `supabase/{profiles,security_core,page_permissions_rls_lectures,verif_securite}.sql`.
+  Reste hors base : déploiement des Edge Functions durcies + rotation `service_role`.
 
 ## Commandes
 
