@@ -23,18 +23,18 @@ function stddev(values: number[]): number {
  * simples, tutoiement, on dit juste ce qui cloche et quoi faire.
  */
 const MSG = {
-  empty:
-    'Ce mois est vide dans le fichier. Vérifie que tu as exporté la bonne période.',
+  empty: 'Ce mois est vide. Vérifie la période exportée.',
   incomplete:
-    "Il manque des jours dans le fichier. Si le mois n'est pas terminé c'est normal, sinon réexporte le mois complet.",
+    "Il manque des jours. Réexporte le mois complet (sauf si le mois n'est pas fini).",
   impossible:
-    'Le fichier contient des valeurs impossibles (du revenu sans chambre vendue, ou des valeurs négatives). Il a mal été exporté, reprends-le depuis le PMS.',
-  adrWeird:
-    "Le prix par chambre a l'air anormal. Vérifie que c'est le bon fichier.",
+    'Valeurs impossibles dans le fichier : il est mal exporté, reprends-le.',
+  occNoRev:
+    "Des jours ont de l'occupation mais aucun revenu. Vérifie le fichier.",
+  adrWeird: "Prix par chambre anormal. Vérifie que c'est le bon fichier.",
   tvaMissing:
-    "Le fichier ne contient sûrement pas la TVA (les revenus sont trop bas). Dans le PMS, coche l'option Select All avant d'exporter, puis réimporte.",
+    'Revenus trop bas : la TVA manque sûrement. Vérifie que ton export inclut la TVA.',
   tvaHigh:
-    "Les revenus sont plus hauts que d'habitude : soit la TVA est comptée deux fois, soit ce fichier corrige un ancien import fait sans TVA. Si tu corriges, tu peux importer ; sinon vérifie tes options d'export.",
+    'Revenus trop hauts : TVA en double, ou tu corriges un ancien import. Vérifie avant de forcer.',
 } as const
 
 /**
@@ -67,6 +67,14 @@ export function validateForecast(
   );
   if (hasImpossible) {
     alerts.push({ type: 'error', message: MSG.impossible });
+  }
+
+  // Occupation SANS revenu : souvent une colonne REV vide (parseFloat -> 0), qui
+  // fausse le projeté ; parfois du comp légitime. Avertissement forçable, pas une
+  // erreur bloquante — pour ne pas refuser un vrai cas comp.
+  const hasOccNoRev = rows.some((r) => r.occ > 0 && r.revTTC === 0);
+  if (hasOccNoRev) {
+    alerts.push({ type: 'warning', message: MSG.occNoRev });
   }
 
   // ADR moyen sur le mois
@@ -131,25 +139,23 @@ export function validateForecast(
 export function validateCoherence(realiseJour: KPIBlock): Alert[] {
   const alerts: Alert[] = [];
 
+  // Impossibilités PHYSIQUES (certaines) → bloquantes. Le snapshot de nuit ne peut
+  // ni dépasser l'inventaire (80 chambres) ni être négatif. Le taux d'occupation se
+  // déduit des nuitées : pas de contrôle séparé (ce serait le même fait).
+  if (realiseJour.nuitees < 0 || realiseJour.roomRevenue < 0) {
+    alerts.push({ type: 'error', message: 'Valeurs négatives dans le fichier. Il est mal exporté, reprends-le.' });
+  }
   if (realiseJour.nuitees > TOTAL_ROOMS) {
-    alerts.push({ type: 'error', message: `Nuitées jour (${realiseJour.nuitees}) > ${TOTAL_ROOMS} chambres` });
-  }
-  if (realiseJour.to > 100) {
-    alerts.push({ type: 'error', message: `TO jour (${realiseJour.to.toFixed(1)}%) > 100%` });
-  }
-  if (realiseJour.nuitees > 0 && realiseJour.roomRevenue === 0) {
-    alerts.push({ type: 'error', message: 'Chambres vendues sans revenu' });
-  }
-  if (realiseJour.nuitees === 0 && realiseJour.roomRevenue > 0) {
-    alerts.push({ type: 'error', message: 'Revenu sans chambres vendues' });
+    alerts.push({ type: 'error', message: 'Plus de nuitées que de chambres. Fichier à vérifier.' });
   }
 
-  // Vérification croisée PM × Nuitées ≈ Room Revenue
-  if (realiseJour.nuitees > 0) {
-    const expectedRevenue = realiseJour.pm * realiseJour.nuitees;
-    if (Math.abs(realiseJour.roomRevenue - expectedRevenue) > 1) {
-      alerts.push({ type: 'warning', message: 'Écart PM × Nuitées vs Room Revenue' });
-    }
+  // Incohérences PROBABLES, avec de rares cas limites room-only légitimes (day-use,
+  // no-show, comp) → à vérifier, non bloquantes.
+  if (realiseJour.nuitees > 0 && realiseJour.roomRevenue === 0) {
+    alerts.push({ type: 'warning', message: 'Des chambres vendues mais aucun revenu. À vérifier.' });
+  }
+  if (realiseJour.nuitees === 0 && realiseJour.roomRevenue > 0) {
+    alerts.push({ type: 'warning', message: 'Du revenu sans chambre vendue. À vérifier.' });
   }
 
   return alerts;

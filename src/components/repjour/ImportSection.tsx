@@ -214,8 +214,8 @@ export function ImportSection({
             name: file.name,
             status: 'error',
             errorMsg: isCivilToday
-              ? 'Le rapport de cette nuit n’est disponible qu’à partir de 02h00 (clôture de la journée). Réessayez après cette heure.'
-              : `Ce fichier date du ${fileDay}/${String(fileMonth).padStart(2, '0')}/${fileYear}. Veuillez extraire les fichiers du jour depuis votre PMS avant de les importer.`,
+              ? 'Le rapport de cette nuit est dispo à partir de 02h00. Réessaie après.'
+              : `Ce fichier date du ${fileDay}/${String(fileMonth).padStart(2, '0')}/${fileYear}. Importe celui du jour.`,
           }
           if (expectedType === 'comparison') setComparison(slot)
           else setForecast(slot)
@@ -469,9 +469,8 @@ export function ImportSection({
             <div className="space-y-4 px-6 py-4">
               <AlertBanner alerts={validationWarnings} />
               <p className="text-xs leading-relaxed text-muted-foreground">
-                Si tes données sont bonnes, tu peux forcer l'import. Sinon,
-                recommence l'export : forcer un mauvais fichier écrit de fausses
-                valeurs et fausse tes calculs.
+                Forcer un mauvais fichier fausse tes calculs. En cas de doute,
+                recommence l'export.
               </p>
             </div>
             <div className="flex justify-end gap-3 border-t border-border bg-muted/40 px-6 py-4">

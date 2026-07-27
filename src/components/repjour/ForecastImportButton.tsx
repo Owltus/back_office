@@ -174,9 +174,8 @@ export function ForecastImportButton({
                   ))}
                 </ul>
                 <p className="text-xs text-amber-500/70">
-                  Si tes données sont bonnes, tu peux forcer l'import. Sinon,
-                  recommence l'export : forcer un mauvais fichier écrit de fausses
-                  valeurs et fausse tes calculs.
+                  Forcer un mauvais fichier fausse tes calculs. En cas de doute,
+                  recommence l'export.
                 </p>
               </div>
               <DialogFooter>
@@ -210,8 +209,7 @@ export function ForecastImportButton({
                   ))}
                 </ul>
                 <p className="text-xs text-destructive/80">
-                  Tes données actuelles sont intactes. Corrige le fichier, puis
-                  recommence.
+                  Tes données sont intactes. Corrige le fichier et recommence.
                 </p>
               </div>
               <DialogFooter>

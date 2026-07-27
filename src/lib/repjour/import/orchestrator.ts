@@ -229,15 +229,25 @@ export async function processComparisonOnly(
     )
   }
 
-  // Essayer de récupérer le projeté depuis un import forecast existant
-  const { data: existingForecasts } = await supabase
+  // Essayer de récupérer le projeté depuis un import forecast existant.
+  const { data: existingForecasts, error: forecastErr } = await supabase
     .from('forecast_days')
     .select('*')
     .eq('year', reportDate.year)
     .eq('month', reportDate.month)
 
+  // Lecture en échec : on NE PEUT PAS calculer le projeté. On échoue clairement
+  // plutôt que d'écrire des zéros dans pm_*, qui écraseraient un projeté correct au
+  // ré-import d'une date déjà rapportée. Le Comparison se relit du fichier — un
+  // simple réessai suffit. (Miroir des gardes `existingErr` de processImport.)
+  if (forecastErr) {
+    throw new Error(
+      'Lecture du forecast indisponible, projeté non calculable. Réessaie.',
+    )
+  }
+
   let finalProjeteMois = projeteMois
-  if (existingForecasts && existingForecasts.length > 0) {
+  if (existingForecasts.length > 0) {
     const totalOCC = existingForecasts.reduce(
       (s: number, f: { occ: number }) => s + f.occ,
       0,
@@ -256,13 +266,21 @@ export async function processComparisonOnly(
   } else {
     alerts.push({
       type: 'warning',
-      message: 'Pas de Forecast importé — projeté mois non disponible',
+      message: 'Pas de forecast importé, projeté du mois indisponible.',
     })
   }
 
   const ecart = computeEcart(finalProjeteMois, budget)
   const coherenceAlerts = validateCoherence(realiseJour)
   alerts.push(...coherenceAlerts)
+  // Une impossibilité PHYSIQUE du réalisé bloque l'import : sinon on écrirait un
+  // rapport faux affiché quand même en « réussi ».
+  const coherenceErrors = coherenceAlerts.filter((a) => a.type === 'error')
+  if (coherenceErrors.length > 0) {
+    throw new Error(
+      `Rapport invalide :\n${coherenceErrors.map((a) => `• ${a.message}`).join('\n')}`,
+    )
+  }
 
   const dateStr = `${reportDate.year}-${String(reportDate.month).padStart(2, '0')}-${String(reportDate.dayOfMonth).padStart(2, '0')}`
 
@@ -399,9 +417,16 @@ export async function processImport(
   // Écart
   const ecart = computeEcart(projeteMois, budget)
 
-  // Contrôles de cohérence — réalisé
+  // Contrôles de cohérence — réalisé. Une impossibilité PHYSIQUE bloque l'import
+  // (sinon un rapport faux s'écrirait puis s'afficherait quand même en « réussi »).
   const coherenceAlerts = validateCoherence(realiseJour)
   alerts.push(...coherenceAlerts)
+  const coherenceErrors = coherenceAlerts.filter((a) => a.type === 'error')
+  if (coherenceErrors.length > 0) {
+    throw new Error(
+      `Rapport invalide :\n${coherenceErrors.map((a) => `• ${a.message}`).join('\n')}`,
+    )
+  }
 
   // Historique du mois AVANT écriture : sert à la détection TVA par comparaison à
   // l'import précédent, et évite que le secours budget ne rejoue un faux positif à
