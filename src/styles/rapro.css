@@ -222,15 +222,23 @@
   border-radius: var(--radius);
 }
 
-/* --- Légende des statuts (bas du tableau, alignée à droite, petits dots) - */
+/* --- Légende (bas du tableau) : deux groupes « geste + sens » sur UNE ligne —
+   à GAUCHE la souris clic gauche + les couleurs qu'elle pose, à DROITE la souris
+   clic droit + « bloquée de la veille ». `space-between` sépare les deux. */
 .rapro-legend {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 0.4rem 1rem;
   font-size: 0.72rem;
   color: var(--muted-foreground);
+}
+.rapro-legend-group {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.9rem;
 }
 .rapro-legend-item {
   display: inline-flex;
@@ -253,30 +261,13 @@
 .rapro-legend-dot.is-todo {
   background: #f87171;
 }
-/* Aide « comment ça marche » : deux gestes souris, juste au-dessus de la légende
-   des couleurs. Une ligne par geste, illustrée d'une petite souris. */
-.rapro-help {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem 1.5rem;
-  font-size: 0.75rem;
-  color: var(--muted-foreground);
-}
-.rapro-help-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.rapro-help-item strong {
-  font-weight: 600;
-  color: var(--foreground);
-}
 /* Souris : corps en teinte muette (currentColor), bouton surligné selon le geste —
-   neutre à gauche (couleurs variées), rouge à droite (le liseré). */
+   neutre à gauche (change les couleurs), rouge à droite (bloquée de la veille).
+   Petite, à la hauteur de la ligne de légende. */
 .rapro-mouse {
   flex-shrink: 0;
-  width: 0.9rem;
-  height: 1.25rem;
+  width: 0.8rem;
+  height: 1.1rem;
   color: var(--muted-foreground);
 }
 .rapro-mouse-btn {
@@ -285,8 +276,8 @@
 .rapro-mouse-right .rapro-mouse-btn {
   fill: #f87171;
 }
-/* Témoin « bloquée la veille » : petit carré à liseré rouge (comme la grille /
-   le PDF), pas un dot rond — c'est une bordure, pas une couleur de fond. */
+/* Témoin « bloquée la veille » : petit carré à liseré rouge (miroir de la grille
+   et du PDF), pas un dot rond — c'est une bordure, pas un fond. */
 .rapro-legend-carried {
   display: inline-block;
   width: 0.6rem;

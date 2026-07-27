@@ -866,41 +866,28 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
             })}
           </div>
 
-          {/* Aide « comment ça marche » : les deux gestes, illustrés par une
-              souris dont le bouton concerné est surligné. Une phrase simple par
-              geste — répond au « ultra confusant ». */}
-          <div className="rapro-help">
-            <span className="rapro-help-item">
-              <MouseGlyph side="left" />
-              <span>
-                <strong>Clic gauche</strong> : la couleur (nettoyée → refus →
-                bloquée)
-              </span>
-            </span>
-            <span className="rapro-help-item">
-              <MouseGlyph side="right" />
-              <span>
-                <strong>Clic droit</strong> : le liseré « bloquée de la veille »
-              </span>
-            </span>
-          </div>
-
+          {/* Deux groupes « geste + sens » sur une ligne : à GAUCHE la souris clic
+              gauche + les couleurs qu'elle pose ; à DROITE la souris clic droit +
+              « bloquée de la veille ». Le glyphe suffit — pas de texte « clic
+              gauche/droit ». « Non vendue » (grisé) se lit sans légende. */}
           <div className="rapro-legend">
-            {/* « Non vendue » (empty) ne figure pas dans LEGEND_ORDER ; le rendu
-              grisé des cases non vendues, lui, reste (via CELL_STATES/cellState). */}
-            {LEGEND_ORDER.map((st) => (
-              <span key={st} className="rapro-legend-item">
-                <span
-                  className={cn('rapro-legend-dot', CELL_STATES[st].legendMod)}
-                />
-                {CELL_STATES[st].label}
+            <span className="rapro-legend-group">
+              <MouseGlyph side="left" />
+              {LEGEND_ORDER.map((st) => (
+                <span key={st} className="rapro-legend-item">
+                  <span
+                    className={cn('rapro-legend-dot', CELL_STATES[st].legendMod)}
+                  />
+                  {CELL_STATES[st].label}
+                </span>
+              ))}
+            </span>
+            <span className="rapro-legend-group">
+              <MouseGlyph side="right" />
+              <span className="rapro-legend-item">
+                <span className="rapro-legend-carried" />
+                Bloquée de la veille
               </span>
-            ))}
-            {/* Témoin du sur-statut « bloquée la veille » : carré à liseré rouge
-                (pas un dot) — miroir de la grille et du PDF. */}
-            <span className="rapro-legend-item">
-              <span className="rapro-legend-carried" />
-              Bloquée de la veille
             </span>
           </div>
 
