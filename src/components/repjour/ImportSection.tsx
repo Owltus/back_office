@@ -1,10 +1,5 @@
-import {
-  useCallback,
-  useRef,
-  useState,
-  type DragEvent,
-  type RefObject,
-} from 'react'
+import { useCallback, useRef, useState } from 'react'
+import type { DragEvent, RefObject } from 'react'
 import { Check, FileUp, X } from 'lucide-react'
 
 import { Button } from '#/components/ui/button.tsx'
@@ -440,10 +435,10 @@ export function ImportSection({
             className="fixed inset-0 bg-black/50"
             onClick={() => setShowConfirmModal(false)}
           />
-          <div className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border-2 border-destructive/30 bg-card shadow-xl">
-            <div className="border-b border-destructive/20 bg-destructive/10 px-6 py-4">
+          <div className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-amber-500/30 bg-card shadow-xl">
+            <div className="border-b border-amber-500/20 bg-amber-500/10 px-6 py-4">
               <div className="flex items-center gap-3">
-                <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-destructive/20">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-amber-500/20">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     width="22"
@@ -454,7 +449,7 @@ export function ImportSection({
                     strokeWidth="2.5"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    className="text-destructive"
+                    className="text-amber-500"
                   >
                     <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
                     <line x1="12" y1="9" x2="12" y2="13" />
@@ -462,11 +457,11 @@ export function ImportSection({
                   </svg>
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-destructive">
-                    Anomalie dans le fichier
+                  <h3 className="text-lg font-bold text-amber-500">
+                    Quelques points à vérifier
                   </h3>
-                  <p className="text-xs text-destructive/70">
-                    Les données ne correspondent pas aux imports précédents
+                  <p className="text-xs text-muted-foreground">
+                    Contrôles informatifs — pas forcément un problème
                   </p>
                 </div>
               </div>
@@ -474,22 +469,17 @@ export function ImportSection({
             <div className="space-y-4 px-6 py-4">
               <AlertBanner alerts={validationWarnings} />
               <p className="text-xs leading-relaxed text-muted-foreground">
-                Si vous avez bien vérifié vos paramètres d'export et que le
-                fichier est correct, vous pouvez forcer l'import. Dans le cas
-                contraire, annulez et ré-exportez depuis le PMS.
+                Si tes données sont bonnes (bon fichier, TVA incluse), tu peux
+                importer. Sinon, annule et ré-exporte depuis le PMS.
               </p>
             </div>
             <div className="flex justify-end gap-3 border-t border-border bg-muted/40 px-6 py-4">
-              <Button onClick={() => setShowConfirmModal(false)}>
-                Annuler et corriger
+              <Button variant="outline" onClick={() => setShowConfirmModal(false)}>
+                Annuler
               </Button>
-              <button
-                onClick={executeImport}
-                disabled={importing}
-                className="px-4 py-2.5 text-xs text-muted-foreground underline underline-offset-2 transition-colors hover:text-destructive disabled:opacity-50"
-              >
+              <Button onClick={executeImport} disabled={importing}>
                 {importing ? 'Import...' : 'Importer quand même'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

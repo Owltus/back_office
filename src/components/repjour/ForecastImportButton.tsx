@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { Upload } from 'lucide-react'
 
+import { AlertBanner } from '#/components/repjour/AlertBanner.tsx'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
@@ -17,12 +18,17 @@ import {
   importForecastDays,
   preValidateForecast,
 } from '#/lib/repjour/import/orchestrator.ts'
+import type { Alert } from '#/lib/repjour/types.ts'
 
-/** État du dialogue de retour (une seule modale, contenu selon l'issue). */
+/**
+ * État du dialogue de retour (une seule modale, contenu selon l'issue). On garde
+ * les `Alert` (avec leur `type`) plutôt que des chaînes → rendu par `AlertBanner`,
+ * le MÊME que l'import journalier du dashboard (erreur rouge / avertissement ambre).
+ */
 type Feedback =
-  | { kind: 'errors'; messages: string[] }
-  | { kind: 'confirm'; messages: string[]; file: File }
-  | { kind: 'success'; summary: string; warnings: string[] }
+  | { kind: 'errors'; alerts: Alert[] }
+  | { kind: 'confirm'; alerts: Alert[]; file: File }
+  | { kind: 'success'; summary: string; warnings: Alert[] }
   | null
 
 /**
@@ -32,6 +38,8 @@ type Feedback =
  * budget) → upsert de TOUTES les lignes dans `forecast_days`. Rien d'autre n'est
  * touché ; `onImported` rafraîchit la vue.
  *
+ * Affichage des messages HARMONISÉ avec le dashboard : erreurs = bloquantes
+ * (rouge), avertissements = informatifs (ambre), on peut « Importer quand même ».
  * Rendu NUL pour les non-admins (garde ergonomique ; la RLS reste la sécurité
  * réelle). Le fichier n'est jamais stocké — seulement parsé puis écrit ligne à ligne.
  */
@@ -47,7 +55,19 @@ export function ForecastImportButton({
 
   if (!can('repjour', 'gestion')) return null
 
-  async function runImport(file: File, warnings: string[]) {
+  function fail(err: unknown) {
+    setFeedback({
+      kind: 'errors',
+      alerts: [
+        {
+          type: 'error',
+          message: err instanceof Error ? err.message : 'Erreur inattendue',
+        },
+      ],
+    })
+  }
+
+  async function runImport(file: File, warnings: Alert[]) {
     setBusy(true)
     try {
       const s = await importForecastDays(file)
@@ -59,10 +79,7 @@ export function ForecastImportButton({
       })
       onImported()
     } catch (err) {
-      setFeedback({
-        kind: 'errors',
-        messages: [err instanceof Error ? err.message : 'Erreur inattendue'],
-      })
+      fail(err)
     } finally {
       setBusy(false)
     }
@@ -73,24 +90,19 @@ export function ForecastImportButton({
     try {
       // Pré-validation multi-mois (mêmes contrôles TTC/HT et budget que le
       // dashboard, préfixés par mois). Les erreurs bloquent, les avertissements
-      // demandent confirmation.
+      // (informatifs, souvent faux positifs) demandent confirmation.
       const { errors, warnings } = await preValidateForecast(file)
-      const errMsgs = errors.map((e) => e.message)
-      const warnMsgs = warnings.map((w) => w.message)
-      if (errMsgs.length > 0) {
-        setFeedback({ kind: 'errors', messages: errMsgs })
+      if (errors.length > 0) {
+        setFeedback({ kind: 'errors', alerts: errors })
         return
       }
-      if (warnMsgs.length > 0) {
-        setFeedback({ kind: 'confirm', messages: warnMsgs, file })
+      if (warnings.length > 0) {
+        setFeedback({ kind: 'confirm', alerts: warnings, file })
         return
       }
       await runImport(file, [])
     } catch (err) {
-      setFeedback({
-        kind: 'errors',
-        messages: [err instanceof Error ? err.message : 'Erreur inattendue'],
-      })
+      fail(err)
     } finally {
       setBusy(false)
     }
@@ -137,11 +149,9 @@ export function ForecastImportButton({
                   Aucune donnée n'a été écrite. Corrige le fichier puis réessaie.
                 </DialogDescription>
               </DialogHeader>
-              <ul className="max-h-64 space-y-1 overflow-y-auto text-sm text-destructive">
-                {feedback.messages.map((m, i) => (
-                  <li key={i}>• {m}</li>
-                ))}
-              </ul>
+              <div className="max-h-72 overflow-y-auto">
+                <AlertBanner alerts={feedback.alerts} />
+              </div>
               <DialogFooter>
                 <Button onClick={() => setFeedback(null)}>Fermer</Button>
               </DialogFooter>
@@ -151,17 +161,15 @@ export function ForecastImportButton({
           {feedback?.kind === 'confirm' && (
             <>
               <DialogHeader>
-                <DialogTitle>Avertissements</DialogTitle>
+                <DialogTitle>Quelques points à vérifier</DialogTitle>
                 <DialogDescription>
-                  Le fichier est importable, mais quelques points méritent un coup
-                  d'œil. Importer quand même ?
+                  Ces contrôles sont informatifs — pas forcément un problème. Si
+                  tes données sont bonnes, tu peux importer.
                 </DialogDescription>
               </DialogHeader>
-              <ul className="max-h-64 space-y-1 overflow-y-auto text-sm text-muted-foreground">
-                {feedback.messages.map((m, i) => (
-                  <li key={i}>• {m}</li>
-                ))}
-              </ul>
+              <div className="max-h-72 overflow-y-auto">
+                <AlertBanner alerts={feedback.alerts} />
+              </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setFeedback(null)}>
                   Annuler
@@ -169,9 +177,9 @@ export function ForecastImportButton({
                 <Button
                   disabled={busy}
                   onClick={() => {
-                    const { file, messages } = feedback
+                    const { file, alerts } = feedback
                     setFeedback(null)
-                    void runImport(file, messages)
+                    void runImport(file, alerts)
                   }}
                 >
                   Importer quand même
@@ -187,11 +195,9 @@ export function ForecastImportButton({
                 <DialogDescription>{feedback.summary}</DialogDescription>
               </DialogHeader>
               {feedback.warnings.length > 0 && (
-                <ul className="max-h-64 space-y-1 overflow-y-auto text-sm text-muted-foreground">
-                  {feedback.warnings.map((m, i) => (
-                    <li key={i}>• {m}</li>
-                  ))}
-                </ul>
+                <div className="max-h-72 overflow-y-auto">
+                  <AlertBanner alerts={feedback.warnings} />
+                </div>
               )}
               <DialogFooter>
                 <Button onClick={() => setFeedback(null)}>Fermer</Button>
