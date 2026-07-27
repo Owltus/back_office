@@ -461,7 +461,7 @@ export function ImportSection({
                     Quelques points à vérifier
                   </h3>
                   <p className="text-xs text-muted-foreground">
-                    Contrôles informatifs — pas forcément un problème
+                    Contrôles informatifs, pas forcément un problème
                   </p>
                 </div>
               </div>

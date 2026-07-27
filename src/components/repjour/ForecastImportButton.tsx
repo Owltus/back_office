@@ -163,7 +163,7 @@ export function ForecastImportButton({
               <DialogHeader>
                 <DialogTitle>Quelques points à vérifier</DialogTitle>
                 <DialogDescription>
-                  Ces contrôles sont informatifs — pas forcément un problème. Si
+                  Ces contrôles sont informatifs, pas forcément un problème. Si
                   tes données sont bonnes, tu peux importer.
                 </DialogDescription>
               </DialogHeader>
