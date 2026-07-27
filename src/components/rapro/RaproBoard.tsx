@@ -866,13 +866,21 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
             })}
           </div>
 
-          {/* Deux groupes « geste + sens » sur une ligne : à GAUCHE la souris clic
-              gauche + les couleurs qu'elle pose ; à DROITE la souris clic droit +
-              « bloquée de la veille ». Le glyphe suffit — pas de texte « clic
-              gauche/droit ». « Non vendue » (grisé) se lit sans légende. */}
+          {/* Tuto simple à GAUCHE (les deux gestes : souris + action courte, sans
+              « clic gauche/droit » — le glyphe montre déjà le bouton), et tous les
+              statuts couleur à DROITE. « Non vendue » (grisé) se lit sans légende. */}
           <div className="rapro-legend">
             <span className="rapro-legend-group">
-              <MouseGlyph side="left" />
+              <span className="rapro-legend-item">
+                <MouseGlyph side="left" />
+                change le statut
+              </span>
+              <span className="rapro-legend-item">
+                <MouseGlyph side="right" />
+                bloquée de la veille
+              </span>
+            </span>
+            <span className="rapro-legend-group">
               {LEGEND_ORDER.map((st) => (
                 <span key={st} className="rapro-legend-item">
                   <span
@@ -881,13 +889,6 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
                   {CELL_STATES[st].label}
                 </span>
               ))}
-            </span>
-            <span className="rapro-legend-group">
-              <MouseGlyph side="right" />
-              <span className="rapro-legend-item">
-                <span className="rapro-legend-carried" />
-                Bloquée de la veille
-              </span>
             </span>
           </div>
 

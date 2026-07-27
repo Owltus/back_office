@@ -276,12 +276,3 @@
 .rapro-mouse-right .rapro-mouse-btn {
   fill: #f87171;
 }
-/* Témoin « bloquée la veille » : petit carré à liseré rouge (miroir de la grille
-   et du PDF), pas un dot rond — c'est une bordure, pas un fond. */
-.rapro-legend-carried {
-  display: inline-block;
-  width: 0.6rem;
-  height: 0.6rem;
-  border-radius: 2px;
-  border: 1.5px solid #f87171;
-}
