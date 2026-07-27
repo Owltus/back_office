@@ -889,6 +889,15 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
                   {CELL_STATES[st].label}
                 </span>
               ))}
+              {/* « Bloquée de la veille » : AJOUTÉE DYNAMIQUEMENT aux statuts
+                  seulement s'il y en a au moins une ce jour (même condition
+                  `carried.size > 0` que la carte de synthèse). */}
+              {carried.size > 0 && (
+                <span className="rapro-legend-item">
+                  <span className="rapro-legend-carried" />
+                  Bloquée de la veille
+                </span>
+              )}
             </span>
           </div>
 
