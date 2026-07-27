@@ -56,7 +56,10 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'Méthode non autorisée' }, 405)
 
   const url = Deno.env.get('SUPABASE_URL')
-  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+  // Clé secrète : la nouvelle `sb_secret_…` si le secret SB_SECRET_KEY est posé,
+  // sinon repli sur le service_role legacy auto-injecté (migration sans coupure).
+  const serviceKey =
+    Deno.env.get('SB_SECRET_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
   if (!url || !serviceKey)
     return json({ error: 'Configuration serveur manquante' }, 500)
 

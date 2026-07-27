@@ -50,7 +50,10 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'Méthode non autorisée' }, 405)
 
   const url = Deno.env.get('SUPABASE_URL')
-  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+  // Clé secrète : la nouvelle `sb_secret_…` si le secret SB_SECRET_KEY est posé,
+  // sinon repli sur le service_role legacy auto-injecté (migration sans coupure).
+  const serviceKey =
+    Deno.env.get('SB_SECRET_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
   const resendKey = Deno.env.get('RESEND_API_KEY')
   // Expéditeur : `onboarding@resend.dev` en test (Resend n'accepte alors QUE ta
   // propre adresse d'inscription comme destinataire). À basculer vers ton domaine
