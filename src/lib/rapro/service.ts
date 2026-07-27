@@ -1,9 +1,11 @@
 /*
  * Accès Supabase du Rapprochement — suivi ménage par (jour, chambre).
- * Postulat : une chambre vendue est NETTOYÉE par défaut. On stocke tout statut
- * POSÉ explicitement (y compris `nettoyee`, ex. une chambre non vendue qu'on
- * marque nettoyée) ; l'absence de ligne = chambre NON TOUCHÉE (nettoyée par défaut
- * si vendue, grisée sinon). `clearRoom` efface la ligne (retour à l'origine).
+ * Postulat : une chambre vendue est NETTOYÉE par défaut. `status` est NULLABLE :
+ * NULL = AUCUNE couleur (grise si non vendue, verte par défaut si vendue). Une
+ * couleur explicite (nettoyee/refus/non_nettoyee) est stockée telle quelle. Une
+ * ligne peut n'exister QUE pour le liseré « bloquée la veille » (status null,
+ * carried_manual true). L'absence de ligne = chambre NON TOUCHÉE, sans liseré.
+ * `clearRoom` efface la ligne (retour à l'origine).
  * Convention d'erreur maison : { data, error } → if (error) throw error.
  */
 
@@ -42,7 +44,10 @@ export async function fetchDay(reportDate: string): Promise<RaproDay> {
     DbRaproRoom,
     'room' | 'status' | 'carried_manual'
   >[]) {
-    statuses.set(r.room, KNOWN_STATUSES.has(r.status) ? r.status : 'refus')
+    // Couleur EXPLICITE seulement : une ligne `status null` (posée pour le seul
+    // liseré) reste HORS de la map → « aucune couleur » (grise/verte selon vente).
+    if (r.status != null)
+      statuses.set(r.room, KNOWN_STATUSES.has(r.status) ? r.status : 'refus')
     if (r.carried_manual) carriedManual.add(r.room)
   }
   return { reportDate, statuses, carriedManual }
@@ -97,20 +102,23 @@ export async function clearRoom(
 }
 
 /**
- * Pose l'état COMPLET d'une chambre : statut (couleur) + sur-statut « bloquée la
- * veille » posé à la main. Le défaut PROPRE (nettoyée sans flag) n'a pas de ligne
+ * Pose l'état COMPLET d'une chambre : couleur (`status`, ou `null` = aucune) +
+ * sur-statut « bloquée la veille ». Aucune couleur ET aucun liseré = pas de ligne
  * → on la supprime (comme `clearRoom`). Sinon upsert des deux colonnes. En les
  * fournissant TOUJOURS ensemble, une écriture de couleur (clic) et une de liseré
- * (double-clic) préservent chacune l'autre dimension, sans dépendre d'un merge
+ * (clic droit) préservent chacune l'autre dimension, sans dépendre d'un merge
  * implicite côté PostgREST.
  */
 export async function setRoom(
   reportDate: string,
   room: number,
-  status: RoomStatus,
+  status: RoomStatus | null,
   carriedManual: boolean,
 ): Promise<void> {
-  if (status === 'nettoyee' && !carriedManual) {
+  // Aucune couleur ET aucun liseré = rien à stocker → on efface (le défaut,
+  // grise/verte, se déduit de l'absence). Sinon upsert : `status` peut être null
+  // quand seule compte la bordure.
+  if (status === null && !carriedManual) {
     return clearRoom(reportDate, room)
   }
   const { error } = await supabase
@@ -124,28 +132,30 @@ export async function setRoom(
 
 /**
  * Matérialise à la CLÔTURE une ligne `nettoyee` pour les chambres vendues encore
- * au défaut implicite (aucune ligne stockée). Sans cela, une chambre nettoyée par
- * défaut n'existerait pas en base et échapperait au récap facturable ELIOR (qui
- * compte des lignes réelles). Les chambres portant déjà une exception ne sont PAS
- * touchées : on n'insère QUE les `rooms` fournies (l'appelant transmet les
- * occupées SANS ligne). Bulk insert ; `created_by`/`updated_at` posés par le
- * trigger serveur.
+ * au défaut (aucune COULEUR : ligne absente, ou ligne existant seulement pour le
+ * liseré `carried_manual`). Sans cela, une chambre nettoyée par défaut n'existerait
+ * pas en base et échapperait au récap facturable ELIOR (qui compte les lignes de
+ * statut réelles). L'appelant ne transmet QUE des chambres SANS couleur explicite
+ * (occupées au défaut), donc on n'écrase aucune exception. Bulk upsert ;
+ * `created_by`/`updated_at` posés par le trigger serveur.
  */
 export async function materializeCleaned(
   reportDate: string,
   rooms: number[],
 ): Promise<void> {
   if (rooms.length === 0) return
-  // `ignoreDuplicates` → INSERT ... ON CONFLICT DO NOTHING : on n'écrase JAMAIS
-  // une ligne existante (une exception déjà posée reste intacte), on ne fait
-  // qu'ajouter les chambres au défaut implicite.
+  // Upsert `status = 'nettoyee'` — SEULE cette colonne est dans le payload, donc
+  // le liseré `carried_manual` d'une ligne existante est PRÉSERVÉ. Ligne absente
+  // → insert ; ligne « liseré seul » (status null) → passe à nettoyee sans perdre
+  // le liseré. Pas d'`ignoreDuplicates` : il faut justement POUVOIR mettre à jour
+  // ces lignes « liseré seul » (l'appelant garantit l'absence de couleur à écraser).
   const { error } = await supabase.from(RAPRO_TABLE).upsert(
     rooms.map((room) => ({
       report_date: reportDate,
       room,
       status: 'nettoyee',
     })),
-    { onConflict: 'report_date,room', ignoreDuplicates: true },
+    { onConflict: 'report_date,room' },
   )
   if (error) throw error
 }

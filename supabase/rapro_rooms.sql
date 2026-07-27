@@ -1,14 +1,15 @@
 -- À EXÉCUTER PAR L'UTILISATEUR dans Supabase → SQL Editor. Ré-exécutable.
 -- Table NOUVELLE, indépendante des tables repjour partagées (lecture seule).
 --
--- Suivi ménage : UNE ligne par (jour, chambre) avec un statut. On ne stocke que
--- les chambres à un statut non-défaut (nettoyee / refus) ; l'absence de ligne
--- vaut « non_nettoyee ». Remplace la version précédente (jamais déployée) qui
--- stockait une ligne par jour → d'où le drop initial.
---
--- Statuts (3) : nettoyee | non_nettoyee (« Bloquée ») | refus. La 2e
--- dimension `qualifier` (sur-statut « faux no-show ») a été abandonnée — retrait
--- non destructif via rapro_rooms_drop_qualifier.sql (ce script-ci ne la crée pas).
+-- Suivi ménage : UNE ligne par (jour, chambre). Deux dimensions ORTHOGONALES :
+--   • status (couleur) : NULL = aucune couleur (chambre non vendue laissée grise,
+--     OU chambre vendue au défaut « nettoyée ») ; sinon nettoyee | non_nettoyee
+--     (« Bloquée ») | refus, toujours stockée telle quelle. L'absence de ligne
+--     vaut donc « aucune couleur » (grise si non vendue, verte si vendue).
+--   • carried_manual : sur-statut « bloquée la veille » posé à la main (liseré).
+-- Une ligne peut n'exister QUE pour porter le liseré (status NULL, carried_manual
+-- true) : d'où le status NULLABLE. La dimension `qualifier` (« faux no-show ») a
+-- été abandonnée — retrait non destructif via rapro_rooms_drop_qualifier.sql.
 --
 -- ⚠ Script de PREMIER déploiement : `drop table … cascade` ci-dessous EFFACE
 --   toute donnée existante. NE PAS le rejouer sur une base en service.
@@ -19,8 +20,9 @@ create table public.rapro_rooms (
   id          uuid primary key default gen_random_uuid(),
   report_date date not null,
   room        smallint not null,
-  status      text not null default 'non_nettoyee'
-                check (status in ('nettoyee', 'non_nettoyee', 'refus')),
+  -- NULLABLE : NULL = aucune couleur (voir en-tête). Pas de défaut (une ligne
+  -- sans couleur explicite reste NULL) ; le CHECK laisse passer NULL.
+  status      text check (status is null or status in ('nettoyee', 'non_nettoyee', 'refus')),
   -- Sur-statut « bloquée la veille » POSÉ À LA MAIN (orthogonal au status) :
   -- permet de marquer un report tardif directement sur le jour courant. Traité
   -- par le roulement comme une origine (cf. lib/rapro/carryover.ts).

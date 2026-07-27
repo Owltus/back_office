@@ -1,6 +1,6 @@
-/** Statut d'une chambre (terminal). Le défaut d'une chambre vendue est
- * `nettoyee` ; on n'applique un statut qu'en exception.
- * - `nettoyee` : défaut d'une chambre vendue (facturable).
+/** Couleur EXPLICITE d'une chambre. `null` (voir `DbRaproRoom.status`) = aucune
+ * couleur, traité à part — ce type ne couvre que les couleurs réellement posées.
+ * - `nettoyee` : nettoyée (facturable), vert.
  * - `non_nettoyee` : « Bloquée » — utilisée mais non nettoyée, reste due et roule.
  * - `refus` : client en séjour qui décline le ménage (hors charge). */
 export type RoomStatus = 'nettoyee' | 'non_nettoyee' | 'refus'
@@ -9,15 +9,19 @@ export type RoomStatus = 'nettoyee' | 'non_nettoyee' | 'refus'
 export interface DbRaproRoom {
   report_date: string
   room: number
-  status: RoomStatus
+  /** Couleur, ou `null` = AUCUNE couleur (chambre non vendue laissée grise, ou
+   * vendue au défaut « nettoyée »). Orthogonal à `carried_manual` : une ligne peut
+   * n'exister QUE pour porter le liseré (status null, carried_manual true). */
+  status: RoomStatus | null
   /** Sur-statut « bloquée la veille » posé à la main (orthogonal au status). */
   carried_manual: boolean
 }
 
 /**
- * État ménage d'un jour : `statuses` = statut par chambre (absence de ligne =
- * `nettoyee`, défaut), dérivé des lignes DB. `carriedManual` = chambres portant
- * le sur-statut « bloquée la veille » posé à la main ce jour-là.
+ * État ménage d'un jour : `statuses` ne contient QUE les chambres à couleur
+ * EXPLICITE (les lignes `status null` en sont absentes — l'absence vaut « aucune
+ * couleur » : grise si non vendue, verte si vendue). `carriedManual` = chambres
+ * portant le sur-statut « bloquée la veille » posé à la main ce jour-là.
  */
 export interface RaproDay {
   reportDate: string

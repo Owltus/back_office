@@ -35,8 +35,7 @@ import {
   cellState,
   countStats,
   LEGEND_ORDER,
-  nextStatus,
-  STATUS_LABEL,
+  nextFill,
   statusOf,
 } from '#/lib/rapro/constants.ts'
 import { addDays, clampDay, today } from '#/lib/rapro/day.ts'
@@ -236,17 +235,15 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   // Réconciliation sur le DÛ ÉLARGI (occupées du jour ∪ reportées).
   const dueSet = new Set(occupied)
   for (const r of carried) dueSet.add(r)
-  const rec = reconcile(statuses, dueSet)
-  // Décompte des statuts (cards Nettoyées / Refus / Bloquées) sur TOUTES les
-  // chambres affichées, REPORTÉES COMPRISES : vendues effectives ∪ « bloquées la
-  // veille ». Une reportée nettoyée aujourd'hui (rendue verte + liseré) est un
-  // ménage facturable ELIOR : elle DOIT compter dans « Nettoyées », même
-  // inoccupée au PDJ du jour (client parti) — sinon la grille la peint en vert
-  // sans que le compteur la voie. (« Vendues » reste `effectiveSold`, hors
-  // reportées : une reportée inoccupée n'est pas une vente du jour.)
-  const countedRooms = new Set(effectiveSold)
-  for (const r of carried) countedRooms.add(r)
-  const stats = countStats(statuses, countedRooms)
+  const rec = reconcile(statuses, dueSet, occupied)
+  // Décompte des cards (Nettoyées / Refus / Bloquées du jour) sur les VENDUES
+  // EFFECTIVES (occupées ∪ chambres à couleur explicite). Une reportée nettoyée
+  // aujourd'hui porte une couleur verte EXPLICITE → elle est dans `effectiveSold`
+  // et compte comme ménage facturable, même inoccupée au PDJ (client parti). Une
+  // reportée laissée GRISE (aucune couleur) n'a rien de fait : elle n'entre pas
+  // ici (comptée à part « Bloquées de la veille », et pesant sur « Reste à faire »
+  // via la réconciliation).
+  const stats = countStats(statuses, effectiveSold)
   // Fenêtre de report résolue ? Tant qu'une requête de la fenêtre est en vol,
   // `carried` est incomplet : afficher « Aucune donnée » sur un jour sans
   // occupation directe mais À REPORTS serait un faux vide, effacé une fraction de
@@ -265,7 +262,6 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
      reviennent. */
   const showDash = fallbackMode && effectiveSold.size === 0
   const dash = (v: number | string) => (showDash ? '—' : v)
-  const isDue = (room: number) => occupied.has(room) || carried.has(room)
   // Erreur réseau persistante sur un jour de la fenêtre → roulement possiblement
   // incomplet : on le signale via la bannière d'erreur (pas de sous-comptage muet).
   const windowError = raproWindow.some((q) => q.isError)
@@ -386,40 +382,40 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
     }
   }
 
-  // Pose la COULEUR (statut) d'une chambre en PRÉSERVANT son liseré manuel. Le
-  // défaut propre (nettoyée SANS liseré manuel) n'a pas de ligne → on l'efface ;
-  // sinon on la stocke. `setRoom` applique la même règle côté base.
-  function setColor(room: number, status: RoomStatus) {
+  // Pose la COULEUR d'une chambre (`null` = aucune couleur) en PRÉSERVANT son
+  // liseré manuel. `null` retire la couleur → hors de la map, la chambre redevient
+  // grise (non vendue) ou verte par défaut (vendue). `setRoom` applique la même
+  // règle côté base (aucune couleur + aucun liseré = pas de ligne).
+  function setColor(room: number, status: RoomStatus | null) {
     const manual = dayCarriedManual.has(room)
     return mutateDay(
       (st) => {
-        if (status === 'nettoyee' && !manual) st.delete(room)
+        if (status === null) st.delete(room)
         else st.set(room, status)
       },
       () => setRoom(selectedDate, room, status, manual),
     )
   }
 
-  // Clic sur une chambre = cycle des COULEURS : Nettoyée → Refus → Bloquée →
-  // défaut, IDENTIQUE pour vendues et non vendues. Le liseré « bloquée la veille »
-  // manuel (double-clic) est ORTHOGONAL et préservé. Cas particulier : une non
-  // vendue SANS ligne part du gris, son premier clic pose Nettoyée (sinon
-  // `nextStatus(nettoyee)` sauterait directement à Refus).
+  // Clic GAUCHE = cycle des COULEURS via `nextFill`, selon que la chambre est
+  // VENDUE : vendue → vert → refus → bloquée → vert ; non vendue → gris → vert →
+  // refus → bloquée → gris. Fonctionne donc sur les non vendues (c'était le bug :
+  // le clic était sans effet). Le liseré « bloquée la veille » (clic droit) est
+  // ORTHOGONAL et préservé.
   function toggle(room: number) {
-    if (!isDue(room) && !statuses.has(room)) {
-      return setColor(room, 'nettoyee')
-    }
-    return setColor(room, nextStatus(statusOf(statuses, room)))
+    const current = statuses.get(room) ?? null
+    return setColor(room, nextFill(current, occupied.has(room)))
   }
 
-  // Double-clic = pose / retire le sur-statut « bloquée la veille » À LA MAIN sur
-  // le jour courant. INTOUCHABLE si le liseré vient du roulement AUTOMATIQUE
-  // (dérivé du passé) : seul le flag posé aujourd'hui se bascule. Orthogonal à la
-  // couleur — `setRoom` garde le statut de la chambre.
+  // Clic DROIT = pose / retire le sur-statut « bloquée la veille » À LA MAIN sur le
+  // jour courant. INTOUCHABLE si le liseré vient du roulement AUTOMATIQUE (dérivé
+  // du passé) : seul le flag posé aujourd'hui se bascule. Orthogonal à la couleur :
+  // on REPOSE la couleur COURANTE telle quelle (`null` si aucune) → une chambre
+  // grise reste GRISE (elle ne devient plus verte, c'était l'autre moitié du bug).
   function toggleManual(room: number) {
     if (carriedDerived.has(room)) return
     const next = !dayCarriedManual.has(room)
-    const status = statusOf(statuses, room)
+    const status = statuses.get(room) ?? null
     return mutateDay(
       (_st, mn) => {
         if (next) mn.add(room)
@@ -446,7 +442,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
       },
       async () => {
         await Promise.all(
-          toReset.map((r) => setRoom(selectedDate, r, 'nettoyee', false)),
+          toReset.map((r) => setRoom(selectedDate, r, null, false)),
         )
       },
     )
@@ -804,8 +800,10 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
           <div className={cn('rapro-floors', !canEditFields && 'is-locked')}>
             {FLOORS.map(({ floor, rooms }) => {
               // Bouton de rollback actif seulement si au moins une chambre de
-              // l'étage porte un statut (≠ nettoyée par défaut) à annuler.
-              const hasStatus = rooms.some((r) => statuses.has(r))
+              // l'étage porte une couleur OU un liseré manuel à annuler.
+              const hasStatus = rooms.some(
+                (r) => statuses.has(r) || dayCarriedManual.has(r),
+              )
               return (
                 <div key={floor} className="rapro-floor">
                   <div className="rapro-floor-head">
@@ -826,13 +824,17 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
                   <div className="rapro-rooms">
                     {rooms.map((room) => {
                       const status = statusOf(statuses, room)
-                      // Grisée seulement si NON touchée (pas de ligne) ET non vendue.
-                      // Une chambre non vendue explicitement marquée montre sa couleur.
-                      const isEmpty = !statuses.has(room) && !isDue(room)
+                      // Grise si AUCUNE couleur explicite ET non vendue — que la
+                      // chambre soit reportée (liseré) ou non : le liseré est
+                      // ORTHOGONAL, il ne colore pas le fond. Une couleur posée
+                      // (même sur une non vendue) montre sa couleur.
+                      const isEmpty = !statuses.has(room) && !occupied.has(room)
                       const isCarried = carried.has(room)
-                      const cls =
-                        CELL_STATES[cellState(status, isEmpty)].webClass
-                      const label = `Chambre ${room} — ${STATUS_LABEL[status]}${isEmpty ? ' — non vendue' : ''}${isCarried ? ' — bloquée de la veille' : ''}`
+                      const visual = cellState(status, isEmpty)
+                      const cls = CELL_STATES[visual].webClass
+                      // Libellé = état VISUEL (une grise dit « Non vendue », pas
+                      // « Nettoyée » par défaut) + mention du liseré reporté.
+                      const roomLabel = `Chambre ${room} — ${CELL_STATES[visual].label}${isCarried ? ' — bloquée de la veille' : ''}`
                       // Clic GAUCHE = cycle des couleurs (instantané) ; clic DROIT
                       // = pose/retire le liseré « bloquée la veille » À LA MAIN. Un
                       // jour clôturé reste figé (mutations gardées par `canEditFields`).
@@ -846,8 +848,8 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
                             toggleManual(room)
                           }}
                           disabled={!isSuccess}
-                          aria-label={label}
-                          title={label}
+                          aria-label={roomLabel}
+                          title={roomLabel}
                           className={cn(
                             'rapro-room',
                             cls,
@@ -865,6 +867,11 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
           </div>
 
           <div className="rapro-legend">
+            {/* Indice d'interaction, poussé à gauche (les deux gestes du board) :
+                lève la confusion clic / clic droit. */}
+            <span className="rapro-hint">
+              Clic : couleur · Clic droit : bloquée de la veille
+            </span>
             {/* « Non vendue » (empty) ne figure pas dans LEGEND_ORDER ; le rendu
               grisé des cases non vendues, lui, reste (via CELL_STATES/cellState). */}
             {LEGEND_ORDER.map((st) => (
@@ -875,6 +882,12 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
                 {CELL_STATES[st].label}
               </span>
             ))}
+            {/* Témoin du sur-statut « bloquée la veille » : carré à liseré rouge
+                (pas un dot) — miroir de la grille et du PDF. */}
+            <span className="rapro-legend-item">
+              <span className="rapro-legend-carried" />
+              Bloquée de la veille
+            </span>
           </div>
 
           {/* Zone commentaire présente de base, y compris en mode secours :

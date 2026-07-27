@@ -1,14 +1,17 @@
 /* ------------------------------------------------------------------ *
  * Rapprochement de chambres — suivi ménage compact (housekeeping)      *
  * UNE carte par étage (titre + bouton de rollback) ; les chambres y    *
- * sont EMPILÉES en pastilles. Vendue = NETTOYÉE par défaut.            *
- * Clic = cycle de statut : nettoyée → refus → bloquée →                *
- * (défaut). La couleur = le statut.                                    *
- *   vert        = nettoyée (défaut, facturée)                          *
+ * sont EMPILÉES en pastilles.                                          *
+ * CLIC GAUCHE = cycle de COULEUR (le fond = la couleur) :             *
+ *   vendue     : vert → refus → bloquée → vert                        *
+ *   non vendue : gris → vert → refus → bloquée → gris                 *
+ * CLIC DROIT = liseré « bloquée la veille » (ORTHOGONAL : ne change   *
+ *   PAS le fond).                                                      *
+ *   vert        = nettoyée (facturée)                                  *
  *   ambre       = refus de service                                     *
  *   rouge       = bloquée (utilisée, non nettoyée : due, roule)        *
- *   grisé       = non vendue ce jour (occupation reprise du PDJ)       *
- *   liseré rouge = bloquée la veille (reportée, non résolue)           *
+ *   grisé       = aucune couleur (non vendue, ou reportée à traiter)   *
+ *   liseré rouge = bloquée la veille (reportée)                        *
  * ------------------------------------------------------------------ */
 
 /* Colonnes d'étages : gap de 1px sur fond « bordure » + colonnes en fond
@@ -174,6 +177,12 @@
 .rapro-room-carried:hover:not(:disabled) {
   border-color: #f87171;
 }
+/* Grise ET reportée (« à traiter », clic droit sur une non vendue) : on NEUTRALISE
+   le grisage (opacity de .rapro-room-empty) pour que le liseré rouge ressorte net
+   — la chambre reste grise de fond mais visiblement à traiter. */
+.rapro-room-empty.rapro-room-carried {
+  opacity: 1;
+}
 .rapro-room-clean:hover:not(:disabled),
 .rapro-room-refus:hover:not(:disabled),
 .rapro-room-todo:hover:not(:disabled) {
@@ -243,4 +252,18 @@
 }
 .rapro-legend-dot.is-todo {
   background: #f87171;
+}
+/* Indice d'interaction, poussé à gauche de la rangée (le reste = légende, à droite). */
+.rapro-hint {
+  margin-right: auto;
+  color: var(--muted-foreground);
+}
+/* Témoin « bloquée la veille » : petit carré à liseré rouge (comme la grille /
+   le PDF), pas un dot rond — c'est une bordure, pas une couleur de fond. */
+.rapro-legend-carried {
+  display: inline-block;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 2px;
+  border: 1.5px solid #f87171;
 }

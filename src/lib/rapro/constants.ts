@@ -9,18 +9,30 @@ export const STATUS_LABEL: Record<RoomStatus, string> = {
   refus: 'Refus',
 }
 
-/** Cycle du CLIC sur une chambre due : nettoyée (défaut) → refus → bloquée →
- * nettoyée. Le défaut (absence de ligne) est `nettoyee`. */
-export const CLICK_CYCLE: readonly RoomStatus[] = [
-  'nettoyee',
-  'refus',
-  'non_nettoyee',
-]
-
-/** Statut suivant dans le cycle du clic (cf. `CLICK_CYCLE`). */
-export function nextStatus(status: RoomStatus): RoomStatus {
-  const i = CLICK_CYCLE.indexOf(status)
-  return CLICK_CYCLE[(i + 1) % CLICK_CYCLE.length]
+/**
+ * Couleur suivante au clic gauche. `null` = AUCUNE couleur (grise si non vendue,
+ * verte par défaut si vendue). Deux cycles selon que la chambre est VENDUE :
+ *  - vendue (toujours « active », jamais grise) : vert → refus → bloquée → vert.
+ *    Le vert par défaut est `null` (pas de couleur explicite à stocker).
+ *  - non vendue : gris → nettoyée (vert) → refus → bloquée → gris. Le gris (et le
+ *    retour au gris) est `null` (pas de ligne). Identique aux vendues, avec en
+ *    plus l'état gris d'entrée/sortie.
+ */
+export function nextFill(
+  current: RoomStatus | null,
+  sold: boolean,
+): RoomStatus | null {
+  if (sold) {
+    // 3 états : null (vert) → refus → non_nettoyee → null (vert).
+    if (current === 'refus') return 'non_nettoyee'
+    if (current === 'non_nettoyee') return null
+    return 'refus' // null ou nettoyee (vert) → refus
+  }
+  // 4 états : null (gris) → nettoyee → refus → non_nettoyee → null (gris).
+  if (current === null) return 'nettoyee'
+  if (current === 'nettoyee') return 'refus'
+  if (current === 'refus') return 'non_nettoyee'
+  return null // non_nettoyee → gris
 }
 
 /** Statut d'une chambre, avec la convention « absence de ligne = nettoyee ».
@@ -110,9 +122,10 @@ export const CATEGORY_COLOR = {
  * se lit sans légende (rendu par CELL_STATES/cellState). */
 export const LEGEND_ORDER: CellState[] = ['clean', 'refus', 'todo']
 
-/** Décompte des statuts sur les chambres DUES (occupées), en PARTITION (aucun
- * recouvrement) : nettoyées, bloquées (`non_nettoyee`), refus. Chaque chambre due
- * tombe dans exactement une catégorie. */
+/** Décompte des statuts sur un ENSEMBLE de chambres (typiquement « vendues
+ * effectives » = occupées ∪ marquées d'une couleur), en PARTITION (aucun
+ * recouvrement) : nettoyées (défaut inclus), bloquées (`non_nettoyee`), refus.
+ * Chaque chambre de l'ensemble tombe dans exactement une catégorie. */
 export function countStats(
   statuses: ReadonlyMap<number, RoomStatus>,
   occupied: ReadonlySet<number>,

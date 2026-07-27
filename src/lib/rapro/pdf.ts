@@ -159,7 +159,6 @@ function renderRaproDocument(
   y += 20
 
   // --- Tableau complet des chambres par étage (couleurs de statut) ---------
-  const hasOccupancy = occupied.size > 0
   const colW = CONTENT_W / FLOORS.length
   const cellH = 4.6
   const gridTop = y
@@ -168,9 +167,11 @@ function renderRaproDocument(
     pdf.setFont('helvetica', 'bold').setFontSize(7.5).setTextColor(90)
     pdf.text(`Étage ${floor}`, cx + colW / 2, gridTop, { align: 'center' })
     rooms.forEach((room, j) => {
+      // Aligné sur le web : grise si AUCUNE couleur explicite ET non vendue. Le
+      // liseré (carried) est tracé À PART (ci-dessous), il ne colore pas le fond.
       const state = cellState(
         statusOf(statuses, room),
-        hasOccupancy && !occupied.has(room) && !carried.has(room),
+        !statuses.has(room) && !occupied.has(room),
       )
       // Bloquée de la veille : la case garde le fond de son STATUT, un liseré
       // rouge net est tracé par-dessus (cf. plus bas) — fait sur la veille.
