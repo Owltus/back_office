@@ -1,7 +1,18 @@
 import type { ReactNode } from 'react'
 
+import type { KpiBarSegment } from '#/components/analytique/KpiStackedBarChart.tsx'
 import { CATEGORY_COLOR } from '#/lib/rapro/constants.ts'
-import { vendues, type DayStatusCounts } from '#/lib/rapro/monthly.ts'
+import { vendues } from '#/lib/rapro/monthly.ts'
+import type { DayStatusCounts } from '#/lib/rapro/monthly.ts'
+
+/** Segments de l'histogramme empilé des deux vues analytique — mêmes couleurs et
+ * même partition que les colonnes du tableau : nettoyée + bloquée + refus =
+ * chambres vendues. Source unique, importée par les deux boards. */
+export const RAPRO_CHART_SEGMENTS: KpiBarSegment[] = [
+  { key: 'nettoyee', name: 'Nettoyées', color: CATEGORY_COLOR.nettoyee },
+  { key: 'bloquee', name: 'Bloquées', color: CATEGORY_COLOR.bloquee },
+  { key: 'refus', name: 'Refus', color: CATEGORY_COLOR.refus },
+]
 
 /*
  * Colonnes de catégorie partagées par les deux vues analytique du rapprochement

@@ -11,8 +11,9 @@ import {
 import { AnalytiqueTable } from '#/components/analytique/AnalytiqueTable.tsx'
 import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
 import { AnalytiqueBackButton } from '#/components/analytique/AnalytiqueBackButton.tsx'
-import { KpiLineChart } from '#/components/analytique/KpiLineChart.tsx'
+import { KpiStackedBarChart } from '#/components/analytique/KpiStackedBarChart.tsx'
 import {
+  RAPRO_CHART_SEGMENTS,
   RaproCatCells,
   RaproCatHead,
 } from '#/components/rapro/RaproCatColumns.tsx'
@@ -65,7 +66,10 @@ export function RaproMonthlyBoard({
   // useMemo sur `[rows]` n'aurait jamais mémoïsé.
   const chartData = rows.map((r) => ({
     jour: String(r.day),
+    day: r.day,
     nettoyee: r.nettoyee,
+    bloquee: r.bloquee,
+    refus: r.refus,
   }))
 
   const navigate = useNavigate()
@@ -147,16 +151,33 @@ export function RaproMonthlyBoard({
         </tbody>
       </AnalytiqueTable>
 
-      {/* Graphique unique, pleine largeur */}
+      {/* Histogramme empilé par jour : nettoyées + bloquées + refus = chambres
+          vendues, au code couleur des colonnes / cartes. Clic sur une colonne →
+          jour du rapprochement. */}
       <AnalytiqueCharts cols={1}>
-        <KpiLineChart
-          title="Chambres nettoyées par jour"
+        <KpiStackedBarChart
+          title="Répartition des chambres vendues par jour"
           data={chartData}
           xKey="jour"
-          realKey="nettoyee"
-          realName="Nettoyées"
-          realDotRadius={2}
+          segments={RAPRO_CHART_SEGMENTS}
+          onBarClick={(p) => {
+            const day = Number(p.day)
+            if (Number.isFinite(day)) {
+              const mm = String(month).padStart(2, '0')
+              const date = `${year}-${mm}-${String(day).padStart(2, '0')}`
+              navigate({ to: '/rapro', search: { date } })
+            }
+          }}
           tooltipFormatter={(v) => String(v)}
+          labelFormatter={(label) => {
+            const day = Number(label)
+            if (!Number.isFinite(day)) return label
+            return capitalize(
+              format(new Date(year, month - 1, day), 'EEEE d MMMM', {
+                locale: fr,
+              }),
+            )
+          }}
         />
       </AnalytiqueCharts>
     </AnalytiqueShell>

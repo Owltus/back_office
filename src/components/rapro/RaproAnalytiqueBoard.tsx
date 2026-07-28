@@ -12,8 +12,9 @@ import {
 import { AnalytiqueTable } from '#/components/analytique/AnalytiqueTable.tsx'
 import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
 import { YearNav } from '#/components/analytique/YearNav.tsx'
-import { KpiLineChart } from '#/components/analytique/KpiLineChart.tsx'
+import { KpiStackedBarChart } from '#/components/analytique/KpiStackedBarChart.tsx'
 import {
+  RAPRO_CHART_SEGMENTS,
   RaproCatCells,
   RaproCatHead,
 } from '#/components/rapro/RaproCatColumns.tsx'
@@ -119,7 +120,10 @@ export function RaproAnalytiqueBoard() {
     const future = isFutureMonth(m)
     return {
       mois: MONTHS_SHORT[m - 1],
+      month: m,
       nettoyee: future ? null : t.nettoyee,
+      bloquee: future ? null : t.bloquee,
+      refus: future ? null : t.refus,
     }
   })
 
@@ -206,15 +210,28 @@ export function RaproAnalytiqueBoard() {
         </tbody>
       </AnalytiqueTable>
 
-      {/* Graphique unique, pleine largeur */}
+      {/* Histogramme empilé : nettoyées + bloquées + refus = chambres vendues,
+          au code couleur des colonnes / cartes. Clic sur une colonne → détail du
+          mois (comme le tableau). */}
       <AnalytiqueCharts cols={1}>
-        <KpiLineChart
-          title="Chambres nettoyées par mois"
+        <KpiStackedBarChart
+          title="Répartition des chambres vendues par mois"
           data={chartData}
           xKey="mois"
-          realKey="nettoyee"
-          realName="Nettoyées"
+          segments={RAPRO_CHART_SEGMENTS}
+          onBarClick={(p) => {
+            const m = p.month
+            if (typeof m === 'number')
+              navigate({
+                to: '/rapro/analytique/$year/$month',
+                params: { year: String(year), month: String(m) },
+              })
+          }}
           tooltipFormatter={(v) => String(v)}
+          labelFormatter={(label) => {
+            const i = MONTHS_SHORT.indexOf(label)
+            return i >= 0 ? `${monthLabel(year, i + 1)} ${year}` : label
+          }}
         />
       </AnalytiqueCharts>
     </AnalytiqueShell>
