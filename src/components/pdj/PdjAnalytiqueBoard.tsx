@@ -68,9 +68,9 @@ export function PdjAnalytiqueBoard() {
 
   // Moyennes PAR JOUR. Inclus : par jour de service (connu partout). Servis / Extra
   // / Non servis : par jour RENSEIGNÉ (conso saisie) — sinon un jour non renseigné
-  // les tirerait vers le bas. « Servis » = réservés servis (total servi − extra) →
-  // même bucket que le tableau/graphe. Conversion : total servi (extras compris)
-  // sur les présents. `null` si le dénominateur est nul (→ « — »).
+  // les tirerait vers le bas. « Servis » = TOTAL servi (extra compris), comme le
+  // tableau. Conversion : total servi (extras compris) sur les présents. `null` si
+  // le dénominateur est nul (→ « — »).
   const summary = useMemo(() => {
     const totalDays = months.reduce((s, m) => s + m.days, 0)
     const recDays = months.reduce((s, m) => s + m.recordedDays, 0)
@@ -87,7 +87,7 @@ export function PdjAnalytiqueBoard() {
     )
     return {
       avgInclus: totalDays > 0 ? totalIncluded / totalDays : null,
-      avgServis: recDays > 0 ? (totalServed - totalExtra) / recDays : null,
+      avgServis: recDays > 0 ? totalServed / recDays : null,
       avgExtra: recDays > 0 ? totalExtra / recDays : null,
       avgNonServis: recDays > 0 ? totalNonServis / recDays : null,
       // Conversion / Remplissage : sur les seules données RENSEIGNÉES (servi), pas
@@ -134,7 +134,7 @@ export function PdjAnalytiqueBoard() {
     const segs: KpiBarSegment[] = []
     if (chartData.some((d) => d.servisInclus != null)) {
       segs.push(
-        { key: 'servisInclus', name: 'Servis', color: 'var(--chart-1)' },
+        { key: 'servisInclus', name: 'Réservés servis', color: 'var(--chart-1)' },
         { key: 'extra', name: 'Extra', color: 'var(--chart-5)' },
         { key: 'nonVenu', name: 'Non servis', color: 'var(--chart-3)' },
       )
@@ -170,25 +170,25 @@ export function PdjAnalytiqueBoard() {
         <StatCard
           label="Moy. inclus"
           accent="var(--muted-foreground)"
-          hint="PDJ inclus par jour de service (moyenne)"
+          hint="Petits-déjeuners réservés par les clients"
           value={summary.avgInclus != null ? fmtInt(summary.avgInclus) : '—'}
         />
         <StatCard
           label="Moy. servis"
           accent="var(--chart-1)"
-          hint="Réservés servis par jour renseigné (moyenne)"
+          hint="Tous les petits-déjeuners servis, extra compris"
           value={summary.avgServis != null ? fmtInt(summary.avgServis) : '—'}
         />
         <StatCard
           label="Moy. extra"
           accent="var(--chart-5)"
-          hint="Servis sans réservation, par jour renseigné (moyenne)"
+          hint="Petits-déjeuners servis à des clients sans réservation"
           value={summary.avgExtra != null ? fmtInt(summary.avgExtra) : '—'}
         />
         <StatCard
           label="Moy. non servis"
           accent="var(--chart-3)"
-          hint="Réservés non servis, par jour renseigné (moyenne)"
+          hint="Petits-déjeuners réservés dont le client ne s'est pas présenté"
           value={
             summary.avgNonServis != null ? fmtInt(summary.avgNonServis) : '—'
           }
@@ -196,7 +196,7 @@ export function PdjAnalytiqueBoard() {
         <StatCard
           label="Moy. conversion"
           accent="var(--chart-2)"
-          hint="Part des présents servis (extras compris) = total servi ÷ présents"
+          hint="Clients servis rapportés aux clients présents"
           value={
             summary.avgConversion != null
               ? fmtPctInt(summary.avgConversion)
@@ -206,7 +206,7 @@ export function PdjAnalytiqueBoard() {
         <StatCard
           label="Moy. remplissage"
           accent="var(--chart-4)"
-          hint="Part de la capacité clients servie = total servi ÷ (160/jour × jours)"
+          hint="Clients servis rapportés au nombre maximum de clients"
           value={
             summary.avgCoverage != null ? fmtPctInt(summary.avgCoverage) : '—'
           }

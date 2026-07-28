@@ -5,12 +5,13 @@ import { fmtInt, fmtPctInt } from '#/lib/pdj/format.ts'
  * détail mensuel) : en-tête et cellules de valeur/tirets. Les deux vues partagent
  * 9 colonnes (Occupation / Clients / Inclus / Servis / Extra / Non servis /
  * Potentiel / Conversion / Remplissage) ; la vue annuelle ajoute une colonne
- * « Jours » (withDays). Servis / Extra / Non servis forment 3 buckets DISJOINTS
- * (cohérents avec le graphe) : « Servis » = réservés servis (= total servi − extra) ;
- * « Extra » = pris par des clients NON réservés (Σ max(0, servi − inclus) par chambre) ;
- * « Non servis » = réservés/payés mais jamais servis (Σ max(0, inclus − servi) par
- * chambre). Total servi = Servis + Extra (déductible). Le couple
- * Conversion/Remplissage reprend la logique PM/RevPAR de repjour, en base CLIENTS :
+ * « Jours » (withDays). « Servis » = TOTAL des PDJ servis (extra compris) ;
+ * « Extra » = servis à des clients NON réservés (Σ max(0, servi − inclus) par chambre),
+ * un SOUS-ensemble de Servis ; « Non servis » = réservés/payés mais jamais servis
+ * (Σ max(0, inclus − servi) par chambre). Réconciliation : réservés servis = Servis −
+ * Extra ; Inclus = (Servis − Extra) + Non servis. Le GRAPHE, lui, empile 3 tranches
+ * DISJOINTES (réservés servis / extra / non servis) pour ne rien double-compter. Le
+ * couple Conversion/Remplissage reprend la logique PM/RevPAR de repjour, en base CLIENTS :
  *   • « Conversion » = Servis ÷ Présents — comme le PM (par client présent) ;
  *   • « Remplissage » = Servis ÷ capacité CLIENTS (160/jour = 80 ch. × 2) — comme le
  *     RevPAR (rapporté à toute la capacité, donc bas si l'hôtel est peu rempli).
@@ -155,14 +156,14 @@ export function PdjStatCells({
       >
         {fmtInt(stats.included)}
       </td>
-      {/* « Servis » = réservés servis (= total servi − extra) → forme avec Extra /
-          Non servis les 3 buckets DISJOINTS du graphe. Total servi = Servis + Extra
-          (déductible). « — » si la conso n'a pas été saisie (extra null). */}
+      {/* « Servis » = TOTAL des PDJ servis (extra compris). Extra en est un sous-
+          ensemble (servis sans réservation) ; le graphe empile à part la portion
+          réservée (servi − extra) et l'extra. « — » si conso non saisie (extra null). */}
       <td
         className="whitespace-nowrap px-2 py-2 text-center text-xs font-medium tabular-nums text-muted-foreground/50"
         style={stats.extra != null ? { color: 'var(--chart-1)' } : undefined}
       >
-        {stats.extra != null ? fmtInt(stats.served - stats.extra) : '—'}
+        {stats.extra != null ? fmtInt(stats.served) : '—'}
       </td>
       <td
         className="hidden whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums text-muted-foreground/50 sm:table-cell"
