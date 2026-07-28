@@ -30,6 +30,9 @@ const RULE: RGB = [51, 51, 51]
 const POS: RGB = [18, 122, 46]
 const NEG: RGB = [180, 35, 24]
 const AMBER: RGB = [176, 120, 10]
+const INDIGO: RGB = [67, 56, 202]
+const CYAN: RGB = [14, 116, 144]
+const PINK: RGB = [190, 24, 93]
 
 const setDraw = (pdf: jsPDF, c: RGB) => pdf.setDrawColor(c[0], c[1], c[2])
 const setText = (pdf: jsPDF, c: RGB) => pdf.setTextColor(c[0], c[1], c[2])
@@ -40,12 +43,13 @@ const T = (s: string) => s.replace(/\s+/g, ' ').trim()
 
 // --- Lecture de la page (DOM) ---------------------------------------------
 
-type Tone = 'ink' | 'muted' | 'pos' | 'neg' | 'amber'
+type Tone = 'ink' | 'muted' | 'pos' | 'neg' | 'amber' | 'indigo' | 'cyan' | 'pink'
 
 interface PdfCard {
   label: string
   value: string
   sub?: string
+  accent: RGB | null
 }
 interface PdfCell {
   text: string
@@ -67,10 +71,31 @@ export interface AnalytiqueExtract {
   charts: PdfChart[]
 }
 
-/** Déduit le ton d'une cellule/valeur à partir des classes de couleur Tailwind
- * portées par l'élément ou l'un de ses descendants (le PDF, sur fond blanc, ne
- * peut pas réutiliser les couleurs sombres de l'écran — on les REMAPPE). */
+/** Détecte la couleur d'un token de thème posé en STYLE INLINE (les cellules et les
+ * cartes PDJ colorent via style={{color / --tile:'var(--chart-N)'}}, invisibles aux
+ * regex de classe Tailwind). Renvoie le ton, ou null. */
+function styleTone(styleAttr: string): Tone | null {
+  if (/--chart-1\b/.test(styleAttr)) return 'indigo'
+  if (/--chart-2\b/.test(styleAttr)) return 'cyan'
+  if (/--chart-3\b/.test(styleAttr)) return 'amber'
+  if (/--chart-4\b/.test(styleAttr)) return 'pink'
+  if (/--chart-5\b/.test(styleAttr)) return 'pos'
+  if (/--muted-foreground\b/.test(styleAttr)) return 'muted'
+  return null
+}
+
+/** Parse « rgb(r, g, b) » / « rgba(...) » en triplet 0-255, ou null. */
+function parseRgb(s: string): RGB | null {
+  const m = /rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/.exec(s)
+  return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null
+}
+
+/** Déduit le ton d'une cellule/valeur : d'abord le token de thème en style inline,
+ * sinon les classes de couleur Tailwind (le PDF, sur fond blanc, ne peut pas
+ * réutiliser les couleurs claires de l'écran — on les REMAPPE en couleurs document). */
 function toneOf(el: Element): Tone {
+  const st = styleTone(el.getAttribute('style') ?? '')
+  if (st) return st
   const cls =
     el.className +
     ' ' +
@@ -168,6 +193,15 @@ export async function extractAnalytique(
   ).map((tile) => {
     const label = readText(tile.querySelector('.stat-tile__label'))
     const valueEl = tile.querySelector('.stat-tile__value')
+    // Liseré d'accent : ton du token de thème (→ couleur document, cohérente avec le
+    // tableau) si présent, sinon couleur RÉELLE du rail (cartes à accent hex).
+    const tone = styleTone(tile.getAttribute('style') ?? '')
+    const railEl = tile.querySelector('.stat-tile__rail')
+    const accent: RGB | null = tone
+      ? toneColor(tone)
+      : railEl
+        ? parseRgb(getComputedStyle(railEl).backgroundColor)
+        : null
     // Carte en FRACTION (valeur / référence) : la valeur enveloppe plusieurs
     // spans (valeur, filet, référence) — on les sépare pour ne pas les coller,
     // la référence passant en sous-titre « / objectif » (comme le PDF repjour).
@@ -177,10 +211,11 @@ export async function extractAnalytique(
         label,
         value: readText(valueEl.firstElementChild),
         sub: ref ? `/ ${ref}` : undefined,
+        accent,
       }
     }
     const sub = readText(valueEl?.nextElementSibling)
-    return { label, value: readText(valueEl), sub: sub || undefined }
+    return { label, value: readText(valueEl), sub: sub || undefined, accent }
   })
 
   // Tableau.
@@ -242,6 +277,12 @@ function toneColor(t: Tone): RGB {
       return NEG
     case 'amber':
       return AMBER
+    case 'indigo':
+      return INDIGO
+    case 'cyan':
+      return CYAN
+    case 'pink':
+      return PINK
     default:
       return INK
   }
@@ -334,6 +375,11 @@ function renderDocument(
       const mid = cx + cw / 2
       setDraw(pdf, BORDER)
       pdf.setLineWidth(0.25).rect(cx, y, cw, ch)
+      // Liseré de couleur (accent) à gauche, comme à l'écran.
+      if (c.accent) {
+        pdf.setFillColor(c.accent[0], c.accent[1], c.accent[2])
+        pdf.rect(cx + 0.3, y + 0.3, 1, ch - 0.6, 'F')
+      }
       // Titre centré, une seule ligne, taille uniforme.
       setText(pdf, GRAY)
       pdf.setFont('helvetica', 'bold').setFontSize(titleSize)
@@ -369,12 +415,19 @@ function renderDocument(
       pdf.setFont('helvetica', 'bold').setFontSize(7)
       // 1re colonne (Mois / Jour) : en-tête à gauche.
       pdf.text((table.columns[0] ?? '').toUpperCase(), LEFT, y)
-      // Autres en-têtes : centrés.
+      // Autres en-têtes : centrés, RÉDUITS pour tenir sur une seule ligne (au lieu
+      // d'un retour à la ligne en plein mot type « CONVERSIO/N » quand la colonne est
+      // étroite — cas des tableaux denses, ex. PDJ à 9 colonnes de valeur).
       for (let j = 0; j < valCols; j++) {
-        pdf.text((table.columns[j + 1] ?? '').toUpperCase(), colMid(j), y, {
-          align: 'center',
-          maxWidth: colW - 1,
-        })
+        fitCenteredText(
+          pdf,
+          (table.columns[j + 1] ?? '').toUpperCase(),
+          colMid(j),
+          y,
+          colW - 1,
+          7,
+          4.5,
+        )
       }
       y += 2
       setDraw(pdf, RULE)

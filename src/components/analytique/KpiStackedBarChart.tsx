@@ -2,6 +2,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -11,10 +12,10 @@ import {
 /*
  * Histogramme empilé réutilisable (Recharts) — une barre par point sur l'axe X,
  * chaque barre découpée en segments EMPILÉS (proportionnels). Pendant « barres »
- * du KpiLineChart : même habillage thème (grille, axes, infobulle). Pas de légende
- * en bas — l'infobulle personnalisée porte déjà la pastille de couleur de chaque
- * segment. Client-only (monté sous des îlots `ssr: false`). Place dans le socle
- * partagé `components/analytique/`.
+ * du KpiLineChart : même habillage thème (grille, axes, infobulle). Légende en bas
+ * OPTIONNELLE (`showLegend`, masquée par défaut car l'infobulle porte déjà la
+ * pastille de couleur de chaque segment). Client-only (monté sous des îlots
+ * `ssr: false`). Place dans le socle partagé `components/analytique/`.
  *
  * Les segments à `null` ne dessinent aucune tranche (ex. un mois/jour sans conso
  * saisie). Couleurs passées en clair par l'appelant (tokens `--chart-*`), lisibles
@@ -46,6 +47,9 @@ interface KpiStackedBarChartProps {
   /** Formateur du LIBELLÉ (en-tête) de l'infobulle. L'axe X reste abrégé, mais le
    * survol peut afficher le libellé complet (ex. « Fév » → « Février 2026 »). */
   labelFormatter?: (label: string) => string
+  /** Affiche la légende en bas (défaut : masquée — l'infobulle porte déjà les
+   * pastilles de couleur). Activée sur les vues où la place le permet (ex. annuelle). */
+  showLegend?: boolean
 }
 
 const AXIS = 'var(--muted-foreground)'
@@ -137,6 +141,7 @@ export function KpiStackedBarChart({
   yTickFormatter,
   tooltipFormatter,
   labelFormatter,
+  showLegend = false,
 }: KpiStackedBarChartProps) {
   return (
     <div className="rounded-xl border border-border bg-card p-4">
@@ -163,6 +168,7 @@ export function KpiStackedBarChart({
               />
             }
           />
+          {showLegend && <Legend wrapperStyle={{ fontSize: 11 }} />}
           {segments.map((seg) => (
             <Bar
               key={seg.key}
