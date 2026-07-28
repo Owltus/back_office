@@ -83,6 +83,16 @@ function styleTone(styleAttr: string): Tone | null {
   if (/--chart-4\b/.test(styleAttr)) return 'pink'
   if (/--chart-5\b/.test(styleAttr)) return 'pos'
   if (/--muted-foreground\b/.test(styleAttr)) return 'muted'
+  // Couleurs de marque posées EN DUR (pages rapro : #818cf8 vendues, #f87171
+  // bloquée, #94a3b8 moyenne), hors du système de tokens --chart. Elles arrivent
+  // en HEX (custom property `--tile`, JSON de légende) OU en rgb(...) — le CSSOM
+  // sérialise ainsi une couleur d'un `color:` inline. On mappe les DEUX formes.
+  if (/#818cf8/i.test(styleAttr) || /\b129[,\s]+140[,\s]+248\b/.test(styleAttr))
+    return 'indigo'
+  if (/#f87171/i.test(styleAttr) || /\b248[,\s]+113[,\s]+113\b/.test(styleAttr))
+    return 'neg'
+  if (/#94a3b8/i.test(styleAttr) || /\b148[,\s]+163[,\s]+184\b/.test(styleAttr))
+    return 'muted'
   return null
 }
 
@@ -96,7 +106,13 @@ function parseRgb(s: string): RGB | null {
  * sinon les classes de couleur Tailwind (le PDF, sur fond blanc, ne peut pas
  * réutiliser les couleurs claires de l'écran — on les REMAPPE en couleurs document). */
 function toneOf(el: Element): Tone {
-  const st = styleTone(el.getAttribute('style') ?? '')
+  // Style INLINE de couleur, sur l'élément OU un descendant : certaines cellules
+  // colorent un <span> intérieur (ex. rapro RaproCatCells), d'autres le <td>
+  // directement (ex. PDJ). On rassemble tous les styles inline avant de déduire le ton.
+  const inlineStyles = [el, ...Array.from(el.querySelectorAll('*'))]
+    .map((e) => e.getAttribute('style') ?? '')
+    .join(' ')
+  const st = styleTone(inlineStyles)
   if (st) return st
   const cls =
     el.className +
