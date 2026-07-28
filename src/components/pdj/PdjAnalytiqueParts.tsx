@@ -67,23 +67,41 @@ export function PdjStatsHead({
       <th className="hidden px-2 py-2 text-center text-xs font-medium text-muted-foreground sm:table-cell">
         Inclus
       </th>
-      <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
+      {/* En-têtes colorées comme leurs valeurs / cartes (Servis indigo, Extra vert,
+          Non servis ambre, Conversion cyan, Remplissage rose). L'inline `color`
+          l'emporte sur `text-muted-foreground` — même procédé que les cellules. */}
+      <th
+        className="px-2 py-2 text-center text-xs font-medium text-muted-foreground"
+        style={{ color: 'var(--chart-1)' }}
+      >
         Servis
       </th>
-      <th className="hidden px-2 py-2 text-center text-xs font-medium text-muted-foreground sm:table-cell">
+      <th
+        className="hidden px-2 py-2 text-center text-xs font-medium text-muted-foreground sm:table-cell"
+        style={{ color: 'var(--chart-5)' }}
+      >
         Extra
       </th>
-      <th className="hidden whitespace-nowrap px-2 py-2 text-center text-xs font-medium text-muted-foreground sm:table-cell">
+      <th
+        className="hidden whitespace-nowrap px-2 py-2 text-center text-xs font-medium text-muted-foreground sm:table-cell"
+        style={{ color: 'var(--chart-3)' }}
+      >
         Non servis
       </th>
       <th className="hidden px-2 py-2 text-center text-xs font-medium text-muted-foreground sm:table-cell">
         Potentiel
       </th>
-      <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
+      <th
+        className="px-2 py-2 text-center text-xs font-medium text-muted-foreground"
+        style={{ color: 'var(--chart-2)' }}
+      >
         <span className="hidden sm:inline">Conversion</span>
         <span className="sm:hidden">Conv.</span>
       </th>
-      <th className="hidden px-3 py-2 text-center text-xs font-medium text-muted-foreground sm:table-cell">
+      <th
+        className="hidden px-3 py-2 text-center text-xs font-medium text-muted-foreground sm:table-cell"
+        style={{ color: 'var(--chart-4)' }}
+      >
         Remplissage
       </th>
     </tr>
