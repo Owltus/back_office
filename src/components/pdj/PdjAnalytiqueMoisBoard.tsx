@@ -78,21 +78,23 @@ export function PdjAnalytiqueMoisBoard({
     const recorded = stats.filter((d) => d.extra != null)
     const recDays = recorded.length
     const totalIncluded = stats.reduce((s, d) => s + d.included, 0)
-    const totalGuests = stats.reduce((s, d) => s + d.guests, 0)
     const totalServed = stats.reduce((s, d) => s + d.served, 0)
     const totalExtra = recorded.reduce((s, d) => s + (d.extra ?? 0), 0)
     const totalNonServis = recorded.reduce((s, d) => s + (d.noShow ?? 0), 0)
+    // Clients des SEULS jours renseignés (servi saisi) — dénominateur des taux
+    // servi-dépendants, pour ne pas les diluer avec les jours réservés non saisis.
+    const recGuests = recorded.reduce((s, d) => s + d.guests, 0)
     return {
       avgInclus: totalDays > 0 ? totalIncluded / totalDays : 0,
       avgServis: recDays > 0 ? (totalServed - totalExtra) / recDays : null,
       avgExtra: recDays > 0 ? totalExtra / recDays : null,
       avgNonServis: recDays > 0 ? totalNonServis / recDays : null,
-      // Conversion / Remplissage : « — » si AUCUN servi sur la période (comme les
-      // colonnes du tableau), pas un trompeur 0 %.
-      avgConversion: totalServed > 0 ? (totalServed / totalGuests) * 100 : null,
+      // Conversion / Remplissage : sur les seuls jours RENSEIGNÉS (servi), pas dilué
+      // par les jours réservés-mais-non-saisis. « — » si aucun servi.
+      avgConversion: recGuests > 0 ? (totalServed / recGuests) * 100 : null,
       avgCoverage:
-        totalServed > 0
-          ? (totalServed / (MAX_CLIENTS_PER_DAY * totalDays)) * 100
+        recDays > 0
+          ? (totalServed / (MAX_CLIENTS_PER_DAY * recDays)) * 100
           : null,
     }
   }, [stats])
