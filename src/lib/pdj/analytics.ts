@@ -156,12 +156,13 @@ export function aggregatePdjMonthly(
     const s = months[i]
     s.potential = Math.max(0, s.guests - s.included)
     s.avgOccupancy = s.days > 0 ? occSum[i] / s.days : 0
-    // Conversion : servi rapporté aux clients PRÉSENTS (base clients).
-    s.conversion = s.guests > 0 ? (s.served / s.guests) * 100 : null
-    // Remplissage : servi rapporté à la capacité CLIENTS de la période (160/j × jours
-    // renseignés), pas au nombre de chambres. Bas si l'hôtel est peu rempli en clients.
+    // Conversion / Remplissage : « — » (null) si AUCUN servi (donnée non saisie),
+    // comme extra/non-servis — pas un trompeur 0 %. Conversion = servi ÷ présents ;
+    // Remplissage = servi ÷ capacité CLIENTS (160/j × jours de service).
+    s.conversion =
+      s.served > 0 && s.guests > 0 ? (s.served / s.guests) * 100 : null
     s.coverage =
-      s.days > 0 ? (s.served / (MAX_CLIENTS_PER_DAY * s.days)) * 100 : null
+      s.served > 0 ? (s.served / (MAX_CLIENTS_PER_DAY * s.days)) * 100 : null
   }
   return months
 }
@@ -264,10 +265,11 @@ export function aggregatePdjDaily(
         noShow: s.served > 0 ? s.noShow : null,
         potential: Math.max(0, s.guests - s.included),
         occupancy: (rooms / TOTAL_ROOMS) * 100,
-        // Conversion : base clients présents. Remplissage : base capacité clients du
-        // jour (160 = 80 ch. × 2), pas les chambres.
-        conversion: s.guests > 0 ? (s.served / s.guests) * 100 : null,
-        coverage: (s.served / MAX_CLIENTS_PER_DAY) * 100,
+        // Conversion / Remplissage : « — » si AUCUN servi ce jour (comme extra/non-
+        // servis). Conversion = servi ÷ présents ; Remplissage = servi ÷ 160 (capacité).
+        conversion:
+          s.served > 0 && s.guests > 0 ? (s.served / s.guests) * 100 : null,
+        coverage: s.served > 0 ? (s.served / MAX_CLIENTS_PER_DAY) * 100 : null,
       }
     })
 }

@@ -84,10 +84,11 @@ export function PdjAnalytiqueBoard() {
       avgServis: recDays > 0 ? (totalServed - totalExtra) / recDays : null,
       avgExtra: recDays > 0 ? totalExtra / recDays : null,
       avgNonServis: recDays > 0 ? totalNonServis / recDays : null,
-      avgConversion: totalGuests > 0 ? (totalServed / totalGuests) * 100 : null,
-      // Remplissage : total servi ÷ capacité clients (160/jour) sur les jours de service.
+      // Conversion / Remplissage : « — » si AUCUN servi sur la période (comme les
+      // colonnes du tableau), pas un trompeur 0 %.
+      avgConversion: totalServed > 0 ? (totalServed / totalGuests) * 100 : null,
       avgCoverage:
-        totalDays > 0
+        totalServed > 0
           ? (totalServed / (MAX_CLIENTS_PER_DAY * totalDays)) * 100
           : null,
     }
@@ -159,25 +160,25 @@ export function PdjAnalytiqueBoard() {
           (inclus gris, servis indigo, extra vert, non servis ambre, conversion cyan). */}
       <AnalytiqueCardsGrid cols={6}>
         <StatCard
-          label="Moyenne inclus"
+          label="Moy. inclus"
           accent="var(--muted-foreground)"
           hint="PDJ inclus par jour de service (moyenne)"
           value={summary.avgInclus != null ? fmtInt(summary.avgInclus) : '—'}
         />
         <StatCard
-          label="Moyenne servis"
+          label="Moy. servis"
           accent="var(--chart-1)"
           hint="Réservés servis par jour renseigné (moyenne)"
           value={summary.avgServis != null ? fmtInt(summary.avgServis) : '—'}
         />
         <StatCard
-          label="Moyenne extra"
+          label="Moy. extra"
           accent="var(--chart-5)"
           hint="Servis sans réservation, par jour renseigné (moyenne)"
           value={summary.avgExtra != null ? fmtInt(summary.avgExtra) : '—'}
         />
         <StatCard
-          label="Moyenne non servis"
+          label="Moy. non servis"
           accent="var(--chart-3)"
           hint="Réservés non servis, par jour renseigné (moyenne)"
           value={
@@ -185,7 +186,7 @@ export function PdjAnalytiqueBoard() {
           }
         />
         <StatCard
-          label="Moyenne conversion"
+          label="Moy. conversion"
           accent="var(--chart-2)"
           hint="Part des présents servis (extras compris) = total servi ÷ présents"
           value={
@@ -195,7 +196,7 @@ export function PdjAnalytiqueBoard() {
           }
         />
         <StatCard
-          label="Moyenne remplissage"
+          label="Moy. remplissage"
           accent="var(--chart-4)"
           hint="Part de la capacité clients servie = total servi ÷ (160/jour × jours)"
           value={
@@ -230,7 +231,7 @@ export function PdjAnalytiqueBoard() {
                     hasData ? 'text-foreground' : 'text-muted-foreground'
                   }`}
                 >
-                  {MONTHS_SHORT[m.month - 1]}
+                  {MONTHS_LABELS[m.month - 1]}
                 </td>
                 <PdjStatCells
                   stats={
@@ -264,6 +265,7 @@ export function PdjAnalytiqueBoard() {
           data={chartData}
           xKey="mois"
           segments={segments}
+          showLegend
           tooltipFormatter={fmtInt}
           labelFormatter={(label) => {
             // L'axe X est abrégé (« Fév ») ; l'infobulle montre le mois complet.
