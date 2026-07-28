@@ -1,11 +1,22 @@
-import { fmtInt, fmtPct } from '#/lib/pdj/format.ts'
+import { fmtInt, fmtPctInt } from '#/lib/pdj/format.ts'
 
 /*
  * Briques de tableau partagées par les deux vues analytique PDJ (annuelle et
  * détail mensuel) : en-tête et cellules de valeur/tirets. Les deux vues partagent
- * 5 colonnes (Occupation / Clients / Inclus / Servis / Potentiel) ; la vue
- * annuelle ajoute une colonne « Jours » (withDays). Les CARTES de synthèse, elles,
- * diffèrent volontairement entre les deux vues et restent propres à chaque board.
+ * 9 colonnes (Occupation / Clients / Inclus / Servis / Extra / Non servis /
+ * Potentiel / Conversion / Remplissage) ; la vue annuelle ajoute une colonne
+ * « Jours » (withDays). Servis / Extra / Non servis forment 3 buckets DISJOINTS
+ * (cohérents avec le graphe) : « Servis » = réservés servis (= total servi − extra) ;
+ * « Extra » = pris par des clients NON réservés (Σ max(0, servi − inclus) par chambre) ;
+ * « Non servis » = réservés/payés mais jamais servis (Σ max(0, inclus − servi) par
+ * chambre). Total servi = Servis + Extra (déductible). Le couple
+ * Conversion/Remplissage reprend la logique PM/RevPAR de repjour, en base CLIENTS :
+ *   • « Conversion » = Servis ÷ Présents — comme le PM (par client présent) ;
+ *   • « Remplissage » = Servis ÷ capacité CLIENTS (160/jour = 80 ch. × 2) — comme le
+ *     RevPAR (rapporté à toute la capacité, donc bas si l'hôtel est peu rempli).
+ * Les deux sont calculées dans le métier (`analytics.ts`) et valent `null` (« — »)
+ * quand elles ne sont pas calculables. Les CARTES de synthèse diffèrent volontairement
+ * entre les deux vues et restent propres à chaque board.
  */
 
 /** Métriques d'une ligne (mois ou jour). `days` seulement pour la vue annuelle. */
@@ -14,7 +25,15 @@ export interface PdjRowStats {
   guests: number
   included: number
   served: number
+  /** null = conso non saisie ce jour/mois → « — » (non calculable). */
+  extra: number | null
+  /** null = conso non saisie → « — » (pas de « non servis » sans servi). */
+  noShow: number | null
   potential: number
+  /** Conversion (%) = servi ÷ présents. null → « — ». Calculée en amont. */
+  conversion: number | null
+  /** Remplissage (%) = servi ÷ capacité clients. null → « — ». Calculée en amont. */
+  coverage: number | null
   days?: number
 }
 
@@ -50,8 +69,21 @@ export function PdjStatsHead({
       <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
         Servis
       </th>
-      <th className="hidden px-3 py-2 text-center text-xs font-medium text-muted-foreground sm:table-cell">
+      <th className="hidden px-2 py-2 text-center text-xs font-medium text-muted-foreground sm:table-cell">
+        Extra
+      </th>
+      <th className="hidden whitespace-nowrap px-2 py-2 text-center text-xs font-medium text-muted-foreground sm:table-cell">
+        Non servis
+      </th>
+      <th className="hidden px-2 py-2 text-center text-xs font-medium text-muted-foreground sm:table-cell">
         Potentiel
+      </th>
+      <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
+        <span className="hidden sm:inline">Conversion</span>
+        <span className="sm:hidden">Conv.</span>
+      </th>
+      <th className="hidden px-3 py-2 text-center text-xs font-medium text-muted-foreground sm:table-cell">
+        Remplissage
       </th>
     </tr>
   )
@@ -86,6 +118,18 @@ export function PdjStatCells({
         <td className="px-2 py-2 text-center text-xs text-muted-foreground/50">
           —
         </td>
+        <td className="hidden px-2 py-2 text-center text-xs text-muted-foreground/50 sm:table-cell">
+          —
+        </td>
+        <td className="hidden px-2 py-2 text-center text-xs text-muted-foreground/50 sm:table-cell">
+          —
+        </td>
+        <td className="hidden px-2 py-2 text-center text-xs text-muted-foreground/50 sm:table-cell">
+          —
+        </td>
+        <td className="px-2 py-2 text-center text-xs text-muted-foreground/50">
+          —
+        </td>
         <td className="hidden px-3 py-2 text-center text-xs text-muted-foreground/50 sm:table-cell">
           —
         </td>
@@ -100,19 +144,54 @@ export function PdjStatCells({
         </td>
       )}
       <td className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums">
-        {fmtPct(stats.occupancy)}
+        {fmtPctInt(stats.occupancy)}
       </td>
       <td className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums">
         {fmtInt(stats.guests)}
       </td>
-      <td className="hidden whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums sm:table-cell">
+      <td
+        className="hidden whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums sm:table-cell"
+        style={{ color: 'var(--muted-foreground)' }}
+      >
         {fmtInt(stats.included)}
       </td>
-      <td className="whitespace-nowrap px-2 py-2 text-center text-xs font-medium tabular-nums text-foreground">
-        {fmtInt(stats.served)}
+      {/* « Servis » = réservés servis (= total servi − extra) → forme avec Extra /
+          Non servis les 3 buckets DISJOINTS du graphe. Total servi = Servis + Extra
+          (déductible). « — » si la conso n'a pas été saisie (extra null). */}
+      <td
+        className="whitespace-nowrap px-2 py-2 text-center text-xs font-medium tabular-nums text-muted-foreground/50"
+        style={stats.extra != null ? { color: 'var(--chart-1)' } : undefined}
+      >
+        {stats.extra != null ? fmtInt(stats.served - stats.extra) : '—'}
       </td>
-      <td className="hidden whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums text-muted-foreground sm:table-cell">
+      <td
+        className="hidden whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums text-muted-foreground/50 sm:table-cell"
+        style={stats.extra != null ? { color: 'var(--chart-5)' } : undefined}
+      >
+        {stats.extra != null ? fmtInt(stats.extra) : '—'}
+      </td>
+      <td
+        className="hidden whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums text-muted-foreground/50 sm:table-cell"
+        style={stats.noShow != null ? { color: 'var(--chart-3)' } : undefined}
+      >
+        {stats.noShow != null ? fmtInt(stats.noShow) : '—'}
+      </td>
+      <td className="hidden whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums text-muted-foreground sm:table-cell">
         {fmtInt(stats.potential)}
+      </td>
+      {/* Conversion / Remplissage : calculées en amont (métier), base CLIENTS.
+          Conversion en cyan (--chart-2), même code couleur que sa carte de synthèse. */}
+      <td
+        className="whitespace-nowrap px-2 py-2 text-center text-xs font-medium tabular-nums text-muted-foreground/50"
+        style={stats.conversion != null ? { color: 'var(--chart-2)' } : undefined}
+      >
+        {stats.conversion != null ? fmtPctInt(stats.conversion) : '—'}
+      </td>
+      <td
+        className="hidden whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums text-muted-foreground/50 sm:table-cell"
+        style={stats.coverage != null ? { color: 'var(--chart-4)' } : undefined}
+      >
+        {stats.coverage != null ? fmtPctInt(stats.coverage) : '—'}
       </td>
     </>
   )

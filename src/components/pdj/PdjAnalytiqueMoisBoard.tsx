@@ -10,15 +10,16 @@ import {
 import { AnalytiqueTable } from '#/components/analytique/AnalytiqueTable.tsx'
 import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
 import { AnalytiqueBackButton } from '#/components/analytique/AnalytiqueBackButton.tsx'
-import { KpiLineChart } from '#/components/analytique/KpiLineChart.tsx'
+import { KpiStackedBarChart } from '#/components/analytique/KpiStackedBarChart.tsx'
+import type { KpiBarSegment } from '#/components/analytique/KpiStackedBarChart.tsx'
 import {
   PdjStatCells,
   PdjStatsHead,
 } from '#/components/pdj/PdjAnalytiqueParts.tsx'
 import { fetchRange } from '#/lib/pdj/service.ts'
-import { aggregatePdjDaily } from '#/lib/pdj/analytics.ts'
-import { fmtInt, fmtPct } from '#/lib/pdj/format.ts'
-import { MONTHS_LABELS } from '#/lib/repjour/constants.ts'
+import { aggregatePdjDaily, MAX_CLIENTS_PER_DAY } from '#/lib/pdj/analytics.ts'
+import { fmtInt, fmtPctInt } from '#/lib/pdj/format.ts'
+import { DAY_NAMES, MONTHS_LABELS } from '#/lib/repjour/constants.ts'
 
 /*
  * Détail analytique PDJ d'un mois, jour par jour — calqué sur le gabarit
@@ -26,9 +27,10 @@ import { MONTHS_LABELS } from '#/lib/repjour/constants.ts'
  *
  * Charge en LECTURE les lignes du mois (fetchRange), les agrège par jour
  * (aggregatePdjDaily), puis rend : cartes de synthèse du mois, tableau jour par
- * jour et deux graphiques (PDJ servis/inclus/potentiel, occupation). `year` /
- * `month` viennent de la route (params $year/$month). Aucune écriture Supabase
- * — uniquement des `select`.
+ * jour et un histogramme empilé (par jour : Servis + Extra + Non servis ;
+ * repli sur l'Inclus attendu, couleur neutre, si la conso du jour n'a pas été
+ * saisie). `year` / `month` viennent de la route (params $year/$month). Aucune
+ * écriture Supabase — uniquement des `select`.
  */
 
 const DAY_NAMES_SHORT = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam']
@@ -69,31 +71,79 @@ export function PdjAnalytiqueMoisBoard({
     [lastDay],
   )
 
+  // Moyennes par jour (cf. PdjAnalytiqueBoard). Inclus : par jour de service.
+  // Servis (= servi − extra) / Extra / Non servis : par jour RENSEIGNÉ (conso saisie).
+  // Conversion : total servi (extras compris) ÷ présents. `null` → « — ».
   const summary = useMemo(() => {
-    const count = stats.length
+    const totalDays = stats.length
+    const recorded = stats.filter((d) => d.extra != null)
+    const recDays = recorded.length
+    const totalIncluded = stats.reduce((s, d) => s + d.included, 0)
+    const totalGuests = stats.reduce((s, d) => s + d.guests, 0)
+    const totalServed = stats.reduce((s, d) => s + d.served, 0)
+    const totalExtra = recorded.reduce((s, d) => s + (d.extra ?? 0), 0)
+    const totalNonServis = recorded.reduce((s, d) => s + (d.noShow ?? 0), 0)
     return {
-      coveredDays: count,
-      totalServed: stats.reduce((s, d) => s + d.served, 0),
-      totalPotential: stats.reduce((s, d) => s + d.potential, 0),
-      avgOccupancy:
-        count > 0 ? stats.reduce((s, d) => s + d.occupancy, 0) / count : 0,
+      avgInclus: totalDays > 0 ? totalIncluded / totalDays : 0,
+      avgServis: recDays > 0 ? (totalServed - totalExtra) / recDays : null,
+      avgExtra: recDays > 0 ? totalExtra / recDays : null,
+      avgNonServis: recDays > 0 ? totalNonServis / recDays : null,
+      avgConversion: totalGuests > 0 ? (totalServed / totalGuests) * 100 : null,
+      // Remplissage : total servi ÷ capacité clients (160/jour) sur les jours de service.
+      avgCoverage:
+        totalDays > 0
+          ? (totalServed / (MAX_CLIENTS_PER_DAY * totalDays)) * 100
+          : null,
     }
   }, [stats])
 
+  // Une barre par jour. Jour RENSEIGNÉ (conso saisie) → empilement disjoint Servis
+  // inclus (= servi − extra) + Extra + Non servis. Jour SANS conso → repli sur
+  // l'Inclus attendu (autre couleur), pour ne pas afficher une barre vide.
   const chartData = useMemo(
     () =>
       days.map((day) => {
         const s = byDay.get(day)
+        const jour = String(day)
+        if (s && s.extra != null && s.noShow != null) {
+          return {
+            jour,
+            servisInclus: s.served - s.extra,
+            extra: s.extra,
+            nonVenu: s.noShow,
+            inclus: null,
+          }
+        }
         return {
-          jour: String(day),
-          servis: s ? s.served : null,
+          jour,
+          servisInclus: null,
+          extra: null,
+          nonVenu: null,
           inclus: s ? s.included : null,
-          potentiel: s ? s.potential : null,
-          occ: s ? s.occupancy : null,
         }
       }),
     [days, byDay],
   )
+
+  // Segments présents seulement s'ils portent au moins une valeur (légende propre).
+  const segments = useMemo<KpiBarSegment[]>(() => {
+    const segs: KpiBarSegment[] = []
+    if (chartData.some((d) => d.servisInclus != null)) {
+      segs.push(
+        { key: 'servisInclus', name: 'Servis', color: 'var(--chart-1)' },
+        { key: 'extra', name: 'Extra', color: 'var(--chart-5)' },
+        { key: 'nonVenu', name: 'Non servis', color: 'var(--chart-3)' },
+      )
+    }
+    if (chartData.some((d) => d.inclus != null)) {
+      segs.push({
+        key: 'inclus',
+        name: 'Inclus (non saisi)',
+        color: 'var(--muted-foreground)',
+      })
+    }
+    return segs
+  }, [chartData])
 
   const monthLabel = MONTHS_LABELS[month - 1] || ''
 
@@ -106,32 +156,60 @@ export function PdjAnalytiqueMoisBoard({
       loading={loading}
       printTitle={`PDJ · ${monthLabel} ${year}`}
       skeleton={{
-        cols: 5,
-        charts: 2,
+        cols: 9,
+        charts: 1,
         rows: new Date(year, month, 0).getDate(),
+        cards: 6,
+        cardCols: 6,
+        cardLines: 2,
       }}
     >
-      {/* Synthèse du mois */}
-      <AnalytiqueCardsGrid>
+      {/* Synthèse du mois — moyennes par jour, aux COULEURS des buckets du graphe
+          (inclus gris, servis indigo, extra vert, non servis ambre, conversion cyan). */}
+      <AnalytiqueCardsGrid cols={6}>
         <StatCard
-          label="Jours couverts"
-          accent="#818cf8"
-          value={fmtInt(summary.coveredDays)}
+          label="Moyenne inclus"
+          accent="var(--muted-foreground)"
+          hint="PDJ inclus par jour de service (moyenne)"
+          value={fmtInt(summary.avgInclus)}
         />
         <StatCard
-          label="Taux d'occupation moyen"
-          accent="#38bdf8"
-          value={fmtPct(summary.avgOccupancy)}
+          label="Moyenne servis"
+          accent="var(--chart-1)"
+          hint="Réservés servis par jour renseigné (moyenne)"
+          value={summary.avgServis != null ? fmtInt(summary.avgServis) : '—'}
         />
         <StatCard
-          label="PDJ servis"
-          accent="#34d399"
-          value={fmtInt(summary.totalServed)}
+          label="Moyenne extra"
+          accent="var(--chart-5)"
+          hint="Servis sans réservation, par jour renseigné (moyenne)"
+          value={summary.avgExtra != null ? fmtInt(summary.avgExtra) : '—'}
         />
         <StatCard
-          label="Potentiel non inclus"
-          accent="#fbbf24"
-          value={fmtInt(summary.totalPotential)}
+          label="Moyenne non servis"
+          accent="var(--chart-3)"
+          hint="Réservés non servis, par jour renseigné (moyenne)"
+          value={
+            summary.avgNonServis != null ? fmtInt(summary.avgNonServis) : '—'
+          }
+        />
+        <StatCard
+          label="Moyenne conversion"
+          accent="var(--chart-2)"
+          hint="Part des présents servis (extras compris) = total servi ÷ présents"
+          value={
+            summary.avgConversion != null
+              ? fmtPctInt(summary.avgConversion)
+              : '—'
+          }
+        />
+        <StatCard
+          label="Moyenne remplissage"
+          accent="var(--chart-4)"
+          hint="Part de la capacité clients servie = total servi ÷ (160/jour × jours)"
+          value={
+            summary.avgCoverage != null ? fmtPctInt(summary.avgCoverage) : '—'
+          }
         />
       </AnalytiqueCardsGrid>
 
@@ -166,30 +244,25 @@ export function PdjAnalytiqueMoisBoard({
         </tbody>
       </AnalytiqueTable>
 
-      {/* Graphiques */}
-      <AnalytiqueCharts>
-        <KpiLineChart
-          title="Petits-déjeuners par jour"
+      {/* Histogramme empilé par jour : Servis + Extra + Non servis (répartition
+          disjointe des PDJ) ; repli sur l'Inclus attendu, couleur neutre, quand la
+          conso du jour n'a pas été saisie. */}
+      <AnalytiqueCharts cols={1}>
+        <KpiStackedBarChart
+          title="Répartition des petits-déjeuners par jour"
           data={chartData}
           xKey="jour"
-          realKey="servis"
-          projKey="inclus"
-          budgetKey="potentiel"
-          realName="Servis"
-          projName="Inclus"
-          budgetName="Potentiel"
-          realDotRadius={2}
+          segments={segments}
           tooltipFormatter={fmtInt}
-        />
-        <KpiLineChart
-          title="Taux d'occupation par jour"
-          data={chartData}
-          xKey="jour"
-          realKey="occ"
-          realName="Occupation"
-          realDotRadius={2}
-          yDomain={[0, 100]}
-          tooltipFormatter={fmtPct}
+          labelFormatter={(label) => {
+            // L'axe X n'affiche que le numéro du jour ; l'infobulle donne le jour de
+            // la semaine et la date complète (il y a la place au survol).
+            const day = Number(label)
+            if (!Number.isFinite(day)) return label
+            const weekday = DAY_NAMES[new Date(year, month - 1, day).getDay()]
+            const cap = weekday.charAt(0).toUpperCase() + weekday.slice(1)
+            return `${cap} ${day} ${MONTHS_LABELS[month - 1].toLowerCase()} ${year}`
+          }}
         />
       </AnalytiqueCharts>
     </AnalytiqueShell>
