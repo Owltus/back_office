@@ -1160,18 +1160,39 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
         </div>
       </div>
 
-      {/* Légende — sous le planning, alignée à droite (déplacée de l'en-tête). */}
-      <div className="flex flex-wrap items-center justify-end gap-3 text-xs">
-        {STATUS_ORDER.map((s) => (
-          <span key={s} className="flex items-center gap-1.5">
-            <span className={cn('size-2.5 rounded-full', STATUS[s].dot)} />
-            {STATUS[s].label}
+      {/* Légende — sous le planning. Gestes souris à GAUCHE (le glyphe montre déjà
+          le bouton, façon rapro), statuts couleur à DROITE. Les gestes n'existent
+          qu'en édition ; en lecture seule, les statuts restent alignés à droite. */}
+      <div
+        className={cn(
+          'flex flex-wrap items-center gap-x-6 gap-y-2 text-xs',
+          canEdit ? 'justify-between' : 'justify-end',
+        )}
+      >
+        {canEdit && (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <MouseGlyph side="right" />
+              nouvelle réservation
+            </span>
+            <span className="flex items-center gap-1.5">
+              <MouseGlyph side="left" />
+              déplacer une réservation
+            </span>
+          </div>
+        )}
+        <div className="flex flex-wrap items-center gap-3">
+          {STATUS_ORDER.map((s) => (
+            <span key={s} className="flex items-center gap-1.5">
+              <span className={cn('size-2.5 rounded-full', STATUS[s].dot)} />
+              {STATUS[s].label}
+            </span>
+          ))}
+          <span className="flex items-center gap-1.5 text-muted-foreground">
+            <MessageSquare className="size-3" />
+            Commentaire
           </span>
-        ))}
-        <span className="flex items-center gap-1.5 text-muted-foreground">
-          <MessageSquare className="size-3" />
-          Commentaire
-        </span>
+        </div>
       </div>
 
       {/* Modale du commentaire. Double emploi : édition libre depuis le menu
@@ -1218,6 +1239,53 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+/**
+ * Petite souris SVG avec le bouton GAUCHE ou DROIT surligné — illustre un geste
+ * du planning (clic droit sur une case vide = nouvelle réservation ; clic gauche
+ * glissé sur une barre = déplacer). Calquée sur le glyphe de la page rapro, mais
+ * en classes Tailwind (parking n'a pas de feuille CSS dédiée). Le surlignage est
+ * un rectangle CLIPPÉ au corps arrondi, si bien qu'il épouse le coin sans path.
+ */
+function MouseGlyph({ side }: { side: 'left' | 'right' }) {
+  const clipId = `parking-mouse-${side}`
+  const btnX = side === 'left' ? 3 : 10
+  return (
+    <svg
+      className="h-[1.1rem] w-[0.8rem] shrink-0 text-muted-foreground"
+      viewBox="0 0 20 28"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <defs>
+        <clipPath id={clipId}>
+          <rect x="3" y="2" width="14" height="24" rx="7" />
+        </clipPath>
+      </defs>
+      {/* Bouton surligné (moitié haute, gauche ou droite), clippé au corps. */}
+      <rect
+        x={btnX}
+        y="2"
+        width="7"
+        height="11"
+        className="fill-foreground/60"
+        clipPath={`url(#${clipId})`}
+      />
+      {/* Corps + séparation des deux boutons. */}
+      <rect
+        x="3"
+        y="2"
+        width="14"
+        height="24"
+        rx="7"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+      <line x1="10" y1="2" x2="10" y2="13" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
   )
 }
 
