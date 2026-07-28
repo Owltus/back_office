@@ -62,6 +62,7 @@ export async function buildParkingSheetPdf(
   const { jsPDF } = await import('jspdf')
   const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
   pdf.setProperties({ title })
+  rotateSecondPage(pdf) // abonnement AVANT le rendu ; l'injection a lieu à l'output
   renderSheets(pdf, data)
   return pdf
 }
@@ -112,6 +113,25 @@ function renderSheets(pdf: jsPDF, { days }: ParkingSheetPdfData): void {
     const col = i % PER_PAGE // 0 = gauche, 1 = droite
     const x = MARGIN + col * (TABLE_W + GAP)
     drawSheet(pdf, x, day)
+  })
+}
+
+/**
+ * Tourne la 2e page (et suivantes) de 180° via l'attribut `/Rotate` de la PAGE
+ * PDF, et NON par une transformation du contenu : la feuille est dessinée
+ * normalement (mise en page identique à la 1re page), c'est l'affichage /
+ * l'impression de la page entière qui est retourné — demandé pour le recto/verso.
+ *
+ * jsPDF n'a pas d'API de rotation de page, mais publie un événement `putPage` au
+ * milieu de l'écriture du dictionnaire de page ; on y injecte `/Rotate 180` pour
+ * les pages après la première. `write` n'est pas dans les types, d'où le cast.
+ */
+function rotateSecondPage(pdf: jsPDF): void {
+  const internal = pdf.internal as typeof pdf.internal & {
+    write: (line: string) => void
+  }
+  internal.events.subscribe('putPage', (data: { pageNumber: number }) => {
+    if (data.pageNumber >= 2) internal.write('/Rotate 180')
   })
 }
 
