@@ -7,7 +7,7 @@ import {
   deleteYearBudget,
 } from '#/lib/repjour/services/daily.ts'
 import { SkeletonTable } from '#/components/shared/skeleton/SkeletonTable.tsx'
-import { MONTHS_LABELS } from '#/lib/repjour/constants.ts'
+import { MONTHS_LABELS, MONTHS_SHORT } from '#/lib/repjour/constants.ts'
 import { fmt } from '#/lib/repjour/format.ts'
 import type { MonthBudget } from '#/lib/repjour/types.ts'
 import { Input } from '#/components/ui/input.tsx'
@@ -285,7 +285,7 @@ export function BudgetContent({ readOnly = false }: { readOnly?: boolean }) {
                             {MONTHS_LABELS[b.month - 1]}
                           </span>
                           <span className="sm:hidden">
-                            {MONTHS_LABELS[b.month - 1]?.slice(0, 3)}
+                            {MONTHS_SHORT[b.month - 1]}
                           </span>
                         </>
                       ) : (

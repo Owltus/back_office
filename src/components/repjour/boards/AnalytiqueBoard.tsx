@@ -17,7 +17,7 @@ import {
   fetchYearAnalytics,
   fetchYearBudget,
 } from '#/lib/repjour/services/daily.ts'
-import { MONTHS_LABELS } from '#/lib/repjour/constants.ts'
+import { MONTHS_LABELS, MONTHS_SHORT } from '#/lib/repjour/constants.ts'
 import { fmt } from '#/lib/repjour/format.ts'
 
 /*
@@ -127,7 +127,7 @@ export function AnalytiqueBoard() {
       const hasData = m.source !== 'vide'
       const isReal = m.source === 'realise' || m.source === 'projete'
       return {
-        mois: MONTHS_LABELS[m.month - 1]?.slice(0, 3),
+        mois: MONTHS_SHORT[m.month - 1],
         revenueReal: isReal && hasData ? m.revenue : null,
         revenueProj:
           m.source === 'forecast' && hasData
@@ -269,7 +269,7 @@ export function AnalytiqueBoard() {
                     {MONTHS_LABELS[m.month - 1]}
                   </span>
                   <span className="sm:hidden">
-                    {MONTHS_LABELS[m.month - 1]?.slice(0, 3)}
+                    {MONTHS_SHORT[m.month - 1]}
                   </span>
                 </td>
                 {hasData ? (
