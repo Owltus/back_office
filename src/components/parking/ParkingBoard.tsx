@@ -429,8 +429,15 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
             spot: r.spot,
             nom: r.client,
             numero: room != null ? String(room) : '',
+            // Colonne « Facturé? » : reflète le statut. `checkout` = « Non payé »
+            // (cf. STATUS) → surtout PAS « Oui ». `reserve` (en attente de paiement)
+            // reste vide, à compléter à la main.
             facture:
-              r.status === 'paye' || r.status === 'checkout' ? 'Oui' : '',
+              r.status === 'paye'
+                ? 'Oui'
+                : r.status === 'checkout'
+                  ? 'Non'
+                  : '',
             // Vraies dates du séjour (indépendantes du jour de la feuille).
             checkIn: format(addDays(ref, r.startDay), 'dd/MM'),
             checkOut: format(addDays(ref, r.startDay + r.nights), 'dd/MM'),
