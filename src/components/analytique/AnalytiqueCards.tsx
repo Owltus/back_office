@@ -18,14 +18,17 @@ export function AnalytiqueCardsGrid({
   cols = 4,
 }: {
   children: ReactNode
-  /** Colonnes à partir de `sm` : 4 (défaut) ou 5 (ex. Rapro avec « Vendues »). */
-  cols?: 4 | 5
+  /** Colonnes à partir de `sm` : 4 (défaut), 5 (ex. Rapro « Vendues ») ou 6 (PDJ :
+   * 6 moyennes → 2 sur mobile, 3 sur tablette, 6 sur grand écran). */
+  cols?: 4 | 5 | 6
 }) {
   return (
     <div
       className={cn(
         'grid shrink-0 grid-cols-2 gap-3',
-        cols === 5 ? 'sm:grid-cols-5' : 'sm:grid-cols-4',
+        cols === 6 && 'sm:grid-cols-3 lg:grid-cols-6',
+        cols === 5 && 'sm:grid-cols-5',
+        cols === 4 && 'sm:grid-cols-4',
       )}
     >
       {children}

@@ -39,7 +39,9 @@ export function AnalytiqueSkeleton({
         <div
           className={cn(
             'grid shrink-0 grid-cols-2 gap-3',
-            cardCols === 5 ? 'sm:grid-cols-5' : 'sm:grid-cols-4',
+            cardCols === 6 && 'sm:grid-cols-3 lg:grid-cols-6',
+            cardCols === 5 && 'sm:grid-cols-5',
+            cardCols !== 5 && cardCols !== 6 && 'sm:grid-cols-4',
           )}
           aria-hidden="true"
         >
@@ -67,10 +69,10 @@ export function AnalytiqueSkeleton({
         </div>
         <div className="no-scrollbar lg:min-h-0 lg:flex-1 lg:overflow-hidden">
           <div className="divide-y divide-border/50">
-            {Array.from({ length: rows }).map((_, i) => (
+            {Array.from({ length: rows }).map((_row, i) => (
               <div key={i} className="flex items-center gap-4 px-3 py-2.5">
                 <Skeleton className="h-3 w-24" />
-                {Array.from({ length: cols }).map((_, j) => (
+                {Array.from({ length: cols }).map((_col, j) => (
                   <Skeleton key={j} className="ml-auto h-3 w-10" />
                 ))}
               </div>
