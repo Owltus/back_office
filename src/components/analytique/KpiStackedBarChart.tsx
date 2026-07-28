@@ -2,7 +2,6 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -12,10 +11,10 @@ import {
 /*
  * Histogramme empilé réutilisable (Recharts) — une barre par point sur l'axe X,
  * chaque barre découpée en segments EMPILÉS (proportionnels). Pendant « barres »
- * du KpiLineChart : même habillage thème (grille, axes, infobulle). Légende en bas
- * OPTIONNELLE (`showLegend`, masquée par défaut car l'infobulle porte déjà la
- * pastille de couleur de chaque segment). Client-only (monté sous des îlots
- * `ssr: false`). Place dans le socle partagé `components/analytique/`.
+ * du KpiLineChart : même habillage thème (grille, axes, infobulle). PAS de légende
+ * à l'écran (l'infobulle porte déjà la pastille de couleur) ; les items sont exposés
+ * sur `data-legend` pour être reconstruits dans le PDF. Client-only (monté sous des
+ * îlots `ssr: false`). Place dans le socle partagé `components/analytique/`.
  *
  * Les segments à `null` ne dessinent aucune tranche (ex. un mois/jour sans conso
  * saisie). Couleurs passées en clair par l'appelant (tokens `--chart-*`), lisibles
@@ -47,9 +46,13 @@ interface KpiStackedBarChartProps {
   /** Formateur du LIBELLÉ (en-tête) de l'infobulle. L'axe X reste abrégé, mais le
    * survol peut afficher le libellé complet (ex. « Fév » → « Février 2026 »). */
   labelFormatter?: (label: string) => string
-  /** Affiche la légende en bas (défaut : masquée — l'infobulle porte déjà les
-   * pastilles de couleur). Activée sur les vues où la place le permet (ex. annuelle). */
-  showLegend?: boolean
+  /** Ordre des items de légende (clés de segments) exposés au PDF via `data-legend`.
+   * La légende n'est pas affichée à l'écran ; elle est reconstruite dans le document.
+   * Sans cet ordre : ordre de `segments`. N'affecte pas l'empilement des barres. */
+  legendOrder?: string[]
+  /** Clic sur une barre/colonne → reçoit l'entrée de `data` correspondante (ex. pour
+   * naviguer vers le détail). Le curseur passe en « pointer » quand fourni. */
+  onBarClick?: (payload: Record<string, unknown>) => void
 }
 
 const AXIS = 'var(--muted-foreground)'
@@ -141,12 +144,34 @@ export function KpiStackedBarChart({
   yTickFormatter,
   tooltipFormatter,
   labelFormatter,
-  showLegend = false,
+  legendOrder,
+  onBarClick,
 }: KpiStackedBarChartProps) {
+  // La légende n'est PAS affichée à l'écran (l'infobulle porte déjà les pastilles).
+  // On expose ses items (nom + couleur token, dans l'ordre voulu) sur `data-legend`
+  // pour que le générateur PDF la reconstruise (cf. lib/analytique/pdf.ts).
+  const legendItems = legendOrder
+    ? legendOrder
+        .map((key) => segments.find((s) => s.key === key))
+        .filter((s): s is KpiBarSegment => s != null)
+    : segments
+  const pdfLegend =
+    legendItems.length > 0
+      ? JSON.stringify(
+          legendItems.map((s) => ({ name: s.name, color: s.color })),
+        )
+      : undefined
   return (
-    <div className="rounded-xl border border-border bg-card p-4">
+    <div
+      className="rounded-xl border border-border bg-card p-4"
+      data-legend={pdfLegend}
+    >
       <h3 className="mb-3 text-sm font-medium text-muted-foreground">{title}</h3>
-      <ResponsiveContainer width="100%" height={220}>
+      <ResponsiveContainer
+        width="100%"
+        height={220}
+        className={onBarClick ? 'cursor-pointer' : undefined}
+      >
         <BarChart data={data} margin={{ top: 5, right: 0, left: -25, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke={GRID} />
           <XAxis
@@ -168,7 +193,6 @@ export function KpiStackedBarChart({
               />
             }
           />
-          {showLegend && <Legend wrapperStyle={{ fontSize: 11 }} />}
           {segments.map((seg) => (
             <Bar
               key={seg.key}
@@ -176,6 +200,13 @@ export function KpiStackedBarChart({
               name={seg.name}
               stackId="pdj"
               fill={seg.color}
+              onClick={
+                onBarClick
+                  ? (d: { payload?: Record<string, unknown> }) => {
+                      if (d.payload) onBarClick(d.payload)
+                    }
+                  : undefined
+              }
             />
           ))}
         </BarChart>

@@ -110,6 +110,7 @@ export function PdjAnalytiqueBoard() {
         if (m.extra != null && m.noShow != null) {
           return {
             mois,
+            month: m.month,
             servisInclus: m.served - m.extra,
             extra: m.extra,
             nonVenu: m.noShow,
@@ -118,6 +119,7 @@ export function PdjAnalytiqueBoard() {
         }
         return {
           mois,
+          month: m.month,
           servisInclus: null,
           extra: null,
           nonVenu: null,
@@ -271,7 +273,16 @@ export function PdjAnalytiqueBoard() {
           data={chartData}
           xKey="mois"
           segments={segments}
-          showLegend
+          legendOrder={['inclus', 'extra', 'nonVenu', 'servisInclus']}
+          onBarClick={(p) => {
+            // Clic sur une colonne (mois) → page détail du mois.
+            const m = p.month
+            if (typeof m === 'number')
+              navigate({
+                to: '/pdj/analytique/$year/$month',
+                params: { year: String(year), month: String(m) },
+              })
+          }}
           tooltipFormatter={fmtInt}
           labelFormatter={(label) => {
             // L'axe X est abrégé (« Fév ») ; l'infobulle montre le mois complet.

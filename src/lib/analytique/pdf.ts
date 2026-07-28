@@ -64,6 +64,8 @@ interface PdfChart {
   title: string
   dataUrl: string
   ratio: number
+  /** Items de légende (nom + couleur document), reconstruits pour le PDF. */
+  legend?: { name: string; color: RGB }[]
 }
 export interface AnalytiqueExtract {
   cards: PdfCard[]
@@ -222,19 +224,26 @@ export async function extractAnalytique(
   let table: PdfTable | null = null
   const tableEl = root.querySelector('table')
   if (tableEl) {
-    const columns = Array.from(tableEl.querySelectorAll('thead th')).map(
+    const allColumns = Array.from(tableEl.querySelectorAll('thead th')).map(
       readText,
     )
+    // Colonnes présentes À L'ÉCRAN mais RETIRÉES du document (repérées par libellé) :
+    // on garde le tableau web complet, le PDF en omet quelques colonnes.
+    const PDF_OMIT = new Set(['Clients', 'Potentiel'])
+    const keep = allColumns.map((c) => !PDF_OMIT.has(c))
+    const columns = allColumns.filter((_c, i) => keep[i])
     const rows: PdfCell[][] = []
     for (const tr of Array.from(tableEl.querySelectorAll('tbody tr'))) {
       const tds = Array.from(tr.querySelectorAll('td'))
       if (tds.length === 0) continue
       rows.push(
-        tds.map((td, i) => ({
-          text: readText(td),
-          tone: i === 0 ? 'ink' : toneOf(td),
-          bold: i === 0 ? true : isBold(td),
-        })),
+        tds
+          .map((td, i) => ({
+            text: readText(td),
+            tone: i === 0 ? 'ink' : toneOf(td),
+            bold: i === 0 ? true : isBold(td),
+          }))
+          .filter((_c, i) => keep[i]),
       )
     }
     table = { columns, rows }
@@ -247,10 +256,27 @@ export async function extractAnalytique(
     root.querySelectorAll<SVGSVGElement>('svg.recharts-surface'),
   ).filter((svg) => (svg.clientWidth || 0) > 100)
   for (const svg of svgs) {
-    const title = readText(svg.closest('.rounded-xl')?.querySelector('h3'))
+    const container = svg.closest('.rounded-xl')
+    const title = readText(container?.querySelector('h3'))
+    // Légende NON affichée à l'écran : ses items (nom + couleur token) sont exposés
+    // en JSON sur `data-legend`, on la reconstruit ICI pour le document. Couleurs
+    // remappées en couleurs document via styleTone.
+    let legend: { name: string; color: RGB }[] | undefined
+    const raw = container?.getAttribute('data-legend')
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as { name: string; color: string }[]
+        legend = parsed.map((it) => ({
+          name: it.name,
+          color: toneColor(styleTone(it.color) ?? 'ink'),
+        }))
+      } catch {
+        legend = undefined
+      }
+    }
     try {
       const { dataUrl, ratio } = await rasterizeChartSvg(svg)
-      charts.push({ title, dataUrl, ratio })
+      charts.push({ title, dataUrl, ratio, legend })
     } catch {
       // Graphe ignoré : le PDF sort quand même avec cartes + tableau.
     }
@@ -312,7 +338,29 @@ function drawChartBlock(
     iw = ih * chart.ratio
   }
   pdf.addImage(chart.dataUrl, 'PNG', x + (w - iw) / 2, ty, iw, ih)
-  return ty - y + ih
+  ty += ih
+  // Légende sous le graphe : rangée centrée de « pastille + nom ».
+  if (chart.legend && chart.legend.length > 0) {
+    ty += 3.5
+    pdf.setFont('helvetica', 'normal').setFontSize(6.5)
+    const sq = 2
+    const gap = 1.3
+    const itemGap = 4
+    const widths = chart.legend.map((it) => sq + gap + pdf.getTextWidth(it.name))
+    const total =
+      widths.reduce((s, wd) => s + wd, 0) + itemGap * (chart.legend.length - 1)
+    let lx = x + Math.max(0, (w - total) / 2)
+    for (let i = 0; i < chart.legend.length; i++) {
+      const it = chart.legend[i]
+      pdf.setFillColor(it.color[0], it.color[1], it.color[2])
+      pdf.rect(lx, ty - sq + 0.3, sq, sq, 'F')
+      setText(pdf, GRAY2)
+      pdf.text(it.name, lx + sq + gap, ty)
+      lx += widths[i] + itemGap
+    }
+    ty += 1
+  }
+  return ty - y
 }
 
 /** Pose un texte CENTRÉ sur (cx, y), garanti sur UNE seule ligne : la police
@@ -471,11 +519,14 @@ function renderDocument(
     const gap = 6
     const maxH = 55
     const colW = charts.length === 1 ? CONTENT_W : (CONTENT_W - gap) / 2
+    // Réserve ~6 mm pour la légende dessinée sous le graphe (si présente).
+    const legendH = (c?: PdfChart) =>
+      c?.legend && c.legend.length > 0 ? 6 : 0
     const rowHeight = (a: PdfChart, b?: PdfChart) =>
       4 +
       Math.max(
-        Math.min(colW / a.ratio, maxH),
-        b ? Math.min(colW / b.ratio, maxH) : 0,
+        Math.min(colW / a.ratio, maxH) + legendH(a),
+        b ? Math.min(colW / b.ratio, maxH) + legendH(b) : 0,
       ) +
       6
     let need = 0

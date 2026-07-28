@@ -255,6 +255,15 @@ export function PdjAnalytiqueMoisBoard({
           data={chartData}
           xKey="jour"
           segments={segments}
+          legendOrder={['inclus', 'extra', 'nonVenu', 'servisInclus']}
+          onBarClick={(p) => {
+            // Clic sur une barre (jour) → page PDJ de ce jour.
+            const day = Number(p.jour)
+            if (Number.isFinite(day)) {
+              const date = `${year}-${mm}-${String(day).padStart(2, '0')}`
+              navigate({ to: '/pdj', search: { date } })
+            }
+          }}
           tooltipFormatter={fmtInt}
           labelFormatter={(label) => {
             // L'axe X n'affiche que le numéro du jour ; l'infobulle donne le jour de
