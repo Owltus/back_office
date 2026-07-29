@@ -35,11 +35,11 @@ function NoRoleNotice() {
       <ShieldAlert className="size-10 text-muted-foreground" />
       <div className="space-y-1">
         <p className="text-base font-medium text-foreground">
-          Aucun rôle attribué à ce compte
+          Aucun rôle n'est attribué à ton compte
         </p>
         <p className="max-w-sm text-sm text-muted-foreground">
-          Votre compte est connecté mais n'a pas de profil actif. Contactez un
-          administrateur pour obtenir un accès à cette section.
+          Ton compte est connecté mais n'a pas encore de profil actif. Demande un
+          accès à un administrateur.
         </p>
       </div>
       <Button asChild variant="outline">

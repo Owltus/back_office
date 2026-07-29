@@ -128,6 +128,9 @@ export function DashboardBoard() {
   const [pdfBusy, setPdfBusy] = useState(false)
   const [printBlocked, setPrintBlocked] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  // Erreur d'une action du board (suppression, aperçu PDF) : affichée en bandeau
+  // plutôt qu'un window.alert natif ou un échec muet.
+  const [actionError, setActionError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!serverNote) return
@@ -193,8 +196,9 @@ export function DashboardBoard() {
 
   // Repli MTD : n'a de sens que si le jour affiché n'a PAS de rapport.
   const latestMTD = report ? null : (latestOfMonth ?? null)
-  // Une erreur réseau laisse `report` à `undefined` : on rend l'état vide
-  // plutôt que de faire tourner le squelette indéfiniment.
+  // Une erreur réseau laisse `report` à `undefined` : `loading` exclut `reportError`
+  // pour ne pas tourner en squelette, et le rendu affiche un message d'échec DÉDIÉ
+  // (distinct de l'état vide) quand `reportError` est vrai.
   //
   // La porte attend le rapport MAIS AUSSI le budget et le forecast : le choix de
   // branche (vide / partielle / complète) en dépend. Les gater seulement sur le
@@ -236,6 +240,7 @@ export function DashboardBoard() {
   const handleDateChange = (date: string) => {
     setSelectedDate(date)
     setDetailMode(false)
+    setActionError(null)
   }
 
   // Suppression des données du jour AFFICHÉ uniquement : `deleteDayData` cible
@@ -244,15 +249,14 @@ export function DashboardBoard() {
   // super/admin côté service (RLS + assertWriteRole), admin côté UI.
   const handleDeleteDay = async () => {
     if (!isAdmin || !report) return
+    setActionError(null)
     try {
       await deleteDayData(selectedDate)
       setDetailMode(false)
       await queryClient.invalidateQueries({ queryKey: ['repjour'] })
     } catch (err) {
-      window.alert(
-        'Suppression impossible : ' +
-          (err instanceof Error ? err.message : 'erreur inconnue'),
-      )
+      console.error('Suppression du jour échouée :', err)
+      setActionError('La suppression a échoué. Réessaie dans un instant.')
     }
   }
 
@@ -398,12 +402,14 @@ export function DashboardBoard() {
   async function handleGeneratePdf() {
     if (!budget) return
     setPdfBusy(true)
+    setActionError(null)
     try {
       const data = buildPdfData(budget)
       const [yr, mo, da] = selectedDate.split('-')
       await printRepjourReport(data, `Rapport_${da}-${mo}-${yr}`)
-    } catch {
-      // Silencieux : l'impression est un confort, pas un flux critique.
+    } catch (err) {
+      console.error('Aperçu du rapport indisponible :', err)
+      setActionError("L'aperçu d'impression n'a pas pu s'ouvrir. Réessaie.")
     } finally {
       setPdfBusy(false)
     }
@@ -432,9 +438,8 @@ export function DashboardBoard() {
       })
       setServerNote(result.message)
     } catch (err) {
-      setServerNote(
-        `Erreur inattendue : ${err instanceof Error ? err.message : String(err)}`,
-      )
+      console.error('Envoi serveur échoué :', err)
+      setServerNote("L'envoi a échoué. Réessaie dans un instant.")
     } finally {
       setServerSending(false)
     }
@@ -558,13 +563,33 @@ export function DashboardBoard() {
           }
         />
 
+        {actionError && (
+          <div className="mb-4 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {actionError}
+          </div>
+        )}
+
         {loading ? (
           <BoardSkeleton />
+        ) : reportError && !report ? (
+          // `&& !report` : un échec de refetch (canal realtime) alors qu'un rapport
+          // est déjà en cache NE DOIT PAS effacer l'affichage — on ne montre cet
+          // écran que pour un vrai échec de chargement (aucune donnée en cache).
+          <div className="rounded-xl border border-border bg-card p-8 text-center">
+            <p className="mb-3 text-4xl text-muted-foreground">—</p>
+            <p className="text-lg font-medium text-foreground">
+              Impossible de charger le rapport
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Vérifie ta connexion et réessaie.
+            </p>
+          </div>
         ) : importOnly ? (
           // Rapport du jour pas encore importé (rôle habilité) : on n'affiche
           // rien ici — la carte d'import ci-dessous devient l'unique contenu.
           <p className="text-sm text-muted-foreground">
-            Aucun rapport importé pour le {displayDate}. Importez-le ci-dessous.
+            Le rapport du {displayDate} n'a pas encore été chargé. Charge-le
+            ci-dessous.
           </p>
         ) : !report && !hasPartialData ? (
           <div className="rounded-xl border border-border bg-card p-8 text-center">
@@ -573,7 +598,7 @@ export function DashboardBoard() {
               Aucune donnée pour le {displayDate}
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Aucun rapport ni prévision n'a été importé pour cette date.
+              Aucun rapport ni prévision pour cette date.
             </p>
           </div>
         ) : hasPartialData && budget ? (

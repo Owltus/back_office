@@ -66,6 +66,13 @@ export function RecipientsModal({ open, onClose }: Props) {
   const [recipients, setRecipients] = useState<EmailRecipient[]>([])
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
+  // Le TON est EXPLICITE : plus de couleur déduite du mot « Erreur » dans le texte
+  // (couplage fragile qui cassait dès qu'on reformulait un message).
+  const [messageTone, setMessageTone] = useState<'error' | 'success'>('error')
+  const notify = (text: string, tone: 'error' | 'success') => {
+    setMessage(text)
+    setMessageTone(tone)
+  }
 
   const [showAdd, setShowAdd] = useState(false)
   const [newEmail, setNewEmail] = useState('')
@@ -95,7 +102,7 @@ export function RecipientsModal({ open, onClose }: Props) {
     // `type="email"` du <Input> ne déclenche AUCUNE validation native. Le
     // contrôle doit donc être explicite.
     if (!isValidEmail(newEmail)) {
-      setMessage('Adresse email invalide')
+      notify("Cette adresse email n'est pas valide.", 'error')
       return
     }
     try {
@@ -104,10 +111,11 @@ export function RecipientsModal({ open, onClose }: Props) {
       setNewName('')
       setNewType('to')
       setShowAdd(false)
-      setMessage('Destinataire ajouté')
+      notify('Destinataire ajouté', 'success')
       load()
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Erreur')
+      console.error('Écriture du destinataire échouée :', err)
+      notify("Une erreur s'est produite. Réessaie.", 'error')
     }
   }
 
@@ -124,16 +132,17 @@ export function RecipientsModal({ open, onClose }: Props) {
   const saveEdit = async () => {
     if (!editingId) return
     if (!isValidEmail(editForm.email)) {
-      setMessage('Adresse email invalide')
+      notify("Cette adresse email n'est pas valide.", 'error')
       return
     }
     try {
       await updateRecipient(editingId, editForm)
       setEditingId(null)
-      setMessage('Mis à jour')
+      notify('Mis à jour', 'success')
       load()
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Erreur')
+      console.error('Écriture du destinataire échouée :', err)
+      notify("Une erreur s'est produite. Réessaie.", 'error')
     }
   }
 
@@ -276,7 +285,7 @@ export function RecipientsModal({ open, onClose }: Props) {
             <div
               className={cn(
                 'rounded-lg px-3 py-2 text-xs',
-                message.includes('Erreur') || message.includes('requis')
+                messageTone === 'error'
                   ? 'bg-destructive/10 text-destructive'
                   : 'bg-emerald-500/10 text-emerald-500',
               )}

@@ -215,7 +215,7 @@ export function ImportSection({
             status: 'error',
             errorMsg: isCivilToday
               ? 'Le rapport de cette nuit est dispo à partir de 02h00. Réessaie après.'
-              : `Ce fichier date du ${fileDay}/${String(fileMonth).padStart(2, '0')}/${fileYear}. Importe celui du jour.`,
+              : `Ce fichier date du ${fileDay}/${String(fileMonth).padStart(2, '0')}/${fileYear}. Charge plutôt celui d'aujourd'hui.`,
           }
           if (expectedType === 'comparison') setComparison(slot)
           else setForecast(slot)
@@ -227,8 +227,24 @@ export function ImportSection({
       const detected = detectFileType(file.name, text)
 
       if (detected === 'comparison') {
-        setComparison({ file, name: file.name, status: 'ready' })
-        setDetectedDate(extractReportDate(file.name))
+        // extractReportDate refuse un nom de fichier sans date lisible (sinon le
+        // rapport serait rangé en silence à une fausse date). On l'attrape ici
+        // pour l'afficher proprement dans la zone plutôt que de laisser remonter.
+        try {
+          const reportDate = extractReportDate(file.name)
+          setComparison({ file, name: file.name, status: 'ready' })
+          setDetectedDate(reportDate)
+        } catch (err) {
+          setComparison({
+            file: null,
+            name: file.name,
+            status: 'error',
+            errorMsg:
+              err instanceof Error
+                ? err.message
+                : 'Impossible de lire la date dans le nom du fichier.',
+          })
+        }
       } else if (detected === 'forecast') {
         setForecast({ file, name: file.name, status: 'ready' })
       } else {
@@ -236,7 +252,8 @@ export function ImportSection({
           file: null,
           name: file.name,
           status: 'error',
-          errorMsg: 'Type de fichier non reconnu',
+          errorMsg:
+            'Ce fichier n\'est pas reconnu. Il faut les chiffres du jour et les prévisions.',
         }
         if (expectedType === 'comparison') setComparison(slot)
         else setForecast(slot)
@@ -290,10 +307,14 @@ export function ImportSection({
       setComparison(EMPTY_SLOT)
       setForecast(EMPTY_SLOT)
       setDetectedDate(null)
-      setDone('Import réussi. Le rapport a été mis à jour.')
+      setDone("C'est enregistré. Le rapport du jour est à jour.")
       onImported()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur inattendue')
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Une erreur inattendue s'est produite. Réessaie.",
+      )
     } finally {
       setImporting(false)
     }
@@ -326,13 +347,24 @@ export function ImportSection({
       // Phase 2 : import direct (clean ou comparison-only)
       await executeImport()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur inattendue')
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Une erreur inattendue s'est produite. Réessaie.",
+      )
       setImporting(false)
     }
   }
 
   const bothReady = comparison.status === 'ready' && forecast.status === 'ready'
   const canImport = isAdmin ? comparison.status === 'ready' : bothReady
+
+  // Un avertissement `forceRequiresAdmin` (TVA manquante / en double) ne peut PAS
+  // être forcé par un non-admin : le forçage global exigeant tout-ou-rien, la
+  // présence d'UN seul tel avertissement bloque le bouton pour le super_utilisateur.
+  // L'admin, lui, force comme avant. C'est la garde qui a manqué à l'import HT forcé.
+  const forceBlocked =
+    !isAdmin && validationWarnings.some((w) => w.forceRequiresAdmin)
 
   return (
     <div
@@ -348,7 +380,7 @@ export function ImportSection({
           Importer un rapport
         </h2>
         <span className="hidden truncate text-xs text-muted-foreground sm:inline">
-          — fichiers CSV du PMS (Comparison + Forecast)
+          — les deux fichiers exportés de ton logiciel (chiffres du jour et prévisions)
         </span>
       </div>
 
@@ -362,7 +394,7 @@ export function ImportSection({
         className={`grid grid-cols-1 sm:grid-cols-2 ${spacious ? 'gap-4' : 'gap-3'}`}
       >
         <FileDropSlot
-          title="Comparison By Date"
+          title="Chiffres du jour (Comparison By Date)"
           slot={comparison}
           isDragOver={dragOverSlot === 'comparison'}
           inputRef={compRef}
@@ -378,7 +410,7 @@ export function ImportSection({
           onDragLeave={onDragLeave}
         />
         <FileDropSlot
-          title="Forecast By Date Range"
+          title="Prévisions du mois (Forecast By Date Range)"
           slot={forecast}
           isDragOver={dragOverSlot === 'forecast'}
           inputRef={foreRef}
@@ -403,7 +435,7 @@ export function ImportSection({
       {validationErrors.length > 0 && (
         <div className="space-y-2">
           <p className="text-sm font-medium text-destructive">
-            Import refusé :
+            Fichier refusé :
           </p>
           <AlertBanner alerts={validationErrors} />
         </div>
@@ -421,12 +453,12 @@ export function ImportSection({
         className="w-full"
       >
         {importing
-          ? 'Import en cours...'
+          ? 'Enregistrement…'
           : bothReady
-            ? 'Importer et calculer'
+            ? 'Enregistrer le rapport'
             : isAdmin && canImport
-              ? 'Importer le Comparison seul'
-              : 'Sélectionnez les 2 fichiers'}
+              ? 'Enregistrer seulement les chiffres du jour'
+              : 'Choisis les deux fichiers'}
       </Button>
 
       {showConfirmModal && (
@@ -468,18 +500,28 @@ export function ImportSection({
             </div>
             <div className="space-y-4 px-6 py-4">
               <AlertBanner alerts={validationWarnings} />
-              <p className="text-xs leading-relaxed text-muted-foreground">
-                Forcer un mauvais fichier fausse tes calculs. En cas de doute,
-                recommence l'export.
-              </p>
+              {forceBlocked ? (
+                <p className="text-xs leading-relaxed text-amber-500/90">
+                  Ce fichier a un problème de TVA. Tu ne peux pas le forcer depuis
+                  ton compte : reprends l'export en vérifiant qu'il inclut bien la
+                  TVA, ou demande à un administrateur.
+                </p>
+              ) : (
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  Forcer un mauvais fichier fausse tes calculs. En cas de doute,
+                  recommence l'export.
+                </p>
+              )}
             </div>
             <div className="flex justify-end gap-3 border-t border-border bg-muted/40 px-6 py-4">
               <Button variant="outline" onClick={() => setShowConfirmModal(false)}>
-                Je recommence
+                {forceBlocked ? "J'ai compris" : 'Je recommence'}
               </Button>
-              <Button onClick={executeImport} disabled={importing}>
-                {importing ? 'Import...' : "Forcer l'import"}
-              </Button>
+              {!forceBlocked && (
+                <Button onClick={executeImport} disabled={importing}>
+                  {importing ? 'Import...' : "Forcer l'import"}
+                </Button>
+              )}
             </div>
           </div>
         </div>

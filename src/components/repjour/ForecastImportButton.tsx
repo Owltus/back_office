@@ -58,7 +58,10 @@ export function ForecastImportButton({
       alerts: [
         {
           type: 'error',
-          message: err instanceof Error ? err.message : 'Erreur inattendue',
+          message:
+            err instanceof Error
+              ? err.message
+              : "Une erreur inattendue s'est produite. Réessaie.",
         },
       ],
     })
@@ -119,13 +122,13 @@ export function ForecastImportButton({
         className="hidden"
         onChange={onInputChange}
       />
-      <Tip label="Importer un forecast (plusieurs mois ou l'année)">
+      <Tip label="Importer des prévisions (plusieurs mois ou l'année)">
         <Button
           variant="outline"
           size="icon-sm"
           disabled={busy}
           onClick={() => inputRef.current?.click()}
-          aria-label="Importer un forecast"
+          aria-label="Importer des prévisions"
         >
           <Upload />
         </Button>
@@ -139,7 +142,7 @@ export function ForecastImportButton({
           {feedback?.kind === 'success' && (
             <>
               <DialogHeader>
-                <DialogTitle>Import du forecast</DialogTitle>
+                <DialogTitle>Import des prévisions</DialogTitle>
                 <DialogDescription>Voici le résultat.</DialogDescription>
               </DialogHeader>
               <div className="flex gap-2 rounded-md bg-emerald-500/10 px-3 py-2 text-sm text-emerald-500">
