@@ -1,6 +1,6 @@
 import { supabase } from '#/lib/supabase.ts'
 import { errorMessage } from '#/lib/errors.ts'
-import { TOTAL_ROOMS } from '#/lib/repjour/constants.ts'
+import { MONTHS, TOTAL_ROOMS } from '#/lib/repjour/constants.ts'
 import { parseComparison } from '#/lib/repjour/parse/comparison.ts'
 import { parseComparisonMetrics } from '#/lib/repjour/parse/metrics.ts'
 import { parseForecast, parseForecastAll } from '#/lib/repjour/parse/forecast.ts'
@@ -56,7 +56,11 @@ export async function preValidateForecast(
   if (allRows.length === 0) {
     return {
       errors: [
-        { type: 'error', message: 'Aucune donnée forecast dans le fichier' },
+        {
+          type: 'error',
+          message:
+            'Ce fichier de prévisions est vide. Vérifie que tu as exporté le bon fichier.',
+        },
       ],
       warnings: [],
     }
@@ -146,7 +150,9 @@ export async function importForecastDays(
   const text = await file.text()
   const rows = parseForecastAll(text)
   if (rows.length === 0) {
-    throw new Error('Aucune donnée forecast dans le fichier')
+    throw new Error(
+      'Ce fichier de prévisions est vide. Vérifie que tu as exporté le bon fichier.',
+    )
   }
   const data = rows.map((r) => ({
     date: r.date,
@@ -162,7 +168,8 @@ export async function importForecastDays(
     .from('forecast_days')
     .upsert(data, { onConflict: 'date' })
   if (error) {
-    throw new Error(`Erreur sauvegarde forecast : ${error.message}`)
+    console.error('Sauvegarde des prévisions échouée :', error.message)
+    throw new Error("Les prévisions n'ont pas pu être enregistrées. Réessaie dans un instant.")
   }
   const monthKeys = new Set(rows.map((r) => `${r.year}-${r.month}`))
   const years = [...new Set(rows.map((r) => r.year))].sort((a, b) => a - b)
@@ -184,11 +191,12 @@ async function saveComparisonMetrics(
   try {
     await upsertDailyMetrics(dateStr, parseComparisonMetrics(comparisonText))
   } catch (err) {
-    // `errorMessage`, pas `String(err)` : Supabase lève un objet ordinaire, pas
-    // une Error. L'alerte affichait « [object Object] » au lieu de la cause.
+    // Détail technique en console, message simple à l'écran (jamais la cause brute).
+    console.error('Archivage du détail du rapport échoué :', errorMessage(err))
     alerts.push({
       type: 'warning',
-      message: `Le détail du Comparison n'a pas été archivé. Votre rapport est bien enregistré. Cause : ${errorMessage(err)}`,
+      message:
+        "Le détail du rapport n'a pas pu être enregistré, mais ton rapport du jour est bien sauvegardé.",
     })
   }
 }
@@ -225,7 +233,7 @@ export async function processComparisonOnly(
 
   if (budgetError || !budget) {
     throw new Error(
-      `Budget introuvable pour ${reportDate.month}/${reportDate.year}`,
+      `Aucun objectif n'est défini pour ${MONTHS[reportDate.month]} ${reportDate.year}. Ajoute-le dans la gestion budgétaire avant d'importer.`,
     )
   }
 
@@ -242,7 +250,7 @@ export async function processComparisonOnly(
   // simple réessai suffit. (Miroir des gardes `existingErr` de processImport.)
   if (forecastErr) {
     throw new Error(
-      'Lecture du forecast indisponible, projeté non calculable. Réessaie.',
+      "Impossible de lire les prévisions du mois pour l'instant. Réessaie dans un instant.",
     )
   }
 
@@ -266,7 +274,8 @@ export async function processComparisonOnly(
   } else {
     alerts.push({
       type: 'warning',
-      message: 'Pas de forecast importé, projeté du mois indisponible.',
+      message:
+        "Aucune prévision n'a encore été chargée pour ce mois : les chiffres prévus ne peuvent pas s'afficher.",
     })
   }
 
@@ -278,7 +287,7 @@ export async function processComparisonOnly(
   const coherenceErrors = coherenceAlerts.filter((a) => a.type === 'error')
   if (coherenceErrors.length > 0) {
     throw new Error(
-      `Rapport invalide :\n${coherenceErrors.map((a) => `• ${a.message}`).join('\n')}`,
+      `Ce rapport ne peut pas être enregistré :\n${coherenceErrors.map((a) => `• ${a.message}`).join('\n')}`,
     )
   }
 
@@ -316,8 +325,10 @@ export async function processComparisonOnly(
     .from('daily_reports')
     .upsert(reportData, { onConflict: 'date' })
 
-  if (upsertError)
-    throw new Error(`Erreur sauvegarde rapport : ${upsertError.message}`)
+  if (upsertError) {
+    console.error('Sauvegarde du rapport échouée :', upsertError.message)
+    throw new Error("Le rapport n'a pas pu être enregistré. Réessaie dans un instant.")
+  }
 
   /*
    * PAS D'ARCHIVAGE DES CSV — décision du 2026-07-21, ne pas le réintroduire.
@@ -377,8 +388,7 @@ export async function processImport(
     forecastText = text1
   } else {
     throw new Error(
-      'Impossible de détecter les types de fichiers. ' +
-        'Un fichier Comparison By Date et un Forecast By Date Range sont requis.',
+      'Impossible de reconnaître les fichiers. Il faut le fichier des chiffres du jour (Comparison By Date) et celui des prévisions (Forecast By Date Range).',
     )
   }
 
@@ -410,7 +420,7 @@ export async function processImport(
 
   if (budgetError || !budget) {
     throw new Error(
-      `Budget introuvable pour ${reportDate.month}/${reportDate.year}`,
+      `Aucun objectif n'est défini pour ${MONTHS[reportDate.month]} ${reportDate.year}. Ajoute-le dans la gestion budgétaire avant d'importer.`,
     )
   }
 
@@ -424,7 +434,7 @@ export async function processImport(
   const coherenceErrors = coherenceAlerts.filter((a) => a.type === 'error')
   if (coherenceErrors.length > 0) {
     throw new Error(
-      `Rapport invalide :\n${coherenceErrors.map((a) => `• ${a.message}`).join('\n')}`,
+      `Ce rapport ne peut pas être enregistré :\n${coherenceErrors.map((a) => `• ${a.message}`).join('\n')}`,
     )
   }
 
@@ -449,7 +459,7 @@ export async function processImport(
   const blockingErrors = forecastAlerts.filter((a) => a.type === 'error')
   if (blockingErrors.length > 0) {
     throw new Error(
-      `Données forecast invalides :\n${blockingErrors.map((a) => `• ${a.message}`).join('\n')}`,
+      `Ces prévisions ne peuvent pas être enregistrées :\n${blockingErrors.map((a) => `• ${a.message}`).join('\n')}`,
     )
   }
   alerts.push(...forecastAlerts)
@@ -490,8 +500,10 @@ export async function processImport(
     .from('daily_reports')
     .upsert(reportData, { onConflict: 'date' })
 
-  if (upsertError)
-    throw new Error(`Erreur sauvegarde rapport : ${upsertError.message}`)
+  if (upsertError) {
+    console.error('Sauvegarde du rapport échouée :', upsertError.message)
+    throw new Error("Le rapport n'a pas pu être enregistré. Réessaie dans un instant.")
+  }
 
   // UPSERT forecast_days
   const forecastData = forecastRows.map((r) => ({
@@ -511,9 +523,11 @@ export async function processImport(
       .upsert(forecastData, { onConflict: 'date' })
 
     if (forecastError) {
+      console.error('Sauvegarde des prévisions échouée :', forecastError.message)
       alerts.push({
         type: 'warning',
-        message: `Erreur sauvegarde forecast : ${forecastError.message}`,
+        message:
+          "Les prévisions n'ont pas pu être enregistrées, mais ton rapport du jour est bien sauvegardé.",
       })
     }
   }

@@ -100,7 +100,7 @@ export async function assertWriteRole(): Promise<void> {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) {
-    throw new Error('Accès refusé : session requise pour cette opération')
+    throw new Error('Tu dois être connecté pour faire ça.')
   }
 }
 

@@ -69,7 +69,8 @@ export function parseComparisonMetrics(csvText: string): ComparisonMetricRow[] {
     skipEmptyLines: true,
   })
   const data = result.data ?? []
-  if (data.length === 0) throw new Error('CSV Comparison vide ou illisible')
+  if (data.length === 0)
+    throw new Error("Le fichier des chiffres du jour est vide ou illisible. Recommence l'export.")
 
   // Index des colonnes par en-tête : le PMS peut en ajouter ou les réordonner.
   const header = data[0].map((h) => (h ?? '').trim().toUpperCase())
@@ -78,7 +79,7 @@ export function parseComparisonMetrics(csvText: string): ComparisonMetricRow[] {
   ) as Record<(typeof COLUMNS)[number][0], number>
 
   if (index.today === -1) {
-    throw new Error('Colonne TODAY introuvable dans le CSV Comparison')
+    throw new Error("Ce fichier n'a pas le bon format. Vérifie le fichier des chiffres du jour (Comparison By Date).")
   }
 
   const rows: ComparisonMetricRow[] = []

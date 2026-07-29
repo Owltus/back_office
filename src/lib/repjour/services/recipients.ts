@@ -44,7 +44,7 @@ export async function addRecipient(
   type: RecipientType = 'to',
 ): Promise<void> {
   const parsed = emailSchema.safeParse(email)
-  if (!parsed.success) throw new Error('Adresse email invalide')
+  if (!parsed.success) throw new Error("Cette adresse email n'est pas valide.")
   const { error } = await supabase
     .from('email_recipients')
     .insert({ email: parsed.data, name: name.trim(), type })
@@ -60,7 +60,7 @@ export async function updateRecipient(
   // (un simple bascule de `active` ne doit pas exiger de revalider l'email).
   if (next.email !== undefined) {
     const parsed = emailSchema.safeParse(next.email)
-    if (!parsed.success) throw new Error('Adresse email invalide')
+    if (!parsed.success) throw new Error("Cette adresse email n'est pas valide.")
     next.email = parsed.data
   }
   const { error } = await supabase

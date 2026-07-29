@@ -63,9 +63,14 @@ export async function sendReportViaServer(
     body: { subject, htmlBody, pdfBase64, pdfName: `${pdfTitle}.pdf` },
   })
 
-  if (error) return { ok: false, message: `Échec de l'envoi : ${error.message}` }
-  if (data?.error)
-    return { ok: false, message: `Échec de l'envoi : ${data.error}` }
+  if (error) {
+    console.error("Envoi serveur échoué :", error.message)
+    return { ok: false, message: "L'envoi a échoué. Réessaie dans un instant." }
+  }
+  if (data?.error) {
+    console.error("Envoi serveur (fonction) échoué :", data.error)
+    return { ok: false, message: "L'envoi a échoué. Réessaie dans un instant." }
+  }
 
   const to = typeof data?.to === 'number' ? data.to : 0
   const cc = typeof data?.cc === 'number' ? data.cc : 0

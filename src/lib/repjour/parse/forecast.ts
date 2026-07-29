@@ -16,7 +16,7 @@ export function parseForecastAll(csvText: string): ForecastRow[] {
   });
 
   if (!result.data || result.data.length < 3) {
-    throw new Error('CSV Forecast vide ou trop court');
+    throw new Error("Le fichier des prévisions est vide ou incomplet. Recommence l'export.");
   }
 
   const headers = result.data[1];
@@ -24,9 +24,13 @@ export function parseForecastAll(csvText: string): ForecastRow[] {
   const occHeader = (headers[3] || '').trim().toUpperCase();
   const revHeader = (headers[7] || '').trim().toUpperCase();
 
-  if (dateHeader !== 'DATE') throw new Error(`En-tête index 0 attendu "DATE", trouvé "${headers[0]?.trim()}"`);
-  if (occHeader !== 'OCC') throw new Error(`En-tête index 3 attendu "OCC", trouvé "${headers[3]?.trim()}"`);
-  if (revHeader !== 'REV') throw new Error(`En-tête index 7 attendu "REV", trouvé "${headers[7]?.trim()}"`);
+  if (dateHeader !== 'DATE' || occHeader !== 'OCC' || revHeader !== 'REV') {
+    // Détail technique en console, message simple à l'écran.
+    console.error(
+      `Forecast : en-têtes inattendus "${headers[0]?.trim()}" / "${headers[3]?.trim()}" / "${headers[7]?.trim()}" (attendus DATE / OCC / REV)`,
+    );
+    throw new Error("Ce fichier n'a pas le bon format. Vérifie que c'est bien le fichier des prévisions (Forecast By Date Range).");
+  }
 
   const rows: ForecastRow[] = [];
 

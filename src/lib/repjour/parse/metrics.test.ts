@@ -53,6 +53,8 @@ describe('parseComparisonMetrics', () => {
   })
 
   it('rejette un fichier sans colonne TODAY', () => {
-    expect(() => parseComparisonMetrics('SECTION,MTD\nFoo,1')).toThrow(/TODAY/)
+    expect(() => parseComparisonMetrics('SECTION,MTD\nFoo,1')).toThrow(
+      /bon format/,
+    )
   })
 })

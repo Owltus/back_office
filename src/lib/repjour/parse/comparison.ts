@@ -9,7 +9,7 @@ export function parseComparison(csvText: string): ComparisonData {
   });
 
   if (!result.data || result.data.length === 0) {
-    throw new Error('CSV Comparison vide ou illisible');
+    throw new Error("Le fichier des chiffres du jour est vide ou illisible. Recommence l'export.");
   }
 
   // Trouver les index des colonnes TODAY et MTD depuis l'en-tête
@@ -24,7 +24,7 @@ export function parseComparison(csvText: string): ComparisonData {
   }
 
   if (todayIndex === -1 || mtdIndex === -1) {
-    throw new Error('Colonnes TODAY et/ou MTD introuvables dans le CSV Comparison');
+    throw new Error("Ce fichier n'a pas le bon format. Vérifie que c'est bien le fichier des chiffres du jour (Comparison By Date).");
   }
 
   // Chercher les lignes par nom de SECTION (colonne 0)
