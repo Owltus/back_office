@@ -17,24 +17,35 @@ function stddev(values: number[]): number {
 }
 
 /*
- * Messages de validation forecast — VOLONTAIREMENT sans chiffres et CONSTANTS
- * (identiques d'un mois à l'autre) : `preValidateForecast` les dédoublonne, si
- * bien qu'un même souci sur plusieurs mois ne donne QU'UN message. Phrases
- * simples, tutoiement, on dit juste ce qui cloche et quoi faire.
+ * Messages de validation — VOLONTAIREMENT sans chiffres et CONSTANTS (identiques
+ * d'un mois à l'autre) : `preValidateForecast` les dédoublonne, si bien qu'un même
+ * souci sur plusieurs mois ne donne QU'UN message. Phrases simples, tutoiement, on
+ * dit juste ce qui cloche et quoi faire. Source UNIQUE : les messages de
+ * `validateForecast` (prévisions) ET de `validateCoherence` (rapport réel) sont ici.
  */
 const MSG = {
-  empty: 'Ce mois est vide. Vérifie la période exportée.',
+  empty: "Ce fichier ne contient aucun jour. Vérifie le mois que tu as exporté.",
   incomplete:
-    "Il manque des jours. Réexporte le mois complet (sauf si le mois n'est pas fini).",
+    "Il manque des jours dans le fichier. Réexporte le mois entier (normal si le mois n'est pas encore fini).",
   impossible:
-    'Valeurs impossibles dans le fichier : il est mal exporté, reprends-le.',
+    'Le fichier contient des chiffres impossibles. Il a mal été exporté, recommence.',
   occNoRev:
-    "Des jours ont de l'occupation mais aucun revenu. Vérifie le fichier.",
-  adrWeird: "Prix par chambre anormal. Vérifie que c'est le bon fichier.",
+    'Sur certains jours, des chambres sont occupées mais leur montant est à zéro. Vérifie le fichier.',
+  adrWeird:
+    "Le prix moyen par chambre est anormal. Vérifie que c'est le bon fichier.",
   tvaMissing:
-    'Revenus trop bas : la TVA manque sûrement. Vérifie que ton export inclut la TVA.',
+    "Les montants sont trop bas : la TVA n'est sûrement pas incluse dans ce fichier. Vérifie ton export.",
   tvaHigh:
-    'Revenus trop hauts : TVA en double, ou tu corriges un ancien import. Vérifie avant de forcer.',
+    "Les montants sont trop élevés : la TVA est sûrement comptée deux fois. C'est normal seulement si tu corriges un ancien rapport exprès.",
+  // Cohérence du rapport réel (réalisé) — étaient écrits en dur dans validateCoherence.
+  realNegatives:
+    'Le fichier contient des chiffres négatifs. Il a mal été exporté, recommence.',
+  tooManyRooms:
+    "Le fichier compte plus de chambres vendues que l'hôtel n'en a. Vérifie le fichier.",
+  roomNoRevenue:
+    'Des chambres sont vendues mais leur montant est à zéro. Vérifie le fichier.',
+  revenueNoRoom:
+    'Il y a un montant mais aucune chambre vendue. Vérifie le fichier.',
 } as const
 
 /**
@@ -130,8 +141,22 @@ export function validateForecast(
     if (ratio > 1.07 && ratio < 1.13) tvaHigh = true;
   }
 
-  if (tvaMissing) alerts.push({ type: 'warning', message: MSG.tvaMissing });
-  if (tvaHigh) alerts.push({ type: 'warning', message: MSG.tvaHigh });
+  // Les signaux TVA ne sont PAS forçables par un non-admin : c'est le garde-fou qui
+  // a manqué le jour où un rapport HT (sans TVA) a été poussé de force, faussant le
+  // projeté. Un hôtelier voit l'alerte mais ne peut que recommencer ; seul un admin
+  // tranche. Les autres avertissements restent forçables par tous.
+  if (tvaMissing)
+    alerts.push({
+      type: 'warning',
+      message: MSG.tvaMissing,
+      forceRequiresAdmin: true,
+    });
+  if (tvaHigh)
+    alerts.push({
+      type: 'warning',
+      message: MSG.tvaHigh,
+      forceRequiresAdmin: true,
+    });
 
   return alerts;
 }
@@ -143,19 +168,19 @@ export function validateCoherence(realiseJour: KPIBlock): Alert[] {
   // ni dépasser l'inventaire (80 chambres) ni être négatif. Le taux d'occupation se
   // déduit des nuitées : pas de contrôle séparé (ce serait le même fait).
   if (realiseJour.nuitees < 0 || realiseJour.roomRevenue < 0) {
-    alerts.push({ type: 'error', message: 'Valeurs négatives dans le fichier. Il est mal exporté, reprends-le.' });
+    alerts.push({ type: 'error', message: MSG.realNegatives });
   }
   if (realiseJour.nuitees > TOTAL_ROOMS) {
-    alerts.push({ type: 'error', message: 'Plus de nuitées que de chambres. Fichier à vérifier.' });
+    alerts.push({ type: 'error', message: MSG.tooManyRooms });
   }
 
   // Incohérences PROBABLES, avec de rares cas limites room-only légitimes (day-use,
   // no-show, comp) → à vérifier, non bloquantes.
   if (realiseJour.nuitees > 0 && realiseJour.roomRevenue === 0) {
-    alerts.push({ type: 'warning', message: 'Des chambres vendues mais aucun revenu. À vérifier.' });
+    alerts.push({ type: 'warning', message: MSG.roomNoRevenue });
   }
   if (realiseJour.nuitees === 0 && realiseJour.roomRevenue > 0) {
-    alerts.push({ type: 'warning', message: 'Du revenu sans chambre vendue. À vérifier.' });
+    alerts.push({ type: 'warning', message: MSG.revenueNoRoom });
   }
 
   return alerts;
