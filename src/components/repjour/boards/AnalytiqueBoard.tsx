@@ -3,17 +3,13 @@ import { useNavigate } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { ForecastImportButton } from '#/components/repjour/ForecastImportButton.tsx'
+import { RepjourAnalytiqueCards } from '#/components/repjour/boards/RepjourAnalytiqueCards.tsx'
 import { AnalytiqueShell } from '#/components/analytique/AnalytiqueShell.tsx'
-import {
-  AnalytiqueCardsGrid,
-  StatCard,
-} from '#/components/analytique/AnalytiqueCards.tsx'
 import { AnalytiqueTable } from '#/components/analytique/AnalytiqueTable.tsx'
 import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
 import { YearNav } from '#/components/analytique/YearNav.tsx'
 import { useAnnualYear } from '#/components/analytique/useAnnualYear.ts'
 import { KpiLineChart } from '#/components/analytique/KpiLineChart.tsx'
-import { ACCENT } from '#/components/analytique/accents.ts'
 import {
   fetchBudgetYears,
   fetchYearAnalytics,
@@ -178,37 +174,19 @@ export function AnalytiqueBoard() {
       printTitle={`RepJour · ${year}`}
       skeleton={{ cols: 7, charts: 2, rows: 12 }}
     >
-      {/* Synthèse annuelle — réalisé / objectif en FRACTION (barre horizontale). */}
-      <AnalytiqueCardsGrid>
-        <StatCard
-          label="Nuitées"
-          accent={ACCENT.indigo}
-          hint="Chambres vendues sur l'année (cumul des nuitées). Objectif budget en dessous."
-          value={fmt.nuitees(summary.totalNuitees)}
-          reference={fmt.nuitees(summary.budgetTotalNuitees)}
-        />
-        <StatCard
-          label="Taux d'occupation moyen"
-          accent={ACCENT.cyan}
-          hint="Chambres occupées en moyenne, rapportées aux chambres disponibles."
-          value={fmt.pct(summary.avgTO)}
-          reference={fmt.pct(summary.budgetAvgTO)}
-        />
-        <StatCard
-          label="Revenu moyen par chambre"
-          accent={ACCENT.green}
-          hint="Chiffre d'affaires rapporté à toutes les chambres (RevPAR)."
-          value={fmt.eur(summary.avgRevPAR)}
-          reference={fmt.eur(summary.budgetAvgRevPAR)}
-        />
-        <StatCard
-          label="Chiffre d'affaires total"
-          accent={ACCENT.amber}
-          hint="Chiffre d'affaires hébergement de l'année, TVA comprise."
-          value={fmt.eurInt(summary.totalRevenue)}
-          reference={fmt.eurInt(summary.budgetTotalRevenue)}
-        />
-      </AnalytiqueCardsGrid>
+      {/* Synthèse annuelle — cartes partagées avec le détail mensuel :
+          réalisé / objectif budget en FRACTION (barre horizontale). Le cumul
+          budget vaut 0 (jamais absent) en annuel, donc toujours fourni. */}
+      <RepjourAnalytiqueCards
+        summary={summary}
+        period="l'année"
+        budget={{
+          nuitees: summary.budgetTotalNuitees,
+          to: summary.budgetAvgTO,
+          revpar: summary.budgetAvgRevPAR,
+          revenue: summary.budgetTotalRevenue,
+        }}
+      />
 
       {/* Tableau mois par mois */}
       <AnalytiqueTable

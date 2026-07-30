@@ -1,17 +1,13 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 
+import { RepjourAnalytiqueCards } from '#/components/repjour/boards/RepjourAnalytiqueCards.tsx'
 import { AnalytiqueShell } from '#/components/analytique/AnalytiqueShell.tsx'
-import {
-  AnalytiqueCardsGrid,
-  StatCard,
-} from '#/components/analytique/AnalytiqueCards.tsx'
 import { AnalytiqueTable } from '#/components/analytique/AnalytiqueTable.tsx'
 import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
 import { AnalytiqueBackButton } from '#/components/analytique/AnalytiqueBackButton.tsx'
 import { KpiLineChart } from '#/components/analytique/KpiLineChart.tsx'
 import { KpiCell } from '#/components/analytique/KpiCell.tsx'
-import { ACCENT } from '#/components/analytique/accents.ts'
 import { fetchUnifiedDays } from '#/lib/repjour/services/data.ts'
 import { fetchBudget } from '#/lib/repjour/services/daily.ts'
 import {
@@ -170,38 +166,23 @@ export function AnalytiqueMoisBoard({
         rows: new Date(year, month, 0).getDate(),
       }}
     >
-      {/* Cartes résumé — réalisé / objectif en FRACTION (barre horizontale) quand
-          un budget existe pour le mois ; sinon valeur seule. */}
-      <AnalytiqueCardsGrid>
-        <StatCard
-          label="Nuitées"
-          accent={ACCENT.indigo}
-          hint="Chambres vendues sur le mois (cumul des nuitées). Objectif budget en dessous."
-          value={fmt.nuitees(summary.totalNuitees)}
-          reference={budget ? fmt.nuitees(budget.nuitees) : undefined}
-        />
-        <StatCard
-          label="Taux d'occupation moyen"
-          accent={ACCENT.cyan}
-          hint="Chambres occupées en moyenne, rapportées aux chambres disponibles."
-          value={fmt.pct(summary.avgTO)}
-          reference={budget ? fmt.pct(budget.taux_occupation) : undefined}
-        />
-        <StatCard
-          label="Revenu moyen par chambre"
-          accent={ACCENT.green}
-          hint="Chiffre d'affaires rapporté à toutes les chambres (RevPAR)."
-          value={fmt.eur(summary.avgRevPAR)}
-          reference={budget ? fmt.eur(budget.revpar) : undefined}
-        />
-        <StatCard
-          label="Chiffre d'affaires"
-          accent={ACCENT.amber}
-          hint="Chiffre d'affaires hébergement du mois, TVA comprise."
-          value={fmt.eurInt(summary.totalRevenue)}
-          reference={budget ? fmt.eurInt(budget.room_revenue) : undefined}
-        />
-      </AnalytiqueCardsGrid>
+      {/* Cartes résumé — partagées avec la vue annuelle : réalisé / objectif en
+          FRACTION (barre horizontale) quand un budget existe pour le mois ;
+          sinon valeur seule (budget null → pas de 3e ligne). */}
+      <RepjourAnalytiqueCards
+        summary={summary}
+        period="le mois"
+        budget={
+          budget
+            ? {
+                nuitees: budget.nuitees,
+                to: budget.taux_occupation,
+                revpar: budget.revpar,
+                revenue: budget.room_revenue,
+              }
+            : null
+        }
+      />
 
       {/* Tableau jour par jour (défile en interne, en-tête collant) */}
       <AnalytiqueTable
