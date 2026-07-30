@@ -7,6 +7,7 @@ import {
   AnalytiqueCardsGrid,
   shareSub,
   StatCard,
+  subText,
 } from '#/components/analytique/AnalytiqueCards.tsx'
 import { AnalytiqueTable } from '#/components/analytique/AnalytiqueTable.tsx'
 import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
@@ -27,8 +28,8 @@ import { ACCENT } from '#/components/analytique/accents.ts'
  *
  * Charge en LECTURE toutes les réservations (fetchReservations), les agrège par
  * mois pour l'année sélectionnée (aggregateParkingMonthly), puis rend : cartes
- * de synthèse annuelle, tableau mois par mois et deux graphiques (occupation,
- * réservations). Aucune écriture Supabase — uniquement des `select`. Aucun
+ * de synthèse annuelle, tableau mois par mois et un graphique (occupation).
+ * Aucune écriture Supabase — uniquement des `select`. Aucun
  * montant € (la table n'a pas de tarif). Ouvert à tous les rôles connectés en
  * lecture (garde `ProtectedRoute` sur la route).
  */
@@ -61,12 +62,18 @@ export function ParkingAnalytiqueBoard() {
   const summary = useMemo(() => {
     const active = months.filter((m) => m.reservations > 0)
     const count = active.length
+    const totalReservations = months.reduce((s, m) => s + m.reservations, 0)
+    const totalNights = months.reduce((s, m) => s + m.nights, 0)
     return {
-      totalReservations: months.reduce((s, m) => s + m.reservations, 0),
-      totalNights: months.reduce((s, m) => s + m.nights, 0),
+      totalReservations,
+      totalNights,
       totalUnpaid: months.reduce((s, m) => s + m.unpaid, 0),
       avgOccupancy:
         count > 0 ? active.reduce((s, m) => s + m.occupancyRate, 0) / count : 0,
+      // 2e info : cadence mensuelle des réservations + durée moyenne d'un séjour.
+      reservationsPerMonth: count > 0 ? totalReservations / count : 0,
+      nightsPerReservation:
+        totalReservations > 0 ? totalNights / totalReservations : 0,
     }
   }, [months])
 
@@ -107,6 +114,11 @@ export function ParkingAnalytiqueBoard() {
           accent={ACCENT.indigo}
           value={fmtInt(summary.totalReservations)}
           hint="Nombre total de réservations de parking sur l'année."
+          sub={
+            summary.reservationsPerMonth > 0
+              ? subText(`moy. ${fmtInt(summary.reservationsPerMonth)} / mois`)
+              : undefined
+          }
         />
         <StatCard
           label="Taux d'occupation moyen"
@@ -119,6 +131,11 @@ export function ParkingAnalytiqueBoard() {
           accent={ACCENT.green}
           value={fmtInt(summary.totalNights)}
           hint="Total des nuits de stationnement sur l'année."
+          sub={
+            summary.nightsPerReservation > 0
+              ? subText(`moy. ${fmtInt(summary.nightsPerReservation)} / réservation`)
+              : undefined
+          }
         />
         <StatCard
           label="Impayés"

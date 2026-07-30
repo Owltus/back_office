@@ -7,6 +7,7 @@ import {
   AnalytiqueCardsGrid,
   shareSub,
   StatCard,
+  subText,
 } from '#/components/analytique/AnalytiqueCards.tsx'
 import { AnalytiqueTable } from '#/components/analytique/AnalytiqueTable.tsx'
 import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
@@ -25,7 +26,7 @@ import { ACCENT } from '#/components/analytique/accents.ts'
  * Charge en LECTURE toutes les réservations (fetchReservations, cache partagé
  * avec la vue annuelle), les agrège au jour le jour sur le mois demandé
  * (aggregateParkingDaily, occupation RÉELLE), puis rend : 4 cartes du mois,
- * tableau jour par jour et deux graphiques (occupation, arrivées). Aucune
+ * tableau jour par jour et un graphique (occupation). Aucune
  * écriture Supabase — uniquement des `select`. Aucun montant € (la table n'a
  * pas de tarif). `year` / `month` viennent des params de route.
  */
@@ -65,7 +66,15 @@ export function ParkingAnalytiqueMoisBoard({
       (r) => r.start_date.startsWith(prefix) && r.status === 'checkout',
     ).length
 
-    return { avgOccupancy, arrivals, departures, unpaid }
+    return {
+      avgOccupancy,
+      arrivals,
+      departures,
+      unpaid,
+      // 2e info : cadence quotidienne (moyenne sur les jours du mois).
+      arrivalsPerDay: count > 0 ? arrivals / count : 0,
+      departuresPerDay: count > 0 ? departures / count : 0,
+    }
   }, [days, reservations, year, month])
 
   const chartData = useMemo(
@@ -104,22 +113,32 @@ export function ParkingAnalytiqueMoisBoard({
       {/* Cartes du mois */}
       <AnalytiqueCardsGrid>
         <StatCard
-          label="Occupation moyenne"
+          label="Taux d'occupation moyen"
           accent={ACCENT.cyan}
           value={fmtPct(summary.avgOccupancy)}
-          hint="Places occupées en moyenne sur le mois."
+          hint="Places occupées en moyenne, rapportées aux places disponibles."
         />
         <StatCard
           label="Arrivées"
           accent={ACCENT.indigo}
           value={fmtInt(summary.arrivals)}
           hint="Nombre de véhicules arrivés dans le mois."
+          sub={
+            summary.arrivalsPerDay > 0
+              ? subText(`moy. ${fmtInt(summary.arrivalsPerDay)} / jour`)
+              : undefined
+          }
         />
         <StatCard
           label="Départs"
           accent={ACCENT.green}
           value={fmtInt(summary.departures)}
           hint="Nombre de véhicules partis dans le mois."
+          sub={
+            summary.departuresPerDay > 0
+              ? subText(`moy. ${fmtInt(summary.departuresPerDay)} / jour`)
+              : undefined
+          }
         />
         <StatCard
           label="Impayés"
