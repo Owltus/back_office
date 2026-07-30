@@ -3,7 +3,12 @@ import { useNavigate } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { ForecastImportButton } from '#/components/repjour/ForecastImportButton.tsx'
-import { RepjourAnalytiqueCards } from '#/components/repjour/boards/RepjourAnalytiqueCards.tsx'
+import {
+  RepjourAnalytiqueCards,
+  RepjourStatCells,
+  RepjourStatsHead,
+} from '#/components/repjour/boards/RepjourAnalytiqueParts.tsx'
+import { subText } from '#/components/analytique/AnalytiqueCards.tsx'
 import { AnalytiqueShell } from '#/components/analytique/AnalytiqueShell.tsx'
 import { AnalytiqueTable } from '#/components/analytique/AnalytiqueTable.tsx'
 import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
@@ -15,7 +20,7 @@ import {
   fetchYearAnalytics,
   fetchYearBudget,
 } from '#/lib/repjour/services/daily.ts'
-import { MONTHS_LABELS, MONTHS_SHORT } from '#/lib/repjour/constants.ts'
+import { MONTHS_LABELS, MONTHS_SHORT, TOTAL_ROOMS } from '#/lib/repjour/constants.ts'
 import { fmt } from '#/lib/repjour/format.ts'
 
 /*
@@ -35,17 +40,12 @@ import { fmt } from '#/lib/repjour/format.ts'
  */
 
 const currentYear = new Date().getFullYear()
-const { compact, compactDec, compactEcart } = fmt
 
 interface AnnualSummary {
   totalNuitees: number
   avgTO: number
   avgRevPAR: number
   totalRevenue: number
-  budgetTotalNuitees: number
-  budgetAvgTO: number
-  budgetAvgRevPAR: number
-  budgetTotalRevenue: number
 }
 
 export function AnalytiqueBoard() {
@@ -78,26 +78,48 @@ export function AnalytiqueBoard() {
   const analytics = data?.[0] ?? []
   const budgets = data?.[1] ?? []
 
+  // Mois PASSÉS ou EN COURS uniquement (on exclut les mois futurs — purement
+  // prévisionnels — pour ne pas gonfler les cartes avec du forecast), et portant
+  // des données. Alimente les CARTES ; le tableau, lui, affiche tous les mois.
+  const coveredMonths = useMemo(() => {
+    const cm = new Date().getMonth() + 1
+    return analytics.filter(
+      (m) =>
+        m.daysWithData > 0 &&
+        (year < currentYear || (year === currentYear && m.month <= cm)),
+    )
+  }, [analytics, year])
+
   const summary: AnnualSummary = useMemo(() => {
-    const mwd = analytics.filter((m) => m.daysWithData > 0)
-    const count = mwd.length
+    const totalNuitees = coveredMonths.reduce((s, m) => s + m.nuitees, 0)
+    const totalRevenue = coveredMonths.reduce((s, m) => s + m.revenue, 0)
+    // TO et RevPAR annuels PONDÉRÉS par la capacité (80 ch. × jours des mois
+    // couverts) — PAS une moyenne simple des taux mensuels (un mois de 28 j ne
+    // pèse pas comme un mois de 31 j). = réalisé/projeté total ÷ capacité totale.
+    const capacity =
+      TOTAL_ROOMS *
+      coveredMonths.reduce((s, m) => s + new Date(year, m.month, 0).getDate(), 0)
     return {
-      totalNuitees: mwd.reduce((s, m) => s + m.nuitees, 0),
-      avgTO: count > 0 ? mwd.reduce((s, m) => s + m.to, 0) / count : 0,
-      avgRevPAR: count > 0 ? mwd.reduce((s, m) => s + m.revpar, 0) / count : 0,
-      totalRevenue: mwd.reduce((s, m) => s + m.revenue, 0),
-      budgetTotalNuitees: budgets.reduce((s, b) => s + b.nuitees, 0),
-      budgetAvgTO:
-        budgets.length > 0
-          ? budgets.reduce((s, b) => s + b.taux_occupation, 0) / budgets.length
-          : 0,
-      budgetAvgRevPAR:
-        budgets.length > 0
-          ? budgets.reduce((s, b) => s + b.revpar, 0) / budgets.length
-          : 0,
-      budgetTotalRevenue: budgets.reduce((s, b) => s + b.room_revenue, 0),
+      totalNuitees,
+      totalRevenue,
+      avgTO: capacity > 0 ? (totalNuitees / capacity) * 100 : 0,
+      avgRevPAR: capacity > 0 ? totalRevenue / capacity : 0,
     }
-  }, [analytics, budgets])
+  }, [coveredMonths, year])
+
+  // Cadence mensuelle (2e info des cartes Nuitées / CA) : total rapporté aux mois
+  // couverts. « moy. X / mois ».
+  const activeMonths = coveredMonths.length
+  const nuiteesSub =
+    activeMonths > 0
+      ? subText(
+          `moy. ${fmt.nuitees(Math.round(summary.totalNuitees / activeMonths))} / mois`,
+        )
+      : undefined
+  const caSub =
+    activeMonths > 0
+      ? subText(`moy. ${fmt.keur(summary.totalRevenue / activeMonths)} / mois`)
+      : undefined
 
   const currentMonth = new Date().getMonth() + 1
 
@@ -174,58 +196,22 @@ export function AnalytiqueBoard() {
       printTitle={`RepJour · ${year}`}
       skeleton={{ cols: 7, charts: 2, rows: 12 }}
     >
-      {/* Synthèse annuelle — cartes partagées avec le détail mensuel :
-          réalisé / objectif budget en FRACTION (barre horizontale). Le cumul
-          budget vaut 0 (jamais absent) en annuel, donc toujours fourni. */}
+      {/* Synthèse annuelle — cartes partagées avec le détail mensuel : valeur =
+          total (ou taux), 2e info = cadence « moy. X / mois ». */}
       <RepjourAnalytiqueCards
         summary={summary}
-        period="l'année"
-        budget={{
-          nuitees: summary.budgetTotalNuitees,
-          to: summary.budgetAvgTO,
-          revpar: summary.budgetAvgRevPAR,
-          revenue: summary.budgetTotalRevenue,
-        }}
+        coverage="mois en cours et passés"
+        nuiteesSub={nuiteesSub}
+        caSub={caSub}
       />
 
-      {/* Tableau mois par mois */}
-      <AnalytiqueTable
-        head={
-          <tr className="border-b border-border bg-muted">
-            <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">
-              Mois
-            </th>
-            <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
-              <span className="hidden sm:inline">Nuitées</span>
-              <span className="sm:hidden">Nuit.</span>
-            </th>
-            <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
-              TO
-            </th>
-            <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
-              PM
-            </th>
-            <th className="hidden px-2 py-2 text-center text-xs font-medium text-muted-foreground sm:table-cell">
-              RevPAR
-            </th>
-            <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
-              CA
-            </th>
-            <th className="hidden px-2 py-2 text-center text-xs font-medium text-muted-foreground sm:table-cell">
-              Budget
-            </th>
-            <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground">
-              <span className="hidden sm:inline">Écart</span>
-              <span className="sm:hidden">+/-</span>
-            </th>
-          </tr>
-        }
-      >
+      {/* Tableau mois par mois — en-tête et cellules partagés avec le détail
+          mensuel (colonnes strictement identiques, seule « Mois » diffère). */}
+      <AnalytiqueTable head={<RepjourStatsHead firstLabel="Mois" />}>
         <tbody>
           {analytics.map((m) => {
             const b = budgetByMonth.get(m.month)
             const hasData = m.source !== 'vide'
-            const ecart = hasData && b ? m.revenue - b.room_revenue : 0
             const isFuture =
               (year === currentYear && m.month > currentMonth) ||
               year > currentYear
@@ -257,115 +243,17 @@ export function AnalytiqueBoard() {
                     {MONTHS_SHORT[m.month - 1]}
                   </span>
                 </td>
-                {hasData ? (
-                  <>
-                    <td
-                      className={`whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums ${
-                        isFuture ? 'opacity-25' : ''
-                      }`}
-                    >
-                      <span className="hidden sm:inline">
-                        {fmt.nuitees(m.nuitees)}
-                      </span>
-                      <span className="sm:hidden">{compact(m.nuitees)}</span>
-                    </td>
-                    <td
-                      className={`whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums ${
-                        m.hasOvercapacity
-                          ? 'font-bold text-destructive'
-                          : isFuture
-                            ? 'opacity-25'
-                            : ''
-                      }`}
-                    >
-                      <span className="hidden sm:inline">{fmt.pct(m.to)}</span>
-                      <span className="sm:hidden">{compactDec(m.to)}</span>
-                    </td>
-                    <td
-                      className={`whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums ${
-                        isFuture ? 'opacity-25' : ''
-                      }`}
-                    >
-                      <span className="hidden sm:inline">{fmt.eur(m.pm)}</span>
-                      <span className="sm:hidden">{compactDec(m.pm)}</span>
-                    </td>
-                    <td
-                      className={`hidden whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums sm:table-cell ${
-                        isFuture ? 'opacity-25' : ''
-                      }`}
-                    >
-                      {fmt.eur(m.revpar)}
-                    </td>
-                    <td
-                      className={`whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums ${
-                        isFuture ? 'opacity-25' : ''
-                      }`}
-                    >
-                      <span className="hidden sm:inline">
-                        {fmt.eurInt(m.revenue)}
-                      </span>
-                      <span className="sm:hidden">{compact(m.revenue)}</span>
-                    </td>
-                    <td
-                      className={`hidden whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums text-muted-foreground sm:table-cell ${
-                        isFuture ? 'opacity-25' : ''
-                      }`}
-                    >
-                      {b ? fmt.eurInt(b.room_revenue) : '—'}
-                    </td>
-                    <td
-                      className={`whitespace-nowrap px-3 py-2 text-center text-xs font-bold tabular-nums ${
-                        ecart >= 0 ? 'text-emerald-500' : 'text-destructive'
-                      } ${isFuture ? 'opacity-25' : ''}`}
-                    >
-                      <span className="hidden sm:inline">
-                        {b ? fmt.ecartEurInt(ecart) : '—'}
-                      </span>
-                      <span className="sm:hidden">
-                        {b ? compactEcart(ecart) : '—'}
-                      </span>
-                    </td>
-                  </>
-                ) : (
-                  <>
-                    <td
-                      colSpan={3}
-                      className={`px-2 py-2 text-center text-xs text-muted-foreground/50 ${
-                        isFuture ? 'opacity-25' : ''
-                      }`}
-                    >
-                      —
-                    </td>
-                    <td
-                      className={`hidden px-2 py-2 text-center text-xs text-muted-foreground/50 sm:table-cell ${
-                        isFuture ? 'opacity-25' : ''
-                      }`}
-                    >
-                      —
-                    </td>
-                    <td
-                      className={`px-2 py-2 text-center text-xs text-muted-foreground/50 ${
-                        isFuture ? 'opacity-25' : ''
-                      }`}
-                    >
-                      —
-                    </td>
-                    <td
-                      className={`hidden px-2 py-2 text-center text-xs tabular-nums text-muted-foreground sm:table-cell ${
-                        isFuture ? 'opacity-25' : ''
-                      }`}
-                    >
-                      {b ? fmt.eurInt(b.room_revenue) : '—'}
-                    </td>
-                    <td
-                      className={`px-3 py-2 text-center text-xs text-muted-foreground/50 ${
-                        isFuture ? 'opacity-25' : ''
-                      }`}
-                    >
-                      —
-                    </td>
-                  </>
-                )}
+                <RepjourStatCells
+                  nuitees={hasData ? m.nuitees : null}
+                  to={hasData ? m.to : null}
+                  pm={hasData ? m.pm : null}
+                  revpar={hasData ? m.revpar : null}
+                  ca={hasData ? m.revenue : null}
+                  budget={b ? b.room_revenue : null}
+                  ecart={hasData && b ? m.revenue - b.room_revenue : null}
+                  future={isFuture}
+                  overcapacity={m.hasOvercapacity}
+                />
               </tr>
             )
           })}

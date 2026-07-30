@@ -1,13 +1,17 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 
-import { RepjourAnalytiqueCards } from '#/components/repjour/boards/RepjourAnalytiqueCards.tsx'
+import {
+  RepjourAnalytiqueCards,
+  RepjourStatCells,
+  RepjourStatsHead,
+} from '#/components/repjour/boards/RepjourAnalytiqueParts.tsx'
+import { subText } from '#/components/analytique/AnalytiqueCards.tsx'
 import { AnalytiqueShell } from '#/components/analytique/AnalytiqueShell.tsx'
 import { AnalytiqueTable } from '#/components/analytique/AnalytiqueTable.tsx'
 import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
 import { AnalytiqueBackButton } from '#/components/analytique/AnalytiqueBackButton.tsx'
 import { KpiLineChart } from '#/components/analytique/KpiLineChart.tsx'
-import { KpiCell } from '#/components/analytique/KpiCell.tsx'
 import { fetchUnifiedDays } from '#/lib/repjour/services/data.ts'
 import { fetchBudget } from '#/lib/repjour/services/daily.ts'
 import {
@@ -34,8 +38,6 @@ interface MonthSummary {
   avgTO: number
   avgRevPAR: number
 }
-
-const { compact, compactDec } = fmt
 
 export function AnalytiqueMoisBoard({
   year,
@@ -66,6 +68,18 @@ export function AnalytiqueMoisBoard({
       ? now.getDate()
       : 999
 
+  // Dernier jour à inclure dans les CARTES : mois passés ou en cours uniquement —
+  // tout le mois s'il est passé, aujourd'hui si c'est le mois en cours, aucun jour
+  // s'il est futur (les cartes excluent le forecast). Le tableau, lui, affiche tout.
+  const nowYear = now.getFullYear()
+  const nowMonth = now.getMonth() + 1
+  const lastCardDay =
+    year < nowYear || (year === nowYear && month < nowMonth)
+      ? 31
+      : year === nowYear && month === nowMonth
+        ? now.getDate()
+        : 0
+
   const summary: MonthSummary = useMemo(() => {
     let totalNuitees = 0
     let totalRevenue = 0
@@ -74,6 +88,8 @@ export function AnalytiqueMoisBoard({
     let count = 0
 
     for (const row of rows) {
+      // Cartes = mois passés ou en cours : on ignore les jours futurs (forecast).
+      if (new Date(row.date + 'T00:00:00').getDate() > lastCardDay) continue
       const r = row.report
       const f = row.forecast
       if (r) {
@@ -97,7 +113,27 @@ export function AnalytiqueMoisBoard({
       avgTO: count > 0 ? toSum / count : 0,
       avgRevPAR: count > 0 ? revparSum / count : 0,
     }
-  }, [rows])
+  }, [rows, lastCardDay])
+
+  // Budget quotidien = objectif mensuel réparti sur les jours du mois (même base
+  // que la courbe budget du graphe). Cadence des cartes = total / jours actifs.
+  const dailyBudget =
+    budget && rows.length > 0 ? budget.room_revenue / rows.length : null
+  const activeDays = rows.filter(
+    (row) =>
+      new Date(row.date + 'T00:00:00').getDate() <= lastCardDay &&
+      (row.report || row.forecast),
+  ).length
+  const nuiteesSub =
+    activeDays > 0
+      ? subText(
+          `moy. ${fmt.nuitees(Math.round(summary.totalNuitees / activeDays))} / jour`,
+        )
+      : undefined
+  const caSub =
+    activeDays > 0
+      ? subText(`moy. ${fmt.keur(summary.totalRevenue / activeDays)} / jour`)
+      : undefined
 
   const chartData = useMemo(() => {
     const daysInMonth = rows.length
@@ -166,50 +202,18 @@ export function AnalytiqueMoisBoard({
         rows: new Date(year, month, 0).getDate(),
       }}
     >
-      {/* Cartes résumé — partagées avec la vue annuelle : réalisé / objectif en
-          FRACTION (barre horizontale) quand un budget existe pour le mois ;
-          sinon valeur seule (budget null → pas de 3e ligne). */}
+      {/* Cartes résumé — partagées avec la vue annuelle : valeur = total (ou taux),
+          2e info = cadence « moy. X / jour ». */}
       <RepjourAnalytiqueCards
         summary={summary}
-        period="le mois"
-        budget={
-          budget
-            ? {
-                nuitees: budget.nuitees,
-                to: budget.taux_occupation,
-                revpar: budget.revpar,
-                revenue: budget.room_revenue,
-              }
-            : null
-        }
+        coverage="jours en cours et passés"
+        nuiteesSub={nuiteesSub}
+        caSub={caSub}
       />
 
-      {/* Tableau jour par jour (défile en interne, en-tête collant) */}
-      <AnalytiqueTable
-        head={
-          <tr className="border-b border-border bg-muted">
-            <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">
-              Jour
-            </th>
-            <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
-              <span className="hidden sm:inline">Nuitées</span>
-              <span className="sm:hidden">Nuit.</span>
-            </th>
-            <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
-              TO
-            </th>
-            <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
-              PM
-            </th>
-            <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
-              RevPAR
-            </th>
-            <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
-              CA
-            </th>
-          </tr>
-        }
-      >
+      {/* Tableau jour par jour — en-tête et cellules partagés avec la vue annuelle
+          (colonnes strictement identiques, seule « Jour » diffère). */}
+      <AnalytiqueTable head={<RepjourStatsHead firstLabel="Jour" />}>
         <tbody>
           {rows.map((row) => {
             const r = row.report
@@ -226,8 +230,6 @@ export function AnalytiqueMoisBoard({
             const revpar = r ? r.rj_revpar : f ? f.rev_ttc / TOTAL_ROOMS : null
             const ca = r ? r.rj_room_revenue : f ? f.rev_ttc : null
 
-            const opacity = isFuture && !r ? 'opacity-25' : ''
-
             return (
               <tr
                 key={row.date}
@@ -242,39 +244,18 @@ export function AnalytiqueMoisBoard({
                 >
                   {dayName} {dayNum}
                 </td>
-                <KpiCell
-                  value={nuitees}
-                  full={fmt.nuitees}
-                  compact={compact}
-                  className={opacity}
-                />
-                <KpiCell
-                  value={to}
-                  full={fmt.pct}
-                  compact={compactDec}
-                  className={
-                    to != null && to > 100
-                      ? 'font-bold text-destructive'
-                      : opacity
+                <RepjourStatCells
+                  nuitees={nuitees}
+                  to={to}
+                  pm={pm}
+                  revpar={revpar}
+                  ca={ca}
+                  budget={hasData ? dailyBudget : null}
+                  ecart={
+                    ca != null && dailyBudget != null ? ca - dailyBudget : null
                   }
-                />
-                <KpiCell
-                  value={pm}
-                  full={fmt.eur}
-                  compact={compactDec}
-                  className={opacity}
-                />
-                <KpiCell
-                  value={revpar}
-                  full={fmt.eur}
-                  compact={compactDec}
-                  className={opacity}
-                />
-                <KpiCell
-                  value={ca}
-                  full={fmt.eurInt}
-                  compact={compact}
-                  className={opacity}
+                  future={isFuture && !r}
+                  overcapacity={to != null && to > 100}
                 />
               </tr>
             )
