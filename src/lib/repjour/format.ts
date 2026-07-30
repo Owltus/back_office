@@ -13,6 +13,9 @@ const nuitees = (n: number) => nf0.format(n);
 
 const pct = (n: number) => nf1.format(n) + ' %';
 
+// Pourcentage arrondi à l'entier (cartes analytique : pas de décimale).
+const pctInt = (n: number) => nf0.format(n) + ' %';
+
 const eur = (n: number) => nf1.format(n) + ' €';
 
 const eurInt = (n: number) => nf0.format(n) + ' €';
@@ -48,6 +51,7 @@ const compactEcartDec = (n: number) => sign(n) + nf1.format(n);
 export const fmt = {
   nuitees,
   pct,
+  pctInt,
   eur,
   eurInt,
   ecartNuitees,

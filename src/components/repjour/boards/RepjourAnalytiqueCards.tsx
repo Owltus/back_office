@@ -55,8 +55,8 @@ export function RepjourAnalytiqueCards({
         label="Taux d'occupation moyen"
         accent={ACCENT.cyan}
         hint="Chambres occupées en moyenne, rapportées aux chambres disponibles."
-        value={fmt.pct(summary.avgTO)}
-        reference={budget ? fmt.pct(budget.to) : undefined}
+        value={fmt.pctInt(summary.avgTO)}
+        reference={budget ? fmt.pctInt(budget.to) : undefined}
       />
       <StatCard
         label="Revenu moyen par chambre"
