@@ -31,6 +31,7 @@ export function StatTile({
   children,
   printHidden,
   className,
+  coloredValue,
 }: {
   label: ReactNode
   value: ReactNode
@@ -49,6 +50,9 @@ export function StatTile({
   /** Masquer à l'impression (footer PDJ : cartes écran uniquement). */
   printHidden?: boolean
   className?: string
+  /** Colorer la VALEUR avec la couleur d'accent (`--tile`) au lieu du gris foreground.
+   * Les cartes analytique l'activent pour que TOUTES aient une valeur colorée. */
+  coloredValue?: boolean
 }) {
   const card = (
     <div
@@ -76,7 +80,13 @@ export function StatTile({
           {reference != null ? (
             // Fraction : valeur / barre horizontale / référence, centrée.
             <span className="stat-tile__value inline-flex flex-col items-center gap-[0.18rem] self-center text-center leading-[1.1]">
-              <span className="text-[1.4rem] font-bold tabular-nums text-foreground">
+              <span
+                className={cn(
+                  'text-[1.4rem] font-bold tabular-nums',
+                  !coloredValue && 'text-foreground',
+                )}
+                style={coloredValue ? { color: 'var(--tile)' } : undefined}
+              >
                 {value}
               </span>
               <span
@@ -92,7 +102,13 @@ export function StatTile({
               </span>
             </span>
           ) : (
-            <span className="stat-tile__value text-[1.4rem] font-bold leading-none tabular-nums text-foreground">
+            <span
+              className={cn(
+                'stat-tile__value text-[1.4rem] font-bold leading-none tabular-nums',
+                !coloredValue && 'text-foreground',
+              )}
+              style={coloredValue ? { color: 'var(--tile)' } : undefined}
+            >
               {value}
             </span>
           )}

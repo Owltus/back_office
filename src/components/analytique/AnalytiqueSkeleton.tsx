@@ -29,9 +29,9 @@ export function AnalytiqueSkeleton({
   /** Colonnes de la grille de cartes — miroir du board. 4 par défaut ; 5 quand une
    * carte de plus est ajoutée (ex. Rapro « Vendues »). */
   cardCols?: number
-  /** Lignes par carte : 3 (label + valeur + sous-texte, cas courant) ou 2 (label +
-   * valeur seule, ex. cartes Rapro). Évite qu'une carte squelette soit plus haute
-   * que la vraie. */
+  /** Lignes par carte : 3 (label + valeur + 3e ligne — sous-texte ou fraction
+   * budget, cas de toutes les pages actuelles) ou 2 (label + valeur seule). Évite
+   * qu'une carte squelette soit plus haute que la vraie. */
   cardLines?: number
 }) {
   return (

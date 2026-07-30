@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { ComponentProps, ReactNode } from 'react'
 
 import { StatTile } from '#/components/shared/StatTile.tsx'
 import { cn } from '#/lib/utils.ts'
@@ -36,57 +36,31 @@ export function AnalytiqueCardsGrid({
   return <div className={cardsGridClass(cols)}>{children}</div>
 }
 
+/** Carte de synthèse analytique = `StatTile` avec deux défauts : accent `primary` et
+ * VALEUR COLORÉE (`coloredValue`). Le type dérive de StatTile (pas de recopie manuelle
+ * des props) — ajouter un prop à StatTile le rend automatiquement disponible ici. */
 export function StatCard({
-  label,
-  value,
-  sub,
-  reference,
   accent = 'var(--primary)',
-  hint,
-  printHidden,
-  className,
-  children,
-}: {
-  label: ReactNode
-  value: ReactNode
-  sub?: ReactNode
-  /** Référence de comparaison (budget / objectif) → valeur affichée en fraction. */
-  reference?: ReactNode
-  /** Couleur du liseré (défaut primary). */
-  accent?: string
-  /** Explication au survol (tooltip). */
-  hint?: string
-  /** Masquer à l'impression (relayé à StatTile). */
-  printHidden?: boolean
-  /** Classes supplémentaires (relayées à StatTile). */
-  className?: string
-  children?: ReactNode
-}) {
+  coloredValue = true,
+  ...rest
+}: Omit<ComponentProps<typeof StatTile>, 'accent'> & { accent?: string }) {
+  return <StatTile accent={accent} coloredValue={coloredValue} {...rest} />
+}
+
+/** Petit sous-texte grisé — 2e information d'une carte, rendu sous la valeur.
+ * Rendu unique partagé (ex. « 1 234 au total », « 38 % du total »). */
+export function subText(content: ReactNode) {
   return (
-    <StatTile
-      label={label}
-      value={value}
-      accent={accent}
-      reference={reference}
-      sub={sub}
-      hint={hint}
-      printHidden={printHidden}
-      className={className}
-    >
-      {children}
-    </StatTile>
+    <span className="text-[0.7rem] font-medium text-muted-foreground">
+      {content}
+    </span>
   )
 }
 
-/** Sous-texte « X % <suffix> » — 2e information d'une carte : la PART qu'elle
- * représente dans un total (ex. caisse « du total », rapro « des vendues », parking
- * « des réservations »). `undefined` si le total est nul (rien à afficher). Partagé
- * pour un rendu identique partout. */
+/** Sous-texte « X % <suffix> » — la PART qu'une carte représente dans un total
+ * (caisse « du total », rapro « des vendues », parking « des réservations »).
+ * `undefined` si le total est nul (rien à afficher). */
 export function shareSub(part: number, total: number, suffix = 'du total') {
   if (total <= 0) return undefined
-  return (
-    <span className="text-[0.7rem] font-medium text-muted-foreground">
-      {`${Math.round((part / total) * 100)} % ${suffix}`}
-    </span>
-  )
+  return subText(`${Math.round((part / total) * 100)} % ${suffix}`)
 }
