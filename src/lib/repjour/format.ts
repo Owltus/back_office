@@ -11,7 +11,7 @@ const sign = (n: number) => (n >= 0 ? '+' : '');
 
 const nuitees = (n: number) => nf0.format(n);
 
-const pct = (n: number) => nf1.format(n) + '%';
+const pct = (n: number) => nf1.format(n) + ' %';
 
 const eur = (n: number) => nf1.format(n) + ' €';
 
