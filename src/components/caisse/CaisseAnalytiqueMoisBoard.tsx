@@ -7,6 +7,7 @@ import { AnalytiqueTable } from '#/components/analytique/AnalytiqueTable.tsx'
 import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
 import { AnalytiqueBackButton } from '#/components/analytique/AnalytiqueBackButton.tsx'
 import { KpiLineChart } from '#/components/analytique/KpiLineChart.tsx'
+import { subText } from '#/components/analytique/AnalytiqueCards.tsx'
 import {
   CaisseAnalytiqueCards,
   CaisseStatCells,
@@ -21,7 +22,7 @@ import { DAY_NAMES, MONTHS_LABELS } from '#/lib/repjour/constants.ts'
  * Détail analytique Caisse d'un MOIS, jour par jour — gabarit calqué sur
  * repjour/AnalytiqueMoisBoard, alimenté par les feuilles de caisse (fetchSheets)
  * agrégées par jour (aggregateCaisseDaily). Rend : cartes de synthèse du mois,
- * tableau jour par jour et deux graphiques (encaissé, écart). Aucune écriture
+ * tableau jour par jour et un graphique (encaissé). Aucune écriture
  * Supabase — uniquement des `select`. `year` / `month` viennent des params de
  * route ; retour à la vue annuelle par la flèche.
  */
@@ -88,6 +89,12 @@ export function CaisseAnalytiqueMoisBoard({
     return `${wd.charAt(0).toUpperCase()}${wd.slice(1)} ${day} ${monthLabel.toLowerCase()}`
   }
 
+  // 2e info de la carte Total encaissé : moyenne par jour de caisse.
+  const totalSub =
+    days.length > 0
+      ? subText(`moy. ${fmtEur(summary.encaisse / days.length)} / jour`)
+      : undefined
+
   const navigate = useNavigate()
 
   return (
@@ -103,7 +110,7 @@ export function CaisseAnalytiqueMoisBoard({
       printTitle={`Caisse · ${monthLabel} ${year}`}
     >
       {/* Synthèse du mois — cartes partagées avec la vue annuelle. */}
-      <CaisseAnalytiqueCards summary={summary} periodLabel="sur le mois" />
+      <CaisseAnalytiqueCards summary={summary} totalSub={totalSub} />
 
       {/* Tableau jour par jour */}
       <AnalytiqueTable head={<CaisseStatsHead firstLabel="Jour" />}>

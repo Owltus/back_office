@@ -7,6 +7,7 @@ import { AnalytiqueTable } from '#/components/analytique/AnalytiqueTable.tsx'
 import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
 import { YearNav } from '#/components/analytique/YearNav.tsx'
 import { useAnnualYear } from '#/components/analytique/useAnnualYear.ts'
+import { subText } from '#/components/analytique/AnalytiqueCards.tsx'
 import { KpiLineChart } from '#/components/analytique/KpiLineChart.tsx'
 import {
   CaisseAnalytiqueCards,
@@ -28,7 +29,7 @@ import { MONTHS_LABELS, MONTHS_SHORT } from '#/lib/repjour/constants.ts'
  * Charge en LECTURE toutes les feuilles de caisse (fetchSheets), en dérive les
  * années disponibles puis agrège l'année sélectionnée par mois
  * (aggregateCaisseMonthly). Rend : cartes de synthèse annuelle, tableau mois par
- * mois et deux graphiques (total encaissé, écart). Aucune écriture Supabase —
+ * mois et un graphique (total encaissé). Aucune écriture Supabase —
  * uniquement des `select`. Ouverte à tous les rôles connectés en lecture (garde
  * `ProtectedRoute` sur la route).
  */
@@ -72,6 +73,13 @@ export function CaisseAnalytiqueBoard() {
     return i >= 0 ? `${MONTHS_LABELS[i]} ${year}` : label
   }
 
+  // 2e info de la carte Total encaissé : moyenne par mois encaissé.
+  const activeMonths = months.filter((m) => m.sheets > 0).length
+  const totalSub =
+    activeMonths > 0
+      ? subText(`moy. ${fmtEur(summary.encaisse / activeMonths)} / mois`)
+      : undefined
+
   return (
     <AnalytiqueShell
       title="Analytique"
@@ -88,7 +96,7 @@ export function CaisseAnalytiqueBoard() {
       printTitle={`Caisse · ${year}`}
     >
       {/* Synthèse annuelle — cartes partagées avec le détail mensuel. */}
-      <CaisseAnalytiqueCards summary={summary} periodLabel="sur l'année" />
+      <CaisseAnalytiqueCards summary={summary} totalSub={totalSub} />
 
       {/* Tableau mois par mois */}
       <AnalytiqueTable head={<CaisseStatsHead firstLabel="Mois" />}>

@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react'
+
 import {
   AnalytiqueCardsGrid,
   shareSub,
@@ -36,22 +38,25 @@ import { cn } from '#/lib/utils.ts'
 const ECARTS_HINT =
   'Feuilles clôturées présentant un écart : soit la recette comptée diffère de l’attendu (espèces, CB, chèques vacances ou Adyen), soit le fond de caisse n’est pas à 150 €.'
 
-/** Cartes de synthèse : Total encaissé / Espèces / Carte / Écarts.
- *  `periodLabel` complète l'intitulé encaissé (« sur l'année » / « sur le mois »). */
+/** Cartes de synthèse : Total encaissé / Espèces / Carte / Écarts. Titres identiques
+ * en vue annuelle et mensuelle (la période est déjà donnée par la page). */
 export function CaisseAnalytiqueCards({
   summary,
-  periodLabel,
+  totalSub,
 }: {
   summary: CaisseSummary
-  periodLabel: string
+  /** 2e info de la carte Total encaissé (cadence par mois / jour), fournie par le
+   * board qui connaît le nombre de mois / jours. */
+  totalSub?: ReactNode
 }) {
   const carte = summary.cb + summary.adyen
   return (
     <AnalytiqueCardsGrid>
       <StatCard
-        label={`Total encaissé ${periodLabel}`}
+        label="Total encaissé"
         accent={ACCENT.green}
         hint="Somme réellement encaissée, tous moyens de paiement confondus."
+        sub={totalSub}
         value={fmtEur(summary.encaisse)}
       />
       <StatCard
