@@ -15,11 +15,12 @@ import { YearNav } from '#/components/analytique/YearNav.tsx'
 import { useAnnualYear } from '#/components/analytique/useAnnualYear.ts'
 import { KpiLineChart } from '#/components/analytique/KpiLineChart.tsx'
 import { fetchReservations } from '#/lib/parking/service.ts'
+import { fetchYearAnalytics } from '#/lib/repjour/services/daily.ts'
 import {
   aggregateParkingMonthly,
   yearsFromReservations,
 } from '#/lib/parking/analytics.ts'
-import { fmtInt, fmtPct } from '#/lib/parking/format.ts'
+import { fmtInt, fmtPct, fmtPctInt } from '#/lib/parking/format.ts'
 import { MONTHS_LABELS, MONTHS_SHORT } from '#/lib/repjour/constants.ts'
 import { ACCENT } from '#/components/analytique/accents.ts'
 
@@ -41,7 +42,7 @@ export function ParkingAnalytiqueBoard() {
 
   // Toutes les réservations (une seule lecture, mise en cache). L'agrégation par
   // année se fait ensuite en mémoire — pas de nouvelle requête par année.
-  const { data: reservations = [], isPending: loading } = useQuery({
+  const { data: reservations = [], isPending: loadingRes } = useQuery({
     queryKey: ['parking', 'analytics'],
     queryFn: fetchReservations,
   })
@@ -54,28 +55,56 @@ export function ParkingAnalytiqueBoard() {
   // Année sélectionnée + recalage si absente de la liste (hook partagé).
   const { year, setYear } = useAnnualYear(years, currentYear)
 
+  // Occupation HÔTEL mois par mois (nuitées) — dénominateur du captage : part des
+  // chambres occupées qui ont aussi pris une place de parking. Même service que
+  // l'analytique repjour, clé de cache propre au parking.
+  const { data: hotelMonths = [], isPending: loadingHotel } = useQuery({
+    queryKey: ['parking', 'hotel-year', year],
+    queryFn: () => fetchYearAnalytics(year),
+  })
+  const loading = loadingRes || loadingHotel
+
   const months = useMemo(
     () => aggregateParkingMonthly(reservations, year),
     [reservations, year],
   )
+
+  // Nuitées HÔTEL par mois (dénominateur du captage), indexées par numéro de mois.
+  const hotelNuiteesByMonth = useMemo(() => {
+    const map = new Map<number, number>()
+    for (const h of hotelMonths) map.set(h.month, h.nuitees)
+    return map
+  }, [hotelMonths])
 
   const summary = useMemo(() => {
     const active = months.filter((m) => m.reservations > 0)
     const count = active.length
     const totalReservations = months.reduce((s, m) => s + m.reservations, 0)
     const totalNights = months.reduce((s, m) => s + m.nights, 0)
+    // Captage annuel = Σ nuits-places client ÷ Σ nuitées hôtel, sur les seuls mois
+    // où l'occupation hôtel est connue (nuitées > 0). « — » sinon.
+    let capNum = 0
+    let capDen = 0
+    for (const m of months) {
+      const nuitees = hotelNuiteesByMonth.get(m.month) ?? 0
+      if (nuitees > 0) {
+        capNum += m.clientNights
+        capDen += nuitees
+      }
+    }
     return {
       totalReservations,
       totalNights,
       totalUnpaid: months.reduce((s, m) => s + m.unpaid, 0),
       avgOccupancy:
         count > 0 ? active.reduce((s, m) => s + m.occupancyRate, 0) / count : 0,
+      avgCaptage: capDen > 0 ? (capNum / capDen) * 100 : null,
       // 2e info : cadence mensuelle des réservations + durée moyenne d'un séjour.
       reservationsPerMonth: count > 0 ? totalReservations / count : 0,
       nightsPerReservation:
         totalReservations > 0 ? totalNights / totalReservations : 0,
     }
-  }, [months])
+  }, [months, hotelNuiteesByMonth])
 
   const chartData = useMemo(
     () =>
@@ -105,10 +134,10 @@ export function ParkingAnalytiqueBoard() {
       }
       loading={loading}
       printTitle={`Parking · ${year}`}
-      skeleton={{ cols: 6, charts: 1, rows: 12 }}
+      skeleton={{ cols: 7, charts: 1, rows: 12, cards: 5, cardCols: 5 }}
     >
       {/* Synthèse annuelle */}
-      <AnalytiqueCardsGrid>
+      <AnalytiqueCardsGrid cols={5}>
         <StatCard
           label="Réservations"
           accent={ACCENT.indigo}
@@ -123,7 +152,7 @@ export function ParkingAnalytiqueBoard() {
         <StatCard
           label="Taux d'occupation moyen"
           accent={ACCENT.cyan}
-          value={fmtPct(summary.avgOccupancy)}
+          value={fmtPctInt(summary.avgOccupancy)}
           hint="Places occupées en moyenne, rapportées aux places disponibles."
         />
         <StatCard
@@ -148,6 +177,12 @@ export function ParkingAnalytiqueBoard() {
             'des réservations',
           )}
         />
+        <StatCard
+          label="Captage"
+          accent={ACCENT.pink}
+          value={summary.avgCaptage != null ? fmtPctInt(summary.avgCaptage) : '—'}
+          hint="Places de parking occupées rapportées aux chambres occupées de l'hôtel."
+        />
       </AnalytiqueCardsGrid>
 
       {/* Tableau mois par mois */}
@@ -157,14 +192,23 @@ export function ParkingAnalytiqueBoard() {
             <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">
               Mois
             </th>
-            <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
+            <th
+              className="px-2 py-2 text-center text-xs font-medium text-muted-foreground"
+              style={{ color: ACCENT.indigo }}
+            >
               Résas
             </th>
-            <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
+            <th
+              className="px-2 py-2 text-center text-xs font-medium text-muted-foreground"
+              style={{ color: ACCENT.cyan }}
+            >
               <span className="hidden sm:inline">Occupation</span>
               <span className="sm:hidden">Occ.</span>
             </th>
-            <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
+            <th
+              className="px-2 py-2 text-center text-xs font-medium text-muted-foreground"
+              style={{ color: ACCENT.green }}
+            >
               Nuits
             </th>
             <th className="hidden px-2 py-2 text-center text-xs font-medium text-muted-foreground sm:table-cell">
@@ -173,8 +217,17 @@ export function ParkingAnalytiqueBoard() {
             <th className="hidden px-2 py-2 text-center text-xs font-medium text-muted-foreground sm:table-cell">
               Réservées
             </th>
-            <th className="px-3 py-2 text-center text-xs font-medium text-muted-foreground">
+            <th
+              className="px-2 py-2 text-center text-xs font-medium text-muted-foreground"
+              style={{ color: ACCENT.red }}
+            >
               Impayées
+            </th>
+            <th
+              className="px-3 py-2 text-center text-xs font-medium text-muted-foreground"
+              style={{ color: ACCENT.pink }}
+            >
+              Captage
             </th>
           </tr>
         }
@@ -182,6 +235,8 @@ export function ParkingAnalytiqueBoard() {
         <tbody>
           {months.map((m) => {
             const hasData = m.reservations > 0
+            const nuitees = hotelNuiteesByMonth.get(m.month) ?? 0
+            const captage = nuitees > 0 ? (m.clientNights / nuitees) * 100 : null
             return (
               <tr
                 key={m.month}
@@ -207,13 +262,22 @@ export function ParkingAnalytiqueBoard() {
                 </td>
                 {hasData ? (
                   <>
-                    <td className="whitespace-nowrap px-2 py-2 text-center text-xs font-medium tabular-nums text-foreground">
+                    <td
+                      className="whitespace-nowrap px-2 py-2 text-center text-xs font-medium tabular-nums"
+                      style={{ color: ACCENT.indigo }}
+                    >
                       {fmtInt(m.reservations)}
                     </td>
-                    <td className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums">
+                    <td
+                      className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums"
+                      style={{ color: ACCENT.cyan }}
+                    >
                       {fmtPct(m.occupancyRate)}
                     </td>
-                    <td className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums">
+                    <td
+                      className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums"
+                      style={{ color: ACCENT.green }}
+                    >
                       {fmtInt(m.nights)}
                     </td>
                     <td className="hidden whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums sm:table-cell">
@@ -222,8 +286,17 @@ export function ParkingAnalytiqueBoard() {
                     <td className="hidden whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums sm:table-cell">
                       {fmtInt(m.reserved)}
                     </td>
-                    <td className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums text-muted-foreground">
+                    <td
+                      className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums"
+                      style={{ color: ACCENT.red }}
+                    >
                       {fmtInt(m.unpaid)}
+                    </td>
+                    <td
+                      className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums text-muted-foreground/50"
+                      style={captage != null ? { color: ACCENT.pink } : undefined}
+                    >
+                      {captage != null ? fmtPct(captage) : '—'}
                     </td>
                   </>
                 ) : (
@@ -238,6 +311,9 @@ export function ParkingAnalytiqueBoard() {
                       —
                     </td>
                     <td className="hidden px-2 py-2 text-center text-xs text-muted-foreground/50 sm:table-cell">
+                      —
+                    </td>
+                    <td className="px-2 py-2 text-center text-xs text-muted-foreground/50">
                       —
                     </td>
                     <td className="px-3 py-2 text-center text-xs text-muted-foreground/50">

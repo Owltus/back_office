@@ -24,6 +24,9 @@ export interface ParkingMonthStats {
   reservations: number
   /** Nuits cumulées (somme des `nights`) sur le mois. */
   nights: number
+  /** Nuits-places CLIENT (personnel exclu) cumulées — numérateur du captage
+   * hôtelier (rapporté aux nuitées de l'hôtel). */
+  clientNights: number
   /**
    * Taux d'occupation moyen (%) : places-nuits client occupées rapportées à la
    * capacité du mois (12 places × nombre de jours du mois).
@@ -48,6 +51,7 @@ function emptyMonth(month: number): ParkingMonthStats {
     month,
     reservations: 0,
     nights: 0,
+    clientNights: 0,
     occupancyRate: 0,
     paid: 0,
     reserved: 0,
@@ -93,6 +97,7 @@ export function aggregateParkingMonthly(
   for (let i = 0; i < 12; i++) {
     const s = months[i]
     const capacity = CLIENT_SPOTS * daysInMonth(year, i + 1)
+    s.clientNights = clientNights[i]
     s.occupancyRate = capacity > 0 ? (clientNights[i] / capacity) * 100 : 0
   }
   return months
