@@ -16,11 +16,7 @@ import {
   PdjStatsHead,
 } from '#/components/pdj/PdjAnalytiqueParts.tsx'
 import { fetchRange, fetchServiceDates } from '#/lib/pdj/service.ts'
-import {
-  aggregatePdjMonthly,
-  MAX_CLIENTS_PER_DAY,
-  yearsFromDates,
-} from '#/lib/pdj/analytics.ts'
+import { aggregatePdjMonthly, yearsFromDates } from '#/lib/pdj/analytics.ts'
 import { fmtInt } from '#/lib/pdj/format.ts'
 import { MONTHS_LABELS, MONTHS_SHORT } from '#/lib/repjour/constants.ts'
 
@@ -62,7 +58,7 @@ export function PdjAnalytiqueBoard() {
   // Moyennes PAR JOUR. Inclus : par jour de service (connu partout). Servis / Extra
   // / Non servis : par jour RENSEIGNÉ (conso saisie) — sinon un jour non renseigné
   // les tirerait vers le bas. « Servis » = TOTAL servi (extra compris), comme le
-  // tableau. Conversion : total servi (extras compris) sur les présents. `null` si
+  // tableau. Captage : total servi (extras compris) sur les présents. `null` si
   // le dénominateur est nul (→ « — »).
   const summary = useMemo(() => {
     const totalDays = months.reduce((s, m) => s + m.days, 0)
@@ -89,13 +85,9 @@ export function PdjAnalytiqueBoard() {
       totalServed,
       totalExtra,
       totalNonServis,
-      // Conversion / Remplissage : sur les seules données RENSEIGNÉES (servi), pas
-      // dilué par les mois réservés-mais-non-saisis. « — » si aucun servi.
+      // Captage : sur les seules données RENSEIGNÉES (servi), pas dilué par les mois
+      // réservés-mais-non-saisis. « — » si aucun servi.
       avgConversion: recGuests > 0 ? (totalServed / recGuests) * 100 : null,
-      avgCoverage:
-        recDays > 0
-          ? (totalServed / (MAX_CLIENTS_PER_DAY * recDays)) * 100
-          : null,
     }
   }, [months])
 
@@ -161,7 +153,7 @@ export function PdjAnalytiqueBoard() {
       }
       loading={loading}
       printTitle={`PDJ · ${year}`}
-      skeleton={{ cols: 9, charts: 1, rows: 12, cards: 6, cardCols: 6, cardLines: 3 }}
+      skeleton={{ cols: 8, charts: 1, rows: 12, cards: 5, cardCols: 5, cardLines: 3 }}
     >
       <PdjAnalytiqueCards summary={summary} />
 
@@ -205,7 +197,6 @@ export function PdjAnalytiqueBoard() {
                           noShow: m.noShow,
                           potential: m.potential,
                           conversion: m.conversion,
-                          coverage: m.coverage,
                         }
                       : undefined
                   }

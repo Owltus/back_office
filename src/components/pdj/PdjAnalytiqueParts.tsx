@@ -9,21 +9,18 @@ import {
 /*
  * Briques de tableau partagées par les deux vues analytique PDJ (annuelle et
  * détail mensuel) : en-tête et cellules de valeur/tirets. Les deux vues partagent
- * 9 colonnes (Occupation / Clients / Inclus / Servis / Extra / Non servis /
- * Potentiel / Conversion / Remplissage) ; la vue annuelle ajoute une colonne
- * « Jours » (withDays). « Servis » = TOTAL des PDJ servis (extra compris) ;
- * « Extra » = servis à des clients NON réservés (Σ max(0, servi − inclus) par chambre),
- * un SOUS-ensemble de Servis ; « Non servis » = réservés/payés mais jamais servis
- * (Σ max(0, inclus − servi) par chambre). Réconciliation : réservés servis = Servis −
- * Extra ; Inclus = (Servis − Extra) + Non servis. Le GRAPHE, lui, empile 3 tranches
- * DISJOINTES (réservés servis / extra / non servis) pour ne rien double-compter. Le
- * couple Conversion/Remplissage reprend la logique PM/RevPAR de repjour, en base CLIENTS :
- *   • « Conversion » = Servis ÷ Présents — comme le PM (par client présent) ;
- *   • « Remplissage » = Servis ÷ capacité CLIENTS (160/jour = 80 ch. × 2) — comme le
- *     RevPAR (rapporté à toute la capacité, donc bas si l'hôtel est peu rempli).
- * Les deux sont calculées dans le métier (`analytics.ts`) et valent `null` (« — »)
- * quand elles ne sont pas calculables. Les CARTES de synthèse (PdjAnalytiqueCards) sont
- * IDENTIQUES en annuel et mensuel → une seule définition, partagée ci-dessous.
+ * 8 colonnes (Occupation / Clients / Inclus / Servis / Extra / Non servis /
+ * Potentiel / Captage) ; la vue annuelle ajoute une colonne « Jours » (withDays).
+ * « Servis » = TOTAL des PDJ servis (extra compris) ; « Extra » = servis à des
+ * clients NON réservés (Σ max(0, servi − inclus) par chambre), un SOUS-ensemble de
+ * Servis ; « Non servis » = réservés/payés mais jamais servis (Σ max(0, inclus −
+ * servi) par chambre). Réconciliation : réservés servis = Servis − Extra ; Inclus =
+ * (Servis − Extra) + Non servis. Le GRAPHE, lui, empile 3 tranches DISJOINTES
+ * (réservés servis / extra / non servis) pour ne rien double-compter. Le « Captage »
+ * = Servis ÷ Présents (part des clients présents ayant pris le petit-déjeuner),
+ * calculé dans le métier (`analytics.ts`), vaut `null` (« — ») s'il n'est pas
+ * calculable. Les CARTES de synthèse (PdjAnalytiqueCards) sont IDENTIQUES en annuel
+ * et mensuel → une seule définition, partagée ci-dessous.
  */
 
 /** Résumé PDJ (mêmes champs en annuel et mensuel) alimentant les 6 cartes. */
@@ -33,23 +30,22 @@ export interface PdjAnalytiqueSummary {
   avgExtra: number | null
   avgNonServis: number | null
   avgConversion: number | null
-  avgCoverage: number | null
   totalIncluded: number
   totalServed: number
   totalExtra: number
   totalNonServis: number
 }
 
-/** Les 6 cartes de synthèse PDJ — IDENTIQUES en vue annuelle et mensuelle (même
- * `summary`). Valeur = total, sous-texte = cadence « moy. X / jour » ; Conversion /
- * Remplissage = taux (pas de sous-texte). Une seule définition, partagée. */
+/** Les 5 cartes de synthèse PDJ — IDENTIQUES en vue annuelle et mensuelle (même
+ * `summary`). Valeur = total, sous-texte = cadence « moy. X / jour » ; le Captage
+ * est un taux (pas de sous-texte). Une seule définition, partagée. */
 export function PdjAnalytiqueCards({
   summary,
 }: {
   summary: PdjAnalytiqueSummary
 }) {
   return (
-    <AnalytiqueCardsGrid cols={6}>
+    <AnalytiqueCardsGrid cols={5}>
       <StatCard
         label="Inclus"
         accent={ACCENT.slate}
@@ -97,19 +93,11 @@ export function PdjAnalytiqueCards({
         }
       />
       <StatCard
-        label="Conversion"
-        accent={ACCENT.cyan}
+        label="Captage"
+        accent={ACCENT.pink}
         hint="Clients servis rapportés aux clients présents"
         value={
           summary.avgConversion != null ? fmtPctInt(summary.avgConversion) : '—'
-        }
-      />
-      <StatCard
-        label="Remplissage"
-        accent={ACCENT.pink}
-        hint="Clients servis rapportés au nombre maximum de clients"
-        value={
-          summary.avgCoverage != null ? fmtPctInt(summary.avgCoverage) : '—'
         }
       />
     </AnalytiqueCardsGrid>
@@ -127,10 +115,8 @@ export interface PdjRowStats {
   /** null = conso non saisie → « — » (pas de « non servis » sans servi). */
   noShow: number | null
   potential: number
-  /** Conversion (%) = servi ÷ présents. null → « — ». Calculée en amont. */
+  /** Captage (%) = servi ÷ présents. null → « — ». Calculé en amont. */
   conversion: number | null
-  /** Remplissage (%) = servi ÷ capacité clients. null → « — ». Calculée en amont. */
-  coverage: number | null
   days?: number
 }
 
@@ -164,8 +150,8 @@ export function PdjStatsHead({
         Inclus
       </th>
       {/* En-têtes colorées comme leurs valeurs / cartes (Servis indigo, Extra vert,
-          Non servis ambre, Conversion cyan, Remplissage rose). L'inline `color`
-          l'emporte sur `text-muted-foreground` — même procédé que les cellules. */}
+          Non servis ambre, Captage rose). L'inline `color` l'emporte sur
+          `text-muted-foreground` — même procédé que les cellules. */}
       <th
         className="px-2 py-2 text-center text-xs font-medium text-muted-foreground"
         style={{ color: ACCENT.indigo }}
@@ -188,17 +174,11 @@ export function PdjStatsHead({
         Potentiel
       </th>
       <th
-        className="px-2 py-2 text-center text-xs font-medium text-muted-foreground"
-        style={{ color: ACCENT.cyan }}
-      >
-        <span className="hidden sm:inline">Conversion</span>
-        <span className="sm:hidden">Conv.</span>
-      </th>
-      <th
-        className="hidden px-3 py-2 text-center text-xs font-medium text-muted-foreground sm:table-cell"
+        className="px-3 py-2 text-center text-xs font-medium text-muted-foreground"
         style={{ color: ACCENT.pink }}
       >
-        Remplissage
+        <span className="hidden sm:inline">Captage</span>
+        <span className="sm:hidden">Capt.</span>
       </th>
     </tr>
   )
@@ -242,10 +222,7 @@ export function PdjStatCells({
         <td className="hidden px-2 py-2 text-center text-xs text-muted-foreground/50 sm:table-cell">
           —
         </td>
-        <td className="px-2 py-2 text-center text-xs text-muted-foreground/50">
-          —
-        </td>
-        <td className="hidden px-3 py-2 text-center text-xs text-muted-foreground/50 sm:table-cell">
+        <td className="px-3 py-2 text-center text-xs text-muted-foreground/50">
           —
         </td>
       </>
@@ -294,19 +271,13 @@ export function PdjStatCells({
       <td className="hidden whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums text-muted-foreground sm:table-cell">
         {fmtInt(stats.potential)}
       </td>
-      {/* Conversion / Remplissage : calculées en amont (métier), base CLIENTS.
-          Conversion en cyan (--chart-2), même code couleur que sa carte de synthèse. */}
+      {/* Captage : calculé en amont (métier), base CLIENTS. En rose (--chart-4),
+          même code couleur que sa carte de synthèse. */}
       <td
-        className="whitespace-nowrap px-2 py-2 text-center text-xs font-medium tabular-nums text-muted-foreground/50"
-        style={stats.conversion != null ? { color: ACCENT.cyan } : undefined}
+        className="whitespace-nowrap px-3 py-2 text-center text-xs font-medium tabular-nums text-muted-foreground/50"
+        style={stats.conversion != null ? { color: ACCENT.pink } : undefined}
       >
         {stats.conversion != null ? fmtPctInt(stats.conversion) : '—'}
-      </td>
-      <td
-        className="hidden whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums text-muted-foreground/50 sm:table-cell"
-        style={stats.coverage != null ? { color: ACCENT.pink } : undefined}
-      >
-        {stats.coverage != null ? fmtPctInt(stats.coverage) : '—'}
       </td>
     </>
   )

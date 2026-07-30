@@ -15,7 +15,7 @@ import {
   PdjStatsHead,
 } from '#/components/pdj/PdjAnalytiqueParts.tsx'
 import { fetchRange } from '#/lib/pdj/service.ts'
-import { aggregatePdjDaily, MAX_CLIENTS_PER_DAY } from '#/lib/pdj/analytics.ts'
+import { aggregatePdjDaily } from '#/lib/pdj/analytics.ts'
 import { fmtInt } from '#/lib/pdj/format.ts'
 import { DAY_NAMES, MONTHS_LABELS } from '#/lib/repjour/constants.ts'
 
@@ -70,7 +70,7 @@ export function PdjAnalytiqueMoisBoard({
 
   // Moyennes par jour (cf. PdjAnalytiqueBoard). Inclus : par jour de service.
   // Servis (= total servi, extra compris) / Extra / Non servis : par jour RENSEIGNÉ.
-  // Conversion : total servi (extras compris) ÷ présents. `null` → « — ».
+  // Captage : total servi (extras compris) ÷ présents. `null` → « — ».
   const summary = useMemo(() => {
     const totalDays = stats.length
     const recorded = stats.filter((d) => d.extra != null)
@@ -93,13 +93,9 @@ export function PdjAnalytiqueMoisBoard({
       totalServed,
       totalExtra,
       totalNonServis,
-      // Conversion / Remplissage : sur les seuls jours RENSEIGNÉS (servi), pas dilué
-      // par les jours réservés-mais-non-saisis. « — » si aucun servi.
+      // Captage : sur les seuls jours RENSEIGNÉS (servi), pas dilué par les jours
+      // réservés-mais-non-saisis. « — » si aucun servi.
       avgConversion: recGuests > 0 ? (totalServed / recGuests) * 100 : null,
-      avgCoverage:
-        recDays > 0
-          ? (totalServed / (MAX_CLIENTS_PER_DAY * recDays)) * 100
-          : null,
     }
   }, [stats])
 
@@ -162,11 +158,11 @@ export function PdjAnalytiqueMoisBoard({
       loading={loading}
       printTitle={`PDJ · ${monthLabel} ${year}`}
       skeleton={{
-        cols: 9,
+        cols: 8,
         charts: 1,
         rows: new Date(year, month, 0).getDate(),
-        cards: 6,
-        cardCols: 6,
+        cards: 5,
+        cardCols: 5,
         cardLines: 3,
       }}
     >

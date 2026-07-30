@@ -12,16 +12,6 @@ import type { PdjDayRow } from '#/lib/pdj/service.ts'
 
 const TOTAL_ROOMS = ALL_ROOMS.length
 
-/*
- * Capacité en CLIENTS (pas en chambres). Par défaut 2 personnes par chambre
- * (chambres doubles) → 80 × 2 = 160 clients/jour au maximum. Sert de dénominateur
- * à la « remplissage » : servi rapporté à la capacité clients de la période, et
- * NON au nombre de chambres (sinon on mélange couverts et chambres). La conversion,
- * elle, se rapporte aux clients réellement PRÉSENTS (guests).
- */
-const PAX_PER_ROOM = 2
-export const MAX_CLIENTS_PER_DAY = TOTAL_ROOMS * PAX_PER_ROOM
-
 /** Synthèse d'un mois (indices 1..12). */
 export interface PdjMonthStats {
   month: number
@@ -49,11 +39,8 @@ export interface PdjMonthStats {
   potential: number
   /** Taux d'occupation moyen des jours du mois (%, base CHAMBRES : occupées / 80). */
   avgOccupancy: number
-  /** Conversion = servi ÷ clients PRÉSENTS (%). `null` si aucun client. */
+  /** Captage = servi ÷ clients PRÉSENTS (%). `null` si aucun client. */
   conversion: number | null
-  /** Remplissage = servi ÷ capacité CLIENTS de la période (160/j × jours) (%).
-   * `null` si aucun jour. Pendant « RevPAR » en base clients. */
-  coverage: number | null
 }
 
 /** Un mois vide (aucune donnée). */
@@ -71,7 +58,6 @@ function emptyMonth(month: number): PdjMonthStats {
     potential: 0,
     avgOccupancy: 0,
     conversion: null,
-    coverage: null,
   }
 }
 
@@ -156,13 +142,10 @@ export function aggregatePdjMonthly(
     const s = months[i]
     s.potential = Math.max(0, s.guests - s.included)
     s.avgOccupancy = s.days > 0 ? occSum[i] / s.days : 0
-    // Conversion / Remplissage : « — » (null) si AUCUN servi (donnée non saisie),
-    // comme extra/non-servis — pas un trompeur 0 %. Conversion = servi ÷ présents ;
-    // Remplissage = servi ÷ capacité CLIENTS (160/j × jours de service).
+    // Captage : « — » (null) si AUCUN servi (donnée non saisie), comme extra/non-
+    // servis — pas un trompeur 0 %. Captage = servi ÷ clients présents.
     s.conversion =
       s.served > 0 && s.guests > 0 ? (s.served / s.guests) * 100 : null
-    s.coverage =
-      s.served > 0 ? (s.served / (MAX_CLIENTS_PER_DAY * s.days)) * 100 : null
   }
   return months
 }
@@ -192,10 +175,8 @@ export interface PdjDayStats {
   potential: number
   /** Taux d'occupation du jour (%, base CHAMBRES : occupées / 80). */
   occupancy: number
-  /** Conversion = servi ÷ clients PRÉSENTS (%). `null` si aucun client. */
+  /** Captage = servi ÷ clients PRÉSENTS (%). `null` si aucun client. */
   conversion: number | null
-  /** Remplissage = servi ÷ capacité CLIENTS du jour (160) (%). */
-  coverage: number | null
 }
 
 /**
@@ -265,11 +246,10 @@ export function aggregatePdjDaily(
         noShow: s.served > 0 ? s.noShow : null,
         potential: Math.max(0, s.guests - s.included),
         occupancy: (rooms / TOTAL_ROOMS) * 100,
-        // Conversion / Remplissage : « — » si AUCUN servi ce jour (comme extra/non-
-        // servis). Conversion = servi ÷ présents ; Remplissage = servi ÷ 160 (capacité).
+        // Captage : « — » si AUCUN servi ce jour (comme extra/non-servis).
+        // Captage = servi ÷ clients présents.
         conversion:
           s.served > 0 && s.guests > 0 ? (s.served / s.guests) * 100 : null,
-        coverage: s.served > 0 ? (s.served / MAX_CLIENTS_PER_DAY) * 100 : null,
       }
     })
 }
