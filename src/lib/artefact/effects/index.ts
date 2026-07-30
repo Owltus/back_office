@@ -7,6 +7,7 @@ import { bubblesEffect } from './bubbles.ts'
 import { confettiEffect } from './confetti.ts'
 import { disintegrateEffect } from './disintegrate.ts'
 import { fireworksEffect } from './fireworks.ts'
+import { flowersEffect } from './flowers.ts'
 import { glitchEffect } from './glitch.ts'
 import { heartEffect } from './heart.ts'
 import { heartSwarmEffect } from './heartswarm.ts'
@@ -42,6 +43,7 @@ export const EFFECTS: readonly EffectDefinition[] = [
   snowEffect,
   sakuraEffect,
   autumnEffect,
+  flowersEffect,
   confettiEffect,
   bubblesEffect,
   balloonsEffect,
@@ -65,6 +67,7 @@ export const VALIDATED_EFFECT_IDS: ReadonlySet<string> = new Set([
   'snow',
   'sakura',
   'autumn',
+  'flowers',
   'confetti',
   'bubbles',
   'balloons',
