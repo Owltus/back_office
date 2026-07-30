@@ -3,10 +3,6 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 
 import { AnalytiqueShell } from '#/components/analytique/AnalytiqueShell.tsx'
-import {
-  AnalytiqueCardsGrid,
-  StatCard,
-} from '#/components/analytique/AnalytiqueCards.tsx'
 import { AnalytiqueTable } from '#/components/analytique/AnalytiqueTable.tsx'
 import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
 import { YearNav } from '#/components/analytique/YearNav.tsx'
@@ -15,6 +11,7 @@ import { ACCENT } from '#/components/analytique/accents.ts'
 import { KpiStackedBarChart } from '#/components/analytique/KpiStackedBarChart.tsx'
 import type { KpiBarSegment } from '#/components/analytique/KpiStackedBarChart.tsx'
 import {
+  PdjAnalytiqueCards,
   PdjStatCells,
   PdjStatsHead,
 } from '#/components/pdj/PdjAnalytiqueParts.tsx'
@@ -24,7 +21,7 @@ import {
   MAX_CLIENTS_PER_DAY,
   yearsFromDates,
 } from '#/lib/pdj/analytics.ts'
-import { fmtInt, fmtPctInt } from '#/lib/pdj/format.ts'
+import { fmtInt } from '#/lib/pdj/format.ts'
 import { MONTHS_LABELS, MONTHS_SHORT } from '#/lib/repjour/constants.ts'
 
 /*
@@ -86,6 +83,12 @@ export function PdjAnalytiqueBoard() {
       avgServis: recDays > 0 ? totalServed / recDays : null,
       avgExtra: recDays > 0 ? totalExtra / recDays : null,
       avgNonServis: recDays > 0 ? totalNonServis / recDays : null,
+      // Totaux additionnés de la période : valeur centrale des cartes de comptage ;
+      // la moyenne / jour passe en 2e info.
+      totalIncluded,
+      totalServed,
+      totalExtra,
+      totalNonServis,
       // Conversion / Remplissage : sur les seules données RENSEIGNÉES (servi), pas
       // dilué par les mois réservés-mais-non-saisis. « — » si aucun servi.
       avgConversion: recGuests > 0 ? (totalServed / recGuests) * 100 : null,
@@ -158,56 +161,9 @@ export function PdjAnalytiqueBoard() {
       }
       loading={loading}
       printTitle={`PDJ · ${year}`}
-      skeleton={{ cols: 9, charts: 1, rows: 12, cards: 6, cardCols: 6, cardLines: 2 }}
+      skeleton={{ cols: 9, charts: 1, rows: 12, cards: 6, cardCols: 6, cardLines: 3 }}
     >
-      {/* Synthèse annuelle — moyennes par jour, aux COULEURS des buckets du graphe
-          (inclus gris, servis indigo, extra vert, non servis ambre, conversion cyan). */}
-      <AnalytiqueCardsGrid cols={6}>
-        <StatCard
-          label="Moy. inclus"
-          accent={ACCENT.slate}
-          hint="Petits-déjeuners réservés par les clients"
-          value={summary.avgInclus != null ? fmtInt(summary.avgInclus) : '—'}
-        />
-        <StatCard
-          label="Moy. servis"
-          accent={ACCENT.indigo}
-          hint="Tous les petits-déjeuners servis, extra compris"
-          value={summary.avgServis != null ? fmtInt(summary.avgServis) : '—'}
-        />
-        <StatCard
-          label="Moy. extra"
-          accent={ACCENT.green}
-          hint="Petits-déjeuners servis à des clients sans réservation"
-          value={summary.avgExtra != null ? fmtInt(summary.avgExtra) : '—'}
-        />
-        <StatCard
-          label="Moy. non servis"
-          accent={ACCENT.amber}
-          hint="Petits-déjeuners réservés dont le client ne s'est pas présenté"
-          value={
-            summary.avgNonServis != null ? fmtInt(summary.avgNonServis) : '—'
-          }
-        />
-        <StatCard
-          label="Moy. conversion"
-          accent={ACCENT.cyan}
-          hint="Clients servis rapportés aux clients présents"
-          value={
-            summary.avgConversion != null
-              ? fmtPctInt(summary.avgConversion)
-              : '—'
-          }
-        />
-        <StatCard
-          label="Moy. remplissage"
-          accent={ACCENT.pink}
-          hint="Clients servis rapportés au nombre maximum de clients"
-          value={
-            summary.avgCoverage != null ? fmtPctInt(summary.avgCoverage) : '—'
-          }
-        />
-      </AnalytiqueCardsGrid>
+      <PdjAnalytiqueCards summary={summary} />
 
       {/* Tableau mois par mois */}
       <AnalytiqueTable head={<PdjStatsHead firstLabel="Mois" />}>

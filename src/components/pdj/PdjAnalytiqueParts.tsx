@@ -1,5 +1,10 @@
 import { fmtInt, fmtPctInt } from '#/lib/pdj/format.ts'
 import { ACCENT } from '#/components/analytique/accents.ts'
+import {
+  AnalytiqueCardsGrid,
+  StatCard,
+  subText,
+} from '#/components/analytique/AnalytiqueCards.tsx'
 
 /*
  * Briques de tableau partagées par les deux vues analytique PDJ (annuelle et
@@ -17,9 +22,99 @@ import { ACCENT } from '#/components/analytique/accents.ts'
  *   • « Remplissage » = Servis ÷ capacité CLIENTS (160/jour = 80 ch. × 2) — comme le
  *     RevPAR (rapporté à toute la capacité, donc bas si l'hôtel est peu rempli).
  * Les deux sont calculées dans le métier (`analytics.ts`) et valent `null` (« — »)
- * quand elles ne sont pas calculables. Les CARTES de synthèse diffèrent volontairement
- * entre les deux vues et restent propres à chaque board.
+ * quand elles ne sont pas calculables. Les CARTES de synthèse (PdjAnalytiqueCards) sont
+ * IDENTIQUES en annuel et mensuel → une seule définition, partagée ci-dessous.
  */
+
+/** Résumé PDJ (mêmes champs en annuel et mensuel) alimentant les 6 cartes. */
+export interface PdjAnalytiqueSummary {
+  avgInclus: number | null
+  avgServis: number | null
+  avgExtra: number | null
+  avgNonServis: number | null
+  avgConversion: number | null
+  avgCoverage: number | null
+  totalIncluded: number
+  totalServed: number
+  totalExtra: number
+  totalNonServis: number
+}
+
+/** Les 6 cartes de synthèse PDJ — IDENTIQUES en vue annuelle et mensuelle (même
+ * `summary`). Valeur = total, sous-texte = cadence « moy. X / jour » ; Conversion /
+ * Remplissage = taux (pas de sous-texte). Une seule définition, partagée. */
+export function PdjAnalytiqueCards({
+  summary,
+}: {
+  summary: PdjAnalytiqueSummary
+}) {
+  return (
+    <AnalytiqueCardsGrid cols={6}>
+      <StatCard
+        label="Inclus"
+        accent={ACCENT.slate}
+        hint="Petits-déjeuners réservés par les clients"
+        sub={
+          summary.avgInclus != null
+            ? subText(`moy. ${fmtInt(summary.avgInclus)} / jour`)
+            : undefined
+        }
+        value={summary.avgInclus != null ? fmtInt(summary.totalIncluded) : '—'}
+      />
+      <StatCard
+        label="Servis"
+        accent={ACCENT.indigo}
+        hint="Tous les petits-déjeuners servis, extra compris"
+        sub={
+          summary.avgServis != null
+            ? subText(`moy. ${fmtInt(summary.avgServis)} / jour`)
+            : undefined
+        }
+        value={summary.avgServis != null ? fmtInt(summary.totalServed) : '—'}
+      />
+      <StatCard
+        label="Extra"
+        accent={ACCENT.green}
+        hint="Petits-déjeuners servis à des clients sans réservation"
+        sub={
+          summary.avgExtra != null
+            ? subText(`moy. ${fmtInt(summary.avgExtra)} / jour`)
+            : undefined
+        }
+        value={summary.avgExtra != null ? fmtInt(summary.totalExtra) : '—'}
+      />
+      <StatCard
+        label="Non servis"
+        accent={ACCENT.amber}
+        hint="Petits-déjeuners réservés dont le client ne s'est pas présenté"
+        sub={
+          summary.avgNonServis != null
+            ? subText(`moy. ${fmtInt(summary.avgNonServis)} / jour`)
+            : undefined
+        }
+        value={
+          summary.avgNonServis != null ? fmtInt(summary.totalNonServis) : '—'
+        }
+      />
+      <StatCard
+        label="Conversion"
+        accent={ACCENT.cyan}
+        hint="Clients servis rapportés aux clients présents"
+        value={
+          summary.avgConversion != null ? fmtPctInt(summary.avgConversion) : '—'
+        }
+      />
+      <StatCard
+        label="Remplissage"
+        accent={ACCENT.pink}
+        hint="Clients servis rapportés au nombre maximum de clients"
+        value={
+          summary.avgCoverage != null ? fmtPctInt(summary.avgCoverage) : '—'
+        }
+      />
+    </AnalytiqueCardsGrid>
+  )
+}
 
 /** Métriques d'une ligne (mois ou jour). `days` seulement pour la vue annuelle. */
 export interface PdjRowStats {
