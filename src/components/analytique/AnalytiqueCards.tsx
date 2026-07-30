@@ -13,6 +13,17 @@ import { cn } from '#/lib/utils.ts'
  * repjour…). `accent` par défaut = primary (les pages qui codent une couleur —
  * ex. rapro — la passent explicitement).
  */
+/** Classe de la grille de cartes — source UNIQUE, partagée avec le squelette de
+ * chargement (`AnalytiqueSkeleton`) pour qu'ils ne dérivent jamais l'un de l'autre. */
+export function cardsGridClass(cols: number): string {
+  return cn(
+    'grid shrink-0 grid-cols-2 gap-3',
+    cols === 6 && 'sm:grid-cols-3 lg:grid-cols-6',
+    cols === 5 && 'sm:grid-cols-5',
+    cols !== 5 && cols !== 6 && 'sm:grid-cols-4',
+  )
+}
+
 export function AnalytiqueCardsGrid({
   children,
   cols = 4,
@@ -22,18 +33,7 @@ export function AnalytiqueCardsGrid({
    * 6 moyennes → 2 sur mobile, 3 sur tablette, 6 sur grand écran). */
   cols?: 4 | 5 | 6
 }) {
-  return (
-    <div
-      className={cn(
-        'grid shrink-0 grid-cols-2 gap-3',
-        cols === 6 && 'sm:grid-cols-3 lg:grid-cols-6',
-        cols === 5 && 'sm:grid-cols-5',
-        cols === 4 && 'sm:grid-cols-4',
-      )}
-    >
-      {children}
-    </div>
-  )
+  return <div className={cardsGridClass(cols)}>{children}</div>
 }
 
 export function StatCard({
@@ -43,6 +43,8 @@ export function StatCard({
   reference,
   accent = 'var(--primary)',
   hint,
+  printHidden,
+  className,
   children,
 }: {
   label: ReactNode
@@ -54,6 +56,10 @@ export function StatCard({
   accent?: string
   /** Explication au survol (tooltip). */
   hint?: string
+  /** Masquer à l'impression (relayé à StatTile). */
+  printHidden?: boolean
+  /** Classes supplémentaires (relayées à StatTile). */
+  className?: string
   children?: ReactNode
 }) {
   return (
@@ -64,8 +70,23 @@ export function StatCard({
       reference={reference}
       sub={sub}
       hint={hint}
+      printHidden={printHidden}
+      className={className}
     >
       {children}
     </StatTile>
+  )
+}
+
+/** Sous-texte « X % <suffix> » — 2e information d'une carte : la PART qu'elle
+ * représente dans un total (ex. caisse « du total », rapro « des vendues », parking
+ * « des réservations »). `undefined` si le total est nul (rien à afficher). Partagé
+ * pour un rendu identique partout. */
+export function shareSub(part: number, total: number, suffix = 'du total') {
+  if (total <= 0) return undefined
+  return (
+    <span className="text-[0.7rem] font-medium text-muted-foreground">
+      {`${Math.round((part / total) * 100)} % ${suffix}`}
+    </span>
   )
 }

@@ -1,5 +1,7 @@
 import { Skeleton } from '#/components/ui/skeleton.tsx'
-import { cn } from '#/lib/utils.ts'
+import { cardsGridClass } from '#/components/analytique/AnalytiqueCards.tsx'
+import { chartsGridClass } from '#/components/analytique/AnalytiqueCharts.tsx'
+import { CHART_HEIGHT } from '#/components/analytique/chartConstants.ts'
 
 /*
  * Squelette de chargement des pages analytique — reflet 1:1 du layout construit
@@ -36,15 +38,7 @@ export function AnalytiqueSkeleton({
     <>
       {/* Cartes de synthèse (masquées si `cards === 0`) */}
       {cards > 0 && (
-        <div
-          className={cn(
-            'grid shrink-0 grid-cols-2 gap-3',
-            cardCols === 6 && 'sm:grid-cols-3 lg:grid-cols-6',
-            cardCols === 5 && 'sm:grid-cols-5',
-            cardCols !== 5 && cardCols !== 6 && 'sm:grid-cols-4',
-          )}
-          aria-hidden="true"
-        >
+        <div className={cardsGridClass(cardCols)} aria-hidden="true">
           {Array.from({ length: cards }).map((_, i) => (
             <div key={i} className="rounded-xl border border-border bg-card p-4">
               <Skeleton className="h-3 w-24" />
@@ -82,17 +76,14 @@ export function AnalytiqueSkeleton({
       </div>
 
       {/* Graphiques (un seul → pleine largeur, comme le board) */}
-      <div
-        className={cn(
-          'grid shrink-0 grid-cols-1 gap-4',
-          charts > 1 && 'lg:grid-cols-2',
-        )}
-        aria-hidden="true"
-      >
+      <div className={chartsGridClass(charts)} aria-hidden="true">
         {Array.from({ length: charts }).map((_, i) => (
           <div key={i} className="rounded-xl border border-border bg-card p-4">
             <Skeleton className="h-3 w-40" />
-            <Skeleton className="mt-3 h-[220px] w-full rounded-lg" />
+            <Skeleton
+              className="mt-3 w-full rounded-lg"
+              style={{ height: CHART_HEIGHT }}
+            />
           </div>
         ))}
       </div>

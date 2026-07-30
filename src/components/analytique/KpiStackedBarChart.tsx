@@ -8,6 +8,14 @@ import {
   YAxis,
 } from 'recharts'
 
+import { ChartTooltip } from '#/components/analytique/ChartTooltip.tsx'
+import {
+  CHART_AXIS,
+  CHART_GRID,
+  CHART_HEIGHT,
+  CHART_MARGIN,
+} from '#/components/analytique/chartConstants.ts'
+
 /*
  * Histogramme empilé réutilisable (Recharts) — une barre par point sur l'axe X,
  * chaque barre découpée en segments EMPILÉS (proportionnels). Pendant « barres »
@@ -50,90 +58,12 @@ interface KpiStackedBarChartProps {
    * La légende n'est pas affichée à l'écran ; elle est reconstruite dans le document.
    * Sans cet ordre : ordre de `segments`. N'affecte pas l'empilement des barres. */
   legendOrder?: string[]
+  /** Identifiant d'empilement Recharts (défaut 'stack'). Toutes les barres d'un même
+   * graphe le partagent pour s'empiler. */
+  stackId?: string
   /** Clic sur une barre/colonne → reçoit l'entrée de `data` correspondante (ex. pour
    * naviguer vers le détail). Le curseur passe en « pointer » quand fourni. */
   onBarClick?: (payload: Record<string, unknown>) => void
-}
-
-const AXIS = 'var(--muted-foreground)'
-const GRID = 'var(--border)'
-
-/** Une entrée de l'infobulle (sous-ensemble du payload Recharts qu'on exploite). */
-interface TooltipEntry {
-  name?: string
-  value?: number | string | null
-  color?: string
-  fill?: string
-  dataKey?: string | number
-}
-
-/**
- * Infobulle personnalisée : chaque ligne porte une PASTILLE de la couleur du
- * segment (repère « légende », sans quoi on ne sait plus qui est qui), son nom, et
- * sa valeur alignée à droite. En-tête via `labelFormatter` (libellé complet). Les
- * segments sans valeur (null) sont masqués. `active`/`payload`/`label` sont injectés
- * par Recharts (via `content`), d'où leur caractère optionnel.
- */
-function ChartTooltip({
-  active,
-  payload,
-  label,
-  labelFormatter,
-  valueFormatter,
-}: {
-  active?: boolean
-  payload?: TooltipEntry[]
-  label?: string | number
-  labelFormatter?: (label: string) => string
-  valueFormatter: (value: number) => string
-}) {
-  if (!active || !payload || payload.length === 0) return null
-  const rows = payload.filter((e) => e.value != null)
-  if (rows.length === 0) return null
-  const head = labelFormatter ? labelFormatter(String(label)) : String(label)
-  return (
-    <div
-      style={{
-        backgroundColor: 'var(--card)',
-        border: '1px solid var(--border)',
-        borderRadius: 8,
-        color: 'var(--foreground)',
-        fontSize: 12,
-        padding: '8px 10px',
-        minWidth: 170,
-      }}
-    >
-      <div style={{ marginBottom: 6, fontWeight: 500 }}>{head}</div>
-      {rows.map((entry) => (
-        <div
-          key={String(entry.dataKey)}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            lineHeight: 1.6,
-          }}
-        >
-          <span
-            aria-hidden="true"
-            style={{
-              width: 10,
-              height: 10,
-              flexShrink: 0,
-              borderRadius: 2,
-              backgroundColor: entry.color ?? entry.fill,
-            }}
-          />
-          <span>{entry.name}</span>
-          <span
-            style={{ marginLeft: 'auto', fontVariantNumeric: 'tabular-nums' }}
-          >
-            {valueFormatter(Number(entry.value))}
-          </span>
-        </div>
-      ))}
-    </div>
-  )
 }
 
 export function KpiStackedBarChart({
@@ -145,6 +75,7 @@ export function KpiStackedBarChart({
   tooltipFormatter,
   labelFormatter,
   legendOrder,
+  stackId = 'stack',
   onBarClick,
 }: KpiStackedBarChartProps) {
   // La légende n'est PAS affichée à l'écran (l'infobulle porte déjà les pastilles).
@@ -169,20 +100,20 @@ export function KpiStackedBarChart({
       <h3 className="mb-3 text-sm font-medium text-muted-foreground">{title}</h3>
       <ResponsiveContainer
         width="100%"
-        height={220}
+        height={CHART_HEIGHT}
         className={onBarClick ? 'cursor-pointer' : undefined}
       >
-        <BarChart data={data} margin={{ top: 5, right: 0, left: -25, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke={GRID} />
+        <BarChart data={data} margin={CHART_MARGIN}>
+          <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
           <XAxis
             dataKey={xKey}
-            tick={{ fontSize: 11, fill: AXIS }}
-            stroke={GRID}
+            tick={{ fontSize: 11, fill: CHART_AXIS }}
+            stroke={CHART_GRID}
           />
           <YAxis
             tickFormatter={yTickFormatter}
-            tick={{ fontSize: 11, fill: AXIS }}
-            stroke={GRID}
+            tick={{ fontSize: 11, fill: CHART_AXIS }}
+            stroke={CHART_GRID}
           />
           <Tooltip
             cursor={{ fill: 'var(--muted-foreground)', opacity: 0.12 }}
@@ -198,7 +129,7 @@ export function KpiStackedBarChart({
               key={seg.key}
               dataKey={seg.key}
               name={seg.name}
-              stackId="pdj"
+              stackId={stackId}
               fill={seg.color}
               onClick={
                 onBarClick

@@ -9,6 +9,14 @@ import {
   YAxis,
 } from 'recharts'
 
+import { ChartTooltip } from '#/components/analytique/ChartTooltip.tsx'
+import {
+  CHART_AXIS,
+  CHART_GRID,
+  CHART_HEIGHT,
+  CHART_MARGIN,
+} from '#/components/analytique/chartConstants.ts'
+
 /*
  * Graphique KPI réutilisable (Recharts) — jusqu'à trois courbes : réalisé (plein),
  * projeté/forecast (gris) et budget (pointillé). Les courbes projetée et budget
@@ -33,8 +41,8 @@ export const KPI_CHART_COLORS = {
   real: 'var(--chart-1)',
   proj: 'var(--muted-foreground)',
   budget: 'var(--destructive)',
-  grid: 'var(--border)',
-  axis: 'var(--muted-foreground)',
+  grid: CHART_GRID,
+  axis: CHART_AXIS,
 } as const
 
 interface KpiLineChartProps {
@@ -64,6 +72,9 @@ interface KpiLineChartProps {
   yTickFormatter?: (value: number) => string
   /** Formateur des valeurs dans l'infobulle. */
   tooltipFormatter: (value: number) => string
+  /** Formateur du LIBELLÉ (en-tête) de l'infobulle. L'axe X reste abrégé, mais le
+   * survol peut afficher le libellé complet (ex. « Fév » → « Février 2026 »). */
+  labelFormatter?: (label: string) => string
 }
 
 export function KpiLineChart({
@@ -80,12 +91,16 @@ export function KpiLineChart({
   yDomain,
   yTickFormatter,
   tooltipFormatter,
+  labelFormatter,
 }: KpiLineChartProps) {
+  // Légende masquée quand il n'y a qu'une seule série (redondante avec le titre) ;
+  // affichée dès qu'il y a une courbe projeté et/ou budget.
+  const multiSeries = Boolean(projKey || budgetKey)
   return (
     <div className="rounded-xl border border-border bg-card p-4">
       <h3 className="mb-3 text-sm font-medium text-muted-foreground">{title}</h3>
-      <ResponsiveContainer width="100%" height={220}>
-        <LineChart data={data} margin={{ top: 5, right: 0, left: -25, bottom: 0 }}>
+      <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
+        <LineChart data={data} margin={CHART_MARGIN}>
           <CartesianGrid strokeDasharray="3 3" stroke={KPI_CHART_COLORS.grid} />
           <XAxis
             dataKey={xKey}
@@ -99,18 +114,15 @@ export function KpiLineChart({
             stroke={KPI_CHART_COLORS.grid}
           />
           <Tooltip
-            formatter={(value) => tooltipFormatter(Number(value))}
-            contentStyle={{
-              backgroundColor: 'var(--card)',
-              border: '1px solid var(--border)',
-              borderRadius: 8,
-              color: 'var(--foreground)',
-              fontSize: 12,
-            }}
-            labelStyle={{ color: 'var(--foreground)' }}
-            itemStyle={{ color: 'var(--foreground)' }}
+            cursor={{ stroke: 'var(--muted-foreground)', strokeOpacity: 0.3 }}
+            content={
+              <ChartTooltip
+                labelFormatter={labelFormatter}
+                valueFormatter={tooltipFormatter}
+              />
+            }
           />
-          <Legend wrapperStyle={{ fontSize: 11 }} />
+          {multiSeries && <Legend wrapperStyle={{ fontSize: 11 }} />}
           <Line
             type="monotone"
             dataKey={realKey}
