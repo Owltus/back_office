@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 
@@ -10,6 +10,8 @@ import {
 import { AnalytiqueTable } from '#/components/analytique/AnalytiqueTable.tsx'
 import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
 import { YearNav } from '#/components/analytique/YearNav.tsx'
+import { useAnnualYear } from '#/components/analytique/useAnnualYear.ts'
+import { ACCENT } from '#/components/analytique/accents.ts'
 import { KpiStackedBarChart } from '#/components/analytique/KpiStackedBarChart.tsx'
 import type { KpiBarSegment } from '#/components/analytique/KpiStackedBarChart.tsx'
 import {
@@ -41,7 +43,6 @@ const currentYear = new Date().getFullYear()
 
 export function PdjAnalytiqueBoard() {
   const navigate = useNavigate()
-  const [year, setYear] = useState(currentYear)
 
   // Années disponibles (dérivées des jours de service en base).
   const { data: dates = [] } = useQuery({
@@ -50,13 +51,8 @@ export function PdjAnalytiqueBoard() {
   })
   const years = useMemo(() => yearsFromDates(dates, currentYear), [dates])
 
-  // Si l'année sélectionnée n'est pas dans la liste chargée, se caler sur la
-  // plus récente.
-  useEffect(() => {
-    if (years.length > 0 && !years.includes(year)) {
-      setYear(years[years.length - 1])
-    }
-  }, [years, year])
+  // Année sélectionnée + recalage si absente de la liste (hook partagé).
+  const { year, setYear } = useAnnualYear(years, currentYear)
 
   // Lignes de l'année → agrégation mensuelle. Cache par année (retour instantané).
   const { data: rows = [], isPending: loading } = useQuery({
@@ -134,16 +130,16 @@ export function PdjAnalytiqueBoard() {
     const segs: KpiBarSegment[] = []
     if (chartData.some((d) => d.servisInclus != null)) {
       segs.push(
-        { key: 'servisInclus', name: 'Réservés servis', color: 'var(--chart-1)' },
-        { key: 'extra', name: 'Extra', color: 'var(--chart-5)' },
-        { key: 'nonVenu', name: 'Non servis', color: 'var(--chart-3)' },
+        { key: 'servisInclus', name: 'Réservés servis', color: ACCENT.indigo },
+        { key: 'extra', name: 'Extra', color: ACCENT.green },
+        { key: 'nonVenu', name: 'Non servis', color: ACCENT.amber },
       )
     }
     if (chartData.some((d) => d.inclus != null)) {
       segs.push({
         key: 'inclus',
         name: 'Inclus (non saisi)',
-        color: 'var(--muted-foreground)',
+        color: ACCENT.slate,
       })
     }
     return segs
@@ -169,25 +165,25 @@ export function PdjAnalytiqueBoard() {
       <AnalytiqueCardsGrid cols={6}>
         <StatCard
           label="Moy. inclus"
-          accent="var(--muted-foreground)"
+          accent={ACCENT.slate}
           hint="Petits-déjeuners réservés par les clients"
           value={summary.avgInclus != null ? fmtInt(summary.avgInclus) : '—'}
         />
         <StatCard
           label="Moy. servis"
-          accent="var(--chart-1)"
+          accent={ACCENT.indigo}
           hint="Tous les petits-déjeuners servis, extra compris"
           value={summary.avgServis != null ? fmtInt(summary.avgServis) : '—'}
         />
         <StatCard
           label="Moy. extra"
-          accent="var(--chart-5)"
+          accent={ACCENT.green}
           hint="Petits-déjeuners servis à des clients sans réservation"
           value={summary.avgExtra != null ? fmtInt(summary.avgExtra) : '—'}
         />
         <StatCard
           label="Moy. non servis"
-          accent="var(--chart-3)"
+          accent={ACCENT.amber}
           hint="Petits-déjeuners réservés dont le client ne s'est pas présenté"
           value={
             summary.avgNonServis != null ? fmtInt(summary.avgNonServis) : '—'
@@ -195,7 +191,7 @@ export function PdjAnalytiqueBoard() {
         />
         <StatCard
           label="Moy. conversion"
-          accent="var(--chart-2)"
+          accent={ACCENT.cyan}
           hint="Clients servis rapportés aux clients présents"
           value={
             summary.avgConversion != null
@@ -205,7 +201,7 @@ export function PdjAnalytiqueBoard() {
         />
         <StatCard
           label="Moy. remplissage"
-          accent="var(--chart-4)"
+          accent={ACCENT.pink}
           hint="Clients servis rapportés au nombre maximum de clients"
           value={
             summary.avgCoverage != null ? fmtPctInt(summary.avgCoverage) : '—'

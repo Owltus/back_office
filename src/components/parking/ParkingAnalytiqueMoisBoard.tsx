@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { AnalytiqueShell } from '#/components/analytique/AnalytiqueShell.tsx'
 import {
   AnalytiqueCardsGrid,
+  shareSub,
   StatCard,
 } from '#/components/analytique/AnalytiqueCards.tsx'
 import { AnalytiqueTable } from '#/components/analytique/AnalytiqueTable.tsx'
@@ -14,7 +15,8 @@ import { KpiLineChart } from '#/components/analytique/KpiLineChart.tsx'
 import { fetchReservations } from '#/lib/parking/service.ts'
 import { aggregateParkingDaily } from '#/lib/parking/analytics.ts'
 import { fmtInt, fmtPct } from '#/lib/parking/format.ts'
-import { MONTHS_LABELS } from '#/lib/repjour/constants.ts'
+import { DAY_NAMES, MONTHS_LABELS } from '#/lib/repjour/constants.ts'
+import { ACCENT } from '#/components/analytique/accents.ts'
 
 /*
  * Détail analytique d'un MOIS de parking, jour par jour — gabarit calqué sur
@@ -71,18 +73,25 @@ export function ParkingAnalytiqueMoisBoard({
       days.map((d) => ({
         jour: d.day,
         occ: d.occupancy,
-        arrivals: d.arrivals,
       })),
     [days],
   )
 
-  const monthLabel = `${MONTHS_LABELS[month - 1] || ''} ${year}`
+  const monthLabel = MONTHS_LABELS[month - 1] || ''
+
+  // En-tête d'infobulle du graphe : « 15 » → « Mardi 15 février ».
+  const dayTooltipLabel = (label: string) => {
+    const day = Number(label)
+    if (!Number.isFinite(day) || day < 1) return label
+    const wd = DAY_NAMES[new Date(year, month - 1, day).getDay()]
+    return `${wd.charAt(0).toUpperCase()}${wd.slice(1)} ${day} ${monthLabel.toLowerCase()}`
+  }
 
   const navigate = useNavigate()
 
   return (
     <AnalytiqueShell
-      title={monthLabel}
+      title={`${monthLabel} ${year}`}
       actions={<AnalytiqueBackButton />}
       loading={loading}
       printTitle={`Parking · ${monthLabel} ${year}`}
@@ -96,23 +105,28 @@ export function ParkingAnalytiqueMoisBoard({
       <AnalytiqueCardsGrid>
         <StatCard
           label="Occupation moyenne"
-          accent="#38bdf8"
+          accent={ACCENT.cyan}
           value={fmtPct(summary.avgOccupancy)}
+          hint="Places occupées en moyenne sur le mois."
         />
         <StatCard
           label="Arrivées"
-          accent="#818cf8"
+          accent={ACCENT.indigo}
           value={fmtInt(summary.arrivals)}
+          hint="Nombre de véhicules arrivés dans le mois."
         />
         <StatCard
           label="Départs"
-          accent="#34d399"
+          accent={ACCENT.green}
           value={fmtInt(summary.departures)}
+          hint="Nombre de véhicules partis dans le mois."
         />
         <StatCard
           label="Impayés"
-          accent="#f87171"
+          accent={ACCENT.red}
           value={fmtInt(summary.unpaid)}
+          hint="Réservations parties sans paiement enregistré."
+          sub={shareSub(summary.unpaid, summary.arrivals, 'des arrivées')}
         />
       </AnalytiqueCardsGrid>
 
@@ -158,18 +172,29 @@ export function ParkingAnalytiqueMoisBoard({
                 >
                   {d.day}
                 </td>
-                <td className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums">
-                  {fmtPct(d.occupancy)}
-                </td>
-                <td className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums">
-                  {fmtInt(d.occupiedClient)}
-                </td>
-                <td className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums text-muted-foreground">
-                  {fmtInt(d.arrivals)}
-                </td>
-                <td className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums text-muted-foreground">
-                  {fmtInt(d.departures)}
-                </td>
+                {hasData ? (
+                  <>
+                    <td className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums">
+                      {fmtPct(d.occupancy)}
+                    </td>
+                    <td className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums">
+                      {fmtInt(d.occupiedClient)}
+                    </td>
+                    <td className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums text-muted-foreground">
+                      {fmtInt(d.arrivals)}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums text-muted-foreground">
+                      {fmtInt(d.departures)}
+                    </td>
+                  </>
+                ) : (
+                  <td
+                    colSpan={4}
+                    className="px-2 py-2 text-center text-xs text-muted-foreground/50"
+                  >
+                    —
+                  </td>
+                )}
               </tr>
             )
           })}
@@ -187,6 +212,7 @@ export function ParkingAnalytiqueMoisBoard({
           realDotRadius={2}
           yDomain={[0, 100]}
           tooltipFormatter={fmtPct}
+          labelFormatter={dayTooltipLabel}
         />
       </AnalytiqueCharts>
     </AnalytiqueShell>

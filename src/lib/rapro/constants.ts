@@ -115,6 +115,11 @@ export const CATEGORY_COLOR = {
   nettoyee: 'var(--chart-5)',
   bloquee: '#f87171',
   refus: 'var(--chart-3)',
+  // Ajoutés pour l'analytique : « vendues » (total) et « moyenne / jour ». Ce sont
+  // EXACTEMENT --chart-1 et --muted-foreground (plus de hex #818cf8 / #94a3b8 en
+  // dur dans les boards). Le PDF (pdf.ts) lit déjà ces tokens.
+  vendues: 'var(--chart-1)',
+  moyenne: 'var(--muted-foreground)',
 } as const
 
 /** Ordre d'affichage de la légende (bas de grille + PDF) : nettoyée, refus,

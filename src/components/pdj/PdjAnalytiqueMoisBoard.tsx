@@ -12,6 +12,7 @@ import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
 import { AnalytiqueBackButton } from '#/components/analytique/AnalytiqueBackButton.tsx'
 import { KpiStackedBarChart } from '#/components/analytique/KpiStackedBarChart.tsx'
 import type { KpiBarSegment } from '#/components/analytique/KpiStackedBarChart.tsx'
+import { ACCENT } from '#/components/analytique/accents.ts'
 import {
   PdjStatCells,
   PdjStatsHead,
@@ -85,7 +86,7 @@ export function PdjAnalytiqueMoisBoard({
     // servi-dépendants, pour ne pas les diluer avec les jours réservés non saisis.
     const recGuests = recorded.reduce((s, d) => s + d.guests, 0)
     return {
-      avgInclus: totalDays > 0 ? totalIncluded / totalDays : 0,
+      avgInclus: totalDays > 0 ? totalIncluded / totalDays : null,
       avgServis: recDays > 0 ? totalServed / recDays : null,
       avgExtra: recDays > 0 ? totalExtra / recDays : null,
       avgNonServis: recDays > 0 ? totalNonServis / recDays : null,
@@ -132,16 +133,16 @@ export function PdjAnalytiqueMoisBoard({
     const segs: KpiBarSegment[] = []
     if (chartData.some((d) => d.servisInclus != null)) {
       segs.push(
-        { key: 'servisInclus', name: 'Réservés servis', color: 'var(--chart-1)' },
-        { key: 'extra', name: 'Extra', color: 'var(--chart-5)' },
-        { key: 'nonVenu', name: 'Non servis', color: 'var(--chart-3)' },
+        { key: 'servisInclus', name: 'Réservés servis', color: ACCENT.indigo },
+        { key: 'extra', name: 'Extra', color: ACCENT.green },
+        { key: 'nonVenu', name: 'Non servis', color: ACCENT.amber },
       )
     }
     if (chartData.some((d) => d.inclus != null)) {
       segs.push({
         key: 'inclus',
         name: 'Inclus (non saisi)',
-        color: 'var(--muted-foreground)',
+        color: ACCENT.slate,
       })
     }
     return segs
@@ -171,25 +172,25 @@ export function PdjAnalytiqueMoisBoard({
       <AnalytiqueCardsGrid cols={6}>
         <StatCard
           label="Moy. inclus"
-          accent="var(--muted-foreground)"
+          accent={ACCENT.slate}
           hint="Petits-déjeuners réservés par les clients"
-          value={fmtInt(summary.avgInclus)}
+          value={summary.avgInclus != null ? fmtInt(summary.avgInclus) : '—'}
         />
         <StatCard
           label="Moy. servis"
-          accent="var(--chart-1)"
+          accent={ACCENT.indigo}
           hint="Tous les petits-déjeuners servis, extra compris"
           value={summary.avgServis != null ? fmtInt(summary.avgServis) : '—'}
         />
         <StatCard
           label="Moy. extra"
-          accent="var(--chart-5)"
+          accent={ACCENT.green}
           hint="Petits-déjeuners servis à des clients sans réservation"
           value={summary.avgExtra != null ? fmtInt(summary.avgExtra) : '—'}
         />
         <StatCard
           label="Moy. non servis"
-          accent="var(--chart-3)"
+          accent={ACCENT.amber}
           hint="Petits-déjeuners réservés dont le client ne s'est pas présenté"
           value={
             summary.avgNonServis != null ? fmtInt(summary.avgNonServis) : '—'
@@ -197,7 +198,7 @@ export function PdjAnalytiqueMoisBoard({
         />
         <StatCard
           label="Moy. conversion"
-          accent="var(--chart-2)"
+          accent={ACCENT.cyan}
           hint="Clients servis rapportés aux clients présents"
           value={
             summary.avgConversion != null
@@ -207,7 +208,7 @@ export function PdjAnalytiqueMoisBoard({
         />
         <StatCard
           label="Moy. remplissage"
-          accent="var(--chart-4)"
+          accent={ACCENT.pink}
           hint="Clients servis rapportés au nombre maximum de clients"
           value={
             summary.avgCoverage != null ? fmtPctInt(summary.avgCoverage) : '—'

@@ -1,7 +1,9 @@
 import {
   AnalytiqueCardsGrid,
+  shareSub,
   StatCard,
 } from '#/components/analytique/AnalytiqueCards.tsx'
+import { ACCENT } from '#/components/analytique/accents.ts'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { fmtEur, fmtInt } from '#/lib/caisse/format.ts'
 import type { CaisseSummary } from '#/lib/caisse/analytics.ts'
@@ -34,17 +36,6 @@ import { cn } from '#/lib/utils.ts'
 const ECARTS_HINT =
   'Feuilles clôturées présentant un écart : soit la recette comptée diffère de l’attendu (espèces, CB, chèques vacances ou Adyen), soit le fond de caisse n’est pas à 150 €.'
 
-/** Part d'un mode dans le total encaissé, en sous-titre de carte (« 38 % du total »).
- *  Rien si le total est nul (période sans encaissement). */
-function shareSub(part: number, total: number) {
-  if (total <= 0) return undefined
-  return (
-    <span className="text-[0.7rem] font-medium text-muted-foreground">
-      {`${Math.round((part / total) * 100)} % du total`}
-    </span>
-  )
-}
-
 /** Cartes de synthèse : Total encaissé / Espèces / Carte / Écarts.
  *  `periodLabel` complète l'intitulé encaissé (« sur l'année » / « sur le mois »). */
 export function CaisseAnalytiqueCards({
@@ -59,25 +50,27 @@ export function CaisseAnalytiqueCards({
     <AnalytiqueCardsGrid>
       <StatCard
         label={`Total encaissé ${periodLabel}`}
-        accent="#34d399"
+        accent={ACCENT.green}
+        hint="Somme réellement encaissée, tous moyens de paiement confondus."
         value={fmtEur(summary.encaisse)}
       />
       <StatCard
         label="Espèces"
-        accent="#38bdf8"
+        accent={ACCENT.cyan}
+        hint="Part encaissée en espèces."
         value={fmtEur(summary.cash)}
         sub={shareSub(summary.cash, summary.encaisse)}
       />
       <StatCard
         label="Carte"
-        accent="#818cf8"
+        accent={ACCENT.indigo}
         hint="Carte bancaire (TPE) et carte web (Adyen) cumulées."
         value={fmtEur(carte)}
         sub={shareSub(carte, summary.encaisse)}
       />
       <StatCard
         label="Écarts"
-        accent="#fbbf24"
+        accent={ACCENT.amber}
         hint={ECARTS_HINT}
         value={fmtInt(summary.anomalies)}
       />

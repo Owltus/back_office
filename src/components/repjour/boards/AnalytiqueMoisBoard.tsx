@@ -11,6 +11,7 @@ import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
 import { AnalytiqueBackButton } from '#/components/analytique/AnalytiqueBackButton.tsx'
 import { KpiLineChart } from '#/components/analytique/KpiLineChart.tsx'
 import { KpiCell } from '#/components/analytique/KpiCell.tsx'
+import { ACCENT } from '#/components/analytique/accents.ts'
 import { fetchUnifiedDays } from '#/lib/repjour/services/data.ts'
 import { fetchBudget } from '#/lib/repjour/services/daily.ts'
 import {
@@ -148,6 +149,15 @@ export function AnalytiqueMoisBoard({
 
   const monthLabel = MONTHS_LABELS[month - 1] || ''
 
+  // En-tête d'infobulle des graphes : « 15 » → « Mardi 15 février » (jour de
+  // semaine + date, plus lisible au survol que le numéro nu).
+  const dayTooltipLabel = (label: string) => {
+    const day = Number(label)
+    if (!Number.isFinite(day) || day < 1) return label
+    const wd = DAY_NAMES[new Date(year, month - 1, day).getDay()]
+    return `${wd.charAt(0).toUpperCase()}${wd.slice(1)} ${day} ${monthLabel.toLowerCase()}`
+  }
+
   return (
     <AnalytiqueShell
       title={`${monthLabel} ${year}`}
@@ -165,25 +175,29 @@ export function AnalytiqueMoisBoard({
       <AnalytiqueCardsGrid>
         <StatCard
           label="Nuitées"
-          accent="#818cf8"
+          accent={ACCENT.indigo}
+          hint="Chambres vendues sur le mois (cumul des nuitées). Objectif budget en dessous."
           value={fmt.nuitees(summary.totalNuitees)}
           reference={budget ? fmt.nuitees(budget.nuitees) : undefined}
         />
         <StatCard
           label="Taux d'occupation moyen"
-          accent="#38bdf8"
+          accent={ACCENT.cyan}
+          hint="Chambres occupées en moyenne, rapportées aux chambres disponibles."
           value={fmt.pct(summary.avgTO)}
           reference={budget ? fmt.pct(budget.taux_occupation) : undefined}
         />
         <StatCard
           label="Revenu moyen par chambre"
-          accent="#34d399"
+          accent={ACCENT.green}
+          hint="Chiffre d'affaires rapporté à toutes les chambres (RevPAR)."
           value={fmt.eur(summary.avgRevPAR)}
           reference={budget ? fmt.eur(budget.revpar) : undefined}
         />
         <StatCard
           label="Chiffre d'affaires"
-          accent="#fbbf24"
+          accent={ACCENT.amber}
+          hint="Chiffre d'affaires hébergement du mois, TVA comprise."
           value={fmt.eurInt(summary.totalRevenue)}
           reference={budget ? fmt.eurInt(budget.room_revenue) : undefined}
         />
@@ -300,6 +314,7 @@ export function AnalytiqueMoisBoard({
           realDotRadius={2}
           yTickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
           tooltipFormatter={fmt.eurInt}
+          labelFormatter={dayTooltipLabel}
         />
         <KpiLineChart
           title="Taux d'occupation par jour"
@@ -312,6 +327,7 @@ export function AnalytiqueMoisBoard({
           realDotRadius={2}
           yDomain={[0, 100]}
           tooltipFormatter={fmt.pct}
+          labelFormatter={dayTooltipLabel}
         />
       </AnalytiqueCharts>
     </AnalytiqueShell>

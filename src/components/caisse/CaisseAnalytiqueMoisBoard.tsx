@@ -15,7 +15,7 @@ import {
 import { fetchSheets } from '#/lib/caisse/service.ts'
 import { aggregateCaisseDaily, summarize } from '#/lib/caisse/analytics.ts'
 import { fmtEur } from '#/lib/caisse/format.ts'
-import { MONTHS_LABELS } from '#/lib/repjour/constants.ts'
+import { DAY_NAMES, MONTHS_LABELS } from '#/lib/repjour/constants.ts'
 
 /*
  * Détail analytique Caisse d'un MOIS, jour par jour — gabarit calqué sur
@@ -80,6 +80,14 @@ export function CaisseAnalytiqueMoisBoard({
 
   const monthLabel = MONTHS_LABELS[month - 1] || ''
 
+  // En-tête d'infobulle du graphe : « 5 » → « Mardi 5 février ».
+  const dayTooltipLabel = (label: string) => {
+    const day = Number(label)
+    if (!Number.isFinite(day) || day < 1) return label
+    const wd = DAY_NAMES[new Date(year, month - 1, day).getDay()]
+    return `${wd.charAt(0).toUpperCase()}${wd.slice(1)} ${day} ${monthLabel.toLowerCase()}`
+  }
+
   const navigate = useNavigate()
 
   return (
@@ -141,6 +149,7 @@ export function CaisseAnalytiqueMoisBoard({
             v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)
           }
           tooltipFormatter={fmtEur}
+          labelFormatter={dayTooltipLabel}
         />
       </AnalytiqueCharts>
     </AnalytiqueShell>

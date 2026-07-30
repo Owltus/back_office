@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
@@ -11,7 +11,9 @@ import {
 import { AnalytiqueTable } from '#/components/analytique/AnalytiqueTable.tsx'
 import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
 import { YearNav } from '#/components/analytique/YearNav.tsx'
+import { useAnnualYear } from '#/components/analytique/useAnnualYear.ts'
 import { KpiLineChart } from '#/components/analytique/KpiLineChart.tsx'
+import { ACCENT } from '#/components/analytique/accents.ts'
 import {
   fetchBudgetYears,
   fetchYearAnalytics,
@@ -53,7 +55,6 @@ interface AnnualSummary {
 export function AnalytiqueBoard() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const [year, setYear] = useState(currentYear)
 
   // Liste des années disponibles (budget) — mise en cache par le QueryClient.
   const { data: years = [] } = useQuery({
@@ -64,13 +65,8 @@ export function AnalytiqueBoard() {
     },
   })
 
-  // Si l'année sélectionnée n'est pas dans la liste chargée, se caler sur la
-  // plus récente (remplace l'ajustement fait autrefois au montage).
-  useEffect(() => {
-    if (years.length > 0 && !years.includes(year)) {
-      setYear(years[years.length - 1])
-    }
-  }, [years, year])
+  // Année sélectionnée + recalage si absente de la liste (hook partagé).
+  const { year, setYear } = useAnnualYear(years, currentYear)
 
   // Agrégation annuelle + budget de l'année. Le cache affiche instantanément,
   // mais on REFETCH à chaque ouverture (`refetchOnMount: 'always'`) : après un
@@ -148,6 +144,13 @@ export function AnalytiqueBoard() {
     })
   }, [analytics, budgetByMonth])
 
+  // En-tête d'infobulle des graphes : « Fév » → « Février 2026 » (plus lisible au
+  // survol que l'abréviation de l'axe).
+  const monthTooltipLabel = (label: string) => {
+    const i = MONTHS_SHORT.indexOf(label)
+    return i >= 0 ? `${MONTHS_LABELS[i]} ${year}` : label
+  }
+
   return (
     <AnalytiqueShell
       title="Analytique"
@@ -179,25 +182,29 @@ export function AnalytiqueBoard() {
       <AnalytiqueCardsGrid>
         <StatCard
           label="Nuitées"
-          accent="#818cf8"
+          accent={ACCENT.indigo}
+          hint="Chambres vendues sur l'année (cumul des nuitées). Objectif budget en dessous."
           value={fmt.nuitees(summary.totalNuitees)}
           reference={fmt.nuitees(summary.budgetTotalNuitees)}
         />
         <StatCard
           label="Taux d'occupation moyen"
-          accent="#38bdf8"
+          accent={ACCENT.cyan}
+          hint="Chambres occupées en moyenne, rapportées aux chambres disponibles."
           value={fmt.pct(summary.avgTO)}
           reference={fmt.pct(summary.budgetAvgTO)}
         />
         <StatCard
-          label="Revenu par chambre moyen"
-          accent="#34d399"
+          label="Revenu moyen par chambre"
+          accent={ACCENT.green}
+          hint="Chiffre d'affaires rapporté à toutes les chambres (RevPAR)."
           value={fmt.eur(summary.avgRevPAR)}
           reference={fmt.eur(summary.budgetAvgRevPAR)}
         />
         <StatCard
           label="Chiffre d'affaires total"
-          accent="#fbbf24"
+          accent={ACCENT.amber}
+          hint="Chiffre d'affaires hébergement de l'année, TVA comprise."
           value={fmt.eurInt(summary.totalRevenue)}
           reference={fmt.eurInt(summary.budgetTotalRevenue)}
         />
@@ -399,6 +406,7 @@ export function AnalytiqueBoard() {
           projName="Projeté"
           yTickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
           tooltipFormatter={fmt.eurInt}
+          labelFormatter={monthTooltipLabel}
         />
         <KpiLineChart
           title="Taux d'occupation par mois"
@@ -410,6 +418,7 @@ export function AnalytiqueBoard() {
           projName="Projeté"
           yDomain={[0, 100]}
           tooltipFormatter={fmt.pct}
+          labelFormatter={monthTooltipLabel}
         />
       </AnalytiqueCharts>
     </AnalytiqueShell>

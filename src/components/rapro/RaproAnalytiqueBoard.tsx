@@ -7,6 +7,7 @@ import { fr } from 'date-fns/locale'
 import { AnalytiqueShell } from '#/components/analytique/AnalytiqueShell.tsx'
 import {
   AnalytiqueCardsGrid,
+  shareSub,
   StatCard,
 } from '#/components/analytique/AnalytiqueCards.tsx'
 import { AnalytiqueTable } from '#/components/analytique/AnalytiqueTable.tsx'
@@ -20,6 +21,7 @@ import {
 } from '#/components/rapro/RaproCatColumns.tsx'
 import { fetchOldestDay } from '#/lib/rapro/service.ts'
 import { CATEGORY_COLOR as CAT_COLOR } from '#/lib/rapro/constants.ts'
+import { MONTHS_SHORT } from '#/lib/shared/dates.ts'
 import { capitalize } from '#/lib/utils.ts'
 import {
   fetchStatusCountsByRange,
@@ -37,21 +39,6 @@ import {
  */
 
 const MONTHS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
-
-const MONTHS_SHORT = [
-  'Jan',
-  'Fév',
-  'Mar',
-  'Avr',
-  'Mai',
-  'Juin',
-  'Juil',
-  'Aoû',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Déc',
-]
 
 const currentYear = new Date().getFullYear()
 
@@ -147,17 +134,27 @@ export function RaproAnalytiqueBoard() {
       <AnalytiqueCardsGrid cols={5}>
         <StatCard
           label="Moyenne nettoyées / jour"
-          accent="#94a3b8"
-          value={<span style={{ color: '#94a3b8' }}>{avgCleanedPerDay}</span>}
+          accent={CAT_COLOR.moyenne}
+          hint="Chambres nettoyées en moyenne par jour travaillé."
+          value={
+            <span style={{ color: CAT_COLOR.moyenne }}>{avgCleanedPerDay}</span>
+          }
         />
         <StatCard
           label="Vendues sur l'année"
-          accent="#818cf8"
-          value={<span style={{ color: '#818cf8' }}>{vendues(yearTotals)}</span>}
+          accent={CAT_COLOR.vendues}
+          hint="Chambres vendues : nettoyées + bloquées + refus."
+          value={
+            <span style={{ color: CAT_COLOR.vendues }}>
+              {vendues(yearTotals)}
+            </span>
+          }
         />
         <StatCard
           label="Nettoyées sur l'année"
           accent={CAT_COLOR.nettoyee}
+          hint="Chambres nettoyées, facturées à ELIOR."
+          sub={shareSub(yearTotals.nettoyee, vendues(yearTotals), 'des vendues')}
           value={
             <span style={{ color: CAT_COLOR.nettoyee }}>
               {yearTotals.nettoyee}
@@ -167,6 +164,8 @@ export function RaproAnalytiqueBoard() {
         <StatCard
           label="Bloquées sur l'année"
           accent={CAT_COLOR.bloquee}
+          hint="Chambres non nettoyées (bloquées)."
+          sub={shareSub(yearTotals.bloquee, vendues(yearTotals), 'des vendues')}
           value={
             <span style={{ color: CAT_COLOR.bloquee }}>
               {yearTotals.bloquee}
@@ -176,6 +175,8 @@ export function RaproAnalytiqueBoard() {
         <StatCard
           label="Refus sur l'année"
           accent={CAT_COLOR.refus}
+          hint="Chambres refusées, hors facturation."
+          sub={shareSub(yearTotals.refus, vendues(yearTotals), 'des vendues')}
           value={
             <span style={{ color: CAT_COLOR.refus }}>{yearTotals.refus}</span>
           }

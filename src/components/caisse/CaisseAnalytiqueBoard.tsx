@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 
@@ -6,6 +6,7 @@ import { AnalytiqueShell } from '#/components/analytique/AnalytiqueShell.tsx'
 import { AnalytiqueTable } from '#/components/analytique/AnalytiqueTable.tsx'
 import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
 import { YearNav } from '#/components/analytique/YearNav.tsx'
+import { useAnnualYear } from '#/components/analytique/useAnnualYear.ts'
 import { KpiLineChart } from '#/components/analytique/KpiLineChart.tsx'
 import {
   CaisseAnalytiqueCards,
@@ -19,6 +20,7 @@ import {
   yearsFromSheets,
 } from '#/lib/caisse/analytics.ts'
 import { fmtEur } from '#/lib/caisse/format.ts'
+import { MONTHS_LABELS, MONTHS_SHORT } from '#/lib/repjour/constants.ts'
 
 /*
  * Vue analytique Caisse — gabarit calqué sur pdj/PdjAnalytiqueBoard.
@@ -33,24 +35,8 @@ import { fmtEur } from '#/lib/caisse/format.ts'
 
 const currentYear = new Date().getFullYear()
 
-const MONTHS_SHORT = [
-  'Jan',
-  'Fév',
-  'Mar',
-  'Avr',
-  'Mai',
-  'Juin',
-  'Juil',
-  'Aoû',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Déc',
-]
-
 export function CaisseAnalytiqueBoard() {
   const navigate = useNavigate()
-  const [year, setYear] = useState(currentYear)
 
   // Toutes les feuilles (lecture) : dérive les années ET l'agrégation. Une seule
   // requête mise en cache — le changement d'année filtre côté client.
@@ -61,13 +47,8 @@ export function CaisseAnalytiqueBoard() {
 
   const years = useMemo(() => yearsFromSheets(sheets, currentYear), [sheets])
 
-  // Si l'année sélectionnée n'est pas dans la liste chargée, se caler sur la
-  // plus récente.
-  useEffect(() => {
-    if (years.length > 0 && !years.includes(year)) {
-      setYear(years[years.length - 1])
-    }
-  }, [years, year])
+  // Année sélectionnée + recalage si absente de la liste (hook partagé).
+  const { year, setYear } = useAnnualYear(years, currentYear)
 
   const months = useMemo(
     () => aggregateCaisseMonthly(sheets, year),
@@ -84,6 +65,12 @@ export function CaisseAnalytiqueBoard() {
       })),
     [months],
   )
+
+  // En-tête d'infobulle du graphe : « Fév » → « Février 2026 ».
+  const monthTooltipLabel = (label: string) => {
+    const i = MONTHS_SHORT.indexOf(label)
+    return i >= 0 ? `${MONTHS_LABELS[i]} ${year}` : label
+  }
 
   return (
     <AnalytiqueShell
@@ -146,7 +133,11 @@ export function CaisseAnalytiqueBoard() {
           xKey="mois"
           realKey="encaisse"
           realName="Encaissé"
+          yTickFormatter={(v) =>
+            v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)
+          }
           tooltipFormatter={fmtEur}
+          labelFormatter={monthTooltipLabel}
         />
       </AnalytiqueCharts>
     </AnalytiqueShell>

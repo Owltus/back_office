@@ -1,15 +1,17 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 
 import { AnalytiqueShell } from '#/components/analytique/AnalytiqueShell.tsx'
 import {
   AnalytiqueCardsGrid,
+  shareSub,
   StatCard,
 } from '#/components/analytique/AnalytiqueCards.tsx'
 import { AnalytiqueTable } from '#/components/analytique/AnalytiqueTable.tsx'
 import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
 import { YearNav } from '#/components/analytique/YearNav.tsx'
+import { useAnnualYear } from '#/components/analytique/useAnnualYear.ts'
 import { KpiLineChart } from '#/components/analytique/KpiLineChart.tsx'
 import { fetchReservations } from '#/lib/parking/service.ts'
 import {
@@ -17,6 +19,8 @@ import {
   yearsFromReservations,
 } from '#/lib/parking/analytics.ts'
 import { fmtInt, fmtPct } from '#/lib/parking/format.ts'
+import { MONTHS_LABELS, MONTHS_SHORT } from '#/lib/repjour/constants.ts'
+import { ACCENT } from '#/components/analytique/accents.ts'
 
 /*
  * Vue analytique Parking — gabarit calqué sur pdj/PdjAnalytiqueBoard.
@@ -31,24 +35,8 @@ import { fmtInt, fmtPct } from '#/lib/parking/format.ts'
 
 const currentYear = new Date().getFullYear()
 
-const MONTHS_SHORT = [
-  'Jan',
-  'Fév',
-  'Mar',
-  'Avr',
-  'Mai',
-  'Juin',
-  'Juil',
-  'Aoû',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Déc',
-]
-
 export function ParkingAnalytiqueBoard() {
   const navigate = useNavigate()
-  const [year, setYear] = useState(currentYear)
 
   // Toutes les réservations (une seule lecture, mise en cache). L'agrégation par
   // année se fait ensuite en mémoire — pas de nouvelle requête par année.
@@ -62,13 +50,8 @@ export function ParkingAnalytiqueBoard() {
     [reservations],
   )
 
-  // Si l'année sélectionnée n'est pas dans la liste chargée, se caler sur la
-  // plus récente.
-  useEffect(() => {
-    if (years.length > 0 && !years.includes(year)) {
-      setYear(years[years.length - 1])
-    }
-  }, [years, year])
+  // Année sélectionnée + recalage si absente de la liste (hook partagé).
+  const { year, setYear } = useAnnualYear(years, currentYear)
 
   const months = useMemo(
     () => aggregateParkingMonthly(reservations, year),
@@ -92,11 +75,15 @@ export function ParkingAnalytiqueBoard() {
       months.map((m) => ({
         mois: MONTHS_SHORT[m.month - 1],
         occ: m.reservations > 0 ? m.occupancyRate : null,
-        resas: m.reservations > 0 ? m.reservations : null,
-        payees: m.reservations > 0 ? m.paid : null,
       })),
     [months],
   )
+
+  // En-tête d'infobulle du graphe : « Fév » → « Février 2026 ».
+  const monthTooltipLabel = (label: string) => {
+    const i = MONTHS_SHORT.indexOf(label)
+    return i >= 0 ? `${MONTHS_LABELS[i]} ${year}` : label
+  }
 
   return (
     <AnalytiqueShell
@@ -117,23 +104,32 @@ export function ParkingAnalytiqueBoard() {
       <AnalytiqueCardsGrid>
         <StatCard
           label="Réservations"
-          accent="#818cf8"
+          accent={ACCENT.indigo}
           value={fmtInt(summary.totalReservations)}
+          hint="Nombre total de réservations de parking sur l'année."
         />
         <StatCard
           label="Taux d'occupation moyen"
-          accent="#38bdf8"
+          accent={ACCENT.cyan}
           value={fmtPct(summary.avgOccupancy)}
+          hint="Places occupées en moyenne, rapportées aux places disponibles."
         />
         <StatCard
           label="Nuits totales"
-          accent="#34d399"
+          accent={ACCENT.green}
           value={fmtInt(summary.totalNights)}
+          hint="Total des nuits de stationnement sur l'année."
         />
         <StatCard
           label="Impayés"
-          accent="#f87171"
+          accent={ACCENT.red}
           value={fmtInt(summary.totalUnpaid)}
+          hint="Réservations parties sans paiement enregistré."
+          sub={shareSub(
+            summary.totalUnpaid,
+            summary.totalReservations,
+            'des réservations',
+          )}
         />
       </AnalytiqueCardsGrid>
 
@@ -248,6 +244,7 @@ export function ParkingAnalytiqueBoard() {
           realName="Occupation"
           yDomain={[0, 100]}
           tooltipFormatter={fmtPct}
+          labelFormatter={monthTooltipLabel}
         />
       </AnalytiqueCharts>
     </AnalytiqueShell>

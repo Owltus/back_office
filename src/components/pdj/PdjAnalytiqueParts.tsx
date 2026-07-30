@@ -1,4 +1,5 @@
 import { fmtInt, fmtPctInt } from '#/lib/pdj/format.ts'
+import { ACCENT } from '#/components/analytique/accents.ts'
 
 /*
  * Briques de tableau partagées par les deux vues analytique PDJ (annuelle et
@@ -72,19 +73,19 @@ export function PdjStatsHead({
           l'emporte sur `text-muted-foreground` — même procédé que les cellules. */}
       <th
         className="px-2 py-2 text-center text-xs font-medium text-muted-foreground"
-        style={{ color: 'var(--chart-1)' }}
+        style={{ color: ACCENT.indigo }}
       >
         Servis
       </th>
       <th
         className="hidden px-2 py-2 text-center text-xs font-medium text-muted-foreground sm:table-cell"
-        style={{ color: 'var(--chart-5)' }}
+        style={{ color: ACCENT.green }}
       >
         Extra
       </th>
       <th
         className="hidden whitespace-nowrap px-2 py-2 text-center text-xs font-medium text-muted-foreground sm:table-cell"
-        style={{ color: 'var(--chart-3)' }}
+        style={{ color: ACCENT.amber }}
       >
         Non servis
       </th>
@@ -93,14 +94,14 @@ export function PdjStatsHead({
       </th>
       <th
         className="px-2 py-2 text-center text-xs font-medium text-muted-foreground"
-        style={{ color: 'var(--chart-2)' }}
+        style={{ color: ACCENT.cyan }}
       >
         <span className="hidden sm:inline">Conversion</span>
         <span className="sm:hidden">Conv.</span>
       </th>
       <th
         className="hidden px-3 py-2 text-center text-xs font-medium text-muted-foreground sm:table-cell"
-        style={{ color: 'var(--chart-4)' }}
+        style={{ color: ACCENT.pink }}
       >
         Remplissage
       </th>
@@ -170,7 +171,7 @@ export function PdjStatCells({
       </td>
       <td
         className="hidden whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums sm:table-cell"
-        style={{ color: 'var(--muted-foreground)' }}
+        style={{ color: ACCENT.slate }}
       >
         {fmtInt(stats.included)}
       </td>
@@ -179,19 +180,19 @@ export function PdjStatCells({
           réservée (servi − extra) et l'extra. « — » si conso non saisie (extra null). */}
       <td
         className="whitespace-nowrap px-2 py-2 text-center text-xs font-medium tabular-nums text-muted-foreground/50"
-        style={stats.extra != null ? { color: 'var(--chart-1)' } : undefined}
+        style={stats.extra != null ? { color: ACCENT.indigo } : undefined}
       >
         {stats.extra != null ? fmtInt(stats.served) : '—'}
       </td>
       <td
         className="hidden whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums text-muted-foreground/50 sm:table-cell"
-        style={stats.extra != null ? { color: 'var(--chart-5)' } : undefined}
+        style={stats.extra != null ? { color: ACCENT.green } : undefined}
       >
         {stats.extra != null ? fmtInt(stats.extra) : '—'}
       </td>
       <td
         className="hidden whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums text-muted-foreground/50 sm:table-cell"
-        style={stats.noShow != null ? { color: 'var(--chart-3)' } : undefined}
+        style={stats.noShow != null ? { color: ACCENT.amber } : undefined}
       >
         {stats.noShow != null ? fmtInt(stats.noShow) : '—'}
       </td>
@@ -202,13 +203,13 @@ export function PdjStatCells({
           Conversion en cyan (--chart-2), même code couleur que sa carte de synthèse. */}
       <td
         className="whitespace-nowrap px-2 py-2 text-center text-xs font-medium tabular-nums text-muted-foreground/50"
-        style={stats.conversion != null ? { color: 'var(--chart-2)' } : undefined}
+        style={stats.conversion != null ? { color: ACCENT.cyan } : undefined}
       >
         {stats.conversion != null ? fmtPctInt(stats.conversion) : '—'}
       </td>
       <td
         className="hidden whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums text-muted-foreground/50 sm:table-cell"
-        style={stats.coverage != null ? { color: 'var(--chart-4)' } : undefined}
+        style={stats.coverage != null ? { color: ACCENT.pink } : undefined}
       >
         {stats.coverage != null ? fmtPctInt(stats.coverage) : '—'}
       </td>

@@ -43,7 +43,7 @@ export function RaproCatHead({ firstLabel }: { firstLabel: string }) {
       </th>
       <th
         className="px-3 py-2 text-center text-xs font-medium"
-        style={{ color: '#818cf8' }}
+        style={{ color: CATEGORY_COLOR.vendues }}
       >
         Vendues
       </th>
@@ -79,7 +79,7 @@ export function RaproCatCells({ counts }: { counts: DayStatusCounts }) {
         {sold === 0 ? (
           <span className="text-muted-foreground/40">0</span>
         ) : (
-          <span style={{ color: '#818cf8' }}>{sold}</span>
+          <span style={{ color: CATEGORY_COLOR.vendues }}>{sold}</span>
         )}
       </td>
       <td className="whitespace-nowrap px-3 py-2 text-center text-xs font-medium tabular-nums">

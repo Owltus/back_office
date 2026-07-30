@@ -6,6 +6,7 @@ import { fr } from 'date-fns/locale'
 import { AnalytiqueShell } from '#/components/analytique/AnalytiqueShell.tsx'
 import {
   AnalytiqueCardsGrid,
+  shareSub,
   StatCard,
 } from '#/components/analytique/AnalytiqueCards.tsx'
 import { AnalytiqueTable } from '#/components/analytique/AnalytiqueTable.tsx'
@@ -94,17 +95,29 @@ export function RaproMonthlyBoard({
       <AnalytiqueCardsGrid cols={5}>
         <StatCard
           label="Moyenne nettoyées / jour"
-          accent="#94a3b8"
-          value={<span style={{ color: '#94a3b8' }}>{avgCleanedPerDay}</span>}
+          accent={CATEGORY_COLOR.moyenne}
+          hint="Chambres nettoyées en moyenne par jour travaillé."
+          value={
+            <span style={{ color: CATEGORY_COLOR.moyenne }}>
+              {avgCleanedPerDay}
+            </span>
+          }
         />
         <StatCard
           label="Vendues"
-          accent="#818cf8"
-          value={<span style={{ color: '#818cf8' }}>{vendues(totals)}</span>}
+          accent={CATEGORY_COLOR.vendues}
+          hint="Chambres vendues : nettoyées + bloquées + refus."
+          value={
+            <span style={{ color: CATEGORY_COLOR.vendues }}>
+              {vendues(totals)}
+            </span>
+          }
         />
         <StatCard
           label="Nettoyées"
           accent={CATEGORY_COLOR.nettoyee}
+          hint="Chambres nettoyées, facturées à ELIOR."
+          sub={shareSub(totals.nettoyee, vendues(totals), 'des vendues')}
           value={
             <span style={{ color: CATEGORY_COLOR.nettoyee }}>
               {totals.nettoyee}
@@ -114,6 +127,8 @@ export function RaproMonthlyBoard({
         <StatCard
           label="Bloquées"
           accent={CATEGORY_COLOR.bloquee}
+          hint="Chambres non nettoyées (bloquées)."
+          sub={shareSub(totals.bloquee, vendues(totals), 'des vendues')}
           value={
             <span style={{ color: CATEGORY_COLOR.bloquee }}>
               {totals.bloquee}
@@ -123,6 +138,8 @@ export function RaproMonthlyBoard({
         <StatCard
           label="Refus"
           accent={CATEGORY_COLOR.refus}
+          hint="Chambres refusées, hors facturation."
+          sub={shareSub(totals.refus, vendues(totals), 'des vendues')}
           value={
             <span style={{ color: CATEGORY_COLOR.refus }}>{totals.refus}</span>
           }
