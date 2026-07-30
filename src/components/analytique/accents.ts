@@ -4,16 +4,18 @@
  * les valeurs colorées (colonnes, segments de graphe) des 5 features y puisent, au
  * lieu de hex en dur dispersés (`#818cf8`, `#38bdf8`, `#34d399`, `#fbbf24`…).
  *
- * But : un SYSTÈME de couleurs cohérent, pas des assignations identiques — chaque
- * page reste libre d'affecter la couleur qui convient à sa métrique.
+ * But : un SYSTÈME cohérent — un même SUJET porte la même couleur d'une page à
+ * l'autre (occupation, captage, volume…), sans jamais deux cartes de la même
+ * couleur sur une même page. La valeur en tableau reprend l'accent de sa carte.
  *
- * Usage courant (indicatif, non contraignant) :
- *   indigo → volume principal (nuitées, réservations, vendues, servis, carte…)
- *   cyan   → taux / occupation / conversion / part
+ * Sémantique (à respecter d'une page à l'autre) :
+ *   indigo → volume principal (nuitées, réservations, arrivées, vendues, servis, carte…)
+ *   cyan   → taux d'occupation / remplissage
+ *   pink   → captage / conversion (part captée) — DISTINCT du cyan pour cohabiter
+ *            avec l'occupation sur une même page (parking).
  *   green  → argent / revenu / encaissé / nettoyées
  *   amber  → à surveiller (écarts, refus, non servis, CA)
- *   pink   → métrique secondaire (remplissage)
- *   slate  → neutre / moyenne / référence
+ *   slate  → neutre / moyenne / référence / base (inclus)
  *   red    → négatif fort (impayés, bloquées) — seule couleur hors token (pas
  *            d'équivalent `--chart-*`), miroir de `.rapro-room-todo` (rapro.css).
  */

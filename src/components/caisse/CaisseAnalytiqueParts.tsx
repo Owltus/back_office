@@ -90,20 +90,32 @@ export function CaisseStatsHead({ firstLabel }: { firstLabel: string }) {
       <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">
         {firstLabel}
       </th>
-      <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground">
+      <th
+        className="px-2 py-2 text-right text-xs font-medium text-muted-foreground"
+        style={{ color: ACCENT.cyan }}
+      >
         Espèces
       </th>
-      <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground">
+      <th
+        className="px-2 py-2 text-right text-xs font-medium text-muted-foreground"
+        style={{ color: ACCENT.indigo }}
+      >
         CB
       </th>
       <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground">
         <span className="hidden sm:inline">Chèques vac.</span>
         <span className="sm:hidden">Ch. vac.</span>
       </th>
-      <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground">
+      <th
+        className="px-2 py-2 text-right text-xs font-medium text-muted-foreground"
+        style={{ color: ACCENT.indigo }}
+      >
         Adyen
       </th>
-      <th className="px-2 py-2 text-right text-xs font-medium text-muted-foreground">
+      <th
+        className="px-2 py-2 text-right text-xs font-medium text-muted-foreground"
+        style={{ color: ACCENT.green }}
+      >
         <span className="hidden sm:inline">Total encaissé</span>
         <span className="sm:hidden">Total</span>
       </th>
@@ -149,11 +161,20 @@ export function CaisseStatCells({
   const mode = 'whitespace-nowrap px-2 py-2 text-right text-xs tabular-nums text-muted-foreground'
   return (
     <>
-      <td className={mode}>{fmtEur(stats.cash)}</td>
-      <td className={mode}>{fmtEur(stats.cb)}</td>
+      <td className={mode} style={{ color: ACCENT.cyan }}>
+        {fmtEur(stats.cash)}
+      </td>
+      <td className={mode} style={{ color: ACCENT.indigo }}>
+        {fmtEur(stats.cb)}
+      </td>
       <td className={mode}>{fmtEur(stats.cvac)}</td>
-      <td className={mode}>{fmtEur(stats.adyen)}</td>
-      <td className="whitespace-nowrap px-2 py-2 text-right text-xs font-medium tabular-nums text-foreground">
+      <td className={mode} style={{ color: ACCENT.indigo }}>
+        {fmtEur(stats.adyen)}
+      </td>
+      <td
+        className="whitespace-nowrap px-2 py-2 text-right text-xs font-medium tabular-nums"
+        style={{ color: ACCENT.green }}
+      >
         {fmtEur(stats.encaisse)}
       </td>
       <td
