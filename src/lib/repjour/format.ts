@@ -20,6 +20,10 @@ const eur = (n: number) => nf1.format(n) + ' €';
 
 const eurInt = (n: number) => nf0.format(n) + ' €';
 
+// Kilo-euros arrondis (ex. « 1 245 k€ ») — pour les gros montants (CA) où l'euro
+// à l'unité est illisible.
+const keur = (n: number) => nf0.format(Math.round(n / 1000)) + ' k€';
+
 const ecartNuitees = (n: number) => sign(n) + nf0.format(n);
 
 const ecartPts = (n: number) => sign(n) + nf1.format(n) + ' pts';
@@ -54,6 +58,7 @@ export const fmt = {
   pctInt,
   eur,
   eurInt,
+  keur,
   ecartNuitees,
   ecartPts,
   ecartEur,
