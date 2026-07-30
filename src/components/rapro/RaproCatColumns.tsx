@@ -2,6 +2,12 @@ import type { ReactNode } from 'react'
 
 import type { KpiBarSegment } from '#/components/analytique/KpiStackedBarChart.tsx'
 import { CATEGORY_COLOR } from '#/lib/rapro/constants.ts'
+import {
+  AnalytiqueCardsGrid,
+  shareSub,
+  StatCard,
+  subText,
+} from '#/components/analytique/AnalytiqueCards.tsx'
 import { vendues } from '#/lib/rapro/monthly.ts'
 import type { DayStatusCounts } from '#/lib/rapro/monthly.ts'
 
@@ -13,6 +19,63 @@ export const RAPRO_CHART_SEGMENTS: KpiBarSegment[] = [
   { key: 'bloquee', name: 'Bloquées', color: CATEGORY_COLOR.bloquee },
   { key: 'refus', name: 'Refus', color: CATEGORY_COLOR.refus },
 ]
+
+/** Les 5 cartes de synthèse du rapprochement — IDENTIQUES en vue annuelle et mensuelle
+ * (même `totals`). Valeur = total, sous-texte = « % des vendues » (cadence « / jour »
+ * pour Vendues). « Moy. nettoyées / jour » = indicateur par jour (pas de sous-texte). */
+export function RaproAnalytiqueCards({
+  totals,
+  avgCleanedPerDay,
+  activeDays,
+}: {
+  totals: DayStatusCounts
+  avgCleanedPerDay: number
+  activeDays: number
+}) {
+  const sold = vendues(totals)
+  return (
+    <AnalytiqueCardsGrid cols={5}>
+      <StatCard
+        label="Moy. nettoyées / jour"
+        accent={CATEGORY_COLOR.moyenne}
+        hint="Chambres nettoyées en moyenne par jour travaillé."
+        value={avgCleanedPerDay}
+      />
+      <StatCard
+        label="Vendues"
+        accent={CATEGORY_COLOR.vendues}
+        hint="Chambres vendues : nettoyées + bloquées + refus."
+        sub={
+          activeDays > 0
+            ? subText(`moy. ${Math.round(sold / activeDays)} / jour`)
+            : undefined
+        }
+        value={sold}
+      />
+      <StatCard
+        label="Nettoyées"
+        accent={CATEGORY_COLOR.nettoyee}
+        hint="Chambres nettoyées, facturées à ELIOR."
+        sub={shareSub(totals.nettoyee, sold, 'des vendues')}
+        value={totals.nettoyee}
+      />
+      <StatCard
+        label="Bloquées"
+        accent={CATEGORY_COLOR.bloquee}
+        hint="Chambres non nettoyées (bloquées)."
+        sub={shareSub(totals.bloquee, sold, 'des vendues')}
+        value={totals.bloquee}
+      />
+      <StatCard
+        label="Refus"
+        accent={CATEGORY_COLOR.refus}
+        hint="Chambres refusées, hors facturation."
+        sub={shareSub(totals.refus, sold, 'des vendues')}
+        value={totals.refus}
+      />
+    </AnalytiqueCardsGrid>
+  )
+}
 
 /*
  * Colonnes de catégorie partagées par les deux vues analytique du rapprochement

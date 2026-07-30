@@ -4,36 +4,30 @@ import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 
 import { AnalytiqueShell } from '#/components/analytique/AnalytiqueShell.tsx'
-import {
-  AnalytiqueCardsGrid,
-  shareSub,
-  StatCard,
-} from '#/components/analytique/AnalytiqueCards.tsx'
 import { AnalytiqueTable } from '#/components/analytique/AnalytiqueTable.tsx'
 import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
 import { AnalytiqueBackButton } from '#/components/analytique/AnalytiqueBackButton.tsx'
 import { KpiStackedBarChart } from '#/components/analytique/KpiStackedBarChart.tsx'
 import {
+  RaproAnalytiqueCards,
   RAPRO_CHART_SEGMENTS,
   RaproCatCells,
   RaproCatHead,
 } from '#/components/rapro/RaproCatColumns.tsx'
 import { parseDateStr } from '#/lib/poster/dateFormatter.ts'
-import { CATEGORY_COLOR } from '#/lib/rapro/constants.ts'
 import { capitalize } from '#/lib/utils.ts'
 import {
   fetchStatusCountsByRange,
   monthBounds,
   monthlyRows,
-  vendues,
 } from '#/lib/rapro/monthly.ts'
 
 /**
- * Détail d'un MOIS — harmonisé sur le socle analytique partagé. 4 cartes de
- * synthèse (nettoyées / bloquées / refus + moyenne journalière), puis le détail
- * jour par jour et un graphique des nettoyées par jour. Export PDF (base de
- * facturation ELIOR). Le mois vient des params de route ; retour à la vue
- * annuelle par le chevron.
+ * Détail d'un MOIS — harmonisé sur le socle analytique partagé. 5 cartes de
+ * synthèse (moyenne nettoyées / jour, vendues, nettoyées / bloquées / refus),
+ * puis le détail jour par jour et un graphique des nettoyées par jour. Export
+ * PDF (base de facturation ELIOR). Le mois vient des params de route ; retour à
+ * la vue annuelle par le chevron.
  */
 
 export function RaproMonthlyBoard({
@@ -86,65 +80,15 @@ export function RaproMonthlyBoard({
         charts: 1,
         cards: 5,
         cardCols: 5,
-        cardLines: 2,
+        cardLines: 3,
         rows: new Date(year, month, 0).getDate(),
       }}
     >
-      {/* Synthèse du mois — même ordre que la vue annuelle : moyenne / jour, puis
-          vendues (total) et les 3 totaux par catégorie. */}
-      <AnalytiqueCardsGrid cols={5}>
-        <StatCard
-          label="Moyenne nettoyées / jour"
-          accent={CATEGORY_COLOR.moyenne}
-          hint="Chambres nettoyées en moyenne par jour travaillé."
-          value={
-            <span style={{ color: CATEGORY_COLOR.moyenne }}>
-              {avgCleanedPerDay}
-            </span>
-          }
-        />
-        <StatCard
-          label="Vendues"
-          accent={CATEGORY_COLOR.vendues}
-          hint="Chambres vendues : nettoyées + bloquées + refus."
-          value={
-            <span style={{ color: CATEGORY_COLOR.vendues }}>
-              {vendues(totals)}
-            </span>
-          }
-        />
-        <StatCard
-          label="Nettoyées"
-          accent={CATEGORY_COLOR.nettoyee}
-          hint="Chambres nettoyées, facturées à ELIOR."
-          sub={shareSub(totals.nettoyee, vendues(totals), 'des vendues')}
-          value={
-            <span style={{ color: CATEGORY_COLOR.nettoyee }}>
-              {totals.nettoyee}
-            </span>
-          }
-        />
-        <StatCard
-          label="Bloquées"
-          accent={CATEGORY_COLOR.bloquee}
-          hint="Chambres non nettoyées (bloquées)."
-          sub={shareSub(totals.bloquee, vendues(totals), 'des vendues')}
-          value={
-            <span style={{ color: CATEGORY_COLOR.bloquee }}>
-              {totals.bloquee}
-            </span>
-          }
-        />
-        <StatCard
-          label="Refus"
-          accent={CATEGORY_COLOR.refus}
-          hint="Chambres refusées, hors facturation."
-          sub={shareSub(totals.refus, vendues(totals), 'des vendues')}
-          value={
-            <span style={{ color: CATEGORY_COLOR.refus }}>{totals.refus}</span>
-          }
-        />
-      </AnalytiqueCardsGrid>
+      <RaproAnalytiqueCards
+        totals={totals}
+        avgCleanedPerDay={avgCleanedPerDay}
+        activeDays={activeDays}
+      />
 
       {/* Tableau jour par jour */}
       <AnalytiqueTable head={<RaproCatHead firstLabel="Jour" />}>
