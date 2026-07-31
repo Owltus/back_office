@@ -27,6 +27,9 @@ const COUNT = 14
 const BLADES = 350
 /** Fondu / flétrissement final (ms avant DURATION). */
 const FADE_MS = 1200
+/** Échelle globale du décor : ~2x plus bas, PROPORTIONS conservées (tout est
+ * multiplié pareil -> rien n'est déformé, juste plus petit). */
+const SCENE_SCALE = 0.55
 
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v)
 const easeOutCubic = (x: number) => 1 - Math.pow(1 - x, 3)
@@ -175,7 +178,8 @@ function buildStems(width: number, height: number, groundY: number): Stem[] {
   for (let i = 0; i < COUNT; i++) {
     const depth = Math.random()
     // Peu de variance -> lit de fleurs HOMOGÈNE (tailles et hauteurs proches).
-    const scale = 0.88 + depth * 0.24
+    // SCENE_SCALE réduit tout le plant en gardant ses proportions internes.
+    const scale = (0.88 + depth * 0.24) * SCENE_SCALE
     // Tiges assez hautes pour une bonne PROPORTION fleur/tige, mais tout le décor
     // reste petit et dans le bas de la fenêtre (~1/3 plus petit qu'avant).
     const h = height * (0.093 + Math.random() * 0.034) * scale
@@ -233,18 +237,18 @@ function buildBlades(width: number, height: number): Blade[] {
   const blades: Blade[] = []
   for (let i = 0; i < BLADES; i++) {
     const depth = Math.random()
-    const scale = 0.7 + depth * 0.5
+    const scale = (0.7 + depth * 0.5) * SCENE_SCALE
     blades.push({
       x0: Math.random() * width,
       // Brins plus courts que les tiges (les fleurs dominent le lit d'herbe).
       h: height * (0.033 + Math.random() * 0.053) * scale,
-      lean: (Math.random() - 0.5) * height * 0.014,
+      lean: (Math.random() - 0.5) * height * 0.014 * SCENE_SCALE,
       bornAt: Math.random() * 900,
       growMs: 1200 + Math.random() * 1200,
       swayAmp: 3 + Math.random() * 5,
       swayFreq: 0.0012 + Math.random() * 0.001,
       swayPhase: Math.random() * TAU,
-      w: 1.2 + Math.random() * 1.4,
+      w: (1.2 + Math.random() * 1.4) * SCENE_SCALE,
       color: GRASS[Math.floor(Math.random() * GRASS.length)],
       depth,
     })
