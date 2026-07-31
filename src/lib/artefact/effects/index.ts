@@ -5,6 +5,7 @@ import { blackholeEffect } from './blackhole.ts'
 import { boidsEffect } from './boids.ts'
 import { bubblesEffect } from './bubbles.ts'
 import { confettiEffect } from './confetti.ts'
+import { diceEffect } from './dice.ts'
 import { disintegrateEffect } from './disintegrate.ts'
 import { fireworksEffect } from './fireworks.ts'
 import { flowersEffect } from './flowers.ts'
@@ -22,7 +23,12 @@ import { snowEffect } from './snow.ts'
 import { vortexEffect } from './vortex.ts'
 import type { EffectDefinition } from './types.ts'
 
-export type { EffectDefinition, EffectEnv, EffectRunner } from './types.ts'
+export type {
+  EffectDefinition,
+  EffectEnv,
+  EffectRunner,
+  WebglEffectEnv,
+} from './types.ts'
 
 /*
  * Registre des effets de la page Artefact. L'ordre est celui des boutons.
@@ -53,6 +59,7 @@ export const EFFECTS: readonly EffectDefinition[] = [
   disintegrateEffect,
   kaleidoscopeEffect,
   boidsEffect,
+  diceEffect,
 ]
 
 /**
@@ -72,4 +79,5 @@ export const VALIDATED_EFFECT_IDS: ReadonlySet<string> = new Set([
   'bubbles',
   'balloons',
   'heartswarm',
+  'd20',
 ])
