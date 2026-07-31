@@ -34,14 +34,24 @@ export function EffectOverlay({ effect, onDone }: EffectOverlayProps) {
   useEffect(() => {
     const canvasEl = canvasRef.current
     if (!canvasEl) return
-    const context = canvasEl.getContext('2d')
-    if (!context) return
     const canvas: HTMLCanvasElement = canvasEl
-    const ctx: CanvasRenderingContext2D = context
 
     // Plafonné à 2 : au-delà, le coût de remplissage explose sans gain visible.
     const dpr = Math.min(window.devicePixelRatio || 1, 2)
+    // Un canvas ne peut avoir qu'un type de contexte à vie : on décide 2D vs WebGL
+    // AVANT tout `getContext`. Les effets WebGL prennent le canvas brut et gèrent
+    // leur propre renderer (et leur propre resize) ; ne pas appeler getContext('2d').
+    const isWebgl = effect.mode === 'webgl'
+    let ctx: CanvasRenderingContext2D | null = null
+    if (!isWebgl) {
+      ctx = canvas.getContext('2d')
+      if (!ctx) return
+    }
+
     function resize() {
+      // Le renderer WebGL de l'effet gère sa propre taille : on ne touche pas au
+      // backing store du canvas (le réécrire réinitialiserait le viewport GL).
+      if (isWebgl || !ctx) return
       canvas.width = window.innerWidth * dpr
       canvas.height = window.innerHeight * dpr
       // Le repère de dessin est en pixels CSS : les effets raisonnent en
@@ -51,11 +61,12 @@ export function EffectOverlay({ effect, onDone }: EffectOverlayProps) {
     resize()
     window.addEventListener('resize', resize)
 
-    const runner = effect.create({
-      ctx,
-      width: window.innerWidth,
-      height: window.innerHeight,
-    })
+    const width = window.innerWidth
+    const height = window.innerHeight
+    const runner =
+      effect.mode === 'webgl'
+        ? effect.create({ canvas, width, height, dpr })
+        : effect.create({ ctx: ctx as CanvasRenderingContext2D, width, height })
 
     let raf = 0
     let stopped = false
@@ -90,6 +101,10 @@ export function EffectOverlay({ effect, onDone }: EffectOverlayProps) {
       stopped = true
       cancelAnimationFrame(raf)
       window.removeEventListener('resize', resize)
+      // Libère les ressources de l'effet (renderer WebGL, monde physique…). Le
+      // cleanup ne s'exécutant qu'une fois par montage, `destroy` est appelé une
+      // seule fois — que l'arrêt soit naturel (via onDone -> démontage) ou forcé.
+      runner.destroy?.()
     }
   }, [effect])
 
