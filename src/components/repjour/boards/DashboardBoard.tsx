@@ -382,6 +382,9 @@ export function DashboardBoard() {
           budget: budgetSafe,
           ecart,
           pickup,
+          dayOfMonth: report.day_of_month,
+          daysInMonth: report.days_in_month,
+          monthStartProjection: pickupSeries[0] ?? null,
           importedAt: report.imported_at,
         }
       : {
@@ -391,6 +394,9 @@ export function DashboardBoard() {
           projeteMois: fcMoisKPI,
           budget: budgetSafe,
           ecart: fcEcart,
+          dayOfMonth: latestMTD?.day_of_month ?? 0,
+          daysInMonth: daysInMonthPartial,
+          monthStartProjection: null,
         }
   }
 

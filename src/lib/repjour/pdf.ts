@@ -9,12 +9,16 @@
  *
  * Le document reprend le contenu de l'écran, mais avec le STYLE DOCUMENT propre
  * aux PDF de l'app (pas le look web : ni cartes arrondies, ni bandeau coloré) :
- * en-tête centré + filet, bandeau de compteurs bordés, sections titrées à filets
- * fins, écarts colorés (vert/rouge) comme la caisse. Ordre :
+ * en-tête centré + filet, cartes bordées à liseré d'accent (façon PDF analytique),
+ * sections titrées à filets fins, écarts colorés (vert/rouge) comme la caisse. Ordre :
  *   en-tête (titre + date)
- *   → compteurs de synthèse (revenu / RevPAR / TO projetés vs budget, + pickup)
+ *   → cartes de synthèse (les 4 MÊMES qu'à l'écran, via `monthPace`)
  *   → progression du mois (acquis / jour / projeté vs budget + répartition)
  *   → détail par indicateur (Jour / Cumul / Projeté / Budget / Écart)
+ *
+ * Les cartes ne sont PAS recodées : leurs valeurs viennent de `monthPace`, la même
+ * source que le composant écran `SummaryCards` — le document colle donc toujours
+ * aux cartes affichées (même intention que le PDF analytique, qui lit le DOM).
  */
 
 import { format } from 'date-fns'
@@ -22,6 +26,7 @@ import { fr } from 'date-fns/locale'
 import type { jsPDF } from 'jspdf'
 
 import { fmt } from '#/lib/repjour/format.ts'
+import { fmtJours, monthPace } from '#/lib/repjour/summaryMetrics.ts'
 import type { Ecart, KPIBlock, MonthBudget } from '#/lib/repjour/types.ts'
 
 export interface RepjourPdfData {
@@ -36,11 +41,21 @@ export interface RepjourPdfData {
   budget: MonthBudget
   /** Écart projeté vs budget — `null` si non calculable. */
   ecart: Ecart | null
-  /** « Pris depuis la veille » (euros) — `null`/absent → compteur masqué. */
+  /** « Pris depuis la veille » (euros) — `null`/absent → carte « — ». */
   pickup?: number | null
+  /** Quantième du jour affiché (1..31) et nombre de jours du mois — cadence des
+   * cartes temporelles (effort restant, avance sur le rythme). 0 si inconnu. */
+  dayOfMonth?: number
+  daysInMonth?: number
+  /** Projeté fin de mois tel qu'il était au 1er (carnet d'ouverture) — 2e valeur
+   * de la carte « Rentré depuis le 1er ». `null`/absent → sous-valeur masquée. */
+  monthStartProjection?: number | null
   /** Horodatage d'import du rapport (petite mention de pied). */
   importedAt?: string | null
 }
+
+/** KPI à zéro — repli quand le cumul réalisé est absent (jour projeté seul). */
+const ZERO_KPI: KPIBlock = { nuitees: 0, to: 0, pm: 0, revpar: 0, roomRevenue: 0 }
 
 /** Ouvre un PDF déjà rendu dans la fenêtre d'impression, via un iframe caché
  * recyclé (aucun téléchargement). Même harnais que caisse / rapro. */
@@ -98,6 +113,10 @@ const RULE: RGB = [51, 51, 51] // filet fort (sous l'en-tête)
 // Écarts : mêmes teintes que la caisse (cohérence entre les PDF de l'app).
 const POS: RGB = [18, 122, 46]
 const NEG: RGB = [180, 35, 24]
+// Accents des cartes (liseré à gauche) — mêmes teintes que le PDF analytique.
+const AMBER: RGB = [176, 120, 10]
+const INDIGO: RGB = [67, 56, 202]
+const CYAN: RGB = [14, 116, 144]
 // Répartition du mois (données) — vert / or / gris / rouge.
 const ACQUIS: RGB = [18, 122, 46]
 const JOUR: RGB = [204, 150, 20]
@@ -171,6 +190,77 @@ function colRight(i: number): number {
   return LABEL_R + COL_W * (i + 1) - PAD
 }
 
+/** Pose un texte CENTRÉ sur (cx, y) garanti sur UNE ligne : la police démarre à
+ * `base` et est réduite (jusqu'à `min`) pour tenir dans `maxW`. Repris du PDF
+ * analytique (jsPDF est linéaire en taille : `base * maxW / largeur` remplit pile). */
+function fitCenteredText(
+  pdf: jsPDF,
+  text: string,
+  cx: number,
+  y: number,
+  maxW: number,
+  base: number,
+  min: number,
+): void {
+  pdf.setFontSize(base)
+  const w = pdf.getTextWidth(text)
+  if (w > maxW) pdf.setFontSize(Math.max(min, (base * maxW) / w))
+  pdf.text(text, cx, y, { align: 'center' })
+}
+
+interface PdfCard {
+  label: string
+  value: string
+  valueColor: RGB
+  sub?: string
+  subColor: RGB
+  accent: RGB
+}
+
+/** Dessine la rangée de cartes de synthèse (cellule bordée + liseré d'accent à
+ * gauche + titre / valeur / sous-valeur centrés), façon PDF analytique. Renvoie le
+ * `y` sous la rangée. */
+function drawCards(pdf: jsPDF, cards: PdfCard[], y: number): number {
+  const gap = 3
+  const cw = (CONTENT_W - gap * (cards.length - 1)) / cards.length
+  const ch = 18
+  const usable = cw - 4
+  // Taille de titre UNIFORME = celle qui fait tenir le titre le plus long sur une
+  // ligne (rangée homogène plutôt que des tailles panachées).
+  pdf.setFont('helvetica', 'bold')
+  let titleSize = 6.4
+  for (const c of cards) {
+    pdf.setFontSize(6.4)
+    const w = pdf.getTextWidth(c.label.toUpperCase())
+    if (w > usable)
+      titleSize = Math.min(titleSize, Math.max(4.4, (6.4 * usable) / w))
+  }
+  cards.forEach((c, i) => {
+    const cx = LEFT + i * (cw + gap)
+    const mid = cx + cw / 2
+    setDraw(pdf, BORDER)
+    pdf.setLineWidth(0.25).rect(cx, y, cw, ch)
+    // Liseré d'accent à gauche.
+    setFill(pdf, c.accent)
+    pdf.rect(cx + 0.3, y + 0.3, 1, ch - 0.6, 'F')
+    // Titre centré, une seule ligne, taille uniforme.
+    setText(pdf, GRAY)
+    pdf.setFont('helvetica', 'bold').setFontSize(titleSize)
+    pdf.text(c.label.toUpperCase(), mid, y + 5, { align: 'center' })
+    // Valeur centrée, en gras (réduite si très longue).
+    setText(pdf, c.valueColor)
+    pdf.setFont('helvetica', 'bold')
+    fitCenteredText(pdf, c.value, mid, c.sub ? y + 11.8 : y + 12.6, usable, 12, 8)
+    // Sous-valeur centrée.
+    if (c.sub) {
+      setText(pdf, c.subColor)
+      pdf.setFont('helvetica', 'normal')
+      fitCenteredText(pdf, c.sub, mid, y + 15.6, usable, 6.8, 5)
+    }
+  })
+  return y + ch + 10
+}
+
 /** Titre de section : petit libellé en capitales + filet fin pleine largeur. */
 function sectionTitle(pdf: jsPDF, y: number, label: string): number {
   setText(pdf, GRAY2)
@@ -190,6 +280,9 @@ function renderReportDocument(pdf: jsPDF, data: RepjourPdfData): void {
     budget,
     ecart,
     pickup,
+    dayOfMonth,
+    daysInMonth,
+    monthStartProjection,
     importedAt,
   } = data
 
@@ -207,53 +300,73 @@ function renderReportDocument(pdf: jsPDF, data: RepjourPdfData): void {
   pdf.setLineWidth(0.4).line(LEFT, y, RIGHT, y)
   y += 10
 
-  // ===== Compteurs de synthèse (cellules bordées, façon rapro) ============
-  const cells: { label: string; value: string; sub?: string; color?: RGB }[] = [
-    {
-      label: 'Revenu hébergement',
-      value: fmt.eurInt(projeteMois?.roomRevenue ?? 0),
-      sub: fmt.eurInt(budget.room_revenue),
-    },
-    {
-      label: 'Revenu moyen / chambre',
-      value: fmt.eurInt(projeteMois?.revpar ?? 0),
-      sub: fmt.eurInt(budget.revpar),
-    },
-    {
-      label: "Taux d'occupation",
-      value: fmt.pct(projeteMois?.to ?? 0),
-      sub: fmt.pct(budget.taux_occupation),
-    },
-  ]
-  if (typeof pickup === 'number') {
-    cells.push({
-      label: 'Pris depuis la veille',
-      value: fmt.ecartEurInt(pickup),
-      color: pickup >= 0 ? POS : NEG,
-    })
+  // ===== Cartes de synthèse (les 4 MÊMES qu'à l'écran, via monthPace) ======
+  const dom = dayOfMonth ?? 0
+  const dim = daysInMonth ?? 0
+  const {
+    rentre,
+    remainingDays,
+    hasDay,
+    effortJour,
+    rythmeTenu,
+    budgetAtteint,
+    joursAvance,
+  } = monthPace({
+    realiseMTD: realiseMTD ?? ZERO_KPI,
+    budget,
+    dayOfMonth: dom,
+    daysInMonth: dim,
+  })
+  const pk = typeof pickup === 'number' ? pickup : null
+  const depart = typeof monthStartProjection === 'number' ? monthStartProjection : null
+
+  // Sous-valeur de « Effort restant » : reprend la logique de l'écran.
+  let effortSub: string | undefined
+  let effortSubColor: RGB = GRAY
+  if (remainingDays <= 0) effortSub = 'mois terminé'
+  else if (budgetAtteint) {
+    effortSub = 'budget atteint'
+    effortSubColor = POS
+  } else if (rythmeTenu > 0) {
+    effortSub = T(`vs ${fmt.eurInt(rythmeTenu)}/j tenus`)
+    effortSubColor = effortJour <= rythmeTenu ? POS : NEG
   }
 
-  const gap = 3
-  const cw = (CONTENT_W - gap * (cells.length - 1)) / cells.length
-  const ch = 18
-  cells.forEach((c, i) => {
-    const cx = LEFT + i * (cw + gap)
-    setDraw(pdf, BORDER)
-    pdf.setLineWidth(0.25)
-    pdf.rect(cx, y, cw, ch)
-    setText(pdf, GRAY)
-    pdf.setFont('helvetica', 'normal').setFontSize(6.3)
-    pdf.text(c.label.toUpperCase(), cx + 3, y + 4.7, { maxWidth: cw - 5 })
-    setText(pdf, c.color ?? INK)
-    pdf.setFont('helvetica', 'bold').setFontSize(13)
-    pdf.text(T(c.value), cx + 3, y + 12)
-    if (c.sub) {
-      setText(pdf, GRAY)
-      pdf.setFont('helvetica', 'normal').setFontSize(7)
-      pdf.text(T(`/ ${c.sub}`), cx + 3, y + 16)
-    }
-  })
-  y += ch + 10
+  const cards: PdfCard[] = [
+    {
+      label: 'Pris depuis la veille',
+      accent: POS,
+      value: pk == null ? '—' : T(fmt.ecartEurInt(pk)),
+      valueColor: pk == null ? GRAY : pk >= 0 ? POS : NEG,
+      sub: pk == null ? undefined : 'vs dernier rapport',
+      subColor: GRAY,
+    },
+    {
+      label: 'Effort restant',
+      accent: AMBER,
+      value: remainingDays > 0 ? T(`${fmt.eurInt(effortJour)}/j`) : '—',
+      valueColor: remainingDays > 0 ? INK : GRAY,
+      sub: effortSub,
+      subColor: effortSubColor,
+    },
+    {
+      label: 'Avance sur le budget',
+      accent: CYAN,
+      value: joursAvance == null ? '—' : T(fmtJours(joursAvance)),
+      valueColor: joursAvance == null ? GRAY : joursAvance >= 0 ? POS : NEG,
+      sub: hasDay ? `au jour ${dom}/${dim}` : undefined,
+      subColor: GRAY,
+    },
+    {
+      label: 'Rentré depuis le 1er',
+      accent: INDIGO,
+      value: T(fmt.eurInt(rentre)),
+      valueColor: INK,
+      sub: depart == null ? undefined : T(`${fmt.eurInt(depart)} au 1er`),
+      subColor: GRAY,
+    },
+  ]
+  y = drawCards(pdf, cards, y)
 
   // ===== Progression du mois ==============================================
   const partial = !realiseJour
