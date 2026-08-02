@@ -589,6 +589,8 @@ export function DashboardBoard() {
               projeteMois={fcMoisKPI || ZERO_KPI}
               budget={budget}
               ecart={fcEcart || ZERO_KPI}
+              dayOfMonth={latestMTD?.day_of_month ?? 0}
+              daysInMonth={daysInMonthPartial}
               partial
             />
 
@@ -612,6 +614,8 @@ export function DashboardBoard() {
               ecart={ecart}
               pickup={pickup}
               pickupSeries={pickupSeries}
+              dayOfMonth={report.day_of_month}
+              daysInMonth={report.days_in_month}
             />
 
             {/* Détail des calculs : ouvert en MODALE depuis le bouton « ? » de

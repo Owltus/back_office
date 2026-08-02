@@ -1,16 +1,32 @@
-import { Sparkline } from '#/components/shared/Sparkline.tsx'
+import type { ReactNode } from 'react'
+
+import { ACCENT } from '#/components/analytique/accents.ts'
 import { StatTile } from '#/components/shared/StatTile.tsx'
 import { fmt } from '#/lib/repjour/format.ts'
+import { fmtJours, monthPace } from '#/lib/repjour/summaryMetrics.ts'
 import type { Ecart, KPIBlock, MonthBudget } from '#/lib/repjour/types.ts'
 
 /*
  * Cartes de synthèse + barre de progression multi-segments du mois.
  *
- * Portage de la source (thème clair) vers le dark : cartes bg-white → bg-card,
- * bg-success → emerald, bg-gray-300 (projeté) → muted-foreground (lisible sur
- * fond sombre), marqueur bg-black → bg-foreground. La couleur « jour » (or
- * #D4A017) est conservée. Les positions absolues en % de chaque segment sont
- * portées à l'identique.
+ * CARTES (4) — dimension TEMPS, volontairement HORS de ce que montrent déjà le
+ * tableau KPI (grille statique Jour/Cumul/Projeté/Budget/Écart) et la barre de
+ * progression (jauge d'atteinte du budget). Elles ne recopient aucune de leurs
+ * valeurs : ce sont des vitesses et des variations, pas des cellules.
+ *   1. Pris depuis la veille — variation du CA projeté depuis le dernier rapport.
+ *   2. Effort restant       — CA/jour à faire sur les jours restants pour le budget.
+ *   3. Avance sur le budget — position réelle vs rythme linéaire du budget, en jours.
+ *   4. Rentré depuis le 1er — CA réalisé cumulé du mois (total de la barre) + carnet au 1er.
+ *
+ * Hauteur STRICTE de chaque carte : titre / valeur / sous-valeur, jamais plus de
+ * trois lignes (pas de courbe ni de contenu additionnel) pour qu'elles restent
+ * toutes de la même hauteur.
+ *
+ * BARRE (inchangée) : acquis (vert) + jour (or) + projeté (gris) vs budget. Portage
+ * de la source (thème clair) vers le dark : bg-white → bg-card, bg-success →
+ * emerald, bg-gray-300 (projeté) → muted-foreground, marqueur bg-black → bg-foreground.
+ * La couleur « jour » (or #D4A017) est conservée. Les positions absolues en % de
+ * chaque segment sont portées à l'identique.
  */
 
 const COLOR_JOUR = '#D4A017'
@@ -25,14 +41,31 @@ interface SummaryCardsProps {
   /**
    * « Pris depuis la veille » : écart du Revenu hébergement projeté entre le jour
    * affiché et la veille (en euros). Positif = réservations nettes prises,
-   * négatif = annulations nettes. `null`/absent → carte masquée (pas de veille).
+   * négatif = annulations nettes. `null`/absent → carte « — » (pas de veille).
    */
   pickup?: number | null
   /**
-   * Série du CA projeté fin de mois, jour par jour depuis le 1er → sparkline
-   * « CA pris depuis le début du mois » dans la carte pickup.
+   * Série du CA projeté fin de mois, jour par jour depuis le 1er. Sert au
+   * « Départ du mois » : premier point = projeté au 1er (carnet d'ouverture),
+   * dernier moins premier = révision depuis.
    */
   pickupSeries?: number[]
+  /**
+   * Quantième du jour affiché (1..31) et nombre de jours du mois : cadence des
+   * cartes temporelles (effort restant, avance sur le rythme). 0 si inconnu
+   * (projection sans jour réalisé) → les cartes concernées affichent « — ».
+   */
+  dayOfMonth?: number
+  daysInMonth?: number
+}
+
+/** Petit sous-texte grisé sous la valeur d'une carte. */
+function subMuted(content: ReactNode) {
+  return (
+    <span className="text-[0.7rem] font-medium text-muted-foreground">
+      {content}
+    </span>
+  )
 }
 
 export function SummaryCards({
@@ -43,27 +76,32 @@ export function SummaryCards({
   partial = false,
   pickup = null,
   pickupSeries = [],
+  dayOfMonth = 0,
+  daysInMonth = 0,
 }: SummaryCardsProps) {
-  const cards = [
-    {
-      label: 'Revenu hébergement',
-      value: fmt.eurInt(projeteMois.roomRevenue),
-      budgetValue: fmt.eurInt(budget.room_revenue),
-    },
-    {
-      label: 'Revenu moyen par chambre',
-      value: fmt.eurInt(projeteMois.revpar),
-      budgetValue: fmt.eurInt(budget.revpar),
-    },
-    {
-      label: "Taux d'occupation",
-      value: fmt.pct(projeteMois.to),
-      budgetValue: fmt.pct(budget.taux_occupation),
-    },
-  ]
+  // --- Données dérivées des cartes (aucune n'est une cellule du tableau) -------
+  // Calcul déporté dans `monthPace` : SOURCE UNIQUE partagée avec le PDF, pour
+  // que le document reflète toujours exactement les cartes de l'écran.
+  const {
+    rentre,
+    remainingDays,
+    hasDay,
+    effortJour,
+    rythmeTenu,
+    budgetAtteint,
+    joursAvance,
+  } = monthPace({ realiseMTD, budget, dayOfMonth, daysInMonth })
+  // Cumul réalisé, aussi utilisé par la barre de progression ci-dessous.
+  const acquis = rentre
+  // Carnet d'ouverture : projeté fin de mois tel qu'il était au 1er (1er point).
+  const depart = pickupSeries.length >= 1 ? pickupSeries[0] : null
 
+  const dash = <span className="text-muted-foreground">—</span>
+  const signedClass = (n: number) =>
+    n >= 0 ? 'text-emerald-500' : 'text-destructive'
+
+  // --- Éléments de barre de progression (inchangés) ---------------------------
   const caJour = !partial && realiseJour ? realiseJour.roomRevenue : 0
-  const acquis = realiseMTD.roomRevenue
   const precedent = Math.max(0, acquis - caJour)
   const projete = Math.max(0, projeteMois.roomRevenue - acquis)
   const total = acquis + projete
@@ -80,52 +118,87 @@ export function SummaryCards({
   const projeteWidth = pctOf(projete)
   const moisGoalPos = (100 / moisMaxScale) * 100
 
-  const hasPickup = typeof pickup === 'number'
-
   return (
     <div className="space-y-3">
-      <div
-        className={`grid grid-cols-2 gap-3 sm:gap-4 ${
-          hasPickup ? 'sm:grid-cols-4' : 'sm:grid-cols-3'
-        }`}
-      >
-        {cards.map((card, i) => (
-          <StatTile
-            key={card.label}
-            label={card.label}
-            accent="var(--primary)"
-            className={i === 0 ? 'col-span-2 sm:col-span-1' : undefined}
-            value={card.value}
-            reference={card.budgetValue}
-          />
-        ))}
-
-        {/* « Pris depuis la veille » — 4ᵉ carte sur la même ligne que les KPI.
-            Simple soustraction du Revenu hébergement projeté d'un jour à l'autre :
-            combien de réservations nettes on a prises (vert) ou perdues (rouge)
-            depuis le dernier rapport du mois. Masquée quand il n'y a rien à
-            comparer (1er du mois, ou jour sans rapport). */}
-        {hasPickup && (
-          <StatTile
-            label="Pris depuis la veille"
-            accent={pickup >= 0 ? '#34d399' : 'var(--destructive)'}
-            value={
-              <span
-                className={pickup >= 0 ? 'text-emerald-500' : 'text-destructive'}
-              >
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+        {/* 1. Pris depuis la veille — mouvement court terme du carnet. */}
+        <StatTile
+          label="Pris depuis la veille"
+          accent={ACCENT.green}
+          hint="Variation du chiffre d'affaires projeté fin de mois depuis le dernier rapport. Positif : réservations nettes prises ; négatif : annulations nettes."
+          value={
+            pickup == null ? (
+              dash
+            ) : (
+              <span className={signedClass(pickup)}>
                 {fmt.ecartEurInt(pickup)}
               </span>
-            }
-          >
-            {pickupSeries.length >= 2 && (
-              <Sparkline
-                data={pickupSeries}
-                color="#34d399"
-                className="mt-2"
-              />
-            )}
-          </StatTile>
-        )}
+            )
+          }
+          sub={pickup == null ? undefined : subMuted('vs dernier rapport')}
+        />
+
+        {/* 2. Effort restant — CA/jour à tenir sur les jours restants. */}
+        <StatTile
+          label="Effort restant"
+          accent={ACCENT.amber}
+          hint="Chiffre d'affaires à réaliser chaque jour restant pour atteindre le budget du mois, comparé au rythme déjà tenu."
+          value={
+            remainingDays > 0 ? `${fmt.eurInt(effortJour)}/j` : dash
+          }
+          sub={
+            remainingDays <= 0
+              ? subMuted('mois terminé')
+              : budgetAtteint
+                ? (
+                    <span className="text-[0.7rem] font-semibold text-emerald-500">
+                      budget atteint
+                    </span>
+                  )
+                : rythmeTenu > 0
+                  ? (
+                      <span
+                        className={`text-[0.7rem] font-semibold ${
+                          effortJour <= rythmeTenu
+                            ? 'text-emerald-500'
+                            : 'text-destructive'
+                        }`}
+                      >
+                        vs {fmt.eurInt(rythmeTenu)}/j tenus
+                      </span>
+                    )
+                  : undefined
+          }
+        />
+
+        {/* 3. Avance sur le budget — position vs rythme linéaire, en jours. */}
+        <StatTile
+          label="Avance sur le budget"
+          accent={ACCENT.cyan}
+          hint="Écart entre le chiffre d'affaires cumulé et le rythme linéaire du budget à cette date, exprimé en jours. Positif : en avance ; négatif : en retard."
+          value={
+            joursAvance == null ? (
+              dash
+            ) : (
+              <span className={signedClass(joursAvance)}>
+                {fmtJours(joursAvance)}
+              </span>
+            )
+          }
+          sub={
+            hasDay ? subMuted(`au jour ${dayOfMonth}/${daysInMonth}`) : undefined
+          }
+        />
+
+        {/* 4. Rentré depuis le 1er — CA réalisé cumulé (= total de la barre) +
+            rappel du carnet d'ouverture au 1er en sous-valeur. */}
+        <StatTile
+          label="Rentré depuis le 1er"
+          accent={ACCENT.indigo}
+          hint="Chiffre d'affaires réellement réalisé en cumul depuis le début du mois (le total de la barre de progression). En dessous : le carnet déjà projeté fin de mois au 1er."
+          value={fmt.eurInt(rentre)}
+          sub={depart == null ? undefined : subMuted(`${fmt.eurInt(depart)} au 1er`)}
+        />
       </div>
 
       {/* Barre de progression mois : acquis (vert) + projeté (gris) vs budget */}
