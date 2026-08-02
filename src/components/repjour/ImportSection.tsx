@@ -359,12 +359,10 @@ export function ImportSection({
   const bothReady = comparison.status === 'ready' && forecast.status === 'ready'
   const canImport = isAdmin ? comparison.status === 'ready' : bothReady
 
-  // Un avertissement `forceRequiresAdmin` (TVA manquante / en double) ne peut PAS
-  // être forcé par un non-admin : le forçage global exigeant tout-ou-rien, la
-  // présence d'UN seul tel avertissement bloque le bouton pour le super_utilisateur.
-  // L'admin, lui, force comme avant. C'est la garde qui a manqué à l'import HT forcé.
-  const forceBlocked =
-    !isAdmin && validationWarnings.some((w) => w.forceRequiresAdmin)
+  // Les problèmes de TVA (forecast en HT) sont désormais des ERREURS bloquantes
+  // (fichier refusé, à réexporter) — plus des avertissements forçables. Les seuls
+  // avertissements restants (jours manquants, occupation sans revenu…) sont bénins
+  // et forçables par tous : plus de garde `forceRequiresAdmin` à gérer ici.
 
   return (
     <div
@@ -500,28 +498,18 @@ export function ImportSection({
             </div>
             <div className="space-y-4 px-6 py-4">
               <AlertBanner alerts={validationWarnings} />
-              {forceBlocked ? (
-                <p className="text-xs leading-relaxed text-amber-500/90">
-                  Ce fichier a un problème de TVA. Tu ne peux pas le forcer depuis
-                  ton compte : reprends l'export en vérifiant qu'il inclut bien la
-                  TVA, ou demande à un administrateur.
-                </p>
-              ) : (
-                <p className="text-xs leading-relaxed text-muted-foreground">
-                  Forcer un mauvais fichier fausse tes calculs. En cas de doute,
-                  recommence l'export.
-                </p>
-              )}
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                Forcer un mauvais fichier fausse tes calculs. En cas de doute,
+                recommence l'export.
+              </p>
             </div>
             <div className="flex justify-end gap-3 border-t border-border bg-muted/40 px-6 py-4">
               <Button variant="outline" onClick={() => setShowConfirmModal(false)}>
-                {forceBlocked ? "J'ai compris" : 'Je recommence'}
+                Je recommence
               </Button>
-              {!forceBlocked && (
-                <Button onClick={executeImport} disabled={importing}>
-                  {importing ? 'Import...' : "Forcer l'import"}
-                </Button>
-              )}
+              <Button onClick={executeImport} disabled={importing}>
+                {importing ? 'Import...' : "Forcer l'import"}
+              </Button>
             </div>
           </div>
         </div>

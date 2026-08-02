@@ -1,4 +1,5 @@
 import Papa from 'papaparse';
+import { fromTTC } from '#/lib/repjour/constants.ts';
 import type { ForecastRow } from '#/lib/repjour/types.ts';
 
 export function parseForecast(csvText: string, reportMonth: number, reportYear: number): ForecastRow[] {
@@ -48,7 +49,7 @@ export function parseForecastAll(csvText: string): ForecastRow[] {
 
     const occ = parseInt(row[3], 10) || 0;
     const revTTC = parseFloat(row[7]) || 0;
-    const revHT = revTTC / (1 + 10 / 100); // REV du forecast est déjà TTC
+    const revHT = fromTTC(revTTC); // REV du forecast est déjà TTC
 
     rows.push({
       date: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,

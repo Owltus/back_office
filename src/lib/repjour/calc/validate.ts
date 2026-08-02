@@ -1,19 +1,46 @@
 import { TOTAL_ROOMS } from '#/lib/repjour/constants.ts';
-import type { Alert, ForecastDay, ForecastRow, KPIBlock, MonthBudget } from '#/lib/repjour/types.ts';
+import type { Alert, DailyReport, ForecastRow, KPIBlock } from '#/lib/repjour/types.ts';
 
-function median(values: number[]): number {
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0
-    ? (sorted[mid - 1] + sorted[mid]) / 2
-    : sorted[mid];
+/**
+ * Référence TTC servant d'étalon pour juger si un forecast porte bien sa TVA.
+ * `adrTTC` = prix moyen chambre RÉALISÉ MTD (donc en TTC, non manipulable).
+ * `throughDay` = dernier jour du mois couvert par ce réalisé : la comparaison se
+ * fait À PÉRIMÈTRE ÉGAL (forecast restreint aux jours ≤ throughDay), pour ne pas
+ * confondre un décalage de TVA avec une simple saisonnalité de fin de mois.
+ */
+export interface TvaRef {
+  adrTTC: number;
+  throughDay: number;
 }
 
-function stddev(values: number[]): number {
-  if (values.length === 0) return 0;
-  const mean = values.reduce((s, v) => s + v, 0) / values.length;
-  const variance = values.reduce((s, v) => s + (v - mean) ** 2, 0) / values.length;
-  return Math.sqrt(variance);
+/** Jours réalisés minimum pour qu'un ADR MTD fasse foi (l'ADR d'un seul jour est
+ * trop volatil pour servir de référence). */
+const SEUIL_JOURS_REF = 5;
+
+/**
+ * Construit la référence TTC à partir du RÉALISÉ MTD (revenu chambre TTC / nuitées
+ * cumulés jusqu'au jour `throughDay`), si assez de jours sont réalisés. Réalisé
+ * SEUL (pas de repli budget : trop bruité). `null` = pas de référence fiable (mois
+ * futur, début de mois) → aucune détection TVA possible.
+ */
+export function buildTvaRefFrom(
+  roomRevenueTTC: number,
+  nuitees: number,
+  throughDay: number,
+): TvaRef | null {
+  if (nuitees >= SEUIL_JOURS_REF && roomRevenueTTC > 0 && throughDay > 0) {
+    return { adrTTC: roomRevenueTTC / nuitees, throughDay };
+  }
+  return null;
+}
+
+export function buildTvaRef(latestReport: DailyReport | null): TvaRef | null {
+  if (!latestReport) return null;
+  return buildTvaRefFrom(
+    latestReport.rmtd_room_revenue,
+    latestReport.rmtd_nuitees,
+    latestReport.day_of_month,
+  );
 }
 
 /*
@@ -34,9 +61,7 @@ const MSG = {
   adrWeird:
     "Le prix moyen par chambre est anormal. Vérifie que c'est le bon fichier.",
   tvaMissing:
-    "Les montants sont trop bas : la TVA n'est sûrement pas incluse dans ce fichier. Vérifie ton export.",
-  tvaHigh:
-    "Les montants sont trop élevés : la TVA est sûrement comptée deux fois. C'est normal seulement si tu corriges un ancien rapport exprès.",
+    "Ce forecast est en HT (montants trop bas d'environ 10%) : la TVA n'a pas été incluse à l'export. Réexporte-le en cochant « Include Tax ».",
   // Cohérence du rapport réel (réalisé) — étaient écrits en dur dans validateCoherence.
   realNegatives:
     'Le fichier contient des chiffres négatifs. Il a mal été exporté, recommence.',
@@ -54,9 +79,8 @@ const MSG = {
  */
 export function validateForecast(
   rows: ForecastRow[],
-  budget: MonthBudget | null,
   daysInMonth: number,
-  existingDays?: ForecastDay[] | null
+  ref: TvaRef | null,
 ): Alert[] {
   const alerts: Alert[] = [];
 
@@ -97,66 +121,37 @@ export function validateForecast(
     alerts.push({ type: 'warning', message: MSG.adrWeird });
   }
 
-  // Signaux TVA : « manque la TVA » (revenus trop bas) vs « TVA trop haute » (deux
-  // fois, ou correction d'un ancien import HT). Deux détecteurs, MÊME message. Le 4e
-  // argument porte l'ÉTAT de l'historique du mois, en TROIS cas :
-  //   • absent (null/undefined) = historique INCONNU (lecture échouée) → on ne tente
-  //     RIEN, surtout pas le secours budget qui rejouerait un faux positif ;
-  //   • tableau VIDE = 1er import CONFIRMÉ du mois → secours budget (un objectif,
-  //     pas une vérité, mais faute de mieux au tout premier import) ;
-  //   • tableau NON vide = déjà importé → comparaison à l'import précédent, précise
-  //     et SILENCIEUSE au réimport du même fichier (ratio ~1) → jamais de nag.
-  let tvaMissing = false;
-  let tvaHigh = false;
-
-  if (!existingDays) {
-    // Historique inconnu (lecture en échec, ou non fournie) → aucune détection TVA.
-  } else if (existingDays.length > 0) {
-    // Comparaison à l'import précédent (mêmes jours, même occupation). Il faut au
-    // moins 5 jours comparables pour que la médiane soit fiable ; en dessous, on ne
-    // signale rien (et on ne retombe PAS sur le budget — pas de nag).
-    const existingMap = new Map<string, ForecastDay>();
-    for (const day of existingDays) {
-      existingMap.set(day.date, day);
+  // Détection « forecast en HT » (case « Include Tax » oubliée à l'export). Le
+  // forecast n'a AUCUNE colonne de taxe : on ne peut pas l'auto-vérifier, on le
+  // compare donc à une référence TTC FIABLE — l'ADR réalisé du mois (`ref`, jamais
+  // le budget ni l'import précédent). Sans référence (mois futur), on ne juge pas.
+  //
+  // À PÉRIMÈTRE ÉGAL : on ne compare que les jours DÉJÀ RÉALISÉS (≤ throughDay), où
+  // le forecast doit coller au réalisé. Sinon la saisonnalité de fin de mois
+  // (projetée moins chère) ferait chuter la moyenne du mois entier et refuserait à
+  // tort un fichier correct. Un forecast en HT est ~10 à 16 % sous le réalisé
+  // (l'écart HT->TTC réel n'est pas un 10 % pile, il varie par jour) : bande
+  // TOLÉRANTE 0,83–0,93. En dessous de 0,83, ce n'est plus une simple TVA manquante
+  // (autre problème, laissé à adrWeird). C'est une DONNÉE FAUSSE → ERROR BLOQUANTE
+  // (fichier refusé, à réexporter), pas un avertissement forçable.
+  if (ref && ref.adrTTC > 0) {
+    let occPast = 0;
+    let revPast = 0;
+    for (const r of rows) {
+      const day = parseInt(r.date.slice(8, 10), 10);
+      if (day <= ref.throughDay) {
+        occPast += r.occ;
+        revPast += r.revTTC;
+      }
     }
-
-    const ratios: number[] = [];
-    for (const row of rows) {
-      if (row.occ <= 0) continue;
-      const existing = existingMap.get(row.date);
-      if (!existing || existing.occ !== row.occ || existing.rev_ttc <= 0) continue;
-      ratios.push(row.revTTC / existing.rev_ttc);
+    const adrPast = occPast > 0 ? revPast / occPast : 0;
+    if (adrPast > 0) {
+      const ratio = adrPast / ref.adrTTC;
+      if (ratio > 0.83 && ratio < 0.93) {
+        alerts.push({ type: 'error', message: MSG.tvaMissing });
+      }
     }
-
-    if (ratios.length >= 5) {
-      const med = median(ratios);
-      const sd = stddev(ratios);
-      if (med > 1.08 && med < 1.12 && sd < 0.02) tvaHigh = true;
-      if (med > 0.89 && med < 0.93 && sd < 0.02) tvaMissing = true;
-    }
-  } else if (budget && budget.prix_moyen > 0 && avgADR > 0) {
-    // Tableau vide = 1er import confirmé du mois → secours budget.
-    const ratio = avgADR / budget.prix_moyen;
-    if (ratio > 0.88 && ratio < 0.93) tvaMissing = true;
-    if (ratio > 1.07 && ratio < 1.13) tvaHigh = true;
   }
-
-  // Les signaux TVA ne sont PAS forçables par un non-admin : c'est le garde-fou qui
-  // a manqué le jour où un rapport HT (sans TVA) a été poussé de force, faussant le
-  // projeté. Un hôtelier voit l'alerte mais ne peut que recommencer ; seul un admin
-  // tranche. Les autres avertissements restent forçables par tous.
-  if (tvaMissing)
-    alerts.push({
-      type: 'warning',
-      message: MSG.tvaMissing,
-      forceRequiresAdmin: true,
-    });
-  if (tvaHigh)
-    alerts.push({
-      type: 'warning',
-      message: MSG.tvaHigh,
-      forceRequiresAdmin: true,
-    });
 
   return alerts;
 }

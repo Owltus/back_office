@@ -14,12 +14,14 @@ import {
 } from '#/lib/repjour/calc/kpi.ts'
 import { computeEcart } from '#/lib/repjour/calc/ecart.ts'
 import {
+  buildTvaRef,
+  buildTvaRefFrom,
   validateCoherence,
   validateForecast,
 } from '#/lib/repjour/calc/validate.ts'
 import type {
   Alert,
-  ForecastDay,
+  DailyReport,
   KPIBlock,
   MonthBudget,
   Ecart,
@@ -74,26 +76,23 @@ export async function preValidateForecast(
     monthGroups.get(key)!.push(row)
   }
 
-  // Fetch données existantes et budgets pour les années concernées
+  // Référence TTC = RÉALISÉ des années concernées (daily_reports, en TTC). On en
+  // tire l'ADR réalisé par mois pour juger si le forecast porte bien sa TVA. Pas
+  // de lecture forecast_days ni budget ici : la détection ne s'appuie QUE sur le
+  // réalisé (cf. calc/validate.ts).
   const years = [...new Set(allRows.map((r) => r.year))]
 
-  const [{ data: existingAll, error: existingErr }, { data: budgetsAll }] =
-    await Promise.all([
-      supabase.from('forecast_days').select('*').in('year', years),
-      supabase.from('budget').select('*').in('year', years),
-    ])
+  const { data: reportsAll } = await supabase
+    .from('daily_reports')
+    .select('*')
+    .in('year', years)
 
-  // Indexer par {year, month}
-  const existingMap = new Map<string, ForecastDay[]>()
-  for (const day of (existingAll || []) as ForecastDay[]) {
-    const key = `${day.year}-${day.month}`
-    if (!existingMap.has(key)) existingMap.set(key, [])
-    existingMap.get(key)!.push(day)
-  }
-
-  const budgetMap = new Map<string, MonthBudget>()
-  for (const b of (budgetsAll || []) as MonthBudget[]) {
-    budgetMap.set(`${b.year}-${b.month}`, b)
+  // Dernier rapport (jour le plus avancé) par {year, month} → porte le MTD réalisé.
+  const latestByMonth = new Map<string, DailyReport>()
+  for (const r of (reportsAll || []) as DailyReport[]) {
+    const key = `${r.year}-${r.month}`
+    const cur = latestByMonth.get(key)
+    if (!cur || r.day_of_month > cur.day_of_month) latestByMonth.set(key, r)
   }
 
   const allAlerts: Alert[] = []
@@ -103,11 +102,8 @@ export async function preValidateForecast(
     const year = parseInt(yearStr, 10)
     const month = parseInt(monthStr, 10)
     const daysInMonth = new Date(year, month, 0).getDate()
-    // Lecture échouée → `undefined` (historique INCONNU : ni détection précédent ni
-    // secours budget). Lecture OK sans ligne pour ce mois → `[]` (1er import confirmé).
-    const existing = existingErr ? undefined : (existingMap.get(key) ?? [])
-    const budget = budgetMap.get(key) || null
-    allAlerts.push(...validateForecast(rows, budget, daysInMonth, existing))
+    const ref = buildTvaRef(latestByMonth.get(key) ?? null)
+    allAlerts.push(...validateForecast(rows, daysInMonth, ref))
   }
 
   // UN seul message par souci : les alertes sont sans chiffre et identiques d'un
@@ -438,23 +434,19 @@ export async function processImport(
     )
   }
 
-  // Historique du mois AVANT écriture : sert à la détection TVA par comparaison à
-  // l'import précédent, et évite que le secours budget ne rejoue un faux positif à
-  // CHAQUE réimport (cf. validateForecast). Miroir de preValidateForecast — sans lui,
-  // `existingDays` restait absent ici et le fallback budget tournait toujours.
-  const { data: existingForecast, error: existingErr } = await supabase
-    .from('forecast_days')
-    .select('*')
-    .eq('year', reportDate.year)
-    .eq('month', reportDate.month)
-
-  // Contrôles de cohérence — forecast. Lecture échouée → `undefined` (historique
-  // INCONNU : on ne persiste PAS un faux positif budget). Lecture OK sans ligne → `[]`.
+  // Contrôles de cohérence — forecast. Référence TTC = ADR réalisé MTD, pris
+  // directement du Comparison qu'on importe (le plus frais, déjà en mémoire) : un
+  // forecast en HT ressort ~10 % sous ce réalisé. `null` si trop peu de jours
+  // réalisés (début de mois) → pas de détection (cf. validateForecast).
+  const ref = buildTvaRefFrom(
+    realiseMTD.roomRevenue,
+    realiseMTD.nuitees,
+    reportDate.dayOfMonth,
+  )
   const forecastAlerts = validateForecast(
     forecastRows,
-    budget,
     reportDate.daysInMonth,
-    existingErr ? undefined : (existingForecast as ForecastDay[]),
+    ref,
   )
   const blockingErrors = forecastAlerts.filter((a) => a.type === 'error')
   if (blockingErrors.length > 0) {

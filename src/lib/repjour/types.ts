@@ -56,13 +56,6 @@ export interface DailyReport {
 export interface Alert {
   type: 'error' | 'warning';
   message: string;
-  /**
-   * Avertissement NON forçable par un non-admin : il le voit, mais seul un admin
-   * peut passer outre (cf. l'incident du HT poussé de force par un hôtelier). Les
-   * avertissements ordinaires (jours manquants, etc.) restent forçables par tous.
-   * Absent = forçable par quiconque peut importer.
-   */
-  forceRequiresAdmin?: boolean;
 }
 
 export interface MonthBudget {
