@@ -49,6 +49,11 @@ describe('carryOver — roulement des chambres bloquées', () => {
     expect(carryOver(past)).toEqual(new Set())
   })
 
+  it('un rattrapage le lendemain résout (le ménage en retard est enfin fait)', () => {
+    const past = [snap([[305, 'non_nettoyee']]), snap([[305, 'rattrapage']])]
+    expect(carryOver(past)).toEqual(new Set())
+  })
+
   it('le liseré ne dépend jamais du statut du jour courant', () => {
     // Bloquée hier (J-1), elle porte le liseré aujourd'hui même si aujourd'hui
     // elle est nettoyée/refus : le jour courant n'entre pas dans `past`.
@@ -111,6 +116,27 @@ describe('carryOver — sur-statut « bloquée la veille » posé à la main', (
   it('le flag re-posé chaque jour continue de rouler', () => {
     const past = [snap([], [305]), snap([], [305])]
     expect(carryOver(past)).toEqual(new Set([305]))
+  })
+
+  it('un refus le jour même annule le liseré manuel (ne roule plus)', () => {
+    // 305 marquée « bloquée la veille » à la main ET refusée le même jour : le
+    // refus clôt le dossier, la chambre ne roule pas au lendemain. Sans ce cas,
+    // on obtenait une chambre « refusée mais bloquée de la veille » (incohérent).
+    expect(carryOver([snap([[305, 'refus']], [305])])).toEqual(new Set())
+  })
+
+  it('une nettoyée le jour même annule aussi le liseré manuel', () => {
+    expect(carryOver([snap([[305, 'nettoyee']], [305])])).toEqual(new Set())
+  })
+
+  it('un rattrapage le jour même annule aussi le liseré manuel', () => {
+    expect(carryOver([snap([[305, 'rattrapage']], [305])])).toEqual(new Set())
+  })
+
+  it('un liseré manuel sur une chambre grise (sans couleur) roule toujours', () => {
+    // Garde-fou : le statut terminal seul résout ; une grise marquée à la main
+    // reste bien un dû qui roule (le comportement d'origine du liseré manuel).
+    expect(carryOver([snap([], [305])])).toEqual(new Set([305]))
   })
 })
 

@@ -12,9 +12,10 @@
  *    son statut (nettoyée/refus/bloquée), mais roule comme un blocage.
  *
  * RÉSOLUTION : une chambre roule tant qu'elle reste un dû-non-fait — bloquée OU
- * marquée à la main. Dès qu'un jour intermédiaire elle n'est plus ni l'un ni
- * l'autre (nettoyée par défaut/explicite, ou hors charge), elle cesse de rouler.
- * Le nettoyage par défaut (occupée sans exception) vaut donc résolution ; on NE
+ * marquée à la main. Un statut TERMINAL (nettoyée, rattrapage, refus) clôt le
+ * dossier et arrête le roulement, MÊME le jour où un liseré manuel a été posé :
+ * une chambre refusée ou nettoyée ne peut pas rester « bloquée de la veille ». Le
+ * nettoyage par défaut (occupée sans exception) vaut aussi résolution ; on NE
  * regarde PAS l'occupation PDJ.
  *
  * Les statuts par jour sont lus côté composant via les queries existantes (mêmes
@@ -36,12 +37,24 @@ export interface DaySnapshot {
   carriedManual: ReadonlySet<number>
 }
 
-/** Une chambre est « résolue » (cesse de rouler) un jour donné si elle n'est plus
- * un dû-non-fait : ni bloquée (`non_nettoyee`), ni marquée « bloquée la veille » à
- * la main. Tout le reste — nettoyée par défaut/explicite, refus — résout. */
+/** Statuts TERMINAUX : le dossier de la chambre est clos ce jour-là. Un ménage
+ * fait (`nettoyee`, `rattrapage`) ou un client qui décline (`refus`) : plus rien
+ * n'est dû. Ils résolvent le roulement même quand un liseré « bloquée la veille »
+ * a été posé à la main — une chambre refusée/nettoyée ne peut pas rester bloquée. */
+function isTerminal(status: RoomStatus | undefined): boolean {
+  return status === 'nettoyee' || status === 'rattrapage' || status === 'refus'
+}
+
+/** Une chambre est « résolue » (cesse de rouler) un jour donné si son dossier est
+ * clos : un statut terminal (nettoyée/rattrapage/refus) l'emporte, même sur un
+ * liseré manuel. Sinon elle reste due tant qu'elle est bloquée (`non_nettoyee`) ou
+ * maintenue par un liseré manuel ; l'absence de couleur (grise) sans liseré vaut
+ * nettoyée par défaut → résolue. */
 function isResolved(snap: DaySnapshot, room: number): boolean {
+  const status = snap.statuses.get(room)
+  if (isTerminal(status)) return true
   if (snap.carriedManual.has(room)) return false
-  return snap.statuses.get(room) !== 'non_nettoyee'
+  return status !== 'non_nettoyee'
 }
 
 /**
@@ -84,7 +97,12 @@ export function carryOver(past: DaySnapshot[]): Set<number> {
   }
   past.forEach((snap, i) => {
     // Origines du jour : bloquées explicites + marquées « la veille » à la main.
-    const origins = new Set<number>(snap.carriedManual)
+    // Un liseré manuel n'origine PLUS de roulement si la chambre est déjà résolue
+    // ce jour-là (statut terminal) : un refus/nettoyée/rattrapage clôt le dossier.
+    const origins = new Set<number>()
+    for (const room of snap.carriedManual) {
+      if (!isTerminal(snap.statuses.get(room))) origins.add(room)
+    }
     for (const [room, status] of snap.statuses) {
       if (status === 'non_nettoyee') origins.add(room)
     }
