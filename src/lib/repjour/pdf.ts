@@ -15,7 +15,6 @@
  *   → compteurs de synthèse (revenu / RevPAR / TO projetés vs budget, + pickup)
  *   → progression du mois (acquis / jour / projeté vs budget + répartition)
  *   → détail par indicateur (Jour / Cumul / Projeté / Budget / Écart)
- *   → alertes éventuelles.
  */
 
 import { format } from 'date-fns'
@@ -23,7 +22,7 @@ import { fr } from 'date-fns/locale'
 import type { jsPDF } from 'jspdf'
 
 import { fmt } from '#/lib/repjour/format.ts'
-import type { Alert, Ecart, KPIBlock, MonthBudget } from '#/lib/repjour/types.ts'
+import type { Ecart, KPIBlock, MonthBudget } from '#/lib/repjour/types.ts'
 
 export interface RepjourPdfData {
   /** Date en toutes lettres (ex. « lundi 7 juillet 2026 »). */
@@ -39,8 +38,6 @@ export interface RepjourPdfData {
   ecart: Ecart | null
   /** « Pris depuis la veille » (euros) — `null`/absent → compteur masqué. */
   pickup?: number | null
-  /** Alertes du rapport (erreurs / avertissements). */
-  alerts?: Alert[]
   /** Horodatage d'import du rapport (petite mention de pied). */
   importedAt?: string | null
 }
@@ -105,7 +102,6 @@ const NEG: RGB = [180, 35, 24]
 const ACQUIS: RGB = [18, 122, 46]
 const JOUR: RGB = [204, 150, 20]
 const PROJETE: RGB = [150, 150, 158]
-const AMBER: RGB = [176, 120, 10] // avertissement
 
 const setFill = (pdf: jsPDF, c: RGB) => pdf.setFillColor(c[0], c[1], c[2])
 const setDraw = (pdf: jsPDF, c: RGB) => pdf.setDrawColor(c[0], c[1], c[2])
@@ -194,7 +190,6 @@ function renderReportDocument(pdf: jsPDF, data: RepjourPdfData): void {
     budget,
     ecart,
     pickup,
-    alerts,
     importedAt,
   } = data
 
@@ -386,22 +381,6 @@ function renderReportDocument(pdf: jsPDF, data: RepjourPdfData): void {
   pdf.setFont('helvetica', 'italic').setFontSize(7.5)
   pdf.text('Montants TTC', RIGHT, y, { align: 'right' })
   y += 8
-
-  // ===== Alertes ==========================================================
-  const list = alerts ?? []
-  if (list.length > 0) {
-    y = sectionTitle(pdf, y, 'ALERTES')
-    list.forEach((a) => {
-      const color = a.type === 'error' ? NEG : AMBER
-      pdf.setFont('helvetica', 'normal').setFontSize(8.5)
-      const lines = pdf.splitTextToSize(a.message, CONTENT_W - 6) as string[]
-      setFill(pdf, color)
-      pdf.rect(LEFT, y - 2.3, 2.2, 2.2, 'F')
-      setText(pdf, INK)
-      pdf.text(lines, LEFT + 5, y)
-      y += lines.length * 4.4 + 2.5
-    })
-  }
 
   // ===== Pied : horodatage d'import =======================================
   if (importedAt) {

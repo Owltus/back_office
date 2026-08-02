@@ -382,7 +382,6 @@ export function DashboardBoard() {
           budget: budgetSafe,
           ecart,
           pickup,
-          alerts: report.alerts || [],
           importedAt: report.imported_at,
         }
       : {
