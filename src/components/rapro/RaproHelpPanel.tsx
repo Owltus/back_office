@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 
 import { MouseGlyph } from '#/components/rapro/MouseGlyph.tsx'
+import { Kbd, KbdArrow, KbdPlus, Shortcut } from '#/components/shared/Kbd.tsx'
 
 /*
  * Contenu du modal d'aide du Rapprochement (bouton « ? » de la barre d'actions).
@@ -201,6 +202,39 @@ export function RaproHelpPanel() {
           C'est souvent une arrivée ou une annulation de dernière minute présente
           dans un seul des deux rapports, à vérifier.
         </p>
+      </Section>
+
+      <Section title="Raccourcis clavier">
+        <div className="space-y-2.5">
+          <Shortcut
+            keys={
+              <>
+                <Kbd>
+                  <KbdArrow dir="left" />
+                </Kbd>
+                <Kbd>
+                  <KbdArrow dir="right" />
+                </Kbd>
+              </>
+            }
+          >
+            Jour précédent ou suivant.
+          </Shortcut>
+          <Shortcut keys={<Kbd className="px-2">Alt</Kbd>}>
+            Revenir à aujourd'hui.
+          </Shortcut>
+          <Shortcut
+            keys={
+              <>
+                <Kbd className="px-2">Ctrl</Kbd>
+                <KbdPlus />
+                <Kbd>P</Kbd>
+              </>
+            }
+          >
+            Imprimer la feuille, une fois le rapprochement clôturé.
+          </Shortcut>
+        </div>
       </Section>
     </div>
   )
