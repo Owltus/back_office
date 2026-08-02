@@ -51,9 +51,10 @@ export function reconcile(
     else if (s === 'non_nettoyee') {
       // dû non fait → pending (compté par soustraction)
     } else {
-      // s === 'nettoyee' : couleur verte EXPLICITE (fait), OU aucune couleur —
-      // faite seulement si la chambre est VENDUE (défaut) ; une reportée grise
-      // (non vendue, sans couleur) reste un dû non fait → pending.
+      // s === 'nettoyee' ou 'rattrapage' : ménage FAIT dès qu'une couleur est
+      // posée (vert explicite ou rattrapage d'une reportée), OU aucune couleur sur
+      // une chambre VENDUE (nettoyée par défaut). Une reportée grise (non vendue,
+      // sans couleur) reste un dû non fait → pending.
       if (hasColor || sold.has(room)) clean++
     }
   }

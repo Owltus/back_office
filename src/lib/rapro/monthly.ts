@@ -14,16 +14,21 @@
 import { supabase } from '#/lib/supabase.ts'
 import { fetchValidatedDays } from '#/lib/rapro/service.ts'
 
-/** Décompte des statuts stockés d'un jour (nettoyée / bloquée / refus, hors
- * occupation PDJ) — mêmes catégories que la grille du rapprochement. */
+/** Décompte des statuts stockés d'un jour (nettoyée / rattrapage / bloquée /
+ * refus, hors occupation PDJ) — mêmes catégories que la grille du rapprochement.
+ * `nettoyee` = ménage d'une chambre VENDUE (défaut inclus, matérialisé à la
+ * clôture) ; `rattrapage` = ménage d'une chambre REPORTÉE non vendue (facturable
+ * mais PAS une vente du jour) — compté à part pour ne pas gonfler les vendues. */
 export interface DayStatusCounts {
   nettoyee: number
+  rattrapage: number
   bloquee: number
   refus: number
 }
 
 const emptyCounts = (): DayStatusCounts => ({
   nettoyee: 0,
+  rattrapage: 0,
   bloquee: 0,
   refus: 0,
 })
@@ -50,7 +55,7 @@ export async function fetchStatusCountsByRange(
     const { data, error, count } = await supabase
       .from('rapro_rooms')
       .select('report_date, status', { count: 'exact' })
-      .in('status', ['nettoyee', 'non_nettoyee', 'refus'])
+      .in('status', ['nettoyee', 'non_nettoyee', 'refus', 'rattrapage'])
       .gte('report_date', from)
       .lte('report_date', to)
       .order('report_date', { ascending: true })
@@ -63,8 +68,12 @@ export async function fetchStatusCountsByRange(
       // Jour non clôturé → hors analytique (statuts encore provisoires).
       if (!validated.has(r.report_date)) continue
       const c = byDay.get(r.report_date) ?? emptyCounts()
-      // Facturable = statut `nettoyee` ; `non_nettoyee` = « Bloquée ».
+      // Facturable = `nettoyee` (vente) OU `rattrapage` (reportée non vendue) ;
+      // `non_nettoyee` = « Bloquée ». Le rattrapage est compté à PART pour rester
+      // hors des « vendues » (cf. `vendues`) tout en pesant sur la facture (cf.
+      // `cleaned`).
       if (r.status === 'nettoyee') c.nettoyee++
+      else if (r.status === 'rattrapage') c.rattrapage++
       else if (r.status === 'non_nettoyee') c.bloquee++
       else if (r.status === 'refus') c.refus++
       byDay.set(r.report_date, c)
@@ -74,12 +83,19 @@ export async function fetchStatusCountsByRange(
   return byDay
 }
 
-/** Chambres VENDUES d'un décompte = total des chambres suivies (nettoyées +
- * bloquées + refus). Chaque statut matérialise une chambre occupée ce jour-là
- * (nettoyée = vendue facturée, bloquée = à nettoyer, refus = client présent) :
- * leur somme est le nombre de chambres vendues. */
+/** Chambres VENDUES d'un décompte = chambres occupées ce jour-là (nettoyée =
+ * vendue facturée, bloquée = à nettoyer, refus = client présent). Le `rattrapage`
+ * en est EXCLU : c'est un ménage fait sur une chambre reportée non vendue (vendue
+ * la veille, pas aujourd'hui) — l'inclure double-compterait l'occupation. */
 export function vendues(c: DayStatusCounts): number {
   return c.nettoyee + c.bloquee + c.refus
+}
+
+/** Ménages FACTURABLES ELIOR d'un décompte = nettoyées (chambres vendues) +
+ * rattrapages (reportées non vendues enfin nettoyées). C'est le total de la
+ * facture ménage, distinct des vendues (occupation). */
+export function cleaned(c: DayStatusCounts): number {
+  return c.nettoyee + c.rattrapage
 }
 
 /** Somme des décomptes d'un ensemble de jours. */
@@ -87,6 +103,7 @@ export function sumCounts(byDay: Map<string, DayStatusCounts>): DayStatusCounts 
   const t = emptyCounts()
   for (const c of byDay.values()) {
     t.nettoyee += c.nettoyee
+    t.rattrapage += c.rattrapage
     t.bloquee += c.bloquee
     t.refus += c.refus
   }
@@ -127,6 +144,7 @@ export function monthlyRows(
     const date = `${year}-${mm}-${String(d).padStart(2, '0')}`
     const c = byDay.get(date) ?? emptyCounts()
     totals.nettoyee += c.nettoyee
+    totals.rattrapage += c.rattrapage
     totals.bloquee += c.bloquee
     totals.refus += c.refus
     rows.push({ date, day: d, ...c })

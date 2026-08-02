@@ -19,6 +19,7 @@ import { fetchOldestDay } from '#/lib/rapro/service.ts'
 import { MONTHS_SHORT } from '#/lib/shared/dates.ts'
 import { capitalize } from '#/lib/utils.ts'
 import {
+  cleaned,
   fetchStatusCountsByRange,
   monthBounds,
   sumCounts,
@@ -75,19 +76,20 @@ export function RaproAnalytiqueBoard() {
   const yearTotals = totals.reduce(
     (a, t) => ({
       nettoyee: a.nettoyee + t.nettoyee,
+      rattrapage: a.rattrapage + t.rattrapage,
       bloquee: a.bloquee + t.bloquee,
       refus: a.refus + t.refus,
     }),
-    { nettoyee: 0, bloquee: 0, refus: 0 },
+    { nettoyee: 0, rattrapage: 0, bloquee: 0, refus: 0 },
   )
-  // Moyenne de chambres nettoyées par JOUR travaillé sur l'année — PAS par mois :
-  // avec un seul mois saisi, « /mois » égalait le total (inutile). Dénominateur =
-  // nombre de jours CLÔTURÉS ayant des données ; `fetchStatusCountsByRange` ne
-  // renvoie que ceux-là (jours non clôturés exclus), donc c'est la somme des
-  // tailles des Map mensuelles. Numérateur (`yearTotals`) déjà borné aux clôturés.
+  // Moyenne de MÉNAGES FACTURÉS (nettoyées + rattrapages) par JOUR travaillé sur
+  // l'année — PAS par mois : avec un seul mois saisi, « /mois » égalait le total
+  // (inutile). Dénominateur = nombre de jours CLÔTURÉS ayant des données ;
+  // `fetchStatusCountsByRange` ne renvoie que ceux-là (jours non clôturés exclus),
+  // donc c'est la somme des tailles des Map mensuelles. Numérateur borné aux clôturés.
   const activeDays = monthQueries.reduce((n, q) => n + (q.data?.size ?? 0), 0)
   const avgCleanedPerDay = activeDays
-    ? Math.round(yearTotals.nettoyee / activeDays)
+    ? Math.round(cleaned(yearTotals) / activeDays)
     : 0
 
   const currentMonth = now.getMonth() + 1

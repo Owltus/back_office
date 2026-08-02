@@ -28,6 +28,7 @@ const KNOWN_STATUSES = new Set<RoomStatus>([
   'nettoyee',
   'non_nettoyee',
   'refus',
+  'rattrapage',
 ])
 
 /** État d'un jour : Map chambre→statut (défaut nettoyee = absence de ligne).

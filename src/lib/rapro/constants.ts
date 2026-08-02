@@ -7,20 +7,28 @@ export const STATUS_LABEL: Record<RoomStatus, string> = {
   // `nettoyee` (absence de ligne), donc `non_nettoyee` est toujours explicite.
   non_nettoyee: 'Bloquée du jour',
   refus: 'Refus',
+  // Rattrapage : ménage en retard fait sur une reportée non vendue. À l'écran
+  // c'est une nettoyée (verte) ; le liseré « bloquée la veille » fait la nuance.
+  rattrapage: 'Nettoyée',
 }
 
 /**
  * Couleur suivante au clic gauche. `null` = AUCUNE couleur (grise si non vendue,
- * verte par défaut si vendue). Deux cycles selon que la chambre est VENDUE :
- *  - vendue (toujours « active », jamais grise) : vert → refus → bloquée → vert.
- *    Le vert par défaut est `null` (pas de couleur explicite à stocker).
- *  - non vendue : gris → nettoyée (vert) → refus → bloquée → gris. Le gris (et le
- *    retour au gris) est `null` (pas de ligne). Identique aux vendues, avec en
- *    plus l'état gris d'entrée/sortie.
+ * verte par défaut si vendue). TROIS cycles selon la situation de la chambre :
+ *  - VENDUE (occupée aujourd'hui, toujours « active ») : vert → refus → bloquée →
+ *    vert. Le vert par défaut est `null` (pas de couleur explicite à stocker).
+ *  - NON VENDUE ET REPORTÉE (bloquée la veille, vidée depuis) : le clic ne sert
+ *    qu'à solder le ménage en retard → gris → rattrapage (ménage fait, facturable
+ *    mais PAS une vente) → bloquée (encore dû, roule) → gris. Pas de « refus » :
+ *    sans client aujourd'hui, refuser le ménage n'aurait aucun sens.
+ *  - NON VENDUE, NON REPORTÉE : correction d'occupation (In-House a raté une vente)
+ *    → gris → nettoyée (vert) → refus → bloquée → gris. La couleur affirme que la
+ *    chambre était bien vendue → elle compte alors comme vendue.
  */
 export function nextFill(
   current: RoomStatus | null,
   sold: boolean,
+  carried = false,
 ): RoomStatus | null {
   if (sold) {
     // 3 états : null (vert) → refus → non_nettoyee → null (vert).
@@ -28,7 +36,14 @@ export function nextFill(
     if (current === 'non_nettoyee') return null
     return 'refus' // null ou nettoyee (vert) → refus
   }
-  // 4 états : null (gris) → nettoyee → refus → non_nettoyee → null (gris).
+  if (carried) {
+    // Reportée non vendue : null (gris) → rattrapage → non_nettoyee → null (gris).
+    if (current === null) return 'rattrapage'
+    if (current === 'rattrapage') return 'non_nettoyee'
+    return null // non_nettoyee (ou tout autre reliquat) → gris
+  }
+  // Non vendue, non reportée — 4 états : null (gris) → nettoyee → refus →
+  // non_nettoyee → null (gris).
   if (current === null) return 'nettoyee'
   if (current === 'nettoyee') return 'refus'
   if (current === 'refus') return 'non_nettoyee'
@@ -66,6 +81,11 @@ export function cellState(status: RoomStatus, isEmpty: boolean): CellState {
     // Défaut : grisé si la chambre n'est pas vendue, nettoyé sinon.
     case 'nettoyee':
       return isEmpty ? 'empty' : 'clean'
+    // Rattrapage : ménage fait sur une reportée → même rendu qu'une nettoyée
+    // (vert). La chambre porte toujours une couleur (jamais grise ici) ; le liseré
+    // « bloquée la veille » dessiné à part la distingue d'une nettoyée ordinaire.
+    case 'rattrapage':
+      return 'clean'
     // « Bloquée » : grisée si non vendue, rouge « à faire » sinon.
     case 'non_nettoyee':
       return isEmpty ? 'empty' : 'todo'
@@ -115,6 +135,9 @@ export const CATEGORY_COLOR = {
   nettoyee: 'var(--chart-5)',
   bloquee: '#f87171',
   refus: 'var(--chart-3)',
+  // Rattrapage : parent de la nettoyée (un ménage fait) mais distinct — teinte
+  // propre (chart-2) pour le lire à part dans le tableau analytique.
+  rattrapage: 'var(--chart-2)',
   // Ajoutés pour l'analytique : « vendues » (total) et « moyenne / jour ». Ce sont
   // EXACTEMENT --chart-1 et --muted-foreground (plus de hex #818cf8 / #94a3b8 en
   // dur dans les boards). Le PDF (pdf.ts) lit déjà ces tokens.
@@ -143,8 +166,10 @@ export function countStats(
   let todo = 0
   let refus = 0
   for (const room of occupied) {
+    // Nettoyée et rattrapage = un ménage fait → comptés ensemble (même famille).
     switch (statusOf(statuses, room)) {
       case 'nettoyee':
+      case 'rattrapage':
         clean++
         break
       case 'refus':

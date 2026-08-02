@@ -8,7 +8,7 @@ import {
   StatCard,
   subText,
 } from '#/components/analytique/AnalytiqueCards.tsx'
-import { vendues } from '#/lib/rapro/monthly.ts'
+import { cleaned, vendues } from '#/lib/rapro/monthly.ts'
 import type { DayStatusCounts } from '#/lib/rapro/monthly.ts'
 
 /** Segments de l'histogramme empilé des deux vues analytique — mêmes couleurs et
@@ -33,18 +33,19 @@ export function RaproAnalytiqueCards({
   activeDays: number
 }) {
   const sold = vendues(totals)
+  const bill = cleaned(totals)
   return (
     <AnalytiqueCardsGrid cols={5}>
       <StatCard
         label="Moy. nettoyées / jour"
         accent={CATEGORY_COLOR.moyenne}
-        hint="Chambres nettoyées en moyenne par jour travaillé."
+        hint="Ménages facturés en moyenne par jour travaillé."
         value={avgCleanedPerDay}
       />
       <StatCard
         label="Vendues"
         accent={CATEGORY_COLOR.vendues}
-        hint="Chambres vendues : nettoyées + bloquées + refus."
+        hint="Chambres vendues (occupées) : nettoyées + bloquées + refus. Les rattrapages sur reportées non vendues n'en sont PAS."
         sub={
           activeDays > 0
             ? subText(`moy. ${Math.round(sold / activeDays)} / jour`)
@@ -55,9 +56,13 @@ export function RaproAnalytiqueCards({
       <StatCard
         label="Nettoyées"
         accent={CATEGORY_COLOR.nettoyee}
-        hint="Chambres nettoyées, facturées à ELIOR."
-        sub={shareSub(totals.nettoyee, sold, 'des vendues')}
-        value={totals.nettoyee}
+        hint="Ménages faits et facturés à ELIOR."
+        sub={
+          activeDays > 0
+            ? subText(`moy. ${avgCleanedPerDay} / jour`)
+            : undefined
+        }
+        value={bill}
       />
       <StatCard
         label="Bloquées"

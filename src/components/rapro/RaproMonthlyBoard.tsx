@@ -17,6 +17,7 @@ import {
 import { parseDateStr } from '#/lib/poster/dateFormatter.ts'
 import { capitalize } from '#/lib/utils.ts'
 import {
+  cleaned,
   fetchStatusCountsByRange,
   monthBounds,
   monthlyRows,
@@ -44,13 +45,14 @@ export function RaproMonthlyBoard({
     queryFn: () => fetchStatusCountsByRange(bounds.from, bounds.to),
   })
   const { rows, totals } = monthlyRows(year, month, byDay ?? new Map())
-  // Moyenne de chambres nettoyées par jour ACTIF (au moins une donnée) : diviser
-  // par tous les jours du mois fausserait la moyenne (jours vides / à venir).
+  // Moyenne de MÉNAGES FACTURÉS (nettoyées + rattrapages) par jour ACTIF (au moins
+  // une donnée) : diviser par tous les jours du mois fausserait la moyenne (jours
+  // vides / à venir). Un jour où il n'y a QU'un rattrapage compte comme actif.
   const activeDays = rows.filter(
-    (r) => r.nettoyee + r.bloquee + r.refus > 0,
+    (r) => r.nettoyee + r.rattrapage + r.bloquee + r.refus > 0,
   ).length
   const avgCleanedPerDay = activeDays
-    ? Math.round(totals.nettoyee / activeDays)
+    ? Math.round(cleaned(totals) / activeDays)
     : 0
 
   const monthLabel = capitalize(

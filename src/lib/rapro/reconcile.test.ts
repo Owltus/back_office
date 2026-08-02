@@ -50,6 +50,17 @@ describe('reconcile — balance du ménage', () => {
     })
   })
 
+  it('une reportée non vendue passée en rattrapage est faite (facturable, non vendue)', () => {
+    // 305 reportée (due) mais PAS vendue (sold vide), marquée rattrapage : le
+    // ménage en retard est fait → clean, plus rien en attente.
+    expect(reconcile(map([[305, 'rattrapage']]), set(305), set())).toEqual({
+      due: 1,
+      clean: 1,
+      settled: 0,
+      pending: 0,
+    })
+  })
+
   it('mélange vendues + reportée grise', () => {
     // 101 vendue nettoyée (défaut) ; 102 vendue bloquée ; 305 reportée grise.
     const due = set(101, 102, 305)
