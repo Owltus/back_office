@@ -30,6 +30,10 @@ import { PrintButton } from '#/components/shared/PrintButton.tsx'
 import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { StepNav } from '#/components/shared/StepNav.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
+import { HelpDialogHeader } from '#/components/shared/HelpDialogHeader.tsx'
+import { HelpGlyph } from '#/components/shared/HelpGlyph.tsx'
+import { MouseGlyph } from '#/components/parking/MouseGlyph.tsx'
+import { ParkingHelpPanel } from '#/components/parking/ParkingHelpPanel.tsx'
 import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
 import { Button } from '#/components/ui/button.tsx'
 import { Calendar } from '#/components/ui/calendar.tsx'
@@ -185,6 +189,8 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
   const [reservations, setReservations] = useState<Reservation[]>([])
   const [editingId, setEditingId] = useState<string | null>(null)
   const [calOpen, setCalOpen] = useState(false)
+  // Modal d'aide : tutoriel factuel de la page (bouton « ? » de la barre d'actions).
+  const [helpOpen, setHelpOpen] = useState(false)
   const [commentId, setCommentId] = useState<string | null>(null)
   const [commentDraft, setCommentDraft] = useState('')
   // Statut en attente de justification : « Non payé » ne s'écrit qu'avec un
@@ -855,8 +861,18 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
         title={rangeLabel}
         actions={
           <>
-            {/* Groupe « actions de page » : vue analytique + impression. */}
+            {/* Groupe « actions de page » : aide + vue analytique + impression. */}
             <ButtonGroup>
+              <Tip label="Comment ça marche">
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  onClick={() => setHelpOpen(true)}
+                  aria-label="Comment ça marche"
+                >
+                  <HelpGlyph />
+                </Button>
+              </Tip>
               <Tip label="Vue analytique">
                 <Button asChild variant="outline" size="icon-sm">
                   <Link to="/parking/analytique" aria-label="Vue analytique">
@@ -1195,6 +1211,22 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
         </div>
       </div>
 
+      {/* Modal d'aide : tutoriel factuel de la page (bouton « ? »). Le contenu
+          reste en place dessous. */}
+      <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
+        <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-2xl">
+          <HelpDialogHeader
+            icon={<HelpGlyph />}
+            title="Comment fonctionne le planning parking"
+            description="Attribuer les places de parking, jour par jour."
+          />
+          {/* Seul le corps défile : l'en-tête reste fixe en haut. */}
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <ParkingHelpPanel canEdit={canEdit} />
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Modale du commentaire. Double emploi : édition libre depuis le menu
           contextuel, ou justification OBLIGATOIRE d'un passage en « Non payé »
           (`pendingStatus`) — le statut n'est alors écrit qu'avec le motif. */}
@@ -1239,53 +1271,6 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
         </DialogContent>
       </Dialog>
     </div>
-  )
-}
-
-/**
- * Petite souris SVG avec le bouton GAUCHE ou DROIT surligné — illustre un geste
- * du planning (clic droit sur une case vide = nouvelle réservation ; clic gauche
- * glissé sur une barre = déplacer). Calquée sur le glyphe de la page rapro, mais
- * en classes Tailwind (parking n'a pas de feuille CSS dédiée). Le surlignage est
- * un rectangle CLIPPÉ au corps arrondi, si bien qu'il épouse le coin sans path.
- */
-function MouseGlyph({ side }: { side: 'left' | 'right' }) {
-  const clipId = `parking-mouse-${side}`
-  const btnX = side === 'left' ? 3 : 10
-  return (
-    <svg
-      className="h-[1.1rem] w-[0.8rem] shrink-0 text-muted-foreground"
-      viewBox="0 0 20 28"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <defs>
-        <clipPath id={clipId}>
-          <rect x="3" y="2" width="14" height="24" rx="7" />
-        </clipPath>
-      </defs>
-      {/* Bouton surligné (moitié haute, gauche ou droite), clippé au corps. */}
-      <rect
-        x={btnX}
-        y="2"
-        width="7"
-        height="11"
-        className="fill-foreground/60"
-        clipPath={`url(#${clipId})`}
-      />
-      {/* Corps + séparation des deux boutons. */}
-      <rect
-        x="3"
-        y="2"
-        width="14"
-        height="24"
-        rx="7"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-      />
-      <line x1="10" y1="2" x2="10" y2="13" stroke="currentColor" strokeWidth="1.2" />
-    </svg>
   )
 }
 
