@@ -82,6 +82,8 @@ export function SummaryCards({
   // --- Données dérivées des cartes (aucune n'est une cellule du tableau) -------
   // Calcul déporté dans `monthPace` : SOURCE UNIQUE partagée avec le PDF, pour
   // que le document reflète toujours exactement les cartes de l'écran.
+  // Carnet d'ouverture : projeté fin de mois tel qu'il était au 1er (1er point).
+  const depart = pickupSeries.length >= 1 ? pickupSeries[0] : null
   const {
     rentre,
     remainingDays,
@@ -90,11 +92,10 @@ export function SummaryCards({
     rythmeTenu,
     budgetAtteint,
     joursAvance,
-  } = monthPace({ realiseMTD, budget, dayOfMonth, daysInMonth })
+    revision,
+  } = monthPace({ realiseMTD, projeteMois, budget, dayOfMonth, daysInMonth, depart })
   // Cumul réalisé, aussi utilisé par la barre de progression ci-dessous.
   const acquis = rentre
-  // Carnet d'ouverture : projeté fin de mois tel qu'il était au 1er (1er point).
-  const depart = pickupSeries.length >= 1 ? pickupSeries[0] : null
 
   const dash = <span className="text-muted-foreground">—</span>
   const signedClass = (n: number) =>
@@ -196,7 +197,15 @@ export function SummaryCards({
           label="Rentré depuis le 1er"
           accent={ACCENT.indigo}
           hint="Chiffre d'affaires réellement réalisé en cumul depuis le début du mois (le total de la barre de progression). En dessous : le carnet déjà projeté fin de mois au 1er."
-          value={fmt.eurInt(rentre)}
+          value={
+            revision == null ? (
+              fmt.eurInt(rentre)
+            ) : (
+              <span className={signedClass(revision)}>
+                {(revision >= 0 ? '+' : '-') + fmt.eurInt(rentre)}
+              </span>
+            )
+          }
           sub={depart == null ? undefined : subMuted(`${fmt.eurInt(depart)} au 1er`)}
         />
       </div>

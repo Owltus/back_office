@@ -303,6 +303,8 @@ function renderReportDocument(pdf: jsPDF, data: RepjourPdfData): void {
   // ===== Cartes de synthèse (les 4 MÊMES qu'à l'écran, via monthPace) ======
   const dom = dayOfMonth ?? 0
   const dim = daysInMonth ?? 0
+  const pk = typeof pickup === 'number' ? pickup : null
+  const depart = typeof monthStartProjection === 'number' ? monthStartProjection : null
   const {
     rentre,
     remainingDays,
@@ -311,14 +313,15 @@ function renderReportDocument(pdf: jsPDF, data: RepjourPdfData): void {
     rythmeTenu,
     budgetAtteint,
     joursAvance,
+    revision,
   } = monthPace({
     realiseMTD: realiseMTD ?? ZERO_KPI,
+    projeteMois: projeteMois ?? ZERO_KPI,
     budget,
     dayOfMonth: dom,
     daysInMonth: dim,
+    depart,
   })
-  const pk = typeof pickup === 'number' ? pickup : null
-  const depart = typeof monthStartProjection === 'number' ? monthStartProjection : null
 
   // Sous-valeur de « Effort restant » : reprend la logique de l'écran.
   let effortSub: string | undefined
@@ -360,8 +363,11 @@ function renderReportDocument(pdf: jsPDF, data: RepjourPdfData): void {
     {
       label: 'Rentré depuis le 1er',
       accent: INDIGO,
-      value: T(fmt.eurInt(rentre)),
-      valueColor: INK,
+      value:
+        revision == null
+          ? T(fmt.eurInt(rentre))
+          : T((revision >= 0 ? '+' : '-') + fmt.eurInt(rentre)),
+      valueColor: revision == null ? INK : revision >= 0 ? POS : NEG,
       sub: depart == null ? undefined : T(`${fmt.eurInt(depart)} au 1er`),
       subColor: GRAY,
     },

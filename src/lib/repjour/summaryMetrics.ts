@@ -13,11 +13,15 @@ import type { KPIBlock, MonthBudget } from '#/lib/repjour/types.ts'
 export interface MonthPaceInput {
   /** Cumul mois à date (réalisé). */
   realiseMTD: KPIBlock
+  /** Projeté fin de mois (au jour affiché). */
+  projeteMois: KPIBlock
   budget: MonthBudget
   /** Quantième du jour affiché (1..31), 0 si inconnu. */
   dayOfMonth: number
   /** Nombre de jours du mois, 0 si inconnu. */
   daysInMonth: number
+  /** Projeté fin de mois tel qu'il était au 1er (carnet d'ouverture), ou `null`. */
+  depart: number | null
 }
 
 export interface MonthPace {
@@ -36,13 +40,19 @@ export interface MonthPace {
   /** Avance (+) ou retard (-) en jours sur le rythme linéaire du budget, ou
    * `null` si le jour du mois est inconnu. */
   joursAvance: number | null
+  /** Écart du projeté fin de mois vs le projeté du 1er (carnet d'ouverture) :
+   * positif = on fait mieux que prévu à l'ouverture, négatif = moins bien. `null`
+   * si le carnet d'ouverture est inconnu. */
+  revision: number | null
 }
 
 export function monthPace({
   realiseMTD,
+  projeteMois,
   budget,
   dayOfMonth,
   daysInMonth,
+  depart,
 }: MonthPaceInput): MonthPace {
   const rentre = realiseMTD.roomRevenue
   const budgetCA = budget.room_revenue
@@ -58,6 +68,8 @@ export function monthPace({
   const joursAvance =
     hasDay && rythmeBudgetJour > 0 ? rentre / rythmeBudgetJour - dayOfMonth : null
 
+  const revision = depart != null ? projeteMois.roomRevenue - depart : null
+
   return {
     rentre,
     remainingDays,
@@ -66,6 +78,7 @@ export function monthPace({
     rythmeTenu,
     budgetAtteint,
     joursAvance,
+    revision,
   }
 }
 
