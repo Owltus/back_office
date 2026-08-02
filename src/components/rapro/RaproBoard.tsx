@@ -19,6 +19,11 @@ import { Tip } from '#/components/shared/Tip.tsx'
 import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
 import { useStepNavKeys } from '#/components/shared/useStepNavKeys.ts'
 import { Button } from '#/components/ui/button.tsx'
+import { Dialog, DialogContent } from '#/components/ui/dialog.tsx'
+import { HelpDialogHeader } from '#/components/shared/HelpDialogHeader.tsx'
+import { HelpGlyph } from '#/components/shared/HelpGlyph.tsx'
+import { MouseGlyph } from '#/components/rapro/MouseGlyph.tsx'
+import { RaproHelpPanel } from '#/components/rapro/RaproHelpPanel.tsx'
 import { CloseSheetDialog } from '#/components/shared/CloseSheetDialog.tsx'
 import type { CloseIssue } from '#/components/shared/CloseSheetDialog.tsx'
 import { Textarea } from '#/components/ui/textarea.tsx'
@@ -158,6 +163,8 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
     saveComment(selectedDate, next).catch(() => {})
   }
   const [pdfBusy, setPdfBusy] = useState(false)
+  // Modal d'aide : tutoriel factuel de la page (bouton « ? » de la barre d'actions).
+  const [helpOpen, setHelpOpen] = useState(false)
   // Modal de clôture : nom de l'hôtelier saisi avant de figer le jour (comme caisse).
   const [closeOpen, setCloseOpen] = useState(false)
   const [hotelierName, setHotelierName] = useState('')
@@ -205,12 +212,6 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   // Le Comparison ne bloque rien : il se signale à côté de la grille, pas à sa place.
   const optionalMissing = missing.filter((m) => !m.required)
 
-  // « Vendues » EFFECTIVES : l'occupation PDJ + les chambres NON vendues
-  // auxquelles on a posé un statut à la main. Une non vendue marquée compte alors
-  // comme vendue (carte Vendues) ET dans sa carte de statut (Nettoyées/Refus/…).
-  const effectiveSold = new Set(occupied)
-  for (const room of statuses.keys()) effectiveSold.add(room)
-
   // Roulement (report) DÉRIVÉ : on relit une fenêtre bornée de jours précédents
   // (statuts rapro SEULS — le roulement ne dépend PAS de l'occupation PDJ), mêmes
   // clés → cache partagé avec la navigation. `carried` = chambres bloquées un jour
@@ -232,18 +233,33 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   const carried = new Set(carriedDerived)
   for (const r of dayCarriedManual) carried.add(r)
 
+  // « Vendues » = occupation RÉELLE du jour. Une chambre colorée à la main ne
+  // compte comme vendue que si elle n'est PAS reportée : c'est alors une
+  // correction d'occupation (In-House a raté une vente). Une reportée non occupée
+  // n'a PAS été vendue aujourd'hui — elle l'a été la veille ; la couleur qu'on lui
+  // pose ne dit que si son ménage en retard (rattrapage) est fait. Elle ne gonfle
+  // donc jamais les vendues (c'était le bug : « toute couleur = vendue »).
+  const effectiveSold = new Set(occupied)
+  for (const room of statuses.keys())
+    if (!carried.has(room)) effectiveSold.add(room)
+
   // Réconciliation sur le DÛ ÉLARGI (occupées du jour ∪ reportées).
   const dueSet = new Set(occupied)
   for (const r of carried) dueSet.add(r)
   const rec = reconcile(statuses, dueSet, occupied)
   // Décompte des cards (Nettoyées / Refus / Bloquées du jour) sur les VENDUES
-  // EFFECTIVES (occupées ∪ chambres à couleur explicite). Une reportée nettoyée
-  // aujourd'hui porte une couleur verte EXPLICITE → elle est dans `effectiveSold`
-  // et compte comme ménage facturable, même inoccupée au PDJ (client parti). Une
-  // reportée laissée GRISE (aucune couleur) n'a rien de fait : elle n'entre pas
-  // ici (comptée à part « Bloquées de la veille », et pesant sur « Reste à faire »
-  // via la réconciliation).
+  // EFFECTIVES uniquement (occupées ∪ corrections d'occupation) : une reportée non
+  // vendue n'y entre pas, donc elle ne peut plus fausser « Bloquées du jour » ni
+  // « Refus » — elle vit dans « Bloquées de la veille » et la réconciliation.
   const stats = countStats(statuses, effectiveSold)
+  // Rattrapages : ménages FAITS aujourd'hui sur une chambre reportée NON vendue
+  // (statut `rattrapage`, donc hors `effectiveSold` → absents de `stats.clean`).
+  // Ils sont facturables (Option A) : on les rajoute au total « Nettoyées » sans
+  // les compter en vendues. `!effectiveSold.has` évite tout double comptage.
+  let rattrapages = 0
+  for (const [room, s] of statuses)
+    if (s === 'rattrapage' && !effectiveSold.has(room)) rattrapages++
+  const cleanedCount = stats.clean + rattrapages
   // Fenêtre de report résolue ? Tant qu'une requête de la fenêtre est en vol,
   // `carried` est incomplet : afficher « Aucune donnée » sur un jour sans
   // occupation directe mais À REPORTS serait un faux vide, effacé une fraction de
@@ -397,14 +413,18 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
     )
   }
 
-  // Clic GAUCHE = cycle des COULEURS via `nextFill`, selon que la chambre est
-  // VENDUE : vendue → vert → refus → bloquée → vert ; non vendue → gris → vert →
-  // refus → bloquée → gris. Fonctionne donc sur les non vendues (c'était le bug :
-  // le clic était sans effet). Le liseré « bloquée la veille » (clic droit) est
-  // ORTHOGONAL et préservé.
+  // Clic GAUCHE = cycle des COULEURS via `nextFill`, selon la situation de la
+  // chambre : VENDUE (vert → refus → bloquée → vert) ; REPORTÉE non vendue (gris →
+  // rattrapage → bloquée → gris : on ne fait que solder le ménage en retard) ; non
+  // vendue non reportée (gris → vert → refus → bloquée → gris : correction
+  // d'occupation). Le liseré « bloquée la veille » (clic droit) est ORTHOGONAL et
+  // préservé.
   function toggle(room: number) {
     const current = statuses.get(room) ?? null
-    return setColor(room, nextFill(current, occupied.has(room)))
+    return setColor(
+      room,
+      nextFill(current, occupied.has(room), carried.has(room)),
+    )
   }
 
   // Clic DROIT = pose / retire le sur-statut « bloquée la veille » À LA MAIN sur le
@@ -515,7 +535,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
           carried,
           counts: {
             sold: effectiveSold.size,
-            clean: stats.clean,
+            clean: cleanedCount,
             bloquee: stats.todo,
             refus: stats.refus,
           },
@@ -626,8 +646,20 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
         }
         actions={
           <>
-            {/* Groupe « actions de page » : vue analytique + impression. */}
+            {/* Groupe « actions de page » : aide + vue analytique + impression. */}
             <ButtonGroup>
+              {/* Aide : ouvre le tutoriel de la page (même bouton « ? » que
+                  RepJour, tout à gauche du groupe). */}
+              <Tip label="Comment ça marche">
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  onClick={() => setHelpOpen(true)}
+                  aria-label="Comment ça marche"
+                >
+                  <HelpGlyph />
+                </Button>
+              </Tip>
               <Tip label="Vue analytique">
                 <Button asChild variant="outline" size="icon-sm">
                   <Link to="/rapro/analytique" aria-label="Vue analytique">
@@ -743,10 +775,10 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
               hint="Chambres occupées à traiter aujourd'hui."
             />
             <StatTile
-              value={dash(stats.clean)}
+              value={dash(cleanedCount)}
               label="Nettoyées"
               accent={CATEGORY_COLOR.nettoyee}
-              hint="Chambres nettoyées aujourd'hui (facturées)."
+              hint="Ménages faits aujourd'hui, facturés (dont rattrapages sur reportées non vendues)."
             />
             <StatTile
               value={dash(stats.refus)}
@@ -919,6 +951,22 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
         </>
       )}
 
+      {/* Modal d'aide : tutoriel factuel de la page (bouton « ? »). Le contenu
+          reste en place dessous. */}
+      <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
+        <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-2xl">
+          <HelpDialogHeader
+            icon={<HelpGlyph />}
+            title="Comment fonctionne le rapprochement"
+            description="Le suivi du ménage des chambres, étape par étape."
+          />
+          {/* Seul le corps défile : l'en-tête (flex shrink-0) reste fixe en haut. */}
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <RaproHelpPanel />
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <PrintBlockedDialog
         open={printBlocked !== ''}
         onOpenChange={(open) => !open && setPrintBlocked('')}
@@ -946,59 +994,6 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
 function sourceDate(date: string): string {
   const d = parseDateStr(date)
   return d ? format(d, 'd MMMM yyyy', { locale: fr }) : date
-}
-
-/**
- * Petite souris SVG avec le bouton GAUCHE ou DROIT surligné — illustre les deux
- * gestes de la grille. Le surlignage est un rectangle CLIPPÉ au corps arrondi, si
- * bien qu'il épouse le coin du bouton sans path manuel. Bouton gauche en teinte
- * neutre (il pose des couleurs variées), bouton droit en rouge (le liseré).
- */
-function MouseGlyph({ side }: { side: 'left' | 'right' }) {
-  const clipId = `rapro-mouse-${side}`
-  const btnX = side === 'left' ? 3 : 10
-  return (
-    <svg
-      className={cn('rapro-mouse', side === 'right' && 'rapro-mouse-right')}
-      viewBox="0 0 20 28"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <defs>
-        <clipPath id={clipId}>
-          <rect x="3" y="2" width="14" height="24" rx="7" />
-        </clipPath>
-      </defs>
-      {/* Bouton surligné (moitié haute, gauche ou droite), clippé au corps. */}
-      <rect
-        x={btnX}
-        y="2"
-        width="7"
-        height="11"
-        className="rapro-mouse-btn"
-        clipPath={`url(#${clipId})`}
-      />
-      {/* Corps + séparation des deux boutons. */}
-      <rect
-        x="3"
-        y="2"
-        width="14"
-        height="24"
-        rx="7"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-      />
-      <line
-        x1="10"
-        y1="2"
-        x2="10"
-        y2="13"
-        stroke="currentColor"
-        strokeWidth="1.2"
-      />
-    </svg>
-  )
 }
 
 /**
