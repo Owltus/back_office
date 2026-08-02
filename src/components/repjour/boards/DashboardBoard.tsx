@@ -20,13 +20,9 @@ import { useStepNavKeys } from '#/components/shared/useStepNavKeys.ts'
 import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '#/components/ui/dialog.tsx'
+import { Dialog, DialogContent } from '#/components/ui/dialog.tsx'
+import { HelpDialogHeader } from '#/components/shared/HelpDialogHeader.tsx'
+import { HelpGlyph } from '#/components/shared/HelpGlyph.tsx'
 import { DatePickerButton } from '#/components/form/fields.tsx'
 import { BoardSkeleton } from '#/components/repjour/BoardSkeleton.tsx'
 import { AlertBanner } from '#/components/repjour/AlertBanner.tsx'
@@ -501,23 +497,9 @@ export function DashboardBoard() {
                       aria-label="Détail des calculs"
                       aria-pressed={detailMode}
                     >
-                      {/* « ? » nu (sans cercle), tracé ÉPAIS remplissant la boîte
-                          24×24. Exception de taille : 20 px (vs 16 px pour les
-                          voisines lucide) pour bien le mettre en avant — ratio
-                          préservé, donc aucune déformation. */}
-                      <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth={2.75}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden="true"
-                        className="size-5"
-                      >
-                        <path d="M7.4 7.4a4.7 4.7 0 0 1 9 1.6c0 3.1-4.5 4.6-4.5 4.6" />
-                        <path d="M12 20h.01" />
-                      </svg>
+                      {/* « ? » nu, 20 px (vs 16 px pour les voisines lucide) pour
+                          le mettre en avant. Source partagée avec l'en-tête. */}
+                      <HelpGlyph />
                     </Button>
                   </Tip>
                 ) : null}
@@ -637,22 +619,24 @@ export function DashboardBoard() {
                 la barre d'actions (`detailMode`). Le contenu de la page reste en
                 place dessous. */}
             <Dialog open={detailMode} onOpenChange={setDetailMode}>
-              <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
-                <DialogHeader>
-                  <DialogTitle>Détail des calculs — {displayDate}</DialogTitle>
-                  <DialogDescription>
-                    Comment chaque indicateur du rapport est obtenu.
-                  </DialogDescription>
-                </DialogHeader>
-                <KPIDetailPanel
-                  realiseJour={rj}
-                  realiseMTD={rmtd}
-                  projeteMois={pm}
-                  budget={budget}
-                  ecart={ecart}
-                  dayOfMonth={report.day_of_month}
-                  daysInMonth={report.days_in_month}
+              <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-3xl">
+                <HelpDialogHeader
+                  icon={<HelpGlyph />}
+                  title={`Détail des calculs — ${displayDate}`}
+                  description="Comment chaque indicateur du rapport est obtenu."
                 />
+                {/* Seul le corps défile : l'en-tête reste fixe en haut. */}
+                <div className="min-h-0 flex-1 overflow-y-auto">
+                  <KPIDetailPanel
+                    realiseJour={rj}
+                    realiseMTD={rmtd}
+                    projeteMois={pm}
+                    budget={budget}
+                    ecart={ecart}
+                    dayOfMonth={report.day_of_month}
+                    daysInMonth={report.days_in_month}
+                  />
+                </div>
               </DialogContent>
             </Dialog>
 
