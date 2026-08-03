@@ -26,7 +26,7 @@ as $$
 declare
   n int;
 begin
-  if public.page_level_rank(public.get_page_level('facturation')) < 2 then
+  if public.get_page_level('facturation') <> 'gestion' then
     raise exception 'not authorized';
   end if;
   if jsonb_typeof(p_rows) is distinct from 'array' then
@@ -68,7 +68,7 @@ as $$
 declare
   removed int;
 begin
-  if public.page_level_rank(public.get_page_level('facturation')) < 2 then
+  if public.get_page_level('facturation') <> 'gestion' then
     raise exception 'not authorized';
   end if;
   if current_setting('facturation.confirm_reimport', true) is distinct from 'OUI_REMPLACER' then

@@ -37,7 +37,7 @@ security definer
 set search_path = public
 as $$
 begin
-  if public.page_level_rank(public.get_page_level('facturation')) < 2 then
+  if public.get_page_level('facturation') <> 'gestion' then
     raise exception 'not authorized';
   end if;
   if char_length(coalesce(p_issuer, '')) < 4 then
@@ -60,7 +60,7 @@ security definer
 set search_path = public
 as $$
 begin
-  if public.page_level_rank(public.get_page_level('facturation')) < 2 then
+  if public.get_page_level('facturation') <> 'gestion' then
     raise exception 'not authorized';
   end if;
 
