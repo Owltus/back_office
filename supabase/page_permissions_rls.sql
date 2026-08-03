@@ -123,6 +123,11 @@ create policy "pdj delete (page:pdj)"
   using (public.page_level_rank(public.get_page_level('pdj')) >= 2);
 
 -- ---- RAPRO — feuilles jour (page 'rapro') -----------------------------------
+-- Écriture bornée par NIVEAU **et** par FENÊTRE J-2 (miroir de
+-- lib/rapro/editability.ts, RAPRO_GRACE_DAYS = 2) : un compte `ecriture` n'agit
+-- (clôture, réouverture, commentaire) que sur les jours report_date >= J-2 ;
+-- au-delà dans le passé, rien, même non clôturé. La `gestion` agit sur tout jour.
+-- Le pivot est report_date (le jour rapproché) sur les DEUX tables.
 drop policy if exists "rapro_sheets insert (super/admin)" on public.rapro_sheets;
 drop policy if exists "rapro_sheets update (super/admin)" on public.rapro_sheets;
 drop policy if exists "rapro_sheets delete (super/admin)" on public.rapro_sheets;
@@ -132,14 +137,38 @@ drop policy if exists "rapro_sheets delete (page:rapro)" on public.rapro_sheets;
 
 create policy "rapro_sheets write (page:rapro)"
   on public.rapro_sheets for insert to authenticated
-  with check (public.page_level_rank(public.get_page_level('rapro')) >= 2);
+  with check (
+    public.get_page_level('rapro') = 'gestion'
+    or (
+      public.page_level_rank(public.get_page_level('rapro')) >= 2
+      and report_date >= (current_date - 2)
+    )
+  );
 create policy "rapro_sheets update (page:rapro)"
   on public.rapro_sheets for update to authenticated
-  using (public.page_level_rank(public.get_page_level('rapro')) >= 2)
-  with check (public.page_level_rank(public.get_page_level('rapro')) >= 2);
+  using (
+    public.get_page_level('rapro') = 'gestion'
+    or (
+      public.page_level_rank(public.get_page_level('rapro')) >= 2
+      and report_date >= (current_date - 2)
+    )
+  )
+  with check (
+    public.get_page_level('rapro') = 'gestion'
+    or (
+      public.page_level_rank(public.get_page_level('rapro')) >= 2
+      and report_date >= (current_date - 2)
+    )
+  );
 create policy "rapro_sheets delete (page:rapro)"
   on public.rapro_sheets for delete to authenticated
-  using (public.page_level_rank(public.get_page_level('rapro')) >= 2);
+  using (
+    public.get_page_level('rapro') = 'gestion'
+    or (
+      public.page_level_rank(public.get_page_level('rapro')) >= 2
+      and report_date >= (current_date - 2)
+    )
+  );
 
 -- ---- RAPRO — chambres (page 'rapro') ----------------------------------------
 drop policy if exists "rapro insert (super/admin)" on public.rapro_rooms;
@@ -151,14 +180,38 @@ drop policy if exists "rapro_rooms delete (page:rapro)" on public.rapro_rooms;
 
 create policy "rapro_rooms write (page:rapro)"
   on public.rapro_rooms for insert to authenticated
-  with check (public.page_level_rank(public.get_page_level('rapro')) >= 2);
+  with check (
+    public.get_page_level('rapro') = 'gestion'
+    or (
+      public.page_level_rank(public.get_page_level('rapro')) >= 2
+      and report_date >= (current_date - 2)
+    )
+  );
 create policy "rapro_rooms update (page:rapro)"
   on public.rapro_rooms for update to authenticated
-  using (public.page_level_rank(public.get_page_level('rapro')) >= 2)
-  with check (public.page_level_rank(public.get_page_level('rapro')) >= 2);
+  using (
+    public.get_page_level('rapro') = 'gestion'
+    or (
+      public.page_level_rank(public.get_page_level('rapro')) >= 2
+      and report_date >= (current_date - 2)
+    )
+  )
+  with check (
+    public.get_page_level('rapro') = 'gestion'
+    or (
+      public.page_level_rank(public.get_page_level('rapro')) >= 2
+      and report_date >= (current_date - 2)
+    )
+  );
 create policy "rapro_rooms delete (page:rapro)"
   on public.rapro_rooms for delete to authenticated
-  using (public.page_level_rank(public.get_page_level('rapro')) >= 2);
+  using (
+    public.get_page_level('rapro') = 'gestion'
+    or (
+      public.page_level_rank(public.get_page_level('rapro')) >= 2
+      and report_date >= (current_date - 2)
+    )
+  );
 
 -- ---- PMS daily metrics — import Comparison (page 'repjour') ------------------
 -- NOTE : rattachement 'repjour' à confirmer (l'import Comparison se fait dans RepJour).
