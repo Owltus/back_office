@@ -85,7 +85,11 @@ import {
   updateReservation,
 } from '#/lib/parking/service.ts'
 import type { DbReservation } from '#/lib/parking/service.ts'
-import { canEditReservation } from '#/lib/parking/editability.ts'
+import {
+  canCreateReservation,
+  canEditReservation,
+  clampSpanToEditable,
+} from '#/lib/parking/editability.ts'
 import { printParkingSheets } from '#/lib/parking/pdf.ts'
 import { fmtPctInt } from '#/lib/parking/format.ts'
 import { matchRoom } from '#/lib/parking/pdjMatch.ts'
@@ -520,8 +524,8 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
 
   function addReservation(startDay: number, spot: number) {
     if (!canEdit || !startDate) return
-    // Créer dans le passé verrouillé (> grâce) exige la gestion.
-    if (!canEditReservation({ startDay, nights: 1 }, todayOffset, level)) return
+    // Créer dans le passé verrouillé (arrivée < aujourd'hui − grâce) exige la gestion.
+    if (!canCreateReservation(startDay, todayOffset, level)) return
     if (hasOverlap(reservations, spot, startDay, 1)) return // emplacement déjà occupé
     const id = insertReservation(
       { client: '', spot, startDay, nights: 1, status: 'reserve', comment: '' },
@@ -553,15 +557,8 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
   // déjà écarté par l'appelant (clic sur l'overlay).
   function pasteReservation(startDay: number, spot: number) {
     if (!canEdit || !startDate || !clipboard) return
-    // Coller dans le passé verrouillé exige la gestion (borne sur le séjour visé).
-    if (
-      !canEditReservation(
-        { startDay, nights: clipboard.nights },
-        todayOffset,
-        level,
-      )
-    )
-      return
+    // Coller dans le passé verrouillé exige la gestion (borne sur l'arrivée visée).
+    if (!canCreateReservation(startDay, todayOffset, level)) return
     insertReservation(
       {
         client: clipboard.client,
@@ -718,6 +715,15 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
         )
         nights = orig.nights - (startDay - orig.startDay)
       }
+      // Écriture : borne le geste au domaine éditable (le début ne recule pas dans
+      // le passé verrouillé, la fin n'y est pas ramenée). La gestion n'est pas bridée.
+      ;({ startDay, nights } = clampSpanToEditable(
+        { startDay, nights },
+        orig,
+        mode,
+        todayOffset,
+        level,
+      ))
       setReservations((prev) => {
         // Geste refusé si la position visée chevauche une autre réservation.
         if (hasOverlap(prev, spot, startDay, nights, res.id)) return prev

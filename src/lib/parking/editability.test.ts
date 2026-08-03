@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  canCreateReservation,
   canEditReservation,
+  clampSpanToEditable,
   isReservationCurrent,
 } from '#/lib/parking/editability.ts'
 import { PARKING_GRACE_DAYS } from '#/lib/permissions/actions.ts'
@@ -65,5 +67,68 @@ describe('canEditReservation — niveau requis + fenêtre', () => {
     const farPast = { startDay: TODAY - 9, nights: 1 } // départ 92
     expect(canEditReservation(farPast, TODAY, 'ecriture')).toBe(false)
     expect(canEditReservation(farPast, TODAY, 'gestion')).toBe(true)
+  })
+})
+
+describe('canCreateReservation — l’arrivée doit être dans la zone éditable', () => {
+  it('ecriture : arrivée avant le plancher refusée, à partir du plancher acceptée', () => {
+    expect(canCreateReservation(FLOOR - 1, TODAY, 'ecriture')).toBe(false)
+    expect(canCreateReservation(FLOOR, TODAY, 'ecriture')).toBe(true)
+    expect(canCreateReservation(TODAY + 3, TODAY, 'ecriture')).toBe(true)
+  })
+
+  it('gestion : peut créer dans le passé verrouillé ; lecture : jamais', () => {
+    expect(canCreateReservation(FLOOR - 30, TODAY, 'gestion')).toBe(true)
+    expect(canCreateReservation(TODAY + 3, TODAY, 'lecture')).toBe(false)
+  })
+})
+
+describe('clampSpanToEditable — le geste ne réécrit pas le passé (écriture)', () => {
+  it('gestion : aucun bornage', () => {
+    const proposed = { startDay: TODAY - 40, nights: 2 }
+    expect(clampSpanToEditable(proposed, { startDay: TODAY, nights: 2 }, 'move', TODAY, 'gestion')).toEqual(proposed)
+  })
+
+  it('move : le début est ramené au plancher, la durée est conservée', () => {
+    // Résa présente (start 98) tirée à 70 → bornée au plancher 93, nights inchangé.
+    const orig = { startDay: 98, nights: 2 }
+    expect(
+      clampSpanToEditable({ startDay: 70, nights: 2 }, orig, 'move', TODAY, 'ecriture'),
+    ).toEqual({ startDay: FLOOR, nights: 2 })
+  })
+
+  it('move : un séjour en cours ne peut pas reculer plus loin que son origine', () => {
+    // Ongoing démarré à -20 (avant le plancher) : le début ne peut pas passer sous -20.
+    const orig = { startDay: TODAY - 20, nights: 30 }
+    expect(
+      clampSpanToEditable({ startDay: TODAY - 25, nights: 30 }, orig, 'move', TODAY, 'ecriture'),
+    ).toEqual({ startDay: TODAY - 20, nights: 30 })
+    // Avancer reste libre.
+    expect(
+      clampSpanToEditable({ startDay: TODAY - 3, nights: 30 }, orig, 'move', TODAY, 'ecriture'),
+    ).toEqual({ startDay: TODAY - 3, nights: 30 })
+  })
+
+  it('resize-left : début borné au plancher, la fin reste fixe', () => {
+    // Fin fixe = 100 (start 98 + nights 2). Tirer le bord gauche à 70 → start=93,
+    // nights recalculé pour garder la fin à 100.
+    const orig = { startDay: 98, nights: 2 }
+    expect(
+      clampSpanToEditable({ startDay: 70, nights: 30 }, orig, 'resize-left', TODAY, 'ecriture'),
+    ).toEqual({ startDay: FLOOR, nights: 100 - FLOOR })
+  })
+
+  it('resize-right : la fin ne peut pas être ramenée sous le plancher', () => {
+    // Séjour en cours (start -20). Réduire jusqu’à finir avant le plancher est borné
+    // à une durée qui pose la fin pile au plancher.
+    const orig = { startDay: TODAY - 20, nights: 30 }
+    const res = clampSpanToEditable(
+      { startDay: TODAY - 20, nights: 1 },
+      orig,
+      'resize-right',
+      TODAY,
+      'ecriture',
+    )
+    expect(res.startDay + res.nights).toBe(FLOOR)
   })
 })
