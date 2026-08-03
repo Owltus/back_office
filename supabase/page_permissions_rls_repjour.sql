@@ -32,7 +32,11 @@ create policy "daily_reports delete (page:repjour)"
   on public.daily_reports for delete to authenticated
   using (public.page_level_rank(public.get_page_level('repjour')) >= 2);
 
--- ---- forecast_days (page 'repjour') -----------------------------------------
+-- ---- forecast_days (page 'repjour') — GESTION uniquement ---------------------
+-- L'import Forecast (analytique) est réservé à la GESTION côté UI
+-- (ForecastImportButton). On aligne la RLS : écriture d'un forecast = gestion, pas
+-- le simple import CSV (daily_reports/pms restent à >= 2 écriture). Un écriture ne
+-- peut donc pas écrire de forecast via l'API.
 drop policy if exists "SuperUser/Admin write forecast" on public.forecast_days;
 drop policy if exists "SuperUser/Admin update forecast" on public.forecast_days;
 drop policy if exists "SuperUser/Admin delete forecast" on public.forecast_days;
@@ -42,11 +46,11 @@ drop policy if exists "forecast_days delete (page:repjour)" on public.forecast_d
 
 create policy "forecast_days write (page:repjour)"
   on public.forecast_days for insert to authenticated
-  with check (public.page_level_rank(public.get_page_level('repjour')) >= 2);
+  with check (public.get_page_level('repjour') = 'gestion');
 create policy "forecast_days update (page:repjour)"
   on public.forecast_days for update to authenticated
-  using (public.page_level_rank(public.get_page_level('repjour')) >= 2)
-  with check (public.page_level_rank(public.get_page_level('repjour')) >= 2);
+  using (public.get_page_level('repjour') = 'gestion')
+  with check (public.get_page_level('repjour') = 'gestion');
 create policy "forecast_days delete (page:repjour)"
   on public.forecast_days for delete to authenticated
-  using (public.page_level_rank(public.get_page_level('repjour')) >= 2);
+  using (public.get_page_level('repjour') = 'gestion');
