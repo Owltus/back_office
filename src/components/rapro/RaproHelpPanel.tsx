@@ -193,6 +193,12 @@ export function RaproHelpPanel() {
           restées bloquées à la clôture ne sont pas perdues : elles réapparaissent
           le lendemain avec leur contour rouge.
         </p>
+        <p>
+          La saisie et la clôture ne restent ouvertes que sur les trois derniers
+          jours (aujourd'hui, la veille et l'avant-veille). Passé ce délai, un jour
+          n'est plus modifiable, même s'il n'a pas été clôturé : sa correction est
+          réservée à la gestion.
+        </p>
       </Section>
 
       <Section title="Le contrôle d'occupation">

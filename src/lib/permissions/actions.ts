@@ -21,3 +21,12 @@
  * current_date - 7` côté RLS.
  */
 export const PARKING_GRACE_DAYS = 7
+
+/**
+ * Rapprochement : nombre de jours dans le passé où un compte `ecriture` peut
+ * encore agir (éditer la grille, clôturer, rouvrir puis re-clôturer). Fenêtre
+ * J-0..J-RAPRO_GRACE_DAYS. Au-delà, aucune modification en `ecriture` même si le
+ * jour n'est pas clôturé ; seule la `gestion` reste libre. Miroir de la borne
+ * `report_date >= current_date - 2` côté RLS.
+ */
+export const RAPRO_GRACE_DAYS = 2

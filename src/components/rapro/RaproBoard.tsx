@@ -44,6 +44,7 @@ import {
   statusOf,
 } from '#/lib/rapro/constants.ts'
 import { addDays, clampDay, today } from '#/lib/rapro/day.ts'
+import { canReconcileDay } from '#/lib/rapro/editability.ts'
 import { printRaproSheet } from '#/lib/rapro/pdf.ts'
 import { reconcile } from '#/lib/rapro/reconcile.ts'
 import { FLOORS } from '#/lib/rapro/rooms.ts'
@@ -77,12 +78,18 @@ const EMPTY_MANUAL: ReadonlySet<number> = new Set()
  * stockées. Écriture super/admin — RLS.
  */
 export function RaproBoard({ initialDate }: { initialDate?: string }) {
-  const { user, can } = useAuth()
-  const isWriter = can('rapro', 'ecriture')
+  const { user, pageLevel } = useAuth()
+  // Niveau effectif : sert au verrou PAR JOUR. Écriture n'agit que dans la fenêtre
+  // de grâce (J-0..J-2) ; la gestion peut agir sur n'importe quel jour (cf.
+  // lib/rapro/editability.ts).
+  const level = pageLevel('rapro')
   const queryClient = useQueryClient()
 
   const [selectedDate, setSelectedDate] = useState(() => initialDate ?? today())
   const todayStr = today()
+  // Le jour affiché est-il actionnable (édition grille, clôture, réouverture) ?
+  // Lecture : jamais. Écriture : seulement dans la fenêtre J-2. Gestion : toujours.
+  const dayEditable = canReconcileDay(selectedDate, todayStr, level)
 
   const { data: oldestDay, isError: oldestError } = useQuery({
     queryKey: ['rapro', 'oldest'],
@@ -133,8 +140,10 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
     queryFn: () => fetchSheet(selectedDate),
   })
   const isValidated = sheet?.status === 'validated'
-  // Verrou : dès qu'un jour est clôturé, tout est figé (grille + commentaire).
-  const canEditFields = isWriter && !isValidated
+  // Verrou : éditable seulement si le jour est actionnable (niveau + fenêtre) ET
+  // non clôturé. Un jour clôturé se fige ; un jour hors fenêtre (écriture) aussi,
+  // même s'il n'est pas clôturé.
+  const canEditFields = dayEditable && !isValidated
   // Commentaire COMMITÉ (hydraté depuis la feuille, mis à jour au blur du champ ;
   // la frappe vit dans RaproCommentCard). Lu par le PDF et la clôture.
   const [comment, setComment] = useState('')
@@ -592,7 +601,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
      Le poids visuel suit l'intention, comme sur la feuille de caisse : clôturer
      est la SUITE du travail (bouton plein), réouvrir en est le RETOUR EN ARRIÈRE
      (contour vert, accordé à la pastille d'en-tête). */
-  const stateAction = !isWriter ? null : !isValidated ? (
+  const stateAction = !dayEditable ? null : !isValidated ? (
     // Avertissement non bloquant (D5) au survol si la balance n'est pas à zéro ;
     // le compteur visible vit dans la card « Reste à faire ».
     <Tip
