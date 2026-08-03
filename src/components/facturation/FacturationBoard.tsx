@@ -10,6 +10,7 @@ import {
   Trash2,
 } from 'lucide-react'
 
+import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import {
@@ -211,6 +212,13 @@ function CenterPlaceholder({ record }: { record: InvoiceRecord | null }) {
 }
 
 export function FacturationBoard() {
+  // Facturation encore en dev : verrouillée en ADMIN-ONLY. Seul le niveau gestion
+  // (= admin en pratique) peut agir ; tout autre niveau consulte en lecture seule.
+  // La RLS (RPC facturation à `= gestion`) est le vrai rempart ; l'UI masque juste
+  // l'entrée d'édition. Sans ajout de facture, InvoicePanel (stamp, référentiel,
+  // revue, denylist) n'est jamais rendu → surface d'édition inaccessible.
+  const { can } = useAuth()
+  const canManage = can('facturation', 'gestion')
   const { records, selectedId } = useStore(facturationStore)
   const [dragging, setDragging] = useState(false)
   const [histOpen, setHistOpen] = useState(false)
@@ -272,6 +280,7 @@ export function FacturationBoard() {
   }, [pool, issuers, issuerCodes, issuerDenylist, issuerMemory])
 
   function addFiles(files: FileList | File[]) {
+    if (!canManage) return // lecture seule : pas d'ajout de facture (admin-only)
     const pdfs = Array.from(files).filter(
       (f) => f.type === 'application/pdf' || /\.pdf$/i.test(f.name),
     )
@@ -383,6 +392,7 @@ export function FacturationBoard() {
           )}
         >
           {records.length === 0 ? (
+            canManage ? (
             <button
               type="button"
               onClick={openPicker}
@@ -402,6 +412,19 @@ export function FacturationBoard() {
                 navigateur
               </div>
             </button>
+            ) : (
+              <div className="empty-canvas flex min-h-[240px] flex-1 flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border p-6 text-center lg:min-h-0">
+                <div className="rounded-full bg-secondary p-4">
+                  <FileText className="size-8 text-muted-foreground" />
+                </div>
+                <div className="text-base font-medium">
+                  Facturation en lecture seule
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  La saisie des factures est réservée à un administrateur.
+                </div>
+              </div>
+            )
           ) : (
             <InvoiceList
               records={records}
