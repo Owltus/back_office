@@ -1,4 +1,6 @@
-export type UserRole = 'utilisateur' | 'super_utilisateur' | 'admin';
+// `super_utilisateur` (legacy) a été retiré : les comptes concernés ont été
+// basculés en `utilisateur` (cf. supabase/legacy_super_utilisateur_bascule.sql).
+export type UserRole = 'utilisateur' | 'admin';
 
 export interface Profile {
   id: string;

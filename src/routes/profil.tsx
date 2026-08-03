@@ -15,7 +15,7 @@ export const Route = createFileRoute('/profil')({
  */
 function ProfilPage() {
   return (
-    <ProtectedRoute allowedRoles={['utilisateur', 'super_utilisateur', 'admin']}>
+    <ProtectedRoute allowedRoles={['utilisateur', 'admin']}>
       <ProfilBoard />
     </ProtectedRoute>
   )

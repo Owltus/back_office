@@ -35,8 +35,8 @@ export function atLeastLevel(level: PageLevel | null | undefined, min: PageLevel
   return levelRank(level) >= RANK[min]
 }
 
-// Grade dérivé du rôle stocké : seul 'admin' est un grade admin ; tout le reste
-// ('utilisateur', 'super_utilisateur' legacy) est un grade utilisateur.
+// Grade dérivé du rôle stocké : seul 'admin' est un grade admin ; 'utilisateur'
+// (et toute valeur legacy résiduelle) est un grade utilisateur.
 export function gradeOf(role: UserRole | null | undefined): Grade {
   return role === 'admin' ? 'admin' : 'utilisateur'
 }

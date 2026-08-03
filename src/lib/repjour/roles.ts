@@ -17,13 +17,11 @@ export const ROLE_HOME: Record<UserRole, string> = {
   // au dashboard (sous le tableau) pour les rôles autorisés — il n'y a plus de
   // route /repjour/import dédiée.
   utilisateur: '/repjour',
-  super_utilisateur: '/repjour',
   admin: '/repjour',
 };
 
 /** Libellés d'affichage des rôles (repris de la source AccountsPage/ProfilePage). */
 export const ROLE_LABELS: Record<UserRole, string> = {
   utilisateur: 'Utilisateur',
-  super_utilisateur: 'Super utilisateur',
   admin: 'Administrateur',
 };
