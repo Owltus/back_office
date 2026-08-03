@@ -252,10 +252,16 @@ create policy "affiche delete (page:affichage)"
   on public.affiche_templates for delete to authenticated
   using (public.page_level_rank(public.get_page_level('affichage')) >= 2);
 
--- ---- CAISSE (page 'caisse') — verrou 24 h conservé --------------------------
--- INSERT : >= ecriture. UPDATE : >= ecriture ET (gestion OU pas validé OU grâce).
--- DELETE : gestion (pièce comptable). 'gestion' remplace l'ancien 'admin'.
--- Le trigger caisse_stamp (validated_at/by serveur) reste en place, inchangé.
+-- ---- CAISSE (page 'caisse') — fenêtre J-1 (plus courte que rapro) -----------
+-- Écriture bornée par NIVEAU **et** par FENÊTRE J-1 (miroir de
+-- lib/caisse/editability.ts, CAISSE_GRACE_DAYS = 1). Remplace l'ancien verrou
+-- « 24 h après validation » : ce qui compte désormais est le JOUR de la feuille.
+--   - gestion  : agit sur n'importe quel jour (édition, clôture, réouverture) ;
+--   - ecriture : uniquement les feuilles report_date >= aujourd'hui - 1 (aujourd'hui
+--     et J-1 : éditer, clôturer, rouvrir puis re-clôturer) ; dès J-2, rien, même
+--     non clôturée.
+-- DELETE reste réservé à la gestion (pièce comptable). Le trigger caisse_stamp
+-- (validated_at/by serveur) reste en place, inchangé (signature d'audit).
 drop policy if exists "caisse insert (super/admin)" on public.caisse_sheets;
 drop policy if exists "caisse update (role + verrou)" on public.caisse_sheets;
 drop policy if exists "caisse delete (admin)" on public.caisse_sheets;
@@ -265,24 +271,28 @@ drop policy if exists "caisse delete (page:caisse gestion)" on public.caisse_she
 
 create policy "caisse write (page:caisse)"
   on public.caisse_sheets for insert to authenticated
-  with check (public.page_level_rank(public.get_page_level('caisse')) >= 2);
+  with check (
+    public.get_page_level('caisse') = 'gestion'
+    or (
+      public.page_level_rank(public.get_page_level('caisse')) >= 2
+      and report_date >= (current_date - 1)
+    )
+  );
 
 create policy "caisse update (page:caisse + verrou)"
   on public.caisse_sheets for update to authenticated
   using (
-    public.page_level_rank(public.get_page_level('caisse')) >= 2
-    and (
-      public.get_page_level('caisse') = 'gestion'   -- gestion = déverrouille hors grâce (ex-admin)
-      or validated_at is null
-      or now() < validated_at + interval '24 hours'
+    public.get_page_level('caisse') = 'gestion'
+    or (
+      public.page_level_rank(public.get_page_level('caisse')) >= 2
+      and report_date >= (current_date - 1)
     )
   )
   with check (
-    public.page_level_rank(public.get_page_level('caisse')) >= 2
-    and (
-      public.get_page_level('caisse') = 'gestion'
-      or validated_at is null
-      or now() < validated_at + interval '24 hours'
+    public.get_page_level('caisse') = 'gestion'
+    or (
+      public.page_level_rank(public.get_page_level('caisse')) >= 2
+      and report_date >= (current_date - 1)
     )
   );
 
