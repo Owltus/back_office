@@ -11,13 +11,14 @@ export const Route = createFileRoute('/gestion')({
 /**
  * Gestion budgétaire — fonction applicative accessible via le menu utilisateur
  * global (là où l'on se déconnecte). Onglets Données et Budget. Le budget étant
- * de la donnée repjour, la page est rattachée à la page `repjour` : visible par
- * tout lecteur repjour, éditable uniquement au niveau `gestion` (géré dans le
- * board + RLS). Remplace l'ancien modèle par grade (`grade !== 'admin'`).
+ * de la donnée repjour sensible, la PAGE entière est réservée au niveau `gestion`
+ * sur repjour (`min="gestion"`) : seuls les gestionnaires la voient et l'éditent.
+ * Remplace l'ancien modèle par grade (`grade !== 'admin'`). NB : la colonne Budget
+ * du tableau de bord repjour reste un KPI visible par tous (autre écran).
  */
 function GestionPage() {
   return (
-    <PageGuard page="repjour">
+    <PageGuard page="repjour" min="gestion">
       <GestionBoard />
     </PageGuard>
   )

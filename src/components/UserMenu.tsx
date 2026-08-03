@@ -53,7 +53,7 @@ export function UserMenu({
   align?: ContentProps['align']
   side?: ContentProps['side']
 }) {
-  const { profile, user, role, signOut } = useAuth()
+  const { profile, user, role, can, signOut } = useAuth()
   const navigate = useNavigate()
   const theme = useSyncExternalStore(subscribeTheme, getTheme, getServerTheme)
 
@@ -95,10 +95,12 @@ export function UserMenu({
           <User />
           Profil
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => navigate({ to: '/gestion' })}>
-          <Wallet />
-          Gestion budgétaire
-        </DropdownMenuItem>
+        {can('repjour', 'gestion') && (
+          <DropdownMenuItem onSelect={() => navigate({ to: '/gestion' })}>
+            <Wallet />
+            Gestion budgétaire
+          </DropdownMenuItem>
+        )}
         {role === 'admin' && (
           <DropdownMenuItem onSelect={() => navigate({ to: '/comptes' })}>
             <Users />
