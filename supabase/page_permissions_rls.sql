@@ -23,6 +23,13 @@
 -- =============================================================================
 
 -- ---- PARKING (page 'parking') -----------------------------------------------
+-- Écriture bornée par NIVEAU **et** par FENÊTRE TEMPORELLE :
+--   - gestion  : peut tout modifier, y compris le passé verrouillé ;
+--   - ecriture : uniquement les réservations D'ACTUALITÉ, c.-à-d. dont la date de
+--     fin de séjour (start_date + nights) n'est pas antérieure de plus de 7 jours
+--     à aujourd'hui. Cela couvre présent, futur, passé récent ET séjours en cours.
+-- Miroir EXACT de lib/parking/editability.ts (PARKING_GRACE_DAYS = 7). Le
+-- with check sur INSERT/UPDATE empêche aussi de POUSSER une résa dans le passé figé.
 drop policy if exists "parking insert (super/admin)" on public.parking_reservations;
 drop policy if exists "parking update (super/admin)" on public.parking_reservations;
 drop policy if exists "parking delete (super/admin)" on public.parking_reservations;
@@ -32,14 +39,38 @@ drop policy if exists "parking delete (page:parking)" on public.parking_reservat
 
 create policy "parking write (page:parking)"
   on public.parking_reservations for insert to authenticated
-  with check (public.page_level_rank(public.get_page_level('parking')) >= 2);
+  with check (
+    public.get_page_level('parking') = 'gestion'
+    or (
+      public.page_level_rank(public.get_page_level('parking')) >= 2
+      and (start_date + nights) >= (current_date - 7)
+    )
+  );
 create policy "parking update (page:parking)"
   on public.parking_reservations for update to authenticated
-  using (public.page_level_rank(public.get_page_level('parking')) >= 2)
-  with check (public.page_level_rank(public.get_page_level('parking')) >= 2);
+  using (
+    public.get_page_level('parking') = 'gestion'
+    or (
+      public.page_level_rank(public.get_page_level('parking')) >= 2
+      and (start_date + nights) >= (current_date - 7)
+    )
+  )
+  with check (
+    public.get_page_level('parking') = 'gestion'
+    or (
+      public.page_level_rank(public.get_page_level('parking')) >= 2
+      and (start_date + nights) >= (current_date - 7)
+    )
+  );
 create policy "parking delete (page:parking)"
   on public.parking_reservations for delete to authenticated
-  using (public.page_level_rank(public.get_page_level('parking')) >= 2);
+  using (
+    public.get_page_level('parking') = 'gestion'
+    or (
+      public.page_level_rank(public.get_page_level('parking')) >= 2
+      and (start_date + nights) >= (current_date - 7)
+    )
+  );
 
 -- ---- PDJ (page 'pdj') -------------------------------------------------------
 drop policy if exists "pdj insert (super/admin)" on public.pdj_breakfasts;
