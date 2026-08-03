@@ -29,6 +29,7 @@ import {
 import { PosterPreview } from '#/components/affiche/Poster.tsx'
 import { IconPicker, ColorPicker } from '#/components/affiche/pickers.tsx'
 import { TemplateDialog } from '#/components/affiche/TemplateDialog.tsx'
+import { useConfirm } from '#/components/shared/ConfirmDialog.tsx'
 import {
   calculateAutoSizes,
   calculateIconSize,
@@ -102,6 +103,9 @@ export function AffichageBoard() {
   const canWrite = can('affichage', 'ecriture')
   const canManage = can('affichage', 'gestion')
   const queryClient = useQueryClient()
+  // Confirmation de suppression : modale maison (comme le reste de l'app), au lieu
+  // du window.confirm natif.
+  const { confirm, confirmDialog } = useConfirm()
 
   // Modèles chargés depuis Supabase (cache TanStack Query) — remplace la
   // collection en dur. `isPending` distingue le chargement (aucune donnée encore)
@@ -185,7 +189,13 @@ export function AffichageBoard() {
 
   async function handleDeleteTemplate() {
     if (!selected || !canModifySelected) return
-    if (!window.confirm(`Supprimer le modèle « ${selected.name} » ?`)) return
+    const ok = await confirm({
+      title: `Supprimer le modèle « ${selected.name} » ?`,
+      description: 'Cette action est définitive.',
+      confirmLabel: 'Supprimer',
+      destructive: true,
+    })
+    if (!ok) return
     try {
       await deleteTemplate(selected.id)
       if (selectedTemplate === selected.id) setAffiche({ selectedTemplate: '' })
@@ -580,6 +590,7 @@ export function AffichageBoard() {
           onSubmit={handleSubmitTemplate}
         />
       )}
+      {confirmDialog}
     </div>
   )
 }
