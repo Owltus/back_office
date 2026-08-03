@@ -23,13 +23,16 @@
 -- =============================================================================
 
 -- ---- PARKING (page 'parking') -----------------------------------------------
--- Écriture bornée par NIVEAU **et** par FENÊTRE TEMPORELLE :
---   - gestion  : peut tout modifier, y compris le passé verrouillé ;
---   - ecriture : uniquement les réservations D'ACTUALITÉ, c.-à-d. dont la date de
---     fin de séjour (start_date + nights) n'est pas antérieure de plus de 7 jours
---     à aujourd'hui. Cela couvre présent, futur, passé récent ET séjours en cours.
--- Miroir EXACT de lib/parking/editability.ts (PARKING_GRACE_DAYS = 7). Le
--- with check sur INSERT/UPDATE empêche aussi de POUSSER une résa dans le passé figé.
+-- Écriture bornée par NIVEAU **et** par FENÊTRE TEMPORELLE (miroir EXACT de
+-- lib/parking/editability.ts, PARKING_GRACE_DAYS = 7) :
+--   - gestion  : peut tout modifier/créer, y compris le passé verrouillé ;
+--   - ecriture : n'agit que sur l'actualité, sans réécrire le passé figé :
+--       INSERT  arrivée (start_date) >= J-7 (pas de back-dating) ;
+--       UPDATE  fin (start_date + nights) >= J-7 avant ET après, ET le début ne
+--               recule pas dans le passé verrouillé (trigger, cf. plus bas) ;
+--       DELETE  seulement une résa d'actualité (fin >= J-7).
+-- Le recul du début exige de comparer OLD/NEW → hors de portée d'une policy
+-- (WITH CHECK ne voit que NEW), d'où le trigger parking_no_past_rewrite.
 drop policy if exists "parking insert (super/admin)" on public.parking_reservations;
 drop policy if exists "parking update (super/admin)" on public.parking_reservations;
 drop policy if exists "parking delete (super/admin)" on public.parking_reservations;
@@ -43,7 +46,7 @@ create policy "parking write (page:parking)"
     public.get_page_level('parking') = 'gestion'
     or (
       public.page_level_rank(public.get_page_level('parking')) >= 2
-      and (start_date + nights) >= (current_date - 7)
+      and start_date >= (current_date - 7)
     )
   );
 create policy "parking update (page:parking)"
@@ -71,6 +74,34 @@ create policy "parking delete (page:parking)"
       and (start_date + nights) >= (current_date - 7)
     )
   );
+
+-- Trigger anti-recul du début (OLD vs NEW) : un éditeur écriture ne peut pas
+-- faire reculer start_date plus loin dans le passé verrouillé. gestion et
+-- contextes non-utilisateur (service_role / SQL editor) non bridés.
+create or replace function public.parking_no_past_rewrite()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.uid() is null then
+    return new;
+  end if;
+  if public.get_page_level('parking') = 'gestion' then
+    return new;
+  end if;
+  if new.start_date < old.start_date and new.start_date < (current_date - 7) then
+    raise exception 'parking: recul du debut dans le passe verrouille (reserve a la gestion)';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists parking_no_past_rewrite on public.parking_reservations;
+create trigger parking_no_past_rewrite
+  before update on public.parking_reservations
+  for each row execute function public.parking_no_past_rewrite();
 
 -- ---- PDJ (page 'pdj') -------------------------------------------------------
 drop policy if exists "pdj insert (super/admin)" on public.pdj_breakfasts;
