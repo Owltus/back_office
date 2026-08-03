@@ -21,6 +21,12 @@ import type {
 
 export const RAPRO_TABLE = 'rapro_rooms'
 export const RAPRO_SHEETS_TABLE = 'rapro_sheets'
+/** Vue d'occupation In-House SANS données nominatives, gardée sur la page rapro
+ * (supabase/rapro_occupancy_view.sql). Le rapprochement lit l'occupation par
+ * chambre ICI plutôt que directement dans `pdj_breakfasts` (fermé à la page pdj
+ * et porteur du nom client) : un compte rapro sans droit pdj voit quand même
+ * l'occupation, sans jamais recevoir de PII. */
+export const RAPRO_OCCUPANCY_VIEW = 'rapro_occupancy'
 
 /** Statuts valides. Une valeur inconnue en base est ramenée à un statut sûr
  * plutôt que de casser le rendu (défense ; ne devrait pas arriver). */
@@ -52,6 +58,23 @@ export async function fetchDay(reportDate: string): Promise<RaproDay> {
     if (r.carried_manual) carriedManual.add(r.room)
   }
   return { reportDate, statuses, carriedManual }
+}
+
+/** Occupation In-House par chambre pour un jour (vue rapro_occupancy, sans PII).
+ * `adr` sert à repérer les chambres offertes (tarif 0) dans le contrôle comptable. */
+export interface RaproOccupancyRow {
+  room: number
+  adr: number | null
+}
+export async function fetchOccupancy(
+  serviceDate: string,
+): Promise<RaproOccupancyRow[]> {
+  const { data, error } = await supabase
+    .from(RAPRO_OCCUPANCY_VIEW)
+    .select('room, adr')
+    .eq('service_date', serviceDate)
+  if (error) throw error
+  return (data ?? []) as RaproOccupancyRow[]
 }
 
 /** Jour le plus ancien enregistré (borne basse de navigation), ou null. */

@@ -27,10 +27,7 @@ import { RaproHelpPanel } from '#/components/rapro/RaproHelpPanel.tsx'
 import { CloseSheetDialog } from '#/components/shared/CloseSheetDialog.tsx'
 import type { CloseIssue } from '#/components/shared/CloseSheetDialog.tsx'
 import { Textarea } from '#/components/ui/textarea.tsx'
-import {
-  fetchDay as fetchPdjDay,
-  fetchServiceDates,
-} from '#/lib/pdj/service.ts'
+import { fetchServiceDates } from '#/lib/pdj/service.ts'
 import { parseDateStr } from '#/lib/poster/dateFormatter.ts'
 import { carryOver, carryoverWindow } from '#/lib/rapro/carryover.ts'
 import type { DaySnapshot } from '#/lib/rapro/carryover.ts'
@@ -51,6 +48,7 @@ import { FLOORS } from '#/lib/rapro/rooms.ts'
 import { missingSources } from '#/lib/rapro/sources.ts'
 import {
   fetchDay,
+  fetchOccupancy,
   fetchOfficialOcc,
   fetchOldestDay,
   fetchSheet,
@@ -185,10 +183,13 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
     queryFn: () => fetchOfficialOcc(addDays(selectedDate, -1)),
   })
 
-  // Occupation PAR CHAMBRE (PDJ) : source unique des chambres vendues + du grisé.
+  // Occupation PAR CHAMBRE (In-House) : source unique des chambres vendues + du
+  // grisé. Lue via la vue `rapro_occupancy` (sans nom client, gardée sur la page
+  // rapro) et non directement dans pdj_breakfasts : un compte rapro sans droit pdj
+  // voit quand même l'occupation, sans recevoir de donnée nominative.
   const { data: pdjRows } = useQuery({
-    queryKey: ['pdj', 'day', selectedDate],
-    queryFn: () => fetchPdjDay(selectedDate),
+    queryKey: ['rapro', 'occupancy', selectedDate],
+    queryFn: () => fetchOccupancy(selectedDate),
   })
   const occupied = new Set((pdjRows ?? []).map((r) => r.room))
   const hasOccupancy = occupied.size > 0
