@@ -9,8 +9,9 @@
 --
 -- daily_reports + forecast_days : écriture (I/U/D) → au moins 'ecriture' sur la
 --   page 'repjour' (remplace get_user_role() in ('super_utilisateur','admin')).
--- budget : NON touché — reste réservé au grade admin (page /gestion), cf.
---   policy « Admin manages budget » (get_user_role() = 'admin', toujours valide).
+-- budget : désormais rattaché à repjour:gestion (page /gestion) — voir
+--   supabase/gestion_budget_rls.sql (remplace l'ancienne policy FOR ALL par grade
+--   « Admin manages budget »). L'admin conserve tout (gestion partout).
 -- =============================================================================
 
 -- ---- daily_reports (page 'repjour') -----------------------------------------

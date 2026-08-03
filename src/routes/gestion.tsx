@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 
-import { ProtectedRoute } from '#/components/repjour/ProtectedRoute.tsx'
+import { PageGuard } from '#/components/auth/PageGuard.tsx'
 import { GestionBoard } from '#/components/repjour/boards/GestionBoard.tsx'
 
 export const Route = createFileRoute('/gestion')({
@@ -10,14 +10,15 @@ export const Route = createFileRoute('/gestion')({
 
 /**
  * Gestion budgétaire — fonction applicative accessible via le menu utilisateur
- * global (là où l'on se déconnecte). Onglets Données et Budget. Accessible à
- * tous les rôles connectés, mais en LECTURE SEULE pour les non-admin (l'édition
- * et les suppressions sont réservées à l'admin, géré dans le board + RLS).
+ * global (là où l'on se déconnecte). Onglets Données et Budget. Le budget étant
+ * de la donnée repjour, la page est rattachée à la page `repjour` : visible par
+ * tout lecteur repjour, éditable uniquement au niveau `gestion` (géré dans le
+ * board + RLS). Remplace l'ancien modèle par grade (`grade !== 'admin'`).
  */
 function GestionPage() {
   return (
-    <ProtectedRoute allowedRoles={['utilisateur', 'super_utilisateur', 'admin']}>
+    <PageGuard page="repjour">
       <GestionBoard />
-    </ProtectedRoute>
+    </PageGuard>
   )
 }

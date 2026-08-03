@@ -14,10 +14,11 @@ import { BudgetContent } from '#/components/repjour/boards/BudgetContent.tsx'
  * `postes` est absente de la base (confirmé par sonde live, HTTP 404) — aucun
  * service ni onglet n'est porté (décision D7).
  *
- * Gating (source : `readOnly = role !== 'admin'`) : la page est VISIBLE par
- * tous les rôles autorisés mais seule la session `admin` peut éditer/supprimer.
- * `readOnly` est transmis aux deux contenus, qui masquent alors les actions
- * d'écriture. La sécurité réelle reste la RLS Supabase.
+ * Gating : la page est VISIBLE par tout lecteur repjour, mais seul le niveau
+ * `gestion` sur repjour peut éditer/supprimer (`readOnly = !can('repjour',
+ * 'gestion')`). Remplace l'ancien binaire de grade `role !== 'admin'`. `readOnly`
+ * est transmis aux deux contenus, qui masquent les actions d'écriture. La sécurité
+ * réelle reste la RLS Supabase (budget borné à repjour:gestion).
  *
  * Le toggle d'onglets de la source (boutons segmentés) est conservé et restylé
  * en dark (tokens shadcn), aucun composant Tabs shadcn n'étant présent dans le
@@ -27,8 +28,8 @@ import { BudgetContent } from '#/components/repjour/boards/BudgetContent.tsx'
 type Tab = 'donnees' | 'budget'
 
 export function GestionBoard() {
-  const { grade } = useAuth()
-  const readOnly = grade !== 'admin'
+  const { can } = useAuth()
+  const readOnly = !can('repjour', 'gestion')
   const [tab, setTab] = useState<Tab>('budget')
 
   return (
