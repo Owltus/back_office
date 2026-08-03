@@ -21,12 +21,13 @@ import type {
 
 export const RAPRO_TABLE = 'rapro_rooms'
 export const RAPRO_SHEETS_TABLE = 'rapro_sheets'
-/** Vue d'occupation In-House SANS données nominatives, gardée sur la page rapro
- * (supabase/rapro_occupancy_view.sql). Le rapprochement lit l'occupation par
- * chambre ICI plutôt que directement dans `pdj_breakfasts` (fermé à la page pdj
- * et porteur du nom client) : un compte rapro sans droit pdj voit quand même
- * l'occupation, sans jamais recevoir de PII. */
-export const RAPRO_OCCUPANCY_VIEW = 'rapro_occupancy'
+/** Fonction SECURITY DEFINER d'occupation In-House SANS données nominatives,
+ * gardée sur la page rapro (supabase/rapro_occupancy_fn.sql). Le rapprochement lit
+ * l'occupation par chambre ICI plutôt que directement dans `pdj_breakfasts` (fermé
+ * à la page pdj et porteur du nom client) : un compte rapro sans droit pdj voit
+ * quand même l'occupation, sans jamais recevoir de PII. Fonction (et non vue) pour
+ * éviter le lint Supabase « security_definer_view ». */
+export const RAPRO_OCCUPANCY_FN = 'rapro_occupancy'
 
 /** Statuts valides. Une valeur inconnue en base est ramenée à un statut sûr
  * plutôt que de casser le rendu (défense ; ne devrait pas arriver). */
@@ -69,10 +70,9 @@ export interface RaproOccupancyRow {
 export async function fetchOccupancy(
   serviceDate: string,
 ): Promise<RaproOccupancyRow[]> {
-  const { data, error } = await supabase
-    .from(RAPRO_OCCUPANCY_VIEW)
-    .select('room, adr')
-    .eq('service_date', serviceDate)
+  const { data, error } = await supabase.rpc(RAPRO_OCCUPANCY_FN, {
+    p_date: serviceDate,
+  })
   if (error) throw error
   return (data ?? []) as RaproOccupancyRow[]
 }
