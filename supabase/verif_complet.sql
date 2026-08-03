@@ -95,7 +95,14 @@ with checks(ordre, controle, ok) as (
     (18, 'securite : trigger protect_role_escalation actif',
       (select count(*) from pg_trigger
        where tgrelid='public.profiles'::regclass
-         and tgname='protect_role_escalation' and tgenabled='O') = 1)
+         and tgname='protect_role_escalation' and tgenabled='O') = 1),
+
+    -- PDJ
+    (19, 'pdj : insert+update fenetre 3j',
+      (select count(*) from pg_policies
+       where schemaname='public' and tablename='pdj_breakfasts'
+         and policyname like 'pdj %(page:pdj)'
+         and (coalesce(qual,'')||coalesce(with_check,'')) ilike '%current_date - 3%') = 2)
 )
 select controle,
        case when ok then 'OK' else 'KO' end as verdict

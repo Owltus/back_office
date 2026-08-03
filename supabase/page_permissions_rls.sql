@@ -103,7 +103,11 @@ create trigger parking_no_past_rewrite
   before update on public.parking_reservations
   for each row execute function public.parking_no_past_rewrite();
 
--- ---- PDJ (page 'pdj') -------------------------------------------------------
+-- ---- PDJ (page 'pdj') — fenêtre J-3 (comme rapro/caisse) --------------------
+-- Écriture bornée par NIVEAU **et** par FENÊTRE J-3 (miroir de
+-- lib/pdj/editability.ts, PDJ_GRACE_DAYS = 3) : un écriture ne coche/sert que les
+-- jours service_date >= aujourd'hui - 3 ; au-delà, bloqué. La gestion agit sur
+-- tout jour. Pivot = service_date.
 drop policy if exists "pdj insert (super/admin)" on public.pdj_breakfasts;
 drop policy if exists "pdj update (super/admin)" on public.pdj_breakfasts;
 drop policy if exists "pdj delete (super/admin)" on public.pdj_breakfasts;
@@ -113,14 +117,33 @@ drop policy if exists "pdj delete (page:pdj)" on public.pdj_breakfasts;
 
 create policy "pdj write (page:pdj)"
   on public.pdj_breakfasts for insert to authenticated
-  with check (public.page_level_rank(public.get_page_level('pdj')) >= 2);
+  with check (
+    public.get_page_level('pdj') = 'gestion'
+    or (
+      public.page_level_rank(public.get_page_level('pdj')) >= 2
+      and service_date >= (current_date - 3)
+    )
+  );
 create policy "pdj update (page:pdj)"
   on public.pdj_breakfasts for update to authenticated
-  using (public.page_level_rank(public.get_page_level('pdj')) >= 2)
-  with check (public.page_level_rank(public.get_page_level('pdj')) >= 2);
+  using (
+    public.get_page_level('pdj') = 'gestion'
+    or (
+      public.page_level_rank(public.get_page_level('pdj')) >= 2
+      and service_date >= (current_date - 3)
+    )
+  )
+  with check (
+    public.get_page_level('pdj') = 'gestion'
+    or (
+      public.page_level_rank(public.get_page_level('pdj')) >= 2
+      and service_date >= (current_date - 3)
+    )
+  );
+-- DELETE = gestion (suppression d'un jour entier, réservée à l'admin côté UI).
 create policy "pdj delete (page:pdj)"
   on public.pdj_breakfasts for delete to authenticated
-  using (public.page_level_rank(public.get_page_level('pdj')) >= 2);
+  using (public.get_page_level('pdj') = 'gestion');
 
 -- ---- RAPRO — feuilles jour (page 'rapro') -----------------------------------
 -- Écriture bornée par NIVEAU **et** par FENÊTRE J-2 (miroir de
