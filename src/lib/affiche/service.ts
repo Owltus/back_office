@@ -1,5 +1,8 @@
 import { supabase } from '#/lib/supabase.ts'
-import type { AfficheTemplate } from '#/lib/affiche/model.ts'
+import type {
+  AfficheTemplate,
+  AfficheTemplateInput,
+} from '#/lib/affiche/model.ts'
 import type { ColorKey } from '#/lib/poster/config.ts'
 
 /*
@@ -26,6 +29,8 @@ export interface DbAfficheTemplate {
   title_en: string
   message_en: string
   sort_order: number
+  /** Auteur d'origine, posé/figé par le trigger serveur (null pour les seeds). */
+  created_by: string | null
 }
 
 /** DB → modèle applicatif. */
@@ -39,14 +44,17 @@ export function toAfficheTemplate(row: DbAfficheTemplate): AfficheTemplate {
     messageFr: row.message_fr,
     titleEn: row.title_en,
     messageEn: row.message_en,
+    createdBy: row.created_by ?? null,
   }
 }
 
-/** Modèle applicatif → ligne DB (insert). L'id est fourni par le client. */
+/** Modèle applicatif → ligne DB (insert). L'id est fourni par le client ;
+ * `created_by` est OMIS volontairement (posé serveur par le trigger d'estampille,
+ * jamais falsifiable côté client). */
 export function toDbInsert(
-  template: AfficheTemplate,
+  template: AfficheTemplateInput & { id: string },
   sortOrder = 0,
-): DbAfficheTemplate {
+): Omit<DbAfficheTemplate, 'created_by'> {
   return {
     id: template.id,
     name: template.name,
@@ -85,7 +93,9 @@ export async function fetchTemplates(): Promise<AfficheTemplate[]> {
   return (data as DbAfficheTemplate[]).map(toAfficheTemplate)
 }
 
-export async function createTemplate(row: DbAfficheTemplate): Promise<void> {
+export async function createTemplate(
+  row: Omit<DbAfficheTemplate, 'created_by'>,
+): Promise<void> {
   const { error } = await supabase.from(AFFICHE_TEMPLATES_TABLE).insert(row)
   if (error) throw error
 }

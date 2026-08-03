@@ -17,7 +17,11 @@ export interface AfficheTemplate {
   messageFr: string
   titleEn: string
   messageEn: string
+  /** Auteur d'origine (id du compte). `null` = modèle historique/seed, sans
+   * auteur (modifiable en gestion uniquement). Posé et figé côté serveur. */
+  createdBy: string | null
 }
 
-/** Champs éditables d'un modèle (formulaire de création / édition, sans `id`). */
-export type AfficheTemplateInput = Omit<AfficheTemplate, 'id'>
+/** Champs éditables d'un modèle (formulaire de création / édition). Sans `id` ni
+ * `createdBy` : l'auteur est géré par le serveur, jamais saisi. */
+export type AfficheTemplateInput = Omit<AfficheTemplate, 'id' | 'createdBy'>

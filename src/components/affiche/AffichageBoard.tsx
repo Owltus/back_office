@@ -93,8 +93,14 @@ export function AffichageBoard() {
   } = state
 
   // Popovers icône / couleur (état d'UI local, non persisté).
-  const { can } = useAuth()
-  const canEdit = can('affichage', 'ecriture')
+  // Modèle d'accès PAR PROPRIÉTAIRE :
+  //  - lecture : édite « à chaud » les champs (toujours actifs) + génère des PDF,
+  //    mais ne voit pas la barre de gestion des modèles (rien n'est persisté) ;
+  //  - ecriture : crée des modèles ; ne modifie/supprime QUE les siens ;
+  //  - gestion : crée / modifie / supprime TOUS les modèles.
+  const { can, user } = useAuth()
+  const canWrite = can('affichage', 'ecriture')
+  const canManage = can('affichage', 'gestion')
   const queryClient = useQueryClient()
 
   // Modèles chargés depuis Supabase (cache TanStack Query) — remplace la
@@ -125,8 +131,17 @@ export function AffichageBoard() {
 
   // Modèle actuellement sélectionné (pour éditer / supprimer).
   const selected = templates.find((t) => t.id === selectedTemplate) ?? null
+  // Propriété : un écriture ne peut toucher qu'à SES modèles ; la gestion, à tous.
+  // Un seed (createdBy null) n'a pas d'auteur → gestion uniquement.
+  const isOwner =
+    selected != null &&
+    selected.createdBy != null &&
+    selected.createdBy === user?.id
+  // Droit de modifier le modèle SÉLECTIONNÉ (le `selected` non nul est vérifié
+  // séparément par les appelants) : gestion partout, écriture sur le sien.
+  const canModifySelected = canManage || (canWrite && isOwner)
 
-  // Dialog de création / édition, réservé aux rôles autorisés (canEdit).
+  // Dialog de création / édition, réservé aux niveaux écriture/gestion (canWrite).
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<AfficheTemplate | null>(null)
 
@@ -134,16 +149,29 @@ export function AffichageBoard() {
     queryClient.invalidateQueries({ queryKey: ['affiche', 'templates'] })
 
   async function handleSubmitTemplate(input: AfficheTemplateInput) {
-    if (!canEdit) return
     try {
       if (editing) {
+        // Édition : gestion partout, écriture seulement sur son propre modèle.
+        const own =
+          editing.createdBy != null && editing.createdBy === user?.id
+        if (!(canManage || (canWrite && own))) return
         await updateTemplate(editing.id, toDbPatch(input))
-        // Rafraîchit l'aperçu si le modèle édité est celui affiché.
+        // Rafraîchit l'aperçu si le modèle édité est celui affiché ; l'auteur
+        // d'origine est conservé (createdBy figé serveur).
         if (selectedTemplate === editing.id) {
-          applyAfficheTemplate({ id: editing.id, ...input })
+          applyAfficheTemplate({
+            id: editing.id,
+            ...input,
+            createdBy: editing.createdBy,
+          })
         }
       } else {
-        const created: AfficheTemplate = { id: crypto.randomUUID(), ...input }
+        if (!canWrite) return
+        const created: AfficheTemplate = {
+          id: crypto.randomUUID(),
+          ...input,
+          createdBy: user?.id ?? null,
+        }
         await createTemplate(toDbInsert(created, templates.length))
         applyAfficheTemplate(created)
       }
@@ -156,7 +184,7 @@ export function AffichageBoard() {
   }
 
   async function handleDeleteTemplate() {
-    if (!canEdit || !selected) return
+    if (!selected || !canModifySelected) return
     if (!window.confirm(`Supprimer le modèle « ${selected.name} » ?`)) return
     try {
       await deleteTemplate(selected.id)
@@ -168,13 +196,13 @@ export function AffichageBoard() {
   }
 
   function openCreate() {
-    if (!canEdit) return
+    if (!canWrite) return
     setEditing(null)
     setDialogOpen(true)
   }
 
   function openEdit() {
-    if (!canEdit || !selected) return
+    if (!selected || !canModifySelected) return
     setEditing(selected)
     setDialogOpen(true)
   }
@@ -374,11 +402,13 @@ export function AffichageBoard() {
                   ))}
                 </SelectContent>
               </Select>
-              {canEdit && (
+              {canWrite && (
                 // Groupe segmenté (cf. ButtonGroup) : nouveau / éditer /
                 // supprimer forment un seul bloc. `flex w-full` (au lieu de
                 // l'inline-flex par défaut) pour que « Nouveau » (flex-1)
                 // occupe la largeur restante, éditer/supprimer collés à droite.
+                // Éditer/supprimer sont bornés à la PROPRIÉTÉ (canModifySelected) :
+                // un écriture ne touche que ses modèles ; la gestion, tous.
                 <ButtonGroup className="flex w-full">
                   <Tip label="Nouveau modèle">
                     <Button
@@ -391,23 +421,35 @@ export function AffichageBoard() {
                       Nouveau
                     </Button>
                   </Tip>
-                  <Tip label="Modifier le modèle">
+                  <Tip
+                    label={
+                      selected && !canModifySelected
+                        ? 'Modèle d’un autre auteur (réservé à la gestion)'
+                        : 'Modifier le modèle'
+                    }
+                  >
                     <Button
                       variant="outline"
                       size="icon-sm"
                       onClick={openEdit}
-                      disabled={!selected}
+                      disabled={!selected || !canModifySelected}
                       aria-label="Modifier le modèle"
                     >
                       <Pencil />
                     </Button>
                   </Tip>
-                  <Tip label="Supprimer le modèle">
+                  <Tip
+                    label={
+                      selected && !canModifySelected
+                        ? 'Modèle d’un autre auteur (réservé à la gestion)'
+                        : 'Supprimer le modèle'
+                    }
+                  >
                     <Button
                       variant="outline"
                       size="icon-sm"
                       onClick={handleDeleteTemplate}
-                      disabled={!selected}
+                      disabled={!selected || !canModifySelected}
                       aria-label="Supprimer le modèle"
                     >
                       <Trash2 />
@@ -527,7 +569,7 @@ export function AffichageBoard() {
         </aside>
       </div>
 
-      {canEdit && (
+      {canWrite && (
         <TemplateDialog
           open={dialogOpen}
           onOpenChange={(o) => {
