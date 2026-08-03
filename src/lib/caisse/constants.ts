@@ -38,12 +38,11 @@ export const emptyCounts = (): Counts =>
 /** Fond de caisse d'origine attendu (€). */
 export const FUND_TARGET = 150
 
-/**
- * Fenêtre de grâce éditable après validation (heures) — D1.
- * DOIT rester égale à l'`interval` de la policy RLS UPDATE
- * (supabase/caisse_sheets.sql). Changer l'un impose de changer l'autre.
- */
-export const GRACE_HOURS = 24
+/* L'ancienne fenêtre de grâce « 24 h après validation » (GRACE_HOURS) a été
+ * remplacée par une fenêtre PAR JOUR (J-1 : aujourd'hui et la veille) :
+ * l'éditabilité dépend désormais de la date de la feuille, pas d'un délai post
+ * validation. Voir CAISSE_GRACE_DAYS (lib/permissions/actions.ts) et
+ * lib/caisse/editability.ts, miroir de la policy RLS caisse. */
 
 /** Tolérance d'égalité pour considérer un écart « à zéro » (arrondis centime). */
 export const EPSILON = 0.005

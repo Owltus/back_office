@@ -30,3 +30,14 @@ export const PARKING_GRACE_DAYS = 7
  * `report_date >= current_date - 2` côté RLS.
  */
 export const RAPRO_GRACE_DAYS = 2
+
+/**
+ * Caisse : même principe que le rapprochement, mais fenêtre plus COURTE. Nombre de
+ * jours dans le passé où un compte `ecriture` peut encore agir (saisir, clôturer,
+ * rouvrir puis re-clôturer) sur une feuille, d'après sa date (report_date). Fenêtre
+ * J-0..J-CAISSE_GRACE_DAYS = aujourd'hui et J-1 SEULEMENT. Au-delà (dès J-2) :
+ * aucune modification en `ecriture`, même feuille non clôturée ; seule la `gestion`
+ * reste libre. Remplace l'ancien verrou « 24 h après validation ». Miroir de la
+ * borne `report_date >= current_date - 1` côté RLS.
+ */
+export const CAISSE_GRACE_DAYS = 1

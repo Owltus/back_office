@@ -1,6 +1,6 @@
 import { supabase } from '#/lib/supabase.ts'
 import { hasCountedFund } from '#/lib/caisse/calc.ts'
-import { DENOMINATIONS, GRACE_HOURS } from '#/lib/caisse/constants.ts'
+import { DENOMINATIONS } from '#/lib/caisse/constants.ts'
 import { slotKey } from '#/lib/caisse/shift.ts'
 import type {
   CaisseSheet,
@@ -9,8 +9,6 @@ import type {
   DbCaisseSheet,
   Shift,
 } from '#/lib/caisse/types.ts'
-import { levelRank } from '#/lib/permissions/index.ts'
-import type { PageLevel } from '#/lib/permissions/index.ts'
 
 /*
  * Service d'accès Supabase pour les feuilles de caisse (table `caisse_sheets`).
@@ -222,25 +220,13 @@ export async function validateSheet(id: string): Promise<void> {
   if (error) throw error
 }
 
-/** Déverrouillage admin : remet la feuille en brouillon. Hors fenêtre de grâce,
- * la RLS ne laisse passer cet UPDATE que pour un admin. */
+/** Déverrouillage : remet la feuille en brouillon. En écriture, la RLS ne laisse
+ * passer cet UPDATE que dans la fenêtre J-2 ; hors fenêtre, seule la gestion peut
+ * (voir lib/caisse/editability.ts et la policy caisse). */
 export async function reopenSheet(id: string): Promise<void> {
   const { error } = await supabase
     .from(CAISSE_TABLE)
     .update({ status: 'draft', validated_at: null, validated_by: null })
     .eq('id', id)
   if (error) throw error
-}
-
-/**
- * Garde d'édition ERGONOMIQUE — reflète la policy RLS UPDATE (l'autorité réelle).
- * Autorise si : niveau caisse >= Écriture ET (Gestion, OU feuille non validée, OU
- * dans la fenêtre de grâce). Sert à griser l'UI sans aller-retour serveur.
- */
-export function canEditSheet(sheet: CaisseSheet | null, level: PageLevel | null): boolean {
-  if (levelRank(level) < 2) return false
-  if (!sheet || sheet.status !== 'validated' || !sheet.validatedAt) return true
-  if (level === 'gestion') return true
-  const graceEnd = new Date(sheet.validatedAt).getTime() + GRACE_HOURS * 3_600_000
-  return Date.now() < graceEnd
 }

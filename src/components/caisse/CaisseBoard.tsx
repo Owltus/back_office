@@ -52,7 +52,6 @@ import {
   paymentColumns,
 } from '#/lib/caisse/constants.ts'
 import {
-  canEditSheet,
   fetchOldestSlot,
   fetchPreviousSheet,
   fetchRecentValidatedSlots,
@@ -61,6 +60,7 @@ import {
   upsertSheet,
   validateSheet,
 } from '#/lib/caisse/service.ts'
+import { canActOnCaisseDay } from '#/lib/caisse/editability.ts'
 import {
   currentSlot,
   resolveDisplaySlot,
@@ -263,7 +263,13 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
   // n'empêche pas la saisie (on repart alors d'un comptage vide).
   const ready = sheet !== undefined && !(needsCarry && prevLoading)
   const caisseLevel = pageLevel('caisse')
-  const editable = ready && canEditSheet(sheet ?? null, caisseLevel)
+  // Jour métier courant (borne haute de la fenêtre). Verrou PAR JOUR, comme le
+  // rapprochement mais plus court : écriture n'agit que dans la fenêtre J-1
+  // (aujourd'hui et J-1) ; la gestion agit sur n'importe quel jour (cf.
+  // lib/caisse/editability.ts).
+  const todayDate = currentSlot(now).date
+  const dayEditable = canActOnCaisseDay(selectedDate, todayDate, caisseLevel)
+  const editable = ready && dayEditable
   const isWriter = can('caisse', 'ecriture')
   // Champs éditables UNIQUEMENT sur un brouillon : une caisse clôturée est
   // verrouillée (valeurs figées) pour tous, admin compris — il faut la réouvrir
@@ -310,7 +316,8 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
       if (snapshot === lastSavedRef.current) return
       const qk = ['caisse', 'sheet', input.reportDate, input.shift] as const
       const prev = queryClient.getQueryData<CaisseSheet | null>(qk)
-      if (!canEditSheet(prev ?? null, caisseLevel)) return // éditabilité du couple sauvegardé
+      // Éditabilité du couple sauvegardé : jour dans la fenêtre (niveau + J-2).
+      if (!canActOnCaisseDay(input.reportDate, todayDate, caisseLevel)) return
       // Les mutations d'indicateur / de baseline sont scopées au couple ENCORE
       // actif : la résolution asynchrone d'un flush d'un couple quitté ne doit
       // ni repeindre l'indicateur ni salir la baseline du couple courant.
@@ -341,7 +348,7 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
         }
       }
     },
-    [queryClient, caisseLevel],
+    [queryClient, caisseLevel, todayDate],
   )
 
   // Hydratation : uniquement au (premier) chargement d'un couple (date, shift).
@@ -573,8 +580,8 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
 
   /* Bouton d'état de la feuille, rendu en bas de page (sous les commentaires),
      là où se termine la saisie : Réouvrir si la feuille est clôturée et
-     `editable` (admin à tout moment, OU super_utilisateur dans la fenêtre de
-     grâce), Verrouillé sinon (super hors grâce), Clôturer sur un brouillon.
+     `editable` (gestion à tout moment, OU écriture dans la fenêtre J-2),
+     Verrouillé sinon (écriture hors fenêtre), Clôturer sur un brouillon éditable.
 
      Le poids visuel suit l'intention : clôturer est la SUITE du travail (bouton
      plein), réouvrir en est le RETOUR EN ARRIÈRE (contour vert, comme la
@@ -619,7 +626,7 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
     // porteur. C'est ici que l'infobulle compte le plus — elle est la seule à
     // dire POURQUOI la réouverture est refusée.
     return (
-      <Tip label="Réouverture réservée à un administrateur">
+      <Tip label="Réouverture réservée à la gestion (caisse trop ancienne)">
         <span tabIndex={0} className="block w-full">
           <Button
             variant="outline"
