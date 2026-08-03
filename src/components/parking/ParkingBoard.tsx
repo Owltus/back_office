@@ -85,6 +85,7 @@ import {
   updateReservation,
 } from '#/lib/parking/service.ts'
 import type { DbReservation } from '#/lib/parking/service.ts'
+import { canEditReservation } from '#/lib/parking/editability.ts'
 import { printParkingSheets } from '#/lib/parking/pdf.ts'
 import { fmtPctInt } from '#/lib/parking/format.ts'
 import { matchRoom } from '#/lib/parking/pdjMatch.ts'
@@ -177,9 +178,14 @@ function pointerToCell(
 }
 
 export function ParkingBoard({ initialDate }: { initialDate?: string }) {
-  const { can } = useAuth()
+  const { can, pageLevel } = useAuth()
   // Seuls les niveaux Écriture / Gestion peuvent modifier ; Lecture = consultation.
   const canEdit = can('parking', 'ecriture')
+  // Niveau effectif sur le parking : sert au verrou TEMPOREL par réservation.
+  // Écriture agit sur l'actualité (présent, futur, passé récent, séjours en
+  // cours) ; seule la gestion peut modifier le passé verrouillé (cf.
+  // lib/parking/editability.ts).
+  const level = pageLevel('parking')
   const [startDate, setStartDate] = useState<Date | null>(null)
   const [offset, setOffset] = useState(0)
   // Défilement au clic-glissé (drag-to-scroll) : vrai le temps d'un panoramique,
@@ -514,6 +520,8 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
 
   function addReservation(startDay: number, spot: number) {
     if (!canEdit || !startDate) return
+    // Créer dans le passé verrouillé (> grâce) exige la gestion.
+    if (!canEditReservation({ startDay, nights: 1 }, todayOffset, level)) return
     if (hasOverlap(reservations, spot, startDay, 1)) return // emplacement déjà occupé
     const id = insertReservation(
       { client: '', spot, startDay, nights: 1, status: 'reserve', comment: '' },
@@ -545,6 +553,15 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
   // déjà écarté par l'appelant (clic sur l'overlay).
   function pasteReservation(startDay: number, spot: number) {
     if (!canEdit || !startDate || !clipboard) return
+    // Coller dans le passé verrouillé exige la gestion (borne sur le séjour visé).
+    if (
+      !canEditReservation(
+        { startDay, nights: clipboard.nights },
+        todayOffset,
+        level,
+      )
+    )
+      return
     insertReservation(
       {
         client: clipboard.client,
@@ -575,6 +592,8 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
     if (!canEdit) return
     if (commentId === null) return
     const id = commentId
+    const target = reservations.find((r) => r.id === id)
+    if (target && !canEditReservation(target, todayOffset, level)) return
     const comment = commentDraft.trim()
     const status = pendingStatus
     if (status && !comment) return // justification obligatoire
@@ -594,6 +613,7 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
     if (!canEdit) return
     const current = reservations.find((r) => r.id === id)
     if (!current || current.status === status) return
+    if (!canEditReservation(current, todayOffset, level)) return
     /* « Non payé » exige un motif écrit. On ouvre la modale AVANT toute
        écriture : appliquer le statut d'abord, quitte à le retirer si l'hôtelier
        annule, l'aurait diffusé en base — donc, par le temps réel, sur l'écran
@@ -614,6 +634,8 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
 
   function rename(id: string, value: string) {
     if (!canEdit) return
+    const target = reservations.find((r) => r.id === id)
+    if (target && !canEditReservation(target, todayOffset, level)) return
     const client = value.trim()
     setReservations((prev) =>
       prev.map((r) => (r.id === id ? { ...r, client } : r)),
@@ -623,6 +645,8 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
 
   function remove(id: string) {
     if (!canEdit) return
+    const target = reservations.find((r) => r.id === id)
+    if (target && !canEditReservation(target, todayOffset, level)) return
     setReservations((prev) => prev.filter((r) => r.id !== id))
     deleteReservation(id).catch(console.error)
   }
@@ -635,12 +659,16 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
     if (!canEdit) return
     if (!startDate) return
     // Ctrl/Cmd + clic = copie rapide (accroche au curseur), sans déplacement.
+    // Copier reste permis même sur une résa passée (elle sera recréée dans
+    // l'actualité) ; seuls déplacement et redimensionnement sont verrouillés.
     if (e.ctrlKey || e.metaKey) {
       e.preventDefault()
       e.stopPropagation()
       copyReservation(res)
       return
     }
+    // Déplacer/redimensionner le passé verrouillé exige la gestion.
+    if (!canEditReservation(res, todayOffset, level)) return
     e.preventDefault()
     e.stopPropagation()
     const startX = e.clientX
@@ -1102,6 +1130,7 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
                     key={r.id}
                     r={r}
                     canEdit={canEdit}
+                    locked={canEdit && !canEditReservation(r, todayOffset, level)}
                     offset={offset}
                     slotW={slotW}
                     editing={editingId === r.id}
@@ -1277,6 +1306,9 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
 interface ReservationBarProps {
   r: Reservation
   canEdit: boolean
+  /** Résa passée hors fenêtre de grâce : un éditeur `ecriture` ne peut plus la
+   * modifier (réservé à la `gestion`). Sans effet pour un lecteur (déjà bridé). */
+  locked: boolean
   offset: number
   slotW: number
   editing: boolean
@@ -1293,6 +1325,7 @@ interface ReservationBarProps {
 function ReservationBar({
   r,
   canEdit,
+  locked,
   offset,
   slotW,
   editing,
@@ -1306,6 +1339,10 @@ function ReservationBar({
   onRemove,
 }: ReservationBarProps) {
   const st = STATUS[r.status]
+  // Interactif = éditeur ET résa d'actualité. Une résa passée verrouillée se
+  // comporte comme en lecture seule (ni drag, ni poignées, ni menu d'édition),
+  // avec un tooltip explicatif à la place.
+  const interactive = canEdit && !locked
   const inputRef = useRef<HTMLInputElement>(null)
   // « Renommer » du menu contextuel : on diffère l'entrée en édition à la
   // fermeture du menu (onCloseAutoFocus), pour que l'input monte APRÈS la gestion
@@ -1340,18 +1377,19 @@ function ReservationBar({
       role="button"
       tabIndex={0}
       onPointerDown={
-        canEdit ? (e) => onStartInteraction(e, r, 'move') : undefined
+        interactive ? (e) => onStartInteraction(e, r, 'move') : undefined
       }
-      onDoubleClick={canEdit ? () => onStartEdit(r.id) : undefined}
+      onDoubleClick={interactive ? () => onStartEdit(r.id) : undefined}
       onClick={(e) => e.stopPropagation()}
       className={cn(
         'group absolute flex touch-none items-center gap-1.5 rounded-md border px-1.5 text-xs shadow-sm',
-        canEdit && 'cursor-grab active:cursor-grabbing',
+        interactive && 'cursor-grab active:cursor-grabbing',
+        locked && 'opacity-60',
         st.bar,
       )}
       style={barRect(r.startDay, r.spot, r.nights, offset, slotW)}
     >
-      {canEdit && (
+      {interactive && (
         <span
           onPointerDown={(e) => onStartInteraction(e, r, 'resize-left')}
           className="absolute left-0 top-0 h-full w-1.5 cursor-ew-resize rounded-l-md"
@@ -1387,7 +1425,7 @@ function ReservationBar({
         <MessageSquare className="mr-1 size-3 shrink-0 opacity-70" />
       )}
 
-      {canEdit && (
+      {interactive && (
         <span
           onPointerDown={(e) => onStartInteraction(e, r, 'resize-right')}
           className="absolute right-0 top-0 h-full w-1.5 cursor-ew-resize rounded-r-md"
@@ -1402,12 +1440,21 @@ function ReservationBar({
     </TooltipContent>
   )
 
-  // Lecture seule : tooltip conservé, mais aucun menu contextuel d'édition.
-  if (!canEdit) {
+  // Non interactif : lecture seule (aucun menu d'édition). Pour un éditeur bloqué
+  // par la fenêtre de grâce, on explique pourquoi via le tooltip ; sinon on garde
+  // le tooltip du commentaire.
+  if (!interactive) {
+    const info = locked ? (
+      <TooltipContent side="top" className="max-w-56 select-none">
+        Réservation passée — modification réservée à la gestion.
+      </TooltipContent>
+    ) : (
+      tip
+    )
     return (
       <Tooltip>
         <TooltipTrigger asChild>{bar}</TooltipTrigger>
-        {tip}
+        {info}
       </Tooltip>
     )
   }

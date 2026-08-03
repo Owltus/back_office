@@ -131,6 +131,11 @@ export function ParkingHelpPanel({ canEdit }: { canEdit: boolean }) {
             Une place déjà occupée à ce moment refuse le dépôt (la barre devient
             rouge) : deux réservations ne peuvent pas se chevaucher.
           </p>
+          <p>
+            Vous modifiez librement les réservations en cours, à venir et
+            terminées depuis moins de sept jours. Au-delà, une réservation passée
+            se verrouille : seule la gestion peut encore la modifier.
+          </p>
         </Section>
       )}
 
