@@ -233,7 +233,11 @@ create policy "pms delete (page:repjour)"
   on public.pms_daily_metrics for delete to authenticated
   using (public.page_level_rank(public.get_page_level('repjour')) >= 2);
 
--- ---- AFFICHAGE (page 'affichage') -------------------------------------------
+-- ---- AFFICHAGE (page 'affichage') — modèle PAR PROPRIÉTAIRE ------------------
+-- INSERT : ecriture (created_by posé serveur par le trigger affiche_stamp).
+-- UPDATE/DELETE : gestion (tout) OU ecriture sur SON propre modèle
+-- (created_by = auth.uid()). L'auteur d'origine est figé (trigger). Détail +
+-- migration created_by dans supabase/affiche_owner_model.sql (source de vérité).
 drop policy if exists "affiche insert (super/admin)" on public.affiche_templates;
 drop policy if exists "affiche update (super/admin)" on public.affiche_templates;
 drop policy if exists "affiche delete (super/admin)" on public.affiche_templates;
@@ -246,11 +250,29 @@ create policy "affiche write (page:affichage)"
   with check (public.page_level_rank(public.get_page_level('affichage')) >= 2);
 create policy "affiche update (page:affichage)"
   on public.affiche_templates for update to authenticated
-  using (public.page_level_rank(public.get_page_level('affichage')) >= 2)
-  with check (public.page_level_rank(public.get_page_level('affichage')) >= 2);
+  using (
+    public.get_page_level('affichage') = 'gestion'
+    or (
+      public.page_level_rank(public.get_page_level('affichage')) >= 2
+      and created_by = auth.uid()
+    )
+  )
+  with check (
+    public.get_page_level('affichage') = 'gestion'
+    or (
+      public.page_level_rank(public.get_page_level('affichage')) >= 2
+      and created_by = auth.uid()
+    )
+  );
 create policy "affiche delete (page:affichage)"
   on public.affiche_templates for delete to authenticated
-  using (public.page_level_rank(public.get_page_level('affichage')) >= 2);
+  using (
+    public.get_page_level('affichage') = 'gestion'
+    or (
+      public.page_level_rank(public.get_page_level('affichage')) >= 2
+      and created_by = auth.uid()
+    )
+  );
 
 -- ---- CAISSE (page 'caisse') — fenêtre J-1 (plus courte que rapro) -----------
 -- Écriture bornée par NIVEAU **et** par FENÊTRE J-1 (miroir de

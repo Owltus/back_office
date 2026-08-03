@@ -27,56 +27,95 @@ create table if not exists public.affiche_templates (
   message_en text not null default '',
   sort_order int not null default 0,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  created_by uuid                                   -- auteur d'origine (posé/figé serveur)
 );
+
+-- Migration en base existante : ajoute la colonne auteur si absente.
+alter table public.affiche_templates
+  add column if not exists created_by uuid;
 
 create index if not exists affiche_templates_sort_idx
   on public.affiche_templates (sort_order, name);
 
--- ---- Trigger updated_at (fonction DÉDIÉE, ne rien écraser d'existant) --------
-create or replace function public.affiche_set_updated_at()
-returns trigger language plpgsql as $$
+-- ---- Trigger d'estampille SERVEUR : created_by (posé/figé) + updated_at -------
+-- created_by = auth.uid() à l'INSERT, figé à l'auteur d'origine à l'UPDATE (même
+-- quand la gestion édite le modèle d'un autre). Remplace l'ancien trigger
+-- updated_at seul. Détails : supabase/affiche_owner_model.sql.
+create or replace function public.affiche_stamp()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
 begin
-  new.updated_at = now();
+  if tg_op = 'INSERT' then
+    new.created_by := auth.uid();
+    new.updated_at := now();
+  else
+    new.created_by := old.created_by;
+    new.updated_at := now();
+  end if;
   return new;
 end;
 $$;
 
 drop trigger if exists affiche_templates_set_updated_at on public.affiche_templates;
-create trigger affiche_templates_set_updated_at
-  before update on public.affiche_templates
-  for each row execute function public.affiche_set_updated_at();
+drop trigger if exists affiche_templates_stamp on public.affiche_templates;
+create trigger affiche_templates_stamp
+  before insert or update on public.affiche_templates
+  for each row execute function public.affiche_stamp();
 
--- ---- RLS ---------------------------------------------------------------------
+-- ---- RLS — modèle PAR PROPRIÉTAIRE ------------------------------------------
+-- LECTURE : tous les porteurs de la page (modèles exposés à tous). INSERT :
+-- ecriture. UPDATE/DELETE : gestion (tout) OU ecriture sur SON propre modèle.
+-- NE PAS réintroduire de policy par rôle (get_user_role) ici. Source de vérité :
+-- supabase/affiche_owner_model.sql (et bloc affichage de page_permissions_rls.sql).
 alter table public.affiche_templates enable row level security;
 
--- LECTURE : tous les authentifiés (les 3 rôles)
 drop policy if exists "affiche read (authenticated)" on public.affiche_templates;
-create policy "affiche read (authenticated)"
-  on public.affiche_templates for select
-  to authenticated using (true);
-
--- INSERT : super_utilisateur + admin
+drop policy if exists "affiche read (page:affichage)" on public.affiche_templates;
 drop policy if exists "affiche insert (super/admin)" on public.affiche_templates;
-create policy "affiche insert (super/admin)"
-  on public.affiche_templates for insert
-  to authenticated
-  with check (get_user_role() in ('super_utilisateur', 'admin'));
-
--- UPDATE : super_utilisateur + admin
 drop policy if exists "affiche update (super/admin)" on public.affiche_templates;
-create policy "affiche update (super/admin)"
-  on public.affiche_templates for update
-  to authenticated
-  using (get_user_role() in ('super_utilisateur', 'admin'))
-  with check (get_user_role() in ('super_utilisateur', 'admin'));
-
--- DELETE : super_utilisateur + admin
 drop policy if exists "affiche delete (super/admin)" on public.affiche_templates;
-create policy "affiche delete (super/admin)"
-  on public.affiche_templates for delete
-  to authenticated
-  using (get_user_role() in ('super_utilisateur', 'admin'));
+drop policy if exists "affiche write (page:affichage)" on public.affiche_templates;
+drop policy if exists "affiche update (page:affichage)" on public.affiche_templates;
+drop policy if exists "affiche delete (page:affichage)" on public.affiche_templates;
+
+create policy "affiche read (page:affichage)"
+  on public.affiche_templates for select to authenticated
+  using ((select public.page_level_rank(public.get_page_level('affichage'))) >= 1);
+
+create policy "affiche write (page:affichage)"
+  on public.affiche_templates for insert to authenticated
+  with check (public.page_level_rank(public.get_page_level('affichage')) >= 2);
+
+create policy "affiche update (page:affichage)"
+  on public.affiche_templates for update to authenticated
+  using (
+    public.get_page_level('affichage') = 'gestion'
+    or (
+      public.page_level_rank(public.get_page_level('affichage')) >= 2
+      and created_by = auth.uid()
+    )
+  )
+  with check (
+    public.get_page_level('affichage') = 'gestion'
+    or (
+      public.page_level_rank(public.get_page_level('affichage')) >= 2
+      and created_by = auth.uid()
+    )
+  );
+
+create policy "affiche delete (page:affichage)"
+  on public.affiche_templates for delete to authenticated
+  using (
+    public.get_page_level('affichage') = 'gestion'
+    or (
+      public.page_level_rank(public.get_page_level('affichage')) >= 2
+      and created_by = auth.uid()
+    )
+  );
 
 -- ---- Seed des 7 modèles historiques (idempotent : seulement si table vide) ---
 -- Transcrit à l'identique de src/lib/poster/templates.ts (collection).
