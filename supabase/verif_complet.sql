@@ -14,7 +14,7 @@ with checks(ordre, controle, ok) as (
       (select count(*) from pg_policies
        where schemaname='public' and tablename='parking_reservations'
          and policyname like 'parking %(page:parking)'
-         and (coalesce(qual,'')||coalesce(with_check,'')) like '%current_date - 7%') = 3),
+         and (coalesce(qual,'')||coalesce(with_check,'')) ilike '%current_date - 7%') = 3),
     (2, 'parking : trigger parking_no_past_rewrite',
       (select count(*) from pg_trigger
        where tgrelid='public.parking_reservations'::regclass
@@ -25,7 +25,7 @@ with checks(ordre, controle, ok) as (
       (select count(*) from pg_policies
        where schemaname='public' and tablename in ('rapro_sheets','rapro_rooms')
          and policyname like 'rapro%(page:rapro)'
-         and (coalesce(qual,'')||coalesce(with_check,'')) like '%current_date - 2%') = 6),
+         and (coalesce(qual,'')||coalesce(with_check,'')) ilike '%current_date - 2%') = 6),
     (4, 'rapro : fonction rapro_occupancy (SECURITY DEFINER)',
       (select count(*) from pg_proc
        where pronamespace='public'::regnamespace and proname='rapro_occupancy' and prosecdef) = 1),
@@ -38,7 +38,7 @@ with checks(ordre, controle, ok) as (
       (select count(*) from pg_policies
        where schemaname='public' and tablename='caisse_sheets'
          and policyname like 'caisse %(page:caisse%'
-         and (coalesce(qual,'')||coalesce(with_check,'')) like '%current_date - 1%') >= 2),
+         and (coalesce(qual,'')||coalesce(with_check,'')) ilike '%current_date - 1%') >= 2),
 
     -- FACTURATION
     (7, 'facturation : aucune garde < 2 restante (tout gestion)',
