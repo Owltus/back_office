@@ -46,6 +46,7 @@ import {
   setServed,
 } from '#/lib/pdj/service.ts'
 import type { PdjDayRow } from '#/lib/pdj/service.ts'
+import { canEditPdjDay } from '#/lib/pdj/editability.ts'
 
 /* --------------------------------------------------------------------------
  * Petit-déjeuner (PDJ) — portage de l'app "Breakfast Tracker", désormais
@@ -76,9 +77,13 @@ const fmtTitle = new Intl.DateTimeFormat('fr-FR', {
 })
 
 export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
-  const { can } = useAuth()
+  const { can, pageLevel } = useAuth()
   const canEdit = can('pdj', 'ecriture')
   const isAdmin = can('pdj', 'gestion')
+  // Niveau effectif : sert au verrou PAR JOUR de la saisie (cocher les cases).
+  // Écriture ne coche que dans la fenêtre J-3 ; la gestion coche n'importe quel
+  // jour (cf. lib/pdj/editability.ts).
+  const level = pageLevel('pdj')
   const queryClient = useQueryClient()
 
   // Jour hôtelier courant (Europe/Paris) figé au montage : jour affiché par
@@ -101,6 +106,9 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
   // `initialDate` (lien « jour » depuis le rapport mensuel) ouvre directement ce
   // jour-là ; absent, le comportement reste identique (aujourd'hui).
   const [selectedDate, setSelectedDate] = useState(initialDate ?? today)
+  // Le jour affiché est-il « cochable » ? Lecture : jamais. Écriture : fenêtre J-3.
+  // Gestion : toujours. Gouverne la grille de saisie (pas l'import, gardé à part).
+  const dayEditable = canEditPdjDay(selectedDate, today, level)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [dragging, setDragging] = useState(false)
@@ -329,7 +337,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
   // identité à chaque render annulerait le memo et re-rendrait les 80 lignes.
   const handleServe = useCallback(
     (room: number, n: number) => {
-      if (!canEdit || !selectedDate) return
+      if (!dayEditable || !selectedDate) return
       queryClient.setQueryData<PdjDayRow[]>(
         ['pdj', 'day', selectedDate],
         (old) =>
@@ -344,7 +352,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
         })
       })
     },
-    [canEdit, selectedDate, queryClient],
+    [dayEditable, selectedDate, queryClient],
   )
 
   function handlePrint() {
@@ -616,7 +624,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                         key={room}
                         room={room}
                         row={byRoom.get(room)}
-                        canEdit={canEdit}
+                        canEdit={dayEditable}
                         onServe={handleServe}
                       />
                     ))}

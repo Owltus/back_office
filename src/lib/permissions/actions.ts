@@ -41,3 +41,12 @@ export const RAPRO_GRACE_DAYS = 2
  * borne `report_date >= current_date - 1` côté RLS.
  */
 export const CAISSE_GRACE_DAYS = 1
+
+/**
+ * PDJ : même principe que rapro/caisse. Nombre de jours dans le passé où un compte
+ * `ecriture` peut encore cocher/servir les petits-déjeuners d'un jour, d'après sa
+ * date de service. Fenêtre J-0..J-PDJ_GRACE_DAYS = aujourd'hui et les 3 jours
+ * précédents. Au-delà : aucune saisie en `ecriture` ; seule la `gestion` reste
+ * libre. Miroir de la borne `service_date >= current_date - 3` côté RLS.
+ */
+export const PDJ_GRACE_DAYS = 3
