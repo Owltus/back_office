@@ -118,3 +118,23 @@ select 'budget: ecriture reservee repjour:gestion' as controle,
 from pg_policies
 where schemaname = 'public' and tablename = 'budget'
   and policyname like 'budget %(page:repjour gestion)';
+
+-- 10) LEGACY & GARDE-FOUS GLOBAUX
+select 'legacy: plus aucun super_utilisateur' as controle,
+  count(*) as n,
+  case when count(*) = 0 then 'OK' else 'KO' end as verdict
+from public.profiles where role = 'super_utilisateur';
+
+select 'global: au moins un compte admin existe' as controle,
+  count(*) as n,
+  case when count(*) >= 1 then 'OK' else 'KO' end as verdict
+from public.profiles where role = 'admin';
+
+-- Anti-escalade REACTIVE apres la bascule (le script de bascule le desactive
+-- temporairement ; il doit etre 'O' = enabled a la fin).
+select 'securite: trigger protect_role_escalation actif' as controle,
+  count(*) as n,
+  case when count(*) = 1 then 'OK' else 'KO' end as verdict
+from pg_trigger
+where tgrelid = 'public.profiles'::regclass
+  and tgname = 'protect_role_escalation' and tgenabled = 'O';
