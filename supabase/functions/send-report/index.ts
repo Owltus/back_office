@@ -145,6 +145,13 @@ Deno.serve(async (req) => {
   if (to.length === 0)
     return json({ error: 'Aucun destinataire actif (type « to »)' }, 400)
 
+  // Durcissement (F5) : plafond de destinataires par envoi. Borne le rayon
+  // d'action d'un token admin compromis (relais de masse) et les coûts Resend.
+  // Le rapport journalier a une poignée de destinataires ; 50 est très large.
+  const MAX_RECIPIENTS = 50
+  if (to.length + cc.length > MAX_RECIPIENTS)
+    return json({ error: 'Trop de destinataires pour un seul envoi' }, 413)
+
   // 5. Envoi via Resend (PDF en pièce jointe si fourni).
   const payload: Record<string, unknown> = {
     from,
@@ -166,8 +173,10 @@ Deno.serve(async (req) => {
   })
 
   if (!res.ok) {
-    const detail = await res.text()
-    return json({ error: 'Envoi Resend échoué', detail }, 502)
+    // Erreur générique au client (Mineur-1 : ne pas exposer la structure interne
+    // de l'API Resend) ; le détail reste côté serveur pour le diagnostic.
+    console.error('Resend a échoué', res.status, await res.text())
+    return json({ error: 'Envoi du message échoué' }, 502)
   }
   const out = await res.json().catch(() => ({}))
   return json(

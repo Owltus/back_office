@@ -119,8 +119,25 @@ Deno.serve(async (req) => {
         { error: 'Ce compte possède un profil : gérez-le via la gestion des comptes.' },
         409,
       )
+    // Durcissement (F6) : ne supprimer que si l'identité vient d'être créée
+    // (fenêtre de quelques minutes). Sans cette borne, un rollbackUserId
+    // arbitraire permettrait de supprimer n'importe quel `auth.users` orphelin
+    // (ex. compte sans profil hérité), contournant les gardes de delete-user.
+    const { data: target } = await admin.auth.admin.getUserById(uid)
+    const createdAt = target?.user?.created_at
+      ? Date.parse(target.user.created_at)
+      : NaN
+    const ROLLBACK_WINDOW_MS = 10 * 60 * 1000
+    if (!Number.isFinite(createdAt) || Date.now() - createdAt > ROLLBACK_WINDOW_MS)
+      return json(
+        { error: 'Annulation refusée : ce compte n’a pas été créé à l’instant.' },
+        409,
+      )
     const { error: delErr } = await admin.auth.admin.deleteUser(uid)
-    if (delErr) return json({ error: delErr.message || 'Annulation échouée' }, 400)
+    if (delErr) {
+      console.error('deleteUser (rollback) a échoué', delErr)
+      return json({ error: 'Annulation échouée' }, 400)
+    }
     return json({ rolledBack: uid }, 200)
   }
 
@@ -147,11 +164,13 @@ Deno.serve(async (req) => {
     const already =
       createErr?.code === 'email_exists' ||
       (createErr?.message ?? '').toLowerCase().includes('already')
+    // Détail côté serveur uniquement (Mineur-1) ; message générique au client.
+    if (createErr && !already) console.error('createUser a échoué', createErr)
     return json(
       {
         error: already
           ? 'Un compte existe déjà avec cet email'
-          : createErr?.message || 'Création du compte échouée',
+          : 'Création du compte échouée',
       },
       already ? 409 : 400,
     )
