@@ -392,19 +392,32 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
     )
   }, [startDate, offset, visibleDays])
 
-  // Taux d'occupation de chaque jour affiché : toutes les places occupées
-  // (personnel 13 & 14 « en over » COMPRIS) / 14, en %. Une place n'ayant jamais
-  // deux réservations le même jour (hasOverlap l'interdit), compter les
-  // réservations couvrant le jour revient à compter les places distinctes. Le
-  // décalage absolu du jour i affiché est `offset + i` (même repère que startDay).
-  const dayOccupancy = useMemo(() => {
+  // Occupation + alerte "zone critique" de chaque jour affiché.
+  // - occupancy : toutes les places occupées (personnel 13 & 14 « en over »
+  //   COMPRIS) / 14, en %.
+  // - critical : les 12 places client sont TOUTES prises ET on déborde sur le
+  //   personnel (13/14) → l'entête du jour passe en rouge (surbooking).
+  // Une place n'ayant jamais deux réservations le même jour (hasOverlap
+  // l'interdit), compter les réservations couvrant le jour revient à compter les
+  // places distinctes. Le décalage absolu du jour i est `offset + i`.
+  const dayInfo = useMemo(() => {
+    const clientSpots = FIRST_STAFF_SPOT - 1 // 12 places client
     return days.map((_, i) => {
       const o = offset + i
       let occ = 0
+      let clientOcc = 0
+      let staffOcc = 0
       for (const r of reservations) {
-        if (r.startDay <= o && o < r.startDay + r.nights) occ++
+        if (r.startDay <= o && o < r.startDay + r.nights) {
+          occ++
+          if (r.spot < FIRST_STAFF_SPOT) clientOcc++
+          else staffOcc++
+        }
       }
-      return (occ / SPOTS) * 100
+      return {
+        occupancy: (occ / SPOTS) * 100,
+        critical: clientOcc >= clientSpots && staffOcc > 0,
+      }
     })
   }, [days, offset, reservations])
 
@@ -1114,29 +1127,59 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
               )
             })}
 
-            {/* En-tête des jours */}
+            {/* En-tête des jours. En zone critique (12 places client pleines +
+                débordement sur le personnel 13/14), tout l'entête passe en rouge. */}
             <div className="flex" style={{ height: HEADER_H }}>
-              {days.map((d, i) => (
-                <div
-                  key={i}
-                  className={cn(
-                    'flex flex-col items-center justify-center border-l border-border first:border-l-0',
-                    i === todayIndex && 'bg-primary/5',
-                  )}
-                  style={{ width: dayW }}
-                >
-                  <span className="text-xs font-medium capitalize">
-                    {fmtWeekday.format(d)}
-                  </span>
-                  <span className="text-[11px] text-muted-foreground">
-                    {fmtDay.format(d)}
-                  </span>
-                  {/* Taux d'occupation du jour (14 places, personnel compris), arrondi. */}
-                  <span className="text-[10px] font-medium tabular-nums text-sky-400">
-                    {fmtPctInt(dayOccupancy[i])}
-                  </span>
-                </div>
-              ))}
+              {days.map((d, i) => {
+                const info = dayInfo[i]
+                const critical = info.critical
+                return (
+                  <div
+                    key={i}
+                    className={cn(
+                      'flex flex-col items-center justify-center border-l border-border first:border-l-0',
+                      critical
+                        ? 'bg-rose-500/10'
+                        : i === todayIndex && 'bg-primary/5',
+                    )}
+                    style={{ width: dayW }}
+                    title={
+                      critical
+                        ? 'Zone critique : places client pleines, débordement sur les places personnel (13 et 14).'
+                        : undefined
+                    }
+                  >
+                    <span
+                      className={cn(
+                        'text-xs font-medium capitalize',
+                        critical && 'text-rose-600 dark:text-rose-300',
+                      )}
+                    >
+                      {fmtWeekday.format(d)}
+                    </span>
+                    <span
+                      className={cn(
+                        'text-[11px] text-muted-foreground',
+                        critical && 'text-rose-500/80 dark:text-rose-300/80',
+                      )}
+                    >
+                      {fmtDay.format(d)}
+                    </span>
+                    {/* Taux d'occupation du jour (14 places, personnel compris),
+                        arrondi ; rouge en zone critique. */}
+                    <span
+                      className={cn(
+                        'text-[10px] font-medium tabular-nums',
+                        critical
+                          ? 'text-rose-500 dark:text-rose-400'
+                          : 'text-sky-400',
+                      )}
+                    >
+                      {fmtPctInt(info.occupancy)}
+                    </span>
+                  </div>
+                )
+              })}
             </div>
 
             {/* Grille + réservations */}
