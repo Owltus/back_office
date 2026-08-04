@@ -129,6 +129,22 @@ Le temps de chargement perçu vient surtout de l'auth cliente + du mode SPA. Rè
   `profiles` (policy self-update figeant `role` + trigger `protect_role_escalation`) ;
   contrainte de format sur `email_recipients`. Objets désormais **versionnés** :
   `supabase/{profiles,security_core,page_permissions_rls_lectures,verif_securite}.sql`.
+- **Pentest red team + remédiation le 2026-08-04** (rapport `doc/pentest-2026-08-04.md`,
+  plan `plan/securite-remediation-2026-08-04/`, contrôle `supabase/verif_securite_2026-08-04.sql`
+  OK) : correction du seul XSS stocké (branche arête du tooltip `GalaxyChart`,
+  nom d'émetteur PDF non échappé) ; anti-escalade `profiles` étendue à l'**INSERT**
+  (policy INSERT bornée + trigger `before insert or update`) ; `daily_reports`
+  refermé en lecture sur `page:repjour` seul, `/rapro` lit l'occupation via la RPC
+  `daily_reports_occ` (SECURITY DEFINER, `rj_nuitees` uniquement) ; `set_user_grade`
+  refuse de rétrograder le dernier admin ; `get_user_role` **versionnée** dans
+  `security_core.sql` ; policies dupliquées **retirées des fichiers de table**
+  (autorité unique = `page_permissions_rls*`/`*_rls_fenetre_*` ; anti « revert
+  silencieux ») ; `search_path` figé dans les défs de triggers d'estampillage ;
+  `drop table … cascade` de `rapro_rooms.sql` neutralisé ; Edge Functions durcies
+  (plafond destinataires `send-report`, rollback `create-user` borné à 10 min,
+  erreurs génériques) ; client `detectSessionInUrl:false` + garde des params de
+  route `$year/$month`. Risque **accepté** : tokens de session en `localStorage`
+  (structurel au client Supabase JS ; son vecteur XSS a été supprimé).
 - **Clés API migrées le 2026-07-27** : le projet est passé du legacy (anon/service_role
   JWT) au **nouveau système** — client sur `sb_publishable` (`VITE_SUPABASE_ANON_KEY`
   local + Vercel), Edge Functions sur `sb_secret` (secret `SB_SECRET_KEY`, lu avec repli
