@@ -58,10 +58,10 @@ create index if not exists facturation_wordpool_code_idx
 -- ---- RLS : lecture authentifiée, aucune écriture directe --------------------
 alter table public.facturation_wordpool enable row level security;
 
-drop policy if exists "wordpool read (authenticated)" on public.facturation_wordpool;
-create policy "wordpool read (authenticated)" on public.facturation_wordpool
-  for select to authenticated using (true);
--- Pas de policy INSERT/UPDATE/DELETE : seule la RPC SECURITY DEFINER écrit.
+-- RLS : les policies de cette table vivent dans page_permissions_rls*.sql et
+-- les fichiers *_rls_fenetre_*.sql (autorité UNIQUE). Ne PAS recréer de policy
+-- ici : un rejeu rouvrirait les lectures et court-circuiterait permissions + fenetres.
+-- Écriture : seule la RPC SECURITY DEFINER écrit (aucune policy INSERT/UPDATE/DELETE).
 
 -- ---- RPC : apprentissage atomique par delta ---------------------------------
 -- p_codes  : les codes finaux validés d'une facture (vérité terrain).
@@ -153,10 +153,10 @@ create table if not exists public.facturation_issuers (
 
 alter table public.facturation_issuers enable row level security;
 
-drop policy if exists "issuers read (authenticated)" on public.facturation_issuers;
-create policy "issuers read (authenticated)" on public.facturation_issuers
-  for select to authenticated using (true);
--- Pas de policy INSERT/UPDATE/DELETE : seule la RPC SECURITY DEFINER écrit.
+-- RLS : les policies de cette table vivent dans page_permissions_rls*.sql et
+-- les fichiers *_rls_fenetre_*.sql (autorité UNIQUE). Ne PAS recréer de policy
+-- ici : un rejeu rouvrirait les lectures et court-circuiterait permissions + fenetres.
+-- Écriture : seule la RPC SECURITY DEFINER écrit (aucune policy INSERT/UPDATE/DELETE).
 
 -- p_name    : nom normalisé (clé) ; p_display : forme lisible à afficher.
 create or replace function public.facturation_issuer_learn(
@@ -220,9 +220,9 @@ create index if not exists facturation_issuer_codes_issuer_idx
 
 alter table public.facturation_issuer_codes enable row level security;
 
-drop policy if exists "issuer_codes read (authenticated)" on public.facturation_issuer_codes;
-create policy "issuer_codes read (authenticated)" on public.facturation_issuer_codes
-  for select to authenticated using (true);
+-- RLS : les policies de cette table vivent dans page_permissions_rls*.sql et
+-- les fichiers *_rls_fenetre_*.sql (autorité UNIQUE). Ne PAS recréer de policy
+-- ici : un rejeu rouvrirait les lectures et court-circuiterait permissions + fenetres.
 
 -- ---- RPC : apprentissage (+1 par code validé pour l'émetteur) ---------------
 create or replace function public.facturation_issuer_codes_learn(
@@ -321,9 +321,9 @@ create index if not exists facturation_issuer_denylist_issuer_idx
 
 alter table public.facturation_issuer_denylist enable row level security;
 
-drop policy if exists "issuer_denylist read (authenticated)" on public.facturation_issuer_denylist;
-create policy "issuer_denylist read (authenticated)" on public.facturation_issuer_denylist
-  for select to authenticated using (true);
+-- RLS : les policies de cette table vivent dans page_permissions_rls*.sql et
+-- les fichiers *_rls_fenetre_*.sql (autorité UNIQUE). Ne PAS recréer de policy
+-- ici : un rejeu rouvrirait les lectures et court-circuiterait permissions + fenetres.
 
 -- ---- RPC : poser une interdiction (idempotent) ------------------------------
 create or replace function public.facturation_issuer_denylist_add(
@@ -407,10 +407,10 @@ create index if not exists facturation_learned_docs_issuer_idx
 
 alter table public.facturation_learned_docs enable row level security;
 
-drop policy if exists "learned_docs read (authenticated)" on public.facturation_learned_docs;
-create policy "learned_docs read (authenticated)" on public.facturation_learned_docs
-  for select to authenticated using (true);
--- Pas de policy INSERT/UPDATE/DELETE : seule la RPC SECURITY DEFINER écrit.
+-- RLS : les policies de cette table vivent dans page_permissions_rls*.sql et
+-- les fichiers *_rls_fenetre_*.sql (autorité UNIQUE). Ne PAS recréer de policy
+-- ici : un rejeu rouvrirait les lectures et court-circuiterait permissions + fenetres.
+-- Écriture : seule la RPC SECURITY DEFINER écrit (aucune policy INSERT/UPDATE/DELETE).
 
 -- ---- RPC : enregistrer un document appris (idempotent) ----------------------
 create or replace function public.facturation_learned_docs_record(

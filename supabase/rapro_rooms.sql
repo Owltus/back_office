@@ -41,7 +41,7 @@ create table if not exists public.rapro_rooms (
 -- SÉCURITÉ : created_by est posé ICI (auth.uid()), jamais accepté du client, et
 -- figé après création — pas d'attribution d'une écriture à l'UUID d'un tiers.
 create or replace function public.rapro_rooms_stamp()
-returns trigger language plpgsql as $$
+returns trigger language plpgsql set search_path = public as $$
 begin
   new.updated_at := now();
   if tg_op = 'INSERT' then
@@ -63,26 +63,6 @@ create trigger rapro_rooms_stamp
 -- get_user_role() est supposée DÉJÀ déployée (partagée avec caisse/pdj).
 alter table public.rapro_rooms enable row level security;
 
-drop policy if exists "rapro read (authenticated)" on public.rapro_rooms;
-create policy "rapro read (authenticated)"
-  on public.rapro_rooms for select
-  to authenticated using (true);
-
-drop policy if exists "rapro insert (super/admin)" on public.rapro_rooms;
-create policy "rapro insert (super/admin)"
-  on public.rapro_rooms for insert
-  to authenticated
-  with check (get_user_role() in ('super_utilisateur', 'admin'));
-
-drop policy if exists "rapro update (super/admin)" on public.rapro_rooms;
-create policy "rapro update (super/admin)"
-  on public.rapro_rooms for update
-  to authenticated
-  using (get_user_role() in ('super_utilisateur', 'admin'))
-  with check (get_user_role() in ('super_utilisateur', 'admin'));
-
-drop policy if exists "rapro delete (super/admin)" on public.rapro_rooms;
-create policy "rapro delete (super/admin)"
-  on public.rapro_rooms for delete
-  to authenticated
-  using (get_user_role() in ('super_utilisateur', 'admin'));
+-- RLS : les policies de cette table vivent dans page_permissions_rls*.sql et
+-- les fichiers *_rls_fenetre_*.sql (autorité UNIQUE). Ne PAS recréer de policy
+-- ici : un rejeu rouvrirait les lectures et court-circuiterait permissions + fenetres.

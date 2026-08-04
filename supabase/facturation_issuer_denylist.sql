@@ -23,9 +23,9 @@ create index if not exists facturation_issuer_denylist_issuer_idx
 
 alter table public.facturation_issuer_denylist enable row level security;
 
-drop policy if exists "issuer_denylist read (authenticated)" on public.facturation_issuer_denylist;
-create policy "issuer_denylist read (authenticated)" on public.facturation_issuer_denylist
-  for select to authenticated using (true);
+-- RLS : les policies de cette table vivent dans page_permissions_rls*.sql et
+-- les fichiers *_rls_fenetre_*.sql (autorité UNIQUE). Ne PAS recréer de policy
+-- ici : un rejeu rouvrirait les lectures et court-circuiterait permissions + fenetres.
 
 -- ---- RPC : poser une interdiction (idempotent) ------------------------------
 create or replace function public.facturation_issuer_denylist_add(

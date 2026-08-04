@@ -91,7 +91,7 @@ create index if not exists caisse_sheets_report_date_idx
 -- Le trigger écrase toute valeur envoyée par le client → la policy temporelle
 -- ci-dessous redevient fiable, et la signature reflète l'appelant réel.
 create or replace function public.caisse_stamp()
-returns trigger language plpgsql as $$
+returns trigger language plpgsql set search_path = public as $$
 begin
   new.updated_at := now();
   if tg_op = 'INSERT' then
@@ -132,51 +132,9 @@ create trigger caisse_sheets_stamp
 -- ---- RLS --------------------------------------------------------------------
 alter table public.caisse_sheets enable row level security;
 
--- SELECT : tous les authentifiés
-drop policy if exists "caisse read (authenticated)" on public.caisse_sheets;
-create policy "caisse read (authenticated)"
-  on public.caisse_sheets for select
-  to authenticated using (true);
-
--- INSERT : super/admin
-drop policy if exists "caisse insert (super/admin)" on public.caisse_sheets;
-create policy "caisse insert (super/admin)"
-  on public.caisse_sheets for insert
-  to authenticated
-  with check (get_user_role() in ('super_utilisateur', 'admin'));
-
--- UPDATE : super/admin ET (admin OU pas encore validé OU dans la fenêtre de grâce)
--- La clause `using` s'évalue sur la ligne EXISTANTE : au moment où un
--- super_utilisateur valide, validated_at est encore NULL → l'UPDATE passe. Les
--- corrections ultérieures passent tant que now() < validated_at + 24h. Ensuite,
--- seul l'admin peut modifier (correction ou remise en brouillon = déverrouillage).
-drop policy if exists "caisse update (role + verrou)" on public.caisse_sheets;
-create policy "caisse update (role + verrou)"
-  on public.caisse_sheets for update
-  to authenticated
-  using (
-    get_user_role() in ('super_utilisateur', 'admin')
-    and (
-      get_user_role() = 'admin'
-      or validated_at is null
-      or now() < validated_at + interval '24 hours'
-    )
-  )
-  with check (
-    get_user_role() in ('super_utilisateur', 'admin')
-    and (
-      get_user_role() = 'admin'
-      or validated_at is null
-      or now() < validated_at + interval '24 hours'
-    )
-  );
-
--- DELETE : admin seulement (une feuille validée est une pièce comptable) — D7
-drop policy if exists "caisse delete (admin)" on public.caisse_sheets;
-create policy "caisse delete (admin)"
-  on public.caisse_sheets for delete
-  to authenticated
-  using (get_user_role() = 'admin');
+-- RLS : les policies de cette table vivent dans page_permissions_rls*.sql et
+-- les fichiers *_rls_fenetre_*.sql (autorité UNIQUE). Ne PAS recréer de policy
+-- ici : un rejeu rouvrirait les lectures et court-circuiterait permissions + fenetres.
 
 -- ---- Migration : retrait des modes American Express (AX) et Chèques (CHEQ) ---
 -- Ces deux modes de paiement ne sont pas utilisés en réalité. On supprime les

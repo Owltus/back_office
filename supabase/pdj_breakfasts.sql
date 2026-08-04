@@ -57,7 +57,7 @@ create index if not exists pdj_breakfasts_service_date_idx
 
 -- ---- Trigger updated_at (fonction DÉDIÉE, ne rien écraser d'existant) --------
 create or replace function public.pdj_set_updated_at()
-returns trigger language plpgsql as $$
+returns trigger language plpgsql set search_path = public as $$
 begin
   new.updated_at = now();
   return new;
@@ -72,29 +72,9 @@ create trigger pdj_breakfasts_set_updated_at
 -- ---- RLS --------------------------------------------------------------------
 alter table public.pdj_breakfasts enable row level security;
 
-drop policy if exists "pdj read (authenticated)" on public.pdj_breakfasts;
-create policy "pdj read (authenticated)"
-  on public.pdj_breakfasts for select
-  to authenticated using (true);
-
-drop policy if exists "pdj insert (super/admin)" on public.pdj_breakfasts;
-create policy "pdj insert (super/admin)"
-  on public.pdj_breakfasts for insert
-  to authenticated
-  with check (get_user_role() in ('super_utilisateur', 'admin'));
-
-drop policy if exists "pdj update (super/admin)" on public.pdj_breakfasts;
-create policy "pdj update (super/admin)"
-  on public.pdj_breakfasts for update
-  to authenticated
-  using (get_user_role() in ('super_utilisateur', 'admin'))
-  with check (get_user_role() in ('super_utilisateur', 'admin'));
-
-drop policy if exists "pdj delete (super/admin)" on public.pdj_breakfasts;
-create policy "pdj delete (super/admin)"
-  on public.pdj_breakfasts for delete
-  to authenticated
-  using (get_user_role() in ('super_utilisateur', 'admin'));
+-- RLS : les policies de cette table vivent dans page_permissions_rls*.sql et
+-- les fichiers *_rls_fenetre_*.sql (autorité UNIQUE). Ne PAS recréer de policy
+-- ici : un rejeu rouvrirait les lectures et court-circuiterait permissions + fenetres.
 
 -- ---- Purge RGPD manuelle (référence) ----------------------------------------
 -- Anonymise les noms à partir de J-2 (aujourd'hui et J-1 conservés) en gardant

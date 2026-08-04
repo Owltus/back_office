@@ -82,9 +82,16 @@ $function$;
 
 -- === get_user_role — invariants ==============================================
 --   security definer + set search_path = public. Sert de garde à de nombreuses
---   policies/RPC : à versionner à l'identique (coller la définition confirmée).
---
--- >>> COLLER ICI la définition confirmée de get_user_role(). <<<
+--   policies/RPC. Corps versionné à l'identique de la prod (dump du 2026-08-04
+--   via pg_get_functiondef) — finding F3 du pentest.
+create or replace function public.get_user_role()
+returns text
+language sql
+security definer
+set search_path = public
+as $function$
+  select role from public.profiles where id = auth.uid();
+$function$;
 
 -- === VÉRIFICATION (compte jetable, JWT non-admin) ============================
 --   rpc/admin_update_password  →  doit renvoyer 403 / 'forbidden'.

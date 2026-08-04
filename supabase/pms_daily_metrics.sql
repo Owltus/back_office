@@ -46,7 +46,7 @@ create index if not exists pms_daily_metrics_date_section
 -- SÉCURITÉ : imported_by est posé ICI (auth.uid()), jamais accepté du client, et
 -- figé après création — l'import ne peut pas être attribué à l'UUID d'un tiers.
 create or replace function public.pms_daily_metrics_stamp()
-returns trigger language plpgsql as $$
+returns trigger language plpgsql set search_path = public as $$
 begin
   new.updated_at := now();
   -- imported_by = l'appelant réel, à CHAQUE écriture : non falsifiable, et
@@ -65,28 +65,6 @@ create trigger pms_daily_metrics_stamp
 -- RLS : lecture pour tout authentifié, écriture réservée aux rôles qui importent.
 alter table public.pms_daily_metrics enable row level security;
 
-drop policy if exists "pms_daily_metrics read (authenticated)" on public.pms_daily_metrics;
-create policy "pms_daily_metrics read (authenticated)"
-  on public.pms_daily_metrics for select
-  to authenticated using (true);
-
-drop policy if exists "pms_daily_metrics insert (super/admin)" on public.pms_daily_metrics;
-create policy "pms_daily_metrics insert (super/admin)"
-  on public.pms_daily_metrics for insert
-  to authenticated
-  with check (get_user_role() in ('super_utilisateur', 'admin'));
-
-drop policy if exists "pms_daily_metrics update (super/admin)" on public.pms_daily_metrics;
-create policy "pms_daily_metrics update (super/admin)"
-  on public.pms_daily_metrics for update
-  to authenticated
-  using (get_user_role() in ('super_utilisateur', 'admin'))
-  with check (get_user_role() in ('super_utilisateur', 'admin'));
-
--- Delete : un réimport d'un fichier plus court doit pouvoir purger les lignes
--- surnuméraires de la même date (voir services/metrics.ts).
-drop policy if exists "pms_daily_metrics delete (super/admin)" on public.pms_daily_metrics;
-create policy "pms_daily_metrics delete (super/admin)"
-  on public.pms_daily_metrics for delete
-  to authenticated
-  using (get_user_role() in ('super_utilisateur', 'admin'));
+-- RLS : les policies de cette table vivent dans page_permissions_rls*.sql et
+-- les fichiers *_rls_fenetre_*.sql (autorité UNIQUE). Ne PAS recréer de policy
+-- ici : un rejeu rouvrirait les lectures et court-circuiterait permissions + fenetres.

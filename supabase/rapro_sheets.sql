@@ -24,7 +24,7 @@ create table if not exists public.rapro_sheets (
 -- acceptés du client — sinon un super/admin pouvait attribuer une clôture ou une
 -- création à l'UUID d'un tiers (falsification de signature / audit).
 create or replace function public.rapro_sheets_stamp()
-returns trigger language plpgsql as $$
+returns trigger language plpgsql set search_path = public as $$
 begin
   new.updated_at := now();
   if tg_op = 'INSERT' then
@@ -64,27 +64,6 @@ create trigger rapro_sheets_stamp
 -- RLS : lecture pour tout authentifié, écriture réservée super_utilisateur/admin.
 alter table public.rapro_sheets enable row level security;
 
-drop policy if exists "rapro_sheets read (authenticated)" on public.rapro_sheets;
-create policy "rapro_sheets read (authenticated)"
-  on public.rapro_sheets for select
-  to authenticated using (true);
-
-drop policy if exists "rapro_sheets insert (super/admin)" on public.rapro_sheets;
-create policy "rapro_sheets insert (super/admin)"
-  on public.rapro_sheets for insert
-  to authenticated
-  with check (get_user_role() in ('super_utilisateur', 'admin'));
-
--- PAS de verrou temporel : super/admin peuvent réouvrir à tout moment.
-drop policy if exists "rapro_sheets update (super/admin)" on public.rapro_sheets;
-create policy "rapro_sheets update (super/admin)"
-  on public.rapro_sheets for update
-  to authenticated
-  using (get_user_role() in ('super_utilisateur', 'admin'))
-  with check (get_user_role() in ('super_utilisateur', 'admin'));
-
-drop policy if exists "rapro_sheets delete (super/admin)" on public.rapro_sheets;
-create policy "rapro_sheets delete (super/admin)"
-  on public.rapro_sheets for delete
-  to authenticated
-  using (get_user_role() in ('super_utilisateur', 'admin'));
+-- RLS : les policies de cette table vivent dans page_permissions_rls*.sql et
+-- les fichiers *_rls_fenetre_*.sql (autorité UNIQUE). Ne PAS recréer de policy
+-- ici : un rejeu rouvrirait les lectures et court-circuiterait permissions + fenetres.

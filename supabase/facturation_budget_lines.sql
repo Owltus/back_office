@@ -26,9 +26,9 @@ create table if not exists public.facturation_budget_lines (
 
 -- 2) RLS : lecture authentifiée, aucune policy d'écriture (write = RPC only) --
 alter table public.facturation_budget_lines enable row level security;
-drop policy if exists "budget_lines read (authenticated)" on public.facturation_budget_lines;
-create policy "budget_lines read (authenticated)" on public.facturation_budget_lines
-  for select to authenticated using (true);
+-- RLS : les policies de cette table vivent dans page_permissions_rls*.sql et
+-- les fichiers *_rls_fenetre_*.sql (autorité UNIQUE). Ne PAS recréer de policy
+-- ici : un rejeu rouvrirait les lectures et court-circuiterait permissions + fenetres.
 
 -- 3) Trigger updated_at ------------------------------------------------------
 create or replace function public.facturation_budget_lines_touch()

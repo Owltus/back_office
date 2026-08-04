@@ -26,10 +26,10 @@ create table if not exists public.facturation_issuers (
 
 alter table public.facturation_issuers enable row level security;
 
-drop policy if exists "issuers read (authenticated)" on public.facturation_issuers;
-create policy "issuers read (authenticated)" on public.facturation_issuers
-  for select to authenticated using (true);
--- Pas de policy INSERT/UPDATE/DELETE : seule la RPC SECURITY DEFINER écrit.
+-- RLS : les policies de cette table vivent dans page_permissions_rls*.sql et
+-- les fichiers *_rls_fenetre_*.sql (autorité UNIQUE). Ne PAS recréer de policy
+-- ici : un rejeu rouvrirait les lectures et court-circuiterait permissions + fenetres.
+-- Écriture : seule la RPC SECURITY DEFINER écrit (aucune policy INSERT/UPDATE/DELETE).
 
 -- p_name    : nom normalisé (clé) ; p_display : forme lisible à afficher.
 create or replace function public.facturation_issuer_learn(

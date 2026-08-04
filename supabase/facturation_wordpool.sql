@@ -35,10 +35,10 @@ create index if not exists facturation_wordpool_code_idx
 -- ---- RLS : lecture authentifiée, aucune écriture directe --------------------
 alter table public.facturation_wordpool enable row level security;
 
-drop policy if exists "wordpool read (authenticated)" on public.facturation_wordpool;
-create policy "wordpool read (authenticated)" on public.facturation_wordpool
-  for select to authenticated using (true);
--- Pas de policy INSERT/UPDATE/DELETE : seule la RPC SECURITY DEFINER écrit.
+-- RLS : les policies de cette table vivent dans page_permissions_rls*.sql et
+-- les fichiers *_rls_fenetre_*.sql (autorité UNIQUE). Ne PAS recréer de policy
+-- ici : un rejeu rouvrirait les lectures et court-circuiterait permissions + fenetres.
+-- Écriture : seule la RPC SECURITY DEFINER écrit (aucune policy INSERT/UPDATE/DELETE).
 
 -- ---- RPC : apprentissage atomique par delta ---------------------------------
 -- p_codes  : les codes finaux validés d'une facture (vérité terrain).

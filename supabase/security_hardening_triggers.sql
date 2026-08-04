@@ -21,7 +21,7 @@
 
 -- ---- caisse_sheets : verrou 24 h infalsifiable + signature fiable ------------
 create or replace function public.caisse_stamp()
-returns trigger language plpgsql as $$
+returns trigger language plpgsql set search_path = public as $$
 begin
   new.updated_at := now();
   if tg_op = 'INSERT' then
@@ -60,7 +60,7 @@ create trigger caisse_sheets_stamp
 
 -- ---- rapro_sheets : signature de clôture fiable -----------------------------
 create or replace function public.rapro_sheets_stamp()
-returns trigger language plpgsql as $$
+returns trigger language plpgsql set search_path = public as $$
 begin
   new.updated_at := now();
   if tg_op = 'INSERT' then
@@ -99,7 +99,7 @@ create trigger rapro_sheets_stamp
 
 -- ---- rapro_rooms : created_by non falsifiable -------------------------------
 create or replace function public.rapro_rooms_stamp()
-returns trigger language plpgsql as $$
+returns trigger language plpgsql set search_path = public as $$
 begin
   new.updated_at := now();
   if tg_op = 'INSERT' then
@@ -119,7 +119,7 @@ create trigger rapro_rooms_stamp
 
 -- ---- pms_daily_metrics : imported_by non falsifiable ------------------------
 create or replace function public.pms_daily_metrics_stamp()
-returns trigger language plpgsql as $$
+returns trigger language plpgsql set search_path = public as $$
 begin
   new.updated_at := now();
   new.imported_by := auth.uid();   -- l'appelant réel, à chaque écriture

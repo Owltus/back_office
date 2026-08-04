@@ -28,7 +28,7 @@ create index if not exists parking_reservations_spot_date_idx
 -- updated_at automatique (fonction nommée spécifiquement pour ne RIEN écraser
 -- d'existant dans la base partagée).
 create or replace function public.parking_set_updated_at()
-returns trigger language plpgsql as $$
+returns trigger language plpgsql set search_path = public as $$
 begin
   new.updated_at = now();
   return new;
@@ -43,34 +43,9 @@ create trigger parking_reservations_set_updated_at
 -- RLS.
 alter table public.parking_reservations enable row level security;
 
--- LECTURE : tout utilisateur authentifié voit le planning (les 3 rôles).
-drop policy if exists "parking read (authenticated)" on public.parking_reservations;
-create policy "parking read (authenticated)"
-  on public.parking_reservations for select
-  to authenticated using (true);
-
--- ÉCRITURE : réservée à `super_utilisateur` et `admin`. Le rôle `utilisateur`
--- (visiteur) peut lire mais PAS modifier.
-drop policy if exists "parking write (authenticated)" on public.parking_reservations;
-
-drop policy if exists "parking insert (super/admin)" on public.parking_reservations;
-create policy "parking insert (super/admin)"
-  on public.parking_reservations for insert
-  to authenticated
-  with check (get_user_role() in ('super_utilisateur', 'admin'));
-
-drop policy if exists "parking update (super/admin)" on public.parking_reservations;
-create policy "parking update (super/admin)"
-  on public.parking_reservations for update
-  to authenticated
-  using (get_user_role() in ('super_utilisateur', 'admin'))
-  with check (get_user_role() in ('super_utilisateur', 'admin'));
-
-drop policy if exists "parking delete (super/admin)" on public.parking_reservations;
-create policy "parking delete (super/admin)"
-  on public.parking_reservations for delete
-  to authenticated
-  using (get_user_role() in ('super_utilisateur', 'admin'));
+-- RLS : les policies de cette table vivent dans page_permissions_rls*.sql et
+-- les fichiers *_rls_fenetre_*.sql (autorité UNIQUE). Ne PAS recréer de policy
+-- ici : un rejeu rouvrirait les lectures et court-circuiterait permissions + fenetres.
 
 -- Realtime : diffuser les INSERT/UPDATE/DELETE aux clients abonnés.
 -- (Bloc idempotent : ne casse pas si la table est déjà dans la publication.)
