@@ -250,12 +250,19 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   // pose ne dit que si son ménage en retard (rattrapage) est fait. Elle ne gonfle
   // donc jamais les vendues (c'était le bug : « toute couleur = vendue »).
   const effectiveSold = new Set(occupied)
-  for (const room of statuses.keys())
-    if (!carried.has(room)) effectiveSold.add(room)
+  for (const [room, s] of statuses) {
+    // « non_vendue » = correction INVERSE : le PMS a compté une vente inexistante
+    // → on RETIRE la chambre des vendues (grise, hors charge). Sinon une couleur
+    // sur une non-reportée vaut correction d'occupation (In-House a raté une vente).
+    if (s === 'non_vendue') effectiveSold.delete(room)
+    else if (!carried.has(room)) effectiveSold.add(room)
+  }
 
-  // Réconciliation sur le DÛ ÉLARGI (occupées du jour ∪ reportées).
+  // Réconciliation sur le DÛ ÉLARGI (occupées du jour ∪ reportées). Une chambre
+  // déclarée « non vendue » (correction inverse) sort du dû : plus aucun ménage.
   const dueSet = new Set(occupied)
   for (const r of carried) dueSet.add(r)
+  for (const [room, s] of statuses) if (s === 'non_vendue') dueSet.delete(room)
   const rec = reconcile(statuses, dueSet, occupied)
   // Décompte des cards (Nettoyées / Refus / Bloquées du jour) sur les VENDUES
   // EFFECTIVES uniquement (occupées ∪ corrections d'occupation) : une reportée non

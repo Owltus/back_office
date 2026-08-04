@@ -10,13 +10,19 @@ export const STATUS_LABEL: Record<RoomStatus, string> = {
   // Rattrapage : ménage en retard fait sur une reportée non vendue. À l'écran
   // c'est une nettoyée (verte) ; le liseré « bloquée la veille » fait la nuance.
   rattrapage: 'Nettoyée',
+  // Non vendue forcée : correction d'occupation inverse (PMS a compté une vente
+  // qui n'existe pas). Grise, hors charge.
+  non_vendue: 'Non vendue',
 }
 
 /**
  * Couleur suivante au clic gauche. `null` = AUCUNE couleur (grise si non vendue,
  * verte par défaut si vendue). TROIS cycles selon la situation de la chambre :
  *  - VENDUE (occupée aujourd'hui, toujours « active ») : vert → refus → bloquée →
- *    vert. Le vert par défaut est `null` (pas de couleur explicite à stocker).
+ *    non vendue (gris) → vert. Le vert par défaut est `null` (pas de couleur
+ *    explicite à stocker) ; « non vendue » corrige une vente comptée à tort par le
+ *    PMS (la chambre sort alors des vendues et du dû, symétrique de la correction
+ *    d'une non-vendue vers vendue ci-dessous).
  *  - NON VENDUE ET REPORTÉE (bloquée la veille, vidée depuis) : le clic ne sert
  *    qu'à solder le ménage en retard → gris → rattrapage (ménage fait, facturable
  *    mais PAS une vente) → bloquée (encore dû, roule) → gris. Pas de « refus » :
@@ -31,9 +37,11 @@ export function nextFill(
   carried = false,
 ): RoomStatus | null {
   if (sold) {
-    // 3 états : null (vert) → refus → non_nettoyee → null (vert).
+    // 4 états : null (vert) → refus → non_nettoyee (bloquée) → non_vendue (gris) →
+    // null (vert). La « non vendue » corrige une vente comptée à tort par le PMS.
     if (current === 'refus') return 'non_nettoyee'
-    if (current === 'non_nettoyee') return null
+    if (current === 'non_nettoyee') return 'non_vendue'
+    if (current === 'non_vendue') return null
     return 'refus' // null ou nettoyee (vert) → refus
   }
   if (carried) {
@@ -89,6 +97,10 @@ export function cellState(status: RoomStatus, isEmpty: boolean): CellState {
     // « Bloquée » : grisée si non vendue, rouge « à faire » sinon.
     case 'non_nettoyee':
       return isEmpty ? 'empty' : 'todo'
+    // « Non vendue » forcée : TOUJOURS grise, même si le PMS la disait occupée —
+    // c'est justement la correction (la vente n'a pas eu lieu).
+    case 'non_vendue':
+      return 'empty'
     default: {
       // Garde d'exhaustivité : un nouveau RoomStatus non traité casse la compilation.
       const _exhaustive: never = status

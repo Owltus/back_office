@@ -110,8 +110,11 @@ export function RaproHelpPanel() {
           <span>
             <span className="font-medium text-foreground">Clic gauche</span> : fait
             défiler le statut de la chambre. Les états proposés s'adaptent à la
-            situation. Une chambre vendue tourne entre nettoyée, refus et bloquée ;
-            une chambre non vendue peut être marquée à la main si besoin.
+            situation. Une chambre vendue tourne entre nettoyée, refus, bloquée et{' '}
+            <span className="font-medium text-foreground">non vendue</span> (si le
+            rooming l'a comptée vendue à tort, un dernier clic la grise et la sort
+            des vendues) ; une chambre non vendue peut à l'inverse être marquée
+            vendue à la main si besoin.
           </span>
         </div>
         <div className="flex items-start gap-2.5">

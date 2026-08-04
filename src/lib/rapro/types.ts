@@ -7,8 +7,18 @@
  *   (bloquée la veille, vidée depuis). Facturable ELIOR comme une nettoyée, mais
  *   PAS une vente du jour (elle a été vendue hier) → jamais comptée en « vendues ».
  *   Rendu vert comme une nettoyée ; c'est le liseré « bloquée la veille » qui la
- *   distingue à l'œil. Résout le roulement (elle cesse de rouler). */
-export type RoomStatus = 'nettoyee' | 'non_nettoyee' | 'refus' | 'rattrapage'
+ *   distingue à l'œil. Résout le roulement (elle cesse de rouler).
+ * - `non_vendue` : correction d'occupation INVERSE — une chambre marquée occupée
+ *   par le PMS (In-House) qui n'a en fait PAS été vendue. Forcée grise, RETIRÉE des
+ *   vendues et du dû, non facturable, ne roule pas. Symétrique de la correction
+ *   existante (marquer vendue une non-vendue) ; atteinte dans le cycle de clic des
+ *   chambres vendues. */
+export type RoomStatus =
+  | 'nettoyee'
+  | 'non_nettoyee'
+  | 'refus'
+  | 'rattrapage'
+  | 'non_vendue'
 
 /** Ligne DB (miroir de public.rapro_rooms) — une ligne par (jour, chambre). */
 export interface DbRaproRoom {
