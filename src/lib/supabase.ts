@@ -33,7 +33,12 @@ export const supabase = createClient(
     auth: {
       persistSession: true,
       autoRefreshToken: true,
-      detectSessionInUrl: true,
+      // false : le login se fait par signInWithPassword uniquement (aucun OAuth
+      // ni magic-link), donc aucun token n'arrive jamais par l'URL. Inspecter
+      // l'URL à chaque chargement serait une surface d'attaque gratuite (fixation
+      // de session via fragment fabriqué). Repasser à true seulement si un flux
+      // redirect (OAuth, lien magique, reset par lien) est ajouté un jour.
+      detectSessionInUrl: false,
     },
   },
 )

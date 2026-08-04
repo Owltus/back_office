@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 
 import { PageGuard } from '#/components/auth/PageGuard.tsx'
+import { parseYearMonthParams } from '#/lib/shared/routeParams.ts'
 import { CaisseAnalytiqueMoisBoard } from '#/components/caisse/CaisseAnalytiqueMoisBoard.tsx'
 
 export const Route = createFileRoute('/caisse/analytique/$year/$month')({
@@ -13,10 +14,10 @@ export const Route = createFileRoute('/caisse/analytique/$year/$month')({
  * LECTURE. La garde `ProtectedRoute` redirige vers /login sans session.
  */
 function CaisseAnalytiqueDetailPage() {
-  const { year, month } = Route.useParams()
+  const { year, month } = parseYearMonthParams(Route.useParams())
   return (
     <PageGuard page="caisse">
-      <CaisseAnalytiqueMoisBoard year={Number(year)} month={Number(month)} />
+      <CaisseAnalytiqueMoisBoard year={year} month={month} />
     </PageGuard>
   )
 }

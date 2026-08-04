@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 
 import { PageGuard } from '#/components/auth/PageGuard.tsx'
+import { parseYearMonthParams } from '#/lib/shared/routeParams.ts'
 import { PdjAnalytiqueMoisBoard } from '#/components/pdj/PdjAnalytiqueMoisBoard.tsx'
 
 export const Route = createFileRoute('/pdj/analytique/$year/$month')({
@@ -14,10 +15,10 @@ export const Route = createFileRoute('/pdj/analytique/$year/$month')({
  * PageContainer est fourni par le board (convention de l'onglet PDJ).
  */
 function PdjAnalytiqueMoisPage() {
-  const { year, month } = Route.useParams()
+  const { year, month } = parseYearMonthParams(Route.useParams())
   return (
     <PageGuard page="pdj">
-      <PdjAnalytiqueMoisBoard year={Number(year)} month={Number(month)} />
+      <PdjAnalytiqueMoisBoard year={year} month={month} />
     </PageGuard>
   )
 }

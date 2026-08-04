@@ -265,15 +265,16 @@ export async function reopenSheet(reportDate: string): Promise<void> {
  * rapro D correspond à `daily_reports.date = D − 1` (voir l'appelant).
  */
 export async function fetchOfficialOcc(date: string): Promise<number | null> {
-  const { data, error } = await supabase
-    .from('daily_reports')
-    .select('rj_nuitees')
-    .eq('date', date)
-    .limit(1)
-    .maybeSingle()
+  // Passe par la RPC `daily_reports_occ` (SECURITY DEFINER, gardée page:rapro,
+  // n'expose que rj_nuitees) plutôt que de lire `daily_reports` en direct : un
+  // compte rapro-only n'a plus accès à toute la table de reporting financier
+  // (M2 du pentest 2026-08-04). La policy SELECT de daily_reports est refermée
+  // sur page:repjour dans le script de remédiation.
+  const { data, error } = await supabase.rpc('daily_reports_occ', {
+    p_date: date,
+  })
   if (error) throw error
-  const n = data?.rj_nuitees
-  return typeof n === 'number' ? n : null
+  return typeof data === 'number' ? data : null
 }
 
 /*

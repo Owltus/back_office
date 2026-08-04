@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 
 import { PageGuard } from '#/components/auth/PageGuard.tsx'
+import { parseYearMonthParams } from '#/lib/shared/routeParams.ts'
 import { ParkingAnalytiqueMoisBoard } from '#/components/parking/ParkingAnalytiqueMoisBoard.tsx'
 
 export const Route = createFileRoute('/parking/analytique/$year/$month')({
@@ -14,10 +15,10 @@ export const Route = createFileRoute('/parking/analytique/$year/$month')({
  * board fournit lui-même son `PageContainer` (convention de l'onglet Parking).
  */
 function ParkingAnalytiqueDetailPage() {
-  const { year, month } = Route.useParams()
+  const { year, month } = parseYearMonthParams(Route.useParams())
   return (
     <PageGuard page="parking">
-      <ParkingAnalytiqueMoisBoard year={Number(year)} month={Number(month)} />
+      <ParkingAnalytiqueMoisBoard year={year} month={month} />
     </PageGuard>
   )
 }

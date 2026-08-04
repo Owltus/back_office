@@ -209,9 +209,16 @@ const starStyle = (type: 'issuer' | 'code', hex: string, size: number) =>
         opacity: 1,
       }
 
-/** Échappe le HTML injecté dans les tooltips (les descriptions peuvent contenir & < >). */
+/** Échappe le HTML injecté dans les tooltips (les libellés/descriptions viennent
+ * de PDF/OCR tiers : peuvent contenir & < > " '). Couvre les 5 caractères, aligné
+ * sur lib/repjour/reportHtml.ts. */
 const escapeHtml = (s: string): string =>
-  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
 
 /** Tronque proprement une description trop longue pour un tooltip. */
 const truncate = (s: string, n: number): string =>
@@ -479,9 +486,12 @@ export function GalaxyChart({
         extraCssText: 'border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.4)',
         formatter: (p: TooltipParam) => {
           if (p.dataType === 'edge') {
-            const s = labelById.get(p.data.source ?? '') ?? p.data.source
-            const t = labelById.get(p.data.target ?? '') ?? p.data.target
-            return `<span style="color:#94a3b8">Fournisseur → imputation</span><br>${s} → ${t}`
+            // Libellés issus de noms d'émetteur (PDF/OCR tiers) → ÉCHAPPÉS avant
+            // injection innerHTML (c'était le XSS stocké : branche arête oubliée
+            // alors que la branche nœud échappait déjà).
+            const s = labelById.get(p.data.source ?? '') ?? p.data.source ?? ''
+            const t = labelById.get(p.data.target ?? '') ?? p.data.target ?? ''
+            return `<span style="color:#94a3b8">Fournisseur → imputation</span><br>${escapeHtml(s)} → ${escapeHtml(t)}`
           }
           const d = p.data
           const title = `<b style="font-size:13px">${escapeHtml(d.name ?? '')}</b>`

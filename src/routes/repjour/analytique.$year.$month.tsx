@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 
 import { PageGuard } from '#/components/auth/PageGuard.tsx'
 import { AnalytiqueMoisBoard } from '#/components/repjour/boards/AnalytiqueMoisBoard.tsx'
+import { parseYearMonthParams } from '#/lib/shared/routeParams.ts'
 
 export const Route = createFileRoute('/repjour/analytique/$year/$month')({
   component: AnalytiqueMoisPage,
@@ -14,10 +15,10 @@ export const Route = createFileRoute('/repjour/analytique/$year/$month')({
  * convertis en nombres pour le board.
  */
 function AnalytiqueMoisPage() {
-  const { year, month } = Route.useParams()
+  const { year, month } = parseYearMonthParams(Route.useParams())
   return (
     <PageGuard page="repjour">
-      <AnalytiqueMoisBoard year={Number(year)} month={Number(month)} />
+      <AnalytiqueMoisBoard year={year} month={month} />
     </PageGuard>
   )
 }
