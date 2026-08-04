@@ -11,12 +11,14 @@
 -- true) : d'où le status NULLABLE. La dimension `qualifier` (« faux no-show ») a
 -- été abandonnée — retrait non destructif via rapro_rooms_drop_qualifier.sql.
 --
--- ⚠ Script de PREMIER déploiement : `drop table … cascade` ci-dessous EFFACE
---   toute donnée existante. NE PAS le rejouer sur une base en service.
+-- ⚠ PREMIER DÉPLOIEMENT UNIQUEMENT : le `drop table … cascade` ci-dessous EFFACE
+--   toute donnée existante. Il est NEUTRALISÉ (commenté) pour qu'un rejeu par
+--   réflexe ne perde pas le suivi ménage en prod. Le `create table if not exists`
+--   rend le fichier sûr à rejouer. Pour une vraie ré-initialisation, décommenter
+--   SCIEMMENT la ligne suivante.
+-- drop table if exists public.rapro_rooms cascade;
 
-drop table if exists public.rapro_rooms cascade;
-
-create table public.rapro_rooms (
+create table if not exists public.rapro_rooms (
   id          uuid primary key default gen_random_uuid(),
   report_date date not null,
   room        smallint not null,
