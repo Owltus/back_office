@@ -90,6 +90,9 @@ import {
   canEditReservation,
   clampSpanToEditable,
 } from '#/lib/parking/editability.ts'
+import { useParkingHistory } from '#/components/parking/useParkingHistory.ts'
+import { useUndoRedoShortcut } from '#/components/shared/useUndoRedoShortcut.ts'
+import type { ReservationPatch } from '#/lib/parking/history.ts'
 import { printParkingSheets } from '#/lib/parking/pdf.ts'
 import { fmtPctInt } from '#/lib/parking/format.ts'
 import { matchRoom } from '#/lib/parking/pdjMatch.ts'
@@ -224,6 +227,8 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
   const [ghost, setGhost] = useState<{ day: number; spot: number } | null>(null)
   // Miroir de `reservations` lisible dans les closures de drag (état le plus récent).
   const reservationsRef = useRef<Reservation[]>([])
+  // Vrai le temps d'un drag/redimension : neutralise Ctrl+Z pendant le geste.
+  const interactingRef = useRef(false)
   const timelineRef = useRef<HTMLDivElement>(null)
   // Case visée par le dernier clic droit sur une zone vide (pour "Nouvelle réservation").
   const pendingCell = useRef<{ day: number; spot: number }>({ day: 0, spot: 1 })
@@ -488,50 +493,117 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
     return bands
   }, [days])
 
-  // Insertion optimiste d'une résa (UUID + ajout local + persistance + rollback).
-  // Partagée par addReservation et pasteReservation ; retourne l'id créé.
-  function insertReservation(
-    fields: {
-      client: string
-      spot: number
-      startDay: number
-      nights: number
-      status: Status
-      comment: string
-    },
+  /* Primitives d'écriture partagées : état local optimiste + persistance
+   * Supabase + gardes (temporelle, anti-chevauchement). Utilisées PAR les
+   * handlers ET par l'undo/redo — pas de duplication. Chacune renvoie un
+   * booléen : false = action refusée/périmée (l'undo saute alors l'entrée).
+   * On lit `reservationsRef.current` (miroir frais) plutôt que `reservations`,
+   * pour voir l'état le plus récent même hors cycle de rendu. */
+
+  // Reservation (startDay relatif) → patch DbReservation (start_date absolu).
+  // Ne convertit que les clés présentes.
+  function toDbPatch(
+    patch: ReservationPatch,
     ref: Date,
-  ) {
-    const id = crypto.randomUUID()
-    const { client, spot, startDay, nights, status, comment } = fields
-    setReservations((prev) => [
-      ...prev,
-      { id, client, spot, startDay, nights, status, comment },
-    ])
+  ): Partial<Omit<DbReservation, 'id'>> {
+    const out: Partial<Omit<DbReservation, 'id'>> = {}
+    if (patch.client != null) out.client = patch.client
+    if (patch.spot != null) out.spot = patch.spot
+    if (patch.nights != null) out.nights = patch.nights
+    if (patch.status != null) out.status = patch.status
+    if (patch.comment != null) out.comment = patch.comment
+    if (patch.startDay != null) out.start_date = startDayToDate(patch.startDay, ref)
+    return out
+  }
+
+  // Insère une résa (nouvelle, collée, ou ré-insérée par un undo de suppression).
+  function applyCreate(res: Reservation): boolean {
+    if (!startDate) return false
+    if (!canCreateReservation(res.startDay, todayOffset, level)) return false
+    if (hasOverlap(reservationsRef.current, res.spot, res.startDay, res.nights))
+      return false
+    setReservations((prev) =>
+      prev.some((r) => r.id === res.id) ? prev : [...prev, res],
+    )
     createReservation({
-      id,
-      spot,
-      client,
-      start_date: startDayToDate(startDay, ref),
-      nights,
-      status,
-      comment,
+      id: res.id,
+      spot: res.spot,
+      client: res.client,
+      start_date: startDayToDate(res.startDay, startDate),
+      nights: res.nights,
+      status: res.status,
+      comment: res.comment,
     }).catch((err) => {
       console.error(err)
-      setReservations((prev) => prev.filter((r) => r.id !== id))
+      setReservations((prev) => prev.filter((r) => r.id !== res.id))
     })
-    return id
+    return true
   }
+
+  function applyDelete(id: string): boolean {
+    const target = reservationsRef.current.find((r) => r.id === id)
+    if (!target) return false
+    if (!canEditReservation(target, todayOffset, level)) return false
+    setReservations((prev) => prev.filter((r) => r.id !== id))
+    deleteReservation(id).catch(console.error)
+    return true
+  }
+
+  // Patche les seuls champs fournis (préserve le reste, dont le travail concurrent).
+  function applyUpdate(id: string, patch: ReservationPatch): boolean {
+    if (!startDate) return false
+    const target = reservationsRef.current.find((r) => r.id === id)
+    if (!target) return false
+    if (!canEditReservation(target, todayOffset, level)) return false
+    const geometry =
+      patch.spot != null || patch.startDay != null || patch.nights != null
+    if (geometry) {
+      const spot = patch.spot ?? target.spot
+      const startDay = patch.startDay ?? target.startDay
+      const nights = patch.nights ?? target.nights
+      if (hasOverlap(reservationsRef.current, spot, startDay, nights, id))
+        return false
+    }
+    setReservations((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, ...patch } : r)),
+    )
+    updateReservation(id, toDbPatch(patch, startDate)).catch(console.error)
+    return true
+  }
+
+  const { record, undo, redo } = useParkingHistory({
+    applyCreate,
+    applyDelete,
+    applyUpdate,
+  })
+
+  // Ctrl+Z / Ctrl+Y : inerte pendant un geste (drag) ou un placement (copie
+  // accrochée au curseur), sinon rejouerait une action à moitié posée.
+  useUndoRedoShortcut(
+    () => {
+      if (interactingRef.current || clipboard) return
+      undo()
+    },
+    () => {
+      if (interactingRef.current || clipboard) return
+      redo()
+    },
+  )
 
   function addReservation(startDay: number, spot: number) {
     if (!canEdit || !startDate) return
-    // Créer dans le passé verrouillé (arrivée < aujourd'hui − grâce) exige la gestion.
-    if (!canCreateReservation(startDay, todayOffset, level)) return
-    if (hasOverlap(reservations, spot, startDay, 1)) return // emplacement déjà occupé
-    const id = insertReservation(
-      { client: '', spot, startDay, nights: 1, status: 'reserve', comment: '' },
-      startDate,
-    )
-    setEditingId(id)
+    const res: Reservation = {
+      id: crypto.randomUUID(),
+      client: '',
+      spot,
+      startDay,
+      nights: 1,
+      status: 'reserve',
+      comment: '',
+    }
+    if (!applyCreate(res)) return
+    record({ kind: 'create', snapshot: res })
+    setEditingId(res.id)
   }
 
   // « Copier » (menu contextuel ou Ctrl/Cmd+clic) : pose la copie au curseur.
@@ -557,19 +629,18 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
   // déjà écarté par l'appelant (clic sur l'overlay).
   function pasteReservation(startDay: number, spot: number) {
     if (!canEdit || !startDate || !clipboard) return
-    // Coller dans le passé verrouillé exige la gestion (borne sur l'arrivée visée).
-    if (!canCreateReservation(startDay, todayOffset, level)) return
-    insertReservation(
-      {
-        client: clipboard.client,
-        spot,
-        startDay,
-        nights: clipboard.nights,
-        status: clipboard.status,
-        comment: clipboard.comment,
-      },
-      startDate,
-    )
+    const res: Reservation = {
+      id: crypto.randomUUID(),
+      client: clipboard.client,
+      spot,
+      startDay,
+      nights: clipboard.nights,
+      status: clipboard.status,
+      comment: clipboard.comment,
+    }
+    // La garde du passé verrouillé (borne sur l'arrivée) est dans applyCreate.
+    if (!applyCreate(res)) return
+    record({ kind: 'create', snapshot: res })
   }
 
   function openComment(r: Reservation) {
@@ -590,20 +661,19 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
     if (commentId === null) return
     const id = commentId
     const target = reservations.find((r) => r.id === id)
-    if (target && !canEditReservation(target, todayOffset, level)) return
+    if (!target) return
     const comment = commentDraft.trim()
     const status = pendingStatus
     if (status && !comment) return // justification obligatoire
-    setReservations((prev) =>
-      prev.map((r) =>
-        r.id === id ? { ...r, comment, status: status ?? r.status } : r,
-      ),
-    )
+    // Patch limité aux champs touchés (le statut ne part qu'avec sa justification).
+    const after: ReservationPatch = status ? { comment, status } : { comment }
+    const before: ReservationPatch = status
+      ? { comment: target.comment, status: target.status }
+      : { comment: target.comment }
+    if (!applyUpdate(id, after)) return
+    record({ kind: 'update', id, before, after })
     setCommentId(null)
     setPendingStatus(null)
-    updateReservation(id, status ? { comment, status } : { comment }).catch(
-      console.error,
-    )
   }
 
   function setStatus(id: string, status: Status) {
@@ -623,29 +693,29 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
       setCommentId(id)
       return
     }
-    setReservations((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, status } : r)),
-    )
-    updateReservation(id, { status }).catch(console.error)
+    const before: ReservationPatch = { status: current.status }
+    if (!applyUpdate(id, { status })) return
+    record({ kind: 'update', id, before, after: { status } })
   }
 
   function rename(id: string, value: string) {
     if (!canEdit) return
     const target = reservations.find((r) => r.id === id)
-    if (target && !canEditReservation(target, todayOffset, level)) return
+    if (!target) return
     const client = value.trim()
-    setReservations((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, client } : r)),
-    )
-    updateReservation(id, { client }).catch(console.error)
+    if (client === target.client) return
+    const before: ReservationPatch = { client: target.client }
+    if (!applyUpdate(id, { client })) return
+    record({ kind: 'update', id, before, after: { client } })
   }
 
   function remove(id: string) {
     if (!canEdit) return
     const target = reservations.find((r) => r.id === id)
-    if (target && !canEditReservation(target, todayOffset, level)) return
-    setReservations((prev) => prev.filter((r) => r.id !== id))
-    deleteReservation(id).catch(console.error)
+    if (!target) return
+    const snapshot: Reservation = { ...target }
+    if (!applyDelete(id)) return
+    record({ kind: 'delete', snapshot })
   }
 
   function startInteraction(
@@ -668,6 +738,7 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
     if (!canEditReservation(res, todayOffset, level)) return
     e.preventDefault()
     e.stopPropagation()
+    interactingRef.current = true
     const startX = e.clientX
     const startY = e.clientY
     const orig = { ...res }
@@ -775,6 +846,7 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
       if (rafId) cancelAnimationFrame(rafId)
+      interactingRef.current = false
       // Persiste la position FINALE si elle a changé (lecture de l'état à jour).
       const r = reservationsRef.current.find((x) => x.id === res.id)
       if (
@@ -788,6 +860,17 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
           start_date: startDayToDate(r.startDay, startDate),
           nights: r.nights,
         }).catch(console.error)
+        // Historise le geste : patch géométrique (place/jour/durée) seulement.
+        record({
+          kind: 'update',
+          id: res.id,
+          before: {
+            spot: orig.spot,
+            startDay: orig.startDay,
+            nights: orig.nights,
+          },
+          after: { spot: r.spot, startDay: r.startDay, nights: r.nights },
+        })
       }
     }
     window.addEventListener('pointermove', onMove)

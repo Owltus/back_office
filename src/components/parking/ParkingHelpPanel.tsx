@@ -132,6 +132,12 @@ export function ParkingHelpPanel({ canEdit }: { canEdit: boolean }) {
             rouge) : deux réservations ne peuvent pas se chevaucher.
           </p>
           <p>
+            Un geste malheureux se corrige avec{' '}
+            <span className="font-medium text-foreground">Ctrl + Z</span> (annuler)
+            et <span className="font-medium text-foreground">Ctrl + Y</span>{' '}
+            (rétablir).
+          </p>
+          <p>
             Vous modifiez librement les réservations en cours, à venir et
             terminées depuis moins de sept jours. Au-delà, une réservation passée
             se verrouille : seule la gestion peut encore la modifier.
@@ -179,6 +185,33 @@ export function ParkingHelpPanel({ canEdit }: { canEdit: boolean }) {
             Copier une réservation, puis un clic la pose sur la case visée
             (⌘ sur Mac).
           </Shortcut>
+          {canEdit && (
+            <>
+              <Shortcut
+                keys={
+                  <>
+                    <Kbd className="px-2">Ctrl</Kbd>
+                    <KbdPlus />
+                    <Kbd>Z</Kbd>
+                  </>
+                }
+              >
+                Annuler la dernière action : création, déplacement, renommage,
+                statut, commentaire ou suppression (⌘ sur Mac).
+              </Shortcut>
+              <Shortcut
+                keys={
+                  <>
+                    <Kbd className="px-2">Ctrl</Kbd>
+                    <KbdPlus />
+                    <Kbd>Y</Kbd>
+                  </>
+                }
+              >
+                Rétablir l'action annulée (ou Ctrl + Maj + Z).
+              </Shortcut>
+            </>
+          )}
           <Shortcut
             keys={
               <>
