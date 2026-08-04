@@ -392,21 +392,19 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
     )
   }, [startDate, offset, visibleDays])
 
-  // Taux d'occupation CLIENT de chaque jour affiché : places client occupées
-  // (spots < FIRST_STAFF_SPOT, personnel exclu) / 12, en %. Une place n'ayant
-  // jamais deux réservations le même jour (hasOverlap l'interdit), compter les
+  // Taux d'occupation de chaque jour affiché : toutes les places occupées
+  // (personnel 13 & 14 « en over » COMPRIS) / 14, en %. Une place n'ayant jamais
+  // deux réservations le même jour (hasOverlap l'interdit), compter les
   // réservations couvrant le jour revient à compter les places distinctes. Le
   // décalage absolu du jour i affiché est `offset + i` (même repère que startDay).
   const dayOccupancy = useMemo(() => {
-    const clientSpots = FIRST_STAFF_SPOT - 1
     return days.map((_, i) => {
       const o = offset + i
       let occ = 0
       for (const r of reservations) {
-        if (r.spot < FIRST_STAFF_SPOT && r.startDay <= o && o < r.startDay + r.nights)
-          occ++
+        if (r.startDay <= o && o < r.startDay + r.nights) occ++
       }
-      return (occ / clientSpots) * 100
+      return (occ / SPOTS) * 100
     })
   }, [days, offset, reservations])
 
@@ -1133,7 +1131,7 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
                   <span className="text-[11px] text-muted-foreground">
                     {fmtDay.format(d)}
                   </span>
-                  {/* Taux d'occupation client du jour (places 1-12), arrondi. */}
+                  {/* Taux d'occupation du jour (14 places, personnel compris), arrondi. */}
                   <span className="text-[10px] font-medium tabular-nums text-sky-400">
                     {fmtPctInt(dayOccupancy[i])}
                   </span>

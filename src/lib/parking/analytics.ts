@@ -1,4 +1,4 @@
-import { FIRST_STAFF_SPOT } from '#/lib/parking/model.ts'
+import { FIRST_STAFF_SPOT, SPOTS } from '#/lib/parking/model.ts'
 import type { DbReservation } from '#/lib/parking/service.ts'
 
 /*
@@ -13,9 +13,9 @@ import type { DbReservation } from '#/lib/parking/service.ts'
  * calcule donc jamais de chiffre d'affaires.
  */
 
-// Places réellement louées aux clients : on exclut les places personnel
-// (spot >= FIRST_STAFF_SPOT, soit 13 et 14) → 12 places client.
-const CLIENT_SPOTS = FIRST_STAFF_SPOT - 1
+// Le taux d'occupation compte TOUTES les places, personnel 13 & 14 (« en over »)
+// COMPRIS → dénominateur = SPOTS (14). Les nuits-places CLIENT (personnel exclu,
+// spot < FIRST_STAFF_SPOT) restent calculées à part, pour le seul captage.
 
 /** Synthèse d'un mois (indices 1..12). */
 export interface ParkingMonthStats {
@@ -28,8 +28,8 @@ export interface ParkingMonthStats {
    * hôtelier (rapporté aux nuitées de l'hôtel). */
   clientNights: number
   /**
-   * Taux d'occupation moyen (%) : places-nuits client occupées rapportées à la
-   * capacité du mois (12 places × nombre de jours du mois).
+   * Taux d'occupation moyen (%) : place-nuits occupées (TOUTES places, personnel
+   * 13 & 14 compris) rapportées à la capacité du mois (14 places × jours du mois).
    *
    * Approximation MVP : chaque réservation est comptée EN ENTIER dans le mois de
    * son `start_date`, même si le séjour déborde sur le mois suivant. Suffisant
@@ -67,8 +67,8 @@ function daysInMonth(year: number, month: number): number {
 /**
  * Agrège les réservations d'une année en 12 synthèses mensuelles. Les lignes
  * hors `year` sont ignorées (la lecture charge tout l'historique). L'axe est
- * l'arrivée (`start_date`) ; les places personnel (>= FIRST_STAFF_SPOT) sont
- * exclues du calcul d'occupation mais comptées dans les statuts/nuits.
+ * l'arrivée (`start_date`) ; l'occupation compte TOUTES les places (personnel
+ * compris), seul le captage isole les nuits-places client.
  */
 export function aggregateParkingMonthly(
   reservations: DbReservation[],
@@ -89,16 +89,17 @@ export function aggregateParkingMonthly(
     s.nights += r.nights
     if (r.status === 'paye') s.paid += 1
     else if (r.status === 'reserve') s.reserved += 1
-    else if (r.status === 'checkout') s.unpaid += 1
+    else s.unpaid += 1
 
     if (r.spot < FIRST_STAFF_SPOT) clientNights[m] += r.nights
   }
 
   for (let i = 0; i < 12; i++) {
     const s = months[i]
-    const capacity = CLIENT_SPOTS * daysInMonth(year, i + 1)
+    // Occupation = place-nuits TOUTES places (s.nights) / (14 places × jours).
+    const capacity = SPOTS * daysInMonth(year, i + 1)
     s.clientNights = clientNights[i]
-    s.occupancyRate = capacity > 0 ? (clientNights[i] / capacity) * 100 : 0
+    s.occupancyRate = capacity > 0 ? (s.nights / capacity) * 100 : 0
   }
   return months
 }
@@ -109,9 +110,12 @@ export interface ParkingDayStats {
   date: string
   /** Numéro du jour dans le mois (1..dernier). */
   day: number
-  /** Places CLIENT distinctes occupées ce jour (spots < FIRST_STAFF_SPOT). */
+  /** Places distinctes occupées ce jour, TOUTES places (personnel compris). */
+  occupied: number
+  /** Places CLIENT distinctes occupées ce jour (spots < FIRST_STAFF_SPOT),
+   * conservées pour le seul calcul de captage. */
   occupiedClient: number
-  /** Taux d'occupation client du jour (%) : occupiedClient / 12 × 100. */
+  /** Taux d'occupation du jour (%) : occupied / 14 × 100 (personnel compris). */
   occupancy: number
   /** Réservations dont l'arrivée (`start_date`) tombe ce jour. */
   arrivals: number
@@ -130,10 +134,10 @@ function ymd(d: Date): string {
 /**
  * Agrège les réservations en une entrée par jour du calendrier du mois
  * (1..dernier jour). Occupation RÉELLE : une réservation couvre un jour si
- * `start_date <= jour < start_date + nights`. Les places personnel
- * (>= FIRST_STAFF_SPOT) sont exclues du décompte d'occupation. Comparaison de
- * dates en chaînes 'YYYY-MM-DD' construites proprement (padStart), jamais via
- * toISOString.
+ * `start_date <= jour < start_date + nights`. L'occupation compte TOUTES les
+ * places (personnel 13 & 14 compris) ; `occupiedClient` isole les places client
+ * pour le captage. Comparaison de dates en chaînes 'YYYY-MM-DD' construites
+ * proprement (padStart), jamais via toISOString.
  */
 export function aggregateParkingDaily(
   reservations: DbReservation[],
@@ -161,24 +165,27 @@ export function aggregateParkingDaily(
   const result: ParkingDayStats[] = []
   for (let day = 1; day <= nDays; day++) {
     const dateStr = `${year}-${mm}-${String(day).padStart(2, '0')}`
-    const spots = new Set<number>()
+    const spotsAll = new Set<number>()
+    const spotsClient = new Set<number>()
     let arrivals = 0
     let departures = 0
 
     for (const e of enriched) {
-      if (e.start <= dateStr && dateStr < e.end && e.spot < FIRST_STAFF_SPOT) {
-        spots.add(e.spot)
+      if (e.start <= dateStr && dateStr < e.end) {
+        spotsAll.add(e.spot)
+        if (e.spot < FIRST_STAFF_SPOT) spotsClient.add(e.spot)
       }
       if (e.start === dateStr) arrivals += 1
       if (e.end === dateStr) departures += 1
     }
 
-    const occupiedClient = spots.size
+    const occupied = spotsAll.size
     result.push({
       date: dateStr,
       day,
-      occupiedClient,
-      occupancy: CLIENT_SPOTS > 0 ? (occupiedClient / CLIENT_SPOTS) * 100 : 0,
+      occupied,
+      occupiedClient: spotsClient.size,
+      occupancy: (occupied / SPOTS) * 100,
       arrivals,
       departures,
     })

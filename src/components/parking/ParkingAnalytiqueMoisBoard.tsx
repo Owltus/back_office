@@ -232,10 +232,13 @@ export function ParkingAnalytiqueMoisBoard({
       >
         <tbody>
           {days.map((d) => {
-            const hasData = d.occupiedClient > 0
+            const hasData = d.occupied > 0
             const rooms = hotelRoomsByDay.get(d.day) ?? 0
+            // Captage : places CLIENT occupées / chambres hôtel (personnel exclu).
             const captage =
-              hasData && rooms > 0 ? (d.occupiedClient / rooms) * 100 : null
+              d.occupiedClient > 0 && rooms > 0
+                ? (d.occupiedClient / rooms) * 100
+                : null
             return (
               <tr
                 key={d.date}
@@ -260,7 +263,7 @@ export function ParkingAnalytiqueMoisBoard({
                       {fmtPct(d.occupancy)}
                     </td>
                     <td className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums">
-                      {fmtInt(d.occupiedClient)}
+                      {fmtInt(d.occupied)}
                     </td>
                     <td
                       className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums"
