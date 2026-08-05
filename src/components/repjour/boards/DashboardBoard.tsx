@@ -30,6 +30,7 @@ import { KPIDetailPanel } from '#/components/repjour/KPIDetailPanel.tsx'
 import { KPITable } from '#/components/repjour/KPITable.tsx'
 import { ImportSection } from '#/components/repjour/ImportSection.tsx'
 import { RecipientsModal } from '#/components/repjour/RecipientsModal.tsx'
+import { serverReportRecipients } from '#/lib/repjour/services/recipients.ts'
 import { SummaryCards } from '#/components/repjour/SummaryCards.tsx'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { supabase } from '#/lib/supabase.ts'
@@ -121,6 +122,7 @@ export function DashboardBoard() {
   const [serverSending, setServerSending] = useState(false)
   const [serverNote, setServerNote] = useState<string | null>(null)
   const [showRecipients, setShowRecipients] = useState(false)
+  const [showServerRecipients, setShowServerRecipients] = useState(false)
   const [pdfBusy, setPdfBusy] = useState(false)
   const [printBlocked, setPrintBlocked] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -740,18 +742,35 @@ export function DashboardBoard() {
                     existant au-dessus. */}
                 {isAdmin && (
                   <div className="flex flex-col gap-1">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full border-dashed"
-                      disabled={serverSending}
-                      onClick={handleSendServer}
-                    >
-                      <Send />
-                      {serverSending
-                        ? 'Envoi en cours…'
-                        : 'Envoyer via serveur (dev)'}
-                    </Button>
+                    {/* Groupe segmenté calqué sur « Envoyer par email » : le bouton
+                        d'envoi (flex-1) + ⚙️ gestion des destinataires SERVEUR (liste
+                        dédiée server_report_recipients, distincte du mailto). Style
+                        pointillé conservé (flux « dev » non encore stabilisé). */}
+                    <ButtonGroup className="flex w-full">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 border-dashed"
+                        disabled={serverSending}
+                        onClick={handleSendServer}
+                      >
+                        <Send />
+                        {serverSending
+                          ? 'Envoi en cours…'
+                          : 'Envoyer via serveur (dev)'}
+                      </Button>
+                      <Tip label="Gérer les destinataires serveur">
+                        <Button
+                          variant="outline"
+                          size="icon-sm"
+                          className="border-dashed"
+                          aria-label="Gérer les destinataires serveur"
+                          onClick={() => setShowServerRecipients(true)}
+                        >
+                          <Settings />
+                        </Button>
+                      </Tip>
+                    </ButtonGroup>
                     {serverNote && (
                       <p className="text-xs leading-relaxed text-muted-foreground">
                         {serverNote}
@@ -789,6 +808,15 @@ export function DashboardBoard() {
         <RecipientsModal
           open={showRecipients}
           onClose={() => setShowRecipients(false)}
+        />
+      )}
+
+      {isAdmin && (
+        <RecipientsModal
+          open={showServerRecipients}
+          onClose={() => setShowServerRecipients(false)}
+          service={serverReportRecipients}
+          title="Destinataires serveur"
         />
       )}
 

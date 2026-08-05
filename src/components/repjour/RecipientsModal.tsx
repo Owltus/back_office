@@ -12,18 +12,21 @@ import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
 import { cn } from '#/lib/utils.ts'
 import { isValidEmail } from '#/lib/shared/email.ts'
-import {
-  addRecipient,
-  deleteRecipient,
-  fetchRecipients,
-  updateRecipient,
-  type EmailRecipient,
-  type RecipientType,
+import { emailRecipients } from '#/lib/repjour/services/recipients.ts'
+import type {
+  EmailRecipient,
+  RecipientsService,
+  RecipientType,
 } from '#/lib/repjour/services/recipients.ts'
 
 interface Props {
   open: boolean
   onClose: () => void
+  /** CRUD de la liste à gérer. Défaut : les destinataires du mailto
+   * (`email_recipients`). L'envoi serveur passe la sienne (`serverReportRecipients`). */
+  service?: RecipientsService
+  /** Titre de la modale (ex. « Destinataires » vs « Destinataires serveur »). */
+  title?: string
 }
 
 /*
@@ -62,7 +65,12 @@ function TypeToggle({
   )
 }
 
-export function RecipientsModal({ open, onClose }: Props) {
+export function RecipientsModal({
+  open,
+  onClose,
+  service = emailRecipients,
+  title = 'Destinataires',
+}: Props) {
   const [recipients, setRecipients] = useState<EmailRecipient[]>([])
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
@@ -87,7 +95,7 @@ export function RecipientsModal({ open, onClose }: Props) {
   })
 
   async function load() {
-    const data = await fetchRecipients()
+    const data = await service.fetch()
     setRecipients(data)
     setLoading(false)
   }
@@ -106,7 +114,7 @@ export function RecipientsModal({ open, onClose }: Props) {
       return
     }
     try {
-      await addRecipient(newEmail, newName, newType)
+      await service.add(newEmail, newName, newType)
       setNewEmail('')
       setNewName('')
       setNewType('to')
@@ -120,7 +128,7 @@ export function RecipientsModal({ open, onClose }: Props) {
   }
 
   const handleToggle = async (r: EmailRecipient) => {
-    await updateRecipient(r.id, { active: !r.active })
+    await service.update(r.id, { active: !r.active })
     load()
   }
 
@@ -136,7 +144,7 @@ export function RecipientsModal({ open, onClose }: Props) {
       return
     }
     try {
-      await updateRecipient(editingId, editForm)
+      await service.update(editingId, editForm)
       setEditingId(null)
       notify('Mis à jour', 'success')
       load()
@@ -148,7 +156,7 @@ export function RecipientsModal({ open, onClose }: Props) {
 
   const handleDelete = async (id: number) => {
     if (!confirm('Supprimer ce destinataire ?')) return
-    await deleteRecipient(id)
+    await service.remove(id)
     load()
   }
 
@@ -260,7 +268,7 @@ export function RecipientsModal({ open, onClose }: Props) {
         <DialogHeader>
           <div className="flex items-center justify-between gap-2 pr-6">
             <div>
-              <DialogTitle>Destinataires</DialogTitle>
+              <DialogTitle>{title}</DialogTitle>
               <p className="text-xs text-muted-foreground">
                 {activeCount} actif{activeCount > 1 ? 's' : ''} sur{' '}
                 {recipients.length}
