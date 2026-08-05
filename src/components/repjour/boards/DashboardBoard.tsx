@@ -135,10 +135,6 @@ export function DashboardBoard() {
   const { can } = useAuth()
   const queryClient = useQueryClient()
   const isAdmin = can('repjour', 'gestion')
-  // L'envoi serveur est ouvert aux ÉDITEURS (niveau écriture) et au-dessus ; la
-  // GESTION des destinataires (⚙️) reste réservée au niveau gestion (isAdmin).
-  // L'anti-spam serveur applique un cooldown plus strict aux non-admins.
-  const canSendServer = can('repjour', 'ecriture')
   const canImport = can('repjour', 'ecriture')
 
   const d = new Date(selectedDate + 'T00:00:00')
@@ -739,12 +735,12 @@ export function DashboardBoard() {
                     tant qu'il n'est pas stabilisé (Edge Function à déployer,
                     domaine d'expéditeur à vérifier). N'altère pas l'envoi
                     existant au-dessus. */}
-                {canSendServer && (
+                {isAdmin && (
                   <div className="flex flex-col gap-1">
                     {/* Groupe segmenté calqué sur « Envoyer par email » : le bouton
-                        d'envoi (flex-1, ouvert aux éditeurs) + ⚙️ gestion des
-                        destinataires SERVEUR (liste dédiée, RÉSERVÉE gestion). Style
-                        pointillé conservé (flux « dev » non encore stabilisé). */}
+                        d'envoi (flex-1) + ⚙️ gestion des destinataires SERVEUR (liste
+                        dédiée server_report_recipients, distincte du mailto). Admin
+                        (gestion) uniquement. Style pointillé conservé (flux « dev »). */}
                     <ButtonGroup className="flex w-full">
                       <Button
                         variant="outline"
@@ -758,7 +754,6 @@ export function DashboardBoard() {
                           ? 'Envoi en cours…'
                           : 'Envoyer via serveur (dev)'}
                       </Button>
-                      {isAdmin && (
                       <Tip label="Gérer les destinataires serveur">
                         <Button
                           variant="outline"
@@ -770,7 +765,6 @@ export function DashboardBoard() {
                           <Settings />
                         </Button>
                       </Tip>
-                      )}
                     </ButtonGroup>
                   </div>
                 )}
@@ -816,7 +810,7 @@ export function DashboardBoard() {
         />
       )}
 
-      {canSendServer && (
+      {isAdmin && (
         <ServerSendDialog
           open={showServerConfirm}
           onClose={() => setShowServerConfirm(false)}

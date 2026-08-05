@@ -81,8 +81,9 @@ Deno.serve(async (req) => {
   } = await admin.auth.getUser(token)
   if (callerErr || !caller) return json({ error: 'Session invalide' }, 401)
 
-  // 2. Autorisation : admin (grade) OU niveau écriture/gestion sur la page RepJour.
-  //    Les éditeurs peuvent donc envoyer, avec un anti-spam plus strict (voir 2b).
+  // 2. Autorisation : admin (grade) OU niveau GESTION sur la page RepJour — même
+  //    garde que le bouton d'envoi côté front (réservé à la gestion, pas aux
+  //    éditeurs, pour éviter la confusion).
   const { data: prof, error: profErr } = await admin
     .from('profiles')
     .select('role')
@@ -101,14 +102,13 @@ Deno.serve(async (req) => {
       .maybeSingle()
     pageLevel = perm?.level ?? null
   }
-  if (!isAdmin && pageLevel !== 'ecriture' && pageLevel !== 'gestion')
+  if (!isAdmin && pageLevel !== 'gestion')
     return json({ error: 'Non autorisé' }, 403)
 
-  // 2b. Anti-spam SERVEUR : un envoi par utilisateur au maximum toutes les
-  //     N minutes (admin : 5 ; éditeur/gestionnaire : 15). Enforcement non
-  //     contournable — le front peut afficher un compte à rebours, mais c'est ICI
-  //     que la limite est réellement tenue. Le timestamp est stocké dans
-  //     report_send_throttle (accès service_role uniquement).
+  // 2b. Anti-spam SERVEUR : un envoi par utilisateur au maximum toutes les N
+  //     minutes (admin de grade : 5 ; gestionnaire non-admin : 15). Enforcement
+  //     non contournable. Timestamp du dernier envoi dans report_send_throttle
+  //     (accès service_role uniquement).
   const cooldownMin = isAdmin ? 5 : 15
   const { data: last } = await admin
     .from('report_send_throttle')
