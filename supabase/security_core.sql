@@ -82,6 +82,13 @@ begin
   update auth.users
   set encrypted_password = crypt(new_password, gen_salt('bf'))
   where id = target_user_id;
+  -- Traçabilité (A2, pentest #2) : journaliser le reset (jamais le mot de passe).
+  insert into public.audit_log (table_name, record_id, action, old_data, performed_by, performed_at)
+  values (
+    'auth.users', target_user_id::text, 'admin_password_reset',
+    jsonb_build_object('target_role', (select role from public.profiles where id = target_user_id)),
+    auth.uid(), now()
+  );
 end;
 $function$;
 

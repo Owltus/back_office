@@ -134,6 +134,16 @@ begin
      and (select count(*) from public.profiles where role = 'admin') <= 1 then
     raise exception 'dernier admin: rétrogradation refusée (verrouillage total)';
   end if;
+  -- Traçabilité (A4, pentest #2) : journaliser AVANT l'update (capture l'ancien rôle).
+  insert into public.audit_log (table_name, record_id, action, old_data, performed_by, performed_at)
+  values (
+    'profiles', p_user::text, 'set_user_grade',
+    jsonb_build_object(
+      'old_role', (select role from public.profiles where id = p_user),
+      'new_grade', p_grade
+    ),
+    auth.uid(), now()
+  );
   update public.profiles set role = p_grade where id = p_user;
 end;
 $$;
