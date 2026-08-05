@@ -830,7 +830,7 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
                   onChange={(c, v) => c !== 'web' && setLs(c as PayKey, v)}
                 />
                 <AmountRow
-                  label="CAISSE/TPE"
+                  label="DÉPÔT"
                   rowIndex={2}
                   onCellKeyDown={handleGridTab}
                   cols={cols}

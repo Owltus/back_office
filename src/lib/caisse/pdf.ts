@@ -248,7 +248,7 @@ function renderCaisseDocument(
   const sources: Array<{ label: string; key: 'snt' | 'ls' | 'caisse' }> = [
     { label: "STAY N'TOUCH", key: 'snt' },
     { label: 'LIGHTSPEED', key: 'ls' },
-    { label: 'CAISSE/TPE', key: 'caisse' },
+    { label: 'DÉPÔT', key: 'caisse' },
   ]
   pdf.setFontSize(9).setTextColor(26)
   sources.forEach((s) => {
