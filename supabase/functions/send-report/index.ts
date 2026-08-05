@@ -81,14 +81,51 @@ Deno.serve(async (req) => {
   } = await admin.auth.getUser(token)
   if (callerErr || !caller) return json({ error: 'Session invalide' }, 401)
 
-  // 2. Autorisation : l'appelant DOIT être admin.
+  // 2. Autorisation : admin (grade) OU niveau écriture/gestion sur la page RepJour.
+  //    Les éditeurs peuvent donc envoyer, avec un anti-spam plus strict (voir 2b).
   const { data: prof, error: profErr } = await admin
     .from('profiles')
     .select('role')
     .eq('id', caller.id)
     .single()
-  if (profErr || prof?.role !== 'admin')
-    return json({ error: 'Réservé aux administrateurs' }, 403)
+  if (profErr) return json({ error: 'Autorisation impossible' }, 403)
+
+  const isAdmin = prof?.role === 'admin'
+  let pageLevel: string | null = isAdmin ? 'gestion' : null
+  if (!isAdmin) {
+    const { data: perm } = await admin
+      .from('user_page_permissions')
+      .select('level')
+      .eq('user_id', caller.id)
+      .eq('page', 'repjour')
+      .maybeSingle()
+    pageLevel = perm?.level ?? null
+  }
+  if (!isAdmin && pageLevel !== 'ecriture' && pageLevel !== 'gestion')
+    return json({ error: 'Non autorisé' }, 403)
+
+  // 2b. Anti-spam SERVEUR : un envoi par utilisateur au maximum toutes les
+  //     N minutes (admin : 5 ; éditeur/gestionnaire : 15). Enforcement non
+  //     contournable — le front peut afficher un compte à rebours, mais c'est ICI
+  //     que la limite est réellement tenue. Le timestamp est stocké dans
+  //     report_send_throttle (accès service_role uniquement).
+  const cooldownMin = isAdmin ? 5 : 15
+  const { data: last } = await admin
+    .from('report_send_throttle')
+    .select('last_sent_at')
+    .eq('user_id', caller.id)
+    .maybeSingle()
+  if (last?.last_sent_at) {
+    const remainingMs =
+      cooldownMin * 60_000 - (Date.now() - new Date(last.last_sent_at).getTime())
+    if (remainingMs > 0) {
+      const mins = Math.ceil(remainingMs / 60_000)
+      return json(
+        { error: `Envoi trop rapproché. Réessaie dans ${mins} min.` },
+        429,
+      )
+    }
+  }
 
   // 3. Corps de requête (produit par le front : jsPDF + buildReportHtml).
   let body: {
@@ -181,6 +218,13 @@ Deno.serve(async (req) => {
     return json({ error: 'Envoi du message échoué' }, 502)
   }
   const out = await res.json().catch(() => ({}))
+
+  // Envoi réussi : (ré)arme le cooldown pour cet utilisateur. `upsert` sur la clé
+  // primaire user_id → une ligne par personne, écrasée à chaque envoi.
+  await admin
+    .from('report_send_throttle')
+    .upsert({ user_id: caller.id, last_sent_at: new Date().toISOString() })
+
   return json(
     {
       ok: true,
