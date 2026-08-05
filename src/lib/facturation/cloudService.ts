@@ -409,6 +409,37 @@ export async function fetchJournal(): Promise<{ entries: JournalEntry[] }> {
   return { entries }
 }
 
+/**
+ * Apprentissage IDEMPOTENT d'une facture en UN seul appel transactionnel (A1).
+ * La RPC `facturation_learn_document` insère le journal (on conflict hash) PUIS,
+ * seulement si l'entrée est nouvelle, applique les incréments nuages + émetteur →
+ * un rejeu ou deux onglets ne comptent qu'une fois. Renvoie `true` si la facture a
+ * été RÉELLEMENT apprise (nouvelle), `false` si c'était un doublon (rien incrémenté).
+ * Remplace la séquence non atomique learnClouds + learnIssuerCodes + learnIssuer +
+ * recordLearnedDoc.
+ */
+export async function learnInvoiceDocument(entry: {
+  hash: string
+  issuer: string
+  display: string
+  codes: string[]
+  deltas: Record<string, number>
+  comptes: Record<string, string>
+  method: 'native' | 'ocr'
+}): Promise<boolean> {
+  const { data, error } = await supabase.rpc('facturation_learn_document', {
+    p_hash: entry.hash,
+    p_issuer: entry.issuer,
+    p_display: entry.display,
+    p_codes: entry.codes,
+    p_deltas: entry.deltas,
+    p_comptes: entry.comptes,
+    p_method: entry.method,
+  })
+  if (error) throw error
+  return data === true
+}
+
 /** Enregistre un document appris (idempotent côté serveur : on conflict do nothing). */
 export async function recordLearnedDoc(entry: JournalEntry): Promise<void> {
   const { error } = await supabase.rpc('facturation_learned_docs_record', {

@@ -44,10 +44,7 @@ import { canLearn } from '#/lib/facturation/detect.ts'
 import { issuerKey } from '#/lib/facturation/text.ts'
 import {
   deleteLearnedDoc,
-  learnClouds,
-  learnIssuer,
-  learnIssuerCodes,
-  recordLearnedDoc,
+  learnInvoiceDocument,
   unlearnClouds,
   unlearnIssuer,
   unlearnIssuerCodes,
@@ -415,36 +412,46 @@ export function InvoicePanel({
       if (
         !record.learned &&
         record.codes.length > 0 &&
+        record.hash &&
         !journalHasHash(record.hash)
       ) {
-        // Le pull de mots appris = UNIQUEMENT le contenu de la facture. Le nom d'émetteur
-        // n'est PLUS injecté dans les nuages : son signal vit dans le modèle séparé
-        // émetteur→codes (learnIssuerCodes ci-dessous), ce qui garde les nuages propres.
         // INSTANTANÉ figé ICI : le désapprentissage retirera EXACTEMENT ces codes/émetteur,
         // même si l'utilisateur ré-édite ensuite l'imputation (compteurs partagés → symétrie).
+        // Le nom d'émetteur n'entre PAS dans les nuages : son signal vit dans le modèle
+        // séparé émetteur→codes, ce qui garde les nuages propres.
         const learnedCodes = [...record.codes]
         const deltas = countTokens(record.text)
         const learnSupplier = canLearn(record.supplierName, record.siren)
-        let learnedIssuer: string | null = null
+        const name = learnSupplier ? issuerKey(record.supplierName, record.siren) : ''
+        const display = learnSupplier ? record.supplierName.trim() : ''
         try {
-          await learnClouds(learnedCodes, deltas)
-          // Patch optimiste du cache (mêmes deltas), sans refetch du modèle.
-          // NOTE (D5) : le MÊME delta est appliqué à TOUS les codes retenus (miroir
-          // fidèle de la RPC). Pour un article multi-imputé, cela gonfle identiquement
-          // plusieurs codes et dilue leur discrimination future. Un affinage (répartir
-          // le poids par code) toucherait aussi la RPC → différé, hors de ce lot.
-          queryClient.setQueryData<WordPool>(['facturation', 'clouds'], (old) =>
-            mergePools(old ?? { perCode: {} }, {
-              perCode: Object.fromEntries(learnedCodes.map((c) => [c, deltas])),
-            }),
-          )
-          // Apprentissage de l'émetteur, ISOLÉ : un échec ici ne doit pas invalider les
-          // nuages déjà appris (sinon l'instantané ne refléterait pas la réalité).
-          if (learnSupplier) {
-            try {
-              const name = issuerKey(record.supplierName, record.siren)
-              const display = record.supplierName.trim()
-              await learnIssuer(name, display)
+          // UNE seule RPC transactionnelle et IDEMPOTENTE (A1) : journal + incréments
+          // nuages/émetteur gagnés ENSEMBLE, gardés par le hash. Un rejeu ou deux
+          // onglets ne comptent qu'une fois (fin de l'inflation permanente des poids).
+          // Renvoie false si le hash était déjà présent (doublon) → aucun incrément.
+          const learned = await learnInvoiceDocument({
+            hash: record.hash,
+            issuer: name,
+            display,
+            codes: learnedCodes,
+            deltas,
+            comptes: { ...record.comptes }, // compte choisi par code, figé au tampon
+            method: record.method ?? 'native',
+          })
+          if (learned) {
+            const learnedIssuer = name || null
+            // Patchs optimistes des caches (mêmes deltas), sans refetch — appliqués
+            // UNIQUEMENT si l'apprentissage a réellement eu lieu (sinon on gonflerait
+            // l'affichage pour un doublon).
+            // NOTE (D5) : le MÊME delta est appliqué à TOUS les codes retenus (miroir
+            // fidèle de la RPC). Un article multi-imputé gonfle identiquement plusieurs
+            // codes ; un affinage (poids par code) toucherait aussi la RPC → différé.
+            queryClient.setQueryData<WordPool>(['facturation', 'clouds'], (old) =>
+              mergePools(old ?? { perCode: {} }, {
+                perCode: Object.fromEntries(learnedCodes.map((c) => [c, deltas])),
+              }),
+            )
+            if (learnSupplier) {
               queryClient.setQueryData<Issuer[]>(
                 ['facturation', 'issuers'],
                 (old) => {
@@ -456,53 +463,34 @@ export function InvoicePanel({
                   return list
                 },
               )
-              // Co-occurrence émetteur → codes (le « filtre fort » : +1 par code validé).
-              await learnIssuerCodes(name, learnedCodes)
               queryClient.setQueryData<IssuerCodes>(
                 ['facturation', 'issuerCodes'],
                 (old) =>
                   mergeIssuerCodes(old ?? { perIssuer: {} }, {
                     perIssuer: {
-                      [name]: Object.fromEntries(
-                        learnedCodes.map((c) => [c, 1]),
-                      ),
+                      [name]: Object.fromEntries(learnedCodes.map((c) => [c, 1])),
                     },
                   }),
               )
-              learnedIssuer = name // n'est figé QUE si l'émetteur a bien été mémorisé
-            } catch {
-              setLearnWarning(true) // émetteur non mémorisé, mais les nuages, si
             }
-          }
-          // learned + INSTANTANÉ posés en DERNIER, une fois l'apprentissage réel connu :
-          // un échec émetteur laisse learnedIssuer=null → l'undo ne touchera pas l'émetteur.
-          onPatch({ learned: true, learnedCodes, learnedIssuer })
-          // JOURNAL : trace persistante de CE document (hash → instantané figé). Permet la
-          // détection de doublon et le désapprentissage EXACT sans re-déposer le PDF.
-          // Best-effort : un échec (table absente, droits) ne bloque pas le PDF déjà tamponné.
-          if (record.hash) {
+            onPatch({ learned: true, learnedCodes, learnedIssuer })
             const entry: JournalEntry = {
               hash: record.hash,
               issuerKey: learnedIssuer,
               codes: learnedCodes,
-              comptes: { ...record.comptes }, // compte choisi par code, figé au tampon
+              comptes: { ...record.comptes },
               deltas,
               method: record.method ?? 'native',
               learnedAt: record.processedDate,
             }
-            try {
-              await recordLearnedDoc(entry)
-              queryClient.setQueryData<{ entries: JournalEntry[] }>(
-                ['facturation', 'journal'],
-                (old) => ({ entries: [...(old?.entries ?? []), entry] }),
-              )
-            } catch {
-              // Journal non écrit (best-effort) ; l'apprentissage reste fait.
-            }
+            queryClient.setQueryData<{ entries: JournalEntry[] }>(
+              ['facturation', 'journal'],
+              (old) => ({ entries: [...(old?.entries ?? []), entry] }),
+            )
           }
         } catch {
-          // Même les nuages ont échoué → rien appris, learned reste false (pas d'undo
-          // asymétrique). On SIGNALE (rôle, table, réseau) au lieu du silence.
+          // Échec RPC (rôle, table, réseau) → rien appris, learned reste false (pas
+          // d'undo asymétrique). On SIGNALE au lieu du silence.
           setLearnWarning(true)
         }
       }
