@@ -106,8 +106,11 @@ Deno.serve(async (req) => {
     .select('id, role')
     .eq('id', userId)
     .maybeSingle()
-  if (targetErr)
-    return json({ error: targetErr.message || 'Vérification du compte échouée' }, 400)
+  if (targetErr) {
+    // Détail côté serveur uniquement (B3) ; message générique au client.
+    console.error('delete-user: lecture profil cible', targetErr)
+    return json({ error: 'Vérification du compte échouée' }, 400)
+  }
   if (!target)
     return json({ error: 'Compte introuvable dans la gestion des comptes' }, 404)
 
@@ -127,8 +130,11 @@ Deno.serve(async (req) => {
     .from('profiles')
     .delete()
     .eq('id', userId)
-  if (profDelErr)
-    return json({ error: profDelErr.message || 'Suppression du profil échouée' }, 400)
+  if (profDelErr) {
+    // Détail côté serveur uniquement (B3) ; message générique au client.
+    console.error('delete-user: suppression profil', profDelErr)
+    return json({ error: 'Suppression du profil échouée' }, 400)
+  }
 
   // 5. Suppression DÉFINITIVE de l'identité auth.users.
   const { error: delErr } = await admin.auth.admin.deleteUser(userId)

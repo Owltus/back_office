@@ -26,6 +26,7 @@ begin
   new.updated_at := now();
   if tg_op = 'INSERT' then
     new.created_by := auth.uid();
+    new.countersigned_by := null;                 -- jamais posée à la création (A3)
     if new.status = 'validated' then
       new.validated_at := now();
       new.validated_by := auth.uid();
@@ -35,6 +36,7 @@ begin
     end if;
   else -- UPDATE
     new.created_by := old.created_by;
+    new.countersigned_by := old.countersigned_by; -- non réécrivable par le client (A3)
     if new.status = 'validated' then
       if old.status is distinct from 'validated' then
         new.validated_at := now();

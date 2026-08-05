@@ -96,6 +96,7 @@ begin
   new.updated_at := now();
   if tg_op = 'INSERT' then
     new.created_by := auth.uid();                     -- création figée à l'appelant
+    new.countersigned_by := null;                     -- jamais posée à la création
     if new.status = 'validated' then
       new.validated_at := now();                      -- horodatage SERVEUR
       new.validated_by := auth.uid();                 -- signature = appelant réel
@@ -105,6 +106,7 @@ begin
     end if;
   else -- UPDATE
     new.created_by := old.created_by;                 -- created_by non réécrivable
+    new.countersigned_by := old.countersigned_by;     -- non réécrivable par le client (A3)
     if new.status = 'validated' then
       if old.status is distinct from 'validated' then
         new.validated_at := now();                    -- (re)validation → maintenant

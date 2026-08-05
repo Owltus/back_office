@@ -26,9 +26,12 @@
 alter table public.rapro_rooms
   drop constraint if exists rapro_rooms_status_check;
 
+-- NB (B7) : liste alignée sur l'état final à 5 valeurs (rattrapage + non_vendue),
+-- pour qu'un rejeu de CE fichier ne retire jamais `non_vendue`. La valeur de
+-- vérité est rapro_rooms_status_non_vendue.sql ; ces deux fichiers convergent.
 alter table public.rapro_rooms
   add constraint rapro_rooms_status_check
   check (
     status is null
-    or status in ('nettoyee', 'non_nettoyee', 'refus', 'rattrapage')
+    or status in ('nettoyee', 'non_nettoyee', 'refus', 'rattrapage', 'non_vendue')
   );

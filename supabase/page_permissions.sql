@@ -127,6 +127,13 @@ begin
   if p_grade not in ('admin', 'utilisateur') then
     raise exception 'invalid grade: %', p_grade;
   end if;
+  -- Garde « dernier admin » (A4) : refuser de rétrograder le SEUL admin restant
+  -- (sinon verrouillage total de l'administration).
+  if p_grade <> 'admin'
+     and exists (select 1 from public.profiles where id = p_user and role = 'admin')
+     and (select count(*) from public.profiles where role = 'admin') <= 1 then
+    raise exception 'dernier admin: rétrogradation refusée (verrouillage total)';
+  end if;
   update public.profiles set role = p_grade where id = p_user;
 end;
 $$;

@@ -59,6 +59,11 @@ begin
   if (select role from public.profiles where id = auth.uid()) <> 'admin' then
     raise exception 'Accès refusé : rôle admin requis';
   end if;
+  -- Anti-takeover inter-admin (A2) : refuser une cible admin autre que soi-même.
+  if target_user_id <> auth.uid()
+     and (select role from public.profiles where id = target_user_id) = 'admin' then
+    raise exception 'Cible administrateur : réinitialisation interdite (passer par le dashboard)';
+  end if;
   if length(new_password) < 12 then
     raise exception 'Le mot de passe doit faire au moins 12 caractères';
   end if;
