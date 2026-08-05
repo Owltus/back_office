@@ -13,12 +13,13 @@
 //   2. Contrôle applicatif : on lit le rôle de l'APPELANT dans `profiles` via la
 //      clé service_role ; SEUL un `admin` peut envoyer (le bouton est déjà
 //      admin-only côté front, mais la décision réelle est prise ICI).
-//   3. Les destinataires sont lus CÔTÉ SERVEUR depuis `email_recipients` : le
-//      navigateur ne peut pas faire envoyer à des adresses arbitraires.
+//   3. Les destinataires sont lus CÔTÉ SERVEUR depuis `server_report_recipients`
+//      (liste DÉDIÉE à l'envoi serveur, distincte du mailto `email_recipients`) :
+//      le navigateur ne peut pas faire envoyer à des adresses arbitraires.
 //
-// Empreinte sur le backend partagé : LECTURE SEULE (`email_recipients`). Aucune
-// écriture. La clé Resend et l'expéditeur vivent en secrets serveur, jamais
-// committés, jamais côté navigateur.
+// Empreinte backend : LECTURE SEULE (`server_report_recipients`). Aucune écriture.
+// La clé Resend et l'expéditeur vivent en secrets serveur, jamais committés, jamais
+// côté navigateur.
 //
 // Secrets à poser (par l'utilisateur) :
 //   supabase secrets set RESEND_API_KEY=re_xxx
@@ -134,7 +135,7 @@ Deno.serve(async (req) => {
       .filter(Boolean)
   } else {
     const { data: recips, error: recipErr } = await admin
-      .from('email_recipients')
+      .from('server_report_recipients')
       .select('email, type')
       .eq('active', true)
     if (recipErr)
