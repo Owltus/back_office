@@ -30,6 +30,7 @@ import { KPIDetailPanel } from '#/components/repjour/KPIDetailPanel.tsx'
 import { KPITable } from '#/components/repjour/KPITable.tsx'
 import { ImportSection } from '#/components/repjour/ImportSection.tsx'
 import { RecipientsModal } from '#/components/repjour/RecipientsModal.tsx'
+import { ServerSendDialog } from '#/components/repjour/ServerSendDialog.tsx'
 import { serverReportRecipients } from '#/lib/repjour/services/recipients.ts'
 import { SummaryCards } from '#/components/repjour/SummaryCards.tsx'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
@@ -120,21 +121,15 @@ export function DashboardBoard() {
   const [sending, setSending] = useState(false)
   // Flux dev (envoi serveur Resend) : état d'envoi + message de retour transitoire.
   const [serverSending, setServerSending] = useState(false)
-  const [serverNote, setServerNote] = useState<string | null>(null)
   const [showRecipients, setShowRecipients] = useState(false)
   const [showServerRecipients, setShowServerRecipients] = useState(false)
+  const [showServerConfirm, setShowServerConfirm] = useState(false)
   const [pdfBusy, setPdfBusy] = useState(false)
   const [printBlocked, setPrintBlocked] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   // Erreur d'une action du board (suppression, aperçu PDF) : affichée en bandeau
   // plutôt qu'un window.alert natif ou un échec muet.
   const [actionError, setActionError] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (!serverNote) return
-    const t = setTimeout(() => setServerNote(null), 15000)
-    return () => clearTimeout(t)
-  }, [serverNote])
 
   const { can } = useAuth()
   const queryClient = useQueryClient()
@@ -422,10 +417,9 @@ export function DashboardBoard() {
   async function handleSendServer() {
     if (!budget || !report || !rj || !rmtd || !pm || !ecart) return
     setServerSending(true)
-    setServerNote(null)
     try {
       const [yr, mo, da] = selectedDate.split('-')
-      const result = await sendReportViaServer({
+      await sendReportViaServer({
         emailData: {
           realiseJour: rj,
           realiseMTD: rmtd,
@@ -442,10 +436,8 @@ export function DashboardBoard() {
         pdfData: buildPdfData(budget),
         pdfTitle: `Repjour_NACV_${da}-${mo}-${yr}`,
       })
-      setServerNote(result.message)
     } catch (err) {
       console.error('Envoi serveur échoué :', err)
-      setServerNote("L'envoi a échoué. Réessaie dans un instant.")
     } finally {
       setServerSending(false)
     }
@@ -752,7 +744,7 @@ export function DashboardBoard() {
                         size="sm"
                         className="flex-1 border-dashed"
                         disabled={serverSending}
-                        onClick={handleSendServer}
+                        onClick={() => setShowServerConfirm(true)}
                       >
                         <Send />
                         {serverSending
@@ -771,11 +763,6 @@ export function DashboardBoard() {
                         </Button>
                       </Tip>
                     </ButtonGroup>
-                    {serverNote && (
-                      <p className="text-xs leading-relaxed text-muted-foreground">
-                        {serverNote}
-                      </p>
-                    )}
                   </div>
                 )}
           </>
@@ -817,6 +804,15 @@ export function DashboardBoard() {
           onClose={() => setShowServerRecipients(false)}
           service={serverReportRecipients}
           title="Destinataires serveur"
+        />
+      )}
+
+      {isAdmin && (
+        <ServerSendDialog
+          open={showServerConfirm}
+          onClose={() => setShowServerConfirm(false)}
+          onConfirm={handleSendServer}
+          sending={serverSending}
         />
       )}
 
