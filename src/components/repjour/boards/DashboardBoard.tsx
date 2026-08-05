@@ -132,7 +132,11 @@ export function DashboardBoard() {
   // plutôt qu'un window.alert natif ou un échec muet.
   const [actionError, setActionError] = useState<string | null>(null)
 
-  const { can } = useAuth()
+  const { can, grade } = useAuth()
+  // Grade ADMIN réel (« dieu »), distinct du niveau de page « gestion » qu'un
+  // gestionnaire non-admin peut avoir. Le flux d'envoi serveur est réservé aux
+  // vrais admins tant qu'il est en dev.
+  const isGradeAdmin = grade === 'admin'
   const queryClient = useQueryClient()
   const isAdmin = can('repjour', 'gestion')
   const canImport = can('repjour', 'ecriture')
@@ -735,12 +739,12 @@ export function DashboardBoard() {
                     tant qu'il n'est pas stabilisé (Edge Function à déployer,
                     domaine d'expéditeur à vérifier). N'altère pas l'envoi
                     existant au-dessus. */}
-                {isAdmin && (
+                {isGradeAdmin && (
                   <div className="flex flex-col gap-1">
                     {/* Groupe segmenté calqué sur « Envoyer par email » : le bouton
                         d'envoi (flex-1) + ⚙️ gestion des destinataires SERVEUR (liste
-                        dédiée server_report_recipients, distincte du mailto). Admin
-                        (gestion) uniquement. Style pointillé conservé (flux « dev »). */}
+                        dédiée server_report_recipients, distincte du mailto). Réservé
+                        au GRADE ADMIN (flux « dev »). Style pointillé conservé. */}
                     <ButtonGroup className="flex w-full">
                       <Button
                         variant="outline"
@@ -801,7 +805,7 @@ export function DashboardBoard() {
         />
       )}
 
-      {isAdmin && (
+      {isGradeAdmin && (
         <RecipientsModal
           open={showServerRecipients}
           onClose={() => setShowServerRecipients(false)}
@@ -810,7 +814,7 @@ export function DashboardBoard() {
         />
       )}
 
-      {isAdmin && (
+      {isGradeAdmin && (
         <ServerSendDialog
           open={showServerConfirm}
           onClose={() => setShowServerConfirm(false)}

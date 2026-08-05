@@ -81,35 +81,21 @@ Deno.serve(async (req) => {
   } = await admin.auth.getUser(token)
   if (callerErr || !caller) return json({ error: 'Session invalide' }, 401)
 
-  // 2. Autorisation : admin (grade) OU niveau GESTION sur la page RepJour — même
-  //    garde que le bouton d'envoi côté front (réservé à la gestion, pas aux
-  //    éditeurs, pour éviter la confusion).
+  // 2. Autorisation : GRADE ADMIN uniquement (profiles.role = 'admin') — pas le
+  //    niveau de page « gestion » qu'un gestionnaire non-admin pourrait avoir. Le
+  //    flux d'envoi serveur reste réservé aux vrais admins tant qu'il est en dev.
   const { data: prof, error: profErr } = await admin
     .from('profiles')
     .select('role')
     .eq('id', caller.id)
     .single()
-  if (profErr) return json({ error: 'Autorisation impossible' }, 403)
+  if (profErr || prof?.role !== 'admin')
+    return json({ error: 'Réservé aux administrateurs' }, 403)
 
-  const isAdmin = prof?.role === 'admin'
-  let pageLevel: string | null = isAdmin ? 'gestion' : null
-  if (!isAdmin) {
-    const { data: perm } = await admin
-      .from('user_page_permissions')
-      .select('level')
-      .eq('user_id', caller.id)
-      .eq('page', 'repjour')
-      .maybeSingle()
-    pageLevel = perm?.level ?? null
-  }
-  if (!isAdmin && pageLevel !== 'gestion')
-    return json({ error: 'Non autorisé' }, 403)
-
-  // 2b. Anti-spam SERVEUR : un envoi par utilisateur au maximum toutes les N
-  //     minutes (admin de grade : 5 ; gestionnaire non-admin : 15). Enforcement
-  //     non contournable. Timestamp du dernier envoi dans report_send_throttle
-  //     (accès service_role uniquement).
-  const cooldownMin = isAdmin ? 5 : 15
+  // 2b. Anti-spam SERVEUR : un envoi par utilisateur au maximum toutes les 5 min
+  //     (anti double-clic / faute de frappe). Enforcement non contournable ;
+  //     timestamp du dernier envoi dans report_send_throttle (service_role only).
+  const cooldownMin = 5
   const { data: last } = await admin
     .from('report_send_throttle')
     .select('last_sent_at')
