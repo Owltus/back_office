@@ -12,35 +12,37 @@ import {
 } from '#/components/ui/dialog.tsx'
 import { serverReportRecipients } from '#/lib/repjour/services/recipients.ts'
 import type { EmailRecipient } from '#/lib/repjour/services/recipients.ts'
+import type { ServerSendResult } from '#/lib/repjour/sendServer.ts'
 
 /*
  * Confirmation AVANT l'envoi serveur (Resend, envoi RÉEL immédiat). Ajoute de la
  * friction UX volontaire : on ouvre d'abord cette modale, qui LIT et AFFICHE la
- * liste réelle des destinataires serveur (`server_report_recipients`), puis on ne
- * part qu'après un clic explicite sur « Envoyer ». Sans destinataire actif, le
- * bouton est désactivé — impossible d'envoyer dans le vide par réflexe.
+ * liste réelle des destinataires (`server_report_recipients`), puis on ne part
+ * qu'après un clic explicite. Sans destinataire actif, le bouton est désactivé.
  *
- * NB : si le garde-fou serveur `REPORT_TEST_TO` est posé, l'envoi ne partira qu'à
- * l'adresse de test (le front ne connaît pas ce secret). La liste ci-dessous est
- * donc la cible EN PRODUCTION ; un mode test ne fait que la restreindre.
+ * L'envoi est attendu ici : en cas de refus (anti-spam serveur « réessaie dans
+ * X min », erreur réseau…), le message s'affiche DANS la modale, qui reste ouverte.
+ * Sur succès, la modale se ferme. Aucun toast persistant ailleurs.
  */
 
 interface Props {
   open: boolean
   onClose: () => void
-  /** Déclenche l'envoi réel (handleSendServer du board). */
-  onConfirm: () => void
-  /** Envoi en cours (désactive le bouton, affiche l'état). */
-  sending: boolean
+  /** Déclenche l'envoi réel et renvoie son résultat (ok + message). */
+  onConfirm: () => Promise<ServerSendResult>
 }
 
-export function ServerSendDialog({ open, onClose, onConfirm, sending }: Props) {
+export function ServerSendDialog({ open, onClose, onConfirm }: Props) {
   const [loading, setLoading] = useState(true)
   const [recipients, setRecipients] = useState<EmailRecipient[]>([])
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!open) return
     setLoading(true)
+    setError(null)
+    setBusy(false)
     serverReportRecipients.fetch().then((list) => {
       setRecipients(list)
       setLoading(false)
@@ -50,7 +52,16 @@ export function ServerSendDialog({ open, onClose, onConfirm, sending }: Props) {
   const active = recipients.filter((r) => r.active)
   const to = active.filter((r) => r.type === 'to')
   const cc = active.filter((r) => r.type === 'cc')
-  const canSend = !loading && to.length > 0 && !sending
+  const canSend = !loading && to.length > 0 && !busy
+
+  const send = async () => {
+    setBusy(true)
+    setError(null)
+    const result = await onConfirm()
+    setBusy(false)
+    if (result.ok) onClose()
+    else setError(result.message)
+  }
 
   const Line = (r: EmailRecipient) => (
     <li key={r.id} className="truncate text-sm text-foreground">
@@ -59,7 +70,7 @@ export function ServerSendDialog({ open, onClose, onConfirm, sending }: Props) {
   )
 
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+    <Dialog open={open} onOpenChange={(o) => !o && !busy && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -100,21 +111,21 @@ export function ServerSendDialog({ open, onClose, onConfirm, sending }: Props) {
               )}
             </>
           )}
+
+          {error && (
+            <div className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {error}
+            </div>
+          )}
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={sending}>
+          <Button variant="outline" onClick={onClose} disabled={busy}>
             Annuler
           </Button>
-          <Button
-            disabled={!canSend}
-            onClick={() => {
-              onClose()
-              onConfirm()
-            }}
-          >
-            <Send />
-            Envoyer
+          <Button disabled={!canSend} onClick={send}>
+            {busy ? <Loader2 className="animate-spin" /> : <Send />}
+            {busy ? 'Envoi…' : 'Envoyer'}
           </Button>
         </DialogFooter>
       </DialogContent>

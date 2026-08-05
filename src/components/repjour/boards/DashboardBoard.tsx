@@ -38,6 +38,7 @@ import { supabase } from '#/lib/supabase.ts'
 import { businessNow } from '#/lib/businessDay.ts'
 import { captureTableImage, sendReport } from '#/lib/repjour/email.ts'
 import { sendReportViaServer } from '#/lib/repjour/sendServer.ts'
+import type { ServerSendResult } from '#/lib/repjour/sendServer.ts'
 import {
   fetchAvailableDates,
   fetchBudget,
@@ -134,6 +135,10 @@ export function DashboardBoard() {
   const { can } = useAuth()
   const queryClient = useQueryClient()
   const isAdmin = can('repjour', 'gestion')
+  // L'envoi serveur est ouvert aux ÉDITEURS (niveau écriture) et au-dessus ; la
+  // GESTION des destinataires (⚙️) reste réservée au niveau gestion (isAdmin).
+  // L'anti-spam serveur applique un cooldown plus strict aux non-admins.
+  const canSendServer = can('repjour', 'ecriture')
   const canImport = can('repjour', 'ecriture')
 
   const d = new Date(selectedDate + 'T00:00:00')
@@ -414,12 +419,13 @@ export function DashboardBoard() {
   }
 
   // --- Envoi serveur (dev, admin-only) : PDF joint + corps HTML via Resend ----
-  async function handleSendServer() {
-    if (!budget || !report || !rj || !rmtd || !pm || !ecart) return
+  async function handleSendServer(): Promise<ServerSendResult> {
+    if (!budget || !report || !rj || !rmtd || !pm || !ecart)
+      return { ok: false, message: 'Données du rapport indisponibles.' }
     setServerSending(true)
     try {
       const [yr, mo, da] = selectedDate.split('-')
-      await sendReportViaServer({
+      return await sendReportViaServer({
         emailData: {
           realiseJour: rj,
           realiseMTD: rmtd,
@@ -438,6 +444,7 @@ export function DashboardBoard() {
       })
     } catch (err) {
       console.error('Envoi serveur échoué :', err)
+      return { ok: false, message: "L'envoi a échoué. Réessaie dans un instant." }
     } finally {
       setServerSending(false)
     }
@@ -732,11 +739,11 @@ export function DashboardBoard() {
                     tant qu'il n'est pas stabilisé (Edge Function à déployer,
                     domaine d'expéditeur à vérifier). N'altère pas l'envoi
                     existant au-dessus. */}
-                {isAdmin && (
+                {canSendServer && (
                   <div className="flex flex-col gap-1">
                     {/* Groupe segmenté calqué sur « Envoyer par email » : le bouton
-                        d'envoi (flex-1) + ⚙️ gestion des destinataires SERVEUR (liste
-                        dédiée server_report_recipients, distincte du mailto). Style
+                        d'envoi (flex-1, ouvert aux éditeurs) + ⚙️ gestion des
+                        destinataires SERVEUR (liste dédiée, RÉSERVÉE gestion). Style
                         pointillé conservé (flux « dev » non encore stabilisé). */}
                     <ButtonGroup className="flex w-full">
                       <Button
@@ -751,6 +758,7 @@ export function DashboardBoard() {
                           ? 'Envoi en cours…'
                           : 'Envoyer via serveur (dev)'}
                       </Button>
+                      {isAdmin && (
                       <Tip label="Gérer les destinataires serveur">
                         <Button
                           variant="outline"
@@ -762,6 +770,7 @@ export function DashboardBoard() {
                           <Settings />
                         </Button>
                       </Tip>
+                      )}
                     </ButtonGroup>
                   </div>
                 )}
@@ -807,12 +816,11 @@ export function DashboardBoard() {
         />
       )}
 
-      {isAdmin && (
+      {canSendServer && (
         <ServerSendDialog
           open={showServerConfirm}
           onClose={() => setShowServerConfirm(false)}
           onConfirm={handleSendServer}
-          sending={serverSending}
         />
       )}
 
