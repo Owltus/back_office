@@ -43,22 +43,24 @@ const KNOWN_STATUSES = new Set<RoomStatus>([
 export async function fetchDay(reportDate: string): Promise<RaproDay> {
   const { data, error } = await supabase
     .from(RAPRO_TABLE)
-    .select('room, status, carried_manual')
+    .select('room, status, carried_manual, materialized')
     .eq('report_date', reportDate)
   if (error) throw error
   const statuses = new Map<number, RoomStatus>()
   const carriedManual = new Set<number>()
+  const materialized = new Set<number>()
   for (const r of (data ?? []) as Pick<
     DbRaproRoom,
-    'room' | 'status' | 'carried_manual'
+    'room' | 'status' | 'carried_manual' | 'materialized'
   >[]) {
     // Couleur EXPLICITE seulement : une ligne `status null` (posée pour le seul
     // liseré) reste HORS de la map → « aucune couleur » (grise/verte selon vente).
     if (r.status != null)
       statuses.set(r.room, KNOWN_STATUSES.has(r.status) ? r.status : 'refus')
     if (r.carried_manual) carriedManual.add(r.room)
+    if (r.materialized) materialized.add(r.room)
   }
-  return { reportDate, statuses, carriedManual }
+  return { reportDate, statuses, carriedManual, materialized }
 }
 
 /** Occupation In-House par chambre pour un jour (vue rapro_occupancy, sans PII).
@@ -178,10 +180,35 @@ export async function materializeCleaned(
       report_date: reportDate,
       room,
       status: 'nettoyee',
+      // A5 : marque la ligne comme MATÉRIALISÉE (posée par la clôture, pas à la
+      // main) → purgeable à la réouverture. `carried_manual` absent du payload =
+      // préservé par l'upsert (une ligne « liseré seul » garde son liseré).
+      materialized: true,
     })),
     { onConflict: 'report_date,room' },
   )
   if (error) throw error
+}
+
+/**
+ * Purge à la RÉOUVERTURE (A5) des lignes matérialisées à la clôture qui ne
+ * correspondent plus à rien : sans liseré → ligne supprimée (retour au défaut,
+ * grise si plus vendue) ; avec liseré manuel → on ne retire que la couleur
+ * (status null) pour PRÉSERVER le liseré « bloquée la veille ». Ne touche JAMAIS
+ * une correction manuelle (materialized = false). Passe par les écritures
+ * normales (RLS) → l'autorisation de réouverture est respectée.
+ */
+export async function purgeMaterialized(
+  reportDate: string,
+  rooms: { room: number; carriedManual: boolean }[],
+): Promise<void> {
+  await Promise.all(
+    rooms.map((r) =>
+      r.carriedManual
+        ? setRoom(reportDate, r.room, null, true)
+        : clearRoom(reportDate, r.room),
+    ),
+  )
 }
 
 /* --- Feuille jour : clôture + commentaire (table rapro_sheets) ----------- */

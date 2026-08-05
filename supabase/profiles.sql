@@ -24,6 +24,9 @@ create policy "Users update own profile"
   with check (
     id = auth.uid()
     and role = (select role from public.profiles where id = auth.uid())
+    -- B2 : figer aussi l'email (jamais édité par /profil) → pas d'usurpation
+    -- d'affichage dans la console admin (profiles.email vs auth.users.email).
+    and email = (select email from public.profiles where id = auth.uid())
   );
 
 -- 2) Ceinture + bretelles : trigger BEFORE UPDATE qui FORCE le rôle à sa valeur

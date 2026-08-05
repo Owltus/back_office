@@ -30,6 +30,9 @@ export interface DbRaproRoom {
   status: RoomStatus | null
   /** Sur-statut « bloquée la veille » posé à la main (orthogonal au status). */
   carried_manual: boolean
+  /** true = ligne 'nettoyee' matérialisée à la clôture (pas une saisie manuelle).
+   * Sert à la purge ciblée à la réouverture (A5). */
+  materialized: boolean
 }
 
 /**
@@ -42,6 +45,9 @@ export interface RaproDay {
   reportDate: string
   statuses: Map<number, RoomStatus>
   carriedManual: Set<number>
+  /** Chambres dont la ligne 'nettoyee' a été matérialisée à la clôture (A5) :
+   * purgées à la réouverture si elles ne correspondent plus à une occupation. */
+  materialized: Set<number>
 }
 
 /** État de clôture d'une feuille jour. */

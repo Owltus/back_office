@@ -29,6 +29,10 @@ create table if not exists public.rapro_rooms (
   -- permet de marquer un report tardif directement sur le jour courant. Traité
   -- par le roulement comme une origine (cf. lib/rapro/carryover.ts).
   carried_manual boolean not null default false,
+  -- true = ligne 'nettoyee' POSÉE AUTOMATIQUEMENT à la clôture (materializeCleaned).
+  -- Distingue une matérialisation d'une correction manuelle → purge ciblée à la
+  -- réouverture (A5, cf. RaproBoard.handleReopen).
+  materialized boolean not null default false,
   created_by  uuid default auth.uid(),
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now(),

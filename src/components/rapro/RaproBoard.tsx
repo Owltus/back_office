@@ -53,6 +53,7 @@ import {
   fetchOldestDay,
   fetchSheet,
   materializeCleaned,
+  purgeMaterialized,
   reopenSheet,
   saveComment,
   setRoom,
@@ -63,6 +64,7 @@ import { capitalize, cn } from '#/lib/utils.ts'
 
 const EMPTY: ReadonlyMap<number, RoomStatus> = new Map()
 const EMPTY_MANUAL: ReadonlySet<number> = new Set()
+const EMPTY_MATERIALIZED: ReadonlySet<number> = new Set()
 
 /**
  * Rapprochement de chambres — suivi ménage par chambre et par jour.
@@ -131,6 +133,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   })
   const statuses = day?.statuses ?? EMPTY
   const dayCarriedManual = day?.carriedManual ?? EMPTY_MANUAL
+  const dayMaterialized = day?.materialized ?? EMPTY_MATERIALIZED
 
   // Feuille jour : clôture + commentaire (table rapro_sheets, au niveau jour).
   const { data: sheet } = useQuery({
@@ -400,6 +403,9 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
       reportDate: selectedDate,
       statuses: nextStatuses,
       carriedManual: nextManual,
+      // Édition de couleur/liseré : le flag `materialized` (posé à la clôture) est
+      // inchangé → on le reporte tel quel (vide sur un jour ouvert en pratique).
+      materialized: new Set(dayMaterialized),
     })
     try {
       await persist()
@@ -410,6 +416,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
           reportDate: selectedDate,
           statuses: new Map(),
           carriedManual: new Set(),
+          materialized: new Set(),
         },
       )
     }
@@ -492,20 +499,6 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   // sans rechargement complet de la page.
   const invalidateAnalytique = () =>
     queryClient.invalidateQueries({ queryKey: ['rapro', 'monthly-counts'] })
-  // Exécute une mutation de feuille puis resynchronise le cache (échec
-  // silencieux : l'invalidation rétablit l'état réel du serveur).
-  function refreshSheet(run: () => Promise<void>) {
-    run()
-      .catch(() => {})
-      .finally(() =>
-        Promise.all([
-          queryClient.invalidateQueries({
-            queryKey: ['rapro', 'sheet', selectedDate],
-          }),
-          invalidateAnalytique(),
-        ]),
-      )
-  }
   // Ouvre le modal de clôture, en pré-remplissant le nom déjà posé (cas d'une
   // réouverture puis re-clôture).
   function openCloseModal() {
@@ -538,7 +531,30 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
       )
   }
   function handleReopen() {
-    refreshSheet(() => reopenSheet(selectedDate))
+    // A5 : à la réouverture, purger les lignes 'nettoyee' MATÉRIALISÉES à la
+    // clôture (une vente annulée depuis ne doit plus être facturée ELIOR en
+    // fantôme). Les corrections manuelles (materialized = false) sont épargnées ;
+    // le liseré « bloquée la veille » est préservé (purgeMaterialized).
+    const toPurge = [...dayMaterialized].map((room) => ({
+      room,
+      carriedManual: dayCarriedManual.has(room),
+    }))
+    reopenSheet(selectedDate)
+      .then(() =>
+        toPurge.length ? purgeMaterialized(selectedDate, toPurge) : undefined,
+      )
+      .catch(() => {})
+      .finally(() =>
+        Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: ['rapro', 'sheet', selectedDate],
+          }),
+          queryClient.invalidateQueries({
+            queryKey: ['rapro', 'day', selectedDate],
+          }),
+          invalidateAnalytique(),
+        ]),
+      )
   }
   async function handleGeneratePdf() {
     setPdfBusy(true)
