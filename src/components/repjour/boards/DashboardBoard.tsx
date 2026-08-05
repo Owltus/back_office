@@ -407,7 +407,7 @@ export function DashboardBoard() {
     try {
       const data = buildPdfData(budget)
       const [yr, mo, da] = selectedDate.split('-')
-      await printRepjourReport(data, `Rapport_${da}-${mo}-${yr}`)
+      await printRepjourReport(data, `Repjour_NACV_${da}-${mo}-${yr}`)
     } catch (err) {
       console.error('Aperçu du rapport indisponible :', err)
       setActionError("L'aperçu d'impression n'a pas pu s'ouvrir. Réessaie.")
@@ -435,7 +435,7 @@ export function DashboardBoard() {
           year: report.year,
         },
         pdfData: buildPdfData(budget),
-        pdfTitle: `Rapport_${da}-${mo}-${yr}`,
+        pdfTitle: `Repjour_NACV_${da}-${mo}-${yr}`,
       })
       setServerNote(result.message)
     } catch (err) {
