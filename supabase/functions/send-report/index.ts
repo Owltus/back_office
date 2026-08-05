@@ -23,7 +23,8 @@
 // Secrets à poser (par l'utilisateur) :
 //   supabase secrets set RESEND_API_KEY=re_xxx
 //   supabase secrets set REPORT_FROM="Rep Jour <onboarding@resend.dev>"   (test)
-//   → plus tard : REPORT_FROM="Rep Jour <repjour@backoffice.daystrome.com>"
+//   → prod : REPORT_FROM="Rep Jour <noreply@repjour.naostack.com>"
+//     (domaine `repjour.naostack.com` à vérifier dans Resend, DNS sur Cloudflare)
 
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
