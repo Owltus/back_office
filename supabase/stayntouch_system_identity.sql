@@ -1,41 +1,32 @@
 -- =============================================================================
--- Identité système « StayNTouch (PMS) » — pour estampiller les imports AUTOMATIQUES
--- (daily_reports.imported_by → « importé par StayNTouch »).
+-- OPTIONNEL — identité système « StayNTouch (PMS) » pour ÉTIQUETER l'auteur des
+-- imports automatiques (daily_reports.imported_by).
 --
--- À EXÉCUTER PAR L'UTILISATEUR dans Supabase → SQL Editor. Ré-exécutable (idempotent).
--- NON DESTRUCTIF : insère UNE ligne dans public.profiles. N'écrit rien d'autre.
+-- ⚠ NE PAS exécuter l'ancien insert direct dans profiles : profiles.id est une FK
+--   vers auth.users (compte réel). Un insert d'un id absent d'auth.users échoue
+--   (erreur 23503 profiles_id_fkey). Le diagnostic ne voyait pas cette FK car elle
+--   pointe vers le schéma protégé `auth`.
 --
--- Diagnostic confirmé (2026-08-06) :
---   - daily_reports.imported_by → FK public.profiles(id), nullable.
---   - profiles.id : AUCUNE FK vers auth.users → une simple ligne profiles suffit
---     (pas besoin de créer un compte auth.users).
---   - pms_daily_metrics.imported_by : aucune FK, posé par trigger auth.uid()
---     (sera null en service_role — acceptable, l'étiquette vit sur daily_reports).
+-- PAR DÉFAUT : on N'A PAS BESOIN de ce fichier. L'import auto écrit
+-- daily_reports.imported_by = NULL (colonne nullable) → aucun compte à créer.
 --
--- SÉCURITÉ : cette identité n'a AUCUN droit. role='utilisateur' + aucune ligne
--- dans user_page_permissions = accès nul partout (défaut fermé). C'est une simple
--- ÉTIQUETTE d'affichage, pas un compte utilisable (aucun auth.users, donc aucune
--- connexion possible).
+-- SI tu VEUX l'étiquette « importé par StayNTouch » :
+--   1. Dashboard Supabase → Authentication → Users → Add user :
+--        email : pms@stayntouch.system   (adresse fictive, aucun usage réel)
+--        password : une longue chaîne aléatoire (jamais utilisée pour se connecter)
+--      → cela crée proprement la ligne auth.users + (via trigger) la ligne profiles.
+--   2. Récupère l'UUID du compte créé (colonne id dans la liste des users).
+--   3. Renomme la fiche + verrouille le grade (exécute ci-dessous en remplaçant
+--      <UUID> par l'UUID réel) :
+--
+--      update public.profiles
+--        set display_name = 'StayNTouch (PMS)', role = 'utilisateur'
+--        where id = '<UUID>';
+--
+--   4. Donne-moi cet UUID : je le mets dans supabase/functions/import-report/
+--      repjour.ts (constante SYSTEM_IMPORTER_ID) à la place de null, et on
+--      redéploie la fonction. Les imports auto s'afficheront alors « StayNTouch (PMS) ».
+--
+-- Le compte n'a AUCUN droit (role='utilisateur' + aucune permission de page) et
+-- n'est pas destiné à la connexion : c'est une simple étiquette.
 -- =============================================================================
-
-insert into public.profiles (id, email, display_name, role, first_name, last_name)
-values (
-  '11111111-1111-1111-1111-111111111111',
-  'pms@stayntouch.system',       -- adresse fictive (aucun auth.users derrière)
-  'StayNTouch (PMS)',            -- ce qui s'affiche : « importé par StayNTouch (PMS) »
-  'utilisateur',                 -- grade le plus bas ; aucun droit de page accordé
-  'StayNTouch',
-  'PMS'
-)
-on conflict (id) do update
-  set display_name = excluded.display_name,
-      first_name   = excluded.first_name,
-      last_name    = excluded.last_name;
-
--- Vérification (lecture seule) :
---   select id, display_name, role from public.profiles
---   where id = '11111111-1111-1111-1111-111111111111';
---   -- attendu : StayNTouch (PMS), utilisateur
---   select * from public.user_page_permissions
---   where user_id = '11111111-1111-1111-1111-111111111111';
---   -- attendu : 0 ligne (aucun droit)

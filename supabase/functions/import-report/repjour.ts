@@ -34,9 +34,13 @@ const MONTHS = [
   'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre',
 ]
 
-// Identité système « StayNTouch (PMS) » : les imports robot sont estampillés avec
-// cet UUID fixe (cf. étape 1, SQL d'identité système).
-const SYSTEM_IMPORTER_ID = '11111111-1111-1111-1111-111111111111'
+// Auteur des imports automatiques. `daily_reports.imported_by` est une FK vers
+// public.profiles(id) (donc vers un VRAI compte auth.users) et est NULLABLE :
+// pour l'import robot, on laisse `null` (pas d'auteur nommé) — aucune création de
+// compte, aucun risque. Pour afficher « importé par StayNTouch », il faudrait un
+// vrai compte système (dashboard → Authentication → Add user) puis mettre son
+// UUID ici. Reste `null` par défaut.
+const SYSTEM_IMPORTER_ID: string | null = null
 
 // --- Types minimaux (recopiés de src/lib/repjour/types.ts) --------------------
 interface Alert {
