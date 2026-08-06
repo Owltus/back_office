@@ -95,6 +95,12 @@ Deno.serve(async (req) => {
     auth: { autoRefreshToken: false, persistSession: false },
   })
 
+  // MODE TEST : IMPORT_DRY_RUN=true → on parse et VALIDE tout (mêmes contrôles
+  // qu'en réel : nuitées>80, négatifs, forecast en HT, colonnes/date PDJ…), mais
+  // on N'ÉCRIT RIEN en base. Le résumé part dans les logs. Bascule à false (ou
+  // secret retiré) pour l'import réel.
+  const dryRun = Deno.env.get('IMPORT_DRY_RUN') === 'true'
+
   // 2. Corps = e-mail brut (MIME complet).
   const rawEmail = await req.text()
   if (!rawEmail) return json({ error: 'Corps vide' }, 400)
@@ -133,11 +139,21 @@ Deno.serve(async (req) => {
     try {
       const imported =
         type === 'comparison'
-          ? await importComparison(admin, content, filename)
+          ? await importComparison(admin, content, filename, dryRun)
           : type === 'forecast'
-            ? await importForecast(admin, content, filename)
-            : await importInhouse(admin, content, filename)
-      results.push({ filename, type, ok: true, imported })
+            ? await importForecast(admin, content, filename, dryRun)
+            : await importInhouse(admin, content, filename, dryRun)
+      results.push({
+        filename,
+        type,
+        ok: true,
+        imported,
+        note: dryRun ? 'dry-run : validé, rien écrit' : undefined,
+      })
+      // Résumé LISIBLE dans les logs Supabase (Functions → import-report → Logs).
+      console.log(
+        `${dryRun ? '[DRY-RUN] recu OK' : '[IMPORT]'} ${type} « ${filename} » -> ${imported} ligne(s)${dryRun ? ' valides, AUCUNE ecriture' : ' importees'}.`,
+      )
     } catch (err) {
       hadError = true
       const message = err instanceof Error ? err.message : String(err)
@@ -148,5 +164,5 @@ Deno.serve(async (req) => {
 
   // 5. Compte rendu. Un échec bloquant → 422 pour que le Worker REJETTE (l'envoi
   //    reste visible côté PMS), plutôt qu'un faux « OK » silencieux.
-  return json({ ok: !hadError, results }, hadError ? 422 : 200)
+  return json({ ok: !hadError, dryRun, results }, hadError ? 422 : 200)
 })

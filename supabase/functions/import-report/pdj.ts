@@ -340,6 +340,7 @@ export async function importInhouse(
   admin: SupabaseClient,
   csv: string,
   filename: string,
+  dryRun = false,
 ): Promise<number> {
   const rows = csvToDbRows(csv, filename)
 
@@ -350,15 +351,19 @@ export async function importInhouse(
   for (const r of rows) byKey.set(`${r.service_date}|${r.room}`, r)
   const deduped = [...byKey.values()]
 
-  // Upsert par lots (cf. importRows, service.ts:119). Le payload N'INCLUT PAS
-  // breakfasts_served ni served → un réimport ne réinitialise pas la saisie du
-  // staff (ON CONFLICT DO UPDATE ne touche que les colonnes fournies).
-  const CHUNK = 1000
-  for (let i = 0; i < deduped.length; i += CHUNK) {
-    const { error } = await admin
-      .from(PDJ_TABLE)
-      .upsert(deduped.slice(i, i + CHUNK), { onConflict: 'service_date,room' })
-    if (error) throw new Error(`Écriture pdj_breakfasts échouée : ${error.message}`)
+  // Dry-run : parsing + dédoublonnage faits (throws ci-dessus si erreur), aucune
+  // écriture. Sinon, upsert par lots (cf. importRows, service.ts:119). Le payload
+  // N'INCLUT PAS breakfasts_served ni served → un réimport ne réinitialise pas la
+  // saisie du staff (ON CONFLICT DO UPDATE ne touche que les colonnes fournies).
+  if (!dryRun) {
+    const CHUNK = 1000
+    for (let i = 0; i < deduped.length; i += CHUNK) {
+      const { error } = await admin
+        .from(PDJ_TABLE)
+        .upsert(deduped.slice(i, i + CHUNK), { onConflict: 'service_date,room' })
+      if (error)
+        throw new Error(`Écriture pdj_breakfasts échouée : ${error.message}`)
+    }
   }
 
   return deduped.length

@@ -557,6 +557,7 @@ export async function importComparison(
   admin: SupabaseClient,
   csv: string,
   filename: string,
+  dryRun = false,
 ): Promise<number> {
   const reportDate = extractReportDate(filename)
   const comparison = parseComparison(csv)
@@ -643,7 +644,7 @@ export async function importComparison(
   let metrics: ComparisonMetricRow[] = []
   try {
     metrics = parseComparisonMetrics(csv)
-    await upsertDailyMetrics(admin, dateStr, metrics)
+    if (!dryRun) await upsertDailyMetrics(admin, dateStr, metrics)
   } catch (err) {
     console.error(
       'Archivage du détail du rapport échoué :',
@@ -682,18 +683,22 @@ export async function importComparison(
     alerts,
   }
 
-  const { error: upsertError } = await admin
-    .from('daily_reports')
-    .upsert(reportData, { onConflict: 'date' })
+  // En dry-run : tout a été parsé et validé (throws ci-dessus si erreur), mais on
+  // N'ÉCRIT PAS. Sinon, upsert réel du rapport du jour.
+  if (!dryRun) {
+    const { error: upsertError } = await admin
+      .from('daily_reports')
+      .upsert(reportData, { onConflict: 'date' })
 
-  if (upsertError) {
-    console.error('Sauvegarde du rapport échouée :', upsertError.message)
-    throw new Error(
-      "Le rapport n'a pas pu être enregistré. Réessaie dans un instant.",
-    )
+    if (upsertError) {
+      console.error('Sauvegarde du rapport échouée :', upsertError.message)
+      throw new Error(
+        "Le rapport n'a pas pu être enregistré. Réessaie dans un instant.",
+      )
+    }
   }
 
-  // Nombre de lignes importées : les lignes de détail, sinon 1 (le rapport lui-même).
+  // Nombre de lignes (qui seraient) importées : les lignes de détail, sinon 1.
   return metrics.length || 1
 }
 
@@ -711,6 +716,7 @@ export async function importForecast(
   admin: SupabaseClient,
   csv: string,
   _filename: string,
+  dryRun = false,
 ): Promise<number> {
   const rows = parseForecastAll(csv)
   if (rows.length === 0) {
@@ -791,14 +797,17 @@ export async function importForecast(
     occ_percent: (r.occ / TOTAL_ROOMS) * 100,
   }))
 
-  const { error } = await admin
-    .from('forecast_days')
-    .upsert(data, { onConflict: 'date' })
-  if (error) {
-    console.error('Sauvegarde des prévisions échouée :', error.message)
-    throw new Error(
-      "Les prévisions n'ont pas pu être enregistrées. Réessaie dans un instant.",
-    )
+  // Dry-run : validation faite, aucune écriture. Sinon, upsert réel.
+  if (!dryRun) {
+    const { error } = await admin
+      .from('forecast_days')
+      .upsert(data, { onConflict: 'date' })
+    if (error) {
+      console.error('Sauvegarde des prévisions échouée :', error.message)
+      throw new Error(
+        "Les prévisions n'ont pas pu être enregistrées. Réessaie dans un instant.",
+      )
+    }
   }
 
   return rows.length
