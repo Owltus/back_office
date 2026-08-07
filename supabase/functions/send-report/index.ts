@@ -29,6 +29,8 @@
 
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
+import { sendMail } from '../_shared/send-mail.ts'
+
 const cors = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers':
@@ -42,11 +44,6 @@ const json = (body: unknown, status = 200) =>
     headers: { ...cors, 'Content-Type': 'application/json' },
   })
 
-interface Recipient {
-  email: string
-  type: 'to' | 'cc'
-}
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   if (req.method !== 'POST') return json({ error: 'Méthode non autorisée' }, 405)
@@ -57,10 +54,6 @@ Deno.serve(async (req) => {
   const serviceKey =
     Deno.env.get('SB_SECRET_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
   const resendKey = Deno.env.get('RESEND_API_KEY')
-  // Expéditeur : `onboarding@resend.dev` en test (Resend n'accepte alors QUE ta
-  // propre adresse d'inscription comme destinataire). À basculer vers ton domaine
-  // vérifié une fois les DNS en place.
-  const from = Deno.env.get('REPORT_FROM') ?? 'Rep Jour <onboarding@resend.dev>'
 
   if (!url || !serviceKey)
     return json({ error: 'Configuration serveur manquante' }, 500)
@@ -92,29 +85,45 @@ Deno.serve(async (req) => {
   if (profErr || prof?.role !== 'admin')
     return json({ error: 'Réservé aux administrateurs' }, 403)
 
-  // 2b. Anti-spam SERVEUR : un envoi par utilisateur au maximum toutes les 5 min
-  //     (anti double-clic / faute de frappe). Enforcement non contournable ;
-  //     timestamp du dernier envoi dans report_send_throttle (service_role only).
-  const cooldownMin = 5
-  const { data: last } = await admin
+  // 2b. Anti-spam SERVEUR PROGRESSIF (par utilisateur, non contournable) : au lieu
+  //     d'un blocage fixe, une courbe qui se dégonfle toute seule à l'arrêt.
+  //       - délai de base : 10 s entre deux envois (on peut en enchaîner) ;
+  //       - >= 5 envois en 1 min  → l'écart requis monte à 5 min ;
+  //       - >= 10 envois en 5 min → l'écart requis monte à 1 h.
+  //     L'historique récent (horodatages epoch ms) est stocké dans
+  //     report_send_throttle.recent_sends (jsonb), élagué à 1 h. service_role only.
+  const nowMs = Date.now()
+  const { data: throttleRow } = await admin
     .from('report_send_throttle')
-    .select('last_sent_at')
+    .select('recent_sends')
     .eq('user_id', caller.id)
     .maybeSingle()
-  if (last?.last_sent_at) {
-    const remainingMs =
-      cooldownMin * 60_000 - (Date.now() - new Date(last.last_sent_at).getTime())
-    if (remainingMs > 0) {
-      const mins = Math.ceil(remainingMs / 60_000)
-      return json(
-        { error: `Envoi trop rapproché. Réessaie dans ${mins} min.` },
-        429,
-      )
-    }
+  const rawRecent = Array.isArray(throttleRow?.recent_sends)
+    ? (throttleRow.recent_sends as unknown[])
+    : []
+  const recent = rawRecent
+    .map((t) => (typeof t === 'number' ? t : new Date(String(t)).getTime()))
+    .filter((t) => Number.isFinite(t) && nowMs - t < 3_600_000) // garde 1 h
+  const inLastMinute = recent.filter((t) => nowMs - t < 60_000).length
+  const inLast5Min = recent.filter((t) => nowMs - t < 300_000).length
+  let requiredGapMs = 10_000 // base : 10 s
+  if (inLastMinute >= 5) requiredGapMs = 300_000 // 5 min
+  if (inLast5Min >= 10) requiredGapMs = 3_600_000 // 1 h
+  const lastMs = recent.length ? Math.max(...recent) : 0
+  if (lastMs && nowMs - lastMs < requiredGapMs) {
+    const remainingMs = requiredGapMs - (nowMs - lastMs)
+    const msg =
+      remainingMs >= 60_000
+        ? `Trop d'envois rapprochés. Réessaie dans ${Math.ceil(remainingMs / 60_000)} min.`
+        : `Petit délai anti-doublon. Réessaie dans ${Math.ceil(remainingMs / 1000)} s.`
+    return json({ error: msg }, 429)
   }
 
-  // 3. Corps de requête (produit par le front : jsPDF + buildReportHtml).
+  // 3. Corps de requête (produit par le front : jsPDF + rendu HTML).
+  //    `kind` distingue le RepJour (défaut) du PDJ : il pilote l'EXPÉDITEUR et la
+  //    LISTE de destinataires (deux diffusions strictement séparées).
   let body: {
+    kind?: 'repjour' | 'pdj'
     subject?: string
     htmlBody?: string
     pdfBase64?: string
@@ -125,12 +134,25 @@ Deno.serve(async (req) => {
   } catch {
     return json({ error: 'Corps de requête invalide' }, 400)
   }
+  const kind = body.kind === 'pdj' ? 'pdj' : 'repjour'
   const subject = (body.subject ?? '').trim()
   const htmlBody = body.htmlBody ?? ''
   const pdfBase64 = body.pdfBase64 ?? ''
   const pdfName = (body.pdfName ?? 'rapport.pdf').trim()
   if (!subject || !htmlBody)
     return json({ error: 'Sujet ou corps manquant' }, 400)
+
+  // Expéditeur + table de destinataires selon `kind`. `onboarding@resend.dev` en
+  // repli test (Resend n'accepte alors QUE ton adresse d'inscription). Bascule vers
+  // les domaines vérifiés (repjour/pdj .naostack.com) une fois les DNS en place.
+  const from =
+    kind === 'pdj'
+      ? (Deno.env.get('PDJ_REPORT_FROM') ??
+        Deno.env.get('REPORT_FROM') ??
+        'OKKO PDJ <onboarding@resend.dev>')
+      : (Deno.env.get('REPORT_FROM') ?? 'Rep Jour <onboarding@resend.dev>')
+  const recipientsTable =
+    kind === 'pdj' ? 'pdj_report_recipients' : 'server_report_recipients'
 
   // Durcissement (B2) : le contenu est piloté par l'appelant (admin), on le borne.
   //   - pdfName : nom de fichier simple .pdf, jamais de chemin (../, /).
@@ -142,82 +164,42 @@ Deno.serve(async (req) => {
   if (pdfBase64.length > 8_000_000)
     return json({ error: 'Pièce jointe trop volumineuse' }, 413)
 
-  // 4. Destinataires.
-  //   GARDE-FOU LISTE BLANCHE : si le secret REPORT_TEST_TO est défini, on IGNORE
-  //   TOTALEMENT `email_recipients` et on n'envoie QU'AUX adresses de ce secret
-  //   (une ou plusieurs, séparées par des virgules). Aucune autre adresse ne peut
-  //   recevoir. Pour passer à la vraie liste (production) : retirer ce secret
-  //   (`supabase secrets unset REPORT_TEST_TO`).
-  const testTo = Deno.env.get('REPORT_TEST_TO')?.trim()
-  let to: string[]
-  let cc: string[] = []
-  if (testTo) {
-    to = testTo
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean)
-  } else {
-    const { data: recips, error: recipErr } = await admin
-      .from('server_report_recipients')
-      .select('email, type')
-      .eq('active', true)
-    if (recipErr)
-      return json({ error: 'Lecture des destinataires échouée' }, 500)
-    const list = (recips ?? []) as Recipient[]
-    to = list.filter((r) => r.type === 'to').map((r) => r.email)
-    cc = list.filter((r) => r.type === 'cc').map((r) => r.email)
-  }
-  if (to.length === 0)
-    return json({ error: 'Aucun destinataire actif (type « to »)' }, 400)
-
-  // Durcissement (F5) : plafond de destinataires par envoi. Borne le rayon
-  // d'action d'un token admin compromis (relais de masse) et les coûts Resend.
-  // Le rapport journalier a une poignée de destinataires ; 50 est très large.
-  const MAX_RECIPIENTS = 50
-  if (to.length + cc.length > MAX_RECIPIENTS)
-    return json({ error: 'Trop de destinataires pour un seul envoi' }, 413)
-
-  // 5. Envoi via Resend (PDF en pièce jointe si fourni).
-  const payload: Record<string, unknown> = {
+  // 4. + 5. Destinataires + envoi, DÉLÉGUÉS au module partagé ../_shared/send-mail.ts
+  //    (lecture de la liste `recipientsTable`, garde-fou liste blanche REPORT_TEST_TO,
+  //    plafond de destinataires, envoi Resend, erreurs génériques). Un même code
+  //    d'envoi sert ce chemin MANUEL et le chemin AUTOMATIQUE (import-report).
+  const testTo = Deno.env.get('REPORT_TEST_TO')
+  const result = await sendMail({
+    admin,
     from,
-    to,
     subject,
     html: htmlBody,
-  }
-  if (cc.length > 0) payload.cc = cc
-  if (pdfBase64)
-    payload.attachments = [{ filename: pdfName, content: pdfBase64 }]
-
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${resendKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
+    pdfBase64,
+    pdfName,
+    recipientsTable,
+    resendKey,
+    testTo,
   })
 
-  if (!res.ok) {
-    // Erreur générique au client (Mineur-1 : ne pas exposer la structure interne
-    // de l'API Resend) ; le détail reste côté serveur pour le diagnostic.
-    console.error('Resend a échoué', res.status, await res.text())
-    return json({ error: 'Envoi du message échoué' }, 502)
-  }
-  const out = await res.json().catch(() => ({}))
+  if (!result.ok)
+    return json({ error: result.error ?? 'Envoi du message échoué' }, 502)
 
-  // Envoi réussi : (ré)arme le cooldown pour cet utilisateur. `upsert` sur la clé
-  // primaire user_id → une ligne par personne, écrasée à chaque envoi.
-  await admin
-    .from('report_send_throttle')
-    .upsert({ user_id: caller.id, last_sent_at: new Date().toISOString() })
+  // Envoi réussi : ajoute cet horodatage à l'historique récent (élagué, max 30
+  // entrées) → alimente la courbe anti-spam progressive. `upsert` sur user_id.
+  const updatedRecent = [...recent, nowMs].slice(-30)
+  await admin.from('report_send_throttle').upsert({
+    user_id: caller.id,
+    last_sent_at: new Date(nowMs).toISOString(),
+    recent_sends: updatedRecent,
+  })
 
   return json(
     {
       ok: true,
-      id: out?.id ?? null,
-      to: to.length,
-      cc: cc.length,
-      testMode: Boolean(testTo),
+      id: result.id ?? null,
+      to: result.to,
+      cc: result.cc,
+      testMode: result.testMode,
     },
     200,
   )

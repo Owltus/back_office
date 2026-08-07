@@ -24,6 +24,8 @@ import { createClient } from 'jsr:@supabase/supabase-js@2'
 
 import { importComparison, importForecast } from './repjour.ts'
 import { importInhouse } from './pdj.ts'
+import { maybeAutoSendRepjour } from './autoSend.ts'
+import { maybeAutoSendPdj } from './autoSendPdj.ts'
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -159,6 +161,46 @@ Deno.serve(async (req) => {
       const message = err instanceof Error ? err.message : String(err)
       console.error(`Import ${type} (${filename}) échoué :`, message)
       results.push({ filename, type, ok: false, note: message })
+    }
+  }
+
+  // 4b. ENVOI AUTOMATIQUE du RepJour : si un Comparison ou un Forecast vient
+  //     d'être importé, tenter l'envoi auto (il ne part QUE si les DEUX du jour
+  //     sont présents, une seule fois — garde d'idempotence auto_sent_at). Un échec
+  //     ou un no-op N'IMPACTE PAS le statut d'import (le PMS ne doit pas rejouer
+  //     l'e-mail pour un souci d'envoi). En dry-run : détecte et logue, n'envoie rien.
+  const touchedRepjour = results.some(
+    (r) => r.ok && (r.type === 'comparison' || r.type === 'forecast'),
+  )
+  if (touchedRepjour) {
+    try {
+      const outcome = await maybeAutoSendRepjour(admin, dryRun)
+      console.log(
+        `[AUTO-SEND repjour] ${outcome.sent ? 'ENVOYÉ' : 'non envoyé'} — ${outcome.note}`,
+      )
+    } catch (err) {
+      console.error(
+        '[AUTO-SEND repjour] exception inattendue :',
+        err instanceof Error ? err.message : String(err),
+      )
+    }
+  }
+
+  // 4c. ENVOI AUTOMATIQUE du PDJ : si un In-House vient d'être importé, envoyer la
+  //     feuille de petit-déjeuner du jour (une seule fois — garde pdj_auto_send_log).
+  //     Idem : n'impacte pas le statut d'import ; en dry-run, détecte sans envoyer.
+  const touchedPdj = results.some((r) => r.ok && r.type === 'inhouse')
+  if (touchedPdj) {
+    try {
+      const outcome = await maybeAutoSendPdj(admin, dryRun)
+      console.log(
+        `[AUTO-SEND pdj] ${outcome.sent ? 'ENVOYÉ' : 'non envoyé'} — ${outcome.note}`,
+      )
+    } catch (err) {
+      console.error(
+        '[AUTO-SEND pdj] exception inattendue :',
+        err instanceof Error ? err.message : String(err),
+      )
     }
   }
 
