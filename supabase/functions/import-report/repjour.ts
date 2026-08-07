@@ -814,6 +814,11 @@ export async function importForecast(
   }
 
   // UPSERT forecast_days (pas de colonne imported_by).
+  // `imported_at` estampille CHAQUE import réussi (même valeur pour tout le lot)
+  // → l'auto-send RepJour peut juger si le Forecast est FRAIS (importé lors du
+  // cycle courant) avant d'envoyer. L'upsert onConflict='date' met donc à jour
+  // imported_at à chaque ré-import.
+  const importedAt = new Date().toISOString()
   const data = rows.map((r) => ({
     date: r.date,
     month: r.month,
@@ -823,6 +828,7 @@ export async function importForecast(
     rev_ttc: r.revTTC,
     adr_ttc: r.occ > 0 ? r.revTTC / r.occ : 0,
     occ_percent: (r.occ / TOTAL_ROOMS) * 100,
+    imported_at: importedAt,
   }))
 
   // Dry-run : validation faite, aucune écriture. Sinon, upsert réel.
