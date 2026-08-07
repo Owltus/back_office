@@ -1,13 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import {
-  Image as ImageIcon,
-  LineChart,
-  Send,
-  Settings,
-  Trash2,
-} from 'lucide-react'
+import { LineChart, Send, Settings, Trash2 } from 'lucide-react'
 
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
@@ -36,7 +30,7 @@ import { SummaryCards } from '#/components/repjour/SummaryCards.tsx'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { supabase } from '#/lib/supabase.ts'
 import { businessNow } from '#/lib/businessDay.ts'
-import { captureTableImage, sendReport } from '#/lib/repjour/email.ts'
+import { MANUAL_IMPORT_ENABLED_FOR_ALL } from '#/lib/repjour/constants.ts'
 import { sendReportViaServer } from '#/lib/repjour/sendServer.ts'
 import type { ServerSendResult } from '#/lib/repjour/sendServer.ts'
 import {
@@ -119,10 +113,8 @@ export function DashboardBoard() {
   // après 02h → veille, en journée les deux coïncident. Puis on affiche le tableau
   // si son rapport existe, ou l'invite d'import sinon. (Cf. getImportDayStr.)
   const [selectedDate, setSelectedDate] = useState(getImportDayStr)
-  const [sending, setSending] = useState(false)
-  // Flux dev (envoi serveur Resend) : état d'envoi + message de retour transitoire.
+  // Envoi serveur (Resend) : état d'envoi transitoire (bouton de la barre du haut).
   const [serverSending, setServerSending] = useState(false)
-  const [showRecipients, setShowRecipients] = useState(false)
   const [showServerRecipients, setShowServerRecipients] = useState(false)
   const [showServerConfirm, setShowServerConfirm] = useState(false)
   const [pdfBusy, setPdfBusy] = useState(false)
@@ -534,6 +526,43 @@ export function DashboardBoard() {
                   }
                 />
               </ButtonGroup>
+              {/* Groupe « actions admin » (GRADE admin) : envoi serveur du rapport
+                  (Resend, PDF joint + HTML) + gestion des destinataires serveur.
+                  Relocalisé ici, à côté de « Imprimer ». L'envoi auto (Comparison +
+                  Forecast présents) reste le canal normal ; ce bouton est le FILET
+                  de secours manuel, non bridé par la garde d'idempotence auto, et
+                  ouvre TOUJOURS le modal de vérification avant d'envoyer. */}
+              {isGradeAdmin && (
+                <ButtonGroup>
+                  <Tip
+                    label={
+                      canPrint
+                        ? 'Envoyer le rapport par e-mail'
+                        : 'Aucune donnée à envoyer pour ce jour'
+                    }
+                  >
+                    <Button
+                      variant="outline"
+                      size="icon-sm"
+                      aria-label="Envoyer le rapport par e-mail"
+                      disabled={!canPrint || serverSending}
+                      onClick={() => setShowServerConfirm(true)}
+                    >
+                      <Send />
+                    </Button>
+                  </Tip>
+                  <Tip label="Gérer les destinataires">
+                    <Button
+                      variant="outline"
+                      size="icon-sm"
+                      aria-label="Gérer les destinataires"
+                      onClick={() => setShowServerRecipients(true)}
+                    >
+                      <Settings />
+                    </Button>
+                  </Tip>
+                </ButtonGroup>
+              )}
               {/* Groupe « navigation temporelle », collé au bord droit. */}
               <StepNav
                 onPrev={() => shiftDate(-1)}
@@ -665,113 +694,11 @@ export function DashboardBoard() {
 
             <AlertBanner alerts={report.alerts || []} />
 
-                {/* Actions email, directement SOUS le tableau, au-dessus de la
-                    carte d'import. Visibles par TOUS les rôles : captureTableImage
-                    et sendReport n'écrivent rien en base (îlot HEX autonome de
-                    email.ts, presse-papier, mailto). Seule « Gérer les
-                    destinataires » écrit (email_recipients) et reste admin. */}
-                {/* Groupe segmenté (cf. ButtonGroup) : copier l'image / envoyer
-                    / (admin) gérer les destinataires. 2 ou 3 boutons selon le
-                    rôle. `flex w-full` pour que « Envoyer » (flex-1) occupe la
-                    largeur restante entre les icônes. */}
-                <ButtonGroup className="flex w-full">
-                  <Tip label="Copier le tableau en image">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      aria-label="Copier le tableau en image"
-                      onClick={() =>
-                        captureTableImage({
-                          realiseJour: rj,
-                          realiseMTD: rmtd,
-                          projeteMois: pm,
-                          budget,
-                          ecart,
-                          dayOfMonth: report.day_of_month,
-                          month: report.month,
-                          year: report.year,
-                        })
-                      }
-                    >
-                      <ImageIcon />
-                    </Button>
-                  </Tip>
-                  <Button
-                    variant="outline"
-                    className="flex-1"
-                    disabled={sending}
-                    onClick={async () => {
-                      setSending(true)
-                      try {
-                        await sendReport({
-                          realiseJour: rj,
-                          realiseMTD: rmtd,
-                          projeteMois: pm,
-                          budget,
-                          ecart,
-                          dayOfMonth: report.day_of_month,
-                          month: report.month,
-                          year: report.year,
-                        })
-                      } finally {
-                        setSending(false)
-                      }
-                    }}
-                  >
-                    {sending ? 'Préparation...' : 'Envoyer par email'}
-                  </Button>
-                  {isAdmin && (
-                    <Tip label="Gérer les destinataires">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        aria-label="Gérer les destinataires"
-                        onClick={() => setShowRecipients(true)}
-                      >
-                        <Settings />
-                      </Button>
-                    </Tip>
-                  )}
-                </ButtonGroup>
-
-                {/* Flux DEV (admin-only) : envoi serveur via Resend — PDF en
-                    pièce jointe + corps HTML, en un clic. Séparé et en pointillés
-                    tant qu'il n'est pas stabilisé (Edge Function à déployer,
-                    domaine d'expéditeur à vérifier). N'altère pas l'envoi
-                    existant au-dessus. */}
-                {isGradeAdmin && (
-                  <div className="flex flex-col gap-1">
-                    {/* Groupe segmenté calqué sur « Envoyer par email » : le bouton
-                        d'envoi (flex-1) + ⚙️ gestion des destinataires SERVEUR (liste
-                        dédiée server_report_recipients, distincte du mailto). Réservé
-                        au GRADE ADMIN (flux « dev »). Style pointillé conservé. */}
-                    <ButtonGroup className="flex w-full">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1 border-dashed"
-                        disabled={serverSending}
-                        onClick={() => setShowServerConfirm(true)}
-                      >
-                        <Send />
-                        {serverSending
-                          ? 'Envoi en cours…'
-                          : 'Envoyer via serveur (dev)'}
-                      </Button>
-                      <Tip label="Gérer les destinataires serveur">
-                        <Button
-                          variant="outline"
-                          size="icon-sm"
-                          className="border-dashed"
-                          aria-label="Gérer les destinataires serveur"
-                          onClick={() => setShowServerRecipients(true)}
-                        >
-                          <Settings />
-                        </Button>
-                      </Tip>
-                    </ButtonGroup>
-                  </div>
-                )}
+                {/* Envoi du rapport : relocalisé dans la barre d'actions du HAUT
+                    (PageHeader, à côté de « Imprimer »). L'ancien groupe inline
+                    « Copier l'image / Envoyer par email (mailto) / (dev) » a été
+                    retiré : l'envoi passe désormais par le serveur (auto + filet
+                    manuel admin). */}
           </>
         ) : null}
 
@@ -787,8 +714,15 @@ export function DashboardBoard() {
               voit plus que le tableau (`isAdmin || !report`) ;
             - admin : toujours visible ce jour-là (données présentes ou non) ;
             - utilisateur : jamais (exclu par `canImport`).
+            SOMMEIL : l'ingestion étant désormais AUTOMATIQUE, l'import manuel est
+            réservé au GRADE admin (filet de secours), sauf si le flag
+            MANUAL_IMPORT_ENABLED_FOR_ALL le rouvre à tous les rôles habilités.
             Un import réussi recharge le rapport affiché. */}
-        {!loading && canImport && isImportDay && (isAdmin || !report) && (
+        {!loading &&
+          canImport &&
+          isImportDay &&
+          (isAdmin || !report) &&
+          (MANUAL_IMPORT_ENABLED_FOR_ALL || isGradeAdmin) && (
             <ImportSection
               spacious={importOnly}
               onImported={() =>
@@ -798,19 +732,12 @@ export function DashboardBoard() {
           )}
       </div>
 
-      {isAdmin && (
-        <RecipientsModal
-          open={showRecipients}
-          onClose={() => setShowRecipients(false)}
-        />
-      )}
-
       {isGradeAdmin && (
         <RecipientsModal
           open={showServerRecipients}
           onClose={() => setShowServerRecipients(false)}
           service={serverReportRecipients}
-          title="Destinataires serveur"
+          title="Destinataires du rapport"
         />
       )}
 

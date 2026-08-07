@@ -8,6 +8,8 @@ import {
   Coffee,
   FileUp,
   LineChart,
+  Send,
+  Settings,
   Star,
   Trash2,
 } from 'lucide-react'
@@ -28,8 +30,14 @@ import { Button } from '#/components/ui/button.tsx'
 import { DatePickerButton } from '#/components/form/fields.tsx'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { capitalize, cn } from '#/lib/utils.ts'
+import { MANUAL_IMPORT_ENABLED_FOR_ALL } from '#/lib/repjour/constants.ts'
 import { errorMessage } from '#/lib/errors.ts'
 import { printWithTitle } from '#/lib/print.ts'
+import { RecipientsModal } from '#/components/repjour/RecipientsModal.tsx'
+import { ServerSendDialog } from '#/components/repjour/ServerSendDialog.tsx'
+import { pdjReportRecipients } from '#/lib/repjour/services/recipients.ts'
+import { sendPdjViaServer } from '#/lib/pdj/sendServer.ts'
+import { type PdjSheetData } from '#/lib/pdj/pdf.ts'
 import {
   ALL_ROOMS,
   localDateStr,
@@ -77,9 +85,18 @@ const fmtTitle = new Intl.DateTimeFormat('fr-FR', {
 })
 
 export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
-  const { can, pageLevel } = useAuth()
+  const { can, pageLevel, grade } = useAuth()
   const canEdit = can('pdj', 'ecriture')
   const isAdmin = can('pdj', 'gestion')
+  // Import manuel en SOMMEIL : l'ingestion du In-House est désormais AUTOMATIQUE
+  // (Edge Function import-report). Le dépôt manuel reste réservé au GRADE admin
+  // (filet de secours), sauf flag de réouverture. La saisie « servi » reste, elle,
+  // sous `canEdit` (inchangée). Cf. MANUAL_IMPORT_ENABLED_FOR_ALL.
+  const canManualImport =
+    canEdit && (MANUAL_IMPORT_ENABLED_FOR_ALL || grade === 'admin')
+  // Grade ADMIN réel : réserve l'envoi serveur (Resend) + la gestion des
+  // destinataires PDJ, comme sur RepJour.
+  const isGradeAdmin = grade === 'admin'
   // Niveau effectif : sert au verrou PAR JOUR de la saisie (cocher les cases).
   // Écriture ne coche que dans la fenêtre J-3 ; la gestion coche n'importe quel
   // jour (cf. lib/pdj/editability.ts).
@@ -355,11 +372,53 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
     [dayEditable, selectedDate, queryClient],
   )
 
+  // Données de la feuille PDJ (contrat partagé) : source UNIQUE de l'impression
+  // (PDF jsPDF) ET de l'envoi serveur — la pièce jointe est donc EXACTEMENT la
+  // feuille imprimée. Ne garde que les chambres occupées ; le générateur itère
+  // ALL_ROOMS pour rendre chaque chambre.
+  const pdjSheet: PdjSheetData = useMemo(
+    () => ({
+      titleDate,
+      serviceDate: selectedDate,
+      stats,
+      rows: (dayRows ?? []).map((r) => ({
+        room: r.room,
+        guestName: r.guest_name,
+        vip: r.vip,
+        status: r.status,
+        stayCount: r.stay_count,
+        guests: r.guests,
+        breakfastsIncluded: r.breakfasts_included,
+        breakfastsServed: r.breakfasts_served,
+      })),
+    }),
+    [titleDate, selectedDate, stats, dayRows],
+  )
+
+  // Impression : logique D'ORIGINE, INCHANGÉE — la feuille A4 mise en forme par
+  // pdj.css (@media print) via printWithTitle. C'est la trame historique validée.
+  // NE PAS remplacer par un générateur jsPDF.
   function handlePrint() {
     const d = selectedDate ? new Date(selectedDate + 'T00:00:00') : new Date()
     const dd = String(d.getDate()).padStart(2, '0')
     const mm = String(d.getMonth() + 1).padStart(2, '0')
     printWithTitle(`Breakfast_${dd}-${mm}-${d.getFullYear()}`)
+  }
+
+  // Envoi serveur manuel (filet admin) : PDF joint + corps HTML via Resend, sur la
+  // liste PDJ dédiée. Non bridé par l'idempotence de l'envoi AUTO.
+  async function handleSendServerPdj(): Promise<{ ok: boolean; message: string }> {
+    if (!hasData)
+      return { ok: false, message: 'Aucune donnée de PDJ pour ce jour.' }
+    setServerSending(true)
+    try {
+      return await sendPdjViaServer(pdjSheet)
+    } catch (err) {
+      console.error('Envoi PDJ serveur échoué :', err)
+      return { ok: false, message: "L'envoi a échoué. Réessaie dans un instant." }
+    } finally {
+      setServerSending(false)
+    }
   }
 
   // Suppression des données du jour AFFICHÉ uniquement (ce service_date).
@@ -382,6 +441,10 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
   // qu'un écran vide à imprimer — on le dit plutôt que de ne rien faire.
   const [printBlocked, setPrintBlocked] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  // Envoi serveur PDJ (Resend) : état d'envoi + modales (confirmation, destinataires).
+  const [serverSending, setServerSending] = useState(false)
+  const [showServerConfirm, setShowServerConfirm] = useState(false)
+  const [showServerRecipients, setShowServerRecipients] = useState(false)
   usePrintShortcut(() => {
     if (!hasData) {
       setPrintBlocked(true)
@@ -457,7 +520,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                   </Link>
                 </Button>
               </Tip>
-              {canEdit && (
+              {canManualImport && (
                 <Tip label="Importer un CSV In-House Guests">
                   <Button
                     variant="outline"
@@ -478,6 +541,42 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                 }
               />
             </ButtonGroup>
+            {/* Groupe « actions admin » (GRADE admin) : envoi serveur du PDJ (Resend,
+                PDF joint + HTML) + gestion des destinataires PDJ. À côté d'« Imprimer ».
+                L'envoi normal est AUTO (après import In-House) ; ce bouton est le FILET
+                manuel, non bridé par l'idempotence auto, et ouvre TOUJOURS le modal de
+                vérification. */}
+            {isGradeAdmin && (
+              <ButtonGroup>
+                <Tip
+                  label={
+                    hasData
+                      ? 'Envoyer le PDJ par e-mail'
+                      : 'Aucune donnée à envoyer pour ce jour'
+                  }
+                >
+                  <Button
+                    variant="outline"
+                    size="icon-sm"
+                    aria-label="Envoyer le PDJ par e-mail"
+                    disabled={!hasData || serverSending}
+                    onClick={() => setShowServerConfirm(true)}
+                  >
+                    <Send />
+                  </Button>
+                </Tip>
+                <Tip label="Gérer les destinataires PDJ">
+                  <Button
+                    variant="outline"
+                    size="icon-sm"
+                    aria-label="Gérer les destinataires PDJ"
+                    onClick={() => setShowServerRecipients(true)}
+                  >
+                    <Settings />
+                  </Button>
+                </Tip>
+              </ButtonGroup>
+            )}
             {/* Groupe « navigation temporelle », collé au bord droit. */}
             {canNavigate && (
               <StepNav
@@ -507,9 +606,9 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
       {loading ? (
         <BoardSkeleton />
       ) : !hasData ? (
-        canEdit ? (
+        canManualImport ? (
           // Jour courant (ou jour sélectionné) sans rapport : on NE retombe PAS
-          // sur d'anciennes données, on propose l'import.
+          // sur d'anciennes données, on propose l'import (admin, filet de secours).
           <EmptyCanvas
             role="button"
             tabIndex={0}
@@ -651,6 +750,26 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
         destructive
         onConfirm={handleDeleteDay}
       />
+
+      {isGradeAdmin && (
+        <RecipientsModal
+          open={showServerRecipients}
+          onClose={() => setShowServerRecipients(false)}
+          service={pdjReportRecipients}
+          title="Destinataires PDJ"
+        />
+      )}
+
+      {isGradeAdmin && (
+        <ServerSendDialog
+          open={showServerConfirm}
+          onClose={() => setShowServerConfirm(false)}
+          onConfirm={handleSendServerPdj}
+          service={pdjReportRecipients}
+          title="Envoyer le petit-déjeuner"
+          description="La feuille de petit-déjeuner du jour va être envoyée par e-mail (PDF joint) aux destinataires ci-dessous."
+        />
+      )}
     </div>
   )
 }

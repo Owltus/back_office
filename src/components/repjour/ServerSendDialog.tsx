@@ -11,7 +11,10 @@ import {
   DialogTitle,
 } from '#/components/ui/dialog.tsx'
 import { serverReportRecipients } from '#/lib/repjour/services/recipients.ts'
-import type { EmailRecipient } from '#/lib/repjour/services/recipients.ts'
+import type {
+  EmailRecipient,
+  RecipientsService,
+} from '#/lib/repjour/services/recipients.ts'
 import type { ServerSendResult } from '#/lib/repjour/sendServer.ts'
 
 /*
@@ -30,9 +33,22 @@ interface Props {
   onClose: () => void
   /** Déclenche l'envoi réel et renvoie son résultat (ok + message). */
   onConfirm: () => Promise<ServerSendResult>
+  /** Liste de destinataires à afficher (défaut : RepJour). Le PDJ passe la sienne. */
+  service?: RecipientsService
+  /** Titre de la modale (défaut : « Envoyer le rapport »). */
+  title?: string
+  /** Phrase d'introduction (défaut : formulation RepJour). */
+  description?: string
 }
 
-export function ServerSendDialog({ open, onClose, onConfirm }: Props) {
+export function ServerSendDialog({
+  open,
+  onClose,
+  onConfirm,
+  service = serverReportRecipients,
+  title = 'Envoyer le rapport',
+  description = 'Le rapport du jour va être envoyé par email (PDF joint) aux destinataires ci-dessous.',
+}: Props) {
   const [loading, setLoading] = useState(true)
   const [recipients, setRecipients] = useState<EmailRecipient[]>([])
   const [busy, setBusy] = useState(false)
@@ -43,11 +59,11 @@ export function ServerSendDialog({ open, onClose, onConfirm }: Props) {
     setLoading(true)
     setError(null)
     setBusy(false)
-    serverReportRecipients.fetch().then((list) => {
+    service.fetch().then((list) => {
       setRecipients(list)
       setLoading(false)
     })
-  }, [open])
+  }, [open, service])
 
   const active = recipients.filter((r) => r.active)
   const to = active.filter((r) => r.type === 'to')
@@ -75,12 +91,9 @@ export function ServerSendDialog({ open, onClose, onConfirm }: Props) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Send className="size-5 text-primary" />
-            Envoyer le rapport
+            {title}
           </DialogTitle>
-          <DialogDescription>
-            Le rapport du jour va être envoyé par email (PDF joint) aux
-            destinataires ci-dessous.
-          </DialogDescription>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
