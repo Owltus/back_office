@@ -39,6 +39,11 @@ supabase/.temp
 supabase/.branches
 supabase/.env
 
+# Claude Code : outillage local de session (agents, skills, workflows générés).
+# Pas des sources du projet. Retirer une sous-ligne si tu veux versionner tes
+# agents/skills persos partagés (ex. !.claude/agents/).
+.claude/
+
 # Éditeurs / IDE
 .idea
 *.suo
