@@ -14,7 +14,7 @@
 
 import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2'
 
-import { stayKind } from '../_shared/pdj/rooms.ts'
+import { KNOWN_ROOMS, stayKind } from '../_shared/pdj/rooms.ts'
 import {
   buildPdjDateStr,
   buildPdjEmailHtml,
@@ -154,7 +154,14 @@ export async function maybeAutoSendPdj(
     console.error('Auto-envoi PDJ : lecture des lignes du jour échouée :', rowsErr.message)
     return { sent: false, note: 'lecture des lignes échouée' }
   }
-  const breakfastRows = (rows ?? []) as BreakfastRow[]
+  // NE GARDER QUE les chambres de l'inventaire dessiné : une ligne hors inventaire
+  // ne figure dans aucun étage du PDF, donc la compter dans les tuiles rendrait le
+  // PDF incohérent (total ≠ grille) et divergerait de la feuille imprimée client.
+  const allRows = (rows ?? []) as BreakfastRow[]
+  const breakfastRows = allRows.filter((r) => KNOWN_ROOMS.has(r.room))
+  const dropped = allRows.length - breakfastRows.length
+  if (dropped > 0)
+    console.warn(`Auto-envoi PDJ : ${dropped} chambre(s) hors inventaire ignorée(s).`)
   const stats = computeStats(breakfastRows)
   const sheetRows: PdjSheetRow[] = breakfastRows.map((r) => ({
     room: r.room,
@@ -201,8 +208,13 @@ export async function maybeAutoSendPdj(
     testTo,
   })
 
-  if (!result.ok)
+  if (!result.ok) {
+    // Libérer la réservation : sinon le jour reste marqué « envoyé » dans
+    // pdj_auto_send_log sans qu'aucun mail soit parti, et aucune tentative auto ne
+    // le rattrapera. La suppression permet un nouvel essai au prochain import.
+    await admin.from('pdj_auto_send_log').delete().eq('service_date', D)
     return { sent: false, note: `envoi échoué (${result.error ?? 'inconnu'})` }
+  }
   return {
     sent: true,
     note: `envoyé le PDJ du ${D} à ${result.to} destinataire(s)${

@@ -20,6 +20,13 @@ export const ALL_ROOMS = [
   ...range(621, 631), // étage 6 (11)
 ]
 
+/** Ensemble des chambres de l'inventaire (test d'appartenance en O(1)). Sert à
+ * écarter les lignes hors inventaire (salle de séminaire, « 0 », faute PMS) qui
+ * ne sont dessinées dans aucun étage : sinon les tuiles de stats compteraient une
+ * chambre absente de la grille (PDF incohérent) et divergeraient de la feuille
+ * imprimée côté client. */
+export const KNOWN_ROOMS = new Set<number>(ALL_ROOMS)
+
 /** Étage d'une chambre (centaine du numéro). */
 export const floorOf = (room: number): number => Math.floor(room / 100)
 
