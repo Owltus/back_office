@@ -57,12 +57,11 @@ import type { KPIBlock, MonthBudget } from '#/lib/repjour/types.ts'
  * le forecast du mois, calcule les KPI et écarts (lib/repjour/calc), puis rend
  * SummaryCards + KPITable + AlertBanner + KPIDetailPanel.
  *
- * Actions email : « Copier l'image » (captureTableImage) et « Envoyer par email »
- * (sendReport) sont ouvertes à TOUS les rôles — elles n'écrivent PAS en base
- * (image via html2canvas sur l'îlot HEX autonome de email.ts, copie
- * presse-papier, mailto). Seule « Gérer les destinataires » (RecipientsModal)
- * écrit (`email_recipients`) et reste réservée à l'admin. Le reste du board
- * n'effectue que des `select` (+ un abonnement temps réel en lecture).
+ * Actions email : l'ingestion des rapports est désormais AUTOMATIQUE (Edge
+ * Function), et l'envoi serveur (Resend, PDF joint) + la gestion des
+ * destinataires sont regroupés dans la barre d'actions du haut, réservés au
+ * GRADE admin (filet de secours manuel — l'envoi normal est auto). Le reste du
+ * board n'effectue que des `select` (+ un abonnement temps réel en lecture).
  */
 
 const ZERO_KPI: KPIBlock = {
@@ -605,11 +604,13 @@ export function DashboardBoard() {
             </p>
           </div>
         ) : importOnly ? (
-          // Rapport du jour pas encore importé (rôle habilité) : on n'affiche
-          // rien ici — la carte d'import ci-dessous devient l'unique contenu.
+          // Rapport du jour pas encore importé, pour un rôle habilité NON-admin.
+          // L'ingestion étant désormais AUTOMATIQUE (Edge Function) et l'import
+          // manuel réservé au grade admin, on n'invite plus vers un contrôle
+          // absent : on informe que le rapport arrivera de lui-même.
           <p className="text-sm text-muted-foreground">
-            Le rapport du {displayDate} n'a pas encore été chargé. Charge-le
-            ci-dessous.
+            Le rapport du {displayDate} sera importé automatiquement dès sa
+            réception.
           </p>
         ) : !report && !hasPartialData ? (
           <div className="rounded-xl border border-border bg-card p-8 text-center">
