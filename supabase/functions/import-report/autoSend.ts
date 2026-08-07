@@ -3,12 +3,16 @@
 //
 // PRINCIPE (unifié, robuste aux deux ordres d'arrivée) : le rapport à envoyer est
 // « le daily_reports le plus RÉCENT pas encore auto-envoyé (auto_sent_at IS NULL)
-// dont le mois possède au moins une ligne forecast_days ». Ce candidat unique :
-//   - Comparison arrive, Forecast déjà là  → la ligne du jour devient candidate → envoi ;
-//   - Forecast arrive, Comparison déjà là   → idem → envoi ;
-//   - un seul des deux présent               → pas de candidat → pas d'envoi ;
-//   - déjà envoyé                            → auto_sent_at posé → exclu.
-// On n'a donc besoin NI du nom de fichier NI des mois du Forecast.
+// dont le mois possède un Forecast FRAIS (importé lors du cycle courant) ». Ce
+// candidat unique :
+//   - Comparison arrive, Forecast frais déjà là → la ligne du jour devient candidate → envoi ;
+//   - Forecast (frais) arrive, Comparison déjà là → idem → envoi ;
+//   - un seul des deux présent                    → pas de candidat / pas frais → pas d'envoi ;
+//   - Forecast présent mais PÉRIMÉ (import raté ce cycle, ex. 422) → pas frais → pas d'envoi ;
+//   - déjà envoyé                                 → auto_sent_at posé → exclu.
+// La FRAÎCHEUR (et non la simple présence) garantit qu'on n'envoie jamais un RepJour
+// avec un projeté d'un cycle précédent. L'envoi MANUEL admin reste toujours possible.
+// On n'a besoin NI du nom de fichier NI des mois du Forecast.
 //
 // IDEMPOTENCE : la réservation est ATOMIQUE — `update … set auto_sent_at = now()
 // where date = D and auto_sent_at is null returning *`. Postgres sérialise les
@@ -32,8 +36,17 @@ import type { RepjourPdfData } from '../_shared/repjour/pdf.ts'
 import type { EmailData } from '../_shared/repjour/reportHtml.ts'
 import type { Ecart, KPIBlock, MonthBudget } from '../_shared/repjour/types.ts'
 import { sendMail } from '../_shared/send-mail.ts'
+import { businessDateStr } from '../_shared/businessDay.ts'
 
 const TOTAL_ROOMS = 80
+
+// Fenêtre de « fraîcheur » du Forecast : importé il y a moins de FRESH_WINDOW_MS.
+// Les rapports arrivent une fois par cycle (~24 h d'écart) ; 12 h sépare donc
+// nettement « importé ce cycle » de « importé le cycle précédent ». On raisonne
+// en fenêtre de temps plutôt qu'en égalité de date de cycle, pour rester robuste
+// autour de la frontière 02h (un import à 01h59 et un autre à 02h01 sont la même
+// nuit mais deux dates de cycle différentes).
+const FRESH_WINDOW_MS = 12 * 60 * 60 * 1000
 
 /** Ligne daily_reports (colonnes utiles). */
 interface DailyRow {
@@ -141,24 +154,41 @@ export async function maybeAutoSendRepjour(
   if (candidate.auto_sent_at)
     return { sent: false, note: `déjà envoyé (${D})` }
 
-  // Fenêtre de récence : ne pas auto-envoyer un rapport de plus de 3 jours (outage
-  // long / backfill → filet manuel). Comparaison de chaînes 'YYYY-MM-DD' (ordonnées).
-  const cutoff = new Date(Date.now() - 3 * 86_400_000).toISOString().slice(0, 10)
+  // Fenêtre de récence, calée sur le cycle hôtelier (02h) : ne pas auto-envoyer un
+  // rapport de plus de ~3 cycles (outage / backfill → filet manuel).
+  const cutoff = businessDateStr(new Date(Date.now() - 3 * 86_400_000))
   if (D < cutoff)
     return { sent: false, note: `rapport trop ancien (${D}) — envoi auto ignoré` }
 
-  // Forecast présent pour le mois du rapport ? (« les deux présents »)
-  const { count: fcCount, error: fcErr } = await admin
+  // GARDE-FOU CLÉ : le Forecast du mois doit être FRAIS (importé lors du cycle
+  // courant), pas seulement « présent ». On lit le dernier `imported_at` du mois :
+  // s'il n'y a pas de forecast, ou s'il date d'un cycle précédent (échec du forecast
+  // cette nuit, ex. le 422 du 2026-08-08), on N'ENVOIE PAS en auto — le RepJour
+  // partirait sinon avec un projeté périmé. L'envoi MANUEL reste possible.
+  // NB : la colonne imported_at peut être nullable en base (lignes antérieures au
+  // stamping). En SQL `order ... desc` place les NULL EN PREMIER → on les exclut
+  // explicitement pour récupérer le dernier import RÉEL, jamais un NULL.
+  const { data: fcRows, error: fcErr } = await admin
     .from('forecast_days')
-    .select('date', { count: 'exact', head: true })
+    .select('imported_at')
     .eq('year', candidate.year)
     .eq('month', candidate.month)
+    .not('imported_at', 'is', null)
+    .order('imported_at', { ascending: false })
+    .limit(1)
   if (fcErr) {
     console.error('Auto-envoi : lecture forecast_days échouée :', fcErr.message)
     return { sent: false, note: 'lecture prévisions échouée' }
   }
-  if ((fcCount ?? 0) === 0)
-    return { sent: false, note: 'Forecast pas encore présent pour ce mois' }
+  const latestFc = fcRows?.[0]?.imported_at as string | undefined
+  if (!latestFc)
+    return { sent: false, note: 'Forecast absent pour ce mois — envoi auto ignoré' }
+  const fcAgeMs = Date.now() - new Date(latestFc).getTime()
+  if (!(fcAgeMs >= 0 && fcAgeMs < FRESH_WINDOW_MS))
+    return {
+      sent: false,
+      note: `Forecast pas frais (importé il y a ${Math.round(fcAgeMs / 3_600_000)} h) — envoi auto ignoré, manuel possible`,
+    }
 
   // 2. Budget du mois — requis pour l'écart. Absent → on n'envoie pas (rapport
   //    incomplet) ; ce n'est pas une erreur de la fonction.
