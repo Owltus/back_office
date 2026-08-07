@@ -154,11 +154,19 @@ export async function maybeAutoSendRepjour(
   if (candidate.auto_sent_at)
     return { sent: false, note: `déjà envoyé (${D})` }
 
-  // Fenêtre de récence, calée sur le cycle hôtelier (02h) : ne pas auto-envoyer un
-  // rapport de plus de ~3 cycles (outage / backfill → filet manuel).
-  const cutoff = businessDateStr(new Date(Date.now() - 3 * 86_400_000))
-  if (D < cutoff)
-    return { sent: false, note: `rapport trop ancien (${D}) — envoi auto ignoré` }
+  // Éligibilité BORNÉE AU CYCLE COURANT (anti catch-up). Le rapport StayNTouch
+  // porte sur la veille de sa génération, donc au cycle courant la date attendue
+  // est businessDateStr() ou businessDateStr(J-1) (tolérance frontière 02h). Tout
+  // rapport plus ancien n'est PLUS auto-envoyé — sinon un rapport de la veille non
+  // envoyé partirait avec un projeté recalculé depuis le Forecast d'un AUTRE cycle
+  // (mélange de millésimes). Le rattrapage des jours antérieurs reste au canal
+  // manuel admin. Le motif « hors cycle » est transitoire (cf. relecture différée
+  // dans index.ts) : il couvre aussi le cas où le Comparison du jour n'a pas encore
+  // été committé par l'invocation sœur.
+  const cycleToday = businessDateStr()
+  const cycleYesterday = businessDateStr(new Date(Date.now() - 86_400_000))
+  if (D !== cycleToday && D !== cycleYesterday)
+    return { sent: false, note: `hors cycle courant (${D}) — envoi auto ignoré, manuel possible` }
 
   // GARDE-FOU CLÉ : le Forecast du mois doit être FRAIS (importé lors du cycle
   // courant), pas seulement « présent ». On lit le dernier `imported_at` du mois :
@@ -352,8 +360,14 @@ export async function maybeAutoSendRepjour(
     testTo,
   })
 
-  if (!result.ok)
+  if (!result.ok) {
+    // Libérer la réservation atomique : sinon auto_sent_at resterait posé et le
+    // jour serait « brûlé » (aucune nouvelle tentative auto), alors qu'aucun mail
+    // n'est parti. Un ré-import pourra relancer l'envoi. La 2e invocation éventuelle
+    // reverra auto_sent_at NULL, mais l'UPDATE atomique garde un seul gagnant.
+    await admin.from('daily_reports').update({ auto_sent_at: null }).eq('date', D)
     return { sent: false, note: `envoi échoué (${result.error ?? 'inconnu'})` }
+  }
   return {
     sent: true,
     note: `envoyé le rapport du ${D} à ${result.to} destinataire(s)${

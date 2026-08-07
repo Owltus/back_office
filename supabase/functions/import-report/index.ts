@@ -174,7 +174,17 @@ Deno.serve(async (req) => {
   )
   if (touchedRepjour) {
     try {
-      const outcome = await maybeAutoSendRepjour(admin, dryRun)
+      let outcome = await maybeAutoSendRepjour(admin, dryRun)
+      // Course concurrente : Comparison et Forecast arrivent en DEUX e-mails →
+      // deux invocations Edge quasi simultanées. Si celle-ci s'abstient pour une
+      // raison TRANSITOIRE (la donnée sœur n'est pas encore committée), on retente
+      // UNE fois après un court délai, le temps que l'autre invocation committe.
+      // L'idempotence atomique (auto_sent_at) garantit qu'aucun double envoi ne peut
+      // en résulter. Fenêtre résiduelle infime si le commit sœur dépasse le délai.
+      if (!dryRun && !outcome.sent && /pas frais|absent|hors cycle/i.test(outcome.note)) {
+        await new Promise((r) => setTimeout(r, 4000))
+        outcome = await maybeAutoSendRepjour(admin, dryRun)
+      }
       console.log(
         `[AUTO-SEND repjour] ${outcome.sent ? 'ENVOYÉ' : 'non envoyé'} — ${outcome.note}`,
       )
