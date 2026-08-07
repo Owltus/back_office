@@ -154,10 +154,36 @@ function parseGuestRows(content: string, serviceDate: string): ParsedRow[] {
   // Retrait d'un BOM éventuel en tête (export PMS/Windows) : sinon il se colle au
   // premier en-tête « Room » et casse la détection des colonnes.
   const clean = content.charCodeAt(0) === 0xfeff ? content.slice(1) : content
-  const separator = clean.split('\n')[0].includes(';') ? ';' : ','
-  const lines = clean.split('\n').filter((l) => l.trim())
-  // En-têtes normalisés : trim() retire espaces, \r de fin de ligne (CRLF) et BOM
-  // résiduel pour que indexOf('Room') etc. matchent.
+  const rawLines = clean.split('\n').filter((l) => l.trim())
+
+  // TROUVER la ligne d'en-tête (Room + Status + Guest Name) au lieu de supposer la
+  // première : l'export AUTOMATIQUE StayNTouch (« ..._report_DAILY_....csv ») fait
+  // précéder l'en-tête de 2 lignes de métadonnées (Hotel Code… / valeurs). On teste
+  // les deux séparateurs (, puis ;) et on retient celui qui découpe bien l'en-tête.
+  const isHeader = (cells: string[]) =>
+    cells.includes('Room') &&
+    cells.includes('Status') &&
+    cells.includes('Guest Name')
+  let separator = ','
+  let headerIdx = -1
+  outer: for (let i = 0; i < rawLines.length; i++) {
+    for (const sep of [',', ';']) {
+      const cells = parseCsvLine(rawLines[i], sep).map((c) => c.trim())
+      if (isHeader(cells)) {
+        separator = sep
+        headerIdx = i
+        break outer
+      }
+    }
+  }
+  if (headerIdx === -1) {
+    throw new Error(
+      'Colonnes manquantes : en-tete (Room, Status, Guest Name...) introuvable.',
+    )
+  }
+
+  // À partir de l'en-tête : ligne d'en-tête + lignes de données (préambule ignoré).
+  const lines = rawLines.slice(headerIdx)
   const headers = parseCsvLine(lines[0], separator).map((h) => h.trim())
 
   const col = Object.fromEntries(
