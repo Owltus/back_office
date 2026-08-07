@@ -27,6 +27,7 @@ import type {
   PdjStats,
 } from '../_shared/pdj/pdf.ts'
 import { sendMail } from '../_shared/send-mail.ts'
+import { businessDateStr } from '../_shared/businessDay.ts'
 
 export interface AutoSendOutcome {
   sent: boolean
@@ -101,7 +102,8 @@ export async function maybeAutoSendPdj(
   if (!recent) return { sent: false, note: 'aucune donnée PDJ' }
   const D = recent.service_date as string
 
-  const cutoff = new Date(Date.now() - 3 * 86_400_000).toISOString().slice(0, 10)
+  // Fenêtre de récence calée sur le cycle hôtelier (02h) : jamais un vieux jour.
+  const cutoff = businessDateStr(new Date(Date.now() - 3 * 86_400_000))
   if (D < cutoff)
     return { sent: false, note: `PDJ trop ancien (${D}) — envoi auto ignoré` }
 
