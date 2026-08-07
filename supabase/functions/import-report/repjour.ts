@@ -157,16 +157,30 @@ function parseComparison(csvText: string): ComparisonData {
     )
   }
 
-  const headerRow = result.data[0]
+  // Trouver la LIGNE d'en-tête (colonnes TODAY + MTD) : l'export automatique peut
+  // être précédé de lignes de métadonnées (Hotel Code…), on ne suppose donc pas
+  // la première ligne.
+  let headerIdx = -1
   let todayIndex = -1
   let mtdIndex = -1
-  for (let i = 0; i < headerRow.length; i++) {
-    const val = headerRow[i]?.trim().toUpperCase()
-    if (val === 'TODAY') todayIndex = i
-    if (val === 'MTD') mtdIndex = i
+  for (let r = 0; r < result.data.length; r++) {
+    const row = result.data[r]
+    let t = -1
+    let m = -1
+    for (let i = 0; i < row.length; i++) {
+      const val = row[i]?.trim().toUpperCase()
+      if (val === 'TODAY') t = i
+      if (val === 'MTD') m = i
+    }
+    if (t !== -1 && m !== -1) {
+      headerIdx = r
+      todayIndex = t
+      mtdIndex = m
+      break
+    }
   }
 
-  if (todayIndex === -1 || mtdIndex === -1) {
+  if (headerIdx === -1) {
     throw new Error(
       "Ce fichier n'a pas le bon format. Vérifie que c'est bien le fichier des chiffres du jour (Comparison By Date).",
     )
@@ -178,7 +192,7 @@ function parseComparison(csvText: string): ComparisonData {
   let totalRevenueHTMTD = 0
   let vatToday = 0
 
-  for (const row of result.data.slice(1)) {
+  for (const row of result.data.slice(headerIdx + 1)) {
     const section = (row[0] || '').trim()
     if (section === 'Occupied Rooms') {
       occExclCompToday = parseFloat(row[todayIndex]) || 0
@@ -239,19 +253,27 @@ function parseComparisonMetrics(csvText: string): ComparisonMetricRow[] {
     )
   }
 
-  const header = data[0].map((h) => (h ?? '').trim().toUpperCase())
-  const index = Object.fromEntries(
-    METRIC_COLUMNS.map(([key, label]) => [key, header.indexOf(label)]),
-  ) as Record<(typeof METRIC_COLUMNS)[number][0], number>
-
-  if (index.today === -1) {
+  // Ligne d'en-tête = première contenant TODAY (préambule éventuel ignoré).
+  let headerIdx = -1
+  for (let r = 0; r < data.length; r++) {
+    if (data[r].map((h) => (h ?? '').trim().toUpperCase()).includes('TODAY')) {
+      headerIdx = r
+      break
+    }
+  }
+  if (headerIdx === -1) {
     throw new Error(
       "Ce fichier n'a pas le bon format. Vérifie le fichier des chiffres du jour (Comparison By Date).",
     )
   }
 
+  const header = data[headerIdx].map((h) => (h ?? '').trim().toUpperCase())
+  const index = Object.fromEntries(
+    METRIC_COLUMNS.map(([key, label]) => [key, header.indexOf(label)]),
+  ) as Record<(typeof METRIC_COLUMNS)[number][0], number>
+
   const rows: ComparisonMetricRow[] = []
-  for (const row of data.slice(1)) {
+  for (const row of data.slice(headerIdx + 1)) {
     const section = (row[0] ?? '').trim()
     if (!section) continue
 
@@ -288,29 +310,35 @@ function parseForecastAll(csvText: string): ForecastRow[] {
     skipEmptyLines: true,
   })
 
-  if (!result.data || result.data.length < 3) {
+  if (!result.data || result.data.length < 2) {
     throw new Error(
       "Le fichier des prévisions est vide ou incomplet. Recommence l'export.",
     )
   }
 
-  const headers = result.data[1]
-  const dateHeader = (headers[0] || '').trim().toUpperCase()
-  const occHeader = (headers[3] || '').trim().toUpperCase()
-  const revHeader = (headers[7] || '').trim().toUpperCase()
-
-  if (dateHeader !== 'DATE' || occHeader !== 'OCC' || revHeader !== 'REV') {
-    console.error(
-      `Forecast : en-têtes inattendus "${headers[0]?.trim()}" / "${headers[3]?.trim()}" / "${headers[7]?.trim()}" (attendus DATE / OCC / REV)`,
-    )
+  // Trouver la ligne d'en-tête (DATE + OCC + REV) et localiser les colonnes PAR NOM
+  // — robuste au préambule (export auto) et à un éventuel réordonnancement.
+  let headerIdx = -1
+  for (let r = 0; r < result.data.length; r++) {
+    const up = result.data[r].map((h) => (h ?? '').trim().toUpperCase())
+    if (up.includes('DATE') && up.includes('OCC') && up.includes('REV')) {
+      headerIdx = r
+      break
+    }
+  }
+  if (headerIdx === -1) {
     throw new Error(
       "Ce fichier n'a pas le bon format. Vérifie que c'est bien le fichier des prévisions (Forecast By Date Range).",
     )
   }
+  const up = result.data[headerIdx].map((h) => (h ?? '').trim().toUpperCase())
+  const dateCol = up.indexOf('DATE')
+  const occCol = up.indexOf('OCC')
+  const revCol = up.indexOf('REV')
 
   const rows: ForecastRow[] = []
-  for (const row of result.data.slice(2)) {
-    const dateStr = (row[0] || '').trim()
+  for (const row of result.data.slice(headerIdx + 1)) {
+    const dateStr = (row[dateCol] || '').trim()
     if (dateStr.toUpperCase() === 'TOTALS' || dateStr === '') continue
 
     const dateParts = dateStr.split('-')
@@ -321,8 +349,8 @@ function parseForecastAll(csvText: string): ForecastRow[] {
     const year = parseInt(dateParts[2], 10)
     if (isNaN(day) || isNaN(month) || isNaN(year)) continue
 
-    const occ = parseInt(row[3], 10) || 0
-    const revTTC = parseFloat(row[7]) || 0
+    const occ = parseInt(row[occCol], 10) || 0
+    const revTTC = parseFloat(row[revCol]) || 0
     const revHT = fromTTC(revTTC) // REV du forecast est déjà TTC
 
     rows.push({
