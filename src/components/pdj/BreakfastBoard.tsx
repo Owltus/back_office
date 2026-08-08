@@ -16,6 +16,7 @@ import {
 
 import { EmptyCanvas } from '#/components/shared/EmptyCanvas.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
+import { SendStatusBanner } from '#/components/shared/SendStatusBanner.tsx'
 import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { ConfirmDialog } from '#/components/shared/ConfirmDialog.tsx'
 import { PrintBlockedDialog } from '#/components/shared/PrintBlockedDialog.tsx'
@@ -48,6 +49,7 @@ import { businessDateStr, businessNow } from '#/lib/businessDay.ts'
 import {
   deleteDay,
   fetchDay,
+  fetchPdjSent,
   fetchServiceDates,
   importRows,
   purgeOldGuestNames,
@@ -161,6 +163,16 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
   })
   const loading = isPending
 
+  // Marqueur d'envoi de la feuille PDJ du CYCLE COURANT (aujourd'hui hôtelier) :
+  // présence d'une ligne pdj_auto_send_log. On ne l'interroge QUE pour le jour
+  // courant (le seul où un bandeau « pas encore envoyé » a du sens) — jamais sur
+  // l'historique. Voir fetchPdjSent : nécessite une lecture ouverte côté serveur
+  // (la table est en RLS fermée par défaut), sinon renvoie toujours `false`.
+  const { data: pdjSent } = useQuery({
+    queryKey: ['pdj', 'auto-send-log', today],
+    queryFn: () => fetchPdjSent(today),
+  })
+
   const byRoom = useMemo(() => {
     const map = new Map<number, PdjDayRow>()
     for (const r of dayRows ?? []) map.set(r.room, r)
@@ -168,6 +180,12 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
   }, [dayRows])
 
   const hasData = (dayRows?.length ?? 0) > 0
+
+  // Bandeau « pas encore envoyé » : uniquement sur le jour COURANT (jamais
+  // l'historique), quand des données existent ET qu'aucune ligne pdj_auto_send_log
+  // n'atteste l'envoi. `pdjSent === false` (et non `!pdjSent`) : tant que la
+  // lecture est en cours (undefined), on n'affiche rien (pas de flash).
+  const pdjNotSent = hasData && selectedDate === today && pdjSent === false
 
   const floors = useMemo(() => {
     const map = new Map<number, number[]>()
@@ -412,7 +430,15 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
       return { ok: false, message: 'Aucune donnée de PDJ pour ce jour.' }
     setServerSending(true)
     try {
-      return await sendPdjViaServer(pdjSheet)
+      const result = await sendPdjViaServer(pdjSheet)
+      // Envoi réussi : le serveur a posé le marqueur (ligne pdj_auto_send_log).
+      // On relit le marqueur pour retirer le bandeau tout de suite (ce board n'a
+      // pas d'abonnement realtime, contrairement à RepJour).
+      if (result.ok)
+        void queryClient.invalidateQueries({
+          queryKey: ['pdj', 'auto-send-log'],
+        })
+      return result
     } catch (err) {
       console.error('Envoi PDJ serveur échoué :', err)
       return { ok: false, message: "L'envoi a échoué. Réessaie dans un instant." }
@@ -600,6 +626,18 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
           </>
         }
       />
+
+      {/* Bandeau « pas encore envoyé » : filet de secours, jour courant seulement.
+          Masqué à l'impression (print:hidden) — il n'appartient pas à la feuille. */}
+      {pdjNotSent && (
+        <div className="print:hidden">
+          <SendStatusBanner
+            message={`La feuille de petit-déjeuner du ${titleDate} n'a pas encore été envoyée.`}
+            onSend={isGradeAdmin ? () => setShowServerConfirm(true) : undefined}
+            sending={serverSending}
+          />
+        </div>
+      )}
 
       {/* Un seul gate bascule le corps : squelette pendant le fetch (jamais la
           dropzone), contenu si données, sinon l'EmptyCanvas (vide réel). */}

@@ -20,6 +20,7 @@ import { HelpGlyph } from '#/components/shared/HelpGlyph.tsx'
 import { DatePickerButton } from '#/components/form/fields.tsx'
 import { BoardSkeleton } from '#/components/repjour/BoardSkeleton.tsx'
 import { AlertBanner } from '#/components/repjour/AlertBanner.tsx'
+import { SendStatusBanner } from '#/components/shared/SendStatusBanner.tsx'
 import { KPIDetailPanel } from '#/components/repjour/KPIDetailPanel.tsx'
 import { KPITable } from '#/components/repjour/KPITable.tsx'
 import { ImportSection } from '#/components/repjour/ImportSection.tsx'
@@ -362,6 +363,16 @@ export function DashboardBoard() {
   // rapport complet du jour ; son bouton bascule vit dans la barre d'actions.
   const hasFullReport = !!report && !!rj && !!rmtd && !!pm && !!budget && !!ecart
 
+  // Bandeau « pas encore envoyé » : uniquement sur le rapport du CYCLE HÔTELIER
+  // COURANT (le dernier jour clôturé attendu, getImportDayStr, bascule à 02h),
+  // jamais sur l'historique. Rapport présent + marqueur d'envoi absent
+  // (auto_sent_at NULL) = pas encore envoyé (auto ni manuel). Se retire au refetch
+  // dès que le marqueur est posé (envoi manuel → invalidation ci-dessous ; envoi
+  // auto → canal realtime daily_reports).
+  const currentCycleDate = getImportDayStr()
+  const notSent =
+    !!report && report.auto_sent_at == null && selectedDate === currentCycleDate
+
   // Données du document PDF — partagées par la fonction Imprimer ET l'envoi
   // serveur (le rapport joint est exactement le PDF imprimé). Variante complète
   // si le jour est réalisé, partielle (prévision seule) sinon.
@@ -416,7 +427,7 @@ export function DashboardBoard() {
     setServerSending(true)
     try {
       const [yr, mo, da] = selectedDate.split('-')
-      return await sendReportViaServer({
+      const result = await sendReportViaServer({
         emailData: {
           realiseJour: rj,
           realiseMTD: rmtd,
@@ -433,6 +444,12 @@ export function DashboardBoard() {
         pdfData: buildPdfData(budget),
         pdfTitle: `Repjour_NACV_${da}-${mo}-${yr}`,
       })
+      // Envoi réussi : le serveur a posé `auto_sent_at`. On relit le rapport pour
+      // que le bandeau « pas encore envoyé » disparaisse tout de suite, sans
+      // attendre l'éventuel événement realtime.
+      if (result.ok)
+        void queryClient.invalidateQueries({ queryKey: ['repjour'] })
+      return result
     } catch (err) {
       console.error('Envoi serveur échoué :', err)
       return { ok: false, message: "L'envoi a échoué. Réessaie dans un instant." }
@@ -586,6 +603,14 @@ export function DashboardBoard() {
           <div className="mb-4 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
             {actionError}
           </div>
+        )}
+
+        {notSent && (
+          <SendStatusBanner
+            message={`Le rapport du ${displayDate} n'a pas encore été envoyé.`}
+            onSend={isGradeAdmin ? () => setShowServerConfirm(true) : undefined}
+            sending={serverSending}
+          />
         )}
 
         {loading ? (

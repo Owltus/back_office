@@ -52,6 +52,11 @@ export interface DailyReport {
   pm_room_revenue: number;
   imported_at: string;
   imported_by: string;
+  // Marqueur d'envoi (auto OU manuel) : NON NULL = rapport envoyé, NULL/absent =
+  // pas encore envoyé. Alimente le bandeau « pas encore envoyé » (SendStatusBanner).
+  // Optionnel car les select restreints (analytique) ne le ramènent pas ; le
+  // dashboard le lit via fetchReportByDate (select '*').
+  auto_sent_at?: string | null;
   alerts: Alert[];
 }
 
