@@ -36,7 +36,7 @@ import type { RepjourPdfData } from '../_shared/repjour/pdf.ts'
 import type { EmailData } from '../_shared/repjour/reportHtml.ts'
 import type { Ecart, KPIBlock, MonthBudget } from '../_shared/repjour/types.ts'
 import { sendMail } from '../_shared/send-mail.ts'
-import { businessDateStr } from '../_shared/businessDay.ts'
+import { businessDateStr, isWithinPipelineWindow } from '../_shared/businessDay.ts'
 
 const TOTAL_ROOMS = 80
 
@@ -124,7 +124,17 @@ function computeProjeteMois(
 export async function maybeAutoSendRepjour(
   admin: SupabaseClient,
   dryRun: boolean,
+  instant: Date = new Date(),
 ): Promise<AutoSendOutcome> {
+  // DÉFENSE EN PROFONDEUR : l'envoi AUTO ne part que dans la fenêtre [02h, 04h[
+  // (Paris). Redondant avec la garde en amont d'index.ts (on n'arrive ici que via
+  // le pipeline, déjà borné), mais blinde contre tout futur appel par un autre
+  // chemin. N'affecte PAS l'envoi MANUEL admin (send-report, autre fichier).
+  // `instant` = heure lue UNE fois par requête (passée par index.ts) → import et
+  // envoi décident sur la même horloge (pas de désaccord à cheval sur 04h).
+  if (!isWithinPipelineWindow(instant))
+    return { sent: false, note: 'hors fenêtre horaire — envoi auto ignoré' }
+
   // Secrets / config d'envoi.
   const resendKey = Deno.env.get('RESEND_API_KEY')
   const from =
@@ -163,16 +173,24 @@ export async function maybeAutoSendRepjour(
   // manuel admin. Le motif « hors cycle » est transitoire (cf. relecture différée
   // dans index.ts) : il couvre aussi le cas où le Comparison du jour n'a pas encore
   // été committé par l'invocation sœur.
-  const cycleToday = businessDateStr()
-  const cycleYesterday = businessDateStr(new Date(Date.now() - 86_400_000))
+  const cycleToday = businessDateStr(instant)
+  const cycleYesterday = businessDateStr(new Date(instant.getTime() - 86_400_000))
   if (D !== cycleToday && D !== cycleYesterday)
     return { sent: false, note: `hors cycle courant (${D}) — envoi auto ignoré, manuel possible` }
 
-  // GARDE-FOU CLÉ : le Forecast du mois doit être FRAIS (importé lors du cycle
-  // courant), pas seulement « présent ». On lit le dernier `imported_at` du mois :
-  // s'il n'y a pas de forecast, ou s'il date d'un cycle précédent (échec du forecast
-  // cette nuit, ex. le 422 du 2026-08-08), on N'ENVOIE PAS en auto — le RepJour
-  // partirait sinon avec un projeté périmé. L'envoi MANUEL reste possible.
+  // JONCTION de mois/année : le rapport J-1 tombe dans un mois différent du cycle
+  // courant (nuit du 1er : rapport du dernier jour du mois précédent ; couvre aussi
+  // le 31/12 -> 01/01). Ce jour-là, StayNTouch a déjà basculé au mois suivant → un
+  // forecast frais du mois qui s'achève ne viendra JAMAIS. On assouplit donc la
+  // règle de fraîcheur ci-dessous (forecast PRÉSENT = suffisant).
+  const isMonthBoundary = D.slice(0, 7) !== cycleToday.slice(0, 7)
+
+  // GARDE-FOU : le Forecast du mois doit être PRÉSENT (toujours), et FRAIS (importé
+  // ce cycle) SAUF à la jonction de mois/année (cf. isMonthBoundary). On lit le
+  // dernier `imported_at` du mois : s'il n'y a pas de forecast du tout, on n'envoie
+  // pas (projeté impossible). En milieu de mois, un forecast périmé (échec ce soir,
+  // ex. le 422 du 2026-08-08) bloque aussi l'envoi auto (pas de chiffres périmés) ;
+  // l'envoi MANUEL reste possible.
   // NB : la colonne imported_at peut être nullable en base (lignes antérieures au
   // stamping). En SQL `order ... desc` place les NULL EN PREMIER → on les exclut
   // explicitement pour récupérer le dernier import RÉEL, jamais un NULL.
@@ -191,8 +209,11 @@ export async function maybeAutoSendRepjour(
   const latestFc = fcRows?.[0]?.imported_at as string | undefined
   if (!latestFc)
     return { sent: false, note: 'Forecast absent pour ce mois — envoi auto ignoré' }
-  const fcAgeMs = Date.now() - new Date(latestFc).getTime()
-  if (!(fcAgeMs >= 0 && fcAgeMs < FRESH_WINDOW_MS))
+  // Fraîcheur exigée SEULEMENT hors jonction. À la jonction (dernier jour du mois /
+  // 31 déc), « forecast présent » suffit : le mois est complet, on envoie avec le
+  // forecast déjà en base. En milieu de mois, on garde le filet anti-projeté-périmé.
+  const fcAgeMs = instant.getTime() - new Date(latestFc).getTime()
+  if (!isMonthBoundary && !(fcAgeMs >= 0 && fcAgeMs < FRESH_WINDOW_MS))
     return {
       sent: false,
       note: `Forecast pas frais (importé il y a ${Math.round(fcAgeMs / 3_600_000)} h) — envoi auto ignoré, manuel possible`,
@@ -272,107 +293,129 @@ export async function maybeAutoSendRepjour(
     row = reserved as DailyRow
   }
 
-  // 5. Reconstruire EmailData + RepjourPdfData (comme le client).
-  const rj = reportToKPI(row, 'rj')
-  const rmtd = reportToKPI(row, 'rmtd')
-  const pm = reportToKPI(row, 'pm')
-  const ecart = computeEcart(pm, budget as MonthBudget)
-
-  // pickup = pm.roomRevenue du jour - pm.roomRevenue du dernier rapport ANTÉRIEUR
-  // du même mois. monthStartProjection = pm.roomRevenue du 1er rapport du mois.
-  const { data: monthRows } = await admin
-    .from('daily_reports')
-    .select('day_of_month, pm_room_revenue')
-    .eq('year', candidate.year)
-    .eq('month', candidate.month)
-    .lte('day_of_month', candidate.day_of_month)
-    .order('day_of_month', { ascending: true })
-  const series = (monthRows ?? []) as {
-    day_of_month: number
-    pm_room_revenue: number
-  }[]
-  const monthStartProjection = series.length > 0 ? series[0].pm_room_revenue : null
-  const prev = series.filter((r) => r.day_of_month < candidate.day_of_month)
-  const prevPm = prev.length > 0 ? prev[prev.length - 1].pm_room_revenue : null
-  const pickup = prevPm != null ? pm.roomRevenue - prevPm : null
-
-  const emailData: EmailData = {
-    realiseJour: rj,
-    realiseMTD: rmtd,
-    projeteMois: pm,
-    budget: budget as MonthBudget,
-    ecart,
-    dayOfMonth: candidate.day_of_month,
-    month: candidate.month,
-    year: candidate.year,
-    pickup,
-    daysInMonth: candidate.days_in_month,
-    monthStartProjection,
+  // À partir d'ici, la RÉSERVATION (hors dry-run) est POSÉE (auto_sent_at). Toute
+  // sortie NON réussie doit la LIBÉRER (remettre auto_sent_at à NULL), sinon le jour
+  // est « brûlé » : marqué envoyé sans mail parti, aucune reprise auto. On enveloppe
+  // donc TOUT le bloc post-réservation (rendu, PDF, envoi). Le rattrapage se fait
+  // ensuite par le bandeau + envoi manuel (aucun ré-import auto n'a lieu).
+  const releaseReservation = async () => {
+    if (dryRun) return
+    const { error: delErr } = await admin
+      .from('daily_reports')
+      .update({ auto_sent_at: null })
+      .eq('date', D)
+    if (delErr)
+      console.error('Auto-envoi : libération de la réservation échouée :', delErr.message)
   }
 
-  const dateStr = buildRepjourDateStr({
-    year: candidate.year,
-    month: candidate.month,
-    dayOfMonth: candidate.day_of_month,
-  })
-  const titleDate = dateStr.charAt(0).toUpperCase() + dateStr.slice(1)
-  const [yr, mo, da] = D.split('-')
-  const pdfTitle = `Repjour_NACV_${da}-${mo}-${yr}`
+  try {
+    // 5. Reconstruire EmailData + RepjourPdfData (comme le client).
+    const rj = reportToKPI(row, 'rj')
+    const rmtd = reportToKPI(row, 'rmtd')
+    const pm = reportToKPI(row, 'pm')
+    const ecart = computeEcart(pm, budget as MonthBudget)
 
-  const pdfData: RepjourPdfData = {
-    titleDate,
-    realiseJour: rj,
-    realiseMTD: rmtd,
-    projeteMois: pm,
-    budget: budget as MonthBudget,
-    ecart,
-    pickup,
-    dayOfMonth: candidate.day_of_month,
-    daysInMonth: candidate.days_in_month,
-    monthStartProjection,
-    importedAt: row.imported_at,
-  }
+    // pickup = pm.roomRevenue du jour - pm.roomRevenue du dernier rapport ANTÉRIEUR
+    // du même mois. monthStartProjection = pm.roomRevenue du 1er rapport du mois.
+    const { data: monthRows } = await admin
+      .from('daily_reports')
+      .select('day_of_month, pm_room_revenue')
+      .eq('year', candidate.year)
+      .eq('month', candidate.month)
+      .lte('day_of_month', candidate.day_of_month)
+      .order('day_of_month', { ascending: true })
+    const series = (monthRows ?? []) as {
+      day_of_month: number
+      pm_room_revenue: number
+    }[]
+    const monthStartProjection = series.length > 0 ? series[0].pm_room_revenue : null
+    const prev = series.filter((r) => r.day_of_month < candidate.day_of_month)
+    const prevPm = prev.length > 0 ? prev[prev.length - 1].pm_room_revenue : null
+    const pickup = prevPm != null ? pm.roomRevenue - prevPm : null
 
-  const subject = buildRepjourSubject(emailData)
-  const html = buildRepjourEmailHtml(emailData, dateStr)
-
-  if (dryRun) {
-    return {
-      sent: false,
-      note: `[DRY-RUN] aurait envoyé le rapport du ${D} (${to0(testTo)})`,
+    const emailData: EmailData = {
+      realiseJour: rj,
+      realiseMTD: rmtd,
+      projeteMois: pm,
+      budget: budget as MonthBudget,
+      ecart,
+      dayOfMonth: candidate.day_of_month,
+      month: candidate.month,
+      year: candidate.year,
+      pickup,
+      daysInMonth: candidate.days_in_month,
+      monthStartProjection,
     }
-  }
 
-  // resendKey déjà vérifiée avant la réservation (hors dry-run) ; ce garde-fou
-  // redondant sert surtout à narrower le type (string) pour sendMail.
-  if (!resendKey) return { sent: false, note: 'RESEND_API_KEY manquante' }
+    const dateStr = buildRepjourDateStr({
+      year: candidate.year,
+      month: candidate.month,
+      dayOfMonth: candidate.day_of_month,
+    })
+    const titleDate = dateStr.charAt(0).toUpperCase() + dateStr.slice(1)
+    const [yr, mo, da] = D.split('-')
+    const pdfTitle = `Repjour_NACV_${da}-${mo}-${yr}`
 
-  const pdfBytes = buildRepjourPdfBytes(pdfData, pdfTitle)
-  const result = await sendMail({
-    admin,
-    from,
-    subject,
-    html,
-    pdfBytes,
-    pdfName: `${pdfTitle}.pdf`,
-    recipientsTable: 'server_report_recipients',
-    resendKey,
-    testTo,
-  })
+    const pdfData: RepjourPdfData = {
+      titleDate,
+      realiseJour: rj,
+      realiseMTD: rmtd,
+      projeteMois: pm,
+      budget: budget as MonthBudget,
+      ecart,
+      pickup,
+      dayOfMonth: candidate.day_of_month,
+      daysInMonth: candidate.days_in_month,
+      monthStartProjection,
+      importedAt: row.imported_at,
+    }
 
-  if (!result.ok) {
-    // Libérer la réservation atomique : sinon auto_sent_at resterait posé et le
-    // jour serait « brûlé » (aucune nouvelle tentative auto), alors qu'aucun mail
-    // n'est parti. Un ré-import pourra relancer l'envoi. La 2e invocation éventuelle
-    // reverra auto_sent_at NULL, mais l'UPDATE atomique garde un seul gagnant.
-    await admin.from('daily_reports').update({ auto_sent_at: null }).eq('date', D)
-    return { sent: false, note: `envoi échoué (${result.error ?? 'inconnu'})` }
-  }
-  return {
-    sent: true,
-    note: `envoyé le rapport du ${D} à ${result.to} destinataire(s)${
-      result.cc ? ` (+${result.cc} cc)` : ''
-    }${result.testMode ? ' — mode test' : ''}`,
+    const subject = buildRepjourSubject(emailData)
+    const html = buildRepjourEmailHtml(emailData, dateStr)
+
+    if (dryRun) {
+      return {
+        sent: false,
+        note: `[DRY-RUN] aurait envoyé le rapport du ${D} (${to0(testTo)})`,
+      }
+    }
+
+    // resendKey déjà vérifiée avant la réservation (hors dry-run) ; narrowing.
+    if (!resendKey) {
+      await releaseReservation()
+      return { sent: false, note: 'RESEND_API_KEY manquante' }
+    }
+
+    const pdfBytes = buildRepjourPdfBytes(pdfData, pdfTitle)
+    const result = await sendMail({
+      admin,
+      from,
+      subject,
+      html,
+      pdfBytes,
+      pdfName: `${pdfTitle}.pdf`,
+      recipientsTable: 'server_report_recipients',
+      resendKey,
+      testTo,
+    })
+
+    if (!result.ok) {
+      await releaseReservation()
+      return { sent: false, note: `envoi échoué (${result.error ?? 'inconnu'})` }
+    }
+    return {
+      sent: true,
+      note: `envoyé le rapport du ${D} à ${result.to} destinataire(s)${
+        result.cc ? ` (+${result.cc} cc)` : ''
+      }${result.testMode ? ' — mode test' : ''}`,
+    }
+  } catch (err) {
+    console.error(
+      'Auto-envoi : exception post-réservation :',
+      err instanceof Error ? err.message : String(err),
+    )
+    await releaseReservation()
+    return { sent: false, note: 'envoi non abouti (exception post-réservation)' }
   }
 }
 

@@ -26,6 +26,12 @@ import { importComparison, importForecast } from './repjour.ts'
 import { importInhouse } from './pdj.ts'
 import { maybeAutoSendRepjour } from './autoSend.ts'
 import { maybeAutoSendPdj } from './autoSendPdj.ts'
+import {
+  isWithinPipelineWindow,
+  parisHour,
+  PIPELINE_WINDOW_END_HOUR,
+  PIPELINE_WINDOW_START_HOUR,
+} from '../_shared/businessDay.ts'
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -103,6 +109,22 @@ Deno.serve(async (req) => {
   // secret retiré) pour l'import réel.
   const dryRun = Deno.env.get('IMPORT_DRY_RUN') === 'true'
 
+  // HORLOGE UNIQUE : on lit l'heure UNE seule fois par requête et on la propage à
+  // la garde de fenêtre ET aux fonctions d'envoi. Ainsi, un POST à cheval sur 04h
+  // décide de façon COHÉRENTE (pas « données écrites mais e-mail refusé »).
+  const instant = new Date()
+
+  // 1c. FENÊTRE HORAIRE du cycle hôtelier : on n'accepte l'ingestion auto que dans
+  //     [02h, 04h[ (heure de Paris). Hors de cette fenêtre (ex. un envoi de test à
+  //     16h30, ou un rapport hors cycle), on IGNORE : aucune lecture du corps,
+  //     aucune écriture, aucun envoi. On répond 200 (traité) pour que le Worker ne
+  //     retente pas. L'import MANUEL admin (autre canal) reste disponible H24.
+  if (!isWithinPipelineWindow(instant)) {
+    const note = `hors fenêtre d'ingestion auto (${parisHour(instant)}h Paris, attendu [${PIPELINE_WINDOW_START_HOUR}h,${PIPELINE_WINDOW_END_HOUR}h[) — rapport ignoré`
+    console.log(`[IGNORE] ${note}`)
+    return json({ ok: true, ignored: true, note }, 200)
+  }
+
   // 2. Corps = e-mail brut (MIME complet).
   const rawEmail = await req.text()
   if (!rawEmail) return json({ error: 'Corps vide' }, 400)
@@ -174,16 +196,16 @@ Deno.serve(async (req) => {
   )
   if (touchedRepjour) {
     try {
-      let outcome = await maybeAutoSendRepjour(admin, dryRun)
+      let outcome = await maybeAutoSendRepjour(admin, dryRun, instant)
       // Course concurrente : Comparison et Forecast arrivent en DEUX e-mails →
       // deux invocations Edge quasi simultanées. Si celle-ci s'abstient pour une
       // raison TRANSITOIRE (la donnée sœur n'est pas encore committée), on retente
       // UNE fois après un court délai, le temps que l'autre invocation committe.
       // L'idempotence atomique (auto_sent_at) garantit qu'aucun double envoi ne peut
       // en résulter. Fenêtre résiduelle infime si le commit sœur dépasse le délai.
-      if (!dryRun && !outcome.sent && /pas frais|absent|hors cycle/i.test(outcome.note)) {
+      if (!dryRun && !outcome.sent && /forecast (pas frais|absent)|hors cycle/i.test(outcome.note)) {
         await new Promise((r) => setTimeout(r, 4000))
-        outcome = await maybeAutoSendRepjour(admin, dryRun)
+        outcome = await maybeAutoSendRepjour(admin, dryRun, instant)
       }
       console.log(
         `[AUTO-SEND repjour] ${outcome.sent ? 'ENVOYÉ' : 'non envoyé'} — ${outcome.note}`,
@@ -202,7 +224,7 @@ Deno.serve(async (req) => {
   const touchedPdj = results.some((r) => r.ok && r.type === 'inhouse')
   if (touchedPdj) {
     try {
-      const outcome = await maybeAutoSendPdj(admin, dryRun)
+      const outcome = await maybeAutoSendPdj(admin, dryRun, instant)
       console.log(
         `[AUTO-SEND pdj] ${outcome.sent ? 'ENVOYÉ' : 'non envoyé'} — ${outcome.note}`,
       )

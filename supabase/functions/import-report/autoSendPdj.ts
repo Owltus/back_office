@@ -27,7 +27,7 @@ import type {
   PdjStats,
 } from '../_shared/pdj/pdf.ts'
 import { sendMail } from '../_shared/send-mail.ts'
-import { businessDateStr } from '../_shared/businessDay.ts'
+import { businessDateStr, isWithinPipelineWindow } from '../_shared/businessDay.ts'
 
 export interface AutoSendOutcome {
   sent: boolean
@@ -76,7 +76,15 @@ function computeStats(rows: BreakfastRow[]): PdjStats {
 export async function maybeAutoSendPdj(
   admin: SupabaseClient,
   dryRun: boolean,
+  instant: Date = new Date(),
 ): Promise<AutoSendOutcome> {
+  // DÉFENSE EN PROFONDEUR : l'envoi AUTO PDJ ne part que dans la fenêtre [02h, 04h[
+  // (Paris). Redondant avec la garde d'index.ts, mais blinde tout futur chemin.
+  // N'affecte PAS l'envoi MANUEL admin (send-report). `instant` = heure lue une fois
+  // par requête (index.ts) pour décider sur la même horloge que l'import.
+  if (!isWithinPipelineWindow(instant))
+    return { sent: false, note: 'hors fenêtre horaire — envoi auto ignoré' }
+
   const resendKey = Deno.env.get('RESEND_API_KEY')
   const from =
     Deno.env.get('PDJ_REPORT_FROM') ??
@@ -103,7 +111,7 @@ export async function maybeAutoSendPdj(
   const D = recent.service_date as string
 
   // Fenêtre de récence calée sur le cycle hôtelier (02h) : jamais un vieux jour.
-  const cutoff = businessDateStr(new Date(Date.now() - 3 * 86_400_000))
+  const cutoff = businessDateStr(new Date(instant.getTime() - 3 * 86_400_000))
   if (D < cutoff)
     return { sent: false, note: `PDJ trop ancien (${D}) — envoi auto ignoré` }
 
@@ -142,83 +150,108 @@ export async function maybeAutoSendPdj(
     }
   }
 
-  // 4. Construire la feuille depuis pdj_breakfasts (uniquement les chambres occupées).
-  const { data: rows, error: rowsErr } = await admin
-    .from('pdj_breakfasts')
-    .select(
-      'room, guest_name, vip, status, stay_count, guests, breakfasts_included, breakfasts_served',
-    )
-    .eq('service_date', D)
-    .order('room', { ascending: true })
-  if (rowsErr) {
-    console.error('Auto-envoi PDJ : lecture des lignes du jour échouée :', rowsErr.message)
-    return { sent: false, note: 'lecture des lignes échouée' }
-  }
-  // NE GARDER QUE les chambres de l'inventaire dessiné : une ligne hors inventaire
-  // ne figure dans aucun étage du PDF, donc la compter dans les tuiles rendrait le
-  // PDF incohérent (total ≠ grille) et divergerait de la feuille imprimée client.
-  const allRows = (rows ?? []) as BreakfastRow[]
-  const breakfastRows = allRows.filter((r) => KNOWN_ROOMS.has(r.room))
-  const dropped = allRows.length - breakfastRows.length
-  if (dropped > 0)
-    console.warn(`Auto-envoi PDJ : ${dropped} chambre(s) hors inventaire ignorée(s).`)
-  const stats = computeStats(breakfastRows)
-  const sheetRows: PdjSheetRow[] = breakfastRows.map((r) => ({
-    room: r.room,
-    guestName: r.guest_name,
-    vip: r.vip,
-    status: r.status,
-    stayCount: r.stay_count,
-    guests: r.guests,
-    breakfastsIncluded: r.breakfasts_included,
-    breakfastsServed: r.breakfasts_served,
-  }))
-  const titleDate = buildPdjDateStr(D)
-  const sheet: PdjSheetData = {
-    titleDate,
-    serviceDate: D,
-    stats,
-    rows: sheetRows,
+  // À partir d'ici, la réservation (hors dry-run) est POSÉE. Toute sortie NON réussie
+  // doit la LIBÉRER, sinon le jour reste « envoyé » sans mail parti (aucune reprise
+  // auto). On enveloppe donc TOUT le bloc post-réservation : erreur de lecture,
+  // exception de génération PDF, ou échec Resend → suppression de la ligne
+  // pdj_auto_send_log. Le rattrapage se fait ensuite par le bandeau + envoi manuel.
+  const releaseReservation = async () => {
+    if (dryRun) return
+    const { error: delErr } = await admin
+      .from('pdj_auto_send_log')
+      .delete()
+      .eq('service_date', D)
+    if (delErr)
+      console.error('Auto-envoi PDJ : libération de la réservation échouée :', delErr.message)
   }
 
-  const subject = buildPdjSubject(sheet)
-  const html = buildPdjEmailHtml(sheet, titleDate)
-
-  if (dryRun) {
-    return {
-      sent: false,
-      note: `[DRY-RUN] aurait envoyé le PDJ du ${D} (${stats.rooms} ch., ${stats.breakfasts} PDJ)`,
+  try {
+    // 4. Construire la feuille depuis pdj_breakfasts (uniquement les chambres occupées).
+    const { data: rows, error: rowsErr } = await admin
+      .from('pdj_breakfasts')
+      .select(
+        'room, guest_name, vip, status, stay_count, guests, breakfasts_included, breakfasts_served',
+      )
+      .eq('service_date', D)
+      .order('room', { ascending: true })
+    if (rowsErr) {
+      console.error('Auto-envoi PDJ : lecture des lignes du jour échouée :', rowsErr.message)
+      await releaseReservation()
+      return { sent: false, note: 'lecture des lignes échouée' }
     }
-  }
+    // NE GARDER QUE les chambres de l'inventaire dessiné : une ligne hors inventaire
+    // ne figure dans aucun étage du PDF, donc la compter dans les tuiles rendrait le
+    // PDF incohérent (total ≠ grille) et divergerait de la feuille imprimée client.
+    const allRows = (rows ?? []) as BreakfastRow[]
+    const breakfastRows = allRows.filter((r) => KNOWN_ROOMS.has(r.room))
+    const dropped = allRows.length - breakfastRows.length
+    if (dropped > 0)
+      console.warn(`Auto-envoi PDJ : ${dropped} chambre(s) hors inventaire ignorée(s).`)
+    const stats = computeStats(breakfastRows)
+    const sheetRows: PdjSheetRow[] = breakfastRows.map((r) => ({
+      room: r.room,
+      guestName: r.guest_name,
+      vip: r.vip,
+      status: r.status,
+      stayCount: r.stay_count,
+      guests: r.guests,
+      breakfastsIncluded: r.breakfasts_included,
+      breakfastsServed: r.breakfasts_served,
+    }))
+    const titleDate = buildPdjDateStr(D)
+    const sheet: PdjSheetData = {
+      titleDate,
+      serviceDate: D,
+      stats,
+      rows: sheetRows,
+    }
 
-  // resendKey garantie présente ici (vérifiée avant réservation) ; narrowing.
-  if (!resendKey) return { sent: false, note: 'RESEND_API_KEY manquante' }
+    const subject = buildPdjSubject(sheet)
+    const html = buildPdjEmailHtml(sheet, titleDate)
 
-  const [yr, mo, da] = D.split('-')
-  const pdfBytes = buildPdjPdfBytes(sheet)
-  const result = await sendMail({
-    admin,
-    from,
-    subject,
-    html,
-    pdfBytes,
-    pdfName: `Breakfast_${da}-${mo}-${yr}.pdf`,
-    recipientsTable: 'pdj_report_recipients',
-    resendKey,
-    testTo,
-  })
+    if (dryRun) {
+      return {
+        sent: false,
+        note: `[DRY-RUN] aurait envoyé le PDJ du ${D} (${stats.rooms} ch., ${stats.breakfasts} PDJ)`,
+      }
+    }
 
-  if (!result.ok) {
-    // Libérer la réservation : sinon le jour reste marqué « envoyé » dans
-    // pdj_auto_send_log sans qu'aucun mail soit parti, et aucune tentative auto ne
-    // le rattrapera. La suppression permet un nouvel essai au prochain import.
-    await admin.from('pdj_auto_send_log').delete().eq('service_date', D)
-    return { sent: false, note: `envoi échoué (${result.error ?? 'inconnu'})` }
-  }
-  return {
-    sent: true,
-    note: `envoyé le PDJ du ${D} à ${result.to} destinataire(s)${
-      result.cc ? ` (+${result.cc} cc)` : ''
-    }${result.testMode ? ' — mode test' : ''}`,
+    // resendKey garantie présente ici (vérifiée avant réservation) ; narrowing.
+    if (!resendKey) {
+      await releaseReservation()
+      return { sent: false, note: 'RESEND_API_KEY manquante' }
+    }
+
+    const [yr, mo, da] = D.split('-')
+    const pdfBytes = buildPdjPdfBytes(sheet)
+    const result = await sendMail({
+      admin,
+      from,
+      subject,
+      html,
+      pdfBytes,
+      pdfName: `Breakfast_${da}-${mo}-${yr}.pdf`,
+      recipientsTable: 'pdj_report_recipients',
+      resendKey,
+      testTo,
+    })
+
+    if (!result.ok) {
+      await releaseReservation()
+      return { sent: false, note: `envoi échoué (${result.error ?? 'inconnu'})` }
+    }
+    return {
+      sent: true,
+      note: `envoyé le PDJ du ${D} à ${result.to} destinataire(s)${
+        result.cc ? ` (+${result.cc} cc)` : ''
+      }${result.testMode ? ' — mode test' : ''}`,
+    }
+  } catch (err) {
+    console.error(
+      'Auto-envoi PDJ : exception post-réservation :',
+      err instanceof Error ? err.message : String(err),
+    )
+    await releaseReservation()
+    return { sent: false, note: 'envoi non abouti (exception post-réservation)' }
   }
 }

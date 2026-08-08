@@ -11,6 +11,33 @@
 export const DAY_CUTOFF_HOUR = 2
 
 /**
+ * Heure murale (0-23) à Europe/Paris pour l'instant donné. Le runtime Edge tourne
+ * en UTC ; on lit l'heure de Paris via la TZ (gère l'heure d'été). Sert à borner
+ * l'ingestion automatique à la fenêtre du cycle hôtelier.
+ */
+export function parisHour(instant: Date = new Date()): number {
+  const parisWall = new Date(
+    instant.toLocaleString('en-US', { timeZone: 'Europe/Paris' }),
+  )
+  return parisWall.getHours()
+}
+
+// Fenêtre horaire (heure de Paris) où l'ingestion ET l'envoi AUTOMATIQUES sont
+// autorisés : [02h, 04h[. Les rapports du pipeline sont tirés vers 02h30 ; hors de
+// cette fenêtre, on ignore tout (ni écriture, ni envoi auto). Source UNIQUE de la
+// règle — utilisée par la garde en amont (index.ts) ET par les fonctions d'envoi
+// (autoSend/autoSendPdj) en défense en profondeur. N'affecte QUE l'automatique :
+// l'envoi MANUEL admin (send-report) reste disponible 24h/24.
+export const PIPELINE_WINDOW_START_HOUR = 2
+export const PIPELINE_WINDOW_END_HOUR = 4
+
+/** Vrai si l'instant tombe dans la fenêtre d'automatisation [02h, 04h[ (Paris). */
+export function isWithinPipelineWindow(instant: Date = new Date()): boolean {
+  const h = parisHour(instant)
+  return h >= PIPELINE_WINDOW_START_HOUR && h < PIPELINE_WINDOW_END_HOUR
+}
+
+/**
  * 'YYYY-MM-DD' du jour hôtelier (Europe/Paris, bascule 02h00) correspondant à
  * l'instant donné. Avant 02h Paris, renvoie la date de la veille.
  */
