@@ -124,6 +124,7 @@ Deno.serve(async (req) => {
   //    LISTE de destinataires (deux diffusions strictement séparées).
   let body: {
     kind?: 'repjour' | 'pdj'
+    date?: string
     subject?: string
     htmlBody?: string
     pdfBase64?: string
@@ -135,6 +136,9 @@ Deno.serve(async (req) => {
     return json({ error: 'Corps de requête invalide' }, 400)
   }
   const kind = body.kind === 'pdj' ? 'pdj' : 'repjour'
+  // Date du rapport (YYYY-MM-DD) — optionnelle : sert UNIQUEMENT à poser le marqueur
+  // d'envoi après succès (pour que le bandeau « pas encore envoyé » se retire).
+  const reportDate = (body.date ?? '').trim()
   const subject = (body.subject ?? '').trim()
   const htmlBody = body.htmlBody ?? ''
   const pdfBase64 = body.pdfBase64 ?? ''
@@ -184,7 +188,33 @@ Deno.serve(async (req) => {
   if (!result.ok)
     return json({ error: result.error ?? 'Envoi du message échoué' }, 502)
 
-  // Envoi réussi : ajoute cet horodatage à l'historique récent (élagué, max 30
+  // Envoi réussi : POSE LE MARQUEUR D'ENVOI pour la date du rapport, afin que le
+  // bandeau « pas encore envoyé » (front) se retire après un envoi MANUEL, comme
+  // après un envoi auto. On réutilise les marqueurs existants (auto_sent_at pour le
+  // RepJour ; ligne pdj_auto_send_log pour le PDJ) — « auto_sent_at » signifie donc
+  // « envoyé (auto ou manuel) ». Best-effort : un échec ici n'annule pas le mail parti.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(reportDate)) {
+    try {
+      if (kind === 'pdj') {
+        await admin.from('pdj_auto_send_log').upsert(
+          { service_date: reportDate, sent_at: new Date(nowMs).toISOString() },
+          { onConflict: 'service_date', ignoreDuplicates: true },
+        )
+      } else {
+        await admin
+          .from('daily_reports')
+          .update({ auto_sent_at: new Date(nowMs).toISOString() })
+          .eq('date', reportDate)
+      }
+    } catch (e) {
+      console.error(
+        "Marqueur d'envoi manuel non posé :",
+        e instanceof Error ? e.message : String(e),
+      )
+    }
+  }
+
+  // Ajoute cet horodatage à l'historique récent (élagué, max 30
   // entrées) → alimente la courbe anti-spam progressive. `upsert` sur user_id.
   const updatedRecent = [...recent, nowMs].slice(-30)
   await admin.from('report_send_throttle').upsert({

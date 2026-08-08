@@ -30,8 +30,10 @@ export async function sendPdjViaServer(
   const [yr, mo, da] = data.serviceDate.split('-')
   const pdfName = `Breakfast_${da}-${mo}-${yr}.pdf`
 
+  // Date de service (YYYY-MM-DD) : permet à send-report de POSER le marqueur d'envoi
+  // (ligne pdj_auto_send_log) pour que le bandeau « pas encore envoyé » se retire.
   const { data: res, error } = await supabase.functions.invoke('send-report', {
-    body: { kind: 'pdj', subject, htmlBody, pdfBase64, pdfName },
+    body: { kind: 'pdj', date: data.serviceDate, subject, htmlBody, pdfBase64, pdfName },
   })
 
   if (error) {

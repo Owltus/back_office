@@ -108,8 +108,12 @@ export async function sendReportViaServer(
   const pdf = await buildRepjourPdf(pdfData, pdfTitle)
   const pdfBase64 = pdf.output('datauristring').split(',')[1] ?? ''
 
+  // Date du rapport (YYYY-MM-DD) : permet à send-report de POSER le marqueur d'envoi
+  // (daily_reports.auto_sent_at) pour que le bandeau « pas encore envoyé » se retire.
+  const reportDate = `${emailData.year}-${String(emailData.month).padStart(2, '0')}-${String(emailData.dayOfMonth).padStart(2, '0')}`
+
   const { data, error } = await supabase.functions.invoke('send-report', {
-    body: { subject, htmlBody, pdfBase64, pdfName: `${pdfTitle}.pdf` },
+    body: { date: reportDate, subject, htmlBody, pdfBase64, pdfName: `${pdfTitle}.pdf` },
   })
 
   if (error) {
