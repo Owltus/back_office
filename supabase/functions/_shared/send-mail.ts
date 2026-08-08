@@ -135,33 +135,61 @@ export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
   if (attachmentContent)
     payload.attachments = [{ filename: pdfName, content: attachmentContent }]
 
-  let res: Response
-  try {
-    res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${resendKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    })
-  } catch (err) {
-    console.error('Appel Resend échoué', err)
+  // Envoi Resend avec RETRY : jusqu'à 5 tentatives, ARRÊT DÈS SUCCÈS. On ne retente
+  // que sur erreur TRANSITOIRE (erreur réseau, 5xx, 429) ; une 4xx (hors 429) est
+  // définitive → inutile de réessayer. Backoff court (1s, 2s, 4s, 8s ; total < ~15s,
+  // compatible Edge). Un simple hoquet réseau ne fait donc plus perdre l'e-mail.
+  const MAX_ATTEMPTS = 5
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    let res: Response
+    try {
+      res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${resendKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      })
+    } catch (err) {
+      // Erreur réseau = transitoire → on retente (sauf si c'était la dernière).
+      console.error(
+        `Appel Resend échoué (tentative ${attempt}/${MAX_ATTEMPTS})`,
+        err instanceof Error ? err.message : String(err),
+      )
+      if (attempt < MAX_ATTEMPTS) {
+        await sleep(1000 * 2 ** (attempt - 1))
+        continue
+      }
+      return fail('Envoi du message échoué')
+    }
+
+    if (res.ok) {
+      const out = await res.json().catch(() => ({}))
+      return {
+        ok: true,
+        id: out?.id ?? null,
+        to: to.length,
+        cc: cc.length,
+        testMode: Boolean(test),
+      }
+    }
+
+    // Échec HTTP : ne retenter que si transitoire (5xx / 429). Détail dans les logs,
+    // message générique renvoyé (ne pas exposer la structure interne de Resend).
+    const transient = res.status >= 500 || res.status === 429
+    console.error(
+      `Resend a échoué (tentative ${attempt}/${MAX_ATTEMPTS})`,
+      res.status,
+      await res.text(),
+    )
+    if (transient && attempt < MAX_ATTEMPTS) {
+      await sleep(1000 * 2 ** (attempt - 1))
+      continue
+    }
     return fail('Envoi du message échoué')
   }
 
-  if (!res.ok) {
-    // Erreur générique (ne pas exposer la structure interne de Resend) ; détail logs.
-    console.error('Resend a échoué', res.status, await res.text())
-    return fail('Envoi du message échoué')
-  }
-  const out = await res.json().catch(() => ({}))
-
-  return {
-    ok: true,
-    id: out?.id ?? null,
-    to: to.length,
-    cc: cc.length,
-    testMode: Boolean(test),
-  }
+  return fail('Envoi du message échoué')
 }
