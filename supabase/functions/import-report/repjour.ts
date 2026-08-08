@@ -112,6 +112,61 @@ interface TvaRef {
 // couvrent la VEILLE → on soustrait 1 jour. Découpage SÛR : on part des
 // composantes AAAAMMJJ du nom, jamais de `new Date()` dépendant du fuseau serveur,
 // et l'arithmétique J-1 se fait en UTC (déterministe, indépendante de DST/UTC/Paris).
+/** Construit un ReportDate (+ nb de jours du mois) à partir de composantes DÉJÀ
+ * résolues (année, mois 1-12, jour). Validation en UTC pur, déterministe. */
+function buildReportDate(year: number, month: number, day: number): ReportDate {
+  const date = new Date(Date.UTC(year, month - 1, day))
+  if (isNaN(date.getTime())) {
+    throw new Error("La date du rapport n'est pas valide.")
+  }
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate()
+  return { dayOfMonth: day, month, year, daysInMonth }
+}
+
+/**
+ * Date du rapport lue dans la colonne « REPORT DATE » du CSV (option StayNTouch
+ * INCLUDE REPORT DATE), au format JJ-MM-AAAA. C'est LA date des données — aucun
+ * J-1 à appliquer. Robuste au préambule et à un réordonnancement (recherche par
+ * NOM de colonne). Renvoie null si la colonne est absente (ancien format) → on
+ * retombera sur le nom de fichier. Sourcer la date du CONTENU élimine toute
+ * dépendance à l'heure de tirage / au fuseau du nom de fichier.
+ */
+function extractReportDateFromCsv(csvText: string): ReportDate | null {
+  const result = Papa.parse<string[]>(csvText, {
+    header: false,
+    skipEmptyLines: true,
+  })
+  const data = result.data ?? []
+  let col = -1
+  let headerIdx = -1
+  for (let r = 0; r < data.length; r++) {
+    const i = data[r]
+      .map((h) => (h ?? '').trim().toUpperCase())
+      .indexOf('REPORT DATE')
+    if (i !== -1) {
+      col = i
+      headerIdx = r
+      break
+    }
+  }
+  if (col === -1) return null
+  for (const row of data.slice(headerIdx + 1)) {
+    const m = (row[col] ?? '').trim().match(/^(\d{2})-(\d{2})-(\d{4})$/)
+    if (m) {
+      return buildReportDate(
+        parseInt(m[3], 10),
+        parseInt(m[2], 10),
+        parseInt(m[1], 10),
+      )
+    }
+  }
+  return null
+}
+
+// La date du NOM de fichier est la date d'export (aujourd'hui) ; les données
+// couvrent la VEILLE → on soustrait 1 jour. REPLI utilisé seulement si la colonne
+// REPORT DATE est absente. Découpage SÛR : composantes AAAAMMJJ, arithmétique J-1
+// en UTC (déterministe, indépendante de DST/fuseau).
 function extractReportDate(filename: string | undefined): ReportDate {
   const match = filename?.match(/(\d{4})(\d{2})(\d{2})/)
   if (!match) {
@@ -134,12 +189,11 @@ function extractReportDate(filename: string | undefined): ReportDate {
     )
   }
 
-  const year = date.getUTCFullYear()
-  const month = date.getUTCMonth() + 1 // 1-12
-  const dayOfMonth = date.getUTCDate()
-  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate()
-
-  return { dayOfMonth, month, year, daysInMonth }
+  return buildReportDate(
+    date.getUTCFullYear(),
+    date.getUTCMonth() + 1,
+    date.getUTCDate(),
+  )
 }
 
 // =============================================================================
@@ -587,7 +641,13 @@ export async function importComparison(
   filename: string,
   dryRun = false,
 ): Promise<number> {
-  const reportDate = extractReportDate(filename)
+  // Date du rapport : PRIORITÉ à la colonne REPORT DATE du CSV (fiable, = date des
+  // données) ; repli sur le nom de fichier (J-1) si la colonne est absente.
+  const fromCsv = extractReportDateFromCsv(csv)
+  const reportDate = fromCsv ?? extractReportDate(filename)
+  console.log(
+    `[DATE] rapport daté du ${reportDate.dayOfMonth}/${reportDate.month}/${reportDate.year} (source : ${fromCsv ? 'colonne REPORT DATE' : 'nom de fichier J-1'})`,
+  )
   const comparison = parseComparison(csv)
 
   const alerts: Alert[] = []
@@ -801,12 +861,22 @@ export async function importForecast(
     )
   }
 
+  // PIPELINE AUTO : l'export StayNTouch a toujours le même format → on ne BLOQUE
+  // que sur des données vraiment corrompues (vide, valeurs impossibles). Les
+  // HEURISTIQUES (« forecast en HT »), utiles en import MANUEL où un humain peut
+  // re-exporter, sont ici seulement LOGUÉES : sinon un faux positif bloquerait
+  // tout l'envoi RepJour sans personne pour corriger. (Le manuel = autre code,
+  // côté app, garde sa validation complète.)
+  const HEURISTIC_MSGS = new Set<string>([MSG.tvaMissing])
   const seen = new Set<string>()
-  const blockingErrors = allErrors.filter((a) => {
+  const dedup = allErrors.filter((a) => {
     if (seen.has(a.message)) return false
     seen.add(a.message)
     return true
   })
+  for (const a of dedup.filter((a) => HEURISTIC_MSGS.has(a.message)))
+    console.warn(`[FORECAST] avertissement (non bloquant en auto) : ${a.message}`)
+  const blockingErrors = dedup.filter((a) => !HEURISTIC_MSGS.has(a.message))
   if (blockingErrors.length > 0) {
     throw new Error(
       `Ces prévisions ne peuvent pas être enregistrées :\n${blockingErrors.map((a) => `• ${a.message}`).join('\n')}`,
