@@ -126,13 +126,20 @@ export async function maybeAutoSendRepjour(
   dryRun: boolean,
   instant: Date = new Date(),
 ): Promise<AutoSendOutcome> {
-  // DÉFENSE EN PROFONDEUR : l'envoi AUTO ne part que dans la fenêtre [02h, 04h[
-  // (Paris). Redondant avec la garde en amont d'index.ts (on n'arrive ici que via
-  // le pipeline, déjà borné), mais blinde contre tout futur appel par un autre
-  // chemin. N'affecte PAS l'envoi MANUEL admin (send-report, autre fichier).
-  // `instant` = heure lue UNE fois par requête (passée par index.ts) → import et
-  // envoi décident sur la même horloge (pas de désaccord à cheval sur 04h).
-  if (!isWithinPipelineWindow(instant))
+  // L'envoi AUTO ne part que dans la fenêtre [02h, 04h[ (Paris) — c'est désormais la
+  // SEULE garde de fenêtre (l'ingestion, elle, tourne 24/7). N'affecte PAS l'envoi
+  // MANUEL admin (send-report). `instant` = heure lue UNE fois par requête.
+  //
+  // INTERRUPTEUR DE TEST : le secret PIPELINE_WINDOW_BYPASS=true LÈVE cette garde pour
+  // valider la boucle complète EN JOURNÉE (envoi réel, pas une simulation). Défaut =
+  // garde active. Réversible sans redéploiement : il suffit d'unset le secret après le
+  // test. À laisser absent en fonctionnement normal.
+  const bypassWindow = Deno.env.get('PIPELINE_WINDOW_BYPASS') === 'true'
+  if (bypassWindow)
+    console.warn(
+      '[AUTO-SEND] PIPELINE_WINDOW_BYPASS=true — garde de fenêtre [02h,04h[ LEVÉE (test réel en cours).',
+    )
+  if (!bypassWindow && !isWithinPipelineWindow(instant))
     return { sent: false, note: 'hors fenêtre horaire — envoi auto ignoré' }
 
   // Secrets / config d'envoi.
