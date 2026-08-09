@@ -1,0 +1,13 @@
+# Réglages de déploiement des Edge Functions, FIGÉS dans le repo — pour que
+# `import-report` garde verify_jwt=false à CHAQUE déploiement, sans dépendre du flag
+# `--no-verify-jwt` (oubliable : un deploy sans le flag réactive la vérif JWT -> 401
+# depuis le Worker Cloudflare -> pipeline auto MORT, en silence).
+#
+# import-report est appelée par le Worker Cloudflare (pas par un utilisateur connecté)
+# -> PAS de JWT à vérifier : la barrière est le secret `X-Import-Secret`, vérifié dans
+# le code (comparaison en temps constant).
+#
+# Les autres fonctions (send-report, create-user, delete-user) gardent le défaut
+# verify_jwt = true (appelées avec le JWT admin) — inutile de les lister ici.
+[functions.import-report]
+verify_jwt = false
