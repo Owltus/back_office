@@ -806,7 +806,7 @@ export function DashboardBoard() {
           )}
 
         {sendMention && (
-          <div className="mt-1 text-right text-xs text-muted-foreground/60 print:hidden">
+          <div className="mt-1 text-right text-xs text-muted-foreground opacity-30 print:hidden">
             {sendMention}
           </div>
         )}
