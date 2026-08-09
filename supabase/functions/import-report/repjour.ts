@@ -246,9 +246,12 @@ function parseComparison(csvText: string): ComparisonData {
   let totalRevenueHTMTD = 0
   let vatToday = 0
 
+  // Libellés de section comparés en MAJUSCULES (comme l'en-tête TODAY/MTD) : robuste
+  // à un simple changement de casse côté PMS (« Room Revenue » vs « ROOM REVENUE »).
+  // Sans ça, un renommage de casse mettait le KPI à 0 silencieusement (CA à 0 € envoyé).
   for (const row of result.data.slice(headerIdx + 1)) {
-    const section = (row[0] || '').trim()
-    if (section === 'Occupied Rooms') {
+    const section = (row[0] || '').trim().toUpperCase()
+    if (section === 'OCCUPIED ROOMS') {
       occExclCompToday = parseFloat(row[todayIndex]) || 0
       occExclCompMTD = parseFloat(row[mtdIndex]) || 0
     } else if (section === 'ROOM REVENUE') {
@@ -499,6 +502,8 @@ const MSG = {
     'Des chambres sont vendues mais leur montant est à zéro. Vérifie le fichier.',
   revenueNoRoom:
     'Il y a un montant mais aucune chambre vendue. Vérifie le fichier.',
+  forecastOverCapacity:
+    "Une prévision dépasse largement la capacité de l'hôtel sur un jour. Le fichier a mal été exporté, recommence.",
 } as const
 
 function validateForecast(
@@ -522,6 +527,16 @@ function validateForecast(
   )
   if (hasImpossible) {
     alerts.push({ type: 'error', message: MSG.impossible })
+  }
+
+  // Plafond de MAGNITUDE : une occupation ≥ 1,5× la capacité est physiquement
+  // impossible → fichier corrompu (valeur aberrante, colonne décalée…). Seuil large
+  // (pas une égalité stricte à TOTAL_ROOMS) pour ne pas rejeter un surbooking marginal
+  // légitime (ex. 82 vendues). ERROR bloquante, y compris en pipeline auto : c'est une
+  // vraie corruption, pas une heuristique — sinon un projeté mensuel gonflé (TO > 100 %)
+  // serait écrit puis e-mailé.
+  if (rows.some((r) => r.occ > TOTAL_ROOMS * 1.5)) {
+    alerts.push({ type: 'error', message: MSG.forecastOverCapacity })
   }
 
   const hasOccNoRev = rows.some((r) => r.occ > 0 && r.revTTC === 0)

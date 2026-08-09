@@ -387,8 +387,13 @@ export async function importInhouse(
       const { error } = await admin
         .from(PDJ_TABLE)
         .upsert(deduped.slice(i, i + CHUNK), { onConflict: 'service_date,room' })
-      if (error)
-        throw new Error(`Écriture pdj_breakfasts échouée : ${error.message}`)
+      if (error) {
+        // Détail Postgres brut UNIQUEMENT dans les logs serveur ; message renvoyé
+        // NEUTRE (le compte rendu part au Worker, ne pas y exposer noms de tables /
+        // contraintes / structure interne).
+        console.error('Écriture pdj_breakfasts échouée :', error.message)
+        throw new Error('Écriture des données PDJ échouée. Réessaie dans un instant.')
+      }
     }
   }
 
