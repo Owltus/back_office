@@ -25,7 +25,6 @@ import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { importComparison, importForecast } from './repjour.ts'
 import { importInhouse } from './pdj.ts'
 import { maybeAutoSendRepjour } from './autoSend.ts'
-import { maybeAutoSendPdj } from './autoSendPdj.ts'
 import {
   isWithinPipelineWindow,
   parisHour,
@@ -221,23 +220,8 @@ Deno.serve(async (req) => {
     }
   }
 
-  // 4c. ENVOI AUTOMATIQUE du PDJ : si un In-House vient d'être importé, envoyer la
-  //     feuille de petit-déjeuner du jour (une seule fois — garde pdj_auto_send_log).
-  //     Idem : n'impacte pas le statut d'import ; en dry-run, détecte sans envoyer.
-  const touchedPdj = results.some((r) => r.ok && r.type === 'inhouse')
-  if (touchedPdj) {
-    try {
-      const outcome = await maybeAutoSendPdj(admin, dryRun, instant)
-      console.log(
-        `[AUTO-SEND pdj] ${outcome.sent ? 'ENVOYÉ' : 'non envoyé'} — ${outcome.note}`,
-      )
-    } catch (err) {
-      console.error(
-        '[AUTO-SEND pdj] exception inattendue :',
-        err instanceof Error ? err.message : String(err),
-      )
-    }
-  }
+  // NB : l'In-House est bien IMPORTÉ (données de la page PDJ) mais n'est PLUS envoyé
+  // par e-mail — l'envoi PDJ a été retiré (livraison impossible côté tenant okko).
 
   // 5. Compte rendu. Un échec bloquant → 422 pour que le Worker REJETTE (l'envoi
   //    reste visible côté PMS), plutôt qu'un faux « OK » silencieux.

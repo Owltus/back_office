@@ -25,8 +25,8 @@ export function parisHour(instant: Date = new Date()): number {
 // Fenêtre horaire (heure de Paris) où l'ingestion ET l'envoi AUTOMATIQUES sont
 // autorisés : [02h, 04h[. Les rapports du pipeline sont tirés vers 02h30 ; hors de
 // cette fenêtre, on ignore tout (ni écriture, ni envoi auto). Source UNIQUE de la
-// règle — utilisée par la garde en amont (index.ts) ET par les fonctions d'envoi
-// (autoSend/autoSendPdj) en défense en profondeur. N'affecte QUE l'automatique :
+// règle — utilisée par la garde en amont (index.ts) ET par la fonction d'envoi
+// (autoSend) en défense en profondeur. N'affecte QUE l'automatique :
 // l'envoi MANUEL admin (send-report) reste disponible 24h/24.
 export const PIPELINE_WINDOW_START_HOUR = 2
 export const PIPELINE_WINDOW_END_HOUR = 4
