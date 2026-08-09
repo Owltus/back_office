@@ -107,6 +107,15 @@ function getImportDayStr(): string {
   return localDateStr(d)
 }
 
+// Date + heure d'envoi du mail (ex. « 8 août 2026 à 14:32 ») — mention discrète.
+const fmtSentAt = new Intl.DateTimeFormat('fr-FR', {
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+})
+
 export function DashboardBoard() {
   const [detailMode, setDetailMode] = useState(false)
   // Ouverture sur le dernier jour CLÔTURÉ (J-1 du jour hôtelier, bascule à 02h) :
@@ -380,6 +389,18 @@ export function DashboardBoard() {
     report.auto_sent_at == null &&
     report.send_reminder_dismissed_at == null &&
     selectedDate === currentCycleDate
+
+  // Mention discrète (bas droite du contenu) de l'état d'envoi du rapport affiché :
+  //  - envoyé          → « Envoyé le <date> à <heure> » (heure réelle de l'envoi) ;
+  //  - bandeau présent → rien (le bandeau ambre suffit) ;
+  //  - sinon (bandeau ignoré, ou rapport ancien non envoyé) → « Rapport non envoyé ».
+  const sendMention = !report
+    ? null
+    : report.auto_sent_at
+      ? `Envoyé le ${fmtSentAt.format(new Date(report.auto_sent_at))}`
+      : notSent
+        ? null
+        : 'Rapport non envoyé'
 
   // Données du document PDF — partagées par la fonction Imprimer ET l'envoi
   // serveur (le rapport joint est exactement le PDF imprimé). Variante complète
@@ -783,6 +804,12 @@ export function DashboardBoard() {
               }
             />
           )}
+
+        {sendMention && (
+          <div className="mt-1 text-right text-xs text-muted-foreground/60 print:hidden">
+            {sendMention}
+          </div>
+        )}
       </div>
 
       {isGradeAdmin && (
