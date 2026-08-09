@@ -29,6 +29,16 @@ export async function fetchLatestReport(): Promise<DailyReport | null> {
   return data
 }
 
+/**
+ * Masque le bandeau « pas encore envoyé » d'un rapport (décision PARTAGÉE, en base).
+ * Passe par la RPC `dismiss_send_reminder` (SECURITY DEFINER, gardée niveau écriture
+ * sur repjour — admins inclus). Ne touche PAS `auto_sent_at` : l'envoi reste possible.
+ */
+export async function dismissSendReminder(date: string): Promise<void> {
+  const { error } = await supabase.rpc('dismiss_send_reminder', { p_date: date })
+  if (error) throw error
+}
+
 export async function fetchReportByDate(
   date: string,
 ): Promise<DailyReport | null> {

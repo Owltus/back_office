@@ -57,6 +57,7 @@ export interface DailyReport {
   // Optionnel car les select restreints (analytique) ne le ramènent pas ; le
   // dashboard le lit via fetchReportByDate (select '*').
   auto_sent_at?: string | null;
+  send_reminder_dismissed_at?: string | null;
   alerts: Alert[];
 }
 

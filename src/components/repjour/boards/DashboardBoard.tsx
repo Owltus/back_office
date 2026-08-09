@@ -42,6 +42,7 @@ import {
   fetchMonthReports,
   fetchPreviousReportInMonth,
   fetchReportByDate,
+  dismissSendReminder,
 } from '#/lib/repjour/services/daily.ts'
 import { deleteDayData } from '#/lib/repjour/services/data.ts'
 import { reportToKPI } from '#/lib/repjour/calc/kpi.ts'
@@ -115,6 +116,8 @@ export function DashboardBoard() {
   const [selectedDate, setSelectedDate] = useState(getImportDayStr)
   // Envoi serveur (Resend) : état d'envoi transitoire (bouton de la barre du haut).
   const [serverSending, setServerSending] = useState(false)
+  // Masquage du bandeau « pas encore envoyé » (RPC dismiss_send_reminder) : transitoire.
+  const [ignoring, setIgnoring] = useState(false)
   const [showServerRecipients, setShowServerRecipients] = useState(false)
   const [showServerConfirm, setShowServerConfirm] = useState(false)
   const [pdfBusy, setPdfBusy] = useState(false)
@@ -370,8 +373,13 @@ export function DashboardBoard() {
   // dès que le marqueur est posé (envoi manuel → invalidation ci-dessous ; envoi
   // auto → canal realtime daily_reports).
   const currentCycleDate = getImportDayStr()
+  // `send_reminder_dismissed_at` non nul = un rôle habilité a cliqué « Ignorer »
+  // (masquage partagé, en base) → on ne montre plus le bandeau, même non envoyé.
   const notSent =
-    !!report && report.auto_sent_at == null && selectedDate === currentCycleDate
+    !!report &&
+    report.auto_sent_at == null &&
+    report.send_reminder_dismissed_at == null &&
+    selectedDate === currentCycleDate
 
   // Données du document PDF — partagées par la fonction Imprimer ET l'envoi
   // serveur (le rapport joint est exactement le PDF imprimé). Variante complète
@@ -455,6 +463,25 @@ export function DashboardBoard() {
       return { ok: false, message: "L'envoi a échoué. Réessaie dans un instant." }
     } finally {
       setServerSending(false)
+    }
+  }
+
+  // « Ignorer » le bandeau : masquage PARTAGÉ (en base) via la RPC gardée par rôle
+  // (écriture/gestion sur repjour, admins inclus). Ne touche PAS auto_sent_at → un
+  // envoi manuel reste possible depuis la barre du haut. Le canal realtime
+  // daily_reports le retire ensuite pour tous ; on invalide aussi tout de suite.
+  async function handleIgnore(): Promise<void> {
+    if (!report) return
+    setActionError(null)
+    setIgnoring(true)
+    try {
+      await dismissSendReminder(currentCycleDate)
+      await queryClient.invalidateQueries({ queryKey: ['repjour'] })
+    } catch (err) {
+      console.error('[repjour] masquage du bandeau échoué', err)
+      setActionError("Le rappel n'a pas pu être masqué. Réessaie dans un instant.")
+    } finally {
+      setIgnoring(false)
     }
   }
 
@@ -608,8 +635,8 @@ export function DashboardBoard() {
         {notSent && (
           <SendStatusBanner
             message={`Le rapport du ${displayDate} n'a pas encore été envoyé.`}
-            onSend={isGradeAdmin ? () => setShowServerConfirm(true) : undefined}
-            sending={serverSending}
+            onIgnore={canImport ? handleIgnore : undefined}
+            ignoring={ignoring}
           />
         )}
 
