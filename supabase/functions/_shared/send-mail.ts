@@ -27,7 +27,7 @@ interface Recipient {
 export interface SendMailInput {
   /** Client service_role (bypass RLS) fourni par l'appelant. */
   admin: SupabaseClient
-  /** Expéditeur complet, ex. « OKKO PDJ <noreply@pdj.naostack.com> ». */
+  /** Expéditeur complet, ex. « Rep Jour <noreply@repjour.naostack.com> ». */
   from: string
   subject: string
   /** Corps HTML complet (document `<!doctype html>…`). */
@@ -39,7 +39,7 @@ export interface SendMailInput {
   pdfBase64?: string | null
   /** Nom de fichier de la pièce jointe (borné : simple `.pdf`, sans chemin). */
   pdfName?: string
-  /** Table des destinataires, ex. « server_report_recipients » / « pdj_report_recipients ». */
+  /** Table des destinataires, ex. « server_report_recipients ». */
   recipientsTable: string
   /** Clé Resend (secret RESEND_API_KEY). */
   resendKey: string

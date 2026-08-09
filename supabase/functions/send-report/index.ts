@@ -120,10 +120,7 @@ Deno.serve(async (req) => {
   }
 
   // 3. Corps de requête (produit par le front : jsPDF + rendu HTML).
-  //    `kind` distingue le RepJour (défaut) du PDJ : il pilote l'EXPÉDITEUR et la
-  //    LISTE de destinataires (deux diffusions strictement séparées).
   let body: {
-    kind?: 'repjour' | 'pdj'
     date?: string
     subject?: string
     htmlBody?: string
@@ -135,7 +132,6 @@ Deno.serve(async (req) => {
   } catch {
     return json({ error: 'Corps de requête invalide' }, 400)
   }
-  const kind = body.kind === 'pdj' ? 'pdj' : 'repjour'
   // Date du rapport (YYYY-MM-DD) — optionnelle : sert UNIQUEMENT à poser le marqueur
   // d'envoi après succès (pour que le bandeau « pas encore envoyé » se retire).
   const reportDate = (body.date ?? '').trim()
@@ -146,27 +142,11 @@ Deno.serve(async (req) => {
   if (!subject || !htmlBody)
     return json({ error: 'Sujet ou corps manquant' }, 400)
 
-  // Expéditeur + table de destinataires selon `kind`. `onboarding@resend.dev` en
+  // Expéditeur + table de destinataires (Rep Jour). `onboarding@resend.dev` en
   // repli test (Resend n'accepte alors QUE ton adresse d'inscription). Bascule vers
-  // les domaines vérifiés (repjour/pdj .naostack.com) une fois les DNS en place.
-  const from =
-    kind === 'pdj'
-      ? (Deno.env.get('PDJ_REPORT_FROM') ??
-        Deno.env.get('REPORT_FROM') ??
-        'OKKO PDJ <onboarding@resend.dev>')
-      : (Deno.env.get('REPORT_FROM') ?? 'Rep Jour <onboarding@resend.dev>')
-  const recipientsTable =
-    kind === 'pdj' ? 'pdj_report_recipients' : 'server_report_recipients'
-
-  // TEST DIAGNOSTIC (temporaire, OFF par défaut) : si le secret PDJ_TEST_NO_PDF=true,
-  // on envoie le PDJ SANS la pièce jointe PDF. But : vérifier si c'est le PDF (liste
-  // de noms clients = données personnelles) qui déclenche un rejet silencieux côté
-  // tenant okko (hypothèse DLP), alors que le Rep Jour (chiffres seuls) passe. Le PDF
-  // reste construit côté client, on ne fait que NE PAS le joindre ici. À RETIRER après
-  // le diagnostic (supprimer le secret suffit à revenir au comportement normal).
-  const skipPdf = kind === 'pdj' && Deno.env.get('PDJ_TEST_NO_PDF') === 'true'
-  if (skipPdf)
-    console.log('[TEST] PDJ envoyé SANS pièce jointe (PDJ_TEST_NO_PDF=true)')
+  // le domaine vérifié (repjour.naostack.com) une fois les DNS en place.
+  const from = Deno.env.get('REPORT_FROM') ?? 'Rep Jour <onboarding@resend.dev>'
+  const recipientsTable = 'server_report_recipients'
 
   // Durcissement (B2) : le contenu est piloté par l'appelant (admin), on le borne.
   //   - pdfName : nom de fichier simple .pdf, jamais de chemin (../, /).
@@ -188,7 +168,7 @@ Deno.serve(async (req) => {
     from,
     subject,
     html: htmlBody,
-    pdfBase64: skipPdf ? null : pdfBase64,
+    pdfBase64,
     pdfName,
     recipientsTable,
     resendKey,
@@ -200,22 +180,15 @@ Deno.serve(async (req) => {
 
   // Envoi réussi : POSE LE MARQUEUR D'ENVOI pour la date du rapport, afin que le
   // bandeau « pas encore envoyé » (front) se retire après un envoi MANUEL, comme
-  // après un envoi auto. On réutilise les marqueurs existants (auto_sent_at pour le
-  // RepJour ; ligne pdj_auto_send_log pour le PDJ) — « auto_sent_at » signifie donc
-  // « envoyé (auto ou manuel) ». Best-effort : un échec ici n'annule pas le mail parti.
+  // après un envoi auto. On réutilise le marqueur existant `daily_reports.auto_sent_at`
+  // — « auto_sent_at » signifie donc « envoyé (auto ou manuel) ». Best-effort : un
+  // échec ici n'annule pas le mail parti.
   if (/^\d{4}-\d{2}-\d{2}$/.test(reportDate)) {
     try {
-      if (kind === 'pdj') {
-        await admin.from('pdj_auto_send_log').upsert(
-          { service_date: reportDate, sent_at: new Date(nowMs).toISOString() },
-          { onConflict: 'service_date', ignoreDuplicates: true },
-        )
-      } else {
-        await admin
-          .from('daily_reports')
-          .update({ auto_sent_at: new Date(nowMs).toISOString() })
-          .eq('date', reportDate)
-      }
+      await admin
+        .from('daily_reports')
+        .update({ auto_sent_at: new Date(nowMs).toISOString() })
+        .eq('date', reportDate)
     } catch (e) {
       console.error(
         "Marqueur d'envoi manuel non posé :",
