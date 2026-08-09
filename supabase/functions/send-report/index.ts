@@ -158,6 +158,16 @@ Deno.serve(async (req) => {
   const recipientsTable =
     kind === 'pdj' ? 'pdj_report_recipients' : 'server_report_recipients'
 
+  // TEST DIAGNOSTIC (temporaire, OFF par défaut) : si le secret PDJ_TEST_NO_PDF=true,
+  // on envoie le PDJ SANS la pièce jointe PDF. But : vérifier si c'est le PDF (liste
+  // de noms clients = données personnelles) qui déclenche un rejet silencieux côté
+  // tenant okko (hypothèse DLP), alors que le Rep Jour (chiffres seuls) passe. Le PDF
+  // reste construit côté client, on ne fait que NE PAS le joindre ici. À RETIRER après
+  // le diagnostic (supprimer le secret suffit à revenir au comportement normal).
+  const skipPdf = kind === 'pdj' && Deno.env.get('PDJ_TEST_NO_PDF') === 'true'
+  if (skipPdf)
+    console.log('[TEST] PDJ envoyé SANS pièce jointe (PDJ_TEST_NO_PDF=true)')
+
   // Durcissement (B2) : le contenu est piloté par l'appelant (admin), on le borne.
   //   - pdfName : nom de fichier simple .pdf, jamais de chemin (../, /).
   //   - tailles plafonnées (charge mémoire / Resend).
@@ -178,7 +188,7 @@ Deno.serve(async (req) => {
     from,
     subject,
     html: htmlBody,
-    pdfBase64,
+    pdfBase64: skipPdf ? null : pdfBase64,
     pdfName,
     recipientsTable,
     resendKey,
