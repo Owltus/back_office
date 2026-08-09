@@ -16,27 +16,34 @@ export function parseForecastAll(csvText: string): ForecastRow[] {
     skipEmptyLines: true,
   });
 
-  if (!result.data || result.data.length < 3) {
+  if (!result.data || result.data.length < 2) {
     throw new Error("Le fichier des prévisions est vide ou incomplet. Recommence l'export.");
   }
 
-  const headers = result.data[1];
-  const dateHeader = (headers[0] || '').trim().toUpperCase();
-  const occHeader = (headers[3] || '').trim().toUpperCase();
-  const revHeader = (headers[7] || '').trim().toUpperCase();
-
-  if (dateHeader !== 'DATE' || occHeader !== 'OCC' || revHeader !== 'REV') {
-    // Détail technique en console, message simple à l'écran.
-    console.error(
-      `Forecast : en-têtes inattendus "${headers[0]?.trim()}" / "${headers[3]?.trim()}" / "${headers[7]?.trim()}" (attendus DATE / OCC / REV)`,
-    );
+  // Trouver la LIGNE d'en-tête (DATE + OCC + REV), OÙ QU'ELLE SOIT, et localiser les
+  // colonnes PAR NOM — robuste au préambule de l'export planifié
+  // « *_forecast_report_DAILY_* » comme à l'export manuel « Forecast By Date Range »,
+  // et à un éventuel réordonnancement. (Les deux formats sont donc acceptés.)
+  let headerIdx = -1;
+  for (let r = 0; r < result.data.length; r++) {
+    const up = result.data[r].map((h) => (h ?? '').trim().toUpperCase());
+    if (up.includes('DATE') && up.includes('OCC') && up.includes('REV')) {
+      headerIdx = r;
+      break;
+    }
+  }
+  if (headerIdx === -1) {
     throw new Error("Ce fichier n'a pas le bon format. Vérifie que c'est bien le fichier des prévisions (Forecast By Date Range).");
   }
+  const up = result.data[headerIdx].map((h) => (h ?? '').trim().toUpperCase());
+  const dateCol = up.indexOf('DATE');
+  const occCol = up.indexOf('OCC');
+  const revCol = up.indexOf('REV');
 
   const rows: ForecastRow[] = [];
 
-  for (const row of result.data.slice(2)) {
-    const dateStr = (row[0] || '').trim();
+  for (const row of result.data.slice(headerIdx + 1)) {
+    const dateStr = (row[dateCol] || '').trim();
     if (dateStr.toUpperCase() === 'TOTALS' || dateStr === '') continue;
 
     const dateParts = dateStr.split('-');
@@ -47,8 +54,8 @@ export function parseForecastAll(csvText: string): ForecastRow[] {
     const year = parseInt(dateParts[2], 10);
     if (isNaN(day) || isNaN(month) || isNaN(year)) continue;
 
-    const occ = parseInt(row[3], 10) || 0;
-    const revTTC = parseFloat(row[7]) || 0;
+    const occ = parseInt(row[occCol], 10) || 0;
+    const revTTC = parseFloat(row[revCol]) || 0;
     const revHT = fromTTC(revTTC); // REV du forecast est déjà TTC
 
     rows.push({

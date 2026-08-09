@@ -12,18 +12,32 @@ export function parseComparison(csvText: string): ComparisonData {
     throw new Error("Le fichier des chiffres du jour est vide ou illisible. Recommence l'export.");
   }
 
-  // Trouver les index des colonnes TODAY et MTD depuis l'en-tête
-  const headerRow = result.data[0];
+  // Trouver la LIGNE d'en-tête (colonnes TODAY + MTD), OÙ QU'ELLE SOIT : l'export
+  // manuel « Comparison By Date » a l'en-tête en 1re ligne, mais l'export planifié
+  // « *_comparison_report_DAILY_* » est précédé d'un préambule (Hotel Code…). On la
+  // cherche donc au lieu de supposer la 1re ligne (les deux formats sont acceptés).
+  let headerIdx = -1;
   let todayIndex = -1;
   let mtdIndex = -1;
 
-  for (let i = 0; i < headerRow.length; i++) {
-    const val = headerRow[i]?.trim().toUpperCase();
-    if (val === 'TODAY') todayIndex = i;
-    if (val === 'MTD') mtdIndex = i;
+  for (let r = 0; r < result.data.length; r++) {
+    const row = result.data[r];
+    let t = -1;
+    let m = -1;
+    for (let i = 0; i < row.length; i++) {
+      const val = row[i]?.trim().toUpperCase();
+      if (val === 'TODAY') t = i;
+      if (val === 'MTD') m = i;
+    }
+    if (t !== -1 && m !== -1) {
+      headerIdx = r;
+      todayIndex = t;
+      mtdIndex = m;
+      break;
+    }
   }
 
-  if (todayIndex === -1 || mtdIndex === -1) {
+  if (headerIdx === -1) {
     throw new Error("Ce fichier n'a pas le bon format. Vérifie que c'est bien le fichier des chiffres du jour (Comparison By Date).");
   }
 
@@ -34,7 +48,7 @@ export function parseComparison(csvText: string): ComparisonData {
   let totalRevenueHTMTD = 0;
   let vatToday = 0;
 
-  for (const row of result.data.slice(1)) {
+  for (const row of result.data.slice(headerIdx + 1)) {
     const section = (row[0] || '').trim();
 
     if (section === 'Occupied Rooms') {

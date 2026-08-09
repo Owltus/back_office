@@ -142,11 +142,24 @@ export function parseGuestRows(
   // il se colle au premier en-tête « Room » et fait échouer la détection des
   // colonnes → 0 ligne, faux problème « fichier invalide »).
   const clean = content.charCodeAt(0) === 0xfeff ? content.slice(1) : content
-  const separator = clean.split('\n')[0].includes(';') ? ';' : ','
   const lines = clean.split('\n').filter((l) => l.trim())
+  // Trouver la LIGNE d'en-tête (contient « Room » ET « Status » ET « Guest Name »),
+  // OÙ QU'ELLE SOIT : l'export planifié « *_in_house_guests_report_DAILY_* » est
+  // précédé d'un préambule (Hotel Code…), alors que l'export manuel « In-House
+  // Guests » a l'en-tête en 1re ligne. On la cherche donc (les deux formats passent).
+  const headerLineIdx = lines.findIndex(
+    (l) => l.includes('Room') && l.includes('Status') && l.includes('Guest Name'),
+  )
+  if (headerLineIdx === -1) {
+    throw new Error(
+      `Le fichier CSV ne contient pas toutes les colonnes requises : ${REQUIRED_COLUMNS.join(', ')}.`,
+    )
+  }
+  const headerLine = lines[headerLineIdx]
+  const separator = headerLine.includes(';') ? ';' : ','
   // En-têtes normalisés : `trim()` retire les espaces, le `\r` de fin de ligne
   // (CRLF) et un BOM résiduel — pour que `indexOf('Room')` etc. matchent.
-  const headers = parseCsvLine(lines[0], separator).map((h) => h.trim())
+  const headers = parseCsvLine(headerLine, separator).map((h) => h.trim())
 
   const col = Object.fromEntries(
     [
@@ -181,7 +194,7 @@ export function parseGuestRows(
   // Un n° de chambre est toujours numérique → écarte l'en-tête, le pied de page
   // « TOTAL ROOMS » et les lignes de continuation des notes multilignes.
   const rows = lines
-    .slice(1)
+    .slice(headerLineIdx + 1)
     .map((l) => parseCsvLine(l.trim(), separator))
     .filter((v) => {
       const room = v[col.room]?.trim()
