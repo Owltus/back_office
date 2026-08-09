@@ -46,13 +46,14 @@ type ReportType = 'comparison' | 'forecast' | 'inhouse'
  * de contenu (mêmes critères que les imports manuels RepJour/PDJ). */
 function detectType(filename: string, content: string): ReportType | null {
   const f = filename.toLowerCase()
-  const firstLine = (content.split(/\r?\n/, 1)[0] || '').toUpperCase()
 
-  // 1) Par nom de fichier (le plus fiable).
-  if (f.includes('comparison_by_date') || f.includes('comparison by date'))
-    return 'comparison'
-  if (f.includes('forecast_by_date_range') || f.includes('forecast by date range'))
-    return 'forecast'
+  // 1) Par nom de fichier (le plus fiable). LARGE : couvre les exports manuels
+  //    (« Comparison By Date », « Forecast By Date Range », « In-House Guests »)
+  //    ET les exports planifiés du pipeline (« *_comparison_report_DAILY_* »,
+  //    « *_forecast_report_DAILY_* », « *_in_house_guests_report_DAILY_* »). Les
+  //    trois mots-clés sont mutuellement exclusifs entre les 3 types de rapport.
+  if (f.includes('comparison')) return 'comparison'
+  if (f.includes('forecast')) return 'forecast'
   if (
     f.includes('in-house') ||
     f.includes('in_house') ||
@@ -61,9 +62,11 @@ function detectType(filename: string, content: string): ReportType | null {
   )
     return 'inhouse'
 
-  // 2) Repli par contenu.
+  // 2) Repli par contenu (nom altéré). On inspecte les 1res lignes (pas seulement
+  //    la 1re) : dans le forecast, « FORECAST » est en ligne 2-3, pas en ligne 1.
+  const head = content.slice(0, 2000).toUpperCase()
   if (content.includes('Occupied Rooms')) return 'comparison'
-  if (firstLine.includes('FORECAST')) return 'forecast'
+  if (head.includes('FORECAST')) return 'forecast'
   // Signature In-House : en-tête portant à la fois « Guest Name » et « Addons ».
   if (/(^|[,;])\s*Guest Name\s*([,;])/.test(content) && content.includes('Addons'))
     return 'inhouse'
