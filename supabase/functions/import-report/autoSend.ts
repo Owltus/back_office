@@ -212,7 +212,15 @@ export async function maybeAutoSendRepjour(
   // Fraîcheur exigée SEULEMENT hors jonction. À la jonction (dernier jour du mois /
   // 31 déc), « forecast présent » suffit : le mois est complet, on envoie avec le
   // forecast déjà en base. En milieu de mois, on garde le filet anti-projeté-périmé.
-  const fcAgeMs = instant.getTime() - new Date(latestFc).getTime()
+  //
+  // ATTENTION : l'âge se mesure avec l'heure RÉELLE (`Date.now()`), PAS avec `instant`.
+  // `instant` est figé au tout début de la requête (index.ts), AVANT le parse ; or le
+  // Forecast qui vient d'être importé DANS cette même requête est estampillé
+  // `imported_at = now()` APRÈS le parse, donc APRÈS `instant`. Utiliser `instant` ici
+  // donnait un âge NÉGATIF → « pas frais » → auto-envoi jamais déclenché quand le
+  // Comparison arrivait avant le Forecast (ou les deux dans le même mail). `instant`
+  // reste réservé à la garde de fenêtre [02h,04h[ (cohérence de la borne 04h).
+  const fcAgeMs = Date.now() - new Date(latestFc).getTime()
   if (!isMonthBoundary && !(fcAgeMs >= 0 && fcAgeMs < FRESH_WINDOW_MS))
     return {
       sent: false,
@@ -400,8 +408,24 @@ export async function maybeAutoSendRepjour(
     })
 
     if (!result.ok) {
-      await releaseReservation()
-      return { sent: false, note: `envoi échoué (${result.error ?? 'inconnu'})` }
+      if (result.certainNotSent) {
+        // Rien n'est parti (échec pré-envoi : config, destinataires, ou 4xx définitif).
+        // On LIBÈRE la réservation → le bandeau « pas encore envoyé » réapparaît et un
+        // renvoi manuel est possible sans risque de doublon.
+        await releaseReservation()
+        return { sent: false, note: `envoi échoué (${result.error ?? 'inconnu'})` }
+      }
+      // Issue AMBIGUË (réseau/5xx après le POST) : l'e-mail est PEUT-ÊTRE parti. On NE
+      // libère PAS la réservation (un renvoi manuel créerait un doublon) ; on garde le
+      // marqueur et on journalise pour vérification humaine. La clé d'idempotence Resend
+      // couvre les retries INTERNES ; ce garde couvre le renvoi manuel ultérieur.
+      console.error(
+        `Auto-envoi : issue INCERTAINE pour ${D} (${result.error ?? 'inconnu'}) — réservation CONSERVÉE (vérifier la réception avant tout renvoi manuel).`,
+      )
+      return {
+        sent: false,
+        note: `envoi incertain (${result.error ?? 'inconnu'}) — réservation conservée, vérifier la réception`,
+      }
     }
     return {
       sent: true,
