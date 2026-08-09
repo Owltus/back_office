@@ -51,79 +51,12 @@ from (
          then 'OK' else 'A VERIFIER' end
 
   union all
-  -- 4. Table pdj_auto_send_log (idempotence PDJ)
+  -- 4. Table server_report_recipients (destinataires RepJour)
+  --    NB : les contrôles PDJ (pdj_auto_send_log, pdj_report_recipients) ont été
+  --    RETIRÉS le 2026-08-09 — l'envoi e-mail du PDJ a été supprimé et ces 2 tables
+  --    sont droppées (voir supabase/pdj_email_drop.sql). Ce contrôle ne couvre plus
+  --    que le socle RepJour.
   select 4,
-    'table pdj_auto_send_log',
-    case when exists(select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace
-                     where n.nspname='public' and c.relname='pdj_auto_send_log')
-         then 'présente' else 'ABSENTE' end,
-    'présente',
-    case when exists(select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace
-                     where n.nspname='public' and c.relname='pdj_auto_send_log')
-         then 'OK' else 'A VERIFIER' end
-
-  union all
-  -- 5. RLS activée sur pdj_auto_send_log, 0 policy (défaut fermé, écrit par service_role)
-  select 5,
-    'pdj_auto_send_log : RLS + policies',
-    coalesce((select 'rls=' || c.relrowsecurity::text from pg_class c
-              join pg_namespace n on n.oid=c.relnamespace
-              where n.nspname='public' and c.relname='pdj_auto_send_log'), 'table absente')
-      || ' / policies=' ||
-      (select count(*)::text from pg_policies
-       where schemaname='public' and tablename='pdj_auto_send_log'),
-    'rls=true / policies=0',
-    case when (select c.relrowsecurity from pg_class c join pg_namespace n on n.oid=c.relnamespace
-               where n.nspname='public' and c.relname='pdj_auto_send_log') = true
-          and (select count(*) from pg_policies
-               where schemaname='public' and tablename='pdj_auto_send_log') = 0
-         then 'OK' else 'A VERIFIER' end
-
-  union all
-  -- 6. Table pdj_report_recipients (destinataires PDJ = PII)
-  select 6,
-    'table pdj_report_recipients',
-    case when exists(select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace
-                     where n.nspname='public' and c.relname='pdj_report_recipients')
-         then 'présente' else 'ABSENTE' end,
-    'présente',
-    case when exists(select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace
-                     where n.nspname='public' and c.relname='pdj_report_recipients')
-         then 'OK' else 'A VERIFIER' end
-
-  union all
-  -- 7. RLS + policies pdj_report_recipients (RLS on, policies gardées par page:pdj)
-  select 7,
-    'pdj_report_recipients : RLS + policies',
-    coalesce((select 'rls=' || c.relrowsecurity::text from pg_class c
-              join pg_namespace n on n.oid=c.relnamespace
-              where n.nspname='public' and c.relname='pdj_report_recipients'), 'table absente')
-      || ' / policies=' ||
-      (select count(*)::text from pg_policies
-       where schemaname='public' and tablename='pdj_report_recipients'),
-    'rls=true / policies>=1 (toutes to authenticated)',
-    case when (select c.relrowsecurity from pg_class c join pg_namespace n on n.oid=c.relnamespace
-               where n.nspname='public' and c.relname='pdj_report_recipients') = true
-          and (select count(*) from pg_policies
-               where schemaname='public' and tablename='pdj_report_recipients') >= 1
-         then 'OK' else 'A VERIFIER' end
-
-  union all
-  -- 8. anon NE DOIT PAS avoir de policy sur pdj_report_recipients (PII)
-  select 8,
-    'pdj_report_recipients : policies visant anon',
-    (select count(*)::text from pg_policies
-     where schemaname='public' and tablename='pdj_report_recipients'
-       and 'anon' = any(roles)),
-    '0',
-    case when (select count(*) from pg_policies
-               where schemaname='public' and tablename='pdj_report_recipients'
-                 and 'anon' = any(roles)) = 0
-         then 'OK' else 'A VERIFIER' end
-
-  union all
-  -- 9. Table server_report_recipients (destinataires RepJour)
-  select 9,
     'table server_report_recipients',
     case when exists(select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace
                      where n.nspname='public' and c.relname='server_report_recipients')
@@ -134,8 +67,8 @@ from (
          then 'OK' else 'A VERIFIER' end
 
   union all
-  -- 10. Anti-spam progressif : report_send_throttle.recent_sends
-  select 10,
+  -- 5. Anti-spam progressif : report_send_throttle.recent_sends
+  select 5,
     'report_send_throttle.recent_sends',
     coalesce((select data_type from information_schema.columns
               where table_schema='public' and table_name='report_send_throttle'
