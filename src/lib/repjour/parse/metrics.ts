@@ -72,18 +72,29 @@ export function parseComparisonMetrics(csvText: string): ComparisonMetricRow[] {
   if (data.length === 0)
     throw new Error("Le fichier des chiffres du jour est vide ou illisible. Recommence l'export.")
 
+  // Trouver la LIGNE d'en-tête (colonne TODAY), OÙ QU'ELLE SOIT : l'export planifié
+  // « *_comparison_report_DAILY_* » est précédé d'un préambule (Hotel Code…), alors
+  // que l'export manuel « Comparison By Date » a l'en-tête en 1re ligne. On la
+  // cherche donc au lieu de supposer la 1re ligne (les deux formats sont acceptés).
+  let headerIdx = -1
+  for (let r = 0; r < data.length; r++) {
+    if (data[r].map((h) => (h ?? '').trim().toUpperCase()).includes('TODAY')) {
+      headerIdx = r
+      break
+    }
+  }
+  if (headerIdx === -1) {
+    throw new Error("Ce fichier n'a pas le bon format. Vérifie le fichier des chiffres du jour (Comparison By Date).")
+  }
+
   // Index des colonnes par en-tête : le PMS peut en ajouter ou les réordonner.
-  const header = data[0].map((h) => (h ?? '').trim().toUpperCase())
+  const header = data[headerIdx].map((h) => (h ?? '').trim().toUpperCase())
   const index = Object.fromEntries(
     COLUMNS.map(([key, label]) => [key, header.indexOf(label)]),
   ) as Record<(typeof COLUMNS)[number][0], number>
 
-  if (index.today === -1) {
-    throw new Error("Ce fichier n'a pas le bon format. Vérifie le fichier des chiffres du jour (Comparison By Date).")
-  }
-
   const rows: ComparisonMetricRow[] = []
-  for (const row of data.slice(1)) {
+  for (const row of data.slice(headerIdx + 1)) {
     const section = (row[0] ?? '').trim()
     if (!section) continue
 
