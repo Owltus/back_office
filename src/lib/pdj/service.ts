@@ -59,28 +59,6 @@ export async function fetchOldestServiceDate(): Promise<string | null> {
   return data ? (data as { service_date: string }).service_date : null
 }
 
-/**
- * La feuille de PDJ de ce jour a-t-elle été envoyée (auto OU manuel) ?
- * Marqueur = présence d'une ligne dans `pdj_auto_send_log` pour la `service_date`
- * (posée par l'Edge Function après un envoi réussi). Alimente le bandeau « pas
- * encore envoyé » (SendStatusBanner). Lecture seule d'une seule colonne.
- *
- * ATTENTION : `pdj_auto_send_log` a la RLS activée SANS policy (écrite/lue
- * uniquement par le service_role de l'Edge Function). Sans une policy SELECT pour
- * `authenticated` — OU une RPC SECURITY DEFINER exposant la présence de la ligne —
- * cette lecture renvoie toujours `false` côté client (0 ligne visible), et le
- * bandeau PDJ resterait affiché même après un envoi. Voir supabase/pdj_auto_send.sql.
- */
-export async function fetchPdjSent(serviceDate: string): Promise<boolean> {
-  const { data, error } = await supabase
-    .from('pdj_auto_send_log')
-    .select('service_date')
-    .eq('service_date', serviceDate)
-    .maybeSingle()
-  if (error) throw error
-  return !!data
-}
-
 /** Toutes les lignes d'un jour de service, triées par chambre. */
 export async function fetchDay(serviceDate: string): Promise<PdjDayRow[]> {
   const { data, error } = await supabase

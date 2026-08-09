@@ -93,10 +93,6 @@ export const serverReportRecipients = makeRecipientsService(
   'server_report_recipients',
 )
 
-/** Destinataires de l'envoi du PDJ par e-mail (Resend, send-report kind='pdj').
- * Liste INDÉPENDANTE de celle du RepJour — aucune adresse partagée. */
-export const pdjReportRecipients = makeRecipientsService('pdj_report_recipients')
-
 // --- Compat : les appelants historiques (email.ts, RecipientsModal) importent
 // ces fonctions nommées, liées à `email_recipients`. Conservées à l'identique.
 export const fetchRecipients = emailRecipients.fetch
