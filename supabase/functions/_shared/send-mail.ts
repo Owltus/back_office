@@ -55,6 +55,11 @@ export interface SendMailResult {
   id?: string | null
   /** Message d'erreur GÉNÉRIQUE (le détail reste dans les logs serveur). */
   error?: string
+  /** Vrai quand on est CERTAIN que rien n'est parti (échec AVANT que Resend ait pu
+   * accepter la requête : validation, lecture destinataires, 4xx définitif). Faux =
+   * échec AMBIGU (réseau/5xx après un POST : l'e-mail est peut-être parti). Permet à
+   * l'appelant de décider s'il peut relâcher une réservation sans risquer un doublon. */
+  certainNotSent?: boolean
 }
 
 // Plafond de destinataires par envoi — borne le rayon d'action et les coûts Resend
@@ -81,12 +86,13 @@ export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
     testTo,
   } = input
 
-  const fail = (msg: string): SendMailResult => ({
+  const fail = (msg: string, certainNotSent = true): SendMailResult => ({
     ok: false,
     to: 0,
     cc: 0,
     testMode: Boolean(testTo?.trim()),
     error: msg,
+    certainNotSent,
   })
 
   if (!subject.trim() || !html) return fail('Sujet ou corps manquant')
@@ -139,6 +145,10 @@ export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
   // que sur erreur TRANSITOIRE (erreur réseau, 5xx, 429) ; une 4xx (hors 429) est
   // définitive → inutile de réessayer. Backoff court (1s, 2s, 4s, 8s ; total < ~15s,
   // compatible Edge). Un simple hoquet réseau ne fait donc plus perdre l'e-mail.
+  // Clé d'idempotence STABLE pour toutes les tentatives de CET envoi : si Resend a
+  // déjà accepté la requête mais que la réponse est perdue (réseau/5xx après POST), le
+  // retry renvoie la MÊME clé → Resend dédoublonne au lieu d'expédier un 2e e-mail.
+  const idempotencyKey = crypto.randomUUID()
   const MAX_ATTEMPTS = 5
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
@@ -149,6 +159,7 @@ export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
         headers: {
           Authorization: `Bearer ${resendKey}`,
           'Content-Type': 'application/json',
+          'Idempotency-Key': idempotencyKey,
         },
         body: JSON.stringify(payload),
       })
@@ -162,7 +173,9 @@ export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
         await sleep(1000 * 2 ** (attempt - 1))
         continue
       }
-      return fail('Envoi du message échoué')
+      // Erreur réseau après toutes les tentatives : issue AMBIGUË (le POST a pu
+      // aboutir côté Resend avant la coupure) → certainNotSent = false.
+      return fail('Envoi du message échoué', false)
     }
 
     if (res.ok) {
@@ -188,8 +201,10 @@ export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
       await sleep(1000 * 2 ** (attempt - 1))
       continue
     }
-    return fail('Envoi du message échoué')
+    // Transitoire épuisé (5xx/429) = AMBIGU (certainNotSent=false) ; 4xx définitif =
+    // Resend a REJETÉ la requête, rien n'est parti (certainNotSent=true).
+    return fail('Envoi du message échoué', !transient)
   }
 
-  return fail('Envoi du message échoué')
+  return fail('Envoi du message échoué', false)
 }
