@@ -158,6 +158,27 @@ Deno.serve(async (req) => {
   if (pdfBase64.length > 8_000_000)
     return json({ error: 'Pièce jointe trop volumineuse' }, 413)
 
+  // ANTI-SPAM : on RÉSERVE le créneau AVANT l'envoi (et non après), pour qu'un 2e
+  // clic concurrent (double-clic, deux onglets) voie immédiatement cet envoi en cours
+  // et soit bloqué par le gate ci-dessus. Auparavant l'horodatage n'était écrit
+  // qu'APRÈS un envoi réussi : pendant toute la durée de sendMail (jusqu'à ~15 s avec
+  // les retries) une 2e requête passait le gate et un 2e e-mail partait. L'horodatage
+  // reste posé même si l'envoi échoue (compte comme une tentative → évite de marteler
+  // Resend). `upsert` sur user_id (dernier gagnant). NB : une simultanéité stricte
+  // (deux lectures avant toute écriture) resterait non couverte — cela demanderait une
+  // RPC atomique côté DB ; ce durcissement ferme la fenêtre réaliste du double-clic.
+  const updatedRecent = [...recent, nowMs].slice(-30)
+  const { error: throttleErr } = await admin.from('report_send_throttle').upsert({
+    user_id: caller.id,
+    last_sent_at: new Date(nowMs).toISOString(),
+    recent_sends: updatedRecent,
+  })
+  if (throttleErr)
+    console.error(
+      "Anti-spam : écriture de l'horodatage échouée :",
+      throttleErr.message,
+    )
+
   // 4. + 5. Destinataires + envoi, DÉLÉGUÉS au module partagé ../_shared/send-mail.ts
   //    (lecture de la liste `recipientsTable`, garde-fou liste blanche REPORT_TEST_TO,
   //    plafond de destinataires, envoi Resend, erreurs génériques). Un même code
@@ -196,15 +217,6 @@ Deno.serve(async (req) => {
       )
     }
   }
-
-  // Ajoute cet horodatage à l'historique récent (élagué, max 30
-  // entrées) → alimente la courbe anti-spam progressive. `upsert` sur user_id.
-  const updatedRecent = [...recent, nowMs].slice(-30)
-  await admin.from('report_send_throttle').upsert({
-    user_id: caller.id,
-    last_sent_at: new Date(nowMs).toISOString(),
-    recent_sends: updatedRecent,
-  })
 
   return json(
     {
