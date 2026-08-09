@@ -25,18 +25,34 @@ import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { importComparison, importForecast } from './repjour.ts'
 import { importInhouse } from './pdj.ts'
 import { maybeAutoSendRepjour } from './autoSend.ts'
-import {
-  isWithinPipelineWindow,
-  parisHour,
-  PIPELINE_WINDOW_END_HOUR,
-  PIPELINE_WINDOW_START_HOUR,
-} from '../_shared/businessDay.ts'
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
     headers: { 'Content-Type': 'application/json' },
   })
+
+/** Comparaison EN TEMPS CONSTANT du secret d'entrée. On hashe les deux valeurs en
+ * SHA-256 (longueur fixe) puis on compare octet par octet SANS court-circuit : le
+ * temps de réponse ne fuit ni la longueur ni le préfixe correct du secret (la
+ * comparaison `!==` sur String s'arrêtait au 1er octet différent). C'est la seule
+ * barrière d'authentification (verify_jwt=false, écriture service_role). */
+async function secretMatches(
+  provided: string | null,
+  expected: string,
+): Promise<boolean> {
+  if (provided == null) return false
+  const enc = new TextEncoder()
+  const [a, b] = await Promise.all([
+    crypto.subtle.digest('SHA-256', enc.encode(provided)),
+    crypto.subtle.digest('SHA-256', enc.encode(expected)),
+  ])
+  const va = new Uint8Array(a)
+  const vb = new Uint8Array(b)
+  let diff = 0
+  for (let i = 0; i < va.length; i++) diff |= va[i] ^ vb[i]
+  return diff === 0
+}
 
 // --- Détection du type de rapport (EXTENSIBLE : ajouter une entrée ici) -------
 type ReportType = 'comparison' | 'forecast' | 'inhouse'
@@ -91,7 +107,7 @@ Deno.serve(async (req) => {
   // 1. Secret partagé — barrière unique, vérifiée AVANT toute lecture du corps.
   const secret = Deno.env.get('IMPORT_SECRET')
   if (!secret) return json({ error: 'Configuration serveur manquante' }, 500)
-  if (req.headers.get('X-Import-Secret') !== secret)
+  if (!(await secretMatches(req.headers.get('X-Import-Secret'), secret)))
     return json({ error: 'Non autorisé' }, 401)
 
   // Client service_role (bypass RLS) — même schéma que send-report : nouvelle clé
@@ -111,21 +127,17 @@ Deno.serve(async (req) => {
   // secret retiré) pour l'import réel.
   const dryRun = Deno.env.get('IMPORT_DRY_RUN') === 'true'
 
-  // HORLOGE UNIQUE : on lit l'heure UNE seule fois par requête et on la propage à
-  // la garde de fenêtre ET aux fonctions d'envoi. Ainsi, un POST à cheval sur 04h
-  // décide de façon COHÉRENTE (pas « données écrites mais e-mail refusé »).
+  // HORLOGE UNIQUE : lue une seule fois par requête et propagée à l'ENVOI AUTO
+  // (garde de fenêtre [02h,04h[ + bornage du cycle, décidés dans autoSend.ts).
+  //
+  // L'INGESTION, elle, n'est PLUS bornée par l'heure : on IMPORTE TOUJOURS. Les
+  // écritures sont idempotentes (upsert), donc une re-livraison est sans danger, et
+  // surtout un e-mail livré en RETARD (retard SMTP/greylisting, passage à l'heure
+  // d'été, à cheval sur 04h) n'est plus PERDU en silence. Seul l'AUTO-ENVOI reste
+  // borné à [02h,04h[ (garde dans maybeAutoSendRepjour) : hors fenêtre, les données
+  // sont bien enregistrées mais le mail n'est pas auto-envoyé (le filet manuel admin
+  // + le bandeau « pas encore envoyé » prennent le relais).
   const instant = new Date()
-
-  // 1c. FENÊTRE HORAIRE du cycle hôtelier : on n'accepte l'ingestion auto que dans
-  //     [02h, 04h[ (heure de Paris). Hors de cette fenêtre (ex. un envoi de test à
-  //     16h30, ou un rapport hors cycle), on IGNORE : aucune lecture du corps,
-  //     aucune écriture, aucun envoi. On répond 200 (traité) pour que le Worker ne
-  //     retente pas. L'import MANUEL admin (autre canal) reste disponible H24.
-  if (!isWithinPipelineWindow(instant)) {
-    const note = `hors fenêtre d'ingestion auto (${parisHour(instant)}h Paris, attendu [${PIPELINE_WINDOW_START_HOUR}h,${PIPELINE_WINDOW_END_HOUR}h[) — rapport ignoré`
-    console.log(`[IGNORE] ${note}`)
-    return json({ ok: true, ignored: true, note }, 200)
-  }
 
   // 2. Corps = e-mail brut (MIME complet).
   const rawEmail = await req.text()
@@ -155,6 +167,10 @@ Deno.serve(async (req) => {
   let hadError = false
   for (const att of csvs) {
     const filename = att.filename || 'sans-nom.csv'
+    // Nom assaini pour la JOURNALISATION uniquement : le nom vient d'un en-tête MIME
+    // (potentiellement forgé) ; on retire CR/LF/TAB et on borne la longueur pour
+    // éviter la falsification de logs (log forging).
+    const logName = filename.replace(/[\r\n\t]/g, ' ').slice(0, 200)
     const content = new TextDecoder('utf-8').decode(att.content)
     const type = detectType(filename, content)
     if (!type) {
@@ -178,12 +194,12 @@ Deno.serve(async (req) => {
       })
       // Résumé LISIBLE dans les logs Supabase (Functions → import-report → Logs).
       console.log(
-        `${dryRun ? '[DRY-RUN] recu OK' : '[IMPORT]'} ${type} « ${filename} » -> ${imported} ligne(s)${dryRun ? ' valides, AUCUNE ecriture' : ' importees'}.`,
+        `${dryRun ? '[DRY-RUN] recu OK' : '[IMPORT]'} ${type} « ${logName} » -> ${imported} ligne(s)${dryRun ? ' valides, AUCUNE ecriture' : ' importees'}.`,
       )
     } catch (err) {
       hadError = true
       const message = err instanceof Error ? err.message : String(err)
-      console.error(`Import ${type} (${filename}) échoué :`, message)
+      console.error(`Import ${type} (${logName}) échoué :`, message)
       results.push({ filename, type, ok: false, note: message })
     }
   }
