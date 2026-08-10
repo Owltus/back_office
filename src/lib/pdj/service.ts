@@ -1,5 +1,6 @@
 import { supabase } from '#/lib/supabase.ts'
 import type { DbPdjRow } from '#/lib/pdj/csv.ts'
+import type { InHouseCoverRow } from '#/lib/pdj/amounts.ts'
 
 /*
  * Service d'accès Supabase pour les petits-déjeuners (table `pdj_breakfasts`).
@@ -11,6 +12,9 @@ import type { DbPdjRow } from '#/lib/pdj/csv.ts'
  */
 
 export const PDJ_TABLE = 'pdj_breakfasts'
+
+/** Table « Addon Production » : production PDJ agrégée par (jour de service, code). */
+export const PDJ_ADDON_TABLE = 'pdj_addon_production'
 
 /** Ligne DB complète (lecture) : champs d'import + consommation + id. */
 export interface PdjDayRow extends DbPdjRow {
@@ -138,6 +142,21 @@ export async function deleteDay(serviceDate: string): Promise<void> {
   if (error) throw error
 }
 
+/**
+ * Supprime les agrégats Addon Production d'UN jour (ce jour uniquement, via
+ * `.eq('service_date', …)` — jamais un autre jour). Miroir de `deleteDay` pour la
+ * seconde source ; appelé conjointement à la suppression d'un jour. Gestion (RLS).
+ */
+export async function deleteAddonProductionDay(
+  serviceDate: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from(PDJ_ADDON_TABLE)
+    .delete()
+    .eq('service_date', serviceDate)
+  if (error) throw error
+}
+
 /** Met à jour la consommation d'une chambre pour un jour (saisie staff, D4). */
 export async function setServed(
   serviceDate: string,
@@ -170,4 +189,113 @@ export async function purgeOldGuestNames(oldestKept: string): Promise<void> {
     .lt('service_date', oldestKept)
     .not('guest_name', 'is', null)
   if (error) throw error
+}
+
+/* --------------------------------------------------------------------------
+ * Addon Production (table `pdj_addon_production`).
+ *
+ * Production PDJ agrégée par (jour de service, code produit) : Total Count et
+ * chiffre d'affaires TTC. Alimente le calcul des montants HT de la journée
+ * (voir amounts.ts). `service_date` est DÉJÀ le jour de service (date métier
+ * « clôture » + 1, via `breakfastServiceDate`) : c'est l'appelant qui applique
+ * l'alignement +1 avant l'upsert, jamais ce service.
+ * ------------------------------------------------------------------------ */
+
+/** Ligne DB complète (lecture) de la production Addon : import + id. */
+export interface PdjAddonRow {
+  id: string
+  service_date: string
+  code: string
+  total_count: number
+  revenue_ttc: number
+  source_file: string | null
+}
+
+/** Payload d'upsert d'une ligne Addon (sans id ni estampillage serveur). */
+export interface AddonProductionDbRow {
+  service_date: string
+  code: string
+  total_count: number
+  revenue_ttc: number
+  source_file: string
+}
+
+/** Toutes les lignes Addon d'UN jour de service. Non paginé : au plus quelques
+ * codes par jour. Miroir de `fetchDay`. */
+export async function fetchAddonProduction(
+  serviceDate: string,
+): Promise<PdjAddonRow[]> {
+  const { data, error } = await supabase
+    .from(PDJ_ADDON_TABLE)
+    .select('*')
+    .eq('service_date', serviceDate)
+  if (error) throw error
+  return data as PdjAddonRow[]
+}
+
+/**
+ * Import idempotent (upsert sur la clé métier `(service_date, code)`). Le code
+ * est normalisé (`trim().toUpperCase()`) — cohérent avec l'Edge et la clé de
+ * conflit. Déduplication préalable par `service_date|code` (le DERNIER gagne) :
+ * une clé de conflit répétée dans un même lot ferait échouer l'upsert. Découpé
+ * en lots de 1000 (calque `importRows`). N'écrit PAS les colonnes d'estampillage
+ * (`updated_at`, posé par le trigger).
+ */
+export async function importAddonProduction(
+  rows: AddonProductionDbRow[],
+): Promise<void> {
+  const deduped = new Map<string, AddonProductionDbRow>()
+  for (const row of rows) {
+    const code = row.code.trim().toUpperCase()
+    deduped.set(`${row.service_date}|${code}`, { ...row, code })
+  }
+  const payload = [...deduped.values()]
+
+  const CHUNK = 1000
+  for (let i = 0; i < payload.length; i += CHUNK) {
+    const { error } = await supabase
+      .from(PDJ_ADDON_TABLE)
+      .upsert(payload.slice(i, i + CHUNK), {
+        onConflict: 'service_date,code',
+      })
+    if (error) throw error
+  }
+}
+
+/** Toutes les lignes Addon, tous jours confondus (paginé). Sert au repère
+ * « moyenne par jour ». */
+export async function fetchAllAddonProduction(): Promise<PdjAddonRow[]> {
+  const PAGE = 1000
+  const out: PdjAddonRow[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from(PDJ_ADDON_TABLE)
+      .select('*')
+      .range(from, from + PAGE - 1)
+    if (error) throw error
+    const rows = (data ?? []) as PdjAddonRow[]
+    out.push(...rows)
+    if (rows.length < PAGE) break
+  }
+  return out
+}
+
+/** Lignes In-House (colonnes utiles au calcul) de TOUS les jours (paginé). Sert
+ * aux repères « moyenne par jour » (total HT et taux de captage). */
+export async function fetchAllInHouseCovers(): Promise<InHouseCoverRow[]> {
+  const PAGE = 1000
+  const cols =
+    'service_date,addons,adults,children,guests,breakfasts_served,breakfasts_included'
+  const out: InHouseCoverRow[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from(PDJ_TABLE)
+      .select(cols)
+      .range(from, from + PAGE - 1)
+    if (error) throw error
+    const rows = (data ?? []) as unknown as InHouseCoverRow[]
+    out.push(...rows)
+    if (rows.length < PAGE) break
+  }
+  return out
 }
