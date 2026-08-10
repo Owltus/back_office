@@ -22,6 +22,7 @@ import { Button } from '#/components/ui/button.tsx'
 import { Dialog, DialogContent } from '#/components/ui/dialog.tsx'
 import { HelpDialogHeader } from '#/components/shared/HelpDialogHeader.tsx'
 import { HelpGlyph } from '#/components/shared/HelpGlyph.tsx'
+import { ACCENT } from '#/components/analytique/accents.ts'
 import { MouseGlyph } from '#/components/rapro/MouseGlyph.tsx'
 import { RaproHelpPanel } from '#/components/rapro/RaproHelpPanel.tsx'
 import { CloseSheetDialog } from '#/components/shared/CloseSheetDialog.tsx'
@@ -811,20 +812,30 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
           <div className="rapro-stats">
             {/* Balance en TÊTE : contrôle de cohérence « coup d'œil ». Nettoyées +
                 Refus + Bloquées du jour − Bloquées de la veille doit retomber sur les
-                Vendues → « 0 » vert si le compte est juste, sinon « +X / −X » rouge
-                (écart à vérifier). Même tuile numérique que les autres (pas de glyphe
-                ni de sous-texte). En secours sans saisie, « — ». */}
+                Vendues. Liseré GRIS neutre (seule tuile ainsi → la carte de synthèse se
+                démarque des compteurs colorés) ; la VALEUR reste VERTE (« 0 » juste) ou
+                ROUGE (« +X / −X » écart) — on ne colore donc PAS le texte avec la
+                couleur du liseré (pas de `coloredValue`). En secours sans saisie, « — ». */}
             <StatTile
               value={
-                showDash
-                  ? '—'
-                  : balanced
-                    ? '0'
-                    : `${balanceDelta > 0 ? '+' : '−'}${Math.abs(balanceDelta)}`
+                showDash ? (
+                  '—'
+                ) : (
+                  <span
+                    style={{
+                      color: balanced
+                        ? CATEGORY_COLOR.nettoyee
+                        : CATEGORY_COLOR.bloquee,
+                    }}
+                  >
+                    {balanced
+                      ? '0'
+                      : `${balanceDelta > 0 ? '+' : '−'}${Math.abs(balanceDelta)}`}
+                  </span>
+                )
               }
               label="Balance"
-              accent={balanced ? CATEGORY_COLOR.nettoyee : CATEGORY_COLOR.bloquee}
-              coloredValue={!showDash}
+              accent={ACCENT.slate}
               hint="Nettoyées + Refus + Bloquées du jour − Bloquées de la veille doit retomber sur les Vendues. « 0 » quand le compte est juste ; sinon l'écart (+/−) est à vérifier."
             />
             <StatTile
