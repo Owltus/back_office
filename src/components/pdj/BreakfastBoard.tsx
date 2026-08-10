@@ -39,15 +39,29 @@ import {
 } from '#/lib/pdj/csv.ts'
 import { businessDateStr, businessNow } from '#/lib/businessDay.ts'
 import {
+  deleteAddonProductionDay,
   deleteDay,
+  fetchAddonProduction,
+  fetchAllAddonProduction,
+  fetchAllInHouseCovers,
   fetchDay,
   fetchServiceDates,
+  importAddonProduction,
   importRows,
   purgeOldGuestNames,
   setServed,
 } from '#/lib/pdj/service.ts'
-import type { PdjDayRow } from '#/lib/pdj/service.ts'
+import type { AddonProductionDbRow, PdjDayRow } from '#/lib/pdj/service.ts'
 import { canEditPdjDay } from '#/lib/pdj/editability.ts'
+import { breakfastServiceDate, parseAddonProduction } from '#/lib/pdj/addon.ts'
+import {
+  computeCaptageBenchmark,
+  computeDailyBenchmark,
+  computeOccupancyBenchmark,
+  computePdjAmounts,
+  countCovers,
+} from '#/lib/pdj/amounts.ts'
+import { fmtEur, fmtInt, fmtPctInt } from '#/lib/pdj/format.ts'
 
 /* --------------------------------------------------------------------------
  * Petit-déjeuner (PDJ) — portage de l'app "Breakfast Tracker", désormais
@@ -76,6 +90,39 @@ const fmtTitle = new Intl.DateTimeFormat('fr-FR', {
   month: 'long',
   year: 'numeric',
 })
+
+// Montant HT pour le PDF : le nombre formaté + un « HT » plus petit et grisé.
+function htPrice(n: number) {
+  return (
+    <>
+      {fmtEur(n, 2)}
+      <span className="pdj-revenue-ht">HT</span>
+    </>
+  )
+}
+
+// Sous-texte grisé sous la valeur d'une card (façon RepJour), TOUJOURS masqué à
+// l'impression : les sous-textes n'apparaissent qu'à l'écran, jamais dans le PDF.
+function subMuted(content: string) {
+  return (
+    <span className="text-[0.7rem] font-medium text-muted-foreground print:hidden">
+      {content}
+    </span>
+  )
+}
+
+// Détection d'un CSV « Addon Production » sur son CONTENU (pas son nom) : soit
+// l'en-tête explicite « Addon Production » du préambule, soit la paire
+// « Total Count » + « Total Revenue » SANS « Guest Name » (qui, elle, signe un
+// In-House). Départage l'aiguillage de l'import (voir loadFiles).
+function isAddonCsv(content: string): boolean {
+  if (content.includes('Addon Production')) return true
+  return (
+    content.includes('Total Count') &&
+    content.includes('Total Revenue') &&
+    !content.includes('Guest Name')
+  )
+}
 
 export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
   const { can, pageLevel, grade } = useAuth()
@@ -117,7 +164,6 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
   // Gestion : toujours. Gouverne la grille de saisie (pas l'import, gardé à part).
   const dayEditable = canEditPdjDay(selectedDate, today, level)
   const [error, setError] = useState('')
-  const [notice, setNotice] = useState('')
   const [dragging, setDragging] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -159,6 +205,74 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
 
   const hasData = (dayRows?.length ?? 0) > 0
 
+  // Production Addon (montants TTC par code) du jour affiché. Alimente le calcul
+  // des trois montants HT injectés dans les cases « € » du PDF (impression
+  // uniquement). Absente → cases vides (comportement historique).
+  const { data: addonRows = [] } = useQuery({
+    queryKey: ['pdj', 'addons', selectedDate],
+    queryFn: () => fetchAddonProduction(selectedDate),
+    enabled: !!selectedDate,
+  })
+
+  // Extras du jour = couverts servis au-delà des inclus (cf. amounts.ts). Source
+  // UNIQUE, partagée par la card « PDJ Extra » (compteur) et le calcul des montants.
+  const extrasCount = useMemo(
+    () =>
+      (dayRows ?? []).reduce(
+        (s, r) => s + Math.max(0, r.breakfasts_served - r.breakfasts_included),
+        0,
+      ),
+    [dayRows],
+  )
+
+  // Montants HT du jour : PDJ inclus / extras / total. `null` sans Addon (cases
+  // laissées vides). Le calcul et l'arrondi vivent dans le métier.
+  const amounts = useMemo(() => {
+    if (addonRows.length === 0) return null
+    const covers = countCovers(dayRows ?? [])
+    return computePdjAmounts({
+      addon: addonRows.map((r) => ({
+        code: r.code,
+        count: r.total_count,
+        revenue: r.revenue_ttc,
+      })),
+      covers,
+      extrasCount,
+    })
+  }, [addonRows, dayRows, extrasCount])
+
+  // Repère « moyenne par jour » : total HT moyen sur TOUS les jours ayant à la
+  // fois In-House ET Addon. Requête à part (ne bloque pas la vue du jour), chargée
+  // une fois. computeDailyBenchmark exclut les jours sans les deux sources.
+  const { data: benchmark } = useQuery({
+    queryKey: ['pdj', 'benchmark'],
+    queryFn: async () => {
+      const [addon, inhouse] = await Promise.all([
+        fetchAllAddonProduction(),
+        fetchAllInHouseCovers(),
+      ])
+      return {
+        // Repère « total HT / jour » : jours ayant In-House ET Addon.
+        total: computeDailyBenchmark(
+          addon.map((r) => ({
+            service_date: r.service_date,
+            code: r.code,
+            revenue: r.revenue_ttc,
+          })),
+          inhouse,
+        ),
+        // Repère « captage / jour » : jours ayant du servi saisi (vraies données).
+        captage: computeCaptageBenchmark(inhouse),
+        // Repère « occupation / jour » : chambres et clients moyens (tous jours In-House).
+        occupancy: computeOccupancyBenchmark(inhouse),
+      }
+    },
+  })
+
+  // Le jour affiché a-t-il les DEUX sources (In-House + Addon) ? Sinon la card
+  // « CA PDJ » affiche « 0 € » (pas de card sans les deux sources).
+  const dayHasBoth = hasData && addonRows.length > 0
+
   const floors = useMemo(() => {
     const map = new Map<number, number[]>()
     for (const room of ALL_ROOMS) {
@@ -195,6 +309,14 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
       departing,
     }
   }, [byRoom])
+
+  // Taux de captage du jour = (inclus + extras) ÷ clients : base = inclus (réel,
+  // issu des réservations), augmente à mesure qu'on saisit des extras. « — »
+  // seulement s'il n'y a aucun client (pas de données In-House).
+  const captageDay =
+    stats.guests > 0
+      ? ((stats.breakfasts + extrasCount) / stats.guests) * 100
+      : null
 
   // Libellés datés mémoïsés sur la seule date : deux formatages Intl (coûteux)
   // qui, sinon, se rejouaient à chaque re-render (dont chaque clic « servi »).
@@ -260,7 +382,6 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
   async function loadFiles(fileList: File[]) {
     if (!canEdit || fileList.length === 0) return
     setError('')
-    setNotice('')
 
     const csvFiles = fileList.filter((f) =>
       f.name.toLowerCase().endsWith('.csv'),
@@ -275,53 +396,102 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
       const inputs = await Promise.all(
         csvFiles.map(async (f) => ({ name: f.name, content: await f.text() })),
       )
-      const result = mergeCsvFiles(inputs)
 
-      if (result.rows.length === 0) {
-        // On remonte la RAISON précise par fichier (colonnes manquantes, nom sans
-        // date, aucune ligne exploitable) au lieu d'un message générique opaque :
-        // c'est ce qui permet de comprendre pourquoi un fichier est refusé.
-        const why = result.ignored
-          .map((i) => `« ${i.name} » : ${i.reason}`)
-          .join(' ; ')
-        setError(
-          'Aucune donnée exploitable. ' +
-            (why ||
-              'Fichier invalide ou mal nommé (attendu « In-House Guests _YYYYMMDD… »).'),
-        )
-        return
+      // Aiguillage par CONTENU (pas par nom) : l'« Addon Production » agrège les
+      // montants par code produit et n'a pas la structure In-House. On le route
+      // vers le calcul des montants ; tout le reste suit le chemin In-House.
+      const addonInputs = inputs.filter((i) => isAddonCsv(i.content))
+      const inHouseInputs = inputs.filter((i) => !isAddonCsv(i.content))
+
+      const problems: string[] = []
+      let targetDate: string | null = null
+      // Import réussi (In-House ou Addon), indépendamment de tout message : un
+      // Addon seul n'affiche AUCUN bandeau, il ne doit donc pas retomber dans le
+      // garde-fou « Aucune donnée exploitable ».
+      let imported = false
+
+      // --- In-House : chemin historique (mergeCsvFiles → importRows). ---
+      if (inHouseInputs.length > 0) {
+        const result = mergeCsvFiles(inHouseInputs)
+        if (result.rows.length === 0) {
+          // On remonte la RAISON précise par fichier (colonnes manquantes, nom
+          // sans date, aucune ligne exploitable) plutôt qu'un message opaque.
+          const why = result.ignored
+            .map((i) => `« ${i.name} » : ${i.reason}`)
+            .join(' ; ')
+          problems.push(
+            'In-House : aucune donnée exploitable. ' +
+              (why ||
+                'Fichier invalide ou mal nommé (attendu « In-House Guests _YYYYMMDD… »).'),
+          )
+        } else if (!isAdmin && result.dates.some((d) => d > businessDateStr())) {
+          // Blocage avant 02h (sauf admin) : un fichier daté d'un jour hôtelier
+          // non encore ouvert — le rapport In-House n'est tiré qu'à partir de
+          // 02h — est refusé. Voir #/lib/businessDay.ts.
+          problems.push(
+            'Le rapport de cette nuit n’est disponible qu’à partir de 02h00 (clôture de la journée). Réessayez après cette heure.',
+          )
+        } else {
+          await importRows(result.rows)
+          imported = true
+          if (result.ignored.length > 0)
+            console.warn('[pdj] fichiers ignorés à l’import', result.ignored)
+          // Jour le plus pertinent du lot In-House : aujourd'hui s'il en fait
+          // partie, sinon le jour importé le plus récent.
+          targetDate = result.dates.includes(today) ? today : result.dates[0]
+        }
       }
 
-      // Blocage avant 02h (sauf admin) : un fichier daté d'un jour hôtelier non
-      // encore ouvert — le rapport In-House n'est tiré qu'à partir de 02h — est
-      // refusé. L'admin garde l'accès immédiat. Voir #/lib/businessDay.ts.
-      if (!isAdmin && result.dates.some((d) => d > businessDateStr())) {
-        setError(
-          'Le rapport de cette nuit n’est disponible qu’à partir de 02h00 (clôture de la journée). Réessayez après cette heure.',
-        )
-        return
+      // --- Addon Production : parse par fichier, +1 jour, upsert. ---
+      if (addonInputs.length > 0) {
+        const addonRowsToImport: AddonProductionDbRow[] = []
+        const addonDays = new Set<string>()
+        for (const f of addonInputs) {
+          const parsed = parseAddonProduction(f.content)
+          if (!parsed.businessDate) {
+            problems.push(
+              `« ${f.name} » : date métier introuvable dans l’Addon Production.`,
+            )
+            continue
+          }
+          // Alignement +1 jour : la date lue est la date « clôture », le PDJ est
+          // servi le lendemain (jour sous lequel le board range la journée).
+          const serviceDate = breakfastServiceDate(parsed.businessDate)
+          addonDays.add(serviceDate)
+          for (const r of parsed.rows) {
+            addonRowsToImport.push({
+              service_date: serviceDate,
+              code: r.code,
+              total_count: r.count,
+              revenue_ttc: r.revenue,
+              source_file: f.name,
+            })
+          }
+        }
+        if (addonRowsToImport.length > 0) {
+          await importAddonProduction(addonRowsToImport)
+          imported = true
+          // Pas de bandeau de succès pour l'Addon (convention UX : on n'affiche
+          // que les anomalies) — le PDF montre désormais les montants.
+          // Se placer sur le jour du petit-déjeuner importé le plus récent (si
+          // l'In-House n'a pas déjà fixé la cible).
+          const days = [...addonDays].sort((a, b) => (a > b ? -1 : 1))
+          if (!targetDate) targetDate = days[0]
+        }
       }
 
-      await importRows(result.rows)
       await queryClient.invalidateQueries({ queryKey: ['pdj'] })
+      if (targetDate) setSelectedDate(targetDate)
 
-      // On se place sur le jour le plus pertinent du lot : aujourd'hui s'il en
-      // fait partie, sinon le jour importé le plus récent.
-      setSelectedDate(result.dates.includes(today) ? today : result.dates[0])
+      if (nonCsv > 0) {
+        problems.push(
+          `${nonCsv} fichier${nonCsv > 1 ? 's' : ''} non .csv ignoré${nonCsv > 1 ? 's' : ''}.`,
+        )
+      }
 
-      if (result.ignored.length > 0)
-        console.warn('[pdj] fichiers ignorés à l’import', result.ignored)
-
-      const ignored = result.ignored.length + nonCsv
-      const nbFiles = result.imported.length
-      const nbDays = result.dates.length
-      setNotice(
-        `${nbFiles} fichier${nbFiles > 1 ? 's' : ''} importé${nbFiles > 1 ? 's' : ''} ` +
-          `(${nbDays} jour${nbDays > 1 ? 's' : ''})` +
-          (ignored > 0
-            ? ` — ${ignored} ignoré${ignored > 1 ? 's' : ''}.`
-            : '.'),
-      )
+      if (problems.length > 0) setError(problems.join(' '))
+      if (!imported && problems.length === 0)
+        setError('Aucune donnée exploitable.')
     } catch (err) {
       setError(`Erreur lors du traitement des fichiers : ${errorMessage(err)}`)
     }
@@ -377,7 +547,12 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
   async function handleDeleteDay() {
     if (!isAdmin || !hasData || !selectedDate) return
     try {
-      await deleteDay(selectedDate)
+      // Supprime les DEUX sources du jour affiché (In-House + Addon), et SEULEMENT
+      // ce jour : chaque delete est borné par .eq('service_date', selectedDate).
+      await Promise.all([
+        deleteDay(selectedDate),
+        deleteAddonProductionDay(selectedDate),
+      ])
       await queryClient.invalidateQueries({ queryKey: ['pdj'] })
     } catch (err) {
       window.alert(
@@ -427,9 +602,11 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
       />
 
       {error && <div className="pdj-error print:hidden">{error}</div>}
-      {notice && (
-        <div className="rounded-lg bg-emerald-500/10 px-4 py-3 text-sm text-emerald-500 print:hidden">
-          {notice}
+      {/* Contrôle défensif des montants (anomalie seulement) : discret, à
+          l'écran uniquement, jamais imprimé, jamais de card. */}
+      {hasData && amounts && amounts.warnings.length > 0 && (
+        <div className="rounded-lg bg-amber-500/10 px-4 py-3 text-sm text-amber-500 print:hidden">
+          {amounts.warnings.join(' ')}
         </div>
       )}
 
@@ -468,7 +645,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                 </Button>
               </Tip>
               {canManualImport && (
-                <Tip label="Importer un CSV In-House Guests">
+                <Tip label="Importer un CSV In-House ou Addon Production">
                   <Button
                     variant="outline"
                     size="icon-sm"
@@ -546,7 +723,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
               Glissez vos fichiers CSV ici
             </div>
             <div className="text-sm text-muted-foreground">
-              un ou plusieurs .csv — les fichiers invalides sont ignorés
+              In-House ou Addon Production — les fichiers invalides sont ignorés
             </div>
           </EmptyCanvas>
         ) : (
@@ -569,20 +746,66 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                 value={stats.rooms}
                 label="Chambres occupées"
                 accent="#818cf8"
+                sub={
+                  benchmark && benchmark.occupancy.avgRooms != null
+                    ? subMuted(`moy. ${fmtInt(benchmark.occupancy.avgRooms)}/j`)
+                    : undefined
+                }
               />
-              <StatTile value={stats.guests} label="Clients" accent="#38bdf8" />
+              <StatTile
+                value={stats.guests}
+                label="Clients"
+                accent="#38bdf8"
+                sub={
+                  benchmark && benchmark.occupancy.avgGuests != null
+                    ? subMuted(`moy. ${fmtInt(benchmark.occupancy.avgGuests)}/j`)
+                    : undefined
+                }
+              />
               <StatTile
                 value={stats.breakfasts}
                 label="PDJ inclus"
                 accent="#34d399"
+                sub={
+                  amounts ? subMuted(fmtEur(amounts.includedHT, 2)) : undefined
+                }
               />
               <StatTile
-                value={stats.potential}
-                label="PDJ non inclus"
+                value={extrasCount}
+                label="PDJ Extra"
                 accent="#fbbf24"
                 printHidden
+                sub={
+                  amounts
+                    ? subMuted(
+                        amounts.extrasHT != null
+                          ? fmtEur(amounts.extrasHT, 2)
+                          : '—',
+                      )
+                    : undefined
+                }
+              />
+              {/* Écran : « CA PDJ » (total HT du jour + moyenne/jour sur les
+                  jours valides). PDF : on conserve « Recouche ». D'où DEUX tuiles
+                  complémentaires — l'une printHidden (écran), l'autre screen-hidden
+                  (PDF) — pour changer l'écran SANS toucher au footer du PDF. */}
+              <StatTile
+                printHidden
+                label="CA PDJ"
+                accent="#60a5fa"
+                value={
+                  dayHasBoth && amounts && amounts.totalHT != null
+                    ? fmtEur(amounts.totalHT, 2)
+                    : fmtEur(0, 0)
+                }
+                sub={
+                  benchmark && benchmark.total.avgTotalHT != null
+                    ? subMuted(`moy. ${fmtEur(benchmark.total.avgTotalHT, 2)}/j`)
+                    : undefined
+                }
               />
               <StatTile
+                className="stat-tile--screen-hidden"
                 value={stats.staying}
                 label={
                   <>
@@ -592,7 +815,32 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                 }
                 accent="#60a5fa"
               />
+              {/* Taux de captage (écran uniquement) : (inclus + extras) ÷ clients
+                  du jour ; « — » si la conso n'a pas été saisie (pas de vraie
+                  donnée). Sous-texte = moyenne sur les jours avec servi saisi. */}
               <StatTile
+                printHidden
+                label="Taux de captage"
+                accent="#f472b6"
+                value={
+                  captageDay != null ? (
+                    fmtPctInt(captageDay)
+                  ) : (
+                    <span className="text-base font-semibold text-muted-foreground">
+                      —
+                    </span>
+                  )
+                }
+                sub={
+                  benchmark && benchmark.captage.avgCaptage != null
+                    ? subMuted(`moy. ${fmtPctInt(benchmark.captage.avgCaptage)}/j`)
+                    : undefined
+                }
+              />
+              {/* Départ : masqué à l'ÉCRAN, conservé dans le footer du PDF (comme
+                  Recouche) → écran allégé sans toucher au PDF. */}
+              <StatTile
+                className="stat-tile--screen-hidden"
                 value={stats.departing}
                 label={
                   <>
@@ -603,14 +851,48 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                 accent="#fb7185"
               />
             </div>
-            {/* Cases « € » à remplir à la main — impression uniquement. */}
-            <div className="pdj-stats-grid pdj-stats-revenue">
-              {['PDJ Inclus €', 'PDJ Extra €', 'Total €'].map((label) => (
-                <div key={label} className="pdj-revenue">
-                  <div className="pdj-revenue-value"> </div>
-                  <div className="pdj-revenue-label">{label}</div>
+            {/* Cases « € » — impression uniquement. Valeurs calculées depuis
+                l'Addon Production du jour (montants HT) ; vides sans Addon
+                (comportement historique, saisie manuelle au stylo). */}
+            <div
+              className={
+                'pdj-stats-grid pdj-stats-revenue' +
+                (amounts && amounts.extrasHT != null && amounts.extrasHT > 0
+                  ? ''
+                  : ' pdj-revenue-faded')
+              }
+            >
+              <div className="pdj-revenue">
+                <div className="pdj-revenue-value">
+                  {amounts ? htPrice(amounts.includedHT) : ' '}
                 </div>
-              ))}
+                <div className="pdj-revenue-label">PDJ Inclus €</div>
+              </div>
+              <div className="pdj-revenue">
+                {/* Extra rempli seulement s'il y a des extras chiffrables ;
+                    sinon case gardée, valeur vide (décision D1). */}
+                <div className="pdj-revenue-value">
+                  {amounts && amounts.extrasHT != null && amounts.extrasHT > 0
+                    ? htPrice(amounts.extrasHT)
+                    : ' '}
+                </div>
+                <div className="pdj-revenue-label">PDJ Extra €</div>
+              </div>
+              <div className="pdj-revenue">
+                {/* Total affiché SEULEMENT si au moins 1 extra est sélectionné :
+                    sans extra, Total == Inclus (redondant) et changerait dès qu'on
+                    coche un extra → on n'imprime pas un chiffre provisoire. Même
+                    condition que la case Extra. */}
+                <div className="pdj-revenue-value">
+                  {amounts &&
+                  amounts.extrasHT != null &&
+                  amounts.extrasHT > 0 &&
+                  amounts.totalHT != null
+                    ? htPrice(amounts.totalHT)
+                    : ' '}
+                </div>
+                <div className="pdj-revenue-label">Total €</div>
+              </div>
             </div>
           </div>
 

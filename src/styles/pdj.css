@@ -147,6 +147,12 @@
     grid-template-columns: repeat(6, 1fr);
   }
 }
+
+/* Tuile masquée à l'ÉCRAN mais conservée dans le footer du PDF (miroir de
+   printHidden) : permet de remplacer une card à l'écran sans toucher au PDF. */
+.pdj-stats .stat-tile--screen-hidden {
+  display: none !important;
+}
 /* Cases « € » : présentes uniquement à l'impression (comme l'app d'origine) */
 .pdj-stats-revenue {
   display: none;
@@ -378,7 +384,18 @@
   .pdj-revenue-value {
     min-height: 30px;
     font-size: 24px;
-    color: #1a1a1a;
+    color: #666; /* gris sombre, discret (au lieu du noir) */
+  }
+  .pdj-revenue-ht {
+    font-size: 11px;
+    color: #999; /* « HT » plus petit et plus clair, subordonné au montant */
+    margin-left: 2px;
+  }
+  /* Tant qu'aucun extra n'est saisi (Extra + Total vides), estompe seulement la
+     VALEUR monétaire (le « HT » suit par héritage) — PAS les libellés (PDJ Inclus,
+     PDJ Extra, Total) ni la cellule. Opacité pleine dès qu'un extra est saisi. */
+  .pdj-revenue-faded .pdj-revenue-value {
+    opacity: 0.2;
   }
   .pdj-revenue-label {
     font-size: 7px;
@@ -413,5 +430,10 @@
   /* KPI présents à l'écran uniquement (le footer PDF garde ses 5 colonnes). */
   .pdj-stats .stat-tile--print-hidden {
     display: none !important;
+  }
+  /* Miroir : tuile écran-seule → RÉAFFICHÉE dans le footer du PDF (ex. Recouche,
+     remplacée à l'écran par « PDJ Total » mais conservée à l'impression). */
+  .pdj-stats .stat-tile--screen-hidden {
+    display: flex !important;
   }
 }
