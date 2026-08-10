@@ -101,6 +101,15 @@ export function PdjAnalytiqueMoisBoard({
     // Clients des SEULS jours renseignés (servi saisi) — dénominateur des taux
     // servi-dépendants, pour ne pas les diluer avec les jours réservés non saisis.
     const totalGuests = stats.reduce((s, d) => s + d.guests, 0)
+    // CA petit-déjeuner du mois : somme HT + moyenne / jour (jours avec CA).
+    const caPrefix = `${year}-${mm}-`
+    let caTotal = 0
+    let caDays = 0
+    for (const [date, t] of dailyCa) {
+      if (!date.startsWith(caPrefix)) continue
+      caTotal += t
+      caDays += 1
+    }
     return {
       avgInclus: totalDays > 0 ? totalIncluded / totalDays : null,
       avgServis: recDays > 0 ? totalServed / recDays : null,
@@ -117,8 +126,11 @@ export function PdjAnalytiqueMoisBoard({
         totalGuests > 0
           ? ((totalIncluded + totalExtra) / totalGuests) * 100
           : null,
+      // CA petit-déjeuner : somme HT du mois + moyenne par jour (jours avec CA).
+      totalCa: caDays > 0 ? caTotal : null,
+      avgCa: caDays > 0 ? caTotal / caDays : null,
     }
-  }, [stats])
+  }, [stats, dailyCa, year, mm])
 
   // Une barre par jour. Jour RENSEIGNÉ (conso saisie) → empilement disjoint Servis
   // inclus (= servi − extra) + Extra + Non servis. Jour SANS conso → repli sur
@@ -182,8 +194,8 @@ export function PdjAnalytiqueMoisBoard({
         cols: 8,
         charts: 1,
         rows: new Date(year, month, 0).getDate(),
-        cards: 5,
-        cardCols: 5,
+        cards: 6,
+        cardCols: 6,
         cardLines: 3,
       }}
     >

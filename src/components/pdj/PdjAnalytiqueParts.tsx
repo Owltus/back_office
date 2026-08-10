@@ -34,6 +34,10 @@ export interface PdjAnalytiqueSummary {
   totalServed: number
   totalExtra: number
   totalNonServis: number
+  /** CA petit-déjeuner (total HT inclus + extras) sur la période ; moyenne / jour.
+   * null si aucun jour avec CA (pas d'Addon exploitable). */
+  totalCa: number | null
+  avgCa: number | null
 }
 
 /** Les 5 cartes de synthèse PDJ — IDENTIQUES en vue annuelle et mensuelle (même
@@ -45,7 +49,7 @@ export function PdjAnalytiqueCards({
   summary: PdjAnalytiqueSummary
 }) {
   return (
-    <AnalytiqueCardsGrid cols={5}>
+    <AnalytiqueCardsGrid cols={6}>
       <StatCard
         label="Inclus"
         accent={ACCENT.slate}
@@ -91,6 +95,17 @@ export function PdjAnalytiqueCards({
         value={
           summary.avgNonServis != null ? fmtInt(summary.totalNonServis) : '—'
         }
+      />
+      <StatCard
+        label="CA"
+        accent={ACCENT.cyan}
+        hint="Chiffre d'affaires petit-déjeuner (inclus + extras), HT"
+        sub={
+          summary.avgCa != null
+            ? subText(`moy. ${fmtEur(summary.avgCa, 0)} / jour`)
+            : undefined
+        }
+        value={summary.totalCa != null ? fmtEur(summary.totalCa, 0) : '—'}
       />
       <StatCard
         label="Captage"

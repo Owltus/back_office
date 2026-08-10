@@ -70,7 +70,7 @@ export function PdjAnalytiqueBoard() {
 
   // CA PDJ (total HT inclus + extras) cumulé par mois. null pour un mois sans
   // Addon exploitable (« — » au tableau).
-  const caPdjByMonth = useMemo(() => {
+  const caStats = useMemo(() => {
     const totals = computeDailyTotals(
       addonRows.map((r) => ({
         service_date: r.service_date,
@@ -80,13 +80,17 @@ export function PdjAnalytiqueBoard() {
       rows,
     )
     const byMonth = new Array<number | null>(12).fill(null)
-    for (const [date, total] of totals) {
+    let total = 0
+    let days = 0
+    for (const [date, t] of totals) {
       if (!date.startsWith(`${year}-`)) continue
       const m = Number(date.slice(5, 7)) - 1
       if (m < 0 || m > 11) continue
-      byMonth[m] = (byMonth[m] ?? 0) + total
+      byMonth[m] = (byMonth[m] ?? 0) + t
+      total += t
+      days += 1
     }
-    return byMonth
+    return { byMonth, total, days }
   }, [addonRows, rows, year])
 
   // Moyennes PAR JOUR. Inclus : par jour de service (connu partout). Servis / Extra
@@ -119,8 +123,11 @@ export function PdjAnalytiqueBoard() {
         totalGuests > 0
           ? ((totalIncluded + totalExtra) / totalGuests) * 100
           : null,
+      // CA petit-déjeuner : somme HT sur l'année + moyenne par jour (jours avec CA).
+      totalCa: caStats.days > 0 ? caStats.total : null,
+      avgCa: caStats.days > 0 ? caStats.total / caStats.days : null,
     }
-  }, [months])
+  }, [months, caStats])
 
   // Une barre par mois. Mois RENSEIGNÉ (conso saisie) → empilement disjoint
   // Servis (= servi − extra) + Extra + Non servis. Mois SANS conso → repli
@@ -194,7 +201,7 @@ export function PdjAnalytiqueBoard() {
       }
       loading={loading}
       printTitle={`PDJ · ${year}`}
-      skeleton={{ cols: 8, charts: 1, rows: 12, cards: 5, cardCols: 5, cardLines: 3 }}
+      skeleton={{ cols: 8, charts: 1, rows: 12, cards: 6, cardCols: 6, cardLines: 3 }}
     >
       <PdjAnalytiqueCards summary={summary} />
 
@@ -236,7 +243,7 @@ export function PdjAnalytiqueBoard() {
                           served: m.served,
                           extra: m.extra,
                           noShow: m.noShow,
-                          caPdj: caPdjByMonth[m.month - 1],
+                          caPdj: caStats.byMonth[m.month - 1],
                           conversion: m.conversion,
                         }
                       : undefined
