@@ -280,6 +280,14 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   for (const [room, s] of statuses)
     if (s === 'rattrapage' && !effectiveSold.has(room)) rattrapages++
   const cleanedCount = stats.clean + rattrapages
+  // Balance « coup d'œil » : contrôle que les catégories affichées retombent sur les
+  // Vendues — Nettoyées + Refus + Bloquées du jour − Bloquées de la veille − Vendues.
+  // Calculée sur les MÊMES nombres que les cartes → toujours cohérente avec ce qu'on
+  // lit à l'écran : 0 = « Tout va bien », sinon l'écart signé signale un décompte qui
+  // ne tombe pas juste (typiquement des bloquées de la veille pas encore rattrapées).
+  const balanceDelta =
+    cleanedCount + stats.refus + stats.todo - carried.size - effectiveSold.size
+  const balanced = balanceDelta === 0
   // Fenêtre de report résolue ? Tant qu'une requête de la fenêtre est en vol,
   // `carried` est incomplet : afficher « Aucune donnée » sur un jour sans
   // occupation directe mais À REPORTS serait un faux vide, effacé une fraction de
@@ -751,7 +759,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
               grille des étages (une colonne par étage), aux mêmes gabarits que le
               contenu réel pour ne rien décaler à l'arrivée des données. */}
           <div className="rapro-stats" aria-hidden="true">
-            {Array.from({ length: 4 }).map((_, i) => (
+            {Array.from({ length: 5 }).map((_, i) => (
               <div
                 key={i}
                 className="flex items-stretch overflow-hidden rounded-xl border border-border bg-card"
@@ -801,6 +809,24 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
           )}
 
           <div className="rapro-stats">
+            {/* Balance en TÊTE : contrôle de cohérence « coup d'œil ». Nettoyées +
+                Refus + Bloquées du jour − Bloquées de la veille doit retomber sur les
+                Vendues → « 0 » vert si le compte est juste, sinon « +X / −X » rouge
+                (écart à vérifier). Même tuile numérique que les autres (pas de glyphe
+                ni de sous-texte). En secours sans saisie, « — ». */}
+            <StatTile
+              value={
+                showDash
+                  ? '—'
+                  : balanced
+                    ? '0'
+                    : `${balanceDelta > 0 ? '+' : '−'}${Math.abs(balanceDelta)}`
+              }
+              label="Balance"
+              accent={balanced ? CATEGORY_COLOR.nettoyee : CATEGORY_COLOR.bloquee}
+              coloredValue={!showDash}
+              hint="Nettoyées + Refus + Bloquées du jour − Bloquées de la veille doit retomber sur les Vendues. « 0 » quand le compte est juste ; sinon l'écart (+/−) est à vérifier."
+            />
             <StatTile
               value={dash(effectiveSold.size)}
               label="Vendues"
