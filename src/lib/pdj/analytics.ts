@@ -39,7 +39,8 @@ export interface PdjMonthStats {
   potential: number
   /** Taux d'occupation moyen des jours du mois (%, base CHAMBRES : occupées / 80). */
   avgOccupancy: number
-  /** Captage = servi ÷ clients PRÉSENTS (%). `null` si aucun client. */
+  /** Captage = (inclus + extras) ÷ clients (%). Base = inclus, augmente avec les
+   * extras. `null` seulement si aucun client. */
   conversion: number | null
 }
 
@@ -142,10 +143,10 @@ export function aggregatePdjMonthly(
     const s = months[i]
     s.potential = Math.max(0, s.guests - s.included)
     s.avgOccupancy = s.days > 0 ? occSum[i] / s.days : 0
-    // Captage : « — » (null) si AUCUN servi (donnée non saisie), comme extra/non-
-    // servis — pas un trompeur 0 %. Captage = servi ÷ clients présents.
+    // Captage = (inclus + extras) ÷ clients : base = inclus (réel, issu des
+    // réservations), augmente avec les extras. « — » (null) seulement sans client.
     s.conversion =
-      s.served > 0 && s.guests > 0 ? (s.served / s.guests) * 100 : null
+      s.guests > 0 ? ((s.included + (s.extra ?? 0)) / s.guests) * 100 : null
   }
   return months
 }
@@ -175,7 +176,8 @@ export interface PdjDayStats {
   potential: number
   /** Taux d'occupation du jour (%, base CHAMBRES : occupées / 80). */
   occupancy: number
-  /** Captage = servi ÷ clients PRÉSENTS (%). `null` si aucun client. */
+  /** Captage = (inclus + extras) ÷ clients (%). Base = inclus, augmente avec les
+   * extras. `null` seulement si aucun client. */
   conversion: number | null
 }
 
@@ -246,10 +248,10 @@ export function aggregatePdjDaily(
         noShow: s.served > 0 ? s.noShow : null,
         potential: Math.max(0, s.guests - s.included),
         occupancy: (rooms / TOTAL_ROOMS) * 100,
-        // Captage : « — » si AUCUN servi ce jour (comme extra/non-servis).
-        // Captage = servi ÷ clients présents.
+        // Captage = (inclus + extras) ÷ clients : base = inclus, augmente avec les
+        // extras. « — » (null) seulement sans client.
         conversion:
-          s.served > 0 && s.guests > 0 ? (s.served / s.guests) * 100 : null,
+          s.guests > 0 ? ((s.included + s.extra) / s.guests) * 100 : null,
       }
     })
 }

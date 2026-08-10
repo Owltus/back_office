@@ -1,4 +1,4 @@
-import { fmtInt, fmtPctInt } from '#/lib/pdj/format.ts'
+import { fmtEur, fmtInt, fmtPctInt } from '#/lib/pdj/format.ts'
 import { ACCENT } from '#/components/analytique/accents.ts'
 import {
   AnalytiqueCardsGrid,
@@ -10,7 +10,7 @@ import {
  * Briques de tableau partagées par les deux vues analytique PDJ (annuelle et
  * détail mensuel) : en-tête et cellules de valeur/tirets. Les deux vues partagent
  * 8 colonnes (Occupation / Clients / Inclus / Servis / Extra / Non servis /
- * Potentiel / Captage) ; la vue annuelle ajoute une colonne « Jours » (withDays).
+ * CA / Captage) ; la vue annuelle ajoute une colonne « Jours » (withDays).
  * « Servis » = TOTAL des PDJ servis (extra compris) ; « Extra » = servis à des
  * clients NON réservés (Σ max(0, servi − inclus) par chambre), un SOUS-ensemble de
  * Servis ; « Non servis » = réservés/payés mais jamais servis (Σ max(0, inclus −
@@ -95,7 +95,7 @@ export function PdjAnalytiqueCards({
       <StatCard
         label="Captage"
         accent={ACCENT.pink}
-        hint="Clients servis rapportés aux clients présents"
+        hint="Petits-déjeuners (inclus + extras) rapportés aux clients"
         value={
           summary.avgConversion != null ? fmtPctInt(summary.avgConversion) : '—'
         }
@@ -114,8 +114,10 @@ export interface PdjRowStats {
   extra: number | null
   /** null = conso non saisie → « — » (pas de « non servis » sans servi). */
   noShow: number | null
-  potential: number
-  /** Captage (%) = servi ÷ présents. null → « — ». Calculé en amont. */
+  /** CA PDJ = total HT (inclus + extras) du jour/mois. null → « — » (pas d'Addon
+   * ou total non chiffrable). Calculé en amont (croisement Addon × In-House). */
+  caPdj: number | null
+  /** Captage (%) = (inclus + extras) ÷ clients. null → « — ». Calculé en amont. */
   conversion: number | null
   days?: number
 }
@@ -170,8 +172,11 @@ export function PdjStatsHead({
       >
         Non servis
       </th>
-      <th className="hidden px-2 py-2 text-center text-xs font-medium text-muted-foreground sm:table-cell">
-        Potentiel
+      <th
+        className="hidden whitespace-nowrap px-2 py-2 text-center text-xs font-medium text-muted-foreground sm:table-cell"
+        style={{ color: ACCENT.cyan }}
+      >
+        CA
       </th>
       <th
         className="px-3 py-2 text-center text-xs font-medium text-muted-foreground"
@@ -268,8 +273,13 @@ export function PdjStatCells({
       >
         {stats.noShow != null ? fmtInt(stats.noShow) : '—'}
       </td>
-      <td className="hidden whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums text-muted-foreground sm:table-cell">
-        {fmtInt(stats.potential)}
+      {/* CA PDJ = total HT (inclus + extras), croisement Addon × In-House. En cyan
+          (--chart-2). « — » sans Addon ou total non chiffrable. */}
+      <td
+        className="hidden whitespace-nowrap px-2 py-2 text-center text-xs font-medium tabular-nums text-muted-foreground/50 sm:table-cell"
+        style={stats.caPdj != null ? { color: ACCENT.cyan } : undefined}
+      >
+        {stats.caPdj != null ? fmtEur(stats.caPdj, 0) : '—'}
       </td>
       {/* Captage : calculé en amont (métier), base CLIENTS. En rose (--chart-4),
           même code couleur que sa carte de synthèse. */}

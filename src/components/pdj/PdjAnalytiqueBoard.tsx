@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 
 import { AnalytiqueShell } from '#/components/analytique/AnalytiqueShell.tsx'
@@ -10,13 +10,19 @@ import { useAnnualYear } from '#/components/analytique/useAnnualYear.ts'
 import { ACCENT } from '#/components/analytique/accents.ts'
 import { KpiStackedBarChart } from '#/components/analytique/KpiStackedBarChart.tsx'
 import type { KpiBarSegment } from '#/components/analytique/KpiStackedBarChart.tsx'
+import { AddonImportButton } from '#/components/pdj/AddonImportButton.tsx'
 import {
   PdjAnalytiqueCards,
   PdjStatCells,
   PdjStatsHead,
 } from '#/components/pdj/PdjAnalytiqueParts.tsx'
-import { fetchRange, fetchServiceDates } from '#/lib/pdj/service.ts'
+import {
+  fetchAllAddonProduction,
+  fetchRange,
+  fetchServiceDates,
+} from '#/lib/pdj/service.ts'
 import { aggregatePdjMonthly, yearsFromDates } from '#/lib/pdj/analytics.ts'
+import { computeDailyTotals } from '#/lib/pdj/amounts.ts'
 import { fmtInt } from '#/lib/pdj/format.ts'
 import { MONTHS_LABELS, MONTHS_SHORT } from '#/lib/repjour/constants.ts'
 
@@ -36,6 +42,7 @@ const currentYear = new Date().getFullYear()
 
 export function PdjAnalytiqueBoard() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
   // Années disponibles (dérivées des jours de service en base).
   const { data: dates = [] } = useQuery({
@@ -53,7 +60,34 @@ export function PdjAnalytiqueBoard() {
     queryFn: () => fetchRange(`${year}-01-01`, `${year}-12-31`),
   })
 
+  // Addon Production (tous jours) → CA PDJ (croisé avec l'In-House de l'année).
+  const { data: addonRows = [] } = useQuery({
+    queryKey: ['pdj', 'addon-all'],
+    queryFn: fetchAllAddonProduction,
+  })
+
   const months = useMemo(() => aggregatePdjMonthly(rows, year), [rows, year])
+
+  // CA PDJ (total HT inclus + extras) cumulé par mois. null pour un mois sans
+  // Addon exploitable (« — » au tableau).
+  const caPdjByMonth = useMemo(() => {
+    const totals = computeDailyTotals(
+      addonRows.map((r) => ({
+        service_date: r.service_date,
+        code: r.code,
+        revenue: r.revenue_ttc,
+      })),
+      rows,
+    )
+    const byMonth = new Array<number | null>(12).fill(null)
+    for (const [date, total] of totals) {
+      if (!date.startsWith(`${year}-`)) continue
+      const m = Number(date.slice(5, 7)) - 1
+      if (m < 0 || m > 11) continue
+      byMonth[m] = (byMonth[m] ?? 0) + total
+    }
+    return byMonth
+  }, [addonRows, rows, year])
 
   // Moyennes PAR JOUR. Inclus : par jour de service (connu partout). Servis / Extra
   // / Non servis : par jour RENSEIGNÉ (conso saisie) — sinon un jour non renseigné
@@ -67,13 +101,8 @@ export function PdjAnalytiqueBoard() {
     const totalServed = months.reduce((s, m) => s + m.served, 0)
     const totalExtra = months.reduce((s, m) => s + (m.extra ?? 0), 0)
     const totalNonServis = months.reduce((s, m) => s + (m.noShow ?? 0), 0)
-    // Clients des SEULS mois renseignés (servi > 0) — dénominateur des taux
-    // servi-dépendants, pour ne PAS les diluer avec les mois qui n'ont que des
-    // réservations (sinon le servi d'un mois se noie dans les clients de tous).
-    const recGuests = months.reduce(
-      (s, m) => s + (m.served > 0 ? m.guests : 0),
-      0,
-    )
+    // Clients cumulés (tous les mois) — dénominateur du captage.
+    const totalGuests = months.reduce((s, m) => s + m.guests, 0)
     return {
       avgInclus: totalDays > 0 ? totalIncluded / totalDays : null,
       avgServis: recDays > 0 ? totalServed / recDays : null,
@@ -85,9 +114,11 @@ export function PdjAnalytiqueBoard() {
       totalServed,
       totalExtra,
       totalNonServis,
-      // Captage : sur les seules données RENSEIGNÉES (servi), pas dilué par les mois
-      // réservés-mais-non-saisis. « — » si aucun servi.
-      avgConversion: recGuests > 0 ? (totalServed / recGuests) * 100 : null,
+      // Captage = (inclus + extras) ÷ clients (base = inclus ; augmente avec les extras).
+      avgConversion:
+        totalGuests > 0
+          ? ((totalIncluded + totalExtra) / totalGuests) * 100
+          : null,
     }
   }, [months])
 
@@ -144,12 +175,22 @@ export function PdjAnalytiqueBoard() {
     <AnalytiqueShell
       title="Analytique"
       actions={
-        <YearNav
-          year={year}
-          setYear={setYear}
-          years={years}
-          currentYear={currentYear}
-        />
+        <>
+          {/* Import Addon Production (admin) accolé à l'impression : dépôt d'un CSV
+              « plage » (plusieurs jours) → upsert pdj_addon_production. Rafraîchit
+              toutes les vues PDJ (analytique + board). */}
+          <AddonImportButton
+            onImported={() =>
+              queryClient.invalidateQueries({ queryKey: ['pdj'] })
+            }
+          />
+          <YearNav
+            year={year}
+            setYear={setYear}
+            years={years}
+            currentYear={currentYear}
+          />
+        </>
       }
       loading={loading}
       printTitle={`PDJ · ${year}`}
@@ -195,7 +236,7 @@ export function PdjAnalytiqueBoard() {
                           served: m.served,
                           extra: m.extra,
                           noShow: m.noShow,
-                          potential: m.potential,
+                          caPdj: caPdjByMonth[m.month - 1],
                           conversion: m.conversion,
                         }
                       : undefined

@@ -14,8 +14,9 @@ import {
   PdjStatCells,
   PdjStatsHead,
 } from '#/components/pdj/PdjAnalytiqueParts.tsx'
-import { fetchRange } from '#/lib/pdj/service.ts'
+import { fetchAllAddonProduction, fetchRange } from '#/lib/pdj/service.ts'
 import { aggregatePdjDaily } from '#/lib/pdj/analytics.ts'
+import { computeDailyTotals } from '#/lib/pdj/amounts.ts'
 import { fmtInt } from '#/lib/pdj/format.ts'
 import { DAY_NAMES, MONTHS_LABELS } from '#/lib/repjour/constants.ts'
 
@@ -55,6 +56,24 @@ export function PdjAnalytiqueMoisBoard({
     [rows, year, month],
   )
 
+  // Addon Production (tous jours) → CA PDJ par jour (croisé avec l'In-House).
+  const { data: addonRows = [] } = useQuery({
+    queryKey: ['pdj', 'addon-all'],
+    queryFn: fetchAllAddonProduction,
+  })
+  const dailyCa = useMemo(
+    () =>
+      computeDailyTotals(
+        addonRows.map((r) => ({
+          service_date: r.service_date,
+          code: r.code,
+          revenue: r.revenue_ttc,
+        })),
+        rows,
+      ),
+    [addonRows, rows],
+  )
+
   // Index par numéro de jour pour peupler un tableau plein mois (1..lastDay),
   // les jours sans donnée restant en tirets grisés.
   const byDay = useMemo(() => {
@@ -81,7 +100,7 @@ export function PdjAnalytiqueMoisBoard({
     const totalNonServis = recorded.reduce((s, d) => s + (d.noShow ?? 0), 0)
     // Clients des SEULS jours renseignés (servi saisi) — dénominateur des taux
     // servi-dépendants, pour ne pas les diluer avec les jours réservés non saisis.
-    const recGuests = recorded.reduce((s, d) => s + d.guests, 0)
+    const totalGuests = stats.reduce((s, d) => s + d.guests, 0)
     return {
       avgInclus: totalDays > 0 ? totalIncluded / totalDays : null,
       avgServis: recDays > 0 ? totalServed / recDays : null,
@@ -93,9 +112,11 @@ export function PdjAnalytiqueMoisBoard({
       totalServed,
       totalExtra,
       totalNonServis,
-      // Captage : sur les seuls jours RENSEIGNÉS (servi), pas dilué par les jours
-      // réservés-mais-non-saisis. « — » si aucun servi.
-      avgConversion: recGuests > 0 ? (totalServed / recGuests) * 100 : null,
+      // Captage = (inclus + extras) ÷ clients (base = inclus ; augmente avec les extras).
+      avgConversion:
+        totalGuests > 0
+          ? ((totalIncluded + totalExtra) / totalGuests) * 100
+          : null,
     }
   }, [stats])
 
@@ -192,7 +213,22 @@ export function PdjAnalytiqueMoisBoard({
                 >
                   {dayName} {day}
                 </td>
-                <PdjStatCells stats={s} />
+                <PdjStatCells
+                  stats={
+                    s
+                      ? {
+                          occupancy: s.occupancy,
+                          guests: s.guests,
+                          included: s.included,
+                          served: s.served,
+                          extra: s.extra,
+                          noShow: s.noShow,
+                          caPdj: dailyCa.get(date) ?? null,
+                          conversion: s.conversion,
+                        }
+                      : undefined
+                  }
+                />
               </tr>
             )
           })}
