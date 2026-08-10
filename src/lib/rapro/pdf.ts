@@ -131,27 +131,41 @@ function renderRaproDocument(
   pdf.setDrawColor(51).setLineWidth(0.4).line(LEFT, y, RIGHT, y)
   y += 8
 
-  // --- Bandeau de compteurs — mêmes catégories que la page (hors « Reste à
-  //     faire ») : Vendues / Nettoyées / Refus / Bloquées, + une case
-  //     « Bloq. veille » AJOUTÉE seulement s'il y a des chambres reportées.
-  const cells: Array<[string, number]> = [
-    ['Vendues', counts.sold],
-    ['Nettoyées', counts.clean],
-    ['Refus', counts.refus],
-    ['Bloquées du jour', counts.bloquee],
+  // --- Bandeau de compteurs — mêmes catégories que la page, dans le même ordre :
+  //     Balance (en tête) / Vendues / Nettoyées / Refus / Bloquées du jour, + une
+  //     case « Bloq. veille » AJOUTÉE seulement s'il y a des chambres reportées.
+  //     Balance = Nettoyées + Refus + Bloquées du jour − Bloquées de la veille −
+  //     Vendues (contrôle de cohérence) : « 0 » vert si le compte tombe juste,
+  //     « +X / -X » rouge sinon. Calculée sur les MÊMES compteurs que l'écran →
+  //     valeur identique (tiret ASCII pour l'encodage helvetica du PDF).
+  const balance =
+    counts.clean + counts.refus + counts.bloquee - carried.size - counts.sold
+  const balanceText =
+    balance === 0 ? '0' : `${balance > 0 ? '+' : '-'}${Math.abs(balance)}`
+  const balanceColor: RGB = balance === 0 ? [5, 150, 105] : [220, 38, 38]
+  type BannerCell = { label: string; text: string; color?: RGB }
+  const cells: BannerCell[] = [
+    { label: 'Balance', text: balanceText, color: balanceColor },
+    { label: 'Vendues', text: String(counts.sold) },
+    { label: 'Nettoyées', text: String(counts.clean) },
+    { label: 'Refus', text: String(counts.refus) },
+    { label: 'Bloq. du jour', text: String(counts.bloquee) },
   ]
-  if (carried.size > 0) cells.push(['Bloquées de la veille', carried.size])
+  if (carried.size > 0)
+    cells.push({ label: 'Bloq. de la veille', text: String(carried.size) })
   const cw = CONTENT_W / cells.length
-  cells.forEach(([lbl, val], i) => {
+  cells.forEach(({ label, text, color }, i) => {
     const cx = LEFT + i * cw
     pdf
       .setDrawColor(210)
       .setLineWidth(0.2)
       .rect(cx, y, cw - 2, 15)
-    pdf.setFont('helvetica', 'bold').setFontSize(14).setTextColor(26)
-    pdf.text(String(val), cx + (cw - 2) / 2, y + 7.5, { align: 'center' })
+    pdf.setFont('helvetica', 'bold').setFontSize(14)
+    if (color) pdf.setTextColor(color[0], color[1], color[2])
+    else pdf.setTextColor(26)
+    pdf.text(text, cx + (cw - 2) / 2, y + 7.5, { align: 'center' })
     pdf.setFont('helvetica', 'normal').setFontSize(6.5).setTextColor(110)
-    pdf.text(lbl.toUpperCase(), cx + (cw - 2) / 2, y + 12.5, {
+    pdf.text(label.toUpperCase(), cx + (cw - 2) / 2, y + 12.5, {
       align: 'center',
       maxWidth: cw - 3,
     })
