@@ -145,6 +145,10 @@ create policy "pdj delete (page:pdj)"
   on public.pdj_breakfasts for delete to authenticated
   using (public.get_page_level('pdj') = 'gestion');
 
+-- (Les policies d'écriture de pdj_addon_production sont définies dans
+--  supabase/pdj_addon_production.sql, fichier auto-suffisant et rejouable —
+--  pas ici, pour ne pas dupliquer.)
+
 -- ---- RAPRO — feuilles jour (page 'rapro') -----------------------------------
 -- Écriture bornée par NIVEAU **et** par FENÊTRE J-2 (miroir de
 -- lib/rapro/editability.ts, RAPRO_GRACE_DAYS = 2) : un compte `ecriture` n'agit

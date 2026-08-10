@@ -109,6 +109,9 @@ create policy "pdj read (page:pdj)"
   on public.pdj_breakfasts for select to authenticated
   using ((select public.page_level_rank(public.get_page_level('pdj'))) >= 1);
 
+-- (Les policies de pdj_addon_production sont définies dans supabase/pdj_addon_production.sql,
+--  fichier auto-suffisant et rejouable — pas ici, pour ne pas dupliquer.)
+
 -- -----------------------------------------------------------------------------
 -- Page PARKING — contient `client` (PII, conservée par décision du 2026-07-13)
 -- -----------------------------------------------------------------------------
