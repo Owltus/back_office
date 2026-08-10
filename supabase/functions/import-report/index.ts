@@ -24,6 +24,7 @@ import { createClient } from 'jsr:@supabase/supabase-js@2'
 
 import { importComparison, importForecast } from './repjour.ts'
 import { importInhouse } from './pdj.ts'
+import { importAddon } from './addon.ts'
 import { maybeAutoSendRepjour } from './autoSend.ts'
 
 const json = (body: unknown, status = 200) =>
@@ -55,7 +56,7 @@ async function secretMatches(
 }
 
 // --- Détection du type de rapport (EXTENSIBLE : ajouter une entrée ici) -------
-type ReportType = 'comparison' | 'forecast' | 'inhouse'
+type ReportType = 'comparison' | 'forecast' | 'inhouse' | 'addon'
 
 /** Devine le type d'un CSV par son nom de fichier puis, en repli, par sa signature
  * de contenu (mêmes critères que les imports manuels RepJour/PDJ). */
@@ -69,6 +70,10 @@ function detectType(filename: string, content: string): ReportType | null {
   //    trois mots-clés sont mutuellement exclusifs entre les 3 types de rapport.
   if (f.includes('comparison')) return 'comparison'
   if (f.includes('forecast')) return 'forecast'
+  // Addon Production (« *_addon_production_report_DAILY_* ») : le nom In-House
+  // « _in_house_guests_ » ne contient pas « addon » → pas de collision. Testé
+  // AVANT le bloc in-house.
+  if (f.includes('addon')) return 'addon'
   if (
     f.includes('in-house') ||
     f.includes('in_house') ||
@@ -82,6 +87,9 @@ function detectType(filename: string, content: string): ReportType | null {
   const head = content.slice(0, 2000).toUpperCase()
   if (content.includes('Occupied Rooms')) return 'comparison'
   if (head.includes('FORECAST')) return 'forecast'
+  // Signature Addon Production : le « Report Name » vaut « Addon Production ». Testé
+  // AVANT l'In-House (dont la signature « Addons » est un simple préfixe partagé).
+  if (head.includes('ADDON PRODUCTION')) return 'addon'
   // Signature In-House : en-tête portant à la fois « Guest Name » et « Addons ».
   if (/(^|[,;])\s*Guest Name\s*([,;])/.test(content) && content.includes('Addons'))
     return 'inhouse'
@@ -184,7 +192,9 @@ Deno.serve(async (req) => {
           ? await importComparison(admin, content, filename, dryRun)
           : type === 'forecast'
             ? await importForecast(admin, content, filename, dryRun)
-            : await importInhouse(admin, content, filename, dryRun)
+            : type === 'addon'
+              ? await importAddon(admin, content, filename, dryRun)
+              : await importInhouse(admin, content, filename, dryRun)
       results.push({
         filename,
         type,
