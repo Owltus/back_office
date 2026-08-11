@@ -28,6 +28,7 @@ import { RecipientsModal } from '#/components/repjour/RecipientsModal.tsx'
 import { ServerSendDialog } from '#/components/repjour/ServerSendDialog.tsx'
 import { serverReportRecipients } from '#/lib/repjour/services/recipients.ts'
 import { SummaryCards } from '#/components/repjour/SummaryCards.tsx'
+import { DayCrossSummary } from '#/components/repjour/DayCrossSummary.tsx'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { supabase } from '#/lib/supabase.ts'
 import { businessNow } from '#/lib/businessDay.ts'
@@ -767,6 +768,8 @@ export function DashboardBoard() {
             </div>
 
             <AlertBanner alerts={report.alerts || []} />
+
+            <DayCrossSummary date={selectedDate} hotelRoomsSold={rj.nuitees} />
 
                 {/* Envoi du rapport : relocalisé dans la barre d'actions du HAUT
                     (PageHeader, à côté de « Imprimer »). L'ancien groupe inline
