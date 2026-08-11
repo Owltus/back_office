@@ -54,19 +54,29 @@ export interface PdjAmountsInput {
   covers: CoversByCode
   /** Nombre de couverts EXTRAS (servis au-delà des inclus). */
   extrasCount: number
+  /** PDJ inclus saisis À LA MAIN (day-use…), absents de l'Addon : valorisés au
+   *  tarif et ajoutés au HT inclus. Défaut 0. Les extras manuels, eux, passent
+   *  déjà par `extrasCount`. */
+  manualIncludedCount?: number
 }
+
+/**
+ * Tarif unitaire TTC d'un petit-déjeuner (prix catalogue OKKO). Confirmé au
+ * centime par l'Addon Production (revenu PDJ = 19 € × unités facturées). Sert à
+ * valoriser les EXTRAS (couverts servis au-delà des inclus), absents de tout
+ * fichier. Montants des rapports = TTC → HT via fromTTC (÷ VAT_FACTOR = 1,10).
+ * À ajuster ici si le tarif change (source unique).
+ */
+export const PDJ_EXTRA_TTC = 19
 
 /** Montants HT calculés + contrôle défensif. */
 export interface PdjAmounts {
-  /** PDJ inclus, HT, arrondi 2 déc. */
+  /** PDJ inclus, HT, arrondi 2 déc. (revenu réel de l'Addon ÷ 1,10). */
   includedHT: number
-  /** Extras HT : 0 si aucun extra ; null si prix unitaire PDJ indéterminable. */
-  extrasHT: number | null
-  /** Total HT (inclus + extras), arrondi 2 déc. ; null si les extras ne sont pas
-   *  chiffrables (prix PDJ indéterminable) — aligné sur extrasHT. */
-  totalHT: number | null
-  /** Prix unitaire TTC du code PDJ (pour les extras) ; null si couverts nuls. */
-  unitTtcPDJ: number | null
+  /** Extras HT, arrondi 2 déc. : 0 si aucun extra (valorisés au tarif PDJ). */
+  extrasHT: number
+  /** Total HT (inclus + extras), arrondi 2 déc. */
+  totalHT: number
   /** Anomalies non bloquantes (contrôle défensif). */
   warnings: string[]
 }
@@ -74,27 +84,27 @@ export interface PdjAmounts {
 /**
  * Calcule les montants HT de la journée.
  *
- * - `includedTtc` = Σ revenue des codes petit-déjeuner → `includedHT =
- *   round2(fromTTC(includedTtc))`.
- * - `unitTtcPDJ` = revenuePDJ / coversPDJ si coversPDJ > 0, sinon null (garde
- *   division par zéro).
- * - `extrasHT` = 0 si extrasCount = 0 ; sinon round2(fromTTC(extrasCount ×
- *   unitTtcPDJ)) si le prix unitaire est connu ; sinon null + warning.
- * - `totalHT` = round2(fromTTC(includedTtc + extrasCount × unitTtcPDJ)) : arrondi
- *   AU TOTAL uniquement, jamais au prix unitaire ; null quand `extrasHT` est null
- *   (extras présents mais non chiffrables) — pas de total silencieusement minoré.
+ * - `includedTtc` = Σ revenue des codes petit-déjeuner (valeur RÉELLE du fichier
+ *   Addon) → `includedHT = round2(fromTTC(includedTtc))`.
+ * - `extrasHT` = 0 si extrasCount = 0 ; sinon `round2(fromTTC(extrasCount ×
+ *   PDJ_EXTRA_TTC))` — valorisés au TARIF catalogue, pas déduits des couverts.
+ * - `totalHT` = `round2(fromTTC(includedTtc + extrasCount × PDJ_EXTRA_TTC))` :
+ *   arrondi AU TOTAL uniquement, jamais au prix unitaire.
+ *
+ * Les extras sont valorisés au tarif (PDJ_EXTRA_TTC) et non plus via
+ * « revenu ÷ couverts » : ce ratio dérivait (~1 couvert In-House de plus que
+ * d'unités facturées) et sortait ~18,67 € au lieu de 19 € → 16,97 au lieu de
+ * 17,27 HT. L'inclus, lui, reste le revenu réel du fichier (÷ 1,10).
  */
 export function computePdjAmounts(input: PdjAmountsInput): PdjAmounts {
-  const { addon, covers, extrasCount } = input
+  const { addon, covers, extrasCount, manualIncludedCount = 0 } = input
   const warnings: string[] = []
 
-  const includedTtc = addon.reduce((sum, r) => sum + r.revenue, 0)
+  // Inclus = revenu Addon + PDJ inclus saisis à la main (valorisés au tarif).
+  const includedTtc =
+    addon.reduce((sum, r) => sum + r.revenue, 0) +
+    manualIncludedCount * PDJ_EXTRA_TTC
   const includedHT = round2(fromTTC(includedTtc))
-
-  // Prix unitaire TTC du code PDJ (support des extras). Garde division par zéro.
-  const pdjRevenue = addon.find((r) => r.code === 'PDJ')?.revenue ?? 0
-  const unitTtcPDJ =
-    covers.coversPDJ > 0 ? pdjRevenue / covers.coversPDJ : null
 
   // Contrôle défensif : un code facturé (revenu > 0) sans couvert In-House
   // signale un In-House incomplet ou une incohérence d'import.
@@ -109,25 +119,13 @@ export function computePdjAmounts(input: PdjAmountsInput): PdjAmounts {
     }
   }
 
-  let extrasHT: number | null
-  if (extrasCount === 0) {
-    extrasHT = 0
-  } else if (unitTtcPDJ !== null) {
-    extrasHT = round2(fromTTC(extrasCount * unitTtcPDJ))
-  } else {
-    extrasHT = null
-    warnings.push('Extras impossibles à valoriser : prix PDJ indéterminable.')
-  }
+  // Extras : couverts servis au-delà des inclus, ABSENTS de tout fichier →
+  // valorisés au tarif catalogue PDJ. Arrondi AU TOTAL uniquement.
+  const extrasTtc = extrasCount * PDJ_EXTRA_TTC
+  const extrasHT = extrasCount > 0 ? round2(fromTTC(extrasTtc)) : 0
+  const totalHT = round2(fromTTC(includedTtc + extrasTtc))
 
-  // Total HT : null si les extras ne sont pas chiffrables (extrasHT null), pour
-  // ne jamais imprimer un total minoré en silence ; sinon inclus + extras
-  // valorisés, arrondi AU TOTAL uniquement (jamais au prix unitaire).
-  const totalHT =
-    extrasHT === null
-      ? null
-      : round2(fromTTC(includedTtc + extrasCount * (unitTtcPDJ ?? 0)))
-
-  return { includedHT, extrasHT, totalHT, unitTtcPDJ, warnings }
+  return { includedHT, extrasHT, totalHT, warnings }
 }
 
 /** Ligne In-House minimale pour le calcul d'un jour (couverts + extras). */
@@ -183,7 +181,7 @@ export function computeDailyTotals(
       covers,
       extrasCount,
     })
-    if (totalHT != null) totals.set(day, totalHT)
+    totals.set(day, totalHT)
   }
   return totals
 }

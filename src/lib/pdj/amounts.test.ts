@@ -47,26 +47,35 @@ describe('computePdjAmounts', () => {
     expect(r.includedHT).toBe(797.27)
     expect(r.extrasHT).toBe(0)
     expect(r.totalHT).toBe(797.27)
-    expect(r.unitTtcPDJ).toBeCloseTo(817 / 22, 6)
     expect(r.warnings).toHaveLength(0)
   })
 
-  it('coversPDJ = 0 : unitTtcPDJ null, extrasHT null si extras > 0 + warning', () => {
+  it('extras valorisés au TARIF catalogue PDJ (19 € TTC) : 1 extra → 17.27 HT', () => {
+    // Prix catalogue, PAS déduit des couverts : 19 / 1,10 = 17,2727… → 17.27.
+    const r = computePdjAmounts({
+      addon: [],
+      covers: { coversPDJ: 0, coversPDJBB: 0 },
+      extrasCount: 1,
+    })
+
+    expect(r.extrasHT).toBe(17.27)
+    expect(r.includedHT).toBe(0)
+    expect(r.totalHT).toBe(17.27)
+  })
+
+  it('coversPDJ = 0 : extras chiffrables au tarif (indépendant des couverts) + warning', () => {
     const r = computePdjAmounts({
       addon: [{ code: 'PDJ', count: 22, revenue: 817 }],
       covers: { coversPDJ: 0, coversPDJBB: 0 },
       extrasCount: 2,
     })
 
-    expect(r.unitTtcPDJ).toBeNull()
-    expect(r.extrasHT).toBeNull()
-    // Total INDÉTERMINÉ (null) tant que les extras ne sont pas chiffrables : pas
-    // de total silencieusement minoré (aligné sur extrasHT).
-    expect(r.totalHT).toBeNull()
-    // includedHT reste calculable (indépendant des couverts) : round2(817/1,10).
+    // Extras valorisés au tarif (2 × 19 / 1,10) — plus jamais null.
+    expect(r.extrasHT).toBe(34.55)
+    // includedHT = round2(817/1,10) ; total = round2((817 + 38)/1,10).
     expect(r.includedHT).toBe(742.73)
-    expect(r.warnings.length).toBeGreaterThan(0)
-    expect(r.warnings.some((w) => w.includes('Extras'))).toBe(true)
+    expect(r.totalHT).toBe(777.27)
+    // Contrôle défensif : revenu PDJ facturé mais aucun couvert In-House.
     expect(r.warnings.some((w) => w.includes('sans couvert'))).toBe(true)
   })
 
@@ -80,19 +89,15 @@ describe('computePdjAmounts', () => {
     expect(r.warnings.some((w) => w.includes('PDJBB'))).toBe(true)
   })
 
-  it('arrondi AU TOTAL uniquement (pas d’accumulation d’arrondis unitaires)', () => {
-    // unitTtcPDJ = 817/22 = 37.13636… ; 3 extras.
+  it('total = inclus + extras au tarif, arrondi AU TOTAL', () => {
+    // 3 extras × 19 € TTC = 57 ; total TTC = 877 + 57 = 934 → round2(934/1,10).
     const r = computePdjAmounts({
       addon: ADDON,
       covers: { coversPDJ: 22, coversPDJBB: 3 },
       extrasCount: 3,
     })
 
-    // Raw : round2((877 + 3 × 37.13636…) / 1.1) = 898.55
-    expect(r.totalHT).toBe(898.55)
-    // Si l'on arrondissait le prix unitaire (37.14) d'abord, on obtiendrait
-    // 898.56 : le calcul au total évite ce biais.
-    expect(r.totalHT).not.toBe(898.56)
+    expect(r.totalHT).toBe(849.09)
   })
 })
 
