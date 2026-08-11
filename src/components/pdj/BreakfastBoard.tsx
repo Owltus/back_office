@@ -37,6 +37,7 @@ import {
   mergeCsvFiles,
   stayKind,
 } from '#/lib/pdj/csv.ts'
+import type { ManualKind } from '#/lib/pdj/csv.ts'
 import { businessDateStr, businessNow } from '#/lib/businessDay.ts'
 import {
   deleteAddonProductionDay,
@@ -49,6 +50,7 @@ import {
   importAddonProduction,
   importRows,
   purgeOldGuestNames,
+  setManualServe,
   setServed,
 } from '#/lib/pdj/service.ts'
 import type { AddonProductionDbRow, PdjDayRow } from '#/lib/pdj/service.ts'
@@ -230,6 +232,11 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
   const amounts = useMemo(() => {
     if (addonRows.length === 0) return null
     const covers = countCovers(dayRows ?? [])
+    // PDJ inclus saisis à la main (absents de l'Addon) → ajoutés au HT inclus.
+    const manualIncludedCount = (dayRows ?? []).reduce(
+      (s, r) => s + (r.manual_kind === 'inclus' ? r.breakfasts_served : 0),
+      0,
+    )
     return computePdjAmounts({
       addon: addonRows.map((r) => ({
         code: r.code,
@@ -237,6 +244,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
         revenue: r.revenue_ttc,
       })),
       covers,
+      manualIncludedCount,
       extrasCount,
     })
   }, [addonRows, dayRows, extrasCount])
@@ -524,6 +532,74 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
       )
       setServed(selectedDate, room, n).catch((err) => {
         console.error('[pdj] enregistrement de la consommation échoué', err)
+        void queryClient.invalidateQueries({
+          queryKey: ['pdj', 'day', selectedDate],
+        })
+      })
+    },
+    [dayEditable, selectedDate, queryClient],
+  )
+
+  // Saisie MANUELLE d'un PDJ dans une chambre non check-in (day-use…). Crée la
+  // ligne manuelle si la chambre est vide, la met à jour sinon ; tout décoché la
+  // retire. Maj optimiste du cache puis persistance (setManualServe).
+  const handleManual = useCallback(
+    (room: number, n: number, kind: ManualKind) => {
+      if (!dayEditable || !selectedDate) return
+      const included = kind === 'inclus' ? n : 0
+      queryClient.setQueryData<PdjDayRow[]>(
+        ['pdj', 'day', selectedDate],
+        (old) => {
+          const list = old ?? []
+          if (n <= 0) {
+            return list.filter((r) => !(r.room === room && r.manual_kind != null))
+          }
+          if (list.some((r) => r.room === room)) {
+            return list.map((r) =>
+              r.room === room
+                ? {
+                    ...r,
+                    breakfasts_served: n,
+                    served: true,
+                    breakfasts_included: included,
+                    manual_kind: kind,
+                  }
+                : r,
+            )
+          }
+          const created: PdjDayRow = {
+            id: crypto.randomUUID(),
+            service_date: selectedDate,
+            room,
+            guest_name: null,
+            status: '',
+            vip: false,
+            adults: 0,
+            children: 0,
+            guests: 0,
+            no_of_nights: null,
+            room_type: null,
+            rate_plan: null,
+            channel: null,
+            company: null,
+            guarantee: null,
+            payment_type: null,
+            addons: null,
+            adr: null,
+            arrival_date: null,
+            departure_date: null,
+            stay_count: 0,
+            breakfasts_included: included,
+            source_file: '',
+            manual_kind: kind,
+            breakfasts_served: n,
+            served: true,
+          }
+          return [...list, created]
+        },
+      )
+      setManualServe(selectedDate, room, n, kind).catch((err) => {
+        console.error('[pdj] saisie manuelle échouée', err)
         void queryClient.invalidateQueries({
           queryKey: ['pdj', 'day', selectedDate],
         })
@@ -918,6 +994,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                         row={byRoom.get(room)}
                         canEdit={dayEditable}
                         onServe={handleServe}
+                        onManual={handleManual}
                       />
                     ))}
                   </tbody>
@@ -1037,28 +1114,47 @@ const GuestRow = memo(function GuestRow({
   row,
   canEdit,
   onServe,
+  onManual,
 }: {
   room: number
   row?: PdjDayRow
   canEdit: boolean
   onServe: (room: number, n: number) => void
+  onManual: (room: number, n: number, kind: ManualKind) => void
 }) {
-  const numGuests = row?.guests ?? 0
+  // Cases « attendues » = PDJ INCLUS (règle enfants / PAX, cf. csv.ts), PAS le
+  // nombre de clients : un enfant/bébé (< 12 ans) ne prend pas de case, et jamais
+  // plus de 2. Piloté par `breakfasts_included` (recalculé à l'import + rétroactif
+  // via supabase/pdj_breakfasts_recompute.sql).
+  const numExpected = row?.breakfasts_included ?? 0
   const served = row?.breakfasts_served ?? 0
-  // Minimum 2 cases pour une grille visuellement régulière (impression papier).
-  const numBoxes = Math.max(2, numGuests)
+  // Minimum 2 cases pour une grille régulière ; on élargit si un PDJ « en plus »
+  // a déjà été servi au-delà des attendus (pour ne pas masquer une case cochée).
+  const numBoxes = Math.max(2, numExpected, served)
   // Flèche selon la nature du séjour (source unique `stayKind`) : départ vs recouche.
-  const kind = row ? stayKind(row.status) : null
-  const departing = kind === 'departing'
-  const staying = kind === 'staying'
-  // Double-clic sur la ligne (si des couverts existent) : tout servir / annuler.
-  const canServe = canEdit && numGuests > 0
+  const stay = row ? stayKind(row.status) : null
+  const departing = stay === 'departing'
+  const staying = stay === 'staying'
+  // Saisie MANUELLE : une chambre VIDE (non check-in) ou déjà manuelle accepte un
+  // PDJ à la main (day-use, no-show revenu…). `mKind` = son type inclus/extra
+  // (défaut extra). `doServe` route le clic vers le bon canal (manuel vs normal).
+  const manualKind = row?.manual_kind ?? null
+  const isManual = manualKind != null
+  const canManual = !row || isManual
+  const mKind: ManualKind = manualKind ?? 'extra'
+  const doServe = (n: number) =>
+    canManual ? onManual(room, n, mKind) : onServe(room, n)
+  // Cases interactives : PDJ inclus « normal », OU ligne manuelle, OU chambre vide
+  // éditable (pour permettre la 1re coche → création de la ligne manuelle).
+  const showInteractive = numExpected > 0 || isManual || (!row && canEdit)
+  // Double-clic « tout servir / annuler » : réservé aux lignes à couverts attendus.
+  const canServe = canEdit && numExpected > 0
 
   return (
     <tr
       onDoubleClick={
         canServe
-          ? () => onServe(room, served >= numGuests ? 0 : numGuests)
+          ? () => doServe(served >= numExpected ? 0 : numExpected)
           : undefined
       }
       title={canServe ? 'Double-clic : tout servir / annuler' : undefined}
@@ -1069,22 +1165,62 @@ const GuestRow = memo(function GuestRow({
       )}
     >
       <td className="pdj-room">{room}</td>
-      <td className={cn('pdj-name', row?.vip && 'pdj-vip')}>
-        {row?.vip && (
-          <Star className="pdj-name-star size-3" fill="currentColor" />
-        )}
-        {row ? (row.guest_name ?? '—') : ''}
-      </td>
-      <td className="pdj-c">
-        {departing ? (
-          <ArrowUp className="pdj-status-icon" style={{ color: '#EF5350' }} />
-        ) : staying ? (
-          <ArrowDown className="pdj-status-icon" style={{ color: '#2196F3' }} />
-        ) : null}
-      </td>
-      <td className="pdj-c pdj-stay-count">
-        {row && row.stay_count > 1 ? row.stay_count : ' '}
-      </td>
+      {isManual ? (
+        // Saisie manuelle : la bande Nom / Statut / Visites (vides ici) est
+        // fusionnée via colSpan — entre Chambre et Clients (cases), inchangées.
+        // Par défaut, on n'affiche QUE le type en toutes lettres, centré ; le
+        // toggle (compact, Extra en 1er) n'apparaît qu'au SURVOL de la bande.
+        <td className="pdj-name" colSpan={3}>
+          <div className="group relative flex w-full items-center justify-center">
+            {/* Type en toutes lettres : reste dans le flux → fixe la hauteur de la
+                ligne (identique aux autres). Juste masqué (invisible) au survol. */}
+            <span className="text-xs font-medium capitalize text-muted-foreground group-hover:invisible">
+              {mKind}
+            </span>
+            {/* Toggle SUPERPOSÉ (absolute) → n'affecte JAMAIS la hauteur : aucun
+                saut au survol. Compact, centré, Extra en 1er, écran seul. */}
+            <span className="absolute inset-0 hidden items-center justify-center group-hover:flex print:hidden">
+              <span className="inline-flex overflow-hidden rounded-md border border-border bg-card text-xs leading-none">
+                {(['extra', 'inclus'] as const).map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    disabled={!canEdit}
+                    onClick={() => onManual(room, served, k)}
+                    className={cn(
+                      'px-2 py-0.5 font-medium capitalize transition-colors',
+                      mKind === k
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:bg-accent',
+                    )}
+                  >
+                    {k}
+                  </button>
+                ))}
+              </span>
+            </span>
+          </div>
+        </td>
+      ) : (
+        <>
+          <td className={cn('pdj-name', row?.vip && 'pdj-vip')}>
+            {row?.vip && (
+              <Star className="pdj-name-star size-3" fill="currentColor" />
+            )}
+            {row ? (row.guest_name ?? '—') : ''}
+          </td>
+          <td className="pdj-c">
+            {departing ? (
+              <ArrowUp className="pdj-status-icon" style={{ color: '#EF5350' }} />
+            ) : staying ? (
+              <ArrowDown className="pdj-status-icon" style={{ color: '#2196F3' }} />
+            ) : null}
+          </td>
+          <td className="pdj-c pdj-stay-count">
+            {row && row.stay_count > 1 ? row.stay_count : ' '}
+          </td>
+        </>
+      )}
       <td className="pdj-c">
         {/* Impression : cases à cocher. Celles marquées « servi » à l'écran
             (i < served) sont pré-remplies (miroir du DOM) ; le reste est à
@@ -1095,7 +1231,7 @@ const GuestRow = memo(function GuestRow({
               key={i}
               className={cn(
                 'pdj-checkbox',
-                i < numGuests && 'pdj-expected',
+                i < numExpected && 'pdj-expected',
                 i < served && 'pdj-checked',
               )}
             />
@@ -1106,26 +1242,26 @@ const GuestRow = memo(function GuestRow({
             = client attendu (1 ou 2) ; bordure fine en pointillés = place
             supplémentaire (cochable à la main pour un PDJ « en plus », mais JAMAIS
             remplie par le double-clic de la ligne) ; case pleine = servi. */}
-        {numGuests > 0 && (
+        {showInteractive && (
           <span className="inline-flex items-center gap-1 print:hidden">
             {Array.from({ length: numBoxes }, (_, i) => {
-              const expected = i < numGuests
+              const expected = i < numExpected
               const isServed = i < served
               return (
                 <button
                   key={i}
                   type="button"
                   disabled={!canEdit}
-                  onClick={() => onServe(room, served === i + 1 ? i : i + 1)}
+                  onClick={() => doServe(served === i + 1 ? i : i + 1)}
                   onDoubleClick={(e) => e.stopPropagation()}
                   aria-label={
                     expected
-                      ? `Servi ${i + 1} sur ${numGuests}`
+                      ? `Servi ${i + 1} sur ${numExpected}`
                       : `Servi ${i + 1} (supplémentaire)`
                   }
                   title={
                     expected
-                      ? `${served} / ${numGuests} servis`
+                      ? `${served} / ${numExpected} servis`
                       : 'PDJ supplémentaire (au-delà des clients attendus)'
                   }
                   className={cn(
