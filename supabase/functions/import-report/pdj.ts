@@ -272,12 +272,14 @@ function parseGuestRows(content: string, serviceDate: string): ParsedRow[] {
     const adults = parseInt(v[col.adults]) || 0
     const children = parseInt(v[col.children]) || 0
     const guests = adults + children
-    // PDJ inclus = 1 si tarif « BB1PAX », sinon adultes + enfants (règle BB1PAX).
-    const breakfastsIncluded = hasPDJ
-      ? rate.toUpperCase().includes('BB1PAX')
-        ? 1
-        : guests
-      : 0
+    // PDJ inclus : le tarif fait foi quand il précise un nombre de PAX (« BB1PAX »,
+    // « BB2PAX », « PDJ INCLUS 2 PAX »…) ; sinon, les adultes. Dans TOUS les cas :
+    // jamais les enfants (< 12 ans / bébés = PDJ gratuit → plafond au nb d'adultes)
+    // et jamais plus de 2 (max 2 adultes par chambre). Un tarif qui LIMITE reste
+    // prioritaire (BB1PAX → 1). Doit rester aligné sur csv.ts (client).
+    const paxMatch = rate.toUpperCase().match(/(\d+)\s*PAX/)
+    const paxOrAdults = paxMatch ? parseInt(paxMatch[1], 10) : adults
+    const breakfastsIncluded = hasPDJ ? Math.min(paxOrAdults, adults, 2) : 0
 
     result.push({
       room: Number(v[col.room].trim()),
@@ -345,6 +347,7 @@ function csvToDbRows(content: string, fileName: string): DbPdjRow[] {
     stay_count: r.stayCount,
     breakfasts_included: r.breakfastsIncluded,
     source_file: fileName,
+    manual_kind: null, // un import efface toute saisie manuelle (aligné sur csv.ts)
   }))
 }
 

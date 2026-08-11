@@ -250,11 +250,14 @@ export function parseGuestRows(
     const adults = parseInt(v[col.adults]) || 0
     const children = parseInt(v[col.children]) || 0
     const guests = adults + children
-    const breakfastsIncluded = hasPDJ
-      ? rate.toUpperCase().includes('BB1PAX')
-        ? 1
-        : guests
-      : 0
+    // Nombre de PDJ inclus. Le tarif fait foi quand il précise un nombre de PAX
+    // (« BB1PAX », « BB2PAX », « PDJ INCLUS 2 PAX »…) ; sinon, les adultes. Dans
+    // TOUS les cas : jamais les enfants (< 12 ans / bébés = PDJ gratuit → plafond
+    // au nb d'adultes) et jamais plus de 2 (max 2 adultes par chambre ; 3 occupants
+    // = 2 adultes + 1 bébé). Un tarif qui LIMITE reste prioritaire (BB1PAX → 1).
+    const paxMatch = rate.toUpperCase().match(/(\d+)\s*PAX/)
+    const paxOrAdults = paxMatch ? parseInt(paxMatch[1], 10) : adults
+    const breakfastsIncluded = hasPDJ ? Math.min(paxOrAdults, adults, 2) : 0
 
     result.push({
       room: Number(v[col.room].trim()),
@@ -283,6 +286,10 @@ export function parseGuestRows(
   return result
 }
 
+/** Nature d'un PDJ saisi À LA MAIN dans une chambre non check-in (day-use,
+ * no-show revenu…) : inclus (compte dans les inclus) ou extra (à la carte). */
+export type ManualKind = 'inclus' | 'extra'
+
 /** Ligne DB écrite à l'import (snake_case). Sans consommation ni id/timestamps. */
 export interface DbPdjRow {
   service_date: string
@@ -307,6 +314,8 @@ export interface DbPdjRow {
   stay_count: number
   breakfasts_included: number
   source_file: string
+  /** null pour une ligne d'import ; posé uniquement par la saisie manuelle. */
+  manual_kind: ManualKind | null
 }
 
 /**
@@ -356,6 +365,9 @@ export function csvToDbRows(content: string, fileName: string): DbPdjRow[] {
     stay_count: r.stayCount,
     breakfasts_included: r.breakfastsIncluded,
     source_file: fileName,
+    // Un import EFFACE toute saisie manuelle sur la même (jour, chambre) : un vrai
+    // check-in reprend la main sur une chambre auparavant renseignée à la main.
+    manual_kind: null,
   }))
 }
 

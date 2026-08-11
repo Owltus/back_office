@@ -95,6 +95,56 @@ describe('csvToDbRows', () => {
     expect(rows[0].breakfasts_included).toBe(1)
   })
 
+  it('tarif « N PAX » fait foi : enfant exclu (2 adultes + 1 enfant, « 2 PAX » → 2)', () => {
+    const now = new Date()
+    const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
+    const mini =
+      'Room,Status,Guest Name,VIP,Adults,Children,Addons,Rate\n' +
+      '624,IN HOUSE,"GIALLONGO, C",,2,1,PDJ INCL,HOTELBEDS - FLEX - PDJ INCLUS 2 PAX - OPAQUE\n'
+
+    const rows = csvToDbRows(mini, `In-House Guests _${stamp}.csv`)
+
+    expect(rows[0].guests).toBe(3) // 2 adultes + 1 enfant (occupants réels)
+    expect(rows[0].breakfasts_included).toBe(2) // le « 2 PAX » du tarif prime
+  })
+
+  it('tarif générique sans PAX : adultes seuls (enfant exclu)', () => {
+    const now = new Date()
+    const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
+    const mini =
+      'Room,Status,Guest Name,VIP,Adults,Children,Addons,Rate\n' +
+      '410,IN HOUSE,"FAMILLE, D",,2,1,PDJ INCL,BOOKING - NR - PDJ INCL\n'
+
+    const rows = csvToDbRows(mini, `In-House Guests _${stamp}.csv`)
+
+    expect(rows[0].breakfasts_included).toBe(2) // adultes seuls, enfant ignoré
+  })
+
+  it('enfant non compté même sur un tarif « 2 PAX » : 1 adulte + 1 enfant → 1', () => {
+    const now = new Date()
+    const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
+    const mini =
+      'Room,Status,Guest Name,VIP,Adults,Children,Addons,Rate\n' +
+      '311,IN HOUSE,"MONO, A",,1,1,PDJ INCL,HOTELBEDS - FLEX - PDJ INCLUS 2 PAX - OPAQUE\n'
+
+    const rows = csvToDbRows(mini, `In-House Guests _${stamp}.csv`)
+
+    // Plafond = nb d'adultes → l'enfant ne prend pas de case.
+    expect(rows[0].breakfasts_included).toBe(1)
+  })
+
+  it('jamais plus de 2 cases (plafond max 2 adultes)', () => {
+    const now = new Date()
+    const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
+    const mini =
+      'Room,Status,Guest Name,VIP,Adults,Children,Addons,Rate\n' +
+      '312,IN HOUSE,"MAX, B",,3,0,PDJ INCL,BOOKING - NR - PDJ INCL\n'
+
+    const rows = csvToDbRows(mini, `In-House Guests _${stamp}.csv`)
+
+    expect(rows[0].breakfasts_included).toBe(2)
+  })
+
   it('nom de fichier sans date : erreur explicite', () => {
     expect(() => csvToDbRows('Room,Status\n', 'export.csv')).toThrow(
       /Date non extractible/,

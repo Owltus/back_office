@@ -1,5 +1,5 @@
 import { supabase } from '#/lib/supabase.ts'
-import type { DbPdjRow } from '#/lib/pdj/csv.ts'
+import type { DbPdjRow, ManualKind } from '#/lib/pdj/csv.ts'
 import type { InHouseCoverRow } from '#/lib/pdj/amounts.ts'
 
 /*
@@ -171,6 +171,45 @@ export async function setServed(
     })
     .eq('service_date', serviceDate)
     .eq('room', room)
+  if (error) throw error
+}
+
+/**
+ * Saisie MANUELLE d'un PDJ dans une chambre non check-in (day-use, no-show
+ * revenu…). Contrairement à `setServed` (UPDATE d'une ligne existante), ceci
+ * CRÉE la ligne au besoin (upsert sur la clé métier) et pose `manual_kind` :
+ *  - `inclus` → `breakfasts_included = breakfastsServed` (compte dans les inclus) ;
+ *  - `extra`  → `breakfasts_included = 0` (compte dans les extras).
+ * Tout décocher (`breakfastsServed <= 0`) SUPPRIME la ligne manuelle → la chambre
+ * redevient vide (le `not manual_kind is null` protège les vraies lignes d'import).
+ */
+export async function setManualServe(
+  serviceDate: string,
+  room: number,
+  breakfastsServed: number,
+  kind: ManualKind,
+): Promise<void> {
+  if (breakfastsServed <= 0) {
+    const { error } = await supabase
+      .from(PDJ_TABLE)
+      .delete()
+      .eq('service_date', serviceDate)
+      .eq('room', room)
+      .not('manual_kind', 'is', null)
+    if (error) throw error
+    return
+  }
+  const { error } = await supabase.from(PDJ_TABLE).upsert(
+    {
+      service_date: serviceDate,
+      room,
+      breakfasts_served: breakfastsServed,
+      served: true,
+      breakfasts_included: kind === 'inclus' ? breakfastsServed : 0,
+      manual_kind: kind,
+    },
+    { onConflict: 'service_date,room' },
+  )
   if (error) throw error
 }
 
