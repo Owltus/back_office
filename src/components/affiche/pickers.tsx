@@ -17,8 +17,9 @@ import {
 import { cn } from '#/lib/utils.ts'
 
 /*
- * Sélecteurs d'icône et de thème de couleur, extraits d'AffichageBoard pour être
- * partagés entre le panneau de réglages et le formulaire de modèle (TemplateDialog).
+ * Sélecteurs d'icône et de thème de couleur, utilisés dans le panneau de réglages
+ * d'AffichageBoard (l'icône et la couleur s'éditent directement sur l'affiche,
+ * puis sont enregistrées dans le modèle via « Créer » / « Sauvegarder »).
  * Chaque sélecteur gère son propre état d'ouverture (Popover) ; il expose une API
  * contrôlée `value` / `onChange`.
  */

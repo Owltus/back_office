@@ -26,11 +26,11 @@
   color-adjust: exact;
 }
 
-/* Zone icône (en haut) */
+/* Zone icône (premier bloc du corps réparti). Ses marges ne sont plus fixes :
+   c'est le space-evenly du corps (.poster-zone-content) qui pose les vides
+   autour d'elle, comme pour les autres zones. */
 .poster-zone-icon {
   text-align: center;
-  margin-bottom: 20px;
-  padding-top: 10px;
   flex-shrink: 0;
 }
 .poster-icon {
@@ -46,26 +46,29 @@
   opacity: 0.9;
 }
 
-/* Zone contenu principal */
+/* Corps réparti : icône + section FR + divider + section EN. Chaque enfant prend
+   sa HAUTEUR NATURELLE (plus de flex:1 qui avalait tout l'espace et rendait le
+   space-evenly inerte). space-evenly distribue alors des vides ÉGAUX entre tous
+   les blocs réellement présents — c'est le cœur du placement automatique. */
 .poster-zone-content {
   flex: 1;
   display: flex;
   flex-direction: column;
   justify-content: space-evenly;
   gap: 0;
-  padding-top: 10px;
   min-height: 0;
 }
 
-/* Zone section (FR / EN) */
+/* Zone section (FR / EN) — hauteur naturelle. Le padding vertical est retiré :
+   la séparation entre zones est désormais gérée par le space-evenly du corps.
+   Le `gap` interne (titre / message / infos) reste, plus serré que les vides
+   inter-zones → hiérarchie visuelle (éléments d'une même section rapprochés). */
 .poster-zone-section {
   text-align: center;
-  padding: 30px 60px;
+  padding: 0 60px;
   display: flex;
   flex-direction: column;
-  justify-content: center;
   gap: 25px;
-  flex: 1;
   min-height: 0;
 }
 
@@ -99,8 +102,9 @@
   line-height: 2;
   word-wrap: break-word;
   overflow-wrap: break-word;
+  /* Plus de margin-top : l'écart avec le message est porté par le `gap` de la
+     section (évite le double espacement message → infos). */
   margin: 0;
-  margin-top: 20px;
 }
 .poster-section-info p {
   margin: 5px 0;
@@ -114,7 +118,9 @@
   height: 2px;
   background: currentColor;
   opacity: 0.75;
-  margin: 40px 120px;
+  /* Marge verticale retirée (space-evenly gère les vides autour) ; la marge
+     horizontale reste : c'est elle qui donne sa largeur à la barre. */
+  margin: 0 120px;
 }
 .poster-divider::before {
   content: '';
@@ -130,13 +136,14 @@
   justify-content: center;
 }
 
-/* Zone bas de page (logo) */
+/* Zone bas de page (logo) — hors du corps réparti, ancrée en bas par le
+   flex:1 du corps qui la pousse vers le bas (plus besoin de margin-top:auto).
+   Un léger padding-top la détache du dernier bloc. */
 .poster-zone-footer {
   text-align: center;
-  padding-top: 40px;
+  padding-top: 20px;
   flex-shrink: 0;
   opacity: 0.5;
-  margin-top: auto;
 }
 .poster-zone-footer svg {
   /* Le preflight Tailwind force `svg { display: block }`, ce qui casse le

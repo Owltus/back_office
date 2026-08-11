@@ -99,6 +99,7 @@ export const Poster = memo(function Poster(props: PosterProps) {
     fontSizeMessage,
     fontSizeInfo,
     isAutoSizeMode,
+    gap,
   } = props
 
   // --- Champs dérivés (calculés, non stockés) ------------------------------
@@ -121,6 +122,13 @@ export const Poster = memo(function Poster(props: PosterProps) {
   const hasInfoFr = dates.start !== null || hours.full !== null
   const hasInfoEn = hasInfoFr
 
+  // Mode MANUEL : le slider « Espacement » pilote le gap À L'INTÉRIEUR d'une
+  // section — entre le titre, le message et les dates/heures. Il ne touche NI à
+  // la répartition des sections, NI à l'icône (ancrée en haut), NI au logo
+  // (ancré en bas). En AUTO, le gap intra reste celui du CSS (25px).
+  const manual = !isAutoSizeMode
+  const gapPx = Math.round(Math.max(0, Number(gap) || 0))
+
   // Couleurs + fond posés en style inline, avec --poster-bg pour le masque
   // central du divider (::before), exactement comme le fork.
   const posterStyle = {
@@ -128,6 +136,12 @@ export const Poster = memo(function Poster(props: PosterProps) {
     color: color.text,
     '--poster-bg': backgroundColor,
   } as CSSProperties
+
+  // Espacement intra-section (titre / message / dates-heures). En MANUEL → gap
+  // du slider ; en AUTO → undefined, le CSS reprend (gap:25).
+  const sectionStyle: CSSProperties | undefined = manual
+    ? { gap: `${gapPx}px` }
+    : undefined
 
   // L'icône est injectée telle quelle (SVG statique interne, pas de saisie
   // utilisateur → dangerouslySetInnerHTML sûr). Fidélité au fork (`_updateIcon`) :
@@ -149,7 +163,8 @@ export const Poster = memo(function Poster(props: PosterProps) {
 
   return (
     <div className="poster" id="poster" style={posterStyle}>
-      {/* ZONE ICÔNE (en haut) */}
+      {/* ZONE ICÔNE — ancrée EN HAUT de l'affiche (hors du corps réparti) :
+          elle reste collée en tête, seul le contenu se répartit sous elle. */}
       {showIcon && (
         <div className="poster-zone-icon">
           <div
@@ -160,10 +175,13 @@ export const Poster = memo(function Poster(props: PosterProps) {
         </div>
       )}
 
-      {/* ZONE CONTENU PRINCIPAL */}
+      {/* CORPS RÉPARTI : section FR + divider + section EN partagent l'espace
+          restant en space-evenly (poster.css) — vides égaux selon ce qui est
+          présent (section EN + divider, dates/horaires). La répartition reste
+          automatique même en manuel (le slider n'agit que dans les sections). */}
       <div className="poster-zone-content">
         {/* Section française */}
-        <section className="poster-zone-section">
+        <section className="poster-zone-section" style={sectionStyle}>
           <h1 className="poster-section-title" style={{ fontSize: fontSizeTitle }}>
             {titleFr}
           </h1>
@@ -208,7 +226,7 @@ export const Poster = memo(function Poster(props: PosterProps) {
 
         {/* Section anglaise */}
         {showEnglish && (
-          <section className="poster-zone-section">
+          <section className="poster-zone-section" style={sectionStyle}>
             <h1 className="poster-section-title" style={{ fontSize: fontSizeTitle }}>
               {titleEn}
             </h1>
@@ -230,7 +248,7 @@ export const Poster = memo(function Poster(props: PosterProps) {
         )}
       </div>
 
-      {/* ZONE BAS DE PAGE (logo, toujours visible) */}
+      {/* ZONE BAS DE PAGE (logo, toujours ancré en bas). */}
       <div className="poster-zone-footer">
         <PosterLogo colorKey={colorKey} textColor={color.text} />
       </div>

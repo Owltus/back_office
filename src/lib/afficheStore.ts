@@ -41,6 +41,9 @@ function buildInitialState(): AfficheState {
     fontSizeTitle: 56,
     fontSizeMessage: 26,
     fontSizeInfo: 18,
+    // Espacement intra-section par défaut (titre / message / dates), mode manuel
+    // uniquement. 25 = valeur du CSS en auto → pas de saut à la bascule.
+    gap: 25,
   }
 }
 
@@ -52,20 +55,31 @@ export function setAffiche(patch: Partial<AfficheState>) {
 }
 
 /**
- * Applique un modèle : remplace les 4 textes + icône + couleur et mémorise
- * l'id du modèle sélectionné. Reçoit un modèle DÉJÀ RÉSOLU (plus de lecture
- * d'une collection en dur). Le recalcul des tailles est piloté par le composant
- * (effet mode auto), comme dans le fork.
+ * Applique un modèle : réinjecte l'ÉTAT COMPLET de l'affiche (textes, icône,
+ * couleur, dates/heures, mode taille + tailles perso + espacement) et mémorise
+ * l'id du modèle sélectionné. Reçoit un modèle DÉJÀ RÉSOLU. En mode auto, les
+ * tailles restockées sont ignorées à l'affichage (recalcul dérivé) mais servent
+ * de base au passage en manuel.
  */
-export function applyAfficheTemplate(template: AfficheTemplate) {
+export function applyAfficheTemplate(t: AfficheTemplate) {
   setAffiche({
-    titleFr: template.titleFr,
-    messageFr: template.messageFr,
-    titleEn: template.titleEn,
-    messageEn: template.messageEn,
-    selectedIcon: template.icon,
-    colorKey: template.color,
-    selectedTemplate: template.id,
+    titleFr: t.titleFr,
+    messageFr: t.messageFr,
+    titleEn: t.titleEn,
+    messageEn: t.messageEn,
+    selectedIcon: t.selectedIcon,
+    colorKey: t.colorKey,
+    dateStart: t.dateStart,
+    dateEnd: t.dateEnd,
+    timeStart: t.timeStart,
+    timeEnd: t.timeEnd,
+    isAutoSizeMode: t.isAutoSizeMode,
+    fontSizeIcon: t.fontSizeIcon,
+    fontSizeTitle: t.fontSizeTitle,
+    fontSizeMessage: t.fontSizeMessage,
+    fontSizeInfo: t.fontSizeInfo,
+    gap: t.gap,
+    selectedTemplate: t.id,
   })
 }
 

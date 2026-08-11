@@ -51,6 +51,13 @@ export interface PosterContent {
   fontSizeMessage: number
   /** Taille (px) des infos (dates / horaires). */
   fontSizeInfo: number
+  /**
+   * Espacement vertical (px) entre les blocs de l'affiche (icône, sections,
+   * divider, logo). Utilisé UNIQUEMENT en mode manuel : il remplace alors la
+   * répartition automatique (`space-evenly`) par un gap fixe réglable. En mode
+   * auto, ce champ est ignoré (le placement reste distribué).
+   */
+  gap: number
 }
 
 /**

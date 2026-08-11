@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '@tanstack/react-store'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Pencil, Plus, Trash2 } from 'lucide-react'
+import { Check, FilePlus2, Plus, Save, Trash2 } from 'lucide-react'
 
-import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
 import { SkeletonBlock } from '#/components/shared/skeleton/SkeletonBlock.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
@@ -13,7 +12,9 @@ import { Label } from '#/components/ui/label.tsx'
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '#/components/ui/select.tsx'
@@ -28,7 +29,7 @@ import {
 } from '#/components/form/fields.tsx'
 import { PosterPreview } from '#/components/affiche/Poster.tsx'
 import { IconPicker, ColorPicker } from '#/components/affiche/pickers.tsx'
-import { TemplateDialog } from '#/components/affiche/TemplateDialog.tsx'
+import { TemplateNameDialog } from '#/components/affiche/TemplateNameDialog.tsx'
 import { useConfirm } from '#/components/shared/ConfirmDialog.tsx'
 import {
   calculateAutoSizes,
@@ -36,21 +37,19 @@ import {
 } from '#/lib/poster/sizeCalculator.ts'
 import { hasEnglishContent } from '#/lib/poster/types.ts'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
-import type {
-  AfficheTemplate,
-  AfficheTemplateInput,
-} from '#/lib/affiche/model.ts'
+import type { AfficheTemplateInput } from '#/lib/affiche/model.ts'
 import {
   createTemplate,
   deleteTemplate,
   fetchTemplates,
   toDbInsert,
-  toDbPatch,
+  toDbUpdate,
   updateTemplate,
 } from '#/lib/affiche/service.ts'
 import {
   afficheStore,
   applyAfficheTemplate,
+  resetAffiche,
   setAffiche,
 } from '#/lib/afficheStore.ts'
 import { printWithTitle } from '#/lib/print.ts'
@@ -91,6 +90,7 @@ export function AffichageBoard() {
     fontSizeTitle,
     fontSizeMessage,
     fontSizeInfo,
+    gap,
   } = state
 
   // Popovers icône / couleur (état d'UI local, non persisté).
@@ -133,7 +133,8 @@ export function AffichageBoard() {
     if (isPristine) applyAfficheTemplate(templates[0])
   }, [templates, isPristine])
 
-  // Modèle actuellement sélectionné (pour éditer / supprimer).
+  // Modèle actuellement sélectionné (pour sauvegarder / supprimer). Il RESTE
+  // sélectionné pendant l'édition des champs → « Sauvegarder » réécrit ce modèle.
   const selected = templates.find((t) => t.id === selectedTemplate) ?? null
   // Propriété : un écriture ne peut toucher qu'à SES modèles ; la gestion, à tous.
   // Un seed (createdBy null) n'a pas d'auteur → gestion uniquement.
@@ -145,45 +146,89 @@ export function AffichageBoard() {
   // séparément par les appelants) : gestion partout, écriture sur le sien.
   const canModifySelected = canManage || (canWrite && isOwner)
 
-  // Dialog de création / édition, réservé aux niveaux écriture/gestion (canWrite).
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [editing, setEditing] = useState<AfficheTemplate | null>(null)
+  // Groupement du dropdown par PROPRIÉTÉ (createdBy), pas par droit de modif :
+  // « Mes modèles » (dont je suis l'auteur) vs « Autres modèles » (seeds sans
+  // auteur + modèles d'autres). Un gestionnaire/admin voit le même découpage
+  // même s'il peut tout modifier. On ne groupe QUE si les deux listes existent.
+  const myTemplates = templates.filter((t) => t.createdBy === user?.id)
+  const otherTemplates = templates.filter((t) => t.createdBy !== user?.id)
+  const groupedTemplates = myTemplates.length > 0 && otherTemplates.length > 0
+
+  // Modale « nom du modèle » (création), réservée aux niveaux écriture/gestion.
+  const [nameOpen, setNameOpen] = useState(false)
+
+  // Feedback bref à l'enregistrement : le bouton passe à « Enregistré ✓ » ~1,8 s.
+  const [savedFlash, setSavedFlash] = useState(false)
+  const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  function flashSaved() {
+    setSavedFlash(true)
+    if (savedTimer.current) clearTimeout(savedTimer.current)
+    savedTimer.current = setTimeout(() => setSavedFlash(false), 1800)
+  }
+  useEffect(
+    () => () => {
+      if (savedTimer.current) clearTimeout(savedTimer.current)
+    },
+    [],
+  )
 
   const invalidateTemplates = () =>
     queryClient.invalidateQueries({ queryKey: ['affiche', 'templates'] })
 
-  async function handleSubmitTemplate(input: AfficheTemplateInput) {
+  // Capture l'ÉTAT COMPLET courant de l'affiche en entrée de modèle (tout sauf
+  // le nom, fourni par l'appelant) — c'est ce qui est enregistré/mis à jour.
+  const currentInput = (name: string): AfficheTemplateInput => ({
+    name,
+    titleFr,
+    messageFr,
+    titleEn,
+    messageEn,
+    selectedIcon,
+    colorKey,
+    dateStart,
+    dateEnd,
+    timeStart,
+    timeEnd,
+    isAutoSizeMode,
+    fontSizeIcon,
+    fontSizeTitle,
+    fontSizeMessage,
+    fontSizeInfo,
+    gap,
+  })
+
+  // « Nouveau » : repart d'une affiche vierge, plus aucun modèle sélectionné →
+  // le bouton du bas repasse en « Créer ». N'écrit rien en base.
+  function handleNew() {
+    resetAffiche()
+  }
+
+  // « Créer » : la modale ne demande que le nom ; le reste = état courant.
+  async function handleCreate(name: string) {
+    if (!canWrite) return
+    const id = crypto.randomUUID()
     try {
-      if (editing) {
-        // Édition : gestion partout, écriture seulement sur son propre modèle.
-        const own =
-          editing.createdBy != null && editing.createdBy === user?.id
-        if (!(canManage || (canWrite && own))) return
-        await updateTemplate(editing.id, toDbPatch(input))
-        // Rafraîchit l'aperçu si le modèle édité est celui affiché ; l'auteur
-        // d'origine est conservé (createdBy figé serveur).
-        if (selectedTemplate === editing.id) {
-          applyAfficheTemplate({
-            id: editing.id,
-            ...input,
-            createdBy: editing.createdBy,
-          })
-        }
-      } else {
-        if (!canWrite) return
-        const created: AfficheTemplate = {
-          id: crypto.randomUUID(),
-          ...input,
-          createdBy: user?.id ?? null,
-        }
-        await createTemplate(toDbInsert(created, templates.length))
-        applyAfficheTemplate(created)
-      }
+      await createTemplate(toDbInsert({ ...currentInput(name), id }, templates.length))
       await invalidateTemplates()
-      setDialogOpen(false)
-      setEditing(null)
+      // Le nouveau modèle devient le modèle sélectionné (l'état colle déjà).
+      setAffiche({ selectedTemplate: id })
+      setNameOpen(false)
+      flashSaved()
     } catch (err) {
-      console.error('[affiche] enregistrement du modèle échoué', err)
+      console.error('[affiche] création du modèle échouée', err)
+    }
+  }
+
+  // « Sauvegarder » : réécrit le modèle sélectionné avec l'état courant (sans
+  // redemander le nom, conservé). Gardé par la propriété (canModifySelected).
+  async function handleSave() {
+    if (!selected || !canModifySelected) return
+    try {
+      await updateTemplate(selected.id, toDbUpdate(currentInput(selected.name)))
+      await invalidateTemplates()
+      flashSaved()
+    } catch (err) {
+      console.error('[affiche] sauvegarde du modèle échouée', err)
     }
   }
 
@@ -203,18 +248,6 @@ export function AffichageBoard() {
     } catch (err) {
       console.error('[affiche] suppression du modèle échouée', err)
     }
-  }
-
-  function openCreate() {
-    if (!canWrite) return
-    setEditing(null)
-    setDialogOpen(true)
-  }
-
-  function openEdit() {
-    if (!selected || !canModifySelected) return
-    setEditing(selected)
-    setDialogOpen(true)
   }
 
   // --- Tailles auto DÉRIVÉES au render (portage de updateSizeMode + adjustIconSize) --
@@ -256,15 +289,12 @@ export function AffichageBoard() {
       }
     : { fontSizeTitle, fontSizeMessage, fontSizeInfo, fontSizeIcon }
 
-  // Bascule auto/manuel : au passage en manuel, on amorce les sliders avec les
-  // valeurs auto courantes (comportement du fork : updateSizeMode écrit toujours
-  // les sliders au moment de la bascule).
+  // Bascule auto/manuel FLUIDE : on ne touche QU'au mode. Les tailles manuelles
+  // (fontSize* + gap) restent stockées dans le store → repasser en manuel restaure
+  // exactement les paramètres réglés / sauvegardés, sans les écraser par les
+  // valeurs auto (aller-retour auto ↔ manuel sans perte).
   function onAutoModeChange(checked: boolean) {
-    if (checked) {
-      setAffiche({ isAutoSizeMode: true })
-    } else {
-      setAffiche({ isAutoSizeMode: false, ...effectiveSizes })
-    }
+    setAffiche({ isAutoSizeMode: checked })
   }
 
   // --- Visibilité des sliders en mode manuel (portage de updateVisibleControls) --
@@ -298,19 +328,53 @@ export function AffichageBoard() {
   // est résolue, on rend l'aperçu réel — évite le flash affiche blanche→modèle.
   const previewLoading = templatesPending && isPristine
 
+  // Bouton du bas (près d'Imprimer), réutilisé desktop (card actions) + mobile.
+  //  - « Sauvegarder » quand un modèle MODIFIABLE est chargé → réécrit l'état
+  //    complet dans ce modèle.
+  //  - « Créer un modèle » sinon : rien de sélectionné, OU modèle chargé non
+  //    modifiable (seed / autre auteur) → on enregistre l'état courant comme un
+  //    NOUVEAU modèle (pas de cul-de-sac : éditer un seed puis « Créer »).
+  const renderSaveOrCreate = () => {
+    if (!canWrite) return null
+    // Feedback bref après un enregistrement réussi (création ou sauvegarde) :
+    // pastille verte inerte pendant ~1,8 s, puis retour au bouton normal.
+    if (savedFlash) {
+      return (
+        <Button
+          variant="outline"
+          className="w-full border-chart-5/40 text-chart-5 hover:text-chart-5"
+        >
+          <Check />
+          Enregistré
+        </Button>
+      )
+    }
+    return selected && canModifySelected ? (
+      <Tip label="Enregistrer les modifications dans ce modèle">
+        <Button onClick={handleSave} className="w-full">
+          <Save />
+          Sauvegarder
+        </Button>
+      </Tip>
+    ) : (
+      <Button onClick={() => setNameOpen(true)} className="w-full">
+        <Plus />
+        Créer un modèle
+      </Button>
+    )
+  }
+
   return (
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-4 lg:flex-row lg:gap-6">
       {/* PANNEAU TEXTES (gauche, écran uniquement) : titres + messages FR/EN */}
       <aside className="flex min-h-0 w-full shrink-0 flex-col gap-5 rounded-xl border border-border bg-card p-5 print:hidden lg:max-h-full lg:w-80 lg:overflow-y-auto">
-        {/* Textes français — toute édition du contenu vide selectedTemplate :
-            le label du Select redevient le placeholder (le contenu a divergé du
-            modèle), et re-choisir le même modèle le ré-applique vraiment. */}
+        {/* Textes français. L'édition NE désélectionne PLUS le modèle : on reste
+            « sur » le modèle chargé pour que « Sauvegarder » le réécrive. Pour
+            repartir de zéro, utiliser « Nouveau ». */}
         <Field label="Titre (français)">
           <Input
             value={titleFr}
-            onChange={(e) =>
-              setAffiche({ titleFr: e.target.value, selectedTemplate: '' })
-            }
+            onChange={(e) => setAffiche({ titleFr: e.target.value })}
             placeholder="Titre en français"
           />
         </Field>
@@ -319,9 +383,7 @@ export function AffichageBoard() {
         <Field label="Message (français)" className="min-h-0 flex-1">
           <Textarea
             value={messageFr}
-            onChange={(e) =>
-              setAffiche({ messageFr: e.target.value, selectedTemplate: '' })
-            }
+            onChange={(e) => setAffiche({ messageFr: e.target.value })}
             placeholder="Message en français"
             rows={4}
             className="min-h-16 flex-1 resize-none field-sizing-fixed"
@@ -334,18 +396,14 @@ export function AffichageBoard() {
         <Field label="Titre (anglais)">
           <Input
             value={titleEn}
-            onChange={(e) =>
-              setAffiche({ titleEn: e.target.value, selectedTemplate: '' })
-            }
+            onChange={(e) => setAffiche({ titleEn: e.target.value })}
             placeholder="Titre en anglais"
           />
         </Field>
         <Field label="Message (anglais)" className="min-h-0 flex-1">
           <Textarea
             value={messageEn}
-            onChange={(e) =>
-              setAffiche({ messageEn: e.target.value, selectedTemplate: '' })
-            }
+            onChange={(e) => setAffiche({ messageEn: e.target.value })}
             placeholder="Message en anglais"
             rows={4}
             className="min-h-16 flex-1 resize-none field-sizing-fixed"
@@ -366,29 +424,31 @@ export function AffichageBoard() {
             <PosterPreview {...state} {...effectiveSizes} />
           )}
         </div>
-        {/* Bouton Imprimer sous l'aperçu, uniquement en responsive. */}
+        {/* Boutons Imprimer + Créer/Sauvegarder sous l'aperçu, en responsive. */}
         <PrintButton
           onClick={handlePrint}
           label="Imprimer"
           className="w-full lg:hidden print:hidden"
         />
+        <div className="lg:hidden print:hidden empty:hidden">
+          {renderSaveOrCreate()}
+        </div>
       </div>
 
-      {/* COLONNE DROITE (écran uniquement) : card impression + card réglages */}
+      {/* COLONNE DROITE (écran uniquement) : Imprimer (haut) + réglages (défile) +
+          Créer/Sauvegarder (bas). */}
       <div className="flex min-h-0 w-full shrink-0 flex-col gap-4 print:hidden lg:max-h-full lg:w-80">
-        {/* Card impression (desktop uniquement : en responsive le bouton vit
-            sous l'aperçu, en bas de page). */}
+        {/* Card impression — ancrée EN HAUT (desktop ; en responsive Imprimer vit
+            sous l'aperçu). */}
         <div className="hidden shrink-0 rounded-xl border border-border bg-card p-4 lg:block">
           <PrintButton onClick={handlePrint} label="Imprimer" className="w-full" />
         </div>
 
-        {/* Card réglages : modèle, icône, couleur, dates/horaires, tailles.
-            flex-1 : elle s'étire jusqu'en bas, comme la card de gauche. */}
-        <aside className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto rounded-xl border border-border bg-card p-5">
-          {/* Modèles : sélection (tous les rôles) + barre de gestion (création /
-              édition / suppression, réservée aux rôles super_utilisateur / admin).
-              Le Select occupe sa propre ligne ; les actions passent en dessous
-              pour rester visibles dans la colonne étroite. */}
+        {/* Card MODÈLE (sa propre card, comme les cards boutons) : sélection
+            (tous les rôles) + actions (écriture/gestion). « Nouveau » repart
+            d'une affiche vierge ; la suppression est bornée à la propriété.
+            L'enregistrement se fait par le bouton du bas (Créer / Sauvegarder). */}
+        <div className="shrink-0 rounded-xl border border-border bg-card p-4">
           <Field label="Modèle prédéfini">
             <div className="flex flex-col gap-2">
               <Select
@@ -405,47 +465,45 @@ export function AffichageBoard() {
                   <SelectValue placeholder="Choisir un modèle" />
                 </SelectTrigger>
                 <SelectContent position="popper">
-                  {templates.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>
-                      {t.name}
-                    </SelectItem>
-                  ))}
+                  {groupedTemplates ? (
+                    <>
+                      <SelectGroup>
+                        <SelectLabel>Mes modèles</SelectLabel>
+                        {myTemplates.map((t) => (
+                          <SelectItem key={t.id} value={t.id}>
+                            {t.name}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                      <SelectGroup>
+                        <SelectLabel>Autres modèles</SelectLabel>
+                        {otherTemplates.map((t) => (
+                          <SelectItem key={t.id} value={t.id}>
+                            {t.name}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </>
+                  ) : (
+                    templates.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.name}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
               {canWrite && (
-                // Groupe segmenté (cf. ButtonGroup) : nouveau / éditer /
-                // supprimer forment un seul bloc. `flex w-full` (au lieu de
-                // l'inline-flex par défaut) pour que « Nouveau » (flex-1)
-                // occupe la largeur restante, éditer/supprimer collés à droite.
-                // Éditer/supprimer sont bornés à la PROPRIÉTÉ (canModifySelected) :
-                // un écriture ne touche que ses modèles ; la gestion, tous.
-                <ButtonGroup className="flex w-full">
-                  <Tip label="Nouveau modèle">
+                <div className="flex w-full gap-2">
+                  <Tip label="Nouvelle affiche vierge">
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={openCreate}
+                      onClick={handleNew}
                       className="flex-1"
                     >
-                      <Plus />
+                      <FilePlus2 />
                       Nouveau
-                    </Button>
-                  </Tip>
-                  <Tip
-                    label={
-                      selected && !canModifySelected
-                        ? 'Modèle d’un autre auteur (réservé à la gestion)'
-                        : 'Modifier le modèle'
-                    }
-                  >
-                    <Button
-                      variant="outline"
-                      size="icon-sm"
-                      onClick={openEdit}
-                      disabled={!selected || !canModifySelected}
-                      aria-label="Modifier le modèle"
-                    >
-                      <Pencil />
                     </Button>
                   </Tip>
                   <Tip
@@ -465,13 +523,15 @@ export function AffichageBoard() {
                       <Trash2 />
                     </Button>
                   </Tip>
-                </ButtonGroup>
+                </div>
               )}
             </div>
           </Field>
+        </div>
 
-          <Separator />
-
+        {/* Card réglages : icône, couleur, dates/horaires, tailles.
+            flex-1 : elle s'étire et pousse la card actions tout en bas. */}
+        <aside className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto rounded-xl border border-border bg-card p-5">
           {/* Icône */}
           <Field label="Icône">
             <IconPicker
@@ -538,6 +598,16 @@ export function AffichageBoard() {
             l'élément associé est absent (updateVisibleControls du fork). */}
           {!isAutoSizeMode && (
             <div className="flex flex-col gap-4">
+              {/* Espacement intra-section : pilote le gap entre le titre, le
+                  message et les dates/heures. N'affecte ni l'icône, ni le logo,
+                  ni la répartition des sections. Toujours visible en manuel. */}
+              <SizeSlider
+                label="Espacement"
+                value={gap}
+                min={0}
+                max={80}
+                onChange={(v) => setAffiche({ gap: v })}
+              />
               {showIconSlider && (
                 <SizeSlider
                   label="Icône"
@@ -577,17 +647,22 @@ export function AffichageBoard() {
             </div>
           )}
         </aside>
+
+        {/* Card Créer/Sauvegarder ancrée EN BAS de la colonne droite (desktop ;
+            en responsive ce bouton vit sous l'aperçu). Masquée pour les rôles
+            sans écriture (rien à enregistrer). */}
+        {canWrite && (
+          <div className="hidden shrink-0 rounded-xl border border-border bg-card p-4 lg:block">
+            {renderSaveOrCreate()}
+          </div>
+        )}
       </div>
 
       {canWrite && (
-        <TemplateDialog
-          open={dialogOpen}
-          onOpenChange={(o) => {
-            setDialogOpen(o)
-            if (!o) setEditing(null)
-          }}
-          initial={editing}
-          onSubmit={handleSubmitTemplate}
+        <TemplateNameDialog
+          open={nameOpen}
+          onOpenChange={setNameOpen}
+          onSubmit={handleCreate}
         />
       )}
       {confirmDialog}

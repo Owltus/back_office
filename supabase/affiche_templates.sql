@@ -15,6 +15,9 @@
 -- =============================================================================
 
 -- ---- Table + index -----------------------------------------------------------
+-- Un modèle mémorise l'ÉTAT COMPLET de l'affiche : en plus des textes / icône /
+-- couleur, les dates-heures et les réglages de taille (mode auto/manuel, polices,
+-- espacement). Charger un modèle réapplique donc tout côté app.
 create table if not exists public.affiche_templates (
   id uuid primary key default gen_random_uuid(),
   name text not null default '',
@@ -25,15 +28,39 @@ create table if not exists public.affiche_templates (
   message_fr text not null default '',
   title_en text not null default '',
   message_en text not null default '',
+  -- Dates / horaires (formats natifs des inputs : 'YYYY-MM-DD' / 'HH:MM' / '')
+  date_start text not null default '',
+  date_end text not null default '',
+  time_start text not null default '',
+  time_end text not null default '',
+  -- Réglages de taille (mode auto/manuel + tailles perso + espacement intra-section)
+  is_auto_size_mode boolean not null default true,
+  font_size_icon int not null default 140,
+  font_size_title int not null default 56,
+  font_size_message int not null default 26,
+  font_size_info int not null default 18,
+  gap int not null default 25,
   sort_order int not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   created_by uuid                                   -- auteur d'origine (posé/figé serveur)
 );
 
--- Migration en base existante : ajoute la colonne auteur si absente.
+-- Migration en base existante : ajoute les colonnes si absentes. Non destructif
+-- (add column if not exists + defaults) → les modèles seed existants prennent les
+-- valeurs par défaut (mode auto, tailles par défaut, pas de date) : rendu inchangé.
 alter table public.affiche_templates
-  add column if not exists created_by uuid;
+  add column if not exists created_by uuid,
+  add column if not exists date_start text not null default '',
+  add column if not exists date_end text not null default '',
+  add column if not exists time_start text not null default '',
+  add column if not exists time_end text not null default '',
+  add column if not exists is_auto_size_mode boolean not null default true,
+  add column if not exists font_size_icon int not null default 140,
+  add column if not exists font_size_title int not null default 56,
+  add column if not exists font_size_message int not null default 26,
+  add column if not exists font_size_info int not null default 18,
+  add column if not exists gap int not null default 25;
 
 create index if not exists affiche_templates_sort_idx
   on public.affiche_templates (sort_order, name);
