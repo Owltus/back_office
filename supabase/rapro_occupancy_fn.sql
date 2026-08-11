@@ -16,20 +16,26 @@
 --   donc l'occupation, sans jamais recevoir de PII.
 -- =============================================================================
 
--- 1) Retire l'ancienne vue (qui déclenchait le lint 0010).
+-- 1) Retire l'ancienne vue (qui déclenchait le lint 0010) et l'ancienne fonction
+--    (sa signature CHANGE : ajout de `manual_kind` → `create or replace` seul
+--    échouerait sur « cannot change return type »).
 drop view if exists public.rapro_occupancy;
+drop function if exists public.rapro_occupancy(date);
 
 -- 2) Fonction de remplacement. SECURITY DEFINER + search_path figé (évite le lint
 --    function_search_path_mutable). Renvoie 0 ligne si l'appelant n'a pas au moins
 --    la lecture sur rapro (même sémantique qu'une RLS fermée : aucune erreur).
+--    `manual_kind` (saisie manuelle PDJ = day-use…) permet au rapprochement de
+--    RETIRER ces chambres du comparatif comptable (présentes au rooming mais pas
+--    une nuitée vendue), comme les offertes (adr 0).
 create or replace function public.rapro_occupancy(p_date date)
-returns table (room int, adr numeric)
+returns table (room int, adr numeric, manual_kind text)
 language sql
 security definer
 stable
 set search_path = public
 as $$
-  select b.room::int, b.adr
+  select b.room::int, b.adr, b.manual_kind
   from public.pdj_breakfasts b
   where b.service_date = p_date
     and (select public.page_level_rank(public.get_page_level('rapro'))) >= 1

@@ -321,7 +321,12 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   const freeRooms = (pdjRows ?? []).filter(
     (r) => r.adr != null && Number(r.adr) === 0,
   ).length
-  const inHouseExclComp = occupied.size - freeRooms
+  // Day-use : chambres saisies À LA MAIN dans la page PDJ (manual_kind) — utilisées
+  // la journée uniquement, présentes au rooming mais HORS nuitée comptable. On les
+  // retire du comparatif comptable (comme les offertes) pour ne pas lever une fausse
+  // alerte d'écart. Aucun autre effet (ni affichage, ni Vendues, ni Balance).
+  const dayUseCount = (pdjRows ?? []).filter((r) => r.manual_kind != null).length
+  const inHouseExclComp = occupied.size - freeRooms - dayUseCount
   const occGap =
     isValidated &&
     hasOccupancy &&

@@ -63,11 +63,13 @@ export async function fetchDay(reportDate: string): Promise<RaproDay> {
   return { reportDate, statuses, carriedManual, materialized }
 }
 
-/** Occupation In-House par chambre pour un jour (vue rapro_occupancy, sans PII).
- * `adr` sert à repérer les chambres offertes (tarif 0) dans le contrôle comptable. */
+/** Occupation In-House par chambre pour un jour (fonction rapro_occupancy, sans PII).
+ * `adr` repère les chambres offertes (tarif 0) ; `manual_kind` (non null) repère
+ * les chambres saisies à la main (day-use…) — les deux sont hors nuitée comptable. */
 export interface RaproOccupancyRow {
   room: number
   adr: number | null
+  manual_kind: 'inclus' | 'extra' | null
 }
 export async function fetchOccupancy(
   serviceDate: string,
