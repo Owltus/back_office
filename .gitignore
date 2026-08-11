@@ -77,6 +77,9 @@ screenshot/
 # versionné : il vient du réseau, et le figer évite de dépendre d'un CDN au build.
 public/tesseract/*.js
 
+# Lockfile Deno (Edge Functions Supabase) : régénéré localement, non versionné.
+deno.lock
+
 # Divers
 __unconfig*
 todos.json
