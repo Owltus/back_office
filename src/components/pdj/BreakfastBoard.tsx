@@ -817,7 +817,12 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
         <>
           {/* Statistiques (footer fixe en impression). */}
           <div className="pdj-stats">
-            <div className="pdj-stats-grid">
+            <div
+              className={cn(
+                'pdj-stats-grid',
+                extrasCount > 0 && 'pdj-stats-grid--with-extra',
+              )}
+            >
               <StatTile
                 value={stats.rooms}
                 label="Chambres occupées"
@@ -861,6 +866,19 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                     : undefined
                 }
               />
+              {/* Miroir PDF de « PDJ Extra » — conservée dans le footer du PDF
+                  UNIQUEMENT s'il y a au moins un extra saisi (sinon le PDF garde
+                  sa mise en page à 5 colonnes). Même card que l'écran, placée
+                  juste après « PDJ inclus » (les tuiles écran-seules intercalées
+                  ne s'impriment pas). */}
+              {extrasCount > 0 && (
+                <StatTile
+                  className="stat-tile--screen-hidden"
+                  value={extrasCount}
+                  label="PDJ Extra"
+                  accent="#fbbf24"
+                />
+              )}
               {/* Écran : « CA PDJ » (total HT du jour + moyenne/jour sur les
                   jours valides). PDF : on conserve « Recouche ». D'où DEUX tuiles
                   complémentaires — l'une printHidden (écran), l'autre screen-hidden

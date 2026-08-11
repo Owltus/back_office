@@ -348,6 +348,12 @@
     grid-template-columns: repeat(5, 1fr);
     gap: 10px;
   }
+  /* Footer PDF à 6 colonnes quand la card « PDJ Extra » est présente (au moins
+     un extra saisi) : la rangée reste pleine, sans tuile orpheline. Sans extra,
+     on garde les 5 colonnes historiques. */
+  .pdj-stats-grid.pdj-stats-grid--with-extra {
+    grid-template-columns: repeat(6, 1fr);
+  }
   /* Les KPI sont des StatTile : on APLATIT la tuile pour le footer du PDF —
      liseré masqué, fond clair, corps compact, valeur AU-DESSUS du libellé
      (column-reverse). On recible les classes stables du composant. */
@@ -386,10 +392,22 @@
     font-size: 24px;
     color: #666; /* gris sombre, discret (au lieu du noir) */
   }
+  /* « HT » subordonné au montant : on le SORT du calcul de centrage. Rendu à
+     largeur nulle (inline-block width:0) → il ne compte pas dans la largeur de la
+     ligne, donc le montant « … € » est centré dans la tuile comme si « HT »
+     n'existait pas. Le texte déborde en visuel juste après le montant (overflow
+     visible par défaut), décalé de 2px via `left` (position, pas layout → ne pèse
+     pas non plus). Plus petit et plus clair qu'avant. */
   .pdj-revenue-ht {
-    font-size: 11px;
-    color: #999; /* « HT » plus petit et plus clair, subordonné au montant */
-    margin-left: 2px;
+    display: inline-block;
+    width: 0;
+    margin-left: 0;
+    position: relative;
+    left: 2px;
+    font-size: 9px;
+    color: #aaa;
+    white-space: nowrap;
+    vertical-align: baseline;
   }
   /* Tant qu'aucun extra n'est saisi (Extra + Total vides), estompe seulement la
      VALEUR monétaire (le « HT » suit par héritage) — PAS les libellés (PDJ Inclus,
