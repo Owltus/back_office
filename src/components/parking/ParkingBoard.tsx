@@ -394,7 +394,8 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
 
   // Occupation + alerte "zone critique" de chaque jour affiché.
   // - occupancy : toutes les places occupées (personnel 13 & 14 « en over »
-  //   COMPRIS) / 14, en %.
+  //   COMPRIS au numérateur) rapportées aux 12 places CLIENT → DÉPASSE 100 %
+  //   dès qu'une place tampon 13/14 est prise.
   // - critical : les 12 places client sont TOUTES prises ET on déborde sur le
   //   personnel (13/14) → l'entête du jour passe en rouge (surbooking).
   // Une place n'ayant jamais deux réservations le même jour (hasOverlap
@@ -415,7 +416,7 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
         }
       }
       return {
-        occupancy: (occ / SPOTS) * 100,
+        occupancy: (occ / clientSpots) * 100,
         critical: clientOcc >= clientSpots && staffOcc > 0,
       }
     })
@@ -1165,8 +1166,8 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
                     >
                       {fmtDay.format(d)}
                     </span>
-                    {/* Taux d'occupation du jour (14 places, personnel compris),
-                        arrondi ; rouge en zone critique. */}
+                    {/* Taux d'occupation du jour (base 12 places client, personnel
+                        13/14 « en over » → >100 %), arrondi ; rouge en zone critique. */}
                     <span
                       className={cn(
                         'text-[10px] font-medium tabular-nums',

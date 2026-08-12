@@ -6,7 +6,10 @@
  * ------------------------------------------------------------------------ */
 
 export const SPOTS = 14
-export const FIRST_STAFF_SPOT = 13 // places 13 & 14 = "personnel"
+export const FIRST_STAFF_SPOT = 13 // places 13 & 14 = "personnel" (tampon)
+// Places CLIENT (1..12) : dénominateur du taux d'occupation. Remplir les places
+// tampon 13 & 14 pousse alors le taux AU-DESSUS de 100 % (surbooking assumé).
+export const CLIENT_SPOTS = FIRST_STAFF_SPOT - 1 // 12
 export const SPOTS_LIST = Array.from({ length: SPOTS }, (_, i) => i + 1)
 export const SLOTS_PER_DAY = 2 // chaque jour = 2 demi-journées (matin / après-midi)
 

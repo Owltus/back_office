@@ -85,8 +85,9 @@ export function ParkingHelpPanel({ canEdit }: { canEdit: boolean }) {
         </p>
         <p>
           En tête de chaque colonne, le pourcentage bleu indique le taux
-          d'occupation des places clients ce jour-là. Le jour courant et les
-          week-ends sont légèrement marqués pour se repérer.
+          d'occupation des 12 places clients ce jour-là. Il dépasse 100 % quand
+          les deux places tampon du bas (13 et 14) sont prises. Le jour courant
+          et les week-ends sont légèrement marqués pour se repérer.
         </p>
       </Section>
 
