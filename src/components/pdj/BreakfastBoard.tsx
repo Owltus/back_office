@@ -1162,9 +1162,13 @@ const GuestRow = memo(function GuestRow({
   const mKind: ManualKind = manualKind ?? 'extra'
   const doServe = (n: number) =>
     canManual ? onManual(room, n, mKind) : onServe(room, n)
-  // Cases interactives : PDJ inclus « normal », OU ligne manuelle, OU chambre vide
-  // éditable (pour permettre la 1re coche → création de la ligne manuelle).
-  const showInteractive = numExpected > 0 || isManual || (!row && canEdit)
+  // Cases interactives : TOUTE chambre OCCUPÉE (client présent), qu'elle ait du PDJ
+  // inclus OU NON — sinon on ne pouvait pas servir un PDJ EXTRA à un client d'une
+  // chambre sans PDJ inclus (le clic passe alors par `onServe` : breakfasts_served
+  // sur la ligne, comptés en extras puisque breakfasts_included = 0). PLUS la chambre
+  // vide éditable (1re coche → ligne manuelle day-use). Une chambre occupée affiche
+  // ses cases même en lecture seule (pour montrer l'état « servi »).
+  const showInteractive = !!row || (!row && canEdit)
   // Double-clic « tout servir / annuler » : réservé aux lignes à couverts attendus.
   const canServe = canEdit && numExpected > 0
 
