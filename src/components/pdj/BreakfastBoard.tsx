@@ -1140,11 +1140,23 @@ const GuestRow = memo(function GuestRow({
   onServe: (room: number, n: number) => void
   onManual: (room: number, n: number, kind: ManualKind) => void
 }) {
-  // Cases « attendues » = PDJ INCLUS (règle enfants / PAX, cf. csv.ts), PAS le
-  // nombre de clients : un enfant/bébé (< 12 ans) ne prend pas de case, et jamais
-  // plus de 2. Piloté par `breakfasts_included` (recalculé à l'import + rétroactif
-  // via supabase/pdj_breakfasts_recompute.sql).
-  const numExpected = row?.breakfasts_included ?? 0
+  // Type de saisie manuelle (day-use/no-show) : calculé d'abord car il conditionne
+  // le sens des cases « attendues » ci-dessous.
+  const manualKind = row?.manual_kind ?? null
+  const isManual = manualKind != null
+  // Cases en GRAS = clients PRÉSENTS dans la chambre (adultes ; enfants/bébés
+  // exclus ; jamais plus de 2). Une chambre occupée SANS PDJ inclus montre donc
+  // aussi ses clients en gras, comme une chambre à PDJ inclus — la distinction
+  // « PDJ inclus » reste lisible via le FOND VERT de la ligne (.pdj-included,
+  // piloté à part par `breakfasts_included`, cf. plus bas). Une ligne MANUELLE n'a
+  // pas de client réel en rooming → on garde son nombre saisi ; chambre vide → 0.
+  // (Les MONTANTS et les extras restent calculés depuis `breakfasts_included`,
+  // jamais depuis ce nombre de cases : servir au-delà des inclus = extra facturé.)
+  const numExpected = isManual
+    ? (row?.breakfasts_included ?? 0)
+    : row
+      ? Math.min(row.adults, 2)
+      : 0
   const served = row?.breakfasts_served ?? 0
   // Minimum 2 cases pour une grille régulière ; on élargit si un PDJ « en plus »
   // a déjà été servi au-delà des attendus (pour ne pas masquer une case cochée).
@@ -1156,8 +1168,6 @@ const GuestRow = memo(function GuestRow({
   // Saisie MANUELLE : une chambre VIDE (non check-in) ou déjà manuelle accepte un
   // PDJ à la main (day-use, no-show revenu…). `mKind` = son type inclus/extra
   // (défaut extra). `doServe` route le clic vers le bon canal (manuel vs normal).
-  const manualKind = row?.manual_kind ?? null
-  const isManual = manualKind != null
   const canManual = !row || isManual
   const mKind: ManualKind = manualKind ?? 'extra'
   const doServe = (n: number) =>
