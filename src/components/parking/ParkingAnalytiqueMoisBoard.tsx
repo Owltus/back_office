@@ -15,7 +15,10 @@ import { AnalytiqueBackButton } from '#/components/analytique/AnalytiqueBackButt
 import { KpiLineChart } from '#/components/analytique/KpiLineChart.tsx'
 import { fetchReservations } from '#/lib/parking/service.ts'
 import { fetchUnifiedDays } from '#/lib/repjour/services/data.ts'
-import { aggregateParkingDaily } from '#/lib/parking/analytics.ts'
+import {
+  aggregateParkingDaily,
+  captageIndex,
+} from '#/lib/parking/analytics.ts'
 import { fmtInt, fmtPct, fmtPctInt } from '#/lib/parking/format.ts'
 import { DAY_NAMES, MONTHS_LABELS } from '#/lib/repjour/constants.ts'
 import { ACCENT } from '#/components/analytique/accents.ts'
@@ -87,15 +90,15 @@ export function ParkingAnalytiqueMoisBoard({
       (r) => r.start_date.startsWith(prefix) && r.status === 'checkout',
     ).length
 
-    // Captage du mois = Σ places parking occupées ÷ Σ chambres occupées hôtel,
-    // sur les seuls jours où l'occupation hôtel est connue. « — » sinon.
-    let capNum = 0
-    let capDen = 0
+    // Captage du mois : occupation parking client rapportée à l'occupation hôtel,
+    // sur les cumuls des jours où l'occupation hôtel est connue. « — » si aucune base.
+    let capClient = 0
+    let capRooms = 0
     for (const d of days) {
       const rooms = hotelRoomsByDay.get(d.day) ?? 0
       if (rooms > 0) {
-        capNum += d.occupiedClient
-        capDen += rooms
+        capClient += d.occupiedClient
+        capRooms += rooms
       }
     }
 
@@ -104,7 +107,7 @@ export function ParkingAnalytiqueMoisBoard({
       arrivals,
       departures,
       unpaid,
-      avgCaptage: capDen > 0 ? (capNum / capDen) * 100 : null,
+      avgCaptage: captageIndex(capClient, capRooms),
       // 2e info : cadence quotidienne (moyenne sur les jours du mois).
       arrivalsPerDay: count > 0 ? arrivals / count : 0,
       departuresPerDay: count > 0 ? departures / count : 0,
@@ -119,6 +122,13 @@ export function ParkingAnalytiqueMoisBoard({
       })),
     [days],
   )
+
+  // Axe : reste borné à 100 % tant qu'aucun jour ne déborde sur les places
+  // tampon (13/14) ; sinon on monte à la dizaine supérieure pour ne pas tronquer.
+  const occMax = useMemo(() => {
+    const peak = Math.max(100, ...chartData.map((d) => d.occ))
+    return Math.ceil(peak / 10) * 10
+  }, [chartData])
 
   const monthLabel = MONTHS_LABELS[month - 1] || ''
 
@@ -187,7 +197,7 @@ export function ParkingAnalytiqueMoisBoard({
           label="Captage"
           accent={ACCENT.pink}
           value={summary.avgCaptage != null ? fmtPctInt(summary.avgCaptage) : '—'}
-          hint="Places de parking occupées rapportées aux chambres occupées de l'hôtel."
+          hint="Remplissage du parking client comparé à celui de l'hôtel. 100 % = parking au moins aussi rempli, en proportion, que l'hôtel (demande captée au max) ; en dessous, le parking traîne derrière ; 0 % = clients présents mais parking vide."
         />
       </AnalytiqueCardsGrid>
 
@@ -234,11 +244,8 @@ export function ParkingAnalytiqueMoisBoard({
           {days.map((d) => {
             const hasData = d.occupied > 0
             const rooms = hotelRoomsByDay.get(d.day) ?? 0
-            // Captage : places CLIENT occupées / chambres hôtel (personnel exclu).
-            const captage =
-              d.occupiedClient > 0 && rooms > 0
-                ? (d.occupiedClient / rooms) * 100
-                : null
+            // Captage : occupation parking client rapportée à l'occupation hôtel du jour.
+            const captage = rooms > 0 ? captageIndex(d.occupiedClient, rooms) : null
             return (
               <tr
                 key={d.date}
@@ -307,7 +314,7 @@ export function ParkingAnalytiqueMoisBoard({
           realKey="occ"
           realName="Occupation"
           realDotRadius={2}
-          yDomain={[0, 100]}
+          yDomain={[0, occMax]}
           tooltipFormatter={fmtPct}
           labelFormatter={dayTooltipLabel}
         />

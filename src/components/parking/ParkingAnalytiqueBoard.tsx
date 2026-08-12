@@ -18,6 +18,7 @@ import { fetchReservations } from '#/lib/parking/service.ts'
 import { fetchYearAnalytics } from '#/lib/repjour/services/daily.ts'
 import {
   aggregateParkingMonthly,
+  captageIndex,
   yearsFromReservations,
 } from '#/lib/parking/analytics.ts'
 import { fmtInt, fmtPct, fmtPctInt } from '#/lib/parking/format.ts'
@@ -81,15 +82,15 @@ export function ParkingAnalytiqueBoard() {
     const count = active.length
     const totalReservations = months.reduce((s, m) => s + m.reservations, 0)
     const totalNights = months.reduce((s, m) => s + m.nights, 0)
-    // Captage annuel = Σ nuits-places client ÷ Σ nuitées hôtel, sur les seuls mois
-    // où l'occupation hôtel est connue (nuitées > 0). « — » sinon.
-    let capNum = 0
-    let capDen = 0
+    // Captage annuel : occupation parking client rapportée à l'occupation hôtel,
+    // sur les cumuls des mois où l'occupation hôtel est connue. « — » sinon.
+    let capClient = 0
+    let capRooms = 0
     for (const m of months) {
       const nuitees = hotelNuiteesByMonth.get(m.month) ?? 0
       if (nuitees > 0) {
-        capNum += m.clientNights
-        capDen += nuitees
+        capClient += m.clientNights
+        capRooms += nuitees
       }
     }
     return {
@@ -98,7 +99,7 @@ export function ParkingAnalytiqueBoard() {
       totalUnpaid: months.reduce((s, m) => s + m.unpaid, 0),
       avgOccupancy:
         count > 0 ? active.reduce((s, m) => s + m.occupancyRate, 0) / count : 0,
-      avgCaptage: capDen > 0 ? (capNum / capDen) * 100 : null,
+      avgCaptage: captageIndex(capClient, capRooms),
       // 2e info : cadence mensuelle des réservations + durée moyenne d'un séjour.
       reservationsPerMonth: count > 0 ? totalReservations / count : 0,
       nightsPerReservation:
@@ -114,6 +115,13 @@ export function ParkingAnalytiqueBoard() {
       })),
     [months],
   )
+
+  // Axe : reste borné à 100 % tant qu'aucun mois ne déborde sur les places
+  // tampon (13/14) ; sinon on monte à la dizaine supérieure pour ne pas tronquer.
+  const occMax = useMemo(() => {
+    const peak = Math.max(100, ...chartData.map((d) => d.occ ?? 0))
+    return Math.ceil(peak / 10) * 10
+  }, [chartData])
 
   // En-tête d'infobulle du graphe : « Fév » → « Février 2026 ».
   const monthTooltipLabel = (label: string) => {
@@ -181,7 +189,7 @@ export function ParkingAnalytiqueBoard() {
           label="Captage"
           accent={ACCENT.pink}
           value={summary.avgCaptage != null ? fmtPctInt(summary.avgCaptage) : '—'}
-          hint="Places de parking occupées rapportées aux chambres occupées de l'hôtel."
+          hint="Remplissage du parking client comparé à celui de l'hôtel. 100 % = parking au moins aussi rempli, en proportion, que l'hôtel (demande captée au max) ; en dessous, le parking traîne derrière ; 0 % = clients présents mais parking vide."
         />
       </AnalytiqueCardsGrid>
 
@@ -236,7 +244,7 @@ export function ParkingAnalytiqueBoard() {
           {months.map((m) => {
             const hasData = m.reservations > 0
             const nuitees = hotelNuiteesByMonth.get(m.month) ?? 0
-            const captage = nuitees > 0 ? (m.clientNights / nuitees) * 100 : null
+            const captage = nuitees > 0 ? captageIndex(m.clientNights, nuitees) : null
             return (
               <tr
                 key={m.month}
@@ -335,7 +343,7 @@ export function ParkingAnalytiqueBoard() {
           xKey="mois"
           realKey="occ"
           realName="Occupation"
-          yDomain={[0, 100]}
+          yDomain={[0, occMax]}
           tooltipFormatter={fmtPct}
           labelFormatter={monthTooltipLabel}
         />
