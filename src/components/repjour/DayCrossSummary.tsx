@@ -11,7 +11,6 @@ import { fmtEur, fmtInt, fmtPctInt } from '#/lib/format/index.ts'
 import {
   computeCaptageBenchmark,
   computeDailyBenchmark,
-  computeOccupancyBenchmark,
 } from '#/lib/pdj/amounts.ts'
 import {
   fetchAllAddonProduction,
@@ -21,13 +20,18 @@ import {
 import { detectTarifs } from '#/lib/pdj/tarif.ts'
 import { pdjDaySummary } from '#/lib/pdj/summary.ts'
 import { fetchReservations } from '#/lib/parking/service.ts'
-import { aggregateParkingDaily } from '#/lib/parking/analytics.ts'
+import { aggregateParkingDaily, captageIndex } from '#/lib/parking/analytics.ts'
 import { fetchUnifiedDays } from '#/lib/repjour/services/data.ts'
 import {
   fetchDay as fetchRaproDay,
   fetchOccupancy,
   fetchOldestDay,
 } from '#/lib/rapro/service.ts'
+import {
+  cleaned,
+  fetchStatusCountsByRange,
+  sumCounts,
+} from '#/lib/rapro/monthly.ts'
 import { carryOver, carryoverWindow } from '#/lib/rapro/carryover.ts'
 import type { DaySnapshot } from '#/lib/rapro/carryover.ts'
 import { CATEGORY_COLOR } from '#/lib/rapro/constants.ts'
@@ -38,16 +42,17 @@ import type { RoomStatus } from '#/lib/rapro/types.ts'
 /*
  * Bande de synthèse TRANSVERSE du rapport journalier — sous le tableau KPI.
  *
- * Pour la DATE affichée du rapport, un aperçu de trois autres features : PDJ,
- * Parking, Rapprochement. Chaque bloc REPRODUIT les cards de sa page d'origine
- * (mêmes libellés, mêmes valeurs, MÊMES codes couleur ET MÊMES sous-textes) —
- * aucun sous-texte n'est inventé :
- *   - PDJ (board .pdj-stats) : inclus/Extra → montant HT DU JOUR ; CA PDJ &
- *     Taux de captage → MOYENNE (benchmark, `moy. …/j`) via ['pdj','benchmark'].
- *   - Parking : Arrivées/Départs → `moy. X / jour` (analytique mensuel) ;
- *     Occupation & Captage → moyenne du mois `moy. …/j` (les pages parking n'en
- *     portent pas — AJOUT assumé, dans l'esprit des benchmarks PDJ).
- *   - Rapprochement (board /rapro) : AUCUNE card ne porte de sous-texte → aucun.
+ * Pour la DATE affichée du rapport : valeurs DU JOUR, et sous-textes = MOYENNE sur
+ * une fenêtre GLISSANTE de 30 jours finissant à cette date. Cette fenêtre est
+ * PROPRE à la bande RepJour — les pages/analytiques gardent leurs propres périodes,
+ * donc on ne réutilise PAS leurs requêtes moyennées (ex. ['pdj','benchmark'] = tout
+ * l'historique) :
+ *   - PDJ : inclus/Extra → montant HT DU JOUR ; CA PDJ & Captage → `moy. …/j` sur
+ *     30 j (Addon + In-House complets filtrés à la fenêtre, mêmes repères PDJ).
+ *   - Parking : Occupation (NOMBRE) / Arrivées / Départs / Captage → `moy.` sur 30 j
+ *     (agrégation des 1–2 mois couvrant la fenêtre, restreinte à celle-ci).
+ *   - Rapprochement : Nettoyées / Refus / Bloquées du jour → `moy. X / jour` sur 30 j
+ *     (jours clôturés). « Bloquées de la veille » = roulement, non agrégé → pas de moy.
  * Composants d'ÉCRAN uniquement : ils ne touchent NI le PDF « Imprimer » NI le
  * rapport e-mail (qui ne lisent que monthPace/summaryMetrics).
  *
@@ -69,6 +74,37 @@ function subMuted(content: ReactNode) {
       {content}
     </span>
   )
+}
+
+/*
+ * Fenêtre GLISSANTE de 30 jours (spécifique à la bande RepJour) : toutes les
+ * moyennes des cartes se calculent sur `[date − 29 j, date]`. Les pages et
+ * analytiques gardent leurs propres périodes — on ne réutilise donc PAS leurs
+ * requêtes moyennées (ex. ['pdj','benchmark'] = tout l'historique).
+ */
+const WINDOW_DAYS = 30
+
+/** Décale une date 'YYYY-MM-DD' de `delta` jours (calcul local, sans piège UTC). */
+function shiftDate(dateStr: string, delta: number): string {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const dt = new Date(y, m - 1, d + delta)
+  const yy = dt.getFullYear()
+  const mm = String(dt.getMonth() + 1).padStart(2, '0')
+  const dd = String(dt.getDate()).padStart(2, '0')
+  return `${yy}-${mm}-${dd}`
+}
+
+/** Les 1 à 2 mois (année, mois) couvrant la fenêtre [from, to] (≤ 30 jours). */
+function monthsCovering(
+  from: string,
+  to: string,
+): { year: number; month: number }[] {
+  const uniq = new Map<string, { year: number; month: number }>()
+  for (const s of [from, to]) {
+    const [y, m] = s.split('-').map(Number)
+    uniq.set(`${y}-${m}`, { year: y, month: m })
+  }
+  return [...uniq.values()]
 }
 
 /** En-tête d'un bloc (icône + libellé), lien vers la page source. */
@@ -122,6 +158,10 @@ export function DayCrossSummary({
   const canParking = can('parking', 'lecture')
   const canRapro = can('rapro', 'lecture')
 
+  // Fenêtre glissante de 30 jours finissant à la date affichée — base de TOUTES
+  // les moyennes de la bande (cf. helpers en tête de fichier).
+  const windowFrom = useMemo(() => shiftDate(date, -(WINDOW_DAYS - 1)), [date])
+
   // --- PDJ (In-House + Addon du jour) ----------------------------------------
   const pdjDayQ = useQuery({
     queryKey: ['pdj', 'day', date],
@@ -144,85 +184,97 @@ export function DayCrossSummary({
     () => (pdjDayQ.data ? pdjDaySummary(pdjDayQ.data, tarifs) : null),
     [pdjDayQ.data, tarifs],
   )
-  // Repère « moyenne par jour » (benchmark) — sous-textes CA PDJ & captage.
-  // MÊME requête que la page PDJ (queryKey ['pdj','benchmark']) → cache partagé.
-  // On renvoie la MÊME forme {total,captage,occupancy} pour ne pas corrompre ce
-  // cache partagé (la page PDJ lit benchmark.occupancy).
-  const pdjBenchQ = useQuery({
-    queryKey: ['pdj', 'benchmark'],
-    queryFn: async () => {
-      const [addon, inhouse] = await Promise.all([
-        fetchAllAddonProduction(),
-        fetchAllInHouseCovers(),
-      ])
-      return {
-        total: computeDailyBenchmark(
-          addon.map((r) => ({
-            service_date: r.service_date,
-            code: r.code,
-            revenue: r.revenue_ttc,
-          })),
-          inhouse,
-        ),
-        captage: computeCaptageBenchmark(inhouse),
-        occupancy: computeOccupancyBenchmark(inhouse),
-      }
-    },
+  // Couverts In-House COMPLETS (clé propre, pas ['pdj','benchmark'] qui est la
+  // moyenne TOUT-historique de la page PDJ). L'Addon complet est déjà chargé
+  // (allAddonQ). On filtre les deux à la fenêtre 30 j, puis on réutilise les
+  // repères PDJ existants — même définition, période restreinte.
+  const inhouseAllQ = useQuery({
+    queryKey: ['pdj', 'inhouse-all'],
+    queryFn: fetchAllInHouseCovers,
     enabled: canPdj,
   })
-  const benchmark = pdjBenchQ.data
+  const pdjWin = useMemo(() => {
+    if (!allAddonQ.data || !inhouseAllQ.data) return null
+    const inWin = (d: string) => d >= windowFrom && d <= date
+    const addon = allAddonQ.data
+      .filter((r) => inWin(r.service_date))
+      .map((r) => ({
+        service_date: r.service_date,
+        code: r.code,
+        revenue: r.revenue_ttc,
+      }))
+    const inhouse = inhouseAllQ.data.filter((r) => inWin(r.service_date))
+    return {
+      total: computeDailyBenchmark(addon, inhouse),
+      captage: computeCaptageBenchmark(inhouse),
+    }
+  }, [allAddonQ.data, inhouseAllQ.data, windowFrom, date])
 
-  // --- Parking (jour + moyennes du mois) -------------------------------------
+  // --- Parking (jour courant + moyennes 30 j glissants) ----------------------
   const parkingQ = useQuery({
     queryKey: ['parking', 'reservations'],
     queryFn: fetchReservations,
     enabled: canParking,
   })
-  const [pkYear, pkMonth] = date.split('-').map(Number)
-  // Occupation HÔTEL du mois, jour par jour (rj_nuitees) — dénominateur du captage
-  // MOYEN. MÊME clé que l'analytique parking (['parking','hotel-month',...]).
-  const hotelMonthQ = useQuery({
-    queryKey: ['parking', 'hotel-month', pkYear, pkMonth],
-    queryFn: () => fetchUnifiedDays({ year: pkYear, month: pkMonth }),
-    enabled: canParking,
+  // Occupation HÔTEL (rj_nuitees) des 1–2 mois couvrant la fenêtre 30 j —
+  // dénominateur du captage MOYEN. MÊME clé que l'analytique parking (cache
+  // partagé). Indexée par date complète (la fenêtre peut chevaucher deux mois).
+  const coverMonths = useMemo(
+    () => monthsCovering(windowFrom, date),
+    [windowFrom, date],
+  )
+  const hotelWinQs = useQueries({
+    queries: coverMonths.map(({ year, month }) => ({
+      queryKey: ['parking', 'hotel-month', year, month],
+      queryFn: () => fetchUnifiedDays({ year, month }),
+      enabled: canParking,
+    })),
   })
-  const parkingAgg = useMemo(() => {
-    if (!parkingQ.data) return null
-    const days = aggregateParkingDaily(parkingQ.data, pkYear, pkMonth)
-    const day = days.find((d) => d.date === date)
-    if (!day) return null
-    const n = days.length || 1
-    const avg = (sel: (d: (typeof days)[number]) => number) =>
-      days.reduce((s, d) => s + sel(d), 0) / n
-    // Captage MOYEN du mois = Σ places client ÷ Σ nuitées hôtel (jours à hôtel
-    // connu) × 100 — calque exact de l'analytique parking mensuel.
-    const hotelByDay = new Map<number, number>()
-    for (const row of hotelMonthQ.data ?? []) {
-      if (row.report)
-        hotelByDay.set(Number(row.date.slice(8, 10)), row.report.rj_nuitees)
+  const hotelByDate = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const q of hotelWinQs) {
+      for (const row of q.data ?? []) {
+        if (row.report) map.set(row.date, row.report.rj_nuitees)
+      }
     }
-    let capNum = 0
-    let capDen = 0
-    for (const d of days) {
-      const rooms = hotelByDay.get(d.day) ?? 0
+    return map
+  }, [hotelWinQs])
+  const parkingAgg = useMemo(() => {
+    const res = parkingQ.data
+    if (!res) return null
+    // Fenêtre 30 j : agréger les 1–2 mois qui la couvrent puis restreindre à
+    // [windowFrom, date]. La dernière ligne (date) porte les valeurs DU JOUR.
+    const winDays = coverMonths
+      .flatMap(({ year, month }) => aggregateParkingDaily(res, year, month))
+      .filter((d) => d.date >= windowFrom && d.date <= date)
+    const day = winDays.find((d) => d.date === date)
+    if (!day) return null
+    const n = winDays.length || 1
+    const avg = (sel: (d: (typeof winDays)[number]) => number) =>
+      winDays.reduce((s, d) => s + sel(d), 0) / n
+    // Captage MOYEN — captageIndex (occupation parking client ÷ occupation hôtel,
+    // borné 0–100 %) sur les cumuls des jours à hôtel connu de la fenêtre.
+    let capClient = 0
+    let capRooms = 0
+    for (const d of winDays) {
+      const rooms = hotelByDate.get(d.date) ?? 0
       if (rooms > 0) {
-        capNum += d.occupiedClient
-        capDen += rooms
+        capClient += d.occupiedClient
+        capRooms += rooms
       }
     }
     return {
       day,
-      avgOccupancy: avg((d) => d.occupancy),
+      avgOccupied: avg((d) => d.occupied),
       avgArrivals: avg((d) => d.arrivals),
       avgDepartures: avg((d) => d.departures),
-      avgCaptage: capDen > 0 ? (capNum / capDen) * 100 : null,
+      avgCaptage: captageIndex(capClient, capRooms),
     }
-  }, [parkingQ.data, hotelMonthQ.data, date, pkYear, pkMonth])
-  // Captage parking DU JOUR = places CLIENT occupées ÷ nuitées hôtel du jour (× 100).
-  const parkingCaptage =
-    parkingAgg && hotelRoomsSold && hotelRoomsSold > 0
-      ? (parkingAgg.day.occupiedClient / hotelRoomsSold) * 100
-      : null
+  }, [parkingQ.data, hotelByDate, coverMonths, windowFrom, date])
+  // Captage parking DU JOUR — MÊME calcul que l'analytique (captageIndex).
+  const parkingCaptage = parkingAgg
+    ? captageIndex(parkingAgg.day.occupiedClient, hotelRoomsSold ?? 0)
+    : null
 
   // --- Rapprochement (occupation + statuts + roulement) ----------------------
   const raproOccQ = useQuery({
@@ -265,6 +317,30 @@ export function DayCrossSummary({
     return raproDaySummary(raproOccQ.data, raproDayQ.data.statuses, carried)
   }, [raproOccQ.data, raproDayQ.data, raproWindow, windowDays])
 
+  // Moyennes sur la fenêtre 30 j (sous-textes des cartes rapro) — même décompte
+  // que l'analytique rapro (`fetchStatusCountsByRange`, jours CLÔTURÉS uniquement),
+  // sur la plage glissante. Dénominateur = jours actifs (avec données) de la
+  // fenêtre. Le roulement (« bloquées de la veille ») n'y est pas agrégé → pas de
+  // moyenne pour cette carte.
+  const raproWinQ = useQuery({
+    queryKey: ['rapro', 'counts-range', windowFrom, date],
+    queryFn: () => fetchStatusCountsByRange(windowFrom, date),
+    enabled: canRapro,
+  })
+  const raproAvg = useMemo(() => {
+    const byDay = raproWinQ.data
+    if (!byDay || byDay.size === 0) return null
+    // `fetchStatusCountsByRange` ne renvoie que les jours clôturés PORTEURS de
+    // données → chaque entrée est un jour actif : `byDay.size` = dénominateur.
+    const totals = sumCounts(byDay)
+    const active = byDay.size
+    return {
+      nettoyees: cleaned(totals) / active,
+      refus: totals.refus / active,
+      bloqueesJour: totals.bloquee / active,
+    }
+  }, [raproWinQ.data])
+
   const showPdj = canPdj && pdj
   const showParking = canParking && parkingAgg
   const showRapro = canRapro && rapro
@@ -297,24 +373,24 @@ export function DayCrossSummary({
             value={fmtInt(pdj.extrasCount)}
             sub={pdj.hasAddon ? subMuted(fmtEur(pdj.extrasHT, 2)) : undefined}
           />
-          {/* CA PDJ & captage : MOYENNE (benchmark), comme le board. */}
+          {/* CA PDJ & captage : MOYENNE sur 30 j glissants. */}
           <StatTile
             label="CA PDJ"
             accent="#60a5fa"
             value={pdj.hasAddon ? fmtEur(pdj.totalHT, 2) : fmtEur(0, 0)}
             sub={
-              benchmark && benchmark.total.avgTotalHT != null
-                ? subMuted(`moy. ${fmtEur(benchmark.total.avgTotalHT, 2)}/j`)
+              pdjWin && pdjWin.total.avgTotalHT != null
+                ? subMuted(`moy. ${fmtEur(pdjWin.total.avgTotalHT, 2)}/j`)
                 : undefined
             }
           />
           <StatTile
-            label="Taux de captage"
+            label="Captage"
             accent="#f472b6"
             value={pdj.captage == null ? '—' : fmtPctInt(pdj.captage)}
             sub={
-              benchmark && benchmark.captage.avgCaptage != null
-                ? subMuted(`moy. ${fmtPctInt(benchmark.captage.avgCaptage)}/j`)
+              pdjWin && pdjWin.captage.avgCaptage != null
+                ? subMuted(`moy. ${fmtPctInt(pdjWin.captage.avgCaptage)}/j`)
                 : undefined
             }
           />
@@ -331,13 +407,18 @@ export function DayCrossSummary({
             />
           }
         >
-          {/* Occupation & Captage : moyenne du mois en sous-texte (choix produit —
-              les pages parking n'en portent pas, dans l'esprit des benchmarks PDJ). */}
+          {/* Occupation : NOMBRE de places occupées (sans %), moyenne 30 j en
+              sous-texte. Captage : moyenne 30 j en % (choix produit — les pages
+              parking n'en portent pas, dans l'esprit des benchmarks PDJ). */}
           <StatTile
             label="Occupation"
             accent={ACCENT.cyan}
-            value={fmtPctInt(parkingAgg.day.occupancy)}
-            sub={subMuted(`moy. ${fmtPctInt(parkingAgg.avgOccupancy)}/j`)}
+            value={fmtInt(parkingAgg.day.occupied)}
+            sub={
+              parkingAgg.avgOccupied > 0
+                ? subMuted(`moy. ${fmtInt(parkingAgg.avgOccupied)} / jour`)
+                : undefined
+            }
           />
           {/* Arrivées / Départs : `moy. X / jour` (analytique mensuel), si > 0. */}
           <StatTile
@@ -383,21 +464,38 @@ export function DayCrossSummary({
             />
           }
         >
-          {/* Le board /rapro ne porte AUCUN sous-texte sur ses cards → aucun ici. */}
+          {/* Sous-textes = moyenne sur 30 j glissants (jours clôturés actifs), même
+              décompte que l'analytique rapro. Exception : « bloquées de la veille »
+              (roulement) n'est pas agrégé → pas de moyenne. */}
           <StatTile
             label="Nettoyées"
             accent={CATEGORY_COLOR.nettoyee}
             value={fmtInt(rapro.nettoyees)}
+            sub={
+              raproAvg
+                ? subMuted(`moy. ${fmtInt(raproAvg.nettoyees)} / jour`)
+                : undefined
+            }
           />
           <StatTile
             label="Refus"
             accent={CATEGORY_COLOR.refus}
             value={fmtInt(rapro.refus)}
+            sub={
+              raproAvg
+                ? subMuted(`moy. ${fmtInt(raproAvg.refus)} / jour`)
+                : undefined
+            }
           />
           <StatTile
             label="Bloquées du jour"
             accent={CATEGORY_COLOR.bloquee}
             value={fmtInt(rapro.bloqueesJour)}
+            sub={
+              raproAvg
+                ? subMuted(`moy. ${fmtInt(raproAvg.bloqueesJour)} / jour`)
+                : undefined
+            }
           />
           <StatTile
             label="Bloquées de la veille"
