@@ -13,6 +13,8 @@
 
 import { fromTTC } from '#/lib/repjour/constants.ts'
 import type { AddonProductionRow } from '#/lib/pdj/addon.ts'
+import { detectTarifs } from '#/lib/pdj/tarif.ts'
+import { computePdjCA } from '#/lib/pdj/breakdown.ts'
 
 /** Arrondi à 2 décimales (au centime). */
 function round2(n: number): number {
@@ -146,20 +148,20 @@ export interface DailyBenchmark {
 }
 
 /**
- * Total HT (inclus + extras) PAR JOUR — clé `service_date`. Ne retient que les
- * jours ayant À LA FOIS de l'Addon et de l'In-House, avec un total chiffrable.
- * Fonction pure ; base du repère « moyenne / jour » ET du CA PDJ de l'analytique.
+ * CA HT (inclus + extras) PAR JOUR — clé `service_date`. MÊME définition que la
+ * fiche journalière : CA calculé PAR CHAMBRE (computePdjCA) au tarif DÉTECTÉ dans
+ * l'Addon (detectTarifs, rien en dur), pas « Σ revenu Addon ÷ 1,10 ». SOURCE
+ * UNIQUE du CA de l'analytique → le même chiffre que le board et le PDF. Retient
+ * tout jour In-House dont le CA est chiffrable (> 0) ; le tarif vient de TOUT
+ * l'historique Addon, un jour n'a donc pas besoin de sa propre ligne Addon.
  */
 export function computeDailyTotals(
   addon: { service_date: string; code: string; revenue: number }[],
   inHouse: InHouseCoverRow[],
 ): Map<string, number> {
-  const addonByDay = new Map<string, AddonProductionRow[]>()
-  for (const r of addon) {
-    const list = addonByDay.get(r.service_date) ?? []
-    list.push({ code: r.code, count: 0, revenue: r.revenue })
-    addonByDay.set(r.service_date, list)
-  }
+  const tarifs = detectTarifs(
+    addon.map((r) => ({ code: r.code, revenue_ttc: r.revenue })),
+  )
   const inHouseByDay = new Map<string, InHouseCoverRow[]>()
   for (const r of inHouse) {
     const list = inHouseByDay.get(r.service_date) ?? []
@@ -168,20 +170,9 @@ export function computeDailyTotals(
   }
 
   const totals = new Map<string, number>()
-  for (const [day, addonRows] of addonByDay) {
-    const rows = inHouseByDay.get(day)
-    if (!rows || rows.length === 0) continue // jour sans In-House → exclu
-    const covers = countCovers(rows)
-    const extrasCount = rows.reduce(
-      (s, r) => s + Math.max(0, r.breakfasts_served - r.breakfasts_included),
-      0,
-    )
-    const { totalHT } = computePdjAmounts({
-      addon: addonRows,
-      covers,
-      extrasCount,
-    })
-    totals.set(day, totalHT)
+  for (const [day, rows] of inHouseByDay) {
+    const { totalHt } = computePdjCA(rows, tarifs)
+    if (totalHt > 0) totals.set(day, totalHt)
   }
   return totals
 }

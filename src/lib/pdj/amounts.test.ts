@@ -102,21 +102,23 @@ describe('computePdjAmounts', () => {
 })
 
 describe('computeDailyBenchmark', () => {
-  it('moyenne par jour sur les jours ayant addon ET in-house', () => {
+  it('moyenne par jour = CA PAR CHAMBRE au tarif détecté (jours In-House)', () => {
+    // Revenus PDJ tous multiples de 19 → tarif détecté 19 € → HT unitaire 17,27.
     const addon = [
-      { service_date: '2026-08-10', code: 'PDJ', revenue: 880 },
-      { service_date: '2026-08-11', code: 'PDJ', revenue: 440 },
-      { service_date: '2026-08-12', code: 'PDJ', revenue: 100 }, // exclu : pas d'in-house
+      { service_date: '2026-08-10', code: 'PDJ', revenue: 190 },
+      { service_date: '2026-08-11', code: 'PDJ', revenue: 95 },
+      { service_date: '2026-08-12', code: 'PDJ', revenue: 57 },
     ]
     const inHouse = [
-      { service_date: '2026-08-10', addons: 'PDJ INCL', adults: 22, children: 0, guests: 22, breakfasts_served: 0, breakfasts_included: 22 },
-      { service_date: '2026-08-11', addons: 'PDJ INCL', adults: 11, children: 0, guests: 11, breakfasts_served: 0, breakfasts_included: 11 },
-      { service_date: '2026-08-13', addons: 'PDJ INCL', adults: 5, children: 0, guests: 5, breakfasts_served: 0, breakfasts_included: 5 }, // exclu : pas d'addon
+      { service_date: '2026-08-10', addons: 'PDJ INCL', adults: 10, children: 0, guests: 10, breakfasts_served: 0, breakfasts_included: 10 },
+      { service_date: '2026-08-11', addons: 'PDJ INCL', adults: 5, children: 0, guests: 5, breakfasts_served: 0, breakfasts_included: 5 },
+      // Le tarif est global : ce jour compte même sans ligne Addon propre.
+      { service_date: '2026-08-13', addons: 'PDJ INCL', adults: 4, children: 0, guests: 4, breakfasts_served: 0, breakfasts_included: 4 },
     ]
-    // jour 10 : round2(880/1,1)=800 ; jour 11 : round2(440/1,1)=400 → moy 600, 2 jours.
+    // 10 : 10×17,27=172,70 ; 11 : 5×17,27=86,35 ; 13 : 4×17,27=69,08 → moy 109,38, 3 jours.
     expect(computeDailyBenchmark(addon, inHouse)).toEqual({
-      avgTotalHT: 600,
-      days: 2,
+      avgTotalHT: 109.38,
+      days: 3,
     })
   })
 
