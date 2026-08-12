@@ -1,15 +1,14 @@
 /* --------------------------------------------------------------------------
  * Petit-déjeuner (PDJ) — synthèse d'un jour pour une vue TRANSVERSE (RepJour).
  *
- * Agrège les lignes In-House (`pdj_breakfasts`) + l'Addon Production d'un jour en
- * quelques compteurs et les montants HT, en RÉUTILISANT les fonctions pures du
- * board PDJ (`countCovers`, `computePdjAmounts`) — aucune règle de calcul n'est
- * réécrite ici. Sert à alimenter la bande de synthèse du rapport journalier sans
- * dupliquer la logique métier.
+ * Agrège les lignes In-House (`pdj_breakfasts`) d'un jour en quelques compteurs et
+ * les montants HT, via la SOURCE UNIQUE du CA (`computePdjCA`, par chambre, au
+ * tarif détecté) — même chiffre que le board, le PDF et l'analytique. Sert à
+ * alimenter la bande de synthèse du rapport journalier sans dupliquer la logique.
  * ------------------------------------------------------------------------ */
 
-import { computePdjAmounts, countCovers } from '#/lib/pdj/amounts.ts'
-import type { PdjAddonRow, PdjDayRow } from '#/lib/pdj/service.ts'
+import { computePdjCA } from '#/lib/pdj/breakdown.ts'
+import type { PdjDayRow } from '#/lib/pdj/service.ts'
 
 /** Synthèse condensée du PDJ d'un jour. */
 export interface PdjDaySummary {
@@ -29,18 +28,18 @@ export interface PdjDaySummary {
   extrasHT: number
   /** Total (inclus + extras), HT. */
   totalHT: number
-  /** L'Addon Production du jour est présent → le CA HT est chiffrable. */
+  /** Le CA HT est chiffrable (tarif détecté et PDJ présents). */
   hasAddon: boolean
 }
 
 /**
- * Synthèse PDJ d'un jour. Miroir exact du décompte du board (`BreakfastBoard`) :
- * volumes calculés sur les lignes In-House, montants HT via `computePdjAmounts`
- * (inclus = revenu Addon + inclus manuels ÷ 1,10 ; extras au tarif catalogue).
+ * Synthèse PDJ d'un jour. Miroir exact du board (`BreakfastBoard`) : volumes sur
+ * les lignes In-House, CA HT via `computePdjCA` (par chambre, inclus + extras au
+ * tarif DÉTECTÉ). `tarifs` = détection sur tout l'historique Addon (cf. tarif.ts).
  */
 export function pdjDaySummary(
   rows: PdjDayRow[],
-  addon: PdjAddonRow[],
+  tarifs: Map<string, number>,
 ): PdjDaySummary {
   const rooms = rows.length
   const guests = rows.reduce((s, r) => s + r.guests, 0)
@@ -49,23 +48,7 @@ export function pdjDaySummary(
     (s, r) => s + Math.max(0, r.breakfasts_served - r.breakfasts_included),
     0,
   )
-  // PDJ inclus saisis À LA MAIN (day-use…), absents de l'Addon : valorisés au
-  // tarif et ajoutés au HT inclus (cf. computePdjAmounts).
-  const manualIncludedCount = rows.reduce(
-    (s, r) => s + (r.manual_kind === 'inclus' ? r.breakfasts_served : 0),
-    0,
-  )
-  const covers = countCovers(rows)
-  const { includedHT, extrasHT, totalHT } = computePdjAmounts({
-    addon: addon.map((a) => ({
-      code: a.code,
-      count: a.total_count,
-      revenue: a.revenue_ttc,
-    })),
-    covers,
-    extrasCount,
-    manualIncludedCount,
-  })
+  const { includedHt, extrasHt, totalHt } = computePdjCA(rows, tarifs)
   const captage = guests > 0 ? ((included + extrasCount) / guests) * 100 : null
 
   return {
@@ -74,9 +57,9 @@ export function pdjDaySummary(
     included,
     extrasCount,
     captage,
-    includedHT,
-    extrasHT,
-    totalHT,
-    hasAddon: addon.length > 0,
+    includedHT: includedHt,
+    extrasHT: extrasHt,
+    totalHT: totalHt,
+    hasAddon: totalHt > 0,
   }
 }

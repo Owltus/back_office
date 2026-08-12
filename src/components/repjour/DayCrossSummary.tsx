@@ -14,11 +14,11 @@ import {
   computeOccupancyBenchmark,
 } from '#/lib/pdj/amounts.ts'
 import {
-  fetchAddonProduction,
   fetchAllAddonProduction,
   fetchAllInHouseCovers,
   fetchDay as fetchPdjDay,
 } from '#/lib/pdj/service.ts'
+import { detectTarifs } from '#/lib/pdj/tarif.ts'
 import { pdjDaySummary } from '#/lib/pdj/summary.ts'
 import { fetchReservations } from '#/lib/parking/service.ts'
 import { aggregateParkingDaily } from '#/lib/parking/analytics.ts'
@@ -128,17 +128,21 @@ export function DayCrossSummary({
     queryFn: () => fetchPdjDay(date),
     enabled: canPdj,
   })
-  const pdjAddonQ = useQuery({
-    queryKey: ['pdj', 'addons', date],
-    queryFn: () => fetchAddonProduction(date),
+  // Tarifs unitaires détectés sur TOUT l'historique Addon (rien en dur ; cf.
+  // tarif.ts). MÊME clé que la page PDJ → cache partagé. Le CA du jour se calcule
+  // par chambre (computePdjCA) au tarif détecté : même chiffre que le board.
+  const allAddonQ = useQuery({
+    queryKey: ['pdj', 'addon-all'],
+    queryFn: fetchAllAddonProduction,
     enabled: canPdj,
   })
+  const tarifs = useMemo(
+    () => detectTarifs(allAddonQ.data ?? []),
+    [allAddonQ.data],
+  )
   const pdj = useMemo(
-    () =>
-      pdjDayQ.data && pdjAddonQ.data
-        ? pdjDaySummary(pdjDayQ.data, pdjAddonQ.data)
-        : null,
-    [pdjDayQ.data, pdjAddonQ.data],
+    () => (pdjDayQ.data ? pdjDaySummary(pdjDayQ.data, tarifs) : null),
+    [pdjDayQ.data, tarifs],
   )
   // Repère « moyenne par jour » (benchmark) — sous-textes CA PDJ & captage.
   // MÊME requête que la page PDJ (queryKey ['pdj','benchmark']) → cache partagé.
