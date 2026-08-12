@@ -8,8 +8,10 @@ import {
   Coffee,
   FileUp,
   LineChart,
+  Receipt,
   Star,
   Trash2,
+  Users,
 } from 'lucide-react'
 
 import { EmptyCanvas } from '#/components/shared/EmptyCanvas.tsx'
@@ -42,7 +44,6 @@ import { businessDateStr, businessNow } from '#/lib/businessDay.ts'
 import {
   deleteAddonProductionDay,
   deleteDay,
-  fetchAddonProduction,
   fetchAllAddonProduction,
   fetchAllInHouseCovers,
   fetchDay,
@@ -60,9 +61,9 @@ import {
   computeCaptageBenchmark,
   computeDailyBenchmark,
   computeOccupancyBenchmark,
-  computePdjAmounts,
-  countCovers,
 } from '#/lib/pdj/amounts.ts'
+import { detectTarifs } from '#/lib/pdj/tarif.ts'
+import { computePdjCA, roomFinance } from '#/lib/pdj/breakdown.ts'
 import { fmtEur, fmtInt, fmtPctInt } from '#/lib/pdj/format.ts'
 
 /* --------------------------------------------------------------------------
@@ -207,14 +208,10 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
 
   const hasData = (dayRows?.length ?? 0) > 0
 
-  // Production Addon (montants TTC par code) du jour affiché. Alimente le calcul
-  // des trois montants HT injectés dans les cases « € » du PDF (impression
-  // uniquement). Absente → cases vides (comportement historique).
-  const { data: addonRows = [] } = useQuery({
-    queryKey: ['pdj', 'addons', selectedDate],
-    queryFn: () => fetchAddonProduction(selectedDate),
-    enabled: !!selectedDate,
-  })
+  // Mode « détail financier » : bascule le tableau (Nom→OTA, Statut→code PDJ,
+  // Visites→prix HT) sans quitter la page. Écran uniquement — l'impression garde
+  // la feuille nominative (cf. pdj.css, @media print force le mode normal).
+  const [financeMode, setFinanceMode] = useState(false)
 
   // Extras du jour = couverts servis au-delà des inclus (cf. amounts.ts). Source
   // UNIQUE, partagée par la card « PDJ Extra » (compteur) et le calcul des montants.
@@ -227,27 +224,18 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
     [dayRows],
   )
 
-  // Montants HT du jour : PDJ inclus / extras / total. `null` sans Addon (cases
-  // laissées vides). Le calcul et l'arrondi vivent dans le métier.
-  const amounts = useMemo(() => {
-    if (addonRows.length === 0) return null
-    const covers = countCovers(dayRows ?? [])
-    // PDJ inclus saisis à la main (absents de l'Addon) → ajoutés au HT inclus.
-    const manualIncludedCount = (dayRows ?? []).reduce(
-      (s, r) => s + (r.manual_kind === 'inclus' ? r.breakfasts_served : 0),
-      0,
-    )
-    return computePdjAmounts({
-      addon: addonRows.map((r) => ({
-        code: r.code,
-        count: r.total_count,
-        revenue: r.revenue_ttc,
-      })),
-      covers,
-      manualIncludedCount,
-      extrasCount,
-    })
-  }, [addonRows, dayRows, extrasCount])
+  // Tarifs unitaires par code, DÉTECTÉS dans l'Addon (dynamique, rien en dur ;
+  // cf. tarif.ts). Chargé une fois, mis en cache (partagé avec la fiche financière).
+  const { data: allAddon } = useQuery({
+    queryKey: ['pdj', 'addon-all'],
+    queryFn: fetchAllAddonProduction,
+  })
+  const tarifs = useMemo(() => detectTarifs(allAddon ?? []), [allAddon])
+
+  // Montants HT du jour : CA = (inclus + extra) PAR CHAMBRE × tarif détecté.
+  // SOURCE UNIQUE du CA (fiche, cartes, PDF, analytique) → le même chiffre partout.
+  // Le batch groupe non ventilé (facturé sans chambre) n'entre PAS dans le CA.
+  const ca = useMemo(() => computePdjCA(dayRows ?? [], tarifs), [dayRows, tarifs])
 
   // Repère « moyenne par jour » : total HT moyen sur TOUS les jours ayant à la
   // fois In-House ET Addon. Requête à part (ne bloque pas la vue du jour), chargée
@@ -276,10 +264,6 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
       }
     },
   })
-
-  // Le jour affiché a-t-il les DEUX sources (In-House + Addon) ? Sinon la card
-  // « CA PDJ » affiche « 0 € » (pas de card sans les deux sources).
-  const dayHasBoth = hasData && addonRows.length > 0
 
   const floors = useMemo(() => {
     const map = new Map<number, number[]>()
@@ -678,13 +662,6 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
       />
 
       {error && <div className="pdj-error print:hidden">{error}</div>}
-      {/* Contrôle défensif des montants (anomalie seulement) : discret, à
-          l'écran uniquement, jamais imprimé, jamais de card. */}
-      {hasData && amounts && amounts.warnings.length > 0 && (
-        <div className="rounded-lg bg-amber-500/10 px-4 py-3 text-sm text-amber-500 print:hidden">
-          {amounts.warnings.join(' ')}
-        </div>
-      )}
 
       {/* En-tête TOUJOURS rendu : le titre du jour est connu d'emblée, il ne doit
           pas apparaître après coup. Seule la navigation (StepNav) reste
@@ -710,6 +687,63 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                   </Button>
                 </Tip>
               </ButtonGroup>
+            )}
+            {/* Bascule « vue service ↔ détail financier » : segmented control dans
+                le style des boutons d'action (bordure outline, hauteur icon-sm), un
+                seul actif à la fois. La pastille bleue GLISSE d'une position à
+                l'autre (translate animé) au lieu de sauter. Réétiquette le tableau
+                à l'écran ; jamais imprimé. */}
+            {hasData && (
+              <div className="pdj-seg relative inline-flex h-8 items-center overflow-hidden rounded-md border bg-background shadow-xs print:hidden dark:border-input dark:bg-input/30">
+                {/* Pastille active : remplit TOUTE la hauteur (inset-y-0) et la
+                    largeur d'un bouton (w-7), collée aux bordures. Ses coins sont
+                    clippés par l'arrondi du conteneur (overflow-hidden) → elle
+                    épouse exactement le cadre. Position par `left` inline (aucune
+                    composition Tailwind, contrairement à `transform`) : service = 0,
+                    financier = largeur d'un bouton (1,75rem). Transition en CSS. */}
+                <span
+                  data-thumb
+                  aria-hidden="true"
+                  style={{ left: financeMode ? '1.75rem' : '0' }}
+                  className="pointer-events-none absolute inset-y-0 w-7 bg-primary"
+                />
+                <Tip label="Vue service">
+                  <button
+                    type="button"
+                    onClick={() => setFinanceMode(false)}
+                    aria-label="Vue service"
+                    aria-pressed={!financeMode}
+                    className="relative z-10 flex size-7 items-center justify-center rounded-[5px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  >
+                    <Users
+                      className={cn(
+                        'size-4 transition-colors duration-200',
+                        financeMode
+                          ? 'text-muted-foreground'
+                          : 'text-primary-foreground',
+                      )}
+                    />
+                  </button>
+                </Tip>
+                <Tip label="Détail financier">
+                  <button
+                    type="button"
+                    onClick={() => setFinanceMode(true)}
+                    aria-label="Détail financier"
+                    aria-pressed={financeMode}
+                    className="relative z-10 flex size-7 items-center justify-center rounded-[5px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  >
+                    <Receipt
+                      className={cn(
+                        'size-4 transition-colors duration-200',
+                        financeMode
+                          ? 'text-primary-foreground'
+                          : 'text-muted-foreground',
+                      )}
+                    />
+                  </button>
+                </Tip>
+              </div>
             )}
             {/* Groupe « actions de page » : analytique + import + impression. */}
             <ButtonGroup>
@@ -847,24 +881,14 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                 value={stats.breakfasts}
                 label="PDJ inclus"
                 accent="#34d399"
-                sub={
-                  amounts ? subMuted(fmtEur(amounts.includedHT, 2)) : undefined
-                }
+                sub={ca.inclusNb > 0 ? subMuted(fmtEur(ca.includedHt, 2)) : undefined}
               />
               <StatTile
                 value={extrasCount}
                 label="PDJ Extra"
                 accent="#fbbf24"
                 printHidden
-                sub={
-                  amounts
-                    ? subMuted(
-                        amounts.extrasHT != null
-                          ? fmtEur(amounts.extrasHT, 2)
-                          : '—',
-                      )
-                    : undefined
-                }
+                sub={extrasCount > 0 ? subMuted(fmtEur(ca.extrasHt, 2)) : undefined}
               />
               {/* Miroir PDF de « PDJ Extra » — conservée dans le footer du PDF
                   UNIQUEMENT s'il y a au moins un extra saisi (sinon le PDF garde
@@ -887,11 +911,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                 printHidden
                 label="CA PDJ"
                 accent="#60a5fa"
-                value={
-                  dayHasBoth && amounts && amounts.totalHT != null
-                    ? fmtEur(amounts.totalHT, 2)
-                    : fmtEur(0, 0)
-                }
+                value={ca.totalHt > 0 ? fmtEur(ca.totalHt, 2) : fmtEur(0, 0)}
                 sub={
                   benchmark && benchmark.total.avgTotalHT != null
                     ? subMuted(`moy. ${fmtEur(benchmark.total.avgTotalHT, 2)}/j`)
@@ -951,14 +971,12 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
             <div
               className={
                 'pdj-stats-grid pdj-stats-revenue' +
-                (amounts && amounts.extrasHT != null && amounts.extrasHT > 0
-                  ? ''
-                  : ' pdj-revenue-faded')
+                (ca.extrasHt > 0 ? '' : ' pdj-revenue-faded')
               }
             >
               <div className="pdj-revenue">
                 <div className="pdj-revenue-value">
-                  {amounts ? htPrice(amounts.includedHT) : ' '}
+                  {ca.inclusNb > 0 ? htPrice(ca.includedHt) : ' '}
                 </div>
                 <div className="pdj-revenue-label">PDJ Inclus €</div>
               </div>
@@ -966,9 +984,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                 {/* Extra rempli seulement s'il y a des extras chiffrables ;
                     sinon case gardée, valeur vide (décision D1). */}
                 <div className="pdj-revenue-value">
-                  {amounts && amounts.extrasHT != null && amounts.extrasHT > 0
-                    ? htPrice(amounts.extrasHT)
-                    : ' '}
+                  {ca.extrasHt > 0 ? htPrice(ca.extrasHt) : ' '}
                 </div>
                 <div className="pdj-revenue-label">PDJ Extra €</div>
               </div>
@@ -978,38 +994,27 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                     coche un extra → on n'imprime pas un chiffre provisoire. Même
                     condition que la case Extra. */}
                 <div className="pdj-revenue-value">
-                  {amounts &&
-                  amounts.extrasHT != null &&
-                  amounts.extrasHT > 0 &&
-                  amounts.totalHT != null
-                    ? htPrice(amounts.totalHT)
-                    : ' '}
+                  {ca.extrasHt > 0 ? htPrice(ca.totalHt) : ' '}
                 </div>
                 <div className="pdj-revenue-label">Total €</div>
               </div>
             </div>
           </div>
 
-          {/* Tableaux par étage. */}
-          <div className="pdj-floors">
+          {/* Tableaux par étage. La classe `pdj-finance` bascule l'affichage en
+              mode détail financier (CSS) — écran uniquement, l'impression revient
+              au mode nominatif. */}
+          <div className={cn('pdj-floors', financeMode && 'pdj-finance')}>
             {floors.map(({ floor, rooms }) => (
               <div key={floor} className="pdj-floor">
                 <table>
-                  <thead>
-                    <tr>
-                      <th>Chambre</th>
-                      <th>Nom</th>
-                      <th className="pdj-c">Statut</th>
-                      <th className="pdj-c">Visites</th>
-                      <th className="pdj-c">Clients</th>
-                    </tr>
-                  </thead>
                   <tbody>
                     {rooms.map((room) => (
                       <GuestRow
                         key={room}
                         room={room}
                         row={byRoom.get(room)}
+                        tarifs={tarifs}
                         canEdit={dayEditable}
                         onServe={handleServe}
                         onManual={handleManual}
@@ -1086,15 +1091,6 @@ function BoardSkeleton() {
         {FLOOR_ROOM_COUNTS.map((count, i) => (
           <div key={i} className="pdj-floor">
             <table>
-              <thead>
-                <tr>
-                  <th>Chambre</th>
-                  <th>Nom</th>
-                  <th className="pdj-c">Statut</th>
-                  <th className="pdj-c">Visites</th>
-                  <th className="pdj-c">Clients</th>
-                </tr>
-              </thead>
               <tbody>
                 {Array.from({ length: count }).map((_, r) => (
                   <tr key={r}>
@@ -1104,10 +1100,10 @@ function BoardSkeleton() {
                     <td>
                       <Skeleton className="h-3 w-24" />
                     </td>
-                    <td className="pdj-c">
-                      <Skeleton className="mx-auto h-3 w-10" />
+                    <td className="pdj-c pdj-status">
+                      <Skeleton className="mx-auto h-3 w-4" />
                     </td>
-                    <td className="pdj-c">
+                    <td className="pdj-c pdj-stay-count">
                       <Skeleton className="mx-auto h-3 w-6" />
                     </td>
                     <td className="pdj-c">
@@ -1130,16 +1126,22 @@ function BoardSkeleton() {
 const GuestRow = memo(function GuestRow({
   room,
   row,
+  tarifs,
   canEdit,
   onServe,
   onManual,
 }: {
   room: number
   row?: PdjDayRow
+  tarifs: Map<string, number>
   canEdit: boolean
   onServe: (room: number, n: number) => void
   onManual: (room: number, n: number, kind: ManualKind) => void
 }) {
+  // Détail financier de la chambre (OTA · code PDJ · prix HT) — calculé pour toutes
+  // les lignes ; l'affichage écran/impression est piloté par CSS (classe pdj-finance
+  // sur le conteneur), les valeurs restant DANS le DOM en permanence.
+  const fin = row ? roomFinance(row, tarifs) : null
   // Type de saisie manuelle (day-use/no-show) : calculé d'abord car il conditionne
   // le sens des cases « attendues » ci-dessous.
   const manualKind = row?.manual_kind ?? null
@@ -1236,20 +1238,45 @@ const GuestRow = memo(function GuestRow({
       ) : (
         <>
           <td className={cn('pdj-name', row?.vip && 'pdj-vip')}>
-            {row?.vip && (
-              <Star className="pdj-name-star size-3" fill="currentColor" />
-            )}
-            {row ? (row.guest_name ?? '—') : ''}
+            {/* Normal : nom du client. Financier : origine (OTA). */}
+            <span className="pdj-name-inner pdj-val-normal">
+              {row?.vip && (
+                <Star className="pdj-name-star size-3" fill="currentColor" />
+              )}
+              {row ? (row.guest_name ?? '—') : ''}
+            </span>
+            <span
+              className="pdj-name-inner pdj-val-finance"
+              title={fin?.origin}
+            >
+              {fin ? fin.origin : ''}
+            </span>
           </td>
-          <td className="pdj-c">
-            {departing ? (
-              <ArrowUp className="pdj-status-icon" style={{ color: '#EF5350' }} />
-            ) : staying ? (
-              <ArrowDown className="pdj-status-icon" style={{ color: '#2196F3' }} />
-            ) : null}
+          <td className="pdj-c pdj-status">
+            {/* Normal : flèche statut. Financier : code PDJ. */}
+            <span className="pdj-val-normal">
+              {departing ? (
+                <ArrowUp
+                  className="pdj-status-icon"
+                  style={{ color: '#EF5350' }}
+                />
+              ) : staying ? (
+                <ArrowDown
+                  className="pdj-status-icon"
+                  style={{ color: '#2196F3' }}
+                />
+              ) : null}
+            </span>
+            <span className="pdj-val-finance pdj-code">{fin?.code ?? '—'}</span>
           </td>
           <td className="pdj-c pdj-stay-count">
-            {row && row.stay_count > 1 ? row.stay_count : ' '}
+            {/* Normal : nombre de visites. Financier : prix HT facturé. */}
+            <span className="pdj-val-normal">
+              {row && row.stay_count > 1 ? row.stay_count : ' '}
+            </span>
+            <span className="pdj-val-finance pdj-price">
+              {fin && fin.htCa > 0 ? fmtEur(fin.htCa, 2) : '—'}
+            </span>
           </td>
         </>
       )}

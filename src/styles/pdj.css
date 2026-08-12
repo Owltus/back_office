@@ -63,8 +63,12 @@
 .pdj-floor td.pdj-c {
   text-align: center;
 }
+/* Séparateur de lignes : hairline CLAIR (à partir de --foreground) plutôt qu'un
+   slate sombre translucide — un ajout de clarté se compose de façon IDENTIQUE sur
+   fond sombre ET sur le vert « PDJ inclus », alors qu'un slate translucide virait
+   au sale sur le vert. Écran uniquement : l'impression garde sa bordure blanche. */
 .pdj-floor tbody tr {
-  border-bottom: 1px solid color-mix(in oklab, var(--border) 55%, transparent);
+  border-bottom: 1px solid color-mix(in oklab, var(--foreground) 8%, transparent);
   transition: background-color 0.12s ease;
 }
 .pdj-floor tbody tr:last-child {
@@ -85,6 +89,13 @@
 .pdj-name {
   max-width: 0;
   width: 100%;
+}
+/* Ellipsis du nom porté par un span INTERNE, jamais par la td : un overflow:hidden
+   sur une cellule en border-collapse clippe la bordure HAUTE de la ligne → la
+   discontinuité visible uniquement sous la colonne Nom. Le span, hors modèle de
+   tableau, tronque sans toucher aux bordures. Vaut aussi à l'impression. */
+.pdj-name-inner {
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -118,6 +129,73 @@
   width: 1rem;
   height: 1rem;
   vertical-align: middle;
+}
+
+/* Colonnes resserrées (écran) — en-têtes retirés, chaque colonne au plus juste :
+   Chambre compacte, Statut à la largeur de la flèche, Visites ≥ 3 caractères.
+   La colonne Nom (width: 100%) absorbe l'espace restant. */
+.pdj-floor td.pdj-room {
+  width: 1%;
+  white-space: nowrap;
+  padding-right: 0.35rem;
+}
+.pdj-floor td.pdj-status {
+  width: 1%;
+  padding-left: 0.3rem;
+  padding-right: 0.3rem;
+}
+.pdj-floor td.pdj-stay-count {
+  width: 1%;
+  min-width: 3ch;
+  padding-left: 0.3rem;
+  padding-right: 0.3rem;
+  text-align: center;
+}
+
+/* Segmented control « vue service ↔ détail financier » : la pastille active (bleue)
+   GLISSE d'une cellule à l'autre. On anime la propriété `left` (et non `transform`,
+   dont la composition Tailwind v4 parasite le style inline → la pastille sauterait).
+   Cellule = largeur d'un bouton (1,75rem) après le padding (0,125rem). Coupé si
+   l'utilisateur a demandé à réduire les animations. */
+.pdj-seg [data-thumb] {
+  transition: left 0.2s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pdj-seg [data-thumb] {
+    transition: none;
+  }
+}
+
+/* --- Bascule « détail financier » (écran) -------------------------------------
+   Chaque colonne centrale porte DEUX valeurs dans le DOM : la normale (nom /
+   statut / visites) et la financière (OTA / code PDJ / prix). La classe
+   `.pdj-finance` sur le conteneur choisit laquelle s'affiche. L'IMPRESSION force
+   toujours la valeur normale (feuille nominative inchangée, cf. @media print). */
+.pdj-val-finance {
+  display: none;
+}
+.pdj-finance .pdj-val-normal {
+  display: none;
+}
+.pdj-finance .pdj-val-finance {
+  display: inline;
+}
+.pdj-finance .pdj-name-inner.pdj-val-finance {
+  display: block;
+}
+/* En mode financier, Statut porte le code et Visites le prix : on élargit au
+   contenu (l'OTA, colonne Nom en width:100%, absorbe le reste). */
+.pdj-finance td.pdj-status,
+.pdj-finance td.pdj-stay-count {
+  min-width: 0;
+  white-space: nowrap;
+}
+.pdj-finance .pdj-code {
+  color: var(--muted-foreground);
+}
+.pdj-finance .pdj-price {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
 }
 
 /* Flèche dans les libellés « Recouche » / « Départ » : impression uniquement
@@ -273,6 +351,18 @@
     padding-left: 2px;
     padding-right: 2px;
     font-size: 9px;
+  }
+  /* Détail financier = écran uniquement : même si le mode est actif à l'écran,
+     l'impression réaffiche TOUJOURS la feuille nominative (nom / statut / visites)
+     et masque les valeurs financières. La feuille PDF reste identique. */
+  .pdj-val-finance {
+    display: none !important;
+  }
+  .pdj-finance .pdj-val-normal {
+    display: inline !important;
+  }
+  .pdj-finance .pdj-name-inner.pdj-val-normal {
+    display: block !important;
   }
   .pdj-floor td:nth-child(3) {
     width: 15px;
