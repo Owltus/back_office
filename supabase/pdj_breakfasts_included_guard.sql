@@ -7,8 +7,11 @@
 -- source d'écriture (Edge auto périmée, client, réimport…). Sur toute écriture
 -- d'une ligne D'IMPORT (`manual_kind IS NULL`), `breakfasts_included` est
 -- RECALCULÉ depuis les colonnes source de la LIGNE elle-même :
---    cases = min( N PAX si le tarif le précise sinon adultes, nb d'adultes, 2 )
---    → enfants / bébés JAMAIS comptés ; JAMAIS plus de 2 ; 0 si pas de PDJ.
+--    cases = min( N PAX si le tarif le précise sinon adultes, occupants, 2 )
+--    → le PAX du tarif = nb de PDJ VENDUS, BORNÉ au nb d'occupants réels
+--      (adultes + enfants) : « 2 PAX » avec 1 adulte + 1 enfant -> 2 (enfant payant
+--      compté), mais « 2 PAX » pour une personne SEULE -> 1 (pas de couvert
+--      fantôme) ; sans PAX, les adultes seuls ; JAMAIS plus de 2 ; 0 si pas de PDJ.
 -- Règle STRICTEMENT IDENTIQUE à src/lib/pdj/csv.ts, supabase/functions/
 -- import-report/pdj.ts et supabase/pdj_breakfasts_recompute.sql (même regex,
 -- même least()). Donc pour un import déjà correct : aucun changement (idempotent).
@@ -44,7 +47,7 @@ begin
           (regexp_match(upper(coalesce(new.rate_plan, '')), '([0-9]+)[[:space:]]*PAX'))[1]::int,
           new.adults
         ),
-        new.adults,
+        coalesce(new.adults, 0) + coalesce(new.children, 0),
         2
       )
     else 0
