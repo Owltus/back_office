@@ -188,11 +188,19 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
     },
     [],
   )
+  // Timers de l'animation « cases cochées une à une » (automode) : nettoyés au
+  // démontage ET avant chaque relance, pour ne pas cocher après coup.
+  const autoTimersRef = useRef<ReturnType<typeof setTimeout>[]>([])
+  const clearAutoTimers = useCallback(() => {
+    for (const id of autoTimersRef.current) clearTimeout(id)
+    autoTimersRef.current = []
+  }, [])
   useEffect(
     () => () => {
       if (autoMsgTimer.current) clearTimeout(autoMsgTimer.current)
+      clearAutoTimers()
     },
-    [],
+    [clearAutoTimers],
   )
 
   // Jours de service disponibles (du plus récent au plus ancien).
@@ -561,50 +569,49 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
   // maj optimiste du cache pour les N chambres, puis persistance en lot ; rollback
   // si échec. Respecte `dayEditable` (RLS : la gestion coche tout jour).
   const runAutoMode = useCallback(() => {
-    if (!dayEditable || !selectedDate) {
-      flashAuto('Jour non modifiable : automode indisponible.', 'warn')
-      return
-    }
+    if (!dayEditable || !selectedDate) return
     const targets = autoModeTargets(dayRows ?? [])
-    if (targets.length === 0) {
-      flashAuto('Automode : rien à cocher.', 'warn')
-      return
+    if (targets.length === 0) return
+    clearAutoTimers()
+    // Ordre ALÉATOIRE (Fisher-Yates) → jolie apparition en désordre.
+    const shuffled = targets.slice()
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
     }
-    const served = new Map(targets.map((t) => [t.room, t.served]))
-    // Remplissage optimiste INSTANTANÉ (côté « cheat code ») : les cases se
-    // cochent tout de suite. Mais le message de succès n'est flashé qu'APRÈS
-    // confirmation serveur — on n'annonce jamais un cochage qu'on n'a pas
-    // persisté (setServed lève si la RLS a refusé sans erreur).
-    queryClient.setQueryData<PdjDayRow[]>(['pdj', 'day', selectedDate], (old) =>
-      old?.map((r) =>
-        served.has(r.room)
-          ? { ...r, breakfasts_served: served.get(r.room) ?? 0, served: true }
-          : r,
-      ),
-    )
-    const n = targets.length
+    // Cadence rapide mais visible, BORNÉE (pas d'attente longue même à 80
+    // chambres). Chaque case se coche par une maj optimiste décalée ; la
+    // transition CSS du bouton fait le fondu. Léger jitter aléatoire.
+    const perStep = Math.min(45, Math.max(12, Math.round(900 / shuffled.length)))
+    shuffled.forEach((t, i) => {
+      const delay = i * perStep + Math.random() * perStep
+      const id = setTimeout(() => {
+        queryClient.setQueryData<PdjDayRow[]>(
+          ['pdj', 'day', selectedDate],
+          (old) =>
+            old?.map((r) =>
+              r.room === t.room
+                ? { ...r, breakfasts_served: t.served, served: true }
+                : r,
+            ),
+        )
+      }, delay)
+      autoTimersRef.current.push(id)
+    })
+    // Persistance en lot, immédiate (indépendante de l'animation). AUCUN bandeau
+    // après l'automode : l'animation est le seul retour. Échec (RLS/réseau) → on
+    // stoppe l'animation et on resynchronise sur l'état réel persisté (les coches
+    // non enregistrées disparaissent).
     void Promise.all(
       targets.map((t) => setServed(selectedDate, t.room, t.served)),
-    )
-      .then(() =>
-        flashAuto(
-          `Automode : ${n} chambre${n > 1 ? 's' : ''} cochée${n > 1 ? 's' : ''}.`,
-        ),
-      )
-      .catch((err) => {
-        console.error('[pdj] automode : écriture échouée', err)
-        // Rejet (RLS ou réseau), même partiel : on resynchronise sur l'état réel
-        // persisté (les coches optimistes non confirmées disparaissent) et on
-        // le dit clairement plutôt que d'afficher un faux succès.
-        void queryClient.invalidateQueries({
-          queryKey: ['pdj', 'day', selectedDate],
-        })
-        flashAuto(
-          'Automode : enregistrement refusé (jour hors fenêtre ou droit insuffisant).',
-          'warn',
-        )
+    ).catch((err) => {
+      console.error('[pdj] automode : écriture échouée', err)
+      clearAutoTimers()
+      void queryClient.invalidateQueries({
+        queryKey: ['pdj', 'day', selectedDate],
       })
-  }, [dayEditable, selectedDate, dayRows, queryClient, flashAuto])
+    })
+  }, [dayEditable, selectedDate, dayRows, queryClient, clearAutoTimers])
 
   // Écoute « automode » tant que le compte a le droit d'écrire (garde focus
   // incluse dans le hook). Portée limitée au board : l'écouteur part au démontage.
