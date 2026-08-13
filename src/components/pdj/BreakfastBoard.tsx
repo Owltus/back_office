@@ -25,6 +25,7 @@ import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
 import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { StepNav } from '#/components/shared/StepNav.tsx'
 import { useStepNavKeys } from '#/components/shared/useStepNavKeys.ts'
+import { useKeySequence } from '#/components/shared/useKeySequence.ts'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { DatePickerButton } from '#/components/form/fields.tsx'
@@ -64,6 +65,7 @@ import {
 } from '#/lib/pdj/amounts.ts'
 import { detectTarifs } from '#/lib/pdj/tarif.ts'
 import { computePdjCA, roomFinance } from '#/lib/pdj/breakdown.ts'
+import { autoModeTargets } from '#/lib/pdj/automode.ts'
 import { fmtEur, fmtInt, fmtPctInt } from '#/lib/pdj/format.ts'
 
 /* --------------------------------------------------------------------------
@@ -169,6 +171,29 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
   const [error, setError] = useState('')
   const [dragging, setDragging] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // Retour transitoire (« automode » + échecs d'enregistrement) : message bref
+  // (~3,5 s), jamais imprimé, coloré selon la tonalité (succès / avertissement).
+  // Un seul timer, réarmé à chaque message.
+  const [autoMsg, setAutoMsg] = useState<{
+    text: string
+    tone: 'ok' | 'warn'
+  } | null>(null)
+  const autoMsgTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const flashAuto = useCallback(
+    (text: string, tone: 'ok' | 'warn' = 'ok') => {
+      setAutoMsg({ text, tone })
+      if (autoMsgTimer.current) clearTimeout(autoMsgTimer.current)
+      autoMsgTimer.current = setTimeout(() => setAutoMsg(null), 3500)
+    },
+    [],
+  )
+  useEffect(
+    () => () => {
+      if (autoMsgTimer.current) clearTimeout(autoMsgTimer.current)
+    },
+    [],
+  )
 
   // Jours de service disponibles (du plus récent au plus ancien).
   const { data: dates = [] } = useQuery({
@@ -516,13 +541,74 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
       )
       setServed(selectedDate, room, n).catch((err) => {
         console.error('[pdj] enregistrement de la consommation échoué', err)
+        // Resynchronise (annule la coche optimiste) ET explique le revert, sinon
+        // la case « rebondirait » sans raison visible (rejet RLS silencieux).
         void queryClient.invalidateQueries({
           queryKey: ['pdj', 'day', selectedDate],
         })
+        flashAuto(
+          'Enregistrement refusé : jour hors fenêtre ou droit insuffisant.',
+          'warn',
+        )
       })
     },
-    [dayEditable, selectedDate, queryClient],
+    [dayEditable, selectedDate, queryClient, flashAuto],
   )
+
+  // « automode » : cheat code de cochage auto. On tape « automode » au clavier
+  // (sans champ) → pour le JOUR affiché, coche le dû facturé (breakfasts_included)
+  // de chaque chambre facturée pas encore saisie (cf. autoModeTargets). Une seule
+  // maj optimiste du cache pour les N chambres, puis persistance en lot ; rollback
+  // si échec. Respecte `dayEditable` (RLS : la gestion coche tout jour).
+  const runAutoMode = useCallback(() => {
+    if (!dayEditable || !selectedDate) {
+      flashAuto('Jour non modifiable : automode indisponible.', 'warn')
+      return
+    }
+    const targets = autoModeTargets(dayRows ?? [])
+    if (targets.length === 0) {
+      flashAuto('Automode : rien à cocher.', 'warn')
+      return
+    }
+    const served = new Map(targets.map((t) => [t.room, t.served]))
+    // Remplissage optimiste INSTANTANÉ (côté « cheat code ») : les cases se
+    // cochent tout de suite. Mais le message de succès n'est flashé qu'APRÈS
+    // confirmation serveur — on n'annonce jamais un cochage qu'on n'a pas
+    // persisté (setServed lève si la RLS a refusé sans erreur).
+    queryClient.setQueryData<PdjDayRow[]>(['pdj', 'day', selectedDate], (old) =>
+      old?.map((r) =>
+        served.has(r.room)
+          ? { ...r, breakfasts_served: served.get(r.room) ?? 0, served: true }
+          : r,
+      ),
+    )
+    const n = targets.length
+    void Promise.all(
+      targets.map((t) => setServed(selectedDate, t.room, t.served)),
+    )
+      .then(() =>
+        flashAuto(
+          `Automode : ${n} chambre${n > 1 ? 's' : ''} cochée${n > 1 ? 's' : ''}.`,
+        ),
+      )
+      .catch((err) => {
+        console.error('[pdj] automode : écriture échouée', err)
+        // Rejet (RLS ou réseau), même partiel : on resynchronise sur l'état réel
+        // persisté (les coches optimistes non confirmées disparaissent) et on
+        // le dit clairement plutôt que d'afficher un faux succès.
+        void queryClient.invalidateQueries({
+          queryKey: ['pdj', 'day', selectedDate],
+        })
+        flashAuto(
+          'Automode : enregistrement refusé (jour hors fenêtre ou droit insuffisant).',
+          'warn',
+        )
+      })
+  }, [dayEditable, selectedDate, dayRows, queryClient, flashAuto])
+
+  // Écoute « automode » tant que le compte a le droit d'écrire (garde focus
+  // incluse dans le hook). Portée limitée au board : l'écouteur part au démontage.
+  useKeySequence('automode', runAutoMode, { enabled: canEdit })
 
   // Saisie MANUELLE d'un PDJ dans une chambre non check-in (day-use…). Crée la
   // ligne manuelle si la chambre est vide, la met à jour sinon ; tout décoché la
@@ -662,6 +748,20 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
       />
 
       {error && <div className="pdj-error print:hidden">{error}</div>}
+
+      {autoMsg && (
+        <div
+          role="status"
+          className={cn(
+            'rounded-md border px-3 py-2 text-sm font-medium print:hidden',
+            autoMsg.tone === 'ok'
+              ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+              : 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300',
+          )}
+        >
+          {autoMsg.text}
+        </div>
+      )}
 
       {/* En-tête TOUJOURS rendu : le titre du jour est connu d'emblée, il ne doit
           pas apparaître après coup. Seule la navigation (StepNav) reste
