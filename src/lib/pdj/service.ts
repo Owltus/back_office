@@ -157,13 +157,18 @@ export async function deleteAddonProductionDay(
   if (error) throw error
 }
 
-/** Met à jour la consommation d'une chambre pour un jour (saisie staff, D4). */
+/** Met à jour la consommation d'une chambre pour un jour (saisie staff, D4).
+ *
+ * `.select('id')` est ESSENTIEL : un UPDATE dont les lignes échouent au prédicat
+ * `USING` d'une policy RLS (ex. jour hors fenêtre J-3) ne renvoie PAS d'erreur —
+ * il modifie simplement 0 ligne (`error: null`). Sans lire les lignes affectées,
+ * un rejet RLS passerait pour un succès. On lève donc une erreur si 0 ligne. */
 export async function setServed(
   serviceDate: string,
   room: number,
   breakfastsServed: number,
 ): Promise<void> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from(PDJ_TABLE)
     .update({
       breakfasts_served: breakfastsServed,
@@ -171,7 +176,13 @@ export async function setServed(
     })
     .eq('service_date', serviceDate)
     .eq('room', room)
+    .select('id')
   if (error) throw error
+  if (!data || data.length === 0) {
+    throw new Error(
+      `Aucune ligne modifiée (${serviceDate}, chambre ${room}) : jour hors fenêtre d'écriture ou droit insuffisant.`,
+    )
+  }
 }
 
 /**
