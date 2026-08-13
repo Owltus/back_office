@@ -14,12 +14,12 @@ import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
 import { YearNav } from '#/components/analytique/YearNav.tsx'
 import { useAnnualYear } from '#/components/analytique/useAnnualYear.ts'
 import { KpiLineChart } from '#/components/analytique/KpiLineChart.tsx'
-import { fetchReservations } from '#/lib/parking/service.ts'
+import { fetchParkingArrivals } from '#/lib/parking/service.ts'
 import { fetchYearAnalytics } from '#/lib/repjour/services/daily.ts'
 import {
   aggregateParkingMonthly,
   captageIndex,
-  yearsFromReservations,
+  yearsFromParkingDates,
 } from '#/lib/parking/analytics.ts'
 import { fmtInt, fmtPct, fmtPctInt } from '#/lib/parking/format.ts'
 import { MONTHS_LABELS, MONTHS_SHORT } from '#/lib/repjour/constants.ts'
@@ -41,16 +41,17 @@ const currentYear = new Date().getFullYear()
 export function ParkingAnalytiqueBoard() {
   const navigate = useNavigate()
 
-  // Toutes les réservations (une seule lecture, mise en cache). L'agrégation par
+  // Agrégat des ARRIVÉES (vue `parking_arrivals_agg`, une ligne par jour au lieu
+  // d'une par réservation). Une seule lecture, mise en cache ; l'agrégation par
   // année se fait ensuite en mémoire — pas de nouvelle requête par année.
-  const { data: reservations = [], isPending: loadingRes } = useQuery({
-    queryKey: ['parking', 'analytics'],
-    queryFn: fetchReservations,
+  const { data: arrivals = [], isPending: loadingRes } = useQuery({
+    queryKey: ['parking', 'arrivals-all'],
+    queryFn: fetchParkingArrivals,
   })
 
   const years = useMemo(
-    () => yearsFromReservations(reservations, currentYear),
-    [reservations],
+    () => yearsFromParkingDates(arrivals.map((r) => r.start_date), currentYear),
+    [arrivals],
   )
 
   // Année sélectionnée + recalage si absente de la liste (hook partagé).
@@ -66,8 +67,8 @@ export function ParkingAnalytiqueBoard() {
   const loading = loadingRes || loadingHotel
 
   const months = useMemo(
-    () => aggregateParkingMonthly(reservations, year),
-    [reservations, year],
+    () => aggregateParkingMonthly(arrivals, year),
+    [arrivals, year],
   )
 
   // Nuitées HÔTEL par mois (dénominateur du captage), indexées par numéro de mois.

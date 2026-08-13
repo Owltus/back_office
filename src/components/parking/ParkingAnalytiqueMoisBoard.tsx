@@ -13,7 +13,10 @@ import { AnalytiqueTable } from '#/components/analytique/AnalytiqueTable.tsx'
 import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
 import { AnalytiqueBackButton } from '#/components/analytique/AnalytiqueBackButton.tsx'
 import { KpiLineChart } from '#/components/analytique/KpiLineChart.tsx'
-import { fetchReservations } from '#/lib/parking/service.ts'
+import {
+  fetchParkingArrivals,
+  fetchParkingDailyOccupation,
+} from '#/lib/parking/service.ts'
 import { fetchUnifiedDays } from '#/lib/repjour/services/data.ts'
 import {
   aggregateParkingDaily,
@@ -42,13 +45,24 @@ export function ParkingAnalytiqueMoisBoard({
   year: number
   month: number
 }) {
-  // MÊME clé que la vue annuelle (`['parking','analytics']`) : toutes les
-  // réservations sont lues une seule fois et partagées entre les deux vues (hit
-  // de cache instantané au passage annuel → mois, et entre mois). L'agrégation
-  // par jour est un calcul client négligeable, dérivé du cache.
-  const { data: reservations = [], isPending: loadingRes } = useQuery({
-    queryKey: ['parking', 'analytics'],
-    queryFn: fetchReservations,
+  const mm = String(month).padStart(2, '0')
+  const nDays = new Date(year, month, 0).getDate()
+  const monthStart = `${year}-${mm}-01`
+  const monthEnd = `${year}-${mm}-${String(nDays).padStart(2, '0')}`
+
+  // Occupation RÉELLE du mois, jour par jour, depuis la vue dépliée
+  // `parking_daily_occupation` BORNÉE au mois côté serveur (l'expansion des
+  // séjours est faite en base, plus aucun scan de tout l'historique).
+  const { data: occRows = [], isPending: loadingOcc } = useQuery({
+    queryKey: ['parking', 'daily-occ', year, month],
+    queryFn: () => fetchParkingDailyOccupation(monthStart, monthEnd),
+  })
+
+  // Impayés du mois : réservations arrivées dans le mois au statut checkout, lues
+  // depuis l'agrégat des arrivées (clé partagée avec l'analytique annuel → cache).
+  const { data: arrivalRows = [] } = useQuery({
+    queryKey: ['parking', 'arrivals-all'],
+    queryFn: fetchParkingArrivals,
   })
 
   // Occupation HÔTEL du mois, jour par jour (rj_nuitees = chambres occupées la
@@ -58,11 +72,11 @@ export function ParkingAnalytiqueMoisBoard({
     queryKey: ['parking', 'hotel-month', year, month],
     queryFn: () => fetchUnifiedDays({ year, month }),
   })
-  const loading = loadingRes || loadingHotel
+  const loading = loadingOcc || loadingHotel
 
   const days = useMemo(
-    () => aggregateParkingDaily(reservations, year, month),
-    [reservations, year, month],
+    () => aggregateParkingDaily(occRows, year, month),
+    [occRows, year, month],
   )
 
   // Chambres occupées HÔTEL par jour (numéro de jour → rj_nuitees), dénominateur
@@ -83,12 +97,12 @@ export function ParkingAnalytiqueMoisBoard({
     const arrivals = days.reduce((s, d) => s + d.arrivals, 0)
     const departures = days.reduce((s, d) => s + d.departures, 0)
 
-    // Impayés : réservations dont l'arrivée tombe dans le mois, au statut
-    // checkout (départ enregistré sans paiement).
-    const prefix = `${year}-${String(month).padStart(2, '0')}-`
-    const unpaid = reservations.filter(
-      (r) => r.start_date.startsWith(prefix) && r.status === 'checkout',
-    ).length
+    // Impayés : réservations dont l'arrivée tombe dans le mois, au statut checkout
+    // (départ enregistré sans paiement) — somme des `unpaid` de l'agrégat d'arrivées.
+    const prefix = `${year}-${mm}-`
+    const unpaid = arrivalRows
+      .filter((a) => a.start_date.startsWith(prefix))
+      .reduce((s, a) => s + a.unpaid, 0)
 
     // Captage du mois : occupation parking client rapportée à l'occupation hôtel,
     // sur les cumuls des jours où l'occupation hôtel est connue. « — » si aucune base.
@@ -112,7 +126,7 @@ export function ParkingAnalytiqueMoisBoard({
       arrivalsPerDay: count > 0 ? arrivals / count : 0,
       departuresPerDay: count > 0 ? departures / count : 0,
     }
-  }, [days, reservations, year, month, hotelRoomsByDay])
+  }, [days, arrivalRows, year, mm, hotelRoomsByDay])
 
   const chartData = useMemo(
     () =>

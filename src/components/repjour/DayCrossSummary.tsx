@@ -16,8 +16,8 @@ import {
 } from '#/lib/pdj/service.ts'
 import { detectTarifs } from '#/lib/pdj/tarif.ts'
 import { pdjDaySummary } from '#/lib/pdj/summary.ts'
-import { fetchReservations } from '#/lib/parking/service.ts'
-import { aggregateParkingDaily, captageIndex } from '#/lib/parking/analytics.ts'
+import { fetchParkingDailyOccupation } from '#/lib/parking/service.ts'
+import { captageIndex } from '#/lib/parking/analytics.ts'
 import { fetchUnifiedDays } from '#/lib/repjour/services/data.ts'
 import {
   fetchDay as fetchRaproDay,
@@ -198,9 +198,12 @@ export function DayCrossSummary({
   }, [aggWinQ.data, tarifs])
 
   // --- Parking (jour courant + moyennes 30 j glissants) ----------------------
-  const parkingQ = useQuery({
-    queryKey: ['parking', 'reservations'],
-    queryFn: fetchReservations,
+  // Occupation parking par jour sur la fenêtre 30 j, depuis la vue dépliée
+  // `parking_daily_occupation` bornée côté serveur — plus de chargement de TOUTES
+  // les réservations sur la page RepJour.
+  const parkingOccQ = useQuery({
+    queryKey: ['parking', 'daily-occ-range', windowFrom, date],
+    queryFn: () => fetchParkingDailyOccupation(windowFrom, date),
     enabled: canParking,
   })
   // Occupation HÔTEL (rj_nuitees) des 1–2 mois couvrant la fenêtre 30 j —
@@ -227,13 +230,29 @@ export function DayCrossSummary({
     return map
   }, [hotelWinQs])
   const parkingAgg = useMemo(() => {
-    const res = parkingQ.data
-    if (!res) return null
-    // Fenêtre 30 j : agréger les 1–2 mois qui la couvrent puis restreindre à
-    // [windowFrom, date]. La dernière ligne (date) porte les valeurs DU JOUR.
-    const winDays = coverMonths
-      .flatMap(({ year, month }) => aggregateParkingDaily(res, year, month))
-      .filter((d) => d.date >= windowFrom && d.date <= date)
+    const rows = parkingOccQ.data
+    if (!rows) return null
+    // La vue ne renvoie que les jours ACTIFS → on reconstruit TOUS les jours
+    // calendaires de [windowFrom, date] (les jours vides comptent 0 dans les
+    // moyennes). La dernière entrée (date) porte les valeurs DU JOUR.
+    const byDate = new Map(rows.map((r) => [r.date, r]))
+    const winDays: {
+      date: string
+      occupied: number
+      occupiedClient: number
+      arrivals: number
+      departures: number
+    }[] = []
+    for (let d = windowFrom; d <= date; d = shiftDate(d, 1)) {
+      const r = byDate.get(d)
+      winDays.push({
+        date: d,
+        occupied: r?.occupied ?? 0,
+        occupiedClient: r?.occupied_client ?? 0,
+        arrivals: r?.arrivals ?? 0,
+        departures: r?.departures ?? 0,
+      })
+    }
     const day = winDays.find((d) => d.date === date)
     if (!day) return null
     const n = winDays.length || 1
@@ -257,7 +276,7 @@ export function DayCrossSummary({
       avgDepartures: avg((d) => d.departures),
       avgCaptage: captageIndex(capClient, capRooms),
     }
-  }, [parkingQ.data, hotelByDate, coverMonths, windowFrom, date])
+  }, [parkingOccQ.data, hotelByDate, windowFrom, date])
   // Captage parking DU JOUR — MÊME calcul que l'analytique (captageIndex).
   const parkingCaptage = parkingAgg
     ? captageIndex(parkingAgg.day.occupiedClient, hotelRoomsSold ?? 0)
