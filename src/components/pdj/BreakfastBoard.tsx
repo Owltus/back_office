@@ -46,7 +46,7 @@ import {
   deleteAddonProductionDay,
   deleteDay,
   fetchAllAddonProduction,
-  fetchAllInHouseCovers,
+  fetchDailyAgg,
   fetchDay,
   fetchServiceDates,
   importAddonProduction,
@@ -56,13 +56,10 @@ import {
   setServed,
 } from '#/lib/pdj/service.ts'
 import type { AddonProductionDbRow, PdjDayRow } from '#/lib/pdj/service.ts'
+import { supabase } from '#/lib/supabase.ts'
 import { canEditPdjDay } from '#/lib/pdj/editability.ts'
 import { breakfastServiceDate, parseAddonProduction } from '#/lib/pdj/addon.ts'
-import {
-  computeCaptageBenchmark,
-  computeDailyBenchmark,
-  computeOccupancyBenchmark,
-} from '#/lib/pdj/amounts.ts'
+import { computeAggBenchmarks } from '#/lib/pdj/amounts.ts'
 import { detectTarifs } from '#/lib/pdj/tarif.ts'
 import { computePdjCA, roomFinance } from '#/lib/pdj/breakdown.ts'
 import { autoModeTargets } from '#/lib/pdj/automode.ts'
@@ -191,9 +188,14 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
   // Timers de l'animation « cases cochées une à une » (automode) : nettoyés au
   // démontage ET avant chaque relance, pour ne pas cocher après coup.
   const autoTimersRef = useRef<ReturnType<typeof setTimeout>[]>([])
+  // Vrai PENDANT l'animation « automode » : le canal realtime ignore alors les
+  // échos (nos propres écritures reviennent en < 1 s et rempliraient les cases
+  // d'un coup, court-circuitant le décalage voulu).
+  const autoRunningRef = useRef(false)
   const clearAutoTimers = useCallback(() => {
     for (const id of autoTimersRef.current) clearTimeout(id)
     autoTimersRef.current = []
+    autoRunningRef.current = false
   }, [])
   useEffect(
     () => () => {
@@ -217,7 +219,11 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
     if (purgedRef.current || !canEdit) return
     purgedRef.current = true
     purgeOldGuestNames(yesterday)
-      .then(() => queryClient.invalidateQueries({ queryKey: ['pdj'] }))
+      // La purge n'anonymise QUE des noms de jours passés → seules les vues « jour »
+      // peuvent être périmées. On n'invalide donc que `['pdj','day']` (ciblé), pas
+      // le préfixe `['pdj']` entier qui rejouait aussi dates + agrégats + benchmark
+      // (les scans lourds) sur CHAQUE montage éditeur.
+      .then(() => queryClient.invalidateQueries({ queryKey: ['pdj', 'day'] }))
       .catch((err) => console.error('[pdj] purge RGPD échouée', err))
   }, [canEdit, queryClient, yesterday])
 
@@ -240,6 +246,54 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
   }, [dayRows])
 
   const hasData = (dayRows?.length ?? 0) > 0
+
+  // Temps réel du JOUR affiché : un cochage (ou une saisie manuelle) fait par un
+  // AUTRE utilisateur apparaît en direct, sans rafraîchir la page. On s'abonne aux
+  // changements de `pdj_breakfasts` filtrés sur `service_date` (côté serveur, la
+  // RLS s'applique aussi au realtime), et on PATCHE le cache du jour chambre par
+  // chambre — jamais de refetch : cela préserverait aussi bien nos maj optimistes
+  // en vol que les cases des autres. Le canal se réabonne au changement de jour.
+  useEffect(() => {
+    if (!selectedDate) return
+    const channel = supabase
+      .channel(`pdj-day-${selectedDate}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'pdj_breakfasts',
+          filter: `service_date=eq.${selectedDate}`,
+        },
+        (payload) => {
+          // Pendant l'animation « automode », nos propres échos arriveraient d'un
+          // coup et rempliraient les cases sans le décalage : on les ignore.
+          if (autoRunningRef.current) return
+          queryClient.setQueryData<PdjDayRow[]>(
+            ['pdj', 'day', selectedDate],
+            (old) => {
+              const list = old ?? []
+              if (payload.eventType === 'DELETE') {
+                const id = (payload.old as { id?: string }).id
+                return id ? list.filter((r) => r.id !== id) : list
+              }
+              const row = payload.new as PdjDayRow
+              if (!row || typeof row.room !== 'number') return list
+              if (list.some((r) => r.room === row.room)) {
+                return list.map((r) =>
+                  r.room === row.room ? { ...r, ...row } : r,
+                )
+              }
+              return [...list, row]
+            },
+          )
+        },
+      )
+      .subscribe()
+    return () => {
+      void supabase.removeChannel(channel)
+    }
+  }, [selectedDate, queryClient])
 
   // Mode « détail financier » : bascule le tableau (Nom→OTA, Statut→code PDJ,
   // Visites→prix HT) sans quitter la page. Écran uniquement — l'impression garde
@@ -270,33 +324,20 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
   // Le batch groupe non ventilé (facturé sans chambre) n'entre PAS dans le CA.
   const ca = useMemo(() => computePdjCA(dayRows ?? [], tarifs), [dayRows, tarifs])
 
-  // Repère « moyenne par jour » : total HT moyen sur TOUS les jours ayant à la
-  // fois In-House ET Addon. Requête à part (ne bloque pas la vue du jour), chargée
-  // une fois. computeDailyBenchmark exclut les jours sans les deux sources.
-  const { data: benchmark } = useQuery({
-    queryKey: ['pdj', 'benchmark'],
-    queryFn: async () => {
-      const [addon, inhouse] = await Promise.all([
-        fetchAllAddonProduction(),
-        fetchAllInHouseCovers(),
-      ])
-      return {
-        // Repère « total HT / jour » : jours ayant In-House ET Addon.
-        total: computeDailyBenchmark(
-          addon.map((r) => ({
-            service_date: r.service_date,
-            code: r.code,
-            revenue: r.revenue_ttc,
-          })),
-          inhouse,
-        ),
-        // Repère « captage / jour » : jours ayant du servi saisi (vraies données).
-        captage: computeCaptageBenchmark(inhouse),
-        // Repère « occupation / jour » : chambres et clients moyens (tous jours In-House).
-        occupancy: computeOccupancyBenchmark(inhouse),
-      }
-    },
+  // Repères « moyenne par jour » (total HT, captage, occupation) sur TOUT
+  // l'historique. Lus depuis la VUE d'agrégation `pdj_daily_agg` (quelques lignes
+  // par jour) au lieu de scanner la table entière — mêmes chiffres, une fraction
+  // du coût. Les tarifs (pour le CA) viennent de l'Addon DÉJÀ en cache (`tarifs`),
+  // plus de second fetch. `benchmark` reste `undefined` tant que l'agrégat charge
+  // (rendu inchangé : les sous-textes n'apparaissent qu'ensuite).
+  const { data: aggAll } = useQuery({
+    queryKey: ['pdj', 'agg-all'],
+    queryFn: () => fetchDailyAgg('2000-01-01', '2100-12-31'),
   })
+  const benchmark = useMemo(
+    () => (aggAll ? computeAggBenchmarks(aggAll, tarifs) : undefined),
+    [aggAll, tarifs],
+  )
 
   const floors = useMemo(() => {
     const map = new Map<number, number[]>()
@@ -573,6 +614,8 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
     const targets = autoModeTargets(dayRows ?? [])
     if (targets.length === 0) return
     clearAutoTimers()
+    // Gèle le canal realtime le temps de l'animation (cf. autoRunningRef).
+    autoRunningRef.current = true
     // Ordre ALÉATOIRE (Fisher-Yates) → jolie apparition en désordre.
     const shuffled = targets.slice()
     for (let i = shuffled.length - 1; i > 0; i--) {
@@ -598,6 +641,14 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
       }, delay)
       autoTimersRef.current.push(id)
     })
+    // Fin d'animation : on rouvre le canal realtime (marge après la dernière case).
+    const resetId = setTimeout(
+      () => {
+        autoRunningRef.current = false
+      },
+      shuffled.length * perStep + 400,
+    )
+    autoTimersRef.current.push(resetId)
     // Persistance en lot, immédiate (indépendante de l'animation). AUCUN bandeau
     // après l'automode : l'animation est le seul retour. Échec (RLS/réseau) → on
     // stoppe l'animation et on resynchronise sur l'état réel persisté (les coches

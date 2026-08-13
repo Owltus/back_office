@@ -14,9 +14,10 @@ import {
   PdjStatCells,
   PdjStatsHead,
 } from '#/components/pdj/PdjAnalytiqueParts.tsx'
-import { fetchAllAddonProduction, fetchRange } from '#/lib/pdj/service.ts'
+import { fetchAllAddonProduction, fetchDailyAgg } from '#/lib/pdj/service.ts'
 import { aggregatePdjDaily } from '#/lib/pdj/analytics.ts'
-import { computeDailyTotals } from '#/lib/pdj/amounts.ts'
+import { computeAggDailyTotals } from '#/lib/pdj/amounts.ts'
+import { detectTarifs } from '#/lib/pdj/tarif.ts'
 import { fmtInt } from '#/lib/pdj/format.ts'
 import { DAY_NAMES, MONTHS_LABELS } from '#/lib/repjour/constants.ts'
 
@@ -49,28 +50,20 @@ export function PdjAnalytiqueMoisBoard({
   // jour est un calcul client négligeable, dérivé du cache.
   const { data: rows = [], isPending: loading } = useQuery({
     queryKey: ['pdj', 'analytics', year],
-    queryFn: () => fetchRange(`${year}-01-01`, `${year}-12-31`),
+    queryFn: () => fetchDailyAgg(`${year}-01-01`, `${year}-12-31`),
   })
   const stats = useMemo(
     () => aggregatePdjDaily(rows, year, month),
     [rows, year, month],
   )
 
-  // Addon Production (tous jours) → CA PDJ par jour (croisé avec l'In-House).
+  // Addon Production (tous jours) → tarifs détectés → CA PDJ par jour.
   const { data: addonRows = [] } = useQuery({
     queryKey: ['pdj', 'addon-all'],
     queryFn: fetchAllAddonProduction,
   })
   const dailyCa = useMemo(
-    () =>
-      computeDailyTotals(
-        addonRows.map((r) => ({
-          service_date: r.service_date,
-          code: r.code,
-          revenue: r.revenue_ttc,
-        })),
-        rows,
-      ),
+    () => computeAggDailyTotals(rows, detectTarifs(addonRows)),
     [addonRows, rows],
   )
 

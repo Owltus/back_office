@@ -18,11 +18,12 @@ import {
 } from '#/components/pdj/PdjAnalytiqueParts.tsx'
 import {
   fetchAllAddonProduction,
-  fetchRange,
+  fetchDailyAgg,
   fetchServiceDates,
 } from '#/lib/pdj/service.ts'
 import { aggregatePdjMonthly, yearsFromDates } from '#/lib/pdj/analytics.ts'
-import { computeDailyTotals } from '#/lib/pdj/amounts.ts'
+import { computeAggDailyTotals } from '#/lib/pdj/amounts.ts'
+import { detectTarifs } from '#/lib/pdj/tarif.ts'
 import { fmtInt } from '#/lib/pdj/format.ts'
 import { MONTHS_LABELS, MONTHS_SHORT } from '#/lib/repjour/constants.ts'
 
@@ -54,13 +55,14 @@ export function PdjAnalytiqueBoard() {
   // Année sélectionnée + recalage si absente de la liste (hook partagé).
   const { year, setYear } = useAnnualYear(years, currentYear)
 
-  // Lignes de l'année → agrégation mensuelle. Cache par année (retour instantané).
+  // Lignes AGRÉGÉES de l'année (vue pdj_daily_agg) → agrégation mensuelle. Cache
+  // par année (retour instantané, partagé avec la vue « mois »).
   const { data: rows = [], isPending: loading } = useQuery({
     queryKey: ['pdj', 'analytics', year],
-    queryFn: () => fetchRange(`${year}-01-01`, `${year}-12-31`),
+    queryFn: () => fetchDailyAgg(`${year}-01-01`, `${year}-12-31`),
   })
 
-  // Addon Production (tous jours) → CA PDJ (croisé avec l'In-House de l'année).
+  // Addon Production (tous jours) → tarifs détectés → CA PDJ (croisé avec l'année).
   const { data: addonRows = [] } = useQuery({
     queryKey: ['pdj', 'addon-all'],
     queryFn: fetchAllAddonProduction,
@@ -71,14 +73,8 @@ export function PdjAnalytiqueBoard() {
   // CA PDJ (total HT inclus + extras) cumulé par mois. null pour un mois sans
   // Addon exploitable (« — » au tableau).
   const caStats = useMemo(() => {
-    const totals = computeDailyTotals(
-      addonRows.map((r) => ({
-        service_date: r.service_date,
-        code: r.code,
-        revenue: r.revenue_ttc,
-      })),
-      rows,
-    )
+    const tarifs = detectTarifs(addonRows)
+    const totals = computeAggDailyTotals(rows, tarifs)
     const byMonth = new Array<number | null>(12).fill(null)
     let total = 0
     let days = 0
