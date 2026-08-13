@@ -1253,18 +1253,20 @@ const GuestRow = memo(function GuestRow({
   // le sens des cases « attendues » ci-dessous.
   const manualKind = row?.manual_kind ?? null
   const isManual = manualKind != null
-  // Cases en GRAS = clients PRÉSENTS dans la chambre (adultes ; enfants/bébés
-  // exclus ; jamais plus de 2). Une chambre occupée SANS PDJ inclus montre donc
-  // aussi ses clients en gras, comme une chambre à PDJ inclus — la distinction
-  // « PDJ inclus » reste lisible via le FOND VERT de la ligne (.pdj-included,
-  // piloté à part par `breakfasts_included`, cf. plus bas). Une ligne MANUELLE n'a
-  // pas de client réel en rooming → on garde son nombre saisi ; chambre vide → 0.
-  // (Les MONTANTS et les extras restent calculés depuis `breakfasts_included`,
-  // jamais depuis ce nombre de cases : servir au-delà des inclus = extra facturé.)
+  // Cases en GRAS = petits-déjeuners ATTENDUS de la chambre. Pour une chambre à
+  // PDJ inclus, c'est le DÛ facturé (`breakfasts_included`, qui compte l'enfant
+  // payant d'un tarif « N PAX » — cf. csv.ts). Pour une chambre occupée SANS PDJ
+  // inclus, on montre ses clients présents (`min(adults, 2)`) afin de pouvoir lui
+  // servir un PDJ EXTRA. La distinction « PDJ inclus » reste aussi lisible via le
+  // FOND VERT de la ligne (.pdj-included). Une ligne MANUELLE garde son nombre
+  // saisi ; chambre vide → 0. (Les MONTANTS et les extras restent calculés depuis
+  // `breakfasts_included` : servir au-delà des inclus = extra facturé.)
   const numExpected = isManual
     ? (row?.breakfasts_included ?? 0)
     : row
-      ? Math.min(row.adults, 2)
+      ? row.breakfasts_included > 0
+        ? row.breakfasts_included
+        : Math.min(row.adults, 2)
       : 0
   const served = row?.breakfasts_served ?? 0
   // Minimum 2 cases pour une grille régulière ; on élargit si un PDJ « en plus »
