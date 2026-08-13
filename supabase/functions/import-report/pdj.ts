@@ -272,14 +272,16 @@ function parseGuestRows(content: string, serviceDate: string): ParsedRow[] {
     const adults = parseInt(v[col.adults]) || 0
     const children = parseInt(v[col.children]) || 0
     const guests = adults + children
-    // PDJ inclus : le tarif fait foi quand il précise un nombre de PAX (« BB1PAX »,
-    // « BB2PAX », « PDJ INCLUS 2 PAX »…) ; sinon, les adultes. Dans TOUS les cas :
-    // jamais les enfants (< 12 ans / bébés = PDJ gratuit → plafond au nb d'adultes)
-    // et jamais plus de 2 (max 2 adultes par chambre). Un tarif qui LIMITE reste
-    // prioritaire (BB1PAX → 1). Doit rester aligné sur csv.ts (client).
+    // PDJ inclus (dû facturé) : le tarif fait foi quand il précise un nombre de PAX
+    // (« BB1PAX », « BB2PAX », « PDJ INCLUS 2 PAX »…) = nb de PDJ VENDUS, mais borné
+    // au nombre d'OCCUPANTS réels (`guests` = adultes + enfants) : « 2 PAX » avec
+    // 1 adulte + 1 enfant → 2 (enfant payant compté), « 2 PAX » pour une personne
+    // seule → 1 (pas de couvert fantôme). Sans PAX, on retombe sur les adultes.
+    // Jamais plus de 2. Un tarif qui LIMITE reste prioritaire (BB1PAX → 1). Doit
+    // rester aligné sur csv.ts.
     const paxMatch = rate.toUpperCase().match(/(\d+)\s*PAX/)
     const paxOrAdults = paxMatch ? parseInt(paxMatch[1], 10) : adults
-    const breakfastsIncluded = hasPDJ ? Math.min(paxOrAdults, adults, 2) : 0
+    const breakfastsIncluded = hasPDJ ? Math.min(paxOrAdults, guests, 2) : 0
 
     result.push({
       room: Number(v[col.room].trim()),

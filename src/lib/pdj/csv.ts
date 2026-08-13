@@ -250,14 +250,19 @@ export function parseGuestRows(
     const adults = parseInt(v[col.adults]) || 0
     const children = parseInt(v[col.children]) || 0
     const guests = adults + children
-    // Nombre de PDJ inclus. Le tarif fait foi quand il précise un nombre de PAX
-    // (« BB1PAX », « BB2PAX », « PDJ INCLUS 2 PAX »…) ; sinon, les adultes. Dans
-    // TOUS les cas : jamais les enfants (< 12 ans / bébés = PDJ gratuit → plafond
-    // au nb d'adultes) et jamais plus de 2 (max 2 adultes par chambre ; 3 occupants
-    // = 2 adultes + 1 bébé). Un tarif qui LIMITE reste prioritaire (BB1PAX → 1).
+    // Nombre de PDJ inclus (dû facturé). Le tarif fait foi quand il précise un
+    // nombre de PAX (« BB1PAX », « BB2PAX », « PDJ INCLUS 2 PAX »…) : ce PAX = le
+    // nombre de PDJ vendus. MAIS on le borne au nombre d'OCCUPANTS réels de la
+    // chambre (`guests` = adultes + enfants) : un « 2 PAX » vendu à une personne
+    // SEULE ne compte qu'1 PDJ (pas de couvert fantôme), tandis qu'un « 2 PAX »
+    // avec 1 adulte + 1 enfant en compte 2 (l'enfant qui paie occupe la 2e place).
+    // Sans PAX dans le tarif, `paxOrAdults` retombe sur les adultes → `min(adults,
+    // 2)` comme avant. Jamais plus de 2. Un tarif qui LIMITE reste prioritaire
+    // (BB1PAX → 1). Aligné sur import-report/pdj.ts, le trigger DB
+    // pdj_clamp_breakfasts_included et pdj_breakfasts_recompute.sql.
     const paxMatch = rate.toUpperCase().match(/(\d+)\s*PAX/)
     const paxOrAdults = paxMatch ? parseInt(paxMatch[1], 10) : adults
-    const breakfastsIncluded = hasPDJ ? Math.min(paxOrAdults, adults, 2) : 0
+    const breakfastsIncluded = hasPDJ ? Math.min(paxOrAdults, guests, 2) : 0
 
     result.push({
       room: Number(v[col.room].trim()),

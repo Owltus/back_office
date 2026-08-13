@@ -95,7 +95,7 @@ describe('csvToDbRows', () => {
     expect(rows[0].breakfasts_included).toBe(1)
   })
 
-  it('tarif « N PAX » fait foi : enfant exclu (2 adultes + 1 enfant, « 2 PAX » → 2)', () => {
+  it('tarif « N PAX » plafonne : 2 adultes + 1 enfant, « 2 PAX » → 2 (3e occupant non vendu)', () => {
     const now = new Date()
     const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
     const mini =
@@ -105,7 +105,7 @@ describe('csvToDbRows', () => {
     const rows = csvToDbRows(mini, `In-House Guests _${stamp}.csv`)
 
     expect(rows[0].guests).toBe(3) // 2 adultes + 1 enfant (occupants réels)
-    expect(rows[0].breakfasts_included).toBe(2) // le « 2 PAX » du tarif prime
+    expect(rows[0].breakfasts_included).toBe(2) // 2 PDJ vendus : le 3e occupant n'est pas facturé
   })
 
   it('tarif générique sans PAX : adultes seuls (enfant exclu)', () => {
@@ -120,7 +120,7 @@ describe('csvToDbRows', () => {
     expect(rows[0].breakfasts_included).toBe(2) // adultes seuls, enfant ignoré
   })
 
-  it('enfant non compté même sur un tarif « 2 PAX » : 1 adulte + 1 enfant → 1', () => {
+  it('enfant payant compté via le tarif « 2 PAX » : 1 adulte + 1 enfant → 2', () => {
     const now = new Date()
     const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
     const mini =
@@ -129,7 +129,22 @@ describe('csvToDbRows', () => {
 
     const rows = csvToDbRows(mini, `In-House Guests _${stamp}.csv`)
 
-    // Plafond = nb d'adultes → l'enfant ne prend pas de case.
+    // Le « 2 PAX » du tarif = 2 PDJ vendus : l'enfant (≥ 12 ans) qui paie prend
+    // la 2e case, même avec 1 seul adulte au rooming. (Cas réel chambres 112/212.)
+    expect(rows[0].breakfasts_included).toBe(2)
+  })
+
+  it('personne seule sous tarif « 2 PAX » : 1 adulte + 0 enfant → 1 (pas de couvert fantôme)', () => {
+    const now = new Date()
+    const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
+    const mini =
+      'Room,Status,Guest Name,VIP,Adults,Children,Addons,Rate\n' +
+      '118,IN HOUSE,"SEUL, S",,1,0,PDJ INCL,BOOKING - FLEX - PDJ INCLUS 2 PAX\n'
+
+    const rows = csvToDbRows(mini, `In-House Guests _${stamp}.csv`)
+
+    // Tarif « 2 PAX » mais 1 seul occupant → borné aux personnes présentes : 1 PDJ.
+    // (Cas archi-courant : chambre double en occupation simple — ne PAS facturer 2.)
     expect(rows[0].breakfasts_included).toBe(1)
   })
 
