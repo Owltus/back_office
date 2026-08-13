@@ -111,6 +111,18 @@ const ROW_H = 44
 const HEADER_H = 52
 const LABEL_W = 56
 const STEP = 3 // pas de navigation (jours)
+
+/* Fenêtre de données CHARGÉE (bornée). Le planning ne télécharge que les
+ * réservations autour de la période consultée, pas tout l'historique. La fenêtre
+ * ne fait que S'AGRANDIR quand on navigue près d'un bord (jamais rétrécir), et se
+ * réinitialise au montage. `STAY_LOOKBACK` = marge amont pour capter les séjours
+ * démarrés juste avant la fenêtre mais qui débordent dedans (bornage par
+ * start_date, la date de fin n'étant pas indexée). */
+const LOAD_PAST_DAYS = 90 // passé chargé au départ
+const LOAD_FUTURE_DAYS = 180 // futur chargé au départ
+const LOAD_EXPAND_DAYS = 120 // taille d'un agrandissement
+const LOAD_EDGE_GUARD = 21 // on étend quand la vue arrive à ≤ N jours d'un bord
+const STAY_LOOKBACK_DAYS = 45 // marge amont pour les séjours débordant dans la vue
 const BAR_PAD_X = 2 // marge horizontale d'une barre (px)
 const BAR_PAD_Y = 4 // marge verticale d'une barre (px)
 
@@ -195,6 +207,9 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
   const level = pageLevel('parking')
   const [startDate, setStartDate] = useState<Date | null>(null)
   const [offset, setOffset] = useState(0)
+  // Fenêtre de dates CHARGÉE (bornes 'YYYY-MM-DD' sur start_date). null tant que le
+  // premier cadrage n'est pas posé → la requête attend. S'agrandit à la navigation.
+  const [range, setRange] = useState<{ from: string; to: string } | null>(null)
   // Défilement au clic-glissé (drag-to-scroll) : vrai le temps d'un panoramique,
   // pour le curseur « grabbing » et la neutralisation de la sélection de texte.
   const [panning, setPanning] = useState(false)
@@ -238,6 +253,20 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
     setStartDate(startOfWeek(new Date(), { weekStartsOn: 1 }))
   }, [])
 
+  // Fenêtre de données initiale (autour d'aujourd'hui), posée une fois côté client
+  // — même précaution d'hydratation que le lundi de référence.
+  useEffect(() => {
+    if (range) return
+    const today = new Date()
+    setRange({
+      from: format(
+        addDays(today, -(LOAD_PAST_DAYS + STAY_LOOKBACK_DAYS)),
+        'yyyy-MM-dd',
+      ),
+      to: format(addDays(today, LOAD_FUTURE_DAYS), 'yyyy-MM-dd'),
+    })
+  }, [range])
+
   // Miroir à jour pour les handlers de drag (closures figées sur un ancien état).
   useEffect(() => {
     reservationsRef.current = reservations
@@ -257,18 +286,18 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
   }, [clipboard])
 
   /*
-   * Chargement initial mis en CACHE (lib/query.ts) : revenir sur le planning
-   * réaffiche les réservations sans attendre le réseau. La requête ne dépend
-   * pas de `startDate`, elle part donc dès le premier rendu, sans attendre le
-   * cycle qui pose le lundi de référence.
+   * Chargement BORNÉ à la fenêtre `range`, mis en CACHE par (from, to) : revenir
+   * sur le planning réaffiche les réservations sans attendre le réseau. On ne
+   * télécharge plus tout l'historique — seulement la période consultée, étendue à
+   * la navigation (cf. l'effet d'agrandissement).
    *
-   * `staleTime: 0` : le temps réel ne tient la vue à jour que TANT QUE la page
-   * est montée. Au retour, il faut rattraper ce qui a changé entre-temps — les
-   * données du cache s'affichent aussitôt, le refetch les corrige derrière.
+   * `staleTime: 0` : le temps réel tient la vue à jour TANT QUE la page est montée.
+   * Au retour, les données du cache s'affichent aussitôt, le refetch corrige derrière.
    */
   const { data: rows, error: rowsError } = useQuery({
-    queryKey: ['parking', 'reservations'],
-    queryFn: fetchReservations,
+    queryKey: ['parking', 'reservations', range?.from, range?.to],
+    queryFn: () => fetchReservations(range!.from, range!.to),
+    enabled: !!range,
     staleTime: 0,
   })
 
@@ -276,11 +305,19 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
     if (rowsError) console.error(rowsError)
   }, [rowsError])
 
-  // Le cache stocke les lignes BRUTES : leur conversion dépend de `startDate`,
-  // qui est propre à l'affichage, pas à la donnée.
+  // FUSION par identifiant (jamais d'écrasement, jamais de suppression ici) : les
+  // lignes déjà présentes — patchées par le temps réel, ou modifiées en vol (drag,
+  // copie) — sont PRÉSERVÉES ; la tranche chargée met à jour / ajoute par `id`. Les
+  // suppressions passent par le canal realtime (en direct) et par le rechargement
+  // propre au montage (état vide → vérité de la fenêtre). C'est ce qui garantit que
+  // borner/agrandir la fenêtre n'efface jamais une mise à jour temps réel.
   useEffect(() => {
     if (!rows || !startDate) return
-    setReservations(rows.map((r) => toReservation(r, startDate)))
+    setReservations((prev) => {
+      const byId = new Map(prev.map((r) => [r.id, r]))
+      for (const row of rows) byId.set(row.id, toReservation(row, startDate))
+      return [...byId.values()]
+    })
   }, [rows, startDate])
 
   // Abonnement Realtime, une fois le lundi de réf. connu. Il patche l'état
@@ -332,6 +369,44 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
     containerW > 0 ? Math.max(1, Math.floor(containerW / MIN_DAY_W)) : 0
   const dayW = visibleDays > 0 ? containerW / visibleDays : MIN_DAY_W
   const slotW = dayW / SLOTS_PER_DAY
+
+  // Agrandissement de la fenêtre chargée quand la vue approche d'un bord (jamais de
+  // rétrécissement). Un seul agrandissement couvre même un saut lointain (lien
+  // ?date=…) : on prend la borne la plus large entre « +1 palier » et « couvrir la
+  // vue ». Le lookback amont capte les séjours débordant dans la vue.
+  useEffect(() => {
+    if (!startDate || !range || visibleDays <= 0) return
+    const visFrom = addDays(startDate, offset)
+    const visTo = addDays(startDate, offset + visibleDays - 1)
+    const rangeFrom = new Date(range.from + 'T00:00:00')
+    const rangeTo = new Date(range.to + 'T00:00:00')
+    const earlier = (a: Date, b: Date) => (a < b ? a : b)
+    const later = (a: Date, b: Date) => (a > b ? a : b)
+
+    let nextFrom = range.from
+    let nextTo = range.to
+    if (
+      differenceInCalendarDays(visFrom, rangeFrom) <=
+      LOAD_EDGE_GUARD + STAY_LOOKBACK_DAYS
+    ) {
+      nextFrom = format(
+        earlier(
+          addDays(rangeFrom, -LOAD_EXPAND_DAYS),
+          addDays(visFrom, -(STAY_LOOKBACK_DAYS + LOAD_EDGE_GUARD)),
+        ),
+        'yyyy-MM-dd',
+      )
+    }
+    if (differenceInCalendarDays(rangeTo, visTo) <= LOAD_EDGE_GUARD) {
+      nextTo = format(
+        later(addDays(rangeTo, LOAD_EXPAND_DAYS), addDays(visTo, LOAD_EDGE_GUARD)),
+        'yyyy-MM-dd',
+      )
+    }
+    if (nextFrom !== range.from || nextTo !== range.to) {
+      setRange({ from: nextFrom, to: nextTo })
+    }
+  }, [startDate, range, offset, visibleDays])
 
   // Décalage (en jours) du jour actuel par rapport au lundi de référence.
   const todayOffset = startDate
