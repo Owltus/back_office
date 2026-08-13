@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
 import type { AddonProductionRow } from '#/lib/pdj/addon.ts'
+import type { PdjAggRow } from '#/lib/pdj/service.ts'
 import {
+  computeAggBenchmarks,
+  computeAggDailyTotals,
   computeCaptageBenchmark,
   computeDailyBenchmark,
   computeOccupancyBenchmark,
@@ -171,6 +174,72 @@ describe('computeOccupancyBenchmark', () => {
       avgRooms: null,
       avgGuests: null,
       days: 0,
+    })
+  })
+})
+
+/* --- Variantes « depuis la vue d'agrégation » (pdj_daily_agg) ---------------- */
+
+function agg(
+  partial: Partial<PdjAggRow> & { service_date: string },
+): PdjAggRow {
+  return {
+    code: 'PDJ',
+    rooms: 0,
+    guests: 0,
+    included: 0,
+    served: 0,
+    extra: 0,
+    no_show: 0,
+    ...partial,
+  }
+}
+
+const TARIFS = new Map<string, number>([['PDJ', 19]])
+
+describe('computeAggDailyTotals', () => {
+  it('CA HT par jour = inclus (par code) + extras au tarif PDJ (17,27 HT)', () => {
+    const rows: PdjAggRow[] = [
+      agg({ service_date: '2026-08-10', included: 10 }), // 10 × 17,27 = 172,70
+      agg({ service_date: '2026-08-11', included: 5 }), // 5 × 17,27 = 86,35
+      // Bucket sans code : ne porte QUE des extras (walk-in) → 2 × 17,27 = 34,54.
+      agg({ service_date: '2026-08-12', code: null, extra: 2 }),
+    ]
+    const totals = computeAggDailyTotals(rows, TARIFS)
+    expect(totals.get('2026-08-10')).toBe(172.7)
+    expect(totals.get('2026-08-11')).toBe(86.35)
+    expect(totals.get('2026-08-12')).toBe(34.54)
+  })
+
+  it('exclut les jours au CA nul et le bucket null sans extra', () => {
+    const rows: PdjAggRow[] = [
+      agg({ service_date: '2026-08-13', code: null, included: 5, served: 0 }),
+    ]
+    expect(computeAggDailyTotals(rows, TARIFS).size).toBe(0)
+  })
+})
+
+describe('computeAggBenchmarks', () => {
+  it('total, captage et occupation calculés d’un coup depuis la vue', () => {
+    const rows: PdjAggRow[] = [
+      agg({ service_date: '2026-08-10', rooms: 2, guests: 20, included: 20, served: 25, extra: 5 }),
+      agg({ service_date: '2026-08-11', rooms: 1, guests: 20, included: 10, served: 10 }),
+      agg({ service_date: '2026-08-12', rooms: 1, guests: 8, included: 8, served: 0, no_show: 8 }),
+    ]
+    const b = computeAggBenchmarks(rows, TARIFS)
+    // CA/jour : (431,75 + 172,70 + 138,16) / 3 = 247,54 sur 3 jours.
+    expect(b.total).toEqual({ avgTotalHT: 247.54, days: 3 })
+    // Captage : (125 + 50) / 2 = 87,5 ; le jour non saisi (servi 0) est exclu.
+    expect(b.captage).toEqual({ avgCaptage: 87.5, days: 2 })
+    // Occupation : chambres (4/3 = 1,33) et clients (48/3 = 16) sur 3 jours.
+    expect(b.occupancy).toEqual({ avgRooms: 1.33, avgGuests: 16, days: 3 })
+  })
+
+  it('tout à null/0 sur un jeu vide', () => {
+    expect(computeAggBenchmarks([], TARIFS)).toEqual({
+      total: { avgTotalHT: null, days: 0 },
+      captage: { avgCaptage: null, days: 0 },
+      occupancy: { avgRooms: null, avgGuests: null, days: 0 },
     })
   })
 })

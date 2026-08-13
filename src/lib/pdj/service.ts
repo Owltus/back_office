@@ -16,6 +16,33 @@ export const PDJ_TABLE = 'pdj_breakfasts'
 /** Table « Addon Production » : production PDJ agrégée par (jour de service, code). */
 export const PDJ_ADDON_TABLE = 'pdj_addon_production'
 
+/** Vue d'agrégation « un jour × un code » (supabase/pdj_daily_agg.sql) : quelques
+ * centaines de lignes au lieu des ~11 700 de la table. Alimente l'analytique et
+ * les moyennes/jour du board. La grille du jour (cochage live) NE passe PAS par
+ * là — elle reste sur `fetchDay`. */
+export const PDJ_AGG_VIEW = 'pdj_daily_agg'
+
+/** Ligne de la vue `pdj_daily_agg` : un (jour de service, code) pré-agrégé.
+ * `extra` / `no_show` sont sommés PAR CHAMBRE côté base (greatest avant somme) —
+ * on ne peut donc pas les redériver des totaux, ils sont fournis tels quels. */
+export interface PdjAggRow {
+  service_date: string
+  /** Code PDJ (PDJ / PDJBB / PDJGROUP10) ou `null` = chambre sans PDJ. */
+  code: string | null
+  /** Chambres occupées (une ligne source par chambre → count). */
+  rooms: number
+  /** Clients cumulés. */
+  guests: number
+  /** PDJ inclus (dû facturé) cumulés. */
+  included: number
+  /** PDJ servis (saisis) cumulés. */
+  served: number
+  /** Extras : Σ max(0, servi − inclus) par chambre. */
+  extra: number
+  /** Non servis : Σ max(0, inclus − servi) par chambre. */
+  no_show: number
+}
+
 /** Ligne DB complète (lecture) : champs d'import + consommation + id. */
 export interface PdjDayRow extends DbPdjRow {
   id: string
@@ -24,20 +51,19 @@ export interface PdjDayRow extends DbPdjRow {
 }
 
 /** Dates de service DISTINCTES (années dispo de l'analytique, sélecteur de jour
- * du board). PAGINÉ : une ligne par (jour, chambre) → non paginé, l'API tronquait
- * à 1000 room-jours (≈ les 20 derniers jours), masquant les dates/années plus
- * anciennes. On lit la seule colonne `service_date` page par page (payload
- * minime), puis on déduplique. */
+ * du board). Lues depuis la VUE `pdj_daily_agg` : au plus quelques lignes par jour
+ * (une par code), soit ~10× moins que la table brute — la liste des ~230 dates
+ * tient dans une seule page au lieu d'une douzaine de pages en série. Paginé par
+ * sécurité (si l'historique grandit), puis dédupliqué. */
 export async function fetchServiceDates(): Promise<string[]> {
   const PAGE = 1000
   const dates: string[] = []
   let offset = 0
   for (;;) {
     const { data, error } = await supabase
-      .from(PDJ_TABLE)
+      .from(PDJ_AGG_VIEW)
       .select('service_date')
       .order('service_date', { ascending: false })
-      .order('room', { ascending: true })
       .range(offset, offset + PAGE - 1)
     if (error) throw error
     const rows = (data ?? []) as { service_date: string }[]
@@ -103,6 +129,36 @@ export async function fetchRange(
       .range(offset, offset + PAGE - 1)
     if (error) throw error
     const rows = (data ?? []) as PdjDayRow[]
+    all.push(...rows)
+    if (rows.length < PAGE) break
+    offset += rows.length
+  }
+  return all
+}
+
+/**
+ * Lignes AGRÉGÉES (une par jour × code) sur une plage de jours, depuis la vue
+ * `pdj_daily_agg`. Remplace `fetchRange` pour l'analytique et les moyennes/jour :
+ * on lit ~4 lignes/jour au lieu d'une par chambre (~40/jour). Bornes 'YYYY-MM-DD'
+ * incluses. Paginé (tiny), trié par date puis code.
+ */
+export async function fetchDailyAgg(
+  from: string,
+  to: string,
+): Promise<PdjAggRow[]> {
+  const PAGE = 1000
+  const all: PdjAggRow[] = []
+  let offset = 0
+  for (;;) {
+    const { data, error } = await supabase
+      .from(PDJ_AGG_VIEW)
+      .select('*')
+      .gte('service_date', from)
+      .lte('service_date', to)
+      .order('service_date', { ascending: true })
+      .range(offset, offset + PAGE - 1)
+    if (error) throw error
+    const rows = (data ?? []) as PdjAggRow[]
     all.push(...rows)
     if (rows.length < PAGE) break
     offset += rows.length

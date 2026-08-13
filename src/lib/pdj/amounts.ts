@@ -13,6 +13,7 @@
 
 import { fromTTC } from '#/lib/repjour/constants.ts'
 import type { AddonProductionRow } from '#/lib/pdj/addon.ts'
+import type { PdjAggRow } from '#/lib/pdj/service.ts'
 import { detectTarifs } from '#/lib/pdj/tarif.ts'
 import { computePdjCA } from '#/lib/pdj/breakdown.ts'
 
@@ -270,4 +271,132 @@ export function computeOccupancyBenchmark(
     avgGuests: round2(sumGuests / days),
     days,
   }
+}
+
+/* --------------------------------------------------------------------------
+ * Variantes « depuis la vue d'agrégation » (pdj_daily_agg, une ligne par jour ×
+ * code). Elles remplacent, pour l'analytique et les moyennes/jour du board, les
+ * versions qui scannaient la table brute. Résultats IDENTIQUES au centime — même
+ * ordre d'arrondi que computePdjCA (includedHt et extrasHt arrondis séparément
+ * puis sommés puis réarrondis). Les versions « brutes » ci-dessus restent en
+ * service pour la bande RepJour (DayCrossSummary).
+ * ------------------------------------------------------------------------ */
+
+/**
+ * CA HT (inclus + extras) PAR JOUR depuis les lignes de la vue. Même définition
+ * que `computeDailyTotals` : inclus valorisés au tarif du CODE, extras au tarif
+ * PDJ ; le bucket `code = null` ne porte que des extras (walk-in). Ne retient que
+ * les jours au CA chiffrable (> 0). `tarifs` vient de la détection Addon.
+ */
+export function computeAggDailyTotals(
+  rows: PdjAggRow[],
+  tarifs: Map<string, number>,
+): Map<string, number> {
+  const unitHt = (code: string): number => {
+    const p = tarifs.get(code)
+    return p != null ? round2(fromTTC(p)) : 0
+  }
+  // Par jour : HT des inclus (par code) + nb d'extras (tous codes confondus).
+  const byDay = new Map<string, { includedHt: number; extra: number }>()
+  for (const r of rows) {
+    const d = byDay.get(r.service_date) ?? { includedHt: 0, extra: 0 }
+    if (r.code && r.included > 0) d.includedHt += r.included * unitHt(r.code)
+    d.extra += r.extra
+    byDay.set(r.service_date, d)
+  }
+
+  const totals = new Map<string, number>()
+  for (const [date, d] of byDay) {
+    // Même arrondi que computePdjCA : inclus et extras arrondis séparément.
+    const includedHt = round2(d.includedHt)
+    const extrasHt = round2(d.extra * unitHt('PDJ'))
+    const totalHt = round2(includedHt + extrasHt)
+    if (totalHt > 0) totals.set(date, totalHt)
+  }
+  return totals
+}
+
+/** Les trois repères « moyenne par jour » du board (mêmes formes que les versions
+ *  brutes), calculés depuis la vue. */
+export interface AggBenchmarks {
+  total: DailyBenchmark
+  captage: CaptageBenchmark
+  occupancy: OccupancyBenchmark
+}
+
+/**
+ * Calcule d'un coup les 3 moyennes/jour du board depuis les lignes de la vue :
+ *  - `total`   : CA HT moyen / jour (jours au CA > 0) ;
+ *  - `captage` : (inclus + extras) ÷ clients, moyenne des taux quotidiens sur les
+ *                jours dont la conso a été SAISIE (servi > 0) ;
+ *  - `occupancy` : chambres et clients moyens / jour (tous jours présents).
+ * Reproduit exactement computeDailyBenchmark / computeCaptageBenchmark /
+ * computeOccupancyBenchmark, mais sur des données déjà agrégées.
+ */
+export function computeAggBenchmarks(
+  rows: PdjAggRow[],
+  tarifs: Map<string, number>,
+): AggBenchmarks {
+  // Total HT / jour : réutilise computeAggDailyTotals (mêmes jours retenus).
+  const totalsMap = computeAggDailyTotals(rows, tarifs)
+  const totalsArr = [...totalsMap.values()]
+  const total: DailyBenchmark =
+    totalsArr.length === 0
+      ? { avgTotalHT: null, days: 0 }
+      : {
+          avgTotalHT: round2(
+            totalsArr.reduce((s, t) => s + t, 0) / totalsArr.length,
+          ),
+          days: totalsArr.length,
+        }
+
+  // Totaux par jour (sommés entre codes) pour captage + occupation.
+  const byDay = new Map<
+    string,
+    { included: number; served: number; extra: number; guests: number; rooms: number }
+  >()
+  for (const r of rows) {
+    const d =
+      byDay.get(r.service_date) ??
+      { included: 0, served: 0, extra: 0, guests: 0, rooms: 0 }
+    d.included += r.included
+    d.served += r.served
+    d.extra += r.extra
+    d.guests += r.guests
+    d.rooms += r.rooms
+    byDay.set(r.service_date, d)
+  }
+
+  // Captage : moyenne des taux quotidiens, jours servis (servi > 0, clients > 0).
+  const rates: number[] = []
+  for (const d of byDay.values()) {
+    if (d.served <= 0 || d.guests <= 0) continue
+    rates.push(((d.included + d.extra) / d.guests) * 100)
+  }
+  const captage: CaptageBenchmark =
+    rates.length === 0
+      ? { avgCaptage: null, days: 0 }
+      : {
+          avgCaptage: round2(rates.reduce((s, r) => s + r, 0) / rates.length),
+          days: rates.length,
+        }
+
+  // Occupation : chambres et clients moyens sur tous les jours présents.
+  const days = byDay.size
+  let sumRooms = 0
+  let sumGuests = 0
+  for (const d of byDay.values()) {
+    sumRooms += d.rooms
+    sumGuests += d.guests
+  }
+  const occupancy: OccupancyBenchmark =
+    days === 0
+      ? { avgRooms: null, avgGuests: null, days: 0 }
+      : {
+          avgRooms: round2(sumRooms / days),
+          avgGuests: round2(sumGuests / days),
+          days,
+        }
+
+  return { total, captage, occupancy }
 }

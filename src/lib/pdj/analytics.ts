@@ -1,13 +1,17 @@
 import { ALL_ROOMS } from '#/lib/pdj/csv.ts'
-import type { PdjDayRow } from '#/lib/pdj/service.ts'
+import type { PdjAggRow } from '#/lib/pdj/service.ts'
 
 /*
  * Agrégation analytique des petits-déjeuners (métier pur, sans React).
  *
- * Alimente `PdjAnalytiqueBoard` : à partir des lignes brutes d'une plage de
- * jours (une ligne par (service_date, room)), produit une synthèse mensuelle
- * sur une année. Aucune écriture, aucun accès réseau ici — les lignes sont
- * lues en amont par `fetchRange`.
+ * Alimente `PdjAnalytiqueBoard` : à partir des lignes de la VUE `pdj_daily_agg`
+ * (une par (service_date, code), déjà pré-agrégées côté base), produit une
+ * synthèse mensuelle sur une année. Aucune écriture, aucun accès réseau ici — les
+ * lignes sont lues en amont par `fetchDailyAgg`.
+ *
+ * Note clé : `extra` / `no_show` de la vue sont DÉJÀ sommés par chambre
+ * (greatest(...,0) avant somme). On les additionne donc simplement entre codes
+ * d'un même jour — surtout PAS `max(0, Σservi − Σinclus)` qui serait faux.
  */
 
 const TOTAL_ROOMS = ALL_ROOMS.length
@@ -69,19 +73,18 @@ function emptyMonth(month: number): PdjMonthStats {
  * pas biaiser un mois partiellement renseigné.
  */
 export function aggregatePdjMonthly(
-  rows: PdjDayRow[],
+  rows: PdjAggRow[],
   year: number,
 ): PdjMonthStats[] {
   const months = Array.from({ length: 12 }, (_, i) => emptyMonth(i + 1))
   // Somme des taux d'occupation quotidiens par mois (moyennée en fin de calcul).
   const occSum = new Array(12).fill(0)
-  // Chambres distinctes vues par jour → taux quotidien exact.
-  const seenPerDay = new Map<string, Set<number>>()
-  // Conso SAISIE par jour (servi / extra / non-venu). Agrégée au mois dans un second
-  // temps, avec garde-fou « jour renseigné » (voir plus bas).
+  // Totaux PAR JOUR (sommés entre les codes du jour) : chambres pour l'occupation,
+  // servi / extra / non-venu pour l'agrégation mensuelle avec garde-fou « jour
+  // renseigné » (voir plus bas). Une entrée par jour, tous codes confondus.
   const perDay = new Map<
     string,
-    { month: number; served: number; extra: number; noShow: number }
+    { month: number; rooms: number; served: number; extra: number; noShow: number }
   >()
 
   const prefix = `${year}-`
@@ -91,40 +94,30 @@ export function aggregatePdjMonthly(
     if (m < 0 || m > 11) continue
 
     const s = months[m]
-    const inc = r.breakfasts_included
-    const srv = r.breakfasts_served
     s.guests += r.guests
-    s.included += inc
-    s.served += srv
+    s.included += r.included
+    s.served += r.served
 
-    // Extra / non-venus : accumulés PAR JOUR (et par chambre : max(0, …) avant somme,
-    // sinon un extra et un non-venu du même jour s'annuleraient). On agrège au mois
-    // plus bas, en n'y gardant que les jours dont la conso a été SAISIE (servi > 0).
+    // Extra / non-venus : la vue les a DÉJÀ sommés par chambre → on additionne
+    // simplement les codes du jour. Agrégé au mois plus bas, en n'y gardant que les
+    // jours dont la conso a été SAISIE (servi > 0). `rooms` = chambres du jour.
     let pd = perDay.get(r.service_date)
     if (!pd) {
-      pd = { month: m, served: 0, extra: 0, noShow: 0 }
+      pd = { month: m, rooms: 0, served: 0, extra: 0, noShow: 0 }
       perDay.set(r.service_date, pd)
     }
-    pd.served += srv
-    pd.extra += Math.max(0, srv - inc)
-    pd.noShow += Math.max(0, inc - srv)
-
-    let seen = seenPerDay.get(r.service_date)
-    if (!seen) {
-      seen = new Set<number>()
-      seenPerDay.set(r.service_date, seen)
-    }
-    seen.add(r.room)
+    pd.rooms += r.rooms
+    pd.served += r.served
+    pd.extra += r.extra
+    pd.noShow += r.no_show
   }
 
   // Chambres occupées + jours + occupation quotidienne, à partir des jours vus.
-  for (const [date, seen] of seenPerDay) {
-    const m = Number(date.slice(5, 7)) - 1
-    if (m < 0 || m > 11) continue
-    const s = months[m]
+  for (const pd of perDay.values()) {
+    const s = months[pd.month]
     s.days += 1
-    s.rooms += seen.size
-    occSum[m] += (seen.size / TOTAL_ROOMS) * 100
+    s.rooms += pd.rooms
+    occSum[pd.month] += (pd.rooms / TOTAL_ROOMS) * 100
   }
 
   // Extra / non-venus : n'agréger QUE les jours réellement renseignés (au moins un
@@ -189,7 +182,7 @@ export interface PdjDayStats {
  * distinctes par jour.
  */
 export function aggregatePdjDaily(
-  rows: PdjDayRow[],
+  rows: PdjAggRow[],
   year: number,
   month: number,
 ): PdjDayStats[] {
@@ -202,7 +195,7 @@ export function aggregatePdjDaily(
       served: number
       extra: number
       noShow: number
-      rooms: Set<number>
+      rooms: number
     }
   >()
 
@@ -216,25 +209,23 @@ export function aggregatePdjDaily(
         served: 0,
         extra: 0,
         noShow: 0,
-        rooms: new Set<number>(),
+        rooms: 0,
       }
       byDate.set(r.service_date, s)
     }
-    const inc = r.breakfasts_included
-    const srv = r.breakfasts_served
     s.guests += r.guests
-    s.included += inc
-    s.served += srv
-    // Par chambre avant sommation (cf. aggregatePdjMonthly).
-    s.extra += Math.max(0, srv - inc)
-    s.noShow += Math.max(0, inc - srv)
-    s.rooms.add(r.room)
+    s.included += r.included
+    s.served += r.served
+    // Déjà sommés par chambre côté vue → simple addition des codes du jour.
+    s.extra += r.extra
+    s.noShow += r.no_show
+    s.rooms += r.rooms
   }
 
   return [...byDate.entries()]
     .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
     .map(([date, s]) => {
-      const rooms = s.rooms.size
+      const rooms = s.rooms
       return {
         date,
         day: Number(date.slice(8, 10)),
