@@ -8,13 +8,10 @@ import { StatTile } from '#/components/shared/StatTile.tsx'
 import { ACCENT } from '#/components/analytique/accents.ts'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { fmtEur, fmtInt, fmtPctInt } from '#/lib/format/index.ts'
-import {
-  computeCaptageBenchmark,
-  computeDailyBenchmark,
-} from '#/lib/pdj/amounts.ts'
+import { computeAggBenchmarks } from '#/lib/pdj/amounts.ts'
 import {
   fetchAllAddonProduction,
-  fetchAllInHouseCovers,
+  fetchDailyAgg,
   fetchDay as fetchPdjDay,
 } from '#/lib/pdj/service.ts'
 import { detectTarifs } from '#/lib/pdj/tarif.ts'
@@ -184,31 +181,21 @@ export function DayCrossSummary({
     () => (pdjDayQ.data ? pdjDaySummary(pdjDayQ.data, tarifs) : null),
     [pdjDayQ.data, tarifs],
   )
-  // Couverts In-House COMPLETS (clé propre, pas ['pdj','benchmark'] qui est la
-  // moyenne TOUT-historique de la page PDJ). L'Addon complet est déjà chargé
-  // (allAddonQ). On filtre les deux à la fenêtre 30 j, puis on réutilise les
-  // repères PDJ existants — même définition, période restreinte.
-  const inhouseAllQ = useQuery({
-    queryKey: ['pdj', 'inhouse-all'],
-    queryFn: fetchAllInHouseCovers,
+  // Repères PDJ de la fenêtre 30 j, lus depuis la VUE d'agrégation `pdj_daily_agg`
+  // BORNÉE côté serveur à [windowFrom, date] : une poignée de lignes au lieu du
+  // scan complet de la table. Le tarif du CA vient de l'Addon tout-historique
+  // (`tarifs`), comme le board — un jour de la fenêtre n'a pas besoin de sa propre
+  // ligne Addon. Clé de cache versionnée par la fenêtre.
+  const aggWinQ = useQuery({
+    queryKey: ['pdj', 'agg-range', windowFrom, date],
+    queryFn: () => fetchDailyAgg(windowFrom, date),
     enabled: canPdj,
   })
   const pdjWin = useMemo(() => {
-    if (!allAddonQ.data || !inhouseAllQ.data) return null
-    const inWin = (d: string) => d >= windowFrom && d <= date
-    const addon = allAddonQ.data
-      .filter((r) => inWin(r.service_date))
-      .map((r) => ({
-        service_date: r.service_date,
-        code: r.code,
-        revenue: r.revenue_ttc,
-      }))
-    const inhouse = inhouseAllQ.data.filter((r) => inWin(r.service_date))
-    return {
-      total: computeDailyBenchmark(addon, inhouse),
-      captage: computeCaptageBenchmark(inhouse),
-    }
-  }, [allAddonQ.data, inhouseAllQ.data, windowFrom, date])
+    if (!aggWinQ.data) return null
+    const { total, captage } = computeAggBenchmarks(aggWinQ.data, tarifs)
+    return { total, captage }
+  }, [aggWinQ.data, tarifs])
 
   // --- Parking (jour courant + moyennes 30 j glissants) ----------------------
   const parkingQ = useQuery({

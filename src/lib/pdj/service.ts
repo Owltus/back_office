@@ -1,6 +1,5 @@
 import { supabase } from '#/lib/supabase.ts'
 import type { DbPdjRow, ManualKind } from '#/lib/pdj/csv.ts'
-import type { InHouseCoverRow } from '#/lib/pdj/amounts.ts'
 
 /*
  * Service d'accès Supabase pour les petits-déjeuners (table `pdj_breakfasts`).
@@ -380,26 +379,6 @@ export async function fetchAllAddonProduction(): Promise<PdjAddonRow[]> {
       .range(from, from + PAGE - 1)
     if (error) throw error
     const rows = (data ?? []) as PdjAddonRow[]
-    out.push(...rows)
-    if (rows.length < PAGE) break
-  }
-  return out
-}
-
-/** Lignes In-House (colonnes utiles au calcul) de TOUS les jours (paginé). Sert
- * aux repères « moyenne par jour » (total HT et taux de captage). */
-export async function fetchAllInHouseCovers(): Promise<InHouseCoverRow[]> {
-  const PAGE = 1000
-  const cols =
-    'service_date,addons,adults,children,guests,breakfasts_served,breakfasts_included'
-  const out: InHouseCoverRow[] = []
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await supabase
-      .from(PDJ_TABLE)
-      .select(cols)
-      .range(from, from + PAGE - 1)
-    if (error) throw error
-    const rows = (data ?? []) as unknown as InHouseCoverRow[]
     out.push(...rows)
     if (rows.length < PAGE) break
   }

@@ -14,8 +14,6 @@
 import { fromTTC } from '#/lib/repjour/constants.ts'
 import type { AddonProductionRow } from '#/lib/pdj/addon.ts'
 import type { PdjAggRow } from '#/lib/pdj/service.ts'
-import { detectTarifs } from '#/lib/pdj/tarif.ts'
-import { computePdjCA } from '#/lib/pdj/breakdown.ts'
 
 /** Arrondi à 2 décimales (au centime). */
 function round2(n: number): number {
@@ -131,16 +129,9 @@ export function computePdjAmounts(input: PdjAmountsInput): PdjAmounts {
   return { includedHT, extrasHT, totalHT, warnings }
 }
 
-/** Ligne In-House minimale pour le calcul d'un jour (couverts + extras). */
-export interface InHouseCoverRow {
-  service_date: string
-  addons: string | null
-  adults: number
-  children: number
-  guests: number
-  breakfasts_served: number
-  breakfasts_included: number
-}
+/* Repères « moyenne par jour » — formes de retour. Le CALCUL vit désormais
+ * uniquement dans `computeAggBenchmarks` (depuis la vue d'agrégation) ; ces
+ * interfaces restent la forme publique des trois repères. */
 
 /** Repère « moyenne par jour » du total HT. `avgTotalHT` null si aucun jour valide. */
 export interface DailyBenchmark {
@@ -148,91 +139,10 @@ export interface DailyBenchmark {
   days: number
 }
 
-/**
- * CA HT (inclus + extras) PAR JOUR — clé `service_date`. MÊME définition que la
- * fiche journalière : CA calculé PAR CHAMBRE (computePdjCA) au tarif DÉTECTÉ dans
- * l'Addon (detectTarifs, rien en dur), pas « Σ revenu Addon ÷ 1,10 ». SOURCE
- * UNIQUE du CA de l'analytique → le même chiffre que le board et le PDF. Retient
- * tout jour In-House dont le CA est chiffrable (> 0) ; le tarif vient de TOUT
- * l'historique Addon, un jour n'a donc pas besoin de sa propre ligne Addon.
- */
-export function computeDailyTotals(
-  addon: { service_date: string; code: string; revenue: number }[],
-  inHouse: InHouseCoverRow[],
-): Map<string, number> {
-  const tarifs = detectTarifs(
-    addon.map((r) => ({ code: r.code, revenue_ttc: r.revenue })),
-  )
-  const inHouseByDay = new Map<string, InHouseCoverRow[]>()
-  for (const r of inHouse) {
-    const list = inHouseByDay.get(r.service_date) ?? []
-    list.push(r)
-    inHouseByDay.set(r.service_date, list)
-  }
-
-  const totals = new Map<string, number>()
-  for (const [day, rows] of inHouseByDay) {
-    const { totalHt } = computePdjCA(rows, tarifs)
-    if (totalHt > 0) totals.set(day, totalHt)
-  }
-  return totals
-}
-
-/**
- * Moyenne par JOUR du total HT (inclus + extras), sur les jours ayant à la fois
- * de l'Addon et de l'In-House (cf. computeDailyTotals). null si aucun jour.
- */
-export function computeDailyBenchmark(
-  addon: { service_date: string; code: string; revenue: number }[],
-  inHouse: InHouseCoverRow[],
-): DailyBenchmark {
-  const totals = [...computeDailyTotals(addon, inHouse).values()]
-  if (totals.length === 0) return { avgTotalHT: null, days: 0 }
-  const sum = totals.reduce((s, t) => s + t, 0)
-  return { avgTotalHT: round2(sum / totals.length), days: totals.length }
-}
-
 /** Repère « captage moyen par jour ». `avgCaptage` null si aucun jour renseigné. */
 export interface CaptageBenchmark {
   avgCaptage: number | null
   days: number
-}
-
-/**
- * Moyenne par JOUR du taux de captage = (inclus + extras) ÷ clients, calculée
- * UNIQUEMENT sur les jours dont la conso a été SAISIE (servi > 0) — « de vraies
- * données ». Moyenne des taux quotidiens (pas un ratio poolé). null si aucun jour.
- */
-export function computeCaptageBenchmark(
-  inHouse: InHouseCoverRow[],
-): CaptageBenchmark {
-  const byDay = new Map<
-    string,
-    { included: number; served: number; extra: number; guests: number }
-  >()
-  for (const r of inHouse) {
-    const d = byDay.get(r.service_date) ?? {
-      included: 0,
-      served: 0,
-      extra: 0,
-      guests: 0,
-    }
-    d.included += r.breakfasts_included
-    d.served += r.breakfasts_served
-    d.extra += Math.max(0, r.breakfasts_served - r.breakfasts_included)
-    d.guests += r.guests
-    byDay.set(r.service_date, d)
-  }
-
-  const rates: number[] = []
-  for (const d of byDay.values()) {
-    if (d.served <= 0 || d.guests <= 0) continue // pas de servi saisi → exclu
-    rates.push(((d.included + d.extra) / d.guests) * 100)
-  }
-
-  if (rates.length === 0) return { avgCaptage: null, days: 0 }
-  const sum = rates.reduce((s, r) => s + r, 0)
-  return { avgCaptage: round2(sum / rates.length), days: rates.length }
 }
 
 /** Repère « occupation moyenne par jour » (chambres et clients). null si aucun jour. */
@@ -242,51 +152,19 @@ export interface OccupancyBenchmark {
   days: number
 }
 
-/**
- * Moyenne par JOUR des chambres occupées et des clients, sur TOUS les jours ayant
- * de l'In-House. Une ligne = une chambre-jour (clé unique (service_date, room)),
- * donc chambres/jour = nb de lignes du jour ; clients/jour = Σ guests.
- */
-export function computeOccupancyBenchmark(
-  inHouse: InHouseCoverRow[],
-): OccupancyBenchmark {
-  const byDay = new Map<string, { rooms: number; guests: number }>()
-  for (const r of inHouse) {
-    const d = byDay.get(r.service_date) ?? { rooms: 0, guests: 0 }
-    d.rooms += 1
-    d.guests += r.guests
-    byDay.set(r.service_date, d)
-  }
-
-  const days = byDay.size
-  if (days === 0) return { avgRooms: null, avgGuests: null, days: 0 }
-  let sumRooms = 0
-  let sumGuests = 0
-  for (const d of byDay.values()) {
-    sumRooms += d.rooms
-    sumGuests += d.guests
-  }
-  return {
-    avgRooms: round2(sumRooms / days),
-    avgGuests: round2(sumGuests / days),
-    days,
-  }
-}
-
 /* --------------------------------------------------------------------------
- * Variantes « depuis la vue d'agrégation » (pdj_daily_agg, une ligne par jour ×
- * code). Elles remplacent, pour l'analytique et les moyennes/jour du board, les
- * versions qui scannaient la table brute. Résultats IDENTIQUES au centime — même
- * ordre d'arrondi que computePdjCA (includedHt et extrasHt arrondis séparément
- * puis sommés puis réarrondis). Les versions « brutes » ci-dessus restent en
- * service pour la bande RepJour (DayCrossSummary).
+ * Calcul du CA et des moyennes/jour DEPUIS LA VUE d'agrégation (pdj_daily_agg,
+ * une ligne par jour × code). C'est l'unique chemin : le board, l'analytique ET
+ * la bande RepJour passent tous par là — plus aucun scan de la table brute.
+ * L'ordre d'arrondi (includedHt et extrasHt arrondis séparément puis sommés puis
+ * réarrondis) reproduit au centime celui de la fiche par chambre (breakdown.ts).
  * ------------------------------------------------------------------------ */
 
 /**
- * CA HT (inclus + extras) PAR JOUR depuis les lignes de la vue. Même définition
- * que `computeDailyTotals` : inclus valorisés au tarif du CODE, extras au tarif
- * PDJ ; le bucket `code = null` ne porte que des extras (walk-in). Ne retient que
- * les jours au CA chiffrable (> 0). `tarifs` vient de la détection Addon.
+ * CA HT (inclus + extras) PAR JOUR depuis les lignes de la vue : inclus valorisés
+ * au tarif du CODE, extras au tarif PDJ ; le bucket `code = null` ne porte que des
+ * extras (walk-in). Ne retient que les jours au CA chiffrable (> 0). `tarifs` vient
+ * de la détection Addon (tout-historique).
  */
 export function computeAggDailyTotals(
   rows: PdjAggRow[],
@@ -316,8 +194,7 @@ export function computeAggDailyTotals(
   return totals
 }
 
-/** Les trois repères « moyenne par jour » du board (mêmes formes que les versions
- *  brutes), calculés depuis la vue. */
+/** Les trois repères « moyenne par jour » du board, calculés depuis la vue. */
 export interface AggBenchmarks {
   total: DailyBenchmark
   captage: CaptageBenchmark
@@ -330,8 +207,7 @@ export interface AggBenchmarks {
  *  - `captage` : (inclus + extras) ÷ clients, moyenne des taux quotidiens sur les
  *                jours dont la conso a été SAISIE (servi > 0) ;
  *  - `occupancy` : chambres et clients moyens / jour (tous jours présents).
- * Reproduit exactement computeDailyBenchmark / computeCaptageBenchmark /
- * computeOccupancyBenchmark, mais sur des données déjà agrégées.
+ * Le board utilise les trois ; la bande RepJour n'en prend que `total` + `captage`.
  */
 export function computeAggBenchmarks(
   rows: PdjAggRow[],
