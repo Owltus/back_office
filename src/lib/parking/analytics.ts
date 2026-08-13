@@ -1,14 +1,21 @@
-import { CLIENT_SPOTS, FIRST_STAFF_SPOT } from '#/lib/parking/model.ts'
-import type { DbReservation } from '#/lib/parking/service.ts'
+import { CLIENT_SPOTS } from '#/lib/parking/model.ts'
+import type {
+  ParkingArrivalsRow,
+  ParkingDailyOccRow,
+} from '#/lib/parking/service.ts'
 import { TOTAL_ROOMS } from '#/lib/repjour/constants.ts'
 
 /*
  * Agrégation analytique du planning parking (métier pur, sans React).
  *
- * Alimente `ParkingAnalytiqueBoard` : à partir des lignes brutes lues en base
- * (une par réservation, avec `start_date` en date absolue), produit une synthèse
- * mensuelle sur une année. Aucune écriture, aucun accès réseau ici — les lignes
- * sont lues en amont par `fetchReservations`.
+ * Alimente `ParkingAnalytiqueBoard` (annuel) et `ParkingAnalytiqueMoisBoard`
+ * (mensuel) à partir des VUES d'agrégation (`parking_arrivals_agg`,
+ * `parking_daily_occupation`), pré-réduites côté base. Le planning `/parking`, lui,
+ * garde les réservations brutes + son temps réel — il ne passe PAS par ici.
+ *
+ * Particularité parking : une réservation couvre plusieurs jours. C'est la VUE
+ * `parking_daily_occupation` qui « déplie » l'occupation jour par jour (generate_series) ;
+ * ici on ne fait plus que sommer/compléter, jamais recalculer un chevauchement.
  *
  * AUCUN montant € : la table `parking_reservations` ne porte pas de tarif ; on ne
  * calcule donc jamais de chiffre d'affaires.
@@ -106,13 +113,13 @@ function daysInMonth(year: number, month: number): number {
 }
 
 /**
- * Agrège les réservations d'une année en 12 synthèses mensuelles. Les lignes
- * hors `year` sont ignorées (la lecture charge tout l'historique). L'axe est
+ * Agrège les lignes d'arrivée (vue `parking_arrivals_agg`, une par start_date) d'une
+ * année en 12 synthèses mensuelles. Les lignes hors `year` sont ignorées. L'axe est
  * l'arrivée (`start_date`) ; l'occupation compte TOUTES les places (personnel
- * compris), seul le captage isole les nuits-places client.
+ * compris, via `nights`), le captage isole les nuits-places client (`client_nights`).
  */
 export function aggregateParkingMonthly(
-  reservations: DbReservation[],
+  rows: ParkingArrivalsRow[],
   year: number,
 ): ParkingMonthStats[] {
   const months = Array.from({ length: 12 }, (_, i) => emptyMonth(i + 1))
@@ -120,19 +127,19 @@ export function aggregateParkingMonthly(
   const clientNights = new Array(12).fill(0)
 
   const prefix = `${year}-`
-  for (const r of reservations) {
+  for (const r of rows) {
     if (!r.start_date.startsWith(prefix)) continue
     const m = Number(r.start_date.slice(5, 7)) - 1
     if (m < 0 || m > 11) continue
 
     const s = months[m]
-    s.reservations += 1
+    s.reservations += r.reservations
     s.nights += r.nights
-    if (r.status === 'paye') s.paid += 1
-    else if (r.status === 'reserve') s.reserved += 1
-    else s.unpaid += 1
+    s.paid += r.paid
+    s.reserved += r.reserved
+    s.unpaid += r.unpaid
 
-    if (r.spot < FIRST_STAFF_SPOT) clientNights[m] += r.nights
+    clientNights[m] += r.client_nights
   }
 
   for (let i = 0; i < 12; i++) {
@@ -165,84 +172,50 @@ export interface ParkingDayStats {
   departures: number
 }
 
-/** Date locale → 'YYYY-MM-DD' (sans piège UTC de toISOString). */
-function ymd(d: Date): string {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
-
 /**
- * Agrège les réservations en une entrée par jour du calendrier du mois
- * (1..dernier jour). Occupation RÉELLE : une réservation couvre un jour si
- * `start_date <= jour < start_date + nights`. L'occupation compte TOUTES les
- * places (personnel 13 & 14 compris) ; `occupiedClient` isole les places client
- * pour le captage. Comparaison de dates en chaînes 'YYYY-MM-DD' construites
- * proprement (padStart), jamais via toISOString.
+ * Construit une entrée par jour du calendrier du mois (1..dernier jour) à partir
+ * des lignes de la vue `parking_daily_occupation` (occupation déjà dépliée côté
+ * base). Les jours absents de la vue (aucune occupation/arrivée/départ) sont
+ * complétés à zéro. Occupation compte TOUTES les places ; `occupiedClient` isole
+ * les places client pour le captage. `rows` peut couvrir une plage plus large que
+ * le mois : seuls les jours du mois sont retenus (lookup par date exacte).
  */
 export function aggregateParkingDaily(
-  reservations: DbReservation[],
+  rows: ParkingDailyOccRow[],
   year: number,
   month: number,
 ): ParkingDayStats[] {
   const nDays = new Date(year, month, 0).getDate()
   const mm = String(month).padStart(2, '0')
-  const firstStr = `${year}-${mm}-01`
-  const lastStr = `${year}-${mm}-${String(nDays).padStart(2, '0')}`
-
-  // Fenêtre de chaque réservation : bornes en chaînes 'YYYY-MM-DD'. La borne de
-  // fin (départ) est exclusive côté occupation, inclusive côté « départs ».
-  // On BORNE au mois : une résa dont la fenêtre [start, end] ne touche pas
-  // [firstStr, lastStr] ne peut occuper, arriver ni partir aucun jour du mois —
-  // inutile de la balayer nDays fois (la lecture charge tout l'historique).
-  const enriched = reservations
-    .map((r) => {
-      const [sy, sm, sd] = r.start_date.split('-').map(Number)
-      const end = new Date(sy, sm - 1, sd + r.nights)
-      return { spot: r.spot, start: r.start_date, end: ymd(end) }
-    })
-    .filter((e) => e.start <= lastStr && e.end >= firstStr)
+  const byDate = new Map<string, ParkingDailyOccRow>()
+  for (const r of rows) byDate.set(r.date, r)
 
   const result: ParkingDayStats[] = []
   for (let day = 1; day <= nDays; day++) {
     const dateStr = `${year}-${mm}-${String(day).padStart(2, '0')}`
-    const spotsAll = new Set<number>()
-    const spotsClient = new Set<number>()
-    let arrivals = 0
-    let departures = 0
-
-    for (const e of enriched) {
-      if (e.start <= dateStr && dateStr < e.end) {
-        spotsAll.add(e.spot)
-        if (e.spot < FIRST_STAFF_SPOT) spotsClient.add(e.spot)
-      }
-      if (e.start === dateStr) arrivals += 1
-      if (e.end === dateStr) departures += 1
-    }
-
-    const occupied = spotsAll.size
+    const r = byDate.get(dateStr)
+    const occupied = r?.occupied ?? 0
     result.push({
       date: dateStr,
       day,
       occupied,
-      occupiedClient: spotsClient.size,
+      occupiedClient: r?.occupied_client ?? 0,
       occupancy: (occupied / CLIENT_SPOTS) * 100,
-      arrivals,
-      departures,
+      arrivals: r?.arrivals ?? 0,
+      departures: r?.departures ?? 0,
     })
   }
   return result
 }
 
-/** Années présentes dans les `start_date` d'une liste de réservations (croissant). */
-export function yearsFromReservations(
-  reservations: DbReservation[],
+/** Années présentes dans une liste de dates 'YYYY-MM-DD' (croissant) + fallback. */
+export function yearsFromParkingDates(
+  dates: string[],
   fallback: number,
 ): number[] {
   const set = new Set<number>()
-  for (const r of reservations) {
-    const y = Number(r.start_date.slice(0, 4))
+  for (const d of dates) {
+    const y = Number(d.slice(0, 4))
     if (Number.isFinite(y)) set.add(y)
   }
   set.add(fallback)
