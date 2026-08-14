@@ -109,6 +109,13 @@ import { fetchDay as fetchPdjDay } from '#/lib/pdj/service.ts'
  * ------------------------------------------------------------------------ */
 
 const MIN_DAY_W = 140 // largeur minimale d'un jour (les colonnes remplissent la largeur)
+const COMPACT_DAY_W = 64 // largeur minimale d'un jour en mode compact (téléphone)
+// Compact : les rangées s'ÉTIRENT pour remplir la hauteur disponible (pas de vide
+// sous le tableau). Bornes de sécurité + réserve pour la légende / marges sous la
+// carte (au-delà, la page défile plutôt que d'écraser les rangées).
+const COMPACT_MIN_ROW_H = 30
+const COMPACT_MAX_ROW_H = 60
+const COMPACT_BOTTOM_GAP = 64
 const ROW_H = 44
 const HEADER_H = 52
 const LABEL_W = 56
@@ -171,12 +178,13 @@ function barRect(
   nights: number,
   offset: number,
   slotW: number,
+  rowH: number,
 ) {
   return {
     left: (arrivalSlot(startDay) - offset * SLOTS_PER_DAY) * slotW + BAR_PAD_X,
     width: nights * SLOTS_PER_DAY * slotW - BAR_PAD_X * 2,
-    top: (spot - 1) * ROW_H + BAR_PAD_Y,
-    height: ROW_H - BAR_PAD_Y * 2,
+    top: (spot - 1) * rowH + BAR_PAD_Y,
+    height: rowH - BAR_PAD_Y * 2,
   }
 }
 
@@ -187,6 +195,7 @@ function pointerToCell(
   dayW: number,
   offset: number,
   visibleDays: number,
+  rowH: number,
 ) {
   const rect = e.currentTarget.getBoundingClientRect()
   const dayIndex = clamp(
@@ -194,7 +203,7 @@ function pointerToCell(
     0,
     Math.max(0, visibleDays - 1),
   )
-  const spot = clamp(Math.floor((e.clientY - rect.top) / ROW_H) + 1, 1, SPOTS)
+  const spot = clamp(Math.floor((e.clientY - rect.top) / rowH) + 1, 1, SPOTS)
   return { day: offset + dayIndex, spot }
 }
 
@@ -219,10 +228,32 @@ function PmrGlyph({ className }: { className?: string }) {
   )
 }
 
+// Affichage COMPACT (téléphone / petit écran, < 768px — breakpoint aligné sur la
+// Navbar). En compact, le planning passe en LECTURE SEULE côté front (créer /
+// déplacer / redimensionner par glisser-déposer tactile est ingérable) et masque
+// les noms — on ne voit que les zones colorées, et seul le panoramique jours reste.
+// Règle purement front : la RLS demeure l'unique autorité des droits.
+function useIsCompact(): boolean {
+  const [compact, setCompact] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)')
+    const update = () => setCompact(mq.matches)
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [])
+  return compact
+}
+
 export function ParkingBoard({ initialDate }: { initialDate?: string }) {
   const { can, pageLevel } = useAuth()
   // Seuls les niveaux Écriture / Gestion peuvent modifier ; Lecture = consultation.
-  const canEdit = can('parking', 'ecriture')
+  const isCompact = useIsCompact()
+  // En affichage compact (téléphone), l'édition est désactivée CÔTÉ FRONT : lecture
+  // seule, seul le panoramique jours reste. `canEdit` porte « droit d'écrire ET pas
+  // en compact » → tous les points d'édition (création, déplacement, redim, menus)
+  // s'en déduisent automatiquement. (La RLS reste l'autorité réelle des droits.)
+  const canEdit = can('parking', 'ecriture') && !isCompact
   // Niveau effectif sur le parking : sert au verrou TEMPOREL par réservation.
   // Écriture agit sur l'actualité (présent, futur, passé récent, séjours en
   // cours) ; seule la gestion peut modifier le passé verrouillé (cf.
@@ -237,6 +268,9 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
   // pour le curseur « grabbing » et la neutralisation de la sélection de texte.
   const [panning, setPanning] = useState(false)
   const [containerW, setContainerW] = useState(0)
+  // Hauteur du haut de la timeline au bas du viewport (mesurée) → sert à étirer les
+  // rangées pour remplir l'écran en compact. 0 tant que non mesurée.
+  const [availH, setAvailH] = useState(0)
   const [reservations, setReservations] = useState<Reservation[]>([])
   const [editingId, setEditingId] = useState<string | null>(null)
   const [calOpen, setCalOpen] = useState(false)
@@ -376,22 +410,47 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
     }
   }, [startDate])
 
-  // Mesure de la largeur disponible → nombre de jours affichés.
+  // Mesure de la largeur (→ nombre de jours) ET de la hauteur disponible sous la
+  // timeline (→ étirement des rangées en compact). Recalculées au redimensionnement
+  // du conteneur (RO) et de la fenêtre (rotation, clavier virtuel, reflow d'en-tête).
   useEffect(() => {
     const el = timelineRef.current
     if (!el) return
-    const ro = new ResizeObserver((entries) => {
-      setContainerW(entries[0].contentRect.width)
-    })
+    const measure = () => {
+      setContainerW(el.clientWidth)
+      setAvailH(window.innerHeight - el.getBoundingClientRect().top)
+    }
+    const ro = new ResizeObserver(measure)
     ro.observe(el)
-    setContainerW(el.clientWidth)
-    return () => ro.disconnect()
+    measure()
+    window.addEventListener('resize', measure)
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('resize', measure)
+    }
   }, [startDate])
 
+  // Largeur mini d'un jour : réduite en compact → colonnes plus étroites, plus de
+  // jours visibles à l'écran (on ne montre que les zones colorées, pas les noms).
+  const dayMinW = isCompact ? COMPACT_DAY_W : MIN_DAY_W
   const visibleDays =
-    containerW > 0 ? Math.max(1, Math.floor(containerW / MIN_DAY_W)) : 0
-  const dayW = visibleDays > 0 ? containerW / visibleDays : MIN_DAY_W
+    containerW > 0 ? Math.max(1, Math.floor(containerW / dayMinW)) : 0
+  const dayW = visibleDays > 0 ? containerW / visibleDays : dayMinW
   const slotW = dayW / SLOTS_PER_DAY
+  // Densité en compact : en-tête + colonne des places rétrécis, et rangées ÉTIRÉES
+  // pour remplir la hauteur disponible (14 rangées occupent tout l'écran, sans vide
+  // dessous). Bornées entre un mini et un maxi ; au-delà du mini, la page défile.
+  const headerH = isCompact ? 52 : HEADER_H
+  const labelW = isCompact ? 40 : LABEL_W
+  const rowH = isCompact
+    ? Math.max(
+        COMPACT_MIN_ROW_H,
+        Math.min(
+          COMPACT_MAX_ROW_H,
+          Math.floor((availH - headerH - COMPACT_BOTTOM_GAP) / SPOTS),
+        ),
+      )
+    : ROW_H
 
   // Agrandissement de la fenêtre chargée quand la vue approche d'un bord (jamais de
   // rétrécissement). Un seul agrandissement couvre même un saut lointain (lien
@@ -880,7 +939,7 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
     // jours auto-défilés. Appelé au déplacement ET à chaque tick d'auto-scroll.
     const applyPosition = () => {
       const dDay = Math.round((lastX - startX) / w) + panSteps
-      const dRow = Math.round((lastY - startY) / ROW_H)
+      const dRow = Math.round((lastY - startY) / rowH)
       let spot = orig.spot
       let startDay = orig.startDay
       let nights = orig.nights
@@ -990,7 +1049,7 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
   // Au clic droit sur une zone vide, on mémorise la case visée ;
   // "Nouvelle réservation" du menu contextuel l'utilise ensuite.
   function captureCell(e: ReactMouseEvent<HTMLDivElement>) {
-    pendingCell.current = pointerToCell(e, dayW, offset, visibleDays)
+    pendingCell.current = pointerToCell(e, dayW, offset, visibleDays, rowH)
   }
 
   /*
@@ -1036,11 +1095,19 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
     setCalOpen(false)
   }
 
-  // Plage de dates affichée en titre (haut à gauche), façon autres pages.
+  // Plage de dates affichée en titre (haut à gauche), façon autres pages. En
+  // compact, on n'affiche QUE l'année (les jours/dates figurent déjà dans l'en-tête
+  // des colonnes) pour gagner de la place ; « AAAA – AAAA » si la fenêtre déborde
+  // sur deux années.
   const rangeLabel = (() => {
     if (days.length === 0) return ''
     const first = days[0]
     const last = days[days.length - 1]
+    if (isCompact) {
+      const fy = first.getFullYear()
+      const ly = last.getFullYear()
+      return fy === ly ? String(fy) : `${fy} – ${ly}`
+    }
     return first.getFullYear() === last.getFullYear()
       ? `${fmtDay.format(first)} – ${fmtDayYear.format(last)}`
       : `${fmtDayYear.format(first)} – ${fmtDayYear.format(last)}`
@@ -1073,7 +1140,7 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
         backgroundImage: [
           `repeating-linear-gradient(to right, rgba(148,163,184,0.18) 0 1px, transparent 1px ${dayW}px)`,
           `repeating-linear-gradient(to right, transparent 0 ${slotW}px, rgba(148,163,184,0.08) ${slotW}px ${slotW + 1}px, transparent ${slotW + 1}px ${dayW}px)`,
-          `repeating-linear-gradient(to bottom, rgba(148,163,184,0.10) 0 1px, transparent 1px ${ROW_H}px)`,
+          `repeating-linear-gradient(to bottom, rgba(148,163,184,0.10) 0 1px, transparent 1px ${rowH}px)`,
         ].join(','),
       }}
     />
@@ -1164,11 +1231,11 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
         {/* Colonne fixe des places */}
         <div
           className="shrink-0 border-r border-border"
-          style={{ width: LABEL_W }}
+          style={{ width: labelW }}
         >
           <div
             className="flex items-center justify-center text-xs font-medium text-muted-foreground"
-            style={{ height: HEADER_H }}
+            style={{ height: headerH }}
           >
             Place
           </div>
@@ -1179,7 +1246,7 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
                 'flex items-center justify-center border-t border-border text-sm',
                 s >= FIRST_STAFF_SPOT && 'bg-primary/5',
               )}
-              style={{ height: ROW_H }}
+              style={{ height: rowH }}
             >
               {s === PMR_SPOT ? (
                 <span
@@ -1207,7 +1274,7 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
             // + rangées) pour ne pas provoquer de saut au passage au planning.
             <div
               className="p-3"
-              style={{ height: HEADER_H + SPOTS * ROW_H }}
+              style={{ height: headerH + SPOTS * rowH }}
             >
               <SkeletonBlock className="h-full rounded-xl" />
             </div>
@@ -1238,7 +1305,7 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
 
             {/* En-tête des jours. En zone critique (12 places client pleines +
                 débordement sur le personnel 13/14), tout l'entête passe en rouge. */}
-            <div className="flex" style={{ height: HEADER_H }}>
+            <div className="flex" style={{ height: headerH }}>
               {days.map((d, i) => {
                 const info = dayInfo[i]
                 const critical = info.critical
@@ -1292,7 +1359,7 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
             </div>
 
             {/* Grille + réservations */}
-            <div className="relative" style={{ height: SPOTS * ROW_H }}>
+            <div className="relative" style={{ height: SPOTS * rowH }}>
               {/* Fond : lignes de jour / midi / rangées + clic droit pour ajouter.
                     En lecture seule (utilisateur), pas de menu contextuel : on
                     rend le fond seul (clic droit navigateur inoffensif). */}
@@ -1343,7 +1410,7 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
                   style={{
                     left: todayIndex * dayW,
                     width: dayW,
-                    height: (FIRST_STAFF_SPOT - 1) * ROW_H,
+                    height: (FIRST_STAFF_SPOT - 1) * rowH,
                   }}
                 />
               )}
@@ -1353,7 +1420,7 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
                 <div
                   key={s}
                   className="pointer-events-none absolute left-0 right-0 bg-primary/5"
-                  style={{ top: (s - 1) * ROW_H, height: ROW_H }}
+                  style={{ top: (s - 1) * rowH, height: rowH }}
                 />
               ))}
 
@@ -1372,6 +1439,7 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
                     locked={canEdit && !canEditReservation(r, todayOffset, level)}
                     offset={offset}
                     slotW={slotW}
+                    rowH={rowH}
                     editing={editingId === r.id}
                     onStartInteraction={startInteraction}
                     onStartEdit={setEditingId}
@@ -1392,7 +1460,7 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
                   <div
                     className="absolute inset-0 z-20 cursor-copy"
                     onMouseMove={(e) => {
-                      const cell = pointerToCell(e, dayW, offset, visibleDays)
+                      const cell = pointerToCell(e, dayW, offset, visibleDays, rowH)
                       // Ne re-render que si la case change (pas à chaque pixel).
                       setGhost((prev) =>
                         prev && prev.day === cell.day && prev.spot === cell.spot
@@ -1424,6 +1492,7 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
                         clipboard.nights,
                         offset,
                         slotW,
+                        rowH,
                       )}
                     >
                       <span className="min-w-0 flex-1 truncate font-medium">
@@ -1550,6 +1619,7 @@ interface ReservationBarProps {
   locked: boolean
   offset: number
   slotW: number
+  rowH: number
   editing: boolean
   onStartInteraction: (e: ReactPointerEvent, r: Reservation, mode: Mode) => void
   onStartEdit: (id: string) => void
@@ -1567,6 +1637,7 @@ function ReservationBar({
   locked,
   offset,
   slotW,
+  rowH,
   editing,
   onStartInteraction,
   onStartEdit,
@@ -1626,7 +1697,7 @@ function ReservationBar({
         locked && 'opacity-60',
         st.bar,
       )}
-      style={barRect(r.startDay, r.spot, r.nights, offset, slotW)}
+      style={barRect(r.startDay, r.spot, r.nights, offset, slotW, rowH)}
     >
       {interactive && (
         <span
