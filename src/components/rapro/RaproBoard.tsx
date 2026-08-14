@@ -512,7 +512,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   // `monthly-counts` → vues annuelle ET mensuelle) pour qu'il se resynchronise
   // sans rechargement complet de la page.
   const invalidateAnalytique = () =>
-    queryClient.invalidateQueries({ queryKey: ['rapro', 'monthly-counts'] })
+    queryClient.invalidateQueries({ queryKey: ['rapro', 'daily-agg'] })
   // Ouvre le modal de clôture, en pré-remplissant le nom déjà posé (cas d'une
   // réouverture puis re-clôture).
   function openCloseModal() {

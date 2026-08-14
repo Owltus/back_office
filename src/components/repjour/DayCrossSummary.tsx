@@ -26,7 +26,7 @@ import {
 } from '#/lib/rapro/service.ts'
 import {
   cleaned,
-  fetchStatusCountsByRange,
+  fetchRaproDailyAgg,
   sumCounts,
 } from '#/lib/rapro/monthly.ts'
 import { carryOver, carryoverWindow } from '#/lib/rapro/carryover.ts'
@@ -324,20 +324,20 @@ export function DayCrossSummary({
   }, [raproOccQ.data, raproDayQ.data, raproWindow, windowDays])
 
   // Moyennes sur la fenêtre 30 j (sous-textes des cartes rapro) — même décompte
-  // que l'analytique rapro (`fetchStatusCountsByRange`, jours CLÔTURÉS uniquement),
-  // sur la plage glissante. Dénominateur = jours actifs (avec données) de la
-  // fenêtre. Le roulement (« bloquées de la veille ») n'y est pas agrégé → pas de
-  // moyenne pour cette carte.
+  // que l'analytique rapro (vue `rapro_daily_agg`, jours CLÔTURÉS uniquement), sur
+  // la plage glissante. Dénominateur = jours actifs (avec données) de la fenêtre.
+  // Le roulement (« bloquées de la veille ») n'y est pas agrégé → pas de moyenne
+  // pour cette carte.
   const raproWinQ = useQuery({
-    queryKey: ['rapro', 'counts-range', windowFrom, date],
-    queryFn: () => fetchStatusCountsByRange(windowFrom, date),
+    queryKey: ['rapro', 'daily-agg-range', windowFrom, date],
+    queryFn: () => fetchRaproDailyAgg(windowFrom, date),
     enabled: canRapro,
   })
   const raproAvg = useMemo(() => {
     const byDay = raproWinQ.data
     if (!byDay || byDay.size === 0) return null
-    // `fetchStatusCountsByRange` ne renvoie que les jours clôturés PORTEURS de
-    // données → chaque entrée est un jour actif : `byDay.size` = dénominateur.
+    // La vue ne renvoie que les jours clôturés PORTEURS de données → chaque entrée
+    // est un jour actif : `byDay.size` = dénominateur.
     const totals = sumCounts(byDay)
     const active = byDay.size
     return {

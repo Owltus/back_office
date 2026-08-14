@@ -16,12 +16,7 @@ import {
 } from '#/components/rapro/RaproCatColumns.tsx'
 import { parseDateStr } from '#/lib/poster/dateFormatter.ts'
 import { capitalize } from '#/lib/utils.ts'
-import {
-  cleaned,
-  fetchStatusCountsByRange,
-  monthBounds,
-  monthlyRows,
-} from '#/lib/rapro/monthly.ts'
+import { cleaned, fetchRaproDailyAgg, monthlyRows } from '#/lib/rapro/monthly.ts'
 
 /**
  * Détail d'un MOIS — harmonisé sur le socle analytique partagé. 5 cartes de
@@ -38,13 +33,14 @@ export function RaproMonthlyBoard({
   year: number
   month: number
 }) {
-  const bounds = monthBounds(year, month)
-
-  const { data: byDay, isPending: loading } = useQuery({
-    queryKey: ['rapro', 'monthly-counts', year, month],
-    queryFn: () => fetchStatusCountsByRange(bounds.from, bounds.to),
+  // MÊME clé que la vue annuelle (`['rapro','daily-agg', year]`) : la Map de
+  // l'année est lue une seule fois et partagée (retour instantané annuel ↔ mois).
+  // `monthlyRows` ne lit que les jours du mois demandé dans cette Map.
+  const { data: yearMap, isPending: loading } = useQuery({
+    queryKey: ['rapro', 'daily-agg', year],
+    queryFn: () => fetchRaproDailyAgg(`${year}-01-01`, `${year}-12-31`),
   })
-  const { rows, totals } = monthlyRows(year, month, byDay ?? new Map())
+  const { rows, totals } = monthlyRows(year, month, yearMap ?? new Map())
   // Moyenne de MÉNAGES FACTURÉS (nettoyées + rattrapages) par jour ACTIF (au moins
   // une donnée) : diviser par tous les jours du mois fausserait la moyenne (jours
   // vides / à venir). Un jour où il n'y a QU'un rattrapage compte comme actif.

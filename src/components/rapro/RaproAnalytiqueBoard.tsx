@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useQueries, useQuery } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
@@ -18,12 +18,7 @@ import {
 import { fetchOldestDay } from '#/lib/rapro/service.ts'
 import { MONTHS_SHORT } from '#/lib/shared/dates.ts'
 import { capitalize } from '#/lib/utils.ts'
-import {
-  cleaned,
-  fetchStatusCountsByRange,
-  monthBounds,
-  sumCounts,
-} from '#/lib/rapro/monthly.ts'
+import { cleaned, fetchRaproDailyAgg } from '#/lib/rapro/monthly.ts'
 
 /*
  * Récap ménage ANNUEL — harmonisé sur le socle analytique partagé (repjour / PDJ).
@@ -59,20 +54,39 @@ export function RaproAnalytiqueBoard() {
     return list.length > 0 ? list : [currentYear]
   }, [oldest])
 
-  const monthQueries = useQueries({
-    queries: MONTHS.map((m) => {
-      const b = monthBounds(year, m)
-      return {
-        queryKey: ['rapro', 'monthly-counts', year, m],
-        queryFn: () => fetchStatusCountsByRange(b.from, b.to),
-      }
-    }),
+  // UNE seule lecture pour toute l'année (vue rapro_daily_agg, une ligne par jour
+  // clôturé) au lieu de 12 requêtes mensuelles. Cache par année, partagé avec la
+  // vue « mois » (retour instantané).
+  const { data: yearMap, isPending: loading } = useQuery({
+    queryKey: ['rapro', 'daily-agg', year],
+    queryFn: () => fetchRaproDailyAgg(`${year}-01-01`, `${year}-12-31`),
   })
-  const loading = monthQueries.some((q) => q.isPending)
 
-  const totals = MONTHS.map((_, i) =>
-    sumCounts(monthQueries[i]?.data ?? new Map()),
-  )
+  // Décomptes par mois + nombre de jours ACTIFS (clôturés avec données), dérivés en
+  // UNE passe de la Map annuelle.
+  const { totals, activeDays } = useMemo(() => {
+    const monthTotals = MONTHS.map(() => ({
+      nettoyee: 0,
+      rattrapage: 0,
+      bloquee: 0,
+      refus: 0,
+    }))
+    let days = 0
+    if (yearMap) {
+      for (const [date, c] of yearMap) {
+        const mi = Number(date.slice(5, 7)) - 1
+        if (mi < 0 || mi > 11) continue
+        const t = monthTotals[mi]
+        t.nettoyee += c.nettoyee
+        t.rattrapage += c.rattrapage
+        t.bloquee += c.bloquee
+        t.refus += c.refus
+        days += 1
+      }
+    }
+    return { totals: monthTotals, activeDays: days }
+  }, [yearMap])
+
   const yearTotals = totals.reduce(
     (a, t) => ({
       nettoyee: a.nettoyee + t.nettoyee,
@@ -83,11 +97,8 @@ export function RaproAnalytiqueBoard() {
     { nettoyee: 0, rattrapage: 0, bloquee: 0, refus: 0 },
   )
   // Moyenne de MÉNAGES FACTURÉS (nettoyées + rattrapages) par JOUR travaillé sur
-  // l'année — PAS par mois : avec un seul mois saisi, « /mois » égalait le total
-  // (inutile). Dénominateur = nombre de jours CLÔTURÉS ayant des données ;
-  // `fetchStatusCountsByRange` ne renvoie que ceux-là (jours non clôturés exclus),
-  // donc c'est la somme des tailles des Map mensuelles. Numérateur borné aux clôturés.
-  const activeDays = monthQueries.reduce((n, q) => n + (q.data?.size ?? 0), 0)
+  // l'année. Dénominateur = jours CLÔTURÉS ayant des données (la vue ne renvoie
+  // que ceux-là) = taille de la Map annuelle.
   const avgCleanedPerDay = activeDays
     ? Math.round(cleaned(yearTotals) / activeDays)
     : 0
