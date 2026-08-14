@@ -139,20 +139,33 @@ const BAR_PAD_Y = 4 // marge verticale d'une barre (px)
  * page. Le texte doit donc contraster avec CE fond-là, pas avec la teinte —
  * d'où une encre foncée en clair et claire en sombre, jamais l'une des deux
  * seule (un texte clair sur fond clair devient invisible, et réciproquement). */
-const STATUS: Record<Status, { label: string; bar: string; dot: string }> = {
+// Style d'une barre éclaté en `border` / `fill` (teinte 15 %) / `text` / `dot`.
+// La teinte `fill` est posée sur un fond OPAQUE (bg-card) : la barre garde son
+// rendu habituel MAIS ne laisse rien transparaître dessous (utile en zone
+// critique, fond rouge derrière). Le point (`dot`) sert à la légende / au menu.
+const STATUS: Record<
+  Status,
+  { label: string; border: string; fill: string; text: string; dot: string }
+> = {
   reserve: {
     label: 'Réservé',
-    bar: 'border-slate-400/50 bg-slate-400/15 text-slate-700 dark:text-slate-100',
+    border: 'border-slate-400/50',
+    fill: 'bg-slate-400/15',
+    text: 'text-slate-700 dark:text-slate-100',
     dot: 'bg-slate-400',
   },
   paye: {
     label: 'Payé',
-    bar: 'border-emerald-500/50 bg-emerald-500/15 text-emerald-700 dark:text-emerald-100',
+    border: 'border-emerald-500/50',
+    fill: 'bg-emerald-500/15',
+    text: 'text-emerald-700 dark:text-emerald-100',
     dot: 'bg-emerald-500',
   },
   checkout: {
     label: 'Non payé',
-    bar: 'border-orange-500/50 bg-orange-500/15 text-orange-700 dark:text-orange-100',
+    border: 'border-orange-500/50',
+    fill: 'bg-orange-500/15',
+    text: 'text-orange-700 dark:text-orange-100',
     dot: 'bg-orange-500',
   },
 }
@@ -1424,6 +1437,26 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
                 />
               ))}
 
+              {/* Zone critique (surbooking) : le FOND de toute la colonne devient
+                  rouge (aplat, en-tête déjà rouge à part). Il est posé DERRIÈRE les
+                  barres, qui restent TRANSLUCIDES → on voit le rouge à travers les
+                  zones de réservation (empilement voulu : fond rouge + zones
+                  transparentes par-dessus). */}
+              {days.map((_, i) =>
+                dayInfo[i]?.critical ? (
+                  <div
+                    key={`crit-${i}`}
+                    className="pointer-events-none absolute bg-rose-500/10"
+                    style={{
+                      left: i * dayW,
+                      width: dayW,
+                      top: 0,
+                      height: SPOTS * rowH,
+                    }}
+                  />
+                ) : null,
+              )}
+
               {/* Réservations (uniquement celles visibles dans la fenêtre) */}
               {reservations
                 .filter(
@@ -1484,7 +1517,11 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
                         'pointer-events-none absolute z-30 flex items-center rounded-md border px-1.5 text-xs shadow-lg',
                         ghostInvalid
                           ? 'border-rose-500 bg-rose-500/25 text-rose-700 dark:text-rose-50'
-                          : STATUS[clipboard.status].bar,
+                          : cn(
+                              STATUS[clipboard.status].border,
+                              STATUS[clipboard.status].fill,
+                              STATUS[clipboard.status].text,
+                            ),
                       )}
                       style={barRect(
                         ghost.day,
@@ -1695,7 +1732,9 @@ function ReservationBar({
         'group absolute flex touch-none items-center gap-1.5 rounded-md border px-1.5 text-xs shadow-sm',
         interactive && 'cursor-grab active:cursor-grabbing',
         locked && 'opacity-60',
-        st.bar,
+        st.border,
+        st.fill,
+        st.text,
       )}
       style={barRect(r.startDay, r.spot, r.nights, offset, slotW, rowH)}
     >
