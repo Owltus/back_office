@@ -21,6 +21,10 @@ import type {
 
 export const RAPRO_TABLE = 'rapro_rooms'
 export const RAPRO_SHEETS_TABLE = 'rapro_sheets'
+/** Vue d'agrégation du récap ménage (supabase/rapro_daily_agg.sql) : une ligne par
+ * jour CLÔTURÉ, décomptes par statut. Alimente les analytiques + la bande RepJour ;
+ * le board /rapro (saisie) garde ses lectures par jour. */
+export const RAPRO_AGG_VIEW = 'rapro_daily_agg'
 /** Fonction SECURITY DEFINER d'occupation In-House SANS données nominatives,
  * gardée sur la page rapro (supabase/rapro_occupancy_fn.sql). Le rapprochement lit
  * l'occupation par chambre ICI plutôt que directement dans `pdj_breakfasts` (fermé
@@ -314,18 +318,3 @@ export async function fetchOfficialOcc(date: string): Promise<number | null> {
  * jamais occupé de chambre, aucune case de la grille ne peut le porter.
  */
 
-/** Ensemble des jours CLÔTURÉS (rapprochement validé) sur `[from, to]`. Sert au
- * roulement : seuls les jours clôturés font rouler leurs chambres non faites. */
-export async function fetchValidatedDays(
-  from: string,
-  to: string,
-): Promise<Set<string>> {
-  const { data, error } = await supabase
-    .from(RAPRO_SHEETS_TABLE)
-    .select('report_date')
-    .eq('status', 'validated')
-    .gte('report_date', from)
-    .lte('report_date', to)
-  if (error) throw error
-  return new Set((data ?? []).map((r) => r.report_date as string))
-}

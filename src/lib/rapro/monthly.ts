@@ -12,7 +12,7 @@
  */
 
 import { supabase } from '#/lib/supabase.ts'
-import { fetchValidatedDays } from '#/lib/rapro/service.ts'
+import { RAPRO_AGG_VIEW } from '#/lib/rapro/service.ts'
 
 /** Décompte des statuts stockés d'un jour (nettoyée / rattrapage / bloquée /
  * refus, hors occupation PDJ) — mêmes catégories que la grille du rapprochement.
@@ -34,50 +34,38 @@ const emptyCounts = (): DayStatusCounts => ({
 })
 
 /**
- * Comptage par jour des statuts nettoyee / non_nettoyee / refus sur `[from, to]`,
- * RESTREINT aux jours dont le rapprochement est CLÔTURÉ (validé). PAGINÉ jusqu'au
- * count exact (un mois plein peut dépasser le plafond de 1000 lignes de l'API),
- * en avançant du nombre de lignes réellement renvoyées ; les lignes d'un jour non
- * clôturé sont ignorées au comptage.
+ * Décomptes par jour (nettoyee / rattrapage / bloquee / refus) sur `[from, to]`,
+ * lus depuis la VUE `rapro_daily_agg` : une ligne par jour CLÔTURÉ, déjà agrégée
+ * côté base (le JOIN sur rapro_sheets validated y remplace l'ancien filtrage des
+ * jours clôturés). Bornes 'YYYY-MM-DD' incluses. Paginé (défensif : ≤ 366 lignes/an).
+ * Renvoie la même Map que consommaient les analytiques (monthlyRows / sumCounts).
  */
-export async function fetchStatusCountsByRange(
+export async function fetchRaproDailyAgg(
   from: string,
   to: string,
 ): Promise<Map<string, DayStatusCounts>> {
   const byDay = new Map<string, DayStatusCounts>()
-  // Jours clôturés de la fenêtre : hors de cet ensemble, rien ne compte.
-  const validated = await fetchValidatedDays(from, to)
-  if (validated.size === 0) return byDay
   const PAGE = 1000
   let offset = 0
-  let expected = Infinity
-  while (offset < expected) {
-    const { data, error, count } = await supabase
-      .from('rapro_rooms')
-      .select('report_date, status', { count: 'exact' })
-      .in('status', ['nettoyee', 'non_nettoyee', 'refus', 'rattrapage'])
+  for (;;) {
+    const { data, error } = await supabase
+      .from(RAPRO_AGG_VIEW)
+      .select('*')
       .gte('report_date', from)
       .lte('report_date', to)
       .order('report_date', { ascending: true })
       .range(offset, offset + PAGE - 1)
     if (error) throw error
-    if (count != null) expected = count
-    const rows = (data ?? []) as { report_date: string; status: string }[]
-    if (rows.length === 0) break
+    const rows = (data ?? []) as (DayStatusCounts & { report_date: string })[]
     for (const r of rows) {
-      // Jour non clôturé → hors analytique (statuts encore provisoires).
-      if (!validated.has(r.report_date)) continue
-      const c = byDay.get(r.report_date) ?? emptyCounts()
-      // Facturable = `nettoyee` (vente) OU `rattrapage` (reportée non vendue) ;
-      // `non_nettoyee` = « Bloquée ». Le rattrapage est compté à PART pour rester
-      // hors des « vendues » (cf. `vendues`) tout en pesant sur la facture (cf.
-      // `cleaned`).
-      if (r.status === 'nettoyee') c.nettoyee++
-      else if (r.status === 'rattrapage') c.rattrapage++
-      else if (r.status === 'non_nettoyee') c.bloquee++
-      else if (r.status === 'refus') c.refus++
-      byDay.set(r.report_date, c)
+      byDay.set(r.report_date, {
+        nettoyee: r.nettoyee,
+        rattrapage: r.rattrapage,
+        bloquee: r.bloquee,
+        refus: r.refus,
+      })
     }
+    if (rows.length < PAGE) break
     offset += rows.length
   }
   return byDay
