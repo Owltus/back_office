@@ -68,6 +68,8 @@ import {
 import { clamp, cn } from '#/lib/utils.ts'
 import {
   FIRST_STAFF_SPOT,
+  PMR_GLYPH,
+  PMR_SPOT,
   SLOTS_PER_DAY,
   SPOTS,
   SPOTS_LIST,
@@ -194,6 +196,27 @@ function pointerToCell(
   )
   const spot = clamp(Math.floor((e.clientY - rect.top) / ROW_H) + 1, 1, SPOTS)
   return { day: offset + dayIndex, spot }
+}
+
+// Pictogramme « fauteuil roulant » (PMR), affiché à la place du numéro de la place
+// PMR. SVG (potrace) issu de la SOURCE UNIQUE `PMR_GLYPH` (model.ts, partagée avec
+// le PDF) ; `currentColor` → suit la couleur du texte, se dimensionne via `className`.
+function PmrGlyph({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox={PMR_GLYPH.viewBox}
+      fill="currentColor"
+      aria-hidden="true"
+      className={className}
+    >
+      <g transform={PMR_GLYPH.transform} stroke="none">
+        {PMR_GLYPH.paths.map((d, i) => (
+          <path key={i} d={d} />
+        ))}
+      </g>
+    </svg>
+  )
 }
 
 export function ParkingBoard({ initialDate }: { initialDate?: string }) {
@@ -1158,7 +1181,17 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
               )}
               style={{ height: ROW_H }}
             >
-              <span className="font-medium tabular-nums">{s}</span>
+              {s === PMR_SPOT ? (
+                <span
+                  role="img"
+                  aria-label="Place PMR (personne à mobilité réduite)"
+                  title="Place PMR (personne à mobilité réduite)"
+                >
+                  <PmrGlyph className="size-7" />
+                </span>
+              ) : (
+                <span className="font-medium tabular-nums">{s}</span>
+              )}
             </div>
           ))}
         </div>

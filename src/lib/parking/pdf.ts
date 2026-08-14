@@ -17,7 +17,12 @@ import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import type { jsPDF } from 'jspdf'
 
-import { FIRST_STAFF_SPOT, SPOTS_LIST } from '#/lib/parking/model.ts'
+import {
+  FIRST_STAFF_SPOT,
+  PMR_GLYPH,
+  PMR_SPOT,
+  SPOTS_LIST,
+} from '#/lib/parking/model.ts'
 import { capitalize } from '#/lib/utils.ts'
 
 /** Une ligne pré-remplie (un client présent) d'une feuille de suivi. */
@@ -54,6 +59,39 @@ function openPrintablePdf(pdf: jsPDF, frameId: string): void {
   document.body.appendChild(iframe)
 }
 
+/** Rasterise le pictogramme PMR en PNG (data URI) : jsPDF ne dessine pas les
+ * `<path>` SVG, on passe donc par une image. Encre INK, fond transparent, haute
+ * résolution (netteté à l'impression), ratio du viewBox respecté. Renvoie null si
+ * indisponible (pas de DOM, échec) → le PDF retombe alors sur le numéro « 8 ». */
+async function pmrPngDataUrl(): Promise<string | null> {
+  if (typeof document === 'undefined') return null
+  const W = 220
+  const H = Math.round(W * (1280 / 1122)) // ratio du viewBox portrait 1122×1280
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="${PMR_GLYPH.viewBox}">` +
+    `<g transform="${PMR_GLYPH.transform}" fill="rgb(${INK[0]},${INK[1]},${INK[2]})">` +
+    PMR_GLYPH.paths.map((d) => `<path d="${d}"/>`).join('') +
+    `</g></svg>`
+  const url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)
+  try {
+    const img = new Image()
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve()
+      img.onerror = () => reject(new Error('PMR svg load failed'))
+      img.src = url
+    })
+    const canvas = document.createElement('canvas')
+    canvas.width = W
+    canvas.height = H
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return null
+    ctx.drawImage(img, 0, 0, W, H)
+    return canvas.toDataURL('image/png')
+  } catch {
+    return null
+  }
+}
+
 /** Construit le document PDF (jsPDF), sans l'imprimer. Séparé pour l'aperçu/test. */
 export async function buildParkingSheetPdf(
   data: ParkingSheetPdfData,
@@ -63,7 +101,8 @@ export async function buildParkingSheetPdf(
   const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
   pdf.setProperties({ title })
   rotateSecondPage(pdf) // abonnement AVANT le rendu ; l'injection a lieu à l'output
-  renderSheets(pdf, data)
+  const pmrPng = await pmrPngDataUrl() // pictogramme place PMR (null → repli « 8 »)
+  renderSheets(pdf, data, pmrPng)
   return pdf
 }
 
@@ -107,12 +146,16 @@ const setFill = (pdf: jsPDF, c: RGB) => pdf.setFillColor(c[0], c[1], c[2])
 const setDraw = (pdf: jsPDF, c: RGB) => pdf.setDrawColor(c[0], c[1], c[2])
 const setText = (pdf: jsPDF, c: RGB) => pdf.setTextColor(c[0], c[1], c[2])
 
-function renderSheets(pdf: jsPDF, { days }: ParkingSheetPdfData): void {
+function renderSheets(
+  pdf: jsPDF,
+  { days }: ParkingSheetPdfData,
+  pmrPng: string | null,
+): void {
   days.forEach((day, i) => {
     if (i > 0 && i % PER_PAGE === 0) pdf.addPage()
     const col = i % PER_PAGE // 0 = gauche, 1 = droite
     const x = MARGIN + col * (TABLE_W + GAP)
-    drawSheet(pdf, x, day)
+    drawSheet(pdf, x, day, pmrPng)
   })
 }
 
@@ -136,7 +179,12 @@ function rotateSecondPage(pdf: jsPDF): void {
 }
 
 /** Un tableau (un jour) à l'abscisse `x`, pleine hauteur de page. */
-function drawSheet(pdf: jsPDF, x: number, day: ParkingSheetDay): void {
+function drawSheet(
+  pdf: jsPDF,
+  x: number,
+  day: ParkingSheetDay,
+  pmrPng: string | null,
+): void {
   const W = TABLE_W
   const bySpot = new Map<number, ParkingSheetRow>()
   day.rows.forEach((r) => bySpot.set(r.spot, r))
@@ -215,9 +263,24 @@ function drawSheet(pdf: jsPDF, x: number, day: ParkingSheetDay): void {
   // Lignes : n° de place + clients présents pré-remplis.
   SPOTS_LIST.forEach((spot, r) => {
     const ty = headY + headH + r * rowH + rowH / 2 + 1.4
-    setText(pdf, INK)
-    pdf.setFont('helvetica', 'bold').setFontSize(10)
-    pdf.text(String(spot), xs[0] + COLS[0].w / 2, ty, { align: 'center' })
+    // Colonne « Place » : pictogramme fauteuil pour la place PMR, numéro sinon.
+    if (spot === PMR_SPOT && pmrPng) {
+      const imgH = 8 // mm (tient dans la ligne de 11,6 mm)
+      const imgW = imgH * (1122 / 1280) // ratio du viewBox portrait
+      const cellTop = headY + headH + r * rowH
+      pdf.addImage(
+        pmrPng,
+        'PNG',
+        xs[0] + COLS[0].w / 2 - imgW / 2,
+        cellTop + rowH / 2 - imgH / 2,
+        imgW,
+        imgH,
+      )
+    } else {
+      setText(pdf, INK)
+      pdf.setFont('helvetica', 'bold').setFontSize(10)
+      pdf.text(String(spot), xs[0] + COLS[0].w / 2, ty, { align: 'center' })
+    }
 
     const row = bySpot.get(spot)
     if (!row) return
