@@ -28,6 +28,12 @@ export interface IssuerHint {
   concentrated: boolean
   /** Codes interdits pour cet émetteur (denylist) : retirés de tous les candidats. */
   deny?: Set<string>
+  /** Guidage par FAMILLE (section) : P(famille | émetteur) replié depuis le prior code
+   *  (issuerFamilies.issuerFamilyPrior). PUREMENT INFORMATIF ici — recopié dans la Detection
+   *  pour l'UI, il n'altère JAMAIS le classement des codes ci-dessous. */
+  familyPrior?: Record<string, number>
+  /** L'émetteur a-t-il été vu assez de fois pour oser orienter au niveau famille (AA2). */
+  familyReady?: boolean
 }
 
 /** Plancher du prior : un code non vu chez l'émetteur (prior 0) est moins favorisé, pas
@@ -216,6 +222,8 @@ export function detect(
       hints,
       scores,
       abstained: false,
+      familyPrior: issuer?.familyPrior,
+      familyReady: issuer?.familyReady,
     }
   }
 
@@ -249,6 +257,8 @@ export function detect(
     scores,
     abstained,
     fromIssuerOnly: issuerOnly,
+    familyPrior: issuer?.familyPrior,
+    familyReady: issuer?.familyReady,
   }
 }
 

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import {
+  BookText,
   Loader2,
   Lock,
   Pencil,
@@ -28,6 +29,7 @@ import {
 } from '#/components/ui/tooltip.tsx'
 import { useConfirm } from '#/components/shared/ConfirmDialog.tsx'
 import { ReferentielImport } from '#/components/facturation/ReferentielImport.tsx'
+import { ComptesManager } from '#/components/facturation/ComptesManager.tsx'
 import { useFacturationModel } from '#/components/facturation/useFacturationModel.ts'
 import { useBudgetLinesCuration } from '#/components/facturation/useBudgetLinesCuration.ts'
 import { imputationKey } from '#/lib/facturation/budgetRegistry.ts'
@@ -76,6 +78,7 @@ export function BudgetLinesManager({
   const [busy, setBusy] = useState<string | null>(null) // couple en cours de suppression
   const [rowError, setRowError] = useState<Record<string, string>>({})
   const [importOpen, setImportOpen] = useState(false) // dialog de réimport en masse
+  const [comptesOpen, setComptesOpen] = useState(false) // dialog du dictionnaire des comptes
 
   // Croise le cache déjà chargé pour savoir quels CODES sont UTILISÉS (le blocage de suppression
   // se joue au niveau du code, cf. la garde serveur : dernier compte d'un code utilisé).
@@ -482,6 +485,14 @@ export function BudgetLinesManager({
                   <Button
                     variant="outline"
                     size="sm"
+                    onClick={() => setComptesOpen(true)}
+                  >
+                    <BookText className="size-4" />
+                    Comptes
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => setImportOpen(true)}
                   >
                     <Upload className="size-4" />
@@ -499,6 +510,7 @@ export function BudgetLinesManager({
         </DialogContent>
       </Dialog>
       <ReferentielImport open={importOpen} onOpenChange={setImportOpen} />
+      <ComptesManager open={comptesOpen} onOpenChange={setComptesOpen} />
     </>
   )
 }

@@ -1,3 +1,4 @@
+import { imputationParts } from '#/lib/facturation/imputationFormat.ts'
 import type {
   InvoiceRecord,
   StampData,
@@ -76,9 +77,11 @@ export function stampLines(data: StampData): StampLine[] {
     lines.push({ text: '— à imputer —', size: 10, bold: true, color: 'grey' })
   }
   for (const code of codes) {
-    const compte = data.comptes[code]?.trim()
+    // Présence du compte dérivée de la source unique (imputationParts) ; l'alignement en
+    // COLONNES (trois espaces) reste propre au tampon PDF, pour un rendu tabulaire lisible.
+    const { compte, hasCompte } = imputationParts(code, data.comptes[code] ?? '')
     lines.push({
-      text: compte ? `${code}   ${compte}` : code,
+      text: hasCompte ? `${code}   ${compte}` : code,
       size: 10,
       bold: true,
       color: 'ink',

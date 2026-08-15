@@ -1,4 +1,4 @@
-import type { BudgetLine } from '#/lib/facturation/types.ts'
+import type { BudgetLine, CompteLine } from '#/lib/facturation/types.ts'
 
 /*
  * Registre du référentiel des imputations comptables — logique PURE (aucun React/DOM/Supabase).
@@ -21,6 +21,7 @@ let CATEGORY = new Map<string, string>() // code -> section comptable
 let TAG = new Map<string, string>() // code -> 1er tag (domaine)
 let COMPTES = new Map<string, string[]>() // code -> comptes (ordre du plan)
 let HINT = new Map<string, string>() // "code|compte" -> description du couple
+let COMPTE_LABEL = new Map<string, string>() // compte -> nom humain (dictionnaire)
 
 /** Clé canonique d'une imputation : `code|compte`. Source unique de l'encodage. */
 export const imputationKey = (code: string, compte: string): string =>
@@ -50,6 +51,17 @@ export function setBudgetLines(lines: BudgetLine[]): void {
   }
 }
 
+/** Remplace le DICTIONNAIRE des comptes (compte → nom humain). Appelé par la query
+ *  ['facturation','comptes'] au rendu, en miroir de setBudgetLines. */
+export function setCompteLabels(rows: CompteLine[]): void {
+  COMPTE_LABEL = new Map(rows.map((r) => [r.compte, r.libelle]))
+}
+
+/** Nom humain d'un compte (ex. '60710000' → 'Achats de denrées'), ou le NUMÉRO brut en repli
+ *  si le compte n'est pas au dictionnaire (jamais vide). Accès synchrone (plein render). */
+export const compteLabel = (compte: string): string =>
+  COMPTE_LABEL.get(compte)?.trim() || compte
+
 /** Le référentiel courant (ordre du plan, une entrée par couple). Vide tant que non chargé. */
 export const allBudgetLines = (): BudgetLine[] => LINES
 
@@ -74,6 +86,22 @@ export const budgetHint = (code: string, compte = ''): string => {
     if (h) return h
   }
   return HINT.get(imputationKey(code, '')) ?? ''
+}
+
+/** Codes retenus qui EXIGENT un compte (>= 2 comptes possibles au référentiel) mais dont
+ *  aucun n'a été choisi (`comptes[code]` vide). Un code à 0 ou 1 compte n'est jamais
+ *  « manquant » (rien à choisir). Pure ; le résolveur `comptesFor` est injectable pour les
+ *  tests, et vaut `comptesForCode` (registre courant) par défaut. */
+export function missingComptes(
+  codes: string[],
+  comptes: Record<string, string>,
+  comptesFor: (code: string) => string[] = comptesForCode,
+): string[] {
+  return codes.filter((code) => {
+    const chosen = (comptes[code] ?? '').trim()
+    if (chosen) return false
+    return comptesFor(code).length > 1
+  })
 }
 
 /** Complète une table `code → compte` pour l'ensemble `codes` : conserve les choix déjà faits ;

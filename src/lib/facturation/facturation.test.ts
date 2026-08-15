@@ -36,8 +36,15 @@ import {
   issuerPrior,
   mergeIssuerCodes,
   removeIssuerCode,
+  type IssuerCodes,
 } from '#/lib/facturation/issuerCodes.ts'
 import { reviewQueue } from '#/lib/facturation/anomalies.ts'
+import {
+  familyGuidanceReady,
+  familyTier,
+  issuerFamilyPrior,
+  plausibleFamilies,
+} from '#/lib/facturation/issuerFamilies.ts'
 import {
   deniedCodes,
   mergeDenylist,
@@ -50,9 +57,18 @@ import { computeGrid, pageAt } from '#/lib/facturation/grid.ts'
 import { SEED_RULES } from '#/lib/facturation/constants.ts'
 import {
   budgetLabel,
+  compteLabel,
   fillComptes,
+  missingComptes,
   setBudgetLines,
+  setCompteLabels,
 } from '#/lib/facturation/budgetRegistry.ts'
+import {
+  formatCompteLabel,
+  formatImputation,
+  formatImputationLabel,
+  imputationParts,
+} from '#/lib/facturation/imputationFormat.ts'
 import {
   issuerCandidates,
   preferredCompte,
@@ -806,7 +822,8 @@ describe('buildGalaxy', () => {
     })
     expect(g.nodes.find((n) => n.type === 'issuer')?.label).toBe('EDF')
     const code = g.nodes.find((n) => n.type === 'code')!
-    expect(code.category).toBe('Énergie & fluides')
+    // La catégorie = la FAMILLE (section) en casse homogène (plus les tags, désormais vidés).
+    expect(code.category).toBe('Frais exploitation / operation')
   })
 
   it('un émetteur partagé entre plusieurs codes = un seul nœud', () => {
@@ -1065,5 +1082,152 @@ describe('issuerCandidates (couples déjà utilisés par un émetteur)', () => {
   it('renvoie [] pour un émetteur inconnu ou une clé vide', () => {
     expect(issuerCandidates(mem, 'siren:000000000')).toEqual([])
     expect(issuerCandidates(mem, '')).toEqual([])
+  })
+})
+
+describe('imputationFormat (rendu unique du couple code/compte)', () => {
+  it('formatImputation : `code · compte` quand le compte est renseigné', () => {
+    expect(formatImputation('FMELECoooo', '60612100')).toBe(
+      'FMELECoooo · 60612100',
+    )
+  })
+  it('formatImputation : code seul quand le compte est vide ou espacé', () => {
+    expect(formatImputation('FMELECoooo', '')).toBe('FMELECoooo')
+    expect(formatImputation('FMELECoooo', '   ')).toBe('FMELECoooo')
+  })
+  it('imputationParts : détoure le compte et porte la règle de présence', () => {
+    expect(imputationParts('FMELECoooo', ' 60612100 ')).toEqual({
+      code: 'FMELECoooo',
+      compte: '60612100',
+      hasCompte: true,
+    })
+    expect(imputationParts('FMELECoooo', '').hasCompte).toBe(false)
+  })
+})
+
+describe('guidage par famille (issuerFamilies — vivant, déterministe)', () => {
+  // Émetteur « technique » : 8 factures, toutes en Exploitation ; jamais de Restauration.
+  const model: IssuerCodes = {
+    perIssuer: {
+      'siren:technique': { FMELECoooo: 5, FMGAZooooo: 3 },
+      'siren:varie': { FMELECoooo: 1, REBEALCOOL: 1 }, // 2 factures → pas encore prêt
+    },
+  }
+  // Mapping code → famille injecté (comme budgetCategory).
+  const familyOf = (code: string): string =>
+    code === 'REBEALCOOL'
+      ? 'RESTAURATION'
+      : code.startsWith('FM')
+        ? 'FRAIS EXPLOITATION / OPERATION'
+        : ''
+
+  it('replie les priors code sur leur famille', () => {
+    const fp = issuerFamilyPrior(model, 'siren:technique', familyOf)
+    expect(fp['FRAIS EXPLOITATION / OPERATION']).toBeCloseTo(1)
+    expect(fp['RESTAURATION'] ?? 0).toBe(0)
+  })
+
+  it('technique → Exploitation plausible, Restauration improbable', () => {
+    const fp = issuerFamilyPrior(model, 'siren:technique', familyOf)
+    const ready = familyGuidanceReady(model, 'siren:technique')
+    expect(ready).toBe(true)
+    expect(familyTier(fp, 'FRAIS EXPLOITATION / OPERATION', ready)).toBe(
+      'plausible',
+    )
+    expect(familyTier(fp, 'RESTAURATION', ready)).toBe('improbable')
+    expect(plausibleFamilies(fp, ready)).toEqual([
+      'FRAIS EXPLOITATION / OPERATION',
+    ])
+  })
+
+  it('démarrage à froid : émetteur inconnu → aucune orientation (tout neutre)', () => {
+    const fp = issuerFamilyPrior(model, 'siren:inconnu', familyOf)
+    const ready = familyGuidanceReady(model, 'siren:inconnu')
+    expect(ready).toBe(false)
+    expect(familyTier(fp, 'RESTAURATION', ready)).toBe('neutre')
+    expect(plausibleFamilies(fp, ready)).toEqual([])
+  })
+
+  it('émetteur peu vu (< seuil) → pas encore prêt, neutre', () => {
+    const ready = familyGuidanceReady(model, 'siren:varie')
+    expect(ready).toBe(false)
+    const fp = issuerFamilyPrior(model, 'siren:varie', familyOf)
+    expect(familyTier(fp, 'RESTAURATION', ready)).toBe('neutre')
+  })
+
+  it('un code SANS section (famille vide) n’est jamais « improbable »', () => {
+    const fp = issuerFamilyPrior(model, 'siren:technique', familyOf)
+    expect(familyTier(fp, '', true)).toBe('neutre')
+  })
+
+  it('le guidage famille N’ALTÈRE PAS les codes détectés (invariant)', () => {
+    const base = detect(EDF_TEXT)
+    const guided = detect(EDF_TEXT, undefined, undefined, {
+      prior: {},
+      concentrated: false,
+      familyPrior: { 'FRAIS EXPLOITATION / OPERATION': 1 },
+      familyReady: true,
+    })
+    expect(guided.codes).toEqual(base.codes)
+    expect(guided.code).toBe(base.code)
+    // …mais la Detection porte bien le signal famille pour l'UI.
+    expect(guided.familyReady).toBe(true)
+    expect(base.familyReady).toBeUndefined()
+  })
+})
+
+describe('compteLabel + rendus écran par nom humain (dictionnaire des comptes)', () => {
+  beforeAll(() =>
+    setCompteLabels([
+      { compte: '60710000', libelle: 'Achats de denrées' },
+      { compte: '60750000', libelle: '  Achats d’alcool  ' }, // espacé → détouré
+    ]),
+  )
+  afterAll(() => setCompteLabels([]))
+
+  it('compteLabel : nom humain si connu, numéro brut en repli, jamais vide', () => {
+    expect(compteLabel('60710000')).toBe('Achats de denrées')
+    expect(compteLabel('60750000')).toBe('Achats d’alcool')
+    expect(compteLabel('99999999')).toBe('99999999') // hors dictionnaire → numéro
+  })
+  it('formatCompteLabel : nom du compte, vide si pas de compte', () => {
+    expect(formatCompteLabel('60710000', compteLabel)).toBe('Achats de denrées')
+    expect(formatCompteLabel('', compteLabel)).toBe('')
+  })
+  it('formatImputationLabel : « poste · nom du compte », poste seul sans compte', () => {
+    expect(formatImputationLabel('Alcool', '60750000', compteLabel)).toBe(
+      'Alcool · Achats d’alcool',
+    )
+    expect(formatImputationLabel('Alcool', '', compteLabel)).toBe('Alcool')
+  })
+})
+
+describe('missingComptes (garde-fou compte à choisir)', () => {
+  // Résolveur injecté : FMGAZooooo est multi-comptes, FMELECoooo mono-compte, FMDIVERS legacy 0.
+  const comptesFor = (code: string): string[] =>
+    code === 'FMGAZooooo'
+      ? ['60613100', '60613200']
+      : code === 'FMELECoooo'
+        ? ['60612100']
+        : []
+
+  it('liste un code multi-comptes laissé vide', () => {
+    expect(missingComptes(['FMGAZooooo'], {}, comptesFor)).toEqual(['FMGAZooooo'])
+  })
+  it('ignore un code multi-comptes une fois le compte choisi', () => {
+    expect(
+      missingComptes(['FMGAZooooo'], { FMGAZooooo: '60613200' }, comptesFor),
+    ).toEqual([])
+  })
+  it('ignore un code mono-compte (rien à choisir)', () => {
+    expect(missingComptes(['FMELECoooo'], {}, comptesFor)).toEqual([])
+  })
+  it('ignore un code legacy sans compte au référentiel', () => {
+    expect(missingComptes(['FMDIVERS'], {}, comptesFor)).toEqual([])
+  })
+  it('traite un choix uniquement composé d’espaces comme vide', () => {
+    expect(
+      missingComptes(['FMGAZooooo'], { FMGAZooooo: '  ' }, comptesFor),
+    ).toEqual(['FMGAZooooo'])
   })
 })

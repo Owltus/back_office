@@ -23,6 +23,14 @@ export interface BudgetLine {
   tags: string[]
 }
 
+/** Une entrée du DICTIONNAIRE des comptes : un numéro de compte comptable et son NOM humain
+ *  (ex. { compte: '60710000', libelle: 'Achats de denrées' }). Indépendant des codes : un
+ *  compte partagé par plusieurs codes porte partout le même nom. Table facturation_ref_comptes. */
+export interface CompteLine {
+  compte: string
+  libelle: string
+}
+
 /**
  * Règle de correspondance fournisseur → code comptable. Le matching est
  * déterministe : on cherche les `keywords` (nom de marque, mot-clé récurrent)
@@ -114,6 +122,12 @@ export interface Detection {
   /** Vrai quand l'imputation vient du SEUL prior émetteur (mots muets) : proposée par
    *  habitude, À VÉRIFIER par un humain (badge). Alimente la future file de revue. */
   fromIssuerOnly?: boolean
+  /** Guidage directionnel par FAMILLE (section) : P(famille | émetteur), replié depuis la
+   *  mémoire émetteur→code au moment de la détection. INFORMATIF (n'altère pas `codes`) :
+   *  oriente l'affichage (résumé « plutôt X », familles grisées, alerte « inhabituel »). */
+  familyPrior?: Record<string, number>
+  /** L'émetteur était-il assez mûr pour orienter au niveau famille (sinon : vue neutre). */
+  familyReady?: boolean
 }
 
 /** Données apposées dans le cartouche du tampon. Plusieurs imputations possibles

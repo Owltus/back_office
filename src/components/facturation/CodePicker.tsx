@@ -28,7 +28,12 @@ import {
   probaFor,
 } from '#/components/facturation/confidence.ts'
 import { useFacturationModel } from '#/components/facturation/useFacturationModel.ts'
-import { fillComptes } from '#/lib/facturation/budgetRegistry.ts'
+import { compteLabel, fillComptes } from '#/lib/facturation/budgetRegistry.ts'
+import { formatSection } from '#/lib/facturation/imputationFormat.ts'
+import {
+  familyTier,
+  type FamilyTier,
+} from '#/lib/facturation/issuerFamilies.ts'
 import { preferredCompte } from '#/lib/facturation/issuerMemory.ts'
 import { normalize } from '#/lib/facturation/detect.ts'
 import type { BudgetLine, Detection } from '#/lib/facturation/types.ts'
@@ -52,6 +57,26 @@ interface CodeEntry {
   search: string
 }
 
+/** Un POSTE = un libellé et les codes qui le partagent (AA4). Le plus souvent 1 code par
+ *  libellé ; quand plusieurs codes partagent un libellé, on les regroupe sous ce poste pour
+ *  éviter l'apparence de doublons. Ordre du plan préservé. */
+interface PosteGroup {
+  label: string
+  entries: CodeEntry[]
+}
+function groupByLabel(entries: CodeEntry[]): PosteGroup[] {
+  const out: PosteGroup[] = []
+  for (const it of entries) {
+    let p = out.find((x) => x.label === it.line.label)
+    if (!p) {
+      p = { label: it.line.label, entries: [] }
+      out.push(p)
+    }
+    p.entries.push(it)
+  }
+  return out
+}
+
 export function CodePicker({
   open,
   onOpenChange,
@@ -72,31 +97,35 @@ export function CodePicker({
   /** Clé de l'émetteur courant (issuerKey) → pré-sélection de son compte habituel à l'ajout d'un code. */
   issuer?: string
 }) {
-  const { budgetLines, issuerMemory } = useFacturationModel()
+  const { budgetLines, comptes: compteDict, issuerMemory } = useFacturationModel()
   const [q, setQ] = useState('')
   const [activeSection, setActiveSection] = useState<string | null>(null)
 
   // Index de recherche normalisé, une entrée par CODE (le référentiel a une ligne par COUPLE :
-  // on regroupe les comptes d'un même code). Recalculé quand le référentiel change.
+  // on regroupe les comptes d'un même code). La recherche indexe AUSSI le NOM humain du compte
+  // (dictionnaire) → taper « denrées » ou « adyen » trouve le bon compte. Recalculé quand le
+  // référentiel OU le dictionnaire changent.
   const index = useMemo(() => {
     const byCode = new Map<string, CodeEntry>()
     for (const l of budgetLines) {
       const hit = byCode.get(l.code)
       if (hit) {
         if (l.compte && !hit.comptes.includes(l.compte)) hit.comptes.push(l.compte)
-        hit.search += ' ' + normalize(`${l.compte} ${l.hint ?? ''}`)
+        hit.search +=
+          ' ' + normalize(`${l.compte} ${compteLabel(l.compte)} ${l.hint ?? ''}`)
         continue
       }
       byCode.set(l.code, {
         line: l,
         comptes: l.compte ? [l.compte] : [],
         search: normalize(
-          `${l.code} ${l.label} ${l.category} ${l.compte} ${l.hint ?? ''}`,
+          `${l.code} ${l.label} ${l.category} ${l.compte} ${compteLabel(l.compte)} ${l.hint ?? ''}`,
         ),
       })
     }
     return [...byCode.values()]
-  }, [budgetLines])
+    // `compteDict` est une dép pour ré-indexer les noms humains quand le dictionnaire charge.
+  }, [budgetLines, compteDict])
 
   // Sections comptables présentes (remplace le filtre « par domaine » : les tags ne sont plus
   // portés par le référentiel couplé).
@@ -106,23 +135,38 @@ export function CodePicker({
     [index],
   )
 
-  // Filtre = section active (si présente) ET tous les mots de la requête présents,
-  // puis regroupé par section dans l'ordre du plan.
+  // Guidage : niveau (plausible/neutre/improbable) d'une famille pour l'émetteur courant,
+  // dérivé du prior famille porté par la détection. Neutre partout au démarrage à froid.
+  const familyReady = !!detection?.familyReady && !!detection.familyPrior
+  const tierOf = (category: string): FamilyTier =>
+    familyReady
+      ? familyTier(detection!.familyPrior!, category, true)
+      : 'neutre'
+
+  // Filtre = section active (si présente) ET tous les mots de la requête présents, regroupé par
+  // section. ORIENTATION : les familles plausibles remontent en tête, les improbables sont
+  // reléguées en bas (grisées à l'affichage, JAMAIS masquées — AA1).
+  const TIER_RANK: Record<FamilyTier, number> = {
+    plausible: 0,
+    neutre: 1,
+    improbable: 2,
+  }
   const groups = useMemo(() => {
     const tokens = normalize(q).split(/\s+/).filter(Boolean)
-    const out: { category: string; entries: CodeEntry[] }[] = []
+    const out: { category: string; entries: CodeEntry[]; tier: FamilyTier }[] = []
     for (const it of index) {
       if (activeSection && it.line.category !== activeSection) continue
       if (!tokens.every((t) => it.search.includes(t))) continue
       let g = out.find((x) => x.category === it.line.category)
       if (!g) {
-        g = { category: it.line.category, entries: [] }
+        g = { category: it.line.category, entries: [], tier: tierOf(it.line.category) }
         out.push(g)
       }
       g.entries.push(it)
     }
-    return out
-  }, [q, activeSection, index])
+    return out.sort((a, b) => TIER_RANK[a.tier] - TIER_RANK[b.tier])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q, activeSection, index, detection])
 
   // Cocher/décocher un code, en réalignant la table des comptes (compte pré-rempli si le code
   // n'en a qu'un ; choix conservé sinon, entrée retirée quand le code est décoché).
@@ -194,15 +238,41 @@ export function CodePicker({
               </p>
             ) : (
               groups.map((g) => (
-                <div key={g.category} className="mb-2 flex flex-col gap-1.5">
+                <div
+                  key={g.category}
+                  className={cn(
+                    'mb-2 flex flex-col gap-1.5',
+                    // Famille improbable pour cet émetteur : grisée mais TOUJOURS accessible (AA1).
+                    g.tier === 'improbable' && 'opacity-55',
+                  )}
+                >
                   <div className="flex items-center gap-2 px-2 py-1">
                     <span className="h-px flex-1 bg-primary/20" />
                     <span className="text-[11px] font-semibold tracking-[0.12em] text-primary/80 uppercase">
-                      {g.category}
+                      {formatSection(g.category)}
                     </span>
+                    {g.tier === 'improbable' && (
+                      <span className="rounded bg-secondary px-1 text-[9px] font-normal tracking-normal text-muted-foreground normal-case">
+                        rare pour cet émetteur
+                      </span>
+                    )}
                     <span className="h-px flex-1 bg-primary/20" />
                   </div>
-                  {g.entries.map((it) => {
+                  {groupByLabel(g.entries).map((poste) => {
+                   // Sous-en-tête « poste » seulement si plusieurs codes partagent le libellé
+                   // (AA4). Sinon wrapper transparent (display:contents) → rendu inchangé.
+                   const multi = poste.entries.length > 1
+                   return (
+                    <div
+                      key={poste.label || poste.entries[0].line.code}
+                      className={multi ? 'flex flex-col gap-1' : 'contents'}
+                    >
+                      {multi && (
+                        <div className="px-2 pt-1 text-xs font-medium text-foreground/90">
+                          {poste.label}
+                        </div>
+                      )}
+                      {poste.entries.map((it) => {
                     const l = it.line
                     const on = selected.includes(l.code)
                     const raw = probaFor(l.code, detection)
@@ -226,20 +296,40 @@ export function CodePicker({
                         >
                           {/* Nom, code + compte(s), explication (place réservée à droite pour le %). */}
                           <span className="flex min-w-0 flex-col gap-1 pr-12">
-                            <span className="truncate text-sm text-foreground">
-                              {l.label}
-                            </span>
+                            {!multi && (
+                              <span className="truncate text-sm text-foreground">
+                                {l.label}
+                              </span>
+                            )}
                             <span className="flex flex-wrap items-center gap-x-1.5 font-mono text-[11px] text-muted-foreground">
                               <span>{l.code}</span>
-                              {it.comptes.length === 1 ? (
-                                <span className="text-muted-foreground/70">
-                                  · {it.comptes[0]}
+                              {it.comptes.length === 0 ? (
+                                <span className="font-sans text-muted-foreground/50 italic">
+                                  · pas de compte
                                 </span>
-                              ) : it.comptes.length > 1 ? (
-                                <span className="text-muted-foreground/70">
-                                  · {it.comptes.length} comptes
+                              ) : it.comptes.length === 1 ? (
+                                <span className="font-sans text-muted-foreground/70">
+                                  · {compteLabel(it.comptes[0])}
                                 </span>
-                              ) : null}
+                              ) : on ? (
+                                <span
+                                  className={cn(
+                                    'font-sans',
+                                    comptes[l.code]?.trim()
+                                      ? 'text-muted-foreground/70'
+                                      : 'text-amber-500',
+                                  )}
+                                >
+                                  ·{' '}
+                                  {comptes[l.code]?.trim()
+                                    ? compteLabel(comptes[l.code])
+                                    : 'compte à choisir'}
+                                </span>
+                              ) : (
+                                <span className="font-sans text-muted-foreground/70">
+                                  · {it.comptes.length} comptes possibles
+                                </span>
+                              )}
                             </span>
                             {l.hint && (
                               <Tooltip>
@@ -288,20 +378,13 @@ export function CodePicker({
                               value={comptes[l.code] ?? ''}
                               onValueChange={(v) => setCompte(l.code, v)}
                             >
-                              <SelectTrigger
-                                size="sm"
-                                className="w-full font-mono text-[11px]"
-                              >
+                              <SelectTrigger size="sm" className="w-full text-xs">
                                 <SelectValue placeholder="Choisir un compte" />
                               </SelectTrigger>
                               <SelectContent>
                                 {it.comptes.map((c) => (
-                                  <SelectItem
-                                    key={c}
-                                    value={c}
-                                    className="font-mono"
-                                  >
-                                    {c}
+                                  <SelectItem key={c} value={c}>
+                                    {compteLabel(c)}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
@@ -310,7 +393,10 @@ export function CodePicker({
                         )}
                       </div>
                     )
-                  })}
+                      })}
+                    </div>
+                    )
+                   })}
                 </div>
               ))
             )}

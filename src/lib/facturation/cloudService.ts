@@ -4,7 +4,11 @@ import type { IssuerCodes } from '#/lib/facturation/issuerCodes.ts'
 import type { IssuerDenylist } from '#/lib/facturation/issuerDenylist.ts'
 import type { Issuer } from '#/lib/facturation/issuers.ts'
 import type { IssuerMemory } from '#/lib/facturation/issuerMemory.ts'
-import type { BudgetLine, JournalEntry } from '#/lib/facturation/types.ts'
+import type {
+  BudgetLine,
+  CompteLine,
+  JournalEntry,
+} from '#/lib/facturation/types.ts'
 
 /*
  * Accès Supabase aux nuages de mots (table facturation_wordpool). Lecture = tout
@@ -123,6 +127,65 @@ export async function fetchBudgetLines(): Promise<BudgetLine[]> {
     from += 1000
   }
   return lines
+}
+
+// --- Dictionnaire des comptes (facturation_ref_comptes) ----------------------
+// Une ligne = un COUPLE (compte, libellé humain). Lecture par page ; écritures via RPC.
+const COMPTES_TABLE = 'facturation_ref_comptes'
+
+/** Dictionnaire des comptes : numéro → nom humain, ordonné par numéro. Injecté dans
+ *  budgetRegistry (setCompteLabels) pour l'accès synchrone `compteLabel`. */
+export async function fetchComptes(): Promise<CompteLine[]> {
+  const rows: CompteLine[] = []
+  let from = 0
+  for (;;) {
+    const { data, error } = await supabase
+      .from(COMPTES_TABLE)
+      .select('compte, libelle')
+      .order('compte', { ascending: true })
+      .range(from, from + 999)
+    if (error) throw error
+    const batch = (data ?? []) as { compte: string; libelle: string | null }[]
+    for (const r of batch)
+      rows.push({ compte: r.compte, libelle: r.libelle ?? '' })
+    if (batch.length < 1000) break
+    from += 1000
+  }
+  return rows
+}
+
+/** Crée ou renomme un compte du dictionnaire (RPC `facturation_ref_comptes_upsert`, garde de
+ *  rôle interne `gestion`). */
+export async function upsertCompte(
+  compte: string,
+  libelle: string,
+): Promise<void> {
+  const { error } = await supabase.rpc('facturation_ref_comptes_upsert', {
+    p_compte: compte,
+    p_libelle: libelle,
+  })
+  if (error) throw error
+}
+
+/** Supprime un compte du dictionnaire (RPC). Refuse (SQLSTATE 23503) si le compte est encore
+ *  référencé par une imputation du référentiel couple. */
+export async function deleteCompte(compte: string): Promise<void> {
+  const { error } = await supabase.rpc('facturation_ref_comptes_delete', {
+    p_compte: compte,
+  })
+  if (error) throw error
+}
+
+/** Réimport EN MASSE du dictionnaire (RPC additive `facturation_ref_comptes_reimport`).
+ *  Renvoie le nombre de lignes traitées côté serveur. */
+export async function reimportComptes(
+  rows: { compte: string; libelle: string }[],
+): Promise<number> {
+  const { data, error } = await supabase.rpc('facturation_ref_comptes_reimport', {
+    p_rows: rows,
+  })
+  if (error) throw error
+  return (data as number | null) ?? 0
 }
 
 /** Crée ou met à jour une imputation au COUPLE (code + compte ; RPC, garde de rôle interne).

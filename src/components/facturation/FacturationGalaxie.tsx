@@ -155,9 +155,10 @@ export function FacturationGalaxie() {
           <h1 className="text-lg leading-tight font-bold text-slate-100">
             Galaxie des imputations
           </h1>
+          {/* Compteur HONNÊTE : les soleils sont des POSTES (codes), pas des couples
+              code+compte — l'ancien libellé « imputations » induisait en erreur. */}
           <p className="mt-1 text-xs text-slate-400 tabular-nums">
-            {counts.issuer} émetteurs · {counts.code} imputations ·{' '}
-            {counts.word} mots
+            {counts.issuer} émetteurs · {counts.code} postes · {counts.word} mots
           </p>
         </div>
       </div>

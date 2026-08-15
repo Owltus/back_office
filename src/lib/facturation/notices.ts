@@ -10,6 +10,11 @@
  */
 
 import { canLearn } from '#/lib/facturation/detect.ts'
+import {
+  budgetCategory,
+  missingComptes,
+} from '#/lib/facturation/budgetRegistry.ts'
+import { familyTier } from '#/lib/facturation/issuerFamilies.ts'
 import type { InvoiceRecord } from '#/lib/facturation/types.ts'
 
 export type NoticeTone = 'ok' | 'info' | 'warn' | 'error'
@@ -48,6 +53,21 @@ export function invoiceNotices(record: InvoiceRecord): Notice[] {
       },
     ]
 
+  // Compte à choisir : un code retenu a plusieurs comptes possibles mais aucun n'est fixé.
+  // Bloquant pour le tamponnage (canStamp), au même titre qu'un code manquant.
+  const sansCompte = missingComptes(record.codes, record.comptes)
+  if (sansCompte.length > 0)
+    return [
+      {
+        id: 'compte-manquant',
+        tone: 'warn',
+        text:
+          sansCompte.length === 1
+            ? `Choisissez le compte de ${sansCompte[0]} pour pouvoir tamponner.`
+            : `Choisissez le compte de ${sansCompte.length} imputations pour pouvoir tamponner.`,
+      },
+    ]
+
   if (record.duplicate)
     return [
       {
@@ -56,6 +76,23 @@ export function invoiceNotices(record: InvoiceRecord): Notice[] {
         text: 'Cette facture a déjà été tamponnée. La tamponner à nouveau ne la réapprendra pas.',
       },
     ]
+
+  // Guidage directionnel (« mauvaise direction ») : un code retenu appartient à une famille
+  // improbable pour cet émetteur. Signal DOUX, NON bloquant (le tampon reste possible).
+  const d = record.detection
+  if (d?.familyReady && d.familyPrior) {
+    const improbable = record.codes.some(
+      (c) => familyTier(d.familyPrior!, budgetCategory(c), true) === 'improbable',
+    )
+    if (improbable)
+      return [
+        {
+          id: 'famille-improbable',
+          tone: 'warn',
+          text: 'Imputation inhabituelle pour cet émetteur. À vérifier.',
+        },
+      ]
+  }
 
   // Facture prête : on dit ce que le tampon va retenir, ou ce qui manque pour qu'il retienne.
   if (canLearn(record.supplierName, record.siren))

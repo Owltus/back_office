@@ -38,8 +38,12 @@ import {
 } from '#/components/facturation/confidence.ts'
 import {
   budgetLabel,
+  compteLabel,
   comptesForCode,
+  missingComptes,
 } from '#/lib/facturation/budgetRegistry.ts'
+import { formatSection } from '#/lib/facturation/imputationFormat.ts'
+import { plausibleFamilies } from '#/lib/facturation/issuerFamilies.ts'
 import { canLearn } from '#/lib/facturation/detect.ts'
 import { issuerKey } from '#/lib/facturation/text.ts'
 import {
@@ -141,7 +145,8 @@ function ImputationList({
                     </span>
                   )}
                 </span>
-                {/* Compte du couple : Select si plusieurs comptes, sinon le compte affiché. */}
+                {/* Compte du couple : Select si plusieurs comptes, sinon le compte affiché.
+                    Affiché par son NOM humain (dictionnaire) ; le numéro reste pour le tampon. */}
                 {comptesList.length > 1 ? (
                   <Select
                     value={comptes[code] ?? ''}
@@ -149,23 +154,27 @@ function ImputationList({
                   >
                     <SelectTrigger
                       size="sm"
-                      className="mt-0.5 h-7 w-full font-mono text-[11px]"
+                      className="mt-0.5 h-7 w-full text-xs"
                     >
                       <SelectValue placeholder="Choisir un compte" />
                     </SelectTrigger>
                     <SelectContent>
                       {comptesList.map((c) => (
-                        <SelectItem key={c} value={c} className="font-mono">
-                          {c}
+                        <SelectItem key={c} value={c}>
+                          {compteLabel(c)}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 ) : comptesList.length === 1 ? (
-                  <span className="font-mono text-[11px] text-muted-foreground/70">
-                    {comptes[code] || comptesList[0]}
+                  <span className="text-[11px] text-muted-foreground/70">
+                    {compteLabel(comptes[code] || comptesList[0])}
                   </span>
-                ) : null}
+                ) : (
+                  <span className="text-[11px] text-muted-foreground/50 italic">
+                    pas de compte
+                  </span>
+                )}
               </div>
 
               <div className="shrink-0 text-right">
@@ -371,12 +380,23 @@ export function InvoicePanel({
     )
   }
 
-  const canStamp = record.codes.length > 0
+  // Tamponnable seulement si au moins un code EST retenu ET aucun code multi-comptes n'a
+  // été laissé sans compte (garde-fou : le tampon ne part jamais avec un compte manquant).
+  const canStamp =
+    record.codes.length > 0 &&
+    missingComptes(record.codes, record.comptes).length === 0
 
   // Candidats appris pour l'émetteur courant : couples (code, compte) déjà utilisés, du plus
   // fréquent au moins fréquent. Proposition cliquable en tête, jamais une auto-validation.
   const currentIssuerKey = issuerKey(record.supplierName, record.siren)
   const candidates = issuerCandidates(issuerMemory, currentIssuerKey)
+
+  // Guidage directionnel : familles vers lesquelles pencher pour cet émetteur (informatif,
+  // vide au démarrage à froid). Le côté « improbable » se voit dans le picker + la notice.
+  const steerFamilies =
+    record.detection?.familyReady && record.detection.familyPrior
+      ? plausibleFamilies(record.detection.familyPrior, true)
+      : []
 
   // Ajoute un couple candidat à l'imputation, sans doublonner un code déjà présent.
   function addCandidate(code: string, compte: string) {
@@ -695,6 +715,16 @@ export function InvoicePanel({
               <Settings2 className="size-4" />
             </Button>
           </div>
+          {/* Résumé directionnel : « Plutôt : … » pour un émetteur assez connu. Orientation
+              douce, informative ; rien au démarrage à froid (émetteur inconnu/peu vu). */}
+          {steerFamilies.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              Plutôt&nbsp;:{' '}
+              <span className="text-foreground">
+                {steerFamilies.slice(0, 3).map(formatSection).join(', ')}
+              </span>
+            </p>
+          )}
         </div>
 
         {/* Candidats appris pour l'émetteur : couples déjà utilisés, cliquables. Simple
@@ -714,7 +744,7 @@ export function InvoicePanel({
                     title={
                       already
                         ? 'Déjà dans les imputations'
-                        : `Ajouter ${budgetLabel(code)} (${compte})`
+                        : `Ajouter ${budgetLabel(code)} — ${compteLabel(compte)}`
                     }
                     className={cn(
                       'flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-left text-xs transition-colors',
@@ -729,8 +759,8 @@ export function InvoicePanel({
                     <span className="max-w-[10rem] truncate">
                       {budgetLabel(code)}
                     </span>
-                    <span className="font-mono text-[10px] text-muted-foreground">
-                      {compte}
+                    <span className="max-w-[10rem] truncate text-[10px] text-muted-foreground">
+                      {compteLabel(compte)}
                     </span>
                   </button>
                 )

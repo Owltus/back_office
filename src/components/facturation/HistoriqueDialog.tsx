@@ -9,7 +9,11 @@ import {
   DialogTitle,
 } from '#/components/ui/dialog.tsx'
 import { useFacturationModel } from '#/components/facturation/useFacturationModel.ts'
-import { budgetLabel } from '#/lib/facturation/budgetRegistry.ts'
+import { budgetLabel, compteLabel } from '#/lib/facturation/budgetRegistry.ts'
+import {
+  formatImputation,
+  formatImputationLabel,
+} from '#/lib/facturation/imputationFormat.ts'
 import type { JournalEntry } from '#/lib/facturation/types.ts'
 
 /*
@@ -98,22 +102,31 @@ export function HistoriqueDialog({
                       className="rounded-lg border border-border bg-card px-3 py-2"
                     >
                       <div className="flex items-start justify-between gap-3">
+                        {/* Lecture HUMAINE : « poste · nom du compte » (numéro consultable
+                            au survol, cf. ligne mono ci-dessous pour le comptable). */}
                         <p className="min-w-0 flex-1 text-sm text-foreground">
                           {e.codes.length > 0
-                            ? e.codes.map((c) => budgetLabel(c)).join(', ')
+                            ? e.codes
+                                .map((c) =>
+                                  formatImputationLabel(
+                                    budgetLabel(c),
+                                    e.comptes?.[c] ?? '',
+                                    compteLabel,
+                                  ),
+                                )
+                                .join(', ')
                             : 'Aucune imputation'}
                         </p>
                         <span className="shrink-0 font-mono text-[11px] text-muted-foreground tabular-nums">
                           {e.learnedAt.slice(0, 10)}
                         </span>
                       </div>
+                      {/* Détail TECHNIQUE (code + numéro) pour le comptable. */}
                       {e.codes.length > 0 && (
                         <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
                           {e.codes
-                            .map((c) =>
-                              e.comptes?.[c] ? `${c} ${e.comptes[c]}` : c,
-                            )
-                            .join(' · ')}
+                            .map((c) => formatImputation(c, e.comptes?.[c] ?? ''))
+                            .join(', ')}
                         </p>
                       )}
                     </div>

@@ -1,4 +1,5 @@
 import { budgetLabel } from '#/lib/facturation/budgetRegistry.ts'
+import { formatSection } from '#/lib/facturation/imputationFormat.ts'
 import type { BudgetLine } from '#/lib/facturation/types.ts'
 import {
   computeStats,
@@ -658,7 +659,12 @@ export function buildGalaxy(
   lines: BudgetLine[] = [],
 ): GalaxyGraph {
   const issuerName = new Map(issuers.map((i) => [i.name, i.display]))
-  const tagByCode = new Map(lines.map((l) => [l.code, l.tags[0] ?? '']))
+  // Domaine d'un code = sa FAMILLE (section), affichée en casse homogène. Remplace l'ancien
+  // `tags` (vidé en base → tout retombait sur « Autre » = galaxie monochrome). La section est
+  // vivante et cohérente avec le guidage par famille.
+  const sectionByCode = new Map(
+    lines.map((l) => [l.code, formatSection(l.category)]),
+  )
   const nodes: GalaxyNode[] = []
   const links: GalaxyLink[] = []
   const codePresent = new Set<string>()
@@ -676,7 +682,7 @@ export function buildGalaxy(
       .map((w) => [w.token, w.count] as [string, number])
     if (top.length === 0) continue
 
-    const domain = tagByCode.get(code) || 'Autre'
+    const domain = sectionByCode.get(code) || 'Autre'
     const codeId = `code:${code}`
     codePresent.add(code)
     nodes.push({

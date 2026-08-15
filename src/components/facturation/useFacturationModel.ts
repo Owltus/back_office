@@ -3,19 +3,27 @@ import { useQuery } from '@tanstack/react-query'
 import {
   fetchBudgetLines,
   fetchClouds,
+  fetchComptes,
   fetchIssuerCodes,
   fetchIssuerDenylist,
   fetchIssuerMemory,
   fetchIssuers,
   fetchJournal,
 } from '#/lib/facturation/cloudService.ts'
-import { setBudgetLines } from '#/lib/facturation/budgetRegistry.ts'
+import {
+  setBudgetLines,
+  setCompteLabels,
+} from '#/lib/facturation/budgetRegistry.ts'
 import type { WordPool } from '#/lib/facturation/wordpool.ts'
 import type { IssuerCodes } from '#/lib/facturation/issuerCodes.ts'
 import type { IssuerDenylist } from '#/lib/facturation/issuerDenylist.ts'
 import type { IssuerMemory } from '#/lib/facturation/issuerMemory.ts'
 import type { Issuer } from '#/lib/facturation/issuers.ts'
-import type { BudgetLine, JournalEntry } from '#/lib/facturation/types.ts'
+import type {
+  BudgetLine,
+  CompteLine,
+  JournalEntry,
+} from '#/lib/facturation/types.ts'
 
 /**
  * Lectures Supabase de la facturation, en cache (nuages de mots appris, dictionnaire
@@ -34,6 +42,9 @@ export function useFacturationModel(): {
   /** Référentiel des imputations (Supabase). Aussi injecté dans budgetRegistry pour les
    *  accès synchrones (budgetLabel/budgetHint). Vide tant que la query n'a pas résolu. */
   budgetLines: BudgetLine[]
+  /** Dictionnaire des comptes (compte → nom humain). Aussi injecté dans budgetRegistry
+   *  (compteLabel). Vide tant que la query n'a pas résolu. */
+  comptes: CompteLine[]
 } {
   const { data: pool } = useQuery({
     queryKey: ['facturation', 'clouds'],
@@ -70,10 +81,18 @@ export function useFacturationModel(): {
     queryFn: fetchBudgetLines,
     retry: false,
   })
-  // Peuple le registre synchrone (budgetLabel/budgetHint/budgetTag) AU RENDU — avant les
-  // useMemo enfants (buildGalaxy…) → aucune course. Idempotent, sans état ; repli code si vide.
+  const { data: comptesData } = useQuery({
+    queryKey: ['facturation', 'comptes'],
+    queryFn: fetchComptes,
+    retry: false,
+  })
+  // Peuple le registre synchrone (budgetLabel/budgetHint/budgetTag/compteLabel) AU RENDU —
+  // avant les useMemo enfants (buildGalaxy…) → aucune course. Idempotent, sans état ; repli
+  // code/numéro si vide.
   const budgetLines = budgetLinesData ?? []
+  const comptes = comptesData ?? []
   setBudgetLines(budgetLines)
+  setCompteLabels(comptes)
   return {
     serverPool: pool ?? { perCode: {} },
     issuers: issuers ?? [],
@@ -82,5 +101,6 @@ export function useFacturationModel(): {
     issuerMemory: issuerMemory ?? { perIssuer: {} },
     journal: journal ?? { entries: [] },
     budgetLines,
+    comptes,
   }
 }

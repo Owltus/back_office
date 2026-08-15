@@ -58,7 +58,14 @@ import {
 } from '#/lib/facturation/issuerDenylist.ts'
 import { hashDocument } from '#/lib/facturation/hash.ts'
 import { reviewQueue } from '#/lib/facturation/anomalies.ts'
-import { fillComptes } from '#/lib/facturation/budgetRegistry.ts'
+import {
+  budgetCategory,
+  fillComptes,
+} from '#/lib/facturation/budgetRegistry.ts'
+import {
+  familyGuidanceReady,
+  issuerFamilyPrior,
+} from '#/lib/facturation/issuerFamilies.ts'
 import { stampDataOf } from '#/lib/facturation/stampLayout.ts'
 import {
   addInvoices,
@@ -112,11 +119,21 @@ function issuerHintFor(
   if (!known) return undefined
   const deny = deniedCodes(denylist, known.name)
   const mat = issuerMaturity(model, known.name)
-  if (!mat.strong && deny.size === 0) return undefined // aucun signal → mots seuls
+  // Guidage FAMILLE : mûrit plus vite que le prior code (seuil AA2 < seuil strong). On peut
+  // donc orienter au niveau famille pour un émetteur vu ~3 fois, avant de savoir deviner le
+  // code exact. INFORMATIF : n'altère pas la détection des codes (prior code inchangé).
+  const familyReady = familyGuidanceReady(model, known.name)
+  const familyPrior = familyReady
+    ? issuerFamilyPrior(model, known.name, budgetCategory)
+    : undefined
+  // Aucun signal du tout (émetteur trop peu vu, sans interdiction) → mots seuls.
+  if (!mat.strong && deny.size === 0 && !familyReady) return undefined
   return {
     prior: mat.strong ? issuerPrior(model, known.name) : {},
     concentrated: mat.strong ? mat.concentrated : false,
     deny: deny.size ? deny : undefined,
+    familyPrior,
+    familyReady,
   }
 }
 

@@ -14,7 +14,6 @@ import {
   type GalaxyNodeType,
 } from '#/lib/facturation/galaxy.ts'
 import { budgetHint } from '#/lib/facturation/budgetRegistry.ts'
-import type { Tag } from '#/lib/facturation/constants.ts'
 import { clamp } from '#/lib/utils.ts'
 
 /*
@@ -41,29 +40,26 @@ import { clamp } from '#/lib/utils.ts'
 
 echarts.use([GraphChart, TooltipComponent, LegendComponent, CanvasRenderer])
 
-// Palette de DESSIN (Canvas) — présentation. Typée `Record<Tag>` : le compilateur
-// impose les 13 domaines et signale toute dérive avec la liste TAGS.
-const DOMAIN_HEX: Record<Tag, string> = {
-  Technique: '#94a3b8',
-  'Énergie & fluides': '#f59e0b',
-  Hébergement: '#38bdf8',
-  Restauration: '#fb923c',
-  'IT & logiciels': '#a78bfa',
-  Administratif: '#a1a1aa',
-  RH: '#2dd4bf',
-  Commercial: '#f472b6',
-  Finance: '#34d399',
-  Prestataires: '#818cf8',
-  Déplacements: '#22d3ee',
-  Location: '#a3e635',
-  'Revenus annexes': '#fb7185',
+// Palette de DESSIN (Canvas) — présentation. Une couleur par FAMILLE (section) du plan
+// analytique. Clé NORMALISÉE en MAJUSCULES → tolère la casse hétérogène du référentiel
+// (« Frais de Perso » vs « FRAIS EXPLOITATION… ») et la casse d'affichage (formatSection).
+const SECTION_HEX: Record<string, string> = {
+  'FRAIS EXPLOITATION / OPERATION': '#f59e0b',
+  RESTAURATION: '#fb923c',
+  HEBERGEMENT: '#38bdf8',
+  'FRAIS ADMINISTRATIFS ET GENERAUX': '#a1a1aa',
+  'FRAIS COMMERCIAUX ET MARKETING': '#f472b6',
+  'FRAIS DE PERSO': '#2dd4bf',
+  REDEVANCES: '#34d399',
+  "LOCATION D'ESPACES": '#a3e635',
+  'REVENUS ANNEXES': '#fb7185',
 }
-const ISSUER_HEX = '#cbd5e1' // émetteurs : slate clair, neutre (transverse aux domaines)
-const NEUTRAL_HEX = '#64748b'
+const ISSUER_HEX = '#cbd5e1' // émetteurs : slate clair, neutre (transverse aux familles)
+const NEUTRAL_HEX = '#64748b' // famille inconnue / sans section
 const colorFor = (category: string): string =>
   category === ISSUER_CATEGORY
     ? ISSUER_HEX
-    : ((DOMAIN_HEX as Record<string, string>)[category] ?? NEUTRAL_HEX)
+    : (SECTION_HEX[category.trim().toUpperCase()] ?? NEUTRAL_HEX)
 
 // Utilitaires couleur (les hex de DOMAIN_HEX sont tous `#rrggbb`).
 const rgb = (hex: string): [number, number, number] => {
