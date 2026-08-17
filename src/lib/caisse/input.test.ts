@@ -27,6 +27,17 @@ describe('sanitizeAmount', () => {
   it('retire les caractères non numériques', () => {
     expect(sanitizeAmount('1a2€ 3')).toBe('123')
   })
+  it('refuse le signe moins par défaut', () => {
+    expect(sanitizeAmount('-12,5')).toBe('12,5')
+  })
+  it('accepte un moins en tête quand c’est autorisé', () => {
+    expect(sanitizeAmount('-12,5', { allowNegative: true })).toBe('-12,5')
+    // "-" seul = état de frappe valide (le champ ne doit pas se vider)
+    expect(sanitizeAmount('-', { allowNegative: true })).toBe('-')
+  })
+  it('n’accepte pas un moins en milieu de saisie', () => {
+    expect(sanitizeAmount('12-5', { allowNegative: true })).toBe('125')
+  })
 })
 
 describe('amountValue', () => {
@@ -37,6 +48,10 @@ describe('amountValue', () => {
     expect(amountValue('')).toBe(0)
     expect(amountValue(',')).toBe(0)
   })
+  it('parse un montant négatif, signe seul = 0', () => {
+    expect(amountValue('-93,60')).toBe(-93.6)
+    expect(amountValue('-')).toBe(0)
+  })
 })
 
 describe('amountText', () => {
@@ -45,6 +60,7 @@ describe('amountText', () => {
   })
   it('nombre → texte FR', () => {
     expect(amountText(157.6)).toBe('157,6')
+    expect(amountText(-157.6)).toBe('-157,6')
   })
   // Boucle saisie → valeur → texte cohérente (pas de perte de la virgule)
   it('round-trip conserve la valeur', () => {

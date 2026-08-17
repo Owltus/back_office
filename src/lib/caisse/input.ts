@@ -12,15 +12,25 @@
  * Nettoie une saisie monétaire : conserve chiffres et UN seul séparateur
  * décimal, normalisé en virgule (affichage FR). Ne parse pas — préserve les
  * états intermédiaires de frappe comme "12," ou "12,5".
+ *
+ * `allowNegative` autorise UN signe moins, uniquement en tête (réservé à la
+ * ligne STAY N' TOUCH : un attendu peut être négatif, ex. un remboursement).
+ * Les autres lignes restent positives par construction.
  */
-export function sanitizeAmount(raw: string): string {
+export function sanitizeAmount(
+  raw: string,
+  { allowNegative = false }: { allowNegative?: boolean } = {},
+): string {
+  // Le signe est traité à part : on ne le garde que s'il ouvre la saisie, pour
+  // ne pas accepter "12-5". Un "-" seul est un état de frappe valide.
+  const negative = allowNegative && raw.trimStart().startsWith('-')
   let s = raw.replace(/[^0-9.,]/g, '').replace(/\./g, ',')
   const i = s.indexOf(',')
   if (i !== -1) {
     // un seul séparateur : on retire les virgules suivantes
     s = s.slice(0, i + 1) + s.slice(i + 1).replace(/,/g, '')
   }
-  return s
+  return negative ? `-${s}` : s
 }
 
 /** Nombre à partir d'une saisie monétaire nettoyée (',' décimal). */

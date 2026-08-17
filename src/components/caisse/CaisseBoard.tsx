@@ -813,6 +813,9 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
                   onCellKeyDown={handleGridTab}
                   cols={cols}
                   disabled={!canEditFields}
+                  // Seule ligne à accepter un montant négatif (remboursement,
+                  // correction) : Lightspeed et Dépôt restent positifs.
+                  allowNegative
                   value={(c) =>
                     c === 'web' ? form.snt.cbweb : form.snt[c as PayKey]
                   }
@@ -1076,6 +1079,7 @@ function MoneyInput({
   onFill,
   tabOrder,
   onKeyDown,
+  allowNegative = false,
 }: {
   value: number
   onChange: (v: number) => void
@@ -1085,6 +1089,8 @@ function MoneyInput({
   // Rang pour la tabulation en colonne (lu par handleGridTab via data-taborder).
   tabOrder?: number
   onKeyDown?: (e: ReactKeyboardEvent<HTMLInputElement>) => void
+  // Autorise un montant négatif (ligne STAY N' TOUCH seulement).
+  allowNegative?: boolean
 }) {
   const [text, setText] = useState(() => amountText(value))
   const [focused, setFocused] = useState(false)
@@ -1100,11 +1106,14 @@ function MoneyInput({
     <div className="relative">
       <Input
         type="text"
-        inputMode="decimal"
+        // "text" (clavier complet, touche "-" présente) sur la ligne qui
+        // accepte le négatif — "decimal" ailleurs n'affiche pas ce signe sur
+        // certains claviers virtuels tablette (iOS/Android).
+        inputMode={allowNegative ? 'text' : 'decimal'}
         disabled={disabled}
         value={text}
         onChange={(e) => {
-          const t = sanitizeAmount(e.target.value)
+          const t = sanitizeAmount(e.target.value, { allowNegative })
           setText(t)
           onChange(amountValue(t))
         }}
@@ -1194,6 +1203,7 @@ function AmountRow({
   disabled,
   onFill,
   onCellKeyDown,
+  allowNegative = false,
 }: {
   label: string
   // Rang de la ligne (0 = 1re) : sert à ordonner la tabulation en colonne.
@@ -1206,6 +1216,8 @@ function AmountRow({
   onFill?: (c: EcartKey) => number
   // Tabulation pilotée (colonne par colonne), partagée par toutes les lignes.
   onCellKeyDown?: (e: ReactKeyboardEvent<HTMLInputElement>) => void
+  // Montants négatifs acceptés sur cette ligne (STAY N' TOUCH seulement).
+  allowNegative?: boolean
 }) {
   return (
     <tr className="border-b border-border/60">
@@ -1229,6 +1241,7 @@ function AmountRow({
                 // Ordre colonne-major : colonne × 3 lignes + rang de la ligne.
                 tabOrder={colIndex * 3 + rowIndex}
                 onKeyDown={onCellKeyDown}
+                allowNegative={allowNegative}
               />
             )}
           </td>
