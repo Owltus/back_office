@@ -1019,6 +1019,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                 value={stats.rooms}
                 label="Chambres occupées"
                 accent="#818cf8"
+                hint="Nombre de chambres occupées ce jour (présentes dans l'import In-House), qu'elles aient du petit-déjeuner inclus ou non."
                 sub={
                   benchmark && benchmark.occupancy.avgRooms != null
                     ? subMuted(`moy. ${fmtInt(benchmark.occupancy.avgRooms)}/j`)
@@ -1029,6 +1030,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                 value={stats.guests}
                 label="Clients"
                 accent="#38bdf8"
+                hint="Nombre total de clients logés ce jour, toutes chambres occupées confondues."
                 sub={
                   benchmark && benchmark.occupancy.avgGuests != null
                     ? subMuted(`moy. ${fmtInt(benchmark.occupancy.avgGuests)}/j`)
@@ -1039,6 +1041,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                 value={stats.breakfasts}
                 label="PDJ inclus"
                 accent="#34d399"
+                hint="Petits-déjeuners dus ce jour : inclus au tarif de la réservation, facturés même si le client ne les a pas encore pris."
                 sub={ca.inclusNb > 0 ? subMuted(fmtEur(ca.includedHt, 2)) : undefined}
               />
               <StatTile
@@ -1046,6 +1049,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                 label="PDJ Extra"
                 accent="#fbbf24"
                 printHidden
+                hint="Petits-déjeuners servis au-delà de ce qui était inclus, valorisés au tarif PDJ standard."
                 sub={extrasCount > 0 ? subMuted(fmtEur(ca.extrasHt, 2)) : undefined}
               />
               {/* Miroir PDF de « PDJ Extra » — conservée dans le footer du PDF
@@ -1069,6 +1073,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                 printHidden
                 label="CA PDJ"
                 accent="#60a5fa"
+                hint="Chiffre d'affaires HT du petit-déjeuner ce jour : inclus valorisés au tarif de leur code, extras au tarif PDJ standard."
                 value={ca.totalHt > 0 ? fmtEur(ca.totalHt, 2) : fmtEur(0, 0)}
                 sub={
                   benchmark && benchmark.total.avgTotalHT != null
@@ -1094,6 +1099,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                 printHidden
                 label="Taux de captage"
                 accent="#f472b6"
+                hint="Part des clients logés ayant pris un petit-déjeuner ce jour (inclus + extras ÷ clients). « — » si aucune donnée client."
                 value={
                   captageDay != null ? (
                     fmtPctInt(captageDay)

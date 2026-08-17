@@ -370,12 +370,14 @@ export function DayCrossSummary({
           <StatTile
             label="PDJ inclus"
             accent="#34d399"
+            hint="Petits-déjeuners inclus dus ce jour (facturés au tarif de la réservation, qu'ils aient été pris ou non)."
             value={fmtInt(pdj.included)}
             sub={pdj.hasAddon ? subMuted(fmtEur(pdj.includedHT, 2)) : undefined}
           />
           <StatTile
             label="PDJ Extra"
             accent="#fbbf24"
+            hint="Petits-déjeuners servis au-delà des inclus ce jour, valorisés au tarif PDJ standard."
             value={fmtInt(pdj.extrasCount)}
             sub={pdj.hasAddon ? subMuted(fmtEur(pdj.extrasHT, 2)) : undefined}
           />
@@ -383,6 +385,7 @@ export function DayCrossSummary({
           <StatTile
             label="CA PDJ"
             accent="#60a5fa"
+            hint="Chiffre d'affaires HT du petit-déjeuner ce jour (inclus + extras). En dessous : moyenne sur les 30 derniers jours."
             value={pdj.hasAddon ? fmtEur(pdj.totalHT, 2) : fmtEur(0, 0)}
             sub={
               pdjWin && pdjWin.total.avgTotalHT != null
@@ -393,6 +396,7 @@ export function DayCrossSummary({
           <StatTile
             label="Captage"
             accent="#f472b6"
+            hint="Part des clients logés ayant pris un petit-déjeuner ce jour. En dessous : moyenne sur les 30 derniers jours."
             value={pdj.captage == null ? '—' : fmtPctInt(pdj.captage)}
             sub={
               pdjWin && pdjWin.captage.avgCaptage != null
@@ -419,6 +423,7 @@ export function DayCrossSummary({
           <StatTile
             label="Occupation"
             accent={ACCENT.cyan}
+            hint="Nombre de places de parking occupées ce jour, toutes réservations confondues. En dessous : moyenne sur les 30 derniers jours."
             value={fmtInt(parkingAgg.day.occupied)}
             sub={
               parkingAgg.avgOccupied > 0
@@ -430,6 +435,7 @@ export function DayCrossSummary({
           <StatTile
             label="Arrivées"
             accent={ACCENT.indigo}
+            hint="Nombre d'arrivées parking ce jour. En dessous : moyenne sur les 30 derniers jours."
             value={fmtInt(parkingAgg.day.arrivals)}
             sub={
               parkingAgg.avgArrivals > 0
@@ -440,6 +446,7 @@ export function DayCrossSummary({
           <StatTile
             label="Départs"
             accent={ACCENT.green}
+            hint="Nombre de départs parking ce jour. En dessous : moyenne sur les 30 derniers jours."
             value={fmtInt(parkingAgg.day.departures)}
             sub={
               parkingAgg.avgDepartures > 0
@@ -450,6 +457,7 @@ export function DayCrossSummary({
           <StatTile
             label="Captage"
             accent={ACCENT.pink}
+            hint="Taux d'occupation du parking rapporté au taux d'occupation de l'hôtel ce jour. En dessous : moyenne sur les 30 derniers jours."
             value={parkingCaptage == null ? '—' : fmtPctInt(parkingCaptage)}
             sub={
               parkingAgg.avgCaptage != null
@@ -476,6 +484,7 @@ export function DayCrossSummary({
           <StatTile
             label="Nettoyées"
             accent={CATEGORY_COLOR.nettoyee}
+            hint="Chambres nettoyées ce jour (par défaut ou en rattrapage). En dessous : moyenne sur les 30 derniers jours clôturés."
             value={fmtInt(rapro.nettoyees)}
             sub={
               raproAvg
@@ -486,6 +495,7 @@ export function DayCrossSummary({
           <StatTile
             label="Refus"
             accent={CATEGORY_COLOR.refus}
+            hint="Chambres en refus de service ce jour. En dessous : moyenne sur les 30 derniers jours clôturés."
             value={fmtInt(rapro.refus)}
             sub={
               raproAvg
@@ -496,6 +506,7 @@ export function DayCrossSummary({
           <StatTile
             label="Bloquées du jour"
             accent={CATEGORY_COLOR.bloquee}
+            hint="Chambres occupées non nettoyées ce jour, reportées au lendemain. En dessous : moyenne sur les 30 derniers jours clôturés."
             value={fmtInt(rapro.bloqueesJour)}
             sub={
               raproAvg
@@ -506,6 +517,7 @@ export function DayCrossSummary({
           <StatTile
             label="Bloquées de la veille"
             accent={CATEGORY_COLOR.bloquee}
+            hint="Chambres bloquées la veille et toujours non résolues aujourd'hui (roulement) — cet indicateur ne s'agrège pas, pas de moyenne."
             value={fmtInt(rapro.bloqueesVeille)}
           />
         </SummaryBlock>
