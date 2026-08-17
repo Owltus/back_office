@@ -168,8 +168,15 @@ const STATUS: Record<
     text: 'text-orange-700 dark:text-orange-100',
     dot: 'bg-orange-500',
   },
+  employe: {
+    label: 'Employé',
+    border: 'border-violet-500/50',
+    fill: 'bg-violet-500/15',
+    text: 'text-violet-700 dark:text-violet-100',
+    dot: 'bg-violet-500',
+  },
 }
-const STATUS_ORDER: Status[] = ['reserve', 'paye', 'checkout']
+const STATUS_ORDER: Status[] = ['reserve', 'paye', 'checkout', 'employe']
 
 const fmtWeekday = new Intl.DateTimeFormat('fr-FR', { weekday: 'short' })
 const fmtDay = new Intl.DateTimeFormat('fr-FR', {
@@ -285,6 +292,10 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
   // rangées pour remplir l'écran en compact. 0 tant que non mesurée.
   const [availH, setAvailH] = useState(0)
   const [reservations, setReservations] = useState<Reservation[]>([])
+  // Échec d'écriture (création/déplacement) rejeté par la base — affiché plutôt
+  // qu'un rollback silencieux (contrainte anti-chevauchement `EXCLUDE`, voir
+  // supabase/parking_no_overlap.sql). Effacé au début de l'action suivante.
+  const [actionError, setActionError] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [calOpen, setCalOpen] = useState(false)
   // Modal d'aide : tutoriel factuel de la page (bouton « ? » de la barre d'actions).
@@ -755,12 +766,26 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
     return out
   }
 
+  // Message d'erreur pour un rejet d'écriture par la base. `23P01` = violation
+  // de la contrainte anti-chevauchement `EXCLUDE` (place déjà prise sur cette
+  // période) — cas normal quand deux modifications concurrentes se croisent,
+  // le contrôle client (`hasOverlap`) n'ayant pas encore vu l'autre écriture.
+  function describeWriteError(err: unknown): string {
+    const code = (err as { code?: string } | null)?.code
+    if (code === '23P01') {
+      return 'Cette place est déjà occupée sur cette période (une autre modification vient de la prendre) — action annulée.'
+    }
+    const message = err instanceof Error ? err.message : String(err)
+    return `L'enregistrement a échoué — ${message}`
+  }
+
   // Insère une résa (nouvelle, collée, ou ré-insérée par un undo de suppression).
   function applyCreate(res: Reservation): boolean {
     if (!startDate) return false
     if (!canCreateReservation(res.startDay, todayOffset, level)) return false
     if (hasOverlap(reservationsRef.current, res.spot, res.startDay, res.nights))
       return false
+    setActionError(null)
     setReservations((prev) =>
       prev.some((r) => r.id === res.id) ? prev : [...prev, res],
     )
@@ -775,6 +800,7 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
     }).catch((err) => {
       console.error(err)
       setReservations((prev) => prev.filter((r) => r.id !== res.id))
+      setActionError(describeWriteError(err))
     })
     return true
   }
@@ -803,10 +829,16 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
       if (hasOverlap(reservationsRef.current, spot, startDay, nights, id))
         return false
     }
+    setActionError(null)
+    const before = target
     setReservations((prev) =>
       prev.map((r) => (r.id === id ? { ...r, ...patch } : r)),
     )
-    updateReservation(id, toDbPatch(patch, startDate)).catch(console.error)
+    updateReservation(id, toDbPatch(patch, startDate)).catch((err) => {
+      console.error(err)
+      setReservations((prev) => prev.map((r) => (r.id === id ? before : r)))
+      setActionError(describeWriteError(err))
+    })
     return true
   }
 
@@ -1295,6 +1327,12 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
           </>
         }
       />
+
+      {actionError && (
+        <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {actionError}
+        </div>
+      )}
 
       {/* Planning */}
       <div className="flex overflow-hidden rounded-2xl border border-border bg-card">

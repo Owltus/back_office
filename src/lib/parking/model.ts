@@ -29,7 +29,7 @@ export const CLIENT_SPOTS = FIRST_STAFF_SPOT - 1 // 12
 export const SPOTS_LIST = Array.from({ length: SPOTS }, (_, i) => i + 1)
 export const SLOTS_PER_DAY = 2 // chaque jour = 2 demi-journées (matin / après-midi)
 
-export type Status = 'reserve' | 'paye' | 'checkout'
+export type Status = 'reserve' | 'paye' | 'checkout' | 'employe'
 
 export interface Reservation {
   id: string

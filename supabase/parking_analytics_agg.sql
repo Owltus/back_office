@@ -33,6 +33,7 @@ select
   count(*) filter (where status = 'reserve')::int       as reserved,
   count(*) filter (where status = 'checkout')::int      as unpaid
 from public.parking_reservations
+where status <> 'employe'
 group by start_date;
 
 grant select on public.parking_arrivals_agg to authenticated;
@@ -56,6 +57,7 @@ with expanded as (
     )::date as day
   from public.parking_reservations
   where nights >= 1
+    and status <> 'employe'
 ),
 occ as (
   select
@@ -68,11 +70,13 @@ occ as (
 arr as (
   select start_date::date as day, count(*)::int as arrivals
   from public.parking_reservations
+  where status <> 'employe'
   group by start_date::date
 ),
 dep as (
   select (start_date::date + nights) as day, count(*)::int as departures
   from public.parking_reservations
+  where status <> 'employe'
   group by (start_date::date + nights)
 ),
 spine as (

@@ -102,6 +102,11 @@ export function ParkingHelpPanel({ canEdit }: { canEdit: boolean }) {
           Le client est parti sans régler. Ce statut demande un motif écrit (voir
           plus bas).
         </StatusRow>
+        <StatusRow dot="bg-violet-500" name="Violet, employé.">
+          La place est occupée par un véhicule du personnel, pas par un client.
+          Elle reste comptée dans le taux d'occupation du planning, mais est
+          exclue des chiffres des pages Analytique et de la bande RepJour.
+        </StatusRow>
         <p>
           Une bulle sur une barre signale qu'un commentaire y est attaché ;
           survolez-la pour le lire.
