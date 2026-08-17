@@ -1445,16 +1445,23 @@ const GuestRow = memo(function GuestRow({
             (i < served) sont pré-remplies (miroir du DOM) ; le reste est à
             cocher au stylo. */}
         <span className="pdj-checkboxes">
-          {Array.from({ length: numBoxes }, (_, i) => (
-            <span
-              key={i}
-              className={cn(
-                'pdj-checkbox',
-                i < numExpected && 'pdj-expected',
-                i < served && 'pdj-checked',
-              )}
-            />
-          ))}
+          {Array.from({ length: numBoxes }, (_, i) => {
+            const checkedIdx = i < served
+            // Inclus vs extra = compte FACTURÉ (`row.breakfasts_included`),
+            // même base que les cases interactives à l'écran (pas `numExpected`,
+            // qui peut inclure des places sans PDJ inclus — cf. plus haut).
+            const includedIdx = i < (row?.breakfasts_included ?? 0)
+            return (
+              <span
+                key={i}
+                className={cn(
+                  'pdj-checkbox',
+                  i < numExpected && 'pdj-expected',
+                  checkedIdx && (includedIdx ? 'pdj-checked' : 'pdj-checked-extra'),
+                )}
+              />
+            )
+          })}
         </span>
         {/* Écran : contrôle interactif « servi / attendu » (persisté), calqué
             sur les cases du PDF — toujours 2 cases mini. Bordure pleine en gras
@@ -1466,6 +1473,12 @@ const GuestRow = memo(function GuestRow({
             {Array.from({ length: numBoxes }, (_, i) => {
               const expected = i < numExpected
               const isServed = i < served
+              // Inclus vs extra = compte FACTURÉ (`row.breakfasts_included`),
+              // PAS `numExpected` (qui, pour une chambre SANS PDJ inclus, vaut
+              // `min(adults, 2)` juste pour proposer des cases à cocher — tout
+              // servi là-dedans reste un extra facturé, cf. commentaire
+              // `numExpected` ci-dessus : « breakfasts_included = 0 »).
+              const isIncluded = i < (row?.breakfasts_included ?? 0)
               return (
                 <button
                   key={i}
@@ -1486,13 +1499,17 @@ const GuestRow = memo(function GuestRow({
                   className={cn(
                     'size-3.5 rounded-[3px] transition-colors',
                     isServed
-                      ? 'border-2 border-emerald-500 bg-emerald-500'
+                      ? isIncluded
+                        ? 'border-2 border-emerald-500 bg-emerald-500'
+                        : 'border-2 border-amber-400 bg-amber-400' // même teinte que la carte « PDJ Extra »
                       : expected
                         ? 'border-2 border-foreground/70 bg-transparent'
                         : 'border border-dashed border-muted-foreground/40 bg-transparent',
-                    canEdit
-                      ? 'cursor-pointer hover:border-emerald-400'
-                      : 'cursor-default',
+                    canEdit &&
+                      (isIncluded
+                        ? 'cursor-pointer hover:border-emerald-400'
+                        : 'cursor-pointer hover:border-amber-400'),
+                    !canEdit && 'cursor-default',
                   )}
                 />
               )

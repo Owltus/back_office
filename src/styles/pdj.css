@@ -414,10 +414,17 @@
     background: #fff;
     border: 2px solid #333;
   }
-  /* Case cochée : miroir du « servi » saisi à l'écran (breakfasts_served). */
+  /* Case cochée : miroir du « servi » saisi à l'écran (breakfasts_served).
+     Vert = inclus (dû facturé, breakfasts_included) ; jaune = extra (au-delà
+     des inclus) — mêmes teintes que les cases interactives à l'écran et la
+     carte « PDJ Extra » (#34d399 / #fbbf24, cf. BreakfastBoard.tsx). */
   .pdj-checkbox.pdj-checked {
-    background: #333;
-    border-color: #333;
+    background: #10b981;
+    border-color: #10b981;
+  }
+  .pdj-checkbox.pdj-checked-extra {
+    background: #fbbf24;
+    border-color: #fbbf24;
   }
 
   /* Statistiques en footer fixe */
