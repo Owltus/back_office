@@ -8,6 +8,7 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import './styles/caisse.css';
+@import './styles/literie.css';
 @import './styles/not-found.css';
 @import './styles/pdj.css';
 @import './styles/poster.css';

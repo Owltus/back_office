@@ -50,3 +50,17 @@ export const CAISSE_GRACE_DAYS = 1
  * libre. Miroir de la borne `service_date >= current_date - 3` côté RLS.
  */
 export const PDJ_GRACE_DAYS = 3
+
+/**
+ * Literie : nombre de jours dans le passé où un compte `ecriture` peut encore
+ * créer/modifier une assignation de lit bébé (d'après ses bornes
+ * `start_date`/`end_date`). Fenêtre J-0..J-LITERIE_GRACE_DAYS. Au-delà, seule
+ * la `gestion` reste libre. Le statut « literie synthétique installée » d'une
+ * chambre (`hotel_rooms`), lui, reste modifiable en `ecriture` à tout moment —
+ * état permanent sans notion de jour, pas de fenêtre de grâce sur ce point
+ * précis. Table `literie_sheets` : plus consommée par l'app (clôture/
+ * commentaire retirés à la demande de l'utilisateur) — table restée en base,
+ * orpheline. Miroir des bornes `start_date`/`end_date >= current_date - 2`
+ * côté RLS (`supabase/literie_rls.sql`).
+ */
+export const LITERIE_GRACE_DAYS = 2

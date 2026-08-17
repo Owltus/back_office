@@ -1,0 +1,129 @@
+/* ------------------------------------------------------------------ *
+ * Literie anti-allergène — grille des 80 chambres (statut synthétique) *
+ * Même trame que `.rapro-floors`/`.rapro-room` (styles/rapro.css) :    *
+ * une carte par étage, chambres empilées en pastilles. État PERMANENT  *
+ * (pas de notion de jour) : une seule couleur possible par pastille,   *
+ * pas de liseré ni de cycle multi-statuts.                             *
+ * CLIC = bascule plume ↔ synthétique.                                  *
+ *   grisé (défaut) = plume                                             *
+ *   violet          = synthétique (anti-allergène) installée           *
+ * ------------------------------------------------------------------ */
+
+/* Colonnes d'étages : gap de 1px sur fond « bordure » + colonnes en fond
+   « carte » → fins filets de séparation verticaux entre étages. Une carte
+   par étage — 6 étages → toujours 2, 3 ou 6 colonnes (diviseurs de 6) pour
+   des rangées toujours complètes. */
+.literie-floors {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+}
+@media (min-width: 700px) {
+  .literie-floors {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+@media (min-width: 1200px) {
+  .literie-floors {
+    grid-template-columns: repeat(6, 1fr);
+  }
+}
+
+.literie-floor {
+  overflow: hidden;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+}
+.literie-floor-head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 0.6rem;
+}
+.literie-floor-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+/* Pastilles empilées verticalement, pleine largeur de la colonne (mêmes
+   gabarits que `.rapro-room` : la page vit dans le même registre visuel). */
+.literie-rooms {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0 0.4rem 0.4rem;
+}
+.literie-room {
+  position: relative;
+  width: 100%;
+  padding: 0.2rem 0.35rem;
+  font-size: 0.78rem;
+  line-height: 1.25;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--muted-foreground);
+  background: transparent;
+  border: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
+  border-radius: calc(var(--radius) - 5px);
+  cursor: pointer;
+  transition:
+    background-color 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
+}
+.literie-room:hover:not(:disabled) {
+  border-color: var(--ring);
+}
+.literie-room:focus-visible {
+  outline: none;
+  border-color: var(--ring);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--ring) 45%, transparent);
+}
+.literie-room:disabled {
+  cursor: not-allowed;
+}
+/* Lecture seule : pastilles non cliquables mais toujours lisibles (couleurs
+   conservées) — même principe que `.rapro-floors.is-locked`. */
+.literie-floors.is-locked .literie-room {
+  cursor: default;
+  pointer-events: none;
+}
+
+/* Synthétique installée → violet (chart-1, couleur d'accent de l'app), sur le
+   même principe que les statuts rapro (fond doux ~18 % + bordure ~45 %). */
+.literie-room-synthetic {
+  color: var(--chart-1);
+  background: color-mix(in oklab, var(--chart-1) 18%, transparent);
+  border-color: color-mix(in oklab, var(--chart-1) 45%, transparent);
+}
+.literie-room-synthetic:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+/* --- Légende (bas de grille) ----------------------------------------------- */
+.literie-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 1rem;
+  font-size: 0.72rem;
+  color: var(--muted-foreground);
+}
+.literie-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.literie-legend-dot {
+  display: inline-block;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--foreground) 25%, transparent);
+}
+.literie-legend-dot.is-synthetic {
+  background: var(--chart-1);
+}

@@ -2,6 +2,7 @@ import type { LucideIcon } from 'lucide-react'
 import {
   ArrowLeftRight,
   Banknote,
+  BedDouble,
   ClipboardList,
   Coffee,
   Monitor,
@@ -21,6 +22,7 @@ export type PageKey =
   | 'affichage'
   | 'facturation'
   | 'artefact'
+  | 'literie'
 
 export interface PageDef {
   key: PageKey
@@ -41,6 +43,7 @@ export const PAGES: PageDef[] = [
   { key: 'affichage', label: 'Affichage', route: '/affichage', icon: Monitor },
   { key: 'facturation', label: 'Facturation', route: '/facturation', icon: Stamp },
   { key: 'artefact', label: 'Artefact', route: '/artefact', icon: Palette },
+  { key: 'literie', label: 'Literie', route: '/literie', icon: BedDouble },
 ]
 
 export const PAGE_BY_KEY: Record<PageKey, PageDef> = Object.fromEntries(

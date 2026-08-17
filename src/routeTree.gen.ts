@@ -16,6 +16,7 @@ import { Route as CaisseRouteImport } from './routes/caisse'
 import { Route as ComptesRouteImport } from './routes/comptes'
 import { Route as EasterEggsRouteImport } from './routes/easter-eggs'
 import { Route as GestionRouteImport } from './routes/gestion'
+import { Route as LiterieRouteImport } from './routes/literie'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ParkingRouteImport } from './routes/parking'
 import { Route as PdjRouteImport } from './routes/pdj'
@@ -25,6 +26,7 @@ import { Route as RepjourRouteImport } from './routes/repjour'
 import { Route as CaisseIndexRouteImport } from './routes/caisse/index'
 import { Route as FacturationIndexRouteImport } from './routes/facturation/index'
 import { Route as FacturationGalaxieRouteImport } from './routes/facturation/galaxie'
+import { Route as LiterieIndexRouteImport } from './routes/literie/index'
 import { Route as ParkingIndexRouteImport } from './routes/parking/index'
 import { Route as PdjIndexRouteImport } from './routes/pdj/index'
 import { Route as RaproIndexRouteImport } from './routes/rapro/index'
@@ -75,6 +77,11 @@ const GestionRoute = GestionRouteImport.update({
   path: '/gestion',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LiterieRoute = LiterieRouteImport.update({
+  id: '/literie',
+  path: '/literie',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
@@ -119,6 +126,11 @@ const FacturationGalaxieRoute = FacturationGalaxieRouteImport.update({
   id: '/facturation/galaxie',
   path: '/facturation/galaxie',
   getParentRoute: () => rootRouteImport,
+} as any)
+const LiterieIndexRoute = LiterieIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => LiterieRoute,
 } as any)
 const ParkingIndexRoute = ParkingIndexRouteImport.update({
   id: '/',
@@ -203,6 +215,7 @@ export interface FileRoutesByFullPath {
   '/comptes': typeof ComptesRoute
   '/easter-eggs': typeof EasterEggsRoute
   '/gestion': typeof GestionRoute
+  '/literie': typeof LiterieRouteWithChildren
   '/login': typeof LoginRoute
   '/parking': typeof ParkingRouteWithChildren
   '/pdj': typeof PdjRouteWithChildren
@@ -212,6 +225,7 @@ export interface FileRoutesByFullPath {
   '/facturation/galaxie': typeof FacturationGalaxieRoute
   '/caisse/': typeof CaisseIndexRoute
   '/facturation/': typeof FacturationIndexRoute
+  '/literie/': typeof LiterieIndexRoute
   '/parking/': typeof ParkingIndexRoute
   '/pdj/': typeof PdjIndexRoute
   '/rapro/': typeof RaproIndexRoute
@@ -239,6 +253,7 @@ export interface FileRoutesByTo {
   '/facturation/galaxie': typeof FacturationGalaxieRoute
   '/caisse': typeof CaisseIndexRoute
   '/facturation': typeof FacturationIndexRoute
+  '/literie': typeof LiterieIndexRoute
   '/parking': typeof ParkingIndexRoute
   '/pdj': typeof PdjIndexRoute
   '/rapro': typeof RaproIndexRoute
@@ -263,6 +278,7 @@ export interface FileRoutesById {
   '/comptes': typeof ComptesRoute
   '/easter-eggs': typeof EasterEggsRoute
   '/gestion': typeof GestionRoute
+  '/literie': typeof LiterieRouteWithChildren
   '/login': typeof LoginRoute
   '/parking': typeof ParkingRouteWithChildren
   '/pdj': typeof PdjRouteWithChildren
@@ -272,6 +288,7 @@ export interface FileRoutesById {
   '/facturation/galaxie': typeof FacturationGalaxieRoute
   '/caisse/': typeof CaisseIndexRoute
   '/facturation/': typeof FacturationIndexRoute
+  '/literie/': typeof LiterieIndexRoute
   '/parking/': typeof ParkingIndexRoute
   '/pdj/': typeof PdjIndexRoute
   '/rapro/': typeof RaproIndexRoute
@@ -297,6 +314,7 @@ export interface FileRouteTypes {
     | '/comptes'
     | '/easter-eggs'
     | '/gestion'
+    | '/literie'
     | '/login'
     | '/parking'
     | '/pdj'
@@ -306,6 +324,7 @@ export interface FileRouteTypes {
     | '/facturation/galaxie'
     | '/caisse/'
     | '/facturation/'
+    | '/literie/'
     | '/parking/'
     | '/pdj/'
     | '/rapro/'
@@ -333,6 +352,7 @@ export interface FileRouteTypes {
     | '/facturation/galaxie'
     | '/caisse'
     | '/facturation'
+    | '/literie'
     | '/parking'
     | '/pdj'
     | '/rapro'
@@ -356,6 +376,7 @@ export interface FileRouteTypes {
     | '/comptes'
     | '/easter-eggs'
     | '/gestion'
+    | '/literie'
     | '/login'
     | '/parking'
     | '/pdj'
@@ -365,6 +386,7 @@ export interface FileRouteTypes {
     | '/facturation/galaxie'
     | '/caisse/'
     | '/facturation/'
+    | '/literie/'
     | '/parking/'
     | '/pdj/'
     | '/rapro/'
@@ -389,6 +411,7 @@ export interface RootRouteChildren {
   ComptesRoute: typeof ComptesRoute
   EasterEggsRoute: typeof EasterEggsRoute
   GestionRoute: typeof GestionRoute
+  LiterieRoute: typeof LiterieRouteWithChildren
   LoginRoute: typeof LoginRoute
   ParkingRoute: typeof ParkingRouteWithChildren
   PdjRoute: typeof PdjRouteWithChildren
@@ -448,6 +471,13 @@ declare module '@tanstack/react-router' {
       path: '/gestion'
       fullPath: '/gestion'
       preLoaderRoute: typeof GestionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/literie': {
+      id: '/literie'
+      path: '/literie'
+      fullPath: '/literie'
+      preLoaderRoute: typeof LiterieRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -512,6 +542,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/facturation/galaxie'
       preLoaderRoute: typeof FacturationGalaxieRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/literie/': {
+      id: '/literie/'
+      path: '/'
+      fullPath: '/literie/'
+      preLoaderRoute: typeof LiterieIndexRouteImport
+      parentRoute: typeof LiterieRoute
     }
     '/parking/': {
       id: '/parking/'
@@ -629,6 +666,17 @@ const CaisseRouteChildren: CaisseRouteChildren = {
 const CaisseRouteWithChildren =
   CaisseRoute._addFileChildren(CaisseRouteChildren)
 
+interface LiterieRouteChildren {
+  LiterieIndexRoute: typeof LiterieIndexRoute
+}
+
+const LiterieRouteChildren: LiterieRouteChildren = {
+  LiterieIndexRoute: LiterieIndexRoute,
+}
+
+const LiterieRouteWithChildren =
+  LiterieRoute._addFileChildren(LiterieRouteChildren)
+
 interface ParkingRouteChildren {
   ParkingIndexRoute: typeof ParkingIndexRoute
   ParkingAnalytiqueIndexRoute: typeof ParkingAnalytiqueIndexRoute
@@ -695,6 +743,7 @@ const rootRouteChildren: RootRouteChildren = {
   ComptesRoute: ComptesRoute,
   EasterEggsRoute: EasterEggsRoute,
   GestionRoute: GestionRoute,
+  LiterieRoute: LiterieRouteWithChildren,
   LoginRoute: LoginRoute,
   ParkingRoute: ParkingRouteWithChildren,
   PdjRoute: PdjRouteWithChildren,
