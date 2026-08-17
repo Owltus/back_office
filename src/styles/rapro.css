@@ -34,7 +34,18 @@
   }
 }
 
+/* `display:flex; flex-direction:column` : la grille CSS étire déjà chaque
+   carte à la hauteur de la RANGÉE (le plus grand nombre de chambres d'un
+   étage voisin — comportement par défaut de `align-items: stretch` en
+   grid). Sans flex ici, ce surplus resterait un vide sous la liste des
+   chambres pour un étage plus court (13 ou 11 chambres contre 14 ailleurs).
+   La hauteur de la RANGÉE elle-même (pilotée par l'étage à 14 chambres,
+   cf. commentaire `.rapro-rooms` ci-dessous) ne change pas — seul l'espace
+   interne des étages plus courts est redistribué, l'alignement de hauteur
+   avec la feuille de caisse reste intact. */
 .rapro-floor {
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   background: var(--card);
   border: 1px solid var(--border);
@@ -93,12 +104,17 @@
  * hauteur de cette page sur celle de la feuille de caisse. */
 .rapro-rooms {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 0.25rem;
   padding: 0 0.4rem 0.4rem;
 }
 .rapro-room {
   position: relative;
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
   width: 100%;
   padding: 0.2rem 0.35rem;
   font-size: 0.78rem;

@@ -29,7 +29,16 @@
   }
 }
 
+/* `display:flex; flex-direction:column` : la grille CSS étire déjà chaque
+   carte à la hauteur de la RANGÉE (le plus grand nombre de chambres d'un
+   étage voisin, cf. `.literie-floors` — comportement par défaut de
+   `align-items: stretch` en grid). Sans flex ici, ce surplus de hauteur
+   resterait un vide sous la liste des chambres pour un étage plus court
+   (13 ou 11 chambres contre 14 ailleurs) ; avec flex + `.literie-rooms` en
+   `flex: 1`, la liste occupe TOUTE la hauteur de la carte. */
 .literie-floor {
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   background: var(--card);
   border: 1px solid var(--border);
@@ -48,15 +57,25 @@
 }
 
 /* Pastilles empilées verticalement, pleine largeur de la colonne (mêmes
-   gabarits que `.rapro-room` : la page vit dans le même registre visuel). */
+   gabarits que `.rapro-room` : la page vit dans le même registre visuel).
+   `flex: 1` : occupe toute la hauteur restante de la carte (cf. commentaire
+   `.literie-floor` ci-dessus) ; chaque pastille est ensuite elle-même en
+   `flex: 1` (juste en dessous) pour se partager cet espace À PARTS ÉGALES —
+   un étage à 11 ou 13 chambres a donc des pastilles plus HAUTES qu'un étage
+   à 14, jamais de vide en bas de carte. */
 .literie-rooms {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 0.25rem;
   padding: 0 0.4rem 0.4rem;
 }
 .literie-room {
   position: relative;
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
   width: 100%;
   padding: 0.2rem 0.35rem;
   font-size: 0.78rem;

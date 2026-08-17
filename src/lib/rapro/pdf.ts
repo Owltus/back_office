@@ -173,11 +173,21 @@ function renderRaproDocument(
   y += 20
 
   // --- Tableau complet des chambres par étage (couleurs de statut) ---------
+  // Chaque colonne remplit TOUTE la hauteur de la grille (`gridH`, pilotée par
+  // l'étage le plus fourni) : la hauteur d'UNE case (`floorCellH`) dépend du
+  // nombre de chambres de SON étage, pas d'une valeur fixe — un étage à 13 ou
+  // 11 chambres (contre 14 ailleurs) a donc des cases plus HAUTES, jamais de
+  // vide blanc en bas de colonne. Même principe que `.rapro-room { flex: 1 }`
+  // côté web (styles/rapro.css) ; la hauteur TOTALE de la grille, elle, ne
+  // change pas (`gridH` reste celle du plus long étage).
   const colW = CONTENT_W / FLOORS.length
   const cellH = 4.6
+  const maxRooms = FLOORS.reduce((m, f) => Math.max(m, f.rooms.length), 0)
+  const gridH = maxRooms * cellH
   const gridTop = y
   FLOORS.forEach(({ floor, rooms }, i) => {
     const cx = LEFT + i * colW
+    const floorCellH = gridH / rooms.length
     pdf.setFont('helvetica', 'bold').setFontSize(7.5).setTextColor(90)
     pdf.text(`Étage ${floor}`, cx + colW / 2, gridTop, { align: 'center' })
     rooms.forEach((room, j) => {
@@ -193,8 +203,8 @@ function renderRaproDocument(
       const fill = CELL_FILL[state].fill
       const text = CELL_FILL[state].text
       const w = colW - 2
-      const h = cellH - 0.8
-      const cellY = gridTop + 3 + j * cellH
+      const h = floorCellH - 0.8
+      const cellY = gridTop + 3 + j * floorCellH
       pdf.setFillColor(fill[0], fill[1], fill[2])
       pdf.rect(cx + 1, cellY, w, h, 'F')
       pdf.setFont('helvetica', 'normal').setFontSize(7.5)
@@ -209,8 +219,7 @@ function renderRaproDocument(
       }
     })
   })
-  const maxRooms = FLOORS.reduce((m, f) => Math.max(m, f.rooms.length), 0)
-  y = gridTop + 3 + maxRooms * cellH + 6
+  y = gridTop + 3 + gridH + 6
 
   // --- Légende des statuts (même partition que les cases). « Non vendue »
   //     (grisé) est masquée ; on ajoute une case témoin « Bloquée la veille »
