@@ -364,7 +364,11 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
    * `staleTime: 0` : le temps réel tient la vue à jour TANT QUE la page est montée.
    * Au retour, les données du cache s'affichent aussitôt, le refetch corrige derrière.
    */
-  const { data: rows, error: rowsError } = useQuery({
+  const {
+    data: rows,
+    error: rowsError,
+    refetch: refetchReservations,
+  } = useQuery({
     queryKey: ['parking', 'reservations', range?.from, range?.to],
     queryFn: () => fetchReservations(range!.from, range!.to),
     enabled: !!range,
@@ -375,14 +379,26 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
     if (rowsError) console.error(rowsError)
   }, [rowsError])
 
+  // Posé à `true` juste avant un rechargement de RATTRAPAGE (reconnexion temps
+  // réel, retour de veille) : le prochain passage de l'effet ci-dessous doit
+  // alors REMPLACER l'état plutôt que fusionner, seul moyen de rattraper une
+  // suppression manquée pendant la coupure (une fusion ne supprime jamais).
+  const hardResyncRef = useRef(false)
+
   // FUSION par identifiant (jamais d'écrasement, jamais de suppression ici) : les
   // lignes déjà présentes — patchées par le temps réel, ou modifiées en vol (drag,
   // copie) — sont PRÉSERVÉES ; la tranche chargée met à jour / ajoute par `id`. Les
   // suppressions passent par le canal realtime (en direct) et par le rechargement
   // propre au montage (état vide → vérité de la fenêtre). C'est ce qui garantit que
   // borner/agrandir la fenêtre n'efface jamais une mise à jour temps réel.
+  // EXCEPTION : rattrapage forcé (hardResyncRef) → remplacement complet, cf. ci-dessus.
   useEffect(() => {
     if (!rows || !startDate) return
+    if (hardResyncRef.current) {
+      hardResyncRef.current = false
+      setReservations(rows.map((row) => toReservation(row, startDate)))
+      return
+    }
     setReservations((prev) => {
       const byId = new Map(prev.map((r) => [r.id, r]))
       for (const row of rows) byId.set(row.id, toReservation(row, startDate))
@@ -393,8 +409,25 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
   // Abonnement Realtime, une fois le lundi de réf. connu. Il patche l'état
   // LOCAL ligne à ligne, sans toucher au cache : dériver l'affichage du cache
   // effacerait les mises à jour optimistes encore en vol (drag, copie).
+  //
+  // Un poste laissé inactif longtemps (veille, onglet en arrière-plan) peut
+  // perdre le socket temps réel SANS qu'aucun événement de coupure ne soit
+  // émis (le système d'exploitation gèle la connexion, ne la ferme pas
+  // proprement) → le planning reste figé sur l'état d'avant la veille alors
+  // que d'autres postes ont continué à modifier des réservations. On rattrape
+  // par un rechargement complet (a) dès que le canal signale une reconnexion
+  // après une coupure détectée, ET (b) en filet de sécurité, dès que l'onglet
+  // redevient visible/actif ou que le réseau revient — sans attendre que le
+  // canal le signale lui-même.
   useEffect(() => {
     if (!startDate) return
+
+    const hardResync = () => {
+      hardResyncRef.current = true
+      void refetchReservations()
+    }
+
+    let dropped = false
 
     const channel = supabase
       .channel('parking-reservations')
@@ -417,11 +450,35 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
           }
         },
       )
-      .subscribe()
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          if (dropped) {
+            dropped = false
+            hardResync()
+          }
+        } else if (
+          status === 'CHANNEL_ERROR' ||
+          status === 'TIMED_OUT' ||
+          status === 'CLOSED'
+        ) {
+          dropped = true
+        }
+      })
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') hardResync()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('focus', hardResync)
+    window.addEventListener('online', hardResync)
+
     return () => {
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('focus', hardResync)
+      window.removeEventListener('online', hardResync)
       void supabase.removeChannel(channel)
     }
-  }, [startDate])
+  }, [startDate, refetchReservations])
 
   // Mesure de la largeur (→ nombre de jours) ET de la hauteur disponible sous la
   // timeline (→ étirement des rangées en compact). Recalculées au redimensionnement
