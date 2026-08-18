@@ -21,6 +21,12 @@ import {
  * calculé dans le métier (`analytics.ts`), vaut `null` (« — ») s'il n'est pas
  * calculable. Les CARTES de synthèse (PdjAnalytiqueCards) sont IDENTIQUES en annuel
  * et mensuel → une seule définition, partagée ci-dessous.
+ *
+ * Couleurs alignées sur la page PDJ du jour (BreakfastBoard), qui fait référence :
+ * Inclus vert (#34d399, « PDJ inclus »), Extra ambre (#fbbf24, « PDJ Extra »),
+ * CA bleu (#60a5fa, « CA PDJ »), Captage rose (#f472b6, « Taux de captage »).
+ * Servis et Non servis n'ont pas d'équivalent sur le board : indigo/cyan
+ * (`accents.ts`), choisis pour rester distincts des 4 couleurs ci-dessus.
  */
 
 /** Résumé PDJ (mêmes champs en annuel et mensuel) alimentant les 6 cartes. */
@@ -52,7 +58,7 @@ export function PdjAnalytiqueCards({
     <AnalytiqueCardsGrid cols={6}>
       <StatCard
         label="Inclus"
-        accent={ACCENT.slate}
+        accent="#34d399"
         hint="Petits-déjeuners réservés par les clients"
         sub={
           summary.avgInclus != null
@@ -74,7 +80,7 @@ export function PdjAnalytiqueCards({
       />
       <StatCard
         label="Extra"
-        accent={ACCENT.green}
+        accent="#fbbf24"
         hint="Petits-déjeuners servis à des clients sans réservation"
         sub={
           summary.avgExtra != null
@@ -85,7 +91,7 @@ export function PdjAnalytiqueCards({
       />
       <StatCard
         label="Non servis"
-        accent={ACCENT.amber}
+        accent={ACCENT.cyan}
         hint="Petits-déjeuners réservés dont le client ne s'est pas présenté"
         sub={
           summary.avgNonServis != null
@@ -98,7 +104,7 @@ export function PdjAnalytiqueCards({
       />
       <StatCard
         label="CA"
-        accent={ACCENT.cyan}
+        accent="#60a5fa"
         hint="Chiffre d'affaires petit-déjeuner (inclus + extras), HT"
         sub={
           summary.avgCa != null
@@ -109,7 +115,7 @@ export function PdjAnalytiqueCards({
       />
       <StatCard
         label="Captage"
-        accent={ACCENT.pink}
+        accent="#f472b6"
         hint="Petits-déjeuners (inclus + extras) rapportés aux clients"
         value={
           summary.avgConversion != null ? fmtPctInt(summary.avgConversion) : '—'
@@ -160,10 +166,17 @@ export function PdjStatsHead({
         <span className="hidden sm:inline">Occupation</span>
         <span className="sm:hidden">Occ.</span>
       </th>
-      <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
+      {/* Même bleu que la carte « Clients » du board. */}
+      <th
+        className="px-2 py-2 text-center text-xs font-medium text-muted-foreground"
+        style={{ color: '#38bdf8' }}
+      >
         Clients
       </th>
-      <th className="hidden px-2 py-2 text-center text-xs font-medium text-muted-foreground sm:table-cell">
+      <th
+        className="hidden px-2 py-2 text-center text-xs font-medium text-muted-foreground sm:table-cell"
+        style={{ color: '#34d399' }}
+      >
         Inclus
       </th>
       {/* En-têtes colorées comme leurs valeurs / cartes (Servis indigo, Extra vert,
@@ -177,25 +190,25 @@ export function PdjStatsHead({
       </th>
       <th
         className="hidden px-2 py-2 text-center text-xs font-medium text-muted-foreground sm:table-cell"
-        style={{ color: ACCENT.green }}
+        style={{ color: '#fbbf24' }}
       >
         Extra
       </th>
       <th
         className="hidden whitespace-nowrap px-2 py-2 text-center text-xs font-medium text-muted-foreground sm:table-cell"
-        style={{ color: ACCENT.amber }}
+        style={{ color: ACCENT.cyan }}
       >
         Non servis
       </th>
       <th
         className="hidden whitespace-nowrap px-2 py-2 text-center text-xs font-medium text-muted-foreground sm:table-cell"
-        style={{ color: ACCENT.cyan }}
+        style={{ color: '#60a5fa' }}
       >
         CA
       </th>
       <th
         className="px-3 py-2 text-center text-xs font-medium text-muted-foreground"
-        style={{ color: ACCENT.pink }}
+        style={{ color: '#f472b6' }}
       >
         <span className="hidden sm:inline">Captage</span>
         <span className="sm:hidden">Capt.</span>
@@ -258,12 +271,15 @@ export function PdjStatCells({
       <td className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums">
         {fmtPctInt(stats.occupancy)}
       </td>
-      <td className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums">
+      <td
+        className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums"
+        style={{ color: '#38bdf8' }}
+      >
         {fmtInt(stats.guests)}
       </td>
       <td
         className="hidden whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums sm:table-cell"
-        style={{ color: ACCENT.slate }}
+        style={{ color: '#34d399' }}
       >
         {fmtInt(stats.included)}
       </td>
@@ -278,29 +294,30 @@ export function PdjStatCells({
       </td>
       <td
         className="hidden whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums text-muted-foreground/50 sm:table-cell"
-        style={stats.extra != null ? { color: ACCENT.green } : undefined}
+        style={stats.extra != null ? { color: '#fbbf24' } : undefined}
       >
         {stats.extra != null ? fmtInt(stats.extra) : '—'}
       </td>
       <td
         className="hidden whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums text-muted-foreground/50 sm:table-cell"
-        style={stats.noShow != null ? { color: ACCENT.amber } : undefined}
+        style={stats.noShow != null ? { color: ACCENT.cyan } : undefined}
       >
         {stats.noShow != null ? fmtInt(stats.noShow) : '—'}
       </td>
-      {/* CA PDJ = total HT (inclus + extras), croisement Addon × In-House. En cyan
-          (--chart-2). « — » sans Addon ou total non chiffrable. */}
+      {/* CA PDJ = total HT (inclus + extras), croisement Addon × In-House. Même
+          bleu que la carte « CA PDJ » du board. « — » sans Addon ou total non
+          chiffrable. */}
       <td
         className="hidden whitespace-nowrap px-2 py-2 text-center text-xs font-medium tabular-nums text-muted-foreground/50 sm:table-cell"
-        style={stats.caPdj != null ? { color: ACCENT.cyan } : undefined}
+        style={stats.caPdj != null ? { color: '#60a5fa' } : undefined}
       >
         {stats.caPdj != null ? fmtEur(stats.caPdj, 0) : '—'}
       </td>
-      {/* Captage : calculé en amont (métier), base CLIENTS. En rose (--chart-4),
-          même code couleur que sa carte de synthèse. */}
+      {/* Captage : calculé en amont (métier), base CLIENTS. Même rose que la carte
+          « Taux de captage » du board. */}
       <td
         className="whitespace-nowrap px-3 py-2 text-center text-xs font-medium tabular-nums text-muted-foreground/50"
-        style={stats.conversion != null ? { color: ACCENT.pink } : undefined}
+        style={stats.conversion != null ? { color: '#f472b6' } : undefined}
       >
         {stats.conversion != null ? fmtPctInt(stats.conversion) : '—'}
       </td>

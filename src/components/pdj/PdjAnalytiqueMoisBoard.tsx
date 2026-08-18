@@ -159,15 +159,15 @@ export function PdjAnalytiqueMoisBoard({
     if (chartData.some((d) => d.servisInclus != null)) {
       segs.push(
         { key: 'servisInclus', name: 'Réservés servis', color: ACCENT.indigo },
-        { key: 'extra', name: 'Extra', color: ACCENT.green },
-        { key: 'nonVenu', name: 'Non servis', color: ACCENT.amber },
+        { key: 'extra', name: 'Extra', color: '#fbbf24' },
+        { key: 'nonVenu', name: 'Non servis', color: ACCENT.cyan },
       )
     }
     if (chartData.some((d) => d.inclus != null)) {
       segs.push({
         key: 'inclus',
         name: 'Inclus (non saisi)',
-        color: ACCENT.slate,
+        color: '#34d399',
       })
     }
     return segs
