@@ -8,6 +8,8 @@ import {
   Coffee,
   FileUp,
   LineChart,
+  Minus,
+  Plus,
   Receipt,
   Star,
   Trash2,
@@ -28,6 +30,14 @@ import { useStepNavKeys } from '#/components/shared/useStepNavKeys.ts'
 import { useKeySequence } from '#/components/shared/useKeySequence.ts'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '#/components/ui/dialog.tsx'
 import { DatePickerButton } from '#/components/form/fields.tsx'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { capitalize, cn } from '#/lib/utils.ts'
@@ -48,10 +58,12 @@ import {
   fetchAllAddonProduction,
   fetchDailyAgg,
   fetchDay,
+  fetchExternalsCount,
   fetchServiceDates,
   importAddonProduction,
   importRows,
   purgeOldGuestNames,
+  setExternalsCount,
   setManualServe,
   setServed,
 } from '#/lib/pdj/service.ts'
@@ -300,15 +312,49 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
   // la feuille nominative (cf. pdj.css, @media print force le mode normal).
   const [financeMode, setFinanceMode] = useState(false)
 
-  // Extras du jour = couverts servis au-delà des inclus (cf. amounts.ts). Source
-  // UNIQUE, partagée par la card « PDJ Extra » (compteur) et le calcul des montants.
-  const extrasCount = useMemo(
+  // Extras du jour = couverts servis en chambre au-delà des inclus (cf. amounts.ts).
+  const roomExtrasCount = useMemo(
     () =>
       (dayRows ?? []).reduce(
         (s, r) => s + Math.max(0, r.breakfasts_served - r.breakfasts_included),
         0,
       ),
     [dayRows],
+  )
+
+  // Externes du jour (bouton « Externe », dialogue +/-) : clients venus manger
+  // sans être logés à l'hôtel. Requête indépendante des lignes chambre — le
+  // compteur existe même sur un jour sans In-House. Défaut 0 (aucune ligne).
+  const { data: externalsCount = 0 } = useQuery({
+    queryKey: ['pdj', 'externals', selectedDate],
+    queryFn: () => fetchExternalsCount(selectedDate),
+    enabled: !!selectedDate,
+  })
+  const [externalsOpen, setExternalsOpen] = useState(false)
+
+  // Extras TOTAUX du jour = chambre + externes. Source UNIQUE, partagée par la
+  // card « PDJ Extra » (compteur) et le calcul des montants (computePdjCA).
+  const extrasCount = roomExtrasCount + externalsCount
+
+  // Saisie du nombre d'externes : maj optimiste du cache puis persistance : même
+  // schéma que `handleServe` (rollback + message si le jour est hors fenêtre).
+  const handleExternalsChange = useCallback(
+    (n: number) => {
+      if (!dayEditable || !selectedDate) return
+      const next = Math.max(0, n)
+      queryClient.setQueryData(['pdj', 'externals', selectedDate], next)
+      setExternalsCount(selectedDate, next).catch((err) => {
+        console.error('[pdj] externes : enregistrement échoué', err)
+        void queryClient.invalidateQueries({
+          queryKey: ['pdj', 'externals', selectedDate],
+        })
+        flashAuto(
+          'Enregistrement refusé : jour hors fenêtre ou droit insuffisant.',
+          'warn',
+        )
+      })
+    },
+    [dayEditable, selectedDate, queryClient, flashAuto],
   )
 
   // Tarifs unitaires par code, DÉTECTÉS dans l'Addon (dynamique, rien en dur ;
@@ -319,10 +365,14 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
   })
   const tarifs = useMemo(() => detectTarifs(allAddon ?? []), [allAddon])
 
-  // Montants HT du jour : CA = (inclus + extra) PAR CHAMBRE × tarif détecté.
-  // SOURCE UNIQUE du CA (fiche, cartes, PDF, analytique) → le même chiffre partout.
-  // Le batch groupe non ventilé (facturé sans chambre) n'entre PAS dans le CA.
-  const ca = useMemo(() => computePdjCA(dayRows ?? [], tarifs), [dayRows, tarifs])
+  // Montants HT du jour : CA = (inclus + extra) PAR CHAMBRE × tarif détecté, PLUS
+  // les externes (mêmes extras, sans chambre). SOURCE UNIQUE du CA (fiche, cartes,
+  // PDF, analytique) → le même chiffre partout. Le batch groupe non ventilé
+  // (facturé sans chambre) n'entre PAS dans le CA.
+  const ca = useMemo(
+    () => computePdjCA(dayRows ?? [], tarifs, externalsCount),
+    [dayRows, tarifs, externalsCount],
+  )
 
   // Repères « moyenne par jour » (total HT, captage, occupation) sur TOUT
   // l'historique. Lus depuis la VUE d'agrégation `pdj_daily_agg` (quelques lignes
@@ -903,6 +953,23 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                 </Tip>
               </div>
             )}
+            {/* Bouton « Externe » — exceptionnellement du texte, pas d'icône : ouvre
+                le dialogue +/- du nombre de clients venus manger sans être logés à
+                l'hôtel (s'additionne au PDJ Extra du jour, cf. card ci-dessous).
+                Réservé aux rôles qui peuvent saisir la conso (mêmes droits que les
+                cases « servi »). */}
+            {canEdit && (
+              <Tip label="Ajouter des petits-déjeuners servis à des clients non logés à l'hôtel">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setExternalsOpen(true)}
+                  aria-label="Petits-déjeuners externes"
+                >
+                  Externe
+                </Button>
+              </Tip>
+            )}
             {/* Groupe « actions de page » : analytique + import + impression. */}
             <ButtonGroup>
               <Tip label="Vue analytique">
@@ -1013,6 +1080,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
               className={cn(
                 'pdj-stats-grid',
                 extrasCount > 0 && 'pdj-stats-grid--with-extra',
+                externalsCount > 0 && 'pdj-stats-grid--with-externals',
               )}
             >
               <StatTile
@@ -1045,11 +1113,18 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                 sub={ca.inclusNb > 0 ? subMuted(fmtEur(ca.includedHt, 2)) : undefined}
               />
               <StatTile
-                value={extrasCount}
-                label="PDJ Extra"
+                // Détail écran : « extra chambre + externe » tant qu'il y a au
+                // moins un externe (sinon le simple total, comme avant — les deux
+                // valent le même nombre quand externalsCount = 0).
+                value={
+                  externalsCount > 0
+                    ? `${roomExtrasCount} + ${externalsCount}`
+                    : extrasCount
+                }
+                label={externalsCount > 0 ? 'PDJ Extra + Externe' : 'PDJ Extra'}
                 accent="#fbbf24"
                 printHidden
-                hint="Petits-déjeuners servis au-delà de ce qui était inclus, valorisés au tarif PDJ standard."
+                hint="Petits-déjeuners servis au-delà de ce qui était inclus, plus les externes (clients non logés, bouton « Externe ») — tous valorisés au tarif PDJ standard."
                 sub={extrasCount > 0 ? subMuted(fmtEur(ca.extrasHt, 2)) : undefined}
               />
               {/* Miroir PDF de « PDJ Extra » — conservée dans le footer du PDF
@@ -1063,6 +1138,17 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                   value={extrasCount}
                   label="PDJ Extra"
                   accent="#fbbf24"
+                />
+              )}
+              {/* Tuile PDF-seule (pas d'équivalent écran) : détail des externes
+                  compris dans « PDJ Extra » ci-dessus, uniquement s'il y en a au
+                  moins un (sinon rien à préciser — pas de tuile à 0). */}
+              {externalsCount > 0 && (
+                <StatTile
+                  className="stat-tile--screen-hidden"
+                  value={externalsCount}
+                  label="Externes"
+                  accent="#c084fc"
                 />
               )}
               {/* Écran : « CA PDJ » (total HT du jour + moyenne/jour sur les
@@ -1207,7 +1293,78 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
         destructive
         onConfirm={handleDeleteDay}
       />
+
+      <ExternalsDialog
+        open={externalsOpen}
+        onOpenChange={setExternalsOpen}
+        count={externalsCount}
+        canEdit={dayEditable}
+        onChange={handleExternalsChange}
+      />
     </div>
+  )
+}
+
+/*
+ * Dialogue « Externe » : nombre de clients venus prendre le petit-déjeuner sans
+ * être logés à l'hôtel, pour le jour affiché. Un simple stepper +/- (pas de
+ * bouton « enregistrer » : chaque clic persiste directement, comme le reste de
+ * la saisie PDJ). Désactivé hors fenêtre d'écriture (`canEdit` = `dayEditable`).
+ */
+function ExternalsDialog({
+  open,
+  onOpenChange,
+  count,
+  canEdit,
+  onChange,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  count: number
+  canEdit: boolean
+  onChange: (next: number) => void
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Petits-déjeuners externes</DialogTitle>
+          <DialogDescription>
+            Clients non logés à l'hôtel, comptés en PDJ Extra.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex items-center justify-center gap-5 py-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            disabled={!canEdit || count <= 0}
+            onClick={() => onChange(count - 1)}
+            aria-label="Retirer un externe"
+          >
+            <Minus />
+          </Button>
+          <span className="w-16 text-center text-3xl font-bold tabular-nums">
+            {count}
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            disabled={!canEdit}
+            onClick={() => onChange(count + 1)}
+            aria-label="Ajouter un externe"
+          >
+            <Plus />
+          </Button>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Fermer
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

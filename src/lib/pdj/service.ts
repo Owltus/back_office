@@ -384,3 +384,48 @@ export async function fetchAllAddonProduction(): Promise<PdjAddonRow[]> {
   }
   return out
 }
+
+/* --------------------------------------------------------------------------
+ * Externes (table `pdj_externals`) — petits-déjeuners servis à des clients non
+ * logés à l'hôtel. Un compteur PAR JOUR (bouton « Externe » du board), sans
+ * chambre ni PII. S'additionne au PDJ Extra du jour (cf. breakdown.ts).
+ * ------------------------------------------------------------------------ */
+
+export const PDJ_EXTERNALS_TABLE = 'pdj_externals'
+
+/** Nombre d'externes d'UN jour de service (0 si aucune ligne). */
+export async function fetchExternalsCount(serviceDate: string): Promise<number> {
+  const { data, error } = await supabase
+    .from(PDJ_EXTERNALS_TABLE)
+    .select('count')
+    .eq('service_date', serviceDate)
+    .maybeSingle()
+  if (error) throw error
+  return (data as { count: number } | null)?.count ?? 0
+}
+
+/** Pose le nombre d'externes d'UN jour de service (upsert sur `service_date`). */
+export async function setExternalsCount(
+  serviceDate: string,
+  count: number,
+): Promise<void> {
+  const { error } = await supabase
+    .from(PDJ_EXTERNALS_TABLE)
+    .upsert({ service_date: serviceDate, count }, { onConflict: 'service_date' })
+  if (error) throw error
+}
+
+/** Externes sur une plage de jours (bornes incluses), pour l'analytique
+ * (annuelle et mensuelle) : quelques dizaines de lignes au plus. */
+export async function fetchExternalsRange(
+  from: string,
+  to: string,
+): Promise<{ service_date: string; count: number }[]> {
+  const { data, error } = await supabase
+    .from(PDJ_EXTERNALS_TABLE)
+    .select('service_date, count')
+    .gte('service_date', from)
+    .lte('service_date', to)
+  if (error) throw error
+  return (data ?? []) as { service_date: string; count: number }[]
+}

@@ -140,6 +140,20 @@ describe('computeAggDailyTotals', () => {
     ]
     expect(computeAggDailyTotals(rows, TARIFS).size).toBe(0)
   })
+
+  it('les externes s’ajoutent au CA du jour, même un jour sans extra chambre', () => {
+    const rows: PdjAggRow[] = [
+      agg({ service_date: '2026-08-10', included: 10 }), // 172,70
+      agg({ service_date: '2026-08-14', code: null, included: 0, extra: 0 }),
+    ]
+    const externals = new Map([
+      ['2026-08-10', 2], // + 2 × 17,27 = 34,54
+      ['2026-08-14', 1], // 0 → 17,27 (jour sans CA chambre, mais externe présent)
+    ])
+    const totals = computeAggDailyTotals(rows, TARIFS, externals)
+    expect(totals.get('2026-08-10')).toBeCloseTo(207.24, 2)
+    expect(totals.get('2026-08-14')).toBeCloseTo(17.27, 2)
+  })
 })
 
 describe('computeAggBenchmarks', () => {

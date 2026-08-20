@@ -127,13 +127,16 @@ interface CaRow {
 export function computePdjCA(
   rows: CaRow[],
   tarifs: Map<string, number>,
+  /** Externes (clients non logés venus manger) : comptés en extra, au tarif PDJ
+   *  standard, au même titre qu'un couvert servi en chambre au-delà de l'inclus. */
+  externalsCount = 0,
 ): PdjCA {
   const unitHt = (code: string): number => {
     const p = tarifs.get(code)
     return p != null ? round2(fromTTC(p)) : 0
   }
   let inclusNb = 0
-  let extraNb = 0
+  let extraNb = Math.max(0, externalsCount)
   let includedHt = 0
   for (const r of rows) {
     let code = breakfastCode(r.addons)

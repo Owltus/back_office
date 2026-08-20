@@ -14,7 +14,11 @@ import {
   PdjStatCells,
   PdjStatsHead,
 } from '#/components/pdj/PdjAnalytiqueParts.tsx'
-import { fetchAllAddonProduction, fetchDailyAgg } from '#/lib/pdj/service.ts'
+import {
+  fetchAllAddonProduction,
+  fetchDailyAgg,
+  fetchExternalsRange,
+} from '#/lib/pdj/service.ts'
 import { aggregatePdjDaily } from '#/lib/pdj/analytics.ts'
 import { computeAggDailyTotals } from '#/lib/pdj/amounts.ts'
 import { detectTarifs } from '#/lib/pdj/tarif.ts'
@@ -52,9 +56,21 @@ export function PdjAnalytiqueMoisBoard({
     queryKey: ['pdj', 'analytics', year],
     queryFn: () => fetchDailyAgg(`${year}-01-01`, `${year}-12-31`),
   })
+  // Externes de l'année (MÊME clé que la vue annuelle → cache partagé). S'additionnent
+  // au PDJ Extra du jour, comptes ET CA.
+  const { data: externalsRows = [] } = useQuery({
+    queryKey: ['pdj', 'externals', year],
+    queryFn: () => fetchExternalsRange(`${year}-01-01`, `${year}-12-31`),
+  })
+  const externalsByDate = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const r of externalsRows) map.set(r.service_date, r.count)
+    return map
+  }, [externalsRows])
+
   const stats = useMemo(
-    () => aggregatePdjDaily(rows, year, month),
-    [rows, year, month],
+    () => aggregatePdjDaily(rows, year, month, externalsByDate),
+    [rows, year, month, externalsByDate],
   )
 
   // Addon Production (tous jours) → tarifs détectés → CA PDJ par jour.
@@ -63,8 +79,8 @@ export function PdjAnalytiqueMoisBoard({
     queryFn: fetchAllAddonProduction,
   })
   const dailyCa = useMemo(
-    () => computeAggDailyTotals(rows, detectTarifs(addonRows)),
-    [addonRows, rows],
+    () => computeAggDailyTotals(rows, detectTarifs(addonRows), externalsByDate),
+    [addonRows, rows, externalsByDate],
   )
 
   // Index par numéro de jour pour peupler un tableau plein mois (1..lastDay),

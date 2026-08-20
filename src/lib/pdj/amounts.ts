@@ -169,6 +169,9 @@ export interface OccupancyBenchmark {
 export function computeAggDailyTotals(
   rows: PdjAggRow[],
   tarifs: Map<string, number>,
+  /** Externes PAR JOUR (service_date → nb), s'additionnent aux extras du jour.
+   *  Absent par défaut : n'affecte aucun appelant qui ne le passe pas. */
+  externalsByDate: Map<string, number> = new Map(),
 ): Map<string, number> {
   const unitHt = (code: string): number => {
     const p = tarifs.get(code)
@@ -181,6 +184,12 @@ export function computeAggDailyTotals(
     if (r.code && r.included > 0) d.includedHt += r.included * unitHt(r.code)
     d.extra += r.extra
     byDay.set(r.service_date, d)
+  }
+  for (const [date, ext] of externalsByDate) {
+    if (ext <= 0) continue
+    const d = byDay.get(date) ?? { includedHt: 0, extra: 0 }
+    d.extra += ext
+    byDay.set(date, d)
   }
 
   const totals = new Map<string, number>()

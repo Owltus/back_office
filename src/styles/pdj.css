@@ -451,6 +451,12 @@
   .pdj-stats-grid.pdj-stats-grid--with-extra {
     grid-template-columns: repeat(6, 1fr);
   }
+  /* 7e colonne (tuile « Externes ») : seulement si au moins un externe est
+     saisi — elle vient toujours avec « PDJ Extra » (les externes comptent
+     dedans), d'où le double sélecteur. */
+  .pdj-stats-grid.pdj-stats-grid--with-extra.pdj-stats-grid--with-externals {
+    grid-template-columns: repeat(7, 1fr);
+  }
   /* Les KPI sont des StatTile : on APLATIT la tuile pour le footer du PDF —
      liseré masqué, fond clair, corps compact, valeur AU-DESSUS du libellé
      (column-reverse). On recible les classes stables du composant. */

@@ -140,4 +140,11 @@ describe('computePdjCA', () => {
     expect(ca.extrasHt).toBeCloseTo(51.81, 2) // 3 × 17,27
     expect(ca.totalHt).toBeCloseTo(121.8, 2)
   })
+
+  it('les externes s’ajoutent aux extras, au tarif PDJ standard', () => {
+    const ca = computePdjCA(ROWS, TARIFS, 2)
+    expect(ca.extraNb).toBe(5) // 3 (chambres) + 2 (externes)
+    expect(ca.extrasHt).toBeCloseTo(86.35, 2) // 5 × 17,27
+    expect(ca.totalHt).toBeCloseTo(156.34, 2)
+  })
 })

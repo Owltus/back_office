@@ -75,6 +75,9 @@ function emptyMonth(month: number): PdjMonthStats {
 export function aggregatePdjMonthly(
   rows: PdjAggRow[],
   year: number,
+  /** Externes PAR JOUR (service_date → nb) : s'additionnent aux extras du jour,
+   *  y compris pour un jour sans conso saisie côté chambres (cf. plus bas). */
+  externalsByDate: Map<string, number> = new Map(),
 ): PdjMonthStats[] {
   const months = Array.from({ length: 12 }, (_, i) => emptyMonth(i + 1))
   // Somme des taux d'occupation quotidiens par mois (moyennée en fin de calcul).
@@ -112,6 +115,15 @@ export function aggregatePdjMonthly(
     pd.noShow += r.no_show
   }
 
+  // Externes : s'additionnent à l'extra du jour (uniquement les jours déjà
+  // présents via l'In-House — un jour à 0 chambre occupée n'arrive pas en
+  // pratique, cf. analytics.ts en tête de fichier).
+  for (const [date, ext] of externalsByDate) {
+    if (ext <= 0 || !date.startsWith(prefix)) continue
+    const pd = perDay.get(date)
+    if (pd) pd.extra += ext
+  }
+
   // Chambres occupées + jours + occupation quotidienne, à partir des jours vus.
   for (const pd of perDay.values()) {
     const s = months[pd.month]
@@ -122,8 +134,9 @@ export function aggregatePdjMonthly(
 
   // Extra / non-venus : n'agréger QUE les jours réellement renseignés (au moins un
   // servi). Un jour sans conso saisie (servi = 0 partout) est écarté — sinon tout son
-  // inclus basculerait en faux « non venus ». Un mois sans AUCUN jour renseigné reste
-  // à null (« — » à l'affichage), pas un trompeur « 0 ».
+  // inclus basculerait en faux « non venus » (y compris un jour à externes seuls,
+  // sans aucune case cochée en chambre : le non-venu resterait non fiable). Un mois
+  // sans AUCUN jour renseigné reste à null (« — » à l'affichage), pas un trompeur « 0 ».
   for (const pd of perDay.values()) {
     if (pd.served <= 0) continue
     const s = months[pd.month]
@@ -185,6 +198,8 @@ export function aggregatePdjDaily(
   rows: PdjAggRow[],
   year: number,
   month: number,
+  /** Externes PAR JOUR (service_date → nb) : s'additionnent aux extras du jour. */
+  externalsByDate: Map<string, number> = new Map(),
 ): PdjDayStats[] {
   const prefix = `${year}-${String(month).padStart(2, '0')}-`
   const byDate = new Map<
@@ -222,10 +237,21 @@ export function aggregatePdjDaily(
     s.rooms += r.rooms
   }
 
+  // Externes : s'additionnent à l'extra du jour (jours déjà présents via l'In-House).
+  for (const [date, ext] of externalsByDate) {
+    if (ext <= 0 || !date.startsWith(prefix)) continue
+    const s = byDate.get(date)
+    if (s) s.extra += ext
+  }
+
   return [...byDate.entries()]
     .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
     .map(([date, s]) => {
       const rooms = s.rooms
+      // Extra / non-venus : NON calculables si la conso du jour n'a pas été saisie
+      // (aucun servi) NI d'externe recensé → null (« — »), pas un faux 0 qui
+      // compterait tout l'inclus.
+      const recorded = s.served > 0 || s.extra > 0
       return {
         date,
         day: Number(date.slice(8, 10)),
@@ -233,9 +259,7 @@ export function aggregatePdjDaily(
         guests: s.guests,
         included: s.included,
         served: s.served,
-        // Extra / non-venus : NON calculables si la conso du jour n'a pas été saisie
-        // (aucun servi) → null (« — »), pas un faux 0 qui compterait tout l'inclus.
-        extra: s.served > 0 ? s.extra : null,
+        extra: recorded ? s.extra : null,
         noShow: s.served > 0 ? s.noShow : null,
         potential: Math.max(0, s.guests - s.included),
         occupancy: (rooms / TOTAL_ROOMS) * 100,

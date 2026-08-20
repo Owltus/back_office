@@ -83,6 +83,43 @@ describe('aggregatePdjDaily', () => {
     expect(d.conversion).toBeCloseTo((2 / 2) * 100)
   })
 
+  it('externes : s’ajoutent à l’extra d’un jour déjà saisi (servi > 0)', () => {
+    const rows: PdjAggRow[] = [
+      row({
+        service_date: '2026-08-10',
+        rooms: 2,
+        guests: 4,
+        included: 3,
+        served: 3,
+        extra: 1,
+        no_show: 1,
+      }),
+    ]
+    const [d] = aggregatePdjDaily(
+      rows,
+      2026,
+      8,
+      new Map([['2026-08-10', 2]]),
+    )
+    expect(d.extra).toBe(3) // 1 (chambre) + 2 (externes)
+    expect(d.noShow).toBe(1) // inchangé
+    expect(d.conversion).toBeCloseTo(((3 + 3) / 4) * 100)
+  })
+
+  it('externes seuls (jour non saisi côté chambre) : extra connu, noShow reste null', () => {
+    const rows: PdjAggRow[] = [
+      row({ service_date: '2026-08-11', rooms: 1, guests: 2, included: 2, served: 0, extra: 0, no_show: 2 }),
+    ]
+    const [d] = aggregatePdjDaily(
+      rows,
+      2026,
+      8,
+      new Map([['2026-08-11', 3]]),
+    )
+    expect(d.extra).toBe(3)
+    expect(d.noShow).toBeNull() // pas de conso chambre saisie : non fiable
+  })
+
   it('ignore les lignes hors du mois demandé', () => {
     const rows: PdjAggRow[] = [
       row({ service_date: '2026-08-10', rooms: 1, guests: 1 }),
@@ -125,6 +162,33 @@ describe('aggregatePdjMonthly', () => {
       row({ service_date: '2026-09-01', rooms: 1, guests: 2, included: 2, served: 0, extra: 0, no_show: 2 }),
     ]
     const sep = aggregatePdjMonthly(rows, 2026)[8]
+    expect(sep.recordedDays).toBe(0)
+    expect(sep.extra).toBeNull()
+    expect(sep.noShow).toBeNull()
+  })
+
+  it('externes : s’ajoutent à l’extra d’un jour déjà saisi (servi > 0)', () => {
+    const rows: PdjAggRow[] = [
+      row({ service_date: '2026-08-10', rooms: 2, guests: 4, included: 3, served: 3, extra: 1, no_show: 1 }),
+    ]
+    const aug = aggregatePdjMonthly(
+      rows,
+      2026,
+      new Map([['2026-08-10', 2]]),
+    )[7]
+    expect(aug.extra).toBe(3) // 1 (chambre) + 2 (externes)
+    expect(aug.conversion).toBeCloseTo(((3 + 3) / 4) * 100)
+  })
+
+  it('externes seuls (jour non saisi côté chambre) : ignorés au niveau mensuel, pas de faux non-venus', () => {
+    const rows: PdjAggRow[] = [
+      row({ service_date: '2026-09-01', rooms: 1, guests: 2, included: 2, served: 0, extra: 0, no_show: 2 }),
+    ]
+    const sep = aggregatePdjMonthly(
+      rows,
+      2026,
+      new Map([['2026-09-01', 4]]),
+    )[8]
     expect(sep.recordedDays).toBe(0)
     expect(sep.extra).toBeNull()
     expect(sep.noShow).toBeNull()
