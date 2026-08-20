@@ -1717,6 +1717,21 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
               </DialogDescription>
             )}
           </DialogHeader>
+          {/* Raccourci pour le motif le plus courant : remplace le brouillon
+              d'un clic, au lieu de le taper à chaque fois. Uniquement en
+              justification de « Non payé » (pas en commentaire libre). */}
+          {pendingStatus && (
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                onClick={() => setCommentDraft('À régler au checkout')}
+              >
+                À régler au checkout
+              </Button>
+            </div>
+          )}
           <Textarea
             autoFocus
             rows={4}
