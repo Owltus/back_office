@@ -195,7 +195,16 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
     queryKey: ['rapro', 'occupancy', selectedDate],
     queryFn: () => fetchOccupancy(selectedDate),
   })
-  const occupied = new Set((pdjRows ?? []).map((r) => r.room))
+  // Une ligne `manual_kind` non nul (day-use, PDJ extra saisi à la main…) n'est PAS
+  // une réservation In-House : elle ne doit jamais rendre une chambre « vendue »
+  // ici (sinon un simple PDJ ajouté à la main sur une chambre non vendue la fait
+  // passer facturable au rapprochement). Exclue au même titre qu'une offerte,
+  // mais AVANT toute dérivation (occupied EST la source unique du board).
+  const occupied = new Set(
+    (pdjRows ?? [])
+      .filter((r) => r.manual_kind == null)
+      .map((r) => r.room),
+  )
   const hasOccupancy = occupied.size > 0
   // Requête PDJ résolue mais vide → occupation indisponible ce jour (≠ chargement).
   const noOccupancy = pdjRows !== undefined && occupied.size === 0
@@ -321,12 +330,9 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   const freeRooms = (pdjRows ?? []).filter(
     (r) => r.adr != null && Number(r.adr) === 0,
   ).length
-  // Day-use : chambres saisies À LA MAIN dans la page PDJ (manual_kind) — utilisées
-  // la journée uniquement, présentes au rooming mais HORS nuitée comptable. On les
-  // retire du comparatif comptable (comme les offertes) pour ne pas lever une fausse
-  // alerte d'écart. Aucun autre effet (ni affichage, ni Vendues, ni Balance).
-  const dayUseCount = (pdjRows ?? []).filter((r) => r.manual_kind != null).length
-  const inHouseExclComp = occupied.size - freeRooms - dayUseCount
+  // Day-use (manual_kind) : déjà HORS `occupied` (voir plus haut) — donc déjà hors
+  // de ce comparatif, pas de soustraction séparée à faire ici.
+  const inHouseExclComp = occupied.size - freeRooms
   const occGap =
     isValidated &&
     hasOccupancy &&
