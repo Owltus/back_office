@@ -11,6 +11,7 @@ import {
 } from '#/components/ui/dialog.tsx'
 import { Input } from '#/components/ui/input.tsx'
 import { Label } from '#/components/ui/label.tsx'
+import { titleCaseName } from '#/lib/utils.ts'
 
 /**
  * Une anomalie présentée au moment de clôturer : un titre court (avec le chiffre
@@ -108,7 +109,10 @@ export function CloseSheetDialog({
             <Input
               id="close-hotelier"
               value={hotelierName}
-              onChange={(e) => onHotelierNameChange(e.target.value)}
+              // Casse forcée à chaque frappe (input contrôlé) : « MARTIN » →
+              // « Martin », « JEAN-MICHEL » → « Jean-Michel » — impossible d'y
+              // laisser une majuscule intempestive, Shift/Verr. Maj. compris.
+              onChange={(e) => onHotelierNameChange(titleCaseName(e.target.value))}
             />
           </div>
         </div>
