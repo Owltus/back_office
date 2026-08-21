@@ -94,7 +94,25 @@ function statLabel(full: string, short: string) {
   )
 }
 
+// Sous 1024px, le jour et le statut vivent dans la Navbar globale (voir
+// useNavbarSubtitle/useNavbarBadge plus bas) : `title`/`badge` passent alors à
+// `undefined` plutôt qu'à un contenu masqué en CSS — sinon la ligne titre de
+// PageHeader continue d'exister (vide) et réserve quand même sa hauteur de
+// ligne, ce qui creusait un vide entre la Navbar et les cartes de synthèse.
+function useIsNavbarMobile(): boolean {
+  const [mobile, setMobile] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 1023.98px)')
+    const update = () => setMobile(mq.matches)
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [])
+  return mobile
+}
+
 export function RaproBoard({ initialDate }: { initialDate?: string }) {
+  const isNavbarMobile = useIsNavbarMobile()
   const { user, pageLevel } = useAuth()
   // Niveau effectif : sert au verrou PAR JOUR. Écriture n'agit que dans la fenêtre
   // de grâce (J-0..J-2) ; la gestion peut agir sur n'importe quel jour (cf.
@@ -718,18 +736,16 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
     // plutôt que d'écraser la zone commentaire jusqu'à la faire disparaître.
     <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 max-sm:pb-20">
       <PageHeader
-        // Sous 1024px, le jour affiché vit dans la Navbar globale (sous-titre
-        // sous « Rapprochement », posé par useNavbarSubtitle ci-dessous) : le
-        // titre de page s'efface pour ne pas le répéter deux fois. Au-delà,
-        // la Navbar revient aux onglets et le titre reprend sa place normale.
-        title={<span className="hidden lg:inline">{title}</span>}
+        // Sous 1024px, le jour et le statut vivent dans la Navbar globale
+        // (sous-titre + badge à côté du hamburger, posés par useNavbarSubtitle/
+        // useNavbarBadge ci-dessous) : `undefined` plutôt qu'un contenu masqué
+        // en CSS, pour que la ligne titre de PageHeader ne réserve plus du
+        // tout sa hauteur (le vide entre la Navbar et les cartes de synthèse).
+        // Au-delà de 1024px, la Navbar revient aux onglets et titre/badge
+        // reprennent leur place normale ici.
+        title={isNavbarMobile ? undefined : title}
         badgeAlign="end"
-        // Sous 1024px, ce même badge vit dans la Navbar globale, à côté du
-        // hamburger (posé par useNavbarBadge ci-dessous) : cette copie ne
-        // s'affiche qu'au-delà, pour ne jamais le montrer deux fois.
-        badge={
-          statusBadge && <span className="hidden lg:inline-flex">{statusBadge}</span>
-        }
+        badge={isNavbarMobile ? undefined : statusBadge}
         actions={
           // Sous 640px, ce groupe entier laisse la place à la barre d'outils
           // basse fixe (cf. fin du composant) : une vraie barre d'app mobile

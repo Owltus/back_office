@@ -12,11 +12,14 @@ import { cn } from '#/lib/utils.ts'
  * la gauche, via `leading`.
  *
  * - `leading` : bloc optionnel avant le titre (navigation du parking).
- * - `title` : titre principal (h1). Omis, la colonne sert d'espaceur — c'est ce
- *   qui pousse `actions` à droite quand la page n'a pas de titre. Tronqué
- *   (`truncate`) plutôt que renvoyé à la ligne : un h1 qui enjambe deux lignes
- *   fait dériver la pastille d'état vers une ligne qui ne lui correspond pas
- *   (le bug repéré en mobile sur Rapprochement).
+ * - `title` : titre principal (h1). Omis (`undefined` OU chaîne vide — les deux
+ *   traités pareil, en test de vérité, pas `!= null`), toute la ligne titre
+ *   disparaît (plus de div vide qui réserverait quand même sa hauteur via le
+ *   `gap` du conteneur — le vide repéré entre la Navbar et les cartes en
+ *   mobile sur Rapprochement, une fois titre ET badge confiés à la Navbar).
+ *   Sinon, tronqué (`truncate`) plutôt que renvoyé à la ligne : un h1 qui
+ *   enjambe deux lignes fait dériver la pastille d'état vers une ligne qui ne
+ *   lui correspond pas (le bug repéré en mobile sur Rapprochement).
  * - `badge` : pastille d'état posée juste après le titre, sur la même ligne
  *   (voir `LockBadge`). Hors du h1 : c'est un état, pas un bout de titre.
  *   `shrink-0` : ne cède jamais sa place au titre, reste toujours visible.
@@ -73,40 +76,42 @@ export function PageHeader({
       )}
     >
       {leading}
-      <div className="min-w-0 flex-1">
-        {(title != null || badge != null) && (
-          <div
-            className={cn(
-              'flex min-w-0 flex-nowrap items-center gap-2',
-              badgeAlign === 'end' && 'justify-between lg:justify-start',
-            )}
-          >
-            {title != null && (
-              <h1 className="min-w-0 truncate text-xl font-semibold">{title}</h1>
-            )}
-            {badge != null && (
-              <div
-                className={cn(
-                  'shrink-0',
-                  badgeAlign === 'end' &&
-                    badgeWidth &&
-                    cn(
-                      badgeWidth,
-                      'sm:w-auto',
-                      '[&>*]:flex [&>*]:w-full [&>*]:justify-center',
-                      'sm:[&>*]:inline-flex sm:[&>*]:w-auto',
-                    ),
-                )}
-              >
-                {badge}
-              </div>
-            )}
-          </div>
-        )}
-        {meta != null && (
-          <p className="truncate text-sm text-muted-foreground">{meta}</p>
-        )}
-      </div>
+      {(title || badge != null || meta != null) && (
+        <div className="min-w-0 flex-1">
+          {(title || badge != null) && (
+            <div
+              className={cn(
+                'flex min-w-0 flex-nowrap items-center gap-2',
+                badgeAlign === 'end' && 'justify-between lg:justify-start',
+              )}
+            >
+              {title && (
+                <h1 className="min-w-0 truncate text-xl font-semibold">{title}</h1>
+              )}
+              {badge != null && (
+                <div
+                  className={cn(
+                    'shrink-0',
+                    badgeAlign === 'end' &&
+                      badgeWidth &&
+                      cn(
+                        badgeWidth,
+                        'sm:w-auto',
+                        '[&>*]:flex [&>*]:w-full [&>*]:justify-center',
+                        'sm:[&>*]:inline-flex sm:[&>*]:w-auto',
+                      ),
+                  )}
+                >
+                  {badge}
+                </div>
+              )}
+            </div>
+          )}
+          {meta != null && (
+            <p className="truncate text-sm text-muted-foreground">{meta}</p>
+          )}
+        </div>
+      )}
       {actions != null && (
         <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:w-auto sm:shrink-0 sm:flex-nowrap sm:justify-end">
           {actions}
