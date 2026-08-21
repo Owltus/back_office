@@ -46,6 +46,12 @@ export interface CaisseSheet {
   ls: LsAmounts
   caisse: CaisseAmounts
   counts: Counts
+  /** VESTIGIAL depuis les cautions (plan/caisse-cautions) : toujours écrit à
+   * l'upsert (150 par défaut), mais plus JAMAIS lu pour calculer un écart —
+   * `fundEcart`/`isBalanced`/`hasAnomaly` prennent désormais un fond EFFECTIF
+   * explicite (`effectiveFundTarget()`, lib/caisse/cautions.ts), recalculé en
+   * direct à partir des cautions actives. Ne pas s'attendre à ce que modifier
+   * cette colonne change quoi que ce soit à l'écran. */
   fundOrigin: number
   comment: string
   status: SheetStatus
@@ -62,6 +68,47 @@ export type CaisseSheetInput = Pick<
   CaisseSheet,
   'reportDate' | 'shift' | 'operatorInitials' | 'snt' | 'ls' | 'caisse' | 'counts' | 'fundOrigin' | 'comment'
 >
+
+/* --------------------------------------------------------------------------
+ * Cautions clients (table `caisse_cautions`) — dépôt de garantie en espèces,
+ * rangé dans le tiroir-caisse (une enveloppe par caution), qui augmente le
+ * fond de caisse attendu tant qu'elle est active. Voir lib/caisse/cautions.ts
+ * pour le calcul du fond effectif, et plan/caisse-cautions/00-INDEX.md pour les
+ * décisions métier (D1-D8).
+ * ------------------------------------------------------------------------ */
+
+export type CautionStatus = 'active' | 'refunded'
+
+/** Modèle app d'une caution. */
+export interface Caution {
+  id: string
+  room: number
+  amount: number
+  comment: string
+  takenDate: string // 'YYYY-MM-DD'
+  status: CautionStatus
+  /** Jour du remboursement, borne EXCLUSIVE : la caution ne compte plus dans
+   *  le fond effectif à PARTIR de ce jour (pas encore ce jour-là). */
+  refundedDate: string | null
+  createdBy: string
+  createdAt: string
+}
+
+/** Ligne DB (snake_case) — miroir exact de `public.caisse_cautions`. */
+export interface DbCaution {
+  id: string
+  room: number
+  amount: number
+  comment: string
+  taken_date: string
+  status: CautionStatus
+  refunded_date: string | null
+  refunded_by: string | null
+  refunded_at: string | null
+  created_by: string
+  created_at: string
+  updated_at: string
+}
 
 /** Ligne DB (snake_case) — miroir exact de `public.caisse_sheets`. */
 export interface DbCaisseSheet {

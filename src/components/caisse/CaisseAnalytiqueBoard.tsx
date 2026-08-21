@@ -14,7 +14,7 @@ import {
   CaisseStatCells,
   CaisseStatsHead,
 } from '#/components/caisse/CaisseAnalytiqueParts.tsx'
-import { fetchSheets } from '#/lib/caisse/service.ts'
+import { fetchAllCautions, fetchSheets } from '#/lib/caisse/service.ts'
 import {
   aggregateCaisseMonthly,
   summarize,
@@ -45,6 +45,14 @@ export function CaisseAnalytiqueBoard() {
     queryKey: ['caisse', 'analytics'],
     queryFn: fetchSheets,
   })
+  // Cautions (même clé que le board /caisse, cache partagé) : le fond effectif
+  // évalué pour chaque feuille (hasAnomaly) doit refléter la correction
+  // rétroactive voulue (plan/caisse-cautions/00-INDEX.md, D4) — sinon
+  // l'analytique resterait figée sur l'ancien plancher fixe.
+  const { data: cautions = [] } = useQuery({
+    queryKey: ['caisse', 'cautions'],
+    queryFn: fetchAllCautions,
+  })
 
   const years = useMemo(() => yearsFromSheets(sheets, currentYear), [sheets])
 
@@ -52,8 +60,8 @@ export function CaisseAnalytiqueBoard() {
   const { year, setYear } = useAnnualYear(years, currentYear)
 
   const months = useMemo(
-    () => aggregateCaisseMonthly(sheets, year),
-    [sheets, year],
+    () => aggregateCaisseMonthly(sheets, year, cautions),
+    [sheets, year, cautions],
   )
 
   const summary = useMemo(() => summarize(months), [months])

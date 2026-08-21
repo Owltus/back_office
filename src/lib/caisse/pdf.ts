@@ -18,7 +18,6 @@ import {
   DENOMINATIONS,
   ECART_LABELS,
   EPSILON,
-  FUND_TARGET,
   SHIFT_LABELS,
   paymentColumns,
 } from '#/lib/caisse/constants.ts'
@@ -146,6 +145,10 @@ export interface CaissePdfData {
   form: CaisseSheetInput
   /** Nom de l'hôtelier (pré-rempli dans le cadre de signature). */
   operatorInitials: string
+  /** Fond de caisse EFFECTIF attendu du jour (plancher + cautions actives),
+   * calculé par l'appelant via `effectiveFundTarget()` (lib/caisse/cautions.ts)
+   * — jamais `FUND_TARGET` en dur (une caution active changerait la cible). */
+  effectiveFundTarget: number
 }
 
 /** Construit le document PDF (jsPDF) de la feuille de caisse, sans l'imprimer.
@@ -207,7 +210,7 @@ function sourceAmount(
 
 function renderCaisseDocument(
   pdf: jsPDF,
-  { titleDate, form, operatorInitials }: CaissePdfData,
+  { titleDate, form, operatorInitials, effectiveFundTarget }: CaissePdfData,
   images: DenomImages,
 ): void {
   let y = 22
@@ -320,9 +323,9 @@ function renderCaisseDocument(
   // Total du fond — même mise en page que la page : à gauche « Fond de caisse
   // 150 € » (muté), à droite « total (écart) » coloré (vert si équilibré).
   const total = fundTotal(form)
-  const fe = fundEcart(form)
+  const fe = fundEcart(form, effectiveFundTarget)
   pdf.setFont('helvetica', 'normal').setFontSize(9).setTextColor(110)
-  pdf.text(`Fond de caisse ${fmtEurInt(FUND_TARGET)}`, LEFT, y)
+  pdf.text(`Fond de caisse ${fmtEurInt(effectiveFundTarget)}`, LEFT, y)
   pdf.setFont('helvetica', 'bold')
   setBalanceColor(pdf, Math.abs(fe) < EPSILON)
   pdf.text(`${fmtEur(total)} (${fmtEcart(fe)})`, RIGHT, y, { align: 'right' })

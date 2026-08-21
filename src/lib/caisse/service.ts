@@ -5,8 +5,10 @@ import { slotKey } from '#/lib/caisse/shift.ts'
 import type {
   CaisseSheet,
   CaisseSheetInput,
+  Caution,
   Counts,
   DbCaisseSheet,
+  DbCaution,
   Shift,
 } from '#/lib/caisse/types.ts'
 
@@ -227,6 +229,96 @@ export async function reopenSheet(id: string): Promise<void> {
   const { error } = await supabase
     .from(CAISSE_TABLE)
     .update({ status: 'draft', validated_at: null, validated_by: null })
+    .eq('id', id)
+  if (error) throw error
+}
+
+/* --------------------------------------------------------------------------
+ * Cautions clients (table `caisse_cautions`) — voir lib/caisse/cautions.ts pour
+ * le calcul du fond effectif, et plan/caisse-cautions/00-INDEX.md pour les
+ * décisions métier (D1-D8).
+ * ------------------------------------------------------------------------ */
+
+export const CAISSE_CAUTIONS_TABLE = 'caisse_cautions'
+
+function toCaution(r: DbCaution): Caution {
+  return {
+    id: r.id,
+    room: r.room,
+    amount: num(r.amount),
+    comment: r.comment,
+    takenDate: r.taken_date,
+    status: r.status,
+    refundedDate: r.refunded_date,
+    createdBy: r.created_by,
+    createdAt: r.created_at,
+  }
+}
+
+/** TOUTES les cautions (actives ET remboursées) — nécessaire pour recalculer
+ * correctement le fond effectif d'une date PASSÉE (une caution remboursée
+ * depuis comptait quand même à l'époque, cf. décision D4). Table de petite
+ * taille : pas de pagination. */
+export async function fetchAllCautions(): Promise<Caution[]> {
+  const { data, error } = await supabase
+    .from(CAISSE_CAUTIONS_TABLE)
+    .select('*')
+    .order('taken_date', { ascending: false })
+  if (error) throw error
+  return ((data ?? []) as DbCaution[]).map(toCaution)
+}
+
+/** Prend une nouvelle caution (chambre + montant + commentaire libre). */
+export async function createCaution(input: {
+  room: number
+  amount: number
+  comment: string
+  takenDate: string
+}): Promise<void> {
+  const { error } = await supabase.from(CAISSE_CAUTIONS_TABLE).insert({
+    room: input.room,
+    amount: input.amount,
+    comment: input.comment,
+    taken_date: input.takenDate,
+  })
+  if (error) throw error
+}
+
+/** Corrige chambre/montant/commentaire d'une caution existante (erreur de
+ * saisie) — ne touche jamais `status`/`refunded_*` (cf. `refundCaution`). */
+export async function updateCaution(
+  id: string,
+  input: { room: number; amount: number; comment: string },
+): Promise<void> {
+  const { error } = await supabase
+    .from(CAISSE_CAUTIONS_TABLE)
+    .update({
+      room: input.room,
+      amount: input.amount,
+      comment: input.comment,
+    })
+    .eq('id', id)
+  if (error) throw error
+}
+
+/** Rembourse une caution : `refunded_by`/`refunded_at` sont posés SERVEUR par le
+ * trigger `caisse_cautions_stamp` (jamais par le client). Cesse de compter dans
+ * le fond effectif IMMÉDIATEMENT (borne exclusive sur `refundedDate`, D3). */
+export async function refundCaution(id: string, refundedDate: string): Promise<void> {
+  const { error } = await supabase
+    .from(CAISSE_CAUTIONS_TABLE)
+    .update({ status: 'refunded', refunded_date: refundedDate })
+    .eq('id', id)
+  if (error) throw error
+}
+
+/** Suppression physique (correction d'une erreur de saisie) — réservée à la
+ * gestion par la RLS, jamais le chemin normal de fin de vie d'une caution
+ * (cf. « Rembourser »). */
+export async function deleteCaution(id: string): Promise<void> {
+  const { error } = await supabase
+    .from(CAISSE_CAUTIONS_TABLE)
+    .delete()
     .eq('id', id)
   if (error) throw error
 }

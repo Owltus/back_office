@@ -53,7 +53,7 @@ describe('fundTotal', () => {
       cnt_050: 16, cnt_020: 15, cnt_010: 4, cnt_005: 12,
     })
     expect(fundTotal(s)).toBe(150)
-    expect(fundEcart(s)).toBe(0)
+    expect(fundEcart(s, 150)).toBe(0)
   })
 })
 
@@ -64,9 +64,21 @@ describe('isBalanced', () => {
       cnt_50: 1, cnt_20: 2, cnt_10: 3, cnt_2: 3, cnt_1: 12,
       cnt_050: 16, cnt_020: 15, cnt_010: 4, cnt_005: 12,
     })
-    expect(isBalanced(s)).toBe(true)
+    expect(isBalanced(s, 150)).toBe(true)
 
     s.caisse.cash = 5 // introduit un écart
-    expect(isBalanced(s)).toBe(false)
+    expect(isBalanced(s, 150)).toBe(false)
+  })
+
+  it('un fond effectif majoré (caution active) déplace ce qui est considéré équilibré', () => {
+    const s = base()
+    // Même comptage que ci-dessus (150 €) : équilibré contre 150, plus contre 450.
+    Object.assign(s.counts, {
+      cnt_50: 1, cnt_20: 2, cnt_10: 3, cnt_2: 3, cnt_1: 12,
+      cnt_050: 16, cnt_020: 15, cnt_010: 4, cnt_005: 12,
+    })
+    expect(isBalanced(s, 150)).toBe(true)
+    expect(isBalanced(s, 450)).toBe(false)
+    expect(fundEcart(s, 450)).toBe(-300)
   })
 })

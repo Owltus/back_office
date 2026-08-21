@@ -13,7 +13,7 @@ import {
   CaisseStatCells,
   CaisseStatsHead,
 } from '#/components/caisse/CaisseAnalytiqueParts.tsx'
-import { fetchSheets } from '#/lib/caisse/service.ts'
+import { fetchAllCautions, fetchSheets } from '#/lib/caisse/service.ts'
 import { aggregateCaisseDaily, summarize } from '#/lib/caisse/analytics.ts'
 import { fmtEur } from '#/lib/caisse/format.ts'
 import { DAY_NAMES, MONTHS_LABELS } from '#/lib/repjour/constants.ts'
@@ -47,9 +47,15 @@ export function CaisseAnalytiqueMoisBoard({
     queryKey: ['caisse', 'analytics'],
     queryFn: fetchSheets,
   })
+  // MÊME clé que le board /caisse et la vue annuelle (cache partagé) — voir
+  // CaisseAnalytiqueBoard.tsx pour la raison (D4, correction rétroactive).
+  const { data: cautions = [] } = useQuery({
+    queryKey: ['caisse', 'cautions'],
+    queryFn: fetchAllCautions,
+  })
   const days = useMemo(
-    () => aggregateCaisseDaily(sheets, year, month),
-    [sheets, year, month],
+    () => aggregateCaisseDaily(sheets, year, month, cautions),
+    [sheets, year, month, cautions],
   )
 
   // Index par numéro de jour pour peupler un tableau plein mois (1..lastDay),

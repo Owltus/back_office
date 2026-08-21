@@ -36,7 +36,7 @@ import { cn } from '#/lib/utils.ts'
 /** Explication de « Écarts », partagée par la carte (hint) et l'en-tête du tableau
  * (infobulle) — un libellé unique, jamais divergent entre les deux. */
 const ECARTS_HINT =
-  'Feuilles clôturées présentant un écart : soit la recette comptée diffère de l’attendu (espèces, CB, chèques vacances ou Adyen), soit le fond de caisse n’est pas à 150 €.'
+  'Feuilles clôturées présentant un écart : soit la recette comptée diffère de l’attendu (espèces, CB, chèques vacances ou Adyen), soit le fond de caisse ne correspond pas au niveau attendu ce jour-là (150 €, plus une éventuelle caution active).'
 
 /** Cartes de synthèse : Total encaissé / Espèces / Carte / Écarts. Titres identiques
  * en vue annuelle et mensuelle (la période est déjà donnée par la page). */

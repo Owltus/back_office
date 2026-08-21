@@ -1,6 +1,7 @@
 import { computeEcarts, fundEcart, hasCountedFund } from '#/lib/caisse/calc.ts'
-import { ECART_KEYS, EPSILON } from '#/lib/caisse/constants.ts'
-import type { CaisseSheet } from '#/lib/caisse/types.ts'
+import { effectiveFundTarget } from '#/lib/caisse/cautions.ts'
+import { ECART_KEYS, EPSILON, FUND_TARGET } from '#/lib/caisse/constants.ts'
+import type { Caution, CaisseSheet } from '#/lib/caisse/types.ts'
 
 /*
  * Agrégation analytique des feuilles de caisse (métier pur, sans React).
@@ -22,18 +23,25 @@ import type { CaisseSheet } from '#/lib/caisse/types.ts'
  * SEULES LES FEUILLES CLÔTURÉES COMPTENT : on n'agrège que les feuilles `validated`.
  * Un brouillon (`draft`) porte des montants provisoires (comptage en cours) qui
  * fausseraient les cumuls ; on l'ignore tant qu'il n'est pas clôturé.
+ *
+ * FOND DE CAISSE EFFECTIF (cautions) : le fond attendu n'est jamais lu depuis
+ * une valeur stockée — il se recalcule pour CHAQUE feuille via
+ * `effectiveFundTarget(cautions, reportDate, FUND_TARGET)` (lib/caisse/cautions.ts,
+ * décision D4). Une caution ajoutée en retard corrige donc aussi, automatiquement,
+ * le décompte d'anomalies d'un mois déjà passé.
  */
 
 /**
  * Vrai si une feuille clôturée présente une ANOMALIE : soit un écart de paiement
  * (un mode ≥ EPSILON entre attendu et réel), soit un écart de fond de caisse (fond
- * réellement compté et différent de l'origine). Un fond NON compté (nuit non faite)
- * ne compte pas — c'est une absence de comptage, pas un écart.
+ * réellement compté et différent de la cible EFFECTIVE, plancher + cautions actives
+ * ce jour-là). Un fond NON compté (nuit non faite) ne compte pas — c'est une
+ * absence de comptage, pas un écart.
  */
-function hasAnomaly(s: CaisseSheet): boolean {
+function hasAnomaly(s: CaisseSheet, effectiveTarget: number): boolean {
   const ecarts = computeEcarts(s)
   if (ECART_KEYS.some((c) => Math.abs(ecarts[c]) >= EPSILON)) return true
-  return hasCountedFund(s) && Math.abs(fundEcart(s)) >= EPSILON
+  return hasCountedFund(s) && Math.abs(fundEcart(s, effectiveTarget)) >= EPSILON
 }
 
 /** Réel encaissé (ventilé par moyen de paiement) + fréquence d'anomalies. Métriques
@@ -75,14 +83,15 @@ function emptySummary(): CaisseSummary {
 }
 
 /** Ajoute une feuille clôturée à un cumul de synthèse (mutation en place). */
-function addSheet(t: CaisseSummary, s: CaisseSheet): void {
+function addSheet(t: CaisseSummary, s: CaisseSheet, cautions: Caution[]): void {
   t.sheets += 1
   t.cash += s.caisse.cash
   t.cb += s.caisse.cb
   t.cvac += s.caisse.cvac
   t.adyen += s.caisse.adyen
   t.encaisse += s.caisse.cash + s.caisse.cb + s.caisse.cvac + s.caisse.adyen
-  if (hasAnomaly(s)) t.anomalies += 1
+  const target = effectiveFundTarget(cautions, s.reportDate, FUND_TARGET)
+  if (hasAnomaly(s, target)) t.anomalies += 1
 }
 
 /**
@@ -93,6 +102,7 @@ function addSheet(t: CaisseSummary, s: CaisseSheet): void {
 export function aggregateCaisseMonthly(
   sheets: CaisseSheet[],
   year: number,
+  cautions: Caution[] = [],
 ): CaisseMonthStats[] {
   const months: CaisseMonthStats[] = Array.from({ length: 12 }, (_, i) => ({
     month: i + 1,
@@ -105,7 +115,7 @@ export function aggregateCaisseMonthly(
     if (!s.reportDate.startsWith(prefix)) continue
     const m = Number(s.reportDate.slice(5, 7)) - 1
     if (m < 0 || m > 11) continue
-    addSheet(months[m], s)
+    addSheet(months[m], s, cautions)
   }
 
   return months
@@ -120,6 +130,7 @@ export function aggregateCaisseDaily(
   sheets: CaisseSheet[],
   year: number,
   month: number,
+  cautions: Caution[] = [],
 ): CaisseDayStats[] {
   const prefix = `${year}-${String(month).padStart(2, '0')}-`
   const byDate = new Map<string, CaisseDayStats>()
@@ -137,7 +148,7 @@ export function aggregateCaisseDaily(
       }
       byDate.set(s.reportDate, t)
     }
-    addSheet(t, s)
+    addSheet(t, s, cautions)
   }
 
   return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date))

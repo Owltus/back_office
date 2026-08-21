@@ -33,9 +33,17 @@ export function fundTotal(s: Pick<CaisseSheet, 'counts'>): number {
   return cents / 100
 }
 
-/** Écart du fond de caisse : total compté − fond d'origine (doit être 0). */
-export function fundEcart(s: Pick<CaisseSheet, 'counts' | 'fundOrigin'>): number {
-  return round2(fundTotal(s) - (s.fundOrigin || FUND_TARGET))
+/** Écart du fond de caisse : total compté − fond EFFECTIF attendu (doit être 0).
+ * `effectiveTarget` vient de `effectiveFundTarget()` (lib/caisse/cautions.ts) —
+ * PLUS JAMAIS de `s.fundOrigin` stocké : le fond attendu se recalcule toujours
+ * en direct (décision D4, plan/caisse-cautions/00-INDEX.md), y compris pour une
+ * feuille déjà validée, afin qu'une caution ajoutée en retard corrige
+ * automatiquement l'affichage sans jamais réécrire la feuille. */
+export function fundEcart(
+  s: Pick<CaisseSheet, 'counts'>,
+  effectiveTarget: number,
+): number {
+  return round2(fundTotal(s) - effectiveTarget)
 }
 
 /** Vrai si le fond a été compté (au moins une coupure > 0) — donc un « vrai
@@ -45,11 +53,15 @@ export function hasCountedFund(s: Pick<CaisseSheet, 'counts'>): boolean {
   return fundTotal(s) > 0
 }
 
-/** Vrai si tous les écarts (paiements + fond) sont à zéro à la tolérance près. */
-export function isBalanced(s: SheetAmounts & Pick<CaisseSheet, 'counts' | 'fundOrigin'>): boolean {
+/** Vrai si tous les écarts (paiements + fond) sont à zéro à la tolérance près.
+ * `effectiveTarget` : voir `fundEcart`. */
+export function isBalanced(
+  s: SheetAmounts & Pick<CaisseSheet, 'counts'>,
+  effectiveTarget: number,
+): boolean {
   const ecarts = computeEcarts(s)
   const paymentsOk = Object.values(ecarts).every((v) => Math.abs(v) < EPSILON)
-  return paymentsOk && Math.abs(fundEcart(s)) < EPSILON
+  return paymentsOk && Math.abs(fundEcart(s, effectiveTarget)) < EPSILON
 }
 
 /** Somme d'une colonne attendue (SNT + LS) pour un mode donné. */
@@ -119,6 +131,8 @@ export function inputToSheet(
   }
 }
 
-function round2(n: number): number {
+/** Arrondi au centime — exporté pour rester la SEULE implémentation (réutilisé
+ * par lib/caisse/cautions.ts, jamais dupliqué). */
+export function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100
 }

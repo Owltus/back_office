@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { LineChart, Minus, Plus } from 'lucide-react'
+import { LineChart, Minus, Pencil, Plus, Trash2, Undo2 } from 'lucide-react'
 
 import { LockBadge } from '#/components/shared/LockBadge.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
@@ -16,9 +16,26 @@ import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
 import { useStepNavKeys } from '#/components/shared/useStepNavKeys.ts'
 import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
+import { Label } from '#/components/ui/label.tsx'
 import { Textarea } from '#/components/ui/textarea.tsx'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from '#/components/ui/context-menu.tsx'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '#/components/ui/dialog.tsx'
 import { CloseSheetDialog } from '#/components/shared/CloseSheetDialog.tsx'
 import type { CloseIssue } from '#/components/shared/CloseSheetDialog.tsx'
+import { ConfirmDialog } from '#/components/shared/ConfirmDialog.tsx'
 import { DatePickerButton } from '#/components/form/fields.tsx'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { DENOM_SVG } from '#/assets/euros/index.ts'
@@ -35,6 +52,7 @@ import {
   inputToSheet,
   sheetToInput,
 } from '#/lib/caisse/calc.ts'
+import { effectiveFundTarget, isCautionActiveOn } from '#/lib/caisse/cautions.ts'
 import {
   fmtEcart,
   fmtEcartBare,
@@ -52,17 +70,23 @@ import {
   paymentColumns,
 } from '#/lib/caisse/constants.ts'
 import {
+  createCaution,
+  deleteCaution,
+  fetchAllCautions,
   fetchOldestSlot,
   fetchPreviousSheet,
   fetchRecentValidatedSlots,
   fetchSheet,
+  refundCaution,
   reopenSheet,
+  updateCaution,
   upsertSheet,
   validateSheet,
 } from '#/lib/caisse/service.ts'
 import { canActOnCaisseDay } from '#/lib/caisse/editability.ts'
 import {
   currentSlot,
+  dateStr,
   resolveDisplaySlot,
   slotKey,
   stepSlot,
@@ -74,9 +98,11 @@ import {
   sanitizeAmount,
 } from '#/lib/caisse/input.ts'
 import { fetchOldestServiceDate } from '#/lib/pdj/service.ts'
+import { ALL_ROOMS } from '#/lib/hotel/rooms.ts'
 import type {
   CaisseSheet,
   CaisseSheetInput,
+  Caution,
   DenomKey,
   EcartKey,
   PayKey,
@@ -98,6 +124,12 @@ const fmtTitle = new Intl.DateTimeFormat('fr-FR', {
   day: 'numeric',
   month: 'long',
   year: 'numeric',
+})
+
+// Date courte (« 15 août ») pour la liste des cautions : « depuis le … ».
+const fmtDayShort = new Intl.DateTimeFormat('fr-FR', {
+  day: 'numeric',
+  month: 'long',
 })
 
 export function CaisseBoard({ initialDate }: { initialDate?: string }) {
@@ -226,6 +258,22 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
   const [busy, setBusy] = useState(false)
   const [closeOpen, setCloseOpen] = useState(false)
   const [hotelierName, setHotelierName] = useState('')
+  // Dialogue de caution, un seul état pour les deux usages (création / édition
+  // d'une caution existante) — évite deux composants/prefills qui pourraient
+  // diverger.
+  const [cautionDialog, setCautionDialog] = useState<
+    { mode: 'create' } | { mode: 'edit'; caution: Caution } | null
+  >(null)
+  const [confirmDeleteCautionId, setConfirmDeleteCautionId] = useState<
+    string | null
+  >(null)
+  // Remboursement : action à conséquence réelle (cesse de majorer le fond
+  // immédiatement, D3) et non ré-annulable depuis l'UI — un clic direct depuis
+  // le menu contextuel est trop exposé au mis-clic. Passe donc, comme
+  // « Supprimer », par une confirmation explicite.
+  const [confirmRefundCautionId, setConfirmRefundCautionId] = useState<
+    string | null
+  >(null)
 
   const { data: sheet, isError: sheetError } = useQuery({
     queryKey: ['caisse', 'sheet', selectedDate, selectedShift],
@@ -271,10 +319,37 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
   const dayEditable = canActOnCaisseDay(selectedDate, todayDate, caisseLevel)
   const editable = ready && dayEditable
   const isWriter = can('caisse', 'ecriture')
+  const isGestion = can('caisse', 'gestion')
   // Champs éditables UNIQUEMENT sur un brouillon : une caisse clôturée est
   // verrouillée (valeurs figées) pour tous, admin compris — il faut la réouvrir
   // pour la modifier.
   const canEditFields = editable && !isValidated
+
+  // Cautions clients : TOUTES (actives ET remboursées, table de petite taille) —
+  // nécessaire pour recalculer le fond effectif d'une date passée (D4). Le fond
+  // attendu n'est JAMAIS une valeur stockée : il se recalcule en direct pour le
+  // jour affiché, ce qui permet à une caution ajoutée en retard de corriger
+  // automatiquement l'affichage d'une feuille déjà clôturée (voir
+  // plan/caisse-cautions/00-INDEX.md, D4).
+  const { data: cautions = [] } = useQuery({
+    queryKey: ['caisse', 'cautions'],
+    queryFn: fetchAllCautions,
+  })
+  const effectiveTarget = useMemo(
+    () => effectiveFundTarget(cautions, selectedDate, FUND_TARGET),
+    [cautions, selectedDate],
+  )
+  // Cautions actives pour le jour affiché — liste visible sur la page (bouton
+  // « + Caution », menu contextuel Rembourser/Supprimer).
+  const activeCautions = useMemo(
+    () => cautions.filter((c) => isCautionActiveOn(c, selectedDate)),
+    [cautions, selectedDate],
+  )
+  // Caution ciblée par la confirmation en cours (rembourser ou supprimer) — sert
+  // à afficher chambre + montant dans le texte de la modale, pour qu'un
+  // mis-clic soit repéré avant validation, pas après.
+  const cautionToRefund = cautions.find((c) => c.id === confirmRefundCautionId)
+  const cautionToDelete = cautions.find((c) => c.id === confirmDeleteCautionId)
 
   const ecarts = useMemo(() => computeEcarts(form), [form])
   // Dérivés du fond, mémoïsés ensemble : chaque frappe re-render le board, et sans
@@ -283,9 +358,9 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
   const { total, fEcart } = useMemo(
     () => ({
       total: fundTotal(form),
-      fEcart: fundEcart(form),
+      fEcart: fundEcart(form, effectiveTarget),
     }),
-    [form],
+    [form, effectiveTarget],
   )
 
   // --- Sauvegarde automatique (autosave) -----------------------------------
@@ -437,13 +512,19 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
     })
   }
   if (Math.abs(fEcart) >= EPSILON) {
+    // Précision « (150 € + N caution(s) active(s)) » quand une caution majore la
+    // cible — sinon le montant seul (450 € par ex.) ne s'explique pas de lui-même.
+    const targetLabel =
+      effectiveTarget > FUND_TARGET
+        ? `${fmtEurInt(effectiveTarget)} (${fmtEurInt(FUND_TARGET)} + ${activeCautions.length} caution${activeCautions.length > 1 ? 's' : ''} active${activeCautions.length > 1 ? 's' : ''})`
+        : fmtEurInt(effectiveTarget)
     closeIssues.push({
       title: `Fond de caisse : ${fmtEcart(fEcart)}`,
       detail: !hasCountedFund(form)
-        ? `Le fond n'a pas été compté. Il devrait être à ${fmtEurInt(FUND_TARGET)}.`
+        ? `Le fond n'a pas été compté. Il devrait être à ${targetLabel}.`
         : fEcart > 0
-          ? `Le fond compté dépasse de ${fmtEur(Math.abs(fEcart))} le niveau normal (${fmtEurInt(FUND_TARGET)}).`
-          : `Il manque ${fmtEur(Math.abs(fEcart))} dans le fond (${fmtEurInt(FUND_TARGET)} attendus).`,
+          ? `Le fond compté dépasse de ${fmtEur(Math.abs(fEcart))} le niveau normal (${targetLabel}).`
+          : `Il manque ${fmtEur(Math.abs(fEcart))} dans le fond (${targetLabel} attendus).`,
     })
   }
   // Un écart sans commentaire est la seule anomalie invisible ailleurs : on invite
@@ -542,6 +623,80 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
     return guard(() => reopenSheet(sheet.id))
   }
 
+  // Cautions clients : prise, édition, remboursement (immédiat, D3), suppression
+  // (erreur de saisie, réservée gestion). TOUTES verrouillées par `canEditFields` —
+  // même règle que le reste de la page (une caisse clôturée est figée pour tous,
+  // gestion comprise, jusqu'à réouverture) : autrement il serait étrange de
+  // pouvoir encore toucher aux cautions d'un shift déjà clôturé à l'écran.
+  // Invalident toutes le même cache — la cible affichée (effectiveTarget) suit
+  // sans jamais toucher aux feuilles de caisse.
+  const invalidateCautions = () =>
+    queryClient.invalidateQueries({ queryKey: ['caisse', 'cautions'] })
+
+  async function handleSubmitCaution(input: {
+    room: number
+    amount: number
+    comment: string
+  }) {
+    if (!isWriter || !canEditFields || !cautionDialog) return
+    if (cautionDialog.mode === 'edit') {
+      const id = cautionDialog.caution.id
+      setCautionDialog(null)
+      try {
+        await updateCaution(id, input)
+        await invalidateCautions()
+      } catch (err) {
+        setError(`Modification de la caution refusée ou échouée : ${errorMessage(err)}`)
+      }
+      return
+    }
+    // Garde-fou : une caution ne peut pas être prise dans le FUTUR (le
+    // remboursement, lui, est toujours horodaté à aujourd'hui réel — une
+    // caution future violerait la contrainte refunded_date >= taken_date au
+    // premier remboursement). Comparaison à la vraie date calendaire du jour
+    // (`dateStr(now)`), PAS à `todayDate` : ce dernier suit le rattachement de
+    // shift (la nuit 02h-12h reste datée la veille) et retarde d'un jour tant
+    // qu'on est le matin — même quand le shift affiché a déjà avancé sur
+    // aujourd'hui (nuit de la veille déjà clôturée). Comparer à `todayDate`
+    // rejetait alors à tort une caution prise sur le matin du jour même.
+    if (selectedDate > dateStr(now)) {
+      setError('Impossible de prendre une caution à une date future.')
+      return
+    }
+    setCautionDialog(null)
+    try {
+      await createCaution({ ...input, takenDate: selectedDate })
+      await invalidateCautions()
+    } catch (err) {
+      setError(`Ajout de la caution refusé ou échoué : ${errorMessage(err)}`)
+    }
+  }
+
+  function handleRefundCaution() {
+    if (!isWriter || !canEditFields || !confirmRefundCautionId) return
+    const id = confirmRefundCautionId
+    setConfirmRefundCautionId(null)
+    // Vraie date calendaire (comme la garde-fou de création, cf. handleSubmitCaution) :
+    // `todayDate` retarde d'un jour tant qu'on est le matin et que la nuit de la
+    // veille n'est pas close.
+    refundCaution(id, dateStr(now))
+      .then(invalidateCautions)
+      .catch((err) =>
+        setError(`Remboursement refusé ou échoué : ${errorMessage(err)}`),
+      )
+  }
+
+  function handleDeleteCaution() {
+    if (!isGestion || !canEditFields || !confirmDeleteCautionId) return
+    const id = confirmDeleteCautionId
+    setConfirmDeleteCautionId(null)
+    deleteCaution(id)
+      .then(invalidateCautions)
+      .catch((err) =>
+        setError(`Suppression refusée ou échouée : ${errorMessage(err)}`),
+      )
+  }
+
   // Génère un VRAI document PDF (jsPDF) et ouvre la fenêtre d'impression du
   // navigateur — pas de téléchargement. Cf. src/lib/caisse/pdf.ts.
   const [pdfBusy, setPdfBusy] = useState(false)
@@ -555,6 +710,7 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
           titleDate,
           form,
           operatorInitials: sheet?.operatorInitials || form.operatorInitials,
+          effectiveFundTarget: effectiveTarget,
         },
         `Caisse_${da}-${mo}-${yr}_${form.shift}`,
       )
@@ -661,6 +817,34 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
         }
         actions={
           <>
+            {/* Bouton « Caution » — exceptionnellement du texte + icône « + » :
+                ouvre le dialogue de saisie (chambre, montant, commentaire). Une
+                caution active majore le fond de caisse attendu (cf. carte
+                « Fond de caisse » plus bas) tant qu'elle n'est pas remboursée.
+                Désactivé sur une caisse clôturée — comme tout le reste de la
+                page, il faut la réouvrir pour y toucher. */}
+            {isWriter &&
+              (canEditFields ? (
+                <Tip label="Ajouter une caution client">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCautionDialog({ mode: 'create' })}
+                  >
+                    <Plus />
+                    Caution
+                  </Button>
+                </Tip>
+              ) : (
+                <Tip label="Caisse clôturée : réouvrez-la pour gérer les cautions">
+                  <span tabIndex={0}>
+                    <Button variant="outline" size="sm" disabled>
+                      <Plus />
+                      Caution
+                    </Button>
+                  </span>
+                </Tip>
+              ))}
             {/* Groupe « actions de page » : vue analytique + impression. */}
             <ButtonGroup>
               {/* 0) Vue analytique : synthèse mensuelle en lecture (tous rôles). */}
@@ -963,7 +1147,7 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
             </div>
             <div className="mt-2 flex items-center justify-between text-sm">
               <span className="text-muted-foreground">
-                Fond de caisse {fmtEurInt(FUND_TARGET)}
+                Fond de caisse {fmtEurInt(effectiveTarget)}
               </span>
               <span
                 className={cn(
@@ -977,6 +1161,104 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
               </span>
             </div>
           </div>
+
+          {/* Cautions actives ce jour-là : chambre, montant, commentaire libre.
+              Clic droit (menu contextuel) pour rembourser (immédiat, cesse de
+              majorer le fond dès ce moment — décision D3) ou supprimer (erreur
+              de saisie, réservé gestion). Carte absente s'il n'y en a aucune. */}
+          {activeCautions.length > 0 && (
+            <div className="rounded-xl border border-border bg-card p-3 print:hidden">
+              <div className="mb-2.5 flex items-baseline justify-between gap-2">
+                <h2 className="text-sm font-semibold">Cautions actives</h2>
+                <span className="text-xs text-muted-foreground">
+                  Clic droit sur une ligne pour rembourser ou supprimer
+                </span>
+              </div>
+              <ul className="flex flex-col gap-2">
+                {activeCautions.map((c) => {
+                  // Rien à proposer (caisse clôturée, ou rôle lecture seule) :
+                  // pas de menu contextuel DU TOUT plutôt qu'un menu vide au clic
+                  // droit (gestion implique toujours écriture dans ce modèle de
+                  // rôles, donc `isWriter` seul suffit à couvrir les 3 actions).
+                  const hasActions = isWriter && canEditFields
+                  const row = (
+                    // Une seule ligne, 4 colonnes bien distinctes (chambre /
+                    // montant / commentaire / date), séparées par un liseré
+                    // vertical — le commentaire seul est flexible et tronqué
+                    // (`min-w-0` + `truncate`), tout le reste garde sa largeur
+                    // naturelle sans jamais passer à la ligne. `key` porté ICI
+                    // (pas sur un wrapper) : sans actions, cet <li> est renvoyé
+                    // TEL QUEL comme enfant direct de <ul> — jamais de <div>
+                    // autour (invalide en HTML dans une liste).
+                    <li
+                      key={c.id}
+                      className={cn(
+                        'grid grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-4 rounded-lg bg-muted/30 px-3.5 py-2.5 transition-colors',
+                        hasActions && 'cursor-context-menu hover:bg-muted/60',
+                      )}
+                    >
+                      <span className="whitespace-nowrap text-base font-semibold">
+                        Chambre {c.room}
+                      </span>
+                      <span className="whitespace-nowrap border-l border-border/60 pl-4">
+                        <span className="inline-flex items-center rounded-md bg-indigo-500/10 px-2 py-0.5 tabular-nums font-semibold text-indigo-600 dark:text-indigo-400">
+                          {fmtEur(c.amount)}
+                        </span>
+                      </span>
+                      <span className="min-w-0 truncate border-l border-border/60 pl-4 text-sm text-muted-foreground">
+                        {c.comment || '—'}
+                      </span>
+                      <span className="whitespace-nowrap border-l border-border/60 pl-4 text-xs text-muted-foreground">
+                        depuis le {fmtDayShort.format(new Date(c.takenDate + 'T00:00:00'))}
+                      </span>
+                    </li>
+                  )
+                  if (!hasActions) return row
+                  return (
+                    <ContextMenu key={c.id}>
+                      <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
+                      <ContextMenuContent className="w-48">
+                        <ContextMenuItem
+                          onSelect={() =>
+                            setCautionDialog({ mode: 'edit', caution: c })
+                          }
+                        >
+                          <Pencil />
+                          Modifier
+                        </ContextMenuItem>
+                        {/* Une caution déjà remboursée peut rester listée ici
+                            pour une date PASSÉE antérieure à son remboursement
+                            (D4) — « Rembourser » ne doit alors PAS réapparaître :
+                            la recliquer écraserait silencieusement
+                            `refunded_date` par une date plus tardive, décalant
+                            la cascade. */}
+                        {c.status === 'active' && (
+                          <ContextMenuItem
+                            onSelect={() => setConfirmRefundCautionId(c.id)}
+                          >
+                            <Undo2 />
+                            Rembourser
+                          </ContextMenuItem>
+                        )}
+                        {isGestion && (
+                          <>
+                            <ContextMenuSeparator />
+                            <ContextMenuItem
+                              variant="destructive"
+                              onSelect={() => setConfirmDeleteCautionId(c.id)}
+                            >
+                              <Trash2 />
+                              Supprimer
+                            </ContextMenuItem>
+                          </>
+                        )}
+                      </ContextMenuContent>
+                    </ContextMenu>
+                  )
+                })}
+              </ul>
+            </div>
+          )}
 
           {/* Commentaires (juste en dessous du fond de caisse).
           Carte FLEXIBLE : elle absorbe la place restante de la page et sert de
@@ -1039,14 +1321,150 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
         subtitle={`${titleDate} — ${SHIFT_LABELS[form.shift]}`}
         issues={closeIssues}
         okTitle="Caisse équilibrée"
-        okReason={`Les montants comptés correspondent aux encaissements attendus, et le fond est à ${fmtEurInt(FUND_TARGET)}.`}
+        okReason={`Les montants comptés correspondent aux encaissements attendus, et le fond est à ${fmtEurInt(effectiveTarget)}.`}
         hint={closeHint}
         hotelierName={hotelierName}
         onHotelierNameChange={setHotelierName}
         onConfirm={handleConfirmClose}
         busy={busy}
       />
+
+      <CautionDialog
+        state={cautionDialog}
+        onOpenChange={(open) => {
+          if (!open) setCautionDialog(null)
+        }}
+        onSubmit={handleSubmitCaution}
+      />
+
+      <ConfirmDialog
+        open={confirmRefundCautionId !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmRefundCautionId(null)
+        }}
+        title="Rembourser cette caution ?"
+        description={
+          cautionToRefund
+            ? `Chambre ${cautionToRefund.room} — ${fmtEur(cautionToRefund.amount)}. Le fond de caisse attendu cesse aussitôt d'en tenir compte.`
+            : undefined
+        }
+        confirmLabel="Rembourser"
+        onConfirm={handleRefundCaution}
+      />
+
+      <ConfirmDialog
+        open={confirmDeleteCautionId !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmDeleteCautionId(null)
+        }}
+        title="Supprimer cette caution ?"
+        description={
+          (cautionToDelete
+            ? `Chambre ${cautionToDelete.room} — ${fmtEur(cautionToDelete.amount)}. `
+            : '') +
+          'Réservé à la correction d’une erreur de saisie — pour une caution normalement rendue, utilisez plutôt « Rembourser ».'
+        }
+        confirmLabel="Supprimer"
+        destructive
+        onConfirm={handleDeleteCaution}
+      />
     </div>
+  )
+}
+
+/**
+ * Dialogue de caution, à double usage : création (« state.mode === 'create' »)
+ * ou édition d'une caution existante (« 'edit' », préremplie). Même champs
+ * (chambre, montant, commentaire libre), bouton de confirmation désactivé tant
+ * que chambre/montant ne sont pas valides (miroir `CloseSheetDialog`).
+ */
+function CautionDialog({
+  state,
+  onOpenChange,
+  onSubmit,
+}: {
+  state: { mode: 'create' } | { mode: 'edit'; caution: Caution } | null
+  onOpenChange: (open: boolean) => void
+  onSubmit: (input: { room: number; amount: number; comment: string }) => void
+}) {
+  const editing = state?.mode === 'edit' ? state.caution : null
+  const [room, setRoom] = useState('')
+  const [amount, setAmount] = useState(0)
+  const [comment, setComment] = useState('')
+
+  // (Re)préremplit à chaque ouverture : vide en création, valeurs existantes en
+  // édition — jamais la saisie laissée par un dialogue précédent.
+  useEffect(() => {
+    if (!state) return
+    setRoom(editing ? String(editing.room) : '')
+    setAmount(editing ? editing.amount : 0)
+    setComment(editing ? editing.comment : '')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state])
+
+  const roomNum = Number(room)
+  // Contre le VRAI inventaire (102-114, 201-214, …, 621-631) — pas une plage
+  // 1-80 (TOTAL_ROOMS n'est qu'un COMPTE, pas les numéros réels).
+  const valid = ALL_ROOMS.includes(roomNum) && amount > 0
+
+  function confirm() {
+    if (!valid) return
+    onSubmit({ room: roomNum, amount, comment: comment.trim() })
+  }
+
+  return (
+    <Dialog open={state !== null} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>
+            {editing ? 'Modifier la caution' : 'Nouvelle caution'}
+          </DialogTitle>
+          <DialogDescription>
+            Dépôt en espèces pris à un client, à rendre plus tard.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-3">
+          <div className="grid gap-1.5">
+            <Label htmlFor="caution-room">Chambre</Label>
+            <Input
+              id="caution-room"
+              inputMode="numeric"
+              autoFocus
+              value={room}
+              onChange={(e) => setRoom(e.target.value.replace(/[^0-9]/g, ''))}
+              placeholder="102"
+            />
+          </div>
+          <div className="grid gap-1.5">
+            {/* MoneyInput ne prend pas d'id (pas de htmlFor à lui associer). */}
+            <Label>Montant</Label>
+            <MoneyInput
+              value={amount}
+              onChange={setAmount}
+              disabled={false}
+            />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="caution-comment">Commentaire (facultatif)</Label>
+            <Textarea
+              id="caution-comment"
+              rows={3}
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              placeholder="Précision libre…"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Annuler
+          </Button>
+          <Button onClick={confirm} disabled={!valid}>
+            {editing ? 'Enregistrer' : 'Ajouter'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
