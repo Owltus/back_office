@@ -1,0 +1,26 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "design-system-font-size",
+        "value": "11px",
+        "files": [
+          "src/components/caisse/CaisseBoard.tsx"
+        ],
+        "createdAt": "2026-08-21T21:50:27.440Z",
+        "reason": "pre-existing micro-label (denomination sub-amount), narrower than the label step by design, unrelated to tonight's caution-menu accessibility fix"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "0.65rem",
+        "files": [
+          "src/components/caisse/CaisseBoard.tsx"
+        ],
+        "createdAt": "2026-08-21T21:50:27.498Z",
+        "reason": "pre-existing micro-badge (Remboursee status pill text), narrower than the label step by design, unrelated to tonight's caution-menu accessibility fix"
+      }
+    ]
+  }
+}

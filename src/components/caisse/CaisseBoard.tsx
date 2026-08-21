@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { LineChart, Minus, Pencil, Plus, Trash2, Undo2 } from 'lucide-react'
+import { LineChart, MoreVertical, Minus, Pencil, Plus, Trash2, Undo2 } from 'lucide-react'
 
 import { LockBadge } from '#/components/shared/LockBadge.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
@@ -25,6 +25,13 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from '#/components/ui/context-menu.tsx'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '#/components/ui/dropdown-menu.tsx'
 import {
   Dialog,
   DialogContent,
@@ -1220,30 +1227,106 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
               <div className="mb-2.5 flex items-baseline justify-between gap-2">
                 <h2 className="text-sm font-semibold">Cautions</h2>
                 <span className="text-xs text-muted-foreground">
-                  Clic droit sur une ligne pour agir
+                  Clic droit, ou le bouton ⋮, pour agir
                 </span>
               </div>
               <ul className="flex flex-col gap-2">
                 {visibleCautions.map((c) => {
                   // Rien à proposer (caisse clôturée, ou rôle lecture seule) :
-                  // pas de menu contextuel DU TOUT plutôt qu'un menu vide au clic
-                  // droit (gestion implique toujours écriture dans ce modèle de
-                  // rôles, donc `isWriter` seul suffit à couvrir les 3 actions).
+                  // pas de menu DU TOUT plutôt qu'un menu vide (gestion implique
+                  // toujours écriture dans ce modèle de rôles, donc `isWriter`
+                  // seul suffit à couvrir les 3 actions).
                   const hasActions = isWriter && canEditFields
+                  // Remise en cours proposée UNIQUEMENT le jour même du
+                  // remboursement (c'est la raison d'être de cette liste élargie :
+                  // repérer et corriger une erreur de la journée) — jamais depuis
+                  // une date PASSÉE où la caution apparaît encore active (D4).
+                  const refundedToday =
+                    hasActions &&
+                    c.status === 'refunded' &&
+                    c.refundedDate === selectedDate
+                  // Suppression : gestion à tout moment, écriture SEULEMENT le
+                  // jour même de la prise (miroir exact de la policy RLS,
+                  // supabase/caisse_cautions_delete_ecriture_same_day.sql) — une
+                  // caution plus ancienne « court » déjà sur plusieurs feuilles,
+                  // potentiellement closes ; au-delà, seule la gestion supprime.
+                  const canDelete =
+                    hasActions && (isGestion || c.takenDate === dateStr(now))
+                  // Descripteurs d'action UNIQUES, rendus ensuite par DEUX menus
+                  // distincts (clic droit ET bouton ⋮ visible) : le clic droit
+                  // reste le réflexe souris/desktop, le bouton est l'équivalent
+                  // tactile/clavier — sans lui, ces actions n'étaient joignables
+                  // par aucun des deux (contrainte produit confirmée). Les deux
+                  // primitives Radix (ContextMenu/DropdownMenu) exigent chacune
+                  // leur propre composant Item : un seul tableau de données évite
+                  // de dupliquer le TEXTE et la LOGIQUE, pas le rendu lui-même.
+                  const menuActions = hasActions
+                    ? [
+                        {
+                          key: 'edit',
+                          icon: <Pencil />,
+                          label: 'Modifier',
+                          onSelect: () =>
+                            setCautionDialog({ mode: 'edit', caution: c }),
+                        },
+                        // Une caution déjà remboursée peut rester listée ici pour
+                        // une date PASSÉE antérieure à son remboursement (D4) —
+                        // « Rembourser » ne doit alors PAS réapparaître : la
+                        // recliquer écraserait silencieusement `refunded_date`
+                        // par une date plus tardive, décalant la cascade.
+                        ...(c.status === 'active'
+                          ? [
+                              {
+                                key: 'refund',
+                                icon: <Undo2 />,
+                                label: 'Rembourser',
+                                onSelect: () =>
+                                  setConfirmRefundCautionId(c.id),
+                              },
+                            ]
+                          : []),
+                        ...(refundedToday
+                          ? [
+                              {
+                                key: 'reactivate',
+                                icon: <Undo2 />,
+                                label: 'Remettre en cours',
+                                onSelect: () =>
+                                  setConfirmReactivateCautionId(c.id),
+                              },
+                            ]
+                          : []),
+                        ...(canDelete
+                          ? [
+                              {
+                                key: 'delete',
+                                icon: <Trash2 />,
+                                label: 'Supprimer',
+                                onSelect: () =>
+                                  setConfirmDeleteCautionId(c.id),
+                                destructive: true,
+                                separatorBefore: true,
+                              },
+                            ]
+                          : []),
+                      ]
+                    : []
                   const row = (
-                    // Une seule ligne, 4 colonnes bien distinctes (chambre /
-                    // montant / commentaire / date), séparées par un liseré
-                    // vertical — le commentaire seul est flexible et tronqué
-                    // (`min-w-0` + `truncate`), tout le reste garde sa largeur
-                    // naturelle sans jamais passer à la ligne. `key` porté ICI
-                    // (pas sur un wrapper) : sans actions, cet <li> est renvoyé
-                    // TEL QUEL comme enfant direct de <ul> — jamais de <div>
-                    // autour (invalide en HTML dans une liste).
+                    // Une seule ligne, colonnes bien distinctes (chambre /
+                    // montant / commentaire / date [/ actions]), séparées par un
+                    // liseré vertical — le commentaire seul est flexible et
+                    // tronqué (`min-w-0` + `truncate`), tout le reste garde sa
+                    // largeur naturelle sans jamais passer à la ligne. `key`
+                    // porté ICI (pas sur un wrapper) : sans actions, cet <li> est
+                    // renvoyé TEL QUEL comme enfant direct de <ul> — jamais de
+                    // <div> autour (invalide en HTML dans une liste).
                     <li
                       key={c.id}
                       className={cn(
-                        'grid grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-4 rounded-lg bg-muted/30 px-3.5 py-2.5 transition-colors',
-                        hasActions && 'cursor-context-menu hover:bg-muted/60',
+                        'grid items-center gap-4 rounded-lg bg-muted/30 px-3.5 py-2.5 transition-colors',
+                        hasActions
+                          ? 'grid-cols-[auto_auto_minmax(0,1fr)_auto_auto] cursor-context-menu hover:bg-muted/60'
+                          : 'grid-cols-[auto_auto_minmax(0,1fr)_auto]',
                       )}
                     >
                       <span className="flex items-center gap-2 whitespace-nowrap text-base font-semibold">
@@ -1265,68 +1348,57 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
                       <span className="whitespace-nowrap border-l border-border/60 pl-4 text-xs text-muted-foreground">
                         depuis le {fmtDayShort.format(new Date(c.takenDate + 'T00:00:00'))}
                       </span>
+                      {/* Équivalent tactile/clavier du clic droit — seul moyen
+                          d'atteindre ce menu sans souris. `stopPropagation` :
+                          un clic ici ne doit pas déclencher le menu contextuel
+                          du parent. */}
+                      {hasActions && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              type="button"
+                              aria-label="Actions sur cette caution"
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex size-7 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                            >
+                              <MoreVertical className="size-4" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48">
+                            {menuActions.map((a) => (
+                              <Fragment key={a.key}>
+                                {a.separatorBefore && <DropdownMenuSeparator />}
+                                <DropdownMenuItem
+                                  variant={a.destructive ? 'destructive' : undefined}
+                                  onSelect={a.onSelect}
+                                >
+                                  {a.icon}
+                                  {a.label}
+                                </DropdownMenuItem>
+                              </Fragment>
+                            ))}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
                     </li>
                   )
                   if (!hasActions) return row
-                  // Remise en cours proposée UNIQUEMENT le jour même du
-                  // remboursement (c'est la raison d'être de cette liste élargie :
-                  // repérer et corriger une erreur de la journée) — jamais depuis
-                  // une date PASSÉE où la caution apparaît encore active (D4).
-                  const refundedToday =
-                    c.status === 'refunded' && c.refundedDate === selectedDate
-                  // Suppression : gestion à tout moment, écriture SEULEMENT le
-                  // jour même de la prise (miroir exact de la policy RLS,
-                  // supabase/caisse_cautions_delete_ecriture_same_day.sql) — une
-                  // caution plus ancienne « court » déjà sur plusieurs feuilles,
-                  // potentiellement closes ; au-delà, seule la gestion supprime.
-                  const canDelete =
-                    isGestion || c.takenDate === dateStr(now)
                   return (
                     <ContextMenu key={c.id}>
                       <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
                       <ContextMenuContent className="w-48">
-                        <ContextMenuItem
-                          onSelect={() =>
-                            setCautionDialog({ mode: 'edit', caution: c })
-                          }
-                        >
-                          <Pencil />
-                          Modifier
-                        </ContextMenuItem>
-                        {/* Une caution déjà remboursée peut rester listée ici
-                            pour une date PASSÉE antérieure à son remboursement
-                            (D4) — « Rembourser » ne doit alors PAS réapparaître :
-                            la recliquer écraserait silencieusement
-                            `refunded_date` par une date plus tardive, décalant
-                            la cascade. */}
-                        {c.status === 'active' && (
-                          <ContextMenuItem
-                            onSelect={() => setConfirmRefundCautionId(c.id)}
-                          >
-                            <Undo2 />
-                            Rembourser
-                          </ContextMenuItem>
-                        )}
-                        {refundedToday && (
-                          <ContextMenuItem
-                            onSelect={() => setConfirmReactivateCautionId(c.id)}
-                          >
-                            <Undo2 />
-                            Remettre en cours
-                          </ContextMenuItem>
-                        )}
-                        {canDelete && (
-                          <>
-                            <ContextMenuSeparator />
+                        {menuActions.map((a) => (
+                          <Fragment key={a.key}>
+                            {a.separatorBefore && <ContextMenuSeparator />}
                             <ContextMenuItem
-                              variant="destructive"
-                              onSelect={() => setConfirmDeleteCautionId(c.id)}
+                              variant={a.destructive ? 'destructive' : undefined}
+                              onSelect={a.onSelect}
                             >
-                              <Trash2 />
-                              Supprimer
+                              {a.icon}
+                              {a.label}
                             </ContextMenuItem>
-                          </>
-                        )}
+                          </Fragment>
+                        ))}
                       </ContextMenuContent>
                     </ContextMenu>
                   )
