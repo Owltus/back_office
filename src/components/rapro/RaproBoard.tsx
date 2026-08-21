@@ -3,7 +3,7 @@ import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import { LineChart, RotateCcw } from 'lucide-react'
+import { LineChart, Printer, RotateCcw } from 'lucide-react'
 
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { DatePickerButton } from '#/components/form/fields.tsx'
@@ -692,7 +692,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
     // quand tout tient — bouton de clôture collé en bas), mais dès que le contenu
     // dépasse (fenêtre courte, alerte multi-lignes), elle grandit et `main` défile,
     // plutôt que d'écraser la zone commentaire jusqu'à la faire disparaître.
-    <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4">
+    <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 max-sm:pb-20">
       <PageHeader
         title={title}
         // Rien à annoncer avant que l'occupation et la feuille soient chargées :
@@ -720,13 +720,15 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
           )
         }
         actions={
-          <>
-            {/* Groupe « actions de page » : aide + vue analytique + impression.
-                Sous 640px, chaque bouton s'agrandit (44px, plancher tactile) et
-                révèle son libellé : au survol, l'infobulle dit ce qu'une icône
-                seule fait ; au doigt, il n'y a pas de survol (adapt.md), donc
-                l'icône seule n'explique plus rien. Au-delà, rendu desktop
-                inchangé (icône seule) — cohérent avec les autres pages. */}
+          // Sous 640px, ce groupe entier laisse la place à la barre d'outils
+          // basse fixe (cf. fin du composant) : une vraie barre d'app mobile
+          // (icône + libellé, portée du pouce), pas des boutons de bureau
+          // rétrécis. `hidden sm:contents` : invisible ET hors flux sous 640px
+          // (`hidden`), mais ne crée aucune boîte propre au-delà (`contents`)
+          // — les deux groupes ci-dessous participent au flex du bureau
+          // exactement comme s'ils n'étaient pas enveloppés.
+          <div className="hidden sm:contents">
+            {/* Groupe « actions de page » : aide + vue analytique + impression. */}
             <ButtonGroup>
               {/* Aide : ouvre le tutoriel de la page (même bouton « ? » que
                   RepJour, tout à gauche du groupe). */}
@@ -734,24 +736,16 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
                 <Button
                   variant="outline"
                   size="icon-sm"
-                  className="max-sm:h-11 max-sm:w-auto max-sm:gap-1.5 max-sm:px-3"
                   onClick={() => setHelpOpen(true)}
                   aria-label="Comment ça marche"
                 >
                   <HelpGlyph />
-                  <span className="hidden max-sm:inline">Aide</span>
                 </Button>
               </Tip>
               <Tip label="Vue analytique">
-                <Button
-                  asChild
-                  variant="outline"
-                  size="icon-sm"
-                  className="max-sm:h-11 max-sm:w-auto max-sm:gap-1.5 max-sm:px-3"
-                >
+                <Button asChild variant="outline" size="icon-sm">
                   <Link to="/rapro/analytique" aria-label="Vue analytique">
                     <LineChart />
-                    <span className="hidden max-sm:inline">Analytique</span>
                   </Link>
                 </Button>
               </Tip>
@@ -761,7 +755,6 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
               <PrintButton
                 onClick={handleGeneratePdf}
                 iconOnly
-                mobileLabel
                 disabled={!isValidated || pdfBusy}
                 tipLabel={
                   isValidated
@@ -789,7 +782,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
                 ariaLabel="Choisir un jour"
               />
             </StepNav>
-          </>
+          </div>
         }
       />
 
@@ -1108,6 +1101,70 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
         onHotelierNameChange={setHotelierName}
         onConfirm={handleConfirmClose}
       />
+
+      {/* Barre d'outils basse (mobile uniquement, < 640px) : une vraie barre
+          d'app mobile — icône + libellé, portée du pouce — plutôt que les
+          boutons de bureau simplement rétrécis. `fixed` échappe au scroll de
+          `<main>` (aucun ancêtre ne pose de `transform`/`contain`, donc elle
+          reste bien pinnée à la fenêtre) ; `max-sm:pb-20` sur le conteneur
+          racine ci-dessus réserve la place pour qu'elle ne masque jamais la
+          fin du contenu (commentaire, bouton Clôturer). Aide/Analytique/
+          Imprimer gardent leurs handlers exacts de la barre du haut ; la
+          navigation réutilise StepNav/DatePickerButton tels quels (même
+          logique, seconde instance — la barre du haut reste montée mais
+          cachée via `hidden sm:contents`, donc aucun conflit d'état). */}
+      <nav
+        className="fixed inset-x-0 bottom-0 z-30 flex items-stretch justify-around border-t border-border bg-card/95 px-1 backdrop-blur-md sm:hidden"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      >
+        <button
+          type="button"
+          onClick={() => setHelpOpen(true)}
+          aria-label="Comment ça marche"
+          className="flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-muted-foreground transition-colors active:bg-accent active:text-foreground"
+        >
+          <HelpGlyph className="size-5" />
+          <span className="text-[11px] font-medium">Aide</span>
+        </button>
+        <Link
+          to="/rapro/analytique"
+          aria-label="Vue analytique"
+          className="flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-muted-foreground transition-colors active:bg-accent active:text-foreground"
+        >
+          <LineChart className="size-5" />
+          <span className="text-[11px] font-medium">Analytique</span>
+        </Link>
+        <button
+          type="button"
+          onClick={handleGeneratePdf}
+          disabled={!isValidated || pdfBusy}
+          aria-label="Imprimer / PDF"
+          className="flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-muted-foreground transition-colors active:bg-accent active:text-foreground disabled:pointer-events-none disabled:opacity-40"
+        >
+          <Printer className="size-5" />
+          <span className="text-[11px] font-medium">Imprimer</span>
+        </button>
+        <div className="flex flex-1 items-center justify-center">
+          <StepNav
+            onPrev={() => goStep(-1)}
+            onNext={() => goStep(1)}
+            prevLabel="Jour précédent"
+            nextLabel="Jour suivant"
+            prevDisabled={atLower}
+            nextDisabled={atLatest}
+          >
+            <DatePickerButton
+              value={selectedDate}
+              onChange={goDate}
+              min={lowerDay}
+              max={todayStr}
+              enabledDates={pickerDates}
+              todayValue={todayStr}
+              ariaLabel="Choisir un jour"
+            />
+          </StepNav>
+        </div>
+      </nav>
     </div>
   )
 }

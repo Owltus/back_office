@@ -38,6 +38,11 @@ typography:
     fontWeight: 600
     lineHeight: 1.15
     letterSpacing: "0.03em"
+  tab-label:
+    fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, sans-serif"
+    fontSize: "0.6875rem"
+    fontWeight: 500
+    lineHeight: 1.2
 rounded:
   sm: "8px"
   md: "10px"
@@ -154,6 +159,9 @@ changement de police.
   tableau.
 - **Label** (600, 0.6rem, 1.15, `letter-spacing: 0.03em`, majuscules) : libellé d'en-tête
   de `StatTile` — toujours au-dessus de la valeur, jamais à côté.
+- **Tab Label** (500, 0.6875rem, 1.2) : libellé sous l'icône d'un onglet de barre
+  d'outils basse mobile (« Aide », « Imprimer »…) — jamais en majuscules,
+  contrairement au Label de `StatTile`, qui est un en-tête, pas un nom de commande.
 
 ### Named Rules
 **The Tabular Numbers Rule.** Toute valeur chiffrée destinée à être comparée à une
@@ -172,6 +180,11 @@ En dessous de 640px, l'en-tête de page (`PageHeader`) empile titre+pastille sur
 ligne et la barre d'actions sur la suivante, les sous-groupes d'actions écartés aux deux
 bords (`justify-between`) plutôt qu'entassés à gauche. Au-delà, tout tient sur une seule
 ligne, navigation temporelle collée au bord droit.
+
+Sous 640px, les actions d'une page NE restent pas dans l'en-tête simplement rétrécies :
+elles migrent vers une **barre d'outils basse fixe** (voir Composants), le pattern
+d'app mobile natif — portée du pouce, toujours visible quel que soit le défilement.
+L'en-tête garde alors seulement le titre et la pastille de statut.
 
 Le planning parking bascule en mode compact sous 768px (aligné sur le seuil de la
 Navbar) : lecture seule côté front, noms masqués, seules les zones colorées et le
@@ -267,6 +280,23 @@ rejoindre ce langage.
   bordure) ; en mobile, tiroir latéral (`Sheet`) déclenché par un hamburger, le nom de
   la page courante remplace la marque « Back Office » à côté du logo (les onglets
   étant alors cachés dans le tiroir, rien d'autre ne dit sur quelle page on se trouve).
+
+### Barre d'outils basse mobile (signature, sous 640px)
+- **Quand :** remplace la barre d'actions de l'en-tête sous 640px — pas un
+  rétrécissement de boutons de bureau, une vraie barre d'app mobile.
+- **Position :** `fixed`, collée au bas de la fenêtre, au-dessus de tout scroll de
+  page ; `env(safe-area-inset-bottom)` pour l'encoche/l'indicateur d'accueil iOS.
+  Le contenu de la page réserve l'espace correspondant (`padding-bottom`) pour
+  qu'elle ne masque jamais la fin du contenu.
+- **Cellules :** réparties à parts égales (`flex-1`), icône au-dessus du libellé
+  (Tab Label, 11px), jamais côte à côte — le libellé existe précisément parce que
+  l'infobulle au survol n'existe pas au doigt (une icône seule n'explique plus
+  rien en tactile).
+- **Cible tactile :** chaque cellule fait toute la hauteur de la barre (icône +
+  libellé + `py-2`), largement au-dessus du plancher de 44px.
+- **États :** `active:bg-accent` (retour tactile immédiat), `disabled:opacity-40`
+  pour une action indisponible (ex. imprimer avant clôture) — jamais un bouton
+  simplement absent, la cohérence de la barre prime.
 
 ### Tooltip
 - Fond `bg-foreground` / texte `bg-background` : s'inverse automatiquement entre clair
