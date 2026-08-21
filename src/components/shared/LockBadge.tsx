@@ -13,6 +13,11 @@ import { cn } from '#/lib/utils.ts'
  *
  * Le mot porte le sens à lui seul ; la couleur ne fait que l'appuyer. C'est ce
  * qui la rend lisible sans distinguer l'émeraude de l'ambre.
+ *
+ * Gabarit calqué sur le bouton `outline`/`sm` de la top bar (même bordure,
+ * même fond, même ombre, même hauteur) : ce n'est pas un bouton (rien à
+ * cliquer, pas de hover), mais il doit se lire comme faisant partie de la
+ * même rangée d'actions plutôt que comme une pastille à part.
  */
 export function LockBadge({
   locked,
@@ -27,10 +32,8 @@ export function LockBadge({
   const badge = (
     <span
       className={cn(
-        'inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium',
-        locked
-          ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-500'
-          : 'border-amber-500/30 bg-amber-500/10 text-amber-500',
+        'inline-flex h-8 items-center gap-1.5 rounded-md border bg-background px-3 text-sm font-medium shadow-xs dark:border-input dark:bg-input/30',
+        locked ? 'border-emerald-500/40 text-emerald-500' : 'border-amber-500/40 text-amber-500',
         hint && 'cursor-help',
       )}
     >

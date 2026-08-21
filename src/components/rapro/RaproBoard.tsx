@@ -78,6 +78,21 @@ const EMPTY_MATERIALIZED: ReadonlySet<number> = new Set()
  * persisté par (jour, chambre), en optimiste — seules les exceptions sont
  * stockées. Écriture super/admin — RLS.
  */
+/** Libellé de tuile responsive : le texte OFFICIEL dès qu'il y a la place
+ * (largeur d'écran >= 640px, seuil Tailwind `sm`), une version abrégée en
+ * dessous — pour les deux seuls libellés assez longs pour passer sur deux
+ * lignes dans une tuile étroite (« Bloquées du jour » / « Bloquées de la
+ * veille »), ce qui étirait toute la rangée de cartes (grille en stretch) à
+ * la hauteur de cette tuile. */
+function statLabel(full: string, short: string) {
+  return (
+    <>
+      <span className="hidden sm:inline">{full}</span>
+      <span className="sm:hidden">{short}</span>
+    </>
+  )
+}
+
 export function RaproBoard({ initialDate }: { initialDate?: string }) {
   const { user, pageLevel } = useAuth()
   // Niveau effectif : sert au verrou PAR JOUR. Écriture n'agit que dans la fenêtre
@@ -683,6 +698,13 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
         // Rien à annoncer avant que l'occupation et la feuille soient chargées :
         // la pastille se contredirait le temps d'un rendu. En secours, on affiche
         // « Ouvert » de base (grille de secours exploitable, clôturable).
+        badgeAlign="end"
+        // 94px = largeur de StepNav ci-dessous (3 boutons `icon-sm` de 32px
+        // accolés dans un ButtonGroup, bordures fusionnées : 32×3 − 2px) —
+        // aligne le bord GAUCHE de la pastille sur celui de la navigation
+        // temporelle qu'elle surplombe en mobile (le bord droit l'est déjà
+        // via `badgeAlign="end"`).
+        badgeWidth="w-[94px]"
         badge={
           pdjRows !== undefined &&
           sheet !== undefined && (
@@ -771,7 +793,10 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
               grille des étages (une colonne par étage), aux mêmes gabarits que le
               contenu réel pour ne rien décaler à l'arrivée des données. */}
           <div className="rapro-stats" aria-hidden="true">
-            {Array.from({ length: 5 }).map((_, i) => (
+            {/* 6 tuiles TOUJOURS désormais (Bloquées veille comprise, même à 0) —
+                le squelette doit refléter ce compte fixe pour ne rien décaler à
+                l'arrivée des données. */}
+            {Array.from({ length: 6 }).map((_, i) => (
               <div
                 key={i}
                 className="flex items-stretch overflow-hidden rounded-xl border border-border bg-card"
@@ -869,19 +894,19 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
             />
             <StatTile
               value={dash(stats.todo)}
-              label="Bloquées du jour"
+              label={statLabel('Bloquées du jour', 'BLOQ. J')}
               accent={CATEGORY_COLOR.bloquee}
               hint="Chambres non nettoyées aujourd'hui, reportées à demain."
             />
-            {/* Bloquées de la veille (reportées) : carte affichée SEULEMENT s'il y en a. */}
-            {carried.size > 0 && (
-              <StatTile
-                value={carried.size}
-                label="Bloquées de la veille"
-                accent={CATEGORY_COLOR.bloquee}
-                hint="Chambres bloquées hier, encore à nettoyer aujourd'hui."
-              />
-            )}
+            {/* Bloquées de la veille (reportées) : carte TOUJOURS affichée (même à 0)
+                — la grille de 6 cartes reste stable au lieu de passer de 5 à 6
+                selon les jours, ce qui décalait la mise en page en responsive. */}
+            <StatTile
+              value={dash(carried.size)}
+              label={statLabel('Bloquées de la veille', 'BLOQ. V')}
+              accent={CATEGORY_COLOR.bloquee}
+              hint="Chambres bloquées hier, encore à nettoyer aujourd'hui."
+            />
           </div>
 
           {!fallbackMode && optionalMissing.length > 0 && (
@@ -1002,9 +1027,11 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
                   {CELL_STATES[st].label}
                 </span>
               ))}
-              {/* « Bloquée de la veille » : AJOUTÉE DYNAMIQUEMENT aux statuts
-                  seulement s'il y en a au moins une ce jour (même condition
-                  `carried.size > 0` que la carte de synthèse). */}
+              {/* « Bloquée de la veille » : AJOUTÉE DYNAMIQUEMENT à la légende
+                  seulement s'il y en a au moins une ce jour — contrairement à la
+                  carte de synthèse (désormais toujours affichée, même à 0), un
+                  repère de légende pour un liseré absent de la grille n'aurait
+                  aucun sens. */}
               {carried.size > 0 && (
                 <span className="rapro-legend-item">
                   <span className="rapro-legend-carried" />

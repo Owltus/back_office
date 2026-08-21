@@ -876,6 +876,71 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
           conditionnée à `canNavigate` À L'INTÉRIEUR des actions. */}
       <PageHeader
         title={titleDate}
+        // La bascule service/financier vient ici, à la place du statut des
+        // autres pages (Rapro/Caisse) : `badgeAlign="end"` l'envoie au bord
+        // droit sur sa propre ligne en mobile, au lieu de rester entassée
+        // dans la barre d'actions (déjà chargée en admin : suppression,
+        // externe, analytique/import/impression, navigation temporelle).
+        badgeAlign="end"
+        badge={
+          /* Bascule « vue service ↔ détail financier » : segmented control dans
+             le style des boutons d'action (bordure outline, hauteur icon-sm), un
+             seul actif à la fois. La pastille bleue GLISSE d'une position à
+             l'autre (translate animé) au lieu de sauter. Réétiquette le tableau
+             à l'écran ; jamais imprimé. */
+          hasData && (
+            <div className="pdj-seg relative inline-flex h-8 items-center overflow-hidden rounded-md border bg-background shadow-xs print:hidden dark:border-input dark:bg-input/30">
+              {/* Pastille active : remplit TOUTE la hauteur (inset-y-0) et la
+                  largeur d'un bouton (w-7), collée aux bordures. Ses coins sont
+                  clippés par l'arrondi du conteneur (overflow-hidden) → elle
+                  épouse exactement le cadre. Position par `left` inline (aucune
+                  composition Tailwind, contrairement à `transform`) : service = 0,
+                  financier = largeur d'un bouton (1,75rem). Transition en CSS. */}
+              <span
+                data-thumb
+                aria-hidden="true"
+                style={{ left: financeMode ? '1.75rem' : '0' }}
+                className="pointer-events-none absolute inset-y-0 w-7 bg-primary"
+              />
+              <Tip label="Vue service">
+                <button
+                  type="button"
+                  onClick={() => setFinanceMode(false)}
+                  aria-label="Vue service"
+                  aria-pressed={!financeMode}
+                  className="relative z-10 flex size-7 items-center justify-center rounded-[5px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                >
+                  <Users
+                    className={cn(
+                      'size-4 transition-colors duration-200',
+                      financeMode
+                        ? 'text-muted-foreground'
+                        : 'text-primary-foreground',
+                    )}
+                  />
+                </button>
+              </Tip>
+              <Tip label="Détail financier">
+                <button
+                  type="button"
+                  onClick={() => setFinanceMode(true)}
+                  aria-label="Détail financier"
+                  aria-pressed={financeMode}
+                  className="relative z-10 flex size-7 items-center justify-center rounded-[5px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                >
+                  <Receipt
+                    className={cn(
+                      'size-4 transition-colors duration-200',
+                      financeMode
+                        ? 'text-primary-foreground'
+                        : 'text-muted-foreground',
+                    )}
+                  />
+                </button>
+              </Tip>
+            </div>
+          )
+        }
         actions={
           <>
             {/* Groupe « suppression » (ADMIN uniquement), isolé et à gauche :
@@ -895,63 +960,6 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                   </Button>
                 </Tip>
               </ButtonGroup>
-            )}
-            {/* Bascule « vue service ↔ détail financier » : segmented control dans
-                le style des boutons d'action (bordure outline, hauteur icon-sm), un
-                seul actif à la fois. La pastille bleue GLISSE d'une position à
-                l'autre (translate animé) au lieu de sauter. Réétiquette le tableau
-                à l'écran ; jamais imprimé. */}
-            {hasData && (
-              <div className="pdj-seg relative inline-flex h-8 items-center overflow-hidden rounded-md border bg-background shadow-xs print:hidden dark:border-input dark:bg-input/30">
-                {/* Pastille active : remplit TOUTE la hauteur (inset-y-0) et la
-                    largeur d'un bouton (w-7), collée aux bordures. Ses coins sont
-                    clippés par l'arrondi du conteneur (overflow-hidden) → elle
-                    épouse exactement le cadre. Position par `left` inline (aucune
-                    composition Tailwind, contrairement à `transform`) : service = 0,
-                    financier = largeur d'un bouton (1,75rem). Transition en CSS. */}
-                <span
-                  data-thumb
-                  aria-hidden="true"
-                  style={{ left: financeMode ? '1.75rem' : '0' }}
-                  className="pointer-events-none absolute inset-y-0 w-7 bg-primary"
-                />
-                <Tip label="Vue service">
-                  <button
-                    type="button"
-                    onClick={() => setFinanceMode(false)}
-                    aria-label="Vue service"
-                    aria-pressed={!financeMode}
-                    className="relative z-10 flex size-7 items-center justify-center rounded-[5px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                  >
-                    <Users
-                      className={cn(
-                        'size-4 transition-colors duration-200',
-                        financeMode
-                          ? 'text-muted-foreground'
-                          : 'text-primary-foreground',
-                      )}
-                    />
-                  </button>
-                </Tip>
-                <Tip label="Détail financier">
-                  <button
-                    type="button"
-                    onClick={() => setFinanceMode(true)}
-                    aria-label="Détail financier"
-                    aria-pressed={financeMode}
-                    className="relative z-10 flex size-7 items-center justify-center rounded-[5px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                  >
-                    <Receipt
-                      className={cn(
-                        'size-4 transition-colors duration-200',
-                        financeMode
-                          ? 'text-primary-foreground'
-                          : 'text-muted-foreground',
-                      )}
-                    />
-                  </button>
-                </Tip>
-              </div>
             )}
             {/* Bouton « Externe » — exceptionnellement du texte, pas d'icône : ouvre
                 le dialogue +/- du nombre de clients venus manger sans être logés à

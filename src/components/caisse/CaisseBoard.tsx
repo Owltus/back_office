@@ -844,6 +844,12 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
         title={`${titleDate} (${SHIFT_LABELS[form.shift].toLowerCase()})`}
         // Attendre `ready` : sans feuille chargée, `isValidated` vaut faux par
         // défaut et la pastille afficherait « Ouverte » avant de se contredire.
+        badgeAlign="end"
+        // 94px = largeur de StepNav ci-dessous (même composant qu'en Rapro :
+        // 3 boutons `icon-sm` de 32px accolés dans un ButtonGroup, bordures
+        // fusionnées) — aligne la pastille sur la navigation temporelle
+        // qu'elle surplombe en mobile.
+        badgeWidth="w-[94px]"
         badge={
           ready && (
             <LockBadge

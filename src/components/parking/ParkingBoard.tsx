@@ -1198,18 +1198,13 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
   }
 
   // Plage de dates affichée en titre (haut à gauche), façon autres pages. En
-  // compact, on n'affiche QUE l'année (les jours/dates figurent déjà dans l'en-tête
-  // des colonnes) pour gagner de la place ; « AAAA – AAAA » si la fenêtre déborde
-  // sur deux années.
+  // compact, le titre est VIDE : les jours/dates figurent déjà dans l'en-tête
+  // des colonnes, et l'année ne dit rien d'utile (on la connaît déjà) — ne fait
+  // que prendre de la place dans une barre déjà serrée sur petit écran.
   const rangeLabel = (() => {
-    if (days.length === 0) return ''
+    if (days.length === 0 || isCompact) return ''
     const first = days[0]
     const last = days[days.length - 1]
-    if (isCompact) {
-      const fy = first.getFullYear()
-      const ly = last.getFullYear()
-      return fy === ly ? String(fy) : `${fy} – ${ly}`
-    }
     return first.getFullYear() === last.getFullYear()
       ? `${fmtDay.format(first)} – ${fmtDayYear.format(last)}`
       : `${fmtDayYear.format(first)} – ${fmtDayYear.format(last)}`

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from '@tanstack/react-router'
+import { Link, useRouterState } from '@tanstack/react-router'
 import { ChevronsUpDown, Menu } from 'lucide-react'
 
 import { Logo } from '#/components/Logo.tsx'
@@ -28,6 +28,17 @@ export function Navbar() {
     label: p.label,
     icon: p.icon,
   }))
+
+  // Nom de la page courante (en mobile, remplace la marque « Back Office » à côté
+  // du logo — cf. plus bas) : en desktop, l'onglet actif dans les liens inline
+  // suffit déjà à le dire, mais en mobile les onglets sont cachés dans le tiroir,
+  // donc rien ne l'indiquait. `startsWith` couvre les sous-pages (ex. l'analytique
+  // d'une page, `/rapro/analytique`). Une route hors PAGES (accueil, profil,
+  // gestion, comptes…) n'a pas de nom de page : la marque reste affichée.
+  const pathname = useRouterState({ select: (s) => s.location.pathname })
+  const currentPage = PAGES.find(
+    (p) => pathname === p.route || pathname.startsWith(`${p.route}/`),
+  )
 
   // En passant en mode desktop (>= md), on ferme le tiroir s'il est ouvert.
   useEffect(() => {
@@ -124,8 +135,8 @@ export function Navbar() {
           aria-label="Accueil"
         >
           <Logo className="size-7" />
-          <span className="text-lg font-bold tracking-tight md:hidden">
-            Back Office
+          <span className="truncate text-lg font-bold tracking-tight md:hidden">
+            {currentPage?.label ?? 'Back Office'}
           </span>
         </Link>
 
