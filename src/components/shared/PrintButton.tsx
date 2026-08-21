@@ -2,6 +2,7 @@ import { Printer } from 'lucide-react'
 
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
+import { cn } from '#/lib/utils.ts'
 
 /**
  * Bouton « Imprimer / PDF » commun aux boards (icône Printer + libellé).
@@ -20,12 +21,18 @@ import { Button } from '#/components/ui/button.tsx'
  * - `disabled` : grise le bouton (ex. aucune donnée à imprimer).
  * - `tipLabel` : infobulle. À personnaliser quand le bouton est désactivé —
  *   c'est alors la seule chose qui dise POURQUOI on ne peut pas imprimer.
+ * - `mobileLabel` : n'a d'effet qu'avec `iconOnly`. Sous 640px, le bouton
+ *   s'agrandit (44px, plancher tactile) et révèle le libellé — au survol, une
+ *   infobulle explique une icône seule ; au doigt, il n'y a pas de survol
+ *   (adapt.md), donc l'icône seule n'explique plus rien. Au-delà de 640px,
+ *   rendu inchangé (icône seule, taille normale).
  */
 export function PrintButton({
   onClick,
   className,
   responsiveLabel = false,
   iconOnly = false,
+  mobileLabel = false,
   disabled = false,
   label = 'Imprimer / PDF',
   tipLabel,
@@ -35,6 +42,7 @@ export function PrintButton({
   responsiveLabel?: boolean
   /** N'affiche que l'icône (aucun libellé), en bouton carré `icon-sm`. */
   iconOnly?: boolean
+  mobileLabel?: boolean
   disabled?: boolean
   label?: string
   tipLabel?: string
@@ -45,7 +53,12 @@ export function PrintButton({
       onClick={onClick}
       disabled={disabled}
       size={iconOnly ? 'icon-sm' : 'sm'}
-      className={className}
+      className={cn(
+        iconOnly &&
+          mobileLabel &&
+          'max-sm:h-11 max-sm:w-auto max-sm:gap-1.5 max-sm:px-3',
+        className,
+      )}
       aria-label={label}
     >
       <Printer />
@@ -55,6 +68,9 @@ export function PrintButton({
         ) : (
           label
         ))}
+      {iconOnly && mobileLabel && (
+        <span className="hidden max-sm:inline">{label}</span>
+      )}
     </Button>
   )
 

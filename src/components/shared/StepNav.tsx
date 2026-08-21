@@ -15,6 +15,12 @@ import { Button } from '#/components/ui/button.tsx'
  * flèches divergentes. Le centraliser garantit qu'ils restent alignés, et que
  * les flèches gardent la même taille que le bouton calendrier (`icon-sm`).
  *
+ * Sous 640px, chaque flèche s'agrandit à 44px (`max-sm:size-11`) — plancher de
+ * cible tactile (adapt.md), pas un choix esthétique : 32px reste correct à la
+ * souris mais devient trop petit au doigt. S'applique aux six boards d'un
+ * coup, sans prop à passer : c'est un plancher d'accessibilité, pas une
+ * préférence par page.
+ *
  * Le centre est libre : un `DatePickerButton` (jour, shift), un libellé d'année,
  * ou le sélecteur de plage du parking. Il peut être vide.
  */
@@ -48,6 +54,7 @@ export function StepNav({
       <Button
         variant="outline"
         size="icon-sm"
+        className="max-sm:size-11"
         onClick={onClick}
         disabled={disabled}
         aria-label={label}

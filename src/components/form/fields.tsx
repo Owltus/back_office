@@ -158,7 +158,14 @@ export function DatePickerButton({
     <Popover open={open} onOpenChange={setOpen}>
       <Tip label={ariaLabel}>
         <PopoverTrigger asChild>
-          <Button variant="outline" size="icon-sm" aria-label={ariaLabel}>
+          {/* max-sm:size-11 : même plancher de cible tactile (44px) que StepNav,
+              dont ce bouton est le compagnon direct dans la barre de nav. */}
+          <Button
+            variant="outline"
+            size="icon-sm"
+            className="max-sm:size-11"
+            aria-label={ariaLabel}
+          >
             <CalendarDays />
           </Button>
         </PopoverTrigger>

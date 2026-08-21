@@ -721,7 +721,12 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
         }
         actions={
           <>
-            {/* Groupe « actions de page » : aide + vue analytique + impression. */}
+            {/* Groupe « actions de page » : aide + vue analytique + impression.
+                Sous 640px, chaque bouton s'agrandit (44px, plancher tactile) et
+                révèle son libellé : au survol, l'infobulle dit ce qu'une icône
+                seule fait ; au doigt, il n'y a pas de survol (adapt.md), donc
+                l'icône seule n'explique plus rien. Au-delà, rendu desktop
+                inchangé (icône seule) — cohérent avec les autres pages. */}
             <ButtonGroup>
               {/* Aide : ouvre le tutoriel de la page (même bouton « ? » que
                   RepJour, tout à gauche du groupe). */}
@@ -729,16 +734,24 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
                 <Button
                   variant="outline"
                   size="icon-sm"
+                  className="max-sm:h-11 max-sm:w-auto max-sm:gap-1.5 max-sm:px-3"
                   onClick={() => setHelpOpen(true)}
                   aria-label="Comment ça marche"
                 >
                   <HelpGlyph />
+                  <span className="hidden max-sm:inline">Aide</span>
                 </Button>
               </Tip>
               <Tip label="Vue analytique">
-                <Button asChild variant="outline" size="icon-sm">
+                <Button
+                  asChild
+                  variant="outline"
+                  size="icon-sm"
+                  className="max-sm:h-11 max-sm:w-auto max-sm:gap-1.5 max-sm:px-3"
+                >
                   <Link to="/rapro/analytique" aria-label="Vue analytique">
                     <LineChart />
+                    <span className="hidden max-sm:inline">Analytique</span>
                   </Link>
                 </Button>
               </Tip>
@@ -748,6 +761,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
               <PrintButton
                 onClick={handleGeneratePdf}
                 iconOnly
+                mobileLabel
                 disabled={!isValidated || pdfBusy}
                 tipLabel={
                   isValidated
