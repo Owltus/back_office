@@ -7,7 +7,12 @@ import { UserMenu } from '#/components/UserMenu.tsx'
 import { UserAvatar } from '#/components/shared/UserAvatar.tsx'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { PAGES } from '#/lib/permissions/index.ts'
-import { getNavbarSubtitle, subscribeNavbarSubtitle } from '#/lib/navbarSubtitle.ts'
+import {
+  getNavbarBadge,
+  getNavbarSubtitle,
+  subscribeNavbarBadge,
+  subscribeNavbarSubtitle,
+} from '#/lib/navbarSubtitle.ts'
 import { Button } from '#/components/ui/button.tsx'
 import {
   Sheet,
@@ -50,6 +55,9 @@ export function Navbar() {
     getNavbarSubtitle,
     () => null,
   )
+  // Badge posé par la page courante (ex. le cadenas clôturé/ouvert de
+  // Rapprochement), affiché juste à côté du hamburger — cf. lib/navbarSubtitle.ts.
+  const badge = useSyncExternalStore(subscribeNavbarBadge, getNavbarBadge, () => null)
 
   // En passant en mode desktop (>= lg), on ferme le tiroir s'il est ouvert.
   // Seuil relevé de md (768px) à lg (1024px, 2026-08-21) : à 768-1024px, les 9
@@ -67,18 +75,27 @@ export function Navbar() {
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-card/80 backdrop-blur-md select-none print:hidden">
       <nav className="flex h-16 items-center gap-3 px-4">
-        {/* --- Tiroir mobile (< md) : hamburger + Sheet --- */}
+        {/* --- Tiroir mobile (< lg) : badge de page (si posé) + hamburger + Sheet.
+            Les deux partagent UN SEUL wrapper `order-last ml-auto` — c'est lui
+            qui pousse le duo au bord droit, jamais un des deux enfants pris
+            isolément (sinon le `ml-auto` du hamburger pousserait un vide ENTRE
+            le badge et lui, au lieu de pousser les deux ensemble). Sans badge
+            posé (la plupart des pages), le wrapper ne contient que le bouton :
+            comportement identique à avant. */}
         <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
-          <SheetTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="order-last ml-auto text-muted-foreground lg:hidden"
-              aria-label="Ouvrir le menu"
-            >
-              <Menu className="size-5" />
-            </Button>
-          </SheetTrigger>
+          <div className="order-last ml-auto flex items-center gap-2 lg:hidden">
+            {badge}
+            <SheetTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-muted-foreground"
+                aria-label="Ouvrir le menu"
+              >
+                <Menu className="size-5" />
+              </Button>
+            </SheetTrigger>
+          </div>
           <SheetContent
             side="left"
             showCloseButton={false}

@@ -2,37 +2,46 @@ import { useEffect } from 'react'
 import type { ReactNode } from 'react'
 
 /*
- * Sous-titre de la barre du haut globale (Navbar) : petit texte discret sous
- * le nom de la page, en mobile uniquement (là où la Navbar affiche déjà ce
- * nom à la place de la marque « Back Office »). Sert typiquement à afficher
- * le jour affiché par la page courante (Rapprochement : « Vendredi 21 août
- * 2026 »), une fois ce jour déplacé hors du corps de la page.
+ * Contenu que la page courante pose dans la barre du haut globale (Navbar),
+ * à côté du nom de page (mobile uniquement, là où la Navbar affiche déjà ce
+ * nom à la place de la marque « Back Office ») :
+ *   - le SOUS-TITRE : petit texte discret sous le nom de page (ex. le jour
+ *     affiché sur Rapprochement, une fois déplacé hors du corps de page) ;
+ *   - le BADGE : une icône de statut alignée à côté du bouton hamburger (ex.
+ *     le cadenas clôturé/ouvert de Rapprochement).
  *
- * Store minimal hors-React (même patron que `lib/theme.ts`) : la Navbar est un
- * frère de `<main>`, pas un parent des boards — un contexte React classique
- * imposerait de faire remonter chaque board jusqu'à un ancêtre commun. Une
- * page qui ne pose rien laisse la Navbar afficher uniquement le nom de la
- * page (comportement par défaut, inchangé).
+ * Deux stores minimaux hors-React (même patron que `lib/theme.ts`) : la Navbar
+ * est un frère de `<main>`, pas un parent des boards — un contexte React
+ * classique imposerait de faire remonter chaque board jusqu'à un ancêtre
+ * commun. Une page qui ne pose rien laisse la Navbar afficher son défaut
+ * (nom de page seul, pas de badge).
  */
 
 type Listener = () => void
 
-let subtitle: ReactNode = null
-const listeners = new Set<Listener>()
-
-export function getNavbarSubtitle(): ReactNode {
-  return subtitle
+function createSlot<T>(initial: T) {
+  let value = initial
+  const listeners = new Set<Listener>()
+  return {
+    get: (): T => value,
+    subscribe: (listener: Listener): (() => void) => {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    },
+    set: (next: T): void => {
+      value = next
+      for (const listener of listeners) listener()
+    },
+  }
 }
 
-export function subscribeNavbarSubtitle(listener: Listener): () => void {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
-}
+const subtitleSlot = createSlot<ReactNode>(null)
+const badgeSlot = createSlot<ReactNode>(null)
 
-function setNavbarSubtitle(node: ReactNode): void {
-  subtitle = node
-  for (const listener of listeners) listener()
-}
+export const getNavbarSubtitle = subtitleSlot.get
+export const subscribeNavbarSubtitle = subtitleSlot.subscribe
+export const getNavbarBadge = badgeSlot.get
+export const subscribeNavbarBadge = badgeSlot.subscribe
 
 /**
  * Pose le sous-titre pendant que le composant appelant est monté, le retire à
@@ -40,7 +49,15 @@ function setNavbarSubtitle(node: ReactNode): void {
  */
 export function useNavbarSubtitle(node: ReactNode): void {
   useEffect(() => {
-    setNavbarSubtitle(node)
-    return () => setNavbarSubtitle(null)
+    subtitleSlot.set(node)
+    return () => subtitleSlot.set(null)
+  }, [node])
+}
+
+/** Même mécanique que `useNavbarSubtitle`, pour le badge à côté du hamburger. */
+export function useNavbarBadge(node: ReactNode): void {
+  useEffect(() => {
+    badgeSlot.set(node)
+    return () => badgeSlot.set(null)
   }, [node])
 }

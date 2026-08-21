@@ -8,7 +8,7 @@ import { LineChart, Printer, RotateCcw } from 'lucide-react'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { DatePickerButton } from '#/components/form/fields.tsx'
 import { LockBadge } from '#/components/shared/LockBadge.tsx'
-import { useNavbarSubtitle } from '#/lib/navbarSubtitle.ts'
+import { useNavbarBadge, useNavbarSubtitle } from '#/lib/navbarSubtitle.ts'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { PrintBlockedDialog } from '#/components/shared/PrintBlockedDialog.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
@@ -653,6 +653,25 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   // pas le répéter. Se retire tout seul au démontage (changement de page).
   useNavbarSubtitle(title)
 
+  // Rien à annoncer avant que l'occupation et la feuille soient chargées : la
+  // pastille se contredirait le temps d'un rendu. En secours, on affiche
+  // « Ouvert » de base (grille de secours exploitable, clôturable). Posé à la
+  // fois dans la Navbar (< 1024px, à côté du hamburger) et dans l'en-tête de
+  // page (≥ 1024px) — un seul des deux est visible à la fois (cf. PageHeader).
+  const statusBadge = pdjRows !== undefined && sheet !== undefined && (
+    <LockBadge
+      locked={isValidated}
+      label={isValidated ? 'Clôturé' : 'Ouvert'}
+      compact
+      hint={
+        isValidated
+          ? 'Grille et commentaire figés. Réouvrez le rapprochement pour les modifier.'
+          : 'Saisie en cours, enregistrée à chaque clic.'
+      }
+    />
+  )
+  useNavbarBadge(statusBadge)
+
   /* Bouton d'état du jour, rendu en bas de page (sous les commentaires), là où
      se termine la saisie — comme sur la feuille de caisse. Texte seul : le
      libellé dit déjà l'action, et un cadenas y ajoutait surtout une ambiguïté
@@ -704,24 +723,12 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
         // titre de page s'efface pour ne pas le répéter deux fois. Au-delà,
         // la Navbar revient aux onglets et le titre reprend sa place normale.
         title={<span className="hidden lg:inline">{title}</span>}
-        // Rien à annoncer avant que l'occupation et la feuille soient chargées :
-        // la pastille se contredirait le temps d'un rendu. En secours, on affiche
-        // « Ouvert » de base (grille de secours exploitable, clôturable).
         badgeAlign="end"
+        // Sous 1024px, ce même badge vit dans la Navbar globale, à côté du
+        // hamburger (posé par useNavbarBadge ci-dessous) : cette copie ne
+        // s'affiche qu'au-delà, pour ne jamais le montrer deux fois.
         badge={
-          pdjRows !== undefined &&
-          sheet !== undefined && (
-            <LockBadge
-              locked={isValidated}
-              label={isValidated ? 'Clôturé' : 'Ouvert'}
-              compact
-              hint={
-                isValidated
-                  ? 'Grille et commentaire figés. Réouvrez le rapprochement pour les modifier.'
-                  : 'Saisie en cours, enregistrée à chaque clic.'
-              }
-            />
-          )
+          statusBadge && <span className="hidden lg:inline-flex">{statusBadge}</span>
         }
         actions={
           // Sous 640px, ce groupe entier laisse la place à la barre d'outils

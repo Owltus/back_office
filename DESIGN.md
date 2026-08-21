@@ -289,9 +289,15 @@ rejoindre ce langage.
   peut y poser un texte discret — le jour affiché sur Rapprochement, par exemple
   — quand ce jour a été retiré du corps de page pour économiser la place. Texte
   atténué (`text-muted-foreground`), plus petit que le nom de page, jamais du
-  même poids visuel. Whatever la page pose disparaît automatiquement en la
-  quittant (voir `lib/navbarSubtitle.ts`) — jamais de sous-titre fantôme d'une
-  page précédente.
+  même poids visuel.
+- **Badge de page** (optionnel, à côté du bouton hamburger, PAS à côté du nom de
+  page) : une icône de statut (le cadenas clôturé/ouvert de Rapprochement), même
+  couleur que sa version texte du corps de page. Les deux partagent le même
+  wrapper `ml-auto` que le hamburger — jamais posés séparément, sinon un vide
+  apparaît entre eux au lieu de les pousser ensemble au bord droit.
+- Sous-titre et badge disparaissent automatiquement en quittant la page qui les
+  a posés (voir `lib/navbarSubtitle.ts`) — jamais de résidu d'une page
+  précédente.
 
 ### Barre d'outils basse mobile (signature, sous 640px)
 - **Quand :** remplace la barre d'actions de l'en-tête sous 640px — pas un
