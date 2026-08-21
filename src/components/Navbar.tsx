@@ -40,9 +40,12 @@ export function Navbar() {
     (p) => pathname === p.route || pathname.startsWith(`${p.route}/`),
   )
 
-  // En passant en mode desktop (>= md), on ferme le tiroir s'il est ouvert.
+  // En passant en mode desktop (>= lg), on ferme le tiroir s'il est ouvert.
+  // Seuil relevé de md (768px) à lg (1024px, 2026-08-21) : à 768-1024px, les 9
+  // onglets inline + l'avatar débordaient déjà du viewport (avatar coupé,
+  // inatteignable) — le tiroir mobile gère cette plage bien plus proprement.
   useEffect(() => {
-    const mql = window.matchMedia('(min-width: 768px)')
+    const mql = window.matchMedia('(min-width: 1024px)')
     const onChange = (e: MediaQueryListEvent) => {
       if (e.matches) setMenuOpen(false)
     }
@@ -59,7 +62,7 @@ export function Navbar() {
             <Button
               variant="ghost"
               size="icon"
-              className="order-last ml-auto text-muted-foreground md:hidden"
+              className="order-last ml-auto text-muted-foreground lg:hidden"
               aria-label="Ouvrir le menu"
             >
               <Menu className="size-5" />
@@ -135,13 +138,13 @@ export function Navbar() {
           aria-label="Accueil"
         >
           <Logo className="size-7" />
-          <span className="truncate text-lg font-bold tracking-tight md:hidden">
+          <span className="truncate text-lg font-bold tracking-tight lg:hidden">
             {currentPage?.label ?? 'Back Office'}
           </span>
         </Link>
 
         {/* --- Liens inline (>= md) --- */}
-        <ul className="ml-2 hidden items-center gap-1 md:flex">
+        <ul className="ml-2 hidden items-center gap-1 lg:flex">
           {navItems.map((item) => (
             <li key={item.to}>
               <Link
@@ -160,7 +163,7 @@ export function Navbar() {
         </ul>
 
         {/* --- Compte : dans la top bar sur desktop uniquement --- */}
-        <div className="ml-auto hidden items-center gap-1 sm:gap-2 md:flex">
+        <div className="ml-auto hidden items-center gap-1 sm:gap-2 lg:flex">
           <UserMenu
             trigger={
               <button
