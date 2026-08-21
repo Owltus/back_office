@@ -1,5 +1,5 @@
-import { computeEcarts, fundEcart, hasCountedFund } from '#/lib/caisse/calc.ts'
-import { effectiveFundTarget } from '#/lib/caisse/cautions.ts'
+import { computeEcarts, fundEcart, fundTotal, hasCountedFund } from '#/lib/caisse/calc.ts'
+import { activeCautionsTotal, effectiveFundTarget } from '#/lib/caisse/cautions.ts'
 import { ECART_KEYS, EPSILON, FUND_TARGET } from '#/lib/caisse/constants.ts'
 import type { Caution, CaisseSheet } from '#/lib/caisse/types.ts'
 
@@ -38,10 +38,16 @@ import type { Caution, CaisseSheet } from '#/lib/caisse/types.ts'
  * ce jour-là). Un fond NON compté (nuit non faite) ne compte pas — c'est une
  * absence de comptage, pas un écart.
  */
-function hasAnomaly(s: CaisseSheet, effectiveTarget: number): boolean {
+function hasAnomaly(
+  s: CaisseSheet,
+  countedTotal: number,
+  effectiveTarget: number,
+): boolean {
   const ecarts = computeEcarts(s)
   if (ECART_KEYS.some((c) => Math.abs(ecarts[c]) >= EPSILON)) return true
-  return hasCountedFund(s) && Math.abs(fundEcart(s, effectiveTarget)) >= EPSILON
+  return (
+    hasCountedFund(s) && Math.abs(fundEcart(countedTotal, effectiveTarget)) >= EPSILON
+  )
 }
 
 /** Réel encaissé (ventilé par moyen de paiement) + fréquence d'anomalies. Métriques
@@ -91,7 +97,10 @@ function addSheet(t: CaisseSummary, s: CaisseSheet, cautions: Caution[]): void {
   t.adyen += s.caisse.adyen
   t.encaisse += s.caisse.cash + s.caisse.cb + s.caisse.cvac + s.caisse.adyen
   const target = effectiveFundTarget(cautions, s.reportDate, FUND_TARGET)
-  if (hasAnomaly(s, target)) t.anomalies += 1
+  // Total COMPTÉ = coupures + cautions actives ce jour-là (enveloppes scellées,
+  // jamais recomptées billet par billet) — même règle que CaisseBoard/pdf.ts.
+  const countedTotal = fundTotal(s) + activeCautionsTotal(cautions, s.reportDate)
+  if (hasAnomaly(s, countedTotal, target)) t.anomalies += 1
 }
 
 /**

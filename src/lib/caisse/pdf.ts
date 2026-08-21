@@ -13,7 +13,7 @@
 import type { jsPDF } from 'jspdf'
 
 import { DENOM_SVG } from '#/assets/euros/index.ts'
-import { computeEcarts, fundEcart, fundTotal } from '#/lib/caisse/calc.ts'
+import { computeEcarts, fundEcart, fundTotal, round2 } from '#/lib/caisse/calc.ts'
 import {
   DENOMINATIONS,
   ECART_LABELS,
@@ -22,7 +22,7 @@ import {
   paymentColumns,
 } from '#/lib/caisse/constants.ts'
 import { fmtEcart, fmtEur, fmtEurInt } from '#/lib/caisse/format.ts'
-import type { CaisseSheetInput, DenomKey, EcartKey } from '#/lib/caisse/types.ts'
+import type { CaisseSheetInput, Caution, DenomKey, EcartKey } from '#/lib/caisse/types.ts'
 
 /** Couleur DOM d'un écart : vert si équilibré (≈ 0), rouge sinon. */
 function setBalanceColor(pdf: jsPDF, balanced: boolean): void {
@@ -149,6 +149,10 @@ export interface CaissePdfData {
    * calculé par l'appelant via `effectiveFundTarget()` (lib/caisse/cautions.ts)
    * — jamais `FUND_TARGET` en dur (une caution active changerait la cible). */
   effectiveFundTarget: number
+  /** Cautions ACTIVES ce jour-là (celles qui composent `effectiveFundTarget`).
+   * Liste VIDE = aucune section imprimée : le document reste identique à avant
+   * cette fonctionnalité, rien à signaler. */
+  activeCautions: Caution[]
 }
 
 /** Construit le document PDF (jsPDF) de la feuille de caisse, sans l'imprimer.
@@ -194,6 +198,13 @@ const RIGHT = 195
 const CENTER = 105
 const CONTENT_W = RIGHT - LEFT
 
+// Date courte (« 15 août ») pour la colonne « depuis le » du tableau des
+// cautions — même format que la ligne écran (CaisseBoard.tsx, fmtDayShort).
+const fmtDayShort = new Intl.DateTimeFormat('fr-FR', {
+  day: 'numeric',
+  month: 'long',
+})
+
 /** Montant d'une source (StayNTouch / Lightspeed / Caisse) pour un mode donné. */
 function sourceAmount(
   form: CaisseSheetInput,
@@ -210,7 +221,7 @@ function sourceAmount(
 
 function renderCaisseDocument(
   pdf: jsPDF,
-  { titleDate, form, operatorInitials, effectiveFundTarget }: CaissePdfData,
+  { titleDate, form, operatorInitials, effectiveFundTarget, activeCautions }: CaissePdfData,
   images: DenomImages,
 ): void {
   let y = 22
@@ -321,9 +332,15 @@ function renderCaisseDocument(
   y += 5 * cellH + 3
 
   // Total du fond — même mise en page que la page : à gauche « Fond de caisse
-  // 150 € » (muté), à droite « total (écart) » coloré (vert si équilibré).
-  const total = fundTotal(form)
-  const fe = fundEcart(form, effectiveFundTarget)
+  // 150 € » (muté), à droite « total (écart) » coloré (vert si équilibré). Le
+  // lien avec une éventuelle caution reste implicite (le tableau juste en
+  // dessous suffit) : pas de parenthèse détaillant le calcul sur cette ligne,
+  // volontairement simple. Le total COMPTÉ inclut quand même les cautions
+  // actives (enveloppes scellées, jamais recomptées billet par billet dans la
+  // grille) — même règle que CaisseBoard.tsx, ce n'est que l'AFFICHAGE qui reste sobre.
+  const cautionsCash = activeCautions.reduce((s, c) => s + c.amount, 0)
+  const total = round2(fundTotal(form) + cautionsCash)
+  const fe = fundEcart(total, effectiveFundTarget)
   pdf.setFont('helvetica', 'normal').setFontSize(9).setTextColor(110)
   pdf.text(`Fond de caisse ${fmtEurInt(effectiveFundTarget)}`, LEFT, y)
   pdf.setFont('helvetica', 'bold')
@@ -331,6 +348,69 @@ function renderCaisseDocument(
   pdf.text(`${fmtEur(total)} (${fmtEcart(fe)})`, RIGHT, y, { align: 'right' })
   pdf.setTextColor(26)
   y += 9
+
+  // --- Cautions en cours (juste au-dessus du commentaire) ------------------
+  // RIEN n'est dessiné si la liste est vide : le document reste identique à
+  // avant cette fonctionnalité (pas de titre orphelin, pas de cadre vide).
+  // Tableau encadré SANS en-tête (4 colonnes : chambre / montant / commentaire
+  // / depuis quand), étalé sur toute la largeur — même esprit que le cadre
+  // « FOND DE CAISSE » et mêmes 4 informations que la ligne écran (CaisseBoard).
+  if (activeCautions.length > 0) {
+    pdf.setFont('helvetica', 'bold').setFontSize(10).setTextColor(26)
+    pdf.text('CAUTIONS EN COURS', LEFT, y)
+    y += 5 // même écart titre→contenu que « FOND DE CAISSE » (titre puis grille)
+
+    const rowH = 7
+    const colRoomW = 24
+    const colAmountW = 24
+    const colDateW = 32
+    const commentX = LEFT + colRoomW + colAmountW
+    const dateX = RIGHT - colDateW
+    const tableTop = y
+    const tableH = rowH * activeCautions.length
+
+    pdf.setDrawColor(180).setLineWidth(0.2)
+    pdf.rect(LEFT, tableTop, CONTENT_W, tableH)
+    pdf.line(LEFT + colRoomW, tableTop, LEFT + colRoomW, tableTop + tableH)
+    pdf.line(commentX, tableTop, commentX, tableTop + tableH)
+    pdf.line(dateX, tableTop, dateX, tableTop + tableH)
+
+    activeCautions.forEach((c, i) => {
+      const rowY = tableTop + i * rowH
+      if (i > 0) {
+        pdf.setDrawColor(222).setLineWidth(0.15)
+        pdf.line(LEFT, rowY, RIGHT, rowY)
+      }
+      const textY = rowY + rowH / 2 + 1.2
+      pdf.setFont('helvetica', 'bold').setFontSize(8.5).setTextColor(26)
+      pdf.text(`Ch. ${c.room}`, LEFT + colRoomW / 2, textY, { align: 'center' })
+      pdf.setFont('helvetica', 'normal').setTextColor(60)
+      pdf.text(fmtEur(c.amount), LEFT + colRoomW + colAmountW / 2, textY, {
+        align: 'center',
+      })
+      // Commentaire : une seule ligne, quitte à couper un texte trop long
+      // (comme le fond de caisse, jamais de débordement de page).
+      const [line] = pdf.splitTextToSize(
+        c.comment || '—',
+        dateX - commentX - 6,
+      ) as string[]
+      pdf.text(line, commentX + 3, textY)
+      // Depuis quand — même formatage que la ligne écran (CaisseBoard.tsx).
+      pdf.setFontSize(7.5).setTextColor(120)
+      pdf.text(
+        `depuis le ${fmtDayShort.format(new Date(c.takenDate + 'T00:00:00'))}`,
+        dateX + colDateW / 2,
+        textY,
+        { align: 'center' },
+      )
+      pdf.setFontSize(8.5)
+    })
+    pdf.setTextColor(26)
+    // Même écart (9) qu'entre les autres sections majeures du document (ÉCARTS
+    // → FOND DE CAISSE, Total du fond → CAUTIONS) : avant ce correctif, la
+    // sortie du tableau ne laissait que 4, plus serré que partout ailleurs.
+    y = tableTop + tableH + 9
+  }
 
   // --- Commentaire : label + cadre TOUJOURS présent (zone à écrire) ---------
   pdf.setFont('helvetica', 'bold').setFontSize(10).setTextColor(26)

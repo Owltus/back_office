@@ -33,17 +33,24 @@ export function fundTotal(s: Pick<CaisseSheet, 'counts'>): number {
   return cents / 100
 }
 
-/** Écart du fond de caisse : total compté − fond EFFECTIF attendu (doit être 0).
+/** Écart du fond de caisse : total COMPTÉ − fond EFFECTIF attendu (doit être 0).
+ *
+ * `countedTotal` n'est PAS juste `fundTotal(s)` : il doit inclure les cautions
+ * actives (`fundTotal(s) + activeCautionsTotal(...)`, lib/caisse/cautions.ts).
+ * Une caution est une enveloppe SCELLÉE au montant connu — elle n'est jamais
+ * recomptée billet par billet dans la grille des coupures, donc son montant ne
+ * réapparaîtra JAMAIS dans `fundTotal(s)` tout seul. Sans cet ajout, le fond
+ * afficherait un écart permanent de -(cautions actives), même une caisse
+ * parfaitement équilibrée. C'est l'appelant qui compose `countedTotal` (board,
+ * PDF) — cette fonction reste agnostique des cautions.
+ *
  * `effectiveTarget` vient de `effectiveFundTarget()` (lib/caisse/cautions.ts) —
  * PLUS JAMAIS de `s.fundOrigin` stocké : le fond attendu se recalcule toujours
  * en direct (décision D4, plan/caisse-cautions/00-INDEX.md), y compris pour une
  * feuille déjà validée, afin qu'une caution ajoutée en retard corrige
  * automatiquement l'affichage sans jamais réécrire la feuille. */
-export function fundEcart(
-  s: Pick<CaisseSheet, 'counts'>,
-  effectiveTarget: number,
-): number {
-  return round2(fundTotal(s) - effectiveTarget)
+export function fundEcart(countedTotal: number, effectiveTarget: number): number {
+  return round2(countedTotal - effectiveTarget)
 }
 
 /** Vrai si le fond a été compté (au moins une coupure > 0) — donc un « vrai
@@ -54,14 +61,15 @@ export function hasCountedFund(s: Pick<CaisseSheet, 'counts'>): boolean {
 }
 
 /** Vrai si tous les écarts (paiements + fond) sont à zéro à la tolérance près.
- * `effectiveTarget` : voir `fundEcart`. */
+ * `countedTotal`/`effectiveTarget` : voir `fundEcart`. */
 export function isBalanced(
-  s: SheetAmounts & Pick<CaisseSheet, 'counts'>,
+  s: SheetAmounts,
+  countedTotal: number,
   effectiveTarget: number,
 ): boolean {
   const ecarts = computeEcarts(s)
   const paymentsOk = Object.values(ecarts).every((v) => Math.abs(v) < EPSILON)
-  return paymentsOk && Math.abs(fundEcart(s, effectiveTarget)) < EPSILON
+  return paymentsOk && Math.abs(fundEcart(countedTotal, effectiveTarget)) < EPSILON
 }
 
 /** Somme d'une colonne attendue (SNT + LS) pour un mode donné. */

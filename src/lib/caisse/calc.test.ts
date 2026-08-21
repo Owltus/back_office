@@ -53,7 +53,7 @@ describe('fundTotal', () => {
       cnt_050: 16, cnt_020: 15, cnt_010: 4, cnt_005: 12,
     })
     expect(fundTotal(s)).toBe(150)
-    expect(fundEcart(s, 150)).toBe(0)
+    expect(fundEcart(fundTotal(s), 150)).toBe(0)
   })
 })
 
@@ -64,21 +64,30 @@ describe('isBalanced', () => {
       cnt_50: 1, cnt_20: 2, cnt_10: 3, cnt_2: 3, cnt_1: 12,
       cnt_050: 16, cnt_020: 15, cnt_010: 4, cnt_005: 12,
     })
-    expect(isBalanced(s, 150)).toBe(true)
+    expect(isBalanced(s, fundTotal(s), 150)).toBe(true)
 
     s.caisse.cash = 5 // introduit un écart
-    expect(isBalanced(s, 150)).toBe(false)
+    expect(isBalanced(s, fundTotal(s), 150)).toBe(false)
   })
 
-  it('un fond effectif majoré (caution active) déplace ce qui est considéré équilibré', () => {
+  it('un fond effectif majoré (caution active) exige d’ajouter son montant au COMPTÉ, pas juste au ciblé', () => {
     const s = base()
-    // Même comptage que ci-dessus (150 €) : équilibré contre 150, plus contre 450.
+    // Même comptage que ci-dessus (150 € de coupures) — la caution (300 €) est
+    // une enveloppe scellée, jamais recomptée dans la grille.
     Object.assign(s.counts, {
       cnt_50: 1, cnt_20: 2, cnt_10: 3, cnt_2: 3, cnt_1: 12,
       cnt_050: 16, cnt_020: 15, cnt_010: 4, cnt_005: 12,
     })
-    expect(isBalanced(s, 150)).toBe(true)
-    expect(isBalanced(s, 450)).toBe(false)
-    expect(fundEcart(s, 450)).toBe(-300)
+    const counted = fundTotal(s)
+    // Cible à 150 (aucune caution) : équilibré.
+    expect(isBalanced(s, counted, 150)).toBe(true)
+    // Cible à 450 (caution active) SANS ajouter son montant au compté : c'est
+    // le bug corrigé — un écart apparaîtrait alors qu'il n'y a rien d'anormal.
+    expect(isBalanced(s, counted, 450)).toBe(false)
+    expect(fundEcart(counted, 450)).toBe(-300)
+    // Cible à 450 EN ajoutant la caution au compté (counted + 300) : de
+    // nouveau équilibré — c'est le comportement correct.
+    expect(isBalanced(s, counted + 300, 450)).toBe(true)
+    expect(fundEcart(counted + 300, 450)).toBe(0)
   })
 })

@@ -312,9 +312,23 @@ export async function refundCaution(id: string, refundedDate: string): Promise<v
   if (error) throw error
 }
 
+/** Annule un remboursement saisi par erreur : repasse la caution en `active`.
+ * `refunded_by`/`refunded_at` sont effacés SERVEUR par le trigger (transition
+ * 'refunded' -> 'active'). Réservé au jour même du remboursement dans l'UI
+ * (voir CaisseBoard.tsx) — permet de revoir/corriger ce qui a été fait dans la
+ * journée sans passer par un rétablissement manuel. */
+export async function reactivateCaution(id: string): Promise<void> {
+  const { error } = await supabase
+    .from(CAISSE_CAUTIONS_TABLE)
+    .update({ status: 'active', refunded_date: null })
+    .eq('id', id)
+  if (error) throw error
+}
+
 /** Suppression physique (correction d'une erreur de saisie) — réservée à la
- * gestion par la RLS, jamais le chemin normal de fin de vie d'une caution
- * (cf. « Rembourser »). */
+ * gestion, ou à l'écriture LE JOUR MÊME de la prise (RLS, voir
+ * supabase/caisse_cautions_delete_ecriture_same_day.sql) — jamais le chemin
+ * normal de fin de vie d'une caution (cf. « Rembourser »). */
 export async function deleteCaution(id: string): Promise<void> {
   const { error } = await supabase
     .from(CAISSE_CAUTIONS_TABLE)

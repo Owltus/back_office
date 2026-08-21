@@ -50,6 +50,7 @@ import {
   fundTotal,
   hasCountedFund,
   inputToSheet,
+  round2,
   sheetToInput,
 } from '#/lib/caisse/calc.ts'
 import { effectiveFundTarget, isCautionActiveOn } from '#/lib/caisse/cautions.ts'
@@ -77,6 +78,7 @@ import {
   fetchPreviousSheet,
   fetchRecentValidatedSlots,
   fetchSheet,
+  reactivateCaution,
   refundCaution,
   reopenSheet,
   updateCaution,
@@ -274,6 +276,11 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
   const [confirmRefundCautionId, setConfirmRefundCautionId] = useState<
     string | null
   >(null)
+  // Remise en cours : annule un remboursement saisi par erreur — même exigence
+  // de confirmation que « Rembourser », pour la même raison.
+  const [confirmReactivateCautionId, setConfirmReactivateCautionId] = useState<
+    string | null
+  >(null)
 
   const { data: sheet, isError: sheetError } = useQuery({
     queryKey: ['caisse', 'sheet', selectedDate, selectedShift],
@@ -339,10 +346,24 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
     () => effectiveFundTarget(cautions, selectedDate, FUND_TARGET),
     [cautions, selectedDate],
   )
-  // Cautions actives pour le jour affiché — liste visible sur la page (bouton
-  // « + Caution », menu contextuel Rembourser/Supprimer).
+  // Cautions VRAIMENT actives ce jour-là (composent le fond effectif affiché,
+  // cf. closeIssues plus bas).
   const activeCautions = useMemo(
     () => cautions.filter((c) => isCautionActiveOn(c, selectedDate)),
+    [cautions, selectedDate],
+  )
+  // Cautions à AFFICHER pour le jour affiché : les actives, PLUS celles
+  // remboursées CE jour-là précisément (borne exclusive de isCautionActiveOn :
+  // une caution remboursée aujourd'hui ne compte plus dans le fond dès
+  // aujourd'hui, mais doit rester visible pour repérer une erreur de saisie du
+  // jour et pouvoir la remettre en cours — sans ce deuxième critère, un
+  // remboursement disparaîtrait aussitôt de l'écran).
+  const visibleCautions = useMemo(
+    () =>
+      cautions.filter(
+        (c) =>
+          isCautionActiveOn(c, selectedDate) || c.refundedDate === selectedDate,
+      ),
     [cautions, selectedDate],
   )
   // Caution ciblée par la confirmation en cours (rembourser ou supprimer) — sert
@@ -350,18 +371,23 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
   // mis-clic soit repéré avant validation, pas après.
   const cautionToRefund = cautions.find((c) => c.id === confirmRefundCautionId)
   const cautionToDelete = cautions.find((c) => c.id === confirmDeleteCautionId)
+  const cautionToReactivate = cautions.find(
+    (c) => c.id === confirmReactivateCautionId,
+  )
 
   const ecarts = useMemo(() => computeEcarts(form), [form])
   // Dérivés du fond, mémoïsés ensemble : chaque frappe re-render le board, et sans
   // mémo ces calculs (dont `fundTotal`, une réduction sur 15 coupures) se rejouaient
   // à chaque touche. L'équilibre se lit désormais via `closeIssues` (verdict modal).
-  const { total, fEcart } = useMemo(
-    () => ({
-      total: fundTotal(form),
-      fEcart: fundEcart(form, effectiveTarget),
-    }),
-    [form, effectiveTarget],
-  )
+  // `total` (compté) INCLUT les cautions actives : ce sont des enveloppes
+  // scellées au montant connu, jamais recomptées billet par billet dans la
+  // grille des coupures — sans cet ajout, l'écart afficherait en permanence
+  // -(cautions actives), même une caisse parfaitement équilibrée.
+  const { total, fEcart } = useMemo(() => {
+    const cautionsCash = activeCautions.reduce((s, c) => s + c.amount, 0)
+    const counted = round2(fundTotal(form) + cautionsCash)
+    return { total: counted, fEcart: fundEcart(counted, effectiveTarget) }
+  }, [form, effectiveTarget, activeCautions])
 
   // --- Sauvegarde automatique (autosave) -----------------------------------
   // La feuille est persistée à chaque modification (débounce), sans bouton. Le
@@ -686,8 +712,23 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
       )
   }
 
+  function handleReactivateCaution() {
+    if (!isWriter || !canEditFields || !confirmReactivateCautionId) return
+    const id = confirmReactivateCautionId
+    setConfirmReactivateCautionId(null)
+    reactivateCaution(id)
+      .then(invalidateCautions)
+      .catch((err) =>
+        setError(`Remise en cours refusée ou échouée : ${errorMessage(err)}`),
+      )
+  }
+
   function handleDeleteCaution() {
-    if (!isGestion || !canEditFields || !confirmDeleteCautionId) return
+    if (!canEditFields || !confirmDeleteCautionId) return
+    // Miroir exact de la RLS (caisse_cautions_delete_ecriture_same_day.sql) :
+    // gestion à tout moment, écriture SEULEMENT le jour même de la prise.
+    const target = cautions.find((c) => c.id === confirmDeleteCautionId)
+    if (!target || !(isGestion || target.takenDate === dateStr(now))) return
     const id = confirmDeleteCautionId
     setConfirmDeleteCautionId(null)
     deleteCaution(id)
@@ -711,6 +752,7 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
           form,
           operatorInitials: sheet?.operatorInitials || form.operatorInitials,
           effectiveFundTarget: effectiveTarget,
+          activeCautions,
         },
         `Caisse_${da}-${mo}-${yr}_${form.shift}`,
       )
@@ -1162,20 +1204,21 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
             </div>
           </div>
 
-          {/* Cautions actives ce jour-là : chambre, montant, commentaire libre.
-              Clic droit (menu contextuel) pour rembourser (immédiat, cesse de
-              majorer le fond dès ce moment — décision D3) ou supprimer (erreur
-              de saisie, réservé gestion). Carte absente s'il n'y en a aucune. */}
-          {activeCautions.length > 0 && (
+          {/* Cautions du jour affiché : les actives (chambre, montant,
+              commentaire libre), plus celles remboursées CE jour précisément
+              (pour repérer une erreur et pouvoir les remettre en cours). Clic
+              droit (menu contextuel) pour agir. Carte absente s'il n'y a rien
+              à montrer. */}
+          {visibleCautions.length > 0 && (
             <div className="rounded-xl border border-border bg-card p-3 print:hidden">
               <div className="mb-2.5 flex items-baseline justify-between gap-2">
-                <h2 className="text-sm font-semibold">Cautions actives</h2>
+                <h2 className="text-sm font-semibold">Cautions</h2>
                 <span className="text-xs text-muted-foreground">
-                  Clic droit sur une ligne pour rembourser ou supprimer
+                  Clic droit sur une ligne pour agir
                 </span>
               </div>
               <ul className="flex flex-col gap-2">
-                {activeCautions.map((c) => {
+                {visibleCautions.map((c) => {
                   // Rien à proposer (caisse clôturée, ou rôle lecture seule) :
                   // pas de menu contextuel DU TOUT plutôt qu'un menu vide au clic
                   // droit (gestion implique toujours écriture dans ce modèle de
@@ -1197,8 +1240,13 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
                         hasActions && 'cursor-context-menu hover:bg-muted/60',
                       )}
                     >
-                      <span className="whitespace-nowrap text-base font-semibold">
+                      <span className="flex items-center gap-2 whitespace-nowrap text-base font-semibold">
                         Chambre {c.room}
+                        {c.status === 'refunded' && (
+                          <span className="rounded-full bg-muted px-1.5 py-0.5 text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">
+                            Remboursée
+                          </span>
+                        )}
                       </span>
                       <span className="whitespace-nowrap border-l border-border/60 pl-4">
                         <span className="inline-flex items-center rounded-md bg-indigo-500/10 px-2 py-0.5 tabular-nums font-semibold text-indigo-600 dark:text-indigo-400">
@@ -1214,6 +1262,19 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
                     </li>
                   )
                   if (!hasActions) return row
+                  // Remise en cours proposée UNIQUEMENT le jour même du
+                  // remboursement (c'est la raison d'être de cette liste élargie :
+                  // repérer et corriger une erreur de la journée) — jamais depuis
+                  // une date PASSÉE où la caution apparaît encore active (D4).
+                  const refundedToday =
+                    c.status === 'refunded' && c.refundedDate === selectedDate
+                  // Suppression : gestion à tout moment, écriture SEULEMENT le
+                  // jour même de la prise (miroir exact de la policy RLS,
+                  // supabase/caisse_cautions_delete_ecriture_same_day.sql) — une
+                  // caution plus ancienne « court » déjà sur plusieurs feuilles,
+                  // potentiellement closes ; au-delà, seule la gestion supprime.
+                  const canDelete =
+                    isGestion || c.takenDate === dateStr(now)
                   return (
                     <ContextMenu key={c.id}>
                       <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
@@ -1240,7 +1301,15 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
                             Rembourser
                           </ContextMenuItem>
                         )}
-                        {isGestion && (
+                        {refundedToday && (
+                          <ContextMenuItem
+                            onSelect={() => setConfirmReactivateCautionId(c.id)}
+                          >
+                            <Undo2 />
+                            Remettre en cours
+                          </ContextMenuItem>
+                        )}
+                        {canDelete && (
                           <>
                             <ContextMenuSeparator />
                             <ContextMenuItem
@@ -1367,6 +1436,21 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
         confirmLabel="Supprimer"
         destructive
         onConfirm={handleDeleteCaution}
+      />
+
+      <ConfirmDialog
+        open={confirmReactivateCautionId !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmReactivateCautionId(null)
+        }}
+        title="Remettre cette caution en cours ?"
+        description={
+          cautionToReactivate
+            ? `Chambre ${cautionToReactivate.room} — ${fmtEur(cautionToReactivate.amount)}. Annule le remboursement du jour ; le fond de caisse attendu la comptera de nouveau.`
+            : undefined
+        }
+        confirmLabel="Remettre en cours"
+        onConfirm={handleReactivateCaution}
       />
     </div>
   )
