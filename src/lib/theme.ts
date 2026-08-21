@@ -65,3 +65,22 @@ export function setTheme(theme: Theme): void {
   }
   for (const listener of listeners) listener()
 }
+
+/**
+ * Synchronisation entre ONGLETS du même navigateur (poste de réception partagé,
+ * plusieurs pages ouvertes) : l'événement `storage` ne se déclenche QUE dans les
+ * autres onglets (jamais celui qui a écrit), donc aucune boucle avec `setTheme`.
+ * Sans ça, un onglet resté ouvert ne reflétait le choix fait ailleurs qu'à son
+ * prochain rechargement — ce qui, vu de l'utilisateur devant cet onglet, ressemble
+ * à un thème qui « change tout seul ».
+ */
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (e) => {
+    if (e.key !== THEME_STORAGE_KEY) return
+    const next: Theme = e.newValue === 'light' ? 'light' : DEFAULT_THEME
+    if (next === current) return
+    current = next
+    document.documentElement.classList.toggle('dark', next === 'dark')
+    for (const listener of listeners) listener()
+  })
+}
