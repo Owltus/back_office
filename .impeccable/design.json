@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-21T00:00:00.000Z",
+  "title": "Design System: Back Office OKKO Nantes",
+  "extensions": {
+    "colorMeta": {
+      "indigo-signal": { "role": "primary", "displayName": "Indigo Signal", "canonical": "#6366f1", "tonalRamp": ["#1e1b4b", "#312e81", "#3730a3", "#4338ca", "#4f46e5", "#6366f1", "#818cf8", "#a5b4fc"] },
+      "ink-navy": { "role": "neutral", "displayName": "Ink Navy", "canonical": "#0b111e", "tonalRamp": ["#05070c", "#0b111e", "#141d2e", "#1e293b", "#334155", "#475569", "#64748b", "#94a3b8"] },
+      "slate-card": { "role": "neutral", "displayName": "Slate Card", "canonical": "#141d2e", "tonalRamp": ["#0b111e", "#141d2e", "#1e293b", "#334155", "#475569", "#64748b", "#94a3b8", "#cbd5e1"] },
+      "pale-slate-text": { "role": "neutral", "displayName": "Pale Slate Text", "canonical": "#e2e8f0", "tonalRamp": ["#334155", "#475569", "#64748b", "#94a3b8", "#cbd5e1", "#e2e8f0", "#f1f5f9", "#f8fafc"] },
+      "muted-slate": { "role": "neutral", "displayName": "Muted Slate", "canonical": "#94a3b8", "tonalRamp": ["#334155", "#475569", "#64748b", "#94a3b8", "#cbd5e1", "#e2e8f0", "#f1f5f9", "#f8fafc"] },
+      "alert-red": { "role": "destructive", "displayName": "Alert Red", "canonical": "#ef4444", "tonalRamp": ["#450a0a", "#7f1d1d", "#991b1b", "#b91c1c", "#dc2626", "#ef4444", "#f87171", "#fca5a5"] },
+      "chart-indigo": { "role": "chart", "displayName": "Chart — Indigo", "canonical": "#818cf8" },
+      "chart-cyan": { "role": "chart", "displayName": "Chart — Cyan", "canonical": "#22d3ee" },
+      "chart-amber": { "role": "chart", "displayName": "Chart — Amber", "canonical": "#fbbf24" },
+      "chart-pink": { "role": "chart", "displayName": "Chart — Pink", "canonical": "#f472b6" },
+      "chart-emerald": { "role": "chart", "displayName": "Chart — Emerald", "canonical": "#34d399" }
+    },
+    "typographyMeta": {
+      "title": { "displayName": "Title", "purpose": "Titre de page (h1 de PageHeader), tronqué plutôt que renvoyé à la ligne." },
+      "value": { "displayName": "Value", "purpose": "Valeur chiffrée d'une StatTile, toujours en tabular-nums." },
+      "body": { "displayName": "Body", "purpose": "Texte courant, formulaires, cellules de tableau." },
+      "label": { "displayName": "Label", "purpose": "En-tête de StatTile, toujours au-dessus de la valeur." }
+    },
+    "shadows": [
+      { "name": "control-affordance", "value": "0 1px 2px 0 rgb(0 0 0 / 0.05)", "purpose": "Signale qu'un élément est un contrôle interactif (bouton outline, champ, badge de statut, bascule segmentée)." },
+      { "name": "ambient-card", "value": "0 1px 2px rgba(0, 0, 0, 0.18)", "purpose": "Cas isolé : cartes d'étage du rapprochement, pour se détacher d'un fond identique sur toute la largeur." }
+    ],
+    "motion": [
+      { "name": "control-transition", "value": "150ms ease", "purpose": "Transition couleur/fond/bordure au survol et focus des contrôles (boutons, champs)." },
+      { "name": "segmented-slide", "value": "200ms ease", "purpose": "Glissement de la pastille active dans la bascule segmentée (vue service ↔ détail financier)." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Action principale d'un dialogue ou d'un formulaire.",
+      "html": "<button class=\"ds-btn-primary\">Enregistrer</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 36px; padding: 8px 16px; background: #6366f1; color: #ffffff; font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: 14px; font-weight: 500; border: none; border-radius: 10px; cursor: pointer; transition: background-color 150ms ease; } .ds-btn-primary:hover { background: color-mix(in oklab, #6366f1 90%, white); } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.5); }"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Le variant le plus utilisé de l'app : toute la barre d'outils en est faite.",
+      "html": "<button class=\"ds-btn-outline\">Imprimer</button>",
+      "css": ".ds-btn-outline { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 36px; padding: 8px 12px; background: #141d2e; color: #e2e8f0; font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: 14px; font-weight: 500; border: 1px solid rgba(148, 163, 184, 0.16); border-radius: 10px; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); cursor: pointer; transition: background-color 150ms ease, border-color 150ms ease; } .ds-btn-outline:hover { background: #1e293b; } .ds-btn-outline:focus-visible { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.5); }"
+    },
+    {
+      "name": "Destructive Button",
+      "kind": "button",
+      "refersTo": "button-destructive",
+      "description": "Action réellement irréversible (suppression) — jamais un aplat rouge plein en usage courant.",
+      "html": "<button class=\"ds-btn-destructive\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M3 6h18\"/><path d=\"M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2\"/></svg>Supprimer</button>",
+      "css": ".ds-btn-destructive { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; width: 32px; background: transparent; color: #ef4444; border: 1px solid rgba(148, 163, 184, 0.16); border-radius: 10px; cursor: pointer; transition: background-color 150ms ease; } .ds-btn-destructive:hover { background: rgba(239, 68, 68, 0.1); } .ds-btn-destructive:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.4); }"
+    },
+    {
+      "name": "Stat Tile",
+      "kind": "card",
+      "refersTo": "stat-tile",
+      "description": "Carte de synthèse KPI unifiée, réutilisée partout dans l'app : liseré de couleur + libellé + valeur tabulaire.",
+      "html": "<div class=\"ds-stat-tile\"><span class=\"ds-stat-tile-rail\"></span><div class=\"ds-stat-tile-body\"><span class=\"ds-stat-tile-label\">Chambres occupées</span><span class=\"ds-stat-tile-value\">54</span></div></div>",
+      "css": ".ds-stat-tile { display: flex; align-items: stretch; overflow: hidden; border-radius: 16px; border: 1px solid rgba(148, 163, 184, 0.12); background: #141d2e; } .ds-stat-tile-rail { width: 8px; flex-shrink: 0; background: #818cf8; } .ds-stat-tile-body { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 4px; padding: 8.8px 12px; } .ds-stat-tile-label { font-family: Inter, sans-serif; font-size: 9.6px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; line-height: 1.15; color: #94a3b8; } .ds-stat-tile-value { font-family: Inter, sans-serif; font-size: 22.4px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; color: #e2e8f0; }"
+    },
+    {
+      "name": "Status Badge",
+      "kind": "chip",
+      "refersTo": "badge-status",
+      "description": "Pastille d'état (« Clôturé », « Ouvert ») habillée comme un bouton outline — jamais un badge décoratif à part.",
+      "html": "<span class=\"ds-status-badge is-locked\">Clôturé</span>",
+      "css": ".ds-status-badge { display: inline-flex; height: 32px; align-items: center; justify-content: center; gap: 6px; border-radius: 10px; border: 1px solid; background: #141d2e; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); padding: 0 12px; font-family: Inter, sans-serif; font-size: 14px; font-weight: 500; } .ds-status-badge.is-locked { border-color: rgba(16, 185, 129, 0.4); color: #34d399; } .ds-status-badge.is-open { border-color: rgba(245, 158, 11, 0.4); color: #fbbf24; }"
+    },
+    {
+      "name": "Segmented Toggle",
+      "kind": "custom",
+      "description": "Bascule vue service ↔ détail financier (PDJ) : pastille pleine qui glisse entre deux positions.",
+      "html": "<div class=\"ds-segmented\"><span class=\"ds-segmented-thumb\"></span><button class=\"ds-segmented-btn is-active\" aria-pressed=\"true\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><circle cx=\"9\" cy=\"7\" r=\"4\"/><path d=\"M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2\"/></svg></button><button class=\"ds-segmented-btn\" aria-pressed=\"false\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"/><path d=\"M14 2v6h6\"/></svg></button></div>",
+      "css": ".ds-segmented { position: relative; display: inline-flex; height: 32px; align-items: center; overflow: hidden; border-radius: 10px; border: 1px solid rgba(148, 163, 184, 0.16); background: #141d2e; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); } .ds-segmented-thumb { position: absolute; inset-block: 0; left: 0; width: 28px; background: #6366f1; transition: left 200ms ease; pointer-events: none; } .ds-segmented-btn { position: relative; z-index: 1; display: flex; width: 28px; height: 100%; align-items: center; justify-content: center; background: transparent; border: none; color: #94a3b8; cursor: pointer; } .ds-segmented-btn.is-active { color: #ffffff; }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "description": "Champ de saisie standard — même vocabulaire de bordure/ombre/focus que les boutons.",
+      "html": "<input class=\"ds-input\" type=\"text\" placeholder=\"Rechercher…\" />",
+      "css": ".ds-input { height: 36px; width: 100%; min-width: 0; border-radius: 10px; border: 1px solid rgba(148, 163, 184, 0.16); background: rgba(148, 163, 184, 0.05); padding: 4px 12px; font-family: Inter, sans-serif; font-size: 14px; color: #e2e8f0; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); outline: none; transition: border-color 150ms ease, box-shadow 150ms ease; } .ds-input::placeholder { color: #94a3b8; } .ds-input:focus-visible { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.5); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "La Tour de Contrôle",
+    "overview": "L'app est le poste de pilotage des opérations quotidiennes de l'hôtel : reporting, caisse, parking, petits-déjeuners, rapprochement ménage, facturation. Elle n'a rien à vendre et personne à convaincre — son seul public est le personnel back-office, en vacation, qui a besoin de lire vite, juste, et sans ambiguïté. Le fond navy sombre par défaut (un clair existe, jamais un simple assombrissement du même écran) installe une ambiance sobre et professionnelle : rien n'attire l'œil pour lui-même, tout sert la lecture rapide des chiffres et des statuts.\n\nLes composants sont nets et sans ambiguïté : bordures fines, rayons modestes, aucun effet décoratif. Un bouton, un champ, une pastille de statut partagent le même vocabulaire visuel (contour + shadow-xs + anneau de focus net) — au point qu'une pastille d'état (« Clôturé », « Ouvert ») est délibérément habillée comme un bouton de la barre d'outils qu'elle surplombe, jamais comme un badge décoratif à part.",
+    "keyCharacteristics": [
+      "Sombre par défaut (navy/indigo), clair en alternative réelle — jamais dark-only.",
+      "Une seule famille de police (Inter), hiérarchie par poids et taille, pas par style.",
+      "Cartes plates (bordure, pas d'ombre) ; l'ombre est réservée aux contrôles interactifs.",
+      "Chiffres toujours en tabular-nums : une colonne de nombres s'aligne au chiffre près.",
+      "Rien ne repose sur la couleur seule : chaque statut coloré porte aussi un mot."
+    ],
+    "rules": [
+      { "name": "The One Accent Rule", "body": "Un seul accent (indigo) porte l'action et la sélection dans toute l'app. Les cinq teintes chart-* sont réservées aux séries de données, jamais à l'UI générale.", "section": "colors" },
+      { "name": "The Tabular Numbers Rule", "body": "Toute valeur chiffrée destinée à être comparée à une autre s'affiche en tabular-nums. Un chiffre proportionnel dans une colonne de nombres est un défaut, pas un détail.", "section": "typography" },
+      { "name": "The Exact Divisor Rule", "body": "Une grille à nombre d'éléments connu se réplie sur un diviseur exact de ce nombre, jamais sur un compte intermédiaire qui produirait des rangées inégales.", "section": "layout" },
+      { "name": "The Flat-By-Default Rule", "body": "Une carte n'a pas d'ombre par défaut ; elle se détache par la bordure et le contraste de fond. L'ombre n'apparaît que sur un contrôle, jamais comme décor de carte.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do réutiliser StatTile pour toute nouvelle carte de synthèse plutôt qu'inventer une nouvelle forme de carte.",
+      "Do afficher toute valeur chiffrée comparable en tabular-nums.",
+      "Do garantir un anneau de focus visible et une navigation clavier complète sur tout élément interactif.",
+      "Do faire replier une grille à nombre d'éléments connu sur un diviseur exact.",
+      "Do définir le jeu de tokens complet des deux thèmes (clair ET sombre) pour toute nouvelle couleur."
+    ],
+    "donts": [
+      "Don't ajouter une ombre à une carte pour la faire ressortir.",
+      "Don't introduire une deuxième famille de police dans l'app principale.",
+      "Don't créer une nouvelle pastille rounded-full façon badge décoratif.",
+      "Don't faire reposer un statut sur la couleur seule.",
+      "Don't bloquer une action derrière une interaction souris-only."
+    ]
+  }
+}
