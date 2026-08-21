@@ -274,12 +274,24 @@ rejoindre ce langage.
   de la même rangée d'actions, pas comme une pastille décorative à part. Seule la
   couleur du texte/bordure change selon l'état (émeraude = clôturé, ambre = ouvert) —
   la couleur appuie le mot, elle ne le remplace jamais.
+- **Variante `compact`** (sous 1024px) : le libellé texte cède la place à une
+  simple icône de cadenas (fermé/ouvert), même gabarit carré, mêmes couleurs —
+  pour les pages dont l'identité (nom + jour) a migré dans la Navbar (voir
+  Navigation ci-dessous), où le mot complet n'apporte plus rien face à l'icône.
 
 ### Navigation (barre du haut)
 - Onglets texte (bureau) avec l'onglet actif surligné (`bg-background` + anneau de
-  bordure) ; en mobile, tiroir latéral (`Sheet`) déclenché par un hamburger, le nom de
-  la page courante remplace la marque « Back Office » à côté du logo (les onglets
-  étant alors cachés dans le tiroir, rien d'autre ne dit sur quelle page on se trouve).
+  bordure) ; en mobile (< 1024px), tiroir latéral (`Sheet`) déclenché par un
+  hamburger, le nom de la page courante remplace la marque « Back Office » à côté
+  du logo (les onglets étant alors cachés dans le tiroir, rien d'autre ne dit sur
+  quelle page on se trouve).
+- **Sous-titre de page** (optionnel, sous le nom de page, même zone) : une page
+  peut y poser un texte discret — le jour affiché sur Rapprochement, par exemple
+  — quand ce jour a été retiré du corps de page pour économiser la place. Texte
+  atténué (`text-muted-foreground`), plus petit que le nom de page, jamais du
+  même poids visuel. Whatever la page pose disparaît automatiquement en la
+  quittant (voir `lib/navbarSubtitle.ts`) — jamais de sous-titre fantôme d'une
+  page précédente.
 
 ### Barre d'outils basse mobile (signature, sous 640px)
 - **Quand :** remplace la barre d'actions de l'en-tête sous 640px — pas un

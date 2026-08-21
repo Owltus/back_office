@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { Link, useRouterState } from '@tanstack/react-router'
 import { ChevronsUpDown, Menu } from 'lucide-react'
 
@@ -7,6 +7,7 @@ import { UserMenu } from '#/components/UserMenu.tsx'
 import { UserAvatar } from '#/components/shared/UserAvatar.tsx'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { PAGES } from '#/lib/permissions/index.ts'
+import { getNavbarSubtitle, subscribeNavbarSubtitle } from '#/lib/navbarSubtitle.ts'
 import { Button } from '#/components/ui/button.tsx'
 import {
   Sheet,
@@ -38,6 +39,16 @@ export function Navbar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   const currentPage = PAGES.find(
     (p) => pathname === p.route || pathname.startsWith(`${p.route}/`),
+  )
+
+  // Sous-titre posé par la page courante (ex. le jour affiché sur Rapprochement),
+  // affiché sous son nom — cf. lib/navbarSubtitle.ts. `null` par défaut (getServerSnapshot) :
+  // rendu serveur identique au premier rendu client, avant qu'un board n'ait eu la
+  // chance de poser le sien (évite un flash/mismatch d'hydratation).
+  const subtitle = useSyncExternalStore(
+    subscribeNavbarSubtitle,
+    getNavbarSubtitle,
+    () => null,
   )
 
   // En passant en mode desktop (>= lg), on ferme le tiroir s'il est ouvert.
@@ -131,16 +142,23 @@ export function Navbar() {
           </SheetContent>
         </Sheet>
 
-        {/* --- Logo / marque (nom affiché en mobile) --- */}
+        {/* --- Logo / marque (nom + sous-titre affichés en mobile) --- */}
         <Link
           to="/repjour"
           className="flex items-center gap-2.5"
           aria-label="Accueil"
         >
           <Logo className="size-7" />
-          <span className="truncate text-lg font-bold tracking-tight lg:hidden">
-            {currentPage?.label ?? 'Back Office'}
-          </span>
+          <div className="flex min-w-0 flex-col justify-center lg:hidden">
+            <span className="truncate text-lg leading-tight font-bold tracking-tight">
+              {currentPage?.label ?? 'Back Office'}
+            </span>
+            {subtitle != null && (
+              <span className="truncate text-xs leading-tight text-muted-foreground">
+                {subtitle}
+              </span>
+            )}
+          </div>
         </Link>
 
         {/* --- Liens inline (>= md) --- */}

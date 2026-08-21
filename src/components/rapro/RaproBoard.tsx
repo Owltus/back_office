@@ -8,6 +8,7 @@ import { LineChart, Printer, RotateCcw } from 'lucide-react'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { DatePickerButton } from '#/components/form/fields.tsx'
 import { LockBadge } from '#/components/shared/LockBadge.tsx'
+import { useNavbarSubtitle } from '#/lib/navbarSubtitle.ts'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { PrintBlockedDialog } from '#/components/shared/PrintBlockedDialog.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
@@ -647,6 +648,10 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
     ? format(parsed, 'EEEE d MMMM yyyy', { locale: fr })
     : selectedDate
   const title = capitalize(label)
+  // Sous 1024px, la Navbar globale affiche ce jour sous « Rapprochement » (à la
+  // place de la marque) — le titre de page ci-dessous s'efface d'autant pour ne
+  // pas le répéter. Se retire tout seul au démontage (changement de page).
+  useNavbarSubtitle(title)
 
   /* Bouton d'état du jour, rendu en bas de page (sous les commentaires), là où
      se termine la saisie — comme sur la feuille de caisse. Texte seul : le
@@ -694,23 +699,22 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
     // plutôt que d'écraser la zone commentaire jusqu'à la faire disparaître.
     <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 max-sm:pb-20">
       <PageHeader
-        title={title}
+        // Sous 1024px, le jour affiché vit dans la Navbar globale (sous-titre
+        // sous « Rapprochement », posé par useNavbarSubtitle ci-dessous) : le
+        // titre de page s'efface pour ne pas le répéter deux fois. Au-delà,
+        // la Navbar revient aux onglets et le titre reprend sa place normale.
+        title={<span className="hidden lg:inline">{title}</span>}
         // Rien à annoncer avant que l'occupation et la feuille soient chargées :
         // la pastille se contredirait le temps d'un rendu. En secours, on affiche
         // « Ouvert » de base (grille de secours exploitable, clôturable).
         badgeAlign="end"
-        // 94px = largeur de StepNav ci-dessous (3 boutons `icon-sm` de 32px
-        // accolés dans un ButtonGroup, bordures fusionnées : 32×3 − 2px) —
-        // aligne le bord GAUCHE de la pastille sur celui de la navigation
-        // temporelle qu'elle surplombe en mobile (le bord droit l'est déjà
-        // via `badgeAlign="end"`).
-        badgeWidth="w-[94px]"
         badge={
           pdjRows !== undefined &&
           sheet !== undefined && (
             <LockBadge
               locked={isValidated}
               label={isValidated ? 'Clôturé' : 'Ouvert'}
+              compact
               hint={
                 isValidated
                   ? 'Grille et commentaire figés. Réouvrez le rapprochement pour les modifier.'

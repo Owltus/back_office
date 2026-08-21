@@ -21,10 +21,16 @@ import { cn } from '#/lib/utils.ts'
  *   (voir `LockBadge`). Hors du h1 : c'est un état, pas un bout de titre.
  *   `shrink-0` : ne cède jamais sa place au titre, reste toujours visible.
  * - `badgeAlign` : `'start'` (défaut) colle la pastille juste après le titre,
- *   partout. `'end'` ne change rien au-delà de `sm` (toujours collée au
+ *   partout. `'end'` ne change rien au-delà de `lg` (toujours collée au
  *   titre) mais, en dessous, l'envoie au bord droit de la ligne — plus net
  *   qu'accolée à un titre déjà tronqué (demande explicite sur Rapprochement,
- *   pas généralisée aux autres pages sans le leur demander).
+ *   pas généralisée aux autres pages sans le leur demander). Seuil `lg`
+ *   (1024px, pas `sm`) : c'est là que la Navbar bascule elle aussi en mode
+ *   mobile (nom de page + sous-titre à la place des onglets) — au même
+ *   endroit sur Rapprochement, le titre `h1` s'efface au profit du
+ *   sous-titre de la Navbar (voir `lib/navbarSubtitle.ts`), et la pastille
+ *   doit rester à droite tout du long de cette même plage, pas seulement
+ *   sous 640px.
  * - `badgeWidth` : n'a d'effet qu'avec `badgeAlign="end"`, sous `sm`. Étire la
  *   pastille ELLE-MÊME (pas juste un conteneur autour) à cette largeur — sert
  *   à l'aligner pile sur le bloc du dessous qu'elle surplombe (typiquement la
@@ -72,7 +78,7 @@ export function PageHeader({
           <div
             className={cn(
               'flex min-w-0 flex-nowrap items-center gap-2',
-              badgeAlign === 'end' && 'justify-between sm:justify-start',
+              badgeAlign === 'end' && 'justify-between lg:justify-start',
             )}
           >
             {title != null && (
