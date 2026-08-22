@@ -338,6 +338,17 @@ rejoindre ce langage.
   calendrier personnalisé sur le sous-titre de la Navbar a été essayé, puis
   retiré sur demande explicite (jugé pas pratique) ; ne pas le réintroduire
   sans qu'on le redemande.
+- **Exposée par le socle analytique (`AnalytiqueShell`) via deux props
+  opt-in** : `mobileIdentity` (déplace `title` en sous-titre Navbar sous
+  1024px) et `mobileToolbar` (barre basse fixe sous 640px, le shell y insère
+  lui-même sa cellule Imprimer déjà construite — `ToolbarCell`, exporté par
+  `AnalytiqueShell.tsx` — le board ne fournit que ses cellules de navigation
+  propres). Les deux props sont absentes par défaut : sans elles, une page
+  analytique garde exactement son rendu d'avant. **Consommé aujourd'hui
+  uniquement par les deux vues Rapprochement** (annuelle : pager
+  Préc./Imprimer/Suiv. sur l'année ; mensuelle : Retour/Imprimer) — les 8
+  autres pages du socle (RepJour/PDJ/Parking/Caisse × annuel+mensuel) n'ont
+  pas ce mode ; ne pas présumer qu'elles l'ont sans vérifier le code.
 
 ### Tooltip
 - Fond `bg-foreground` / texte `bg-background` : s'inverse automatiquement entre clair

@@ -3,11 +3,13 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 
-import { AnalytiqueShell } from '#/components/analytique/AnalytiqueShell.tsx'
+import { AnalytiqueShell, ToolbarCell } from '#/components/analytique/AnalytiqueShell.tsx'
 import { AnalytiqueTable } from '#/components/analytique/AnalytiqueTable.tsx'
 import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
-import { YearNav } from '#/components/analytique/YearNav.tsx'
+import { useYearNav } from '#/components/analytique/YearNav.tsx'
+import { StepNav } from '#/components/shared/StepNav.tsx'
 import { KpiStackedBarChart } from '#/components/analytique/KpiStackedBarChart.tsx'
 import {
   RaproAnalytiqueCards,
@@ -121,17 +123,51 @@ export function RaproAnalytiqueBoard() {
     }
   })
 
+  const { goPrev, goNext, prevDisabled, nextDisabled } = useYearNav({
+    year,
+    setYear,
+    years,
+    currentYear,
+  })
+
   return (
     <AnalytiqueShell
       title="Analytique"
+      mobileIdentity
       actions={
-        <YearNav
-          year={year}
-          setYear={setYear}
-          years={years}
-          currentYear={currentYear}
-        />
+        <StepNav
+          onPrev={goPrev}
+          onNext={goNext}
+          prevLabel="Année précédente"
+          nextLabel="Année suivante"
+          prevDisabled={prevDisabled}
+          nextDisabled={nextDisabled}
+        >
+          <span className="inline-flex h-8 items-center justify-center border bg-background px-3 text-sm font-medium tabular-nums shadow-xs dark:border-input dark:bg-input/30">
+            {year}
+          </span>
+        </StepNav>
       }
+      mobileToolbar={(printCell) => (
+        <>
+          <ToolbarCell
+            icon={<ChevronLeft className="size-5" />}
+            label="Préc."
+            ariaLabel="Année précédente"
+            onClick={goPrev}
+            disabled={prevDisabled}
+            bordered={false}
+          />
+          {printCell}
+          <ToolbarCell
+            icon={<ChevronRight className="size-5" />}
+            label="Suiv."
+            ariaLabel="Année suivante"
+            onClick={goNext}
+            disabled={nextDisabled}
+          />
+        </>
+      )}
       loading={loading}
       printTitle={`Rapprochement · ${year}`}
       skeleton={{ cols: 4, charts: 1, cards: 4, cardCols: 4, cardLines: 3, rows: 13 }}

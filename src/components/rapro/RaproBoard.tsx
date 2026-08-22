@@ -10,6 +10,7 @@ import { DatePickerButton } from '#/components/form/fields.tsx'
 import { LockBadge } from '#/components/shared/LockBadge.tsx'
 import { useNavbarBadge, useNavbarSubtitle } from '#/lib/navbarSubtitle.ts'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
+import { useMatchMedia } from '#/components/shared/useMatchMedia.ts'
 import { PrintBlockedDialog } from '#/components/shared/PrintBlockedDialog.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
 import { StatTile } from '#/components/shared/StatTile.tsx'
@@ -104,17 +105,6 @@ function statLabel(full: string, short: string) {
 // élément rendu, même sans contenu visible à l'intérieur. Seul `undefined`
 // (PageHeader renvoie alors `null`, cf. shared/PageHeader.tsx) sort vraiment
 // l'élément du flux et referme le vide entre la Navbar et les cartes.
-function useMatchMedia(query: string): boolean {
-  const [matches, setMatches] = useState(false)
-  useEffect(() => {
-    const mq = window.matchMedia(query)
-    const update = () => setMatches(mq.matches)
-    update()
-    mq.addEventListener('change', update)
-    return () => mq.removeEventListener('change', update)
-  }, [query])
-  return matches
-}
 
 export function RaproBoard({ initialDate }: { initialDate?: string }) {
   const isNavbarMobile = useMatchMedia('(max-width: 1023.98px)')

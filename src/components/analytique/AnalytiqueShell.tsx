@@ -1,11 +1,55 @@
 import { useRef, type ReactNode } from 'react'
+import { Printer } from 'lucide-react'
 
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
 import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
+import { useMatchMedia } from '#/components/shared/useMatchMedia.ts'
+import { useNavbarSubtitle } from '#/lib/navbarSubtitle.ts'
 import { AnalytiqueSkeleton } from '#/components/analytique/AnalytiqueSkeleton.tsx'
 import { printAnalytique } from '#/lib/analytique/pdf.ts'
+import { cn } from '#/lib/utils.ts'
+
+/**
+ * Cellule de la barre d'outils basse mobile : icône au-dessus du libellé,
+ * `flex-1`, même gabarit que la barre basse de /rapro (première page à
+ * l'avoir reçue). Partagée par le shell (cellule Imprimer, voir
+ * `mobileToolbar` ci-dessous) et par les boards qui l'activent (leurs propres
+ * cellules de navigation).
+ */
+export function ToolbarCell({
+  icon,
+  label,
+  onClick,
+  disabled = false,
+  ariaLabel,
+  bordered = true,
+}: {
+  icon: ReactNode
+  label: string
+  onClick: () => void
+  disabled?: boolean
+  ariaLabel: string
+  /** Filet vertical à gauche de la cellule — faux pour la 1re cellule d'une barre. */
+  bordered?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={ariaLabel}
+      className={cn(
+        'flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-muted-foreground transition-colors active:bg-accent active:text-foreground disabled:pointer-events-none disabled:opacity-40',
+        bordered && 'border-l border-border',
+      )}
+    >
+      {icon}
+      <span className="text-[11px] font-medium">{label}</span>
+    </button>
+  )
+}
 
 /*
  * Coquille commune des pages analytique (parentes annuelles ET enfants mensuelles).
@@ -27,6 +71,14 @@ import { printAnalytique } from '#/lib/analytique/pdf.ts'
  * défilement interne. Sans ce garde-fou, sur petit écran les cartes (2 lignes) et
  * les graphiques empilés (`shrink-0`) écrasaient le tableau `flex-1` à 0 — il
  * disparaissait, sans défilement pour le rattraper.
+ *
+ * MODE MOBILE (`mobileIdentity` / `mobileToolbar`) : mêmes mécanismes que /rapro,
+ * exposés en props STRICTEMENT OPTIONNELLES pour ne rien changer aux 8 autres
+ * pages analytique (repjour/PDJ/parking/caisse) qui ne les activent pas.
+ * `mobileIdentity` déplace `title` en sous-titre de la Navbar globale sous
+ * 1024px (voir lib/navbarSubtitle.ts) ; `mobileToolbar` remplace les `actions`
+ * de l'en-tête par une barre d'outils basse fixe sous 640px, à laquelle le
+ * shell fournit sa propre cellule Imprimer (le board place les siennes autour).
  */
 export function AnalytiqueShell({
   title,
@@ -34,6 +86,8 @@ export function AnalytiqueShell({
   loading = false,
   skeleton,
   printTitle,
+  mobileIdentity = false,
+  mobileToolbar,
   children,
 }: {
   title: ReactNode
@@ -50,9 +104,22 @@ export function AnalytiqueShell({
   /** Active le bouton « Imprimer / PDF » et sert de titre au document
    *  (ex. « Caisse · 2026 »). Absent → page non imprimable, pas de bouton. */
   printTitle?: string
+  /** Sous 1024px, déplace `title` dans la Navbar globale (sous-titre de page)
+   *  au lieu de l'en-tête — même mécanisme que /rapro. Absent (défaut) :
+   *  comportement actuel inchangé. */
+  mobileIdentity?: boolean
+  /** Cellules PROPRES au board (navigation temporelle, retour…) pour la barre
+   *  d'outils basse fixe sous 640px ; reçoit la cellule Imprimer déjà construite
+   *  par le shell (`null` si `printTitle` absent) à placer où le board veut.
+   *  Absent (défaut) : pas de barre basse, `actions` reste dans l'en-tête à
+   *  toutes les tailles — comportement actuel inchangé. */
+  mobileToolbar?: (printCell: ReactNode | null) => ReactNode
   children: ReactNode
 }) {
   const rootRef = useRef<HTMLDivElement>(null)
+  const isNavbarMobile = useMatchMedia('(max-width: 1023.98px)')
+  const showTopToolbar = useMatchMedia('(min-width: 640px)')
+  useNavbarSubtitle(mobileIdentity ? title : null)
 
   const handlePrint = () => {
     const root = rootRef.current
@@ -88,16 +155,46 @@ export function AnalytiqueShell({
     ) : (
       actions
     )
+  // Sous 640px, une barre basse remplace les actions de l'en-tête (comme /rapro) :
+  // `undefined`, pas un masquage CSS, pour que PageHeader sorte vraiment du flux
+  // s'il ne reste plus rien à afficher (cf. shared/PageHeader.tsx).
+  const desktopActions =
+    mobileToolbar && !showTopToolbar ? undefined : headerActions
+
+  const printToolbarCell =
+    printTitle != null ? (
+      <ToolbarCell
+        icon={<Printer className="size-5" />}
+        label="Imprimer"
+        onClick={handlePrint}
+        disabled={loading}
+        ariaLabel={loading ? 'Chargement des données…' : 'Imprimer / PDF'}
+      />
+    ) : null
 
   return (
     <PageContainer className="lg:min-h-0">
       <div
         ref={rootRef}
-        className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 lg:min-h-0"
+        className={cn(
+          'mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 lg:min-h-0',
+          mobileToolbar && 'max-sm:pb-20',
+        )}
       >
-        <PageHeader title={title} actions={headerActions} />
+        <PageHeader
+          title={mobileIdentity && isNavbarMobile ? undefined : title}
+          actions={desktopActions}
+        />
         {loading ? <AnalytiqueSkeleton {...skeleton} /> : children}
       </div>
+      {mobileToolbar && (
+        <nav
+          className="fixed inset-x-0 bottom-0 z-30 flex items-stretch border-t border-border bg-card/95 backdrop-blur-md sm:hidden"
+          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+        >
+          {mobileToolbar(printToolbarCell)}
+        </nav>
+      )}
     </PageContainer>
   )
 }

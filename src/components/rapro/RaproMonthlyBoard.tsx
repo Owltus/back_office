@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
-import { useNavigate } from '@tanstack/react-router'
+import { useNavigate, useRouter } from '@tanstack/react-router'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
+import { ArrowLeft } from 'lucide-react'
 
-import { AnalytiqueShell } from '#/components/analytique/AnalytiqueShell.tsx'
+import { AnalytiqueShell, ToolbarCell } from '#/components/analytique/AnalytiqueShell.tsx'
 import { AnalytiqueTable } from '#/components/analytique/AnalytiqueTable.tsx'
 import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
 import { AnalytiqueBackButton } from '#/components/analytique/AnalytiqueBackButton.tsx'
@@ -66,11 +67,25 @@ export function RaproMonthlyBoard({
   }))
 
   const navigate = useNavigate()
+  const router = useRouter()
 
   return (
     <AnalytiqueShell
       title={monthLabel}
+      mobileIdentity
       actions={<AnalytiqueBackButton />}
+      mobileToolbar={(printCell) => (
+        <>
+          <ToolbarCell
+            icon={<ArrowLeft className="size-5" />}
+            label="Retour"
+            ariaLabel="Retour à l'analytique"
+            onClick={() => router.history.back()}
+            bordered={false}
+          />
+          {printCell}
+        </>
+      )}
       loading={loading}
       printTitle={`Rapprochement · ${monthLabel}`}
       skeleton={{
