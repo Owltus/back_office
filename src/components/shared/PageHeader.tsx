@@ -8,10 +8,12 @@ import { cn } from '#/lib/utils.ts'
  * Convention d'agencement, commune à toutes les pages :
  *   [leading] [titre + meta] ······················ [actions]
  * et, dans `actions`, la navigation temporelle vient TOUJOURS en dernier, donc
- * collée au bord droit. Seul le parking déroge : son planning se pilote depuis
- * la gauche, via `leading`.
+ * collée au bord droit.
  *
- * - `leading` : bloc optionnel avant le titre (navigation du parking).
+ * - `leading` : bloc optionnel avant le titre. Aucune page ne l'utilise
+ *   aujourd'hui (Parking pilote son planning depuis `actions`, à droite,
+ *   comme les autres pages) — prop conservée pour un besoin futur de bloc de
+ *   navigation à gauche du titre.
  * - `title` : titre principal (h1). Omis (`undefined` OU chaîne vide — les deux
  *   traités pareil, en test de vérité, pas `!= null`), toute la ligne titre
  *   disparaît (plus de div vide qui réserverait quand même sa hauteur via le

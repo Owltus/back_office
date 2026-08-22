@@ -113,6 +113,10 @@ export function ParkingHelpPanel({ canEdit }: { canEdit: boolean }) {
         </p>
       </Section>
 
+      {/* `canEdit` (posé par ParkingBoard) vaut désormais toujours faux sur
+          écran tactile — cette section, formulée en langage souris (clic
+          droit, clic gauche maintenu, Ctrl+clic), ne s'affiche donc déjà plus
+          en contexte tactile pur, sans media query dédiée à ajouter ici. */}
       {canEdit && (
         <Section title="Créer et modifier une réservation">
           <GestureRow side="right">
@@ -151,86 +155,110 @@ export function ParkingHelpPanel({ canEdit }: { canEdit: boolean }) {
         </Section>
       )}
 
-      <Section title="Se déplacer dans le temps">
-        <p>
-          Les flèches en haut à droite avancent ou reculent de trois jours ;
-          l'icône calendrier saute à une date précise, et « Aujourd'hui » y
-          ramène. On peut aussi attraper une zone vide du planning et la faire
-          glisser pour parcourir les jours.
-        </p>
-      </Section>
+      {/* Deux versions du même déplacement dans le temps, selon l'entrée
+          RÉELLEMENT disponible — jamais les deux en même temps : sur écran
+          tactile, il n'y a ni flèches de barre d'actions ni bouton calendrier
+          (remplacés par la barre d'outils basse, cf. ParkingBoard), et le
+          panoramique se fait au doigt plutôt qu'à la souris.
+          `pointer-fine`/`pointer-coarse` (media feature `pointer`), PAS une
+          largeur d'écran : une tablette tactile large affiche le même texte
+          qu'un téléphone, un ordinateur en fenêtre étroite garde le texte
+          souris. */}
+      <div className="hidden pointer-fine:block">
+        <Section title="Se déplacer dans le temps">
+          <p>
+            Les flèches en haut à droite avancent ou reculent de trois jours ;
+            l'icône calendrier saute à une date précise, et « Aujourd'hui » y
+            ramène. On peut aussi attraper une zone vide du planning et la
+            faire glisser pour parcourir les jours.
+          </p>
+        </Section>
+      </div>
+      <div className="pointer-fine:hidden">
+        <Section title="Se déplacer dans le temps">
+          <p>
+            Les boutons Préc. et Suiv. de la barre du bas avancent ou reculent
+            de trois jours. On peut aussi glisser du doigt une zone vide du
+            planning pour parcourir les jours.
+          </p>
+        </Section>
+      </div>
 
-      <Section title="Raccourcis clavier">
-        <div className="space-y-2.5">
-          <Shortcut
-            keys={
+      {/* Un clavier physique n'existe pas sur un écran tactile — section
+          réservée à la souris/au clavier, même convention que ci-dessus. */}
+      <div className="hidden pointer-fine:block">
+        <Section title="Raccourcis clavier">
+          <div className="space-y-2.5">
+            <Shortcut
+              keys={
+                <>
+                  <Kbd>
+                    <KbdArrow dir="left" />
+                  </Kbd>
+                  <Kbd>
+                    <KbdArrow dir="right" />
+                  </Kbd>
+                </>
+              }
+            >
+              Reculer ou avancer de trois jours.
+            </Shortcut>
+            <Shortcut keys={<Kbd className="px-2">Alt</Kbd>}>
+              Revenir à aujourd'hui.
+            </Shortcut>
+            <Shortcut
+              keys={
+                <>
+                  <Kbd className="px-2">Ctrl</Kbd>
+                  <KbdPlus />
+                  <MouseGlyph side="left" />
+                </>
+              }
+            >
+              Copier une réservation, puis un clic la pose sur la case visée
+              (⌘ sur Mac).
+            </Shortcut>
+            {canEdit && (
               <>
-                <Kbd>
-                  <KbdArrow dir="left" />
-                </Kbd>
-                <Kbd>
-                  <KbdArrow dir="right" />
-                </Kbd>
+                <Shortcut
+                  keys={
+                    <>
+                      <Kbd className="px-2">Ctrl</Kbd>
+                      <KbdPlus />
+                      <Kbd>Z</Kbd>
+                    </>
+                  }
+                >
+                  Annuler la dernière action : création, déplacement,
+                  renommage, statut, commentaire ou suppression (⌘ sur Mac).
+                </Shortcut>
+                <Shortcut
+                  keys={
+                    <>
+                      <Kbd className="px-2">Ctrl</Kbd>
+                      <KbdPlus />
+                      <Kbd>Y</Kbd>
+                    </>
+                  }
+                >
+                  Rétablir l'action annulée (ou Ctrl + Maj + Z).
+                </Shortcut>
               </>
-            }
-          >
-            Reculer ou avancer de trois jours.
-          </Shortcut>
-          <Shortcut keys={<Kbd className="px-2">Alt</Kbd>}>
-            Revenir à aujourd'hui.
-          </Shortcut>
-          <Shortcut
-            keys={
-              <>
-                <Kbd className="px-2">Ctrl</Kbd>
-                <KbdPlus />
-                <MouseGlyph side="left" />
-              </>
-            }
-          >
-            Copier une réservation, puis un clic la pose sur la case visée
-            (⌘ sur Mac).
-          </Shortcut>
-          {canEdit && (
-            <>
-              <Shortcut
-                keys={
-                  <>
-                    <Kbd className="px-2">Ctrl</Kbd>
-                    <KbdPlus />
-                    <Kbd>Z</Kbd>
-                  </>
-                }
-              >
-                Annuler la dernière action : création, déplacement, renommage,
-                statut, commentaire ou suppression (⌘ sur Mac).
-              </Shortcut>
-              <Shortcut
-                keys={
-                  <>
-                    <Kbd className="px-2">Ctrl</Kbd>
-                    <KbdPlus />
-                    <Kbd>Y</Kbd>
-                  </>
-                }
-              >
-                Rétablir l'action annulée (ou Ctrl + Maj + Z).
-              </Shortcut>
-            </>
-          )}
-          <Shortcut
-            keys={
-              <>
-                <Kbd className="px-2">Ctrl</Kbd>
-                <KbdPlus />
-                <Kbd>P</Kbd>
-              </>
-            }
-          >
-            Imprimer les feuilles de suivi.
-          </Shortcut>
-        </div>
-      </Section>
+            )}
+            <Shortcut
+              keys={
+                <>
+                  <Kbd className="px-2">Ctrl</Kbd>
+                  <KbdPlus />
+                  <Kbd>P</Kbd>
+                </>
+              }
+            >
+              Imprimer les feuilles de suivi.
+            </Shortcut>
+          </div>
+        </Section>
+      </div>
 
       <Section title="Imprimer les feuilles de suivi">
         <p>

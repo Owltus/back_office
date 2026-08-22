@@ -1,8 +1,9 @@
 import { useMemo } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
+import { ArrowLeft } from 'lucide-react'
 
-import { AnalytiqueShell } from '#/components/analytique/AnalytiqueShell.tsx'
+import { AnalytiqueShell, ToolbarCell } from '#/components/analytique/AnalytiqueShell.tsx'
 import {
   AnalytiqueCardsGrid,
   shareSub,
@@ -159,7 +160,33 @@ export function ParkingAnalytiqueMoisBoard({
   return (
     <AnalytiqueShell
       title={`${monthLabel} ${year}`}
-      actions={<AnalytiqueBackButton to="/parking/analytique" />}
+      mobileIdentity={`Analytique ${monthLabel} ${year}`}
+      // enlargeOnNarrow={false} : ce bouton n'est JAMAIS montré sur écran
+      // tactile (barre basse dédiée dès qu'un doigt est détecté, cf.
+      // mobileToolbar) — l'agrandir à un simple rétrécissement de fenêtre
+      // désaccorderait sa taille de celle du bouton Imprimer voisin, resté fixe.
+      actions={
+        <AnalytiqueBackButton
+          to="/parking/analytique"
+          enlargeOnNarrow={false}
+        />
+      }
+      // Pas de pager mois précédent/suivant sur cette vue (contrairement à
+      // RepJour/Rapro) : la navigation entre mois se fait depuis le tableau
+      // annuel ou le retour ci-dessus, inchangé ici — la barre basse tactile
+      // ne fait donc que reprendre ces deux mêmes actions.
+      mobileToolbar={(printCell) => (
+        <>
+          <ToolbarCell
+            icon={<ArrowLeft className="size-5" />}
+            label="Retour"
+            ariaLabel="Retour à l'analytique"
+            onClick={() => navigate({ to: '/parking/analytique' })}
+            bordered={false}
+          />
+          {printCell}
+        </>
+      )}
       loading={loading}
       printTitle={`Parking · ${monthLabel} ${year}`}
       skeleton={{

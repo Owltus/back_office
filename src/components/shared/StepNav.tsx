@@ -31,7 +31,8 @@ import { cn } from '#/lib/utils.ts'
  * celle des boutons voisins qui, eux, restent fixes).
  *
  * Le centre est libre : un `DatePickerButton` (jour, shift), un libellé d'année,
- * ou le sélecteur de plage du parking. Il peut être vide.
+ * ou le bouton calendrier à sélection simple du parking (`mode="single"`, pas
+ * une plage). Il peut être vide.
  */
 export function StepNav({
   onPrev,

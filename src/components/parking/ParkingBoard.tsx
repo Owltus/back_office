@@ -3,15 +3,18 @@ import type {
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
 } from 'react'
-import { Link } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import {
   CalendarDays,
+  ChevronLeft,
+  ChevronRight,
   Copy,
   LineChart,
   MessageSquare,
   Pencil,
   Plus,
+  Printer,
   Trash2,
 } from 'lucide-react'
 import {
@@ -32,6 +35,9 @@ import { StepNav } from '#/components/shared/StepNav.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { HelpDialogHeader } from '#/components/shared/HelpDialogHeader.tsx'
 import { HelpGlyph } from '#/components/shared/HelpGlyph.tsx'
+import { useResponsiveShell } from '#/components/shared/useResponsiveShell.ts'
+import { MobileToolbar, ToolbarCell } from '#/components/shared/MobileToolbar.tsx'
+import { useNavbarSubtitle } from '#/lib/navbarSubtitle.ts'
 import { MouseGlyph } from '#/components/parking/MouseGlyph.tsx'
 import { ParkingHelpPanel } from '#/components/parking/ParkingHelpPanel.tsx'
 import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
@@ -267,13 +273,23 @@ function useIsCompact(): boolean {
 
 export function ParkingBoard({ initialDate }: { initialDate?: string }) {
   const { can, pageLevel } = useAuth()
+  const navigate = useNavigate()
+  const { isNavbarMobile, isTouchDevice } = useResponsiveShell()
   // Seuls les niveaux Écriture / Gestion peuvent modifier ; Lecture = consultation.
+  // `isCompact` : PURE largeur (768px, seuil aligné Navbar), pilote UNIQUEMENT la
+  // densité GÉOMÉTRIQUE de la grille (colonnes réduites, rangées étirées, noms
+  // masqués) — jamais la capacité d'édition, désormais séparée (cf. `canEdit`).
   const isCompact = useIsCompact()
-  // En affichage compact (téléphone), l'édition est désactivée CÔTÉ FRONT : lecture
-  // seule, seul le panoramique jours reste. `canEdit` porte « droit d'écrire ET pas
-  // en compact » → tous les points d'édition (création, déplacement, redim, menus)
-  // s'en déduisent automatiquement. (La RLS reste l'autorité réelle des droits.)
-  const canEdit = can('parking', 'ecriture') && !isCompact
+  // `canEdit` dépend désormais du POINTEUR (`isTouchDevice`), pas de la largeur :
+  // un ordinateur à la souris en fenêtre étroite garde le glisser-déposer (grille
+  // en densité compacte, mais toujours éditable) ; un écran tactile (tablette
+  // large comprise, même ≥768px) passe en lecture seule, quelle que soit sa
+  // largeur — le glisser-déposer est jugé inadapté au doigt (poignées fines,
+  // gestes de précision). Tous les points d'édition (création, déplacement,
+  // redim, menus, panneau d'aide) se déduisent de cette seule variable. (La RLS
+  // reste l'autorité réelle des droits ; ce repli reste purement ergonomique
+  // côté front.)
+  const canEdit = can('parking', 'ecriture') && !isTouchDevice
   // Niveau effectif sur le parking : sert au verrou TEMPOREL par réservation.
   // Écriture agit sur l'actualité (présent, futur, passé récent, séjours en
   // cours) ; seule la gestion peut modifier le passé verrouillé (cf.
@@ -1209,6 +1225,14 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
       ? `${fmtDay.format(first)} – ${fmtDayYear.format(last)}`
       : `${fmtDayYear.format(first)} – ${fmtDayYear.format(last)}`
   })()
+  // Sous 1024px (Navbar globale en mode hamburger), la plage de dates vit dans
+  // la Navbar (sous-titre, à côté du nom de page) plutôt que dans l'en-tête de
+  // page — même mécanisme que Rapprochement/RepJour, seuil VOLONTAIREMENT
+  // identique à celui de la Navbar elle-même (hamburger ↔ onglets), pas celui,
+  // indépendant, de la densité géométrique de la grille (768px). `|| null`
+  // (pas la chaîne vide) : en compact géométrique (<768px), `rangeLabel` est
+  // déjà vide — un sous-titre vide n'aurait rien à montrer.
+  useNavbarSubtitle(isNavbarMobile ? rangeLabel || null : null)
 
   // Gate de PREMIER affichage seulement : l'en-tête et la colonne des places
   // sont rendus tout de suite, seul le corps du planning part en squelette tant
@@ -1244,83 +1268,105 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
   )
 
   return (
-    <div className="flex min-w-0 flex-1 flex-col gap-4">
+    <div
+      className={cn(
+        'flex min-w-0 flex-1 flex-col gap-4',
+        isTouchDevice && 'pb-20',
+      )}
+    >
       {/* En-tête façon standard : plage de dates à GAUCHE (titre), navigation
           temporelle à DROITE (icône calendrier). La légende est passée sous le
-          planning. */}
+          planning. Sous 1024px, le titre laisse place au sous-titre de la
+          Navbar globale (cf. useNavbarSubtitle ci-dessus) ; sur écran tactile,
+          ce groupe d'actions entier laisse place à la barre d'outils basse
+          fixe (cf. fin du composant) — `undefined` (pas un `hidden` CSS) pour
+          que PageHeader sorte vraiment du flux si plus rien n'y figure. */}
       <PageHeader
-        title={rangeLabel}
+        title={isNavbarMobile ? undefined : rangeLabel}
         actions={
-          <>
-            {/* Groupe « actions de page » : aide + vue analytique + impression. */}
-            <ButtonGroup>
-              <Tip label="Comment ça marche">
-                <Button
-                  variant="outline"
-                  size="icon-sm"
-                  onClick={() => setHelpOpen(true)}
-                  aria-label="Comment ça marche"
-                >
-                  <HelpGlyph />
-                </Button>
-              </Tip>
-              <Tip label="Vue analytique">
-                <Button asChild variant="outline" size="icon-sm">
-                  <Link to="/parking/analytique" aria-label="Vue analytique">
-                    <LineChart />
-                  </Link>
-                </Button>
-              </Tip>
-              <PrintButton
-                onClick={handleGeneratePdf}
-                iconOnly
-                tipLabel="Imprimer les feuilles de suivi (4 jours)"
-              />
-            </ButtonGroup>
-            {/* Groupe « navigation temporelle », collé au bord droit. */}
-            <StepNav
-              onPrev={() => setOffset((o) => o - STEP)}
-              onNext={() => setOffset((o) => o + STEP)}
-              prevLabel="Reculer de 3 jours"
-              nextLabel="Avancer de 3 jours"
-            >
-            <Popover open={calOpen} onOpenChange={setCalOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="icon-sm"
-                  aria-label="Choisir une date"
-                >
-                  <CalendarDays />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="end">
-                <Calendar
-                  mode="single"
-                  locale={fr}
-                  selected={days[0]}
-                  defaultMonth={days[0]}
-                  onSelect={goToDate}
-                />
-                <div className="border-t border-border p-2">
+          isTouchDevice ? undefined : (
+            <>
+              {/* Groupe « actions de page » : aide + vue analytique + impression. */}
+              <ButtonGroup>
+                <Tip label="Comment ça marche">
                   <Button
-                    variant="ghost"
-                    size="sm"
-                    className="w-full"
-                    onClick={() => {
-                      setOffset(framedOffset)
-                      setCalOpen(false)
-                    }}
-                    disabled={offset === framedOffset}
+                    variant="outline"
+                    size="icon-sm"
+                    onClick={() => setHelpOpen(true)}
+                    aria-label="Comment ça marche"
                   >
-                    Aujourd’hui
+                    <HelpGlyph />
                   </Button>
-                </div>
-              </PopoverContent>
-            </Popover>
-            </StepNav>
-          </>
+                </Tip>
+                <Tip label="Vue analytique">
+                  <Button asChild variant="outline" size="icon-sm">
+                    <Link to="/parking/analytique" aria-label="Vue analytique">
+                      <LineChart />
+                    </Link>
+                  </Button>
+                </Tip>
+                <PrintButton
+                  onClick={handleGeneratePdf}
+                  iconOnly
+                  tipLabel="Imprimer les feuilles de suivi (4 jours)"
+                />
+              </ButtonGroup>
+              {/* Groupe « navigation temporelle », collé au bord droit.
+                  `enlargeOnNarrow={false}` : ce groupe n'est JAMAIS montré
+                  sur écran tactile (barre basse dédiée dès qu'un doigt est
+                  détecté, cf. plus haut) — l'agrandir à un simple
+                  rétrécissement de fenêtre désaccorderait sa taille de celle
+                  des boutons voisins, restés fixes. */}
+              <StepNav
+                onPrev={() => setOffset((o) => o - STEP)}
+                onNext={() => setOffset((o) => o + STEP)}
+                prevLabel="Reculer de 3 jours"
+                nextLabel="Avancer de 3 jours"
+                enlargeOnNarrow={false}
+              >
+              <Popover open={calOpen} onOpenChange={setCalOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon-sm"
+                    aria-label="Choisir une date"
+                  >
+                    <CalendarDays />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="end">
+                  <Calendar
+                    mode="single"
+                    locale={fr}
+                    selected={days[0]}
+                    defaultMonth={days[0]}
+                    onSelect={goToDate}
+                  />
+                  <div className="border-t border-border p-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => {
+                        setOffset(framedOffset)
+                        setCalOpen(false)
+                      }}
+                      disabled={offset === framedOffset}
+                    >
+                      Aujourd’hui
+                    </Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+              </StepNav>
+            </>
+          )
         }
+        // Ce groupe n'existe que côté souris (cf. `isTouchDevice` ci-dessus) :
+        // le repli « aux deux bords » pensé pour la portée du pouce sur
+        // téléphone n'a alors plus de sens, les deux sous-groupes restent
+        // collés ensemble au bord droit à toute largeur.
+        actionsAlign="end"
       />
 
       {actionError && (
@@ -1749,6 +1795,49 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Barre d'outils basse (écran tactile uniquement, peu importe la
+          largeur) : Aide/Analytique/Imprimer gardent leurs handlers exacts de
+          la barre du haut. Navigation temporelle : Précédent/Suivant en
+          cellules pleine largeur aux deux bords (pas de bouton calendrier ici
+          — la plage affichée reste purement informative dans la Navbar, cf.
+          useNavbarSubtitle ci-dessus), même pas que la navigation desktop
+          (STEP = 3 jours). Le panoramique (glisser une zone vide du
+          planning) reste actif à tout pointeur/toute largeur, indépendant de
+          cette barre. */}
+      <MobileToolbar visible={isTouchDevice}>
+        <ToolbarCell
+          icon={<ChevronLeft className="size-5" />}
+          label="Préc."
+          ariaLabel="Reculer de 3 jours"
+          onClick={() => setOffset((o) => o - STEP)}
+          bordered={false}
+        />
+        <ToolbarCell
+          icon={<HelpGlyph className="size-5" />}
+          label="Aide"
+          ariaLabel="Comment ça marche"
+          onClick={() => setHelpOpen(true)}
+        />
+        <ToolbarCell
+          icon={<LineChart className="size-5" />}
+          label="Analytique"
+          ariaLabel="Vue analytique"
+          onClick={() => navigate({ to: '/parking/analytique' })}
+        />
+        <ToolbarCell
+          icon={<Printer className="size-5" />}
+          label="Imprimer"
+          ariaLabel="Imprimer les feuilles de suivi"
+          onClick={() => void handleGeneratePdf()}
+        />
+        <ToolbarCell
+          icon={<ChevronRight className="size-5" />}
+          label="Suiv."
+          ariaLabel="Avancer de 3 jours"
+          onClick={() => setOffset((o) => o + STEP)}
+        />
+      </MobileToolbar>
     </div>
   )
 }
