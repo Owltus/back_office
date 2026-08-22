@@ -983,7 +983,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
             />
             <StatTile
               value={dash(stats.todo)}
-              label={statLabel('Bloquées du jour', 'BLOQ. J')}
+              label={statLabel('Bloquées du jour', 'BLOQ. JOUR')}
               accent={CATEGORY_COLOR.bloquee}
               hint="Chambres non nettoyées aujourd'hui, reportées à demain."
             />
@@ -992,7 +992,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
                 selon les jours, ce qui décalait la mise en page en responsive. */}
             <StatTile
               value={dash(carried.size)}
-              label={statLabel('Bloquées de la veille', 'BLOQ. V')}
+              label={statLabel('Bloquées de la veille', 'BLOQ. VEILLE')}
               accent={CATEGORY_COLOR.bloquee}
               hint="Chambres bloquées hier, encore à nettoyer aujourd'hui."
             />
