@@ -537,15 +537,25 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   // boucle `.map()` qui rend les chambres. `pointerType` filtre la souris : un
   // clic gauche maintenu sur ordinateur ne doit PAS déclencher l'appui long,
   // qui reste sa propre voie (clic droit, `onContextMenu`).
+  //
+  // `pressingRoom` (état, pas juste le ref) : un geste invisible n'est pas une
+  // bonne UX — sans retour visuel PENDANT l'appui, rien ne dit à l'utilisateur
+  // qu'il se passe quelque chose avant les 500ms, ni qu'il maintient la bonne
+  // pression. Pilote l'anneau animé (.rapro-room-pressing, rapro.css), calé sur
+  // la MÊME durée que le seuil de déclenchement — la barre se remplit pile
+  // quand l'action se déclenche, pas un chrono arbitraire.
   const longPress = useRef<{ timer: number | null; fired: boolean }>({
     timer: null,
     fired: false,
   })
+  const [pressingRoom, setPressingRoom] = useState<number | null>(null)
   function startLongPress(room: number, pointerType: string) {
     if (pointerType !== 'touch' && pointerType !== 'pen') return
     longPress.current.fired = false
+    setPressingRoom(room)
     longPress.current.timer = window.setTimeout(() => {
       longPress.current.fired = true
+      setPressingRoom(null)
       toggleManual(room)
     }, 500)
   }
@@ -554,6 +564,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
       window.clearTimeout(longPress.current.timer)
       longPress.current.timer = null
     }
+    setPressingRoom(null)
   }
   // L'appui long relâché déclenche AUSSI un `click` juste après (comportement
   // natif du navigateur) : sans ce garde-fou, la chambre basculerait deux fois
@@ -1077,6 +1088,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
                             'rapro-room',
                             cls,
                             isCarried && 'rapro-room-carried',
+                            pressingRoom === room && 'rapro-room-pressing',
                           )}
                         >
                           {room}
