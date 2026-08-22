@@ -130,6 +130,10 @@ const COMPACT_MIN_ROW_H = 30
 // conteneur mis en page `flex-1 min-h-0` (cf. l'effet dédié), qui exclut déjà
 // nativement tout ce qui n'est pas le planning lui-même.
 const COMPACT_BOTTOM_GAP = 64
+// Cf. le commentaire de l'effet de mesure tactile : marge de sécurité contre
+// l'arrondi entier de `clientHeight` face à une hauteur réellement peinte
+// fractionnaire, qui pouvait laisser filtrer un liséré de 15e rangée.
+const TOUCH_HEIGHT_SAFETY_PX = 2
 const ROW_H = 44
 const HEADER_H = 52
 const LABEL_W = 56
@@ -573,7 +577,14 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
     if (!isTouchDevice) return
     const el = heightRef.current
     if (!el) return
-    const measure = () => setAvailH(el.clientHeight)
+    // `- TOUCH_HEIGHT_SAFETY_PX` : `clientHeight` est un ENTIER arrondi,
+    // alors que la hauteur réellement peinte par le navigateur (issue d'une
+    // chaîne de `flex-1` empilés, chacun pouvant introduire un reste
+    // fractionnaire) ne l'est pas forcément — d'un pixel d'écart suffit pour
+    // que `SPOTS * rowH` dépasse de justesse la vraie hauteur disponible et
+    // laisse filtrer le tout début d'une 15e rangée (liséré fin constaté).
+    // Cette marge, invisible, élimine la possibilité même de ce dépassement.
+    const measure = () => setAvailH(Math.max(0, el.clientHeight - TOUCH_HEIGHT_SAFETY_PX))
     const ro = new ResizeObserver(measure)
     ro.observe(el)
     measure()
