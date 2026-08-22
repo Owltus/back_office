@@ -1659,8 +1659,18 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
               })}
             </div>
 
-            {/* Grille + réservations */}
-            <div className="relative" style={{ height: SPOTS * rowH }}>
+            {/* Grille + réservations. `overflow-hidden` : cette hauteur
+                (`SPOTS * rowH`) est la référence FIABLE de la zone de grille
+                (toujours exacte, contrairement aux mesures dérivées) — un
+                artefact visuel signalé sous la dernière rangée en tactile
+                (bordeaux, hors des 14 lignes) montrait qu'un élément interne
+                (filigrane de semaine, bande de surbooking…) pouvait déborder
+                de ce cadre sans être coupé. En clippant ici, tout contenu
+                reste borné à la grille réelle, quelle qu'en soit la cause. */}
+            <div
+              className="relative overflow-hidden"
+              style={{ height: SPOTS * rowH }}
+            >
               {/* Fond : lignes de jour / midi / rangées + clic droit pour ajouter.
                     En lecture seule (utilisateur), pas de menu contextuel : on
                     rend le fond seul (clic droit navigateur inoffensif). */}
