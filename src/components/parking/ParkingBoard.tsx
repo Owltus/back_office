@@ -123,14 +123,13 @@ const COMPACT_DAY_W = 64 // largeur minimale d'un jour en mode compact (téléph
 // sécurité protège la lisibilité — en dessous, la page défile plutôt que
 // d'écraser les rangées. Réserve pour la légende / marges sous la carte.
 const COMPACT_MIN_ROW_H = 30
+// Réserve pour la légende / marges sous la carte, dans la mesure de position
+// (`window.innerHeight - top`) du mode SOURIS fenêtre étroite (`isCompact`,
+// inchangé — cf. l'effet de mesure). Sans objet en écran tactile : la légende
+// y est masquée et la hauteur y est désormais lue directement sur le
+// conteneur mis en page `flex-1 min-h-0` (cf. l'effet dédié), qui exclut déjà
+// nativement tout ce qui n'est pas le planning lui-même.
 const COMPACT_BOTTOM_GAP = 64
-// Réserve pour la barre d'outils basse fixe sur écran tactile — DOIT rester
-// synchronisé avec la classe `pb-20` (5rem = 80px) posée sur le conteneur
-// racine : c'est cette marge que la barre masquerait sinon, ici soustraite de
-// la hauteur que la grille croit disponible pour ne pas provoquer un
-// défilement de page (la grille se sait « raccourcie » avant de calculer la
-// hauteur de ses rangées, plutôt qu'après).
-const MOBILE_TOOLBAR_RESERVE_H = 80
 const ROW_H = 44
 const HEADER_H = 52
 const LABEL_W = 56
@@ -351,6 +350,12 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
   // Vrai le temps d'un drag/redimension : neutralise Ctrl+Z pendant le geste.
   const interactingRef = useRef(false)
   const timelineRef = useRef<HTMLDivElement>(null)
+  // Conteneur "Planning" (colonne des places + timeline) : sur écran tactile,
+  // sa hauteur CSS devient bornée par la mise en page (`flex-1 min-h-0`, cf.
+  // le retour du composant) plutôt que dictée par son propre contenu — c'est
+  // alors lui, et non plus `timelineRef`, qu'on mesure pour la hauteur
+  // disponible (cf. l'effet dédié plus bas).
+  const heightRef = useRef<HTMLDivElement>(null)
   // Case visée par le dernier clic droit sur une zone vide (pour "Nouvelle réservation").
   const pendingCell = useRef<{ day: number; spot: number }>({ day: 0, spot: 1 })
 
@@ -516,28 +521,26 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
     }
   }, [startDate, refetchReservations])
 
-  // Mesure de la largeur (→ nombre de jours) ET de la hauteur disponible sous la
-  // timeline (→ étirement des rangées en compact/tactile). Recalculées au
-  // redimensionnement du conteneur (RO) et de la fenêtre (rotation, clavier
-  // virtuel, reflow d'en-tête).
+  // Mesure de la largeur (→ nombre de jours). Recalculée au redimensionnement
+  // du conteneur (RO) et de la fenêtre (rotation, clavier virtuel).
   //
-  // `isNavbarMobile`/`isTouchDevice` dans les dépendances : `useMatchMedia`
-  // répond `false` au tout premier rendu (SSR-safe), le temps d'un effet, AVANT
-  // de se corriger à la vraie valeur — l'en-tête est donc encore plein format
-  // (titre + actions) lors du TOUT PREMIER appel de `measure()`. Une fois
-  // corrigé, l'en-tête peut se réduire à RIEN du tout (`PageHeader` retourne
-  // `null`), ce qui déplace la timeline vers le haut SANS changer sa propre
-  // taille — le `ResizeObserver`, qui ne surveille QUE la taille de l'élément
-  // observé (pas sa position), ne se redéclenche alors jamais tout seul. Sans
-  // ce garde, la hauteur disponible restait calculée sur l'ancien en-tête,
-  // plus haut que nécessaire, laissant une marge vide en bas du tableau que
-  // rien ne venait jamais combler.
+  // Hors écran tactile, cet effet mesure AUSSI la hauteur disponible (mode
+  // souris fenêtre étroite, `isCompact`) par arithmétique de position
+  // (`window.innerHeight - top`) : approche pré-existante, fragile en
+  // toute rigueur (un `ResizeObserver` ne se redéclenche pas si l'élément
+  // bouge sans changer de taille), mais jamais mise en défaut en pratique
+  // sur bureau — donc volontairement INCHANGÉE (cf. « ne pas toucher au mode
+  // bureau »). Sur écran tactile, la hauteur est désormais mesurée
+  // séparément et plus robustement (cf. l'effet suivant) : ce garde évite que
+  // les deux mesures ne s'écrasent l'une l'autre.
   useEffect(() => {
     const el = timelineRef.current
     if (!el) return
     const measure = () => {
       setContainerW(el.clientWidth)
-      setAvailH(window.innerHeight - el.getBoundingClientRect().top)
+      if (!isTouchDevice) {
+        setAvailH(window.innerHeight - el.getBoundingClientRect().top)
+      }
     }
     const ro = new ResizeObserver(measure)
     ro.observe(el)
@@ -548,6 +551,30 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
       window.removeEventListener('resize', measure)
     }
   }, [startDate, isNavbarMobile, isTouchDevice])
+
+  // Hauteur disponible en écran tactile : lue DIRECTEMENT sur le conteneur
+  // "Planning" (`heightRef`) une fois celui-ci mis en page `flex-1 min-h-0`
+  // (cf. le retour du composant) — sa hauteur CSS devient alors bornée par la
+  // mise en page ambiante (page, barre d'outils basse fixe), pas par son
+  // propre contenu. Le `ResizeObserver` capte alors fidèlement toute
+  // variation réelle de la place disponible (rotation, clavier virtuel,
+  // apparition/disparition de la barre du haut), sans les angles morts de
+  // l'arithmétique de position ci-dessus (dépendance à la position ET à la
+  // taille de l'élément observé, jamais fiable à 100 % sur un timing
+  // d'hydratation). Inerte à la souris : le conteneur y garde sa hauteur
+  // naturelle dictée par le contenu (`rowH`) — le mesurer créerait une
+  // boucle (la hauteur mesurée dépendrait de la valeur qu'elle sert à
+  // calculer).
+  useEffect(() => {
+    if (!isTouchDevice) return
+    const el = heightRef.current
+    if (!el) return
+    const measure = () => setAvailH(el.clientHeight)
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    measure()
+    return () => ro.disconnect()
+  }, [isTouchDevice])
 
   // Largeur mini d'un jour : réduite en compact → colonnes plus étroites, plus de
   // jours visibles à l'écran (on ne montre que les zones colorées, pas les noms).
@@ -565,15 +592,23 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
   // étroite <768px, y compris à la souris — comportement bureau PRÉEXISTANT,
   // inchangé) OU `isTouchDevice` (tablette tactile LARGE ≥768px comprise —
   // nouveau : avant, une tablette au doigt gardait des rangées de hauteur
-  // FIXE, sans rapport avec la hauteur réelle de son écran). Seul le second
-  // cas réserve la hauteur de la barre d'outils basse fixe
-  // (`MOBILE_TOOLBAR_RESERVE_H`, absente à la souris, où aucune barre basse
-  // n'existe).
+  // FIXE, sans rapport avec la hauteur réelle de son écran).
+  //
+  // Les deux cas ne soustraient PAS la même chose de `availH`, car ils ne
+  // mesurent pas la même chose (cf. les deux effets de mesure ci-dessus) :
+  // - Mode souris (`isCompact` seul) : `availH` vient d'une mesure de
+  //   POSITION (« du haut de la grille au bas de la fenêtre »), qui ignore
+  //   tout ce qui se trouve SOUS la grille (légende, marges) → `headerH` et
+  //   `COMPACT_BOTTOM_GAP` en soustraction manuelle.
+  // - Écran tactile : `availH` vient directement de la hauteur CSS RÉELLE du
+  //   conteneur `flex-1 min-h-0` du planning (légende masquée, barre basse
+  //   hors flux) → seul `headerH` (partie du même conteneur) reste à
+  //   soustraire, tout le reste est déjà exclu par la mise en page.
   //
   // AUCUN plafond volontairement : les rangées remplissent TOUTE la hauteur
   // disponible, quelle qu'elle soit (grand écran tactile → grandes rangées,
   // pas de marge vide en bas) — seul un plancher (`COMPACT_MIN_ROW_H`)
-  // protège la lisibilité ; en dessous, la page défile plutôt que d'écraser
+  // protège la lisibilité ; en dessous, la grille défile plutôt que d'écraser
   // les rangées à l'illisible. Un ancien plafond (`COMPACT_MAX_ROW_H`, 60px)
   // laissait précisément la marge vide signalée par l'utilisateur sur des
   // écrans où la hauteur calculée dépassait ce plafond — retiré.
@@ -584,10 +619,7 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
       ? Math.max(
           COMPACT_MIN_ROW_H,
           Math.floor(
-            (availH -
-              headerH -
-              COMPACT_BOTTOM_GAP -
-              (isTouchDevice ? MOBILE_TOOLBAR_RESERVE_H : 0)) /
+            (availH - headerH - (isTouchDevice ? 0 : COMPACT_BOTTOM_GAP)) /
               SPOTS,
           ),
         )
@@ -1323,7 +1355,11 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
   return (
     <div
       className={cn(
-        'flex min-w-0 flex-1 flex-col gap-4',
+        // `min-h-0` : nécessaire pour que le conteneur de hauteur variable
+        // ci-dessous (écran tactile) reçoive une hauteur réellement bornée de
+        // <main>/PageContainer plutôt que de forcer TOUTE la page à défiler —
+        // cf. commentaire sur `heightRef` plus bas. Sans effet sur bureau.
+        'flex min-h-0 min-w-0 flex-1 flex-col gap-4',
         isTouchDevice && 'pb-20',
       )}
     >
@@ -1428,8 +1464,24 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
         </div>
       )}
 
-      {/* Planning */}
-      <div className="flex overflow-hidden rounded-2xl border border-border bg-card">
+      {/* Planning. Sur écran tactile, `flex-1 min-h-0` + overflow vertical
+          explicite (axe par axe, pas le raccourci `overflow-hidden` — son
+          ordre de cascade face à `overflow-y-auto` n'est pas garanti) : la
+          hauteur de ce conteneur devient bornée par la mise en page ambiante
+          au lieu d'être dictée par son propre contenu, ce qui permet de la
+          mesurer fidèlement (cf. l'effet dédié sur `heightRef` plus haut) et
+          déclenche un DÉFILEMENT LOCAL si le contenu dépasse malgré tout
+          (plancher `COMPACT_MIN_ROW_H` atteint) plutôt qu'un défilement de
+          toute la page. Inchangé à la souris (`overflow-hidden` d'origine). */}
+      <div
+        ref={heightRef}
+        className={cn(
+          'flex rounded-2xl border border-border bg-card',
+          isTouchDevice
+            ? 'min-h-0 flex-1 overflow-x-hidden overflow-y-auto'
+            : 'overflow-hidden',
+        )}
+      >
         {/* Colonne fixe des places */}
         <div
           className="shrink-0 border-r border-border"

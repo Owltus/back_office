@@ -16,7 +16,12 @@ function ParkingPage() {
   const { date } = Route.useSearch()
   return (
     <PageGuard page="parking">
-      <PageContainer>
+      {/* `fillHeight` (min-h-0) : sans effet en soi (une seule colonne flex-1
+          dans <main>, déjà bornée) — NÉCESSAIRE pour que le conteneur de
+          hauteur variable de ParkingBoard (écran tactile) puisse recevoir
+          une hauteur réellement bornée plutôt que de faire défiler <main>
+          entier. Sans danger pour le bureau, qui n'active pas ce mode. */}
+      <PageContainer fillHeight>
         <ParkingBoard initialDate={date} />
       </PageContainer>
     </PageGuard>
