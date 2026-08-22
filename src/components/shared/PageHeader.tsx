@@ -30,14 +30,16 @@ import { cn } from '#/lib/utils.ts'
  *   Caisse/PDJ/Rapprochement, pas généralisée aux autres pages sans le leur
  *   demander).
  * - `badgeAlignBreakpoint` : seuil de cette bascule — `'lg'` (1024px, défaut,
- *   Caisse/PDJ) ou `'md'` (768px, Rapprochement). Doit rester aligné sur le
- *   seuil auquel LA PAGE ELLE-MÊME confie titre/badge à la Navbar globale
- *   (`isNavbarMobile`, voir `lib/navbarSubtitle.ts`) : c'est à cet endroit
- *   précis que le `h1` s'efface au profit du sous-titre de Navbar, et la
- *   pastille doit rester à droite tout du long de cette même plage, pas un
- *   seuil indépendant qui dérive. Caisse/PDJ ne confient rien à la Navbar
- *   (leur badge reste toujours dans l'en-tête) : leur seuil `lg` n'a donc
- *   pas ce lien et reste au défaut.
+ *   Caisse/PDJ) ou `'md'` (768px). Doit rester aligné sur le seuil auquel LA
+ *   PAGE ELLE-MÊME confie titre/badge à la Navbar globale (`isNavbarMobile`,
+ *   voir `lib/navbarSubtitle.ts`) : c'est à cet endroit précis que le `h1`
+ *   s'efface au profit du sous-titre de Navbar, et la pastille doit rester à
+ *   droite tout du long de cette même plage, pas un seuil indépendant qui
+ *   dérive. Caisse/PDJ ne confient rien à la Navbar (leur badge reste
+ *   toujours dans l'en-tête) : leur seuil `lg` n'a donc pas ce lien et reste
+ *   au défaut. `'none'` (Rapprochement) : ne revient JAMAIS à `start`, la
+ *   pastille reste au bord droit à toutes les tailles — demandé
+ *   explicitement là, pas un défaut à généraliser sans qu'on le redemande.
  * - `badgeWidth` : n'a d'effet qu'avec `badgeAlign="end"`, sous `sm`. Étire la
  *   pastille ELLE-MÊME (pas juste un conteneur autour) à cette largeur — sert
  *   à l'aligner pile sur le bloc du dessous qu'elle surplombe (typiquement la
@@ -68,7 +70,7 @@ export function PageHeader({
   title?: ReactNode
   badge?: ReactNode
   badgeAlign?: 'start' | 'end'
-  badgeAlignBreakpoint?: 'md' | 'lg'
+  badgeAlignBreakpoint?: 'md' | 'lg' | 'none'
   badgeWidth?: string
   meta?: ReactNode
   actions?: ReactNode
@@ -98,9 +100,11 @@ export function PageHeader({
               className={cn(
                 'flex min-w-0 flex-nowrap items-center gap-2',
                 badgeAlign === 'end' &&
-                  (badgeAlignBreakpoint === 'md'
-                    ? 'justify-between md:justify-start'
-                    : 'justify-between lg:justify-start'),
+                  (badgeAlignBreakpoint === 'none'
+                    ? 'justify-between'
+                    : badgeAlignBreakpoint === 'md'
+                      ? 'justify-between md:justify-start'
+                      : 'justify-between lg:justify-start'),
               )}
             >
               {title && (

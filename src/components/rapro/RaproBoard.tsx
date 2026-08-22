@@ -832,7 +832,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
         // reprennent leur place normale ici — même seuil que la grille.
         title={isNavbarMobile ? undefined : title}
         badgeAlign="end"
-        badgeAlignBreakpoint="md"
+        badgeAlignBreakpoint="none"
         badge={isNavbarMobile ? undefined : statusBadge}
         // Sur écran tactile, ce groupe entier laisse la place à la barre
         // d'outils basse fixe (cf. fin du composant) : une vraie barre d'app
