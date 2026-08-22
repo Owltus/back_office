@@ -18,18 +18,18 @@
    « carte » → fins filets de séparation verticaux entre étages. */
 /* Une carte par étage — 6 étages → toujours 3 ou 6 colonnes (diviseurs de 6)
    pour des rangées toujours complètes, jamais de mise en page bâtarde.
-   Repli à 3 colonnes sous 640px : à 6 colonnes, chaque étage devient trop
-   étroit pour rester confortable bien avant le bord de la fenêtre — le
-   palier est donc placé plus tôt (640px) qu'un simple calcul de largeur
-   minimale de colonne ne l'exigerait, pour ne pas s'attarder sur 6 colonnes
-   serrées. Même seuil que `.rapro-stats` ci-dessous : les deux grilles
-   basculent ensemble. */
+   Repli à 3 colonnes sous 768px (relevé de 640px, 2026-08-22 — jugé encore
+   trop tardif : le mode 6 colonnes s'étirait trop longtemps en rétrécissant
+   la fenêtre) : à 6 colonnes, chaque étage devient trop étroit pour rester
+   confortable bien avant le bord de la fenêtre — le repli à 3 doit arriver
+   plus tôt, pas au dernier moment. Même seuil que `.rapro-stats` ci-dessous :
+   les deux grilles basculent ensemble. */
 .rapro-floors {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 0.75rem;
 }
-@media (min-width: 640px) {
+@media (min-width: 768px) {
   .rapro-floors {
     grid-template-columns: repeat(6, 1fr);
   }
@@ -243,17 +243,18 @@
  * TOUJOURS 6 tuiles (dont « Bloquées veille », affichée même à 0 — un compte
  * qui varierait entre 5 et 6 décalait la mise en page d'un jour à l'autre).
  * Colonnes FIXES en diviseurs de 6 (3 ou 6), calées sur `.rapro-floors` — même
- * seuil (640px), pour que cartes et tableau des étages basculent ensemble et
- * affichent le même nombre de colonnes/rangées. `auto-fit` a été abandonné :
- * avec 6 tuiles il pouvait retomber sur un nombre de colonnes qui ne divise
- * pas 6 (ex. 4), répartissant les tuiles en rangées inégales (4 + 2) — un
- * repli en diviseur de 6 garantit deux rangées toujours symétriques (3 + 3). */
+ * seuil (768px, relevé de 640px le 2026-08-22), pour que cartes et tableau
+ * des étages basculent ensemble et affichent le même nombre de colonnes/
+ * rangées. `auto-fit` a été abandonné : avec 6 tuiles il pouvait retomber sur
+ * un nombre de colonnes qui ne divise pas 6 (ex. 4), répartissant les tuiles
+ * en rangées inégales (4 + 2) — un repli en diviseur de 6 garantit deux
+ * rangées toujours symétriques (3 + 3). */
 .rapro-stats {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 0.6rem;
 }
-@media (min-width: 640px) {
+@media (min-width: 768px) {
   .rapro-stats {
     grid-template-columns: repeat(6, 1fr);
   }
