@@ -74,16 +74,23 @@ export function ToolbarCell({
  *
  * MODE MOBILE (`mobileIdentity` / `mobileToolbar`) : mêmes mécanismes que /rapro,
  * exposés en props STRICTEMENT OPTIONNELLES pour ne rien changer aux 8 autres
- * pages analytique (repjour/PDJ/parking/caisse) qui ne les activent pas.
+ * pages analytique (repjour/PDJ/parking/caisse) qui ne les activent pas — les
+ * deux seuils ci-dessous (`isNavbarMobile`, `isTouchDevice`) sont TOUJOURS
+ * calculés (un Hook ne peut pas être conditionnel) mais ne changent le rendu
+ * QUE si le board a fourni `mobileIdentity`/`mobileToolbar` ; sinon ils restent
+ * inutilisés.
  * `mobileIdentity` déplace un contenu (fourni par le board, PAS forcément égal
  * à `title` — ex. « Analytique 2026 » quand `title` reste « Analytique » sur
  * l'en-tête desktop, où l'année est déjà visible à côté via YearNav) en
- * sous-titre de la Navbar globale sous 1024px (voir lib/navbarSubtitle.ts) :
- * l'année/le mois n'y est sinon plus visible nulle part, la barre basse ayant
- * remplacé le `YearNav`/bouton retour de l'en-tête. `mobileToolbar` remplace
- * les `actions` de l'en-tête par une barre d'outils basse fixe sous 640px, à
- * laquelle le shell fournit sa propre cellule Imprimer (le board place les
- * siennes autour).
+ * sous-titre de la Navbar globale sous 768px (voir lib/navbarSubtitle.ts) —
+ * seuil aligné sur celui de la grille chambres/KPI (rapro.css) pour qu'ils
+ * basculent ensemble : l'année/le mois n'y est sinon plus visible nulle part,
+ * la barre basse ayant remplacé le `YearNav`/bouton retour de l'en-tête.
+ * `mobileToolbar` remplace les `actions` de l'en-tête par une barre d'outils
+ * basse fixe sur ÉCRAN TACTILE (`(hover:none) and (pointer:coarse)`, PAS une
+ * largeur — une tablette tactile large a la barre basse comme un téléphone ;
+ * un ordinateur en fenêtre étroite garde la barre du haut), à laquelle le
+ * shell fournit sa propre cellule Imprimer (le board place les siennes autour).
  */
 export function AnalytiqueShell({
   title,
@@ -109,7 +116,7 @@ export function AnalytiqueShell({
   /** Active le bouton « Imprimer / PDF » et sert de titre au document
    *  (ex. « Caisse · 2026 »). Absent → page non imprimable, pas de bouton. */
   printTitle?: string
-  /** Sous 1024px, déplace ce contenu dans la Navbar globale (sous-titre de
+  /** Sous 768px, déplace ce contenu dans la Navbar globale (sous-titre de
    *  page) et retire `title` de l'en-tête — même mécanisme que /rapro. N'est
    *  PAS forcément égal à `title` : la vue annuelle passe ici « Analytique
    *  2026 » alors que `title` reste « Analytique » sur l'en-tête desktop, où
@@ -119,17 +126,24 @@ export function AnalytiqueShell({
    *  actuel inchangé. */
   mobileIdentity?: ReactNode
   /** Cellules PROPRES au board (navigation temporelle, retour…) pour la barre
-   *  d'outils basse fixe sous 640px ; reçoit la cellule Imprimer déjà construite
-   *  par le shell (`null` si `printTitle` absent) à placer où le board veut.
-   *  Absent (défaut) : pas de barre basse, `actions` reste dans l'en-tête à
-   *  toutes les tailles — comportement actuel inchangé. */
+   *  d'outils basse fixe sur écran tactile ; reçoit la cellule Imprimer déjà
+   *  construite par le shell (`null` si `printTitle` absent) à placer où le
+   *  board veut. Absent (défaut) : pas de barre basse, `actions` reste dans
+   *  l'en-tête à toutes les tailles — comportement actuel inchangé. */
   mobileToolbar?: (printCell: ReactNode | null) => ReactNode
   children: ReactNode
 }) {
   const rootRef = useRef<HTMLDivElement>(null)
-  const isNavbarMobile = useMatchMedia('(max-width: 1023.98px)')
-  const showTopToolbar = useMatchMedia('(min-width: 640px)')
-  useNavbarSubtitle(mobileIdentity ?? null)
+  const isNavbarMobile = useMatchMedia('(max-width: 767.98px)')
+  const isTouchDevice = useMatchMedia('(hover: none) and (pointer: coarse)')
+  // GATÉ par `isNavbarMobile` (≠ posé inconditionnellement) : le bloc
+  // nom-de-page/sous-titre de la Navbar reste visible jusqu'à 1024px
+  // (`lg:hidden`, seuil FIXE du hamburger, commun à toute l'app), un seuil
+  // DIFFÉRENT de celui qui fait réapparaître le titre dans l'en-tête de page
+  // (768px, `isNavbarMobile`). Entre les deux, sans ce garde, le contenu se
+  // serait affiché EN DOUBLE : une fois dans la Navbar (toujours en mode
+  // hamburger), une fois dans l'en-tête de page (déjà repassé en mode bureau).
+  useNavbarSubtitle(isNavbarMobile ? (mobileIdentity ?? null) : null)
 
   const handlePrint = () => {
     const root = rootRef.current
@@ -165,11 +179,12 @@ export function AnalytiqueShell({
     ) : (
       actions
     )
-  // Sous 640px, une barre basse remplace les actions de l'en-tête (comme /rapro) :
-  // `undefined`, pas un masquage CSS, pour que PageHeader sorte vraiment du flux
-  // s'il ne reste plus rien à afficher (cf. shared/PageHeader.tsx).
+  // Sur écran tactile, une barre basse remplace les actions de l'en-tête
+  // (comme /rapro) : `undefined`, pas un masquage CSS, pour que PageHeader
+  // sorte vraiment du flux s'il ne reste plus rien à afficher (cf.
+  // shared/PageHeader.tsx).
   const desktopActions =
-    mobileToolbar && !showTopToolbar ? undefined : headerActions
+    mobileToolbar && isTouchDevice ? undefined : headerActions
 
   const printToolbarCell =
     printTitle != null ? (
@@ -188,7 +203,7 @@ export function AnalytiqueShell({
         ref={rootRef}
         className={cn(
           'mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 lg:min-h-0',
-          mobileToolbar && 'max-sm:pb-20',
+          mobileToolbar && isTouchDevice && 'pb-20',
         )}
       >
         <PageHeader
@@ -197,9 +212,9 @@ export function AnalytiqueShell({
         />
         {loading ? <AnalytiqueSkeleton {...skeleton} /> : children}
       </div>
-      {mobileToolbar && (
+      {mobileToolbar && isTouchDevice && (
         <nav
-          className="fixed inset-x-0 bottom-0 z-30 flex items-stretch border-t border-border bg-card/95 backdrop-blur-md sm:hidden"
+          className="fixed inset-x-0 bottom-0 z-30 flex items-stretch border-t border-border bg-card/95 backdrop-blur-md"
           style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
         >
           {mobileToolbar(printToolbarCell)}

@@ -274,9 +274,10 @@ rejoindre ce langage.
   de la même rangée d'actions, pas comme une pastille décorative à part. Seule la
   couleur du texte/bordure change selon l'état (émeraude = clôturé, ambre = ouvert) —
   la couleur appuie le mot, elle ne le remplace jamais.
-- **Variante `compact`** (sous 1024px) : le libellé texte cède la place à une
-  simple icône de cadenas (fermé/ouvert), même gabarit carré, mêmes couleurs —
-  pour les pages dont l'identité (nom + jour) a migré dans la Navbar (voir
+- **Variante `compact`** (sous 768px, seuil aligné sur celui de la page qui
+  l'utilise — voir plus bas) : le libellé texte cède la place à une simple
+  icône de cadenas (fermé/ouvert), même gabarit carré, mêmes couleurs — pour
+  les pages dont l'identité (nom + jour) a migré dans la Navbar (voir
   Navigation ci-dessous), où le mot complet n'apporte plus rien face à l'icône.
 
 ### Navigation (barre du haut)
@@ -304,10 +305,28 @@ rejoindre ce langage.
 - Sous-titre et badge disparaissent automatiquement en quittant la page qui les
   a posés (voir `lib/navbarSubtitle.ts`) — jamais de résidu d'une page
   précédente.
+- **Le seuil hamburger (1024px) est FIXE et commun à toute l'app** — le bloc
+  nom-de-page/sous-titre de la Navbar reste visible jusque-là quoi qu'il
+  arrive. Une page peut vouloir migrer SON PROPRE titre/badge vers ce bloc à
+  un seuil plus étroit (Rapprochement : 768px, aligné sur sa grille) — dans ce
+  cas, poser `useNavbarSubtitle`/`useNavbarBadge` avec le contenu (pas
+  `null`) UNIQUEMENT sous ce seuil plus étroit à elle, jamais
+  inconditionnellement : entre les deux seuils, la Navbar reste en mode
+  hamburger (donc visible) alors que la page a déjà remis son titre dans son
+  propre en-tête — sans ce garde, le même contenu s'affiche EN DOUBLE dans
+  cet entre-deux (bug réel rencontré en alignant Rapprochement sur 768px).
 
-### Barre d'outils basse mobile (signature, sous 640px)
-- **Quand :** remplace la barre d'actions de l'en-tête sous 640px — pas un
-  rétrécissement de boutons de bureau, une vraie barre d'app mobile.
+### Barre d'outils basse mobile (signature)
+- **Quand :** remplace la barre d'actions de l'en-tête sur ÉCRAN TACTILE —
+  `(hover:none) and (pointer:coarse)`, PAS une largeur d'écran. Une tablette
+  tactile large (768-1024px) a la barre basse comme un téléphone ; un
+  ordinateur en fenêtre étroite (souris) garde la barre du haut, boutons
+  agrandis à 44px. La largeur dit combien de place il y a, pas COMMENT on
+  touche l'écran — détecter l'un via l'autre a longtemps laissé les tablettes
+  dans un entre-deux non voulu (grille déjà en densité bureau dès 768px,
+  boutons de la barre du haut pourtant restés à leur taille souris). Ce n'est
+  toujours PAS un rétrécissement de boutons de bureau, une vraie barre d'app
+  mobile.
 - **Position :** `fixed`, collée au bas de la fenêtre, au-dessus de tout scroll de
   page ; `env(safe-area-inset-bottom)` pour l'encoche/l'indicateur d'accueil iOS.
   Le contenu de la page réserve l'espace correspondant (`padding-bottom`) pour
@@ -334,17 +353,20 @@ rejoindre ce langage.
   acceptable.
 - **Sans sélecteur de date en mobile, pour l'instant :** Rapprochement s'y
   parcourt uniquement jour par jour (Précédent/Suivant) — pas de bouton
-  calendrier dans la barre basse ni ailleurs sous 1024px. Un déclencheur
-  calendrier personnalisé sur le sous-titre de la Navbar a été essayé, puis
-  retiré sur demande explicite (jugé pas pratique) ; ne pas le réintroduire
-  sans qu'on le redemande.
+  calendrier dans la barre basse ni ailleurs sur écran tactile (le bouton
+  calendrier vit dans la barre du haut, elle-même absente sur ce type
+  d'écran). Un déclencheur calendrier personnalisé sur le sous-titre de la
+  Navbar a été essayé, puis retiré sur demande explicite (jugé pas pratique) ;
+  ne pas le réintroduire sans qu'on le redemande.
 - **Exposée par le socle analytique (`AnalytiqueShell`) via deux props
   opt-in** : `mobileIdentity` (contenu déplacé en sous-titre Navbar sous
-  1024px — PAS forcément égal à `title` : la vue annuelle y passe « Analytique
+  768px — PAS forcément égal à `title` : la vue annuelle y passe « Analytique
   2026 » alors que `title` reste « Analytique » sur l'en-tête desktop, où
   l'année est déjà visible via `YearNav` ; sur la Navbar mobile c'est le seul
   endroit qui la montre encore, la barre basse ayant remplacé ce `YearNav`/le
-  bouton retour de l'en-tête) et `mobileToolbar` (barre basse fixe sous 640px,
+  bouton retour de l'en-tête — posé UNIQUEMENT sous ce seuil, jamais
+  inconditionnellement, cf. la règle générale de doublon plus haut) et
+  `mobileToolbar` (barre basse fixe sur écran tactile, peu importe la largeur,
   le shell y insère lui-même sa cellule Imprimer déjà construite —
   `ToolbarCell`, exporté par `AnalytiqueShell.tsx` — le board ne fournit que
   ses cellules de navigation propres). Les deux props sont absentes par
@@ -368,7 +390,17 @@ rejoindre ce langage.
   autres pages du socle (RepJour/PDJ/Parking/Caisse × annuel+mensuel) n'ont
   pas ce mode ; ne pas présumer qu'elles l'ont sans vérifier le code.
 
-### Tooltip
+### Détection tactile réelle (contenu, pas seulement mise en page)
+- Un contenu qui DÉCRIT un geste (légende souris/tactile de la grille
+  Rapprochement, section « gestes » du modal d'aide) doit changer selon
+  l'entrée RÉELLEMENT disponible, pas selon une largeur d'écran : une
+  tablette tactile large ne doit jamais lire « clic droit » ou voir un glyphe
+  de souris. En CSS pur (composant sans état/hook), utiliser les variants
+  Tailwind natifs `pointer-fine:`/`pointer-coarse:` (media feature
+  `pointer`) plutôt qu'un seuil `sm`/`md`/`lg` — même principe que la
+  détection JS `(hover:none) and (pointer:coarse)` déjà utilisée pour la
+  bascule barre du haut/barre basse et pour le bouton Imprimer sur mobile
+  (`window.open` synchrone).
 - Fond `bg-foreground` / texte `bg-background` : s'inverse automatiquement entre clair
   et sombre puisqu'il utilise les jetons plutôt qu'une couleur fixe — jamais l'infobulle
   système du navigateur (`title`), toujours repeinte aux couleurs de l'app.

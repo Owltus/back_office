@@ -102,11 +102,14 @@ export function RaproHelpPanel() {
         </ColorRow>
       </Section>
 
-      {/* Deux versions du même geste, selon l'entrée disponible — jamais les
-          deux en même temps : la souris n'existe pas au doigt, et décrire
-          « clic droit » sur un écran tactile n'aiderait personne. Même seuil
-          (640px) que l'ancienne légende souris/tactile de la grille. */}
-      <div className="hidden sm:block">
+      {/* Deux versions du même geste, selon l'entrée RÉELLEMENT disponible —
+          jamais les deux en même temps : la souris n'existe pas au doigt, et
+          décrire « clic droit » sur un écran tactile n'aiderait personne.
+          `pointer-fine`/`pointer-coarse` (media feature `pointer`), PAS une
+          largeur d'écran : une tablette tactile large affiche le même texte
+          qu'un téléphone, un ordinateur en fenêtre étroite garde le texte
+          souris — la largeur ne dit rien sur la présence d'une souris. */}
+      <div className="hidden pointer-fine:block">
         <Section title="Les deux gestes de la souris">
           <div className="flex items-start gap-2.5">
             <span className="mt-0.5 shrink-0">
@@ -139,7 +142,7 @@ export function RaproHelpPanel() {
           </p>
         </Section>
       </div>
-      <div className="sm:hidden">
+      <div className="pointer-fine:hidden">
         <Section title="Les deux gestes tactiles">
           <p>
             <span className="font-medium text-foreground">Appui simple</span> : fait

@@ -24,16 +24,20 @@ import { cn } from '#/lib/utils.ts'
  *   (voir `LockBadge`). Hors du h1 : c'est un état, pas un bout de titre.
  *   `shrink-0` : ne cède jamais sa place au titre, reste toujours visible.
  * - `badgeAlign` : `'start'` (défaut) colle la pastille juste après le titre,
- *   partout. `'end'` ne change rien au-delà de `lg` (toujours collée au
- *   titre) mais, en dessous, l'envoie au bord droit de la ligne — plus net
- *   qu'accolée à un titre déjà tronqué (demande explicite sur Rapprochement,
- *   pas généralisée aux autres pages sans le leur demander). Seuil `lg`
- *   (1024px, pas `sm`) : c'est là que la Navbar bascule elle aussi en mode
- *   mobile (nom de page + sous-titre à la place des onglets) — au même
- *   endroit sur Rapprochement, le titre `h1` s'efface au profit du
- *   sous-titre de la Navbar (voir `lib/navbarSubtitle.ts`), et la pastille
- *   doit rester à droite tout du long de cette même plage, pas seulement
- *   sous 640px.
+ *   partout. `'end'` ne change rien au-delà du seuil de bascule (toujours
+ *   collée au titre) mais, en dessous, l'envoie au bord droit de la ligne —
+ *   plus net qu'accolée à un titre déjà tronqué (demande explicite sur
+ *   Caisse/PDJ/Rapprochement, pas généralisée aux autres pages sans le leur
+ *   demander).
+ * - `badgeAlignBreakpoint` : seuil de cette bascule — `'lg'` (1024px, défaut,
+ *   Caisse/PDJ) ou `'md'` (768px, Rapprochement). Doit rester aligné sur le
+ *   seuil auquel LA PAGE ELLE-MÊME confie titre/badge à la Navbar globale
+ *   (`isNavbarMobile`, voir `lib/navbarSubtitle.ts`) : c'est à cet endroit
+ *   précis que le `h1` s'efface au profit du sous-titre de Navbar, et la
+ *   pastille doit rester à droite tout du long de cette même plage, pas un
+ *   seuil indépendant qui dérive. Caisse/PDJ ne confient rien à la Navbar
+ *   (leur badge reste toujours dans l'en-tête) : leur seuil `lg` n'a donc
+ *   pas ce lien et reste au défaut.
  * - `badgeWidth` : n'a d'effet qu'avec `badgeAlign="end"`, sous `sm`. Étire la
  *   pastille ELLE-MÊME (pas juste un conteneur autour) à cette largeur — sert
  *   à l'aligner pile sur le bloc du dessous qu'elle surplombe (typiquement la
@@ -54,6 +58,7 @@ export function PageHeader({
   title,
   badge,
   badgeAlign = 'start',
+  badgeAlignBreakpoint = 'lg',
   badgeWidth,
   meta,
   actions,
@@ -63,6 +68,7 @@ export function PageHeader({
   title?: ReactNode
   badge?: ReactNode
   badgeAlign?: 'start' | 'end'
+  badgeAlignBreakpoint?: 'md' | 'lg'
   badgeWidth?: string
   meta?: ReactNode
   actions?: ReactNode
@@ -91,7 +97,10 @@ export function PageHeader({
             <div
               className={cn(
                 'flex min-w-0 flex-nowrap items-center gap-2',
-                badgeAlign === 'end' && 'justify-between lg:justify-start',
+                badgeAlign === 'end' &&
+                  (badgeAlignBreakpoint === 'md'
+                    ? 'justify-between md:justify-start'
+                    : 'justify-between lg:justify-start'),
               )}
             >
               {title && (

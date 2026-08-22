@@ -95,20 +95,33 @@ function statLabel(full: string, short: string) {
   )
 }
 
-// Sous 1024px, le jour et le statut vivent dans la Navbar globale (voir
+// Sous 768px, le jour et le statut vivent dans la Navbar globale (voir
 // useNavbarSubtitle/useNavbarBadge plus bas) : `title`/`badge` passent alors à
-// `undefined` plutôt qu'à un contenu masqué en CSS. Sous 640px, la barre
-// d'outils basse fixe remplace en plus les actions du haut : `actions` passe
-// lui aussi à `undefined`. Dans les deux cas, un contenu masqué en CSS plutôt
-// qu'absent aurait laissé PageHeader exister comme élément flex VIDE dans la
-// page — le `gap` du conteneur parent réserve de la place autour de tout
-// élément rendu, même sans contenu visible à l'intérieur. Seul `undefined`
+// `undefined` plutôt qu'à un contenu masqué en CSS. Seuil aligné sur celui de
+// la grille chambres/KPI (`.rapro-floors`/`.rapro-stats`, rapro.css) : les deux
+// basculent en mode bureau ENSEMBLE, pas à deux seuils différents (c'était le
+// cas jusqu'ici avec 1024px ici et 768px pour la grille — une tablette entre
+// les deux affichait déjà une grille pleine densité bureau sous une identité
+// de page restée « mobile », un entre-deux qui ne correspondait à rien).
+//
+// Sur ÉCRAN TACTILE (peu importe la largeur — une tablette de 768 à 1024px
+// EST tactile), la barre d'outils basse fixe remplace les actions du haut :
+// `actions` passe alors à `undefined`. Détecté via `(hover:none) and
+// (pointer:coarse)`, PAS une largeur de fenêtre (adapt.md) : un ordinateur à
+// la souris, même dans une fenêtre étroite, garde la barre du haut ; une
+// tablette au doigt, même large, a la barre basse — la largeur dit combien de
+// place il y a, pas COMMENT on touche l'écran.
+//
+// Dans les deux cas, un contenu masqué en CSS plutôt qu'absent aurait laissé
+// PageHeader exister comme élément flex VIDE dans la page — le `gap` du
+// conteneur parent réserve de la place autour de tout élément rendu, même
+// sans contenu visible à l'intérieur. Seul `undefined`
 // (PageHeader renvoie alors `null`, cf. shared/PageHeader.tsx) sort vraiment
 // l'élément du flux et referme le vide entre la Navbar et les cartes.
 
 export function RaproBoard({ initialDate }: { initialDate?: string }) {
-  const isNavbarMobile = useMatchMedia('(max-width: 1023.98px)')
-  const showTopToolbar = useMatchMedia('(min-width: 640px)')
+  const isNavbarMobile = useMatchMedia('(max-width: 767.98px)')
+  const isTouchDevice = useMatchMedia('(hover: none) and (pointer: coarse)')
   const { user, pageLevel } = useAuth()
   // Niveau effectif : sert au verrou PAR JOUR. Écriture n'agit que dans la fenêtre
   // de grâce (J-0..J-2) ; la gestion peut agir sur n'importe quel jour (cf.
@@ -723,18 +736,28 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
     ? format(parsed, 'EEEE d MMMM yyyy', { locale: fr })
     : selectedDate
   const title = capitalize(label)
-  // Sous 1024px, la Navbar globale affiche ce jour sous « Rapprochement » (à la
+  // Sous 768px, la Navbar globale affiche ce jour sous « Rapprochement » (à la
   // place de la marque) — le titre de page ci-dessous s'efface d'autant pour ne
   // pas le répéter. Se retire tout seul au démontage (changement de page).
   // Texte simple, non interactif (le tap-pour-ouvrir-le-calendrier essayé ici a
   // été retiré sur demande explicite).
-  useNavbarSubtitle(title)
+  //
+  // GATÉ par `isNavbarMobile` (≠ posé inconditionnellement) : le bloc
+  // nom-de-page/sous-titre de la Navbar reste visible jusqu'à 1024px
+  // (`lg:hidden`, seuil FIXE du hamburger, commun à toute l'app — voir
+  // Navbar.tsx), un seuil DIFFÉRENT de celui qui fait réapparaître le titre
+  // dans l'en-tête de page (768px). Entre les deux, sans ce garde, le jour
+  // se serait affiché EN DOUBLE : une fois dans la Navbar (toujours en mode
+  // hamburger), une fois dans l'en-tête de page (déjà repassé en mode bureau).
+  useNavbarSubtitle(isNavbarMobile ? title : null)
 
   // Rien à annoncer avant que l'occupation et la feuille soient chargées : la
   // pastille se contredirait le temps d'un rendu. En secours, on affiche
   // « Ouvert » de base (grille de secours exploitable, clôturable). Posé à la
-  // fois dans la Navbar (< 1024px, à côté du hamburger) et dans l'en-tête de
-  // page (≥ 1024px) — un seul des deux est visible à la fois (cf. PageHeader).
+  // fois dans la Navbar (< 768px, à côté du hamburger) et dans l'en-tête de
+  // page (≥ 768px) — un seul des deux est visible à la fois (cf. PageHeader),
+  // même garde `isNavbarMobile` que le sous-titre ci-dessus et pour la même
+  // raison (éviter le doublon entre 768 et 1024px).
   const statusBadge = pdjRows !== undefined && sheet !== undefined && (
     <LockBadge
       locked={isValidated}
@@ -747,7 +770,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
       }
     />
   )
-  useNavbarBadge(statusBadge)
+  useNavbarBadge(isNavbarMobile ? statusBadge : null)
 
   /* Bouton d'état du jour, rendu en bas de page (sous les commentaires), là où
      se termine la saisie — comme sur la feuille de caisse. Texte seul : le
@@ -793,26 +816,33 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
     // quand tout tient — bouton de clôture collé en bas), mais dès que le contenu
     // dépasse (fenêtre courte, alerte multi-lignes), elle grandit et `main` défile,
     // plutôt que d'écraser la zone commentaire jusqu'à la faire disparaître.
-    <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 max-sm:pb-20">
+    <div
+      className={cn(
+        'mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4',
+        isTouchDevice && 'pb-20',
+      )}
+    >
       <PageHeader
-        // Sous 1024px, le jour et le statut vivent dans la Navbar globale
+        // Sous 768px, le jour et le statut vivent dans la Navbar globale
         // (sous-titre + badge à côté du hamburger, posés par useNavbarSubtitle/
         // useNavbarBadge ci-dessous) : `undefined` plutôt qu'un contenu masqué
         // en CSS, pour que la ligne titre de PageHeader ne réserve plus du
         // tout sa hauteur (le vide entre la Navbar et les cartes de synthèse).
-        // Au-delà de 1024px, la Navbar revient aux onglets et titre/badge
-        // reprennent leur place normale ici.
+        // Au-delà de 768px, la Navbar revient aux onglets et titre/badge
+        // reprennent leur place normale ici — même seuil que la grille.
         title={isNavbarMobile ? undefined : title}
         badgeAlign="end"
+        badgeAlignBreakpoint="md"
         badge={isNavbarMobile ? undefined : statusBadge}
-        // Sous 640px, ce groupe entier laisse la place à la barre d'outils
-        // basse fixe (cf. fin du composant) : une vraie barre d'app mobile
-        // (icône + libellé, portée du pouce), pas des boutons de bureau
-        // rétrécis. `undefined` (pas un `hidden` CSS) : PageHeader ne rend
-        // alors littéralement rien pour ce prop, au lieu d'un groupe présent
-        // mais invisible qui réserverait quand même sa part du `gap` parent.
+        // Sur écran tactile, ce groupe entier laisse la place à la barre
+        // d'outils basse fixe (cf. fin du composant) : une vraie barre d'app
+        // mobile (icône + libellé, portée du pouce), pas des boutons de bureau
+        // rétrécis — qu'il s'agisse d'un téléphone ou d'une tablette large.
+        // `undefined` (pas un `hidden` CSS) : PageHeader ne rend alors
+        // littéralement rien pour ce prop, au lieu d'un groupe présent mais
+        // invisible qui réserverait quand même sa part du `gap` parent.
         actions={
-          !showTopToolbar ? undefined : (
+          isTouchDevice ? undefined : (
             <>
             {/* Groupe « actions de page » : aide + vue analytique + impression. */}
             <ButtonGroup>
@@ -1109,12 +1139,14 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
           {/* Tuto simple à GAUCHE (les deux gestes : souris + action courte, sans
               « clic gauche/droit » — le glyphe montre déjà le bouton), et tous les
               statuts couleur à DROITE. « Non vendue » (grisé) se lit sans légende.
-              Souris uniquement (≥ 640px) : sous 640px, l'appui simple/long est
-              jugé assez instinctif pour ne pas avoir besoin d'être rappelé — le
-              geste lui-même reste actif à toute largeur (cf. startLongPress),
-              seule cette légende texte est réservée au bureau. */}
+              Souris uniquement (`pointer-fine`, PAS une largeur d'écran : une
+              tablette tactile large n'a pas de souris) : sur un écran tactile,
+              l'appui simple/long est jugé assez instinctif pour ne pas avoir
+              besoin d'être rappelé — le geste lui-même reste actif à toute
+              largeur (cf. startLongPress), seule cette légende texte est
+              réservée à la souris. */}
           <div className="rapro-legend">
-            <span className="hidden sm:contents">
+            <span className="hidden pointer-fine:contents">
               <span className="rapro-legend-group">
                 <span className="rapro-legend-item">
                   <MouseGlyph side="left" />
@@ -1203,77 +1235,79 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
         onConfirm={handleConfirmClose}
       />
 
-      {/* Barre d'outils basse (mobile uniquement, < 640px) : une vraie barre
-          d'app mobile — icône + libellé, portée du pouce — plutôt que les
-          boutons de bureau simplement rétrécis. `fixed` échappe au scroll de
-          `<main>` (aucun ancêtre ne pose de `transform`/`contain`, donc elle
-          reste bien pinnée à la fenêtre) ; `max-sm:pb-20` sur le conteneur
-          racine ci-dessus réserve la place pour qu'elle ne masque jamais la
-          fin du contenu (commentaire, bouton Clôturer). Aide/Analytique/
-          Imprimer gardent leurs handlers exacts de la barre du haut.
+      {/* Barre d'outils basse (écran tactile uniquement, peu importe la
+          largeur — téléphone OU tablette) : une vraie barre d'app mobile —
+          icône + libellé, portée du pouce — plutôt que les boutons de bureau
+          simplement rétrécis. `fixed` échappe au scroll de `<main>` (aucun
+          ancêtre ne pose de `transform`/`contain`, donc elle reste bien
+          pinnée à la fenêtre) ; `pb-20` sur le conteneur racine ci-dessus
+          réserve la place pour qu'elle ne masque jamais la fin du contenu
+          (commentaire, bouton Clôturer). Aide/Analytique/Imprimer gardent
+          leurs handlers exacts de la barre du haut.
           Navigation temporelle : PAS le cluster StepNav+calendrier compressé
-          dans une seule cellule (jugé peu pratique en mobile) — Précédent et
+          dans une seule cellule (jugé peu pratique au doigt) — Précédent et
           Suivant deviennent chacun leur propre cellule pleine largeur, aux
           deux BORDS de la barre. C'est le pattern natif du feuilletage
           (pager) : au pouce, les bords d'un écran se rejoignent plus
           naturellement qu'un cluster étroit coincé dans un coin, et l'usage
           réel de cette page est justement de feuilleter les jours en continu.
-          Le bouton calendrier séparé disparaît : le jour affiché en Navbar
-          (sous-titre, useNavbarSubtitle ci-dessus) est maintenant lui-même
-          tappable pour choisir une date arbitraire — un deuxième bouton
-          calendrier ici aurait été redondant. */}
-      <nav
-        className="fixed inset-x-0 bottom-0 z-30 flex items-stretch border-t border-border bg-card/95 backdrop-blur-md sm:hidden"
-        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-      >
-        <button
-          type="button"
-          onClick={() => goStep(-1)}
-          disabled={atLower}
-          aria-label="Jour précédent"
-          className="flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-muted-foreground transition-colors active:bg-accent active:text-foreground disabled:pointer-events-none disabled:opacity-40"
+          Pas de bouton calendrier séparé ici : le jour affiché en Navbar
+          (sous-titre, useNavbarSubtitle ci-dessus) reste purement informatif
+          (pas de sélecteur de date sur écran tactile, cf. DESIGN.md). */}
+      {isTouchDevice && (
+        <nav
+          className="fixed inset-x-0 bottom-0 z-30 flex items-stretch border-t border-border bg-card/95 backdrop-blur-md"
+          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
         >
-          <ChevronLeft className="size-5" />
-          <span className="text-[11px] font-medium">Préc.</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setHelpOpen(true)}
-          aria-label="Comment ça marche"
-          className="flex flex-1 flex-col items-center justify-center gap-0.5 border-l border-border py-2 text-muted-foreground transition-colors active:bg-accent active:text-foreground"
-        >
-          <HelpGlyph className="size-5" />
-          <span className="text-[11px] font-medium">Aide</span>
-        </button>
-        <Link
-          to="/rapro/analytique"
-          aria-label="Vue analytique"
-          className="flex flex-1 flex-col items-center justify-center gap-0.5 border-l border-border py-2 text-muted-foreground transition-colors active:bg-accent active:text-foreground"
-        >
-          <LineChart className="size-5" />
-          <span className="text-[11px] font-medium">Analytique</span>
-        </Link>
-        <button
-          type="button"
-          onClick={handleGeneratePdf}
-          disabled={!isValidated || pdfBusy}
-          aria-label="Imprimer / PDF"
-          className="flex flex-1 flex-col items-center justify-center gap-0.5 border-l border-border py-2 text-muted-foreground transition-colors active:bg-accent active:text-foreground disabled:pointer-events-none disabled:opacity-40"
-        >
-          <Printer className="size-5" />
-          <span className="text-[11px] font-medium">Imprimer</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => goStep(1)}
-          disabled={atLatest}
-          aria-label="Jour suivant"
-          className="flex flex-1 flex-col items-center justify-center gap-0.5 border-l border-border py-2 text-muted-foreground transition-colors active:bg-accent active:text-foreground disabled:pointer-events-none disabled:opacity-40"
-        >
-          <ChevronRight className="size-5" />
-          <span className="text-[11px] font-medium">Suiv.</span>
-        </button>
-      </nav>
+          <button
+            type="button"
+            onClick={() => goStep(-1)}
+            disabled={atLower}
+            aria-label="Jour précédent"
+            className="flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-muted-foreground transition-colors active:bg-accent active:text-foreground disabled:pointer-events-none disabled:opacity-40"
+          >
+            <ChevronLeft className="size-5" />
+            <span className="text-[11px] font-medium">Préc.</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setHelpOpen(true)}
+            aria-label="Comment ça marche"
+            className="flex flex-1 flex-col items-center justify-center gap-0.5 border-l border-border py-2 text-muted-foreground transition-colors active:bg-accent active:text-foreground"
+          >
+            <HelpGlyph className="size-5" />
+            <span className="text-[11px] font-medium">Aide</span>
+          </button>
+          <Link
+            to="/rapro/analytique"
+            aria-label="Vue analytique"
+            className="flex flex-1 flex-col items-center justify-center gap-0.5 border-l border-border py-2 text-muted-foreground transition-colors active:bg-accent active:text-foreground"
+          >
+            <LineChart className="size-5" />
+            <span className="text-[11px] font-medium">Analytique</span>
+          </Link>
+          <button
+            type="button"
+            onClick={handleGeneratePdf}
+            disabled={!isValidated || pdfBusy}
+            aria-label="Imprimer / PDF"
+            className="flex flex-1 flex-col items-center justify-center gap-0.5 border-l border-border py-2 text-muted-foreground transition-colors active:bg-accent active:text-foreground disabled:pointer-events-none disabled:opacity-40"
+          >
+            <Printer className="size-5" />
+            <span className="text-[11px] font-medium">Imprimer</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => goStep(1)}
+            disabled={atLatest}
+            aria-label="Jour suivant"
+            className="flex flex-1 flex-col items-center justify-center gap-0.5 border-l border-border py-2 text-muted-foreground transition-colors active:bg-accent active:text-foreground disabled:pointer-events-none disabled:opacity-40"
+          >
+            <ChevronRight className="size-5" />
+            <span className="text-[11px] font-medium">Suiv.</span>
+          </button>
+        </nav>
+      )}
     </div>
   )
 }

@@ -21,12 +21,14 @@ import { cn } from '#/lib/utils.ts'
  * cliquer, pas de hover), mais il doit se lire comme faisant partie de la
  * même rangée d'actions plutôt que comme une pastille à part.
  *
- * `compact` : sous 1024px (même seuil que le mode mobile de la Navbar, cf.
- * `lib/navbarSubtitle.ts`), remplace le libellé par une simple icône de
- * cadenas (fermé = clôturé, ouvert = ouvert) — même gabarit et mêmes
- * couleurs, juste plus court. Sert à économiser de la place une fois la date
- * et les actions déplacées hors de l'en-tête de page (barre du haut globale /
- * barre d'outils basse). Au-delà de 1024px, rendu inchangé (libellé texte).
+ * `compact` : sous 768px, remplace le libellé par une simple icône de cadenas
+ * (fermé = clôturé, ouvert = ouvert) — même gabarit et mêmes couleurs, juste
+ * plus court. Sert à économiser de la place une fois la date et les actions
+ * déplacées hors de l'en-tête de page (barre du haut globale / barre d'outils
+ * basse). Au-delà de 768px, rendu inchangé (libellé texte). Seul consommateur
+ * actuel : Rapprochement — le seuil doit rester aligné sur le sien
+ * (`isNavbarMobile`, actuellement 768px lui aussi) : c'est LÀ que le badge
+ * change d'emplacement (Navbar ↔ en-tête de page), pas un seuil indépendant.
  */
 export function LockBadge({
   locked,
@@ -45,13 +47,13 @@ export function LockBadge({
     <span
       className={cn(
         'inline-flex h-8 items-center gap-1.5 rounded-md border bg-background px-3 text-sm font-medium shadow-xs dark:border-input dark:bg-input/30',
-        compact && 'max-lg:w-8 max-lg:justify-center max-lg:px-0',
+        compact && 'max-md:w-8 max-md:justify-center max-md:px-0',
         locked ? 'border-emerald-500/40 text-emerald-500' : 'border-amber-500/40 text-amber-500',
         hint && 'cursor-help',
       )}
     >
-      {compact && <Icon className="size-4 shrink-0 lg:hidden" />}
-      <span className={compact ? 'hidden lg:inline' : undefined}>{label}</span>
+      {compact && <Icon className="size-4 shrink-0 md:hidden" />}
+      <span className={compact ? 'hidden md:inline' : undefined}>{label}</span>
     </span>
   )
   if (!hint) return badge
