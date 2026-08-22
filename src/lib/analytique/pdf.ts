@@ -577,16 +577,28 @@ export async function buildAnalytiquePdf(
 
 /**
  * Lit la page analytique sous `root`, en construit le PDF et ouvre la fenêtre
- * d'impression du navigateur (autoPrint + iframe caché, aucun téléchargement).
+ * d'impression du navigateur.
+ *
+ * Desktop : iframe cachée + `autoPrint()` (action « imprimer » intégrée au PDF),
+ * qui ne se déclenche que via une visionneuse PDF NATIVE dans l'iframe — absente
+ * de la plupart des navigateurs mobiles. `printWindow`, si fourni (onglet ouvert
+ * de façon SYNCHRONE par l'appelant, avant tout `await`, pour ne pas se faire
+ * bloquer comme popup), reçoit directement l'URL du PDF : la visionneuse du
+ * téléphone prend le relais avec son propre bouton imprimer/partager.
  */
 export async function printAnalytique(
   root: HTMLElement,
   printTitle: string,
+  printWindow?: Window | null,
 ): Promise<void> {
   const extract = await extractAnalytique(root)
   const pdf = await buildAnalytiquePdf(extract, printTitle)
   pdf.autoPrint()
   const blobUrl = pdf.output('bloburl').toString()
+  if (printWindow) {
+    printWindow.location.href = blobUrl
+    return
+  }
   document.getElementById('analytique-print-frame')?.remove()
   const iframe = document.createElement('iframe')
   iframe.id = 'analytique-print-frame'

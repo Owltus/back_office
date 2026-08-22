@@ -57,7 +57,17 @@ export function AnalytiqueShell({
   const handlePrint = () => {
     const root = rootRef.current
     if (!printTitle || loading || !root) return
-    void printAnalytique(root, printTitle)
+    // Ouverture SYNCHRONE (avant l'await de printAnalytique) : un window.open()
+    // lancé après un await sort du geste utilisateur aux yeux du bloqueur de
+    // popups, qui le bloquerait silencieusement. Seul le tactile en a besoin
+    // (l'iframe cachée + autoPrint marche déjà sur ordinateur) — détecté par
+    // pointeur, pas par largeur d'écran, pour ne pas casser un navigateur de
+    // bureau redimensionné en fenêtre étroite.
+    const isTouchDevice = window.matchMedia(
+      '(hover: none) and (pointer: coarse)',
+    ).matches
+    const printWindow = isTouchDevice ? window.open('', '_blank') : null
+    void printAnalytique(root, printTitle, printWindow)
   }
   usePrintShortcut(handlePrint)
 
@@ -70,6 +80,7 @@ export function AnalytiqueShell({
           onClick={handlePrint}
           disabled={loading}
           iconOnly
+          className="max-sm:size-11"
           tipLabel={loading ? 'Chargement des données…' : 'Imprimer / PDF'}
         />
         {actions}

@@ -150,11 +150,9 @@ export const CATEGORY_COLOR = {
   // Rattrapage : parent de la nettoyée (un ménage fait) mais distinct — teinte
   // propre (chart-2) pour le lire à part dans le tableau analytique.
   rattrapage: 'var(--chart-2)',
-  // Ajoutés pour l'analytique : « vendues » (total) et « moyenne / jour ». Ce sont
-  // EXACTEMENT --chart-1 et --muted-foreground (plus de hex #818cf8 / #94a3b8 en
-  // dur dans les boards). Le PDF (pdf.ts) lit déjà ces tokens.
+  // Ajouté pour l'analytique : « vendues » (total). EXACTEMENT --chart-1 (plus de
+  // hex #818cf8 en dur dans les boards). Le PDF (pdf.ts) lit déjà ce token.
   vendues: 'var(--chart-1)',
-  moyenne: 'var(--muted-foreground)',
 } as const
 
 /** Ordre d'affichage de la légende (bas de grille + PDF) : nettoyée, refus,

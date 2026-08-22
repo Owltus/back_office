@@ -76,8 +76,8 @@ export function RaproMonthlyBoard({
       skeleton={{
         cols: 4,
         charts: 1,
-        cards: 5,
-        cardCols: 5,
+        cards: 4,
+        cardCols: 4,
         cardLines: 3,
         rows: new Date(year, month, 0).getDate(),
       }}

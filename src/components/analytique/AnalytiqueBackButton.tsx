@@ -16,6 +16,7 @@ export function AnalytiqueBackButton() {
       <Button
         variant="outline"
         size="icon-sm"
+        className="max-sm:size-11"
         onClick={() => router.history.back()}
         aria-label="Retour à l'analytique"
       >

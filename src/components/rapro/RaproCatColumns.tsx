@@ -20,9 +20,10 @@ export const RAPRO_CHART_SEGMENTS: KpiBarSegment[] = [
   { key: 'refus', name: 'Refus', color: CATEGORY_COLOR.refus },
 ]
 
-/** Les 5 cartes de synthèse du rapprochement — IDENTIQUES en vue annuelle et mensuelle
+/** Les 4 cartes de synthèse du rapprochement — IDENTIQUES en vue annuelle et mensuelle
  * (même `totals`). Valeur = total, sous-texte = « % des vendues » (cadence « / jour »
- * pour Vendues). « Moy. nettoyées / jour » = indicateur par jour (pas de sous-texte). */
+ * pour Vendues et Nettoyées, via `avgCleanedPerDay`). Nombre PAIR de cartes voulu
+ * (mise en page de la grille) : pas de carte « Moy. nettoyées / jour » à part. */
 export function RaproAnalytiqueCards({
   totals,
   avgCleanedPerDay,
@@ -35,13 +36,7 @@ export function RaproAnalytiqueCards({
   const sold = vendues(totals)
   const bill = cleaned(totals)
   return (
-    <AnalytiqueCardsGrid cols={5}>
-      <StatCard
-        label="Moy. nettoyées / jour"
-        accent={CATEGORY_COLOR.moyenne}
-        hint="Ménages facturés en moyenne par jour travaillé."
-        value={avgCleanedPerDay}
-      />
+    <AnalytiqueCardsGrid>
       <StatCard
         label="Vendues"
         accent={CATEGORY_COLOR.vendues}

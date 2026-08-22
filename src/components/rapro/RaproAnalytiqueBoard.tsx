@@ -134,7 +134,7 @@ export function RaproAnalytiqueBoard() {
       }
       loading={loading}
       printTitle={`Rapprochement · ${year}`}
-      skeleton={{ cols: 4, charts: 1, cards: 5, cardCols: 5, cardLines: 3, rows: 13 }}
+      skeleton={{ cols: 4, charts: 1, cards: 4, cardCols: 4, cardLines: 3, rows: 13 }}
     >
       <RaproAnalytiqueCards
         totals={yearTotals}
