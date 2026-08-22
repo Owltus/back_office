@@ -109,9 +109,18 @@ export function PageHeader({
               className={cn(
                 'flex min-w-0 flex-nowrap items-center gap-2',
                 badgeAlign === 'end' &&
-                  (badgeAlignBreakpoint === 'none'
-                    ? 'justify-between'
-                    : 'justify-between lg:justify-start'),
+                  (!title
+                    ? // Pas de titre à côté duquel écarter le badge (page qui le
+                      // garde affiché même quand le titre part dans la Navbar,
+                      // ex. le contrôle service/financier de PDJ) : `justify-
+                      // between` n'a alors qu'un seul enfant, et
+                      // `space-between` avec un seul élément le colle au bord
+                      // de DÉPART, pas de fin — l'inverse de ce que `badgeAlign
+                      // ="end"` demande. `justify-end` direct, à toute largeur.
+                      'justify-end'
+                    : badgeAlignBreakpoint === 'none'
+                      ? 'justify-between'
+                      : 'justify-between lg:justify-start'),
               )}
             >
               {title && (

@@ -145,7 +145,7 @@ function isAddonCsv(content: string): boolean {
 }
 
 export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
-  const { isNavbarMobile, isTouchDevice } = useResponsiveShell()
+  const { isNavbarMobile, isTouchDevice, isPhoneWidth } = useResponsiveShell()
   const navigate = useNavigate()
   const { can, pageLevel, grade } = useAuth()
   const canEdit = can('pdj', 'ecriture')
@@ -928,18 +928,34 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
              l'autre (translate animé) au lieu de sauter. Réétiquette le tableau
              à l'écran ; jamais imprimé. */
           hasData && (
-            <div className="pdj-seg relative inline-flex h-8 items-center overflow-hidden rounded-md border bg-background shadow-xs print:hidden dark:border-input dark:bg-input/30">
+            <div
+              className={cn(
+                'pdj-seg relative inline-flex items-center overflow-hidden rounded-md border bg-background shadow-xs print:hidden dark:border-input dark:bg-input/30',
+                // Cibles agrandies sur écran tactile (doigt, pas de survol pour
+                // se rattraper d'un clic raté) : ce contrôle est le SEUL de la
+                // page qui reste actionnable en tactile hors de la barre
+                // d'outils basse (cf. plus haut, `badge` non gouverné par
+                // `isTouchDevice`) — ses cibles doivent donc suivre le même
+                // gabarit tactile que celle-ci, pas rester à la taille
+                // souris (`h-8`/`size-7`, ~28px, sous le minimum tactile
+                // usuel). Inchangé à la souris, toute largeur comprise.
+                isTouchDevice ? 'h-11' : 'h-8',
+              )}
+            >
               {/* Pastille active : remplit TOUTE la hauteur (inset-y-0) et la
-                  largeur d'un bouton (w-7), collée aux bordures. Ses coins sont
+                  largeur d'un bouton, collée aux bordures. Ses coins sont
                   clippés par l'arrondi du conteneur (overflow-hidden) → elle
                   épouse exactement le cadre. Position par `left` inline (aucune
                   composition Tailwind, contrairement à `transform`) : service = 0,
-                  financier = largeur d'un bouton (1,75rem). Transition en CSS. */}
+                  financier = largeur d'un bouton. Transition en CSS. */}
               <span
                 data-thumb
                 aria-hidden="true"
-                style={{ left: financeMode ? '1.75rem' : '0' }}
-                className="pointer-events-none absolute inset-y-0 w-7 bg-primary"
+                style={{ left: financeMode ? (isTouchDevice ? '2.75rem' : '1.75rem') : '0' }}
+                className={cn(
+                  'pointer-events-none absolute inset-y-0 bg-primary',
+                  isTouchDevice ? 'w-11' : 'w-7',
+                )}
               />
               <Tip label="Vue service">
                 <button
@@ -947,7 +963,10 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                   onClick={() => setFinanceMode(false)}
                   aria-label="Vue service"
                   aria-pressed={!financeMode}
-                  className="relative z-10 flex size-7 items-center justify-center rounded-[5px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  className={cn(
+                    'relative z-10 flex items-center justify-center rounded-[5px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+                    isTouchDevice ? 'size-11' : 'size-7',
+                  )}
                 >
                   <Users
                     className={cn(
@@ -965,7 +984,10 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                   onClick={() => setFinanceMode(true)}
                   aria-label="Détail financier"
                   aria-pressed={financeMode}
-                  className="relative z-10 flex size-7 items-center justify-center rounded-[5px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  className={cn(
+                    'relative z-10 flex items-center justify-center rounded-[5px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+                    isTouchDevice ? 'size-11' : 'size-7',
+                  )}
                 >
                   <Receipt
                     className={cn(
@@ -1370,18 +1392,19 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
       {/* Barre d'outils basse (écran tactile uniquement, peu importe la largeur
           — téléphone OU tablette) : même socle partagé que Rapro
           (`MobileToolbar`/`ToolbarCell`, shared/), pas une réécriture locale.
-          Vue analytique, Import CSV (si `canManualImport`), Impression, puis
-          le pager Préc./Suiv. jour aux deux bords (pattern de feuilletage,
-          comme Rapro — pas de bouton calendrier séparé, le jour affiché en
-          Navbar reste purement informatif).
+          Pager Préc./Suiv. jour aux deux bords (pattern de feuilletage, comme
+          Rapro — pas de bouton calendrier séparé, le jour affiché en Navbar
+          reste purement informatif).
 
-          Le bouton « Externe » (dialogue +/- clients non logés à l'hôtel)
-          N'Y FIGURE PAS, à dessein : geste ADMIN/écriture peu fréquent en
-          contexte tactile, et l'ajouter porterait la barre à 6 cellules (au
-          lieu de 4-5) sans bénéfice mesuré côté usage réel — il reste
-          accessible en mode souris uniquement (cf. `actions` ci-dessus, gaté
-          `isTouchDevice`). Le bouton de suppression admin (Trash2) suit la
-          même logique. */}
+          « Externe » (dialogue +/- clients non logés à l'hôtel) figure ICI,
+          à TOUTE largeur tactile (téléphone et tablette) : geste d'écriture
+          courant, pas réservé au bureau.
+
+          La suppression admin (Corbeille), en revanche, est gatée
+          `!isPhoneWidth` EN PLUS de `isTouchDevice` : gardée hors du
+          téléphone (écran le plus étroit, geste destructif rare, priorité
+          aux cellules du quotidien) mais réintroduite sur tablette, qui a
+          mécaniquement la place. */}
       <MobileToolbar visible={isTouchDevice}>
         <ToolbarCell
           icon={<ChevronLeft className="size-5" />}
@@ -1391,6 +1414,22 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
           disabled={dateIdx < 0 || dateIdx >= navDates.length - 1}
           bordered={false}
         />
+        {isAdmin && hasData && !isPhoneWidth && (
+          <ToolbarCell
+            icon={<Trash2 className="size-5" />}
+            label="Suppr."
+            ariaLabel="Supprimer les données de ce jour"
+            onClick={() => setConfirmDelete(true)}
+          />
+        )}
+        {canEdit && (
+          <ToolbarCell
+            icon={<Users className="size-5" />}
+            label="Externe"
+            ariaLabel="Petits-déjeuners externes"
+            onClick={() => setExternalsOpen(true)}
+          />
+        )}
         <ToolbarCell
           icon={<LineChart className="size-5" />}
           label="Analytique"
