@@ -274,11 +274,11 @@ rejoindre ce langage.
   de la même rangée d'actions, pas comme une pastille décorative à part. Seule la
   couleur du texte/bordure change selon l'état (émeraude = clôturé, ambre = ouvert) —
   la couleur appuie le mot, elle ne le remplace jamais.
-- **Variante `compact`** (sous 768px, seuil aligné sur celui de la page qui
-  l'utilise — voir plus bas) : le libellé texte cède la place à une simple
-  icône de cadenas (fermé/ouvert), même gabarit carré, mêmes couleurs — pour
-  les pages dont l'identité (nom + jour) a migré dans la Navbar (voir
-  Navigation ci-dessous), où le mot complet n'apporte plus rien face à l'icône.
+- **Variante `compact`** (sous 1024px, seuil hamburger de la Navbar — voir
+  plus bas) : le libellé texte cède la place à une simple icône de cadenas
+  (fermé/ouvert), même gabarit carré, mêmes couleurs — pour les pages dont
+  l'identité (nom + jour) a migré dans la Navbar (voir Navigation ci-dessous),
+  où le mot complet n'apporte plus rien face à l'icône.
 
 ### Navigation (barre du haut)
 - Onglets texte (bureau) avec l'onglet actif surligné (`bg-background` + anneau de
@@ -307,26 +307,50 @@ rejoindre ce langage.
   précédente.
 - **Le seuil hamburger (1024px) est FIXE et commun à toute l'app** — le bloc
   nom-de-page/sous-titre de la Navbar reste visible jusque-là quoi qu'il
-  arrive. Une page peut vouloir migrer SON PROPRE titre/badge vers ce bloc à
-  un seuil plus étroit (Rapprochement : 768px, aligné sur sa grille) — dans ce
-  cas, poser `useNavbarSubtitle`/`useNavbarBadge` avec le contenu (pas
-  `null`) UNIQUEMENT sous ce seuil plus étroit à elle, jamais
-  inconditionnellement : entre les deux seuils, la Navbar reste en mode
-  hamburger (donc visible) alors que la page a déjà remis son titre dans son
-  propre en-tête — sans ce garde, le même contenu s'affiche EN DOUBLE dans
-  cet entre-deux (bug réel rencontré en alignant Rapprochement sur 768px).
+  arrive, et doit y rester COMPLET (nom + sous-titre + badge) tout du long :
+  une page en mode hamburger sans sous-titre/badge alors qu'elle en a un à
+  offrir se lit comme un oubli, pas comme un choix. Le seuil auquel une page
+  confie SON PROPRE titre/badge à ce bloc (`isNavbarMobile`) doit donc rester
+  IDENTIQUE au seuil hamburger (1024px), jamais un seuil de mise en page
+  propre à la page (ex. la grille chambres/KPI de Rapprochement, 768px) même
+  si l'intention (« tout bascule ensemble ») semble raisonnable de prime
+  abord : **essayé puis abandonné sur Rapprochement** — aligner ce seuil sur
+  celui de la grille (768px) a produit une Navbar incomplète (juste « Rapprochement »,
+  sans date ni statut) entre 768 et 1024px, la page ayant déjà repris son
+  titre en interne à cette largeur pendant que la Navbar restait, elle, en
+  mode hamburger jusqu'à 1024px. Les deux zones (Navbar / contenu de page)
+  n'ont pas à basculer au même seuil — la grille PEUT légitimement paraître
+  « déjà bureau » en dessous de 1024px sans que ce soit incohérent, ce sont
+  deux zones d'écran différentes. Poser `useNavbarSubtitle`/`useNavbarBadge`
+  avec le contenu (pas `null`) UNIQUEMENT sous ce seuil (1024px), jamais
+  inconditionnellement, reste nécessaire : sans ce garde, le contenu resterait
+  posé même une fois la Navbar repassée en mode onglets.
 
 ### Barre d'outils basse mobile (signature)
 - **Quand :** remplace la barre d'actions de l'en-tête sur ÉCRAN TACTILE —
   `(hover:none) and (pointer:coarse)`, PAS une largeur d'écran. Une tablette
   tactile large (768-1024px) a la barre basse comme un téléphone ; un
-  ordinateur en fenêtre étroite (souris) garde la barre du haut, boutons
-  agrandis à 44px. La largeur dit combien de place il y a, pas COMMENT on
-  touche l'écran — détecter l'un via l'autre a longtemps laissé les tablettes
-  dans un entre-deux non voulu (grille déjà en densité bureau dès 768px,
-  boutons de la barre du haut pourtant restés à leur taille souris). Ce n'est
-  toujours PAS un rétrécissement de boutons de bureau, une vraie barre d'app
-  mobile.
+  ordinateur en fenêtre étroite (souris) garde la barre du haut. La largeur
+  dit combien de place il y a, pas COMMENT on touche l'écran — détecter l'un
+  via l'autre a longtemps laissé les tablettes dans un entre-deux non voulu
+  (grille déjà en densité bureau dès 768px, boutons de la barre du haut
+  pourtant restés à leur taille souris). Ce n'est toujours PAS un
+  rétrécissement de boutons de bureau, une vraie barre d'app mobile.
+- **Barre du haut garantie non-tactile ⇒ taille FIXE, jamais agrandie sous
+  640px** (Rapprochement) : une fois ce groupe remplacé par la barre basse
+  dès qu'un doigt est détecté, il ne s'affiche plus JAMAIS que côté souris —
+  l'agrandissement à 44px (plancher tactile) qu'il gardait encore sous 640px
+  n'a alors plus de raison d'être, et désaccorde sa taille de celle des
+  boutons voisins restés fixes (StepNav/DatePickerButton/AnalytiqueBackButton
+  y acceptent un prop `enlargeOnNarrow={false}`, défaut `true` inchangé pour
+  les 5 autres domaines dont la barre du haut peut réellement apparaître sur
+  téléphone).
+- **Sous-groupes d'actions TOUJOURS collés au bord droit à la souris, jamais
+  écartés aux deux bords** (Rapprochement, `PageHeader` `actionsAlign="end"`) :
+  le repli générique « écarté aux deux bords » sous `sm` (voir Layout
+  ci-dessus) est pensé pour la portée du pouce sur téléphone — sur un groupe
+  garanti souris-seule, il ne produit qu'un réagencement gauche/droite
+  déroutant au redimensionnement de fenêtre, sans aucun bénéfice.
 - **Position :** `fixed`, collée au bas de la fenêtre, au-dessus de tout scroll de
   page ; `env(safe-area-inset-bottom)` pour l'encoche/l'indicateur d'accueil iOS.
   Le contenu de la page réserve l'espace correspondant (`padding-bottom`) pour
@@ -360,12 +384,13 @@ rejoindre ce langage.
   ne pas le réintroduire sans qu'on le redemande.
 - **Exposée par le socle analytique (`AnalytiqueShell`) via deux props
   opt-in** : `mobileIdentity` (contenu déplacé en sous-titre Navbar sous
-  768px — PAS forcément égal à `title` : la vue annuelle y passe « Analytique
-  2026 » alors que `title` reste « Analytique » sur l'en-tête desktop, où
-  l'année est déjà visible via `YearNav` ; sur la Navbar mobile c'est le seul
-  endroit qui la montre encore, la barre basse ayant remplacé ce `YearNav`/le
-  bouton retour de l'en-tête — posé UNIQUEMENT sous ce seuil, jamais
-  inconditionnellement, cf. la règle générale de doublon plus haut) et
+  1024px, seuil hamburger — PAS forcément égal à `title` : la vue annuelle y
+  passe « Analytique 2026 » alors que `title` reste « Analytique » sur
+  l'en-tête desktop, où l'année est déjà visible via `YearNav` ; sur la Navbar
+  mobile c'est le seul endroit qui la montre encore, la barre basse ayant
+  remplacé ce `YearNav`/le bouton retour de l'en-tête — posé UNIQUEMENT sous
+  ce seuil, jamais inconditionnellement, cf. la règle générale du seuil
+  hamburger plus haut) et
   `mobileToolbar` (barre basse fixe sur écran tactile, peu importe la largeur,
   le shell y insère lui-même sa cellule Imprimer déjà construite —
   `ToolbarCell`, exporté par `AnalytiqueShell.tsx` — le board ne fournit que

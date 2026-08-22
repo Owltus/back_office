@@ -82,9 +82,13 @@ export function ToolbarCell({
  * `mobileIdentity` déplace un contenu (fourni par le board, PAS forcément égal
  * à `title` — ex. « Analytique 2026 » quand `title` reste « Analytique » sur
  * l'en-tête desktop, où l'année est déjà visible à côté via YearNav) en
- * sous-titre de la Navbar globale sous 768px (voir lib/navbarSubtitle.ts) —
- * seuil aligné sur celui de la grille chambres/KPI (rapro.css) pour qu'ils
- * basculent ensemble : l'année/le mois n'y est sinon plus visible nulle part,
+ * sous-titre de la Navbar globale sous 1024px (voir lib/navbarSubtitle.ts) —
+ * seuil VOLONTAIREMENT identique à celui de la Navbar elle-même (hamburger ↔
+ * onglets, fixe pour toute l'app), PAS celui, indépendant, de la grille
+ * chambres/KPI (768px, rapro.css — un essai d'alignement dessus a été fait
+ * puis abandonné) : la Navbar doit rester COMPLÈTE tout du long de sa propre
+ * plage en mode hamburger, quelle que soit la densité déjà affichée par la
+ * grille en dessous — l'année/le mois n'y est sinon plus visible nulle part,
  * la barre basse ayant remplacé le `YearNav`/bouton retour de l'en-tête.
  * `mobileToolbar` remplace les `actions` de l'en-tête par une barre d'outils
  * basse fixe sur ÉCRAN TACTILE (`(hover:none) and (pointer:coarse)`, PAS une
@@ -116,7 +120,7 @@ export function AnalytiqueShell({
   /** Active le bouton « Imprimer / PDF » et sert de titre au document
    *  (ex. « Caisse · 2026 »). Absent → page non imprimable, pas de bouton. */
   printTitle?: string
-  /** Sous 768px, déplace ce contenu dans la Navbar globale (sous-titre de
+  /** Sous 1024px, déplace ce contenu dans la Navbar globale (sous-titre de
    *  page) et retire `title` de l'en-tête — même mécanisme que /rapro. N'est
    *  PAS forcément égal à `title` : la vue annuelle passe ici « Analytique
    *  2026 » alors que `title` reste « Analytique » sur l'en-tête desktop, où
@@ -134,15 +138,12 @@ export function AnalytiqueShell({
   children: ReactNode
 }) {
   const rootRef = useRef<HTMLDivElement>(null)
-  const isNavbarMobile = useMatchMedia('(max-width: 767.98px)')
+  const isNavbarMobile = useMatchMedia('(max-width: 1023.98px)')
   const isTouchDevice = useMatchMedia('(hover: none) and (pointer: coarse)')
-  // GATÉ par `isNavbarMobile` (≠ posé inconditionnellement) : le bloc
-  // nom-de-page/sous-titre de la Navbar reste visible jusqu'à 1024px
-  // (`lg:hidden`, seuil FIXE du hamburger, commun à toute l'app), un seuil
-  // DIFFÉRENT de celui qui fait réapparaître le titre dans l'en-tête de page
-  // (768px, `isNavbarMobile`). Entre les deux, sans ce garde, le contenu se
-  // serait affiché EN DOUBLE : une fois dans la Navbar (toujours en mode
-  // hamburger), une fois dans l'en-tête de page (déjà repassé en mode bureau).
+  // GATÉ par `isNavbarMobile` (≠ posé inconditionnellement) : sans ce garde,
+  // le sous-titre resterait posé même quand la Navbar n'en montre plus rien
+  // (≥ 1024px), un résidu qui ne se nettoierait qu'au démontage complet du
+  // composant plutôt qu'au bon moment.
   useNavbarSubtitle(isNavbarMobile ? (mobileIdentity ?? null) : null)
 
   const handlePrint = () => {

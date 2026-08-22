@@ -95,14 +95,19 @@ function statLabel(full: string, short: string) {
   )
 }
 
-// Sous 768px, le jour et le statut vivent dans la Navbar globale (voir
+// Sous 1024px, le jour et le statut vivent dans la Navbar globale (voir
 // useNavbarSubtitle/useNavbarBadge plus bas) : `title`/`badge` passent alors à
-// `undefined` plutôt qu'à un contenu masqué en CSS. Seuil aligné sur celui de
-// la grille chambres/KPI (`.rapro-floors`/`.rapro-stats`, rapro.css) : les deux
-// basculent en mode bureau ENSEMBLE, pas à deux seuils différents (c'était le
-// cas jusqu'ici avec 1024px ici et 768px pour la grille — une tablette entre
-// les deux affichait déjà une grille pleine densité bureau sous une identité
-// de page restée « mobile », un entre-deux qui ne correspondait à rien).
+// `undefined` plutôt qu'à un contenu masqué en CSS. Seuil VOLONTAIREMENT
+// aligné sur celui de la Navbar elle-même (hamburger ↔ onglets, fixe pour
+// toute l'app, cf. Navbar.tsx), PAS sur celui de la grille chambres/KPI
+// (`.rapro-floors`/`.rapro-stats`, 768px, rapro.css) : un essai d'alignement
+// sur 768px a été fait puis abandonné — la Navbar reste en mode hamburger
+// jusqu'à 1024px quoi qu'il arrive, et son bloc nom-de-page/sous-titre doit
+// donc rester complet (sous-titre + badge) tout du long de cette même plage,
+// sans quoi elle affiche « Rapprochement » tout seul, sans date ni statut,
+// entre 768 et 1024px — la grille, elle, peut légitimement paraître « déjà
+// bureau » à cette largeur sans que ce soit incohérent : ce sont deux zones
+// d'écran différentes, elles n'ont pas à basculer au même seuil.
 //
 // Sur ÉCRAN TACTILE (peu importe la largeur — une tablette de 768 à 1024px
 // EST tactile), la barre d'outils basse fixe remplace les actions du haut :
@@ -120,7 +125,7 @@ function statLabel(full: string, short: string) {
 // l'élément du flux et referme le vide entre la Navbar et les cartes.
 
 export function RaproBoard({ initialDate }: { initialDate?: string }) {
-  const isNavbarMobile = useMatchMedia('(max-width: 767.98px)')
+  const isNavbarMobile = useMatchMedia('(max-width: 1023.98px)')
   const isTouchDevice = useMatchMedia('(hover: none) and (pointer: coarse)')
   const { user, pageLevel } = useAuth()
   // Niveau effectif : sert au verrou PAR JOUR. Écriture n'agit que dans la fenêtre
@@ -736,28 +741,30 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
     ? format(parsed, 'EEEE d MMMM yyyy', { locale: fr })
     : selectedDate
   const title = capitalize(label)
-  // Sous 768px, la Navbar globale affiche ce jour sous « Rapprochement » (à la
-  // place de la marque) — le titre de page ci-dessous s'efface d'autant pour ne
-  // pas le répéter. Se retire tout seul au démontage (changement de page).
-  // Texte simple, non interactif (le tap-pour-ouvrir-le-calendrier essayé ici a
-  // été retiré sur demande explicite).
+  // Sous 1024px, la Navbar globale affiche ce jour sous « Rapprochement » (à
+  // la place de la marque) — le titre de page ci-dessous s'efface d'autant
+  // pour ne pas le répéter. Se retire tout seul au démontage (changement de
+  // page). Texte simple, non interactif (le tap-pour-ouvrir-le-calendrier
+  // essayé ici a été retiré sur demande explicite).
   //
-  // GATÉ par `isNavbarMobile` (≠ posé inconditionnellement) : le bloc
-  // nom-de-page/sous-titre de la Navbar reste visible jusqu'à 1024px
-  // (`lg:hidden`, seuil FIXE du hamburger, commun à toute l'app — voir
-  // Navbar.tsx), un seuil DIFFÉRENT de celui qui fait réapparaître le titre
-  // dans l'en-tête de page (768px). Entre les deux, sans ce garde, le jour
-  // se serait affiché EN DOUBLE : une fois dans la Navbar (toujours en mode
-  // hamburger), une fois dans l'en-tête de page (déjà repassé en mode bureau).
+  // GATÉ par `isNavbarMobile` (≠ posé inconditionnellement) : sans ce garde,
+  // le sous-titre resterait posé même quand la Navbar n'en montre plus rien
+  // (≥ 1024px), un résidu qui ne se nettoierait qu'au démontage complet du
+  // composant plutôt qu'au bon moment. Seuil VOLONTAIREMENT identique à celui
+  // de la Navbar elle-même (hamburger ↔ onglets, fixe pour toute l'app) — pas
+  // celui, indépendant, de la grille chambres/KPI (768px, rapro.css) : la
+  // Navbar doit rester COMPLÈTE (nom + sous-titre + badge) tout du long de sa
+  // propre plage en mode hamburger, quelle que soit la densité déjà affichée
+  // par la grille en dessous.
   useNavbarSubtitle(isNavbarMobile ? title : null)
 
   // Rien à annoncer avant que l'occupation et la feuille soient chargées : la
   // pastille se contredirait le temps d'un rendu. En secours, on affiche
   // « Ouvert » de base (grille de secours exploitable, clôturable). Posé à la
-  // fois dans la Navbar (< 768px, à côté du hamburger) et dans l'en-tête de
-  // page (≥ 768px) — un seul des deux est visible à la fois (cf. PageHeader),
+  // fois dans la Navbar (< 1024px, à côté du hamburger) et dans l'en-tête de
+  // page (≥ 1024px) — un seul des deux est visible à la fois (cf. PageHeader),
   // même garde `isNavbarMobile` que le sous-titre ci-dessus et pour la même
-  // raison (éviter le doublon entre 768 et 1024px).
+  // raison.
   const statusBadge = pdjRows !== undefined && sheet !== undefined && (
     <LockBadge
       locked={isValidated}
@@ -823,13 +830,15 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
       )}
     >
       <PageHeader
-        // Sous 768px, le jour et le statut vivent dans la Navbar globale
+        // Sous 1024px, le jour et le statut vivent dans la Navbar globale
         // (sous-titre + badge à côté du hamburger, posés par useNavbarSubtitle/
         // useNavbarBadge ci-dessous) : `undefined` plutôt qu'un contenu masqué
         // en CSS, pour que la ligne titre de PageHeader ne réserve plus du
         // tout sa hauteur (le vide entre la Navbar et les cartes de synthèse).
-        // Au-delà de 768px, la Navbar revient aux onglets et titre/badge
-        // reprennent leur place normale ici — même seuil que la grille.
+        // Au-delà de 1024px, la Navbar revient aux onglets et titre/badge
+        // reprennent leur place normale ici — même seuil que la Navbar
+        // elle-même (hamburger ↔ onglets), pas celui de la grille (768px,
+        // indépendant : voir le commentaire sur `isNavbarMobile` plus haut).
         title={isNavbarMobile ? undefined : title}
         badgeAlign="end"
         badgeAlignBreakpoint="none"
