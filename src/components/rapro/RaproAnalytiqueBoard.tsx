@@ -137,7 +137,16 @@ export function RaproAnalytiqueBoard() {
       mobileIdentity={`Analytique ${year}`}
       actions={
         <>
-          <AnalytiqueBackButton to="/rapro" label="Retour au rapprochement" />
+          {/* enlargeOnNarrow={false} sur les deux : ce groupe n'est JAMAIS
+              montré sur écran tactile (barre basse dédiée dès qu'un doigt
+              est détecté, cf. AnalytiqueShell/mobileToolbar) — l'agrandir à
+              un simple rétrécissement de fenêtre désaccorderait sa taille de
+              celle du bouton Imprimer voisin, resté fixe. */}
+          <AnalytiqueBackButton
+            to="/rapro"
+            label="Retour au rapprochement"
+            enlargeOnNarrow={false}
+          />
           <StepNav
             onPrev={goPrev}
             onNext={goNext}
@@ -145,6 +154,7 @@ export function RaproAnalytiqueBoard() {
             nextLabel="Année suivante"
             prevDisabled={prevDisabled}
             nextDisabled={nextDisabled}
+            enlargeOnNarrow={false}
           >
             <span className="inline-flex h-8 items-center justify-center border bg-background px-3 text-sm font-medium tabular-nums shadow-xs dark:border-input dark:bg-input/30">
               {year}

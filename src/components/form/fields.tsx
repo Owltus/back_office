@@ -121,6 +121,7 @@ export function DatePickerButton({
   max,
   enabledDates,
   todayValue,
+  enlargeOnNarrow = true,
 }: {
   value: string
   onChange: (value: string) => void
@@ -140,6 +141,10 @@ export function DatePickerButton({
    * jour courant (RepJour : dernier jour clôturé ; PDJ/Rapro : jour hôtelier).
    */
   todayValue?: string
+  /** Défaut `true` (plancher tactile 44px sous 640px, comme `StepNav`). À
+   *  désactiver UNIQUEMENT quand l'appelant garantit déjà que ce bouton ne
+   *  s'affiche jamais sur écran tactile (cf. `StepNav`, même raison). */
+  enlargeOnNarrow?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const date = parseDateStr(value)
@@ -163,7 +168,7 @@ export function DatePickerButton({
           <Button
             variant="outline"
             size="icon-sm"
-            className="max-sm:size-11"
+            className={cn(enlargeOnNarrow && 'max-sm:size-11')}
             aria-label={ariaLabel}
           >
             <CalendarDays />

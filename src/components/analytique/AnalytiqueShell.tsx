@@ -164,6 +164,14 @@ export function AnalytiqueShell({
 
   // Bouton d'impression placé AVANT les actions du board : la navigation
   // temporelle (YearNav) reste collée au bord droit, comme le veut la convention.
+  //
+  // `max-sm:size-11` seulement quand ce bouton reste le SEUL affichage mobile
+  // de la page (les 8 boards sans `mobileToolbar`, où il peut réellement
+  // apparaître sur un téléphone sous 640px). Sur Rapro (`mobileToolbar`
+  // fourni), ce bouton d'en-tête est garanti non-tactile (remplacé par sa
+  // propre cellule dans la barre basse dès qu'un doigt est détecté) :
+  // l'agrandir au rétrécissement de fenêtre désaccorderait sa taille de celle
+  // du bouton Retour/StepNav voisin, restés fixes pour la même raison.
   const headerActions =
     printTitle != null ? (
       <>
@@ -171,7 +179,7 @@ export function AnalytiqueShell({
           onClick={handlePrint}
           disabled={loading}
           iconOnly
-          className="max-sm:size-11"
+          className={mobileToolbar ? undefined : 'max-sm:size-11'}
           tipLabel={loading ? 'Chargement des données…' : 'Imprimer / PDF'}
         />
         {actions}

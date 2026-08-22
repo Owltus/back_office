@@ -3,6 +3,7 @@ import { ArrowLeft } from 'lucide-react'
 
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
+import { cn } from '#/lib/utils.ts'
 
 /*
  * Bouton retour des pages analytique : remonte dans l'ARBORESCENCE LOGIQUE de
@@ -16,14 +17,24 @@ import { Button } from '#/components/ui/button.tsx'
 export function AnalytiqueBackButton({
   to,
   label = "Retour à l'analytique",
+  enlargeOnNarrow = true,
 }: {
   /** Route de la page parente dans l'arborescence (ex. `/rapro/analytique`). */
   to: string
   label?: string
+  /** Défaut `true` (plancher tactile 44px sous 640px, comme `StepNav`). À
+   *  désactiver UNIQUEMENT quand l'appelant garantit déjà que ce bouton ne
+   *  s'affiche jamais sur écran tactile (cf. `StepNav`, même raison). */
+  enlargeOnNarrow?: boolean
 }) {
   return (
     <Tip label={label}>
-      <Button asChild variant="outline" size="icon-sm" className="max-sm:size-11">
+      <Button
+        asChild
+        variant="outline"
+        size="icon-sm"
+        className={cn(enlargeOnNarrow && 'max-sm:size-11')}
+      >
         <Link to={to} aria-label={label}>
           <ArrowLeft />
         </Link>

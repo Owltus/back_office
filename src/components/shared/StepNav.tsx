@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
+import { cn } from '#/lib/utils.ts'
 
 /**
  * Navigation par pas : [◀] centre [▶], en groupe de boutons segmenté — les trois
@@ -17,9 +18,17 @@ import { Button } from '#/components/ui/button.tsx'
  *
  * Sous 640px, chaque flèche s'agrandit à 44px (`max-sm:size-11`) — plancher de
  * cible tactile (adapt.md), pas un choix esthétique : 32px reste correct à la
- * souris mais devient trop petit au doigt. S'applique aux six boards d'un
- * coup, sans prop à passer : c'est un plancher d'accessibilité, pas une
- * préférence par page.
+ * souris mais devient trop petit au doigt. S'applique par défaut aux six
+ * boards d'un coup, sans prop à passer : c'est un plancher d'accessibilité,
+ * pas une préférence par page.
+ *
+ * `enlargeOnNarrow` (défaut `true`) : à désactiver UNIQUEMENT quand l'appelant
+ * garantit déjà que ce `StepNav` ne s'affiche jamais sur écran tactile (ex.
+ * Rapprochement, dont toute la barre du haut est remplacée par une barre
+ * basse tactile dédiée dès qu'un doigt est détecté — ce `StepNav` n'y est
+ * alors JAMAIS montré qu'à la souris, l'agrandissement au rétrécissement de
+ * fenêtre n'a plus de raison d'être et ne fait que désaccorder sa taille de
+ * celle des boutons voisins qui, eux, restent fixes).
  *
  * Le centre est libre : un `DatePickerButton` (jour, shift), un libellé d'année,
  * ou le sélecteur de plage du parking. Il peut être vide.
@@ -31,6 +40,7 @@ export function StepNav({
   nextLabel,
   prevDisabled = false,
   nextDisabled = false,
+  enlargeOnNarrow = true,
   children,
   className,
 }: {
@@ -41,6 +51,7 @@ export function StepNav({
   nextLabel: string
   prevDisabled?: boolean
   nextDisabled?: boolean
+  enlargeOnNarrow?: boolean
   children?: ReactNode
   className?: string
 }) {
@@ -54,7 +65,7 @@ export function StepNav({
       <Button
         variant="outline"
         size="icon-sm"
-        className="max-sm:size-11"
+        className={cn(enlargeOnNarrow && 'max-sm:size-11')}
         onClick={onClick}
         disabled={disabled}
         aria-label={label}

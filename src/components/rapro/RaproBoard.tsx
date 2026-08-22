@@ -879,7 +879,13 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
                 }
               />
             </ButtonGroup>
-            {/* Groupe « navigation temporelle », collé au bord droit. */}
+            {/* Groupe « navigation temporelle », collé au bord droit.
+                `enlargeOnNarrow={false}` sur les deux : tout ce bloc n'est
+                JAMAIS montré sur écran tactile (remplacé par la barre basse
+                dès qu'un doigt est détecté, cf. plus haut) — l'agrandir à un
+                simple rétrécissement de fenêtre n'aurait donc plus de sens et
+                ne fait que désaccorder sa taille de celle d'Aide/Analytique/
+                Imprimer ci-dessus, restés fixes. */}
             <StepNav
               onPrev={() => goStep(-1)}
               onNext={() => goStep(1)}
@@ -887,6 +893,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
               nextLabel="Jour suivant"
               prevDisabled={atLower}
               nextDisabled={atLatest}
+              enlargeOnNarrow={false}
             >
               <DatePickerButton
                 value={selectedDate}
@@ -896,6 +903,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
                 enabledDates={pickerDates}
                 todayValue={todayStr}
                 ariaLabel="Choisir un jour"
+                enlargeOnNarrow={false}
               />
             </StepNav>
             </>

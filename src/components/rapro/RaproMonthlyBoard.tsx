@@ -109,7 +109,12 @@ export function RaproMonthlyBoard({
       mobileIdentity={`Analytique ${monthLabel}`}
       actions={
         <>
-          <AnalytiqueBackButton to="/rapro/analytique" />
+          {/* enlargeOnNarrow={false} sur les deux : ce groupe n'est JAMAIS
+              montré sur écran tactile (barre basse dédiée dès qu'un doigt
+              est détecté, cf. AnalytiqueShell/mobileToolbar) — l'agrandir à
+              un simple rétrécissement de fenêtre désaccorderait sa taille de
+              celle du bouton Imprimer voisin, resté fixe. */}
+          <AnalytiqueBackButton to="/rapro/analytique" enlargeOnNarrow={false} />
           <StepNav
             onPrev={goPrev}
             onNext={goNext}
@@ -117,6 +122,7 @@ export function RaproMonthlyBoard({
             nextLabel="Mois suivant"
             prevDisabled={prevDisabled}
             nextDisabled={nextDisabled}
+            enlargeOnNarrow={false}
           />
         </>
       }
