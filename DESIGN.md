@@ -411,9 +411,52 @@ rejoindre ce langage.
     Préc./Retour/Imprimer/Suiv. sur le mois (bornée du plus ancien jour saisi
     au mois courant, jamais dans le futur — mêmes bornes que la vue annuelle).
 
-  Les 8
-  autres pages du socle (RepJour/PDJ/Parking/Caisse × annuel+mensuel) n'ont
-  pas ce mode ; ne pas présumer qu'elles l'ont sans vérifier le code.
+  **Étendu aux 4 autres domaines** (RepJour, PDJ, Caisse, Parking — chacun
+  board du jour + les deux vues analytique), avec le même socle partagé
+  (`useResponsiveShell`, `MobileToolbar`/`ToolbarCell` — voir plus bas) mais
+  des cellules propres à chaque domaine, PAS un copier-coller du contenu de
+  Rapprochement :
+  - **RepJour** : barre basse Préc./Détail des calculs (équivalent tactile du
+    « ? » — RepJour n'a pas de modal d'aide généraliste)/Analytique/Imprimer/
+    Suiv. Actions admin (suppression, envoi, destinataires) réservées à la
+    barre du haut. Pas de badge (aucune notion de clôture sur ce domaine).
+  - **PDJ** : barre basse Préc./Analytique/Import CSV (si le rôle
+    l'autorise)/Imprimer/Suiv. Pas de badge. Le raccourci caché « automode »
+    (tape le mot au clavier) reste VOLONTAIREMENT réservé au clavier physique
+    de bureau — décision produit assumée, pas un oubli ; aucun déclencheur
+    tactile équivalent n'existe.
+  - **Caisse** : barre basse Préc./Analytique/Imprimer/Suiv., navigation par
+    SHIFT (matin→soir→nuit→lendemain, comme le `StepNav` desktop existant —
+    pas un pager par jour, pas de sélecteur de shift dédié construit). Badge
+    de statut (`LockBadge compact`, 2e consommateur après Rapprochement) migré
+    dans la Navbar comme sur Rapprochement. Le bouton « Caution » (création)
+    reste desktop uniquement — action ponctuelle, pas une navigation répétée.
+  - **Parking** : barre basse Préc./Aide/Analytique/Imprimer/Suiv. (pas de
+    bouton calendrier, la plage affichée reste informative dans la Navbar).
+    Pas de badge. Chantier le plus délicat des quatre : la capacité d'édition/
+    glisser-déposer (seule exception de l'app à l'opérabilité clavier/souris)
+    dépend désormais du POINTEUR (`isTouchDevice`) et non plus de la largeur
+    — dissocié de la densité géométrique de la grille (`isCompact`, 768px,
+    INCHANGÉE, toujours purement liée à la largeur). Avant : une tablette
+    tactile large (768-1024px) gardait le glisser-déposer actif au doigt
+    (poignées de 6px non adaptées), un ordinateur à la souris en fenêtre
+    étroite le perdait à tort. Les deux angles morts sont corrigés.
+
+  Toutes les vues analytique des 4 domaines ont `mobileIdentity`/`mobileToolbar`
+  actifs, avec le même pager Préc./Retour/Imprimer/Suiv. que Rapprochement là
+  où une navigation temporelle existait déjà — jamais inventée au-delà de ce
+  qui existait avant (ex. PDJ/Caisse mensuel n'avaient pas de pager mois par
+  mois avant ce chantier ; leur barre basse reste Retour/Imprimer seulement).
+
+  **`RaproBoard.tsx` n'a volontairement PAS été retouché** lors de cette
+  extension (contrairement à `AnalytiqueShell.tsx`, qui consomme le nouveau
+  socle) : c'est du code de production déjà testé en profondeur, le retoucher
+  pour du DRY interne sans bénéfice utilisateur visible aurait ajouté un
+  risque de régression injustifié — voir `plan/responsive-tactile-multi-pages/00-INDEX.md`.
+  Le socle partagé vit dans `src/components/shared/useResponsiveShell.ts`
+  (hook combiné `{ isNavbarMobile, isTouchDevice }` + `isTouchDeviceNow()`
+  synchrone) et `src/components/shared/MobileToolbar.tsx` (`ToolbarCell` +
+  conteneur `<nav>` fixe, réexporté par `AnalytiqueShell.tsx` pour compatibilité).
 
 ### Détection tactile réelle (contenu, pas seulement mise en page)
 - Un contenu qui DÉCRIT un geste (légende souris/tactile de la grille
@@ -426,6 +469,8 @@ rejoindre ce langage.
   détection JS `(hover:none) and (pointer:coarse)` déjà utilisée pour la
   bascule barre du haut/barre basse et pour le bouton Imprimer sur mobile
   (`window.open` synchrone).
+
+### Tooltip
 - Fond `bg-foreground` / texte `bg-background` : s'inverse automatiquement entre clair
   et sombre puisqu'il utilise les jetons plutôt qu'une couleur fixe — jamais l'infobulle
   système du navigateur (`title`), toujours repeinte aux couleurs de l'app.

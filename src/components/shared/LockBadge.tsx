@@ -26,11 +26,12 @@ import { cn } from '#/lib/utils.ts'
  * couleurs, juste plus court. Sert à économiser de la place une fois la date
  * et les actions déplacées hors de l'en-tête de page (barre du haut globale /
  * barre d'outils basse). Au-delà de 1024px, rendu inchangé (libellé texte).
- * Seul consommateur actuel : Rapprochement — le seuil doit rester identique
- * au sien (`isNavbarMobile`, 1024px), qui est LUI-MÊME calé sur le seuil
- * hamburger de la Navbar (fixe pour toute l'app) : c'est là que le badge
- * change d'emplacement (Navbar ↔ en-tête de page), pas un seuil indépendant
- * ni celui, sans rapport, de la grille chambres/KPI de Rapprochement (768px).
+ * Consommateurs actuels : Rapprochement et Caisse — le seuil doit rester
+ * identique au leur (`isNavbarMobile`, 1024px), qui est LUI-MÊME calé sur le
+ * seuil hamburger de la Navbar (fixe pour toute l'app) : c'est là que le
+ * badge change d'emplacement (Navbar ↔ en-tête de page), pas un seuil
+ * indépendant ni celui, sans rapport, d'une mise en page propre à une page
+ * (ex. la grille chambres/KPI de Rapprochement, 768px).
  */
 export function LockBadge({
   locked,
