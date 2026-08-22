@@ -1488,24 +1488,27 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
         </div>
       )}
 
-      {/* Planning. Sur écran tactile, `flex-1 min-h-0` + overflow vertical
-          explicite (axe par axe, pas le raccourci `overflow-hidden` — son
-          ordre de cascade face à `overflow-y-auto` n'est pas garanti) : la
-          hauteur de ce conteneur devient bornée par la mise en page ambiante
-          au lieu d'être dictée par son propre contenu, ce qui permet de la
-          mesurer fidèlement (cf. l'effet dédié sur `heightRef` plus haut) et
-          déclenche un DÉFILEMENT LOCAL si le contenu dépasse malgré tout
-          (plancher `COMPACT_MIN_ROW_H` atteint) plutôt qu'un défilement de
-          toute la page. Inchangé à la souris (`overflow-hidden` d'origine). */}
+      {/* Planning. `heightRef` porte UNIQUEMENT le rôle de mesure/défilement,
+          jamais l'apparence — sur écran tactile, `Math.floor` dans le calcul
+          des rangées laisse quasi toujours un reliquat de quelques pixels
+          entre le bas de la grille et le bas de l'espace disponible (normal,
+          pas un bug). Si `heightRef` portait AUSSI la carte visible (bordure
+          arrondie, fond), cette bordure se retrouverait étirée plus bas que
+          son propre contenu — détachée, flottant dans ce reliquat (le
+          « liséré » signalé après la dernière rangée). En confiant
+          l'apparence à un enfant SIMPLE (non étiré, toujours collé à son
+          contenu réel), le reliquat éventuel reste un espace NEUTRE sous une
+          carte inchangée, jamais une bordure flottante. Inchangé à la souris
+          (`heightRef` n'y est jamais plus grand que son contenu). */}
       <div
         ref={heightRef}
         className={cn(
-          'flex rounded-2xl border border-border bg-card',
           isTouchDevice
             ? 'min-h-0 flex-1 overflow-x-hidden overflow-y-auto'
             : 'overflow-hidden',
         )}
       >
+        <div className="flex rounded-2xl border border-border bg-card">
         {/* Colonne fixe des places. `min-h-0` : sans lui, un enfant flex garde
             par défaut une hauteur minimale dictée par SON PROPRE contenu
             (`min-height:auto`) et refuse le rétrécissement imposé par
@@ -1845,6 +1848,7 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
             </div>
           </div>
           )}
+        </div>
         </div>
       </div>
 
