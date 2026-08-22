@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
-import { LineChart, Send, Settings, Trash2 } from 'lucide-react'
+import { Link, useNavigate } from '@tanstack/react-router'
+import { ChevronLeft, ChevronRight, LineChart, Printer, Send, Settings, Trash2 } from 'lucide-react'
 
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
@@ -12,6 +12,9 @@ import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { StepNav } from '#/components/shared/StepNav.tsx'
 import { useStepNavKeys } from '#/components/shared/useStepNavKeys.ts'
 import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
+import { useResponsiveShell } from '#/components/shared/useResponsiveShell.ts'
+import { MobileToolbar, ToolbarCell } from '#/components/shared/MobileToolbar.tsx'
+import { useNavbarSubtitle } from '#/lib/navbarSubtitle.ts'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { Dialog, DialogContent } from '#/components/ui/dialog.tsx'
@@ -32,6 +35,7 @@ import { DayCrossSummary } from '#/components/repjour/DayCrossSummary.tsx'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { supabase } from '#/lib/supabase.ts'
 import { businessNow } from '#/lib/businessDay.ts'
+import { cn } from '#/lib/utils.ts'
 import { MANUAL_IMPORT_ENABLED_FOR_ALL } from '#/lib/repjour/constants.ts'
 import { sendReportViaServer } from '#/lib/repjour/sendServer.ts'
 import type { ServerSendResult } from '#/lib/repjour/sendServer.ts'
@@ -118,6 +122,8 @@ const fmtSentAt = new Intl.DateTimeFormat('fr-FR', {
 })
 
 export function DashboardBoard() {
+  const navigate = useNavigate()
+  const { isNavbarMobile, isTouchDevice } = useResponsiveShell()
   const [detailMode, setDetailMode] = useState(false)
   // Ouverture sur le dernier jour CLÔTURÉ (J-1 du jour hôtelier, bascule à 02h) :
   // avant 02h → avant-veille (la veille civile n'a pas encore de rapport tiré),
@@ -280,6 +286,11 @@ export function DashboardBoard() {
         return `${DAY_NAMES[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth() + 1]} ${d.getFullYear()}`
       })()
     : 'Aucune date sélectionnée'
+  // Sous 1024px, la Navbar globale affiche ce jour sous « RepJour » (à la
+  // place de la marque) — le titre de PageHeader s'efface d'autant pour ne
+  // pas le répéter (même mécanisme que Rapprochement). Aucun badge : RepJour
+  // n'a aucune notion de clôture/statut à annoncer à côté.
+  useNavbarSubtitle(isNavbarMobile ? displayDate : null)
 
   const rj = report ? reportToKPI(report, 'rj') : null
   const rmtd = report ? reportToKPI(report, 'rmtd') : null
@@ -520,11 +531,26 @@ export function DashboardBoard() {
 
   return (
     <PageContainer>
-      <div className="mx-auto w-full max-w-5xl space-y-4">
+      <div
+        className={cn(
+          'mx-auto w-full max-w-5xl space-y-4',
+          // Réserve la place de la barre d'outils basse tactile (cf. fin du
+          // composant) pour qu'elle ne masque jamais la fin du contenu.
+          isTouchDevice && 'pb-20',
+        )}
+      >
         <PageHeader
-          title={displayDate}
+          // Sous 1024px, le jour vit dans la Navbar globale (sous-titre posé par
+          // useNavbarSubtitle ci-dessus) : `undefined` plutôt qu'un contenu
+          // masqué en CSS, pour que la ligne titre ne réserve plus sa hauteur
+          // (même raison que Rapprochement).
+          title={isNavbarMobile ? undefined : displayDate}
+          // Sur écran tactile, ce groupe entier laisse la place à la barre
+          // d'outils basse fixe (cf. fin du composant) — `undefined`, pas un
+          // `hidden` CSS, pour que PageHeader sorte vraiment du flux.
           actions={
-            <>
+            isTouchDevice ? undefined : (
+              <>
               {/* Groupe « suppression » (ADMIN uniquement), isolé et à gauche :
                   supprime les données du seul jour affiché. Bouton outline, icône
                   rouge (pas de fond plein). Présent seulement s'il y a un rapport. */}
@@ -628,13 +654,19 @@ export function DashboardBoard() {
                   </Tip>
                 </ButtonGroup>
               )}
-              {/* Groupe « navigation temporelle », collé au bord droit. */}
+              {/* Groupe « navigation temporelle », collé au bord droit.
+                  `enlargeOnNarrow={false}` sur les deux : ce groupe n'est
+                  JAMAIS montré sur écran tactile (barre basse dédiée dès
+                  qu'un doigt est détecté, cf. plus haut) — l'agrandir à un
+                  simple rétrécissement de fenêtre désaccorderait sa taille de
+                  celle des boutons voisins, restés fixes. */}
               <StepNav
                 onPrev={() => shiftDate(-1)}
                 onNext={() => shiftDate(1)}
                 prevLabel="Jour précédent"
                 nextLabel="Jour suivant"
                 nextDisabled={selectedDate >= maxDate}
+                enlargeOnNarrow={false}
               >
                 <DatePickerButton
                   value={selectedDate}
@@ -642,10 +674,13 @@ export function DashboardBoard() {
                   max={maxDate}
                   enabledDates={pickerDates}
                   todayValue={maxDate}
+                  enlargeOnNarrow={false}
                 />
               </StepNav>
-            </>
+              </>
+            )
           }
+          actionsAlign="end"
         />
 
         {actionError && (
@@ -847,6 +882,55 @@ export function DashboardBoard() {
         destructive
         onConfirm={handleDeleteDay}
       />
+
+      {/* Barre d'outils basse (écran tactile uniquement, peu importe la
+          largeur), même patron que Rapprochement : Précédent/Suivant aux deux
+          BORDS (pager plein largeur, plus naturel au pouce qu'un cluster
+          coincé dans un coin), Détail/Analytique/Imprimer au centre. Les
+          actions ADMIN (suppression, envoi serveur, destinataires) restent
+          réservées à la barre du haut — un usage admin sur tablette tactile
+          est marginal, les y ajouter aurait surchargé la barre au-delà du
+          raisonnable (5-6 cellules max, comme Rapprochement). */}
+      <MobileToolbar visible={isTouchDevice}>
+        <ToolbarCell
+          icon={<ChevronLeft className="size-5" />}
+          label="Préc."
+          ariaLabel="Jour précédent"
+          onClick={() => shiftDate(-1)}
+          bordered={false}
+        />
+        {/* Équivalent tactile du bouton « ? » de la barre du haut : bascule le
+            détail des calculs. Désactivé sans rapport complet (rien à
+            détailler), plutôt qu'absent — la barre garde le même nombre de
+            cellules d'un jour à l'autre. */}
+        <ToolbarCell
+          icon={<HelpGlyph className="size-5" />}
+          label="Détail"
+          ariaLabel="Détail des calculs"
+          onClick={() => setDetailMode((v) => !v)}
+          disabled={!hasFullReport}
+        />
+        <ToolbarCell
+          icon={<LineChart className="size-5" />}
+          label="Analytique"
+          ariaLabel="Vue analytique"
+          onClick={() => navigate({ to: '/repjour/analytique' })}
+        />
+        <ToolbarCell
+          icon={<Printer className="size-5" />}
+          label="Imprimer"
+          ariaLabel="Imprimer / PDF"
+          onClick={handleGeneratePdf}
+          disabled={!canPrint || pdfBusy}
+        />
+        <ToolbarCell
+          icon={<ChevronRight className="size-5" />}
+          label="Suiv."
+          ariaLabel="Jour suivant"
+          onClick={() => shiftDate(1)}
+          disabled={selectedDate >= maxDate}
+        />
+      </MobileToolbar>
     </PageContainer>
   )
 }

@@ -1,5 +1,7 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useNavigate } from '@tanstack/react-router'
+import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react'
 
 import {
   RepjourAnalytiqueCards,
@@ -7,13 +9,15 @@ import {
   RepjourStatsHead,
 } from '#/components/repjour/boards/RepjourAnalytiqueParts.tsx'
 import { subText } from '#/components/analytique/AnalytiqueCards.tsx'
-import { AnalytiqueShell } from '#/components/analytique/AnalytiqueShell.tsx'
+import { AnalytiqueShell, ToolbarCell } from '#/components/analytique/AnalytiqueShell.tsx'
 import { AnalytiqueTable } from '#/components/analytique/AnalytiqueTable.tsx'
 import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
 import { AnalytiqueBackButton } from '#/components/analytique/AnalytiqueBackButton.tsx'
+import { StepNav } from '#/components/shared/StepNav.tsx'
+import { useStepNavKeys } from '#/components/shared/useStepNavKeys.ts'
 import { KpiLineChart } from '#/components/analytique/KpiLineChart.tsx'
 import { fetchUnifiedDays } from '#/lib/repjour/services/data.ts'
-import { fetchBudget } from '#/lib/repjour/services/daily.ts'
+import { fetchAvailableDates, fetchBudget } from '#/lib/repjour/services/daily.ts'
 import {
   DAY_NAMES,
   MONTHS_LABELS,
@@ -190,10 +194,98 @@ export function AnalytiqueMoisBoard({
     return `${wd.charAt(0).toUpperCase()}${wd.slice(1)} ${day} ${monthLabel.toLowerCase()}`
   }
 
+  const navigate = useNavigate()
+
+  // Navigation mois par mois, du plus ancien rapport saisi au mois courant —
+  // même patron que RaproMonthlyBoard. `fetchAvailableDates` (déjà utilisé par
+  // le dashboard, MÊME clé de cache) renvoie toutes les dates de `daily_reports`
+  // triées décroissant : la plus ancienne (dernier élément) borne le passé,
+  // sans requête dédiée supplémentaire.
+  const { data: availableDates } = useQuery({
+    queryKey: ['repjour', 'available-dates'],
+    queryFn: fetchAvailableDates,
+  })
+  const oldest = availableDates?.length
+    ? availableDates[availableDates.length - 1]
+    : undefined
+  // `nowYear`/`nowMonth` (calendrier, pas jour hôtelier) déjà calculés plus
+  // haut pour `lastCardDay` — réutilisés ici comme borne « mois courant »,
+  // au lieu d'un second `new Date()` redondant.
+  const minYear = oldest ? Number(oldest.slice(0, 4)) : nowYear
+  const minMonth = oldest ? Number(oldest.slice(5, 7)) : nowMonth
+  const prevDisabled = year < minYear || (year === minYear && month <= minMonth)
+  const nextDisabled =
+    year > nowYear || (year === nowYear && month >= nowMonth)
+
+  const goToMonth = (y: number, m: number) =>
+    navigate({
+      to: '/repjour/analytique/$year/$month',
+      params: { year: String(y), month: String(m) },
+    })
+  const goPrev = () =>
+    goToMonth(month === 1 ? year - 1 : year, month === 1 ? 12 : month - 1)
+  const goNext = () =>
+    goToMonth(month === 12 ? year + 1 : year, month === 12 ? 1 : month + 1)
+  useStepNavKeys({
+    onPrev: goPrev,
+    onNext: goNext,
+    onToday: () => goToMonth(nowYear, nowMonth),
+    prevDisabled,
+    nextDisabled,
+  })
+
   return (
     <AnalytiqueShell
       title={`${monthLabel} ${year}`}
-      actions={<AnalytiqueBackButton to="/repjour/analytique" />}
+      mobileIdentity={`Analytique ${monthLabel} ${year}`}
+      actions={
+        <>
+          {/* enlargeOnNarrow={false} sur les deux : ce groupe n'est JAMAIS
+              montré sur écran tactile (barre basse dédiée dès qu'un doigt est
+              détecté, cf. mobileToolbar ci-dessous) — l'agrandir à un simple
+              rétrécissement de fenêtre désaccorderait sa taille de celle du
+              bouton Imprimer voisin, resté fixe. */}
+          <AnalytiqueBackButton
+            to="/repjour/analytique"
+            enlargeOnNarrow={false}
+          />
+          <StepNav
+            onPrev={goPrev}
+            onNext={goNext}
+            prevLabel="Mois précédent"
+            nextLabel="Mois suivant"
+            prevDisabled={prevDisabled}
+            nextDisabled={nextDisabled}
+            enlargeOnNarrow={false}
+          />
+        </>
+      }
+      mobileToolbar={(printCell) => (
+        <>
+          <ToolbarCell
+            icon={<ChevronLeft className="size-5" />}
+            label="Préc."
+            ariaLabel="Mois précédent"
+            onClick={goPrev}
+            disabled={prevDisabled}
+            bordered={false}
+          />
+          <ToolbarCell
+            icon={<ArrowLeft className="size-5" />}
+            label="Retour"
+            ariaLabel="Retour à l'analytique"
+            onClick={() => navigate({ to: '/repjour/analytique' })}
+          />
+          {printCell}
+          <ToolbarCell
+            icon={<ChevronRight className="size-5" />}
+            label="Suiv."
+            ariaLabel="Mois suivant"
+            onClick={goNext}
+            disabled={nextDisabled}
+          />
+        </>
+      )}
       loading={loading}
       printTitle={`RepJour · ${monthLabel} ${year}`}
       skeleton={{
