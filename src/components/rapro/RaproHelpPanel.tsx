@@ -102,37 +102,66 @@ export function RaproHelpPanel() {
         </ColorRow>
       </Section>
 
-      <Section title="Les deux gestes de la souris">
-        <div className="flex items-start gap-2.5">
-          <span className="mt-0.5 shrink-0">
-            <MouseGlyph side="left" />
-          </span>
-          <span>
-            <span className="font-medium text-foreground">Clic gauche</span> : fait
+      {/* Deux versions du même geste, selon l'entrée disponible — jamais les
+          deux en même temps : la souris n'existe pas au doigt, et décrire
+          « clic droit » sur un écran tactile n'aiderait personne. Même seuil
+          (640px) que l'ancienne légende souris/tactile de la grille. */}
+      <div className="hidden sm:block">
+        <Section title="Les deux gestes de la souris">
+          <div className="flex items-start gap-2.5">
+            <span className="mt-0.5 shrink-0">
+              <MouseGlyph side="left" />
+            </span>
+            <span>
+              <span className="font-medium text-foreground">Clic gauche</span> : fait
+              défiler le statut de la chambre. Les états proposés s'adaptent à la
+              situation. Une chambre vendue tourne entre nettoyée, refus, bloquée et{' '}
+              <span className="font-medium text-foreground">non vendue</span> (si le
+              rooming l'a comptée vendue à tort, un dernier clic la grise et la sort
+              des vendues) ; une chambre non vendue peut à l'inverse être marquée
+              vendue à la main si besoin.
+            </span>
+          </div>
+          <div className="flex items-start gap-2.5">
+            <span className="mt-0.5 shrink-0">
+              <MouseGlyph side="right" />
+            </span>
+            <span>
+              <span className="font-medium text-foreground">Clic droit</span> : pose
+              ou retire à la main le liseré « bloquée de la veille ». Utile pour un
+              report tardif repéré après coup. Le liseré calculé automatiquement à
+              partir des jours passés, lui, ne se retire pas au clic droit.
+            </span>
+          </div>
+          <p>
+            La flèche de retour en haut de chaque étage remet toutes les chambres de
+            l'étage à leur état d'origine, d'un seul geste, pour corriger une saisie.
+          </p>
+        </Section>
+      </div>
+      <div className="sm:hidden">
+        <Section title="Les deux gestes tactiles">
+          <p>
+            <span className="font-medium text-foreground">Appui simple</span> : fait
             défiler le statut de la chambre. Les états proposés s'adaptent à la
             situation. Une chambre vendue tourne entre nettoyée, refus, bloquée et{' '}
             <span className="font-medium text-foreground">non vendue</span> (si le
-            rooming l'a comptée vendue à tort, un dernier clic la grise et la sort
+            rooming l'a comptée vendue à tort, un dernier appui la grise et la sort
             des vendues) ; une chambre non vendue peut à l'inverse être marquée
             vendue à la main si besoin.
-          </span>
-        </div>
-        <div className="flex items-start gap-2.5">
-          <span className="mt-0.5 shrink-0">
-            <MouseGlyph side="right" />
-          </span>
-          <span>
-            <span className="font-medium text-foreground">Clic droit</span> : pose
-            ou retire à la main le liseré « bloquée de la veille ». Utile pour un
-            report tardif repéré après coup. Le liseré calculé automatiquement à
-            partir des jours passés, lui, ne se retire pas au clic droit.
-          </span>
-        </div>
-        <p>
-          La flèche de retour en haut de chaque étage remet toutes les chambres de
-          l'étage à leur état d'origine, d'un seul geste, pour corriger une saisie.
-        </p>
-      </Section>
+          </p>
+          <p>
+            <span className="font-medium text-foreground">Appui long</span> : pose ou
+            retire à la main le liseré « bloquée de la veille ». Utile pour un report
+            tardif repéré après coup. Le liseré calculé automatiquement à partir des
+            jours passés, lui, ne se retire pas à l'appui long.
+          </p>
+          <p>
+            La flèche de retour en haut de chaque étage remet toutes les chambres de
+            l'étage à leur état d'origine, d'un seul geste, pour corriger une saisie.
+          </p>
+        </Section>
+      </div>
 
       <Section title="Le cas d'une chambre bloquée la veille et non vendue">
         <p>
@@ -213,38 +242,43 @@ export function RaproHelpPanel() {
         </p>
       </Section>
 
-      <Section title="Raccourcis clavier">
-        <div className="space-y-2.5">
-          <Shortcut
-            keys={
-              <>
-                <Kbd>
-                  <KbdArrow dir="left" />
-                </Kbd>
-                <Kbd>
-                  <KbdArrow dir="right" />
-                </Kbd>
-              </>
-            }
-          >
-            Jour précédent ou suivant.
-          </Shortcut>
-          <Shortcut keys={<Kbd className="px-2">Alt</Kbd>}>
-            Revenir à aujourd'hui.
-          </Shortcut>
-          <Shortcut
-            keys={
-              <>
-                <Kbd className="px-2">Ctrl</Kbd>
-                <KbdPlus />
-                <Kbd>P</Kbd>
-              </>
-            }
-          >
-            Imprimer la feuille, une fois le rapprochement clôturé.
-          </Shortcut>
-        </div>
-      </Section>
+      {/* Un clavier physique n'existe pas sur un écran tactile — section
+          réservée au bureau (même seuil que le reste des contenus liés à la
+          souris ci-dessus). */}
+      <div className="hidden sm:block">
+        <Section title="Raccourcis clavier">
+          <div className="space-y-2.5">
+            <Shortcut
+              keys={
+                <>
+                  <Kbd>
+                    <KbdArrow dir="left" />
+                  </Kbd>
+                  <Kbd>
+                    <KbdArrow dir="right" />
+                  </Kbd>
+                </>
+              }
+            >
+              Jour précédent ou suivant.
+            </Shortcut>
+            <Shortcut keys={<Kbd className="px-2">Alt</Kbd>}>
+              Revenir à aujourd'hui.
+            </Shortcut>
+            <Shortcut
+              keys={
+                <>
+                  <Kbd className="px-2">Ctrl</Kbd>
+                  <KbdPlus />
+                  <Kbd>P</Kbd>
+                </>
+              }
+            >
+              Imprimer la feuille, une fois le rapprochement clôturé.
+            </Shortcut>
+          </div>
+        </Section>
+      </div>
     </div>
   )
 }
