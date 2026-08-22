@@ -1,15 +1,18 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent, DragEvent } from 'react'
-import { Link } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowDown,
   ArrowUp,
+  ChevronLeft,
+  ChevronRight,
   Coffee,
   FileUp,
   LineChart,
   Minus,
   Plus,
+  Printer,
   Receipt,
   Star,
   Trash2,
@@ -25,10 +28,13 @@ import { PrintButton } from '#/components/shared/PrintButton.tsx'
 import { StatTile } from '#/components/shared/StatTile.tsx'
 import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
 import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
+import { MobileToolbar, ToolbarCell } from '#/components/shared/MobileToolbar.tsx'
+import { useResponsiveShell } from '#/components/shared/useResponsiveShell.ts'
 import { StepNav } from '#/components/shared/StepNav.tsx'
 import { useStepNavKeys } from '#/components/shared/useStepNavKeys.ts'
 import { useKeySequence } from '#/components/shared/useKeySequence.ts'
 import { Tip } from '#/components/shared/Tip.tsx'
+import { useNavbarSubtitle } from '#/lib/navbarSubtitle.ts'
 import { Button } from '#/components/ui/button.tsx'
 import {
   Dialog,
@@ -139,6 +145,8 @@ function isAddonCsv(content: string): boolean {
 }
 
 export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
+  const { isNavbarMobile, isTouchDevice } = useResponsiveShell()
+  const navigate = useNavigate()
   const { can, pageLevel, grade } = useAuth()
   const canEdit = can('pdj', 'ecriture')
   const isAdmin = can('pdj', 'gestion')
@@ -716,6 +724,13 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
 
   // Écoute « automode » tant que le compte a le droit d'écrire (garde focus
   // incluse dans le hook). Portée limitée au board : l'écouteur part au démontage.
+  //
+  // DÉCISION PRODUIT (plan responsive-tactile-multi-pages, D1, tranchée par
+  // l'utilisateur) : ce raccourci reste VOLONTAIREMENT réservé au clavier
+  // physique de bureau — aucun déclencheur tactile équivalent (bouton discret,
+  // appui long, geste dédié…) n'est construit ici. Sur un usage tactile pur
+  // (tablette sans clavier), l'automode est donc totalement inatteignable ;
+  // c'est un choix assumé, pas un oubli.
   useKeySequence('automode', runAutoMode, { enabled: canEdit })
 
   // Saisie MANUELLE d'un PDJ dans une chambre non check-in (day-use…). Crée la
@@ -834,10 +849,26 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
   // que s'il existe un autre jour que « aujourd'hui » où aller.
   const canNavigate = navDates.length > 1
 
+  // Sous 1024px, la Navbar globale affiche ce jour sous « Petit-déjeuner » (à
+  // la place de la marque) — le titre de page ci-dessus s'efface d'autant
+  // (cf. `title` de PageHeader). GATÉ par `isNavbarMobile` : sans ce garde, le
+  // sous-titre resterait posé même quand la Navbar n'en montre plus rien
+  // (≥ 1024px). Pas de `useNavbarBadge` ici : PDJ n'a pas de statut clôturé/
+  // ouvert façon `LockBadge` (le badge du PageHeader est le segmented control
+  // service/financier, qui reste dans l'en-tête, pas dans la Navbar).
+  useNavbarSubtitle(isNavbarMobile ? titleDate : null)
+
   return (
     // `max-w-5xl` centre le contenu comme sur RepJour. Neutralisé à
     // l'impression : la feuille A4 impose déjà sa largeur (voir pdj.css).
-    <div className="pdj-doc mx-auto flex w-full min-w-0 max-w-5xl flex-1 flex-col gap-5 print:max-w-none">
+    // `pb-20` réserve la place de la barre d'outils basse tactile (cf. fin du
+    // composant) pour qu'elle ne masque jamais la fin du contenu.
+    <div
+      className={cn(
+        'pdj-doc mx-auto flex w-full min-w-0 max-w-5xl flex-1 flex-col gap-5 print:max-w-none',
+        isTouchDevice && 'pb-20',
+      )}
+    >
       {/* En-tête compact (impression uniquement). */}
       <div className="pdj-header">
         <h1>Breakfast</h1>
@@ -875,7 +906,15 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
           pas apparaître après coup. Seule la navigation (StepNav) reste
           conditionnée à `canNavigate` À L'INTÉRIEUR des actions. */}
       <PageHeader
-        title={titleDate}
+        // Sous 1024px, le jour vit dans la Navbar globale (sous-titre, posé par
+        // useNavbarSubtitle ci-dessous) : `undefined` plutôt qu'un contenu
+        // masqué en CSS, pour que la ligne titre de PageHeader ne réserve plus
+        // sa hauteur. Même seuil que la Navbar elle-même (hamburger ↔ onglets),
+        // pas celui, indépendant, des tuiles/tableaux PDJ. Le badge (bascule
+        // service/financier, ci-dessous) N'EST PAS gouverné par ce seuil : ce
+        // n'est pas un statut dupliqué dans la Navbar comme sur Rapro, mais un
+        // contrôle fonctionnel qui doit rester utilisable à toute largeur.
+        title={isNavbarMobile ? undefined : titleDate}
         // La bascule service/financier vient ici, à la place du statut des
         // autres pages (Rapro/Caisse) : `badgeAlign="end"` l'envoie au bord
         // droit sur sa propre ligne en mobile, au lieu de rester entassée
@@ -941,7 +980,12 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
             </div>
           )
         }
+        // Sur écran tactile, ce groupe entier laisse la place à la barre
+        // d'outils basse fixe (cf. fin du composant) — même mécanisme que
+        // Rapro. `undefined` (pas un `hidden` CSS) : PageHeader ne rend alors
+        // littéralement rien pour ce prop.
         actions={
+          isTouchDevice ? undefined : (
           <>
             {/* Groupe « suppression » (ADMIN uniquement), isolé et à gauche :
                   supprime les données du seul jour affiché. Bouton outline, icône
@@ -1008,7 +1052,12 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                 }
               />
             </ButtonGroup>
-            {/* Groupe « navigation temporelle », collé au bord droit. */}
+            {/* Groupe « navigation temporelle », collé au bord droit.
+                `enlargeOnNarrow={false}` sur les deux : ce groupe n'est
+                JAMAIS montré sur écran tactile (barre basse dédiée dès qu'un
+                doigt est détecté, cf. plus haut) — l'agrandir à un simple
+                rétrécissement de fenêtre désaccorderait sa taille de celle
+                des boutons voisins, restés fixes. */}
             {canNavigate && (
               <StepNav
                 onPrev={gotoOlder}
@@ -1017,6 +1066,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                 nextLabel="Jour suivant"
                 prevDisabled={dateIdx < 0 || dateIdx >= navDates.length - 1}
                 nextDisabled={dateIdx <= 0}
+                enlargeOnNarrow={false}
               >
                 <DatePickerButton
                   value={selectedDate}
@@ -1025,11 +1075,18 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                   max={today}
                   enabledDates={navDates}
                   todayValue={today}
+                  enlargeOnNarrow={false}
                 />
               </StepNav>
             )}
           </>
+          )
         }
+        // Ce groupe n'existe qu'en mode souris (cf. `isTouchDevice` ci-dessus) :
+        // toujours collé au bord droit, jamais écarté aux deux bords même en
+        // fenêtre étroite (le repli « aux deux bords », pensé pour la portée du
+        // pouce sur téléphone, n'a alors plus de sens).
+        actionsAlign="end"
       />
 
       {/* Un seul gate bascule le corps : squelette pendant le fetch (jamais la
@@ -1309,6 +1366,60 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
         canEdit={dayEditable}
         onChange={handleExternalsChange}
       />
+
+      {/* Barre d'outils basse (écran tactile uniquement, peu importe la largeur
+          — téléphone OU tablette) : même socle partagé que Rapro
+          (`MobileToolbar`/`ToolbarCell`, shared/), pas une réécriture locale.
+          Vue analytique, Import CSV (si `canManualImport`), Impression, puis
+          le pager Préc./Suiv. jour aux deux bords (pattern de feuilletage,
+          comme Rapro — pas de bouton calendrier séparé, le jour affiché en
+          Navbar reste purement informatif).
+
+          Le bouton « Externe » (dialogue +/- clients non logés à l'hôtel)
+          N'Y FIGURE PAS, à dessein : geste ADMIN/écriture peu fréquent en
+          contexte tactile, et l'ajouter porterait la barre à 6 cellules (au
+          lieu de 4-5) sans bénéfice mesuré côté usage réel — il reste
+          accessible en mode souris uniquement (cf. `actions` ci-dessus, gaté
+          `isTouchDevice`). Le bouton de suppression admin (Trash2) suit la
+          même logique. */}
+      <MobileToolbar visible={isTouchDevice}>
+        <ToolbarCell
+          icon={<ChevronLeft className="size-5" />}
+          label="Préc."
+          ariaLabel="Jour précédent"
+          onClick={gotoOlder}
+          disabled={dateIdx < 0 || dateIdx >= navDates.length - 1}
+          bordered={false}
+        />
+        <ToolbarCell
+          icon={<LineChart className="size-5" />}
+          label="Analytique"
+          ariaLabel="Vue analytique"
+          onClick={() => navigate({ to: '/pdj/analytique' })}
+        />
+        {canManualImport && (
+          <ToolbarCell
+            icon={<FileUp className="size-5" />}
+            label="Importer"
+            ariaLabel="Importer un CSV"
+            onClick={() => inputRef.current?.click()}
+          />
+        )}
+        <ToolbarCell
+          icon={<Printer className="size-5" />}
+          label="Imprimer"
+          ariaLabel={hasData ? 'Imprimer / PDF' : 'Aucune donnée à imprimer'}
+          onClick={handlePrint}
+          disabled={!hasData}
+        />
+        <ToolbarCell
+          icon={<ChevronRight className="size-5" />}
+          label="Suiv."
+          ariaLabel="Jour suivant"
+          onClick={gotoNewer}
+          disabled={dateIdx <= 0}
+        />
+      </MobileToolbar>
     </div>
   )
 }

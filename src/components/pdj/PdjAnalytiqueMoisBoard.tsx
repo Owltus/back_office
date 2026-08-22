@@ -1,8 +1,9 @@
 import { useMemo } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
+import { ArrowLeft } from 'lucide-react'
 
-import { AnalytiqueShell } from '#/components/analytique/AnalytiqueShell.tsx'
+import { AnalytiqueShell, ToolbarCell } from '#/components/analytique/AnalytiqueShell.tsx'
 import { AnalytiqueTable } from '#/components/analytique/AnalytiqueTable.tsx'
 import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
 import { AnalytiqueBackButton } from '#/components/analytique/AnalytiqueBackButton.tsx'
@@ -196,7 +197,31 @@ export function PdjAnalytiqueMoisBoard({
   return (
     <AnalytiqueShell
       title={`${monthLabel} ${year}`}
-      actions={<AnalytiqueBackButton to="/pdj/analytique" />}
+      mobileIdentity={`Analytique ${monthLabel} ${year}`}
+      // enlargeOnNarrow={false} : ce bouton n'est JAMAIS montré sur écran
+      // tactile (barre basse dédiée dès qu'un doigt est détecté, cf.
+      // mobileToolbar) — l'agrandir à un simple rétrécissement de fenêtre n'a
+      // donc plus de raison d'être, comme sur /rapro.
+      actions={
+        <AnalytiqueBackButton to="/pdj/analytique" enlargeOnNarrow={false} />
+      }
+      // Seulement Retour + Imprimer : contrairement à /rapro (qui a un pas
+      // mois par mois desktop ET clavier), la vue mensuelle PDJ n'a jamais eu
+      // de navigation mois-à-mois (ni bouton, ni raccourci ←/→) — seul un
+      // retour à l'annuel existe. La barre basse tactile réplique donc
+      // exactement cette capacité, sans en inventer une nouvelle.
+      mobileToolbar={(printCell) => (
+        <>
+          <ToolbarCell
+            icon={<ArrowLeft className="size-5" />}
+            label="Retour"
+            ariaLabel="Retour à l'analytique"
+            onClick={() => navigate({ to: '/pdj/analytique' })}
+            bordered={false}
+          />
+          {printCell}
+        </>
+      )}
       loading={loading}
       printTitle={`PDJ · ${monthLabel} ${year}`}
       skeleton={{

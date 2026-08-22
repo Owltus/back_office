@@ -1,12 +1,14 @@
 import { useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
+import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react'
 
-import { AnalytiqueShell } from '#/components/analytique/AnalytiqueShell.tsx'
+import { AnalytiqueShell, ToolbarCell } from '#/components/analytique/AnalytiqueShell.tsx'
 import { AnalytiqueTable } from '#/components/analytique/AnalytiqueTable.tsx'
 import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
-import { YearNav } from '#/components/analytique/YearNav.tsx'
+import { useYearNav } from '#/components/analytique/YearNav.tsx'
 import { useAnnualYear } from '#/components/analytique/useAnnualYear.ts'
+import { StepNav } from '#/components/shared/StepNav.tsx'
 import { ACCENT } from '#/components/analytique/accents.ts'
 import { KpiStackedBarChart } from '#/components/analytique/KpiStackedBarChart.tsx'
 import type { KpiBarSegment } from '#/components/analytique/KpiStackedBarChart.tsx'
@@ -190,27 +192,82 @@ export function PdjAnalytiqueBoard() {
     return segs
   }, [chartData])
 
+  // `useYearNav` directement (pas le composant `<YearNav>`) : goPrev/goNext/
+  // prevDisabled/nextDisabled sont réutilisés par la barre d'outils basse
+  // tactile ci-dessous, comme sur /rapro (RaproAnalytiqueBoard). Appeler AUSSI
+  // `<YearNav>` en plus de ce hook doublerait `useStepNavKeys` (deux écouteurs
+  // clavier ←/→ sur la même action).
+  const { goPrev, goNext, prevDisabled, nextDisabled } = useYearNav({
+    year,
+    setYear,
+    years,
+    currentYear,
+  })
+
   return (
     <AnalytiqueShell
       title="Analytique"
+      mobileIdentity={`Analytique ${year}`}
       actions={
         <>
           {/* Import Addon Production (admin) accolé à l'impression : dépôt d'un CSV
               « plage » (plusieurs jours) → upsert pdj_addon_production. Rafraîchit
-              toutes les vues PDJ (analytique + board). */}
+              toutes les vues PDJ (analytique + board). Volontairement ABSENT de la
+              barre basse tactile (mobileToolbar ci-dessous) : import de fichier
+              admin, usage rare et déjà pensé souris/clavier (même logique que le
+              bouton « Externe » du board du jour) — reste accessible en mode
+              souris uniquement. */}
           <AddonImportButton
             onImported={() =>
               queryClient.invalidateQueries({ queryKey: ['pdj'] })
             }
           />
-          <YearNav
-            year={year}
-            setYear={setYear}
-            years={years}
-            currentYear={currentYear}
-          />
+          {/* enlargeOnNarrow={false} : ce groupe n'est JAMAIS montré sur écran
+              tactile (barre basse dédiée dès qu'un doigt est détecté, cf.
+              mobileToolbar) — l'agrandir à un simple rétrécissement de fenêtre
+              désaccorderait sa taille de celle du bouton Import voisin, resté
+              fixe. */}
+          <StepNav
+            onPrev={goPrev}
+            onNext={goNext}
+            prevLabel="Année précédente"
+            nextLabel="Année suivante"
+            prevDisabled={prevDisabled}
+            nextDisabled={nextDisabled}
+            enlargeOnNarrow={false}
+          >
+            <span className="inline-flex h-8 items-center justify-center border bg-background px-3 text-sm font-medium tabular-nums shadow-xs dark:border-input dark:bg-input/30">
+              {year}
+            </span>
+          </StepNav>
         </>
       }
+      mobileToolbar={(printCell) => (
+        <>
+          <ToolbarCell
+            icon={<ChevronLeft className="size-5" />}
+            label="Préc."
+            ariaLabel="Année précédente"
+            onClick={goPrev}
+            disabled={prevDisabled}
+            bordered={false}
+          />
+          <ToolbarCell
+            icon={<ArrowLeft className="size-5" />}
+            label="Retour"
+            ariaLabel="Retour au petit-déjeuner"
+            onClick={() => navigate({ to: '/pdj' })}
+          />
+          {printCell}
+          <ToolbarCell
+            icon={<ChevronRight className="size-5" />}
+            label="Suiv."
+            ariaLabel="Année suivante"
+            onClick={goNext}
+            disabled={nextDisabled}
+          />
+        </>
+      )}
       loading={loading}
       printTitle={`PDJ · ${year}`}
       skeleton={{ cols: 8, charts: 1, rows: 12, cards: 6, cardCols: 6, cardLines: 3 }}
