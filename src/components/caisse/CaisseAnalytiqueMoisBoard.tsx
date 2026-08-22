@@ -1,8 +1,9 @@
 import { useMemo } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
+import { ArrowLeft } from 'lucide-react'
 
-import { AnalytiqueShell } from '#/components/analytique/AnalytiqueShell.tsx'
+import { AnalytiqueShell, ToolbarCell } from '#/components/analytique/AnalytiqueShell.tsx'
 import { AnalytiqueTable } from '#/components/analytique/AnalytiqueTable.tsx'
 import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
 import { AnalytiqueBackButton } from '#/components/analytique/AnalytiqueBackButton.tsx'
@@ -106,7 +107,27 @@ export function CaisseAnalytiqueMoisBoard({
   return (
     <AnalytiqueShell
       title={`${monthLabel} ${year}`}
-      actions={<AnalytiqueBackButton to="/caisse/analytique" />}
+      mobileIdentity={`Analytique ${monthLabel}`}
+      actions={
+        // enlargeOnNarrow={false} : ce bouton n'est JAMAIS montré sur écran
+        // tactile (barre basse dédiée dès qu'un doigt est détecté, cf.
+        // mobileToolbar plus bas) — l'agrandir à un simple rétrécissement de
+        // fenêtre désaccorderait sa taille de celle du bouton Imprimer voisin,
+        // resté fixe.
+        <AnalytiqueBackButton to="/caisse/analytique" enlargeOnNarrow={false} />
+      }
+      mobileToolbar={(printCell) => (
+        <>
+          <ToolbarCell
+            icon={<ArrowLeft className="size-5" />}
+            label="Retour"
+            ariaLabel="Retour à l'analytique"
+            onClick={() => navigate({ to: '/caisse/analytique' })}
+            bordered={false}
+          />
+          {printCell}
+        </>
+      )}
       loading={loading}
       skeleton={{
         cols: 6,

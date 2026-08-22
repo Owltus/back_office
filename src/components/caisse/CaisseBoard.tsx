@@ -1,18 +1,30 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
-import { Link } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { LineChart, MoreVertical, Minus, Pencil, Plus, Trash2, Undo2 } from 'lucide-react'
+import {
+  ChevronLeft,
+  ChevronRight,
+  LineChart,
+  MoreVertical,
+  Minus,
+  Pencil,
+  Plus,
+  Printer,
+  Trash2,
+  Undo2,
+} from 'lucide-react'
 
 import { LockBadge } from '#/components/shared/LockBadge.tsx'
+import { MobileToolbar, ToolbarCell } from '#/components/shared/MobileToolbar.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
-import { PrintBlockedDialog } from '#/components/shared/PrintBlockedDialog.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
 import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { StepNav } from '#/components/shared/StepNav.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
+import { useResponsiveShell } from '#/components/shared/useResponsiveShell.ts'
 import { useStepNavKeys } from '#/components/shared/useStepNavKeys.ts'
 import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
@@ -48,6 +60,7 @@ import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { DENOM_SVG } from '#/assets/euros/index.ts'
 import { capitalize, cn } from '#/lib/utils.ts'
 import { errorMessage } from '#/lib/errors.ts'
+import { useNavbarBadge, useNavbarSubtitle } from '#/lib/navbarSubtitle.ts'
 import { printCaisseSheet } from '#/lib/caisse/pdf.ts'
 import {
   computeEcarts,
@@ -142,6 +155,8 @@ const fmtDayShort = new Intl.DateTimeFormat('fr-FR', {
 })
 
 export function CaisseBoard({ initialDate }: { initialDate?: string }) {
+  const { isNavbarMobile, isTouchDevice } = useResponsiveShell()
+  const navigate = useNavigate()
   const { user, can, pageLevel } = useAuth()
   const queryClient = useQueryClient()
 
@@ -771,15 +786,11 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
   }
 
   // Ctrl+P emprunte la même porte que le bouton : le PDF jsPDF, jamais le rendu
-  // brut du DOM. Feuille non clôturée, le raccourci explique son refus — là où
-  // le bouton se contente d'être désactivé, infobulle à l'appui.
-  const [printBlocked, setPrintBlocked] = useState(false)
+  // brut du DOM. Feuille non clôturée → ne fait rien, comme un bouton désactivé
+  // (harmonisé sur le seul mécanisme disabled + tooltip du bouton d'en-tête ;
+  // plus de modale dédiée au raccourci clavier, cf. Rapro/RepJour).
   usePrintShortcut(() => {
-    if (pdfBusy) return
-    if (!isValidated) {
-      setPrintBlocked(true)
-      return
-    }
+    if (pdfBusy || !isValidated) return
     void handleGeneratePdf()
   })
 
@@ -845,105 +856,141 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
     )
   })()
 
+  const title = `${titleDate} (${SHIFT_LABELS[form.shift].toLowerCase()})`
+  // Sous 1024px, le jour+shift vit dans la Navbar globale (sous-titre, à côté
+  // du hamburger) — le titre de page s'efface d'autant pour ne pas le répéter,
+  // même mécanisme que Rapprochement (seuil VOLONTAIREMENT identique à celui
+  // de la Navbar, cf. `isNavbarMobile` = `useResponsiveShell`).
+  useNavbarSubtitle(isNavbarMobile ? title : null)
+  // Même mécanisme pour la pastille de statut : posée à la fois dans la Navbar
+  // (< 1024px) et dans l'en-tête de page (≥ 1024px), un seul des deux visible à
+  // la fois (cf. PageHeader). Attendre `ready` : sans feuille chargée,
+  // `isValidated` vaut faux par défaut et la pastille afficherait « Ouverte »
+  // avant de se contredire.
+  const statusBadge = ready && (
+    <LockBadge
+      locked={isValidated}
+      label={isValidated ? 'Clôturée' : 'Ouverte'}
+      compact
+      hint={
+        isValidated
+          ? 'Montants figés. Réouvrez la feuille pour les modifier.'
+          : 'Saisie en cours, enregistrée automatiquement.'
+      }
+    />
+  )
+  useNavbarBadge(isNavbarMobile ? statusBadge : null)
+
   return (
-    <div className="caisse-doc mx-auto flex w-full min-w-0 max-w-5xl flex-1 flex-col gap-4 print:max-w-none">
+    <div
+      className={cn(
+        'caisse-doc mx-auto flex w-full min-w-0 max-w-5xl flex-1 flex-col gap-4 print:max-w-none',
+        isTouchDevice && 'pb-20',
+      )}
+    >
       <PageHeader
-        title={`${titleDate} (${SHIFT_LABELS[form.shift].toLowerCase()})`}
-        // Attendre `ready` : sans feuille chargée, `isValidated` vaut faux par
-        // défaut et la pastille afficherait « Ouverte » avant de se contredire.
+        // Sous 1024px, `undefined` (pas un masquage CSS) : la ligne titre ne
+        // réserve plus sa hauteur — cf. commentaire useNavbarSubtitle ci-dessus.
+        title={isNavbarMobile ? undefined : title}
         badgeAlign="end"
-        // 94px = largeur de StepNav ci-dessous (même composant qu'en Rapro :
-        // 3 boutons `icon-sm` de 32px accolés dans un ButtonGroup, bordures
-        // fusionnées) — aligne la pastille sur la navigation temporelle
-        // qu'elle surplombe en mobile.
-        badgeWidth="w-[94px]"
-        badge={
-          ready && (
-            <LockBadge
-              locked={isValidated}
-              label={isValidated ? 'Clôturée' : 'Ouverte'}
-              hint={
-                isValidated
-                  ? 'Montants figés. Réouvrez la feuille pour les modifier.'
-                  : 'Saisie en cours, enregistrée automatiquement.'
-              }
-            />
-          )
-        }
+        badge={isNavbarMobile ? undefined : statusBadge}
+        // Sur écran tactile, ce groupe entier laisse la place à la barre
+        // d'outils basse fixe (cf. fin du composant), comme Rapprochement.
+        // `undefined` (pas un `hidden` CSS) : PageHeader ne rend alors
+        // littéralement rien pour ce prop.
         actions={
-          <>
-            {/* Bouton « Caution » — exceptionnellement du texte + icône « + » :
-                ouvre le dialogue de saisie (chambre, montant, commentaire). Une
-                caution active majore le fond de caisse attendu (cf. carte
-                « Fond de caisse » plus bas) tant qu'elle n'est pas remboursée.
-                Désactivé sur une caisse clôturée — comme tout le reste de la
-                page, il faut la réouvrir pour y toucher. */}
-            {isWriter &&
-              (canEditFields ? (
-                <Tip label="Ajouter une caution client">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCautionDialog({ mode: 'create' })}
-                  >
-                    <Plus />
-                    Caution
-                  </Button>
-                </Tip>
-              ) : (
-                <Tip label="Caisse clôturée : réouvrez-la pour gérer les cautions">
-                  <span tabIndex={0}>
-                    <Button variant="outline" size="sm" disabled>
+          isTouchDevice ? undefined : (
+            <>
+              {/* Bouton « Caution » — exceptionnellement du texte + icône « + » :
+                  ouvre le dialogue de saisie (chambre, montant, commentaire). Une
+                  caution active majore le fond de caisse attendu (cf. carte
+                  « Fond de caisse » plus bas) tant qu'elle n'est pas remboursée.
+                  Désactivé sur une caisse clôturée — comme tout le reste de la
+                  page, il faut la réouvrir pour y toucher.
+                  Réservé au bureau à la souris : créer une caution est une
+                  action PONCTUELLE, pas une navigation répétée comme
+                  Préc./Suiv./Imprimer — volontairement absente de la barre
+                  d'outils basse tactile (cf. plan/responsive-tactile-multi-
+                  pages/6-caisse-board-jour.md). */}
+              {isWriter &&
+                (canEditFields ? (
+                  <Tip label="Ajouter une caution client">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCautionDialog({ mode: 'create' })}
+                    >
                       <Plus />
                       Caution
                     </Button>
-                  </span>
+                  </Tip>
+                ) : (
+                  <Tip label="Caisse clôturée : réouvrez-la pour gérer les cautions">
+                    <span tabIndex={0}>
+                      <Button variant="outline" size="sm" disabled>
+                        <Plus />
+                        Caution
+                      </Button>
+                    </span>
+                  </Tip>
+                ))}
+              {/* Groupe « actions de page » : vue analytique + impression. */}
+              <ButtonGroup>
+                {/* 0) Vue analytique : synthèse mensuelle en lecture (tous rôles). */}
+                <Tip label="Vue analytique">
+                  <Button asChild variant="outline" size="icon-sm">
+                    <Link to="/caisse/analytique" aria-label="Vue analytique">
+                      <LineChart />
+                    </Link>
+                  </Button>
                 </Tip>
-              ))}
-            {/* Groupe « actions de page » : vue analytique + impression. */}
-            <ButtonGroup>
-              {/* 0) Vue analytique : synthèse mensuelle en lecture (tous rôles). */}
-              <Tip label="Vue analytique">
-                <Button asChild variant="outline" size="icon-sm">
-                  <Link to="/caisse/analytique" aria-label="Vue analytique">
-                    <LineChart />
-                  </Link>
-                </Button>
-              </Tip>
-              {/* 1) Impression : toujours présente, mais désactivée tant que la
-                  caisse n'est pas clôturée — le document ne s'imprime qu'une fois
-                  les montants figés. L'infobulle porte alors la raison. */}
-              <PrintButton
-                onClick={handleGeneratePdf}
-                iconOnly
-                disabled={!isValidated || pdfBusy}
-                tipLabel={
-                  isValidated
-                    ? 'Imprimer / PDF'
-                    : 'Clôturez la caisse pour imprimer la feuille'
-                }
-              />
-            </ButtonGroup>
-            {/* Groupe « navigation temporelle », collé au bord droit. */}
-            <StepNav
-              onPrev={() => goStep(-1)}
-              onNext={() => goStep(1)}
-              prevLabel="Shift précédent"
-              nextLabel="Shift suivant"
-              prevDisabled={atLowerBound}
-              nextDisabled={atLatestSlot}
-            >
-              <DatePickerButton
-                value={selectedDate}
-                onChange={goDate}
-                min={lowerSlot.date}
-                max={displaySlot.date}
-                todayValue={displaySlot.date}
-                ariaLabel="Choisir un jour"
-              />
-            </StepNav>
-          </>
+                {/* 1) Impression : toujours présente, mais désactivée tant que la
+                    caisse n'est pas clôturée — le document ne s'imprime qu'une fois
+                    les montants figés. L'infobulle porte alors la raison. */}
+                <PrintButton
+                  onClick={handleGeneratePdf}
+                  iconOnly
+                  disabled={!isValidated || pdfBusy}
+                  tipLabel={
+                    isValidated
+                      ? 'Imprimer / PDF'
+                      : 'Clôturez la caisse pour imprimer la feuille'
+                  }
+                />
+              </ButtonGroup>
+              {/* Groupe « navigation temporelle », collé au bord droit.
+                  `enlargeOnNarrow={false}` sur les deux : ce groupe n'est
+                  JAMAIS montré sur écran tactile (barre basse dédiée dès
+                  qu'un doigt est détecté, cf. plus haut) — l'agrandir à un
+                  simple rétrécissement de fenêtre désaccorderait sa taille de
+                  celle des boutons voisins, restés fixes. */}
+              <StepNav
+                onPrev={() => goStep(-1)}
+                onNext={() => goStep(1)}
+                prevLabel="Shift précédent"
+                nextLabel="Shift suivant"
+                prevDisabled={atLowerBound}
+                nextDisabled={atLatestSlot}
+                enlargeOnNarrow={false}
+              >
+                <DatePickerButton
+                  value={selectedDate}
+                  onChange={goDate}
+                  min={lowerSlot.date}
+                  max={displaySlot.date}
+                  todayValue={displaySlot.date}
+                  ariaLabel="Choisir un jour"
+                  enlargeOnNarrow={false}
+                />
+              </StepNav>
+            </>
+          )
         }
+        // Toujours collées ensemble au bord droit, jamais écartées aux deux
+        // bords même en fenêtre étroite : ce groupe n'existe que côté souris
+        // (cf. `isTouchDevice` ci-dessus) — le repli « aux deux bords », pensé
+        // pour la portée du pouce sur téléphone, n'a ici aucune raison d'être.
+        actionsAlign="end"
       />
 
       {sheetError && (
@@ -1454,12 +1501,6 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
         </>
       )}
 
-      <PrintBlockedDialog
-        open={printBlocked}
-        onOpenChange={setPrintBlocked}
-        reason="La caisse n'est pas clôturée. Clôturez-la pour imprimer la feuille."
-      />
-
       {/* Modal de clôture : verdict didactique + nom de l'hôtelier + clôture. */}
       <CloseSheetDialog
         open={closeOpen}
@@ -1530,6 +1571,49 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
         confirmLabel="Remettre en cours"
         onConfirm={handleReactivateCaution}
       />
+
+      {/* Barre d'outils basse (écran tactile uniquement, peu importe la
+          largeur — téléphone OU tablette) : même patron que Rapprochement.
+          Préc./Suiv. avancent d'un SHIFT (matin → soir → nuit → lendemain, via
+          `goStep`/`stepSlot`), PAS d'un jour civil — décision produit tranchée
+          (plan/responsive-tactile-multi-pages/00-INDEX.md, D2), pas de
+          sélecteur de shift dédié à construire. Le bouton « Caution » n'y
+          figure pas : action ponctuelle (création), pas une navigation
+          répétée — elle reste réservée à l'en-tête desktop (cf. plus haut). */}
+      <MobileToolbar visible={isTouchDevice}>
+        <ToolbarCell
+          icon={<ChevronLeft className="size-5" />}
+          label="Préc."
+          ariaLabel="Shift précédent"
+          onClick={() => goStep(-1)}
+          disabled={atLowerBound}
+          bordered={false}
+        />
+        <ToolbarCell
+          icon={<LineChart className="size-5" />}
+          label="Analytique"
+          ariaLabel="Vue analytique"
+          onClick={() => navigate({ to: '/caisse/analytique' })}
+        />
+        <ToolbarCell
+          icon={<Printer className="size-5" />}
+          label="Imprimer"
+          ariaLabel={
+            isValidated
+              ? 'Imprimer / PDF'
+              : 'Clôturez la caisse pour imprimer la feuille'
+          }
+          onClick={handleGeneratePdf}
+          disabled={!isValidated || pdfBusy}
+        />
+        <ToolbarCell
+          icon={<ChevronRight className="size-5" />}
+          label="Suiv."
+          ariaLabel="Shift suivant"
+          onClick={() => goStep(1)}
+          disabled={atLatestSlot}
+        />
+      </MobileToolbar>
     </div>
   )
 }

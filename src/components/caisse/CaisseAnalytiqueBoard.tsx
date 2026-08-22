@@ -1,14 +1,16 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
+import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react'
 
-import { AnalytiqueShell } from '#/components/analytique/AnalytiqueShell.tsx'
+import { AnalytiqueShell, ToolbarCell } from '#/components/analytique/AnalytiqueShell.tsx'
 import { AnalytiqueTable } from '#/components/analytique/AnalytiqueTable.tsx'
 import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
-import { YearNav } from '#/components/analytique/YearNav.tsx'
+import { useYearNav } from '#/components/analytique/YearNav.tsx'
 import { useAnnualYear } from '#/components/analytique/useAnnualYear.ts'
 import { subText } from '#/components/analytique/AnalytiqueCards.tsx'
 import { KpiLineChart } from '#/components/analytique/KpiLineChart.tsx'
+import { StepNav } from '#/components/shared/StepNav.tsx'
 import {
   CaisseAnalytiqueCards,
   CaisseStatCells,
@@ -58,6 +60,15 @@ export function CaisseAnalytiqueBoard() {
 
   // Année sélectionnée + recalage si absente de la liste (hook partagé).
   const { year, setYear } = useAnnualYear(years, currentYear)
+  // Navigation d'année, extraite du composant `YearNav` (au lieu de le poser
+  // tel quel en `actions`) : `mobileToolbar` a besoin des mêmes goPrev/goNext
+  // pour ses propres cellules, comme sur RaproAnalytiqueBoard.
+  const { goPrev, goNext, prevDisabled, nextDisabled } = useYearNav({
+    year,
+    setYear,
+    years,
+    currentYear,
+  })
 
   const months = useMemo(
     () => aggregateCaisseMonthly(sheets, year, cautions),
@@ -91,14 +102,53 @@ export function CaisseAnalytiqueBoard() {
   return (
     <AnalytiqueShell
       title="Analytique"
+      mobileIdentity={`Analytique ${year}`}
       actions={
-        <YearNav
-          year={year}
-          setYear={setYear}
-          years={years}
-          currentYear={currentYear}
-        />
+        // enlargeOnNarrow={false} : ce groupe n'est JAMAIS montré sur écran
+        // tactile (barre basse dédiée dès qu'un doigt est détecté, cf.
+        // mobileToolbar plus bas) — l'agrandir à un simple rétrécissement de
+        // fenêtre désaccorderait sa taille de celle du bouton Imprimer voisin,
+        // resté fixe.
+        <StepNav
+          onPrev={goPrev}
+          onNext={goNext}
+          prevLabel="Année précédente"
+          nextLabel="Année suivante"
+          prevDisabled={prevDisabled}
+          nextDisabled={nextDisabled}
+          enlargeOnNarrow={false}
+        >
+          <span className="inline-flex h-8 items-center justify-center border bg-background px-3 text-sm font-medium tabular-nums shadow-xs dark:border-input dark:bg-input/30">
+            {year}
+          </span>
+        </StepNav>
       }
+      mobileToolbar={(printCell) => (
+        <>
+          <ToolbarCell
+            icon={<ChevronLeft className="size-5" />}
+            label="Préc."
+            ariaLabel="Année précédente"
+            onClick={goPrev}
+            disabled={prevDisabled}
+            bordered={false}
+          />
+          <ToolbarCell
+            icon={<ArrowLeft className="size-5" />}
+            label="Retour"
+            ariaLabel="Retour à la caisse"
+            onClick={() => navigate({ to: '/caisse' })}
+          />
+          {printCell}
+          <ToolbarCell
+            icon={<ChevronRight className="size-5" />}
+            label="Suiv."
+            ariaLabel="Année suivante"
+            onClick={goNext}
+            disabled={nextDisabled}
+          />
+        </>
+      )}
       loading={loading}
       skeleton={{ cols: 6, charts: 1, rows: 12 }}
       printTitle={`Caisse · ${year}`}
