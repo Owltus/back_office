@@ -75,10 +75,15 @@ export function ToolbarCell({
  * MODE MOBILE (`mobileIdentity` / `mobileToolbar`) : mêmes mécanismes que /rapro,
  * exposés en props STRICTEMENT OPTIONNELLES pour ne rien changer aux 8 autres
  * pages analytique (repjour/PDJ/parking/caisse) qui ne les activent pas.
- * `mobileIdentity` déplace `title` en sous-titre de la Navbar globale sous
- * 1024px (voir lib/navbarSubtitle.ts) ; `mobileToolbar` remplace les `actions`
- * de l'en-tête par une barre d'outils basse fixe sous 640px, à laquelle le
- * shell fournit sa propre cellule Imprimer (le board place les siennes autour).
+ * `mobileIdentity` déplace un contenu (fourni par le board, PAS forcément égal
+ * à `title` — ex. « Analytique 2026 » quand `title` reste « Analytique » sur
+ * l'en-tête desktop, où l'année est déjà visible à côté via YearNav) en
+ * sous-titre de la Navbar globale sous 1024px (voir lib/navbarSubtitle.ts) :
+ * l'année/le mois n'y est sinon plus visible nulle part, la barre basse ayant
+ * remplacé le `YearNav`/bouton retour de l'en-tête. `mobileToolbar` remplace
+ * les `actions` de l'en-tête par une barre d'outils basse fixe sous 640px, à
+ * laquelle le shell fournit sa propre cellule Imprimer (le board place les
+ * siennes autour).
  */
 export function AnalytiqueShell({
   title,
@@ -86,7 +91,7 @@ export function AnalytiqueShell({
   loading = false,
   skeleton,
   printTitle,
-  mobileIdentity = false,
+  mobileIdentity,
   mobileToolbar,
   children,
 }: {
@@ -104,10 +109,15 @@ export function AnalytiqueShell({
   /** Active le bouton « Imprimer / PDF » et sert de titre au document
    *  (ex. « Caisse · 2026 »). Absent → page non imprimable, pas de bouton. */
   printTitle?: string
-  /** Sous 1024px, déplace `title` dans la Navbar globale (sous-titre de page)
-   *  au lieu de l'en-tête — même mécanisme que /rapro. Absent (défaut) :
-   *  comportement actuel inchangé. */
-  mobileIdentity?: boolean
+  /** Sous 1024px, déplace ce contenu dans la Navbar globale (sous-titre de
+   *  page) et retire `title` de l'en-tête — même mécanisme que /rapro. N'est
+   *  PAS forcément égal à `title` : la vue annuelle passe ici « Analytique
+   *  2026 » alors que `title` reste « Analytique » sur l'en-tête desktop, où
+   *  l'année est déjà visible via YearNav — sur la Navbar (mobile), c'est le
+   *  seul endroit qui la montre encore, la barre basse ayant remplacé le
+   *  `YearNav`/bouton retour de l'en-tête. Absent (défaut) : comportement
+   *  actuel inchangé. */
+  mobileIdentity?: ReactNode
   /** Cellules PROPRES au board (navigation temporelle, retour…) pour la barre
    *  d'outils basse fixe sous 640px ; reçoit la cellule Imprimer déjà construite
    *  par le shell (`null` si `printTitle` absent) à placer où le board veut.
@@ -119,7 +129,7 @@ export function AnalytiqueShell({
   const rootRef = useRef<HTMLDivElement>(null)
   const isNavbarMobile = useMatchMedia('(max-width: 1023.98px)')
   const showTopToolbar = useMatchMedia('(min-width: 640px)')
-  useNavbarSubtitle(mobileIdentity ? title : null)
+  useNavbarSubtitle(mobileIdentity ?? null)
 
   const handlePrint = () => {
     const root = rootRef.current
@@ -182,7 +192,7 @@ export function AnalytiqueShell({
         )}
       >
         <PageHeader
-          title={mobileIdentity && isNavbarMobile ? undefined : title}
+          title={mobileIdentity != null && isNavbarMobile ? undefined : title}
           actions={desktopActions}
         />
         {loading ? <AnalytiqueSkeleton {...skeleton} /> : children}

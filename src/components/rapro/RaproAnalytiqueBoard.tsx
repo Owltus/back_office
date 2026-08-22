@@ -133,7 +133,7 @@ export function RaproAnalytiqueBoard() {
   return (
     <AnalytiqueShell
       title="Analytique"
-      mobileIdentity
+      mobileIdentity={`Analytique ${year}`}
       actions={
         <StepNav
           onPrev={goPrev}

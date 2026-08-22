@@ -339,14 +339,20 @@ rejoindre ce langage.
   retiré sur demande explicite (jugé pas pratique) ; ne pas le réintroduire
   sans qu'on le redemande.
 - **Exposée par le socle analytique (`AnalytiqueShell`) via deux props
-  opt-in** : `mobileIdentity` (déplace `title` en sous-titre Navbar sous
-  1024px) et `mobileToolbar` (barre basse fixe sous 640px, le shell y insère
-  lui-même sa cellule Imprimer déjà construite — `ToolbarCell`, exporté par
-  `AnalytiqueShell.tsx` — le board ne fournit que ses cellules de navigation
-  propres). Les deux props sont absentes par défaut : sans elles, une page
-  analytique garde exactement son rendu d'avant. **Consommé aujourd'hui
-  uniquement par les deux vues Rapprochement** (annuelle : pager
-  Préc./Imprimer/Suiv. sur l'année ; mensuelle : Retour/Imprimer) — les 8
+  opt-in** : `mobileIdentity` (contenu déplacé en sous-titre Navbar sous
+  1024px — PAS forcément égal à `title` : la vue annuelle y passe « Analytique
+  2026 » alors que `title` reste « Analytique » sur l'en-tête desktop, où
+  l'année est déjà visible via `YearNav` ; sur la Navbar mobile c'est le seul
+  endroit qui la montre encore, la barre basse ayant remplacé ce `YearNav`/le
+  bouton retour de l'en-tête) et `mobileToolbar` (barre basse fixe sous 640px,
+  le shell y insère lui-même sa cellule Imprimer déjà construite —
+  `ToolbarCell`, exporté par `AnalytiqueShell.tsx` — le board ne fournit que
+  ses cellules de navigation propres). Les deux props sont absentes par
+  défaut : sans elles, une page analytique garde exactement son rendu d'avant.
+  **Consommé aujourd'hui uniquement par les deux vues Rapprochement**
+  (annuelle : sous-titre « Analytique 2026 », pager Préc./Imprimer/Suiv. sur
+  l'année ; mensuelle : sous-titre « Analytique Août 2026 »,
+  Retour/Imprimer) — les 8
   autres pages du socle (RepJour/PDJ/Parking/Caisse × annuel+mensuel) n'ont
   pas ce mode ; ne pas présumer qu'elles l'ont sans vérifier le code.
 

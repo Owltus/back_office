@@ -72,7 +72,7 @@ export function RaproMonthlyBoard({
   return (
     <AnalytiqueShell
       title={monthLabel}
-      mobileIdentity
+      mobileIdentity={`Analytique ${monthLabel}`}
       actions={<AnalytiqueBackButton />}
       mobileToolbar={(printCell) => (
         <>
