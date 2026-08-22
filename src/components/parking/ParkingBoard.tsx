@@ -1225,14 +1225,23 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
       ? `${fmtDay.format(first)} – ${fmtDayYear.format(last)}`
       : `${fmtDayYear.format(first)} – ${fmtDayYear.format(last)}`
   })()
-  // Sous 1024px (Navbar globale en mode hamburger), la plage de dates vit dans
-  // la Navbar (sous-titre, à côté du nom de page) plutôt que dans l'en-tête de
-  // page — même mécanisme que Rapprochement/RepJour, seuil VOLONTAIREMENT
-  // identique à celui de la Navbar elle-même (hamburger ↔ onglets), pas celui,
-  // indépendant, de la densité géométrique de la grille (768px). `|| null`
-  // (pas la chaîne vide) : en compact géométrique (<768px), `rangeLabel` est
-  // déjà vide — un sous-titre vide n'aurait rien à montrer.
-  useNavbarSubtitle(isNavbarMobile ? rangeLabel || null : null)
+  // Sous 1024px (Navbar globale en mode hamburger) ET à la souris, la plage de
+  // dates vit dans la Navbar (sous-titre, à côté du nom de page) plutôt que
+  // dans l'en-tête de page — même mécanisme que Rapprochement/RepJour, seuil
+  // VOLONTAIREMENT identique à celui de la Navbar elle-même (hamburger ↔
+  // onglets), pas celui, indépendant, de la densité géométrique de la grille
+  // (768px). `|| null` (pas la chaîne vide) : en compact géométrique
+  // (<768px), `rangeLabel` est déjà vide — un sous-titre vide n'aurait rien à
+  // montrer.
+  //
+  // JAMAIS sur écran tactile (`!isTouchDevice`), tablette large comprise :
+  // chaque colonne de la grille affiche déjà sa propre date en en-tête — ce
+  // sous-titre y serait redondant et grignote une hauteur précieuse sur un
+  // écran déjà court. Le mode souris (bureau, fenêtre étroite comprise) garde
+  // le comportement d'origine, inchangé.
+  useNavbarSubtitle(
+    isNavbarMobile && !isTouchDevice ? rangeLabel || null : null,
+  )
 
   // Gate de PREMIER affichage seulement : l'en-tête et la colonne des places
   // sont rendus tout de suite, seul le corps du planning part en squelette tant
@@ -1688,7 +1697,15 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
 
       {/* Légende — sous le planning. Gestes souris à GAUCHE (le glyphe montre déjà
           le bouton, façon rapro), statuts couleur à DROITE. Les gestes n'existent
-          qu'en édition ; en lecture seule, les statuts restent alignés à droite. */}
+          qu'en édition ; en lecture seule, les statuts restent alignés à droite.
+          Masquée entièrement sur écran tactile (tablette et téléphone) :
+          l'espace vertical y est précieux, et les gestes souris n'y ont de
+          toute façon aucun sens (`canEdit` déjà faux en tactile, cf. D3) —
+          quant aux couleurs de statut, jugées assez instinctives pour ne pas
+          avoir besoin d'être rappelées là, comme la légende de gestes de
+          Rapprochement retirée en mobile pour la même raison. Inchangée à la
+          souris, quelle que soit la largeur. */}
+      {!isTouchDevice && (
       <div
         className={cn(
           'flex flex-wrap items-center gap-x-6 gap-y-2 text-xs',
@@ -1720,6 +1737,7 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
           </span>
         </div>
       </div>
+      )}
 
       {/* Modal d'aide : tutoriel factuel de la page (bouton « ? »). Le contenu
           reste en place dessous. */}
