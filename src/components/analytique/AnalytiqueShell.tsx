@@ -5,51 +5,21 @@ import { PageContainer } from '#/components/shared/PageContainer.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
 import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
-import { useMatchMedia } from '#/components/shared/useMatchMedia.ts'
+import {
+  useResponsiveShell,
+  isTouchDeviceNow,
+} from '#/components/shared/useResponsiveShell.ts'
+import { MobileToolbar, ToolbarCell } from '#/components/shared/MobileToolbar.tsx'
 import { useNavbarSubtitle } from '#/lib/navbarSubtitle.ts'
 import { AnalytiqueSkeleton } from '#/components/analytique/AnalytiqueSkeleton.tsx'
 import { printAnalytique } from '#/lib/analytique/pdf.ts'
 import { cn } from '#/lib/utils.ts'
 
-/**
- * Cellule de la barre d'outils basse mobile : icône au-dessus du libellé,
- * `flex-1`, même gabarit que la barre basse de /rapro (première page à
- * l'avoir reçue). Partagée par le shell (cellule Imprimer, voir
- * `mobileToolbar` ci-dessous) et par les boards qui l'activent (leurs propres
- * cellules de navigation).
- */
-export function ToolbarCell({
-  icon,
-  label,
-  onClick,
-  disabled = false,
-  ariaLabel,
-  bordered = true,
-}: {
-  icon: ReactNode
-  label: string
-  onClick: () => void
-  disabled?: boolean
-  ariaLabel: string
-  /** Filet vertical à gauche de la cellule — faux pour la 1re cellule d'une barre. */
-  bordered?: boolean
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={ariaLabel}
-      className={cn(
-        'flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-muted-foreground transition-colors active:bg-accent active:text-foreground disabled:pointer-events-none disabled:opacity-40',
-        bordered && 'border-l border-border',
-      )}
-    >
-      {icon}
-      <span className="text-[11px] font-medium">{label}</span>
-    </button>
-  )
-}
+// `ToolbarCell` vit désormais dans `shared/MobileToolbar.tsx` (socle commun à
+// toutes les pages, pas seulement analytique) — ré-exporté ici pour ne rien
+// casser des imports existants (`RaproAnalytiqueBoard.tsx`, `RaproMonthlyBoard.tsx`
+// l'importent depuis ce fichier).
+export { ToolbarCell }
 
 /*
  * Coquille commune des pages analytique (parentes annuelles ET enfants mensuelles).
@@ -138,8 +108,7 @@ export function AnalytiqueShell({
   children: ReactNode
 }) {
   const rootRef = useRef<HTMLDivElement>(null)
-  const isNavbarMobile = useMatchMedia('(max-width: 1023.98px)')
-  const isTouchDevice = useMatchMedia('(hover: none) and (pointer: coarse)')
+  const { isNavbarMobile, isTouchDevice } = useResponsiveShell()
   // GATÉ par `isNavbarMobile` (≠ posé inconditionnellement) : sans ce garde,
   // le sous-titre resterait posé même quand la Navbar n'en montre plus rien
   // (≥ 1024px), un résidu qui ne se nettoierait qu'au démontage complet du
@@ -155,10 +124,7 @@ export function AnalytiqueShell({
     // (l'iframe cachée + autoPrint marche déjà sur ordinateur) — détecté par
     // pointeur, pas par largeur d'écran, pour ne pas casser un navigateur de
     // bureau redimensionné en fenêtre étroite.
-    const isTouchDevice = window.matchMedia(
-      '(hover: none) and (pointer: coarse)',
-    ).matches
-    const printWindow = isTouchDevice ? window.open('', '_blank') : null
+    const printWindow = isTouchDeviceNow() ? window.open('', '_blank') : null
     void printAnalytique(root, printTitle, printWindow)
   }
   usePrintShortcut(handlePrint)
@@ -225,14 +191,9 @@ export function AnalytiqueShell({
         />
         {loading ? <AnalytiqueSkeleton {...skeleton} /> : children}
       </div>
-      {mobileToolbar && isTouchDevice && (
-        <nav
-          className="fixed inset-x-0 bottom-0 z-30 flex items-stretch border-t border-border bg-card/95 backdrop-blur-md"
-          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-        >
-          {mobileToolbar(printToolbarCell)}
-        </nav>
-      )}
+      <MobileToolbar visible={Boolean(mobileToolbar) && isTouchDevice}>
+        {mobileToolbar?.(printToolbarCell)}
+      </MobileToolbar>
     </PageContainer>
   )
 }
