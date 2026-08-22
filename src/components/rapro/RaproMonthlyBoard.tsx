@@ -2,13 +2,15 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useRouter } from '@tanstack/react-router'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react'
 
 import { AnalytiqueShell, ToolbarCell } from '#/components/analytique/AnalytiqueShell.tsx'
 import { AnalytiqueTable } from '#/components/analytique/AnalytiqueTable.tsx'
 import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
 import { AnalytiqueBackButton } from '#/components/analytique/AnalytiqueBackButton.tsx'
 import { KpiStackedBarChart } from '#/components/analytique/KpiStackedBarChart.tsx'
+import { StepNav } from '#/components/shared/StepNav.tsx'
+import { useStepNavKeys } from '#/components/shared/useStepNavKeys.ts'
 import {
   RaproAnalytiqueCards,
   RAPRO_CHART_SEGMENTS,
@@ -18,6 +20,7 @@ import {
 import { parseDateStr } from '#/lib/poster/dateFormatter.ts'
 import { capitalize } from '#/lib/utils.ts'
 import { cleaned, fetchRaproDailyAgg, monthlyRows } from '#/lib/rapro/monthly.ts'
+import { fetchOldestDay } from '#/lib/rapro/service.ts'
 
 /**
  * Détail d'un MOIS — harmonisé sur le socle analytique partagé. 5 cartes de
@@ -69,21 +72,79 @@ export function RaproMonthlyBoard({
   const navigate = useNavigate()
   const router = useRouter()
 
+  // Bornes de la navigation mois par mois : du plus ancien jour saisi (comme la
+  // vue annuelle) au mois courant — jamais dans le futur.
+  const { data: oldest } = useQuery({
+    queryKey: ['rapro', 'oldest'],
+    queryFn: fetchOldestDay,
+  })
+  const now = new Date()
+  const currentYear = now.getFullYear()
+  const currentMonth = now.getMonth() + 1
+  const minYear = oldest ? Number(oldest.slice(0, 4)) : currentYear
+  const minMonth = oldest ? Number(oldest.slice(5, 7)) : currentMonth
+  const prevDisabled = year < minYear || (year === minYear && month <= minMonth)
+  const nextDisabled =
+    year > currentYear || (year === currentYear && month >= currentMonth)
+
+  const goToMonth = (y: number, m: number) =>
+    navigate({
+      to: '/rapro/analytique/$year/$month',
+      params: { year: String(y), month: String(m) },
+    })
+  const goPrev = () =>
+    goToMonth(month === 1 ? year - 1 : year, month === 1 ? 12 : month - 1)
+  const goNext = () =>
+    goToMonth(month === 12 ? year + 1 : year, month === 12 ? 1 : month + 1)
+  useStepNavKeys({
+    onPrev: goPrev,
+    onNext: goNext,
+    onToday: () => goToMonth(currentYear, currentMonth),
+    prevDisabled,
+    nextDisabled,
+  })
+
   return (
     <AnalytiqueShell
       title={monthLabel}
       mobileIdentity={`Analytique ${monthLabel}`}
-      actions={<AnalytiqueBackButton />}
+      actions={
+        <>
+          <AnalytiqueBackButton />
+          <StepNav
+            onPrev={goPrev}
+            onNext={goNext}
+            prevLabel="Mois précédent"
+            nextLabel="Mois suivant"
+            prevDisabled={prevDisabled}
+            nextDisabled={nextDisabled}
+          />
+        </>
+      }
       mobileToolbar={(printCell) => (
         <>
+          <ToolbarCell
+            icon={<ChevronLeft className="size-5" />}
+            label="Préc."
+            ariaLabel="Mois précédent"
+            onClick={goPrev}
+            disabled={prevDisabled}
+            bordered={false}
+          />
           <ToolbarCell
             icon={<ArrowLeft className="size-5" />}
             label="Retour"
             ariaLabel="Retour à l'analytique"
             onClick={() => router.history.back()}
-            bordered={false}
           />
           {printCell}
+          <ToolbarCell
+            icon={<ChevronRight className="size-5" />}
+            label="Suiv."
+            ariaLabel="Mois suivant"
+            onClick={goNext}
+            disabled={nextDisabled}
+          />
         </>
       )}
       loading={loading}

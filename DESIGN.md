@@ -349,12 +349,18 @@ rejoindre ce langage.
   `ToolbarCell`, exporté par `AnalytiqueShell.tsx` — le board ne fournit que
   ses cellules de navigation propres). Les deux props sont absentes par
   défaut : sans elles, une page analytique garde exactement son rendu d'avant.
-  **Consommé aujourd'hui uniquement par les deux vues Rapprochement**
-  (annuelle : sous-titre « Analytique 2026 », barre basse
-  Préc./Retour/Imprimer/Suiv. sur l'année, le bouton Retour existant AUSSI en
-  desktop dans l'en-tête via `AnalytiqueBackButton` — la vue annuelle n'avait
-  jusque-là aucun moyen de revenir à `/rapro` ; mensuelle : sous-titre
-  « Analytique Août 2026 », Retour/Imprimer) — les 8
+  **Consommé aujourd'hui uniquement par les deux vues Rapprochement**, toutes
+  deux avec un pager Préc./Suiv. aux DEUX bords de la barre basse (même
+  convention que /rapro, § pager plus haut) et le bouton Retour existant AUSSI
+  en desktop dans l'en-tête via `AnalytiqueBackButton` :
+  - annuelle : sous-titre « Analytique 2026 », barre basse
+    Préc./Retour/Imprimer/Suiv. sur l'année — cette vue n'avait jusque-là
+    aucun moyen de revenir à `/rapro` ;
+  - mensuelle : sous-titre « Analytique Août 2026 », barre basse
+    Préc./Retour/Imprimer/Suiv. sur le mois (bornée du plus ancien jour saisi
+    au mois courant, jamais dans le futur — mêmes bornes que la vue annuelle).
+
+  Les 8
   autres pages du socle (RepJour/PDJ/Parking/Caisse × annuel+mensuel) n'ont
   pas ce mode ; ne pas présumer qu'elles l'ont sans vérifier le code.
 
