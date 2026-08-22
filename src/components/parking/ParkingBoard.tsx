@@ -315,6 +315,10 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
   // Hauteur du haut de la timeline au bas du viewport (mesurée) → sert à étirer les
   // rangées pour remplir l'écran en compact. 0 tant que non mesurée.
   const [availH, setAvailH] = useState(0)
+  // Hauteur RÉELLE de la barre d'outils basse tactile, rapportée par
+  // `MobileToolbar` (cf. son `onHeightChange`) — remplace la réserve
+  // `pb-20` devinée dès qu'elle est connue (cf. le retour du composant).
+  const [toolbarH, setToolbarH] = useState(0)
   const [reservations, setReservations] = useState<Reservation[]>([])
   // Échec d'écriture (création/déplacement) rejeté par la base — affiché plutôt
   // qu'un rollback silencieux (contrainte anti-chevauchement `EXCLUDE`, voir
@@ -1359,9 +1363,18 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
         // ci-dessous (écran tactile) reçoive une hauteur réellement bornée de
         // <main>/PageContainer plutôt que de forcer TOUTE la page à défiler —
         // cf. commentaire sur `heightRef` plus bas. Sans effet sur bureau.
+        //
+        // `pb-20` sert de repli GROSSIER tant que la vraie hauteur de la barre
+        // d'outils basse n'est pas encore mesurée (au tout premier rendu) ;
+        // dès que `toolbarH` est connu (cf. `onHeightChange` sur
+        // `MobileToolbar` plus bas), le style en ligne ci-dessous le
+        // remplace par la valeur EXACTE — une constante devinée dérive vite
+        // d'un appareil à l'autre (zone de sécurité variable), un écart même
+        // petit se voyait comme un vide en bas du tableau.
         'flex min-h-0 min-w-0 flex-1 flex-col gap-4',
         isTouchDevice && 'pb-20',
       )}
+      style={isTouchDevice && toolbarH ? { paddingBottom: toolbarH } : undefined}
     >
       {/* En-tête façon standard : plage de dates à GAUCHE (titre), navigation
           temporelle à DROITE (icône calendrier). La légende est passée sous le
@@ -1482,9 +1495,17 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
             : 'overflow-hidden',
         )}
       >
-        {/* Colonne fixe des places */}
+        {/* Colonne fixe des places. `min-h-0` : sans lui, un enfant flex garde
+            par défaut une hauteur minimale dictée par SON PROPRE contenu
+            (`min-height:auto`) et refuse le rétrécissement imposé par
+            `align-items:stretch` du parent — la colonne grandirait alors
+            au-delà de `heightRef`, avec un rendu incohérent selon que le
+            voisin (`timelineRef`) clippe ou non son propre débordement (cf.
+            son commentaire). Les DEUX colonnes doivent réagir IDENTIQUEMENT
+            à un contenu trop grand : laisser `heightRef`, seul, gérer le
+            débordement (scroll), pas chacune indépendamment. */}
         <div
-          className="shrink-0 border-r border-border"
+          className="min-h-0 shrink-0 border-r border-border"
           style={{ width: labelW }}
         >
           <div
@@ -1517,12 +1538,27 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
           ))}
         </div>
 
-        {/* Zone des jours (sans scrollbar : navigation par flèches). Le conteneur
-            porteur de `timelineRef` reste TOUJOURS monté — c'est lui que mesure
-            le ResizeObserver ; seul son contenu bascule en squelette pendant le
-            chargement, sinon la largeur ne serait jamais mesurée et le gate
-            resterait bloqué. */}
-        <div ref={timelineRef} className="min-w-0 flex-1 overflow-hidden">
+        {/* Zone des jours (jamais de scrollbar HORIZONTALE : navigation par
+            flèches). Le conteneur porteur de `timelineRef` reste TOUJOURS
+            monté — c'est lui que mesure le ResizeObserver ; seul son contenu
+            bascule en squelette pendant le chargement, sinon la largeur ne
+            serait jamais mesurée et le gate resterait bloqué.
+            `min-h-0` : cf. le commentaire de la colonne des places voisine.
+            Sur écran tactile, l'axe VERTICAL n'est PLUS clippé ici
+            (`overflow-x-hidden` seul, pas `overflow-hidden`) : un débordement
+            vertical doit remonter jusqu'à `heightRef`, seul niveau qui gère le
+            défilement — le clipper ICI le rendrait invisible ET non
+            défilable, alors que la colonne des places voisine (non clippée)
+            déborderait, elle, normalement : les deux colonnes désaccordées,
+            visuellement incohérentes. Inchangé à la souris
+            (`overflow-hidden` d'origine, sur les deux axes). */}
+        <div
+          ref={timelineRef}
+          className={cn(
+            'min-w-0 min-h-0 flex-1',
+            isTouchDevice ? 'overflow-x-hidden' : 'overflow-hidden',
+          )}
+        >
           {loading ? (
             // Reflet du corps : même hauteur que la colonne des places (en-tête
             // + rangées) pour ne pas provoquer de saut au passage au planning.
@@ -1919,7 +1955,7 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
           (STEP = 3 jours). Le panoramique (glisser une zone vide du
           planning) reste actif à tout pointeur/toute largeur, indépendant de
           cette barre. */}
-      <MobileToolbar visible={isTouchDevice}>
+      <MobileToolbar visible={isTouchDevice} onHeightChange={setToolbarH}>
         <ToolbarCell
           icon={<ChevronLeft className="size-5" />}
           label="Préc."

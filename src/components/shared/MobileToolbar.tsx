@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { useEffect, useRef } from 'react'
 
 import { cn } from '#/lib/utils.ts'
 
@@ -48,17 +49,39 @@ export function ToolbarCell({
  * — l'appelant décide (typiquement `isTouchDevice` de `useResponsiveShell`),
  * ce composant ne fait pas sa propre détection pour rester composable avec un
  * hook déjà calculé une fois par board.
+ *
+ * `onHeightChange` (optionnel) : rapporte la hauteur RÉELLEMENT rendue de la
+ * barre (`ResizeObserver`, safe-area incluse) à chaque changement — un
+ * appelant qui réserve de la place sous son contenu pour cette barre fixe
+ * (padding-bottom) peut alors utiliser cette valeur exacte au lieu de deviner
+ * une constante, qui dérive vite d'un appareil à l'autre (safe-area variable).
  */
 export function MobileToolbar({
   visible,
+  onHeightChange,
   children,
 }: {
   visible: boolean
+  onHeightChange?: (height: number) => void
   children: ReactNode
 }) {
+  const ref = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    if (!visible || !onHeightChange) return
+    const el = ref.current
+    if (!el) return
+    const measure = () => onHeightChange(el.offsetHeight)
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    measure()
+    return () => ro.disconnect()
+  }, [visible, onHeightChange])
+
   if (!visible) return null
   return (
     <nav
+      ref={ref}
       className="fixed inset-x-0 bottom-0 z-30 flex items-stretch border-t border-border bg-card/95 backdrop-blur-md"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
