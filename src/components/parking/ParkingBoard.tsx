@@ -517,8 +517,21 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
   }, [startDate, refetchReservations])
 
   // Mesure de la largeur (→ nombre de jours) ET de la hauteur disponible sous la
-  // timeline (→ étirement des rangées en compact). Recalculées au redimensionnement
-  // du conteneur (RO) et de la fenêtre (rotation, clavier virtuel, reflow d'en-tête).
+  // timeline (→ étirement des rangées en compact/tactile). Recalculées au
+  // redimensionnement du conteneur (RO) et de la fenêtre (rotation, clavier
+  // virtuel, reflow d'en-tête).
+  //
+  // `isNavbarMobile`/`isTouchDevice` dans les dépendances : `useMatchMedia`
+  // répond `false` au tout premier rendu (SSR-safe), le temps d'un effet, AVANT
+  // de se corriger à la vraie valeur — l'en-tête est donc encore plein format
+  // (titre + actions) lors du TOUT PREMIER appel de `measure()`. Une fois
+  // corrigé, l'en-tête peut se réduire à RIEN du tout (`PageHeader` retourne
+  // `null`), ce qui déplace la timeline vers le haut SANS changer sa propre
+  // taille — le `ResizeObserver`, qui ne surveille QUE la taille de l'élément
+  // observé (pas sa position), ne se redéclenche alors jamais tout seul. Sans
+  // ce garde, la hauteur disponible restait calculée sur l'ancien en-tête,
+  // plus haut que nécessaire, laissant une marge vide en bas du tableau que
+  // rien ne venait jamais combler.
   useEffect(() => {
     const el = timelineRef.current
     if (!el) return
@@ -534,7 +547,7 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
       ro.disconnect()
       window.removeEventListener('resize', measure)
     }
-  }, [startDate])
+  }, [startDate, isNavbarMobile, isTouchDevice])
 
   // Largeur mini d'un jour : réduite en compact → colonnes plus étroites, plus de
   // jours visibles à l'écran (on ne montre que les zones colorées, pas les noms).
