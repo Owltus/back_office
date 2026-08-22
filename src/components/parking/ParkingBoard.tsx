@@ -116,12 +116,22 @@ import { fetchDay as fetchPdjDay } from '#/lib/pdj/service.ts'
 
 const MIN_DAY_W = 140 // largeur minimale d'un jour (les colonnes remplissent la largeur)
 const COMPACT_DAY_W = 64 // largeur minimale d'un jour en mode compact (téléphone)
-// Compact : les rangées s'ÉTIRENT pour remplir la hauteur disponible (pas de vide
-// sous le tableau). Bornes de sécurité + réserve pour la légende / marges sous la
-// carte (au-delà, la page défile plutôt que d'écraser les rangées).
+// Sur écran TACTILE (téléphone ET tablette — `isTouchDevice`, pas `isCompact` :
+// la densité géométrique et l'étirement des rangées sont deux préoccupations
+// distinctes, cf. D3), les rangées s'ÉTIRENT pour remplir la hauteur disponible
+// (pas de vide sous le tableau, pas de défilement de page). Bornes de sécurité
+// + réserve pour la légende / marges sous la carte (au-delà, la page défile
+// plutôt que d'écraser les rangées).
 const COMPACT_MIN_ROW_H = 30
 const COMPACT_MAX_ROW_H = 60
 const COMPACT_BOTTOM_GAP = 64
+// Réserve pour la barre d'outils basse fixe sur écran tactile — DOIT rester
+// synchronisé avec la classe `pb-20` (5rem = 80px) posée sur le conteneur
+// racine : c'est cette marge que la barre masquerait sinon, ici soustraite de
+// la hauteur que la grille croit disponible pour ne pas provoquer un
+// défilement de page (la grille se sait « raccourcie » avant de calculer la
+// hauteur de ses rangées, plutôt qu'après).
+const MOBILE_TOOLBAR_RESERVE_H = 80
 const ROW_H = 44
 const HEADER_H = 52
 const LABEL_W = 56
@@ -534,20 +544,39 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
     containerW > 0 ? Math.max(1, Math.floor(containerW / dayMinW)) : 0
   const dayW = visibleDays > 0 ? containerW / visibleDays : dayMinW
   const slotW = dayW / SLOTS_PER_DAY
-  // Densité en compact : en-tête + colonne des places rétrécis, et rangées ÉTIRÉES
-  // pour remplir la hauteur disponible (14 rangées occupent tout l'écran, sans vide
-  // dessous). Bornées entre un mini et un maxi ; au-delà du mini, la page défile.
+  // Densité géométrique (en-tête + colonne des places rétrécis) : liée à la
+  // LARGEUR seule (`isCompact`, inchangé — cf. D3, séparé de la capacité
+  // d'édition).
+  //
+  // L'étirement des rangées pour remplir la hauteur disponible (pas de
+  // défilement de page) s'active sur DEUX cas désormais distincts, réunis par
+  // un OU : `isCompact` (fenêtre étroite <768px, y compris à la souris —
+  // comportement bureau PRÉEXISTANT, inchangé) OU `isTouchDevice` (tablette
+  // tactile LARGE ≥768px comprise — nouveau : avant, une tablette au doigt
+  // gardait des rangées de hauteur FIXE, sans rapport avec la hauteur réelle
+  // de son écran, ce qui provoquait un défilement de page non voulu). Seul le
+  // second cas réserve la hauteur de la barre d'outils basse fixe
+  // (`MOBILE_TOOLBAR_RESERVE_H`, absente à la souris, où aucune barre basse
+  // n'existe). Bornées entre un mini et un maxi ; au-delà du mini, la page
+  // défile quand même plutôt que d'écraser les rangées à l'illisible.
   const headerH = isCompact ? 52 : HEADER_H
   const labelW = isCompact ? 40 : LABEL_W
-  const rowH = isCompact
-    ? Math.max(
-        COMPACT_MIN_ROW_H,
-        Math.min(
-          COMPACT_MAX_ROW_H,
-          Math.floor((availH - headerH - COMPACT_BOTTOM_GAP) / SPOTS),
-        ),
-      )
-    : ROW_H
+  const rowH =
+    isCompact || isTouchDevice
+      ? Math.max(
+          COMPACT_MIN_ROW_H,
+          Math.min(
+            COMPACT_MAX_ROW_H,
+            Math.floor(
+              (availH -
+                headerH -
+                COMPACT_BOTTOM_GAP -
+                (isTouchDevice ? MOBILE_TOOLBAR_RESERVE_H : 0)) /
+                SPOTS,
+            ),
+          ),
+        )
+      : ROW_H
 
   // Agrandissement de la fenêtre chargée quand la vue approche d'un bord (jamais de
   // rétrécissement). Un seul agrandissement couvre même un saut lointain (lien
