@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { format } from 'date-fns'
@@ -723,44 +723,9 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   // Sous 1024px, la Navbar globale affiche ce jour sous « Rapprochement » (à la
   // place de la marque) — le titre de page ci-dessous s'efface d'autant pour ne
   // pas le répéter. Se retire tout seul au démontage (changement de page).
-  //
-  // Rendu TAPPABLE (DatePickerButton, trigger personnalisé) plutôt qu'un texte
-  // plat : la barre d'outils basse mobile n'a plus de bouton calendrier dédié
-  // (retiré — cf. la barre plus bas) précisément parce qu'un jour affiché déjà
-  // visible ici, sur lequel on peut taper pour en choisir un autre, rend ce
-  // bouton séparé redondant plutôt que de le caser une deuxième fois quelque
-  // part. Le popover et sa logique (bornes, jours désactivés) restent ceux de
-  // DatePickerButton — seul le déclencheur change.
-  //
-  // `useMemo` (pas l'élément recréé en ligne à chaque rendu) : `useNavbarSubtitle`
-  // dépend de l'IDENTITÉ de l'élément (`useEffect([node])`) — un objet JSX neuf à
-  // chaque rendu de RaproBoard aurait reposé le sous-titre en boucle (une simple
-  // frappe dans le commentaire, par ex., aurait suffi), la Navbar se re-rendant à
-  // chaque fois pour rien. Recalculé seulement quand une des dépendances change
-  // vraiment.
-  const navbarSubtitle = useMemo(
-    () => (
-      <DatePickerButton
-        value={selectedDate}
-        onChange={goDate}
-        min={lowerDay}
-        max={todayStr}
-        enabledDates={pickerDates}
-        todayValue={todayStr}
-        ariaLabel="Choisir un jour"
-        trigger={
-          <button
-            type="button"
-            className="-mx-1 -my-0.5 truncate rounded px-1 py-0.5 text-left text-xs text-muted-foreground underline decoration-dotted underline-offset-2"
-          >
-            {title}
-          </button>
-        }
-      />
-    ),
-    [selectedDate, lowerDay, todayStr, pickerDates, title, goDate],
-  )
-  useNavbarSubtitle(navbarSubtitle)
+  // Texte simple, non interactif (le tap-pour-ouvrir-le-calendrier essayé ici a
+  // été retiré sur demande explicite).
+  useNavbarSubtitle(title)
 
   // Rien à annoncer avant que l'occupation et la feuille soient chargées : la
   // pastille se contredirait le temps d'un rendu. En secours, on affiche

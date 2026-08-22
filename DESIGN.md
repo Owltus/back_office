@@ -289,11 +289,13 @@ rejoindre ce langage.
   peut y poser un texte discret — le jour affiché sur Rapprochement, par exemple
   — quand ce jour a été retiré du corps de page pour économiser la place. Texte
   atténué (`text-muted-foreground`), plus petit que le nom de page, jamais du
-  même poids visuel. Peut être TAPPABLE (soulignement pointillé plutôt qu'un
-  simple texte, ex. le sélecteur de date de Rapprochement) : dans ce cas,
-  toujours un FRÈRE du lien « Accueil » (logo + nom de page), jamais un enfant
-  — un bouton imbriqué dans un `<a>` est invalide en HTML, et le clic active le
-  lien parent au lieu du contrôle voulu.
+  même poids visuel. Purement informatif, PAS interactif (essayé puis retiré
+  sur demande explicite : le tap ouvrait un calendrier, jugé pas voulu là).
+- **Nom de page non cliquable en mobile** : contrairement au logo (raccourci
+  « Accueil » constant, icône réduite), le nom de page/sous-titre ne navigue
+  nulle part sous 1024px — un tap dessus ne doit jamais faire quitter la page
+  courante par accident ; les onglets restent à un tap dans le tiroir
+  hamburger, la voie volontaire.
 - **Badge de page** (optionnel, à côté du bouton hamburger, PAS à côté du nom de
   page) : une icône de statut (le cadenas clôturé/ouvert de Rapprochement), même
   couleur que sa version texte du corps de page. Les deux partagent le même
@@ -330,11 +332,12 @@ rejoindre ce langage.
   cluster de contrôles compressés dans une seule cellule (flèches + calendrier
   fondus ensemble) est un anti-pattern sur cette barre, pas une variante
   acceptable.
-- **Pas de bouton calendrier séparé si le jour est déjà affiché ailleurs :**
-  quand le sous-titre de la Navbar (voir Navigation) montre déjà le jour
-  courant, il DEVIENT lui-même le sélecteur de date (trigger personnalisé
-  d'un `DatePickerButton` existant, jamais un second contrôle redondant dans
-  la barre basse pour la même donnée).
+- **Sans sélecteur de date en mobile, pour l'instant :** Rapprochement s'y
+  parcourt uniquement jour par jour (Précédent/Suivant) — pas de bouton
+  calendrier dans la barre basse ni ailleurs sous 1024px. Un déclencheur
+  calendrier personnalisé sur le sous-titre de la Navbar a été essayé, puis
+  retiré sur demande explicite (jugé pas pratique) ; ne pas le réintroduire
+  sans qu'on le redemande.
 
 ### Tooltip
 - Fond `bg-foreground` / texte `bg-background` : s'inverse automatiquement entre clair

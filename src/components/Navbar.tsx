@@ -167,24 +167,18 @@ export function Navbar() {
             <Logo className="size-7" />
           </Link>
           <div className="flex min-w-0 flex-col justify-center lg:hidden">
-            {/* Nom de page : lien « Accueil » séparé, PAS le même élément que
-                le sous-titre en dessous. Le sous-titre (posé par une page, ex.
-                le jour de Rapprochement) peut lui-même être tappable (voir
-                DatePickerButton en trigger personnalisé) — il ne doit donc
-                JAMAIS finir imbriqué dans un lien : un bouton dans un `<a>`
-                est invalide, et le clic dessus déclenchait la navigation du
-                lien au lieu d'ouvrir son propre popover. */}
-            <Link
-              to="/repjour"
-              aria-label="Accueil"
-              className="truncate text-lg leading-tight font-bold tracking-tight"
-            >
+            {/* Nom de page : purement informatif en mobile, PAS un lien — les
+                onglets sont dans le tiroir hamburger, à un tap de là ; cliquer
+                le nom de page ne doit pas faire quitter la page courante par
+                accident. Le logo, lui, reste le raccourci « Accueil » (petite
+                icône, faible risque de mauvais tap). */}
+            <span className="truncate text-lg leading-tight font-bold tracking-tight">
               {currentPage?.label ?? 'Back Office'}
-            </Link>
+            </span>
             {subtitle != null && (
-              <div className="min-w-0 truncate text-xs leading-tight text-muted-foreground">
+              <span className="min-w-0 truncate text-xs leading-tight text-muted-foreground">
                 {subtitle}
-              </div>
+              </span>
             )}
           </div>
         </div>
