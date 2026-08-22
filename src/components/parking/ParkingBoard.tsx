@@ -118,12 +118,11 @@ const MIN_DAY_W = 140 // largeur minimale d'un jour (les colonnes remplissent la
 const COMPACT_DAY_W = 64 // largeur minimale d'un jour en mode compact (téléphone)
 // Sur écran TACTILE (téléphone ET tablette — `isTouchDevice`, pas `isCompact` :
 // la densité géométrique et l'étirement des rangées sont deux préoccupations
-// distinctes, cf. D3), les rangées s'ÉTIRENT pour remplir la hauteur disponible
-// (pas de vide sous le tableau, pas de défilement de page). Bornes de sécurité
-// + réserve pour la légende / marges sous la carte (au-delà, la page défile
-// plutôt que d'écraser les rangées).
+// distinctes, cf. D3), les rangées s'ÉTIRENT pour remplir TOUTE la hauteur
+// disponible, sans plafond (pas de vide sous le tableau) ; seul un plancher de
+// sécurité protège la lisibilité — en dessous, la page défile plutôt que
+// d'écraser les rangées. Réserve pour la légende / marges sous la carte.
 const COMPACT_MIN_ROW_H = 30
-const COMPACT_MAX_ROW_H = 60
 const COMPACT_BOTTOM_GAP = 64
 // Réserve pour la barre d'outils basse fixe sur écran tactile — DOIT rester
 // synchronisé avec la classe `pb-20` (5rem = 80px) posée sur le conteneur
@@ -548,32 +547,35 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
   // LARGEUR seule (`isCompact`, inchangé — cf. D3, séparé de la capacité
   // d'édition).
   //
-  // L'étirement des rangées pour remplir la hauteur disponible (pas de
-  // défilement de page) s'active sur DEUX cas désormais distincts, réunis par
-  // un OU : `isCompact` (fenêtre étroite <768px, y compris à la souris —
-  // comportement bureau PRÉEXISTANT, inchangé) OU `isTouchDevice` (tablette
-  // tactile LARGE ≥768px comprise — nouveau : avant, une tablette au doigt
-  // gardait des rangées de hauteur FIXE, sans rapport avec la hauteur réelle
-  // de son écran, ce qui provoquait un défilement de page non voulu). Seul le
-  // second cas réserve la hauteur de la barre d'outils basse fixe
+  // L'étirement des rangées pour remplir la hauteur disponible s'active sur
+  // DEUX cas désormais distincts, réunis par un OU : `isCompact` (fenêtre
+  // étroite <768px, y compris à la souris — comportement bureau PRÉEXISTANT,
+  // inchangé) OU `isTouchDevice` (tablette tactile LARGE ≥768px comprise —
+  // nouveau : avant, une tablette au doigt gardait des rangées de hauteur
+  // FIXE, sans rapport avec la hauteur réelle de son écran). Seul le second
+  // cas réserve la hauteur de la barre d'outils basse fixe
   // (`MOBILE_TOOLBAR_RESERVE_H`, absente à la souris, où aucune barre basse
-  // n'existe). Bornées entre un mini et un maxi ; au-delà du mini, la page
-  // défile quand même plutôt que d'écraser les rangées à l'illisible.
+  // n'existe).
+  //
+  // AUCUN plafond volontairement : les rangées remplissent TOUTE la hauteur
+  // disponible, quelle qu'elle soit (grand écran tactile → grandes rangées,
+  // pas de marge vide en bas) — seul un plancher (`COMPACT_MIN_ROW_H`)
+  // protège la lisibilité ; en dessous, la page défile plutôt que d'écraser
+  // les rangées à l'illisible. Un ancien plafond (`COMPACT_MAX_ROW_H`, 60px)
+  // laissait précisément la marge vide signalée par l'utilisateur sur des
+  // écrans où la hauteur calculée dépassait ce plafond — retiré.
   const headerH = isCompact ? 52 : HEADER_H
   const labelW = isCompact ? 40 : LABEL_W
   const rowH =
     isCompact || isTouchDevice
       ? Math.max(
           COMPACT_MIN_ROW_H,
-          Math.min(
-            COMPACT_MAX_ROW_H,
-            Math.floor(
-              (availH -
-                headerH -
-                COMPACT_BOTTOM_GAP -
-                (isTouchDevice ? MOBILE_TOOLBAR_RESERVE_H : 0)) /
-                SPOTS,
-            ),
+          Math.floor(
+            (availH -
+              headerH -
+              COMPACT_BOTTOM_GAP -
+              (isTouchDevice ? MOBILE_TOOLBAR_RESERVE_H : 0)) /
+              SPOTS,
           ),
         )
       : ROW_H
