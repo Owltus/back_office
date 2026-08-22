@@ -196,7 +196,7 @@ export function PdjAnalytiqueMoisBoard({
   return (
     <AnalytiqueShell
       title={`${monthLabel} ${year}`}
-      actions={<AnalytiqueBackButton />}
+      actions={<AnalytiqueBackButton to="/pdj/analytique" />}
       loading={loading}
       printTitle={`PDJ · ${monthLabel} ${year}`}
       skeleton={{

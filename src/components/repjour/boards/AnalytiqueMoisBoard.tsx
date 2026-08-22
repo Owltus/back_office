@@ -193,7 +193,7 @@ export function AnalytiqueMoisBoard({
   return (
     <AnalytiqueShell
       title={`${monthLabel} ${year}`}
-      actions={<AnalytiqueBackButton />}
+      actions={<AnalytiqueBackButton to="/repjour/analytique" />}
       loading={loading}
       printTitle={`RepJour · ${monthLabel} ${year}`}
       skeleton={{

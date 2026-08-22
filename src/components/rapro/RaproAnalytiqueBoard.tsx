@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useNavigate, useRouter } from '@tanstack/react-router'
+import { useNavigate } from '@tanstack/react-router'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react'
@@ -130,7 +130,6 @@ export function RaproAnalytiqueBoard() {
     years,
     currentYear,
   })
-  const router = useRouter()
 
   return (
     <AnalytiqueShell
@@ -138,7 +137,7 @@ export function RaproAnalytiqueBoard() {
       mobileIdentity={`Analytique ${year}`}
       actions={
         <>
-          <AnalytiqueBackButton />
+          <AnalytiqueBackButton to="/rapro" label="Retour au rapprochement" />
           <StepNav
             onPrev={goPrev}
             onNext={goNext}
@@ -166,8 +165,8 @@ export function RaproAnalytiqueBoard() {
           <ToolbarCell
             icon={<ArrowLeft className="size-5" />}
             label="Retour"
-            ariaLabel="Retour"
-            onClick={() => router.history.back()}
+            ariaLabel="Retour au rapprochement"
+            onClick={() => navigate({ to: '/rapro' })}
           />
           {printCell}
           <ToolbarCell

@@ -159,7 +159,7 @@ export function ParkingAnalytiqueMoisBoard({
   return (
     <AnalytiqueShell
       title={`${monthLabel} ${year}`}
-      actions={<AnalytiqueBackButton />}
+      actions={<AnalytiqueBackButton to="/parking/analytique" />}
       loading={loading}
       printTitle={`Parking · ${monthLabel} ${year}`}
       skeleton={{

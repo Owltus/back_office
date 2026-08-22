@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { useNavigate, useRouter } from '@tanstack/react-router'
+import { useNavigate } from '@tanstack/react-router'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react'
@@ -70,7 +70,6 @@ export function RaproMonthlyBoard({
   }))
 
   const navigate = useNavigate()
-  const router = useRouter()
 
   // Bornes de la navigation mois par mois : du plus ancien jour saisi (comme la
   // vue annuelle) au mois courant — jamais dans le futur.
@@ -110,7 +109,7 @@ export function RaproMonthlyBoard({
       mobileIdentity={`Analytique ${monthLabel}`}
       actions={
         <>
-          <AnalytiqueBackButton />
+          <AnalytiqueBackButton to="/rapro/analytique" />
           <StepNav
             onPrev={goPrev}
             onNext={goNext}
@@ -135,7 +134,7 @@ export function RaproMonthlyBoard({
             icon={<ArrowLeft className="size-5" />}
             label="Retour"
             ariaLabel="Retour à l'analytique"
-            onClick={() => router.history.back()}
+            onClick={() => navigate({ to: '/rapro/analytique' })}
           />
           {printCell}
           <ToolbarCell

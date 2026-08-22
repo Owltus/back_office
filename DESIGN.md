@@ -352,7 +352,11 @@ rejoindre ce langage.
   **Consommé aujourd'hui uniquement par les deux vues Rapprochement**, toutes
   deux avec un pager Préc./Suiv. aux DEUX bords de la barre basse (même
   convention que /rapro, § pager plus haut) et le bouton Retour existant AUSSI
-  en desktop dans l'en-tête via `AnalytiqueBackButton` :
+  en desktop dans l'en-tête via `AnalytiqueBackButton`, qui remonte
+  l'ARBORESCENCE LOGIQUE (`to`, un lien explicite) et non l'historique de
+  navigation (`router.history.back()`, retiré : sa cible dépend du chemin par
+  lequel on est arrivé — lien direct, actualisation, onglet neuf — pas de la
+  structure du site) :
   - annuelle : sous-titre « Analytique 2026 », barre basse
     Préc./Retour/Imprimer/Suiv. sur l'année — cette vue n'avait jusque-là
     aucun moyen de revenir à `/rapro` ;

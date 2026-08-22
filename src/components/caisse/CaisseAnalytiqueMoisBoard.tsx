@@ -106,7 +106,7 @@ export function CaisseAnalytiqueMoisBoard({
   return (
     <AnalytiqueShell
       title={`${monthLabel} ${year}`}
-      actions={<AnalytiqueBackButton />}
+      actions={<AnalytiqueBackButton to="/caisse/analytique" />}
       loading={loading}
       skeleton={{
         cols: 6,
