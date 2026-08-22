@@ -54,6 +54,15 @@ import { cn } from '#/lib/utils.ts'
  *   bords (`justify-between`) plutôt qu'entassés à droite avec un flou de
  *   priorité — le même repli que `.rapro-floors`/`.rapro-stats` : un seul
  *   palier net (empilé / une ligne), pas un entre-deux bâtard.
+ * - `actionsAlign` : `'responsive'` (défaut, ci-dessus) ou `'end'` — les
+ *   sous-groupes restent COLLÉS ENSEMBLE au bord droit à TOUTE largeur,
+ *   jamais écartés aux deux bords même en fenêtre étroite. Réservé aux `actions`
+ *   dont l'appelant garantit déjà qu'elles ne s'affichent QUE sur ordinateur
+ *   à la souris (Rapprochement : tout ce bloc disparaît sur écran tactile,
+ *   remplacé par la barre basse) — le repli « écarté aux deux bords », pensé
+ *   pour la portée du pouce sur téléphone, n'a alors plus de sens : à la
+ *   souris, un rétrécissement de fenêtre ne justifie pas de séparer les
+ *   groupes, seulement de les laisser (au pire) passer à la ligne ensemble.
  */
 export function PageHeader({
   leading,
@@ -64,6 +73,7 @@ export function PageHeader({
   badgeWidth,
   meta,
   actions,
+  actionsAlign = 'responsive',
   className,
 }: {
   leading?: ReactNode
@@ -74,6 +84,7 @@ export function PageHeader({
   badgeWidth?: string
   meta?: ReactNode
   actions?: ReactNode
+  actionsAlign?: 'responsive' | 'end'
   className?: string
 }) {
   // Rien à montrer nulle part : `null`, pas un `<div>` vide. Un élément rendu,
@@ -135,7 +146,12 @@ export function PageHeader({
         </div>
       )}
       {actions != null && (
-        <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:w-auto sm:shrink-0 sm:flex-nowrap sm:justify-end">
+        <div
+          className={cn(
+            'flex w-full flex-wrap items-center gap-2 sm:w-auto sm:shrink-0 sm:flex-nowrap',
+            actionsAlign === 'end' ? 'justify-end' : 'justify-between sm:justify-end',
+          )}
+        >
           {actions}
         </div>
       )}

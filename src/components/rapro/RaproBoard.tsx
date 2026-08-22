@@ -909,6 +909,11 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
             </>
           )
         }
+        // Toujours collées ensemble au bord droit, jamais écartées aux deux
+        // bords même en fenêtre étroite : ce groupe n'existe que côté souris
+        // (cf. `isTouchDevice` ci-dessus), le repli « aux deux bords » pensé
+        // pour la portée du pouce sur téléphone n'a ici aucune raison d'être.
+        actionsAlign="end"
       />
 
       {(isError || oldestError || windowError) && (

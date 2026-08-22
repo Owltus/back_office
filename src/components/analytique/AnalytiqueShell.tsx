@@ -217,6 +217,10 @@ export function AnalytiqueShell({
         <PageHeader
           title={mobileIdentity != null && isNavbarMobile ? undefined : title}
           actions={desktopActions}
+          // "end" quand `mobileToolbar` est fourni : ce groupe n'existe alors
+          // que côté souris (remplacé par la barre basse sur écran tactile),
+          // le repli « aux deux bords » pensé pour le pouce n'a plus de sens.
+          actionsAlign={mobileToolbar ? 'end' : 'responsive'}
         />
         {loading ? <AnalytiqueSkeleton {...skeleton} /> : children}
       </div>
