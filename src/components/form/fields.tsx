@@ -7,6 +7,7 @@
  */
 
 import { cloneElement, useId, useState } from 'react'
+import type { ReactNode } from 'react'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { CalendarDays, Clock } from 'lucide-react'
@@ -121,6 +122,7 @@ export function DatePickerButton({
   max,
   enabledDates,
   todayValue,
+  trigger,
 }: {
   value: string
   onChange: (value: string) => void
@@ -140,6 +142,13 @@ export function DatePickerButton({
    * jour courant (RepJour : dernier jour clôturé ; PDJ/Rapro : jour hôtelier).
    */
   todayValue?: string
+  /**
+   * Déclencheur personnalisé (remplace le bouton icône calendrier par défaut) —
+   * sert par ex. à rendre le sous-titre jour de la Navbar (déjà affiché) tappable
+   * plutôt que d'ajouter un bouton calendrier séparé. `asChild` de Radix clone les
+   * props d'ouverture sur cet élément : n'importe quel élément focalisable convient.
+   */
+  trigger?: ReactNode
 }) {
   const [open, setOpen] = useState(false)
   const date = parseDateStr(value)
@@ -158,16 +167,18 @@ export function DatePickerButton({
     <Popover open={open} onOpenChange={setOpen}>
       <Tip label={ariaLabel}>
         <PopoverTrigger asChild>
-          {/* max-sm:size-11 : même plancher de cible tactile (44px) que StepNav,
-              dont ce bouton est le compagnon direct dans la barre de nav. */}
-          <Button
-            variant="outline"
-            size="icon-sm"
-            className="max-sm:size-11"
-            aria-label={ariaLabel}
-          >
-            <CalendarDays />
-          </Button>
+          {trigger ?? (
+            // max-sm:size-11 : même plancher de cible tactile (44px) que StepNav,
+            // dont ce bouton est le compagnon direct dans la barre de nav.
+            <Button
+              variant="outline"
+              size="icon-sm"
+              className="max-sm:size-11"
+              aria-label={ariaLabel}
+            >
+              <CalendarDays />
+            </Button>
+          )}
         </PopoverTrigger>
       </Tip>
       <PopoverContent className="w-auto p-0" align="start">

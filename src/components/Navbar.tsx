@@ -160,23 +160,34 @@ export function Navbar() {
         </Sheet>
 
         {/* --- Logo / marque (nom + sous-titre affichés en mobile) --- */}
-        <Link
-          to="/repjour"
-          className="flex items-center gap-2.5"
-          aria-label="Accueil"
-        >
-          <Logo className="size-7" />
+        <div className="flex items-center gap-2.5">
+          {/* Logo home-link, toujours cliquable, jamais empilé (il reste petit
+              et centré sur la hauteur des deux lignes de texte à côté). */}
+          <Link to="/repjour" aria-label="Accueil" className="shrink-0">
+            <Logo className="size-7" />
+          </Link>
           <div className="flex min-w-0 flex-col justify-center lg:hidden">
-            <span className="truncate text-lg leading-tight font-bold tracking-tight">
+            {/* Nom de page : lien « Accueil » séparé, PAS le même élément que
+                le sous-titre en dessous. Le sous-titre (posé par une page, ex.
+                le jour de Rapprochement) peut lui-même être tappable (voir
+                DatePickerButton en trigger personnalisé) — il ne doit donc
+                JAMAIS finir imbriqué dans un lien : un bouton dans un `<a>`
+                est invalide, et le clic dessus déclenchait la navigation du
+                lien au lieu d'ouvrir son propre popover. */}
+            <Link
+              to="/repjour"
+              aria-label="Accueil"
+              className="truncate text-lg leading-tight font-bold tracking-tight"
+            >
               {currentPage?.label ?? 'Back Office'}
-            </span>
+            </Link>
             {subtitle != null && (
-              <span className="truncate text-xs leading-tight text-muted-foreground">
+              <div className="min-w-0 truncate text-xs leading-tight text-muted-foreground">
                 {subtitle}
-              </span>
+              </div>
             )}
           </div>
-        </Link>
+        </div>
 
         {/* --- Liens inline (>= md) --- */}
         <ul className="ml-2 hidden items-center gap-1 lg:flex">

@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import { LineChart, Printer, RotateCcw } from 'lucide-react'
+import { ChevronLeft, ChevronRight, LineChart, Printer, RotateCcw } from 'lucide-react'
 
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { DatePickerButton } from '#/components/form/fields.tsx'
@@ -723,7 +723,44 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   // Sous 1024px, la Navbar globale affiche ce jour sous « Rapprochement » (à la
   // place de la marque) — le titre de page ci-dessous s'efface d'autant pour ne
   // pas le répéter. Se retire tout seul au démontage (changement de page).
-  useNavbarSubtitle(title)
+  //
+  // Rendu TAPPABLE (DatePickerButton, trigger personnalisé) plutôt qu'un texte
+  // plat : la barre d'outils basse mobile n'a plus de bouton calendrier dédié
+  // (retiré — cf. la barre plus bas) précisément parce qu'un jour affiché déjà
+  // visible ici, sur lequel on peut taper pour en choisir un autre, rend ce
+  // bouton séparé redondant plutôt que de le caser une deuxième fois quelque
+  // part. Le popover et sa logique (bornes, jours désactivés) restent ceux de
+  // DatePickerButton — seul le déclencheur change.
+  //
+  // `useMemo` (pas l'élément recréé en ligne à chaque rendu) : `useNavbarSubtitle`
+  // dépend de l'IDENTITÉ de l'élément (`useEffect([node])`) — un objet JSX neuf à
+  // chaque rendu de RaproBoard aurait reposé le sous-titre en boucle (une simple
+  // frappe dans le commentaire, par ex., aurait suffi), la Navbar se re-rendant à
+  // chaque fois pour rien. Recalculé seulement quand une des dépendances change
+  // vraiment.
+  const navbarSubtitle = useMemo(
+    () => (
+      <DatePickerButton
+        value={selectedDate}
+        onChange={goDate}
+        min={lowerDay}
+        max={todayStr}
+        enabledDates={pickerDates}
+        todayValue={todayStr}
+        ariaLabel="Choisir un jour"
+        trigger={
+          <button
+            type="button"
+            className="-mx-1 -my-0.5 truncate rounded px-1 py-0.5 text-left text-xs text-muted-foreground underline decoration-dotted underline-offset-2"
+          >
+            {title}
+          </button>
+        }
+      />
+    ),
+    [selectedDate, lowerDay, todayStr, pickerDates, title, goDate],
+  )
+  useNavbarSubtitle(navbarSubtitle)
 
   // Rien à annoncer avant que l'occupation et la feuille soient chargées : la
   // pastille se contredirait le temps d'un rendu. En secours, on affiche
@@ -1205,19 +1242,37 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
           reste bien pinnée à la fenêtre) ; `max-sm:pb-20` sur le conteneur
           racine ci-dessus réserve la place pour qu'elle ne masque jamais la
           fin du contenu (commentaire, bouton Clôturer). Aide/Analytique/
-          Imprimer gardent leurs handlers exacts de la barre du haut ; la
-          navigation réutilise StepNav/DatePickerButton tels quels (même
-          logique, seconde instance — la barre du haut reste montée mais
-          cachée via `hidden sm:contents`, donc aucun conflit d'état). */}
+          Imprimer gardent leurs handlers exacts de la barre du haut.
+          Navigation temporelle : PAS le cluster StepNav+calendrier compressé
+          dans une seule cellule (jugé peu pratique en mobile) — Précédent et
+          Suivant deviennent chacun leur propre cellule pleine largeur, aux
+          deux BORDS de la barre. C'est le pattern natif du feuilletage
+          (pager) : au pouce, les bords d'un écran se rejoignent plus
+          naturellement qu'un cluster étroit coincé dans un coin, et l'usage
+          réel de cette page est justement de feuilleter les jours en continu.
+          Le bouton calendrier séparé disparaît : le jour affiché en Navbar
+          (sous-titre, useNavbarSubtitle ci-dessus) est maintenant lui-même
+          tappable pour choisir une date arbitraire — un deuxième bouton
+          calendrier ici aurait été redondant. */}
       <nav
-        className="fixed inset-x-0 bottom-0 z-30 flex items-stretch justify-around border-t border-border bg-card/95 px-1 backdrop-blur-md sm:hidden"
+        className="fixed inset-x-0 bottom-0 z-30 flex items-stretch border-t border-border bg-card/95 backdrop-blur-md sm:hidden"
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
         <button
           type="button"
+          onClick={() => goStep(-1)}
+          disabled={atLower}
+          aria-label="Jour précédent"
+          className="flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-muted-foreground transition-colors active:bg-accent active:text-foreground disabled:pointer-events-none disabled:opacity-40"
+        >
+          <ChevronLeft className="size-5" />
+          <span className="text-[11px] font-medium">Préc.</span>
+        </button>
+        <button
+          type="button"
           onClick={() => setHelpOpen(true)}
           aria-label="Comment ça marche"
-          className="flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-muted-foreground transition-colors active:bg-accent active:text-foreground"
+          className="flex flex-1 flex-col items-center justify-center gap-0.5 border-l border-border py-2 text-muted-foreground transition-colors active:bg-accent active:text-foreground"
         >
           <HelpGlyph className="size-5" />
           <span className="text-[11px] font-medium">Aide</span>
@@ -1225,7 +1280,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
         <Link
           to="/rapro/analytique"
           aria-label="Vue analytique"
-          className="flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-muted-foreground transition-colors active:bg-accent active:text-foreground"
+          className="flex flex-1 flex-col items-center justify-center gap-0.5 border-l border-border py-2 text-muted-foreground transition-colors active:bg-accent active:text-foreground"
         >
           <LineChart className="size-5" />
           <span className="text-[11px] font-medium">Analytique</span>
@@ -1235,31 +1290,21 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
           onClick={handleGeneratePdf}
           disabled={!isValidated || pdfBusy}
           aria-label="Imprimer / PDF"
-          className="flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-muted-foreground transition-colors active:bg-accent active:text-foreground disabled:pointer-events-none disabled:opacity-40"
+          className="flex flex-1 flex-col items-center justify-center gap-0.5 border-l border-border py-2 text-muted-foreground transition-colors active:bg-accent active:text-foreground disabled:pointer-events-none disabled:opacity-40"
         >
           <Printer className="size-5" />
           <span className="text-[11px] font-medium">Imprimer</span>
         </button>
-        <div className="flex flex-1 items-center justify-center">
-          <StepNav
-            onPrev={() => goStep(-1)}
-            onNext={() => goStep(1)}
-            prevLabel="Jour précédent"
-            nextLabel="Jour suivant"
-            prevDisabled={atLower}
-            nextDisabled={atLatest}
-          >
-            <DatePickerButton
-              value={selectedDate}
-              onChange={goDate}
-              min={lowerDay}
-              max={todayStr}
-              enabledDates={pickerDates}
-              todayValue={todayStr}
-              ariaLabel="Choisir un jour"
-            />
-          </StepNav>
-        </div>
+        <button
+          type="button"
+          onClick={() => goStep(1)}
+          disabled={atLatest}
+          aria-label="Jour suivant"
+          className="flex flex-1 flex-col items-center justify-center gap-0.5 border-l border-border py-2 text-muted-foreground transition-colors active:bg-accent active:text-foreground disabled:pointer-events-none disabled:opacity-40"
+        >
+          <ChevronRight className="size-5" />
+          <span className="text-[11px] font-medium">Suiv.</span>
+        </button>
       </nav>
     </div>
   )

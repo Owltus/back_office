@@ -289,7 +289,11 @@ rejoindre ce langage.
   peut y poser un texte discret — le jour affiché sur Rapprochement, par exemple
   — quand ce jour a été retiré du corps de page pour économiser la place. Texte
   atténué (`text-muted-foreground`), plus petit que le nom de page, jamais du
-  même poids visuel.
+  même poids visuel. Peut être TAPPABLE (soulignement pointillé plutôt qu'un
+  simple texte, ex. le sélecteur de date de Rapprochement) : dans ce cas,
+  toujours un FRÈRE du lien « Accueil » (logo + nom de page), jamais un enfant
+  — un bouton imbriqué dans un `<a>` est invalide en HTML, et le clic active le
+  lien parent au lieu du contrôle voulu.
 - **Badge de page** (optionnel, à côté du bouton hamburger, PAS à côté du nom de
   page) : une icône de statut (le cadenas clôturé/ouvert de Rapprochement), même
   couleur que sa version texte du corps de page. Les deux partagent le même
@@ -315,6 +319,22 @@ rejoindre ce langage.
 - **États :** `active:bg-accent` (retour tactile immédiat), `disabled:opacity-40`
   pour une action indisponible (ex. imprimer avant clôture) — jamais un bouton
   simplement absent, la cohérence de la barre prime.
+- **Séparateurs :** filet vertical (`border-l`) entre cellules plutôt qu'un
+  espacement flottant (`gap`/`justify-around`) — cellules pleine largeur bord à
+  bord, comme une vraie barre d'onglets native, pas des boutons espacés.
+- **Navigation temporelle « feuilletage » (pager) :** quand une page se
+  parcourt jour par jour en continu (Rapprochement), Précédent/Suivant ne sont
+  PAS un cluster resserré au milieu de la barre — chacun devient sa PROPRE
+  cellule, aux deux BORDS de la barre. Au pouce, les bords d'un écran se
+  rejoignent plus naturellement qu'un cluster étroit coincé dans un coin ; un
+  cluster de contrôles compressés dans une seule cellule (flèches + calendrier
+  fondus ensemble) est un anti-pattern sur cette barre, pas une variante
+  acceptable.
+- **Pas de bouton calendrier séparé si le jour est déjà affiché ailleurs :**
+  quand le sous-titre de la Navbar (voir Navigation) montre déjà le jour
+  courant, il DEVIENT lui-même le sélecteur de date (trigger personnalisé
+  d'un `DatePickerButton` existant, jamais un second contrôle redondant dans
+  la barre basse pour la même donnée).
 
 ### Tooltip
 - Fond `bg-foreground` / texte `bg-background` : s'inverse automatiquement entre clair
