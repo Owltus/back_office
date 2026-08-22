@@ -96,23 +96,29 @@ function statLabel(full: string, short: string) {
 
 // Sous 1024px, le jour et le statut vivent dans la Navbar globale (voir
 // useNavbarSubtitle/useNavbarBadge plus bas) : `title`/`badge` passent alors à
-// `undefined` plutôt qu'à un contenu masqué en CSS — sinon la ligne titre de
-// PageHeader continue d'exister (vide) et réserve quand même sa hauteur de
-// ligne, ce qui creusait un vide entre la Navbar et les cartes de synthèse.
-function useIsNavbarMobile(): boolean {
-  const [mobile, setMobile] = useState(false)
+// `undefined` plutôt qu'à un contenu masqué en CSS. Sous 640px, la barre
+// d'outils basse fixe remplace en plus les actions du haut : `actions` passe
+// lui aussi à `undefined`. Dans les deux cas, un contenu masqué en CSS plutôt
+// qu'absent aurait laissé PageHeader exister comme élément flex VIDE dans la
+// page — le `gap` du conteneur parent réserve de la place autour de tout
+// élément rendu, même sans contenu visible à l'intérieur. Seul `undefined`
+// (PageHeader renvoie alors `null`, cf. shared/PageHeader.tsx) sort vraiment
+// l'élément du flux et referme le vide entre la Navbar et les cartes.
+function useMatchMedia(query: string): boolean {
+  const [matches, setMatches] = useState(false)
   useEffect(() => {
-    const mq = window.matchMedia('(max-width: 1023.98px)')
-    const update = () => setMobile(mq.matches)
+    const mq = window.matchMedia(query)
+    const update = () => setMatches(mq.matches)
     update()
     mq.addEventListener('change', update)
     return () => mq.removeEventListener('change', update)
-  }, [])
-  return mobile
+  }, [query])
+  return matches
 }
 
 export function RaproBoard({ initialDate }: { initialDate?: string }) {
-  const isNavbarMobile = useIsNavbarMobile()
+  const isNavbarMobile = useMatchMedia('(max-width: 1023.98px)')
+  const showTopToolbar = useMatchMedia('(min-width: 640px)')
   const { user, pageLevel } = useAuth()
   // Niveau effectif : sert au verrou PAR JOUR. Écriture n'agit que dans la fenêtre
   // de grâce (J-0..J-2) ; la gestion peut agir sur n'importe quel jour (cf.
@@ -746,15 +752,15 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
         title={isNavbarMobile ? undefined : title}
         badgeAlign="end"
         badge={isNavbarMobile ? undefined : statusBadge}
+        // Sous 640px, ce groupe entier laisse la place à la barre d'outils
+        // basse fixe (cf. fin du composant) : une vraie barre d'app mobile
+        // (icône + libellé, portée du pouce), pas des boutons de bureau
+        // rétrécis. `undefined` (pas un `hidden` CSS) : PageHeader ne rend
+        // alors littéralement rien pour ce prop, au lieu d'un groupe présent
+        // mais invisible qui réserverait quand même sa part du `gap` parent.
         actions={
-          // Sous 640px, ce groupe entier laisse la place à la barre d'outils
-          // basse fixe (cf. fin du composant) : une vraie barre d'app mobile
-          // (icône + libellé, portée du pouce), pas des boutons de bureau
-          // rétrécis. `hidden sm:contents` : invisible ET hors flux sous 640px
-          // (`hidden`), mais ne crée aucune boîte propre au-delà (`contents`)
-          // — les deux groupes ci-dessous participent au flex du bureau
-          // exactement comme s'ils n'étaient pas enveloppés.
-          <div className="hidden sm:contents">
+          !showTopToolbar ? undefined : (
+            <>
             {/* Groupe « actions de page » : aide + vue analytique + impression. */}
             <ButtonGroup>
               {/* Aide : ouvre le tutoriel de la page (même bouton « ? » que
@@ -809,7 +815,8 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
                 ariaLabel="Choisir un jour"
               />
             </StepNav>
-          </div>
+            </>
+          )
         }
       />
 

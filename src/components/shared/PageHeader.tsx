@@ -68,6 +68,15 @@ export function PageHeader({
   actions?: ReactNode
   className?: string
 }) {
+  // Rien à montrer nulle part : `null`, pas un `<div>` vide. Un élément rendu,
+  // même sans contenu visible à l'intérieur, reste un item flex à part entière
+  // pour le CONTENEUR PARENT — son `gap` réserve quand même de la place autour
+  // de lui. Seul `null` sort vraiment PageHeader du flux (Rapprochement, en
+  // dessous de 640px : titre/badge confiés à la Navbar, actions à la barre
+  // d'outils basse — tout absent au sens strict, pas juste masqué en CSS).
+  if (leading == null && !title && badge == null && meta == null && actions == null) {
+    return null
+  }
   return (
     <div
       className={cn(
