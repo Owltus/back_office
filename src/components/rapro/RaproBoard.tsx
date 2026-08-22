@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { format } from 'date-fns'
@@ -529,6 +529,43 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
     )
   }
 
+  // Équivalent tactile du clic droit : au tactile, il n'existe littéralement
+  // pas — sans ceci, « bloquée la veille » serait injoignable au doigt. Appui
+  // simple = `toggle` (inchangé) ; appui long (500ms) = `toggleManual`. Un SEUL
+  // ref pour toute la grille (une seule chambre pressée à la fois) plutôt qu'un
+  // hook par chambre : `useRef`/`useState` ne peuvent pas s'appeler dans la
+  // boucle `.map()` qui rend les chambres. `pointerType` filtre la souris : un
+  // clic gauche maintenu sur ordinateur ne doit PAS déclencher l'appui long,
+  // qui reste sa propre voie (clic droit, `onContextMenu`).
+  const longPress = useRef<{ timer: number | null; fired: boolean }>({
+    timer: null,
+    fired: false,
+  })
+  function startLongPress(room: number, pointerType: string) {
+    if (pointerType !== 'touch' && pointerType !== 'pen') return
+    longPress.current.fired = false
+    longPress.current.timer = window.setTimeout(() => {
+      longPress.current.fired = true
+      toggleManual(room)
+    }, 500)
+  }
+  function cancelLongPress() {
+    if (longPress.current.timer != null) {
+      window.clearTimeout(longPress.current.timer)
+      longPress.current.timer = null
+    }
+  }
+  // L'appui long relâché déclenche AUSSI un `click` juste après (comportement
+  // natif du navigateur) : sans ce garde-fou, la chambre basculerait deux fois
+  // (bloquée la veille ET couleur suivante) pour un seul geste.
+  function handleRoomTap(room: number) {
+    if (longPress.current.fired) {
+      longPress.current.fired = false
+      return
+    }
+    toggle(room)
+  }
+
   // Bouton d'en-tête d'étage : ROLLBACK total à l'origine. Toute chambre de
   // l'étage portant un statut OU un liseré manuel repasse au défaut (ligne
   // supprimée). Sert à annuler d'un geste les saisies erronées d'un étage.
@@ -1014,18 +1051,25 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
                       // Libellé = état VISUEL (une grise dit « Non vendue », pas
                       // « Nettoyée » par défaut) + mention du liseré reporté.
                       const roomLabel = `Chambre ${room} — ${CELL_STATES[visual].label}${isCarried ? ' — bloquée de la veille' : ''}`
-                      // Clic GAUCHE = cycle des couleurs (instantané) ; clic DROIT
-                      // = pose/retire le liseré « bloquée la veille » À LA MAIN. Un
-                      // jour clôturé reste figé (mutations gardées par `canEditFields`).
+                      // Souris : clic GAUCHE = cycle des couleurs (instantané) ; clic
+                      // DROIT = pose/retire le liseré « bloquée la veille » À LA MAIN.
+                      // Tactile (pas de clic droit) : appui simple = clic gauche,
+                      // appui long (500ms) = clic droit — cf. startLongPress/
+                      // handleRoomTap. Un jour clôturé reste figé (mutations gardées
+                      // par `canEditFields`).
                       return (
                         <button
                           key={room}
                           type="button"
-                          onClick={() => toggle(room)}
+                          onClick={() => handleRoomTap(room)}
                           onContextMenu={(e) => {
                             e.preventDefault()
                             toggleManual(room)
                           }}
+                          onPointerDown={(e) => startLongPress(room, e.pointerType)}
+                          onPointerUp={cancelLongPress}
+                          onPointerLeave={cancelLongPress}
+                          onPointerCancel={cancelLongPress}
                           disabled={!isSuccess}
                           aria-label={roomLabel}
                           title={roomLabel}
@@ -1047,16 +1091,32 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
 
           {/* Tuto simple à GAUCHE (les deux gestes : souris + action courte, sans
               « clic gauche/droit » — le glyphe montre déjà le bouton), et tous les
-              statuts couleur à DROITE. « Non vendue » (grisé) se lit sans légende. */}
+              statuts couleur à DROITE. « Non vendue » (grisé) se lit sans légende.
+              Souris (≥ 640px) ET tactile (< 640px) montrent CHACUN leur propre
+              geste — pas de mention de souris sous 640px, où elle n'existe pas.
+              Le geste tactile (appui long) fonctionne à toute largeur (cf.
+              startLongPress) ; seul ce texte-ci est responsive, pas la fonction. */}
           <div className="rapro-legend">
-            <span className="rapro-legend-group">
-              <span className="rapro-legend-item">
-                <MouseGlyph side="left" />
-                change le statut
+            <span className="hidden sm:contents">
+              <span className="rapro-legend-group">
+                <span className="rapro-legend-item">
+                  <MouseGlyph side="left" />
+                  change le statut
+                </span>
+                <span className="rapro-legend-item">
+                  <MouseGlyph side="right" />
+                  bloquée de la veille
+                </span>
               </span>
-              <span className="rapro-legend-item">
-                <MouseGlyph side="right" />
-                bloquée de la veille
+            </span>
+            <span className="contents sm:hidden">
+              <span className="rapro-legend-group">
+                <span className="rapro-legend-item">
+                  Appui simple : change le statut
+                </span>
+                <span className="rapro-legend-item">
+                  Appui long : bloquée de la veille
+                </span>
               </span>
             </span>
             <span className="rapro-legend-group">
