@@ -1,13 +1,14 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useNavigate } from '@tanstack/react-router'
+import { useNavigate, useRouter } from '@tanstack/react-router'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react'
 
 import { AnalytiqueShell, ToolbarCell } from '#/components/analytique/AnalytiqueShell.tsx'
 import { AnalytiqueTable } from '#/components/analytique/AnalytiqueTable.tsx'
 import { AnalytiqueCharts } from '#/components/analytique/AnalytiqueCharts.tsx'
+import { AnalytiqueBackButton } from '#/components/analytique/AnalytiqueBackButton.tsx'
 import { useYearNav } from '#/components/analytique/YearNav.tsx'
 import { StepNav } from '#/components/shared/StepNav.tsx'
 import { KpiStackedBarChart } from '#/components/analytique/KpiStackedBarChart.tsx'
@@ -129,24 +130,28 @@ export function RaproAnalytiqueBoard() {
     years,
     currentYear,
   })
+  const router = useRouter()
 
   return (
     <AnalytiqueShell
       title="Analytique"
       mobileIdentity={`Analytique ${year}`}
       actions={
-        <StepNav
-          onPrev={goPrev}
-          onNext={goNext}
-          prevLabel="Année précédente"
-          nextLabel="Année suivante"
-          prevDisabled={prevDisabled}
-          nextDisabled={nextDisabled}
-        >
-          <span className="inline-flex h-8 items-center justify-center border bg-background px-3 text-sm font-medium tabular-nums shadow-xs dark:border-input dark:bg-input/30">
-            {year}
-          </span>
-        </StepNav>
+        <>
+          <AnalytiqueBackButton />
+          <StepNav
+            onPrev={goPrev}
+            onNext={goNext}
+            prevLabel="Année précédente"
+            nextLabel="Année suivante"
+            prevDisabled={prevDisabled}
+            nextDisabled={nextDisabled}
+          >
+            <span className="inline-flex h-8 items-center justify-center border bg-background px-3 text-sm font-medium tabular-nums shadow-xs dark:border-input dark:bg-input/30">
+              {year}
+            </span>
+          </StepNav>
+        </>
       }
       mobileToolbar={(printCell) => (
         <>
@@ -157,6 +162,12 @@ export function RaproAnalytiqueBoard() {
             onClick={goPrev}
             disabled={prevDisabled}
             bordered={false}
+          />
+          <ToolbarCell
+            icon={<ArrowLeft className="size-5" />}
+            label="Retour"
+            ariaLabel="Retour"
+            onClick={() => router.history.back()}
           />
           {printCell}
           <ToolbarCell
