@@ -190,7 +190,7 @@ export function RaproMonthlyBoard({
           jour du rapprochement. */}
       <AnalytiqueCharts cols={1}>
         <KpiStackedBarChart
-          title="Répartition des chambres vendues par jour"
+          title="Répartition des chambres nettoyées par jour"
           data={chartData}
           xKey="jour"
           segments={RAPRO_CHART_SEGMENTS}
