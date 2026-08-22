@@ -43,10 +43,34 @@ export interface RaproPdfData {
 }
 
 /** Ouvre un PDF déjà rendu dans la fenêtre d'impression, via un iframe caché
- * recyclé (aucun téléchargement). Harnais partagé par les documents rapro. */
-function openPrintablePdf(pdf: jsPDF, frameId: string): void {
+ * recyclé (aucun téléchargement). Harnais partagé par les documents rapro.
+ *
+ * L'astuce iframe 0×0 + `autoPrint()` (action « imprimer » intégrée au PDF) ne
+ * fonctionne que si le navigateur rend le PDF dans une visionneuse NATIVE à
+ * l'intérieur de l'iframe — le cas sur desktop (Chrome/Firefox/Edge), pas sur
+ * la plupart des navigateurs mobiles (iOS Safari, Chrome Android) : l'iframe
+ * invisible ne déclenche rien, le bouton semble ne rien faire (rapporté en
+ * usage réel).
+ *
+ * `printWindow`, si fourni, est un onglet déjà OUVERT par l'appelant — sur
+ * tactile, on y redirige simplement la location vers le PDF, la visionneuse du
+ * téléphone prend le relais (son propre bouton imprimer/partager : AirPrint
+ * iOS, menu Chrome Android…). Ouvert ICI (dans `openPrintablePdf`, après
+ * l'`await import('jspdf')`), un `window.open()` arriverait trop tard aux yeux
+ * du bloqueur de popups (hors du geste utilisateur synchrone) et serait
+ * silencieusement bloqué — c'est pourquoi l'appelant doit l'ouvrir lui-même
+ * AVANT tout await, vide, et nous le passer déjà prêt. */
+function openPrintablePdf(
+  pdf: jsPDF,
+  frameId: string,
+  printWindow?: Window | null,
+): void {
   pdf.autoPrint()
   const blobUrl = pdf.output('bloburl').toString()
+  if (printWindow) {
+    printWindow.location.href = blobUrl
+    return
+  }
   document.getElementById(frameId)?.remove()
   const iframe = document.createElement('iframe')
   iframe.id = frameId
@@ -56,16 +80,19 @@ function openPrintablePdf(pdf: jsPDF, frameId: string): void {
   document.body.appendChild(iframe)
 }
 
-/** Génère le PDF du rapprochement du jour et ouvre l'impression. */
+/** Génère le PDF du rapprochement du jour et ouvre l'impression.
+ * `printWindow` : voir `openPrintablePdf` — à ouvrir par l'appelant AVANT
+ * d'appeler cette fonction (avant tout await), sur tactile uniquement. */
 export async function printRaproSheet(
   data: RaproPdfData,
   title: string,
+  printWindow?: Window | null,
 ): Promise<void> {
   const { jsPDF } = await import('jspdf')
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   pdf.setProperties({ title })
   renderRaproDocument(pdf, data)
-  openPrintablePdf(pdf, 'rapro-print-frame')
+  openPrintablePdf(pdf, 'rapro-print-frame', printWindow)
 }
 
 export interface RaproMonthlyPdfData {

@@ -666,6 +666,18 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   }
   async function handleGeneratePdf() {
     setPdfBusy(true)
+    // Sur tactile, la fenêtre s'ouvre ICI, SYNCHRONE avec le clic — un
+    // `window.open()` lancé après l'import() dynamique de jsPDF (dans
+    // printRaproSheet) arriverait hors du geste utilisateur aux yeux du
+    // bloqueur de popups, qui le bloquerait silencieusement. Vide pour
+    // l'instant, sa location changera une fois le PDF prêt (lib/rapro/pdf.ts).
+    // `(hover: none) and (pointer: coarse)` : le vrai signal d'un écran
+    // tactile (adapt.md), pas la largeur de fenêtre — une fenêtre desktop
+    // redimensionnée étroite garde l'impression automatique, qui y marche.
+    const isTouchDevice = window.matchMedia(
+      '(hover: none) and (pointer: coarse)',
+    ).matches
+    const printWindow = isTouchDevice ? window.open('', '_blank') : null
     try {
       const [yy, mm, dd] = selectedDate.split('-')
       await printRaproSheet(
@@ -685,6 +697,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
           validatedAt: sheet?.validatedAt ?? null,
         },
         `Rapprochement_${dd}-${mm}-${yy}`,
+        printWindow,
       )
     } catch {
       // Silencieux : l'impression est un confort, pas un flux critique.
