@@ -222,6 +222,7 @@ export function RaproAnalytiqueBoard() {
       <AnalytiqueCharts cols={1}>
         <KpiStackedBarChart
           title="Répartition des chambres nettoyées par mois"
+          compactMobile
           data={chartData}
           xKey="mois"
           segments={RAPRO_CHART_SEGMENTS}

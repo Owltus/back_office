@@ -15,6 +15,7 @@ import {
   CHART_HEIGHT,
   CHART_MARGIN,
 } from '#/components/analytique/chartConstants.ts'
+import { cn } from '#/lib/utils.ts'
 
 /*
  * Histogramme empilé réutilisable (Recharts) — une barre par point sur l'axe X,
@@ -64,6 +65,11 @@ interface KpiStackedBarChartProps {
   /** Clic sur une barre/colonne → reçoit l'entrée de `data` correspondante (ex. pour
    * naviguer vers le détail). Le curseur passe en « pointer » quand fourni. */
   onBarClick?: (payload: Record<string, unknown>) => void
+  /** Sous 640px, masque le titre et resserre la marge latérale de la carte pour
+   * rendre le maximum de largeur au tracé — un écran de téléphone est trop
+   * étroit pour se permettre le même confortable de marge que sur bureau.
+   * Opt-in (défaut false) : ne change rien aux pages qui ne l'activent pas. */
+  compactMobile?: boolean
 }
 
 export function KpiStackedBarChart({
@@ -77,6 +83,7 @@ export function KpiStackedBarChart({
   legendOrder,
   stackId = 'stack',
   onBarClick,
+  compactMobile = false,
 }: KpiStackedBarChartProps) {
   // La légende n'est PAS affichée à l'écran (l'infobulle porte déjà les pastilles).
   // On expose ses items (nom + couleur token, dans l'ordre voulu) sur `data-legend`
@@ -94,10 +101,20 @@ export function KpiStackedBarChart({
       : undefined
   return (
     <div
-      className="rounded-xl border border-border bg-card p-4"
+      className={cn(
+        'rounded-xl border border-border bg-card p-4',
+        compactMobile && 'max-sm:px-1',
+      )}
       data-legend={pdfLegend}
     >
-      <h3 className="mb-3 text-sm font-medium text-muted-foreground">{title}</h3>
+      <h3
+        className={cn(
+          'mb-3 text-sm font-medium text-muted-foreground',
+          compactMobile && 'max-sm:hidden',
+        )}
+      >
+        {title}
+      </h3>
       <ResponsiveContainer
         width="100%"
         height={CHART_HEIGHT}
