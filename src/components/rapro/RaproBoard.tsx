@@ -1104,10 +1104,10 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
           {/* Tuto simple à GAUCHE (les deux gestes : souris + action courte, sans
               « clic gauche/droit » — le glyphe montre déjà le bouton), et tous les
               statuts couleur à DROITE. « Non vendue » (grisé) se lit sans légende.
-              Souris (≥ 640px) ET tactile (< 640px) montrent CHACUN leur propre
-              geste — pas de mention de souris sous 640px, où elle n'existe pas.
-              Le geste tactile (appui long) fonctionne à toute largeur (cf.
-              startLongPress) ; seul ce texte-ci est responsive, pas la fonction. */}
+              Souris uniquement (≥ 640px) : sous 640px, l'appui simple/long est
+              jugé assez instinctif pour ne pas avoir besoin d'être rappelé — le
+              geste lui-même reste actif à toute largeur (cf. startLongPress),
+              seule cette légende texte est réservée au bureau. */}
           <div className="rapro-legend">
             <span className="hidden sm:contents">
               <span className="rapro-legend-group">
@@ -1118,16 +1118,6 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
                 <span className="rapro-legend-item">
                   <MouseGlyph side="right" />
                   bloquée de la veille
-                </span>
-              </span>
-            </span>
-            <span className="contents sm:hidden">
-              <span className="rapro-legend-group">
-                <span className="rapro-legend-item">
-                  Appui simple : change le statut
-                </span>
-                <span className="rapro-legend-item">
-                  Appui long : bloquée de la veille
                 </span>
               </span>
             </span>
