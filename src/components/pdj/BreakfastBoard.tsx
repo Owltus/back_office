@@ -913,76 +913,6 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
         // sa hauteur. Même seuil que la Navbar elle-même (hamburger ↔ onglets),
         // pas celui, indépendant, des tuiles/tableaux PDJ.
         title={isNavbarMobile ? undefined : titleDate}
-        // La bascule service/financier vient ici, à la place du statut des
-        // autres pages (Rapro/Caisse) : `badgeAlign="end"` l'envoie au bord
-        // droit sur sa propre ligne en mobile, au lieu de rester entassée
-        // dans la barre d'actions. Sans effet sur écran tactile, où le badge
-        // est de toute façon `undefined` (cf. plus bas) — la bascule y vit
-        // dans la barre d'outils basse.
-        badgeAlign="end"
-        badge={
-          /* Bascule « vue service ↔ détail financier » : segmented control dans
-             le style des boutons d'action (bordure outline, hauteur icon-sm), un
-             seul actif à la fois. La pastille bleue GLISSE d'une position à
-             l'autre (translate animé) au lieu de sauter. Réétiquette le tableau
-             à l'écran ; jamais imprimé.
-             Réservé à la souris (`!isTouchDevice`) : sur écran tactile, la
-             bascule vit désormais dans la barre d'outils basse (cf. fin du
-             composant), comme tout le reste des actions de page. */
-          hasData &&
-          !isTouchDevice && (
-            <div className="pdj-seg relative inline-flex h-8 items-center overflow-hidden rounded-md border bg-background shadow-xs print:hidden dark:border-input dark:bg-input/30">
-              {/* Pastille active : remplit TOUTE la hauteur (inset-y-0) et la
-                  largeur d'un bouton (w-7), collée aux bordures. Ses coins sont
-                  clippés par l'arrondi du conteneur (overflow-hidden) → elle
-                  épouse exactement le cadre. Position par `left` inline (aucune
-                  composition Tailwind, contrairement à `transform`) : service = 0,
-                  financier = largeur d'un bouton (1,75rem). Transition en CSS. */}
-              <span
-                data-thumb
-                aria-hidden="true"
-                style={{ left: financeMode ? '1.75rem' : '0' }}
-                className="pointer-events-none absolute inset-y-0 w-7 bg-primary"
-              />
-              <Tip label="Vue service">
-                <button
-                  type="button"
-                  onClick={() => setFinanceMode(false)}
-                  aria-label="Vue service"
-                  aria-pressed={!financeMode}
-                  className="relative z-10 flex size-7 items-center justify-center rounded-[5px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                >
-                  <Users
-                    className={cn(
-                      'size-4 transition-colors duration-200',
-                      financeMode
-                        ? 'text-muted-foreground'
-                        : 'text-primary-foreground',
-                    )}
-                  />
-                </button>
-              </Tip>
-              <Tip label="Détail financier">
-                <button
-                  type="button"
-                  onClick={() => setFinanceMode(true)}
-                  aria-label="Détail financier"
-                  aria-pressed={financeMode}
-                  className="relative z-10 flex size-7 items-center justify-center rounded-[5px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                >
-                  <Receipt
-                    className={cn(
-                      'size-4 transition-colors duration-200',
-                      financeMode
-                        ? 'text-primary-foreground'
-                        : 'text-muted-foreground',
-                    )}
-                  />
-                </button>
-              </Tip>
-            </div>
-          )
-        }
         // Sur écran tactile, ce groupe entier laisse la place à la barre
         // d'outils basse fixe (cf. fin du composant) — même mécanisme que
         // Rapro. `undefined` (pas un `hidden` CSS) : PageHeader ne rend alors
@@ -990,6 +920,69 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
         actions={
           isTouchDevice ? undefined : (
           <>
+            {/* Bascule « vue service ↔ détail financier » : segmented control
+                dans le style des boutons d'action (bordure outline, hauteur
+                icon-sm), un seul actif à la fois. La pastille bleue GLISSE
+                d'une position à l'autre (translate animé) au lieu de sauter.
+                Réétiquette le tableau à l'écran ; jamais imprimé.
+                Vivait auparavant dans le `badge` du titre (aligné à part,
+                détaché du reste des actions) — ramenée ici, dans la même
+                zone que tous les autres boutons de page, à la demande de
+                l'utilisateur. Réservée à la souris (le bloc `actions` entier
+                l'est déjà) : sur écran tactile, la bascule vit dans la barre
+                d'outils basse (cf. fin du composant). */}
+            {hasData && (
+              <div className="pdj-seg relative inline-flex h-8 items-center overflow-hidden rounded-md border bg-background shadow-xs print:hidden dark:border-input dark:bg-input/30">
+                {/* Pastille active : remplit TOUTE la hauteur (inset-y-0) et la
+                    largeur d'un bouton (w-7), collée aux bordures. Ses coins sont
+                    clippés par l'arrondi du conteneur (overflow-hidden) → elle
+                    épouse exactement le cadre. Position par `left` inline (aucune
+                    composition Tailwind, contrairement à `transform`) : service = 0,
+                    financier = largeur d'un bouton (1,75rem). Transition en CSS. */}
+                <span
+                  data-thumb
+                  aria-hidden="true"
+                  style={{ left: financeMode ? '1.75rem' : '0' }}
+                  className="pointer-events-none absolute inset-y-0 w-7 bg-primary"
+                />
+                <Tip label="Vue service">
+                  <button
+                    type="button"
+                    onClick={() => setFinanceMode(false)}
+                    aria-label="Vue service"
+                    aria-pressed={!financeMode}
+                    className="relative z-10 flex size-7 items-center justify-center rounded-[5px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  >
+                    <Users
+                      className={cn(
+                        'size-4 transition-colors duration-200',
+                        financeMode
+                          ? 'text-muted-foreground'
+                          : 'text-primary-foreground',
+                      )}
+                    />
+                  </button>
+                </Tip>
+                <Tip label="Détail financier">
+                  <button
+                    type="button"
+                    onClick={() => setFinanceMode(true)}
+                    aria-label="Détail financier"
+                    aria-pressed={financeMode}
+                    className="relative z-10 flex size-7 items-center justify-center rounded-[5px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  >
+                    <Receipt
+                      className={cn(
+                        'size-4 transition-colors duration-200',
+                        financeMode
+                          ? 'text-primary-foreground'
+                          : 'text-muted-foreground',
+                      )}
+                    />
+                  </button>
+                </Tip>
+              </div>
+            )}
             {/* Groupe « suppression » (ADMIN uniquement), isolé et à gauche :
                   supprime les données du seul jour affiché. Bouton outline, icône
                   rouge (pas de fond plein). Présent seulement s'il y a des données. */}
