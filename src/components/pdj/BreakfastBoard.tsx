@@ -148,10 +148,16 @@ function isAddonCsv(content: string): boolean {
 export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
   const { isNavbarMobile, isTouchDevice, isPhoneWidth } = useResponsiveShell()
   // Tablette tactile EN LARGEUR (typiquement paysage) : ni un seuil de plus,
-  // juste ces deux signaux déjà en place. Pilote la grille des étages sur
-  // une seule rangée de 6 (`pdj-floors--wide-touch`) et la largeur max du
-  // document (cf. plus bas) — jamais vrai à la souris ni sur téléphone.
+  // juste ces deux signaux déjà en place. Pilote la grille des étages en 3
+  // colonnes (`pdj-floors--wide-touch`) et la largeur max du document (cf.
+  // plus bas) — jamais vrai à la souris ni sur téléphone.
   const wideTouch = isTouchDevice && !isNavbarMobile
+  // Tablette tactile EN PORTRAIT (768-1023px de large, ni téléphone ni assez
+  // large pour `wideTouch`) : pilote la grille des étages en 2 colonnes
+  // (`pdj-floors--tablet-portrait`) et le retrait de la tuile « Taux de
+  // captage » (gain de place, demande utilisateur) — jamais vrai à la
+  // souris, sur téléphone, ni en largeur (wideTouch déjà couvert).
+  const tabletPortrait = isTouchDevice && !isPhoneWidth && isNavbarMobile
   const navigate = useNavigate()
   const { can, pageLevel, grade } = useAuth()
   const canEdit = can('pdj', 'ecriture')
@@ -867,11 +873,10 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
   return (
     // `max-w-5xl` centre le contenu comme sur RepJour. Neutralisé à
     // l'impression (la feuille A4 impose déjà sa largeur, voir pdj.css) ET
-    // en tablette tactile en largeur (`wideTouch`) : la grille des étages y
-    // passe sur une seule rangée de 6 (cf. `pdj-floors--wide-touch`) et doit
-    // pouvoir utiliser TOUTE la largeur de l'écran, pas seulement 1024px —
-    // sans ce garde, `max-w-5xl` laissait de grandes marges mortes de part
-    // et d'autre sur un écran plus large (retour utilisateur).
+    // en tablette tactile en largeur (`wideTouch`) : sur un écran plus large
+    // que 1024px, `max-w-5xl` laissait de grandes marges mortes de part et
+    // d'autre (retour utilisateur) — sans objet en tablette portrait
+    // (`tabletPortrait`), déjà plus étroite que ce plafond.
     // `pb-20` réserve la place de la barre d'outils basse tactile (cf. fin du
     // composant) pour qu'elle ne masque jamais la fin du contenu.
     <div
@@ -1153,6 +1158,10 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                 'pdj-stats-grid',
                 extrasCount > 0 && 'pdj-stats-grid--with-extra',
                 externalsCount > 0 && 'pdj-stats-grid--with-externals',
+                // 5 tuiles au lieu de 6 en tablette portrait (« Taux de
+                // captage » retirée juste en dessous, gain de place) : la
+                // rangée doit rester pleine, pas de tuile orpheline.
+                tabletPortrait && 'pdj-stats-grid--tablet-portrait',
               )}
             >
               <StatTile
@@ -1252,27 +1261,34 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
               />
               {/* Taux de captage (écran uniquement) : (inclus + extras) ÷ clients
                   du jour ; « — » si la conso n'a pas été saisie (pas de vraie
-                  donnée). Sous-texte = moyenne sur les jours avec servi saisi. */}
-              <StatTile
-                printHidden
-                label="Taux de captage"
-                accent="#f472b6"
-                hint="Part des clients logés ayant pris un petit-déjeuner ce jour (inclus + extras ÷ clients). « — » si aucune donnée client."
-                value={
-                  captageDay != null ? (
-                    fmtPctInt(captageDay)
-                  ) : (
-                    <span className="text-base font-semibold text-muted-foreground">
-                      —
-                    </span>
-                  )
-                }
-                sub={
-                  benchmark && benchmark.captage.avgCaptage != null
-                    ? subMuted(`moy. ${fmtPctInt(benchmark.captage.avgCaptage)}/j`)
-                    : undefined
-                }
-              />
+                  donnée). Sous-texte = moyenne sur les jours avec servi saisi.
+                  Retirée en tablette portrait (`tabletPortrait`) pour gagner
+                  de la place (demande utilisateur) — `printHidden` la
+                  masquait déjà à l'impression, donc rien à changer côté PDF. */}
+              {!tabletPortrait && (
+                <StatTile
+                  printHidden
+                  label="Taux de captage"
+                  accent="#f472b6"
+                  hint="Part des clients logés ayant pris un petit-déjeuner ce jour (inclus + extras ÷ clients). « — » si aucune donnée client."
+                  value={
+                    captageDay != null ? (
+                      fmtPctInt(captageDay)
+                    ) : (
+                      <span className="text-base font-semibold text-muted-foreground">
+                        —
+                      </span>
+                    )
+                  }
+                  sub={
+                    benchmark && benchmark.captage.avgCaptage != null
+                      ? subMuted(
+                          `moy. ${fmtPctInt(benchmark.captage.avgCaptage)}/j`,
+                        )
+                      : undefined
+                  }
+                />
+              )}
               {/* Départ : masqué à l'ÉCRAN, conservé dans le footer du PDF (comme
                   Recouche) → écran allégé sans toucher au PDF. */}
               <StatTile
@@ -1326,21 +1342,18 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
           {/* Tableaux par étage. La classe `pdj-finance` bascule l'affichage en
               mode détail financier (CSS) — écran uniquement, l'impression revient
               au mode nominatif.
-              `pdj-floors--wide-touch` (tablette tactile EN LARGEUR ≥1024px,
-              donc typiquement en orientation paysage — `isTouchDevice &&
-              !isNavbarMobile`, aucun nouveau seuil, juste ces deux signaux
-              déjà en place) : les 6 étages tiennent sur UNE seule rangée,
-              en réduisant aussi la densité des lignes, pour que la liste
-              entière soit visible sans défilement (demande explicite,
-              écran le plus large disponible). Sans effet à la souris quelle
-              que soit la largeur de fenêtre (`isTouchDevice` l'exclut), et
-              sans effet sur téléphone (`isNavbarMobile` reste vrai en
-              dessous de 1024px). */}
+              `pdj-floors--wide-touch` (tablette tactile EN LARGEUR, ≥1024px —
+              `isTouchDevice && !isNavbarMobile`) : 3 colonnes. `pdj-floors--
+              tablet-portrait` (tablette tactile EN PORTRAIT, 768-1023px —
+              `isTouchDevice && !isPhoneWidth && isNavbarMobile`) : 2 colonnes.
+              Aucun nouveau seuil, juste les signaux déjà en place. Sans effet
+              à la souris ni sur téléphone. */}
           <div
             className={cn(
               'pdj-floors',
               financeMode && 'pdj-finance',
               wideTouch && 'pdj-floors--wide-touch',
+              tabletPortrait && 'pdj-floors--tablet-portrait',
             )}
           >
             {floors.map(({ floor, rooms }) => (
@@ -1576,16 +1589,20 @@ const FLOOR_ROOM_COUNTS = [
  * ligne, même nombre de lignes par étage — pour ne rien décaler à l'arrivée des
  * données. Purement décoratif ; l'en-tête, lui, est déjà rendu au-dessus. */
 function BoardSkeleton() {
-  const { isNavbarMobile, isTouchDevice } = useResponsiveShell()
+  const { isNavbarMobile, isTouchDevice, isPhoneWidth } = useResponsiveShell()
   const wideTouch = isTouchDevice && !isNavbarMobile
+  const tabletPortrait = isTouchDevice && !isPhoneWidth && isNavbarMobile
+  // 5 tuiles en tablette portrait (« Taux de captage » retirée du vrai
+  // contenu, cf. son commentaire plus bas), 6 sinon.
+  const statTileCount = tabletPortrait ? 5 : 6
   return (
     <>
-      {/* Rangée de 6 tuiles dans LEUR vraie grille (`pdj-stats-grid`, 6 colonnes),
-          à la forme du composant StatTile (liseré + libellé + valeur) pour coller
+      {/* Rangée de tuiles dans LEUR vraie grille (`pdj-stats-grid`), à la
+          forme du composant StatTile (liseré + libellé + valeur) pour coller
           au réel et ne rien décaler. */}
       <div className="pdj-stats" aria-hidden="true">
         <div className="pdj-stats-grid">
-          {Array.from({ length: 6 }).map((_, i) => (
+          {Array.from({ length: statTileCount }).map((_, i) => (
             <div
               key={i}
               className="flex items-stretch overflow-hidden rounded-xl border border-border bg-card"
@@ -1601,11 +1618,14 @@ function BoardSkeleton() {
       </div>
       {/* Tableaux par étage : même structure que le vrai (`pdj-floor > table`),
           en-têtes réels (invariants), et autant de lignes que de chambres.
-          Même modificateur `pdj-floors--wide-touch` que le vrai contenu
-          (cf. son commentaire), pour ne rien décaler à l'arrivée des
-          données. */}
+          Mêmes modificateurs que le vrai contenu (cf. son commentaire), pour
+          ne rien décaler à l'arrivée des données. */}
       <div
-        className={cn('pdj-floors', wideTouch && 'pdj-floors--wide-touch')}
+        className={cn(
+          'pdj-floors',
+          wideTouch && 'pdj-floors--wide-touch',
+          tabletPortrait && 'pdj-floors--tablet-portrait',
+        )}
         aria-hidden="true"
       >
         {FLOOR_ROOM_COUNTS.map((count, i) => (

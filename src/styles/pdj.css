@@ -41,6 +41,14 @@
   grid-template-columns: repeat(3, 1fr);
 }
 
+/* Tablette tactile EN PORTRAIT (768-1023px de large — `isTouchDevice &&
+   !isPhoneWidth && isNavbarMobile` côté composant, ni téléphone ni assez
+   large pour `wideTouch`) : 2 colonnes (donc 3 rangées pour les 6 étages),
+   demande utilisateur. Sans effet à la souris ni sur téléphone. */
+.pdj-floors--tablet-portrait {
+  grid-template-columns: repeat(2, 1fr);
+}
+
 /* À l'écran, les cartes d'une même rangée ont la même hauteur (align stretch
    par défaut) et le tableau remplit la carte : les étages moins remplis (1 et 6)
    s'alignent sur les autres sans laisser de vide en bas. */
@@ -240,6 +248,13 @@
   .pdj-stats-grid {
     grid-template-columns: repeat(6, 1fr);
   }
+}
+/* Tablette portrait (cf. `.pdj-floors--tablet-portrait`) : « Taux de captage »
+   est retirée (gain de place, demande utilisateur), 5 tuiles restantes — la
+   rangée doit rester pleine plutôt que garder une 6e colonne vide. Après le
+   palier ci-dessus dans la cascade : l'emporte à cette largeur. */
+.pdj-stats-grid.pdj-stats-grid--tablet-portrait {
+  grid-template-columns: repeat(5, 1fr);
 }
 
 /* Tuile masquée à l'ÉCRAN mais conservée dans le footer du PDF (miroir de
