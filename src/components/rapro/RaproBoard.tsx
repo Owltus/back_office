@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { ChevronLeft, ChevronRight, LineChart, Printer, RotateCcw } from 'lucide-react'
@@ -11,6 +11,8 @@ import { LockBadge } from '#/components/shared/LockBadge.tsx'
 import { useNavbarBadge, useNavbarSubtitle } from '#/lib/navbarSubtitle.ts'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { useMatchMedia } from '#/components/shared/useMatchMedia.ts'
+import { isTouchDeviceNow } from '#/components/shared/useResponsiveShell.ts'
+import { MobileToolbar, ToolbarCell } from '#/components/shared/MobileToolbar.tsx'
 import { PrintBlockedDialog } from '#/components/shared/PrintBlockedDialog.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
 import { StatTile } from '#/components/shared/StatTile.tsx'
@@ -46,6 +48,7 @@ import {
 import { addDays, clampDay, today } from '#/lib/rapro/day.ts'
 import { canReconcileDay } from '#/lib/rapro/editability.ts'
 import { printRaproSheet } from '#/lib/rapro/pdf.ts'
+import { printWithTitle } from '#/lib/print.ts'
 import { reconcile } from '#/lib/rapro/reconcile.ts'
 import { FLOORS } from '#/lib/rapro/rooms.ts'
 import { missingSources } from '#/lib/rapro/sources.ts'
@@ -127,6 +130,7 @@ function statLabel(full: string, short: string) {
 export function RaproBoard({ initialDate }: { initialDate?: string }) {
   const isNavbarMobile = useMatchMedia('(max-width: 1023.98px)')
   const isTouchDevice = useMatchMedia('(hover: none) and (pointer: coarse)')
+  const navigate = useNavigate()
   const { user, pageLevel } = useAuth()
   // Niveau effectif : sert au verrou PAR JOUR. Écriture n'agit que dans la fenêtre
   // de grâce (J-0..J-2) ; la gestion peut agir sur n'importe quel jour (cf.
@@ -679,13 +683,13 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
     // printRaproSheet) arriverait hors du geste utilisateur aux yeux du
     // bloqueur de popups, qui le bloquerait silencieusement. Vide pour
     // l'instant, sa location changera une fois le PDF prêt (lib/rapro/pdf.ts).
-    // `(hover: none) and (pointer: coarse)` : le vrai signal d'un écran
-    // tactile (adapt.md), pas la largeur de fenêtre — une fenêtre desktop
-    // redimensionnée étroite garde l'impression automatique, qui y marche.
-    const isTouchDevice = window.matchMedia(
-      '(hover: none) and (pointer: coarse)',
-    ).matches
-    const printWindow = isTouchDevice ? window.open('', '_blank') : null
+    // `isTouchDeviceNow()` (`hover: none` + `pointer: coarse`) : le vrai
+    // signal d'un écran tactile, pas la largeur de fenêtre — une fenêtre
+    // desktop redimensionnée étroite garde l'impression automatique, qui y
+    // marche. Repris du helper partagé (`useResponsiveShell.ts`) au lieu
+    // d'une détection dupliquée en dur, pour ne plus jamais diverger de la
+    // définition centrale.
+    const printWindow = isTouchDeviceNow() ? window.open('', '_blank') : null
     try {
       const [yy, mm, dd] = selectedDate.split('-')
       await printRaproSheet(
@@ -714,6 +718,20 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
     }
   }
 
+  // Bascule d'impression (chantier « audit impression tactile », D1) : sur
+  // écran tactile, `window.print()` NATIF sur ce même DOM (comme PDJ) — CSS
+  // `@media print` dans rapro.css, réutilise `.rapro-stats`/`.rapro-floors`/
+  // `.rapro-legend`/le commentaire déjà affichés à l'écran. Sur souris,
+  // `handleGeneratePdf` (jsPDF) reste TOTALEMENT inchangé.
+  function handlePrint() {
+    if (isTouchDevice) {
+      const [yy, mm, dd] = selectedDate.split('-')
+      printWithTitle(`Rapprochement_${dd}-${mm}-${yy}`)
+      return
+    }
+    void handleGeneratePdf()
+  }
+
   /* Ctrl+P emprunte la même porte que le bouton : le PDF jsPDF, jamais le rendu
      brut du DOM. Deux refus possibles, et ils ne se confondent pas — sans
      données, dire « clôturez » serait un cul-de-sac, puisque le bouton de
@@ -733,7 +751,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
       )
       return
     }
-    void handleGeneratePdf()
+    handlePrint()
   })
 
   const parsed = parseDateStr(selectedDate)
@@ -825,10 +843,18 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
     // plutôt que d'écraser la zone commentaire jusqu'à la faire disparaître.
     <div
       className={cn(
-        'mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4',
+        'rapro-doc mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4',
         isTouchDevice && 'pb-20',
       )}
     >
+      {/* En-tête compact : IMPRESSION UNIQUEMENT (masqué à l'écran par
+          `rapro.css`, comme `.pdj-header` sur PDJ) — le titre/la date de
+          l'écran vivent dans PageHeader/la Navbar, jamais imprimés
+          eux-mêmes (`print:hidden`). */}
+      <div className="rapro-header">
+        <h1>Rapprochement des chambres</h1>
+        <span className="rapro-date">{title}</span>
+      </div>
       <PageHeader
         // Sous 1024px, le jour et le statut vivent dans la Navbar globale
         // (sous-titre + badge à côté du hamburger, posés par useNavbarSubtitle/
@@ -878,7 +904,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
                   n'est pas clôturé — l'infobulle porte alors la raison. Le bouton
                   de clôture, lui, ferme la page (sous les commentaires). */}
               <PrintButton
-                onClick={handleGeneratePdf}
+                onClick={handlePrint}
                 iconOnly
                 disabled={!isValidated || pdfBusy}
                 tipLabel={
@@ -1217,6 +1243,30 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
             onCommit={commitComment}
           />
 
+          {/* Signatures : IMPRESSION UNIQUEMENT (masqué à l'écran), miroir des
+              cadres du PDF jsPDF (lib/rapro/pdf.ts) — l'écran a déjà le statut
+              clôturé/ouvert (LockBadge) et l'opérateur (RaproCommentCard),
+              mais pas de cadre à signer physiquement. */}
+          <div className="rapro-print-footer">
+            {isValidated && sheet.validatedAt && (
+              <span className="rapro-print-closure">
+                Clôturé le{' '}
+                {format(new Date(sheet.validatedAt), "d MMMM yyyy 'à' HH'h'mm", {
+                  locale: fr,
+                })}
+              </span>
+            )}
+            <div className="rapro-print-signatures">
+              <div className="rapro-print-sig-box">
+                Signature OKKO
+                {isValidated && sheet.operatorName
+                  ? ` (${sheet.operatorName})`
+                  : ''}
+              </div>
+              <div className="rapro-print-sig-box">Signature ÉLIOR</div>
+            </div>
+          </div>
+
           {stateAction}
         </>
       )}
@@ -1258,14 +1308,11 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
       />
 
       {/* Barre d'outils basse (écran tactile uniquement, peu importe la
-          largeur — téléphone OU tablette) : une vraie barre d'app mobile —
-          icône + libellé, portée du pouce — plutôt que les boutons de bureau
-          simplement rétrécis. `fixed` échappe au scroll de `<main>` (aucun
-          ancêtre ne pose de `transform`/`contain`, donc elle reste bien
-          pinnée à la fenêtre) ; `pb-20` sur le conteneur racine ci-dessus
-          réserve la place pour qu'elle ne masque jamais la fin du contenu
-          (commentaire, bouton Clôturer). Aide/Analytique/Imprimer gardent
-          leurs handlers exacts de la barre du haut.
+          largeur — téléphone OU tablette) : socle partagé `MobileToolbar`/
+          `ToolbarCell` (`print:hidden` hérité automatiquement — cf. son
+          commentaire — au lieu du `<nav>` fait main d'origine, qui ne
+          l'avait jamais reçu). Aide/Analytique/Imprimer gardent leurs
+          handlers exacts de la barre du haut.
           Navigation temporelle : PAS le cluster StepNav+calendrier compressé
           dans une seule cellule (jugé peu pratique au doigt) — Précédent et
           Suivant deviennent chacun leur propre cellule pleine largeur, aux
@@ -1276,60 +1323,42 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
           Pas de bouton calendrier séparé ici : le jour affiché en Navbar
           (sous-titre, useNavbarSubtitle ci-dessus) reste purement informatif
           (pas de sélecteur de date sur écran tactile, cf. DESIGN.md). */}
-      {isTouchDevice && (
-        <nav
-          className="fixed inset-x-0 bottom-0 z-30 flex items-stretch border-t border-border bg-card/95 backdrop-blur-md"
-          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-        >
-          <button
-            type="button"
-            onClick={() => goStep(-1)}
-            disabled={atLower}
-            aria-label="Jour précédent"
-            className="flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-muted-foreground transition-colors active:bg-accent active:text-foreground disabled:pointer-events-none disabled:opacity-40"
-          >
-            <ChevronLeft className="size-5" />
-            <span className="text-[11px] font-medium">Préc.</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setHelpOpen(true)}
-            aria-label="Comment ça marche"
-            className="flex flex-1 flex-col items-center justify-center gap-0.5 border-l border-border py-2 text-muted-foreground transition-colors active:bg-accent active:text-foreground"
-          >
-            <HelpGlyph className="size-5" />
-            <span className="text-[11px] font-medium">Aide</span>
-          </button>
-          <Link
-            to="/rapro/analytique"
-            aria-label="Vue analytique"
-            className="flex flex-1 flex-col items-center justify-center gap-0.5 border-l border-border py-2 text-muted-foreground transition-colors active:bg-accent active:text-foreground"
-          >
-            <LineChart className="size-5" />
-            <span className="text-[11px] font-medium">Analytique</span>
-          </Link>
-          <button
-            type="button"
-            onClick={handleGeneratePdf}
-            disabled={!isValidated || pdfBusy}
-            aria-label="Imprimer / PDF"
-            className="flex flex-1 flex-col items-center justify-center gap-0.5 border-l border-border py-2 text-muted-foreground transition-colors active:bg-accent active:text-foreground disabled:pointer-events-none disabled:opacity-40"
-          >
-            <Printer className="size-5" />
-            <span className="text-[11px] font-medium">Imprimer</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => goStep(1)}
-            disabled={atLatest}
-            aria-label="Jour suivant"
-            className="flex flex-1 flex-col items-center justify-center gap-0.5 border-l border-border py-2 text-muted-foreground transition-colors active:bg-accent active:text-foreground disabled:pointer-events-none disabled:opacity-40"
-          >
-            <ChevronRight className="size-5" />
-            <span className="text-[11px] font-medium">Suiv.</span>
-          </button>
-        </nav>
-      )}
+      <MobileToolbar visible={isTouchDevice}>
+        <ToolbarCell
+          icon={<ChevronLeft className="size-5" />}
+          label="Préc."
+          ariaLabel="Jour précédent"
+          onClick={() => goStep(-1)}
+          disabled={atLower}
+          bordered={false}
+        />
+        <ToolbarCell
+          icon={<HelpGlyph className="size-5" />}
+          label="Aide"
+          ariaLabel="Comment ça marche"
+          onClick={() => setHelpOpen(true)}
+        />
+        <ToolbarCell
+          icon={<LineChart className="size-5" />}
+          label="Analytique"
+          ariaLabel="Vue analytique"
+          onClick={() => navigate({ to: '/rapro/analytique' })}
+        />
+        <ToolbarCell
+          icon={<Printer className="size-5" />}
+          label="Imprimer"
+          ariaLabel="Imprimer / PDF"
+          onClick={handlePrint}
+          disabled={!isValidated || pdfBusy}
+        />
+        <ToolbarCell
+          icon={<ChevronRight className="size-5" />}
+          label="Suiv."
+          ariaLabel="Jour suivant"
+          onClick={() => goStep(1)}
+          disabled={atLatest}
+        />
+      </MobileToolbar>
     </div>
   )
 }

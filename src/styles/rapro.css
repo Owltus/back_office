@@ -346,3 +346,165 @@
   border-radius: 2px;
   border: 1.5px solid #f87171;
 }
+
+/* --- Impression native (tactile) --------------------------------------- *
+ * Chantier « audit impression tactile » (D1) : sur écran tactile, le
+ * bouton Imprimer déclenche désormais `window.print()` (natif) sur CE
+ * MÊME DOM plutôt que jsPDF + fenêtre séparée — comme PDJ. Le DOM écran
+ * (`.rapro-stats`/`.rapro-floors`/`.rapro-legend`/le commentaire) porte
+ * déjà TOUTE l'information du document ; seuls le titre/date et les
+ * cadres de signature n'ont pas d'équivalent écran (ajoutés ci-dessous,
+ * en-tête et pied de page IMPRESSION UNIQUEMENT, mêmes classes que
+ * `.pdj-header` sur PDJ). Le chemin SOURIS (jsPDF, lib/rapro/pdf.ts)
+ * reste totalement inchangé par ce chantier. */
+
+/* En-tête compact : masqué à l'écran, réservé à l'impression. */
+.rapro-header {
+  display: none;
+}
+
+/* Pied de page signatures : masqué à l'écran, réservé à l'impression. */
+.rapro-print-footer {
+  display: none;
+}
+
+@media print {
+  .rapro-doc,
+  .rapro-doc * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  @page {
+    margin: 12mm;
+    size: A4 portrait;
+  }
+
+  /* En-tête compact : titre centré + date en dessous, comme PDJ. */
+  .rapro-header {
+    display: block;
+    margin-bottom: 10px;
+    text-align: center;
+  }
+  .rapro-header h1 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: #1a1a1a;
+    text-transform: uppercase;
+  }
+  .rapro-header .rapro-date {
+    display: block;
+    margin-top: 2px;
+    font-size: 19px;
+    font-weight: 700;
+    color: #1a1a1a;
+  }
+
+  /* Fond blanc pour toutes les cartes/tuiles — le thème sombre de l'app
+     n'a aucun sens sur papier. */
+  .rapro-floor {
+    background: #fff;
+    border: 1px solid #ddd;
+    box-shadow: none;
+  }
+  .rapro-floor-title {
+    color: #1a1a1a;
+  }
+  /* Bouton « marquer l'étage nettoyé » : action, pas du contenu à imprimer. */
+  .rapro-floor-action {
+    display: none;
+  }
+
+  .rapro-room {
+    color: #1a1a1a;
+    background: #f5f5f5;
+    border: 1px solid #ddd;
+    cursor: default;
+  }
+  .rapro-room-empty {
+    color: #999;
+    background: #fff;
+    border-color: #eee;
+    opacity: 1;
+  }
+  .rapro-room-clean {
+    color: #065f46;
+    background: #d1fae5;
+    border-color: #6ee7b7;
+  }
+  .rapro-room-refus {
+    color: #92400e;
+    background: #fef3c7;
+    border-color: #fcd34d;
+  }
+  .rapro-room-todo {
+    color: #991b1b;
+    background: #fee2e2;
+    border-color: #f87171;
+  }
+  .rapro-room-carried {
+    border-color: #ef4444;
+    box-shadow: inset 0 0 0 1.25px #ef4444;
+  }
+
+  /* Tuiles de synthèse (StatTile) : mêmes classes stables qu'à l'écran,
+     aplaties pour le papier — même traitement que `.pdj-stats .stat-tile`
+     dans pdj.css. */
+  .rapro-stats .stat-tile {
+    background: #fafafa;
+    border: 1px solid #e0e0e0;
+    box-shadow: none;
+  }
+  .rapro-stats .stat-tile__rail {
+    display: none;
+  }
+  .rapro-stats .stat-tile__value {
+    color: #1a1a1a;
+  }
+  .rapro-stats .stat-tile__label {
+    color: #666;
+  }
+
+  .rapro-legend {
+    color: #444;
+  }
+  /* Gestes souris (clic gauche/droit) sans objet sur une feuille imprimée. */
+  .rapro-mouse {
+    display: none;
+  }
+
+  .rapro-comment-title {
+    color: #1a1a1a;
+  }
+
+  /* Pied de page signatures : cadre OKKO nominatif + cadre ÉLIOR fixe,
+     miroir du PDF jsPDF (lib/rapro/pdf.ts, `renderRaproDocument`). */
+  .rapro-print-footer {
+    display: block;
+    margin-top: 16px;
+  }
+  .rapro-print-closure {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 9px;
+    color: #666;
+    text-align: right;
+  }
+  .rapro-print-signatures {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .rapro-print-sig-box {
+    flex: 1;
+    min-height: 60px;
+    padding: 6px 8px;
+    font-size: 9px;
+    font-weight: 600;
+    color: #666;
+    border: 1px solid #333;
+  }
+}
