@@ -1341,7 +1341,11 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
         <ToolbarCell
           icon={<Printer className="size-5" />}
           label="Imprimer"
-          ariaLabel="Imprimer / PDF"
+          ariaLabel={
+            isValidated
+              ? 'Imprimer / PDF'
+              : 'Clôturez le rapprochement pour imprimer la feuille'
+          }
           onClick={handlePrint}
           disabled={!isValidated || pdfBusy}
         />

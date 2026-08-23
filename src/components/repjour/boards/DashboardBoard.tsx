@@ -965,7 +965,9 @@ export function DashboardBoard() {
         <ToolbarCell
           icon={<Printer className="size-5" />}
           label="Imprimer"
-          ariaLabel="Imprimer / PDF"
+          ariaLabel={
+            canPrint ? 'Imprimer / PDF' : 'Aucune donnée à imprimer pour ce jour'
+          }
           onClick={isTouchDevice ? handlePrint : handleGeneratePdf}
           disabled={!canPrint || pdfBusy}
         />

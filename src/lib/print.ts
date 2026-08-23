@@ -4,14 +4,36 @@
  * restauré. `afterprint` est plus fiable que le timeout seul (impression
  * asynchrone) ; le timeout reste en filet de sécurité, restaurer deux fois
  * est sans effet.
+ *
+ * Réentrant : un double-appel avant restauration (double-tap, ou un
+ * appelant sans garde `pdfBusy` pendant l'appel synchrone lui-même) annule
+ * le timer et l'écouteur précédents au lieu de les empiler, et garde le
+ * VRAI titre d'origine (pas le titre temporaire déjà posé) pour la
+ * restauration finale.
  */
+let originalTitle: string | null = null
+let restoreTimer: ReturnType<typeof setTimeout> | null = null
+let restoreListener: (() => void) | null = null
+
 export function printWithTitle(documentTitle: string): void {
-  const previousTitle = document.title
+  if (originalTitle === null) {
+    originalTitle = document.title
+  }
+  if (restoreTimer !== null) {
+    clearTimeout(restoreTimer)
+  }
+  if (restoreListener !== null) {
+    window.removeEventListener('afterprint', restoreListener)
+  }
   document.title = documentTitle
   const restore = () => {
-    document.title = previousTitle
+    document.title = originalTitle ?? documentTitle
+    originalTitle = null
+    restoreTimer = null
+    restoreListener = null
   }
+  restoreListener = restore
   window.addEventListener('afterprint', restore, { once: true })
   window.print()
-  setTimeout(restore, 1000)
+  restoreTimer = setTimeout(restore, 1000)
 }

@@ -6,6 +6,7 @@ import { Check, FilePlus2, Plus, Save, Trash2 } from 'lucide-react'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
 import { SkeletonBlock } from '#/components/shared/skeleton/SkeletonBlock.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
+import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
 import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
 import { Label } from '#/components/ui/label.tsx'
@@ -321,6 +322,7 @@ export function AffichageBoard() {
     }
     printWithTitle(`Affiche_${stamp}`)
   }
+  usePrintShortcut(handlePrint)
 
   // Squelette de l'aperçu : uniquement au démarrage à froid, tant que les
   // modèles ne sont pas chargés ET que le store est encore vierge (aucun modèle
