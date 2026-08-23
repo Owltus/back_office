@@ -58,7 +58,7 @@ export async function printRaproSheet(
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   pdf.setProperties({ title })
   renderRaproDocument(pdf, data)
-  openPrintablePdf(pdf, 'rapro-print-frame', target)
+  openPrintablePdf(pdf, 'rapro-print-frame', title, target)
 }
 
 const LEFT = 15

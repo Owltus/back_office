@@ -177,7 +177,7 @@ export async function printCaisseSheet(
   target?: Window | null,
 ): Promise<void> {
   const pdf = await buildCaissePdf(data, title)
-  openPrintablePdf(pdf, 'caisse-print-frame', target)
+  openPrintablePdf(pdf, 'caisse-print-frame', title, target)
 }
 
 const LEFT = 15

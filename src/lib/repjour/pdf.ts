@@ -84,7 +84,7 @@ export async function printRepjourReport(
   target?: Window | null,
 ): Promise<void> {
   const pdf = await buildRepjourPdf(data, title)
-  openPrintablePdf(pdf, 'repjour-print-frame', target)
+  openPrintablePdf(pdf, 'repjour-print-frame', title, target)
 }
 
 // --- Géométrie -------------------------------------------------------------

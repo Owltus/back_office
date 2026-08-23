@@ -192,11 +192,21 @@ async function rasterizeChartSvg(
   }
 }
 
-/** Texte VISIBLE d'un élément : `innerText` ignore les nœuds masqués en CSS —
- * indispensable pour les en-têtes responsive qui contiennent deux libellés (un
- * long visible ≥ sm, un court caché), que `textContent` concaténerait. */
+/** Texte d'un élément, pour le PDF. Convention responsive « double libellé »
+ * du socle analytique (`KpiCell`, en-têtes PDJ/Rapro/Parking/Caisse/RepJour) :
+ * un span `.hidden.sm:inline` (long, complet) et un `.sm:hidden` (court,
+ * pour l'écran étroit d'un téléphone). LE PDF DOIT TOUJOURS PRENDRE LE LONG, quelle
+ * que soit la largeur d'écran au moment du clic — sinon le même document
+ * imprimé depuis un téléphone (« OCC. »/« CAPT. ») diffère de celui imprimé
+ * depuis un ordinateur (« OCCUPATION »/« CAPTAGE »), alors que le PDF est
+ * censé être identique partout. `textContent` (pas `innerText`) sur le span
+ * long : on veut SON texte même quand `display:none` le rend invisible.
+ * Repli sur `innerText` (texte VISIBLE, ignore les nœuds masqués) si aucun
+ * span long n'existe — élément sans ce motif responsive. */
 function readText(el: Element | null | undefined): string {
   if (!el) return ''
+  const long = el.querySelector('.hidden.sm\\:inline')
+  if (long) return T(long.textContent ?? '')
   const t = (el as HTMLElement).innerText
   return T(t != null && t !== '' ? t : (el.textContent ?? ''))
 }
@@ -586,5 +596,5 @@ export async function printAnalytique(
 ): Promise<void> {
   const extract = await extractAnalytique(root)
   const pdf = await buildAnalytiquePdf(extract, printTitle)
-  openPrintablePdf(pdf, 'analytique-print-frame', target)
+  openPrintablePdf(pdf, 'analytique-print-frame', printTitle, target)
 }

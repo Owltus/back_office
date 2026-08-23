@@ -25,20 +25,31 @@ import type { jsPDF } from 'jspdf'
  *
  * `URL.revokeObjectURL` différé au `load` de l'iframe (jamais immédiat : le
  * navigateur a encore besoin du blob le temps de charger le PDF dedans).
+ *
+ * `title` nomme le fichier sur tactile : un `blob:` URL brut n'a aucun nom
+ * (son dernier segment est un UUID généré par le navigateur), c'est donc CE
+ * nom que la visionneuse mobile propose à l'enregistrement — pas le
+ * `/Title` interne du PDF (`pdf.setProperties`), que la plupart des
+ * visionneuses mobiles ignorent. On construit l'URL depuis un `File` nommé
+ * plutôt qu'un `Blob` anonyme pour lui donner ce nom.
  */
 export function openPrintablePdf(
   pdf: jsPDF,
   frameId: string,
+  title: string,
   target?: Window | null,
 ): void {
   pdf.autoPrint()
-  const blobUrl = pdf.output('bloburl').toString()
 
   if (target) {
-    target.location.href = blobUrl
+    const file = new File([pdf.output('blob')], `${title}.pdf`, {
+      type: 'application/pdf',
+    })
+    target.location.href = URL.createObjectURL(file)
     return
   }
 
+  const blobUrl = pdf.output('bloburl').toString()
   document.getElementById(frameId)?.remove()
   const iframe = document.createElement('iframe')
   iframe.id = frameId

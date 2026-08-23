@@ -101,7 +101,7 @@ export async function printParkingSheets(
   target?: Window | null,
 ): Promise<void> {
   const pdf = await buildParkingSheetPdf(data, title)
-  openPrintablePdf(pdf, 'parking-print-frame', target)
+  openPrintablePdf(pdf, 'parking-print-frame', title, target)
 }
 
 // --- Géométrie (A4 paysage : 297 × 210 mm) ---------------------------------
