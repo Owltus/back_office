@@ -14,6 +14,7 @@ import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import type { jsPDF } from 'jspdf'
 
+import { openPrintablePdf } from '#/lib/print/openPdf.ts'
 import {
   CELL_STATES,
   cellState,
@@ -42,49 +43,22 @@ export interface RaproPdfData {
   validatedAt: string | null
 }
 
-/** Ouvre un PDF déjà rendu dans la fenêtre d'impression, via un iframe caché
- * recyclé (aucun téléchargement). Harnais partagé par les documents rapro.
- *
- * L'astuce iframe 0×0 + `autoPrint()` (action « imprimer » intégrée au PDF) ne
- * fonctionne que si le navigateur rend le PDF dans une visionneuse NATIVE à
- * l'intérieur de l'iframe — le cas sur desktop (Chrome/Firefox/Edge), pas sur
- * la plupart des navigateurs mobiles (iOS Safari, Chrome Android) : l'iframe
- * invisible ne déclenche rien, le bouton semble ne rien faire (rapporté en
- * usage réel).
- *
- * Réservé à la SOURIS depuis la décision D1 (plan/audit-impression-tactile) :
- * le tactile imprime désormais nativement le DOM écran (`window.print()`,
- * cf. `RaproBoard.tsx`/`rapro.css`), ce chemin jsPDF + iframe caché n'est
- * donc plus jamais appelé que depuis un pointeur souris. `URL.revokeObjectURL`
- * différé au `load` de l'iframe (jamais immédiat : le navigateur a encore
- * besoin du blob le temps de charger le PDF dedans). */
-function openPrintablePdf(pdf: jsPDF, frameId: string): void {
-  pdf.autoPrint()
-  const blobUrl = pdf.output('bloburl').toString()
-  document.getElementById(frameId)?.remove()
-  const iframe = document.createElement('iframe')
-  iframe.id = frameId
-  iframe.style.cssText =
-    'position:fixed;right:0;bottom:0;width:0;height:0;border:0'
-  iframe.addEventListener(
-    'load',
-    () => URL.revokeObjectURL(blobUrl),
-    { once: true },
-  )
-  iframe.src = blobUrl
-  document.body.appendChild(iframe)
-}
-
-/** Génère le PDF du rapprochement du jour et ouvre l'impression (souris). */
+/** Génère le PDF du rapprochement du jour et l'ouvre pour impression — MÊME
+ * document, souris ou tactile (cf. `lib/print/openPdf.ts`) : sur tactile,
+ * `target` (fenêtre ouverte par l'appelant AVANT tout await) reçoit le PDF
+ * dans un nouvel onglet visible, où l'utilisateur déclenche l'impression
+ * depuis la visionneuse native — l'astuce iframe caché + `autoPrint()` ne
+ * fonctionnant que sur desktop. */
 export async function printRaproSheet(
   data: RaproPdfData,
   title: string,
+  target?: Window | null,
 ): Promise<void> {
   const { jsPDF } = await import('jspdf')
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   pdf.setProperties({ title })
   renderRaproDocument(pdf, data)
-  openPrintablePdf(pdf, 'rapro-print-frame')
+  openPrintablePdf(pdf, 'rapro-print-frame', target)
 }
 
 const LEFT = 15

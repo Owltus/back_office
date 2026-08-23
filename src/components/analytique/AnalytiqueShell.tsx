@@ -13,7 +13,6 @@ import { MobileToolbar, ToolbarCell } from '#/components/shared/MobileToolbar.ts
 import { useNavbarSubtitle } from '#/lib/navbarSubtitle.ts'
 import { AnalytiqueSkeleton } from '#/components/analytique/AnalytiqueSkeleton.tsx'
 import { printAnalytique } from '#/lib/analytique/pdf.ts'
-import { printWithTitle } from '#/lib/print.ts'
 import { cn } from '#/lib/utils.ts'
 
 // `ToolbarCell` vit désormais dans `shared/MobileToolbar.tsx` (socle commun à
@@ -31,18 +30,13 @@ export { ToolbarCell }
  * modification de mise en page se fait donc ici, une seule fois, pour les 10 pages.
  *
  * IMPRESSION : `printTitle` active le bouton « Imprimer / PDF » (icône seule, et
- * Ctrl/Cmd+P), commun aux boards. DEUX mécaniques selon le pointeur (comme PDJ) :
- *   - SOURIS (`handlePrintPdf`, INCHANGÉ) : PDF vectoriel bâti par `printAnalytique`
- *     (`lib/analytique/pdf.ts`), qui LIT le contenu déjà rendu sous `rootRef`
- *     (cartes → tableau → graphes) et le redessine avec jsPDF.
- *   - TACTILE (`handlePrint`, nouveau nom du dispatcher) : `printWithTitle` déclenche
- *     l'impression NATIVE du navigateur (`window.print()`), qui imprime ce MÊME DOM
- *     restylé `@media print` (`styles/analytique.css`) — aucun bloc HTML séparé,
- *     contrairement à Parking : le DOM écran analytique (cartes + tableau + graphe
- *     SVG Recharts, qui s'imprime nativement) est déjà tout ce que `printAnalytique`
- *     extrait pour le PDF.
- * Le document reflète la page : cartes, puis TOUS les mois / jours, puis le(s)
- * graphe(s).
+ * Ctrl/Cmd+P), commun aux boards. MÊME PDF souris et tactile, bâti par
+ * `printAnalytique` (`lib/analytique/pdf.ts`), qui LIT le contenu déjà rendu
+ * sous `rootRef` (cartes → tableau → graphes) et le redessine avec jsPDF —
+ * seule la présentation change (iframe caché + `autoPrint()` à la souris,
+ * nouvel onglet visible au doigt, cf. `handlePrint` ci-dessous et
+ * `lib/print/openPdf.ts`). Le document reflète la page : cartes, puis TOUS
+ * les mois / jours, puis le(s) graphe(s).
  *
  * Bornage RESPONSIVE (`lg:min-h-0`) : sous `lg`, la page suit son flux naturel et
  * défile normalement (le tableau prend toute sa hauteur, tous les mois visibles) ;
@@ -124,39 +118,27 @@ export function AnalytiqueShell({
   // composant plutôt qu'au bon moment.
   useNavbarSubtitle(isNavbarMobile ? (mobileIdentity ?? null) : null)
 
-  // Impression SOURIS (chemin desktop, INCHANGÉ) : PDF vectoriel jsPDF, extrait
-  // du DOM déjà rendu sous `rootRef` (cartes → tableau → graphes), imprimé via
-  // iframe cachée + `autoPrint()`. N'est plus jamais appelé sur tactile depuis
-  // la bascule ci-dessous — `printAnalytique` garde son 3e paramètre
-  // `printWindow` (fenêtre ouverte pour un lecteur PDF mobile) dans
-  // `lib/analytique/pdf.ts`, INCHANGÉ, simplement non utilisé ici désormais.
-  // `printError` : aucun système de notification n'existait déjà dans ce
-  // socle (audit impression tactile, étape 8) — bandeau minimal plutôt qu'un
-  // échec muet, qui donne l'impression que le bouton « ne fait rien ».
-  const [printError, setPrintError] = useState(false)
-  const handlePrintPdf = () => {
-    const root = rootRef.current
-    if (!printTitle || loading || !root) return
-    setPrintError(false)
-    printAnalytique(root, printTitle).catch(() => setPrintError(true))
-  }
-  // Bascule tactile (D1, cf. plan/audit-impression-tactile) : sur un appareil
-  // à doigt, `window.print()` natif (CSS `@media print` de
-  // `styles/analytique.css`) plutôt que le PDF jsPDF — la plupart des
-  // navigateurs mobiles n'ont pas de lecteur PDF capable d'exécuter
-  // `autoPrint()`, contrairement au bureau où l'iframe caché suffit. Détecté
-  // par pointeur (`isTouchDeviceNow`, synchrone), pas par largeur d'écran, pour
+  // Génère le MÊME PDF, souris ou tactile — extrait du DOM déjà rendu sous
+  // `rootRef` (cartes → tableau → graphes). Sur tactile, la plupart des
+  // navigateurs mobiles ne rendent aucune visionneuse PDF dans l'iframe
+  // caché (souris) : `autoPrint()` n'y déclenche rien, le bouton semblait ne
+  // rien faire. On ouvre donc ce même PDF dans un nouvel onglet VISIBLE —
+  // `window.open` synchrone avec le clic (avant tout `await`), sinon le
+  // bloqueur de popups l'annule (cf. lib/print/openPdf.ts). Détecté par
+  // pointeur (`isTouchDeviceNow`, synchrone), pas par largeur d'écran, pour
   // ne pas casser un navigateur de bureau redimensionné en fenêtre étroite.
   // Seul point de branchement : les 10 pages appellent toutes `handlePrint`
   // (bouton d'en-tête, cellule `MobileToolbar`, raccourci Ctrl/Cmd+P) via ce
   // même shell, sans rien à changer individuellement.
+  // `printError` : bandeau minimal plutôt qu'un échec muet, qui donne
+  // l'impression que le bouton « ne fait rien ».
+  const [printError, setPrintError] = useState(false)
   const handlePrint = () => {
-    if (!printTitle || loading) return
-    if (isTouchDeviceNow()) {
-      printWithTitle(printTitle)
-      return
-    }
-    handlePrintPdf()
+    const root = rootRef.current
+    if (!printTitle || loading || !root) return
+    const target = isTouchDeviceNow() ? window.open('', '_blank') : undefined
+    setPrintError(false)
+    printAnalytique(root, printTitle, target).catch(() => setPrintError(true))
   }
   usePrintShortcut(handlePrint)
 

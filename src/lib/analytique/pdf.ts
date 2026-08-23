@@ -18,6 +18,8 @@
 
 import type { jsPDF } from 'jspdf'
 
+import { openPrintablePdf } from '#/lib/print/openPdf.ts'
+
 type RGB = [number, number, number]
 
 // Palette DOCUMENT, identique aux autres PDF de l'app (cohérence inter-documents).
@@ -575,34 +577,14 @@ export async function buildAnalytiquePdf(
   return pdf
 }
 
-/**
- * Lit la page analytique sous `root`, en construit le PDF et ouvre la fenêtre
- * d'impression du navigateur.
- *
- * Desktop : iframe cachée + `autoPrint()` (action « imprimer » intégrée au PDF),
- * qui ne se déclenche que via une visionneuse PDF NATIVE dans l'iframe — absente
- * de la plupart des navigateurs mobiles. `printWindow`, si fourni (onglet ouvert
- * de façon SYNCHRONE par l'appelant, avant tout `await`, pour ne pas se faire
- * bloquer comme popup), reçoit directement l'URL du PDF : la visionneuse du
- * téléphone prend le relais avec son propre bouton imprimer/partager.
- */
+/** Lit la page analytique sous `root`, en construit le PDF et ouvre
+ * l'impression — même document souris et tactile (cf. `lib/print/openPdf.ts`). */
 export async function printAnalytique(
   root: HTMLElement,
   printTitle: string,
-  printWindow?: Window | null,
+  target?: Window | null,
 ): Promise<void> {
   const extract = await extractAnalytique(root)
   const pdf = await buildAnalytiquePdf(extract, printTitle)
-  pdf.autoPrint()
-  const blobUrl = pdf.output('bloburl').toString()
-  if (printWindow) {
-    printWindow.location.href = blobUrl
-    return
-  }
-  document.getElementById('analytique-print-frame')?.remove()
-  const iframe = document.createElement('iframe')
-  iframe.id = 'analytique-print-frame'
-  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0'
-  iframe.src = blobUrl
-  document.body.appendChild(iframe)
+  openPrintablePdf(pdf, 'analytique-print-frame', target)
 }

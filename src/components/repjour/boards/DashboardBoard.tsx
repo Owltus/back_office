@@ -54,7 +54,6 @@ import { reportToKPI } from '#/lib/repjour/calc/kpi.ts'
 import { computeEcart } from '#/lib/repjour/calc/ecart.ts'
 import { printRepjourReport } from '#/lib/repjour/pdf.ts'
 import type { RepjourPdfData } from '#/lib/repjour/pdf.ts'
-import { printWithTitle } from '#/lib/print.ts'
 import { DAY_NAMES, MONTHS, TOTAL_ROOMS } from '#/lib/repjour/constants.ts'
 import type { KPIBlock, MonthBudget } from '#/lib/repjour/types.ts'
 
@@ -446,35 +445,27 @@ export function DashboardBoard() {
         }
   }
 
-  // Réservé à la SOURIS (chemin jsPDF) depuis la décision D1 : le tactile
-  // appelle désormais `handlePrint`, qui bascule vers `printWithTitle()`/
-  // `window.print()` natif et n'atteint plus jamais cette fonction.
-  async function handleGeneratePdf() {
+  // Génère le MÊME PDF, souris ou tactile. Sur tactile, la plupart des
+  // navigateurs mobiles ne rendent aucune visionneuse PDF dans l'iframe
+  // caché (souris) : `autoPrint()` n'y déclenche rien, le bouton semblait ne
+  // rien faire. On ouvre donc ce même PDF dans un nouvel onglet VISIBLE —
+  // `window.open` synchrone avec le clic (avant tout `await`), sinon le
+  // bloqueur de popups l'annule (cf. lib/print/openPdf.ts).
+  async function handlePrint() {
     if (!budget) return
+    const target = isTouchDevice ? window.open('', '_blank') : undefined
     setPdfBusy(true)
     setActionError(null)
     try {
       const data = buildPdfData(budget)
       const [yr, mo, da] = selectedDate.split('-')
-      await printRepjourReport(data, `Repjour_NACV_${da}-${mo}-${yr}`)
+      await printRepjourReport(data, `Repjour_NACV_${da}-${mo}-${yr}`, target)
     } catch (err) {
       console.error('Aperçu du rapport indisponible :', err)
       setActionError("L'aperçu d'impression n'a pas pu s'ouvrir. Réessaie.")
     } finally {
       setPdfBusy(false)
     }
-  }
-
-  // Impression tactile (D1 — audit-impression-tactile) : document HTML
-  // `@media print` (repjour.css), même patron que PDJ (BreakfastBoard.handlePrint
-  // + printWithTitle) — `window.print()` natif ouvre la VRAIE interface
-  // d'impression du navigateur, contrairement au PDF jsPDF (`handleGeneratePdf`
-  // ci-dessus), inatteignable sur la plupart des lecteurs PDF mobiles. Réutilise
-  // le DOM écran déjà affiché (SummaryCards + KPITable) : voir `.repjour-doc` /
-  // `.repjour-print-header` dans repjour.css. Chemin SOURIS inchangé (jsPDF).
-  function handlePrint() {
-    const [yr, mo, da] = selectedDate.split('-')
-    printWithTitle(`Repjour_NACV_${da}-${mo}-${yr}`)
   }
 
   // --- Envoi serveur (dev, admin-only) : PDF joint + corps HTML via Resend ----
@@ -534,20 +525,15 @@ export function DashboardBoard() {
     }
   }
 
-  // Ctrl+P emprunte la même porte que les boutons : PDF jsPDF à la souris,
-  // impression native (`handlePrint`) sur tactile. Sans données imprimables, le
-  // raccourci explique son refus dans les deux cas.
+  // Ctrl+P emprunte la même porte que les boutons. Sans données imprimables,
+  // le raccourci explique son refus.
   usePrintShortcut(() => {
     if (!canPrint) {
       setPrintBlocked(true)
       return
     }
-    if (isTouchDevice) {
-      handlePrint()
-      return
-    }
     if (pdfBusy) return
-    void handleGeneratePdf()
+    void handlePrint()
   })
 
   return (
@@ -641,7 +627,7 @@ export function DashboardBoard() {
                 {/* Impression : toujours présente, désactivée tant qu'il n'y a
                     rien à imprimer (jour vide) — l'infobulle porte la raison. */}
                 <PrintButton
-                  onClick={isTouchDevice ? handlePrint : handleGeneratePdf}
+                  onClick={handlePrint}
                   iconOnly
                   disabled={!canPrint || pdfBusy}
                   tipLabel={
@@ -968,7 +954,7 @@ export function DashboardBoard() {
           ariaLabel={
             canPrint ? 'Imprimer / PDF' : 'Aucune donnée à imprimer pour ce jour'
           }
-          onClick={isTouchDevice ? handlePrint : handleGeneratePdf}
+          onClick={handlePrint}
           disabled={!canPrint || pdfBusy}
         />
         <ToolbarCell

@@ -17,6 +17,7 @@ import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import type { jsPDF } from 'jspdf'
 
+import { openPrintablePdf } from '#/lib/print/openPdf.ts'
 import {
   FIRST_STAFF_SPOT,
   PMR_GLYPH,
@@ -43,30 +44,6 @@ export interface ParkingSheetDay {
 
 export interface ParkingSheetPdfData {
   days: ParkingSheetDay[]
-}
-
-/** Ouvre un PDF déjà rendu dans la fenêtre d'impression, via un iframe caché
- * recyclé (aucun téléchargement). Réservé à la SOURIS depuis la décision D1
- * (plan/audit-impression-tactile) : le tactile imprime désormais nativement
- * un document HTML dédié (`window.print()`, cf. `ParkingBoard.tsx`/
- * `parking.css`). `URL.revokeObjectURL` différé au `load` de l'iframe
- * (jamais immédiat : le navigateur a encore besoin du blob le temps de
- * charger le PDF dedans). */
-function openPrintablePdf(pdf: jsPDF, frameId: string): void {
-  pdf.autoPrint()
-  const blobUrl = pdf.output('bloburl').toString()
-  document.getElementById(frameId)?.remove()
-  const iframe = document.createElement('iframe')
-  iframe.id = frameId
-  iframe.style.cssText =
-    'position:fixed;right:0;bottom:0;width:0;height:0;border:0'
-  iframe.addEventListener(
-    'load',
-    () => URL.revokeObjectURL(blobUrl),
-    { once: true },
-  )
-  iframe.src = blobUrl
-  document.body.appendChild(iframe)
 }
 
 /** Rasterise le pictogramme PMR en PNG (data URI) : jsPDF ne dessine pas les
@@ -116,13 +93,15 @@ export async function buildParkingSheetPdf(
   return pdf
 }
 
-/** Génère les feuilles de suivi et ouvre l'impression (souris). */
+/** Génère les feuilles de suivi et ouvre l'impression — même document
+ * souris et tactile (cf. `lib/print/openPdf.ts`). */
 export async function printParkingSheets(
   data: ParkingSheetPdfData,
   title: string,
+  target?: Window | null,
 ): Promise<void> {
   const pdf = await buildParkingSheetPdf(data, title)
-  openPrintablePdf(pdf, 'parking-print-frame')
+  openPrintablePdf(pdf, 'parking-print-frame', target)
 }
 
 // --- Géométrie (A4 paysage : 297 × 210 mm) ---------------------------------

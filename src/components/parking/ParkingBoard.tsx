@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { flushSync } from 'react-dom'
 import type {
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
@@ -104,7 +103,6 @@ import { useUndoRedoShortcut } from '#/components/shared/useUndoRedoShortcut.ts'
 import type { ReservationPatch } from '#/lib/parking/history.ts'
 import { printParkingSheets } from '#/lib/parking/pdf.ts'
 import type { ParkingSheetPdfData } from '#/lib/parking/pdf.ts'
-import { printWithTitle } from '#/lib/print.ts'
 import { fmtPctInt } from '#/lib/parking/format.ts'
 import { matchRoom } from '#/lib/parking/pdjMatch.ts'
 import { fetchDay as fetchPdjDay } from '#/lib/pdj/service.ts'
@@ -336,13 +334,6 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
   // ouvrait plusieurs fenêtres tactiles concurrentes, une seule recevant le
   // PDF, et toute erreur devenait une exception non interceptée (silencieuse).
   const [pdfBusy, setPdfBusy] = useState(false)
-  // Données du document imprimable natif (tactile, cf. `handlePrint` plus
-  // bas) : `null` tant qu'aucune impression tactile n'a eu lieu — le bloc
-  // JSX correspondant (masqué à l'écran) reste alors vide, sans effet.
-  const [printData, setPrintData] = useState<{
-    days: ParkingSheetPdfData['days']
-    stamp: string
-  } | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [calOpen, setCalOpen] = useState(false)
   // Modal d'aide : tutoriel factuel de la page (bouton « ? » de la barre d'actions).
@@ -798,10 +789,8 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
   // passés (guest_name = null) — J-1 restera donc vide tant que la rétention PDJ
   // n'aura pas été revue. Correspondance conservatrice (cf. matchRoom).
   //
-  // Données des 4 feuilles (J-1..J+2), communes aux DEUX rendus (jsPDF souris
-  // ET document HTML imprimable tactile, cf. `handlePrint` plus bas) : un seul
-  // calcul, jamais deux implémentations indépendantes qui pourraient diverger
-  // (chantier « audit impression tactile », étape 5).
+  // Données des 4 feuilles (J-1..J+2) : même PDF souris et tactile
+  // (cf. `handlePrint` plus bas), calculées une seule fois.
   async function buildSheetDays(): Promise<{
     days: ParkingSheetPdfData['days']
     stamp: string
@@ -849,47 +838,24 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
     return { days: sheetDays, stamp }
   }
 
-  // Ctrl+P emprunte la même porte que le bouton (PDF vectoriel, pas le DOM brut).
-  // Réservé à la SOURIS (chemin jsPDF) depuis la décision D1 : le tactile
-  // appelle désormais `handlePrint` (ci-dessous), qui bascule vers
-  // `printWithTitle()`/`window.print()` natif et n'atteint plus jamais
-  // cette fonction.
-  async function handleGeneratePdf() {
+  // Génère le MÊME PDF, souris ou tactile. Sur tactile, la plupart des
+  // navigateurs mobiles ne rendent aucune visionneuse PDF dans l'iframe
+  // caché (souris) : `autoPrint()` n'y déclenche rien, le bouton semblait ne
+  // rien faire. On ouvre donc ce même PDF dans un nouvel onglet VISIBLE —
+  // `window.open` synchrone avec le clic (avant tout `await`), sinon le
+  // bloqueur de popups l'annule (cf. lib/print/openPdf.ts).
+  async function handlePrint() {
     if (pdfBusy) return
+    const target = isTouchDevice ? window.open('', '_blank') : undefined
     setPdfBusy(true)
     setActionError(null)
     try {
       const { days: sheetDays, stamp } = await buildSheetDays()
-      await printParkingSheets({ days: sheetDays }, `Feuille_parking_${stamp}`)
-    } catch {
-      setActionError("L'aperçu d'impression n'a pas pu s'ouvrir. Réessaie.")
-    } finally {
-      setPdfBusy(false)
-    }
-  }
-  // Bascule d'impression (chantier « audit impression tactile », D1) : sur
-  // écran tactile, `window.print()` NATIF sur un document HTML dédié (comme
-  // PDJ) plutôt que jsPDF + fenêtre séparée. Contrairement à Rapro/RepJour,
-  // la vue écran (planning horizontal) n'a aucun rapport structurel avec la
-  // feuille de suivi (grille fixe 14 places, 4 jours) — un bloc imprimable
-  // DÉDIÉ existe donc plus bas dans le rendu, alimenté par `printData`.
-  // `flushSync` : les données mettent un `await` à arriver (mêmes lectures
-  // réseau que le chemin jsPDF, `buildSheetDays`) — sans lui, `printWithTitle`
-  // appellerait `window.print()` avant que React ait posé `printData` dans
-  // le DOM, imprimant un document vide. `flushSync` force le commit
-  // SYNCHRONE de ce `setState` avant de continuer.
-  async function handlePrint() {
-    if (!isTouchDevice) {
-      void handleGeneratePdf()
-      return
-    }
-    if (pdfBusy) return
-    setPdfBusy(true)
-    setActionError(null)
-    try {
-      const data = await buildSheetDays()
-      flushSync(() => setPrintData(data))
-      printWithTitle(`Feuille_parking_${data.stamp}`)
+      await printParkingSheets(
+        { days: sheetDays },
+        `Feuille_parking_${stamp}`,
+        target,
+      )
     } catch {
       setActionError("L'aperçu d'impression n'a pas pu s'ouvrir. Réessaie.")
     } finally {
@@ -2045,84 +2011,6 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Document imprimable natif (chantier « audit impression tactile »,
-          D1) : masqué à l'écran (`hidden print:block`), alimenté par
-          `printData` juste avant `window.print()` (cf. `handlePrint`).
-          Contrairement à Rapro/RepJour, la vue écran (planning horizontal
-          défilable) n'a aucun rapport structurel avec la feuille de suivi
-          (grille fixe 14 places par jour) — bloc dédié, sur le modèle exact
-          du document jsPDF (`lib/parking/pdf.ts`, `drawSheet`) : bandeau
-          titre, grille Place/NOM/N°/Facturé?/Check-in/Check-out, places
-          13-14 grisées (personnel), pictogramme PMR sur la place 8. CSS
-          paysage dans `parking.css` (nouveau fichier). */}
-      {printData && (
-        <div className="hidden print:block">
-          {/* 2 feuilles par page (miroir de `PER_PAGE` dans lib/parking/pdf.ts) :
-              4 jours → 2 pages. `parking-print-page` porte le saut de page. */}
-          {[0, 2].map((pageStart) => (
-            <div key={pageStart} className="parking-print-page">
-              {printData.days.slice(pageStart, pageStart + 2).map((day) => {
-                const bySpot = new Map(day.rows.map((r) => [r.spot, r]))
-                return (
-                  <div key={day.date.toISOString()} className="parking-print-sheet">
-                    <div className="parking-print-date">
-                      Date :{' '}
-                      <strong className="capitalize">
-                        {format(day.date, 'EEEE d MMMM yyyy', { locale: fr })}
-                      </strong>
-                    </div>
-                    <div className="parking-print-band">
-                      FEUILLE DE SUIVI PARKING
-                    </div>
-                    <table className="parking-print-table">
-                      <thead>
-                        <tr>
-                          <th>Place</th>
-                          <th className="parking-print-left">NOM</th>
-                          <th>N°de #</th>
-                          <th>Facturé?</th>
-                          <th>Check in</th>
-                          <th>Check out</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {SPOTS_LIST.map((spot) => {
-                          const row = bySpot.get(spot)
-                          return (
-                            <tr
-                              key={spot}
-                              className={cn(
-                                spot >= FIRST_STAFF_SPOT &&
-                                  'parking-print-staff',
-                              )}
-                            >
-                              <td className="parking-print-spot">
-                                {spot === PMR_SPOT ? (
-                                  <PmrGlyph className="parking-print-pmr" />
-                                ) : (
-                                  spot
-                                )}
-                              </td>
-                              <td className="parking-print-left">
-                                {row?.nom}
-                              </td>
-                              <td>{row?.numero}</td>
-                              <td>{row?.facture}</td>
-                              <td>{row?.checkIn}</td>
-                              <td>{row?.checkOut}</td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )
-              })}
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* Barre d'outils basse (écran tactile uniquement, peu importe la
           largeur) : Aide/Analytique/Imprimer gardent leurs handlers exacts de

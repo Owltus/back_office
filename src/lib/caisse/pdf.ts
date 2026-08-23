@@ -13,6 +13,7 @@
 import type { jsPDF } from 'jspdf'
 
 import { DENOM_SVG } from '#/assets/euros/index.ts'
+import { openPrintablePdf } from '#/lib/print/openPdf.ts'
 import { computeEcarts, fundEcart, fundTotal, round2 } from '#/lib/caisse/calc.ts'
 import {
   DENOMINATIONS,
@@ -168,37 +169,15 @@ export async function buildCaissePdf(
   return pdf
 }
 
-/** Ouvre un PDF déjà rendu dans la fenêtre d'impression, via un iframe caché
- * recyclé (aucun téléchargement) — même harnais que rapro/repjour/parking.
- * Réservé à la SOURIS depuis la décision D1 (plan/audit-impression-tactile) :
- * le tactile imprime désormais nativement le DOM écran (`window.print()`,
- * cf. `CaisseBoard.tsx`/`caisse.css`). `URL.revokeObjectURL` différé au
- * `load` de l'iframe (jamais immédiat : le navigateur a encore besoin du
- * blob le temps de charger le PDF dedans). */
-function openPrintablePdf(pdf: jsPDF, frameId: string): void {
-  pdf.autoPrint()
-  const blobUrl = pdf.output('bloburl').toString()
-  document.getElementById(frameId)?.remove()
-  const iframe = document.createElement('iframe')
-  iframe.id = frameId
-  iframe.style.cssText =
-    'position:fixed;right:0;bottom:0;width:0;height:0;border:0'
-  iframe.addEventListener(
-    'load',
-    () => URL.revokeObjectURL(blobUrl),
-    { once: true },
-  )
-  iframe.src = blobUrl
-  document.body.appendChild(iframe)
-}
-
-/** Génère le PDF de la feuille de caisse et ouvre l'impression (souris). */
+/** Génère le PDF de la feuille de caisse et ouvre l'impression — même
+ * document souris et tactile (cf. `lib/print/openPdf.ts`). */
 export async function printCaisseSheet(
   data: CaissePdfData,
   title: string,
+  target?: Window | null,
 ): Promise<void> {
   const pdf = await buildCaissePdf(data, title)
-  openPrintablePdf(pdf, 'caisse-print-frame')
+  openPrintablePdf(pdf, 'caisse-print-frame', target)
 }
 
 const LEFT = 15

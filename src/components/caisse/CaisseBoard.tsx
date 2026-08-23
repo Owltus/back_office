@@ -61,7 +61,6 @@ import { DENOM_SVG } from '#/assets/euros/index.ts'
 import { capitalize, cn } from '#/lib/utils.ts'
 import { errorMessage } from '#/lib/errors.ts'
 import { useNavbarBadge, useNavbarSubtitle } from '#/lib/navbarSubtitle.ts'
-import { printWithTitle } from '#/lib/print.ts'
 import { printCaisseSheet } from '#/lib/caisse/pdf.ts'
 import {
   computeEcarts,
@@ -761,11 +760,15 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
       )
   }
 
-  // Génère un VRAI document PDF (jsPDF) et ouvre la fenêtre d'impression du
-  // navigateur — pas de téléchargement. Réservé à la SOURIS (le tactile
-  // imprime nativement via handlePrint). Cf. src/lib/caisse/pdf.ts.
+  // Génère le MÊME PDF, souris ou tactile. Sur tactile, la plupart des
+  // navigateurs mobiles ne rendent aucune visionneuse PDF dans l'iframe
+  // caché (souris) : `autoPrint()` n'y déclenche rien, le bouton semblait ne
+  // rien faire. On ouvre donc ce même PDF dans un nouvel onglet VISIBLE —
+  // `window.open` synchrone avec le clic (avant tout `await`), sinon le
+  // bloqueur de popups l'annule (cf. lib/print/openPdf.ts).
   const [pdfBusy, setPdfBusy] = useState(false)
-  const handleGeneratePdf = async () => {
+  const handlePrint = async () => {
+    const target = isTouchDevice ? window.open('', '_blank') : undefined
     setPdfBusy(true)
     setError('')
     try {
@@ -779,6 +782,7 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
           activeCautions,
         },
         `Caisse_${da}-${mo}-${yr}_${form.shift}`,
+        target,
       )
     } catch (err) {
       setError(`Impression du PDF impossible : ${errorMessage(err)}`)
@@ -787,23 +791,11 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
     }
   }
 
-  // Impression TACTILE : window.print() natif sur le DOM écran, restylé par
-  // caisse.css (@media print) — même mécanisme que PDJ. Le chemin SOURIS reste
-  // exclusivement `handleGeneratePdf` (jsPDF, cf. lib/caisse/pdf.ts),
-  // entièrement inchangé par ce chantier.
-  function handlePrint() {
-    const [yr, mo, da] = selectedDate.split('-')
-    printWithTitle(`Caisse_${da}-${mo}-${yr}_${form.shift}`)
-  }
-
-  // Ctrl+P emprunte la même porte que le bouton : jsPDF à la souris, impression
-  // native au doigt. Feuille non clôturée → ne fait rien, comme un bouton
-  // désactivé (harmonisé sur le seul mécanisme disabled + tooltip du bouton
-  // d'en-tête ; plus de modale dédiée au raccourci clavier, cf. Rapro/RepJour).
+  // Ctrl+P emprunte la même porte que le bouton. Feuille non clôturée → ne
+  // fait rien, comme un bouton désactivé.
   usePrintShortcut(() => {
     if (pdfBusy || !isValidated) return
-    if (isTouchDevice) handlePrint()
-    else void handleGeneratePdf()
+    void handlePrint()
   })
 
   /* Bouton d'état de la feuille, rendu en bas de page (sous les commentaires),
@@ -971,11 +963,9 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
                 </Tip>
                 {/* 1) Impression : toujours présente, mais désactivée tant que la
                     caisse n'est pas clôturée — le document ne s'imprime qu'une fois
-                    les montants figés. L'infobulle porte alors la raison.
-                    Tactile → impression native (handlePrint) ; souris → PDF
-                    jsPDF (handleGeneratePdf), inchangé. */}
+                    les montants figés. L'infobulle porte alors la raison. */}
                 <PrintButton
-                  onClick={isTouchDevice ? handlePrint : handleGeneratePdf}
+                  onClick={handlePrint}
                   iconOnly
                   disabled={!isValidated || pdfBusy}
                   tipLabel={

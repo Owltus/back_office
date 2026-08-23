@@ -25,6 +25,7 @@ import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import type { jsPDF } from 'jspdf'
 
+import { openPrintablePdf } from '#/lib/print/openPdf.ts'
 import { fmt } from '#/lib/repjour/format.ts'
 import { fmtJours, monthPace } from '#/lib/repjour/summaryMetrics.ts'
 import type { Ecart, KPIBlock, MonthBudget } from '#/lib/repjour/types.ts'
@@ -63,23 +64,6 @@ const ZERO_KPI: KPIBlock = { nuitees: 0, to: 0, pm: 0, revpar: 0, roomRevenue: 0
  * le DOM écran (`window.print()`, cf. `DashboardBoard.tsx`/`repjour.css`).
  * `URL.revokeObjectURL` différé au `load` de l'iframe (jamais immédiat : le
  * navigateur a encore besoin du blob le temps de charger le PDF dedans). */
-function openPrintablePdf(pdf: jsPDF, frameId: string): void {
-  pdf.autoPrint()
-  const blobUrl = pdf.output('bloburl').toString()
-  document.getElementById(frameId)?.remove()
-  const iframe = document.createElement('iframe')
-  iframe.id = frameId
-  iframe.style.cssText =
-    'position:fixed;right:0;bottom:0;width:0;height:0;border:0'
-  iframe.addEventListener(
-    'load',
-    () => URL.revokeObjectURL(blobUrl),
-    { once: true },
-  )
-  iframe.src = blobUrl
-  document.body.appendChild(iframe)
-}
-
 /** Construit le document PDF (jsPDF) du rapport, sans l'imprimer. Séparé de
  * l'impression pour être réutilisable (aperçu, test). */
 export async function buildRepjourPdf(
@@ -97,9 +81,10 @@ export async function buildRepjourPdf(
 export async function printRepjourReport(
   data: RepjourPdfData,
   title: string,
+  target?: Window | null,
 ): Promise<void> {
   const pdf = await buildRepjourPdf(data, title)
-  openPrintablePdf(pdf, 'repjour-print-frame')
+  openPrintablePdf(pdf, 'repjour-print-frame', target)
 }
 
 // --- Géométrie -------------------------------------------------------------

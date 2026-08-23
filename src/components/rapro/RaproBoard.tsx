@@ -47,7 +47,6 @@ import {
 import { addDays, clampDay, today } from '#/lib/rapro/day.ts'
 import { canReconcileDay } from '#/lib/rapro/editability.ts'
 import { printRaproSheet } from '#/lib/rapro/pdf.ts'
-import { printWithTitle } from '#/lib/print.ts'
 import { reconcile } from '#/lib/rapro/reconcile.ts'
 import { FLOORS } from '#/lib/rapro/rooms.ts'
 import { missingSources } from '#/lib/rapro/sources.ts'
@@ -675,11 +674,10 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
         ]),
       )
   }
-  // Réservé à la SOURIS (chemin jsPDF) depuis la décision D1 : le tactile
-  // appelle désormais `handlePrint` (ci-dessous), qui bascule vers
-  // `printWithTitle()`/`window.print()` natif et n'atteint plus jamais cette
-  // fonction — plus besoin d'y ouvrir de fenêtre ni d'y détecter le pointeur.
-  async function handleGeneratePdf() {
+  // Génère le MÊME PDF, souris ou tactile — `target` (fenêtre déjà ouverte
+  // par `handlePrint`, synchrone avec le clic) reçoit le document sur
+  // tactile, l'iframe caché habituel sur souris (cf. lib/print/openPdf.ts).
+  async function handleGeneratePdf(target?: Window | null) {
     setPdfBusy(true)
     try {
       const [yy, mm, dd] = selectedDate.split('-')
@@ -700,6 +698,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
           validatedAt: sheet?.validatedAt ?? null,
         },
         `Rapprochement_${dd}-${mm}-${yy}`,
+        target,
       )
     } catch {
       // Réutilise la modale de blocage existante (raison générique) plutôt
@@ -712,18 +711,16 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
     }
   }
 
-  // Bascule d'impression (chantier « audit impression tactile », D1) : sur
-  // écran tactile, `window.print()` NATIF sur ce même DOM (comme PDJ) — CSS
-  // `@media print` dans rapro.css, réutilise `.rapro-stats`/`.rapro-floors`/
-  // `.rapro-legend`/le commentaire déjà affichés à l'écran. Sur souris,
-  // `handleGeneratePdf` (jsPDF) reste TOTALEMENT inchangé.
+  // Sur tactile, la plupart des navigateurs mobiles ne rendent aucune
+  // visionneuse PDF dans l'iframe caché (souris) : `autoPrint()` n'y
+  // déclenche rien, le bouton semblait ne rien faire. On ouvre donc le MÊME
+  // PDF dans un nouvel onglet VISIBLE — `window.open` synchrone avec le clic
+  // (avant tout `await`), sinon le bloqueur de popups l'annule. Un geste de
+  // plus qu'au bureau (l'utilisateur imprime depuis sa visionneuse), mais un
+  // document strictement identique.
   function handlePrint() {
-    if (isTouchDevice) {
-      const [yy, mm, dd] = selectedDate.split('-')
-      printWithTitle(`Rapprochement_${dd}-${mm}-${yy}`)
-      return
-    }
-    void handleGeneratePdf()
+    const target = isTouchDevice ? window.open('', '_blank') : undefined
+    void handleGeneratePdf(target)
   }
 
   /* Ctrl+P emprunte la même porte que le bouton : le PDF jsPDF, jamais le rendu
