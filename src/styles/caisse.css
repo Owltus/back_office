@@ -16,12 +16,161 @@
    champs), pas en CSS : le pseudo `:focus::placeholder` s'est révélé non fiable
    via le pipeline Tailwind v4 / HMR. */
 
-/* Impression : feuille compacte, noir sur blanc. */
+/* ------------------------------------------------------------------ *
+ * Impression TACTILE (window.print() natif, cf. CaisseBoard.tsx
+ * handlePrint) — même mécanisme que PDJ (pdj.css) : le DOM écran (tableau des
+ * montants, fond de caisse, cautions actives) est réutilisé TEL QUEL, juste
+ * restylé ci-dessous. Le chemin SOURIS reste jsPDF (lib/caisse/pdf.ts),
+ * totalement inchangé — ce bloc ne le concerne pas.
+ *
+ * En-tête imprimé dédié (`.caisse-header`), masqué à l'écran : la barre de
+ * titre écran (`PageHeader`) est déjà `print:hidden` par construction
+ * (composant partagé), il lui faut un remplaçant sobre pour le papier — même
+ * patron que `.pdj-header`.
+ * ------------------------------------------------------------------ */
+.caisse-header {
+  display: none;
+}
+
 @media print {
+  /* Palette : le thème est en permanence sombre à l'écran (« navy » forcé sur
+     <html>, cf. CLAUDE.md) — texte clair sur fond sombre. Réimprimer ce DOM
+     tel quel donnerait du texte clair sur papier blanc : illisible. On
+     réutilise donc ici le jeu de variables CLAIR de `:root` (styles.css),
+     déjà conçu pour un fond blanc — pas une palette d'impression inventée à
+     part. Portée limitée à `.caisse-doc` (les variables sont héritées par
+     tous ses descendants) : n'affecte ni l'écran, ni les autres pages.
+     `--border` est renforcé au-delà de la valeur `:root` (0.1) : plusieurs
+     liserés de la page l'utilisent déjà atténué (`border-border/60`), et la
+     valeur `:root` d'origine — jamais éprouvée sur fond blanc, le thème clair
+     n'étant nulle part actif dans l'app — y devenait quasi invisible.
+     `--muted-foreground` est de même assombri d'un cran pour rester net sur
+     papier (le rendu papier n'a pas l'anti-aliasing d'un écran rétina). */
   .caisse-doc {
-    gap: 0.75rem;
+    --background: #f8fafc;
+    --foreground: #0f172a;
+    --card: #ffffff;
+    --card-foreground: #0f172a;
+    --primary: #4f46e5;
+    --primary-foreground: #ffffff;
+    --muted: #f1f5f9;
+    --muted-foreground: #475569;
+    --accent: #eef2ff;
+    --accent-foreground: #312e81;
+    --destructive: #b91c1c;
+    --destructive-foreground: #ffffff;
+    --border: rgba(15, 23, 42, 0.35);
+    --input: rgba(15, 23, 42, 0.2);
   }
-  .caisse-table table {
+
+  /* Ces teintes doivent réellement sortir sur le papier — sans ce forçage,
+     les fonds/liserés des cases remplies (fond de caisse, badge de caution)
+     dépendent du réglage navigateur « graphiques d'arrière-plan », hors de
+     notre contrôle, et disparaîtraient selon le cas. */
+  .caisse-doc,
+  .caisse-doc * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  @page {
+    margin: 12mm;
+    size: A4 portrait;
+  }
+
+  .caisse-doc {
+    gap: 10px;
+  }
+
+  /* En-tête compact, impression uniquement (titre + date + shift). */
+  .caisse-header {
+    display: block;
+    margin-bottom: 14px;
+    text-align: center;
+  }
+  .caisse-header h1 {
+    margin: 0 0 4px;
     font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+  .caisse-header-date {
+    display: block;
+    /* Palier « title » du ramp typographique (DESIGN.md). */
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--foreground);
+  }
+  .caisse-header-shift {
+    display: block;
+    margin-top: 2px;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+
+  .caisse-table table {
+    font-size: 10.5px;
+  }
+  /* Libellés de colonne toujours en toutes lettres au papier : la bascule
+     « Carte web » / « Adyen » dépend d'un point de rupture de LARGEUR
+     (`max-sm:`/`sm:`), ambigu à l'impression (le navigateur peut l'évaluer
+     sur la largeur de la page A4 ou celle de l'écran d'origine selon le
+     device — même famille d'ambiguïté que le bug `vh` corrigé sur PDJ cette
+     session). On fige le résultat plutôt que de dépendre de cette résolution. */
+  .caisse-table .max-sm\:hidden {
+    display: inline !important;
+  }
+  .caisse-table .sm\:hidden {
+    display: none !important;
+  }
+
+  /* Grille des coupures : 3 colonnes × 5 rangées FIXES, comme le PDF jsPDF —
+     jamais les 2 colonnes du gabarit mobile (même ambiguïté de largeur que
+     ci-dessus). `grid-column: auto` neutralise le pleine-largeur du billet de
+     500 € (`col-span-2`, utile seulement au gabarit mobile 2 colonnes). */
+  .caisse-denoms {
+    grid-template-columns: repeat(3, 1fr) !important;
+    grid-auto-flow: column !important;
+    grid-template-rows: repeat(5, 1fr) !important;
+    gap: 4px !important;
+  }
+  .caisse-denoms > * {
+    grid-column: auto !important;
+  }
+
+  /* Chaque carte reste entière sur une page plutôt que coupée en deux. */
+  .caisse-card {
+    break-inside: avoid;
+  }
+
+  /* Valeur imprimée en regard d'un champ de saisie (le champ lui-même est
+     `print:hidden`, cf. CaisseBoard.tsx) : le rendu natif d'un <input>/
+     <textarea> désactivé est trop peu fiable/lisible selon le navigateur à
+     l'impression — on imprime la valeur en texte brut à la place, formatée
+     exactement comme le PDF jsPDF (`fmtEur`), pour ne jamais diverger. */
+  .caisse-print-value {
+    display: block;
+    text-align: right;
+    padding-right: 4px;
+    font-variant-numeric: tabular-nums;
+  }
+  .caisse-print-count {
+    display: block;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+  .caisse-print-comment {
+    display: block;
+    min-height: 16mm;
+    padding: 4px 2px;
+    font-size: 10px;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    color: var(--foreground);
   }
 }

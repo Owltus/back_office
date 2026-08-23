@@ -64,6 +64,7 @@ import { DENOM_SVG } from '#/assets/euros/index.ts'
 import { capitalize, cn } from '#/lib/utils.ts'
 import { errorMessage } from '#/lib/errors.ts'
 import { useNavbarBadge, useNavbarSubtitle } from '#/lib/navbarSubtitle.ts'
+import { printWithTitle } from '#/lib/print.ts'
 import { printCaisseSheet } from '#/lib/caisse/pdf.ts'
 import {
   computeEcarts,
@@ -797,13 +798,23 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
     }
   }
 
-  // Ctrl+P emprunte la même porte que le bouton : le PDF jsPDF, jamais le rendu
-  // brut du DOM. Feuille non clôturée → ne fait rien, comme un bouton désactivé
-  // (harmonisé sur le seul mécanisme disabled + tooltip du bouton d'en-tête ;
-  // plus de modale dédiée au raccourci clavier, cf. Rapro/RepJour).
+  // Impression TACTILE : window.print() natif sur le DOM écran, restylé par
+  // caisse.css (@media print) — même mécanisme que PDJ. Le chemin SOURIS reste
+  // exclusivement `handleGeneratePdf` (jsPDF, cf. lib/caisse/pdf.ts),
+  // entièrement inchangé par ce chantier.
+  function handlePrint() {
+    const [yr, mo, da] = selectedDate.split('-')
+    printWithTitle(`Caisse_${da}-${mo}-${yr}_${form.shift}`)
+  }
+
+  // Ctrl+P emprunte la même porte que le bouton : jsPDF à la souris, impression
+  // native au doigt. Feuille non clôturée → ne fait rien, comme un bouton
+  // désactivé (harmonisé sur le seul mécanisme disabled + tooltip du bouton
+  // d'en-tête ; plus de modale dédiée au raccourci clavier, cf. Rapro/RepJour).
   usePrintShortcut(() => {
     if (pdfBusy || !isValidated) return
-    void handleGeneratePdf()
+    if (isTouchDevice) handlePrint()
+    else void handleGeneratePdf()
   })
 
   /* Bouton d'état de la feuille, rendu en bas de page (sous les commentaires),
@@ -897,9 +908,22 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
     <div
       className={cn(
         'caisse-doc mx-auto flex w-full min-w-0 max-w-5xl flex-1 flex-col gap-4 print:max-w-none',
-        isTouchDevice && 'pb-20',
+        // `print:pb-0` : la réserve pour la barre d'outils basse fixe n'a de
+        // sens qu'à l'écran (elle-même `print:hidden`, cf. MobileToolbar) —
+        // sans lui, un espace vide inutile s'ajoutait au document imprimé.
+        isTouchDevice && 'pb-20 print:pb-0',
       )}
     >
+      {/* En-tête compact, impression tactile uniquement (cf. caisse.css) —
+          la barre de titre écran (PageHeader) est déjà print:hidden. */}
+      <div className="caisse-header">
+        <h1>Feuille de caisse</h1>
+        <span className="caisse-header-date">{titleDate}</span>
+        <span className="caisse-header-shift">
+          {SHIFT_LABELS[form.shift]}
+        </span>
+      </div>
+
       <PageHeader
         // Sous 1024px, `undefined` (pas un masquage CSS) : la ligne titre ne
         // réserve plus sa hauteur — cf. commentaire useNavbarSubtitle ci-dessus.
@@ -958,9 +982,11 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
                 </Tip>
                 {/* 1) Impression : toujours présente, mais désactivée tant que la
                     caisse n'est pas clôturée — le document ne s'imprime qu'une fois
-                    les montants figés. L'infobulle porte alors la raison. */}
+                    les montants figés. L'infobulle porte alors la raison.
+                    Tactile → impression native (handlePrint) ; souris → PDF
+                    jsPDF (handleGeneratePdf), inchangé. */}
                 <PrintButton
-                  onClick={handleGeneratePdf}
+                  onClick={isTouchDevice ? handlePrint : handleGeneratePdf}
                   iconOnly
                   disabled={!isValidated || pdfBusy}
                   tipLabel={
@@ -1006,13 +1032,13 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
       />
 
       {sheetError && (
-        <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive print:hidden">
           Impossible de charger cette feuille (connexion ?). Réessayez en
           changeant de shift puis en revenant.
         </div>
       )}
       {error && (
-        <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive print:hidden">
           {error}
         </div>
       )}
@@ -1177,7 +1203,7 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
           {/* Comptage du fond de caisse. Grille responsive : 2 colonnes (mobile),
           3 (intermédiaire), 5 colonnes-décades en remplissage vertical (≥ lg :
           grid-flow-col + grid-rows-3 → 500/200/100, 50/20/10, …). */}
-          <div className="rounded-xl border border-border bg-card p-3">
+          <div className="caisse-card rounded-xl border border-border bg-card p-3">
             <div
               data-denom-grid
               className="caisse-denoms grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-flow-col lg:grid-cols-5 lg:grid-rows-3"
@@ -1205,7 +1231,7 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
                       aria-label={`Retirer un ${d.label}`}
                       disabled={!canEditFields}
                       onClick={() => bumpCount(d.key, -1)}
-                      className="flex flex-1 items-center justify-center border-r border-border/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
+                      className="flex flex-1 items-center justify-center border-r border-border/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-30 print:hidden"
                     >
                       <Minus className="size-4" />
                     </button>
@@ -1251,7 +1277,7 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
                       aria-label={`Ajouter un ${d.label}`}
                       disabled={!canEditFields}
                       onClick={() => bumpCount(d.key, 1)}
-                      className="flex flex-1 items-center justify-center border-l border-border/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
+                      className="flex flex-1 items-center justify-center border-l border-border/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-30 print:hidden"
                     >
                       <Plus className="size-4" />
                     </button>
@@ -1282,10 +1308,19 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
               droit (menu contextuel) pour agir. Carte absente s'il n'y a rien
               à montrer. */}
           {visibleCautions.length > 0 && (
-            <div className="rounded-xl border border-border bg-card p-3 print:hidden">
+            <div
+              className={cn(
+                'caisse-card rounded-xl border border-border bg-card p-3',
+                // À l'impression, seules les cautions ACTIVES comptent (même
+                // périmètre que `activeCautions` du PDF jsPDF) : si la liste
+                // écran ne contient que des remboursées du jour, la carte
+                // entière n'a rien à montrer sur le document.
+                activeCautions.length === 0 && 'print:hidden',
+              )}
+            >
               <div className="mb-2.5 flex items-baseline justify-between gap-2">
                 <h2 className="text-sm font-semibold">Cautions</h2>
-                <span className="text-xs text-muted-foreground">
+                <span className="text-xs text-muted-foreground print:hidden">
                   Clic droit, ou le bouton ⋮, pour agir
                 </span>
               </div>
@@ -1386,6 +1421,9 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
                         hasActions
                           ? 'grid-cols-[auto_auto_minmax(0,1fr)_auto_auto] cursor-context-menu hover:bg-muted/60'
                           : 'grid-cols-[auto_auto_minmax(0,1fr)_auto]',
+                        // Remboursée : hors périmètre du document imprimé
+                        // (cf. gate `activeCautions` ci-dessus).
+                        c.status === 'refunded' && 'print:hidden',
                       )}
                     >
                       <span className="flex items-center gap-2 whitespace-nowrap text-base font-semibold">
@@ -1473,7 +1511,7 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
           collé en bas quand tout tient. Sur une fenêtre courte, le champ se
           réduit jusqu'à son plancher `min-h-16` (jamais 0, jamais invisible),
           puis c'est la page qui défile (conteneur racine sans `min-h-0`). */}
-          <div className="flex flex-1 flex-col rounded-xl border border-border bg-card p-3">
+          <div className="caisse-card flex flex-1 flex-col rounded-xl border border-border bg-card p-3">
             <div className="mb-2 flex items-center justify-between gap-2">
               <h2 className="text-sm font-semibold">Commentaires</h2>
               {isValidated && sheet?.operatorInitials && (
@@ -1493,13 +1531,18 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
               // carte, `min-h-16` est le plancher, `resize-none` retire la poignée
               // (et neutralise le `field-sizing-content` de la primitive, qui
               // étirait le champ à mesure qu'on écrivait).
-              className="min-h-16 flex-1 resize-none"
+              className="min-h-16 flex-1 resize-none print:hidden"
             />
+            {/* Impression tactile : le rendu papier d'un <textarea> désactivé
+                est trop peu fiable selon le navigateur — texte brut à la place. */}
+            <div className="caisse-print-comment hidden print:block">
+              {form.comment.trim() || '—'}
+            </div>
           </div>
 
           {/* Actions — le bouton d'état ferme la page, sous la saisie. */}
           {isWriter && (
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2 print:hidden">
               {/* Autosave silencieux : on ne signale QUE les échecs (sinon la
               sauvegarde travaille en arrière-plan, sans mention explicite). */}
               {editable && saveState === 'error' && (
@@ -1615,7 +1658,7 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
               ? 'Imprimer / PDF'
               : 'Clôturez la caisse pour imprimer la feuille'
           }
-          onClick={handleGeneratePdf}
+          onClick={handlePrint}
           disabled={!isValidated || pdfBusy}
         />
         <ToolbarCell
@@ -1804,10 +1847,16 @@ function MoneyInput({
             : undefined
         }
         data-taborder={tabOrder}
-        className="h-8 pr-6 text-right tabular-nums"
+        className="h-8 pr-6 text-right tabular-nums print:hidden"
       />
-      <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-muted-foreground">
+      <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-muted-foreground print:hidden">
         €
+      </span>
+      {/* Impression tactile : le rendu papier d'un <input> désactivé est trop
+          peu fiable selon le navigateur — texte brut à la place, formaté
+          exactement comme le PDF jsPDF (même fonction fmtEur). */}
+      <span className="caisse-print-value hidden print:block">
+        {fmtEur(value)}
       </span>
     </div>
   )
@@ -1831,19 +1880,25 @@ function CountInput({
 }) {
   const [focused, setFocused] = useState(false)
   return (
-    <Input
-      type="text"
-      inputMode="numeric"
-      disabled={disabled}
-      value={value === 0 ? '' : String(value)}
-      onChange={(e) => onChange(countValue(e.target.value))}
-      onKeyDown={onKeyDown}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
-      placeholder={focused ? '' : '0'}
-      data-denom-cell
-      className="h-6 w-4/5 px-1 text-center text-sm tabular-nums"
-    />
+    <>
+      <Input
+        type="text"
+        inputMode="numeric"
+        disabled={disabled}
+        value={value === 0 ? '' : String(value)}
+        onChange={(e) => onChange(countValue(e.target.value))}
+        onKeyDown={onKeyDown}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        placeholder={focused ? '' : '0'}
+        data-denom-cell
+        className="h-6 w-4/5 px-1 text-center text-sm tabular-nums print:hidden"
+      />
+      {/* Impression tactile : même raison que MoneyInput ci-dessus. */}
+      <span className="caisse-print-count hidden print:block">
+        × {value}
+      </span>
+    </>
   )
 }
 
