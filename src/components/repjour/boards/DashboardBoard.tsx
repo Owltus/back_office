@@ -12,7 +12,10 @@ import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { StepNav } from '#/components/shared/StepNav.tsx'
 import { useStepNavKeys } from '#/components/shared/useStepNavKeys.ts'
 import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
-import { useResponsiveShell } from '#/components/shared/useResponsiveShell.ts'
+import {
+  isTouchDeviceNow,
+  useResponsiveShell,
+} from '#/components/shared/useResponsiveShell.ts'
 import { MobileToolbar, ToolbarCell } from '#/components/shared/MobileToolbar.tsx'
 import { useNavbarSubtitle } from '#/lib/navbarSubtitle.ts'
 import { Tip } from '#/components/shared/Tip.tsx'
@@ -449,10 +452,22 @@ export function DashboardBoard() {
     if (!budget) return
     setPdfBusy(true)
     setActionError(null)
+    // Sur tactile, la fenêtre s'ouvre ICI, SYNCHRONE avec le clic — un
+    // `window.open()` lancé après l'import() dynamique de jsPDF (dans
+    // printRepjourReport) arriverait hors du geste utilisateur aux yeux du
+    // bloqueur de popups, qui le bloquerait silencieusement ; c'est aussi la
+    // seule façon d'obtenir une visionneuse PDF visible sur mobile (l'iframe
+    // caché, seul repli côté souris, n'y affiche jamais rien). Vide pour
+    // l'instant, sa location changera une fois le PDF prêt.
+    const printWindow = isTouchDeviceNow() ? window.open('', '_blank') : null
     try {
       const data = buildPdfData(budget)
       const [yr, mo, da] = selectedDate.split('-')
-      await printRepjourReport(data, `Repjour_NACV_${da}-${mo}-${yr}`)
+      await printRepjourReport(
+        data,
+        `Repjour_NACV_${da}-${mo}-${yr}`,
+        printWindow,
+      )
     } catch (err) {
       console.error('Aperçu du rapport indisponible :', err)
       setActionError("L'aperçu d'impression n'a pas pu s'ouvrir. Réessaie.")

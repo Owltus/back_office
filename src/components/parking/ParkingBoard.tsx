@@ -35,7 +35,10 @@ import { StepNav } from '#/components/shared/StepNav.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { HelpDialogHeader } from '#/components/shared/HelpDialogHeader.tsx'
 import { HelpGlyph } from '#/components/shared/HelpGlyph.tsx'
-import { useResponsiveShell } from '#/components/shared/useResponsiveShell.ts'
+import {
+  isTouchDeviceNow,
+  useResponsiveShell,
+} from '#/components/shared/useResponsiveShell.ts'
 import { MobileToolbar, ToolbarCell } from '#/components/shared/MobileToolbar.tsx'
 import { useNavbarSubtitle } from '#/lib/navbarSubtitle.ts'
 import { MouseGlyph } from '#/components/parking/MouseGlyph.tsx'
@@ -785,6 +788,14 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
   //
   // Ctrl+P emprunte la même porte que le bouton (PDF vectoriel, pas le DOM brut).
   async function handleGeneratePdf() {
+    // Sur tactile, la fenêtre s'ouvre ICI, SYNCHRONE avec le clic, AVANT le
+    // moindre await (les lectures PDJ des 4 jours plus bas comme l'import()
+    // dynamique de jsPDF dans printParkingSheets) — sinon le bloqueur de
+    // popups la refuserait, hors du geste utilisateur à ses yeux ; c'est
+    // aussi la seule façon d'obtenir une visionneuse PDF visible sur mobile
+    // (l'iframe caché, seul repli côté souris, n'y affiche jamais rien).
+    // Vide pour l'instant, sa location changera une fois le PDF prêt.
+    const printWindow = isTouchDeviceNow() ? window.open('', '_blank') : null
     const ref = startDate ?? new Date()
     const todayOff = differenceInCalendarDays(new Date(), ref)
     const offsets = [-1, 0, 1, 2].map((k) => todayOff + k)
@@ -825,7 +836,7 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
     })
     const d = days[0].date
     const stamp = `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`
-    void printParkingSheets({ days }, `Feuille_parking_${stamp}`)
+    void printParkingSheets({ days }, `Feuille_parking_${stamp}`, printWindow)
   }
   usePrintShortcut(() => void handleGeneratePdf())
 

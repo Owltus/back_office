@@ -169,17 +169,23 @@ export async function buildCaissePdf(
 }
 
 /** Génère le PDF de la feuille de caisse et ouvre la fenêtre d'impression du
- * navigateur (via autoPrint dans un iframe caché — pas de téléchargement). */
+ * navigateur (via autoPrint). Souris : iframe caché recyclé, aucun
+ * téléchargement, aucune popup. Tactile : `printWindow` (ouverte par
+ * l'appelant AVANT tout await, sur tactile uniquement) reçoit le PDF —
+ * l'iframe caché reste invisible aux navigateurs mobiles, qui n'y activent
+ * pas leur visionneuse PDF. */
 export async function printCaisseSheet(
   data: CaissePdfData,
   title: string,
+  printWindow?: Window | null,
 ): Promise<void> {
   const pdf = await buildCaissePdf(data, title)
   pdf.autoPrint()
-  // Le PDF (avec action « imprimer » intégrée) est chargé dans un iframe caché :
-  // le navigateur ouvre alors sa fenêtre d'impression, sans télécharger ni
-  // ouvrir de popup (donc pas de blocage). On recycle un seul iframe.
   const blobUrl = pdf.output('bloburl').toString()
+  if (printWindow) {
+    printWindow.location.href = blobUrl
+    return
+  }
   document.getElementById('caisse-print-frame')?.remove()
   const iframe = document.createElement('iframe')
   iframe.id = 'caisse-print-frame'
