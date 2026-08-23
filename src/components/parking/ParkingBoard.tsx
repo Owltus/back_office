@@ -36,10 +36,7 @@ import { StepNav } from '#/components/shared/StepNav.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { HelpDialogHeader } from '#/components/shared/HelpDialogHeader.tsx'
 import { HelpGlyph } from '#/components/shared/HelpGlyph.tsx'
-import {
-  isTouchDeviceNow,
-  useResponsiveShell,
-} from '#/components/shared/useResponsiveShell.ts'
+import { useResponsiveShell } from '#/components/shared/useResponsiveShell.ts'
 import { MobileToolbar, ToolbarCell } from '#/components/shared/MobileToolbar.tsx'
 import { useNavbarSubtitle } from '#/lib/navbarSubtitle.ts'
 import { MouseGlyph } from '#/components/parking/MouseGlyph.tsx'
@@ -853,25 +850,17 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
   }
 
   // Ctrl+P emprunte la même porte que le bouton (PDF vectoriel, pas le DOM brut).
+  // Réservé à la SOURIS (chemin jsPDF) depuis la décision D1 : le tactile
+  // appelle désormais `handlePrint` (ci-dessous), qui bascule vers
+  // `printWithTitle()`/`window.print()` natif et n'atteint plus jamais
+  // cette fonction.
   async function handleGeneratePdf() {
     if (pdfBusy) return
     setPdfBusy(true)
     setActionError(null)
-    // Sur tactile, la fenêtre s'ouvre ICI, SYNCHRONE avec le clic, AVANT le
-    // moindre await (les lectures PDJ des 4 jours plus bas comme l'import()
-    // dynamique de jsPDF dans printParkingSheets) — sinon le bloqueur de
-    // popups la refuserait, hors du geste utilisateur à ses yeux ; c'est
-    // aussi la seule façon d'obtenir une visionneuse PDF visible sur mobile
-    // (l'iframe caché, seul repli côté souris, n'y affiche jamais rien).
-    // Vide pour l'instant, sa location changera une fois le PDF prêt.
-    const printWindow = isTouchDeviceNow() ? window.open('', '_blank') : null
     try {
       const { days: sheetDays, stamp } = await buildSheetDays()
-      await printParkingSheets(
-        { days: sheetDays },
-        `Feuille_parking_${stamp}`,
-        printWindow,
-      )
+      await printParkingSheets({ days: sheetDays }, `Feuille_parking_${stamp}`)
     } catch {
       setActionError("L'aperçu d'impression n'a pas pu s'ouvrir. Réessaie.")
     } finally {

@@ -52,66 +52,39 @@ export interface RaproPdfData {
  * invisible ne déclenche rien, le bouton semble ne rien faire (rapporté en
  * usage réel).
  *
- * `printWindow`, si fourni, est un onglet déjà OUVERT par l'appelant — sur
- * tactile, on y redirige simplement la location vers le PDF, la visionneuse du
- * téléphone prend le relais (son propre bouton imprimer/partager : AirPrint
- * iOS, menu Chrome Android…). Ouvert ICI (dans `openPrintablePdf`, après
- * l'`await import('jspdf')`), un `window.open()` arriverait trop tard aux yeux
- * du bloqueur de popups (hors du geste utilisateur synchrone) et serait
- * silencieusement bloqué — c'est pourquoi l'appelant doit l'ouvrir lui-même
- * AVANT tout await, vide, et nous le passer déjà prêt. */
-function openPrintablePdf(
-  pdf: jsPDF,
-  frameId: string,
-  printWindow?: Window | null,
-): void {
+ * Réservé à la SOURIS depuis la décision D1 (plan/audit-impression-tactile) :
+ * le tactile imprime désormais nativement le DOM écran (`window.print()`,
+ * cf. `RaproBoard.tsx`/`rapro.css`), ce chemin jsPDF + iframe caché n'est
+ * donc plus jamais appelé que depuis un pointeur souris. `URL.revokeObjectURL`
+ * différé au `load` de l'iframe (jamais immédiat : le navigateur a encore
+ * besoin du blob le temps de charger le PDF dedans). */
+function openPrintablePdf(pdf: jsPDF, frameId: string): void {
   pdf.autoPrint()
   const blobUrl = pdf.output('bloburl').toString()
-  if (printWindow) {
-    printWindow.location.href = blobUrl
-    return
-  }
   document.getElementById(frameId)?.remove()
   const iframe = document.createElement('iframe')
   iframe.id = frameId
   iframe.style.cssText =
     'position:fixed;right:0;bottom:0;width:0;height:0;border:0'
+  iframe.addEventListener(
+    'load',
+    () => URL.revokeObjectURL(blobUrl),
+    { once: true },
+  )
   iframe.src = blobUrl
   document.body.appendChild(iframe)
 }
 
-/** Génère le PDF du rapprochement du jour et ouvre l'impression.
- * `printWindow` : voir `openPrintablePdf` — à ouvrir par l'appelant AVANT
- * d'appeler cette fonction (avant tout await), sur tactile uniquement. */
+/** Génère le PDF du rapprochement du jour et ouvre l'impression (souris). */
 export async function printRaproSheet(
   data: RaproPdfData,
   title: string,
-  printWindow?: Window | null,
 ): Promise<void> {
   const { jsPDF } = await import('jspdf')
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   pdf.setProperties({ title })
   renderRaproDocument(pdf, data)
-  openPrintablePdf(pdf, 'rapro-print-frame', printWindow)
-}
-
-export interface RaproMonthlyPdfData {
-  /** Libellé du mois (ex. « Juillet 2026 »). */
-  title: string
-  rows: Array<{ date: string; day: number; cleaned: number }>
-  total: number
-}
-
-/** Génère le récap mensuel ELIOR (jour par jour + total) et ouvre l'impression. */
-export async function printRaproMonthly(
-  data: RaproMonthlyPdfData,
-  title: string,
-): Promise<void> {
-  const { jsPDF } = await import('jspdf')
-  const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-  pdf.setProperties({ title })
-  renderMonthlyDocument(pdf, data)
-  openPrintablePdf(pdf, 'rapro-monthly-print-frame')
+  openPrintablePdf(pdf, 'rapro-print-frame')
 }
 
 const LEFT = 15
@@ -322,48 +295,4 @@ function renderRaproDocument(
     : 'SIGNATURE OKKO'
   pdf.text(okkoLabel, LEFT + 3, sigY + 5)
   pdf.text('SIGNATURE ÉLIOR', RIGHT - boxW + 3, sigY + 5)
-}
-
-/** Récap mensuel ELIOR : en-tête + tableau jour → nettoyées + total. Tient sur
- * une page A4 (≤ 31 lignes). */
-function renderMonthlyDocument(
-  pdf: jsPDF,
-  { title, rows, total }: RaproMonthlyPdfData,
-): void {
-  let y = 20
-  pdf.setTextColor(26)
-  pdf.setFont('helvetica', 'normal').setFontSize(12)
-  pdf.text('RÉCAP MÉNAGE — ELIOR', CENTER, y, { align: 'center' })
-  y += 9
-  pdf.setFont('helvetica', 'bold').setFontSize(17)
-  pdf.text(title, CENTER, y, { align: 'center' })
-  y += 5
-  pdf.setDrawColor(51).setLineWidth(0.4).line(LEFT, y, RIGHT, y)
-  y += 7
-
-  // En-têtes de colonnes.
-  pdf.setFont('helvetica', 'bold').setFontSize(9).setTextColor(90)
-  pdf.text('Jour', LEFT, y)
-  pdf.text('Chambres nettoyées', RIGHT, y, { align: 'right' })
-  y += 2
-  pdf.setDrawColor(200).setLineWidth(0.2).line(LEFT, y, RIGHT, y)
-  y += 5
-
-  // Une ligne par jour (0 en gris clair).
-  const rowH = 6
-  rows.forEach(({ day, cleaned }) => {
-    pdf.setFont('helvetica', 'normal').setFontSize(9)
-    pdf.setTextColor(cleaned > 0 ? 40 : 165)
-    pdf.text(String(day).padStart(2, '0'), LEFT, y)
-    pdf.text(String(cleaned), RIGHT, y, { align: 'right' })
-    y += rowH
-  })
-
-  // Total du mois.
-  y += 1
-  pdf.setDrawColor(51).setLineWidth(0.3).line(LEFT, y, RIGHT, y)
-  y += 6
-  pdf.setFont('helvetica', 'bold').setFontSize(11).setTextColor(26)
-  pdf.text('Total du mois', LEFT, y)
-  pdf.text(String(total), RIGHT, y, { align: 'right' })
 }

@@ -11,7 +11,6 @@ import { LockBadge } from '#/components/shared/LockBadge.tsx'
 import { useNavbarBadge, useNavbarSubtitle } from '#/lib/navbarSubtitle.ts'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { useMatchMedia } from '#/components/shared/useMatchMedia.ts'
-import { isTouchDeviceNow } from '#/components/shared/useResponsiveShell.ts'
 import { MobileToolbar, ToolbarCell } from '#/components/shared/MobileToolbar.tsx'
 import { PrintBlockedDialog } from '#/components/shared/PrintBlockedDialog.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
@@ -676,20 +675,12 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
         ]),
       )
   }
+  // Réservé à la SOURIS (chemin jsPDF) depuis la décision D1 : le tactile
+  // appelle désormais `handlePrint` (ci-dessous), qui bascule vers
+  // `printWithTitle()`/`window.print()` natif et n'atteint plus jamais cette
+  // fonction — plus besoin d'y ouvrir de fenêtre ni d'y détecter le pointeur.
   async function handleGeneratePdf() {
     setPdfBusy(true)
-    // Sur tactile, la fenêtre s'ouvre ICI, SYNCHRONE avec le clic — un
-    // `window.open()` lancé après l'import() dynamique de jsPDF (dans
-    // printRaproSheet) arriverait hors du geste utilisateur aux yeux du
-    // bloqueur de popups, qui le bloquerait silencieusement. Vide pour
-    // l'instant, sa location changera une fois le PDF prêt (lib/rapro/pdf.ts).
-    // `isTouchDeviceNow()` (`hover: none` + `pointer: coarse`) : le vrai
-    // signal d'un écran tactile, pas la largeur de fenêtre — une fenêtre
-    // desktop redimensionnée étroite garde l'impression automatique, qui y
-    // marche. Repris du helper partagé (`useResponsiveShell.ts`) au lieu
-    // d'une détection dupliquée en dur, pour ne plus jamais diverger de la
-    // définition centrale.
-    const printWindow = isTouchDeviceNow() ? window.open('', '_blank') : null
     try {
       const [yy, mm, dd] = selectedDate.split('-')
       await printRaproSheet(
@@ -709,7 +700,6 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
           validatedAt: sheet?.validatedAt ?? null,
         },
         `Rapprochement_${dd}-${mm}-${yy}`,
-        printWindow,
       )
     } catch {
       // Réutilise la modale de blocage existante (raison générique) plutôt

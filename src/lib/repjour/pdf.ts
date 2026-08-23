@@ -57,28 +57,25 @@ export interface RepjourPdfData {
 /** KPI à zéro — repli quand le cumul réalisé est absent (jour projeté seul). */
 const ZERO_KPI: KPIBlock = { nuitees: 0, to: 0, pm: 0, revpar: 0, roomRevenue: 0 }
 
-/** Ouvre un PDF déjà rendu dans la fenêtre d'impression. Sur tactile,
- * `printWindow` (ouverte par l'appelant AVANT tout await, cf.
- * `printRepjourReport`) reçoit le PDF — l'iframe caché reste invisible aux
- * navigateurs mobiles, qui n'y activent pas leur visionneuse PDF. Sans
- * `printWindow` (souris) : iframe caché recyclé, aucun téléchargement, même
- * harnais que caisse / rapro / parking. */
-function openPrintablePdf(
-  pdf: jsPDF,
-  frameId: string,
-  printWindow?: Window | null,
-): void {
+/** Ouvre un PDF déjà rendu dans la fenêtre d'impression, via un iframe caché
+ * recyclé (aucun téléchargement). Réservé à la SOURIS depuis la décision D1
+ * (plan/audit-impression-tactile) : le tactile imprime désormais nativement
+ * le DOM écran (`window.print()`, cf. `DashboardBoard.tsx`/`repjour.css`).
+ * `URL.revokeObjectURL` différé au `load` de l'iframe (jamais immédiat : le
+ * navigateur a encore besoin du blob le temps de charger le PDF dedans). */
+function openPrintablePdf(pdf: jsPDF, frameId: string): void {
   pdf.autoPrint()
   const blobUrl = pdf.output('bloburl').toString()
-  if (printWindow) {
-    printWindow.location.href = blobUrl
-    return
-  }
   document.getElementById(frameId)?.remove()
   const iframe = document.createElement('iframe')
   iframe.id = frameId
   iframe.style.cssText =
     'position:fixed;right:0;bottom:0;width:0;height:0;border:0'
+  iframe.addEventListener(
+    'load',
+    () => URL.revokeObjectURL(blobUrl),
+    { once: true },
+  )
   iframe.src = blobUrl
   document.body.appendChild(iframe)
 }
@@ -96,16 +93,13 @@ export async function buildRepjourPdf(
   return pdf
 }
 
-/** Génère le PDF du rapport du jour et ouvre l'impression.
- * `printWindow` : voir `openPrintablePdf` — à ouvrir par l'appelant AVANT
- * d'appeler cette fonction (avant tout await), sur tactile uniquement. */
+/** Génère le PDF du rapport du jour et ouvre l'impression (souris). */
 export async function printRepjourReport(
   data: RepjourPdfData,
   title: string,
-  printWindow?: Window | null,
 ): Promise<void> {
   const pdf = await buildRepjourPdf(data, title)
-  openPrintablePdf(pdf, 'repjour-print-frame', printWindow)
+  openPrintablePdf(pdf, 'repjour-print-frame')
 }
 
 // --- Géométrie -------------------------------------------------------------

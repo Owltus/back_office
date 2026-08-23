@@ -168,35 +168,37 @@ export async function buildCaissePdf(
   return pdf
 }
 
-/** Génère le PDF de la feuille de caisse et ouvre la fenêtre d'impression du
- * navigateur (via autoPrint). Souris : iframe caché recyclé, aucun
- * téléchargement, aucune popup. Tactile : `printWindow` (ouverte par
- * l'appelant AVANT tout await, sur tactile uniquement) reçoit le PDF —
- * l'iframe caché reste invisible aux navigateurs mobiles, qui n'y activent
- * pas leur visionneuse PDF. */
+/** Ouvre un PDF déjà rendu dans la fenêtre d'impression, via un iframe caché
+ * recyclé (aucun téléchargement) — même harnais que rapro/repjour/parking.
+ * Réservé à la SOURIS depuis la décision D1 (plan/audit-impression-tactile) :
+ * le tactile imprime désormais nativement le DOM écran (`window.print()`,
+ * cf. `CaisseBoard.tsx`/`caisse.css`). `URL.revokeObjectURL` différé au
+ * `load` de l'iframe (jamais immédiat : le navigateur a encore besoin du
+ * blob le temps de charger le PDF dedans). */
+function openPrintablePdf(pdf: jsPDF, frameId: string): void {
+  pdf.autoPrint()
+  const blobUrl = pdf.output('bloburl').toString()
+  document.getElementById(frameId)?.remove()
+  const iframe = document.createElement('iframe')
+  iframe.id = frameId
+  iframe.style.cssText =
+    'position:fixed;right:0;bottom:0;width:0;height:0;border:0'
+  iframe.addEventListener(
+    'load',
+    () => URL.revokeObjectURL(blobUrl),
+    { once: true },
+  )
+  iframe.src = blobUrl
+  document.body.appendChild(iframe)
+}
+
+/** Génère le PDF de la feuille de caisse et ouvre l'impression (souris). */
 export async function printCaisseSheet(
   data: CaissePdfData,
   title: string,
-  printWindow?: Window | null,
 ): Promise<void> {
   const pdf = await buildCaissePdf(data, title)
-  pdf.autoPrint()
-  const blobUrl = pdf.output('bloburl').toString()
-  if (printWindow) {
-    printWindow.location.href = blobUrl
-    return
-  }
-  document.getElementById('caisse-print-frame')?.remove()
-  const iframe = document.createElement('iframe')
-  iframe.id = 'caisse-print-frame'
-  iframe.style.position = 'fixed'
-  iframe.style.right = '0'
-  iframe.style.bottom = '0'
-  iframe.style.width = '0'
-  iframe.style.height = '0'
-  iframe.style.border = '0'
-  iframe.src = blobUrl
-  document.body.appendChild(iframe)
+  openPrintablePdf(pdf, 'caisse-print-frame')
 }
 
 const LEFT = 15

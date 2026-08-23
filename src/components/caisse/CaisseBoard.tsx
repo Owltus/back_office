@@ -24,10 +24,7 @@ import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { StepNav } from '#/components/shared/StepNav.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
-import {
-  isTouchDeviceNow,
-  useResponsiveShell,
-} from '#/components/shared/useResponsiveShell.ts'
+import { useResponsiveShell } from '#/components/shared/useResponsiveShell.ts'
 import { useStepNavKeys } from '#/components/shared/useStepNavKeys.ts'
 import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
@@ -765,19 +762,12 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
   }
 
   // Génère un VRAI document PDF (jsPDF) et ouvre la fenêtre d'impression du
-  // navigateur — pas de téléchargement. Cf. src/lib/caisse/pdf.ts.
+  // navigateur — pas de téléchargement. Réservé à la SOURIS (le tactile
+  // imprime nativement via handlePrint). Cf. src/lib/caisse/pdf.ts.
   const [pdfBusy, setPdfBusy] = useState(false)
   const handleGeneratePdf = async () => {
     setPdfBusy(true)
     setError('')
-    // Sur tactile, la fenêtre s'ouvre ICI, SYNCHRONE avec le clic — un
-    // `window.open()` lancé après l'import() dynamique de jsPDF (dans
-    // printCaisseSheet) arriverait hors du geste utilisateur aux yeux du
-    // bloqueur de popups, qui le bloquerait silencieusement ; c'est aussi la
-    // seule façon d'obtenir une visionneuse PDF visible sur mobile (l'iframe
-    // caché, seul repli côté souris, n'y affiche jamais rien). Vide pour
-    // l'instant, sa location changera une fois le PDF prêt.
-    const printWindow = isTouchDeviceNow() ? window.open('', '_blank') : null
     try {
       const [yr, mo, da] = selectedDate.split('-')
       await printCaisseSheet(
@@ -789,7 +779,6 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
           activeCautions,
         },
         `Caisse_${da}-${mo}-${yr}_${form.shift}`,
-        printWindow,
       )
     } catch (err) {
       setError(`Impression du PDF impossible : ${errorMessage(err)}`)
