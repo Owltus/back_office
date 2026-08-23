@@ -33,34 +33,29 @@
 }
 
 @media print {
-  /* Palette : le thème est en permanence sombre à l'écran (« navy » forcé sur
-     <html>, cf. CLAUDE.md) — texte clair sur fond sombre. Réimprimer ce DOM
-     tel quel donnerait du texte clair sur papier blanc : illisible. On
-     réutilise donc ici le jeu de variables CLAIR de `:root` (styles.css),
-     déjà conçu pour un fond blanc — pas une palette d'impression inventée à
-     part. Portée limitée à `.caisse-doc` (les variables sont héritées par
-     tous ses descendants) : n'affecte ni l'écran, ni les autres pages.
-     `--border` est renforcé au-delà de la valeur `:root` (0.1) : plusieurs
-     liserés de la page l'utilisent déjà atténué (`border-border/60`), et la
-     valeur `:root` d'origine — jamais éprouvée sur fond blanc, le thème clair
-     n'étant nulle part actif dans l'app — y devenait quasi invisible.
-     `--muted-foreground` est de même assombri d'un cran pour rester net sur
-     papier (le rendu papier n'a pas l'anti-aliasing d'un écran rétina). */
+  /* Palette PAPIER — mêmes teintes que `lib/caisse/pdf.ts` (encre #1a1a1a,
+     vert/rouge de solde 127a2e/b42318, case cochée en indigo #4f46e5), PAS
+     la palette claire générique de `:root` : cette dernière reste pensée
+     pour un dashboard écran, pas pour reproduire fidèlement le PDF jsPDF —
+     sans ce calage, les deux documents de la même feuille dérivaient
+     visuellement l'un de l'autre. Portée limitée à `.caisse-doc` (les
+     variables sont héritées par tous ses descendants) : n'affecte ni
+     l'écran, ni les autres pages. */
   .caisse-doc {
-    --background: #f8fafc;
-    --foreground: #0f172a;
+    --background: #ffffff;
+    --foreground: #1a1a1a;
     --card: #ffffff;
-    --card-foreground: #0f172a;
+    --card-foreground: #1a1a1a;
     --primary: #4f46e5;
     --primary-foreground: #ffffff;
-    --muted: #f1f5f9;
-    --muted-foreground: #475569;
+    --muted: #f5f5f5;
+    --muted-foreground: #6e6e6e;
     --accent: #eef2ff;
     --accent-foreground: #312e81;
-    --destructive: #b91c1c;
+    --destructive: #b42318;
     --destructive-foreground: #ffffff;
-    --border: rgba(15, 23, 42, 0.35);
-    --input: rgba(15, 23, 42, 0.2);
+    --border: #d2d2d6;
+    --input: #d2d2d6;
   }
 
   /* Ces teintes doivent réellement sortir sur le papier — sans ce forçage,

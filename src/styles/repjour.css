@@ -24,10 +24,17 @@
  *     sur papier blanc, le fond sombre n'imprimant généralement pas). Les
  *     tokens shadcn utilisés par SummaryCards/KPITable/StatTile ne sont que
  *     des indirections vers les variables `--card`/`--foreground`/
- *     `--muted-foreground`/`--border` (`@theme inline`, styles.css) : les
- *     redéfinir en clair sur `.repjour-doc` suffit à reteinter tout le
- *     sous-arbre (même mécanisme que le bascule `.dark`, mais localisé à
- *     l'impression et à ce conteneur).
+ *     `--muted-foreground`/`--border`/`--chart-*` (`@theme inline`,
+ *     styles.css) : les redéfinir sur `.repjour-doc` suffit à reteinter tout
+ *     le sous-arbre (même mécanisme que le bascule `.dark`, mais localisé à
+ *     l'impression et à ce conteneur) — vers la palette PAPIER de
+ *     `lib/repjour/pdf.ts` (INK/BORDER/INDIGO/CYAN/AMBER/PINK/POS), PAS la
+ *     palette claire générique de `:root` : cette dernière reste pensée pour
+ *     un dashboard écran (teintes plus vives), pas pour reproduire fidèlement
+ *     le PDF jsPDF — sans ce réassombrissement, les deux documents du même
+ *     rapport dérivaient visuellement l'un de l'autre. Même palette
+ *     qu'`analytique.css` (constantes strictement identiques dans les deux
+ *     générateurs PDF).
  *  2. PageHeader (titre écran) est intégralement `print:hidden` (son propre
  *     composant) : `.repjour-print-header` le remplace par un en-tête compact
  *     dédié, sur le modèle de `.pdj-header`.
@@ -39,16 +46,22 @@
  */
 @media print {
   .repjour-doc {
-    /* Repasse en clair (voir point 1 ci-dessus) — mêmes valeurs que le thème
-       clair par défaut (`:root`, styles.css), pour rester cohérent si ce
-       thème évolue un jour. */
-    --background: #f8fafc;
-    --foreground: #0f172a;
+    /* Palette PAPIER (voir point 1 ci-dessus) — mêmes teintes que
+       `lib/repjour/pdf.ts` (INK/BORDER/INDIGO/CYAN/AMBER/PINK/POS),
+       partagées à l'identique par `analytique.css`. */
+    --background: #ffffff;
+    --foreground: #1a1a1a;
     --card: #ffffff;
-    --card-foreground: #0f172a;
-    --muted: #f1f5f9;
-    --muted-foreground: #475569;
-    --border: rgba(15, 23, 42, 0.16);
+    --card-foreground: #1a1a1a;
+    --border: #d2d2d6;
+    --muted: #f5f5f5;
+    --muted-foreground: #6e6e6e;
+    --destructive: #b42318;
+    --chart-1: #4338ca; /* indigo */
+    --chart-2: #0e7490; /* cyan */
+    --chart-3: #b0780a; /* amber */
+    --chart-4: #be185d; /* pink */
+    --chart-5: #127a2e; /* vert/positif */
 
     max-width: none;
     gap: 0.75rem;

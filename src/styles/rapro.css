@@ -450,23 +450,8 @@
     box-shadow: inset 0 0 0 1.25px #ef4444;
   }
 
-  /* Tuiles de synthèse (StatTile) : mêmes classes stables qu'à l'écran,
-     aplaties pour le papier — même traitement que `.pdj-stats .stat-tile`
-     dans pdj.css. */
-  .rapro-stats .stat-tile {
-    background: #fafafa;
-    border: 1px solid #e0e0e0;
-    box-shadow: none;
-  }
-  .rapro-stats .stat-tile__rail {
-    display: none;
-  }
-  .rapro-stats .stat-tile__value {
-    color: #1a1a1a;
-  }
-  .rapro-stats .stat-tile__label {
-    color: #666;
-  }
+  /* Tuiles de synthèse (StatTile) : aplatissement + police partagés par
+     les 5 documents imprimés, voir styles/print.css. */
 
   .rapro-legend {
     color: #444;

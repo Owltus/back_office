@@ -1,0 +1,101 @@
+/* ------------------------------------------------------------------ *
+ * Impression — socle PARTAGÉ par tous les documents imprimés          *
+ * nativement (tactile, `.<domaine>-doc`) : Rapro, RepJour, Parking,   *
+ * Caisse, Analytique.                                                  *
+ *                                                                       *
+ * SOURCE UNIQUE de la police et des teintes de signal, pour que        *
+ * chaque page tactile reproduise fidèlement SON PDF jsPDF de bureau    *
+ * (lib/<domaine>/pdf.ts, INCHANGÉ par ce fichier) au lieu de laisser   *
+ * la palette générique de l'app (pensée pour un fond sombre) se       *
+ * glisser dans le document imprimé. Même police (Helvetica, celle de  *
+ * jsPDF), même encre pour les cartes de synthèse (StatTile), même     *
+ * vert/rouge de signal (positif/négatif) partout — un seul jeu de     *
+ * règles, pas une copie par page qui dérive avec le temps.             *
+ *
+ * Chaque fichier `<domaine>.css` ne redéfinit QUE ce qui lui est
+ * propre (structure de tableau, couleurs de statut métier, palette
+ * `--foreground`/`--border`/`--chart-*`...) : ce socle-ci n'y touche
+ * pas, il vient compléter par-dessus.
+ *
+ * PDJ n'est PAS inclus : son document n'a jamais utilisé jsPDF (un
+ * seul rendu, déjà cohérent bureau/tactile par construction), rien à
+ * aligner — c'est la référence de ce chantier, laissée intacte.
+ * ------------------------------------------------------------------ */
+@media print {
+  .rapro-doc,
+  .repjour-doc,
+  .parking-doc,
+  .caisse-doc,
+  .analytique-doc {
+    font-family: Helvetica, Arial, sans-serif;
+  }
+
+  /* Carte de synthèse (StatTile, components/shared/StatTile.tsx) : le
+     liseré de couleur a du sens sur un dashboard écran, pas sur une
+     feuille imprimée — même traitement « aplati » que PDJ (référence). */
+  .rapro-doc .stat-tile,
+  .repjour-doc .stat-tile,
+  .caisse-doc .stat-tile,
+  .analytique-doc .stat-tile {
+    background: #fafafa;
+    border: 1px solid #e0e0e0;
+    box-shadow: none;
+  }
+  .rapro-doc .stat-tile__rail,
+  .repjour-doc .stat-tile__rail,
+  .caisse-doc .stat-tile__rail,
+  .analytique-doc .stat-tile__rail {
+    display: none;
+  }
+  .rapro-doc .stat-tile__label,
+  .repjour-doc .stat-tile__label,
+  .caisse-doc .stat-tile__label,
+  .analytique-doc .stat-tile__label {
+    color: #666;
+  }
+  .rapro-doc .stat-tile__value,
+  .repjour-doc .stat-tile__value,
+  .caisse-doc .stat-tile__value,
+  .analytique-doc .stat-tile__value {
+    color: #1a1a1a;
+  }
+
+  /* Ombres portées : utiles pour détacher une carte d'un fond sombre à
+     l'écran, sans objet sur une page blanche — jsPDF n'en dessine
+     jamais. */
+  .rapro-doc .shadow-sm,
+  .repjour-doc .shadow-sm,
+  .caisse-doc .shadow-sm,
+  .analytique-doc .shadow-sm {
+    box-shadow: none !important;
+  }
+
+  /* Signal positif/négatif (utilitaires Tailwind emerald/destructive) :
+     mêmes teintes que POS/NEG des PDF jsPDF (127a2e / b42318), partout
+     où un composant écran les pose, au lieu du vert/rouge saturés
+     choisis pour ressortir sur fond sombre. */
+  .rapro-doc .text-emerald-500,
+  .repjour-doc .text-emerald-500,
+  .caisse-doc .text-emerald-500,
+  .analytique-doc .text-emerald-500 {
+    color: #127a2e !important;
+  }
+  .rapro-doc .bg-emerald-500,
+  .repjour-doc .bg-emerald-500,
+  .caisse-doc .bg-emerald-500,
+  .analytique-doc .bg-emerald-500 {
+    background-color: #127a2e !important;
+  }
+  .rapro-doc .text-destructive,
+  .repjour-doc .text-destructive,
+  .caisse-doc .text-destructive,
+  .analytique-doc .text-destructive {
+    color: #b42318 !important;
+  }
+  .rapro-doc .bg-destructive,
+  .repjour-doc .bg-destructive,
+  .caisse-doc .bg-destructive,
+  .analytique-doc .bg-destructive {
+    background-color: #b42318 !important;
+  }
+}

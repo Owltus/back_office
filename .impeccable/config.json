@@ -52,6 +52,41 @@
           "src/styles/repjour.css"
         ],
         "createdAt": "2026-08-23T11:18:53.930Z"
+      },
+      {
+        "rule": "design-system-font",
+        "value": "helvetica",
+        "createdAt": "2026-08-23T12:16:14.571Z"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#e0e0e0",
+        "createdAt": "2026-08-23T12:16:14.637Z"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#666",
+        "createdAt": "2026-08-23T12:16:14.709Z"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#1a1a1a",
+        "createdAt": "2026-08-23T12:16:14.769Z"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#127a2e",
+        "createdAt": "2026-08-23T12:16:14.833Z"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#b42318",
+        "createdAt": "2026-08-23T12:16:14.893Z"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#fafafa",
+        "createdAt": "2026-08-23T12:16:14.951Z"
       }
     ]
   }
