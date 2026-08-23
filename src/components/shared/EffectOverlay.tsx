@@ -111,7 +111,7 @@ export function EffectOverlay({ effect, onDone }: EffectOverlayProps) {
   return (
     <div
       aria-hidden="true"
-      className="pointer-events-none fixed inset-0 z-[9998] overflow-hidden"
+      className="pointer-events-none fixed inset-0 z-[9998] overflow-hidden print:hidden"
     >
       <canvas ref={canvasRef} className="h-full w-full" />
     </div>

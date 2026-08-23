@@ -21,7 +21,7 @@ import { RouteSkeleton } from '#/components/shared/skeleton/RouteSkeleton.tsx'
 function BootSkeleton({ pathname }: { pathname: string }) {
   return (
     <div className="flex h-dvh flex-col overflow-hidden" aria-hidden="true">
-      <header className="sticky top-0 z-40 border-b border-border bg-card/80 backdrop-blur-md">
+      <header className="sticky top-0 z-40 border-b border-border bg-card/80 backdrop-blur-md print:hidden">
         <div className="flex h-16 items-center gap-3 px-4">
           <Skeleton className="size-7 rounded-md" />
           <div className="ml-2 hidden items-center gap-2 md:flex">
