@@ -43,6 +43,15 @@
   grid-template-columns: repeat(6, 1fr);
   gap: 0.5rem;
 }
+/* Colonnes retirées pour la lisibilité (demande utilisateur) : la flèche
+   statut (départ rouge / recouche bleu) et le nombre de nuitées — chaque
+   étage n'a déjà que ~164px de large sur cette disposition à 6 colonnes, le
+   nom du client en profite. Le reste (chambre, nom, cases à cocher) est
+   inchangé. Sans effet ailleurs (souris, mobile, tablette étroite/portrait). */
+.pdj-floors--wide-touch .pdj-floor td.pdj-status,
+.pdj-floors--wide-touch .pdj-floor td.pdj-stay-count {
+  display: none;
+}
 
 /* À l'écran, les cartes d'une même rangée ont la même hauteur (align stretch
    par défaut) et le tableau remplit la carte : les étages moins remplis (1 et 6)
