@@ -8,6 +8,12 @@ import { cn } from '#/lib/utils.ts'
  * `flex-1`, gabarit natif d'app mobile (pas un bouton de bureau rétréci).
  * Le libellé existe précisément parce que l'infobulle au survol n'existe pas
  * au doigt — une icône seule n'explique plus rien en tactile.
+ *
+ * `active` (optionnel) : pour un GROUPE de cellules qui bascule entre
+ * plusieurs vues persistantes (ex. service ↔ financier sur PDJ) plutôt qu'une
+ * action ponctuelle — colore l'icône/le libellé en `text-primary` pour
+ * montrer laquelle est sélectionnée, comme la pastille du segmented control
+ * desktop équivalent. `false`/omis : rendu inchangé (action ponctuelle).
  */
 export function ToolbarCell({
   icon,
@@ -16,6 +22,7 @@ export function ToolbarCell({
   disabled = false,
   ariaLabel,
   bordered = true,
+  active = false,
 }: {
   icon: ReactNode
   label: string
@@ -24,6 +31,8 @@ export function ToolbarCell({
   ariaLabel: string
   /** Filet vertical à gauche de la cellule — faux pour la 1re cellule d'une barre. */
   bordered?: boolean
+  /** Vrai si cette cellule représente la vue actuellement active d'un groupe. */
+  active?: boolean
 }) {
   return (
     <button
@@ -31,8 +40,10 @@ export function ToolbarCell({
       onClick={onClick}
       disabled={disabled}
       aria-label={ariaLabel}
+      aria-pressed={active}
       className={cn(
-        'flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-muted-foreground transition-colors active:bg-accent active:text-foreground disabled:pointer-events-none disabled:opacity-40',
+        'flex flex-1 flex-col items-center justify-center gap-0.5 py-2 transition-colors active:bg-accent active:text-foreground disabled:pointer-events-none disabled:opacity-40',
+        active ? 'text-primary' : 'text-muted-foreground',
         bordered && 'border-l border-border',
       )}
     >

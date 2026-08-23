@@ -16,6 +16,7 @@ import {
   Receipt,
   Star,
   Trash2,
+  UserPlus,
   Users,
 } from 'lucide-react'
 
@@ -910,52 +911,38 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
         // useNavbarSubtitle ci-dessous) : `undefined` plutôt qu'un contenu
         // masqué en CSS, pour que la ligne titre de PageHeader ne réserve plus
         // sa hauteur. Même seuil que la Navbar elle-même (hamburger ↔ onglets),
-        // pas celui, indépendant, des tuiles/tableaux PDJ. Le badge (bascule
-        // service/financier, ci-dessous) N'EST PAS gouverné par ce seuil : ce
-        // n'est pas un statut dupliqué dans la Navbar comme sur Rapro, mais un
-        // contrôle fonctionnel qui doit rester utilisable à toute largeur.
+        // pas celui, indépendant, des tuiles/tableaux PDJ.
         title={isNavbarMobile ? undefined : titleDate}
         // La bascule service/financier vient ici, à la place du statut des
         // autres pages (Rapro/Caisse) : `badgeAlign="end"` l'envoie au bord
         // droit sur sa propre ligne en mobile, au lieu de rester entassée
-        // dans la barre d'actions (déjà chargée en admin : suppression,
-        // externe, analytique/import/impression, navigation temporelle).
+        // dans la barre d'actions. Sans effet sur écran tactile, où le badge
+        // est de toute façon `undefined` (cf. plus bas) — la bascule y vit
+        // dans la barre d'outils basse.
         badgeAlign="end"
         badge={
           /* Bascule « vue service ↔ détail financier » : segmented control dans
              le style des boutons d'action (bordure outline, hauteur icon-sm), un
              seul actif à la fois. La pastille bleue GLISSE d'une position à
              l'autre (translate animé) au lieu de sauter. Réétiquette le tableau
-             à l'écran ; jamais imprimé. */
-          hasData && (
-            <div
-              className={cn(
-                'pdj-seg relative inline-flex items-center overflow-hidden rounded-md border bg-background shadow-xs print:hidden dark:border-input dark:bg-input/30',
-                // Cibles agrandies sur écran tactile (doigt, pas de survol pour
-                // se rattraper d'un clic raté) : ce contrôle est le SEUL de la
-                // page qui reste actionnable en tactile hors de la barre
-                // d'outils basse (cf. plus haut, `badge` non gouverné par
-                // `isTouchDevice`) — ses cibles doivent donc suivre le même
-                // gabarit tactile que celle-ci, pas rester à la taille
-                // souris (`h-8`/`size-7`, ~28px, sous le minimum tactile
-                // usuel). Inchangé à la souris, toute largeur comprise.
-                isTouchDevice ? 'h-11' : 'h-8',
-              )}
-            >
+             à l'écran ; jamais imprimé.
+             Réservé à la souris (`!isTouchDevice`) : sur écran tactile, la
+             bascule vit désormais dans la barre d'outils basse (cf. fin du
+             composant), comme tout le reste des actions de page. */
+          hasData &&
+          !isTouchDevice && (
+            <div className="pdj-seg relative inline-flex h-8 items-center overflow-hidden rounded-md border bg-background shadow-xs print:hidden dark:border-input dark:bg-input/30">
               {/* Pastille active : remplit TOUTE la hauteur (inset-y-0) et la
-                  largeur d'un bouton, collée aux bordures. Ses coins sont
+                  largeur d'un bouton (w-7), collée aux bordures. Ses coins sont
                   clippés par l'arrondi du conteneur (overflow-hidden) → elle
                   épouse exactement le cadre. Position par `left` inline (aucune
                   composition Tailwind, contrairement à `transform`) : service = 0,
-                  financier = largeur d'un bouton. Transition en CSS. */}
+                  financier = largeur d'un bouton (1,75rem). Transition en CSS. */}
               <span
                 data-thumb
                 aria-hidden="true"
-                style={{ left: financeMode ? (isTouchDevice ? '2.75rem' : '1.75rem') : '0' }}
-                className={cn(
-                  'pointer-events-none absolute inset-y-0 bg-primary',
-                  isTouchDevice ? 'w-11' : 'w-7',
-                )}
+                style={{ left: financeMode ? '1.75rem' : '0' }}
+                className="pointer-events-none absolute inset-y-0 w-7 bg-primary"
               />
               <Tip label="Vue service">
                 <button
@@ -963,10 +950,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                   onClick={() => setFinanceMode(false)}
                   aria-label="Vue service"
                   aria-pressed={!financeMode}
-                  className={cn(
-                    'relative z-10 flex items-center justify-center rounded-[5px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
-                    isTouchDevice ? 'size-11' : 'size-7',
-                  )}
+                  className="relative z-10 flex size-7 items-center justify-center rounded-[5px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
                 >
                   <Users
                     className={cn(
@@ -984,10 +968,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                   onClick={() => setFinanceMode(true)}
                   aria-label="Détail financier"
                   aria-pressed={financeMode}
-                  className={cn(
-                    'relative z-10 flex items-center justify-center rounded-[5px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
-                    isTouchDevice ? 'size-11' : 'size-7',
-                  )}
+                  className="relative z-10 flex size-7 items-center justify-center rounded-[5px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
                 >
                   <Receipt
                     className={cn(
@@ -1400,11 +1381,19 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
           à TOUTE largeur tactile (téléphone et tablette) : geste d'écriture
           courant, pas réservé au bureau.
 
-          La suppression admin (Corbeille), en revanche, est gatée
-          `!isPhoneWidth` EN PLUS de `isTouchDevice` : gardée hors du
-          téléphone (écran le plus étroit, geste destructif rare, priorité
-          aux cellules du quotidien) mais réintroduite sur tablette, qui a
-          mécaniquement la place. */}
+          Importer et la suppression admin, retirés (peu utiles en usage
+          tactile courant — import CSV et suppression restent des gestes de
+          bureau/admin ponctuels) : la place libérée revient à la bascule
+          Vue service ↔ Détail financier (ex-badge d'en-tête, cf. plus haut),
+          qui doit rester accessible sur toute largeur tactile.
+          Téléphone (`isPhoneWidth`) : UNE seule cellule, qui fonctionne comme
+          un interrupteur (icône/libellé = vue COURANTE, un tap bascule vers
+          l'autre) — l'écran le plus étroit n'a pas la place pour deux
+          cellules adjacentes en plus des 4 autres. Tablette : les DEUX
+          cellules restent adjacentes et visibles en permanence (`active`
+          indique laquelle est sélectionnée), plus lisible qu'un
+          interrupteur unique quand la largeur le permet — même principe que
+          le segmented control desktop. */}
       <MobileToolbar visible={isTouchDevice}>
         <ToolbarCell
           icon={<ChevronLeft className="size-5" />}
@@ -1414,17 +1403,9 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
           disabled={dateIdx < 0 || dateIdx >= navDates.length - 1}
           bordered={false}
         />
-        {isAdmin && hasData && !isPhoneWidth && (
-          <ToolbarCell
-            icon={<Trash2 className="size-5" />}
-            label="Suppr."
-            ariaLabel="Supprimer les données de ce jour"
-            onClick={() => setConfirmDelete(true)}
-          />
-        )}
         {canEdit && (
           <ToolbarCell
-            icon={<Users className="size-5" />}
+            icon={<UserPlus className="size-5" />}
             label="Externe"
             ariaLabel="Petits-déjeuners externes"
             onClick={() => setExternalsOpen(true)}
@@ -1436,14 +1417,6 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
           ariaLabel="Vue analytique"
           onClick={() => navigate({ to: '/pdj/analytique' })}
         />
-        {canManualImport && (
-          <ToolbarCell
-            icon={<FileUp className="size-5" />}
-            label="Importer"
-            ariaLabel="Importer un CSV"
-            onClick={() => inputRef.current?.click()}
-          />
-        )}
         <ToolbarCell
           icon={<Printer className="size-5" />}
           label="Imprimer"
@@ -1451,6 +1424,46 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
           onClick={handlePrint}
           disabled={!hasData}
         />
+        {hasData && isPhoneWidth && (
+          // Interrupteur unique : icône/libellé montrent la vue COURANTE, le
+          // tap bascule vers l'autre. `active` la teinte pour rester
+          // repérable au milieu de cellules à icône neutre.
+          <ToolbarCell
+            icon={
+              financeMode ? (
+                <Receipt className="size-5" />
+              ) : (
+                <Users className="size-5" />
+              )
+            }
+            label={financeMode ? 'Financier' : 'Service'}
+            ariaLabel={
+              financeMode
+                ? 'Basculer vers la vue service'
+                : 'Basculer vers le détail financier'
+            }
+            onClick={() => setFinanceMode(!financeMode)}
+            active
+          />
+        )}
+        {hasData && !isPhoneWidth && (
+          <>
+            <ToolbarCell
+              icon={<Users className="size-5" />}
+              label="Service"
+              ariaLabel="Vue service"
+              onClick={() => setFinanceMode(false)}
+              active={!financeMode}
+            />
+            <ToolbarCell
+              icon={<Receipt className="size-5" />}
+              label="Financier"
+              ariaLabel="Détail financier"
+              onClick={() => setFinanceMode(true)}
+              active={financeMode}
+            />
+          </>
+        )}
         <ToolbarCell
           icon={<ChevronRight className="size-5" />}
           label="Suiv."
