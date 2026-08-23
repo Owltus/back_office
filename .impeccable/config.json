@@ -20,6 +20,38 @@
         ],
         "createdAt": "2026-08-21T21:50:27.498Z",
         "reason": "pre-existing micro-badge (Remboursee status pill text), narrower than the label step by design, unrelated to tonight's caution-menu accessibility fix"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "12px",
+        "files": [
+          "src/styles/repjour.css"
+        ],
+        "createdAt": "2026-08-23T11:18:48.442Z"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#666",
+        "files": [
+          "src/styles/repjour.css"
+        ],
+        "createdAt": "2026-08-23T11:18:53.790Z"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "18px",
+        "files": [
+          "src/styles/repjour.css"
+        ],
+        "createdAt": "2026-08-23T11:18:53.850Z"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#1a1a1a",
+        "files": [
+          "src/styles/repjour.css"
+        ],
+        "createdAt": "2026-08-23T11:18:53.930Z"
       }
     ]
   }

@@ -57,6 +57,7 @@ import { reportToKPI } from '#/lib/repjour/calc/kpi.ts'
 import { computeEcart } from '#/lib/repjour/calc/ecart.ts'
 import { printRepjourReport } from '#/lib/repjour/pdf.ts'
 import type { RepjourPdfData } from '#/lib/repjour/pdf.ts'
+import { printWithTitle } from '#/lib/print.ts'
 import { DAY_NAMES, MONTHS, TOTAL_ROOMS } from '#/lib/repjour/constants.ts'
 import type { KPIBlock, MonthBudget } from '#/lib/repjour/types.ts'
 
@@ -476,6 +477,18 @@ export function DashboardBoard() {
     }
   }
 
+  // Impression tactile (D1 — audit-impression-tactile) : document HTML
+  // `@media print` (repjour.css), même patron que PDJ (BreakfastBoard.handlePrint
+  // + printWithTitle) — `window.print()` natif ouvre la VRAIE interface
+  // d'impression du navigateur, contrairement au PDF jsPDF (`handleGeneratePdf`
+  // ci-dessus), inatteignable sur la plupart des lecteurs PDF mobiles. Réutilise
+  // le DOM écran déjà affiché (SummaryCards + KPITable) : voir `.repjour-doc` /
+  // `.repjour-print-header` dans repjour.css. Chemin SOURIS inchangé (jsPDF).
+  function handlePrint() {
+    const [yr, mo, da] = selectedDate.split('-')
+    printWithTitle(`Repjour_NACV_${da}-${mo}-${yr}`)
+  }
+
   // --- Envoi serveur (dev, admin-only) : PDF joint + corps HTML via Resend ----
   async function handleSendServer(): Promise<ServerSendResult> {
     if (!budget || !report || !rj || !rmtd || !pm || !ecart)
@@ -533,27 +546,45 @@ export function DashboardBoard() {
     }
   }
 
-  // Ctrl+P emprunte la même porte que le bouton : le PDF jsPDF, jamais le rendu
-  // brut du DOM. Sans données imprimables, le raccourci explique son refus.
+  // Ctrl+P emprunte la même porte que les boutons : PDF jsPDF à la souris,
+  // impression native (`handlePrint`) sur tactile. Sans données imprimables, le
+  // raccourci explique son refus dans les deux cas.
   usePrintShortcut(() => {
-    if (pdfBusy) return
     if (!canPrint) {
       setPrintBlocked(true)
       return
     }
+    if (isTouchDevice) {
+      handlePrint()
+      return
+    }
+    if (pdfBusy) return
     void handleGeneratePdf()
   })
 
   return (
-    <PageContainer>
+    <PageContainer printBleed>
       <div
         className={cn(
-          'mx-auto w-full max-w-5xl space-y-4',
+          // `repjour-doc` : accroche du bloc `@media print` (repjour.css) —
+          // repasse le document en clair (thème forcé dark sur <html>, cf.
+          // CLAUDE.md) pour l'impression tactile, sur le modèle de `.pdj-doc`.
+          'repjour-doc mx-auto w-full max-w-5xl space-y-4 print:max-w-none',
           // Réserve la place de la barre d'outils basse tactile (cf. fin du
-          // composant) pour qu'elle ne masque jamais la fin du contenu.
-          isTouchDevice && 'pb-20',
+          // composant) pour qu'elle ne masque jamais la fin du contenu ;
+          // `print:pb-0` : cette réserve n'a de sens qu'à l'écran (même
+          // mécanisme que pdj-doc, cf. BreakfastBoard.tsx).
+          isTouchDevice && 'pb-20 print:pb-0',
         )}
       >
+        {/* En-tête compact, IMPRESSION UNIQUEMENT : `PageHeader` (titre écran,
+            juste en dessous) est `print:hidden` — ce bloc dédié le remplace,
+            même patron que `.pdj-header` (pdj.css). */}
+        <div className="repjour-print-header">
+          <h1>Rapport journalier</h1>
+          <span className="repjour-print-date">{displayDate}</span>
+        </div>
+
         <PageHeader
           // Sous 1024px, le jour vit dans la Navbar globale (sous-titre posé par
           // useNavbarSubtitle ci-dessus) : `undefined` plutôt qu'un contenu
@@ -622,7 +653,7 @@ export function DashboardBoard() {
                 {/* Impression : toujours présente, désactivée tant qu'il n'y a
                     rien à imprimer (jour vide) — l'infobulle porte la raison. */}
                 <PrintButton
-                  onClick={handleGeneratePdf}
+                  onClick={isTouchDevice ? handlePrint : handleGeneratePdf}
                   iconOnly
                   disabled={!canPrint || pdfBusy}
                   tipLabel={
@@ -699,17 +730,19 @@ export function DashboardBoard() {
         />
 
         {actionError && (
-          <div className="mb-4 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <div className="mb-4 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive print:hidden">
             {actionError}
           </div>
         )}
 
         {notSent && (
-          <SendStatusBanner
-            message={`Le rapport du ${displayDate} n'a pas encore été envoyé.`}
-            onIgnore={canImport ? handleIgnore : undefined}
-            ignoring={ignoring}
-          />
+          <div className="print:hidden">
+            <SendStatusBanner
+              message={`Le rapport du ${displayDate} n'a pas encore été envoyé.`}
+              onIgnore={canImport ? handleIgnore : undefined}
+              ignoring={ignoring}
+            />
+          </div>
         )}
 
         {loading ? (
@@ -817,9 +850,17 @@ export function DashboardBoard() {
               />
             </div>
 
-            <AlertBanner alerts={report.alerts || []} />
+            <div className="print:hidden">
+              <AlertBanner alerts={report.alerts || []} />
+            </div>
 
-            <DayCrossSummary date={selectedDate} hotelRoomsSold={rj.nuitees} />
+            {/* Bande de synthèse transverse : composant D'ÉCRAN UNIQUEMENT (cf.
+                en-tête de DayCrossSummary.tsx) — ne touche ni le PDF « Imprimer »
+                ni le rapport e-mail ; exclue du document imprimé tactile pour la
+                même raison. */}
+            <div className="print:hidden">
+              <DayCrossSummary date={selectedDate} hotelRoomsSold={rj.nuitees} />
+            </div>
 
                 {/* Envoi du rapport : relocalisé dans la barre d'actions du HAUT
                     (PageHeader, à côté de « Imprimer »). L'ancien groupe inline
@@ -850,12 +891,14 @@ export function DashboardBoard() {
           isImportDay &&
           (isAdmin || !report) &&
           (MANUAL_IMPORT_ENABLED_FOR_ALL || isGradeAdmin) && (
-            <ImportSection
-              spacious={importOnly}
-              onImported={() =>
-                void queryClient.invalidateQueries({ queryKey: ['repjour'] })
-              }
-            />
+            <div className="print:hidden">
+              <ImportSection
+                spacious={importOnly}
+                onImported={() =>
+                  void queryClient.invalidateQueries({ queryKey: ['repjour'] })
+                }
+              />
+            </div>
           )}
 
         {sendMention && (
@@ -935,7 +978,7 @@ export function DashboardBoard() {
           icon={<Printer className="size-5" />}
           label="Imprimer"
           ariaLabel="Imprimer / PDF"
-          onClick={handleGeneratePdf}
+          onClick={isTouchDevice ? handlePrint : handleGeneratePdf}
           disabled={!canPrint || pdfBusy}
         />
         <ToolbarCell

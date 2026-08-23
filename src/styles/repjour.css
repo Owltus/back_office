@@ -1,8 +1,96 @@
 /* Rapport journalier (RepJour) — le style passe en Tailwind inline (tokens
-   shadcn). Ce fichier ne porte que l'ajustement Recharts ci-dessous. */
+   shadcn). Ce fichier porte l'ajustement Recharts, plus le bloc d'impression
+   tactile ci-dessous. */
 
 /* Recharts : supprime le halo de focus natif sur les éléments SVG. */
 .recharts-wrapper *:focus,
 .recharts-wrapper *:active {
   outline: none !important;
+}
+
+/* --- Impression tactile (D1 — plan/audit-impression-tactile) --------------
+ *
+ * Sur tactile, `window.print()` natif remplace le PDF jsPDF (inchangé côté
+ * souris, cf. `handleGeneratePdf` / `lib/repjour/pdf.ts`) — voir
+ * `DashboardBoard.tsx` (`handlePrint`, `printWithTitle`). Le document
+ * réutilise le DOM ÉCRAN existant (SummaryCards + KPITable, déjà les mêmes
+ * sections que le PDF : cartes de synthèse, progression du mois, détail par
+ * indicateur) plutôt qu'un rendu recodé, sur `.repjour-doc`.
+ *
+ * Deux différences avec le PDJ (`.pdj-doc`, pdj.css), qui justifient ce bloc
+ * dédié plutôt qu'un simple `démasquage` :
+ *  1. Le thème est FORCÉ DARK NAVY sur `<html>` (cf. CLAUDE.md) — imprimer le
+ *     DOM écran tel quel donnerait du texte clair sur fond sombre (illisible
+ *     sur papier blanc, le fond sombre n'imprimant généralement pas). Les
+ *     tokens shadcn utilisés par SummaryCards/KPITable/StatTile ne sont que
+ *     des indirections vers les variables `--card`/`--foreground`/
+ *     `--muted-foreground`/`--border` (`@theme inline`, styles.css) : les
+ *     redéfinir en clair sur `.repjour-doc` suffit à reteinter tout le
+ *     sous-arbre (même mécanisme que le bascule `.dark`, mais localisé à
+ *     l'impression et à ce conteneur).
+ *  2. PageHeader (titre écran) est intégralement `print:hidden` (son propre
+ *     composant) : `.repjour-print-header` le remplace par un en-tête compact
+ *     dédié, sur le modèle de `.pdj-header`.
+ *
+ * Hauteur en `mm` évitée ici : contrairement au planning PDJ (grille fixe
+ * 3×2 calée sur une page A4), ce document est un flux normal (cartes puis
+ * tableau) qui peut légitimement courir sur plusieurs pages — pas de piège
+ * `vh` à corriger.
+ */
+@media print {
+  .repjour-doc {
+    /* Repasse en clair (voir point 1 ci-dessus) — mêmes valeurs que le thème
+       clair par défaut (`:root`, styles.css), pour rester cohérent si ce
+       thème évolue un jour. */
+    --background: #f8fafc;
+    --foreground: #0f172a;
+    --card: #ffffff;
+    --card-foreground: #0f172a;
+    --muted: #f1f5f9;
+    --muted-foreground: #475569;
+    --border: rgba(15, 23, 42, 0.16);
+
+    max-width: none;
+    gap: 0.75rem;
+
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    color-adjust: exact;
+  }
+
+  @page {
+    margin: 12mm;
+    size: A4 portrait;
+  }
+
+  /* En-tête compact imprimé (voir point 2 ci-dessus) : masqué à l'écran (règle
+     hors `@media print`, plus bas), centré à l'impression — même gabarit que
+     `.pdj-header`. Sélecteur composé pour l'emporter sur cette règle écran par
+     spécificité, sans dépendre de l'ordre des blocs dans le fichier. */
+  .repjour-doc .repjour-print-header {
+    display: block;
+    margin-bottom: 14px;
+    text-align: center;
+  }
+  .repjour-print-header h1 {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 400;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    color: #666;
+  }
+  .repjour-print-header .repjour-print-date {
+    display: block;
+    margin-top: 4px;
+    font-size: 18px;
+    font-weight: 700;
+    color: #1a1a1a;
+  }
+}
+
+/* `.repjour-print-header` masqué à l'ÉCRAN (hors `@media print` ci-dessus,
+   pour ne pas dépendre de l'ordre des règles). */
+.repjour-print-header {
+  display: none;
 }
