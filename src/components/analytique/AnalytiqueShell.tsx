@@ -13,6 +13,7 @@ import { MobileToolbar, ToolbarCell } from '#/components/shared/MobileToolbar.ts
 import { useNavbarSubtitle } from '#/lib/navbarSubtitle.ts'
 import { AnalytiqueSkeleton } from '#/components/analytique/AnalytiqueSkeleton.tsx'
 import { printAnalytique } from '#/lib/analytique/pdf.ts'
+import { printWithTitle } from '#/lib/print.ts'
 import { cn } from '#/lib/utils.ts'
 
 // `ToolbarCell` vit désormais dans `shared/MobileToolbar.tsx` (socle commun à
@@ -30,10 +31,18 @@ export { ToolbarCell }
  * modification de mise en page se fait donc ici, une seule fois, pour les 10 pages.
  *
  * IMPRESSION : `printTitle` active le bouton « Imprimer / PDF » (icône seule, et
- * Ctrl/Cmd+P), commun aux boards. Le PDF est bâti par `printAnalytique`, qui LIT le
- * contenu déjà rendu sous `rootRef` (cartes → tableau → graphes) — une seule
- * mécanique pour toutes les pages analytique, présentes et futures. Le document
- * reflète la page : cartes, puis TOUS les mois / jours, puis le(s) graphe(s).
+ * Ctrl/Cmd+P), commun aux boards. DEUX mécaniques selon le pointeur (comme PDJ) :
+ *   - SOURIS (`handlePrintPdf`, INCHANGÉ) : PDF vectoriel bâti par `printAnalytique`
+ *     (`lib/analytique/pdf.ts`), qui LIT le contenu déjà rendu sous `rootRef`
+ *     (cartes → tableau → graphes) et le redessine avec jsPDF.
+ *   - TACTILE (`handlePrint`, nouveau nom du dispatcher) : `printWithTitle` déclenche
+ *     l'impression NATIVE du navigateur (`window.print()`), qui imprime ce MÊME DOM
+ *     restylé `@media print` (`styles/analytique.css`) — aucun bloc HTML séparé,
+ *     contrairement à Parking : le DOM écran analytique (cartes + tableau + graphe
+ *     SVG Recharts, qui s'imprime nativement) est déjà tout ce que `printAnalytique`
+ *     extrait pour le PDF.
+ * Le document reflète la page : cartes, puis TOUS les mois / jours, puis le(s)
+ * graphe(s).
  *
  * Bornage RESPONSIVE (`lg:min-h-0`) : sous `lg`, la page suit son flux naturel et
  * défile normalement (le tableau prend toute sa hauteur, tous les mois visibles) ;
@@ -115,17 +124,34 @@ export function AnalytiqueShell({
   // composant plutôt qu'au bon moment.
   useNavbarSubtitle(isNavbarMobile ? (mobileIdentity ?? null) : null)
 
-  const handlePrint = () => {
+  // Impression SOURIS (chemin desktop, INCHANGÉ) : PDF vectoriel jsPDF, extrait
+  // du DOM déjà rendu sous `rootRef` (cartes → tableau → graphes), imprimé via
+  // iframe cachée + `autoPrint()`. N'est plus jamais appelé sur tactile depuis
+  // la bascule ci-dessous — `printAnalytique` garde son 3e paramètre
+  // `printWindow` (fenêtre ouverte pour un lecteur PDF mobile) dans
+  // `lib/analytique/pdf.ts`, INCHANGÉ, simplement non utilisé ici désormais.
+  const handlePrintPdf = () => {
     const root = rootRef.current
     if (!printTitle || loading || !root) return
-    // Ouverture SYNCHRONE (avant l'await de printAnalytique) : un window.open()
-    // lancé après un await sort du geste utilisateur aux yeux du bloqueur de
-    // popups, qui le bloquerait silencieusement. Seul le tactile en a besoin
-    // (l'iframe cachée + autoPrint marche déjà sur ordinateur) — détecté par
-    // pointeur, pas par largeur d'écran, pour ne pas casser un navigateur de
-    // bureau redimensionné en fenêtre étroite.
-    const printWindow = isTouchDeviceNow() ? window.open('', '_blank') : null
-    void printAnalytique(root, printTitle, printWindow)
+    void printAnalytique(root, printTitle)
+  }
+  // Bascule tactile (D1, cf. plan/audit-impression-tactile) : sur un appareil
+  // à doigt, `window.print()` natif (CSS `@media print` de
+  // `styles/analytique.css`) plutôt que le PDF jsPDF — la plupart des
+  // navigateurs mobiles n'ont pas de lecteur PDF capable d'exécuter
+  // `autoPrint()`, contrairement au bureau où l'iframe caché suffit. Détecté
+  // par pointeur (`isTouchDeviceNow`, synchrone), pas par largeur d'écran, pour
+  // ne pas casser un navigateur de bureau redimensionné en fenêtre étroite.
+  // Seul point de branchement : les 10 pages appellent toutes `handlePrint`
+  // (bouton d'en-tête, cellule `MobileToolbar`, raccourci Ctrl/Cmd+P) via ce
+  // même shell, sans rien à changer individuellement.
+  const handlePrint = () => {
+    if (!printTitle || loading) return
+    if (isTouchDeviceNow()) {
+      printWithTitle(printTitle)
+      return
+    }
+    handlePrintPdf()
   }
   usePrintShortcut(handlePrint)
 
@@ -173,12 +199,26 @@ export function AnalytiqueShell({
     ) : null
 
   return (
-    <PageContainer className="lg:min-h-0">
+    // `printBleed` : supprime le padding (`p-4 md:p-6`) à l'impression — la
+    // mise en page papier vient du `@page { margin }` de `analytique.css`,
+    // pas du padding écran (même mécanique que PDJ/Affiche).
+    <PageContainer printBleed className="lg:min-h-0">
       <div
         ref={rootRef}
+        // `analytique-doc` : classe stable ciblée par `styles/analytique.css`
+        // (`@media print`) — bascule le document en papier blanc et neutralise
+        // le bornage écran (hauteur de viewport, largeur de colonne), posée UNE
+        // fois ici pour les 10 pages analytique, sans effet sur les autres
+        // pages de l'app qui partagent aussi `PageContainer`/`PageHeader`
+        // (rapro, repjour, caisse…, hors socle analytique).
         className={cn(
-          'mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 lg:min-h-0',
-          mobileToolbar && isTouchDevice && 'pb-20',
+          'analytique-doc mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 lg:min-h-0',
+          // `print:pb-0` : cette réserve (place pour la barre d'outils basse
+          // fixe, elle-même `print:hidden`) n'a de sens qu'à l'écran — sans ce
+          // garde, un `pb-20` (80px) inutile s'ajoutait en bas du document
+          // imprimé depuis un appareil tactile (même correctif que PDJ,
+          // `BreakfastBoard.tsx`).
+          mobileToolbar && isTouchDevice && 'pb-20 print:pb-0',
         )}
       >
         <PageHeader

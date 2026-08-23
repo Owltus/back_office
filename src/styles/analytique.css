@@ -1,0 +1,103 @@
+/* ------------------------------------------------------------------ *
+ * Analytique (socle partagé, 10 pages : 5 domaines × annuel/mensuel)   *
+ * Écran : thème sombre de l'app, layout Tailwind (rien à styler ici). *
+ * Impression TACTILE (`window.print()` natif, `AnalytiqueShell.      *
+ * handlePrint` — cf. plan/audit-impression-tactile/                  *
+ * 7-analytique-print-natif.md, décision D1) : document blanc A4      *
+ * portrait qui réutilise TEL QUEL le DOM déjà affiché à l'écran      *
+ * (cartes `.stat-tile`, `<table>` d'AnalytiqueTable, graphiques SVG   *
+ * Recharts) — contrairement à Parking, aucun bloc HTML imprimable    *
+ * dédié n'est nécessaire : ce DOM est déjà tout ce que               *
+ * `extractAnalytique` (chemin SOURIS, jsPDF, `lib/analytique/        *
+ * pdf.ts`, INCHANGÉ) lit pour construire le PDF. Un SVG s'imprime    *
+ * nativement (pas de rasterisation façon `rasterizeChartSvg`).       *
+ *                                                                     *
+ * MÉCANIQUE : plutôt que recibler chaque classe Tailwind une à une,  *
+ * on renverse les TOKENS de thème (`--foreground`, `--card`,         *
+ * `--border`, `--muted*`, `--chart-*`, `--destructive`) sur           *
+ * `.analytique-doc` (posée sur le conteneur racine d'AnalytiqueShell)*
+ * vers une palette PAPIER — les mêmes teintes que le document jsPDF   *
+ * (`lib/analytique/pdf.ts`), pour qu'aucun des deux chemins           *
+ * d'impression ne dérive visuellement de l'autre. Tout élément qui    *
+ * consomme ces tokens via `bg-card`/`text-foreground`/`var(--chart-N)`*
+ * etc. (StatTile, AnalytiqueTable, KpiLineChart, KpiStackedBarChart…) *
+ * en hérite AUTOMATIQUEMENT, sans qu'aucun de ces composants n'ait   *
+ * besoin d'une classe ou d'un import propres à l'impression — un seul*
+ * jeu de règles couvre les 10 pages, présentes et futures.            *
+ *                                                                     *
+ * Les couleurs « de marque » posées en dur par certaines pages        *
+ * (ex. rapro `CATEGORY_COLOR.bloquee = '#f87171'`, Tailwind           *
+ * `text-emerald-500` / `text-amber-500`) ne sont PAS des tokens : ces *
+ * teintes fixes restent telles quelles à l'impression (déjà assez     *
+ * contrastées sur blanc, cf. audit de l'étape 7).                     *
+ * ------------------------------------------------------------------ */
+@media print {
+  @page {
+    margin: 12mm;
+    size: A4 portrait;
+  }
+
+  /* Couleurs EXACTES (liserés de tuile, segments du graphe, fonds de
+     ligne d'en-tête) : sans ce garde, certains navigateurs désaturent
+     ou suppriment les fonds pour économiser l'encre. */
+  .analytique-doc,
+  .analytique-doc * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  /* Palette PAPIER — remplace la palette dark-navy (forcée à l'écran,
+     cf. CLAUDE.md) le temps du document imprimé. Mêmes teintes que
+     `lib/analytique/pdf.ts` (INK/GRAY/BORDER/INDIGO/CYAN/AMBER/PINK/POS/NEG) :
+     les pastels de la palette dark (`--chart-1..5`, pensés pour ressortir
+     sur fond sombre) sont trop clairs sur papier blanc, d'où le
+     réassombrissement — identique au remappage déjà fait pour le PDF
+     souris, pour que les deux chemins d'impression restent cohérents. */
+  .analytique-doc {
+    --background: #ffffff;
+    --foreground: #1a1a1a;
+    --card: #ffffff;
+    --card-foreground: #1a1a1a;
+    --border: #d2d2d6;
+    --muted: #f5f5f5;
+    --muted-foreground: #6e6e6e;
+    --destructive: #b42318;
+    --chart-1: #4338ca; /* indigo (doc) */
+    --chart-2: #0e7490; /* cyan (doc) */
+    --chart-3: #b0780a; /* amber (doc) */
+    --chart-4: #be185d; /* pink (doc) */
+    --chart-5: #127a2e; /* vert/positif (doc) */
+
+    background: var(--background);
+    color: var(--foreground);
+
+    /* Bornage ÉCRAN (hauteur de viewport, largeur de colonne, réserve pour
+       la barre d'outils basse tactile) sans objet sur papier : le document
+       suit son flux naturel, la pagination du navigateur gère le
+       débordement sur plusieurs pages. */
+    max-width: none;
+    min-height: 0;
+    height: auto;
+  }
+
+  /* `<thead>` collant (`AnalytiqueTable.tsx`, `sticky top-0`) : déjà sans
+     effet en pratique (la largeur d'une page A4 passe sous le seuil `lg`
+     qui borne le tableau à un défilement interne — il retrouve son flux
+     naturel, cf. commentaire d'AnalytiqueShell), mais figé explicitement
+     pour ne dépendre d'aucune largeur de papier ni d'aucun navigateur
+     particulier (cf. le bug d'ambiguïté `vh` corrigé sur PDJ : mieux vaut
+     un calcul qui ne varie jamais selon l'appareil déclencheur).
+     `page-break-inside: avoid` sur les cartes de synthèse et les
+     graphiques : évite qu'une tuile ou un graphe soit coupé en deux entre
+     deux pages ; le tableau, lui, DOIT pouvoir se répartir sur plusieurs
+     pages (aucune contrainte posée dessus). */
+  .analytique-doc table thead {
+    position: static;
+  }
+  .analytique-doc .stat-tile,
+  .analytique-doc .rounded-xl:has(svg.recharts-surface) {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
