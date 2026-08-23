@@ -883,7 +883,12 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
       className={cn(
         'pdj-doc mx-auto flex w-full min-w-0 flex-1 flex-col gap-5 print:max-w-none',
         wideTouch ? 'max-w-none' : 'max-w-5xl',
-        isTouchDevice && 'pb-20',
+        // `print:pb-0` : cette réserve n'a de sens qu'à l'écran (place pour
+        // la barre d'outils basse fixe, elle-même masquée à l'impression,
+        // cf. MobileToolbar) — sans lui, un `pb-20` (80px) inutile s'ajoutait
+        // au document imprimé. Même mécanisme que `print:max-w-none`
+        // ci-dessus (le variant `print:` l'emporte sans `!important`).
+        isTouchDevice && 'pb-20 print:pb-0',
       )}
     >
       {/* En-tête compact (impression uniquement). */}

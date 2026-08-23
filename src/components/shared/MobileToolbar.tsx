@@ -93,7 +93,15 @@ export function MobileToolbar({
   return (
     <nav
       ref={ref}
-      className="fixed inset-x-0 bottom-0 z-30 flex items-stretch border-t border-border bg-card/95 backdrop-blur-md"
+      // `print:hidden` : chrome de NAVIGATION écran, jamais un contenu du
+      // document — sans lui, un `window.print()` déclenché en session
+      // tactile (ex. PDJ, seule page à imprimer via CSS `@media print`
+      // plutôt qu'un PDF jsPDF autonome) imprimait la barre elle-même
+      // (labels des cellules) EN PLUS du document, avec sa hauteur non
+      // comptée nulle part dans la mise en page imprimée — le contenu
+      // débordait alors sur plusieurs pages, la barre `position:fixed` se
+      // répétant sur chacune (retour utilisateur, capture à l'appui).
+      className="fixed inset-x-0 bottom-0 z-30 flex items-stretch border-t border-border bg-card/95 backdrop-blur-md print:hidden"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
       {children}
