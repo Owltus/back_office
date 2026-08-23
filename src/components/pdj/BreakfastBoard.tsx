@@ -1314,8 +1314,24 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
 
           {/* Tableaux par étage. La classe `pdj-finance` bascule l'affichage en
               mode détail financier (CSS) — écran uniquement, l'impression revient
-              au mode nominatif. */}
-          <div className={cn('pdj-floors', financeMode && 'pdj-finance')}>
+              au mode nominatif.
+              `pdj-floors--wide-touch` (tablette tactile EN LARGEUR ≥1024px,
+              donc typiquement en orientation paysage — `isTouchDevice &&
+              !isNavbarMobile`, aucun nouveau seuil, juste ces deux signaux
+              déjà en place) : les 6 étages tiennent sur UNE seule rangée,
+              en réduisant aussi la densité des lignes, pour que la liste
+              entière soit visible sans défilement (demande explicite,
+              écran le plus large disponible). Sans effet à la souris quelle
+              que soit la largeur de fenêtre (`isTouchDevice` l'exclut), et
+              sans effet sur téléphone (`isNavbarMobile` reste vrai en
+              dessous de 1024px). */}
+          <div
+            className={cn(
+              'pdj-floors',
+              financeMode && 'pdj-finance',
+              isTouchDevice && !isNavbarMobile && 'pdj-floors--wide-touch',
+            )}
+          >
             {floors.map(({ floor, rooms }) => (
               <div key={floor} className="pdj-floor">
                 <table>
@@ -1549,6 +1565,7 @@ const FLOOR_ROOM_COUNTS = [
  * ligne, même nombre de lignes par étage — pour ne rien décaler à l'arrivée des
  * données. Purement décoratif ; l'en-tête, lui, est déjà rendu au-dessus. */
 function BoardSkeleton() {
+  const { isNavbarMobile, isTouchDevice } = useResponsiveShell()
   return (
     <>
       {/* Rangée de 6 tuiles dans LEUR vraie grille (`pdj-stats-grid`, 6 colonnes),
@@ -1571,8 +1588,17 @@ function BoardSkeleton() {
         </div>
       </div>
       {/* Tableaux par étage : même structure que le vrai (`pdj-floor > table`),
-          en-têtes réels (invariants), et autant de lignes que de chambres. */}
-      <div className="pdj-floors" aria-hidden="true">
+          en-têtes réels (invariants), et autant de lignes que de chambres.
+          Même modificateur `pdj-floors--wide-touch` que le vrai contenu
+          (cf. son commentaire), pour ne rien décaler à l'arrivée des
+          données. */}
+      <div
+        className={cn(
+          'pdj-floors',
+          isTouchDevice && !isNavbarMobile && 'pdj-floors--wide-touch',
+        )}
+        aria-hidden="true"
+      >
         {FLOOR_ROOM_COUNTS.map((count, i) => (
           <div key={i} className="pdj-floor">
             <table>
