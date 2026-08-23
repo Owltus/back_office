@@ -7,9 +7,11 @@
    (voir styles/poster.css). */
 @import 'tailwindcss';
 @import 'tw-animate-css';
+@import './styles/analytique.css';
 @import './styles/caisse.css';
 @import './styles/literie.css';
 @import './styles/not-found.css';
+@import './styles/parking.css';
 @import './styles/pdj.css';
 @import './styles/poster.css';
 @import './styles/rapro.css';
