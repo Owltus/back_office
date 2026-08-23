@@ -147,6 +147,11 @@ function isAddonCsv(content: string): boolean {
 
 export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
   const { isNavbarMobile, isTouchDevice, isPhoneWidth } = useResponsiveShell()
+  // Tablette tactile EN LARGEUR (typiquement paysage) : ni un seuil de plus,
+  // juste ces deux signaux déjà en place. Pilote la grille des étages sur
+  // une seule rangée de 6 (`pdj-floors--wide-touch`) et la largeur max du
+  // document (cf. plus bas) — jamais vrai à la souris ni sur téléphone.
+  const wideTouch = isTouchDevice && !isNavbarMobile
   const navigate = useNavigate()
   const { can, pageLevel, grade } = useAuth()
   const canEdit = can('pdj', 'ecriture')
@@ -861,12 +866,18 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
 
   return (
     // `max-w-5xl` centre le contenu comme sur RepJour. Neutralisé à
-    // l'impression : la feuille A4 impose déjà sa largeur (voir pdj.css).
+    // l'impression (la feuille A4 impose déjà sa largeur, voir pdj.css) ET
+    // en tablette tactile en largeur (`wideTouch`) : la grille des étages y
+    // passe sur une seule rangée de 6 (cf. `pdj-floors--wide-touch`) et doit
+    // pouvoir utiliser TOUTE la largeur de l'écran, pas seulement 1024px —
+    // sans ce garde, `max-w-5xl` laissait de grandes marges mortes de part
+    // et d'autre sur un écran plus large (retour utilisateur).
     // `pb-20` réserve la place de la barre d'outils basse tactile (cf. fin du
     // composant) pour qu'elle ne masque jamais la fin du contenu.
     <div
       className={cn(
-        'pdj-doc mx-auto flex w-full min-w-0 max-w-5xl flex-1 flex-col gap-5 print:max-w-none',
+        'pdj-doc mx-auto flex w-full min-w-0 flex-1 flex-col gap-5 print:max-w-none',
+        wideTouch ? 'max-w-none' : 'max-w-5xl',
         isTouchDevice && 'pb-20',
       )}
     >
@@ -1329,7 +1340,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
             className={cn(
               'pdj-floors',
               financeMode && 'pdj-finance',
-              isTouchDevice && !isNavbarMobile && 'pdj-floors--wide-touch',
+              wideTouch && 'pdj-floors--wide-touch',
             )}
           >
             {floors.map(({ floor, rooms }) => (
@@ -1566,6 +1577,7 @@ const FLOOR_ROOM_COUNTS = [
  * données. Purement décoratif ; l'en-tête, lui, est déjà rendu au-dessus. */
 function BoardSkeleton() {
   const { isNavbarMobile, isTouchDevice } = useResponsiveShell()
+  const wideTouch = isTouchDevice && !isNavbarMobile
   return (
     <>
       {/* Rangée de 6 tuiles dans LEUR vraie grille (`pdj-stats-grid`, 6 colonnes),
@@ -1593,10 +1605,7 @@ function BoardSkeleton() {
           (cf. son commentaire), pour ne rien décaler à l'arrivée des
           données. */}
       <div
-        className={cn(
-          'pdj-floors',
-          isTouchDevice && !isNavbarMobile && 'pdj-floors--wide-touch',
-        )}
+        className={cn('pdj-floors', wideTouch && 'pdj-floors--wide-touch')}
         aria-hidden="true"
       >
         {FLOOR_ROOM_COUNTS.map((count, i) => (

@@ -31,31 +31,17 @@
    !isNavbarMobile` côté composant — pas de nouveau seuil, réutilise les deux
    signaux déjà en place) : les 6 étages tiennent sur UNE seule rangée, jamais
    de défilement de page pour voir la liste entière (demande explicite,
-   utiliser toute la largeur disponible). Nécessite une densité plus compacte
-   que les autres paliers (largeur par étage bien plus restreinte) : lignes et
-   en-têtes resserrés, sans descendre jusqu'à la taille illisible du PDF
-   (voir plus bas, @media print). Après les paliers de largeur ci-dessus dans
-   la cascade : l'emporte quelle que soit la largeur où `wide-touch`
-   s'applique. Sans effet à la souris (jamais posée hors tactile). */
+   utiliser toute la largeur disponible). Densité de ligne INCHANGÉE
+   (`.pdj-floor td/th` normaux) : un premier essai resserré (padding/police
+   réduits) laissait un vide bien plus grand en bas de page que prévu — la
+   hauteur d'un étage à 14 chambres en taille normale (~450px) tient déjà
+   confortablement sous la rangée de tuiles KPI sur ce format d'écran (retour
+   utilisateur avec capture). Après les paliers de largeur ci-dessus dans la
+   cascade : l'emporte quelle que soit la largeur où `wide-touch` s'applique.
+   Sans effet à la souris (jamais posée hors tactile). */
 .pdj-floors--wide-touch {
   grid-template-columns: repeat(6, 1fr);
   gap: 0.5rem;
-}
-.pdj-floors--wide-touch .pdj-floor thead th {
-  padding: 0.3rem 0.35rem;
-  font-size: 0.55rem;
-}
-.pdj-floors--wide-touch .pdj-floor td {
-  padding: 0.2rem 0.35rem;
-  font-size: 0.72rem;
-}
-.pdj-floors--wide-touch .pdj-floor td.pdj-room {
-  padding-right: 0.2rem;
-}
-.pdj-floors--wide-touch .pdj-floor td.pdj-status,
-.pdj-floors--wide-touch .pdj-floor td.pdj-stay-count {
-  padding-left: 0.2rem;
-  padding-right: 0.2rem;
 }
 
 /* À l'écran, les cartes d'une même rangée ont la même hauteur (align stretch
