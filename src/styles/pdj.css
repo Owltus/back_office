@@ -36,17 +36,25 @@
    en faveur de la lisibilité plutôt que d'éliminer coûte que coûte un
    défilement de page éventuel. Densité de ligne et colonnes INCHANGÉES
    (`.pdj-floor` normal, rien de retiré). Sans effet à la souris (jamais
-   posée hors tactile) ni sur téléphone (`isNavbarMobile`). */
-.pdj-floors--wide-touch {
-  grid-template-columns: repeat(3, 1fr);
-}
+   posée hors tactile) ni sur téléphone (`isNavbarMobile`).
+   `@media screen` explicite : ces classes restent posées sur l'élément
+   pendant un job d'impression déclenché depuis un appareil tactile (React
+   ne les retire pas) — sans ce garde, leur spécificité égale à `.pdj-floors`
+   pourrait entrer en concurrence avec la grille PDF (plus bas, @media
+   print), qui doit rester la SEULE source de vérité pour la mise en page
+   imprimée. */
+@media screen {
+  .pdj-floors--wide-touch {
+    grid-template-columns: repeat(3, 1fr);
+  }
 
-/* Tablette tactile EN PORTRAIT (768-1023px de large — `isTouchDevice &&
-   !isPhoneWidth && isNavbarMobile` côté composant, ni téléphone ni assez
-   large pour `wideTouch`) : 2 colonnes (donc 3 rangées pour les 6 étages),
-   demande utilisateur. Sans effet à la souris ni sur téléphone. */
-.pdj-floors--tablet-portrait {
-  grid-template-columns: repeat(2, 1fr);
+  /* Tablette tactile EN PORTRAIT (768-1023px de large — `isTouchDevice &&
+     !isPhoneWidth && isNavbarMobile` côté composant, ni téléphone ni assez
+     large pour `wideTouch`) : 2 colonnes (donc 3 rangées pour les 6 étages),
+     demande utilisateur. Sans effet à la souris ni sur téléphone. */
+  .pdj-floors--tablet-portrait {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 /* À l'écran, les cartes d'une même rangée ont la même hauteur (align stretch
@@ -252,9 +260,15 @@
 /* Tablette portrait (cf. `.pdj-floors--tablet-portrait`) : « Taux de captage »
    est retirée (gain de place, demande utilisateur), 5 tuiles restantes — la
    rangée doit rester pleine plutôt que garder une 6e colonne vide. Après le
-   palier ci-dessus dans la cascade : l'emporte à cette largeur. */
-.pdj-stats-grid.pdj-stats-grid--tablet-portrait {
-  grid-template-columns: repeat(5, 1fr);
+   palier ci-dessus dans la cascade : l'emporte à cette largeur.
+   `@media screen` explicite (cf. `.pdj-floors--wide-touch` plus haut, même
+   raison) : la classe reste posée pendant un job d'impression déclenché
+   depuis une tablette, sans devoir concurrencer la grille PDF plus bas
+   (@media print), seule source de vérité pour la mise en page imprimée. */
+@media screen {
+  .pdj-stats-grid.pdj-stats-grid--tablet-portrait {
+    grid-template-columns: repeat(5, 1fr);
+  }
 }
 
 /* Tuile masquée à l'ÉCRAN mais conservée dans le footer du PDF (miroir de
@@ -315,13 +329,24 @@
     color: #666;
   }
 
-  /* Grille 3×2 des 6 étages sur une seule page A4 */
+  /* Grille 3×2 des 6 étages sur une seule page A4.
+     Hauteur en `mm`, PAS `vh` : `100vh` reste ambigu à l'impression sur
+     certains navigateurs tactiles (Safari/Chrome mobile), qui peuvent le
+     résoudre sur la hauteur de l'ÉCRAN de l'appareil plutôt que sur la page
+     A4 réelle — la grille se retrouvait alors mal dimensionnée et débordait
+     sur 2-3 pages au lieu d'une seule, UNIQUEMENT depuis mobile/tablette
+     (retour utilisateur, jamais reproduit depuis un ordinateur). `277mm` =
+     hauteur de page A4 (297mm) moins les deux marges de 10mm (`@page`
+     ci-dessus) : la vraie zone imprimable, un calcul physique qui ne dépend
+     JAMAIS du périphérique déclencheur. Résultat IDENTIQUE au bureau (où
+     `100vh` valait déjà cette même valeur) ; corrige mobile/tablette sans
+     toucher au rendu bureau. */
   .pdj-floors {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     grid-template-rows: repeat(2, 1fr);
     gap: 40px 4px;
-    height: calc(100vh - 60px);
+    height: calc(277mm - 60px);
     padding-bottom: 115px;
   }
   .pdj-floor {
