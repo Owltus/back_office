@@ -1,4 +1,4 @@
-import { useRef, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { Printer } from 'lucide-react'
 
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
@@ -130,10 +130,15 @@ export function AnalytiqueShell({
   // la bascule ci-dessous — `printAnalytique` garde son 3e paramètre
   // `printWindow` (fenêtre ouverte pour un lecteur PDF mobile) dans
   // `lib/analytique/pdf.ts`, INCHANGÉ, simplement non utilisé ici désormais.
+  // `printError` : aucun système de notification n'existait déjà dans ce
+  // socle (audit impression tactile, étape 8) — bandeau minimal plutôt qu'un
+  // échec muet, qui donne l'impression que le bouton « ne fait rien ».
+  const [printError, setPrintError] = useState(false)
   const handlePrintPdf = () => {
     const root = rootRef.current
     if (!printTitle || loading || !root) return
-    void printAnalytique(root, printTitle)
+    setPrintError(false)
+    printAnalytique(root, printTitle).catch(() => setPrintError(true))
   }
   // Bascule tactile (D1, cf. plan/audit-impression-tactile) : sur un appareil
   // à doigt, `window.print()` natif (CSS `@media print` de
@@ -229,6 +234,14 @@ export function AnalytiqueShell({
           // le repli « aux deux bords » pensé pour le pouce n'a plus de sens.
           actionsAlign={mobileToolbar ? 'end' : 'responsive'}
         />
+        {printError && (
+          <div
+            role="status"
+            className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive print:hidden"
+          >
+            L'aperçu d'impression n'a pas pu s'ouvrir. Réessaie.
+          </div>
+        )}
         {loading ? <AnalytiqueSkeleton {...skeleton} /> : children}
       </div>
       <MobileToolbar visible={Boolean(mobileToolbar) && isTouchDevice}>

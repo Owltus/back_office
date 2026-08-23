@@ -712,7 +712,11 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
         printWindow,
       )
     } catch {
-      // Silencieux : l'impression est un confort, pas un flux critique.
+      // Réutilise la modale de blocage existante (raison générique) plutôt
+      // qu'un nouvel état dédié — un échec silencieux ici fait dire à
+      // l'utilisateur que le bouton « ne fait rien » (audit impression
+      // tactile, étape 8).
+      setPrintBlocked("L'aperçu d'impression n'a pas pu s'ouvrir. Réessaie.")
     } finally {
       setPdfBusy(false)
     }
