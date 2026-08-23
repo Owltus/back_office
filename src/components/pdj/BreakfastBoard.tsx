@@ -920,17 +920,52 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
         actions={
           isTouchDevice ? undefined : (
           <>
+            {/* Groupe « suppression » (ADMIN uniquement), isolé et à gauche :
+                  supprime les données du seul jour affiché. Bouton outline, icône
+                  rouge (pas de fond plein). Présent seulement s'il y a des données. */}
+            {isAdmin && hasData && (
+              <ButtonGroup>
+                <Tip label="Supprimer les données de ce jour">
+                  <Button
+                    variant="outline"
+                    size="icon-sm"
+                    onClick={() => setConfirmDelete(true)}
+                    aria-label="Supprimer les données de ce jour"
+                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  >
+                    <Trash2 />
+                  </Button>
+                </Tip>
+              </ButtonGroup>
+            )}
+            {/* Bouton « Externe » — exceptionnellement du texte, pas d'icône : ouvre
+                le dialogue +/- du nombre de clients venus manger sans être logés à
+                l'hôtel (s'additionne au PDJ Extra du jour, cf. card ci-dessous).
+                Réservé aux rôles qui peuvent saisir la conso (mêmes droits que les
+                cases « servi »). */}
+            {canEdit && (
+              <Tip label="Ajouter des petits-déjeuners servis à des clients non logés à l'hôtel">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setExternalsOpen(true)}
+                  aria-label="Petits-déjeuners externes"
+                >
+                  Externe
+                </Button>
+              </Tip>
+            )}
             {/* Bascule « vue service ↔ détail financier » : segmented control
                 dans le style des boutons d'action (bordure outline, hauteur
                 icon-sm), un seul actif à la fois. La pastille bleue GLISSE
                 d'une position à l'autre (translate animé) au lieu de sauter.
                 Réétiquette le tableau à l'écran ; jamais imprimé.
                 Vivait auparavant dans le `badge` du titre (aligné à part,
-                détaché du reste des actions) — ramenée ici, dans la même
-                zone que tous les autres boutons de page, à la demande de
-                l'utilisateur. Réservée à la souris (le bloc `actions` entier
-                l'est déjà) : sur écran tactile, la bascule vit dans la barre
-                d'outils basse (cf. fin du composant). */}
+                détaché du reste des actions), puis en tête d'`actions` — placée
+                ici, après « Externe », à la demande de l'utilisateur. Réservée
+                à la souris (le bloc `actions` entier l'est déjà) : sur écran
+                tactile, la bascule vit dans la barre d'outils basse (cf. fin
+                du composant). */}
             {hasData && (
               <div className="pdj-seg relative inline-flex h-8 items-center overflow-hidden rounded-md border bg-background shadow-xs print:hidden dark:border-input dark:bg-input/30">
                 {/* Pastille active : remplit TOUTE la hauteur (inset-y-0) et la
@@ -982,41 +1017,6 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                   </button>
                 </Tip>
               </div>
-            )}
-            {/* Groupe « suppression » (ADMIN uniquement), isolé et à gauche :
-                  supprime les données du seul jour affiché. Bouton outline, icône
-                  rouge (pas de fond plein). Présent seulement s'il y a des données. */}
-            {isAdmin && hasData && (
-              <ButtonGroup>
-                <Tip label="Supprimer les données de ce jour">
-                  <Button
-                    variant="outline"
-                    size="icon-sm"
-                    onClick={() => setConfirmDelete(true)}
-                    aria-label="Supprimer les données de ce jour"
-                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                  >
-                    <Trash2 />
-                  </Button>
-                </Tip>
-              </ButtonGroup>
-            )}
-            {/* Bouton « Externe » — exceptionnellement du texte, pas d'icône : ouvre
-                le dialogue +/- du nombre de clients venus manger sans être logés à
-                l'hôtel (s'additionne au PDJ Extra du jour, cf. card ci-dessous).
-                Réservé aux rôles qui peuvent saisir la conso (mêmes droits que les
-                cases « servi »). */}
-            {canEdit && (
-              <Tip label="Ajouter des petits-déjeuners servis à des clients non logés à l'hôtel">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setExternalsOpen(true)}
-                  aria-label="Petits-déjeuners externes"
-                >
-                  Externe
-                </Button>
-              </Tip>
             )}
             {/* Groupe « actions de page » : analytique + import + impression. */}
             <ButtonGroup>
