@@ -307,6 +307,20 @@
     size: A4 portrait;
   }
 
+  /* `.pdj-doc` reste un flex column avec `gap-5` (20px, classe Tailwind
+     posée à l'écran, jamais annulée par un variant `print:`) : à
+     l'impression, cet espacement s'ajoute au `margin-bottom` DÉJÀ posé sur
+     `.pdj-header` ci-dessous et ne laissait qu'une poignée de pixels de
+     marge avant que `.pdj-floors` (hauteur calculée pour tenir sur UNE
+     page) ne déborde sur une 2e page — page presque vide, sauf le footer
+     `.pdj-stats` (position: fixed) que Chrome réimprime alors sur CHAQUE
+     page supplémentaire (comportement natif du moteur d'impression). Zéro
+     ici : l'espacement visuel entre l'en-tête et la grille reste porté par
+     le seul `margin-bottom` de `.pdj-header`. */
+  .pdj-doc {
+    gap: 0;
+  }
+
   /* En-tête compact : titre centré + date à droite */
   .pdj-header {
     position: relative;
