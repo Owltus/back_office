@@ -10,50 +10,28 @@
 }
 
 /* --- Écran : tableau de bord pleine largeur (indépendant du rendu A4) --- */
-/* Au maximum 3 colonnes (1 → 2 → 3 selon la largeur), qui remplissent la page. */
+/* 3 paliers, CALÉS SUR LES MÊMES SEUILS que la grille des tuiles KPI
+   ci-dessous (`isPhoneWidth` 768px, `isNavbarMobile` 1024px) plutôt que sur
+   des seuils propres (900/1440px) qui dérivaient des cartes — l'un des deux
+   changeait de palier sans l'autre. Sens large → étroit (6 étages) :
+   ≥1024px → 3 colonnes (2 rangées) ; 768-1023px → 2 colonnes (3 rangées) ;
+   < 768px → 1 colonne (6 rangées). Ces seuils étant EXACTEMENT ceux
+   d'`isNavbarMobile`/`isPhoneWidth`, ils couvrent aussi bien la souris que
+   le tactile (`wideTouch`/`tabletPortrait`, cf. BreakfastBoard.tsx, n'ont
+   donc plus besoin d'un modificateur de grille dédié ici). */
 .pdj-floors {
   display: grid;
   grid-template-columns: 1fr;
   gap: 1rem;
 }
-@media (min-width: 900px) {
+@media (min-width: 768px) {
   .pdj-floors {
     grid-template-columns: repeat(2, 1fr);
   }
 }
-@media (min-width: 1440px) {
+@media (min-width: 1024px) {
   .pdj-floors {
     grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-/* Tablette tactile EN LARGEUR (typiquement paysage, `isTouchDevice &&
-   !isNavbarMobile` côté composant — pas de nouveau seuil, réutilise les deux
-   signaux déjà en place) : 3 colonnes (donc 2 rangées pour les 6 étages),
-   toute la largeur de l'écran (cf. `max-w-none` du document). Un essai
-   précédent en 6 colonnes/1 rangée (sans défilement) sacrifiait trop la
-   lisibilité (flèche statut et nuitées retirées) — tranché par l'utilisateur
-   en faveur de la lisibilité plutôt que d'éliminer coûte que coûte un
-   défilement de page éventuel. Densité de ligne et colonnes INCHANGÉES
-   (`.pdj-floor` normal, rien de retiré). Sans effet à la souris (jamais
-   posée hors tactile) ni sur téléphone (`isNavbarMobile`).
-   `@media screen` explicite : ces classes restent posées sur l'élément
-   pendant un job d'impression déclenché depuis un appareil tactile (React
-   ne les retire pas) — sans ce garde, leur spécificité égale à `.pdj-floors`
-   pourrait entrer en concurrence avec la grille PDF (plus bas, @media
-   print), qui doit rester la SEULE source de vérité pour la mise en page
-   imprimée. */
-@media screen {
-  .pdj-floors--wide-touch {
-    grid-template-columns: repeat(3, 1fr);
-  }
-
-  /* Tablette tactile EN PORTRAIT (768-1023px de large — `isTouchDevice &&
-     !isPhoneWidth && isNavbarMobile` côté composant, ni téléphone ni assez
-     large pour `wideTouch`) : 2 colonnes (donc 3 rangées pour les 6 étages),
-     demande utilisateur. Sans effet à la souris ni sur téléphone. */
-  .pdj-floors--tablet-portrait {
-    grid-template-columns: repeat(2, 1fr);
   }
 }
 

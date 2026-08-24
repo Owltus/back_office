@@ -148,13 +148,14 @@ function isAddonCsv(content: string): boolean {
 export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
   const { isNavbarMobile, isTouchDevice, isPhoneWidth } = useResponsiveShell()
   // Tablette tactile EN LARGEUR (typiquement paysage) : ni un seuil de plus,
-  // juste ces deux signaux déjà en place. Pilote la grille des étages en 3
-  // colonnes (`pdj-floors--wide-touch`) et la largeur max du document (cf.
-  // plus bas) — jamais vrai à la souris ni sur téléphone.
+  // juste ces deux signaux déjà en place. Pilote la largeur max du document
+  // (cf. plus bas) — jamais vrai à la souris ni sur téléphone. La grille des
+  // étages (`.pdj-floors`, pdj.css) n'a plus besoin de ce signal : ses
+  // paliers CSS (768/1024px) sont désormais les mêmes seuils qu'`isNavbarMobile`
+  // / `isPhoneWidth`, donc déjà corrects en tactile comme à la souris.
   const wideTouch = isTouchDevice && !isNavbarMobile
   // Tablette tactile EN PORTRAIT (768-1023px de large, ni téléphone ni assez
-  // large pour `wideTouch`) : pilote la grille des étages en 2 colonnes
-  // (`pdj-floors--tablet-portrait`) et le retrait de la tuile « Taux de
+  // large pour `wideTouch`) : pilote le retrait de la tuile « Taux de
   // captage » (gain de place, demande utilisateur) — jamais vrai à la
   // souris, sur téléphone, ni en largeur (wideTouch déjà couvert).
   const tabletPortrait = isTouchDevice && !isPhoneWidth && isNavbarMobile
@@ -1346,20 +1347,12 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
 
           {/* Tableaux par étage. La classe `pdj-finance` bascule l'affichage en
               mode détail financier (CSS) — écran uniquement, l'impression revient
-              au mode nominatif.
-              `pdj-floors--wide-touch` (tablette tactile EN LARGEUR, ≥1024px —
-              `isTouchDevice && !isNavbarMobile`) : 3 colonnes. `pdj-floors--
-              tablet-portrait` (tablette tactile EN PORTRAIT, 768-1023px —
-              `isTouchDevice && !isPhoneWidth && isNavbarMobile`) : 2 colonnes.
-              Aucun nouveau seuil, juste les signaux déjà en place. Sans effet
-              à la souris ni sur téléphone. */}
+              au mode nominatif. Grille en 3 paliers (1 → 2 → 3 colonnes),
+              calée en CSS sur les mêmes seuils (768/1024px) que la grille des
+              tuiles KPI ci-dessus — souris et tactile s'y comportent déjà
+              pareil, aucun modificateur JS dédié requis (cf. pdj.css). */}
           <div
-            className={cn(
-              'pdj-floors',
-              financeMode && 'pdj-finance',
-              wideTouch && 'pdj-floors--wide-touch',
-              tabletPortrait && 'pdj-floors--tablet-portrait',
-            )}
+            className={cn('pdj-floors', financeMode && 'pdj-finance')}
           >
             {floors.map(({ floor, rooms }) => (
               <div key={floor} className="pdj-floor">
@@ -1595,7 +1588,6 @@ const FLOOR_ROOM_COUNTS = [
  * données. Purement décoratif ; l'en-tête, lui, est déjà rendu au-dessus. */
 function BoardSkeleton() {
   const { isNavbarMobile, isTouchDevice, isPhoneWidth } = useResponsiveShell()
-  const wideTouch = isTouchDevice && !isNavbarMobile
   const tabletPortrait = isTouchDevice && !isPhoneWidth && isNavbarMobile
   // 5 tuiles en tablette portrait (« Taux de captage » retirée du vrai
   // contenu, cf. son commentaire plus bas), 6 sinon.
@@ -1623,16 +1615,9 @@ function BoardSkeleton() {
       </div>
       {/* Tableaux par étage : même structure que le vrai (`pdj-floor > table`),
           en-têtes réels (invariants), et autant de lignes que de chambres.
-          Mêmes modificateurs que le vrai contenu (cf. son commentaire), pour
-          ne rien décaler à l'arrivée des données. */}
-      <div
-        className={cn(
-          'pdj-floors',
-          wideTouch && 'pdj-floors--wide-touch',
-          tabletPortrait && 'pdj-floors--tablet-portrait',
-        )}
-        aria-hidden="true"
-      >
+          Même grille que le vrai contenu (cf. son commentaire), pour ne rien
+          décaler à l'arrivée des données. */}
+      <div className="pdj-floors" aria-hidden="true">
         {FLOOR_ROOM_COUNTS.map((count, i) => (
           <div key={i} className="pdj-floor">
             <table>
