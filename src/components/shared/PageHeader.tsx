@@ -52,6 +52,16 @@ import { cn } from '#/lib/utils.ts'
  *   bords (`justify-between`) plutôt qu'entassés à droite avec un flou de
  *   priorité — le même repli que `.rapro-floors`/`.rapro-stats` : un seul
  *   palier net (empilé / une ligne), pas un entre-deux bâtard.
+ *   DÈS `sm` (souris comme tactile large), le conteneur racine est
+ *   `flex-nowrap` : titre et actions restent TOUJOURS sur la même ligne,
+ *   les actions collées au bord droit — jamais de bascule à la ligne
+ *   suivante à mi-chemin (c'était `sm:flex-wrap`, qui laissait le bloc
+ *   actions retomber, aligné à GAUCHE de sa propre ligne, dès que titre +
+ *   actions dépassaient la largeur disponible ; incohérent d'une page à
+ *   l'autre selon le nombre de boutons — retour utilisateur). Le titre
+ *   (`min-w-0 flex-1 truncate`) absorbe tout le rétrécissement à la place ;
+ *   les actions (`shrink-0`) gardent leur largeur pleine à toute largeur
+ *   ≥ 640px.
  * - `actionsAlign` : `'responsive'` (défaut, ci-dessus) ou `'end'` — les
  *   sous-groupes restent COLLÉS ENSEMBLE au bord droit à TOUTE largeur,
  *   jamais écartés aux deux bords même en fenêtre étroite. Réservé aux `actions`
@@ -97,7 +107,7 @@ export function PageHeader({
   return (
     <div
       className={cn(
-        'flex flex-col gap-3 print:hidden sm:flex-row sm:flex-wrap sm:items-center',
+        'flex flex-col gap-3 print:hidden sm:flex-row sm:flex-nowrap sm:items-center',
         className,
       )}
     >
