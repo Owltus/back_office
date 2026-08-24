@@ -150,9 +150,10 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
   // Tablette tactile EN LARGEUR (typiquement paysage) : ni un seuil de plus,
   // juste ces deux signaux déjà en place. Pilote la largeur max du document
   // (cf. plus bas) — jamais vrai à la souris ni sur téléphone. La grille des
-  // étages (`.pdj-floors`, pdj.css) n'a plus besoin de ce signal : `auto-fit`
-  // + `minmax(330px, 1fr)` répartit les colonnes selon la largeur RÉELLEMENT
-  // rendue, tactile comme souris, sans seuil de viewport à maintenir ici.
+  // étages (`.pdj-floors`, pdj.css) n'a plus besoin de ce signal : ses
+  // paliers (900/1280px, propres au contenu des tableaux d'étage — pas
+  // ceux des tuiles KPI) sont de simples seuils de largeur, valables en
+  // tactile comme à la souris.
   const wideTouch = isTouchDevice && !isNavbarMobile
   // Tablette tactile EN PORTRAIT (768-1023px de large, ni téléphone ni assez
   // large pour `wideTouch`) : pilote le retrait de la tuile « Taux de
@@ -872,23 +873,18 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
   useNavbarSubtitle(isNavbarMobile ? titleDate : null)
 
   return (
-    // `max-w-6xl` (1152px) centre le contenu, dans le même esprit que
-    // RepJour. Plus large que son ancien `max-w-5xl` (1024px) : la grille
-    // des étages a besoin d'au moins 3×330px + 2 gaps (1022px, cf. pdj.css)
-    // pour tenir sur 3 colonnes — à 1024px, la marge ne tenait qu'à ~2px et
-    // basculait à 2 colonnes au moindre arrondi de layout (barre de
-    // défilement, sous-pixel). Neutralisé à l'impression (la feuille A4
-    // impose déjà sa largeur, voir pdj.css) ET en tablette tactile en
-    // largeur (`wideTouch`) : sur un écran plus large que 1024px,
-    // `max-w-5xl` laissait de grandes marges mortes de part et d'autre
-    // (retour utilisateur) — sans objet en tablette portrait
+    // `max-w-5xl` centre le contenu comme sur RepJour. Neutralisé à
+    // l'impression (la feuille A4 impose déjà sa largeur, voir pdj.css) ET
+    // en tablette tactile en largeur (`wideTouch`) : sur un écran plus large
+    // que 1024px, `max-w-5xl` laissait de grandes marges mortes de part et
+    // d'autre (retour utilisateur) — sans objet en tablette portrait
     // (`tabletPortrait`), déjà plus étroite que ce plafond.
     // `pb-20` réserve la place de la barre d'outils basse tactile (cf. fin du
     // composant) pour qu'elle ne masque jamais la fin du contenu.
     <div
       className={cn(
         'pdj-doc mx-auto flex w-full min-w-0 flex-1 flex-col gap-5 print:max-w-none',
-        wideTouch ? 'max-w-none' : 'max-w-6xl',
+        wideTouch ? 'max-w-none' : 'max-w-5xl',
         // `print:pb-0` : cette réserve n'a de sens qu'à l'écran (place pour
         // la barre d'outils basse fixe, elle-même masquée à l'impression,
         // cf. MobileToolbar) — sans lui, un `pb-20` (80px) inutile s'ajoutait
@@ -1352,11 +1348,11 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
 
           {/* Tableaux par étage. La classe `pdj-finance` bascule l'affichage en
               mode détail financier (CSS) — écran uniquement, l'impression revient
-              au mode nominatif. Grille en `auto-fit`/`minmax(330px, 1fr)`
-              (pdj.css) : le nombre de colonnes (1 à 3) suit la largeur
-              réellement rendue, pas un seuil de viewport arbitraire — reste
-              en 3 colonnes tant qu'elles tiennent ≥330px. Aucun modificateur
-              JS dédié requis, souris et tactile s'y comportent pareil. */}
+              au mode nominatif. Grille en 3 paliers (1 → 2 → 3 colonnes), sur
+              des seuils (900/1280px, pdj.css) propres au contenu des étages —
+              délibérément distincts de ceux des tuiles KPI (768/1024px), pour
+              rester plus longtemps sur chaque palier. Aucun modificateur JS
+              dédié requis, souris et tactile s'y comportent pareil. */}
           <div
             className={cn('pdj-floors', financeMode && 'pdj-finance')}
           >
