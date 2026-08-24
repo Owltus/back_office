@@ -241,18 +241,22 @@
 
 /* KPI (rangée à l'écran) : 6 cartes réparties sans jamais de ligne incomplète
    (6 est divisible par 2 / 3 / 6, donc chaque palier reste équilibré).
-   Un seul palier intermédiaire (3 colonnes, deux rangées) existait entre le
-   mobile étroit et le grand écran (1280px) — la tablette y tombait alors
-   qu'elle a largement la place pour les 6 colonnes sur une seule rangée
-   (retour utilisateur). Palier retiré : dès 768px (même seuil que la
-   densité compacte du planning parking / `isPhoneWidth`), 6 colonnes
-   directement. */
+   3 paliers (demande utilisateur), sur les DEUX seuils déjà en place pour le
+   reste de la coquille (`useResponsiveShell` : `isPhoneWidth` < 768px,
+   `isNavbarMobile` < 1024px) plutôt qu'un troisième seuil ad hoc :
+   < 768px → 2 colonnes (3 rangées) ; 768-1023px → 3 colonnes (2 rangées) ;
+   ≥ 1024px → 6 colonnes (1 rangée). */
 .pdj-stats-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 0.75rem;
 }
 @media (min-width: 768px) {
+  .pdj-stats-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+@media (min-width: 1024px) {
   .pdj-stats-grid {
     grid-template-columns: repeat(6, 1fr);
   }
