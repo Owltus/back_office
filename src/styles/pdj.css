@@ -10,29 +10,23 @@
 }
 
 /* --- Écran : tableau de bord pleine largeur (indépendant du rendu A4) --- */
-/* 3 paliers, seuils PROPRES aux étages (indépendants de ceux des tuiles KPI,
-   cf. `.pdj-stats-grid` plus bas) : une carte KPI n'a besoin que d'assez de
-   place pour un libellé et un chiffre, un tableau d'étage porte chambre +
-   nom + statut + visites + cases, donc chaque colonne réclame nettement plus
-   de largeur avant d'en gagner une de plus. Sens large → étroit (6 étages) :
-   ≥1280px → 3 colonnes (2 rangées) ; 900-1279px → 2 colonnes (3 rangées) ;
-   < 900px → 1 colonne (6 rangées). Demande utilisateur : rester plus
-   longtemps sur chaque palier plutôt que de basculer dès 1024/768px (seuils
-   des tuiles KPI, désormais trop rapprochés pour ce contenu). */
+/* Colonnes pilotées par la largeur RÉELLE disponible plutôt que par des
+   seuils de viewport arbitraires (un palier calé sur la largeur de fenêtre
+   ne correspondait pas à la largeur réellement rendue de `.pdj-doc`, capée
+   à `max-w-5xl` à la souris — le palier 3 colonnes n'arrivait jamais assez
+   tôt, celui à 2 colonnes traînait trop longtemps). `auto-fit` + `minmax`
+   pose la vraie contrainte, la largeur mini d'une carte d'étage lisible
+   (demande utilisateur, 330px) : autant de colonnes de ≥330px que la place
+   le permet (3 → 2 → 1), max-width plafonne à 3 (lisibilité, cf. plus haut)
+   même en tactile plein écran (`.pdj-doc.max-w-none`). `min(330px, 100%)`
+   dans le minmax : sur un mobile plus étroit que 330px, la colonne unique
+   redevient fluide au lieu de forcer un débordement horizontal. */
 .pdj-floors {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(min(330px, 100%), 1fr));
   gap: 1rem;
-}
-@media (min-width: 900px) {
-  .pdj-floors {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-@media (min-width: 1280px) {
-  .pdj-floors {
-    grid-template-columns: repeat(3, 1fr);
-  }
+  max-width: calc(3 * 330px + 2 * 1rem);
+  margin-inline: auto;
 }
 
 /* À l'écran, les cartes d'une même rangée ont la même hauteur (align stretch
