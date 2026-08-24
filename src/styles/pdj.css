@@ -14,11 +14,18 @@
    cf. `.pdj-stats-grid` plus bas) : une carte KPI n'a besoin que d'assez de
    place pour un libellé et un chiffre, un tableau d'étage porte chambre +
    nom + statut + visites + cases, donc chaque colonne réclame nettement plus
-   de largeur avant d'en gagner une de plus. Sens large → étroit (6 étages) :
-   ≥1280px → 3 colonnes (2 rangées) ; 900-1279px → 2 colonnes (3 rangées) ;
-   < 900px → 1 colonne (6 rangées). Demande utilisateur : rester plus
-   longtemps sur chaque palier plutôt que de basculer dès 1024/768px (seuils
-   des tuiles KPI, désormais trop rapprochés pour ce contenu). */
+   de largeur avant d'en gagner une de plus.
+   Le seuil des 3 colonnes (1088px) N'EST PAS arbitraire : `.pdj-doc` est
+   plafonné à `max-w-5xl` (1024px) à la souris (cf. BreakfastBoard.tsx), donc
+   sa largeur réelle cesse de grandir dès que la fenêtre atteint ~1082px
+   (1024px + les marges de page). Avec l'ancien seuil (1280px), la fenêtre
+   restait 200px de plus en 2 colonnes de ~500px CHACUNE alors que le
+   conteneur, déjà à sa largeur max, tenait très bien 3 colonnes de ~330px
+   — palier abaissé pour déclencher les 3 colonnes dès que le conteneur est
+   assez large, pas un pixel de fenêtre plus tard (demande utilisateur :
+   rester plus longtemps en 3 colonnes). Sens large → étroit (6 étages) :
+   ≥1088px → 3 colonnes (2 rangées) ; 900-1087px → 2 colonnes (3 rangées) ;
+   < 900px → 1 colonne (6 rangées). */
 .pdj-floors {
   display: grid;
   grid-template-columns: 1fr;
@@ -29,7 +36,7 @@
     grid-template-columns: repeat(2, 1fr);
   }
 }
-@media (min-width: 1280px) {
+@media (min-width: 1088px) {
   .pdj-floors {
     grid-template-columns: repeat(3, 1fr);
   }
