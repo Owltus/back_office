@@ -11,21 +11,17 @@
 
 /* --- Écran : tableau de bord pleine largeur (indépendant du rendu A4) --- */
 /* 3 paliers, seuils PROPRES aux étages (indépendants de ceux des tuiles KPI,
-   cf. `.pdj-stats-grid` plus bas) : une carte KPI n'a besoin que d'assez de
-   place pour un libellé et un chiffre, un tableau d'étage porte chambre +
-   nom + statut + visites + cases, donc chaque colonne réclame nettement plus
-   de largeur avant d'en gagner une de plus.
-   Le seuil des 3 colonnes (1088px) N'EST PAS arbitraire : `.pdj-doc` est
-   plafonné à `max-w-5xl` (1024px) à la souris (cf. BreakfastBoard.tsx), donc
-   sa largeur réelle cesse de grandir dès que la fenêtre atteint ~1082px
-   (1024px + les marges de page). Avec l'ancien seuil (1280px), la fenêtre
-   restait 200px de plus en 2 colonnes de ~500px CHACUNE alors que le
-   conteneur, déjà à sa largeur max, tenait très bien 3 colonnes de ~330px
-   — palier abaissé pour déclencher les 3 colonnes dès que le conteneur est
-   assez large, pas un pixel de fenêtre plus tard (demande utilisateur :
-   rester plus longtemps en 3 colonnes). Sens large → étroit (6 étages) :
-   ≥1088px → 3 colonnes (2 rangées) ; 900-1087px → 2 colonnes (3 rangées) ;
-   < 900px → 1 colonne (6 rangées). */
+   cf. `.pdj-stats-grid` plus bas). `.pdj-doc` est plafonné à `max-w-5xl`
+   (1024px) à la souris (cf. BreakfastBoard.tsx) : sa largeur réelle cesse de
+   grandir dès que la fenêtre atteint ~1082px, donc au-delà les colonnes ne
+   peuvent de toute façon pas dépasser ~330px chacune. Seuil des 3 colonnes
+   abaissé à 950px (demande utilisateur, deux allers-retours : d'abord
+   1280px → 1088px calé sur ce plafond, puis encore plus bas) : le
+   conteneur n'y fait plus que ~892px, donc des colonnes ~270px — plus
+   serrées que le confort de 330px, mais le palier 3 colonnes reste actif
+   sur une plage de fenêtre bien plus large. Sens large → étroit (6 étages) :
+   ≥950px → 3 colonnes (2 rangées) ; 900-949px → 2 colonnes (3 rangées,
+   plage résiduelle étroite) ; < 900px → 1 colonne (6 rangées). */
 .pdj-floors {
   display: grid;
   grid-template-columns: 1fr;
@@ -36,7 +32,7 @@
     grid-template-columns: repeat(2, 1fr);
   }
 }
-@media (min-width: 1088px) {
+@media (min-width: 950px) {
   .pdj-floors {
     grid-template-columns: repeat(3, 1fr);
   }
