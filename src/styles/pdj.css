@@ -17,17 +17,22 @@
    peuvent de toute façon pas dépasser ~330px chacune. Seuil des 3 colonnes
    abaissé à 950px (demande utilisateur, deux allers-retours : d'abord
    1280px → 1088px calé sur ce plafond, puis encore plus bas) : le
-   conteneur n'y fait plus que ~892px, donc des colonnes ~270px — plus
-   serrées que le confort de 330px, mais le palier 3 colonnes reste actif
-   sur une plage de fenêtre bien plus large. Sens large → étroit (6 étages) :
-   ≥950px → 3 colonnes (2 rangées) ; 900-949px → 2 colonnes (3 rangées,
-   plage résiduelle étroite) ; < 900px → 1 colonne (6 rangées). */
+   conteneur n'y fait plus que ~892px, donc des colonnes ~270px.
+   Seuil des 2 colonnes abaissé à son tour de 900px à 768px (demande
+   utilisateur, palier trop court à 900-949px) : réutilise `isPhoneWidth`
+   (même seuil que le reste de la coquille, cf. `useResponsiveShell`) plutôt
+   qu'un chiffre de plus — en dessous, c'est un téléphone, 1 colonne a du
+   sens de toute façon. Le palier 2 colonnes couvre désormais 768-949px
+   (181px, plus de 3× l'ancienne plage), colonnes confortables (~290 à
+   ~350px). Sens large → étroit (6 étages) :
+   ≥950px → 3 colonnes (2 rangées) ; 768-949px → 2 colonnes (3 rangées) ;
+   < 768px → 1 colonne (6 rangées). */
 .pdj-floors {
   display: grid;
   grid-template-columns: 1fr;
   gap: 1rem;
 }
-@media (min-width: 900px) {
+@media (min-width: 768px) {
   .pdj-floors {
     grid-template-columns: repeat(2, 1fr);
   }
