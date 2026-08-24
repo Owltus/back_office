@@ -151,8 +151,9 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
   // juste ces deux signaux déjà en place. Pilote la largeur max du document
   // (cf. plus bas) — jamais vrai à la souris ni sur téléphone. La grille des
   // étages (`.pdj-floors`, pdj.css) n'a plus besoin de ce signal : ses
-  // paliers CSS (768/1024px) sont désormais les mêmes seuils qu'`isNavbarMobile`
-  // / `isPhoneWidth`, donc déjà corrects en tactile comme à la souris.
+  // paliers (900/1280px, propres au contenu des tableaux d'étage — pas
+  // ceux des tuiles KPI) sont de simples seuils de largeur, valables en
+  // tactile comme à la souris.
   const wideTouch = isTouchDevice && !isNavbarMobile
   // Tablette tactile EN PORTRAIT (768-1023px de large, ni téléphone ni assez
   // large pour `wideTouch`) : pilote le retrait de la tuile « Taux de
@@ -1347,10 +1348,11 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
 
           {/* Tableaux par étage. La classe `pdj-finance` bascule l'affichage en
               mode détail financier (CSS) — écran uniquement, l'impression revient
-              au mode nominatif. Grille en 3 paliers (1 → 2 → 3 colonnes),
-              calée en CSS sur les mêmes seuils (768/1024px) que la grille des
-              tuiles KPI ci-dessus — souris et tactile s'y comportent déjà
-              pareil, aucun modificateur JS dédié requis (cf. pdj.css). */}
+              au mode nominatif. Grille en 3 paliers (1 → 2 → 3 colonnes), sur
+              des seuils (900/1280px, pdj.css) propres au contenu des étages —
+              délibérément distincts de ceux des tuiles KPI (768/1024px), pour
+              rester plus longtemps sur chaque palier. Aucun modificateur JS
+              dédié requis, souris et tactile s'y comportent pareil. */}
           <div
             className={cn('pdj-floors', financeMode && 'pdj-finance')}
           >
