@@ -119,9 +119,14 @@ select
   s.day::text                       as date,
   coalesce(occ.occupied, 0)         as occupied,
   coalesce(occ.occupied_client, 0)  as occupied_client,
-  coalesce(occ.occupied_free, 0)    as occupied_free,
   coalesce(arr.arrivals, 0)         as arrivals,
-  coalesce(dep.departures, 0)       as departures
+  coalesce(dep.departures, 0)       as departures,
+  -- Colonne AJOUTÉE EN FIN de liste (pas insérée entre occupied_client et
+  -- arrivals) : `create or replace view` interdit de changer la position
+  -- d'une colonne existante ("cannot change name of view column 'arrivals'
+  -- to 'occupied_free'") — seul un ajout strictement en dernière position
+  -- est autorisé sans `drop view` préalable.
+  coalesce(occ.occupied_free, 0)    as occupied_free
 from spine s
 left join occ on occ.day = s.day
 left join arr on arr.day = s.day
