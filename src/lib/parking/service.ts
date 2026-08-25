@@ -29,6 +29,18 @@ export interface ParkingArrivalsRow {
   paid: number
   reserved: number
   unpaid: number
+  /** Réservations au statut « gratuité » (comptées à part, jamais facturées).
+   * Optionnel : absent tant que `parking_analytics_agg.sql` (étape 2 du
+   * chantier) n'a pas été rejoué par l'utilisateur dans Supabase. */
+  free?: number
+  /** Nuits cumulées des réservations « gratuité ». Optionnel, même raison. */
+  free_nights?: number
+  /** CA HT du jour (nuitées reserve/paye/checkout uniquement), au tarif en
+   * vigueur à `start_date` (voir `parking_tarifs`, table versionnée).
+   * Optionnel, même raison. */
+  ca_ht?: number
+  /** CA TTC du jour (même périmètre). Optionnel, même raison. */
+  ca_ttc?: number
 }
 
 /** Ligne de `parking_daily_occupation` : occupation réelle d'un jour de calendrier.
@@ -40,6 +52,9 @@ export interface ParkingDailyOccRow {
   occupied: number
   /** Places CLIENT distinctes occupées ce jour (spot < 13). */
   occupied_client: number
+  /** Places distinctes en statut « gratuité » occupées ce jour. Optionnel :
+   * absent tant que `parking_analytics_agg.sql` n'a pas été rejoué. */
+  occupied_free?: number
   /** Réservations dont l'arrivée tombe ce jour. */
   arrivals: number
   /** Réservations dont le départ (start_date + nights) tombe ce jour. */

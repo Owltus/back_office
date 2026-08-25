@@ -23,7 +23,7 @@ import {
   aggregateParkingDaily,
   captageIndex,
 } from '#/lib/parking/analytics.ts'
-import { fmtInt, fmtPct, fmtPctInt } from '#/lib/parking/format.ts'
+import { fmtEur, fmtInt, fmtPct, fmtPctInt } from '#/lib/parking/format.ts'
 import { DAY_NAMES, MONTHS_LABELS } from '#/lib/repjour/constants.ts'
 import { ACCENT } from '#/components/analytique/accents.ts'
 
@@ -98,12 +98,15 @@ export function ParkingAnalytiqueMoisBoard({
     const arrivals = days.reduce((s, d) => s + d.arrivals, 0)
     const departures = days.reduce((s, d) => s + d.departures, 0)
 
-    // Impayés : réservations dont l'arrivée tombe dans le mois, au statut checkout
-    // (départ enregistré sans paiement) — somme des `unpaid` de l'agrégat d'arrivées.
+    // Impayés / gratuité / CA : réservations dont l'arrivée tombe dans le mois,
+    // sommées depuis l'agrégat d'arrivées (même source que la vue annuelle).
     const prefix = `${year}-${mm}-`
-    const unpaid = arrivalRows
-      .filter((a) => a.start_date.startsWith(prefix))
-      .reduce((s, a) => s + a.unpaid, 0)
+    const monthArrivals = arrivalRows.filter((a) => a.start_date.startsWith(prefix))
+    const unpaid = monthArrivals.reduce((s, a) => s + a.unpaid, 0)
+    // `?? 0` : tolère une vue pas encore migrée (colonnes gratuité/CA absentes
+    // le temps que le SQL soit joué en prod) sans propager de NaN.
+    const free = monthArrivals.reduce((s, a) => s + (a.free ?? 0), 0)
+    const caTtc = monthArrivals.reduce((s, a) => s + (a.ca_ttc ?? 0), 0)
 
     // Captage du mois : occupation parking client rapportée à l'occupation hôtel,
     // sur les cumuls des jours où l'occupation hôtel est connue. « — » si aucune base.
@@ -122,6 +125,8 @@ export function ParkingAnalytiqueMoisBoard({
       arrivals,
       departures,
       unpaid,
+      free,
+      caTtc,
       avgCaptage: captageIndex(capClient, capRooms),
       // 2e info : cadence quotidienne (moyenne sur les jours du mois).
       arrivalsPerDay: count > 0 ? arrivals / count : 0,
@@ -190,15 +195,15 @@ export function ParkingAnalytiqueMoisBoard({
       loading={loading}
       printTitle={`Parking · ${monthLabel} ${year}`}
       skeleton={{
-        cols: 5,
+        cols: 6,
         charts: 1,
         rows: new Date(year, month, 0).getDate(),
-        cards: 5,
-        cardCols: 5,
+        cards: 7,
+        cardCols: 7,
       }}
     >
       {/* Cartes du mois */}
-      <AnalytiqueCardsGrid cols={5}>
+      <AnalytiqueCardsGrid cols={7}>
         <StatCard
           label="Taux d'occupation moyen"
           accent={ACCENT.cyan}
@@ -226,6 +231,19 @@ export function ParkingAnalytiqueMoisBoard({
               ? subText(`moy. ${fmtInt(summary.departuresPerDay)} / jour`)
               : undefined
           }
+        />
+        <StatCard
+          label="Gratuité"
+          accent={ACCENT.slate}
+          value={fmtInt(summary.free)}
+          hint="Réservations en gratuité arrivées ce mois-ci — comptées dans les nuitées, jamais dans le CA."
+          sub={shareSub(summary.free, summary.arrivals, 'des arrivées')}
+        />
+        <StatCard
+          label="CA Parking"
+          accent={ACCENT.amber}
+          value={fmtEur(summary.caTtc)}
+          hint="Chiffre d'affaires TTC du mois (réservé/payé/non payé), hors employé et gratuité."
         />
         <StatCard
           label="Impayés"
@@ -259,6 +277,12 @@ export function ParkingAnalytiqueMoisBoard({
             <th className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
               <span className="hidden sm:inline">Occupées</span>
               <span className="sm:hidden">Occ.</span>
+            </th>
+            <th
+              className="px-2 py-2 text-center text-xs font-medium text-muted-foreground"
+              style={{ color: ACCENT.slate }}
+            >
+              Gratuité
             </th>
             <th
               className="px-2 py-2 text-center text-xs font-medium text-muted-foreground"
@@ -315,6 +339,12 @@ export function ParkingAnalytiqueMoisBoard({
                     </td>
                     <td
                       className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums"
+                      style={{ color: ACCENT.slate }}
+                    >
+                      {fmtInt(d.occupiedFree)}
+                    </td>
+                    <td
+                      className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums"
                       style={{ color: ACCENT.indigo }}
                     >
                       {fmtInt(d.arrivals)}
@@ -334,7 +364,7 @@ export function ParkingAnalytiqueMoisBoard({
                   </>
                 ) : (
                   <td
-                    colSpan={5}
+                    colSpan={6}
                     className="px-2 py-2 text-center text-xs text-muted-foreground/50"
                   >
                     —

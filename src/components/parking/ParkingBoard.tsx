@@ -194,8 +194,15 @@ const STATUS: Record<
     text: 'text-violet-700 dark:text-violet-100',
     dot: 'bg-violet-500',
   },
+  gratuite: {
+    label: 'Gratuité',
+    border: 'border-sky-500/50',
+    fill: 'bg-sky-500/15',
+    text: 'text-sky-700 dark:text-sky-100',
+    dot: 'bg-sky-500',
+  },
 }
-const STATUS_ORDER: Status[] = ['reserve', 'paye', 'checkout', 'employe']
+const STATUS_ORDER: Status[] = ['reserve', 'paye', 'checkout', 'employe', 'gratuite']
 
 const fmtWeekday = new Intl.DateTimeFormat('fr-FR', { weekday: 'short' })
 const fmtDay = new Intl.DateTimeFormat('fr-FR', {

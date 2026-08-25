@@ -17,8 +17,12 @@ import { TOTAL_ROOMS } from '#/lib/repjour/constants.ts'
  * `parking_daily_occupation` qui « déplie » l'occupation jour par jour (generate_series) ;
  * ici on ne fait plus que sommer/compléter, jamais recalculer un chevauchement.
  *
- * AUCUN montant € : la table `parking_reservations` ne porte pas de tarif ; on ne
- * calcule donc jamais de chiffre d'affaires.
+ * CA (chiffre d'affaires) : calculé côté vue SQL (`ca_ht`/`ca_ttc` de
+ * `parking_arrivals_agg`), au tarif VERSIONNÉ en vigueur à la date d'arrivée
+ * de chaque réservation (`parking_tarifs`) — ici on ne fait que sommer par
+ * mois, jamais recalculer un prix. Ne porte que sur les nuitées facturables
+ * (`reserve`/`paye`/`checkout`) : ni `employe` (jamais facturé), ni
+ * `gratuite` (gratuite par définition).
  */
 
 // Le taux d'occupation compte TOUTES les places occupées au NUMÉRATEUR (personnel
@@ -91,6 +95,15 @@ export interface ParkingMonthStats {
   reserved: number
   /** Réservations au statut « non payé » (checkout impayé). */
   unpaid: number
+  /** Réservations au statut « gratuité ». */
+  free: number
+  /** Nuits cumulées des réservations « gratuité ». */
+  freeNights: number
+  /** CA HT du mois (nuitées reserve/paye/checkout uniquement, au tarif en
+   * vigueur à la date d'arrivée de chaque réservation). */
+  caHt: number
+  /** CA TTC du mois (même périmètre). */
+  caTtc: number
 }
 
 /** Un mois vide (aucune donnée). */
@@ -104,6 +117,10 @@ function emptyMonth(month: number): ParkingMonthStats {
     paid: 0,
     reserved: 0,
     unpaid: 0,
+    free: 0,
+    freeNights: 0,
+    caHt: 0,
+    caTtc: 0,
   }
 }
 
@@ -138,6 +155,13 @@ export function aggregateParkingMonthly(
     s.paid += r.paid
     s.reserved += r.reserved
     s.unpaid += r.unpaid
+    // `?? 0` : tolère une vue `parking_arrivals_agg` pas encore migrée (colonnes
+    // gratuité/CA absentes le temps que le SQL soit joué en prod) sans propager
+    // de NaN dans les totaux.
+    s.free += r.free ?? 0
+    s.freeNights += r.free_nights ?? 0
+    s.caHt += r.ca_ht ?? 0
+    s.caTtc += r.ca_ttc ?? 0
 
     clientNights[m] += r.client_nights
   }
@@ -163,6 +187,9 @@ export interface ParkingDayStats {
   /** Places CLIENT distinctes occupées ce jour (spots < FIRST_STAFF_SPOT),
    * conservées pour le seul calcul de captage. */
   occupiedClient: number
+  /** Places distinctes en statut « gratuité » occupées ce jour (déjà comptées
+   * dans `occupied`/`occupiedClient` — colonne dédiée en plus, pas exclusive). */
+  occupiedFree: number
   /** Taux d'occupation du jour (%) : occupied / 12 places CLIENT × 100 (numérateur
    * personnel compris → dépasse 100 % si les places tampon 13/14 sont prises). */
   occupancy: number
@@ -200,6 +227,7 @@ export function aggregateParkingDaily(
       day,
       occupied,
       occupiedClient: r?.occupied_client ?? 0,
+      occupiedFree: r?.occupied_free ?? 0,
       occupancy: (occupied / CLIENT_SPOTS) * 100,
       arrivals: r?.arrivals ?? 0,
       departures: r?.departures ?? 0,

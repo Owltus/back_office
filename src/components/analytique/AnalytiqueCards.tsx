@@ -18,9 +18,10 @@ import { cn } from '#/lib/utils.ts'
 export function cardsGridClass(cols: number): string {
   return cn(
     'grid shrink-0 grid-cols-2 gap-3',
+    cols === 7 && 'sm:grid-cols-4 lg:grid-cols-7',
     cols === 6 && 'sm:grid-cols-3 lg:grid-cols-6',
     cols === 5 && 'sm:grid-cols-5',
-    cols !== 5 && cols !== 6 && 'sm:grid-cols-4',
+    cols !== 5 && cols !== 6 && cols !== 7 && 'sm:grid-cols-4',
   )
 }
 
@@ -29,9 +30,11 @@ export function AnalytiqueCardsGrid({
   cols = 4,
 }: {
   children: ReactNode
-  /** Colonnes à partir de `sm` : 4 (défaut), 5 (ex. Rapro « Vendues ») ou 6 (PDJ :
-   * 6 moyennes → 2 sur mobile, 3 sur tablette, 6 sur grand écran). */
-  cols?: 4 | 5 | 6
+  /** Colonnes à partir de `sm` : 4 (défaut), 5 (ex. Rapro « Vendues »), 6 (PDJ :
+   * 6 moyennes → 2 sur mobile, 3 sur tablette, 6 sur grand écran) ou 7 (Parking :
+   * 5 cartes existantes + Gratuité/CA → 2 sur mobile, 4 sur tablette, 7 sur
+   * grand écran). */
+  cols?: 4 | 5 | 6 | 7
 }) {
   return <div className={cardsGridClass(cols)}>{children}</div>
 }

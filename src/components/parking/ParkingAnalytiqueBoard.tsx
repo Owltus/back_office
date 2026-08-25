@@ -23,7 +23,7 @@ import {
   captageIndex,
   yearsFromParkingDates,
 } from '#/lib/parking/analytics.ts'
-import { fmtInt, fmtPct, fmtPctInt } from '#/lib/parking/format.ts'
+import { fmtEur, fmtInt, fmtPct, fmtPctInt } from '#/lib/parking/format.ts'
 import { MONTHS_LABELS, MONTHS_SHORT } from '#/lib/repjour/constants.ts'
 import { ACCENT } from '#/components/analytique/accents.ts'
 
@@ -100,6 +100,9 @@ export function ParkingAnalytiqueBoard() {
       totalReservations,
       totalNights,
       totalUnpaid: months.reduce((s, m) => s + m.unpaid, 0),
+      totalFree: months.reduce((s, m) => s + m.free, 0),
+      totalCaHt: months.reduce((s, m) => s + m.caHt, 0),
+      totalCaTtc: months.reduce((s, m) => s + m.caTtc, 0),
       avgOccupancy:
         count > 0 ? active.reduce((s, m) => s + m.occupancyRate, 0) / count : 0,
       avgCaptage: captageIndex(capClient, capRooms),
@@ -194,10 +197,10 @@ export function ParkingAnalytiqueBoard() {
       )}
       loading={loading}
       printTitle={`Parking · ${year}`}
-      skeleton={{ cols: 7, charts: 1, rows: 12, cards: 5, cardCols: 5 }}
+      skeleton={{ cols: 9, charts: 1, rows: 12, cards: 7, cardCols: 7 }}
     >
       {/* Synthèse annuelle */}
-      <AnalytiqueCardsGrid cols={5}>
+      <AnalytiqueCardsGrid cols={7}>
         <StatCard
           label="Réservations"
           accent={ACCENT.indigo}
@@ -225,6 +228,23 @@ export function ParkingAnalytiqueBoard() {
               ? subText(`moy. ${fmtInt(summary.nightsPerReservation)} / réservation`)
               : undefined
           }
+        />
+        <StatCard
+          label="Gratuité"
+          accent={ACCENT.slate}
+          value={fmtInt(summary.totalFree)}
+          hint="Réservations en gratuité sur l'année — comptées dans les nuitées, jamais dans le CA."
+          sub={shareSub(
+            summary.totalFree,
+            summary.totalReservations,
+            'des réservations',
+          )}
+        />
+        <StatCard
+          label="CA Parking"
+          accent={ACCENT.amber}
+          value={fmtEur(summary.totalCaTtc)}
+          hint="Chiffre d'affaires TTC (réservé/payé/non payé), hors employé et gratuité, au tarif en vigueur à la date d'arrivée de chaque réservation."
         />
         <StatCard
           label="Impayés"
@@ -278,10 +298,22 @@ export function ParkingAnalytiqueBoard() {
               Réservées
             </th>
             <th
+              className="hidden px-2 py-2 text-center text-xs font-medium text-muted-foreground sm:table-cell"
+              style={{ color: ACCENT.slate }}
+            >
+              Gratuité
+            </th>
+            <th
               className="px-2 py-2 text-center text-xs font-medium text-muted-foreground"
               style={{ color: ACCENT.red }}
             >
               Impayées
+            </th>
+            <th
+              className="px-2 py-2 text-center text-xs font-medium text-muted-foreground"
+              style={{ color: ACCENT.amber }}
+            >
+              CA
             </th>
             <th
               className="px-3 py-2 text-center text-xs font-medium text-muted-foreground"
@@ -347,10 +379,22 @@ export function ParkingAnalytiqueBoard() {
                       {fmtInt(m.reserved)}
                     </td>
                     <td
+                      className="hidden whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums sm:table-cell"
+                      style={{ color: ACCENT.slate }}
+                    >
+                      {fmtInt(m.free)}
+                    </td>
+                    <td
                       className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums"
                       style={{ color: ACCENT.red }}
                     >
                       {fmtInt(m.unpaid)}
+                    </td>
+                    <td
+                      className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums"
+                      style={{ color: ACCENT.amber }}
+                    >
+                      {fmtEur(m.caTtc)}
                     </td>
                     <td
                       className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums text-muted-foreground/50"
@@ -371,6 +415,12 @@ export function ParkingAnalytiqueBoard() {
                       —
                     </td>
                     <td className="hidden px-2 py-2 text-center text-xs text-muted-foreground/50 sm:table-cell">
+                      —
+                    </td>
+                    <td className="hidden px-2 py-2 text-center text-xs text-muted-foreground/50 sm:table-cell">
+                      —
+                    </td>
+                    <td className="px-2 py-2 text-center text-xs text-muted-foreground/50">
                       —
                     </td>
                     <td className="px-2 py-2 text-center text-xs text-muted-foreground/50">
