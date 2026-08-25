@@ -20,6 +20,7 @@ import { sakuraEffect } from './sakura.ts'
 import { shockwaveEffect } from './shockwave.ts'
 import { shootingStarsEffect } from './shootingstars.ts'
 import { snowEffect } from './snow.ts'
+import { strawhatEffect } from './strawhat.ts'
 import { vortexEffect } from './vortex.ts'
 import type { EffectDefinition } from './types.ts'
 
@@ -60,6 +61,7 @@ export const EFFECTS: readonly EffectDefinition[] = [
   kaleidoscopeEffect,
   boidsEffect,
   diceEffect,
+  strawhatEffect,
 ]
 
 /**
@@ -80,4 +82,5 @@ export const VALIDATED_EFFECT_IDS: ReadonlySet<string> = new Set([
   'balloons',
   'heartswarm',
   'd20',
+  'strawhat',
 ])
