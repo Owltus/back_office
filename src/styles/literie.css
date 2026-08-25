@@ -12,18 +12,25 @@
 /* Colonnes d'étages : gap de 1px sur fond « bordure » + colonnes en fond
    « carte » → fins filets de séparation verticaux entre étages. Une carte
    par étage — 6 étages → toujours 2, 3 ou 6 colonnes (diviseurs de 6) pour
-   des rangées toujours complètes. */
+   des rangées toujours complètes.
+   Chaque pastille n'affiche qu'un numéro de chambre à 3 chiffres : une
+   colonne reste lisible même très étroite (~55 px), donc les paliers à 3 et
+   6 colonnes sont volontairement agressifs — 2 colonnes ne reste que le
+   PLANCHER de sécurité des tout petits écrans, pas un palier qu'on cherche à
+   voir souvent. La page vit dans `max-w-5xl` (1024 px) : passé ce point la
+   largeur de carte n'augmente de toute façon plus, inutile de retarder le
+   dernier palier au-delà. */
 .literie-floors {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 0.75rem;
 }
-@media (min-width: 700px) {
+@media (min-width: 360px) {
   .literie-floors {
     grid-template-columns: repeat(3, 1fr);
   }
 }
-@media (min-width: 1200px) {
+@media (min-width: 480px) {
   .literie-floors {
     grid-template-columns: repeat(6, 1fr);
   }
@@ -51,9 +58,15 @@
   justify-content: center;
   padding: 0.5rem 0.6rem;
 }
+/* Taille fluide (`clamp` + `vw`) plutôt qu'un palier fixe : la largeur de
+   colonne varie en continu avec la fenêtre À L'INTÉRIEUR même d'un palier de
+   `.literie-floors` (ex. 480-1024 px reste 6 colonnes, mais une colonne y va
+   de ~65 à ~160 px) — le texte doit suivre la même courbe, pas juste la
+   largeur au moment où on bascule de palier. */
 .literie-floor-title {
-  font-size: 0.85rem;
+  font-size: clamp(0.62rem, 0.42rem + 0.68vw, 0.85rem);
   font-weight: 600;
+  white-space: nowrap;
 }
 
 /* Pastilles empilées verticalement, pleine largeur de la colonne (mêmes
