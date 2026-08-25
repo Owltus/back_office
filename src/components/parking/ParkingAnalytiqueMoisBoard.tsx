@@ -83,12 +83,13 @@ export function ParkingAnalytiqueMoisBoard({
   // CA par jour = CA des réservations dont l'ARRIVÉE tombe ce jour (même
   // simplification que le CA mensuel : attribué au jour d'arrivée, pas
   // réparti nuit par nuit sur tout le séjour). Vient de `parking_arrivals_agg`
-  // (une ligne par start_date, `ca_ttc` déjà calculé au tarif en vigueur),
-  // PAS de `parking_daily_occupation` (qui déplie l'OCCUPATION, sans CA) —
-  // c'est pourquoi ce lookup est séparé de `aggregateParkingDaily`.
+  // (une ligne par start_date, `ca_ht` déjà calculé au tarif en vigueur), HT
+  // comme le reste de la page (pas TTC) — PAS de `parking_daily_occupation`
+  // (qui déplie l'OCCUPATION, sans CA) — c'est pourquoi ce lookup est séparé
+  // de `aggregateParkingDaily`.
   const caByDate = useMemo(() => {
     const map = new Map<string, number>()
-    for (const a of arrivalRows) map.set(a.start_date, a.ca_ttc ?? 0)
+    for (const a of arrivalRows) map.set(a.start_date, a.ca_ht ?? 0)
     return map
   }, [arrivalRows])
 
@@ -118,7 +119,7 @@ export function ParkingAnalytiqueMoisBoard({
     // `?? 0` : tolère une vue pas encore migrée (colonnes gratuité/CA absentes
     // le temps que le SQL soit joué en prod) sans propager de NaN.
     const free = monthArrivals.reduce((s, a) => s + (a.free ?? 0), 0)
-    const caTtc = monthArrivals.reduce((s, a) => s + (a.ca_ttc ?? 0), 0)
+    const caHt = monthArrivals.reduce((s, a) => s + (a.ca_ht ?? 0), 0)
 
     // Captage du mois : occupation parking client rapportée à l'occupation hôtel,
     // sur les cumuls des jours où l'occupation hôtel est connue. « — » si aucune base.
@@ -138,12 +139,12 @@ export function ParkingAnalytiqueMoisBoard({
       departures,
       unpaid,
       free,
-      caTtc,
+      caHt,
       avgCaptage: captageIndex(capClient, capRooms),
       // 2e info : cadence quotidienne (moyenne sur les jours du mois).
       arrivalsPerDay: count > 0 ? arrivals / count : 0,
       departuresPerDay: count > 0 ? departures / count : 0,
-      caTtcPerDay: count > 0 ? caTtc / count : 0,
+      caHtPerDay: count > 0 ? caHt / count : 0,
     }
   }, [days, arrivalRows, year, mm, hotelRoomsByDay])
 
@@ -255,11 +256,11 @@ export function ParkingAnalytiqueMoisBoard({
         <StatCard
           label="CA Parking"
           accent={ACCENT.amber}
-          value={fmtEur(summary.caTtc)}
-          hint="Chiffre d'affaires TTC du mois (réservé/payé/non payé), hors employé et gratuité."
+          value={fmtEur(summary.caHt)}
+          hint="Chiffre d'affaires HT du mois (réservé/payé/non payé), hors employé et gratuité."
           sub={
-            summary.caTtcPerDay > 0
-              ? subText(`moy. ${fmtEur(summary.caTtcPerDay)} / jour`)
+            summary.caHtPerDay > 0
+              ? subText(`moy. ${fmtEur(summary.caHtPerDay)} / jour`)
               : undefined
           }
         />

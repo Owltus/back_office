@@ -102,7 +102,6 @@ export function ParkingAnalytiqueBoard() {
       totalUnpaid: months.reduce((s, m) => s + m.unpaid, 0),
       totalFree: months.reduce((s, m) => s + m.free, 0),
       totalCaHt: months.reduce((s, m) => s + m.caHt, 0),
-      totalCaTtc: months.reduce((s, m) => s + m.caTtc, 0),
       avgOccupancy:
         count > 0 ? active.reduce((s, m) => s + m.occupancyRate, 0) / count : 0,
       avgCaptage: captageIndex(capClient, capRooms),
@@ -110,9 +109,10 @@ export function ParkingAnalytiqueBoard() {
       reservationsPerMonth: count > 0 ? totalReservations / count : 0,
       nightsPerReservation:
         totalReservations > 0 ? totalNights / totalReservations : 0,
-      // CA moyen par mois actif (mêmes mois que reservationsPerMonth).
-      caTtcPerMonth:
-        count > 0 ? months.reduce((s, m) => s + m.caTtc, 0) / count : 0,
+      // CA moyen par mois actif (mêmes mois que reservationsPerMonth). HT
+      // (comme « CA PDJ ») — pas TTC.
+      caHtPerMonth:
+        count > 0 ? months.reduce((s, m) => s + m.caHt, 0) / count : 0,
     }
   }, [months, hotelNuiteesByMonth])
 
@@ -246,11 +246,11 @@ export function ParkingAnalytiqueBoard() {
         <StatCard
           label="CA Parking"
           accent={ACCENT.amber}
-          value={fmtEur(summary.totalCaTtc)}
-          hint="Chiffre d'affaires TTC (réservé/payé/non payé), hors employé et gratuité, au tarif en vigueur à la date d'arrivée de chaque réservation."
+          value={fmtEur(summary.totalCaHt)}
+          hint="Chiffre d'affaires HT (réservé/payé/non payé), hors employé et gratuité, au tarif en vigueur à la date d'arrivée de chaque réservation."
           sub={
-            summary.caTtcPerMonth > 0
-              ? subText(`moy. ${fmtEur(summary.caTtcPerMonth)} / mois`)
+            summary.caHtPerMonth > 0
+              ? subText(`moy. ${fmtEur(summary.caHtPerMonth)} / mois`)
               : undefined
           }
         />
@@ -402,7 +402,7 @@ export function ParkingAnalytiqueBoard() {
                       className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums"
                       style={{ color: ACCENT.amber }}
                     >
-                      {fmtEur(m.caTtc)}
+                      {fmtEur(m.caHt)}
                     </td>
                     <td
                       className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums text-muted-foreground/50"
