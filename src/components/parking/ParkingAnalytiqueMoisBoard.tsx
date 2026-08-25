@@ -212,14 +212,14 @@ export function ParkingAnalytiqueMoisBoard({
         cols: 7,
         charts: 1,
         rows: new Date(year, month, 0).getDate(),
-        cards: 7,
-        cardCols: 7,
+        cards: 6,
+        cardCols: 6,
       }}
     >
       {/* Cartes du mois */}
-      <AnalytiqueCardsGrid cols={7}>
+      <AnalytiqueCardsGrid cols={6}>
         <StatCard
-          label="Taux d'occupation moyen"
+          label="TO moyen"
           accent={ACCENT.cyan}
           value={fmtPctInt(summary.avgOccupancy)}
           hint="Places occupées en moyenne, rapportées aux places disponibles."
@@ -245,13 +245,6 @@ export function ParkingAnalytiqueMoisBoard({
               ? subText(`moy. ${fmtInt(summary.departuresPerDay)} / jour`)
               : undefined
           }
-        />
-        <StatCard
-          label="Gratuité"
-          accent={ACCENT.slate}
-          value={fmtInt(summary.free)}
-          hint="Réservations en gratuité arrivées ce mois-ci — comptées dans les nuitées, jamais dans le CA."
-          sub={shareSub(summary.free, summary.arrivals, 'des arrivées')}
         />
         <StatCard
           label="CA Parking"

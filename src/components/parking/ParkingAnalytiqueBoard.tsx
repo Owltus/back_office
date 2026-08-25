@@ -200,10 +200,10 @@ export function ParkingAnalytiqueBoard() {
       )}
       loading={loading}
       printTitle={`Parking · ${year}`}
-      skeleton={{ cols: 9, charts: 1, rows: 12, cards: 7, cardCols: 7 }}
+      skeleton={{ cols: 9, charts: 1, rows: 12, cards: 6, cardCols: 6 }}
     >
       {/* Synthèse annuelle */}
-      <AnalytiqueCardsGrid cols={7}>
+      <AnalytiqueCardsGrid cols={6}>
         <StatCard
           label="Réservations"
           accent={ACCENT.indigo}
@@ -216,7 +216,7 @@ export function ParkingAnalytiqueBoard() {
           }
         />
         <StatCard
-          label="Taux d'occupation moyen"
+          label="TO moyen"
           accent={ACCENT.cyan}
           value={fmtPctInt(summary.avgOccupancy)}
           hint="Places occupées en moyenne, rapportées aux places disponibles."
@@ -231,17 +231,6 @@ export function ParkingAnalytiqueBoard() {
               ? subText(`moy. ${fmtInt(summary.nightsPerReservation)} / réservation`)
               : undefined
           }
-        />
-        <StatCard
-          label="Gratuité"
-          accent={ACCENT.slate}
-          value={fmtInt(summary.totalFree)}
-          hint="Réservations en gratuité sur l'année — comptées dans les nuitées, jamais dans le CA."
-          sub={shareSub(
-            summary.totalFree,
-            summary.totalReservations,
-            'des réservations',
-          )}
         />
         <StatCard
           label="CA Parking"
