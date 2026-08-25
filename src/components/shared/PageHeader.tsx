@@ -117,6 +117,18 @@ export function PageHeader({
       className={cn(
         'flex flex-col gap-3 print:hidden sm:flex-row sm:flex-nowrap sm:items-center',
         'pointer-fine:flex-row pointer-fine:flex-nowrap pointer-fine:items-center',
+        // `justify-end` : sans effet quand le bloc titre/badge/meta est présent
+        // (son `flex-1` absorbe déjà tout l'espace restant, rien à redistribuer)
+        // — MAIS le vrai bug : plusieurs pages masquent le titre sous `lg`
+        // (1024px, `title={isNavbarMobile ? undefined : ...}`, le jour vit
+        // alors dans la Navbar) SANS passer de `badge` ni `meta` : la condition
+        // `(title || badge != null || meta != null)` ci-dessous devient fausse,
+        // le bloc titre entier ne se rend PLUS DU TOUT, et `actions` se
+        // retrouve seul enfant de ce conteneur — sans alignement explicite, il
+        // retombe sur `justify-start` (défaut du flex), donc à GAUCHE (bug
+        // reproduit et confirmé en navigateur sur RepJour à 746px de large,
+        // souris : retour utilisateur « toujours à droite »).
+        'justify-end',
         className,
       )}
     >
