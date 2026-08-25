@@ -35,7 +35,9 @@ import type { EasterEgg } from '#/lib/easter-eggs/types.ts'
  * une card lance son effet ; l'interrupteur l'active/désactive, le crayon la passe
  * en édition INLINE (mot-clé + effet), la corbeille supprime. Le runtime
  * `EasterEggs` remonte ensuite les actifs sur toute l'app. Seuls les effets
- * validés sont proposés (les autres restent réservés aux tests dans Artefact).
+ * validés (`VALIDATED_EFFECT_IDS`) sont proposés — le registre `EFFECTS` ne
+ * contient plus que des effets déjà retenus, il n'y a plus de bac à sable
+ * séparé (page /artefact retirée).
  */
 
 const VALIDATED_EFFECTS = EFFECTS.filter((e) => VALIDATED_EFFECT_IDS.has(e.id))

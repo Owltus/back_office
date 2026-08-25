@@ -11,7 +11,6 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AffichageRouteImport } from './routes/affichage'
-import { Route as ArtefactRouteImport } from './routes/artefact'
 import { Route as CaisseRouteImport } from './routes/caisse'
 import { Route as ComptesRouteImport } from './routes/comptes'
 import { Route as EasterEggsRouteImport } from './routes/easter-eggs'
@@ -50,11 +49,6 @@ const IndexRoute = IndexRouteImport.update({
 const AffichageRoute = AffichageRouteImport.update({
   id: '/affichage',
   path: '/affichage',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ArtefactRoute = ArtefactRouteImport.update({
-  id: '/artefact',
-  path: '/artefact',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CaisseRoute = CaisseRouteImport.update({
@@ -210,7 +204,6 @@ const RepjourAnalytiqueYearMonthRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/affichage': typeof AffichageRoute
-  '/artefact': typeof ArtefactRoute
   '/caisse': typeof CaisseRouteWithChildren
   '/comptes': typeof ComptesRoute
   '/easter-eggs': typeof EasterEggsRoute
@@ -244,7 +237,6 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/affichage': typeof AffichageRoute
-  '/artefact': typeof ArtefactRoute
   '/comptes': typeof ComptesRoute
   '/easter-eggs': typeof EasterEggsRoute
   '/gestion': typeof GestionRoute
@@ -273,7 +265,6 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/affichage': typeof AffichageRoute
-  '/artefact': typeof ArtefactRoute
   '/caisse': typeof CaisseRouteWithChildren
   '/comptes': typeof ComptesRoute
   '/easter-eggs': typeof EasterEggsRoute
@@ -309,7 +300,6 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/affichage'
-    | '/artefact'
     | '/caisse'
     | '/comptes'
     | '/easter-eggs'
@@ -343,7 +333,6 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/affichage'
-    | '/artefact'
     | '/comptes'
     | '/easter-eggs'
     | '/gestion'
@@ -371,7 +360,6 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/affichage'
-    | '/artefact'
     | '/caisse'
     | '/comptes'
     | '/easter-eggs'
@@ -406,7 +394,6 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AffichageRoute: typeof AffichageRoute
-  ArtefactRoute: typeof ArtefactRoute
   CaisseRoute: typeof CaisseRouteWithChildren
   ComptesRoute: typeof ComptesRoute
   EasterEggsRoute: typeof EasterEggsRoute
@@ -436,13 +423,6 @@ declare module '@tanstack/react-router' {
       path: '/affichage'
       fullPath: '/affichage'
       preLoaderRoute: typeof AffichageRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/artefact': {
-      id: '/artefact'
-      path: '/artefact'
-      fullPath: '/artefact'
-      preLoaderRoute: typeof ArtefactRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/caisse': {
@@ -738,7 +718,6 @@ const RepjourRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AffichageRoute: AffichageRoute,
-  ArtefactRoute: ArtefactRoute,
   CaisseRoute: CaisseRouteWithChildren,
   ComptesRoute: ComptesRoute,
   EasterEggsRoute: EasterEggsRoute,

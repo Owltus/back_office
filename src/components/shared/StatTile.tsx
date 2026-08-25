@@ -8,10 +8,9 @@ import {
 import { cn } from '#/lib/utils.ts'
 
 /*
- * Carte de synthèse UNIFIÉE — reproduction FIDÈLE du style « Tuile, valeur
- * seule » retenu sur la page /artefact : liseré de couleur à gauche + corps
- * centré (libellé 0.6rem en haut, valeur 1.4rem en bas), AUCUNE icône. Métriques
- * calquées à l'identique sur la maquette.
+ * Carte de synthèse UNIFIÉE — style « Tuile, valeur seule » : liseré de couleur
+ * à gauche + corps centré (libellé 0.6rem en haut, valeur 1.4rem en bas),
+ * AUCUNE icône.
  *
  * Composant UNIQUE, réutilisé partout (rapro, PDJ, analytique, dashboard). Les
  * éléments portent des classes stables (`stat-tile`, `stat-tile__rail/body/

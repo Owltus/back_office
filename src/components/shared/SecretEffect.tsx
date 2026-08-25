@@ -8,7 +8,7 @@ import type { EffectDefinition } from '#/lib/artefact/effects/index.ts'
  * Easter egg clavier générique — taper un MOT-CLÉ (n'importe où, à la Konami)
  * déclenche un effet visuel plein écran. Généralise l'ancien `SecretFireworks` :
  * le mot ET l'effet arrivent en props, l'animation étant un `EffectDefinition`
- * joué par le moteur commun `EffectOverlay` (le même que la page Artefact).
+ * joué par le moteur commun `EffectOverlay`.
  *
  * - Détecteur de séquence : buffer glissant des dernières frappes, insensible à
  *   la casse ET aux accents (« chloé » comme « chloe » marchent).

@@ -1,27 +1,16 @@
-import { auroraEffect } from './aurora.ts'
 import { autumnEffect } from './autumn.ts'
-import { balloonsEffect } from './balloons.ts'
-import { blackholeEffect } from './blackhole.ts'
-import { boidsEffect } from './boids.ts'
-import { bubblesEffect } from './bubbles.ts'
 import { confettiEffect } from './confetti.ts'
 import { diceEffect } from './dice.ts'
-import { disintegrateEffect } from './disintegrate.ts'
 import { fireworksEffect } from './fireworks.ts'
 import { flowersEffect } from './flowers.ts'
-import { glitchEffect } from './glitch.ts'
 import { heartEffect } from './heart.ts'
 import { heartSwarmEffect } from './heartswarm.ts'
-import { kaleidoscopeEffect } from './kaleidoscope.ts'
 import { lightningEffect } from './lightning.ts'
-import { matrixEffect } from './matrix.ts'
 import { moneyRainEffect } from './moneyrain.ts'
 import { sakuraEffect } from './sakura.ts'
-import { shockwaveEffect } from './shockwave.ts'
 import { shootingStarsEffect } from './shootingstars.ts'
 import { snowEffect } from './snow.ts'
 import { strawhatEffect } from './strawhat.ts'
-import { vortexEffect } from './vortex.ts'
 import type { EffectDefinition } from './types.ts'
 
 export type {
@@ -32,17 +21,18 @@ export type {
 } from './types.ts'
 
 /*
- * Registre des effets de la page Artefact. L'ordre est celui des boutons.
- * Chacun se déclenche à la demande via `EffectOverlay` (bouton) ; les easter eggs
- * clavier (`SecretEffect`) rejouent certains de ces effets à la frappe d'un
- * mot-clé — même moteur canvas, déclencheur différent.
+ * Registre des effets déclenchables par les easter eggs (page admin
+ * `/easter-eggs`, `components/easter-eggs/EasterEggsBoard.tsx`) et par les
+ * détecteurs clavier (`SecretEffect`). L'ancienne page /artefact, qui servait
+ * de bac à sable pour les essayer avant validation, a été retirée le
+ * 2026-08-25 : ce registre ne contient donc plus que des effets déjà VALIDÉS
+ * (`VALIDATED_EFFECT_IDS` couvre l'intégralité de la liste). Les effets « à
+ * valider » retirés ce jour-là (matrix, blackhole, vortex, shockwave, aurora,
+ * glitch, disintegrate, kaleidoscope, boids) ainsi que bulles et ballons
+ * (validés mais retirés sur demande) ont été supprimés du code, pas
+ * seulement du registre.
  */
 export const EFFECTS: readonly EffectDefinition[] = [
-  matrixEffect,
-  blackholeEffect,
-  vortexEffect,
-  shockwaveEffect,
-  auroraEffect,
   shootingStarsEffect,
   fireworksEffect,
   moneyRainEffect,
@@ -52,14 +42,8 @@ export const EFFECTS: readonly EffectDefinition[] = [
   autumnEffect,
   flowersEffect,
   confettiEffect,
-  bubblesEffect,
-  balloonsEffect,
   heartSwarmEffect,
   lightningEffect,
-  glitchEffect,
-  disintegrateEffect,
-  kaleidoscopeEffect,
-  boidsEffect,
   diceEffect,
   strawhatEffect,
 ]
@@ -78,9 +62,8 @@ export const VALIDATED_EFFECT_IDS: ReadonlySet<string> = new Set([
   'autumn',
   'flowers',
   'confetti',
-  'bubbles',
-  'balloons',
   'heartswarm',
   'd20',
   'strawhat',
+  'lightning',
 ])

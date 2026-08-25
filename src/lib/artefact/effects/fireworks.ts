@@ -3,8 +3,8 @@ import type { EffectDefinition, EffectEnv, EffectRunner } from './types.ts'
 /*
  * Feu d'artifice — des fusées montent depuis le bas puis explosent en gerbes
  * colorées ; gravité + friction + traînées (composite `destination-out` pour
- * l'estompe, `lighter` pour l'accumulation). Joué par le bouton de la page
- * Artefact comme par l'easter egg clavier « chloé » (`SecretEffect`).
+ * l'estompe, `lighter` pour l'accumulation). Joué par l'easter egg clavier
+ * « chloé » (`SecretEffect`).
  *
  * L'animation intègre PAR IMAGE (calibrée ~60 fps). On la normalise ici
  * par `dt` (`step = dt / FRAME`) : le rendu reste IDENTIQUE à 60 fps (step ≈ 1) et

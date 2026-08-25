@@ -3,8 +3,9 @@ import { useEffect, useRef, useState } from 'react'
 import type { EffectDefinition } from '#/lib/artefact/effects/index.ts'
 
 /*
- * Moteur de rendu commun à TOUS les effets visuels : la page Artefact (boutons)
- * comme les easter eggs clavier (`components/shared/SecretEffect.tsx`).
+ * Moteur de rendu commun à tous les effets visuels : les easter eggs clavier
+ * (`components/shared/SecretEffect.tsx`) et l'aperçu jouable de la page admin
+ * `/easter-eggs` (`components/easter-eggs/EasterEggsBoard.tsx`).
  *
  * Canvas plein écran en `pointer-events: none`, boucle `requestAnimationFrame`,
  * densité de pixels bornée, nettoyage strict — le tout séparé de tout effet

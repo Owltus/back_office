@@ -1,10 +1,10 @@
 import { cn } from '#/lib/utils.ts'
 
 /*
- * Mini-graphique en ligne (sparkline) — SVG inline, sans dépendance. Épuré,
- * comme la maquette /artefact : UNE seule ligne, rien d'autre (pas d'aire, pas
- * de point, pas de texte). Étiré en largeur (`preserveAspectRatio="none"`) ; le
- * trait reste net grâce à `vector-effect: non-scaling-stroke`. Rien sous 2 points.
+ * Mini-graphique en ligne (sparkline) — SVG inline, sans dépendance. Épuré :
+ * UNE seule ligne, rien d'autre (pas d'aire, pas de point, pas de texte).
+ * Étiré en largeur (`preserveAspectRatio="none"`) ; le trait reste net grâce à
+ * `vector-effect: non-scaling-stroke`. Rien sous 2 points.
  */
 export function Sparkline({
   data,

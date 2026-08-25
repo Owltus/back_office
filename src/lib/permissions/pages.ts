@@ -6,7 +6,6 @@ import {
   ClipboardList,
   Coffee,
   Monitor,
-  Palette,
   SquareParking,
   Stamp,
 } from 'lucide-react'
@@ -21,7 +20,6 @@ export type PageKey =
   | 'caisse'
   | 'affichage'
   | 'facturation'
-  | 'artefact'
   | 'literie'
 
 export interface PageDef {
@@ -42,7 +40,6 @@ export const PAGES: PageDef[] = [
   { key: 'caisse', label: 'Caisse', route: '/caisse', icon: Banknote },
   { key: 'affichage', label: 'Affichage', route: '/affichage', icon: Monitor },
   { key: 'facturation', label: 'Facturation', route: '/facturation', icon: Stamp },
-  { key: 'artefact', label: 'Artefact', route: '/artefact', icon: Palette },
   { key: 'literie', label: 'Literie', route: '/literie', icon: BedDouble },
 ]
 

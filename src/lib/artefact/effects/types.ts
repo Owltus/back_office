@@ -1,10 +1,10 @@
 /*
- * Contrat commun des effets visuels de la page Artefact.
+ * Contrat commun des effets visuels déclenchés par les easter eggs.
  *
  * Un effet est du MÉTIER PUR : il ne connaît ni React ni Tailwind, il reçoit une
  * surface de dessin et dessine. Toute la mécanique commune (création du canvas,
  * densité de pixels, boucle d'animation, nettoyage, arrêt d'urgence) vit dans
- * `components/artefact/EffectOverlay.tsx` — un effet n'a donc qu'à décrire ce
+ * `components/shared/EffectOverlay.tsx` — un effet n'a donc qu'à décrire ce
  * qu'il peint image par image.
  *
  * Le canvas est superposé à la page en `pointer-events: none` : un effet
