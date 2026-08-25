@@ -150,6 +150,11 @@ export function PdjAnalytiqueBoard() {
     () =>
       months.map((m) => {
         const mois = MONTHS_SHORT[m.month - 1]
+        // `inclusTotal`/`servedTotal` : TOUJOURS renseignés (même quand la conso
+        // n'est pas saisie) — servent uniquement l'infobulle (cf. `tooltipExtra`
+        // ci-dessous), sans tranche dédiée dans le graphe.
+        const inclusTotal = m.days > 0 ? m.included : null
+        const servedTotal = m.days > 0 ? m.served : null
         if (m.extra != null && m.noShow != null) {
           return {
             mois,
@@ -158,6 +163,8 @@ export function PdjAnalytiqueBoard() {
             extra: m.extra,
             nonVenu: m.noShow,
             inclus: null,
+            inclusTotal,
+            servedTotal,
           }
         }
         return {
@@ -166,7 +173,9 @@ export function PdjAnalytiqueBoard() {
           servisInclus: null,
           extra: null,
           nonVenu: null,
-          inclus: m.days > 0 ? m.included : null,
+          inclus: inclusTotal,
+          inclusTotal,
+          servedTotal,
         }
       }),
     [months],
@@ -177,7 +186,7 @@ export function PdjAnalytiqueBoard() {
     const segs: KpiBarSegment[] = []
     if (chartData.some((d) => d.servisInclus != null)) {
       segs.push(
-        { key: 'servisInclus', name: 'Réservés servis', color: ACCENT.indigo },
+        { key: 'servisInclus', name: 'Servis', color: ACCENT.indigo },
         { key: 'extra', name: 'Extra', color: '#fbbf24' },
         { key: 'nonVenu', name: 'Non servis', color: ACCENT.cyan },
       )
@@ -349,6 +358,10 @@ export function PdjAnalytiqueBoard() {
             const i = MONTHS_SHORT.indexOf(label)
             return i >= 0 ? `${MONTHS_LABELS[i]} ${year}` : label
           }}
+          tooltipExtra={(row) => [
+            { name: 'PDJ inclus', value: row.inclusTotal as number | null },
+            { name: 'PDJ réellement servi', value: row.servedTotal as number | null },
+          ]}
         />
       </AnalytiqueCharts>
     </AnalytiqueShell>

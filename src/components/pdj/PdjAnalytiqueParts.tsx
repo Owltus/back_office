@@ -11,16 +11,24 @@ import {
  * détail mensuel) : en-tête et cellules de valeur/tirets. Les deux vues partagent
  * 8 colonnes (Occupation / Clients / Inclus / Servis / Extra / Non servis /
  * CA / Captage) ; la vue annuelle ajoute une colonne « Jours » (withDays).
- * « Servis » = TOTAL des PDJ servis (extra compris) ; « Extra » = servis à des
- * clients NON réservés (Σ max(0, servi − inclus) par chambre), un SOUS-ensemble de
- * Servis ; « Non servis » = réservés/payés mais jamais servis (Σ max(0, inclus −
- * servi) par chambre). Réconciliation : réservés servis = Servis − Extra ; Inclus =
- * (Servis − Extra) + Non servis. Le GRAPHE, lui, empile 3 tranches DISJOINTES
- * (réservés servis / extra / non servis) pour ne rien double-compter. Le « Captage »
- * = Servis ÷ Présents (part des clients présents ayant pris le petit-déjeuner),
- * calculé dans le métier (`analytics.ts`), vaut `null` (« — ») s'il n'est pas
- * calculable. Les CARTES de synthèse (PdjAnalytiqueCards) sont IDENTIQUES en annuel
- * et mensuel → une seule définition, partagée ci-dessous.
+ *
+ * `stats.served` (la donnée brute, alimentant aussi le Captage ci-dessous) est le
+ * TOTAL des PDJ servis, extra compris. La colonne « Servis » du TABLEAU, elle,
+ * affiche ce total MOINS l'extra (`served - extra`) : à côté d'une colonne
+ * « Extra » séparée, additionner deux fois les mêmes extras (55 servis dont 5
+ * extra, PUIS 5 extra à côté) lisait comme une incohérence. Extra reste un
+ * SOUS-ensemble de `served` (Σ max(0, servi − inclus) par chambre) ; « Non
+ * servis » = réservés/payés mais jamais servis (Σ max(0, inclus − servi) par
+ * chambre). Réconciliation : Inclus = Servis (colonne, donc déjà hors extra) +
+ * Non servis. Le GRAPHE empile les 3 mêmes tranches DISJOINTES (servis hors
+ * extra / extra / non servis) pour ne rien double-compter — même valeurs que le
+ * tableau. Le « Captage » = `served` (brut, extra compris) ÷ Présents (part des
+ * clients présents ayant pris le petit-déjeuner), calculé dans le métier
+ * (`analytics.ts`), vaut `null` (« — ») s'il n'est pas calculable. Les CARTES de
+ * synthèse (PdjAnalytiqueCards), elles, gardent le TOTAL brut sur leur « Servis »
+ * (leur `hint` le dit explicitement : « extra compris ») — seule la colonne du
+ * tableau change. Cartes IDENTIQUES en annuel et mensuel → une seule définition,
+ * partagée ci-dessous.
  *
  * Couleurs alignées sur la page PDJ du jour (BreakfastBoard), qui fait référence :
  * Inclus vert (#34d399, « PDJ inclus »), Extra ambre (#fbbf24, « PDJ Extra »),
@@ -283,14 +291,15 @@ export function PdjStatCells({
       >
         {fmtInt(stats.included)}
       </td>
-      {/* « Servis » = TOTAL des PDJ servis (extra compris). Extra en est un sous-
-          ensemble (servis sans réservation) ; le graphe empile à part la portion
-          réservée (servi − extra) et l'extra. « — » si conso non saisie (extra null). */}
+      {/* « Servis » = servi − extra (la portion RÉSERVÉE effectivement servie),
+          PAS le total brut : à côté d'une colonne Extra séparée, additionner deux
+          fois les mêmes extras (55 servis dont 5 extra, PUIS 5 extra à côté)
+          lisait comme une incohérence. « — » si conso non saisie (extra null). */}
       <td
         className="whitespace-nowrap px-2 py-2 text-center text-xs font-medium tabular-nums text-muted-foreground/50"
         style={stats.extra != null ? { color: ACCENT.indigo } : undefined}
       >
-        {stats.extra != null ? fmtInt(stats.served) : '—'}
+        {stats.extra != null ? fmtInt(stats.served - stats.extra) : '—'}
       </td>
       <td
         className="hidden whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums text-muted-foreground/50 sm:table-cell"
