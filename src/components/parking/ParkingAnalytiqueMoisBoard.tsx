@@ -80,6 +80,18 @@ export function ParkingAnalytiqueMoisBoard({
     [occRows, year, month],
   )
 
+  // CA par jour = CA des réservations dont l'ARRIVÉE tombe ce jour (même
+  // simplification que le CA mensuel : attribué au jour d'arrivée, pas
+  // réparti nuit par nuit sur tout le séjour). Vient de `parking_arrivals_agg`
+  // (une ligne par start_date, `ca_ttc` déjà calculé au tarif en vigueur),
+  // PAS de `parking_daily_occupation` (qui déplie l'OCCUPATION, sans CA) —
+  // c'est pourquoi ce lookup est séparé de `aggregateParkingDaily`.
+  const caByDate = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const a of arrivalRows) map.set(a.start_date, a.ca_ttc ?? 0)
+    return map
+  }, [arrivalRows])
+
   // Chambres occupées HÔTEL par jour (numéro de jour → rj_nuitees), dénominateur
   // du captage journalier. Jours sans rapport absents (captage « — »).
   const hotelRoomsByDay = useMemo(() => {
@@ -196,7 +208,7 @@ export function ParkingAnalytiqueMoisBoard({
       loading={loading}
       printTitle={`Parking · ${monthLabel} ${year}`}
       skeleton={{
-        cols: 6,
+        cols: 7,
         charts: 1,
         rows: new Date(year, month, 0).getDate(),
         cards: 7,
@@ -303,6 +315,12 @@ export function ParkingAnalytiqueMoisBoard({
               Départs
             </th>
             <th
+              className="px-2 py-2 text-center text-xs font-medium text-muted-foreground"
+              style={{ color: ACCENT.amber }}
+            >
+              CA
+            </th>
+            <th
               className="px-3 py-2 text-center text-xs font-medium text-muted-foreground"
               style={{ color: ACCENT.pink }}
             >
@@ -362,6 +380,12 @@ export function ParkingAnalytiqueMoisBoard({
                       {fmtInt(d.departures)}
                     </td>
                     <td
+                      className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums"
+                      style={{ color: ACCENT.amber }}
+                    >
+                      {fmtEur(caByDate.get(d.date) ?? 0)}
+                    </td>
+                    <td
                       className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums text-muted-foreground/50"
                       style={captage != null ? { color: ACCENT.pink } : undefined}
                     >
@@ -370,7 +394,7 @@ export function ParkingAnalytiqueMoisBoard({
                   </>
                 ) : (
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="px-2 py-2 text-center text-xs text-muted-foreground/50"
                   >
                     —
