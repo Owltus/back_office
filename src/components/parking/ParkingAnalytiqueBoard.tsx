@@ -110,6 +110,9 @@ export function ParkingAnalytiqueBoard() {
       reservationsPerMonth: count > 0 ? totalReservations / count : 0,
       nightsPerReservation:
         totalReservations > 0 ? totalNights / totalReservations : 0,
+      // CA moyen par mois actif (mêmes mois que reservationsPerMonth).
+      caTtcPerMonth:
+        count > 0 ? months.reduce((s, m) => s + m.caTtc, 0) / count : 0,
     }
   }, [months, hotelNuiteesByMonth])
 
@@ -245,6 +248,11 @@ export function ParkingAnalytiqueBoard() {
           accent={ACCENT.amber}
           value={fmtEur(summary.totalCaTtc)}
           hint="Chiffre d'affaires TTC (réservé/payé/non payé), hors employé et gratuité, au tarif en vigueur à la date d'arrivée de chaque réservation."
+          sub={
+            summary.caTtcPerMonth > 0
+              ? subText(`moy. ${fmtEur(summary.caTtcPerMonth)} / mois`)
+              : undefined
+          }
         />
         <StatCard
           label="Impayés"

@@ -131,6 +131,7 @@ export function ParkingAnalytiqueMoisBoard({
       // 2e info : cadence quotidienne (moyenne sur les jours du mois).
       arrivalsPerDay: count > 0 ? arrivals / count : 0,
       departuresPerDay: count > 0 ? departures / count : 0,
+      caTtcPerDay: count > 0 ? caTtc / count : 0,
     }
   }, [days, arrivalRows, year, mm, hotelRoomsByDay])
 
@@ -244,6 +245,11 @@ export function ParkingAnalytiqueMoisBoard({
           accent={ACCENT.amber}
           value={fmtEur(summary.caTtc)}
           hint="Chiffre d'affaires TTC du mois (réservé/payé/non payé), hors employé et gratuité."
+          sub={
+            summary.caTtcPerDay > 0
+              ? subText(`moy. ${fmtEur(summary.caTtcPerDay)} / jour`)
+              : undefined
+          }
         />
         <StatCard
           label="Impayés"
