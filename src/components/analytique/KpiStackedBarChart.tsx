@@ -2,6 +2,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -9,6 +10,7 @@ import {
 } from 'recharts'
 
 import { ChartTooltip } from '#/components/analytique/ChartTooltip.tsx'
+import type { ChartTooltipExtraRow } from '#/components/analytique/ChartTooltip.tsx'
 import {
   CHART_AXIS,
   CHART_GRID,
@@ -70,6 +72,53 @@ interface KpiStackedBarChartProps {
    * étroit pour se permettre le même confortable de marge que sur bureau.
    * Opt-in (défaut false) : ne change rien aux pages qui ne l'activent pas. */
   compactMobile?: boolean
+  /** Lignes d'infobulle SUPPLÉMENTAIRES, sans tranche dans le graphe — cf.
+   * `ChartTooltip`. Reçoit la ligne de données complète (tous les champs de
+   * `data`, pas seulement ceux dessinés par `segments`). */
+  tooltipExtra?: (row: Record<string, unknown>) => ChartTooltipExtraRow[]
+  /** Ligne de repère horizontale UNIQUE, nette et continue sur toute la
+   * largeur du graphe — y compris au-dessus des colonnes sans donnée (une
+   * ligne de référence n'a pas besoin de conso saisie pour exister). Même
+   * valeur tous les jours, volontairement : une valeur qui varierait par jour
+   * a été jugée trop confuse à lire. `opacity` basse par défaut : ça ne doit
+   * jamais lire comme une alerte, juste un repère qu'on peut ignorer. */
+  referenceLine?: {
+    value: number
+    color?: string
+    opacity?: number
+  }
+  /** Valeurs de `xKey` à mettre en évidence (rouge/gras) sur l'axe — ex. les
+   * jours ayant dépassé un seuil. Vide/absent par défaut (aucune mise en
+   * évidence, style d'axe normal). */
+  highlightXValues?: ReadonlySet<string | number>
+}
+
+interface XTickProps {
+  x?: number | string
+  y?: number | string
+  payload?: { value: string | number }
+}
+
+/** Tick d'axe X personnalisé : colore/grossit le libellé pour les valeurs
+ * présentes dans `highlight`. Fonction plutôt que composant nommé — évite de
+ * re-déclarer un composant à chaque rendu tout en capturant `highlight`. */
+function makeHighlightTick(highlight: ReadonlySet<string | number>) {
+  return function XTick({ x, y, payload }: XTickProps) {
+    if (x == null || y == null || !payload) return null
+    const active = highlight.has(payload.value)
+    return (
+      <text
+        x={x}
+        y={Number(y) + 10}
+        textAnchor="middle"
+        fontSize={11}
+        fill={active ? 'var(--destructive)' : CHART_AXIS}
+        fontWeight={active ? 700 : 400}
+      >
+        {payload.value}
+      </text>
+    )
+  }
 }
 
 export function KpiStackedBarChart({
@@ -84,6 +133,9 @@ export function KpiStackedBarChart({
   stackId = 'stack',
   onBarClick,
   compactMobile = false,
+  tooltipExtra,
+  referenceLine,
+  highlightXValues,
 }: KpiStackedBarChartProps) {
   // La légende n'est PAS affichée à l'écran (l'infobulle porte déjà les pastilles).
   // On expose ses items (nom + couleur token, dans l'ordre voulu) sur `data-legend`
@@ -124,7 +176,11 @@ export function KpiStackedBarChart({
           <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
           <XAxis
             dataKey={xKey}
-            tick={{ fontSize: 11, fill: CHART_AXIS }}
+            tick={
+              highlightXValues
+                ? makeHighlightTick(highlightXValues)
+                : { fontSize: 11, fill: CHART_AXIS }
+            }
             stroke={CHART_GRID}
           />
           <YAxis
@@ -138,6 +194,7 @@ export function KpiStackedBarChart({
               <ChartTooltip
                 labelFormatter={labelFormatter}
                 valueFormatter={tooltipFormatter}
+                extraRows={tooltipExtra}
               />
             }
           />
@@ -157,6 +214,20 @@ export function KpiStackedBarChart({
               }
             />
           ))}
+          {/* APRÈS les barres : un enfant plus tardif se peint par-dessus en SVG —
+              la ligne reste visible même là où une barre la traverse. Nette et
+              continue sur toute la largeur, y compris au-dessus des colonnes
+              sans donnée (une ligne de référence n'a besoin d'aucune donnée
+              pour exister). */}
+          {referenceLine && (
+            <ReferenceLine
+              y={referenceLine.value}
+              stroke={referenceLine.color ?? 'var(--destructive)'}
+              strokeOpacity={referenceLine.opacity ?? 0.3}
+              strokeWidth={2}
+              ifOverflow="extendDomain"
+            />
+          )}
         </BarChart>
       </ResponsiveContainer>
     </div>

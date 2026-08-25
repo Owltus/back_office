@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 
 import {
   aggregatePdjDaily,
+  aggregatePdjLoadPoints,
   aggregatePdjMonthly,
+  computeRuptureThreshold,
   yearsFromDates,
 } from '#/lib/pdj/analytics.ts'
 import type { PdjAggRow } from '#/lib/pdj/service.ts'
@@ -200,5 +202,74 @@ describe('yearsFromDates', () => {
     expect(yearsFromDates(['2026-08-10', '2025-01-02', '2026-12-31'], 2027)).toEqual([
       2025, 2026, 2027,
     ])
+  })
+})
+
+describe('aggregatePdjLoadPoints', () => {
+  it('somme entre codes du même jour', () => {
+    const rows: PdjAggRow[] = [
+      row({ service_date: '2026-08-10', code: 'PDJ', included: 3, served: 3, no_show: 1 }),
+      row({ service_date: '2026-08-10', code: 'PDJBB', included: 1, served: 1, no_show: 0 }),
+    ]
+    expect(aggregatePdjLoadPoints(rows)).toEqual([
+      { date: '2026-08-10', included: 4, noShow: 1 },
+    ])
+  })
+
+  it('écarte un jour non renseigné (servi = 0) — le non-venu ne serait pas fiable', () => {
+    const rows: PdjAggRow[] = [
+      row({ service_date: '2026-08-11', included: 2, served: 0, no_show: 2 }),
+    ]
+    expect(aggregatePdjLoadPoints(rows)).toEqual([])
+  })
+
+  it('écarte un jour sans PDJ inclus — dénominateur du taux', () => {
+    const rows: PdjAggRow[] = [
+      row({ service_date: '2026-08-12', included: 0, served: 1, extra: 1 }),
+    ]
+    expect(aggregatePdjLoadPoints(rows)).toEqual([])
+  })
+})
+
+describe('computeRuptureThreshold', () => {
+  it('null si l’historique est trop court', () => {
+    const points = Array.from({ length: 10 }, (_, i) => ({
+      date: `2026-08-${String(i + 1).padStart(2, '0')}`,
+      included: 30 + i,
+      noShow: 1,
+    }))
+    expect(computeRuptureThreshold(points)).toBeNull()
+  })
+
+  it('null si le taux de non-servis ne varie pas avec le volume (pas de signal)', () => {
+    // Ratio constant (~5 %) quel que soit le volume : aucune coupure ne devrait
+    // révéler d'écart franc entre jours calmes et chargés.
+    const points = Array.from({ length: 25 }, (_, i) => {
+      const included = 10 + i
+      return { date: `2026-08-${String(i + 1).padStart(2, '0')}`, included, noShow: Math.round(included * 0.05) }
+    })
+    expect(computeRuptureThreshold(points)).toBeNull()
+  })
+
+  it('détecte une rupture nette entre jours calmes et jours chargés', () => {
+    // 20 jours calmes (30-49 inclus, non-venu quasi nul) puis 20 jours chargés
+    // (50-69 inclus, non-venu élevé) : la coupure doit tomber pile entre les
+    // deux groupes, avec un écart de taux net.
+    const calm = Array.from({ length: 20 }, (_, i) => ({
+      date: `2026-01-${String(i + 1).padStart(2, '0')}`,
+      included: 30 + i,
+      noShow: 1,
+    }))
+    const busy = Array.from({ length: 20 }, (_, i) => ({
+      date: `2026-02-${String(i + 1).padStart(2, '0')}`,
+      included: 50 + i,
+      noShow: 15,
+    }))
+    const result = computeRuptureThreshold([...calm, ...busy])
+    expect(result).not.toBeNull()
+    expect(result?.threshold).toBe(50)
+    expect(result?.sampleSize).toBe(40)
+    expect(result?.belowRate).toBeLessThan(5)
+    expect(result?.aboveRate).toBeGreaterThan(20)
   })
 })

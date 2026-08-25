@@ -281,3 +281,119 @@ export function yearsFromDates(dates: string[], fallback: number): number[] {
   set.add(fallback)
   return [...set].sort((a, b) => a - b)
 }
+
+/*
+ * « Courbe de panique » — détection d'un effet de seuil : au-delà d'un certain
+ * volume de PDJ inclus dans une journée, l'équipe se retrouve débordée (buffet,
+ * vaisselle, accueil) et le taux de non-servis grimpe nettement, pas parce que
+ * les clients ne sont pas venus mais parce que personne n'a eu le temps de les
+ * cocher. Calculé sur TOUT l'historique disponible (pas le seul mois affiché,
+ * trop peu de jours renseignés pour être fiable), puis affiché comme repère
+ * stable sur chaque vue mensuelle — pas un seuil qui recalcule (et donc saute)
+ * à chaque changement de données.
+ */
+
+/** Un jour de service RENSEIGNÉ (conso saisie), réduit au strict nécessaire pour
+ * chercher un effet de seuil : volume (inclus) et non-servis. Indépendant de
+ * l'année/mois — un point par jour sur tout l'historique. */
+export interface PdjLoadPoint {
+  date: string
+  included: number
+  noShow: number
+}
+
+/** Réduit les lignes brutes (tous codes, TOUTES dates) en un point par jour
+ * renseigné (au moins un servi ce jour — sinon `no_show` n'est pas fiable) et
+ * avec au moins un PDJ inclus (dénominateur du taux). Ne dépend PAS des externes
+ * (ils n'entrent pas dans le calcul du non-servis). */
+export function aggregatePdjLoadPoints(rows: PdjAggRow[]): PdjLoadPoint[] {
+  const byDate = new Map<string, { included: number; served: number; noShow: number }>()
+  for (const r of rows) {
+    let s = byDate.get(r.service_date)
+    if (!s) {
+      s = { included: 0, served: 0, noShow: 0 }
+      byDate.set(r.service_date, s)
+    }
+    s.included += r.included
+    s.served += r.served
+    s.noShow += r.no_show
+  }
+  const points: PdjLoadPoint[] = []
+  for (const [date, s] of byDate) {
+    if (s.served <= 0 || s.included <= 0) continue
+    points.push({ date, included: s.included, noShow: s.noShow })
+  }
+  return points
+}
+
+/** Seuil de rupture détecté, avec les taux de part et d'autre (pour expliquer le
+ * chiffre, pas juste l'asséner) et la taille de l'échantillon qui l'a produit. */
+export interface PdjRuptureThreshold {
+  /** Volume de PDJ inclus au-delà duquel le taux de non-servis grimpe nettement. */
+  threshold: number
+  /** Taux moyen de non-servis (%) sur les jours À CE VOLUME OU EN DESSOUS. */
+  belowRate: number
+  /** Taux moyen de non-servis (%) sur les jours AU-DESSUS. */
+  aboveRate: number
+  /** Nombre de jours renseignés ayant servi au calcul. */
+  sampleSize: number
+}
+
+/** En dessous, le signal n'est pas assez fiable pour affirmer un seuil — mieux
+ * vaut ne rien afficher qu'un chiffre qui ne tiendrait qu'à 2-3 jours. */
+const RUPTURE_MIN_SAMPLE = 20
+/** Au moins ce nombre de jours de CHAQUE côté de la coupure — un seuil calé sur
+ * un unique jour exceptionnel n'aurait aucune valeur prédictive. */
+const RUPTURE_MIN_GROUP = 6
+/** Écart minimal (points de %) entre les deux groupes pour parler de « rupture »
+ * plutôt que d'un bruit statistique sans intérêt opérationnel. */
+const RUPTURE_MIN_GAP = 3
+
+/**
+ * Cherche, parmi les volumes observés, le point de coupure qui MAXIMISE l'écart
+ * entre le taux de non-servis moyen des jours calmes et celui des jours chargés
+ * (recherche de type arbre de décision à 1 variable — pas de bibliothèque
+ * statistique nécessaire). `null` si l'historique est trop court ou si aucune
+ * coupure ne révèle un écart franc : mieux vaut l'absence de seuil qu'un chiffre
+ * qui ne reflète que du bruit.
+ */
+export function computeRuptureThreshold(
+  points: PdjLoadPoint[],
+): PdjRuptureThreshold | null {
+  if (points.length < RUPTURE_MIN_SAMPLE) return null
+
+  const sorted = points
+    .map((p) => ({ included: p.included, missRate: (p.noShow / p.included) * 100 }))
+    .sort((a, b) => a.included - b.included)
+
+  let best: { threshold: number; gap: number; belowRate: number; aboveRate: number } | null =
+    null
+  for (let i = RUPTURE_MIN_GROUP; i <= sorted.length - RUPTURE_MIN_GROUP; i++) {
+    // Coupure entre deux volumes ÉGAUX : les jours à ce volume se retrouveraient
+    // arbitrairement d'un côté ou de l'autre — pas un point de coupure valide.
+    if (sorted[i - 1].included === sorted[i].included) continue
+    const belowRate = mean(sorted.slice(0, i).map((p) => p.missRate))
+    const aboveRate = mean(sorted.slice(i).map((p) => p.missRate))
+    const gap = aboveRate - belowRate
+    if (!best || gap > best.gap) {
+      best = {
+        threshold: Math.round((sorted[i - 1].included + sorted[i].included) / 2),
+        gap,
+        belowRate,
+        aboveRate,
+      }
+    }
+  }
+  if (!best || best.gap < RUPTURE_MIN_GAP) return null
+
+  return {
+    threshold: best.threshold,
+    belowRate: best.belowRate,
+    aboveRate: best.aboveRate,
+    sampleSize: sorted.length,
+  }
+}
+
+function mean(xs: number[]): number {
+  return xs.reduce((s, x) => s + x, 0) / xs.length
+}

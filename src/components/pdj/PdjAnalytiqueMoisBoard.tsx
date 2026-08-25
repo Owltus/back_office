@@ -20,7 +20,11 @@ import {
   fetchDailyAgg,
   fetchExternalsRange,
 } from '#/lib/pdj/service.ts'
-import { aggregatePdjDaily } from '#/lib/pdj/analytics.ts'
+import {
+  aggregatePdjDaily,
+  aggregatePdjLoadPoints,
+  computeRuptureThreshold,
+} from '#/lib/pdj/analytics.ts'
 import { computeAggDailyTotals } from '#/lib/pdj/amounts.ts'
 import { detectTarifs } from '#/lib/pdj/tarif.ts'
 import { fmtInt } from '#/lib/pdj/format.ts'
@@ -72,6 +76,26 @@ export function PdjAnalytiqueMoisBoard({
   const stats = useMemo(
     () => aggregatePdjDaily(rows, year, month, externalsByDate),
     [rows, year, month, externalsByDate],
+  )
+
+  // Seuil de rupture (« courbe de panique ») : calculé sur TOUT l'historique
+  // (bornes larges plutôt qu'un aller-retour pour connaître la date la plus
+  // ancienne — la vue `pdj_daily_agg` ne pèse de toute façon que quelques
+  // centaines de lignes), PAS le seul mois affiché — trop peu de jours
+  // renseignés pour un seuil fiable. MÊME clé partout : un seul calcul, partagé
+  // entre tous les mois consultés. `staleTime` généreux : un seuil statistique
+  // n'a pas besoin d'être recalculé à la seconde près.
+  //
+  // Un seul chiffre pour tout le mois (pas un seuil par jour de semaine, essayé
+  // puis jugé trop confus à lire) — une ligne nette, unique, facile à retenir.
+  const { data: historyRows = [] } = useQuery({
+    queryKey: ['pdj', 'analytics', 'all-history'],
+    queryFn: () => fetchDailyAgg('2000-01-01', '2100-12-31'),
+    staleTime: 5 * 60_000,
+  })
+  const rupture = useMemo(
+    () => computeRuptureThreshold(aggregatePdjLoadPoints(historyRows)),
+    [historyRows],
   )
 
   // Addon Production (tous jours) → tarifs détectés → CA PDJ par jour.
@@ -150,6 +174,11 @@ export function PdjAnalytiqueMoisBoard({
       days.map((day) => {
         const s = byDay.get(day)
         const jour = String(day)
+        // `inclusTotal`/`servedTotal` : TOUJOURS renseignés (même quand la conso
+        // n'est pas saisie) — servent uniquement l'infobulle (cf. `tooltipExtra`
+        // ci-dessous), sans tranche dédiée dans le graphe.
+        const inclusTotal = s ? s.included : null
+        const servedTotal = s ? s.served : null
         if (s && s.extra != null && s.noShow != null) {
           return {
             jour,
@@ -157,6 +186,8 @@ export function PdjAnalytiqueMoisBoard({
             extra: s.extra,
             nonVenu: s.noShow,
             inclus: null,
+            inclusTotal,
+            servedTotal,
           }
         }
         return {
@@ -164,18 +195,31 @@ export function PdjAnalytiqueMoisBoard({
           servisInclus: null,
           extra: null,
           nonVenu: null,
-          inclus: s ? s.included : null,
+          inclus: inclusTotal,
+          inclusTotal,
+          servedTotal,
         }
       }),
     [days, byDay],
   )
+
+  // Jours ayant dépassé le seuil de rupture (volume d'inclus) — colorés en
+  // rouge sur l'axe du graphe. Vide tant qu'aucun seuil fiable n'est calculé.
+  const riskDays = useMemo(() => {
+    if (!rupture) return new Set<string>()
+    return new Set(
+      chartData
+        .filter((d) => d.inclusTotal != null && d.inclusTotal > rupture.threshold)
+        .map((d) => d.jour),
+    )
+  }, [chartData, rupture])
 
   // Segments présents seulement s'ils portent au moins une valeur (légende propre).
   const segments = useMemo<KpiBarSegment[]>(() => {
     const segs: KpiBarSegment[] = []
     if (chartData.some((d) => d.servisInclus != null)) {
       segs.push(
-        { key: 'servisInclus', name: 'Réservés servis', color: ACCENT.indigo },
+        { key: 'servisInclus', name: 'Servis', color: ACCENT.indigo },
         { key: 'extra', name: 'Extra', color: '#fbbf24' },
         { key: 'nonVenu', name: 'Non servis', color: ACCENT.cyan },
       )
@@ -283,10 +327,15 @@ export function PdjAnalytiqueMoisBoard({
 
       {/* Histogramme empilé par jour : Servis + Extra + Non servis (répartition
           disjointe des PDJ) ; repli sur l'Inclus attendu, couleur neutre, quand la
-          conso du jour n'a pas été saisie. */}
+          conso du jour n'a pas été saisie. Repère de rupture superposé : une
+          seule ligne rouge nette, continue sur tout le mois (même les jours
+          sans donnée), à faible opacité (purement indicative), et les jours
+          ayant dépassé le seuil en rouge/gras sur l'axe. */}
       <AnalytiqueCharts cols={1}>
         <KpiStackedBarChart
           title="Répartition des petits-déjeuners par jour"
+          referenceLine={rupture ? { value: rupture.threshold, opacity: 0.3 } : undefined}
+          highlightXValues={riskDays}
           data={chartData}
           xKey="jour"
           segments={segments}
@@ -309,6 +358,10 @@ export function PdjAnalytiqueMoisBoard({
             const cap = weekday.charAt(0).toUpperCase() + weekday.slice(1)
             return `${cap} ${day} ${MONTHS_LABELS[month - 1].toLowerCase()} ${year}`
           }}
+          tooltipExtra={(row) => [
+            { name: 'PDJ inclus', value: row.inclusTotal as number | null },
+            { name: 'PDJ réellement servi', value: row.servedTotal as number | null },
+          ]}
         />
       </AnalytiqueCharts>
     </AnalytiqueShell>
