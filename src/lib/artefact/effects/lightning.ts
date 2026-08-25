@@ -16,17 +16,21 @@ import type { EffectDefinition, EffectEnv, EffectRunner } from './types.ts'
  * qui permet aux ramifications parties à l'horizontale de rester crédibles.
  *
  * Deux points de mise en scène comptent autant que la géométrie :
- * - le SILENCE entre deux frappes, de durée variable, sans lequel l'œil
+ * - le SILENCE entre les deux frappes, de durée variable, sans lequel l'œil
  *   s'habitue et l'effet retombe ;
  * - le RÉAMORÇAGE : un vrai éclair est une salve de plusieurs décharges de
  *   retour en 50-150 ms. On rallume donc le même tracé deux ou trois fois avant
  *   de l'éteindre — c'est ce clignotement qui « fait » la foudre.
+ *
+ * EXACTEMENT DEUX FRAPPES (tracé fractal ou lueur de nappe diffuse, au hasard
+ * comme avant) puis l'effet s'arrête — dès que les deux ont fini de
+ * s'éteindre, pas au bout d'une durée fixe qui laissait traîner l'écran vide.
  */
 
-const DURATION = 7500
-// Bascule en phase d'éloignement : au-delà, plus aucun éclair au premier plan,
-// seulement des lueurs de nappe assourdies. L'orage part au lieu de s'arrêter.
-const LAST_STRIKE_MS = 6000
+const TOTAL_STRIKES = 2
+// Filet de sécurité seulement : l'effet s'arrête normalement dès que les deux
+// frappes sont retombées, bien avant cette borne.
+const DURATION = 4000
 
 // Constante de temps du flash plein écran (ms) : très courte, c'est une gifle
 // lumineuse, pas un fondu.
@@ -138,6 +142,7 @@ function create({ ctx, width, height }: EffectEnv): EffectRunner {
   // Intensité du flash plein écran, cumulative : deux frappes rapprochées
   // s'additionnent au lieu de se remplacer.
   let flash = 0
+  let strikesFired = 0
   let nextStrikeAt = rand(180, 420)
 
   function radial(x: number, y: number, r: number, intensity: number) {
@@ -148,29 +153,27 @@ function create({ ctx, width, height }: EffectEnv): EffectRunner {
     return g
   }
 
-  function strike(receding: boolean) {
+  function strike() {
     /*
      * Une frappe sur quatre est un éclair de nappe : lointain, masqué par les
      * nuages, il ne montre AUCUN tracé — juste une lueur diffuse et un flash
-     * atténué. C'est ce qui donne de la profondeur à l'orage : sans lui, toutes
-     * les décharges semblent tomber à la même distance.
-     * En phase d'éloignement, il ne reste QUE ce type de frappe, assourdi.
+     * atténué. C'est ce qui donne de la profondeur à l'orage : sans lui, les
+     * deux décharges sembleraient tomber à la même distance.
      */
-    if (receding || Math.random() < 0.26) {
-      const dim = receding ? 0.45 : 1
+    if (Math.random() < 0.26) {
       bolts.push({
         strokes: [],
         glow: radial(
           rand(0.15, 0.85) * width,
           rand(0.05, 0.3) * height,
           rand(0.3, 0.5) * width,
-          0.85 * dim,
+          0.85,
         ),
         life: 1,
         pulses: 0,
         nextPulse: 0,
       })
-      flash += rand(0.22, 0.4) * dim
+      flash += rand(0.22, 0.4)
       return
     }
 
@@ -211,19 +214,13 @@ function create({ ctx, width, height }: EffectEnv): EffectRunner {
       flash *= Math.exp(-dt / FLASH_TAU)
       if (flash < 0.002) flash = 0
 
-      if (elapsed >= nextStrikeAt) {
-        // Passé LAST_STRIKE_MS l'orage S'ÉLOIGNE : plus aucun tracé au premier
-        // plan, seulement des lueurs de nappe assourdies. L'effet s'achève sur
-        // un orage qui s'en va — et non sur un écran brutalement vide, ce que
-        // donnait une simple coupure des frappes (jusqu'à 1,5 s de néant).
-        const receding = elapsed >= LAST_STRIKE_MS
-        strike(receding)
+      if (strikesFired < TOTAL_STRIKES && elapsed >= nextStrikeAt) {
+        strikesFired++
+        strike()
         // Le silence est la matière première de l'effet : intervalle largement
-        // variable, avec parfois une réplique quasi immédiate — mais jamais
-        // pendant l'éloignement, où l'on veut au contraire de l'espacement.
-        nextStrikeAt =
-          elapsed +
-          (!receding && Math.random() < 0.22 ? rand(160, 340) : rand(520, 1550))
+        // variable entre les deux frappes, avec parfois une réplique quasi
+        // immédiate — sans lui l'œil ne perçoit pas deux décharges distinctes.
+        nextStrikeAt = elapsed + (Math.random() < 0.22 ? rand(160, 340) : rand(520, 1550))
       }
 
       for (let i = bolts.length - 1; i >= 0; i--) {
@@ -286,7 +283,12 @@ function create({ ctx, width, height }: EffectEnv): EffectRunner {
 
       ctx.globalAlpha = 1
       ctx.globalCompositeOperation = 'source-over'
-      return elapsed < DURATION
+
+      // Fin dès que les deux frappes sont bien retombées (plus aucun bolt, plus
+      // de flash résiduel) — pas au bout d'une durée fixe qui laisserait traîner
+      // l'écran vide. DURATION reste un filet de sécurité.
+      const done = strikesFired >= TOTAL_STRIKES && bolts.length === 0 && flash === 0
+      return elapsed < DURATION && !done
     },
   }
 }
@@ -294,7 +296,7 @@ function create({ ctx, width, height }: EffectEnv): EffectRunner {
 export const lightningEffect: EffectDefinition = {
   id: 'lightning',
   label: 'Orage',
-  hint: 'Éclairs fractals, flashs et silences',
+  hint: 'Deux frappes — éclair ou tonnerre au hasard, puis silence',
   durationMs: DURATION,
   create,
 }
