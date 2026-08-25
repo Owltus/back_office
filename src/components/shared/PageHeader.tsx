@@ -45,23 +45,31 @@ import { cn } from '#/lib/utils.ts'
  *   ligne) : classe Tailwind arbitraire, ex. `'w-[94px]'`. Sans elle, la
  *   pastille garde sa largeur de contenu (bord droit aligné, bord gauche non).
  * - `meta` : ligne secondaire sous le titre (date, nom de fichier…).
- * - `actions` : zone de boutons alignée à droite. Sous `sm` (640px), la barre
- *   n'a plus la largeur pour tenir titre + pastille + actions sur une seule
- *   ligne : les actions passent en pleine largeur, sur leur propre ligne, les
- *   sous-groupes (outils de page / navigation temporelle) écartés aux deux
- *   bords (`justify-between`) plutôt qu'entassés à droite avec un flou de
- *   priorité — le même repli que `.rapro-floors`/`.rapro-stats` : un seul
- *   palier net (empilé / une ligne), pas un entre-deux bâtard.
- *   DÈS `sm` (souris comme tactile large), le conteneur racine est
- *   `flex-nowrap` : titre et actions restent TOUJOURS sur la même ligne,
- *   les actions collées au bord droit — jamais de bascule à la ligne
- *   suivante à mi-chemin (c'était `sm:flex-wrap`, qui laissait le bloc
- *   actions retomber, aligné à GAUCHE de sa propre ligne, dès que titre +
- *   actions dépassaient la largeur disponible ; incohérent d'une page à
- *   l'autre selon le nombre de boutons — retour utilisateur). Le titre
- *   (`min-w-0 flex-1 truncate`) absorbe tout le rétrécissement à la place ;
- *   les actions (`shrink-0`) gardent leur largeur pleine à toute largeur
- *   ≥ 640px.
+ * - `actions` : zone de boutons alignée à droite.
+ *   SOURIS (`pointer-fine`, media query CSS — PAS un seuil de largeur) :
+ *   TOUJOURS une seule ligne, actions collées au bord droit, à N'IMPORTE
+ *   quelle largeur de fenêtre. Avant, ce repli était piloté par `sm`
+ *   (640px, un seuil de VIEWPORT) : sur ordinateur, rétrécir la fenêtre
+ *   sous 640px faisait basculer tout le bloc en mode « tactile » (titre
+ *   empilé, actions en pleine largeur, sous-groupes écartés aux deux
+ *   bords — un des groupes atterrissait à GAUCHE) puis revenait à droite
+ *   en réélargissant : oscillation gauche/droite incohérente à la souris,
+ *   pourtant jamais tactile (retour utilisateur — « toujours à droite »).
+ *   `pointer-fine:*` prime sur `flex-col`/`sm:*` car Tailwind émet les
+ *   utilitaires à variante APRÈS l'utilitaire nu de même propriété, donc
+ *   le media query pointeur l'emporte dès qu'il matche, indépendamment de
+ *   la largeur. Le titre (`min-w-0 flex-1 truncate`) absorbe tout le
+ *   rétrécissement à la place ; les actions (`shrink-0`) gardent leur
+ *   largeur pleine.
+ *   TACTILE (`pointer: coarse`, aucun changement) : sous `sm` (640px), la
+ *   barre n'a plus la largeur pour tenir titre + pastille + actions sur
+ *   une seule ligne : les actions passent en pleine largeur, sur leur
+ *   propre ligne, les sous-groupes (outils de page / navigation
+ *   temporelle) écartés aux deux bords (`justify-between`) plutôt
+ *   qu'entassés à droite avec un flou de priorité — le même repli que
+ *   `.rapro-floors`/`.rapro-stats` : un seul palier net (empilé / une
+ *   ligne), pas un entre-deux bâtard. Depuis `sm`, même comportement
+ *   qu'à la souris (une ligne, à droite).
  * - `actionsAlign` : `'responsive'` (défaut, ci-dessus) ou `'end'` — les
  *   sous-groupes restent COLLÉS ENSEMBLE au bord droit à TOUTE largeur,
  *   jamais écartés aux deux bords même en fenêtre étroite. Réservé aux `actions`
@@ -108,6 +116,7 @@ export function PageHeader({
     <div
       className={cn(
         'flex flex-col gap-3 print:hidden sm:flex-row sm:flex-nowrap sm:items-center',
+        'pointer-fine:flex-row pointer-fine:flex-nowrap pointer-fine:items-center',
         className,
       )}
     >
@@ -164,7 +173,10 @@ export function PageHeader({
         <div
           className={cn(
             'flex w-full flex-wrap items-center gap-2 sm:w-auto sm:shrink-0 sm:flex-nowrap',
-            actionsAlign === 'end' ? 'justify-end' : 'justify-between sm:justify-end',
+            'pointer-fine:w-auto pointer-fine:shrink-0 pointer-fine:flex-nowrap',
+            actionsAlign === 'end'
+              ? 'justify-end'
+              : 'justify-between sm:justify-end pointer-fine:justify-end',
           )}
         >
           {actions}
