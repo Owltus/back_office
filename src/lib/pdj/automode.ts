@@ -1,4 +1,5 @@
 import { breakfastCode } from '#/lib/pdj/breakdown.ts'
+import type { ManualKind } from '#/lib/pdj/csv.ts'
 
 /* --------------------------------------------------------------------------
  * « automode » — métier pur (sans React ni Supabase).
@@ -21,7 +22,7 @@ import { breakfastCode } from '#/lib/pdj/breakdown.ts'
 export interface AutoModeRow {
   room: number
   addons: string | null
-  manual_kind: 'inclus' | 'extra' | null
+  manual_kind: ManualKind | null
   breakfasts_included: number
   breakfasts_served: number
 }

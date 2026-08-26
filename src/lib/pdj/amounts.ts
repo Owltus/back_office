@@ -177,17 +177,23 @@ export function computeAggDailyTotals(
     const p = tarifs.get(code)
     return p != null ? round2(fromTTC(p)) : 0
   }
-  // Par jour : HT des inclus (par code) + nb d'extras (tous codes confondus).
-  const byDay = new Map<string, { includedHt: number; extra: number }>()
+  // Par jour : HT des inclus (par code) + nb d'extras (tous codes confondus),
+  // moins les extras OFFERTS (gratuits, cf. breakdown.ts) — comptés dans `extra`
+  // (stats inchangées) mais jamais dans le CA.
+  const byDay = new Map<
+    string,
+    { includedHt: number; extra: number; offert: number }
+  >()
   for (const r of rows) {
-    const d = byDay.get(r.service_date) ?? { includedHt: 0, extra: 0 }
+    const d = byDay.get(r.service_date) ?? { includedHt: 0, extra: 0, offert: 0 }
     if (r.code && r.included > 0) d.includedHt += r.included * unitHt(r.code)
     d.extra += r.extra
+    d.offert += r.offert
     byDay.set(r.service_date, d)
   }
   for (const [date, ext] of externalsByDate) {
     if (ext <= 0) continue
-    const d = byDay.get(date) ?? { includedHt: 0, extra: 0 }
+    const d = byDay.get(date) ?? { includedHt: 0, extra: 0, offert: 0 }
     d.extra += ext
     byDay.set(date, d)
   }
@@ -196,7 +202,7 @@ export function computeAggDailyTotals(
   for (const [date, d] of byDay) {
     // Même arrondi que computePdjCA : inclus et extras arrondis séparément.
     const includedHt = round2(d.includedHt)
-    const extrasHt = round2(d.extra * unitHt('PDJ'))
+    const extrasHt = round2(Math.max(0, d.extra - d.offert) * unitHt('PDJ'))
     const totalHt = round2(includedHt + extrasHt)
     if (totalHt > 0) totals.set(date, totalHt)
   }

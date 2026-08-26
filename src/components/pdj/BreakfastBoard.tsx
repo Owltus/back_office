@@ -653,14 +653,21 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
   const handleServe = useCallback(
     (room: number, n: number) => {
       if (!dayEditable || !selectedDate) return
+      // Un « offert » ne doit jamais dépasser le nombre servi : si on redescend
+      // le servi en-dessous de l'offert déjà posé, on le borne au passage.
+      const currentOffert =
+        dayRows?.find((r) => r.room === room)?.breakfasts_offert ?? 0
+      const offert = Math.min(currentOffert, n)
       queryClient.setQueryData<PdjDayRow[]>(
         ['pdj', 'day', selectedDate],
         (old) =>
           old?.map((r) =>
-            r.room === room ? { ...r, breakfasts_served: n, served: n > 0 } : r,
+            r.room === room
+              ? { ...r, breakfasts_served: n, served: n > 0, breakfasts_offert: offert }
+              : r,
           ),
       )
-      setServed(selectedDate, room, n).catch((err) => {
+      setServed(selectedDate, room, n, offert).catch((err) => {
         console.error('[pdj] enregistrement de la consommation échoué', err)
         // Resynchronise (annule la coche optimiste) ET explique le revert, sinon
         // la case « rebondirait » sans raison visible (rejet RLS silencieux).
@@ -673,7 +680,44 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
         )
       })
     },
-    [dayEditable, selectedDate, queryClient, flashAuto],
+    [dayEditable, selectedDate, dayRows, queryClient, flashAuto],
+  )
+
+  // Marque (clic droit) une case « offert » (gratuite) sur une chambre occupée
+  // SANS PDJ inclus : `n` = nombre d'extras offerts « jusqu'ici » (curseur, même
+  // logique que `handleServe`) ; sert aussi le servi si on offre une case pas
+  // encore cochée (offrir sert forcément le petit-déjeuner).
+  const handleOffert = useCallback(
+    (room: number, n: number) => {
+      if (!dayEditable || !selectedDate) return
+      const current = dayRows?.find((r) => r.room === room)
+      const served = Math.max(current?.breakfasts_served ?? 0, n)
+      queryClient.setQueryData<PdjDayRow[]>(
+        ['pdj', 'day', selectedDate],
+        (old) =>
+          old?.map((r) =>
+            r.room === room
+              ? {
+                  ...r,
+                  breakfasts_served: served,
+                  served: served > 0,
+                  breakfasts_offert: n,
+                }
+              : r,
+          ),
+      )
+      setServed(selectedDate, room, served, n).catch((err) => {
+        console.error('[pdj] marquage « offert » échoué', err)
+        void queryClient.invalidateQueries({
+          queryKey: ['pdj', 'day', selectedDate],
+        })
+        flashAuto(
+          'Enregistrement refusé : jour hors fenêtre ou droit insuffisant.',
+          'warn',
+        )
+      })
+    },
+    [dayEditable, selectedDate, dayRows, queryClient, flashAuto],
   )
 
   // « automode » : cheat code de cochage auto. On tape « automode » au clavier
@@ -801,6 +845,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
             manual_kind: kind,
             breakfasts_served: n,
             served: true,
+            breakfasts_offert: 0,
           }
           return [...list, created]
         },
@@ -1369,6 +1414,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                         canEdit={dayEditable}
                         onServe={handleServe}
                         onManual={handleManual}
+                        onOffert={handleOffert}
                       />
                     ))}
                   </tbody>
@@ -1662,6 +1708,7 @@ const GuestRow = memo(function GuestRow({
   canEdit,
   onServe,
   onManual,
+  onOffert,
 }: {
   room: number
   row?: PdjDayRow
@@ -1669,6 +1716,7 @@ const GuestRow = memo(function GuestRow({
   canEdit: boolean
   onServe: (room: number, n: number) => void
   onManual: (room: number, n: number, kind: ManualKind) => void
+  onOffert: (room: number, n: number) => void
 }) {
   // Détail financier de la chambre (OTA · code PDJ · prix HT) — calculé pour toutes
   // les lignes ; l'affichage écran/impression est piloté par CSS (classe pdj-finance
@@ -1708,6 +1756,17 @@ const GuestRow = memo(function GuestRow({
   const mKind: ManualKind = manualKind ?? 'extra'
   const doServe = (n: number) =>
     canManual ? onManual(room, n, mKind) : onServe(room, n)
+  // « Offert » (gratuit, clic droit) : réservé aux chambres occupées SANS PDJ
+  // inclus (le cas visé par la demande — une chambre à PDJ inclus n'a pas
+  // d'extra « offert » à proposer, son dû est déjà facturé). Comme
+  // `breakfasts_included` vaut alors 0, la position `i` d'une case CORRESPOND
+  // directement à son rang parmi les extras (pas de décalage à soustraire).
+  const canOffertToggle =
+    canEdit && !isManual && !!row && row.breakfasts_included === 0
+  const offertCount = row?.breakfasts_offert ?? 0
+  // Une ligne manuelle « offert » l'est en BLOC (tout son servi, cf. service.ts) ;
+  // une ligne normale l'est jusqu'à `offertCount` (curseur posé au clic droit).
+  const isOffertAt = (i: number) => (isManual ? mKind === 'offert' : i < offertCount)
   // Cases interactives : TOUTE chambre OCCUPÉE (client présent), qu'elle ait du PDJ
   // inclus OU NON — sinon on ne pouvait pas servir un PDJ EXTRA à un client d'une
   // chambre sans PDJ inclus (le clic passe alors par `onServe` : breakfasts_served
@@ -1742,14 +1801,20 @@ const GuestRow = memo(function GuestRow({
           <div className="group relative flex w-full items-center justify-center">
             {/* Type en toutes lettres : reste dans le flux → fixe la hauteur de la
                 ligne (identique aux autres). Juste masqué (invisible) au survol. */}
-            <span className="text-xs font-medium capitalize text-muted-foreground group-hover:invisible">
+            <span
+              className={cn(
+                'text-xs font-medium capitalize group-hover:invisible',
+                mKind === 'offert' ? 'text-purple-400' : 'text-muted-foreground',
+              )}
+            >
               {mKind}
             </span>
             {/* Toggle SUPERPOSÉ (absolute) → n'affecte JAMAIS la hauteur : aucun
-                saut au survol. Compact, centré, Extra en 1er, écran seul. */}
+                saut au survol. Compact, centré, Extra en 1er, écran seul. Offert
+                en dernier, teinté violet quand actif (case gratuite, cf. droite). */}
             <span className="absolute inset-0 hidden items-center justify-center group-hover:flex print:hidden">
               <span className="inline-flex overflow-hidden rounded-md border border-border bg-card text-xs leading-none">
-                {(['extra', 'inclus'] as const).map((k) => (
+                {(['extra', 'inclus', 'offert'] as const).map((k) => (
                   <button
                     key={k}
                     type="button"
@@ -1758,7 +1823,9 @@ const GuestRow = memo(function GuestRow({
                     className={cn(
                       'px-2 py-0.5 font-medium capitalize transition-colors',
                       mKind === k
-                        ? 'bg-primary text-primary-foreground'
+                        ? k === 'offert'
+                          ? 'bg-purple-500 text-white'
+                          : 'bg-primary text-primary-foreground'
                         : 'text-muted-foreground hover:bg-accent',
                     )}
                   >
@@ -1825,13 +1892,19 @@ const GuestRow = memo(function GuestRow({
             // même base que les cases interactives à l'écran (pas `numExpected`,
             // qui peut inclure des places sans PDJ inclus — cf. plus haut).
             const includedIdx = i < (row?.breakfasts_included ?? 0)
+            const offertIdx = checkedIdx && !includedIdx && isOffertAt(i)
             return (
               <span
                 key={i}
                 className={cn(
                   'pdj-checkbox',
                   i < numExpected && 'pdj-expected',
-                  checkedIdx && (includedIdx ? 'pdj-checked' : 'pdj-checked-extra'),
+                  checkedIdx &&
+                    (offertIdx
+                      ? 'pdj-checked-offert'
+                      : includedIdx
+                        ? 'pdj-checked'
+                        : 'pdj-checked-extra'),
                 )}
               />
             )
@@ -1853,6 +1926,7 @@ const GuestRow = memo(function GuestRow({
               // servi là-dedans reste un extra facturé, cf. commentaire
               // `numExpected` ci-dessus : « breakfasts_included = 0 »).
               const isIncluded = i < (row?.breakfasts_included ?? 0)
+              const isOffert = isServed && !isIncluded && isOffertAt(i)
               return (
                 <button
                   key={i}
@@ -1860,29 +1934,43 @@ const GuestRow = memo(function GuestRow({
                   disabled={!canEdit}
                   onClick={() => doServe(served === i + 1 ? i : i + 1)}
                   onDoubleClick={(e) => e.stopPropagation()}
+                  onContextMenu={
+                    canOffertToggle
+                      ? (e) => {
+                          e.preventDefault()
+                          onOffert(room, offertCount === i + 1 ? i : i + 1)
+                        }
+                      : undefined
+                  }
                   aria-label={
                     expected
                       ? `Servi ${i + 1} sur ${numExpected}`
                       : `Servi ${i + 1} (supplémentaire)`
                   }
                   title={
-                    expected
-                      ? `${served} / ${numExpected} servis`
-                      : 'PDJ supplémentaire (au-delà des clients attendus)'
+                    canOffertToggle
+                      ? 'Clic : servi/annulé. Clic droit : offert (gratuit).'
+                      : expected
+                        ? `${served} / ${numExpected} servis`
+                        : 'PDJ supplémentaire (au-delà des clients attendus)'
                   }
                   className={cn(
                     'size-3.5 rounded-[3px] transition-colors',
                     isServed
-                      ? isIncluded
-                        ? 'border-2 border-emerald-500 bg-emerald-500'
-                        : 'border-2 border-amber-400 bg-amber-400' // même teinte que la carte « PDJ Extra »
+                      ? isOffert
+                        ? 'border-2 border-purple-400 bg-purple-400' // gratuit, cf. carte « Externes »
+                        : isIncluded
+                          ? 'border-2 border-emerald-500 bg-emerald-500'
+                          : 'border-2 border-amber-400 bg-amber-400' // même teinte que la carte « PDJ Extra »
                       : expected
                         ? 'border-2 border-foreground/70 bg-transparent'
                         : 'border border-dashed border-muted-foreground/40 bg-transparent',
                     canEdit &&
-                      (isIncluded
-                        ? 'cursor-pointer hover:border-emerald-400'
-                        : 'cursor-pointer hover:border-amber-400'),
+                      (isOffert
+                        ? 'cursor-pointer hover:border-purple-300'
+                        : isIncluded
+                          ? 'cursor-pointer hover:border-emerald-400'
+                          : 'cursor-pointer hover:border-amber-400'),
                     !canEdit && 'cursor-default',
                   )}
                 />

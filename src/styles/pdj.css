@@ -487,6 +487,12 @@
     background: #fbbf24;
     border-color: #fbbf24;
   }
+  /* Extra OFFERT (gratuit, posé par clic droit sur la case à l'écran) : violet,
+     même teinte que la carte « Externes » (#c084fc, cf. BreakfastBoard.tsx). */
+  .pdj-checkbox.pdj-checked-offert {
+    background: #c084fc;
+    border-color: #c084fc;
+  }
 
   /* Statistiques en footer fixe */
   .pdj-stats {

@@ -23,6 +23,10 @@
 -- extra / no_show sont sommés PAR CHAMBRE (greatest(...,0) AVANT somme) : c'est ce
 -- que fait le JS ligne à ligne. On ne peut donc PAS les recalculer depuis les
 -- totaux du jour — d'où leur présence dans la vue.
+--
+-- `offert` (ajouté par supabase/pdj_breakfasts_offert.sql, colonne dont cette
+-- vue DÉPEND) : parmi les extras, combien sont OFFERTS (gratuits) — comptés
+-- dans `extra` (stats inchangées) mais déduits du CA côté client (amounts.ts).
 -- =============================================================================
 
 create or replace view public.pdj_daily_agg
@@ -37,13 +41,21 @@ select
   coalesce(sum(greatest(breakfasts_served - breakfasts_included, 0)), 0)::int
                                                                      as extra,
   coalesce(sum(greatest(breakfasts_included - breakfasts_served, 0)), 0)::int
-                                                                     as no_show
+                                                                     as no_show,
+  coalesce(sum(
+    case
+      when manual_kind = 'offert' then breakfasts_served
+      else least(breakfasts_offert, greatest(breakfasts_served - breakfasts_included, 0))
+    end
+  ), 0)::int                                                         as offert
 from (
   select
     service_date,
     guests,
     breakfasts_included,
     breakfasts_served,
+    breakfasts_offert,
+    manual_kind,
     case
       when upper(coalesce(addons, '')) like '%PDJGROUP%' then 'PDJGROUP10'
       when upper(coalesce(addons, '')) like '%PDJBB%'    then 'PDJBB'

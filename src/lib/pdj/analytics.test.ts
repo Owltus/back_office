@@ -27,6 +27,7 @@ function row(partial: Partial<PdjAggRow> & { service_date: string }): PdjAggRow 
     served: 0,
     extra: 0,
     no_show: 0,
+    offert: 0,
     ...partial,
   }
 }

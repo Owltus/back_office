@@ -40,6 +40,8 @@ export interface PdjAggRow {
   extra: number
   /** Non servis : Σ max(0, inclus − servi) par chambre. */
   no_show: number
+  /** Offerts : parmi les extras, Σ de ceux marqués gratuits (cf. breakdown.ts). */
+  offert: number
 }
 
 /** Ligne DB complète (lecture) : champs d'import + consommation + id. */
@@ -47,6 +49,10 @@ export interface PdjDayRow extends DbPdjRow {
   id: string
   breakfasts_served: number
   served: boolean
+  /** Parmi les extras servis (au-delà de `breakfasts_included`), combien sont
+   *  OFFERTS (gratuits, posés par clic droit sur la case) — sans objet pour une
+   *  ligne manuelle `manual_kind = 'offert'`, où toute la ligne est gratuite. */
+  breakfasts_offert: number
 }
 
 /** Dates de service DISTINCTES (années dispo de l'analytique, sélecteur de jour
@@ -222,13 +228,19 @@ export async function setServed(
   serviceDate: string,
   room: number,
   breakfastsServed: number,
+  /** Nombre d'extras OFFERTS à conserver (clamp), inchangé si omis. Toujours
+   *  fourni par le board (cf. handleServe) pour ne jamais laisser un « offert »
+   *  au-delà du nouveau nombre servi. */
+  breakfastsOffert?: number,
 ): Promise<void> {
+  const payload: Record<string, number | boolean> = {
+    breakfasts_served: breakfastsServed,
+    served: breakfastsServed > 0,
+  }
+  if (breakfastsOffert != null) payload.breakfasts_offert = breakfastsOffert
   const { data, error } = await supabase
     .from(PDJ_TABLE)
-    .update({
-      breakfasts_served: breakfastsServed,
-      served: breakfastsServed > 0,
-    })
+    .update(payload)
     .eq('service_date', serviceDate)
     .eq('room', room)
     .select('id')
@@ -245,7 +257,9 @@ export async function setServed(
  * revenu…). Contrairement à `setServed` (UPDATE d'une ligne existante), ceci
  * CRÉE la ligne au besoin (upsert sur la clé métier) et pose `manual_kind` :
  *  - `inclus` → `breakfasts_included = breakfastsServed` (compte dans les inclus) ;
- *  - `extra`  → `breakfasts_included = 0` (compte dans les extras).
+ *  - `extra`  → `breakfasts_included = 0` (compte dans les extras, facturé) ;
+ *  - `offert` → `breakfasts_included = 0` (compte dans les extras, gratuit —
+ *    cf. computePdjCA/roomFinance, breakdown.ts).
  * Tout décocher (`breakfastsServed <= 0`) SUPPRIME la ligne manuelle → la chambre
  * redevient vide (le `not manual_kind is null` protège les vraies lignes d'import).
  */

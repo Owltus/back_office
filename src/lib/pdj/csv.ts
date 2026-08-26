@@ -292,8 +292,9 @@ export function parseGuestRows(
 }
 
 /** Nature d'un PDJ saisi À LA MAIN dans une chambre non check-in (day-use,
- * no-show revenu…) : inclus (compte dans les inclus) ou extra (à la carte). */
-export type ManualKind = 'inclus' | 'extra'
+ * no-show revenu…) : inclus (compte dans les inclus), extra (à la carte,
+ * facturé) ou offert (à la carte, gratuit — cf. breakdown.ts). */
+export type ManualKind = 'inclus' | 'extra' | 'offert'
 
 /** Ligne DB écrite à l'import (snake_case). Sans consommation ni id/timestamps. */
 export interface DbPdjRow {

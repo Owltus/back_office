@@ -129,6 +129,37 @@ describe('roomFinance', () => {
       ),
     ).toEqual({ origin: 'EXPEDIA', code: null, htCa: 0 })
   })
+
+  it('extra OFFERT (chambre sans PDJ) : servi mais 0€', () => {
+    // 2 servis, walk-in, dont 1 offert (breakfasts_offert) → 1 seul facturé.
+    expect(
+      roomFinance(
+        {
+          addons: 'TAXE',
+          breakfasts_included: 0,
+          breakfasts_served: 2,
+          breakfasts_offert: 1,
+          channel: 'Direct',
+        },
+        TARIFS,
+      ),
+    ).toEqual({ origin: 'Direct', code: 'PDJ', htCa: 17.27 })
+  })
+
+  it('ligne manuelle « offert » : toute la ligne gratuite', () => {
+    expect(
+      roomFinance(
+        {
+          addons: null,
+          breakfasts_included: 0,
+          breakfasts_served: 2,
+          manual_kind: 'offert',
+          channel: null,
+        },
+        TARIFS,
+      ),
+    ).toEqual({ origin: 'Direct', code: 'PDJ', htCa: 0 })
+  })
 })
 
 describe('computePdjCA', () => {
@@ -146,5 +177,26 @@ describe('computePdjCA', () => {
     expect(ca.extraNb).toBe(5) // 3 (chambres) + 2 (externes)
     expect(ca.extrasHt).toBeCloseTo(86.35, 2) // 5 × 17,27
     expect(ca.totalHt).toBeCloseTo(156.34, 2)
+  })
+
+  it('un extra OFFERT reste compté (extraNb) mais sort du CA', () => {
+    const rows = [
+      // 500 : 2 extras dont 1 offert → extraNb inchangé (3), extrasHt réduit.
+      { ...ROWS[3], breakfasts_offert: 1 },
+      ROWS[2],
+    ]
+    const ca = computePdjCA(rows, TARIFS)
+    expect(ca.extraNb).toBe(3) // 213: 1 + 500: 2 (inchangé, offert compris)
+    expect(ca.extrasHt).toBeCloseTo(34.54, 2) // (3 − 1) × 17,27
+  })
+
+  it('une ligne manuelle « offert » sort entièrement du CA extra', () => {
+    const rows = [
+      { addons: null, breakfasts_included: 0, breakfasts_served: 2, manual_kind: 'offert' },
+    ]
+    const ca = computePdjCA(rows, TARIFS)
+    expect(ca.extraNb).toBe(2)
+    expect(ca.extrasHt).toBe(0)
+    expect(ca.totalHt).toBe(0)
   })
 })

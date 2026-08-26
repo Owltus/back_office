@@ -20,6 +20,25 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100
 }
 
+/** Ligne minimale portant de quoi calculer ses extras OFFERTS (gratuits). */
+interface OffertRow {
+  breakfasts_included: number
+  breakfasts_served: number
+  breakfasts_offert?: number
+  manual_kind?: string | null
+}
+
+/** Nombre d'extras OFFERTS (gratuits) d'une ligne, borné aux extras réellement
+ *  servis : une ligne manuelle `offert` l'est en totalité (tout son servi, dû
+ *  toujours à 0) ; une ligne normale (import) l'est jusqu'à concurrence de
+ *  `breakfasts_offert` (posé par clic droit sur la case, écran). Ne compte
+ *  jamais plus que ce qui est effectivement au-delà de l'inclus. */
+function offertUnits(r: OffertRow): number {
+  const extra = Math.max(0, r.breakfasts_served - r.breakfasts_included)
+  if (r.manual_kind === 'offert') return extra
+  return Math.min(r.breakfasts_offert ?? 0, extra)
+}
+
 /**
  * Code petit-déjeuner d'une chambre depuis sa colonne `addons` : GROUP d'abord,
  * puis PDJBB (sinon 'PDJ' capterait aussi PDJBB/PDJGROUP), sinon PDJ. null si pas
@@ -86,9 +105,11 @@ interface InHouseRow {
   breakfasts_included: number
   breakfasts_served: number
   channel: string | null
-  /** Ligne saisie à la main sur la page (day-use…) : 'inclus' | 'extra' | null.
-   *  Un inclus manuel n'a pas de code dans `addons` → valorisé au tarif PDJ. */
+  /** Ligne saisie à la main sur la page (day-use…) : 'inclus' | 'extra' | 'offert'
+   *  | null. Un inclus manuel n'a pas de code dans `addons` → valorisé au tarif PDJ. */
   manual_kind?: string | null
+  /** Extras OFFERTS (gratuits) parmi les servis — cf. `offertUnits`. */
+  breakfasts_offert?: number
 }
 interface AddonRow {
   code: string
@@ -122,6 +143,8 @@ interface CaRow {
   breakfasts_served: number
   manual_kind?: string | null
   channel?: string | null
+  /** Extras OFFERTS (gratuits) parmi les servis — cf. `offertUnits`. */
+  breakfasts_offert?: number
 }
 
 export function computePdjCA(
@@ -137,6 +160,7 @@ export function computePdjCA(
   }
   let inclusNb = 0
   let extraNb = Math.max(0, externalsCount)
+  let offertNb = 0
   let includedHt = 0
   for (const r of rows) {
     let code = breakfastCode(r.addons)
@@ -147,8 +171,11 @@ export function computePdjCA(
       includedHt += round2(r.breakfasts_included * unitHt(code))
     }
     extraNb += Math.max(0, r.breakfasts_served - r.breakfasts_included)
+    offertNb += offertUnits(r)
   }
-  const extrasHt = round2(extraNb * unitHt('PDJ'))
+  // Extras OFFERTS : comptés dans `extraNb` (stats « PDJ Extra », inchangées),
+  // mais exclus du CA facturé — c'est tout l'objet du statut « offert ».
+  const extrasHt = round2(Math.max(0, extraNb - offertNb) * unitHt('PDJ'))
   return {
     inclusNb,
     extraNb,
@@ -174,8 +201,10 @@ export function roomFinance(
   const included =
     code && row.breakfasts_included > 0 ? row.breakfasts_included : 0
   const extra = Math.max(0, row.breakfasts_served - included)
+  const extraBillable = Math.max(0, extra - offertUnits(row))
   const htCa = round2(
-    round2(included * unitHt(code ?? 'PDJ')) + round2(extra * unitHt('PDJ')),
+    round2(included * unitHt(code ?? 'PDJ')) +
+      round2(extraBillable * unitHt('PDJ')),
   )
   return {
     origin: (row.channel ?? '').trim() || 'Direct',
@@ -213,10 +242,11 @@ export function pdjRoomBreakdown(
     const included = code && r.breakfasts_included > 0 ? r.breakfasts_included : 0
     const served = r.breakfasts_served
     const extra = Math.max(0, served - included)
+    const extraBillable = Math.max(0, extra - offertUnits(r))
     if (code && !tarifs.has(code)) missingTarif.add(code)
 
     const htInclus = round2(included * unitHt(code ?? 'PDJ'))
-    const htExtra = round2(extra * unitHt('PDJ'))
+    const htExtra = round2(extraBillable * unitHt('PDJ'))
     const htCa = round2(htInclus + htExtra)
 
     // Code d'affichage : le code PDJ ; sinon 'PDJ' si un extra a été servi sans

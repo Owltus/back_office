@@ -87,6 +87,18 @@
         "rule": "design-system-color",
         "value": "#fafafa",
         "createdAt": "2026-08-23T12:16:14.951Z"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#ef5350",
+        "createdAt": "2026-08-26T08:02:32.753Z",
+        "reason": "pre-existing status arrow color (départ), predates this session's PDJ offert change"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#2196f3",
+        "createdAt": "2026-08-26T08:02:32.808Z",
+        "reason": "pre-existing status arrow color (recouche), predates this session's PDJ offert change"
       }
     ]
   }

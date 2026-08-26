@@ -74,7 +74,7 @@ export async function fetchDay(reportDate: string): Promise<RaproDay> {
 export interface RaproOccupancyRow {
   room: number
   adr: number | null
-  manual_kind: 'inclus' | 'extra' | null
+  manual_kind: 'inclus' | 'extra' | 'offert' | null
 }
 export async function fetchOccupancy(
   serviceDate: string,

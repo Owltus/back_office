@@ -40,6 +40,7 @@ function row(partial: Partial<PdjDayRow>): PdjDayRow {
     id: 'id-101',
     breakfasts_served: 2,
     served: true,
+    breakfasts_offert: 0,
     ...partial,
   }
 }
