@@ -539,13 +539,14 @@
      d'un gris uniforme : vert (inclus), jaune (extra/externes), violet
      (gratuités) restent lisibles au clic d'œil sur le papier. */
   .pdj-stats .stat-tile {
-    background: #fafafa;
+    background: color-mix(in srgb, var(--tile) 30%, transparent);
     border: 1px solid var(--tile);
     border-radius: 1px;
   }
   /* « Chambres occupées » et « Clients » : occupation brute, pas une catégorie
-     de petit-déjeuner — bordure neutre (grise), pas d'accent coloré. */
+     de petit-déjeuner — fond et bordure neutres (gris), pas d'accent coloré. */
   .pdj-stats .stat-tile.pdj-stat-neutral {
+    background: #fafafa;
     border-color: #e0e0e0;
   }
   .pdj-stats .stat-tile__rail {
