@@ -1210,6 +1210,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                 'pdj-stats-grid',
                 extrasCount > 0 && 'pdj-stats-grid--with-extra',
                 externalsCount > 0 && 'pdj-stats-grid--with-externals',
+                ca.offertNb > 0 && 'pdj-stats-grid--with-offert',
                 // 5 tuiles au lieu de 6 en tablette portrait (« Taux de
                 // captage » retirée juste en dessous, gain de place) : la
                 // rangée doit rester pleine, pas de tuile orpheline.
@@ -1281,6 +1282,18 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                   className="stat-tile--screen-hidden"
                   value={externalsCount}
                   label="Externes"
+                  accent="#c084fc"
+                />
+              )}
+              {/* Tuile PDF-seule : petits-déjeuners OFFERTS (gratuits, clic droit
+                  sur la case / bouton manuel) parmi les extras ci-dessus,
+                  uniquement s'il y en a au moins un — même violet que la case
+                  cochée à l'écran (cf. pdj.css, .pdj-checked-offert). */}
+              {ca.offertNb > 0 && (
+                <StatTile
+                  className="stat-tile--screen-hidden"
+                  value={ca.offertNb}
+                  label="Gratuités"
                   accent="#c084fc"
                 />
               )}

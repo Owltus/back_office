@@ -133,6 +133,9 @@ export interface PdjCA {
   extrasHt: number
   /** CA total HT = inclus + extra. */
   totalHt: number
+  /** Σ des extras OFFERTS (gratuits), DÉJÀ compris dans `extraNb` — jamais dans
+   *  `extrasHt`/`totalHt`. Sert la tuile « Gratuités » (board, PDF). */
+  offertNb: number
 }
 
 /** Ligne minimale pour le CA : ce que portent aussi bien le board (PdjDayRow) que
@@ -182,6 +185,7 @@ export function computePdjCA(
     includedHt: round2(includedHt),
     extrasHt,
     totalHt: round2(round2(includedHt) + extrasHt),
+    offertNb,
   }
 }
 

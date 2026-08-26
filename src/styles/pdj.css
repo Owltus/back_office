@@ -524,12 +524,23 @@
   .pdj-stats-grid.pdj-stats-grid--with-extra.pdj-stats-grid--with-externals {
     grid-template-columns: repeat(7, 1fr);
   }
+  /* Colonne(s) « Gratuités » : un offert est TOUJOURS un extra (cf. offertNb
+     ⊆ extraNb, breakdown.ts) → --with-extra est déjà posée, jamais seule. */
+  .pdj-stats-grid.pdj-stats-grid--with-extra.pdj-stats-grid--with-offert {
+    grid-template-columns: repeat(7, 1fr);
+  }
+  .pdj-stats-grid.pdj-stats-grid--with-extra.pdj-stats-grid--with-externals.pdj-stats-grid--with-offert {
+    grid-template-columns: repeat(8, 1fr);
+  }
   /* Les KPI sont des StatTile : on APLATIT la tuile pour le footer du PDF —
      liseré masqué, fond clair, corps compact, valeur AU-DESSUS du libellé
-     (column-reverse). On recible les classes stables du composant. */
+     (column-reverse). On recible les classes stables du composant. Bordure
+     = COULEUR D'ACCENT de la tuile (`--tile`, posée par le composant) au lieu
+     d'un gris uniforme : vert (inclus), jaune (extra/externes), violet
+     (gratuités) restent lisibles au clic d'œil sur le papier. */
   .pdj-stats .stat-tile {
     background: #fafafa;
-    border: 1px solid #e0e0e0;
+    border: 1px solid var(--tile);
     border-radius: 1px;
   }
   .pdj-stats .stat-tile__rail {
