@@ -1876,7 +1876,10 @@ const GuestRow = memo(function GuestRow({
               {row && row.stay_count > 1 ? row.stay_count : ' '}
             </span>
             <span className="pdj-val-finance pdj-price">
-              {fin && fin.htCa > 0 ? fmtEur(fin.htCa, 2) : '—'}
+              {/* `— ` = aucun PDJ (code null) ; sinon TOUJOURS un montant, y
+                  compris « 0,00 € » pour un offert (gratuit mais bien un PDJ,
+                  à distinguer visuellement d'une chambre sans petit-déjeuner). */}
+              {fin && fin.code != null ? fmtEur(fin.htCa, 2) : '—'}
             </span>
           </td>
         </>
