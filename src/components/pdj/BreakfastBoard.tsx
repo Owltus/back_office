@@ -1218,6 +1218,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
               )}
             >
               <StatTile
+                className="pdj-stat-neutral"
                 value={stats.rooms}
                 label="Chambres occupées"
                 accent="#818cf8"
@@ -1229,6 +1230,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                 }
               />
               <StatTile
+                className="pdj-stat-neutral"
                 value={stats.guests}
                 label="Clients"
                 accent="#38bdf8"

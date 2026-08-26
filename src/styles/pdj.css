@@ -543,6 +543,11 @@
     border: 1px solid var(--tile);
     border-radius: 1px;
   }
+  /* « Chambres occupées » et « Clients » : occupation brute, pas une catégorie
+     de petit-déjeuner — bordure neutre (grise), pas d'accent coloré. */
+  .pdj-stats .stat-tile.pdj-stat-neutral {
+    border-color: #e0e0e0;
+  }
   .pdj-stats .stat-tile__rail {
     display: none;
   }
