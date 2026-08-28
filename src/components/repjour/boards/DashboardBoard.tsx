@@ -23,6 +23,7 @@ import { HelpGlyph } from '#/components/shared/HelpGlyph.tsx'
 import { DatePickerButton } from '#/components/form/fields.tsx'
 import { BoardSkeleton } from '#/components/repjour/BoardSkeleton.tsx'
 import { AlertBanner } from '#/components/repjour/AlertBanner.tsx'
+import { PmsFilesBanner } from '#/components/repjour/PmsFilesBanner.tsx'
 import { SendStatusBanner } from '#/components/shared/SendStatusBanner.tsx'
 import { KPIDetailPanel } from '#/components/repjour/KPIDetailPanel.tsx'
 import { KPITable } from '#/components/repjour/KPITable.tsx'
@@ -42,6 +43,7 @@ import type { ServerSendResult } from '#/lib/repjour/sendServer.ts'
 import {
   fetchAvailableDates,
   fetchBudget,
+  fetchForecastFreshness,
   fetchForecastMonthTotal,
   fetchLatestReportOfMonth,
   fetchMonthReports,
@@ -49,6 +51,7 @@ import {
   fetchReportByDate,
   dismissSendReminder,
 } from '#/lib/repjour/services/daily.ts'
+import { checkPmsFilesReceived } from '#/lib/repjour/pmsStatus.ts'
 import { deleteDayData } from '#/lib/repjour/services/data.ts'
 import { reportToKPI } from '#/lib/repjour/calc/kpi.ts'
 import { computeEcart } from '#/lib/repjour/calc/ecart.ts'
@@ -180,6 +183,12 @@ export function DashboardBoard() {
   const { data: forecastMonthTotal, isPending: forecastPending } = useQuery({
     queryKey: ['repjour', 'forecast-month', year, month],
     queryFn: () => fetchForecastMonthTotal(year, month),
+  })
+  // Fraîcheur du Forecast du mois — sert UNIQUEMENT au bandeau « fichiers PMS
+  // manquants » (pmsStatus.ts), pas à l'affichage des KPI.
+  const { data: forecastImportedAt } = useQuery({
+    queryKey: ['repjour', 'forecast-freshness', year, month],
+    queryFn: () => fetchForecastFreshness(year, month),
   })
   const { data: latestOfMonth } = useQuery({
     queryKey: ['repjour', 'latest-of-month', year, month],
@@ -401,6 +410,21 @@ export function DashboardBoard() {
     report.auto_sent_at == null &&
     report.send_reminder_dismissed_at == null &&
     selectedDate === currentCycleDate
+
+  // Bandeau « fichiers PMS manquants » : uniquement sur le cycle COURANT (comme
+  // `notSent`), et seulement une fois le rapport chargé (`!loading`, sinon
+  // `report` vaut encore `undefined` et ferait passer le Comparison pour
+  // manquant le temps d'un flash). Remplace le bandeau générique « pas encore
+  // envoyé » quand il s'applique : c'est la raison PRÉCISE du non-envoi.
+  const pmsCheck =
+    selectedDate === currentCycleDate && !loading
+      ? checkPmsFilesReceived({
+          date: currentCycleDate,
+          now: new Date(),
+          comparisonReceived: !!report,
+          forecastImportedAt: forecastImportedAt ?? null,
+        })
+      : null
 
   // Mention discrète (bas droite du contenu) de l'état d'envoi du rapport affiché :
   //  - envoyé          → « Envoyé le <date> à <heure> » (heure réelle de l'envoi) ;
@@ -709,14 +733,20 @@ export function DashboardBoard() {
           </div>
         )}
 
-        {notSent && (
-          <div className="print:hidden">
-            <SendStatusBanner
-              message={`Le rapport du ${displayDate} n'a pas encore été envoyé.`}
-              onIgnore={canImport ? handleIgnore : undefined}
-              ignoring={ignoring}
-            />
+        {pmsCheck?.show ? (
+          <div className="mb-4 print:hidden">
+            <PmsFilesBanner date={displayDate} files={pmsCheck.files} />
           </div>
+        ) : (
+          notSent && (
+            <div className="print:hidden">
+              <SendStatusBanner
+                message={`Le rapport du ${displayDate} n'a pas encore été envoyé.`}
+                onIgnore={canImport ? handleIgnore : undefined}
+                ignoring={ignoring}
+              />
+            </div>
+          )
         )}
 
         {loading ? (

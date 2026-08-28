@@ -41,3 +41,17 @@ export function businessDateStr(now = new Date()): string {
   const day = String(d.getDate()).padStart(2, '0')
   return `${d.getFullYear()}-${m}-${day}`
 }
+
+// Fenêtre horaire où le pipeline d'ingestion AUTOMATIQUE (e-mail StayNTouch →
+// Edge Function import-report) tourne : [02h, 04h[. COPIE CONFORME de
+// supabase/functions/_shared/businessDay.ts (même constantes), pour que le
+// bandeau « fichiers PMS manquants » (pmsStatus.ts) sache quand la fenêtre est
+// passée sans attendre un aller-retour serveur.
+export const PIPELINE_WINDOW_START_HOUR = 2
+export const PIPELINE_WINDOW_END_HOUR = 4
+
+/** Vrai si l'instant tombe dans la fenêtre d'ingestion automatique [02h, 04h[. */
+export function isWithinPipelineWindow(now = new Date()): boolean {
+  const h = now.getHours()
+  return h >= PIPELINE_WINDOW_START_HOUR && h < PIPELINE_WINDOW_END_HOUR
+}

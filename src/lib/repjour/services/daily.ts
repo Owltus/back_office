@@ -114,6 +114,29 @@ export async function fetchForecastMonthTotal(
 }
 
 /**
+ * Dernier `imported_at` des `forecast_days` d'un mois, ou `null` si aucun n'a
+ * encore été importé. Sert au bandeau « fichiers PMS manquants » (pmsStatus.ts)
+ * pour juger si le Forecast du cycle courant est arrivé — même lecture que la
+ * garde de fraîcheur côté auto-envoi (supabase/functions/import-report/autoSend.ts).
+ */
+export async function fetchForecastFreshness(
+  year: number,
+  month: number,
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('forecast_days')
+    .select('imported_at')
+    .eq('year', year)
+    .eq('month', month)
+    .not('imported_at', 'is', null)
+    .order('imported_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) throw error
+  return data?.imported_at ?? null
+}
+
+/**
  * Dernier rapport importé ANTÉRIEUR à `date`, dans le MÊME mois. Sert à la carte
  * « Pris depuis la veille » : on y soustrait le projeté fin de mois d'un jour à
  * l'autre. La contrainte « même mois » est essentielle — le projeté est un total
