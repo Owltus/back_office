@@ -735,7 +735,7 @@ export function DashboardBoard() {
 
         {pmsCheck?.show ? (
           <div className="mb-4 print:hidden">
-            <PmsFilesBanner date={displayDate} files={pmsCheck.files} />
+            <PmsFilesBanner message={pmsCheck.message} />
           </div>
         ) : (
           notSent && (

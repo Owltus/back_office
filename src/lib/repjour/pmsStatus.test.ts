@@ -21,10 +21,10 @@ describe('checkPmsFilesReceived', () => {
       forecastImportedAt: '2026-08-15T02:30:00',
     })
     expect(result.show).toBe(false)
-    expect(result.files.every((f) => f.received)).toBe(true)
+    expect(result.message).toBe('')
   })
 
-  it('montre le bandeau si le Comparison manque après 04h', () => {
+  it('une phrase unique, sans retour à la ligne, quand seul le Comparison manque', () => {
     const result = checkPmsFilesReceived({
       date: '2026-08-14',
       now: new Date('2026-08-15T04:01:00'),
@@ -32,14 +32,13 @@ describe('checkPmsFilesReceived', () => {
       forecastImportedAt: '2026-08-15T02:30:00',
     })
     expect(result.show).toBe(true)
-    expect(result.files[0]).toEqual({
-      label: 'Chiffres du jour (Comparison)',
-      received: false,
-    })
-    expect(result.files[1].received).toBe(true)
+    expect(result.message).not.toContain('\n')
+    expect(result.message).toBe(
+      "Le PMS n'a pas transmis les chiffres du jour (Comparison) : le rapport du 2026-08-14 ne sera pas envoyé automatiquement.",
+    )
   })
 
-  it('montre le bandeau si le Forecast est absent', () => {
+  it('une phrase unique quand seul le Forecast manque (absent)', () => {
     const result = checkPmsFilesReceived({
       date: '2026-08-14',
       now: new Date('2026-08-15T09:00:00'),
@@ -47,13 +46,13 @@ describe('checkPmsFilesReceived', () => {
       forecastImportedAt: null,
     })
     expect(result.show).toBe(true)
-    expect(result.files[1]).toEqual({
-      label: 'Prévisions (Forecast)',
-      received: false,
-    })
+    expect(result.message).not.toContain('\n')
+    expect(result.message).toBe(
+      "Le PMS n'a pas transmis les prévisions (Forecast) : le rapport du 2026-08-14 ne sera pas envoyé automatiquement.",
+    )
   })
 
-  it('montre le bandeau si le Forecast est périmé (>12h, importé le cycle précédent)', () => {
+  it('une phrase unique quand le Forecast est périmé (>12h, cycle précédent)', () => {
     const result = checkPmsFilesReceived({
       date: '2026-08-14',
       now: new Date('2026-08-15T09:00:00'),
@@ -61,7 +60,21 @@ describe('checkPmsFilesReceived', () => {
       forecastImportedAt: '2026-08-13T02:30:00',
     })
     expect(result.show).toBe(true)
-    expect(result.files[1].received).toBe(false)
+    expect(result.message).toContain('les prévisions (Forecast)')
+  })
+
+  it('une phrase unique quand les deux manquent, sans retour à la ligne ni liste', () => {
+    const result = checkPmsFilesReceived({
+      date: '2026-08-14',
+      now: new Date('2026-08-15T09:00:00'),
+      comparisonReceived: false,
+      forecastImportedAt: null,
+    })
+    expect(result.show).toBe(true)
+    expect(result.message).not.toContain('\n')
+    expect(result.message).toBe(
+      "Le PMS n'a transmis ni les chiffres du jour (Comparison) ni les prévisions (Forecast) : le rapport du 2026-08-14 ne sera pas envoyé automatiquement.",
+    )
   })
 
   it('jonction de mois : un Forecast périmé mais PRÉSENT suffit (dernier jour du mois)', () => {
@@ -72,6 +85,6 @@ describe('checkPmsFilesReceived', () => {
       forecastImportedAt: '2026-08-20T02:30:00',
     })
     expect(result.show).toBe(false)
-    expect(result.files[1].received).toBe(true)
+    expect(result.message).toBe('')
   })
 })

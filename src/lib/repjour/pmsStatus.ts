@@ -20,21 +20,29 @@ import { isWithinPipelineWindow } from '#/lib/businessDay.ts'
 /** Même fenêtre de fraîcheur que le Forecast côté auto-envoi (12h). */
 const FRESH_WINDOW_MS = 12 * 60 * 60 * 1000
 
-export interface PmsFileStatus {
-  label: string
-  received: boolean
-}
-
 export interface PmsFilesCheck {
   /** Faut-il afficher le bandeau (fenêtre d'ingestion passée + au moins un fichier manquant). */
   show: boolean
-  files: PmsFileStatus[]
+  /** Phrase unique (une ou deux courtes propositions), prête à afficher telle quelle. */
+  message: string
 }
 
 /** Vrai si `dateStr` ('YYYY-MM-DD') est le dernier jour de son mois. */
 function isLastDayOfMonth(dateStr: string): boolean {
   const [y, m, d] = dateStr.split('-').map(Number)
   return d === new Date(y, m, 0).getDate()
+}
+
+/**
+ * Phrase unique décrivant ce qui manque, quelle que soit la combinaison
+ * (l'un, l'autre, ou les deux) — jamais de liste ni de retour à la ligne.
+ */
+function buildMessage(date: string, missing: string[]): string {
+  const cause =
+    missing.length > 1
+      ? `n'a transmis ni ${missing.join(' ni ')}`
+      : `n'a pas transmis ${missing[0]}`
+  return `Le PMS ${cause} : le rapport du ${date} ne sera pas envoyé automatiquement.`
 }
 
 /**
@@ -60,13 +68,12 @@ export function checkPmsFilesReceived(params: {
     (monthBoundary ||
       now.getTime() - new Date(forecastImportedAt).getTime() < FRESH_WINDOW_MS)
 
-  const files: PmsFileStatus[] = [
-    { label: 'Chiffres du jour (Comparison)', received: comparisonReceived },
-    { label: 'Prévisions (Forecast)', received: forecastReceived },
-  ]
+  const missing: string[] = []
+  if (!comparisonReceived) missing.push('les chiffres du jour (Comparison)')
+  if (!forecastReceived) missing.push('les prévisions (Forecast)')
 
   return {
-    show: !isWithinPipelineWindow(now) && files.some((f) => !f.received),
-    files,
+    show: !isWithinPipelineWindow(now) && missing.length > 0,
+    message: missing.length > 0 ? buildMessage(date, missing) : '',
   }
 }
