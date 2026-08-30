@@ -7,6 +7,7 @@ import { heartEffect } from './heart.ts'
 import { heartSwarmEffect } from './heartswarm.ts'
 import { lightningEffect } from './lightning.ts'
 import { moneyRainEffect } from './moneyrain.ts'
+import { pastisEffect } from './pastis.ts'
 import { sakuraEffect } from './sakura.ts'
 import { shootingStarsEffect } from './shootingstars.ts'
 import { snowEffect } from './snow.ts'
@@ -46,6 +47,7 @@ export const EFFECTS: readonly EffectDefinition[] = [
   lightningEffect,
   diceEffect,
   strawhatEffect,
+  pastisEffect,
 ]
 
 /**
@@ -66,4 +68,5 @@ export const VALIDATED_EFFECT_IDS: ReadonlySet<string> = new Set([
   'd20',
   'strawhat',
   'lightning',
+  'pastis',
 ])
