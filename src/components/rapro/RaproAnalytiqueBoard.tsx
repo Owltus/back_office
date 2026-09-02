@@ -119,6 +119,7 @@ export function RaproAnalytiqueBoard() {
       mois: MONTHS_SHORT[m - 1],
       month: m,
       nettoyee: future ? null : t.nettoyee,
+      rattrapage: future ? null : t.rattrapage,
       bloquee: future ? null : t.bloquee,
       refus: future ? null : t.refus,
     }
@@ -190,7 +191,7 @@ export function RaproAnalytiqueBoard() {
       )}
       loading={loading}
       printTitle={`Rapprochement · ${year}`}
-      skeleton={{ cols: 4, charts: 1, cards: 4, cardCols: 4, cardLines: 3, rows: 13 }}
+      skeleton={{ cols: 5, charts: 1, cards: 4, cardCols: 4, cardLines: 3, rows: 13 }}
     >
       <RaproAnalytiqueCards
         totals={yearTotals}
@@ -226,9 +227,9 @@ export function RaproAnalytiqueBoard() {
         </tbody>
       </AnalytiqueTable>
 
-      {/* Histogramme empilé : nettoyées + bloquées + refus = chambres vendues,
-          au code couleur des colonnes / cartes. Clic sur une colonne → détail du
-          mois (comme le tableau). */}
+      {/* Histogramme empilé : nettoyées + bloquées de la veille (rattrapages) +
+          bloquées + refus, au code couleur des colonnes / cartes. Clic sur une
+          colonne → détail du mois (comme le tableau). */}
       <AnalytiqueCharts cols={1}>
         <KpiStackedBarChart
           title="Répartition des chambres nettoyées par mois"

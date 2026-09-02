@@ -11,11 +11,19 @@ import {
 import { cleaned, vendues } from '#/lib/rapro/monthly.ts'
 import type { DayStatusCounts } from '#/lib/rapro/monthly.ts'
 
-/** Segments de l'histogramme empilé des deux vues analytique — mêmes couleurs et
- * même partition que les colonnes du tableau : nettoyée + bloquée + refus =
- * chambres vendues. Source unique, importée par les deux boards. */
+/** Segments de l'histogramme empilé des deux vues analytique — mêmes couleurs
+ * que les colonnes du tableau : nettoyée + bloquée de la veille (rattrapage) +
+ * bloquée + refus. La pile dépasse donc les « vendues » quand des bloquées de la
+ * veille ont été nettoyées (elles ne sont pas des ventes du jour, mais bien des
+ * ménages facturés — même lecture que la page du jour). Source unique, importée
+ * par les deux boards. */
 export const RAPRO_CHART_SEGMENTS: KpiBarSegment[] = [
   { key: 'nettoyee', name: 'Nettoyées', color: CATEGORY_COLOR.nettoyee },
+  {
+    key: 'rattrapage',
+    name: 'Bloquées de la veille (nettoyées)',
+    color: CATEGORY_COLOR.rattrapage,
+  },
   { key: 'bloquee', name: 'Bloquées', color: CATEGORY_COLOR.bloquee },
   { key: 'refus', name: 'Refus', color: CATEGORY_COLOR.refus },
 ]
@@ -96,8 +104,10 @@ export function coloredCount(n: number, color: string): ReactNode {
   )
 }
 
-/** En-tête : colonne VENDUES (total) + 3 colonnes de catégorie. `firstLabel` =
- * titre de la 1re colonne. */
+/** En-tête : colonne VENDUES (total) + 4 colonnes de catégorie. « Nettoyée »
+ * totalise TOUS les ménages facturés du jour (nettoyées du jour + bloquées de la
+ * veille nettoyées), comme le compteur de la page du jour ; « Bloquée de la
+ * veille » en détaille la part rattrapée. `firstLabel` = titre de la 1re colonne. */
 export function RaproCatHead({ firstLabel }: { firstLabel: string }) {
   return (
     <tr className="border-b border-border bg-muted">
@@ -118,6 +128,12 @@ export function RaproCatHead({ firstLabel }: { firstLabel: string }) {
       </th>
       <th
         className="px-3 py-2 text-center text-xs font-medium"
+        style={{ color: CATEGORY_COLOR.rattrapage }}
+      >
+        Bloquée de la veille
+      </th>
+      <th
+        className="px-3 py-2 text-center text-xs font-medium"
         style={{ color: CATEGORY_COLOR.bloquee }}
       >
         Bloquée
@@ -132,7 +148,11 @@ export function RaproCatHead({ firstLabel }: { firstLabel: string }) {
   )
 }
 
-/** Les cellules d'une ligne : VENDUES (total, neutre) + les 3 comptages colorés.
+/** Les cellules d'une ligne : VENDUES (total, neutre) + les 4 comptages colorés.
+ * « Nettoyée » = `cleaned` (nettoyées du jour + bloquées de la veille nettoyées),
+ * ALIGNÉ sur le compteur « Nettoyées » de la page du jour ; la colonne « Bloquée
+ * de la veille » en isole la part rattrapée. `Nettoyée` peut donc dépasser
+ * `Vendues` (un rattrapage n'est pas une vente du jour) — c'est voulu.
  * L'appelant fournit la 1re cellule (jour / mois) avant celles-ci. */
 export function RaproCatCells({ counts }: { counts: DayStatusCounts }) {
   const sold = vendues(counts)
@@ -146,7 +166,10 @@ export function RaproCatCells({ counts }: { counts: DayStatusCounts }) {
         )}
       </td>
       <td className="whitespace-nowrap px-3 py-2 text-center text-xs font-medium tabular-nums">
-        {coloredCount(counts.nettoyee, CATEGORY_COLOR.nettoyee)}
+        {coloredCount(cleaned(counts), CATEGORY_COLOR.nettoyee)}
+      </td>
+      <td className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums">
+        {coloredCount(counts.rattrapage, CATEGORY_COLOR.rattrapage)}
       </td>
       <td className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums">
         {coloredCount(counts.bloquee, CATEGORY_COLOR.bloquee)}

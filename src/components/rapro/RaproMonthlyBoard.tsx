@@ -65,6 +65,7 @@ export function RaproMonthlyBoard({
     jour: String(r.day),
     day: r.day,
     nettoyee: r.nettoyee,
+    rattrapage: r.rattrapage,
     bloquee: r.bloquee,
     refus: r.refus,
   }))
@@ -155,7 +156,7 @@ export function RaproMonthlyBoard({
       loading={loading}
       printTitle={`Rapprochement · ${monthLabel}`}
       skeleton={{
-        cols: 4,
+        cols: 5,
         charts: 1,
         cards: 4,
         cardCols: 4,
@@ -191,9 +192,9 @@ export function RaproMonthlyBoard({
         </tbody>
       </AnalytiqueTable>
 
-      {/* Histogramme empilé par jour : nettoyées + bloquées + refus = chambres
-          vendues, au code couleur des colonnes / cartes. Clic sur une colonne →
-          jour du rapprochement. */}
+      {/* Histogramme empilé par jour : nettoyées + bloquées de la veille
+          (rattrapages) + bloquées + refus, au code couleur des colonnes / cartes.
+          Clic sur une colonne → jour du rapprochement. */}
       <AnalytiqueCharts cols={1}>
         <KpiStackedBarChart
           title="Répartition des chambres nettoyées par jour"
