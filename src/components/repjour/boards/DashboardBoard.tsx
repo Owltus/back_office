@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { ChevronLeft, ChevronRight, LineChart, Printer, Send, Settings, Trash2 } from 'lucide-react'
+import {
+  ChevronLeft,
+  ChevronRight,
+  LineChart,
+  Printer,
+  Send,
+  Settings,
+  Trash2,
+} from 'lucide-react'
 
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
@@ -13,7 +21,10 @@ import { StepNav } from '#/components/shared/StepNav.tsx'
 import { useStepNavKeys } from '#/components/shared/useStepNavKeys.ts'
 import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
 import { useResponsiveShell } from '#/components/shared/useResponsiveShell.ts'
-import { MobileToolbar, ToolbarCell } from '#/components/shared/MobileToolbar.tsx'
+import {
+  MobileToolbar,
+  ToolbarCell,
+} from '#/components/shared/MobileToolbar.tsx'
 import { useNavbarSubtitle } from '#/lib/navbarSubtitle.ts'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
@@ -186,7 +197,7 @@ export function DashboardBoard() {
   })
   // Fraîcheur du Forecast du mois — sert UNIQUEMENT au bandeau « fichiers PMS
   // manquants » (pmsStatus.ts), pas à l'affichage des KPI.
-  const { data: forecastImportedAt } = useQuery({
+  const { data: forecastImportedAt, isPending: freshnessPending } = useQuery({
     queryKey: ['repjour', 'forecast-freshness', year, month],
     queryFn: () => fetchForecastFreshness(year, month),
   })
@@ -390,11 +401,13 @@ export function DashboardBoard() {
   // Impression : possible dès qu'un tableau KPI est affiché — rapport complet du
   // jour, OU données partielles (projection + budget) — jamais sur un jour vide.
   const canPrint =
-    !!budget && ((!!report && !!rj && !!rmtd && !!pm && !!ecart) || !!hasPartialData)
+    !!budget &&
+    ((!!report && !!rj && !!rmtd && !!pm && !!ecart) || !!hasPartialData)
 
   // Le mode détaillé (aide expliquant tous les calculs) n'a de sens qu'avec un
   // rapport complet du jour ; son bouton bascule vit dans la barre d'actions.
-  const hasFullReport = !!report && !!rj && !!rmtd && !!pm && !!budget && !!ecart
+  const hasFullReport =
+    !!report && !!rj && !!rmtd && !!pm && !!budget && !!ecart
 
   // Bandeau « pas encore envoyé » : uniquement sur le rapport du CYCLE HÔTELIER
   // COURANT (le dernier jour clôturé attendu, getImportDayStr, bascule à 02h),
@@ -412,17 +425,22 @@ export function DashboardBoard() {
     selectedDate === currentCycleDate
 
   // Bandeau « fichiers PMS manquants » : uniquement sur le cycle COURANT (comme
-  // `notSent`), et seulement une fois le rapport chargé (`!loading`, sinon
-  // `report` vaut encore `undefined` et ferait passer le Comparison pour
-  // manquant le temps d'un flash). Remplace le bandeau générique « pas encore
-  // envoyé » quand il s'applique : c'est la raison PRÉCISE du non-envoi.
+  // `notSent`), et seulement une fois le rapport ET la fraîcheur du Forecast
+  // chargés (sinon `report` vaut encore `undefined` et ferait passer le
+  // Comparison pour manquant le temps d'un flash ; idem pour `forecastImportedAt`
+  // encore en vol qui ferait croire à un Forecast absent). Muet dès que le
+  // rapport est parti (auto ou manuel) ou que le rappel a été ignoré : la règle
+  // vit dans pmsStatus.ts. Remplace le bandeau générique « pas encore envoyé »
+  // quand il s'applique : c'est la raison PRÉCISE du non-envoi.
   const pmsCheck =
-    selectedDate === currentCycleDate && !loading
+    selectedDate === currentCycleDate && !loading && !freshnessPending
       ? checkPmsFilesReceived({
           date: currentCycleDate,
           now: new Date(),
           comparisonReceived: !!report,
           forecastImportedAt: forecastImportedAt ?? null,
+          sent: report?.auto_sent_at != null,
+          dismissed: report?.send_reminder_dismissed_at != null,
         })
       : null
 
@@ -524,7 +542,10 @@ export function DashboardBoard() {
       return result
     } catch (err) {
       console.error('Envoi serveur échoué :', err)
-      return { ok: false, message: "L'envoi a échoué. Réessaie dans un instant." }
+      return {
+        ok: false,
+        message: "L'envoi a échoué. Réessaie dans un instant.",
+      }
     } finally {
       setServerSending(false)
     }
@@ -543,7 +564,9 @@ export function DashboardBoard() {
       await queryClient.invalidateQueries({ queryKey: ['repjour'] })
     } catch (err) {
       console.error('[repjour] masquage du bandeau échoué', err)
-      setActionError("Le rappel n'a pas pu être masqué. Réessaie dans un instant.")
+      setActionError(
+        "Le rappel n'a pas pu être masqué. Réessaie dans un instant.",
+      )
     } finally {
       setIgnoring(false)
     }
@@ -595,132 +618,135 @@ export function DashboardBoard() {
           actions={
             isTouchDevice ? undefined : (
               <>
-              {/* Groupe « suppression » (ADMIN uniquement), isolé et à gauche :
+                {/* Groupe « suppression » (ADMIN uniquement), isolé et à gauche :
                   supprime les données du seul jour affiché. Bouton outline, icône
                   rouge (pas de fond plein). Présent seulement s'il y a un rapport. */}
-              {isAdmin && report && (
+                {isAdmin && report && (
+                  <ButtonGroup>
+                    <Tip label="Supprimer les données de ce jour">
+                      <Button
+                        variant="outline"
+                        size="icon-sm"
+                        onClick={() => setConfirmDelete(true)}
+                        aria-label="Supprimer les données de ce jour"
+                        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                      >
+                        <Trash2 />
+                      </Button>
+                    </Tip>
+                  </ButtonGroup>
+                )}
+                {/* Groupe « actions de page » : aide + vue analytique + impression. */}
                 <ButtonGroup>
-                  <Tip label="Supprimer les données de ce jour">
-                    <Button
-                      variant="outline"
-                      size="icon-sm"
-                      onClick={() => setConfirmDelete(true)}
-                      aria-label="Supprimer les données de ce jour"
-                      className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                    >
-                      <Trash2 />
-                    </Button>
-                  </Tip>
-                </ButtonGroup>
-              )}
-              {/* Groupe « actions de page » : aide + vue analytique + impression. */}
-              <ButtonGroup>
-                {/* Aide « détail des calculs » : bascule le mode détaillé.
+                  {/* Aide « détail des calculs » : bascule le mode détaillé.
                     Présente seulement avec un rapport complet (sinon rien à
                     détailler). Placée en tête du groupe (tout à gauche). */}
-                {hasFullReport ? (
-                  <Tip
-                    label={
-                      detailMode
-                        ? 'Fermer le détail des calculs'
-                        : 'Détail des calculs'
-                    }
-                  >
-                    <Button
-                      variant={detailMode ? 'default' : 'outline'}
-                      size="icon-sm"
-                      onClick={() => setDetailMode((v) => !v)}
-                      aria-label="Détail des calculs"
-                      aria-pressed={detailMode}
+                  {hasFullReport ? (
+                    <Tip
+                      label={
+                        detailMode
+                          ? 'Fermer le détail des calculs'
+                          : 'Détail des calculs'
+                      }
                     >
-                      {/* « ? » nu, 20 px (vs 16 px pour les voisines lucide) pour
+                      <Button
+                        variant={detailMode ? 'default' : 'outline'}
+                        size="icon-sm"
+                        onClick={() => setDetailMode((v) => !v)}
+                        aria-label="Détail des calculs"
+                        aria-pressed={detailMode}
+                      >
+                        {/* « ? » nu, 20 px (vs 16 px pour les voisines lucide) pour
                           le mettre en avant. Source partagée avec l'en-tête. */}
-                      <HelpGlyph />
+                        <HelpGlyph />
+                      </Button>
+                    </Tip>
+                  ) : null}
+                  {/* Accès à la vue analytique — remplace le lien de l'ancienne
+                    sous-nav repjour (supprimée). */}
+                  <Tip label="Vue analytique">
+                    <Button asChild variant="outline" size="icon-sm">
+                      <Link
+                        to="/repjour/analytique"
+                        aria-label="Vue analytique"
+                      >
+                        <LineChart />
+                      </Link>
                     </Button>
                   </Tip>
-                ) : null}
-                {/* Accès à la vue analytique — remplace le lien de l'ancienne
-                    sous-nav repjour (supprimée). */}
-                <Tip label="Vue analytique">
-                  <Button asChild variant="outline" size="icon-sm">
-                    <Link to="/repjour/analytique" aria-label="Vue analytique">
-                      <LineChart />
-                    </Link>
-                  </Button>
-                </Tip>
-                {/* Impression : toujours présente, désactivée tant qu'il n'y a
+                  {/* Impression : toujours présente, désactivée tant qu'il n'y a
                     rien à imprimer (jour vide) — l'infobulle porte la raison. */}
-                <PrintButton
-                  onClick={handlePrint}
-                  iconOnly
-                  disabled={!canPrint || pdfBusy}
-                  tipLabel={
-                    canPrint
-                      ? 'Imprimer / PDF'
-                      : 'Aucune donnée à imprimer pour ce jour'
-                  }
-                />
-              </ButtonGroup>
-              {/* Groupe « actions admin » (GRADE admin) : envoi serveur du rapport
+                  <PrintButton
+                    onClick={handlePrint}
+                    iconOnly
+                    disabled={!canPrint || pdfBusy}
+                    tipLabel={
+                      canPrint
+                        ? 'Imprimer / PDF'
+                        : 'Aucune donnée à imprimer pour ce jour'
+                    }
+                  />
+                </ButtonGroup>
+                {/* Groupe « actions admin » (GRADE admin) : envoi serveur du rapport
                   (Resend, PDF joint + HTML) + gestion des destinataires serveur.
                   Relocalisé ici, à côté de « Imprimer ». L'envoi auto (Comparison +
                   Forecast présents) reste le canal normal ; ce bouton est le FILET
                   de secours manuel, non bridé par la garde d'idempotence auto, et
                   ouvre TOUJOURS le modal de vérification avant d'envoyer. */}
-              {isGradeAdmin && (
-                <ButtonGroup>
-                  <Tip
-                    label={
-                      canPrint
-                        ? 'Envoyer le rapport par e-mail'
-                        : 'Aucune donnée à envoyer pour ce jour'
-                    }
-                  >
-                    <Button
-                      variant="outline"
-                      size="icon-sm"
-                      aria-label="Envoyer le rapport par e-mail"
-                      disabled={!canPrint || serverSending}
-                      onClick={() => setShowServerConfirm(true)}
+                {isGradeAdmin && (
+                  <ButtonGroup>
+                    <Tip
+                      label={
+                        canPrint
+                          ? 'Envoyer le rapport par e-mail'
+                          : 'Aucune donnée à envoyer pour ce jour'
+                      }
                     >
-                      <Send />
-                    </Button>
-                  </Tip>
-                  <Tip label="Gérer les destinataires">
-                    <Button
-                      variant="outline"
-                      size="icon-sm"
-                      aria-label="Gérer les destinataires"
-                      onClick={() => setShowServerRecipients(true)}
-                    >
-                      <Settings />
-                    </Button>
-                  </Tip>
-                </ButtonGroup>
-              )}
-              {/* Groupe « navigation temporelle », collé au bord droit.
+                      <Button
+                        variant="outline"
+                        size="icon-sm"
+                        aria-label="Envoyer le rapport par e-mail"
+                        disabled={!canPrint || serverSending}
+                        onClick={() => setShowServerConfirm(true)}
+                      >
+                        <Send />
+                      </Button>
+                    </Tip>
+                    <Tip label="Gérer les destinataires">
+                      <Button
+                        variant="outline"
+                        size="icon-sm"
+                        aria-label="Gérer les destinataires"
+                        onClick={() => setShowServerRecipients(true)}
+                      >
+                        <Settings />
+                      </Button>
+                    </Tip>
+                  </ButtonGroup>
+                )}
+                {/* Groupe « navigation temporelle », collé au bord droit.
                   `enlargeOnNarrow={false}` sur les deux : ce groupe n'est
                   JAMAIS montré sur écran tactile (barre basse dédiée dès
                   qu'un doigt est détecté, cf. plus haut) — l'agrandir à un
                   simple rétrécissement de fenêtre désaccorderait sa taille de
                   celle des boutons voisins, restés fixes. */}
-              <StepNav
-                onPrev={() => shiftDate(-1)}
-                onNext={() => shiftDate(1)}
-                prevLabel="Jour précédent"
-                nextLabel="Jour suivant"
-                nextDisabled={selectedDate >= maxDate}
-                enlargeOnNarrow={false}
-              >
-                <DatePickerButton
-                  value={selectedDate}
-                  onChange={handleDateChange}
-                  max={maxDate}
-                  enabledDates={pickerDates}
-                  todayValue={maxDate}
+                <StepNav
+                  onPrev={() => shiftDate(-1)}
+                  onNext={() => shiftDate(1)}
+                  prevLabel="Jour précédent"
+                  nextLabel="Jour suivant"
+                  nextDisabled={selectedDate >= maxDate}
                   enlargeOnNarrow={false}
-                />
-              </StepNav>
+                >
+                  <DatePickerButton
+                    value={selectedDate}
+                    onChange={handleDateChange}
+                    max={maxDate}
+                    enabledDates={pickerDates}
+                    todayValue={maxDate}
+                    enlargeOnNarrow={false}
+                  />
+                </StepNav>
               </>
             )
           }
@@ -735,7 +761,11 @@ export function DashboardBoard() {
 
         {pmsCheck?.show ? (
           <div className="mb-4 print:hidden">
-            <PmsFilesBanner message={pmsCheck.message} />
+            <PmsFilesBanner
+              message={pmsCheck.message}
+              onIgnore={canImport && report ? handleIgnore : undefined}
+              ignoring={ignoring}
+            />
           </div>
         ) : (
           notSent && (
@@ -863,10 +893,13 @@ export function DashboardBoard() {
                 ni le rapport e-mail ; exclue du document imprimé tactile pour la
                 même raison. */}
             <div className="print:hidden">
-              <DayCrossSummary date={selectedDate} hotelRoomsSold={rj.nuitees} />
+              <DayCrossSummary
+                date={selectedDate}
+                hotelRoomsSold={rj.nuitees}
+              />
             </div>
 
-                {/* Envoi du rapport : relocalisé dans la barre d'actions du HAUT
+            {/* Envoi du rapport : relocalisé dans la barre d'actions du HAUT
                     (PageHeader, à côté de « Imprimer »). L'ancien groupe inline
                     « Copier l'image / Envoyer par email (mailto) / (dev) » a été
                     retiré : l'envoi passe désormais par le serveur (auto + filet
@@ -982,7 +1015,9 @@ export function DashboardBoard() {
           icon={<Printer className="size-5" />}
           label="Imprimer"
           ariaLabel={
-            canPrint ? 'Imprimer / PDF' : 'Aucune donnée à imprimer pour ce jour'
+            canPrint
+              ? 'Imprimer / PDF'
+              : 'Aucune donnée à imprimer pour ce jour'
           }
           onClick={handlePrint}
           disabled={!canPrint || pdfBusy}
