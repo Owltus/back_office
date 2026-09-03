@@ -66,11 +66,16 @@ with checks(ordre, controle, ok) as (
          and (coalesce(qual,'')||coalesce(with_check,'')) like '%get_user_role%') = 0),
 
     -- REPJOUR
-    (12, 'repjour : forecast_days reserve gestion',
+    (12, 'repjour : forecast_days gestion (ou ecriture en mode manuel)',
       (select count(*) from pg_policies
        where schemaname='public' and tablename='forecast_days'
          and policyname like 'forecast_days %(page:repjour)'
-         and (coalesce(qual,'')||coalesce(with_check,'')) like '%= ''gestion''%') = 3),
+         and (coalesce(qual,'')||coalesce(with_check,'')) like '%= ''gestion''%') = 3
+      and (select count(*) from pg_policies
+       where schemaname='public' and tablename='forecast_days'
+         and policyname like 'forecast_days %(page:repjour)'
+         and cmd in ('INSERT','UPDATE')
+         and (coalesce(qual,'')||coalesce(with_check,'')) like '%repjour_manual_forecast_allowed%') = 2),
     (13, 'repjour : daily_reports en ecriture (>= 2)',
       (select count(*) from pg_policies
        where schemaname='public' and tablename='daily_reports'

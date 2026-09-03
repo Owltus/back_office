@@ -34,6 +34,7 @@ import { useResponsiveShell } from '#/components/shared/useResponsiveShell.ts'
 import { StepNav } from '#/components/shared/StepNav.tsx'
 import { useStepNavKeys } from '#/components/shared/useStepNavKeys.ts'
 import { useKeySequence } from '#/components/shared/useKeySequence.ts'
+import { useNow } from '#/components/shared/useNow.ts'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { useNavbarSubtitle } from '#/lib/navbarSubtitle.ts'
 import { Button } from '#/components/ui/button.tsx'
@@ -48,7 +49,6 @@ import {
 import { DatePickerButton } from '#/components/form/fields.tsx'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { capitalize, cn } from '#/lib/utils.ts'
-import { MANUAL_IMPORT_ENABLED_FOR_ALL } from '#/lib/repjour/constants.ts'
 import { errorMessage } from '#/lib/errors.ts'
 import { printWithTitle } from '#/lib/print.ts'
 import {
@@ -58,7 +58,12 @@ import {
   stayKind,
 } from '#/lib/pdj/csv.ts'
 import type { ManualKind } from '#/lib/pdj/csv.ts'
-import { businessDateStr, businessNow } from '#/lib/businessDay.ts'
+import {
+  businessDateStr,
+  businessNow,
+  isManualImportOpen,
+  isManualModeHour,
+} from '#/lib/businessDay.ts'
 import {
   deleteAddonProductionDay,
   deleteDay,
@@ -161,15 +166,12 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
   // souris, sur téléphone, ni en largeur (wideTouch déjà couvert).
   const tabletPortrait = isTouchDevice && !isPhoneWidth && isNavbarMobile
   const navigate = useNavigate()
-  const { can, pageLevel, grade } = useAuth()
+  const { can, pageLevel } = useAuth()
   const canEdit = can('pdj', 'ecriture')
   const isAdmin = can('pdj', 'gestion')
-  // Import manuel en SOMMEIL : l'ingestion du In-House est désormais AUTOMATIQUE
-  // (Edge Function import-report). Le dépôt manuel reste réservé au GRADE admin
-  // (filet de secours), sauf flag de réouverture. La saisie « servi » reste, elle,
-  // sous `canEdit` (inchangée). Cf. MANUAL_IMPORT_ENABLED_FOR_ALL.
-  const canManualImport =
-    canEdit && (MANUAL_IMPORT_ENABLED_FOR_ALL || grade === 'admin')
+  // Import manuel : voir `canManualImport` plus bas (gestion toujours ; écriture
+  // seulement en MODE MANUEL, quand le In-House du jour n'est pas arrivé après 03h).
+  // La saisie « servi » reste, elle, sous `canEdit` (inchangée).
   // Niveau effectif : sert au verrou PAR JOUR de la saisie (cocher les cases).
   // Écriture ne coche que dans la fenêtre J-3 ; la gestion coche n'importe quel
   // jour (cf. lib/pdj/editability.ts).
@@ -280,6 +282,20 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
   }, [dayRows])
 
   const hasData = (dayRows?.length ?? 0) > 0
+
+  // Horloge de rendu (1 min) : le mode manuel s'ouvre à 03h sans autre signal.
+  const now = useNow()
+  // MODE MANUEL (écriture) : l'ingestion du In-House est AUTOMATIQUE (Edge
+  // Function import-report, vers 02h30). Si le PMS ne transmet pas, l'écriture
+  // peut déposer l'extraction manuelle à partir de 03h, uniquement sur le JOUR
+  // COURANT encore vide. La gestion importe toujours. Règle pure :
+  // lib/businessDay.ts (isManualImportOpen). Côté base, pdj_breakfasts et
+  // pdj_addon_production sont déjà ouverts à l'écriture sur J-3.
+  const manualImportOpen =
+    selectedDate === today &&
+    !loading &&
+    isManualImportOpen({ now, dataReceived: hasData })
+  const canManualImport = isAdmin || (canEdit && manualImportOpen)
 
   // Temps réel du JOUR affiché : un cochage (ou une saisie manuelle) fait par un
   // AUTRE utilisateur apparaît en direct, sans rafraîchir la page. On s'abonne aux
@@ -518,7 +534,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
   // sur l'extension, puis `mergeCsvFiles` valide/dédoublonne : les fichiers
   // illisibles ou en doublon sont ignorés sans bloquer l'import du reste.
   async function loadFiles(fileList: File[]) {
-    if (!canEdit || fileList.length === 0) return
+    if (!canManualImport || fileList.length === 0) return
     setError('')
 
     const csvFiles = fileList.filter((f) =>
@@ -1189,6 +1205,11 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
             <div className="text-sm text-muted-foreground">
               In-House ou Addon Production — les fichiers invalides sont ignorés
             </div>
+            {!isAdmin && (
+              <div className="text-xs text-amber-500/90">
+                Mode manuel : le PMS n'a pas transmis le In-House de cette nuit.
+              </div>
+            )}
           </EmptyCanvas>
         ) : (
           <EmptyCanvas className="empty-canvas min-h-[340px] flex-col gap-3 text-center text-muted-foreground">
@@ -1197,7 +1218,9 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
               Aucune donnée de petit-déjeuner disponible.
             </p>
             <p className="text-xs">
-              Un responsable doit importer le rapport du jour.
+              {selectedDate === today && !isManualModeHour(now)
+                ? "Le rapport de cette nuit n'est pas encore arrivé."
+                : 'Un responsable doit importer le rapport du jour.'}
             </p>
           </EmptyCanvas>
         )

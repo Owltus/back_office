@@ -145,8 +145,14 @@ function FileDropSlot({
 export function ImportSection({
   onImported,
   spacious = false,
+  manual = false,
 }: {
   onImported: () => void
+  /**
+   * Mode manuel (compte « écriture », données du PMS non reçues après 03h) :
+   * le sous-titre dit pourquoi la carte est là. La gestion ne le passe jamais.
+   */
+  manual?: boolean
   /**
    * Variante agrandie, réservée à l'état « carte seule » (aucune donnée pour le
    * jour → la carte occupe toute la page). NE PAS activer quand le tableau est
@@ -253,7 +259,7 @@ export function ImportSection({
           name: file.name,
           status: 'error',
           errorMsg:
-            'Ce fichier n\'est pas reconnu. Il faut les chiffres du jour et les prévisions.',
+            "Ce fichier n'est pas reconnu. Il faut les chiffres du jour et les prévisions.",
         }
         if (expectedType === 'comparison') setComparison(slot)
         else setForecast(slot)
@@ -378,7 +384,9 @@ export function ImportSection({
           Importer un rapport
         </h2>
         <span className="hidden truncate text-xs text-muted-foreground sm:inline">
-          — les deux fichiers exportés de ton logiciel (chiffres du jour et prévisions)
+          {manual
+            ? "— mode manuel : le PMS n'a pas transmis le rapport de cette nuit, dépose les deux exports"
+            : '— les deux fichiers exportés de ton logiciel (chiffres du jour et prévisions)'}
         </span>
       </div>
 
@@ -504,7 +512,10 @@ export function ImportSection({
               </p>
             </div>
             <div className="flex justify-end gap-3 border-t border-border bg-muted/40 px-6 py-4">
-              <Button variant="outline" onClick={() => setShowConfirmModal(false)}>
+              <Button
+                variant="outline"
+                onClick={() => setShowConfirmModal(false)}
+              >
                 Je recommence
               </Button>
               <Button onClick={executeImport} disabled={importing}>

@@ -55,3 +55,44 @@ export function isWithinPipelineWindow(now = new Date()): boolean {
   const h = now.getHours()
   return h >= PIPELINE_WINDOW_START_HOUR && h < PIPELINE_WINDOW_END_HOUR
 }
+
+// ---------------------------------------------------------------------------
+// MODE MANUEL — import de secours par les comptes « écriture ».
+//
+// L'ingestion des exports StayNTouch (Comparison/Forecast pour RepJour, In-House
+// pour PDJ) est AUTOMATIQUE et arrive vers 02h30. Si le PMS ne transmet pas, il
+// faut pouvoir faire une extraction manuelle et la déposer dans l'app. La gestion
+// a toujours ce droit ; l'écriture ne l'obtient qu'en MODE MANUEL : à partir de
+// MANUAL_MODE_HOUR (03h) tant que les données du cycle courant ne sont pas là.
+//
+// Plage fermée = [02h, 03h[ uniquement : c'est le seul créneau où l'absence de
+// données est NORMALE (le pipeline est attendu). Avant 02h, le cycle affiché est
+// encore celui de la veille : s'il n'a toujours pas de données, le mode manuel
+// reste ouvert (retard non résolu de la veille).
+//
+// Miroir SQL : public.repjour_manual_forecast_allowed (forecast_days est réservé
+// à la gestion en RLS, sauf en mode manuel). daily_reports / pms_daily_metrics /
+// pdj_* sont déjà ouverts à l'écriture.
+// ---------------------------------------------------------------------------
+
+/** Heure locale à partir de laquelle le mode manuel peut s'ouvrir (03h00). */
+export const MANUAL_MODE_HOUR = 3
+
+/** Vrai hors de la plage [02h, 03h[ où l'on attend encore le pipeline. */
+export function isManualModeHour(now = new Date()): boolean {
+  const h = now.getHours()
+  return h < DAY_CUTOFF_HOUR || h >= MANUAL_MODE_HOUR
+}
+
+/**
+ * Le mode manuel est-il ouvert ? Heure passée ET données du cycle absentes.
+ * `dataReceived` = le cycle courant a déjà ses données (rapport RepJour présent,
+ * ou lignes In-House du jour de service PDJ) : dès qu'elles arrivent, l'import
+ * de secours se referme pour l'écriture.
+ */
+export function isManualImportOpen(params: {
+  now: Date
+  dataReceived: boolean
+}): boolean {
+  return !params.dataReceived && isManualModeHour(params.now)
+}

@@ -35,6 +35,7 @@ import { DatePickerButton } from '#/components/form/fields.tsx'
 import { BoardSkeleton } from '#/components/repjour/BoardSkeleton.tsx'
 import { AlertBanner } from '#/components/repjour/AlertBanner.tsx'
 import { PmsFilesBanner } from '#/components/repjour/PmsFilesBanner.tsx'
+import { useNow } from '#/components/shared/useNow.ts'
 import { SendStatusBanner } from '#/components/shared/SendStatusBanner.tsx'
 import { KPIDetailPanel } from '#/components/repjour/KPIDetailPanel.tsx'
 import { KPITable } from '#/components/repjour/KPITable.tsx'
@@ -46,9 +47,8 @@ import { SummaryCards } from '#/components/repjour/SummaryCards.tsx'
 import { DayCrossSummary } from '#/components/repjour/DayCrossSummary.tsx'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { supabase } from '#/lib/supabase.ts'
-import { businessNow } from '#/lib/businessDay.ts'
+import { businessNow, isManualImportOpen } from '#/lib/businessDay.ts'
 import { cn } from '#/lib/utils.ts'
-import { MANUAL_IMPORT_ENABLED_FOR_ALL } from '#/lib/repjour/constants.ts'
 import { sendReportViaServer } from '#/lib/repjour/sendServer.ts'
 import type { ServerSendResult } from '#/lib/repjour/sendServer.ts'
 import {
@@ -369,14 +369,28 @@ export function DashboardBoard() {
   // affiche le tableau vide / la projection.
   const isImportDay = selectedDate === maxDate
 
+  // Horloge de rendu (1 min) : le mode manuel s'ouvre à 03h et le bandeau PMS
+  // à 04h SANS autre signal — une page laissée ouverte doit suivre.
+  const now = useNow()
+
+  // MODE MANUEL (écriture) : l'import de secours ne s'ouvre à l'écriture qu'à
+  // partir de 03h, tant que le rapport du jour d'import n'est pas arrivé (le
+  // pipeline auto le livre vers 02h30). La gestion importe toujours. Règle pure
+  // + miroir RLS forecast_days : voir lib/businessDay.ts (isManualImportOpen).
+  const manualImportOpen =
+    !loading &&
+    isImportDay &&
+    isManualImportOpen({ now, dataReceived: !!report })
+  const canManualImport = isAdmin || (canImport && manualImportOpen)
+
   // Rapport d'hier pas encore importé : on n'affiche QUE la zone d'import, pas le
   // tableau. (utilisateur : jamais d'import → vue inchangée ; tout jour ≠ hier :
-  // on ne propose pas l'import.)
+  // on ne propose pas l'import ; écriture hors mode manuel : vue inchangée.)
   //
   // Exception ADMIN : jamais ce mode « import seul ». Il garde la vue de journée
   // — le tableau (ou la projection / l'état vide) PLUS la carte d'import compacte
   // en bas — même quand le rapport n'est pas encore là.
-  const importOnly = !report && isImportDay && canImport && !isAdmin
+  const importOnly = !report && isImportDay && canManualImport && !isAdmin
 
   const daysInMonthPartial = selectedDate
     ? (() => {
@@ -436,7 +450,7 @@ export function DashboardBoard() {
     selectedDate === currentCycleDate && !loading && !freshnessPending
       ? checkPmsFilesReceived({
           date: currentCycleDate,
-          now: new Date(),
+          now,
           comparisonReceived: !!report,
           forecastImportedAt: forecastImportedAt ?? null,
           sent: report?.auto_sent_at != null,
@@ -795,13 +809,12 @@ export function DashboardBoard() {
             </p>
           </div>
         ) : importOnly ? (
-          // Rapport du jour pas encore importé, pour un rôle habilité NON-admin.
-          // L'ingestion étant désormais AUTOMATIQUE (Edge Function) et l'import
-          // manuel réservé au grade admin, on n'invite plus vers un contrôle
-          // absent : on informe que le rapport arrivera de lui-même.
+          // MODE MANUEL, compte écriture : le rapport du jour n'est pas arrivé
+          // après 03h. La carte d'import (ci-dessous) est le seul contenu ; on
+          // dit pourquoi elle est là, en une phrase.
           <p className="text-sm text-muted-foreground">
-            Le rapport du {displayDate} sera importé automatiquement dès sa
-            réception.
+            Le PMS n'a pas transmis le rapport du {displayDate}. Dépose les deux
+            exports ci-dessous.
           </p>
         ) : !report && !hasPartialData ? (
           <div className="rounded-xl border border-border bg-card p-8 text-center">
@@ -907,36 +920,29 @@ export function DashboardBoard() {
           </>
         ) : null}
 
-        {/* Import — carte placée en bas du dashboard, réservée aux rôles
-            super_utilisateur / admin. Masquée sur tout jour
+        {/* Import — carte placée en bas du dashboard. Masquée sur tout jour
             AUTRE qu'hier (`isImportDay`) : l'import ne peut combler que le
             rapport de la veille (J-1), donc on ne le propose que ce jour-là ;
             partout ailleurs (jour courant, futur, passé plus ancien) on affiche
             le tableau vide / la projection.
-            RÈGLE D'AFFICHAGE PAR RÔLE (le jour d'import) :
-            - super_utilisateur : visible UNIQUEMENT tant que le rapport d'hier
-              n'existe pas. Dès qu'il est présent, la carte disparaît et il ne
-              voit plus que le tableau (`isAdmin || !report`) ;
-            - admin : toujours visible ce jour-là (données présentes ou non) ;
-            - utilisateur : jamais (exclu par `canImport`).
-            SOMMEIL : l'ingestion étant désormais AUTOMATIQUE, l'import manuel est
-            réservé au GRADE admin (filet de secours), sauf si le flag
-            MANUAL_IMPORT_ENABLED_FOR_ALL le rouvre à tous les rôles habilités.
+            RÈGLE D'AFFICHAGE PAR NIVEAU (le jour d'import) :
+            - gestion : toujours visible ce jour-là (données présentes ou non) ;
+            - écriture : UNIQUEMENT en MODE MANUEL — à partir de 03h et tant que
+              le rapport n'est pas arrivé (`manualImportOpen`). Dès qu'il est
+              présent (auto ou manuel), la carte disparaît ;
+            - lecture : jamais.
             Un import réussi recharge le rapport affiché. */}
-        {!loading &&
-          canImport &&
-          isImportDay &&
-          (isAdmin || !report) &&
-          (MANUAL_IMPORT_ENABLED_FOR_ALL || isGradeAdmin) && (
-            <div className="print:hidden">
-              <ImportSection
-                spacious={importOnly}
-                onImported={() =>
-                  void queryClient.invalidateQueries({ queryKey: ['repjour'] })
-                }
-              />
-            </div>
-          )}
+        {!loading && isImportDay && canManualImport && (
+          <div className="print:hidden">
+            <ImportSection
+              spacious={importOnly}
+              manual={!isAdmin}
+              onImported={() =>
+                void queryClient.invalidateQueries({ queryKey: ['repjour'] })
+              }
+            />
+          </div>
+        )}
 
         {sendMention && (
           <div className="mt-1 text-right text-xs text-muted-foreground opacity-15 print:hidden">
