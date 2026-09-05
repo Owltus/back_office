@@ -41,8 +41,11 @@ create or replace view public.pdj_service_dates
   select distinct service_date
   from public.pdj_breakfasts;
 
+-- Les privilèges par défaut de Supabase donnent ALL aux rôles applicatifs sur
+-- tout nouvel objet de `public` : on ne laisse que SELECT (la vue n'est de
+-- toute façon pas modifiable, `distinct` oblige).
+revoke all on public.pdj_service_dates from authenticated, anon;
 grant select on public.pdj_service_dates to authenticated;
-revoke all on public.pdj_service_dates from anon;
 
 -- (3) OPTIONNEL, DÉSACTIVÉ : index simple sur parking_reservations.start_date.
 -- Mesuré inutile le 2026-09-05 (528 lignes, fenêtre de 316 jours en 6 ms).
