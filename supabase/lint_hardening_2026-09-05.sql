@@ -22,21 +22,27 @@
 --     par is_admin / get_page_level + RLS.
 -- =============================================================================
 
--- (1) Ni PUBLIC ni anon sur AUCUNE fonction security definer non-trigger ;
---     authenticated conservé (canal normal de l'app connectée).
+-- (1) Ni PUBLIC ni anon sur AUCUNE fonction security definer non-trigger, dans
+--     public ET private (schéma privé créé par private_schema_aides.sql) ;
+--     authenticated conservé (canal normal de l'app connectée). Depuis le plan
+--     security-advisor-zero-2026-09-05, une fonction security definer restée
+--     dans public est une ANOMALIE : signalée par notice.
 do $$
 declare r record;
 begin
   for r in
-    select p.oid::regprocedure as sig
+    select p.oid::regprocedure as sig, n.nspname
     from pg_proc p
     join pg_namespace n on n.oid = p.pronamespace
-    where n.nspname = 'public'
+    where n.nspname in ('public', 'private')
       and p.prosecdef
       and p.prorettype <> 'pg_catalog.trigger'::regtype
   loop
     execute format('revoke execute on function %s from public, anon;', r.sig);
     execute format('grant execute on function %s to authenticated;', r.sig);
+    if r.nspname = 'public' then
+      raise notice 'ANOMALIE : fonction security definer encore dans public : % (a deplacer dans private, voir private_rpc_relais.sql)', r.sig;
+    end if;
   end loop;
 end $$;
 
