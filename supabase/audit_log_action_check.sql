@@ -1,7 +1,11 @@
 -- =============================================================================
 -- audit_log — élargir la contrainte CHECK sur `action` (correctif lot 3, A2/A4)
 --
--- À EXÉCUTER PAR L'UTILISATEUR dans Supabase → SQL Editor, EN UNE FOIS.
+-- APPLIQUÉ en prod le 2026-09-04 ; VÉRIFIÉ le 2026-09-05 via `supabase db query`
+-- (contrainte = admin_password_reset, DELETE, INSERT, set_user_grade, UPDATE ;
+-- les 3 fonctions écrivant dans audit_log — set_user_grade, admin_update_password,
+-- log_delete — n'utilisent que ces valeurs ; insert de test annulé = accepté).
+-- Rejouable sans risque (idempotent), EN UNE FOIS.
 -- SÛR / idempotent : aucune ligne modifiée, la contrainte est recréée avec un
 -- SUR-ENSEMBLE des valeurs déjà admises (les lignes existantes restent valides).
 --

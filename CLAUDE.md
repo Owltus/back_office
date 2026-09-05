@@ -26,9 +26,13 @@ tourne dessus) : la prudence reste de mise.
 - **Opérations destructrices = confirmation explicite à chaque fois** : `DROP`,
   `TRUNCATE`, `DELETE`/`UPDATE` de masse (sans `WHERE` ciblé), suppression de
   colonnes, réécriture de données. Ne jamais les lancer par réflexe.
-- **Exécution du SQL** : par l'**utilisateur** dans Supabase → SQL Editor (setup
-  actuel, aucun outil d'exécution direct branché côté assistant). L'assistant
-  **propose** le SQL (fichiers `supabase/*.sql`), l'utilisateur l'exécute.
+- **Exécution du SQL** : depuis le 2026-09-05, l'assistant a un **accès direct**
+  via le CLI (`supabase db query --linked`, skill `bob-assistant-supabase`,
+  liaison `supabase link --project-ref ozpavwghrmmkrnmkxodg` faite une fois par
+  poste). Le fichier `supabase/*.sql` reste la source de vérité (écrit et commité
+  AVANT d'être appliqué avec `-f`), et la règle destructif = confirmation
+  explicite reste entière. Repli : l'utilisateur colle le script dans le SQL
+  Editor.
 - Les écritures via l'app (RPC `SECURITY DEFINER` à garde de rôle + RLS) restent
   le canal normal pour les features ; l'assistant ne teste pas les écritures
   applicatives contre la prod à la place de l'utilisateur.
