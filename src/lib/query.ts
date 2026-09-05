@@ -1,5 +1,7 @@
 import { QueryClient } from '@tanstack/react-query'
 
+import { backoffMs, isOutageError } from '#/lib/backendHealth.ts'
+
 /**
  * Réglages de cache par défaut du `QueryClient`.
  *
@@ -9,8 +11,13 @@ import { QueryClient } from '@tanstack/react-query'
  * - `gcTime` : on garde les données en cache 5 min après leur dernier usage.
  * - `refetchOnWindowFocus: false` : pas de refetch à chaque retour d'onglet
  *   (comportement plus prévisible pour un back-office interne).
- * - `retry: 1` : un seul réessai en cas d'échec réseau (évite d'allonger les
- *   temps d'attente en cas de coupure).
+ * - `refetchOnReconnect: true` : au retour du réseau, les requêtes actives
+ *   se rafraîchissent (une fois).
+ * - `retry` selon la NATURE de l'erreur : une erreur métier (RLS, 4xx) est
+ *   réessayée une seule fois comme avant ; une PANNE (5xx, timeout, réseau)
+ *   est réessayée trois fois, espacées par le backoff exponentiel avec
+ *   jitter de `lib/backendHealth.ts` (1 s, 1-2 s, 1-4 s), puis l'erreur
+ *   remonte et le disjoncteur prend le relais (gardes, bandeau).
  */
 export function getContext() {
   const queryClient = new QueryClient({
@@ -19,7 +26,9 @@ export function getContext() {
         staleTime: 60_000,
         gcTime: 5 * 60_000,
         refetchOnWindowFocus: false,
-        retry: 1,
+        refetchOnReconnect: true,
+        retry: (count, err) => (isOutageError(err) ? count < 3 : count < 1),
+        retryDelay: (count) => backoffMs(count),
       },
     },
   })
