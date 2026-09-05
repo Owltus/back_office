@@ -20,12 +20,13 @@
 drop policy if exists "caisse cautions delete (page:caisse gestion)" on public.caisse_cautions;
 drop policy if exists "caisse cautions delete (page:caisse)" on public.caisse_cautions;
 
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "caisse cautions delete (page:caisse)"
   on public.caisse_cautions for delete to authenticated
   using (
-    public.get_page_level('caisse') = 'gestion'
+    (select public.get_page_level('caisse')) = 'gestion'
     or (
-      public.page_level_rank(public.get_page_level('caisse')) >= 2
+      (select public.page_level_rank(public.get_page_level('caisse'))) >= 2
       and taken_date = current_date
     )
   );

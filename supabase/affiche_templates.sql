@@ -113,33 +113,36 @@ create policy "affiche read (page:affichage)"
   on public.affiche_templates for select to authenticated
   using ((select public.page_level_rank(public.get_page_level('affichage'))) >= 1);
 
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "affiche write (page:affichage)"
   on public.affiche_templates for insert to authenticated
-  with check (public.page_level_rank(public.get_page_level('affichage')) >= 2);
+  with check ((select public.page_level_rank(public.get_page_level('affichage'))) >= 2);
 
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "affiche update (page:affichage)"
   on public.affiche_templates for update to authenticated
   using (
-    public.get_page_level('affichage') = 'gestion'
+    (select public.get_page_level('affichage')) = 'gestion'
     or (
-      public.page_level_rank(public.get_page_level('affichage')) >= 2
+      (select public.page_level_rank(public.get_page_level('affichage'))) >= 2
       and created_by = auth.uid()
     )
   )
   with check (
-    public.get_page_level('affichage') = 'gestion'
+    (select public.get_page_level('affichage')) = 'gestion'
     or (
-      public.page_level_rank(public.get_page_level('affichage')) >= 2
+      (select public.page_level_rank(public.get_page_level('affichage'))) >= 2
       and created_by = auth.uid()
     )
   );
 
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "affiche delete (page:affichage)"
   on public.affiche_templates for delete to authenticated
   using (
-    public.get_page_level('affichage') = 'gestion'
+    (select public.get_page_level('affichage')) = 'gestion'
     or (
-      public.page_level_rank(public.get_page_level('affichage')) >= 2
+      (select public.page_level_rank(public.get_page_level('affichage'))) >= 2
       and created_by = auth.uid()
     )
   );

@@ -30,37 +30,40 @@ drop policy if exists "rapro_sheets write (page:rapro)" on public.rapro_sheets;
 drop policy if exists "rapro_sheets update (page:rapro)" on public.rapro_sheets;
 drop policy if exists "rapro_sheets delete (page:rapro)" on public.rapro_sheets;
 
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "rapro_sheets write (page:rapro)"
   on public.rapro_sheets for insert to authenticated
   with check (
-    public.get_page_level('rapro') = 'gestion'
+    (select public.get_page_level('rapro')) = 'gestion'
     or (
-      public.page_level_rank(public.get_page_level('rapro')) >= 2
+      (select public.page_level_rank(public.get_page_level('rapro'))) >= 2
       and report_date >= (current_date - 2)
     )
   );
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "rapro_sheets update (page:rapro)"
   on public.rapro_sheets for update to authenticated
   using (
-    public.get_page_level('rapro') = 'gestion'
+    (select public.get_page_level('rapro')) = 'gestion'
     or (
-      public.page_level_rank(public.get_page_level('rapro')) >= 2
+      (select public.page_level_rank(public.get_page_level('rapro'))) >= 2
       and report_date >= (current_date - 2)
     )
   )
   with check (
-    public.get_page_level('rapro') = 'gestion'
+    (select public.get_page_level('rapro')) = 'gestion'
     or (
-      public.page_level_rank(public.get_page_level('rapro')) >= 2
+      (select public.page_level_rank(public.get_page_level('rapro'))) >= 2
       and report_date >= (current_date - 2)
     )
   );
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "rapro_sheets delete (page:rapro)"
   on public.rapro_sheets for delete to authenticated
   using (
-    public.get_page_level('rapro') = 'gestion'
+    (select public.get_page_level('rapro')) = 'gestion'
     or (
-      public.page_level_rank(public.get_page_level('rapro')) >= 2
+      (select public.page_level_rank(public.get_page_level('rapro'))) >= 2
       and report_date >= (current_date - 2)
     )
   );
@@ -74,37 +77,40 @@ drop policy if exists "rapro_rooms write (page:rapro)" on public.rapro_rooms;
 drop policy if exists "rapro_rooms update (page:rapro)" on public.rapro_rooms;
 drop policy if exists "rapro_rooms delete (page:rapro)" on public.rapro_rooms;
 
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "rapro_rooms write (page:rapro)"
   on public.rapro_rooms for insert to authenticated
   with check (
-    public.get_page_level('rapro') = 'gestion'
+    (select public.get_page_level('rapro')) = 'gestion'
     or (
-      public.page_level_rank(public.get_page_level('rapro')) >= 2
+      (select public.page_level_rank(public.get_page_level('rapro'))) >= 2
       and report_date >= (current_date - 2)
     )
   );
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "rapro_rooms update (page:rapro)"
   on public.rapro_rooms for update to authenticated
   using (
-    public.get_page_level('rapro') = 'gestion'
+    (select public.get_page_level('rapro')) = 'gestion'
     or (
-      public.page_level_rank(public.get_page_level('rapro')) >= 2
+      (select public.page_level_rank(public.get_page_level('rapro'))) >= 2
       and report_date >= (current_date - 2)
     )
   )
   with check (
-    public.get_page_level('rapro') = 'gestion'
+    (select public.get_page_level('rapro')) = 'gestion'
     or (
-      public.page_level_rank(public.get_page_level('rapro')) >= 2
+      (select public.page_level_rank(public.get_page_level('rapro'))) >= 2
       and report_date >= (current_date - 2)
     )
   );
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "rapro_rooms delete (page:rapro)"
   on public.rapro_rooms for delete to authenticated
   using (
-    public.get_page_level('rapro') = 'gestion'
+    (select public.get_page_level('rapro')) = 'gestion'
     or (
-      public.page_level_rank(public.get_page_level('rapro')) >= 2
+      (select public.page_level_rank(public.get_page_level('rapro'))) >= 2
       and report_date >= (current_date - 2)
     )
   );

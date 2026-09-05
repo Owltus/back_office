@@ -21,34 +21,37 @@ drop policy if exists "pdj write (page:pdj)" on public.pdj_breakfasts;
 drop policy if exists "pdj update (page:pdj)" on public.pdj_breakfasts;
 drop policy if exists "pdj delete (page:pdj)" on public.pdj_breakfasts;
 
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "pdj write (page:pdj)"
   on public.pdj_breakfasts for insert to authenticated
   with check (
-    public.get_page_level('pdj') = 'gestion'
+    (select public.get_page_level('pdj')) = 'gestion'
     or (
-      public.page_level_rank(public.get_page_level('pdj')) >= 2
+      (select public.page_level_rank(public.get_page_level('pdj'))) >= 2
       and service_date >= (current_date - 3)
     )
   );
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "pdj update (page:pdj)"
   on public.pdj_breakfasts for update to authenticated
   using (
-    public.get_page_level('pdj') = 'gestion'
+    (select public.get_page_level('pdj')) = 'gestion'
     or (
-      public.page_level_rank(public.get_page_level('pdj')) >= 2
+      (select public.page_level_rank(public.get_page_level('pdj'))) >= 2
       and service_date >= (current_date - 3)
     )
   )
   with check (
-    public.get_page_level('pdj') = 'gestion'
+    (select public.get_page_level('pdj')) = 'gestion'
     or (
-      public.page_level_rank(public.get_page_level('pdj')) >= 2
+      (select public.page_level_rank(public.get_page_level('pdj'))) >= 2
       and service_date >= (current_date - 3)
     )
   );
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "pdj delete (page:pdj)"
   on public.pdj_breakfasts for delete to authenticated
-  using (public.get_page_level('pdj') = 'gestion');
+  using ((select public.get_page_level('pdj')) = 'gestion');
 
 
 -- VÉRIFICATION — insert/update avec la fenêtre 3 j, delete en gestion.

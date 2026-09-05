@@ -105,15 +105,17 @@ create policy "caisse cautions read (page:caisse)"
   using ((select public.page_level_rank(public.get_page_level('caisse'))) >= 1);
 
 drop policy if exists "caisse cautions write (page:caisse)" on public.caisse_cautions;
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "caisse cautions write (page:caisse)"
   on public.caisse_cautions for insert to authenticated
-  with check (public.page_level_rank(public.get_page_level('caisse')) >= 2);
+  with check ((select public.page_level_rank(public.get_page_level('caisse'))) >= 2);
 
 drop policy if exists "caisse cautions update (page:caisse)" on public.caisse_cautions;
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "caisse cautions update (page:caisse)"
   on public.caisse_cautions for update to authenticated
-  using (public.page_level_rank(public.get_page_level('caisse')) >= 2)
-  with check (public.page_level_rank(public.get_page_level('caisse')) >= 2);
+  using ((select public.page_level_rank(public.get_page_level('caisse'))) >= 2)
+  with check ((select public.page_level_rank(public.get_page_level('caisse'))) >= 2);
 
 -- Suppression : voir supabase/caisse_cautions_delete_ecriture_same_day.sql
 -- (autorité UNIQUE pour cette policy — ne PAS la recréer ici, ce serait un

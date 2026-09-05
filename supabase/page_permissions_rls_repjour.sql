@@ -22,16 +22,19 @@ drop policy if exists "daily_reports write (page:repjour)" on public.daily_repor
 drop policy if exists "daily_reports update (page:repjour)" on public.daily_reports;
 drop policy if exists "daily_reports delete (page:repjour)" on public.daily_reports;
 
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "daily_reports write (page:repjour)"
   on public.daily_reports for insert to authenticated
-  with check (public.page_level_rank(public.get_page_level('repjour')) >= 2);
+  with check ((select public.page_level_rank(public.get_page_level('repjour'))) >= 2);
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "daily_reports update (page:repjour)"
   on public.daily_reports for update to authenticated
-  using (public.page_level_rank(public.get_page_level('repjour')) >= 2)
-  with check (public.page_level_rank(public.get_page_level('repjour')) >= 2);
+  using ((select public.page_level_rank(public.get_page_level('repjour'))) >= 2)
+  with check ((select public.page_level_rank(public.get_page_level('repjour'))) >= 2);
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "daily_reports delete (page:repjour)"
   on public.daily_reports for delete to authenticated
-  using (public.page_level_rank(public.get_page_level('repjour')) >= 2);
+  using ((select public.page_level_rank(public.get_page_level('repjour'))) >= 2);
 
 -- ---- forecast_days (page 'repjour') — GESTION, ou ÉCRITURE en MODE MANUEL ----
 -- L'import Forecast (analytique) est réservé à la GESTION côté UI
@@ -78,34 +81,37 @@ drop policy if exists "forecast_days write (page:repjour)" on public.forecast_da
 drop policy if exists "forecast_days update (page:repjour)" on public.forecast_days;
 drop policy if exists "forecast_days delete (page:repjour)" on public.forecast_days;
 
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "forecast_days write (page:repjour)"
   on public.forecast_days for insert to authenticated
   with check (
-    public.get_page_level('repjour') = 'gestion'
+    (select public.get_page_level('repjour')) = 'gestion'
     or (
-      public.page_level_rank(public.get_page_level('repjour')) >= 2
+      (select public.page_level_rank(public.get_page_level('repjour'))) >= 2
       and public.repjour_manual_forecast_allowed(year, month)
     )
   );
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "forecast_days update (page:repjour)"
   on public.forecast_days for update to authenticated
   using (
-    public.get_page_level('repjour') = 'gestion'
+    (select public.get_page_level('repjour')) = 'gestion'
     or (
-      public.page_level_rank(public.get_page_level('repjour')) >= 2
+      (select public.page_level_rank(public.get_page_level('repjour'))) >= 2
       and public.repjour_manual_forecast_allowed(year, month)
     )
   )
   with check (
-    public.get_page_level('repjour') = 'gestion'
+    (select public.get_page_level('repjour')) = 'gestion'
     or (
-      public.page_level_rank(public.get_page_level('repjour')) >= 2
+      (select public.page_level_rank(public.get_page_level('repjour'))) >= 2
       and public.repjour_manual_forecast_allowed(year, month)
     )
   );
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "forecast_days delete (page:repjour)"
   on public.forecast_days for delete to authenticated
-  using (public.get_page_level('repjour') = 'gestion');
+  using ((select public.get_page_level('repjour')) = 'gestion');
 
 -- VÉRIFICATION — 3 policies forecast_days + la fonction du mode manuel.
 select policyname, cmd

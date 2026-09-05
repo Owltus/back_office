@@ -81,37 +81,40 @@ drop policy if exists "pdj addon write (page:pdj)"  on public.pdj_addon_producti
 drop policy if exists "pdj addon update (page:pdj)" on public.pdj_addon_production;
 drop policy if exists "pdj addon delete (page:pdj)" on public.pdj_addon_production;
 
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "pdj addon write (page:pdj)"
   on public.pdj_addon_production for insert to authenticated
   with check (
-    public.get_page_level('pdj') = 'gestion'
+    (select public.get_page_level('pdj')) = 'gestion'
     or (
-      public.page_level_rank(public.get_page_level('pdj')) >= 2
+      (select public.page_level_rank(public.get_page_level('pdj'))) >= 2
       and service_date >= (current_date - 3)
     )
   );
 
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "pdj addon update (page:pdj)"
   on public.pdj_addon_production for update to authenticated
   using (
-    public.get_page_level('pdj') = 'gestion'
+    (select public.get_page_level('pdj')) = 'gestion'
     or (
-      public.page_level_rank(public.get_page_level('pdj')) >= 2
+      (select public.page_level_rank(public.get_page_level('pdj'))) >= 2
       and service_date >= (current_date - 3)
     )
   )
   with check (
-    public.get_page_level('pdj') = 'gestion'
+    (select public.get_page_level('pdj')) = 'gestion'
     or (
-      public.page_level_rank(public.get_page_level('pdj')) >= 2
+      (select public.page_level_rank(public.get_page_level('pdj'))) >= 2
       and service_date >= (current_date - 3)
     )
   );
 
 -- DELETE = gestion (miroir de pdj_breakfasts).
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "pdj addon delete (page:pdj)"
   on public.pdj_addon_production for delete to authenticated
-  using (public.get_page_level('pdj') = 'gestion');
+  using ((select public.get_page_level('pdj')) = 'gestion');
 
 -- ---- Vérification (lecture seule) -------------------------------------------
 -- Vérif :

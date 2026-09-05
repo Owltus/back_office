@@ -47,25 +47,28 @@ create policy "easter_eggs read (authenticated)"
 
 -- INSERT : admin seulement.
 drop policy if exists "easter_eggs insert (admin)" on public.easter_eggs;
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "easter_eggs insert (admin)"
   on public.easter_eggs for insert
   to authenticated
-  with check (public.is_admin());
+  with check ((select public.is_admin()));
 
 -- UPDATE : admin seulement.
 drop policy if exists "easter_eggs update (admin)" on public.easter_eggs;
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "easter_eggs update (admin)"
   on public.easter_eggs for update
   to authenticated
-  using (public.is_admin())
-  with check (public.is_admin());
+  using ((select public.is_admin()))
+  with check ((select public.is_admin()));
 
 -- DELETE : admin seulement.
 drop policy if exists "easter_eggs delete (admin)" on public.easter_eggs;
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "easter_eggs delete (admin)"
   on public.easter_eggs for delete
   to authenticated
-  using (public.is_admin());
+  using ((select public.is_admin()));
 
 -- ---- Seed : migre les easter eggs jusqu'ici codés en dur -------------------
 -- Les `effect_id` doivent correspondre aux `id` du registre EFFECTS (front).

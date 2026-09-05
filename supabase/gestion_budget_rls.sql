@@ -24,16 +24,19 @@ drop policy if exists "budget write (page:repjour gestion)" on public.budget;
 drop policy if exists "budget update (page:repjour gestion)" on public.budget;
 drop policy if exists "budget delete (page:repjour gestion)" on public.budget;
 
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "budget write (page:repjour gestion)"
   on public.budget for insert to authenticated
-  with check (public.get_page_level('repjour') = 'gestion');
+  with check ((select public.get_page_level('repjour')) = 'gestion');
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "budget update (page:repjour gestion)"
   on public.budget for update to authenticated
-  using (public.get_page_level('repjour') = 'gestion')
-  with check (public.get_page_level('repjour') = 'gestion');
+  using ((select public.get_page_level('repjour')) = 'gestion')
+  with check ((select public.get_page_level('repjour')) = 'gestion');
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "budget delete (page:repjour gestion)"
   on public.budget for delete to authenticated
-  using (public.get_page_level('repjour') = 'gestion');
+  using ((select public.get_page_level('repjour')) = 'gestion');
 
 
 -- VÉRIFICATION — plus de « Admin manages budget » ; 1 read + 3 write.

@@ -35,41 +35,44 @@ drop policy if exists "parking update (page:parking)" on public.parking_reservat
 drop policy if exists "parking delete (page:parking)" on public.parking_reservations;
 
 -- INSERT : l'arrivée doit être dans la zone éditable (pas de back-dating).
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "parking write (page:parking)"
   on public.parking_reservations for insert to authenticated
   with check (
-    public.get_page_level('parking') = 'gestion'
+    (select public.get_page_level('parking')) = 'gestion'
     or (
-      public.page_level_rank(public.get_page_level('parking')) >= 2
+      (select public.page_level_rank(public.get_page_level('parking'))) >= 2
       and start_date >= (current_date - 7)
     )
   );
 
 -- UPDATE : la résa (avant ET après) doit rester d'actualité (fin >= J-7).
 -- Le recul du début est traité par le trigger (§3).
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "parking update (page:parking)"
   on public.parking_reservations for update to authenticated
   using (
-    public.get_page_level('parking') = 'gestion'
+    (select public.get_page_level('parking')) = 'gestion'
     or (
-      public.page_level_rank(public.get_page_level('parking')) >= 2
+      (select public.page_level_rank(public.get_page_level('parking'))) >= 2
       and (start_date + nights) >= (current_date - 7)
     )
   )
   with check (
-    public.get_page_level('parking') = 'gestion'
+    (select public.get_page_level('parking')) = 'gestion'
     or (
-      public.page_level_rank(public.get_page_level('parking')) >= 2
+      (select public.page_level_rank(public.get_page_level('parking'))) >= 2
       and (start_date + nights) >= (current_date - 7)
     )
   );
 
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "parking delete (page:parking)"
   on public.parking_reservations for delete to authenticated
   using (
-    public.get_page_level('parking') = 'gestion'
+    (select public.get_page_level('parking')) = 'gestion'
     or (
-      public.page_level_rank(public.get_page_level('parking')) >= 2
+      (select public.page_level_rank(public.get_page_level('parking'))) >= 2
       and (start_date + nights) >= (current_date - 7)
     )
   );

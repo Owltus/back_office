@@ -259,10 +259,11 @@ create policy "hotel_rooms read (page:literie)"
   using ((select public.page_level_rank(public.get_page_level('literie'))) >= 1);
 
 drop policy if exists "hotel_rooms write (page:literie)" on public.hotel_rooms;
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "hotel_rooms write (page:literie)"
   on public.hotel_rooms for update to authenticated
-  using (public.page_level_rank(public.get_page_level('literie')) >= 2)
-  with check (public.page_level_rank(public.get_page_level('literie')) >= 2);
+  using ((select public.page_level_rank(public.get_page_level('literie'))) >= 2)
+  with check ((select public.page_level_rank(public.get_page_level('literie'))) >= 2);
 
 -- LITERIE_STOCK / LITERIE_STOCK_MOVEMENTS (lecture seule — écriture RPC only)
 drop policy if exists "literie_stock read (page:literie)" on public.literie_stock;
@@ -282,10 +283,11 @@ create policy "baby_cots read (page:literie)"
   using ((select public.page_level_rank(public.get_page_level('literie'))) >= 1);
 
 drop policy if exists "baby_cots write (page:literie)" on public.baby_cots;
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "baby_cots write (page:literie)"
   on public.baby_cots for all to authenticated
-  using (public.get_page_level('literie') = 'gestion')
-  with check (public.get_page_level('literie') = 'gestion');
+  using ((select public.get_page_level('literie')) = 'gestion')
+  with check ((select public.get_page_level('literie')) = 'gestion');
 
 -- BABY_COT_ASSIGNMENTS (fenêtre de grâce LITERIE_GRACE_DAYS = 2)
 drop policy if exists "baby_cot_assignments read (page:literie)" on public.baby_cot_assignments;
@@ -294,41 +296,44 @@ create policy "baby_cot_assignments read (page:literie)"
   using ((select public.page_level_rank(public.get_page_level('literie'))) >= 1);
 
 drop policy if exists "baby_cot_assignments write (page:literie)" on public.baby_cot_assignments;
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "baby_cot_assignments write (page:literie)"
   on public.baby_cot_assignments for insert to authenticated
   with check (
-    public.get_page_level('literie') = 'gestion'
+    (select public.get_page_level('literie')) = 'gestion'
     or (
-      public.page_level_rank(public.get_page_level('literie')) >= 2
+      (select public.page_level_rank(public.get_page_level('literie'))) >= 2
       and start_date >= (current_date - 2)
     )
   );
 
 drop policy if exists "baby_cot_assignments update (page:literie)" on public.baby_cot_assignments;
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "baby_cot_assignments update (page:literie)"
   on public.baby_cot_assignments for update to authenticated
   using (
-    public.get_page_level('literie') = 'gestion'
+    (select public.get_page_level('literie')) = 'gestion'
     or (
-      public.page_level_rank(public.get_page_level('literie')) >= 2
+      (select public.page_level_rank(public.get_page_level('literie'))) >= 2
       and end_date >= (current_date - 2)
     )
   )
   with check (
-    public.get_page_level('literie') = 'gestion'
+    (select public.get_page_level('literie')) = 'gestion'
     or (
-      public.page_level_rank(public.get_page_level('literie')) >= 2
+      (select public.page_level_rank(public.get_page_level('literie'))) >= 2
       and end_date >= (current_date - 2)
     )
   );
 
 drop policy if exists "baby_cot_assignments delete (page:literie)" on public.baby_cot_assignments;
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "baby_cot_assignments delete (page:literie)"
   on public.baby_cot_assignments for delete to authenticated
   using (
-    public.get_page_level('literie') = 'gestion'
+    (select public.get_page_level('literie')) = 'gestion'
     or (
-      public.page_level_rank(public.get_page_level('literie')) >= 2
+      (select public.page_level_rank(public.get_page_level('literie'))) >= 2
       and end_date >= (current_date - 2)
     )
   );

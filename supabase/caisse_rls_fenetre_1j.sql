@@ -31,36 +31,39 @@ drop policy if exists "caisse write (page:caisse)" on public.caisse_sheets;
 drop policy if exists "caisse update (page:caisse + verrou)" on public.caisse_sheets;
 drop policy if exists "caisse delete (page:caisse gestion)" on public.caisse_sheets;
 
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "caisse write (page:caisse)"
   on public.caisse_sheets for insert to authenticated
   with check (
-    public.get_page_level('caisse') = 'gestion'
+    (select public.get_page_level('caisse')) = 'gestion'
     or (
-      public.page_level_rank(public.get_page_level('caisse')) >= 2
+      (select public.page_level_rank(public.get_page_level('caisse'))) >= 2
       and report_date >= (current_date - 1)
     )
   );
 
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "caisse update (page:caisse + verrou)"
   on public.caisse_sheets for update to authenticated
   using (
-    public.get_page_level('caisse') = 'gestion'
+    (select public.get_page_level('caisse')) = 'gestion'
     or (
-      public.page_level_rank(public.get_page_level('caisse')) >= 2
+      (select public.page_level_rank(public.get_page_level('caisse'))) >= 2
       and report_date >= (current_date - 1)
     )
   )
   with check (
-    public.get_page_level('caisse') = 'gestion'
+    (select public.get_page_level('caisse')) = 'gestion'
     or (
-      public.page_level_rank(public.get_page_level('caisse')) >= 2
+      (select public.page_level_rank(public.get_page_level('caisse'))) >= 2
       and report_date >= (current_date - 1)
     )
   );
 
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "caisse delete (page:caisse gestion)"
   on public.caisse_sheets for delete to authenticated
-  using (public.get_page_level('caisse') = 'gestion');
+  using ((select public.get_page_level('caisse')) = 'gestion');
 
 
 -- 3) VÉRIFICATION — doit lister les 3 policies (insert/update/delete).

@@ -54,36 +54,39 @@ drop policy if exists "pdj externals write (page:pdj)"  on public.pdj_externals;
 drop policy if exists "pdj externals update (page:pdj)" on public.pdj_externals;
 drop policy if exists "pdj externals delete (page:pdj)" on public.pdj_externals;
 
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "pdj externals write (page:pdj)"
   on public.pdj_externals for insert to authenticated
   with check (
-    public.get_page_level('pdj') = 'gestion'
+    (select public.get_page_level('pdj')) = 'gestion'
     or (
-      public.page_level_rank(public.get_page_level('pdj')) >= 2
+      (select public.page_level_rank(public.get_page_level('pdj'))) >= 2
       and service_date >= (current_date - 3)
     )
   );
 
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "pdj externals update (page:pdj)"
   on public.pdj_externals for update to authenticated
   using (
-    public.get_page_level('pdj') = 'gestion'
+    (select public.get_page_level('pdj')) = 'gestion'
     or (
-      public.page_level_rank(public.get_page_level('pdj')) >= 2
+      (select public.page_level_rank(public.get_page_level('pdj'))) >= 2
       and service_date >= (current_date - 3)
     )
   )
   with check (
-    public.get_page_level('pdj') = 'gestion'
+    (select public.get_page_level('pdj')) = 'gestion'
     or (
-      public.page_level_rank(public.get_page_level('pdj')) >= 2
+      (select public.page_level_rank(public.get_page_level('pdj'))) >= 2
       and service_date >= (current_date - 3)
     )
   );
 
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "pdj externals delete (page:pdj)"
   on public.pdj_externals for delete to authenticated
-  using (public.get_page_level('pdj') = 'gestion');
+  using ((select public.get_page_level('pdj')) = 'gestion');
 
 -- ---- Vérification (lecture seule) -------------------------------------------
 -- Vérif :

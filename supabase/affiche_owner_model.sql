@@ -62,35 +62,38 @@ create policy "affiche read (page:affichage)"
   using ((select public.page_level_rank(public.get_page_level('affichage'))) >= 1);
 
 -- INSERT : écriture (created_by est posé par le trigger, pas par le client).
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "affiche write (page:affichage)"
   on public.affiche_templates for insert to authenticated
-  with check (public.page_level_rank(public.get_page_level('affichage')) >= 2);
+  with check ((select public.page_level_rank(public.get_page_level('affichage'))) >= 2);
 
 -- UPDATE : gestion (tout) OU écriture sur SON propre modèle.
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "affiche update (page:affichage)"
   on public.affiche_templates for update to authenticated
   using (
-    public.get_page_level('affichage') = 'gestion'
+    (select public.get_page_level('affichage')) = 'gestion'
     or (
-      public.page_level_rank(public.get_page_level('affichage')) >= 2
+      (select public.page_level_rank(public.get_page_level('affichage'))) >= 2
       and created_by = auth.uid()
     )
   )
   with check (
-    public.get_page_level('affichage') = 'gestion'
+    (select public.get_page_level('affichage')) = 'gestion'
     or (
-      public.page_level_rank(public.get_page_level('affichage')) >= 2
+      (select public.page_level_rank(public.get_page_level('affichage'))) >= 2
       and created_by = auth.uid()
     )
   );
 
 -- DELETE : gestion (tout) OU écriture sur SON propre modèle.
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "affiche delete (page:affichage)"
   on public.affiche_templates for delete to authenticated
   using (
-    public.get_page_level('affichage') = 'gestion'
+    (select public.get_page_level('affichage')) = 'gestion'
     or (
-      public.page_level_rank(public.get_page_level('affichage')) >= 2
+      (select public.page_level_rank(public.get_page_level('affichage'))) >= 2
       and created_by = auth.uid()
     )
   );

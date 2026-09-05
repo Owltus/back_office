@@ -114,8 +114,27 @@ Le temps de chargement perçu vient surtout de l'auth cliente + du mode SPA. Rè
   sert qu'à l'affiche A3, uniquement par `routes/affichage.tsx`.
 - **Chargement perçu** : préférer un squelette (`components/repjour/BoardSkeleton.tsx`,
   primitive `ui/skeleton`) à un spinner plein écran pour les états de chargement.
+- **Résilience backend (panne du 2026-09-05, plan `perf-resilience-2026-09-05`)** :
+  toute requête Supabase passe par le `global.fetch` de `lib/supabase.ts`
+  (timeout 20 s) qui alimente le disjoncteur pur `lib/backendHealth.ts`
+  (`up`/`down`, backoff exponentiel avec jitter 1 s → 30 s, `shouldSkip()`,
+  `createSingleFlight`). `lib/query.ts` réessaie 3 fois une PANNE
+  (`isOutageError`), 1 fois une erreur métier. Le bandeau
+  `shared/BackendStatusBanner.tsx` (monté par `AppAuthGate`) est la SEULE
+  restitution d'une panne : jamais de renvoi sur `/login`, jamais de faux
+  « Aucune page accessible » (`PageGuard` lit `backendDown` + `permsResolved`).
+  Règles à ne pas casser : relecture profil/droits en single-flight, cadence
+  3 min onglet visible + 60 s minimum, JAMAIS de relecture sur
+  `TOKEN_REFRESHED`, une erreur réseau n'efface JAMAIS le cache local, le chemin
+  d'éjection (`profiles` renvoie 0 ligne → `signOut`) reste intact.
+- **Lectures sobres** : `select` de colonnes explicites (jamais `select *` sur une
+  table à PII) ; `queryKey` STABLE d'un jour à l'autre (arrondir une fenêtre
+  glissante, cf. `snapRangeToMonths`) ; bornes historiques (« première date »)
+  en `staleTime: Infinity` ; un seul refetch par retour d'onglet (coalescer
+  visibility/focus/online) ; invalidations Realtime avec debounce ; la liste des
+  dates PDJ vient de la vue `pdj_service_dates` (jamais de l'agrégat).
 - Valider toute modif perf : `pnpm build` (vérifier le découpage des chunks) +
-  `npx tsc --noEmit`.
+  `npx tsc --noEmit` ; côté base `supabase/verif_perf.sql` (lecture seule).
 
 ## Faits base de données (vérifiés en lecture)
 

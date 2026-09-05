@@ -33,10 +33,11 @@ begin;
 -- peut s'auto-insérer qu'en 'utilisateur'. (Le flux normal de création passe par
 -- un admin dans ComptesBoard ; l'auto-inscription publique est désactivée.)
 drop policy if exists "profiles insert (bornee)" on public.profiles;
+-- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "profiles insert (bornee)"
   on public.profiles for insert to authenticated
   with check (
-    public.is_admin()
+    (select public.is_admin())
     or (id = auth.uid() and role = 'utilisateur')
   );
 
