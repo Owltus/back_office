@@ -12,16 +12,18 @@
 
 with checks(ordre, controle, ok) as (
   values
+    -- Les aides vivent dans le schéma `private` depuis private_schema_aides.sql
+    -- (plan security-advisor-zero-2026-09-05, étape 1).
     (1, 'get_user_role : STABLE',
       (select provolatile from pg_proc
-       where pronamespace='public'::regnamespace and proname='get_user_role') = 's'),
+       where pronamespace='private'::regnamespace and proname='get_user_role') = 's'),
     (2, 'get_user_role : security definer + search_path fige',
       (select prosecdef and coalesce(array_to_string(proconfig, ','), '') like '%search_path=public%'
        from pg_proc
-       where pronamespace='public'::regnamespace and proname='get_user_role')),
+       where pronamespace='private'::regnamespace and proname='get_user_role')),
     (3, 'get_page_level / is_admin : STABLE',
       (select count(*) from pg_proc
-       where pronamespace='public'::regnamespace
+       where pronamespace='private'::regnamespace
          and proname in ('get_page_level','is_admin') and provolatile='s') = 2),
     (4, 'pdj_service_dates : vue presente, security_invoker',
       (select count(*) from pg_class

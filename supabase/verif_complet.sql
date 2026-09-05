@@ -26,9 +26,11 @@ with checks(ordre, controle, ok) as (
        where schemaname='public' and tablename in ('rapro_sheets','rapro_rooms')
          and policyname like 'rapro%(page:rapro)'
          and (coalesce(qual,'')||coalesce(with_check,'')) ilike '%current_date - 2%') = 6),
-    (4, 'rapro : fonction rapro_occupancy (SECURITY DEFINER)',
+    -- Depuis private_rpc_relais.sql (2026-09-05) : la fonction privilégiée vit
+    -- dans `private`, public ne porte qu'un relais SECURITY INVOKER.
+    (4, 'rapro : fonction rapro_occupancy (SECURITY DEFINER, schema private)',
       (select count(*) from pg_proc
-       where pronamespace='public'::regnamespace and proname='rapro_occupancy' and prosecdef) = 1),
+       where pronamespace='private'::regnamespace and proname='rapro_occupancy' and prosecdef) = 1),
     (5, 'rapro : plus de VUE rapro_occupancy',
       (select count(*) from information_schema.views
        where table_schema='public' and table_name='rapro_occupancy') = 0),
