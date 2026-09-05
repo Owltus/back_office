@@ -72,16 +72,26 @@ export function PageGuard({
   min?: PageLevel
   children: ReactNode
 }) {
-  const { user, loading, profileLoading, permissionsLoading, permissions, grade } =
-    useAuth()
+  const {
+    user,
+    loading,
+    profileLoading,
+    permissionsLoading,
+    permsResolved,
+    backendDown,
+    permissions,
+    grade,
+  } = useAuth()
   const pathname = useRouterState({ select: (s) => s.location.pathname })
 
   if (loading) return <GuardSkeleton pathname={pathname} />
   if (!user) return <Navigate to="/login" replace />
 
   if (!atLeast(permissions, grade, page, min)) {
-    // Droits pas encore résolus : rester en squelette plutôt que rediriger à tort.
-    if (profileLoading || permissionsLoading)
+    // Droits pas encore résolus, OU backend en panne sans jamais avoir eu les
+    // droits de ce compte : squelette (le bandeau de statut explique pourquoi).
+    // Jamais « Aucune page accessible » sur une simple panne.
+    if (profileLoading || permissionsLoading || (backendDown && !permsResolved))
       return <GuardSkeleton pathname={pathname} />
     const home = firstAllowedPage(permissions, grade)
     return home ? (

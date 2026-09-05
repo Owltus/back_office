@@ -15,10 +15,16 @@ export const Route = createFileRoute('/login')({
   head: () => ({ meta: [{ title: 'Connexion — Back Office' }] }),
   // Un utilisateur déjà connecté ne doit jamais voir le formulaire : on redirige
   // AVANT le rendu (lecture de session locale, rapide) plutôt qu'après coup via un
-  // `useEffect` (qui laissait flasher le formulaire).
+  // `useEffect` (qui laissait flasher le formulaire). Borné à 2 s : si auth-js
+  // est occupé à rafraîchir un jeton contre un backend en panne, `getSession`
+  // pend ; on rend alors le formulaire au lieu de bloquer la navigation (le
+  // `useEffect` de la page redirige de toute façon dès qu'un `user` existe).
   beforeLoad: async () => {
-    const { data } = await supabase.auth.getSession()
-    if (data.session) {
+    const session = await Promise.race([
+      supabase.auth.getSession().then(({ data }) => data.session),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 2_000)),
+    ])
+    if (session) {
       throw redirect({ to: '/repjour' })
     }
   },
