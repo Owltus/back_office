@@ -43,6 +43,34 @@ export interface Reservation {
 
 export type Mode = 'move' | 'resize-left' | 'resize-right'
 
+/**
+ * Arrondit une fenêtre de dates aux bornes de MOIS civils (1er du mois de
+ * `from` → dernier jour du mois de `to`).
+ *
+ * Pourquoi : la fenêtre chargée par le planning était calculée sur `new Date()`,
+ * donc sa clé de cache (from, to) changeait chaque jour civil → cache froid tous
+ * les matins, fenêtre complète repayée. Arrondie au mois, la clé ne bouge qu'au
+ * changement de mois. La fenêtre ne peut que s'ÉLARGIR par rapport à la demande
+ * (jamais rétrécir) et la fonction est IDEMPOTENTE (une fenêtre déjà arrondie
+ * ressort identique) : indispensable, car elle est appliquée à la fois à la
+ * fenêtre initiale et à chaque agrandissement — sans idempotence, l'effet
+ * d'agrandissement bouclerait.
+ *
+ * Dates LOCALES à minuit (même repère que `'YYYY-MM-DD' + 'T00:00:00'` utilisé
+ * partout dans le planning) ; l'heure des bornes reçues est ignorée.
+ */
+export function snapRangeToMonths(
+  from: Date,
+  to: Date,
+): { from: Date; to: Date } {
+  return {
+    from: new Date(from.getFullYear(), from.getMonth(), 1),
+    // Jour 0 du mois suivant = dernier jour du mois de `to` (28/29/30/31 gérés
+    // par le constructeur Date, décembre → janvier de l'année suivante compris).
+    to: new Date(to.getFullYear(), to.getMonth() + 1, 0),
+  }
+}
+
 // Modèle demi-journées : arrivée = après-midi (slot impair), départ = matin (slot pair).
 export const arrivalSlot = (startDay: number) => startDay * SLOTS_PER_DAY + 1
 export const departureSlot = (startDay: number, nights: number) =>

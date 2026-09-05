@@ -61,7 +61,10 @@ export interface ParkingDailyOccRow {
   departures: number
 }
 
-/** Ligne telle que stockée en base (dates absolues). */
+/** Ligne telle que stockée en base (dates absolues). Ce sont EXACTEMENT les
+ * colonnes demandées par `fetchReservations` (cf. `RESERVATION_COLUMNS`) : la
+ * table en porte d'autres (`created_at`, `updated_at`…) que le planning n'utilise
+ * jamais — inutile de les faire transiter. */
 export interface DbReservation {
   id: string
   spot: number
@@ -93,6 +96,12 @@ export function startDayToDate(startDay: number, refMonday: Date): string {
   return format(addDays(refMonday, startDay), 'yyyy-MM-dd')
 }
 
+/** Colonnes lues par le planning : `select('*')` renvoyait 9 colonnes dont 2
+ * (`created_at`, `updated_at`) ignorées par `toReservation`. Liste explicite =
+ * charge utile minimale, et un ajout de colonne en base n'alourdit plus la
+ * requête à notre insu. Doit rester alignée sur `DbReservation`. */
+const RESERVATION_COLUMNS = 'id,spot,client,start_date,nights,status,comment'
+
 /**
  * Réservations, éventuellement BORNÉES à une fenêtre de dates d'arrivée
  * (`start_date` ∈ [from, to], bornes 'YYYY-MM-DD' incluses). Le planning charge
@@ -109,7 +118,7 @@ export async function fetchReservations(
   const all: DbReservation[] = []
   let offset = 0
   for (;;) {
-    let q = supabase.from(PARKING_TABLE).select('*')
+    let q = supabase.from(PARKING_TABLE).select(RESERVATION_COLUMNS)
     if (from) q = q.gte('start_date', from)
     if (to) q = q.lte('start_date', to)
     const { data, error } = await q

@@ -4,7 +4,7 @@ import type {
   PointerEvent as ReactPointerEvent,
 } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   CalendarDays,
   ChevronLeft,
@@ -81,8 +81,10 @@ import {
   SPOTS_LIST,
   arrivalSlot,
   hasOverlap,
+  snapRangeToMonths,
 } from '#/lib/parking/model.ts'
 import type { Mode, Reservation, Status } from '#/lib/parking/model.ts'
+import { backendHealth } from '#/lib/backendHealth.ts'
 import { supabase } from '#/lib/supabase.ts'
 import {
   createReservation,
@@ -151,6 +153,46 @@ const LOAD_FUTURE_DAYS = 180 // futur chargé au départ
 const LOAD_EXPAND_DAYS = 120 // taille d'un agrandissement
 const LOAD_EDGE_GUARD = 21 // on étend quand la vue arrive à ≤ N jours d'un bord
 const STAY_LOOKBACK_DAYS = 45 // marge amont pour les séjours débordant dans la vue
+/* Rechargement de rattrapage (retour d'onglet, focus, réseau revenu, canal
+ * temps réel reconnecté) : ces événements arrivent en RAFALE (un réveil de
+ * veille = visibilitychange + focus + online + resouscription, en moins d'une
+ * seconde). Un seul refetch pour toute la rafale, déclenché 2 s après le
+ * dernier signal (debounce à retardement). */
+const RESYNC_DEBOUNCE_MS = 2_000
+
+/** Fenêtre chargée, bornes 'YYYY-MM-DD' incluses sur `start_date`. */
+type LoadRange = { from: string; to: string }
+
+/** Clé de cache de la fenêtre — SOURCE UNIQUE, partagée par `useQuery` et par le
+ * miroir Realtime (`setQueryData`) : les deux doivent viser la même entrée. */
+function reservationsKey(range: LoadRange | null) {
+  return ['parking', 'reservations', range?.from, range?.to] as const
+}
+
+/** Fenêtre demandée → fenêtre chargée, arrondie aux bornes de mois (cf.
+ * `snapRangeToMonths`) et formatée pour la requête. Passage OBLIGÉ de toute
+ * fenêtre (initiale comme agrandie) : c'est l'arrondi qui rend la clé stable. */
+function toLoadRange(from: Date, to: Date): LoadRange {
+  const snapped = snapRangeToMonths(from, to)
+  return {
+    from: format(snapped.from, 'yyyy-MM-dd'),
+    to: format(snapped.to, 'yyyy-MM-dd'),
+  }
+}
+
+/** Ligne Realtime (la table complète) → les 7 colonnes que lit le planning, pour
+ * que le cache reste homogène avec ce que renvoie `fetchReservations`. */
+function pickDbReservation(row: DbReservation): DbReservation {
+  return {
+    id: row.id,
+    spot: row.spot,
+    client: row.client,
+    start_date: row.start_date,
+    nights: row.nights,
+    status: row.status,
+    comment: row.comment,
+  }
+}
 const BAR_PAD_X = 2 // marge horizontale d'une barre (px)
 const BAR_PAD_Y = 4 // marge verticale d'une barre (px)
 
@@ -319,7 +361,12 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
   const [offset, setOffset] = useState(0)
   // Fenêtre de dates CHARGÉE (bornes 'YYYY-MM-DD' sur start_date). null tant que le
   // premier cadrage n'est pas posé → la requête attend. S'agrandit à la navigation.
-  const [range, setRange] = useState<{ from: string; to: string } | null>(null)
+  const [range, setRange] = useState<LoadRange | null>(null)
+  // Miroir de `range` lisible depuis le handler Realtime (closure figée à la
+  // souscription) : le canal ne doit PAS se réabonner à chaque agrandissement de
+  // fenêtre, il lit donc la fenêtre courante ici.
+  const rangeRef = useRef<LoadRange | null>(null)
+  const queryClient = useQueryClient()
   // Défilement au clic-glissé (drag-to-scroll) : vrai le temps d'un panoramique,
   // pour le curseur « grabbing » et la neutralisation de la sélection de texte.
   const [panning, setPanning] = useState(false)
@@ -386,17 +433,22 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
   }, [])
 
   // Fenêtre de données initiale (autour d'aujourd'hui), posée une fois côté client
-  // — même précaution d'hydratation que le lundi de référence.
+  // — même précaution d'hydratation que le lundi de référence. Arrondie au mois
+  // (`toLoadRange`) : la clé de cache est ainsi la même d'un jour à l'autre, un
+  // retour sur le planning le lendemain retrouve l'entrée de la veille.
   useEffect(() => {
     if (range) return
     const today = new Date()
-    setRange({
-      from: format(
+    setRange(
+      toLoadRange(
         addDays(today, -(LOAD_PAST_DAYS + STAY_LOOKBACK_DAYS)),
-        'yyyy-MM-dd',
+        addDays(today, LOAD_FUTURE_DAYS),
       ),
-      to: format(addDays(today, LOAD_FUTURE_DAYS), 'yyyy-MM-dd'),
-    })
+    )
+  }, [range])
+
+  useEffect(() => {
+    rangeRef.current = range
   }, [range])
 
   // Miroir à jour pour les handlers de drag (closures figées sur un ancien état).
@@ -423,18 +475,26 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
    * télécharge plus tout l'historique — seulement la période consultée, étendue à
    * la navigation (cf. l'effet d'agrandissement).
    *
-   * `staleTime: 0` : le temps réel tient la vue à jour TANT QUE la page est montée.
-   * Au retour, les données du cache s'affichent aussitôt, le refetch corrige derrière.
+   * `staleTime: 30_000` : le temps réel tient la vue à jour TANT QUE la page est
+   * montée, et ses événements sont MIROITÉS dans le cache (cf. le canal) : l'image
+   * en cache reste juste après un démontage. Un aller-retour rapide sur /parking
+   * (< 30 s) ne repaie donc plus la fenêtre ; au-delà, le refetch au montage
+   * corrige derrière l'affichage immédiat.
+   *
+   * `refetchOnReconnect: false` : le retour du réseau est déjà pris en charge par
+   * le rattrapage coalescé (`requestResync`, événement `online`) ; laisser le
+   * défaut global ferait DEUX requêtes à la reconnexion.
    */
   const {
     data: rows,
     error: rowsError,
     refetch: refetchReservations,
   } = useQuery({
-    queryKey: ['parking', 'reservations', range?.from, range?.to],
+    queryKey: reservationsKey(range),
     queryFn: () => fetchReservations(range!.from, range!.to),
     enabled: !!range,
-    staleTime: 0,
+    staleTime: 30_000,
+    refetchOnReconnect: false,
   })
 
   useEffect(() => {
@@ -454,23 +514,42 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
   // propre au montage (état vide → vérité de la fenêtre). C'est ce qui garantit que
   // borner/agrandir la fenêtre n'efface jamais une mise à jour temps réel.
   // EXCEPTION : rattrapage forcé (hardResyncRef) → remplacement complet, cf. ci-dessus.
+  //
+  // Le cache change aussi à chaque événement Realtime miroité (cf. le canal). Ne
+  // sont alors fusionnées que les lignes dont l'OBJET a changé depuis la dernière
+  // fusion (`lastFusedRef`, comparaison par référence) : le miroir ne réécrit que
+  // la ligne touchée, les autres gardent leur référence. Sans ce filtre, chaque
+  // événement d'un collègue rappliquerait TOUTE la fenêtre sur l'état local et
+  // écraserait une modification optimiste en vol (barre en cours de glissement
+  // ramenée à sa position d'origine juste avant le relâchement, geste perdu). Un
+  // vrai refetch renvoie des objets neufs → toutes les lignes sont fusionnées,
+  // comme avant.
+  const lastFusedRef = useRef<Map<string, DbReservation>>(new Map())
   useEffect(() => {
     if (!rows || !startDate) return
+    const previous = lastFusedRef.current
+    lastFusedRef.current = new Map(rows.map((row) => [row.id, row]))
     if (hardResyncRef.current) {
       hardResyncRef.current = false
       setReservations(rows.map((row) => toReservation(row, startDate)))
       return
     }
+    const changed = rows.filter((row) => previous.get(row.id) !== row)
+    if (changed.length === 0) return
     setReservations((prev) => {
       const byId = new Map(prev.map((r) => [r.id, r]))
-      for (const row of rows) byId.set(row.id, toReservation(row, startDate))
+      for (const row of changed) byId.set(row.id, toReservation(row, startDate))
       return [...byId.values()]
     })
   }, [rows, startDate])
 
   // Abonnement Realtime, une fois le lundi de réf. connu. Il patche l'état
-  // LOCAL ligne à ligne, sans toucher au cache : dériver l'affichage du cache
-  // effacerait les mises à jour optimistes encore en vol (drag, copie).
+  // LOCAL ligne à ligne : l'affichage n'est jamais DÉRIVÉ du cache (ça
+  // effacerait les mises à jour optimistes encore en vol : drag, copie). Chaque
+  // événement est en outre MIROITÉ dans le cache de la fenêtre courante
+  // (`setQueryData`, upsert par id / retrait sur DELETE), pour que l'entrée
+  // servie au prochain montage (fraîche 30 s) reflète ce qui s'est passé pendant
+  // que la page était ouverte, et non l'image du dernier fetch.
   //
   // Un poste laissé inactif longtemps (veille, onglet en arrière-plan) peut
   // perdre le socket temps réel SANS qu'aucun événement de coupure ne soit
@@ -480,13 +559,60 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
   // par un rechargement complet (a) dès que le canal signale une reconnexion
   // après une coupure détectée, ET (b) en filet de sécurité, dès que l'onglet
   // redevient visible/actif ou que le réseau revient — sans attendre que le
-  // canal le signale lui-même.
+  // canal le signale lui-même. Tous ces signaux passent par `requestResync`
+  // (un seul refetch par rafale, cf. RESYNC_DEBOUNCE_MS), ignoré tant que le
+  // disjoncteur backend est ouvert : relancer une lecture complète sur une base
+  // qui ne répond pas ne ferait qu'aggraver la panne (le retour d'onglet
+  // suivant, ou la reconnexion du canal, retentera).
   useEffect(() => {
     if (!startDate) return
 
-    const hardResync = () => {
-      hardResyncRef.current = true
-      void refetchReservations()
+    let resyncTimer: ReturnType<typeof setTimeout> | null = null
+    const requestResync = () => {
+      if (resyncTimer) clearTimeout(resyncTimer)
+      resyncTimer = setTimeout(() => {
+        resyncTimer = null
+        if (backendHealth.shouldSkip()) return
+        // Onglet caché (ex. `online` reçu en arrière-plan) : inutile de recharger
+        // maintenant, le `visibilitychange` du retour s'en chargera.
+        if (document.visibilityState === 'hidden') return
+        hardResyncRef.current = true
+        void refetchReservations()
+      }, RESYNC_DEBOUNCE_MS)
+    }
+
+    // Miroir d'un événement dans le cache de la fenêtre courante. Ne crée JAMAIS
+    // d'entrée (updater → `undefined` quand l'entrée n'existe pas encore) : une
+    // entrée créée avec une seule ligne passerait pour fraîche et priverait la
+    // fenêtre nouvellement demandée de son premier fetch. Le cache d'une fenêtre
+    // ne contient que les lignes dont `start_date` y tombe : une ligne qui en
+    // sort (déplacée par un collègue) en est retirée, exactement comme un fetch
+    // ne la renverrait plus. Pendant un rattrapage forcé en attente, on
+    // s'abstient : le fetch imminent remplace l'entrée de toute façon.
+    const mirror = (id: string, row: DbReservation | null) => {
+      const current = rangeRef.current
+      if (!current || hardResyncRef.current) return
+      // Ligne à conserver dans l'entrée : présente (pas un DELETE) ET dans la fenêtre.
+      const kept =
+        row !== null && row.start_date >= current.from && row.start_date <= current.to
+          ? row
+          : null
+      queryClient.setQueryData<DbReservation[]>(
+        reservationsKey(current),
+        (cached) => {
+          if (cached === undefined) return undefined
+          if (kept === null) {
+            return cached.some((r) => r.id === id)
+              ? cached.filter((r) => r.id !== id)
+              : cached
+          }
+          const i = cached.findIndex((r) => r.id === id)
+          if (i === -1) return [...cached, kept]
+          const next = cached.slice()
+          next[i] = kept
+          return next
+        },
+      )
     }
 
     let dropped = false
@@ -500,8 +626,10 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
           if (payload.eventType === 'DELETE') {
             const id = (payload.old as { id: string }).id
             setReservations((prev) => prev.filter((r) => r.id !== id))
+            mirror(id, null)
           } else {
-            const res = toReservation(payload.new as DbReservation, startDate)
+            const row = pickDbReservation(payload.new as DbReservation)
+            const res = toReservation(row, startDate)
             setReservations((prev) => {
               const i = prev.findIndex((r) => r.id === res.id)
               if (i === -1) return [...prev, res]
@@ -509,6 +637,7 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
               next[i] = res
               return next
             })
+            mirror(row.id, row)
           }
         },
       )
@@ -516,7 +645,7 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
         if (status === 'SUBSCRIBED') {
           if (dropped) {
             dropped = false
-            hardResync()
+            requestResync()
           }
         } else if (
           status === 'CHANNEL_ERROR' ||
@@ -528,19 +657,20 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
       })
 
     const onVisibility = () => {
-      if (document.visibilityState === 'visible') hardResync()
+      if (document.visibilityState === 'visible') requestResync()
     }
     document.addEventListener('visibilitychange', onVisibility)
-    window.addEventListener('focus', hardResync)
-    window.addEventListener('online', hardResync)
+    window.addEventListener('focus', requestResync)
+    window.addEventListener('online', requestResync)
 
     return () => {
+      if (resyncTimer) clearTimeout(resyncTimer)
       document.removeEventListener('visibilitychange', onVisibility)
-      window.removeEventListener('focus', hardResync)
-      window.removeEventListener('online', hardResync)
+      window.removeEventListener('focus', requestResync)
+      window.removeEventListener('online', requestResync)
       void supabase.removeChannel(channel)
     }
-  }, [startDate, refetchReservations])
+  }, [startDate, refetchReservations, queryClient])
 
   // Mesure de la largeur (→ nombre de jours). Recalculée au redimensionnement
   // du conteneur (RO) et de la fenêtre (rotation, clavier virtuel).
@@ -657,6 +787,12 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
   // rétrécissement). Un seul agrandissement couvre même un saut lointain (lien
   // ?date=…) : on prend la borne la plus large entre « +1 palier » et « couvrir la
   // vue ». Le lookback amont capte les séjours débordant dans la vue.
+  //
+  // La fenêtre résultante repasse par `toLoadRange` (arrondi au mois), comme la
+  // fenêtre initiale : `range` est donc TOUJOURS arrondie, et l'arrondi étant
+  // idempotent, un passage sans agrandissement redonne exactement `range` → pas
+  // de `setRange`, pas de boucle. Une borne agrandie ne peut que reculer d'au
+  // moins un palier, donc strictement s'éloigner : l'effet converge.
   useEffect(() => {
     if (!startDate || !range || visibleDays <= 0) return
     const visFrom = addDays(startDate, offset)
@@ -666,28 +802,26 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
     const earlier = (a: Date, b: Date) => (a < b ? a : b)
     const later = (a: Date, b: Date) => (a > b ? a : b)
 
-    let nextFrom = range.from
-    let nextTo = range.to
+    let nextFrom = rangeFrom
+    let nextTo = rangeTo
     if (
       differenceInCalendarDays(visFrom, rangeFrom) <=
       LOAD_EDGE_GUARD + STAY_LOOKBACK_DAYS
     ) {
-      nextFrom = format(
-        earlier(
-          addDays(rangeFrom, -LOAD_EXPAND_DAYS),
-          addDays(visFrom, -(STAY_LOOKBACK_DAYS + LOAD_EDGE_GUARD)),
-        ),
-        'yyyy-MM-dd',
+      nextFrom = earlier(
+        addDays(rangeFrom, -LOAD_EXPAND_DAYS),
+        addDays(visFrom, -(STAY_LOOKBACK_DAYS + LOAD_EDGE_GUARD)),
       )
     }
     if (differenceInCalendarDays(rangeTo, visTo) <= LOAD_EDGE_GUARD) {
-      nextTo = format(
-        later(addDays(rangeTo, LOAD_EXPAND_DAYS), addDays(visTo, LOAD_EDGE_GUARD)),
-        'yyyy-MM-dd',
+      nextTo = later(
+        addDays(rangeTo, LOAD_EXPAND_DAYS),
+        addDays(visTo, LOAD_EDGE_GUARD),
       )
     }
-    if (nextFrom !== range.from || nextTo !== range.to) {
-      setRange({ from: nextFrom, to: nextTo })
+    const next = toLoadRange(nextFrom, nextTo)
+    if (next.from !== range.from || next.to !== range.to) {
+      setRange(next)
     }
   }, [startDate, range, offset, visibleDays])
 
