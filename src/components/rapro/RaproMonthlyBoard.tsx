@@ -74,9 +74,12 @@ export function RaproMonthlyBoard({
 
   // Bornes de la navigation mois par mois : du plus ancien jour saisi (comme la
   // vue annuelle) au mois courant — jamais dans le futur.
+  // Borne figée pour la session (aucun import rapro ne peut la faire reculer).
   const { data: oldest } = useQuery({
     queryKey: ['rapro', 'oldest'],
     queryFn: fetchOldestDay,
+    staleTime: Infinity,
+    gcTime: 60 * 60_000,
   })
   const now = new Date()
   const currentYear = now.getFullYear()

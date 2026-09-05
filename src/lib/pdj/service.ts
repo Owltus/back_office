@@ -55,18 +55,29 @@ export interface PdjDayRow extends DbPdjRow {
   breakfasts_offert: number
 }
 
+/** Clé TanStack Query UNIQUE des dates de service (`fetchServiceDates`), partagée
+ * par le board PDJ, l'analytique PDJ et le board rapro : une seule clé = une seule
+ * requête en cache pour les trois pages (c'est la lecture la plus lourde du
+ * projet). Sous le préfixe `['pdj']`, donc couverte par l'invalidation globale
+ * jouée à la fin de chaque import. */
+export const PDJ_DATES_KEY = ['pdj', 'dates'] as const
+
+/** Vue `select distinct service_date` (supabase/perf_2026-09-05.sql) : Index Only
+ * Scan sur `pdj_breakfasts_service_date_idx`, ~19 ms mesurés, contre 248 ms via
+ * l'agrégat `pdj_daily_agg` (scan complet + regroupement de 12 787 lignes). */
+export const PDJ_DATES_VIEW = 'pdj_service_dates'
+
 /** Dates de service DISTINCTES (années dispo de l'analytique, sélecteur de jour
- * du board). Lues depuis la VUE `pdj_daily_agg` : au plus quelques lignes par jour
- * (une par code), soit ~10× moins que la table brute — la liste des ~230 dates
- * tient dans une seule page au lieu d'une douzaine de pages en série. Paginé par
- * sécurité (si l'historique grandit), puis dédupliqué. */
+ * du board). Lues depuis la vue `pdj_service_dates` : une ligne par date (~235),
+ * déjà dédoublonnées côté base. Paginé par sécurité (si l'historique grandit) ;
+ * le `Set` final est conservé, idempotent, au cas où la vue changerait. */
 export async function fetchServiceDates(): Promise<string[]> {
   const PAGE = 1000
   const dates: string[] = []
   let offset = 0
   for (;;) {
     const { data, error } = await supabase
-      .from(PDJ_AGG_VIEW)
+      .from(PDJ_DATES_VIEW)
       .select('service_date')
       .order('service_date', { ascending: false })
       .range(offset, offset + PAGE - 1)

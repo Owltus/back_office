@@ -23,6 +23,7 @@ import {
   fetchDailyAgg,
   fetchExternalsRange,
   fetchServiceDates,
+  PDJ_DATES_KEY,
 } from '#/lib/pdj/service.ts'
 import { aggregatePdjMonthly, yearsFromDates } from '#/lib/pdj/analytics.ts'
 import { computeAggDailyTotals } from '#/lib/pdj/amounts.ts'
@@ -48,10 +49,12 @@ export function PdjAnalytiqueBoard() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
-  // Années disponibles (dérivées des jours de service en base).
+  // Années disponibles (dérivées des jours de service en base). Clé partagée
+  // avec le board PDJ et le board rapro ; l'import invalide le préfixe ['pdj'].
   const { data: dates = [] } = useQuery({
-    queryKey: ['pdj', 'dates'],
+    queryKey: PDJ_DATES_KEY,
     queryFn: fetchServiceDates,
+    staleTime: 5 * 60_000,
   })
   const years = useMemo(() => yearsFromDates(dates, currentYear), [dates])
 

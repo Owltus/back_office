@@ -31,7 +31,7 @@ import { RaproHelpPanel } from '#/components/rapro/RaproHelpPanel.tsx'
 import { CloseSheetDialog } from '#/components/shared/CloseSheetDialog.tsx'
 import type { CloseIssue } from '#/components/shared/CloseSheetDialog.tsx'
 import { Textarea } from '#/components/ui/textarea.tsx'
-import { fetchServiceDates } from '#/lib/pdj/service.ts'
+import { PDJ_DATES_KEY, fetchServiceDates } from '#/lib/pdj/service.ts'
 import { parseDateStr } from '#/lib/poster/dateFormatter.ts'
 import { carryOver, carryoverWindow } from '#/lib/rapro/carryover.ts'
 import type { DaySnapshot } from '#/lib/rapro/carryover.ts'
@@ -142,15 +142,21 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   // Lecture : jamais. Écriture : seulement dans la fenêtre J-2. Gestion : toujours.
   const dayEditable = canReconcileDay(selectedDate, todayStr, level)
 
+  // Borne historique : ne recule jamais en usage courant (aucun import rapro),
+  // donc figée pour la session — inutile de la relire toutes les 60 s.
   const { data: oldestDay, isError: oldestError } = useQuery({
     queryKey: ['rapro', 'oldest'],
     queryFn: fetchOldestDay,
+    staleTime: Infinity,
+    gcTime: 60 * 60_000,
   })
   // Jours ayant des données PDJ (comme la navigation du petit-déj) : on peut
-  // reculer jusqu'au plus ancien, même si rapro_rooms est encore vide.
+  // reculer jusqu'au plus ancien, même si rapro_rooms est encore vide. MÊME clé
+  // que le board PDJ → une seule requête partagée entre /pdj et /rapro.
   const { data: serviceDates } = useQuery({
-    queryKey: ['rapro', 'service-dates'],
+    queryKey: PDJ_DATES_KEY,
     queryFn: fetchServiceDates,
+    staleTime: 5 * 60_000,
   })
   const pdjOldest = serviceDates?.length
     ? serviceDates[serviceDates.length - 1]

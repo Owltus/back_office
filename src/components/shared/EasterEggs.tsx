@@ -16,9 +16,13 @@ import { SecretEffect } from './SecretEffect.tsx'
  * échoue silencieusement (`data` reste indéfini) et aucun easter egg n'est monté.
  */
 export function EasterEggs() {
+  // Liste quasi statique : ne change que depuis la page admin, qui invalide le
+  // préfixe ['easter-eggs'] après chaque modification → une lecture par heure
+  // suffit (au lieu d'une relecture à chaque montage passé 60 s).
   const { data } = useQuery({
     queryKey: ['easter-eggs', 'active'],
     queryFn: fetchEasterEggs,
+    staleTime: 60 * 60_000,
   })
 
   const eggs = (data ?? []).filter((egg) => egg.enabled)

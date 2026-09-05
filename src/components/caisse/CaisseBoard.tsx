@@ -200,9 +200,14 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
   // ancien enregistrement, ou — s'il n'existe pas ou n'est pas plus ancien — le
   // shift JUSTE AVANT (base vide : on remonte d'un cran pour amorcer le fond).
   const nowKey = slotKey(displaySlot.date, displaySlot.shift)
+  // Bornes historiques figées pour la session : elles ne reculent qu'à la création
+  // d'une feuille plus ancienne (couvert par `invalidate()` → préfixe ['caisse'])
+  // ou à un import In-House rétroactif (préfixe ['pdj'] invalidé par l'import).
   const { data: oldestSlot } = useQuery({
     queryKey: ['caisse', 'oldest'],
     queryFn: fetchOldestSlot,
+    staleTime: Infinity,
+    gcTime: 60 * 60_000,
   })
   // Plus ancien jour ayant un rapport In-House (PDJ) : la caisse doit pouvoir
   // remonter jusque-là pour saisir les caisses historiques, même sans caisse
@@ -210,6 +215,8 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
   const { data: oldestServiceDate } = useQuery({
     queryKey: ['pdj', 'oldest-service-date'],
     queryFn: fetchOldestServiceDate,
+    staleTime: Infinity,
+    gcTime: 60 * 60_000,
   })
   const prevSlot = stepSlot(displaySlot.date, displaySlot.shift, -1)
   // Borne basse = le PLUS ANCIEN parmi : le shift juste avant (amorçage du fond),

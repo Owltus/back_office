@@ -46,9 +46,12 @@ export function RaproAnalytiqueBoard() {
 
   // Années disponibles (du plus ancien jour saisi à l'année courante) pour le
   // menu déroulant, comme sur l'analytique repjour / PDJ.
+  // Borne figée pour la session (aucun import rapro ne peut la faire reculer).
   const { data: oldest } = useQuery({
     queryKey: ['rapro', 'oldest'],
     queryFn: fetchOldestDay,
+    staleTime: Infinity,
+    gcTime: 60 * 60_000,
   })
   const years = useMemo(() => {
     const start = oldest ? Number(oldest.slice(0, 4)) : currentYear

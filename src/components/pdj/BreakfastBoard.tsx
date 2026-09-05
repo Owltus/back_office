@@ -73,6 +73,7 @@ import {
   fetchExternalsCount,
   fetchServiceDates,
   importAddonProduction,
+  PDJ_DATES_KEY,
   importRows,
   purgeOldGuestNames,
   setExternalsCount,
@@ -241,10 +242,13 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
     [clearAutoTimers],
   )
 
-  // Jours de service disponibles (du plus récent au plus ancien).
+  // Jours de service disponibles (du plus récent au plus ancien). Clé partagée
+  // avec l'analytique PDJ et le board rapro ; ne change qu'à l'import, qui
+  // invalide le préfixe ['pdj'] → 5 min de fraîcheur suffisent.
   const { data: dates = [] } = useQuery({
-    queryKey: ['pdj', 'dates'],
+    queryKey: PDJ_DATES_KEY,
     queryFn: fetchServiceDates,
+    staleTime: 5 * 60_000,
   })
 
   // Purge RGPD au montage (une seule fois, rôles habilités) : anonymise les noms
