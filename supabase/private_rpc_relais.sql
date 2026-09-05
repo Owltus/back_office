@@ -1371,4 +1371,6 @@ union all
 select 'fonctions privees appelant un relais public', count(*)::text
 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
 where n.nspname = 'private' and p.prokind = 'f'
-  and (case when p.prokind = 'f' then pg_get_functiondef(p.oid) end) ~ 'public\.(facturation_|set_user_grade|set_page_permission|remove_page_permission|admin_update_password|rapro_occupancy|daily_reports_occ)';
+  -- noms de FONCTIONS suivis de « ( » : les tables public.facturation_* ne comptent pas
+  and (case when p.prokind = 'f' then pg_get_functiondef(p.oid) end)
+      ~ ('public\.(' || (select string_agg(q.proname, '|') from pg_proc q join pg_namespace m on m.oid = q.pronamespace where m.nspname = 'private') || ')\(');
