@@ -18,6 +18,7 @@
 -- 00-INDEX.md, décision D4 : ajouter une caution rétroactive corrige donc
 -- automatiquement l'affichage d'une feuille déjà clôturée, sans jamais réécrire
 -- cette feuille (aucun conflit avec son verrou RLS).
+-- 2026-09-05 : aides en schéma private (voir private_schema_aides.sql)
 -- =============================================================================
 
 -- ---- Table + index ----------------------------------------------------------
@@ -102,20 +103,20 @@ alter table public.caisse_cautions enable row level security;
 drop policy if exists "caisse cautions read (page:caisse)" on public.caisse_cautions;
 create policy "caisse cautions read (page:caisse)"
   on public.caisse_cautions for select to authenticated
-  using ((select public.page_level_rank(public.get_page_level('caisse'))) >= 1);
+  using ((select private.page_level_rank(private.get_page_level('caisse'))) >= 1);
 
 drop policy if exists "caisse cautions write (page:caisse)" on public.caisse_cautions;
 -- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "caisse cautions write (page:caisse)"
   on public.caisse_cautions for insert to authenticated
-  with check ((select public.page_level_rank(public.get_page_level('caisse'))) >= 2);
+  with check ((select private.page_level_rank(private.get_page_level('caisse'))) >= 2);
 
 drop policy if exists "caisse cautions update (page:caisse)" on public.caisse_cautions;
 -- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "caisse cautions update (page:caisse)"
   on public.caisse_cautions for update to authenticated
-  using ((select public.page_level_rank(public.get_page_level('caisse'))) >= 2)
-  with check ((select public.page_level_rank(public.get_page_level('caisse'))) >= 2);
+  using ((select private.page_level_rank(private.get_page_level('caisse'))) >= 2)
+  with check ((select private.page_level_rank(private.get_page_level('caisse'))) >= 2);
 
 -- Suppression : voir supabase/caisse_cautions_delete_ecriture_same_day.sql
 -- (autorité UNIQUE pour cette policy — ne PAS la recréer ici, ce serait un

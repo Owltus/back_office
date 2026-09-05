@@ -12,6 +12,7 @@
 -- budget : désormais rattaché à repjour:gestion (page /gestion) — voir
 --   supabase/gestion_budget_rls.sql (remplace l'ancienne policy FOR ALL par grade
 --   « Admin manages budget »). L'admin conserve tout (gestion partout).
+-- 2026-09-05 : aides en schéma private (voir private_schema_aides.sql)
 -- =============================================================================
 
 -- ---- daily_reports (page 'repjour') -----------------------------------------
@@ -25,16 +26,16 @@ drop policy if exists "daily_reports delete (page:repjour)" on public.daily_repo
 -- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "daily_reports write (page:repjour)"
   on public.daily_reports for insert to authenticated
-  with check ((select public.page_level_rank(public.get_page_level('repjour'))) >= 2);
+  with check ((select private.page_level_rank(private.get_page_level('repjour'))) >= 2);
 -- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "daily_reports update (page:repjour)"
   on public.daily_reports for update to authenticated
-  using ((select public.page_level_rank(public.get_page_level('repjour'))) >= 2)
-  with check ((select public.page_level_rank(public.get_page_level('repjour'))) >= 2);
+  using ((select private.page_level_rank(private.get_page_level('repjour'))) >= 2)
+  with check ((select private.page_level_rank(private.get_page_level('repjour'))) >= 2);
 -- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "daily_reports delete (page:repjour)"
   on public.daily_reports for delete to authenticated
-  using ((select public.page_level_rank(public.get_page_level('repjour'))) >= 2);
+  using ((select private.page_level_rank(private.get_page_level('repjour'))) >= 2);
 
 -- ---- forecast_days (page 'repjour') — GESTION, ou ÉCRITURE en MODE MANUEL ----
 -- L'import Forecast (analytique) est réservé à la GESTION côté UI
@@ -53,6 +54,13 @@ create policy "daily_reports delete (page:repjour)"
 -- daily_reports AVANT forecast_days (orchestrator.ts) : au moment d'écrire le
 -- Forecast, le rapport manuel existe déjà. Miroir UI : lib/businessDay.ts
 -- (isManualImportOpen, MANUAL_MODE_HOUR). DELETE reste gestion.
+-- ---------------------------------------------------------------------------
+-- PÉRIMÉ le 2026-09-05 : repjour_manual_forecast_allowed vit désormais dans le
+-- schéma private (autorité : supabase/private_schema_aides.sql). Ne pas
+-- rejouer ce bloc (fonction et ses grants) : il recréerait une fonction
+-- security definer dans public (Security Advisor rouvert, doublon avec le
+-- relais). Conservé pour l'historique.
+-- ---------------------------------------------------------------------------
 create or replace function public.repjour_manual_forecast_allowed(p_year int, p_month int)
 returns boolean
 language sql stable security definer set search_path = public
@@ -85,33 +93,33 @@ drop policy if exists "forecast_days delete (page:repjour)" on public.forecast_d
 create policy "forecast_days write (page:repjour)"
   on public.forecast_days for insert to authenticated
   with check (
-    (select public.get_page_level('repjour')) = 'gestion'
+    (select private.get_page_level('repjour')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('repjour'))) >= 2
-      and public.repjour_manual_forecast_allowed(year, month)
+      (select private.page_level_rank(private.get_page_level('repjour'))) >= 2
+      and private.repjour_manual_forecast_allowed(year, month)
     )
   );
 -- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "forecast_days update (page:repjour)"
   on public.forecast_days for update to authenticated
   using (
-    (select public.get_page_level('repjour')) = 'gestion'
+    (select private.get_page_level('repjour')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('repjour'))) >= 2
-      and public.repjour_manual_forecast_allowed(year, month)
+      (select private.page_level_rank(private.get_page_level('repjour'))) >= 2
+      and private.repjour_manual_forecast_allowed(year, month)
     )
   )
   with check (
-    (select public.get_page_level('repjour')) = 'gestion'
+    (select private.get_page_level('repjour')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('repjour'))) >= 2
-      and public.repjour_manual_forecast_allowed(year, month)
+      (select private.page_level_rank(private.get_page_level('repjour'))) >= 2
+      and private.repjour_manual_forecast_allowed(year, month)
     )
   );
 -- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "forecast_days delete (page:repjour)"
   on public.forecast_days for delete to authenticated
-  using ((select public.get_page_level('repjour')) = 'gestion');
+  using ((select private.get_page_level('repjour')) = 'gestion');
 
 -- VÉRIFICATION — 3 policies forecast_days + la fonction du mode manuel.
 select policyname, cmd

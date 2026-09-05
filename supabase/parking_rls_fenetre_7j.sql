@@ -17,6 +17,7 @@
 --       * DELETE : seulement une résa d'actualité (fin >= aujourd'hui - 7 j).
 --     Le cas « début reculé » exige de comparer OLD et NEW → impossible en policy
 --     (WITH CHECK ne voit que NEW), d'où le trigger BEFORE UPDATE ci-dessous.
+-- 2026-09-05 : aides en schéma private (voir private_schema_aides.sql)
 -- =============================================================================
 
 -- 1) APERÇU (facultatif) — combien de résa seraient « verrouillées » aujourd'hui
@@ -39,9 +40,9 @@ drop policy if exists "parking delete (page:parking)" on public.parking_reservat
 create policy "parking write (page:parking)"
   on public.parking_reservations for insert to authenticated
   with check (
-    (select public.get_page_level('parking')) = 'gestion'
+    (select private.get_page_level('parking')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('parking'))) >= 2
+      (select private.page_level_rank(private.get_page_level('parking'))) >= 2
       and start_date >= (current_date - 7)
     )
   );
@@ -52,16 +53,16 @@ create policy "parking write (page:parking)"
 create policy "parking update (page:parking)"
   on public.parking_reservations for update to authenticated
   using (
-    (select public.get_page_level('parking')) = 'gestion'
+    (select private.get_page_level('parking')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('parking'))) >= 2
+      (select private.page_level_rank(private.get_page_level('parking'))) >= 2
       and (start_date + nights) >= (current_date - 7)
     )
   )
   with check (
-    (select public.get_page_level('parking')) = 'gestion'
+    (select private.get_page_level('parking')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('parking'))) >= 2
+      (select private.page_level_rank(private.get_page_level('parking'))) >= 2
       and (start_date + nights) >= (current_date - 7)
     )
   );
@@ -70,9 +71,9 @@ create policy "parking update (page:parking)"
 create policy "parking delete (page:parking)"
   on public.parking_reservations for delete to authenticated
   using (
-    (select public.get_page_level('parking')) = 'gestion'
+    (select private.get_page_level('parking')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('parking'))) >= 2
+      (select private.page_level_rank(private.get_page_level('parking'))) >= 2
       and (start_date + nights) >= (current_date - 7)
     )
   );
@@ -94,7 +95,7 @@ begin
     return new;
   end if;
   -- La gestion (et l'admin, qui a get_page_level = 'gestion') peut tout.
-  if public.get_page_level('parking') = 'gestion' then
+  if private.get_page_level('parking') = 'gestion' then
     return new;
   end if;
   -- Interdire de reculer le début plus loin dans le passé verrouillé.

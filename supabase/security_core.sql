@@ -1,3 +1,11 @@
+-- =============================================================================
+-- REMPLACÉ le 2026-09-05 par supabase/private_schema_aides.sql (get_user_role)
+-- et supabase/private_rpc_relais.sql (admin_update_password) — NE PLUS REJOUER.
+-- Rejouer ce fichier recréerait une fonction security definer dans public
+-- (Security Advisor rouvert, doublon avec le relais) ou une garde périmée.
+-- Conservé pour l'historique.
+-- =============================================================================
+
 -- ============================================================================
 -- security_core — fonctions de sécurité critiques (C1) : rapatriement + garde.
 --

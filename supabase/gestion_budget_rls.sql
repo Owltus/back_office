@@ -14,6 +14,7 @@
 --
 --   La LECTURE reste « budget read (page:repjour) » (>= 1), déjà posée par
 --   page_permissions_rls_lectures.sql — NON touchée ici.
+-- 2026-09-05 : aides en schéma private (voir private_schema_aides.sql)
 -- =============================================================================
 
 -- Retire l'ancienne policy FOR ALL par grade (portait la lecture ET l'écriture).
@@ -27,16 +28,16 @@ drop policy if exists "budget delete (page:repjour gestion)" on public.budget;
 -- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "budget write (page:repjour gestion)"
   on public.budget for insert to authenticated
-  with check ((select public.get_page_level('repjour')) = 'gestion');
+  with check ((select private.get_page_level('repjour')) = 'gestion');
 -- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "budget update (page:repjour gestion)"
   on public.budget for update to authenticated
-  using ((select public.get_page_level('repjour')) = 'gestion')
-  with check ((select public.get_page_level('repjour')) = 'gestion');
+  using ((select private.get_page_level('repjour')) = 'gestion')
+  with check ((select private.get_page_level('repjour')) = 'gestion');
 -- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "budget delete (page:repjour gestion)"
   on public.budget for delete to authenticated
-  using ((select public.get_page_level('repjour')) = 'gestion');
+  using ((select private.get_page_level('repjour')) = 'gestion');
 
 
 -- VÉRIFICATION — plus de « Admin manages budget » ; 1 read + 3 write.

@@ -39,6 +39,7 @@
 --
 -- PRÉREQUIS : page_permissions.sql exécuté (is_admin / page_level_rank /
 -- get_page_level existent et sont grantées à authenticated). Vérifié en prod.
+-- 2026-09-05 : aides en schéma private (voir private_schema_aides.sql)
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
@@ -53,8 +54,8 @@ drop policy if exists "All read reports" on public.daily_reports;
 create policy "daily_reports read (page:repjour ou rapro)"
   on public.daily_reports for select to authenticated
   using (
-    (select public.page_level_rank(public.get_page_level('repjour'))) >= 1
-    or (select public.page_level_rank(public.get_page_level('rapro'))) >= 1
+    (select private.page_level_rank(private.get_page_level('repjour'))) >= 1
+    or (select private.page_level_rank(private.get_page_level('rapro'))) >= 1
   );
 
 -- Les appels sont enveloppés dans un (select ...) pour être évalués UNE FOIS par
@@ -63,19 +64,19 @@ create policy "daily_reports read (page:repjour ou rapro)"
 drop policy if exists "All read forecast" on public.forecast_days;
 create policy "forecast_days read (page:repjour)"
   on public.forecast_days for select to authenticated
-  using ((select public.page_level_rank(public.get_page_level('repjour'))) >= 1);
+  using ((select private.page_level_rank(private.get_page_level('repjour'))) >= 1);
 
 -- Attention : NE PAS toucher à « Admin manages budget » (FOR ALL) qui porte
 -- aussi les écritures admin. On ne retire que la SELECT permissive.
 drop policy if exists "All read budget" on public.budget;
 create policy "budget read (page:repjour)"
   on public.budget for select to authenticated
-  using ((select public.page_level_rank(public.get_page_level('repjour'))) >= 1);
+  using ((select private.page_level_rank(private.get_page_level('repjour'))) >= 1);
 
 drop policy if exists "pms_daily_metrics read (authenticated)" on public.pms_daily_metrics;
 create policy "pms_daily_metrics read (page:repjour)"
   on public.pms_daily_metrics for select to authenticated
-  using ((select public.page_level_rank(public.get_page_level('repjour'))) >= 1);
+  using ((select private.page_level_rank(private.get_page_level('repjour'))) >= 1);
 
 -- -----------------------------------------------------------------------------
 -- Page CAISSE
@@ -84,7 +85,7 @@ create policy "pms_daily_metrics read (page:repjour)"
 drop policy if exists "caisse read (authenticated)" on public.caisse_sheets;
 create policy "caisse read (page:caisse)"
   on public.caisse_sheets for select to authenticated
-  using ((select public.page_level_rank(public.get_page_level('caisse'))) >= 1);
+  using ((select private.page_level_rank(private.get_page_level('caisse'))) >= 1);
 
 -- -----------------------------------------------------------------------------
 -- Page RAPRO
@@ -93,12 +94,12 @@ create policy "caisse read (page:caisse)"
 drop policy if exists "rapro read (authenticated)" on public.rapro_rooms;
 create policy "rapro_rooms read (page:rapro)"
   on public.rapro_rooms for select to authenticated
-  using ((select public.page_level_rank(public.get_page_level('rapro'))) >= 1);
+  using ((select private.page_level_rank(private.get_page_level('rapro'))) >= 1);
 
 drop policy if exists "rapro_sheets read (authenticated)" on public.rapro_sheets;
 create policy "rapro_sheets read (page:rapro)"
   on public.rapro_sheets for select to authenticated
-  using ((select public.page_level_rank(public.get_page_level('rapro'))) >= 1);
+  using ((select private.page_level_rank(private.get_page_level('rapro'))) >= 1);
 
 -- -----------------------------------------------------------------------------
 -- Page PDJ — contient des données nominatives (guest_name, purgé à J-2)
@@ -107,7 +108,7 @@ create policy "rapro_sheets read (page:rapro)"
 drop policy if exists "pdj read (authenticated)" on public.pdj_breakfasts;
 create policy "pdj read (page:pdj)"
   on public.pdj_breakfasts for select to authenticated
-  using ((select public.page_level_rank(public.get_page_level('pdj'))) >= 1);
+  using ((select private.page_level_rank(private.get_page_level('pdj'))) >= 1);
 
 -- (Les policies de pdj_addon_production sont définies dans supabase/pdj_addon_production.sql,
 --  fichier auto-suffisant et rejouable — pas ici, pour ne pas dupliquer.)
@@ -119,7 +120,7 @@ create policy "pdj read (page:pdj)"
 drop policy if exists "parking read (authenticated)" on public.parking_reservations;
 create policy "parking read (page:parking)"
   on public.parking_reservations for select to authenticated
-  using ((select public.page_level_rank(public.get_page_level('parking'))) >= 1);
+  using ((select private.page_level_rank(private.get_page_level('parking'))) >= 1);
 
 -- -----------------------------------------------------------------------------
 -- Page AFFICHAGE
@@ -128,7 +129,7 @@ create policy "parking read (page:parking)"
 drop policy if exists "affiche read (authenticated)" on public.affiche_templates;
 create policy "affiche read (page:affichage)"
   on public.affiche_templates for select to authenticated
-  using ((select public.page_level_rank(public.get_page_level('affichage'))) >= 1);
+  using ((select private.page_level_rank(private.get_page_level('affichage'))) >= 1);
 
 -- -----------------------------------------------------------------------------
 -- Page FACTURATION — 6 tables. facturation_learned_docs mérite l'attention :
@@ -139,32 +140,32 @@ create policy "affiche read (page:affichage)"
 drop policy if exists "budget_lines read (authenticated)" on public.facturation_budget_lines;
 create policy "budget_lines read (page:facturation)"
   on public.facturation_budget_lines for select to authenticated
-  using ((select public.page_level_rank(public.get_page_level('facturation'))) >= 1);
+  using ((select private.page_level_rank(private.get_page_level('facturation'))) >= 1);
 
 drop policy if exists "issuer_codes read (authenticated)" on public.facturation_issuer_codes;
 create policy "issuer_codes read (page:facturation)"
   on public.facturation_issuer_codes for select to authenticated
-  using ((select public.page_level_rank(public.get_page_level('facturation'))) >= 1);
+  using ((select private.page_level_rank(private.get_page_level('facturation'))) >= 1);
 
 drop policy if exists "issuer_denylist read (authenticated)" on public.facturation_issuer_denylist;
 create policy "issuer_denylist read (page:facturation)"
   on public.facturation_issuer_denylist for select to authenticated
-  using ((select public.page_level_rank(public.get_page_level('facturation'))) >= 1);
+  using ((select private.page_level_rank(private.get_page_level('facturation'))) >= 1);
 
 drop policy if exists "issuers read (authenticated)" on public.facturation_issuers;
 create policy "issuers read (page:facturation)"
   on public.facturation_issuers for select to authenticated
-  using ((select public.page_level_rank(public.get_page_level('facturation'))) >= 1);
+  using ((select private.page_level_rank(private.get_page_level('facturation'))) >= 1);
 
 drop policy if exists "learned_docs read (authenticated)" on public.facturation_learned_docs;
 create policy "learned_docs read (page:facturation)"
   on public.facturation_learned_docs for select to authenticated
-  using ((select public.page_level_rank(public.get_page_level('facturation'))) >= 1);
+  using ((select private.page_level_rank(private.get_page_level('facturation'))) >= 1);
 
 drop policy if exists "wordpool read (authenticated)" on public.facturation_wordpool;
 create policy "wordpool read (page:facturation)"
   on public.facturation_wordpool for select to authenticated
-  using ((select public.page_level_rank(public.get_page_level('facturation'))) >= 1);
+  using ((select private.page_level_rank(private.get_page_level('facturation'))) >= 1);
 
 -- facturation_ref_imputations — table AJOUTÉE après le durcissement initial, elle
 -- était restée en `using(true)` (H2). On la ferme comme les autres facturation_*.
@@ -173,7 +174,7 @@ drop policy if exists "ref_imputations read (authenticated)" on public.facturati
 drop policy if exists "facturation_ref_imputations read (authenticated)" on public.facturation_ref_imputations;
 create policy "ref_imputations read (page:facturation)"
   on public.facturation_ref_imputations for select to authenticated
-  using ((select public.page_level_rank(public.get_page_level('facturation'))) >= 1);
+  using ((select private.page_level_rank(private.get_page_level('facturation'))) >= 1);
 
 -- =============================================================================
 -- VÉRIFICATIONS APRÈS EXÉCUTION (lecture seule)

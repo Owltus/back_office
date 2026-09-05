@@ -12,6 +12,7 @@
 -- RLS : lecture authentifiée ; AUCUNE écriture directe (write = RPC only, voir
 -- facturation_ref_imputations_rpc.sql). Le seed vit dans
 -- facturation_ref_imputations_seed.sql (à passer APRÈS ce fichier et le RPC).
+-- 2026-09-05 : aides en schéma private (voir private_schema_aides.sql)
 -- ============================================================================
 
 -- 1) Table -------------------------------------------------------------------
@@ -36,7 +37,7 @@ drop policy if exists "ref_imputations read (authenticated)" on public.facturati
 drop policy if exists "ref_imputations read (page:facturation)" on public.facturation_ref_imputations;
 create policy "ref_imputations read (page:facturation)" on public.facturation_ref_imputations
   for select to authenticated
-  using ((select public.page_level_rank(public.get_page_level('facturation'))) >= 1);
+  using ((select private.page_level_rank(private.get_page_level('facturation'))) >= 1);
 
 -- 3) Trigger updated_at ------------------------------------------------------
 create or replace function public.facturation_ref_imputations_touch()

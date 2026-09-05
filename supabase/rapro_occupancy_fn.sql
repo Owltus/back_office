@@ -1,4 +1,11 @@
 -- =============================================================================
+-- REMPLACÉ le 2026-09-05 par supabase/private_rpc_relais.sql — NE PLUS REJOUER.
+-- Rejouer ce fichier recréerait une fonction security definer dans public
+-- (Security Advisor rouvert, doublon avec le relais) ou une garde périmée.
+-- Conservé pour l'historique.
+-- =============================================================================
+
+-- =============================================================================
 -- RAPRO — fonction d'occupation In-House SANS données nominatives
 --
 -- À EXÉCUTER PAR L'UTILISATEUR dans Supabase → SQL Editor.

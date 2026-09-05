@@ -38,6 +38,18 @@ alter table public.facturation_learned_docs enable row level security;
 -- ici : un rejeu rouvrirait les lectures et court-circuiterait permissions + fenetres.
 -- Écriture : seule la RPC SECURITY DEFINER écrit (aucune policy INSERT/UPDATE/DELETE).
 
+-- ---------------------------------------------------------------------------
+-- PÉRIMÉ le 2026-09-05 : les RPC ci-dessous (jusqu'à la fin du fichier) vivent
+-- désormais dans le schéma private, avec un relais security invoker de même nom
+-- dans public (autorité : supabase/private_rpc_relais.sql ; garde NULL :
+-- supabase/facturation_garde_null_2026-09-05.sql). Ne pas rejouer ces blocs :
+-- ils recréeraient des fonctions security definer dans public (Security Advisor
+-- rouvert, doublon avec le relais) et une garde périmée (`<> 'gestion'` laisse
+-- passer NULL). Conservés pour l'historique.
+-- En outre, facturation_learned_docs_record ci-dessous est l'ancienne surcharge
+-- 5 args, SUPPRIMÉE le 2026-07-26 (facturation_learned_docs_comptes.sql) : la
+-- rejouer recréerait une surcharge fantôme (résolution PostgREST ambiguë).
+-- ---------------------------------------------------------------------------
 -- ---- RPC : enregistrer un document appris (idempotent) ----------------------
 create or replace function public.facturation_learned_docs_record(
   p_hash   text,

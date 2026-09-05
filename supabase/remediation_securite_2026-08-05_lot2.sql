@@ -10,6 +10,7 @@
 --   A5 — rapro_rooms : colonne `materialized` (distingue une ligne « nettoyée »
 --        POSÉE À LA CLÔTURE d'une correction manuelle → purge ciblée à la
 --        réouverture, cf. code client). Non destructif : add column if not exists.
+-- 2026-09-05 : aides en schéma private (voir private_schema_aides.sql)
 -- =============================================================================
 
 begin;
@@ -17,14 +18,18 @@ begin;
 -- -----------------------------------------------------------------------------
 -- B2 — profiles self-update : figer email (en plus de role)
 -- -----------------------------------------------------------------------------
+-- 2026-09-05 : texte aligné sur rpc_invoker_2026-09.sql (autorité). L'ancienne
+-- sous-requête sur profiles était récursive (42P17 « infinite recursion detected
+-- in policy », bug depuis le 2026-08-05) ; role/email sont désormais lus via
+-- les aides security definer du schéma private.
 drop policy if exists "Users update own profile" on public.profiles;
-create policy "Users update own profile"
-  on public.profiles for update to authenticated
+create policy "Users update own profile" on public.profiles
+  for update to authenticated
   using (id = auth.uid())
   with check (
     id = auth.uid()
-    and role = (select role from public.profiles where id = auth.uid())
-    and email = (select email from public.profiles where id = auth.uid())
+    and role = (select private.get_user_role())
+    and email = (select private.get_user_email())
   );
 
 -- -----------------------------------------------------------------------------

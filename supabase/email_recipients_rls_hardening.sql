@@ -40,6 +40,7 @@
 -- PRÉREQUIS : page_permissions.sql exécuté (is_admin/page_level_rank/
 -- get_page_level existent et sont grantées à authenticated). Vérifié en prod par
 -- le pentest : rpc/get_page_level('affichage') a renvoyé "lecture".
+-- 2026-09-05 : aides en schéma private (voir private_schema_aides.sql)
 -- =============================================================================
 
 alter table public.email_recipients enable row level security;
@@ -69,25 +70,25 @@ end $$;
 create policy "email_recipients read (page:repjour)"
   on public.email_recipients for select
   to authenticated
-  using ((select public.page_level_rank(public.get_page_level('repjour'))) >= 1);
+  using ((select private.page_level_rank(private.get_page_level('repjour'))) >= 1);
 
 -- Écritures : niveau « gestion » uniquement — c'est exactement la garde de la
 -- modale « Destinataires ». send-report (service_role) n'est pas affecté.
 create policy "email_recipients insert (page:repjour gestion)"
   on public.email_recipients for insert
   to authenticated
-  with check ((select public.get_page_level('repjour')) = 'gestion');
+  with check ((select private.get_page_level('repjour')) = 'gestion');
 
 create policy "email_recipients update (page:repjour gestion)"
   on public.email_recipients for update
   to authenticated
-  using ((select public.get_page_level('repjour')) = 'gestion')
-  with check ((select public.get_page_level('repjour')) = 'gestion');
+  using ((select private.get_page_level('repjour')) = 'gestion')
+  with check ((select private.get_page_level('repjour')) = 'gestion');
 
 create policy "email_recipients delete (page:repjour gestion)"
   on public.email_recipients for delete
   to authenticated
-  using ((select public.get_page_level('repjour')) = 'gestion');
+  using ((select private.get_page_level('repjour')) = 'gestion');
 
 -- =============================================================================
 -- Vérifications à faire après exécution (lecture seule) :

@@ -1,4 +1,16 @@
 -- =============================================================================
+-- REMPLACÉ le 2026-09-05 par supabase/private_rpc_relais.sql — NE PLUS REJOUER.
+-- Rejouer ce fichier recréerait une fonction security definer dans public
+-- (Security Advisor rouvert, doublon avec le relais) ou une garde périmée.
+-- Conservé pour l'historique.
+-- Fonctions concernées : daily_reports_occ, set_user_grade. NB : la policy
+-- « daily_reports read (page:repjour) » (M2) n'a pas d'autre définition
+-- versionnée ; elle est en prod
+-- (contrôle : verif_securite_2026-08-04.sql). profiles insert (bornee) →
+-- perf_rls_ecriture_2026-09-05.sql ; prevent_self_role_change → profiles.sql.
+-- =============================================================================
+
+-- =============================================================================
 -- REMÉDIATION SÉCURITÉ — pentest du 2026-08-04 (script consolidé UNIQUE)
 --
 -- À EXÉCUTER PAR L'UTILISATEUR dans Supabase -> SQL Editor, EN UNE FOIS.

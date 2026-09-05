@@ -17,6 +17,15 @@ alter table public.facturation_wordpool
 alter table public.facturation_wordpool
   add constraint facturation_wordpool_count_nonneg check (count >= 0);
 
+-- ---------------------------------------------------------------------------
+-- PÉRIMÉ le 2026-09-05 : les RPC ci-dessous (jusqu'à la fin du fichier) vivent
+-- désormais dans le schéma private, avec un relais security invoker de même nom
+-- dans public (autorité : supabase/private_rpc_relais.sql ; garde NULL :
+-- supabase/facturation_garde_null_2026-09-05.sql). Ne pas rejouer ces blocs :
+-- ils recréeraient des fonctions security definer dans public (Security Advisor
+-- rouvert, doublon avec le relais) et une garde périmée (`<> 'gestion'` laisse
+-- passer NULL). Conservés pour l'historique.
+-- ---------------------------------------------------------------------------
 -- ---- RPC : désapprentissage (symétrique de _learn) --------------------------
 -- Décrémente les compteurs des `p_codes` par `p_deltas` (le delta d'origine, rejoué
 -- par l'appelant), borné à 0, puis purge les lignes vidées.

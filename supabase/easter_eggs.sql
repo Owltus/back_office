@@ -8,6 +8,7 @@
 --   Lecture  : tout utilisateur authentifié (le runtime monte les effets actifs).
 --   Écriture : admin uniquement — via public.is_admin() (RPC déjà
 --              déployée, même garde que caisse_sheets « delete (admin) »).
+-- 2026-09-05 : aides en schéma private (voir private_schema_aides.sql)
 -- ============================================================================
 
 -- ---- Table -----------------------------------------------------------------
@@ -51,7 +52,7 @@ drop policy if exists "easter_eggs insert (admin)" on public.easter_eggs;
 create policy "easter_eggs insert (admin)"
   on public.easter_eggs for insert
   to authenticated
-  with check ((select public.is_admin()));
+  with check ((select private.is_admin()));
 
 -- UPDATE : admin seulement.
 drop policy if exists "easter_eggs update (admin)" on public.easter_eggs;
@@ -59,8 +60,8 @@ drop policy if exists "easter_eggs update (admin)" on public.easter_eggs;
 create policy "easter_eggs update (admin)"
   on public.easter_eggs for update
   to authenticated
-  using ((select public.is_admin()))
-  with check ((select public.is_admin()));
+  using ((select private.is_admin()))
+  with check ((select private.is_admin()));
 
 -- DELETE : admin seulement.
 drop policy if exists "easter_eggs delete (admin)" on public.easter_eggs;
@@ -68,7 +69,7 @@ drop policy if exists "easter_eggs delete (admin)" on public.easter_eggs;
 create policy "easter_eggs delete (admin)"
   on public.easter_eggs for delete
   to authenticated
-  using ((select public.is_admin()));
+  using ((select private.is_admin()));
 
 -- ---- Seed : migre les easter eggs jusqu'ici codés en dur -------------------
 -- Les `effect_id` doivent correspondre aux `id` du registre EFFECTS (front).

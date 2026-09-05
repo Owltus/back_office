@@ -20,6 +20,7 @@
 --
 -- PRÉREQUIS : les non-admins doivent avoir reçu leurs permissions AVANT
 -- d'exécuter ce script (sinon écriture coupée jusqu'au pré-remplissage).
+-- 2026-09-05 : aides en schéma private (voir private_schema_aides.sql)
 -- =============================================================================
 
 -- ---- PARKING (page 'parking') -----------------------------------------------
@@ -44,9 +45,9 @@ drop policy if exists "parking delete (page:parking)" on public.parking_reservat
 create policy "parking write (page:parking)"
   on public.parking_reservations for insert to authenticated
   with check (
-    (select public.get_page_level('parking')) = 'gestion'
+    (select private.get_page_level('parking')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('parking'))) >= 2
+      (select private.page_level_rank(private.get_page_level('parking'))) >= 2
       and start_date >= (current_date - 7)
     )
   );
@@ -54,16 +55,16 @@ create policy "parking write (page:parking)"
 create policy "parking update (page:parking)"
   on public.parking_reservations for update to authenticated
   using (
-    (select public.get_page_level('parking')) = 'gestion'
+    (select private.get_page_level('parking')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('parking'))) >= 2
+      (select private.page_level_rank(private.get_page_level('parking'))) >= 2
       and (start_date + nights) >= (current_date - 7)
     )
   )
   with check (
-    (select public.get_page_level('parking')) = 'gestion'
+    (select private.get_page_level('parking')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('parking'))) >= 2
+      (select private.page_level_rank(private.get_page_level('parking'))) >= 2
       and (start_date + nights) >= (current_date - 7)
     )
   );
@@ -71,9 +72,9 @@ create policy "parking update (page:parking)"
 create policy "parking delete (page:parking)"
   on public.parking_reservations for delete to authenticated
   using (
-    (select public.get_page_level('parking')) = 'gestion'
+    (select private.get_page_level('parking')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('parking'))) >= 2
+      (select private.page_level_rank(private.get_page_level('parking'))) >= 2
       and (start_date + nights) >= (current_date - 7)
     )
   );
@@ -91,7 +92,7 @@ begin
   if auth.uid() is null then
     return new;
   end if;
-  if public.get_page_level('parking') = 'gestion' then
+  if private.get_page_level('parking') = 'gestion' then
     return new;
   end if;
   if new.start_date < old.start_date and new.start_date < (current_date - 7) then
@@ -122,9 +123,9 @@ drop policy if exists "pdj delete (page:pdj)" on public.pdj_breakfasts;
 create policy "pdj write (page:pdj)"
   on public.pdj_breakfasts for insert to authenticated
   with check (
-    (select public.get_page_level('pdj')) = 'gestion'
+    (select private.get_page_level('pdj')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('pdj'))) >= 2
+      (select private.page_level_rank(private.get_page_level('pdj'))) >= 2
       and service_date >= (current_date - 3)
     )
   );
@@ -132,16 +133,16 @@ create policy "pdj write (page:pdj)"
 create policy "pdj update (page:pdj)"
   on public.pdj_breakfasts for update to authenticated
   using (
-    (select public.get_page_level('pdj')) = 'gestion'
+    (select private.get_page_level('pdj')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('pdj'))) >= 2
+      (select private.page_level_rank(private.get_page_level('pdj'))) >= 2
       and service_date >= (current_date - 3)
     )
   )
   with check (
-    (select public.get_page_level('pdj')) = 'gestion'
+    (select private.get_page_level('pdj')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('pdj'))) >= 2
+      (select private.page_level_rank(private.get_page_level('pdj'))) >= 2
       and service_date >= (current_date - 3)
     )
   );
@@ -149,7 +150,7 @@ create policy "pdj update (page:pdj)"
 -- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "pdj delete (page:pdj)"
   on public.pdj_breakfasts for delete to authenticated
-  using ((select public.get_page_level('pdj')) = 'gestion');
+  using ((select private.get_page_level('pdj')) = 'gestion');
 
 -- (Les policies d'écriture de pdj_addon_production sont définies dans
 --  supabase/pdj_addon_production.sql, fichier auto-suffisant et rejouable —
@@ -172,9 +173,9 @@ drop policy if exists "rapro_sheets delete (page:rapro)" on public.rapro_sheets;
 create policy "rapro_sheets write (page:rapro)"
   on public.rapro_sheets for insert to authenticated
   with check (
-    (select public.get_page_level('rapro')) = 'gestion'
+    (select private.get_page_level('rapro')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('rapro'))) >= 2
+      (select private.page_level_rank(private.get_page_level('rapro'))) >= 2
       and report_date >= (current_date - 2)
     )
   );
@@ -182,16 +183,16 @@ create policy "rapro_sheets write (page:rapro)"
 create policy "rapro_sheets update (page:rapro)"
   on public.rapro_sheets for update to authenticated
   using (
-    (select public.get_page_level('rapro')) = 'gestion'
+    (select private.get_page_level('rapro')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('rapro'))) >= 2
+      (select private.page_level_rank(private.get_page_level('rapro'))) >= 2
       and report_date >= (current_date - 2)
     )
   )
   with check (
-    (select public.get_page_level('rapro')) = 'gestion'
+    (select private.get_page_level('rapro')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('rapro'))) >= 2
+      (select private.page_level_rank(private.get_page_level('rapro'))) >= 2
       and report_date >= (current_date - 2)
     )
   );
@@ -199,9 +200,9 @@ create policy "rapro_sheets update (page:rapro)"
 create policy "rapro_sheets delete (page:rapro)"
   on public.rapro_sheets for delete to authenticated
   using (
-    (select public.get_page_level('rapro')) = 'gestion'
+    (select private.get_page_level('rapro')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('rapro'))) >= 2
+      (select private.page_level_rank(private.get_page_level('rapro'))) >= 2
       and report_date >= (current_date - 2)
     )
   );
@@ -218,9 +219,9 @@ drop policy if exists "rapro_rooms delete (page:rapro)" on public.rapro_rooms;
 create policy "rapro_rooms write (page:rapro)"
   on public.rapro_rooms for insert to authenticated
   with check (
-    (select public.get_page_level('rapro')) = 'gestion'
+    (select private.get_page_level('rapro')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('rapro'))) >= 2
+      (select private.page_level_rank(private.get_page_level('rapro'))) >= 2
       and report_date >= (current_date - 2)
     )
   );
@@ -228,16 +229,16 @@ create policy "rapro_rooms write (page:rapro)"
 create policy "rapro_rooms update (page:rapro)"
   on public.rapro_rooms for update to authenticated
   using (
-    (select public.get_page_level('rapro')) = 'gestion'
+    (select private.get_page_level('rapro')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('rapro'))) >= 2
+      (select private.page_level_rank(private.get_page_level('rapro'))) >= 2
       and report_date >= (current_date - 2)
     )
   )
   with check (
-    (select public.get_page_level('rapro')) = 'gestion'
+    (select private.get_page_level('rapro')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('rapro'))) >= 2
+      (select private.page_level_rank(private.get_page_level('rapro'))) >= 2
       and report_date >= (current_date - 2)
     )
   );
@@ -245,9 +246,9 @@ create policy "rapro_rooms update (page:rapro)"
 create policy "rapro_rooms delete (page:rapro)"
   on public.rapro_rooms for delete to authenticated
   using (
-    (select public.get_page_level('rapro')) = 'gestion'
+    (select private.get_page_level('rapro')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('rapro'))) >= 2
+      (select private.page_level_rank(private.get_page_level('rapro'))) >= 2
       and report_date >= (current_date - 2)
     )
   );
@@ -264,16 +265,16 @@ drop policy if exists "pms delete (page:repjour)" on public.pms_daily_metrics;
 -- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "pms write (page:repjour)"
   on public.pms_daily_metrics for insert to authenticated
-  with check ((select public.page_level_rank(public.get_page_level('repjour'))) >= 2);
+  with check ((select private.page_level_rank(private.get_page_level('repjour'))) >= 2);
 -- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "pms update (page:repjour)"
   on public.pms_daily_metrics for update to authenticated
-  using ((select public.page_level_rank(public.get_page_level('repjour'))) >= 2)
-  with check ((select public.page_level_rank(public.get_page_level('repjour'))) >= 2);
+  using ((select private.page_level_rank(private.get_page_level('repjour'))) >= 2)
+  with check ((select private.page_level_rank(private.get_page_level('repjour'))) >= 2);
 -- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "pms delete (page:repjour)"
   on public.pms_daily_metrics for delete to authenticated
-  using ((select public.page_level_rank(public.get_page_level('repjour'))) >= 2);
+  using ((select private.page_level_rank(private.get_page_level('repjour'))) >= 2);
 
 -- ---- AFFICHAGE (page 'affichage') — modèle PAR PROPRIÉTAIRE ------------------
 -- INSERT : ecriture (created_by posé serveur par le trigger affiche_stamp).
@@ -290,21 +291,21 @@ drop policy if exists "affiche delete (page:affichage)" on public.affiche_templa
 -- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "affiche write (page:affichage)"
   on public.affiche_templates for insert to authenticated
-  with check ((select public.page_level_rank(public.get_page_level('affichage'))) >= 2);
+  with check ((select private.page_level_rank(private.get_page_level('affichage'))) >= 2);
 -- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "affiche update (page:affichage)"
   on public.affiche_templates for update to authenticated
   using (
-    (select public.get_page_level('affichage')) = 'gestion'
+    (select private.get_page_level('affichage')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('affichage'))) >= 2
+      (select private.page_level_rank(private.get_page_level('affichage'))) >= 2
       and created_by = auth.uid()
     )
   )
   with check (
-    (select public.get_page_level('affichage')) = 'gestion'
+    (select private.get_page_level('affichage')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('affichage'))) >= 2
+      (select private.page_level_rank(private.get_page_level('affichage'))) >= 2
       and created_by = auth.uid()
     )
   );
@@ -312,9 +313,9 @@ create policy "affiche update (page:affichage)"
 create policy "affiche delete (page:affichage)"
   on public.affiche_templates for delete to authenticated
   using (
-    (select public.get_page_level('affichage')) = 'gestion'
+    (select private.get_page_level('affichage')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('affichage'))) >= 2
+      (select private.page_level_rank(private.get_page_level('affichage'))) >= 2
       and created_by = auth.uid()
     )
   );
@@ -340,9 +341,9 @@ drop policy if exists "caisse delete (page:caisse gestion)" on public.caisse_she
 create policy "caisse write (page:caisse)"
   on public.caisse_sheets for insert to authenticated
   with check (
-    (select public.get_page_level('caisse')) = 'gestion'
+    (select private.get_page_level('caisse')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('caisse'))) >= 2
+      (select private.page_level_rank(private.get_page_level('caisse'))) >= 2
       and report_date >= (current_date - 1)
     )
   );
@@ -351,16 +352,16 @@ create policy "caisse write (page:caisse)"
 create policy "caisse update (page:caisse + verrou)"
   on public.caisse_sheets for update to authenticated
   using (
-    (select public.get_page_level('caisse')) = 'gestion'
+    (select private.get_page_level('caisse')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('caisse'))) >= 2
+      (select private.page_level_rank(private.get_page_level('caisse'))) >= 2
       and report_date >= (current_date - 1)
     )
   )
   with check (
-    (select public.get_page_level('caisse')) = 'gestion'
+    (select private.get_page_level('caisse')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('caisse'))) >= 2
+      (select private.page_level_rank(private.get_page_level('caisse'))) >= 2
       and report_date >= (current_date - 1)
     )
   );
@@ -368,7 +369,7 @@ create policy "caisse update (page:caisse + verrou)"
 -- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "caisse delete (page:caisse gestion)"
   on public.caisse_sheets for delete to authenticated
-  using ((select public.get_page_level('caisse')) = 'gestion');
+  using ((select private.get_page_level('caisse')) = 'gestion');
 
 -- =============================================================================
 -- COMPLÉMENTS (dans d'autres fichiers, à exécuter à la bascule) :

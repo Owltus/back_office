@@ -19,6 +19,7 @@
 -- a été retirée de l'app (décision utilisateur) — cette table existe encore
 -- en base si supabase/literie_sheets.sql a été joué avant, mais n'est plus
 -- créée ni vérifiée ici (orpheline, sans effet si tu ne la touches pas).
+-- 2026-09-05 : aides en schéma private (voir private_schema_aides.sql)
 -- =============================================================================
 
 
@@ -82,6 +83,13 @@ create table if not exists public.literie_stock_movements (
 create index if not exists literie_stock_movements_room_idx
   on public.literie_stock_movements (room, created_at desc);
 
+-- ---------------------------------------------------------------------------
+-- SUPPRIMÉE le 2026-09-05 : literie_record_movement n'existe plus en prod
+-- (aucun appelant ; drop dans supabase/rpc_invoker_2026-09.sql). Ne pas
+-- rejouer ce bloc (fonction et son grant) : il recréerait une fonction
+-- security definer dans public (Security Advisor rouvert). Conservé pour
+-- l'historique (rollback).
+-- ---------------------------------------------------------------------------
 -- RPC bas niveau : UN mouvement + ajustement du compteur (utilisée en interne
 -- par literie_toggle_bedding ci-dessous ; reste appelable seule pour un futur
 -- ajustement manuel du stock).
@@ -118,6 +126,13 @@ end;
 $$;
 grant execute on function public.literie_record_movement(smallint, text, text, smallint) to authenticated;
 
+-- ---------------------------------------------------------------------------
+-- SUPPRIMÉE le 2026-09-05 : literie_toggle_bedding n'existe plus en prod
+-- (aucun appelant ; drop dans supabase/rpc_invoker_2026-09.sql). Ne pas
+-- rejouer ce bloc (fonction et son grant) : il recréerait une fonction
+-- security definer dans public (Security Advisor rouvert). Conservé pour
+-- l'historique (rollback).
+-- ---------------------------------------------------------------------------
 -- RPC atomique (celle appelée par l'app) : chambre + les 2 mouvements + le
 -- compteur dans UNE seule transaction — si le stock est insuffisant, TOUT
 -- annule, y compris le statut de la chambre (pas de désynchronisation).
@@ -256,53 +271,53 @@ alter table public.baby_cot_assignments enable row level security;
 drop policy if exists "hotel_rooms read (page:literie)" on public.hotel_rooms;
 create policy "hotel_rooms read (page:literie)"
   on public.hotel_rooms for select to authenticated
-  using ((select public.page_level_rank(public.get_page_level('literie'))) >= 1);
+  using ((select private.page_level_rank(private.get_page_level('literie'))) >= 1);
 
 drop policy if exists "hotel_rooms write (page:literie)" on public.hotel_rooms;
 -- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "hotel_rooms write (page:literie)"
   on public.hotel_rooms for update to authenticated
-  using ((select public.page_level_rank(public.get_page_level('literie'))) >= 2)
-  with check ((select public.page_level_rank(public.get_page_level('literie'))) >= 2);
+  using ((select private.page_level_rank(private.get_page_level('literie'))) >= 2)
+  with check ((select private.page_level_rank(private.get_page_level('literie'))) >= 2);
 
 -- LITERIE_STOCK / LITERIE_STOCK_MOVEMENTS (lecture seule — écriture RPC only)
 drop policy if exists "literie_stock read (page:literie)" on public.literie_stock;
 create policy "literie_stock read (page:literie)"
   on public.literie_stock for select to authenticated
-  using ((select public.page_level_rank(public.get_page_level('literie'))) >= 1);
+  using ((select private.page_level_rank(private.get_page_level('literie'))) >= 1);
 
 drop policy if exists "literie_stock_movements read (page:literie)" on public.literie_stock_movements;
 create policy "literie_stock_movements read (page:literie)"
   on public.literie_stock_movements for select to authenticated
-  using ((select public.page_level_rank(public.get_page_level('literie'))) >= 1);
+  using ((select private.page_level_rank(private.get_page_level('literie'))) >= 1);
 
 -- BABY_COTS (gestion du parc, réservée à 'gestion')
 drop policy if exists "baby_cots read (page:literie)" on public.baby_cots;
 create policy "baby_cots read (page:literie)"
   on public.baby_cots for select to authenticated
-  using ((select public.page_level_rank(public.get_page_level('literie'))) >= 1);
+  using ((select private.page_level_rank(private.get_page_level('literie'))) >= 1);
 
 drop policy if exists "baby_cots write (page:literie)" on public.baby_cots;
 -- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "baby_cots write (page:literie)"
   on public.baby_cots for all to authenticated
-  using ((select public.get_page_level('literie')) = 'gestion')
-  with check ((select public.get_page_level('literie')) = 'gestion');
+  using ((select private.get_page_level('literie')) = 'gestion')
+  with check ((select private.get_page_level('literie')) = 'gestion');
 
 -- BABY_COT_ASSIGNMENTS (fenêtre de grâce LITERIE_GRACE_DAYS = 2)
 drop policy if exists "baby_cot_assignments read (page:literie)" on public.baby_cot_assignments;
 create policy "baby_cot_assignments read (page:literie)"
   on public.baby_cot_assignments for select to authenticated
-  using ((select public.page_level_rank(public.get_page_level('literie'))) >= 1);
+  using ((select private.page_level_rank(private.get_page_level('literie'))) >= 1);
 
 drop policy if exists "baby_cot_assignments write (page:literie)" on public.baby_cot_assignments;
 -- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "baby_cot_assignments write (page:literie)"
   on public.baby_cot_assignments for insert to authenticated
   with check (
-    (select public.get_page_level('literie')) = 'gestion'
+    (select private.get_page_level('literie')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('literie'))) >= 2
+      (select private.page_level_rank(private.get_page_level('literie'))) >= 2
       and start_date >= (current_date - 2)
     )
   );
@@ -312,16 +327,16 @@ drop policy if exists "baby_cot_assignments update (page:literie)" on public.bab
 create policy "baby_cot_assignments update (page:literie)"
   on public.baby_cot_assignments for update to authenticated
   using (
-    (select public.get_page_level('literie')) = 'gestion'
+    (select private.get_page_level('literie')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('literie'))) >= 2
+      (select private.page_level_rank(private.get_page_level('literie'))) >= 2
       and end_date >= (current_date - 2)
     )
   )
   with check (
-    (select public.get_page_level('literie')) = 'gestion'
+    (select private.get_page_level('literie')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('literie'))) >= 2
+      (select private.page_level_rank(private.get_page_level('literie'))) >= 2
       and end_date >= (current_date - 2)
     )
   );
@@ -331,9 +346,9 @@ drop policy if exists "baby_cot_assignments delete (page:literie)" on public.bab
 create policy "baby_cot_assignments delete (page:literie)"
   on public.baby_cot_assignments for delete to authenticated
   using (
-    (select public.get_page_level('literie')) = 'gestion'
+    (select private.get_page_level('literie')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('literie'))) >= 2
+      (select private.page_level_rank(private.get_page_level('literie'))) >= 2
       and end_date >= (current_date - 2)
     )
   );

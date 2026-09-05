@@ -1,4 +1,13 @@
 -- =============================================================================
+-- REMPLACÉ le 2026-09-05 par supabase/rpc_invoker_2026-09.sql — NE PLUS REJOUER.
+-- Rejouer ce fichier recréerait une fonction security definer dans public
+-- (Security Advisor rouvert, doublon avec le relais) ou une garde périmée.
+-- Conservé pour l'historique.
+-- NB : la colonne daily_reports.send_reminder_dismissed_at (add column if not
+-- exists) est déjà en prod ; sa seule définition versionnée reste ici.
+-- =============================================================================
+
+-- =============================================================================
 -- REPJOUR — bandeau « pas encore envoyé » : bouton « Ignorer » (masquage PARTAGÉ)
 --
 -- À EXÉCUTER PAR L'UTILISATEUR dans Supabase → SQL Editor. Idempotent, NON destructif.

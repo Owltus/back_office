@@ -1,4 +1,12 @@
 -- =============================================================================
+-- REMPLACÉ le 2026-09-05 par supabase/private_rpc_relais.sql
+-- (+ supabase/facturation_garde_null_2026-09-05.sql) — NE PLUS REJOUER.
+-- Rejouer ce fichier recréerait une fonction security definer dans public
+-- (Security Advisor rouvert, doublon avec le relais) ou une garde périmée.
+-- Conservé pour l'historique.
+-- =============================================================================
+
+-- =============================================================================
 -- facturation_learn_document — apprentissage IDEMPOTENT d'une facture (A1, pentest #2)
 --
 -- À EXÉCUTER PAR L'UTILISATEUR dans Supabase → SQL Editor. Ré-exécutable.

@@ -19,6 +19,7 @@
 --
 -- PRÉREQUIS : page_permissions.sql exécuté (is_admin / page_level_rank /
 -- get_page_level existent et sont grantées à authenticated).
+-- 2026-09-05 : aides en schéma private (voir private_schema_aides.sql)
 -- =============================================================================
 
 create table if not exists public.server_report_recipients (
@@ -57,24 +58,24 @@ end $$;
 create policy "srr read (page:repjour)"
   on public.server_report_recipients for select
   to authenticated
-  using ((select public.page_level_rank(public.get_page_level('repjour'))) >= 1);
+  using ((select private.page_level_rank(private.get_page_level('repjour'))) >= 1);
 
 -- ÉCRITURES : niveau « gestion » — exactement la garde de la modale (admin-only UI).
 create policy "srr insert (page:repjour gestion)"
   on public.server_report_recipients for insert
   to authenticated
-  with check ((select public.get_page_level('repjour')) = 'gestion');
+  with check ((select private.get_page_level('repjour')) = 'gestion');
 
 create policy "srr update (page:repjour gestion)"
   on public.server_report_recipients for update
   to authenticated
-  using ((select public.get_page_level('repjour')) = 'gestion')
-  with check ((select public.get_page_level('repjour')) = 'gestion');
+  using ((select private.get_page_level('repjour')) = 'gestion')
+  with check ((select private.get_page_level('repjour')) = 'gestion');
 
 create policy "srr delete (page:repjour gestion)"
   on public.server_report_recipients for delete
   to authenticated
-  using ((select public.get_page_level('repjour')) = 'gestion');
+  using ((select private.get_page_level('repjour')) = 'gestion');
 
 -- =============================================================================
 -- Vérifications (lecture seule) après exécution :

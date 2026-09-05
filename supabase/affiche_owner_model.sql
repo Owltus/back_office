@@ -10,6 +10,7 @@
 --   - gestion  : crée / modifie / supprime TOUS les modèles.
 -- L'auteur d'origine est PRÉSERVÉ à chaque modification (created_by figé serveur).
 -- Les modèles historiques (seed, created_by NULL) ne sont modifiables qu'en gestion.
+-- 2026-09-05 : aides en schéma private (voir private_schema_aides.sql)
 -- =============================================================================
 
 -- 1) Colonne auteur (nullable : les modèles seedés restent sans auteur = gestion-only).
@@ -59,29 +60,29 @@ drop policy if exists "affiche delete (page:affichage)" on public.affiche_templa
 -- LECTURE : tous les porteurs de la page (les modèles sont exposés à tous).
 create policy "affiche read (page:affichage)"
   on public.affiche_templates for select to authenticated
-  using ((select public.page_level_rank(public.get_page_level('affichage'))) >= 1);
+  using ((select private.page_level_rank(private.get_page_level('affichage'))) >= 1);
 
 -- INSERT : écriture (created_by est posé par le trigger, pas par le client).
 -- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "affiche write (page:affichage)"
   on public.affiche_templates for insert to authenticated
-  with check ((select public.page_level_rank(public.get_page_level('affichage'))) >= 2);
+  with check ((select private.page_level_rank(private.get_page_level('affichage'))) >= 2);
 
 -- UPDATE : gestion (tout) OU écriture sur SON propre modèle.
 -- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "affiche update (page:affichage)"
   on public.affiche_templates for update to authenticated
   using (
-    (select public.get_page_level('affichage')) = 'gestion'
+    (select private.get_page_level('affichage')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('affichage'))) >= 2
+      (select private.page_level_rank(private.get_page_level('affichage'))) >= 2
       and created_by = auth.uid()
     )
   )
   with check (
-    (select public.get_page_level('affichage')) = 'gestion'
+    (select private.get_page_level('affichage')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('affichage'))) >= 2
+      (select private.page_level_rank(private.get_page_level('affichage'))) >= 2
       and created_by = auth.uid()
     )
   );
@@ -91,9 +92,9 @@ create policy "affiche update (page:affichage)"
 create policy "affiche delete (page:affichage)"
   on public.affiche_templates for delete to authenticated
   using (
-    (select public.get_page_level('affichage')) = 'gestion'
+    (select private.get_page_level('affichage')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('affichage'))) >= 2
+      (select private.page_level_rank(private.get_page_level('affichage'))) >= 2
       and created_by = auth.uid()
     )
   );

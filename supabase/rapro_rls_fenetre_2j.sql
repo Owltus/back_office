@@ -13,6 +13,7 @@
 -- Le pivot est report_date (le jour rapproché), présent sur les deux tables.
 -- La réouverture est un simple UPDATE de rapro_sheets (status -> draft) : elle
 -- passe donc par la policy UPDATE ci-dessous, bornée à la fenêtre pour l'écriture.
+-- 2026-09-05 : aides en schéma private (voir private_schema_aides.sql)
 -- =============================================================================
 
 -- 1) APERÇU (facultatif) — jours clôturés hors fenêtre (réouverture réservée gestion).
@@ -34,9 +35,9 @@ drop policy if exists "rapro_sheets delete (page:rapro)" on public.rapro_sheets;
 create policy "rapro_sheets write (page:rapro)"
   on public.rapro_sheets for insert to authenticated
   with check (
-    (select public.get_page_level('rapro')) = 'gestion'
+    (select private.get_page_level('rapro')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('rapro'))) >= 2
+      (select private.page_level_rank(private.get_page_level('rapro'))) >= 2
       and report_date >= (current_date - 2)
     )
   );
@@ -44,16 +45,16 @@ create policy "rapro_sheets write (page:rapro)"
 create policy "rapro_sheets update (page:rapro)"
   on public.rapro_sheets for update to authenticated
   using (
-    (select public.get_page_level('rapro')) = 'gestion'
+    (select private.get_page_level('rapro')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('rapro'))) >= 2
+      (select private.page_level_rank(private.get_page_level('rapro'))) >= 2
       and report_date >= (current_date - 2)
     )
   )
   with check (
-    (select public.get_page_level('rapro')) = 'gestion'
+    (select private.get_page_level('rapro')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('rapro'))) >= 2
+      (select private.page_level_rank(private.get_page_level('rapro'))) >= 2
       and report_date >= (current_date - 2)
     )
   );
@@ -61,9 +62,9 @@ create policy "rapro_sheets update (page:rapro)"
 create policy "rapro_sheets delete (page:rapro)"
   on public.rapro_sheets for delete to authenticated
   using (
-    (select public.get_page_level('rapro')) = 'gestion'
+    (select private.get_page_level('rapro')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('rapro'))) >= 2
+      (select private.page_level_rank(private.get_page_level('rapro'))) >= 2
       and report_date >= (current_date - 2)
     )
   );
@@ -81,9 +82,9 @@ drop policy if exists "rapro_rooms delete (page:rapro)" on public.rapro_rooms;
 create policy "rapro_rooms write (page:rapro)"
   on public.rapro_rooms for insert to authenticated
   with check (
-    (select public.get_page_level('rapro')) = 'gestion'
+    (select private.get_page_level('rapro')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('rapro'))) >= 2
+      (select private.page_level_rank(private.get_page_level('rapro'))) >= 2
       and report_date >= (current_date - 2)
     )
   );
@@ -91,16 +92,16 @@ create policy "rapro_rooms write (page:rapro)"
 create policy "rapro_rooms update (page:rapro)"
   on public.rapro_rooms for update to authenticated
   using (
-    (select public.get_page_level('rapro')) = 'gestion'
+    (select private.get_page_level('rapro')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('rapro'))) >= 2
+      (select private.page_level_rank(private.get_page_level('rapro'))) >= 2
       and report_date >= (current_date - 2)
     )
   )
   with check (
-    (select public.get_page_level('rapro')) = 'gestion'
+    (select private.get_page_level('rapro')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('rapro'))) >= 2
+      (select private.page_level_rank(private.get_page_level('rapro'))) >= 2
       and report_date >= (current_date - 2)
     )
   );
@@ -108,9 +109,9 @@ create policy "rapro_rooms update (page:rapro)"
 create policy "rapro_rooms delete (page:rapro)"
   on public.rapro_rooms for delete to authenticated
   using (
-    (select public.get_page_level('rapro')) = 'gestion'
+    (select private.get_page_level('rapro')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('rapro'))) >= 2
+      (select private.page_level_rank(private.get_page_level('rapro'))) >= 2
       and report_date >= (current_date - 2)
     )
   );

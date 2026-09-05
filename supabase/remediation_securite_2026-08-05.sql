@@ -1,4 +1,14 @@
 -- =============================================================================
+-- REMPLACÉ le 2026-09-05 par supabase/private_rpc_relais.sql — NE PLUS REJOUER.
+-- Rejouer ce fichier recréerait une fonction security definer dans public
+-- (Security Advisor rouvert, doublon avec le relais) ou une garde périmée.
+-- Conservé pour l'historique.
+-- Fonctions concernées : admin_update_password, set_user_grade. caisse_stamp →
+-- caisse_sheets.sql /
+-- security_hardening_triggers.sql ; CHECK rapro_rooms.status → rapro_rooms.sql.
+-- =============================================================================
+
+-- =============================================================================
 -- REMÉDIATION SÉCURITÉ — pentest #2 du 2026-08-05 (script consolidé UNIQUE)
 --
 -- À EXÉCUTER PAR L'UTILISATEUR dans Supabase → SQL Editor, EN UNE FOIS.

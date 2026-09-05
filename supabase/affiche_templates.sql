@@ -12,6 +12,7 @@
 -- delete) réservée aux rôles 'super_utilisateur' et 'admin'.
 -- Chargement côté app (D3) : TanStack Query (pas de Realtime) → pas de bloc
 -- `alter publication supabase_realtime`.
+-- 2026-09-05 : aides en schéma private (voir private_schema_aides.sql)
 -- =============================================================================
 
 -- ---- Table + index -----------------------------------------------------------
@@ -111,27 +112,27 @@ drop policy if exists "affiche delete (page:affichage)" on public.affiche_templa
 
 create policy "affiche read (page:affichage)"
   on public.affiche_templates for select to authenticated
-  using ((select public.page_level_rank(public.get_page_level('affichage'))) >= 1);
+  using ((select private.page_level_rank(private.get_page_level('affichage'))) >= 1);
 
 -- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "affiche write (page:affichage)"
   on public.affiche_templates for insert to authenticated
-  with check ((select public.page_level_rank(public.get_page_level('affichage'))) >= 2);
+  with check ((select private.page_level_rank(private.get_page_level('affichage'))) >= 2);
 
 -- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "affiche update (page:affichage)"
   on public.affiche_templates for update to authenticated
   using (
-    (select public.get_page_level('affichage')) = 'gestion'
+    (select private.get_page_level('affichage')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('affichage'))) >= 2
+      (select private.page_level_rank(private.get_page_level('affichage'))) >= 2
       and created_by = auth.uid()
     )
   )
   with check (
-    (select public.get_page_level('affichage')) = 'gestion'
+    (select private.get_page_level('affichage')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('affichage'))) >= 2
+      (select private.page_level_rank(private.get_page_level('affichage'))) >= 2
       and created_by = auth.uid()
     )
   );
@@ -140,9 +141,9 @@ create policy "affiche update (page:affichage)"
 create policy "affiche delete (page:affichage)"
   on public.affiche_templates for delete to authenticated
   using (
-    (select public.get_page_level('affichage')) = 'gestion'
+    (select private.get_page_level('affichage')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('affichage'))) >= 2
+      (select private.page_level_rank(private.get_page_level('affichage'))) >= 2
       and created_by = auth.uid()
     )
   );

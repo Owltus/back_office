@@ -10,6 +10,7 @@
 --   - ecriture : import des rapports CSV (daily_reports + pms_daily_metrics, >= 2) ;
 --   - gestion  : tout, + import des FORECAST (forecast_days) — ce script.
 -- daily_reports / pms_daily_metrics restent à >= 2 (écriture), inchangés.
+-- 2026-09-05 : aides en schéma private (voir private_schema_aides.sql)
 -- =============================================================================
 
 drop policy if exists "SuperUser/Admin write forecast" on public.forecast_days;
@@ -22,16 +23,16 @@ drop policy if exists "forecast_days delete (page:repjour)" on public.forecast_d
 -- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "forecast_days write (page:repjour)"
   on public.forecast_days for insert to authenticated
-  with check ((select public.get_page_level('repjour')) = 'gestion');
+  with check ((select private.get_page_level('repjour')) = 'gestion');
 -- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "forecast_days update (page:repjour)"
   on public.forecast_days for update to authenticated
-  using ((select public.get_page_level('repjour')) = 'gestion')
-  with check ((select public.get_page_level('repjour')) = 'gestion');
+  using ((select private.get_page_level('repjour')) = 'gestion')
+  with check ((select private.get_page_level('repjour')) = 'gestion');
 -- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "forecast_days delete (page:repjour)"
   on public.forecast_days for delete to authenticated
-  using ((select public.get_page_level('repjour')) = 'gestion');
+  using ((select private.get_page_level('repjour')) = 'gestion');
 
 
 -- VÉRIFICATION — les 3 policies forecast_days doivent exiger 'gestion'.

@@ -22,6 +22,7 @@
 --
 -- Idempotent : create table/index if not exists, policies redéfinies via
 -- drop/create, seed via on conflict do nothing. Non destructif.
+-- 2026-09-05 : aides en schéma private (voir private_schema_aides.sql)
 -- =============================================================================
 
 create table if not exists public.parking_tarifs (
@@ -44,11 +45,18 @@ alter table public.parking_tarifs enable row level security;
 drop policy if exists "parking_tarifs read (page:parking)" on public.parking_tarifs;
 create policy "parking_tarifs read (page:parking)"
   on public.parking_tarifs for select to authenticated
-  using ((select public.page_level_rank(public.get_page_level('parking'))) >= 1);
+  using ((select private.page_level_rank(private.get_page_level('parking'))) >= 1);
 
 -- Écriture : réservée admin, exclusivement via la RPC ci-dessous. Aucune
 -- policy INSERT/UPDATE/DELETE pour `authenticated`.
 
+-- ---------------------------------------------------------------------------
+-- SUPPRIMÉE le 2026-09-05 : set_parking_tarif n'existe plus en prod (aucun
+-- appelant ; drop dans supabase/rpc_invoker_2026-09.sql). Ne pas rejouer ce
+-- bloc (fonction et son grant) : il recréerait une fonction security definer
+-- dans public (Security Advisor rouvert). Conservé pour l'historique
+-- (rollback).
+-- ---------------------------------------------------------------------------
 create or replace function public.set_parking_tarif(
   p_price_ttc numeric,
   p_vat_rate numeric,

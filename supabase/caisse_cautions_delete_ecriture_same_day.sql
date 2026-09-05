@@ -15,6 +15,7 @@
 --   d'où la borne au jour de création (`taken_date = current_date`). Au-delà,
 --   seule la gestion peut encore supprimer (elle assume la correction historique,
 --   comme pour une feuille de caisse déjà clôturée).
+-- 2026-09-05 : aides en schéma private (voir private_schema_aides.sql)
 -- =============================================================================
 
 drop policy if exists "caisse cautions delete (page:caisse gestion)" on public.caisse_cautions;
@@ -24,9 +25,9 @@ drop policy if exists "caisse cautions delete (page:caisse)" on public.caisse_ca
 create policy "caisse cautions delete (page:caisse)"
   on public.caisse_cautions for delete to authenticated
   using (
-    (select public.get_page_level('caisse')) = 'gestion'
+    (select private.get_page_level('caisse')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('caisse'))) >= 2
+      (select private.page_level_rank(private.get_page_level('caisse'))) >= 2
       and taken_date = current_date
     )
   );

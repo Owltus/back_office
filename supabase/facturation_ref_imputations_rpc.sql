@@ -1,3 +1,11 @@
+-- =============================================================================
+-- REMPLACÉ le 2026-09-05 par supabase/private_rpc_relais.sql
+-- (+ supabase/facturation_garde_null_2026-09-05.sql) — NE PLUS REJOUER.
+-- Rejouer ce fichier recréerait une fonction security definer dans public
+-- (Security Advisor rouvert, doublon avec le relais) ou une garde périmée.
+-- Conservé pour l'historique.
+-- =============================================================================
+
 -- ============================================================================
 -- facturation_ref_imputations — RPC de réimport (SECURITY DEFINER, garde de rôle).
 --

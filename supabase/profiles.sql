@@ -11,22 +11,27 @@
 --     sinon on laisse en place l'ancienne (permissive) en plus de la nouvelle.
 --   - Ne PAS toucher à la table (create table) : la définition réelle vit en prod.
 --     Ce fichier ne gère QUE les gardes (policy + trigger), idempotentes.
+-- 2026-09-05 : aides en schéma private (voir private_schema_aides.sql)
 -- ============================================================================
 
 alter table public.profiles enable row level security;
 
 -- 1) Self-update SANS pouvoir changer son rôle : le `role` écrit doit rester
 --    égal au rôle courant. Un non-admin ne peut donc pas se promouvoir.
+-- 2026-09-05 : texte aligné sur rpc_invoker_2026-09.sql (autorité). L'ancienne
+-- sous-requête sur profiles était récursive (42P17 « infinite recursion detected
+-- in policy », bug depuis le 2026-08-05) ; role/email sont désormais lus via
+-- les aides security definer du schéma private.
 drop policy if exists "Users update own profile" on public.profiles;
-create policy "Users update own profile"
-  on public.profiles for update to authenticated
+create policy "Users update own profile" on public.profiles
+  for update to authenticated
   using (id = auth.uid())
   with check (
     id = auth.uid()
-    and role = (select role from public.profiles where id = auth.uid())
+    and role = (select private.get_user_role())
     -- B2 : figer aussi l'email (jamais édité par /profil) → pas d'usurpation
     -- d'affichage dans la console admin (profiles.email vs auth.users.email).
-    and email = (select email from public.profiles where id = auth.uid())
+    and email = (select private.get_user_email())
   );
 
 -- 2) Ceinture + bretelles : trigger BEFORE UPDATE qui FORCE le rôle à sa valeur
@@ -39,7 +44,7 @@ security definer
 set search_path = public
 as $$
 begin
-  if new.role is distinct from old.role and not public.is_admin() then
+  if new.role is distinct from old.role and not private.is_admin() then
     new.role := old.role;
   end if;
   return new;

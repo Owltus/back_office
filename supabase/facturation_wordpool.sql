@@ -40,6 +40,15 @@ alter table public.facturation_wordpool enable row level security;
 -- ici : un rejeu rouvrirait les lectures et court-circuiterait permissions + fenetres.
 -- Écriture : seule la RPC SECURITY DEFINER écrit (aucune policy INSERT/UPDATE/DELETE).
 
+-- ---------------------------------------------------------------------------
+-- PÉRIMÉ le 2026-09-05 : les RPC ci-dessous (jusqu'à la fin du fichier) vivent
+-- désormais dans le schéma private, avec un relais security invoker de même nom
+-- dans public (autorité : supabase/private_rpc_relais.sql ; garde NULL :
+-- supabase/facturation_garde_null_2026-09-05.sql). Ne pas rejouer ces blocs :
+-- ils recréeraient des fonctions security definer dans public (Security Advisor
+-- rouvert, doublon avec le relais) et une garde périmée (`<> 'gestion'` laisse
+-- passer NULL). Conservés pour l'historique.
+-- ---------------------------------------------------------------------------
 -- ---- RPC : apprentissage atomique par delta ---------------------------------
 -- p_codes  : les codes finaux validés d'une facture (vérité terrain).
 -- p_deltas : { "token": increment, ... } (les mots de CETTE facture).

@@ -168,6 +168,31 @@ Le temps de chargement perçu vient surtout de l'auth cliente + du mode SPA. Rè
   erreurs génériques) ; client `detectSessionInUrl:false` + garde des params de
   route `$year/$month`. Risque **accepté** : tokens de session en `localStorage`
   (structurel au client Supabase JS ; son vecteur XSS a été supprimé).
+- **Schéma `private` depuis le 2026-09-05** (plan `security-advisor-zero-2026-09-05`,
+  Security Advisor à zéro côté SQL) : TOUTE fonction `security definer` vit dans
+  `private` (non exposé à PostgREST ; usage `authenticated` + `service_role`,
+  jamais `anon`/PUBLIC ; ne JAMAIS l'ajouter aux « Exposed schemas » du
+  dashboard). Aides des policies : `private.get_page_level`, `private.is_admin`,
+  `private.get_user_role`, `private.page_level_rank`,
+  `private.repjour_manual_forecast_allowed`, `private.get_user_email`. Les 34 RPC
+  privilégiées (comptes/droits, `daily_reports_occ`, `rapro_occupancy`, 28
+  `facturation_*`) y vivent aussi ; `public` ne porte que des **relais
+  `security invoker`** de même nom/signature (l'app appelle `public.<nom>`
+  sans changement) et `dismiss_send_reminder` (invoker, policy identique).
+  Fichiers d'autorité : `private_schema_aides.sql`, `rpc_invoker_2026-09.sql`,
+  `private_rpc_relais.sql`, `facturation_garde_null_2026-09-05.sql` ; contrôle
+  `verif_advisor.sql` (11 contrôles) + `verif_complet.sql`. Les anciens fichiers
+  de fonctions portent « REMPLACÉ — NE PLUS REJOUER ». Règles : une nouvelle
+  RPC privilégiée = fonction dans `private` + relais invoker dans `public` ;
+  une garde de niveau s'écrit `is distinct from 'gestion'` ou
+  `page_level_rank(...) >= n`, JAMAIS `<> 'gestion'` (NULL passe) ; générer le
+  SQL depuis le catalogue (`pg_get_functiondef`) plutôt que recopier. Deux
+  failles préexistantes corrigées ce jour : garde NULL des 28 RPC facturation
+  (tout compte connecté sans droit facturation pouvait écrire), policy
+  `Users update own profile` auto-référente (42P17 : aucun non-admin ne pouvait
+  modifier son profil depuis le 2026-08-05). Fonctions supprimées (aucun
+  appelant) : `set_parking_tarif`, `literie_record_movement`,
+  `literie_toggle_bedding`.
 - **Clés API migrées le 2026-07-27** : le projet est passé du legacy (anon/service_role
   JWT) au **nouveau système** — client sur `sb_publishable` (`VITE_SUPABASE_ANON_KEY`
   local + Vercel), Edge Functions sur `sb_secret` (secret `SB_SECRET_KEY`, lu avec repli

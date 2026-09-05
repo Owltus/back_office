@@ -21,6 +21,7 @@
 -- DEUX CHEMINS D'ÉCRITURE (comme pdj_breakfasts) : l'Edge Function (service_role,
 -- contourne la RLS, pipeline auto) ET l'app lors de l'import manuel (sous RLS,
 -- réservé aux admins). D'où des policies de LECTURE ET d'ÉCRITURE `page:pdj`.
+-- 2026-09-05 : aides en schéma private (voir private_schema_aides.sql)
 -- =============================================================================
 
 -- ---- Table + index ----------------------------------------------------------
@@ -72,7 +73,7 @@ alter table public.pdj_addon_production enable row level security;
 drop policy if exists "pdj addon read (page:pdj)" on public.pdj_addon_production;
 create policy "pdj addon read (page:pdj)"
   on public.pdj_addon_production for select to authenticated
-  using ((select public.page_level_rank(public.get_page_level('pdj'))) >= 1);
+  using ((select private.page_level_rank(private.get_page_level('pdj'))) >= 1);
 
 -- ÉCRITURE INSERT/UPDATE : gestion, ou rank >= 2 + fenêtre J-3. L'import manuel
 -- côté app est réservé aux admins (gestion → hors fenêtre) ; l'Edge (service_role)
@@ -85,9 +86,9 @@ drop policy if exists "pdj addon delete (page:pdj)" on public.pdj_addon_producti
 create policy "pdj addon write (page:pdj)"
   on public.pdj_addon_production for insert to authenticated
   with check (
-    (select public.get_page_level('pdj')) = 'gestion'
+    (select private.get_page_level('pdj')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('pdj'))) >= 2
+      (select private.page_level_rank(private.get_page_level('pdj'))) >= 2
       and service_date >= (current_date - 3)
     )
   );
@@ -96,16 +97,16 @@ create policy "pdj addon write (page:pdj)"
 create policy "pdj addon update (page:pdj)"
   on public.pdj_addon_production for update to authenticated
   using (
-    (select public.get_page_level('pdj')) = 'gestion'
+    (select private.get_page_level('pdj')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('pdj'))) >= 2
+      (select private.page_level_rank(private.get_page_level('pdj'))) >= 2
       and service_date >= (current_date - 3)
     )
   )
   with check (
-    (select public.get_page_level('pdj')) = 'gestion'
+    (select private.get_page_level('pdj')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('pdj'))) >= 2
+      (select private.page_level_rank(private.get_page_level('pdj'))) >= 2
       and service_date >= (current_date - 3)
     )
   );
@@ -114,7 +115,7 @@ create policy "pdj addon update (page:pdj)"
 -- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "pdj addon delete (page:pdj)"
   on public.pdj_addon_production for delete to authenticated
-  using ((select public.get_page_level('pdj')) = 'gestion');
+  using ((select private.get_page_level('pdj')) = 'gestion');
 
 -- ---- Vérification (lecture seule) -------------------------------------------
 -- Vérif :

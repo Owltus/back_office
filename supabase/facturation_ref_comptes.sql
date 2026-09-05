@@ -12,6 +12,7 @@
 -- RLS : lecture PAR PAGE (facturation), aucune écriture directe (write = RPC only, voir
 -- facturation_ref_comptes_rpc.sql). Le seed vit dans facturation_ref_comptes_seed.sql
 -- (à passer APRÈS ce fichier et le RPC).
+-- 2026-09-05 : aides en schéma private (voir private_schema_aides.sql)
 -- ============================================================================
 
 -- 1) Table -------------------------------------------------------------------
@@ -28,7 +29,7 @@ alter table public.facturation_ref_comptes enable row level security;
 drop policy if exists "ref_comptes read (page:facturation)" on public.facturation_ref_comptes;
 create policy "ref_comptes read (page:facturation)" on public.facturation_ref_comptes
   for select to authenticated
-  using ((select public.page_level_rank(public.get_page_level('facturation'))) >= 1);
+  using ((select private.page_level_rank(private.get_page_level('facturation'))) >= 1);
 
 -- 3) Trigger updated_at ------------------------------------------------------
 create or replace function public.facturation_ref_comptes_touch()

@@ -33,6 +33,15 @@ alter table public.facturation_issuer_codes enable row level security;
 -- les fichiers *_rls_fenetre_*.sql (autorité UNIQUE). Ne PAS recréer de policy
 -- ici : un rejeu rouvrirait les lectures et court-circuiterait permissions + fenetres.
 
+-- ---------------------------------------------------------------------------
+-- PÉRIMÉ le 2026-09-05 : les RPC ci-dessous (jusqu'à la fin du fichier) vivent
+-- désormais dans le schéma private, avec un relais security invoker de même nom
+-- dans public (autorité : supabase/private_rpc_relais.sql ; garde NULL :
+-- supabase/facturation_garde_null_2026-09-05.sql). Ne pas rejouer ces blocs :
+-- ils recréeraient des fonctions security definer dans public (Security Advisor
+-- rouvert, doublon avec le relais) et une garde périmée (`<> 'gestion'` laisse
+-- passer NULL). Conservés pour l'historique.
+-- ---------------------------------------------------------------------------
 -- ---- RPC : apprentissage (+1 par code validé pour l'émetteur) ---------------
 create or replace function public.facturation_issuer_codes_learn(
   p_issuer text,

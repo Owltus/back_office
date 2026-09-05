@@ -21,6 +21,14 @@
 alter table public.facturation_learned_docs
   add column if not exists comptes jsonb not null default '{}'::jsonb;
 
+-- ---------------------------------------------------------------------------
+-- PÉRIMÉ le 2026-09-05 : facturation_learned_docs_record vit désormais dans le
+-- schéma private (autorité : supabase/private_rpc_relais.sql, garde NULL :
+-- supabase/facturation_garde_null_2026-09-05.sql). Ne pas rejouer ce bloc
+-- (fonction et ses grants) : il recréerait une fonction security definer dans
+-- public (Security Advisor rouvert, doublon avec le relais). Conservé pour
+-- l'historique.
+-- ---------------------------------------------------------------------------
 -- 2) RPC record ÉTENDU : porte aussi les comptes (idempotent, garde de rôle) --
 -- La signature gagne p_comptes → on DROP l'ancienne (5 args) avant de recréer,
 -- pour éviter une surcharge fantôme (deux versions résolues au hasard par PostgREST).

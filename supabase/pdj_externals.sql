@@ -13,6 +13,7 @@
 -- carte « PDJ Extra », CA HT au tarif PDJ standard, analytique annuelle et
 -- mensuelle) — voir src/lib/pdj/breakdown.ts (computePdjCA), amounts.ts
 -- (computeAggDailyTotals) et analytics.ts (aggregatePdjMonthly/aggregatePdjDaily).
+-- 2026-09-05 : aides en schéma private (voir private_schema_aides.sql)
 -- =============================================================================
 
 -- ---- Table + index ----------------------------------------------------------
@@ -48,7 +49,7 @@ alter table public.pdj_externals enable row level security;
 drop policy if exists "pdj externals read (page:pdj)" on public.pdj_externals;
 create policy "pdj externals read (page:pdj)"
   on public.pdj_externals for select to authenticated
-  using ((select public.page_level_rank(public.get_page_level('pdj'))) >= 1);
+  using ((select private.page_level_rank(private.get_page_level('pdj'))) >= 1);
 
 drop policy if exists "pdj externals write (page:pdj)"  on public.pdj_externals;
 drop policy if exists "pdj externals update (page:pdj)" on public.pdj_externals;
@@ -58,9 +59,9 @@ drop policy if exists "pdj externals delete (page:pdj)" on public.pdj_externals;
 create policy "pdj externals write (page:pdj)"
   on public.pdj_externals for insert to authenticated
   with check (
-    (select public.get_page_level('pdj')) = 'gestion'
+    (select private.get_page_level('pdj')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('pdj'))) >= 2
+      (select private.page_level_rank(private.get_page_level('pdj'))) >= 2
       and service_date >= (current_date - 3)
     )
   );
@@ -69,16 +70,16 @@ create policy "pdj externals write (page:pdj)"
 create policy "pdj externals update (page:pdj)"
   on public.pdj_externals for update to authenticated
   using (
-    (select public.get_page_level('pdj')) = 'gestion'
+    (select private.get_page_level('pdj')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('pdj'))) >= 2
+      (select private.page_level_rank(private.get_page_level('pdj'))) >= 2
       and service_date >= (current_date - 3)
     )
   )
   with check (
-    (select public.get_page_level('pdj')) = 'gestion'
+    (select private.get_page_level('pdj')) = 'gestion'
     or (
-      (select public.page_level_rank(public.get_page_level('pdj'))) >= 2
+      (select private.page_level_rank(private.get_page_level('pdj'))) >= 2
       and service_date >= (current_date - 3)
     )
   );
@@ -86,7 +87,7 @@ create policy "pdj externals update (page:pdj)"
 -- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
 create policy "pdj externals delete (page:pdj)"
   on public.pdj_externals for delete to authenticated
-  using ((select public.get_page_level('pdj')) = 'gestion');
+  using ((select private.get_page_level('pdj')) = 'gestion');
 
 -- ---- Vérification (lecture seule) -------------------------------------------
 -- Vérif :

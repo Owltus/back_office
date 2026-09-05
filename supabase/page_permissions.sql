@@ -26,10 +26,18 @@
 --
 -- ORDRE INTERNE : la table est créée AVANT get_page_level(), car cette fonction
 -- SQL référence la table et son corps est validé à la création.
+-- 2026-09-05 : aides en schéma private (voir private_schema_aides.sql)
 -- =============================================================================
 
 -- ---- Fonctions sans dépendance à la table -----------------------------------
 
+-- ---------------------------------------------------------------------------
+-- PÉRIMÉ le 2026-09-05 : is_admin vit désormais dans le schéma private
+-- (autorité : supabase/private_schema_aides.sql). Ne pas rejouer ce bloc
+-- (fonction et ses grants) : il recréerait une fonction security definer dans
+-- public (Security Advisor rouvert, doublon avec le relais). Conservé pour
+-- l'historique.
+-- ---------------------------------------------------------------------------
 -- Vrai si l'appelant est de grade 'admin'.
 create or replace function public.is_admin()
 returns boolean
@@ -38,6 +46,13 @@ as $$
   select coalesce((select role = 'admin' from public.profiles where id = auth.uid()), false);
 $$;
 
+-- ---------------------------------------------------------------------------
+-- PÉRIMÉ le 2026-09-05 : page_level_rank vit désormais dans le schéma private
+-- (autorité : supabase/private_schema_aides.sql). Ne pas rejouer ce bloc
+-- (fonction et ses grants) : il recréerait une fonction security definer dans
+-- public (Security Advisor rouvert, doublon avec le relais). Conservé pour
+-- l'historique.
+-- ---------------------------------------------------------------------------
 -- Ordre total des niveaux (0 = aucun accès).
 create or replace function public.page_level_rank(p_level text)
 returns int
@@ -68,12 +83,19 @@ drop policy if exists "upp select self or admin" on public.user_page_permissions
 create policy "upp select self or admin"
   on public.user_page_permissions for select
   to authenticated
-  using (user_id = auth.uid() or public.is_admin());
+  using (user_id = auth.uid() or private.is_admin());
 
 -- Pas de policy INSERT/UPDATE/DELETE : écriture exclusivement via les RPC ci-dessous.
 
 -- ---- Fonction dépendant de la table -----------------------------------------
 
+-- ---------------------------------------------------------------------------
+-- PÉRIMÉ le 2026-09-05 : get_page_level vit désormais dans le schéma private
+-- (autorité : supabase/private_schema_aides.sql). Ne pas rejouer ce bloc
+-- (fonction et ses grants) : il recréerait une fonction security definer dans
+-- public (Security Advisor rouvert, doublon avec le relais). Conservé pour
+-- l'historique.
+-- ---------------------------------------------------------------------------
 -- Niveau de l'appelant sur une page : admin = 'gestion' partout, sinon le niveau
 -- stocké (ou NULL = aucun accès).
 create or replace function public.get_page_level(p_page text)
@@ -89,6 +111,13 @@ $$;
 
 -- ---- RPC d'administration (gardées admin) -----------------------------------
 
+-- ---------------------------------------------------------------------------
+-- PÉRIMÉ le 2026-09-05 : set_page_permission vit désormais dans le schéma
+-- private (autorité : supabase/private_rpc_relais.sql). Ne pas rejouer ce bloc
+-- (fonction et ses grants) : il recréerait une fonction security definer dans
+-- public (Security Advisor rouvert, doublon avec le relais). Conservé pour
+-- l'historique.
+-- ---------------------------------------------------------------------------
 -- Attribue / met à jour le niveau d'un utilisateur sur une page.
 create or replace function public.set_page_permission(p_user uuid, p_page text, p_level text)
 returns void
@@ -106,6 +135,13 @@ begin
 end;
 $$;
 
+-- ---------------------------------------------------------------------------
+-- PÉRIMÉ le 2026-09-05 : remove_page_permission vit désormais dans le schéma
+-- private (autorité : supabase/private_rpc_relais.sql). Ne pas rejouer ce bloc
+-- (fonction et ses grants) : il recréerait une fonction security definer dans
+-- public (Security Advisor rouvert, doublon avec le relais). Conservé pour
+-- l'historique.
+-- ---------------------------------------------------------------------------
 -- Retire tout accès d'un utilisateur à une page.
 create or replace function public.remove_page_permission(p_user uuid, p_page text)
 returns void
@@ -117,6 +153,13 @@ begin
 end;
 $$;
 
+-- ---------------------------------------------------------------------------
+-- PÉRIMÉ le 2026-09-05 : set_user_grade vit désormais dans le schéma private
+-- (autorité : supabase/private_rpc_relais.sql). Ne pas rejouer ce bloc
+-- (fonction et ses grants) : il recréerait une fonction security definer dans
+-- public (Security Advisor rouvert, doublon avec le relais). Conservé pour
+-- l'historique.
+-- ---------------------------------------------------------------------------
 -- Change le grade d'un compte (canal serveur gardé, remplace l'update client direct).
 create or replace function public.set_user_grade(p_user uuid, p_grade text)
 returns void
@@ -148,6 +191,12 @@ begin
 end;
 $$;
 
+-- ---------------------------------------------------------------------------
+-- PÉRIMÉ le 2026-09-05 : les privilèges sont posés avec les fonctions dans le
+-- schéma private (private_schema_aides.sql, private_rpc_relais.sql). Ces grants
+-- échoueraient pour les 3 aides (plus dans public) et ne viseraient que les
+-- relais pour les 3 RPC. Conservé pour l'historique.
+-- ---------------------------------------------------------------------------
 -- ---- Droits d'exécution -----------------------------------------------------
 -- Les policies RLS évaluent get_page_level/is_admin/page_level_rank sous
 -- l'identité de l'appelant → elles doivent être exécutables par authenticated.
