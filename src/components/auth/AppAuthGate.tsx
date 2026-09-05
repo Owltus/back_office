@@ -1,11 +1,27 @@
+import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Navigate, useRouterState } from '@tanstack/react-router'
 
 import { useAuth } from '#/components/auth/AuthContext.tsx'
+import { BackendStatusBanner } from '#/components/shared/BackendStatusBanner.tsx'
 import { EasterEggs } from '#/components/shared/EasterEggs.tsx'
 import { Navbar } from '#/components/Navbar.tsx'
 import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { RouteSkeleton } from '#/components/shared/skeleton/RouteSkeleton.tsx'
+
+/** Vrai après `delayMs` de montage : sert à ne parler d'un chargement lent
+ *  qu'une fois qu'il l'est vraiment (jamais de message sur un boot normal). */
+function useDelayedFlag(delayMs: number): boolean {
+  const [flag, setFlag] = useState(false)
+  useEffect(() => {
+    const id = window.setTimeout(() => setFlag(true), delayMs)
+    return () => window.clearTimeout(id)
+  }, [delayMs])
+  return flag
+}
+
+/** Délai au-delà duquel le squelette de démarrage cesse d'être muet. */
+const SLOW_BOOT_MS = 5_000
 
 /**
  * Squelette de démarrage : silhouette de barre de navigation + zone de contenu en
@@ -19,9 +35,17 @@ import { RouteSkeleton } from '#/components/shared/skeleton/RouteSkeleton.tsx'
  * (`app-scroll`, `flex flex-1 flex-col p-4 md:p-6`) pour ne rien décaler.
  */
 function BootSkeleton({ pathname }: { pathname: string }) {
+  // Après 5 s, le squelette cesse d'être muet : un texte accessible dit que le
+  // chargement dure ; si le disjoncteur est ouvert, le bandeau de statut
+  // (monté au-dessus, hors du squelette décoratif) prend le relais.
+  const slow = useDelayedFlag(SLOW_BOOT_MS)
+  const { backendDown } = useAuth()
   return (
-    <div className="flex h-dvh flex-col overflow-hidden" aria-hidden="true">
-      <header className="sticky top-0 z-40 border-b border-border bg-card/80 backdrop-blur-md print:hidden">
+    <div className="flex h-dvh flex-col overflow-hidden">
+      <header
+        className="sticky top-0 z-40 border-b border-border bg-card/80 backdrop-blur-md print:hidden"
+        aria-hidden="true"
+      >
         <div className="flex h-16 items-center gap-3 px-4">
           <Skeleton className="size-7 rounded-md" />
           <div className="ml-2 hidden items-center gap-2 md:flex">
@@ -32,7 +56,19 @@ function BootSkeleton({ pathname }: { pathname: string }) {
           <Skeleton className="ml-auto size-9 rounded-full" />
         </div>
       </header>
-      <main className="app-scroll flex flex-1 flex-col overflow-y-auto">
+      <BackendStatusBanner />
+      {slow && !backendDown && (
+        <p
+          role="status"
+          className="border-b border-border bg-card/60 px-4 py-2 text-sm text-muted-foreground print:hidden"
+        >
+          Chargement plus long que prévu.
+        </p>
+      )}
+      <main
+        className="app-scroll flex flex-1 flex-col overflow-y-auto"
+        aria-hidden="true"
+      >
         <div className="flex flex-1 flex-col p-4 md:p-6">
           <RouteSkeleton pathname={pathname} />
         </div>
@@ -85,6 +121,7 @@ export function AppAuthGate({ children }: { children: ReactNode }) {
   return (
     <div className="flex h-dvh flex-col overflow-hidden print:h-auto print:overflow-visible">
       <Navbar />
+      <BackendStatusBanner />
       <main className="app-scroll flex flex-1 flex-col overflow-y-auto motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300 print:overflow-visible">
         {children}
       </main>
