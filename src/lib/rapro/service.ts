@@ -10,8 +10,9 @@
  */
 
 import { supabase } from '#/lib/supabase.ts'
+import { toRaproDay } from '#/lib/rapro/dayRows.ts'
+import type { DatedRaproRoomRow, RaproRoomRow } from '#/lib/rapro/dayRows.ts'
 import type {
-  DbRaproRoom,
   DbRaproSheet,
   RaproDay,
   RaproSheet,
@@ -33,39 +34,38 @@ export const RAPRO_AGG_VIEW = 'rapro_daily_agg'
  * éviter le lint Supabase « security_definer_view ». */
 export const RAPRO_OCCUPANCY_FN = 'rapro_occupancy'
 
-/** Statuts valides. Une valeur inconnue en base est ramenée à un statut sûr
- * plutôt que de casser le rendu (défense ; ne devrait pas arriver). */
-const KNOWN_STATUSES = new Set<RoomStatus>([
-  'nettoyee',
-  'non_nettoyee',
-  'refus',
-  'rattrapage',
-  'non_vendue',
-])
-
 /** État d'un jour : Map chambre→statut (défaut nettoyee = absence de ligne).
- * TOLÉRANT : une valeur non reconnue est ramenée à 'refus' (hors charge). */
+ * TOLÉRANT : une valeur non reconnue est ramenée à 'refus' (hors charge) — la
+ * conversion vit dans `dayRows.ts` (pure), partagée avec la lecture en plage. */
 export async function fetchDay(reportDate: string): Promise<RaproDay> {
   const { data, error } = await supabase
     .from(RAPRO_TABLE)
     .select('room, status, carried_manual, materialized')
     .eq('report_date', reportDate)
   if (error) throw error
-  const statuses = new Map<number, RoomStatus>()
-  const carriedManual = new Set<number>()
-  const materialized = new Set<number>()
-  for (const r of (data ?? []) as Pick<
-    DbRaproRoom,
-    'room' | 'status' | 'carried_manual' | 'materialized'
-  >[]) {
-    // Couleur EXPLICITE seulement : une ligne `status null` (posée pour le seul
-    // liseré) reste HORS de la map → « aucune couleur » (grise/verte selon vente).
-    if (r.status != null)
-      statuses.set(r.room, KNOWN_STATUSES.has(r.status) ? r.status : 'refus')
-    if (r.carried_manual) carriedManual.add(r.room)
-    if (r.materialized) materialized.add(r.room)
-  }
-  return { reportDate, statuses, carriedManual, materialized }
+  return toRaproDay(reportDate, (data ?? []) as RaproRoomRow[])
+}
+
+/**
+ * Lignes BRUTES de statut sur une plage de jours `[from, to]` (bornes incluses),
+ * en UNE requête. Sert la fenêtre de roulement de la bande RepJour (jusqu'à 7
+ * jours antérieurs) : une lecture au lieu d'une par jour. Le regroupement par
+ * jour est laissé à l'appelant (`groupRowsByDay`, pur) pour que la sémantique
+ * « absence de ligne = résolue » reste celle de `fetchDay`. Les clés
+ * `['rapro','day',d]` du board ne sont pas touchées : lecture séparée, sans
+ * effet sur le cache de la saisie.
+ */
+export async function fetchRoomsRange(
+  from: string,
+  to: string,
+): Promise<DatedRaproRoomRow[]> {
+  const { data, error } = await supabase
+    .from(RAPRO_TABLE)
+    .select('report_date,room,status,carried_manual,materialized')
+    .gte('report_date', from)
+    .lte('report_date', to)
+  if (error) throw error
+  return (data ?? []) as DatedRaproRoomRow[]
 }
 
 /** Occupation In-House par chambre pour un jour (fonction rapro_occupancy, sans PII).

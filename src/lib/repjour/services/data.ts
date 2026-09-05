@@ -73,6 +73,27 @@ export async function fetchUnifiedDays(monthFilter: {
   return rows
 }
 
+/** Nuitées réalisées par jour d'un mois : `date` + `rj_nuitees` seulement.
+ *  Sert la bande de synthèse RepJour (taux de captage PDJ et parking), qui
+ *  n'a besoin d'aucune autre colonne, et ne lit pas `forecast_days` — là où
+ *  `fetchUnifiedDays` (gardée telle quelle pour ses autres appelants) charge les
+ *  deux tables en `select=*`. Seuls les jours AYANT un rapport sont renvoyés. */
+export async function fetchNuiteesByMonth({
+  year,
+  month,
+}: {
+  year: number
+  month: number
+}): Promise<Array<{ date: string; rj_nuitees: number | null }>> {
+  const { data, error } = await supabase
+    .from('daily_reports')
+    .select('date,rj_nuitees')
+    .eq('year', year)
+    .eq('month', month)
+  if (error) throw error
+  return (data ?? []) as Array<{ date: string; rj_nuitees: number | null }>
+}
+
 /*
  * ---------------------------------------------------------------------------
  * Écritures & suppressions (étape 8 — gestion des données).

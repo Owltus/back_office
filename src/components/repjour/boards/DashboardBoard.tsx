@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import {
@@ -246,7 +246,18 @@ export function DashboardBoard() {
     }
   }, [reportError, reportErrorObj])
 
+  // Debounce (500 ms, sur le DERNIER événement) de l'invalidation Realtime : un
+  // import de N lignes émet N événements `postgres_changes` ; sans regroupement,
+  // chaque client refetchait N × toutes les requêtes `['repjour']` montées.
+  const invalidateRef = useRef<number | null>(null)
   useEffect(() => {
+    const scheduleInvalidate = () => {
+      if (invalidateRef.current) window.clearTimeout(invalidateRef.current)
+      invalidateRef.current = window.setTimeout(() => {
+        invalidateRef.current = null
+        void queryClient.invalidateQueries({ queryKey: ['repjour'] })
+      }, 500)
+    }
     // Abonnement temps réel en LECTURE : un import fait ailleurs invalide le
     // cache, et TanStack Query refetche ce qui est monté. On ne recharge plus
     // à la main — sinon le cache serait court-circuité à chaque montage.
@@ -255,13 +266,15 @@ export function DashboardBoard() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'daily_reports' },
-        () => {
-          void queryClient.invalidateQueries({ queryKey: ['repjour'] })
-        },
+        scheduleInvalidate,
       )
       .subscribe()
 
     return () => {
+      // Timer en attente au démontage : on l'annule (pas d'invalidation sur un
+      // composant disparu, ni de fuite du timer).
+      if (invalidateRef.current) window.clearTimeout(invalidateRef.current)
+      invalidateRef.current = null
       void supabase.removeChannel(channel)
     }
   }, [queryClient])

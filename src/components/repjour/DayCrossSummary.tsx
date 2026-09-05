@@ -18,11 +18,12 @@ import { detectTarifs } from '#/lib/pdj/tarif.ts'
 import { pdjDaySummary } from '#/lib/pdj/summary.ts'
 import { fetchParkingDailyOccupation } from '#/lib/parking/service.ts'
 import { captageIndex } from '#/lib/parking/analytics.ts'
-import { fetchUnifiedDays } from '#/lib/repjour/services/data.ts'
+import { fetchNuiteesByMonth } from '#/lib/repjour/services/data.ts'
 import {
   fetchDay as fetchRaproDay,
   fetchOccupancy,
   fetchOldestDay,
+  fetchRoomsRange,
 } from '#/lib/rapro/service.ts'
 import {
   cleaned,
@@ -30,11 +31,10 @@ import {
   sumCounts,
 } from '#/lib/rapro/monthly.ts'
 import { carryOver, carryoverWindow } from '#/lib/rapro/carryover.ts'
-import type { DaySnapshot } from '#/lib/rapro/carryover.ts'
+import { groupRowsByDay } from '#/lib/rapro/dayRows.ts'
 import { CATEGORY_COLOR } from '#/lib/rapro/constants.ts'
 import { raproDaySummary } from '#/lib/rapro/summary.ts'
 import type { RaproDaySummary } from '#/lib/rapro/summary.ts'
-import type { RoomStatus } from '#/lib/rapro/types.ts'
 
 /*
  * Bande de synthèse TRANSVERSE du rapport journalier — sous le tableau KPI.
@@ -59,10 +59,6 @@ import type { RoomStatus } from '#/lib/rapro/types.ts'
  * page ; un compte « repjour seul » ne verrait rien de toute façon. Un admin voit
  * tout. PERF : mêmes `queryKey` que les onglets → cache TanStack partagé.
  */
-
-/** Map/Set vides stables (défauts des jours de la fenêtre de roulement encore en vol). */
-const EMPTY_STATUSES: ReadonlyMap<number, RoomStatus> = new Map()
-const EMPTY_ROOMS: ReadonlySet<number> = new Set()
 
 /** Petit sous-texte grisé sous la valeur d'une carte (calque de SummaryCards). */
 function subMuted(content: ReactNode) {
@@ -168,10 +164,15 @@ export function DayCrossSummary({
   // Tarifs unitaires détectés sur TOUT l'historique Addon (rien en dur ; cf.
   // tarif.ts). MÊME clé que la page PDJ → cache partagé. Le CA du jour se calcule
   // par chambre (computePdjCA) au tarif détecté : même chiffre que le board.
+  // C'est TOUT l'historique Addon (plusieurs centaines de lignes) pour de simples
+  // tarifs unitaires, stables sur des mois : fraîcheur d'une heure ici, conservée
+  // deux heures hors écran — la page RepJour ne le recharge pas à chaque visite.
   const allAddonQ = useQuery({
     queryKey: ['pdj', 'addon-all'],
     queryFn: fetchAllAddonProduction,
     enabled: canPdj,
+    staleTime: 60 * 60_000,
+    gcTime: 2 * 60 * 60_000,
   })
   const tarifs = useMemo(
     () => detectTarifs(allAddonQ.data ?? []),
@@ -207,24 +208,29 @@ export function DayCrossSummary({
     enabled: canParking,
   })
   // Occupation HÔTEL (rj_nuitees) des 1–2 mois couvrant la fenêtre 30 j —
-  // dénominateur du captage MOYEN. MÊME clé que l'analytique parking (cache
-  // partagé). Indexée par date complète (la fenêtre peut chevaucher deux mois).
+  // dénominateur du captage MOYEN. Lecture DÉDIÉE (`date,rj_nuitees` sur
+  // daily_reports seule) : l'ancienne clé partagée avec l'analytique parking
+  // chargeait daily_reports ET forecast_days en `select=*` pour une colonne.
+  // Indexée par date complète (la fenêtre peut chevaucher deux mois). staleTime
+  // 5 min : les nuitées d'un jour passé ne bougent qu'à l'import, et le canal
+  // Realtime de DashboardBoard invalide le préfixe `['repjour']`.
   const coverMonths = useMemo(
     () => monthsCovering(windowFrom, date),
     [windowFrom, date],
   )
   const hotelWinQs = useQueries({
     queries: coverMonths.map(({ year, month }) => ({
-      queryKey: ['parking', 'hotel-month', year, month],
-      queryFn: () => fetchUnifiedDays({ year, month }),
+      queryKey: ['repjour', 'nuitees-month', year, month],
+      queryFn: () => fetchNuiteesByMonth({ year, month }),
       enabled: canParking,
+      staleTime: 5 * 60_000,
     })),
   })
   const hotelByDate = useMemo(() => {
     const map = new Map<string, number>()
     for (const q of hotelWinQs) {
       for (const row of q.data ?? []) {
-        if (row.report) map.set(row.date, row.report.rj_nuitees)
+        if (row.rj_nuitees != null) map.set(row.date, row.rj_nuitees)
       }
     }
     return map
@@ -297,31 +303,36 @@ export function DayCrossSummary({
     queryKey: ['rapro', 'oldest'],
     queryFn: fetchOldestDay,
     enabled: canRapro,
+    staleTime: Infinity, // borne historique figée (mêmes réglages que le board rapro)
+    gcTime: 60 * 60_000,
   })
   // Fenêtre de roulement (jusqu'à 7 jours antérieurs), bornée au plus ancien jour
-  // connu — MÊMES clés que le board → cache partagé, pas de requête en double.
-  const windowDays = canRapro
-    ? carryoverWindow(date, raproOldestQ.data ?? date)
-    : []
-  const raproWindow = useQueries({
-    queries: windowDays.map((d) => ({
-      queryKey: ['rapro', 'day', d],
-      queryFn: () => fetchRaproDay(d),
-      enabled: canRapro,
-    })),
+  // connu ; vide tant que `oldest` n'est pas là (comme avant). Lue en UNE requête
+  // de plage (au lieu d'une par jour), puis regroupée par jour (`groupRowsByDay`,
+  // pur) : un jour sans ligne donne un instantané vide = « résolue », exactement
+  // ce que produisaient les sept `fetchDay`. Clé propre à la bande : les clés
+  // `['rapro','day',d]` restent au board de saisie.
+  const windowDays = useMemo(
+    () => (canRapro ? carryoverWindow(date, raproOldestQ.data ?? date) : []),
+    [canRapro, date, raproOldestQ.data],
+  )
+  const rangeFrom = windowDays[0]
+  const rangeTo = windowDays[windowDays.length - 1]
+  const raproRangeQ = useQuery({
+    queryKey: ['rapro', 'days-range', rangeFrom, rangeTo],
+    queryFn: () => fetchRoomsRange(rangeFrom, rangeTo),
+    enabled: canRapro && windowDays.length > 0,
   })
   const rapro = useMemo<RaproDaySummary | null>(() => {
     if (!raproOccQ.data || !raproDayQ.data) return null
     // « Bloquées de la veille » = roulement DÉRIVÉ du passé ∪ liseré manuel du
-    // jour — calque exact de RaproBoard (l.240-248).
-    const past: DaySnapshot[] = windowDays.map((_, i) => ({
-      statuses: raproWindow[i]?.data?.statuses ?? EMPTY_STATUSES,
-      carriedManual: raproWindow[i]?.data?.carriedManual ?? EMPTY_ROOMS,
-    }))
+    // jour — calque exact de RaproBoard (l.240-248). Plage encore en vol → aucune
+    // ligne → instantanés vides (même repli que les sept lectures d'avant).
+    const past = groupRowsByDay(windowDays, raproRangeQ.data ?? [])
     const carried = new Set(carryOver(past))
     for (const r of raproDayQ.data.carriedManual) carried.add(r)
     return raproDaySummary(raproOccQ.data, raproDayQ.data.statuses, carried)
-  }, [raproOccQ.data, raproDayQ.data, raproWindow, windowDays])
+  }, [raproOccQ.data, raproDayQ.data, raproRangeQ.data, windowDays])
 
   // Moyennes sur la fenêtre 30 j (sous-textes des cartes rapro) — même décompte
   // que l'analytique rapro (vue `rapro_daily_agg`, jours CLÔTURÉS uniquement), sur
