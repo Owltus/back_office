@@ -54,7 +54,7 @@ revoke all on public.pdj_service_dates from anon;
 -- VÉRIFICATION (lecture seule) — attendu : provolatile = 's', 1 vue,
 -- reloptions contient security_invoker=true, anon absent des privilèges.
 -- =============================================================================
-select 'get_user_role' as objet, provolatile as valeur
+select 'get_user_role' as objet, provolatile::text as valeur
 from pg_proc
 where pronamespace = 'public'::regnamespace and proname = 'get_user_role'
 union all
