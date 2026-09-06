@@ -1,3 +1,7 @@
+-- ⚠ 2026-09-05/06 : les blocs literie_record_movement / literie_toggle_bedding
+-- de ce fichier décrivent des fonctions SUPPRIMÉES de la prod (aucun appelant,
+-- rpc_invoker_2026-09.sql). NE PLUS REJOUER ces blocs : ils recréeraient des
+-- fonctions security definer dans public.
 -- 2026-09-06 : les affectations `new.X := old.X` des triggers d'estampillage
 -- passent par private.keep_author(new, old) (fk_auteur_triggers_2026-09-06.sql) :
 -- auteur figé pour tout utilisateur de l'app, mise à NULL acceptée d'un contexte

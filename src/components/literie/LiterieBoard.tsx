@@ -15,8 +15,8 @@ const ROOMS_KEY = ['literie', 'rooms']
 
 /**
  * Literie anti-allergène — page unique (pas de sous-route/bouton de bascule,
- * décision explicite de l'utilisateur) : tuile de synthèse + grille des 80
- * chambres, puis planning des lits parapluie bébé (BabyCotBoard) en bas. État
+ * décision explicite de l'utilisateur) : grille des 80 chambres, puis planning
+ * des lits parapluie bébé (BabyCotBoard) en bas. État
  * de la grille PERMANENT (pas de notion de jour, pas de feuille à clôturer,
  * pas de commentaire) : un clic sur une pastille bascule immédiatement plume
  * ↔ synthétique, à tout moment, tant que `can('literie','ecriture')` (RLS de
@@ -25,9 +25,12 @@ const ROOMS_KEY = ['literie', 'rooms']
  * Pas de suivi de stock ICI (retiré à la demande de l'utilisateur, « pour le
  * moment ») : la page trace UNIQUEMENT quelles chambres ont actuellement de
  * la literie synthétique installée, sans compteur d'oreillers/couettes de
- * secours. Les tables/RPC de stock (`literie_stock`, `literie_toggle_
- * bedding`, cf. `supabase/literie.sql`) restent en base, orphelines, au cas
- * où le suivi de stock reviendrait plus tard.
+ * secours. Les tables de stock (`literie_stock`, `literie_stock_movements`)
+ * restent en base, orphelines et en lecture seule, au cas où le suivi
+ * reviendrait ; les RPC d'écriture (`literie_record_movement`,
+ * `literie_toggle_bedding`) ont été SUPPRIMÉES de la prod le 2026-09-05
+ * (aucun appelant). La bascule plume/synthétique écrit directement dans
+ * `hotel_rooms` (RLS page:literie).
  */
 export function LiterieBoard() {
   const { can } = useAuth()

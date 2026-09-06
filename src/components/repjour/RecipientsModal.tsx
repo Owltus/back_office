@@ -12,7 +12,6 @@ import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
 import { cn } from '#/lib/utils.ts'
 import { isValidEmail } from '#/lib/shared/email.ts'
-import { emailRecipients } from '#/lib/repjour/services/recipients.ts'
 import type {
   EmailRecipient,
   RecipientsService,
@@ -22,9 +21,10 @@ import type {
 interface Props {
   open: boolean
   onClose: () => void
-  /** CRUD de la liste à gérer. Défaut : les destinataires du mailto
-   * (`email_recipients`). L'envoi serveur passe la sienne (`serverReportRecipients`). */
-  service?: RecipientsService
+  /** CRUD de la liste à gérer (aujourd'hui `serverReportRecipients`, seule
+   * liste restante depuis le retrait du mailto et de `email_recipients`,
+   * 2026-09-06). */
+  service: RecipientsService
   /** Titre de la modale (ex. « Destinataires » vs « Destinataires serveur »). */
   title?: string
 }
@@ -68,7 +68,7 @@ function TypeToggle({
 export function RecipientsModal({
   open,
   onClose,
-  service = emailRecipients,
+  service,
   title = 'Destinataires',
 }: Props) {
   const [recipients, setRecipients] = useState<EmailRecipient[]>([])

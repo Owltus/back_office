@@ -4,19 +4,20 @@ import { supabase } from '#/lib/supabase.ts'
 /*
  * CRUD des destinataires email, sous forme de FABRIQUE liée à une table.
  *
- * Deux listes INDÉPENDANTES partagent exactement le même CRUD :
- *   - `email_recipients`         → bouton « Envoyer par email » (mailto, email.ts) ;
- *   - `server_report_recipients` → bouton « Envoyer via serveur » (Resend, Edge
- *     Function send-report).
- * Une seule implémentation, deux instances → aucune divergence de comportement.
+ * Une seule liste aujourd'hui : `server_report_recipients` → bouton « Envoyer
+ * via serveur » (Resend, Edge Function send-report). La liste du mailto
+ * (`email_recipients`, ex-app repjour) a été RETIRÉE le 2026-09-06 : bouton
+ * « Envoyer par email » disparu de DashboardBoard, table droppée
+ * (email_recipients_drop_2026-09-06.sql). La fabrique reste : un futur
+ * second destinataire réutilise la même implémentation.
  *
  * `fetch` est en LECTURE (préremplissage). Les écritures (`add`/`update`/`remove`)
  * sont soumises aux RLS Supabase (page RepJour « gestion »). Aucun DDL.
  *
- * VALIDATION : le format de l'adresse est vérifié AVANT chaque écriture. Pour
- * `email_recipients`, une valeur contenant ? & # ; ou , détournerait le mailto:
- * construit dans email.ts (pentest 2026-07-20, finding 5). La base porte la même
- * contrainte en CHECK — c'est elle qui fait foi, cette validation évite l'aller-retour.
+ * VALIDATION : le format de l'adresse est vérifié AVANT chaque écriture (une
+ * valeur contenant ? & # ; ou , détournait l'ancien mailto:, pentest 2026-07-20,
+ * finding 5). La base porte la même contrainte en CHECK — c'est elle qui fait
+ * foi, cette validation évite l'aller-retour.
  */
 
 export type RecipientType = 'to' | 'cc'
@@ -85,17 +86,7 @@ export function makeRecipientsService(table: string): RecipientsService {
 
 // --- Instances ---------------------------------------------------------------
 
-/** Destinataires du mailto (« Envoyer par email »). */
-export const emailRecipients = makeRecipientsService('email_recipients')
-
 /** Destinataires de l'envoi serveur du RepJour (« Envoyer via serveur », Resend). */
 export const serverReportRecipients = makeRecipientsService(
   'server_report_recipients',
 )
-
-// --- Compat : les appelants historiques (email.ts, RecipientsModal) importent
-// ces fonctions nommées, liées à `email_recipients`. Conservées à l'identique.
-export const fetchRecipients = emailRecipients.fetch
-export const addRecipient = emailRecipients.add
-export const updateRecipient = emailRecipients.update
-export const deleteRecipient = emailRecipients.remove

@@ -1,3 +1,7 @@
+-- ⚠ 2026-09-05/06 : les blocs literie_record_movement / literie_toggle_bedding
+-- de ce fichier décrivent des fonctions SUPPRIMÉES de la prod (aucun appelant,
+-- rpc_invoker_2026-09.sql). NE PLUS REJOUER ces blocs : ils recréeraient des
+-- fonctions security definer dans public.
 -- =============================================================================
 -- private_schema_aides — schéma privé + fonctions d'aide des règles de sécurité
 --

@@ -1,3 +1,5 @@
+> **Caduc (2026-09-06)** : le bucket `csv-archive` n'a jamais été créé ; l'archivage des CSV a été ABANDONNÉ (commit 575bbdd). Ne pas le réintroduire.
+
 # Étape 5 — Décision de rétention RGPD (csv-archive + parking)
 
 ## Objectif

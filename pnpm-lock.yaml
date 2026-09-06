@@ -62,9 +62,6 @@ importers:
       echarts:
         specifier: ^6.1.0
         version: 6.1.0
-      html2canvas:
-        specifier: ^1.4.1
-        version: 1.4.1
       jspdf:
         specifier: ^4.2.1
         version: 4.2.1
@@ -5419,7 +5416,8 @@ snapshots:
 
   balanced-match@4.0.4: {}
 
-  base64-arraybuffer@1.0.2: {}
+  base64-arraybuffer@1.0.2:
+    optional: true
 
   baseline-browser-mapping@2.10.41: {}
 
@@ -5513,6 +5511,7 @@ snapshots:
   css-line-break@2.1.0:
     dependencies:
       utrie: 1.0.2
+    optional: true
 
   css-tree@3.2.1:
     dependencies:
@@ -5855,6 +5854,7 @@ snapshots:
     dependencies:
       css-line-break: 2.1.0
       text-segmentation: 1.0.3
+    optional: true
 
   http-proxy-agent@7.0.2:
     dependencies:
@@ -6425,6 +6425,7 @@ snapshots:
   text-segmentation@1.0.3:
     dependencies:
       utrie: 1.0.2
+    optional: true
 
   three@0.185.1: {}
 
@@ -6567,6 +6568,7 @@ snapshots:
   utrie@1.0.2:
     dependencies:
       base64-arraybuffer: 1.0.2
+    optional: true
 
   victory-vendor@37.3.6:
     dependencies:

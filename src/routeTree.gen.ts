@@ -9,91 +9,41 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as AffichageRouteImport } from './routes/affichage'
-import { Route as CaisseRouteImport } from './routes/caisse'
-import { Route as ComptesRouteImport } from './routes/comptes'
-import { Route as EasterEggsRouteImport } from './routes/easter-eggs'
-import { Route as GestionRouteImport } from './routes/gestion'
-import { Route as LiterieRouteImport } from './routes/literie'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as ParkingRouteImport } from './routes/parking'
-import { Route as PdjRouteImport } from './routes/pdj'
-import { Route as ProfilRouteImport } from './routes/profil'
-import { Route as RaproRouteImport } from './routes/rapro'
 import { Route as RepjourRouteImport } from './routes/repjour'
-import { Route as CaisseIndexRouteImport } from './routes/caisse/index'
-import { Route as FacturationIndexRouteImport } from './routes/facturation/index'
-import { Route as FacturationGalaxieRouteImport } from './routes/facturation/galaxie'
-import { Route as LiterieIndexRouteImport } from './routes/literie/index'
-import { Route as ParkingIndexRouteImport } from './routes/parking/index'
-import { Route as PdjIndexRouteImport } from './routes/pdj/index'
-import { Route as RaproIndexRouteImport } from './routes/rapro/index'
+import { Route as RaproRouteImport } from './routes/rapro'
+import { Route as ProfilRouteImport } from './routes/profil'
+import { Route as PdjRouteImport } from './routes/pdj'
+import { Route as ParkingRouteImport } from './routes/parking'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as LiterieRouteImport } from './routes/literie'
+import { Route as GestionRouteImport } from './routes/gestion'
+import { Route as EasterEggsRouteImport } from './routes/easter-eggs'
+import { Route as ComptesRouteImport } from './routes/comptes'
+import { Route as CaisseRouteImport } from './routes/caisse'
+import { Route as AffichageRouteImport } from './routes/affichage'
+import { Route as IndexRouteImport } from './routes/index'
 import { Route as RepjourIndexRouteImport } from './routes/repjour/index'
-import { Route as CaisseAnalytiqueIndexRouteImport } from './routes/caisse/analytique.index'
-import { Route as ParkingAnalytiqueIndexRouteImport } from './routes/parking/analytique.index'
-import { Route as PdjAnalytiqueIndexRouteImport } from './routes/pdj/analytique.index'
-import { Route as RaproAnalytiqueIndexRouteImport } from './routes/rapro/analytique.index'
+import { Route as RaproIndexRouteImport } from './routes/rapro/index'
+import { Route as PdjIndexRouteImport } from './routes/pdj/index'
+import { Route as ParkingIndexRouteImport } from './routes/parking/index'
+import { Route as LiterieIndexRouteImport } from './routes/literie/index'
+import { Route as FacturationIndexRouteImport } from './routes/facturation/index'
+import { Route as CaisseIndexRouteImport } from './routes/caisse/index'
+import { Route as FacturationGalaxieRouteImport } from './routes/facturation/galaxie'
 import { Route as RepjourAnalytiqueIndexRouteImport } from './routes/repjour/analytique.index'
-import { Route as CaisseAnalytiqueYearMonthRouteImport } from './routes/caisse/analytique.$year.$month'
-import { Route as ParkingAnalytiqueYearMonthRouteImport } from './routes/parking/analytique.$year.$month'
-import { Route as PdjAnalytiqueYearMonthRouteImport } from './routes/pdj/analytique.$year.$month'
-import { Route as RaproAnalytiqueYearMonthRouteImport } from './routes/rapro/analytique.$year.$month'
+import { Route as RaproAnalytiqueIndexRouteImport } from './routes/rapro/analytique.index'
+import { Route as PdjAnalytiqueIndexRouteImport } from './routes/pdj/analytique.index'
+import { Route as ParkingAnalytiqueIndexRouteImport } from './routes/parking/analytique.index'
+import { Route as CaisseAnalytiqueIndexRouteImport } from './routes/caisse/analytique.index'
 import { Route as RepjourAnalytiqueYearMonthRouteImport } from './routes/repjour/analytique.$year.$month'
+import { Route as RaproAnalytiqueYearMonthRouteImport } from './routes/rapro/analytique.$year.$month'
+import { Route as PdjAnalytiqueYearMonthRouteImport } from './routes/pdj/analytique.$year.$month'
+import { Route as ParkingAnalytiqueYearMonthRouteImport } from './routes/parking/analytique.$year.$month'
+import { Route as CaisseAnalytiqueYearMonthRouteImport } from './routes/caisse/analytique.$year.$month'
 
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AffichageRoute = AffichageRouteImport.update({
-  id: '/affichage',
-  path: '/affichage',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CaisseRoute = CaisseRouteImport.update({
-  id: '/caisse',
-  path: '/caisse',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ComptesRoute = ComptesRouteImport.update({
-  id: '/comptes',
-  path: '/comptes',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const EasterEggsRoute = EasterEggsRouteImport.update({
-  id: '/easter-eggs',
-  path: '/easter-eggs',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const GestionRoute = GestionRouteImport.update({
-  id: '/gestion',
-  path: '/gestion',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LiterieRoute = LiterieRouteImport.update({
-  id: '/literie',
-  path: '/literie',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ParkingRoute = ParkingRouteImport.update({
-  id: '/parking',
-  path: '/parking',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PdjRoute = PdjRouteImport.update({
-  id: '/pdj',
-  path: '/pdj',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ProfilRoute = ProfilRouteImport.update({
-  id: '/profil',
-  path: '/profil',
+const RepjourRoute = RepjourRouteImport.update({
+  id: '/repjour',
+  path: '/repjour',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RaproRoute = RaproRouteImport.update({
@@ -101,9 +51,89 @@ const RaproRoute = RaproRouteImport.update({
   path: '/rapro',
   getParentRoute: () => rootRouteImport,
 } as any)
-const RepjourRoute = RepjourRouteImport.update({
-  id: '/repjour',
-  path: '/repjour',
+const ProfilRoute = ProfilRouteImport.update({
+  id: '/profil',
+  path: '/profil',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PdjRoute = PdjRouteImport.update({
+  id: '/pdj',
+  path: '/pdj',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ParkingRoute = ParkingRouteImport.update({
+  id: '/parking',
+  path: '/parking',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LiterieRoute = LiterieRouteImport.update({
+  id: '/literie',
+  path: '/literie',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GestionRoute = GestionRouteImport.update({
+  id: '/gestion',
+  path: '/gestion',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EasterEggsRoute = EasterEggsRouteImport.update({
+  id: '/easter-eggs',
+  path: '/easter-eggs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ComptesRoute = ComptesRouteImport.update({
+  id: '/comptes',
+  path: '/comptes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CaisseRoute = CaisseRouteImport.update({
+  id: '/caisse',
+  path: '/caisse',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AffichageRoute = AffichageRouteImport.update({
+  id: '/affichage',
+  path: '/affichage',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RepjourIndexRoute = RepjourIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => RepjourRoute,
+} as any)
+const RaproIndexRoute = RaproIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => RaproRoute,
+} as any)
+const PdjIndexRoute = PdjIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => PdjRoute,
+} as any)
+const ParkingIndexRoute = ParkingIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ParkingRoute,
+} as any)
+const LiterieIndexRoute = LiterieIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => LiterieRoute,
+} as any)
+const FacturationIndexRoute = FacturationIndexRouteImport.update({
+  id: '/facturation/',
+  path: '/facturation/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CaisseIndexRoute = CaisseIndexRouteImport.update({
@@ -111,94 +141,64 @@ const CaisseIndexRoute = CaisseIndexRouteImport.update({
   path: '/',
   getParentRoute: () => CaisseRoute,
 } as any)
-const FacturationIndexRoute = FacturationIndexRouteImport.update({
-  id: '/facturation/',
-  path: '/facturation/',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const FacturationGalaxieRoute = FacturationGalaxieRouteImport.update({
   id: '/facturation/galaxie',
   path: '/facturation/galaxie',
   getParentRoute: () => rootRouteImport,
-} as any)
-const LiterieIndexRoute = LiterieIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => LiterieRoute,
-} as any)
-const ParkingIndexRoute = ParkingIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => ParkingRoute,
-} as any)
-const PdjIndexRoute = PdjIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => PdjRoute,
-} as any)
-const RaproIndexRoute = RaproIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => RaproRoute,
-} as any)
-const RepjourIndexRoute = RepjourIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => RepjourRoute,
-} as any)
-const CaisseAnalytiqueIndexRoute = CaisseAnalytiqueIndexRouteImport.update({
-  id: '/analytique/',
-  path: '/analytique/',
-  getParentRoute: () => CaisseRoute,
-} as any)
-const ParkingAnalytiqueIndexRoute = ParkingAnalytiqueIndexRouteImport.update({
-  id: '/analytique/',
-  path: '/analytique/',
-  getParentRoute: () => ParkingRoute,
-} as any)
-const PdjAnalytiqueIndexRoute = PdjAnalytiqueIndexRouteImport.update({
-  id: '/analytique/',
-  path: '/analytique/',
-  getParentRoute: () => PdjRoute,
-} as any)
-const RaproAnalytiqueIndexRoute = RaproAnalytiqueIndexRouteImport.update({
-  id: '/analytique/',
-  path: '/analytique/',
-  getParentRoute: () => RaproRoute,
 } as any)
 const RepjourAnalytiqueIndexRoute = RepjourAnalytiqueIndexRouteImport.update({
   id: '/analytique/',
   path: '/analytique/',
   getParentRoute: () => RepjourRoute,
 } as any)
-const CaisseAnalytiqueYearMonthRoute =
-  CaisseAnalytiqueYearMonthRouteImport.update({
-    id: '/analytique/$year/$month',
-    path: '/analytique/$year/$month',
-    getParentRoute: () => CaisseRoute,
-  } as any)
-const ParkingAnalytiqueYearMonthRoute =
-  ParkingAnalytiqueYearMonthRouteImport.update({
-    id: '/analytique/$year/$month',
-    path: '/analytique/$year/$month',
-    getParentRoute: () => ParkingRoute,
-  } as any)
-const PdjAnalytiqueYearMonthRoute = PdjAnalytiqueYearMonthRouteImport.update({
-  id: '/analytique/$year/$month',
-  path: '/analytique/$year/$month',
+const RaproAnalytiqueIndexRoute = RaproAnalytiqueIndexRouteImport.update({
+  id: '/analytique/',
+  path: '/analytique/',
+  getParentRoute: () => RaproRoute,
+} as any)
+const PdjAnalytiqueIndexRoute = PdjAnalytiqueIndexRouteImport.update({
+  id: '/analytique/',
+  path: '/analytique/',
   getParentRoute: () => PdjRoute,
 } as any)
+const ParkingAnalytiqueIndexRoute = ParkingAnalytiqueIndexRouteImport.update({
+  id: '/analytique/',
+  path: '/analytique/',
+  getParentRoute: () => ParkingRoute,
+} as any)
+const CaisseAnalytiqueIndexRoute = CaisseAnalytiqueIndexRouteImport.update({
+  id: '/analytique/',
+  path: '/analytique/',
+  getParentRoute: () => CaisseRoute,
+} as any)
+const RepjourAnalytiqueYearMonthRoute =
+  RepjourAnalytiqueYearMonthRouteImport.update({
+    id: '/analytique/$year/$month',
+    path: '/analytique/$year/$month',
+    getParentRoute: () => RepjourRoute,
+  } as any)
 const RaproAnalytiqueYearMonthRoute =
   RaproAnalytiqueYearMonthRouteImport.update({
     id: '/analytique/$year/$month',
     path: '/analytique/$year/$month',
     getParentRoute: () => RaproRoute,
   } as any)
-const RepjourAnalytiqueYearMonthRoute =
-  RepjourAnalytiqueYearMonthRouteImport.update({
+const PdjAnalytiqueYearMonthRoute = PdjAnalytiqueYearMonthRouteImport.update({
+  id: '/analytique/$year/$month',
+  path: '/analytique/$year/$month',
+  getParentRoute: () => PdjRoute,
+} as any)
+const ParkingAnalytiqueYearMonthRoute =
+  ParkingAnalytiqueYearMonthRouteImport.update({
     id: '/analytique/$year/$month',
     path: '/analytique/$year/$month',
-    getParentRoute: () => RepjourRoute,
+    getParentRoute: () => ParkingRoute,
+  } as any)
+const CaisseAnalytiqueYearMonthRoute =
+  CaisseAnalytiqueYearMonthRouteImport.update({
+    id: '/analytique/$year/$month',
+    path: '/analytique/$year/$month',
+    getParentRoute: () => CaisseRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -411,81 +411,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/affichage': {
-      id: '/affichage'
-      path: '/affichage'
-      fullPath: '/affichage'
-      preLoaderRoute: typeof AffichageRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/caisse': {
-      id: '/caisse'
-      path: '/caisse'
-      fullPath: '/caisse'
-      preLoaderRoute: typeof CaisseRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/comptes': {
-      id: '/comptes'
-      path: '/comptes'
-      fullPath: '/comptes'
-      preLoaderRoute: typeof ComptesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/easter-eggs': {
-      id: '/easter-eggs'
-      path: '/easter-eggs'
-      fullPath: '/easter-eggs'
-      preLoaderRoute: typeof EasterEggsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/gestion': {
-      id: '/gestion'
-      path: '/gestion'
-      fullPath: '/gestion'
-      preLoaderRoute: typeof GestionRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/literie': {
-      id: '/literie'
-      path: '/literie'
-      fullPath: '/literie'
-      preLoaderRoute: typeof LiterieRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/parking': {
-      id: '/parking'
-      path: '/parking'
-      fullPath: '/parking'
-      preLoaderRoute: typeof ParkingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/pdj': {
-      id: '/pdj'
-      path: '/pdj'
-      fullPath: '/pdj'
-      preLoaderRoute: typeof PdjRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/profil': {
-      id: '/profil'
-      path: '/profil'
-      fullPath: '/profil'
-      preLoaderRoute: typeof ProfilRouteImport
+    '/repjour': {
+      id: '/repjour'
+      path: '/repjour'
+      fullPath: '/repjour'
+      preLoaderRoute: typeof RepjourRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/rapro': {
@@ -495,11 +425,123 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RaproRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/repjour': {
-      id: '/repjour'
-      path: '/repjour'
-      fullPath: '/repjour'
-      preLoaderRoute: typeof RepjourRouteImport
+    '/profil': {
+      id: '/profil'
+      path: '/profil'
+      fullPath: '/profil'
+      preLoaderRoute: typeof ProfilRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pdj': {
+      id: '/pdj'
+      path: '/pdj'
+      fullPath: '/pdj'
+      preLoaderRoute: typeof PdjRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/parking': {
+      id: '/parking'
+      path: '/parking'
+      fullPath: '/parking'
+      preLoaderRoute: typeof ParkingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/literie': {
+      id: '/literie'
+      path: '/literie'
+      fullPath: '/literie'
+      preLoaderRoute: typeof LiterieRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/gestion': {
+      id: '/gestion'
+      path: '/gestion'
+      fullPath: '/gestion'
+      preLoaderRoute: typeof GestionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/easter-eggs': {
+      id: '/easter-eggs'
+      path: '/easter-eggs'
+      fullPath: '/easter-eggs'
+      preLoaderRoute: typeof EasterEggsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/comptes': {
+      id: '/comptes'
+      path: '/comptes'
+      fullPath: '/comptes'
+      preLoaderRoute: typeof ComptesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/caisse': {
+      id: '/caisse'
+      path: '/caisse'
+      fullPath: '/caisse'
+      preLoaderRoute: typeof CaisseRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/affichage': {
+      id: '/affichage'
+      path: '/affichage'
+      fullPath: '/affichage'
+      preLoaderRoute: typeof AffichageRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/repjour/': {
+      id: '/repjour/'
+      path: '/'
+      fullPath: '/repjour/'
+      preLoaderRoute: typeof RepjourIndexRouteImport
+      parentRoute: typeof RepjourRoute
+    }
+    '/rapro/': {
+      id: '/rapro/'
+      path: '/'
+      fullPath: '/rapro/'
+      preLoaderRoute: typeof RaproIndexRouteImport
+      parentRoute: typeof RaproRoute
+    }
+    '/pdj/': {
+      id: '/pdj/'
+      path: '/'
+      fullPath: '/pdj/'
+      preLoaderRoute: typeof PdjIndexRouteImport
+      parentRoute: typeof PdjRoute
+    }
+    '/parking/': {
+      id: '/parking/'
+      path: '/'
+      fullPath: '/parking/'
+      preLoaderRoute: typeof ParkingIndexRouteImport
+      parentRoute: typeof ParkingRoute
+    }
+    '/literie/': {
+      id: '/literie/'
+      path: '/'
+      fullPath: '/literie/'
+      preLoaderRoute: typeof LiterieIndexRouteImport
+      parentRoute: typeof LiterieRoute
+    }
+    '/facturation/': {
+      id: '/facturation/'
+      path: '/facturation'
+      fullPath: '/facturation/'
+      preLoaderRoute: typeof FacturationIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/caisse/': {
@@ -509,82 +551,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CaisseIndexRouteImport
       parentRoute: typeof CaisseRoute
     }
-    '/facturation/': {
-      id: '/facturation/'
-      path: '/facturation'
-      fullPath: '/facturation/'
-      preLoaderRoute: typeof FacturationIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/facturation/galaxie': {
       id: '/facturation/galaxie'
       path: '/facturation/galaxie'
       fullPath: '/facturation/galaxie'
       preLoaderRoute: typeof FacturationGalaxieRouteImport
       parentRoute: typeof rootRouteImport
-    }
-    '/literie/': {
-      id: '/literie/'
-      path: '/'
-      fullPath: '/literie/'
-      preLoaderRoute: typeof LiterieIndexRouteImport
-      parentRoute: typeof LiterieRoute
-    }
-    '/parking/': {
-      id: '/parking/'
-      path: '/'
-      fullPath: '/parking/'
-      preLoaderRoute: typeof ParkingIndexRouteImport
-      parentRoute: typeof ParkingRoute
-    }
-    '/pdj/': {
-      id: '/pdj/'
-      path: '/'
-      fullPath: '/pdj/'
-      preLoaderRoute: typeof PdjIndexRouteImport
-      parentRoute: typeof PdjRoute
-    }
-    '/rapro/': {
-      id: '/rapro/'
-      path: '/'
-      fullPath: '/rapro/'
-      preLoaderRoute: typeof RaproIndexRouteImport
-      parentRoute: typeof RaproRoute
-    }
-    '/repjour/': {
-      id: '/repjour/'
-      path: '/'
-      fullPath: '/repjour/'
-      preLoaderRoute: typeof RepjourIndexRouteImport
-      parentRoute: typeof RepjourRoute
-    }
-    '/caisse/analytique/': {
-      id: '/caisse/analytique/'
-      path: '/analytique'
-      fullPath: '/caisse/analytique/'
-      preLoaderRoute: typeof CaisseAnalytiqueIndexRouteImport
-      parentRoute: typeof CaisseRoute
-    }
-    '/parking/analytique/': {
-      id: '/parking/analytique/'
-      path: '/analytique'
-      fullPath: '/parking/analytique/'
-      preLoaderRoute: typeof ParkingAnalytiqueIndexRouteImport
-      parentRoute: typeof ParkingRoute
-    }
-    '/pdj/analytique/': {
-      id: '/pdj/analytique/'
-      path: '/analytique'
-      fullPath: '/pdj/analytique/'
-      preLoaderRoute: typeof PdjAnalytiqueIndexRouteImport
-      parentRoute: typeof PdjRoute
-    }
-    '/rapro/analytique/': {
-      id: '/rapro/analytique/'
-      path: '/analytique'
-      fullPath: '/rapro/analytique/'
-      preLoaderRoute: typeof RaproAnalytiqueIndexRouteImport
-      parentRoute: typeof RaproRoute
     }
     '/repjour/analytique/': {
       id: '/repjour/analytique/'
@@ -593,26 +565,40 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RepjourAnalytiqueIndexRouteImport
       parentRoute: typeof RepjourRoute
     }
-    '/caisse/analytique/$year/$month': {
-      id: '/caisse/analytique/$year/$month'
-      path: '/analytique/$year/$month'
-      fullPath: '/caisse/analytique/$year/$month'
-      preLoaderRoute: typeof CaisseAnalytiqueYearMonthRouteImport
-      parentRoute: typeof CaisseRoute
+    '/rapro/analytique/': {
+      id: '/rapro/analytique/'
+      path: '/analytique'
+      fullPath: '/rapro/analytique/'
+      preLoaderRoute: typeof RaproAnalytiqueIndexRouteImport
+      parentRoute: typeof RaproRoute
     }
-    '/parking/analytique/$year/$month': {
-      id: '/parking/analytique/$year/$month'
-      path: '/analytique/$year/$month'
-      fullPath: '/parking/analytique/$year/$month'
-      preLoaderRoute: typeof ParkingAnalytiqueYearMonthRouteImport
+    '/pdj/analytique/': {
+      id: '/pdj/analytique/'
+      path: '/analytique'
+      fullPath: '/pdj/analytique/'
+      preLoaderRoute: typeof PdjAnalytiqueIndexRouteImport
+      parentRoute: typeof PdjRoute
+    }
+    '/parking/analytique/': {
+      id: '/parking/analytique/'
+      path: '/analytique'
+      fullPath: '/parking/analytique/'
+      preLoaderRoute: typeof ParkingAnalytiqueIndexRouteImport
       parentRoute: typeof ParkingRoute
     }
-    '/pdj/analytique/$year/$month': {
-      id: '/pdj/analytique/$year/$month'
+    '/caisse/analytique/': {
+      id: '/caisse/analytique/'
+      path: '/analytique'
+      fullPath: '/caisse/analytique/'
+      preLoaderRoute: typeof CaisseAnalytiqueIndexRouteImport
+      parentRoute: typeof CaisseRoute
+    }
+    '/repjour/analytique/$year/$month': {
+      id: '/repjour/analytique/$year/$month'
       path: '/analytique/$year/$month'
-      fullPath: '/pdj/analytique/$year/$month'
-      preLoaderRoute: typeof PdjAnalytiqueYearMonthRouteImport
-      parentRoute: typeof PdjRoute
+      fullPath: '/repjour/analytique/$year/$month'
+      preLoaderRoute: typeof RepjourAnalytiqueYearMonthRouteImport
+      parentRoute: typeof RepjourRoute
     }
     '/rapro/analytique/$year/$month': {
       id: '/rapro/analytique/$year/$month'
@@ -621,12 +607,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RaproAnalytiqueYearMonthRouteImport
       parentRoute: typeof RaproRoute
     }
-    '/repjour/analytique/$year/$month': {
-      id: '/repjour/analytique/$year/$month'
+    '/pdj/analytique/$year/$month': {
+      id: '/pdj/analytique/$year/$month'
       path: '/analytique/$year/$month'
-      fullPath: '/repjour/analytique/$year/$month'
-      preLoaderRoute: typeof RepjourAnalytiqueYearMonthRouteImport
-      parentRoute: typeof RepjourRoute
+      fullPath: '/pdj/analytique/$year/$month'
+      preLoaderRoute: typeof PdjAnalytiqueYearMonthRouteImport
+      parentRoute: typeof PdjRoute
+    }
+    '/parking/analytique/$year/$month': {
+      id: '/parking/analytique/$year/$month'
+      path: '/analytique/$year/$month'
+      fullPath: '/parking/analytique/$year/$month'
+      preLoaderRoute: typeof ParkingAnalytiqueYearMonthRouteImport
+      parentRoute: typeof ParkingRoute
+    }
+    '/caisse/analytique/$year/$month': {
+      id: '/caisse/analytique/$year/$month'
+      path: '/analytique/$year/$month'
+      fullPath: '/caisse/analytique/$year/$month'
+      preLoaderRoute: typeof CaisseAnalytiqueYearMonthRouteImport
+      parentRoute: typeof CaisseRoute
     }
   }
 }
