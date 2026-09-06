@@ -75,6 +75,19 @@ function download(bytes: Uint8Array, name: string): void {
  * pour être exécutable/testable hors navigateur. `position` = coin haut-gauche du
  * cartouche en points PDF (origine EN HAUT) ; par défaut le coin haut-droit.
  */
+/**
+ * Les polices standard de pdf-lib (Helvetica) n'encodent que WinAnsi : un emoji
+ * ou un idéogramme dans le commentaire faisait lever `WinAnsi cannot encode`
+ * et le tamponnage échouait (audit 2026-09-06). On remplace l'inencodable par
+ * « ? » plutôt que d'échouer.
+ */
+function toWinAnsi(text: string): string {
+  return text.replace(
+    /[^\x20-\x7E\xA0-\xFF\u2013\u2014\u2018\u2019\u201C\u201D\u2022\u2026\u20AC\u0152\u0153]/g,
+    '?',
+  )
+}
+
 export async function buildStampedPdf(
   src: ArrayBuffer | Uint8Array,
   data: StampData,
@@ -164,7 +177,7 @@ export async function buildStampedPdf(
     const size = line.size * s
     if (i > 0) top -= STAMP_LINE_GAP * s
     const baseline = top - (0.8 + (STAMP_LINE_H - 1) / 2) * size
-    const txt = fit(line.text, f, size, innerW)
+    const txt = fit(toWinAnsi(line.text), f, size, innerW)
     const xText =
       line.align === 'right'
         ? x + STAMP_PAD * s + (innerW - f.widthOfTextAtSize(txt, size))

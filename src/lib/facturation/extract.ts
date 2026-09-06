@@ -22,6 +22,10 @@ import type { ExtractResult, PagePreview } from '#/lib/facturation/types.ts'
  * du bundle principal.
  */
 
+/** Bornes d'entrée (audit 2026-09-06) : un PDF tiers ne doit pas pouvoir geler l'onglet. */
+export const MAX_PDF_BYTES = 25 * 1024 * 1024
+export const MAX_PDF_PAGES = 30
+
 // pdf.js exige un worker ; Vite le résout en URL servie depuis node_modules.
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl
 
@@ -107,10 +111,21 @@ async function renderPages(
  * la couche texte est trop maigre pour être exploitable (seuil par page).
  */
 export async function extractPdf(file: File): Promise<ExtractResult> {
+  if (file.size > MAX_PDF_BYTES) {
+    throw new Error('Fichier PDF trop volumineux (25 Mo maximum)')
+  }
   const buf = await file.arrayBuffer()
+  // Un PDF de fournisseur est une entrée TIERCE : pdfjs-dist >= 6.2.108
+  // obligatoire (CVE-2026-16633, exécution de JS par PDF piégé) ; depuis la v5
+  // pdf.js ne compile plus jamais de code (l'option isEvalSupported a disparu).
+  // La CSP sans 'unsafe-eval' reste le second filet.
   const task = pdfjs.getDocument({ data: new Uint8Array(buf) })
   const pdf = await task.promise
   const pageCount = pdf.numPages
+  if (pageCount > MAX_PDF_PAGES) {
+    await task.destroy()
+    throw new Error(`PDF trop long (${MAX_PDF_PAGES} pages maximum)`)
+  }
   try {
     const native = await readNativeText(pdf)
     const density = native.replace(/\s+/g, '').length

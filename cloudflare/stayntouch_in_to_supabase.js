@@ -23,21 +23,60 @@
  *   Tant qu'elle n'est pas déployée, le Worker rejettera les mails (relais en échec).
  */
 
-// Domaine expéditeur autorisé (sous-chaîne). Le PMS StayNTouch enverra depuis un
-// domaine contenant « stayntouch » ; tout autre expéditeur est refusé.
-const ALLOWED_SENDER_SUBSTRING = 'stayntouch'
+// Domaines expéditeurs autorisés : correspondance EXACTE (durci le 2026-09-06,
+// red team : l'ancienne sous-chaîne « stayntouch » laissait passer
+// `pms.stayntouch-support.evil`). Surchargeable sans redéploiement par la
+// variable Cloudflare ALLOWED_SENDER_DOMAINS (liste séparée par des virgules),
+// par exemple si le PMS envoie depuis un sous-domaine imprévu : le rejet est
+// journalisé avec le domaine vu, il suffit de l'ajouter.
+const DEFAULT_ALLOWED_SENDER_DOMAINS = ['stayntouch.com', 'mail.stayntouch.com']
+
+// Le Worker relaie le secret d'import : l'authenticité de l'expéditeur est
+// donc le SEUL verrou avant l'écriture en base. L'en-tête From est falsifiable
+// en SMTP ; on exige en plus que Cloudflare ait vérifié SPF ou DKIM ou DMARC
+// (en-tête Authentication-Results posé par Email Routing).
+// Garde-fou d'exploitation : si Cloudflare ne posait pas cet en-tête sur cette
+// zone, TOUS les imports seraient refusés (visible dans les logs du Worker :
+// « SPF/DKIM/DMARC absents »). Poser alors REQUIRE_SENDER_AUTH=false le temps
+// de vérifier la configuration DMARC de la zone, puis remettre à true.
+function senderAuthenticated(headers, env) {
+  if ((env.REQUIRE_SENDER_AUTH || 'true').toLowerCase() === 'false') return true
+  const auth = (headers.get('authentication-results') || '').toLowerCase()
+  return /(dmarc|dkim|spf)=pass/.test(auth)
+}
+
+function allowedDomains(env) {
+  const raw = (env.ALLOWED_SENDER_DOMAINS || '').trim()
+  const list = raw
+    ? raw
+        .split(',')
+        .map((d) => d.trim().toLowerCase())
+        .filter(Boolean)
+    : DEFAULT_ALLOWED_SENDER_DOMAINS
+  return new Set(list)
+}
 
 export default {
   /**
    * @param {ForwardableEmailMessage} message
-   * @param {{ IMPORT_ENDPOINT: string, IMPORT_SECRET: string }} env
+   * @param {{ IMPORT_ENDPOINT: string, IMPORT_SECRET: string, ALLOWED_SENDER_DOMAINS?: string, REQUIRE_SENDER_AUTH?: string }} env
    */
   async email(message, env) {
-    // --- 1. Filtre expéditeur : domaine contenant « stayntouch » -------------
+    // --- 1. Filtre expéditeur : domaine EXACT + authentification SPF/DKIM/DMARC
     const from = (message.from || '').toLowerCase()
-    const domain = from.split('@')[1] || ''
-    if (!domain.includes(ALLOWED_SENDER_SUBSTRING)) {
+    const domain = from.split('@').pop() || ''
+    if (!allowedDomains(env).has(domain)) {
+      console.warn(
+        `[import] expediteur refuse (domaine non autorise) : ${domain}`,
+      )
       message.setReject('Expéditeur non autorisé')
+      return
+    }
+    if (!senderAuthenticated(message.headers, env)) {
+      console.warn(
+        `[import] expediteur refuse (SPF/DKIM/DMARC absents) : ${domain}`,
+      )
+      message.setReject('Authentification e-mail insuffisante')
       return
     }
 

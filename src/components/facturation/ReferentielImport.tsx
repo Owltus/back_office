@@ -12,6 +12,7 @@ import {
 } from '#/components/ui/dialog.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { useConfirm } from '#/components/shared/ConfirmDialog.tsx'
+import { fileTooLarge, MAX_JSON_BYTES } from '#/lib/shared/files.ts'
 import { reimportRefImputations } from '#/lib/facturation/cloudService.ts'
 
 /*
@@ -103,6 +104,11 @@ export function ReferentielImport({
     setRows(null)
     setIgnored(0)
     setFileName(file.name)
+    const tooLarge = fileTooLarge(file, MAX_JSON_BYTES)
+    if (tooLarge) {
+      setParseError(tooLarge)
+      return
+    }
     try {
       const text = await file.text()
       const isJson = /\.json$/i.test(file.name) || text.trim().startsWith('[')

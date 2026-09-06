@@ -11,7 +11,7 @@
 // e-mail : un import Addon ne déclenche jamais l'auto-envoi RepJour (voir
 // index.ts, condition `touchedRepjour`).
 
-import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2'
+import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2.115.0'
 
 // Table cible (cf. src/lib/pdj/service.ts — PDJ_ADDON_TABLE).
 const PDJ_ADDON_TABLE = 'pdj_addon_production'

@@ -25,7 +25,7 @@
 // `auth.users` est touchée par la création). Aucune écriture sur les tables
 // « repjour ».
 
-import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { createClient } from 'jsr:@supabase/supabase-js@2.115.0'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
   // Clé secrète : la nouvelle `sb_secret_…` si le secret SB_SECRET_KEY est posé,
   // sinon repli sur le service_role legacy auto-injecté (migration sans coupure).
   const serviceKey =
-    Deno.env.get('SB_SECRET_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    Deno.env.get('SB_SECRET_KEY') // legacy service_role révoquée le 2026-07-27 : plus de repli
   if (!url || !serviceKey)
     return json({ error: 'Configuration serveur manquante' }, 500)
 

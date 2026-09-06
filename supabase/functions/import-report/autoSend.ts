@@ -24,7 +24,7 @@
 // L'envoi lui-même passe par le module partagé ../_shared/send-mail.ts (Resend +
 // liste server_report_recipients + garde REPORT_TEST_TO). Aucun secret ici.
 
-import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2'
+import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2.115.0'
 
 import {
   buildRepjourDateStr,

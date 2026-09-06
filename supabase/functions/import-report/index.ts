@@ -19,8 +19,8 @@
 // Écritures en base : via la clé service_role (bypass RLS), exactement comme
 // send-report. Estampille « StayNTouch (PMS) » (voir étapes 3/4).
 
-import PostalMime from 'npm:postal-mime@2'
-import { createClient } from 'jsr:@supabase/supabase-js@2'
+import PostalMime from 'npm:postal-mime@2.7.6'
+import { createClient } from 'jsr:@supabase/supabase-js@2.115.0'
 
 import { importComparison, importForecast } from './repjour.ts'
 import { importInhouse } from './pdj.ts'
@@ -122,7 +122,7 @@ Deno.serve(async (req) => {
   // sb_secret si posée, sinon repli service_role legacy.
   const url = Deno.env.get('SUPABASE_URL')
   const serviceKey =
-    Deno.env.get('SB_SECRET_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    Deno.env.get('SB_SECRET_KEY') // legacy service_role révoquée le 2026-07-27 : plus de repli
   if (!url || !serviceKey)
     return json({ error: 'Configuration serveur manquante' }, 500)
   const admin = createClient(url, serviceKey, {
@@ -148,7 +148,16 @@ Deno.serve(async (req) => {
   const instant = new Date()
 
   // 2. Corps = e-mail brut (MIME complet).
+  // Plafond de taille (audit 2026-09-06) : le MIME complet est chargé en
+  // mémoire ; un rapport PMS pèse quelques centaines de Ko.
+  const contentLength = Number(req.headers.get('content-length') ?? '0')
+  if (contentLength > 30_000_000) {
+    return json({ error: 'Message trop volumineux' }, 413)
+  }
   const rawEmail = await req.text()
+  if (rawEmail.length > 30_000_000) {
+    return json({ error: 'Message trop volumineux' }, 413)
+  }
   if (!rawEmail) return json({ error: 'Corps vide' }, 400)
 
   // 3. Extraction des pièces jointes CSV.

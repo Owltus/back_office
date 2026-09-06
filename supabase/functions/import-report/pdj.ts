@@ -11,7 +11,7 @@
 // résa ni la balance. `guest_name` n'est conservé que pour aujourd'hui et la
 // veille (fenêtre Europe/Paris), sinon null.
 
-import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2'
+import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2.115.0'
 
 // Table cible (cf. src/lib/pdj/service.ts:13 — PDJ_TABLE).
 const PDJ_TABLE = 'pdj_breakfasts'

@@ -16,8 +16,8 @@
 // IGNORE totalement la table et on n'envoie QU'À ces adresses — parfait pour
 // valider l'envoi (manuel ou auto) sans risque.
 
-import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2'
-import { encodeBase64 } from 'jsr:@std/encoding@1/base64'
+import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2.115.0'
+import { encodeBase64 } from 'jsr:@std/encoding@1.0.11/base64'
 
 interface Recipient {
   email: string

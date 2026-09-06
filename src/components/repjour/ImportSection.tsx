@@ -10,6 +10,7 @@ import {
   processComparisonOnly,
   preValidateForecast,
 } from '#/lib/repjour/import/orchestrator.ts'
+import { fileTooLarge, MAX_CSV_BYTES } from '#/lib/shared/files.ts'
 import { detectFileType } from '#/lib/repjour/parse/detect.ts'
 import { extractReportDate } from '#/lib/repjour/parse/date.ts'
 import { businessNow } from '#/lib/businessDay.ts'
@@ -229,6 +230,18 @@ export function ImportSection({
         }
       }
 
+      const tooLarge = fileTooLarge(file, MAX_CSV_BYTES)
+      if (tooLarge) {
+        const slot: FileSlot = {
+          file: null,
+          name: file.name,
+          status: 'error',
+          errorMsg: tooLarge,
+        }
+        if (expectedType === 'comparison') setComparison(slot)
+        else setForecast(slot)
+        return
+      }
       const text = await file.text()
       const detected = detectFileType(file.name, text)
 

@@ -18,6 +18,7 @@ import {
   parseAddonProductionRange,
 } from '#/lib/pdj/addon.ts'
 import { importAddonProduction } from '#/lib/pdj/service.ts'
+import { fileTooLarge, MAX_CSV_BYTES } from '#/lib/shared/files.ts'
 import type { AddonProductionDbRow } from '#/lib/pdj/service.ts'
 
 /**
@@ -45,6 +46,11 @@ export function AddonImportButton({ onImported }: { onImported: () => void }) {
   if (!can('pdj', 'gestion')) return null
 
   async function handleFile(file: File) {
+    const tooLarge = fileTooLarge(file, MAX_CSV_BYTES)
+    if (tooLarge) {
+      setFeedback({ kind: 'errors', message: tooLarge })
+      return
+    }
     setBusy(true)
     try {
       const parsed = parseAddonProductionRange(await file.text())
@@ -66,7 +72,9 @@ export function AddonImportButton({ onImported }: { onImported: () => void }) {
         source_file: file.name,
       }))
       const days = new Set(rows.map((r) => r.service_date)).size
-      const years = [...new Set(rows.map((r) => r.service_date.slice(0, 4)))].sort()
+      const years = [
+        ...new Set(rows.map((r) => r.service_date.slice(0, 4))),
+      ].sort()
       await importAddonProduction(rows)
       setFeedback({
         kind: 'success',

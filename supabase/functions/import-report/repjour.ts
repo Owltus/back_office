@@ -10,8 +10,8 @@
 // sur erreur BLOQUANTE de validation (le message est renvoyé tel quel au client).
 // `admin` est un client service_role (bypass RLS) fourni par l'appelant.
 
-import Papa from 'npm:papaparse@5'
-import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2'
+import Papa from 'npm:papaparse@5.7.0'
+import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2.115.0'
 
 // --- Constantes recopiées de src/lib/repjour/constants.ts ---------------------
 const TOTAL_ROOMS = 80 // 80 chambres (hôtel unique)

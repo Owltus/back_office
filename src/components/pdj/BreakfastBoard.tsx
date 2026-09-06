@@ -29,7 +29,10 @@ import { PrintButton } from '#/components/shared/PrintButton.tsx'
 import { StatTile } from '#/components/shared/StatTile.tsx'
 import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
 import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
-import { MobileToolbar, ToolbarCell } from '#/components/shared/MobileToolbar.tsx'
+import {
+  MobileToolbar,
+  ToolbarCell,
+} from '#/components/shared/MobileToolbar.tsx'
 import { useResponsiveShell } from '#/components/shared/useResponsiveShell.ts'
 import { StepNav } from '#/components/shared/StepNav.tsx'
 import { useStepNavKeys } from '#/components/shared/useStepNavKeys.ts'
@@ -87,6 +90,7 @@ import { breakfastServiceDate, parseAddonProduction } from '#/lib/pdj/addon.ts'
 import { computeAggBenchmarks } from '#/lib/pdj/amounts.ts'
 import { detectTarifs } from '#/lib/pdj/tarif.ts'
 import { purgeGate } from '#/lib/pdj/purgeGate.ts'
+import { fileTooLarge, MAX_CSV_BYTES } from '#/lib/shared/files.ts'
 import { computePdjCA, roomFinance } from '#/lib/pdj/breakdown.ts'
 import { autoModeTargets } from '#/lib/pdj/automode.ts'
 import { fmtEur, fmtInt, fmtPctInt } from '#/lib/pdj/format.ts'
@@ -215,14 +219,11 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
     tone: 'ok' | 'warn'
   } | null>(null)
   const autoMsgTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const flashAuto = useCallback(
-    (text: string, tone: 'ok' | 'warn' = 'ok') => {
-      setAutoMsg({ text, tone })
-      if (autoMsgTimer.current) clearTimeout(autoMsgTimer.current)
-      autoMsgTimer.current = setTimeout(() => setAutoMsg(null), 3500)
-    },
-    [],
-  )
+  const flashAuto = useCallback((text: string, tone: 'ok' | 'warn' = 'ok') => {
+    setAutoMsg({ text, tone })
+    if (autoMsgTimer.current) clearTimeout(autoMsgTimer.current)
+    autoMsgTimer.current = setTimeout(() => setAutoMsg(null), 3500)
+  }, [])
   // Timers de l'animation « cases cochées une à une » (automode) : nettoyés au
   // démontage ET avant chaque relance, pour ne pas cocher après coup.
   const autoTimersRef = useRef<ReturnType<typeof setTimeout>[]>([])
@@ -556,6 +557,13 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
       setError('Aucun fichier .csv dans la sélection.')
       return
     }
+    const tooLarge = csvFiles
+      .map((f) => fileTooLarge(f, MAX_CSV_BYTES))
+      .find(Boolean)
+    if (tooLarge) {
+      setError(tooLarge)
+      return
+    }
 
     try {
       const inputs = await Promise.all(
@@ -589,7 +597,10 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
               (why ||
                 'Fichier invalide ou mal nommé (attendu « In-House Guests _YYYYMMDD… »).'),
           )
-        } else if (!isAdmin && result.dates.some((d) => d > businessDateStr())) {
+        } else if (
+          !isAdmin &&
+          result.dates.some((d) => d > businessDateStr())
+        ) {
           // Blocage avant 02h (sauf admin) : un fichier daté d'un jour hôtelier
           // non encore ouvert — le rapport In-House n'est tiré qu'à partir de
           // 02h — est refusé. Voir #/lib/businessDay.ts.
@@ -690,7 +701,12 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
         (old) =>
           old?.map((r) =>
             r.room === room
-              ? { ...r, breakfasts_served: n, served: n > 0, breakfasts_offert: offert }
+              ? {
+                  ...r,
+                  breakfasts_served: n,
+                  served: n > 0,
+                  breakfasts_offert: offert,
+                }
               : r,
           ),
       )
@@ -768,7 +784,10 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
     // Cadence rapide mais visible, BORNÉE (pas d'attente longue même à 80
     // chambres). Chaque case se coche par une maj optimiste décalée ; la
     // transition CSS du bouton fait le fondu. Léger jitter aléatoire.
-    const perStep = Math.min(45, Math.max(12, Math.round(900 / shuffled.length)))
+    const perStep = Math.min(
+      45,
+      Math.max(12, Math.round(900 / shuffled.length)),
+    )
     shuffled.forEach((t, i) => {
       const delay = i * perStep + Math.random() * perStep
       const id = setTimeout(() => {
@@ -830,7 +849,9 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
         (old) => {
           const list = old ?? []
           if (n <= 0) {
-            return list.filter((r) => !(r.room === room && r.manual_kind != null))
+            return list.filter(
+              (r) => !(r.room === room && r.manual_kind != null),
+            )
           }
           if (list.some((r) => r.room === room)) {
             return list.map((r) =>
@@ -1014,43 +1035,43 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
         // littéralement rien pour ce prop.
         actions={
           isTouchDevice ? undefined : (
-          <>
-            {/* Groupe « suppression » (ADMIN uniquement), isolé et à gauche :
+            <>
+              {/* Groupe « suppression » (ADMIN uniquement), isolé et à gauche :
                   supprime les données du seul jour affiché. Bouton outline, icône
                   rouge (pas de fond plein). Présent seulement s'il y a des données. */}
-            {isAdmin && hasData && (
-              <ButtonGroup>
-                <Tip label="Supprimer les données de ce jour">
-                  <Button
-                    variant="outline"
-                    size="icon-sm"
-                    onClick={() => setConfirmDelete(true)}
-                    aria-label="Supprimer les données de ce jour"
-                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                  >
-                    <Trash2 />
-                  </Button>
-                </Tip>
-              </ButtonGroup>
-            )}
-            {/* Bouton « Externe » — exceptionnellement du texte, pas d'icône : ouvre
+              {isAdmin && hasData && (
+                <ButtonGroup>
+                  <Tip label="Supprimer les données de ce jour">
+                    <Button
+                      variant="outline"
+                      size="icon-sm"
+                      onClick={() => setConfirmDelete(true)}
+                      aria-label="Supprimer les données de ce jour"
+                      className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    >
+                      <Trash2 />
+                    </Button>
+                  </Tip>
+                </ButtonGroup>
+              )}
+              {/* Bouton « Externe » — exceptionnellement du texte, pas d'icône : ouvre
                 le dialogue +/- du nombre de clients venus manger sans être logés à
                 l'hôtel (s'additionne au PDJ Extra du jour, cf. card ci-dessous).
                 Réservé aux rôles qui peuvent saisir la conso (mêmes droits que les
                 cases « servi »). */}
-            {canEdit && (
-              <Tip label="Ajouter des petits-déjeuners servis à des clients non logés à l'hôtel">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setExternalsOpen(true)}
-                  aria-label="Petits-déjeuners externes"
-                >
-                  Externe
-                </Button>
-              </Tip>
-            )}
-            {/* Bascule « vue service ↔ détail financier » : segmented control
+              {canEdit && (
+                <Tip label="Ajouter des petits-déjeuners servis à des clients non logés à l'hôtel">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setExternalsOpen(true)}
+                    aria-label="Petits-déjeuners externes"
+                  >
+                    Externe
+                  </Button>
+                </Tip>
+              )}
+              {/* Bascule « vue service ↔ détail financier » : segmented control
                 dans le style des boutons d'action (bordure outline, hauteur
                 icon-sm), un seul actif à la fois. La pastille bleue GLISSE
                 d'une position à l'autre (translate animé) au lieu de sauter.
@@ -1061,116 +1082,116 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                 à la souris (le bloc `actions` entier l'est déjà) : sur écran
                 tactile, la bascule vit dans la barre d'outils basse (cf. fin
                 du composant). */}
-            {hasData && (
-              <div className="pdj-seg relative inline-flex h-8 items-center overflow-hidden rounded-md border bg-background shadow-xs print:hidden dark:border-input dark:bg-input/30">
-                {/* Pastille active : remplit TOUTE la hauteur (inset-y-0) et la
+              {hasData && (
+                <div className="pdj-seg relative inline-flex h-8 items-center overflow-hidden rounded-md border bg-background shadow-xs print:hidden dark:border-input dark:bg-input/30">
+                  {/* Pastille active : remplit TOUTE la hauteur (inset-y-0) et la
                     largeur d'un bouton (w-7), collée aux bordures. Ses coins sont
                     clippés par l'arrondi du conteneur (overflow-hidden) → elle
                     épouse exactement le cadre. Position par `left` inline (aucune
                     composition Tailwind, contrairement à `transform`) : service = 0,
                     financier = largeur d'un bouton (1,75rem). Transition en CSS. */}
-                <span
-                  data-thumb
-                  aria-hidden="true"
-                  style={{ left: financeMode ? '1.75rem' : '0' }}
-                  className="pointer-events-none absolute inset-y-0 w-7 bg-primary"
-                />
-                <Tip label="Vue service">
-                  <button
-                    type="button"
-                    onClick={() => setFinanceMode(false)}
-                    aria-label="Vue service"
-                    aria-pressed={!financeMode}
-                    className="relative z-10 flex size-7 items-center justify-center rounded-[5px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                  >
-                    <Users
-                      className={cn(
-                        'size-4 transition-colors duration-200',
-                        financeMode
-                          ? 'text-muted-foreground'
-                          : 'text-primary-foreground',
-                      )}
-                    />
-                  </button>
-                </Tip>
-                <Tip label="Détail financier">
-                  <button
-                    type="button"
-                    onClick={() => setFinanceMode(true)}
-                    aria-label="Détail financier"
-                    aria-pressed={financeMode}
-                    className="relative z-10 flex size-7 items-center justify-center rounded-[5px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                  >
-                    <Receipt
-                      className={cn(
-                        'size-4 transition-colors duration-200',
-                        financeMode
-                          ? 'text-primary-foreground'
-                          : 'text-muted-foreground',
-                      )}
-                    />
-                  </button>
-                </Tip>
-              </div>
-            )}
-            {/* Groupe « actions de page » : analytique + import + impression. */}
-            <ButtonGroup>
-              <Tip label="Vue analytique">
-                <Button asChild variant="outline" size="icon-sm">
-                  <Link to="/pdj/analytique" aria-label="Vue analytique">
-                    <LineChart />
-                  </Link>
-                </Button>
-              </Tip>
-              {canManualImport && (
-                <Tip label="Importer un CSV In-House ou Addon Production">
-                  <Button
-                    variant="outline"
-                    size="icon-sm"
-                    onClick={() => inputRef.current?.click()}
-                    aria-label="Importer un CSV"
-                  >
-                    <FileUp />
+                  <span
+                    data-thumb
+                    aria-hidden="true"
+                    style={{ left: financeMode ? '1.75rem' : '0' }}
+                    className="pointer-events-none absolute inset-y-0 w-7 bg-primary"
+                  />
+                  <Tip label="Vue service">
+                    <button
+                      type="button"
+                      onClick={() => setFinanceMode(false)}
+                      aria-label="Vue service"
+                      aria-pressed={!financeMode}
+                      className="relative z-10 flex size-7 items-center justify-center rounded-[5px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                    >
+                      <Users
+                        className={cn(
+                          'size-4 transition-colors duration-200',
+                          financeMode
+                            ? 'text-muted-foreground'
+                            : 'text-primary-foreground',
+                        )}
+                      />
+                    </button>
+                  </Tip>
+                  <Tip label="Détail financier">
+                    <button
+                      type="button"
+                      onClick={() => setFinanceMode(true)}
+                      aria-label="Détail financier"
+                      aria-pressed={financeMode}
+                      className="relative z-10 flex size-7 items-center justify-center rounded-[5px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                    >
+                      <Receipt
+                        className={cn(
+                          'size-4 transition-colors duration-200',
+                          financeMode
+                            ? 'text-primary-foreground'
+                            : 'text-muted-foreground',
+                        )}
+                      />
+                    </button>
+                  </Tip>
+                </div>
+              )}
+              {/* Groupe « actions de page » : analytique + import + impression. */}
+              <ButtonGroup>
+                <Tip label="Vue analytique">
+                  <Button asChild variant="outline" size="icon-sm">
+                    <Link to="/pdj/analytique" aria-label="Vue analytique">
+                      <LineChart />
+                    </Link>
                   </Button>
                 </Tip>
-              )}
-              <PrintButton
-                onClick={handlePrint}
-                iconOnly
-                disabled={!hasData}
-                tipLabel={
-                  hasData ? 'Imprimer / PDF' : 'Aucune donnée à imprimer'
-                }
-              />
-            </ButtonGroup>
-            {/* Groupe « navigation temporelle », collé au bord droit.
+                {canManualImport && (
+                  <Tip label="Importer un CSV In-House ou Addon Production">
+                    <Button
+                      variant="outline"
+                      size="icon-sm"
+                      onClick={() => inputRef.current?.click()}
+                      aria-label="Importer un CSV"
+                    >
+                      <FileUp />
+                    </Button>
+                  </Tip>
+                )}
+                <PrintButton
+                  onClick={handlePrint}
+                  iconOnly
+                  disabled={!hasData}
+                  tipLabel={
+                    hasData ? 'Imprimer / PDF' : 'Aucune donnée à imprimer'
+                  }
+                />
+              </ButtonGroup>
+              {/* Groupe « navigation temporelle », collé au bord droit.
                 `enlargeOnNarrow={false}` sur les deux : ce groupe n'est
                 JAMAIS montré sur écran tactile (barre basse dédiée dès qu'un
                 doigt est détecté, cf. plus haut) — l'agrandir à un simple
                 rétrécissement de fenêtre désaccorderait sa taille de celle
                 des boutons voisins, restés fixes. */}
-            {canNavigate && (
-              <StepNav
-                onPrev={gotoOlder}
-                onNext={gotoNewer}
-                prevLabel="Jour précédent"
-                nextLabel="Jour suivant"
-                prevDisabled={dateIdx < 0 || dateIdx >= navDates.length - 1}
-                nextDisabled={dateIdx <= 0}
-                enlargeOnNarrow={false}
-              >
-                <DatePickerButton
-                  value={selectedDate}
-                  onChange={selectNearestDate}
-                  ariaLabel="Choisir un jour"
-                  max={today}
-                  enabledDates={navDates}
-                  todayValue={today}
+              {canNavigate && (
+                <StepNav
+                  onPrev={gotoOlder}
+                  onNext={gotoNewer}
+                  prevLabel="Jour précédent"
+                  nextLabel="Jour suivant"
+                  prevDisabled={dateIdx < 0 || dateIdx >= navDates.length - 1}
+                  nextDisabled={dateIdx <= 0}
                   enlargeOnNarrow={false}
-                />
-              </StepNav>
-            )}
-          </>
+                >
+                  <DatePickerButton
+                    value={selectedDate}
+                    onChange={selectNearestDate}
+                    ariaLabel="Choisir un jour"
+                    max={today}
+                    enabledDates={navDates}
+                    todayValue={today}
+                    enlargeOnNarrow={false}
+                  />
+                </StepNav>
+              )}
+            </>
           )
         }
         // Ce groupe n'existe qu'en mode souris (cf. `isTouchDevice` ci-dessus) :
@@ -1271,7 +1292,9 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                 hint="Nombre total de clients logés ce jour, toutes chambres occupées confondues."
                 sub={
                   benchmark && benchmark.occupancy.avgGuests != null
-                    ? subMuted(`moy. ${fmtInt(benchmark.occupancy.avgGuests)}/j`)
+                    ? subMuted(
+                        `moy. ${fmtInt(benchmark.occupancy.avgGuests)}/j`,
+                      )
                     : undefined
                 }
               />
@@ -1280,7 +1303,11 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                 label="PDJ inclus"
                 accent="#34d399"
                 hint="Petits-déjeuners dus ce jour : inclus au tarif de la réservation, facturés même si le client ne les a pas encore pris."
-                sub={ca.inclusNb > 0 ? subMuted(fmtEur(ca.includedHt, 2)) : undefined}
+                sub={
+                  ca.inclusNb > 0
+                    ? subMuted(fmtEur(ca.includedHt, 2))
+                    : undefined
+                }
               />
               <StatTile
                 // Détail écran : « extra chambre + externe » tant qu'il y a au
@@ -1295,7 +1322,9 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                 accent="#fbbf24"
                 printHidden
                 hint="Petits-déjeuners servis au-delà de ce qui était inclus, plus les externes (clients non logés, bouton « Externe ») — tous valorisés au tarif PDJ standard."
-                sub={extrasCount > 0 ? subMuted(fmtEur(ca.extrasHt, 2)) : undefined}
+                sub={
+                  extrasCount > 0 ? subMuted(fmtEur(ca.extrasHt, 2)) : undefined
+                }
               />
               {/* Miroir PDF de « PDJ Extra » — conservée dans le footer du PDF
                   UNIQUEMENT s'il y a au moins un extra saisi (sinon le PDF garde
@@ -1345,7 +1374,9 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                 value={ca.totalHt > 0 ? fmtEur(ca.totalHt, 2) : fmtEur(0, 0)}
                 sub={
                   benchmark && benchmark.total.avgTotalHT != null
-                    ? subMuted(`moy. ${fmtEur(benchmark.total.avgTotalHT, 2)}/j`)
+                    ? subMuted(
+                        `moy. ${fmtEur(benchmark.total.avgTotalHT, 2)}/j`,
+                      )
                     : undefined
                 }
               />
@@ -1447,9 +1478,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
               délibérément distincts de ceux des tuiles KPI (768/1024px), pour
               rester plus longtemps sur chaque palier. Aucun modificateur JS
               dédié requis, souris et tactile s'y comportent pareil. */}
-          <div
-            className={cn('pdj-floors', financeMode && 'pdj-finance')}
-          >
+          <div className={cn('pdj-floors', financeMode && 'pdj-finance')}>
             {floors.map(({ floor, rooms }) => (
               <div key={floor} className="pdj-floor">
                 <table>
@@ -1815,7 +1844,8 @@ const GuestRow = memo(function GuestRow({
   const offertCount = row?.breakfasts_offert ?? 0
   // Une ligne manuelle « offert » l'est en BLOC (tout son servi, cf. service.ts) ;
   // une ligne normale l'est jusqu'à `offertCount` (curseur posé au clic droit).
-  const isOffertAt = (i: number) => (isManual ? mKind === 'offert' : i < offertCount)
+  const isOffertAt = (i: number) =>
+    isManual ? mKind === 'offert' : i < offertCount
   // Cases interactives : TOUTE chambre OCCUPÉE (client présent), qu'elle ait du PDJ
   // inclus OU NON — sinon on ne pouvait pas servir un PDJ EXTRA à un client d'une
   // chambre sans PDJ inclus (le clic passe alors par `onServe` : breakfasts_served
@@ -1853,7 +1883,9 @@ const GuestRow = memo(function GuestRow({
             <span
               className={cn(
                 'text-xs font-medium capitalize group-hover:invisible',
-                mKind === 'offert' ? 'text-purple-400' : 'text-muted-foreground',
+                mKind === 'offert'
+                  ? 'text-purple-400'
+                  : 'text-muted-foreground',
               )}
             >
               {mKind}
