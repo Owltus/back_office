@@ -212,8 +212,9 @@ export function DayCrossSummary({
   // daily_reports seule) : l'ancienne clé partagée avec l'analytique parking
   // chargeait daily_reports ET forecast_days en `select=*` pour une colonne.
   // Indexée par date complète (la fenêtre peut chevaucher deux mois). staleTime
-  // 5 min : les nuitées d'un jour passé ne bougent qu'à l'import, et le canal
-  // Realtime de DashboardBoard invalide le préfixe `['repjour']`.
+  // 5 min : les nuitées d'un jour passé ne bougent qu'à l'import, et
+  // DashboardBoard invalide le préfixe `['repjour']` au retour sur l'onglet
+  // (et après ses propres imports).
   const coverMonths = useMemo(
     () => monthsCovering(windowFrom, date),
     [windowFrom, date],

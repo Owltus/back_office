@@ -34,7 +34,7 @@ import { MONTHS_LABELS, MONTHS_SHORT } from '#/lib/repjour/constants.ts'
 /*
  * Vue analytique PDJ — gabarit calqué sur repjour/AnalytiqueBoard.
  *
- * Charge en LECTURE les lignes de l'année sélectionnée (fetchRange), les agrège
+ * Charge en LECTURE les lignes agrégées de l'année sélectionnée (fetchDailyAgg), les agrège
  * par mois (aggregatePdjMonthly), puis rend : cartes de synthèse annuelle,
  * tableau mois par mois et un histogramme empilé (par mois : Servis +
  * Extra + Non servis ; sur un mois sans conso saisie, repli sur l'Inclus attendu,

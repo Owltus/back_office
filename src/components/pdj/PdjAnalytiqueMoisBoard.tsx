@@ -34,7 +34,7 @@ import { DAY_NAMES, MONTHS_LABELS } from '#/lib/repjour/constants.ts'
  * Détail analytique PDJ d'un mois, jour par jour — calqué sur le gabarit
  * repjour/AnalytiqueMoisBoard et harmonisé avec PdjAnalytiqueBoard (vue annuelle).
  *
- * Charge en LECTURE les lignes du mois (fetchRange), les agrège par jour
+ * Charge en LECTURE les lignes agrégées du mois (fetchDailyAgg), les agrège par jour
  * (aggregatePdjDaily), puis rend : cartes de synthèse du mois, tableau jour par
  * jour et un histogramme empilé (par jour : Servis + Extra + Non servis ;
  * repli sur l'Inclus attendu, couleur neutre, si la conso du jour n'a pas été
@@ -83,8 +83,9 @@ export function PdjAnalytiqueMoisBoard({
   // ancienne — la vue `pdj_daily_agg` ne pèse de toute façon que quelques
   // centaines de lignes), PAS le seul mois affiché — trop peu de jours
   // renseignés pour un seuil fiable. MÊME clé partout : un seul calcul, partagé
-  // entre tous les mois consultés. `staleTime` généreux : un seuil statistique
-  // n'a pas besoin d'être recalculé à la seconde près.
+  // entre tous les mois consultés ET avec le benchmark du board PDJ (même clé,
+  // un seul scan). `staleTime` généreux : un seuil statistique n'a pas besoin
+  // d'être recalculé à la seconde près.
   //
   // Un seul chiffre pour tout le mois (pas un seuil par jour de semaine, essayé
   // puis jugé trop confus à lire) — une ligne nette, unique, facile à retenir.

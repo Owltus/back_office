@@ -116,45 +116,12 @@ export async function fetchDay(serviceDate: string): Promise<PdjDayRow[]> {
   return data as PdjDayRow[]
 }
 
-/**
- * Toutes les lignes sur une plage de jours (bornes incluses), triées par date.
- * Lecture seule dédiée à la vue analytique : agrégation ensuite côté client
- * (par mois). Bornes au format 'YYYY-MM-DD'.
- *
- * PAGINÉ : une ligne par (jour, chambre) → une plage large (un mois, a fortiori
- * une année) dépasse vite le plafond de 1000 lignes de l'API. Sans pagination,
- * on ne récupérait que les 1000 premières dates (⇒ seuls les premiers mois
- * apparaissaient dans l'analytique). On lit page par page jusqu'à une page
- * incomplète.
- */
-export async function fetchRange(
-  from: string,
-  to: string,
-): Promise<PdjDayRow[]> {
-  const PAGE = 1000
-  const all: PdjDayRow[] = []
-  let offset = 0
-  for (;;) {
-    const { data, error } = await supabase
-      .from(PDJ_TABLE)
-      .select('*')
-      .gte('service_date', from)
-      .lte('service_date', to)
-      .order('service_date', { ascending: true })
-      .order('room', { ascending: true })
-      .range(offset, offset + PAGE - 1)
-    if (error) throw error
-    const rows = (data ?? []) as PdjDayRow[]
-    all.push(...rows)
-    if (rows.length < PAGE) break
-    offset += rows.length
-  }
-  return all
-}
+// `fetchRange` (scan paginé de la table par plage) a été RETIRÉ le 2026-09-06 :
+// plus aucun appelant depuis la vue d'agrégation `pdj_daily_agg` (2026-08-13).
 
 /**
  * Lignes AGRÉGÉES (une par jour × code) sur une plage de jours, depuis la vue
- * `pdj_daily_agg`. Remplace `fetchRange` pour l'analytique et les moyennes/jour :
+ * `pdj_daily_agg`. Remplace l'ancien scan de la table pour l'analytique et les moyennes/jour :
  * on lit ~4 lignes/jour au lieu d'une par chambre (~40/jour). Bornes 'YYYY-MM-DD'
  * incluses. Paginé (tiny), trié par date puis code.
  */
@@ -311,6 +278,9 @@ export async function setManualServe(
  * VEILLE, on garde les noms d'aujourd'hui ET de J-1 (fenêtre nécessaire au
  * rapprochement parking↔PDJ) et on purge à partir de J-2. Idempotent (ne touche
  * que les lignes encore nommées). Barré par la RLS pour le rôle `utilisateur`.
+ * Servie par l'index partiel `pdj_breakfasts_guest_name_pending_idx`
+ * (perf_audit_2026-09-06.sql) ; ne part qu'une fois par jour et par poste
+ * (`purgeGate`, voir BreakfastBoard).
  */
 export async function purgeOldGuestNames(oldestKept: string): Promise<void> {
   const { error } = await supabase

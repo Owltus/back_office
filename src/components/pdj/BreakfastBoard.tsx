@@ -86,6 +86,7 @@ import { canEditPdjDay } from '#/lib/pdj/editability.ts'
 import { breakfastServiceDate, parseAddonProduction } from '#/lib/pdj/addon.ts'
 import { computeAggBenchmarks } from '#/lib/pdj/amounts.ts'
 import { detectTarifs } from '#/lib/pdj/tarif.ts'
+import { purgeGate } from '#/lib/pdj/purgeGate.ts'
 import { computePdjCA, roomFinance } from '#/lib/pdj/breakdown.ts'
 import { autoModeTargets } from '#/lib/pdj/automode.ts'
 import { fmtEur, fmtInt, fmtPctInt } from '#/lib/pdj/format.ts'
@@ -251,20 +252,23 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
     staleTime: 5 * 60_000,
   })
 
-  // Purge RGPD au montage (une seule fois, rôles habilités) : anonymise les noms
-  // à partir de J-2 (aujourd'hui et J-1 conservés), garde les stats. Idempotent,
-  // silencieux si rien à purger.
-  const purgedRef = useRef(false)
+  // Purge RGPD (rôles habilités) : anonymise les noms à partir de J-2
+  // (aujourd'hui et J-1 conservés), garde les stats. Idempotent, silencieux si
+  // rien à purger. UNE fois par jour hôtelier et par poste (`purgeGate`, état
+  // de module) : l'ancien `useRef` repartait à zéro à chaque montage du board,
+  // soit un UPDATE de masse à chaque visite de la page (audit 2026-09-06).
   useEffect(() => {
-    if (purgedRef.current || !canEdit) return
-    purgedRef.current = true
+    if (!canEdit || !purgeGate.claim(yesterday)) return
     purgeOldGuestNames(yesterday)
       // La purge n'anonymise QUE des noms de jours passés → seules les vues « jour »
       // peuvent être périmées. On n'invalide donc que `['pdj','day']` (ciblé), pas
       // le préfixe `['pdj']` entier qui rejouait aussi dates + agrégats + benchmark
       // (les scans lourds) sur CHAQUE montage éditeur.
       .then(() => queryClient.invalidateQueries({ queryKey: ['pdj', 'day'] }))
-      .catch((err) => console.error('[pdj] purge RGPD échouée', err))
+      .catch((err) => {
+        purgeGate.release(yesterday)
+        console.error('[pdj] purge RGPD échouée', err)
+      })
   }, [canEdit, queryClient, yesterday])
 
   // Lignes du jour sélectionné. On NE met PAS de défaut `= []` : il masquerait
@@ -422,9 +426,12 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
   // du coût. Les tarifs (pour le CA) viennent de l'Addon DÉJÀ en cache (`tarifs`),
   // plus de second fetch. `benchmark` reste `undefined` tant que l'agrégat charge
   // (rendu inchangé : les sous-textes n'apparaissent qu'ensuite).
+  // Clé PARTAGÉE avec le seuil de rupture de PdjAnalytiqueMoisBoard : même
+  // lecture (toute la vue), un seul scan en cache au lieu de deux (audit 2026-09-06).
   const { data: aggAll } = useQuery({
-    queryKey: ['pdj', 'agg-all'],
+    queryKey: ['pdj', 'analytics', 'all-history'],
     queryFn: () => fetchDailyAgg('2000-01-01', '2100-12-31'),
+    staleTime: 5 * 60_000,
   })
   const benchmark = useMemo(
     () => (aggAll ? computeAggBenchmarks(aggAll, tarifs) : undefined),

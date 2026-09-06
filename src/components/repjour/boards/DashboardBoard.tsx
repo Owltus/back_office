@@ -46,7 +46,6 @@ import { serverReportRecipients } from '#/lib/repjour/services/recipients.ts'
 import { SummaryCards } from '#/components/repjour/SummaryCards.tsx'
 import { DayCrossSummary } from '#/components/repjour/DayCrossSummary.tsx'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
-import { supabase } from '#/lib/supabase.ts'
 import { businessNow, isManualImportOpen } from '#/lib/businessDay.ts'
 import { cn } from '#/lib/utils.ts'
 import { sendReportViaServer } from '#/lib/repjour/sendServer.ts'
@@ -246,36 +245,44 @@ export function DashboardBoard() {
     }
   }, [reportError, reportErrorObj])
 
-  // Debounce (500 ms, sur le DERNIER événement) de l'invalidation Realtime : un
-  // import de N lignes émet N événements `postgres_changes` ; sans regroupement,
-  // chaque client refetchait N × toutes les requêtes `['repjour']` montées.
+  // Fraîcheur au RETOUR sur l'onglet (visibilité, focus, reconnexion) : un
+  // import fait par un collègue apparaît à la prochaine visite. Remplace
+  // l'abonnement Realtime `postgres_changes` sur `daily_reports` retiré le
+  // 2026-09-06 : la table n'a JAMAIS été dans la publication supabase_realtime,
+  // le canal ne recevait rien (audit). Écart minimal de 30 s entre deux
+  // invalidations : un aller-retour d'onglet rapide ne rejoue pas les 8
+  // requêtes `['repjour']` montées + la bande transverse. Debounce 500 ms sur
+  // le dernier événement (focus + visibilitychange arrivent ensemble).
   const invalidateRef = useRef<number | null>(null)
+  const lastInvalidateAtRef = useRef(0)
   useEffect(() => {
+    const MIN_GAP_MS = 30_000
     const scheduleInvalidate = () => {
+      if (Date.now() - lastInvalidateAtRef.current < MIN_GAP_MS) return
       if (invalidateRef.current) window.clearTimeout(invalidateRef.current)
       invalidateRef.current = window.setTimeout(() => {
         invalidateRef.current = null
+        lastInvalidateAtRef.current = Date.now()
         void queryClient.invalidateQueries({ queryKey: ['repjour'] })
       }, 500)
     }
-    // Abonnement temps réel en LECTURE : un import fait ailleurs invalide le
-    // cache, et TanStack Query refetche ce qui est monté. On ne recharge plus
-    // à la main — sinon le cache serait court-circuité à chaque montage.
-    const channel = supabase
-      .channel('repjour-daily-reports')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'daily_reports' },
-        scheduleInvalidate,
-      )
-      .subscribe()
+    // Premier montage : les requêtes viennent d'être lancées, on part du présent.
+    lastInvalidateAtRef.current = Date.now()
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') scheduleInvalidate()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('focus', scheduleInvalidate)
+    window.addEventListener('online', scheduleInvalidate)
 
     return () => {
       // Timer en attente au démontage : on l'annule (pas d'invalidation sur un
       // composant disparu, ni de fuite du timer).
       if (invalidateRef.current) window.clearTimeout(invalidateRef.current)
       invalidateRef.current = null
-      void supabase.removeChannel(channel)
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('focus', scheduleInvalidate)
+      window.removeEventListener('online', scheduleInvalidate)
     }
   }, [queryClient])
 

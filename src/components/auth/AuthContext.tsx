@@ -16,6 +16,8 @@ import {
   isOutageError,
 } from '#/lib/backendHealth.ts'
 import { errorMessage } from '#/lib/errors.ts'
+import { parseMyAccess } from '#/lib/auth/access.ts'
+import type { MyAccess } from '#/lib/auth/access.ts'
 import type { Profile, UserRole } from '#/lib/repjour/types.ts'
 import { atLeast, gradeOf, levelOf } from '#/lib/permissions/index.ts'
 import type {
@@ -135,6 +137,18 @@ function clearCachedPerms() {
 }
 
 /**
+ * Profil + droits en UN aller-retour (RPC `get_my_access`, perf_audit_2026-09-06).
+ * Lève sur erreur réseau ET sur réponse vide/invalide : l'appelant ne doit
+ * jamais confondre un aléa réseau avec « profil supprimé » (`profile === null`,
+ * seule issue qui éjecte). La RPC lit `auth.uid()` : aucun paramètre.
+ */
+async function fetchMyAccess(): Promise<MyAccess> {
+  const { data, error } = await supabase.rpc('get_my_access')
+  if (error) throw error
+  return parseMyAccess(data)
+}
+
+/**
  * Session persistée par auth-js (`sb-<ref>-auth-token`, même dérivation de clé
  * que la bibliothèque : sous-domaine de l'URL du projet). Lue UNIQUEMENT quand
  * le rafraîchissement du jeton échoue pour cause de PANNE : la session est
@@ -223,88 +237,75 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true
-    const singleProfile = createSingleFlight<void>()
-    const singlePerms = createSingleFlight<void>()
+    const singleAccess = createSingleFlight<void>()
     let lastRevalidateAt = 0
 
-    function resolveProfile(userId: string): Promise<void> {
+    /**
+     * Charge profil ET droits en une seule requête (RPC get_my_access). Règles
+     * inchangées depuis la panne du 2026-09-05 : single-flight par utilisateur,
+     * disjoncteur consulté avant tout appel, une erreur réseau ne touche à RIEN
+     * (ni état, ni cache, ni session), seule une réponse aboutie SANS profil
+     * éjecte (compte supprimé/révoqué par un admin). « 0 permission » est un
+     * état LÉGITIME (aucune page accordée) : jamais d'éjection pour ça.
+     */
+    function resolveAccess(userId: string): Promise<void> {
       // Disjoncteur ouvert : on n'appelle PAS le réseau. C'est le chemin
       // « erreur » : rien n'est écrit, rien n'est effacé, on retentera.
       if (backendHealth.shouldSkip()) return Promise.resolve()
-      return singleProfile(userId, async () => {
-        // Le rôle est-il déjà disponible pour cet utilisateur (état ou cache) ?
-        const alreadyHave =
+      return singleAccess(userId, async () => {
+        // Le rôle / les droits sont-ils déjà disponibles pour cet utilisateur
+        // (état ou cache) ? Sinon seulement, on affiche le chargement.
+        const haveProfile =
           profileUserIdRef.current === userId ||
           readCachedProfile()?.id === userId
-        if (!alreadyHave) setProfileLoading(true)
+        const havePerms =
+          permsUserIdRef.current === userId ||
+          readCachedPerms(userId) !== null
+        if (!haveProfile) setProfileLoading(true)
+        if (!havePerms) setPermissionsLoading(true)
 
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', userId)
-          .maybeSingle()
-        if (!active) return
-
-        // Erreur réseau/transitoire : on ne touche à RIEN (ni profil, ni session,
-        // ni cache). Surtout pas d'éjection sur un simple aléa réseau. En cas
-        // de PANNE, `profileLoading` reste tel quel : sans cache, le squelette
-        // continue (le bandeau explique) plutôt qu'un faux « aucun accès ».
-        if (error) {
+        let access: MyAccess
+        try {
+          access = await fetchMyAccess()
+        } catch (error) {
+          if (!active) return
+          // Erreur réseau/transitoire : on ne touche à RIEN (ni profil, ni
+          // droits, ni session, ni cache). Surtout pas d'éjection sur un simple
+          // aléa réseau. En cas de PANNE, les indicateurs de chargement restent
+          // tels quels : sans cache, le squelette continue (le bandeau explique)
+          // plutôt qu'un faux « aucun accès ».
           setAuthReadError(errorMessage(error))
-          if (!isOutageError(error)) setProfileLoading(false)
+          if (!isOutageError(error)) {
+            setProfileLoading(false)
+            setPermissionsLoading(false)
+          }
           return
         }
+        if (!active) return
 
-        // Requête aboutie mais AUCUNE ligne : le profil n'existe plus → le compte a
-        // été supprimé/révoqué par un admin. On éjecte la session encore ouverte :
+        // Requête aboutie mais AUCUN profil : il n'existe plus → le compte a été
+        // supprimé/révoqué par un admin. On éjecte la session encore ouverte :
         // le token JWT reste techniquement valide jusqu'à son expiration (~1 h),
         // donc c'est CETTE détection qui déconnecte réellement l'utilisateur en
         // séance (signOut → onAuthStateChange → AppAuthGate renvoie vers /login).
-        if (!data) {
+        if (!access.profile) {
           clearProfile()
           await supabase.auth.signOut()
           return
         }
 
-        const next = data as Profile
-        setProfile(next)
-        writeCachedProfile(next)
+        // Le profil renvoyé est celui de la session serveur (auth.uid()) : s'il
+        // ne correspond pas à l'utilisateur attendu (changement de compte en
+        // vol), on ignore cette réponse — la résolution du bon compte suit.
+        if (access.profile.id !== userId) return
+
+        setProfile(access.profile)
+        writeCachedProfile(access.profile)
         profileUserIdRef.current = userId
         setProfileLoading(false)
-        setAuthReadError(null)
-      })
-    }
 
-    // Charge les droits par page. Contrairement au profil, « 0 permission » est un
-    // état LÉGITIME (utilisateur sans page accordée) : ne JAMAIS éjecter ici.
-    function resolvePermissions(userId: string): Promise<void> {
-      if (backendHealth.shouldSkip()) return Promise.resolve()
-      return singlePerms(userId, async () => {
-        const alreadyHave =
-          permsUserIdRef.current === userId ||
-          readCachedPerms(userId) !== null
-        if (!alreadyHave) setPermissionsLoading(true)
-
-        const { data, error } = await supabase
-          .from('user_page_permissions')
-          .select('page, level')
-          .eq('user_id', userId)
-        if (!active) return
-
-        // Aléa réseau : on garde le cache tel quel, aucune éjection. Panne :
-        // `permissionsLoading` reste tel quel (voir resolveProfile).
-        if (error) {
-          setAuthReadError(errorMessage(error))
-          if (!isOutageError(error)) setPermissionsLoading(false)
-          return
-        }
-
-        const map: PagePermissions = {}
-        for (const row of (data ?? []) as Array<{ page: PageKey; level: PageLevel }>) {
-          map[row.page] = row.level
-        }
-        setPermissions(map)
-        writeCachedPerms(userId, map)
+        setPermissions(access.permissions)
+        writeCachedPerms(userId, access.permissions)
         permsUserIdRef.current = userId
         setPermissionsLoading(false)
         setPermsResolved(true)
@@ -330,8 +331,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     /** Résolution complète pour un utilisateur (connexion, changement de compte). */
     function resolveAll(userId: string) {
       lastRevalidateAt = Date.now()
-      void resolveProfile(userId)
-      void resolvePermissions(userId)
+      void resolveAccess(userId)
     }
 
     function applyUser(nextUser: User | null) {
@@ -390,7 +390,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Éjection / mise à jour EN SÉANCE : re-vérifier compte + droits à cadence
     // bornée, onglet visible seulement. Propage un changement de droits fait par
-    // un admin sans attendre une reconnexion ; `resolveProfile` éjecte si le
+    // un admin sans attendre une reconnexion ; `resolveAccess` éjecte si le
     // compte a disparu.
     function revalidate() {
       const uid = userIdRef.current
@@ -399,8 +399,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const t = Date.now()
       if (t - lastRevalidateAt < REVALIDATE_MIN_GAP_MS) return
       lastRevalidateAt = t
-      void resolveProfile(uid)
-      void resolvePermissions(uid)
+      void resolveAccess(uid)
     }
 
     const onVisible = () => {
@@ -463,34 +462,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signOut,
         // Relectures manuelles (page profil). Sur erreur : on lève, et on ne
         // touche NI à l'état NI au cache (une panne n'efface jamais le cache).
+        // Même RPC que le démarrage : les deux relectures rafraîchissent profil
+        // ET droits (un seul aller-retour), sans single-flight ni disjoncteur.
         refreshProfile: async () => {
           if (!user) return
-          const { data, error } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', user.id)
-            .maybeSingle()
-          if (error) throw error
-          const next = (data as Profile | null) ?? null
-          setProfile(next)
-          writeCachedProfile(next)
-          profileUserIdRef.current = next ? user.id : null
+          const access = await fetchMyAccess()
+          setProfile(access.profile)
+          writeCachedProfile(access.profile)
+          profileUserIdRef.current = access.profile ? user.id : null
+          setPermissions(access.permissions)
+          writeCachedPerms(user.id, access.permissions)
+          permsUserIdRef.current = user.id
+          setPermsResolved(true)
         },
         refreshPermissions: async () => {
           if (!user) return
-          const { data, error } = await supabase
-            .from('user_page_permissions')
-            .select('page, level')
-            .eq('user_id', user.id)
-          if (error) throw error
-          const map: PagePermissions = {}
-          for (const row of (data ?? []) as Array<{ page: PageKey; level: PageLevel }>) {
-            map[row.page] = row.level
-          }
-          setPermissions(map)
-          writeCachedPerms(user.id, map)
+          const access = await fetchMyAccess()
+          setPermissions(access.permissions)
+          writeCachedPerms(user.id, access.permissions)
           permsUserIdRef.current = user.id
           setPermsResolved(true)
+          if (access.profile) {
+            setProfile(access.profile)
+            writeCachedProfile(access.profile)
+            profileUserIdRef.current = user.id
+          }
         },
       }}
     >
