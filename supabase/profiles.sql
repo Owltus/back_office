@@ -34,27 +34,12 @@ create policy "Users update own profile" on public.profiles
     and email = (select private.get_user_email())
   );
 
--- 2) Ceinture + bretelles : trigger BEFORE UPDATE qui FORCE le rôle à sa valeur
---    précédente sauf si l'appelant est admin. Neutralise tout contournement de
---    policy (ex. update via une RPC mal gardée).
-create or replace function public.prevent_self_role_change()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  if new.role is distinct from old.role and not private.is_admin() then
-    new.role := old.role;
-  end if;
-  return new;
-end;
-$$;
-
-drop trigger if exists protect_role_escalation on public.profiles;
-create trigger protect_role_escalation
-  before update on public.profiles
-  for each row execute function public.prevent_self_role_change();
+-- 2) Ceinture + bretelles : trigger protect_role_escalation.
+--    REMPLACÉ — NE PLUS REJOUER ce bloc : la version de prod (branche INSERT
+--    du 2026-08-04, security INVOKER depuis le 2026-09-06) est versionnée dans
+--    private_schema_aides.sql (prevent_self_role_change) ; rejouer l'ancien
+--    corps rouvrirait l'escalade à l'INSERT.
+--    CHECK profiles.role réduit à utilisateur/admin : securite_audit_2026-09-06.sql.
 
 -- 3) VÉRIFICATION (lecture seule) — avec un JWT NON-admin (compte jetable),
 --    l'appel PostgREST suivant doit laisser `role` INCHANGÉ :

@@ -117,10 +117,16 @@ create policy "caisse cautions write (page:caisse)" on public.caisse_cautions
 
 -- caisse_cautions / UPDATE
 drop policy if exists "caisse cautions update (page:caisse)" on public.caisse_cautions;
-create policy "caisse cautions update (page:caisse)" on public.caisse_cautions
+-- 2026-09-06 : fenêtre 30 jours pour l'écriture (remboursement J+1 possible),
+-- gestion sans limite — voir securite_audit_2026-09-06.sql (autorité).
+create policy "caisse cautions update (page:caisse) on public.caisse_cautions
   for update to authenticated
-  using (((select private.page_level_rank(private.get_page_level('caisse'))) >= 2))
-  with check (((select private.page_level_rank(private.get_page_level('caisse'))) >= 2));
+  using ((select private.get_page_level('caisse')) = 'gestion'
+         or ((select private.page_level_rank(private.get_page_level('caisse'))) >= 2
+             and taken_date >= current_date - 30))
+  with check ((select private.get_page_level('caisse')) = 'gestion'
+         or ((select private.page_level_rank(private.get_page_level('caisse'))) >= 2
+             and taken_date >= current_date - 30));
 
 -- caisse_sheets / DELETE
 drop policy if exists "caisse delete (page:caisse gestion)" on public.caisse_sheets;
@@ -201,7 +207,7 @@ create policy "forecast_days update (page:repjour)" on public.forecast_days
 -- hotel_config / UPDATE
 drop policy if exists "Admin updates config" on public.hotel_config;
 create policy "Admin updates config" on public.hotel_config
-  for update to public
+  for update to authenticated -- 2026-09-06 : to authenticated (securite_audit_2026-09-06.sql)
   using (((select private.get_user_role()) = 'admin'));
 
 -- hotel_rooms / UPDATE
@@ -322,7 +328,7 @@ create policy "pms update (page:repjour)" on public.pms_daily_metrics
 -- profiles / ALL
 drop policy if exists "Admin manages profiles" on public.profiles;
 create policy "Admin manages profiles" on public.profiles
-  for all to public
+  for all to authenticated -- 2026-09-06 : to authenticated (securite_audit_2026-09-06.sql)
   using (((select private.get_user_role()) = 'admin'));
 
 -- profiles / INSERT

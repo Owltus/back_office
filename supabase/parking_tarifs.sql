@@ -33,8 +33,9 @@ create table if not exists public.parking_tarifs (
   created_at timestamptz not null default now()
 );
 
-create index if not exists parking_tarifs_effective_from_idx
-  on public.parking_tarifs (effective_from desc);
+-- 2026-09-06 : l'index parking_tarifs_effective_from_idx (effective_from desc)
+-- a été SUPPRIMÉ (doublon de la contrainte unique effective_from, qui sert le
+-- même tri par balayage arrière) — ne pas le recréer. Voir securite_audit_2026-09-06.sql.
 
 alter table public.parking_tarifs enable row level security;
 

@@ -1,4 +1,12 @@
 -- =============================================================================
+-- REMPLACÉ — NE PLUS REJOUER (2026-09-06). Ce rollback a été rejoué par erreur
+-- après le durcissement : il a recréé 5 policies `… read (authenticated)`
+-- `using (true)` sur les tables facturation (lecture ouverte à tout compte
+-- connecté), corrigé par securite_audit_2026-09-06.sql. Conservé pour
+-- l'historique uniquement.
+-- =============================================================================
+
+-- =============================================================================
 -- ROLLBACK de page_permissions_rls_lectures.sql
 --
 -- Remet les policies de LECTURE exactement dans l'état où elles étaient AVANT

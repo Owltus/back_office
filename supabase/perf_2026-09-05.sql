@@ -10,7 +10,7 @@
 -- Aucun `drop`. Deux objets seulement :
 --   (1) la fonction `get_user_role()` reçoit l'attribut STABLE ;
 --   (2) une VUE nouvelle `pdj_service_dates` (lecture seule, security_invoker).
--- Rollback : `alter function public.get_user_role() volatile;` et
+-- Rollback : `alter function private.get_user_role() volatile;` et
 -- `drop view public.pdj_service_dates;`.
 --
 -- POURQUOI (panne du 2026-09-05, plan perf-resilience-2026-09-05, étape 7) :
@@ -30,7 +30,8 @@
 -- =============================================================================
 
 -- (1) get_user_role : lecture seule → STABLE.
-alter function public.get_user_role() stable;
+-- 2026-09-06 : la fonction vit dans `private` depuis private_schema_aides.sql.
+alter function private.get_user_role() stable;
 
 -- (2) Dates de service DISTINCTES, sans agrégat.
 -- security_invoker = true : la RLS de `pdj_breakfasts` (page:pdj lecture)
@@ -59,7 +60,7 @@ grant select on public.pdj_service_dates to authenticated;
 -- =============================================================================
 select 'get_user_role' as objet, provolatile::text as valeur
 from pg_proc
-where pronamespace = 'public'::regnamespace and proname = 'get_user_role'
+where pronamespace = 'private'::regnamespace and proname = 'get_user_role'
 union all
 select 'pdj_service_dates', coalesce(array_to_string(reloptions, ','), '(aucune option)')
 from pg_class

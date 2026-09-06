@@ -113,10 +113,16 @@ create policy "caisse cautions write (page:caisse)"
 
 drop policy if exists "caisse cautions update (page:caisse)" on public.caisse_cautions;
 -- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
+-- 2026-09-06 : fenêtre 30 jours pour l'écriture (remboursement J+1 possible),
+-- gestion sans limite — voir securite_audit_2026-09-06.sql (autorité).
 create policy "caisse cautions update (page:caisse)"
   on public.caisse_cautions for update to authenticated
-  using ((select private.page_level_rank(private.get_page_level('caisse'))) >= 2)
-  with check ((select private.page_level_rank(private.get_page_level('caisse'))) >= 2);
+  using ((select private.get_page_level('caisse')) = 'gestion'
+         or ((select private.page_level_rank(private.get_page_level('caisse'))) >= 2
+             and taken_date >= current_date - 30))
+  with check ((select private.get_page_level('caisse')) = 'gestion'
+         or ((select private.page_level_rank(private.get_page_level('caisse'))) >= 2
+             and taken_date >= current_date - 30));
 
 -- Suppression : voir supabase/caisse_cautions_delete_ecriture_same_day.sql
 -- (autorité UNIQUE pour cette policy — ne PAS la recréer ici, ce serait un

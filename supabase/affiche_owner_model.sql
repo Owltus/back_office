@@ -26,7 +26,7 @@ create index if not exists affiche_templates_created_by_idx
 create or replace function public.affiche_stamp()
 returns trigger
 language plpgsql
-security definer
+security invoker
 set search_path = public
 as $$
 begin

@@ -22,6 +22,8 @@
 --     par is_admin / get_page_level + RLS.
 -- =============================================================================
 
+-- NOTE 2026-09-06 : les fonctions TRIGGER (exclues de la boucle ci-dessous) sont
+-- fermées à PUBLIC/anon/authenticated par securite_audit_2026-09-06.sql.
 -- (1) Ni PUBLIC ni anon sur AUCUNE fonction security definer non-trigger, dans
 --     public ET private (schéma privé créé par private_schema_aides.sql) ;
 --     authenticated conservé (canal normal de l'app connectée). Depuis le plan

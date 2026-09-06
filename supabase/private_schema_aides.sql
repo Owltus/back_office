@@ -1071,7 +1071,7 @@ $function$
 CREATE OR REPLACE FUNCTION public.parking_no_past_rewrite()
  RETURNS trigger
  LANGUAGE plpgsql
- SECURITY DEFINER
+ SECURITY INVOKER -- 2026-09-06 (securite_audit_2026-09-06.sql)
  SET search_path TO 'public'
 AS $function$
 begin
@@ -1096,7 +1096,7 @@ $function$
 CREATE OR REPLACE FUNCTION public.prevent_self_role_change()
  RETURNS trigger
  LANGUAGE plpgsql
- SECURITY DEFINER
+ SECURITY INVOKER -- 2026-09-06 (securite_audit_2026-09-06.sql)
  SET search_path TO 'public'
 AS $function$
 begin

@@ -86,7 +86,7 @@ create policy "parking delete (page:parking)"
 create or replace function public.parking_no_past_rewrite()
 returns trigger
 language plpgsql
-security definer
+security invoker
 set search_path = public
 as $$
 begin
