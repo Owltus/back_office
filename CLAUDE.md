@@ -133,6 +133,16 @@ Le temps de chargement perçu vient surtout de l'auth cliente + du mode SPA. Rè
   en `staleTime: Infinity` ; un seul refetch par retour d'onglet (coalescer
   visibility/focus/online) ; invalidations Realtime avec debounce ; la liste des
   dates PDJ vient de la vue `pdj_service_dates` (jamais de l'agrégat).
+- **Depuis l'audit du 2026-09-06** (plan `correctifs-audit-2026-09-06`) : le
+  boot auth lit UNE RPC `get_my_access()` (profil + droits ; réponse vide =
+  erreur réseau, JAMAIS une éjection — seul `profile === null` éjecte, voir
+  `lib/auth/access.ts`) ; la purge RGPD des noms PDJ passe par `purgeGate`
+  (`lib/pdj/purgeGate.ts`, une fois par jour hôtelier et par poste, jamais par
+  un `useRef` remis à zéro au montage) ; `DashboardBoard` n'a PAS d'abonnement
+  Realtime (`daily_reports` n'est pas publiée) : refetch au retour d'onglet
+  avec écart minimal 30 s. Toujours re-mesurer par `explain analyze` avant
+  d'optimiser sur des statistiques cumulées (les 300 ms de `pdj_daily_agg`
+  dataient de la saturation d'avant la panne ; à froid : 5 ms).
 - Valider toute modif perf : `pnpm build` (vérifier le découpage des chunks) +
   `npx tsc --noEmit` ; côté base `supabase/verif_perf.sql` (lecture seule).
 
@@ -193,6 +203,32 @@ Le temps de chargement perçu vient surtout de l'auth cliente + du mode SPA. Rè
   modifier son profil depuis le 2026-08-05). Fonctions supprimées (aucun
   appelant) : `set_parking_tarif`, `literie_record_movement`,
   `literie_toggle_bedding`.
+- **Audit + correctifs du 2026-09-06** (plan `correctifs-audit-2026-09-06`,
+  scripts `securite_audit_2026-09-06.sql`, `fk_auteur_triggers_2026-09-06.sql`,
+  `perf_audit_2026-09-06.sql`, `email_recipients_drop_2026-09-06.sql`,
+  contrôle `verif_audit_2026-09-06.sql` 20/20) : régression refermée (5
+  policies `using (true)` sur facturation venues du fichier ROLLBACK rejoué,
+  désormais « NE PLUS REJOUER ») ; **0 fonction trigger definer dans public**
+  (`log_delete` vit dans `private`, les 3 autres sont invoker) et toute
+  fonction trigger est fermée à PUBLIC/anon/authenticated ; 0 policy
+  `to public` ; **18 FK d'auteur `on delete set null`** (cible `profiles`
+  pour les nouvelles, colonnes nullables) et les 7 triggers d'estampillage
+  figent l'auteur via `private.keep_author(new, old)` (figé pour un
+  utilisateur de l'app, NULL accepté d'un contexte système : c'est ce qui
+  permet la suppression d'un compte) ; CHECK `profiles.role` =
+  utilisateur|admin, CHECK `user_page_permissions.page` = 8 clés de
+  `lib/permissions/pages.ts` (à étendre avec toute nouvelle page) ; cautions
+  UPDATE fenêtré 30 j pour l'écriture ; index partiel
+  `pdj_breakfasts_guest_name_pending_idx` ; vue `pdj_daily_agg` fermée à
+  anon ; RPC invoker `public.get_my_access()` ;
+  `idle_in_transaction_session_timeout = 60s` sur authenticated/anon/
+  authenticator ; **table `email_recipients` SUPPRIMÉE** (seule liste :
+  `server_report_recipients`). Décisions explicites de l'utilisateur, à ne
+  pas re-proposer : daily_reports/pms UPDATE-DELETE en écriture (import =
+  upsert), compte de test et compte Réception partagé conservés, 1 seul admin
+  sans MFA, Realtime conservé (parking, PDJ, lits bébé), doublons de section
+  PMS fidèles au fichier source, contresignature caisse = papier. Restent
+  côté dashboard (superuser) : `track_io_timing`, `log_min_duration_statement`.
 - **Clés API migrées le 2026-07-27** : le projet est passé du legacy (anon/service_role
   JWT) au **nouveau système** — client sur `sb_publishable` (`VITE_SUPABASE_ANON_KEY`
   local + Vercel), Edge Functions sur `sb_secret` (secret `SB_SECRET_KEY`, lu avec repli

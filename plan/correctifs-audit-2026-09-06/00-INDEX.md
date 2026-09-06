@@ -1,5 +1,13 @@
 # Plan — Correctifs de l'audit Supabase du 2026-09-06
 
+> **EXÉCUTÉ le 2026-09-06** (5/5 étapes, 4 scripts SQL appliqués en prod,
+> `verif_audit_2026-09-06.sql` 20/20 + advisor/complet/perf OK, 491 tests,
+> build vert). Écarts par rapport au plan initial : colonne générée `code`
+> abandonnée après mesure (5 ms à froid) ; complément
+> `fk_auteur_triggers_2026-09-06.sql` (les triggers d'estampillage cassaient
+> le SET NULL → `private.keep_author`). Reste utilisateur : `track_io_timing`
+> et `log_min_duration_statement` dans le dashboard (superuser).
+
 ## Contexte
 
 L'audit exploratoire du 2026-09-06 (4 agents en lecture seule : sécurité,

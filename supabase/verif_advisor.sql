@@ -53,7 +53,8 @@ with checks(ordre, controle, ok) as (
        where m.nspname = 'private' and q.prokind = 'f'
          and q.prorettype <> 'pg_catalog.trigger'::regtype -- 2026-09-06 : log_delete (trigger) vit dans private
          and q.proname not in ('get_page_level','is_admin','get_user_role','page_level_rank',
-                               'repjour_manual_forecast_allowed','get_user_email')
+                               'repjour_manual_forecast_allowed','get_user_email',
+                               'keep_author') -- aide des triggers d'estampillage (2026-09-06)
          and not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
                          where n.nspname = 'public' and p.proname = q.proname and not p.prosecdef
                            and pg_get_function_identity_arguments(p.oid) = pg_get_function_identity_arguments(q.oid)
