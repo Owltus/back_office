@@ -1,3 +1,7 @@
+-- 2026-09-06 : les affectations `new.X := old.X` des triggers d'estampillage
+-- passent par private.keep_author(new, old) (fk_auteur_triggers_2026-09-06.sql) :
+-- auteur figé pour tout utilisateur de l'app, mise à NULL acceptée d'un contexte
+-- système (FK on delete set null à la suppression d'un compte).
 -- =============================================================================
 -- AFFICHAGE — modèle d'accès PAR PROPRIÉTAIRE
 --
@@ -34,7 +38,7 @@ begin
     new.created_by := auth.uid();   -- ignore toute valeur envoyée par le client
     new.updated_at := now();
   else
-    new.created_by := old.created_by; -- auteur d'origine immuable
+    new.created_by := private.keep_author(new.created_by, old.created_by); -- auteur d'origine immuable
     new.updated_at := now();
   end if;
   return new;

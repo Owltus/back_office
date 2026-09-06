@@ -1,3 +1,7 @@
+-- 2026-09-06 : les affectations `new.X := old.X` des triggers d'estampillage
+-- passent par private.keep_author(new, old) (fk_auteur_triggers_2026-09-06.sql) :
+-- auteur figé pour tout utilisateur de l'app, mise à NULL acceptée d'un contexte
+-- système (FK on delete set null à la suppression d'un compte).
 -- =============================================================================
 -- caisse_cautions — cautions clients (dépôt de garantie en espèces)
 --
@@ -74,7 +78,7 @@ begin
     new.refunded_by := null;
     new.refunded_at := null;
   elsif tg_op = 'UPDATE' then
-    new.created_by := old.created_by;
+    new.created_by := private.keep_author(new.created_by, old.created_by);
     if new.status = 'refunded' and old.status = 'active' then
       new.refunded_by := auth.uid();
       new.refunded_at := now();

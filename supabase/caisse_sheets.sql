@@ -1,3 +1,7 @@
+-- 2026-09-06 : les affectations `new.X := old.X` des triggers d'estampillage
+-- passent par private.keep_author(new, old) (fk_auteur_triggers_2026-09-06.sql) :
+-- auteur figé pour tout utilisateur de l'app, mise à NULL acceptée d'un contexte
+-- système (FK on delete set null à la suppression d'un compte).
 -- =============================================================================
 -- caisse_sheets — feuilles de caisse persistées par jour + shift (page Caisse)
 --
@@ -105,15 +109,15 @@ begin
       new.validated_by := null;
     end if;
   else -- UPDATE
-    new.created_by := old.created_by;                 -- created_by non réécrivable
-    new.countersigned_by := old.countersigned_by;     -- non réécrivable par le client (A3)
+    new.created_by := private.keep_author(new.created_by, old.created_by);                 -- created_by non réécrivable
+    new.countersigned_by := private.keep_author(new.countersigned_by, old.countersigned_by);     -- non réécrivable par le client (A3)
     if new.status = 'validated' then
       if old.status is distinct from 'validated' then
         new.validated_at := now();                    -- (re)validation → maintenant
         new.validated_by := auth.uid();
       else
         new.validated_at := old.validated_at;         -- déjà validée : figée (pas de post-datage)
-        new.validated_by := old.validated_by;
+        new.validated_by := private.keep_author(new.validated_by, old.validated_by);
       end if;
     else -- réouverture (retour en 'draft')
       new.validated_at := null;

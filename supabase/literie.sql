@@ -1,3 +1,7 @@
+-- 2026-09-06 : les affectations `new.X := old.X` des triggers d'estampillage
+-- passent par private.keep_author(new, old) (fk_auteur_triggers_2026-09-06.sql) :
+-- auteur figé pour tout utilisateur de l'app, mise à NULL acceptée d'un contexte
+-- système (FK on delete set null à la suppression d'un compte).
 -- =============================================================================
 -- literie — script UNIQUE pour toute la page 'literie' (grille literie
 -- synthétique + stock de secours + planning lits parapluie bébé).
@@ -239,7 +243,7 @@ begin
   if tg_op = 'INSERT' then
     new.created_by := auth.uid();
   else
-    new.created_by := old.created_by;
+    new.created_by := private.keep_author(new.created_by, old.created_by);
   end if;
   return new;
 end;

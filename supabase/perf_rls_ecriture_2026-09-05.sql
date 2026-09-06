@@ -119,7 +119,7 @@ create policy "caisse cautions write (page:caisse)" on public.caisse_cautions
 drop policy if exists "caisse cautions update (page:caisse)" on public.caisse_cautions;
 -- 2026-09-06 : fenêtre 30 jours pour l'écriture (remboursement J+1 possible),
 -- gestion sans limite — voir securite_audit_2026-09-06.sql (autorité).
-create policy "caisse cautions update (page:caisse) on public.caisse_cautions
+create policy "caisse cautions update (page:caisse)" on public.caisse_cautions
   for update to authenticated
   using ((select private.get_page_level('caisse')) = 'gestion'
          or ((select private.page_level_rank(private.get_page_level('caisse'))) >= 2

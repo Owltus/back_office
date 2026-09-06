@@ -1,3 +1,7 @@
+-- 2026-09-06 : les affectations `new.X := old.X` des triggers d'estampillage
+-- passent par private.keep_author(new, old) (fk_auteur_triggers_2026-09-06.sql) :
+-- auteur figé pour tout utilisateur de l'app, mise à NULL acceptée d'un contexte
+-- système (FK on delete set null à la suppression d'un compte).
 -- =============================================================================
 -- literie_sheets — feuille du jour literie (commentaire + clôture) (page 'literie')
 --
@@ -43,14 +47,14 @@ begin
       new.validated_by := null;
     end if;
   else
-    new.created_by := old.created_by;
+    new.created_by := private.keep_author(new.created_by, old.created_by);
     if new.status = 'validated' then
       if old.status is distinct from 'validated' then
         new.validated_at := now();
         new.validated_by := auth.uid();
       else
         new.validated_at := old.validated_at;
-        new.validated_by := old.validated_by;
+        new.validated_by := private.keep_author(new.validated_by, old.validated_by);
       end if;
     else
       new.validated_at := null;
