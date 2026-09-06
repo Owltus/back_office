@@ -31,8 +31,9 @@
 --   (4) idle_in_transaction_session_timeout = 60 s pour les rôles de l'API
 --       (contexte `user`, comme Supabase le fait pour supabase_auth_admin) :
 --       une session oubliée en transaction ne bloque plus la base.
---       track_io_timing et log_min_duration_statement sont SUPERUSER : à poser
---       dans le dashboard (Settings → Database → Custom config), pas ici.
+--       track_io_timing et log_min_duration_statement sont SUPERUSER et
+--       IMPOSSIBLES sur ce plan (vérifié le 2026-09-06 : clés refusées par
+--       `supabase postgres-config update`, ALTER DATABASE refusé).
 --   (5) remise à zéro de pg_stat_statements pour repartir sur une base propre
 --       après la panne (tentée hors transaction, échec toléré : propriétaire
 --       supabase_admin ; repli = dashboard → Query Performance → Reset).

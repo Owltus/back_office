@@ -227,8 +227,11 @@ Le temps de chargement perçu vient surtout de l'auth cliente + du mode SPA. Rè
   pas re-proposer : daily_reports/pms UPDATE-DELETE en écriture (import =
   upsert), compte de test et compte Réception partagé conservés, 1 seul admin
   sans MFA, Realtime conservé (parking, PDJ, lits bébé), doublons de section
-  PMS fidèles au fichier source, contresignature caisse = papier. Restent
-  côté dashboard (superuser) : `track_io_timing`, `log_min_duration_statement`.
+  PMS fidèles au fichier source, contresignature caisse = papier.
+  `track_io_timing` et `log_min_duration_statement` sont IMPOSSIBLES sur ce
+  plan (clés refusées par l'API `postgres-config`, ALTER DATABASE refusé :
+  `postgres` n'est pas superuser) : l'observabilité = `pg_stat_statements`
+  (remis à zéro le 2026-09-06) et Reports du dashboard.
 - **Clés API migrées le 2026-07-27** : le projet est passé du legacy (anon/service_role
   JWT) au **nouveau système** — client sur `sb_publishable` (`VITE_SUPABASE_ANON_KEY`
   local + Vercel), Edge Functions sur `sb_secret` (secret `SB_SECRET_KEY`, lu avec repli

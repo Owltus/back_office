@@ -5,8 +5,11 @@
 > build vert). Écarts par rapport au plan initial : colonne générée `code`
 > abandonnée après mesure (5 ms à froid) ; complément
 > `fk_auteur_triggers_2026-09-06.sql` (les triggers d'estampillage cassaient
-> le SET NULL → `private.keep_author`). Reste utilisateur : `track_io_timing`
-> et `log_min_duration_statement` dans le dashboard (superuser).
+> le SET NULL → `private.keep_author`). `track_io_timing` et
+> `log_min_duration_statement` : IMPOSSIBLES sur ce plan (clés refusées par
+> l'API postgres-config, ALTER DATABASE refusé, postgres non superuser).
+> Démarrage vérifié dans le navigateur : 1 appel `get_my_access`, 0 lecture
+> séparée profil/droits, 0 erreur console.
 
 ## Contexte
 
@@ -74,8 +77,8 @@ gardes `is distinct from` / `page_level_rank(...) >= n`.
   `fetchRange` mort retiré.
 - **Boot auth** : une RPC invoker `get_my_access()` remplace les deux lectures.
 - **Surveillance** : `idle_in_transaction_session_timeout` par ALTER ROLE ;
-  `track_io_timing` et `log_min_duration_statement` sont superuser → dashboard
-  (action utilisateur documentée) ; reset des statistiques tenté.
+  `track_io_timing` et `log_min_duration_statement` impossibles (superuser,
+  clés refusées par l'API) ; statistiques remises à zéro.
 - **Archivage CSV** : déjà retiré du code (commit 575bbdd) ; plans annotés.
 - **email_recipients** : lue par du code mort uniquement → table droppée,
   code mort retiré (`lib/repjour/email.ts`, `html2canvas`).
