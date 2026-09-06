@@ -1,3 +1,6 @@
+-- SUPPRIMÉ — NE PLUS REJOUER (2026-09-06) : la table email_recipients a été droppée
+-- (email_recipients_drop_2026-09-06.sql, liste du mailto de l ex-app repjour, sans
+-- lecteur). Conservé pour l historique.
 -- =============================================================================
 -- email_recipients_rls_hardening — lecture réservée aux comptes ayant la page
 -- RepJour, gestion (écritures) réservée au niveau « gestion » (admin inclus),
