@@ -17,6 +17,12 @@ import {
 } from '#/lib/backendHealth.ts'
 import { errorMessage } from '#/lib/errors.ts'
 import { parseMyAccess } from '#/lib/auth/access.ts'
+import {
+  clearLastActive,
+  isInactiveTooLong,
+  readLastActive,
+  writeLastActive,
+} from '#/lib/auth/inactivity.ts'
 import type { MyAccess } from '#/lib/auth/access.ts'
 import type { Profile, UserRole } from '#/lib/repjour/types.ts'
 import { atLeast, gradeOf, levelOf } from '#/lib/permissions/index.ts'
@@ -163,7 +169,9 @@ function readPersistedSessionUser(): User | null {
     const raw = localStorage.getItem(`sb-${ref}-auth-token`)
     if (!raw) return null
     const parsed = JSON.parse(raw) as { user?: User } | null
-    return parsed?.user && typeof parsed.user.id === 'string' ? parsed.user : null
+    return parsed?.user && typeof parsed.user.id === 'string'
+      ? parsed.user
+      : null
   } catch {
     return null
   }
@@ -259,8 +267,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           profileUserIdRef.current === userId ||
           readCachedProfile()?.id === userId
         const havePerms =
-          permsUserIdRef.current === userId ||
-          readCachedPerms(userId) !== null
+          permsUserIdRef.current === userId || readCachedPerms(userId) !== null
         if (!haveProfile) setProfileLoading(true)
         if (!havePerms) setPermissionsLoading(true)
 
@@ -334,7 +341,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       void resolveAccess(userId)
     }
 
+    /**
+     * Expiration par inactivité (24 h sans ouvrir l'app, voir lib/auth/inactivity.ts).
+     * Vrai = la session persistée est trop vieille : on la ferme AVANT de
+     * l'exposer à l'app (signOut → onAuthStateChange → /login).
+     */
+    function expiredByInactivity(): boolean {
+      return isInactiveTooLong(readLastActive(), Date.now())
+    }
+
     function applyUser(nextUser: User | null) {
+      if (nextUser && expiredByInactivity()) {
+        clearLastActive()
+        clearProfile()
+        clearPerms()
+        setUser(null)
+        userIdRef.current = null
+        setLoading(false)
+        void supabase.auth.signOut()
+        return
+      }
+      if (nextUser) writeLastActive(Date.now())
+      else clearLastActive()
       setUser(nextUser)
       userIdRef.current = nextUser?.id ?? null
       setLoading(false)
@@ -396,6 +424,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const uid = userIdRef.current
       if (!uid) return
       if (document.visibilityState !== 'visible') return
+      // Retour après plus de 24 h sans activité : fermeture de session.
+      if (expiredByInactivity()) {
+        clearLastActive()
+        void supabase.auth.signOut()
+        return
+      }
+      writeLastActive(Date.now())
       const t = Date.now()
       if (t - lastRevalidateAt < REVALIDATE_MIN_GAP_MS) return
       lastRevalidateAt = t
@@ -425,6 +460,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const signOut = async () => {
+    clearLastActive()
     await supabase.auth.signOut()
     setUser(null)
     userIdRef.current = null

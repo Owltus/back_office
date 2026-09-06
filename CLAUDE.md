@@ -60,6 +60,26 @@ tourne dessus) : la prudence reste de mise.
   **La sécurité réelle des données = RLS Supabase** ; la garde UI est ergonomique.
 - Menu utilisateur (dans la Navbar) : Profil (`/profil`), Gestion budgétaire
   (`/gestion`), Gestion des comptes (`/comptes`, admin), Déconnexion.
+- **Expiration par inactivité (2026-09-06)** : 24 h sans ouvrir l'app →
+  déconnexion, appliquée par l'app (`lib/auth/inactivity.ts`, horodatage
+  `bo.auth.lastActive.v1`, contrôle au démarrage et à chaque retour d'onglet
+  dans `AuthContext`). GoTrue Free ne borne pas les sessions ; révocation
+  serveur = `delete from auth.sessions` (fait le 2026-09-06, 17 sessions).
+- **Passe red team 2026-09-06** (mémoire `securite-blindage-2026-09-06`) :
+  anon sans aucun privilège sur `public`, TRUNCATE retiré à authenticated,
+  audit_log append-only + journal des droits/comptes (`private.log_row_change`),
+  `daily_reports.imported_by` estampillé, SSL imposé sur Postgres (⚠ toute
+  commande `ssl-enforcement`/`postgres-config` REDÉMARRE la base ~1 min),
+  Edge Function orpheline `smart-handler` supprimée, Edge Functions
+  redéployées avec versions épinglées et sans repli service_role, Worker
+  Cloudflare à domaine exact + SPF/DKIM/DMARC (`ALLOWED_SENDER_DOMAINS`,
+  `REQUIRE_SENDER_AUTH`, à redéployer par l'utilisateur), pdf.js ≥ 6.2.108,
+  bornes de taille sur tous les imports (`lib/shared/files.ts`), filet
+  d'erreur global (`shared/RouteError.tsx`). Dashboard vérifié : mot de passe
+  12 + complexité, aucune URL de redirection, MFA refusée par l'utilisateur.
+  CSP `script-src` sans `'unsafe-inline'` : essayée par meta d'empreintes,
+  incompatible avec l'hydratation du shell TanStack → NE PAS retenter sans
+  preview Vercel ; `'unsafe-inline'` reste.
 
 ## Architecture / conventions
 
