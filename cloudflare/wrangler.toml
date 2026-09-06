@@ -1,0 +1,17 @@
+# Configuration wrangler du Worker d'import (Email Routing → Supabase).
+# Déploiement : `cd cloudflare && npx wrangler@4 deploy` (après `wrangler login`).
+# `keep_vars = true` : les variables et secrets posés dans le dashboard
+# (IMPORT_ENDPOINT, IMPORT_SECRET, et au besoin ALLOWED_SENDER_DOMAINS /
+# REQUIRE_SENDER_AUTH) sont CONSERVÉS au déploiement ; rien n'est défini ici.
+name = "stayntouch_in_to_supabase"
+main = "stayntouch_in_to_supabase.js"
+account_id = "f2231ca968fddd07835e296eec05ad9f"
+compatibility_date = "2025-05-23"
+keep_vars = true
+# Worker e-mail uniquement : pas d'URL publique workers.dev ni d'URL de preview.
+workers_dev = false
+preview_urls = false
+# Journaux du Worker (décisions d'acceptation/refus des e-mails) lisibles dans
+# le dashboard : Workers & Pages → le Worker → Journaux.
+[observability]
+enabled = true
