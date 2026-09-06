@@ -3,9 +3,15 @@
 ## Objectif
 
 Un script `supabase/perf_audit_2026-09-06.sql` qui rend la purge des noms
-quasi gratuite (index partiel), précalcule le `code` PDJ (colonne générée +
-index, vue `pdj_daily_agg` réécrite sur la colonne), fournit la RPC de boot
-`get_my_access()` et pose le garde-fou `idle_in_transaction_session_timeout`.
+quasi gratuite (index partiel), ferme les privilèges par défaut de la vue
+`pdj_daily_agg`, fournit la RPC de boot `get_my_access()` et pose le
+garde-fou `idle_in_transaction_session_timeout`.
+
+**Révision du 2026-09-06 (mesures)** : `explain analyze` à froid donne
+5,5 ms / 396 blocs pour `pdj_daily_agg` sur août 2026 et 5,3 ms pour la liste
+des dates. Les 285-339 ms de `pg_stat_statements` datent de la saturation CPU
+d'avant la panne. La colonne générée `code` n'est donc PAS retenue (gain
+non mesurable, couplage base/JS évité).
 
 ## Contexte
 
@@ -40,12 +46,10 @@ create index if not exists pdj_breakfasts_guest_name_pending_idx
   on public.pdj_breakfasts (service_date) where guest_name is not null;
 ```
 
-### 2. Colonne générée `code` + index + vue
+### 2. Vue `pdj_daily_agg` : privilèges
 
-Expression identique au `CASE` actuel de la vue (extraite par
-`pg_get_viewdef`), puis `create or replace view public.pdj_daily_agg` lisant
-`code` directement ; `revoke all on public.pdj_daily_agg from anon, authenticated;
-grant select … to authenticated`.
+`revoke all on public.pdj_daily_agg from anon, authenticated, public;
+grant select … to authenticated` (anon avait ALL par défaut).
 
 ### 3. RPC `get_my_access()`
 
@@ -77,13 +81,14 @@ idem `anon`, `authenticator`, `postgres`. Tentative
 
 ## Critère de validation
 
-- Index partiel présent, colonne `code` présente, vue lit `code`.
+- Index partiel présent, vue fermée à anon.
 - `verif_perf.sql` tout OK.
-- `pdj_daily_agg` août : buffers et temps inférieurs à la mesure avant.
+- Purge : plan `Index Scan` sur l'index partiel au lieu du `Seq Scan`.
 
 ## Contrôle qualité (revue)
 
-Étape critique (ALTER TABLE, vue de prod, réglages de rôles). Revue manuelle :
-(1) `select code, count(*) from pdj_breakfasts group by 1` identique au
-`group by` de l'ancienne vue ; (2) la vue renvoie les mêmes lignes qu'avant
-sur août 2026 (`except` vide dans les deux sens) ; (3) `has_table_privilege('anon','pdj_daily_agg','select')` = false.
+Étape critique (index, privilèges d'une vue de prod, réglages de rôles).
+Revue manuelle : (1) la vue renvoie les mêmes lignes qu'avant sur août 2026 ;
+(2) `has_table_privilege('anon','pdj_daily_agg','select')` = false ;
+(3) `get_my_access()` sous un compte non admin renvoie son profil et ses
+droits, `permissions = []` pour un compte sans droit.

@@ -1,3 +1,5 @@
+-- 2026-09-06 : privilèges de la vue resserrés (select pour authenticated seul, rien
+-- pour anon) par perf_audit_2026-09-06.sql — à reposer après tout `drop view`.
 -- =============================================================================
 -- pdj_daily_agg — VUE d'agrégation « un jour × un code » des petits-déjeuners
 --
