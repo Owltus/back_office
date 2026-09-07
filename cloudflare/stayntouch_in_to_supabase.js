@@ -68,7 +68,9 @@ function senderAuthPassed(headers) {
   ]
     .join(' ')
     .toLowerCase()
-  return /(dmarc|dkim|spf)=pass/.test(auth)
+  // Pas de  ici : un script d'édition l'avait transformé en caractère
+  // « retour arrière » (0x08) invisible, rendant le test impossible (07/09).
+  return /(dmarc|dkim|spf)=pass(?![a-z])/.test(auth)
 }
 
 function allowedDomains(env) {
