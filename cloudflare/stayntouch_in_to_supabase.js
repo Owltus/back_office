@@ -68,7 +68,7 @@ function senderAuthPassed(headers) {
   ]
     .join(' ')
     .toLowerCase()
-  // Pas de  ici : un script d'édition l'avait transformé en caractère
+  // Pas de barre-b (limite de mot) ici : un script d'édition l'avait transformé en caractère
   // « retour arrière » (0x08) invisible, rendant le test impossible (07/09).
   return /(dmarc|dkim|spf)=pass(?![a-z])/.test(auth)
 }
