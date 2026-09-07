@@ -15,3 +15,9 @@ preview_urls = false
 # le dashboard : Workers & Pages → le Worker → Journaux.
 [observability]
 enabled = true
+
+# Contrôle d'authenticité SPF/DKIM/DMARC BLOQUANT (décision utilisateur du
+# 2026-09-07, après observation réelle : 4/4 e-mails du PMS avec dkim=pass et
+# dmarc=pass). Repasser à "false" pour revenir en observation seule.
+[vars]
+REQUIRE_SENDER_AUTH = "true"
