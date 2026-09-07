@@ -33,15 +33,41 @@ const DEFAULT_ALLOWED_SENDER_DOMAINS = ['stayntouch.com', 'mail.stayntouch.com']
 
 // Le Worker relaie le secret d'import : l'authenticité de l'expéditeur est
 // donc le SEUL verrou avant l'écriture en base. L'en-tête From est falsifiable
-// en SMTP ; on exige en plus que Cloudflare ait vérifié SPF ou DKIM ou DMARC
-// (en-tête Authentication-Results posé par Email Routing).
-// Garde-fou d'exploitation : si Cloudflare ne posait pas cet en-tête sur cette
-// zone, TOUS les imports seraient refusés (visible dans les logs du Worker :
-// « SPF/DKIM/DMARC absents »). Poser alors REQUIRE_SENDER_AUTH=false le temps
-// de vérifier la configuration DMARC de la zone, puis remettre à true.
-function senderAuthenticated(headers, env) {
-  if ((env.REQUIRE_SENDER_AUTH || 'true').toLowerCase() === 'false') return true
-  const auth = (headers.get('authentication-results') || '').toLowerCase()
+// en SMTP (stayntouch.com publie DMARC p=none : Cloudflare ne rejette pas en
+// amont). D'où le contrôle SPF/DKIM/DMARC ci-dessous, en observation d'abord.
+// INCIDENT DU 2026-09-07 : en mode bloquant, les 4 e-mails du PMS ont été
+// refusés « SPF/DKIM/DMARC absents » : Cloudflare Email Routing ne fournit pas
+// (ou pas sous la forme attendue) l'en-tête Authentication-Results. Le
+// contrôle est donc en mode OBSERVATION par défaut : il journalise ce que
+// Cloudflare transmet réellement, sans jamais bloquer. Ne passer
+// REQUIRE_SENDER_AUTH à « true » qu'après avoir lu dans les journaux du Worker
+// un en-tête contenant `=pass` sur un e-mail réel du PMS.
+const AUTH_HEADER_NAMES = [
+  'authentication-results',
+  'arc-authentication-results',
+  'received-spf',
+  'x-cf-authentication-results',
+  'dkim-signature',
+]
+
+function describeAuthHeaders(headers) {
+  const names = []
+  for (const [name] of headers) names.push(name)
+  const parts = AUTH_HEADER_NAMES.map((n) => {
+    const v = headers.get(n)
+    if (v === null) return `${n}=absent`
+    return n === 'dkim-signature' ? `${n}=present` : `${n}=${v.slice(0, 160)}`
+  })
+  return `${parts.join(' | ')} || en-tetes: ${names.join(',').slice(0, 400)}`
+}
+
+function senderAuthPassed(headers) {
+  const auth = [
+    headers.get('authentication-results') || '',
+    headers.get('x-cf-authentication-results') || '',
+  ]
+    .join(' ')
+    .toLowerCase()
   return /(dmarc|dkim|spf)=pass/.test(auth)
 }
 
@@ -72,7 +98,16 @@ export default {
       message.setReject('Expéditeur non autorisé')
       return
     }
-    if (!senderAuthenticated(message.headers, env)) {
+    // Authenticité SPF/DKIM/DMARC : observation (journal) par défaut, blocage
+    // seulement si REQUIRE_SENDER_AUTH=true a été posé après vérification.
+    const authOk = senderAuthPassed(message.headers)
+    console.log(
+      `[import] auth ${authOk ? 'pass' : 'inconnu'} pour ${domain} : ${describeAuthHeaders(message.headers)}`,
+    )
+    if (
+      !authOk &&
+      (env.REQUIRE_SENDER_AUTH || 'false').toLowerCase() === 'true'
+    ) {
       console.warn(
         `[import] expediteur refuse (SPF/DKIM/DMARC absents) : ${domain}`,
       )
