@@ -1073,13 +1073,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                 Réservé aux rôles qui peuvent saisir la conso (mêmes droits que les
                 cases « servi »). */}
               {canEdit && (
-                <Tip
-                  label={
-                    externalsCount > 0
-                      ? `${externalsCount} petit(s)-déjeuner(s) externe(s) saisi(s) ce jour`
-                      : "Ajouter des petits-déjeuners servis à des clients non logés à l'hôtel"
-                  }
-                >
+                <Tip label="Ajouter des petits-déjeuners servis à des clients non logés à l'hôtel">
                   <Button
                     variant="outline"
                     size="sm"
@@ -1087,15 +1081,6 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                     aria-label="Petits-déjeuners externes"
                   >
                     Externe
-                    {/* Compteur À MÊME le bouton dès qu'un externe est saisi :
-                        sinon la seule trace à l'écran est le « 0 + 1 » de la
-                        tuile « PDJ Extra + Externe », et un externe posé par
-                        erreur reste invisible jusqu'à l'impression. */}
-                    {externalsCount > 0 && (
-                      <span className="ml-1.5 rounded-full bg-amber-400/20 px-1.5 py-px text-[0.7rem] font-semibold tabular-nums text-amber-400">
-                        {externalsCount}
-                      </span>
-                    )}
                   </Button>
                 </Tip>
               )}
