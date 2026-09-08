@@ -1,7 +1,10 @@
 import type { ReactNode } from 'react'
 
 import { MouseGlyph } from '#/components/parking/MouseGlyph.tsx'
+import { GuestRow } from '#/components/pdj/GuestRow.tsx'
 import { Kbd, KbdArrow, KbdPlus, Shortcut } from '#/components/shared/Kbd.tsx'
+import { StatTile } from '#/components/shared/StatTile.tsx'
+import type { PdjDayRow } from '#/lib/pdj/service.ts'
 import { cn } from '#/lib/utils.ts'
 
 /*
@@ -52,6 +55,157 @@ function BoxRow({
       </span>
     </div>
   )
+}
+
+/* --------------------------------------------------------------------------
+ * Exemples ILLUSTRÉS : de vraies lignes du tableau, rendues par le composant
+ * `GuestRow` du board et enveloppées dans le `.pdj-floor` de la page. Rien
+ * n'est redessiné à la main — un exemple ne peut donc pas mentir sur ce que la
+ * page affiche vraiment. Les données sont fictives (chambre 114, clients
+ * inventés) et l'ensemble est inerte (`pointer-events-none`) : c'est une
+ * vitrine, pas une zone de saisie.
+ * ------------------------------------------------------------------------ */
+
+/** Tarifs d'exemple, à la forme de ceux détectés dans l'Addon (cf. tarif.ts). */
+const DEMO_TARIFS = new Map([
+  ['PDJ', 19],
+  ['PDJBB', 10],
+])
+
+const noop = () => {}
+
+/** Une ligne d'exemple : les champs qu'on ne précise pas n'ont aucun effet
+ *  visible sur le rendu (ils existent pour satisfaire la forme d'une vraie
+ *  ligne lue en base). */
+function demoRow(over: Partial<PdjDayRow>): PdjDayRow {
+  return {
+    id: 'demo',
+    service_date: '2026-09-08',
+    room: 114,
+    guest_name: 'Teddy Leboucher',
+    status: 'DUE OUT',
+    vip: false,
+    adults: 2,
+    children: 0,
+    guests: 2,
+    no_of_nights: 2,
+    room_type: null,
+    rate_plan: 'FLEX 2 PAX',
+    channel: 'Booking.com',
+    company: null,
+    guarantee: null,
+    payment_type: null,
+    addons: 'PDJ INCL',
+    adr: null,
+    arrival_date: null,
+    departure_date: null,
+    stay_count: 1,
+    breakfasts_included: 2,
+    source_file: '',
+    manual_kind: null,
+    breakfasts_served: 2,
+    served: true,
+    breakfasts_offert: 0,
+    ...over,
+  }
+}
+
+/** La carte d'étage de la page, réduite aux lignes qu'on veut montrer.
+ *  `finance` pose la classe `pdj-finance` du board : les colonnes centrales
+ *  basculent sur leur valeur financière, exactement comme la vraie bascule. */
+function Demo({
+  finance = false,
+  children,
+}: {
+  finance?: boolean
+  children: ReactNode
+}) {
+  return (
+    <div
+      className={cn(
+        'pdj-floor pointer-events-none my-3 select-none',
+        finance && 'pdj-finance',
+      )}
+      aria-hidden="true"
+    >
+      <table>
+        <tbody>{children}</tbody>
+      </table>
+    </div>
+  )
+}
+
+/** Une ligne d'exemple prête à poser dans une `Demo`. `empty` rend la chambre
+ *  SANS ligne (chambre vide de la page). `canEdit` reste vrai : c'est l'état
+ *  normal d'une journée ouverte à la saisie, et la vitrine est de toute façon
+ *  inerte (`pointer-events-none` sur `Demo`). */
+function DemoLine({
+  room = 114,
+  empty = false,
+  ...over
+}: Partial<PdjDayRow> & { room?: number; empty?: boolean }) {
+  return (
+    <GuestRow
+      room={room}
+      row={empty ? undefined : demoRow({ room, ...over })}
+      tarifs={DEMO_TARIFS}
+      canEdit
+      onServe={noop}
+      onManual={noop}
+      onOffert={noop}
+    />
+  )
+}
+
+/* Le même petit casting d'un exemple à l'autre, sur de VRAIES chambres de
+ * l'étage 1 (l'inventaire s'arrête à la 114) : on suit les mêmes clients d'une
+ * section à la suivante au lieu de repartir de zéro à chaque fois.
+ *   114 Teddy Leboucher — deux personnes, petit-déjeuner inclus, départ du jour
+ *   113 Louise Marchand — VIP, seule, un inclus, reste une nuit de plus
+ *   112 Karim Villeneuve — occupée sans petit-déjeuner au tarif, un extra vendu
+ *   109 Alice Fontenay  — même cas, mais l'extra est offert
+ *   111 chambre vide · 110 ligne saisie à la main
+ */
+const LOUISE: Partial<PdjDayRow> & { room: number } = {
+  room: 113,
+  guest_name: 'Louise Marchand',
+  status: 'IN HOUSE',
+  vip: true,
+  adults: 1,
+  guests: 1,
+  stay_count: 4,
+  rate_plan: 'FLEX 1 PAX',
+  breakfasts_included: 1,
+  breakfasts_served: 0,
+  served: false,
+}
+
+const KARIM: Partial<PdjDayRow> & { room: number } = {
+  room: 112,
+  guest_name: 'Karim Villeneuve',
+  status: 'IN HOUSE',
+  channel: 'Direct',
+  addons: 'TAXE SEJOUR',
+  rate_plan: 'FLEX',
+  breakfasts_included: 0,
+  breakfasts_served: 1,
+}
+
+const ALICE: Partial<PdjDayRow> & { room: number } = {
+  room: 109,
+  guest_name: 'Alice Fontenay',
+  status: 'IN HOUSE',
+  channel: 'Expedia',
+  addons: 'TAXE SEJOUR',
+  rate_plan: 'FLEX',
+  breakfasts_included: 0,
+  breakfasts_served: 1,
+  breakfasts_offert: 1,
+}
+
+/** Légende sous un exemple : la phrase qui dit quoi regarder. */
+function Caption({ children }: { children: ReactNode }) {
+  return <p className="text-xs italic">{children}</p>
 }
 
 export function PdjHelpPanel() {
@@ -107,8 +261,21 @@ export function PdjHelpPanel() {
       <Section title="Lire une ligne du tableau">
         <p>
           Il y a un tableau par étage, et une ligne par chambre — même les chambres
-          vides, en gris pâle, pour garder le plan complet de l'hôtel.
+          vides, en gris pâle, pour garder le plan complet de l'hôtel. Voici à quoi
+          ressemblent quatre situations courantes, telles qu'elles s'affichent :
         </p>
+        <Demo>
+          <DemoLine room={111} empty />
+          <DemoLine {...KARIM} breakfasts_served={0} served={false} />
+          <DemoLine {...LOUISE} />
+          <DemoLine room={114} />
+        </Demo>
+        <Caption>
+          Chambre 111 : vide. 112 : occupée, mais sans petit-déjeuner au tarif.
+          113 : cliente VIP qui reste une nuit de plus, à sa quatrième visite, rien
+          de servi pour l'instant. 114 : petit-déjeuner inclus, deux couverts
+          servis, et le client part aujourd'hui.
+        </Caption>
         <ul className="ml-4 list-disc space-y-1.5">
           <li>
             <Term>Le fond vert</Term> signale une chambre dont le petit-déjeuner
@@ -141,6 +308,15 @@ export function PdjHelpPanel() {
           Chaque ligne porte au minimum deux cases. Leur <Term>contour</Term> dit
           ce qu'on attend de la chambre, avant même d'avoir coché quoi que ce soit.
         </p>
+        <Demo>
+          <DemoLine {...LOUISE} />
+          <DemoLine room={114} breakfasts_served={0} served={false} />
+        </Demo>
+        <Caption>
+          Chambre 113 : une seule personne, donc un contour plein et une place
+          supplémentaire en pointillés. 114 : deux personnes, deux petits-déjeuners
+          dus, donc deux contours pleins.
+        </Caption>
         <BoxRow box="border-2 border-foreground/70" name="Contour plein et épais :">
           un couvert attendu. Pour une chambre à petit-déjeuner inclus, c'est le
           nombre de petits-déjeuners dus, tel que facturé. Pour une chambre sans
@@ -218,6 +394,19 @@ export function PdjHelpPanel() {
       </Section>
 
       <Section title="Les couleurs des cases cochées">
+        <p>
+          Une case cochée prend l'une de ces trois couleurs, selon ce qu'elle
+          facture :
+        </p>
+        <Demo>
+          <DemoLine {...ALICE} />
+          <DemoLine {...KARIM} />
+          <DemoLine room={114} />
+        </Demo>
+        <Caption>
+          Chambre 109 : un extra servi, mais offert. 112 : le même extra, vendu.
+          114 : deux petits-déjeuners inclus, servis.
+        </Caption>
         <BoxRow
           box="border-2 border-emerald-500 bg-emerald-500"
           name="Verte, petit-déjeuner inclus."
@@ -251,6 +440,27 @@ export function PdjHelpPanel() {
           particulier. Cochez simplement une case sur sa ligne : une ligne de saisie
           manuelle est créée.
         </p>
+        <Demo>
+          <DemoLine
+            room={110}
+            guest_name={null}
+            status=""
+            adults={0}
+            guests={0}
+            addons={null}
+            rate_plan={null}
+            channel={null}
+            manual_kind="offert"
+            breakfasts_included={0}
+            breakfasts_served={1}
+          />
+          <DemoLine room={111} empty />
+        </Demo>
+        <Caption>
+          Chambre 110 : une ligne manuelle créée de cette façon, ici en « offert » —
+          le type remplace le nom, et la case porte le violet du gratuit. 111 : une
+          chambre vide, dont les cases attendent un premier clic.
+        </Caption>
         <p>
           En survolant cette ligne, un petit sélecteur apparaît pour dire de quoi il
           s'agit :
@@ -287,6 +497,38 @@ export function PdjHelpPanel() {
       </Section>
 
       <Section title="Les compteurs de la journée">
+        <p>
+          Au-dessus des étages, une rangée de compteurs résume la journée. Ce sont
+          les mêmes tuiles que partout dans l'application : un liseré de couleur, un
+          libellé, la valeur, et une moyenne de comparaison en dessous.
+        </p>
+        <div
+          className="pointer-events-none my-3 grid grid-cols-2 gap-2 select-none sm:grid-cols-3"
+          aria-hidden="true"
+        >
+          <StatTile
+            value={38}
+            label="PDJ inclus"
+            accent="#34d399"
+            sub={<span className="text-muted-foreground">655,44 €</span>}
+          />
+          <StatTile
+            value="3 + 1"
+            label="PDJ Extra + Externe"
+            accent="#fbbf24"
+            sub={<span className="text-muted-foreground">69,08 €</span>}
+          />
+          <StatTile
+            value="724,52 €"
+            label="CA PDJ"
+            accent="#60a5fa"
+            sub={<span className="text-muted-foreground">moy. 681,20 €/j</span>}
+          />
+        </div>
+        <Caption>
+          Exemple de chiffres. Ici : 38 petits-déjeuners dus, 3 extras servis en
+          chambre plus 1 externe, et le chiffre d'affaires qui en découle.
+        </Caption>
         <ul className="ml-4 list-disc space-y-1.5">
           <li>
             <Term>Chambres occupées</Term> : les chambres présentes dans le rapport
@@ -377,6 +619,16 @@ export function PdjHelpPanel() {
           petit-déjeuner, et le nombre de visites par le montant hors taxes facturé
           à la chambre.
         </p>
+        <Demo finance>
+          <DemoLine {...ALICE} />
+          <DemoLine {...KARIM} />
+          <DemoLine room={114} />
+        </Demo>
+        <Caption>
+          Les trois mêmes chambres, vues en mode financier : l'extra offert à 0,00 €,
+          l'extra vendu, puis les deux inclus facturés. Montants calculés avec un
+          petit-déjeuner à 19 € TTC.
+        </Caption>
         <p>
           Une chambre sans petit-déjeuner affiche un tiret. Une chambre dont le
           petit-déjeuner est offert affiche bien « 0,00 € » : c'est un
