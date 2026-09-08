@@ -7,7 +7,6 @@ import {
   ChevronRight,
   LineChart,
   MoreVertical,
-  Minus,
   Pencil,
   Plus,
   Printer,
@@ -52,12 +51,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from '#/components/ui/dialog.tsx'
+import {
+  AmountRow,
+  AmountsThead,
+  CautionRow,
+  DenomCell,
+  EcartsRow,
+  MoneyInput,
+} from '#/components/caisse/CaisseSheetParts.tsx'
+import { CaisseHelpPanel } from '#/components/caisse/CaisseHelpPanel.tsx'
 import { CloseSheetDialog } from '#/components/shared/CloseSheetDialog.tsx'
+import { HelpDialogHeader } from '#/components/shared/HelpDialogHeader.tsx'
+import { HelpGlyph } from '#/components/shared/HelpGlyph.tsx'
 import type { CloseIssue } from '#/components/shared/CloseSheetDialog.tsx'
 import { ConfirmDialog } from '#/components/shared/ConfirmDialog.tsx'
 import { DatePickerButton } from '#/components/form/fields.tsx'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
-import { DENOM_SVG } from '#/assets/euros/index.ts'
 import { capitalize, cn } from '#/lib/utils.ts'
 import { errorMessage } from '#/lib/errors.ts'
 import { useNavbarBadge, useNavbarSubtitle } from '#/lib/navbarSubtitle.ts'
@@ -74,12 +83,7 @@ import {
   sheetToInput,
 } from '#/lib/caisse/calc.ts'
 import { effectiveFundTarget, isCautionActiveOn } from '#/lib/caisse/cautions.ts'
-import {
-  fmtEcart,
-  fmtEcartBare,
-  fmtEur,
-  fmtEurInt,
-} from '#/lib/caisse/format.ts'
+import { fmtEcart, fmtEur, fmtEurInt } from '#/lib/caisse/format.ts'
 import {
   DENOMINATIONS,
   ECART_LABELS,
@@ -113,12 +117,6 @@ import {
   slotKey,
   stepSlot,
 } from '#/lib/caisse/shift.ts'
-import {
-  amountText,
-  amountValue,
-  countValue,
-  sanitizeAmount,
-} from '#/lib/caisse/input.ts'
 import { fetchOldestServiceDate } from '#/lib/pdj/service.ts'
 import { ALL_ROOMS } from '#/lib/hotel/rooms.ts'
 import type {
@@ -126,7 +124,6 @@ import type {
   CaisseSheetInput,
   Caution,
   DenomKey,
-  EcartKey,
   PayKey,
   Shift,
 } from '#/lib/caisse/types.ts'
@@ -146,12 +143,6 @@ const fmtTitle = new Intl.DateTimeFormat('fr-FR', {
   day: 'numeric',
   month: 'long',
   year: 'numeric',
-})
-
-// Date courte (« 15 août ») pour la liste des cautions : « depuis le … ».
-const fmtDayShort = new Intl.DateTimeFormat('fr-FR', {
-  day: 'numeric',
-  month: 'long',
 })
 
 export function CaisseBoard({ initialDate }: { initialDate?: string }) {
@@ -288,6 +279,9 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [closeOpen, setCloseOpen] = useState(false)
+  // Modal d'aide : tutoriel factuel de la page (bouton « ? » de la barre
+  // d'actions, même geste que RepJour, PDJ, Rapprochement et Parking).
+  const [helpOpen, setHelpOpen] = useState(false)
   const [hotelierName, setHotelierName] = useState('')
   // Dialogue de caution, un seul état pour les deux usages (création / édition
   // d'une caution existante) — évite deux composants/prefills qui pourraient
@@ -960,7 +954,19 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
                 ))}
               {/* Groupe « actions de page » : vue analytique + impression. */}
               <ButtonGroup>
-                {/* 0) Vue analytique : synthèse mensuelle en lecture (tous rôles). */}
+                {/* 0) Aide : ouvre le tutoriel de la page (même bouton « ? »
+                    que les autres onglets, tout à gauche du groupe). */}
+                <Tip label="Comment ça marche">
+                  <Button
+                    variant="outline"
+                    size="icon-sm"
+                    onClick={() => setHelpOpen(true)}
+                    aria-label="Comment ça marche"
+                  >
+                    <HelpGlyph />
+                  </Button>
+                </Tip>
+                {/* 1) Vue analytique : synthèse mensuelle en lecture (tous rôles). */}
                 <Tip label="Vue analytique">
                   <Button asChild variant="outline" size="icon-sm">
                     <Link to="/caisse/analytique" aria-label="Vue analytique">
@@ -1162,26 +1168,11 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
                   // « 0,30000000000000004 ») et gère le cas « web » (cbweb seul).
                   onFill={(c) => expected(form, c)}
                 />
-                <tr className="border-t border-border bg-muted/30 font-medium">
-                  <td className="px-3 py-1.5">ÉCARTS</td>
-                  {cols.map((c) => {
-                    const v = ecarts[c]
-                    const zero = Math.abs(v) < EPSILON
-                    return (
-                      <td
-                        key={c}
-                        className={cn(
-                          'px-3 py-1.5 text-right tabular-nums',
-                          zero ? 'text-emerald-500' : 'text-destructive',
-                        )}
-                        title={`Attendu ${fmtEur(expected(form, c))}`}
-                      >
-                        {fmtEcartBare(v)}
-                        <span className="max-sm:hidden"> €</span>
-                      </td>
-                    )
-                  })}
-                </tr>
+                <EcartsRow
+                  cols={cols}
+                  ecarts={ecarts}
+                  expectedOf={(c) => expected(form, c)}
+                />
               </tbody>
             </table>
           </div>
@@ -1194,82 +1185,17 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
               data-denom-grid
               className="caisse-denoms grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-flow-col lg:grid-cols-5 lg:grid-rows-3"
             >
-              {DENOMINATIONS.map((d) => {
-                const n = form.counts[d.key] ?? 0
-                const filled = n > 0
-                return (
-                  <div
-                    key={d.key}
-                    className={cn(
-                      'flex items-stretch overflow-hidden rounded-lg border transition-colors',
-                      filled
-                        ? 'border-primary/40 bg-primary/5'
-                        : 'border-border bg-muted/20',
-                      // 500 € en pleine largeur sur mobile (2 cols) : équilibre les
-                      // 14 cartes restantes en 7 rangées de 2. Sans effet dès sm.
-                      d.key === 'cnt_500' && 'col-span-2 sm:col-span-1',
-                    )}
-                  >
-                    {/* Bouton « − » pleine hauteur, à gauche */}
-                    <button
-                      type="button"
-                      tabIndex={-1}
-                      aria-label={`Retirer un ${d.label}`}
-                      disabled={!canEditFields}
-                      onClick={() => bumpCount(d.key, -1)}
-                      className="flex flex-1 items-center justify-center border-r border-border/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-30 print:hidden"
-                    >
-                      <Minus className="size-4" />
-                    </button>
-                    {/* Colonne centrale : quantité, puis visuel du billet / de la
-                    pièce (estompé tant que rien n'est compté), puis sous-total. */}
-                    <div className="flex flex-[1.6] flex-col items-center justify-center gap-1.5 px-1 py-1">
-                      <CountInput
-                        value={n}
-                        disabled={!canEditFields}
-                        onChange={(v) => setCount(d.key, v)}
-                        onKeyDown={handleDenomTab}
-                      />
-                      <div className="flex h-8 items-center justify-center">
-                        <img
-                          src={DENOM_SVG[d.key]}
-                          alt={d.label}
-                          draggable={false}
-                          className={cn(
-                            'max-h-full w-auto select-none drop-shadow-sm transition-opacity',
-                            // Pièce (< 5 €) un peu plus haute que le billet pour l'équilibre.
-                            d.value < 5 ? 'h-8' : 'h-7',
-                            !filled && 'opacity-40',
-                          )}
-                        />
-                      </div>
-                      <span
-                        className={cn(
-                          'whitespace-nowrap text-[11px] leading-none tabular-nums',
-                          filled
-                            ? 'font-medium text-foreground'
-                            : 'text-muted-foreground',
-                        )}
-                      >
-                        {d.value < 1
-                          ? fmtEur(d.value * n)
-                          : fmtEurInt(d.value * n)}
-                      </span>
-                    </div>
-                    {/* Bouton « + » pleine hauteur, à droite */}
-                    <button
-                      type="button"
-                      tabIndex={-1}
-                      aria-label={`Ajouter un ${d.label}`}
-                      disabled={!canEditFields}
-                      onClick={() => bumpCount(d.key, 1)}
-                      className="flex flex-1 items-center justify-center border-l border-border/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-30 print:hidden"
-                    >
-                      <Plus className="size-4" />
-                    </button>
-                  </div>
-                )
-              })}
+              {DENOMINATIONS.map((d) => (
+                <DenomCell
+                  key={d.key}
+                  denom={d}
+                  count={form.counts[d.key] ?? 0}
+                  disabled={!canEditFields}
+                  onChange={(v) => setCount(d.key, v)}
+                  onBump={(delta) => bumpCount(d.key, delta)}
+                  onKeyDown={handleDenomTab}
+                />
+              ))}
             </div>
             <div className="mt-2 flex items-center justify-between text-sm">
               <span className="text-muted-foreground">
@@ -1392,78 +1318,44 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
                       ]
                     : []
                   const row = (
-                    // Une seule ligne, colonnes bien distinctes (chambre /
-                    // montant / commentaire / date [/ actions]), séparées par un
-                    // liseré vertical — le commentaire seul est flexible et
-                    // tronqué (`min-w-0` + `truncate`), tout le reste garde sa
-                    // largeur naturelle sans jamais passer à la ligne. `key`
-                    // porté ICI (pas sur un wrapper) : sans actions, cet <li> est
-                    // renvoyé TEL QUEL comme enfant direct de <ul> — jamais de
-                    // <div> autour (invalide en HTML dans une liste).
-                    <li
+                    <CautionRow
                       key={c.id}
-                      className={cn(
-                        'grid items-center gap-4 rounded-lg bg-muted/30 px-3.5 py-2.5 transition-colors',
-                        hasActions
-                          ? 'grid-cols-[auto_auto_minmax(0,1fr)_auto_auto] cursor-context-menu hover:bg-muted/60'
-                          : 'grid-cols-[auto_auto_minmax(0,1fr)_auto]',
-                        // Remboursée : hors périmètre du document imprimé
-                        // (cf. gate `activeCautions` ci-dessus).
-                        c.status === 'refunded' && 'print:hidden',
-                      )}
-                    >
-                      <span className="flex items-center gap-2 whitespace-nowrap text-base font-semibold">
-                        Chambre {c.room}
-                        {c.status === 'refunded' && (
-                          <span className="rounded-full bg-muted px-1.5 py-0.5 text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">
-                            Remboursée
-                          </span>
-                        )}
-                      </span>
-                      <span className="whitespace-nowrap border-l border-border/60 pl-4">
-                        <span className="inline-flex items-center rounded-md bg-indigo-500/10 px-2 py-0.5 tabular-nums font-semibold text-indigo-600 dark:text-indigo-400">
-                          {fmtEur(c.amount)}
-                        </span>
-                      </span>
-                      <span className="min-w-0 truncate border-l border-border/60 pl-4 text-sm text-muted-foreground">
-                        {c.comment || '—'}
-                      </span>
-                      <span className="whitespace-nowrap border-l border-border/60 pl-4 text-xs text-muted-foreground">
-                        depuis le {fmtDayShort.format(new Date(c.takenDate + 'T00:00:00'))}
-                      </span>
-                      {/* Équivalent tactile/clavier du clic droit — seul moyen
-                          d'atteindre ce menu sans souris. `stopPropagation` :
-                          un clic ici ne doit pas déclencher le menu contextuel
-                          du parent. */}
-                      {hasActions && (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button
-                              type="button"
-                              aria-label="Actions sur cette caution"
-                              onClick={(e) => e.stopPropagation()}
-                              className="flex size-7 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                            >
-                              <MoreVertical className="size-4" />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-48">
-                            {menuActions.map((a) => (
-                              <Fragment key={a.key}>
-                                {a.separatorBefore && <DropdownMenuSeparator />}
-                                <DropdownMenuItem
-                                  variant={a.destructive ? 'destructive' : undefined}
-                                  onSelect={a.onSelect}
-                                >
-                                  {a.icon}
-                                  {a.label}
-                                </DropdownMenuItem>
-                              </Fragment>
-                            ))}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      )}
-                    </li>
+                      caution={c}
+                      actions={
+                        hasActions ? (
+                          /* Équivalent tactile/clavier du clic droit — seul
+                             moyen d'atteindre ce menu sans souris.
+                             `stopPropagation` : un clic ici ne doit pas
+                             déclencher le menu contextuel du parent. */
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                type="button"
+                                aria-label="Actions sur cette caution"
+                                onClick={(e) => e.stopPropagation()}
+                                className="flex size-7 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                              >
+                                <MoreVertical className="size-4" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48">
+                              {menuActions.map((a) => (
+                                <Fragment key={a.key}>
+                                  {a.separatorBefore && <DropdownMenuSeparator />}
+                                  <DropdownMenuItem
+                                    variant={a.destructive ? 'destructive' : undefined}
+                                    onSelect={a.onSelect}
+                                  >
+                                    {a.icon}
+                                    {a.label}
+                                  </DropdownMenuItem>
+                                </Fragment>
+                              ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        ) : null
+                      }
+                    />
                   )
                   if (!hasActions) return row
                   return (
@@ -1543,6 +1435,22 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
       )}
 
       {/* Modal de clôture : verdict didactique + nom de l'hôtelier + clôture. */}
+      {/* Modal d'aide : tutoriel factuel de la page (bouton « ? »). Le contenu
+          reste en place dessous. */}
+      <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
+        <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-2xl">
+          <HelpDialogHeader
+            icon={<HelpGlyph />}
+            title="Comment fonctionne la caisse"
+            description="La feuille de caisse d'un service, étape par étape."
+          />
+          {/* Seul le corps défile : l'en-tête (flex shrink-0) reste fixe en haut. */}
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <CaisseHelpPanel />
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <CloseSheetDialog
         open={closeOpen}
         onOpenChange={setCloseOpen}
@@ -1629,6 +1537,12 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
           onClick={() => goStep(-1)}
           disabled={atLowerBound}
           bordered={false}
+        />
+        <ToolbarCell
+          icon={<HelpGlyph className="size-5" />}
+          label="Aide"
+          ariaLabel="Comment ça marche"
+          onClick={() => setHelpOpen(true)}
         />
         <ToolbarCell
           icon={<LineChart className="size-5" />}
@@ -1769,201 +1683,4 @@ function cycleFocus(
   const next = (i + (e.shiftKey ? -1 : 1) + inputs.length) % inputs.length
   inputs[next].focus()
   inputs[next].select()
-}
-
-/**
- * Champ monétaire : <Input> shadcn en type="text" (pas de flèches natives),
- * suffixe « € ». Garde un état texte interne pour préserver la frappe décimale
- * ("12," ne doit pas être réécrit en "12"), resynchronisé si la valeur externe
- * change (chargement / reset de feuille).
- */
-function MoneyInput({
-  value,
-  onChange,
-  disabled,
-  onFill,
-  tabOrder,
-  onKeyDown,
-  allowNegative = false,
-}: {
-  value: number
-  onChange: (v: number) => void
-  disabled: boolean
-  // Double-clic : remplit le champ (report d'une somme). Absent = pas d'action.
-  onFill?: () => void
-  // Rang pour la tabulation en colonne (lu par handleGridTab via data-taborder).
-  tabOrder?: number
-  onKeyDown?: (e: ReactKeyboardEvent<HTMLInputElement>) => void
-  // Autorise un montant négatif (ligne STAY N' TOUCH seulement).
-  allowNegative?: boolean
-}) {
-  const [text, setText] = useState(() => amountText(value))
-  const [focused, setFocused] = useState(false)
-
-  useEffect(() => {
-    // Ne réécrit le texte QUE si la valeur externe ne correspond plus à la
-    // frappe en cours — sinon on préserve les états intermédiaires ("12,").
-    if (amountValue(text) !== value) setText(amountText(value))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value])
-
-  return (
-    <div className="relative">
-      <Input
-        type="text"
-        // "text" (clavier complet, touche "-" présente) sur la ligne qui
-        // accepte le négatif — "decimal" ailleurs n'affiche pas ce signe sur
-        // certains claviers virtuels tablette (iOS/Android).
-        inputMode={allowNegative ? 'text' : 'decimal'}
-        disabled={disabled}
-        value={text}
-        onChange={(e) => {
-          const t = sanitizeAmount(e.target.value, { allowNegative })
-          setText(t)
-          onChange(amountValue(t))
-        }}
-        onDoubleClick={onFill}
-        onKeyDown={onKeyDown}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-        placeholder={focused ? '' : '0'}
-        title={
-          onFill
-            ? 'Double-clic : additionne Stay N’ Touch + Lightspeed'
-            : undefined
-        }
-        data-taborder={tabOrder}
-        className="h-8 pr-6 text-right tabular-nums print:hidden"
-      />
-      <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-muted-foreground print:hidden">
-        €
-      </span>
-      {/* Impression tactile : le rendu papier d'un <input> désactivé est trop
-          peu fiable selon le navigateur — texte brut à la place, formaté
-          exactement comme le PDF jsPDF (même fonction fmtEur). */}
-      <span className="caisse-print-value hidden print:block">
-        {fmtEur(value)}
-      </span>
-    </div>
-  )
-}
-
-/**
- * Champ de comptage (entier ≥ 0). Le placeholder « 0 » de fond disparaît dès le
- * focus (édition) et réapparaît au blur si le champ est laissé vide.
- */
-function CountInput({
-  value,
-  onChange,
-  disabled,
-  onKeyDown,
-}: {
-  value: number
-  onChange: (v: number) => void
-  disabled: boolean
-  // Tabulation en boucle dans la carte des coupures (handleDenomTab).
-  onKeyDown?: (e: ReactKeyboardEvent<HTMLInputElement>) => void
-}) {
-  const [focused, setFocused] = useState(false)
-  return (
-    <>
-      <Input
-        type="text"
-        inputMode="numeric"
-        disabled={disabled}
-        value={value === 0 ? '' : String(value)}
-        onChange={(e) => onChange(countValue(e.target.value))}
-        onKeyDown={onKeyDown}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-        placeholder={focused ? '' : '0'}
-        data-denom-cell
-        className="h-6 w-4/5 px-1 text-center text-sm tabular-nums print:hidden"
-      />
-      {/* Impression tactile : même raison que MoneyInput ci-dessus. */}
-      <span className="caisse-print-count hidden print:block">
-        × {value}
-      </span>
-    </>
-  )
-}
-
-/** En-tête du tableau des montants (Source + une colonne par mode, « web »
- * responsive → « Adyen » en étroit). Partagé par le squelette de chargement et le
- * tableau réel, pour qu'ils ne divergent pas. */
-function AmountsThead({ cols }: { cols: EcartKey[] }) {
-  return (
-    <tr className="border-b border-border text-xs uppercase text-muted-foreground">
-      <th className="w-32 px-3 py-1.5 text-left font-medium">Source</th>
-      {cols.map((c) => (
-        <th key={c} className="px-3 py-1.5 text-center font-medium">
-          {c === 'web' ? (
-            <>
-              <span className="max-sm:hidden">{ECART_LABELS.web}</span>
-              <span className="sm:hidden">Adyen</span>
-            </>
-          ) : (
-            ECART_LABELS[c]
-          )}
-        </th>
-      ))}
-    </tr>
-  )
-}
-
-function AmountRow({
-  label,
-  rowIndex,
-  cols,
-  value,
-  onChange,
-  disabled,
-  onFill,
-  onCellKeyDown,
-  allowNegative = false,
-}: {
-  label: string
-  // Rang de la ligne (0 = 1re) : sert à ordonner la tabulation en colonne.
-  rowIndex: number
-  cols: EcartKey[]
-  value: (c: EcartKey) => number | null
-  onChange: (c: EcartKey, v: number) => void
-  disabled: boolean
-  // Valeur de report calculée par colonne (double-clic). Absent = pas de report.
-  onFill?: (c: EcartKey) => number
-  // Tabulation pilotée (colonne par colonne), partagée par toutes les lignes.
-  onCellKeyDown?: (e: ReactKeyboardEvent<HTMLInputElement>) => void
-  // Montants négatifs acceptés sur cette ligne (STAY N' TOUCH seulement).
-  allowNegative?: boolean
-}) {
-  return (
-    <tr className="border-b border-border/60">
-      <td className="px-3 py-2 text-xs font-medium uppercase text-muted-foreground max-sm:whitespace-nowrap">
-        {label}
-      </td>
-      {cols.map((c, colIndex) => {
-        const v = value(c)
-        return (
-          <td key={c} className="px-2 py-1">
-            {v === null ? (
-              <span className="block text-right text-muted-foreground">—</span>
-            ) : (
-              <MoneyInput
-                value={v}
-                disabled={disabled}
-                onChange={(nv) => onChange(c, nv)}
-                onFill={
-                  onFill && !disabled ? () => onChange(c, onFill(c)) : undefined
-                }
-                // Ordre colonne-major : colonne × 3 lignes + rang de la ligne.
-                tabOrder={colIndex * 3 + rowIndex}
-                onKeyDown={onCellKeyDown}
-                allowNegative={allowNegative}
-              />
-            )}
-          </td>
-        )
-      })}
-    </tr>
-  )
 }
