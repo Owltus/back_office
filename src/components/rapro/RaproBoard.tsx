@@ -28,6 +28,7 @@ import { HelpGlyph } from '#/components/shared/HelpGlyph.tsx'
 import { ACCENT } from '#/components/analytique/accents.ts'
 import { MouseGlyph } from '#/components/rapro/MouseGlyph.tsx'
 import { RaproHelpPanel } from '#/components/rapro/RaproHelpPanel.tsx'
+import { RoomCell } from '#/components/rapro/RoomCell.tsx'
 import { CloseSheetDialog } from '#/components/shared/CloseSheetDialog.tsx'
 import type { CloseIssue } from '#/components/shared/CloseSheetDialog.tsx'
 import { Textarea } from '#/components/ui/textarea.tsx'
@@ -38,11 +39,9 @@ import type { DaySnapshot } from '#/lib/rapro/carryover.ts'
 import {
   CATEGORY_COLOR,
   CELL_STATES,
-  cellState,
   countStats,
   LEGEND_ORDER,
   nextFill,
-  statusOf,
 } from '#/lib/rapro/constants.ts'
 import { addDays, clampDay, today } from '#/lib/rapro/day.ts'
 import { canReconcileDay } from '#/lib/rapro/editability.ts'
@@ -1129,52 +1128,28 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
                     )}
                   </div>
                   <div className="rapro-rooms">
-                    {rooms.map((room) => {
-                      const status = statusOf(statuses, room)
-                      // Grise si AUCUNE couleur explicite ET non vendue — que la
-                      // chambre soit reportée (liseré) ou non : le liseré est
-                      // ORTHOGONAL, il ne colore pas le fond. Une couleur posée
-                      // (même sur une non vendue) montre sa couleur.
-                      const isEmpty = !statuses.has(room) && !occupied.has(room)
-                      const isCarried = carried.has(room)
-                      const visual = cellState(status, isEmpty)
-                      const cls = CELL_STATES[visual].webClass
-                      // Libellé = état VISUEL (une grise dit « Non vendue », pas
-                      // « Nettoyée » par défaut) + mention du liseré reporté.
-                      const roomLabel = `Chambre ${room} — ${CELL_STATES[visual].label}${isCarried ? ' — bloquée de la veille' : ''}`
-                      // Souris : clic GAUCHE = cycle des couleurs (instantané) ; clic
-                      // DROIT = pose/retire le liseré « bloquée la veille » À LA MAIN.
-                      // Tactile (pas de clic droit) : appui simple = clic gauche,
-                      // appui long (500ms) = clic droit — cf. startLongPress/
-                      // handleRoomTap. Un jour clôturé reste figé (mutations gardées
-                      // par `canEditFields`).
-                      return (
-                        <button
-                          key={room}
-                          type="button"
-                          onClick={() => handleRoomTap(room)}
-                          onContextMenu={(e) => {
-                            e.preventDefault()
-                            toggleManual(room)
-                          }}
-                          onPointerDown={(e) => startLongPress(room, e.pointerType)}
-                          onPointerUp={cancelLongPress}
-                          onPointerLeave={cancelLongPress}
-                          onPointerCancel={cancelLongPress}
-                          disabled={!isSuccess}
-                          aria-label={roomLabel}
-                          title={roomLabel}
-                          className={cn(
-                            'rapro-room',
-                            cls,
-                            isCarried && 'rapro-room-carried',
-                            pressingRoom === room && 'rapro-room-pressing',
-                          )}
-                        >
-                          {room}
-                        </button>
-                      )
-                    })}
+                    {/* Souris : clic GAUCHE = cycle des couleurs (instantané) ;
+                        clic DROIT = pose/retire le liseré « bloquée la veille » À
+                        LA MAIN. Tactile (pas de clic droit) : appui simple = clic
+                        gauche, appui long (500 ms) = clic droit — cf.
+                        startLongPress/handleRoomTap. Un jour clôturé reste figé
+                        (mutations gardées par `canEditFields`). Le rendu d'une
+                        case vit dans `RoomCell` (partagé avec le panneau d'aide). */}
+                    {rooms.map((room) => (
+                      <RoomCell
+                        key={room}
+                        room={room}
+                        status={statuses.get(room) ?? null}
+                        sold={occupied.has(room)}
+                        carried={carried.has(room)}
+                        pressing={pressingRoom === room}
+                        disabled={!isSuccess}
+                        onTap={handleRoomTap}
+                        onContext={toggleManual}
+                        onPointerDown={startLongPress}
+                        onPointerEnd={cancelLongPress}
+                      />
+                    ))}
                   </div>
                 </div>
               )
