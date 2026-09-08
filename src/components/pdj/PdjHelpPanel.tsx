@@ -162,8 +162,7 @@ function DemoLine({
  * section à la suivante au lieu de repartir de zéro à chaque fois.
  *   114 Teddy Leboucher          — deux personnes, petit-déjeuner inclus, départ
  *   113 Pierre-Louis Bessonneau — VIP, seul, un inclus, reste une nuit de plus
- *   112 Alban Hamon             — occupée sans PDJ au tarif, un extra vendu
- *   109 Alice Fontenay          — même cas, mais l'extra est offert
+ *   112 Albane Hamon            — occupée sans PDJ au tarif, des extras servis
  *   111 chambre vide · 110 ligne saisie à la main
  */
 const PIERRE_LOUIS: Partial<PdjDayRow> & { room: number } = {
@@ -180,27 +179,15 @@ const PIERRE_LOUIS: Partial<PdjDayRow> & { room: number } = {
   served: false,
 }
 
-const ALBAN: Partial<PdjDayRow> & { room: number } = {
+const ALBANE: Partial<PdjDayRow> & { room: number } = {
   room: 112,
-  guest_name: 'Alban Hamon',
+  guest_name: 'Albane Hamon',
   status: 'IN HOUSE',
   channel: 'Direct',
   addons: 'TAXE SEJOUR',
   rate_plan: 'FLEX',
   breakfasts_included: 0,
   breakfasts_served: 1,
-}
-
-const ALICE: Partial<PdjDayRow> & { room: number } = {
-  room: 109,
-  guest_name: 'Alice Fontenay',
-  status: 'IN HOUSE',
-  channel: 'Expedia',
-  addons: 'TAXE SEJOUR',
-  rate_plan: 'FLEX',
-  breakfasts_included: 0,
-  breakfasts_served: 1,
-  breakfasts_offert: 1,
 }
 
 /** Légende sous un exemple : la phrase qui dit quoi regarder. */
@@ -266,7 +253,7 @@ export function PdjHelpPanel() {
         </p>
         <Demo>
           <DemoLine room={111} empty />
-          <DemoLine {...ALBAN} breakfasts_served={0} served={false} />
+          <DemoLine {...ALBANE} breakfasts_served={0} served={false} />
           <DemoLine {...PIERRE_LOUIS} />
           <DemoLine room={114} />
         </Demo>
@@ -399,13 +386,13 @@ export function PdjHelpPanel() {
           facture :
         </p>
         <Demo>
-          <DemoLine {...ALICE} />
-          <DemoLine {...ALBAN} />
+          <DemoLine {...ALBANE} breakfasts_served={2} breakfasts_offert={1} />
           <DemoLine room={114} />
         </Demo>
         <Caption>
-          Chambre 109 : un extra servi, mais offert. 112 : le même extra, vendu.
-          114 : deux petits-déjeuners inclus, servis.
+          Chambre 112 : deux extras servis à une chambre qui n'avait droit à aucun
+          petit-déjeuner — le premier offert, le second vendu. 114 : ses deux
+          petits-déjeuners inclus, servis.
         </Caption>
         <BoxRow
           box="border-2 border-emerald-500 bg-emerald-500"
@@ -620,14 +607,14 @@ export function PdjHelpPanel() {
           à la chambre.
         </p>
         <Demo finance>
-          <DemoLine {...ALICE} />
-          <DemoLine {...ALBAN} />
+          <DemoLine {...ALBANE} breakfasts_served={2} breakfasts_offert={1} />
+          <DemoLine {...PIERRE_LOUIS} />
           <DemoLine room={114} />
         </Demo>
         <Caption>
-          Les trois mêmes chambres, vues en mode financier : l'extra offert à 0,00 €,
-          l'extra vendu, puis les deux inclus facturés. Montants calculés avec un
-          petit-déjeuner à 19 € TTC.
+          Les mêmes chambres, vues en mode financier : deux extras dont un offert
+          (un seul est facturé), un inclus non encore servi mais dû, et deux inclus
+          servis. Montants calculés avec un petit-déjeuner à 19 € TTC.
         </Caption>
         <p>
           Une chambre sans petit-déjeuner affiche un tiret. Une chambre dont le
