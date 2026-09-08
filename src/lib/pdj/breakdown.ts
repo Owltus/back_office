@@ -40,6 +40,28 @@ function offertUnits(r: OffertRow): number {
 }
 
 /**
+ * Vrai si la case de rang `index` (0-based, comme les cases dessinées à l'écran
+ * et sur le PDF) d'une ligne est un extra OFFERT (gratuit → case violette).
+ *
+ * SOURCE UNIQUE du rendu, à tenir avec `offertUnits` : le nombre de cases
+ * violettes d'une ligne DOIT toujours valoir sa contribution à la tuile
+ * « Gratuités » (`PdjCA.offertNb`). D'où le décalage `- included` :
+ * `breakfasts_offert` compte des EXTRAS, jamais des positions de case, et
+ * `breakfasts_included` peut monter APRÈS la pose (réimport du jour, trigger
+ * `pdj_breakfasts_clamp_included`). Une ligne manuelle, elle, est offerte en
+ * BLOC via `manual_kind` — `breakfasts_offert` n'y a aucun sens.
+ */
+export function isOffertBox(
+  row: OffertRow | null | undefined,
+  index: number,
+): boolean {
+  if (!row || index >= row.breakfasts_served) return false
+  if (row.manual_kind != null) return row.manual_kind === 'offert'
+  const included = row.breakfasts_included
+  return index >= included && index - included < (row.breakfasts_offert ?? 0)
+}
+
+/**
  * Code petit-déjeuner d'une chambre depuis sa colonne `addons` : GROUP d'abord,
  * puis PDJBB (sinon 'PDJ' capterait aussi PDJBB/PDJGROUP), sinon PDJ. null si pas
  * de PDJ. Aligné sur les codes de l'Addon (PDJ / PDJBB / PDJGROUP10).

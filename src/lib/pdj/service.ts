@@ -265,6 +265,12 @@ export async function setManualServe(
       served: true,
       breakfasts_included: kind === 'inclus' ? breakfastsServed : 0,
       manual_kind: kind,
+      // Une ligne manuelle porte sa gratuité dans `manual_kind` ('offert' vaut
+      // pour TOUTE la ligne) : `breakfasts_offert` n'y a aucun sens et doit être
+      // remis à 0. Sans cela, une valeur héritée d'une ligne d'import convertie
+      // survivait à l'upsert et restait comptée par `offertUnits` (breakdown.ts)
+      // alors qu'AUCUNE case n'était plus rendue en violet.
+      breakfasts_offert: 0,
     },
     { onConflict: 'service_date,room' },
   )

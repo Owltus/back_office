@@ -91,7 +91,7 @@ import { computeAggBenchmarks } from '#/lib/pdj/amounts.ts'
 import { detectTarifs } from '#/lib/pdj/tarif.ts'
 import { purgeGate } from '#/lib/pdj/purgeGate.ts'
 import { fileTooLarge, MAX_CSV_BYTES } from '#/lib/shared/files.ts'
-import { computePdjCA, roomFinance } from '#/lib/pdj/breakdown.ts'
+import { computePdjCA, isOffertBox, roomFinance } from '#/lib/pdj/breakdown.ts'
 import { autoModeTargets } from '#/lib/pdj/automode.ts'
 import { fmtEur, fmtInt, fmtPctInt } from '#/lib/pdj/format.ts'
 
@@ -796,7 +796,13 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
           (old) =>
             old?.map((r) =>
               r.room === t.room
-                ? { ...r, breakfasts_served: t.served, served: true }
+                ? {
+                    ...r,
+                    breakfasts_served: t.served,
+                    served: true,
+                    // Miroir du `0` passé à `setServed` juste en dessous.
+                    breakfasts_offert: 0,
+                  }
                 : r,
             ),
         )
@@ -815,8 +821,12 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
     // après l'automode : l'animation est le seul retour. Échec (RLS/réseau) → on
     // stoppe l'animation et on resynchronise sur l'état réel persisté (les coches
     // non enregistrées disparaissent).
+    // `0` en 4e argument : l'automode ne cible que des chambres NON saisies
+    // (`breakfasts_served === 0`, cf. autoModeTargets) — aucune gratuité servie
+    // ne peut y exister. On borne donc explicitement, comme `handleServe`,
+    // plutôt que de laisser survivre une valeur morte dans la colonne.
     void Promise.all(
-      targets.map((t) => setServed(selectedDate, t.room, t.served)),
+      targets.map((t) => setServed(selectedDate, t.room, t.served, 0)),
     ).catch((err) => {
       console.error('[pdj] automode : écriture échouée', err)
       clearAutoTimers()
@@ -862,6 +872,9 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                     served: true,
                     breakfasts_included: included,
                     manual_kind: kind,
+                    // Miroir de `setManualServe` : une ligne manuelle porte sa
+                    // gratuité dans `manual_kind`, jamais dans cette colonne.
+                    breakfasts_offert: 0,
                   }
                 : r,
             )
@@ -1060,7 +1073,13 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                 Réservé aux rôles qui peuvent saisir la conso (mêmes droits que les
                 cases « servi »). */}
               {canEdit && (
-                <Tip label="Ajouter des petits-déjeuners servis à des clients non logés à l'hôtel">
+                <Tip
+                  label={
+                    externalsCount > 0
+                      ? `${externalsCount} petit(s)-déjeuner(s) externe(s) saisi(s) ce jour`
+                      : "Ajouter des petits-déjeuners servis à des clients non logés à l'hôtel"
+                  }
+                >
                   <Button
                     variant="outline"
                     size="sm"
@@ -1068,6 +1087,15 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                     aria-label="Petits-déjeuners externes"
                   >
                     Externe
+                    {/* Compteur À MÊME le bouton dès qu'un externe est saisi :
+                        sinon la seule trace à l'écran est le « 0 + 1 » de la
+                        tuile « PDJ Extra + Externe », et un externe posé par
+                        erreur reste invisible jusqu'à l'impression. */}
+                    {externalsCount > 0 && (
+                      <span className="ml-1.5 rounded-full bg-amber-400/20 px-1.5 py-px text-[0.7rem] font-semibold tabular-nums text-amber-400">
+                        {externalsCount}
+                      </span>
+                    )}
                   </Button>
                 </Tip>
               )}
@@ -1341,13 +1369,16 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
               )}
               {/* Tuile PDF-seule (pas d'équivalent écran) : détail des externes
                   compris dans « PDJ Extra » ci-dessus, uniquement s'il y en a au
-                  moins un (sinon rien à préciser — pas de tuile à 0). */}
+                  moins un (sinon rien à préciser — pas de tuile à 0). AMBRE comme
+                  « PDJ Extra » dont ils font partie (extra FACTURÉ) : le violet
+                  est réservé aux gratuités, sinon les deux tuiles voisines du
+                  footer PDF sont indiscernables (libellé à 5,5 px). */}
               {externalsCount > 0 && (
                 <StatTile
                   className="stat-tile--screen-hidden"
                   value={externalsCount}
                   label="Externes"
-                  accent="#c084fc"
+                  accent="#fbbf24"
                 />
               )}
               {/* Tuile PDF-seule : petits-déjeuners OFFERTS (gratuits, clic droit
@@ -1834,18 +1865,19 @@ const GuestRow = memo(function GuestRow({
   const mKind: ManualKind = manualKind ?? 'extra'
   const doServe = (n: number) =>
     canManual ? onManual(room, n, mKind) : onServe(room, n)
-  // « Offert » (gratuit, clic droit) : réservé aux chambres occupées SANS PDJ
-  // inclus (le cas visé par la demande — une chambre à PDJ inclus n'a pas
-  // d'extra « offert » à proposer, son dû est déjà facturé). Comme
-  // `breakfasts_included` vaut alors 0, la position `i` d'une case CORRESPOND
-  // directement à son rang parmi les extras (pas de décalage à soustraire).
+  // « Offert » (gratuit, clic droit) : la POSE reste réservée aux chambres
+  // occupées SANS PDJ inclus (une chambre à PDJ inclus n'a pas d'extra « offert »
+  // à proposer, son dû est déjà facturé).
   const canOffertToggle =
     canEdit && !isManual && !!row && row.breakfasts_included === 0
   const offertCount = row?.breakfasts_offert ?? 0
-  // Une ligne manuelle « offert » l'est en BLOC (tout son servi, cf. service.ts) ;
-  // une ligne normale l'est jusqu'à `offertCount` (curseur posé au clic droit).
-  const isOffertAt = (i: number) =>
-    isManual ? mKind === 'offert' : i < offertCount
+  // Case violette : règle PURE et PARTAGÉE (`isOffertBox`, breakdown.ts), tenue
+  // avec le comptage de la tuile « Gratuités » — le nombre de cases violettes
+  // d'une ligne VAUT sa contribution à `ca.offertNb`. C'est ce qui manquait :
+  // la position d'une case n'est le rang d'un extra que tant que
+  // `breakfasts_included` vaut 0, et cette colonne peut monter APRÈS la pose
+  // (réimport, trigger `pdj_breakfasts_clamp_included`).
+  const isOffertAt = (i: number) => isOffertBox(row, i)
   // Cases interactives : TOUTE chambre OCCUPÉE (client présent), qu'elle ait du PDJ
   // inclus OU NON — sinon on ne pouvait pas servir un PDJ EXTRA à un client d'une
   // chambre sans PDJ inclus (le clic passe alors par `onServe` : breakfasts_served
@@ -1976,7 +2008,8 @@ const GuestRow = memo(function GuestRow({
             // même base que les cases interactives à l'écran (pas `numExpected`,
             // qui peut inclure des places sans PDJ inclus — cf. plus haut).
             const includedIdx = i < (row?.breakfasts_included ?? 0)
-            const offertIdx = checkedIdx && !includedIdx && isOffertAt(i)
+            // `isOffertAt` (= isOffertBox) borne déjà au servi et à l'inclus.
+            const offertIdx = isOffertAt(i)
             return (
               <span
                 key={i}
@@ -2010,7 +2043,7 @@ const GuestRow = memo(function GuestRow({
               // servi là-dedans reste un extra facturé, cf. commentaire
               // `numExpected` ci-dessus : « breakfasts_included = 0 »).
               const isIncluded = i < (row?.breakfasts_included ?? 0)
-              const isOffert = isServed && !isIncluded && isOffertAt(i)
+              const isOffert = isOffertAt(i)
               return (
                 <button
                   key={i}
@@ -2042,7 +2075,7 @@ const GuestRow = memo(function GuestRow({
                     'size-3.5 rounded-[3px] transition-colors',
                     isServed
                       ? isOffert
-                        ? 'border-2 border-purple-400 bg-purple-400' // gratuit, cf. carte « Externes »
+                        ? 'border-2 border-purple-400 bg-purple-400' // gratuit, cf. tuile « Gratuités »
                         : isIncluded
                           ? 'border-2 border-emerald-500 bg-emerald-500'
                           : 'border-2 border-amber-400 bg-amber-400' // même teinte que la carte « PDJ Extra »

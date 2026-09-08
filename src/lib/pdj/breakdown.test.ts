@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   breakfastCode,
   computePdjCA,
+  isOffertBox,
   pdjRoomBreakdown,
   roomFinance,
 } from '#/lib/pdj/breakdown.ts'
@@ -198,5 +199,76 @@ describe('computePdjCA', () => {
     expect(ca.extraNb).toBe(2)
     expect(ca.extrasHt).toBe(0)
     expect(ca.totalHt).toBe(0)
+  })
+})
+
+/*
+ * Cases violettes (écran + PDF) vs tuile « Gratuités » (footer du PDF, CA,
+ * analytique) : les DEUX doivent toujours dire le même nombre.
+ *
+ * Le bug d'origine : le rendu prenait `breakfasts_offert` pour un curseur de
+ * POSITION de case, le comptage pour un NOMBRE D'EXTRAS. Les deux ne coïncident
+ * que si `breakfasts_included` vaut 0 — or cette colonne est RECALCULÉE à chaque
+ * écriture d'une ligne d'import (trigger `pdj_breakfasts_clamp_included`, ou
+ * réimport du jour), donc elle peut monter APRÈS la pose de la gratuité.
+ */
+describe('isOffertBox ↔ offertNb (cases violettes = tuile « Gratuités »)', () => {
+  /** Nombre de cases rendues en violet pour une ligne (miroir du board). */
+  const violettes = (row: {
+    breakfasts_included: number
+    breakfasts_served: number
+    breakfasts_offert?: number
+    manual_kind?: string | null
+  }): number => {
+    const boxes = Math.max(2, row.breakfasts_included, row.breakfasts_served)
+    let n = 0
+    for (let i = 0; i < boxes; i++) if (isOffertBox(row, i)) n++
+    return n
+  }
+
+  it('le nombre de cases violettes vaut TOUJOURS la gratuité comptée', () => {
+    for (let included = 0; included <= 3; included++) {
+      for (let served = 0; served <= 4; served++) {
+        for (let offert = 0; offert <= 4; offert++) {
+          const row = {
+            addons: 'PDJ INCL',
+            breakfasts_included: included,
+            breakfasts_served: served,
+            breakfasts_offert: offert,
+          }
+          expect(
+            violettes(row),
+            `included=${included} served=${served} offert=${offert}`,
+          ).toBe(computePdjCA([row], TARIFS).offertNb)
+        }
+      }
+    }
+  })
+
+  it('le cas de la régression : 1 inclus, 2 servis, 1 offert → 1 case violette', () => {
+    // Une gratuité posée sur une chambre SANS PDJ inclus, puis `included` remonté
+    // à 1 par un réimport : la case ne doit pas perdre son violet pendant que la
+    // tuile continue de compter 1.
+    const row = { addons: 'PDJ INCL', breakfasts_included: 1, breakfasts_served: 2, breakfasts_offert: 1 }
+    expect(violettes(row)).toBe(1)
+    expect(computePdjCA([row], TARIFS).offertNb).toBe(1)
+    // La 1re case reste le PDJ inclus (vert), la 2e est la gratuité.
+    expect(isOffertBox(row, 0)).toBe(false)
+    expect(isOffertBox(row, 1)).toBe(true)
+  })
+
+  it('une ligne manuelle est offerte en BLOC, `breakfasts_offert` ignoré', () => {
+    const row = { addons: null, breakfasts_included: 0, breakfasts_served: 2, breakfasts_offert: 0, manual_kind: 'offert' }
+    expect(violettes(row)).toBe(2)
+    expect(computePdjCA([row], TARIFS).offertNb).toBe(2)
+    // Basculée en 'extra', un `breakfasts_offert` résiduel ne doit RIEN colorer
+    // (et `setManualServe` le remet à 0, cf. service.ts).
+    expect(violettes({ ...row, manual_kind: 'extra', breakfasts_offert: 2 })).toBe(0)
+  })
+
+  it('aucune case violette hors du servi ni sur une chambre vide', () => {
+    expect(violettes({ breakfasts_included: 0, breakfasts_served: 0, breakfasts_offert: 2 })).toBe(0)
+    expect(isOffertBox(null, 0)).toBe(false)
+    expect(isOffertBox(undefined, 1)).toBe(false)
   })
 })

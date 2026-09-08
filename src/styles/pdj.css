@@ -488,7 +488,8 @@
     border-color: #fbbf24;
   }
   /* Extra OFFERT (gratuit, posé par clic droit sur la case à l'écran) : violet,
-     même teinte que la carte « Externes » (#c084fc, cf. BreakfastBoard.tsx). */
+     même teinte que la tuile « Gratuités » du footer (#c084fc, cf.
+     BreakfastBoard.tsx) — le violet ne désigne QUE le gratuit. */
   .pdj-checkbox.pdj-checked-offert {
     background: #c084fc;
     border-color: #c084fc;
