@@ -26,6 +26,9 @@ import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { ConfirmDialog } from '#/components/shared/ConfirmDialog.tsx'
 import { PrintBlockedDialog } from '#/components/shared/PrintBlockedDialog.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
+import { HelpDialogHeader } from '#/components/shared/HelpDialogHeader.tsx'
+import { HelpGlyph } from '#/components/shared/HelpGlyph.tsx'
+import { PdjHelpPanel } from '#/components/pdj/PdjHelpPanel.tsx'
 import { StatTile } from '#/components/shared/StatTile.tsx'
 import { usePrintShortcut } from '#/components/shared/usePrintShortcut.ts'
 import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
@@ -378,6 +381,9 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
     enabled: !!selectedDate,
   })
   const [externalsOpen, setExternalsOpen] = useState(false)
+  // Modal d'aide : tutoriel factuel de la page (bouton « ? » de la barre
+  // d'actions, même geste que RepJour, Rapprochement et Parking).
+  const [helpOpen, setHelpOpen] = useState(false)
 
   // Extras TOTAUX du jour = chambre + externes. Source UNIQUE, partagée par la
   // card « PDJ Extra » (compteur) et le calcul des montants (computePdjCA).
@@ -1147,8 +1153,19 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                   </Tip>
                 </div>
               )}
-              {/* Groupe « actions de page » : analytique + import + impression. */}
+              {/* Groupe « actions de page » : aide + analytique + import +
+                  impression. L'aide vient en tête, comme sur les autres pages. */}
               <ButtonGroup>
+                <Tip label="Comment ça marche">
+                  <Button
+                    variant="outline"
+                    size="icon-sm"
+                    onClick={() => setHelpOpen(true)}
+                    aria-label="Comment ça marche"
+                  >
+                    <HelpGlyph />
+                  </Button>
+                </Tip>
                 <Tip label="Vue analytique">
                   <Button asChild variant="outline" size="icon-sm">
                     <Link to="/pdj/analytique" aria-label="Vue analytique">
@@ -1543,6 +1560,22 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
         onChange={handleExternalsChange}
       />
 
+      {/* Modal d'aide : tutoriel factuel de la page (bouton « ? »). Le contenu
+          reste en place dessous. */}
+      <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
+        <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-2xl">
+          <HelpDialogHeader
+            icon={<HelpGlyph />}
+            title="Comment fonctionne le petit-déjeuner"
+            description="Le pointage des couverts du matin, étape par étape."
+          />
+          {/* Seul le corps défile : l'en-tête (flex shrink-0) reste fixe en haut. */}
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <PdjHelpPanel />
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Barre d'outils basse (écran tactile uniquement, peu importe la largeur
           — téléphone OU tablette) : même socle partagé que Rapro
           (`MobileToolbar`/`ToolbarCell`, shared/), pas une réécriture locale.
@@ -1582,6 +1615,17 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
             label="Externe"
             ariaLabel="Petits-déjeuners externes"
             onClick={() => setExternalsOpen(true)}
+          />
+        )}
+        {/* Aide : seulement hors téléphone. Sur la largeur la plus étroite, la
+            barre porte déjà cinq cellules (pager, externe, analytique,
+            impression, bascule de vue) — une sixième les rendrait illisibles. */}
+        {!isPhoneWidth && (
+          <ToolbarCell
+            icon={<HelpGlyph className="size-5" />}
+            label="Aide"
+            ariaLabel="Comment ça marche"
+            onClick={() => setHelpOpen(true)}
           />
         )}
         <ToolbarCell
