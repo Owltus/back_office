@@ -160,15 +160,15 @@ function DemoLine({
 /* Le même petit casting d'un exemple à l'autre, sur de VRAIES chambres de
  * l'étage 1 (l'inventaire s'arrête à la 114) : on suit les mêmes clients d'une
  * section à la suivante au lieu de repartir de zéro à chaque fois.
- *   114 Teddy Leboucher — deux personnes, petit-déjeuner inclus, départ du jour
- *   113 Louise Marchand — VIP, seule, un inclus, reste une nuit de plus
- *   112 Karim Villeneuve — occupée sans petit-déjeuner au tarif, un extra vendu
- *   109 Alice Fontenay  — même cas, mais l'extra est offert
+ *   114 Teddy Leboucher          — deux personnes, petit-déjeuner inclus, départ
+ *   113 Pierre-Louis Bessonneau — VIP, seul, un inclus, reste une nuit de plus
+ *   112 Alban Hamon             — occupée sans PDJ au tarif, un extra vendu
+ *   109 Alice Fontenay          — même cas, mais l'extra est offert
  *   111 chambre vide · 110 ligne saisie à la main
  */
-const LOUISE: Partial<PdjDayRow> & { room: number } = {
+const PIERRE_LOUIS: Partial<PdjDayRow> & { room: number } = {
   room: 113,
-  guest_name: 'Louise Marchand',
+  guest_name: 'Pierre-Louis Bessonneau',
   status: 'IN HOUSE',
   vip: true,
   adults: 1,
@@ -180,9 +180,9 @@ const LOUISE: Partial<PdjDayRow> & { room: number } = {
   served: false,
 }
 
-const KARIM: Partial<PdjDayRow> & { room: number } = {
+const ALBAN: Partial<PdjDayRow> & { room: number } = {
   room: 112,
-  guest_name: 'Karim Villeneuve',
+  guest_name: 'Alban Hamon',
   status: 'IN HOUSE',
   channel: 'Direct',
   addons: 'TAXE SEJOUR',
@@ -266,13 +266,13 @@ export function PdjHelpPanel() {
         </p>
         <Demo>
           <DemoLine room={111} empty />
-          <DemoLine {...KARIM} breakfasts_served={0} served={false} />
-          <DemoLine {...LOUISE} />
+          <DemoLine {...ALBAN} breakfasts_served={0} served={false} />
+          <DemoLine {...PIERRE_LOUIS} />
           <DemoLine room={114} />
         </Demo>
         <Caption>
           Chambre 111 : vide. 112 : occupée, mais sans petit-déjeuner au tarif.
-          113 : cliente VIP qui reste une nuit de plus, à sa quatrième visite, rien
+          113 : client VIP qui reste une nuit de plus, à sa quatrième visite, rien
           de servi pour l'instant. 114 : petit-déjeuner inclus, deux couverts
           servis, et le client part aujourd'hui.
         </Caption>
@@ -309,7 +309,7 @@ export function PdjHelpPanel() {
           ce qu'on attend de la chambre, avant même d'avoir coché quoi que ce soit.
         </p>
         <Demo>
-          <DemoLine {...LOUISE} />
+          <DemoLine {...PIERRE_LOUIS} />
           <DemoLine room={114} breakfasts_served={0} served={false} />
         </Demo>
         <Caption>
@@ -400,7 +400,7 @@ export function PdjHelpPanel() {
         </p>
         <Demo>
           <DemoLine {...ALICE} />
-          <DemoLine {...KARIM} />
+          <DemoLine {...ALBAN} />
           <DemoLine room={114} />
         </Demo>
         <Caption>
@@ -621,7 +621,7 @@ export function PdjHelpPanel() {
         </p>
         <Demo finance>
           <DemoLine {...ALICE} />
-          <DemoLine {...KARIM} />
+          <DemoLine {...ALBAN} />
           <DemoLine room={114} />
         </Demo>
         <Caption>
