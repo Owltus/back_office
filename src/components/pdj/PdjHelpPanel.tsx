@@ -82,7 +82,7 @@ function demoRow(over: Partial<PdjDayRow>): PdjDayRow {
     id: 'demo',
     service_date: '2026-09-08',
     room: 114,
-    guest_name: 'Teddy Leboucher',
+    guest_name: 'LEBOUCHER, Teddy',
     status: 'DUE OUT',
     vip: false,
     adults: 2,
@@ -160,14 +160,16 @@ function DemoLine({
 /* Le même petit casting d'un exemple à l'autre, sur de VRAIES chambres de
  * l'étage 1 (l'inventaire s'arrête à la 114) : on suit les mêmes clients d'une
  * section à la suivante au lieu de repartir de zéro à chaque fois.
- *   114 Teddy Leboucher          — deux personnes, petit-déjeuner inclus, départ
- *   113 Pierre-Louis Bessonneau — VIP, seul, un inclus, reste une nuit de plus
- *   112 Albane Hamon            — occupée sans PDJ au tarif, des extras servis
+ * Les noms suivent la forme du PMS, telle qu'elle arrive dans l'In-House :
+ * NOM en capitales, virgule, prénom capitalisé (« LEBOUCHER, Teddy »).
+ *   114 LEBOUCHER, Teddy         — deux personnes, petit-déjeuner inclus, départ
+ *   113 BESSONNEAU, Pierre-Louis — VIP, seul, un inclus, reste une nuit de plus
+ *   112 HAMON, Albane            — occupée sans PDJ au tarif, des extras servis
  *   111 chambre vide · 110 ligne saisie à la main
  */
 const PIERRE_LOUIS: Partial<PdjDayRow> & { room: number } = {
   room: 113,
-  guest_name: 'Pierre-Louis Bessonneau',
+  guest_name: 'BESSONNEAU, Pierre-Louis',
   status: 'IN HOUSE',
   vip: true,
   adults: 1,
@@ -181,7 +183,7 @@ const PIERRE_LOUIS: Partial<PdjDayRow> & { room: number } = {
 
 const ALBANE: Partial<PdjDayRow> & { room: number } = {
   room: 112,
-  guest_name: 'Albane Hamon',
+  guest_name: 'HAMON, Albane',
   status: 'IN HOUSE',
   channel: 'Direct',
   addons: 'TAXE SEJOUR',
