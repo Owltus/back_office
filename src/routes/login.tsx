@@ -4,6 +4,7 @@ import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
 
 import { useAuth } from '#/components/auth/AuthContext.tsx'
+import { homeTarget } from '#/lib/auth/homeTarget.ts'
 import { supabase } from '#/lib/supabase.ts'
 import { Logo } from '#/components/Logo.tsx'
 import { Button } from '#/components/ui/button.tsx'
@@ -25,7 +26,7 @@ export const Route = createFileRoute('/login')({
       new Promise<null>((resolve) => setTimeout(() => resolve(null), 2_000)),
     ])
     if (session) {
-      throw redirect({ to: '/repjour' })
+      throw redirect({ to: homeTarget() })
     }
   },
 })
@@ -39,11 +40,13 @@ function LoginPage() {
   const navigate = useNavigate()
 
   // Dès qu'une session existe (déjà connecté au montage, ou après une connexion
-  // réussie), on quitte la page de login vers l'onglet RepJour (page d'accueil
-  // par défaut). L'authentification globale suffit ici : pas besoin du rôle.
+  // réussie), on quitte la page de login vers la PAGE D'ACCUEIL DU COMPTE (tête
+  // de son ordre de pages). L'authentification globale suffit ici : pas besoin
+  // du rôle. Au tout premier accès d'un poste, le cache est encore vide et la
+  // cible retombe sur le repli — `PageGuard` corrigera comme il le faisait déjà.
   useEffect(() => {
     if (user) {
-      navigate({ to: '/repjour', replace: true })
+      navigate({ to: homeTarget(), replace: true })
     }
   }, [user, navigate])
 

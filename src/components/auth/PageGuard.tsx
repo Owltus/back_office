@@ -3,7 +3,8 @@ import { Navigate, useRouterState } from '@tanstack/react-router'
 import { ShieldAlert } from 'lucide-react'
 
 import { useAuth } from '#/components/auth/AuthContext.tsx'
-import { atLeast, firstAllowedPage, PAGE_BY_KEY } from '#/lib/permissions/index.ts'
+import { atLeast, PAGE_BY_KEY } from '#/lib/permissions/index.ts'
+import { homePage } from '#/lib/permissions/navigation.ts'
 import type { PageKey, PageLevel } from '#/lib/permissions/index.ts'
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
 import { RouteSkeleton } from '#/components/shared/skeleton/RouteSkeleton.tsx'
@@ -81,6 +82,7 @@ export function PageGuard({
     backendDown,
     permissions,
     grade,
+    profile,
   } = useAuth()
   const pathname = useRouterState({ select: (s) => s.location.pathname })
 
@@ -93,7 +95,12 @@ export function PageGuard({
     // Jamais « Aucune page accessible » sur une simple panne.
     if (profileLoading || permissionsLoading || (backendDown && !permsResolved))
       return <GuardSkeleton pathname={pathname} />
-    const home = firstAllowedPage(permissions, grade)
+    // MÊME source d'ordre que la racine et la Navbar (`profiles.page_order`),
+    // sans quoi les deux notions d'accueil divergeraient et se renverraient la
+    // balle. `homePage` dérive de l'ordre DÉJÀ filtré par les droits : elle ne
+    // peut donc pas désigner une page interdite, et ne relit jamais la
+    // préférence brute — c'est ce qui interdit la boucle de redirection.
+    const home = homePage(permissions, grade, profile?.page_order)
     return home ? (
       <Navigate to={PAGE_BY_KEY[home].route} replace />
     ) : (

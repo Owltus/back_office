@@ -108,7 +108,7 @@ select 'comptes avec preference (attendu 0 juste apres migration)',
 from public.profiles
 where page_order is not null
 union all
-select 'policies profiles inchangees (attendu 4)',
+select 'policies profiles inchangees (attendu 5)',
        count(*)::text
 from pg_policies
 where schemaname = 'public' and tablename = 'profiles'

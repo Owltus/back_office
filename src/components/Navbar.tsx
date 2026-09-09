@@ -7,6 +7,7 @@ import { UserMenu } from '#/components/UserMenu.tsx'
 import { UserAvatar } from '#/components/shared/UserAvatar.tsx'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { PAGES } from '#/lib/permissions/index.ts'
+import { orderedPages } from '#/lib/permissions/navigation.ts'
 import {
   getNavbarBadge,
   getNavbarSubtitle,
@@ -25,15 +26,24 @@ import {
 
 export function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false)
-  const { profile, user, can } = useAuth()
+  const { profile, user, permissions, grade } = useAuth()
   const userName = profile?.display_name || profile?.email || user?.email || ''
-  // Une seule liste, dérivée des droits par page : l'utilisateur ne voit QUE les
-  // pages auxquelles on lui a donné au moins la Lecture (un admin les voit toutes).
-  const navItems = PAGES.filter((p) => can(p.key, 'lecture')).map((p) => ({
-    to: p.route,
-    label: p.label,
-    icon: p.icon,
-  }))
+  // Une seule liste, dans l'ORDRE DU COMPTE (`profiles.page_order`) et filtrée
+  // par ses droits : l'utilisateur ne voit QUE les pages auxquelles on lui a
+  // donné au moins la Lecture (un admin les voit toutes). Le filtrage est déjà
+  // fait par `orderedPages` — ne pas le refaire ici, ce serait deux règles à
+  // tenir d'accord. Sans préférence, l'ordre est celui du registre : rien ne
+  // change pour un compte qui n'a rien réglé.
+  //
+  // Cette liste sert À LA FOIS les onglets du bureau et le tiroir mobile (plus
+  // bas) : l'ordre s'y propage d'un seul geste.
+  const navItems = orderedPages(permissions, grade, profile?.page_order).map(
+    (p) => ({ to: p.route, label: p.label, icon: p.icon }),
+  )
+  // Cible du logo : la page d'accueil du compte, c'est-à-dire la tête de cette
+  // même liste. Repli sur la première page du registre tant que rien n'est
+  // connu (démarrage), jamais un lien mort.
+  const homeLink = navItems[0]?.to ?? '/repjour'
 
   // Nom de la page courante (en mobile, remplace la marque « Back Office » à côté
   // du logo — cf. plus bas) : en desktop, l'onglet actif dans les liens inline
@@ -163,7 +173,7 @@ export function Navbar() {
         <div className="flex items-center gap-2.5">
           {/* Logo home-link, toujours cliquable, jamais empilé (il reste petit
               et centré sur la hauteur des deux lignes de texte à côté). */}
-          <Link to="/repjour" aria-label="Accueil" className="shrink-0">
+          <Link to={homeLink} aria-label="Accueil" className="shrink-0">
             <Logo className="size-7" />
           </Link>
           <div className="flex min-w-0 flex-col justify-center lg:hidden">

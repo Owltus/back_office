@@ -18,6 +18,13 @@ import {
 import { errorMessage } from '#/lib/errors.ts'
 import { parseMyAccess } from '#/lib/auth/access.ts'
 import {
+  clearCachedPerms,
+  readCachedPerms,
+  readCachedProfile,
+  writeCachedPerms,
+  writeCachedProfile,
+} from '#/lib/auth/cache.ts'
+import {
   clearLastActive,
   isInactiveTooLong,
   readLastActive,
@@ -83,64 +90,6 @@ const REVALIDATE_MIN_GAP_MS = 60_000
  * (pas d'aller-retour réseau bloquant). Le fetch réseau ne fait que réconcilier
  * la valeur en arrière-plan. Clé versionnée pour pouvoir invalider le format.
  */
-const PROFILE_CACHE_KEY = 'bo.auth.profile.v1'
-
-function readCachedProfile(): Profile | null {
-  try {
-    const raw = localStorage.getItem(PROFILE_CACHE_KEY)
-    return raw ? (JSON.parse(raw) as Profile) : null
-  } catch {
-    // localStorage indisponible (SSR, mode privé) : non bloquant.
-    return null
-  }
-}
-
-function writeCachedProfile(profile: Profile | null) {
-  try {
-    if (profile) {
-      localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(profile))
-    } else {
-      localStorage.removeItem(PROFILE_CACHE_KEY)
-    }
-  } catch {
-    // Ignoré : le cache n'est qu'une optimisation, jamais une source de vérité.
-  }
-}
-
-/**
- * Cache local des permissions par page — même principe que le profil : au
- * rechargement, les droits sont disponibles IMMÉDIATEMENT, le fetch ne fait que
- * réconcilier en arrière-plan. Stocké avec l'`userId` pour ne jamais servir les
- * droits d'un autre compte (poste partagé).
- */
-const PERMS_CACHE_KEY = 'bo.auth.perms.v1'
-
-function readCachedPerms(userId: string): PagePermissions | null {
-  try {
-    const raw = localStorage.getItem(PERMS_CACHE_KEY)
-    if (!raw) return null
-    const parsed = JSON.parse(raw) as { userId: string; perms: PagePermissions }
-    return parsed.userId === userId ? parsed.perms : null
-  } catch {
-    return null
-  }
-}
-
-function writeCachedPerms(userId: string, perms: PagePermissions) {
-  try {
-    localStorage.setItem(PERMS_CACHE_KEY, JSON.stringify({ userId, perms }))
-  } catch {
-    // Ignoré : cache = optimisation, jamais source de vérité.
-  }
-}
-
-function clearCachedPerms() {
-  try {
-    localStorage.removeItem(PERMS_CACHE_KEY)
-  } catch {
-    // Ignoré.
-  }
-}
 
 /**
  * Profil + droits en UN aller-retour (RPC `get_my_access`, perf_audit_2026-09-06).
