@@ -60,6 +60,27 @@ tourne dessus) : la prudence reste de mise.
   **La sécurité réelle des données = RLS Supabase** ; la garde UI est ergonomique.
 - Menu utilisateur (dans la Navbar) : Profil (`/profil`), Gestion budgétaire
   (`/gestion`), Gestion des comptes (`/comptes`, admin), Déconnexion.
+- **Ordre des pages et page d'accueil PAR COMPTE (2026-09-09)** : colonne
+  `profiles.page_order text[]` nullable (`supabase/nav_page_order_2026-09-09.sql`).
+  La TÊTE de cet ordre est la page d'accueil du compte — c'est vers elle que `/`,
+  les deux redirections de `/login` et le logo pointent (plus aucun `/repjour` en
+  dur). `null` = aucune préférence → ordre du registre `PAGES`, dont l'ordre
+  n'est donc plus qu'un REPLI. Autorité unique de l'ordre affiché :
+  `orderedPages` / `homePage` (`lib/permissions/navigation.ts`), qui filtrent sur
+  les droits puis COMPLÈTENT avec les pages accordées absentes de la préférence —
+  une préférence partielle ou périmée ne masque jamais une page, et rien n'est à
+  réécrire quand un droit change. Aucun repli ne relit la préférence brute :
+  c'est ce qui interdit la boucle de redirection. Réglage ouvert à l'admin
+  (`/comptes`, tout compte) ET à chacun sur le sien (`/profil`), via un `update`
+  direct — aucune RPC, aucune policy modifiée (`Users update own profile` ne fige
+  que `role` et `email` ; `Admin manages profiles` couvre l'écriture croisée).
+  `get_my_access()` est INCHANGÉE : son `to_jsonb(p)` remonte la colonne seul.
+  Le `beforeLoad` de `/` lit le cache local (`lib/auth/cache.ts`,
+  `lib/auth/homeTarget.ts`) : aucune lecture réseau ajoutée au démarrage — ce qui
+  n'est possible que parce que l'app est une SPA (`spa: { enabled: true }`,
+  rewrite Vercel vers `_shell.html`, aucune page prérendue). ⚠ Une nouvelle page
+  doit désormais être déclarée à TROIS endroits : le CHECK de
+  `user_page_permissions`, celui de `profiles.page_order`, et `pages.ts`.
 - **Expiration par inactivité (2026-09-06)** : 24 h sans ouvrir l'app →
   déconnexion, appliquée par l'app (`lib/auth/inactivity.ts`, horodatage
   `bo.auth.lastActive.v1`, contrôle au démarrage et à chaque retour d'onglet
