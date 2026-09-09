@@ -10,6 +10,10 @@ export interface Profile {
   last_name: string;
   role: UserRole;
   created_at: string;
+  // Ordre choisi des pages de navigation ; la tête est la page d'accueil.
+  // `null` = aucune préférence → ordre du registre (cf. lib/permissions/
+  // navigation.ts). Colonne `profiles.page_order`, posée le 2026-09-09.
+  page_order?: string[] | null;
 }
 
 export interface HotelConfig {

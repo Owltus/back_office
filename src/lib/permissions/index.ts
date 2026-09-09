@@ -40,8 +40,13 @@ export function atLeast(
   return atLeastLevel(levelOf(perms, grade, page), min)
 }
 
-// Première page accordée dans l'ordre du registre — sert de page d'accueil et de
-// cible de redirection (null si l'utilisateur n'a accès à aucune page).
+// Première page accordée dans l'ordre du REGISTRE (null si aucune).
+//
+// Depuis le 2026-09-09, la page d'accueil d'un compte est la tête de SON ordre
+// (`homePage`, lib/permissions/navigation.ts) : cette fonction n'en est plus
+// que le cas particulier « aucune préférence ». Elle reste le repli utilisé
+// quand la préférence n'est pas encore connue — au démarrage, ou pendant une
+// panne du backend.
 export function firstAllowedPage(perms: PagePermissions, grade: Grade): PageKey | null {
   return PAGES.find((p) => canView(perms, grade, p.key))?.key ?? null
 }

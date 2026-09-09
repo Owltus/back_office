@@ -30,8 +30,14 @@ export interface PageDef {
 }
 
 // Registre central des pages gouvernées par les droits par page — source unique
-// de vérité (remplace NAV_ITEMS/ADMIN_ITEMS dans la Navbar à l'étape 5). L'ordre
-// définit l'ordre d'affichage ET la page d'accueil par défaut (première accordée).
+// des clés, libellés, routes et icônes.
+//
+// Depuis le 2026-09-09, l'ordre de ce tableau n'est plus qu'un REPLI : chaque
+// compte peut avoir le sien (`profiles.page_order`), et c'est la tête de SON
+// ordre qui fait office de page d'accueil. L'ordre ci-dessous s'applique donc
+// aux comptes sans préférence, et complète une préférence partielle — voir
+// `orderedPages` (lib/permissions/navigation.ts), qui est la seule autorité sur
+// l'ordre affiché.
 export const PAGES: PageDef[] = [
   { key: 'repjour', label: 'RepJour', route: '/repjour', icon: ClipboardList },
   { key: 'pdj', label: 'PDJ', route: '/pdj', icon: Coffee },
