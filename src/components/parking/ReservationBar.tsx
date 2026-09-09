@@ -18,6 +18,7 @@ import {
 } from '#/components/ui/tooltip.tsx'
 import { arrivalSlot, PMR_GLYPH, SLOTS_PER_DAY } from '#/lib/parking/model.ts'
 import type { Mode, Reservation, Status } from '#/lib/parking/model.ts'
+import { lastTouchLabel } from '#/lib/parking/format.ts'
 import { cn } from '#/lib/utils.ts'
 
 /*
@@ -261,9 +262,23 @@ export function ReservationBar({
     </div>
   )
 
-  const tip = r.comment && (
+  // Contenu du survol : le commentaire s'il y en a un, et TOUJOURS la dernière
+  // intervention sur la réservation. Séparés par un filet quand les deux sont
+  // là, pour que la note du client ne se confonde pas avec l'horodatage.
+  const lastTouch = lastTouchLabel(r)
+  const tip = (r.comment || lastTouch) && (
     <TooltipContent side="top" className="max-w-56 select-none">
-      {r.comment}
+      {r.comment && <span className="block">{r.comment}</span>}
+      {lastTouch && (
+        <span
+          className={cn(
+            'block text-[0.7rem] opacity-80',
+            r.comment && 'mt-1 border-t border-current/20 pt-1',
+          )}
+        >
+          {lastTouch}
+        </span>
+      )}
     </TooltipContent>
   )
 
@@ -273,7 +288,14 @@ export function ReservationBar({
   if (!interactive) {
     const info = locked ? (
       <TooltipContent side="top" className="max-w-56 select-none">
-        Réservation passée — modification réservée à la gestion.
+        <span className="block">
+          Réservation passée — modification réservée à la gestion.
+        </span>
+        {lastTouch && (
+          <span className="mt-1 block border-t border-current/20 pt-1 text-[0.7rem] opacity-80">
+            {lastTouch}
+          </span>
+        )}
       </TooltipContent>
     ) : (
       tip

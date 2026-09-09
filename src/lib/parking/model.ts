@@ -39,6 +39,13 @@ export interface Reservation {
   nights: number // >= 1
   status: Status
   comment: string
+  /** Horodatages de la ligne (ISO), affichés au survol de la barre : ils
+   *  disent QUAND la réservation a été touchée pour la dernière fois. La table
+   *  ne porte aucune colonne d'auteur — le recoupement avec le planning du
+   *  personnel est le seul moyen de savoir QUI. Optionnels : une réservation
+   *  tout juste créée localement (maj optimiste) n'en a pas encore. */
+  createdAt?: string
+  updatedAt?: string
 }
 
 export type Mode = 'move' | 'resize-left' | 'resize-right'

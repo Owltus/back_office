@@ -174,8 +174,11 @@ function toLoadRange(from: Date, to: Date): LoadRange {
   }
 }
 
-/** Ligne Realtime (la table complète) → les 7 colonnes que lit le planning, pour
- * que le cache reste homogène avec ce que renvoie `fetchReservations`. */
+/** Ligne Realtime (la table complète) → les colonnes que lit le planning, pour
+ * que le cache reste homogène avec ce que renvoie `fetchReservations`. Les
+ * horodatages en font partie depuis le 2026-09-09 (survol d'une barre) : le
+ * payload Realtime porte la ligne entière, ils arrivent donc à jour après
+ * chaque écriture, y compris celles d'un autre poste. */
 function pickDbReservation(row: DbReservation): DbReservation {
   return {
     id: row.id,
@@ -185,6 +188,8 @@ function pickDbReservation(row: DbReservation): DbReservation {
     nights: row.nights,
     status: row.status,
     comment: row.comment,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
   }
 }
 

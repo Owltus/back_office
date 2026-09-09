@@ -73,6 +73,8 @@ export interface DbReservation {
   nights: number
   status: Status
   comment: string
+  created_at: string
+  updated_at: string
 }
 
 /** Ligne base → réservation d'affichage (startDay relatif au lundi de réf.). */
@@ -88,6 +90,8 @@ export function toReservation(row: DbReservation, refMonday: Date): Reservation 
     nights: row.nights,
     status: row.status,
     comment: row.comment,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   }
 }
 
@@ -96,11 +100,17 @@ export function startDayToDate(startDay: number, refMonday: Date): string {
   return format(addDays(refMonday, startDay), 'yyyy-MM-dd')
 }
 
-/** Colonnes lues par le planning : `select('*')` renvoyait 9 colonnes dont 2
- * (`created_at`, `updated_at`) ignorées par `toReservation`. Liste explicite =
- * charge utile minimale, et un ajout de colonne en base n'alourdit plus la
- * requête à notre insu. Doit rester alignée sur `DbReservation`. */
-const RESERVATION_COLUMNS = 'id,spot,client,start_date,nights,status,comment'
+/** Colonnes lues par le planning. Liste explicite = charge utile minimale, et
+ * un ajout de colonne en base n'alourdit plus la requête à notre insu. Doit
+ * rester alignée sur `DbReservation`.
+ *
+ * `created_at` / `updated_at` avaient été retirés ici comme inutilisés ; ils
+ * sont revenus le 2026-09-09 pour le survol d'une barre, qui dit quand la
+ * réservation a été posée ou modifiée pour la dernière fois. Deux timestamps
+ * par ligne : la charge reste négligeable, et c'est la seule trace de « quand »
+ * dont dispose cette table (aucune colonne d'auteur). */
+const RESERVATION_COLUMNS =
+  'id,spot,client,start_date,nights,status,comment,created_at,updated_at'
 
 /**
  * Réservations, éventuellement BORNÉES à une fenêtre de dates d'arrivée
@@ -186,7 +196,11 @@ export async function fetchParkingDailyOccupation(
   return all
 }
 
-export async function createReservation(row: DbReservation): Promise<void> {
+export async function createReservation(
+  // Les horodatages sont posés par la BASE (défaut `now()` + trigger
+  // `parking_set_updated_at`) : les envoyer serait leur retirer leur valeur.
+  row: Omit<DbReservation, 'created_at' | 'updated_at'>,
+): Promise<void> {
   const { error } = await supabase.from(PARKING_TABLE).insert(row)
   if (error) throw error
 }
