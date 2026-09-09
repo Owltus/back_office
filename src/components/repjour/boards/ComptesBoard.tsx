@@ -148,7 +148,7 @@ function PermRow({
 }
 
 export function ComptesBoard() {
-  const { user, refreshProfile } = useAuth()
+  const { user, applyPageOrder } = useAuth()
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
@@ -174,7 +174,6 @@ export function ComptesBoard() {
   // Préférence d'ordre du compte édité (`profiles.page_order`) : `null` = aucune
   // préférence, donc ordre du registre.
   const [editOrder, setEditOrder] = useState<string[] | null>(null)
-  const [orderBusy, setOrderBusy] = useState(false)
   const [editPassword, setEditPassword] = useState('')
   const [confirmEditPassword, setConfirmEditPassword] = useState('')
   const [savingEdit, setSavingEdit] = useState(false)
@@ -329,36 +328,42 @@ export function ComptesBoard() {
     setPermBusy(null)
   }
 
-  // Ordre des pages du compte édité. Même régime que la matrice des droits :
-  // appliqué IMMÉDIATEMENT (pas au bouton Enregistrer), verrou pendant l'appel,
-  // état local patché après succès — pessimiste, comme `changePerm`.
+  // Ordre des pages du compte édité — la tête est sa page d'accueil.
   //
-  // On envoie le tableau COMPLET en une écriture, jamais une page et un rang :
-  // le réordonnancement reste atomique, sans état intermédiaire incohérent.
-  const changeOrder = async (index: number, delta: -1 | 1) => {
+  // OPTIMISTE, contrairement à la matrice de droits juste au-dessus : ici il
+  // s'agit d'une préférence d'affichage, pas d'un accès. Attendre la réponse du
+  // serveur donnait une liste qui ne bougeait pas au clic. On repose donc
+  // l'ordre précédent si l'écriture échoue, et on le dit.
+  //
+  // Le tableau COMPLET part en une écriture, jamais une page et un rang : le
+  // réordonnancement reste atomique.
+  const changeOrder = (index: number, delta: -1 | 1) => {
     if (!editProfile) return
+    const previous = editOrder
     const current = orderedPages(
       editPerms,
       editForm.grade === 'admin' ? 'admin' : 'utilisateur',
       editOrder,
     ).map((p) => p.key)
     const next = movedBy(current, index, delta)
-    setOrderBusy(true)
+    setEditOrder(next)
+    // Si l'admin règle SON PROPRE compte, sa barre de navigation doit suivre
+    // dans le même geste — sans cela le changement n'arriverait qu'à la
+    // revalidation suivante (3 min).
+    const isSelf = editProfile.id === user?.id
+    if (isSelf) applyPageOrder(next)
     setMessage('')
-    const { error } = await supabase
+    void supabase
       .from('profiles')
       .update({ page_order: next })
       .eq('id', editProfile.id)
-    if (error) {
-      setMessage('Erreur ordre des pages : ' + error.message)
-    } else {
-      setEditOrder(next)
-      // L'admin qui règle SON PROPRE compte doit voir sa barre suivre tout de
-      // suite : sans cela, le changement n'arriverait qu'à la revalidation
-      // suivante (3 min).
-      if (editProfile.id === user?.id) void refreshProfile()
-    }
-    setOrderBusy(false)
+      .then(({ error }) => {
+        if (error) {
+          setEditOrder(previous)
+          if (isSelf) applyPageOrder(previous)
+          setMessage('Erreur ordre des pages : ' + error.message)
+        }
+      })
   }
 
   const saveEdit = async () => {
@@ -752,7 +757,6 @@ export function ComptesBoard() {
                     editOrder,
                   )}
                   onMove={changeOrder}
-                  disabled={orderBusy}
                 />
               </div>
 

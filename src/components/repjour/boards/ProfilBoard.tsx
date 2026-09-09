@@ -28,7 +28,8 @@ import { Skeleton } from '#/components/ui/skeleton.tsx'
  * du thème CLAIR source vers le thème DARK du Back Office (tokens shadcn).
  */
 export function ProfilBoard() {
-  const { user, profile, permissions, grade, refreshProfile } = useAuth()
+  const { user, profile, permissions, grade, refreshProfile, applyPageOrder } =
+    useAuth()
   // Hydratation immédiate depuis le profil déjà en cache (évite le flash de
   // formulaire vide au premier frame) ; l'effet ci-dessous re-synchronise si le
   // profil arrive après coup (chargement en arrière-plan).
@@ -38,7 +39,6 @@ export function ProfilBoard() {
   const [confirmNewPassword, setConfirmNewPassword] = useState('')
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
-  const [orderBusy, setOrderBusy] = useState(false)
 
   useEffect(() => {
     if (profile) {
@@ -104,29 +104,34 @@ export function ProfilBoard() {
 
   // Ordre de MES pages — la tête est ma page d'accueil. Écriture directe sur ma
   // propre ligne : la policy `Users update own profile` l'autorise déjà (elle
-  // ne fige que `role` et `email`), aucune RPC n'est nécessaire. Appliqué en
-  // direct, comme la matrice de droits côté gestion des comptes, puis
-  // `refreshProfile` pour que la barre suive sans attendre la revalidation.
+  // ne fige que `role` et `email`), aucune RPC n'est nécessaire.
+  //
+  // OPTIMISTE : la liste et la barre de navigation se réorganisent AU CLIC, pas
+  // à la réponse du serveur — attendre l'aller-retour donnait une interface qui
+  // semblait ne rien faire pendant une demi-seconde. En cas d'échec, on remet
+  // l'ordre précédent et on le dit. Même schéma que la saisie PDJ et le
+  // planning parking.
   const myPages = orderedPages(permissions, grade, profile?.page_order)
-  const moveMyPage = async (index: number, delta: -1 | 1) => {
+  const moveMyPage = (index: number, delta: -1 | 1) => {
     if (!user) return
+    const previous = profile?.page_order ?? null
     const next = movedBy(
       myPages.map((p) => p.key),
       index,
       delta,
     )
-    setOrderBusy(true)
+    applyPageOrder(next)
     setMessage('')
-    const { error } = await supabase
+    void supabase
       .from('profiles')
       .update({ page_order: next })
       .eq('id', user.id)
-    if (error) {
-      setMessage("Erreur : l'ordre des pages n'a pas pu être enregistré")
-    } else {
-      await refreshProfile()
-    }
-    setOrderBusy(false)
+      .then(({ error }) => {
+        if (error) {
+          applyPageOrder(previous)
+          setMessage("Erreur : l'ordre des pages n'a pas pu être enregistré")
+        }
+      })
   }
 
   const isError =
@@ -249,11 +254,7 @@ export function ProfilBoard() {
               L'ordre s'applique aussi à la barre de navigation.
             </p>
           </div>
-          <PageOrderList
-            pages={myPages}
-            onMove={moveMyPage}
-            disabled={orderBusy}
-          />
+          <PageOrderList pages={myPages} onMove={moveMyPage} />
         </div>
 
         {/* Mot de passe */}

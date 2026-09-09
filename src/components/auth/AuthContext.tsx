@@ -70,6 +70,11 @@ interface AuthContextType {
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
   refreshPermissions: () => Promise<void>
+  /** Pose l'ordre des pages du compte COURANT en mémoire et dans le cache, sans
+   *  aller-retour réseau : la barre de navigation suit au clic, pas à la
+   *  réponse du serveur. L'écran appelant reste responsable de la persistance
+   *  et du retour en arrière si elle échoue. */
+  applyPageOrder: (order: string[] | null) => void
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
@@ -449,6 +454,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // touche NI à l'état NI au cache (une panne n'efface jamais le cache).
         // Même RPC que le démarrage : les deux relectures rafraîchissent profil
         // ET droits (un seul aller-retour), sans single-flight ni disjoncteur.
+        // Mise à jour OPTIMISTE de l'ordre des pages : l'affichage ne doit pas
+        // attendre le réseau pour se réorganiser. Écrit aussi le cache, que le
+        // `beforeLoad` de la racine relira au prochain démarrage.
+        applyPageOrder: (order) => {
+          setProfile((prev) => {
+            if (!prev) return prev
+            const next = { ...prev, page_order: order }
+            writeCachedProfile(next)
+            return next
+          })
+        },
         refreshProfile: async () => {
           if (!user) return
           const access = await fetchMyAccess()
