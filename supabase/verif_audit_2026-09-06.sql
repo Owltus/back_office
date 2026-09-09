@@ -31,10 +31,17 @@ with checks(ordre, controle, ok) as (
          and (has_function_privilege('anon', p.oid, 'execute')
               or has_function_privilege('authenticated', p.oid, 'execute')
               or exists (select 1 from aclexplode(p.proacl) a where a.grantee = 0))) = 0),
-    (6, 'triggers : 22 triggers utilisateur toujours en place',
+    -- Non-régression : AUCUN des 22 triggers de l'audit du 2026-09-06 n'a été
+    -- perdu. Comparaison en « au moins », pas en égalité : le compte exact
+    -- périmait à chaque table ajoutée, et il l'avait fait — 25 triggers au
+    -- 2026-09-09 (estampilleurs de pdj_externals, easter_eggs, hotel_rooms…,
+    -- tous `security invoker`, vérifiés par les contrôles 4 et 5 ci-dessus et
+    -- ci-dessous). Un contrôle qui échoue pour une raison légitime finit par
+    -- être ignoré : c'est ce qu'on évite ici.
+    (6, 'triggers : les 22 triggers utilisateur du 2026-09-06 toujours en place',
       (select count(*) from pg_trigger t join pg_class c on c.oid = t.tgrelid
        join pg_namespace n on n.oid = c.relnamespace
-       where n.nspname = 'public' and not t.tgisinternal) = 22),
+       where n.nspname = 'public' and not t.tgisinternal) >= 22),
     (7, 'triggers : les 7 estampilleurs passent par private.keep_author',
       (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
        where n.nspname = 'public' and p.prorettype = 'pg_catalog.trigger'::regtype
