@@ -22,6 +22,11 @@ import type {
   PageLevel,
   PagePermissions,
 } from '#/lib/permissions/index.ts'
+import { orderedPages } from '#/lib/permissions/navigation.ts'
+import {
+  movedBy,
+  PageOrderList,
+} from '#/components/comptes/PageOrderList.tsx'
 import { PasswordInput } from '#/components/repjour/PasswordInput.tsx'
 import {
   Dialog,
@@ -143,7 +148,7 @@ function PermRow({
 }
 
 export function ComptesBoard() {
-  const { user } = useAuth()
+  const { user, refreshProfile } = useAuth()
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
@@ -166,6 +171,10 @@ export function ComptesBoard() {
   })
   const [editPerms, setEditPerms] = useState<PagePermissions>({})
   const [permBusy, setPermBusy] = useState<PageKey | null>(null)
+  // Préférence d'ordre du compte édité (`profiles.page_order`) : `null` = aucune
+  // préférence, donc ordre du registre.
+  const [editOrder, setEditOrder] = useState<string[] | null>(null)
+  const [orderBusy, setOrderBusy] = useState(false)
   const [editPassword, setEditPassword] = useState('')
   const [confirmEditPassword, setConfirmEditPassword] = useState('')
   const [savingEdit, setSavingEdit] = useState(false)
@@ -286,6 +295,9 @@ export function ComptesBoard() {
       map[row.page] = row.level
     }
     setEditPerms(map)
+    // Préférence d'ordre du compte : la ligne `profiles` est déjà chargée dans
+    // la liste, on la relit ici pour ne pas dépendre de sa fraîcheur.
+    setEditOrder(p.page_order ?? null)
   }
 
   // Applique IMMÉDIATEMENT un changement de droit sur une page (RPC serveur).
@@ -315,6 +327,38 @@ export function ComptesBoard() {
       })
     }
     setPermBusy(null)
+  }
+
+  // Ordre des pages du compte édité. Même régime que la matrice des droits :
+  // appliqué IMMÉDIATEMENT (pas au bouton Enregistrer), verrou pendant l'appel,
+  // état local patché après succès — pessimiste, comme `changePerm`.
+  //
+  // On envoie le tableau COMPLET en une écriture, jamais une page et un rang :
+  // le réordonnancement reste atomique, sans état intermédiaire incohérent.
+  const changeOrder = async (index: number, delta: -1 | 1) => {
+    if (!editProfile) return
+    const current = orderedPages(
+      editPerms,
+      editForm.grade === 'admin' ? 'admin' : 'utilisateur',
+      editOrder,
+    ).map((p) => p.key)
+    const next = movedBy(current, index, delta)
+    setOrderBusy(true)
+    setMessage('')
+    const { error } = await supabase
+      .from('profiles')
+      .update({ page_order: next })
+      .eq('id', editProfile.id)
+    if (error) {
+      setMessage('Erreur ordre des pages : ' + error.message)
+    } else {
+      setEditOrder(next)
+      // L'admin qui règle SON PROPRE compte doit voir sa barre suivre tout de
+      // suite : sans cela, le changement n'arriverait qu'à la revalidation
+      // suivante (3 min).
+      if (editProfile.id === user?.id) void refreshProfile()
+    }
+    setOrderBusy(false)
   }
 
   const saveEdit = async () => {
@@ -689,6 +733,28 @@ export function ComptesBoard() {
                   </div>
                 </div>
               )}
+
+              {/* Ordre des pages du compte — la TÊTE est sa page d'accueil.
+                  Appliqué en direct, comme la matrice au-dessus. Un admin n'a
+                  aucune ligne de droits mais voit les 8 pages : sa liste est
+                  donc complète, d'où le grade passé à `orderedPages`. */}
+              <div className="space-y-2.5">
+                <label className="block text-sm text-muted-foreground">
+                  Ordre des pages
+                  <span className="ml-1 text-xs">
+                    (appliqué immédiatement)
+                  </span>
+                </label>
+                <PageOrderList
+                  pages={orderedPages(
+                    editPerms,
+                    editForm.grade === 'admin' ? 'admin' : 'utilisateur',
+                    editOrder,
+                  )}
+                  onMove={changeOrder}
+                  disabled={orderBusy}
+                />
+              </div>
 
               <div>
                 <label className="mb-1 block text-sm text-muted-foreground">
