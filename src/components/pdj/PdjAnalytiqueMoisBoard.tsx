@@ -99,7 +99,10 @@ export function PdjAnalytiqueMoisBoard({
     [historyRows],
   )
 
-  // Addon Production (tous jours) → tarifs détectés → CA PDJ par jour.
+  // Addon Production (tous jours) → tarifs de RÉFÉRENCE, simple REPLI : le CA
+  // d'un jour se lit dans la recette que le PMS a facturée CE jour-là (colonne
+  // `revenue_ttc` de la vue), remises comprises. La référence ne sert qu'aux
+  // jours sans facturation reçue.
   const { data: addonRows = [] } = useQuery({
     queryKey: ['pdj', 'addon-all'],
     queryFn: fetchAllAddonProduction,

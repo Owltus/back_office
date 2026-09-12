@@ -5,13 +5,17 @@
  *   - In-House (une ligne par chambre) : code PDJ via `addons`, DÛ (inclus au tarif,
  *     `breakfasts_included`) et SERVI (réellement pris, coché sur la page,
  *     `breakfasts_served`) → compta factuelle (dû) vs réelle (servi) ;
- *   - `tarifs` : prix unitaire TTC par code, DÉTECTÉ dans l'Addon (cf. tarif.ts,
- *     rien en dur → suit le prix réel, même s'il change).
+ *   - `tarifs` : prix unitaire TTC par code. Depuis le 2026-09-12 ce sont les
+ *     prix RÉELS du jour, lus dans la facturation du PMS (recette ÷ inclus, cf.
+ *     pricing.ts) ; les tarifs déduits de l'historique (tarif.ts) ne servent plus
+ *     que de repli. Rien en dur, et plus rien de deviné.
  *
- * CA = nb × tarif du code, HT = ÷ 1,10 par PDJ. Aucune division « revenu ÷ nb de
- * chambres » (c'était la cause des prix absurdes). L'Addon du jour sert de CONTRÔLE
- * : on compare le nb de PDJ en chambre au nb facturé (revenu ÷ tarif) → alertes
- * (rendent visible un décalage de date ou une anomalie). Aucune donnée nominative.
+ * Le CA des INCLUS est la recette facturée elle-même (`billedTtc`), pas une
+ * reconstitution — remises et groupes postés en bloc y sont déjà. Les extras,
+ * les externes et les offerts n'y figurent pas : ils sont valorisés à part, au
+ * prix FORT (le plus élevé des prix connus). HT = ÷ 1,10. Aucune division
+ * « revenu ÷ nb de chambres » (c'était la cause des prix absurdes). Aucune
+ * donnée nominative.
  * ------------------------------------------------------------------------ */
 
 import { fromTTC } from '#/lib/repjour/constants.ts'
@@ -158,6 +162,14 @@ export interface PdjCA {
   /** Σ des extras OFFERTS (gratuits), DÉJÀ compris dans `extraNb` — jamais dans
    *  `extrasHt`/`totalHt`. Sert la tuile « Gratuités » (board, PDF). */
   offertNb: number
+  /** `includedHt` vient-il de la recette RÉELLE du PMS (vrai) ou d'une
+   *  reconstitution au prix de référence, faute d'Addon importé (faux) ? */
+  billed: boolean
+  /** Ce que les chambres expliquent à elles seules, au prix du jour. L'écart
+   *  avec `includedHt` est la part facturée SANS chambre — un groupe posté en
+   *  bloc, ou un décalage de comptage entre l'instantané In-House et la
+   *  facturation. Sert à signaler cet écart plutôt qu'à le taire. */
+  rebuiltHt: number
 }
 
 /** Ligne minimale pour le CA : ce que portent aussi bien le board (PdjDayRow) que
@@ -174,40 +186,71 @@ interface CaRow {
 
 export function computePdjCA(
   rows: CaRow[],
+  /** Prix unitaires TTC par code. Depuis le 2026-09-12 ce sont les prix RÉELS
+   *  du jour (`dayUnitPrices`, pricing.ts), et non plus des tarifs déduits de
+   *  l'historique : ils suivent d'eux-mêmes une remise ou un changement de
+   *  tarif. Les prix de référence ne servent plus que de repli. */
   tarifs: Map<string, number>,
-  /** Externes (clients non logés venus manger) : comptés en extra, au tarif PDJ
-   *  standard, au même titre qu'un couvert servi en chambre au-delà de l'inclus. */
+  /** Externes (clients non logés venus manger) : comptés en extra, au PRIX FORT
+   *  du jour, au même titre qu'un couvert servi au-delà de l'inclus. */
   externalsCount = 0,
+  /** Recette TTC réellement facturée par le PMS ce jour-là, tous codes
+   *  confondus (`billedRevenueTtc`). Fournie → elle FAIT FOI pour les inclus :
+   *  le total cesse d'être une reconstitution et devient ce que l'hôtel a
+   *  encaissé, remises et groupes postés en bloc compris. Omise (jour sans
+   *  Addon importé) → on retombe sur la reconstitution au prix de référence,
+   *  faute de mieux. */
+  billedTtc?: number | null,
+  /** Prix TTC d'un couvert vendu à part (extra, externe). Le prix FORT du jour
+   *  au sens de `topPrice` : la remise consentie à une réservation ne baisse
+   *  pas le prix du petit-déjeuner pris au comptoir. Omis, on retombe sur le
+   *  plus élevé des prix passés dans `tarifs`. */
+  extraTtc?: number | null,
 ): PdjCA {
   const unitHt = (code: string): number => {
     const p = tarifs.get(code)
     return p != null ? round2(fromTTC(p)) : 0
   }
+  // Prix FORT : un extra, un externe ou un offert se valorise au tarif plein,
+  // jamais au tarif d'un forfait groupe (décision du 2026-09-12).
+  let topTtc = extraTtc ?? 0
+  if (topTtc <= 0) for (const p of tarifs.values()) if (p > topTtc) topTtc = p
+  const extraUnitHt = topTtc > 0 ? round2(fromTTC(topTtc)) : 0
+
   let inclusNb = 0
   let extraNb = Math.max(0, externalsCount)
   let offertNb = 0
-  let includedHt = 0
+  let rebuiltHt = 0
   for (const r of rows) {
     let code = breakfastCode(r.addons)
-    // Inclus manuel (day-use, absent de l'Addon) → valorisé au tarif PDJ.
+    // Inclus manuel (day-use, absent de l'Addon) → valorisé au prix PDJ.
     if (!code && r.manual_kind === 'inclus') code = 'PDJ'
     if (code && r.breakfasts_included > 0) {
       inclusNb += r.breakfasts_included
-      includedHt += round2(r.breakfasts_included * unitHt(code))
+      rebuiltHt += round2(r.breakfasts_included * unitHt(code))
     }
     extraNb += Math.max(0, r.breakfasts_served - r.breakfasts_included)
     offertNb += offertUnits(r)
   }
+  rebuiltHt = round2(rebuiltHt)
+  // La recette du PMS fait foi quand elle est connue. Elle couvre EXACTEMENT
+  // les inclus (vérifié sur neuf mois : corrélation 0,994, écart cumulé 0,1 %),
+  // jamais les extras, les externes ni les offerts — qui restent valorisés
+  // séparément ci-dessous.
+  const billedKnown = billedTtc != null && billedTtc > 0
+  const includedHt = billedKnown ? round2(fromTTC(billedTtc)) : rebuiltHt
   // Extras OFFERTS : comptés dans `extraNb` (stats « PDJ Extra », inchangées),
   // mais exclus du CA facturé — c'est tout l'objet du statut « offert ».
-  const extrasHt = round2(Math.max(0, extraNb - offertNb) * unitHt('PDJ'))
+  const extrasHt = round2(Math.max(0, extraNb - offertNb) * extraUnitHt)
   return {
     inclusNb,
     extraNb,
-    includedHt: round2(includedHt),
+    includedHt,
     extrasHt,
-    totalHt: round2(round2(includedHt) + extrasHt),
+    totalHt: round2(includedHt + extrasHt),
     offertNb,
+    billed: billedKnown,
+    rebuiltHt,
   }
 }
 

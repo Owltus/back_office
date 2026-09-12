@@ -13,8 +13,15 @@ import {
   fetchAllAddonProduction,
   fetchDailyAgg,
   fetchDay as fetchPdjDay,
+  fetchExternalsCount,
 } from '#/lib/pdj/service.ts'
 import { detectTarifs } from '#/lib/pdj/tarif.ts'
+import {
+  billedRevenueTtc,
+  dayUnitPrices,
+  includedByCode,
+  topPrice,
+} from '#/lib/pdj/pricing.ts'
 import { pdjDaySummary } from '#/lib/pdj/summary.ts'
 import { fetchParkingDailyOccupation } from '#/lib/parking/service.ts'
 import { captageIndex } from '#/lib/parking/analytics.ts'
@@ -161,12 +168,12 @@ export function DayCrossSummary({
     queryFn: () => fetchPdjDay(date),
     enabled: canPdj,
   })
-  // Tarifs unitaires détectés sur TOUT l'historique Addon (rien en dur ; cf.
-  // tarif.ts). MÊME clé que la page PDJ → cache partagé. Le CA du jour se calcule
-  // par chambre (computePdjCA) au tarif détecté : même chiffre que le board.
-  // C'est TOUT l'historique Addon (plusieurs centaines de lignes) pour de simples
-  // tarifs unitaires, stables sur des mois : fraîcheur d'une heure ici, conservée
-  // deux heures hors écran — la page RepJour ne le recharge pas à chaque visite.
+  // Tarifs de RÉFÉRENCE, déduits de tout l'historique Addon (cf. tarif.ts) :
+  // depuis le 2026-09-12 ils ne servent plus que de REPLI, pour un code qu'une
+  // journée ne renseigne pas. Le prix qui fait foi est celui du jour lui-même
+  // (recette du PMS ÷ inclus). MÊME clé que la page PDJ → cache partagé.
+  // Fraîcheur d'une heure ici, conservée deux heures hors écran — la page
+  // RepJour ne recharge pas l'historique à chaque visite.
   const allAddonQ = useQuery({
     queryKey: ['pdj', 'addon-all'],
     queryFn: fetchAllAddonProduction,
@@ -174,29 +181,67 @@ export function DayCrossSummary({
     staleTime: 60 * 60_000,
     gcTime: 2 * 60 * 60_000,
   })
-  const tarifs = useMemo(
+  const referenceTarifs = useMemo(
     () => detectTarifs(allAddonQ.data ?? []),
     [allAddonQ.data],
   )
-  const pdj = useMemo(
-    () => (pdjDayQ.data ? pdjDaySummary(pdjDayQ.data, tarifs) : null),
-    [pdjDayQ.data, tarifs],
-  )
+  // Externes du jour (clients non logés) : le board les compte en extras, la
+  // bande doit donc les compter aussi — sinon les deux « CA PDJ » divergent.
+  const externalsQ = useQuery({
+    queryKey: ['pdj', 'externals', date],
+    queryFn: () => fetchExternalsCount(date),
+    enabled: canPdj,
+  })
   // Repères PDJ de la fenêtre 30 j, lus depuis la VUE d'agrégation `pdj_daily_agg`
   // BORNÉE côté serveur à [windowFrom, date] : une poignée de lignes au lieu du
-  // scan complet de la table. Le tarif du CA vient de l'Addon tout-historique
-  // (`tarifs`), comme le board — un jour de la fenêtre n'a pas besoin de sa propre
-  // ligne Addon. Clé de cache versionnée par la fenêtre.
+  // scan complet de la table. La vue porte AUSSI la recette facturée par le PMS
+  // (`revenue_ttc`), qui sert à la fois aux moyennes de la fenêtre et au CA du
+  // jour affiché. Clé de cache versionnée par la fenêtre.
   const aggWinQ = useQuery({
     queryKey: ['pdj', 'agg-range', windowFrom, date],
     queryFn: () => fetchDailyAgg(windowFrom, date),
     enabled: canPdj,
   })
+  // Facturation du JOUR, extraite de la même fenêtre agrégée (elle se termine à
+  // `date`) : aucune requête de plus. Les prix du jour s'en déduisent — recette
+  // ÷ inclus, code par code — et la recette totale fait foi pour les inclus.
+  const dayAddon = useMemo(
+    () =>
+      (aggWinQ.data ?? [])
+        .filter((r) => r.service_date === date && r.code && r.revenue_ttc != null)
+        .map((r) => ({ code: r.code as string, revenue_ttc: r.revenue_ttc ?? 0 })),
+    [aggWinQ.data, date],
+  )
+  const dayPrices = useMemo(
+    () =>
+      dayUnitPrices(
+        dayAddon,
+        includedByCode(pdjDayQ.data ?? []),
+        referenceTarifs,
+      ),
+    [dayAddon, pdjDayQ.data, referenceTarifs],
+  )
+  const pdj = useMemo(
+    () =>
+      pdjDayQ.data
+        ? pdjDaySummary(
+            pdjDayQ.data,
+            dayPrices,
+            externalsQ.data ?? 0,
+            dayAddon.length > 0 ? billedRevenueTtc(dayAddon) : null,
+            // Prix fort : le plus élevé des prix connus, du jour comme de la
+            // référence — une remise consentie à une réservation ne baisse pas
+            // le prix d'un couvert vendu au comptoir.
+            topPrice(dayPrices, referenceTarifs),
+          )
+        : null,
+    [pdjDayQ.data, dayPrices, externalsQ.data, dayAddon, referenceTarifs],
+  )
   const pdjWin = useMemo(() => {
     if (!aggWinQ.data) return null
-    const { total, captage } = computeAggBenchmarks(aggWinQ.data, tarifs)
+    const { total, captage } = computeAggBenchmarks(aggWinQ.data, referenceTarifs)
     return { total, captage }
-  }, [aggWinQ.data, tarifs])
+  }, [aggWinQ.data, referenceTarifs])
 
   // --- Parking (jour courant + moyennes 30 j glissants) ----------------------
   // Occupation parking par jour sur la fenêtre 30 j, depuis la vue dépliée

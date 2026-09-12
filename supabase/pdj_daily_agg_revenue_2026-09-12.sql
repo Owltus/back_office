@@ -24,8 +24,10 @@
 -- même journée. D'où cette évolution.
 --
 -- FULL JOIN, et pas LEFT : 13 jours d'historique portent une recette SANS aucune
--- ligne In-House (import de rooming raté, 7 170 € au total). Un LEFT JOIN depuis
--- les chambres les perdrait — la recette existe pourtant. À l'inverse, un jour
+-- ligne In-House (import de rooming raté, 7 170 € au total), et 20 jours au
+-- total ont une recette sur un code qu'aucune chambre ne porte (un groupe
+-- facturé en bloc, par exemple). Un LEFT JOIN depuis les chambres perdrait ces
+-- recettes — elles existent pourtant. À l'inverse, un jour
 -- de chambres sans recette reste présent avec `revenue_ttc = null`, ce que le
 -- client distingue d'un zéro (`billed`) pour ne pas afficher « 0 € » quand la
 -- réponse honnête est « on ne sait pas ».
@@ -121,8 +123,8 @@ select 'recette totale de la vue = recette de la table (attendu 0 ecart)',
        (coalesce((select sum(revenue_ttc) from public.pdj_daily_agg), 0)
         - coalesce((select sum(revenue_ttc) from public.pdj_addon_production), 0))::text
 union all
-select 'jours avec recette mais sans chambre (13 attendus)',
-       count(*)::text
+select 'jours avec recette mais sans chambre porteuse (20 mesures le 2026-09-12)',
+       count(distinct service_date)::text
 from public.pdj_daily_agg
 where rooms = 0 and revenue_ttc is not null
 union all

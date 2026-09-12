@@ -4,12 +4,21 @@ import type { PdjDayRow } from '#/lib/pdj/service.ts'
 import { pdjDaySummary } from '#/lib/pdj/summary.ts'
 
 /*
- * Synthèse PDJ d'un jour. Réutilise computePdjCA (déjà couvert par breakdown.test)
- * : ici on vérifie l'AGRÉGATION (volumes, captage, branchement des extras et des
- * inclus manuels) au TARIF DÉTECTÉ (passé en Map, PDJ 19 €).
+ * Synthèse PDJ d'un jour (bande du rapport journalier). Réutilise computePdjCA
+ * (déjà couvert par breakdown.test) : ici on vérifie l'AGRÉGATION (volumes,
+ * captage, branchement des extras, des externes et des inclus manuels).
+ *
+ * `PRIX` = prix unitaires TTC du jour. Ceux d'aujourd'hui, lus dans la
+ * facturation du PMS : PDJ 19,00 € (17,27 € HT), PDJBB et PDJGROUP10 10,00 €
+ * (9,09 € HT). Ils ne sont écrits nulle part en dur dans l'application — ils
+ * peuvent changer d'un jour à l'autre, et le calcul les relit à chaque fois.
  */
 
-const TARIFS = new Map([['PDJ', 19]])
+const TARIFS = new Map([
+  ['PDJ', 19],
+  ['PDJBB', 10],
+  ['PDJGROUP10', 10],
+])
 
 /** Fabrique une ligne In-House minimale (seuls les champs du calcul comptent). */
 function row(partial: Partial<PdjDayRow>): PdjDayRow {
@@ -88,5 +97,32 @@ describe('pdjDaySummary', () => {
     const s = pdjDaySummary(rows, TARIFS)
     // inclus manuel valorisé au tarif détecté : 1 × round2(19 / 1,10)
     expect(s.includedHT).toBeCloseTo(17.27, 2)
+  })
+
+  it('compte les externes en extras, au prix fort du jour', () => {
+    // Un client non logé venu manger : aucune chambre, aucun inclus — mais un
+    // couvert vendu au tarif plein (19 € → 17,27 HT), comme sur la page PDJ.
+    const s = pdjDaySummary([], TARIFS, 2)
+    expect(s.extrasCount).toBe(2)
+    expect(s.extrasHT).toBeCloseTo(34.54, 2)
+    expect(s.totalHT).toBeCloseTo(34.54, 2)
+  })
+
+  it('les inclus valent la recette facturée quand le PMS l a transmise', () => {
+    // 16 inclus facturés 296 € TTC (remise du 2026-09-12) : 269,09 HT, et non
+    // 16 × 17,27 = 276,32 comme le donnerait le prix de référence.
+    const rows: PdjDayRow[] = [
+      row({ room: 101, guests: 16, breakfasts_included: 16, breakfasts_served: 16 }),
+    ]
+    const s = pdjDaySummary(rows, TARIFS, 0, 296)
+    expect(s.includedHT).toBe(269.09)
+    expect(s.totalHT).toBe(269.09)
+  })
+
+  it('sans recette transmise, reconstitue au prix de référence', () => {
+    const rows: PdjDayRow[] = [
+      row({ room: 101, guests: 16, breakfasts_included: 16, breakfasts_served: 16 }),
+    ]
+    expect(pdjDaySummary(rows, TARIFS, 0, null).includedHT).toBeCloseTo(276.32, 2)
   })
 })

@@ -66,7 +66,10 @@ function BoxRow({
  * vitrine, pas une zone de saisie.
  * ------------------------------------------------------------------------ */
 
-/** Tarifs d'exemple, à la forme de ceux détectés dans l'Addon (cf. tarif.ts). */
+/** Prix d'exemple, à la forme de ceux que la page lit chaque jour dans la
+ *  facturation du PMS (cf. pricing.ts). Ce sont les prix en vigueur le
+ *  2026-09-12 ; ils n'ont pas vocation à être vrais éternellement, seulement à
+ *  rendre l'exemple lisible. */
 const DEMO_TARIFS = new Map([
   ['PDJ', 19],
   ['PDJBB', 10],
@@ -530,7 +533,8 @@ export function PdjHelpPanel() {
           <li>
             <Term>PDJ inclus</Term> : les petits-déjeuners dus, compris dans les
             tarifs. Ils sont facturés même si personne ne descend, donc ce chiffre
-            ne bouge pas quand vous cochez.
+            ne bouge pas quand vous cochez. Le montant en dessous est celui que le
+            PMS a réellement facturé, hors taxes.
           </li>
           <li>
             <Term>PDJ Extra</Term> : les couverts servis au-delà des inclus. Dès
@@ -558,27 +562,34 @@ export function PdjHelpPanel() {
 
       <Section title="Comment les prix sont calculés">
         <p>
-          Aucun prix n'est écrit en dur dans l'application. Le tarif unitaire est{' '}
-          <Term>déduit de l'Addon Production</Term> : le chiffre d'affaires d'un
-          code est toujours un multiple de son prix unitaire, il suffit donc de
-          chercher le plus grand montant qui explique la majorité des recettes. Si
-          le prix du petit-déjeuner change demain, la page suit toute seule.
+          Aucun prix n'est écrit en dur dans l'application, et aucun prix n'est
+          deviné non plus. Le chiffre d'affaires des petits-déjeuners{' '}
+          <Term>inclus</Term> est <Term>lu dans l'Addon Production</Term> : c'est
+          le montant que le PMS a réellement facturé ce jour-là. Une remise, un
+          tarif changé par la direction, un groupe à prix négocié — tout cela est
+          déjà dans le chiffre, sans que personne n'ait à le déclarer.
         </p>
         <p>
           Chaque chambre porte un <Term>code</Term> lu dans son tarif :{' '}
           <Term>PDJ</Term> (le petit-déjeuner normal), <Term>PDJBB</Term> (le
           tarif chambre et petit-déjeuner) ou <Term>PDJGROUP10</Term> (les
-          groupes). Chaque code a son prix.
+          groupes). Le prix d'un code se retrouve en divisant sa recette du jour
+          par le nombre de couverts inclus qui la portent. Aujourd'hui par
+          exemple : PDJ à 19,00 € TTC, PDJBB et PDJGROUP10 à 10,00 €. Demain, ce
+          peut être autre chose — la page relit le prix chaque jour.
         </p>
         <p>Le chiffre d'affaires de la journée s'obtient alors ainsi :</p>
         <ul className="ml-4 list-disc space-y-1.5">
           <li>
-            les <Term>inclus</Term> comptent au tarif de leur propre code, dès
-            qu'ils sont dus — cochés ou non, ils sont facturés ;
+            les <Term>inclus</Term> valent ce que le PMS a facturé, dès qu'ils
+            sont dus — cochés ou non, ils sont facturés ;
           </li>
           <li>
-            les <Term>extras</Term> et les <Term>externes</Term> comptent au tarif
-            du petit-déjeuner normal ;
+            les <Term>extras</Term> et les <Term>externes</Term> n'apparaissent
+            pas dans cette facturation : ils sont ajoutés à part, au{' '}
+            <Term>prix le plus élevé connu</Term> — un petit-déjeuner vendu au
+            comptoir n'est pas un forfait groupe, et une remise accordée à une
+            réservation ne le brade pas non plus ;
           </li>
           <li>
             les <Term>offerts</Term> sont retirés du calcul : ils restent des
@@ -586,18 +597,21 @@ export function PdjHelpPanel() {
           </li>
           <li>
             chaque montant est converti hors taxes en divisant par 1,10 (la TVA de
-            la restauration est à 10 %).
+            la restauration est à 10 %). Tous les montants affichés sur la page
+            sont <Term>hors taxes</Term>.
           </li>
         </ul>
         <p>
           Un groupe facturé en bloc par le PMS, sans être rattaché à une chambre,
-          n'entre pas dans ce chiffre d'affaires : la page ne compte que ce qui est
-          réellement posé sur une chambre, plus les externes.
+          fait bien partie du chiffre d'affaires : l'hôtel l'a encaissé. La page
+          le dit dans l'aide de la tuile « PDJ inclus », qui précise le montant
+          facturé que les chambres n'expliquent pas.
         </p>
         <p>
-          Si un écart apparaît entre les chambres et la facturation comptable, ou si
-          un tarif n'a pas pu être détecté, la page le signale : c'est en général le
-          signe d'un décalage de date entre les deux rapports.
+          Un jour dont l'Addon Production n'a pas été importé n'a pas de
+          facturation à lire. La page ne montre alors pas 0 € — ce serait faux —
+          mais une estimation au dernier prix connu, jusqu'à ce que le rapport
+          arrive.
         </p>
       </Section>
 
@@ -616,7 +630,8 @@ export function PdjHelpPanel() {
         <Caption>
           Les mêmes chambres, vues en mode financier : deux extras dont un offert
           (un seul est facturé), un inclus non encore servi mais dû, et deux inclus
-          servis. Montants calculés avec un petit-déjeuner à 19 € TTC.
+          servis. Montants calculés avec le prix du jour, ici 19,00 € TTC
+          (17,27 € HT) le petit-déjeuner.
         </Caption>
         <p>
           Une chambre sans petit-déjeuner affiche un tiret. Une chambre dont le

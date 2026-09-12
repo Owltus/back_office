@@ -28,6 +28,7 @@ function row(partial: Partial<PdjAggRow> & { service_date: string }): PdjAggRow 
     extra: 0,
     no_show: 0,
     offert: 0,
+    revenue_ttc: null,
     ...partial,
   }
 }

@@ -13,6 +13,7 @@
 
 import { fromTTC } from '#/lib/repjour/constants.ts'
 import type { AddonProductionRow } from '#/lib/pdj/addon.ts'
+import { dayUnitPrices, topPrice } from '#/lib/pdj/pricing.ts'
 import type { PdjAggRow } from '#/lib/pdj/service.ts'
 
 /** Arrondi à 2 décimales (au centime). */
@@ -182,27 +183,75 @@ export function computeAggDailyTotals(
   // (stats inchangées) mais jamais dans le CA.
   const byDay = new Map<
     string,
-    { includedHt: number; extra: number; offert: number }
+    {
+      includedHt: number
+      extra: number
+      offert: number
+      /** Recette TTC cumulée du jour, tous codes. */
+      billedTtc: number
+      /** Au moins un code a une recette : elle fait alors foi. */
+      billed: boolean
+      /** Recette et inclus PAR CODE, de quoi relire le prix RÉEL du jour
+       *  (recette ÷ inclus) au lieu de le supposer constant. */
+      byCode: Map<string, { included: number; revenueTtc: number }>
+    }
   >()
+  const emptyDay = () => ({
+    includedHt: 0,
+    extra: 0,
+    offert: 0,
+    billedTtc: 0,
+    billed: false,
+    byCode: new Map<string, { included: number; revenueTtc: number }>(),
+  })
+
   for (const r of rows) {
-    const d = byDay.get(r.service_date) ?? { includedHt: 0, extra: 0, offert: 0 }
+    const d = byDay.get(r.service_date) ?? emptyDay()
+    if (r.code) {
+      const c = d.byCode.get(r.code) ?? { included: 0, revenueTtc: 0 }
+      c.included += r.included
+      c.revenueTtc += r.revenue_ttc ?? 0
+      d.byCode.set(r.code, c)
+    }
     if (r.code && r.included > 0) d.includedHt += r.included * unitHt(r.code)
+    // La recette du PMS fait foi dès qu'elle existe pour ce (jour, code) : elle
+    // porte le prix réellement facturé, remises et groupes postés en bloc
+    // compris. Un jour SANS aucune recette garde l'estimation au prix de
+    // référence — mieux qu'un zéro, qui se lirait comme « aucune recette ».
+    if (r.revenue_ttc != null) {
+      d.billedTtc += r.revenue_ttc
+      d.billed = true
+    }
     d.extra += r.extra
     d.offert += r.offert
     byDay.set(r.service_date, d)
   }
   for (const [date, ext] of externalsByDate) {
     if (ext <= 0) continue
-    const d = byDay.get(date) ?? { includedHt: 0, extra: 0, offert: 0 }
+    const d = byDay.get(date) ?? emptyDay()
     d.extra += ext
     byDay.set(date, d)
   }
 
   const totals = new Map<string, number>()
   for (const [date, d] of byDay) {
-    // Même arrondi que computePdjCA : inclus et extras arrondis séparément.
-    const includedHt = round2(d.includedHt)
-    const extrasHt = round2(Math.max(0, d.extra - d.offert) * unitHt('PDJ'))
+    const includedHt = d.billed
+      ? round2(fromTTC(round2(d.billedTtc)))
+      : round2(d.includedHt)
+    // Prix FORT du JOUR (extras, externes, offerts) : un couvert vendu au
+    // comptoir se valorise au tarif plein, jamais au tarif d'un forfait groupe
+    // — et au tarif RÉELLEMENT pratiqué ce jour-là, remise comprise. Les tarifs
+    // de référence ne servent que de repli, code par code.
+    const dayPrices = dayUnitPrices(
+      [...d.byCode].map(([code, c]) => ({ code, revenue_ttc: c.revenueTtc })),
+      new Map([...d.byCode].map(([code, c]) => [code, c.included])),
+      tarifs,
+    )
+    // Prix du jour ET prix de référence : une remise ponctuelle ne doit pas
+    // faire baisser le prix d'un couvert vendu au comptoir (cf. `topPrice`).
+    const top = topPrice(dayPrices, tarifs)
+    const extraUnitHt = top != null ? round2(fromTTC(top)) : 0
+    const extrasHt = round2(Math.max(0, d.extra - d.offert) * extraUnitHt)
     const totalHt = round2(includedHt + extrasHt)
     if (totalHt > 0) totals.set(date, totalHt)
   }

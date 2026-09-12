@@ -115,6 +115,7 @@ function agg(
     extra: 0,
     no_show: 0,
     offert: 0,
+    revenue_ttc: null,
     ...partial,
   }
 }
@@ -154,6 +155,88 @@ describe('computeAggDailyTotals', () => {
     const totals = computeAggDailyTotals(rows, TARIFS, externals)
     expect(totals.get('2026-08-10')).toBeCloseTo(207.24, 2)
     expect(totals.get('2026-08-14')).toBeCloseTo(17.27, 2)
+  })
+
+  /* --- La recette RÉELLE du PMS fait foi (2026-09-12) --------------------- */
+
+  it('prend la recette facturée plutôt que le prix de référence', () => {
+    // 16 inclus facturés 296 € TTC = 18,50 € l'unité, et non 19 €. Le CA suit
+    // la remise sans que personne n'ait à la déclarer.
+    const rows: PdjAggRow[] = [
+      agg({ service_date: '2026-09-12', included: 16, revenue_ttc: 296 }),
+    ]
+    expect(computeAggDailyTotals(rows, TARIFS).get('2026-09-12')).toBe(269.09)
+  })
+
+  it('une remise sur une réservation ne brade pas le couvert au comptoir', () => {
+    // Même journée : les 16 inclus sont facturés 296 € (18,50 € l'unité, remise
+    // de 8 € consentie à une chambre) → 269,09 HT. L'extra, lui, reste vendu au
+    // prix de la carte, 19 € TTC → 17,27 HT. Total 286,36.
+    const rows: PdjAggRow[] = [
+      agg({
+        service_date: '2026-09-12',
+        included: 16,
+        served: 17,
+        extra: 1,
+        revenue_ttc: 296,
+      }),
+    ]
+    expect(computeAggDailyTotals(rows, TARIFS).get('2026-09-12')).toBe(286.36)
+  })
+
+  it('suit en revanche une HAUSSE décidée par la direction, dès le jour même', () => {
+    // 16 inclus facturés 400 € = 25 € l'unité, au-dessus de la référence (19 €).
+    // Les inclus valent 363,64 HT et l'extra suit le nouveau prix : 22,73 HT.
+    const rows: PdjAggRow[] = [
+      agg({
+        service_date: '2026-10-01',
+        included: 16,
+        served: 17,
+        extra: 1,
+        revenue_ttc: 400,
+      }),
+    ]
+    expect(computeAggDailyTotals(rows, TARIFS).get('2026-10-01')).toBe(386.37)
+  })
+
+  it('prend le prix FORT quand plusieurs codes coexistent', () => {
+    // PDJ à 19 €, groupe à 10 € : l'extra se vend au tarif plein (17,27 HT).
+    // Inclus : (304 + 300) = 604 TTC → 549,09 HT ; + 1 extra → 566,36.
+    const rows: PdjAggRow[] = [
+      agg({ service_date: '2026-09-10', included: 16, revenue_ttc: 304 }),
+      agg({
+        service_date: '2026-09-10',
+        code: 'PDJGROUP10',
+        included: 30,
+        extra: 1,
+        revenue_ttc: 300,
+      }),
+    ]
+    expect(computeAggDailyTotals(rows, TARIFS).get('2026-09-10')).toBe(566.36)
+  })
+
+  it('garde la recette d un groupe posté en bloc, sans chambre porteuse', () => {
+    // 770 € facturés sur le code groupe, dont 690 € sans aucune chambre : le
+    // CA doit refléter ce que l'hôtel a facturé, pas seulement ce que les
+    // chambres expliquent. 770 → 700,00 HT.
+    const rows: PdjAggRow[] = [
+      agg({
+        service_date: '2026-01-31',
+        code: 'PDJGROUP10',
+        rooms: 0,
+        included: 0,
+        revenue_ttc: 770,
+      }),
+    ]
+    expect(computeAggDailyTotals(rows, TARIFS).get('2026-01-31')).toBe(700)
+  })
+
+  it('retombe sur le prix de référence le jour où aucune recette n est reçue', () => {
+    // Import Addon manquant : mieux vaut une estimation qu'un zéro muet.
+    const rows: PdjAggRow[] = [
+      agg({ service_date: '2026-08-10', included: 10, revenue_ttc: null }),
+    ]
+    expect(computeAggDailyTotals(rows, TARIFS).get('2026-08-10')).toBe(172.7)
   })
 })
 

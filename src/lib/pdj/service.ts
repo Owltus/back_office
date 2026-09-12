@@ -42,6 +42,11 @@ export interface PdjAggRow {
   no_show: number
   /** Offerts : parmi les extras, Σ de ceux marqués gratuits (cf. breakdown.ts). */
   offert: number
+  /** Recette TTC facturée par le PMS pour ce (jour, code) — la SOURCE du chiffre
+   *  d'affaires depuis le 2026-09-12. `null` = aucune facturation reçue ce
+   *  jour-là : le calcul retombe alors sur une estimation au prix de référence
+   *  (cf. `computeAggDailyTotals`), jamais sur un zéro muet. */
+  revenue_ttc: number | null
 }
 
 /** Ligne DB complète (lecture) : champs d'import + consommation + id. */
