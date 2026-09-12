@@ -93,12 +93,7 @@ import { canEditPdjDay } from '#/lib/pdj/editability.ts'
 import { breakfastServiceDate, parseAddonProduction } from '#/lib/pdj/addon.ts'
 import { computeAggBenchmarks } from '#/lib/pdj/amounts.ts'
 import { detectTarifs } from '#/lib/pdj/tarif.ts'
-import {
-  billedRevenueTtc,
-  dayUnitPrices,
-  includedByCode,
-  topPrice,
-} from '#/lib/pdj/pricing.ts'
+import { billedRevenueTtc, topPrice } from '#/lib/pdj/pricing.ts'
 import { purgeGate } from '#/lib/pdj/purgeGate.ts'
 import { fileTooLarge, MAX_CSV_BYTES } from '#/lib/shared/files.ts'
 import { computePdjCA } from '#/lib/pdj/breakdown.ts'
@@ -423,10 +418,13 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
     queryKey: ['pdj', 'addon-all'],
     queryFn: fetchAllAddonProduction,
   })
-  // Tarifs de RÉFÉRENCE, déduits de tout l'historique. Depuis le 2026-09-12 ils
-  // ne servent plus que de REPLI : le prix réel se lit dans la facturation du
-  // jour (cf. `dayPrices` juste en dessous).
-  const referenceTarifs = useMemo(() => detectTarifs(allAddon ?? []), [allAddon])
+  // Prix de la CARTE, retrouvés dans l'historique de facturation : 19 € le PDJ,
+  // 10 € le PDJBB et le PDJGROUP10 (mesuré sur 602 recettes le 2026-09-12).
+  // C'est LE prix d'un couvert, celui qu'on affiche. Surtout pas la recette du
+  // jour divisée par les couverts : ce quotient est une moyenne, tirée vers le
+  // bas par une remise et vers le haut par une facturation en bloc (de 8,14 € à
+  // 96,25 € selon les jours) — cf. l'en-tête de pricing.ts.
+  const tarifs = useMemo(() => detectTarifs(allAddon ?? []), [allAddon])
 
   // Facturation du PMS pour le jour affiché : c'est elle qui fait le chiffre
   // d'affaires. Lecture légère (au plus trois lignes, une par code).
@@ -436,36 +434,18 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
     enabled: !!selectedDate,
   })
 
-  // Prix RÉELS du jour, par code : recette ÷ inclus. Ils suivent d'eux-mêmes
-  // une remise ou un changement de tarif, là où le prix deviné exigeait que
-  // toutes les recettes restent des multiples exacts — c'est ce qui avait cassé
-  // le 2026-09-12 (une remise de 8 € avait fait tomber le tarif de 19 € à 1 €).
-  const dayPrices = useMemo(
-    () =>
-      dayUnitPrices(
-        dayAddon ?? [],
-        includedByCode(dayRows ?? []),
-        referenceTarifs,
-      ),
-    [dayAddon, dayRows, referenceTarifs],
-  )
-  // Conservé sous le nom `tarifs` : c'est ce que consomment la fiche par chambre
-  // (`GuestRow`) et les calculs ci-dessous.
-  const tarifs = dayPrices
+  // Prix FORT de la carte : celui des extras, des externes et des offerts. Un
+  // couvert vendu au comptoir se paie au tarif plein, jamais au tarif d'un
+  // forfait groupe — et une remise accordée à une réservation ne le brade pas.
+  const topTtcLabel = useMemo(() => {
+    const p = topPrice(tarifs)
+    return p != null ? ` (${fmtEur(p, 2)} TTC)` : ''
+  }, [tarifs])
 
-  // Prix FORT : celui des extras, des externes et des offerts. Le plus élevé
-  // des prix connus — ceux du jour ET ceux de référence : une remise accordée à
-  // une réservation ne baisse pas le prix d'un petit-déjeuner pris au comptoir.
-  const extraTtc = useMemo(
-    () => topPrice(dayPrices, referenceTarifs),
-    [dayPrices, referenceTarifs],
-  )
-  const topTtcLabel =
-    extraTtc != null ? ` (${fmtEur(extraTtc, 2)} TTC)` : ''
-
-  // Montants HT du jour. Les INCLUS valent ce que le PMS a facturé (recette
-  // réelle, remises et groupes postés en bloc compris) ; les extras et les
-  // externes, absents de cette facturation, sont valorisés au PRIX FORT du jour.
+  // Montants HT du jour. Le TOTAL des inclus vaut ce que le PMS a facturé
+  // (recette réelle, remises et groupes postés en bloc compris) ; les extras et
+  // les externes, absents de cette facturation, sont valorisés au PRIX FORT de
+  // la carte. Le prix affiché chambre par chambre, lui, reste celui de la carte.
   // SOURCE UNIQUE du CA (fiche, cartes, PDF) → le même chiffre partout.
   const ca = useMemo(
     () =>
@@ -474,9 +454,8 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
         tarifs,
         externalsCount,
         dayAddon ? billedRevenueTtc(dayAddon) : null,
-        extraTtc,
       ),
-    [dayRows, tarifs, externalsCount, dayAddon, extraTtc],
+    [dayRows, tarifs, externalsCount, dayAddon],
   )
 
   // Écart entre ce que le PMS a facturé et ce que les chambres expliquent : un
@@ -490,29 +469,28 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
   )
   const inclusHint = useMemo(() => {
     const base = ca.billed
-      ? "Petits-déjeuners dus ce jour. Le montant est celui que le PMS a réellement facturé (remises comprises), converti en HT — il n'est plus reconstitué à partir d'un prix supposé."
-      : "Petits-déjeuners dus ce jour : inclus au tarif de la réservation, facturés même si le client ne les a pas encore pris. Aucune facturation reçue pour ce jour : le montant est une estimation au prix de référence."
+      ? "Petits-déjeuners dus ce jour. Le montant est celui que le PMS a réellement facturé, converti hors taxes — il n'est pas recalculé à partir du prix de la carte."
+      : "Petits-déjeuners dus ce jour : inclus au tarif de la réservation, facturés même si le client ne les a pas encore pris. Aucune facturation reçue pour ce jour : le montant est une estimation au prix de la carte."
     if (Math.abs(ecartNonVentile) < 1) return base
     return ecartNonVentile > 0
-      ? `${base} ${fmtEur(ecartNonVentile, 2)} de cette facturation ne sont rattachés à aucune chambre (groupe posté en bloc).`
-      : `${base} Les chambres portent ${fmtEur(-ecartNonVentile, 2)} de plus que ce qui a été facturé — décalage à vérifier.`
+      ? `${base} ${fmtEur(ecartNonVentile, 2)} de cette facturation ne sont rattachés à aucune chambre : un groupe facturé en bloc, par exemple.`
+      : `${base} Au prix de la carte, les chambres totaliseraient ${fmtEur(-ecartNonVentile, 2)} de plus : une remise a été accordée, ou une facturation manque.`
   }, [ca.billed, ecartNonVentile])
   const caHint = useMemo(
     () =>
       `Chiffre d'affaires HT du petit-déjeuner ce jour : ${
         ca.billed
           ? 'la recette réellement facturée par le PMS pour les inclus'
-          : 'les inclus estimés au prix de référence, faute de facturation reçue'
-      }, plus les extras et les externes valorisés au prix le plus élevé connu${topTtcLabel}. Les gratuités en sont exclues.`,
+          : 'les inclus estimés au prix de la carte, faute de facturation reçue'
+      }, plus les extras et les externes valorisés au prix le plus élevé de la carte${topTtcLabel}. Les gratuités en sont exclues.`,
     [ca.billed, topTtcLabel],
   )
 
   // Repères « moyenne par jour » (total HT, captage, occupation) sur TOUT
   // l'historique. Lus depuis la VUE d'agrégation `pdj_daily_agg` (quelques lignes
   // par jour) au lieu de scanner la table entière — mêmes chiffres, une fraction
-  // du coût. Chaque jour de l'historique y porte SA recette : le prix de
-  // référence n'intervient qu'en repli, jour par jour (surtout PAS le prix du
-  // jour affiché, qui n'a rien à dire des mois précédents).
+  // du coût. Chaque jour de l'historique y porte SA recette facturée ; les
+  // prix de la carte n'y servent qu'aux extras et aux jours sans recette reçue.
   // `benchmark` reste `undefined` tant que l'agrégat charge
   // (rendu inchangé : les sous-textes n'apparaissent qu'ensuite).
   // Clé PARTAGÉE avec le seuil de rupture de PdjAnalytiqueMoisBoard : même
@@ -523,8 +501,8 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
     staleTime: 5 * 60_000,
   })
   const benchmark = useMemo(
-    () => (aggAll ? computeAggBenchmarks(aggAll, referenceTarifs) : undefined),
-    [aggAll, referenceTarifs],
+    () => (aggAll ? computeAggBenchmarks(aggAll, tarifs) : undefined),
+    [aggAll, tarifs],
   )
 
   const floors = useMemo(() => {
@@ -1433,7 +1411,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                 label={externalsCount > 0 ? 'PDJ Extra + Externe' : 'PDJ Extra'}
                 accent="#fbbf24"
                 printHidden
-                hint={`Petits-déjeuners servis au-delà de ce qui était inclus, plus les externes (clients non logés, bouton « Externe »). Le petit-déjeuner facturé par le PMS ne les contient pas : ils sont valorisés à part, au prix le plus élevé connu${topTtcLabel}.`}
+                hint={`Petits-déjeuners servis au-delà de ce qui était inclus, plus les externes (clients non logés, bouton « Externe »). Le petit-déjeuner facturé par le PMS ne les contient pas : ils sont valorisés à part, au prix le plus élevé de la carte${topTtcLabel}.`}
                 sub={
                   extrasCount > 0 ? subMuted(fmtEur(ca.extrasHt, 2)) : undefined
                 }

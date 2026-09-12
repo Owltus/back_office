@@ -163,9 +163,9 @@ export interface PdjCA {
    *  `extrasHt`/`totalHt`. Sert la tuile « Gratuités » (board, PDF). */
   offertNb: number
   /** `includedHt` vient-il de la recette RÉELLE du PMS (vrai) ou d'une
-   *  reconstitution au prix de référence, faute d'Addon importé (faux) ? */
+   *  reconstitution au prix de la carte, faute d'Addon importé (faux) ? */
   billed: boolean
-  /** Ce que les chambres expliquent à elles seules, au prix du jour. L'écart
+  /** Ce que les chambres expliquent à elles seules, au prix de la carte. L'écart
    *  avec `includedHt` est la part facturée SANS chambre — un groupe posté en
    *  bloc, ou un décalage de comptage entre l'instantané In-House et la
    *  facturation. Sert à signaler cet écart plutôt qu'à le taire. */
@@ -186,26 +186,21 @@ interface CaRow {
 
 export function computePdjCA(
   rows: CaRow[],
-  /** Prix unitaires TTC par code. Depuis le 2026-09-12 ce sont les prix RÉELS
-   *  du jour (`dayUnitPrices`, pricing.ts), et non plus des tarifs déduits de
-   *  l'historique : ils suivent d'eux-mêmes une remise ou un changement de
-   *  tarif. Les prix de référence ne servent plus que de repli. */
+  /** Prix unitaires TTC par code — ceux de la CARTE, retrouvés dans
+   *  l'historique de facturation (`detectTarifs`). Surtout pas un prix moyen
+   *  dérivé de la recette du jour : voir l'en-tête de pricing.ts. */
   tarifs: Map<string, number>,
-  /** Externes (clients non logés venus manger) : comptés en extra, au PRIX FORT
-   *  du jour, au même titre qu'un couvert servi au-delà de l'inclus. */
+  /** Externes (clients non logés venus manger) : comptés en extra, au PRIX
+   *  FORT de la carte, au même titre qu'un couvert servi au-delà de l'inclus. */
   externalsCount = 0,
   /** Recette TTC réellement facturée par le PMS ce jour-là, tous codes
-   *  confondus (`billedRevenueTtc`). Fournie → elle FAIT FOI pour les inclus :
-   *  le total cesse d'être une reconstitution et devient ce que l'hôtel a
-   *  encaissé, remises et groupes postés en bloc compris. Omise (jour sans
-   *  Addon importé) → on retombe sur la reconstitution au prix de référence,
-   *  faute de mieux. */
+   *  confondus (`billedRevenueTtc`). Fournie → elle FAIT FOI pour le TOTAL des
+   *  inclus : celui-ci cesse d'être une reconstitution et devient ce que
+   *  l'hôtel a encaissé, remises et groupes postés en bloc compris. Elle ne
+   *  change RIEN au prix affiché chambre par chambre, qui reste celui de la
+   *  carte. Omise (jour sans Addon importé) → reconstitution au prix de la
+   *  carte, faute de mieux. */
   billedTtc?: number | null,
-  /** Prix TTC d'un couvert vendu à part (extra, externe). Le prix FORT du jour
-   *  au sens de `topPrice` : la remise consentie à une réservation ne baisse
-   *  pas le prix du petit-déjeuner pris au comptoir. Omis, on retombe sur le
-   *  plus élevé des prix passés dans `tarifs`. */
-  extraTtc?: number | null,
 ): PdjCA {
   const unitHt = (code: string): number => {
     const p = tarifs.get(code)
@@ -213,8 +208,8 @@ export function computePdjCA(
   }
   // Prix FORT : un extra, un externe ou un offert se valorise au tarif plein,
   // jamais au tarif d'un forfait groupe (décision du 2026-09-12).
-  let topTtc = extraTtc ?? 0
-  if (topTtc <= 0) for (const p of tarifs.values()) if (p > topTtc) topTtc = p
+  let topTtc = 0
+  for (const p of tarifs.values()) if (p > topTtc) topTtc = p
   const extraUnitHt = topTtc > 0 ? round2(fromTTC(topTtc)) : 0
 
   let inclusNb = 0

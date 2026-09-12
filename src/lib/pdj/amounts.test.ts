@@ -169,9 +169,10 @@ describe('computeAggDailyTotals', () => {
   })
 
   it('une remise sur une réservation ne brade pas le couvert au comptoir', () => {
-    // Même journée : les 16 inclus sont facturés 296 € (18,50 € l'unité, remise
-    // de 8 € consentie à une chambre) → 269,09 HT. L'extra, lui, reste vendu au
-    // prix de la carte, 19 € TTC → 17,27 HT. Total 286,36.
+    // Même journée : les 16 inclus sont facturés 296 € au lieu de 304 (remise
+    // de 8 € consentie à une chambre) → 269,09 HT, le montant réellement
+    // encaissé. L'extra, lui, reste vendu au prix de la carte, 19 € TTC →
+    // 17,27 HT : la remise d'une réservation ne change pas le tarif. 286,36.
     const rows: PdjAggRow[] = [
       agg({
         service_date: '2026-09-12',
@@ -184,9 +185,13 @@ describe('computeAggDailyTotals', () => {
     expect(computeAggDailyTotals(rows, TARIFS).get('2026-09-12')).toBe(286.36)
   })
 
-  it('suit en revanche une HAUSSE décidée par la direction, dès le jour même', () => {
-    // 16 inclus facturés 400 € = 25 € l'unité, au-dessus de la référence (19 €).
-    // Les inclus valent 363,64 HT et l'extra suit le nouveau prix : 22,73 HT.
+  it('encaisse une HAUSSE de tarif dès le jour où elle est facturée', () => {
+    // La direction passe le petit-déjeuner à 25 € : 16 inclus facturés 400 €.
+    // Le total suit IMMÉDIATEMENT, puisqu'il vaut la recette (363,64 HT). Le
+    // couvert extra reste valorisé au prix de la carte (17,27 HT) tant que
+    // `detectTarifs` n'a pas vu le nouveau prix devenir majoritaire dans
+    // l'historique — un écart de quelques euros sur les seuls extras, le temps
+    // que la carte bascule, contre un total juste dès le premier jour.
     const rows: PdjAggRow[] = [
       agg({
         service_date: '2026-10-01',
@@ -196,7 +201,7 @@ describe('computeAggDailyTotals', () => {
         revenue_ttc: 400,
       }),
     ]
-    expect(computeAggDailyTotals(rows, TARIFS).get('2026-10-01')).toBe(386.37)
+    expect(computeAggDailyTotals(rows, TARIFS).get('2026-10-01')).toBe(380.91)
   })
 
   it('prend le prix FORT quand plusieurs codes coexistent', () => {

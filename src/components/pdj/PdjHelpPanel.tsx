@@ -66,10 +66,10 @@ function BoxRow({
  * vitrine, pas une zone de saisie.
  * ------------------------------------------------------------------------ */
 
-/** Prix d'exemple, à la forme de ceux que la page lit chaque jour dans la
- *  facturation du PMS (cf. pricing.ts). Ce sont les prix en vigueur le
- *  2026-09-12 ; ils n'ont pas vocation à être vrais éternellement, seulement à
- *  rendre l'exemple lisible. */
+/** Prix d'exemple, à la forme de la carte que `detectTarifs` retrouve dans la
+ *  facturation (cf. tarif.ts). Ce sont les prix en vigueur le 2026-09-12 ; ils
+ *  n'ont pas vocation à être vrais éternellement, seulement à rendre l'exemple
+ *  lisible. */
 const DEMO_TARIFS = new Map([
   ['PDJ', 19],
   ['PDJBB', 10],
@@ -570,26 +570,43 @@ export function PdjHelpPanel() {
           déjà dans le chiffre, sans que personne n'ait à le déclarer.
         </p>
         <p>
-          Chaque chambre porte un <Term>code</Term> lu dans son tarif :{' '}
-          <Term>PDJ</Term> (le petit-déjeuner normal), <Term>PDJBB</Term> (le
-          tarif chambre et petit-déjeuner) ou <Term>PDJGROUP10</Term> (les
-          groupes). Le prix d'un code se retrouve en divisant sa recette du jour
-          par le nombre de couverts inclus qui la portent. Aujourd'hui par
-          exemple : PDJ à 19,00 € TTC, PDJBB et PDJGROUP10 à 10,00 €. Demain, ce
-          peut être autre chose — la page relit le prix chaque jour.
+          Il faut distinguer deux choses. Le <Term>prix d'un couvert</Term>,
+          d'abord : celui de la carte, retrouvé dans l'historique de facturation
+          parce que les recettes en sont toujours des multiples. Chaque chambre
+          porte un <Term>code</Term> lu dans son tarif — <Term>PDJ</Term> (le
+          petit-déjeuner normal, 19,00 € TTC soit 17,27 € HT),{' '}
+          <Term>PDJBB</Term> (le tarif chambre et petit-déjeuner, 10,00 € soit
+          9,09 € HT) ou <Term>PDJGROUP10</Term> (les groupes, 10,00 €
+          également). Rien n'est écrit en dur : si la direction change un tarif,
+          les recettes deviennent multiples du nouveau prix et la page le suit.
+        </p>
+        <p>
+          La <Term>recette d'une journée</Term>, ensuite : ce que l'hôtel a
+          encaissé ce jour-là. Elle n'est pas égale au nombre de couverts
+          multiplié par le prix de la carte, et c'est normal — une remise, un
+          geste commercial ou un groupe facturé en bloc l'en écartent. C'est
+          elle, et non un calcul, qui donne le total des inclus.
+        </p>
+        <p>
+          Attention à ne pas confondre les deux : diviser la recette du jour par
+          le nombre de couverts ne redonne pas le prix de la carte, cela donne
+          une moyenne. Un jour de remise, cette moyenne descend sous le prix
+          réellement payé par les autres chambres. La page affiche donc le prix
+          de la carte sur chaque chambre, et la recette réelle au total.
         </p>
         <p>Le chiffre d'affaires de la journée s'obtient alors ainsi :</p>
         <ul className="ml-4 list-disc space-y-1.5">
           <li>
-            les <Term>inclus</Term> valent ce que le PMS a facturé, dès qu'ils
-            sont dus — cochés ou non, ils sont facturés ;
+            les <Term>inclus</Term> valent, au total, ce que le PMS a facturé —
+            dus dès qu'ils sont au tarif, cochés ou non ;
           </li>
           <li>
             les <Term>extras</Term> et les <Term>externes</Term> n'apparaissent
             pas dans cette facturation : ils sont ajoutés à part, au{' '}
-            <Term>prix le plus élevé connu</Term> — un petit-déjeuner vendu au
-            comptoir n'est pas un forfait groupe, et une remise accordée à une
-            réservation ne le brade pas non plus ;
+            <Term>prix le plus élevé de la carte</Term> (19,00 € TTC, soit
+            17,27 € HT) — un petit-déjeuner vendu au comptoir n'est pas un
+            forfait groupe, et une remise accordée à une réservation ne le brade
+            pas non plus ;
           </li>
           <li>
             les <Term>offerts</Term> sont retirés du calcul : ils restent des
@@ -630,8 +647,7 @@ export function PdjHelpPanel() {
         <Caption>
           Les mêmes chambres, vues en mode financier : deux extras dont un offert
           (un seul est facturé), un inclus non encore servi mais dû, et deux inclus
-          servis. Montants calculés avec le prix du jour, ici 19,00 € TTC
-          (17,27 € HT) le petit-déjeuner.
+          servis. Montants au prix de la carte : 19,00 € TTC, soit 17,27 € HT.
         </Caption>
         <p>
           Une chambre sans petit-déjeuner affiche un tiret. Une chambre dont le

@@ -45,21 +45,17 @@ export interface PdjDaySummary {
  * Synthèse PDJ d'un jour. Miroir exact du board (`BreakfastBoard`) : volumes sur
  * les lignes In-House, CA HT via `computePdjCA`.
  *
- * `prices` = prix unitaires TTC du JOUR (`dayUnitPrices`), c'est-à-dire la
- * recette du PMS divisée par les couverts inclus, avec repli sur les tarifs de
- * référence pour un code que la journée ne renseigne pas.
+ * `tarifs` = prix unitaires TTC de la CARTE (`detectTarifs`), ceux auxquels un
+ * couvert est vendu. Le TOTAL des inclus, lui, vaut la recette facturée.
  */
 export function pdjDaySummary(
   rows: PdjDayRow[],
-  prices: Map<string, number>,
+  tarifs: Map<string, number>,
   /** Externes du jour (clients non logés) : comptés en extras, au prix fort. */
   externalsCount = 0,
   /** Recette TTC facturée par le PMS ce jour-là (`billedRevenueTtc`). Fournie,
    *  elle FAIT FOI pour les inclus ; absente, on retombe sur la reconstitution. */
   billedTtc?: number | null,
-  /** Prix TTC d'un couvert vendu à part (cf. `topPrice`) : le plus élevé des
-   *  prix connus, du jour comme de la référence. */
-  extraTtc?: number | null,
 ): PdjDaySummary {
   const rooms = rows.length
   const guests = rows.reduce((s, r) => s + r.guests, 0)
@@ -71,10 +67,9 @@ export function pdjDaySummary(
   const extrasCount = roomExtras + Math.max(0, externalsCount)
   const { includedHt, extrasHt, totalHt } = computePdjCA(
     rows,
-    prices,
+    tarifs,
     externalsCount,
     billedTtc,
-    extraTtc,
   )
   const captage = guests > 0 ? ((included + extrasCount) / guests) * 100 : null
 
