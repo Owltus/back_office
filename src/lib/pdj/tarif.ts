@@ -10,12 +10,27 @@
  * multiples de 25 → la détection renvoie 25 toute seule.
  *
  * Les jours « remise / gratuité / avoir » (revenus non multiples, 0, négatifs) sont
- * des minoritaires : ils n'empêchent pas la détection (seuil de 2/3) et remontent
- * ailleurs comme anomalies.
+ * des minoritaires : ils n'empêchent pas la détection (SUPPORT_MIN, et surtout
+ * SUPPORT_TOLERANCE au départage) et remontent ailleurs comme anomalies.
+ *
+ * LIMITE CONNUE, mesurée le 2026-09-12 : la détection ne suit PAS un vrai
+ * changement de tarif tant que l'ancien reste majoritaire, et quand les deux
+ * s'équilibrent elle tombe sur un diviseur commun (19 € puis 25 € à parts
+ * égales → 5 €). Ce défaut est antérieur et n'a jamais été rencontré en
+ * production ; le corriger suppose de raisonner sur la RÉCENCE des revenus, ce
+ * qu'une simple fenêtre glissante ne suffit pas à faire (elle traverse la même
+ * zone de diviseur commun). À reprendre le jour où le prix changera.
  * ------------------------------------------------------------------------ */
 
 /** Part minimale des revenus devant s'expliquer par le tarif retenu (sinon null). */
 const SUPPORT_MIN = 0.5
+
+/** Tolérance au DÉPARTAGE : un candidat expliquant au moins cette part du
+ *  meilleur score reste en lice, et c'est alors le plus GRAND qui gagne.
+ *  Absorbe les journées atypiques (remise, geste commercial, avoir) sans
+ *  lesquelles un tarif s'établirait à l'unité près — cf. l'incident du
+ *  2026-09-12 documenté dans `detectUnitPrice`. */
+const SUPPORT_TOLERANCE = 0.95
 
 /**
  * Détecte le prix unitaire TTC (en €) d'un code à partir de ses revenus TTC
@@ -54,9 +69,28 @@ export function detectUnitPrice(revenues: number[]): number | null {
   }
   if (maxMult / cents.length < SUPPORT_MIN) return null
 
-  // Le PLUS GRAND candidat atteignant ce maximum = le tarif.
+  // Le plus grand candidat dont le support est QUASI maximal.
+  //
+  // La comparaison était stricte (`m === maxMult`), et c'est ce qui a cassé le
+  // 2026-09-12 : une SEULE journée Addon non multiple de 19 € (296,00 €, sur
+  // 254 jours d'historique) a suffi à faire tomber le tarif PDJ de 19,00 € à
+  // 1,00 €, divisant par 19 le CA affiché partout — board, PDF, analytique
+  // annuelle et mensuelle, bande RepJour.
+  //
+  // Le mécanisme : 1,00 € divisait les 254 revenus (dont l'intrus), 19,00 € n'en
+  // divisait plus que 253. Avec une égalité STRICTE, le score de 254 l'emportait,
+  // et « le plus grand candidat » ne départageait plus rien puisqu'un seul
+  // candidat atteignait ce maximum. Une exception commerciale sur une journée
+  // suffisait donc à renverser un tarif établi sur huit mois.
+  //
+  // La tolérance rétablit l'intention d'origine : le tarif est le plus grand
+  // montant qui explique la QUASI-TOTALITÉ des recettes, pas celui qui les
+  // explique toutes à une unité près. 19,00 € (253/254) l'emporte de nouveau sur
+  // 1,00 € (254/254), et tout diviseur plus petit (9,50 €, 4,75 €…) reste écarté
+  // par la préférence au plus grand.
+  const supportFloor = maxMult * SUPPORT_TOLERANCE
   let best = 0
-  for (const [cand, m] of multOf) if (m === maxMult && cand > best) best = cand
+  for (const [cand, m] of multOf) if (m >= supportFloor && cand > best) best = cand
   return best > 0 ? best / 100 : null
 }
 

@@ -47,3 +47,49 @@ describe('detectTarifs', () => {
     expect(t.get('PDJBB')).toBe(10)
   })
 })
+
+/*
+ * INCIDENT DU 2026-09-12 — non-régression.
+ *
+ * Une seule journée Addon non multiple de 19 € (296,00 €) sur 254 jours a fait
+ * basculer le tarif PDJ de 19,00 € à 1,00 €, divisant par 19 le CA affiché
+ * partout (board, PDF, analytique, bande RepJour). Cause : le départage exigeait
+ * le score MAXIMAL au sens strict, et 1,00 € divisait les 254 revenus quand
+ * 19,00 € n'en divisait plus que 253.
+ *
+ * Le candidat 1,00 € n'existe que parce qu'un vieux jour à 19,00 € engendre
+ * 1900 / 19 = 100 centimes : les deux conditions doivent être réunies, ce qui
+ * explique que le défaut soit resté invisible huit mois.
+ */
+describe('detectUnitPrice — robustesse à une journée atypique', () => {
+  // 253 jours propres (multiples de 19) + la journée qui a tout cassé.
+  const HISTORIQUE_REEL = [
+    19, // le petit revenu qui fabrique le candidat 1,00 €
+    ...Array.from({ length: 252 }, (_, i) => 19 * (3 + (i % 40))),
+    296, // 2026-09-12 : exception commerciale, non multiple de 19
+  ]
+
+  it('garde 19 € malgré une journée non multiple (incident du 2026-09-12)', () => {
+    expect(detectUnitPrice(HISTORIQUE_REEL)).toBe(19)
+  })
+
+  it('sans la journée atypique, le résultat est identique', () => {
+    expect(detectUnitPrice(HISTORIQUE_REEL.slice(0, -1))).toBe(19)
+  })
+
+  it('résiste à plusieurs journées atypiques isolées', () => {
+    expect(detectUnitPrice([...HISTORIQUE_REEL, 296, 143.5])).toBe(19)
+  })
+
+  it('ne se laisse pas tirer vers un diviseur plus petit', () => {
+    // 9,50 € divise TOUS les revenus en multiples de 19 : il ne doit jamais
+    // l'emporter, la préférence allant au plus grand candidat en lice.
+    expect(detectUnitPrice(HISTORIQUE_REEL)).not.toBe(9.5)
+    expect(detectUnitPrice(HISTORIQUE_REEL)).not.toBe(1)
+  })
+
+  it('renonce encore quand les revenus sont vraiment dispersés', () => {
+    // Le garde-fou SUPPORT_MIN reste actif : pas de tarif inventé sur du bruit.
+    expect(detectUnitPrice([101.37, 203.11, 307.53, 409.99, 511.23])).toBeNull()
+  })
+})
