@@ -93,7 +93,7 @@ import { canEditPdjDay } from '#/lib/pdj/editability.ts'
 import { breakfastServiceDate, parseAddonProduction } from '#/lib/pdj/addon.ts'
 import { computeAggBenchmarks } from '#/lib/pdj/amounts.ts'
 import { detectTarifs } from '#/lib/pdj/tarif.ts'
-import { billedRevenueTtc, topPrice } from '#/lib/pdj/pricing.ts'
+import { billedRevenueTtc, cardPrices, topPrice } from '#/lib/pdj/pricing.ts'
 import { purgeGate } from '#/lib/pdj/purgeGate.ts'
 import { fileTooLarge, MAX_CSV_BYTES } from '#/lib/shared/files.ts'
 import { computePdjCA } from '#/lib/pdj/breakdown.ts'
@@ -418,13 +418,35 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
     queryKey: ['pdj', 'addon-all'],
     queryFn: fetchAllAddonProduction,
   })
-  // Prix de la CARTE, retrouvés dans l'historique de facturation : 19 € le PDJ,
-  // 10 € le PDJBB et le PDJGROUP10 (mesuré sur 602 recettes le 2026-09-12).
-  // C'est LE prix d'un couvert, celui qu'on affiche. Surtout pas la recette du
-  // jour divisée par les couverts : ce quotient est une moyenne, tirée vers le
-  // bas par une remise et vers le haut par une facturation en bloc (de 8,14 € à
-  // 96,25 € selon les jours) — cf. l'en-tête de pricing.ts.
-  const tarifs = useMemo(() => detectTarifs(allAddon ?? []), [allAddon])
+  // Prix de RÉFÉRENCE, gardés en repli seul (cf. `tarifs` plus bas).
+  const referenceTarifs = useMemo(() => detectTarifs(allAddon ?? []), [allAddon])
+
+  // Repères « moyenne par jour » (total HT, captage, occupation) sur TOUT
+  // l'historique. Lus depuis la VUE d'agrégation `pdj_daily_agg` (quelques lignes
+  // par jour) au lieu de scanner la table entière — mêmes chiffres, une fraction
+  // du coût. Chaque jour de l'historique y porte SA recette facturée ; les
+  // prix de la carte n'y servent qu'aux extras et aux jours sans recette reçue.
+  // `benchmark` reste `undefined` tant que l'agrégat charge
+  // (rendu inchangé : les sous-textes n'apparaissent qu'ensuite).
+  // Clé PARTAGÉE avec le seuil de rupture de PdjAnalytiqueMoisBoard : même
+  // lecture (toute la vue), un seul scan en cache au lieu de deux (audit 2026-09-06).
+  const { data: aggAll } = useQuery({
+    queryKey: ['pdj', 'analytics', 'all-history'],
+    queryFn: () => fetchDailyAgg('2000-01-01', '2100-12-31'),
+    staleTime: 5 * 60_000,
+  })
+  // Prix de la CARTE, relus dans la facturation : la valeur la plus FRÉQUENTE
+  // du quotient recette ÷ couverts inclus sur les trois dernières semaines
+  // (19 € le PDJ, 10 € le PDJBB et le PDJGROUP10, mesuré le 2026-09-12). C'est
+  // LE prix d'un couvert, celui qu'on affiche. Jamais le quotient d'UNE journée,
+  // qui est une moyenne tirée vers le bas par une remise et vers le haut par une
+  // facturation en bloc — cf. l'en-tête de pricing.ts.
+  // `selectedDate` borne la lecture : un jour passé se valorise au tarif qui
+  // avait cours ce jour-là, pas à celui d'aujourd'hui.
+  const tarifs = useMemo(
+    () => cardPrices(aggAll ?? [], referenceTarifs, selectedDate),
+    [aggAll, referenceTarifs, selectedDate],
+  )
 
   // Facturation du PMS pour le jour affiché : c'est elle qui fait le chiffre
   // d'affaires. Lecture légère (au plus trois lignes, une par code).
@@ -486,20 +508,8 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
     [ca.billed, topTtcLabel],
   )
 
-  // Repères « moyenne par jour » (total HT, captage, occupation) sur TOUT
-  // l'historique. Lus depuis la VUE d'agrégation `pdj_daily_agg` (quelques lignes
-  // par jour) au lieu de scanner la table entière — mêmes chiffres, une fraction
-  // du coût. Chaque jour de l'historique y porte SA recette facturée ; les
-  // prix de la carte n'y servent qu'aux extras et aux jours sans recette reçue.
-  // `benchmark` reste `undefined` tant que l'agrégat charge
-  // (rendu inchangé : les sous-textes n'apparaissent qu'ensuite).
-  // Clé PARTAGÉE avec le seuil de rupture de PdjAnalytiqueMoisBoard : même
-  // lecture (toute la vue), un seul scan en cache au lieu de deux (audit 2026-09-06).
-  const { data: aggAll } = useQuery({
-    queryKey: ['pdj', 'analytics', 'all-history'],
-    queryFn: () => fetchDailyAgg('2000-01-01', '2100-12-31'),
-    staleTime: 5 * 60_000,
-  })
+  // Repères « moyenne par jour » (total HT, captage, occupation) : calculés
+  // depuis `aggAll` (lu plus haut, même clé de cache).
   const benchmark = useMemo(
     () => (aggAll ? computeAggBenchmarks(aggAll, tarifs) : undefined),
     [aggAll, tarifs],

@@ -26,6 +26,7 @@ import {
   computeRuptureThreshold,
 } from '#/lib/pdj/analytics.ts'
 import { computeAggDailyTotals } from '#/lib/pdj/amounts.ts'
+import { cardPrices } from '#/lib/pdj/pricing.ts'
 import { detectTarifs } from '#/lib/pdj/tarif.ts'
 import { fmtInt } from '#/lib/pdj/format.ts'
 import { DAY_NAMES, MONTHS_LABELS } from '#/lib/repjour/constants.ts'
@@ -108,8 +109,18 @@ export function PdjAnalytiqueMoisBoard({
     queryFn: fetchAllAddonProduction,
   })
   const dailyCa = useMemo(
-    () => computeAggDailyTotals(rows, detectTarifs(addonRows), externalsByDate),
-    [addonRows, rows, externalsByDate],
+    () =>
+      computeAggDailyTotals(
+        rows,
+        // La carte se relit dans l'historique complet, déjà chargé pour le
+        // seuil de rupture — plus fiable qu'un seul mois.
+        cardPrices(
+          historyRows.length > 0 ? historyRows : rows,
+          detectTarifs(addonRows),
+        ),
+        externalsByDate,
+      ),
+    [addonRows, rows, historyRows, externalsByDate],
   )
 
   // Index par numéro de jour pour peupler un tableau plein mois (1..lastDay),

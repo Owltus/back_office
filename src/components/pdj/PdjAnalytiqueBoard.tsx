@@ -27,6 +27,7 @@ import {
 } from '#/lib/pdj/service.ts'
 import { aggregatePdjMonthly, yearsFromDates } from '#/lib/pdj/analytics.ts'
 import { computeAggDailyTotals } from '#/lib/pdj/amounts.ts'
+import { cardPrices } from '#/lib/pdj/pricing.ts'
 import { detectTarifs } from '#/lib/pdj/tarif.ts'
 import { fmtInt } from '#/lib/pdj/format.ts'
 import { MONTHS_LABELS, MONTHS_SHORT } from '#/lib/repjour/constants.ts'
@@ -100,7 +101,7 @@ export function PdjAnalytiqueBoard() {
   const caStats = useMemo(() => {
     const totals = computeAggDailyTotals(
       rows,
-      detectTarifs(addonRows),
+      cardPrices(rows, detectTarifs(addonRows)),
       externalsByDate,
     )
     const byMonth = new Array<number | null>(12).fill(null)

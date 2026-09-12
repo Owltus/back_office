@@ -13,13 +13,21 @@
  * des minoritaires : ils n'empêchent pas la détection (SUPPORT_MIN, et surtout
  * SUPPORT_TOLERANCE au départage) et remontent ailleurs comme anomalies.
  *
- * LIMITE CONNUE, mesurée le 2026-09-12 : la détection ne suit PAS un vrai
- * changement de tarif tant que l'ancien reste majoritaire, et quand les deux
- * s'équilibrent elle tombe sur un diviseur commun (19 € puis 25 € à parts
- * égales → 5 €). Ce défaut est antérieur et n'a jamais été rencontré en
- * production ; le corriger suppose de raisonner sur la RÉCENCE des revenus, ce
- * qu'une simple fenêtre glissante ne suffit pas à faire (elle traverse la même
- * zone de diviseur commun). À reprendre le jour où le prix changera.
+ * ⚠ CE N'EST PLUS LA SOURCE DES PRIX (2026-09-12). La carte se lit désormais
+ * dans `cardPrices` (pricing.ts) : la valeur la plus FRÉQUENTE du quotient
+ * recette ÷ couverts inclus sur les trois dernières semaines. `detectTarifs` ne
+ * sert plus que de REPLI, pour un code que cette fenêtre ne renseigne pas.
+ *
+ * POURQUOI ce déclassement, mesuré en rejouant l'historique réel : la recherche
+ * de diviseur ne survit pas à un CHANGEMENT de tarif. Un passage de 19 € à 25 €
+ * la fait tomber à 1,00 € dès le seizième jour — 19 et 25 n'ont pour diviseur
+ * commun que 1 — et elle n'en repart jamais. Ce n'est pas un retard, c'est un
+ * chiffre absurde, de la même famille que l'incident du 2026-09-12. Le mode du
+ * quotient, lui, bascule proprement sur 25 € au sixième jour.
+ *
+ * Conservée parce qu'elle ne dépend QUE des recettes : elle sait encore donner
+ * un prix quand l'application n'a pas les couverts en face (rooming non
+ * importé), là où `cardPrices` n'a pas de dénominateur.
  * ------------------------------------------------------------------------ */
 
 /** Part minimale des revenus devant s'expliquer par le tarif retenu (sinon null). */

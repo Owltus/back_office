@@ -16,7 +16,7 @@ import {
   fetchExternalsCount,
 } from '#/lib/pdj/service.ts'
 import { detectTarifs } from '#/lib/pdj/tarif.ts'
-import { billedRevenueTtc } from '#/lib/pdj/pricing.ts'
+import { billedRevenueTtc, cardPrices } from '#/lib/pdj/pricing.ts'
 import { pdjDaySummary } from '#/lib/pdj/summary.ts'
 import { fetchParkingDailyOccupation } from '#/lib/parking/service.ts'
 import { captageIndex } from '#/lib/parking/analytics.ts'
@@ -175,7 +175,7 @@ export function DayCrossSummary({
     staleTime: 60 * 60_000,
     gcTime: 2 * 60 * 60_000,
   })
-  const tarifs = useMemo(
+  const referenceTarifs = useMemo(
     () => detectTarifs(allAddonQ.data ?? []),
     [allAddonQ.data],
   )
@@ -205,6 +205,15 @@ export function DayCrossSummary({
         .filter((r) => r.service_date === date && r.code && r.revenue_ttc != null)
         .map((r) => ({ code: r.code as string, revenue_ttc: r.revenue_ttc ?? 0 })),
     [aggWinQ.data, date],
+  )
+  // Prix de la CARTE du jour affiché : la valeur la plus fréquente du quotient
+  // recette ÷ couverts inclus, lue dans la fenêtre DÉJÀ chargée (aucune requête
+  // de plus) et bornée à `date` — un jour passé se valorise au tarif qui avait
+  // cours alors. Même règle, mêmes chiffres que la page PDJ. Les tarifs de
+  // référence ne servent qu'au code qu'une fenêtre trop pauvre ne dirait pas.
+  const tarifs = useMemo(
+    () => cardPrices(aggWinQ.data ?? [], referenceTarifs, date),
+    [aggWinQ.data, referenceTarifs, date],
   )
   const pdj = useMemo(
     () =>
