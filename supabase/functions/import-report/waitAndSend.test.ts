@@ -300,10 +300,11 @@ Deno.test('le mode sobre écrit au CHANGEMENT d état, pas à chaque passage', a
   assertEquals(rows.length, 2)
 })
 
-Deno.test('le mode sobre écrit TOUJOURS une anomalie, même répétée', async () => {
-  // Un envoi refusé de façon définitive doit se voir dès le premier passage,
-  // sans quoi la table créée pour répondre à « pourquoi ça n'est pas parti »
-  // reste muette précisément quand on en a besoin.
+Deno.test('le mode sobre écrit une anomalie UNE fois, pas à chaque passage', async () => {
+  // Une anomalie qui dure toute la nuit doit se voir — une fois, horodatée.
+  // L'écrire à chaque passage noierait la nuit sous des lignes identiques ; ne
+  // jamais l'écrire laisserait le journal muet. C'est le changement d'état qui
+  // fait foi, et une anomalie qui apparaît EST un changement.
   const clock = fakeClock()
   const { rows, writer } = fakeLog()
   const refus: AttemptFn = () =>
@@ -312,16 +313,29 @@ Deno.test('le mode sobre écrit TOUJOURS une anomalie, même répétée', async 
       note: 'envoi échoué (Aucun destinataire actif (type « to »))',
       retryable: false,
     })
+  // Première apparition : l'état change, on écrit.
   await waitThenAutoSend(refus, writer, false, INSTANT, 'veille planifiée', {
     budgetMs: 0,
     quiet: true,
-    lastNote: 'envoi échoué (Aucun destinataire actif (type « to »))',
+    lastNote: 'Forecast pas frais (importé il y a 24 h) — envoi auto ignoré',
     sleep: clock.sleep,
     now: clock.now,
   })
   assertEquals(rows.length, 1)
   assertEquals(rows[0].retryable, false)
   assertEquals(rows[0].sent, false)
+
+  // Passages suivants, même anomalie : on se tait.
+  for (let i = 0; i < 10; i++) {
+    await waitThenAutoSend(refus, writer, false, INSTANT, 'veille planifiée', {
+      budgetMs: 0,
+      quiet: true,
+      lastNote: String(rows[0].note),
+      sleep: clock.sleep,
+      now: clock.now,
+    })
+  }
+  assertEquals(rows.length, 1)
 })
 
 Deno.test('un seul coup d œil ne parle jamais de « fin de veille »', async () => {

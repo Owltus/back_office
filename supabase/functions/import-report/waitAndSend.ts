@@ -269,10 +269,13 @@ export async function waitThenAutoSend(
     // (PDF + Resend), et c'est ce temps-là qui dit si la veille est bien taillée.
     const waitedSeconds = Math.round((now() - startedAt) / 1000)
 
-    // En mode sobre : on écrit si l'état a changé, si le rapport part, ou si la
-    // situation est anormale (rien à espérer du temps ET rien n'est parti).
-    const notable =
-      outcome.sent || !outcome.retryable || outcome.note !== lastNote
+    // En mode sobre : on écrit quand l'état CHANGE, et toujours quand le rapport
+    // part. Rien d'autre. Forcer l'écriture sur toute issue définitive paraissait
+    // prudent, mais « hors fenêtre horaire » en est une : la veille planifiée
+    // aurait laissé une ligne à chaque passage, trente par nuit d'hiver, pour
+    // dire trente fois la même chose. Une anomalie qui dure est écrite UNE fois,
+    // horodatée ; sa disparition l'est aussi, puisque c'est un changement.
+    const notable = outcome.sent || outcome.note !== lastNote
     if (!dryRun && (!deps.quiet || notable)) {
       await logAttempt(admin, {
         cycle_date: cycleDate,
