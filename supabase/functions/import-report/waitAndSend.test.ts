@@ -1,5 +1,11 @@
 // Rejoue la nuit du 2026-09-12 — celle où le rapport journalier n'est pas parti.
 //
+// Ce qui est éprouvé ici, c'est la VEILLE : le filet qui prend le relais quand
+// l'arrivée du second rapport n'a pas suffi à déclencher l'envoi. Le chemin
+// normal, lui, ne dépend d'aucune horloge — c'est l'arrivée du dernier des deux
+// rapports qui fait partir le mail, qu'elle survienne après une minute ou après
+// onze.
+//
 // Lancer : `deno test supabase/functions/import-report/waitAndSend.test.ts`
 //
 // Le temps est SIMULÉ (horloge et sommeil injectés) : la suite s'exécute en
@@ -73,12 +79,12 @@ function attemptsOfThatNight(clock: { now: () => number }): {
   return { fn, calls: () => calls }
 }
 
-Deno.test("l'ancienne reprise de 4 secondes n'attrapait pas le Forecast", async () => {
+Deno.test("l'ancienne reprise de 4 secondes ne voyait pas arriver le Forecast", async () => {
   const clock = fakeClock()
   const { rows, writer } = fakeLog()
   const { fn, calls } = attemptsOfThatNight(clock)
 
-  // Ancien comportement : une tentative, 4 secondes, une seconde tentative.
+  // Ancien comportement : un contrôle, 4 secondes, un second contrôle.
   await waitThenAutoSend(fn, writer, false, INSTANT, 'comparison', {
     retryEveryMs: 4_000,
     budgetMs: 4_000,
@@ -86,8 +92,8 @@ Deno.test("l'ancienne reprise de 4 secondes n'attrapait pas le Forecast", async 
     now: clock.now,
   })
 
-  // Une tentative immédiate, quatre secondes d'attente, une seconde tentative :
-  // c'est exactement tout ce que permettait l'ancien code.
+  // Un contrôle immédiat, quatre secondes, un second contrôle : c'est
+  // exactement tout ce que permettait l'ancien code.
   assertEquals(calls(), 2)
   assertEquals(
     rows.filter((r) => r.sent === true).length,
@@ -95,10 +101,10 @@ Deno.test("l'ancienne reprise de 4 secondes n'attrapait pas le Forecast", async 
     'rien ne part : le Forecast arrive 50 secondes trop tard',
   )
   // Le renoncement est au moins ÉCRIT, ce qui manquait totalement cette nuit-là.
-  assertEquals(String(rows[rows.length - 1].note).startsWith('abandon après'), true)
+  assertEquals(String(rows[rows.length - 1].note).startsWith('fin de veille'), true)
 })
 
-Deno.test('la patience de cinq minutes envoie le rapport à la 60e seconde', async () => {
+Deno.test('la veille voit le Forecast se poser et envoie à la 60e seconde', async () => {
   const clock = fakeClock()
   const { rows, writer } = fakeLog()
   const { fn, calls } = attemptsOfThatNight(clock)
@@ -110,7 +116,7 @@ Deno.test('la patience de cinq minutes envoie le rapport à la 60e seconde', asy
     now: clock.now,
   })
 
-  // 0 s, 15 s, 30 s, 45 s, 60 s → la cinquième tentative trouve le Forecast.
+  // Coups d'œil à 0, 15, 30, 45 et 60 s : le cinquième voit le Forecast.
   assertEquals(calls(), 5)
   assertEquals(clock.elapsed, 60_000)
   const envoi = rows.find((r) => r.sent === true)
@@ -136,7 +142,7 @@ Deno.test('l’invocation du Comparison suffit : celle du Forecast peut mourir',
   assertEquals(rows.some((r) => r.sent === true), true)
 })
 
-Deno.test('une raison définitive arrête tout de suite, sans attendre pour rien', async () => {
+Deno.test('une situation sans issue se retire tout de suite, sans veiller pour rien', async () => {
   const clock = fakeClock()
   const { rows, writer } = fakeLog()
   let calls = 0
@@ -156,7 +162,7 @@ Deno.test('une raison définitive arrête tout de suite, sans attendre pour rien
     now: clock.now,
   })
 
-  assertEquals(calls, 1, 'patienter ne ferait pas apparaître un budget')
+  assertEquals(calls, 1, 'veiller ne ferait pas apparaître un budget')
   assertEquals(clock.elapsed, 0)
   assertEquals(rows.length, 1)
 })
@@ -184,7 +190,7 @@ Deno.test('« déjà envoyé » par l’invocation sœur : on s’arrête, pas d
   assertEquals(rows.some((r) => r.sent === true), false)
 })
 
-Deno.test('le Forecast qui ne viendra jamais : abandon DIT, après cinq minutes', async () => {
+Deno.test('le Forecast qui ne viendra jamais : fin de veille DITE, après cinq minutes', async () => {
   const clock = fakeClock()
   const { rows, writer } = fakeLog()
   let calls = 0
@@ -204,18 +210,18 @@ Deno.test('le Forecast qui ne viendra jamais : abandon DIT, après cinq minutes'
     now: clock.now,
   })
 
-  // 21 tentatives : une par quart de minute de 0 à 300 secondes incluses.
+  // 21 coups d'œil : un par quart de minute, de 0 à 300 secondes incluses.
   assertEquals(calls, 21)
   const dernier = rows[rows.length - 1]
   assertEquals(dernier.sent, false)
   assertEquals(dernier.waited_seconds, 300)
   assertEquals(
     String(dernier.note),
-    "abandon après 300s d'attente et 21 tentative(s) — dernière raison : Forecast absent pour ce mois — envoi auto ignoré",
+    'fin de veille après 300s sans que la donnée attendue se pose (21 contrôles) — dernier état : Forecast absent pour ce mois — envoi auto ignoré',
   )
 })
 
-Deno.test('chaque tentative laisse une trace lisible en base', async () => {
+Deno.test('chaque coup d’œil laisse une trace lisible en base', async () => {
   const clock = fakeClock()
   const { rows, writer } = fakeLog()
   const { fn } = attemptsOfThatNight(clock)

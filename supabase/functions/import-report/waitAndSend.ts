@@ -14,12 +14,27 @@
 // Tout reposait donc sur celle du Forecast — la seule qui pouvait encore
 // envoyer. Elle n'a pas abouti, et le rapport n'est jamais parti.
 //
-// LE PRINCIPE RETENU : les deux invocations deviennent REDONDANTES.
+// LE PRINCIPE RETENU : une VEILLE, et non une série de tentatives.
 //
-// Chacune attend désormais patiemment sa sœur, en réessayant toutes les quinze
-// secondes pendant plusieurs minutes. Celle du Comparison aurait trouvé le
-// Forecast à la quatrième tentative et envoyé le rapport, quoi qu'il soit
-// advenu de l'autre. Il faut que LES DEUX échouent pour que rien ne parte.
+// L'envoi normal ne repose PAS sur cette veille. Il repose sur une règle
+// simple : celui des deux rapports qui arrive EN DERNIER déclenche l'envoi,
+// puisque à ce moment-là tout est réuni. Que le Forecast arrive une minute ou
+// onze minutes après le Comparison n'y change rien — c'est son arrivée qui fait
+// partir le mail, pas une horloge.
+//
+// La veille est le FILET : celui qui est arrivé en premier reste en stand-by, à
+// ne rien faire, et se contente de regarder si la donnée sœur a fini par se
+// poser. Si l'arrivée du second n'a pas réussi à déclencher l'envoi — ce qui
+// s'est produit le 2026-09-12 — c'est le premier, resté en veille, qui prend le
+// relais. Il faut donc que LES DEUX chemins échouent pour que rien ne parte.
+//
+// PORTÉE DE LA VEILLE. Elle dure quelques minutes, pas indéfiniment : elle vit
+// dans l'invocation, que le runtime finit par arrêter. Elle couvre donc un
+// second rapport qui tarde de quelques minutes, pas d'une demi-heure. Au-delà,
+// c'est l'arrivée du second rapport qui reste le seul déclencheur — et si son
+// propre contrôle échoue ce soir-là, rien ne part. Fermer ce dernier trou
+// demande une veille PLANIFIÉE côté base (pg_cron), indépendante de toute
+// invocation.
 //
 // POURQUOI APRÈS LA RÉPONSE, ET NON PENDANT.
 //
@@ -68,14 +83,15 @@ export type AttemptFn = (
   instant: Date,
 ) => Promise<Outcome>
 
-/** Délai entre deux tentatives. Assez court pour partir vite, assez long pour
- *  ne pas marteler la base : le rapport sœur met une minute, pas une heure. */
+/** Intervalle entre deux coups d'œil. Assez court pour partir vite dès que la
+ *  donnée sœur se pose, assez long pour ne rien marteler : en stand-by, on
+ *  regarde, on ne travaille pas. */
 const RETRY_EVERY_MS = 15_000
 
-/** Budget d'attente par défaut, en secondes. Cinq minutes couvrent près de six
- *  fois l'écart observé (54 s) tout en restant sous la durée maximale d'une
- *  invocation. Réglable sans redéploiement par le secret
- *  `AUTO_SEND_PATIENCE_SECONDS` (0 = aucune attente, une seule tentative). */
+/** Durée de la veille par défaut, en secondes. Cinq minutes couvrent six fois
+ *  l'écart de la nuit du 2026-09-12 (54 s), tout en restant sous la durée de vie
+ *  d'une invocation. Réglable sans redéploiement par le secret
+ *  `AUTO_SEND_PATIENCE_SECONDS` (0 = pas de veille, un seul contrôle). */
 const DEFAULT_PATIENCE_S = 300
 
 /** Garde-fou : au-delà, on sortirait de la durée de vie d'une invocation et
@@ -89,7 +105,7 @@ function patienceMs(): number {
   return Math.min(seconds, MAX_PATIENCE_S) * 1000
 }
 
-/** Une tentative, telle qu'on la relira demain matin. */
+/** Un coup d'œil de la veille, tel qu'on le relira demain matin. */
 interface AttemptLog {
   cycle_date: string
   trigger_report: string
@@ -100,7 +116,7 @@ interface AttemptLog {
   note: string
 }
 
-/** Journalise une tentative. N'échoue JAMAIS bruyamment : une trace manquante ne
+/** Journalise un contrôle. N'échoue JAMAIS bruyamment : une trace manquante ne
  *  doit pas empêcher un envoi. */
 async function logAttempt(admin: LogWriter, row: AttemptLog): Promise<void> {
   try {
@@ -115,12 +131,15 @@ async function logAttempt(admin: LogWriter, row: AttemptLog): Promise<void> {
 }
 
 /**
- * Tente l'envoi, puis PATIENTE tant que l'abstention reste transitoire.
+ * Regarde si tout est réuni ; si oui, envoie. Sinon, reste EN VEILLE et regarde
+ * de nouveau, sans rien forcer.
  *
- * S'arrête dès que : le rapport est parti, une autre invocation l'a envoyé, ou
- * la raison n'a rien à espérer du temps (hors fenêtre, budget absent, secret
- * manquant). Sinon réessaie toutes les quinze secondes jusqu'à épuisement du
- * budget, et journalise alors explicitement qu'elle a attendu pour rien.
+ * Se retire dès que : le rapport est parti, l'autre chemin l'a envoyé, ou la
+ * situation n'a rien à espérer du temps (hors fenêtre, budget du mois absent,
+ * secret manquant) — dans ce dernier cas, immédiatement : veiller ne ferait pas
+ * apparaître un budget. Sinon regarde toutes les quinze secondes jusqu'au bout
+ * de la veille, et dit alors explicitement qu'elle se retire sans avoir vu
+ * arriver la donnée attendue.
  */
 export async function waitThenAutoSend(
   /** La tentative d'envoi (`maybeAutoSendRepjour` en production). */
@@ -166,20 +185,20 @@ export async function waitThenAutoSend(
       })
     }
     console.log(
-      `[AUTO-SEND repjour] tentative ${attempt} (+${waitedSeconds}s, déclenchée par ${triggerReport}) — ${
-        outcome.sent ? 'ENVOYÉ' : 'non envoyé'
-      } : ${outcome.note}`,
+      `[AUTO-SEND repjour] veille ouverte par ${triggerReport} — contrôle ${attempt} à +${waitedSeconds}s : ${
+        outcome.sent ? 'ENVOYÉ' : 'rien à faire'
+      } (${outcome.note})`,
     )
 
     // Parti, ou rien à espérer du temps : on s'arrête.
     if (outcome.sent || !outcome.retryable) return
 
-    // Budget épuisé : on le DIT, plutôt que de disparaître en silence. C'est
+    // Fin de la veille : on le DIT, plutôt que de disparaître en silence. C'est
     // cette ligne-là qui manquait le matin du 2026-09-12.
     const elapsed = now() - startedAt
     if (elapsed + retryEveryMs > budgetMs) {
       const totalWaited = Math.round(elapsed / 1000)
-      const note = `abandon après ${totalWaited}s d'attente et ${attempt} tentative(s) — dernière raison : ${outcome.note}`
+      const note = `fin de veille après ${totalWaited}s sans que la donnée attendue se pose (${attempt} contrôles) — dernier état : ${outcome.note}`
       if (!dryRun) {
         await logAttempt(admin, {
           cycle_date: cycleDate,
@@ -200,7 +219,7 @@ export async function waitThenAutoSend(
 }
 
 /**
- * Lance l'attente EN ARRIÈRE-PLAN si le runtime le permet, sinon en ligne.
+ * Ouvre la veille EN ARRIÈRE-PLAN si le runtime le permet, sinon en ligne.
  *
  * `EdgeRuntime.waitUntil` laisse la réponse HTTP partir tout de suite tout en
  * laissant vivre la promesse : le Worker Cloudflare n'attend pas, et le PMS ne
