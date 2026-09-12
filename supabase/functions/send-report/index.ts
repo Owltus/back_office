@@ -194,6 +194,14 @@ Deno.serve(async (req) => {
     recipientsTable,
     resendKey,
     testTo,
+    // FILET DE SECOURS : un envoi manuel doit TOUJOURS partir, même si le même
+    // rapport est déjà parti automatiquement — c'est tout son objet, et c'est une
+    // exigence explicite de l'exploitation (2026-09-12). Sa clé d'idempotence
+    // porte donc l'horodatage de la demande : elle est unique à chaque clic, là
+    // où le chemin automatique utilise `repjour-auto-<date>` pour se dédoublonner
+    // lui-même sur 24 h. NE PAS mutualiser ces deux clés : un renvoi volontaire
+    // serait alors silencieusement avalé par Resend.
+    idempotencyKey: `repjour-manuel-${reportDate}-${nowMs}`,
   })
 
   if (!result.ok)
