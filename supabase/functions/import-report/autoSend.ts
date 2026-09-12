@@ -77,6 +77,22 @@ interface DailyRow {
 export interface AutoSendOutcome {
   sent: boolean
   note: string
+  /**
+   * L'abstention est-elle TRANSITOIRE, c'est-à-dire susceptible de se résoudre
+   * toute seule si l'on patiente ?
+   *
+   * `true`  → la donnée sœur n'est pas encore là (Comparison ou Forecast), ou une
+   *           lecture a échoué. Attendre a un sens : c'est exactement le cas de la
+   *           nuit du 2026-09-12, où le Forecast est arrivé 54 secondes après le
+   *           Comparison.
+   * `false` → rien à espérer du temps : déjà envoyé, hors fenêtre, budget absent,
+   *           secret manquant, envoi déjà tenté. Réessayer ne ferait que répéter.
+   *
+   * Cette distinction est portée par la fonction elle-même, et NON devinée par
+   * l'appelant en relisant `note` : la reprise d'`index.ts` le faisait avec une
+   * expression régulière qui ne couvrait que trois motifs sur quatorze.
+   */
+  retryable: boolean
 }
 
 function reportToKPI(r: DailyRow, prefix: 'rj' | 'rmtd' | 'pm'): KPIBlock {
@@ -140,7 +156,7 @@ export async function maybeAutoSendRepjour(
       '[AUTO-SEND] PIPELINE_WINDOW_BYPASS=true — garde de fenêtre [02h,04h[ LEVÉE (test réel en cours).',
     )
   if (!bypassWindow && !isWithinPipelineWindow(instant))
-    return { sent: false, note: 'hors fenêtre horaire — envoi auto ignoré' }
+    return { sent: false, note: 'hors fenêtre horaire — envoi auto ignoré', retryable: false }
 
   // Secrets / config d'envoi.
   const resendKey = Deno.env.get('RESEND_API_KEY')
@@ -162,14 +178,14 @@ export async function maybeAutoSendRepjour(
     .maybeSingle()
   if (latestErr) {
     console.error('Auto-envoi : lecture daily_reports échouée :', latestErr.message)
-    return { sent: false, note: 'lecture rapports échouée' }
+    return { sent: false, note: 'lecture rapports échouée', retryable: true }
   }
-  if (!latest) return { sent: false, note: 'aucun rapport' }
+  if (!latest) return { sent: false, note: 'aucun rapport', retryable: true }
   const candidate = latest as DailyRow
   const D = candidate.date
 
   if (candidate.auto_sent_at)
-    return { sent: false, note: `déjà envoyé (${D})` }
+    return { sent: false, note: `déjà envoyé (${D})`, retryable: false }
 
   // Éligibilité BORNÉE AU CYCLE COURANT (anti catch-up). Le rapport StayNTouch
   // porte sur la veille de sa génération, donc au cycle courant la date attendue
@@ -183,7 +199,13 @@ export async function maybeAutoSendRepjour(
   const cycleToday = businessDateStr(instant)
   const cycleYesterday = businessDateStr(new Date(instant.getTime() - 86_400_000))
   if (D !== cycleToday && D !== cycleYesterday)
-    return { sent: false, note: `hors cycle courant (${D}) — envoi auto ignoré, manuel possible` }
+    return {
+      sent: false,
+      note: `hors cycle courant (${D}) — envoi auto ignoré, manuel possible`,
+      // Transitoire : le Comparison du cycle n'est peut-être pas encore committé
+      // par l'invocation sœur, auquel cas le plus récent est encore celui d'hier.
+      retryable: true,
+    }
 
   // JONCTION de mois/année : le rapport J-1 tombe dans un mois différent du cycle
   // courant (nuit du 1er : rapport du dernier jour du mois précédent ; couvre aussi
@@ -211,11 +233,15 @@ export async function maybeAutoSendRepjour(
     .limit(1)
   if (fcErr) {
     console.error('Auto-envoi : lecture forecast_days échouée :', fcErr.message)
-    return { sent: false, note: 'lecture prévisions échouée' }
+    return { sent: false, note: 'lecture prévisions échouée', retryable: true }
   }
   const latestFc = fcRows?.[0]?.imported_at as string | undefined
   if (!latestFc)
-    return { sent: false, note: 'Forecast absent pour ce mois — envoi auto ignoré' }
+    return {
+      sent: false,
+      note: 'Forecast absent pour ce mois — envoi auto ignoré',
+      retryable: true,
+    }
   // Fraîcheur exigée SEULEMENT hors jonction. À la jonction (dernier jour du mois /
   // 31 déc), « forecast présent » suffit : le mois est complet, on envoie avec le
   // forecast déjà en base. En milieu de mois, on garde le filet anti-projeté-périmé.
@@ -232,6 +258,7 @@ export async function maybeAutoSendRepjour(
     return {
       sent: false,
       note: `Forecast pas frais (importé il y a ${Math.round(fcAgeMs / 3_600_000)} h) — envoi auto ignoré, manuel possible`,
+      retryable: true,
     }
 
   // 2. Budget du mois — requis pour l'écart. Absent → on n'envoie pas (rapport
@@ -246,6 +273,7 @@ export async function maybeAutoSendRepjour(
     return {
       sent: false,
       note: `budget absent pour ${candidate.month}/${candidate.year}`,
+      retryable: false,
     }
   }
 
@@ -257,7 +285,7 @@ export async function maybeAutoSendRepjour(
     .eq('month', candidate.month)
   if (fcErr2) {
     console.error('Auto-envoi : relecture forecast_days échouée :', fcErr2.message)
-    return { sent: false, note: 'lecture prévisions échouée' }
+    return { sent: false, note: 'lecture prévisions échouée', retryable: true }
   }
   const projete = computeProjeteMois(
     (forecasts ?? []) as { occ: number; rev_ttc: number }[],
@@ -269,7 +297,7 @@ export async function maybeAutoSendRepjour(
   // admin resterait de toute façon disponible, mais autant ne rien poser.
   if (!dryRun && !resendKey) {
     console.error('Auto-envoi : RESEND_API_KEY manquante — envoi impossible.')
-    return { sent: false, note: 'RESEND_API_KEY manquante' }
+    return { sent: false, note: 'RESEND_API_KEY manquante', retryable: false }
   }
 
   // 4. RÉSERVATION ATOMIQUE + recompute pm_* : un seul gagnant. En dry-run, on
@@ -299,11 +327,11 @@ export async function maybeAutoSendRepjour(
       .maybeSingle()
     if (resErr) {
       console.error('Auto-envoi : réservation échouée :', resErr.message)
-      return { sent: false, note: 'réservation échouée' }
+      return { sent: false, note: 'réservation échouée', retryable: true }
     }
     if (!reserved) {
       // Une autre invocation a déjà réservé (course) → on n'envoie pas.
-      return { sent: false, note: 'déjà réservé/envoyé (course évitée)' }
+      return { sent: false, note: 'déjà réservé/envoyé (course évitée)', retryable: false }
     }
     row = reserved as DailyRow
   }
@@ -392,13 +420,14 @@ export async function maybeAutoSendRepjour(
       return {
         sent: false,
         note: `[DRY-RUN] aurait envoyé le rapport du ${D} (${to0(testTo)})`,
+        retryable: false,
       }
     }
 
     // resendKey déjà vérifiée avant la réservation (hors dry-run) ; narrowing.
     if (!resendKey) {
       await releaseReservation()
-      return { sent: false, note: 'RESEND_API_KEY manquante' }
+      return { sent: false, note: 'RESEND_API_KEY manquante', retryable: false }
     }
 
     const pdfBytes = buildRepjourPdfBytes(pdfData, pdfTitle)
@@ -420,7 +449,13 @@ export async function maybeAutoSendRepjour(
         // On LIBÈRE la réservation → le bandeau « pas encore envoyé » réapparaît et un
         // renvoi manuel est possible sans risque de doublon.
         await releaseReservation()
-        return { sent: false, note: `envoi échoué (${result.error ?? 'inconnu'})` }
+        // Envoi réellement tenté et refusé : la réservation est libérée, mais
+        // répéter l'appel ne changerait rien (config, destinataires, 4xx définitif).
+        return {
+          sent: false,
+          note: `envoi échoué (${result.error ?? 'inconnu'})`,
+          retryable: false,
+        }
       }
       // Issue AMBIGUË (réseau/5xx après le POST) : l'e-mail est PEUT-ÊTRE parti. On NE
       // libère PAS la réservation (un renvoi manuel créerait un doublon) ; on garde le
@@ -432,6 +467,7 @@ export async function maybeAutoSendRepjour(
       return {
         sent: false,
         note: `envoi incertain (${result.error ?? 'inconnu'}) — réservation conservée, vérifier la réception`,
+        retryable: false,
       }
     }
     return {
@@ -439,6 +475,7 @@ export async function maybeAutoSendRepjour(
       note: `envoyé le rapport du ${D} à ${result.to} destinataire(s)${
         result.cc ? ` (+${result.cc} cc)` : ''
       }${result.testMode ? ' — mode test' : ''}`,
+      retryable: false,
     }
   } catch (err) {
     console.error(
@@ -446,7 +483,11 @@ export async function maybeAutoSendRepjour(
       err instanceof Error ? err.message : String(err),
     )
     await releaseReservation()
-    return { sent: false, note: 'envoi non abouti (exception post-réservation)' }
+    return {
+      sent: false,
+      note: 'envoi non abouti (exception post-réservation)',
+      retryable: false,
+    }
   }
 }
 

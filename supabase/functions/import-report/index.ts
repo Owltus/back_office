@@ -26,6 +26,7 @@ import { importComparison, importForecast } from './repjour.ts'
 import { importInhouse } from './pdj.ts'
 import { importAddon } from './addon.ts'
 import { maybeAutoSendRepjour } from './autoSend.ts'
+import { scheduleAutoSend } from './waitAndSend.ts'
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -224,35 +225,35 @@ Deno.serve(async (req) => {
   }
 
   // 4b. ENVOI AUTOMATIQUE du RepJour : si un Comparison ou un Forecast vient
-  //     d'être importé, tenter l'envoi auto (il ne part QUE si les DEUX du jour
-  //     sont présents, une seule fois — garde d'idempotence auto_sent_at). Un échec
-  //     ou un no-op N'IMPACTE PAS le statut d'import (le PMS ne doit pas rejouer
-  //     l'e-mail pour un souci d'envoi). En dry-run : détecte et logue, n'envoie rien.
-  const touchedRepjour = results.some(
+  //     d'être importé, on ouvre une ATTENTE PATIENTE de sa donnée sœur (le
+  //     rapport ne part que si les DEUX du cycle sont là, une seule fois — garde
+  //     d'idempotence auto_sent_at). Un échec ou un no-op N'IMPACTE PAS le statut
+  //     d'import : le PMS ne doit pas rejouer l'e-mail pour un souci d'envoi.
+  //
+  //     L'attente se déroule APRÈS la réponse HTTP (cf. waitAndSend.ts) : le
+  //     Worker Cloudflare fait `await fetch` et REJETTE l'e-mail si l'appel
+  //     traîne. C'est ce qui interdit de patienter dans le chemin de réponse.
+  //
+  //     L'ancienne reprise tenait en quatre secondes et ne se déclenchait que sur
+  //     trois motifs reconnus à l'expression régulière. La nuit du 2026-09-12,
+  //     le Forecast est arrivé 54 secondes après le Comparison : l'attente était
+  //     close depuis longtemps, et tout reposait sur la seule invocation du
+  //     Forecast, qui n'a pas abouti. Les deux invocations se couvrent désormais
+  //     l'une l'autre.
+  const triggered = results.find(
     (r) => r.ok && (r.type === 'comparison' || r.type === 'forecast'),
   )
-  if (touchedRepjour) {
-    try {
-      let outcome = await maybeAutoSendRepjour(admin, dryRun, instant)
-      // Course concurrente : Comparison et Forecast arrivent en DEUX e-mails →
-      // deux invocations Edge quasi simultanées. Si celle-ci s'abstient pour une
-      // raison TRANSITOIRE (la donnée sœur n'est pas encore committée), on retente
-      // UNE fois après un court délai, le temps que l'autre invocation committe.
-      // L'idempotence atomique (auto_sent_at) garantit qu'aucun double envoi ne peut
-      // en résulter. Fenêtre résiduelle infime si le commit sœur dépasse le délai.
-      if (!dryRun && !outcome.sent && /forecast (pas frais|absent)|hors cycle/i.test(outcome.note)) {
-        await new Promise((r) => setTimeout(r, 4000))
-        outcome = await maybeAutoSendRepjour(admin, dryRun, instant)
-      }
-      console.log(
-        `[AUTO-SEND repjour] ${outcome.sent ? 'ENVOYÉ' : 'non envoyé'} — ${outcome.note}`,
-      )
-    } catch (err) {
-      console.error(
-        '[AUTO-SEND repjour] exception inattendue :',
-        err instanceof Error ? err.message : String(err),
-      )
-    }
+  if (triggered) {
+    const task = scheduleAutoSend(
+      maybeAutoSendRepjour,
+      admin,
+      dryRun,
+      instant,
+      triggered.type ?? 'inconnu',
+    )
+    // En dry-run (ou sur un runtime sans tâche de fond), on attend le résultat
+    // pour qu'il figure dans le compte rendu ; sinon la réponse part aussitôt.
+    if (task) await task
   }
 
   // NB : l'In-House est bien IMPORTÉ (données de la page PDJ) mais n'est PLUS envoyé
