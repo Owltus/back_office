@@ -26,7 +26,11 @@ import { importComparison, importForecast } from './repjour.ts'
 import { importInhouse } from './pdj.ts'
 import { importAddon } from './addon.ts'
 import { maybeAutoSendRepjour } from './autoSend.ts'
-import { scheduleAutoSend, waitThenAutoSend } from './waitAndSend.ts'
+import {
+  lastNoteOfCycle,
+  scheduleAutoSend,
+  waitThenAutoSend,
+} from './waitAndSend.ts'
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -130,6 +134,13 @@ Deno.serve(async (req) => {
     auth: { autoRefreshToken: false, persistSession: false },
   })
 
+  // MODE TEST, lu AVANT tout le reste : `IMPORT_DRY_RUN=true` valide sans rien
+  // écrire. Il était lu plus bas, après la branche de veille planifiée, qui
+  // passait donc `false` en dur — en posture de test, la minuterie envoyait de
+  // vrais e-mails toutes les deux minutes. Un interrupteur de sécurité qui ne
+  // protège pas est pire que pas d'interrupteur.
+  const dryRun = Deno.env.get('IMPORT_DRY_RUN') === 'true'
+
   // 1b. VEILLE PLANIFIÉE. Le Worker Cloudflare appelle aussi cette fonction sur
   //     minuterie, toutes les deux minutes pendant la nuit, avec cet en-tête et
   //     SANS e-mail. Ce n'est pas un import : on regarde simplement si le
@@ -147,23 +158,36 @@ Deno.serve(async (req) => {
   //     Elle n'écrit au journal QUE si elle envoie : sinon une nuit ordinaire
   //     y laisserait une centaine de lignes « déjà envoyé ».
   if (req.headers.get('X-Import-Check') === '1') {
-    await waitThenAutoSend(
-      maybeAutoSendRepjour,
-      admin,
-      false,
-      new Date(),
-      'veille planifiée',
-      // Un seul coup d'œil : c'est la minuterie qui fait la durée, pas nous.
-      { budgetMs: 0, logOnlyIfSent: true },
-    )
+    // Un contrôle ne porte AUCUN corps. Refuser la combinaison évite qu'un futur
+    // relais d'en-têtes ne fasse silencieusement abandonner un vrai import tout
+    // en répondant 200 — le Worker y verrait un succès et l'e-mail serait perdu.
+    if (Number(req.headers.get('content-length') ?? '0') > 0)
+      return json({ error: 'Un contrôle de veille ne porte pas de corps' }, 400)
+    if (dryRun) return json({ ok: true, check: true, dryRun: true })
+    try {
+      await waitThenAutoSend(
+        maybeAutoSendRepjour,
+        admin,
+        false,
+        new Date(),
+        'veille planifiée',
+        // Un seul coup d'œil : c'est la minuterie qui fait la durée, pas nous.
+        // Mode sobre : on n'écrit au journal qu'au changement d'état.
+        { budgetMs: 0, quiet: true, lastNote: await lastNoteOfCycle(admin) },
+      )
+    } catch (err) {
+      // Ne jamais remonter en 500 : la minuterie repassera dans deux minutes.
+      console.error(
+        '[AUTO-SEND repjour] contrôle planifié en échec :',
+        err instanceof Error ? err.message : String(err),
+      )
+    }
     return json({ ok: true, check: true })
   }
 
-  // MODE TEST : IMPORT_DRY_RUN=true → on parse et VALIDE tout (mêmes contrôles
-  // qu'en réel : nuitées>80, négatifs, forecast en HT, colonnes/date PDJ…), mais
-  // on N'ÉCRIT RIEN en base. Le résumé part dans les logs. Bascule à false (ou
-  // secret retiré) pour l'import réel.
-  const dryRun = Deno.env.get('IMPORT_DRY_RUN') === 'true'
+  // (`dryRun` est lu plus haut : il doit valoir aussi pour la veille planifiée.
+  //  En dry-run, tout est parsé et VALIDÉ — nuitées>80, négatifs, colonnes/date
+  //  PDJ… — mais rien n'est écrit en base ni envoyé.)
 
   // HORLOGE UNIQUE : lue une seule fois par requête et propagée à l'ENVOI AUTO
   // (garde de fenêtre [02h,06h[ + bornage du cycle, décidés dans autoSend.ts).
@@ -273,16 +297,14 @@ Deno.serve(async (req) => {
     (r) => r.ok && (r.type === 'comparison' || r.type === 'forecast'),
   )
   if (triggered) {
-    const task = scheduleAutoSend(
+    scheduleAutoSend(
       maybeAutoSendRepjour,
       admin,
       dryRun,
       instant,
-      triggered.type ?? 'inconnu',
+      // `find` garantit déjà l'un des deux types : pas de repli à inventer.
+      triggered.type as string,
     )
-    // En dry-run (ou sur un runtime sans tâche de fond), on attend le résultat
-    // pour qu'il figure dans le compte rendu ; sinon la réponse part aussitôt.
-    if (task) await task
   }
 
   // NB : l'In-House est bien IMPORTÉ (données de la page PDJ) mais n'est PLUS envoyé

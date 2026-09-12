@@ -88,19 +88,46 @@ export type AttemptFn = (
  *  regarde, on ne travaille pas. */
 const RETRY_EVERY_MS = 15_000
 
-/** Durée de la veille par défaut, en secondes. Cinq minutes couvrent six fois
- *  l'écart de la nuit du 2026-09-12 (54 s), tout en restant sous la durée de vie
- *  d'une invocation. Réglable sans redéploiement par le secret
- *  `AUTO_SEND_PATIENCE_SECONDS` (0 = pas de veille, un seul contrôle). */
-const DEFAULT_PATIENCE_S = 300
+/** Durée de la veille par défaut, en secondes.
+ *
+ *  QUATRE-VINGT-DIX, et non trois cents. La documentation Supabase donne au worker
+ *  une durée de vie de 150 s en plan gratuit (400 s en payant), PARTAGÉE entre les
+ *  requêtes qu'il sert : une veille de 300 s était donc hors limite, et aurait été
+ *  coupée en silence — y compris au milieu d'un envoi.
+ *
+ *  Quatre-vingt-dix secondes couvrent 1,7 fois l'écart de la nuit du 2026-09-12
+ *  (54 s), ce qui suffit à son office : la veille n'est qu'un filet de LATENCE.
+ *  Le filet de FOND, celui qui couvre un rapport en retard d'une demi-heure, est
+ *  la veille planifiée, qui ne dépend d'aucune durée de vie.
+ *
+ *  Réglable sans redéploiement par `AUTO_SEND_PATIENCE_SECONDS` (0 = pas de
+ *  veille, un seul contrôle). */
+const DEFAULT_PATIENCE_S = 90
 
-/** Garde-fou : au-delà, on sortirait de la durée de vie d'une invocation et
- *  l'attente serait coupée au milieu, sans rien journaliser. */
-const MAX_PATIENCE_S = 330
+/** Garde-fou dur, sous la limite du plan gratuit une fois retranchés le temps des
+ *  contrôles et celui de l'envoi final. */
+const MAX_PATIENCE_S = 120
+
+/** Marge à laisser APRÈS la veille, dans la durée de vie du worker.
+ *
+ *  Un contrôle qui aboutit ne se contente pas de lire : il pose une réservation,
+ *  construit un PDF et appelle Resend (jusqu'à cinq essais, une quarantaine de
+ *  secondes au pire). Être tué entre la réservation et l'envoi laisserait la
+ *  journée marquée « envoyée » sans e-mail — l'état le plus difficile à rattraper.
+ *
+ *  Cette marge ne borne PAS la boucle : la retrancher du budget reviendrait à
+ *  rétrécir la veille elle-même, et un premier essai l'avait ramenée à trente
+ *  secondes — moins que les 54 s de l'incident qu'elle doit couvrir. Elle sert à
+ *  DIMENSIONNER : `DEFAULT_PATIENCE_S + cette marge` doit tenir sous la durée de
+ *  vie du worker (150 s en plan gratuit). 90 + 45 = 135 : il reste de quoi
+ *  finir un envoi engagé au tout dernier contrôle. */
+const FINAL_ATTEMPT_MARGIN_MS = 45_000
 
 function patienceMs(): number {
-  const raw = Deno.env.get('AUTO_SEND_PATIENCE_SECONDS')
-  const parsed = raw != null ? Number(raw) : NaN
+  const raw = Deno.env.get('AUTO_SEND_PATIENCE_SECONDS')?.trim()
+  // Chaîne vide traitée comme ABSENTE : poser le secret à "" supprimait la veille
+  // sans le dire (Number('') vaut 0).
+  const parsed = raw ? Number(raw) : NaN
   const seconds = Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_PATIENCE_S
   return Math.min(seconds, MAX_PATIENCE_S) * 1000
 }
@@ -127,6 +154,58 @@ async function logAttempt(admin: LogWriter, row: AttemptLog): Promise<void> {
       '[AUTO-SEND] journalisation échouée :',
       err instanceof Error ? err.message : String(err),
     )
+  }
+}
+
+/** Ce que la lecture du journal a besoin de savoir faire. */
+export interface LogReader {
+  from(table: string): {
+    select(cols: string): {
+      eq(
+        col: string,
+        val: string,
+      ): {
+        order(
+          col: string,
+          opts: { ascending: boolean },
+        ): {
+          limit(n: number): PromiseLike<{
+            data: { note: string }[] | null
+            error: { message: string } | null
+          }>
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Dernier motif journalisé pour le cycle courant, ou `null`.
+ *
+ * Sert au mode sobre de la veille planifiée : elle repasse toutes les deux
+ * minutes et n'écrit qu'au CHANGEMENT d'état. Sans cette relecture, chaque
+ * passage repartirait de zéro et réécrirait le même motif cent fois — ou, si on
+ * choisissait de ne rien écrire, laisserait le journal vide les nuits où aucun
+ * e-mail n'arrive, c'est-à-dire justement celles qu'il doit documenter.
+ *
+ * Ne lève jamais : sans mémoire, on retombe sur « écrire », ce qui est le défaut
+ * le moins grave.
+ */
+export async function lastNoteOfCycle(
+  admin: LogReader,
+  instant: Date = new Date(),
+): Promise<string | null> {
+  try {
+    const { data, error } = await admin
+      .from('repjour_auto_send_log')
+      .select('note')
+      .eq('cycle_date', businessDateStr(instant))
+      .order('created_at', { ascending: false })
+      .limit(1)
+    if (error) return null
+    return data?.[0]?.note ?? null
+  } catch {
+    return null
   }
 }
 
@@ -157,11 +236,16 @@ export async function waitThenAutoSend(
     sleep?: (ms: number) => Promise<void>
     /** Horloge, pour qu'un test puisse faire passer le temps sans le subir. */
     now?: () => number
-    /** N'écrire au journal QUE si le rapport part. Pour la veille planifiée,
-     *  qui regarde toutes les deux minutes : sans cela, une nuit ordinaire
-     *  laisserait une centaine de lignes « déjà envoyé » qui noieraient les
-     *  quelques lignes qui racontent vraiment quelque chose. */
-    logOnlyIfSent?: boolean
+    /** Mode SOBRE, pour la veille planifiée qui repasse toutes les deux minutes :
+     *  on n'écrit au journal que si l'état a CHANGÉ depuis le dernier contrôle,
+     *  ou si quelque chose d'anormal se produit. Écrire à chaque passage
+     *  noierait la nuit sous une centaine de lignes « déjà envoyé » ; ne rien
+     *  écrire du tout, comme au premier jet, laissait le journal VIDE les nuits
+     *  où aucun e-mail n'arrive — exactement celles qu'il doit documenter. */
+    quiet?: boolean
+    /** Dernier motif déjà journalisé pour ce cycle, s'il est connu. Permet au
+     *  mode sobre de n'écrire qu'au changement d'état, d'un passage à l'autre. */
+    lastNote?: string | null
   } = {},
 ): Promise<void> {
   const retryEveryMs = deps.retryEveryMs ?? RETRY_EVERY_MS
@@ -172,13 +256,24 @@ export async function waitThenAutoSend(
   const startedAt = now()
   const cycleDate = businessDateStr(instant)
   let attempt = 0
+  let lastNote = deps.lastNote ?? null
 
   for (;;) {
     attempt += 1
+    // L'heure est relue À CHAQUE contrôle. Figée au départ, elle faisait conclure
+    // « hors fenêtre » à une veille ouverte à 01h58 — définitivement, alors que la
+    // fenêtre s'ouvrait deux minutes plus tard.
+    const at = new Date(now())
+    const outcome = await attemptFn(admin as never, dryRun, at)
+    // Mesuré APRÈS la tentative : un contrôle qui envoie dure plusieurs secondes
+    // (PDF + Resend), et c'est ce temps-là qui dit si la veille est bien taillée.
     const waitedSeconds = Math.round((now() - startedAt) / 1000)
-    const outcome = await attemptFn(admin as never, dryRun, instant)
 
-    if (!dryRun && (outcome.sent || !deps.logOnlyIfSent)) {
+    // En mode sobre : on écrit si l'état a changé, si le rapport part, ou si la
+    // situation est anormale (rien à espérer du temps ET rien n'est parti).
+    const notable =
+      outcome.sent || !outcome.retryable || outcome.note !== lastNote
+    if (!dryRun && (!deps.quiet || notable)) {
       await logAttempt(admin, {
         cycle_date: cycleDate,
         trigger_report: triggerReport,
@@ -189,33 +284,37 @@ export async function waitThenAutoSend(
         note: outcome.note,
       })
     }
-    console.log(
-      `[AUTO-SEND repjour] veille ouverte par ${triggerReport} — contrôle ${attempt} à +${waitedSeconds}s : ${
-        outcome.sent ? 'ENVOYÉ' : 'rien à faire'
-      } (${outcome.note})`,
-    )
+    lastNote = outcome.note
+    const line = `[AUTO-SEND repjour] ${triggerReport} — contrôle ${attempt} à +${waitedSeconds}s : ${
+      outcome.sent ? 'ENVOYÉ' : 'rien à faire'
+    } (${outcome.note})`
+    if (outcome.sent || (!outcome.retryable && !outcome.note.startsWith('déjà')))
+      console.log(line)
+    else if (!deps.quiet) console.log(line)
 
     // Parti, ou rien à espérer du temps : on s'arrête.
     if (outcome.sent || !outcome.retryable) return
 
-    // Fin de la veille : on le DIT, plutôt que de disparaître en silence. C'est
-    // cette ligne-là qui manquait le matin du 2026-09-12.
+    // Un seul contrôle demandé (veille planifiée, dry-run) : on se retire sans
+    // parler de « fin de veille », il n'y en a jamais eu.
+    if (budgetMs <= 0) return
+
     const elapsed = now() - startedAt
     if (elapsed + retryEveryMs > budgetMs) {
       const totalWaited = Math.round(elapsed / 1000)
       const note = `fin de veille après ${totalWaited}s sans que la donnée attendue se pose (${attempt} contrôles) — dernier état : ${outcome.note}`
-      if (!dryRun && !deps.logOnlyIfSent) {
+      if (!dryRun) {
         await logAttempt(admin, {
           cycle_date: cycleDate,
           trigger_report: triggerReport,
-          attempt: attempt + 1,
+          attempt,
           waited_seconds: totalWaited,
           sent: false,
           retryable: false,
           note,
         })
       }
-      console.error(`[AUTO-SEND repjour] ${note}`)
+      console.log(`[AUTO-SEND repjour] ${note}`)
       return
     }
 
@@ -224,13 +323,19 @@ export async function waitThenAutoSend(
 }
 
 /**
- * Ouvre la veille EN ARRIÈRE-PLAN si le runtime le permet, sinon en ligne.
+ * Ouvre la veille EN ARRIÈRE-PLAN.
  *
  * `EdgeRuntime.waitUntil` laisse la réponse HTTP partir tout de suite tout en
  * laissant vivre la promesse : le Worker Cloudflare n'attend pas, et le PMS ne
- * voit jamais son e-mail rebondir. Sur un runtime qui ne l'expose pas (exécution
- * locale, test), on retombe sur une attente en ligne : le comportement reste
- * correct, seule la réponse est plus lente.
+ * voit jamais son e-mail rebondir. C'est le comportement normal sur l'hébergé,
+ * où cette API existe depuis novembre 2024.
+ *
+ * SI ELLE MANQUE (exécution locale, runtime inattendu), on ne fait QU'UN SEUL
+ * contrôle, sans veille. Attendre en ligne serait bien pire que perdre le filet :
+ * le handler e-mail du Worker Cloudflare est arrêté au bout d'une trentaine de
+ * secondes, et `setReject` y est une erreur SMTP PERMANENTE — le PMS ne réessaie
+ * pas et le rapport est perdu pour de bon. On préserve donc l'ingestion, quitte
+ * à se passer du filet ; la veille planifiée, elle, reste entière.
  */
 export function scheduleAutoSend(
   attemptFn: AttemptFn,
@@ -238,24 +343,31 @@ export function scheduleAutoSend(
   dryRun: boolean,
   instant: Date,
   triggerReport: string,
-): Promise<void> | void {
+): void {
+  const runtime = (
+    globalThis as {
+      EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void }
+    }
+  ).EdgeRuntime
+  const detached = typeof runtime?.waitUntil === 'function'
+  if (!detached)
+    console.error(
+      "[AUTO-SEND repjour] EdgeRuntime.waitUntil indisponible — veille désactivée, un seul contrôle. L'ingestion n'est pas affectée ; la veille planifiée prend le relais.",
+    )
   const task = waitThenAutoSend(
     attemptFn,
     admin,
     dryRun,
     instant,
     triggerReport,
+    detached ? {} : { budgetMs: 0 },
   ).catch((err) => {
     console.error(
       '[AUTO-SEND repjour] exception inattendue :',
       err instanceof Error ? err.message : String(err),
     )
   })
-  const runtime = (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } })
-    .EdgeRuntime
-  if (typeof runtime?.waitUntil === 'function') {
-    runtime.waitUntil(task)
-    return
-  }
-  return task
+  if (detached) runtime!.waitUntil!(task)
+  // Sans `waitUntil`, la promesse est lancée sans être attendue : le contrôle
+  // unique est bref, et la réponse au Worker ne doit JAMAIS être retardée.
 }

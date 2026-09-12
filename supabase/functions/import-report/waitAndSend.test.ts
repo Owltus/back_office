@@ -111,7 +111,7 @@ Deno.test('la veille voit le Forecast se poser et envoie à la 60e seconde', asy
 
   await waitThenAutoSend(fn, writer, false, INSTANT, 'comparison', {
     retryEveryMs: 15_000,
-    budgetMs: 300_000,
+    budgetMs: 90_000,
     sleep: clock.sleep,
     now: clock.now,
   })
@@ -135,7 +135,7 @@ Deno.test('l’invocation du Comparison suffit : celle du Forecast peut mourir',
 
   await waitThenAutoSend(fn, writer, false, INSTANT, 'comparison', {
     retryEveryMs: 15_000,
-    budgetMs: 300_000,
+    budgetMs: 90_000,
     sleep: clock.sleep,
     now: clock.now,
   })
@@ -157,7 +157,7 @@ Deno.test('une situation sans issue se retire tout de suite, sans veiller pour r
 
   await waitThenAutoSend(fn, writer, false, INSTANT, 'forecast', {
     retryEveryMs: 15_000,
-    budgetMs: 300_000,
+    budgetMs: 90_000,
     sleep: clock.sleep,
     now: clock.now,
   })
@@ -182,7 +182,7 @@ Deno.test('« déjà envoyé » par l’invocation sœur : on s’arrête, pas d
 
   await waitThenAutoSend(fn, writer, false, INSTANT, 'forecast', {
     retryEveryMs: 15_000,
-    budgetMs: 300_000,
+    budgetMs: 90_000,
     sleep: clock.sleep,
     now: clock.now,
   })
@@ -190,7 +190,7 @@ Deno.test('« déjà envoyé » par l’invocation sœur : on s’arrête, pas d
   assertEquals(rows.some((r) => r.sent === true), false)
 })
 
-Deno.test('le Forecast qui ne viendra jamais : fin de veille DITE, après cinq minutes', async () => {
+Deno.test('le Forecast qui ne viendra jamais : fin de veille DITE, et écrite', async () => {
   const clock = fakeClock()
   const { rows, writer } = fakeLog()
   let calls = 0
@@ -205,19 +205,19 @@ Deno.test('le Forecast qui ne viendra jamais : fin de veille DITE, après cinq m
 
   await waitThenAutoSend(fn, writer, false, INSTANT, 'comparison', {
     retryEveryMs: 15_000,
-    budgetMs: 300_000,
+    budgetMs: 90_000,
     sleep: clock.sleep,
     now: clock.now,
   })
 
-  // 21 coups d'œil : un par quart de minute, de 0 à 300 secondes incluses.
-  assertEquals(calls, 21)
+  // Budget 90 s, un coup d'œil tous les quarts de minute : 0, 15, … 90.
+  assertEquals(calls, 7)
   const dernier = rows[rows.length - 1]
   assertEquals(dernier.sent, false)
-  assertEquals(dernier.waited_seconds, 300)
+  assertEquals(dernier.waited_seconds, 90)
   assertEquals(
     String(dernier.note),
-    'fin de veille après 300s sans que la donnée attendue se pose (21 contrôles) — dernier état : Forecast absent pour ce mois — envoi auto ignoré',
+    'fin de veille après 90s sans que la donnée attendue se pose (7 contrôles) — dernier état : Forecast absent pour ce mois — envoi auto ignoré',
   )
 })
 
@@ -228,7 +228,7 @@ Deno.test('chaque coup d’œil laisse une trace lisible en base', async () => {
 
   await waitThenAutoSend(fn, writer, false, INSTANT, 'forecast', {
     retryEveryMs: 15_000,
-    budgetMs: 300_000,
+    budgetMs: 90_000,
     sleep: clock.sleep,
     now: clock.now,
   })
@@ -241,4 +241,140 @@ Deno.test('chaque coup d’œil laisse une trace lisible en base', async () => {
   // Le cycle hôtelier du 2026-09-12 02:31 (Paris) est bien le 12, pas le 11.
   assertEquals(rows[0].cycle_date, '2026-09-12')
   assertEquals(rows[0].trigger_report, 'forecast')
+})
+
+/* --------------------------------------------------------------------------
+ * Défauts relevés par l'audit adversarial du 2026-09-12, figés ici pour qu'ils
+ * ne puissent pas revenir.
+ * ------------------------------------------------------------------------ */
+
+Deno.test('le mode sobre écrit au CHANGEMENT d état, pas à chaque passage', async () => {
+  // La veille planifiée repasse toutes les deux minutes. Écrire à chaque fois
+  // noierait la nuit ; ne rien écrire du tout — le premier jet — laissait le
+  // journal VIDE les nuits sans e-mail, c'est-à-dire celles qu'il documente.
+  const clock = fakeClock()
+  const { rows, writer } = fakeLog()
+  const immobile: AttemptFn = () =>
+    Promise.resolve({
+      sent: false,
+      note: 'aucun rapport pour le cycle 2026-09-12 — en attente du Comparison',
+      retryable: true,
+    })
+
+  // Premier passage de la nuit : rien n'est encore connu → on écrit.
+  await waitThenAutoSend(immobile, writer, false, INSTANT, 'veille planifiée', {
+    budgetMs: 0,
+    quiet: true,
+    lastNote: null,
+    sleep: clock.sleep,
+    now: clock.now,
+  })
+  assertEquals(rows.length, 1)
+
+  // Passages suivants, état inchangé : on se tait.
+  for (let i = 0; i < 5; i++) {
+    await waitThenAutoSend(immobile, writer, false, INSTANT, 'veille planifiée', {
+      budgetMs: 0,
+      quiet: true,
+      lastNote: String(rows[rows.length - 1].note),
+      sleep: clock.sleep,
+      now: clock.now,
+    })
+  }
+  assertEquals(rows.length, 1)
+
+  // L'état change : on l'écrit.
+  const change: AttemptFn = () =>
+    Promise.resolve({
+      sent: false,
+      note: 'Forecast pas frais (importé il y a 24 h) — envoi auto ignoré',
+      retryable: true,
+    })
+  await waitThenAutoSend(change, writer, false, INSTANT, 'veille planifiée', {
+    budgetMs: 0,
+    quiet: true,
+    lastNote: String(rows[rows.length - 1].note),
+    sleep: clock.sleep,
+    now: clock.now,
+  })
+  assertEquals(rows.length, 2)
+})
+
+Deno.test('le mode sobre écrit TOUJOURS une anomalie, même répétée', async () => {
+  // Un envoi refusé de façon définitive doit se voir dès le premier passage,
+  // sans quoi la table créée pour répondre à « pourquoi ça n'est pas parti »
+  // reste muette précisément quand on en a besoin.
+  const clock = fakeClock()
+  const { rows, writer } = fakeLog()
+  const refus: AttemptFn = () =>
+    Promise.resolve({
+      sent: false,
+      note: 'envoi échoué (Aucun destinataire actif (type « to »))',
+      retryable: false,
+    })
+  await waitThenAutoSend(refus, writer, false, INSTANT, 'veille planifiée', {
+    budgetMs: 0,
+    quiet: true,
+    lastNote: 'envoi échoué (Aucun destinataire actif (type « to »))',
+    sleep: clock.sleep,
+    now: clock.now,
+  })
+  assertEquals(rows.length, 1)
+  assertEquals(rows[0].retryable, false)
+  assertEquals(rows[0].sent, false)
+})
+
+Deno.test('un seul coup d œil ne parle jamais de « fin de veille »', async () => {
+  // Avec `budgetMs: 0`, l'ancienne condition passait systématiquement par la
+  // branche de clôture et émettait une ERREUR « fin de veille après 0s » à
+  // chaque passage de la minuterie — pour une situation parfaitement normale.
+  const clock = fakeClock()
+  const { rows, writer } = fakeLog()
+  await waitThenAutoSend(
+    () =>
+      Promise.resolve({
+        sent: false,
+        note: 'Forecast pas frais (importé il y a 24 h) — envoi auto ignoré',
+        retryable: true,
+      }),
+    writer,
+    false,
+    INSTANT,
+    'veille planifiée',
+    { budgetMs: 0, sleep: clock.sleep, now: clock.now },
+  )
+  assertEquals(rows.length, 1)
+  assertEquals(
+    rows.some((r) => String(r.note).startsWith('fin de veille')),
+    false,
+  )
+})
+
+Deno.test("l heure est RELUE à chaque contrôle, pas figée au départ", async () => {
+  // Une veille ouverte à 01h58 concluait « hors fenêtre » et n'essayait plus
+  // jamais, alors que la fenêtre s'ouvrait deux minutes plus tard.
+  const clock = fakeClock()
+  const { writer } = fakeLog()
+  const vues: number[] = []
+  const fn: AttemptFn = (_admin, _dry, at) => {
+    vues.push(at.getTime())
+    return Promise.resolve({
+      sent: false,
+      note: 'Forecast absent pour ce mois — envoi auto ignoré',
+      retryable: true,
+    })
+  }
+  await waitThenAutoSend(fn, writer, false, INSTANT, 'comparison', {
+    retryEveryMs: 15_000,
+    budgetMs: 45_000,
+    sleep: clock.sleep,
+    now: clock.now,
+  })
+  // Quatre contrôles, quatre instants DISTINCTS et croissants.
+  assertEquals(vues.length, 4)
+  assertEquals(new Set(vues).size, 4)
+  assertEquals(
+    vues.every((t, i) => i === 0 || t > vues[i - 1]),
+    true,
+  )
 })

@@ -17,14 +17,21 @@ preview_urls = false
 # partir sinon. C'est ce qui permet d'attendre un rapport très en retard sans
 # garder aucun processus en vie.
 #
-# L'HEURE EST EN UTC (Cloudflare ne connaît pas les fuseaux). Le PMS émet vers
-# 02h30 à Paris, soit 00h30 UTC en été et 01h30 UTC en hiver. La plage 00h-03h59
-# UTC couvre donc 02h-05h59 (été) et 01h-04h59 (hiver) : les deux saisons, avec
-# plusieurs heures de marge après l'émission. La borne réelle de l'envoi reste
-# décidée côté Supabase (fenêtre horaire de Paris, cf. businessDay.ts) ; cette
-# plage-ci est seulement la période où l'on prend la peine de regarder.
+# L'HEURE EST EN UTC (Cloudflare ne connaît pas les fuseaux), alors que la fenêtre
+# d'envoi est en heure de PARIS : [02h, 06h[ (cf. _shared/businessDay.ts). Il faut
+# donc couvrir l'UNION des deux saisons.
+#
+#   été  (UTC+2) : 02h-05h59 Paris = 00h-03h59 UTC
+#   hiver (UTC+1) : 02h-05h59 Paris = 01h-04h59 UTC
+#   union                            = 00h-04h59 UTC
+#
+# D'où `0-4`. La plage `0-3` retenue au premier jet laissait 61 minutes de la
+# fenêtre sans surveillance TOUT L'HIVER (04h59 → 06h00 Paris) — mesuré — et
+# c'était précisément la tranche tardive que l'élargissement à 06h visait.
+# Les passages tombant hors fenêtre sont refusés côté Supabase avant toute
+# requête en base : les couvrir en trop ne coûte rien.
 [triggers]
-crons = ["*/2 0-3 * * *"]
+crons = ["*/2 0-4 * * *"]
 # Journaux du Worker (décisions d'acceptation/refus des e-mails) lisibles dans
 # le dashboard : Workers & Pages → le Worker → Journaux.
 [observability]

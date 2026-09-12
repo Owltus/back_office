@@ -45,6 +45,13 @@ export interface SendMailInput {
   resendKey: string
   /** Liste blanche de test (secret REPORT_TEST_TO) : si posée, seule elle reçoit. */
   testTo?: string | null
+  /** Clé d'idempotence Resend. Fournie, elle doit identifier le MESSAGE (ex.
+   *  `repjour-2026-09-11`) et non l'appel : Resend dédoublonne alors pendant 24 h
+   *  DEUX INVOCATIONS DIFFÉRENTES de la fonction, pas seulement les retries d'une
+   *  même. C'est la défense en profondeur derrière la réservation atomique — sans
+   *  elle, l'idempotence reposait entièrement sur une seule colonne. Omise, une clé
+   *  aléatoire est tirée (comportement historique : retries seuls). */
+  idempotencyKey?: string | null
 }
 
 export interface SendMailResult {
@@ -60,6 +67,14 @@ export interface SendMailResult {
    * échec AMBIGU (réseau/5xx après un POST : l'e-mail est peut-être parti). Permet à
    * l'appelant de décider s'il peut relâcher une réservation sans risquer un doublon. */
   certainNotSent?: boolean
+  /** Réessayer plus tard a-t-il un sens ?
+   *
+   *  AXE DISTINCT de `certainNotSent`, avec lequel il était confondu : le premier
+   *  dit « peut-on libérer la réservation sans risquer un doublon », celui-ci dit
+   *  « la cause peut-elle disparaître d'elle-même ». Une lecture de destinataires
+   *  qui échoue sur un hoquet de la base est CERTAINEMENT non envoyée ET
+   *  parfaitement réessayable ; un nom de pièce jointe invalide, non. */
+  retryable?: boolean
 }
 
 // Plafond de destinataires par envoi — borne le rayon d'action et les coûts Resend
@@ -86,13 +101,18 @@ export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
     testTo,
   } = input
 
-  const fail = (msg: string, certainNotSent = true): SendMailResult => ({
+  const fail = (
+    msg: string,
+    certainNotSent = true,
+    retryable = false,
+  ): SendMailResult => ({
     ok: false,
     to: 0,
     cc: 0,
     testMode: Boolean(testTo?.trim()),
     error: msg,
     certainNotSent,
+    retryable,
   })
 
   if (!subject.trim() || !html) return fail('Sujet ou corps manquant')
@@ -118,7 +138,10 @@ export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
         `Lecture des destinataires (${recipientsTable}) échouée :`,
         recipErr.message,
       )
-      return fail('Lecture des destinataires échouée')
+      // Hoquet de la base : rien n'est parti (certain), et réessayer a tout son
+      // sens. C'est la distinction qui manquait — l'appelant abandonnait la nuit
+      // sur un simple timeout de lecture.
+      return fail('Lecture des destinataires échouée', true, true)
     }
     const list = (recips ?? []) as Recipient[]
     to = list.filter((r) => r.type === 'to').map((r) => r.email)
@@ -145,10 +168,11 @@ export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
   // que sur erreur TRANSITOIRE (erreur réseau, 5xx, 429) ; une 4xx (hors 429) est
   // définitive → inutile de réessayer. Backoff court (1s, 2s, 4s, 8s ; total < ~15s,
   // compatible Edge). Un simple hoquet réseau ne fait donc plus perdre l'e-mail.
-  // Clé d'idempotence STABLE pour toutes les tentatives de CET envoi : si Resend a
-  // déjà accepté la requête mais que la réponse est perdue (réseau/5xx après POST), le
-  // retry renvoie la MÊME clé → Resend dédoublonne au lieu d'expédier un 2e e-mail.
-  const idempotencyKey = crypto.randomUUID()
+  // Clé d'idempotence. Si l'appelant en fournit une qui identifie le MESSAGE (et
+  // non l'appel), Resend dédoublonne pendant 24 h même entre deux invocations
+  // distinctes de la fonction — c'est le filet derrière la réservation atomique.
+  // À défaut, une clé aléatoire ne couvre que les retries ci-dessous.
+  const idempotencyKey = input.idempotencyKey?.trim() || crypto.randomUUID()
   const MAX_ATTEMPTS = 5
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
@@ -174,8 +198,9 @@ export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
         continue
       }
       // Erreur réseau après toutes les tentatives : issue AMBIGUË (le POST a pu
-      // aboutir côté Resend avant la coupure) → certainNotSent = false.
-      return fail('Envoi du message échoué', false)
+      // aboutir côté Resend avant la coupure) → certainNotSent = false. On NE
+      // réessaie PAS (ce serait risquer un doublon), la réservation est conservée.
+      return fail('Envoi du message échoué', false, false)
     }
 
     if (res.ok) {
@@ -201,10 +226,15 @@ export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
       await sleep(1000 * 2 ** (attempt - 1))
       continue
     }
-    // Transitoire épuisé (5xx/429) = AMBIGU (certainNotSent=false) ; 4xx définitif =
-    // Resend a REJETÉ la requête, rien n'est parti (certainNotSent=true).
-    return fail('Envoi du message échoué', !transient)
+    // 429 (débit) : Resend a REFUSÉ la requête, elle n'a jamais été mise en file —
+    // rien n'est parti, et le débit retombe. C'est donc « certain » ET
+    // « réessayable ». Le classer AMBIGU conservait la réservation et brûlait la
+    // journée : marquée envoyée, sans e-mail, sans reprise possible.
+    if (res.status === 429) return fail('Envoi du message échoué', true, true)
+    // 5xx épuisées = AMBIGU (le POST a pu aboutir) : réservation conservée, pas de
+    // reprise. 4xx définitive = rejet explicite, rien n'est parti, inutile d'insister.
+    return fail('Envoi du message échoué', !transient, false)
   }
 
-  return fail('Envoi du message échoué', false)
+  return fail('Envoi du message échoué', false, false)
 }

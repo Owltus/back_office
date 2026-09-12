@@ -63,3 +63,21 @@ export function businessDateStr(instant: Date = new Date()): string {
   const d = String(parisWall.getDate()).padStart(2, '0')
   return `${y}-${m}-${d}`
 }
+
+/**
+ * Décale une date 'YYYY-MM-DD' d'un nombre de jours, en restant sur la CHAÎNE.
+ *
+ * Pourquoi pas `new Date(t - 86_400_000)` : la veille ne dure pas toujours 24 h.
+ * La nuit du passage à l'heure d'été, elle n'en dure que 23 — retirer 24 h faisait
+ * alors reculer de DEUX jours, et un rapport vieux de deux jours entrait dans la
+ * tolérance de cycle. Ici on manipule un quantième, pas un instant : aucun fuseau,
+ * aucun changement d'heure, aucune ambiguïté. `Date.UTC` gère les fins de mois,
+ * les années bissextiles et le passage d'année.
+ */
+export function shiftDateStr(date: string, days: number): string {
+  const [y, m, d] = date.split('-').map(Number)
+  const t = new Date(Date.UTC(y, m - 1, d + days))
+  const mm = String(t.getUTCMonth() + 1).padStart(2, '0')
+  const dd = String(t.getUTCDate()).padStart(2, '0')
+  return `${t.getUTCFullYear()}-${mm}-${dd}`
+}

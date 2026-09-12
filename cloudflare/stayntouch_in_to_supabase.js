@@ -84,6 +84,21 @@ function allowedDomains(env) {
   return new Set(list)
 }
 
+/** Valeur d'en-tete HTTP sure. Un sujet d'e-mail contenant un retour chariot, un
+ *  saut de ligne ou une tabulation fait lever le constructeur `Headers`, ce qui
+ *  ferait rejeter un import parfaitement valide : un expediteur authentifie
+ *  pourrait bloquer le pipeline avec un sujet forge. Meme precaution que cote
+ *  Edge pour les noms de fichiers. Ecrit caractere par caractere, sans
+ *  expression reguliere, pour rester lisible sans echappement. */
+function sanitizeHeader(value) {
+  let out = ''
+  for (const ch of String(value || '')) {
+    const code = ch.charCodeAt(0)
+    out += code === 13 || code === 10 || code === 9 ? ' ' : ch
+  }
+  return out.slice(0, 200)
+}
+
 export default {
   /**
    * @param {ForwardableEmailMessage} message
@@ -135,10 +150,16 @@ export default {
           // Authentifie le Worker auprès de l'Edge Function.
           'X-Import-Secret': env.IMPORT_SECRET,
           // Contexte utile pour le diagnostic / la traçabilité côté serveur.
+          // Assaini : un sujet contenant CR/LF ferait lever le constructeur
+          // Headers, donc rejeter un import parfaitement valide.
           'X-Mail-From': from,
-          'X-Mail-Subject': message.headers.get('subject') || '',
+          'X-Mail-Subject': sanitizeHeader(message.headers.get('subject')),
         },
         body: rawEmail,
+        // Cloudflare arrête un handler e-mail au bout d'une trentaine de
+        // secondes. Rendre la main AVANT, pour que le `catch` ci-dessous puisse
+        // décider — plutôt que d'être coupé sans avoir rien tranché.
+        signal: AbortSignal.timeout(20_000),
       })
     } catch (err) {
       // Erreur réseau : rejeter → l'expéditeur (le PMS) réessaiera plus tard.
@@ -190,7 +211,12 @@ export default {
           // Distingue ce contrôle d'un e-mail : rien à parser, rien à importer.
           'X-Import-Check': '1',
         },
+        // Un contrôle est bref. Si l'autre bout se bloque, on ne reste pas pendu :
+        // le passage suivant arrive dans deux minutes, rien n'est perdu.
+        signal: AbortSignal.timeout(30_000),
       })
+      // Corps non lu : on l'annule pour libérer la connexion.
+      res.body?.cancel()
       if (!res.ok) {
         console.error('[veille] controle refuse', res.status)
       }

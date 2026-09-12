@@ -36,7 +36,11 @@ import type { RepjourPdfData } from '../_shared/repjour/pdf.ts'
 import type { EmailData } from '../_shared/repjour/reportHtml.ts'
 import type { Ecart, KPIBlock, MonthBudget } from '../_shared/repjour/types.ts'
 import { sendMail } from '../_shared/send-mail.ts'
-import { businessDateStr, isWithinPipelineWindow } from '../_shared/businessDay.ts'
+import {
+  businessDateStr,
+  isWithinPipelineWindow,
+  shiftDateStr,
+} from '../_shared/businessDay.ts'
 
 const TOTAL_ROOMS = 80
 
@@ -172,9 +176,34 @@ export async function maybeAutoSendRepjour(
   //    rapport périmé. On envoie seulement si CE rapport est :
   //    (a) non encore auto-envoyé, (b) RÉCENT (fenêtre 3 jours — au-delà, seul le
   //    filet manuel agit), (c) son mois possède un forecast (les DEUX présents).
+  // Éligibilité BORNÉE AU CYCLE COURANT (anti catch-up). Le rapport StayNTouch
+  // porte sur la veille de sa génération, donc au cycle courant la date attendue
+  // est businessDateStr() ou businessDateStr(J-1) (tolérance frontière 02h). Tout
+  // rapport plus ancien n'est PLUS auto-envoyé — sinon un rapport de la veille non
+  // envoyé partirait avec un projeté recalculé depuis le Forecast d'un AUTRE cycle
+  // (mélange de millésimes). Le rattrapage des jours antérieurs reste au canal
+  // manuel admin.
+  //
+  // INVARIANT à ne pas rompre : `DAY_CUTOFF_HOUR` vaut `PIPELINE_WINDOW_START_HOUR`
+  // (2 h). Le nom du cycle est donc CONSTANT sur toute la fenêtre d'envoi : aucun
+  // glissement de candidat ne peut survenir entre deux contrôles d'une même nuit.
+  //
+  // La veille se calcule sur la CHAÎNE de date, pas en retirant 86 400 000 ms :
+  // la nuit du passage à l'heure d'été, la veille ne dure que 23 h, et soustraire
+  // 24 h sautait un jour — faisant entrer un rapport vieux de DEUX jours dans la
+  // tolérance, exactement le mélange de millésimes que cette garde interdit.
+  const cycleToday = businessDateStr(instant)
+  const cycleYesterday = shiftDateStr(cycleToday, -1)
+
+  // Le candidat est le rapport le plus récent DU CYCLE, borné côté SQL. Lire le
+  // plus récent de toute la table puis vérifier son cycle laissait une ligne
+  // future-datée (import erroné, REPORT DATE décalée) capter la réservation à la
+  // place du vrai rapport, qui n'était alors jamais envoyé.
   const { data: latest, error: latestErr } = await admin
     .from('daily_reports')
     .select('*')
+    .gte('date', cycleYesterday)
+    .lte('date', cycleToday)
     .order('date', { ascending: false })
     .limit(1)
     .maybeSingle()
@@ -182,32 +211,26 @@ export async function maybeAutoSendRepjour(
     console.error('Auto-envoi : lecture daily_reports échouée :', latestErr.message)
     return { sent: false, note: 'lecture rapports échouée', retryable: true }
   }
-  if (!latest) return { sent: false, note: 'aucun rapport', retryable: true }
+  // Aucun rapport du cycle : le Comparison n'est pas encore là. TRANSITOIRE — c'est
+  // l'état normal entre l'arrivée du Forecast et celle du Comparison.
+  if (!latest)
+    return {
+      sent: false,
+      note: `aucun rapport pour le cycle ${cycleToday} — en attente du Comparison`,
+      retryable: true,
+    }
   const candidate = latest as DailyRow
   const D = candidate.date
 
+  // « Déjà envoyé » n'est examiné qu'APRÈS le bornage au cycle, et c'est essentiel.
+  // Testé avant, il portait sur le rapport de la VEILLE tant que le Comparison de
+  // la nuit n'était pas arrivé — un rapport forcément déjà envoyé. L'invocation du
+  // Forecast concluait donc « rien à faire, définitif » dès sa première seconde et
+  // fermait sa veille. Or le Forecast arrive EN PREMIER 19 nuits sur 30 en
+  // production : la couverture croisée annoncée était absente dans le cas
+  // majoritaire. Ici, le candidat appartient au cycle : l'information est vraie.
   if (candidate.auto_sent_at)
     return { sent: false, note: `déjà envoyé (${D})`, retryable: false }
-
-  // Éligibilité BORNÉE AU CYCLE COURANT (anti catch-up). Le rapport StayNTouch
-  // porte sur la veille de sa génération, donc au cycle courant la date attendue
-  // est businessDateStr() ou businessDateStr(J-1) (tolérance frontière 02h). Tout
-  // rapport plus ancien n'est PLUS auto-envoyé — sinon un rapport de la veille non
-  // envoyé partirait avec un projeté recalculé depuis le Forecast d'un AUTRE cycle
-  // (mélange de millésimes). Le rattrapage des jours antérieurs reste au canal
-  // manuel admin. Le motif « hors cycle » est transitoire (cf. relecture différée
-  // dans index.ts) : il couvre aussi le cas où le Comparison du jour n'a pas encore
-  // été committé par l'invocation sœur.
-  const cycleToday = businessDateStr(instant)
-  const cycleYesterday = businessDateStr(new Date(instant.getTime() - 86_400_000))
-  if (D !== cycleToday && D !== cycleYesterday)
-    return {
-      sent: false,
-      note: `hors cycle courant (${D}) — envoi auto ignoré, manuel possible`,
-      // Transitoire : le Comparison du cycle n'est peut-être pas encore committé
-      // par l'invocation sœur, auquel cas le plus récent est encore celui d'hier.
-      retryable: true,
-    }
 
   // JONCTION de mois/année : le rapport J-1 tombe dans un mois différent du cycle
   // courant (nuit du 1er : rapport du dernier jour du mois précédent ; couvre aussi
@@ -222,9 +245,10 @@ export async function maybeAutoSendRepjour(
   // pas (projeté impossible). En milieu de mois, un forecast périmé (échec ce soir,
   // ex. le 422 du 2026-08-08) bloque aussi l'envoi auto (pas de chiffres périmés) ;
   // l'envoi MANUEL reste possible.
-  // NB : la colonne imported_at peut être nullable en base (lignes antérieures au
-  // stamping). En SQL `order ... desc` place les NULL EN PREMIER → on les exclut
-  // explicitement pour récupérer le dernier import RÉEL, jamais un NULL.
+  // NB : `forecast_days.imported_at` est aujourd'hui NOT NULL DEFAULT now() ; le
+  // `.not(...is null)` reste, sans coût, comme garde si d'anciennes lignes non
+  // estampillées réapparaissaient (en SQL `order ... desc` place les NULL EN
+  // PREMIER, on récupérerait alors un NULL au lieu du dernier import réel).
   const { data: fcRows, error: fcErr } = await admin
     .from('forecast_days')
     .select('imported_at')
@@ -270,8 +294,13 @@ export async function maybeAutoSendRepjour(
     .select('*')
     .eq('year', candidate.year)
     .eq('month', candidate.month)
-    .single()
-  if (budErr || !budget) {
+    .limit(1)
+    .maybeSingle()
+  if (budErr) {
+    console.error('Auto-envoi : lecture budget échouée :', budErr.message)
+    return { sent: false, note: 'lecture budget échouée', retryable: true }
+  }
+  if (!budget) {
     return {
       sent: false,
       note: `budget absent pour ${candidate.month}/${candidate.year}`,
@@ -312,11 +341,27 @@ export async function maybeAutoSendRepjour(
     pm_revpar: projete.revpar,
     pm_room_revenue: projete.roomRevenue,
   }
+  // Estampille MÉMORISÉE : elle identifie NOTRE réservation. Sans elle, la
+  // libération effaçait le marqueur de qui que ce soit — y compris celui que
+  // l'envoi manuel venait de poser, ce qui rouvrait la nuit et faisait partir un
+  // second e-mail identique.
+  const stamp = new Date().toISOString()
+  // Projeté PRÉCÉDENT, à restaurer si l'envoi n'aboutit pas : la réservation
+  // écrase les cinq colonnes pm_*, et la libération ne remettait que le drapeau.
+  // Une tentative avortée laissait donc des chiffres faux affichés en permanence
+  // sur la page, et le repli manuel les envoyait sans le savoir.
+  const previousPm = {
+    pm_nuitees: candidate.pm_nuitees,
+    pm_to: candidate.pm_to,
+    pm_pm: candidate.pm_pm,
+    pm_revpar: candidate.pm_revpar,
+    pm_room_revenue: candidate.pm_room_revenue,
+  }
   if (!dryRun) {
     const { data: reserved, error: resErr } = await admin
       .from('daily_reports')
       .update({
-        auto_sent_at: new Date().toISOString(),
+        auto_sent_at: stamp,
         pm_nuitees: projete.nuitees,
         pm_to: projete.to,
         pm_pm: projete.pm,
@@ -332,8 +377,17 @@ export async function maybeAutoSendRepjour(
       return { sent: false, note: 'réservation échouée', retryable: true }
     }
     if (!reserved) {
-      // Une autre invocation a déjà réservé (course) → on n'envoie pas.
-      return { sent: false, note: 'déjà réservé/envoyé (course évitée)', retryable: false }
+      // Une autre invocation a déjà réservé (course) → on n'envoie pas MAINTENANT.
+      // TRANSITOIRE, et non définitif : si la gagnante échoue, elle libère la
+      // réservation quelques secondes plus tard. En concluant « définitif », les
+      // deux chemins mouraient ensemble et la nuit était perdue. Aucun risque de
+      // doublon : on ne peut réserver de nouveau que si le marqueur a été retiré,
+      // ce qui n'arrive que lorsque rien n'est parti.
+      return {
+        sent: false,
+        note: 'déjà réservé par un autre chemin (course évitée)',
+        retryable: true,
+      }
     }
     row = reserved as DailyRow
   }
@@ -343,14 +397,30 @@ export async function maybeAutoSendRepjour(
   // est « brûlé » : marqué envoyé sans mail parti, aucune reprise auto. On enveloppe
   // donc TOUT le bloc post-réservation (rendu, PDF, envoi). Le rattrapage se fait
   // ensuite par le bandeau + envoi manuel (aucun ré-import auto n'a lieu).
-  const releaseReservation = async () => {
-    if (dryRun) return
-    const { error: delErr } = await admin
+  const releaseReservation = async (): Promise<boolean> => {
+    if (dryRun) return true
+    const { data: freed, error: delErr } = await admin
       .from('daily_reports')
-      .update({ auto_sent_at: null })
+      .update({ auto_sent_at: null, ...previousPm })
+      // `auto_sent_at = stamp` : on ne libère QUE sa propre réservation. Si
+      // quelqu'un d'autre détient le marqueur (envoi manuel entre-temps), on n'y
+      // touche pas — 0 ligne modifiée, et on le dit.
       .eq('date', D)
-    if (delErr)
-      console.error('Auto-envoi : libération de la réservation échouée :', delErr.message)
+      .eq('auto_sent_at', stamp)
+      .select('date')
+      .maybeSingle()
+    if (delErr) {
+      console.error(
+        `Auto-envoi : libération de la réservation ÉCHOUÉE pour ${D} — la journée reste marquée envoyée SANS e-mail parti. Vérification humaine requise.`,
+        delErr.message,
+      )
+      return false
+    }
+    if (!freed)
+      console.warn(
+        `Auto-envoi : réservation de ${D} déjà reprise par un autre chemin — rien libéré.`,
+      )
+    return true
   }
 
   try {
@@ -362,13 +432,21 @@ export async function maybeAutoSendRepjour(
 
     // pickup = pm.roomRevenue du jour - pm.roomRevenue du dernier rapport ANTÉRIEUR
     // du même mois. monthStartProjection = pm.roomRevenue du 1er rapport du mois.
-    const { data: monthRows } = await admin
+    const { data: monthRows, error: monthErr } = await admin
       .from('daily_reports')
       .select('day_of_month, pm_room_revenue')
       .eq('year', candidate.year)
       .eq('month', candidate.month)
       .lte('day_of_month', candidate.day_of_month)
       .order('day_of_month', { ascending: true })
+    if (monthErr) {
+      // Sans cette lecture, le pickup et la projection de début de mois seraient
+      // NULS et le rapport partirait amputé de deux chiffres, sans le dire. On
+      // libère et on laissera un prochain contrôle réessayer.
+      console.error('Auto-envoi : lecture du mois échouée :', monthErr.message)
+      await releaseReservation()
+      return { sent: false, note: 'lecture du mois échouée', retryable: true }
+    }
     const series = (monthRows ?? []) as {
       day_of_month: number
       pm_room_revenue: number
@@ -443,6 +521,12 @@ export async function maybeAutoSendRepjour(
       recipientsTable: 'server_report_recipients',
       resendKey,
       testTo,
+      // Clé dérivée du RAPPORT, pas de l'appel : si deux chemins parvenaient
+      // malgré tout à envoyer la même journée, Resend n'expédierait qu'une fois
+      // (fenêtre de 24 h, exactement le bon grain). Filet derrière la réservation
+      // atomique. L'envoi MANUEL, lui, garde une clé distincte : un renvoi
+      // volontaire doit rester possible.
+      idempotencyKey: `repjour-auto-${D}`,
     })
 
     if (!result.ok) {
@@ -451,12 +535,14 @@ export async function maybeAutoSendRepjour(
         // On LIBÈRE la réservation → le bandeau « pas encore envoyé » réapparaît et un
         // renvoi manuel est possible sans risque de doublon.
         await releaseReservation()
-        // Envoi réellement tenté et refusé : la réservation est libérée, mais
-        // répéter l'appel ne changerait rien (config, destinataires, 4xx définitif).
+        // Envoi réellement tenté et refusé, rien n'est parti : on libère. Reste à
+        // savoir si insister a un sens — c'est `sendMail` qui le dit, et lui seul :
+        // un nom de pièce jointe invalide est définitif, un hoquet sur la lecture
+        // des destinataires ou un 429 de débit ne le sont pas.
         return {
           sent: false,
           note: `envoi échoué (${result.error ?? 'inconnu'})`,
-          retryable: false,
+          retryable: result.retryable === true,
         }
       }
       // Issue AMBIGUË (réseau/5xx après le POST) : l'e-mail est PEUT-ÊTRE parti. On NE
@@ -485,10 +571,12 @@ export async function maybeAutoSendRepjour(
       err instanceof Error ? err.message : String(err),
     )
     await releaseReservation()
+    // La réservation vient d'être libérée : réessayer ne peut pas doublonner, et
+    // la cause (lecture, rendu) est souvent transitoire.
     return {
       sent: false,
       note: 'envoi non abouti (exception post-réservation)',
-      retryable: false,
+      retryable: true,
     }
   }
 }
