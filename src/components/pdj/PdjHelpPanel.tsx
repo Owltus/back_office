@@ -326,8 +326,15 @@ export function PdjHelpPanel() {
         <p>
           Le nombre de cases attendues n'est jamais inventé : il vient du tarif de
           la réservation (le « 2 PAX » du plan tarifaire), borné au nombre réel
-          d'occupants, et plafonné à deux. Un enfant payant compte ; deux cases ne
-          peuvent pas apparaître pour une personne seule.
+          d'occupants, et plafonné à deux. Deux cases ne peuvent donc pas
+          apparaître pour une personne seule.
+        </p>
+        <p>
+          Un <Term>enfant</Term> occupe une de ces places comme un adulte, et au
+          même prix : une chambre avec un adulte et un enfant sur un tarif
+          « 2 PAX » affiche bien deux cases, toutes deux facturées. Rien à
+          corriger à la main. Une troisième personne, elle, n'est pas comprise
+          dans le tarif : si elle descend, son petit-déjeuner se coche en extra.
         </p>
       </Section>
 
@@ -422,6 +429,12 @@ export function PdjHelpPanel() {
           Ces trois mêmes couleurs se retrouvent sur la feuille imprimée et sur
           les compteurs récapitulatifs : vert pour le dû, ambre pour l'extra
           facturé, violet pour le gratuit.
+        </p>
+        <p>
+          Une chambre occupée par un membre du personnel fait exception : son
+          plan tarifaire porte la mention <Term>STAFF</Term>, et ses cases sont
+          violettes d'office. Cochée ou non, elle reste à 0 € — il n'y a rien à
+          marquer à la main.
         </p>
       </Section>
 
@@ -610,7 +623,8 @@ export function PdjHelpPanel() {
           </li>
           <li>
             les <Term>offerts</Term> sont retirés du calcul : ils restent des
-            couverts servis, mais valent 0 € ;
+            couverts servis, mais valent 0 €. Les nuits <Term>STAFF</Term> le
+            sont d'office, sans geste à faire ;
           </li>
           <li>
             chaque montant est converti hors taxes en divisant par 1,10 (la TVA de
