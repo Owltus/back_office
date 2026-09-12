@@ -1,4 +1,6 @@
-import { defineConfig } from 'vite'
+// `defineConfig` vient de vitest/config (et non de vite) : c'est la seule
+// signature qui accepte la section `test` ci-dessous.
+import { defineConfig } from 'vitest/config'
 
 import { tanstackStart } from '@tanstack/react-start/plugin/vite'
 
