@@ -212,6 +212,103 @@ describe('computePdjCA', () => {
  * écriture d'une ligne d'import (trigger `pdj_breakfasts_clamp_included`, ou
  * réimport du jour), donc elle peut monter APRÈS la pose de la gratuité.
  */
+/*
+ * Nuits STAFF et couverts ENFANT — deux cas réels du 2026-09-12.
+ *
+ * STAFF : un membre du personnel logé occupe une chambre dont le plan tarifaire
+ * porte « STAFF ». Aucune de ces lignes ne porte d'addon PDJ (vérifié sur les 37
+ * nuits de l'historique), donc rien n'est dû — mais la case est cochée quand la
+ * personne descend manger. Règle posée par l'utilisateur : 0 €, cochée ou non.
+ *
+ * ENFANT : rien de spécial à faire, et c'est le point à ne pas casser. Le plan
+ * tarifaire dit combien de couverts sont inclus (« PDJ INCLUS 2 PAX »), le
+ * trigger `pdj_breakfasts_clamp_included` le borne au nombre réel d'occupants,
+ * et un enfant occupe une de ces places au MÊME prix qu'un adulte (vérifié :
+ * sur 40 journées comportant un enfant, 31 s'expliquent exactement au tarif
+ * plein, les autres portant par ailleurs un geste commercial).
+ */
+describe('nuit STAFF', () => {
+  const staff = (served: number, rate_plan = 'GRATUITE - STAFF') => ({
+    addons: null,
+    rate_plan,
+    breakfasts_included: 0,
+    breakfasts_served: served,
+  })
+
+  it('ne facture rien, la case fût-elle cochée', () => {
+    // Chambre 503 du 2026-09-12 : « TARIF STAFF – 1 PDJ », deux cases cochées.
+    // Sans la règle, elles valaient 2 × 17,27 = 34,54 € HT d'extras.
+    const ca = computePdjCA([staff(2, 'TARIF STAFF – 1 PDJ')], TARIFS)
+    expect(ca.extrasHt).toBe(0)
+    expect(ca.totalHt).toBe(0)
+    // Les couverts restent COMPTÉS : le staff a bien mangé.
+    expect(ca.extraNb).toBe(2)
+    expect(ca.offertNb).toBe(2)
+  })
+
+  it('couvre les trois libellés du PMS', () => {
+    for (const plan of [
+      'GRATUITE - STAFF',
+      'TARIF STAFF – 1 PDJ',
+      'TARIF STAFF – CH SEULE',
+    ]) {
+      expect(computePdjCA([staff(1, plan)], TARIFS).totalHt, plan).toBe(0)
+    }
+  })
+
+  it('reste à 0 € même si un import lui attachait un PDJ inclus par erreur', () => {
+    const ca = computePdjCA(
+      [{ ...staff(2), addons: 'PDJ INCL', breakfasts_included: 2 }],
+      TARIFS,
+    )
+    expect(ca.inclusNb).toBe(0)
+    expect(ca.totalHt).toBe(0)
+  })
+
+  it('la ligne du détail financier affiche 0,00 €', () => {
+    expect(roomFinance(staff(2, 'TARIF STAFF – 1 PDJ'), TARIFS).htCa).toBe(0)
+  })
+
+  it('n affecte pas une chambre ordinaire', () => {
+    const ca = computePdjCA(
+      [{ addons: 'PDJ INCL', rate_plan: 'BOOKING - NR - PDJ INCLUS 2 PAX', breakfasts_included: 2, breakfasts_served: 2 }],
+      TARIFS,
+    )
+    expect(ca.inclusNb).toBe(2)
+    expect(ca.includedHt).toBeCloseTo(34.54, 2)
+  })
+})
+
+describe('couvert ENFANT', () => {
+  it('vaut le tarif plein, comme un adulte', () => {
+    // Chambre 210 du 2026-09-12 : 1 adulte + 1 enfant, plan « PDJ INCLUS 2 PAX »
+    // → 2 inclus, facturés 19 € pièce comme les autres chambres du jour.
+    const ca = computePdjCA(
+      [{ addons: 'PDJ INCL', rate_plan: 'BOOKING - NR - PDJ INCLUS 2 PAX', breakfasts_included: 2, breakfasts_served: 2 }],
+      TARIFS,
+    )
+    expect(ca.inclusNb).toBe(2)
+    expect(ca.rebuiltHt).toBeCloseTo(34.54, 2)
+  })
+
+  it('le total reste la recette facturée, geste commercial compris', () => {
+    // Ce matin-là, l'enfant de la 210 a été facturé 11 € au lieu de 19 : la
+    // journée a rapporté 296 € et non 304. C'est la recette qui fait foi.
+    const rows = [
+      ...Array.from({ length: 7 }, () => ({
+        addons: 'PDJ INCL',
+        breakfasts_included: 2,
+        breakfasts_served: 2,
+      })),
+      { addons: 'PDJ 38.00', breakfasts_included: 2, breakfasts_served: 2 },
+    ]
+    const ca = computePdjCA(rows, TARIFS, 0, 296)
+    expect(ca.inclusNb).toBe(16)
+    expect(ca.includedHt).toBe(269.09) // 296 / 1,10
+    expect(ca.rebuiltHt).toBeCloseTo(276.32, 2) // 16 × 17,27 au prix de la carte
+  })
+})
+
 describe('isOffertBox ↔ offertNb (cases violettes = tuile « Gratuités »)', () => {
   /** Nombre de cases rendues en violet pour une ligne (miroir du board). */
   const violettes = (row: {
@@ -219,6 +316,7 @@ describe('isOffertBox ↔ offertNb (cases violettes = tuile « Gratuités »)', 
     breakfasts_served: number
     breakfasts_offert?: number
     manual_kind?: string | null
+    rate_plan?: string | null
   }): number => {
     const boxes = Math.max(2, row.breakfasts_included, row.breakfasts_served)
     let n = 0
@@ -227,19 +325,22 @@ describe('isOffertBox ↔ offertNb (cases violettes = tuile « Gratuités »)', 
   }
 
   it('le nombre de cases violettes vaut TOUJOURS la gratuité comptée', () => {
-    for (let included = 0; included <= 3; included++) {
-      for (let served = 0; served <= 4; served++) {
-        for (let offert = 0; offert <= 4; offert++) {
-          const row = {
-            addons: 'PDJ INCL',
-            breakfasts_included: included,
-            breakfasts_served: served,
-            breakfasts_offert: offert,
+    for (const rate_plan of [null, 'GRATUITE - STAFF']) {
+      for (let included = 0; included <= 3; included++) {
+        for (let served = 0; served <= 4; served++) {
+          for (let offert = 0; offert <= 4; offert++) {
+            const row = {
+              addons: 'PDJ INCL',
+              breakfasts_included: included,
+              breakfasts_served: served,
+              breakfasts_offert: offert,
+              rate_plan,
+            }
+            expect(
+              violettes(row),
+              `plan=${rate_plan} included=${included} served=${served} offert=${offert}`,
+            ).toBe(computePdjCA([row], TARIFS).offertNb)
           }
-          expect(
-            violettes(row),
-            `included=${included} served=${served} offert=${offert}`,
-          ).toBe(computePdjCA([row], TARIFS).offertNb)
         }
       }
     }

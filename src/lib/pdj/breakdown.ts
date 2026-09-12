@@ -30,14 +30,34 @@ interface OffertRow {
   breakfasts_served: number
   breakfasts_offert?: number
   manual_kind?: string | null
+  /** Plan tarifaire du PMS : c'est lui qui désigne une nuit STAFF. */
+  rate_plan?: string | null
 }
 
-/** Nombre d'extras OFFERTS (gratuits) d'une ligne, borné aux extras réellement
- *  servis : une ligne manuelle `offert` l'est en totalité (tout son servi, dû
- *  toujours à 0) ; une ligne normale (import) l'est jusqu'à concurrence de
- *  `breakfasts_offert` (posé par clic droit sur la case, écran). Ne compte
- *  jamais plus que ce qui est effectivement au-delà de l'inclus. */
+/**
+ * Vrai si la ligne relève d'un plan tarifaire STAFF — un membre de l'équipe
+ * logé à l'hôtel. Trois libellés existent en base : « GRATUITE - STAFF »,
+ * « TARIF STAFF – 1 PDJ » et « TARIF STAFF – CH SEULE » (35 nuits en neuf
+ * mois). Aucun ne porte d'addon PDJ : le petit-déjeuner d'un membre du
+ * personnel n'est jamais facturé.
+ *
+ * Conséquence, posée par l'utilisateur le 2026-09-12 : cochée ou non, une case
+ * STAFF vaut 0 €. Sans cette règle, les cases cochées de la chambre 503 (deux
+ * ce matin) étaient comptées en EXTRAS et facturées 19 € pièce.
+ */
+export function isStaffRow(ratePlan: string | null | undefined): boolean {
+  return (ratePlan ?? '').toUpperCase().includes('STAFF')
+}
+
+/** Nombre de petits-déjeuners OFFERTS (gratuits) d'une ligne.
+ *
+ *  Une nuit STAFF l'est EN TOTALITÉ — tout son servi, sans condition : c'est du
+ *  personnel, rien ne lui est facturé. Une ligne manuelle `offert` l'est de même
+ *  (son dû est toujours à 0). Une ligne normale (import) l'est jusqu'à
+ *  concurrence de `breakfasts_offert` (posé par clic droit sur la case), borné
+ *  aux extras réellement servis — jamais plus que ce qui dépasse l'inclus. */
 function offertUnits(r: OffertRow): number {
+  if (isStaffRow(r.rate_plan)) return r.breakfasts_served
   const extra = Math.max(0, r.breakfasts_served - r.breakfasts_included)
   if (r.manual_kind === 'offert') return extra
   return Math.min(r.breakfasts_offert ?? 0, extra)
@@ -53,13 +73,15 @@ function offertUnits(r: OffertRow): number {
  * `breakfasts_offert` compte des EXTRAS, jamais des positions de case, et
  * `breakfasts_included` peut monter APRÈS la pose (réimport du jour, trigger
  * `pdj_breakfasts_clamp_included`). Une ligne manuelle, elle, est offerte en
- * BLOC via `manual_kind` — `breakfasts_offert` n'y a aucun sens.
+ * BLOC via `manual_kind` — `breakfasts_offert` n'y a aucun sens. Une nuit STAFF
+ * l'est également en bloc, quelle que soit la case.
  */
 export function isOffertBox(
   row: OffertRow | null | undefined,
   index: number,
 ): boolean {
   if (!row || index >= row.breakfasts_served) return false
+  if (isStaffRow(row.rate_plan)) return true
   if (row.manual_kind != null) return row.manual_kind === 'offert'
   const included = row.breakfasts_included
   return index >= included && index - included < (row.breakfasts_offert ?? 0)
@@ -128,6 +150,8 @@ export interface PdjBreakdown {
 interface InHouseRow {
   room: number
   addons: string | null
+  /** Plan tarifaire du PMS — désigne notamment une nuit STAFF (cf. isStaffRow). */
+  rate_plan?: string | null
   breakfasts_included: number
   breakfasts_served: number
   channel: string | null
@@ -179,6 +203,8 @@ interface CaRow {
   breakfasts_included: number
   breakfasts_served: number
   manual_kind?: string | null
+  /** Plan tarifaire du PMS — désigne notamment une nuit STAFF (cf. isStaffRow). */
+  rate_plan?: string | null
   channel?: string | null
   /** Extras OFFERTS (gratuits) parmi les servis — cf. `offertUnits`. */
   breakfasts_offert?: number
@@ -220,6 +246,8 @@ export function computePdjCA(
     let code = breakfastCode(r.addons)
     // Inclus manuel (day-use, absent de l'Addon) → valorisé au prix PDJ.
     if (!code && r.manual_kind === 'inclus') code = 'PDJ'
+    // Nuit STAFF : rien n'est dû, quoi que porte la ligne (cf. isStaffRow).
+    if (isStaffRow(r.rate_plan)) code = null
     if (code && r.breakfasts_included > 0) {
       inclusNb += r.breakfasts_included
       rebuiltHt += round2(r.breakfasts_included * unitHt(code))
@@ -260,10 +288,14 @@ export function roomFinance(
     const p = tarifs.get(c)
     return p != null ? round2(fromTTC(p)) : 0
   }
+  const staff = isStaffRow(row.rate_plan)
   let code = breakfastCode(row.addons)
   if (!code && row.manual_kind === 'inclus') code = 'PDJ'
+  // Nuit STAFF : ni dû ni extra facturable — la ligne vaut 0 €, case cochée ou
+  // non. Le code reste affiché, pour que la chambre ne passe pas pour « sans
+  // petit-déjeuner » alors que le membre du personnel en a bien pris un.
   const included =
-    code && row.breakfasts_included > 0 ? row.breakfasts_included : 0
+    !staff && code && row.breakfasts_included > 0 ? row.breakfasts_included : 0
   const extra = Math.max(0, row.breakfasts_served - included)
   const extraBillable = Math.max(0, extra - offertUnits(row))
   const htCa = round2(
@@ -301,9 +333,11 @@ export function pdjRoomBreakdown(
   // n'a pas pris de petit-déjeuner). Le CA d'une chambre est FACTURÉ dès qu'un PDJ
   // est inclus (dû), indépendamment du cochage « servi ».
   for (const r of rows) {
+    const staff = isStaffRow(r.rate_plan)
     let code = breakfastCode(r.addons)
     if (!code && r.manual_kind === 'inclus') code = 'PDJ'
-    const included = code && r.breakfasts_included > 0 ? r.breakfasts_included : 0
+    const included =
+      !staff && code && r.breakfasts_included > 0 ? r.breakfasts_included : 0
     const served = r.breakfasts_served
     const extra = Math.max(0, served - included)
     const extraBillable = Math.max(0, extra - offertUnits(r))
