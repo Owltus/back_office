@@ -157,6 +157,11 @@ export async function waitThenAutoSend(
     sleep?: (ms: number) => Promise<void>
     /** Horloge, pour qu'un test puisse faire passer le temps sans le subir. */
     now?: () => number
+    /** N'écrire au journal QUE si le rapport part. Pour la veille planifiée,
+     *  qui regarde toutes les deux minutes : sans cela, une nuit ordinaire
+     *  laisserait une centaine de lignes « déjà envoyé » qui noieraient les
+     *  quelques lignes qui racontent vraiment quelque chose. */
+    logOnlyIfSent?: boolean
   } = {},
 ): Promise<void> {
   const retryEveryMs = deps.retryEveryMs ?? RETRY_EVERY_MS
@@ -173,7 +178,7 @@ export async function waitThenAutoSend(
     const waitedSeconds = Math.round((now() - startedAt) / 1000)
     const outcome = await attemptFn(admin as never, dryRun, instant)
 
-    if (!dryRun) {
+    if (!dryRun && (outcome.sent || !deps.logOnlyIfSent)) {
       await logAttempt(admin, {
         cycle_date: cycleDate,
         trigger_report: triggerReport,
@@ -199,7 +204,7 @@ export async function waitThenAutoSend(
     if (elapsed + retryEveryMs > budgetMs) {
       const totalWaited = Math.round(elapsed / 1000)
       const note = `fin de veille après ${totalWaited}s sans que la donnée attendue se pose (${attempt} contrôles) — dernier état : ${outcome.note}`
-      if (!dryRun) {
+      if (!dryRun && !deps.logOnlyIfSent) {
         await logAttempt(admin, {
           cycle_date: cycleDate,
           trigger_report: triggerReport,

@@ -11,6 +11,20 @@ keep_vars = true
 # Worker e-mail uniquement : pas d'URL publique workers.dev ni d'URL de preview.
 workers_dev = false
 preview_urls = false
+
+# VEILLE PLANIFIÉE du rapport journalier (handler `scheduled`). Toutes les deux
+# minutes, elle demande à Supabase si le rapport de la nuit est parti, et le fait
+# partir sinon. C'est ce qui permet d'attendre un rapport très en retard sans
+# garder aucun processus en vie.
+#
+# L'HEURE EST EN UTC (Cloudflare ne connaît pas les fuseaux). Le PMS émet vers
+# 02h30 à Paris, soit 00h30 UTC en été et 01h30 UTC en hiver. La plage 00h-03h59
+# UTC couvre donc 02h-05h59 (été) et 01h-04h59 (hiver) : les deux saisons, avec
+# plusieurs heures de marge après l'émission. La borne réelle de l'envoi reste
+# décidée côté Supabase (fenêtre horaire de Paris, cf. businessDay.ts) ; cette
+# plage-ci est seulement la période où l'on prend la peine de regarder.
+[triggers]
+crons = ["*/2 0-3 * * *"]
 # Journaux du Worker (décisions d'acceptation/refus des e-mails) lisibles dans
 # le dashboard : Workers & Pages → le Worker → Journaux.
 [observability]

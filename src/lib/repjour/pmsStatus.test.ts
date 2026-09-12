@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { checkPmsFilesReceived } from '#/lib/repjour/pmsStatus.ts'
 
 describe('checkPmsFilesReceived', () => {
-  it("ne montre rien pendant la fenêtre d'ingestion [02h,04h[", () => {
+  it("ne montre rien pendant la fenêtre d'ingestion [02h,06h[", () => {
     const result = checkPmsFilesReceived({
       date: '2026-08-14',
       now: new Date('2026-08-15T03:00:00'),
@@ -26,8 +26,10 @@ describe('checkPmsFilesReceived', () => {
 
   it('une phrase unique, sans retour à la ligne, quand seul le Comparison manque', () => {
     const result = checkPmsFilesReceived({
+      // 06h01 : la fenêtre d'envoi automatique est close, plus rien ne partira
+      // tout seul — c'est seulement à partir de là qu'un manque est une anomalie.
       date: '2026-08-14',
-      now: new Date('2026-08-15T04:01:00'),
+      now: new Date('2026-08-15T06:01:00'),
       comparisonReceived: false,
       forecastImportedAt: '2026-08-15T02:30:00',
     })
@@ -36,6 +38,31 @@ describe('checkPmsFilesReceived', () => {
     expect(result.message).toBe(
       "Le PMS n'a pas transmis les chiffres du jour (Comparison) : le rapport du 2026-08-14 ne sera pas envoyé automatiquement.",
     )
+  })
+
+  it('ne crie pas tant que le rapport peut encore partir tout seul', () => {
+    // Le PMS émet vers 02h30 et la livraison des e-mails n'est maîtrisée par
+    // personne : un retard d'une demi-heure est possible. Tant que la fenêtre
+    // d'envoi est ouverte, un fichier absent peut encore arriver ET partir —
+    // annoncer « ne sera pas envoyé » serait faux. La borne est 06h (élargie
+    // de 04h le 2026-09-12, en même temps que la fenêtre serveur).
+    const manquant = {
+      date: '2026-08-14',
+      comparisonReceived: false,
+      forecastImportedAt: '2026-08-15T02:30:00',
+    }
+    expect(
+      checkPmsFilesReceived({ ...manquant, now: new Date('2026-08-15T04:01:00') })
+        .show,
+    ).toBe(false)
+    expect(
+      checkPmsFilesReceived({ ...manquant, now: new Date('2026-08-15T05:59:00') })
+        .show,
+    ).toBe(false)
+    expect(
+      checkPmsFilesReceived({ ...manquant, now: new Date('2026-08-15T06:00:00') })
+        .show,
+    ).toBe(true)
   })
 
   it('une phrase unique quand seul le Forecast manque (absent)', () => {

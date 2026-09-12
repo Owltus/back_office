@@ -42,15 +42,21 @@ export function businessDateStr(now = new Date()): string {
   return `${d.getFullYear()}-${m}-${day}`
 }
 
-// Fenêtre horaire où le pipeline d'ingestion AUTOMATIQUE (e-mail StayNTouch →
-// Edge Function import-report) tourne : [02h, 04h[. COPIE CONFORME de
-// supabase/functions/_shared/businessDay.ts (même constantes), pour que le
-// bandeau « fichiers PMS manquants » (pmsStatus.ts) sache quand la fenêtre est
-// passée sans attendre un aller-retour serveur.
+// Fenêtre horaire pendant laquelle le pipeline automatique peut encore faire
+// partir le rapport : [02h, 06h[. COPIE CONFORME de
+// supabase/functions/_shared/businessDay.ts — les deux constantes DOIVENT rester
+// identiques.
+//
+// Elle sert ici à décider quand le bandeau « fichiers PMS manquants »
+// (pmsStatus.ts) a le droit d'alarmer : tant que la fenêtre est ouverte, un
+// fichier absent n'est pas une anomalie, il peut encore arriver et partir tout
+// seul. Élargie de 04h à 06h le 2026-09-12, en même temps que la fenêtre
+// serveur : la livraison des e-mails n'étant maîtrisée par personne, un retard
+// d'une demi-heure ne doit ni bloquer l'envoi, ni déclencher une alerte.
 export const PIPELINE_WINDOW_START_HOUR = 2
-export const PIPELINE_WINDOW_END_HOUR = 4
+export const PIPELINE_WINDOW_END_HOUR = 6
 
-/** Vrai si l'instant tombe dans la fenêtre d'ingestion automatique [02h, 04h[. */
+/** Vrai si l'instant tombe dans la fenêtre d'automatisation [02h, 06h[. */
 export function isWithinPipelineWindow(now = new Date()): boolean {
   const h = now.getHours()
   return h >= PIPELINE_WINDOW_START_HOUR && h < PIPELINE_WINDOW_END_HOUR

@@ -22,16 +22,26 @@ export function parisHour(instant: Date = new Date()): number {
   return parisWall.getHours()
 }
 
-// Fenêtre horaire (heure de Paris) où l'ingestion ET l'envoi AUTOMATIQUES sont
-// autorisés : [02h, 04h[. Les rapports du pipeline sont tirés vers 02h30 ; hors de
-// cette fenêtre, on ignore tout (ni écriture, ni envoi auto). Source UNIQUE de la
-// règle — utilisée par la garde en amont (index.ts) ET par la fonction d'envoi
-// (autoSend) en défense en profondeur. N'affecte QUE l'automatique :
-// l'envoi MANUEL admin (send-report) reste disponible 24h/24.
+// Fenêtre horaire (heure de Paris) où l'ENVOI automatique est autorisé :
+// [02h, 06h[. L'ingestion, elle, tourne 24h/24 — un rapport livré en retard est
+// toujours enregistré, seul l'envoi est borné.
+//
+// POURQUOI QUATRE HEURES, ET NON DEUX. Le PMS déclenche l'émission vers 02h30 ;
+// l'arrivée suit d'ordinaire de quelques minutes, mais la livraison des e-mails
+// n'est maîtrisée par personne — un décalage d'une demi-heure a déjà été
+// observé. La borne à 04h refusait alors d'envoyer un rapport pourtant complet
+// et valide, sur le seul motif de l'heure. Quatre heures laissent la marge
+// nécessaire tout en gardant l'automatisme confiné à la nuit : rien ne peut
+// partir tout seul en journée.
+//
+// La garde « hors cycle courant » (autoSend.ts) reste la vraie protection
+// contre l'envoi d'un rapport périmé ; cette fenêtre-ci ne fait que borner
+// l'heure. N'affecte QUE l'automatique : l'envoi MANUEL admin (send-report)
+// reste disponible 24h/24.
 export const PIPELINE_WINDOW_START_HOUR = 2
-export const PIPELINE_WINDOW_END_HOUR = 4
+export const PIPELINE_WINDOW_END_HOUR = 6
 
-/** Vrai si l'instant tombe dans la fenêtre d'automatisation [02h, 04h[ (Paris). */
+/** Vrai si l'instant tombe dans la fenêtre d'automatisation [02h, 06h[ (Paris). */
 export function isWithinPipelineWindow(instant: Date = new Date()): boolean {
   const h = parisHour(instant)
   return h >= PIPELINE_WINDOW_START_HOUR && h < PIPELINE_WINDOW_END_HOUR

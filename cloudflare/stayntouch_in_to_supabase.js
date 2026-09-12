@@ -155,4 +155,49 @@ export default {
     }
     // Succès (2xx) : rien à faire, l'e-mail a été traité et importé.
   },
+
+  /**
+   * VEILLE PLANIFIÉE du rapport journalier (minuterie, cf. wrangler.toml).
+   *
+   * Le rapport part normalement à l'arrivée du SECOND des deux fichiers
+   * nécessaires (Comparison et Forecast), quel que soit le délai qui les
+   * sépare. Reste un cas non couvert : ce second fichier arrive très en retard
+   * ET son arrivée n'aboutit pas. La veille ouverte côté Supabase par le
+   * premier arrivé ne vit que quelques minutes — elle meurt avec l'invocation.
+   *
+   * Cette minuterie ne dépend d'aucun e-mail ni d'aucune invocation : elle
+   * demande simplement, toutes les deux minutes pendant la nuit, « le rapport
+   * de cette nuit est-il parti ? ». C'est ce qui permet d'attendre une
+   * demi-heure, ou davantage, sans garder quoi que ce soit en vie.
+   *
+   * Aucune donnée n'est transmise : pas de corps, juste l'en-tête de contrôle
+   * et le secret. L'idempotence côté Supabase (réservation atomique) garantit
+   * qu'aucun envoi ne peut être doublé, quel que soit le nombre d'appels.
+   *
+   * @param {ScheduledController} _event
+   * @param {{ IMPORT_ENDPOINT: string, IMPORT_SECRET: string }} env
+   */
+  async scheduled(_event, env) {
+    if (!env.IMPORT_ENDPOINT || !env.IMPORT_SECRET) {
+      console.error('[veille] configuration du Worker incomplete')
+      return
+    }
+    try {
+      const res = await fetch(env.IMPORT_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'X-Import-Secret': env.IMPORT_SECRET,
+          // Distingue ce contrôle d'un e-mail : rien à parser, rien à importer.
+          'X-Import-Check': '1',
+        },
+      })
+      if (!res.ok) {
+        console.error('[veille] controle refuse', res.status)
+      }
+    } catch (err) {
+      // Sans conséquence : le prochain passage de la minuterie réessaiera dans
+      // deux minutes. Rien n'est perdu, rien n'est à rejouer.
+      console.error('[veille] controle injoignable')
+    }
+  },
 }

@@ -26,7 +26,7 @@ import { importComparison, importForecast } from './repjour.ts'
 import { importInhouse } from './pdj.ts'
 import { importAddon } from './addon.ts'
 import { maybeAutoSendRepjour } from './autoSend.ts'
-import { scheduleAutoSend } from './waitAndSend.ts'
+import { scheduleAutoSend, waitThenAutoSend } from './waitAndSend.ts'
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -130,6 +130,35 @@ Deno.serve(async (req) => {
     auth: { autoRefreshToken: false, persistSession: false },
   })
 
+  // 1b. VEILLE PLANIFIÉE. Le Worker Cloudflare appelle aussi cette fonction sur
+  //     minuterie, toutes les deux minutes pendant la nuit, avec cet en-tête et
+  //     SANS e-mail. Ce n'est pas un import : on regarde simplement si le
+  //     rapport du cycle est parti, et on l'envoie s'il ne l'est pas.
+  //
+  //     POURQUOI. L'envoi normal se déclenche à l'arrivée du second des deux
+  //     rapports, quel que soit le délai — une minute ou une demi-heure. La
+  //     veille ouverte par le premier arrivé rattrape le cas où cette arrivée
+  //     n'aboutit pas, mais elle ne vit que quelques minutes : elle meurt avec
+  //     l'invocation, que la plateforme finit par arrêter. Un rapport très en
+  //     retard dont l'arrivée échouerait ne serait donc couvert par personne.
+  //     Cette minuterie ferme ce dernier trou : elle ne dépend d'aucun e-mail,
+  //     d'aucune invocation antérieure, et regarde pendant toute la nuit.
+  //
+  //     Elle n'écrit au journal QUE si elle envoie : sinon une nuit ordinaire
+  //     y laisserait une centaine de lignes « déjà envoyé ».
+  if (req.headers.get('X-Import-Check') === '1') {
+    await waitThenAutoSend(
+      maybeAutoSendRepjour,
+      admin,
+      false,
+      new Date(),
+      'veille planifiée',
+      // Un seul coup d'œil : c'est la minuterie qui fait la durée, pas nous.
+      { budgetMs: 0, logOnlyIfSent: true },
+    )
+    return json({ ok: true, check: true })
+  }
+
   // MODE TEST : IMPORT_DRY_RUN=true → on parse et VALIDE tout (mêmes contrôles
   // qu'en réel : nuitées>80, négatifs, forecast en HT, colonnes/date PDJ…), mais
   // on N'ÉCRIT RIEN en base. Le résumé part dans les logs. Bascule à false (ou
@@ -137,13 +166,13 @@ Deno.serve(async (req) => {
   const dryRun = Deno.env.get('IMPORT_DRY_RUN') === 'true'
 
   // HORLOGE UNIQUE : lue une seule fois par requête et propagée à l'ENVOI AUTO
-  // (garde de fenêtre [02h,04h[ + bornage du cycle, décidés dans autoSend.ts).
+  // (garde de fenêtre [02h,06h[ + bornage du cycle, décidés dans autoSend.ts).
   //
   // L'INGESTION, elle, n'est PLUS bornée par l'heure : on IMPORTE TOUJOURS. Les
   // écritures sont idempotentes (upsert), donc une re-livraison est sans danger, et
   // surtout un e-mail livré en RETARD (retard SMTP/greylisting, passage à l'heure
   // d'été, à cheval sur 04h) n'est plus PERDU en silence. Seul l'AUTO-ENVOI reste
-  // borné à [02h,04h[ (garde dans maybeAutoSendRepjour) : hors fenêtre, les données
+  // borné à [02h,06h[ (garde dans maybeAutoSendRepjour) : hors fenêtre, les données
   // sont bien enregistrées mais le mail n'est pas auto-envoyé (le filet manuel admin
   // + le bandeau « pas encore envoyé » prennent le relais).
   const instant = new Date()

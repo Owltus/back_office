@@ -19,7 +19,7 @@ import {
  * marqueur d'envoi est posé (auto ou manuel), il n'y a plus rien à signaler,
  * quel que soit l'état des fichiers. De même après un « Ignorer » explicite.
  *
- * On n'affiche RIEN pendant la fenêtre d'ingestion [02h,04h[ (le pipeline est
+ * On n'affiche RIEN pendant la fenêtre d'ingestion [02h,06h[ (le pipeline est
  * encore en train de tourner, un fichier arrivé en second ne doit pas paraître
  * « manquant »).
  *

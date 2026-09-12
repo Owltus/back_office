@@ -390,7 +390,7 @@ export function DashboardBoard() {
   const isImportDay = selectedDate === maxDate
 
   // Horloge de rendu (1 min) : le mode manuel s'ouvre à 03h et le bandeau PMS
-  // à 04h SANS autre signal — une page laissée ouverte doit suivre.
+  // à 06h SANS autre signal — une page laissée ouverte doit suivre.
   const now = useNow()
 
   // MODE MANUEL (écriture) : l'import de secours ne s'ouvre à l'écriture qu'à

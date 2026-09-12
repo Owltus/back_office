@@ -142,9 +142,11 @@ export async function maybeAutoSendRepjour(
   dryRun: boolean,
   instant: Date = new Date(),
 ): Promise<AutoSendOutcome> {
-  // L'envoi AUTO ne part que dans la fenêtre [02h, 04h[ (Paris) — c'est désormais la
-  // SEULE garde de fenêtre (l'ingestion, elle, tourne 24/7). N'affecte PAS l'envoi
-  // MANUEL admin (send-report). `instant` = heure lue UNE fois par requête.
+  // L'envoi AUTO ne part que dans la fenêtre [02h, 06h[ (Paris) — c'est désormais la
+  // SEULE garde de fenêtre (l'ingestion, elle, tourne 24/7). Quatre heures, et non
+  // deux : la livraison des e-mails n'est maîtrisée par personne, et un rapport
+  // complet ne doit pas être refusé sur le seul motif de l'heure. N'affecte PAS
+  // l'envoi MANUEL admin (send-report). `instant` = heure lue UNE fois par requête.
   //
   // INTERRUPTEUR DE TEST : le secret PIPELINE_WINDOW_BYPASS=true LÈVE cette garde pour
   // valider la boucle complète EN JOURNÉE (envoi réel, pas une simulation). Défaut =
@@ -153,7 +155,7 @@ export async function maybeAutoSendRepjour(
   const bypassWindow = Deno.env.get('PIPELINE_WINDOW_BYPASS') === 'true'
   if (bypassWindow)
     console.warn(
-      '[AUTO-SEND] PIPELINE_WINDOW_BYPASS=true — garde de fenêtre [02h,04h[ LEVÉE (test réel en cours).',
+      '[AUTO-SEND] PIPELINE_WINDOW_BYPASS=true — garde de fenêtre [02h,06h[ LEVÉE (test réel en cours).',
     )
   if (!bypassWindow && !isWithinPipelineWindow(instant))
     return { sent: false, note: 'hors fenêtre horaire — envoi auto ignoré', retryable: false }
@@ -252,7 +254,7 @@ export async function maybeAutoSendRepjour(
   // `imported_at = now()` APRÈS le parse, donc APRÈS `instant`. Utiliser `instant` ici
   // donnait un âge NÉGATIF → « pas frais » → auto-envoi jamais déclenché quand le
   // Comparison arrivait avant le Forecast (ou les deux dans le même mail). `instant`
-  // reste réservé à la garde de fenêtre [02h,04h[ (cohérence de la borne 04h).
+  // reste réservé à la garde de fenêtre [02h,06h[ (cohérence de la borne 06h).
   const fcAgeMs = Date.now() - new Date(latestFc).getTime()
   if (!isMonthBoundary && !(fcAgeMs >= 0 && fcAgeMs < FRESH_WINDOW_MS))
     return {
