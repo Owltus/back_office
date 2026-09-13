@@ -72,6 +72,11 @@ minuterie pour un test, puis restauration, deux fois) a laissé le planificateur
 Cloudflare dans un état incohérent. La sortie de `wrangler deploy` annonce le
 calendrier qu'elle a ENVOYÉ, pas celui qui est ACTIF.
 
+**Réparée et stable**, vérifié après coup : déclenchements à 02:36:01, 02:38:01
+et 02:40:01, soit la cadence attendue de deux minutes. Aucune ligne écrite au
+journal pendant ce temps — l'état n'ayant pas changé depuis l'envoi, la
+déduplication fait son office.
+
 ### Règle à retenir
 
 **Après toute modification de `crons`, ne jamais se fier à la sortie du
@@ -97,9 +102,14 @@ retard, ou une invocation d'import qui disparaît. Il doit être vérifié actif
 | Doublon | aucun — course arbitrée |
 | Journal | 6 lignes, lisibles, sans bruit |
 | Veille du Comparison | 5 contrôles sur 67 s, retrait propre |
-| Veille planifiée | **n'a pas tourné**, réveillée à 02:36 |
+| Veille planifiée | n'a pas tourné de 02h00 à 02h31 ; réveillée à 02:36, **stable ensuite** |
 | 4 rapports PMS | tous reçus et importés |
 
-Le chantier tient sur sa première nuit réelle. Le seul point ouvert est la
-fiabilité d'enregistrement du déclencheur Cloudflare, à revérifier demain matin
-et après chaque déploiement du Worker.
+Le chantier tient sur sa première nuit réelle, et les trois chemins sont
+désormais actifs. Le point de vigilance n'est pas le code mais la PROCÉDURE :
+l'enregistrement du déclencheur Cloudflare n'est pas fiable après des
+déploiements rapprochés, et doit être constaté — jamais supposé.
+
+Deux fois cette nuit j'ai conclu trop tôt à une panne en interrogeant une minute
+avant le premier déclenchement. Laisser passer au moins deux cycles avant de
+juger.
