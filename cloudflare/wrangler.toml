@@ -30,6 +30,16 @@ preview_urls = false
 # c'était précisément la tranche tardive que l'élargissement à 06h visait.
 # Les passages tombant hors fenêtre sont refusés côté Supabase avant toute
 # requête en base : les couvrir en trop ne coûte rien.
+#
+# ⚠ APRÈS TOUTE MODIFICATION DE `crons`, VÉRIFIER UN DÉCLENCHEMENT RÉEL.
+# La sortie de `wrangler deploy` annonce le calendrier ENVOYÉ, pas celui qui est
+# ACTIF. La nuit du 13/09, après plusieurs déploiements rapprochés (accélération
+# de la minuterie pour un test, puis restauration), le planificateur Cloudflare
+# n'a plus rien déclenché du tout entre 02h00 et 02h31 alors que `deploy`
+# affichait bien `schedule: */2 0-4 * * *`. Il a fallu un
+# `npx wrangler@4 triggers deploy` explicite pour le réveiller.
+# Contrôle : `npx wrangler@4 tail` doit montrer une ligne `"*/2 0-4 * * *" … Ok`
+# dans les deux minutes, pendant la plage 00h-04h59 UTC.
 [triggers]
 crons = ["*/2 0-4 * * *"]
 # Journaux du Worker (décisions d'acceptation/refus des e-mails) lisibles dans
