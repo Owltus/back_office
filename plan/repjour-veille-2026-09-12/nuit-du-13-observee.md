@@ -77,6 +77,20 @@ et 02:40:01, soit la cadence attendue de deux minutes. Aucune ligne écrite au
 journal pendant ce temps — l'état n'ayant pas changé depuis l'envoi, la
 déduplication fait son office.
 
+### Déduplication du journal : mesurée, et imparfaite par choix
+
+Entre 02:32 et 02:50, la veille planifiée a tiré neuf fois et n'a écrit qu'**une
+seule** ligne redondante (#14 à 02:50:09, motif identique à #13). La relecture du
+dernier motif a échoué à cet instant précis, et le code retombe alors sur
+« écrire » — mieux une ligne en trop qu'un trou dans le journal.
+
+Taux observé : environ une écriture inutile sur neuf passages, soit une dizaine
+par nuit complète. Le journal reste lisible (7 lignes pour cette nuit). Une
+déduplication exacte demanderait un index unique partiel et un
+`on conflict do nothing`, au prix de perdre la réapparition légitime d'un même
+état plus tard dans la nuit. Non fait : le rapport coût/bénéfice ne le justifie
+pas tant que le journal tient en une dizaine de lignes.
+
 ### Règle à retenir
 
 **Après toute modification de `crons`, ne jamais se fier à la sortie du
