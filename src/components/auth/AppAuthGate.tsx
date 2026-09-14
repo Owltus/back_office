@@ -7,7 +7,10 @@ import { BackendStatusBanner } from '#/components/shared/BackendStatusBanner.tsx
 import { EasterEggs } from '#/components/shared/EasterEggs.tsx'
 import { Navbar } from '#/components/Navbar.tsx'
 import { Skeleton } from '#/components/ui/skeleton.tsx'
-import { RouteSkeleton } from '#/components/shared/skeleton/RouteSkeleton.tsx'
+import {
+  RouteSkeleton,
+  SHELL_VARIANT,
+} from '#/components/shared/skeleton/RouteSkeleton.tsx'
 
 /** Vrai après `delayMs` de montage : sert à ne parler d'un chargement lent
  *  qu'une fois qu'il l'est vraiment (jamais de message sur un boot normal). */
@@ -24,17 +27,37 @@ function useDelayedFlag(delayMs: number): boolean {
 const SLOW_BOOT_MS = 5_000
 
 /**
+ * Faux pendant le TOUT PREMIER rendu client, vrai dès l'effet de montage.
+ *
+ * Sert à ne diverger du HTML prérendu qu'APRÈS l'hydratation. Le shell de cette
+ * SPA est prérendu une seule fois et servi pour toutes les routes : tout ce qui
+ * dépend du chemin au premier rendu fait diverger le DOM et déclenche une erreur
+ * d'hydratation (React #418).
+ */
+function useHydrated(): boolean {
+  const [hydrated, setHydrated] = useState(false)
+  useEffect(() => setHydrated(true), [])
+  return hydrated
+}
+
+/**
  * Squelette de démarrage : silhouette de barre de navigation + zone de contenu en
- * squelette, au lieu d'un spinner nu. Déterministe → rendu à l'identique en SSR et
- * au premier rendu client (pas de divergence d'hydratation), et l'arrivée du chrome
- * réel ne déplace rien (même hauteur de barre, même zone de contenu).
+ * squelette, au lieu d'un spinner nu. L'arrivée du chrome réel ne déplace rien
+ * (même hauteur de barre, même zone de contenu).
  *
  * Le corps est délégué à `RouteSkeleton`, qui réserve la barre PageHeader et
  * adapte sa forme à la route d'atterrissage (formulaire, liste, analytique ou
  * board) — le `<main>` et le padding reprennent EXACTEMENT ceux du chrome réel
  * (`app-scroll`, `flex flex-1 flex-col p-4 md:p-6`) pour ne rien décaler.
+ *
+ * ⚠ Cette adaptation au chemin n'a lieu qu'APRÈS l'hydratation. Le shell est
+ * prérendu une seule fois et servi identique sur toutes les routes : rendre
+ * d'emblée la silhouette de /profil ou de /comptes faisait diverger le DOM du
+ * HTML déjà affiché, et React signalait une erreur d'hydratation (#418) à chaque
+ * visite de ces pages. On rend donc d'abord la variante DU SHELL, puis la bonne.
  */
 function BootSkeleton({ pathname }: { pathname: string }) {
+  const hydrated = useHydrated()
   // Après 5 s, le squelette cesse d'être muet : un texte accessible dit que le
   // chargement dure ; si le disjoncteur est ouvert, le bandeau de statut
   // (monté au-dessus, hors du squelette décoratif) prend le relais.
@@ -70,7 +93,10 @@ function BootSkeleton({ pathname }: { pathname: string }) {
         aria-hidden="true"
       >
         <div className="flex flex-1 flex-col p-4 md:p-6">
-          <RouteSkeleton pathname={pathname} />
+          <RouteSkeleton
+            pathname={pathname}
+            variant={hydrated ? undefined : SHELL_VARIANT}
+          />
         </div>
       </main>
     </div>

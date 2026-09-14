@@ -19,7 +19,40 @@ import { SkeletonTable } from '#/components/shared/skeleton/SkeletonTable.tsx'
  *
  * La largeur (`max-w-*`) et l'espacement collent au conteneur réel de chaque
  * famille de page. Décoratif (aria-hidden).
+ *
+ * ⚠ HYDRATATION. L'application est une SPA dont le shell est PRÉRENDU UNE SEULE
+ * FOIS puis servi tel quel pour toutes les routes (rewrite Vercel vers
+ * `_shell.html` — vérifié : l'empreinte du HTML servi est identique sur /pdj et
+ * /profil). Le shell contient donc la variante d'UNE seule route. Adapter ce
+ * squelette au chemin dès le PREMIER rendu client faisait diverger le DOM de
+ * celui du shell sur toute page d'une autre famille — /profil, /comptes et les
+ * analytiques — d'où une erreur d'hydratation React (#418) à chaque visite.
+ *
+ * D'où `SHELL_VARIANT` : avant l'hydratation, on rend la variante du shell ;
+ * on n'adapte qu'ensuite (cf. `AppAuthGate`).
  */
+
+/** Familles de page ayant une silhouette de chargement distincte. */
+export type SkeletonVariant = 'profil' | 'comptes' | 'analytique' | 'board'
+
+/**
+ * Variante contenue dans le SHELL PRÉRENDU, donc celle que le navigateur a déjà
+ * sous les yeux au moment de l'hydratation.
+ *
+ * Le shell est prérendu pour `/`, qui retombe sur la variante « board ».
+ * Vérification, si le prérendu change un jour :
+ *   `curl -s https://backoffice.naostack.com/pdj | grep -o 'max-w-[a-z0-9]*'`
+ * doit montrer `max-w-5xl`, et le premier conteneur porter `space-y-4`.
+ */
+export const SHELL_VARIANT: SkeletonVariant = 'board'
+
+/** Famille de page d'un chemin. Pure : c'est elle qu'on teste, pas le rendu. */
+export function skeletonVariant(pathname: string): SkeletonVariant {
+  if (pathname.startsWith('/profil')) return 'profil'
+  if (pathname.startsWith('/comptes')) return 'comptes'
+  if (pathname.includes('/analytique')) return 'analytique'
+  return 'board'
+}
 
 /** Silhouette de la barre PageHeader : titre à gauche, actions à droite. */
 function HeaderRow() {
@@ -36,9 +69,19 @@ function HeaderRow() {
   )
 }
 
-export function RouteSkeleton({ pathname }: { pathname: string }) {
+export function RouteSkeleton({
+  pathname,
+  /** Force une variante, quel que soit le chemin. Utilisé avant l'hydratation
+   *  pour reproduire exactement le shell prérendu. */
+  variant,
+}: {
+  pathname: string
+  variant?: SkeletonVariant
+}) {
+  const famille = variant ?? skeletonVariant(pathname)
+
   // Profil : carte identité + cartes de formulaire, colonne étroite (max-w-lg).
-  if (pathname.startsWith('/profil')) {
+  if (famille === 'profil') {
     return (
       <div className="mx-auto w-full max-w-lg space-y-6" aria-hidden="true">
         <HeaderRow />
@@ -58,7 +101,7 @@ export function RouteSkeleton({ pathname }: { pathname: string }) {
   }
 
   // Comptes : liste de lignes (colonne max-w-3xl).
-  if (pathname.startsWith('/comptes')) {
+  if (famille === 'comptes') {
     return (
       <div className="mx-auto w-full max-w-3xl space-y-4" aria-hidden="true">
         <HeaderRow />
@@ -72,7 +115,7 @@ export function RouteSkeleton({ pathname }: { pathname: string }) {
   }
 
   // Analytique : cartes + tableau + deux graphes.
-  if (pathname.includes('/analytique')) {
+  if (famille === 'analytique') {
     return (
       <div className="mx-auto w-full max-w-5xl space-y-6" aria-hidden="true">
         <HeaderRow />
