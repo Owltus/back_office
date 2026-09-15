@@ -1,0 +1,48 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "_comment": "Test de mutation — la NOTE de la suite de tests. La couverture dit qu'une ligne a été exécutée ; le score de mutation dit qu'elle a été VÉRIFIÉE. Stryker abîme volontairement le code (un `>` devient `>=`, un `+` devient `-`, une condition est forcée à vrai) et regarde si un test proteste. Un mutant qui survit est une ligne que personne ne surveille. Périmètre : la logique métier PURE de src/lib — ni React, ni réseau, ni Supabase.",
+  "packageManager": "pnpm",
+  "testRunner": "vitest",
+  "reporters": [
+    "html",
+    "clear-text",
+    "progress"
+  ],
+  "coverageAnalysis": "perTest",
+  "incremental": true,
+  "timeoutMS": 20000,
+  "concurrency": 4,
+  "mutate": [
+    "src/lib/repjour/calc/**/*.ts",
+    "src/lib/repjour/summaryMetrics.ts",
+    "src/lib/repjour/pmsStatus.ts",
+    "src/lib/repjour/parse/date.ts",
+    "src/lib/businessDay.ts",
+    "src/lib/pdj/**/*.ts",
+    "src/lib/rapro/**/*.ts",
+    "src/lib/parking/**/*.ts",
+    "src/lib/caisse/**/*.ts",
+    "src/lib/permissions/**/*.ts",
+    "src/lib/auth/**/*.ts",
+    "src/lib/backendHealth.ts",
+    "src/lib/baby-cots/editability.ts",
+    "src/lib/facturation/text.ts",
+    "src/lib/facturation/similarity.ts",
+    "src/lib/facturation/siret.ts",
+    "src/lib/facturation/detect.ts",
+    "src/lib/facturation/notices.ts",
+    "!src/**/*.test.ts",
+    "!src/**/*.d.ts",
+    "!src/lib/**/service.ts",
+    "!src/lib/**/services/**",
+    "!src/lib/**/pdf.ts"
+  ],
+  "thresholds": {
+    "high": 80,
+    "low": 60,
+    "break": null
+  },
+  "plugins": [
+    "@stryker-mutator/vitest-runner"
+  ]
+}

@@ -18,7 +18,17 @@ const config = defineConfig({
     // pas sous Vitest : ils importent des spécificateurs `jsr:` et `npm:` que
     // Vite ne sait pas résoudre. Ils se lancent à part :
     //   deno test supabase/functions/import-report/waitAndSend.test.ts
-    exclude: ['node_modules/**', 'dist/**', 'supabase/**'],
+    // `.stryker-tmp/` : bacs à sable du test de mutation (`pnpm test:mutation`),
+    // chacun une copie complète du dépôt. Sans cette exclusion, un lancement de
+    // Vitest juste après ramasse la suite en huit exemplaires — dont des copies
+    // délibérément sabotées, qui échouent comme prévu et noient le résultat.
+    exclude: [
+      'node_modules/**',
+      'dist/**',
+      'supabase/**',
+      '.stryker-tmp/**',
+      'reports/**',
+    ],
   },
 })
 

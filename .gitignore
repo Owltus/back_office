@@ -83,3 +83,7 @@ deno.lock
 # Divers
 __unconfig*
 todos.json
+
+# Test de mutation (Stryker) — rapports et cache incrémental
+reports/
+.stryker-tmp/

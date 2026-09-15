@@ -13,7 +13,8 @@
     "test": "vitest run",
     "lint": "eslint",
     "format": "prettier --write . && eslint --fix",
-    "check": "prettier --check ."
+    "check": "prettier --check .",
+    "test:mutation": "stryker run"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.0",
@@ -51,6 +52,9 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@fast-check/vitest": "^0.5.0",
+    "@stryker-mutator/core": "^10.0.0",
+    "@stryker-mutator/vitest-runner": "^10.0.0",
     "@tailwindcss/typography": "^0.5.16",
     "@tanstack/eslint-config": "^0.4.0",
     "@tanstack/router-cli": "^1.132.0",
@@ -63,6 +67,7 @@
     "@types/three": "^0.185.1",
     "@vitejs/plugin-react": "^6.0.1",
     "eslint": "^9.20.0",
+    "fast-check": "^4.10.1",
     "jsdom": "^28.1.0",
     "prettier": "^3.8.1",
     "tesseract.js-core": "7.0.0",
