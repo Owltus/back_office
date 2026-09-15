@@ -36,8 +36,8 @@ export interface EmailData {
   /** Nombre de jours du mois — cadence des cartes « Effort restant » / « Avance ».
    * Absent → 0 (ces cartes affichent « — »). */
   daysInMonth?: number
-  /** Projeté fin de mois au 1er (carnet d'ouverture) — sous-valeur de « Rentré
-   * depuis le 1er ». `null`/absent → sous-valeur masquée. */
+  /** Projeté fin de mois au 1er (carnet d'ouverture) — base de la carte « Pris
+   * depuis le 1er ». `null`/absent → carte « — ». */
   monthStartProjection?: number | null
 }
 
@@ -378,7 +378,6 @@ function buildCards(
   const dim = data.daysInMonth ?? 0
   const depart = data.monthStartProjection ?? null
   const {
-    rentre,
     remainingDays,
     hasDay,
     effortJour,
@@ -433,14 +432,11 @@ function buildCards(
       subColor: '#6B7280',
     },
     {
-      label: 'Rentré depuis le 1er',
+      label: 'Pris depuis le 1er',
       accent: '#4338CA',
-      value:
-        revision == null
-          ? fmt.eurInt(rentre)
-          : (revision >= 0 ? '+' : '-') + fmt.eurInt(rentre),
-      valueColor: revision == null ? '#1A1A1A' : ecartColor(revision),
-      sub: depart == null ? '' : `${fmt.eurInt(depart)} au 1er`,
+      value: revision == null ? '—' : fmt.ecartEurInt(revision),
+      valueColor: revision == null ? '#6B7280' : ecartColor(revision),
+      sub: depart == null ? '' : `sur ${fmt.eurInt(depart)} au 1er`,
       subColor: '#6B7280',
     },
   ]

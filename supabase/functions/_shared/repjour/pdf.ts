@@ -47,8 +47,8 @@ export interface RepjourPdfData {
    * cartes temporelles (effort restant, avance sur le rythme). 0 si inconnu. */
   dayOfMonth?: number
   daysInMonth?: number
-  /** Projeté fin de mois tel qu'il était au 1er (carnet d'ouverture) — 2e valeur
-   * de la carte « Rentré depuis le 1er ». `null`/absent → sous-valeur masquée. */
+  /** Projeté fin de mois tel qu'il était au 1er (carnet d'ouverture) — base de la
+   * carte « Pris depuis le 1er ». `null`/absent → carte « — ». */
   monthStartProjection?: number | null
   /** Horodatage d'import du rapport (petite mention de pied). */
   importedAt?: string | null
@@ -292,7 +292,6 @@ function renderReportDocument(pdf: jsPDF, data: RepjourPdfData): void {
   const pk = typeof pickup === 'number' ? pickup : null
   const depart = typeof monthStartProjection === 'number' ? monthStartProjection : null
   const {
-    rentre,
     remainingDays,
     hasDay,
     effortJour,
@@ -347,14 +346,11 @@ function renderReportDocument(pdf: jsPDF, data: RepjourPdfData): void {
       subColor: GRAY,
     },
     {
-      label: 'Rentré depuis le 1er',
+      label: 'Pris depuis le 1er',
       accent: INDIGO,
-      value:
-        revision == null
-          ? T(fmt.eurInt(rentre))
-          : T((revision >= 0 ? '+' : '-') + fmt.eurInt(rentre)),
-      valueColor: revision == null ? INK : revision >= 0 ? POS : NEG,
-      sub: depart == null ? undefined : T(`${fmt.eurInt(depart)} au 1er`),
+      value: revision == null ? '—' : T(fmt.ecartEurInt(revision)),
+      valueColor: revision == null ? GRAY : revision >= 0 ? POS : NEG,
+      sub: depart == null ? undefined : T(`sur ${fmt.eurInt(depart)} au 1er`),
       subColor: GRAY,
     },
   ]

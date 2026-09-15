@@ -16,7 +16,7 @@ import type { Ecart, KPIBlock, MonthBudget } from '#/lib/repjour/types.ts'
  *   1. Pris depuis la veille — variation du CA projeté depuis le dernier rapport.
  *   2. Effort restant       — CA/jour à faire sur les jours restants pour le budget.
  *   3. Avance sur le budget — position réelle vs rythme linéaire du budget, en jours.
- *   4. Rentré depuis le 1er — CA réalisé cumulé du mois (total de la barre) + carnet au 1er.
+ *   4. Pris depuis le 1er  — ce que le mois a AJOUTÉ au carnet projeté du 1er.
  *
  * Hauteur STRICTE de chaque carte : titre / valeur / sous-valeur, jamais plus de
  * trois lignes (pas de courbe ni de contenu additionnel) pour qu'elles restent
@@ -191,22 +191,29 @@ export function SummaryCards({
           }
         />
 
-        {/* 4. Rentré depuis le 1er — CA réalisé cumulé (= total de la barre) +
-            rappel du carnet d'ouverture au 1er en sous-valeur. */}
+        {/* 4. Pris depuis le 1er — ce que le MOIS a ajouté au carnet d'ouverture :
+            le projeté fin de mois d'aujourd'hui moins celui du 1er. C'est l'effort
+            commercial du mois EN COURS, pas son avancement. Le cumul réalisé, lui,
+            reste lisible juste en dessous dans la barre de progression — il est
+            déjà CONTENU dans le carnet du 1er, donc il ne mesure aucun effort. */}
         <StatTile
-          label="Rentré depuis le 1er"
+          label="Pris depuis le 1er"
           accent={ACCENT.indigo}
-          hint="Chiffre d'affaires réellement réalisé en cumul depuis le début du mois (le total de la barre de progression). En dessous : le carnet déjà projeté fin de mois au 1er."
+          hint="Chiffre d'affaires gagné depuis le début du mois, en plus du carnet déjà projeté fin de mois au 1er. Positif : le mois a ajouté des réservations ; négatif : les annulations l'emportent."
           value={
             revision == null ? (
-              fmt.eurInt(rentre)
+              dash
             ) : (
               <span className={signedClass(revision)}>
-                {(revision >= 0 ? '+' : '-') + fmt.eurInt(rentre)}
+                {fmt.ecartEurInt(revision)}
               </span>
             )
           }
-          sub={depart == null ? undefined : subMuted(`${fmt.eurInt(depart)} au 1er`)}
+          sub={
+            depart == null
+              ? undefined
+              : subMuted(`sur ${fmt.eurInt(depart)} au 1er`)
+          }
         />
       </div>
 

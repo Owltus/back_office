@@ -25,7 +25,9 @@ export interface MonthPaceInput {
 }
 
 export interface MonthPace {
-  /** CA réellement réalisé en cumul depuis le 1er (= total de la barre). */
+  /** CA réellement réalisé en cumul depuis le 1er. Alimente la BARRE de
+   * progression et le calcul du rythme — plus aucune carte : il est déjà contenu
+   * dans le carnet du 1er, donc il ne mesure pas l'effort du mois en cours. */
   rentre: number
   /** Jours restants après le jour affiché. */
   remainingDays: number
@@ -40,9 +42,12 @@ export interface MonthPace {
   /** Avance (+) ou retard (-) en jours sur le rythme linéaire du budget, ou
    * `null` si le jour du mois est inconnu. */
   joursAvance: number | null
-  /** Écart du projeté fin de mois vs le projeté du 1er (carnet d'ouverture) :
-   * positif = on fait mieux que prévu à l'ouverture, négatif = moins bien. `null`
-   * si le carnet d'ouverture est inconnu. */
+  /** Carte « Pris depuis le 1er » : ce que le mois a AJOUTÉ au carnet d'ouverture,
+   * soit le projeté fin de mois d'aujourd'hui moins celui du 1er. Positif = le mois
+   * a pris des réservations en plus de ce qui était déjà au carnet ; négatif = les
+   * annulations l'emportent. `null` si le carnet d'ouverture est inconnu.
+   * ⚠ À ne pas confondre avec `rentre` (cumul réalisé), qui est DÉJÀ compris dans
+   * le carnet du 1er et ne dit donc rien de ce qui a été gagné depuis. */
   revision: number | null
 }
 
