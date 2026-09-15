@@ -167,27 +167,47 @@ function extractReportDateFromCsv(csvText: string): ReportDate | null {
 // couvrent la VEILLE → on soustrait 1 jour. REPLI utilisé seulement si la colonne
 // REPORT DATE est absente. Découpage SÛR : composantes AAAAMMJJ, arithmétique J-1
 // en UTC (déterministe, indépendante de DST/fuseau).
+// Vraie date du calendrier, ou null. `Date` ne REFUSE jamais un jour ou un mois
+// hors bornes : il DÉBORDE (30 février → 2 mars, mois 13 → janvier suivant),
+// sans erreur. Un contrôle `isNaN` ne se déclenche donc jamais sur ces entrées.
+// Seule la relecture des composantes après construction fait la différence.
+function dateCalendaireUtc(y: number, m: number, d: number): Date | null {
+  const date = new Date(Date.UTC(y, m - 1, d))
+  if (
+    date.getUTCFullYear() !== y ||
+    date.getUTCMonth() !== m - 1 ||
+    date.getUTCDate() !== d
+  ) {
+    return null
+  }
+  return date
+}
+
 function extractReportDate(filename: string | undefined): ReportDate {
-  const match = filename?.match(/(\d{4})(\d{2})(\d{2})/)
-  if (!match) {
+  // On parcourt TOUS les groupes de huit chiffres et on retient le premier qui
+  // forme une vraie date : un identifiant numérique placé avant la date ne
+  // détourne plus la lecture. Copie conforme de `src/lib/repjour/parse/date.ts`,
+  // à l'arithmétique près (UTC ici, heure locale côté navigateur).
+  let date: Date | null = null
+  for (const groupe of (filename ?? '').matchAll(/(\d{4})(\d{2})(\d{2})/g)) {
+    const candidate = dateCalendaireUtc(
+      parseInt(groupe[1], 10),
+      parseInt(groupe[2], 10),
+      parseInt(groupe[3], 10),
+    )
+    if (candidate) {
+      date = candidate
+      break
+    }
+  }
+
+  if (!date) {
     throw new Error(
       "Impossible de lire la date dans le nom du fichier. Garde le nom d'origine donné par ton logiciel, il contient la date.",
     )
   }
 
-  const y = parseInt(match[1], 10)
-  const m = parseInt(match[2], 10)
-  const d = parseInt(match[3], 10)
-
-  // UTC pur : construit à partir des composantes, décrémenté d'un jour, relu en UTC.
-  const date = new Date(Date.UTC(y, m - 1, d))
   date.setUTCDate(date.getUTCDate() - 1) // J-1 : données de la veille
-
-  if (isNaN(date.getTime())) {
-    throw new Error(
-      "La date lue dans le nom du fichier n'est pas valide. Vérifie que c'est bien le fichier du jour.",
-    )
-  }
 
   return buildReportDate(
     date.getUTCFullYear(),

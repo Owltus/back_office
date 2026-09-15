@@ -83,7 +83,36 @@ export const canLearn = (supplier: string, siren?: string): boolean =>
 const DATE_RE = /\b(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})\b/
 const INVOICE_RE =
   /facture\s*(?:n[°o]?|numero)?\s*[:#]?\s*([a-z0-9][a-z0-9\-\/]{2,})/i
-const AMOUNT_RE = /(\d{1,3}(?:[ .]\d{3})*(?:[,.]\d{2}))\s*(?:€|eur|ttc)/gi
+/*
+ * Séparateurs de milliers tolérés : espace ordinaire, espace insécable
+ * (U+00A0), insécable fine (U+202F), fine (U+2009) et point. Même tolérance
+ * que `siret.ts`, et pour la même raison : les PDF de facturation français
+ * séparent couramment les milliers par une insécable fine. Avec la seule
+ * espace ASCII, « 1 488,60 € » était lu « 488,60 » — mille euros perdus en
+ * silence (Martin, 2026-09-15).
+ */
+const AMOUNT_RE =
+  /(\d{1,3}(?:[ .\u00a0\u202f\u2009]\d{3})*(?:[,.]\d{2}))\s*(?:€|eur|ttc)/gi
+
+/**
+ * Valeur numérique d'un montant écrit à la française OU à l'anglaise.
+ *
+ * L'expression ci-dessus garantit deux décimales à la fin : le DERNIER
+ * séparateur est donc toujours le séparateur décimal, et tout ce qui le précède
+ * n'est que du groupage de milliers. C'est la seule lecture qui marche dans les
+ * deux conventions.
+ *
+ * L'ancienne version effaçait espaces et points sans distinguer leur rôle, si
+ * bien qu'un montant à point décimal était multiplié par cent : « 12.50 EUR »
+ * valait 1250, et un acompte ridicule l'emportait sur le vrai total de la
+ * facture (Martin, 2026-09-15).
+ */
+function amountValue(raw: string): number {
+  const sep = Math.max(raw.lastIndexOf(','), raw.lastIndexOf('.'))
+  if (sep < 0) return Number(raw.replace(/\D/g, ''))
+  const units = raw.slice(0, sep).replace(/\D/g, '')
+  return Number(`${units || '0'}.${raw.slice(sep + 1)}`)
+}
 
 /** yyyy-mm-dd si une date jj/mm/aaaa est trouvée, sinon null. */
 function extractDate(text: string): string | null {
@@ -102,7 +131,7 @@ function extractAmount(text: string): string | null {
   let best: string | null = null
   let bestVal = -1
   for (const m of text.matchAll(AMOUNT_RE)) {
-    const val = Number(m[1].replace(/[ .]/g, '').replace(',', '.'))
+    const val = amountValue(m[1])
     if (Number.isFinite(val) && val > bestVal) {
       bestVal = val
       best = m[1]
