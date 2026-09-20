@@ -184,6 +184,45 @@ Le temps de chargement perçu vient surtout de l'auth cliente + du mode SPA. Rè
   avec écart minimal 30 s. Toujours re-mesurer par `explain analyze` avant
   d'optimiser sur des statistiques cumulées (les 300 ms de `pdj_daily_agg`
   dataient de la saturation d'avant la panne ; à froid : 5 ms).
+- **Audit du chargement, 2026-09-20** (plan `perf-chargement-2026-09-20`) — trois
+  règles nées de faits mesurés, qui en corrigent d'autres :
+  - **`getSession()` n'est PAS une lecture locale** quand le jeton approche de
+    son expiration : auth-js part le renouveler (marge de 90 s sur un jeton
+    d'une heure), donc chaque première ouverture de la journée passait par le
+    réseau, écran bloqué, jusqu'à ~40 s. La règle « auth non bloquante » tient
+    toujours, mais l'attente est désormais **bornée** (`BOOT_AUTH_MAX_WAIT_MS`
+    = 3 s, `AuthContext.tsx`) — jamais supposée nulle. Ne pas retirer ce filet.
+  - **Une feuille de style tierce bloque le rendu**, même chargée par `<link>`
+    avec `preconnect`. « Polices hors du CSS » était nécessaire, pas suffisant :
+    Inter et Poppins sont **auto-hébergées** depuis ce jour (paquets
+    `@fontsource*`, inlinés au build), et la CSP ne mentionne plus Google. Ne
+    pas réintroduire de `<link>` vers `fonts.googleapis.com`.
+  - **Distinguer une requête lente d'une base affamée.** Signature d'une
+    famine : `stddev ≥ mean`, un `min_exec_time` sous la milliseconde, et un
+    `max_exec_time` qui plafonne au même endroit sur des familles de requêtes
+    indépendantes. Quand elle est là, `explain analyze` **à froid** est le seul
+    juge — complément de la leçon du 2026-09-06. Repère : `set_config()`, appel
+    purement mémoire, mettait 5,13 ms de moyenne pour 0,019 au mieux.
+  - **Temps réel réduit à `parking_reservations`** (décision utilisateur du
+    2026-09-20, révise celle du 2026-09-06) : son poller consommait **71,1 % du
+    CPU** de la base, en continu et sans utilisateur connecté, pour 3 tables.
+    PDJ et lits bébé rafraîchissent au retour d'onglet. Autorité :
+    `supabase/realtime_reduction_2026-09-20.sql`, retour arrière en deux lignes.
+  - **`pdj_daily_agg` réécrite** (`pdj_daily_agg_pushdown_2026-09-20.sql`) :
+    `UNION ALL` + CTE `not materialized` à la place du `FULL JOIN`, pour que le
+    filtre de date descende sous l'agrégat. 98 ms → 11 ms. Les trois anciens
+    fichiers portent « REMPLACÉ — NE PLUS REJOUER ».
+  - **Retour visuel de navigation** : `defaultPendingComponent` dans
+    `router.tsx`. L'angle D1 de `squelette-chargement-global` l'avait écarté
+    comme « inutile sans `loader` » — vrai pour les DONNÉES, faux pour le
+    téléchargement du CODE d'une route.
+  - **Cache des fichiers statiques** : `/assets/*` en `immutable` dans
+    `vercel.json` (ils étaient servis en `max-age=0, must-revalidate`, mesuré en
+    production). ⚠ Ne JAMAIS étendre cette règle à `/_shell.html`.
+  - Trois suppositions de l'audit **démenties par la mesure**, à ne pas
+    ressusciter : la simulation de la galaxie (22 nœuds actifs, pas 200), les
+    colonnes du planning parking (`days` ne contient déjà que le visible), et la
+    mémoïsation de `RaproBoard` (~100 opérations par rendu).
 - Valider toute modif perf : `pnpm build` (vérifier le découpage des chunks) +
   `npx tsc --noEmit` ; côté base `supabase/verif_perf.sql` (lecture seule).
 
@@ -267,7 +306,9 @@ Le temps de chargement perçu vient surtout de l'auth cliente + du mode SPA. Rè
   `server_report_recipients`). Décisions explicites de l'utilisateur, à ne
   pas re-proposer : daily_reports/pms UPDATE-DELETE en écriture (import =
   upsert), compte de test et compte Réception partagé conservés, 1 seul admin
-  sans MFA, Realtime conservé (parking, PDJ, lits bébé), doublons de section
+  sans MFA, ~~Realtime conservé (parking, PDJ, lits bébé)~~ **RÉVISÉ le
+  2026-09-20 : Realtime réduit au SEUL `parking_reservations`** (voir plus bas),
+  doublons de section
   PMS fidèles au fichier source, contresignature caisse = papier.
   `track_io_timing` et `log_min_duration_statement` sont IMPOSSIBLES sur ce
   plan (clés refusées par l'API `postgres-config`, ALTER DATABASE refusé :

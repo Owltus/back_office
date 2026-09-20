@@ -1,5 +1,27 @@
 # Plan — Temps de chargement : lever la famine, supprimer les attentes en série
 
+> **EXÉCUTÉ le 2026-09-20** (9 étapes livrées sur 14, 3 annulées par la mesure,
+> 1 différée, 1 partielle). Écarts par rapport au plan initial :
+> - **étapes 7, 8 et 9 SANS OBJET ou DIFFÉRÉES** : les trois suppositions de
+>   l'audit ont été démenties par la mesure — 22 nœuds actifs dans la galaxie et
+>   non 200, le planning parking ne rend déjà que les colonnes visibles, et les
+>   calculs de `RaproBoard` portent sur une centaine d'éléments ;
+> - **étape 2, point 1 ÉCARTÉ** : couper le `fetch` d'authentification à 3 s
+>   aurait échangé une attente visible contre une panne silencieuse. Seule
+>   l'ATTENTE de l'affichage est bornée, pas la requête ;
+> - **étape 12 PARTIELLE** : la vue `pdj_daily_agg` est réécrite et appliquée
+>   (98 ms → 11 ms), les casts `::text` attendent un accord explicite car ils
+>   exigent un `drop view` ;
+> - **étape 11 RÉDUITE** : `ComptesBoard` passe sous TanStack Query,
+>   `BudgetContent` et `DataContent` restent des formulaires à état local — mais
+>   un défaut d'intégrité y a été trouvé et corrigé au passage (un échec de
+>   lecture affichait un budget à zéro qu'un clic pouvait enregistrer par-dessus
+>   le vrai) ;
+> - **étape 14 AJOUTÉE** après la décision de l'utilisateur sur le temps réel ;
+> - **le relevé d'après travaux est partiel** : la répartition du processeur
+>   demande 24 h après la remise à zéro de `pg_stat_statements` (faite à 10h28),
+>   et les temps ressentis demandent des mesures navigateur en production.
+
 ## Contexte
 
 L'utilisateur constate que les pages sont **parfois** très longues à charger, sans
