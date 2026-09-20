@@ -921,17 +921,6 @@ export function DashboardBoard() {
               <AlertBanner alerts={report.alerts || []} />
             </div>
 
-            {/* Bande de synthèse transverse : composant D'ÉCRAN UNIQUEMENT (cf.
-                en-tête de DayCrossSummary.tsx) — ne touche ni le PDF « Imprimer »
-                ni le rapport e-mail ; exclue du document imprimé tactile pour la
-                même raison. */}
-            <div className="print:hidden">
-              <DayCrossSummary
-                date={selectedDate}
-                hotelRoomsSold={rj.nuitees}
-              />
-            </div>
-
             {/* Envoi du rapport : relocalisé dans la barre d'actions du HAUT
                     (PageHeader, à côté de « Imprimer »). L'ancien groupe inline
                     « Copier l'image / Envoyer par email (mailto) / (dev) » a été
@@ -939,6 +928,24 @@ export function DashboardBoard() {
                     manuel admin). */}
           </>
         ) : null}
+
+        {/* Bande de synthèse transverse : composant D'ÉCRAN UNIQUEMENT (cf.
+            en-tête de DayCrossSummary.tsx) — ne touche ni le PDF « Imprimer »
+            ni le rapport e-mail ; exclue du document imprimé tactile pour la
+            même raison (`print:hidden` porté par sa propre section).
+
+            MONTÉ EN DEHORS du bloc conditionnel ci-dessus, et c'est le point :
+            ses douze lectures ne dépendent QUE de la date, jamais du rapport du
+            jour. Les conditionner au rendu du tableau KPI leur faisait attendre
+            un aller-retour réseau complet pour rien — deux vagues au lieu d'une
+            sur la page d'accueil (audit du 2026-09-20). Elles partent désormais
+            dans la même salve ; `visible` ne pilote que l'affichage, qui reste
+            identique à l'octet près. */}
+        <DayCrossSummary
+          date={selectedDate}
+          hotelRoomsSold={rj?.nuitees ?? null}
+          visible={!!(report && rj && rmtd && pm && budget && ecart)}
+        />
 
         {/* Import — carte placée en bas du dashboard. Masquée sur tout jour
             AUTRE qu'hier (`isImportDay`) : l'import ne peut combler que le

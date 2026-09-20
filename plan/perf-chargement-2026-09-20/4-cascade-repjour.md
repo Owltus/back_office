@@ -72,7 +72,21 @@ non optionnelles.
 avec `/pdj`, `/parking` et `/rapro` (`['pdj','addon-all']`, `['rapro','oldest']`,
 `PDJ_DATES_KEY`…), et ce partage est un acquis des chantiers de juillet et août.
 
-### 2. Faire partir la vague 3 en même temps
+### 2. Faire partir la vague 3 en même temps — LAISSÉE EN L'ÉTAT
+
+*Décision du 2026-09-20, en cours d'exécution.* Le repli prévu par l'étape a été
+retenu, pour une raison qui n'apparaissait pas à la lecture de l'audit :
+`['rapro','oldest']` porte `staleTime: Infinity` et `gcTime: 60 * 60_000`. La
+borne historique n'est donc lue **qu'une fois par heure et par poste** ; la
+troisième vague n'existe qu'au tout premier chargement d'une séance, pas à chaque
+ouverture de la page.
+
+Le gain se réduisait à un aller-retour, une fois par heure. En face, il fallait
+découpler la fenêtre de roulement de sa borne historique, c'est-à-dire toucher au
+calcul du « bloquées de la veille » — une règle métier subtile, au cœur du
+rapprochement. Le rapport n'était pas bon.
+
+Ce qui suit reste vrai si la situation change :
 
 `['rapro','days-range']` (`:357`) attend `raproOldestQ.data` parce que
 `carryoverWindow` a besoin de la borne basse. Deux options :

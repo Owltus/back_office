@@ -143,10 +143,20 @@ function SummaryBlock({
 export function DayCrossSummary({
   date,
   hotelRoomsSold,
+  visible = true,
 }: {
   date: string
   /** Nuitées hôtel du jour (rj.nuitees) — dénominateur du captage parking. */
   hotelRoomsSold: number | null
+  /**
+   * Affichage de la bande. Le composant est MONTÉ dès le premier rendu du
+   * tableau de bord, avant même que le rapport du jour soit revenu, pour que
+   * ses douze lectures partent dans la MÊME salve que celles du board
+   * (audit du 2026-09-20 : elles attendaient un aller-retour réseau complet
+   * pour rien — aucune ne dépend du rapport, la date leur suffit).
+   * `visible` ne pilote donc que le rendu, jamais le chargement.
+   */
+  visible?: boolean
 }) {
   const { can } = useAuth()
   const canPdj = can('pdj', 'lecture')
@@ -398,11 +408,15 @@ export function DayCrossSummary({
   const showParking = canParking && parkingAgg
   const showRapro = canRapro && rapro
   // Rien de prêt (aucun droit, ou toutes les lectures encore en vol) : pas de
-  // section vide qui décalerait la page.
+  // section vide qui décalerait la page. Idem tant que le tableau KPI au-dessus
+  // n'est pas affichable (`visible`) — les lectures, elles, sont déjà parties.
+  // Ce test vient APRÈS tous les hooks : c'est ce qui rend le montage anticipé
+  // possible sans enfreindre les règles de React.
+  if (!visible) return null
   if (!showPdj && !showParking && !showRapro) return null
 
   return (
-    <section className="space-y-4">
+    <section className="space-y-4 print:hidden">
       {showPdj && (
         <SummaryBlock
           heading={
