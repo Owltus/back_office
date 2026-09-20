@@ -417,6 +417,15 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
   const { data: allAddon } = useQuery({
     queryKey: ['pdj', 'addon-all'],
     queryFn: fetchAllAddonProduction,
+    // MÊMES réglages que `DayCrossSummary.tsx` pour la MÊME clé. Sans ça, la
+    // fraîcheur la plus courte l'emportait : ouvrir /pdj ramenait la clé à
+    // 60 s et périmait le cache que la bande RepJour gardait une heure — deux
+    // scans complets de la table au lieu d'un. `pg_stat_statements` comptait
+    // 312 appels de `select * from pdj_addon_production` sans WHERE, à 128 ms
+    // de moyenne, sur quinze jours (audit du 2026-09-20). Ce sont des prix
+    // unitaires, stables sur des mois.
+    staleTime: 60 * 60_000,
+    gcTime: 2 * 60 * 60_000,
   })
   // Prix de RÉFÉRENCE, gardés en repli seul (cf. `tarifs` plus bas).
   const referenceTarifs = useMemo(() => detectTarifs(allAddon ?? []), [allAddon])
@@ -433,7 +442,14 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
   const { data: aggAll } = useQuery({
     queryKey: ['pdj', 'analytics', 'all-history'],
     queryFn: () => fetchDailyAgg('2000-01-01', '2100-12-31'),
-    staleTime: 5 * 60_000,
+    // Une heure au lieu de cinq minutes (audit du 2026-09-20). Ce sont des
+    // MOYENNES sur tout l'historique : une journée de plus ne les déplace pas
+    // de façon perceptible. Et la lecture est chère — `pdj_daily_agg` agrège
+    // toute la table avant de rendre, soit ~330 ms mesurées à froid, bien plus
+    // quand la base est en tension. La rappeler toutes les cinq minutes ne
+    // rendait service à personne.
+    staleTime: 60 * 60_000,
+    gcTime: 2 * 60 * 60_000,
   })
   // Prix de la CARTE, relus dans la facturation : la valeur la plus FRÉQUENTE
   // du quotient recette ÷ couverts inclus sur les trois dernières semaines

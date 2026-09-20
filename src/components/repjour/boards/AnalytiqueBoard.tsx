@@ -67,16 +67,20 @@ export function AnalytiqueBoard() {
   // Année sélectionnée + recalage si absente de la liste (hook partagé).
   const { year, setYear } = useAnnualYear(years, currentYear)
 
-  // Agrégation annuelle + budget de l'année. Le cache affiche instantanément,
-  // mais on REFETCH à chaque ouverture (`refetchOnMount: 'always'`) : après un
-  // import de rapports (fait ailleurs, sur le dashboard), la vue annuelle doit
-  // refléter les nouveaux mois sans dépendre d'une invalidation qui aurait pu ne
-  // pas la couvrir. Rafraîchissement en arrière-plan, sans écran de chargement.
+  // Agrégation annuelle + budget de l'année.
+  //
+  // `refetchOnMount: 'always'` a été RETIRÉ le 2026-09-20. Il annulait le
+  // `staleTime` et relisait l'année entière à chaque ouverture, même deux
+  // secondes après la précédente. Son intention — refléter un import récent —
+  // est déjà servie : tout import appelle
+  // `invalidateQueries({ queryKey: ['repjour'] })`, qui couvre cette clé
+  // puisqu'elle en porte le préfixe. Une requête invalidée pendant qu'elle est
+  // démontée est marquée périmée et se recharge au montage suivant : le
+  // comportement observé est identique, sans le coût dans tous les autres cas.
   const { data, isPending: loading } = useQuery({
     queryKey: ['repjour', 'year-analytics', year],
     queryFn: () =>
       Promise.all([fetchYearAnalytics(year), fetchYearBudget(year)]),
-    refetchOnMount: 'always',
   })
   const analytics = data?.[0] ?? []
   const budgets = data?.[1] ?? []

@@ -51,11 +51,24 @@ export async function fetchReportByDate(
   return data
 }
 
+/** Dates ayant un rapport, de la plus récente à la plus ancienne. Sert à griser
+ *  les jours sans données dans les calendriers.
+ *
+ *  ⚠ Le `.limit()` n'est pas une optimisation, c'est un garde-fou de lisibilité
+ *  (audit du 2026-09-20). Sans lui, PostgREST tronque SILENCIEUSEMENT à sa
+ *  limite par défaut de 1 000 lignes : le calendrier se mettrait à griser des
+ *  dates qui existent, sans la moindre erreur. `daily_reports` compte 170
+ *  lignes aujourd'hui, le plafond est donc loin — mais il est explicite, et
+ *  quiconque l'atteindra saura quoi chercher. À ce moment-là, la bonne réponse
+ *  sera de borner la lecture à la période consultée, pas de relever le plafond. */
+const AVAILABLE_DATES_MAX = 5_000
+
 export async function fetchAvailableDates(): Promise<string[]> {
   const { data, error } = await supabase
     .from('daily_reports')
     .select('date')
     .order('date', { ascending: false })
+    .limit(AVAILABLE_DATES_MAX)
   if (error) throw error
   return data?.map((d: { date: string }) => d.date) ?? []
 }

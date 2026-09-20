@@ -49,6 +49,11 @@ export function ParkingAnalytiqueBoard() {
   const { data: arrivals = [], isPending: loadingRes } = useQuery({
     queryKey: ['parking', 'arrivals-all'],
     queryFn: fetchParkingArrivals,
+    // Fraîcheur allongée le 2026-09-20, même raisonnement que la caisse : la
+    // lecture complète est VOULUE (cache partagé annuel/mensuel), et la vue
+    // tient dans quelques centaines de lignes. 60 s était trop court pour des
+    // agrégats d'arrivées passées.
+    staleTime: 10 * 60_000,
   })
 
   const years = useMemo(

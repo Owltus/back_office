@@ -46,6 +46,12 @@ export function CaisseAnalytiqueBoard() {
   const { data: sheets = [], isPending: loading } = useQuery({
     queryKey: ['caisse', 'analytics'],
     queryFn: fetchSheets,
+    // Fraîcheur allongée le 2026-09-20. La table entière est lue volontairement
+    // (le filtrage par année se fait en mémoire, ce qui PARTAGE le cache entre
+    // la vue annuelle et la vue mensuelle) ; mesure du jour : 192 lignes, elle
+    // est minuscule. La relire toutes les 60 s n'apportait rien — une feuille
+    // clôturée ne bouge plus.
+    staleTime: 10 * 60_000,
   })
   // Cautions (même clé que le board /caisse, cache partagé) : le fond effectif
   // évalué pour chaque feuille (hasAnomaly) doit refléter la correction

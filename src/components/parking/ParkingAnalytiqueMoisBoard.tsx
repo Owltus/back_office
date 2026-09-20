@@ -18,7 +18,7 @@ import {
   fetchParkingArrivals,
   fetchParkingDailyOccupation,
 } from '#/lib/parking/service.ts'
-import { fetchUnifiedDays } from '#/lib/repjour/services/data.ts'
+import { fetchNuiteesByMonth } from '#/lib/repjour/services/data.ts'
 import {
   aggregateParkingDaily,
   captageIndex,
@@ -67,11 +67,18 @@ export function ParkingAnalytiqueMoisBoard({
   })
 
   // Occupation HÔTEL du mois, jour par jour (rj_nuitees = chambres occupées la
-  // nuit) — dénominateur du captage. Même service que l'analytique repjour, clé
-  // de cache propre au parking.
+  // nuit) — dénominateur du captage. Clé de cache propre au parking.
+  //
+  // Lecture d'UNE colonne par `fetchNuiteesByMonth` depuis le 2026-09-20. On
+  // passait auparavant par `fetchUnifiedDays`, qui fait deux `select('*')` —
+  // sur `daily_reports` ET sur `forecast_days` — pour n'en tirer que
+  // `rj_nuitees`, et dont le résultat était de toute façon filtré aux seuls
+  // jours porteurs d'un rapport. `fetchNuiteesByMonth` rend exactement cet
+  // ensemble. Le défaut était déjà relevé en commentaire dans
+  // `DayCrossSummary.tsx`, qui avait fait la bascule sans l'étendre ici.
   const { data: hotelDays = [], isPending: loadingHotel } = useQuery({
     queryKey: ['parking', 'hotel-month', year, month],
-    queryFn: () => fetchUnifiedDays({ year, month }),
+    queryFn: () => fetchNuiteesByMonth({ year, month }),
   })
   const loading = loadingOcc || loadingHotel
 
@@ -98,8 +105,8 @@ export function ParkingAnalytiqueMoisBoard({
   const hotelRoomsByDay = useMemo(() => {
     const map = new Map<number, number>()
     for (const row of hotelDays) {
-      if (row.report)
-        map.set(Number(row.date.slice(8, 10)), row.report.rj_nuitees)
+      if (row.rj_nuitees != null)
+        map.set(Number(row.date.slice(8, 10)), row.rj_nuitees)
     }
     return map
   }, [hotelDays])

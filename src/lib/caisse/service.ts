@@ -258,12 +258,22 @@ function toCaution(r: DbCaution): Caution {
 /** TOUTES les cautions (actives ET remboursées) — nécessaire pour recalculer
  * correctement le fond effectif d'une date PASSÉE (une caution remboursée
  * depuis comptait quand même à l'époque, cf. décision D4). Table de petite
- * taille : pas de pagination. */
+ * taille : pas de pagination.
+ *
+ * ⚠ Le `.limit()` est un garde-fou, pas une optimisation (audit du 2026-09-20).
+ * « Table de petite taille » est vrai aujourd'hui et le restera des années,
+ * mais sans plafond explicite PostgREST tronquerait SILENCIEUSEMENT à 1 000
+ * lignes le jour venu — et le fond de caisse d'une date passée se recalculerait
+ * faux, sans erreur. Si ce plafond est un jour atteint, la réponse est de
+ * borner la lecture à la période consultée, pas de le relever. */
+const CAUTIONS_MAX = 5_000
+
 export async function fetchAllCautions(): Promise<Caution[]> {
   const { data, error } = await supabase
     .from(CAISSE_CAUTIONS_TABLE)
     .select('*')
     .order('taken_date', { ascending: false })
+    .limit(CAUTIONS_MAX)
   if (error) throw error
   return ((data ?? []) as DbCaution[]).map(toCaution)
 }

@@ -60,8 +60,9 @@ export function AnalytiqueMoisBoard({
         fetchBudget(year, month),
       ]),
     enabled: Number.isFinite(year) && Number.isFinite(month),
-    // Refetch à l'ouverture : reflète un import récent sans dépendre du cache.
-    refetchOnMount: 'always',
+    // `refetchOnMount: 'always'` retiré le 2026-09-20 : un import invalide déjà
+    // tout le préfixe `['repjour']`, donc cette clé. Voir le commentaire
+    // détaillé dans `AnalytiqueBoard.tsx`.
   })
   const rows = data?.[0] ?? []
   const budget = data?.[1] ?? null
