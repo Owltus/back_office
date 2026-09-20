@@ -88,7 +88,6 @@ import {
   setServed,
 } from '#/lib/pdj/service.ts'
 import type { AddonProductionDbRow, PdjDayRow } from '#/lib/pdj/service.ts'
-import { supabase } from '#/lib/supabase.ts'
 import { canEditPdjDay } from '#/lib/pdj/editability.ts'
 import { breakfastServiceDate, parseAddonProduction } from '#/lib/pdj/addon.ts'
 import { computeAggBenchmarks } from '#/lib/pdj/amounts.ts'
@@ -311,51 +310,57 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
     isManualImportOpen({ now, dataReceived: hasData })
   const canManualImport = isAdmin || (canEdit && manualImportOpen)
 
-  // Temps réel du JOUR affiché : un cochage (ou une saisie manuelle) fait par un
-  // AUTRE utilisateur apparaît en direct, sans rafraîchir la page. On s'abonne aux
-  // changements de `pdj_breakfasts` filtrés sur `service_date` (côté serveur, la
-  // RLS s'applique aussi au realtime), et on PATCHE le cache du jour chambre par
-  // chambre — jamais de refetch : cela préserverait aussi bien nos maj optimistes
-  // en vol que les cases des autres. Le canal se réabonne au changement de jour.
+  /* Fraîcheur au RETOUR sur l'onglet, à la place du temps réel.
+   *
+   * `pdj_breakfasts` a été retirée de la publication `supabase_realtime` le
+   * 2026-09-20 : son poller consommait 71 % du processeur de la base, en
+   * continu et même sans personne de connecté, pour deux utilisateurs
+   * simultanés au plus (décision de l'utilisateur, plan
+   * perf-chargement-2026-09-20, angle D1 — le planning parking, lui, garde son
+   * canal, c'est le seul écran réellement édité à deux postes en même temps).
+   *
+   * Conséquence assumée : un cochage fait par un collègue n'apparaît plus en
+   * DIRECT, mais au retour sur l'onglet. Même garde-fou que le tableau de bord
+   * RepJour : temporisation de 500 ms (visibilité, focus et réseau arrivent en
+   * rafale) et écart minimal de 30 s entre deux relectures.
+   *
+   * ⚠ On INVALIDE la clé du jour affiché, jamais tout le domaine `['pdj']` :
+   * les lectures d'historique (prix de la carte, repères) n'ont aucune raison
+   * d'être rejouées, et elles coûtent cher.
+   *
+   * ⚠ Rien pendant l'animation « automode » : nos propres écritures partent en
+   * rafale, une relecture au milieu ferait sauter l'effet. */
+  const pdjResyncRef = useRef<number | null>(null)
+  const pdjLastResyncRef = useRef(0)
   useEffect(() => {
     if (!selectedDate) return
-    const channel = supabase
-      .channel(`pdj-day-${selectedDate}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'pdj_breakfasts',
-          filter: `service_date=eq.${selectedDate}`,
-        },
-        (payload) => {
-          // Pendant l'animation « automode », nos propres échos arriveraient d'un
-          // coup et rempliraient les cases sans le décalage : on les ignore.
-          if (autoRunningRef.current) return
-          queryClient.setQueryData<PdjDayRow[]>(
-            ['pdj', 'day', selectedDate],
-            (old) => {
-              const list = old ?? []
-              if (payload.eventType === 'DELETE') {
-                const id = (payload.old as { id?: string }).id
-                return id ? list.filter((r) => r.id !== id) : list
-              }
-              const row = payload.new as PdjDayRow
-              if (!row || typeof row.room !== 'number') return list
-              if (list.some((r) => r.room === row.room)) {
-                return list.map((r) =>
-                  r.room === row.room ? { ...r, ...row } : r,
-                )
-              }
-              return [...list, row]
-            },
-          )
-        },
-      )
-      .subscribe()
+    const MIN_GAP_MS = 30_000
+    const scheduleResync = () => {
+      if (autoRunningRef.current) return
+      if (Date.now() - pdjLastResyncRef.current < MIN_GAP_MS) return
+      if (pdjResyncRef.current) window.clearTimeout(pdjResyncRef.current)
+      pdjResyncRef.current = window.setTimeout(() => {
+        pdjResyncRef.current = null
+        pdjLastResyncRef.current = Date.now()
+        void queryClient.invalidateQueries({
+          queryKey: ['pdj', 'day', selectedDate],
+        })
+      }, 500)
+    }
+    // Montage (ou changement de jour) : la lecture vient de partir.
+    pdjLastResyncRef.current = Date.now()
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') scheduleResync()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('focus', scheduleResync)
+    window.addEventListener('online', scheduleResync)
     return () => {
-      void supabase.removeChannel(channel)
+      if (pdjResyncRef.current) window.clearTimeout(pdjResyncRef.current)
+      pdjResyncRef.current = null
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('focus', scheduleResync)
+      window.removeEventListener('online', scheduleResync)
     }
   }, [selectedDate, queryClient])
 

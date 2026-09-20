@@ -55,7 +55,7 @@ import {
   TooltipTrigger,
 } from '#/components/ui/tooltip.tsx'
 import { hasOverlapWithAny } from '#/lib/baby-cots/model.ts'
-import type { CotAssignment, DbCotAssignment } from '#/lib/baby-cots/types.ts'
+import type { CotAssignment } from '#/lib/baby-cots/types.ts'
 import type { CotAssignmentPatch } from '#/lib/baby-cots/history.ts'
 import {
   createAssignment,
@@ -66,7 +66,6 @@ import {
   updateAssignment,
 } from '#/lib/baby-cots/service.ts'
 import { canCreateAssignment, canEditAssignment } from '#/lib/baby-cots/editability.ts'
-import { supabase } from '#/lib/supabase.ts'
 import { clamp, cn } from '#/lib/utils.ts'
 
 /* --------------------------------------------------------------------------
@@ -365,57 +364,24 @@ export function BabyCotBoard() {
     assignmentsRef.current = assignments
   }, [assignments])
 
-  // Abonnement Realtime : patche l'état LOCAL ligne à ligne, sans toucher au
-  // cache. Un poste laissé inactif longtemps (veille, onglet en arrière-plan)
-  // peut perdre le socket temps réel SANS événement de coupure émis → on
-  // rattrape par un rechargement complet (a) dès que le canal signale une
-  // reconnexion après une coupure détectée, ET (b) en filet de sécurité, dès
-  // que l'onglet redevient visible/actif ou que le réseau revient. Copie
-  // fidèle du fix ParkingBoard.tsx (session courante).
+  /* Rattrapage au RETOUR sur l'onglet, à la place du temps réel.
+   *
+   * `baby_cot_assignments` a été retirée de la publication `supabase_realtime`
+   * le 2026-09-20 : le poller du temps réel consommait 71 % du processeur de la
+   * base, en continu et même sans personne de connecté, pour deux utilisateurs
+   * simultanés au plus (décision de l'utilisateur, plan
+   * perf-chargement-2026-09-20, angle D1). Seul le planning parking garde son
+   * canal : c'est le seul écran réellement édité à deux postes en même temps.
+   *
+   * Le rattrapage existait DÉJÀ, en filet de sécurité derrière le canal — un
+   * poste laissé en veille pouvait perdre le socket sans événement de coupure.
+   * Il devient simplement le seul chemin. Conséquence assumée : une assignation
+   * posée par un collègue apparaît au retour sur l'onglet, plus en direct. */
   useEffect(() => {
     const hardResync = () => {
       hardResyncRef.current = true
       void refetchAssignments()
     }
-
-    let dropped = false
-
-    const channel = supabase
-      .channel('baby-cot-assignments')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'baby_cot_assignments' },
-        (payload) => {
-          if (payload.eventType === 'DELETE') {
-            const id = (payload.old as { id: string }).id
-            setAssignments((prev) => prev.filter((a) => a.id !== id))
-          } else {
-            const a = toCotAssignment(payload.new as DbCotAssignment)
-            setAssignments((prev) => {
-              const i = prev.findIndex((x) => x.id === a.id)
-              if (i === -1) return [...prev, a]
-              const next = prev.slice()
-              next[i] = a
-              return next
-            })
-          }
-        },
-      )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          if (dropped) {
-            dropped = false
-            hardResync()
-          }
-        } else if (
-          status === 'CHANNEL_ERROR' ||
-          status === 'TIMED_OUT' ||
-          status === 'CLOSED'
-        ) {
-          dropped = true
-        }
-      })
-
     const onVisibility = () => {
       if (document.visibilityState === 'visible') hardResync()
     }
@@ -427,7 +393,6 @@ export function BabyCotBoard() {
       document.removeEventListener('visibilitychange', onVisibility)
       window.removeEventListener('focus', hardResync)
       window.removeEventListener('online', hardResync)
-      void supabase.removeChannel(channel)
     }
   }, [refetchAssignments])
 
