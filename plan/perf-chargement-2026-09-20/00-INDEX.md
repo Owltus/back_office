@@ -197,7 +197,7 @@ supprime le pire cas de 40 s.
 | 4 | [4-cascade-repjour.md](./4-cascade-repjour.md) | `/repjour` : 3 vagues → 1 | 1 | P0 | 1h30 | 2 allers-retours supprimés sur l'accueil | |
 | 5 | [5-navigation-et-cache-assets.md](./5-navigation-et-cache-assets.md) | Retour visuel + cache des assets | 1 | P1 | 1h | `defaultPendingComponent` + `Cache-Control immutable` | |
 | 6 | [6-graphiques-differes.md](./6-graphiques-differes.md) | recharts et echarts en différé | 1 | P1 | 1h30 | −101 Ko gzip sur 11 pages, −168 Ko sur la galaxie | |
-| 7 | [7-galaxie-hors-rendu.md](./7-galaxie-hors-rendu.md) | Simulation galaxie hors du thread | 6 | P1 | 2h | Plus de gel au rendu de `/facturation/galaxie` | |
+| 7 | [7-galaxie-hors-rendu.md](./7-galaxie-hors-rendu.md) | Simulation galaxie hors du thread | 6 | — | — | **SANS OBJET** — mesuré : 22 nœuds actifs, pas 200 | |
 | 8 | [8-parking-colonnes-visibles.md](./8-parking-colonnes-visibles.md) | Parking : ne rendre que le visible | 1 | P1 | 1h30 | 270+ colonnes → ~30 | |
 | 9 | [9-rapro-memoisation.md](./9-rapro-memoisation.md) | Rapro : mémoïsation | 1 | P2 | 1h | 7 recalculs sortis du corps de rendu | |
 | 10 | [10-lectures-bornees.md](./10-lectures-bornees.md) | Scans d'historique bornés | 1 | P1 | 2h | 5 lectures pleines table supprimées | |

@@ -1,98 +1,70 @@
 # Étape 7 — Sortir la simulation de la galaxie du fil d'exécution de la page
 
-## Objectif
+> **SANS OBJET — mesurée le 2026-09-20, le problème n'existe pas.**
+> Aucune ligne de code modifiée. Le détail ci-dessous est conservé parce que la
+> démarche compte autant que le résultat, et parce que la mesure sera à refaire
+> si le volume de données change d'ordre de grandeur.
 
-Supprimer le gel du navigateur à l'ouverture de `/facturation/galaxie`.
+## Ce que disait l'audit
 
-## Contexte
+L'agent chargé du poids et du rendu avait classé cette page en tête de ses
+suspects : `lib/facturation/galaxy.ts:108` fixe `iters: 400` et `:230-232` fait
+une double boucle sur les nœuds actifs, le tout exécuté de façon synchrone dans
+un `useMemo` de rendu (`FacturationGalaxie.tsx:32`). Soit un coût en
+**400 × N²/2**. Son estimation : « pour 200 nœuds actifs, environ 8 millions
+d'itérations, plusieurs centaines de millisecondes à plus d'une seconde de fil
+principal gelé ».
 
-`src/lib/facturation/galaxy.ts:108` fixe `iters: 400`, et `:230-232` fait une
-double boucle sur les nœuds actifs. Le coût est donc **400 × N²/2** calculs de
-distance, avec racines carrées et trigonométrie. Pour 200 nœuds actifs, cela fait
-environ **8 millions d'opérations**.
+Cette estimation reposait sur un `N` **supposé**. L'agent l'avait d'ailleurs dit
+lui-même : « je n'ai pas le N réel en production ».
 
-Le problème n'est pas le nombre en soi : c'est qu'il est exécuté **de façon
-synchrone dans un `useMemo` du rendu** (`FacturationGalaxie.tsx:32`). Pendant tout
-ce temps, le fil d'exécution unique du navigateur est bloqué : rien ne s'affiche,
-rien ne répond, le curseur ne change même pas. C'est plusieurs centaines de
-millisecondes, jusqu'à plus d'une seconde. Et cela s'ajoute aux 504 Ko d'echarts à
-analyser, ce qui fait de cette page la plus lourde du projet à tous points de vue.
+## Ce que dit la mesure
 
-Le nombre réel de nœuds en production n'est pas connu — il dépend des données. Le
-coût étant **quadratique**, il faut le mesurer avant de choisir la solution :
-200 nœuds et 600 nœuds ne demandent pas le même remède.
+Comptage en lecture seule sur la base de production, le 2026-09-20 :
 
-## Fichier(s) impacté(s)
+| Grandeur | Valeur |
+|---|---:|
+| Imputations distinctes (nœuds `code`) | **8** |
+| Émetteurs (nœuds `issuer`) | **14** |
+| Liens émetteur → code | 15 |
+| Lignes de `facturation_wordpool` | 1 648 |
+| Journal d'apprentissage | 34 documents |
+| Référentiel d'imputations | 97 |
 
-- `src/lib/facturation/galaxy.ts` (modifié)
-- `src/lib/facturation/galaxyWorker.ts` (nouveau)
-- `src/components/facturation/FacturationGalaxie.tsx` (modifié)
+Les mots ne sont **pas** des nœuds de la simulation — le commentaire de la boucle
+est explicite, elle ne traite que « imputations + émetteurs ». Le `N` réel de la
+double boucle vaut donc **22**, pas 200.
 
-## Travail à réaliser
+`400 × 22² / 2 ≈ 97 000` calculs de distance. C'est de l'ordre de la
+milliseconde. Il n'y a rien à corriger, et un Web Worker serait ici une
+complication pure : le coût de démarrage du worker dépasserait de loin le calcul
+qu'il porterait.
 
-### 1. Mesurer d'abord
+## Quand rouvrir ce dossier
 
-Avant d'écrire quoi que ce soit, instrumenter temporairement le `useMemo` de
-`FacturationGalaxie.tsx:32` pour relever, sur les vraies données :
+Le coût est **quadratique** : il reste négligeable tant que le nombre
+d'imputations plus émetteurs reste sous quelques centaines. Repères :
 
-- le nombre de nœuds actifs `N` ;
-- la durée réelle de la simulation.
+| Nœuds actifs | Calculs | Ordre de grandeur |
+|---:|---:|---|
+| 22 (aujourd'hui) | 97 000 | ~1 ms |
+| 100 | 2 000 000 | ~20 ms |
+| 300 | 18 000 000 | ~200 ms, perceptible |
+| 1 000 | 200 000 000 | inacceptable |
 
-C'est la règle du projet : ne pas optimiser sans mesure. Le résultat oriente la
-suite.
+Le seuil de vigilance est donc autour de **300 émetteurs + imputations**. En
+dessous, ne pas toucher. Au-dessus, la voie la plus simple n'est pas le worker
+mais la réduction du coût algorithmique — baisser `iters` (400 est-il
+nécessaire ?) ou découper l'espace en grille, ce qui ramène le coût à ~O(N).
 
-### 2. Trois remèdes, par ordre de préférence
+⚠ Si `iters` change un jour, la disposition de la galaxie change avec : c'est une
+signature visuelle que l'utilisateur connaît. Comparer deux captures sur le même
+jeu de données avant de valider.
 
-**Voie A — déporter dans un Web Worker (recommandée si N est grand).**
-La simulation est un calcul pur sur des tableaux de nombres : elle se déporte bien.
-Le composant affiche la galaxie en disposition initiale, ou un squelette, et la
-remplace quand le worker rend le résultat.
+## Ce que cette étape aura quand même servi
 
-```ts
-// galaxyWorker.ts — la simulation est en O(N²) × 400 : exécutée dans le rendu,
-// elle gelait le navigateur plusieurs centaines de ms. Elle tourne désormais à
-// côté, et la page reste vivante pendant ce temps.
-```
-
-La CSP autorise déjà les workers (`worker-src 'self' blob:` dans `vercel.json`) :
-rien à changer de ce côté.
-
-**Voie B — découper en tranches avec `useDeferredValue` / `startTransition`.**
-Moins de travail, garde tout sur le fil principal mais rend la main entre deux
-paquets d'itérations. Suffisant si la mesure montre 200-300 ms.
-
-**Voie C — réduire le coût algorithmique.** Deux leviers indépendants :
-- baisser `iters` (400 est-il nécessaire ? le rendu converge peut-être à 150) ;
-- remplacer la double boucle par un découpage spatial en grille, qui ramène le
-  coût de O(N²) à ~O(N).
-
-La voie C se combine avec A ou B et vaut d'être regardée : diviser `iters` par
-deux divise le coût par deux, pour une ligne modifiée.
-
-### 3. Garder le résultat visuellement identique
-
-La disposition de la galaxie est une signature visuelle que l'utilisateur connaît.
-Si la voie C change `iters`, **comparer deux captures avant/après sur le même jeu
-de données** avant de valider. Une convergence plus courte donne une galaxie plus
-resserrée : c'est peut-être acceptable, c'est peut-être non — c'est un choix
-d'affichage, pas un choix technique.
-
-## Ordre d'exécution
-
-1. Instrumenter et mesurer `N` et la durée réelle.
-2. Choisir la voie en fonction de la mesure, et l'écrire dans ce fichier.
-3. Implémenter.
-4. Comparer deux captures de la galaxie, avant et après.
-5. `npx tsc --noEmit`
-6. `pnpm test`
-7. `pnpm build`
-
-## Critère de validation
-
-- La durée mesurée au point 1 est consignée dans ce fichier, avant et après.
-- À l'ouverture de `/facturation/galaxie`, **la page reste réactive** : le
-  défilement répond, les onglets du navigateur aussi.
-- La galaxie affichée est visuellement équivalente à celle d'avant — captures à
-  l'appui si `iters` a changé.
-- Voie A : l'onglet Performance du navigateur ne montre plus de tâche longue de
-  plus de 50 ms sur le fil principal au montage de la page.
+Elle rappelle la règle du projet, et pour la deuxième fois en quinze jours :
+**ne jamais optimiser sur une estimation.** Le 2026-09-06, la colonne générée sur
+`pdj_breakfasts` avait été abandonnée parce que les 339 ms cumulés valaient 5,5 ms
+à froid. Ici, ce sont 8 millions d'opérations supposées qui valent 97 000 réelles.
+Un chantier de deux heures évité par une requête de comptage.
