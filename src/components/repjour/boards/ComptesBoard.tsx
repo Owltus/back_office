@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, Trash2 } from 'lucide-react'
 
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
@@ -149,8 +150,29 @@ function PermRow({
 
 export function ComptesBoard() {
   const { user, applyPageOrder } = useAuth()
-  const [profiles, setProfiles] = useState<Profile[]>([])
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
+  /* Liste des comptes. Passée sous TanStack Query le 2026-09-20 : c'était, avec
+   * la gestion budgétaire, la dernière lecture Supabase du projet faite à la
+   * main dans un useEffect — donc sans cache, sans disjoncteur et sans politique
+   * de réessai, contrairement à la règle posée dans CLAUDE.md. Une panne réseau
+   * y restait silencieuse.
+   *
+   * Colonnes EXPLICITES : `profiles` porte des données personnelles, et la règle
+   * des « lectures sobres » interdit `select('*')` sur une telle table. Ce sont
+   * exactement les champs lus par cet écran. */
+  const PROFILE_COLUMNS =
+    'id,email,display_name,first_name,last_name,role,created_at,page_order'
+  const { data: profiles = [], isPending: loadingProfiles } = useQuery({
+    queryKey: ['comptes', 'profiles'],
+    queryFn: async (): Promise<Profile[]> => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select(PROFILE_COLUMNS)
+        .order('created_at', { ascending: true })
+      if (error) throw error
+      return data
+    },
+  })
   const [message, setMessage] = useState('')
   const [deleting, setDeleting] = useState(false)
 
@@ -178,18 +200,13 @@ export function ComptesBoard() {
   const [confirmEditPassword, setConfirmEditPassword] = useState('')
   const [savingEdit, setSavingEdit] = useState(false)
 
-  async function loadProfiles() {
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .order('created_at', { ascending: true })
-    setProfiles(data || [])
-    setLoading(false)
+  /** Après une action d'administration (création, suppression, changement de
+   *  rôle ou de droits), on INVALIDE la clé plutôt que de recharger à la main :
+   *  la liste se remet à jour par le même chemin que n'importe quelle autre
+   *  lecture du projet. */
+  function loadProfiles() {
+    void queryClient.invalidateQueries({ queryKey: ['comptes', 'profiles'] })
   }
-
-  useEffect(() => {
-    loadProfiles()
-  }, [])
 
   const resetCreate = () => {
     setEmail('')
@@ -518,7 +535,7 @@ export function ComptesBoard() {
           </div>
         )}
 
-        {loading ? (
+        {loadingProfiles ? (
           <SkeletonList rows={6} />
         ) : profiles.length === 0 ? (
           <div className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground">

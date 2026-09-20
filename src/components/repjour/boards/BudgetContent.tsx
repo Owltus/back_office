@@ -56,6 +56,15 @@ export function BudgetContent({ readOnly = false }: { readOnly?: boolean }) {
   const [years, setYears] = useState<number[]>([])
   const [budgets, setBudgets] = useState<MonthBudget[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  /* Échec de LECTURE du budget de l'année.
+   *
+   * Défaut trouvé le 2026-09-20 : le `catch` ci-dessous retombait sur
+   * `mergeBudgets(year, [])`, c'est-à-dire DOUZE MOIS À ZÉRO, strictement
+   * indiscernables d'une année réellement vide. Une coupure réseau affichait
+   * donc un budget faux — et comme `handleSave` fait un upsert des douze
+   * lignes, un clic sur « Sauvegarder » aurait ÉCRASÉ le vrai budget par des
+   * zéros. Le tableau n'est plus rendu du tout dans ce cas. */
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
   const [showAddYear, setShowAddYear] = useState(false)
@@ -83,13 +92,17 @@ export function BudgetContent({ readOnly = false }: { readOnly?: boolean }) {
   // Charger le budget de l'année sélectionnée.
   useEffect(() => {
     setLoading(true)
+    setLoadError(null)
     fetchYearBudget(year)
       .then((data) => {
         setBudgets(mergeBudgets(year, data))
       })
       .catch((err) => {
         console.error('[repjour] chargement du budget annuel échoué', err)
-        setBudgets(mergeBudgets(year, []))
+        setBudgets([])
+        setLoadError(
+          err instanceof Error ? err.message : 'Lecture impossible',
+        )
       })
       .finally(() => setLoading(false))
   }, [year])
@@ -233,6 +246,18 @@ export function BudgetContent({ readOnly = false }: { readOnly?: boolean }) {
 
       {loading ? (
         <SkeletonTable cols={5} rows={12} bounded={false} />
+      ) : loadError ? (
+        <div className="rounded-xl border border-border bg-card p-8 text-center">
+          <p className="mb-3 text-4xl text-muted-foreground">—</p>
+          <p className="text-lg font-medium text-foreground">
+            Impossible de lire le budget {year}
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Vérifie ta connexion et rouvre la page. Rien n'est affiché ici tant
+            que le budget n'a pas été lu : un tableau à zéro pourrait être
+            enregistre par-dessus le vrai budget.
+          </p>
+        </div>
       ) : (
         <>
           <div className="overflow-x-auto rounded-xl border border-border bg-card p-4">
