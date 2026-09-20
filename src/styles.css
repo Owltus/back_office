@@ -1,10 +1,20 @@
-/* Les polices ne sont PAS importées ici. Un `@import url(…)` CSS ne se
-   parallélise pas : le navigateur doit d'abord recevoir CETTE feuille, y
-   découvrir la ligne, ouvrir une connexion vers un domaine tiers, et attendre —
-   le texte ne s'affiche pas pendant ce temps.
-   Inter est donc chargée par un <link> + preconnect dans routes/__root.tsx, et
-   Poppins seulement par routes/affichage.tsx, seule page qui s'en serve
-   (voir styles/poster.css). */
+/* Les polices sont AUTO-HÉBERGÉES depuis le 2026-09-20. Ce n'est pas un
+   `@import url(…)` vers un tiers — la règle qui l'interdit reste entière : ces
+   deux lignes désignent un paquet npm, résolu et inliné AU BUILD, et les
+   fichiers .woff2 sont servis par notre propre domaine.
+
+   Pourquoi le changement : Inter était chargée par un <link> vers
+   fonts.googleapis.com. Un <link rel=stylesheet> est BLOQUANT pour le rendu,
+   même précédé de `preconnect` — ces derniers raccourcissent la connexion, ils
+   ne suppriment pas le blocage, et `display=swap` ne concerne que le .woff2,
+   pas la feuille qui le déclare. Sur un réseau d'hôtel filtrant ou à DNS lent,
+   l'app restait BLANCHE jusqu'au timeout du navigateur (audit du 2026-09-20).
+
+   `wght.css` est la version à axe de graisse variable : un seul fichier de
+   48 Ko pour le sous-ensemble latin couvre les cinq graisses utilisées
+   (400/500/600/700/800). Les autres sous-ensembles sont déclarés avec leur
+   `unicode-range` et ne sont jamais téléchargés en français. */
+@import '@fontsource-variable/inter/wght.css';
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import './styles/analytique.css';
@@ -100,7 +110,9 @@
 }
 
 @theme inline {
-  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-sans:
+    'Inter Variable', 'Inter', ui-sans-serif, system-ui, -apple-system,
+    sans-serif;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);

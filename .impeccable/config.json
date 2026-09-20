@@ -99,6 +99,12 @@
         "value": "#2196f3",
         "createdAt": "2026-08-26T08:02:32.808Z",
         "reason": "pre-existing status arrow color (recouche), predates this session's PDJ offert change"
+      },
+      {
+        "rule": "design-system-font",
+        "value": "poppins",
+        "createdAt": "2026-09-20T08:00:14.533Z",
+        "reason": "police deliberee de l'affiche A3 uniquement, anterieure a ce chantier (styles/poster.css) : l'etape 3 n'a fait que l'auto-heberger"
       }
     ]
   }

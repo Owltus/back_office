@@ -37,20 +37,11 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
         type: 'image/svg+xml',
         href: '/favicon.svg',
       },
-      // Inter, police de toute l'app. Les deux `preconnect` ouvrent la
-      // connexion (DNS + TLS) vers Google Fonts pendant que le reste se
-      // télécharge, au lieu d'attendre la découverte du <link>. `gstatic`
-      // sert les fichiers .woff2 et exige `crossorigin`.
-      { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
-      {
-        rel: 'preconnect',
-        href: 'https://fonts.gstatic.com',
-        crossOrigin: 'anonymous',
-      },
-      {
-        rel: 'stylesheet',
-        href: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap',
-      },
+      // Inter est AUTO-HÉBERGÉE depuis le 2026-09-20 (voir src/styles.css) :
+      // plus aucune feuille de style tierce, donc plus aucune requête bloquante
+      // vers un domaine que le réseau de l'hôtel peut filtrer. Ne pas
+      // réintroduire de <link> vers fonts.googleapis.com : il est bloquant pour
+      // le rendu même avec `preconnect`.
       {
         rel: 'stylesheet',
         href: appCss,
