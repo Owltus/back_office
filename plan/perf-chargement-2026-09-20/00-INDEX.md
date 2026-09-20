@@ -198,8 +198,8 @@ supprime le pire cas de 40 s.
 | 5 | [5-navigation-et-cache-assets.md](./5-navigation-et-cache-assets.md) | Retour visuel + cache des assets | 1 | P1 | 1h | `defaultPendingComponent` + `Cache-Control immutable` | |
 | 6 | [6-graphiques-differes.md](./6-graphiques-differes.md) | recharts et echarts en différé | 1 | P1 | 1h30 | −101 Ko gzip sur 11 pages, −168 Ko sur la galaxie | |
 | 7 | [7-galaxie-hors-rendu.md](./7-galaxie-hors-rendu.md) | Simulation galaxie hors du thread | 6 | — | — | **SANS OBJET** — mesuré : 22 nœuds actifs, pas 200 | |
-| 8 | [8-parking-colonnes-visibles.md](./8-parking-colonnes-visibles.md) | Parking : ne rendre que le visible | 1 | P1 | 1h30 | 270+ colonnes → ~30 | |
-| 9 | [9-rapro-memoisation.md](./9-rapro-memoisation.md) | Rapro : mémoïsation | 1 | P2 | 1h | 7 recalculs sortis du corps de rendu | |
+| 8 | [8-parking-colonnes-visibles.md](./8-parking-colonnes-visibles.md) | Parking : ne rendre que le visible | 1 | — | — | **SANS OBJET** — `days` ne contient déjà que le visible | |
+| 9 | [9-rapro-memoisation.md](./9-rapro-memoisation.md) | Rapro : mémoïsation | 1 | — | — | **DIFFÉRÉE** — constat exact, gain nul : ~100 opérations par rendu | |
 | 10 | [10-lectures-bornees.md](./10-lectures-bornees.md) | Scans d'historique bornés | 1 | P1 | 2h | 5 lectures pleines table supprimées | |
 | 11 | [11-gestion-sous-query.md](./11-gestion-sous-query.md) | `/gestion`, `/comptes`, `/profil` sous TanStack Query | 1 | P2 | 1h30 | Dernier fetch manuel du projet retiré | |
 | 12 | [12-sql-vues-analytiques.md](./12-sql-vues-analytiques.md) | `pdj_daily_agg` et casts `::text` | 1 | P1 | 2h | Filtre poussé dans l'agrégat, dates indexables | ⚠ |
