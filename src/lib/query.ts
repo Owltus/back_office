@@ -15,9 +15,17 @@ import { backoffMs, isOutageError } from '#/lib/backendHealth.ts'
  *   se rafraîchissent (une fois).
  * - `retry` selon la NATURE de l'erreur : une erreur métier (RLS, 4xx) est
  *   réessayée une seule fois comme avant ; une PANNE (5xx, timeout, réseau)
- *   est réessayée trois fois, espacées par le backoff exponentiel avec
- *   jitter de `lib/backendHealth.ts` (1 s, 1-2 s, 1-4 s), puis l'erreur
- *   remonte et le disjoncteur prend le relais (gardes, bandeau).
+ *   est réessayée DEUX fois, espacées par le backoff exponentiel avec jitter
+ *   de `lib/backendHealth.ts` (1 s, 1-2 s), puis l'erreur remonte et le
+ *   disjoncteur prend le relais (gardes, bandeau).
+ *
+ *   ⚠ `count` est le nombre de réessais DÉJÀ effectués : `count < 2` donne
+ *   donc TROIS tentatives au total, pas deux. C'est ce total qui compte, parce
+ *   qu'il se multiplie par le timeout de 20 s de `lib/supabase.ts` : le pire
+ *   cas d'une requête sur une base injoignable était de 4 × 20 s + ~7 s de
+ *   backoff ≈ 87 s d'attente avant le moindre message (audit du 2026-09-20).
+ *   Il passe à ~63 s, et le disjoncteur coupe court bien avant sur les
+ *   requêtes suivantes. Ne pas remonter ce seuil sans refaire ce calcul.
  */
 export function getContext() {
   const queryClient = new QueryClient({
@@ -27,7 +35,7 @@ export function getContext() {
         gcTime: 5 * 60_000,
         refetchOnWindowFocus: false,
         refetchOnReconnect: true,
-        retry: (count, err) => (isOutageError(err) ? count < 3 : count < 1),
+        retry: (count, err) => (isOutageError(err) ? count < 2 : count < 1),
         retryDelay: (count) => backoffMs(count),
       },
     },

@@ -87,6 +87,24 @@ const AuthContext = createContext<AuthContextType | null>(null)
  * de profil/droits en cinq mois pour six comptes, et une tempête de réessais
  * qui a empêché la base de se relever lors de la panne du 2026-09-05.
  */
+/**
+ * Attente maximale de la session initiale AVANT d'afficher à partir de la
+ * session déjà persistée (audit de chargement du 2026-09-20).
+ *
+ * Pourquoi c'est nécessaire : `getSession()` n'est PAS une lecture locale
+ * quand le jeton approche de son expiration. auth-js compare
+ * `expires_at` à une marge de 90 s (`EXPIRY_MARGIN_MS`) et, en deçà, part
+ * renouveler le jeton AVANT de rendre la session. Le jeton vivant une heure,
+ * toute ouverture de l'app après plus d'une heure d'inactivité passe donc par
+ * le réseau — c'est-à-dire chaque premier accès de la journée. Sur un backend
+ * lent, auth-js retente une fois, ce qui portait l'écran de squelette à ~40 s.
+ *
+ * Trois secondes suffisent à un renouvellement sain. Au-delà, on affiche sans
+ * attendre : le renouvellement se poursuit, et `getSession()` fait autorité
+ * dès qu'elle répond — y compris pour éjecter si le jeton a été révoqué.
+ */
+const BOOT_AUTH_MAX_WAIT_MS = 3_000
+
 const REVALIDATE_INTERVAL_MS = 180_000
 const REVALIDATE_MIN_GAP_MS = 60_000
 
@@ -114,6 +132,11 @@ async function fetchMyAccess(): Promise<MyAccess> {
  * le rafraîchissement du jeton échoue pour cause de PANNE : la session est
  * alors probablement encore valide et l'utilisateur est gardé connecté (bandeau
  * de panne) au lieu d'être renvoyé sur /login. Jamais écrite ici.
+ *
+ * Second lecteur depuis le 2026-09-20 : le filet d'attente du démarrage
+ * (`BOOT_AUTH_MAX_WAIT_MS`), qui affiche sans attendre un renouvellement lent.
+ * Dans les deux cas l'affichage est PROVISOIRE : l'autorité reste
+ * `getSession()` / `onAuthStateChange`, qui éjectent si le jeton est révoqué.
  */
 function readPersistedSessionUser(): User | null {
   try {
@@ -139,9 +162,12 @@ function readPersistedSessionUser(): User | null {
  * s'appuie dessus pour rediriger tout visiteur non connecté vers `/login`.
  *
  * OPTIMISATION DU CHARGEMENT — la garde ne bloque PAS sur le profil :
- *   - `loading` (session) est levé dès que `getSession()` répond. Or `getSession`
- *     lit le `localStorage` : c'est quasi instantané → l'app s'affiche sans
- *     attendre le réseau.
+ *   - `loading` (session) est levé dès que `getSession()` répond, et au plus
+ *     tard au bout de `BOOT_AUTH_MAX_WAIT_MS`. ⚠ Contrairement à ce que ce
+ *     commentaire a longtemps affirmé, `getSession()` n'est PAS une simple
+ *     lecture du `localStorage` : elle part renouveler le jeton dès qu'il
+ *     approche de son expiration (voir la constante). L'attente est donc
+ *     BORNÉE, jamais supposée nulle.
  *   - le profil (donc le rôle) ET les permissions par page sont chargés EN
  *     ARRIÈRE-PLAN. Pour un utilisateur déjà venu, ils sont hydratés depuis le
  *     cache local → rôle et droits disponibles tout de suite, sans blocage.
@@ -334,10 +360,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    // Session initiale : résolution RAPIDE (getSession lit le localStorage). On
-    // lève `loading` sans attendre le profil ni les permissions (arrière-plan).
+    // Session initiale. `getSession()` peut partir sur le réseau (renouvellement
+    // du jeton, voir BOOT_AUTH_MAX_WAIT_MS) : on ne lui laisse pas bloquer
+    // l'écran indéfiniment. Passé le délai, on affiche à partir de la session
+    // déjà persistée par auth-js ; la promesse poursuit sa route et fait
+    // autorité dès qu'elle répond.
+    const filetAuth = window.setTimeout(() => {
+      if (!active || userIdRef.current) return
+      const persiste = readPersistedSessionUser()
+      if (!persiste) return
+      applyUser(persiste)
+      if (userIdRef.current) resolveAll(persiste.id)
+    }, BOOT_AUTH_MAX_WAIT_MS)
+
     supabase.auth.getSession().then(({ data: { session }, error }) => {
+      window.clearTimeout(filetAuth)
       if (!active) return
+      // Ce que le filet a déjà affiché, le cas échéant : sert à ne pas relancer
+      // la lecture profil+droits pour un utilisateur déjà résolu.
+      const dejaAffiche = userIdRef.current
       let nextUser = session?.user ?? null
       // Jeton expiré ET backend en panne pendant le rafraîchissement : la
       // session persistée est probablement encore valide. On garde l'utilisateur
@@ -348,7 +389,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         nextUser = readPersistedSessionUser()
       }
       applyUser(nextUser)
-      if (nextUser) resolveAll(nextUser.id)
+      // `applyUser(null)` éjecte comme avant : un jeton révoqué reprend toujours
+      // le dessus sur ce que le filet a pu afficher.
+      if (nextUser && nextUser.id !== dejaAffiche) resolveAll(nextUser.id)
     })
 
     // Événements d'auth. Relecture des droits UNIQUEMENT quand l'identité change
@@ -399,6 +442,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => {
       active = false
+      window.clearTimeout(filetAuth)
       subscription.unsubscribe()
       document.removeEventListener('visibilitychange', onVisible)
       window.clearInterval(interval)

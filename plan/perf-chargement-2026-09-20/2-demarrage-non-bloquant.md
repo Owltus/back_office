@@ -64,23 +64,22 @@ cet état. Toute solution doit conduire à l'éjection explicite, jamais au sile
 
 ## Travail à réaliser
 
-### 1. Un timeout court pour l'authentification, long pour les données
+### 1. Un timeout court pour l'authentification — ÉCARTÉ à l'exécution
 
-Le `global.fetch` de `lib/supabase.ts` ne distingue pas les deux. Il doit le faire :
-une lecture de données peut légitimement prendre plusieurs secondes, un
-rafraîchissement de jeton non — et il bloque l'écran.
+*Décision du 2026-09-20, en cours d'exécution.* L'idée était d'appliquer un
+timeout de 3 s aux seuls appels `/auth/v1/` dans le `global.fetch` de
+`lib/supabase.ts`. **Elle est dangereuse et n'a pas été retenue.**
 
-```ts
-const REQUEST_TIMEOUT_MS = 20_000
-/** Le renouvellement de jeton bloque l'affichage : il ne doit jamais faire
- *  attendre plus de trois secondes. Au-delà, on repart de la session locale et
- *  on laisse GoTrue retenter en arrière-plan. */
-const AUTH_TIMEOUT_MS = 3_000
+Couper le `fetch` à 3 s ne se contente pas d'écourter l'attente : il fait
+**échouer** un renouvellement de jeton qui aurait abouti en 5 s sur un réseau
+lent mais fonctionnel. `getSession()` rend alors une session nulle,
+`_getAccessToken` retombe sur la clé anonyme, la RLS refuse tout, et la page se
+remplit de vides pendant les 60 s de `REFRESH_FAILURE_COOLDOWN_MS`. On
+échangerait une attente visible contre une panne silencieuse.
 
-const isAuthCall = (url: string) => url.includes('/auth/v1/')
-```
-
-Appliquer `AUTH_TIMEOUT_MS` quand `isAuthCall(url)`, `REQUEST_TIMEOUT_MS` sinon.
+Le point 3 ci-dessous atteint le même objectif sans ce risque : on borne
+**l'attente de l'affichage**, pas la requête. Le renouvellement garde ses 20 s
+et se termine tranquillement en arrière-plan.
 
 ### 2. Aligner les réessais sur ce que dit le commentaire
 
