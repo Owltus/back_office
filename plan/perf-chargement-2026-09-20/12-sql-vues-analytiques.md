@@ -98,7 +98,35 @@ le 2026-09-05. Ne pas la reproposer.
 
 La voie A est la seule qui traite la cause. Commencer par elle.
 
-### 2. Les casts `::text`
+### 2. Les casts `::text` — EN ATTENTE DE VOTRE ACCORD
+
+*Constat du 2026-09-20, en cours d'exécution.* Les tables portent bien un type
+`date` et ce sont les vues qui le dégradent en `text` :
+
+| Objet | Colonne | Type |
+|---|---|---|
+| `rapro_rooms` | `report_date` | **date** |
+| `rapro_daily_agg` | `report_date` | **text** |
+| `parking_reservations` | `start_date` | **date** |
+| `parking_arrivals_agg` | `start_date` | **text** |
+
+Le correctif est donc bien de retirer le cast. **Mais `create or replace view` ne
+sait pas changer le type d'une colonne** : il faudrait `drop view` puis
+`create view`. C'est une opération destructrice au sens de `CLAUDE.md`, qui
+réclame une confirmation explicite à chaque fois — et elle n'a pas été demandée
+pour ce point précis.
+
+Le rapport coût/gain justifie d'attendre plutôt que d'insister : `rapro_daily_agg`
+mesure **43 ms** à froid et totalise 48 s de processeur sur quatorze jours, soit
+**0,6 %** de la charge. `parking_daily_occupation` mesure 8,8 ms et n'est pas un
+sujet. On parle d'un gain de quelques dizaines de millisecondes sur une poignée
+d'appels par jour, contre un `drop` en production.
+
+À reprendre quand l'utilisateur voudra, ou à joindre à un prochain chantier SQL
+qui ouvre déjà ces vues. Le travail préparatoire est fait : il ne reste qu'à
+retirer les `::text` et à vérifier que le filtre devient une borne d'index.
+
+### 2 bis. Ce que le correctif aurait été
 
 Retirer les `::text` des trois vues et rendre les colonnes de date en type `date`.
 

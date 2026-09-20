@@ -1,3 +1,13 @@
+-- ⚠ REMPLACÉ — NE PLUS REJOUER (2026-09-20).
+-- L'autorité de `pdj_daily_agg` est désormais
+-- `supabase/pdj_daily_agg_pushdown_2026-09-20.sql`, qui exprime le MÊME
+-- résultat (équivalence prouvée sur les 867 lignes) en laissant le filtre
+-- de date descendre sous l'agrégat : 98 ms -> 11 ms, 802 lignes jetées -> 4.
+-- Rejouer ce fichier restaurerait le FULL JOIN et la lenteur avec lui — c'est
+-- exactement le « revert silencieux » contre lequel le projet s'est déjà fait
+-- mordre le 2026-08-04. Conservé pour l'historique et le retour arrière.
+-- =============================================================================
+
 -- 2026-09-06 : privilèges de la vue resserrés (select pour authenticated seul, rien
 -- pour anon) par perf_audit_2026-09-06.sql — à reposer après tout `drop view`.
 -- =============================================================================
