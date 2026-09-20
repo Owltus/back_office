@@ -105,6 +105,12 @@
         "value": "poppins",
         "createdAt": "2026-09-20T08:00:14.533Z",
         "reason": "police deliberee de l'affiche A3 uniquement, anterieure a ce chantier (styles/poster.css) : l'etape 3 n'a fait que l'auto-heberger"
+      },
+      {
+        "rule": "design-system-radius",
+        "value": "9999px",
+        "createdAt": "2026-09-20T08:04:57.919Z",
+        "reason": "pouce d'ascenseur ::-webkit-scrollbar-thumb, forme pilule conventionnelle ; present avant ce chantier (876ec8d), hors perimetre du chantier perf"
       }
     ]
   }

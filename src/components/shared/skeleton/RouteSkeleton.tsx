@@ -1,3 +1,5 @@
+import { useRouterState } from '@tanstack/react-router'
+
 import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { SkeletonCardsRow } from '#/components/shared/skeleton/SkeletonCardsRow.tsx'
 import { SkeletonTable } from '#/components/shared/skeleton/SkeletonTable.tsx'
@@ -137,4 +139,28 @@ export function RouteSkeleton({
       <SkeletonTable cols={5} rows={8} bounded={false} />
     </div>
   )
+}
+
+/**
+ * Squelette rendu par le ROUTEUR pendant une navigation en cours
+ * (`defaultPendingComponent`, voir `router.tsx`).
+ *
+ * Ce que ça corrige (audit de chargement du 2026-09-20) : au clic sur un onglet,
+ * le routeur télécharge le code de la route — jusqu'à une cinquantaine de
+ * fichiers pour `/repjour` — en laissant l'ANCIENNE page affichée et figée. Rien
+ * ne bougeait à l'écran. Sur tablette, où il n'y a pas de survol donc pas de
+ * préchargement, c'était perçu comme un gel de plusieurs secondes.
+ *
+ * `location` est la destination pendant une transition en cours
+ * (`resolvedLocation` reste l'origine) : le squelette prend donc d'emblée la
+ * forme de la page vers laquelle on va, pas de celle qu'on quitte.
+ *
+ * L'angle D1 du chantier `squelette-chargement-global` avait écarté cette option
+ * au motif qu'elle serait « inutile tant que les routes n'ont pas de `loader` ».
+ * C'était juste pour l'attente des DONNÉES ; ça ne l'est pas pour le
+ * téléchargement du CODE de la route, qui n'a rien à voir avec un `loader`.
+ */
+export function PendingRoute() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname })
+  return <RouteSkeleton pathname={pathname} />
 }
