@@ -1,161 +1,47 @@
-import {
-  CartesianGrid,
-  Legend,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
+import { Suspense, lazy } from 'react'
 
-import { ChartTooltip } from '#/components/analytique/ChartTooltip.tsx'
-import {
-  CHART_AXIS,
-  CHART_GRID,
-  CHART_HEIGHT,
-  CHART_MARGIN,
-} from '#/components/analytique/chartConstants.ts'
+import { Skeleton } from '#/components/ui/skeleton.tsx'
+import { CHART_HEIGHT } from '#/components/analytique/chartConstants.ts'
+import type { KpiLineChartProps } from '#/components/analytique/KpiLineChart.render.tsx'
 
 /*
- * Graphique KPI réutilisable (Recharts) — jusqu'à trois courbes : réalisé (plein),
- * projeté/forecast (gris) et budget (pointillé). Les courbes projetée et budget
- * sont optionnelles (1 à 3 séries selon l'onglet). Utilisé par TOUTES les pages
- * analytique (repjour, PDJ, Parking, Caisse, Rapro), d'où sa place dans le socle
- * partagé `components/analytique/`.
+ * Coquille de chargement différé du graphique en courbes.
  *
- * Client-only : monté uniquement sous des îlots `ssr: false`, aucun risque SSR.
+ * Pourquoi (audit de chargement du 2026-09-20) : recharts pèse 345 540 octets
+ * bruts, 100 765 compressés, et il était importé STATIQUEMENT par ce composant,
+ * lui-même importé statiquement par les ONZE boards analytique (repjour, PDJ,
+ * parking, rapro, caisse, en version annuelle et mensuelle). Le tableau de
+ * chiffres attendait donc le téléchargement ET l'analyse du moteur graphique
+ * pour s'afficher — alors qu'il n'en a aucun besoin.
  *
- * Couleurs adaptées au thème DARK navy via les tokens shadcn `--chart-*` et de
- * thème (card / border / muted-foreground / destructive), lisibles en clair comme
- * en sombre :
- *   - réalisé  → var(--chart-1)          (indigo, courbe pleine)
- *   - projeté  → var(--muted-foreground) (gris neutre)
- *   - budget   → var(--destructive)      (rouge pointillé)
- *   - grille   → var(--border)
- *   - axes     → var(--muted-foreground)
- *   - tooltip  → fond var(--card) / bordure var(--border) / texte var(--foreground)
+ * Le moteur arrive désormais après la page. Le repli occupe EXACTEMENT la place
+ * du graphique final (même carte, même titre, même `CHART_HEIGHT`) : aucun saut
+ * de mise en page quand il se substitue au squelette.
+ *
+ * ⚠ Ce module ne doit JAMAIS importer `recharts`, ni rien qui en dépende, sous
+ * peine d'annuler tout le bénéfice. Le `.then()` de réécriture existe parce que
+ * `React.lazy` attend un export par défaut et que le projet n'en utilise aucun.
  */
+const KpiLineChartRender = lazy(() =>
+  import('#/components/analytique/KpiLineChart.render.tsx').then((m) => ({
+    default: m.KpiLineChartRender,
+  })),
+)
 
-export const KPI_CHART_COLORS = {
-  real: 'var(--chart-1)',
-  proj: 'var(--muted-foreground)',
-  budget: 'var(--destructive)',
-  grid: CHART_GRID,
-  axis: CHART_AXIS,
-} as const
-
-interface KpiLineChartProps {
-  /** Titre affiché au-dessus du graphique. */
-  title: string
-  /** Données déjà mises en forme (une entrée par point sur l'axe X). */
-  data: Array<Record<string, number | string | null>>
-  /** Clé de l'axe X dans `data` (ex. 'mois' ou 'jour'). */
-  xKey: string
-  /** Clé de la courbe « réalisé ». */
-  realKey: string
-  /** Clé de la courbe « projeté / forecast » (optionnelle). */
-  projKey?: string
-  /** Clé de la courbe « budget » (optionnelle). */
-  budgetKey?: string
-  /** Libellé de la courbe réalisée (défaut « Réalisé »). */
-  realName?: string
-  /** Libellé de la courbe projetée : « Projeté » (annuel) ou « Forecast » (mensuel). */
-  projName?: string
-  /** Libellé de la courbe budget (défaut « Budget »). */
-  budgetName?: string
-  /** Rayon des points de la courbe réalisée (3 en annuel, 2 en mensuel). */
-  realDotRadius?: number
-  /** Domaine fixe de l'axe Y (ex. [0, 100] pour un taux d'occupation). */
-  yDomain?: [number, number]
-  /** Formateur des graduations Y (ex. milliers « 12k »). */
-  yTickFormatter?: (value: number) => string
-  /** Formateur des valeurs dans l'infobulle. */
-  tooltipFormatter: (value: number) => string
-  /** Formateur du LIBELLÉ (en-tête) de l'infobulle. L'axe X reste abrégé, mais le
-   * survol peut afficher le libellé complet (ex. « Fév » → « Février 2026 »). */
-  labelFormatter?: (label: string) => string
-}
-
-export function KpiLineChart({
-  title,
-  data,
-  xKey,
-  realKey,
-  projKey,
-  budgetKey,
-  realName = 'Réalisé',
-  projName = 'Projeté',
-  budgetName = 'Budget',
-  realDotRadius = 3,
-  yDomain,
-  yTickFormatter,
-  tooltipFormatter,
-  labelFormatter,
-}: KpiLineChartProps) {
-  // Légende masquée quand il n'y a qu'une seule série (redondante avec le titre) ;
-  // affichée dès qu'il y a une courbe projeté et/ou budget.
-  const multiSeries = Boolean(projKey || budgetKey)
+/** Carte vide de la taille exacte du graphique, le temps qu'il arrive. */
+function ChartFallback({ title }: { title: string }) {
   return (
     <div className="rounded-xl border border-border bg-card p-4">
       <h3 className="mb-3 text-sm font-medium text-muted-foreground">{title}</h3>
-      <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
-        <LineChart data={data} margin={CHART_MARGIN}>
-          <CartesianGrid strokeDasharray="3 3" stroke={KPI_CHART_COLORS.grid} />
-          <XAxis
-            dataKey={xKey}
-            tick={{ fontSize: 11, fill: KPI_CHART_COLORS.axis }}
-            stroke={KPI_CHART_COLORS.grid}
-          />
-          <YAxis
-            domain={yDomain}
-            tickFormatter={yTickFormatter}
-            tick={{ fontSize: 11, fill: KPI_CHART_COLORS.axis }}
-            stroke={KPI_CHART_COLORS.grid}
-          />
-          <Tooltip
-            cursor={{ stroke: 'var(--muted-foreground)', strokeOpacity: 0.3 }}
-            content={
-              <ChartTooltip
-                labelFormatter={labelFormatter}
-                valueFormatter={tooltipFormatter}
-              />
-            }
-          />
-          {multiSeries && <Legend wrapperStyle={{ fontSize: 11 }} />}
-          <Line
-            type="monotone"
-            dataKey={realKey}
-            name={realName}
-            stroke={KPI_CHART_COLORS.real}
-            strokeWidth={2}
-            dot={{ r: realDotRadius }}
-            connectNulls={false}
-          />
-          {projKey && (
-            <Line
-              type="monotone"
-              dataKey={projKey}
-              name={projName}
-              stroke={KPI_CHART_COLORS.proj}
-              strokeWidth={2}
-              dot={false}
-              connectNulls={false}
-            />
-          )}
-          {budgetKey && (
-            <Line
-              type="monotone"
-              dataKey={budgetKey}
-              name={budgetName}
-              stroke={KPI_CHART_COLORS.budget}
-              strokeWidth={1}
-              strokeDasharray="5 5"
-              dot={false}
-            />
-          )}
-        </LineChart>
-      </ResponsiveContainer>
+      <Skeleton className="w-full" style={{ height: CHART_HEIGHT }} />
     </div>
+  )
+}
+
+export function KpiLineChart(props: KpiLineChartProps) {
+  return (
+    <Suspense fallback={<ChartFallback title={props.title} />}>
+      <KpiLineChartRender {...props} />
+    </Suspense>
   )
 }
