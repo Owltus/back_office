@@ -227,6 +227,7 @@ supprime le pire cas de 40 s.
 | 12 | [12-sql-vues-analytiques.md](./12-sql-vues-analytiques.md) | `pdj_daily_agg` et casts `::text` | 1 | P1 | 2h | Filtre poussé dans l'agrégat, dates indexables | ⚠ |
 | 14 | [14-temps-reel-reduit.md](./14-temps-reel-reduit.md) | Temps réel réduit au parking | 1 | P0 | 1h30 | Poller allégé, PDJ et lits bébé en rafraîchissement | ⚠ |
 | 13 | [13-validation-globale.md](./13-validation-globale.md) | Validation globale | 1-12, 14 | P0 | 1h | Comparaison chiffrée avant/après | ⚠ |
+| 15 | [15-controle-adverse-2026-09-21.md](./15-controle-adverse-2026-09-21.md) | Contrôle adverse (6 agents) | 13 | P0 | — | 3 régressions corrigées, −32 Ko d'entrée, cause des gels identifiée | ⚠ |
 
 ---
 
