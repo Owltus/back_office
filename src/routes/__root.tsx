@@ -10,6 +10,12 @@ import { TooltipProvider } from '#/components/ui/tooltip.tsx'
 import { THEME_INIT_SCRIPT } from '#/lib/theme.ts'
 
 import appCss from '../styles.css?url'
+// Sous-ensemble LATIN de la graisse variable d'Inter — le seul que tire un
+// navigateur en français (les autres sous-ensembles sont déclarés avec leur
+// `unicode-range` et jamais demandés). Importé en `?url` pour obtenir l'URL
+// empreintée produite par le build, et non un chemin écrit à la main qui
+// casserait silencieusement au prochain changement de version.
+import interLatin from '@fontsource-variable/inter/files/inter-latin-wght-normal.woff2?url'
 
 import type { QueryClient } from '@tanstack/react-query'
 
@@ -45,6 +51,26 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
       {
         rel: 'stylesheet',
         href: appCss,
+      },
+      /*
+       * Préchargement de la police du texte courant (audit du 2026-09-21).
+       *
+       * Sans cette ligne, le `.woff2` n'est découvert qu'après téléchargement ET
+       * analyse de `styles.css` — 144 Ko bruts — soit un aller-retour complet de
+       * retard sur le premier texte dans la bonne police. Mesuré en production
+       * sur le domaine déployé : aucun `preload` de police dans le `<head>`.
+       *
+       * `crossOrigin` est OBLIGATOIRE même en même origine : une police est
+       * toujours demandée en mode CORS, et sans cet attribut le navigateur
+       * télécharge le fichier DEUX fois — une pour le préchargement, une pour la
+       * police elle-même.
+       */
+      {
+        rel: 'preload',
+        as: 'font',
+        type: 'font/woff2',
+        href: interLatin,
+        crossOrigin: 'anonymous',
       },
     ],
   }),

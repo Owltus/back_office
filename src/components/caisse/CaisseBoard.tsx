@@ -319,12 +319,21 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
   // d'hydratation et l'état « prêt » (sinon la condition se réécrit à 3 endroits).
   const needsCarry = sheet === null || emptyDraft
 
-  // Fond de caisse à reporter : feuille précédente RÉELLE, chargée seulement
-  // quand le couple courant attend un report ; sinon on hydrate depuis la sienne.
+  /* Fond de caisse à reporter : feuille précédente RÉELLE.
+   *
+   * Chargée SYSTÉMATIQUEMENT depuis le 2026-09-21, et non plus seulement quand
+   * `needsCarry` est vrai. `needsCarry` se déduit de `sheet` : la conditionner
+   * créait une cascade — on attendait la feuille courante pour décider s'il
+   * fallait lire la précédente, soit un aller-retour réseau complet de plus
+   * avant que la page ne devienne éditable (`ready`, plus bas).
+   *
+   * Le calcul est simple : la lecture rend au plus douze lignes, la mesure du
+   * 2026-09-21 donne ~96 ms par aller-retour vers la base. On paie donc une
+   * petite lecture parfois inutile pour supprimer une attente toujours réelle.
+   * Les deux requêtes partent maintenant dans la même salve. */
   const { data: prevSheet, isLoading: prevLoading } = useQuery({
     queryKey: ['caisse', 'prev', selectedDate, selectedShift],
     queryFn: () => fetchPreviousSheet(selectedDate, selectedShift),
-    enabled: needsCarry,
   })
 
   const [form, setForm] = useState<CaisseSheetInput>(() =>

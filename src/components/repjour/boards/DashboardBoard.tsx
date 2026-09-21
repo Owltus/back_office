@@ -937,14 +937,25 @@ export function DashboardBoard() {
             MONTÉ EN DEHORS du bloc conditionnel ci-dessus, et c'est le point :
             ses douze lectures ne dépendent QUE de la date, jamais du rapport du
             jour. Les conditionner au rendu du tableau KPI leur faisait attendre
-            un aller-retour réseau complet pour rien — deux vagues au lieu d'une
-            sur la page d'accueil (audit du 2026-09-20). Elles partent désormais
-            dans la même salve ; `visible` ne pilote que l'affichage, qui reste
-            identique à l'octet près. */}
+            un aller-retour réseau complet pour rien (audit du 2026-09-20).
+
+            ⚠ CORRIGÉ le 2026-09-21. Le montage anticipé ne servait à rien tant
+            que `visible` attendait `report && rj && rmtd && pm && budget &&
+            ecart` : les douze réponses arrivaient souvent AVANT le rapport du
+            jour, et restaient invisibles jusqu'à lui. On gagnait sur le réseau
+            et on perdait tout à l'écran — ce qui explique qu'aucune
+            amélioration n'ait été ressentie.
+
+            La bande ne dépend plus que de la porte de la page. Elle porte son
+            propre repli (`showPdj || showParking || showRapro`, sinon `null`),
+            donc chaque bloc apparaît dès que SES données sont là, sans attendre
+            les deux autres. Seul `hotelRoomsSold` vient du rapport, et il vaut
+            « — » tant qu'il manque : un dénominateur de captage, pas un
+            bloqueur. */}
         <DayCrossSummary
           date={selectedDate}
           hotelRoomsSold={rj?.nuitees ?? null}
-          visible={!!(report && rj && rmtd && pm && budget && ecart)}
+          visible={!loading && !!(report || hasPartialData)}
         />
 
         {/* Import — carte placée en bas du dashboard. Masquée sur tout jour
