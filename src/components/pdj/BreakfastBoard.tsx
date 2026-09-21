@@ -337,15 +337,25 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
     const MIN_GAP_MS = 30_000
     const scheduleResync = () => {
       if (autoRunningRef.current) return
-      if (Date.now() - pdjLastResyncRef.current < MIN_GAP_MS) return
+      // Écart minimal non encore écoulé : on DIFFÈRE au lieu d'abandonner.
+      // La première écriture de ce garde-fou sortait sans rien replanifier, ce
+      // qui ouvrait un trou de fraîcheur : revenir sur l'onglet dans les 30 s
+      // suivant l'ouverture (ou un changement de jour) ne déclenchait aucune
+      // relecture, ni tout de suite ni plus tard — il fallait un second
+      // aller-retour d'onglet. Combiné à `refetchOnWindowFocus: false` et à
+      // l'absence de canal temps réel, l'écran pouvait rester périmé sans
+      // qu'aucun signal ne le rattrape.
+      const reste = MIN_GAP_MS - (Date.now() - pdjLastResyncRef.current)
+      const delai = reste > 0 ? reste : 500
       if (pdjResyncRef.current) window.clearTimeout(pdjResyncRef.current)
       pdjResyncRef.current = window.setTimeout(() => {
         pdjResyncRef.current = null
+        if (autoRunningRef.current) return
         pdjLastResyncRef.current = Date.now()
         void queryClient.invalidateQueries({
           queryKey: ['pdj', 'day', selectedDate],
         })
-      }, 500)
+      }, delai)
     }
     // Montage (ou changement de jour) : la lecture vient de partir.
     pdjLastResyncRef.current = Date.now()

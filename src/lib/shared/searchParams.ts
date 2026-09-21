@@ -1,5 +1,3 @@
-import { z } from 'zod'
-
 /*
  * Validation du paramètre `?date=` des routes qui ouvrent un board sur un jour
  * précis (parking, pdj, rapro, caisse).
@@ -23,19 +21,35 @@ const toIso = (d: Date) =>
     d.getDate(),
   ).padStart(2, '0')}`
 
-const isoDate = z
-  .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, 'format attendu : YYYY-MM-DD')
+/*
+ * Écrit à la main depuis le 2026-09-21, sans zod.
+ *
+ * Ce module est tiré dans le CHUNK D'ENTRÉE de l'application : les
+ * `validateSearch` vivent dans la partie non code-splittée des routes, donc
+ * toute dépendance qu'ils touchent est payée par CHAQUE page, avant le premier
+ * chiffre affiché. Zod y pesait 53 002 octets bruts / 14 279 compressés — dont
+ * 8 712 octets de conversion vers JSON Schema que ce projet n'appellera jamais
+ * — pour une expression régulière, un contrôle de calendrier et deux bornes
+ * entières. Le comportement ci-dessous est identique à la virgule près ;
+ * `searchParams.test.ts` en est le filet.
+ *
+ * ⚠ Ne pas réintroduire zod ici. S'il devient utile ailleurs, qu'il y reste :
+ * la règle est qu'aucun `validateSearch` ne doit tirer de dépendance lourde.
+ */
+
+/** Vrai si la chaîne est une date `YYYY-MM-DD` réellement existante. */
+export function isValidIsoDate(value: unknown): boolean {
+  if (typeof value !== 'string') return false
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
   /*
    * La regex seule laisserait passer `2026-02-31` ou `2026-13-01`. En JS, ces
    * valeurs ne donnent PAS Invalid Date : `new Date('2026-02-31T00:00:00')`
    * bascule silencieusement au 3 mars. On reformate donc la date obtenue et on
    * la compare à l'entrée — si elles diffèrent, la date n'existait pas.
    */
-  .refine((v) => {
-    const d = new Date(`${v}T00:00:00`)
-    return !Number.isNaN(d.getTime()) && toIso(d) === v
-  }, 'date inexistante au calendrier')
+  const d = new Date(`${value}T00:00:00`)
+  return !Number.isNaN(d.getTime()) && toIso(d) === value
+}
 
 /**
  * `validateSearch` des routes à `?date=`. Retourne `{}` — donc le jour courant
@@ -44,11 +58,6 @@ const isoDate = z
 export function parseDateSearch(
   search: Record<string, unknown>,
 ): { date?: string } {
-  const parsed = isoDate.safeParse(search.date)
-  return parsed.success ? { date: parsed.data } : {}
-}
-
-/** Vrai si la chaîne est une date `YYYY-MM-DD` réellement existante. */
-export function isValidIsoDate(value: unknown): boolean {
-  return isoDate.safeParse(value).success
+  const value = search.date
+  return isValidIsoDate(value) ? { date: value as string } : {}
 }

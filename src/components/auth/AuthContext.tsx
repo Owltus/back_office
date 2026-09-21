@@ -87,23 +87,6 @@ const AuthContext = createContext<AuthContextType | null>(null)
  * de profil/droits en cinq mois pour six comptes, et une tempête de réessais
  * qui a empêché la base de se relever lors de la panne du 2026-09-05.
  */
-/**
- * Attente maximale de la session initiale AVANT d'afficher à partir de la
- * session déjà persistée (audit de chargement du 2026-09-20).
- *
- * Pourquoi c'est nécessaire : `getSession()` n'est PAS une lecture locale
- * quand le jeton approche de son expiration. auth-js compare
- * `expires_at` à une marge de 90 s (`EXPIRY_MARGIN_MS`) et, en deçà, part
- * renouveler le jeton AVANT de rendre la session. Le jeton vivant une heure,
- * toute ouverture de l'app après plus d'une heure d'inactivité passe donc par
- * le réseau — c'est-à-dire chaque premier accès de la journée. Sur un backend
- * lent, auth-js retente une fois, ce qui portait l'écran de squelette à ~40 s.
- *
- * Trois secondes suffisent à un renouvellement sain. Au-delà, on affiche sans
- * attendre : le renouvellement se poursuit, et `getSession()` fait autorité
- * dès qu'elle répond — y compris pour éjecter si le jeton a été révoqué.
- */
-const BOOT_AUTH_MAX_WAIT_MS = 3_000
 
 const REVALIDATE_INTERVAL_MS = 180_000
 const REVALIDATE_MIN_GAP_MS = 60_000
@@ -133,10 +116,25 @@ async function fetchMyAccess(): Promise<MyAccess> {
  * alors probablement encore valide et l'utilisateur est gardé connecté (bandeau
  * de panne) au lieu d'être renvoyé sur /login. Jamais écrite ici.
  *
- * Second lecteur depuis le 2026-09-20 : le filet d'attente du démarrage
- * (`BOOT_AUTH_MAX_WAIT_MS`), qui affiche sans attendre un renouvellement lent.
- * Dans les deux cas l'affichage est PROVISOIRE : l'autorité reste
- * `getSession()` / `onAuthStateChange`, qui éjectent si le jeton est révoqué.
+ * ⚠ SEUL lecteur, et c'est délibéré. Un « filet d'attente » de démarrage a
+ * utilisé cette fonction le 2026-09-20 pour afficher sans attendre un
+ * renouvellement lent ; il a été RETIRÉ le 2026-09-21 après contrôle, pour
+ * deux raisons qui se renforcent :
+ *   1. il ne se déclenchait jamais dans le cas courant (un renouvellement sain
+ *      prend 150 à 400 ms, le minuteur de 3 s était annulé avant d'avoir
+ *      servi) ;
+ *   2. quand il se déclenchait, la session persistée était par construction
+ *      PÉRIMÉE — c'est précisément pour ça qu'auth-js la renouvelait. Il
+ *      affichait donc un écran « connecté » garni d'erreurs RLS, au lieu d'un
+ *      squelette honnête, et sans libérer la moindre donnée : toute requête
+ *      PostgREST attend la même `initializePromise` via `_getAccessToken`.
+ * Ne pas le réintroduire sans traiter d'abord cette barrière-là.
+ *
+ * Ici, PAS de contrôle d'expiration, et c'est voulu : l'unique appelant est le
+ * chemin de PANNE, où le jeton d'accès est justement périmé alors que la
+ * session reste valide. Y ajouter un test d'expiration renverrait l'utilisateur
+ * sur /login à la moindre coupure réseau — ce que la résilience du projet
+ * interdit explicitement depuis le 2026-09-05.
  */
 function readPersistedSessionUser(): User | null {
   try {
@@ -162,12 +160,12 @@ function readPersistedSessionUser(): User | null {
  * s'appuie dessus pour rediriger tout visiteur non connecté vers `/login`.
  *
  * OPTIMISATION DU CHARGEMENT — la garde ne bloque PAS sur le profil :
- *   - `loading` (session) est levé dès que `getSession()` répond, et au plus
- *     tard au bout de `BOOT_AUTH_MAX_WAIT_MS`. ⚠ Contrairement à ce que ce
- *     commentaire a longtemps affirmé, `getSession()` n'est PAS une simple
- *     lecture du `localStorage` : elle part renouveler le jeton dès qu'il
- *     approche de son expiration (voir la constante). L'attente est donc
- *     BORNÉE, jamais supposée nulle.
+ *   - `loading` (session) est levé quand `getSession()` répond. ⚠ Contrairement
+ *     à ce que ce commentaire a longtemps affirmé, `getSession()` n'est PAS une
+ *     simple lecture du `localStorage` : elle part renouveler le jeton dès
+ *     qu'il approche de son expiration (marge de 90 s sur un jeton d'une
+ *     heure). Ce coût est RÉEL et non contourné à ce jour — voir la note
+ *     détaillée à l'appel de `getSession()` plus bas.
  *   - le profil (donc le rôle) ET les permissions par page sont chargés EN
  *     ARRIÈRE-PLAN. Pour un utilisateur déjà venu, ils sont hydratés depuis le
  *     cache local → rôle et droits disponibles tout de suite, sans blocage.
@@ -360,25 +358,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    // Session initiale. `getSession()` peut partir sur le réseau (renouvellement
-    // du jeton, voir BOOT_AUTH_MAX_WAIT_MS) : on ne lui laisse pas bloquer
-    // l'écran indéfiniment. Passé le délai, on affiche à partir de la session
-    // déjà persistée par auth-js ; la promesse poursuit sa route et fait
-    // autorité dès qu'elle répond.
-    const filetAuth = window.setTimeout(() => {
-      if (!active || userIdRef.current) return
-      const persiste = readPersistedSessionUser()
-      if (!persiste) return
-      applyUser(persiste)
-      if (userIdRef.current) resolveAll(persiste.id)
-    }, BOOT_AUTH_MAX_WAIT_MS)
-
+    /* Session initiale.
+     *
+     * ⚠ `getSession()` n'est PAS une lecture locale : auth-js compare
+     * `expires_at` à une marge de 90 s et, en deçà, part RENOUVELER le jeton
+     * avant de rendre la session. Le jeton vivant une heure, chaque première
+     * ouverture de la journée passe donc par le réseau.
+     *
+     * Un « filet » de 3 s a été posé ici le 2026-09-20 pour afficher sans
+     * attendre ; il a été RETIRÉ le 2026-09-21. Il ne se déclenchait jamais
+     * dans le cas courant (renouvellement sain : 150-400 ms), et quand il se
+     * déclenchait il ne libérait que le shell : toute requête PostgREST passe
+     * par `_getAccessToken`, qui attend la MÊME `initializePromise`. On
+     * remplaçait un squelette par un autre squelette, sans avancer une seule
+     * donnée — et en affichant au passage une session périmée.
+     *
+     * Le vrai verrou est cette barrière-là. Le traiter demande de découpler
+     * PostgREST de GoTrue (option `accessToken` de `createClient`), pas de
+     * poser un minuteur par-dessus. */
     supabase.auth.getSession().then(({ data: { session }, error }) => {
-      window.clearTimeout(filetAuth)
       if (!active) return
-      // Ce que le filet a déjà affiché, le cas échéant : sert à ne pas relancer
-      // la lecture profil+droits pour un utilisateur déjà résolu.
-      const dejaAffiche = userIdRef.current
       let nextUser = session?.user ?? null
       // Jeton expiré ET backend en panne pendant le rafraîchissement : la
       // session persistée est probablement encore valide. On garde l'utilisateur
@@ -389,9 +388,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         nextUser = readPersistedSessionUser()
       }
       applyUser(nextUser)
-      // `applyUser(null)` éjecte comme avant : un jeton révoqué reprend toujours
-      // le dessus sur ce que le filet a pu afficher.
-      if (nextUser && nextUser.id !== dejaAffiche) resolveAll(nextUser.id)
+      if (nextUser) resolveAll(nextUser.id)
     })
 
     // Événements d'auth. Relecture des droits UNIQUEMENT quand l'identité change
@@ -442,7 +439,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => {
       active = false
-      window.clearTimeout(filetAuth)
       subscription.unsubscribe()
       document.removeEventListener('visibilitychange', onVisible)
       window.clearInterval(interval)

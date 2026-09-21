@@ -376,23 +376,47 @@ export function BabyCotBoard() {
    * Le rattrapage existait DÉJÀ, en filet de sécurité derrière le canal — un
    * poste laissé en veille pouvait perdre le socket sans événement de coupure.
    * Il devient simplement le seul chemin. Conséquence assumée : une assignation
-   * posée par un collègue apparaît au retour sur l'onglet, plus en direct. */
+   * posée par un collègue apparaît au retour sur l'onglet, plus en direct.
+   *
+   * ⚠ GARDE-FOU, ajouté le 2026-09-21 après contrôle. Il manquait : les trois
+   * écouteurs étaient nus. Un simple retour d'onglet émet `visibilitychange`
+   * PUIS `focus`, soit DEUX rechargements complets consécutifs — et chacun pose
+   * `hardResyncRef`, donc remplace tout l'état local. Tant que le canal temps
+   * réel existait, ce chemin était un filet rarement emprunté ; depuis son
+   * retrait c'est le chemin unique, pris à chaque alt-tab. On coalesce donc la
+   * rafale (500 ms) et on borne la cadence (30 s), exactement comme
+   * `BreakfastBoard` et `DashboardBoard`. Écart non écoulé = on DIFFÈRE, jamais
+   * on n'abandonne, sinon on rouvre un trou de fraîcheur. */
+  const cotResyncRef = useRef<number | null>(null)
+  const cotLastResyncRef = useRef(0)
   useEffect(() => {
-    const hardResync = () => {
-      hardResyncRef.current = true
-      void refetchAssignments()
+    const MIN_GAP_MS = 30_000
+    const scheduleResync = () => {
+      const reste = MIN_GAP_MS - (Date.now() - cotLastResyncRef.current)
+      const delai = reste > 0 ? reste : 500
+      if (cotResyncRef.current) window.clearTimeout(cotResyncRef.current)
+      cotResyncRef.current = window.setTimeout(() => {
+        cotResyncRef.current = null
+        cotLastResyncRef.current = Date.now()
+        hardResyncRef.current = true
+        void refetchAssignments()
+      }, delai)
     }
+    // Montage : la lecture initiale vient de partir.
+    cotLastResyncRef.current = Date.now()
     const onVisibility = () => {
-      if (document.visibilityState === 'visible') hardResync()
+      if (document.visibilityState === 'visible') scheduleResync()
     }
     document.addEventListener('visibilitychange', onVisibility)
-    window.addEventListener('focus', hardResync)
-    window.addEventListener('online', hardResync)
+    window.addEventListener('focus', scheduleResync)
+    window.addEventListener('online', scheduleResync)
 
     return () => {
+      if (cotResyncRef.current) window.clearTimeout(cotResyncRef.current)
+      cotResyncRef.current = null
       document.removeEventListener('visibilitychange', onVisibility)
-      window.removeEventListener('focus', hardResync)
-      window.removeEventListener('online', hardResync)
+      window.removeEventListener('focus', scheduleResync)
+      window.removeEventListener('online', scheduleResync)
     }
   }, [refetchAssignments])
 

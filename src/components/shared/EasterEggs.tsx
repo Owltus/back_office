@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 
-import { EFFECTS } from '#/lib/artefact/effects/index.ts'
+import { LAZY_EFFECTS } from '#/lib/artefact/effects/lazy.ts'
 import { fetchEasterEggs } from '#/lib/easter-eggs/service.ts'
 
 import { SecretEffect } from './SecretEffect.tsx'
@@ -11,8 +11,11 @@ import { SecretEffect } from './SecretEffect.tsx'
  * `<SecretEffect>` codés en dur : la liste (mot-clé → effet) se gère depuis la
  * page admin /easter-eggs.
  *
- * Chaque `effectId` est résolu dans le registre `EFFECTS` ; un effet inconnu (id
- * obsolète) est ignoré. Tant que la migration SQL n'est pas jouée, la requête
+ * Chaque `effectId` est résolu dans le registre PARESSEUX `LAZY_EFFECTS` ; un
+ * effet inconnu (id obsolète) est ignoré. Le registre complet (`index.ts`)
+ * n'est PAS importé ici : il tirerait les quatorze animations — 44 150 octets
+ * bruts — dans le chunk d'entrée de toute l'application, pour du code qui ne
+ * sert qu'au moment où un mot-clé est tapé (audit du 2026-09-21). Tant que la migration SQL n'est pas jouée, la requête
  * échoue silencieusement (`data` reste indéfini) et aucun easter egg n'est monté.
  */
 export function EasterEggs() {
@@ -30,10 +33,10 @@ export function EasterEggs() {
   return (
     <>
       {eggs.map((egg) => {
-        const effect = EFFECTS.find((e) => e.id === egg.effectId)
+        const effect = LAZY_EFFECTS.find((e) => e.id === egg.effectId)
         if (!effect) return null
         return (
-          <SecretEffect key={egg.id} keyword={egg.keyword} effect={effect} />
+          <SecretEffect key={egg.id} keyword={egg.keyword} load={effect.load} />
         )
       })}
     </>
