@@ -6,7 +6,6 @@ import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react'
 import { AnalytiqueShell, ToolbarCell } from '#/components/analytique/AnalytiqueShell.tsx'
 import {
   AnalytiqueCardsGrid,
-  shareSub,
   StatCard,
   subText,
 } from '#/components/analytique/AnalytiqueCards.tsx'
@@ -17,10 +16,8 @@ import { useAnnualYear } from '#/components/analytique/useAnnualYear.ts'
 import { StepNav } from '#/components/shared/StepNav.tsx'
 import { KpiLineChart } from '#/components/analytique/KpiLineChart.tsx'
 import { fetchParkingArrivals } from '#/lib/parking/service.ts'
-import { fetchYearAnalytics } from '#/lib/repjour/services/daily.ts'
 import {
   aggregateParkingMonthly,
-  captageIndex,
   yearsFromParkingDates,
 } from '#/lib/parking/analytics.ts'
 import { fmtEur, fmtInt, fmtPct, fmtPctInt } from '#/lib/parking/format.ts'
@@ -64,52 +61,25 @@ export function ParkingAnalytiqueBoard() {
   // Année sélectionnée + recalage si absente de la liste (hook partagé).
   const { year, setYear } = useAnnualYear(years, currentYear)
 
-  // Occupation HÔTEL mois par mois (nuitées) — dénominateur du captage : part des
-  // chambres occupées qui ont aussi pris une place de parking. Même service que
-  // l'analytique repjour, clé de cache propre au parking.
-  const { data: hotelMonths = [], isPending: loadingHotel } = useQuery({
-    queryKey: ['parking', 'hotel-year', year],
-    queryFn: () => fetchYearAnalytics(year),
-  })
-  const loading = loadingRes || loadingHotel
+  const loading = loadingRes
 
   const months = useMemo(
     () => aggregateParkingMonthly(arrivals, year),
     [arrivals, year],
   )
 
-  // Nuitées HÔTEL par mois (dénominateur du captage), indexées par numéro de mois.
-  const hotelNuiteesByMonth = useMemo(() => {
-    const map = new Map<number, number>()
-    for (const h of hotelMonths) map.set(h.month, h.nuitees)
-    return map
-  }, [hotelMonths])
-
   const summary = useMemo(() => {
     const active = months.filter((m) => m.reservations > 0)
     const count = active.length
     const totalReservations = months.reduce((s, m) => s + m.reservations, 0)
     const totalNights = months.reduce((s, m) => s + m.nights, 0)
-    // Captage annuel : occupation parking client rapportée à l'occupation hôtel,
-    // sur les cumuls des mois où l'occupation hôtel est connue. « — » sinon.
-    let capClient = 0
-    let capRooms = 0
-    for (const m of months) {
-      const nuitees = hotelNuiteesByMonth.get(m.month) ?? 0
-      if (nuitees > 0) {
-        capClient += m.clientNights
-        capRooms += nuitees
-      }
-    }
     return {
       totalReservations,
       totalNights,
-      totalUnpaid: months.reduce((s, m) => s + m.unpaid, 0),
       totalFree: months.reduce((s, m) => s + m.free, 0),
       totalCaHt: months.reduce((s, m) => s + m.caHt, 0),
       avgOccupancy:
         count > 0 ? active.reduce((s, m) => s + m.occupancyRate, 0) / count : 0,
-      avgCaptage: captageIndex(capClient, capRooms),
       // 2e info : cadence mensuelle des réservations + durée moyenne d'un séjour.
       reservationsPerMonth: count > 0 ? totalReservations / count : 0,
       nightsPerReservation:
@@ -119,7 +89,7 @@ export function ParkingAnalytiqueBoard() {
       caHtPerMonth:
         count > 0 ? months.reduce((s, m) => s + m.caHt, 0) / count : 0,
     }
-  }, [months, hotelNuiteesByMonth])
+  }, [months])
 
   const chartData = useMemo(
     () =>
@@ -130,8 +100,10 @@ export function ParkingAnalytiqueBoard() {
     [months],
   )
 
-  // Axe : reste borné à 100 % tant qu'aucun mois ne déborde sur les places
-  // tampon (13/14) ; sinon on monte à la dizaine supérieure pour ne pas tronquer.
+  // Axe : 100 % dans la quasi-totalité des cas depuis que le taux se calcule sur
+  // les 14 places. Le plafond reste DYNAMIQUE parce qu'un mois peut encore
+  // déborder — les nuits d'un séjour sont imputées en entier à son mois d'arrivée
+  // (voir analytics.ts). Mieux vaut un axe qui s'étire qu'une courbe tronquée.
   const occMax = useMemo(() => {
     const peak = Math.max(100, ...chartData.map((d) => d.occ ?? 0))
     return Math.ceil(peak / 10) * 10
@@ -205,10 +177,10 @@ export function ParkingAnalytiqueBoard() {
       )}
       loading={loading}
       printTitle={`Parking · ${year}`}
-      skeleton={{ cols: 9, charts: 1, rows: 12, cards: 6, cardCols: 6 }}
+      skeleton={{ cols: 7, charts: 1, rows: 12, cards: 4, cardCols: 4 }}
     >
       {/* Synthèse annuelle */}
-      <AnalytiqueCardsGrid cols={6}>
+      <AnalytiqueCardsGrid cols={4}>
         <StatCard
           label="Réservations"
           accent={ACCENT.indigo}
@@ -247,23 +219,6 @@ export function ParkingAnalytiqueBoard() {
               ? subText(`moy. ${fmtEur(summary.caHtPerMonth)} / mois`)
               : undefined
           }
-        />
-        <StatCard
-          label="Impayés"
-          accent={ACCENT.red}
-          value={fmtInt(summary.totalUnpaid)}
-          hint="Réservations parties sans paiement enregistré."
-          sub={shareSub(
-            summary.totalUnpaid,
-            summary.totalReservations,
-            'des réservations',
-          )}
-        />
-        <StatCard
-          label="Captage"
-          accent={ACCENT.pink}
-          value={summary.avgCaptage != null ? fmtPctInt(summary.avgCaptage) : '—'}
-          hint="Remplissage du parking client comparé à celui de l'hôtel. 100 % = parking au moins aussi rempli, en proportion, que l'hôtel (demande captée au max) ; en dessous, le parking traîne derrière ; 0 % = clients présents mais parking vide."
         />
       </AnalytiqueCardsGrid>
 
@@ -307,21 +262,9 @@ export function ParkingAnalytiqueBoard() {
             </th>
             <th
               className="px-2 py-2 text-center text-xs font-medium text-muted-foreground"
-              style={{ color: ACCENT.red }}
-            >
-              Impayées
-            </th>
-            <th
-              className="px-2 py-2 text-center text-xs font-medium text-muted-foreground"
               style={{ color: ACCENT.amber }}
             >
               CA
-            </th>
-            <th
-              className="px-3 py-2 text-center text-xs font-medium text-muted-foreground"
-              style={{ color: ACCENT.pink }}
-            >
-              Captage
             </th>
           </tr>
         }
@@ -329,8 +272,6 @@ export function ParkingAnalytiqueBoard() {
         <tbody>
           {months.map((m) => {
             const hasData = m.reservations > 0
-            const nuitees = hotelNuiteesByMonth.get(m.month) ?? 0
-            const captage = nuitees > 0 ? captageIndex(m.clientNights, nuitees) : null
             return (
               <tr
                 key={m.month}
@@ -388,21 +329,9 @@ export function ParkingAnalytiqueBoard() {
                     </td>
                     <td
                       className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums"
-                      style={{ color: ACCENT.red }}
-                    >
-                      {fmtInt(m.unpaid)}
-                    </td>
-                    <td
-                      className="whitespace-nowrap px-2 py-2 text-center text-xs tabular-nums"
                       style={{ color: ACCENT.amber }}
                     >
                       {fmtEur(m.caHt)}
-                    </td>
-                    <td
-                      className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums text-muted-foreground/50"
-                      style={captage != null ? { color: ACCENT.pink } : undefined}
-                    >
-                      {captage != null ? fmtPct(captage) : '—'}
                     </td>
                   </>
                 ) : (
@@ -423,12 +352,6 @@ export function ParkingAnalytiqueBoard() {
                       —
                     </td>
                     <td className="px-2 py-2 text-center text-xs text-muted-foreground/50">
-                      —
-                    </td>
-                    <td className="px-2 py-2 text-center text-xs text-muted-foreground/50">
-                      —
-                    </td>
-                    <td className="px-3 py-2 text-center text-xs text-muted-foreground/50">
                       —
                     </td>
                   </>
