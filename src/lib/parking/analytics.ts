@@ -1,4 +1,4 @@
-import { CLIENT_SPOTS } from '#/lib/parking/model.ts'
+import { CLIENT_SPOTS, SPOTS } from '#/lib/parking/model.ts'
 import type {
   ParkingArrivalsRow,
   ParkingDailyOccRow,
@@ -25,11 +25,13 @@ import { TOTAL_ROOMS } from '#/lib/repjour/constants.ts'
  * `gratuite` (gratuite par définition).
  */
 
-// Le taux d'occupation compte TOUTES les places occupées au NUMÉRATEUR (personnel
-// 13 & 14 compris), rapportées aux 12 places CLIENT au DÉNOMINATEUR (CLIENT_SPOTS).
-// Remplir les places tampon fait donc dépasser 100 % (surbooking assumé). Les
-// nuits-places CLIENT (personnel exclu, spot < FIRST_STAFF_SPOT) restent calculées
-// à part, pour le seul captage.
+// Le taux d'occupation rapporte les places occupées aux 14 places du parking
+// (SPOTS) : numérateur et dénominateur portent sur le MÊME périmètre, places
+// tampon 13 & 14 comprises. Le taux est donc borné à 100 % — c'est le sens de
+// la révision du 2026-09-22, qui annule le dénominateur à 12 places retenu le
+// 2026-08-12. Le planning `/parking`, lui, garde son propre taux sur les 12
+// places CLIENT : c'est ce dépassement de 100 % qui y signale le débordement
+// sur les places tampon (ParkingBoard.tsx). Deux écrans, deux questions.
 
 /* --------------------------------------------------------------------------
  * CAPTAGE PARKING — définition unique (page + analytiques).
@@ -80,13 +82,15 @@ export interface ParkingMonthStats {
   clientNights: number
   /**
    * Taux d'occupation moyen (%) : place-nuits occupées (TOUTES places, personnel
-   * 13 & 14 compris) rapportées à la capacité CLIENT du mois (12 places × jours du
-   * mois). Peut dépasser 100 % les jours où les places tampon 13/14 sont prises.
+   * 13 & 14 compris) rapportées à la capacité du mois (14 places × jours du
+   * mois). Même périmètre en haut et en bas : le taux ne dépasse pas 100 %.
    *
    * Approximation MVP : chaque réservation est comptée EN ENTIER dans le mois de
    * son `start_date`, même si le séjour déborde sur le mois suivant. Suffisant
    * pour dégager une tendance ; à raffiner si un découpage exact au jour devient
-   * nécessaire.
+   * nécessaire. ATTENTION : c'est la SEULE raison pour laquelle ce taux-ci peut
+   * encore dépasser 100 % (séjours longs démarrant en fin de mois). Le taux
+   * JOURNALIER, lui, est borné par construction.
    */
   occupancyRate: number
   /** Réservations au statut « payé ». */
@@ -168,8 +172,8 @@ export function aggregateParkingMonthly(
 
   for (let i = 0; i < 12; i++) {
     const s = months[i]
-    // Occupation = place-nuits TOUTES places (s.nights) / (12 places CLIENT × jours).
-    const capacity = CLIENT_SPOTS * daysInMonth(year, i + 1)
+    // Occupation = place-nuits TOUTES places (s.nights) / (14 places × jours).
+    const capacity = SPOTS * daysInMonth(year, i + 1)
     s.clientNights = clientNights[i]
     s.occupancyRate = capacity > 0 ? (s.nights / capacity) * 100 : 0
   }
@@ -190,8 +194,8 @@ export interface ParkingDayStats {
   /** Places distinctes en statut « gratuité » occupées ce jour (déjà comptées
    * dans `occupied`/`occupiedClient` — colonne dédiée en plus, pas exclusive). */
   occupiedFree: number
-  /** Taux d'occupation du jour (%) : occupied / 12 places CLIENT × 100 (numérateur
-   * personnel compris → dépasse 100 % si les places tampon 13/14 sont prises). */
+  /** Taux d'occupation du jour (%) : occupied / 14 places × 100. Borné à 100 %
+   * par construction : `occupied` est un count(distinct spot) sur 14 places. */
   occupancy: number
   /** Réservations dont l'arrivée (`start_date`) tombe ce jour. */
   arrivals: number
@@ -228,7 +232,7 @@ export function aggregateParkingDaily(
       occupied,
       occupiedClient: r?.occupied_client ?? 0,
       occupiedFree: r?.occupied_free ?? 0,
-      occupancy: (occupied / CLIENT_SPOTS) * 100,
+      occupancy: (occupied / SPOTS) * 100,
       arrivals: r?.arrivals ?? 0,
       departures: r?.departures ?? 0,
     })
