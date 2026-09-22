@@ -223,6 +223,31 @@ Le temps de chargement perçu vient surtout de l'auth cliente + du mode SPA. Rè
     ressusciter : la simulation de la galaxie (22 nœuds actifs, pas 200), les
     colonnes du planning parking (`days` ne contient déjà que le visible), et la
     mémoïsation de `RaproBoard` (~100 opérations par rendu).
+- **La base sature, elle n'est pas lente — mesuré le 2026-09-22.** C'est la
+  règle qui CORRIGE l'instinct « tout paralléliser » du 2026-09-20, lequel avait
+  rendu inconditionnelles les dix lectures de `DayCrossSummary` :
+  - au repos, PostgREST répond en **106 ms** (240 sondes `curl` espacées d'une
+    seconde ; p90 165 ms, p99 497 ms, une seule au-dessus d'une seconde) ;
+  - **pendant** l'ouverture de `/repjour`, la MÊME sonde — un `curl` anonyme,
+    extérieur à l'app — passe à **3,6 s puis 9,9 s**. Ce n'est donc ni le
+    navigateur, ni le thread principal (zéro `longtask`), ni le client Supabase ;
+  - la concurrence seule est INNOCENTE : 40 requêtes triviales en parallèle sont
+    servies en 1,9 s. C'est le **coût** qui compte, pas le nombre
+    (`pdj_service_dates` 1 057 ms de moyenne, `pdj_daily_agg` 684 ms,
+    `rapro_daily_agg` 541 ms — relevés `pg_stat_statements`).
+  Conséquence : sur cette instance, **N requêtes chères simultanées ne se
+  parallélisent pas, elles se font concurrence**. Scinder une salve en deux
+  vagues n'ajoute pas une attente, elle en retire une pour le contenu regardé.
+  `DayCrossSummary` a donc un prop `armed` (`armed={!reportPending}` dans
+  `DashboardBoard`) : médiane du rapport du jour **5 906 → ~1 700 ms**, tout
+  prêt **6 461 → ~4 000 ms** (6 chargements de production). Avant d'ajouter une
+  lecture à une page, se demander dans QUELLE vague elle tombe.
+- ⚠ **`duration` d'un `fetch()` n'est pas un temps serveur.** Sans
+  `Timing-Allow-Origin`, `connectStart`/`requestStart` valent 0 et `duration`
+  court jusqu'à la lecture du corps. Vingt requêtes qui finissent toutes dans la
+  même fenêtre de 80 ms se lisent donc de deux façons opposées (blocage serveur
+  OU thread principal occupé) : seule une sonde EXTÉRIEURE au navigateur
+  tranche. Ne jamais conclure sur le seul Resource Timing.
 - Valider toute modif perf : `pnpm build` (vérifier le découpage des chunks) +
   `npx tsc --noEmit` ; côté base `supabase/verif_perf.sql` (lecture seule).
 
