@@ -97,8 +97,6 @@ export interface ParkingMonthStats {
   paid: number
   /** Réservations au statut « réservé » (en attente de paiement). */
   reserved: number
-  /** Réservations au statut « non payé » (checkout impayé). */
-  unpaid: number
   /** Réservations au statut « gratuité ». */
   free: number
   /** Nuits cumulées des réservations « gratuité ». */
@@ -120,7 +118,6 @@ function emptyMonth(month: number): ParkingMonthStats {
     occupancyRate: 0,
     paid: 0,
     reserved: 0,
-    unpaid: 0,
     free: 0,
     freeNights: 0,
     caHt: 0,
@@ -158,7 +155,6 @@ export function aggregateParkingMonthly(
     s.nights += r.nights
     s.paid += r.paid
     s.reserved += r.reserved
-    s.unpaid += r.unpaid
     // `?? 0` : tolère une vue `parking_arrivals_agg` pas encore migrée (colonnes
     // gratuité/CA absentes le temps que le SQL soit joué en prod) sans propager
     // de NaN dans les totaux.

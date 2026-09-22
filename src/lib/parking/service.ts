@@ -28,6 +28,9 @@ export interface ParkingArrivalsRow {
   client_nights: number
   paid: number
   reserved: number
+  /** Réservations parties au statut `checkout`. Toujours renvoyée par la vue,
+   * plus lue par l'application depuis le retrait de l'indicateur d'impayés
+   * (2026-09-22). */
   unpaid: number
   /** Réservations au statut « gratuité » (comptées à part, jamais facturées).
    * Optionnel : absent tant que `parking_analytics_agg.sql` (étape 2 du
@@ -146,7 +149,7 @@ export async function fetchReservations(
 /**
  * Agrégat des ARRIVÉES, tout l'historique (paginé). Une ligne par start_date, bien
  * moins que les réservations brutes → alimente l'analytique annuel (années dispo +
- * comptes par mois) et l'impayé mensuel. Trié par date décroissante.
+ * comptes par mois, CA). Trié par date décroissante.
  */
 export async function fetchParkingArrivals(): Promise<ParkingArrivalsRow[]> {
   const PAGE = 1000
