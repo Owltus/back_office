@@ -934,26 +934,30 @@ export function DashboardBoard() {
             ni le rapport e-mail ; exclue du document imprimé tactile pour la
             même raison (`print:hidden` porté par sa propre section).
 
-            MONTÉ EN DEHORS du bloc conditionnel ci-dessus, et c'est le point :
-            ses douze lectures ne dépendent QUE de la date, jamais du rapport du
-            jour. Les conditionner au rendu du tableau KPI leur faisait attendre
-            un aller-retour réseau complet pour rien (audit du 2026-09-20).
+            La bande porte son propre repli (`showPdj || showParking ||
+            showRapro`, sinon `null`), donc chaque bloc apparaît dès que SES
+            données sont là, sans attendre les deux autres. Plus rien n'y vient
+            du rapport depuis le retrait du captage parking (2026-09-22).
 
-            ⚠ CORRIGÉ le 2026-09-21. Le montage anticipé ne servait à rien tant
-            que `visible` attendait `report && rj && rmtd && pm && budget &&
-            ecart` : les douze réponses arrivaient souvent AVANT le rapport du
-            jour, et restaient invisibles jusqu'à lui. On gagnait sur le réseau
-            et on perdait tout à l'écran — ce qui explique qu'aucune
-            amélioration n'ait été ressentie.
+            ⚠ REVIREMENT du 2026-09-22 sur `armed`. Le 2026-09-20 ses dix
+            lectures avaient été rendues INCONDITIONNELLES pour partir dans la
+            même salve que celles du board : aucune ne dépend du rapport, donc
+            les faire attendre paraissait une attente offerte. Le raisonnement
+            supposait une base au repos. La mesure dit l'inverse — pendant
+            l'ouverture de /repjour, un `curl` anonyme extérieur à l'app passe
+            de 106 ms à 3,6 s puis 9,9 s : les vingt requêtes ne s'attendent pas
+            entre elles, elles saturent le CPU de l'instance. Le rapport du jour
+            sortait donc à 5 906 ms, avec tout le reste, alors qu'il ne dépend
+            que de lui-même.
 
-            La bande ne dépend plus que de la porte de la page. Elle porte son
-            propre repli (`showPdj || showParking || showRapro`, sinon `null`),
-            donc chaque bloc apparaît dès que SES données sont là, sans attendre
-            les deux autres. Plus rien n'y vient du rapport depuis le retrait du
-            captage parking (2026-09-22). */}
+            `armed={!reportPending}` scinde la salve en deux. Ce n'est pas une
+            cascade regagnée : c'est le contenu regardé qui cesse de faire la
+            queue derrière dix lectures qui ne le concernent pas. Le détail des
+            mesures est dans l'en-tête du prop, côté DayCrossSummary.tsx. */}
         <DayCrossSummary
           date={selectedDate}
           visible={!loading && !!(report || hasPartialData)}
+          armed={!reportPending}
         />
 
         {/* Import — carte placée en bas du dashboard. Masquée sur tout jour

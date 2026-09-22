@@ -128,22 +128,46 @@ function SummaryBlock({
 export function DayCrossSummary({
   date,
   visible = true,
+  armed = true,
 }: {
   date: string
-  /**
-   * Affichage de la bande. Le composant est MONTÉ dès le premier rendu du
-   * tableau de bord, avant même que le rapport du jour soit revenu, pour que
-   * ses douze lectures partent dans la MÊME salve que celles du board
-   * (audit du 2026-09-20 : elles attendaient un aller-retour réseau complet
-   * pour rien — aucune ne dépend du rapport, la date leur suffit).
-   * `visible` ne pilote donc que le rendu, jamais le chargement.
-   */
+  /** Affichage de la bande. Ne pilote QUE le rendu, jamais le chargement. */
   visible?: boolean
+  /**
+   * Autorise les dix lectures de la bande à partir.
+   *
+   * ⚠ Le 2026-09-20 elles avaient été rendues INCONDITIONNELLES, pour qu'elles
+   * partent dans la même salve que celles du tableau de bord : aucune ne dépend
+   * du rapport du jour, la date leur suffit, donc les faire attendre semblait
+   * un aller-retour perdu. Le raisonnement valait pour une base au repos. Il
+   * est FAUX ici, et la mesure du 2026-09-22 le montre :
+   *
+   *   - au repos, la base répond en 106 ms (240 sondes, p99 à 497 ms) ;
+   *   - pendant l'ouverture de /repjour, un simple `curl` anonyme sans aucun
+   *     rapport avec l'app passe de 106 ms à 3,6 s puis 9,9 s.
+   *
+   * Les vingt requêtes ne s'attendent donc pas l'une l'autre : elles se
+   * disputent le CPU d'une petite instance, et plusieurs coûtent entre 300 ms
+   * et 1 s de calcul (`pdj_service_dates` 1 057 ms de moyenne, `pdj_daily_agg`
+   * 684 ms). Résultat mesuré : le rapport du jour — le seul contenu que
+   * l'utilisateur regarde — n'arrivait qu'à 5 906 ms, en même temps que tout
+   * le reste, alors qu'il n'a besoin que de lui-même.
+   *
+   * Scinder la salve en deux n'ajoute donc pas une attente, elle en retire
+   * une : le rapport ne fait plus la queue derrière dix lectures qui ne le
+   * concernent pas. Ne repasser `armed` à une constante qu'avec une mesure
+   * montrant que la base ne sature plus.
+   */
+  armed?: boolean
 }) {
   const { can } = useAuth()
   const canPdj = can('pdj', 'lecture')
   const canParking = can('parking', 'lecture')
   const canRapro = can('rapro', 'lecture')
+  // Droit de lire ET feu vert de la salve (voir `armed`).
+  const litPdj = armed && canPdj
+  const litParking = armed && canParking
+  const litRapro = armed && canRapro
 
   // Fenêtre glissante de 30 jours finissant à la date affichée — base de TOUTES
   // les moyennes de la bande (cf. helpers en tête de fichier).
@@ -153,7 +177,7 @@ export function DayCrossSummary({
   const pdjDayQ = useQuery({
     queryKey: ['pdj', 'day', date],
     queryFn: () => fetchPdjDay(date),
-    enabled: canPdj,
+    enabled: litPdj,
   })
   // Prix de la CARTE, retrouvés dans l'historique de facturation (cf. tarif.ts).
   // MÊME clé que la page PDJ → cache partagé. C'est TOUT l'historique Addon pour
@@ -163,7 +187,7 @@ export function DayCrossSummary({
   const allAddonQ = useQuery({
     queryKey: ['pdj', 'addon-all'],
     queryFn: fetchAllAddonProduction,
-    enabled: canPdj,
+    enabled: litPdj,
     staleTime: 60 * 60_000,
     gcTime: 2 * 60 * 60_000,
   })
@@ -176,7 +200,7 @@ export function DayCrossSummary({
   const externalsQ = useQuery({
     queryKey: ['pdj', 'externals', date],
     queryFn: () => fetchExternalsCount(date),
-    enabled: canPdj,
+    enabled: litPdj,
   })
   // Repères PDJ de la fenêtre 30 j, lus depuis la VUE d'agrégation `pdj_daily_agg`
   // BORNÉE côté serveur à [windowFrom, date] : une poignée de lignes au lieu du
@@ -186,7 +210,7 @@ export function DayCrossSummary({
   const aggWinQ = useQuery({
     queryKey: ['pdj', 'agg-range', windowFrom, date],
     queryFn: () => fetchDailyAgg(windowFrom, date),
-    enabled: canPdj,
+    enabled: litPdj,
   })
   // Facturation du JOUR, extraite de la même fenêtre agrégée (elle se termine à
   // `date`) : aucune requête de plus. Sa somme fait foi pour le total des
@@ -232,7 +256,7 @@ export function DayCrossSummary({
   const parkingOccQ = useQuery({
     queryKey: ['parking', 'daily-occ-range', windowFrom, date],
     queryFn: () => fetchParkingDailyOccupation(windowFrom, date),
-    enabled: canParking,
+    enabled: litParking,
   })
   const parkingAgg = useMemo(() => {
     const rows = parkingOccQ.data
@@ -272,17 +296,17 @@ export function DayCrossSummary({
   const raproOccQ = useQuery({
     queryKey: ['rapro', 'occupancy', date],
     queryFn: () => fetchOccupancy(date),
-    enabled: canRapro,
+    enabled: litRapro,
   })
   const raproDayQ = useQuery({
     queryKey: ['rapro', 'day', date],
     queryFn: () => fetchRaproDay(date),
-    enabled: canRapro,
+    enabled: litRapro,
   })
   const raproOldestQ = useQuery({
     queryKey: ['rapro', 'oldest'],
     queryFn: fetchOldestDay,
-    enabled: canRapro,
+    enabled: litRapro,
     staleTime: Infinity, // borne historique figée (mêmes réglages que le board rapro)
     gcTime: 60 * 60_000,
   })
@@ -301,7 +325,7 @@ export function DayCrossSummary({
   const raproRangeQ = useQuery({
     queryKey: ['rapro', 'days-range', rangeFrom, rangeTo],
     queryFn: () => fetchRoomsRange(rangeFrom, rangeTo),
-    enabled: canRapro && windowDays.length > 0,
+    enabled: litRapro && windowDays.length > 0,
   })
   const rapro = useMemo<RaproDaySummary | null>(() => {
     if (!raproOccQ.data || !raproDayQ.data) return null
@@ -322,7 +346,7 @@ export function DayCrossSummary({
   const raproWinQ = useQuery({
     queryKey: ['rapro', 'daily-agg-range', windowFrom, date],
     queryFn: () => fetchRaproDailyAgg(windowFrom, date),
-    enabled: canRapro,
+    enabled: litRapro,
   })
   const raproAvg = useMemo(() => {
     const byDay = raproWinQ.data
