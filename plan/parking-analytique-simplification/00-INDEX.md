@@ -1,5 +1,27 @@
 # Plan — Analytique parking : retrait du captage et des impayés, occupation sur 14 places
 
+> **EXÉCUTÉ le 2026-09-22**, huit étapes sur huit, en 8 commits
+> `ef9da14..d61dcb3`. **Non poussé.** `npx tsc --noEmit` propre, 823 tests
+> verts, `pnpm build` OK. Aucun script SQL n'a été joué.
+>
+> Écarts par rapport au plan rédigé :
+> - L'angle **D1 a été tranché en option B** avant l'exécution (le captage part
+>   partout) : le plan est passé de 7 à 8 étapes, l'étape 5 a été ajoutée, et la
+>   suppression de `captageIndex` a été déplacée de l'étape 2 vers l'étape 5 —
+>   une fonction se supprime quand elle n'a plus d'appelant, pas avant.
+> - **`fetchNuiteesByMonth` a été supprimée** en plus du périmètre prévu :
+>   le retrait du captage l'a laissée sans aucun appelant.
+> - **`CLIENT_SPOTS` a été supprimée** de `model.ts`, là où le plan initial
+>   prévoyait de la conserver : sans le captage, elle n'avait plus de lecteur.
+> - **L'angle D5 a été tranché par lecture du code** : la requête
+>   `['parking','arrivals-all']` alimente bien le CA par jour, le CA du mois et
+>   la gratuité. Elle a été conservée.
+> - Les **3 erreurs `pnpm lint`** restantes sont préexistantes
+>   (`data.ts:49-50`, `DashboardBoard.tsx:921`), hors des zones touchées.
+> - Une **autre session** a commité `c408fe6` sur le même dépôt pendant le
+>   chantier. Aucune collision : ses fichiers (`router.tsx`, `__root.tsx`) ne
+>   sont dans aucun des huit commits de ce chantier.
+
 ## Contexte
 
 La page `/parking/analytique` (vue annuelle et détail mensuel) affiche six
