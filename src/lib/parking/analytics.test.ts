@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest'
 import {
   aggregateParkingDaily,
   aggregateParkingMonthly,
-  captageIndex,
   yearsFromParkingDates,
 } from '#/lib/parking/analytics.ts'
 import type {
@@ -12,42 +11,10 @@ import type {
 } from '#/lib/parking/service.ts'
 
 /*
- * Captage parking = occupation du parking client ÷ occupation de l'hôtel, en %,
- * BORNÉ 0–100 %. 100 % = parking au moins aussi rempli, en proportion, que
- * l'hôtel ; <100 % = parking en retrait ; 0 % = clients mais parking vide.
- * Voir en-tête de analytics.ts. (12 places client, 80 chambres.)
+ * Occupation parking = places occupées ÷ 14 places (tampon 13 & 14 compris).
+ * Numérateur et dénominateur portent sur le même périmètre : le taux
+ * journalier ne peut pas dépasser 100 %. Voir en-tête de analytics.ts.
  */
-
-describe('captageIndex', () => {
-  it('100 % quand parking et hôtel sont aussi remplis l’un que l’autre', () => {
-    // Parking à 50 % (6/12), hôtel à 50 % (40/80) → parité.
-    expect(captageIndex(6, 40)).toBeCloseTo(100, 6)
-  })
-
-  it('plafonné à 100 % quand le parking est plus tendu que l’hôtel', () => {
-    // Parking plein (12/12), hôtel à 25 % (20/80) → division 400 %, ramené à 100 %.
-    expect(captageIndex(12, 20)).toBe(100)
-  })
-
-  it('faible quand le parking traîne derrière un hôtel plein', () => {
-    // Parking à 17 % (2/12), hôtel plein (80/80) → 16,67 %.
-    expect(captageIndex(2, 80)).toBeCloseTo(16.67, 2)
-  })
-
-  it('0 % quand des clients sont présents mais le parking est vide', () => {
-    expect(captageIndex(0, 56)).toBe(0)
-  })
-
-  it('en retrait quand le parking est moins rempli que l’hôtel', () => {
-    // Parking à 33 % (4/12), hôtel à 70 % (56/80) → 47,6 %.
-    expect(captageIndex(4, 56)).toBeCloseTo(47.62, 2)
-  })
-
-  it('null quand l’occupation hôtel est inconnue (dénominateur nul)', () => {
-    expect(captageIndex(4, 0)).toBeNull()
-    expect(captageIndex(0, 0)).toBeNull()
-  })
-})
 
 describe('aggregateParkingMonthly (vue arrivées)', () => {
   it('somme par mois d’arrivée, ignore les autres années', () => {
@@ -62,14 +29,12 @@ describe('aggregateParkingMonthly (vue arrivées)', () => {
     const aug = months[7]
     expect(aug.reservations).toBe(4) // 3 + 1
     expect(aug.nights).toBe(9) // 7 + 2
-    expect(aug.clientNights).toBe(7) // 5 + 2
     expect(aug.paid).toBe(2)
     expect(aug.reserved).toBe(1)
-    expect(aug.unpaid).toBe(1)
     expect(aug.caHt).toBeCloseTo(81.82) // 63.64 + 18.18
     expect(aug.caTtc).toBe(90) // 70 + 20
-    // Occupation = nuits-places TOUTES places / (12 × jours du mois).
-    expect(aug.occupancyRate).toBeCloseTo((9 / (12 * 31)) * 100)
+    // Occupation = nuits-places TOUTES places / (14 × jours du mois).
+    expect(aug.occupancyRate).toBeCloseTo((9 / (14 * 31)) * 100)
     expect(months[6].reservations).toBe(1) // juillet
     expect(months[0].reservations).toBe(0) // janvier vide (2025 ignoré)
   })
@@ -100,16 +65,27 @@ describe('aggregateParkingDaily (vue occupation)', () => {
     const days = aggregateParkingDaily(occ, 2026, 8)
     expect(days).toHaveLength(31)
     expect(days[0]).toEqual({
-      date: '2026-08-01', day: 1, occupied: 3, occupiedClient: 2, occupiedFree: 1,
-      occupancy: (3 / 12) * 100, arrivals: 1, departures: 0,
+      date: '2026-08-01', day: 1, occupied: 3, occupiedFree: 1,
+      occupancy: (3 / 14) * 100, arrivals: 1, departures: 0,
     })
     // Jour 2 absent de la vue → tout à zéro.
     expect(days[1]).toEqual({
-      date: '2026-08-02', day: 2, occupied: 0, occupiedClient: 0, occupiedFree: 0,
+      date: '2026-08-02', day: 2, occupied: 0, occupiedFree: 0,
       occupancy: 0, arrivals: 0, departures: 0,
     })
-    // Places tampon prises → occupation > 100 % (13/12).
-    expect(days[2].occupancy).toBeCloseTo((13 / 12) * 100)
+    // Treize places prises sur quatorze : le taux reste SOUS 100 %. C'est le
+    // sens du passage au dénominateur de 14 places (2026-09-22) — avant, ce
+    // même jour affichait 108 % (13/12).
+    expect(days[2].occupancy).toBeCloseTo((13 / 14) * 100)
+    expect(days[2].occupancy).toBeLessThan(100)
+  })
+
+  it('parking complet : exactement 100 %, jamais au-dessus', () => {
+    const occ: ParkingDailyOccRow[] = [
+      { date: '2026-08-01', occupied: 14, occupied_client: 12, occupied_free: 0, arrivals: 0, departures: 0 },
+    ]
+    const days = aggregateParkingDaily(occ, 2026, 8)
+    expect(days[0].occupancy).toBe(100)
   })
 
   it('ignore les lignes hors du mois demandé', () => {
