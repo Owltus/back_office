@@ -262,18 +262,49 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
   // rien à purger. UNE fois par jour hôtelier et par poste (`purgeGate`, état
   // de module) : l'ancien `useRef` repartait à zéro à chaque montage du board,
   // soit un UPDATE de masse à chaque visite de la page (audit 2026-09-06).
+  /*
+   * ⚠ DIFFÉRÉE de 3 s depuis le 2026-09-22, après mesure dans le navigateur.
+   *
+   * C'est une ÉCRITURE (`update` de masse sur `pdj_breakfasts`), et elle partait
+   * au montage, dans la même salve que les sept lectures dont l'écran a besoin
+   * pour afficher quoi que ce soit. Relevé sur `/pdj` : elle démarrait à
+   * 1 020 ms, exactement avec les lectures métier.
+   *
+   * Rien ne justifie cette urgence : la purge porte sur des jours PASSÉS
+   * (J-2 et au-delà), elle est idempotente, et `purgeGate` la borne déjà à une
+   * fois par jour hôtelier et par poste. La décaler de trois secondes ne change
+   * rien à la conformité — les noms sont anonymisés le même jour — et rend le
+   * chemin critique de la page aux données de l'hôtelier.
+   *
+   * Le minuteur est annulé au démontage, et `purgeGate.release` est rappelé dans
+   * ce cas : quitter la page avant les 3 s ne doit pas consommer le jeton du
+   * jour sans avoir purgé.
+   */
   useEffect(() => {
     if (!canEdit || !purgeGate.claim(yesterday)) return
-    purgeOldGuestNames(yesterday)
-      // La purge n'anonymise QUE des noms de jours passés → seules les vues « jour »
-      // peuvent être périmées. On n'invalide donc que `['pdj','day']` (ciblé), pas
-      // le préfixe `['pdj']` entier qui rejouait aussi dates + agrégats + benchmark
-      // (les scans lourds) sur CHAQUE montage éditeur.
-      .then(() => queryClient.invalidateQueries({ queryKey: ['pdj', 'day'] }))
-      .catch((err) => {
-        purgeGate.release(yesterday)
-        console.error('[pdj] purge RGPD échouée', err)
-      })
+    let vivant = true
+    const t = window.setTimeout(() => {
+      // Le jeton est consommé À PARTIR D'ICI : le nettoyage ne doit plus le
+      // rendre, sinon un démontage juste après la purge en autoriserait une
+      // seconde le même jour.
+      vivant = false
+      purgeOldGuestNames(yesterday)
+        // La purge n'anonymise QUE des noms de jours passés → seules les vues « jour »
+        // peuvent être périmées. On n'invalide donc que `['pdj','day']` (ciblé), pas
+        // le préfixe `['pdj']` entier qui rejouait aussi dates + agrégats + benchmark
+        // (les scans lourds) sur CHAQUE montage éditeur.
+        .then(() => queryClient.invalidateQueries({ queryKey: ['pdj', 'day'] }))
+        .catch((err) => {
+          purgeGate.release(yesterday)
+          console.error('[pdj] purge RGPD échouée', err)
+        })
+    }, 3_000)
+    return () => {
+      window.clearTimeout(t)
+      // Démontage AVANT le déclenchement : le jeton du jour n'a pas servi, on le
+      // rend, sinon la purge sauterait jusqu'au lendemain.
+      if (vivant) purgeGate.release(yesterday)
+    }
   }, [canEdit, queryClient, yesterday])
 
   // Lignes du jour sélectionné. On NE met PAS de défaut `= []` : il masquerait
