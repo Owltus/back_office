@@ -1,9 +1,8 @@
-import { CLIENT_SPOTS, SPOTS } from '#/lib/parking/model.ts'
+import { SPOTS } from '#/lib/parking/model.ts'
 import type {
   ParkingArrivalsRow,
   ParkingDailyOccRow,
 } from '#/lib/parking/service.ts'
-import { TOTAL_ROOMS } from '#/lib/repjour/constants.ts'
 
 /*
  * Agrégation analytique du planning parking (métier pur, sans React).
@@ -33,43 +32,6 @@ import { TOTAL_ROOMS } from '#/lib/repjour/constants.ts'
 // places CLIENT : c'est ce dépassement de 100 % qui y signale le débordement
 // sur les places tampon (ParkingBoard.tsx). Deux écrans, deux questions.
 
-/* --------------------------------------------------------------------------
- * CAPTAGE PARKING — définition unique (page + analytiques).
- *
- * On NE remesure PAS le remplissage du parking : ce serait le taux d'occupation,
- * et comparer les 12 places à tout l'hôtel donne un ratio minuscule (jamais 100 %).
- * Le captage compare le remplissage du parking client à celui de l'hôtel :
- *
- *   captage = taux d'occupation parking client ÷ taux d'occupation hôtel
- *           = (places client / 12) ÷ (chambres occupées / 80)
- *
- * Le nombre de jours d'une période se simplifie entre haut et bas → on l'applique
- * directement sur les cumuls bruts (places-nuits client, nuitées hôtel).
- *
- * PLAFONNÉ À 100 % pour rester une jauge lisible 0–100 % :
- *   100 % : le parking est AU MOINS aussi rempli (en proportion) que l'hôtel →
- *           on capte toute la demande que l'occupation hôtel laisse espérer.
- *   < 100 % : le parking est À LA TRAÎNE derrière l'hôtel (demande laissée filer).
- *     0 % : des clients présents mais parking vide (potentiel raté, pas d'argent).
- * (Un parking « plus tendu » que l'hôtel — division > 100 % — est ramené à 100 %,
- * son maximum : on ne peut pas capter plus que tout.) Jamais négatif. `null` si
- * l'occupation hôtel est inconnue (dénominateur nul) → affiché « — ».
- * ------------------------------------------------------------------------ */
-
-/**
- * Indice de captage (%) borné 0–100 % : occupation parking client rapportée à
- * l'occupation hôtel, sur des cumuls bruts (le nb de jours se simplifie),
- * plafonné à 100 %. `null` si aucune base hôtel connue.
- */
-export function captageIndex(
-  clientOccupied: number,
-  hotelRooms: number,
-): number | null {
-  if (hotelRooms <= 0) return null
-  const ratio = (clientOccupied / CLIENT_SPOTS / (hotelRooms / TOTAL_ROOMS)) * 100
-  return Math.min(100, ratio)
-}
-
 /** Synthèse d'un mois (indices 1..12). */
 export interface ParkingMonthStats {
   month: number
@@ -77,9 +39,6 @@ export interface ParkingMonthStats {
   reservations: number
   /** Nuits cumulées (somme des `nights`) sur le mois. */
   nights: number
-  /** Nuits-places CLIENT (personnel exclu) cumulées — numérateur du captage
-   * hôtelier (rapporté aux nuitées de l'hôtel). */
-  clientNights: number
   /**
    * Taux d'occupation moyen (%) : place-nuits occupées (TOUTES places, personnel
    * 13 & 14 compris) rapportées à la capacité du mois (14 places × jours du
@@ -114,7 +73,6 @@ function emptyMonth(month: number): ParkingMonthStats {
     month,
     reservations: 0,
     nights: 0,
-    clientNights: 0,
     occupancyRate: 0,
     paid: 0,
     reserved: 0,
@@ -134,15 +92,13 @@ function daysInMonth(year: number, month: number): number {
  * Agrège les lignes d'arrivée (vue `parking_arrivals_agg`, une par start_date) d'une
  * année en 12 synthèses mensuelles. Les lignes hors `year` sont ignorées. L'axe est
  * l'arrivée (`start_date`) ; l'occupation compte TOUTES les places (personnel
- * compris, via `nights`), le captage isole les nuits-places client (`client_nights`).
+ * compris, via `nights`).
  */
 export function aggregateParkingMonthly(
   rows: ParkingArrivalsRow[],
   year: number,
 ): ParkingMonthStats[] {
   const months = Array.from({ length: 12 }, (_, i) => emptyMonth(i + 1))
-  // Places-nuits CLIENT occupées par mois (personnel exclu du calcul d'occupation).
-  const clientNights = new Array(12).fill(0)
 
   const prefix = `${year}-`
   for (const r of rows) {
@@ -162,15 +118,12 @@ export function aggregateParkingMonthly(
     s.freeNights += r.free_nights ?? 0
     s.caHt += r.ca_ht ?? 0
     s.caTtc += r.ca_ttc ?? 0
-
-    clientNights[m] += r.client_nights
   }
 
   for (let i = 0; i < 12; i++) {
     const s = months[i]
     // Occupation = place-nuits TOUTES places (s.nights) / (14 places × jours).
     const capacity = SPOTS * daysInMonth(year, i + 1)
-    s.clientNights = clientNights[i]
     s.occupancyRate = capacity > 0 ? (s.nights / capacity) * 100 : 0
   }
   return months
@@ -184,11 +137,8 @@ export interface ParkingDayStats {
   day: number
   /** Places distinctes occupées ce jour, TOUTES places (personnel compris). */
   occupied: number
-  /** Places CLIENT distinctes occupées ce jour (spots < FIRST_STAFF_SPOT),
-   * conservées pour le seul calcul de captage. */
-  occupiedClient: number
   /** Places distinctes en statut « gratuité » occupées ce jour (déjà comptées
-   * dans `occupied`/`occupiedClient` — colonne dédiée en plus, pas exclusive). */
+   * dans `occupied` — colonne dédiée en plus, pas exclusive). */
   occupiedFree: number
   /** Taux d'occupation du jour (%) : occupied / 14 places × 100. Borné à 100 %
    * par construction : `occupied` est un count(distinct spot) sur 14 places. */
@@ -226,7 +176,6 @@ export function aggregateParkingDaily(
       date: dateStr,
       day,
       occupied,
-      occupiedClient: r?.occupied_client ?? 0,
       occupiedFree: r?.occupied_free ?? 0,
       occupancy: (occupied / SPOTS) * 100,
       arrivals: r?.arrivals ?? 0,

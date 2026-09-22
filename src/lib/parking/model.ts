@@ -8,7 +8,7 @@
 export const SPOTS = 14
 export const FIRST_STAFF_SPOT = 13 // places 13 & 14 = "personnel" (tampon)
 // Place réservée PMR (personne à mobilité réduite) : affichée avec le pictogramme
-// fauteuil au lieu de son numéro. N'a aucun effet métier (occupation, captage…),
+// fauteuil au lieu de son numéro. N'a aucun effet métier (occupation…),
 // c'est un repère visuel. Source unique du numéro de la place PMR.
 export const PMR_SPOT = 8
 
@@ -23,11 +23,6 @@ export const PMR_GLYPH = {
     'M2285 7932 c-901 -468 -1603 -1242 -1983 -2187 -303 -754 -378 -1551 -221 -2350 141 -718 471 -1389 960 -1950 98 -113 328 -341 434 -431 407 -347 869 -611 1365 -783 1435 -496 3009 -177 4170 845 221 194 464 463 637 704 129 179 328 515 321 543 -5 23 -732 1506 -736 1502 -2 -2 -14 -63 -27 -137 -131 -762 -555 -1453 -1182 -1925 -306 -230 -690 -418 -1046 -513 -467 -123 -984 -133 -1452 -26 -664 151 -1274 532 -1699 1060 -348 433 -561 921 -648 1481 -25 168 -35 533 -19 701 40 394 130 720 295 1060 241 497 574 889 1008 1186 76 52 88 64 88 88 0 16 -20 290 -45 610 -25 320 -45 586 -45 591 0 18 -28 7 -175 -69z',
   ],
 } as const
-// Places CLIENT (1..12), par opposition aux places tampon 13 & 14. N'est PLUS
-// le dénominateur du taux d'occupation de l'analytique, qui compte sur les 14
-// places depuis le 2026-09-22 (voir lib/parking/analytics.ts). Sert encore au
-// captage.
-export const CLIENT_SPOTS = FIRST_STAFF_SPOT - 1 // 12
 export const SPOTS_LIST = Array.from({ length: SPOTS }, (_, i) => i + 1)
 export const SLOTS_PER_DAY = 2 // chaque jour = 2 demi-journées (matin / après-midi)
 

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { useMemo } from 'react'
-import { useQueries, useQuery } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { ArrowLeftRight, Coffee, SquareParking } from 'lucide-react'
 
@@ -19,8 +19,6 @@ import { detectTarifs } from '#/lib/pdj/tarif.ts'
 import { billedRevenueTtc, cardPrices } from '#/lib/pdj/pricing.ts'
 import { pdjDaySummary } from '#/lib/pdj/summary.ts'
 import { fetchParkingDailyOccupation } from '#/lib/parking/service.ts'
-import { captageIndex } from '#/lib/parking/analytics.ts'
-import { fetchNuiteesByMonth } from '#/lib/repjour/services/data.ts'
 import {
   fetchDay as fetchRaproDay,
   fetchOccupancy,
@@ -48,7 +46,7 @@ import type { RaproDaySummary } from '#/lib/rapro/summary.ts'
  * l'historique) :
  *   - PDJ : inclus/Extra → montant HT DU JOUR ; CA PDJ & Captage → `moy. …/j` sur
  *     30 j (Addon + In-House complets filtrés à la fenêtre, mêmes repères PDJ).
- *   - Parking : Occupation (NOMBRE) / Arrivées / Départs / Captage → `moy.` sur 30 j
+ *   - Parking : Occupation (NOMBRE) / Arrivées / Départs → `moy.` sur 30 j
  *     (agrégation des 1–2 mois couvrant la fenêtre, restreinte à celle-ci).
  *   - Rapprochement : Nettoyées / Refus / Bloquées du jour → `moy. X / jour` sur 30 j
  *     (jours clôturés). « Bloquées de la veille » = roulement, non agrégé → pas de moy.
@@ -87,19 +85,6 @@ function shiftDate(dateStr: string, delta: number): string {
   const mm = String(dt.getMonth() + 1).padStart(2, '0')
   const dd = String(dt.getDate()).padStart(2, '0')
   return `${yy}-${mm}-${dd}`
-}
-
-/** Les 1 à 2 mois (année, mois) couvrant la fenêtre [from, to] (≤ 30 jours). */
-function monthsCovering(
-  from: string,
-  to: string,
-): { year: number; month: number }[] {
-  const uniq = new Map<string, { year: number; month: number }>()
-  for (const s of [from, to]) {
-    const [y, m] = s.split('-').map(Number)
-    uniq.set(`${y}-${m}`, { year: y, month: m })
-  }
-  return [...uniq.values()]
 }
 
 /** En-tête d'un bloc (icône + libellé), lien vers la page source. */
@@ -142,12 +127,9 @@ function SummaryBlock({
 
 export function DayCrossSummary({
   date,
-  hotelRoomsSold,
   visible = true,
 }: {
   date: string
-  /** Nuitées hôtel du jour (rj.nuitees) — dénominateur du captage parking. */
-  hotelRoomsSold: number | null
   /**
    * Affichage de la bande. Le composant est MONTÉ dès le premier rendu du
    * tableau de bord, avant même que le rapport du jour soit revenu, pour que
@@ -252,35 +234,6 @@ export function DayCrossSummary({
     queryFn: () => fetchParkingDailyOccupation(windowFrom, date),
     enabled: canParking,
   })
-  // Occupation HÔTEL (rj_nuitees) des 1–2 mois couvrant la fenêtre 30 j —
-  // dénominateur du captage MOYEN. Lecture DÉDIÉE (`date,rj_nuitees` sur
-  // daily_reports seule) : l'ancienne clé partagée avec l'analytique parking
-  // chargeait daily_reports ET forecast_days en `select=*` pour une colonne.
-  // Indexée par date complète (la fenêtre peut chevaucher deux mois). staleTime
-  // 5 min : les nuitées d'un jour passé ne bougent qu'à l'import, et
-  // DashboardBoard invalide le préfixe `['repjour']` au retour sur l'onglet
-  // (et après ses propres imports).
-  const coverMonths = useMemo(
-    () => monthsCovering(windowFrom, date),
-    [windowFrom, date],
-  )
-  const hotelWinQs = useQueries({
-    queries: coverMonths.map(({ year, month }) => ({
-      queryKey: ['repjour', 'nuitees-month', year, month],
-      queryFn: () => fetchNuiteesByMonth({ year, month }),
-      enabled: canParking,
-      staleTime: 5 * 60_000,
-    })),
-  })
-  const hotelByDate = useMemo(() => {
-    const map = new Map<string, number>()
-    for (const q of hotelWinQs) {
-      for (const row of q.data ?? []) {
-        if (row.rj_nuitees != null) map.set(row.date, row.rj_nuitees)
-      }
-    }
-    return map
-  }, [hotelWinQs])
   const parkingAgg = useMemo(() => {
     const rows = parkingOccQ.data
     if (!rows) return null
@@ -291,7 +244,6 @@ export function DayCrossSummary({
     const winDays: {
       date: string
       occupied: number
-      occupiedClient: number
       arrivals: number
       departures: number
     }[] = []
@@ -300,7 +252,6 @@ export function DayCrossSummary({
       winDays.push({
         date: d,
         occupied: r?.occupied ?? 0,
-        occupiedClient: r?.occupied_client ?? 0,
         arrivals: r?.arrivals ?? 0,
         departures: r?.departures ?? 0,
       })
@@ -310,30 +261,13 @@ export function DayCrossSummary({
     const n = winDays.length || 1
     const avg = (sel: (d: (typeof winDays)[number]) => number) =>
       winDays.reduce((s, d) => s + sel(d), 0) / n
-    // Captage MOYEN — captageIndex (occupation parking client ÷ occupation hôtel,
-    // borné 0–100 %) sur les cumuls des jours à hôtel connu de la fenêtre.
-    let capClient = 0
-    let capRooms = 0
-    for (const d of winDays) {
-      const rooms = hotelByDate.get(d.date) ?? 0
-      if (rooms > 0) {
-        capClient += d.occupiedClient
-        capRooms += rooms
-      }
-    }
     return {
       day,
       avgOccupied: avg((d) => d.occupied),
       avgArrivals: avg((d) => d.arrivals),
       avgDepartures: avg((d) => d.departures),
-      avgCaptage: captageIndex(capClient, capRooms),
     }
-  }, [parkingOccQ.data, hotelByDate, windowFrom, date])
-  // Captage parking DU JOUR — MÊME calcul que l'analytique (captageIndex).
-  const parkingCaptage = parkingAgg
-    ? captageIndex(parkingAgg.day.occupiedClient, hotelRoomsSold ?? 0)
-    : null
-
+  }, [parkingOccQ.data, windowFrom, date])
   // --- Rapprochement (occupation + statuts + roulement) ----------------------
   const raproOccQ = useQuery({
     queryKey: ['rapro', 'occupancy', date],
@@ -512,17 +446,6 @@ export function DayCrossSummary({
             sub={
               parkingAgg.avgDepartures > 0
                 ? subMuted(`moy. ${fmtInt(parkingAgg.avgDepartures)} / jour`)
-                : undefined
-            }
-          />
-          <StatTile
-            label="Captage"
-            accent={ACCENT.pink}
-            hint="Taux d'occupation du parking rapporté au taux d'occupation de l'hôtel ce jour. En dessous : moyenne sur les 30 derniers jours."
-            value={parkingCaptage == null ? '—' : fmtPctInt(parkingCaptage)}
-            sub={
-              parkingAgg.avgCaptage != null
-                ? subMuted(`moy. ${fmtPctInt(parkingAgg.avgCaptage)}/j`)
                 : undefined
             }
           />

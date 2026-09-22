@@ -24,7 +24,8 @@ export interface ParkingArrivalsRow {
   start_date: string // 'YYYY-MM-DD'
   reservations: number
   nights: number
-  /** Nuits sur des places CLIENT (spot < 13) — numérateur du captage. */
+  /** Nuits sur des places CLIENT (spot < 13). Toujours renvoyée par la vue,
+   * plus lue par l'application depuis le retrait du captage (2026-09-22). */
   client_nights: number
   paid: number
   reserved: number
@@ -53,7 +54,9 @@ export interface ParkingDailyOccRow {
   date: string // 'YYYY-MM-DD'
   /** Places distinctes occupées ce jour (personnel 13/14 compris). */
   occupied: number
-  /** Places CLIENT distinctes occupées ce jour (spot < 13). */
+  /** Places CLIENT distinctes occupées ce jour (spot < 13). Toujours renvoyée
+   * par la vue, plus lue par l'application depuis le retrait du captage
+   * (2026-09-22). */
   occupied_client: number
   /** Places distinctes en statut « gratuité » occupées ce jour. Optionnel :
    * absent tant que `parking_analytics_agg.sql` n'a pas été rejoué. */

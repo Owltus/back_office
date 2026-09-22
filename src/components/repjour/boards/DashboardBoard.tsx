@@ -949,12 +949,10 @@ export function DashboardBoard() {
             La bande ne dépend plus que de la porte de la page. Elle porte son
             propre repli (`showPdj || showParking || showRapro`, sinon `null`),
             donc chaque bloc apparaît dès que SES données sont là, sans attendre
-            les deux autres. Seul `hotelRoomsSold` vient du rapport, et il vaut
-            « — » tant qu'il manque : un dénominateur de captage, pas un
-            bloqueur. */}
+            les deux autres. Plus rien n'y vient du rapport depuis le retrait du
+            captage parking (2026-09-22). */}
         <DayCrossSummary
           date={selectedDate}
-          hotelRoomsSold={rj?.nuitees ?? null}
           visible={!loading && !!(report || hasPartialData)}
         />
 
