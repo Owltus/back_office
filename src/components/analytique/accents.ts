@@ -12,7 +12,9 @@
  *   indigo → volume principal (nuitées, réservations, arrivées, vendues, servis, carte…)
  *   cyan   → taux d'occupation / remplissage
  *   pink   → captage / conversion (part captée) — DISTINCT du cyan pour cohabiter
- *            avec l'occupation sur une même page (parking).
+ *            avec l'occupation sur une même page (PDJ). Plus aucun usage via
+ *            ACCENT depuis le retrait du captage parking (2026-09-22) : la
+ *            bande RepJour pose la teinte en dur pour le captage PDJ.
  *   green  → argent / revenu / encaissé / nettoyées
  *   amber  → à surveiller (écarts, refus, non servis, CA)
  *   slate  → neutre / moyenne / référence / base (inclus)

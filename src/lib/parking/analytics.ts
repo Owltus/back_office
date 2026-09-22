@@ -153,8 +153,8 @@ export interface ParkingDayStats {
  * Construit une entrée par jour du calendrier du mois (1..dernier jour) à partir
  * des lignes de la vue `parking_daily_occupation` (occupation déjà dépliée côté
  * base). Les jours absents de la vue (aucune occupation/arrivée/départ) sont
- * complétés à zéro. Occupation compte TOUTES les places ; `occupiedClient` isole
- * les places client pour le captage. `rows` peut couvrir une plage plus large que
+ * complétés à zéro. Occupation compte TOUTES les places (14, tampon compris) :
+ * le taux est borné à 100 %. `rows` peut couvrir une plage plus large que
  * le mois : seuls les jours du mois sont retenus (lookup par date exacte).
  */
 export function aggregateParkingDaily(
