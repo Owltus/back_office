@@ -48,6 +48,25 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
       // vers un domaine que le réseau de l'hôtel peut filtrer. Ne pas
       // réintroduire de <link> vers fonts.googleapis.com : il est bloquant pour
       // le rendu même avec `preconnect`.
+      /*
+       * Ouvre la connexion vers Supabase (DNS + TCP + TLS) PENDANT que le
+       * JavaScript se télécharge, au lieu de la payer sur la première requête
+       * de données.
+       *
+       * Mesuré le 2026-09-22 : la toute première requête vers la base met
+       * 546 ms, dont environ 40 de mise en relation — le reste étant le
+       * premier octet à froid. C'est peu, mais c'est du temps pris sur le
+       * chemin critique pour rien, et la correction tient en une ligne.
+       *
+       * `crossOrigin` est nécessaire : les requêtes vers Supabase portent des
+       * en-têtes d'authentification, donc en mode CORS. Sans cet attribut, la
+       * connexion ouverte ne serait pas celle réutilisée.
+       */
+      {
+        rel: 'preconnect',
+        href: 'https://ozpavwghrmmkrnmkxodg.supabase.co',
+        crossOrigin: 'anonymous',
+      },
       {
         rel: 'stylesheet',
         href: appCss,
