@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 
 import { backendHealth, isOutageStatus } from '#/lib/backendHealth.ts'
+import { createLimiteur } from '#/lib/requestQueue.ts'
 
 /**
  * Client Supabase partagé côté navigateur.
@@ -35,13 +36,56 @@ if (!supabaseUrl || !supabaseAnonKey) {
 const REQUEST_TIMEOUT_MS = 20_000
 
 /**
- * `fetch` du client : timeout borné + observation pour le disjoncteur
- * (`lib/backendHealth.ts`). Un 2xx/4xx prouve que le backend répond (succès
- * pour le disjoncteur, l'erreur métier remonte normalement) ; un 5xx, un
- * timeout ou une erreur réseau ouvrent le disjoncteur. Un abandon demandé par
- * l'APPELANT (annulation TanStack au démontage) n'est pas une panne.
+ * Plafond de lectures simultanées, PARTAGÉ par toute l'application.
+ *
+ * Six, parce qu'au-delà de neuf la base ne ralentit pas mais s'effondre
+ * (débit divisé par 2,6, latence multipliée par quatre) et que le plafond est
+ * par onglet : deux postes simultanés font douze, encore sous le seuil. Le
+ * tableau de mesures complet est en tête de `lib/requestQueue.ts`.
+ *
+ * C'est le SEUL endroit où ce réglage existe : toute requête Supabase de
+ * l'app — présente ou future, quelle que soit la page — passe par le `fetch`
+ * ci-dessous. Aucune page n'a à s'en soucier.
+ */
+const limiteur = createLimiteur(6)
+
+/** L'URL visée, quelle que soit la forme sous laquelle `fetch` la reçoit. */
+function urlDe(input: RequestInfo | URL): string {
+  if (typeof input === 'string') return input
+  if (input instanceof URL) return input.href
+  return input.url
+}
+
+/**
+ * `fetch` du client : file d'attente bornée + timeout + observation pour le
+ * disjoncteur (`lib/backendHealth.ts`). Un 2xx/4xx prouve que le backend
+ * répond (succès pour le disjoncteur, l'erreur métier remonte normalement) ;
+ * un 5xx, un timeout ou une erreur réseau ouvrent le disjoncteur. Un abandon
+ * demandé par l'APPELANT (annulation TanStack au démontage) n'est pas une
+ * panne.
  */
 async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<Response> {
+  /*
+   * GoTrue reste HORS de la file, et ce n'est pas un détail : chaque requête
+   * PostgREST attend déjà le jeton via `_getAccessToken`. Faire patienter un
+   * renouvellement derrière six lectures de données inverserait les priorités
+   * et pourrait, file pleine, bloquer l'app entière derrière son propre
+   * verrou. L'authentification est rare et courte ; elle passe devant.
+   */
+  if (urlDe(input).includes('/auth/v1/')) return executerFetch(input, init)
+  return limiteur.run(() => executerFetch(input, init))
+}
+
+/**
+ * Le fetch réel. Séparé pour que le minuteur de 20 s démarre APRÈS l'obtention
+ * du jeton de la file : sinon une requête sagement en attente consommerait son
+ * propre délai de garde sans avoir encore rien demandé, et serait abandonnée
+ * pour une lenteur qui n'est pas la sienne.
+ */
+async function executerFetch(
   input: RequestInfo | URL,
   init?: RequestInit,
 ): Promise<Response> {
