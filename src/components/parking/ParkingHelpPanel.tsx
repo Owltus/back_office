@@ -685,15 +685,14 @@ export function ParkingHelpPanel({ canEdit }: { canEdit: boolean }) {
         <p>
           Le bouton courbe ouvre l'analytique du parking. On y va pour les
           questions qui dépassent la journée : combien de réservations ce mois-ci,
-          quel remplissage, quel chiffre d'affaires, combien de départs sans
-          paiement.
+          quel remplissage, quel chiffre d'affaires.
         </p>
         <p>
-          <Term>La vue annuelle</Term> résume l'année en six cartes —{' '}
+          <Term>La vue annuelle</Term> résume l'année en quatre cartes —{' '}
           <Term>Réservations</Term>, <Term>TO moyen</Term>,{' '}
-          <Term>Nuits totales</Term>, <Term>CA Parking</Term>,{' '}
-          <Term>Impayés</Term> et <Term>Captage</Term> — puis un tableau mois par
-          mois et une courbe d'occupation. Les flèches font défiler les années.
+          <Term>Nuits totales</Term> et <Term>CA Parking</Term> — puis un tableau
+          mois par mois et une courbe d'occupation. Les flèches font défiler les
+          années.
         </p>
         <p>
           <Term>Cliquez sur une ligne du tableau</Term> pour ouvrir le détail d'un
@@ -704,11 +703,12 @@ export function ParkingHelpPanel({ canEdit }: { canEdit: boolean }) {
         <p>Trois points à connaître pour lire ces chiffres sans se tromper :</p>
         <ul className="ml-4 list-disc space-y-1.5">
           <li>
-            <Term>Le captage est plafonné à 100 %</Term>, contrairement au taux
-            d'occupation. Il compare le remplissage du parking à celui de l'hôtel :
-            100 % veut dire que le parking est au moins aussi rempli, en
-            proportion, que l'hôtel. Il affiche un tiret tant que l'occupation de
-            l'hôtel n'est pas connue.
+            <Term>Le taux d'occupation de l'analytique se calcule sur les 14
+            places</Term>, tampon compris. Il ne dépasse jamais 100 %. Celui du
+            planning se calcule sur les 12 places client : il passe au-dessus de
+            100 % quand les places tampon sont prises. Le planning surveille le
+            débordement, l'analytique mesure le remplissage. Un même jour peut
+            donc afficher deux pourcentages différents.
           </li>
           <li>
             <Term>Les réservations employé et les gratuités sont hors chiffre

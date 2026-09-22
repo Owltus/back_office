@@ -197,8 +197,8 @@ async function rasterizeChartSvg(
  * un span `.hidden.sm:inline` (long, complet) et un `.sm:hidden` (court,
  * pour l'écran étroit d'un téléphone). LE PDF DOIT TOUJOURS PRENDRE LE LONG, quelle
  * que soit la largeur d'écran au moment du clic — sinon le même document
- * imprimé depuis un téléphone (« OCC. »/« CAPT. ») diffère de celui imprimé
- * depuis un ordinateur (« OCCUPATION »/« CAPTAGE »), alors que le PDF est
+ * imprimé depuis un téléphone (« OCC. ») diffère de celui imprimé
+ * depuis un ordinateur (« OCCUPATION »), alors que le PDF est
  * censé être identique partout. `textContent` (pas `innerText`) sur le span
  * long : on veut SON texte même quand `display:none` le rend invisible.
  * Repli sur `innerText` (texte VISIBLE, ignore les nœuds masqués) si aucun
