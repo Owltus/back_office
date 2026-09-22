@@ -248,6 +248,23 @@ Le temps de chargement perçu vient surtout de l'auth cliente + du mode SPA. Rè
   même fenêtre de 80 ms se lisent donc de deux façons opposées (blocage serveur
   OU thread principal occupé) : seule une sonde EXTÉRIEURE au navigateur
   tranche. Ne jamais conclure sur le seul Resource Timing.
+- **Plafond global de 6 requêtes simultanées** (`lib/requestQueue.ts`, branché
+  dans le `global.fetch` de `lib/supabase.ts`). C'est le SEUL endroit où ce
+  réglage existe : toute page, présente ou future, en bénéficie sans rien faire.
+  GoTrue est HORS file (sinon un renouvellement attendrait derrière six lectures
+  qui l'attendent toutes) et le minuteur de 20 s ne démarre qu'APRÈS l'obtention
+  du jeton de file. Ne pas relever le plafond sans refaire la mesure de débit :
+  le sommet est à 9, l'effondrement à 14, et le plafond est PAR ONGLET.
+- **`select distinct` nu = scan complet.** `pdj_service_dates` (`select distinct
+  service_date from pdj_breakfasts`) coûtait 1 057 ms de moyenne alors que
+  l'index sur `service_date` EXISTAIT : le planificateur ne saute pas tout seul.
+  Réécrite en CTE récursive (« loose index scan », `Index Only Scan`, 251 sondes
+  au lieu de 13 601 lignes) : **317,9 → 27,7 ms**, autorité
+  `supabase/pdj_service_dates_loose_index_2026-09-22.sql`. ⚠ Une vue réécrite
+  doit REPOSER `security_invoker = true` explicitement, sinon elle
+  court-circuite les RLS. Effet de bord mesuré et instructif : les cinq AUTRES
+  requêtes de `/pdj` ont accéléré de 4 à 7× sans être touchées — une requête
+  gourmande affame toutes les autres, donc corriger la pire les corrige toutes.
 - Valider toute modif perf : `pnpm build` (vérifier le découpage des chunks) +
   `npx tsc --noEmit` ; côté base `supabase/verif_perf.sql` (lecture seule).
 
