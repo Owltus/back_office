@@ -55,14 +55,8 @@ preview_urls = false
 # chaine ci-dessous : c'est elle qui aiguille les deux minuteries vers le bon
 # traitement. Les modifier ensemble, jamais l'une sans l'autre.
 #
-# ⚠ Requiert UNE variable a poser dans le dashboard Cloudflare (conservee au
-# deploiement par `keep_vars = true`) :
-#     SUPABASE_PUBLISHABLE_KEY = la cle sb_publishable_...
-# Elle est PUBLIQUE par construction (deja embarquee dans le bundle du
-# navigateur), mais on la garde hors du depot par convention de projet : une
-# cle vit dans .env ou le dashboard, jamais dans git — ne serait-ce que pour
-# qu'une rotation n'y laisse pas de copie perimee.
-# `SUPABASE_URL` est definie dans [vars] plus bas : rien a faire pour elle.
+# Les deux variables du prechauffage sont definies dans [vars] plus bas : il n'y
+# a RIEN a poser dans le dashboard.
 crons = ["*/2 0-4 * * *", "* 4-22 * * *"]
 # Journaux du Worker (décisions d'acceptation/refus des e-mails) lisibles dans
 # le dashboard : Workers & Pages → le Worker → Journaux.
@@ -75,6 +69,28 @@ enabled = true
 [vars]
 REQUIRE_SENDER_AUTH = "true"
 
-# Cible du prechauffage. L'URL du projet est PUBLIQUE — elle figure deja dans
-# CLAUDE.md et dans chaque requete du navigateur : il n'y a rien de secret ici.
+# Cible du prechauffage.
+#
+# Ces deux valeurs sont PUBLIQUES par construction et leur place ici est un
+# choix assume, pas un oubli :
+#
+#   SUPABASE_URL              figure deja dans CLAUDE.md et dans chaque requete
+#                             du navigateur.
+#   SUPABASE_PUBLISHABLE_KEY  est EMBARQUEE DANS LE BUNDLE servi a tout visiteur
+#                             du site (VITE_SUPABASE_ANON_KEY). La publier ici
+#                             n'expose donc strictement rien de neuf. Elle est
+#                             protegee par les RLS, et `anon` n'a AUCUN
+#                             privilege sur `public` depuis le durcissement du
+#                             2026-09-06 : le ping renvoie d'ailleurs un 401
+#                             « permission denied », c'est le comportement
+#                             ATTENDU.
+#
+# ⚠ Ne JAMAIS mettre ici la cle `sb_secret` / `service_role` des Edge Functions,
+# qui contourne toute la RLS. Elle reste un secret du dashboard, et cette regle
+# est absolue (CLAUDE.md, section Cles Supabase).
+#
+# ⚠ Apres une rotation de la cle publishable, mettre cette ligne a jour : une
+# copie perimee ici ferait echouer le prechauffage en silence (le Worker avale
+# ses erreurs, par conception).
 SUPABASE_URL = "https://ozpavwghrmmkrnmkxodg.supabase.co"
+SUPABASE_PUBLISHABLE_KEY = "sb_publishable_JuUXUS-a8KEkaBtAWHeNZQ_LMWejkV4"
