@@ -1,10 +1,15 @@
-# Étape 6 — Bornage de `parking_arrivals_agg`
+# Étape 7 — RPC analytique parking et bornage des arrivées
 
 ## Objectif
 
 Supprimer les deux seules lectures « tout l'historique » de la couche parking,
-sans créer de RPC : les analytiques parking sont déjà sobres, elles n'ont besoin
-que d'un filtre.
+et aligner les deux pages sur le patron RPC du chantier.
+
+⚠ **Le bornage est le vrai sujet ; la RPC est de l'uniformité.** Les analytiques
+parking ne font que 1 à 2 lectures : j'ai argumenté qu'une RPC n'y était pas
+rentable, l'utilisateur a tranché pour l'homogénéité (décision du 2026-09-23).
+Si le temps manque, **borner sans créer la RPC suffit** à capter tout le gain
+réel de cette étape.
 
 ## Contexte
 
@@ -61,7 +66,7 @@ Mesurer aussi le coût de `parking_daily_occupation` : sa `spine` fait un
 s'applique. Sur une petite table c'est indolore ; c'est une **hypothèse, pas une
 mesure**.
 
-### 2. Option A — borner côté client (recommandée si la mesure le justifie)
+### 2. Borner — le gain réel de l’étape
 
 `fetchParkingArrivals(from?, to?)` accepte déjà des bornes optionnelles, comme
 `fetchReservations`. Il suffit que les deux appelants les passent :
@@ -76,11 +81,41 @@ l'année demandée **casserait le sélecteur**.
 
 Aucune modification en base. C'est le changement le plus petit.
 
-### 3. Option B — une fonction bornée en base
+### 3. Les deux RPC (uniformité)
 
-`public.parking_arrivals(p_from date, p_to date)` renvoyant les lignes **et** la
-liste des années en un `jsonb`. Supprime la seconde lecture de l'option A.
-Justifiée seulement si la mesure du point 1 montre un coût réel.
+- `public.parking_analytique_annuelle(p_annee int, p_aujourdhui date)`
+  vers `{ annees, mois[12] }`
+- `public.parking_analytique_mensuelle(p_annee int, p_mois int, p_aujourdhui date)`
+  vers `{ jours, arriveesDuMois }`
+
+Renvoyer `annees` **dans** la réponse supprime la seconde lecture évoquée au
+point 2 et casse la dépendance du sélecteur.
+
+Cas limites à reproduire, qui ne sont pas cosmétiques :
+
+- **Toujours 12 mois** en annuel, **toujours N jours** en mensuel, trous
+  compris. Les jours absents de la vue sont complétés à zéro.
+- `occupancyRate = nights / (SPOTS × joursDuMois) × 100` avec **`SPOTS = 14`,
+  toutes places** (personnel 13/14 compris). Dénominateur nul donne **0**, pas
+  `NaN`.
+- ⚠ **Ce taux peut dépasser 100 %** : les nuits d'un séjour sont imputées en
+  entier au mois d'arrivée. C'est pourquoi le maximum de l'axe est dynamique
+  (`ParkingAnalytiqueBoard.tsx:107-110`). Ne pas « corriger » en bornant à 100.
+- `summary` : moyennes calculées sur les **mois ACTIFS** (`reservations > 0`),
+  pas sur 12 ; `avgOccupancy` est la **moyenne arithmétique des taux mensuels**,
+  pas un taux annuel pondéré.
+- `chartData` : `occ = null` (pas 0) quand le mois n'a aucune réservation —
+  trou dans la courbe, **distinct d'un vrai zéro**.
+- Le CA est imputé au **jour d'arrivée**, jamais réparti sur le séjour.
+- `hasData = occupied > 0` : un jour à zéro occupé mais avec des arrivées
+  affiche des tirets sur six colonnes.
+- Moyennes « par jour » du mensuel divisées par **tous les jours du mois**, y
+  compris futurs et vides — contrairement à rapro qui divise par les jours
+  actifs. **Divergence délibérée entre les deux onglets**, à préserver.
+- `yearsFromParkingDates` : années distinctes **union annéeCourante**, tri
+  croissant.
+
+⚠ Les clés doivent rester sous `['parking', …]`.
 
 ### 4. Ce qu'il ne faut PAS faire
 
@@ -98,14 +133,20 @@ Justifiée seulement si la mesure du point 1 montre un coût réel.
 
 ## Ordre d'exécution
 
-1. Compter les lignes, mesurer à froid (point 1).
-2. Si le coût est négligeable : classer l'étape en « Différé » et s'arrêter là.
-3. Sinon, appliquer l'option A ; l'option B seulement si A ne suffit pas.
-4. `npx tsc --noEmit` + `npx vitest run` + `pnpm build`.
+1. Vérifier en base que `parking_analytics_agg.sql` a bien été rejoué et que
+   les colonnes attendues existent (point 4).
+2. Compter les lignes, mesurer à froid (point 1).
+3. Borner les deux lectures (point 2) — c'est le gain réel, il est acquis ici.
+4. Écrire et commiter le SQL des deux RPC, l'essayer en `rollback`, l'appliquer.
+5. Prouver l'équivalence sur toutes les années et tous les mois.
+6. Réécrire les deux boards.
+7. `npx tsc --noEmit` + `npx vitest run` + `pnpm build`.
 
 ## Critère de validation
 
+- Écarts SQL contre TS à **zéro** sur toutes les années et tous les mois.
 - Aucune lecture de `parking_arrivals_agg` sans borne de date dans le code.
+- Un mois dont le taux dépasse 100 % s'affiche **toujours** au-dessus de 100.
 - Le sélecteur d'années fonctionne toujours, y compris sur une année sans
   réservation.
 - Les chiffres des deux pages parking sont identiques avant/après, vérifiés sur
@@ -115,7 +156,7 @@ Justifiée seulement si la mesure du point 1 montre un coût réel.
 
 ## Contrôle qualité (revue)
 
-Étape critique si l'option B est retenue (création d'objet en base). `/borg`
+Étape critique (création d'objets en base, canal Realtime à proximité). `/borg`
 n'étant pas installé, revue manuelle : (1) confirmer par requête que la vue
 déployée en production a bien les colonnes que le code attend (`free`,
 `free_nights`, `ca_ht`, `ca_ttc`, `occupied_free`) ; (2) vérifier qu'aucun

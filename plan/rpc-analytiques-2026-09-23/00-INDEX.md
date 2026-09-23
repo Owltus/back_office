@@ -16,17 +16,18 @@ Ce que la reconnaissance a établi, et qui **corrige en partie la demande** :
 | analytique RepJour mensuelle | 4 | 1 | à traiter |
 | analytique PDJ annuelle | 4 | 2 (cascade) | à traiter |
 | analytique PDJ mensuelle | 4 | 1 | à traiter |
-| analytique caisse annuelle | 2 | 1 | marginal |
-| analytique caisse mensuelle | 2 | 1 | marginal |
-| analytique parking annuelle | **1** | 1 | rien à gagner |
-| analytique parking mensuelle | **2** | 1 | rien à gagner |
-| analytique rapro annuelle | **2** | 1 | rien à gagner |
-| analytique rapro mensuelle | **2** | 1 | rien à gagner |
+| analytique caisse annuelle | 2 | 1 | gain faible |
+| analytique caisse mensuelle | 2 | 1 | gain faible |
+| analytique parking annuelle | **1** | 1 | gain faible |
+| analytique parking mensuelle | **2** | 1 | gain faible |
+| analytique rapro annuelle | **2** | 1 | gain faible |
+| analytique rapro mensuelle | **2** | 1 | gain faible |
 
-**Quatre pages sur dix justifient une RPC.** Les analytiques parking et rapro
-sont déjà sobres : y appliquer le même chantier coûterait le prix d'une RPC pour
-économiser un aller-retour. Elles sont donc hors périmètre, à une exception près
-(le bornage de `parking_arrivals_agg`, étape 6).
+**Quatre pages sur dix portent l'essentiel du gain** (RepJour et PDJ, 4 lectures
+chacune). Les six autres n'en font que 1 à 2 : j'ai proposé de les laisser
+hors périmètre, **l'utilisateur a demandé de les traiter quand même, pour
+l'uniformité** (décision du 2026-09-23). Elles sont donc dans le chantier, en
+priorité P2, après les quatre qui rapportent.
 
 Le vrai gisement n'est d'ailleurs pas là où on l'attendait. La reconnaissance a
 trouvé **six défauts préexistants** qui coûtent aujourd'hui plus cher que les
@@ -56,6 +57,12 @@ tous leurs lecteurs ; l'algorithme `carryOver` (à état, couvert par une suite
   et 3 ne créent aucune RPC, ne demandent aucun arbitrage, et suppriment un
   aller-retour en cascade plus quatre régressions de cache actives. Si le
   chantier devait s'arrêter après l'étape 3, il aurait déjà rapporté.
+- **Le périmètre élargi en vaut-il la peine ?** J'ai argumenté que non pour
+  caisse, parking et rapro (1 à 2 lectures par page). L'utilisateur a tranché
+  pour l'uniformité. C'est une décision légitime — un code homogène se relit et
+  se maintient mieux qu'un code où la moitié des pages suit un patron et l'autre
+  non. Le coût est réel (trois RPC de plus, trois preuves d'équivalence de plus,
+  plus de surface à tester) et il est assumé, pas ignoré.
 - **Angle mort.** Une RPC unique fait perdre la **dégradation partielle**.
   Aujourd'hui, si la lecture des tarifs PDJ échoue, seules les colonnes CA
   passent à `—` et la page reste lisible. Demain, c'est toute la page qui tombe.
@@ -71,8 +78,9 @@ tous leurs lecteurs ; l'algorithme `carryOver` (à état, couvert par une suite
   pages ; l'agent parking/rapro conclut que ses quatre pages « n'ont rien à
   gagner ». Les deux ont raison sur leur couche — c'est la demande initiale
   (« pareil pour les autres pages ») qui supposait une symétrie qui n'existe
-  pas. Arbitrage retenu dans ce plan : parking et rapro hors périmètre. **À
-  confirmer par l'utilisateur.**
+  pas. **Tranché le 2026-09-23 : l'utilisateur veut les dix pages.** La
+  divergence reste consignée parce qu'elle documente un coût assumé, pas une
+  erreur d'analyse.
 - **`to_jsonb(row)` sur une table à PII.** L'agent conventions signale que
   `repjour_dashboard` emploie `to_jsonb(d)`, équivalent fonctionnel d'un
   `select *`, alors que `CLAUDE.md:171` l'interdit sur une table à PII. Il juge
@@ -86,130 +94,117 @@ tous leurs lecteurs ; l'algorithme `carryOver` (à état, couvert par une suite
   pas à l'œil ». La preuve a été jouée en session et consignée dans le message
   de commit. Reproduire ce précédent ou le corriger ? Voir D7.
 
-## Angles à clarifier
+## Décisions actées (validées le 2026-09-23)
 
-**D1 — Les bornes « mois en cours » doivent-elles rester côté client ?**
-Les cartes des analytiques excluent le futur via `new Date()` **du navigateur**
-(`AnalytiqueBoard.tsx:91-98`, `AnalytiqueMoisBoard.tsx:81-86`,
-`RaproAnalytiqueBoard.tsx:113-114`). Une RPC les calculerait en heure serveur.
-*Option A (recommandée)* — la RPC reçoit la date du client en paramètre, comme
-`repjour_dashboard(p_date)` le fait déjà. Une seule horloge, celle de
-l'utilisateur, et le comportement ne change pas d'un pixel.
-*Option B* — la RPC utilise `current_date`. Plus simple, mais divergence autour
-de minuit et dépendance au fuseau de l'instance.
+- **Périmètre** : **les dix pages analytiques sont traitées** (option B de la
+  question de périmètre). Caisse, parking et rapro passent en P2, après les
+  quatre pages qui portent le gain.
+- **Prix de la carte PDJ (D2)** : **chaque jour est valorisé au tarif qui avait
+  cours ce jour-là** (option B). L'analytique s'aligne sur le board PDJ, qui
+  passe déjà `asOf`. Citation de la décision : « si un jour le prix du petit
+  déj est à celui-ci, le jour qui suit c'en est un autre […] tu dois afficher
+  les bons prix au bon moment de manière cohérente ». ⚠ Les montants de
+  l'analytique PDJ **vont changer** sur toute période antérieure à un
+  changement de tarif. C'est voulu : ils étaient faux.
+- **Voyant de surcapacité (D3)** : **comportement inchangé**, il s'allume quelle
+  que soit la source. Fondement donné par l'utilisateur : l'hôtel compte
+  **80 chambres physiques, infranchissables** ; on peut en retirer par statut,
+  jamais en ajouter. Toute valeur au-dessus de 80 — réelle **ou prévue** — n'est
+  donc pas une surcapacité mais une **donnée fausse**, et mérite le même
+  signalement. Le voyant est requalifié : alerte de qualité de données, pas
+  alerte de remplissage. Aucun chiffre ne bouge.
+- **Panne partielle (D5)** : **une RPC par page, page entière + message
+  d'erreur** (option A). Une page à moitié fausse est plus dangereuse qu'une
+  page absente.
 
-**D2 — Les prix de la carte PDJ : avec ou sans date de référence ?**
-`cardPrices(rows, tarifs, asOf)` accepte une date de valorisation. Le board PDJ
-la passe (`BreakfastBoard.tsx:511`), **les deux pages analytiques ne la passent
-pas**. Sur un historique traversant un changement de tarif, board et analytique
-n'affichent donc pas les mêmes montants. Je ne sais pas si c'est voulu.
-*Option A* — figer le comportement actuel (divergence conservée).
-*Option B (recommandée)* — aligner l'analytique sur le board avant d'écrire la
-RPC, comme correctif séparé et mesurable.
-⚠ **Écartée d'avance** : trancher ce point *dans* la RPC. Figer un comportement
-douteux dans du SQL serait pire que de le laisser en TypeScript.
+## Décisions techniques (prises par l'assistant, 2026-09-23)
 
-**D3 — Le drapeau de surcapacité croise réalisé et prévisionnel : voulu ?**
-`overcapByMonth` (`daily.ts:366,384`) est alimenté par les rapports
-(`rj_nuitees > 80`) **et** par les prévisions (`occ > 80`), indépendamment de la
-source retenue pour le mois. Un mois « réalisé » peut donc être signalé en
-surcapacité à cause d'une ligne de prévision. Seule la branche « vide » force
-`false`.
-*Option A* — reproduire tel quel (comportement inchangé).
-*Option B* — ne regarder que la source gagnante. Plus propre, **mais change
-l'affichage** de mois passés.
+Ces quatre points n'engagent aucun chiffre affiché ni aucune règle métier :
+je les tranche, ils restent réversibles et discutables.
 
-**D4 — Que faire des clés de cache partagées hors analytique ?**
-`['pdj','addon-all']` est consommée par 4 écrans (board PDJ, bande RepJour, les
-2 analytiques PDJ) ; `['pdj','analytics','all-history']` par 2 ;
-`['pdj','dates']` l'est aussi par `RaproBoard.tsx:157` ;
-`['caisse','cautions']` par `CaisseBoard.tsx:374` ; `['rapro','day', date]` par
-le board de saisie qui y fait du `setQueryData` optimiste.
-*Option A (recommandée)* — la RPC analytique n'absorbe **que** les clés qui lui
-sont propres ; les clés partagées restent telles quelles, corrigées par
-l'étape 2. Aucune double source de vérité.
-*Option B* — une RPC « prix de la carte » séparée, consommée par les trois
-pages. Plus élégant, plus cher, et touche le board PDJ hors périmètre.
-⚠ **Écartée d'avance** : absorber la clé dans la RPC analytique en laissant les
-autres pages sur l'ancien chemin. Deux sources de vérité sur le prix du PDJ,
-c'est exactement ce que `pricing.ts` a cherché à éviter après l'incident du
-2026-09-12.
-
-**D5 — Accepte-t-on de perdre la dégradation partielle ?**
-Aujourd'hui, chaque requête tombe indépendamment. Avec une RPC unique, une
-erreur fait tomber la page entière.
-*Option A (recommandée)* — accepter. Le `retry` (3 tentatives en panne) et le
-bandeau de panne couvrent le cas, et une page à moitié fausse est plus
-dangereuse qu'une page absente.
-*Option B* — deux RPC par page (le socle, puis les compléments), pour garder
-une dégradation par blocs. Double le travail.
-
-**D6 — `to_jsonb(row)` ou colonnes explicites pour l'analytique PDJ ?**
-`pdj_breakfasts` porte `guest_name`, `company`, `channel`. `CLAUDE.md:171`
-interdit le `select *` sur une table à PII.
-*Option A (recommandée)* — `jsonb_build_object` colonne à colonne dès qu'une
-RPC touche une table à PII, `to_jsonb` autorisé ailleurs. Écrire la règle dans
-`CLAUDE.md` (étape 7).
-*Option B* — `to_jsonb` partout, par cohérence avec `repjour_dashboard`.
-
-**D7 — Commite-t-on un script de vérification ?**
-*Option A (recommandée)* — un `supabase/verif_rpc_analytiques_2026-09-XX.sql`
-en lecture seule, rejouable, qui confronte chaque champ de chaque RPC à sa
-requête d'origine. Le projet a déjà cette famille `verif_*` ; quatre RPC sans
-filet de test TypeScript la justifient largement.
-*Option B* — reproduire le précédent `repjour_dashboard` (preuve jouée en
-session, consignée dans le message de commit).
+- **D1 — bornes « mois en cours »** : la RPC reçoit **la date du client en
+  paramètre** (`p_aujourdhui`), comme `repjour_dashboard(p_date)`. Une seule
+  horloge, celle de l'utilisateur. `current_date` côté serveur aurait introduit
+  une divergence autour de minuit et une dépendance au fuseau de l'instance.
+- **D4 — clés de cache partagées hors analytique** : la RPC **n'absorbe que ce
+  qui lui est propre**. `['pdj','addon-all']`, `['pdj','analytics',
+  'all-history']`, `['pdj','dates']`, `['caisse','cautions']` et
+  `['rapro','day']` restent des lectures séparées, corrigées par l'étape 2.
+  Les absorber créerait deux sources de vérité sur le prix du PDJ — exactement
+  ce que `pricing.ts` a cherché à éviter après l'incident du 2026-09-12.
+- **D6 — `to_jsonb(row)` sur une table à PII** : **interdit**. Dès qu'une RPC
+  touche `pdj_breakfasts` (`guest_name`, `company`), `profiles` ou
+  `parking_reservations`, le `jsonb_build_object` est construit **colonne par
+  colonne**. `to_jsonb` reste autorisé sur les vues d'agrégation et sur
+  `daily_reports`, qui ne porte pas de PII nominative. La règle est écrite dans
+  `CLAUDE.md` à l'étape 9.
+- **D7 — preuve d'équivalence** : **un `supabase/verif_rpc_analytiques_*.sql`
+  rejouable est commité**. Cinq RPC sans aucun filet de test TypeScript le
+  justifient, et le projet a déjà la famille `verif_*`. C'est une extension du
+  précédent `repjour_dashboard`, pas sa reproduction — et c'est délibéré.
 
 ## Phases
 
 | # | Fichier | Phase | Dépend de | Priorité | Effort | Livrable | Critique |
 |---|---------|-------|-----------|----------|--------|----------|----------|
-| 1 | [1-releve-de-reference.md](./1-releve-de-reference.md) | Relevé de référence après préchauffage | — | P0 | 30 min | `releve-avant.md` chiffré, 5 pages × 3 chargements | |
+| 1 | [1-releve-de-reference.md](./1-releve-de-reference.md) | Relevé de référence après préchauffage | — | P0 | 30 min | `releve-avant.md`, 10 pages × 3 chargements | |
 | 2 | [2-caches-et-invalidations.md](./2-caches-et-invalidations.md) | Divergences de cache et invalidation qui rate sa cible | — | P0 | 1h | 4 `staleTime` alignés, 1 invalidation corrigée | |
 | 3 | [3-cascade-rapro.md](./3-cascade-rapro.md) | Suppression de la cascade rapro de la bande | — | P0 | 45 min | 1 requête de moins, 0 cascade, sans SQL | |
 | 4 | [4-rpc-analytique-repjour.md](./4-rpc-analytique-repjour.md) | RPC analytique RepJour (annuel + mensuel) | 1, 2 | P1 | 3h | 8 lectures → 2 | ⚠ |
-| 5 | [5-rpc-analytique-pdj.md](./5-rpc-analytique-pdj.md) | RPC analytique PDJ (annuel + mensuel) | 1, 2, 4 | P1 | 3h | 8 lectures → 2 (hors clés partagées) | ⚠ |
-| 6 | [6-bornage-parking-arrivals.md](./6-bornage-parking-arrivals.md) | Bornage de `parking_arrivals_agg` | 1 | P2 | 45 min | 2 lectures non bornées supprimées | ⚠ |
-| 7 | [7-doctrine-et-releve-apres.md](./7-doctrine-et-releve-apres.md) | Doctrine à jour et relevé d'après | 1-6 | P1 | 1h | `releve-apres.md`, `CLAUDE.md` corrigé | ⚠ |
+| 5 | [5-rpc-analytique-pdj.md](./5-rpc-analytique-pdj.md) | RPC analytique PDJ + alignement des prix de carte | 1, 2, 4 | P1 | 4h | 8 lectures → 2, montants corrigés | ⚠ |
+| 6 | [6-rpc-analytique-caisse.md](./6-rpc-analytique-caisse.md) | RPC analytique caisse (annuel + mensuel) | 4 | P2 | 2h | 4 lectures → 2 | ⚠ |
+| 7 | [7-rpc-analytique-parking.md](./7-rpc-analytique-parking.md) | RPC analytique parking + bornage des arrivées | 4 | P2 | 2h | 3 lectures → 2, 0 lecture non bornée | ⚠ |
+| 8 | [8-rpc-analytique-rapro.md](./8-rpc-analytique-rapro.md) | RPC analytique rapro (annuel + mensuel) | 3, 4 | P2 | 2h | 4 lectures → 2 | ⚠ |
+| 9 | [9-doctrine-et-releve-apres.md](./9-doctrine-et-releve-apres.md) | Doctrine à jour et relevé d'après | 1-8 | P1 | 1h30 | `releve-apres.md`, `CLAUDE.md` corrigé | ⚠ |
 
 ## Ordre d'exécution
 
 1. **Sprint 0 — débloquer la mesure.** L'étape 1 seule. Elle dépend du
-   déploiement du Worker de préchauffage, qui est une **action utilisateur**
-   (poser `SUPABASE_PUBLISHABLE_KEY`, `wrangler deploy`, `triggers deploy`,
-   puis constater un déclenchement réel dans `wrangler tail`). Sans elle, aucune
-   des étapes suivantes n'est démontrable.
+   déploiement du Worker de préchauffage, qui est une **action utilisateur**.
+   Sans elle, aucune des étapes suivantes n'est démontrable : tout relevé
+   oscille aujourd'hui d'un facteur 4 selon l'état thermique de l'instance.
 2. **Sprint 1 — les gains sans décision.** Étapes 2 et 3, parallélisables. Ni
    SQL, ni arbitrage, ni nouvelle surface : quatre régressions de cache
-   refermées, une invalidation réparée, une cascade supprimée. C'est le
-   meilleur rapport gain/risque du chantier.
-3. **Sprint 2 — les RPC.** Étape 4 d'abord (RepJour, le terrain déjà connu et
-   celui dont le patron est frais), puis 5 (PDJ, plus subtile : arrondis au
-   centime, prix de carte, clés partagées). L'étape 6 peut se glisser en
-   parallèle, elle ne touche que parking.
-4. **Sprint 3 — clôture.** Étape 7 : relevé d'après comparé au relevé d'avant
-   sur les mêmes pages et le même protocole, puis mise à jour de la doctrine.
+   refermées, une invalidation réparée, une cascade supprimée. Meilleur rapport
+   gain/risque du chantier.
+3. **Sprint 2 — les deux pages qui rapportent.** Étape 4 (RepJour, terrain
+   connu, patron frais), puis 5 (PDJ, plus subtile : arrondis au centime, prix
+   de carte à aligner, clés partagées à préserver). L'étape 5 est la seule qui
+   **change des chiffres affichés** — la prévenir avant de la déployer.
+4. **Sprint 3 — l'uniformité.** Étapes 6, 7 et 8, parallélisables entre elles.
+   Gain faible et assumé ; l'intérêt est l'homogénéité du code. Si le temps
+   manque, ce sprint est le premier à sacrifier sans dommage.
+5. **Sprint 4 — clôture.** Étape 9 : relevé d'après selon le protocole
+   **exact** de l'étape 1, puis mise à jour de la doctrine.
 
 ## Architecture cible
 
 ```
 supabase/
-  repjour_analytique_rpc_2026-09-XX.sql       [nouveau]  2 fonctions (annuel, mensuel)
-  pdj_analytique_rpc_2026-09-XX.sql           [nouveau]  2 fonctions (annuel, mensuel)
-  parking_arrivals_bornage_2026-09-XX.sql     [nouveau]  fonction bornée par plage
-  verif_rpc_analytiques_2026-09-XX.sql        [nouveau]  confrontation SQL↔TS (si D7-A)
+  repjour_analytique_rpc_2026-09-XX.sql       [nouveau]  2 fonctions
+  pdj_analytique_rpc_2026-09-XX.sql           [nouveau]  2 fonctions
+  caisse_analytique_rpc_2026-09-XX.sql        [nouveau]  2 fonctions
+  parking_analytique_rpc_2026-09-XX.sql       [nouveau]  2 fonctions + bornage
+  rapro_analytique_rpc_2026-09-XX.sql         [nouveau]  2 fonctions
+  verif_rpc_analytiques_2026-09-XX.sql        [nouveau]  confrontation SQL/TS (D7)
 
 src/lib/repjour/services/daily.ts             [modifié]  + 2 fetch, anciens CONSERVÉS
 src/lib/pdj/service.ts                        [modifié]  + 2 fetch, anciens CONSERVÉS
-src/lib/parking/service.ts                    [modifié]  fetchParkingArrivals borné
-src/components/repjour/boards/AnalytiqueBoard.tsx        [modifié]  4 useQuery → 1
-src/components/repjour/boards/AnalytiqueMoisBoard.tsx    [modifié]  4 useQuery → 1
-src/components/pdj/PdjAnalytiqueBoard.tsx                [modifié]  4 useQuery → 2
-src/components/pdj/PdjAnalytiqueMoisBoard.tsx            [modifié]  4 useQuery → 2
-src/components/parking/ParkingAnalytiqueBoard.tsx        [modifié]  lecture bornée
-src/components/parking/ParkingAnalytiqueMoisBoard.tsx    [modifié]  lecture bornée
-src/components/caisse/CaisseAnalytiqueBoard.tsx          [modifié]  staleTime aligné
-src/components/caisse/CaisseAnalytiqueMoisBoard.tsx      [modifié]  staleTime aligné
+src/lib/pdj/pricing.ts                        [modifié]  asOf propagé (décision D2)
+src/lib/caisse/service.ts                     [modifié]  + 2 fetch, anciens CONSERVÉS
+src/lib/parking/service.ts                    [modifié]  + 2 fetch, arrivées bornées
+src/lib/rapro/monthly.ts                      [modifié]  + 2 fetch, anciens CONSERVÉS
+
+src/components/repjour/boards/AnalytiqueBoard.tsx        [modifié]  4 useQuery -> 1
+src/components/repjour/boards/AnalytiqueMoisBoard.tsx    [modifié]  4 -> 1
+src/components/pdj/PdjAnalytiqueBoard.tsx                [modifié]  4 -> 2
+src/components/pdj/PdjAnalytiqueMoisBoard.tsx            [modifié]  4 -> 2
+src/components/caisse/CaisseAnalytiqueBoard.tsx          [modifié]  2 -> 1
+src/components/caisse/CaisseAnalytiqueMoisBoard.tsx      [modifié]  2 -> 1
+src/components/parking/ParkingAnalytiqueBoard.tsx        [modifié]  1 -> 1 bornée
+src/components/parking/ParkingAnalytiqueMoisBoard.tsx    [modifié]  2 -> 1
+src/components/rapro/RaproAnalytiqueBoard.tsx            [modifié]  2 -> 1
+src/components/rapro/RaproMonthlyBoard.tsx               [modifié]  2 -> 1
 src/components/repjour/DayCrossSummary.tsx               [modifié]  cascade supprimée
 src/components/rapro/RaproBoard.tsx                      [modifié]  invalidation corrigée
 CLAUDE.md                                                [modifié]  doctrine à jour
@@ -223,18 +218,16 @@ plan/rpc-analytiques-2026-09-23/
 
 | Couche | Fichiers modifiés | Fichiers nouveaux |
 |--------|-------------------|-------------------|
-| SQL Supabase | 0 | 4 |
-| Services (`src/lib`) | 3 | 0 |
-| Composants analytiques | 8 | 0 |
+| SQL Supabase | 0 | 6 |
+| Services (`src/lib`) | 6 | 0 |
+| Composants analytiques | 10 | 0 |
 | Composants hors analytique | 2 | 0 |
 | Doctrine | 1 | 0 |
 | Relevés | 0 | 2 |
-| **Total** | **14 modifiés** | **6 nouveaux** |
+| **Total** | **19 modifiés** | **8 nouveaux** |
 
 ## Différé (hors chantier, à garder en tête)
 
-- **Analytiques parking et rapro.** 1 à 2 requêtes par page : le coût d'une RPC
-  ne serait pas remboursé. Rouvrir si elles grossissent.
 - **Écritures budget non invalidantes.** `BudgetContent.tsx:126` (`upsertBudget`)
   et `:147` (`deleteYearBudget`) ne touchent jamais le `QueryClient` : après
   modification d'un budget dans Gestion, les analytiques restent périmées

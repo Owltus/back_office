@@ -1,9 +1,13 @@
-# Étape 5 — RPC analytique PDJ (annuel + mensuel)
+# Étape 5 — RPC analytique PDJ et alignement des prix de carte
 
 ## Objectif
 
 Ramener les huit lectures des deux pages analytiques PDJ à deux, **sans toucher
-aux deux clés partagées avec le board PDJ et la bande RepJour**.
+aux deux clés partagées avec le board PDJ et la bande RepJour**, et corriger au
+passage une divergence de valorisation entre le board et l'analytique.
+
+⚠ **C'est la seule étape du chantier qui CHANGE DES CHIFFRES AFFICHÉS.**
+Prévenir l'utilisateur avant de la déployer.
 
 ## Contexte
 
@@ -88,6 +92,26 @@ externes seuls a un `extra` non nul et un `noShow` nul.
 (`amounts.ts:19`) et celui de caisse (`calc.ts:145`, avec `Number.EPSILON`).
 Ne pas les confondre en portant le calcul en SQL.
 
+### 1 bis. Aligner les prix de carte — décision D2 du 2026-09-23
+
+`cardPrices(rows, tarifs, asOf)` accepte une date de valorisation. Le board PDJ
+la passe (`BreakfastBoard.tsx:511`) ; **les deux pages analytiques ne la passent
+pas**. Sur un historique traversant un changement de tarif, board et analytique
+n'affichent donc pas les mêmes montants.
+
+Décision de l'utilisateur : **chaque jour doit être valorisé au tarif qui avait
+cours ce jour-là**, de façon cohérente partout. Citation : « si un jour le prix
+du petit déj est à celui-ci, le jour qui suit c'en est un autre […] tu dois
+afficher les bons prix au bon moment de manière cohérente ».
+
+Ce correctif est **séparé et mesurable** : le faire AVANT la RPC, le commiter
+seul, et constater le delta sur les montants. Le mêler à la consolidation
+rendrait impossible de savoir lequel des deux a changé un chiffre.
+
+⚠ **Les montants de l'analytique PDJ vont changer** sur toute période antérieure
+à un changement de tarif. C'est voulu : ils étaient faux. Chiffrer l'écart avant
+et après, et le présenter à l'utilisateur.
+
 ### 2. Ce qu'il ne faut PAS porter en SQL
 
 - **`cardPrices`** (`pricing.ts:115-172`) : mode du quotient en centimes
@@ -154,8 +178,10 @@ client**, puis seulement modifier les composants.
 
 ## Ordre d'exécution
 
-1. Vérifier que `detectTarifs` est encore atteignable en pratique.
-2. Écrire et commiter le SQL, l'essayer en `rollback`, l'appliquer.
+1. Aligner `cardPrices` sur `asOf` (point 1 bis), commiter SEUL, chiffrer le
+   delta sur les montants et le présenter à l'utilisateur.
+2. Vérifier que `detectTarifs` est encore atteignable en pratique.
+3. Écrire et commiter le SQL, l'essayer en `rollback`, l'appliquer.
 3. Prouver l'équivalence année par année et mois par mois, au centime sur le CA.
 4. Écrire les deux `fetch` dans `service.ts`.
 5. Réécrire les deux boards, en laissant les deux clés partagées intactes.
@@ -172,6 +198,9 @@ client**, puis seulement modifier les composants.
   **toujours consommées** par le board PDJ et la bande RepJour, avec leur
   `staleTime` d'une heure.
 - Le CA du tableau mensuel ne **saute plus** après le premier affichage.
+- Board PDJ et analytique PDJ affichent **les mêmes montants** pour un même
+  jour, y compris sur une période antérieure à un changement de tarif.
+- L'écart introduit par l'alignement des tarifs est chiffré et documenté.
 - Après un import Addon ou CSV, les deux pages se rafraîchissent toujours.
 
 ## Contrôle qualité (revue)
