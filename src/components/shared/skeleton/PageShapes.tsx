@@ -35,6 +35,22 @@ import { ALL_ROOMS } from '#/lib/hotel/rooms.ts'
  * `plan/squelette-fidele-2026-09-23/`.
  */
 
+/**
+ * Espace de chasse nulle, placé dans chaque cellule du squelette.
+ *
+ * ⚠ Ce n'est pas une coquetterie : c'est lui qui donne sa HAUTEUR à la ligne.
+ * Une vraie cellule contient du TEXTE, donc une boîte de ligne à l'interligne
+ * hérité (19,68 px mesurés). Une cellule qui ne contient qu'une barre de
+ * squelette de 12 px produit une boîte de 12 px — d'où 27,2 px de ligne contre
+ * 35,5 px en vrai, et 215 px manquants sur la page.
+ *
+ * Un caractère invisible rétablit la boîte de ligne du texte ; la barre, rendue
+ * `inline-block`, s'y aligne sans la dépasser. La hauteur suit donc
+ * automatiquement toute évolution de la police ou de l'interligne, ce qu'un
+ * `h-[35px]` codé en dur n'aurait pas fait.
+ */
+const CALE_LIGNE = '​'
+
 /** Chambres par étage, dérivées de l'inventaire réel — jamais codées en dur. */
 export const CHAMBRES_PAR_ETAGE = [
   ...new Set(ALL_ROOMS.map((r) => Math.floor(r / 100))),
@@ -90,25 +106,24 @@ export function FormePdj() {
                      l'essentiel de la dissonance signalée. */
                   <tr key={r}>
                     <td className="pdj-room">
-                      <Skeleton className="h-3 w-8" />
+                      <Skeleton className="inline-block h-3 w-8 align-middle" />
+                      {CALE_LIGNE}
                     </td>
                     <td className="pdj-name">
-                      <span className="pdj-name-inner pdj-val-normal">
-                        <Skeleton className="h-3 w-24" />
-                      </span>
+                      <Skeleton className="inline-block h-3 w-24 align-middle" />
+                      {CALE_LIGNE}
                     </td>
                     <td className="pdj-c pdj-status">
-                      <Skeleton className="mx-auto h-3 w-4" />
+                      <Skeleton className="inline-block h-3 w-4 align-middle" />
+                      {CALE_LIGNE}
                     </td>
                     <td className="pdj-c pdj-stay-count">
-                      <Skeleton className="mx-auto h-3 w-6" />
+                      <Skeleton className="inline-block h-3 w-6 align-middle" />
+                      {CALE_LIGNE}
                     </td>
                     <td className="pdj-c">
-                      <span className="pdj-checkboxes">
-                        {Array.from({ length: 2 }).map((_, c) => (
-                          <Skeleton key={c} className="size-7 rounded-md" />
-                        ))}
-                      </span>
+                      <Skeleton className="inline-block h-3 w-6 align-middle" />
+                      {CALE_LIGNE}
                     </td>
                   </tr>
                 ))}
