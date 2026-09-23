@@ -297,7 +297,10 @@ export function AnalytiqueMoisBoard({
       loading={loading}
       printTitle={`RepJour · ${monthLabel} ${year}`}
       skeleton={{
-        cols: 5,
+        /* 7, pas 5 : le tableau affiche Nuitées, TO, PM, RevPAR, CA, Budget,
+           Écart après le libellé du jour. Compté à 5 jusqu'au 2026-09-23, ce
+           qui rétrécissait le squelette de deux colonnes. */
+        cols: 7,
         charts: 2,
         rows: new Date(year, month, 0).getDate(),
       }}

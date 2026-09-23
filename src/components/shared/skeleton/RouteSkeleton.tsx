@@ -3,6 +3,12 @@ import { useRouterState } from '@tanstack/react-router'
 import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { SkeletonCardsRow } from '#/components/shared/skeleton/SkeletonCardsRow.tsx'
 import { SkeletonTable } from '#/components/shared/skeleton/SkeletonTable.tsx'
+import {
+  FormeCaisse,
+  FormeLiterie,
+  FormePdj,
+  FormeRepjour,
+} from '#/components/shared/skeleton/PageShapes.tsx'
 
 /*
  * Squelette de page au niveau BOOT / GARDE (avant qu'un board ne soit monté),
@@ -34,8 +40,28 @@ import { SkeletonTable } from '#/components/shared/skeleton/SkeletonTable.tsx'
  * on n'adapte qu'ensuite (cf. `AppAuthGate`).
  */
 
-/** Familles de page ayant une silhouette de chargement distincte. */
-export type SkeletonVariant = 'profil' | 'comptes' | 'analytique' | 'board'
+/**
+ * Familles de page ayant une silhouette de chargement distincte.
+ *
+ * ⚠ Élargi le 2026-09-23. Quatre familles ne suffisaient pas : « board »
+ * servait indistinctement à /pdj, /repjour, /caisse, /parking, /rapro et
+ * /literie, et dessinait 4 cartes + un tableau de 8 lignes — soit 789 px sur
+ * TOUTES les pages. Mesure de l'écart avec le contenu réel : +58 % sur /pdj,
+ * +32 % sur /repjour, +29 % sur /caisse. C'est la dissonance graphique
+ * signalée par l'utilisateur.
+ *
+ * `board` reste le REPLI, et reste la variante du shell prérendu
+ * (`SHELL_VARIANT`) : ne pas la retirer.
+ */
+export type SkeletonVariant =
+  | 'profil'
+  | 'comptes'
+  | 'analytique'
+  | 'pdj'
+  | 'repjour'
+  | 'caisse'
+  | 'literie'
+  | 'board'
 
 /**
  * Variante contenue dans le SHELL PRÉRENDU, donc celle que le navigateur a déjà
@@ -48,11 +74,23 @@ export type SkeletonVariant = 'profil' | 'comptes' | 'analytique' | 'board'
  */
 export const SHELL_VARIANT: SkeletonVariant = 'board'
 
-/** Famille de page d'un chemin. Pure : c'est elle qu'on teste, pas le rendu. */
+/** Famille de page d'un chemin. Pure : c'est elle qu'on teste, pas le rendu.
+ *
+ * ⚠ L'ordre compte : `/analytique` est testé AVANT les pages, parce que
+ * `/pdj/analytique` doit rendre la silhouette analytique, pas celle du board
+ * PDJ. */
 export function skeletonVariant(pathname: string): SkeletonVariant {
   if (pathname.startsWith('/profil')) return 'profil'
   if (pathname.startsWith('/comptes')) return 'comptes'
   if (pathname.includes('/analytique')) return 'analytique'
+  if (pathname.startsWith('/pdj')) return 'pdj'
+  if (pathname.startsWith('/repjour')) return 'repjour'
+  if (pathname.startsWith('/caisse')) return 'caisse'
+  if (pathname.startsWith('/literie')) return 'literie'
+  /* /parking et /rapro gardent le repli : mesuré le 2026-09-23, leur contenu
+     fait 789 et 809 px contre 789 px de squelette — l'écart est déjà nul ou
+     de 2 %. Leur donner une silhouette dédiée serait du travail pour rien, et
+     une occasion de dérive de plus. */
   return 'board'
 }
 
@@ -112,6 +150,46 @@ export function RouteSkeleton({
             <Skeleton key={i} className="h-16 w-full rounded-xl" />
           ))}
         </div>
+      </div>
+    )
+  }
+
+  // PDJ : rangée de six tuiles + tableaux par étage (la page la plus haute).
+  if (famille === 'pdj') {
+    return (
+      <div className="mx-auto w-full max-w-5xl space-y-4" aria-hidden="true">
+        <HeaderRow />
+        <FormePdj />
+      </div>
+    )
+  }
+
+  // RepJour : trois cartes + barre de progression + tableau KPI.
+  if (famille === 'repjour') {
+    return (
+      <div className="mx-auto w-full max-w-5xl space-y-4" aria-hidden="true">
+        <HeaderRow />
+        <FormeRepjour />
+      </div>
+    )
+  }
+
+  // Caisse : bandeau d'état, deux colonnes de saisie, bloc de comptage.
+  if (famille === 'caisse') {
+    return (
+      <div className="mx-auto w-full max-w-5xl space-y-4" aria-hidden="true">
+        <HeaderRow />
+        <FormeCaisse />
+      </div>
+    )
+  }
+
+  // Literie : cartes de stock + liste des attributions.
+  if (famille === 'literie') {
+    return (
+      <div className="mx-auto w-full max-w-5xl space-y-4" aria-hidden="true">
+        <HeaderRow />
+        <FormeLiterie />
       </div>
     )
   }
