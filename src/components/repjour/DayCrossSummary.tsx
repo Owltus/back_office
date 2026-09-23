@@ -22,7 +22,6 @@ import { fetchParkingDailyOccupation } from '#/lib/parking/service.ts'
 import {
   fetchDay as fetchRaproDay,
   fetchOccupancy,
-  fetchOldestDay,
   fetchRoomsRange,
 } from '#/lib/rapro/service.ts'
 import {
@@ -124,6 +123,16 @@ function SummaryBlock({
     </div>
   )
 }
+
+/**
+ * Borne basse volontairement inatteignable passée à `carryoverWindow`.
+ *
+ * La fonction prend la PLUS RÉCENTE de ses deux bornes (`J-7` et celle-ci) :
+ * une date antérieure à toute donnée rend donc systématiquement les sept jours
+ * pleins. Nommée plutôt qu'écrite en dur pour que l'intention se lise — ce
+ * n'est pas une date métier, c'est un « pas de borne ».
+ */
+const JOUR_PRE_HISTORIQUE = '1970-01-01'
 
 export function DayCrossSummary({
   date,
@@ -303,29 +312,47 @@ export function DayCrossSummary({
     queryFn: () => fetchRaproDay(date),
     enabled: litRapro,
   })
-  const raproOldestQ = useQuery({
-    queryKey: ['rapro', 'oldest'],
-    queryFn: fetchOldestDay,
-    enabled: litRapro,
-    staleTime: Infinity, // borne historique figée (mêmes réglages que le board rapro)
-    gcTime: 60 * 60_000,
-  })
-  // Fenêtre de roulement (jusqu'à 7 jours antérieurs), bornée au plus ancien jour
-  // connu ; vide tant que `oldest` n'est pas là (comme avant). Lue en UNE requête
-  // de plage (au lieu d'une par jour), puis regroupée par jour (`groupRowsByDay`,
-  // pur) : un jour sans ligne donne un instantané vide = « résolue », exactement
-  // ce que produisaient les sept `fetchDay`. Clé propre à la bande : les clés
-  // `['rapro','day',d]` restent au board de saisie.
+  /*
+   * Fenêtre de roulement : les sept jours antérieurs, PLEINS.
+   *
+   * ⚠ Elle était bornée au plus ancien jour enregistré, lu par une requête
+   * `['rapro','oldest']` — RETIRÉE le 2026-09-23. Cette borne créait une
+   * CASCADE STRICTE, et elle était inutile au résultat.
+   *
+   * La cascade : tant que `oldest` n'était pas revenu, le repli valait `date`,
+   * donc `carryoverWindow(date, date)` rendait `[]`, donc la lecture de plage
+   * restait désactivée. Elle ne pouvait PHYSIQUEMENT pas partir avant. Mesuré
+   * en production sur /repjour : un aller-retour complet perdu en série
+   * (~170 ms à chaud, jusqu'à 1,37 s à froid), au milieu d'une salve déjà
+   * soumise au plafond de six requêtes simultanées.
+   *
+   * L'inutilité : un jour antérieur au premier enregistrement n'a, par
+   * construction, aucune ligne. Son instantané est vide ; il n'origine donc
+   * aucun roulement (ni `non_nettoyee`, ni `carriedManual`) et `isResolved` le
+   * traite comme résolu. Préfixer la fenêtre de tels jours ne peut rien
+   * changer — propriété PROUVÉE sur 1 000 tirages avant le retrait
+   * (`carryover.property.test.ts`, « insensibilité aux jours
+   * pré-historiques »), avec un contre-exemple délimitant sa portée : un jour
+   * vide INTERMÉDIAIRE, lui, résout bel et bien (bug de la chambre 414).
+   *
+   * ⚠ La borne `oldest` reste NÉCESSAIRE ailleurs — elle borne la NAVIGATION
+   * dans `RaproBoard`, `RaproAnalytiqueBoard` et `RaproMonthlyBoard`, qui
+   * continuent de lire cette clé. Ce retrait ne concerne que la bande.
+   *
+   * Si la propriété tombait un jour, RÉTABLIR la borne ici avant toute autre
+   * correction.
+   */
   const windowDays = useMemo(
-    () => (canRapro ? carryoverWindow(date, raproOldestQ.data ?? date) : []),
-    [canRapro, date, raproOldestQ.data],
+    () => (canRapro ? carryoverWindow(date, JOUR_PRE_HISTORIQUE) : []),
+    [canRapro, date],
   )
   const rangeFrom = windowDays[0]
   const rangeTo = windowDays[windowDays.length - 1]
   const raproRangeQ = useQuery({
     queryKey: ['rapro', 'days-range', rangeFrom, rangeTo],
     queryFn: () => fetchRoomsRange(rangeFrom, rangeTo),
-    enabled: litRapro && windowDays.length > 0,
+    // Plus de `windowDays.length > 0` : la fenêtre n'est jamais vide désormais.
+    enabled: litRapro,
   })
   const rapro = useMemo<RaproDaySummary | null>(() => {
     if (!raproOccQ.data || !raproDayQ.data) return null
