@@ -26,7 +26,7 @@ import {
   computeRuptureThreshold,
 } from '#/lib/pdj/analytics.ts'
 import { computeAggDailyTotals } from '#/lib/pdj/amounts.ts'
-import { cardPrices } from '#/lib/pdj/pricing.ts'
+import { cardPricesByDate } from '#/lib/pdj/pricing.ts'
 import { detectTarifs } from '#/lib/pdj/tarif.ts'
 import { fmtInt } from '#/lib/pdj/format.ts'
 import { DAY_NAMES, MONTHS_LABELS } from '#/lib/repjour/constants.ts'
@@ -137,16 +137,36 @@ export function PdjAnalytiqueMoisBoard({
   })
   const dailyCa = useMemo(
     () =>
-      computeAggDailyTotals(
-        rows,
+      (() => {
         // La carte se relit dans l'historique complet, déjà chargé pour le
         // seuil de rupture — plus fiable qu'un seul mois.
-        cardPrices(
-          historyRows.length > 0 ? historyRows : rows,
+        const source = historyRows.length > 0 ? historyRows : rows
+        const parJour = cardPricesByDate(
+          source,
+          rows.map((r) => r.service_date),
           detectTarifs(addonRows),
-        ),
-        externalsByDate,
-      ),
+        )
+        const vide = new Map<string, number>()
+        return computeAggDailyTotals(
+          rows,
+      /*
+       * Prix de la carte PAR JOUR — décision utilisateur du 2026-09-23.
+       *
+       * ⚠ Avant, un SEUL prix (celui d'aujourd'hui) était appliqué à tout
+       * l'historique, alors que le board PDJ valorisait déjà chaque jour au
+       * tarif qui avait cours ce jour-là (il passe `asOf`). Sur une période
+       * traversant un changement de tarif, les deux écrans n'affichaient donc
+       * pas les mêmes montants.
+       *
+       * `cardPricesByDate` rend exactement ce que `cardPrices(rows, repli,
+       * date)` rendrait pour chaque date — propriété vérifiée sur 400 tirages
+       * (`pricing.property.test.ts`) — mais en une seule passe glissante au
+       * lieu de N appels.
+       */
+          (date) => parJour.get(date) ?? vide,
+          externalsByDate,
+        )
+      })(),
     [addonRows, rows, historyRows, externalsByDate],
   )
 

@@ -27,7 +27,7 @@ import {
 } from '#/lib/pdj/service.ts'
 import { aggregatePdjMonthly, yearsFromDates } from '#/lib/pdj/analytics.ts'
 import { computeAggDailyTotals } from '#/lib/pdj/amounts.ts'
-import { cardPrices } from '#/lib/pdj/pricing.ts'
+import { cardPricesByDate } from '#/lib/pdj/pricing.ts'
 import { detectTarifs } from '#/lib/pdj/tarif.ts'
 import { fmtInt } from '#/lib/pdj/format.ts'
 import { MONTHS_LABELS, MONTHS_SHORT } from '#/lib/repjour/constants.ts'
@@ -117,9 +117,29 @@ export function PdjAnalytiqueBoard() {
   // aucun chiffre (« — » au tableau). RÉTROACTIF par construction : rien n'est
   // figé en base, chaque jour est relu au prix qui lui est propre.
   const caStats = useMemo(() => {
+    const parJour = cardPricesByDate(
+      rows,
+      rows.map((r) => r.service_date),
+      detectTarifs(addonRows),
+    )
+    const vide = new Map<string, number>()
     const totals = computeAggDailyTotals(
       rows,
-      cardPrices(rows, detectTarifs(addonRows)),
+      /*
+       * Prix de la carte PAR JOUR — décision utilisateur du 2026-09-23.
+       *
+       * ⚠ Avant, un SEUL prix (celui d'aujourd'hui) était appliqué à tout
+       * l'historique, alors que le board PDJ valorisait déjà chaque jour au
+       * tarif qui avait cours ce jour-là (il passe `asOf`). Sur une période
+       * traversant un changement de tarif, les deux écrans n'affichaient donc
+       * pas les mêmes montants.
+       *
+       * `cardPricesByDate` rend exactement ce que `cardPrices(rows, repli,
+       * date)` rendrait pour chaque date — propriété vérifiée sur 400 tirages
+       * (`pricing.property.test.ts`) — mais en une seule passe glissante au
+       * lieu de N appels.
+       */
+      (date) => parJour.get(date) ?? vide,
       externalsByDate,
     )
     const byMonth = new Array<number | null>(12).fill(null)

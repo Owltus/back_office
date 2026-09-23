@@ -112,6 +112,121 @@ const CARD_MIN_OBSERVATIONS = 3
  * la recette facturée. Un changement de tarif y entre dès le premier jour. Seuls
  * le prix affiché par chambre et la valorisation des extras suivent la carte.
  */
+/** Une observation exploitable : le quotient d'une journée, en centimes. */
+interface Observation {
+  date: string
+  cents: number
+}
+
+/**
+ * Prix retenu pour une liste d'observations TRIÉE par date croissante : le mode
+ * des `CARD_WINDOW` dernières, `0` si elles sont trop peu nombreuses.
+ *
+ * Extrait de `cardPrices` le 2026-09-23 pour être partagé avec
+ * `cardPricesByDate` — le mode et son départage des ex aequo ne doivent exister
+ * qu'à UN endroit. Toute divergence entre les deux se traduirait par un écart
+ * de montant entre le board et l'analytique, ce que ce chantier corrige
+ * précisément.
+ *
+ * `fin` permet de ne considérer que le début de la liste (exclu), pour une
+ * fenêtre glissante sans recopie de tableau.
+ */
+function modeDeLaFenetre(obs: Observation[], fin = obs.length): number {
+  const debut = Math.max(0, fin - CARD_WINDOW)
+  const taille = fin - debut
+  if (taille < CARD_MIN_OBSERVATIONS) return 0
+
+  const count = new Map<number, number>()
+  for (let i = debut; i < fin; i++) {
+    count.set(obs[i].cents, (count.get(obs[i].cents) ?? 0) + 1)
+  }
+  let best = 0
+  let bestN = 0
+  let bestRank = -1
+  for (const [cents, n] of count) {
+    // Dernière position de ce prix dans la fenêtre : départage les ex aequo en
+    // faveur du plus RÉCENT, pour ne pas rester sur l'ancien tarif le jour où
+    // le nouveau l'égale.
+    let rank = -1
+    for (let i = fin - 1; i >= debut; i--) {
+      if (obs[i].cents === cents) {
+        rank = i
+        break
+      }
+    }
+    if (n > bestN || (n === bestN && rank > bestRank)) {
+      best = cents
+      bestN = n
+      bestRank = rank
+    }
+  }
+  return best
+}
+
+/**
+ * Le prix de la carte TEL QU'IL ÉTAIT chaque jour, pour un ensemble de dates.
+ *
+ * POURQUOI — décision utilisateur du 2026-09-23. Le board PDJ valorisait déjà
+ * chaque jour au tarif qui avait cours ce jour-là (il passe `asOf`), mais les
+ * deux pages analytiques appliquaient UN SEUL prix — celui d'aujourd'hui — à
+ * tout l'historique. Sur une période traversant un changement de tarif, board
+ * et analytique n'affichaient donc pas les mêmes montants. Citation de la
+ * décision : « si un jour le prix du petit déj est à celui-ci, le jour qui suit
+ * c'en est un autre […] tu dois afficher les bons prix au bon moment de manière
+ * cohérente ».
+ *
+ * COMMENT — une seule passe glissante, et non 365 appels à `cardPrices`. Les
+ * observations sont triées une fois par code ; les dates cibles sont parcourues
+ * dans l'ordre croissant en avançant un curseur. Le résultat est IDENTIQUE à
+ * `cardPrices(rows, fallback, date)` appelée pour chaque date — c'est ce que
+ * vérifie `pricing.test.ts`.
+ *
+ * Le repli `fallback` s'applique par date, comme dans `cardPrices` : un code
+ * que la fenêtre ne renseigne pas ce jour-là garde son prix de repli.
+ */
+export function cardPricesByDate(
+  rows: DailyCodeRow[],
+  dates: Iterable<string>,
+  fallback: Map<string, number> = new Map(),
+): Map<string, Map<string, number>> {
+  // Mêmes filtres d'exploitabilité que `cardPrices`, à la lettre.
+  const byCode = new Map<string, Observation[]>()
+  for (const r of rows) {
+    if (!r.code || r.included <= 0) continue
+    if (r.revenue_ttc == null || r.revenue_ttc <= 0) continue
+    const cents = Math.round((r.revenue_ttc / r.included) * 100)
+    if (cents <= 0) continue
+    const list = byCode.get(r.code)
+    if (list) list.push({ date: r.service_date, cents })
+    else byCode.set(r.code, [{ date: r.service_date, cents }])
+  }
+  for (const obs of byCode.values()) {
+    obs.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+  }
+
+  const triees = [...new Set(dates)].sort()
+  const parDate = new Map<string, Map<string, number>>()
+  // Un curseur par code, qui n'avance jamais en arrière : c'est ce qui rend la
+  // passe linéaire au lieu de quadratique.
+  const curseurs = new Map<string, number>()
+
+  for (const date of triees) {
+    const prix = new Map<string, number>()
+    for (const [code, obs] of byCode) {
+      let i = curseurs.get(code) ?? 0
+      while (i < obs.length && obs[i].date <= date) i++
+      curseurs.set(code, i)
+      const cents = modeDeLaFenetre(obs, i)
+      if (cents > 0) prix.set(code, cents / 100)
+    }
+    for (const [code, p] of fallback) {
+      if (!prix.has(code) && p > 0) prix.set(code, p)
+    }
+    parDate.set(date, prix)
+  }
+  return parDate
+}
+
 export function cardPrices(
   rows: DailyCodeRow[],
   /** Prix de repli par code (`detectTarifs`), pour un code trop peu observé. */
@@ -137,31 +252,8 @@ export function cardPrices(
   const prices = new Map<string, number>()
   for (const [code, obs] of byCode) {
     obs.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
-    const window = obs.slice(-CARD_WINDOW)
-    if (window.length < CARD_MIN_OBSERVATIONS) continue
-    const count = new Map<number, number>()
-    for (const o of window) count.set(o.cents, (count.get(o.cents) ?? 0) + 1)
-    let best = 0
-    let bestN = 0
-    let bestRank = -1
-    for (const [cents, n] of count) {
-      // Dernière position de ce prix dans la fenêtre : départage les ex aequo
-      // en faveur du plus RÉCENT, pour ne pas rester sur l'ancien tarif le jour
-      // où le nouveau l'égale.
-      let rank = -1
-      for (let i = window.length - 1; i >= 0; i--) {
-        if (window[i].cents === cents) {
-          rank = i
-          break
-        }
-      }
-      if (n > bestN || (n === bestN && rank > bestRank)) {
-        best = cents
-        bestN = n
-        bestRank = rank
-      }
-    }
-    if (best > 0) prices.set(code, best / 100)
+    const cents = modeDeLaFenetre(obs)
+    if (cents > 0) prices.set(code, cents / 100)
   }
 
   // Un code que la fenêtre ne renseigne pas garde son prix de repli.

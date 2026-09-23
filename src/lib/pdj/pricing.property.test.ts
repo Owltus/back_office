@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import fc from 'fast-check'
 
-import { cardPrices, topPrice } from '#/lib/pdj/pricing.ts'
+import { cardPrices, cardPricesByDate, topPrice } from '#/lib/pdj/pricing.ts'
 import type { DailyCodeRow } from '#/lib/pdj/pricing.ts'
 
 /*
@@ -155,6 +155,55 @@ describe('topPrice — appartenance et maximum', () => {
         },
       ),
       { numRuns: 1000 },
+    )
+  })
+})
+
+/*
+ * `cardPricesByDate` doit rendre EXACTEMENT ce que `cardPrices(rows, repli,
+ * date)` rendrait pour chaque date.
+ *
+ * C'est la garantie qui autorise la passe glissante : sans elle, l'analytique
+ * (qui utilise la variante par jour) et le board (qui utilise `cardPrices`
+ * avec `asOf`) pourraient diverger — c'est-à-dire recréer exactement l'écart
+ * que le chantier du 2026-09-23 corrige.
+ */
+describe('cardPricesByDate — identique à cardPrices date par date', () => {
+  const codeArb = fc.constantFrom('PDJ', 'PDJBB', 'PDJGROUP10')
+  const ligneArb = fc.record({
+    service_date: fc
+      .integer({ min: 1, max: 60 })
+      .map((n) => `2026-0${1 + Math.floor((n - 1) / 30)}-${String(((n - 1) % 30) + 1).padStart(2, '0')}`),
+    code: codeArb,
+    included: fc.integer({ min: 0, max: 40 }),
+    revenue_ttc: fc.oneof(
+      fc.constant(null),
+      fc.integer({ min: 0, max: 900 }).map((c) => c / 10),
+    ),
+  })
+
+  it('même résultat que la fonction d’origine, pour chaque date', () => {
+    fc.assert(
+      fc.property(
+        fc.array(ligneArb, { minLength: 0, maxLength: 80 }),
+        fc.oneof(
+          fc.constant(new Map<string, number>()),
+          fc.constant(new Map([['PDJ', 19]])),
+        ),
+        (rows, repli) => {
+          const dates = [...new Set(rows.map((r) => r.service_date))].sort()
+          if (dates.length === 0) return
+          const parDate = cardPricesByDate(rows, dates, repli)
+          for (const d of dates) {
+            const attendu = cardPrices(rows, repli, d)
+            const obtenu = parDate.get(d) ?? new Map()
+            expect([...obtenu.entries()].sort()).toEqual(
+              [...attendu.entries()].sort(),
+            )
+          }
+        },
+      ),
+      { numRuns: 400 },
     )
   })
 })

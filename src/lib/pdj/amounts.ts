@@ -171,16 +171,41 @@ export interface OccupancyBenchmark {
  *
  * Rétroactif par construction : rien n'est persisté, chaque jour est relu.
  */
+/**
+ * Tarifs de la carte : soit un jeu UNIQUE (le board n'affiche qu'un jour), soit
+ * une fonction qui rend le jeu en vigueur À UNE DATE DONNÉE.
+ *
+ * Cette seconde forme date du 2026-09-23 : les pages analytiques affichent des
+ * centaines de jours et doivent valoriser chacun au tarif qui avait cours ce
+ * jour-là, comme le board le fait déjà pour le sien.
+ */
+export type TarifsCarte =
+  | Map<string, number>
+  | ((date: string) => Map<string, number>)
+
+/** Le jeu de tarifs applicable à une date. */
+function tarifsDu(t: TarifsCarte, date: string): Map<string, number> {
+  return typeof t === 'function' ? t(date) : t
+}
+
 export function computeAggDailyTotals(
   rows: PdjAggRow[],
-  tarifs: Map<string, number>,
+  tarifs: TarifsCarte,
   /** Externes PAR JOUR (service_date → nb), s'additionnent aux extras du jour.
    *  Absent par défaut : n'affecte aucun appelant qui ne le passe pas. */
   externalsByDate: Map<string, number> = new Map(),
 ): Map<string, number> {
-  const unitHt = (code: string): number => {
-    const p = tarifs.get(code)
+  const unitHt = (tar: Map<string, number>, code: string): number => {
+    const p = tar.get(code)
     return p != null ? round2(fromTTC(p)) : 0
+  }
+  /* Prix FORT de la carte à une date : un couvert vendu au comptoir ne se
+     valorise jamais au tarif d'un forfait groupe, ni au prix moyen d'une
+     journée remisée (cf. l'en-tête de pricing.ts). */
+  const prixFortHt = (tar: Map<string, number>): number => {
+    let topTtc = 0
+    for (const p of tar.values()) if (p > topTtc) topTtc = p
+    return topTtc > 0 ? round2(fromTTC(topTtc)) : 0
   }
   // Par jour : HT des inclus (par code) + nb d'extras (tous codes confondus),
   // moins les extras OFFERTS (gratuits, cf. breakdown.ts) — comptés dans `extra`
@@ -204,16 +229,12 @@ export function computeAggDailyTotals(
     billedTtc: 0,
     billed: false,
   })
-  // Prix FORT de la CARTE (extras, externes, offerts) : un couvert vendu au
-  // comptoir ne se valorise jamais au tarif d'un forfait groupe, ni au prix
-  // moyen d'une journée remisée (cf. l'en-tête de pricing.ts).
-  let topTtc = 0
-  for (const p of tarifs.values()) if (p > topTtc) topTtc = p
-  const extraUnitHt = topTtc > 0 ? round2(fromTTC(topTtc)) : 0
-
   for (const r of rows) {
     const d = byDay.get(r.service_date) ?? emptyDay()
-    if (r.code && r.included > 0) d.includedHt += r.included * unitHt(r.code)
+    if (r.code && r.included > 0) {
+      d.includedHt +=
+        r.included * unitHt(tarifsDu(tarifs, r.service_date), r.code)
+    }
     // La recette du PMS fait foi dès qu'elle existe pour ce (jour, code) : elle
     // porte le prix réellement facturé, remises et groupes postés en bloc
     // compris. Un jour SANS aucune recette garde l'estimation au prix de
@@ -238,7 +259,9 @@ export function computeAggDailyTotals(
     const includedHt = d.billed
       ? round2(fromTTC(round2(d.billedTtc)))
       : round2(d.includedHt)
-    const extrasHt = round2(Math.max(0, d.extra - d.offert) * extraUnitHt)
+    const extrasHt = round2(
+      Math.max(0, d.extra - d.offert) * prixFortHt(tarifsDu(tarifs, date)),
+    )
     const totalHt = round2(includedHt + extrasHt)
     if (totalHt > 0) totals.set(date, totalHt)
   }
