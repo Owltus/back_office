@@ -196,6 +196,64 @@ export async function fetchLatestReportOfMonth(
   return data
 }
 
+/**
+ * Tout le tableau de bord d'un jour, en UN SEUL aller-retour.
+ *
+ * POURQUOI — mesure du 2026-09-22 puis du 2026-09-23. Les huit lectures
+ * ci-dessus partaient ensemble et revenaient ensemble à 6 461 ms, le rapport du
+ * jour compris, alors qu'il ne dépend que de lui-même. Ce n'est ni le volume
+ * (11,6 Mo de base, 187 lignes dans `daily_reports`) ni la vitesse du SQL :
+ * c'est le NOMBRE d'allers-retours. Un aller-retour coûte ~170 ms à chaud et
+ * jusqu'à 1,37 s à froid ; huit coûtent donc entre 1,4 s et 11 s de latence
+ * pure, pour **13,8 ms de calcul réel** côté base (réponse : 17 ko).
+ *
+ * Les huit fonctions qu'elle remplace restent EXPORTÉES et fonctionnelles :
+ * l'import et l'analytique s'en servent encore, et elles constituent le chemin
+ * de repli si la RPC devait être retirée (`drop function`, cf. le script).
+ *
+ * ⚠ La RPC est `security invoker` : les RLS de `daily_reports`, `budget` et
+ * `forecast_days` s'appliquent à l'appelant EXACTEMENT comme avant. Elle ne
+ * peut rien montrer que le compte ne pouvait déjà lire une requête à la fois.
+ * Autorité : `supabase/repjour_dashboard_rpc_2026-09-23.sql`, équivalence
+ * prouvée champ par champ sur 189 dates (0 écart).
+ */
+export interface RepjourDashboard {
+  rapport: DailyReport | null
+  budget: MonthBudget | null
+  forecastTotal: { occ: number; revTTC: number } | null
+  forecastFraicheur: string | null
+  dernierDuMois: DailyReport | null
+  rapportPrecedent: DailyReport | null
+  rapportsDuMois: DailyReport[]
+  datesDisponibles: string[]
+}
+
+export async function fetchRepjourDashboard(
+  date: string,
+): Promise<RepjourDashboard> {
+  const { data, error } = await supabase.rpc('repjour_dashboard', {
+    p_date: date,
+  })
+  if (error) throw error
+  /*
+   * `rapportsDuMois` et `datesDisponibles` sont garantis non nuls côté SQL
+   * (`coalesce(..., '[]')`) ; les replis ici ne servent qu'au cas où la RPC
+   * serait absente et la réponse vide — mieux vaut un tableau vide qu'un
+   * plantage de rendu.
+   */
+  const d = (data ?? {}) as Partial<RepjourDashboard>
+  return {
+    rapport: d.rapport ?? null,
+    budget: d.budget ?? null,
+    forecastTotal: d.forecastTotal ?? null,
+    forecastFraicheur: d.forecastFraicheur ?? null,
+    dernierDuMois: d.dernierDuMois ?? null,
+    rapportPrecedent: d.rapportPrecedent ?? null,
+    rapportsDuMois: d.rapportsDuMois ?? [],
+    datesDisponibles: d.datesDisponibles ?? [],
+  }
+}
+
 /*
  * ---------------------------------------------------------------------------
  * Analytique annuelle (étape 6) — LECTURE seule.

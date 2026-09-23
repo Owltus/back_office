@@ -51,14 +51,7 @@ import { cn } from '#/lib/utils.ts'
 import { sendReportViaServer } from '#/lib/repjour/sendServer.ts'
 import type { ServerSendResult } from '#/lib/repjour/sendServer.ts'
 import {
-  fetchAvailableDates,
-  fetchBudget,
-  fetchForecastFreshness,
-  fetchForecastMonthTotal,
-  fetchLatestReportOfMonth,
-  fetchMonthReports,
-  fetchPreviousReportInMonth,
-  fetchReportByDate,
+  fetchRepjourDashboard,
   dismissSendReminder,
 } from '#/lib/repjour/services/daily.ts'
 import { checkPmsFilesReceived } from '#/lib/repjour/pmsStatus.ts'
@@ -165,10 +158,6 @@ export function DashboardBoard() {
   const isAdmin = can('repjour', 'gestion')
   const canImport = can('repjour', 'ecriture')
 
-  const d = new Date(selectedDate + 'T00:00:00')
-  const year = d.getFullYear()
-  const month = d.getMonth() + 1
-
   /*
    * Quatre lectures INDÉPENDANTES, donc parallèles. L'ancien code enchaînait
    * le rapport PUIS le reste, alors que l'année et le mois se déduisent de la
@@ -177,50 +166,53 @@ export function DashboardBoard() {
    * Passer par `useQuery` donne surtout le cache (60 s) : revenir sur RepJour
    * réaffiche instantanément, sans repayer le réseau. Voir lib/query.ts.
    */
+  /*
+   * UNE lecture pour tout le tableau de bord (2026-09-23).
+   *
+   * Elle en remplace HUIT — rapport du jour, budget, total Forecast, fraîcheur
+   * du Forecast, dernier rapport du mois, rapport précédent, rapports du mois,
+   * dates disponibles. Elles partaient ensemble et revenaient ensemble à
+   * 6 461 ms, le rapport compris, alors qu'il ne dépend que de lui-même.
+   *
+   * Ce n'était ni le volume (11,6 Mo de base, 187 lignes dans `daily_reports`)
+   * ni la vitesse du SQL, mais le NOMBRE d'allers-retours : ~170 ms pièce à
+   * chaud, jusqu'à 1,37 s à froid, pour 13,8 ms de calcul réel côté base.
+   *
+   * Les huit `queryKey` distinctes disparaissent sans perte : aucune n'avait de
+   * réglage propre (ni `staleTime`, ni `gcTime`), toutes vivaient sous les
+   * défauts de `lib/query.ts`. La clé reste sous `['repjour', …]`, donc les
+   * `invalidateQueries({ queryKey: ['repjour'] })` de l'import continuent de
+   * la rafraîchir sans modification.
+   *
+   * ⚠ `year` et `month` ont disparu du composant : ils ne servaient qu'aux
+   * anciennes clés de requête, et la RPC les déduit elle-même de la date. Les
+   * garder aurait laissé croire qu'ils peuvent varier indépendamment du jour
+   * affiché, ce qui n'a jamais été le cas.
+   */
   const {
-    data: report,
+    data: tableau,
     isPending: reportPending,
     isError: reportError,
     error: reportErrorObj,
   } = useQuery({
-    queryKey: ['repjour', 'report', selectedDate],
-    queryFn: () => fetchReportByDate(selectedDate),
+    queryKey: ['repjour', 'dashboard', selectedDate],
+    queryFn: () => fetchRepjourDashboard(selectedDate),
   })
-  const { data: budget, isPending: budgetPending } = useQuery({
-    queryKey: ['repjour', 'budget', year, month],
-    queryFn: () => fetchBudget(year, month),
-  })
-  const { data: forecastMonthTotal, isPending: forecastPending } = useQuery({
-    queryKey: ['repjour', 'forecast-month', year, month],
-    queryFn: () => fetchForecastMonthTotal(year, month),
-  })
+
+  const report = tableau?.rapport ?? undefined
+  const budget = tableau?.budget ?? undefined
+  const forecastMonthTotal = tableau?.forecastTotal ?? undefined
   // Fraîcheur du Forecast du mois — sert UNIQUEMENT au bandeau « fichiers PMS
   // manquants » (pmsStatus.ts), pas à l'affichage des KPI.
-  const { data: forecastImportedAt, isPending: freshnessPending } = useQuery({
-    queryKey: ['repjour', 'forecast-freshness', year, month],
-    queryFn: () => fetchForecastFreshness(year, month),
-  })
-  const { data: latestOfMonth } = useQuery({
-    queryKey: ['repjour', 'latest-of-month', year, month],
-    queryFn: () => fetchLatestReportOfMonth(year, month),
-  })
-  const { data: prevReport } = useQuery({
-    queryKey: ['repjour', 'prev-report', year, month, selectedDate],
-    queryFn: () => fetchPreviousReportInMonth(selectedDate, year, month),
-  })
+  const forecastImportedAt = tableau?.forecastFraicheur ?? undefined
+  const latestOfMonth = tableau?.dernierDuMois ?? undefined
+  const prevReport = tableau?.rapportPrecedent ?? undefined
   // Rapports du mois (jour par jour) → sparkline du CA projeté « pris depuis le
-  // début du mois » sur la carte pickup. Une lecture, mise en cache par mois.
-  const { data: monthReports } = useQuery({
-    queryKey: ['repjour', 'month-reports', year, month],
-    queryFn: () => fetchMonthReports(year, month),
-  })
+  // début du mois » sur la carte pickup.
+  const monthReports = tableau?.rapportsDuMois
   // Toutes les dates ayant un rapport en base — sert à griser dans le sélecteur
-  // les jours « qu'on ne possède pas » (sans donnée). Une seule lecture, mise en
-  // cache : la liste bouge peu (un import par jour).
-  const { data: availableDates } = useQuery({
-    queryKey: ['repjour', 'available-dates'],
-    queryFn: fetchAvailableDates,
-  })
+  // les jours « qu'on ne possède pas » (sans donnée).
+  const availableDates = tableau?.datesDisponibles
 
   // Repli MTD : n'a de sens que si le jour affiché n'a PAS de rapport.
   const latestMTD = report ? null : (latestOfMonth ?? null)
@@ -234,8 +226,9 @@ export function DashboardBoard() {
   // un jour partiel (budget/forecast arrivés après), ou trou blanc sur un jour
   // complet (l'écart, qui a besoin du budget, encore `null`). Requêtes parallèles
   // + cache 60 s : à la revisite d'un mois, aucune n'est `pending`, pas de flash.
-  const loading =
-    (reportPending || budgetPending || forecastPending) && !reportError
+  // Les trois drapeaux d'origine (`reportPending || budgetPending ||
+  // forecastPending`) n'en font plus qu'un : une seule lecture les porte tous.
+  const loading = reportPending && !reportError
 
   // `useQuery` n'écrit rien dans la console : sans cela une panne réseau
   // deviendrait un écran vide muet, alors que l'ancien code la journalisait.
@@ -467,7 +460,7 @@ export function DashboardBoard() {
   // vit dans pmsStatus.ts. Remplace le bandeau générique « pas encore envoyé »
   // quand il s'applique : c'est la raison PRÉCISE du non-envoi.
   const pmsCheck =
-    selectedDate === currentCycleDate && !loading && !freshnessPending
+    selectedDate === currentCycleDate && !loading && !reportPending
       ? checkPmsFilesReceived({
           date: currentCycleDate,
           now,
