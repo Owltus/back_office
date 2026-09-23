@@ -99,6 +99,94 @@ function sanitizeHeader(value) {
   return out.slice(0, 200)
 }
 
+/*
+ * ---------------------------------------------------------------------------
+ * PRECHAUFFAGE DE LA BASE
+ *
+ * POURQUOI — mesure du 2026-09-23 sur la production. La MEME requete triviale,
+ * selon le temps ecoule depuis la derniere activite :
+ *
+ *   en continu (chaud)        0,17 s
+ *   apres  30 s de repos      0,34 s
+ *   apres  60 s de repos      0,59 s
+ *   apres   2 min de repos    0,62 s
+ *   apres   5 min de repos    0,76 s
+ *   apres une longue pause    1,37 s
+ *
+ * La penalite apparait des TRENTE SECONDES d'inactivite. Autrement dit, un
+ * utilisateur qui ouvre l'application le matin, ou apres une heure sans y
+ * toucher, paie systematiquement huit fois le prix d'une requete chaude — sur
+ * CHAQUE page. C'est la premiere cause de lenteur vecue, et elle etait
+ * invisible dans mes mesures precedentes, qui rechargeaient en boucle et ne
+ * voyaient donc qu'une base deja chaude.
+ *
+ * COMMENT — une requete anonyme par minute pendant les heures d'ouverture. Elle
+ * doit traverser TOUTE la pile pour reveiller ce qu'il faut :
+ *
+ *   sans cle  -> 73 ms, "No API key found" : rejetee a la porte, ne rechauffe
+ *                RIEN. Inutile.
+ *   avec cle  -> "42501 permission denied for table profiles". Un code d'erreur
+ *                PostgreSQL : la requete est allee jusqu'a la base et a evalue
+ *                les RLS. C'est la preuve que la pile entiere est reveillee.
+ *
+ * Le 401 attendu n'est donc pas un echec, c'est le SUCCES : `anon` n'a aucun
+ * privilege sur `public` (durcissement du 2026-09-06) et rien n'est expose.
+ *
+ * HORAIRES — `4-22` en UTC couvre l'union des deux saisons pour 06h-23h Paris
+ * (ete UTC+2 : 04h-21h ; hiver UTC+1 : 05h-22h). La nuit n'est pas prechauffee :
+ * personne n'utilise l'app, et la veille d'import a sa propre minuterie.
+ *
+ * DEUX tirs espaces de 30 s par passage : la minuterie de Cloudflare ne descend
+ * pas sous la minute, or la chaleur retombe des 30 s. Deux tirs ramenent le pire
+ * cas d'environ 0,59 s a environ 0,34 s.
+ * ------------------------------------------------------------------------- */
+
+/** Doit correspondre EXACTEMENT a l'entree de `crons` dans wrangler.toml. */
+const PRECHAUFFAGE_CRON = '* 4-22 * * *'
+
+/** Espacement des deux tirs, en millisecondes. */
+const PRECHAUFFAGE_ESPACEMENT_MS = 30_000
+
+/**
+ * Reveille PostgREST + Postgres (et GoTrue) par des requetes anonymes.
+ *
+ * Aucune donnee lue, aucune ecriture, aucun secret : la cle `publishable` est
+ * publique par construction (elle est embarquee dans le bundle du navigateur).
+ *
+ * @param {{ SUPABASE_URL?: string, SUPABASE_PUBLISHABLE_KEY?: string }} env
+ */
+async function prechauffer(env) {
+  const base = env.SUPABASE_URL
+  const cle = env.SUPABASE_PUBLISHABLE_KEY
+  if (!base || !cle) {
+    console.error('[prechauffage] SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY absentes')
+    return
+  }
+
+  const tir = async (chemin) => {
+    try {
+      const res = await fetch(base + chemin, {
+        headers: { apikey: cle },
+        // Un tir est bref. S'il se bloque, on n'attend pas : le passage suivant
+        // arrive dans une minute et rien n'est perdu.
+        signal: AbortSignal.timeout(15_000),
+      })
+      res.body?.cancel()
+    } catch {
+      // Sans consequence. Le prechauffage est un confort, jamais une dependance :
+      // s'il echoue, l'application fonctionne exactement comme avant, en plus lent.
+    }
+  }
+
+  // PostgREST -> Postgres -> RLS (le chemin que prend chaque page).
+  await tir('/rest/v1/profiles?select=id&limit=1')
+  // GoTrue, que toute requete de donnees attend au demarrage (`_getAccessToken`).
+  await tir('/auth/v1/health')
+
+  await new Promise((r) => setTimeout(r, PRECHAUFFAGE_ESPACEMENT_MS))
+  await tir('/rest/v1/profiles?select=id&limit=1')
+}
+
 export default {
   /**
    * @param {ForwardableEmailMessage} message
@@ -198,7 +286,21 @@ export default {
    * @param {ScheduledController} _event
    * @param {{ IMPORT_ENDPOINT: string, IMPORT_SECRET: string }} env
    */
-  async scheduled(_event, env) {
+  async scheduled(event, env) {
+    /*
+     * DEUX minuteries partagent ce handler, distinguees par `event.cron` :
+     *
+     *   toutes les 2 min, 0h-4h UTC -> veille du rapport journalier (ci-dessous)
+     *   toutes les minutes, 4h-22h  -> PRECHAUFFAGE (voir `prechauffer`)
+     *
+     * Le prechauffage ne doit JAMAIS pouvoir empecher la veille de tourner :
+     * il est traite en premier, dans sa propre branche, et sort aussitot.
+     */
+    if (event && event.cron === PRECHAUFFAGE_CRON) {
+      await prechauffer(env)
+      return
+    }
+
     if (!env.IMPORT_ENDPOINT || !env.IMPORT_SECRET) {
       console.error('[veille] configuration du Worker incomplete')
       return

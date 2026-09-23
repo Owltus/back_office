@@ -41,7 +41,29 @@ preview_urls = false
 # Contrôle : `npx wrangler@4 tail` doit montrer une ligne `"*/2 0-4 * * *" … Ok`
 # dans les deux minutes, pendant la plage 00h-04h59 UTC.
 [triggers]
-crons = ["*/2 0-4 * * *"]
+# La seconde entree est le PRECHAUFFAGE de la base : une requete anonyme par
+# minute pendant les heures d'ouverture, pour que la premiere page ouverte de la
+# journee ne paie pas le demarrage a froid. Mesure du 2026-09-23 : 1,37 s apres
+# une pause contre 0,17 s a chaud, et la penalite apparait des 30 SECONDES
+# d'inactivite. Details et tableau complet en tete du handler `prechauffer`.
+#
+# `4-22` en UTC couvre 06h-23h Paris dans les deux saisons (ete UTC+2 : 04h-21h ;
+# hiver UTC+1 : 05h-22h). La nuit n'est pas prechauffee : personne n'utilise
+# l'app, et la veille d'import a deja sa propre minuterie ci-dessus.
+#
+# ⚠ `PRECHAUFFAGE_CRON` dans le Worker doit correspondre EXACTEMENT a la seconde
+# chaine ci-dessous : c'est elle qui aiguille les deux minuteries vers le bon
+# traitement. Les modifier ensemble, jamais l'une sans l'autre.
+#
+# ⚠ Requiert UNE variable a poser dans le dashboard Cloudflare (conservee au
+# deploiement par `keep_vars = true`) :
+#     SUPABASE_PUBLISHABLE_KEY = la cle sb_publishable_...
+# Elle est PUBLIQUE par construction (deja embarquee dans le bundle du
+# navigateur), mais on la garde hors du depot par convention de projet : une
+# cle vit dans .env ou le dashboard, jamais dans git — ne serait-ce que pour
+# qu'une rotation n'y laisse pas de copie perimee.
+# `SUPABASE_URL` est definie dans [vars] plus bas : rien a faire pour elle.
+crons = ["*/2 0-4 * * *", "* 4-22 * * *"]
 # Journaux du Worker (décisions d'acceptation/refus des e-mails) lisibles dans
 # le dashboard : Workers & Pages → le Worker → Journaux.
 [observability]
@@ -52,3 +74,7 @@ enabled = true
 # dmarc=pass). Repasser à "false" pour revenir en observation seule.
 [vars]
 REQUIRE_SENDER_AUTH = "true"
+
+# Cible du prechauffage. L'URL du projet est PUBLIQUE — elle figure deja dans
+# CLAUDE.md et dans chaque requete du navigateur : il n'y a rien de secret ici.
+SUPABASE_URL = "https://ozpavwghrmmkrnmkxodg.supabase.co"
