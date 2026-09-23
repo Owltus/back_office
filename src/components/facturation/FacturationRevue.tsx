@@ -18,6 +18,7 @@ import {
 } from '#/components/ui/dialog.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { useConfirm } from '#/components/shared/ConfirmDialog.tsx'
+import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { useFacturationModel } from '#/components/facturation/useFacturationModel.ts'
 import { useFacturationCuration } from '#/components/facturation/useFacturationCuration.ts'
 import { reviewQueue, type Anomaly } from '#/lib/facturation/anomalies.ts'
@@ -316,8 +317,24 @@ export function RevueDialog({
   /** Nom lisible de l'émetteur courant (affiché en sous-titre). */
   issuerLabel: string
 }) {
-  const { serverPool, issuers, issuerCodes, issuerDenylist, journal } =
-    useFacturationModel()
+  const {
+    serverPool,
+    issuers,
+    issuerCodes,
+    issuerDenylist,
+    journal,
+    chargement,
+  } = useFacturationModel()
+  /* ⚠ Cet écran affirmait « Rien d'appris pour cet émetteur — aucune
+     imputation à corriger », coche verte à l'appui, avant d'avoir lu la
+     moindre table. C'est le pire des faux états vides de la page : il ne dit
+     pas seulement « vide », il RASSURE. */
+  const enChargement =
+    chargement.pool ||
+    chargement.issuers ||
+    chargement.issuerCodes ||
+    chargement.issuerDenylist ||
+    chargement.journal
   // Poids de discriminance jugé sur TOUT le pool (comparaison inter-imputations).
   const stats = useMemo(() => computeStats(serverPool), [serverPool])
   const {
@@ -501,7 +518,13 @@ export function RevueDialog({
         </DialogHeader>
 
         <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4">
-          {allEmpty ? (
+          {enChargement ? (
+            <div className="flex flex-col gap-3" aria-hidden="true">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-20 w-full rounded-xl" />
+              ))}
+            </div>
+          ) : allEmpty ? (
             <div className="flex flex-col items-center justify-center gap-2 py-12 text-center text-sm text-muted-foreground">
               {hasIssuer ? (
                 <>

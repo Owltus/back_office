@@ -27,6 +27,7 @@ import {
   confidenceTone,
   probaFor,
 } from '#/components/facturation/confidence.ts'
+import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { useFacturationModel } from '#/components/facturation/useFacturationModel.ts'
 import { compteLabel, fillComptes } from '#/lib/facturation/budgetRegistry.ts'
 import { formatSection } from '#/lib/facturation/imputationFormat.ts'
@@ -97,7 +98,12 @@ export function CodePicker({
   /** Clé de l'émetteur courant (issuerKey) → pré-sélection de son compte habituel à l'ajout d'un code. */
   issuer?: string
 }) {
-  const { budgetLines, comptes: compteDict, issuerMemory } = useFacturationModel()
+  const {
+    budgetLines,
+    comptes: compteDict,
+    issuerMemory,
+    chargement,
+  } = useFacturationModel()
   const [q, setQ] = useState('')
   const [activeSection, setActiveSection] = useState<string | null>(null)
 
@@ -232,7 +238,19 @@ export function CodePicker({
 
         <TooltipProvider delayDuration={300}>
           <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
-            {groups.length === 0 ? (
+            {chargement.budgetLines || chargement.comptes ? (
+              /* ⚠ Le référentiel non encore lu donnait « Aucune ligne ne
+                 correspond à "…" » — une réponse de RECHERCHE affirmée avant
+                 d'avoir la moindre ligne à chercher. */
+              <div
+                className="flex flex-col gap-1.5 px-2 py-2"
+                aria-hidden="true"
+              >
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <Skeleton key={i} className="h-9 w-full rounded-md" />
+                ))}
+              </div>
+            ) : groups.length === 0 ? (
               <p className="px-2 py-8 text-center text-sm text-muted-foreground">
                 Aucune ligne ne correspond à « {q} ».
               </p>

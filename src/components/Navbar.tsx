@@ -14,6 +14,7 @@ import {
   subscribeNavbarBadge,
   subscribeNavbarSubtitle,
 } from '#/lib/navbarSubtitle.ts'
+import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import {
   Sheet,
@@ -26,7 +27,7 @@ import {
 
 export function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false)
-  const { profile, user, permissions, grade } = useAuth()
+  const { profile, user, permissions, grade, permsResolved } = useAuth()
   const userName = profile?.display_name || profile?.email || user?.email || ''
   // Une seule liste, dans l'ORDRE DU COMPTE (`profiles.page_order`) et filtrée
   // par ses droits : l'utilisateur ne voit QUE les pages auxquelles on lui a
@@ -44,6 +45,21 @@ export function Navbar() {
   // même liste. Repli sur la première page du registre tant que rien n'est
   // connu (démarrage), jamais un lien mort.
   const homeLink = navItems[0]?.to ?? '/repjour'
+  /*
+   * ⚠ À la PREMIÈRE connexion d'un poste, aucun droit n'est en cache : la
+   * barre se rendait avec ZÉRO onglet, puis neuf apparaissaient d'un coup —
+   * un élément permanent de l'interface qui se remplit sous les yeux, sur
+   * chaque page. On réserve leur place tant que les droits ne sont pas
+   * résolus. Le nombre affiché est celui du registre, filtré par la seule
+   * chose connue d'avance (le grade) : ni une promesse ni une surprise, un
+   * ordre de grandeur juste.
+   *
+   * `permissions` non vide suffit à sortir de cet état même si
+   * `permsResolved` est encore faux : un cache local déjà peuplé rend la
+   * liste tout de suite, sans passer par le squelette.
+   */
+  const ongletsEnAttente = !permsResolved && navItems.length === 0
+  const nbOngletsReserves = Math.min(PAGES.length, 9)
 
   // Nom de la page courante (en mobile, remplace la marque « Back Office » à côté
   // du logo — cf. plus bas) : en desktop, l'onglet actif dans les liens inline
@@ -120,6 +136,17 @@ export function Navbar() {
               </SheetTitle>
             </SheetHeader>
             <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-3">
+              {ongletsEnAttente &&
+                Array.from({ length: nbOngletsReserves }).map((_, i) => (
+                  <div
+                    key={`att-${i}`}
+                    className="flex items-center gap-3 px-3 py-2.5"
+                    aria-hidden="true"
+                  >
+                    <Skeleton className="size-4 shrink-0 rounded" />
+                    <Skeleton className="h-4 w-28" />
+                  </div>
+                ))}
               {navItems.map((item) => (
                 <SheetClose asChild key={item.to}>
                   <Link
@@ -195,6 +222,14 @@ export function Navbar() {
 
         {/* --- Liens inline (>= md) --- */}
         <ul className="ml-2 hidden items-center gap-1 lg:flex">
+          {ongletsEnAttente &&
+            Array.from({ length: nbOngletsReserves }).map((_, i) => (
+              <li key={`att-${i}`} aria-hidden="true">
+                <span className="flex px-3.5 py-1.5">
+                  <Skeleton className="h-5 w-16" />
+                </span>
+              </li>
+            ))}
           {navItems.map((item) => (
             <li key={item.to}>
               <Link

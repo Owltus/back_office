@@ -30,6 +30,7 @@ import {
 import { useConfirm } from '#/components/shared/ConfirmDialog.tsx'
 import { ReferentielImport } from '#/components/facturation/ReferentielImport.tsx'
 import { ComptesManager } from '#/components/facturation/ComptesManager.tsx'
+import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { useFacturationModel } from '#/components/facturation/useFacturationModel.ts'
 import { useBudgetLinesCuration } from '#/components/facturation/useBudgetLinesCuration.ts'
 import { imputationKey } from '#/lib/facturation/budgetRegistry.ts'
@@ -65,8 +66,14 @@ export function BudgetLinesManager({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
-  const { budgetLines, serverPool, issuerCodes, issuerDenylist, journal } =
-    useFacturationModel()
+  const {
+    budgetLines,
+    serverPool,
+    issuerCodes,
+    issuerDenylist,
+    journal,
+    chargement,
+  } = useFacturationModel()
   const { saveLine, removeLine } = useBudgetLinesCuration()
   const { confirm, confirmDialog } = useConfirm()
 
@@ -378,7 +385,18 @@ export function BudgetLinesManager({
               </div>
               <TooltipProvider delayDuration={300}>
                 <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
-                  {groups.length === 0 ? (
+                  {chargement.budgetLines ? (
+                    /* ⚠ Affirmait « Aucune imputation ne correspond » avant
+                       d'avoir lu le référentiel. */
+                    <div
+                      className="flex flex-col gap-1 px-2 py-2"
+                      aria-hidden="true"
+                    >
+                      {Array.from({ length: 10 }).map((_, i) => (
+                        <Skeleton key={i} className="h-8 w-full rounded-md" />
+                      ))}
+                    </div>
+                  ) : groups.length === 0 ? (
                     <p className="px-2 py-8 text-center text-sm text-muted-foreground">
                       Aucune imputation ne correspond.
                     </p>

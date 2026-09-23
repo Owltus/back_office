@@ -18,6 +18,7 @@ import {
   TooltipTrigger,
 } from '#/components/ui/tooltip.tsx'
 import { useConfirm } from '#/components/shared/ConfirmDialog.tsx'
+import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { useFacturationModel } from '#/components/facturation/useFacturationModel.ts'
 import { useComptesCuration } from '#/components/facturation/useComptesCuration.ts'
 import { cn } from '#/lib/utils.ts'
@@ -43,7 +44,7 @@ export function ComptesManager({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
-  const { budgetLines, comptes } = useFacturationModel()
+  const { budgetLines, comptes, chargement } = useFacturationModel()
   const { saveCompte, removeCompte } = useComptesCuration()
   const { confirm, confirmDialog } = useConfirm()
 
@@ -229,7 +230,18 @@ export function ComptesManager({
             </div>
             <TooltipProvider delayDuration={300}>
               <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
-                {filtered.length === 0 ? (
+                {chargement.comptes || chargement.budgetLines ? (
+                  /* ⚠ Affirmait « Aucun compte ne correspond » avant d'avoir
+                     lu le dictionnaire des comptes. */
+                  <div
+                    className="flex flex-col gap-1.5 px-2 py-2"
+                    aria-hidden="true"
+                  >
+                    {Array.from({ length: 8 }).map((_, i) => (
+                      <Skeleton key={i} className="h-9 w-full rounded-md" />
+                    ))}
+                  </div>
+                ) : filtered.length === 0 ? (
                   <p className="px-2 py-8 text-center text-sm text-muted-foreground">
                     Aucun compte ne correspond.
                   </p>

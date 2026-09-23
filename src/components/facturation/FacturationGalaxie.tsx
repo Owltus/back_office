@@ -25,8 +25,16 @@ const NEBULAE = [
 ]
 
 export function FacturationGalaxie() {
-  const { serverPool, issuers, issuerCodes, budgetLines } =
+  const { serverPool, issuers, issuerCodes, budgetLines, chargement } =
     useFacturationModel()
+  /* La galaxie se construit à partir de quatre lectures : tant que l'une
+     manque, le graphe est vide POUR UNE AUTRE RAISON que l'absence de
+     données apprises. Les distinguer est tout l'objet de ce drapeau. */
+  const enChargement =
+    chargement.pool ||
+    chargement.issuers ||
+    chargement.issuerCodes ||
+    chargement.budgetLines
   // Poids de discriminance jugé sur TOUT le pool (comparaison inter-imputations), calculé une fois.
   const stats = useMemo(() => computeStats(serverPool), [serverPool])
   const { graph, counts } = useMemo(() => {
@@ -76,7 +84,15 @@ export function FacturationGalaxie() {
 
         {/* Le graphe (au-dessus des fonds). */}
         <div className="absolute inset-0 z-[2]">
-          {empty ? (
+          {enChargement ? (
+            /* ⚠ Pendant le chargement, cette zone affirmait « Pas encore de
+               données apprises » — une affirmation FAUSSE, et la plus
+               trompeuse de la page : elle laissait croire que le travail
+               d'apprentissage avait disparu. */
+            <div className="flex h-full w-full items-center justify-center">
+              <div className="size-40 animate-pulse rounded-full bg-white/5" />
+            </div>
+          ) : empty ? (
             <div className="flex h-full w-full items-center justify-center px-6 text-center text-sm text-slate-400">
               Pas encore de données apprises — tamponnez des factures pour
               peupler la galaxie.
@@ -157,9 +173,16 @@ export function FacturationGalaxie() {
           </h1>
           {/* Compteur HONNÊTE : les soleils sont des POSTES (codes), pas des couples
               code+compte — l'ancien libellé « imputations » induisait en erreur. */}
-          <p className="mt-1 text-xs text-slate-400 tabular-nums">
-            {counts.issuer} émetteurs · {counts.code} postes · {counts.word} mots
-          </p>
+          {/* ⚠ Le compteur affichait « 0 émetteurs · 0 postes · 0 mots »
+              pendant le chargement. Trois zéros affirmés, aucun mesuré. */}
+          {enChargement ? (
+            <div className="mt-1 h-4 w-48 animate-pulse rounded bg-white/10" />
+          ) : (
+            <p className="mt-1 text-xs text-slate-400 tabular-nums">
+              {counts.issuer} émetteurs · {counts.code} postes ·{' '}
+              {counts.word} mots
+            </p>
+          )}
         </div>
       </div>
     </PageContainer>

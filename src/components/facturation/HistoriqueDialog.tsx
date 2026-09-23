@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '#/components/ui/dialog.tsx'
+import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { useFacturationModel } from '#/components/facturation/useFacturationModel.ts'
 import { budgetLabel, compteLabel } from '#/lib/facturation/budgetRegistry.ts'
 import {
@@ -31,7 +32,7 @@ export function HistoriqueDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
-  const { journal, issuers } = useFacturationModel()
+  const { journal, issuers, chargement } = useFacturationModel()
 
   // Clé émetteur -> nom lisible (le journal ne stocke que la clé canonique).
   const displayOf = useMemo(() => {
@@ -80,7 +81,22 @@ export function HistoriqueDialog({
         </DialogHeader>
 
         <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4">
-          {groups.length === 0 ? (
+          {chargement.journal || chargement.issuers ? (
+            /* ⚠ Cette zone affirmait « Aucune facture apprise pour l'instant »
+               tant que le journal n'était pas revenu. Un squelette de groupes
+               dit la même chose qu'un écran vide — « rien encore » — sans
+               affirmer que rien n'existe. */
+            <div className="flex flex-col gap-6" aria-hidden="true">
+              {Array.from({ length: 3 }).map((_, g) => (
+                <section key={g} className="flex flex-col gap-2">
+                  <Skeleton className="h-5 w-48" />
+                  {Array.from({ length: 2 }).map((_ent, e) => (
+                    <Skeleton key={e} className="h-12 w-full rounded-lg" />
+                  ))}
+                </section>
+              ))}
+            </div>
+          ) : groups.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-2 py-12 text-center text-sm text-muted-foreground">
               <History className="size-8 opacity-60" />
               Aucune facture apprise pour l’instant. Tamponnez une facture pour
