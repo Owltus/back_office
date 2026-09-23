@@ -93,7 +93,16 @@ export function PdjAnalytiqueMoisBoard({
   const { data: historyRows = [] } = useQuery({
     queryKey: ['pdj', 'analytics', 'all-history'],
     queryFn: () => fetchDailyAgg('2000-01-01', '2100-12-31'),
-    staleTime: 5 * 60_000,
+    /*
+     * ⚠ MÊMES réglages que `BreakfastBoard.tsx`, pour la même raison qu'en
+     * dessous : le `staleTime` est évalué PAR OBSERVATEUR. Les 5 minutes qui
+     * étaient ici périmaient l'heure de fraîcheur que le board PDJ garde — or
+     * cette lecture réagrège TOUTE la table `pdj_breakfasts` (bornes
+     * `2000-01-01`/`2100-12-31` qui ne bornent rien), soit ~330 ms à froid.
+     * Corrigé le 2026-09-23.
+     */
+    staleTime: 60 * 60_000,
+    gcTime: 2 * 60 * 60_000,
   })
   const rupture = useMemo(
     () => computeRuptureThreshold(aggregatePdjLoadPoints(historyRows)),
@@ -107,6 +116,24 @@ export function PdjAnalytiqueMoisBoard({
   const { data: addonRows = [] } = useQuery({
     queryKey: ['pdj', 'addon-all'],
     queryFn: fetchAllAddonProduction,
+    /*
+     * ⚠ MÊMES réglages que `BreakfastBoard.tsx` et `DayCrossSummary.tsx`, et ce
+     * n'est pas une duplication décorative : en TanStack Query v5 le
+     * `staleTime` est évalué PAR OBSERVATEUR. Un seul montant plus court suffit
+     * à périmer la clé pour tout le monde.
+     *
+     * Sans ces deux lignes ici, ouvrir l'analytique PDJ ramenait la clé à 60 s
+     * et rouvrait la régression que l'audit du 2026-09-20 avait fermée.
+     * Compteurs relevés le 2026-09-23, sur trois jours :
+     * `pdj_addon_production` lue **144 fois** pour **25,4 s de CPU**, alors
+     * qu'une heure de fraîcheur suffit (la table ne bouge qu'à l'import Addon).
+     *
+     * Ne pas centraliser dans une constante partagée : ce serait une fausse
+     * source unique, puisque TanStack décide par observateur. Un rappel à
+     * chaque site est plus honnête.
+     */
+    staleTime: 60 * 60_000,
+    gcTime: 2 * 60 * 60_000,
   })
   const dailyCa = useMemo(
     () =>

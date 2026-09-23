@@ -620,8 +620,27 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   // de l'analytique (récap facturable). On invalide donc son cache (préfixe
   // `monthly-counts` → vues annuelle ET mensuelle) pour qu'il se resynchronise
   // sans rechargement complet de la page.
-  const invalidateAnalytique = () =>
+  /*
+   * DEUX invalidations, et la seconde n'est pas un doublon.
+   *
+   * Le filtrage de TanStack Query compare la clé ÉLÉMENT PAR ÉLÉMENT :
+   * `['rapro','daily-agg']` attrape `['rapro','daily-agg', 2026]` (les deux
+   * vues analytiques) mais PAS `['rapro','daily-agg-range', du, au]` (la bande
+   * de synthèse de RepJour), parce que l'élément d'index 1 diffère
+   * littéralement — « daily-agg » n'est pas un préfixe de « daily-agg-range »
+   * au sens du filtrage, c'est une autre chaîne.
+   *
+   * Conséquence avant le 2026-09-23 : après une clôture ou une réouverture, les
+   * moyennes 30 jours de la bande RepJour restaient périmées jusqu'au `gcTime`.
+   *
+   * Écrit en deux appels explicites plutôt qu'en renommant la clé de la bande :
+   * ça se lit sans connaître les règles de filtrage, et ça ne touche pas à une
+   * clé consommée ailleurs.
+   */
+  const invalidateAnalytique = () => {
     queryClient.invalidateQueries({ queryKey: ['rapro', 'daily-agg'] })
+    queryClient.invalidateQueries({ queryKey: ['rapro', 'daily-agg-range'] })
+  }
   // Ouvre le modal de clôture, en pré-remplissant le nom déjà posé (cas d'une
   // réouverture puis re-clôture).
   function openCloseModal() {

@@ -76,6 +76,24 @@ export function PdjAnalytiqueBoard() {
   const { data: addonRows = [] } = useQuery({
     queryKey: ['pdj', 'addon-all'],
     queryFn: fetchAllAddonProduction,
+    /*
+     * ⚠ MÊMES réglages que `BreakfastBoard.tsx` et `DayCrossSummary.tsx`, et ce
+     * n'est pas une duplication décorative : en TanStack Query v5 le
+     * `staleTime` est évalué PAR OBSERVATEUR. Un seul montant plus court suffit
+     * à périmer la clé pour tout le monde.
+     *
+     * Sans ces deux lignes ici, ouvrir l'analytique PDJ ramenait la clé à 60 s
+     * et rouvrait la régression que l'audit du 2026-09-20 avait fermée.
+     * Compteurs relevés le 2026-09-23, sur trois jours :
+     * `pdj_addon_production` lue **144 fois** pour **25,4 s de CPU**, alors
+     * qu'une heure de fraîcheur suffit (la table ne bouge qu'à l'import Addon).
+     *
+     * Ne pas centraliser dans une constante partagée : ce serait une fausse
+     * source unique, puisque TanStack décide par observateur. Un rappel à
+     * chaque site est plus honnête.
+     */
+    staleTime: 60 * 60_000,
+    gcTime: 2 * 60 * 60_000,
   })
 
   // Externes de l'année (bouton « Externe » du board) : s'additionnent au PDJ

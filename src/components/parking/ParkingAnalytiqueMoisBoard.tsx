@@ -60,6 +60,17 @@ export function ParkingAnalytiqueMoisBoard({
   const { data: arrivalRows = [] } = useQuery({
     queryKey: ['parking', 'arrivals-all'],
     queryFn: fetchParkingArrivals,
+    /*
+     * ⚠ MÊME `staleTime` que la vue annuelle (`ParkingAnalytiqueBoard.tsx`) :
+     * évalué PAR OBSERVATEUR, son absence ici ramenait la clé partagée à 60 s.
+     * Corrigé le 2026-09-23.
+     *
+     * ⚠ Cette lecture n'est bornée par AUCUNE date : elle rapatrie tout
+     * l'historique des arrivées pour n'en exploiter que 28 à 31 jours. Allonger
+     * sa fraîcheur atténue le symptôme, pas la cause — le bornage est traité à
+     * l'étape 7 du chantier du 2026-09-23.
+     */
+    staleTime: 10 * 60_000,
   })
 
   const loading = loadingOcc

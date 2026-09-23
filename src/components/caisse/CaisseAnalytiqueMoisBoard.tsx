@@ -47,6 +47,19 @@ export function CaisseAnalytiqueMoisBoard({
   const { data: sheets = [], isPending: loading } = useQuery({
     queryKey: ['caisse', 'analytics'],
     queryFn: fetchSheets,
+    /*
+     * ⚠ MÊME `staleTime` que la vue annuelle (`CaisseAnalytiqueBoard.tsx`) : en
+     * TanStack Query v5 il est évalué PAR OBSERVATEUR, donc l'absence de
+     * réglage ici ramenait la clé partagée à 60 s et périmait les 10 minutes
+     * que l'annuel garde. Or `fetchSheets` lit TOUTE la table en pagination
+     * séquentielle. Corrigé le 2026-09-23.
+     *
+     * Ces 10 minutes ne protègent de toute façon qu'entre deux actions de
+     * saisie : `CaisseBoard.tsx:644` invalide `['caisse']` en entier à chaque
+     * clôture, en succès comme en échec. C'est VOULU — les chiffres doivent
+     * suivre la saisie — et ce n'est donc pas à corriger.
+     */
+    staleTime: 10 * 60_000,
   })
   // MÊME clé que le board /caisse et la vue annuelle (cache partagé) — voir
   // CaisseAnalytiqueBoard.tsx pour la raison (D4, correction rétroactive).
