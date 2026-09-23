@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react'
@@ -18,11 +18,7 @@ import { useYearNav } from '#/components/analytique/YearNav.tsx'
 import { StepNav } from '#/components/shared/StepNav.tsx'
 import { useAnnualYear } from '#/components/analytique/useAnnualYear.ts'
 import { KpiLineChart } from '#/components/analytique/KpiLineChart.tsx'
-import {
-  fetchBudgetYears,
-  fetchYearAnalytics,
-  fetchYearBudget,
-} from '#/lib/repjour/services/daily.ts'
+import { fetchRepjourAnalytiqueAnnuelle } from '#/lib/repjour/services/daily.ts'
 import { MONTHS_LABELS, MONTHS_SHORT, TOTAL_ROOMS } from '#/lib/repjour/constants.ts'
 import { fmt } from '#/lib/repjour/format.ts'
 
@@ -55,17 +51,50 @@ export function AnalytiqueBoard() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
-  // Liste des années disponibles (budget) — mise en cache par le QueryClient.
-  const { data: years = [] } = useQuery({
-    queryKey: ['repjour', 'budget-years'],
-    queryFn: async () => {
-      const yrs = await fetchBudgetYears()
-      return yrs.length > 0 ? yrs : [currentYear]
-    },
+  /* L'année RÉELLEMENT lue. Elle vaut l'année courante au premier rendu, puis
+     l'année choisie dès que `useAnnualYear` a tranché — y compris après un
+     recalage. Séparée de `year` pour que le `useQuery` puisse être déclaré
+     AVANT le hook qui dépend de sa réponse : c'est ce qui casse la cascade. */
+  const [yearDemande, setYearDemande] = useState(currentYear)
+
+  /*
+   * UNE lecture pour toute la page (2026-09-23), et elle casse la cascade.
+   *
+   * Avant : quatre allers-retours en DEUX vagues. Les années disponibles
+   * étaient lues d'abord, elles alimentaient `useAnnualYear`, qui fixait
+   * l'année, qui entrait dans la clé de la seconde requête. Pire, quand
+   * l'année courante n'était pas dans la liste, un `useEffect` recalait
+   * l'année et relançait TROIS requêtes en jetant les premières.
+   *
+   * Maintenant : la RPC rend les années DANS sa réponse. La première lecture
+   * part sur l'année courante, et si elle doit être recalée, c'est une seconde
+   * lecture — pas quatre.
+   *
+   * La clé reste sous `['repjour', …]` : les cinq
+   * `invalidateQueries({ queryKey: ['repjour'] })` du tableau de bord et celle
+   * de l'import Forecast (plus bas) continuent de l'attraper sans
+   * modification.
+   */
+  const { data, isPending: loading } = useQuery({
+    queryKey: ['repjour', 'analytique-annuelle', yearDemande],
+    queryFn: () => fetchRepjourAnalytiqueAnnuelle(yearDemande),
   })
+
+  /* Repli `[annéeCourante]` quand le budget est vide : conservé ICI, tel quel.
+     Le déplacer dans la RPC changerait son contrat — `years = []` casse
+     `useYearNav`, et ce n'est pas à une fonction SQL d'en décider. */
+  const years = useMemo(() => {
+    const yrs = data?.annees ?? []
+    return yrs.length > 0 ? yrs : [currentYear]
+  }, [data?.annees])
 
   // Année sélectionnée + recalage si absente de la liste (hook partagé).
   const { year, setYear } = useAnnualYear(years, currentYear)
+  useEffect(() => {
+    // Une seule lecture de plus quand l'année change (ou après un recalage),
+    // là où l'ancien chemin en relançait trois.
+    if (year !== yearDemande) setYearDemande(year)
+  }, [year, yearDemande])
 
   // Agrégation annuelle + budget de l'année.
   //
@@ -77,13 +106,8 @@ export function AnalytiqueBoard() {
   // puisqu'elle en porte le préfixe. Une requête invalidée pendant qu'elle est
   // démontée est marquée périmée et se recharge au montage suivant : le
   // comportement observé est identique, sans le coût dans tous les autres cas.
-  const { data, isPending: loading } = useQuery({
-    queryKey: ['repjour', 'year-analytics', year],
-    queryFn: () =>
-      Promise.all([fetchYearAnalytics(year), fetchYearBudget(year)]),
-  })
-  const analytics = data?.[0] ?? []
-  const budgets = data?.[1] ?? []
+  const analytics = data?.mois ?? []
+  const budgets = data?.budgets ?? []
 
   // Mois PASSÉS ou EN COURS uniquement (on exclut les mois futurs — purement
   // prévisionnels — pour ne pas gonfler les cartes avec du forecast), et portant

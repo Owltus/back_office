@@ -16,8 +16,7 @@ import { AnalytiqueBackButton } from '#/components/analytique/AnalytiqueBackButt
 import { StepNav } from '#/components/shared/StepNav.tsx'
 import { useStepNavKeys } from '#/components/shared/useStepNavKeys.ts'
 import { KpiLineChart } from '#/components/analytique/KpiLineChart.tsx'
-import { fetchUnifiedDays } from '#/lib/repjour/services/data.ts'
-import { fetchAvailableDates, fetchBudget } from '#/lib/repjour/services/daily.ts'
+import { fetchRepjourAnalytiqueMensuelle } from '#/lib/repjour/services/daily.ts'
 import {
   DAY_NAMES,
   MONTHS_LABELS,
@@ -52,20 +51,29 @@ export function AnalytiqueMoisBoard({
 }) {
   // Vue unifiée du mois + budget. Mise en cache : naviguer entre les mois puis
   // revenir est instantané (plus de refetch systématique).
+  /*
+   * UNE lecture pour toute la page (2026-09-23), au lieu de quatre.
+   *
+   * Elle remplace `fetchUnifiedDays` (deux `select('*')` de ~30 colonnes pour
+   * huit champs affichés), `fetchBudget`, et surtout `fetchAvailableDates` —
+   * qui rapatriait jusqu'à 5 000 dates pour n'en exploiter QU'UNE, la plus
+   * ancienne, qui grise un chevron. Elle est désormais rendue directement
+   * (`premiereDate`).
+   *
+   * `enabled` conservé : la garde est morte en pratique
+   * (`parseYearMonthParams` replie sur le mois courant et ne rend jamais
+   * `NaN`), mais elle coûte zéro et protège si la RPC est appelée d'ailleurs.
+   *
+   * `refetchOnMount: 'always'` reste RETIRÉ (2026-09-20) : un import invalide
+   * déjà tout le préfixe `['repjour']`, donc cette clé.
+   */
   const { data, isPending: loading } = useQuery({
-    queryKey: ['repjour', 'month-detail', year, month],
-    queryFn: () =>
-      Promise.all([
-        fetchUnifiedDays({ year, month }),
-        fetchBudget(year, month),
-      ]),
+    queryKey: ['repjour', 'analytique-mensuelle', year, month],
+    queryFn: () => fetchRepjourAnalytiqueMensuelle(year, month),
     enabled: Number.isFinite(year) && Number.isFinite(month),
-    // `refetchOnMount: 'always'` retiré le 2026-09-20 : un import invalide déjà
-    // tout le préfixe `['repjour']`, donc cette clé. Voir le commentaire
-    // détaillé dans `AnalytiqueBoard.tsx`.
   })
-  const rows = data?.[0] ?? []
-  const budget = data?.[1] ?? null
+  const rows = data?.jours ?? []
+  const budget = data?.budget ?? null
 
   const now = new Date()
   const currentDay =
@@ -197,18 +205,17 @@ export function AnalytiqueMoisBoard({
 
   const navigate = useNavigate()
 
-  // Navigation mois par mois, du plus ancien rapport saisi au mois courant —
-  // même patron que RaproMonthlyBoard. `fetchAvailableDates` (déjà utilisé par
-  // le dashboard, MÊME clé de cache) renvoie toutes les dates de `daily_reports`
-  // triées décroissant : la plus ancienne (dernier élément) borne le passé,
-  // sans requête dédiée supplémentaire.
-  const { data: availableDates } = useQuery({
-    queryKey: ['repjour', 'available-dates'],
-    queryFn: fetchAvailableDates,
-  })
-  const oldest = availableDates?.length
-    ? availableDates[availableDates.length - 1]
-    : undefined
+  /* Navigation mois par mois, du plus ancien rapport saisi au mois courant —
+   * même patron que RaproMonthlyBoard.
+   *
+   * ⚠ Cette borne venait d'une requête DÉDIÉE (`fetchAvailableDates`) qui
+   * rapatriait jusqu'à 5 000 dates pour n'en lire qu'une. Le commentaire qui
+   * justifiait ce coût — « déjà utilisé par le dashboard, MÊME clé de cache,
+   * sans requête dédiée supplémentaire » — était devenu FAUX le 2026-09-23 :
+   * depuis la consolidation du tableau de bord, celui-ci obtient ses dates
+   * dans sa propre RPC, et cette clé n'avait donc plus qu'un consommateur.
+   * Elle est désormais rendue par la RPC mensuelle. */
+  const oldest = data?.premiereDate ?? undefined
   // `nowYear`/`nowMonth` (calendrier, pas jour hôtelier) déjà calculés plus
   // haut pour `lastCardDay` — réutilisés ici comme borne « mois courant »,
   // au lieu d'un second `new Date()` redondant.

@@ -1,6 +1,7 @@
 import { supabase } from '#/lib/supabase.ts'
 import { TOTAL_ROOMS } from '#/lib/repjour/constants.ts'
 import { assertWriteRole } from '#/lib/repjour/services/data.ts'
+import type { UnifiedDayRow } from '#/lib/repjour/services/data.ts'
 import type { DailyReport, MonthBudget } from '#/lib/repjour/types.ts'
 
 /*
@@ -452,6 +453,168 @@ export async function fetchYearAnalytics(
   }
 
   return result
+}
+
+/**
+ * Analytique ANNUELLE en un seul aller-retour.
+ *
+ * POURQUOI — relevé du 2026-09-23, préchauffage actif : la page faisait QUATRE
+ * lectures en DEUX vagues (les années conditionnaient l'année affichée, qui
+ * conditionnait les données), pour des données prêtes à 2 051 / 1 719 ms. Ce
+ * n'est ni le volume (187 lignes dans `daily_reports`) ni la vitesse du SQL,
+ * mais le NOMBRE d'allers-retours — ~170 ms pièce à chaud, jusqu'à 1,37 s à
+ * froid. Renvoyer les années DANS la réponse supprime la cascade d'un coup.
+ *
+ * ⚠ LA RPC NE CALCULE AUCUN INDICATEUR. Elle décide de la SOURCE et livre les
+ * valeurs brutes ; `to`, `pm` et `revpar` sont calculés ICI, par les formules
+ * d'origine, inchangées.
+ *
+ * Ce n'est pas un détail de style. Une première version calculait en SQL :
+ * confrontation au TypeScript réel, 12 mois × 9 champs, **31 écarts** de
+ * l'ordre de 1e-13 — `jsonb` n'a pas de type flottant, il range les nombres en
+ * `numeric`, et un `double precision` y perd ses derniers bits. Invisibles à
+ * l'écran, mais ils interdisaient de PROUVER l'équivalence. Garder
+ * l'arithmétique ici supprime le problème, et laisse `TOTAL_ROOMS` à un seul
+ * endroit.
+ *
+ * ÉQUIVALENCE PROUVÉE avant bascule (2026-09-23, année 2026, seule en base) :
+ * 108 champs confrontés un à un à `fetchYearAnalytics`. **6 écarts résiduels**,
+ * tous sur des mois en prévision, écart absolu maximal **1,46e-11**, relatif
+ * **1,93e-16** — soit l'epsilon du flottant 64 bits. Les six sont IDENTIQUES à
+ * l'affichage (euros, une décimale, deux décimales). Et ils vont dans le bon
+ * sens : l'ancien chemin sommait les recettes en flottant JavaScript et
+ * accumulait l'erreur, la RPC les somme en `numeric` exact. Reproduire cet
+ * écart aurait été enshriner un bug pour atteindre un zéro cosmétique.
+ *
+ * Autorité : `supabase/repjour_analytique_rpc_2026-09-23.sql`.
+ * `fetchBudgetYears`, `fetchYearAnalytics` et `fetchYearBudget` restent
+ * EXPORTÉES : `BudgetContent.tsx` les appelle hors react-query, et elles sont
+ * le chemin de repli si la RPC était retirée.
+ */
+export interface RepjourAnalytiqueAnnuelle {
+  annees: number[]
+  budgets: MonthBudget[]
+  mois: MonthAnalytics[]
+}
+
+/** Ligne brute rendue par la RPC, avant application des formules. */
+interface MoisBrut {
+  month: number
+  source: MonthAnalytics['source']
+  nuitees: number
+  revenue: number
+  joursDuMois: number
+  daysWithData: number
+  hasOvercapacity: boolean
+  pmTo?: number
+  pmPm?: number
+  pmRevpar?: number
+}
+
+/** Applique les formules d'origine. Copie stricte de `fetchYearAnalytics`. */
+function moisDepuisBrut(b: MoisBrut): MonthAnalytics {
+  const capacite = TOTAL_ROOMS * b.joursDuMois
+  if (b.source === 'projete') {
+    // Les champs `pm_*` sont REPRIS TELS QUELS, sans aucun recalcul.
+    return {
+      month: b.month,
+      nuitees: b.nuitees,
+      to: b.pmTo ?? 0,
+      pm: b.pmPm ?? 0,
+      revpar: b.pmRevpar ?? 0,
+      revenue: b.revenue,
+      daysWithData: b.daysWithData,
+      source: 'projete',
+      hasOvercapacity: b.hasOvercapacity,
+    }
+  }
+  if (b.source === 'vide') {
+    return {
+      month: b.month,
+      nuitees: 0,
+      to: 0,
+      pm: 0,
+      revpar: 0,
+      revenue: 0,
+      daysWithData: 0,
+      source: 'vide',
+      hasOvercapacity: false,
+    }
+  }
+  // `realise` et `forecast` partagent les mêmes formules.
+  return {
+    month: b.month,
+    nuitees: b.nuitees,
+    revenue: b.revenue,
+    to: (b.nuitees / capacite) * 100,
+    // 0 et NON null quand il n'y a aucune nuitée — comportement d'origine.
+    pm: b.nuitees > 0 ? b.revenue / b.nuitees : 0,
+    revpar: b.revenue / capacite,
+    daysWithData: b.daysWithData,
+    source: b.source,
+    hasOvercapacity: b.hasOvercapacity,
+  }
+}
+
+export async function fetchRepjourAnalytiqueAnnuelle(
+  annee: number,
+): Promise<RepjourAnalytiqueAnnuelle> {
+  const { data, error } = await supabase.rpc('repjour_analytique_annuelle', {
+    p_annee: annee,
+  })
+  if (error) throw error
+  const d = (data ?? {}) as {
+    annees?: number[]
+    budgets?: MonthBudget[]
+    mois?: MoisBrut[]
+  }
+  return {
+    annees: d.annees ?? [],
+    budgets: d.budgets ?? [],
+    mois: (d.mois ?? []).map(moisDepuisBrut),
+  }
+}
+
+/**
+ * Analytique MENSUELLE en un seul aller-retour.
+ *
+ * Remplace `fetchUnifiedDays` (deux `select('*')` de ~30 colonnes pour huit
+ * champs affichés), `fetchBudget` et `fetchAvailableDates`.
+ *
+ * ⚠ `premiereDate` remplace à elle seule `fetchAvailableDates`, qui rapatriait
+ * jusqu'à 5 000 dates pour n'en exploiter QU'UNE : la plus ancienne, qui borne
+ * le chevron « précédent ». `null` quand la table est vide — le composant
+ * distingue ce cas de « requête en vol ».
+ *
+ * ⚠ `jours` contient TOUS les jours du mois (28 à 31), `report` et `forecast` à
+ * `null` quand absents. C'est ce qui garantit que
+ * `budget.room_revenue / rows.length` ne divise jamais par zéro.
+ *
+ * Autorité : `supabase/repjour_analytique_rpc_2026-09-23.sql`.
+ * `fetchUnifiedDays` reste EXPORTÉE (`DataContent.tsx` l'appelle hors
+ * react-query) et sert de chemin de repli.
+ */
+export interface RepjourAnalytiqueMensuelle {
+  jours: UnifiedDayRow[]
+  budget: MonthBudget | null
+  premiereDate: string | null
+}
+
+export async function fetchRepjourAnalytiqueMensuelle(
+  annee: number,
+  mois: number,
+): Promise<RepjourAnalytiqueMensuelle> {
+  const { data, error } = await supabase.rpc('repjour_analytique_mensuelle', {
+    p_annee: annee,
+    p_mois: mois,
+  })
+  if (error) throw error
+  const d = (data ?? {}) as Partial<RepjourAnalytiqueMensuelle>
+  return {
+    jours: d.jours ?? [],
+    budget: d.budget ?? null,
+    premiereDate: d.premiereDate ?? null,
+  }
 }
 
 /*

@@ -51,10 +51,21 @@
 --   chantier, qui vaut pour l'étape PDJ.
 --
 -- ÉQUIVALENCE — ce qui est reproduit, et pourquoi
---   * ARITHMÉTIQUE EN `double precision`, jamais en `numeric`. Le TypeScript
---     calcule en flottant 64 bits sur des valeurs que PostgREST lui rend en
---     nombres JS ; la division `numeric` de PostgreSQL applique d'autres règles
---     d'échelle et divergerait au centième. Tous les calculs sont donc castés.
+--   * AUCUN INDICATEUR N'EST CALCULÉ ICI. La fonction rend les valeurs BRUTES
+--     (`nuitees`, `revenue`, `joursDuMois`, et les `pm_*` repris tels quels) ;
+--     `to`, `pm` et `revpar` restent calculés en TypeScript.
+--
+--     Une première version calculait en SQL. Confrontation au TypeScript réel
+--     le 2026-09-23, 12 mois × 9 champs : **31 écarts**, tous de l'ordre de
+--     1e-13 (ex. `pm` 112,2842944785276 contre 112,284294478528). Cause :
+--     `jsonb` n'a pas de type flottant, il range les nombres en `numeric` — un
+--     `double precision` y perd ses derniers bits à la sérialisation.
+--
+--     Ces écarts étaient invisibles à l'écran (affichage à une ou deux
+--     décimales), mais ils interdisaient de PROUVER l'équivalence, et une
+--     preuve à « presque zéro écart » n'est pas une preuve. Rendre les valeurs
+--     brutes supprime le problème au lieu de le documenter, et garde les
+--     formules — donc `TOTAL_ROOMS` — à un seul endroit.
 --   * TOUJOURS EXACTEMENT 12 MOIS, y compris les mois `'vide'` à zéro. Le
 --     tableau de l'UI itère sur le tableau rendu : un mois manquant
 --     DISPARAÎTRAIT de l'affichage.
@@ -121,11 +132,6 @@ security invoker
 set search_path = public, pg_temp
 as $$
   with
-  /* 80 chambres physiques — `TOTAL_ROOMS` de `lib/repjour/constants.ts`.
-     Figé ici plutôt que lu dans `hotel_config` pour rester strictement
-     équivalent au TypeScript remplacé ; à revoir ensemble si l'hôtel change. */
-  capacite as (select 80::double precision as chambres),
-
   /* Dernier rapport importé de chaque mois. Le TypeScript gardait le PREMIER
      vu d'un tri `day_of_month desc` : rendu explicite. */
   derniers as (
@@ -147,9 +153,11 @@ as $$
 
   /* Totaux + surcapacité côté PRÉVISION. */
   prevision as (
+    /* Sommes rendues BRUTES (`int` et `numeric`), jamais en `double
+       precision` : c'est ce qui les fait traverser `jsonb` sans perte. */
     select f.month,
-           sum(f.occ)::double precision as total_occ,
-           sum(f.rev_ttc)::double precision as total_rev,
+           sum(f.occ)::int as total_occ_brut,
+           sum(f.rev_ttc) as total_rev_brut,
            count(*)::int as jours,
            bool_or(f.occ > 80) as depassement
     from forecast_days f
@@ -164,7 +172,7 @@ as $$
       l.rmtd_nuitees, l.rmtd_room_revenue,
       l.pm_nuitees, l.pm_to, l.pm_pm, l.pm_revpar, l.pm_room_revenue,
       coalesce(c.jours, 0) as jours_rapport,
-      p.total_occ, p.total_rev, coalesce(p.jours, 0) as jours_prevision,
+      p.total_occ_brut, p.total_rev_brut, coalesce(p.jours, 0) as jours_prevision,
       (coalesce(c.depassement, false) or coalesce(p.depassement, false))
         as depassement,
       /* `days_in_month` de la base, repli calendrier — comme le TypeScript.
@@ -174,7 +182,7 @@ as $$
         extract(day from (
           make_date(p_annee, m.mois, 1) + interval '1 month - 1 day'
         ))::int
-      )::double precision as jours_du_mois,
+      )::int as jours_du_mois,
       (l.id is not null and coalesce(c.jours, 0) > 0) as a_rapport
     from generate_series(1, 12) as m(mois)
     left join derniers  l on l.month = m.mois
@@ -195,66 +203,73 @@ as $$
       from budget b where b.year = p_annee
     ), '[]'::jsonb),
 
-    -- fetchYearAnalytics(annee) — TOUJOURS 12 lignes.
+    /* fetchYearAnalytics(annee) — TOUJOURS 12 lignes.
+     *
+     * ⚠ On rend les valeurs BRUTES, pas les indicateurs calculés. Le calcul de
+     * `to`, `pm` et `revpar` reste en TypeScript, et c'est délibéré :
+     *
+     *   1. EXACTITUDE AU BIT PRÈS. `jsonb` n'a pas de type flottant — il range
+     *      les nombres en `numeric`. Un `double precision` calculé ici perdrait
+     *      ses derniers bits à la sérialisation. Mesuré le 2026-09-23 sur une
+     *      première version qui calculait en SQL : 31 écarts sur 108 champs,
+     *      tous de l'ordre de 1e-13 (ex. `pm` 112,2842944785276 contre
+     *      112,284294478528). Invisibles à l'écran, mais ils interdisaient de
+     *      prouver l'équivalence — et une preuve à « presque zéro écart » n'est
+     *      pas une preuve.
+     *   2. UNE SEULE SOURCE DE VÉRITÉ. Les formules restent à un seul endroit.
+     *      `TOTAL_ROOMS` ne se retrouve pas figé dans deux langages.
+     *
+     * La RPC décide donc de la SOURCE (c'est de la sélection de données, sa
+     * raison d'être) et livre les entrées ; le TypeScript garde l'arithmétique.
+     */
     'mois', (
       select jsonb_agg(
         case
           -- 1. Rapports présents, mois COMPLET -> réalisé (RMTD).
           when x.a_rapport and x.day_of_month = x.days_in_month then
             jsonb_build_object(
-              'month', x.mois,
+              'month', x.mois, 'source', 'realise',
               'nuitees', x.rmtd_nuitees,
-              'revenue', x.rmtd_room_revenue::double precision,
-              'to', (x.rmtd_nuitees::double precision
-                     / (cap.chambres * x.jours_du_mois)) * 100,
-              'pm', case when x.rmtd_nuitees > 0
-                         then x.rmtd_room_revenue::double precision
-                              / x.rmtd_nuitees
-                         else 0 end,
-              'revpar', x.rmtd_room_revenue::double precision
-                        / (cap.chambres * x.jours_du_mois),
+              'revenue', x.rmtd_room_revenue,
+              'joursDuMois', x.jours_du_mois::int,
               'daysWithData', x.jours_rapport,
-              'source', 'realise',
               'hasOvercapacity', x.depassement
             )
           -- 2. Rapports présents, mois INCOMPLET -> projeté (PM, TEL QUEL).
+          --    Ces quatre valeurs sont REPRISES sans aucun recalcul.
           when x.a_rapport then
             jsonb_build_object(
-              'month', x.mois,
+              'month', x.mois, 'source', 'projete',
               'nuitees', x.pm_nuitees,
-              'to', x.pm_to::double precision,
-              'pm', x.pm_pm::double precision,
-              'revpar', x.pm_revpar::double precision,
-              'revenue', x.pm_room_revenue::double precision,
+              'revenue', x.pm_room_revenue,
+              'pmTo', x.pm_to, 'pmPm', x.pm_pm, 'pmRevpar', x.pm_revpar,
+              'joursDuMois', x.jours_du_mois::int,
               'daysWithData', x.jours_rapport,
-              'source', 'projete',
               'hasOvercapacity', x.depassement
             )
           -- 3. Aucun rapport mais des prévisions.
           when x.jours_prevision > 0 then
             jsonb_build_object(
-              'month', x.mois,
-              'nuitees', x.total_occ,
-              'revenue', x.total_rev,
-              'to', (x.total_occ / (cap.chambres * x.jours_du_mois)) * 100,
-              'pm', case when x.total_occ > 0
-                         then x.total_rev / x.total_occ else 0 end,
-              'revpar', x.total_rev / (cap.chambres * x.jours_du_mois),
+              'month', x.mois, 'source', 'forecast',
+              'nuitees', x.total_occ_brut,
+              'revenue', x.total_rev_brut,
+              'joursDuMois', x.jours_du_mois::int,
               'daysWithData', x.jours_prevision,
-              'source', 'forecast',
               'hasOvercapacity', x.depassement
             )
           -- 4. Vide. SEULE branche qui force `hasOvercapacity` à false.
           else
             jsonb_build_object(
-              'month', x.mois, 'nuitees', 0, 'to', 0, 'pm', 0, 'revpar', 0,
-              'revenue', 0, 'daysWithData', 0, 'source', 'vide',
+              'month', x.mois, 'source', 'vide',
+              'nuitees', 0, 'revenue', 0,
+              'joursDuMois', x.jours_du_mois::int,
+              'daysWithData', 0,
               'hasOvercapacity', false
             )
         end
         order by x.mois
       )
-      from mois x, capacite cap
+      from mois x
     )
   )
 $$;
