@@ -1,7 +1,7 @@
 import type { ComponentProps, ReactNode } from 'react'
 
 import { StatTile } from '#/components/shared/StatTile.tsx'
-import { cn } from '#/lib/utils.ts'
+import { cardsGridClass } from '#/components/analytique/gridClasses.ts'
 
 /*
  * Grille et carte de synthèse des pages analytique. La grille (`shrink-0`,
@@ -13,17 +13,10 @@ import { cn } from '#/lib/utils.ts'
  * repjour…). `accent` par défaut = primary (les pages qui codent une couleur —
  * ex. rapro — la passent explicitement).
  */
-/** Classe de la grille de cartes — source UNIQUE, partagée avec le squelette de
- * chargement (`AnalytiqueSkeleton`) pour qu'ils ne dérivent jamais l'un de l'autre. */
-export function cardsGridClass(cols: number): string {
-  return cn(
-    'grid shrink-0 grid-cols-2 gap-3',
-    cols === 7 && 'sm:grid-cols-4 lg:grid-cols-7',
-    cols === 6 && 'sm:grid-cols-3 lg:grid-cols-6',
-    cols === 5 && 'sm:grid-cols-5',
-    cols !== 5 && cols !== 6 && cols !== 7 && 'sm:grid-cols-4',
-  )
-}
+/* `cardsGridClass` vit desormais dans `gridClasses.ts` (module sans dependance
+ * lourde) pour que le squelette de ROUTE puisse la reutiliser sans tirer tout le
+ * socle analytique dans le chunk d'entree. Re-exportee ici : aucun appelant ne change. */
+export { cardsGridClass } from '#/components/analytique/gridClasses.ts'
 
 export function AnalytiqueCardsGrid({
   children,

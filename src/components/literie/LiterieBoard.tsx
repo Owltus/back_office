@@ -5,7 +5,7 @@ import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { BabyCotBoard } from '#/components/literie/BabyCotBoard.tsx'
 import { MouseGlyph } from '#/components/parking/MouseGlyph.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
-import { Skeleton } from '#/components/ui/skeleton.tsx'
+import { FormeLiterie } from '#/components/shared/skeleton/PageShapes.tsx'
 import { beddingMap, FLOORS } from '#/lib/literie/model.ts'
 import { fetchRooms, toggleBedding } from '#/lib/literie/service.ts'
 import type { DbHotelRoom } from '#/lib/literie/types.ts'
@@ -97,7 +97,14 @@ export function LiterieBoard() {
       )}
 
       {loading ? (
-        <Skeleton className="h-96 flex-1 rounded-xl" />
+        /* DÉLÈGUE à `FormeLiterie` depuis le 2026-09-24. Cette page avait, comme
+           /pdj et /repjour, deux squelettes sans rapport l'un avec l'autre : le
+           squelette de route dessinait quatre cartes de stock et un tableau de
+           huit lignes — aucun des deux n'existe sur cette page — et celui-ci
+           un unique bloc gris de 384 px pour six cartes d'étage, une légende et
+           le planning des lits bébé ENTIER. Une seule silhouette désormais,
+           bâtie sur les vraies classes `literie-floors` / `literie-room`. */
+        <FormeLiterie />
       ) : (
         <>
           <div className={cn('literie-floors', !canWrite && 'is-locked')}>

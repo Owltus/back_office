@@ -1366,7 +1366,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
       {/* Un seul gate bascule le corps : squelette pendant le fetch (jamais la
           dropzone), contenu si données, sinon l'EmptyCanvas (vide réel). */}
       {loading ? (
-        <BoardSkeleton />
+        <BoardSkeleton tabletPortrait={tabletPortrait} />
       ) : !hasData ? (
         canManualImport ? (
           // Jour courant (ou jour sélectionné) sans rapport : on NE retombe PAS
@@ -1907,16 +1907,25 @@ function ExternalsDialog({
  * celui-ci soit invisible — et pour qu'une divergence de ce genre ne puisse
  * plus se réinstaller en silence.
  *
- * ⚠ La rangée de tuiles y est FIXÉE à six. En tablette portrait, le vrai
- * contenu n'en affiche que cinq (« Taux de captage » retirée). C'est un écart
- * connu et assumé : une tuile en trop se contracte à l'arrivée des données,
- * une tuile manquante ferait sauter toute la grille.
+ * ⚠ REND UN FRAGMENT, pas un `<div>`. `.pdj-doc` est un `flex flex-col gap-5`
+ * dont `.pdj-stats` et `.pdj-floors` sont deux enfants DIRECTS. Le `<div>`
+ * englobant posé ici le 2026-09-23 les enfermait dans un seul enfant flex :
+ * le `gap-5` ne s'appliquait plus entre eux, et le `<div>` n'ayant aucune
+ * classe d'espacement, la grille des étages remontait de 20 px — 20 px de saut
+ * réintroduits par le commit même qui en supprimait 215. `FormePdj` porte son
+ * propre `aria-hidden` sur chacun des deux blocs.
+ *
+ * ⚠ `tabletPortrait` est transmis. Entre 768 et 1023 px, le vrai contenu
+ * n'affiche que CINQ tuiles ET pose `pdj-stats-grid--tablet-portrait`, qui fait
+ * passer la grille à 5 colonnes — un seul rang. Le squelette, à six tuiles sans
+ * la classe, restait sur 3 colonnes, donc DEUX rangs : ce n'était pas « une
+ * tuile en trop qui se contracte » comme l'affirmait le commentaire précédent,
+ * mais un rang entier de ~90 px qui disparaissait, sur la classe d'appareil que
+ * vise l'application. Le board est monté APRÈS l'hydratation : il peut lire la
+ * largeur sans risquer l'erreur React #418, contrairement au squelette de
+ * route, qui garde six tuiles et l'écart documenté.
  */
-function BoardSkeleton() {
-  return (
-    <div aria-hidden="true">
-      <FormePdj />
-    </div>
-  )
+function BoardSkeleton({ tabletPortrait }: { tabletPortrait: boolean }) {
+  return <FormePdj tabletPortrait={tabletPortrait} />
 }
 

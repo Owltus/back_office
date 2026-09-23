@@ -18,7 +18,6 @@ import { LockBadge } from '#/components/shared/LockBadge.tsx'
 import { MobileToolbar, ToolbarCell } from '#/components/shared/MobileToolbar.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
-import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { StepNav } from '#/components/shared/StepNav.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
@@ -59,6 +58,7 @@ import {
   EcartsRow,
   MoneyInput,
 } from '#/components/caisse/CaisseSheetParts.tsx'
+import { FormeCaisse } from '#/components/shared/skeleton/PageShapes.tsx'
 import { CaisseHelpPanel } from '#/components/caisse/CaisseHelpPanel.tsx'
 import { CloseSheetDialog } from '#/components/shared/CloseSheetDialog.tsx'
 import { HelpDialogHeader } from '#/components/shared/HelpDialogHeader.tsx'
@@ -1045,80 +1045,16 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
       )}
 
       {!ready ? (
-        // Squelette-reflet pendant le chargement : reprend la VRAIE ossature du
-        // tableau des montants (en-têtes invariants + `cols`, qui inclut la
-        // colonne « web » du soir), la vraie grille des dénominations et la carte
-        // commentaires — mêmes paddings, mêmes hauteurs d'input, même 500 € pleine
-        // largeur sur mobile — pour ne rien décaler. Rendre le corps seulement une
-        // fois `ready` supprime le flash « valeurs vides → hydratées ». En-tête et
-        // LockBadge restent gérés au-dessus.
-        <>
-          <div
-            className="caisse-table overflow-x-auto rounded-xl border border-border bg-card"
-            aria-hidden="true"
-          >
-            <table className="w-full table-fixed border-collapse text-sm">
-              <thead>
-                <AmountsThead cols={cols} />
-              </thead>
-              <tbody>
-                {Array.from({ length: 3 }).map((_, r) => (
-                  <tr key={r} className="border-b border-border/60">
-                    <td className="px-3 py-2">
-                      <Skeleton className="h-4 w-24" />
-                    </td>
-                    {cols.map((c) => (
-                      <td key={c} className="px-2 py-1">
-                        <Skeleton className="h-9 w-full rounded-md" />
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-                <tr className="border-t border-border bg-muted/30">
-                  <td className="px-3 py-1.5">
-                    <Skeleton className="h-4 w-16" />
-                  </td>
-                  {cols.map((c) => (
-                    <td key={c} className="px-3 py-1.5">
-                      <Skeleton className="ml-auto h-4 w-12" />
-                    </td>
-                  ))}
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <div
-            className="rounded-xl border border-border bg-card p-3"
-            aria-hidden="true"
-          >
-            <div className="caisse-denoms grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-flow-col lg:grid-cols-5 lg:grid-rows-3">
-              {DENOMINATIONS.map((d) => (
-                <Skeleton
-                  key={d.key}
-                  className={cn(
-                    'h-[5.5rem] rounded-lg',
-                    d.key === 'cnt_500' && 'col-span-2 sm:col-span-1',
-                  )}
-                />
-              ))}
-            </div>
-            <div className="mt-2 flex items-center justify-between">
-              <Skeleton className="h-4 w-32" />
-              <Skeleton className="h-4 w-24" />
-            </div>
-          </div>
-
-          {/* Zone commentaire FLEXIBLE : même bornage que le contenu réel
-              (flex-1 + plancher) pour ne rien décaler au passage au contenu. */}
-          <div
-            className="flex flex-1 flex-col rounded-xl border border-border bg-card p-3"
-            aria-hidden="true"
-          >
-            <Skeleton className="mb-2 h-4 w-28" />
-            <Skeleton className="min-h-16 w-full flex-1 rounded-md" />
-          </div>
-        </>
+        // Squelette-reflet pendant le chargement. DÉLÈGUE à `FormeCaisse`
+        // depuis le 2026-09-24 : cette page avait elle aussi DEUX silhouettes,
+        // celle-ci (fidèle) et celle du squelette de route (dessinée à vue —
+        // un bandeau d'état qui n'existe pas, deux colonnes de saisie à la
+        // place d'une table unique, des cases de comptage de 36 px pour des
+        // cellules qui en font 88, et pas de carte Commentaires). Une seule
+        // désormais, à qui l'on passe le nombre RÉEL de colonnes du shift
+        // affiché (`cols` inclut « Carte web / Adyen » le matin et le soir).
+        // En-tête et LockBadge restent gérés au-dessus.
+        <FormeCaisse cols={cols.length} />
       ) : (
         <>
           {/* Tableau des montants + écarts (défile horizontalement si étroit).

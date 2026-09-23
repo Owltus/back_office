@@ -4,9 +4,14 @@ import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { SkeletonCardsRow } from '#/components/shared/skeleton/SkeletonCardsRow.tsx'
 import { SkeletonTable } from '#/components/shared/skeleton/SkeletonTable.tsx'
 import {
+  AnalytiqueSkeleton,
+  paramsAnalytique,
+} from '#/components/analytique/AnalytiqueSkeleton.tsx'
+import {
   FormeCaisse,
   FormeLiterie,
   FormePdj,
+  FormeProfil,
   FormeRepjour,
 } from '#/components/shared/skeleton/PageShapes.tsx'
 
@@ -16,12 +21,13 @@ import {
  *
  * Deux corrections de fond par rapport à l'ancien squelette « dashboard
  * universel » :
- *   1. il réserve TOUJOURS la barre PageHeader (titre + actions). Sans elle, le
- *      contenu descendait d'une ligne (~44 px) à l'arrivée du board — un board
- *      rend son PageHeader hors de sa propre branche de chargement, mais le
- *      squelette boot/garde, lui, remplace la page ENTIÈRE, en-tête compris.
- *   2. il choisit une forme de corps proche de la vraie page (formulaire étroit,
- *      liste, analytique, ou board cartes+tableau par défaut) au lieu de plaquer
+ *   1. il réserve la barre PageHeader (titre + actions) pour les pages QUI EN
+ *      ONT UNE. Sans elle, le contenu descendait d'une ligne (~44 px) à
+ *      l'arrivée du board — un board rend son PageHeader hors de sa propre
+ *      branche de chargement, mais le squelette boot/garde, lui, remplace la
+ *      page ENTIÈRE, en-tête compris. La réciproque est vraie : `/profil` n'a
+ *      pas de PageHeader, lui en dessiner un était une ligne fantôme.
+ *   2. il choisit une forme de corps proche de la vraie page au lieu de plaquer
  *      des cartes+tableau larges sur un formulaire `/profil` ou une liste
  *      `/comptes` — ce qui provoquait un saut de forme et de largeur.
  *
@@ -33,11 +39,16 @@ import {
  * `_shell.html` — vérifié : l'empreinte du HTML servi est identique sur /pdj et
  * /profil). Le shell contient donc la variante d'UNE seule route. Adapter ce
  * squelette au chemin dès le PREMIER rendu client faisait diverger le DOM de
- * celui du shell sur toute page d'une autre famille — /profil, /comptes et les
- * analytiques — d'où une erreur d'hydratation React (#418) à chaque visite.
+ * celui du shell sur toute page d'une autre famille — d'où une erreur
+ * d'hydratation React (#418) à chaque visite.
  *
  * D'où `SHELL_VARIANT` : avant l'hydratation, on rend la variante du shell ;
- * on n'adapte qu'ensuite (cf. `AppAuthGate`).
+ * on n'adapte qu'ensuite (cf. `AppAuthGate`). Ce qui protège réellement, c'est
+ * que `AuthContext` démarre à `loading = true`, donc que `AppAuthGate` rend
+ * `BootSkeleton` (variante forcée) au premier rendu client — `PageGuard`,
+ * `ProtectedRoute` et `PendingRoute`, qui appellent ce composant SANS variante,
+ * sont sous `<Outlet/>` et donc hors d'atteinte à ce moment. Cet invariant est
+ * figé par un test : voir `RouteSkeleton.test.ts`.
  */
 
 /**
@@ -74,19 +85,41 @@ export type SkeletonVariant =
  */
 export const SHELL_VARIANT: SkeletonVariant = 'board'
 
+/** Familles qui divergent du shell APRÈS hydratation. Exporté pour que le test
+ * puisse borner cet ensemble : c'est son ÉTENDUE qui mesure le risque si
+ * l'invariant « `loading` est vrai au premier rendu » venait à tomber. */
+export const VARIANTES_DIVERGENTES: SkeletonVariant[] = [
+  'profil',
+  'comptes',
+  'analytique',
+  'pdj',
+  'repjour',
+  'caisse',
+  'literie',
+]
+
 /** Famille de page d'un chemin. Pure : c'est elle qu'on teste, pas le rendu.
  *
  * ⚠ L'ordre compte : `/analytique` est testé AVANT les pages, parce que
  * `/pdj/analytique` doit rendre la silhouette analytique, pas celle du board
- * PDJ. */
+ * PDJ.
+ *
+ * ⚠ Les préfixes sont testés segment par segment (`/pdj` ou `/pdj/…`), pas par
+ * `startsWith('/pdj')` seul : une route `/pdjXXX` aurait hérité de la
+ * silhouette de PDJ. Sans conséquence aujourd'hui, mais la fonction est passée
+ * de 3 à 7 préfixes — la probabilité de collision n'est plus négligeable. */
+function estSous(pathname: string, prefixe: string): boolean {
+  return pathname === prefixe || pathname.startsWith(`${prefixe}/`)
+}
+
 export function skeletonVariant(pathname: string): SkeletonVariant {
-  if (pathname.startsWith('/profil')) return 'profil'
-  if (pathname.startsWith('/comptes')) return 'comptes'
+  if (estSous(pathname, '/profil')) return 'profil'
+  if (estSous(pathname, '/comptes')) return 'comptes'
   if (pathname.includes('/analytique')) return 'analytique'
-  if (pathname.startsWith('/pdj')) return 'pdj'
-  if (pathname.startsWith('/repjour')) return 'repjour'
-  if (pathname.startsWith('/caisse')) return 'caisse'
-  if (pathname.startsWith('/literie')) return 'literie'
+  if (estSous(pathname, '/pdj')) return 'pdj'
+  if (estSous(pathname, '/repjour')) return 'repjour'
+  if (estSous(pathname, '/caisse')) return 'caisse'
+  if (estSous(pathname, '/literie')) return 'literie'
   /* /parking et /rapro gardent le repli : mesuré le 2026-09-23, leur contenu
      fait 789 et 809 px contre 789 px de squelette — l'écart est déjà nul ou
      de 2 %. Leur donner une silhouette dédiée serait du travail pour rien, et
@@ -94,7 +127,12 @@ export function skeletonVariant(pathname: string): SkeletonVariant {
   return 'board'
 }
 
-/** Silhouette de la barre PageHeader : titre à gauche, actions à droite. */
+/** Silhouette de la barre PageHeader : titre à gauche, actions à droite.
+ *
+ * ⚠ Les actions font `h-8` / `size-8`, pas `h-9` : les pages utilisent
+ * `size="sm"` et `size="icon-sm"` (32 px). À 36 px, c'était le squelette — et
+ * non le titre — qui pilotait la hauteur de la ligne, d'où 4 px de trop sur
+ * TOUTES les variantes. */
 function HeaderRow() {
   return (
     <div className="flex flex-wrap items-center gap-3">
@@ -102,8 +140,8 @@ function HeaderRow() {
         <Skeleton className="h-7 w-44" />
       </div>
       <div className="flex shrink-0 items-center gap-2">
-        <Skeleton className="h-9 w-24 rounded-md" />
-        <Skeleton className="h-9 w-9 rounded-md" />
+        <Skeleton className="h-8 w-24 rounded-md" />
+        <Skeleton className="size-8 rounded-md" />
       </div>
     </div>
   )
@@ -120,34 +158,23 @@ export function RouteSkeleton({
 }) {
   const famille = variant ?? skeletonVariant(pathname)
 
-  // Profil : carte identité + cartes de formulaire, colonne étroite (max-w-lg).
+  // Profil : carte identité + trois cartes de formulaire, colonne étroite.
+  // Pas de HeaderRow : la page ne rend aucun PageHeader.
   if (famille === 'profil') {
-    return (
-      <div className="mx-auto w-full max-w-lg space-y-6" aria-hidden="true">
-        <HeaderRow />
-        <div className="flex items-center gap-4 rounded-xl border border-border bg-card p-6">
-          <Skeleton className="size-14 shrink-0 rounded-full" />
-          <div className="min-w-0 flex-1 space-y-2">
-            <Skeleton className="h-5 w-40" />
-            <Skeleton className="h-4 w-52" />
-          </div>
-        </div>
-        <div className="space-y-4 rounded-xl border border-border bg-card p-6">
-          <Skeleton className="h-4 w-44" />
-          <Skeleton className="h-9 w-full rounded-md" />
-        </div>
-      </div>
-    )
+    return <FormeProfil />
   }
 
-  // Comptes : liste de lignes (colonne max-w-3xl).
+  // Comptes : UNE carte à séparateurs internes (pas six cartes détachées).
   if (famille === 'comptes') {
     return (
-      <div className="mx-auto w-full max-w-3xl space-y-4" aria-hidden="true">
+      <div className="mx-auto w-full max-w-3xl space-y-6" aria-hidden="true">
         <HeaderRow />
-        <div className="space-y-2">
+        <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
           {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-16 w-full rounded-xl" />
+            <div key={i} className="space-y-1.5 px-5 py-4">
+              <Skeleton className="h-5 w-48" />
+              <Skeleton className="h-4 w-36" />
+            </div>
           ))}
         </div>
       </div>
@@ -155,16 +182,22 @@ export function RouteSkeleton({
   }
 
   // PDJ : rangée de six tuiles + tableaux par étage (la page la plus haute).
+  // ⚠ `gap-5`, comme `.pdj-doc` : `FormePdj` renvoie DEUX enfants flex, et
+  // c'est le parent qui les espace.
   if (famille === 'pdj') {
     return (
-      <div className="mx-auto w-full max-w-5xl space-y-4" aria-hidden="true">
+      <div
+        className="mx-auto flex w-full max-w-5xl flex-col gap-5"
+        aria-hidden="true"
+      >
         <HeaderRow />
         <FormePdj />
       </div>
     )
   }
 
-  // RepJour : trois cartes + barre de progression + tableau KPI.
+  // RepJour : quatre cartes + barre de progression + tableau KPI + bande
+  // de synthèse transverse.
   if (famille === 'repjour') {
     return (
       <div className="mx-auto w-full max-w-5xl space-y-4" aria-hidden="true">
@@ -174,42 +207,55 @@ export function RouteSkeleton({
     )
   }
 
-  // Caisse : bandeau d'état, deux colonnes de saisie, bloc de comptage.
+  // Caisse : table des montants, comptage des coupures, commentaires.
   if (famille === 'caisse') {
     return (
-      <div className="mx-auto w-full max-w-5xl space-y-4" aria-hidden="true">
+      <div
+        className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4"
+        aria-hidden="true"
+      >
         <HeaderRow />
         <FormeCaisse />
       </div>
     )
   }
 
-  // Literie : cartes de stock + liste des attributions.
+  // Literie : grille des six étages + légende + planning des lits bébé.
   if (famille === 'literie') {
     return (
-      <div className="mx-auto w-full max-w-5xl space-y-4" aria-hidden="true">
+      <div
+        className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4"
+        aria-hidden="true"
+      >
         <HeaderRow />
         <FormeLiterie />
       </div>
     )
   }
 
-  // Analytique : cartes + tableau + deux graphes.
+  // Analytique : LA silhouette analytique (celle des boards), paramétrée par le
+  // chemin. Elle dessinait ici sa propre forme jusqu'au 2026-09-24 — 5 colonnes
+  // et 8 lignes pour des pages qui en déclarent jusqu'à 8 et 31.
   if (famille === 'analytique') {
+    const p = paramsAnalytique(pathname)
     return (
-      <div className="mx-auto w-full max-w-5xl space-y-6" aria-hidden="true">
+      <div
+        className="mx-auto flex w-full max-w-5xl flex-col gap-6"
+        aria-hidden="true"
+      >
         <HeaderRow />
-        <SkeletonCardsRow count={4} />
-        <SkeletonTable cols={5} rows={8} bounded={false} />
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <Skeleton className="h-[268px] rounded-xl" />
-          <Skeleton className="h-[268px] rounded-xl" />
-        </div>
+        <AnalytiqueSkeleton
+          cols={p.cols}
+          rows={p.rows}
+          cards={p.cards}
+          cardCols={p.cardCols}
+          charts={p.charts}
+        />
       </div>
     )
   }
 
-  // Par défaut (repjour, pdj, parking, caisse, rapro, gestion) : cartes + tableau.
+  // Repli (parking, rapro, gestion) : cartes + tableau.
   return (
     <div className="mx-auto w-full max-w-5xl space-y-4" aria-hidden="true">
       <HeaderRow />
