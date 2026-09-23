@@ -144,8 +144,11 @@ function sanitizeHeader(value) {
 /** Doit correspondre EXACTEMENT a l'entree de `crons` dans wrangler.toml. */
 const PRECHAUFFAGE_CRON = '* 4-22 * * *'
 
-/** Espacement des deux tirs, en millisecondes. */
+/** Espacement des deux rafales, en millisecondes. */
 const PRECHAUFFAGE_ESPACEMENT_MS = 30_000
+
+/** Tirs par rafale. Trois suffisent a atteindre l'etat chaud (cf. `rafale`). */
+const PRECHAUFFAGE_TIRS = 3
 
 /**
  * Reveille PostgREST + Postgres (et GoTrue) par des requetes anonymes.
@@ -163,7 +166,20 @@ async function prechauffer(env) {
     return
   }
 
+  /**
+   * Un tir. JOURNALISE son issue : ce Worker tourne sans surveillance, et un
+   * prechauffage qui echoue en silence est pire qu'un prechauffage absent — on
+   * croit le probleme regle. La mesure du 2026-09-23 l'a montre : impossible de
+   * savoir si les pings arrivaient, parce que `pg_stat_statements` n'enregistre
+   * PAS les requetes refusees en permission (test temoin : cinq pings reels
+   * n'ont pas bouge le compteur d'une unite).
+   *
+   * Un statut 401 est le SUCCES attendu : `anon` n'a aucun privilege sur
+   * `public`, et le code d'erreur PostgreSQL `42501` prouve que la requete est
+   * allee jusqu'a la base.
+   */
   const tir = async (chemin) => {
+    const t0 = Date.now()
     try {
       const res = await fetch(base + chemin, {
         headers: { apikey: cle },
@@ -172,19 +188,43 @@ async function prechauffer(env) {
         signal: AbortSignal.timeout(15_000),
       })
       res.body?.cancel()
-    } catch {
-      // Sans consequence. Le prechauffage est un confort, jamais une dependance :
-      // s'il echoue, l'application fonctionne exactement comme avant, en plus lent.
+      return `${res.status} en ${Date.now() - t0} ms`
+    } catch (err) {
+      // Sans consequence pour l'application — le prechauffage est un confort,
+      // jamais une dependance — mais ON LE DIT.
+      return `ECHEC apres ${Date.now() - t0} ms (${err && err.name})`
     }
   }
 
+  /**
+   * Une RAFALE, pas un tir isole. Mesure du 2026-09-23 apres une longue pause :
+   *
+   *   tir 1   1,372 s
+   *   tir 2   0,511 s
+   *   tir 3   0,237 s
+   *   tir 4   0,157 s
+   *
+   * Il faut TROIS a QUATRE requetes rapprochees pour atteindre l'etat chaud.
+   * Un ping unique toutes les 30 s maintenait la base au niveau « premiere
+   * requete » (0,74 s mesure), soit la moitie du gain possible seulement.
+   */
+  const rafale = async () => {
+    const issues = []
+    for (let i = 0; i < PRECHAUFFAGE_TIRS; i++) {
+      issues.push(await tir('/rest/v1/profiles?select=id&limit=1'))
+    }
+    return issues
+  }
+
   // PostgREST -> Postgres -> RLS (le chemin que prend chaque page).
-  await tir('/rest/v1/profiles?select=id&limit=1')
+  const a = await rafale()
   // GoTrue, que toute requete de donnees attend au demarrage (`_getAccessToken`).
-  await tir('/auth/v1/health')
+  const sante = await tir('/auth/v1/health')
 
   await new Promise((r) => setTimeout(r, PRECHAUFFAGE_ESPACEMENT_MS))
-  await tir('/rest/v1/profiles?select=id&limit=1')
+  const b = await rafale()
+
+  console.log(`[prechauffage] rafale1=[${a}] gotrue=${sante} rafale2=[${b}]`)
 }
 
 export default {
