@@ -137,9 +137,9 @@ Le temps de chargement perçu vient surtout de l'auth cliente + du mode SPA. Rè
   que la page est montée, mais pas la latence AU MONTAGE : sans cache, chaque
   visite repayait tout le réseau (c'était la première cause de lenteur perçue).
   Les deux passent donc par `useQuery` :
-  - `DashboardBoard` : 4 lectures parallèles (jamais en cascade — l'année et le
-    mois se déduisent de la date choisie). Le canal `invalidateQueries` au lieu
-    de recharger à la main.
+  - `DashboardBoard` : **UNE** lecture depuis le 2026-09-23
+    (`public.repjour_dashboard(date)`), qui en remplace huit — 13,8 ms de SQL,
+    17 ko. Il n'a PAS d'abonnement Realtime : refetch au retour d'onglet.
   - `ParkingBoard` : seul le chargement INITIAL est mis en cache (lignes brutes,
     `staleTime: 0` → stale-while-revalidate au retour). Le canal continue de
     patcher l'état LOCAL ligne à ligne : dériver l'affichage du cache effacerait
@@ -265,6 +265,44 @@ Le temps de chargement perçu vient surtout de l'auth cliente + du mode SPA. Rè
   court-circuite les RLS. Effet de bord mesuré et instructif : les cinq AUTRES
   requêtes de `/pdj` ont accéléré de 4 à 7× sans être touchées — une requête
   gourmande affame toutes les autres, donc corriger la pire les corrige toutes.
+- **Consolider des requêtes ne sert QUE si elles se font concurrence**
+  (mesuré le 2026-09-23, chantier `rpc-analytiques-2026-09-23`). Le tableau de
+  bord lançait vingt lectures d'un coup sur une instance qui s'effondre à
+  quatorze : les fusionner en une RPC l'a fait passer de **5 906 à 1 112 ms**.
+  Les pages analytiques en lancent quatre, parallèles, sous le plafond de six :
+  les fusionner n'a RIEN donné, parce que le temps d'une page vaut alors
+  `max(durées)` et non leur somme. **Avant de consolider, lire le
+  chronogramme** — si les requêtes partent ensemble et finissent étalées, il y a
+  concurrence et le gain est réel ; si elles finissent groupées, il n'y en a pas.
+- **Le démarrage à froid était la première cause de lenteur vécue**, et il était
+  invisible dans toutes les mesures parce qu'on recharge en boucle. Après une
+  pause, la première requête coûtait **1 398 ms** contre 394 ms à chaud
+  (2026-09-23). Un Worker Cloudflare envoie désormais une **rafale de trois
+  pings** par minute pendant les heures d'ouverture
+  (`cloudflare/stayntouch_in_to_supabase.js`, cron `* 4-22 * * *`). ⚠ UN ping ne
+  suffit pas : la rampe de chauffe est 1,372 / 0,511 / 0,237 / 0,157 s, il faut
+  trois à quatre requêtes rapprochées. Le ping doit porter la clé publishable —
+  sans elle il est rejeté à la porte et ne réchauffe rien ; le `401 permission
+  denied` qu'il reçoit est le SUCCÈS attendu.
+- **`pg_stat_statements` n'enregistre PAS les requêtes refusées en permission.**
+  Démontré par témoin le 2026-09-23 : cinq requêtes réelles, dont on voyait les
+  réponses, n'ont pas bougé le compteur d'une unité. Valider l'instrument avant
+  de croire la mesure.
+- **`jsonb` n'a pas de type flottant** : il range les nombres en `numeric`, donc
+  un `double precision` calculé en SQL y perd ses derniers bits. Une RPC de
+  consolidation doit rendre les **valeurs brutes** et laisser l'arithmétique au
+  TypeScript — sinon l'équivalence est impossible à prouver (31 écarts de 1e-13
+  mesurés sur une première version qui calculait en SQL). Bénéfice secondaire :
+  les formules, donc `TOTAL_ROOMS`, restent à un seul endroit.
+- **Le `staleTime` de TanStack Query est évalué PAR OBSERVATEUR.** Deux
+  composants qui montent la même clé avec des seuils différents : le plus court
+  décide pour tout le monde. Quatre clés étaient dans ce cas avant le
+  2026-09-23, et c'était toujours la page analytique qui périmait le cache que
+  le board protégeait. Répéter le réglage à chaque site d'appel, avec un
+  commentaire — une constante partagée donnerait l'illusion d'une source unique.
+- **L'invalidation compare la clé ÉLÉMENT PAR ÉLÉMENT.** `['rapro','daily-agg']`
+  n'attrape PAS `['rapro','daily-agg-range', …]` : « daily-agg » n'est pas un
+  préfixe de « daily-agg-range » au sens du filtrage, c'est une autre chaîne.
 - Valider toute modif perf : `pnpm build` (vérifier le découpage des chunks) +
   `npx tsc --noEmit` ; côté base `supabase/verif_perf.sql` (lecture seule).
 

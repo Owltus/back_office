@@ -1,5 +1,19 @@
 # Plan — Analytiques : une lecture par page au lieu de huit
 
+> **EXÉCUTÉ PARTIELLEMENT le 2026-09-23** (5 étapes sur 9). Écarts par rapport
+> au plan initial, tous adossés à `releve-apres.md` :
+> - **étapes 5b, 6 et 8 SANS OBJET** : consolider ne gagne QUE si les requêtes
+>   se font concurrence. Les pages analytiques en lancent quatre, parallèles,
+>   sous le plafond de six — le temps de page vaut `max(durées)` et non leur
+>   somme. Gain mesuré : −41 % sur l'annuelle RepJour, **zéro** sur les trois
+>   autres pages.
+> - **étape 7 RÉDUITE** : la RPC parking est sans objet, mais le **bornage** de
+>   `parking_arrivals_agg` reste valable — seule lecture « tout l'historique »
+>   non bornée subsistante, et elle grossit de 365 lignes par an.
+> - **le « creux de chargement du code » de `releve-avant.md` N'EXISTE PAS**
+>   comme coût structurel : mes quatre mesures avaient toutes été prises juste
+>   après un déploiement. Remesuré sur la même page : 802 ms puis **7 ms**.
+
 ## Contexte
 
 Le 2026-09-23, le tableau de bord `/repjour` est passé de huit lectures à une
