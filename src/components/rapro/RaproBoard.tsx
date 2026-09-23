@@ -237,7 +237,11 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   // OCC officiel du PMS à J-1 (décalage de datage). Sert d'unique CONTRÔLE
   // comptable : si l'occupation PDJ diffère du PMS, on l'alerte (c'est là que les
   // arrivées tardives / corrections apparaissent). Absent si RepJour non importé.
-  const { data: officialOcc, isSuccess: occControlLoaded } = useQuery({
+  const {
+    data: officialOcc,
+    isSuccess: occControlLoaded,
+    isPending: occControlPending,
+  } = useQuery({
     queryKey: ['rapro', 'occ-control', addDays(selectedDate, -1)],
     queryFn: () => fetchOfficialOcc(addDays(selectedDate, -1)),
   })
@@ -274,7 +278,26 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   // plus bas par une garde ciblée sur l'état vide. Le contrôle comptable et le plus
   // ancien jour s'hydratent après, sans bloquer.
   const loading =
-    pdjRows === undefined || sheet === undefined || day === undefined
+    pdjRows === undefined ||
+    sheet === undefined ||
+    day === undefined ||
+    /*
+     * ⚠ AJOUTÉ le 2026-09-24. Le contrôle comptable était volontairement HORS
+     * de cette garde (« s'hydrate après, sans bloquer ») — mais c'est lui qui
+     * décide de la bannière d'écart d'occupation, laquelle s'insère EN TÊTE du
+     * board. Elle arrivait donc après coup et poussait la rangée de tuiles et
+     * toute la grille des étages vers le bas. Une insertion en tête est le pire
+     * cas : tout ce que l'utilisateur regarde se déplace.
+     *
+     * Le coût est nul en pratique : cette lecture part EN MÊME TEMPS que les
+     * trois autres, le temps de la page reste `max(durées)` et non leur somme.
+     *
+     * `isPending` et NON `isSuccess` : sur erreur, `isSuccess` ne devient
+     * jamais vrai et le board resterait en squelette pour toujours. `isPending`
+     * retombe aussi bien sur un succès que sur un échec — la page s'affiche,
+     * simplement sans contrôle comptable, ce qui est le comportement voulu.
+     */
+    occControlPending
 
   // Exports PMS manquants. Calculés seulement une fois les DEUX requêtes
   // résolues : pendant le chargement, tout paraîtrait manquant.

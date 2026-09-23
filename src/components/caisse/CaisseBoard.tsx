@@ -348,7 +348,29 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
   // caisse (feuille précédente) réglé — évite d'éditer avant hydratation. On
   // gate sur le CHARGEMENT (pas la donnée) : une requête « précédente » en échec
   // n'empêche pas la saisie (on repart alors d'un comptage vide).
-  const ready = sheet !== undefined && !(needsCarry && prevLoading)
+  const { data: cautions = [], isPending: cautionsPending } = useQuery({
+    queryKey: ['caisse', 'cautions'],
+    queryFn: fetchAllCautions,
+  })
+  const ready =
+    sheet !== undefined &&
+    !(needsCarry && prevLoading) &&
+    /*
+     * ⚠ AJOUTÉ le 2026-09-24. Les cautions étaient lues HORS de cette garde :
+     * `cautions` valait `[]` au premier rendu du contenu, donc le fond de
+     * caisse attendu s'affichait à 150 € — sa valeur SANS caution — avant de se
+     * corriger tout seul quelques centaines de millisecondes plus tard. Et avec
+     * lui l'écart de caisse, puisque le comptage inclut les enveloppes actives.
+     *
+     * Ce n'est pas un saut de mise en page : c'est un MONTANT FAUX affiché sur
+     * une feuille de caisse, que l'hôtelier peut lire et noter avant qu'il ne
+     * change. Même famille que les faux états vides de la facturation.
+     *
+     * `isPending` et non la présence de la donnée : sur erreur de lecture, la
+     * page doit s'ouvrir quand même (fond de base, sans caution) plutôt que de
+     * rester en squelette.
+     */
+    !cautionsPending
   const caisseLevel = pageLevel('caisse')
   // Jour métier courant (borne haute de la fenêtre). Verrou PAR JOUR, comme le
   // rapprochement mais plus court : écriture n'agit que dans la fenêtre J-1
@@ -370,10 +392,6 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
   // jour affiché, ce qui permet à une caution ajoutée en retard de corriger
   // automatiquement l'affichage d'une feuille déjà clôturée (voir
   // plan/caisse-cautions/00-INDEX.md, D4).
-  const { data: cautions = [] } = useQuery({
-    queryKey: ['caisse', 'cautions'],
-    queryFn: fetchAllCautions,
-  })
   const effectiveTarget = useMemo(
     () => effectiveFundTarget(cautions, selectedDate, FUND_TARGET),
     [cautions, selectedDate],

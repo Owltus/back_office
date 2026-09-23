@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
-import { Check, Upload } from 'lucide-react'
+import { Check, Loader2, Upload } from 'lucide-react'
 
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
@@ -110,7 +110,12 @@ export function AddonImportButton({ onImported }: { onImported: () => void }) {
         className="hidden"
         onChange={onInputChange}
       />
-      <Tip label="Importer un Addon Production (plusieurs jours)">
+      {/* ⚠ Retour visuel pendant l'import (2026-09-24). Le bouton se
+          contentait de se griser : sur un fichier de plusieurs mois, l'import
+          prend plusieurs secondes pendant lesquelles RIEN ne bougeait, et
+          l'utilisateur recliquait ou croyait l'action perdue. L'icône devient
+          une rotation, et l'infobulle dit ce qui se passe. */}
+      <Tip label={busy ? 'Import en cours…' : "Importer un Addon Production (plusieurs jours)"}>
         <Button
           variant="outline"
           size="icon-sm"
@@ -118,7 +123,7 @@ export function AddonImportButton({ onImported }: { onImported: () => void }) {
           onClick={() => inputRef.current?.click()}
           aria-label="Importer un Addon Production"
         >
-          <Upload />
+          {busy ? <Loader2 className="animate-spin" /> : <Upload />}
         </Button>
       </Tip>
 

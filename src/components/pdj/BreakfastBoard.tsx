@@ -21,6 +21,7 @@ import {
 
 import { EmptyCanvas } from '#/components/shared/EmptyCanvas.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
+import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { FormePdj } from '#/components/shared/skeleton/PageShapes.tsx'
 import { ConfirmDialog } from '#/components/shared/ConfirmDialog.tsx'
 import { PrintBlockedDialog } from '#/components/shared/PrintBlockedDialog.tsx'
@@ -485,7 +486,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
   // (rendu inchangé : les sous-textes n'apparaissent qu'ensuite).
   // Clé PARTAGÉE avec le seuil de rupture de PdjAnalytiqueMoisBoard : même
   // lecture (toute la vue), un seul scan en cache au lieu de deux (audit 2026-09-06).
-  const { data: aggAll } = useQuery({
+  const { data: aggAll, isPending: aggPending } = useQuery({
     queryKey: ['pdj', 'analytics', 'all-history'],
     queryFn: () => fetchDailyAgg('2000-01-01', '2100-12-31'),
     // Une heure au lieu de cinq minutes (audit du 2026-09-20). Ce sont des
@@ -576,6 +577,23 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
     () => (aggAll ? computeAggBenchmarks(aggAll, tarifs) : undefined),
     [aggAll, tarifs],
   )
+
+  /*
+   * ⚠ Ligne de repère RÉSERVÉE pendant le chargement de l'agrégat.
+   *
+   * `loading` ne couvre que la lecture DU JOUR — délibérément : l'agrégat
+   * d'historique est cher (~330 ms à froid) et faire attendre le contenu
+   * derrière lui coûterait plus cher que ça ne rapporte (cf. la règle des
+   * vagues dans CLAUDE.md). Mais quatre des six tuiles tirent leur sous-texte
+   * (« moy. …/j ») de cet agrégat : elles se rendaient donc SANS cette ligne,
+   * puis grandissaient toutes ensemble quand il arrivait.
+   *
+   * On réserve la ligne plutôt que de retarder la page : la hauteur de la
+   * rangée ne bouge plus, et le contenu principal reste aussi rapide.
+   */
+  const subRepereEnAttente = aggPending ? (
+    <Skeleton className="h-3 w-20" />
+  ) : undefined
 
   const floors = useMemo(() => {
     const map = new Map<number, number[]>()
@@ -1443,7 +1461,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                 sub={
                   benchmark && benchmark.occupancy.avgRooms != null
                     ? subMuted(`moy. ${fmtInt(benchmark.occupancy.avgRooms)}/j`)
-                    : undefined
+                    : subRepereEnAttente
                 }
               />
               <StatTile
@@ -1457,7 +1475,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                     ? subMuted(
                         `moy. ${fmtInt(benchmark.occupancy.avgGuests)}/j`,
                       )
-                    : undefined
+                    : subRepereEnAttente
                 }
               />
               <StatTile
@@ -1542,7 +1560,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                     ? subMuted(
                         `moy. ${fmtEur(benchmark.total.avgTotalHT, 2)}/j`,
                       )
-                    : undefined
+                    : subRepereEnAttente
                 }
               />
               <StatTile
@@ -1582,7 +1600,7 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
                       ? subMuted(
                           `moy. ${fmtPctInt(benchmark.captage.avgCaptage)}/j`,
                         )
-                      : undefined
+                      : subRepereEnAttente
                   }
                 />
               )}

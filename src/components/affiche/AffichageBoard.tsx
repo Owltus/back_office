@@ -453,8 +453,13 @@ export function AffichageBoard() {
         <div className="shrink-0 rounded-xl border border-border bg-card p-4">
           <Field label="Modèle prédéfini">
             <div className="flex flex-col gap-2">
+              {/* ⚠ `disabled` pendant le chargement (2026-09-24). Sans lui, le
+                  menu s'ouvrait sur une liste VIDE : rien n'indiquait s'il n'y
+                  avait aucun modèle ou si la lecture n'était pas revenue, et
+                  l'utilisateur refermait en pensant la page cassée. */}
               <Select
                 value={selectedTemplate}
+                disabled={templatesPending}
                 onValueChange={(id) => {
                   const t = templates.find((tpl) => tpl.id === id)
                   if (t) applyAfficheTemplate(t)
@@ -464,10 +469,23 @@ export function AffichageBoard() {
                   className="w-full"
                   aria-label="Choisir un modèle"
                 >
-                  <SelectValue placeholder="Choisir un modèle" />
+                  <SelectValue
+                    placeholder={
+                      templatesPending
+                        ? 'Chargement des modèles…'
+                        : 'Choisir un modèle'
+                    }
+                  />
                 </SelectTrigger>
                 <SelectContent position="popper">
-                  {groupedTemplates ? (
+                  {templates.length === 0 ? (
+                    /* Liste vide APRÈS chargement : on le dit, au lieu de
+                       laisser un menu muet. Un `<div>` et non un `SelectItem` —
+                       ce n'est pas un choix, c'est une information. */
+                    <div className="px-2 py-3 text-center text-sm text-muted-foreground">
+                      Aucun modèle enregistré.
+                    </div>
+                  ) : groupedTemplates ? (
                     <>
                       <SelectGroup>
                         <SelectLabel>Mes modèles</SelectLabel>
