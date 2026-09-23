@@ -22,9 +22,13 @@ export function AnalytiqueSkeleton({
   cols?: number
   charts?: number
   rows?: number
-  /** Nombre de cartes de synthèse. 0 = pas de rangée de cartes (ex. Rapro mensuel,
-   * qui n'affiche aucune carte — en dessiner 4 les faisait « disparaître » à
-   * l'arrivée des données). */
+  /** Nombre de cartes de synthèse. 0 = pas de rangée de cartes.
+   *
+   * ⚠ L'exemple cité ici jusqu'au 2026-09-24 — « Rapro mensuel, qui n'affiche
+   * aucune carte » — était PÉRIMÉ : cette page en rend quatre depuis. Le
+   * commentaire décrivait un état du code disparu, ce qui est pire qu'une
+   * absence de commentaire. Le cas `0` reste néanmoins utile pour toute page
+   * qui n'aurait pas de rangée de cartes. */
   cards?: number
   /** Colonnes de la grille de cartes — miroir du board. 4 par défaut ; 5 quand une
    * carte de plus est ajoutée (ex. Rapro « Vendues »). */

@@ -23,7 +23,7 @@ import { cleaned, fetchRaproDailyAgg, monthlyRows } from '#/lib/rapro/monthly.ts
 import { fetchOldestDay } from '#/lib/rapro/service.ts'
 
 /**
- * Détail d'un MOIS — harmonisé sur le socle analytique partagé. 5 cartes de
+ * Détail d'un MOIS — harmonisé sur le socle analytique partagé. 4 cartes de
  * synthèse (moyenne nettoyées / jour, vendues, nettoyées / bloquées / refus),
  * puis le détail jour par jour et un graphique des nettoyées par jour. Export
  * PDF (base de facturation ELIOR). Le mois vient des params de route ; retour à

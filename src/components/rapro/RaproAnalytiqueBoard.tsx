@@ -25,7 +25,7 @@ import { cleaned, fetchRaproDailyAgg } from '#/lib/rapro/monthly.ts'
 
 /*
  * Récap ménage ANNUEL — harmonisé sur le socle analytique partagé (repjour / PDJ).
- * Vue année : sélecteur d'année, 5 cartes de synthèse (dont la moyenne / jour
+ * Vue année : sélecteur d'année, 4 cartes de synthèse (dont la moyenne / jour
  * travaillé), tableau mois par mois (nettoyées / bloquées / refus, clic → détail
  * du mois) et un graphique. Un fetch borné par mois (12 lectures mises en
  * cache). Aucune écriture.
@@ -194,7 +194,17 @@ export function RaproAnalytiqueBoard() {
       )}
       loading={loading}
       printTitle={`Rapprochement · ${year}`}
-      skeleton={{ cols: 5, charts: 1, cards: 4, cardCols: 4, cardLines: 3, rows: 13 }}
+      skeleton={{
+        cols: 5,
+        charts: 1,
+        cards: 4,
+        cardCols: 4,
+        cardLines: 3,
+        /* 12, pas 13. Le 13 datait du 2026-07-13, quand le tableau portait une
+           ligne « Total » en pied ; ce pied a été retiré le 2026-07-22 sans
+           recaler le squelette, qui dessinait depuis une ligne de trop. */
+        rows: 12,
+      }}
     >
       <RaproAnalytiqueCards
         totals={yearTotals}

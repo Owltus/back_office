@@ -7,6 +7,7 @@ import { ArrowLeftRight, Coffee, SquareParking } from 'lucide-react'
 import { StatTile } from '#/components/shared/StatTile.tsx'
 import { ACCENT } from '#/components/analytique/accents.ts'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
+import { BlocBandeSquelette } from '#/components/shared/skeleton/PageShapes.tsx'
 import { fmtEur, fmtInt, fmtPctInt } from '#/lib/format/index.ts'
 import { computeAggBenchmarks } from '#/lib/pdj/amounts.ts'
 import {
@@ -392,16 +393,37 @@ export function DayCrossSummary({
   const showPdj = canPdj && pdj
   const showParking = canParking && parkingAgg
   const showRapro = canRapro && rapro
-  // Rien de prêt (aucun droit, ou toutes les lectures encore en vol) : pas de
-  // section vide qui décalerait la page. Idem tant que le tableau KPI au-dessus
-  // n'est pas affichable (`visible`) — les lectures, elles, sont déjà parties.
-  // Ce test vient APRÈS tous les hooks : c'est ce qui rend le montage anticipé
-  // possible sans enfreindre les règles de React.
+  /*
+   * `visible` reste la seule condition qui masque TOUT : tant que le tableau
+   * KPI au-dessus n'est pas affichable, cette bande n'a pas lieu d'être. Ce
+   * test vient APRÈS tous les hooks — c'est ce qui rend le montage anticipé
+   * possible sans enfreindre les règles de React.
+   */
   if (!visible) return null
-  if (!showPdj && !showParking && !showRapro) return null
+
+  /*
+   * ⚠ Jusqu'au 2026-09-24, la bande rendait `null` tant que ses dix lectures
+   * n'étaient pas revenues. Le commentaire d'alors parlait d'éviter « une
+   * section vide qui décalerait la page » — l'intention était juste, l'effet
+   * exactement inverse : la section SURGISSAIT d'un coup une fois chargée,
+   * 346 px mesurés en production, et poussait tout ce qui la suit vers le bas.
+   * C'était le plus gros saut de la page d'accueil.
+   *
+   * Un bloc affiche désormais son squelette tant que SES données manquent, et
+   * son contenu dès qu'elles arrivent. La hauteur est donc réservée d'emblée,
+   * et chaque bloc se remplit indépendamment des deux autres.
+   *
+   * Un compte sans aucun droit transverse ne voit toujours rien : il n'y a
+   * alors aucun bloc à réserver.
+   */
+  if (!canPdj && !canParking && !canRapro) return null
 
   return (
     <section className="space-y-4 print:hidden">
+      {/* Chaque squelette occupe la PLACE EXACTE de son bloc : groupés en tête,
+          les blocs changeraient d'ordre en se remplissant, ce qui serait un
+          saut de plus plutôt qu'un de moins. */}
+      {canPdj && !showPdj && <BlocBandeSquelette tuiles={4} />}
       {showPdj && (
         <SummaryBlock
           heading={
@@ -453,6 +475,7 @@ export function DayCrossSummary({
         </SummaryBlock>
       )}
 
+      {canParking && !showParking && <BlocBandeSquelette tuiles={3} />}
       {showParking && (
         <SummaryBlock
           heading={
@@ -503,6 +526,7 @@ export function DayCrossSummary({
         </SummaryBlock>
       )}
 
+      {canRapro && !showRapro && <BlocBandeSquelette tuiles={4} />}
       {showRapro && (
         <SummaryBlock
           heading={

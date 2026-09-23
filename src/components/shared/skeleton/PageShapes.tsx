@@ -51,6 +51,53 @@ import { ALL_ROOMS } from '#/lib/hotel/rooms.ts'
  */
 const CALE_LIGNE = '​'
 
+/**
+ * Une tuile de statistique en squelette, aux VRAIES classes (`stat-tile`,
+ * `stat-tile__body`, `stat-tile__label`).
+ *
+ * Exportée parce qu'elle sert à TROIS endroits : la silhouette PDJ, la
+ * silhouette RepJour, et la bande de synthèse transverse. Les avoir écrites
+ * séparément est exactement ce qui a laissé diverger les squelettes PDJ
+ * (mesuré : 60 px contre 77,8 px pour la vraie tuile).
+ */
+export function TuileSquelette() {
+  return (
+    <div className="stat-tile flex items-stretch overflow-hidden rounded-xl border border-border bg-card">
+      <span className="w-2 shrink-0 bg-muted" />
+      <div className="stat-tile__body flex min-w-0 flex-1 flex-col gap-1 px-3 py-[0.55rem]">
+        <span className="stat-tile__label">
+          <Skeleton className="h-2.5 w-16" />
+        </span>
+        <div className="flex flex-1 flex-col justify-center gap-1">
+          <Skeleton className="h-6 w-12" />
+          <Skeleton className="h-3 w-20" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Un bloc de la bande de synthèse transverse : un titre puis une rangée de
+ * tuiles. Relevé en production le 2026-09-23 : 105 px par bloc.
+ *
+ * ⚠ Sert au squelette de route ET à `DayCrossSummary` lui-même, qui rendait
+ * `null` pendant le chargement de ses dix lectures — d'où une section de
+ * 346 px qui surgissait APRÈS que la page semblait finie.
+ */
+export function BlocBandeSquelette({ tuiles = 4 }: { tuiles?: number }) {
+  return (
+    <div className="space-y-2">
+      <Skeleton className="h-3 w-32" />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+        {Array.from({ length: tuiles }).map((_, i) => (
+          <TuileSquelette key={i} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 /** Chambres par étage, dérivées de l'inventaire réel — jamais codées en dur. */
 export const CHAMBRES_PAR_ETAGE = [
   ...new Set(ALL_ROOMS.map((r) => Math.floor(r / 100))),
@@ -222,30 +269,11 @@ export function FormeRepjour() {
 
       {/* Bande de synthèse transverse : trois blocs de 105 px, avec
           respectivement 4, 3 et 4 tuiles — relevé en production. */}
+      {/* Bande de synthèse transverse : trois blocs de 105 px, avec 4, 3 et 4
+          tuiles — relevé en production. */}
       <section className="space-y-4">
         {[4, 3, 4].map((nb, b) => (
-          <div key={b} className="space-y-2">
-            <Skeleton className="h-3 w-32" />
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
-              {Array.from({ length: nb }).map((_, i) => (
-                <div
-                  key={i}
-                  className="stat-tile flex items-stretch overflow-hidden rounded-xl border border-border bg-card"
-                >
-                  <span className="w-2 shrink-0 bg-muted" />
-                  <div className="stat-tile__body flex min-w-0 flex-1 flex-col gap-1 px-3 py-[0.55rem]">
-                    <span className="stat-tile__label">
-                      <Skeleton className="h-2.5 w-16" />
-                    </span>
-                    <div className="flex flex-1 flex-col justify-center gap-1">
-                      <Skeleton className="h-6 w-12" />
-                      <Skeleton className="h-3 w-20" />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          <BlocBandeSquelette key={b} tuiles={nb} />
         ))}
       </section>
     </div>
