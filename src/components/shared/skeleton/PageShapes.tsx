@@ -53,14 +53,24 @@ export function FormePdj() {
       <div className="pdj-stats">
         <div className="pdj-stats-grid">
           {Array.from({ length: 6 }).map((_, i) => (
+            /* MÊMES classes que la vraie tuile (`stat-tile`, `stat-tile__body`,
+               `stat-tile__label`) : c'est ce qui garantit la hauteur, et non un
+               réglage à l'œil. Mesuré le 2026-09-23 : la vraie tuile fait
+               77,8 px ; l'ancienne silhouette, avec ses propres classes, en
+               faisait 60. */
             <div
               key={i}
-              className="flex items-stretch overflow-hidden rounded-xl border border-border bg-card"
+              className="stat-tile flex items-stretch overflow-hidden rounded-xl border border-border bg-card"
             >
               <span className="w-2 shrink-0 bg-muted" />
-              <div className="flex flex-col justify-center gap-2 px-3 py-[0.55rem]">
-                <Skeleton className="h-2.5 w-16" />
-                <Skeleton className="h-6 w-10" />
+              <div className="stat-tile__body flex min-w-0 flex-1 flex-col gap-1 px-3 py-[0.55rem]">
+                <span className="stat-tile__label">
+                  <Skeleton className="h-2.5 w-16" />
+                </span>
+                <div className="flex flex-1 flex-col justify-center gap-1">
+                  <Skeleton className="h-6 w-12" />
+                  <Skeleton className="h-3 w-20" />
+                </div>
               </div>
             </div>
           ))}
@@ -72,18 +82,33 @@ export function FormePdj() {
             <table>
               <tbody>
                 {Array.from({ length: nb }).map((_, r) => (
+                  /* CINQ cellules, comme la vraie ligne. L'ancienne silhouette
+                     n'en dessinait que quatre : elle omettait la colonne des
+                     cases à cocher, qui est justement l'élément le plus HAUT de
+                     la ligne. Mesuré le 2026-09-23 : vraie ligne 35,5 px,
+                     silhouette 26,4 px — soit 215 px manquants sur la page,
+                     l'essentiel de la dissonance signalée. */
                   <tr key={r}>
                     <td className="pdj-room">
                       <Skeleton className="h-3 w-8" />
                     </td>
-                    <td>
-                      <Skeleton className="h-3 w-24" />
+                    <td className="pdj-name">
+                      <span className="pdj-name-inner pdj-val-normal">
+                        <Skeleton className="h-3 w-24" />
+                      </span>
                     </td>
                     <td className="pdj-c pdj-status">
                       <Skeleton className="mx-auto h-3 w-4" />
                     </td>
                     <td className="pdj-c pdj-stay-count">
                       <Skeleton className="mx-auto h-3 w-6" />
+                    </td>
+                    <td className="pdj-c">
+                      <span className="pdj-checkboxes">
+                        {Array.from({ length: 2 }).map((_, c) => (
+                          <Skeleton key={c} className="size-7 rounded-md" />
+                        ))}
+                      </span>
                     </td>
                   </tr>
                 ))}

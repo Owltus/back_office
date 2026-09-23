@@ -21,7 +21,7 @@ import {
 
 import { EmptyCanvas } from '#/components/shared/EmptyCanvas.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
-import { Skeleton } from '#/components/ui/skeleton.tsx'
+import { FormePdj } from '#/components/shared/skeleton/PageShapes.tsx'
 import { ConfirmDialog } from '#/components/shared/ConfirmDialog.tsx'
 import { PrintBlockedDialog } from '#/components/shared/PrintBlockedDialog.tsx'
 import { PrintButton } from '#/components/shared/PrintButton.tsx'
@@ -1893,82 +1893,30 @@ function ExternalsDialog({
 }
 
 /*
- * Nombre de chambres par étage, dans l'ordre d'affichage, DÉRIVÉ de l'inventaire
- * réel (ALL_ROOMS). Chaque étage a un compte inégal (13/14/14/14/14/11) : coder
- * un `rows` fixe faisait grandir ou rétrécir chaque tableau à l'arrivée des
- * données. On calcule ici la vraie hauteur de chaque étage.
+ * Squelette du corps pendant le chargement du jour.
+ *
+ * ⚠ DÉLÈGUE à `FormePdj` depuis le 2026-09-23, et ce n'est pas une
+ * simplification cosmétique. Il existait jusque-là DEUX silhouettes PDJ — celle
+ * du squelette de route et celle-ci — et elles avaient dérivé : celle-ci ne
+ * dessinait que QUATRE cellules par ligne au lieu de cinq, omettant la colonne
+ * des cases à cocher, qui est l'élément le plus HAUT de la ligne. Résultat
+ * mesuré : 35,5 px pour une vraie ligne contre 26,4 px pour la silhouette, soit
+ * 215 px manquants sur la page.
+ *
+ * Une seule silhouette, donc, pour que le passage du squelette de route à
+ * celui-ci soit invisible — et pour qu'une divergence de ce genre ne puisse
+ * plus se réinstaller en silence.
+ *
+ * ⚠ La rangée de tuiles y est FIXÉE à six. En tablette portrait, le vrai
+ * contenu n'en affiche que cinq (« Taux de captage » retirée). C'est un écart
+ * connu et assumé : une tuile en trop se contracte à l'arrivée des données,
+ * une tuile manquante ferait sauter toute la grille.
  */
-const FLOOR_ROOM_COUNTS = [
-  ...new Set(ALL_ROOMS.map((r) => Math.floor(r / 100))),
-].map((floor) => ALL_ROOMS.filter((r) => Math.floor(r / 100) === floor).length)
-
-/*
- * Squelette-reflet du corps pendant le chargement du jour : la rangée de 6 stats
- * puis les 6 tableaux par étage. Les DEUX réutilisent le vrai markup (`pdj-stats`,
- * `pdj-floor > table`) et donc le vrai CSS — mêmes paddings, mêmes hauteurs de
- * ligne, même nombre de lignes par étage — pour ne rien décaler à l'arrivée des
- * données. Purement décoratif ; l'en-tête, lui, est déjà rendu au-dessus. */
 function BoardSkeleton() {
-  const { isNavbarMobile, isTouchDevice, isPhoneWidth } = useResponsiveShell()
-  const tabletPortrait = isTouchDevice && !isPhoneWidth && isNavbarMobile
-  // 5 tuiles en tablette portrait (« Taux de captage » retirée du vrai
-  // contenu, cf. son commentaire plus bas), 6 sinon.
-  const statTileCount = tabletPortrait ? 5 : 6
   return (
-    <>
-      {/* Rangée de tuiles dans LEUR vraie grille (`pdj-stats-grid`), à la
-          forme du composant StatTile (liseré + libellé + valeur) pour coller
-          au réel et ne rien décaler. */}
-      <div className="pdj-stats" aria-hidden="true">
-        <div className="pdj-stats-grid">
-          {Array.from({ length: statTileCount }).map((_, i) => (
-            <div
-              key={i}
-              className="flex items-stretch overflow-hidden rounded-xl border border-border bg-card"
-            >
-              <span className="w-2 shrink-0 bg-muted" aria-hidden="true" />
-              <div className="flex flex-col justify-center gap-2 px-3 py-[0.55rem]">
-                <Skeleton className="h-2.5 w-16" />
-                <Skeleton className="h-6 w-10" />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-      {/* Tableaux par étage : même structure que le vrai (`pdj-floor > table`),
-          en-têtes réels (invariants), et autant de lignes que de chambres.
-          Même grille que le vrai contenu (cf. son commentaire), pour ne rien
-          décaler à l'arrivée des données. */}
-      <div className="pdj-floors" aria-hidden="true">
-        {FLOOR_ROOM_COUNTS.map((count, i) => (
-          <div key={i} className="pdj-floor">
-            <table>
-              <tbody>
-                {Array.from({ length: count }).map((_, r) => (
-                  <tr key={r}>
-                    <td className="pdj-room">
-                      <Skeleton className="h-3 w-8" />
-                    </td>
-                    <td>
-                      <Skeleton className="h-3 w-24" />
-                    </td>
-                    <td className="pdj-c pdj-status">
-                      <Skeleton className="mx-auto h-3 w-4" />
-                    </td>
-                    <td className="pdj-c pdj-stay-count">
-                      <Skeleton className="mx-auto h-3 w-6" />
-                    </td>
-                    <td className="pdj-c">
-                      <Skeleton className="mx-auto h-3 w-6" />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ))}
-      </div>
-    </>
+    <div aria-hidden="true">
+      <FormePdj />
+    </div>
   )
 }
 
