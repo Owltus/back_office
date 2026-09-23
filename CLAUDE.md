@@ -303,6 +303,28 @@ Le temps de chargement perçu vient surtout de l'auth cliente + du mode SPA. Rè
 - **L'invalidation compare la clé ÉLÉMENT PAR ÉLÉMENT.** `['rapro','daily-agg']`
   n'attrape PAS `['rapro','daily-agg-range', …]` : « daily-agg » n'est pas un
   préfixe de « daily-agg-range » au sens du filtrage, c'est une autre chaîne.
+- ⚠ **MESURER DÉGRADE CE QU'ON MESURE.** Constaté le 2026-09-23, en fin de
+  chantier : après une session entière d'`explain analyze` sur des agrégats de
+  13 000 lignes, de rechargements de page en boucle et de sondes en rafale,
+  l'instance s'est retrouvée BRIDÉE — PostgREST à 1 079 ms pour un simple refus
+  de permission, la couche edge à 1 350 ms par-dessus, et un chargement de page
+  dont TOUTES les requêtes ont été abandonnées au bout de 20 s. La base
+  Postgres, elle, était au repos (1 connexion active sur 10) : ce n'était donc
+  ni une requête lente ni une saturation applicative.
+
+  Sur cette offre, le budget d'entrées-sorties se consomme sous charge soutenue
+  et **ne se recharge qu'au repos**. Vérifié : 13,9 s au pire, puis retour à
+  0,16-0,33 s après **moins de deux minutes sans aucune sollicitation**.
+
+  Conséquences pratiques, à respecter avant de juger une mesure :
+  - **laisser l'instance tranquille 2 à 3 minutes** avant tout relevé qui compte ;
+  - **espacer les chargements de page** d'au moins 60 s, jamais en boucle ;
+  - se méfier de tout chiffre aberrant (plusieurs secondes, abandons à 20 s)
+    relevé après une salve de mesures : c'est probablement l'observateur qui l'a
+    causé. Plusieurs chiffres catastrophiques de ce chantier viennent de là ;
+  - `x-envoy-upstream-service-time` dans les en-têtes de réponse sépare le temps
+    PostgREST du temps de la couche edge : c'est l'outil qui tranche entre
+    « la base rame » et « la plateforme rame ».
 - Valider toute modif perf : `pnpm build` (vérifier le découpage des chunks) +
   `npx tsc --noEmit` ; côté base `supabase/verif_perf.sql` (lecture seule).
 

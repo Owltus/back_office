@@ -147,7 +147,20 @@ Elles valent plus que ses gains, parce qu'elles se répéteront sinon.
    0,394 s.
 4. **Généraliser quatre mesures prises dans le même état.** Le « creux de
    chargement » (§4).
-5. **Supposer qu'un gain sur une page se transpose.** Consolider a divisé par
+5. **Mesurer dégrade ce qu'on mesure.** La plus coûteuse des cinq, découverte
+   en toute fin de chantier. Après une session entière de sollicitations,
+   l'instance s'est retrouvée bridée : PostgREST à 1 079 ms pour un refus de
+   permission, et un chargement de page dont TOUTES les requêtes ont été
+   abandonnées à 20 s — alors que Postgres était au repos (1 connexion active
+   sur 10). Retour à 0,16-0,33 s après moins de deux minutes d'inactivité.
+
+   Plusieurs chiffres catastrophiques de ce chantier — les 8 018 ms, les 5 019 ms
+   de la RPC annuelle, les abandons à 20 s — sont donc suspects : je les avais
+   relevés juste après mes propres salves. Ils ne sont pas faux, mais ils ne
+   mesurent pas ce que vit l'utilisateur. Les chiffres du §1, eux, ont été pris
+   sur instance reposée et tiennent.
+
+6. **Supposer qu'un gain sur une page se transpose.** Consolider a divisé par
    cinq le tableau de bord (vingt requêtes concurrentes) et n'a rien donné sur
    l'analytique PDJ (quatre requêtes parallèles). Le nombre de requêtes ne dit
    rien ; ce qui compte est de savoir si elles **se font concurrence**.
