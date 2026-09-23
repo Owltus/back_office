@@ -325,6 +325,42 @@ Le temps de chargement perçu vient surtout de l'auth cliente + du mode SPA. Rè
   - `x-envoy-upstream-service-time` dans les en-têtes de réponse sépare le temps
     PostgREST du temps de la couche edge : c'est l'outil qui tranche entre
     « la base rame » et « la plateforme rame ».
+- **Squelettes de chargement — chantier du 2026-09-23/24** (`components/shared/
+  skeleton/PageShapes.tsx`). Quatre règles nées d'erreurs commises pendant ce
+  chantier même, toutes vérifiées par une passe d'agents adverses :
+  - **UNE seule silhouette par page.** Chaque board avait son squelette local ET
+    recevait celui de la route ; les deux dérivaient en silence. Sur /pdj,
+    4 cellules par ligne contre 5 (215 px) ; sur /repjour, 3 cartes sur
+    `sm:grid-cols-3` contre 4 sur `sm:grid-cols-4`, si bien que la rangée
+    passait de 4 à 3 puis à 4 colonnes et que la page s'effondrait de ~500 px
+    avant de regrandir. Les boards DÉLÈGUENT tous à `PageShapes` ; ne jamais
+    réécrire une silhouette dans un board.
+  - **Relever la forme sur le DOM réel, jamais à l'œil sur une capture.** Les
+    silhouettes écrites de mémoire décrivaient des pages inexistantes :
+    /literie dessinait des cartes de stock et un tableau que la page n'a pas
+    (elle a `literie-floors` + le planning des lits bébé), /caisse un bandeau
+    d'état qui n'existe pas, /repjour une « barre de date » qui est en fait le
+    `title` du PageHeader. Réutiliser les VRAIES classes CSS (elles sont dans la
+    feuille globale, donc disponibles sans importer de code de board).
+  - **Un test qui ne peut pas échouer n'est pas un garde-fou.** Le premier
+    vérifiait qu'une partition d'`ALL_ROOMS` par étage a pour somme
+    `ALL_ROOMS.length` (vrai par construction) et qu'aucune classe n'est vide
+    (impossible par construction) — et, étant un `.ts`, il ne pouvait pas rendre
+    de JSX. `PageShapes.test.tsx` REND les silhouettes et les compte ; toute
+    modification doit être validée en posant une mutation à la main et en
+    vérifiant qu'elle est attrapée. ⚠ `jsdom` ne démarrait pas (override de
+    sécurité `undici` résolu en v8, API changée) : aucun test de rendu n'était
+    possible dans ce dépôt avant le 2026-09-24. L'override est borné à `<8`.
+  - **Un état vide affirmé pendant un chargement est un MENSONGE, pas un saut.**
+    `useFacturationModel` exposait huit lectures sans aucun drapeau : la page
+    affirmait « Aucune facture apprise », « 0 émetteurs · 0 postes · 0 mots »,
+    et « Rien d'appris pour cet émetteur — aucune imputation à corriger » avec
+    une coche verte. Même famille : le fond de caisse affiché à 150 € avant que
+    les cautions n'arrivent. Toute lecture qui alimente un état vide, un
+    compteur ou un montant doit exposer son `isPending` (jamais `isFetching` :
+    un rafraîchissement d'arrière-plan ne doit rien masquer), et toute garde de
+    chargement doit utiliser `isPending` et non `isSuccess` — sinon une erreur
+    laisse la page en squelette pour toujours.
 - Valider toute modif perf : `pnpm build` (vérifier le découpage des chunks) +
   `npx tsc --noEmit` ; côté base `supabase/verif_perf.sql` (lecture seule).
 
