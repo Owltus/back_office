@@ -1,6 +1,7 @@
 import { QueryClient } from '@tanstack/react-query'
 
 import { backoffMs, isOutageError } from '#/lib/backendHealth.ts'
+import { brancherPersistance } from '#/lib/queryPersist.ts'
 
 /**
  * Réglages de cache par défaut du `QueryClient`.
@@ -8,7 +9,15 @@ import { backoffMs, isOutageError } from '#/lib/backendHealth.ts'
  * - `staleTime` : les données restent « fraîches » 1 min → une navigation
  *   aller-retour dans cette fenêtre ne redéclenche PAS de fetch (affichage
  *   instantané depuis le cache).
- * - `gcTime` : on garde les données en cache 5 min après leur dernier usage.
+ * - `gcTime` : 24 h depuis le 2026-09-24 (5 min auparavant). Ce n'est PAS un
+ *   réglage de confort : c'est ce qui rend la persistance sur disque possible.
+ *   Une entrée évincée de la mémoire n'est plus écrite, donc un `gcTime` court
+ *   annulerait le cache de secours au bout de cinq minutes — précisément la
+ *   situation qui a laissé l'hôtel devant un écran vide pendant la panne du
+ *   2026-09-24. Le coût mémoire est négligeable (base de 27 Mo, et l'app n'en
+ *   lit que des sous-ensembles), la fraîcheur reste gouvernée par `staleTime`
+ *   qui, lui, ne change pas : une donnée vieille de deux heures est TOUJOURS
+ *   rafraîchie au montage, elle est juste affichée immédiatement en attendant.
  * - `refetchOnWindowFocus: false` : pas de refetch à chaque retour d'onglet
  *   (comportement plus prévisible pour un back-office interne).
  * - `refetchOnReconnect: true` : au retour du réseau, les requêtes actives
@@ -32,7 +41,7 @@ export function getContext() {
     defaultOptions: {
       queries: {
         staleTime: 60_000,
-        gcTime: 5 * 60_000,
+        gcTime: 24 * 60 * 60_000,
         refetchOnWindowFocus: false,
         refetchOnReconnect: true,
         retry: (count, err) => (isOutageError(err) ? count < 2 : count < 1),
@@ -40,6 +49,11 @@ export function getContext() {
       },
     },
   })
+
+  /* Cache de secours sur disque — voir `lib/queryPersist.ts`. Sans effet hors
+     navigateur, et sans effet sur le démarrage : la restauration n'est pas
+     bloquante. */
+  brancherPersistance(queryClient)
 
   return {
     queryClient,
