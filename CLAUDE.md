@@ -274,16 +274,35 @@ Le temps de chargement perçu vient surtout de l'auth cliente + du mode SPA. Rè
   `max(durées)` et non leur somme. **Avant de consolider, lire le
   chronogramme** — si les requêtes partent ensemble et finissent étalées, il y a
   concurrence et le gain est réel ; si elles finissent groupées, il n'y en a pas.
-- **Le démarrage à froid était la première cause de lenteur vécue**, et il était
-  invisible dans toutes les mesures parce qu'on recharge en boucle. Après une
-  pause, la première requête coûtait **1 398 ms** contre 394 ms à chaud
-  (2026-09-23). Un Worker Cloudflare envoie désormais une **rafale de trois
-  pings** par minute pendant les heures d'ouverture
-  (`cloudflare/stayntouch_in_to_supabase.js`, cron `* 4-22 * * *`). ⚠ UN ping ne
-  suffit pas : la rampe de chauffe est 1,372 / 0,511 / 0,237 / 0,157 s, il faut
-  trois à quatre requêtes rapprochées. Le ping doit porter la clé publishable —
-  sans elle il est rejeté à la porte et ne réchauffe rien ; le `401 permission
-  denied` qu'il reçoit est le SUCCÈS attendu.
+- **~~Préchauffage~~ → SONDE DE SANTÉ (révisé le 2026-09-24, après la panne).**
+  La règle précédente (« rafale de trois pings par minute pour garder la base
+  chaude ») était FAUSSE sur trois points, tous mesurés :
+  - un `permission denied` est tranché AVANT tout accès aux données : ces pings
+    revenaient en 300 ms pendant que la base ne servait plus rien. Ils ne
+    prouvaient rien de ce qu'ils prétendaient ;
+  - chaque refus écrivait une ligne ERROR dans Postgres, PostgREST et l'API
+    Gateway : ~8 000/jour, le dashboard noyé sous notre propre bruit ;
+  - la pratique documentée est UN ping tous les 3 jours (pause à 7 j
+    d'inactivité), dont cette app n'a même pas besoin (usage quotidien + import
+    nocturne). Le gain de chaleur (1,37 → 0,17 s) exigeait une charge continue
+    qui ne laissait qu'une heure de repos par 24 h.
+  Désormais : `sonder()` dans le Worker, UNE requête `/auth/v1/health` toutes
+  les 10 min (cron `*/10 4-22 * * *`), 200 = silence, échec = `console.error`
+  visible comme ERREUR dans Cloudflare. Elle a répondu 504 pendant toute la
+  panne : elle l'aurait vue. ⚠ Elle ne prouve PAS que Postgres sert : une vraie
+  sonde de lecture exigerait `public.ping()` exécutable par `anon`, ce qui
+  contredit `verif_advisor.sql` n° 2 — décision de sécurité, pas de plomberie.
+- **Le mécanisme de la panne du 2026-09-24 est un BUG SUPABASE CONNU, non
+  corrigé** : `supabase/supabase#50043` — la maintenance quotidienne des
+  partitions `realtime.messages` exécute ~90 `ALTER TABLE … OWNER TO` par jour,
+  chacun déclenche `pgrst_ddl_watch` → `NOTIFY pgrst` → PostgREST reconstruit
+  TOUT son cache et répond 503 pendant ce temps (371 s d'indisponibilité en
+  28 h chez le rapporteur). Correctif `supabase/postgres#2464` en BROUILLON.
+  `pgrst_ddl_watch` appartient à `supabase_admin` : aucun contournement côté
+  projet. Ce que nous contrôlons : ne pas aggraver (sonde sobre, disjoncteur,
+  cache persisté), la taille de l'instance (Nano = 0,5 Go, Supabase
+  recommande textuellement Micro pour la production), et la surface Realtime
+  (`parking_reservations` seule publiée).
 - **`pg_stat_statements` n'enregistre PAS les requêtes refusées en permission.**
   Démontré par témoin le 2026-09-23 : cinq requêtes réelles, dont on voyait les
   réponses, n'ont pas bougé le compteur d'une unité. Valider l'instrument avant

@@ -41,23 +41,26 @@ preview_urls = false
 # Contrôle : `npx wrangler@4 tail` doit montrer une ligne `"*/2 0-4 * * *" … Ok`
 # dans les deux minutes, pendant la plage 00h-04h59 UTC.
 [triggers]
-# La seconde entree est le PRECHAUFFAGE de la base : une requete anonyme par
-# minute pendant les heures d'ouverture, pour que la premiere page ouverte de la
-# journee ne paie pas le demarrage a froid. Mesure du 2026-09-23 : 1,37 s apres
-# une pause contre 0,17 s a chaud, et la penalite apparait des 30 SECONDES
-# d'inactivite. Details et tableau complet en tete du handler `prechauffer`.
+# La seconde entree est la SONDE DE SANTE : UNE requete sur /auth/v1/health
+# toutes les dix minutes pendant les heures d'ouverture, journalisee en erreur
+# quand elle echoue. Elle remplace depuis le 2026-09-24 un « prechauffage » a
+# sept requetes par minute qui (1) ne prouvait rien — un refus de permission est
+# tranche avant tout acces aux donnees —, (2) ecrivait ~8 000 lignes d'erreur par
+# jour dans les logs Supabase, noyant tout vrai signal, et (3) ne laissait a la
+# base qu'une heure de repos par 24 h alors que son budget d'E/S ne se recharge
+# qu'au repos. Raisonnement complet en tete du handler `sonder` du Worker et
+# dans plan/panne-supabase-2026-09-24/.
 #
-# `4-22` en UTC couvre 06h-23h Paris dans les deux saisons (ete UTC+2 : 04h-21h ;
-# hiver UTC+1 : 05h-22h). La nuit n'est pas prechauffee : personne n'utilise
-# l'app, et la veille d'import a deja sa propre minuterie ci-dessus.
+# `4-22` en UTC couvre 06h-23h Paris dans les deux saisons. La nuit a sa propre
+# minuterie (veille d'import, ci-dessus).
 #
-# ⚠ `PRECHAUFFAGE_CRON` dans le Worker doit correspondre EXACTEMENT a la seconde
-# chaine ci-dessous : c'est elle qui aiguille les deux minuteries vers le bon
+# ⚠ `SONDE_CRON` dans le Worker doit correspondre EXACTEMENT a la seconde chaine
+# ci-dessous : c'est elle qui aiguille les deux minuteries vers le bon
 # traitement. Les modifier ensemble, jamais l'une sans l'autre.
 #
-# Les deux variables du prechauffage sont definies dans [vars] plus bas : il n'y
-# a RIEN a poser dans le dashboard.
-crons = ["*/2 0-4 * * *", "* 4-22 * * *"]
+# Les deux variables de la sonde sont definies dans [vars] plus bas : il n'y a
+# RIEN a poser dans le dashboard.
+crons = ["*/2 0-4 * * *", "*/10 4-22 * * *"]
 # Journaux du Worker (décisions d'acceptation/refus des e-mails) lisibles dans
 # le dashboard : Workers & Pages → le Worker → Journaux.
 [observability]

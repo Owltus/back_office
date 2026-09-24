@@ -15,8 +15,9 @@ soir**, avant de se rétablir seule. Cette découverte **affaiblit l'hypothèse
 du préchauffage** que ce document tenait pour la plus vraisemblable — voir la
 révision en section 4.
 
-La cause première n'est **pas établie**, et ce post-mortem explique aussi
-pourquoi elle ne le sera peut-être jamais.
+**Le MÉCANISME est établi** (section 9, ajoutée en fin de journée) : c'est un
+bug Supabase connu et non corrigé, `supabase/supabase#50043`. Ce qui reste
+ouvert, c'est pourquoi la base n'a pas guéri seule la seconde fois.
 
 Toutes les heures de ce document sont en **UTC**. L'heure locale (Paris) est
 UTC+2.
@@ -367,3 +368,87 @@ qu'elle prétend corriger.
 
 Ce sont des inconnues assumées, pas des trous comblés par une hypothèse
 commode.
+
+---
+
+## 9. Cause mécanique — un bug Supabase connu (ajouté le 24/09 après recherche)
+
+Recherche faite à la demande de l'utilisateur (« regarde comment les autres
+font, ne réinvente pas la roue »). Résultat : **le mécanisme observé dans les
+logs PostgREST est un bug de plateforme documenté.**
+
+**`supabase/supabase#50043`** — *Realtime partition maintenance triggers a
+PostgREST schema-cache reload ~85×/day → 503 PGRST002 bursts* (ouvert le
+5 septembre 2026, fermé « external-issue ») :
+
+> « Realtime's daily-partition maintenance for `realtime.messages` runs
+> `ALTER TABLE … OWNER TO supabase_realtime_admin` unconditionally. »
+> « PostgREST then rebuilds its entire schema cache and returns 503 / PGRST002
+> to every request while it does. »
+> « ~90 ALTERs a day → ~100 full cache rebuilds → 371 seconds of a completely
+> unavailable REST API in 28 hours », en rafales de 20-25 s.
+
+C'est exactement ce que montraient nos logs : **cinq `NOTIFY pgrst` la même
+seconde** (une rafale de DDL de maintenance), puis des rechargements de
+catalogue à 1,2 s, 2,0 s, **6,4 s**, puis la boucle de redémarrage. Notre
+publication `supabase_realtime_messages_publication` porte bien **7 partitions
+quotidiennes** de `realtime.messages`.
+
+**Correctif** : `supabase/postgres#2464` (*pgrst_ddl_watch ne notifie plus pour
+les schémas auth/realtime/storage*) — **encore en brouillon** au 24/09.
+**Contournement côté projet : aucun.** `pgrst_ddl_watch` appartient à
+`supabase_admin` (`must be owner of function`).
+
+### Pourquoi ça nous frappe plus fort que le rapporteur
+
+Le rapporteur a 1 411 relations et des rechargements de 3-4 s. Nous avons 42
+relations, et nos rechargements prennent normalement ~1 s. Pendant l'incident
+ils ont pris **6,4 s** : quelque chose ralentissait la lecture du catalogue.
+L'instance est **Nano : 0,5 Go de RAM** partagé entre six services, avec
+`shared_buffers` à 229 Mo. La doc Supabase (« High RAM usage ») : usage de base
+~50 % sur la plus petite instance, et *« the operating system may start
+killing processes »* quand le swap monte. Un PostgREST tué et relancé en boucle
+pendant qu'il tente de reconstruire son cache : c'est le tableau observé.
+
+Et la doc *Compute and Disk* est explicite : *« It is recommended to upgrade
+your Project from Nano Compute to Micro Compute when it's convenient for
+you. »* Nano n'est pas prévu pour la production.
+
+### Ce que ça change au classement des hypothèses
+
+| | Avant (section 4) | Après |
+|---|---|---|
+| Déclencheur | inconnu | **DDL de maintenance Realtime → tempête de rechargements PostgREST** (bug #50043) |
+| Terrain | supposé « budget d'E/S » | **mémoire** : 0,5 Go pour six services |
+| Rôle du préchauffage | cause probable, puis exonéré | **aggravateur** : charge continue sur un terrain serré, et — surtout — 8 000 erreurs/jour qui masquaient tout |
+| Question ouverte | la cause | **pourquoi l'épisode 1 a guéri seul et pas le 2** |
+
+### Ce qui a été fait le 24/09
+
+- Préchauffage **remplacé par une sonde** : une requête `/auth/v1/health` toutes
+  les 10 min, silencieuse à 200, `console.error` en échec (visible comme
+  ERREUR dans Cloudflare). 138 requêtes/jour au lieu de 7 980 ; zéro ligne
+  d'erreur en régime normal ; elle a répondu 504 pendant toute la panne, donc
+  elle l'aurait vue. Déployé.
+- Cache de lecture persisté, disjoncteur branché (sections précédentes).
+
+### Ce qui reste à décider — trois choix, tous à l'utilisateur
+
+1. **Une sonde qui LIT vraiment.** `/auth/v1/health` prouve GoTrue vivant, pas
+   Postgres servant. Une vraie preuve exige `public.ping()` (`select true`,
+   `security invoker`, `stable`) exécutable par `anon`, et une exception
+   nommée dans `verif_advisor.sql` n° 2. Surface d'attaque nulle, mais c'est
+   une entorse à « anon sans aucun privilège sur public », règle du red team.
+2. **Nano → Micro** (~10 $/mois, 1 Go). C'est la recommandation écrite de
+   Supabase pour la production, et c'est le seul levier sur le terrain
+   mémoire. Il ne supprime pas les rechargements de cache (bug #50043), il
+   leur donne la place de finir en 1 s au lieu de tuer le processus.
+3. **Retirer `parking_reservations` de la publication Realtime.** N'arrête PAS
+   la maintenance des partitions `messages` (plateforme), mais libère un slot
+   de réplication et le travail de décodage WAL associé. Coût : plus de
+   synchronisation directe du planning entre deux onglets (décision du 20/09
+   à réviser ou non).
+
+Et une chose qui n'est PAS un choix : **suivre `supabase/postgres#2464`**. Le
+jour où il est fusionné et déployé sur notre image Postgres, le déclencheur
+disparaît.

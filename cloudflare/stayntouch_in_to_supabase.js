@@ -101,173 +101,96 @@ function sanitizeHeader(value) {
 
 /*
  * ---------------------------------------------------------------------------
- * PRECHAUFFAGE DE LA BASE
+ * SONDE DE SANTE DE LA BASE (ex-« prechauffage », retire le 2026-09-24)
  *
- * POURQUOI — mesure du 2026-09-23 sur la production. La MEME requete triviale,
- * selon le temps ecoule depuis la derniere activite :
+ * CE QUI A ETE RETIRE, ET POURQUOI. Du 23/09 12h16 au 24/09, ce Worker
+ * « prechauffait » la base : sept requetes anonymes par minute, dix-neuf
+ * heures par jour, sur `/rest/v1/profiles`. Chacune se faisait refuser
+ * (`42501 permission denied`) et c'etait presente comme le succes attendu.
+ * Trois erreurs de raisonnement, toutes mesurees le 24/09 :
  *
- *   en continu (chaud)        0,17 s
- *   apres  30 s de repos      0,34 s
- *   apres  60 s de repos      0,59 s
- *   apres   2 min de repos    0,62 s
- *   apres   5 min de repos    0,76 s
- *   apres une longue pause    1,37 s
+ *   1. Un refus de permission est tranche AVANT tout acces aux donnees. Il ne
+ *      prouve donc PAS que la base sert les requetes — pendant la panne du
+ *      24/09, ces pings revenaient en 300 ms alors que la base ne repondait
+ *      plus a rien. La sonde etait aveugle a ce qu'elle pretendait surveiller.
+ *   2. Chaque refus ecrit une ligne ERROR dans les logs Postgres, PostgREST
+ *      et API Gateway : ~350 erreurs par heure, ~8 000 par jour. Le tableau
+ *      de bord etait noye sous le bruit du Worker, et un vrai probleme y
+ *      aurait disparu.
+ *   3. La pratique documentee pour une instance gratuite est UN ping tous les
+ *      trois jours (pour eviter la pause a sept jours d'inactivite) — et cette
+ *      app n'en a meme pas besoin : l'hotel l'utilise chaque jour et l'import
+ *      nocturne ecrit chaque nuit. Le gain de « chaleur » (1,37 s -> 0,17 s
+ *      sur la premiere page apres une pause) exigeait une charge continue qui
+ *      est, au minimum, le suspect n° 1 de la non-guerison de la panne.
  *
- * La penalite apparait des TRENTE SECONDES d'inactivite. Autrement dit, un
- * utilisateur qui ouvre l'application le matin, ou apres une heure sans y
- * toucher, paie systematiquement huit fois le prix d'une requete chaude — sur
- * CHAQUE page. C'est la premiere cause de lenteur vecue, et elle etait
- * invisible dans mes mesures precedentes, qui rechargeaient en boucle et ne
- * voyaient donc qu'une base deja chaude.
+ * Le mecanisme de la panne, lui, est un bug Supabase connu et non corrige
+ * (supabase/supabase#50043, correctif supabase/postgres#2464 en brouillon) :
+ * la maintenance des partitions Realtime emet ~90 DDL par jour, chacun force
+ * PostgREST a reconstruire tout son cache, et il repond 503 pendant ce temps.
+ * Hors de portee d'un projet. Ce que ce Worker peut faire, c'est ne pas
+ * aggraver, et DIRE quand ca casse.
  *
- * COMMENT — une requete anonyme par minute pendant les heures d'ouverture. Elle
- * doit traverser TOUTE la pile pour reveiller ce qu'il faut :
+ * CE QUE FAIT LA SONDE MAINTENANT. Toutes les dix minutes, UNE requete sur
+ * `/auth/v1/health`, qui repond 200 en temps normal (donc aucune ligne
+ * d'erreur), et qui a repondu 504 pendant toute la panne du 24/09 (donc elle
+ * l'aurait vue). Un echec est journalise en `console.error`, pas en
+ * `console.log` : il apparait comme ERREUR dans le dashboard Cloudflare, la ou
+ * l'ancien dispositif affichait « 0 Errors » en pleine panne parce qu'il
+ * avalait tout.
  *
- *   sans cle  -> 73 ms, "No API key found" : rejetee a la porte, ne rechauffe
- *                RIEN. Inutile.
- *   avec cle  -> "42501 permission denied for table profiles". Un code d'erreur
- *                PostgreSQL : la requete est allee jusqu'a la base et a evalue
- *                les RLS. C'est la preuve que la pile entiere est reveillee.
+ * ⚠ LIMITE ASSUMEE : `/auth/v1/health` prouve que GoTrue est vivant, pas que
+ * Postgres sert des requetes. Une sonde qui LIT vraiment exigerait une
+ * fonction `public.ping()` executable par `anon` — ce qui contredit le
+ * controle n° 2 de `supabase/verif_advisor.sql` (« aucune fonction executable
+ * par anon »), issu du red team. C'est une decision de securite, pas de
+ * plomberie : elle appartient a l'utilisateur.
  *
- * Le 401 attendu n'est donc pas un echec, c'est le SUCCES : `anon` n'a aucun
- * privilege sur `public` (durcissement du 2026-09-06) et rien n'est expose.
- *
- * HORAIRES — `4-22` en UTC couvre l'union des deux saisons pour 06h-23h Paris
- * (ete UTC+2 : 04h-21h ; hiver UTC+1 : 05h-22h). La nuit n'est pas prechauffee :
- * personne n'utilise l'app, et la veille d'import a sa propre minuterie.
- *
- * DEUX tirs espaces de 30 s par passage : la minuterie de Cloudflare ne descend
- * pas sous la minute, or la chaleur retombe des 30 s. Deux tirs ramenent le pire
- * cas d'environ 0,59 s a environ 0,34 s.
+ * HORAIRES — `4-22` en UTC couvre 06h-23h Paris dans les deux saisons. La nuit
+ * a sa propre minuterie (veille d'import). Dix minutes : la base retrouve les
+ * fenetres de repos dont elle a besoin pour recharger son budget d'E/S (regle
+ * mesuree, cf. CLAUDE.md), et 138 requetes par jour au lieu de 7 980.
  * ------------------------------------------------------------------------- */
 
-/** Doit correspondre EXACTEMENT a l'entree de `crons` dans wrangler.toml. */
-const PRECHAUFFAGE_CRON = '* 4-22 * * *'
-
-/** Espacement des deux rafales, en millisecondes. */
-const PRECHAUFFAGE_ESPACEMENT_MS = 30_000
-
-/** Tirs par rafale. Trois suffisent a atteindre l'etat chaud (cf. `rafale`). */
-const PRECHAUFFAGE_TIRS = 3
+/** Doit correspondre EXACTEMENT a la seconde entree de `crons` dans wrangler.toml. */
+const SONDE_CRON = '*/10 4-22 * * *'
 
 /**
- * Reveille PostgREST + Postgres (et GoTrue) par des requetes anonymes.
+ * Une requete de sante, silencieuse quand tout va bien, bruyante quand ca casse.
  *
  * Aucune donnee lue, aucune ecriture, aucun secret : la cle `publishable` est
- * publique par construction (elle est embarquee dans le bundle du navigateur).
+ * publique par construction (embarquee dans le bundle du navigateur).
  *
  * @param {{ SUPABASE_URL?: string, SUPABASE_PUBLISHABLE_KEY?: string }} env
  */
-async function prechauffer(env) {
+async function sonder(env) {
   const base = env.SUPABASE_URL
   const cle = env.SUPABASE_PUBLISHABLE_KEY
   if (!base || !cle) {
-    console.error('[prechauffage] SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY absentes')
+    console.error('[sonde] SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY absentes')
     return
   }
 
-  /**
-   * Un tir. JOURNALISE son issue : ce Worker tourne sans surveillance, et un
-   * prechauffage qui echoue en silence est pire qu'un prechauffage absent — on
-   * croit le probleme regle. La mesure du 2026-09-23 l'a montre : impossible de
-   * savoir si les pings arrivaient, parce que `pg_stat_statements` n'enregistre
-   * PAS les requetes refusees en permission (test temoin : cinq pings reels
-   * n'ont pas bouge le compteur d'une unite).
-   *
-   * Un statut 401 est le SUCCES attendu : `anon` n'a aucun privilege sur
-   * `public`, et le code d'erreur PostgreSQL `42501` prouve que la requete est
-   * allee jusqu'a la base.
-   */
-  const tir = async (chemin) => {
-    const t0 = Date.now()
-    try {
-      const res = await fetch(base + chemin, {
-        headers: { apikey: cle },
-        // Un tir est bref. S'il se bloque, on n'attend pas : le passage suivant
-        // arrive dans une minute et rien n'est perdu.
-        // 5 s, pas 15. Un tir de PRECHAUFFAGE qui met plus de cinq
-        // secondes ne prechauffe plus rien : il ne fait qu'ajouter du poids
-        // sur une base qui souffre deja. Avant le 2026-09-24 c'etait 15 s, et
-        // trois tirs sequentiels suffisaient a faire durer une invocation
-        // 135 s pour une minuterie a 60 s -> les invocations se
-        // CHEVAUCHAIENT, et la pression montait a mesure que la base
-        // ralentissait.
-        signal: AbortSignal.timeout(5_000),
-      })
-      res.body?.cancel()
-      return `${res.status} en ${Date.now() - t0} ms`
-    } catch (err) {
-      // Sans consequence pour l'application — le prechauffage est un confort,
-      // jamais une dependance — mais ON LE DIT.
-      return `ECHEC apres ${Date.now() - t0} ms (${err && err.name})`
+  const t0 = Date.now()
+  try {
+    const res = await fetch(base + '/auth/v1/health', {
+      headers: { apikey: cle },
+      // Cinq secondes : au-dela, la passerelle Supabase a elle-meme deja
+      // rendu un 504 (mesure : 5,2 s systematiquement pendant la panne).
+      signal: AbortSignal.timeout(5_000),
+    })
+    res.body?.cancel()
+    const duree = Date.now() - t0
+    if (res.ok) {
+      console.log(`[sonde] gotrue=${res.status} en ${duree} ms`)
+    } else {
+      console.error(`[sonde] ALERTE gotrue=${res.status} en ${duree} ms`)
     }
-  }
-
-  /**
-   * Une RAFALE, pas un tir isole. Mesure du 2026-09-23 apres une longue pause :
-   *
-   *   tir 1   1,372 s
-   *   tir 2   0,511 s
-   *   tir 3   0,237 s
-   *   tir 4   0,157 s
-   *
-   * Il faut TROIS a QUATRE requetes rapprochees pour atteindre l'etat chaud.
-   * Un ping unique toutes les 30 s maintenait la base au niveau « premiere
-   * requete » (0,74 s mesure), soit la moitie du gain possible seulement.
-   */
-  /*
-   * S'ARRETE AU PREMIER ECHEC — ajoute le 2026-09-24.
-   *
-   * Le prechauffage est un CONFORT. Quand la base ne repond plus, il n'a plus
-   * rien a prechauffer : continuer a tirer ne sert personne et prolonge
-   * l'invocation. Le premier echec est donc un signal d'arret, pas un
-   * incident a traverser.
-   */
-  const rafale = async () => {
-    const issues = []
-    for (let i = 0; i < PRECHAUFFAGE_TIRS; i++) {
-      const issue = await tir('/rest/v1/profiles?select=id&limit=1')
-      issues.push(issue)
-      if (issue.startsWith('ECHEC')) return { issues, ok: false }
-    }
-    return { issues, ok: true }
-  }
-
-  // PostgREST -> Postgres -> RLS (le chemin que prend chaque page).
-  const a = await rafale()
-
-  /*
-   * ABANDON IMMEDIAT si la premiere rafale a echoue.
-   *
-   * Sans ce retour, l'invocation enchainait GoTrue, une attente de 30 s, puis
-   * trois tirs de plus — le tout pendant que la base etait a terre. Releve du
-   * 2026-09-24 : pendant la panne, chaque invocation tirait SEPT fois pour
-   * rien, toutes les minutes, pendant quarante minutes.
-   *
-   * Pire cas desormais : un seul tir de 5 s, soit douze fois moins que la
-   * minuterie. Deux invocations ne peuvent plus se chevaucher, donc la
-   * pression n'augmente plus quand la base ralentit.
-   */
-  if (!a.ok) {
-    console.log(
-      `[prechauffage] ABANDON — base injoignable, rafale1=[${a.issues}]`,
+  } catch (err) {
+    console.error(
+      `[sonde] ALERTE gotrue injoignable apres ${Date.now() - t0} ms (${err && err.name})`,
     )
-    return
   }
-
-  // GoTrue, que toute requete de donnees attend au demarrage (`_getAccessToken`).
-  const sante = await tir('/auth/v1/health')
-  if (sante.startsWith('ECHEC') || sante.startsWith('50')) {
-    console.log(`[prechauffage] ABANDON — GoTrue en panne, gotrue=${sante}`)
-    return
-  }
-
-  await new Promise((r) => setTimeout(r, PRECHAUFFAGE_ESPACEMENT_MS))
-  const b = await rafale()
-
-  console.log(
-    `[prechauffage] rafale1=[${a.issues}] gotrue=${sante} rafale2=[${b.issues}]`,
-  )
 }
 
 export default {
@@ -373,14 +296,14 @@ export default {
     /*
      * DEUX minuteries partagent ce handler, distinguees par `event.cron` :
      *
-     *   toutes les 2 min, 0h-4h UTC -> veille du rapport journalier (ci-dessous)
-     *   toutes les minutes, 4h-22h  -> PRECHAUFFAGE (voir `prechauffer`)
+     *   toutes les 2 min, 0h-4h UTC  -> veille du rapport journalier (ci-dessous)
+     *   toutes les 10 min, 4h-22h UTC -> SONDE de sante (voir `sonder`)
      *
-     * Le prechauffage ne doit JAMAIS pouvoir empecher la veille de tourner :
-     * il est traite en premier, dans sa propre branche, et sort aussitot.
+     * La sonde ne doit JAMAIS pouvoir empecher la veille de tourner : elle est
+     * traitee en premier, dans sa propre branche, et sort aussitot.
      */
-    if (event && event.cron === PRECHAUFFAGE_CRON) {
-      await prechauffer(env)
+    if (event && event.cron === SONDE_CRON) {
+      await sonder(env)
       return
     }
 
