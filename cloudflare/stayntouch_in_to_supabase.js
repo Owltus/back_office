@@ -155,6 +155,9 @@ function sanitizeHeader(value) {
 /** Doit correspondre EXACTEMENT a la seconde entree de `crons` dans wrangler.toml. */
 const SONDE_CRON = '*/10 4-22 * * *'
 
+/** Doit correspondre EXACTEMENT a la premiere entree de `crons` dans wrangler.toml. */
+const VEILLE_CRON = '*/2 0-4 * * *'
+
 /**
  * Une requete de sante, silencieuse quand tout va bien, bruyante quand ca casse.
  *
@@ -304,6 +307,30 @@ export default {
      */
     if (event && event.cron === SONDE_CRON) {
       await sonder(env)
+      return
+    }
+
+    // ⚠ UN CRON INCONNU EST IGNORE, PAS TRAITE COMME LA VEILLE.
+    //
+    // Jusqu'au 2026-09-24, tout ce qui n'etait pas la sonde tombait ici et
+    // lancait le controle d'import. Or le planificateur Cloudflare peut garder
+    // une ANCIENNE minuterie active apres un deploiement (constate le 13/09,
+    // et de nouveau le 24/09 : l'ancien cron « chaque minute, 4h-22h » a
+    // continue de tirer alors que `deploy` ET `triggers deploy` annoncaient
+    // le nouveau « toutes les 10 min »). Resultat : pendant onze minutes, une
+    // minuterie fantome a appele l'Edge Function d'import une fois par minute
+    // — une vraie lecture en base a chaque passage, en plein apres-midi, sans
+    // une ligne d'erreur pour le dire.
+    //
+    // Une minuterie que ce code ne connait pas n'a aucune legitimite a agir.
+    // On la journalise en avertissement (visible dans le dashboard) et on sort.
+    //
+    // (Commentaires sur une ligne a dessein : une expression cron contenant
+    // « */10 » refermerait un commentaire de bloc — c'est arrive ici meme.)
+    if (!event || event.cron !== VEILLE_CRON) {
+      console.warn(
+        `[minuterie] cron inconnu ignore : "${event && event.cron}" — planificateur Cloudflare a rafraichir (wrangler triggers deploy)`,
+      )
       return
     }
 
