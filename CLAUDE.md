@@ -292,6 +292,20 @@ Le temps de chargement perçu vient surtout de l'auth cliente + du mode SPA. Rè
   panne : elle l'aurait vue. ⚠ Elle ne prouve PAS que Postgres sert : une vraie
   sonde de lecture exigerait `public.ping()` exécutable par `anon`, ce qui
   contredit `verif_advisor.sql` n° 2 — décision de sécurité, pas de plomberie.
+- **Planificateur Cloudflare : le calendrier ACTIF n'est pas celui que le
+  dashboard affiche** (constaté le 13/09, puis à nouveau le 24/09 avec preuves).
+  Après `deploy` + `triggers deploy` annonçant `*/10 4-22`, l'ancien
+  `* 4-22 * * *` a continué de tirer **chaque minute pendant ~19 minutes**,
+  alors que la page Déclencheurs ne le listait plus ; il s'est éteint seul
+  ~7 min après le second `triggers deploy`. Deux règles : (1) **le Worker
+  ignore tout cron qu'il ne connaît pas** (`VEILLE_CRON` / `SONDE_CRON`
+  explicites, `console.warn` sinon) — un calendrier fantôme ne doit rien
+  pouvoir déclencher, or l'ancien code traitait tout inconnu comme la veille et
+  a appelé l'Edge Function d'import une fois par minute pendant onze minutes ;
+  (2) **constater dans les logs**, pas déduire du déploiement : `wrangler
+  tail --format json > fichier` pendant un tick complet, puis compter
+  `[sonde]` et `cron inconnu`. Ne pas redéployer en rafale pour « réveiller »
+  le planificateur : c'est ce qui l'avait figé le 13/09.
 - **Le mécanisme de la panne du 2026-09-24 est un BUG SUPABASE CONNU, non
   corrigé** : `supabase/supabase#50043` — la maintenance quotidienne des
   partitions `realtime.messages` exécute ~90 `ALTER TABLE … OWNER TO` par jour,
