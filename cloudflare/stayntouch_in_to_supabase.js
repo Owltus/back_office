@@ -185,7 +185,14 @@ async function prechauffer(env) {
         headers: { apikey: cle },
         // Un tir est bref. S'il se bloque, on n'attend pas : le passage suivant
         // arrive dans une minute et rien n'est perdu.
-        signal: AbortSignal.timeout(15_000),
+        // 5 s, pas 15. Un tir de PRECHAUFFAGE qui met plus de cinq
+        // secondes ne prechauffe plus rien : il ne fait qu'ajouter du poids
+        // sur une base qui souffre deja. Avant le 2026-09-24 c'etait 15 s, et
+        // trois tirs sequentiels suffisaient a faire durer une invocation
+        // 135 s pour une minuterie a 60 s -> les invocations se
+        // CHEVAUCHAIENT, et la pression montait a mesure que la base
+        // ralentissait.
+        signal: AbortSignal.timeout(5_000),
       })
       res.body?.cancel()
       return `${res.status} en ${Date.now() - t0} ms`
@@ -208,23 +215,59 @@ async function prechauffer(env) {
    * Un ping unique toutes les 30 s maintenait la base au niveau « premiere
    * requete » (0,74 s mesure), soit la moitie du gain possible seulement.
    */
+  /*
+   * S'ARRETE AU PREMIER ECHEC — ajoute le 2026-09-24.
+   *
+   * Le prechauffage est un CONFORT. Quand la base ne repond plus, il n'a plus
+   * rien a prechauffer : continuer a tirer ne sert personne et prolonge
+   * l'invocation. Le premier echec est donc un signal d'arret, pas un
+   * incident a traverser.
+   */
   const rafale = async () => {
     const issues = []
     for (let i = 0; i < PRECHAUFFAGE_TIRS; i++) {
-      issues.push(await tir('/rest/v1/profiles?select=id&limit=1'))
+      const issue = await tir('/rest/v1/profiles?select=id&limit=1')
+      issues.push(issue)
+      if (issue.startsWith('ECHEC')) return { issues, ok: false }
     }
-    return issues
+    return { issues, ok: true }
   }
 
   // PostgREST -> Postgres -> RLS (le chemin que prend chaque page).
   const a = await rafale()
+
+  /*
+   * ABANDON IMMEDIAT si la premiere rafale a echoue.
+   *
+   * Sans ce retour, l'invocation enchainait GoTrue, une attente de 30 s, puis
+   * trois tirs de plus — le tout pendant que la base etait a terre. Releve du
+   * 2026-09-24 : pendant la panne, chaque invocation tirait SEPT fois pour
+   * rien, toutes les minutes, pendant quarante minutes.
+   *
+   * Pire cas desormais : un seul tir de 5 s, soit douze fois moins que la
+   * minuterie. Deux invocations ne peuvent plus se chevaucher, donc la
+   * pression n'augmente plus quand la base ralentit.
+   */
+  if (!a.ok) {
+    console.log(
+      `[prechauffage] ABANDON — base injoignable, rafale1=[${a.issues}]`,
+    )
+    return
+  }
+
   // GoTrue, que toute requete de donnees attend au demarrage (`_getAccessToken`).
   const sante = await tir('/auth/v1/health')
+  if (sante.startsWith('ECHEC') || sante.startsWith('50')) {
+    console.log(`[prechauffage] ABANDON — GoTrue en panne, gotrue=${sante}`)
+    return
+  }
 
   await new Promise((r) => setTimeout(r, PRECHAUFFAGE_ESPACEMENT_MS))
   const b = await rafale()
 
-  console.log(`[prechauffage] rafale1=[${a}] gotrue=${sante} rafale2=[${b}]`)
+  console.log(
+    `[prechauffage] rafale1=[${a.issues}] gotrue=${sante} rafale2=[${b.issues}]`,
+  )
 }
 
 export default {

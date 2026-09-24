@@ -49,6 +49,23 @@ const REQUEST_TIMEOUT_MS = 20_000
  */
 const limiteur = createLimiteur(6)
 
+/**
+ * Erreur levée quand le disjoncteur est ouvert : la requête n'est même pas
+ * émise.
+ *
+ * `status: 503` n'est pas cosmétique — c'est ce qui la fait reconnaître comme
+ * une PANNE par `isOutageError`, donc traiter comme telle par le bandeau, les
+ * gardes et la politique de réessai. Sans lui, elle passerait pour une erreur
+ * métier et afficherait un message inexact.
+ */
+class BackendIndisponible extends Error {
+  readonly status = 503
+  constructor() {
+    super('Backend injoignable : requête non émise (disjoncteur ouvert).')
+    this.name = 'BackendIndisponible'
+  }
+}
+
 /** L'URL visée, quelle que soit la forme sous laquelle `fetch` la reçoit. */
 function urlDe(input: RequestInfo | URL): string {
   if (typeof input === 'string') return input
@@ -64,7 +81,11 @@ function urlDe(input: RequestInfo | URL): string {
  * demandé par l'APPELANT (annulation TanStack au démontage) n'est pas une
  * panne.
  */
-async function fetchWithTimeout(
+/* Exporté UNIQUEMENT pour `supabase.test.ts` : c'est le point de passage de
+   tout le trafic de l'app, et la règle du disjoncteur qu'il applique mérite un
+   test qui puisse échouer. Ne pas l'appeler depuis le code applicatif — le
+   client Supabase le branche déjà comme son `global.fetch`. */
+export async function fetchWithTimeout(
   input: RequestInfo | URL,
   init?: RequestInit,
 ): Promise<Response> {
@@ -76,6 +97,35 @@ async function fetchWithTimeout(
    * verrou. L'authentification est rare et courte ; elle passe devant.
    */
   if (urlDe(input).includes('/auth/v1/')) return executerFetch(input, init)
+
+  /*
+   * ÉCHEC IMMÉDIAT QUAND LE DISJONCTEUR EST OUVERT — ajouté le 2026-09-24.
+   *
+   * Le disjoncteur existait depuis la panne du 2026-09-05, mais RIEN ne le
+   * consultait sur le chemin des données : deux appelants seulement s'en
+   * servaient (relecture des droits, canal parking). Pendant les quarante
+   * minutes du 2026-09-24, chaque lecture partait donc quand même, attendait
+   * son délai de garde de 20 s, échouait, puis était réessayée deux fois.
+   * Une page en compte une vingtaine : environ soixante requêtes vouées à
+   * l'échec, et plus d'une minute d'attente avant le moindre message — le
+   * tout dirigé sur une base déjà à terre.
+   *
+   * Désormais, tant que la fenêtre de backoff court, on n'émet RIEN : l'échec
+   * est instantané, l'utilisateur voit le bandeau tout de suite, et la base
+   * cesse de recevoir du trafic pendant qu'elle se relève. C'est un
+   * demi-ouvert naturel : `shouldSkip()` redevient faux à l'échéance, une
+   * requête passe, et elle referme le disjoncteur ou rallonge la fenêtre
+   * (1 s -> 30 s maximum).
+   *
+   * ⚠ `/auth/v1/` en est EXEMPTÉ, délibérément, et le test est placé APRÈS la
+   * ligne ci-dessus pour que ce soit visible. L'authentification est la porte
+   * d'entrée de l'application : un disjoncteur ouvert à tort y enfermerait
+   * tout le monde dehors, alors que la tempête à éteindre est celle des
+   * lectures de données. Le bouton « Réessayer » du bandeau
+   * (`backendHealth.retryNow()`) reste la sortie de secours.
+   */
+  if (backendHealth.shouldSkip()) throw new BackendIndisponible()
+
   return limiteur.run(() => executerFetch(input, init))
 }
 

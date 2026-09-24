@@ -104,7 +104,7 @@ export function estSensible(cle: ReadonlyArray<unknown>): boolean {
  */
 export function doitPersister(query: Query): boolean {
   if (query.state.status !== 'success') return false
-  return !estSensible(query.queryKey as ReadonlyArray<unknown>)
+  return !estSensible(query.queryKey)
 }
 
 /**
