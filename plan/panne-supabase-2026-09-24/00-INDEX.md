@@ -6,9 +6,17 @@ Le matin du 2026-09-24, toute la couche de service du projet Supabase est
 tombée : PostgREST en boucle de redémarrage, Auth à 100 % d'échecs, Storage et
 pooler muets. **Postgres lui-même tournait**, mais n'exécutait plus les
 requêtes. Un redémarrage du projet, déclenché par l'utilisateur à **09:04:39
-UTC**, a tout rétabli en trois minutes. La cause première n'est **pas
-établie** — et ce post-mortem explique aussi pourquoi elle ne le sera peut-être
-jamais.
+UTC**, a tout rétabli en trois minutes.
+
+Les logs du Worker Cloudflare, consultés APRÈS la première version de ce
+document, ont livré la chronologie à la seconde (section 1bis) : la base a
+basculé **en trente secondes**, et elle avait déjà vacillé **la veille au
+soir**, avant de se rétablir seule. Cette découverte **affaiblit l'hypothèse
+du préchauffage** que ce document tenait pour la plus vraisemblable — voir la
+révision en section 4.
+
+La cause première n'est **pas établie**, et ce post-mortem explique aussi
+pourquoi elle ne le sera peut-être jamais.
 
 Toutes les heures de ce document sont en **UTC**. L'heure locale (Paris) est
 UTC+2.
@@ -36,6 +44,57 @@ UTC+2.
 Rampe de chauffe relevée juste après le redémarrage, conforme à celle déjà
 documentée dans `CLAUDE.md` : **2,18 → 1,64 → 1,02 → 0,55 → 0,22 → 0,13 →
 0,17 → 0,16 s**.
+
+---
+
+## 1bis. La chronologie à la seconde, par les logs du Worker
+
+Le Worker Cloudflare journalise l'issue de chacun de ses tirs
+(`[observability] enabled = true`). C'est un **relevé minute par minute de la
+santé de la base, vu de l'extérieur**, et il survit au redémarrage. Filtre sur
+`ECHEC` : **47 événements sur 24 h, en DEUX épisodes seulement.**
+
+Heures locales (UTC+2), telles que le dashboard Cloudflare les rend.
+
+### Épisode 1 — le 23/09 au soir, la base vacille puis se rattrape SEULE
+
+```
+22:53:28  rafale1=[302, 291, 312 ms]          rafale2=[11326 ms, 6230 ms, ECHEC]
+22:54:50  rafale1=[13892 ms, ECHEC, ECHEC]    rafale2=[5697, 3189, 1519 ms]
+22:56:41  rafale1=[ECHEC, 12060, 11276 ms]    rafale2=[2371, 2087, 1833 ms]
+23:16:05  rafale1=[5850, 4749, 13802 ms]      rafale2=[ECHEC, ECHEC, 9894 ms]
+23:16:38  rafale1=[ECHEC, ECHEC, 7977 ms]     rafale2=[440, 331, 322 ms]   <- rétablie
+```
+
+**Vingt-trois minutes de dégradation sévère, puis retour à la normale sans
+aucune intervention.** Personne n'a rien vu : le Worker avale ses erreurs.
+
+### Épisode 2 — le 24/09 au matin, la base ne se rattrape pas
+
+```
+10:24:41  rafale1=[317, 281, 284 ms]  gotrue=200 en 330 ms
+          rafale2=[ECHEC, ECHEC, ECHEC]                    <- BASCULEMENT
+10:26:30  tout en ECHEC              gotrue=504 en 5236 ms
+   ...    identique chaque minute
+11:04:39  REDÉMARRAGE DU PROJET (action utilisateur)
+11:05:11  rafale1=[ECHEC, 521 en 264 ms, 521 en 252 ms]    <- reprise
+11:08:18  première vraie lecture Auth : 7,32 s
+11:11:25  0,19 / 0,12 / 0,09 s                             <- normal
+```
+
+**Le basculement tient en trente secondes** : entre la première et la seconde
+rafale du MÊME passage, la base passe de 280 ms à l'expiration complète.
+
+### Ce que cette chronologie établit
+
+| Fait | Conséquence |
+|---|---|
+| Aucun `ECHEC` entre le déploiement de 18:25 et 22:53 | **4 h 28 de fonctionnement parfait** sous la charge nouvelle |
+| Aucun `ECHEC` entre 06:00 et 10:24 le 24/09 | **4 h 24 de fonctionnement parfait** sous la MÊME charge |
+| Deux épisodes abrupts, séparés de ~11 h | ce n'est pas une dérive progressive |
+| Le premier se résout seul en 23 min | le système sait se rétablir… quand on le laisse |
+| `gotrue=504 en 5,2 s`, systématiquement | la passerelle coupe à ~5,2 s — d'où les 504 mesurés |
+| `ECHEC apres 15000 ms (TimeoutError)` | PostgREST n'a jamais répondu, même partiellement |
 
 ---
 
@@ -127,9 +186,40 @@ dans la minute.
 **Chronologie :** le volume a été multiplié par 2,33 le 23/09 à 18:25, soit
 environ **quatorze heures** avant les premiers symptômes.
 
-**Statut : hypothèse.** 7 requêtes/minute, ce n'est pas beaucoup dans
-l'absolu, et ce sont des refus de permission qui ne lisent aucune donnée. Le
-mécanisme plausible n'est pas « ça surcharge » mais « ça empêche de guérir ».
+**Statut : hypothèse AFFAIBLIE — révision du 2026-09-24, après lecture des
+logs du Worker.**
+
+Les logs (section 1bis) contredisent frontalement la version « le préchauffage
+ne laisse pas la base se reposer, donc elle s'épuise » :
+
+- **4 h 28 de fonctionnement parfait** entre le déploiement de 18:25 et le
+  premier incident de 22:53, sous la charge nouvelle ;
+- **4 h 24 de fonctionnement parfait** le lendemain entre 06:00 et 10:24, sous
+  exactement la même charge ;
+- deux basculements **abrupts** (30 secondes), séparés de onze heures, sans
+  aucune dérive progressive entre les deux.
+
+Une privation de repos produirait une dégradation **graduelle**, pas des
+basculements nets encadrés d'heures parfaites. **Le préchauffage n'est donc
+pas la cause.**
+
+Ce qu'il reste de l'hypothèse, et qui tient toujours :
+
+1. **Il empêche la guérison.** L'épisode du 23/09 au soir s'est résolu seul en
+   23 minutes ; celui du 24/09 au matin ne s'est jamais résolu en 40 minutes.
+   La différence de comportement reste inexpliquée, mais une sollicitation qui
+   repart toutes les 60 s, avec des invocations qui se chevauchent dès que la
+   base ralentit, est un candidat sérieux pour expliquer pourquoi le second
+   n'a pas guéri.
+2. **Il aggrave sous stress.** 135 s d'exécution possible pour une minuterie à
+   60 s, sans disjoncteur ni backoff : la pression AUGMENTE quand la base
+   souffre. C'est un défaut de conception indépendamment de cette panne.
+
+**Correction de méthode à retenir** : j'ai proposé de couper le préchauffage
+en présentant la corrélation temporelle (« ×2,33 six heures avant ») comme
+accablante. Les logs, que je n'avais pas encore lus, montrent que la charge
+nouvelle a tourné plus de quatre heures sans le moindre incident. **La
+corrélation était réelle, l'inférence était trop rapide.**
 
 ### H2 — La tempête `NOTIFY pgrst` côté Supabase
 
@@ -263,10 +353,17 @@ qu'elle prétend corriger.
 
 ## 8. Ce que ce document n'établit pas
 
-- **L'heure exacte du basculement** (les logs Cloudflare la donneraient).
-- **La cause première.** H1 explique la non-guérison, pas le déclenchement.
-- **Le lien de causalité entre le préchauffage et la panne.** Seul l'arrêt du
-  préchauffage, suivi d'une période sans rechute, le démontrerait.
+- ~~L'heure exacte du basculement~~ → **ÉTABLIE** par les logs du Worker :
+  24/09 **10:24:41 local** (08:24:41 UTC), entre deux rafales du même passage.
+  Et un précurseur la veille, 22:53 → 23:16, résolu seul.
+- **La cause première.** Toujours pas établie, et les logs ont éliminé
+  l'explication « privation de repos » qui paraissait la meilleure.
+- **Pourquoi le premier épisode a guéri seul et pas le second.** C'est
+  désormais LA question ouverte la plus intéressante.
+- **Ce qui déclenche un basculement en trente secondes** sur une base de 27 Mo
+  au repos, avec 100 % de cache. Un évènement côté plateforme (rechargement de
+  catalogue PostgREST, migration, relocalisation d'instance) reste le candidat
+  le plus cohérent avec cette soudaineté — mais rien ne le prouve.
 
 Ce sont des inconnues assumées, pas des trous comblés par une hypothèse
 commode.
