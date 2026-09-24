@@ -361,6 +361,48 @@ Le temps de chargement perçu vient surtout de l'auth cliente + du mode SPA. Rè
     un rafraîchissement d'arrière-plan ne doit rien masquer), et toute garde de
     chargement doit utiliser `isPending` et non `isSuccess` — sinon une erreur
     laisse la page en squelette pour toujours.
+- **Panne du 2026-09-24 — trois règles payées cher** (post-mortem complet :
+  `plan/panne-supabase-2026-09-24/00-INDEX.md`). Toute la couche de service est
+  tombée (PostgREST en boucle de redémarrage, Auth à 100 % d'échecs, Storage et
+  pooler muets) pendant que **Postgres tournait** sans servir les requêtes. Un
+  redémarrage du projet a tout rétabli en trois minutes.
+  - **SEULE UNE REQUÊTE QUI LIT DES DONNÉES PROUVE QU'UNE BASE SERT.** J'ai
+    conclu deux fois « la base va bien » sur des signaux vides : un
+    `permission denied` est tranché à l'analyse, AVANT tout accès aux données
+    (une base incapable de lire refuse instantanément), et `/auth/v1/health`
+    ne touche pas la base. La sonde valable, sans identifiants, est un
+    `POST /auth/v1/token?grant_type=password` avec une adresse volontairement
+    inexistante : un `400 invalid_credentials` prouve que GoTrue a bien lu
+    `auth.users`. C'est elle qui a montré 7,32 s puis 0,09 s. Même famille que
+    le `pg_stat_statements` aveugle du 2026-09-23 : l'instrument répondait,
+    mais ne mesurait pas ce qu'on croyait.
+  - **CAPTURER AVANT DE REDÉMARRER.** Le redémarrage relance Postgres et remet
+    à zéro `pg_stat_database`, `pg_stat_statements` et `pg_stat_activity`
+    (`pg_postmaster_start_time()` le confirme). La base inspectée ensuite était
+    fraîche — 100 % de cache, zéro verrou — donc inexploitable, et la cause
+    première n'a JAMAIS pu être établie. Premier réflexe désormais :
+    `supabase/diagnostic_panne.sql` (lecture seule intégrale). Ces vues sont
+    servies depuis la MÉMOIRE : une base qui ne lit plus ses tables a de bonnes
+    chances d'y répondre quand même.
+  - **UNE SONDE QUI AVALE SES ERREURS N'EST PAS UNE SURVEILLANCE.** La panne
+    n'a été détectée que parce qu'un humain a ouvert l'application. Le
+    préchauffage Cloudflare tournait toutes les minutes, a très probablement
+    observé la panne de bout en bout, et n'en a rien dit — il journalise mais
+    n'alerte pas, et ses pings en refus de permission auraient « réussi »
+    quoi qu'il arrive. Un vendredi soir, l'hôtel serait resté sans application
+    jusqu'au lundi. Rien ne remplace une sonde qui LIT et qui ALERTE.
+  - Éliminés et vérifiés, à ne pas re-suspecter sans preuve neuve : taille
+    (27 Mo), gonflement, verrous, slots de réplication (616 octets de retard),
+    WAL (128 Mo), index de `pdj_breakfasts` (valides), CTE récursive du 22/09
+    (terminaison prouvée), `pg_cron` (pas même installé), planificateur caché
+    (balayage exhaustif), incident de plateforme.
+  - ⚠ Le préchauffage `* 4-22 * * *` ne laisse **qu'une heure de repos par
+    24 h** (la veille du rapport couvre 0h-4h59). Or le budget d'E/S ne se
+    recharge qu'au repos. Chaque invocation vit au moins 30 s, la suivante part
+    60 s après : la fenêtre de deux minutes nécessaire est structurellement
+    impossible. Et sans disjoncteur, une invocation sur base malade dure
+    jusqu'à 135 s pour une minuterie à 60 s — les invocations se chevauchent et
+    la pression AUGMENTE à mesure que la base souffre.
 - Valider toute modif perf : `pnpm build` (vérifier le découpage des chunks) +
   `npx tsc --noEmit` ; côté base `supabase/verif_perf.sql` (lecture seule).
 
