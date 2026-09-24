@@ -361,6 +361,40 @@ Le temps de chargement perçu vient surtout de l'auth cliente + du mode SPA. Rè
     un rafraîchissement d'arrière-plan ne doit rien masquer), et toute garde de
     chargement doit utiliser `isPending` et non `isSuccess` — sinon une erreur
     laisse la page en squelette pour toujours.
+- **Désamorçage de la panne du 2026-09-24** (commits `ac9e64a`, `259e0d9`).
+  On ne sait pas empêcher la panne ; on a supprimé ce qu'elle coûtait.
+  - **Le cache de données est PERSISTÉ sur disque** (`lib/queryPersist.ts`,
+    `localStorage`, 24 h). Pendant une coupure, l'app continue de LIRE les
+    dernières données connues au lieu d'un écran vide. ⚠ `gcTime` est passé à
+    **24 h** pour cette raison précise : une entrée évincée de la mémoire n'est
+    plus écrite sur disque, donc un `gcTime` court annulerait le cache de
+    secours. `staleTime` est inchangé (60 s) — la fraîcheur, elle, ne se
+    négocie pas.
+  - ⚠ **CE QUI NE DOIT JAMAIS TOUCHER LE DISQUE** : le poste de la réception
+    est PARTAGÉ. `PREFIXES_SENSIBLES` exclut `pdj/day` (noms clients, qui font
+    l'objet d'une purge RGPD serveur — les recopier l'annulerait),
+    `parking/reservations` (noms clients ; ⚠ clé construite par une FONCTION,
+    invisible à une recherche de `queryKey:` — elle a failli être oubliée),
+    `comptes`, `facturation`, `caisse/cautions` (`select(*)` + commentaire
+    libre). Toute nouvelle lecture nominative doit y être ajoutée ;
+    `queryPersist.test.ts` échoue si on retire une entrée.
+  - **Les ÉCRITURES ne sont pas mises en file** et ne repartent pas toutes
+    seules. Décision explicite : rejouer des écritures différées sur une caisse
+    ou un rapprochement demanderait une résolution de conflits que personne n'a
+    demandée.
+  - **Le disjoncteur coupe enfin le trafic.** `fetchWithTimeout`
+    (`lib/supabase.ts`, passage unique de TOUT le trafic Supabase) consulte
+    `backendHealth.shouldSkip()` AVANT d'émettre. Avant, rien ne le consultait
+    sur le chemin des données : chaque lecture partait, attendait 20 s,
+    échouait, était réessayée deux fois — une vingtaine de lectures par page.
+    ⚠ `/auth/v1/` en est EXEMPTÉ délibérément (un disjoncteur ouvert à tort
+    enfermerait tout le monde dehors) ; c'est figé par un test.
+  - **Le préchauffage s'arrête au premier échec.** Il enchaînait 7 tirs à 15 s
+    même sur une base morte, soit jusqu'à 135 s pour une minuterie à 60 s : les
+    invocations se chevauchaient et la pression montait quand la base
+    ralentissait. Désormais : arrêt au premier échec, délai par tir à 5 s, pire
+    cas 5 s. ⚠ **Le Worker n'est pas déployé automatiquement** — `wrangler
+    deploy` PUIS `wrangler triggers deploy`, et CONSTATER un déclenchement.
 - **Panne du 2026-09-24 — trois règles payées cher** (post-mortem complet :
   `plan/panne-supabase-2026-09-24/00-INDEX.md`). Toute la couche de service est
   tombée (PostgREST en boucle de redémarrage, Auth à 100 % d'échecs, Storage et
