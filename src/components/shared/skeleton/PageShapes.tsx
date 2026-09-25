@@ -1,3 +1,5 @@
+import type { CSSProperties } from 'react'
+
 import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { ALL_ROOMS } from '#/lib/hotel/rooms.ts'
 
@@ -466,8 +468,7 @@ export function FormeLiterie() {
         <Skeleton
           className="w-full rounded-2xl"
           style={{
-            height:
-              BABYCOT_HEADER_H + BABYCOT_LITS_PLANCHER * BABYCOT_ROW_H,
+            height: BABYCOT_HEADER_H + BABYCOT_LITS_PLANCHER * BABYCOT_ROW_H,
           }}
         />
         <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 text-xs">
@@ -544,6 +545,136 @@ export function FormeProfil() {
       </div>
 
       <Skeleton className="h-11 w-full rounded-md" />
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------------- *
+ * Classeur — quatre pages, quatre silhouettes (2026-09-25).                  *
+ *                                                                           *
+ * Relevées sur le DOM réel des boards (`components/classeur/*`) : mêmes      *
+ * classes de grille et de carte, même rapport 210/297 des miniatures A4.    *
+ * Les boards DÉLÈGUENT ici (règle « une silhouette par page ») ; la route    *
+ * (`RouteSkeleton`, variante `classeur`) choisit la forme d'après le chemin. *
+ * ------------------------------------------------------------------------- */
+
+/** Grille de la liste des classeurs et des chapitres du tableau de bord. */
+const GRILLE_CARTES = 'grid gap-3 sm:grid-cols-2 xl:grid-cols-3'
+
+/** Colonnes par défaut de la grille du chapitre (`useChapterZoom`, LARGEUR_CIBLE). */
+const GRILLE_CHAPITRE: CSSProperties = {
+  gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+}
+
+/** /classeur : N cartes « icône + nom + établissement » (`ClasseurCard`). */
+export function FormeClasseurListe({ cartes = 3 }: { cartes?: number }) {
+  return (
+    <div className={GRILLE_CARTES} aria-hidden="true">
+      {Array.from({ length: cartes }).map((_, i) => (
+        <div
+          key={i}
+          className="flex items-center gap-4 rounded-xl border border-border bg-card px-5 py-4"
+        >
+          <Skeleton className="size-5 rounded-sm" />
+          <div className="flex-1">
+            <Skeleton className="h-4 w-40" />
+            <Skeleton className="mt-2 h-3 w-28" />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/**
+ * /classeur/$id : section « Chapitres » (titre + recherche à droite, comme le
+ * second PageHeader de la page) puis N cartes de chapitre (icône + libellé,
+ * description, pastille de statut). `enTete` à false quand le board, qui rend
+ * déjà son PageHeader, ne veut que la grille.
+ */
+export function FormeClasseurDashboard({
+  chapitres = 3,
+  enTete = true,
+}: {
+  chapitres?: number
+  enTete?: boolean
+}) {
+  return (
+    <>
+      {enTete && (
+        <div className="flex flex-wrap items-center gap-3" aria-hidden="true">
+          <div className="min-w-0 flex-1">
+            <Skeleton className="h-7 w-28" />
+          </div>
+          <Skeleton className="h-8 w-full rounded-md sm:w-64" />
+        </div>
+      )}
+      <div className={GRILLE_CARTES} aria-hidden="true">
+        {Array.from({ length: chapitres }).map((_, i) => (
+          <div key={i} className="rounded-xl border border-border bg-card p-4">
+            <div className="flex items-center gap-3">
+              <Skeleton className="size-5 rounded-sm" />
+              <Skeleton className="h-4 w-36" />
+            </div>
+            <Skeleton className="mt-3 h-3 w-48" />
+            <Skeleton className="mt-3 h-5 w-20 rounded-full" />
+          </div>
+        ))}
+      </div>
+    </>
+  )
+}
+
+/**
+ * /classeur/$id/$chapitre : champ de recherche pleine largeur puis N cartes
+ * d'éléments (barre de titre + miniature A4 au rapport 210/297). Le board
+ * transmet son `gridStyle` (zoom) ; la route prend les colonnes par défaut.
+ */
+export function FormeChapitre({
+  cartes = 6,
+  recherche = true,
+  gridStyle = GRILLE_CHAPITRE,
+}: {
+  cartes?: number
+  recherche?: boolean
+  gridStyle?: CSSProperties
+}) {
+  return (
+    <>
+      {recherche && (
+        <Skeleton className="h-9 w-full rounded-md" aria-hidden="true" />
+      )}
+      <div className="grid gap-4" style={gridStyle} aria-hidden="true">
+        {Array.from({ length: cartes }).map((_, i) => (
+          <div
+            key={i}
+            className="overflow-hidden rounded-xl border border-border bg-card"
+          >
+            <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+              <Skeleton className="size-3.5 rounded-sm" />
+              <Skeleton className="h-3 w-32" />
+            </div>
+            <Skeleton
+              className="w-full rounded-none"
+              style={{ aspectRatio: '210 / 297' }}
+            />
+          </div>
+        ))}
+      </div>
+    </>
+  )
+}
+
+/** Détail d'un élément : le cadre `DetailPaper` avec une page A4 grisée. */
+export function FormeDetail() {
+  return (
+    <div className="rounded-xl border border-border bg-card" aria-hidden="true">
+      <div className="flex justify-center p-6">
+        <Skeleton
+          className="w-full max-w-[420px] rounded-sm"
+          style={{ aspectRatio: '210 / 297' }}
+        />
+      </div>
     </div>
   )
 }

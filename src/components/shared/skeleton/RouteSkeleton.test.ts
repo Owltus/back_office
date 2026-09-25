@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   SHELL_VARIANT,
   VARIANTES_DIVERGENTES,
+  paramsClasseur,
   skeletonVariant,
 } from '#/components/shared/skeleton/RouteSkeleton.tsx'
 import type { SkeletonVariant } from '#/components/shared/skeleton/RouteSkeleton.tsx'
@@ -38,6 +39,8 @@ describe('skeletonVariant', () => {
     expect(skeletonVariant('/repjour')).toBe('repjour')
     expect(skeletonVariant('/caisse')).toBe('caisse')
     expect(skeletonVariant('/literie')).toBe('literie')
+    expect(skeletonVariant('/classeur')).toBe('classeur')
+    expect(skeletonVariant('/classeur/1/2/document/3')).toBe('classeur')
   })
 
   it('range les analytiques AVANT leur page mère', () => {
@@ -95,6 +98,7 @@ describe('étendue de la divergence post-hydratation', () => {
       'repjour',
       'caisse',
       'literie',
+      'classeur',
       'board',
     ]
     expect(familles.filter((v) => v !== SHELL_VARIANT)).toEqual(
@@ -135,5 +139,18 @@ describe('skeletonVariant — bornage des préfixes', () => {
     expect(skeletonVariant('/pdjXXX')).toBe(SHELL_VARIANT)
     expect(skeletonVariant('/profilage')).toBe(SHELL_VARIANT)
     expect(skeletonVariant('/pdj/2026-09-24')).toBe('pdj')
+  })
+})
+
+describe('paramsClasseur — la forme suit la profondeur du chemin', () => {
+  it('liste, tableau de bord, chapitre, détail', () => {
+    expect(paramsClasseur('/classeur')).toBe('liste')
+    expect(paramsClasseur('/classeur/')).toBe('liste')
+    expect(paramsClasseur('/classeur/1')).toBe('dashboard')
+    expect(paramsClasseur('/classeur/1/2')).toBe('chapitre')
+    expect(paramsClasseur('/classeur/1/2/document/3')).toBe('detail')
+    expect(paramsClasseur('/classeur/1/2/suivi/3')).toBe('detail')
+    expect(paramsClasseur('/classeur/1/2/signature/3')).toBe('detail')
+    expect(paramsClasseur('/classeur/1/2/intercalaire/3')).toBe('detail')
   })
 })

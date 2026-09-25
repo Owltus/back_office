@@ -16,6 +16,7 @@ import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
+import { FormeDetail } from '#/components/shared/skeleton/PageShapes.tsx'
 import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { messageErreur } from '#/lib/classeur/erreur.ts'
 import { usePageScale } from '#/lib/classeur/print/usePageScale.ts'
@@ -197,14 +198,8 @@ export function DetailSkeleton({ retour }: { retour: RetourVers }) {
   return (
     <div className="flex flex-1 flex-col gap-4" aria-busy="true">
       <DetailHeader retour={retour} title={<Skeleton className="h-6 w-64" />} />
-      <DetailPaper>
-        <div className="flex justify-center p-6">
-          <Skeleton
-            className="w-full max-w-[420px] rounded-sm"
-            style={{ aspectRatio: '210 / 297' }}
-          />
-        </div>
-      </DetailPaper>
+      {/* DÉLÈGUE à `FormeDetail` : même cadre que `DetailPaper`, une page A4. */}
+      <FormeDetail />
     </div>
   )
 }

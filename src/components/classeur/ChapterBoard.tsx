@@ -66,6 +66,7 @@ import { Tip } from '#/components/shared/Tip.tsx'
 import { Alert, AlertDescription } from '#/components/ui/alert.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
+import { FormeChapitre } from '#/components/shared/skeleton/PageShapes.tsx'
 import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { messageErreur } from '#/lib/classeur/erreur.ts'
 import { exporterChapitreZip } from '#/lib/classeur/exportMarkdown.ts'
@@ -514,28 +515,15 @@ export function ChapterBoard({
         {isDragOver && <DropOverlay />}
 
         {contenuQ.isPending ? (
-          <div className="grid gap-4" style={gridStyle} aria-hidden="true">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div
-                key={i}
-                className="overflow-hidden rounded-xl border border-border bg-card"
-              >
-                <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-                  <Skeleton className="size-3.5 rounded-sm" />
-                  <Skeleton className="h-3 w-32" />
-                </div>
-                <Skeleton
-                  className="w-full rounded-none"
-                  style={{ aspectRatio: '210 / 297' }}
-                />
-              </div>
-            ))}
-          </div>
+          /* DÉLÈGUE à `FormeChapitre` avec la grille du zoom courant (la
+             recherche est déjà rendue au-dessus). */
+          <FormeChapitre recherche={false} gridStyle={gridStyle} />
         ) : contenuQ.isError ? null : items.length === 0 ? (
           <div className="flex flex-col items-center gap-3 rounded-xl border border-border bg-card p-8 text-center text-muted-foreground">
             <p className="text-sm">
               Aucun élément dans ce chapitre.
-              {canWrite && ' Déposez des fichiers .md ou .txt pour les importer.'}
+              {canWrite &&
+                ' Déposez des fichiers .md ou .txt pour les importer.'}
             </p>
             {canWrite && (
               <Button

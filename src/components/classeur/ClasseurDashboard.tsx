@@ -37,6 +37,7 @@ import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
+import { FormeClasseurDashboard } from '#/components/shared/skeleton/PageShapes.tsx'
 import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { messageErreur } from '#/lib/classeur/erreur.ts'
 import { DEFAULT_REGISTRY_NAME, getIcon } from '#/lib/classeur/naming.ts'
@@ -409,24 +410,9 @@ export function ClasseurDashboard({
           )}
         </section>
       ) : chapitresQ.isPending ? (
-        <div
-          className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3"
-          aria-hidden="true"
-        >
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div
-              key={i}
-              className="rounded-xl border border-border bg-card p-4"
-            >
-              <div className="flex items-center gap-3">
-                <Skeleton className="size-5 rounded-sm" />
-                <Skeleton className="h-4 w-36" />
-              </div>
-              <Skeleton className="mt-3 h-3 w-48" />
-              <Skeleton className="mt-3 h-5 w-20 rounded-full" />
-            </div>
-          ))}
-        </div>
+        /* DÉLÈGUE à `FormeClasseurDashboard` (sans son en-tête : le PageHeader
+           « Chapitres » est déjà rendu au-dessus). */
+        <FormeClasseurDashboard enTete={false} />
       ) : chapters.length === 0 && chapitresQ.isSuccess ? (
         <div className="flex flex-col items-center gap-3 rounded-xl border border-border bg-card p-8 text-center text-muted-foreground">
           <p className="text-sm">Ce classeur n'a pas encore de chapitre.</p>

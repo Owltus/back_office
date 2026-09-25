@@ -9,6 +9,10 @@ import {
 } from '#/components/analytique/AnalytiqueSkeleton.tsx'
 import {
   FormeCaisse,
+  FormeChapitre,
+  FormeClasseurDashboard,
+  FormeClasseurListe,
+  FormeDetail,
   FormeLiterie,
   FormePdj,
   FormeProfil,
@@ -72,6 +76,7 @@ export type SkeletonVariant =
   | 'repjour'
   | 'caisse'
   | 'literie'
+  | 'classeur'
   | 'board'
 
 /**
@@ -96,6 +101,7 @@ export const VARIANTES_DIVERGENTES: SkeletonVariant[] = [
   'repjour',
   'caisse',
   'literie',
+  'classeur',
 ]
 
 /** Famille de page d'un chemin. Pure : c'est elle qu'on teste, pas le rendu.
@@ -120,12 +126,28 @@ export function skeletonVariant(pathname: string): SkeletonVariant {
   if (estSous(pathname, '/repjour')) return 'repjour'
   if (estSous(pathname, '/caisse')) return 'caisse'
   if (estSous(pathname, '/literie')) return 'literie'
+  if (estSous(pathname, '/classeur')) return 'classeur'
   /* /classeur (page vide, 2026-09-25) garde le repli tant qu'elle n'a pas de
      forme. /parking et /rapro gardent le repli : mesuré le 2026-09-23, leur contenu
      fait 789 et 809 px contre 789 px de squelette — l'écart est déjà nul ou
      de 2 %. Leur donner une silhouette dédiée serait du travail pour rien, et
      une occasion de dérive de plus. */
   return 'board'
+}
+
+/** Forme d'une page du Classeur d'après la profondeur du chemin :
+ *  `/classeur` liste, `/classeur/1` tableau de bord, `/classeur/1/2`
+ *  chapitre, `/classeur/1/2/document/3` (ou suivi, signature, intercalaire)
+ *  détail. Pure : c'est elle qu'on teste. */
+export type FormeClasseur = 'liste' | 'dashboard' | 'chapitre' | 'detail'
+
+export function paramsClasseur(pathname: string): FormeClasseur {
+  const segments = pathname.split('/').filter((s) => s !== '')
+  // segments[0] === 'classeur'
+  if (segments.length <= 1) return 'liste'
+  if (segments.length === 2) return 'dashboard'
+  if (segments.length === 3) return 'chapitre'
+  return 'detail'
 }
 
 /** Silhouette de la barre PageHeader : titre à gauche, actions à droite.
@@ -230,6 +252,23 @@ export function RouteSkeleton({
       >
         <HeaderRow />
         <FormeLiterie />
+      </div>
+    )
+  }
+
+  // Classeur : quatre pages, quatre formes, choisies d'après le chemin.
+  if (famille === 'classeur') {
+    const forme = paramsClasseur(pathname)
+    return (
+      <div
+        className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4"
+        aria-hidden="true"
+      >
+        <HeaderRow />
+        {forme === 'liste' && <FormeClasseurListe />}
+        {forme === 'dashboard' && <FormeClasseurDashboard />}
+        {forme === 'chapitre' && <FormeChapitre />}
+        {forme === 'detail' && <FormeDetail />}
       </div>
     )
   }

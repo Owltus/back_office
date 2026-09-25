@@ -5,6 +5,10 @@ import { cleanup, render } from '@testing-library/react'
 import {
   CHAMBRES_PAR_ETAGE,
   FormeCaisse,
+  FormeChapitre,
+  FormeClasseurDashboard,
+  FormeClasseurListe,
+  FormeDetail,
   FormeLiterie,
   FormePdj,
   FormeProfil,
@@ -48,12 +52,13 @@ describe('TuileSquelette', () => {
 
   it('sait omettre la ligne de sous-texte', () => {
     // Les `sub` sont conditionnels dans `StatTile` (benchmark absent, total nul).
-    const avec = render(<TuileSquelette />).container.querySelectorAll('span,div')
-      .length
-    cleanup()
-    const sans = render(<TuileSquelette sub={false} />).container.querySelectorAll(
+    const avec = render(<TuileSquelette />).container.querySelectorAll(
       'span,div',
     ).length
+    cleanup()
+    const sans = render(
+      <TuileSquelette sub={false} />,
+    ).container.querySelectorAll('span,div').length
     expect(sans).toBeLessThan(avec)
   })
 })
@@ -212,5 +217,45 @@ describe('FormeProfil', () => {
     // fantôme de 36 px suivie de 24 px d'espacement.
     const { container } = render(<FormeProfil />)
     expect(container.querySelector('.h-7')).toBeNull()
+  })
+})
+
+describe('Classeur — quatre silhouettes relevées sur les boards', () => {
+  it('la liste dessine ses cartes sur la grille 2/3 colonnes', () => {
+    const { container } = render(<FormeClasseurListe cartes={4} />)
+    const grille = container.querySelector('.xl\\:grid-cols-3')
+    expect(grille).not.toBeNull()
+    expect(container.querySelectorAll('.rounded-xl.border').length).toBe(4)
+  })
+
+  it('le tableau de bord dessine l’en-tête de section, la recherche et les cartes à pastille', () => {
+    const { container } = render(<FormeClasseurDashboard chapitres={3} />)
+    expect(container.querySelectorAll('.rounded-full').length).toBe(3)
+    expect(container.querySelectorAll('.sm\\:w-64').length).toBe(1)
+    const sans = render(<FormeClasseurDashboard chapitres={2} enTete={false} />)
+    expect(sans.container.querySelectorAll('.sm\\:w-64').length).toBe(0)
+    expect(sans.container.querySelectorAll('.rounded-full').length).toBe(2)
+  })
+
+  it('le chapitre dessine N miniatures au rapport A4 et sa recherche', () => {
+    const { container } = render(<FormeChapitre cartes={5} />)
+    const pages = Array.from(container.querySelectorAll('[style]')).filter(
+      (el) => (el as HTMLElement).style.aspectRatio === '210 / 297',
+    )
+    expect(pages.length).toBe(5)
+    expect(container.querySelectorAll('.h-9.w-full').length).toBe(1)
+    const sansRecherche = render(<FormeChapitre cartes={2} recherche={false} />)
+    expect(sansRecherche.container.querySelectorAll('.h-9.w-full').length).toBe(
+      0,
+    )
+  })
+
+  it('le détail dessine UNE page A4 dans le cadre carte', () => {
+    const { container } = render(<FormeDetail />)
+    const pages = Array.from(container.querySelectorAll('[style]')).filter(
+      (el) => (el as HTMLElement).style.aspectRatio === '210 / 297',
+    )
+    expect(pages.length).toBe(1)
+    expect(container.firstElementChild?.className).toContain('bg-card')
   })
 })

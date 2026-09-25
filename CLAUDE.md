@@ -565,8 +565,18 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   est cible de dépôt (`chapterDropId`), les cartes posent `ItemDragData`.
   Routes minces : la logique vit dans `ClasseurListActions` /
   `ClasseurDashboardActions`.
-- **Squelette** : repli `board` de `RouteSkeleton` tant que les silhouettes
-  n'ont pas été relevées sur le DOM réel (étape 7 du plan).
+- **Squelettes** : variante `classeur` de `RouteSkeleton`, forme choisie par
+  `paramsClasseur(pathname)` (liste, tableau de bord, chapitre, détail) ;
+  silhouettes `FormeClasseurListe`, `FormeClasseurDashboard`, `FormeChapitre`,
+  `FormeDetail` dans `PageShapes.tsx`, relevées sur le DOM des boards, qui y
+  DÉLÈGUENT (le chapitre transmet son `gridStyle` de zoom).
+- **UI alignée le 2026-09-25 soir** sur la grammaire des autres pages
+  (retour utilisateur « les boutons n'ont pas le style des autres pages ») :
+  `PageHeader` + `ButtonGroup` de boutons icône outline avec `Tip`
+  (`IconAction`), création en outline sm avec `Plus` + libellé, aucun bouton
+  plein dans un en-tête, états vides en carte compacte, tiroir des chapitres
+  ouvert depuis le `leading` du PageHeader sous `lg` et nom du classeur en
+  sous-titre de Navbar (`useNavbarSubtitle`), pages A4 encadrées `bg-card`.
 
 ## Faits base de données (vérifiés en lecture)
 
