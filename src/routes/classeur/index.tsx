@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 
 import { PageGuard } from '#/components/auth/PageGuard.tsx'
-import { ClasseurList } from '#/components/classeur/ClasseurList.tsx'
+import { ClasseurListActions } from '#/components/classeur/ClasseurListActions.tsx'
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
 
 export const Route = createFileRoute('/classeur/')({
@@ -9,15 +9,15 @@ export const Route = createFileRoute('/classeur/')({
 })
 
 /**
- * Liste des classeurs. Import et export JSON (`onImporterJson`,
- * `onExporterJson`) seront branchés ici par les étapes 5 et 6 ; sans eux, la
- * liste grise l'import et n'affiche pas l'export.
+ * Liste des classeurs. L'export JSON est branché par `ClasseurListActions`
+ * (étape 5) ; l'import JSON (`onImporterJson`) le sera par l'étape 6 — sans
+ * lui, la liste grise la carte d'import.
  */
 function ClasseurPage() {
   return (
     <PageGuard page="classeur">
       <PageContainer>
-        <ClasseurList />
+        <ClasseurListActions />
       </PageContainer>
     </PageGuard>
   )

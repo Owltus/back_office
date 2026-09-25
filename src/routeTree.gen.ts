@@ -40,11 +40,16 @@ import { Route as ParkingAnalytiqueIndexRouteImport } from './routes/parking/ana
 import { Route as ClasseurClasseurIdIndexRouteImport } from './routes/classeur/$classeurId/index'
 import { Route as CaisseAnalytiqueIndexRouteImport } from './routes/caisse/analytique.index'
 import { Route as ClasseurClasseurIdChapterIdRouteImport } from './routes/classeur/$classeurId/$chapterId'
+import { Route as ClasseurClasseurIdChapterIdIndexRouteImport } from './routes/classeur/$classeurId/$chapterId/index'
 import { Route as RepjourAnalytiqueYearMonthRouteImport } from './routes/repjour/analytique.$year.$month'
 import { Route as RaproAnalytiqueYearMonthRouteImport } from './routes/rapro/analytique.$year.$month'
 import { Route as PdjAnalytiqueYearMonthRouteImport } from './routes/pdj/analytique.$year.$month'
 import { Route as ParkingAnalytiqueYearMonthRouteImport } from './routes/parking/analytique.$year.$month'
 import { Route as CaisseAnalytiqueYearMonthRouteImport } from './routes/caisse/analytique.$year.$month'
+import { Route as ClasseurClasseurIdChapterIdSuiviIdRouteImport } from './routes/classeur/$classeurId/$chapterId/suivi.$id'
+import { Route as ClasseurClasseurIdChapterIdSignatureIdRouteImport } from './routes/classeur/$classeurId/$chapterId/signature.$id'
+import { Route as ClasseurClasseurIdChapterIdIntercalaireIdRouteImport } from './routes/classeur/$classeurId/$chapterId/intercalaire.$id'
+import { Route as ClasseurClasseurIdChapterIdDocumentIdRouteImport } from './routes/classeur/$classeurId/$chapterId/document.$id'
 
 const RepjourRoute = RepjourRouteImport.update({
   id: '/repjour',
@@ -202,6 +207,12 @@ const ClasseurClasseurIdChapterIdRoute =
     path: '/$chapterId',
     getParentRoute: () => ClasseurClasseurIdRoute,
   } as any)
+const ClasseurClasseurIdChapterIdIndexRoute =
+  ClasseurClasseurIdChapterIdIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => ClasseurClasseurIdChapterIdRoute,
+  } as any)
 const RepjourAnalytiqueYearMonthRoute =
   RepjourAnalytiqueYearMonthRouteImport.update({
     id: '/analytique/$year/$month',
@@ -231,6 +242,30 @@ const CaisseAnalytiqueYearMonthRoute =
     path: '/analytique/$year/$month',
     getParentRoute: () => CaisseRoute,
   } as any)
+const ClasseurClasseurIdChapterIdSuiviIdRoute =
+  ClasseurClasseurIdChapterIdSuiviIdRouteImport.update({
+    id: '/suivi/$id',
+    path: '/suivi/$id',
+    getParentRoute: () => ClasseurClasseurIdChapterIdRoute,
+  } as any)
+const ClasseurClasseurIdChapterIdSignatureIdRoute =
+  ClasseurClasseurIdChapterIdSignatureIdRouteImport.update({
+    id: '/signature/$id',
+    path: '/signature/$id',
+    getParentRoute: () => ClasseurClasseurIdChapterIdRoute,
+  } as any)
+const ClasseurClasseurIdChapterIdIntercalaireIdRoute =
+  ClasseurClasseurIdChapterIdIntercalaireIdRouteImport.update({
+    id: '/intercalaire/$id',
+    path: '/intercalaire/$id',
+    getParentRoute: () => ClasseurClasseurIdChapterIdRoute,
+  } as any)
+const ClasseurClasseurIdChapterIdDocumentIdRoute =
+  ClasseurClasseurIdChapterIdDocumentIdRouteImport.update({
+    id: '/document/$id',
+    path: '/document/$id',
+    getParentRoute: () => ClasseurClasseurIdChapterIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -257,7 +292,7 @@ export interface FileRoutesByFullPath {
   '/pdj/': typeof PdjIndexRoute
   '/rapro/': typeof RaproIndexRoute
   '/repjour/': typeof RepjourIndexRoute
-  '/classeur/$classeurId/$chapterId': typeof ClasseurClasseurIdChapterIdRoute
+  '/classeur/$classeurId/$chapterId': typeof ClasseurClasseurIdChapterIdRouteWithChildren
   '/caisse/analytique/': typeof CaisseAnalytiqueIndexRoute
   '/classeur/$classeurId/': typeof ClasseurClasseurIdIndexRoute
   '/parking/analytique/': typeof ParkingAnalytiqueIndexRoute
@@ -269,6 +304,11 @@ export interface FileRoutesByFullPath {
   '/pdj/analytique/$year/$month': typeof PdjAnalytiqueYearMonthRoute
   '/rapro/analytique/$year/$month': typeof RaproAnalytiqueYearMonthRoute
   '/repjour/analytique/$year/$month': typeof RepjourAnalytiqueYearMonthRoute
+  '/classeur/$classeurId/$chapterId/': typeof ClasseurClasseurIdChapterIdIndexRoute
+  '/classeur/$classeurId/$chapterId/document/$id': typeof ClasseurClasseurIdChapterIdDocumentIdRoute
+  '/classeur/$classeurId/$chapterId/intercalaire/$id': typeof ClasseurClasseurIdChapterIdIntercalaireIdRoute
+  '/classeur/$classeurId/$chapterId/signature/$id': typeof ClasseurClasseurIdChapterIdSignatureIdRoute
+  '/classeur/$classeurId/$chapterId/suivi/$id': typeof ClasseurClasseurIdChapterIdSuiviIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -287,7 +327,6 @@ export interface FileRoutesByTo {
   '/pdj': typeof PdjIndexRoute
   '/rapro': typeof RaproIndexRoute
   '/repjour': typeof RepjourIndexRoute
-  '/classeur/$classeurId/$chapterId': typeof ClasseurClasseurIdChapterIdRoute
   '/caisse/analytique': typeof CaisseAnalytiqueIndexRoute
   '/classeur/$classeurId': typeof ClasseurClasseurIdIndexRoute
   '/parking/analytique': typeof ParkingAnalytiqueIndexRoute
@@ -299,6 +338,11 @@ export interface FileRoutesByTo {
   '/pdj/analytique/$year/$month': typeof PdjAnalytiqueYearMonthRoute
   '/rapro/analytique/$year/$month': typeof RaproAnalytiqueYearMonthRoute
   '/repjour/analytique/$year/$month': typeof RepjourAnalytiqueYearMonthRoute
+  '/classeur/$classeurId/$chapterId': typeof ClasseurClasseurIdChapterIdIndexRoute
+  '/classeur/$classeurId/$chapterId/document/$id': typeof ClasseurClasseurIdChapterIdDocumentIdRoute
+  '/classeur/$classeurId/$chapterId/intercalaire/$id': typeof ClasseurClasseurIdChapterIdIntercalaireIdRoute
+  '/classeur/$classeurId/$chapterId/signature/$id': typeof ClasseurClasseurIdChapterIdSignatureIdRoute
+  '/classeur/$classeurId/$chapterId/suivi/$id': typeof ClasseurClasseurIdChapterIdSuiviIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -326,7 +370,7 @@ export interface FileRoutesById {
   '/pdj/': typeof PdjIndexRoute
   '/rapro/': typeof RaproIndexRoute
   '/repjour/': typeof RepjourIndexRoute
-  '/classeur/$classeurId/$chapterId': typeof ClasseurClasseurIdChapterIdRoute
+  '/classeur/$classeurId/$chapterId': typeof ClasseurClasseurIdChapterIdRouteWithChildren
   '/caisse/analytique/': typeof CaisseAnalytiqueIndexRoute
   '/classeur/$classeurId/': typeof ClasseurClasseurIdIndexRoute
   '/parking/analytique/': typeof ParkingAnalytiqueIndexRoute
@@ -338,6 +382,11 @@ export interface FileRoutesById {
   '/pdj/analytique/$year/$month': typeof PdjAnalytiqueYearMonthRoute
   '/rapro/analytique/$year/$month': typeof RaproAnalytiqueYearMonthRoute
   '/repjour/analytique/$year/$month': typeof RepjourAnalytiqueYearMonthRoute
+  '/classeur/$classeurId/$chapterId/': typeof ClasseurClasseurIdChapterIdIndexRoute
+  '/classeur/$classeurId/$chapterId/document/$id': typeof ClasseurClasseurIdChapterIdDocumentIdRoute
+  '/classeur/$classeurId/$chapterId/intercalaire/$id': typeof ClasseurClasseurIdChapterIdIntercalaireIdRoute
+  '/classeur/$classeurId/$chapterId/signature/$id': typeof ClasseurClasseurIdChapterIdSignatureIdRoute
+  '/classeur/$classeurId/$chapterId/suivi/$id': typeof ClasseurClasseurIdChapterIdSuiviIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -378,6 +427,11 @@ export interface FileRouteTypes {
     | '/pdj/analytique/$year/$month'
     | '/rapro/analytique/$year/$month'
     | '/repjour/analytique/$year/$month'
+    | '/classeur/$classeurId/$chapterId/'
+    | '/classeur/$classeurId/$chapterId/document/$id'
+    | '/classeur/$classeurId/$chapterId/intercalaire/$id'
+    | '/classeur/$classeurId/$chapterId/signature/$id'
+    | '/classeur/$classeurId/$chapterId/suivi/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -396,7 +450,6 @@ export interface FileRouteTypes {
     | '/pdj'
     | '/rapro'
     | '/repjour'
-    | '/classeur/$classeurId/$chapterId'
     | '/caisse/analytique'
     | '/classeur/$classeurId'
     | '/parking/analytique'
@@ -408,6 +461,11 @@ export interface FileRouteTypes {
     | '/pdj/analytique/$year/$month'
     | '/rapro/analytique/$year/$month'
     | '/repjour/analytique/$year/$month'
+    | '/classeur/$classeurId/$chapterId'
+    | '/classeur/$classeurId/$chapterId/document/$id'
+    | '/classeur/$classeurId/$chapterId/intercalaire/$id'
+    | '/classeur/$classeurId/$chapterId/signature/$id'
+    | '/classeur/$classeurId/$chapterId/suivi/$id'
   id:
     | '__root__'
     | '/'
@@ -446,6 +504,11 @@ export interface FileRouteTypes {
     | '/pdj/analytique/$year/$month'
     | '/rapro/analytique/$year/$month'
     | '/repjour/analytique/$year/$month'
+    | '/classeur/$classeurId/$chapterId/'
+    | '/classeur/$classeurId/$chapterId/document/$id'
+    | '/classeur/$classeurId/$chapterId/intercalaire/$id'
+    | '/classeur/$classeurId/$chapterId/signature/$id'
+    | '/classeur/$classeurId/$chapterId/suivi/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -686,6 +749,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ClasseurClasseurIdChapterIdRouteImport
       parentRoute: typeof ClasseurClasseurIdRoute
     }
+    '/classeur/$classeurId/$chapterId/': {
+      id: '/classeur/$classeurId/$chapterId/'
+      path: '/'
+      fullPath: '/classeur/$classeurId/$chapterId/'
+      preLoaderRoute: typeof ClasseurClasseurIdChapterIdIndexRouteImport
+      parentRoute: typeof ClasseurClasseurIdChapterIdRoute
+    }
     '/repjour/analytique/$year/$month': {
       id: '/repjour/analytique/$year/$month'
       path: '/analytique/$year/$month'
@@ -721,6 +791,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CaisseAnalytiqueYearMonthRouteImport
       parentRoute: typeof CaisseRoute
     }
+    '/classeur/$classeurId/$chapterId/suivi/$id': {
+      id: '/classeur/$classeurId/$chapterId/suivi/$id'
+      path: '/suivi/$id'
+      fullPath: '/classeur/$classeurId/$chapterId/suivi/$id'
+      preLoaderRoute: typeof ClasseurClasseurIdChapterIdSuiviIdRouteImport
+      parentRoute: typeof ClasseurClasseurIdChapterIdRoute
+    }
+    '/classeur/$classeurId/$chapterId/signature/$id': {
+      id: '/classeur/$classeurId/$chapterId/signature/$id'
+      path: '/signature/$id'
+      fullPath: '/classeur/$classeurId/$chapterId/signature/$id'
+      preLoaderRoute: typeof ClasseurClasseurIdChapterIdSignatureIdRouteImport
+      parentRoute: typeof ClasseurClasseurIdChapterIdRoute
+    }
+    '/classeur/$classeurId/$chapterId/intercalaire/$id': {
+      id: '/classeur/$classeurId/$chapterId/intercalaire/$id'
+      path: '/intercalaire/$id'
+      fullPath: '/classeur/$classeurId/$chapterId/intercalaire/$id'
+      preLoaderRoute: typeof ClasseurClasseurIdChapterIdIntercalaireIdRouteImport
+      parentRoute: typeof ClasseurClasseurIdChapterIdRoute
+    }
+    '/classeur/$classeurId/$chapterId/document/$id': {
+      id: '/classeur/$classeurId/$chapterId/document/$id'
+      path: '/document/$id'
+      fullPath: '/classeur/$classeurId/$chapterId/document/$id'
+      preLoaderRoute: typeof ClasseurClasseurIdChapterIdDocumentIdRouteImport
+      parentRoute: typeof ClasseurClasseurIdChapterIdRoute
+    }
   }
 }
 
@@ -739,13 +837,41 @@ const CaisseRouteChildren: CaisseRouteChildren = {
 const CaisseRouteWithChildren =
   CaisseRoute._addFileChildren(CaisseRouteChildren)
 
+interface ClasseurClasseurIdChapterIdRouteChildren {
+  ClasseurClasseurIdChapterIdIndexRoute: typeof ClasseurClasseurIdChapterIdIndexRoute
+  ClasseurClasseurIdChapterIdDocumentIdRoute: typeof ClasseurClasseurIdChapterIdDocumentIdRoute
+  ClasseurClasseurIdChapterIdIntercalaireIdRoute: typeof ClasseurClasseurIdChapterIdIntercalaireIdRoute
+  ClasseurClasseurIdChapterIdSignatureIdRoute: typeof ClasseurClasseurIdChapterIdSignatureIdRoute
+  ClasseurClasseurIdChapterIdSuiviIdRoute: typeof ClasseurClasseurIdChapterIdSuiviIdRoute
+}
+
+const ClasseurClasseurIdChapterIdRouteChildren: ClasseurClasseurIdChapterIdRouteChildren =
+  {
+    ClasseurClasseurIdChapterIdIndexRoute:
+      ClasseurClasseurIdChapterIdIndexRoute,
+    ClasseurClasseurIdChapterIdDocumentIdRoute:
+      ClasseurClasseurIdChapterIdDocumentIdRoute,
+    ClasseurClasseurIdChapterIdIntercalaireIdRoute:
+      ClasseurClasseurIdChapterIdIntercalaireIdRoute,
+    ClasseurClasseurIdChapterIdSignatureIdRoute:
+      ClasseurClasseurIdChapterIdSignatureIdRoute,
+    ClasseurClasseurIdChapterIdSuiviIdRoute:
+      ClasseurClasseurIdChapterIdSuiviIdRoute,
+  }
+
+const ClasseurClasseurIdChapterIdRouteWithChildren =
+  ClasseurClasseurIdChapterIdRoute._addFileChildren(
+    ClasseurClasseurIdChapterIdRouteChildren,
+  )
+
 interface ClasseurClasseurIdRouteChildren {
-  ClasseurClasseurIdChapterIdRoute: typeof ClasseurClasseurIdChapterIdRoute
+  ClasseurClasseurIdChapterIdRoute: typeof ClasseurClasseurIdChapterIdRouteWithChildren
   ClasseurClasseurIdIndexRoute: typeof ClasseurClasseurIdIndexRoute
 }
 
 const ClasseurClasseurIdRouteChildren: ClasseurClasseurIdRouteChildren = {
-  ClasseurClasseurIdChapterIdRoute: ClasseurClasseurIdChapterIdRoute,
+  ClasseurClasseurIdChapterIdRoute:
+    ClasseurClasseurIdChapterIdRouteWithChildren,
   ClasseurClasseurIdIndexRoute: ClasseurClasseurIdIndexRoute,
 }
 

@@ -7,6 +7,7 @@ import {
   Archive,
   Bookmark,
   FileDown,
+  History,
   FileText,
   FileUp,
   List,
@@ -119,6 +120,7 @@ export function ClasseurDashboard({
   onExporterMarkdown,
   onExporterJson,
   onImporter,
+  onHistorique,
   busy = null,
   renderResult,
 }: {
@@ -128,6 +130,9 @@ export function ClasseurDashboard({
   onExporterMarkdown?: (ctx: DashboardContexte) => void
   onExporterJson?: (ctx: DashboardContexte) => void
   onImporter?: (ctx: DashboardContexte) => void
+  /** Ouvre l'historique des imports (instantanés restaurables). Sans ctx : la
+   * liste est lue par le dialogue lui-même. */
+  onHistorique?: () => void
   busy?: DashboardBusy
   renderResult?: (result: ClasseurSearchResult) => ReactNode
 }) {
@@ -420,6 +425,12 @@ export function ClasseurDashboard({
                   busy={busy === 'import'}
                 />
               )}
+              <ActionCard
+                icon={History}
+                title="Historique des imports"
+                subtitle="Instantanés pris avant chaque fusion"
+                onClick={onHistorique}
+              />
             </div>
           </section>
         </>

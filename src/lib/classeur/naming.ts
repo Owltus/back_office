@@ -2,7 +2,8 @@
  * Libellés, icônes et formats de la page Classeur — portés de Registre
  * (`lib/navigation.ts`, `pages/chapter/types.ts`).
  */
-import { icons, type LucideIcon } from 'lucide-react'
+import { icons } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 
 import type { DbClasseur } from '#/lib/classeur/types.ts'
 
@@ -20,7 +21,7 @@ export const DEFAULT_ESTABLISHMENT = 'Okko Hotels\nNantes Centre-ville'
 export const iconMap = icons as Record<string, LucideIcon>
 
 /** Entrées [nom, composant], calculées une fois (sélecteur d'icônes). */
-export const iconEntries = Object.entries(iconMap) as [string, LucideIcon][]
+export const iconEntries = Object.entries(iconMap)
 
 /** Icône d'un nom Lucide, `FileText` si le nom est inconnu. */
 export function getIcon(name: string): LucideIcon {
@@ -29,7 +30,10 @@ export function getIcon(name: string): LucideIcon {
 
 /** Bloc établissement du pied de page : deux lignes au plus, vides retirées. */
 export function buildEstablishment(
-  classeur: Pick<DbClasseur, 'etablissement' | 'etablissement_complement'> | null | undefined,
+  classeur:
+    | Pick<DbClasseur, 'etablissement' | 'etablissement_complement'>
+    | null
+    | undefined,
 ): string {
   if (!classeur) return ''
   return [classeur.etablissement, classeur.etablissement_complement]

@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 
-import { ClasseurDashboard } from '#/components/classeur/ClasseurDashboard.tsx'
+import { ClasseurDashboardActions } from '#/components/classeur/ClasseurDashboardActions.tsx'
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
 
 export const Route = createFileRoute('/classeur/$classeurId/')({
@@ -12,15 +12,15 @@ export const Route = createFileRoute('/classeur/$classeurId/')({
  * l'identifiant sont faites par le layout parent (`$classeurId.tsx`), qui ne
  * rend cet `Outlet` que pour un identifiant entier.
  *
- * Les rappels d'action (`onSommaire`, `onExporterPdf`, `onExporterMarkdown`,
- * `onExporterJson`, `onImporter`) seront branchés ici par les étapes 5 et 6 ;
- * sans eux, les cartes sont grisées « Bientôt disponible ».
+ * Sommaire, export PDF, Markdown et JSON sont branchés par
+ * `ClasseurDashboardActions` (étape 5) ; l'import JSON (`onImporter`) le
+ * sera par l'étape 6 — sa carte reste grisée « Bientôt disponible ».
  */
 function ClasseurDashboardPage() {
   const { classeurId } = Route.useParams()
   return (
     <PageContainer>
-      <ClasseurDashboard classeurId={Number(classeurId)} />
+      <ClasseurDashboardActions classeurId={Number(classeurId)} />
     </PageContainer>
   )
 }

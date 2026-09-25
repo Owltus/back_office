@@ -1,0 +1,722 @@
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react'
+import { useMutation } from '@tanstack/react-query'
+import { Link, useNavigate } from '@tanstack/react-router'
+import type { DragEndEvent } from '@dnd-kit/core'
+import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable'
+import {
+  AlertCircle,
+  Archive,
+  CheckSquare,
+  FileText,
+  Loader2,
+  Pencil,
+  Plus,
+  Printer,
+  Search,
+  Trash2,
+  X,
+} from 'lucide-react'
+
+import { useAuth } from '#/components/auth/AuthContext.tsx'
+import { DocumentCard } from '#/components/classeur/cards/DocumentCard.tsx'
+import { IntercalaireCard } from '#/components/classeur/cards/IntercalaireCard.tsx'
+import { SignatureSheetCard } from '#/components/classeur/cards/SignatureSheetCard.tsx'
+import { TrackingSheetCard } from '#/components/classeur/cards/TrackingSheetCard.tsx'
+import { BulkDeleteDialog } from '#/components/classeur/dialogs/BulkDeleteDialog.tsx'
+import { ChapterDialog } from '#/components/classeur/dialogs/ChapterDialog.tsx'
+import { CreateItemDialog } from '#/components/classeur/dialogs/CreateItemDialog.tsx'
+import { DeleteItemDialog } from '#/components/classeur/dialogs/DeleteItemDialog.tsx'
+import type { ItemASupprimer } from '#/components/classeur/dialogs/DeleteItemDialog.tsx'
+import { EditItemDialog } from '#/components/classeur/dialogs/EditItemDialog.tsx'
+import type { EditableItem } from '#/components/classeur/dialogs/EditItemDialog.tsx'
+import { EditTrackingSheetDialog } from '#/components/classeur/dialogs/EditTrackingSheetDialog.tsx'
+import {
+  parseChapterDropId,
+  useDndRegistry,
+} from '#/components/classeur/dnd/useDndRegistry.ts'
+import type { ItemDragData } from '#/components/classeur/dnd/useDndRegistry.ts'
+import { DropOverlay } from '#/components/classeur/DropZone.tsx'
+import { useChapterZoom } from '#/components/classeur/hooks/useChapterZoom.ts'
+import {
+  useChapter,
+  useChapterContent,
+  useClasseur,
+  useInvaliderClasseur,
+  usePeriodicites,
+  useReorderItems,
+} from '#/components/classeur/hooks/useClasseur.ts'
+import { useDropZone } from '#/components/classeur/hooks/useDropZone.ts'
+import { useSelection } from '#/components/classeur/hooks/useSelection.ts'
+import {
+  ChapterPrintPages,
+  ItemPages,
+} from '#/components/classeur/print/ItemPages.tsx'
+import { PrintPreview } from '#/components/classeur/print/PrintPreview.tsx'
+import { ConfirmDialog } from '#/components/shared/ConfirmDialog.tsx'
+import { PageHeader } from '#/components/shared/PageHeader.tsx'
+import { Tip } from '#/components/shared/Tip.tsx'
+import { Alert, AlertDescription } from '#/components/ui/alert.tsx'
+import { Button } from '#/components/ui/button.tsx'
+import { Input } from '#/components/ui/input.tsx'
+import { Skeleton } from '#/components/ui/skeleton.tsx'
+import { messageErreur } from '#/lib/classeur/erreur.ts'
+import { exporterChapitreZip } from '#/lib/classeur/exportMarkdown.ts'
+import type { FichierImporte } from '#/lib/classeur/importFichiers.ts'
+import {
+  DEFAULT_REGISTRY_NAME,
+  buildEstablishment,
+  getIcon,
+} from '#/lib/classeur/naming.ts'
+import { cleRef, deplacer, parseCleRef, refsDe } from '#/lib/classeur/ordre.ts'
+import type { ItemRef } from '#/lib/classeur/ordre.ts'
+import {
+  createItem,
+  moveItems,
+  softDeleteChapter,
+} from '#/lib/classeur/service.ts'
+import { contientSansAccents, stripAccents } from '#/lib/classeur/slug.ts'
+import { ITEM_KINDS, flattenItems } from '#/lib/classeur/types.ts'
+import type { ChapterItem, DbTrackingSheet } from '#/lib/classeur/types.ts'
+import { cn } from '#/lib/utils.ts'
+
+/** Stratégie de tri sans effet : la grille ne bouge pas en mode sélection. */
+const strategieInerte = () => null
+
+/** Ce que montre l'aperçu avant impression : un élément, ou tout le chapitre. */
+type Apercu = { type: 'item'; item: ChapterItem } | { type: 'tout' } | null
+
+/**
+ * Page d'un chapitre — portée de Registre (`ChapterPage`, 940 l.) :
+ * en-tête (icône, libellé, description ; édition et suppression douce avec
+ * le droit `ecriture`), recherche instantanée (titre, description, contenu,
+ * accents ignorés), grille des éléments avec miniature A4, réordonnancement
+ * par glisser-déposer, dépôt sur un chapitre de la colonne (déplacement),
+ * sélection multiple (Ctrl + clic) et suppression groupée, création des
+ * quatre natures, export Markdown du chapitre (ZIP), impression d'un élément
+ * ou du chapitre entier, import de fichiers `.md` / `.txt` par dépôt.
+ *
+ * Toutes les écritures passent par `useMutation` et invalident
+ * `classeurKeys.all`. La route monte ce composant avec `key={chapterId}` :
+ * changer de chapitre remet sélection, recherche et dialogues à zéro sans
+ * effet de nettoyage.
+ */
+export function ChapterBoard({
+  classeurId,
+  chapterId,
+}: {
+  classeurId: number
+  chapterId: number
+}) {
+  const { can } = useAuth()
+  const canWrite = can('classeur', 'ecriture')
+  const navigate = useNavigate()
+  const invalider = useInvaliderClasseur()
+
+  const classeurQ = useClasseur(classeurId)
+  const chapterQ = useChapter(chapterId)
+  const contenuQ = useChapterContent(chapterId)
+  const periodicitesQ = usePeriodicites()
+
+  const classeur = classeurQ.data ?? null
+  const chapter = chapterQ.data ?? null
+  const classeurName = classeur?.name ?? DEFAULT_REGISTRY_NAME
+  const establishment = buildEstablishment(classeur)
+  const periodicites = useMemo(
+    () => periodicitesQ.data ?? [],
+    [periodicitesQ.data],
+  )
+  const contenu = contenuQ.data
+  const items = useMemo(() => (contenu ? flattenItems(contenu) : []), [contenu])
+
+  // Recherche instantanée (comme le tableau de bord : `useDeferredValue`).
+  const [recherche, setRecherche] = useState('')
+  const requete = useDeferredValue(stripAccents(recherche.trim()))
+  const enRecherche = requete !== ''
+  const filtres = useMemo(() => {
+    if (!enRecherche) return items
+    return items.filter((it) => {
+      const d = it.data
+      const description = 'description' in d ? d.description : ''
+      const texte = it.kind === 'document' ? it.data.content : ''
+      return (
+        contientSansAccents(d.title, requete) ||
+        contientSansAccents(description, requete) ||
+        contientSansAccents(texte, requete)
+      )
+    })
+  }, [items, requete, enRecherche])
+
+  const selection = useSelection()
+  const { gridStyle, containerRef } = useChapterZoom()
+  const { registerHandler, unregisterHandler, activeDragType } =
+    useDndRegistry()
+  const selectionDragging = selection.selectionMode && activeDragType !== null
+
+  // Dialogues
+  const [createOpen, setCreateOpen] = useState(false)
+  const [editChapterOpen, setEditChapterOpen] = useState(false)
+  const [deleteChapterOpen, setDeleteChapterOpen] = useState(false)
+  const [bulkOpen, setBulkOpen] = useState(false)
+  const [itemEdite, setItemEdite] = useState<EditableItem | null>(null)
+  const [feuilleEditee, setFeuilleEditee] = useState<DbTrackingSheet | null>(
+    null,
+  )
+  const [itemASupprimer, setItemASupprimer] = useState<ItemASupprimer | null>(
+    null,
+  )
+  const [apercu, setApercu] = useState<Apercu>(null)
+  /** Messages des fichiers refusés au dépôt (extension, taille). */
+  const [refus, setRefus] = useState<string[]>([])
+
+  // Écritures
+  const reorder = useReorderItems(chapterId)
+
+  const deplacement = useMutation({
+    mutationFn: ({
+      refs,
+      cible,
+    }: {
+      refs: ReadonlyArray<ItemRef>
+      cible: number
+    }) => moveItems(refs, cible),
+    onSuccess: async () => {
+      await invalider()
+      selection.clear()
+    },
+  })
+
+  const importation = useMutation({
+    mutationFn: async (fichiers: FichierImporte[]) => {
+      // En série : `createItem` calcule le prochain `sort_order` à chaque appel.
+      for (const f of fichiers) {
+        await createItem(chapterId, {
+          kind: 'document',
+          input: { title: f.title, description: '', content: f.content },
+        })
+      }
+      return fichiers.length
+    },
+    onSuccess: () => invalider(),
+  })
+
+  const exportZip = useMutation({
+    mutationFn: async () => {
+      if (!chapter || !contenu) return
+      await exporterChapitreZip(classeurName, chapter, contenu, periodicites)
+    },
+  })
+
+  const suppressionChapitre = useMutation({
+    mutationFn: () => softDeleteChapter(chapterId),
+    onSuccess: async () => {
+      await invalider()
+      await navigate({
+        to: '/classeur/$classeurId',
+        params: { classeurId: String(classeurId) },
+      })
+    },
+  })
+
+  // Dépôt de fichiers (droit `ecriture` seulement).
+  const onImport = useCallback(
+    (fichiers: FichierImporte[]) => {
+      setRefus([])
+      importation.mutate(fichiers)
+    },
+    [importation],
+  )
+  const { isDragOver, dragProps } = useDropZone(onImport, setRefus)
+
+  // Glisser-déposer : réordonnancement dans la grille OU dépôt sur un
+  // chapitre de la colonne (déplacement, de la sélection s'il y en a une).
+  const handleItemDrop = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event
+      if (!over || active.id === over.id) return
+      const data = active.data.current as ItemDragData | undefined
+      if (!data) return
+
+      const cible = parseChapterDropId(over.id)
+      if (cible !== null) {
+        if (cible === data.sourceChapterId) return
+        const refs: ItemRef[] =
+          selection.selectionMode && selection.count > 0
+            ? selection.refs
+            : [{ kind: data.type, id: data.itemId }]
+        deplacement.mutate({ refs, cible })
+        return
+      }
+
+      if (selection.selectionMode) return
+      const de = parseCleRef(active.id)
+      const vers = parseCleRef(over.id)
+      if (!de || !vers) return
+      const refs = refsDe(items)
+      const memeRef = (r: ItemRef, x: ItemRef) =>
+        r.kind === x.kind && r.id === x.id
+      const oldIndex = refs.findIndex((r) => memeRef(r, de))
+      const newIndex = refs.findIndex((r) => memeRef(r, vers))
+      if (oldIndex === -1 || newIndex === -1) return
+      reorder.mutate(deplacer(refs, oldIndex, newIndex))
+    },
+    [items, selection, deplacement, reorder],
+  )
+
+  // Abonnement au registre partagé (pas une lecture de données).
+  useEffect(() => {
+    for (const kind of ITEM_KINDS) registerHandler(kind, handleItemDrop)
+    return () => {
+      for (const kind of ITEM_KINDS) unregisterHandler(kind)
+    }
+  }, [registerHandler, unregisterHandler, handleItemDrop])
+
+  // Chapitre supprimé ou inexistant : `null` une fois la lecture réussie.
+  if (chapterQ.isSuccess && chapter === null) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border px-4 py-16 text-center">
+        <p className="text-sm text-muted-foreground">
+          Ce chapitre n'existe plus.
+        </p>
+        <Button asChild size="sm" variant="outline">
+          <Link
+            to="/classeur/$classeurId"
+            params={{ classeurId: String(classeurId) }}
+          >
+            Accueil du classeur
+          </Link>
+        </Button>
+      </div>
+    )
+  }
+
+  const IconeChapitre = getIcon(chapter?.icon ?? 'FileText')
+  const contexteCartes = {
+    classeurId,
+    chapterId,
+    chapterName: chapter?.label,
+    classeurName,
+    establishment,
+    canWrite,
+    // En mode sélection, le glisser reste ACTIF (dépôt de la sélection sur un
+    // chapitre de la colonne) ; seule la grille ne se réordonne plus.
+    sortableDisabled: enRecherche,
+    selectionMode: selection.selectionMode,
+    selectionDragging,
+  }
+
+  const supprimer = (it: ChapterItem) =>
+    setItemASupprimer({ kind: it.kind, id: it.data.id, title: it.data.title })
+  const modifier = (it: ChapterItem) => {
+    if (it.kind === 'tracking_sheet') setFeuilleEditee(it.data)
+    else
+      setItemEdite({
+        kind: it.kind,
+        id: it.data.id,
+        title: it.data.title,
+        description: it.data.description,
+      })
+  }
+
+  const erreurs: Array<{ cle: string; err: unknown; action: string }> = []
+  if (chapterQ.isError)
+    erreurs.push({
+      cle: 'chapitre',
+      err: chapterQ.error,
+      action: 'Chapitre indisponible',
+    })
+  if (contenuQ.isError)
+    erreurs.push({
+      cle: 'contenu',
+      err: contenuQ.error,
+      action: 'Éléments indisponibles',
+    })
+  if (reorder.isError)
+    erreurs.push({
+      cle: 'ordre',
+      err: reorder.error,
+      action: 'Ordre non enregistré',
+    })
+  if (deplacement.isError)
+    erreurs.push({
+      cle: 'deplacement',
+      err: deplacement.error,
+      action: 'Déplacement impossible',
+    })
+  if (importation.isError)
+    erreurs.push({
+      cle: 'import',
+      err: importation.error,
+      action: 'Import impossible',
+    })
+  if (exportZip.isError)
+    erreurs.push({
+      cle: 'export',
+      err: exportZip.error,
+      action: 'Export impossible',
+    })
+  if (suppressionChapitre.isError)
+    erreurs.push({
+      cle: 'suppression',
+      err: suppressionChapitre.error,
+      action: 'Suppression impossible',
+    })
+
+  return (
+    <div
+      className="flex w-full flex-1 flex-col gap-4"
+      {...(canWrite ? dragProps : {})}
+    >
+      <PageHeader
+        title={
+          chapterQ.isPending ? (
+            <Skeleton className="h-7 w-56" />
+          ) : (
+            <span className="flex items-center gap-2">
+              <IconeChapitre className="size-5 shrink-0 text-muted-foreground" />
+              {chapter?.label}
+            </span>
+          )
+        }
+        meta={chapter?.description.trim() ? chapter.description : undefined}
+        actions={
+          selection.selectionMode ? (
+            <>
+              <span
+                className="text-sm text-muted-foreground"
+                aria-live="polite"
+              >
+                {selection.count} sélectionné{selection.count > 1 ? 's' : ''}
+              </span>
+              <Tip label="Tout sélectionner">
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  onClick={() => selection.selectAll(filtres)}
+                  aria-label="Tout sélectionner"
+                >
+                  <CheckSquare />
+                </Button>
+              </Tip>
+              {canWrite && (
+                <Tip label="Supprimer la sélection">
+                  <Button
+                    variant="outline"
+                    size="icon-sm"
+                    className="border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    onClick={() => setBulkOpen(true)}
+                    aria-label="Supprimer la sélection"
+                  >
+                    <Trash2 />
+                  </Button>
+                </Tip>
+              )}
+              <Tip label="Annuler la sélection">
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  onClick={selection.clear}
+                  aria-label="Annuler la sélection"
+                >
+                  <X />
+                </Button>
+              </Tip>
+            </>
+          ) : (
+            <>
+              <Tip label="Imprimer le chapitre">
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  onClick={() => setApercu({ type: 'tout' })}
+                  disabled={!chapter || items.length === 0}
+                  aria-label="Imprimer le chapitre ou l'enregistrer en PDF"
+                >
+                  <Printer />
+                </Button>
+              </Tip>
+              <Tip label="Exporter en Markdown (ZIP)">
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  onClick={() => exportZip.mutate()}
+                  disabled={!chapter || !contenu || exportZip.isPending}
+                  aria-label="Exporter le chapitre en Markdown"
+                >
+                  {exportZip.isPending ? (
+                    <Loader2 className="animate-spin" />
+                  ) : (
+                    <Archive />
+                  )}
+                </Button>
+              </Tip>
+              {canWrite && chapter && (
+                <>
+                  <Tip label="Modifier le chapitre">
+                    <Button
+                      variant="outline"
+                      size="icon-sm"
+                      onClick={() => setEditChapterOpen(true)}
+                      aria-label="Modifier le chapitre"
+                    >
+                      <Pencil />
+                    </Button>
+                  </Tip>
+                  <Tip label="Supprimer le chapitre">
+                    <Button
+                      variant="outline"
+                      size="icon-sm"
+                      className="hover:bg-destructive/10 hover:text-destructive"
+                      onClick={() => setDeleteChapterOpen(true)}
+                      disabled={suppressionChapitre.isPending}
+                      aria-label="Supprimer le chapitre"
+                    >
+                      {suppressionChapitre.isPending ? (
+                        <Loader2 className="animate-spin" />
+                      ) : (
+                        <Trash2 />
+                      )}
+                    </Button>
+                  </Tip>
+                  <Button size="sm" onClick={() => setCreateOpen(true)}>
+                    <Plus />
+                    Nouveau
+                  </Button>
+                </>
+              )}
+            </>
+          )
+        }
+      />
+
+      {erreurs.map((e) => (
+        <Alert key={e.cle} variant="destructive">
+          <AlertCircle />
+          <AlertDescription>{messageErreur(e.err, e.action)}</AlertDescription>
+        </Alert>
+      ))}
+
+      {refus.length > 0 && (
+        <Alert variant="destructive">
+          <AlertCircle />
+          <AlertDescription>
+            <ul className="list-inside list-disc">
+              {refus.map((m) => (
+                <li key={m}>{m}</li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {importation.isPending && (
+        <Alert>
+          <Loader2 className="animate-spin" />
+          <AlertDescription>Import des fichiers en cours.</AlertDescription>
+        </Alert>
+      )}
+
+      <div className="relative">
+        <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={recherche}
+          onChange={(e) => setRecherche(e.target.value)}
+          placeholder="Rechercher dans le chapitre"
+          aria-label="Rechercher dans le chapitre"
+          className="pl-9"
+          disabled={!contenu}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setRecherche('')
+          }}
+        />
+      </div>
+
+      {/* Zone de dépôt : prend tout l'espace restant */}
+      <div className="relative flex flex-1 flex-col">
+        {isDragOver && <DropOverlay />}
+
+        {contenuQ.isPending ? (
+          <div className="grid gap-4" style={gridStyle} aria-hidden="true">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div
+                key={i}
+                className="overflow-hidden rounded-xl border border-border bg-card"
+              >
+                <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+                  <Skeleton className="size-3.5 rounded-sm" />
+                  <Skeleton className="h-3 w-32" />
+                </div>
+                <Skeleton
+                  className="w-full rounded-none"
+                  style={{ aspectRatio: '210 / 297' }}
+                />
+              </div>
+            ))}
+          </div>
+        ) : contenuQ.isError ? null : items.length === 0 ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border px-4 py-16 text-center">
+            <FileText className="size-8 text-muted-foreground" aria-hidden />
+            <p className="text-sm text-muted-foreground">
+              Aucun élément dans ce chapitre.
+            </p>
+            {canWrite && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setCreateOpen(true)}
+              >
+                <Plus />
+                Nouveau
+              </Button>
+            )}
+          </div>
+        ) : filtres.length === 0 ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border px-4 py-16 text-center">
+            <Search className="size-8 text-muted-foreground" aria-hidden />
+            <p className="text-sm text-muted-foreground">
+              Aucun élément ne correspond à cette recherche.
+            </p>
+          </div>
+        ) : (
+          <SortableContext
+            items={filtres.map((it) => cleRef(it.kind, it.data.id))}
+            strategy={
+              selection.selectionMode ? strategieInerte : rectSortingStrategy
+            }
+            disabled={enRecherche || !canWrite}
+          >
+            <div
+              ref={containerRef}
+              className={cn('grid gap-4', selectionDragging && 'select-none')}
+              style={gridStyle}
+            >
+              {filtres.map((it) => {
+                const cle = cleRef(it.kind, it.data.id)
+                const props = {
+                  ...contexteCartes,
+                  isSelected: selection.selected.has(cle),
+                  onToggleSelect: () => selection.toggle(cle),
+                  onPrint: () => setApercu({ type: 'item', item: it }),
+                  onEdit: () => modifier(it),
+                  onDelete: () => supprimer(it),
+                }
+                switch (it.kind) {
+                  case 'document':
+                    return <DocumentCard key={cle} doc={it.data} {...props} />
+                  case 'tracking_sheet':
+                    return (
+                      <TrackingSheetCard
+                        key={cle}
+                        sheet={it.data}
+                        periodicite={periodicites.find(
+                          (p) => p.id === it.data.periodicite_id,
+                        )}
+                        {...props}
+                      />
+                    )
+                  case 'signature_sheet':
+                    return (
+                      <SignatureSheetCard
+                        key={cle}
+                        sheet={it.data}
+                        {...props}
+                      />
+                    )
+                  case 'intercalaire':
+                    return (
+                      <IntercalaireCard key={cle} page={it.data} {...props} />
+                    )
+                }
+              })}
+            </div>
+          </SortableContext>
+        )}
+      </div>
+
+      {/* Aperçu avant impression : un élément ou le chapitre entier */}
+      <PrintPreview
+        open={apercu !== null}
+        onOpenChange={(open) => {
+          if (!open) setApercu(null)
+        }}
+        title={
+          apercu?.type === 'tout'
+            ? `${chapter?.label ?? 'Chapitre'} — chapitre complet`
+            : apercu?.type === 'item'
+              ? apercu.item.data.title || 'Sans titre'
+              : undefined
+        }
+      >
+        {apercu?.type === 'item' && (
+          <ItemPages
+            item={apercu.item}
+            chapterName={chapter?.label}
+            classeurName={classeurName}
+            establishment={establishment}
+            periodicites={periodicites}
+          />
+        )}
+        {apercu?.type === 'tout' && chapter && contenu && (
+          <ChapterPrintPages
+            chapter={chapter}
+            content={contenu}
+            classeurName={classeurName}
+            establishment={establishment}
+            periodicites={periodicites}
+          />
+        )}
+      </PrintPreview>
+
+      <CreateItemDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        chapterId={chapterId}
+      />
+
+      <EditItemDialog item={itemEdite} onClose={() => setItemEdite(null)} />
+
+      <EditTrackingSheetDialog
+        sheet={feuilleEditee}
+        onClose={() => setFeuilleEditee(null)}
+      />
+
+      <DeleteItemDialog
+        item={itemASupprimer}
+        onClose={() => setItemASupprimer(null)}
+      />
+
+      <BulkDeleteDialog
+        open={bulkOpen}
+        onOpenChange={setBulkOpen}
+        refs={selection.refs}
+        onDone={selection.clear}
+      />
+
+      <ChapterDialog
+        open={editChapterOpen}
+        onOpenChange={setEditChapterOpen}
+        classeurId={classeurId}
+        chapter={chapter}
+      />
+
+      <ConfirmDialog
+        open={deleteChapterOpen}
+        onOpenChange={setDeleteChapterOpen}
+        title="Supprimer le chapitre"
+        description={
+          chapter
+            ? `Le chapitre "${chapter.label}" et son contenu ne seront plus accessibles.`
+            : undefined
+        }
+        confirmLabel="Supprimer"
+        destructive
+        onConfirm={() => suppressionChapitre.mutate()}
+      />
+    </div>
+  )
+}

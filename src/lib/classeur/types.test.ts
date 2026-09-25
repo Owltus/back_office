@@ -7,8 +7,8 @@ import {
   flattenItems,
   ITEM_KINDS,
   ITEM_TABLE,
-  type ChapterContent,
 } from '#/lib/classeur/types.ts'
+import type { ChapterContent } from '#/lib/classeur/types.ts'
 
 const base = {
   uuid: 'u',
@@ -22,13 +22,27 @@ describe('flattenItems', () => {
   it('fusionne les quatre familles et trie par sort_order puis id', () => {
     const contenu: ChapterContent = {
       documents: [
-        { ...base, id: 10, title: 'D', description: '', content: '', sort_order: 3 },
+        {
+          ...base,
+          id: 10,
+          title: 'D',
+          description: '',
+          content: '',
+          sort_order: 3,
+        },
       ],
       tracking_sheets: [
         { ...base, id: 20, title: 'S', periodicite_id: 1, sort_order: 1 },
       ],
       signature_sheets: [
-        { ...base, id: 30, title: 'E', description: '', nombre: 14, sort_order: 2 },
+        {
+          ...base,
+          id: 30,
+          title: 'E',
+          description: '',
+          nombre: 14,
+          sort_order: 2,
+        },
       ],
       intercalaires: [
         { ...base, id: 5, title: 'I', description: '', sort_order: 2 },

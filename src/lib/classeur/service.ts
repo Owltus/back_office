@@ -55,7 +55,7 @@ export async function fetchClasseurs(): Promise<DbClasseur[]> {
     .order('sort_order', { ascending: true })
     .order('id', { ascending: true })
   if (error) throw error
-  return data as DbClasseur[]
+  return data
 }
 
 /** `null` si absent ou supprimé (la page affiche « introuvable »). */
@@ -67,7 +67,7 @@ export async function fetchClasseur(id: number): Promise<DbClasseur | null> {
     .is('deleted_at', null)
     .maybeSingle()
   if (error) throw error
-  return data as DbClasseur | null
+  return data
 }
 
 export interface ClasseurInput {
@@ -94,7 +94,10 @@ export async function updateClasseur(
   id: number,
   patch: Partial<ClasseurInput>,
 ): Promise<void> {
-  const { error } = await supabase.from(CLASSEURS_TABLE).update(patch).eq('id', id)
+  const { error } = await supabase
+    .from(CLASSEURS_TABLE)
+    .update(patch)
+    .eq('id', id)
   if (error) throw error
 }
 
@@ -124,10 +127,12 @@ export async function fetchChapters(classeurId: number): Promise<DbChapter[]> {
     .order('sort_order', { ascending: true })
     .order('id', { ascending: true })
   if (error) throw error
-  return data as DbChapter[]
+  return data
 }
 
-export async function fetchChapter(chapterId: number): Promise<DbChapter | null> {
+export async function fetchChapter(
+  chapterId: number,
+): Promise<DbChapter | null> {
   const { data, error } = await supabase
     .from(CHAPTERS_TABLE)
     .select(COLS_CHAPTER)
@@ -135,7 +140,7 @@ export async function fetchChapter(chapterId: number): Promise<DbChapter | null>
     .is('deleted_at', null)
     .maybeSingle()
   if (error) throw error
-  return data as DbChapter | null
+  return data
 }
 
 export interface ChapterInput {
@@ -144,26 +149,84 @@ export interface ChapterInput {
   description: string
 }
 
+/**
+ * Options d'une création pilotée par la FUSION (`merge/apply.ts`) : `uuid`
+ * du fichier (clé d'appariement des fusions suivantes) et `sort_order` déjà
+ * calculé par le plan. Sans options, comportement inchangé : uuid généré par
+ * la base, ajout en fin de liste.
+ */
+export interface OptionsCreation {
+  uuid?: string
+  sort_order?: number
+}
+
 export async function createChapter(
   classeurId: number,
   input: ChapterInput,
+  options: OptionsCreation = {},
 ): Promise<number> {
-  const existants = await fetchChapters(classeurId)
-  const sort_order = (existants.at(-1)?.sort_order ?? 0) + 1
+  let sort_order = options.sort_order
+  if (sort_order === undefined) {
+    const existants = await fetchChapters(classeurId)
+    sort_order = (existants.at(-1)?.sort_order ?? 0) + 1
+  }
+  const ligne: Record<string, unknown> = {
+    ...input,
+    classeur_id: classeurId,
+    sort_order,
+  }
+  if (options.uuid !== undefined) ligne.uuid = options.uuid
   const { data, error } = await supabase
     .from(CHAPTERS_TABLE)
-    .insert({ ...input, classeur_id: classeurId, sort_order })
+    .insert(ligne)
     .select('id')
     .single()
   if (error) throw error
   return data.id as number
 }
 
+/**
+ * Annule la suppression douce d'un chapitre (fusion : chapitre supprimé
+ * puis réimporté, règle E1 de `merge.ts` ; restauration d'un instantané).
+ * `patch` réécrit ses champs dans le même aller-retour.
+ */
+export async function restaurerChapter(
+  chapterId: number,
+  patch: Partial<ChapterInput> = {},
+): Promise<void> {
+  const { error } = await supabase
+    .from(CHAPTERS_TABLE)
+    .update({ ...patch, deleted_at: null })
+    .eq('id', chapterId)
+  if (error) throw error
+}
+
+/**
+ * Chapitres d'un classeur, SUPPRIMÉS COMPRIS (même colonnes que
+ * `fetchChapters`). Réservé à la fusion : l'appariement par `uuid` regarde
+ * aussi les chapitres supprimés (règle R1). Jamais mis en cache.
+ */
+export async function fetchChaptersAvecSupprimes(
+  classeurId: number,
+): Promise<DbChapter[]> {
+  const { data, error } = await supabase
+    .from(CHAPTERS_TABLE)
+    .select(COLS_CHAPTER)
+    .eq('classeur_id', classeurId)
+    .order('sort_order', { ascending: true })
+    .order('id', { ascending: true })
+  if (error) throw error
+  return data
+}
+
 export async function updateChapter(
   chapterId: number,
   patch: Partial<ChapterInput>,
 ): Promise<void> {
-  const { error } = await supabase.from(CHAPTERS_TABLE).update(patch).eq('id', chapterId)
+  const { error } = await supabase
+    .from(CHAPTERS_TABLE)
+    .update(patch)
+    .eq('id', chapterId)
   if (error) throw error
 }
 
@@ -184,7 +247,10 @@ export async function softDeleteChapter(chapterId: number): Promise<void> {
 async function reorder(table: string, ids: number[]): Promise<void> {
   const results = await Promise.all(
     ids.map((id, index) =>
-      supabase.from(table).update({ sort_order: index + 1 }).eq('id', id),
+      supabase
+        .from(table)
+        .update({ sort_order: index + 1 })
+        .eq('id', id),
     ),
   )
   const echec = results.find((r) => r.error)
@@ -204,7 +270,7 @@ export async function fetchPeriodicites(): Promise<DbPeriodicite[]> {
     .select('id, label, nombre, sort_order')
     .order('sort_order', { ascending: true })
   if (error) throw error
-  return data as DbPeriodicite[]
+  return data
 }
 
 // ---------------------------------------------------------------------------
@@ -215,21 +281,60 @@ async function fetchParChapitre<T>(
   table: string,
   cols: string,
   chapterIds: number[],
+  avecSupprimes = false,
 ): Promise<T[]> {
   if (chapterIds.length === 0) return []
-  const { data, error } = await supabase
-    .from(table)
-    .select(cols)
-    .in('chapter_id', chapterIds)
-    .is('deleted_at', null)
+  let requete = supabase.from(table).select(cols).in('chapter_id', chapterIds)
+  if (!avecSupprimes) requete = requete.is('deleted_at', null)
+  const { data, error } = await requete
     .order('sort_order', { ascending: true })
     .order('id', { ascending: true })
   if (error) throw error
   return data as T[]
 }
 
+/**
+ * Les quatre familles de PLUSIEURS chapitres, SUPPRIMÉS COMPRIS (mêmes
+ * colonnes que `fetchContentParChapitres`, sans le filtre `deleted_at`).
+ * Réservé à la fusion (règles R5/R6 de `merge.ts`). Jamais mis en cache.
+ */
+export async function fetchContentAvecSupprimes(
+  chapterIds: number[],
+): Promise<ChapterContent> {
+  const [documents, tracking_sheets, signature_sheets, intercalaires] =
+    await Promise.all([
+      fetchParChapitre<DbDocument>(
+        ITEM_TABLE.document,
+        COLS_DOCUMENT,
+        chapterIds,
+        true,
+      ),
+      fetchParChapitre<DbTrackingSheet>(
+        ITEM_TABLE.tracking_sheet,
+        COLS_TRACKING,
+        chapterIds,
+        true,
+      ),
+      fetchParChapitre<DbSignatureSheet>(
+        ITEM_TABLE.signature_sheet,
+        COLS_SIGNATURE,
+        chapterIds,
+        true,
+      ),
+      fetchParChapitre<DbIntercalaire>(
+        ITEM_TABLE.intercalaire,
+        COLS_INTERCALAIRE,
+        chapterIds,
+        true,
+      ),
+    ])
+  return { documents, tracking_sheets, signature_sheets, intercalaires }
+}
+
 /** Les quatre familles d'un chapitre, en quatre lectures parallèles. */
-export async function fetchChapterContent(chapterId: number): Promise<ChapterContent> {
+export async function fetchChapterContent(
+  chapterId: number,
+): Promise<ChapterContent> {
   return fetchContentParChapitres([chapterId])
 }
 
@@ -239,7 +344,11 @@ export async function fetchContentParChapitres(
 ): Promise<ChapterContent> {
   const [documents, tracking_sheets, signature_sheets, intercalaires] =
     await Promise.all([
-      fetchParChapitre<DbDocument>(ITEM_TABLE.document, COLS_DOCUMENT, chapterIds),
+      fetchParChapitre<DbDocument>(
+        ITEM_TABLE.document,
+        COLS_DOCUMENT,
+        chapterIds,
+      ),
       fetchParChapitre<DbTrackingSheet>(
         ITEM_TABLE.tracking_sheet,
         COLS_TRACKING,
@@ -277,7 +386,10 @@ const COLS_PAR_KIND: Record<ItemKind, string> = {
 }
 
 /** Un élément par nature et identifiant, `null` si absent ou supprimé. */
-export async function fetchItem<T>(kind: ItemKind, id: number): Promise<T | null> {
+export async function fetchItem<T>(
+  kind: ItemKind,
+  id: number,
+): Promise<T | null> {
   const { data, error } = await supabase
     .from(ITEM_TABLE[kind])
     .select(COLS_PAR_KIND[kind])
@@ -288,12 +400,21 @@ export async function fetchItem<T>(kind: ItemKind, id: number): Promise<T | null
   return data as T | null
 }
 
-export type DocumentInput = Pick<DbDocument, 'title' | 'description' | 'content'>
-export type TrackingSheetInput = Pick<DbTrackingSheet, 'title' | 'periodicite_id'>
-export type SignatureSheetInput = Pick<DbSignatureSheet, 'title' | 'description' | 'nombre'>
+export type DocumentInput = Pick<
+  DbDocument,
+  'title' | 'description' | 'content'
+>
+export type TrackingSheetInput = Pick<
+  DbTrackingSheet,
+  'title' | 'periodicite_id'
+>
+export type SignatureSheetInput = Pick<
+  DbSignatureSheet,
+  'title' | 'description' | 'nombre'
+>
 export type IntercalaireInput = Pick<DbIntercalaire, 'title' | 'description'>
 
-type ItemInput =
+export type ItemInput =
   | { kind: 'document'; input: DocumentInput }
   | { kind: 'tracking_sheet'; input: TrackingSheetInput }
   | { kind: 'signature_sheet'; input: SignatureSheetInput }
@@ -312,16 +433,38 @@ async function prochainOrdre(chapterId: number): Promise<number> {
   return max + 1
 }
 
-/** Crée un élément en fin de chapitre ; rend son identifiant. */
-export async function createItem(chapterId: number, item: ItemInput): Promise<number> {
-  const sort_order = await prochainOrdre(chapterId)
+/**
+ * Crée un élément en fin de chapitre ; rend son identifiant. `options`
+ * (fusion) impose l'`uuid` du fichier et un `sort_order` déjà calculé.
+ */
+export async function createItem(
+  chapterId: number,
+  item: ItemInput,
+  options: OptionsCreation = {},
+): Promise<number> {
+  const sort_order = options.sort_order ?? (await prochainOrdre(chapterId))
+  const ligne: Record<string, unknown> = {
+    ...item.input,
+    chapter_id: chapterId,
+    sort_order,
+  }
+  if (options.uuid !== undefined) ligne.uuid = options.uuid
   const { data, error } = await supabase
     .from(ITEM_TABLE[item.kind])
-    .insert({ ...item.input, chapter_id: chapterId, sort_order })
+    .insert(ligne)
     .select('id')
     .single()
   if (error) throw error
   return data.id as number
+}
+
+/** Annule la suppression douce d'un élément (fusion en mode remplacement, R6). */
+export async function restaurerItem(kind: ItemKind, id: number): Promise<void> {
+  const { error } = await supabase
+    .from(ITEM_TABLE[kind])
+    .update({ deleted_at: null })
+    .eq('id', id)
+  if (error) throw error
 }
 
 export async function updateItem(
@@ -329,11 +472,17 @@ export async function updateItem(
   id: number,
   patch: Partial<DocumentInput & TrackingSheetInput & SignatureSheetInput>,
 ): Promise<void> {
-  const { error } = await supabase.from(ITEM_TABLE[kind]).update(patch).eq('id', id)
+  const { error } = await supabase
+    .from(ITEM_TABLE[kind])
+    .update(patch)
+    .eq('id', id)
   if (error) throw error
 }
 
-export async function softDeleteItem(kind: ItemKind, id: number): Promise<void> {
+export async function softDeleteItem(
+  kind: ItemKind,
+  id: number,
+): Promise<void> {
   const { error } = await supabase
     .from(ITEM_TABLE[kind])
     .update({ deleted_at: new Date().toISOString() })
@@ -348,7 +497,10 @@ export async function softDeleteItems(
   const now = new Date().toISOString()
   const results = await Promise.all(
     refs.map((r) =>
-      supabase.from(ITEM_TABLE[r.kind]).update({ deleted_at: now }).eq('id', r.id),
+      supabase
+        .from(ITEM_TABLE[r.kind])
+        .update({ deleted_at: now })
+        .eq('id', r.id),
     ),
   )
   const echec = results.find((r) => r.error)
@@ -403,7 +555,23 @@ export async function fetchMergeHistory(
     .eq('classeur_id', classeurId)
     .order('merged_at', { ascending: false })
   if (error) throw error
-  return data as DbMergeHistoryEntry[]
+  return data
+}
+
+/**
+ * Une entrée d'historique AVEC son instantané (restauration : il faut le
+ * `classeur_id` et le JSON dans le même aller-retour). `null` si absente.
+ */
+export async function fetchMergeEntry(
+  entryId: number,
+): Promise<(DbMergeHistoryEntry & { snapshot: unknown }) | null> {
+  const { data, error } = await supabase
+    .from(MERGE_HISTORY_TABLE)
+    .select(`${COLS_HISTORY}, snapshot`)
+    .eq('id', entryId)
+    .maybeSingle()
+  if (error) throw error
+  return data
 }
 
 /** L'instantané JSON d'une entrée (lu à part : volumineux). */
@@ -437,6 +605,9 @@ export async function insertMergeHistory(entry: {
 
 /** Suppression PHYSIQUE d'une entrée (RLS : gestion seule). */
 export async function deleteMergeHistory(entryId: number): Promise<void> {
-  const { error } = await supabase.from(MERGE_HISTORY_TABLE).delete().eq('id', entryId)
+  const { error } = await supabase
+    .from(MERGE_HISTORY_TABLE)
+    .delete()
+    .eq('id', entryId)
   if (error) throw error
 }

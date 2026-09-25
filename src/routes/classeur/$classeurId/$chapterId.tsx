@@ -7,9 +7,9 @@ export const Route = createFileRoute('/classeur/$classeurId/$chapterId')({
 /**
  * Layout d'un chapitre : `Outlet` vers la page du chapitre (`index.tsx`) et
  * les quatre pages de détail (`document.$id`, `suivi.$id`, `signature.$id`,
- * `intercalaire.$id`), ajoutées par l'étape 4 (seconde moitié). Garde et
- * colonne des chapitres viennent du layout parent. Identifiant de chapitre
- * invalide : retour au tableau de bord du classeur.
+ * `intercalaire.$id`). Garde et colonne des chapitres viennent du layout
+ * parent. Identifiant de chapitre invalide : retour au tableau de bord du
+ * classeur.
  */
 function ChapterLayout() {
   const { classeurId, chapterId } = Route.useParams()

@@ -8,6 +8,11 @@
  */
 export const MAX_CSV_BYTES = 10 * 1024 * 1024
 export const MAX_JSON_BYTES = 10 * 1024 * 1024
+/**
+ * Fichiers texte déposés sur un chapitre du Classeur (`.md`, `.txt`) : un
+ * document Markdown pèse quelques ko, 2 Mo est déjà une aberration.
+ */
+export const MAX_MARKDOWN_BYTES = 2 * 1024 * 1024
 
 /** Message d'erreur si le fichier dépasse la borne, `null` sinon. */
 export function fileTooLarge(file: File, maxBytes: number): string | null {

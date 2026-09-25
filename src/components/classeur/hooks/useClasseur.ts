@@ -12,8 +12,15 @@ import {
   fetchPeriodicites,
   reorderChapters,
   reorderClasseurs,
+  reorderItems,
 } from '#/lib/classeur/service.ts'
-import type { DbChapter, DbClasseur } from '#/lib/classeur/types.ts'
+import { appliquerOrdre } from '#/lib/classeur/ordre.ts'
+import type { ItemRef } from '#/lib/classeur/ordre.ts'
+import type {
+  ChapterContent,
+  DbChapter,
+  DbClasseur,
+} from '#/lib/classeur/types.ts'
 
 /*
  * Lectures TanStack Query de la page Classeur — SOURCE UNIQUE des `useQuery`.
@@ -168,6 +175,35 @@ export function useReorderChapters(classeurId: number) {
       return { avant }
     },
     onError: (_err, _ids, ctx) => {
+      if (ctx?.avant) queryClient.setQueryData(key, ctx.avant)
+    },
+    onSettled: () => invalider(),
+  })
+}
+
+/**
+ * Réordonnancement OPTIMISTE des éléments d'un chapitre (toutes natures
+ * confondues) : `refs` dans le nouvel ordre. Le cache `items(chapterId)` est
+ * réécrit par `appliquerOrdre` avant l'écriture, restauré si elle échoue,
+ * puis tout est invalidé.
+ */
+export function useReorderItems(chapterId: number) {
+  const queryClient = useQueryClient()
+  const invalider = useInvaliderClasseur()
+  const key = classeurKeys.items(chapterId)
+  return useMutation({
+    mutationFn: (refs: ItemRef[]) => reorderItems(refs),
+    onMutate: async (refs) => {
+      await queryClient.cancelQueries({ queryKey: key })
+      const avant = queryClient.getQueryData<ChapterContent>(key)
+      if (avant)
+        queryClient.setQueryData<ChapterContent>(
+          key,
+          appliquerOrdre(avant, refs),
+        )
+      return { avant }
+    },
+    onError: (_err, _refs, ctx) => {
       if (ctx?.avant) queryClient.setQueryData(key, ctx.avant)
     },
     onSettled: () => invalider(),
