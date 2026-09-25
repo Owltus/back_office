@@ -383,8 +383,8 @@ export function ClasseurDashboard({
                 <div className="border-b border-border" />
                 <ActionCard
                   icon={History}
-                  title="Historique des imports"
-                  subtitle="Instantanés pris avant chaque fusion"
+                  title="Points de restauration"
+                  subtitle="Revenir à un état précédent du classeur"
                   onClick={onHistorique}
                 />
               </>

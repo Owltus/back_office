@@ -11,6 +11,7 @@ import {
   supprimerEntreeHistorique,
 } from '#/lib/classeur/merge/history.ts'
 import type { ClasseurJson } from '#/lib/classeur/merge/schema.ts'
+import { creerPoint } from '#/lib/classeur/restauration.ts'
 import { fetchMergeHistory } from '#/lib/classeur/service.ts'
 
 /*
@@ -74,6 +75,24 @@ export function useImporterNouveauClasseur() {
   return useMutation({
     mutationFn: (fichier: ClasseurJson) =>
       importerCommeNouveauClasseur(fichier),
+    onSettled: () => invalider(),
+  })
+}
+
+/**
+ * Point de restauration MANUEL (majeur), nommé. Rend l'identifiant, ou
+ * `null` si l'état courant est identique au dernier point manuel.
+ */
+export function useCreerPointRestauration() {
+  const invalider = useInvaliderClasseur()
+  return useMutation({
+    mutationFn: ({
+      classeurId,
+      label,
+    }: {
+      classeurId: number
+      label: string
+    }) => creerPoint(classeurId, { kind: 'manuel', label: label.trim() }),
     onSettled: () => invalider(),
   })
 }

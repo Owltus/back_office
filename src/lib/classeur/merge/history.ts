@@ -36,6 +36,7 @@ import {
   parseImportJson,
 } from '#/lib/classeur/merge/schema.ts'
 import { instantaneEgal } from '#/lib/classeur/merge/snapshot.ts'
+import { sansPointsAuto } from '#/lib/classeur/pointsAutoGarde.ts'
 import {
   deleteMergeHistory,
   fetchClasseur,
@@ -76,7 +77,9 @@ export async function restaurerInstantane(
   // Instantané de sécurité AVANT toute écriture.
   await insertMergeHistory({
     classeur_id: classeurId,
-    source_name: SOURCE_SAUVEGARDE,
+    kind: 'securite',
+    label: SOURCE_SAUVEGARDE,
+    source_name: '',
     inserted: 0,
     updated: 0,
     unchanged: 0,
@@ -84,11 +87,13 @@ export async function restaurerInstantane(
     snapshot: courant,
   })
 
-  // Champs du classeur (le plan ne couvre que chapitres et éléments).
-  await updateClasseur(classeurId, snapshot.classeur)
-
+  // Champs du classeur (le plan ne couvre que chapitres et éléments), puis
+  // le plan — sans points auto : le point de sécurité vient d'être pris.
   const plan = planifierFusion(local, snapshot, { replace: true })
-  await executerPlan(classeurId, plan.actions)
+  await sansPointsAuto(async () => {
+    await updateClasseur(classeurId, snapshot.classeur)
+    await executerPlan(classeurId, plan.actions)
+  })
   await elaguerHistorique(classeurId)
   return plan.resultat
 }

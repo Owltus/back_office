@@ -101,24 +101,35 @@ export interface DbIntercalaire {
   updated_at: string
 }
 
+/**
+ * Genre d'un point de restauration (`classeur_merge_history.kind`) :
+ * `auto` mineur pris avant une session de modifications ; `manuel` majeur
+ * nommé par l'utilisateur ; `fusion` avant un import JSON ; `securite` avant
+ * une restauration. Voir `lib/classeur/restauration.ts`.
+ */
+export type PointKind = 'auto' | 'manuel' | 'fusion' | 'securite'
+
 /** Ligne de `classeur_merge_history` (sans l'instantané, volumineux). */
 export interface DbMergeHistoryEntry {
   id: number
   classeur_id: number
   merged_at: string
+  kind: PointKind
+  /** Libellé d'un point manuel. */
+  label: string
+  /** Nom du fichier d'une fusion. */
   source_name: string
   inserted: number
   updated: number
   unchanged: number
   skipped: number
+  /** Poids de l'instantané en octets (posé par trigger). */
+  taille: number | null
 }
 
 /** Les quatre natures d'élément d'un chapitre. */
 export type ItemKind =
-  | 'document'
-  | 'tracking_sheet'
-  | 'signature_sheet'
-  | 'intercalaire'
+  'document' | 'tracking_sheet' | 'signature_sheet' | 'intercalaire'
 
 export const ITEM_KINDS: readonly ItemKind[] = [
   'document',

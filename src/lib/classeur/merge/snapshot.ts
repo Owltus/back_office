@@ -70,3 +70,31 @@ export function entreesAElaguer(
     .slice(Math.max(0, max))
     .map((e) => e.id)
 }
+
+/**
+ * Élagage par GENRE (points de restauration, 2026-09-26) : les points `auto`
+ * (mineurs) ont leur quota, les autres (`manuel`, `fusion`, `securite` :
+ * majeurs) partagent le leur. À quota majeur atteint, les points `securite`
+ * partent en premier (ce sont des filets, pas des jalons choisis), puis les
+ * plus anciens. Rend les identifiants à supprimer.
+ */
+export function entreesAElaguerParGenre(
+  entrees: ReadonlyArray<{ id: number; merged_at: string; kind: string }>,
+  quotas: { auto: number; majeur: number } = { auto: 10, majeur: 10 },
+): number[] {
+  const recentDAbord = (
+    a: { id: number; merged_at: string },
+    b: { id: number; merged_at: string },
+  ) => b.merged_at.localeCompare(a.merged_at) || b.id - a.id
+
+  const auto = entrees.filter((e) => e.kind === 'auto').sort(recentDAbord)
+  const majeurs = entrees.filter((e) => e.kind !== 'auto')
+  // Les jalons choisis d'abord (les plus récents en tête), les filets ensuite.
+  const jalons = majeurs.filter((e) => e.kind !== 'securite').sort(recentDAbord)
+  const filets = majeurs.filter((e) => e.kind === 'securite').sort(recentDAbord)
+
+  return [
+    ...auto.slice(Math.max(0, quotas.auto)),
+    ...[...jalons, ...filets].slice(Math.max(0, quotas.majeur)),
+  ].map((e) => e.id)
+}

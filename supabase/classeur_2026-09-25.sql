@@ -154,12 +154,43 @@ create table if not exists public.classeur_merge_history (
   unchanged    integer     not null default 0,
   skipped      integer     not null default 0,
   snapshot     jsonb       not null,
+  -- 2026-09-26 (classeur_points_restauration_2026-09-26.sql) : points de
+  -- restauration mineurs/majeurs. kind : auto | manuel | fusion | securite.
+  kind         text        not null default 'fusion'
+                           check (kind in ('auto', 'manuel', 'fusion', 'securite')),
+  label        text        not null default '',
+  taille       integer,
   created_at   timestamptz not null default now(),
   updated_at   timestamptz not null default now(),
   created_by   uuid        references public.profiles(id) on delete set null
 );
+alter table public.classeur_merge_history
+  add column if not exists kind text not null default 'fusion'
+    check (kind in ('auto', 'manuel', 'fusion', 'securite')),
+  add column if not exists label text not null default '',
+  add column if not exists taille integer;
 create index if not exists classeur_merge_history_classeur_idx
   on public.classeur_merge_history (classeur_id, merged_at desc);
+create index if not exists classeur_merge_history_kind_idx
+  on public.classeur_merge_history (classeur_id, kind, merged_at desc);
+
+-- Poids de l'instantané, posé à l'insertion (affiché dans le dialogue).
+create or replace function public.classeur_merge_history_taille()
+returns trigger
+language plpgsql
+security invoker
+set search_path to 'public'
+as $function$
+begin
+  new.taille := pg_column_size(new.snapshot);
+  return new;
+end;
+$function$;
+revoke execute on function public.classeur_merge_history_taille() from public, anon, authenticated;
+drop trigger if exists classeur_merge_history_taille on public.classeur_merge_history;
+create trigger classeur_merge_history_taille
+  before insert on public.classeur_merge_history
+  for each row execute function public.classeur_merge_history_taille();
 
 -- =============================================================================
 -- 2) SEED — périodicités (identique à Registre ; `nombre` = colonnes du tableau)
@@ -298,10 +329,19 @@ create policy "classeur_merge_history insert (page:classeur)"
   on public.classeur_merge_history for insert to authenticated
   with check ((select private.page_level_rank(private.get_page_level('classeur'))) >= 2);
 
+-- 2026-09-26 : un point AUTO (mineur) est élagué par qui l'écrit (rang >= 2),
+-- sinon l'historique d'un compte `ecriture` grandirait sans borne ; les
+-- points majeurs restent réservés à `gestion`.
 drop policy if exists "classeur_merge_history delete (page:classeur)" on public.classeur_merge_history;
 create policy "classeur_merge_history delete (page:classeur)"
   on public.classeur_merge_history for delete to authenticated
-  using ((select private.get_page_level('classeur')) = 'gestion');
+  using (
+    (select private.get_page_level('classeur')) = 'gestion'
+    or (
+      kind = 'auto'
+      and (select private.page_level_rank(private.get_page_level('classeur'))) >= 2
+    )
+  );
 
 commit;
 
@@ -330,7 +370,7 @@ select controle, ok::text from (
   select 4, '8 policies read + 12 insert/update + 3 delete/insert historique = 23',
     (select count(*) from pg_policies where schemaname = 'public' and tablename like 'classeur\_%') = 23
   union all
-  select 5, 'trigger classeur_stamp pose 7 fois',
+  select 5, 'trigger classeur_stamp pose 7 fois (+ taille sur l historique)',
     (select count(*) from pg_trigger where tgname = 'classeur_stamp' and not tgisinternal) = 7
   union all
   select 6, 'classeur_stamp non executable par anon/authenticated/public',

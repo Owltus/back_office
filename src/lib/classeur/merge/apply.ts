@@ -43,7 +43,8 @@ import type {
 import { planifierFusion } from '#/lib/classeur/merge/merge.ts'
 import type { ClasseurJson } from '#/lib/classeur/merge/schema.ts'
 import { construireExport } from '#/lib/classeur/merge/schema.ts'
-import { entreesAElaguer } from '#/lib/classeur/merge/snapshot.ts'
+import { entreesAElaguerParGenre } from '#/lib/classeur/merge/snapshot.ts'
+import { sansPointsAuto } from '#/lib/classeur/pointsAutoGarde.ts'
 import {
   createChapter,
   createClasseur,
@@ -305,6 +306,8 @@ export async function appliquerFusion(
   )
   await insertMergeHistory({
     classeur_id: classeurId,
+    kind: 'fusion',
+    label: sourceName,
     source_name: sourceName,
     inserted: plan.resultat.inserted,
     updated: plan.resultat.updated,
@@ -313,8 +316,9 @@ export async function appliquerFusion(
     snapshot: instantane,
   })
 
-  // (c) écritures, dans l'ordre du plan
-  await executerPlan(classeurId, plan.actions)
+  // (c) écritures, dans l'ordre du plan — sans points auto : l'instantané
+  // de fusion vient d'être pris.
+  await sansPointsAuto(() => executerPlan(classeurId, plan.actions))
 
   // (d) élagage
   await elaguerHistorique(classeurId)
@@ -324,15 +328,15 @@ export async function appliquerFusion(
 }
 
 /**
- * Ne garde que les `NOMBRE_MAX_HISTORIQUE` entrées les plus récentes. La
- * suppression est réservée à `gestion` par la RLS : un compte `ecriture`
- * reçoit 42501, qui est IGNORÉ (l'historique grandit, un gestionnaire
- * l'élaguera à sa prochaine fusion). Toute autre erreur remonte, avec un
- * message qui dit que la fusion, elle, est appliquée.
+ * Élague par genre (`entreesAElaguerParGenre` : 10 points auto, 10 majeurs).
+ * La suppression d'un point majeur est réservée à `gestion` par la RLS : un
+ * compte `ecriture` reçoit 42501, qui est IGNORÉ (l'historique grandit, un
+ * gestionnaire l'élaguera à sa prochaine fusion). Toute autre erreur remonte,
+ * avec un message qui dit que la fusion, elle, est appliquée.
  */
 export async function elaguerHistorique(classeurId: number): Promise<void> {
   const entrees = await fetchMergeHistory(classeurId)
-  for (const id of entreesAElaguer(entrees)) {
+  for (const id of entreesAElaguerParGenre(entrees)) {
     try {
       await deleteMergeHistory(id)
     } catch (err) {
@@ -381,6 +385,7 @@ export async function importerCommeNouveauClasseur(
     periodicites,
   }
   const plan = planifierFusion(vide, fichier, { replace: false })
-  await executerPlan(classeurId, plan.actions)
+  // Sans points auto : un classeur neuf n'a pas d'état antérieur à figer.
+  await sansPointsAuto(() => executerPlan(classeurId, plan.actions))
   return classeurId
 }

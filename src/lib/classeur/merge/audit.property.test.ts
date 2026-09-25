@@ -40,6 +40,7 @@ import type {
   DbSignatureSheet,
   DbTrackingSheet,
   ItemKind,
+  PointKind,
 } from '#/lib/classeur/types.ts'
 import { ITEM_KINDS } from '#/lib/classeur/types.ts'
 
@@ -477,6 +478,8 @@ class Simulateur {
 
   insertMergeHistory(entry: {
     classeur_id: number
+    kind: PointKind
+    label: string
     source_name: string
     inserted: number
     updated: number
@@ -489,6 +492,9 @@ class Simulateur {
       id,
       merged_at: this.maintenant(),
       classeur_id: entry.classeur_id,
+      kind: entry.kind,
+      label: entry.label,
+      taille: null,
       source_name: entry.source_name,
       inserted: entry.inserted,
       updated: entry.updated,
@@ -507,6 +513,9 @@ class Simulateur {
         id: e.id,
         classeur_id: e.classeur_id,
         merged_at: e.merged_at,
+        kind: e.kind,
+        label: e.label,
+        taille: e.taille,
         source_name: e.source_name,
         inserted: e.inserted,
         updated: e.updated,
@@ -1765,9 +1774,10 @@ describe('P8 — restauration d’un instantané', () => {
             expect(s.historique).toHaveLength(nAvant)
           } else {
             // L'instantané de sécurité précède les écritures de la restauration.
-            expect(s.historique.at(-1)?.source_name).toBe(
-              'Sauvegarde avant restauration',
-            )
+            const securite = s.historique.at(-1)
+            expect(securite?.kind).toBe('securite')
+            expect(securite?.label).toBe('Sauvegarde avant restauration')
+            expect(securite?.source_name).toBe('')
           }
         },
       ),

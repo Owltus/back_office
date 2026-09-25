@@ -25,8 +25,37 @@ import type {
   DbSignatureSheet,
   DbTrackingSheet,
   ItemKind,
+  PointKind,
 } from '#/lib/classeur/types.ts'
 import { ITEM_TABLE } from '#/lib/classeur/types.ts'
+
+// ---------------------------------------------------------------------------
+// Garde d'écriture : points de restauration automatiques
+// ---------------------------------------------------------------------------
+
+/** Ce que sait une écriture de sa cible, pour retrouver le classeur. */
+export type RefEcriture =
+  | { classeurId: number }
+  | { chapterId: number }
+  | { kind: ItemKind; id: number }
+
+let gardeEcriture: ((ref: RefEcriture) => Promise<void>) | null = null
+
+/**
+ * Pose la garde appelée AVANT chaque écriture de contenu (chapitres,
+ * éléments, champs du classeur) — `lib/classeur/restauration.ts` y branche
+ * les points de restauration automatiques. Injectée plutôt qu'importée :
+ * ce module ne doit dépendre de rien qui dépende de lui.
+ */
+export function definirGardeEcriture(
+  garde: ((ref: RefEcriture) => Promise<void>) | null,
+): void {
+  gardeEcriture = garde
+}
+
+async function avantEcriture(ref: RefEcriture): Promise<void> {
+  if (gardeEcriture !== null) await gardeEcriture(ref)
+}
 
 export const CLASSEURS_TABLE = 'classeur_classeurs'
 export const CHAPTERS_TABLE = 'classeur_chapters'
@@ -41,7 +70,7 @@ const COLS_TRACKING = `${COLS_COMMUNES}, chapter_id, title, periodicite_id`
 const COLS_SIGNATURE = `${COLS_COMMUNES}, chapter_id, title, description, nombre`
 const COLS_INTERCALAIRE = `${COLS_COMMUNES}, chapter_id, title, description`
 const COLS_HISTORY =
-  'id, classeur_id, merged_at, source_name, inserted, updated, unchanged, skipped'
+  'id, classeur_id, merged_at, kind, label, source_name, inserted, updated, unchanged, skipped, taille'
 
 // ---------------------------------------------------------------------------
 // Classeurs
@@ -94,6 +123,7 @@ export async function updateClasseur(
   id: number,
   patch: Partial<ClasseurInput>,
 ): Promise<void> {
+  await avantEcriture({ classeurId: id })
   const { error } = await supabase
     .from(CLASSEURS_TABLE)
     .update(patch)
@@ -171,6 +201,7 @@ export async function createChapter(
   input: ChapterInput,
   options: OptionsCreation = {},
 ): Promise<number> {
+  await avantEcriture({ classeurId })
   let sort_order = options.sort_order
   if (sort_order === undefined) {
     const existants = await fetchChapters(classeurId)
@@ -201,6 +232,7 @@ export async function restaurerChapter(
   chapterId: number,
   patch: ChapterPatch = {},
 ): Promise<void> {
+  await avantEcriture({ chapterId })
   const { error } = await supabase
     .from(CHAPTERS_TABLE)
     .update({ ...patch, deleted_at: null })
@@ -230,6 +262,7 @@ export async function updateChapter(
   chapterId: number,
   patch: ChapterPatch,
 ): Promise<void> {
+  await avantEcriture({ chapterId })
   const { error } = await supabase
     .from(CHAPTERS_TABLE)
     .update(patch)
@@ -238,6 +271,7 @@ export async function updateChapter(
 }
 
 export async function softDeleteChapter(chapterId: number): Promise<void> {
+  await avantEcriture({ chapterId })
   const { error } = await supabase
     .from(CHAPTERS_TABLE)
     .update({ deleted_at: new Date().toISOString() })
@@ -265,7 +299,10 @@ async function reorder(table: string, ids: number[]): Promise<void> {
 }
 
 export const reorderClasseurs = (ids: number[]) => reorder(CLASSEURS_TABLE, ids)
-export const reorderChapters = (ids: number[]) => reorder(CHAPTERS_TABLE, ids)
+export async function reorderChapters(ids: number[]): Promise<void> {
+  if (ids.length > 0) await avantEcriture({ chapterId: ids[0] })
+  await reorder(CHAPTERS_TABLE, ids)
+}
 
 // ---------------------------------------------------------------------------
 // Périodicités (référentiel)
@@ -449,6 +486,7 @@ export async function createItem(
   item: ItemInput,
   options: OptionsCreation = {},
 ): Promise<number> {
+  await avantEcriture({ chapterId })
   const sort_order = options.sort_order ?? (await prochainOrdre(chapterId))
   const ligne: Record<string, unknown> = {
     ...item.input,
@@ -486,6 +524,7 @@ export async function restaurerItem(
   id: number,
   patch: ItemPatch = {},
 ): Promise<void> {
+  await avantEcriture({ kind, id })
   const { error } = await supabase
     .from(ITEM_TABLE[kind])
     .update({ ...patch, deleted_at: null })
@@ -498,6 +537,7 @@ export async function updateItem(
   id: number,
   patch: ItemPatch,
 ): Promise<void> {
+  await avantEcriture({ kind, id })
   const { error } = await supabase
     .from(ITEM_TABLE[kind])
     .update(patch)
@@ -509,6 +549,7 @@ export async function softDeleteItem(
   kind: ItemKind,
   id: number,
 ): Promise<void> {
+  await avantEcriture({ kind, id })
   const { error } = await supabase
     .from(ITEM_TABLE[kind])
     .update({ deleted_at: new Date().toISOString() })
@@ -520,6 +561,7 @@ export async function softDeleteItem(
 export async function softDeleteItems(
   refs: ReadonlyArray<{ kind: ItemKind; id: number }>,
 ): Promise<void> {
+  if (refs.length > 0) await avantEcriture(refs[0])
   const now = new Date().toISOString()
   const results = await Promise.all(
     refs.map((r) =>
@@ -540,6 +582,7 @@ export async function softDeleteItems(
 export async function reorderItems(
   refs: ReadonlyArray<{ kind: ItemKind; id: number }>,
 ): Promise<void> {
+  if (refs.length > 0) await avantEcriture(refs[0])
   const results = await Promise.all(
     refs.map((r, index) =>
       supabase
@@ -557,6 +600,7 @@ export async function moveItems(
   refs: ReadonlyArray<{ kind: ItemKind; id: number }>,
   targetChapterId: number,
 ): Promise<void> {
+  await avantEcriture({ chapterId: targetChapterId })
   let ordre = await prochainOrdre(targetChapterId)
   for (const r of refs) {
     const { error } = await supabase
@@ -613,6 +657,8 @@ export async function fetchMergeSnapshot(entryId: number): Promise<unknown> {
 
 export async function insertMergeHistory(entry: {
   classeur_id: number
+  kind: PointKind
+  label: string
   source_name: string
   inserted: number
   updated: number
