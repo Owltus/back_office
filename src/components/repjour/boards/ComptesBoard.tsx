@@ -758,7 +758,7 @@ export function ComptesBoard() {
 
               {/* Ordre des pages du compte — la TÊTE est sa page d'accueil.
                   Appliqué en direct, comme la matrice au-dessus. Un admin n'a
-                  aucune ligne de droits mais voit les 8 pages : sa liste est
+                  aucune ligne de droits mais voit toutes les pages : sa liste est
                   donc complète, d'où le grade passé à `orderedPages`. */}
               <div className="space-y-2.5">
                 <label className="block text-sm text-muted-foreground">

@@ -116,6 +116,7 @@ describe('étendue de la divergence post-hydratation', () => {
       '/repjour/analytique/2026/9',
       '/caisse',
       '/literie',
+      '/classeur',
       '/parking',
       '/rapro',
       '/gestion',

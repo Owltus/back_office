@@ -42,13 +42,13 @@ function oracleAtLeast(storedLevel: PageLevel | undefined, grade: Grade, min: Pa
 
 // Les 4 valeurs stockables pour UNE page : rien (aucun droit) ou l'un des 3
 // niveaux. levelOf/canView/atLeast ne regardent QUE perms[page] : cette
-// matrice est donc EXHAUSTIVE pour ces trois fonctions — 2 grades × 8 pages ×
-// 4 valeurs stockées × 3 niveaux demandés = 192 cellules.
+// matrice est donc EXHAUSTIVE pour ces trois fonctions — 2 grades × 9 pages ×
+// 4 valeurs stockées × 3 niveaux demandés = 216 cellules.
 const STORED_VALUES: (PageLevel | undefined)[] = [undefined, 'lecture', 'ecriture', 'gestion']
 
 const levelArb = fc.constantFrom<PageLevel>('lecture', 'ecriture', 'gestion')
 
-// Table de permissions arbitraire : chacune des 8 pages a soit un niveau,
+// Table de permissions arbitraire : chacune des 9 pages a soit un niveau,
 // soit rien — couvre aussi les tables « contradictoires » vis-à-vis d'un
 // grade admin, et les tables partielles.
 const permsArb: fc.Arbitrary<PagePermissions> = fc.record({
@@ -60,13 +60,14 @@ const permsArb: fc.Arbitrary<PagePermissions> = fc.record({
   affichage: fc.option(levelArb, { nil: undefined }),
   facturation: fc.option(levelArb, { nil: undefined }),
   literie: fc.option(levelArb, { nil: undefined }),
+  classeur: fc.option(levelArb, { nil: undefined }),
 })
 
 const gradeArb = fc.constantFrom<Grade>(...GRADES)
 const pageArb = fc.constantFrom<PageKey>(...PAGE_KEYS)
 
 describe('levelOf / canView / atLeast — matrice exhaustive', () => {
-  it('couvre les 192 cellules (2 grades × 8 pages × 4 valeurs stockées × 3 niveaux demandés)', () => {
+  it('couvre les 216 cellules (2 grades × 9 pages × 4 valeurs stockées × 3 niveaux demandés)', () => {
     const mismatches: string[] = []
     let cells = 0
 

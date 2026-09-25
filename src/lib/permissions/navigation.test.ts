@@ -17,6 +17,7 @@ const RECEPTION: PagePermissions = {
   caisse: 'ecriture',
   affichage: 'lecture',
   literie: 'lecture',
+  classeur: 'lecture',
 }
 
 // Le cas réel qui motive le chantier : un compte à une seule page.
@@ -35,6 +36,7 @@ describe('orderedPages', () => {
       'caisse',
       'affichage',
       'literie',
+      'classeur',
     ])
   })
 
@@ -47,6 +49,7 @@ describe('orderedPages', () => {
       'rapro',
       'affichage',
       'literie',
+      'classeur',
     ])
   })
 
@@ -60,6 +63,7 @@ describe('orderedPages', () => {
       'rapro',
       'affichage',
       'literie',
+      'classeur',
     ])
   })
 
@@ -72,6 +76,7 @@ describe('orderedPages', () => {
       'caisse',
       'affichage',
       'literie',
+      'classeur',
     ])
   })
 
@@ -84,6 +89,7 @@ describe('orderedPages', () => {
       'rapro',
       'affichage',
       'literie',
+      'classeur',
     ])
   })
 
@@ -93,16 +99,17 @@ describe('orderedPages', () => {
     // pour tous les comptes existants (le précédent de l'ajout de literie).
     const order = ['repjour', 'pdj', 'parking', 'rapro', 'caisse', 'affichage']
     expect(keys(RECEPTION, order)).toContain('literie')
+    expect(keys(RECEPTION, order)).toContain('classeur')
   })
 
   it('un compte sans aucun droit ne voit aucune page', () => {
     expect(keys({}, ['pdj', 'caisse'])).toEqual([])
   })
 
-  it('un admin voit les 8 pages, sans aucune ligne de permission', () => {
+  it('un admin voit les 9 pages, sans aucune ligne de permission', () => {
     // L'admin n'a AUCUNE ligne dans user_page_permissions : son accès total
     // vient du grade. C'est pourquoi la préférence vit sur `profiles`.
-    expect(orderedPages({}, 'admin', ['literie', 'caisse'])).toHaveLength(8)
+    expect(orderedPages({}, 'admin', ['literie', 'caisse'])).toHaveLength(9)
     expect(orderedPages({}, 'admin', ['literie', 'caisse'])[0].key).toBe(
       'literie',
     )

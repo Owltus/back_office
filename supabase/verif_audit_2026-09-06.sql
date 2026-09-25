@@ -59,9 +59,9 @@ with checks(ordre, controle, ok) as (
     (10, 'profiles : CHECK role = utilisateur | admin',
       (select pg_get_constraintdef(oid) from pg_constraint where conname = 'profiles_role_check')
         = 'CHECK ((role = ANY (ARRAY[''utilisateur''::text, ''admin''::text])))'),
-    (11, 'user_page_permissions : CHECK page sur 8 cles',
+    (11, 'user_page_permissions : CHECK page sur 9 cles (classeur ajoutee le 2026-09-25)',
       (select pg_get_constraintdef(oid) from pg_constraint where conname = 'user_page_permissions_page_check')
-        like '%repjour%pdj%parking%rapro%caisse%affichage%facturation%literie%'),
+        like '%repjour%pdj%parking%rapro%caisse%affichage%facturation%literie%classeur%'),
     (12, 'FK auteur : 18 contraintes on delete set null',
       (select count(*) from pg_constraint where contype = 'f' and confdeltype = 'n'
          and conname in ('daily_reports_imported_by_fkey','audit_log_performed_by_fkey','caisse_cautions_refunded_by_fkey',

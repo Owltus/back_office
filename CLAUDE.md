@@ -81,6 +81,14 @@ tourne dessus) : la prudence reste de mise.
   rewrite Vercel vers `_shell.html`, aucune page prérendue). ⚠ Une nouvelle page
   doit désormais être déclarée à TROIS endroits : le CHECK de
   `user_page_permissions`, celui de `profiles.page_order`, et `pages.ts`.
+  Précédent à suivre : **page `classeur` (2026-09-25)**, ajoutée VIDE —
+  `pages.ts` + `routes/classeur.tsx` + `routes/classeur/index.tsx`
+  (`PageGuard page="classeur"`) + `components/classeur/ClasseurBoard.tsx`,
+  script `supabase/page_classeur_2026-09-25.sql` (les deux CHECK, borne
+  `page_order` à 9), tests recopiés à la main (`registres.test.ts`,
+  `navigation*.test.ts`, `authorization.property.test.ts`). Pas de squelette
+  dédié tant qu'elle n'a pas de forme. Quand elle aura des tables : policies
+  sur `private.get_page_level('classeur')`, RPC privilégiées dans `private`.
 - **Expiration par inactivité (2026-09-06)** : 24 h sans ouvrir l'app →
   déconnexion, appliquée par l'app (`lib/auth/inactivity.ts`, horodatage
   `bo.auth.lastActive.v1`, contrôle au démarrage et à chaque retour d'onglet
@@ -543,8 +551,9 @@ Le temps de chargement perçu vient surtout de l'auth cliente + du mode SPA. Rè
   figent l'auteur via `private.keep_author(new, old)` (figé pour un
   utilisateur de l'app, NULL accepté d'un contexte système : c'est ce qui
   permet la suppression d'un compte) ; CHECK `profiles.role` =
-  utilisateur|admin, CHECK `user_page_permissions.page` = 8 clés de
-  `lib/permissions/pages.ts` (à étendre avec toute nouvelle page) ; cautions
+  utilisateur|admin, CHECK `user_page_permissions.page` = les clés de
+  `lib/permissions/pages.ts` (9 depuis `classeur`, 2026-09-25 ; à étendre
+  avec toute nouvelle page) ; cautions
   UPDATE fenêtré 30 j pour l'écriture ; index partiel
   `pdj_breakfasts_guest_name_pending_idx` ; vue `pdj_daily_agg` fermée à
   anon ; RPC invoker `public.get_my_access()` ;

@@ -19,6 +19,7 @@ import { Route as LiterieRouteImport } from './routes/literie'
 import { Route as GestionRouteImport } from './routes/gestion'
 import { Route as EasterEggsRouteImport } from './routes/easter-eggs'
 import { Route as ComptesRouteImport } from './routes/comptes'
+import { Route as ClasseurRouteImport } from './routes/classeur'
 import { Route as CaisseRouteImport } from './routes/caisse'
 import { Route as AffichageRouteImport } from './routes/affichage'
 import { Route as IndexRouteImport } from './routes/index'
@@ -28,6 +29,7 @@ import { Route as PdjIndexRouteImport } from './routes/pdj/index'
 import { Route as ParkingIndexRouteImport } from './routes/parking/index'
 import { Route as LiterieIndexRouteImport } from './routes/literie/index'
 import { Route as FacturationIndexRouteImport } from './routes/facturation/index'
+import { Route as ClasseurIndexRouteImport } from './routes/classeur/index'
 import { Route as CaisseIndexRouteImport } from './routes/caisse/index'
 import { Route as FacturationGalaxieRouteImport } from './routes/facturation/galaxie'
 import { Route as RepjourAnalytiqueIndexRouteImport } from './routes/repjour/analytique.index'
@@ -91,6 +93,11 @@ const ComptesRoute = ComptesRouteImport.update({
   path: '/comptes',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ClasseurRoute = ClasseurRouteImport.update({
+  id: '/classeur',
+  path: '/classeur',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CaisseRoute = CaisseRouteImport.update({
   id: '/caisse',
   path: '/caisse',
@@ -135,6 +142,11 @@ const FacturationIndexRoute = FacturationIndexRouteImport.update({
   id: '/facturation/',
   path: '/facturation/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const ClasseurIndexRoute = ClasseurIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ClasseurRoute,
 } as any)
 const CaisseIndexRoute = CaisseIndexRouteImport.update({
   id: '/',
@@ -205,6 +217,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/affichage': typeof AffichageRoute
   '/caisse': typeof CaisseRouteWithChildren
+  '/classeur': typeof ClasseurRouteWithChildren
   '/comptes': typeof ComptesRoute
   '/easter-eggs': typeof EasterEggsRoute
   '/gestion': typeof GestionRoute
@@ -217,6 +230,7 @@ export interface FileRoutesByFullPath {
   '/repjour': typeof RepjourRouteWithChildren
   '/facturation/galaxie': typeof FacturationGalaxieRoute
   '/caisse/': typeof CaisseIndexRoute
+  '/classeur/': typeof ClasseurIndexRoute
   '/facturation/': typeof FacturationIndexRoute
   '/literie/': typeof LiterieIndexRoute
   '/parking/': typeof ParkingIndexRoute
@@ -244,6 +258,7 @@ export interface FileRoutesByTo {
   '/profil': typeof ProfilRoute
   '/facturation/galaxie': typeof FacturationGalaxieRoute
   '/caisse': typeof CaisseIndexRoute
+  '/classeur': typeof ClasseurIndexRoute
   '/facturation': typeof FacturationIndexRoute
   '/literie': typeof LiterieIndexRoute
   '/parking': typeof ParkingIndexRoute
@@ -266,6 +281,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/affichage': typeof AffichageRoute
   '/caisse': typeof CaisseRouteWithChildren
+  '/classeur': typeof ClasseurRouteWithChildren
   '/comptes': typeof ComptesRoute
   '/easter-eggs': typeof EasterEggsRoute
   '/gestion': typeof GestionRoute
@@ -278,6 +294,7 @@ export interface FileRoutesById {
   '/repjour': typeof RepjourRouteWithChildren
   '/facturation/galaxie': typeof FacturationGalaxieRoute
   '/caisse/': typeof CaisseIndexRoute
+  '/classeur/': typeof ClasseurIndexRoute
   '/facturation/': typeof FacturationIndexRoute
   '/literie/': typeof LiterieIndexRoute
   '/parking/': typeof ParkingIndexRoute
@@ -301,6 +318,7 @@ export interface FileRouteTypes {
     | '/'
     | '/affichage'
     | '/caisse'
+    | '/classeur'
     | '/comptes'
     | '/easter-eggs'
     | '/gestion'
@@ -313,6 +331,7 @@ export interface FileRouteTypes {
     | '/repjour'
     | '/facturation/galaxie'
     | '/caisse/'
+    | '/classeur/'
     | '/facturation/'
     | '/literie/'
     | '/parking/'
@@ -340,6 +359,7 @@ export interface FileRouteTypes {
     | '/profil'
     | '/facturation/galaxie'
     | '/caisse'
+    | '/classeur'
     | '/facturation'
     | '/literie'
     | '/parking'
@@ -361,6 +381,7 @@ export interface FileRouteTypes {
     | '/'
     | '/affichage'
     | '/caisse'
+    | '/classeur'
     | '/comptes'
     | '/easter-eggs'
     | '/gestion'
@@ -373,6 +394,7 @@ export interface FileRouteTypes {
     | '/repjour'
     | '/facturation/galaxie'
     | '/caisse/'
+    | '/classeur/'
     | '/facturation/'
     | '/literie/'
     | '/parking/'
@@ -395,6 +417,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AffichageRoute: typeof AffichageRoute
   CaisseRoute: typeof CaisseRouteWithChildren
+  ClasseurRoute: typeof ClasseurRouteWithChildren
   ComptesRoute: typeof ComptesRoute
   EasterEggsRoute: typeof EasterEggsRoute
   GestionRoute: typeof GestionRoute
@@ -481,6 +504,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ComptesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/classeur': {
+      id: '/classeur'
+      path: '/classeur'
+      fullPath: '/classeur'
+      preLoaderRoute: typeof ClasseurRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/caisse': {
       id: '/caisse'
       path: '/caisse'
@@ -543,6 +573,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/facturation/'
       preLoaderRoute: typeof FacturationIndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/classeur/': {
+      id: '/classeur/'
+      path: '/'
+      fullPath: '/classeur/'
+      preLoaderRoute: typeof ClasseurIndexRouteImport
+      parentRoute: typeof ClasseurRoute
     }
     '/caisse/': {
       id: '/caisse/'
@@ -646,6 +683,18 @@ const CaisseRouteChildren: CaisseRouteChildren = {
 const CaisseRouteWithChildren =
   CaisseRoute._addFileChildren(CaisseRouteChildren)
 
+interface ClasseurRouteChildren {
+  ClasseurIndexRoute: typeof ClasseurIndexRoute
+}
+
+const ClasseurRouteChildren: ClasseurRouteChildren = {
+  ClasseurIndexRoute: ClasseurIndexRoute,
+}
+
+const ClasseurRouteWithChildren = ClasseurRoute._addFileChildren(
+  ClasseurRouteChildren,
+)
+
 interface LiterieRouteChildren {
   LiterieIndexRoute: typeof LiterieIndexRoute
 }
@@ -719,6 +768,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AffichageRoute: AffichageRoute,
   CaisseRoute: CaisseRouteWithChildren,
+  ClasseurRoute: ClasseurRouteWithChildren,
   ComptesRoute: ComptesRoute,
   EasterEggsRoute: EasterEggsRoute,
   GestionRoute: GestionRoute,

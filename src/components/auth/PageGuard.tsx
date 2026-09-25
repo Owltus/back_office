@@ -44,8 +44,8 @@ export function NoAccessNotice() {
 }
 
 /**
- * Garde de route PAR PAGE. Remplace `ProtectedRoute` (rôle global) pour les 8
- * pages de la navbar : vérifie que l'utilisateur a au moins le niveau `min` sur
+ * Garde de route PAR PAGE. Remplace `ProtectedRoute` (rôle global) pour les
+ * pages du registre `PAGES` : vérifie que l'utilisateur a au moins le niveau `min` sur
  * `page`. Sinon → redirection vers sa première page accordée (ou écran « aucun
  * accès » s'il n'en a aucune). Un grade admin a 'gestion' partout.
  *

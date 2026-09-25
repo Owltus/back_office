@@ -33,6 +33,7 @@ const permsArb: fc.Arbitrary<PagePermissions> = fc.record({
   affichage: fc.option(levelArb, { nil: undefined }),
   facturation: fc.option(levelArb, { nil: undefined }),
   literie: fc.option(levelArb, { nil: undefined }),
+  classeur: fc.option(levelArb, { nil: undefined }),
 })
 
 const gradeArb = fc.constantFrom<Grade>('utilisateur', 'admin')

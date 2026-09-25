@@ -120,7 +120,8 @@ export function skeletonVariant(pathname: string): SkeletonVariant {
   if (estSous(pathname, '/repjour')) return 'repjour'
   if (estSous(pathname, '/caisse')) return 'caisse'
   if (estSous(pathname, '/literie')) return 'literie'
-  /* /parking et /rapro gardent le repli : mesuré le 2026-09-23, leur contenu
+  /* /classeur (page vide, 2026-09-25) garde le repli tant qu'elle n'a pas de
+     forme. /parking et /rapro gardent le repli : mesuré le 2026-09-23, leur contenu
      fait 789 et 809 px contre 789 px de squelette — l'écart est déjà nul ou
      de 2 %. Leur donner une silhouette dédiée serait du travail pour rien, et
      une occasion de dérive de plus. */

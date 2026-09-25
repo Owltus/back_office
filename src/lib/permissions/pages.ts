@@ -6,6 +6,7 @@ import {
   ClipboardList,
   Coffee,
   Monitor,
+  NotebookTabs,
   SquareParking,
   Stamp,
 } from 'lucide-react'
@@ -21,6 +22,7 @@ export type PageKey =
   | 'affichage'
   | 'facturation'
   | 'literie'
+  | 'classeur'
 
 export interface PageDef {
   key: PageKey
@@ -47,6 +49,7 @@ export const PAGES: PageDef[] = [
   { key: 'affichage', label: 'Affichage', route: '/affichage', icon: Monitor },
   { key: 'facturation', label: 'Facturation', route: '/facturation', icon: Stamp },
   { key: 'literie', label: 'Literie', route: '/literie', icon: BedDouble },
+  { key: 'classeur', label: 'Classeur', route: '/classeur', icon: NotebookTabs },
 ]
 
 export const PAGE_BY_KEY: Record<PageKey, PageDef> = Object.fromEntries(
