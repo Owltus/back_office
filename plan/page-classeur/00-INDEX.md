@@ -66,6 +66,7 @@ Ce qui fait la valeur du projet source, et qu'on garde tel quel :
 | 5 | [5-exports.md](./5-exports.md) | Export Markdown ZIP, export JSON, impression | 3, 4 | P1 | 2h | `lib/classeur/export*.ts` | |
 | 6 | [6-import-fusion.md](./6-import-fusion.md) | Import JSON, fusion avec prévisualisation, historique, retour arrière | 2, 4 | P1 | 4h | `lib/classeur/merge/*` + tests + dialogue | ⚠ |
 | 7 | [7-cloture.md](./7-cloture.md) | Squelette, doc, mémoire, vérifications, revue adverse | 1-6 | P0 | 2h | CLAUDE.md, `PageShapes`, tests verts, build, contrôle en prod | ⚠ |
+| 8 | [8-points-restauration.md](./8-points-restauration.md) | Points de restauration mineurs/majeurs (2026-09-26, livré, à valider) | 6 | P1 | 4h | `lib/classeur/restauration.ts`, SQL joué, dialogue | ⚠ |
 
 ## Ordre d'exécution
 
