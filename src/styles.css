@@ -19,6 +19,8 @@
 @import 'tw-animate-css';
 @import './styles/analytique.css';
 @import './styles/caisse.css';
+@import './styles/classeur-pages.css';
+@import './styles/classeur.css';
 @import './styles/literie.css';
 @import './styles/not-found.css';
 @import './styles/pdj.css';

@@ -1,0 +1,25 @@
+/* ------------------------------------------------------------------ *
+ * Classeur — pages (liste, colonne des chapitres, tableau de bord).   *
+ * Préfixe `.classeur-*`. Le moteur d'impression (A4, prose) vit dans  *
+ * `classeur.css`, fichier distinct pour ne pas se marcher dessus.     *
+ * Tout ce que Tailwind fait bien reste en classes utilitaires : ici,  *
+ * seulement ce qui dépend du chrome de l'application.                  *
+ * ------------------------------------------------------------------ */
+
+/* Colonne des chapitres (à partir de lg) : collée en haut du <main>, qui
+ * est la zone de défilement de l'app (hauteur d'écran moins la Navbar de
+ * 4 rem). Elle défile en interne au lieu de suivre la page. */
+.classeur-sidebar {
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  max-height: calc(100dvh - 4rem);
+}
+
+/* Chapitre de la colonne survolé par un élément en cours de glisser :
+ * c'est une cible de dépôt (déplacement vers ce chapitre). */
+.classeur-drop-over {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+  background-color: color-mix(in oklab, var(--primary) 12%, transparent);
+}

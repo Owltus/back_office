@@ -1,0 +1,446 @@
+/* ------------------------------------------------------------------ *
+ * Classeur — moteur d'impression A4 et rendu Markdown (porté de Registre,  *
+ * `src/styles/globals.css`).                                              *
+ *                                                                          *
+ * Deux familles de classes :                                               *
+ *  - celles du MOTEUR, dont les noms sont figés parce que le code en       *
+ *    dépend (`paginate`, `buildPrintHtml`, les composants de page) :       *
+ *    `.a4-page`, `.pdf-prose`, `.pdf-header`, `.pdf-footer`,               *
+ *    `.tracking-table`, `.dbg-*` (mode debug `.a4-debug`) ;                *
+ *  - celles propres à la page, en préfixe `.classeur-*`.                   *
+ *                                                                          *
+ * Les pages A4 sont TOUJOURS blanches, encre noire — à l'écran (l'app est  *
+ * en dark navy forcé) comme dans l'iframe d'impression. C'est pourquoi les *
+ * couleurs ci-dessous sont des littéraux « papier » et non les tokens du   *
+ * thème ; la variante `.a4-page-themed` de Registre n'a pas été portée.    *
+ *                                                                          *
+ * La feuille KaTeX (formules `$…$` via remark-math + rehype-katex) est      *
+ * importée ici : un paquet npm résolu et inliné au build, ses polices       *
+ * servies par notre domaine (`font-src 'self' data:`), pas un tiers.       *
+ * ------------------------------------------------------------------ */
+@import 'katex/dist/katex.min.css';
+
+/* ═══════════════════════════════════════════════════════ */
+/* Prose ÉCRAN (aperçu Markdown hors page A4, thème app)   */
+/* ═══════════════════════════════════════════════════════ */
+
+.classeur-prose {
+  color: var(--foreground);
+  line-height: 1.625;
+}
+.classeur-prose h1 {
+  font-size: 1.875rem;
+  font-weight: 700;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+.classeur-prose h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+}
+.classeur-prose h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+}
+.classeur-prose h4 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-top: 1rem;
+  margin-bottom: 0.375rem;
+}
+.classeur-prose h5 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-top: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+.classeur-prose h6 {
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-top: 0.75rem;
+  margin-bottom: 0.25rem;
+  color: var(--muted-foreground);
+}
+.classeur-prose p {
+  margin-bottom: 0.75rem;
+}
+.classeur-prose ul {
+  list-style-type: disc;
+  padding-left: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+.classeur-prose ol {
+  list-style-type: decimal;
+  padding-left: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+.classeur-prose li {
+  margin-bottom: 0.25rem;
+}
+/* Listes imbriquées — styles différenciés par niveau */
+.classeur-prose ul ul {
+  list-style-type: circle;
+}
+.classeur-prose ul ul ul {
+  list-style-type: square;
+}
+.classeur-prose ol ol {
+  list-style-type: lower-alpha;
+}
+.classeur-prose ol ol ol {
+  list-style-type: lower-roman;
+}
+.classeur-prose :not(pre) > code {
+  background-color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  padding: 0.1rem 0.35rem;
+  font-size: 0.85em;
+  font-family:
+    ui-monospace, 'Cascadia Code', Consolas, 'Courier New', monospace;
+  word-break: break-word;
+}
+.classeur-prose pre {
+  background-color: var(--muted);
+  border-radius: 0.375rem;
+  padding: 1rem;
+  overflow-x: auto;
+  margin-bottom: 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+.classeur-prose pre code {
+  background-color: transparent;
+  border: none;
+  padding: 0;
+  border-radius: 0;
+  font-size: inherit;
+}
+.classeur-prose a {
+  color: var(--primary);
+  text-decoration: underline;
+}
+.classeur-prose hr {
+  border: none;
+  height: 1px;
+  background-color: var(--border);
+  margin-top: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+.classeur-prose blockquote {
+  border-left: 3px solid var(--border);
+  padding-left: 1rem;
+  color: var(--muted-foreground);
+  font-style: italic;
+  margin-top: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+.classeur-prose strong {
+  font-weight: 700;
+}
+.classeur-prose em {
+  font-style: italic;
+}
+/* GFM — Tableaux */
+.classeur-prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 0.75rem;
+  font-size: 0.875rem;
+}
+.classeur-prose th {
+  background-color: var(--muted);
+  font-weight: 600;
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+}
+.classeur-prose td {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+}
+.classeur-prose tbody tr:nth-child(even) {
+  background-color: color-mix(in oklab, var(--muted) 50%, transparent);
+}
+/* GFM — Barré */
+.classeur-prose del {
+  text-decoration: line-through;
+  color: var(--muted-foreground);
+}
+/* GFM — Listes de tâches */
+.classeur-prose ul.contains-task-list {
+  list-style-type: none;
+  padding-left: 0;
+}
+.classeur-prose li.task-list-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+.classeur-prose li.task-list-item input[type='checkbox'] {
+  margin: 0;
+  accent-color: var(--primary);
+}
+/* GFM — Images */
+.classeur-prose img {
+  max-width: 100%;
+  border-radius: 0.375rem;
+  margin-bottom: 0.75rem;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ═══════════════════════════════════════════════════════ */
+/* Prose PAPIER (scopée sous .pdf-prose, zone contenu A4) */
+/* ═══════════════════════════════════════════════════════ */
+
+.pdf-prose h1,
+.pdf-prose h2,
+.pdf-prose h3,
+.pdf-prose h4,
+.pdf-prose h5,
+.pdf-prose h6 {
+  color: #000;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+.pdf-prose h1 {
+  font-size: 13pt;
+  margin-top: 0.7cm;
+  margin-bottom: 0.3cm;
+}
+.pdf-prose h2 {
+  font-size: 11.5pt;
+  margin-top: 0.55cm;
+  margin-bottom: 0.25cm;
+}
+.pdf-prose h3 {
+  font-size: 10pt;
+  margin-top: 0.45cm;
+  margin-bottom: 0.2cm;
+}
+.pdf-prose h4 {
+  font-size: 9.5pt;
+  margin-top: 0.35cm;
+  margin-bottom: 0.15cm;
+  font-weight: 600;
+}
+/* Premier élément de chaque page paginée : pas de marge haute
+   (s'applique au conteneur de mesure ET aux pages rendues) */
+.pdf-prose > :first-child,
+.pdf-prose > div > :first-child {
+  margin-top: 0 !important;
+}
+.pdf-prose p {
+  margin-bottom: 0.3cm;
+  orphans: 3;
+  widows: 3;
+}
+.pdf-prose ul {
+  list-style-type: disc;
+  padding-left: 1.2cm;
+  margin-bottom: 0.3cm;
+}
+.pdf-prose ol {
+  list-style-type: decimal;
+  padding-left: 1.2cm;
+  margin-bottom: 0.3cm;
+}
+.pdf-prose li {
+  margin-bottom: 0.1cm;
+}
+/* Listes imbriquées — styles différenciés par niveau */
+.pdf-prose ul ul {
+  list-style-type: circle;
+}
+.pdf-prose ul ul ul {
+  list-style-type: square;
+}
+.pdf-prose ol ol {
+  list-style-type: lower-alpha;
+}
+.pdf-prose ol ol ol {
+  list-style-type: lower-roman;
+}
+.pdf-prose ul.contains-task-list {
+  list-style-type: none;
+  padding-left: 0;
+}
+.pdf-prose li.task-list-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3cm;
+}
+.pdf-prose :not(pre) > code {
+  font-family: 'Cascadia Code', Consolas, 'Courier New', monospace;
+  font-size: 0.9em;
+  background-color: #f5f5f5;
+  padding: 1pt 3pt;
+  border-radius: 2pt;
+}
+.pdf-prose pre {
+  font-family: 'Cascadia Code', Consolas, 'Courier New', monospace;
+  font-size: 9pt;
+  line-height: 1.4;
+  background-color: #f5f5f5;
+  border: 0.75pt solid #ccc;
+  border-radius: 3pt;
+  padding: 0.35cm;
+  margin-bottom: 0.35cm;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+.pdf-prose pre code {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  font-size: inherit;
+}
+.pdf-prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 0.35cm;
+  font-size: 9.5pt;
+  table-layout: auto;
+  word-break: break-word;
+}
+.pdf-prose thead {
+  display: table-header-group;
+}
+.pdf-prose th {
+  background-color: #f5f5f5;
+  font-weight: 600;
+  text-align: left;
+  padding: 4pt 6pt;
+  border: 0.75pt solid #ccc;
+}
+.pdf-prose td {
+  padding: 4pt 6pt;
+  border: 0.75pt solid #ccc;
+}
+.pdf-prose blockquote {
+  border-left: 2.5pt solid #000;
+  margin: 0 0 0.35cm 0;
+  padding-left: 0.4cm;
+  color: #000;
+  font-style: italic;
+}
+.pdf-prose hr {
+  border: none;
+  height: 0.75pt;
+  background-color: rgba(0, 0, 0, 0.2);
+  margin: 0.5cm 0;
+}
+.pdf-prose a {
+  color: #000;
+  text-decoration: underline;
+}
+.pdf-prose img {
+  max-width: 100%;
+  max-height: 180mm;
+  height: auto;
+  margin-bottom: 0.25cm;
+}
+.pdf-prose strong {
+  font-weight: 700;
+}
+.pdf-prose em {
+  font-style: italic;
+}
+.pdf-prose del {
+  text-decoration: line-through;
+}
+/* Formules KaTeX en bloc : une marge de paragraphe, jamais de débordement
+   horizontal hors de la page. */
+.pdf-prose .katex-display {
+  margin: 0.3cm 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+/* Diagrammes Mermaid : bornés à la largeur de la zone contenu. */
+.pdf-prose svg[id^='classeur-mermaid-'] {
+  max-width: 100%;
+  height: auto;
+}
+.classeur-mermaid-error {
+  border: 0.75pt dashed #999;
+  color: #666;
+  font-size: 8pt;
+  padding: 0.3cm;
+  text-align: center;
+  margin-bottom: 0.35cm;
+}
+
+/* Tableau de suivi / de signature (feuilles à 1 page) */
+.tracking-table {
+  width: 100%;
+  height: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.tracking-table th {
+  text-align: center;
+  vertical-align: middle;
+  border: 0.75pt solid #000;
+  background-color: white;
+}
+.tracking-table td {
+  border: 0.75pt solid #000;
+  vertical-align: top;
+  padding: 3pt 6pt;
+  font-size: 9pt;
+  overflow: hidden;
+}
+
+/* Page A4 à l'écran — ombre pour simuler une feuille sur le fond de l'app */
+.a4-page {
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.35),
+    0 0 1px rgba(0, 0, 0, 0.2);
+  flex-shrink: 0;
+}
+/* Miniatures (cartes de chapitre, à venir) : ni ombre ni bordure */
+.a4-miniature .a4-page {
+  box-shadow: none;
+}
+
+/* ═══════════════════════════════════════════════════════ */
+/* Mode debug — fonds colorés + bordures sur chaque zone  */
+/* (poser la classe `a4-debug` sur un ancêtre)             */
+/* ═══════════════════════════════════════════════════════ */
+
+.a4-debug .a4-page {
+  outline: 1px solid rgba(255, 0, 0, 0.3);
+}
+.a4-debug .pdf-header {
+  border: 1px dashed rgba(230, 126, 0, 0.4);
+  background-color: rgba(255, 165, 0, 0.06);
+}
+.a4-debug .dbg-subtitle {
+  border: 1px dashed rgba(218, 112, 214, 0.4);
+  background-color: rgba(218, 112, 214, 0.06);
+}
+.a4-debug .dbg-gap {
+  border: 1px dashed rgba(150, 150, 150, 0.3);
+  background-color: rgba(0, 0, 0, 0.02);
+}
+.a4-debug .dbg-content {
+  border: 1px dashed rgba(34, 167, 34, 0.4);
+  background-color: rgba(34, 167, 34, 0.04);
+}
+.a4-debug .pdf-footer {
+  border: 1px dashed rgba(34, 102, 221, 0.4);
+  background-color: rgba(34, 102, 221, 0.05);
+}
+.a4-debug .dbg-pagination {
+  border: 1px dashed rgba(139, 0, 200, 0.4);
+  background-color: rgba(139, 0, 200, 0.05);
+}
+.a4-debug .dbg-rule {
+  background-color: rgba(255, 0, 0, 0.5) !important;
+}

@@ -32,11 +32,14 @@ import { Route as FacturationIndexRouteImport } from './routes/facturation/index
 import { Route as ClasseurIndexRouteImport } from './routes/classeur/index'
 import { Route as CaisseIndexRouteImport } from './routes/caisse/index'
 import { Route as FacturationGalaxieRouteImport } from './routes/facturation/galaxie'
+import { Route as ClasseurClasseurIdRouteImport } from './routes/classeur/$classeurId'
 import { Route as RepjourAnalytiqueIndexRouteImport } from './routes/repjour/analytique.index'
 import { Route as RaproAnalytiqueIndexRouteImport } from './routes/rapro/analytique.index'
 import { Route as PdjAnalytiqueIndexRouteImport } from './routes/pdj/analytique.index'
 import { Route as ParkingAnalytiqueIndexRouteImport } from './routes/parking/analytique.index'
+import { Route as ClasseurClasseurIdIndexRouteImport } from './routes/classeur/$classeurId/index'
 import { Route as CaisseAnalytiqueIndexRouteImport } from './routes/caisse/analytique.index'
+import { Route as ClasseurClasseurIdChapterIdRouteImport } from './routes/classeur/$classeurId/$chapterId'
 import { Route as RepjourAnalytiqueYearMonthRouteImport } from './routes/repjour/analytique.$year.$month'
 import { Route as RaproAnalytiqueYearMonthRouteImport } from './routes/rapro/analytique.$year.$month'
 import { Route as PdjAnalytiqueYearMonthRouteImport } from './routes/pdj/analytique.$year.$month'
@@ -158,6 +161,11 @@ const FacturationGalaxieRoute = FacturationGalaxieRouteImport.update({
   path: '/facturation/galaxie',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ClasseurClasseurIdRoute = ClasseurClasseurIdRouteImport.update({
+  id: '/$classeurId',
+  path: '/$classeurId',
+  getParentRoute: () => ClasseurRoute,
+} as any)
 const RepjourAnalytiqueIndexRoute = RepjourAnalytiqueIndexRouteImport.update({
   id: '/analytique/',
   path: '/analytique/',
@@ -178,11 +186,22 @@ const ParkingAnalytiqueIndexRoute = ParkingAnalytiqueIndexRouteImport.update({
   path: '/analytique/',
   getParentRoute: () => ParkingRoute,
 } as any)
+const ClasseurClasseurIdIndexRoute = ClasseurClasseurIdIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ClasseurClasseurIdRoute,
+} as any)
 const CaisseAnalytiqueIndexRoute = CaisseAnalytiqueIndexRouteImport.update({
   id: '/analytique/',
   path: '/analytique/',
   getParentRoute: () => CaisseRoute,
 } as any)
+const ClasseurClasseurIdChapterIdRoute =
+  ClasseurClasseurIdChapterIdRouteImport.update({
+    id: '/$chapterId',
+    path: '/$chapterId',
+    getParentRoute: () => ClasseurClasseurIdRoute,
+  } as any)
 const RepjourAnalytiqueYearMonthRoute =
   RepjourAnalytiqueYearMonthRouteImport.update({
     id: '/analytique/$year/$month',
@@ -228,6 +247,7 @@ export interface FileRoutesByFullPath {
   '/profil': typeof ProfilRoute
   '/rapro': typeof RaproRouteWithChildren
   '/repjour': typeof RepjourRouteWithChildren
+  '/classeur/$classeurId': typeof ClasseurClasseurIdRouteWithChildren
   '/facturation/galaxie': typeof FacturationGalaxieRoute
   '/caisse/': typeof CaisseIndexRoute
   '/classeur/': typeof ClasseurIndexRoute
@@ -237,7 +257,9 @@ export interface FileRoutesByFullPath {
   '/pdj/': typeof PdjIndexRoute
   '/rapro/': typeof RaproIndexRoute
   '/repjour/': typeof RepjourIndexRoute
+  '/classeur/$classeurId/$chapterId': typeof ClasseurClasseurIdChapterIdRoute
   '/caisse/analytique/': typeof CaisseAnalytiqueIndexRoute
+  '/classeur/$classeurId/': typeof ClasseurClasseurIdIndexRoute
   '/parking/analytique/': typeof ParkingAnalytiqueIndexRoute
   '/pdj/analytique/': typeof PdjAnalytiqueIndexRoute
   '/rapro/analytique/': typeof RaproAnalytiqueIndexRoute
@@ -265,7 +287,9 @@ export interface FileRoutesByTo {
   '/pdj': typeof PdjIndexRoute
   '/rapro': typeof RaproIndexRoute
   '/repjour': typeof RepjourIndexRoute
+  '/classeur/$classeurId/$chapterId': typeof ClasseurClasseurIdChapterIdRoute
   '/caisse/analytique': typeof CaisseAnalytiqueIndexRoute
+  '/classeur/$classeurId': typeof ClasseurClasseurIdIndexRoute
   '/parking/analytique': typeof ParkingAnalytiqueIndexRoute
   '/pdj/analytique': typeof PdjAnalytiqueIndexRoute
   '/rapro/analytique': typeof RaproAnalytiqueIndexRoute
@@ -292,6 +316,7 @@ export interface FileRoutesById {
   '/profil': typeof ProfilRoute
   '/rapro': typeof RaproRouteWithChildren
   '/repjour': typeof RepjourRouteWithChildren
+  '/classeur/$classeurId': typeof ClasseurClasseurIdRouteWithChildren
   '/facturation/galaxie': typeof FacturationGalaxieRoute
   '/caisse/': typeof CaisseIndexRoute
   '/classeur/': typeof ClasseurIndexRoute
@@ -301,7 +326,9 @@ export interface FileRoutesById {
   '/pdj/': typeof PdjIndexRoute
   '/rapro/': typeof RaproIndexRoute
   '/repjour/': typeof RepjourIndexRoute
+  '/classeur/$classeurId/$chapterId': typeof ClasseurClasseurIdChapterIdRoute
   '/caisse/analytique/': typeof CaisseAnalytiqueIndexRoute
+  '/classeur/$classeurId/': typeof ClasseurClasseurIdIndexRoute
   '/parking/analytique/': typeof ParkingAnalytiqueIndexRoute
   '/pdj/analytique/': typeof PdjAnalytiqueIndexRoute
   '/rapro/analytique/': typeof RaproAnalytiqueIndexRoute
@@ -329,6 +356,7 @@ export interface FileRouteTypes {
     | '/profil'
     | '/rapro'
     | '/repjour'
+    | '/classeur/$classeurId'
     | '/facturation/galaxie'
     | '/caisse/'
     | '/classeur/'
@@ -338,7 +366,9 @@ export interface FileRouteTypes {
     | '/pdj/'
     | '/rapro/'
     | '/repjour/'
+    | '/classeur/$classeurId/$chapterId'
     | '/caisse/analytique/'
+    | '/classeur/$classeurId/'
     | '/parking/analytique/'
     | '/pdj/analytique/'
     | '/rapro/analytique/'
@@ -366,7 +396,9 @@ export interface FileRouteTypes {
     | '/pdj'
     | '/rapro'
     | '/repjour'
+    | '/classeur/$classeurId/$chapterId'
     | '/caisse/analytique'
+    | '/classeur/$classeurId'
     | '/parking/analytique'
     | '/pdj/analytique'
     | '/rapro/analytique'
@@ -392,6 +424,7 @@ export interface FileRouteTypes {
     | '/profil'
     | '/rapro'
     | '/repjour'
+    | '/classeur/$classeurId'
     | '/facturation/galaxie'
     | '/caisse/'
     | '/classeur/'
@@ -401,7 +434,9 @@ export interface FileRouteTypes {
     | '/pdj/'
     | '/rapro/'
     | '/repjour/'
+    | '/classeur/$classeurId/$chapterId'
     | '/caisse/analytique/'
+    | '/classeur/$classeurId/'
     | '/parking/analytique/'
     | '/pdj/analytique/'
     | '/rapro/analytique/'
@@ -595,6 +630,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FacturationGalaxieRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/classeur/$classeurId': {
+      id: '/classeur/$classeurId'
+      path: '/$classeurId'
+      fullPath: '/classeur/$classeurId'
+      preLoaderRoute: typeof ClasseurClasseurIdRouteImport
+      parentRoute: typeof ClasseurRoute
+    }
     '/repjour/analytique/': {
       id: '/repjour/analytique/'
       path: '/analytique'
@@ -623,12 +665,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ParkingAnalytiqueIndexRouteImport
       parentRoute: typeof ParkingRoute
     }
+    '/classeur/$classeurId/': {
+      id: '/classeur/$classeurId/'
+      path: '/'
+      fullPath: '/classeur/$classeurId/'
+      preLoaderRoute: typeof ClasseurClasseurIdIndexRouteImport
+      parentRoute: typeof ClasseurClasseurIdRoute
+    }
     '/caisse/analytique/': {
       id: '/caisse/analytique/'
       path: '/analytique'
       fullPath: '/caisse/analytique/'
       preLoaderRoute: typeof CaisseAnalytiqueIndexRouteImport
       parentRoute: typeof CaisseRoute
+    }
+    '/classeur/$classeurId/$chapterId': {
+      id: '/classeur/$classeurId/$chapterId'
+      path: '/$chapterId'
+      fullPath: '/classeur/$classeurId/$chapterId'
+      preLoaderRoute: typeof ClasseurClasseurIdChapterIdRouteImport
+      parentRoute: typeof ClasseurClasseurIdRoute
     }
     '/repjour/analytique/$year/$month': {
       id: '/repjour/analytique/$year/$month'
@@ -683,11 +739,26 @@ const CaisseRouteChildren: CaisseRouteChildren = {
 const CaisseRouteWithChildren =
   CaisseRoute._addFileChildren(CaisseRouteChildren)
 
+interface ClasseurClasseurIdRouteChildren {
+  ClasseurClasseurIdChapterIdRoute: typeof ClasseurClasseurIdChapterIdRoute
+  ClasseurClasseurIdIndexRoute: typeof ClasseurClasseurIdIndexRoute
+}
+
+const ClasseurClasseurIdRouteChildren: ClasseurClasseurIdRouteChildren = {
+  ClasseurClasseurIdChapterIdRoute: ClasseurClasseurIdChapterIdRoute,
+  ClasseurClasseurIdIndexRoute: ClasseurClasseurIdIndexRoute,
+}
+
+const ClasseurClasseurIdRouteWithChildren =
+  ClasseurClasseurIdRoute._addFileChildren(ClasseurClasseurIdRouteChildren)
+
 interface ClasseurRouteChildren {
+  ClasseurClasseurIdRoute: typeof ClasseurClasseurIdRouteWithChildren
   ClasseurIndexRoute: typeof ClasseurIndexRoute
 }
 
 const ClasseurRouteChildren: ClasseurRouteChildren = {
+  ClasseurClasseurIdRoute: ClasseurClasseurIdRouteWithChildren,
   ClasseurIndexRoute: ClasseurIndexRoute,
 }
 
