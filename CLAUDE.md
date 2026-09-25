@@ -571,9 +571,40 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   l'accueil est la COLONNE de cartes d'actions de Registre, à l'identique
   (28 rem centrés : nouveau chapitre ; Sommaire | Exporter PDF ; séparateur ;
   Exporter en Markdown ; Exporter en JSON | Importer un JSON avec dépôt de
-  fichier ; puis, ajout à nous, séparateur + Historique des imports) sous la
+  fichier ; puis, ajout à nous, séparateur + Points de restauration) sous la
   recherche ; l'en-tête ne garde que l'édition du classeur. Libellés de
   Registre conservés (« Export en cours... », « Déposez ici »).
+- **Points de restauration (2026-09-26, demande de l'utilisateur : « de
+  vraies sauvegardes, faciles, une dizaine, mineures et majeures »)** :
+  `classeur_merge_history` n'est plus l'historique des seules fusions mais
+  la table des points de restauration, typés par `kind`
+  (`supabase/classeur_points_restauration_2026-09-26.sql`, JOUÉ ; autorité
+  `classeur_2026-09-25.sql` à jour). Un point = l'export JSON v2 complet
+  (~43 ko pour le Registre de Sécurité, colonne `taille` posée par trigger),
+  restauré par `restaurerInstantane` (fusion en remplacement).
+  - `auto` (mineur) : pris AVANT la première écriture d'une session, au plus
+    un par quart d'heure et par classeur, par la garde `definirGardeEcriture`
+    posée dans `service.ts` — TOUTE écriture du service l'appelle
+    (`avantEcriture(ref)`), quel que soit l'écran ; résolution
+    élément → chapitre → classeur mémorisée ; jamais bloquante
+    (`console.warn`). Suspendue par `sansPointsAuto` pendant une fusion ou
+    une restauration (`pointsAutoGarde.ts`, compteur : réentrant).
+  - `manuel` (majeur) : nommé par l'utilisateur dans le dialogue ; toujours
+    écrit. `fusion` et `securite` (majeurs) : inchangés, typés.
+  - Quotas `QUOTAS = {auto: 10, majeur: 10}` (`entreesAElaguerParGenre`) ;
+    à quota majeur atteint, les `securite` partent avant les jalons. La RLS
+    delete autorise le rang `ecriture` sur les SEULS points `auto` (sinon
+    l'historique d'un compte écriture grandirait sans borne) ; un 42501
+    arrête l'élagage sans erreur.
+  - Dédoublonnage : un point non manuel n'est pas écrit s'il est égal au
+    DERNIER point, tous genres confondus (`instantaneEgal`, `updated_at`
+    ignorés). Leçon du contrôle navigateur : comparer au dernier point du
+    même genre laissait passer un auto identique au manuel pris 40 s avant.
+  - Choix assumé « avant la session » plutôt qu'« après chaque écriture » :
+    l'état d'arrivée est l'état courant, figé par le prochain point ; un
+    point par frappe coûterait un instantané complet à chaque sauvegarde.
+  - ⚠ `SOURCE_SAUVEGARDE` vit dans `merge/history.ts` (seul). Le simulateur
+    de `audit.property.test.ts` porte `kind`/`label`/`taille`.
 - **Squelettes** : variante `classeur` de `RouteSkeleton`, forme choisie par
   `paramsClasseur(pathname)` (liste, tableau de bord, chapitre, détail) ;
   silhouettes `FormeClasseurListe`, `FormeClasseurDashboard`, `FormeChapitre`,
