@@ -568,9 +568,12 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
 - **Accueil d'un classeur (décision utilisateur du 2026-09-26)** : les
   chapitres ne sont PAS répétés dans la page (ils vivent dans la colonne de
   gauche, pleine hauteur, 20 rem — « trop petite » à 16 rem) ; le corps de
-  l'accueil est la grille de CARTES D'ACTIONS comme dans Registre (nouveau
-  chapitre, sommaire, PDF, ZIP, JSON, import, historique) sous la recherche ;
-  l'en-tête ne garde que l'édition du classeur.
+  l'accueil est la COLONNE de cartes d'actions de Registre, à l'identique
+  (28 rem centrés : nouveau chapitre ; Sommaire | Exporter PDF ; séparateur ;
+  Exporter en Markdown ; Exporter en JSON | Importer un JSON avec dépôt de
+  fichier ; puis, ajout à nous, séparateur + Historique des imports) sous la
+  recherche ; l'en-tête ne garde que l'édition du classeur. Libellés de
+  Registre conservés (« Export en cours... », « Déposez ici »).
 - **Squelettes** : variante `classeur` de `RouteSkeleton`, forme choisie par
   `paramsClasseur(pathname)` (liste, tableau de bord, chapitre, détail) ;
   silhouettes `FormeClasseurListe`, `FormeClasseurDashboard`, `FormeChapitre`,

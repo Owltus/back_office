@@ -186,6 +186,7 @@ export function ClasseurDashboardActions({
         }
         onExporterJson={(c) => exporter.mutate({ type: 'json', ctx: c })}
         onImporter={() => inputRef.current?.click()}
+        onFichierDepose={recevoirFichier}
         onHistorique={() => setHistoriqueOuvert(true)}
         busy={busy}
       />

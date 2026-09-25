@@ -228,11 +228,13 @@ describe('Classeur — quatre silhouettes relevées sur les boards', () => {
     expect(container.querySelectorAll('.rounded-xl.border').length).toBe(4)
   })
 
-  it('l’accueil dessine la recherche et les cartes d’actions, sans grille de chapitres', () => {
-    const { container } = render(<FormeClasseurDashboard cartes={7} />)
+  it('l’accueil dessine la recherche puis la colonne de Registre : 7 cartes, 2 paires, 2 séparateurs', () => {
+    const { container } = render(<FormeClasseurDashboard />)
     expect(container.querySelectorAll('.h-9.w-full').length).toBe(1)
     expect(container.querySelectorAll('.rounded-xl.border').length).toBe(7)
-    expect(container.querySelectorAll('.rounded-full').length).toBe(0)
+    expect(container.querySelectorAll('.grid-cols-2').length).toBe(2)
+    expect(container.querySelectorAll('.border-b').length).toBe(2)
+    expect(container.querySelector('.max-w-md')).not.toBeNull()
   })
 
   it('le chapitre dessine N miniatures au rapport A4 et sa recherche', () => {

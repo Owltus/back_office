@@ -587,27 +587,45 @@ export function FormeClasseurListe({ cartes = 3 }: { cartes?: number }) {
 }
 
 /**
- * /classeur/$id (accueil) : champ de recherche pleine largeur puis la grille
- * des cartes d'actions (icône + titre + sous-titre), comme dans Registre —
- * les chapitres sont dans la colonne, pas dans la page.
+ * /classeur/$id (accueil) : champ de recherche pleine largeur puis la colonne
+ * centrée de Registre (28 rem) : une carte, deux côte à côte, un séparateur,
+ * une carte, deux côte à côte, un séparateur, une carte — sept cartes.
  */
-export function FormeClasseurDashboard({ cartes = 7 }: { cartes?: number }) {
+export function FormeClasseurDashboard() {
+  const carte = (k: string) => (
+    <div
+      key={k}
+      className="flex items-center gap-4 rounded-xl border border-border bg-card px-5 py-4"
+    >
+      <Skeleton className="size-5 rounded-sm" />
+      <div className="flex-1">
+        <Skeleton className="h-4 w-28" />
+        <Skeleton className="mt-2 h-3 w-40" />
+      </div>
+    </div>
+  )
   return (
     <>
       <Skeleton className="h-9 w-full rounded-md" aria-hidden="true" />
-      <div className={GRILLE_CARTES} aria-hidden="true">
-        {Array.from({ length: cartes }).map((_, i) => (
-          <div
-            key={i}
-            className="flex items-center gap-4 rounded-xl border border-border bg-card px-5 py-4"
-          >
-            <Skeleton className="size-5 rounded-sm" />
-            <div className="flex-1">
-              <Skeleton className="h-4 w-36" />
-              <Skeleton className="mt-2 h-3 w-48" />
-            </div>
+      <div
+        className="flex flex-1 items-center justify-center py-6"
+        aria-hidden="true"
+      >
+        <div className="flex w-full max-w-md flex-col gap-4">
+          {carte('nouveau')}
+          <div className="grid grid-cols-2 gap-3">
+            {carte('sommaire')}
+            {carte('pdf')}
           </div>
-        ))}
+          <div className="border-b border-border" />
+          {carte('markdown')}
+          <div className="grid grid-cols-2 gap-3">
+            {carte('json')}
+            {carte('import')}
+          </div>
+          <div className="border-b border-border" />
+          {carte('historique')}
+        </div>
       </div>
     </>
   )

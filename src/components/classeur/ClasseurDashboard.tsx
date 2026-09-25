@@ -1,5 +1,5 @@
 import { useDeferredValue, useMemo, useState } from 'react'
-import type { ReactNode } from 'react'
+import type { DragEvent, ReactNode } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import {
   Archive,
@@ -16,6 +16,7 @@ import {
   Printer,
   Search,
   Table2,
+  Upload,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -97,6 +98,7 @@ export function ClasseurDashboard({
   onExporterMarkdown,
   onExporterJson,
   onImporter,
+  onFichierDepose,
   onHistorique,
   busy = null,
   renderResult,
@@ -107,6 +109,9 @@ export function ClasseurDashboard({
   onExporterMarkdown?: (ctx: DashboardContexte) => void
   onExporterJson?: (ctx: DashboardContexte) => void
   onImporter?: (ctx: DashboardContexte) => void
+  /** Fichier .json DÉPOSÉ sur la carte Importer (Registre acceptait le
+   * glisser-déposer sur cette carte). */
+  onFichierDepose?: (file: File) => void
   /** Ouvre l'historique des imports (instantanés restaurables). Sans ctx : la
    * liste est lue par le dialogue lui-même. */
   onHistorique?: () => void
@@ -134,6 +139,7 @@ export function ClasseurDashboard({
 
   const [editOpen, setEditOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
+  const [survolDepot, setSurvolDepot] = useState(false)
 
   // Recherche instantanée : `useDeferredValue` laisse la frappe fluide sans
   // minuterie ni effet.
@@ -169,6 +175,23 @@ export function ClasseurDashboard({
   const contexte: DashboardContexte | null =
     classeur && content ? { classeur, chapters, content } : null
   const pret = contexte !== null
+
+  // Dépôt d'un fichier sur la carte Importer (comme dans Registre). On ne
+  // réagit qu'aux fichiers, pas aux glissers internes (dnd-kit).
+  const depotActif = canWrite && onFichierDepose !== undefined && pret
+  const surDragOver = (e: DragEvent<HTMLButtonElement>) => {
+    if (!depotActif || !e.dataTransfer.types.includes('Files')) return
+    e.preventDefault()
+    if (!survolDepot) setSurvolDepot(true)
+  }
+  const surDragLeave = () => setSurvolDepot(false)
+  const surDrop = (e: DragEvent<HTMLButtonElement>) => {
+    if (!depotActif) return
+    e.preventDefault()
+    setSurvolDepot(false)
+    const file = e.dataTransfer.files.item(0)
+    if (file !== null) onFichierDepose(file)
+  }
 
   function action(rappel?: (ctx: DashboardContexte) => void) {
     if (!rappel) return undefined
@@ -260,76 +283,113 @@ export function ClasseurDashboard({
           )}
         </section>
       ) : (
-        /* Le corps de l'accueil : les cartes d'actions, comme dans Registre.
-           Les chapitres sont dans la colonne de gauche, pas ici. */
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {canWrite && (
-            <ActionCard
-              icon={Plus}
-              title="Nouveau chapitre"
-              subtitle="Ajouter un chapitre au classeur"
-              onClick={() => setCreateOpen(true)}
-              dashed
-            />
-          )}
-          {onSommaire && (
-            <ActionCard
-              icon={List}
-              title="Sommaire"
-              subtitle="Table des matières"
-              onClick={action(onSommaire)}
-              disabled={!pret}
-              busy={busy === 'sommaire'}
-            />
-          )}
-          {onExporterPdf && (
-            <ActionCard
-              icon={Printer}
-              title="Imprimer ou enregistrer en PDF"
-              subtitle="Classeur complet"
-              onClick={action(onExporterPdf)}
-              disabled={!pret}
-              busy={busy === 'pdf'}
-            />
-          )}
-          {onExporterMarkdown && (
-            <ActionCard
-              icon={Archive}
-              title="Exporter en Markdown"
-              subtitle="Archive ZIP de tous les documents"
-              onClick={action(onExporterMarkdown)}
-              disabled={!pret}
-              busy={busy === 'markdown'}
-            />
-          )}
-          {onExporterJson && (
-            <ActionCard
-              icon={FileUp}
-              title="Exporter en JSON"
-              subtitle="Sauvegarde éditable du classeur"
-              onClick={action(onExporterJson)}
-              disabled={!pret}
-              busy={busy === 'json'}
-            />
-          )}
-          {canWrite && onImporter && (
-            <ActionCard
-              icon={FileDown}
-              title="Importer un JSON"
-              subtitle="Mettre à jour depuis un export"
-              onClick={action(onImporter)}
-              disabled={!pret}
-              busy={busy === 'import'}
-            />
-          )}
-          {onHistorique && (
-            <ActionCard
-              icon={History}
-              title="Historique des imports"
-              subtitle="Instantanés pris avant chaque fusion"
-              onClick={onHistorique}
-            />
-          )}
+        /* Le corps de l'accueil, ORGANISÉ COMME DANS REGISTRE (décision
+           utilisateur du 2026-09-26) : une colonne centrée de 28 rem —
+           « Nouveau chapitre » seul, Sommaire et PDF côte à côte, un
+           séparateur, l'export Markdown seul, puis les deux JSON côte à côte
+           (l'import accepte un fichier déposé). L'historique, qui vivait dans
+           les Paramètres de Registre, vient en dernier sous un séparateur. */
+        <div className="flex flex-1 items-center justify-center py-6">
+          <div className="flex w-full max-w-md flex-col gap-4">
+            {canWrite && (
+              <ActionCard
+                icon={Plus}
+                title="Nouveau chapitre"
+                subtitle="Ajouter un chapitre au classeur"
+                onClick={() => setCreateOpen(true)}
+                dashed
+              />
+            )}
+
+            {(onSommaire || onExporterPdf) && (
+              <div className="grid grid-cols-2 gap-3">
+                {onSommaire && (
+                  <ActionCard
+                    icon={List}
+                    title="Sommaire"
+                    subtitle="Table des matières"
+                    onClick={action(onSommaire)}
+                    disabled={!pret}
+                    busy={busy === 'sommaire'}
+                  />
+                )}
+                {onExporterPdf && (
+                  <ActionCard
+                    icon={Printer}
+                    title="Exporter PDF"
+                    subtitle="Classeur complet"
+                    onClick={action(onExporterPdf)}
+                    disabled={!pret}
+                    busy={busy === 'pdf'}
+                  />
+                )}
+              </div>
+            )}
+
+            {(onExporterMarkdown || onExporterJson || onImporter) && (
+              <div className="border-b border-border" />
+            )}
+
+            {onExporterMarkdown && (
+              <ActionCard
+                icon={Archive}
+                title="Exporter en Markdown"
+                subtitle="Archive ZIP contenant tous les documents"
+                titreOccupe="Export en cours..."
+                onClick={action(onExporterMarkdown)}
+                disabled={!pret || busy !== null}
+                busy={busy === 'markdown'}
+              />
+            )}
+
+            {(onExporterJson || (canWrite && onImporter)) && (
+              <div className="grid grid-cols-2 gap-3">
+                {onExporterJson && (
+                  <ActionCard
+                    icon={FileUp}
+                    title="Exporter en JSON"
+                    subtitle="Sauvegarde éditable du classeur"
+                    titreOccupe="Export en cours..."
+                    onClick={action(onExporterJson)}
+                    disabled={!pret || busy !== null}
+                    busy={busy === 'json'}
+                  />
+                )}
+                {canWrite && onImporter && (
+                  <ActionCard
+                    icon={survolDepot ? Upload : FileDown}
+                    title={survolDepot ? 'Déposez ici' : 'Importer un JSON'}
+                    subtitle={
+                      survolDepot ? undefined : 'Mettre à jour depuis un export'
+                    }
+                    titreOccupe="Import en cours..."
+                    onClick={action(onImporter)}
+                    disabled={!pret || busy !== null}
+                    busy={busy === 'import'}
+                    className={
+                      survolDepot ? 'border-primary bg-primary/5' : undefined
+                    }
+                    onDragEnter={surDragOver}
+                    onDragOver={surDragOver}
+                    onDragLeave={surDragLeave}
+                    onDrop={surDrop}
+                  />
+                )}
+              </div>
+            )}
+
+            {onHistorique && (
+              <>
+                <div className="border-b border-border" />
+                <ActionCard
+                  icon={History}
+                  title="Historique des imports"
+                  subtitle="Instantanés pris avant chaque fusion"
+                  onClick={onHistorique}
+                />
+              </>
+            )}
+          </div>
         </div>
       )}
 
@@ -357,24 +417,38 @@ export function ClasseurDashboard({
 /**
  * Carte d'action de l'accueil (portée de Registre, dans la grammaire de
  * l'app : carte `bg-card`, icône, titre, sous-titre, survol `bg-accent`).
- * `dashed` distingue la création ; `busy` remplace l'icône par un `Loader2`.
+ * `dashed` distingue la création ; `busy` remplace l'icône par un `Loader2`
+ * et le titre par `titreOccupe`. Les gestionnaires de glisser-déposer passent
+ * au bouton (carte Importer).
  */
 function ActionCard({
   icon: Icon,
   title,
   subtitle,
+  titreOccupe = 'En cours',
   onClick,
   disabled = false,
   busy = false,
   dashed = false,
+  className,
+  onDragEnter,
+  onDragOver,
+  onDragLeave,
+  onDrop,
 }: {
   icon: LucideIcon
   title: string
-  subtitle: string
+  subtitle?: string
+  titreOccupe?: string
   onClick?: () => void
   disabled?: boolean
   busy?: boolean
   dashed?: boolean
+  className?: string
+  onDragEnter?: (e: DragEvent<HTMLButtonElement>) => void
+  onDragOver?: (e: DragEvent<HTMLButtonElement>) => void
+  onDragLeave?: (e: DragEvent<HTMLButtonElement>) => void
+  onDrop?: (e: DragEvent<HTMLButtonElement>) => void
 }) {
   const inactif = disabled || busy
   return (
@@ -383,11 +457,16 @@ function ActionCard({
       onClick={onClick}
       disabled={inactif}
       aria-busy={busy || undefined}
+      onDragEnter={onDragEnter}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
       className={cn(
         'flex w-full items-center gap-4 rounded-xl border border-border bg-card px-5 py-4 text-left transition-colors',
         'hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
-        'disabled:pointer-events-none disabled:opacity-50',
+        'disabled:pointer-events-none disabled:opacity-40',
         dashed && 'border-dashed',
+        className,
       )}
     >
       {busy ? (
@@ -397,11 +476,13 @@ function ActionCard({
       )}
       <span className="flex min-w-0 flex-col gap-0.5">
         <span className="truncate text-sm font-medium">
-          {busy ? 'En cours' : title}
+          {busy ? titreOccupe : title}
         </span>
-        <span className="truncate text-xs text-muted-foreground">
-          {subtitle}
-        </span>
+        {subtitle !== undefined && !busy && (
+          <span className="truncate text-xs text-muted-foreground">
+            {subtitle}
+          </span>
+        )}
       </span>
     </button>
   )
