@@ -64,6 +64,9 @@ describe('dernierPoint', () => {
     expect(dernierPoint(entrees, 'auto')?.id).toBe(4)
     expect(dernierPoint(entrees, 'manuel')?.id).toBe(2)
     expect(dernierPoint(entrees, 'fusion')).toBeNull()
+    // Sans genre : le plus récent de tous (c'est lui qui sert au dédoublonnage).
+    expect(dernierPoint(entrees)?.id).toBe(4)
+    expect(dernierPoint([])).toBeNull()
   })
 })
 

@@ -32,8 +32,12 @@
  * suivante. Un point par écriture coûterait un instantané complet (des
  * dizaines de ko à plus d'un Mo) à chaque frappe sauvegardée.
  *
- * DÉDOUBLONNAGE : un point n'est pas écrit si l'instantané est égal au
- * dernier point du même genre (`instantaneEgal`, `updated_at` ignorés).
+ * DÉDOUBLONNAGE : un point auto, de fusion ou de sécurité n'est pas écrit
+ * si l'instantané est égal au DERNIER point, quel que soit son genre
+ * (`instantaneEgal`, `updated_at` ignorés) : restaurer l'un ou l'autre
+ * rendrait le même état, le second ne serait que du poids en base (constaté
+ * le 26/09 : un point auto pris 40 s après un point manuel, 43 ko identiques).
+ * Un point MANUEL est toujours écrit : c'est un jalon nommé par l'utilisateur.
  *
  * UN POINT AUTO NE BLOQUE JAMAIS UNE ÉCRITURE : toute erreur (droits, réseau)
  * est avalée avec un `console.warn`. La sauvegarde est un filet, pas un
@@ -95,17 +99,20 @@ export function doitCreerPointAuto(
   return maintenant - t >= fenetre
 }
 
-/** Le dernier point d'un genre, ou `null`. `entrees` en ordre quelconque. */
+/**
+ * Le dernier point d'un genre (ou de tous les genres si `kind` est omis), ou
+ * `null`. `entrees` en ordre quelconque.
+ */
 export function dernierPoint(
   entrees: ReadonlyArray<
     Pick<DbMergeHistoryEntry, 'id' | 'kind' | 'merged_at'>
   >,
-  kind: PointKind,
+  kind?: PointKind,
 ): Pick<DbMergeHistoryEntry, 'id' | 'kind' | 'merged_at'> | null {
   let meilleur: Pick<DbMergeHistoryEntry, 'id' | 'kind' | 'merged_at'> | null =
     null
   for (const e of entrees) {
-    if (e.kind !== kind) continue
+    if (kind !== undefined && e.kind !== kind) continue
     if (
       meilleur === null ||
       e.merged_at > meilleur.merged_at ||
@@ -144,14 +151,17 @@ export interface OptionsPoint {
   >
   /** Instantané déjà construit (fusion, sécurité) ; sinon lu maintenant. */
   instantane?: ClasseurJson
-  /** Ne pas écrire si égal au dernier point du même genre (défaut : oui). */
+  /**
+   * Ne pas écrire si égal au dernier point, tous genres confondus.
+   * Défaut : oui, sauf pour un point manuel (jalon voulu par l'utilisateur).
+   */
   dedoublonner?: boolean
 }
 
 /**
  * Crée un point de restauration puis élague. Rend l'identifiant, ou `null`
  * si rien n'a été écrit (classeur absent, ou instantané identique au dernier
- * point du même genre).
+ * point).
  */
 export async function creerPoint(
   classeurId: number,
@@ -161,8 +171,8 @@ export async function creerPoint(
   if (instantane === null) return null
 
   const entrees = await fetchMergeHistory(classeurId)
-  if (options.dedoublonner ?? true) {
-    const dernier = dernierPoint(entrees, options.kind)
+  if (options.dedoublonner ?? options.kind !== 'manuel') {
+    const dernier = dernierPoint(entrees)
     if (dernier !== null) {
       const precedent = await fetchMergeSnapshot(dernier.id)
       if (instantaneEgal(precedent, instantane)) return null
