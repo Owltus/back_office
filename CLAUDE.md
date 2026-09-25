@@ -81,7 +81,7 @@ tourne dessus) : la prudence reste de mise.
   rewrite Vercel vers `_shell.html`, aucune page prérendue). ⚠ Une nouvelle page
   doit désormais être déclarée à TROIS endroits : le CHECK de
   `user_page_permissions`, celui de `profiles.page_order`, et `pages.ts`.
-  Précédent à suivre : **page `classeur` (2026-09-25)**, ajoutée VIDE —
+  Précédent à suivre : **page `classeur` (2026-09-25)**, ajoutée VIDE le matin (remplie le jour même, voir la section Classeur) —
   `pages.ts` + `routes/classeur.tsx` + `routes/classeur/index.tsx`
   (`PageGuard page="classeur"`) + `components/classeur/ClasseurBoard.tsx`,
   script `supabase/page_classeur_2026-09-25.sql` (les deux CHECK, borne
@@ -499,6 +499,60 @@ Le temps de chargement perçu vient surtout de l'auth cliente + du mode SPA. Rè
     la pression AUGMENTE à mesure que la base souffre.
 - Valider toute modif perf : `pnpm build` (vérifier le découpage des chunks) +
   `npx tsc --noEmit` ; côté base `supabase/verif_perf.sql` (lecture seule).
+
+## Classeur — portage de Registre (2026-09-25)
+
+La page `/classeur` est le portage de l'application de bureau **Registre**
+(`github.com/Owltus/Registre`, Tauri v2 + SQLite + Rust) dans NOTRE stack,
+sans Rust : classeurs réglementaires (registre de sécurité, carnet
+sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
+`plan/page-classeur/00-INDEX.md`. Ce qu'il faut savoir pour y toucher :
+
+- **Base** : 8 tables `classeur_*` (autorité unique
+  `supabase/classeur_2026-09-25.sql`, rejouable) — classeurs, chapitres,
+  périodicités (référentiel seedé, lecture seule), documents Markdown,
+  feuilles de suivi, feuilles de signature, intercalaires, historique de
+  fusion (`snapshot jsonb`). Identifiants `bigint identity`, colonne `uuid`
+  (CLÉ DE FUSION, jamais réécrite), **suppression douce** partout
+  (`deleted_at`) ; la seule suppression physique (classeur, entrée
+  d'historique) est réservée à `gestion` par la RLS et n'est pas exposée
+  par l'app. Trigger unique `classeur_stamp` (via `private.keep_author`).
+  RLS : lecture rang ≥ 1, insert/update rang ≥ 2, aucune fenêtre de grâce.
+- **Métier pur** dans `lib/classeur/` : `service.ts` (colonnes explicites,
+  toute lecture filtre `deleted_at is null` sauf les `*AvecSupprimes` de la
+  fusion), `keys.ts` (`classeurKeys`, préfixe `classeur` — persistable :
+  aucune donnée nominative), `slug.ts` (`slugify` = miroir EXACT du Rust,
+  clé d'appariement des exports existants : ne pas modifier), `ordre.ts`,
+  `sommaire.ts`, `importFichiers.ts`, exports (`download`, `exportMarkdown`
+  ZIP via `jszip` dynamique, `exportJson` format v2 de Registre —
+  interopérable dans les deux sens avec l'application de bureau).
+- **Impression** : moteur A4 pur DOM porté tel quel (`lib/classeur/print/`,
+  `paginate` avec mesure injectable pour jsdom), rendu Markdown
+  `react-markdown` + GFM + KaTeX + Mermaid (`mermaid` chargé par `import()`
+  au premier diagramme, prouvé hors du chunk d'entrée). PDF = dialogue
+  d'impression du navigateur sur l'iframe (`printViaIframe`), jamais jsPDF
+  ici : le contenu est mis en page par le DOM. Pages A4 TOUJOURS blanches
+  (pas de variante thématique). Classes `.a4-page`, `.pdf-prose`,
+  `.tracking-table` dans `styles/classeur.css` : le moteur en dépend.
+- **Fusion JSON** (`lib/classeur/merge/`) : `planifierFusion` est PURE et
+  reproduit les 12 règles de `do_merge` côté Rust (documentées en tête du
+  fichier, tests R1…R12), avec 5 écarts assumés (E1…E5) qui corrigent des
+  défauts de la source. `appliquerFusion` écrit l'INSTANTANÉ AVANT toute
+  écriture, puis les actions séquentiellement (pas de RPC, pas de
+  transaction : un échec au milieu laisse un état partiel restaurable) ;
+  élagage à 10 entrées, 42501 ignoré. Restauration = fusion en
+  remplacement avec instantané de sécurité, jamais de purge physique.
+- **UI** : TanStack Query partout (`useClasseur.ts`, `useMerge.ts`,
+  invalidation de `classeurKeys.all`, optimistes pour le réordonnancement),
+  `isPending` pour les gardes, pas de toasts (alertes inline,
+  `messageErreur` rend un 42501 lisible), `can('classeur','ecriture')`
+  masque toute écriture, `gestion` la suppression d'un classeur et la
+  purge d'historique. Glisser-déposer `@dnd-kit` : la colonne des chapitres
+  est cible de dépôt (`chapterDropId`), les cartes posent `ItemDragData`.
+  Routes minces : la logique vit dans `ClasseurListActions` /
+  `ClasseurDashboardActions`.
+- **Squelette** : repli `board` de `RouteSkeleton` tant que les silhouettes
+  n'ont pas été relevées sur le DOM réel (étape 7 du plan).
 
 ## Faits base de données (vérifiés en lecture)
 
