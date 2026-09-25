@@ -452,3 +452,32 @@ you. »* Nano n'est pas prévu pour la production.
 Et une chose qui n'est PAS un choix : **suivre `supabase/postgres#2464`**. Le
 jour où il est fusionné et déployé sur notre image Postgres, le déclencheur
 disparaît.
+
+### Contrôle J+1 — 2026-09-25, 06:52-06:55 UTC (réveil programmé)
+
+| Mesure | Avant (24/09 17:25 UTC) | Après (25/09 06:52 UTC, +12,6 h de base) | Lecture |
+|---|---|---|---|
+| `shared_buffers` | 229 Mo | **96 Mo** (vérifié `pg_settings`) | réglage en place, aucun redémarrage depuis |
+| Engagement mémoire | 1,25 Go | **1,14 Go** (−110 Mo) | la réservation a bien reculé |
+| Swap (bande rose) | ~300 Mo, ~40 % de la pile | **visuellement inchangé**, ~40 % | **pas de recul mesurable** |
+| Mémoire utilisée (libellé) | 406,51 Mo | 406,51 Mo | identique |
+| CPU (moyenne 60 min) | 1,6 % | 16,6 % | heure d'ouverture + import nocturne, pas un signal |
+| Lecture réelle via Auth | 0,07-0,31 s | **0,29 / 0,10 / 0,08 s** | la base sert, vite |
+| Logs Postgres, dernière heure | ~100 ERROR/h (`permission denied`) | **16 lignes, toutes LOG, zéro ERROR** | le bruit du préchauffage a disparu |
+| Sonde Cloudflare | — | ticks 08:00→08:50 toutes les 10 min, `gotrue=200` 573-1005 ms, **0 cron fantôme** | stable |
+| Veille nocturne | — | 0 événement `[veille]` sur 24 h ; en base : **rapport du 24/09 envoyé à 02:31 à 3 destinataires (+4 cc)** | pipeline intact |
+
+**Verdict, dit tel quel** : le réglage a fait exactement ce qu'il devait sur la
+réservation (−110 Mo d'engagement), mais **le swap n'a pas reculé** en douze
+heures. Deux lectures possibles, non tranchées : (a) le swap est « collant » —
+les pages déjà échangées ne reviennent en RAM que lorsqu'un processus les
+touche, et rien ne force le noyau à les rapatrier ; la baisse d'engagement est
+le signal avancé, le swap le signal retardé ; (b) le swap ne dépendait pas de
+`shared_buffers` : la machine de 512 Mo est simplement trop petite pour six
+services, et seule une instance plus grande y changerait quelque chose
+(recommandation écrite de Supabase, refusée par l'utilisateur — respectée).
+
+**Décision** : ne PAS revenir en arrière (aucun coût : 96 Mo = 3,5× la base,
+lectures à 0,08 s) et **re-mesurer le swap dans 3 à 4 jours**, en heures
+creuses, avant de conclure. Si la bande rose n'a toujours pas bougé, la
+lecture (b) l'emporte et il faudra le dire sans détour.
