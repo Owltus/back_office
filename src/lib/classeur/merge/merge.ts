@@ -11,17 +11,22 @@
  *      non supprimés.
  *  R2  Chapitre apparié : `update` si label, icon ou description diffèrent
  *      (jamais de règle d'horodatage pour un chapitre), sinon `unchanged` ;
- *      son `sort_order` local n'est jamais touché.
+ *      son `sort_order` local n'est touché qu'en mode remplacement (E6).
  *  R3  Chapitre non apparié : `insert`, ajouté en FIN (max des sort_order
  *      locaux non supprimés + 1), pas au sort_order du fichier.
  *  R4  Élément de type inconnu ou sans titre (après trim) : `skip` + avertissement.
  *  R5  Élément : apparié par `uuid` d'abord (tout le classeur, supprimés
- *      compris, même dans un autre chapitre : il n'est PAS déplacé), sinon
- *      par (chapitre local, nature, titre exact) parmi les non supprimés.
- *      Un chapitre nouveau n'a aucun élément local : pas de repli possible.
+ *      compris, même dans un autre chapitre), sinon par (chapitre local,
+ *      nature, titre exact) parmi les non supprimés. Un chapitre nouveau n'a
+ *      aucun élément local : pas de repli possible. Le Rust ne déplaçait
+ *      jamais un élément apparié ailleurs : ici, si le fichier gagne, il est
+ *      déplacé (E6).
  *  R6  Élément apparié mais supprimé localement : `skip` en mode fusion ;
- *      restauré et compté `insert` en mode remplacement (sans mise à jour
- *      de son contenu, comme le Rust).
+ *      restauré et compté `insert` en mode remplacement. Le Rust le
+ *      restaurait SANS ses champs : ici les champs, le chapitre, l'ordre et
+ *      l'horodatage du fichier sont appliqués (E6). Les éléments d'un
+ *      chapitre lui-même restauré (E1) sont restaurés même en mode fusion,
+ *      sinon le chapitre revenait vide.
  *  R7  Mode fusion, dernier écrit gagne : le fichier ne s'applique que si
  *      son `updated_at` est STRICTEMENT plus récent que le local, ou si l'un
  *      des deux manque (`(Some, Some) => json > local`, sinon `true`).
@@ -30,7 +35,8 @@
  *  R9  Élément apparié et retenu : `update` si un champ de sa nature diffère
  *      (document : title/description/content ; suivi : title/periodicite ;
  *      signature : title/description/nombre ; intercalaire :
- *      title/description), sinon `unchanged`.
+ *      title/description), ou si son chapitre, son ordre ou son uuid
+ *      diffèrent du fichier (E6), sinon `unchanged`.
  *  R10 Élément non apparié : `insert` avec le `sort_order` du fichier et
  *      son `uuid` s'il en a un.
  *  R11 Mode remplacement : tout élément local non supprimé et non apparié
@@ -56,6 +62,20 @@
  *      chaînes ; repli lexicographique si l'un n'est pas lisible.
  *  E5  Les suppressions du mode remplacement suivent l'ordre local
  *      (sort_order, id) et non celui d'une HashMap.
+ *  E6  (audit adverse du 2026-09-25, 7 défauts rouges) Quand le fichier
+ *      gagne (remplacement, ou plus récent en fusion), l'élément reçoit AUSSI
+ *      son chapitre, son `sort_order`, son `uuid` (apparié par titre) et son
+ *      `updated_at` du fichier — le trigger `classeur_stamp` respecte cet
+ *      horodatage, ce qui répare « dernier écrit gagne » après une première
+ *      fusion (la base réestampillait « now », et tout fichier antérieur à la
+ *      fusion était ensuite jugé plus vieux). La restauration d'un instantané
+ *      redevient exacte (ordre, emplacement, contenu des éléments supprimés
+ *      puis restaurés), ce que Registre obtenait en purgeant et réinsérant.
+ *  E7  Appariement par slug/titre CONSOMMÉ : deux chapitres de même slug ou
+ *      deux éléments de même titre (fichiers v1) s'apparient un à un dans
+ *      l'ordre, au lieu de tous tomber sur le premier (doublons / écrasement).
+ *  E8  Un élément au titre vide n'est ignoré que s'il n'a pas d'uuid (sinon il
+ *      s'apparie par uuid) : un export est un point fixe du remplacement.
  */
 
 import { slugify } from '#/lib/classeur/slug.ts'
@@ -154,6 +174,8 @@ export type ActionFusion =
       label: string
       icon: string
       description: string
+      /** Mode remplacement seulement (E6). */
+      sort_order?: number
     }
   | {
       type: 'restaurerChapitre'
@@ -161,6 +183,7 @@ export type ActionFusion =
       label: string
       icon: string
       description: string
+      sort_order?: number
     }
   | { type: 'supprimerChapitre'; id: number }
   | {
@@ -168,10 +191,30 @@ export type ActionFusion =
       chapitre: RefChapitre
       uuid: string | null
       sort_order: number
+      /** Horodatage du fichier, en ISO ; absent si le fichier n'en a pas. */
+      updated_at?: string
       item: ChampsItem
     }
-  | { type: 'modifierItem'; id: number; item: ChampsItem }
-  | { type: 'restaurerItem'; kind: ItemKind; id: number }
+  | {
+      type: 'modifierItem'
+      id: number
+      item: ChampsItem
+      /** Présent si l'élément change de chapitre (E6). */
+      chapitre?: RefChapitre
+      sort_order?: number
+      /** Présent si l'élément a été apparié par titre et que le fichier porte un uuid (E6). */
+      uuid?: string
+      updated_at?: string
+    }
+  | {
+      type: 'restaurerItem'
+      id: number
+      item: ChampsItem
+      chapitre: RefChapitre
+      sort_order: number
+      uuid?: string
+      updated_at?: string
+    }
   | { type: 'supprimerItem'; kind: ItemKind; id: number }
 
 export interface PlanFusion {
@@ -200,6 +243,13 @@ function instant(s: string): number {
   // Fractions au-delà de la milliseconde (Postgres : microsecondes).
   t = t.replace(/(\.\d{3})\d+/, '$1')
   return Date.parse(t)
+}
+
+/** Horodatage du fichier normalisé en ISO pour la base ; `undefined` si absent ou illisible. */
+export function horodatageIso(s: string | undefined): string | undefined {
+  if (s === undefined || s === '') return undefined
+  const t = instant(s)
+  return Number.isFinite(t) ? new Date(t).toISOString() : undefined
 }
 
 /** R7 : `true` si le fichier doit s'appliquer (plus récent, ou horodatage manquant). */
@@ -396,30 +446,34 @@ export function planifierFusion(
     deleted: 0,
   }
 
-  // Index des chapitres (R1)
+  // Index des chapitres (R1). Le repli par slug est une FILE consommée (E7).
   const chapitresLocaux = [...local.chapters].sort(
     (a, b) => a.sort_order - b.sort_order || a.id - b.id,
   )
   const chapitresParUuid = new Map<string, DbChapter>()
-  const chapitresParSlug = new Map<string, DbChapter>()
+  const chapitresParSlug = new Map<string, DbChapter[]>()
   for (const c of chapitresLocaux) {
     if (c.uuid && !chapitresParUuid.has(c.uuid)) chapitresParUuid.set(c.uuid, c)
     if (c.deleted_at === null) {
       const slug = slugify(c.label)
-      if (!chapitresParSlug.has(slug)) chapitresParSlug.set(slug, c)
+      const file = chapitresParSlug.get(slug)
+      if (file === undefined) chapitresParSlug.set(slug, [c])
+      else file.push(c)
     }
   }
 
-  // Index des éléments (R5)
+  // Index des éléments (R5). Le repli par titre est une FILE consommée (E7).
   const itemsLocaux = flattenItems(local.content)
   const itemsParUuid = new Map<string, ChapterItem>()
-  const itemsParRepli = new Map<string, ChapterItem>()
+  const itemsParRepli = new Map<string, ChapterItem[]>()
   for (const it of itemsLocaux) {
     if (it.data.uuid && !itemsParUuid.has(it.data.uuid))
       itemsParUuid.set(it.data.uuid, it)
     if (it.data.deleted_at === null) {
       const cle = cleRepli(it.data.chapter_id, it.kind, it.data.title)
-      if (!itemsParRepli.has(cle)) itemsParRepli.set(cle, it)
+      const file = itemsParRepli.get(cle)
+      if (file === undefined) itemsParRepli.set(cle, [it])
+      else file.push(it)
     }
   }
 
@@ -435,11 +489,11 @@ export function planifierFusion(
   let indexNouveau = 0
 
   for (const chJson of fichier.chapters) {
-    const ref = apparierChapitre(chJson)
+    const { ref, restaure: chapitreRestaure } = apparierChapitre(chJson)
     const chapterIdLocal = ref.type === 'local' ? ref.id : null
 
     for (const item of chJson.items) {
-      // R4
+      // R4 (+ E8)
       if (!estKindConnu(item.kind)) {
         warnings.push(
           `Chapitre '${chJson.label}': item de type inconnu '${item.kind}' ignoré`,
@@ -448,38 +502,71 @@ export function planifierFusion(
         apercu.push(ligne('skip', item.kind, item.title, chJson))
         continue
       }
-      if (item.title.trim() === '') {
+      if (item.title.trim() === '' && item.uuid === undefined) {
         warnings.push(`Chapitre '${chJson.label}': item sans titre ignoré`)
         resultat.skipped += 1
         apercu.push(ligne('skip', item.kind, '(sans titre)', chJson))
         continue
       }
       const kind = item.kind
+      const titreAffiche =
+        item.title.trim() === '' ? '(sans titre)' : item.title
+      const updated_at = horodatageIso(item.updated_at)
 
-      // R5 (+ E2)
+      // R5 (+ E2, E7)
       let existant =
         item.uuid !== undefined ? itemsParUuid.get(item.uuid) : undefined
       if (existant !== undefined && existant.kind !== kind) existant = undefined
+      let parTitre = false
       if (existant === undefined && chapterIdLocal !== null) {
-        existant = itemsParRepli.get(cleRepli(chapterIdLocal, kind, item.title))
+        const file = itemsParRepli.get(
+          cleRepli(chapterIdLocal, kind, item.title),
+        )
+        existant = file?.shift()
+        parTitre = existant !== undefined
       }
 
       if (existant !== undefined) {
         itemsApparies.add(cleItem(existant.kind, existant.data.id))
+        // Un uuid du fichier adopté par un élément apparié par titre (E6) :
+        // les fusions suivantes s'apparieront par uuid.
+        const uuid =
+          parTitre &&
+          item.uuid !== undefined &&
+          item.uuid !== existant.data.uuid
+            ? item.uuid
+            : undefined
 
-        // R6
+        // R6 (+ E1, E6)
         if (existant.data.deleted_at !== null) {
-          if (replace) {
+          if (replace || chapitreRestaure) {
+            const champs = champsDepuisFichier(
+              item,
+              kind,
+              existant,
+              fichier,
+              local.periodicites,
+              warnings,
+            )
+            if (champs === null) {
+              resultat.skipped += 1
+              apercu.push(ligne('skip', kind, titreAffiche, chJson))
+              continue
+            }
             actions.push({
               type: 'restaurerItem',
-              kind: existant.kind,
               id: existant.data.id,
+              item: champs,
+              chapitre: ref,
+              sort_order: item.sort_order,
+              ...(uuid !== undefined ? { uuid } : {}),
+              ...(updated_at !== undefined ? { updated_at } : {}),
             })
             resultat.inserted += 1
-            apercu.push(ligne('insert', kind, item.title, chJson))
+            apercu.push(ligne('insert', kind, titreAffiche, chJson))
           } else {
             resultat.skipped += 1
-            apercu.push(ligne('skip', kind, item.title, chJson))
+            apercu.push(ligne('skip', kind, titreAffiche, chJson))
           }
           continue
         }
@@ -493,7 +580,7 @@ export function planifierFusion(
           continue
         }
 
-        // R9
+        // R9 (+ E6)
         const champs = champsDepuisFichier(
           item,
           kind,
@@ -504,17 +591,29 @@ export function planifierFusion(
         )
         if (champs === null) {
           resultat.skipped += 1
-          apercu.push(ligne('skip', kind, item.title, chJson))
+          apercu.push(ligne('skip', kind, titreAffiche, chJson))
           continue
         }
-        if (champsDifferent(champs, existant)) {
+        const bouge =
+          chapterIdLocal === null || existant.data.chapter_id !== chapterIdLocal
+        const ordreDiffere = existant.data.sort_order !== item.sort_order
+        if (
+          champsDifferent(champs, existant) ||
+          bouge ||
+          ordreDiffere ||
+          uuid !== undefined
+        ) {
           actions.push({
             type: 'modifierItem',
             id: existant.data.id,
             item: champs,
+            ...(bouge ? { chapitre: ref } : {}),
+            ...(ordreDiffere ? { sort_order: item.sort_order } : {}),
+            ...(uuid !== undefined ? { uuid } : {}),
+            ...(updated_at !== undefined ? { updated_at } : {}),
           })
           resultat.updated += 1
-          apercu.push(ligne('update', kind, item.title, chJson))
+          apercu.push(ligne('update', kind, titreAffiche, chJson))
         } else {
           resultat.unchanged += 1
         }
@@ -532,7 +631,7 @@ export function planifierFusion(
       )
       if (champs === null) {
         resultat.skipped += 1
-        apercu.push(ligne('skip', kind, item.title, chJson))
+        apercu.push(ligne('skip', kind, titreAffiche, chJson))
         continue
       }
       actions.push({
@@ -540,10 +639,11 @@ export function planifierFusion(
         chapitre: ref,
         uuid: item.uuid ?? null,
         sort_order: item.sort_order,
+        ...(updated_at !== undefined ? { updated_at } : {}),
         item: champs,
       })
       resultat.inserted += 1
-      apercu.push(ligne('insert', kind, item.title, chJson))
+      apercu.push(ligne('insert', kind, titreAffiche, chJson))
     }
   }
 
@@ -583,15 +683,20 @@ export function planifierFusion(
 
   return { actions, resultat, apercu, warnings }
 
-  // R1, R2, R3, E1
-  function apparierChapitre(chJson: ChapterJson): RefChapitre {
+  // R1, R2, R3, E1, E6, E7
+  function apparierChapitre(chJson: ChapterJson): {
+    ref: RefChapitre
+    restaure: boolean
+  } {
     let apparie =
       chJson.uuid !== undefined ? chapitresParUuid.get(chJson.uuid) : undefined
-    apparie ??= chapitresParSlug.get(slugify(chJson.label))
+    apparie ??= chapitresParSlug.get(slugify(chJson.label))?.shift()
 
     if (apparie === undefined) {
       const index = indexNouveau
       indexNouveau += 1
+      // R3 en fusion : en fin de liste. En remplacement (E6) : l'ordre du
+      // fichier, sinon la passe suivante réordonnerait ce qu'elle vient de créer.
       actions.push({
         type: 'creerChapitre',
         index,
@@ -599,28 +704,33 @@ export function planifierFusion(
         label: chJson.label,
         icon: chJson.icon,
         description: chJson.description,
-        sort_order: prochainOrdreChapitre,
+        sort_order: replace ? chJson.sort_order : prochainOrdreChapitre,
       })
       prochainOrdreChapitre += 1
       resultat.inserted += 1
       apercu.push(ligne('insert', 'chapter', chJson.label, chJson))
-      return { type: 'nouveau', index }
+      return { ref: { type: 'nouveau', index }, restaure: false }
     }
 
     chapitresApparies.add(apparie.id)
+    const ordreDiffere = replace && apparie.sort_order !== chJson.sort_order
     const champs = {
       label: chJson.label,
       icon: chJson.icon,
       description: chJson.description,
+      ...(ordreDiffere ? { sort_order: chJson.sort_order } : {}),
     }
     if (apparie.deleted_at !== null) {
       actions.push({ type: 'restaurerChapitre', id: apparie.id, ...champs })
       resultat.inserted += 1
       apercu.push(ligne('insert', 'chapter', chJson.label, chJson))
-    } else if (
+      return { ref: { type: 'local', id: apparie.id }, restaure: true }
+    }
+    if (
       apparie.label !== chJson.label ||
       apparie.icon !== chJson.icon ||
-      apparie.description !== chJson.description
+      apparie.description !== chJson.description ||
+      ordreDiffere
     ) {
       actions.push({ type: 'modifierChapitre', id: apparie.id, ...champs })
       resultat.updated += 1
@@ -628,7 +738,7 @@ export function planifierFusion(
     } else {
       resultat.unchanged += 1
     }
-    return { type: 'local', id: apparie.id }
+    return { ref: { type: 'local', id: apparie.id }, restaure: false }
   }
 }
 

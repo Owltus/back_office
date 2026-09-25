@@ -43,7 +43,7 @@ describe('instantaneEgal', () => {
     expect(retirerMetadata(a)).not.toHaveProperty('_metadata')
   })
 
-  it('distingue une donnée qui change, y compris updated_at d’un élément et l’ordre des tableaux', () => {
+  it('distingue une donnée qui change et l’ordre des tableaux, mais IGNORE updated_at (réestampillé par la base)', () => {
     const autreTitre = fichier([
       chJson({
         label: 'A',
@@ -57,7 +57,10 @@ describe('instantaneEgal', () => {
         items: [itJson({ kind: 'document', title: 'D', updated_at: 'y' })],
       }),
     ])
-    expect(instantaneEgal(base, autreDate)).toBe(false)
+    // Deux états au même contenu ne différaient que par les horodatages que
+    // la base pose elle-même : chaque restauration empilait un instantané
+    // de sécurité inutile.
+    expect(instantaneEgal(base, autreDate)).toBe(true)
     const deux = fichier([chJson({ label: 'A' }), chJson({ label: 'B' })])
     const inverse = fichier([chJson({ label: 'B' }), chJson({ label: 'A' })])
     expect(instantaneEgal(deux, inverse)).toBe(false)

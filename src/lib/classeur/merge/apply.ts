@@ -64,7 +64,9 @@ import {
 } from '#/lib/classeur/service.ts'
 import type {
   ChapterInput,
+  ChapterPatch,
   ItemInput,
+  ItemPatch,
   OptionsCreation,
 } from '#/lib/classeur/service.ts'
 import type { ItemKind } from '#/lib/classeur/types.ts'
@@ -83,20 +85,20 @@ export interface Ecrivain {
     input: ChapterInput,
     options?: OptionsCreation,
   ) => Promise<number>
-  updateChapter: (id: number, patch: Partial<ChapterInput>) => Promise<void>
-  restaurerChapter: (id: number, patch?: Partial<ChapterInput>) => Promise<void>
+  updateChapter: (id: number, patch: ChapterPatch) => Promise<void>
+  restaurerChapter: (id: number, patch?: ChapterPatch) => Promise<void>
   softDeleteChapter: (id: number) => Promise<void>
   createItem: (
     chapterId: number,
     item: ItemInput,
     options?: OptionsCreation,
   ) => Promise<number>
-  updateItem: (
+  updateItem: (kind: ItemKind, id: number, patch: ItemPatch) => Promise<void>
+  restaurerItem: (
     kind: ItemKind,
     id: number,
-    patch: ItemInput['input'],
+    patch?: ItemPatch,
   ) => Promise<void>
-  restaurerItem: (kind: ItemKind, id: number) => Promise<void>
   softDeleteItem: (kind: ItemKind, id: number) => Promise<void>
 }
 
@@ -157,6 +159,9 @@ export async function executerPlan(
           label: action.label,
           icon: action.icon,
           description: action.description,
+          ...(action.sort_order !== undefined
+            ? { sort_order: action.sort_order }
+            : {}),
         })
         break
       case 'restaurerChapitre':
@@ -164,6 +169,9 @@ export async function executerPlan(
           label: action.label,
           icon: action.icon,
           description: action.description,
+          ...(action.sort_order !== undefined
+            ? { sort_order: action.sort_order }
+            : {}),
         })
         break
       case 'supprimerChapitre':
@@ -174,18 +182,37 @@ export async function executerPlan(
         await ecrivain.createItem(chapterId, action.item, {
           sort_order: action.sort_order,
           ...(action.uuid !== null ? { uuid: action.uuid } : {}),
+          ...(action.updated_at !== undefined
+            ? { updated_at: action.updated_at }
+            : {}),
         })
         break
       }
       case 'modifierItem':
-        await ecrivain.updateItem(
-          action.item.kind,
-          action.id,
-          action.item.input,
-        )
+        await ecrivain.updateItem(action.item.kind, action.id, {
+          ...action.item.input,
+          ...(action.chapitre !== undefined
+            ? { chapter_id: resoudreChapitre(action.chapitre, idsNouveaux) }
+            : {}),
+          ...(action.sort_order !== undefined
+            ? { sort_order: action.sort_order }
+            : {}),
+          ...(action.uuid !== undefined ? { uuid: action.uuid } : {}),
+          ...(action.updated_at !== undefined
+            ? { updated_at: action.updated_at }
+            : {}),
+        })
         break
       case 'restaurerItem':
-        await ecrivain.restaurerItem(action.kind, action.id)
+        await ecrivain.restaurerItem(action.item.kind, action.id, {
+          ...action.item.input,
+          chapter_id: resoudreChapitre(action.chapitre, idsNouveaux),
+          sort_order: action.sort_order,
+          ...(action.uuid !== undefined ? { uuid: action.uuid } : {}),
+          ...(action.updated_at !== undefined
+            ? { updated_at: action.updated_at }
+            : {}),
+        })
         break
       case 'supprimerItem':
         await ecrivain.softDeleteItem(action.kind, action.id)

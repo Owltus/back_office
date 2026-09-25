@@ -542,6 +542,20 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   transaction : un échec au milieu laisse un état partiel restaurable) ;
   élagage à 10 entrées, 42501 ignoré. Restauration = fusion en
   remplacement avec instantané de sécurité, jamais de purge physique.
+  **Audit adverse du 2026-09-25** (`merge/audit.property.test.ts`, 27 tests
+  de propriétés fast-check sur un simulateur en mémoire) : 7 défauts rouges,
+  tous corrigés (E6…E8 en tête de `merge.ts`). Les trois qui comptent :
+  (1) le trigger `classeur_stamp` réestampillait `updated_at = now()` à
+  chaque écriture, donc « dernier écrit gagne » était cassé dès la deuxième
+  fusion — il RESPECTE désormais un `updated_at` fourni
+  (`classeur_stamp_updated_at_2026-09-25.sql`), et la fusion passe celui du
+  fichier ; (2) un élément apparié n'était jamais déplacé ni réordonné, et un
+  supprimé était restauré sans ses champs — la restauration d'un instantané
+  n'était donc PAS exacte (Registre purgeait et réinsérait) ; quand le
+  fichier gagne, chapitre, ordre, uuid et horodatage suivent ; (3) les
+  fichiers v1 à titres ou slugs en doublon écrasaient/dupliquaient
+  (appariement par titre désormais consommé un à un). Règle de méthode :
+  « fidèle au Rust » n'est pas « correct » — le Rust avait ces défauts.
 - **UI** : TanStack Query partout (`useClasseur.ts`, `useMerge.ts`,
   invalidation de `classeurKeys.all`, optimistes pour le réordonnancement),
   `isPending` pour les gardes, pas de toasts (alertes inline,

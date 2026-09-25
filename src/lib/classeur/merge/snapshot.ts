@@ -5,9 +5,12 @@
  * Un instantané est un `ClasseurJson` produit par `construireExport` juste
  * avant une fusion. Deux instantanés sont « égaux » quand leurs DONNÉES le
  * sont : le bloc `_metadata` (qui porte `generated_at`, volatil) est écarté
- * de la comparaison ; les `updated_at` des éléments sont des données et
- * restent comparés, comme chez Registre. Sert à ne pas empiler deux fois le
- * même état dans l'historique et à ne pas restaurer un état déjà courant.
+ * de la comparaison, ainsi que les `updated_at` (2026-09-25 : Registre les
+ * comparait, mais ici la base les réestampille à chaque écriture, donc deux
+ * états au contenu identique n'étaient JAMAIS égaux et chaque restauration
+ * empilait un instantané de sécurité inutile). Sert à ne pas empiler deux
+ * fois le même état dans l'historique et à ne pas restaurer un état déjà
+ * courant.
  */
 
 /** Profondeur d'historique conservée par classeur (Registre en gardait 20). */
@@ -36,8 +39,10 @@ function jsonEgal(a: unknown, b: unknown): boolean {
   }
   const oa = a as Record<string, unknown>
   const ob = b as Record<string, unknown>
-  const clesA = Object.keys(oa).filter((k) => oa[k] !== undefined)
-  const clesB = Object.keys(ob).filter((k) => ob[k] !== undefined)
+  const garder = (o: Record<string, unknown>) => (k: string) =>
+    o[k] !== undefined && k !== 'updated_at'
+  const clesA = Object.keys(oa).filter(garder(oa))
+  const clesB = Object.keys(ob).filter(garder(ob))
   if (clesA.length !== clesB.length) return false
   return clesA.every((k) => k in ob && jsonEgal(oa[k], ob[k]))
 }

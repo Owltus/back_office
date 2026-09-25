@@ -158,7 +158,13 @@ export interface ChapterInput {
 export interface OptionsCreation {
   uuid?: string
   sort_order?: number
+  /** Horodatage à conserver (fusion : celui du fichier). Le trigger
+   * `classeur_stamp` le respecte ; absent → now(). */
+  updated_at?: string
 }
+
+/** Champs d'ordre d'un chapitre, posés par la fusion en remplacement. */
+export type ChapterPatch = Partial<ChapterInput> & { sort_order?: number }
 
 export async function createChapter(
   classeurId: number,
@@ -176,6 +182,7 @@ export async function createChapter(
     sort_order,
   }
   if (options.uuid !== undefined) ligne.uuid = options.uuid
+  if (options.updated_at !== undefined) ligne.updated_at = options.updated_at
   const { data, error } = await supabase
     .from(CHAPTERS_TABLE)
     .insert(ligne)
@@ -192,7 +199,7 @@ export async function createChapter(
  */
 export async function restaurerChapter(
   chapterId: number,
-  patch: Partial<ChapterInput> = {},
+  patch: ChapterPatch = {},
 ): Promise<void> {
   const { error } = await supabase
     .from(CHAPTERS_TABLE)
@@ -221,7 +228,7 @@ export async function fetchChaptersAvecSupprimes(
 
 export async function updateChapter(
   chapterId: number,
-  patch: Partial<ChapterInput>,
+  patch: ChapterPatch,
 ): Promise<void> {
   const { error } = await supabase
     .from(CHAPTERS_TABLE)
@@ -449,6 +456,7 @@ export async function createItem(
     sort_order,
   }
   if (options.uuid !== undefined) ligne.uuid = options.uuid
+  if (options.updated_at !== undefined) ligne.updated_at = options.updated_at
   const { data, error } = await supabase
     .from(ITEM_TABLE[item.kind])
     .insert(ligne)
@@ -458,11 +466,29 @@ export async function createItem(
   return data.id as number
 }
 
-/** Annule la suppression douce d'un élément (fusion en mode remplacement, R6). */
-export async function restaurerItem(kind: ItemKind, id: number): Promise<void> {
+/**
+ * Patch d'un élément : ses champs métier, plus ce que la fusion peut poser
+ * (chapitre cible, ordre, uuid du fichier, horodatage du fichier — respecté
+ * par le trigger `classeur_stamp`). L'interface n'envoie que les champs.
+ */
+export type ItemPatch = Partial<
+  DocumentInput & TrackingSheetInput & SignatureSheetInput
+> & {
+  chapter_id?: number
+  sort_order?: number
+  uuid?: string
+  updated_at?: string
+}
+
+/** Annule la suppression douce, avec les champs du fichier s'il y en a (fusion). */
+export async function restaurerItem(
+  kind: ItemKind,
+  id: number,
+  patch: ItemPatch = {},
+): Promise<void> {
   const { error } = await supabase
     .from(ITEM_TABLE[kind])
-    .update({ deleted_at: null })
+    .update({ ...patch, deleted_at: null })
     .eq('id', id)
   if (error) throw error
 }
@@ -470,7 +496,7 @@ export async function restaurerItem(kind: ItemKind, id: number): Promise<void> {
 export async function updateItem(
   kind: ItemKind,
   id: number,
-  patch: Partial<DocumentInput & TrackingSheetInput & SignatureSheetInput>,
+  patch: ItemPatch,
 ): Promise<void> {
   const { error } = await supabase
     .from(ITEM_TABLE[kind])

@@ -377,7 +377,13 @@ describe('executerPlan — résolution des références', () => {
         item: doc('l1'),
       },
       { type: 'modifierItem', id: 8, item: doc('m') },
-      { type: 'restaurerItem', kind: 'intercalaire', id: 9 },
+      {
+        type: 'restaurerItem',
+        id: 9,
+        item: doc('r'),
+        chapitre: { type: 'nouveau', index: 1 },
+        sort_order: 4,
+      },
       {
         type: 'restaurerChapitre',
         id: 3,
@@ -404,7 +410,7 @@ describe('executerPlan — résolution des références', () => {
       'createItem:102:b1:{"sort_order":2,"uuid":"u"}',
       'createItem:7:l1:{"sort_order":3}',
       'updateItem:document:8',
-      'restaurerItem:intercalaire:9',
+      'restaurerItem:document:9',
       'restaurerChapter:3:R',
       'updateChapter:4',
       'softDeleteItem:document:5',

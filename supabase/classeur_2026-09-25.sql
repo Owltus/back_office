@@ -186,11 +186,19 @@ security invoker
 set search_path to 'public'
 as $function$
 begin
-  new.updated_at := now();
+  -- 2026-09-25 (classeur_stamp_updated_at_2026-09-25.sql) : un `updated_at`
+  -- FOURNI par le client est respecté (fusion JSON : horodatage du fichier,
+  -- règle « dernier écrit gagne ») ; sinon now(), comme avant.
   if tg_op = 'INSERT' then
     new.created_by := auth.uid();
+    if new.updated_at is null then
+      new.updated_at := now();
+    end if;
   else
     new.created_by := private.keep_author(new.created_by, old.created_by);
+    if new.updated_at is not distinct from old.updated_at then
+      new.updated_at := now();
+    end if;
   end if;
   return new;
 end;

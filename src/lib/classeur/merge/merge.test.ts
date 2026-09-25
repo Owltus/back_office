@@ -248,6 +248,8 @@ describe('R7 — dernier écrit gagne (mode fusion)', () => {
       fusion,
     )
     expect(compteurs(plan)).toMatchObject({ updated: 1, unchanged: 1 })
+    // E6 : l'horodatage du fichier voyage avec la modification, en ISO, pour
+    // que la base le conserve (règle « dernier écrit gagne » réparée).
     expect(plan.actions).toEqual([
       {
         type: 'modifierItem',
@@ -256,6 +258,7 @@ describe('R7 — dernier écrit gagne (mode fusion)', () => {
           kind: 'document',
           input: { title: 'Nouveau titre', description: '', content: '' },
         },
+        updated_at: '2026-03-01T11:00:00.000Z',
       },
     ])
     expect(plan.apercu).toEqual([
@@ -510,7 +513,7 @@ describe('R5/R6 — éléments appariés par uuid : autre chapitre, supprimés',
     },
   )
 
-  it('R5 : trouvé par uuid dans un AUTRE chapitre → mis à jour sur place, jamais déplacé', () => {
+  it('R5/E6 : trouvé par uuid dans un AUTRE chapitre → mis à jour ET déplacé vers le chapitre du fichier', () => {
     const f = fichier([
       chJson({
         label: 'B',
@@ -526,6 +529,8 @@ describe('R5/R6 — éléments appariés par uuid : autre chapitre, supprimés',
       }),
     ])
     const plan = planifierFusion(local, f, fusion)
+    // Le Rust laissait l'élément dans A ; un déplacement fait dans Registre
+    // puis exporté n'arrivait jamais. Ici le fichier gagne : il part dans B.
     expect(plan.actions).toEqual([
       {
         type: 'modifierItem',
@@ -534,6 +539,7 @@ describe('R5/R6 — éléments appariés par uuid : autre chapitre, supprimés',
           kind: 'document',
           input: { title: 'Doc', description: '', content: 'v2' },
         },
+        chapitre: { type: 'local', id: 2 },
       },
     ])
     expect(compteurs(plan)).toMatchObject({ updated: 1, inserted: 0 })
@@ -567,7 +573,7 @@ describe('R5/R6 — éléments appariés par uuid : autre chapitre, supprimés',
     ])
   })
 
-  it('R6 remplacement : supprimé localement → restauré tel quel, compté insert', () => {
+  it('R6/E6 remplacement : supprimé localement → restauré AVEC les champs du fichier, compté insert', () => {
     const f = fichier([
       chJson({
         label: 'A',
@@ -590,8 +596,19 @@ describe('R5/R6 — éléments appariés par uuid : autre chapitre, supprimés',
       chJson({ label: 'B', uuid: 'ch-2' }),
     ])
     const plan = planifierFusion(local, f, remplacement)
+    // Le Rust restaurait sans réécrire : un élément modifié puis supprimé
+    // revenait avec un contenu que l'instantané n'avait jamais eu.
     expect(plan.actions).toEqual([
-      { type: 'restaurerItem', kind: 'document', id: 11 },
+      {
+        type: 'restaurerItem',
+        id: 11,
+        item: {
+          kind: 'document',
+          input: { title: 'Effacé', description: '', content: 'ignoré' },
+        },
+        chapitre: { type: 'local', id: 1 },
+        sort_order: 1,
+      },
     ])
     expect(compteurs(plan)).toEqual({
       inserted: 1,
@@ -632,8 +649,13 @@ describe('R11 — mode remplacement : les orphelins locaux sont supprimés (douc
     {
       documents: [
         document({ id: 10, chapter_id: 1, title: 'Reste' }),
-        document({ id: 11, chapter_id: 1, title: 'Part', sort_order: 12 }),
-        document({ id: 12, chapter_id: 3, title: 'Dans un chapitre supprimé' }),
+        document({ id: 11, chapter_id: 1, title: 'Part', sort_order: 11 }),
+        document({
+          id: 12,
+          chapter_id: 3,
+          title: 'Dans un chapitre supprimé',
+          sort_order: 12,
+        }),
       ],
       signature_sheets: [
         signature({
