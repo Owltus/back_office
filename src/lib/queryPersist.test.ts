@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { doitPersister, estSensible } from '#/lib/queryPersist.ts'
+import { doitPersister, estSensible, survitAuJson } from '#/lib/queryPersist.ts'
 import type { Query } from '@tanstack/react-query'
 
 /*
@@ -18,7 +18,8 @@ import type { Query } from '@tanstack/react-query'
 const requete = (
   queryKey: ReadonlyArray<unknown>,
   status: 'success' | 'error' | 'pending' = 'success',
-) => ({ queryKey, state: { status } }) as unknown as Query
+  data: unknown = { ok: true },
+) => ({ queryKey, state: { status, data } }) as unknown as Query
 
 describe('estSensible — ce qui ne doit jamais toucher le disque', () => {
   it('refuse les noms des clients du petit-déjeuner', () => {
@@ -96,5 +97,62 @@ describe('doitPersister', () => {
 
   it('refuse une clé sensible même quand la lecture a réussi', () => {
     expect(doitPersister(requete(['pdj', 'day', '2026-09-24']))).toBe(false)
+  })
+
+  it('refuse une donnée qui ne survivrait pas au JSON — le bug du 2026-09-25', () => {
+    // `RaproDay` tel que le rend `fetchRaproDay` : restauré depuis le disque,
+    // `carriedManual` valait `{}` et `/repjour` plantait au premier rendu.
+    const raproDay = {
+      reportDate: '2026-09-24',
+      statuses: new Map([[101, 'refus']]),
+      carriedManual: new Set([102]),
+      materialized: new Set<number>(),
+    }
+    expect(
+      doitPersister(requete(['rapro', 'day', '2026-09-24'], 'success', raproDay)),
+    ).toBe(false)
+  })
+})
+
+describe('survitAuJson — ce que le disque sait rendre intact', () => {
+  it('accepte primitives, tableaux et objets nus, à toute profondeur', () => {
+    expect(survitAuJson(null)).toBe(true)
+    expect(survitAuJson('x')).toBe(true)
+    expect(survitAuJson(0)).toBe(true)
+    expect(survitAuJson(false)).toBe(true)
+    expect(survitAuJson([])).toBe(true)
+    expect(survitAuJson({})).toBe(true)
+    expect(survitAuJson({ a: [{ b: [1, 'deux', null, { c: true }] }] })).toBe(true)
+    expect(survitAuJson(Object.create(null))).toBe(true)
+  })
+
+  it('refuse Set, Map, Date et instances de classe, même enfouis', () => {
+    expect(survitAuJson(new Set([1]))).toBe(false)
+    expect(survitAuJson(new Map())).toBe(false)
+    expect(survitAuJson(new Date())).toBe(false)
+    class Ligne {}
+    expect(survitAuJson(new Ligne())).toBe(false)
+    expect(survitAuJson({ ok: [1, { profond: new Set() }] })).toBe(false)
+    expect(survitAuJson([[[new Map()]]])).toBe(false)
+  })
+
+  it('refuse ce que JSON remplace par null ou omet', () => {
+    expect(survitAuJson(Number.NaN)).toBe(false)
+    expect(survitAuJson(Number.POSITIVE_INFINITY)).toBe(false)
+    expect(survitAuJson(() => 1)).toBe(false)
+    expect(survitAuJson(10n)).toBe(false)
+  })
+
+  it('tout ce qu il accepte ressort du round-trip JSON identique', () => {
+    // Oracle indépendant : la définition même de la fonction.
+    const acceptes: unknown[] = [
+      { caJour: 4242, lignes: [{ room: 101, ok: true, note: null }] },
+      [1, [2, [3, 'quatre']]],
+      { vide: {}, liste: [] },
+    ]
+    for (const v of acceptes) {
+      expect(survitAuJson(v)).toBe(true)
+      expect(JSON.parse(JSON.stringify(v))).toEqual(v)
+    }
   })
 })

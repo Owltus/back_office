@@ -17,7 +17,7 @@ import { brancherPersistance } from '#/lib/queryPersist.ts'
  * `pg_stat_statements` qui répondait sans rien mesurer).
  */
 
-const CLE = 'bo.query.cache.v1'
+const CLE = 'bo.query.cache.v2'
 
 function clientNeuf() {
   return new QueryClient({
@@ -76,6 +76,51 @@ describe('brancherPersistance — le cache atteint vraiment le disque', () => {
     expect(brut).toContain('4242')
     // …et le nom du client n'y est pas.
     expect(brut).not.toContain('MARTIN')
+  })
+
+  it('n’écrit PAS une donnée à Set/Map — le bug du 2026-09-25', async () => {
+    const qc = clientNeuf()
+    brancherPersistance(qc)
+
+    await qc.fetchQuery({
+      queryKey: ['rapro', 'day', '2026-09-24'],
+      queryFn: () =>
+        Promise.resolve({
+          reportDate: '2026-09-24',
+          statuses: new Map([[101, 'refus']]),
+          carriedManual: new Set([102]),
+          materialized: new Set<number>(),
+        }),
+    })
+    await qc.fetchQuery({
+      queryKey: ['repjour', 'dashboard', '2026-09-24'],
+      queryFn: () => Promise.resolve({ caJour: 4242 }),
+    })
+    await vi.advanceTimersByTimeAsync(3_000)
+
+    const brut = window.localStorage.getItem(CLE)
+    expect(brut).not.toBeNull()
+    // La lecture saine est bien là ; celle à Set/Map n'y est pas.
+    expect(brut).toContain('4242')
+    expect(brut).not.toContain('"rapro"')
+
+    // Et un client neuf ne la voit pas : il repartira en réseau, comme avant
+    // le cache persisté — au lieu d'itérer un `{}`.
+    const second = clientNeuf()
+    brancherPersistance(second)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(second.getQueryData(['rapro', 'day', '2026-09-24'])).toBeUndefined()
+    expect(second.getQueryData(['repjour', 'dashboard', '2026-09-24'])).toEqual({
+      caJour: 4242,
+    })
+  })
+
+  it('efface le cache v1 périmé au branchement', () => {
+    // Les caches v1 déjà écrits contiennent des Set aplatis : ils ne doivent
+    // plus être ni lus (buster) ni laissés sur un poste partagé.
+    window.localStorage.setItem('bo.query.cache.v1', '{"buster":"v1"}')
+    brancherPersistance(clientNeuf())
+    expect(window.localStorage.getItem('bo.query.cache.v1')).toBeNull()
   })
 
   it('restaure les données dans un client NEUF — le cas d’usage réel', async () => {

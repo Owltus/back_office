@@ -419,6 +419,25 @@ Le temps de chargement perçu vient surtout de l'auth cliente + du mode SPA. Rè
     `comptes`, `facturation`, `caisse/cautions` (`select(*)` + commentaire
     libre). Toute nouvelle lecture nominative doit y être ajoutée ;
     `queryPersist.test.ts` échoue si on retire une entrée.
+  - ⚠ **CE QUI NE SURVIT PAS AU JSON N'EST PAS ÉCRIT** (bug du 2026-09-25,
+    trouvé par l'utilisateur en local : « carriedManual is not iterable »).
+    Le persister écrit du JSON, et un `Set`/`Map` y devient `{}` ; restauré
+    au démarrage suivant, `RaproDay` faisait planter `/repjour` (bande de
+    synthèse) et `/rapro` au lieu de les aider — l'écran planté est PIRE que
+    l'écran vide que le cache devait éviter. `doitPersister` passe désormais
+    la DONNÉE au crible de `survitAuJson` (primitives finies, tableaux,
+    objets nus, à toute profondeur ; Set, Map, Date, instances refusés) :
+    une `queryFn` qui rend un `Set` n'est pas persistée, et repart en réseau
+    comme avant. Version de cache passée à `v2`, clé `v1` effacée au
+    branchement (`CLES_PERIMEES`). Réflexe pour toute nouvelle `queryFn` :
+    rendre des objets nus si on veut qu'elle serve hors ligne.
+  - ⚠ **Ne jamais poser une mutation de test sur un fichier que le serveur
+    Vite sert à un navigateur en cours de vérification.** Le 2026-09-25, la
+    mutation `return true` de `survitAuJson` a été servie à chaud pendant le
+    rechargement de contrôle : l'instance mutée a écrit un cache v2 corrompu,
+    puis le rechargement à chaud l'a restauré — la page « réparée » a
+    replanté sous mes yeux. Vérifier la mutation par vitest seul, PUIS
+    recharger le navigateur, jamais les deux en parallèle.
   - **Les ÉCRITURES ne sont pas mises en file** et ne repartent pas toutes
     seules. Décision explicite : rejouer des écritures différées sur une caisse
     ou un rapprochement demanderait une résolution de conflits que personne n'a

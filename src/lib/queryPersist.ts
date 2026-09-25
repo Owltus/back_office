@@ -39,10 +39,22 @@ import type { Query, QueryClient } from '@tanstack/react-query'
  * simplement vide, ce qui est pire que le mal soigné. Un changement de version
  * jette tout le cache : l'application repart en réseau, c'est-à-dire
  * exactement le comportement d'avant ce module.
+ *
+ * Historique :
+ *   v1  2026-09-24  première version.
+ *   v2  2026-09-25  les caches v1 contiennent des `Set`/`Map` aplatis en `{}`
+ *                   (voir `survitAuJson`) : `/repjour` plantait à la
+ *                   restauration (« carriedManual is not iterable »). Le
+ *                   changement de version les jette, et `CLES_PERIMEES` les
+ *                   efface du disque.
  */
-const VERSION_CACHE = 'v1'
+const VERSION_CACHE = 'v2'
 
 const CLE_STOCKAGE = `bo.query.cache.${VERSION_CACHE}`
+
+/** Clés des versions précédentes, à effacer au branchement : un cache que plus
+ * personne ne lit n'a rien à faire sur un poste partagé. */
+const CLES_PERIMEES = ['bo.query.cache.v1']
 
 /**
  * Durée au-delà de laquelle un cache restauré est jeté.
@@ -95,16 +107,61 @@ export function estSensible(cle: ReadonlyArray<unknown>): boolean {
 }
 
 /**
+ * Vrai si cette valeur ressort de `JSON.parse(JSON.stringify(v))` IDENTIQUE.
+ *
+ * Le persister écrit du JSON, et JSON ne connaît que les primitives, les
+ * tableaux et les objets nus. Un `Set` ou une `Map` y deviennent `{}`, une
+ * `Date` une chaîne, une instance de classe un objet sans méthodes. Le cache
+ * était alors restauré dans du code qui itère un `Set` ou appelle `.get()`
+ * sur une `Map` — et l'écran plantait, ce qui est PIRE que l'écran vide que
+ * ce module devait éviter (bug du 2026-09-25 : `RaproDay.carriedManual`,
+ * `RaproDay.statuses`, lus par `/repjour` et `/rapro`).
+ *
+ * Plutôt que d'énumérer les clés concernées (la prochaine `queryFn` qui
+ * rendra un `Set` serait oubliée), on regarde la DONNÉE : ce qui ne survit
+ * pas au JSON n'est pas écrit, point. La requête garde son cache mémoire et
+ * repart en réseau au démarrage suivant, comme avant le 2026-09-24. Un
+ * agrégat de 17 ko se parcourt en une fraction de milliseconde, et l'écriture
+ * est débitée à 2 s : le coût est nul.
+ */
+export function survitAuJson(valeur: unknown): boolean {
+  if (valeur === null) return true
+  switch (typeof valeur) {
+    case 'string':
+    case 'boolean':
+      return true
+    case 'number':
+      // NaN et ±Infinity deviennent `null` : le chiffre restauré mentirait.
+      return Number.isFinite(valeur)
+    case 'undefined':
+      // Une propriété absente ne se voit pas ; c'est le seul cas toléré.
+      return true
+    case 'object':
+      break
+    default:
+      // function, bigint, symbol
+      return false
+  }
+  if (Array.isArray(valeur)) return valeur.every(survitAuJson)
+  const proto = Object.getPrototypeOf(valeur) as unknown
+  if (proto !== Object.prototype && proto !== null) return false
+  return Object.values(valeur as Record<string, unknown>).every(survitAuJson)
+}
+
+/**
  * Vrai si cette requête mérite d'être écrite sur le disque.
  *
- * Deux refus, pour deux raisons différentes :
+ * Trois refus, pour trois raisons différentes :
  *   - la clé est sensible (voir ci-dessus) ;
  *   - la requête n'a pas de données réussies à offrir. Persister une erreur
- *     n'aurait aucun sens : au prochain démarrage on restaurerait une panne.
+ *     n'aurait aucun sens : au prochain démarrage on restaurerait une panne ;
+ *   - la donnée ne survit pas au JSON (voir `survitAuJson`). La restaurer
+ *     ferait planter la page au lieu de l'aider.
  */
 export function doitPersister(query: Query): boolean {
   if (query.state.status !== 'success') return false
-  return !estSensible(query.queryKey)
+  if (estSensible(query.queryKey)) return false
+  return survitAuJson(query.state.data)
 }
 
 /**
@@ -128,6 +185,8 @@ export function brancherPersistance(queryClient: QueryClient): void {
   if (typeof window === 'undefined') return
 
   try {
+    for (const cle of CLES_PERIMEES) window.localStorage.removeItem(cle)
+
     const persister = createSyncStoragePersister({
       storage: window.localStorage,
       key: CLE_STOCKAGE,
