@@ -587,37 +587,25 @@ export function FormeClasseurListe({ cartes = 3 }: { cartes?: number }) {
 }
 
 /**
- * /classeur/$id : section « Chapitres » (titre + recherche à droite, comme le
- * second PageHeader de la page) puis N cartes de chapitre (icône + libellé,
- * description, pastille de statut). `enTete` à false quand le board, qui rend
- * déjà son PageHeader, ne veut que la grille.
+ * /classeur/$id (accueil) : champ de recherche pleine largeur puis la grille
+ * des cartes d'actions (icône + titre + sous-titre), comme dans Registre —
+ * les chapitres sont dans la colonne, pas dans la page.
  */
-export function FormeClasseurDashboard({
-  chapitres = 3,
-  enTete = true,
-}: {
-  chapitres?: number
-  enTete?: boolean
-}) {
+export function FormeClasseurDashboard({ cartes = 7 }: { cartes?: number }) {
   return (
     <>
-      {enTete && (
-        <div className="flex flex-wrap items-center gap-3" aria-hidden="true">
-          <div className="min-w-0 flex-1">
-            <Skeleton className="h-7 w-28" />
-          </div>
-          <Skeleton className="h-8 w-full rounded-md sm:w-64" />
-        </div>
-      )}
+      <Skeleton className="h-9 w-full rounded-md" aria-hidden="true" />
       <div className={GRILLE_CARTES} aria-hidden="true">
-        {Array.from({ length: chapitres }).map((_, i) => (
-          <div key={i} className="rounded-xl border border-border bg-card p-4">
-            <div className="flex items-center gap-3">
-              <Skeleton className="size-5 rounded-sm" />
+        {Array.from({ length: cartes }).map((_, i) => (
+          <div
+            key={i}
+            className="flex items-center gap-4 rounded-xl border border-border bg-card px-5 py-4"
+          >
+            <Skeleton className="size-5 rounded-sm" />
+            <div className="flex-1">
               <Skeleton className="h-4 w-36" />
+              <Skeleton className="mt-2 h-3 w-48" />
             </div>
-            <Skeleton className="mt-3 h-3 w-48" />
-            <Skeleton className="mt-3 h-5 w-20 rounded-full" />
           </div>
         ))}
       </div>

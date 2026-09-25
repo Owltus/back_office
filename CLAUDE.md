@@ -565,6 +565,12 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   est cible de dépôt (`chapterDropId`), les cartes posent `ItemDragData`.
   Routes minces : la logique vit dans `ClasseurListActions` /
   `ClasseurDashboardActions`.
+- **Accueil d'un classeur (décision utilisateur du 2026-09-26)** : les
+  chapitres ne sont PAS répétés dans la page (ils vivent dans la colonne de
+  gauche, pleine hauteur, 20 rem — « trop petite » à 16 rem) ; le corps de
+  l'accueil est la grille de CARTES D'ACTIONS comme dans Registre (nouveau
+  chapitre, sommaire, PDF, ZIP, JSON, import, historique) sous la recherche ;
+  l'en-tête ne garde que l'édition du classeur.
 - **Squelettes** : variante `classeur` de `RouteSkeleton`, forme choisie par
   `paramsClasseur(pathname)` (liste, tableau de bord, chapitre, détail) ;
   silhouettes `FormeClasseurListe`, `FormeClasseurDashboard`, `FormeChapitre`,

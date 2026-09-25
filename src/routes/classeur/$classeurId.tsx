@@ -81,7 +81,7 @@ function ClasseurShell({ classeurId }: { classeurId: number }) {
             <Sheet open={tiroirOuvert} onOpenChange={setTiroirOuvert}>
               <SheetContent
                 side="left"
-                className="w-72 p-0"
+                className="w-80 p-0"
                 showCloseButton={false}
               >
                 <SheetHeader className="sr-only">
@@ -97,16 +97,16 @@ function ClasseurShell({ classeurId }: { classeurId: number }) {
               </SheetContent>
             </Sheet>
           ) : (
-            /* Gouttière au même padding que `PageContainer` : la carte de la
-               colonne s'aligne sur l'en-tête de la page à sa droite. */
-            <div className="hidden shrink-0 py-4 pl-4 md:py-6 md:pl-6 lg:block">
-              <aside
-                aria-label="Chapitres"
-                className="classeur-sidebar flex w-64 flex-col rounded-xl border border-border bg-card"
-              >
-                <ChapterSidebar classeurId={classeurId} />
-              </aside>
-            </div>
+            /* Colonne PLEINE HAUTEUR collée au bord gauche, bordure à droite,
+               comme la sidebar de Registre — décision utilisateur du
+               2026-09-26 (« trop petite ») : 20 rem au lieu d'une carte de
+               16 rem dans une gouttière. Elle défile en interne. */
+            <aside
+              aria-label="Chapitres"
+              className="classeur-sidebar hidden w-80 shrink-0 border-r border-border bg-card lg:flex lg:flex-col"
+            >
+              <ChapterSidebar classeurId={classeurId} />
+            </aside>
           )}
 
           <div className="flex min-w-0 flex-1 flex-col">
