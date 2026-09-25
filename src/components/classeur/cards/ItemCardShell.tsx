@@ -3,7 +3,7 @@ import type { MouseEvent, ReactNode } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Check, FileDown, FileOutput, Pencil, Trash2 } from 'lucide-react'
+import { Check, FileDown, Pencil, Printer, Trash2 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
 import { A4Miniature } from '#/components/classeur/cards/A4Miniature.tsx'
@@ -167,7 +167,7 @@ export function ItemCardShell({
       <div className="flex items-center gap-2 border-b border-border px-3 py-2">
         <Icon className="size-3.5 shrink-0 text-muted-foreground" />
         <span
-          className="min-w-0 flex-1 truncate text-xs font-medium"
+          className="min-w-0 flex-1 truncate text-sm font-medium"
           title={titre}
         >
           {titre}
@@ -204,7 +204,7 @@ export function ItemCardShell({
                     onClick={stop(onPrint)}
                     aria-label="Imprimer ou enregistrer en PDF"
                   >
-                    <FileDown />
+                    <Printer />
                   </Button>
                 </Tip>
               )}
@@ -216,7 +216,7 @@ export function ItemCardShell({
                     onClick={stop(onExportMarkdown)}
                     aria-label="Exporter en Markdown"
                   >
-                    <FileOutput />
+                    <FileDown />
                   </Button>
                 </Tip>
               )}

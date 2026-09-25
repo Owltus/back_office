@@ -7,7 +7,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { AlertCircle, GripVertical, Home, Library } from 'lucide-react'
+import { GripVertical, Home, Library } from 'lucide-react'
 
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import {
@@ -20,7 +20,6 @@ import {
   useChapters,
   useReorderChapters,
 } from '#/components/classeur/hooks/useClasseur.ts'
-import { Alert, AlertDescription } from '#/components/ui/alert.tsx'
 import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { messageErreur } from '#/lib/classeur/erreur.ts'
 import { getIcon } from '#/lib/classeur/naming.ts'
@@ -28,18 +27,20 @@ import type { DbChapter } from '#/lib/classeur/types.ts'
 import { cn } from '#/lib/utils.ts'
 
 const LIEN =
-  'flex min-w-0 flex-1 items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground'
+  'flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground'
 const LIEN_ACTIF =
-  'flex min-w-0 flex-1 items-center gap-3 rounded-lg px-3 py-2 text-sm bg-primary/10 font-medium text-primary transition-colors'
+  'flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-sm bg-accent font-medium text-accent-foreground transition-colors'
 
 /**
  * Colonne « chapitres du classeur » — la partie liste de la `Sidebar` de
  * Registre (Paramètres, À propos et thème ne sont pas portés). Accueil du
  * classeur en tête, chapitres réordonnables au glisser-déposer (poignée
- * visible avec le droit `ecriture`), retour à la liste des classeurs en pied.
+ * visible au survol, droit `ecriture`), retour à la liste des classeurs en
+ * pied.
  *
- * Rendue sur grand écran dans le layout `/classeur/$classeurId`, et dans un
- * tiroir (`ui/sheet`) sous `lg` : `onNavigate` sert alors à refermer le tiroir.
+ * Sans chrome propre : le layout `/classeur/$classeurId` la pose dans une
+ * carte (`rounded-xl border bg-card`, collante) sur grand écran, et dans un
+ * tiroir (`ui/sheet`) sous `lg` — `onNavigate` sert alors à le refermer.
  *
  * Le glisser-déposer passe par le `DndProvider` du layout : chaque chapitre
  * est aussi une CIBLE DE DÉPÔT pour un élément de la page chapitre
@@ -86,8 +87,8 @@ export function ChapterSidebar({
   const params = { classeurId: String(classeurId) }
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex flex-col gap-1 border-b border-border p-2">
+    <div className="flex min-h-0 flex-1 flex-col p-2">
+      <div className="flex flex-col gap-0.5 border-b border-border pb-2">
         <Link
           to="/classeur/$classeurId"
           params={params}
@@ -103,26 +104,23 @@ export function ChapterSidebar({
 
       <nav
         aria-label="Chapitres du classeur"
-        className="flex flex-1 flex-col gap-1 overflow-x-hidden overflow-y-auto p-2"
+        className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-x-hidden overflow-y-auto py-2"
       >
         {chapitres.isPending ? (
-          <div className="flex flex-col gap-1" aria-hidden="true">
+          <div className="flex flex-col gap-0.5" aria-hidden="true">
             {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-3 px-3 py-2">
+              <div key={i} className="flex items-center gap-2 px-2 py-1.5">
                 <Skeleton className="size-4 rounded-sm" />
                 <Skeleton className="h-3.5 w-32" />
               </div>
             ))}
           </div>
         ) : chapitres.isError ? (
-          <Alert variant="destructive">
-            <AlertCircle />
-            <AlertDescription>
-              {messageErreur(chapitres.error, 'Chapitres indisponibles')}
-            </AlertDescription>
-          </Alert>
+          <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">
+            {messageErreur(chapitres.error, 'Chapitres indisponibles')}
+          </p>
         ) : liste.length === 0 ? (
-          <p className="px-3 py-2 text-xs text-muted-foreground">
+          <p className="px-2 py-1.5 text-xs text-muted-foreground">
             Aucun chapitre pour le moment.
           </p>
         ) : (
@@ -143,16 +141,13 @@ export function ChapterSidebar({
         )}
 
         {reorder.isError && (
-          <Alert variant="destructive" className="mt-2">
-            <AlertCircle />
-            <AlertDescription>
-              {messageErreur(reorder.error, 'Ordre non enregistré')}
-            </AlertDescription>
-          </Alert>
+          <p className="mt-2 rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">
+            {messageErreur(reorder.error, 'Ordre non enregistré')}
+          </p>
         )}
       </nav>
 
-      <div className="mt-auto border-t border-border p-2">
+      <div className="mt-auto border-t border-border pt-2">
         <Link to="/classeur" onClick={onNavigate} className={LIEN}>
           <Library className="size-4 shrink-0" />
           <span className="truncate">Tous les classeurs</span>
@@ -202,7 +197,7 @@ function ChapterNavItem({
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform), transition }}
       className={cn(
-        'group flex items-center rounded-lg',
+        'group flex items-center rounded-md',
         isDragging && 'z-50 opacity-40',
         cible && 'classeur-drop-over',
       )}
@@ -226,7 +221,7 @@ function ChapterNavItem({
           {...attributes}
           {...listeners}
           aria-label={`Déplacer le chapitre ${chapter.label}`}
-          className="mr-1 shrink-0 cursor-grab touch-none rounded-md p-1 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:bg-accent focus-visible:opacity-100 active:cursor-grabbing"
+          className="mr-0.5 shrink-0 cursor-grab touch-none rounded-md p-1 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:bg-accent focus-visible:opacity-100 active:cursor-grabbing"
         >
           <GripVertical className="size-4" />
         </button>

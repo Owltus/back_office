@@ -18,27 +18,20 @@ import {
   useSortable,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import {
-  AlertCircle,
-  FileUp,
-  GripVertical,
-  NotebookTabs,
-  Plus,
-  Trash2,
-  Upload,
-} from 'lucide-react'
+import { FileUp, GripVertical, Plus, Trash2, Upload } from 'lucide-react'
 
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { ClasseurDialog } from '#/components/classeur/dialogs/ClasseurDialog.tsx'
+import { DropOverlay } from '#/components/classeur/DropZone.tsx'
 import {
   useClasseurs,
   useInvaliderClasseur,
   useReorderClasseurs,
 } from '#/components/classeur/hooks/useClasseur.ts'
+import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { ConfirmDialog } from '#/components/shared/ConfirmDialog.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
-import { Alert, AlertDescription } from '#/components/ui/alert.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { messageErreur } from '#/lib/classeur/erreur.ts'
@@ -55,11 +48,12 @@ const CARTE =
  * Liste des classeurs — portée de Registre (`ClasseurListPage`). Grille de
  * cartes réordonnables (poignée, droit `ecriture`), création (dialogue),
  * suppression douce (droit `gestion`, confirmation), import et export JSON
- * confiés à l'étape 5/6 par deux points d'extension :
+ * branchés par `ClasseurListActions` via deux points d'extension :
  *
- *   - `onImporterJson(file)` : reçoit le fichier `.json` choisi ou déposé,
- *     déjà borné par `MAX_JSON_BYTES`. Absent : la carte d'import est grisée
- *     avec l'infobulle « Bientôt disponible ».
+ *   - `onImporterJson(file)` : reçoit le fichier `.json` choisi (bouton
+ *     Importer de l'en-tête) ou déposé n'importe où sur la page (voile
+ *     `DropOverlay` pendant le geste), déjà borné par `MAX_JSON_BYTES`.
+ *     Absent : ni bouton ni zone de dépôt.
  *   - `onExporterJson(classeur)` : bouton d'export sur chaque carte. Absent :
  *     bouton non rendu.
  */
@@ -107,6 +101,14 @@ export function ClasseurList({
     reorder.mutate(ids)
   }
 
+  // Import JSON : sélecteur de fichier (bouton de l'en-tête) ou dépôt sur la
+  // page entière. Le compteur d'entrées/sorties évite le clignotement du
+  // voile quand le curseur passe d'un enfant à l'autre.
+  const importActif = canWrite && onImporterJson !== undefined
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [survol, setSurvol] = useState(false)
+  const compteur = useRef(0)
+
   function recevoirFichier(file: File | undefined) {
     if (!file || !onImporterJson) return
     const trop = fileTooLarge(file, MAX_JSON_BYTES)
@@ -122,6 +124,37 @@ export function ClasseurList({
     void onImporterJson(file)
   }
 
+  const dragProps = importActif
+    ? {
+        onDragEnter: (e: DragEvent) => {
+          e.preventDefault()
+          compteur.current += 1
+          setSurvol(true)
+        },
+        onDragOver: (e: DragEvent) => e.preventDefault(),
+        onDragLeave: (e: DragEvent) => {
+          e.preventDefault()
+          compteur.current -= 1
+          if (compteur.current === 0) setSurvol(false)
+        },
+        onDrop: (e: DragEvent) => {
+          e.preventDefault()
+          compteur.current = 0
+          setSurvol(false)
+          recevoirFichier(
+            Array.from(e.dataTransfer.files).find((f) =>
+              f.name.toLowerCase().endsWith('.json'),
+            ),
+          )
+        },
+      }
+    : {}
+
+  const onInputChange = (e: ChangeEvent<HTMLInputElement>) => {
+    recevoirFichier(e.target.files?.[0])
+    e.target.value = ''
+  }
+
   const erreurEcriture = reorder.isError
     ? messageErreur(reorder.error, 'Ordre non enregistré')
     : suppression.isError
@@ -129,33 +162,66 @@ export function ClasseurList({
       : erreurImport
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4">
+    <div
+      className="relative mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4"
+      {...dragProps}
+    >
+      {survol && <DropOverlay label="Déposez un export .json ici" />}
+
+      {importActif && (
+        <input
+          ref={inputRef}
+          type="file"
+          accept="application/json,.json"
+          className="hidden"
+          onChange={onInputChange}
+        />
+      )}
+
       <PageHeader
         title="Classeurs"
         actions={
           canWrite ? (
-            <Button size="sm" onClick={() => setCreateOpen(true)}>
-              <Plus />
-              Nouveau classeur
-            </Button>
+            <>
+              <Tip label="Créer un classeur">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCreateOpen(true)}
+                >
+                  <Plus />
+                  Nouveau classeur
+                </Button>
+              </Tip>
+              {importActif && (
+                <ButtonGroup>
+                  <Tip label="Importer un classeur depuis un export .json">
+                    <Button
+                      variant="outline"
+                      size="icon-sm"
+                      aria-label="Importer un classeur depuis un export .json"
+                      onClick={() => inputRef.current?.click()}
+                    >
+                      <Upload />
+                    </Button>
+                  </Tip>
+                </ButtonGroup>
+              )}
+            </>
           ) : undefined
         }
       />
 
       {classeurs.isError && (
-        <Alert variant="destructive">
-          <AlertCircle />
-          <AlertDescription>
-            {messageErreur(classeurs.error, 'Classeurs indisponibles')}
-          </AlertDescription>
-        </Alert>
+        <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {messageErreur(classeurs.error, 'Classeurs indisponibles')}
+        </div>
       )}
 
       {erreurEcriture && (
-        <Alert variant="destructive">
-          <AlertCircle />
-          <AlertDescription>{erreurEcriture}</AlertDescription>
-        </Alert>
+        <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {erreurEcriture}
+        </div>
       )}
 
       {classeurs.isPending ? (
@@ -175,6 +241,23 @@ export function ClasseurList({
               </div>
             </div>
           ))}
+        </div>
+      ) : classeurs.isSuccess && liste.length === 0 ? (
+        <div className="flex flex-col items-center gap-3 rounded-xl border border-border bg-card p-8 text-center text-muted-foreground">
+          <p className="text-sm">
+            Aucun classeur pour le moment.
+            {importActif && ' Déposez un export .json pour en importer un.'}
+          </p>
+          {canWrite && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setCreateOpen(true)}
+            >
+              <Plus />
+              Créer un classeur
+            </Button>
+          )}
         </div>
       ) : (
         <DndContext
@@ -199,33 +282,9 @@ export function ClasseurList({
                   }
                 />
               ))}
-              {canWrite && (
-                <CarteImport
-                  onFichier={onImporterJson ? recevoirFichier : undefined}
-                />
-              )}
             </div>
           </SortableContext>
         </DndContext>
-      )}
-
-      {classeurs.isSuccess && liste.length === 0 && (
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border px-4 py-16 text-center">
-          <NotebookTabs className="size-8 text-muted-foreground" aria-hidden />
-          <p className="text-sm text-muted-foreground">
-            Aucun classeur pour le moment.
-          </p>
-          {canWrite && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setCreateOpen(true)}
-            >
-              <Plus />
-              Créer un classeur
-            </Button>
-          )}
-        </div>
       )}
 
       <ClasseurDialog
@@ -357,103 +416,5 @@ function ClasseurCard({
         )}
       </div>
     </div>
-  )
-}
-
-/**
- * Carte « Importer un classeur » : clic = sélecteur de fichier, dépôt = même
- * chemin. Sans `onFichier`, grisée avec l'infobulle « Bientôt disponible ».
- */
-function CarteImport({
-  onFichier,
-}: {
-  onFichier?: (file: File | undefined) => void
-}) {
-  const inputRef = useRef<HTMLInputElement>(null)
-  const [survol, setSurvol] = useState(false)
-  const compteur = useRef(0)
-
-  if (!onFichier) {
-    return (
-      <Tip label="Bientôt disponible">
-        <span tabIndex={0} className="block">
-          <div
-            aria-disabled="true"
-            className={cn(
-              CARTE,
-              'min-h-[4.5rem] cursor-not-allowed border-dashed opacity-50 hover:bg-card',
-            )}
-          >
-            <Upload className="size-5 shrink-0 text-muted-foreground" />
-            <div className="flex flex-col gap-0.5">
-              <span className="text-sm font-medium">Importer un classeur</span>
-              <span className="text-xs text-muted-foreground">
-                Depuis un export .json
-              </span>
-            </div>
-          </div>
-        </span>
-      </Tip>
-    )
-  }
-
-  const onDragEnter = (e: DragEvent) => {
-    e.preventDefault()
-    compteur.current += 1
-    setSurvol(true)
-  }
-  const onDragLeave = (e: DragEvent) => {
-    e.preventDefault()
-    compteur.current -= 1
-    if (compteur.current === 0) setSurvol(false)
-  }
-  const onDrop = (e: DragEvent) => {
-    e.preventDefault()
-    compteur.current = 0
-    setSurvol(false)
-    onFichier(
-      Array.from(e.dataTransfer.files).find((f) => f.name.endsWith('.json')),
-    )
-  }
-  const onChange = (e: ChangeEvent<HTMLInputElement>) => {
-    onFichier(e.target.files?.[0])
-    e.target.value = ''
-  }
-
-  return (
-    <>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="application/json,.json"
-        className="hidden"
-        onChange={onChange}
-      />
-      <button
-        type="button"
-        onClick={() => inputRef.current?.click()}
-        onDragEnter={onDragEnter}
-        onDragOver={(e) => e.preventDefault()}
-        onDragLeave={onDragLeave}
-        onDrop={onDrop}
-        className={cn(
-          CARTE,
-          'min-h-[4.5rem] border-dashed',
-          survol && 'border-primary bg-primary/5',
-        )}
-      >
-        <Upload className="size-5 shrink-0 text-muted-foreground" />
-        <div className="flex flex-col gap-0.5">
-          <span className="text-sm font-medium">
-            {survol ? 'Déposer ici' : 'Importer un classeur'}
-          </span>
-          {!survol && (
-            <span className="text-xs text-muted-foreground">
-              Depuis un export .json
-            </span>
-          )}
-        </div>
-      </button>
-    </>
   )
 }

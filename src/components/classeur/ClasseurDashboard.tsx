@@ -3,15 +3,13 @@ import type { ReactNode } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import {
-  AlertCircle,
   Archive,
   Bookmark,
   FileDown,
-  History,
   FileText,
   FileUp,
+  History,
   List,
-  Loader2,
   Pencil,
   PenLine,
   Plus,
@@ -23,6 +21,7 @@ import {
 import type { LucideIcon } from 'lucide-react'
 
 import { useAuth } from '#/components/auth/AuthContext.tsx'
+import { ChapterDrawerButton } from '#/components/classeur/ChapterDrawer.tsx'
 import { ChapterDialog } from '#/components/classeur/dialogs/ChapterDialog.tsx'
 import { ClasseurDialog } from '#/components/classeur/dialogs/ClasseurDialog.tsx'
 import {
@@ -31,10 +30,11 @@ import {
   useClasseurContent,
   useInvaliderClasseur,
 } from '#/components/classeur/hooks/useClasseur.ts'
+import { IconAction } from '#/components/classeur/IconAction.tsx'
+import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { ConfirmDialog } from '#/components/shared/ConfirmDialog.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
-import { Alert, AlertDescription } from '#/components/ui/alert.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
 import { Skeleton } from '#/components/ui/skeleton.tsx'
@@ -73,7 +73,7 @@ export interface ClasseurSearchResult {
   chapterName: string
 }
 
-/** Action en cours, pour l'état des cartes (Loader2). */
+/** Action en cours, pour l'état du bouton concerné (Loader2). */
 export type DashboardBusy =
   'pdf' | 'markdown' | 'json' | 'import' | 'sommaire' | null
 
@@ -101,17 +101,21 @@ const STATUT: Record<ChapterStatus, { label: string; className: string }> = {
 
 /**
  * Tableau de bord d'un classeur — porté de Registre (`DashboardPage`) :
- * en-tête (nom, icône, établissement, édition), recherche instantanée dans
- * tout le classeur (titres, descriptions, contenus, accents ignorés), grille
- * des chapitres avec statut (`computeStatus`), création de chapitre, cartes
- * d'actions.
+ * en-tête (nom, icône, établissement) dont la barre d'actions porte TOUT
+ * (création de chapitre, sommaire, impression, exports, import, historique,
+ * édition du classeur — comme sur les autres pages, plus de grille de
+ * « cartes d'actions »), section « Chapitres » avec la recherche
+ * instantanée dans tout le classeur (titres, descriptions, contenus, accents
+ * ignorés) à droite de son titre, grille des chapitres avec statut
+ * (`computeStatus`).
  *
- * POINTS D'EXTENSION (étapes 5 et 6, branchés par la route) : les cinq
+ * POINTS D'EXTENSION (branchés par `ClasseurDashboardActions`) : les
  * rappels `onSommaire`, `onExporterPdf`, `onExporterMarkdown`,
  * `onExporterJson`, `onImporter` reçoivent le `DashboardContexte` chargé.
- * Absents, leur carte est grisée avec l'infobulle « Bientôt disponible ».
- * `busy` fait tourner la carte de l'action en cours. `renderResult` remplace
- * le rendu par défaut d'un résultat de recherche (cartes de la page chapitre).
+ * Absent, le bouton correspondant n'est pas rendu. `busy` fait tourner le
+ * bouton de l'action en cours ; tous sont désactivés tant que le contenu
+ * n'est pas chargé. `renderResult` remplace le rendu par défaut d'un
+ * résultat de recherche.
  */
 export function ClasseurDashboard({
   classeurId,
@@ -218,9 +222,96 @@ export function ClasseurDashboard({
     }
   }
 
+  const erreurLecture = classeurQ.isError
+    ? classeurQ.error
+    : chapitresQ.isError
+      ? chapitresQ.error
+      : contenuQ.isError
+        ? contenuQ.error
+        : null
+
+  // Groupe « lecture » : sommaire, impression, exports. Un bouton par rappel
+  // fourni — aucun n'est rendu grisé « bientôt disponible ».
+  const actionsLecture = [
+    onSommaire && (
+      <IconAction
+        key="sommaire"
+        label="Sommaire"
+        icon={<List />}
+        onClick={action(onSommaire)}
+        disabled={!pret}
+        busy={busy === 'sommaire'}
+      />
+    ),
+    onExporterPdf && (
+      <IconAction
+        key="pdf"
+        label="Imprimer ou enregistrer en PDF"
+        icon={<Printer />}
+        onClick={action(onExporterPdf)}
+        disabled={!pret}
+        busy={busy === 'pdf'}
+      />
+    ),
+    onExporterMarkdown && (
+      <IconAction
+        key="markdown"
+        label="Exporter en Markdown (ZIP)"
+        icon={<Archive />}
+        onClick={action(onExporterMarkdown)}
+        disabled={!pret}
+        busy={busy === 'markdown'}
+      />
+    ),
+    onExporterJson && (
+      <IconAction
+        key="json"
+        label="Exporter en JSON"
+        icon={<FileUp />}
+        onClick={action(onExporterJson)}
+        disabled={!pret}
+        busy={busy === 'json'}
+      />
+    ),
+  ].filter(Boolean)
+
+  // Groupe « écriture » (droit `ecriture`) : import-fusion, historique des
+  // instantanés, édition du classeur.
+  const actionsEcriture = canWrite
+    ? [
+        onImporter && (
+          <IconAction
+            key="import"
+            label="Importer un export .json (fusion)"
+            icon={<FileDown />}
+            onClick={action(onImporter)}
+            disabled={!pret}
+            busy={busy === 'import'}
+          />
+        ),
+        onHistorique && (
+          <IconAction
+            key="historique"
+            label="Historique des imports"
+            icon={<History />}
+            onClick={onHistorique}
+          />
+        ),
+        classeur && (
+          <IconAction
+            key="modifier"
+            label="Modifier le classeur"
+            icon={<Pencil />}
+            onClick={() => setEditOpen(true)}
+          />
+        ),
+      ].filter(Boolean)
+    : []
+
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4">
       <PageHeader
+        leading={<ChapterDrawerButton />}
         title={
           classeurQ.isPending ? (
             <Skeleton className="h-7 w-48" />
@@ -233,66 +324,72 @@ export function ClasseurDashboard({
         }
         meta={etablissement !== '' ? etablissement : undefined}
         actions={
-          canWrite && classeur ? (
-            <Tip label="Modifier le classeur">
-              <Button
-                variant="outline"
-                size="icon-sm"
-                aria-label="Modifier le classeur"
-                onClick={() => setEditOpen(true)}
-              >
-                <Pencil />
-              </Button>
-            </Tip>
-          ) : undefined
+          <>
+            {canWrite && (
+              <Tip label="Ajouter un chapitre au classeur">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCreateOpen(true)}
+                >
+                  <Plus />
+                  Nouveau chapitre
+                </Button>
+              </Tip>
+            )}
+            {actionsLecture.length > 0 && (
+              <ButtonGroup>{actionsLecture}</ButtonGroup>
+            )}
+            {actionsEcriture.length > 0 && (
+              <ButtonGroup>{actionsEcriture}</ButtonGroup>
+            )}
+          </>
         }
       />
 
-      {(classeurQ.isError || chapitresQ.isError || contenuQ.isError) && (
-        <Alert variant="destructive">
-          <AlertCircle />
-          <AlertDescription>
-            {messageErreur(
-              classeurQ.error ?? chapitresQ.error ?? contenuQ.error,
-              'Classeur indisponible',
-            )}
-          </AlertDescription>
-        </Alert>
+      {erreurLecture !== null && (
+        <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {messageErreur(erreurLecture, 'Classeur indisponible')}
+        </div>
       )}
 
       {suppression.isError && (
-        <Alert variant="destructive">
-          <AlertCircle />
-          <AlertDescription>
-            {messageErreur(suppression.error, 'Suppression impossible')}
-          </AlertDescription>
-        </Alert>
+        <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {messageErreur(suppression.error, 'Suppression impossible')}
+        </div>
       )}
 
-      <div className="relative">
-        <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={recherche}
-          onChange={(e) => setRecherche(e.target.value)}
-          placeholder="Rechercher dans le classeur"
-          aria-label="Rechercher dans le classeur"
-          className="pl-9"
-          disabled={!content}
-        />
-      </div>
+      {/* Section « Chapitres » : second PageHeader (comme « Lits bébé » sur
+          Literie), la recherche à droite de son titre. */}
+      <PageHeader
+        title="Chapitres"
+        actions={
+          <div className="relative w-full sm:w-64 pointer-fine:w-64">
+            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={recherche}
+              onChange={(e) => setRecherche(e.target.value)}
+              placeholder="Rechercher dans le classeur"
+              aria-label="Rechercher dans le classeur"
+              className="h-8 pl-9"
+              disabled={!content}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') setRecherche('')
+              }}
+            />
+          </div>
+        }
+      />
 
       {requete !== '' ? (
         <section className="flex flex-col gap-3" aria-live="polite">
           {resultats.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border px-4 py-12 text-center">
-              <Search className="size-8 text-muted-foreground" aria-hidden />
-              <p className="text-sm text-muted-foreground">
-                Aucun élément ne correspond à cette recherche.
-              </p>
+            <div className="rounded-xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
+              Aucun élément ne correspond à cette recherche.
             </div>
           ) : (
             <>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 {resultats.length} résultat{resultats.length > 1 ? 's' : ''}
               </p>
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -311,129 +408,53 @@ export function ClasseurDashboard({
             </>
           )}
         </section>
-      ) : (
-        <>
-          <section className="flex flex-col gap-3">
-            <h2 className="text-sm font-medium text-muted-foreground">
-              Chapitres
-            </h2>
-            {chapitresQ.isPending ? (
-              <div
-                className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3"
-                aria-hidden="true"
-              >
-                {Array.from({ length: 3 }).map((_, i) => (
-                  <div
-                    key={i}
-                    className="rounded-xl border border-border bg-card p-4"
-                  >
-                    <div className="flex items-center gap-3">
-                      <Skeleton className="size-5 rounded-sm" />
-                      <Skeleton className="h-4 w-36" />
-                    </div>
-                    <Skeleton className="mt-3 h-3 w-48" />
-                    <Skeleton className="mt-3 h-5 w-20 rounded-full" />
-                  </div>
-                ))}
+      ) : chapitresQ.isPending ? (
+        <div
+          className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3"
+          aria-hidden="true"
+        >
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div
+              key={i}
+              className="rounded-xl border border-border bg-card p-4"
+            >
+              <div className="flex items-center gap-3">
+                <Skeleton className="size-5 rounded-sm" />
+                <Skeleton className="h-4 w-36" />
               </div>
-            ) : chapters.length === 0 && chapitresQ.isSuccess ? (
-              <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border px-4 py-12 text-center">
-                <p className="text-sm text-muted-foreground">
-                  Ce classeur n'a pas encore de chapitre.
-                </p>
-                {canWrite && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setCreateOpen(true)}
-                  >
-                    <Plus />
-                    Créer un chapitre
-                  </Button>
-                )}
-              </div>
-            ) : (
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {chapters.map((c) => (
-                  <ChapterCard
-                    key={c.id}
-                    classeurId={classeurId}
-                    chapter={c}
-                    count={content ? (parChapitre.get(c.id) ?? 0) : undefined}
-                    canWrite={canWrite}
-                    onEdit={() => setChapitreEdite(c)}
-                    onDelete={() => setChapitreASupprimer(c)}
-                  />
-                ))}
-              </div>
-            )}
-          </section>
-
-          <section className="flex flex-col gap-3">
-            <h2 className="text-sm font-medium text-muted-foreground">
-              Actions
-            </h2>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {canWrite && (
-                <ActionCard
-                  icon={Plus}
-                  title="Nouveau chapitre"
-                  subtitle="Ajouter un chapitre au classeur"
-                  dashed
-                  onClick={() => setCreateOpen(true)}
-                />
-              )}
-              <ActionCard
-                icon={List}
-                title="Sommaire"
-                subtitle="Table des matières"
-                onClick={action(onSommaire)}
-                disabled={!pret}
-                busy={busy === 'sommaire'}
-              />
-              <ActionCard
-                icon={Printer}
-                title="Exporter en PDF"
-                subtitle="Classeur complet"
-                onClick={action(onExporterPdf)}
-                disabled={!pret}
-                busy={busy === 'pdf'}
-              />
-              <ActionCard
-                icon={Archive}
-                title="Exporter en Markdown"
-                subtitle="Archive ZIP de tous les documents"
-                onClick={action(onExporterMarkdown)}
-                disabled={!pret}
-                busy={busy === 'markdown'}
-              />
-              <ActionCard
-                icon={FileUp}
-                title="Exporter en JSON"
-                subtitle="Sauvegarde éditable du classeur"
-                onClick={action(onExporterJson)}
-                disabled={!pret}
-                busy={busy === 'json'}
-              />
-              {canWrite && (
-                <ActionCard
-                  icon={FileDown}
-                  title="Importer un JSON"
-                  subtitle="Mettre à jour depuis un export"
-                  onClick={action(onImporter)}
-                  disabled={!pret}
-                  busy={busy === 'import'}
-                />
-              )}
-              <ActionCard
-                icon={History}
-                title="Historique des imports"
-                subtitle="Instantanés pris avant chaque fusion"
-                onClick={onHistorique}
-              />
+              <Skeleton className="mt-3 h-3 w-48" />
+              <Skeleton className="mt-3 h-5 w-20 rounded-full" />
             </div>
-          </section>
-        </>
+          ))}
+        </div>
+      ) : chapters.length === 0 && chapitresQ.isSuccess ? (
+        <div className="flex flex-col items-center gap-3 rounded-xl border border-border bg-card p-8 text-center text-muted-foreground">
+          <p className="text-sm">Ce classeur n'a pas encore de chapitre.</p>
+          {canWrite && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setCreateOpen(true)}
+            >
+              <Plus />
+              Créer un chapitre
+            </Button>
+          )}
+        </div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {chapters.map((c) => (
+            <ChapterCard
+              key={c.id}
+              classeurId={classeurId}
+              chapter={c}
+              count={content ? (parChapitre.get(c.id) ?? 0) : undefined}
+              canWrite={canWrite}
+              onEdit={() => setChapitreEdite(c)}
+              onDelete={() => setChapitreASupprimer(c)}
+            />
+          ))}
+        </div>
       )}
 
       <ClasseurDialog
@@ -606,79 +627,5 @@ function ResultatCard({
         {ITEM_LABEL[result.kind]} · {result.chapterName}
       </p>
     </Link>
-  )
-}
-
-/**
- * Carte d'action. Sans `onClick`, l'action n'est pas encore branchée : carte
- * grisée, infobulle « Bientôt disponible » (le `<span tabIndex>` porteur est
- * nécessaire : un bouton désactivé ne reçoit pas le survol, cf. `Tip`).
- */
-function ActionCard({
-  icon: Icon,
-  title,
-  subtitle,
-  onClick,
-  disabled = false,
-  busy = false,
-  dashed = false,
-}: {
-  icon: LucideIcon
-  title: string
-  subtitle: string
-  onClick?: () => void
-  disabled?: boolean
-  busy?: boolean
-  dashed?: boolean
-}) {
-  const corps = (
-    <>
-      {busy ? (
-        <Loader2 className="size-5 shrink-0 animate-spin text-muted-foreground" />
-      ) : (
-        <Icon className="size-5 shrink-0 text-muted-foreground" />
-      )}
-      <div className="flex min-w-0 flex-col gap-0.5">
-        <span className="truncate text-sm font-medium">
-          {busy ? 'En cours' : title}
-        </span>
-        <span className="truncate text-xs text-muted-foreground">
-          {subtitle}
-        </span>
-      </div>
-    </>
-  )
-  const classes = cn(
-    'flex w-full items-center gap-4 rounded-xl border border-border bg-card px-5 py-4 text-left transition-colors',
-    dashed && 'border-dashed',
-  )
-
-  if (!onClick) {
-    return (
-      <Tip label="Bientôt disponible">
-        <span tabIndex={0} className="block">
-          <div
-            aria-disabled="true"
-            className={cn(classes, 'cursor-not-allowed opacity-50')}
-          >
-            {corps}
-          </div>
-        </span>
-      </Tip>
-    )
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled || busy}
-      className={cn(
-        classes,
-        'hover:bg-accent disabled:pointer-events-none disabled:opacity-50',
-      )}
-    >
-      {corps}
-    </button>
   )
 }

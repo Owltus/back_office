@@ -9,9 +9,8 @@ export const Route = createFileRoute('/classeur/')({
 })
 
 /**
- * Liste des classeurs. L'export JSON est branché par `ClasseurListActions`
- * (étape 5) ; l'import JSON (`onImporterJson`) le sera par l'étape 6 — sans
- * lui, la liste grise la carte d'import.
+ * Liste des classeurs. Export et import JSON sont branchés par
+ * `ClasseurListActions` (bouton Importer de l'en-tête + dépôt sur la page).
  */
 function ClasseurPage() {
   return (

@@ -3,6 +3,7 @@ import { useState } from 'react'
 import {
   DetailActions,
   DetailErreur,
+  DetailFields,
   DetailHeader,
   DetailIntrouvable,
   DetailSkeleton,
@@ -21,8 +22,8 @@ const LIGNES_MAX = 60
 /**
  * Page d'une feuille de signature — portée de Registre
  * (`SignatureSheetDetail`) : la page A4 à l'échelle ; en édition, titre,
- * description et nombre de lignes dans la barre (Registre ne permettait pas
- * de changer le nombre de lignes : ajout).
+ * description et nombre de lignes dans une carte sous l'en-tête (Registre
+ * ne permettait pas de changer le nombre de lignes : ajout).
  */
 export function SignatureSheetDetail() {
   const page = useDetailPage('signature_sheet')
@@ -92,41 +93,9 @@ export function SignatureSheetDetail() {
     <div className="flex flex-1 flex-col gap-4">
       <DetailHeader
         retour={retour}
-        title={
-          editing ? (
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <Input
-                value={titre}
-                onChange={(e) => setTitre(e.target.value)}
-                placeholder="Titre de la feuille"
-                aria-label="Titre de la feuille de signature"
-                className="font-semibold sm:flex-1"
-                maxLength={200}
-              />
-              <Input
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Description"
-                aria-label="Description"
-                className="sm:w-56"
-                maxLength={1000}
-              />
-              <Input
-                type="number"
-                inputMode="numeric"
-                min={LIGNES_MIN}
-                max={LIGNES_MAX}
-                value={nombre}
-                onChange={(e) => setNombre(e.target.value)}
-                aria-label="Nombre de lignes"
-                aria-invalid={nombreValide === null}
-                className="sm:w-24"
-              />
-            </div>
-          ) : (
-            <h1 className="truncate text-lg font-semibold">{titreAffiche}</h1>
-          )
-        }
+        title={titreAffiche}
+        kind="signature_sheet"
+        chapterName={page.chapter?.label}
         actions={
           <DetailActions
             editing={editing}
@@ -142,6 +111,38 @@ export function SignatureSheetDetail() {
           />
         }
       />
+
+      {editing && (
+        <DetailFields>
+          <Input
+            value={titre}
+            onChange={(e) => setTitre(e.target.value)}
+            placeholder="Titre de la feuille"
+            aria-label="Titre de la feuille de signature"
+            className="font-medium sm:flex-1"
+            maxLength={200}
+          />
+          <Input
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Description"
+            aria-label="Description"
+            className="sm:w-56"
+            maxLength={1000}
+          />
+          <Input
+            type="number"
+            inputMode="numeric"
+            min={LIGNES_MIN}
+            max={LIGNES_MAX}
+            value={nombre}
+            onChange={(e) => setNombre(e.target.value)}
+            aria-label="Nombre de lignes"
+            aria-invalid={nombreValide === null}
+            className="sm:w-24"
+          />
+        </DetailFields>
+      )}
 
       {editing && nombreValide === null && (
         <p className="text-xs text-destructive">

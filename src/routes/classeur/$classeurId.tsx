@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Link, Navigate, Outlet, createFileRoute } from '@tanstack/react-router'
-import { PanelLeft } from 'lucide-react'
 
 import { PageGuard } from '#/components/auth/PageGuard.tsx'
+import { ChapterDrawerProvider } from '#/components/classeur/ChapterDrawer.tsx'
 import { ChapterSidebar } from '#/components/classeur/ChapterSidebar.tsx'
 import { DndProvider } from '#/components/classeur/dnd/DndProvider.tsx'
 import { useClasseur } from '#/components/classeur/hooks/useClasseur.ts'
@@ -17,16 +17,19 @@ import {
   SheetTitle,
 } from '#/components/ui/sheet.tsx'
 import { DEFAULT_REGISTRY_NAME } from '#/lib/classeur/naming.ts'
+import { useNavbarSubtitle } from '#/lib/navbarSubtitle.ts'
 
 export const Route = createFileRoute('/classeur/$classeurId')({
   component: ClasseurLayout,
 })
 
 /**
- * Layout d'un classeur : colonne des chapitres à gauche (`ChapterSidebar`),
- * page à droite (`Outlet` : tableau de bord, chapitre, détails). Sous `lg`, la
- * colonne devient un tiroir (`ui/sheet`) ouvert depuis une barre au-dessus de
- * la page.
+ * Layout d'un classeur : colonne des chapitres à gauche (`ChapterSidebar`,
+ * une carte collante dans la gouttière de page), page à droite (`Outlet` :
+ * tableau de bord, chapitre, détails). Sous `lg`, la colonne devient un
+ * tiroir (`ui/sheet`) que chaque page ouvre depuis le `leading` de son
+ * `PageHeader` (`ChapterDrawerButton`) ; le nom du classeur passe alors en
+ * sous-titre de la Navbar, comme le jour affiché sur les autres pages.
  *
  * `DndProvider` enveloppe les DEUX : un élément de la page chapitre peut être
  * déposé sur un chapitre de la colonne. L'identifiant de route est converti
@@ -48,16 +51,20 @@ function ClasseurLayout() {
 function ClasseurShell({ classeurId }: { classeurId: number }) {
   const { isNavbarMobile } = useResponsiveShell()
   const [tiroirOuvert, setTiroirOuvert] = useState(false)
+  const ouvrirTiroir = useCallback(() => setTiroirOuvert(true), [])
   const classeur = useClasseur(classeurId)
+
+  const nom = classeur.data?.name ?? DEFAULT_REGISTRY_NAME
+  // Sous 1024px, le nom du classeur vit dans la Navbar globale (sous-titre à
+  // côté du hamburger). GATÉ par `isNavbarMobile`, comme sur PDJ/Rapro.
+  useNavbarSubtitle(isNavbarMobile && classeur.data ? nom : null)
 
   // Classeur supprimé ou inexistant : `null` une fois la lecture réussie.
   if (classeur.isSuccess && classeur.data === null) {
     return (
       <PageContainer>
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border px-4 py-16 text-center">
-          <p className="text-sm text-muted-foreground">
-            Ce classeur n'existe plus.
-          </p>
+        <div className="mx-auto flex w-full max-w-5xl flex-col items-center gap-3 rounded-xl border border-border bg-card p-8 text-center text-muted-foreground">
+          <p className="text-sm">Ce classeur n'existe plus.</p>
           <Button asChild size="sm" variant="outline">
             <Link to="/classeur">Tous les classeurs</Link>
           </Button>
@@ -66,57 +73,47 @@ function ClasseurShell({ classeurId }: { classeurId: number }) {
     )
   }
 
-  const nom = classeur.data?.name ?? DEFAULT_REGISTRY_NAME
-
   return (
     <DndProvider>
-      <div className="flex flex-1">
-        {isNavbarMobile ? (
-          <Sheet open={tiroirOuvert} onOpenChange={setTiroirOuvert}>
-            <SheetContent
-              side="left"
-              className="w-72 p-0"
-              showCloseButton={false}
-            >
-              <SheetHeader className="sr-only">
-                <SheetTitle>Chapitres</SheetTitle>
-                <SheetDescription>Chapitres du classeur {nom}</SheetDescription>
-              </SheetHeader>
-              <ChapterSidebar
-                classeurId={classeurId}
-                onNavigate={() => setTiroirOuvert(false)}
-              />
-            </SheetContent>
-          </Sheet>
-        ) : (
-          <aside
-            aria-label="Chapitres"
-            className="classeur-sidebar hidden w-64 shrink-0 border-r border-border bg-card/40 lg:block"
-          >
-            <ChapterSidebar classeurId={classeurId} />
-          </aside>
-        )}
-
-        <div className="flex min-w-0 flex-1 flex-col">
-          {isNavbarMobile && (
-            <div className="flex items-center gap-2 border-b border-border px-4 py-2 lg:hidden">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setTiroirOuvert(true)}
-                aria-label="Ouvrir la liste des chapitres"
+      <ChapterDrawerProvider open={ouvrirTiroir} mobile={isNavbarMobile}>
+        <div className="flex flex-1">
+          {isNavbarMobile ? (
+            <Sheet open={tiroirOuvert} onOpenChange={setTiroirOuvert}>
+              <SheetContent
+                side="left"
+                className="w-72 p-0"
+                showCloseButton={false}
               >
-                <PanelLeft />
-                Chapitres
-              </Button>
-              <span className="truncate text-sm text-muted-foreground">
-                {nom}
-              </span>
+                <SheetHeader className="sr-only">
+                  <SheetTitle>Chapitres</SheetTitle>
+                  <SheetDescription>
+                    Chapitres du classeur {nom}
+                  </SheetDescription>
+                </SheetHeader>
+                <ChapterSidebar
+                  classeurId={classeurId}
+                  onNavigate={() => setTiroirOuvert(false)}
+                />
+              </SheetContent>
+            </Sheet>
+          ) : (
+            /* Gouttière au même padding que `PageContainer` : la carte de la
+               colonne s'aligne sur l'en-tête de la page à sa droite. */
+            <div className="hidden shrink-0 py-4 pl-4 md:py-6 md:pl-6 lg:block">
+              <aside
+                aria-label="Chapitres"
+                className="classeur-sidebar flex w-64 flex-col rounded-xl border border-border bg-card"
+              >
+                <ChapterSidebar classeurId={classeurId} />
+              </aside>
             </div>
           )}
-          <Outlet />
+
+          <div className="flex min-w-0 flex-1 flex-col">
+            <Outlet />
+          </div>
         </div>
-      </div>
+      </ChapterDrawerProvider>
     </DndProvider>
   )
 }

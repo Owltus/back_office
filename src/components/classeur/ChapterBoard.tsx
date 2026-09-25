@@ -10,10 +10,8 @@ import { Link, useNavigate } from '@tanstack/react-router'
 import type { DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable'
 import {
-  AlertCircle,
   Archive,
   CheckSquare,
-  FileText,
   Loader2,
   Pencil,
   Plus,
@@ -28,6 +26,7 @@ import { DocumentCard } from '#/components/classeur/cards/DocumentCard.tsx'
 import { IntercalaireCard } from '#/components/classeur/cards/IntercalaireCard.tsx'
 import { SignatureSheetCard } from '#/components/classeur/cards/SignatureSheetCard.tsx'
 import { TrackingSheetCard } from '#/components/classeur/cards/TrackingSheetCard.tsx'
+import { ChapterDrawerButton } from '#/components/classeur/ChapterDrawer.tsx'
 import { BulkDeleteDialog } from '#/components/classeur/dialogs/BulkDeleteDialog.tsx'
 import { ChapterDialog } from '#/components/classeur/dialogs/ChapterDialog.tsx'
 import { CreateItemDialog } from '#/components/classeur/dialogs/CreateItemDialog.tsx'
@@ -53,11 +52,14 @@ import {
 } from '#/components/classeur/hooks/useClasseur.ts'
 import { useDropZone } from '#/components/classeur/hooks/useDropZone.ts'
 import { useSelection } from '#/components/classeur/hooks/useSelection.ts'
+import { IconAction } from '#/components/classeur/IconAction.tsx'
 import {
   ChapterPrintPages,
   ItemPages,
 } from '#/components/classeur/print/ItemPages.tsx'
 import { PrintPreview } from '#/components/classeur/print/PrintPreview.tsx'
+import { MouseGlyph } from '#/components/parking/MouseGlyph.tsx'
+import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { ConfirmDialog } from '#/components/shared/ConfirmDialog.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
@@ -279,10 +281,8 @@ export function ChapterBoard({
   // Chapitre supprimé ou inexistant : `null` une fois la lecture réussie.
   if (chapterQ.isSuccess && chapter === null) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border px-4 py-16 text-center">
-        <p className="text-sm text-muted-foreground">
-          Ce chapitre n'existe plus.
-        </p>
+      <div className="flex flex-col items-center gap-3 rounded-xl border border-border bg-card p-8 text-center text-muted-foreground">
+        <p className="text-sm">Ce chapitre n'existe plus.</p>
         <Button asChild size="sm" variant="outline">
           <Link
             to="/classeur/$classeurId"
@@ -373,6 +373,7 @@ export function ChapterBoard({
       {...(canWrite ? dragProps : {})}
     >
       <PageHeader
+        leading={<ChapterDrawerButton />}
         title={
           chapterQ.isPending ? (
             <Skeleton className="h-7 w-56" />
@@ -386,6 +387,8 @@ export function ChapterBoard({
         meta={chapter?.description.trim() ? chapter.description : undefined}
         actions={
           selection.selectionMode ? (
+            /* Mode sélection : compteur puis UN groupe (tout sélectionner,
+               supprimer la sélection, annuler). */
             <>
               <span
                 className="text-sm text-muted-foreground"
@@ -393,101 +396,74 @@ export function ChapterBoard({
               >
                 {selection.count} sélectionné{selection.count > 1 ? 's' : ''}
               </span>
-              <Tip label="Tout sélectionner">
-                <Button
-                  variant="outline"
-                  size="icon-sm"
+              <ButtonGroup>
+                <IconAction
+                  label="Tout sélectionner"
+                  icon={<CheckSquare />}
                   onClick={() => selection.selectAll(filtres)}
-                  aria-label="Tout sélectionner"
-                >
-                  <CheckSquare />
-                </Button>
-              </Tip>
-              {canWrite && (
-                <Tip label="Supprimer la sélection">
+                />
+                {canWrite && (
+                  <IconAction
+                    label="Supprimer la sélection"
+                    icon={<Trash2 />}
+                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    onClick={() => setBulkOpen(true)}
+                  />
+                )}
+                <IconAction
+                  label="Annuler la sélection"
+                  icon={<X />}
+                  onClick={selection.clear}
+                />
+              </ButtonGroup>
+            </>
+          ) : (
+            /* Création (outline sm, comme « Ajouter un compte »), puis le
+               groupe lecture (impression, export) et le groupe écriture
+               (modifier, supprimer — icône rouge, jamais de fond plein). */
+            <>
+              {canWrite && chapter && (
+                <Tip label="Ajouter un document, une feuille ou un intercalaire">
                   <Button
                     variant="outline"
-                    size="icon-sm"
-                    className="border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                    onClick={() => setBulkOpen(true)}
-                    aria-label="Supprimer la sélection"
+                    size="sm"
+                    onClick={() => setCreateOpen(true)}
                   >
-                    <Trash2 />
+                    <Plus />
+                    Nouvel élément
                   </Button>
                 </Tip>
               )}
-              <Tip label="Annuler la sélection">
-                <Button
-                  variant="outline"
-                  size="icon-sm"
-                  onClick={selection.clear}
-                  aria-label="Annuler la sélection"
-                >
-                  <X />
-                </Button>
-              </Tip>
-            </>
-          ) : (
-            <>
-              <Tip label="Imprimer le chapitre">
-                <Button
-                  variant="outline"
-                  size="icon-sm"
+              <ButtonGroup>
+                <IconAction
+                  label="Imprimer le chapitre ou l'enregistrer en PDF"
+                  icon={<Printer />}
                   onClick={() => setApercu({ type: 'tout' })}
                   disabled={!chapter || items.length === 0}
-                  aria-label="Imprimer le chapitre ou l'enregistrer en PDF"
-                >
-                  <Printer />
-                </Button>
-              </Tip>
-              <Tip label="Exporter en Markdown (ZIP)">
-                <Button
-                  variant="outline"
-                  size="icon-sm"
+                />
+                <IconAction
+                  label="Exporter le chapitre en Markdown (ZIP)"
+                  icon={<Archive />}
                   onClick={() => exportZip.mutate()}
-                  disabled={!chapter || !contenu || exportZip.isPending}
-                  aria-label="Exporter le chapitre en Markdown"
-                >
-                  {exportZip.isPending ? (
-                    <Loader2 className="animate-spin" />
-                  ) : (
-                    <Archive />
-                  )}
-                </Button>
-              </Tip>
+                  disabled={!chapter || !contenu}
+                  busy={exportZip.isPending}
+                />
+              </ButtonGroup>
               {canWrite && chapter && (
-                <>
-                  <Tip label="Modifier le chapitre">
-                    <Button
-                      variant="outline"
-                      size="icon-sm"
-                      onClick={() => setEditChapterOpen(true)}
-                      aria-label="Modifier le chapitre"
-                    >
-                      <Pencil />
-                    </Button>
-                  </Tip>
-                  <Tip label="Supprimer le chapitre">
-                    <Button
-                      variant="outline"
-                      size="icon-sm"
-                      className="hover:bg-destructive/10 hover:text-destructive"
-                      onClick={() => setDeleteChapterOpen(true)}
-                      disabled={suppressionChapitre.isPending}
-                      aria-label="Supprimer le chapitre"
-                    >
-                      {suppressionChapitre.isPending ? (
-                        <Loader2 className="animate-spin" />
-                      ) : (
-                        <Trash2 />
-                      )}
-                    </Button>
-                  </Tip>
-                  <Button size="sm" onClick={() => setCreateOpen(true)}>
-                    <Plus />
-                    Nouveau
-                  </Button>
-                </>
+                <ButtonGroup>
+                  <IconAction
+                    label="Modifier le chapitre"
+                    icon={<Pencil />}
+                    onClick={() => setEditChapterOpen(true)}
+                  />
+                  <IconAction
+                    label="Supprimer le chapitre"
+                    icon={<Trash2 />}
+                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    onClick={() => setDeleteChapterOpen(true)}
+                    busy={suppressionChapitre.isPending}
+                  />
+                </ButtonGroup>
               )}
             </>
           )
@@ -495,23 +471,20 @@ export function ChapterBoard({
       />
 
       {erreurs.map((e) => (
-        <Alert key={e.cle} variant="destructive">
-          <AlertCircle />
-          <AlertDescription>{messageErreur(e.err, e.action)}</AlertDescription>
-        </Alert>
+        <div
+          key={e.cle}
+          className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive"
+        >
+          {messageErreur(e.err, e.action)}
+        </div>
       ))}
 
       {refus.length > 0 && (
-        <Alert variant="destructive">
-          <AlertCircle />
-          <AlertDescription>
-            <ul className="list-inside list-disc">
-              {refus.map((m) => (
-                <li key={m}>{m}</li>
-              ))}
-            </ul>
-          </AlertDescription>
-        </Alert>
+        <ul className="list-inside list-disc rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {refus.map((m) => (
+            <li key={m}>{m}</li>
+          ))}
+        </ul>
       )}
 
       {importation.isPending && (
@@ -559,10 +532,10 @@ export function ChapterBoard({
             ))}
           </div>
         ) : contenuQ.isError ? null : items.length === 0 ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border px-4 py-16 text-center">
-            <FileText className="size-8 text-muted-foreground" aria-hidden />
-            <p className="text-sm text-muted-foreground">
+          <div className="flex flex-col items-center gap-3 rounded-xl border border-border bg-card p-8 text-center text-muted-foreground">
+            <p className="text-sm">
               Aucun élément dans ce chapitre.
+              {canWrite && ' Déposez des fichiers .md ou .txt pour les importer.'}
             </p>
             {canWrite && (
               <Button
@@ -571,16 +544,13 @@ export function ChapterBoard({
                 onClick={() => setCreateOpen(true)}
               >
                 <Plus />
-                Nouveau
+                Nouvel élément
               </Button>
             )}
           </div>
         ) : filtres.length === 0 ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border px-4 py-16 text-center">
-            <Search className="size-8 text-muted-foreground" aria-hidden />
-            <p className="text-sm text-muted-foreground">
-              Aucun élément ne correspond à cette recherche.
-            </p>
+          <div className="rounded-xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
+            Aucun élément ne correspond à cette recherche.
           </div>
         ) : (
           <SortableContext
@@ -637,6 +607,21 @@ export function ChapterBoard({
           </SortableContext>
         )}
       </div>
+
+      {/* Repères sous la grille — même ligne que la légende de Literie ou
+          du planning des lits bébé : gestes souris à gauche. */}
+      {items.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
+          {canWrite && !enRecherche && (
+            <span className="flex items-center gap-1.5">
+              <MouseGlyph side="left" />
+              glisser : réordonner, ou déposer sur un chapitre de la colonne
+            </span>
+          )}
+          <span>Ctrl + clic : sélectionner</span>
+          <span>Ctrl + molette : zoom de la grille</span>
+        </div>
+      )}
 
       {/* Aperçu avant impression : un élément ou le chapitre entier */}
       <PrintPreview

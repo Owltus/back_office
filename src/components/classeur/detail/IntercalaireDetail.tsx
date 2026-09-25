@@ -3,6 +3,7 @@ import { useState } from 'react'
 import {
   DetailActions,
   DetailErreur,
+  DetailFields,
   DetailHeader,
   DetailIntrouvable,
   DetailSkeleton,
@@ -16,7 +17,8 @@ import { SANS_TITRE, titreOuDefaut } from '#/lib/classeur/sommaire.ts'
 
 /**
  * Page d'un intercalaire — portée de Registre (`IntercalaireDetail`) : la
- * page A4 à l'échelle ; en édition, titre et description dans la barre.
+ * page A4 à l'échelle ; en édition, titre et description dans une carte
+ * sous l'en-tête, l'aperçu suit la saisie.
  */
 export function IntercalaireDetail() {
   const page = useDetailPage('intercalaire')
@@ -75,30 +77,9 @@ export function IntercalaireDetail() {
     <div className="flex flex-1 flex-col gap-4">
       <DetailHeader
         retour={retour}
-        title={
-          editing ? (
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <Input
-                value={titre}
-                onChange={(e) => setTitre(e.target.value)}
-                placeholder="Titre de l'intercalaire"
-                aria-label="Titre de l'intercalaire"
-                className="font-semibold sm:flex-1"
-                maxLength={200}
-              />
-              <Input
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Description"
-                aria-label="Description"
-                className="sm:w-64"
-                maxLength={1000}
-              />
-            </div>
-          ) : (
-            <h1 className="truncate text-lg font-semibold">{titreAffiche}</h1>
-          )
-        }
+        title={titreAffiche}
+        kind="intercalaire"
+        chapterName={page.chapter?.label}
         actions={
           <DetailActions
             editing={editing}
@@ -114,6 +95,27 @@ export function IntercalaireDetail() {
           />
         }
       />
+
+      {editing && (
+        <DetailFields>
+          <Input
+            value={titre}
+            onChange={(e) => setTitre(e.target.value)}
+            placeholder="Titre de l'intercalaire"
+            aria-label="Titre de l'intercalaire"
+            className="font-medium sm:flex-1"
+            maxLength={200}
+          />
+          <Input
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Description"
+            aria-label="Description"
+            className="sm:w-64"
+            maxLength={1000}
+          />
+        </DetailFields>
+      )}
 
       {page.update.isError && (
         <DetailErreur err={page.update.error} action="Sauvegarde impossible" />

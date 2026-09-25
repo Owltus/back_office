@@ -5,20 +5,19 @@ import {
   useRef,
   useState,
 } from 'react'
-import { FileOutput } from 'lucide-react'
-
 import {
   DetailActions,
   DetailErreur,
+  DetailFields,
   DetailHeader,
   DetailIntrouvable,
+  DetailMarkdownAction,
+  DetailPaper,
   DetailSkeleton,
 } from '#/components/classeur/detail/DetailFrame.tsx'
 import { useDetailPage } from '#/components/classeur/hooks/useDetailPage.ts'
 import { DocumentPages } from '#/components/classeur/print/DocumentPages.tsx'
 import { PrintPreview } from '#/components/classeur/print/PrintPreview.tsx'
-import { Tip } from '#/components/shared/Tip.tsx'
-import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
 import { Textarea } from '#/components/ui/textarea.tsx'
 import { exporterDocumentMarkdown } from '#/lib/classeur/exportMarkdown.ts'
@@ -28,7 +27,7 @@ import { SANS_TITRE, titreOuDefaut } from '#/lib/classeur/sommaire.ts'
 /**
  * Page d'un document Markdown — portée de Registre (`DocumentDetail`).
  * Lecture : les pages A4 empilées à l'échelle de la largeur. Édition :
- * titre et description dans la barre, aperçu A4 (gauche, collant) et
+ * titre et description dans une carte sous l'en-tête, aperçu A4 (gauche, collant) et
  * `textarea` Markdown (droite), Ctrl + S pour sauvegarder, défilement de
  * l'éditeur répercuté sur l'aperçu. Exports : PDF (`PrintPreview`) et
  * Markdown (`.md`).
@@ -156,30 +155,9 @@ export function DocumentDetail() {
     <div className="flex flex-1 flex-col gap-4">
       <DetailHeader
         retour={retour}
-        title={
-          editing ? (
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <Input
-                value={titre}
-                onChange={(e) => setTitre(e.target.value)}
-                placeholder="Titre du document"
-                aria-label="Titre du document"
-                className="font-semibold sm:flex-1"
-                maxLength={200}
-              />
-              <Input
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Description"
-                aria-label="Description du document"
-                className="sm:w-56"
-                maxLength={1000}
-              />
-            </div>
-          ) : (
-            <h1 className="truncate text-lg font-semibold">{titreAffiche}</h1>
-          )
-        }
+        title={titreAffiche}
+        kind="document"
+        chapterName={page.chapter?.label}
         actions={
           <DetailActions
             editing={editing}
@@ -190,23 +168,34 @@ export function DocumentDetail() {
             onSave={() => void sauvegarder()}
             onPrint={() => setPreviewOpen(true)}
             extra={
-              <Tip label="Exporter en Markdown">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    exporterDocumentMarkdown(doc.title, doc.content)
-                  }
-                  aria-label="Exporter en Markdown"
-                >
-                  <FileOutput />
-                  Markdown
-                </Button>
-              </Tip>
+              <DetailMarkdownAction
+                onClick={() => exporterDocumentMarkdown(doc.title, doc.content)}
+              />
             }
           />
         }
       />
+
+      {editing && (
+        <DetailFields>
+          <Input
+            value={titre}
+            onChange={(e) => setTitre(e.target.value)}
+            placeholder="Titre du document"
+            aria-label="Titre du document"
+            className="font-medium sm:flex-1"
+            maxLength={200}
+          />
+          <Input
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Description"
+            aria-label="Description du document"
+            className="sm:w-56"
+            maxLength={1000}
+          />
+        </DetailFields>
+      )}
 
       {page.update.isError && (
         <DetailErreur err={page.update.error} action="Sauvegarde impossible" />
@@ -214,9 +203,9 @@ export function DocumentDetail() {
 
       {editing ? (
         <div className="grid flex-1 gap-4 lg:grid-cols-2">
-          <div
+          <DetailPaper
             ref={apercuRef}
-            className="order-2 overflow-y-auto rounded-xl bg-muted/30 lg:sticky lg:top-0 lg:order-1 lg:max-h-[calc(100dvh-8rem)]"
+            className="order-2 overflow-y-auto lg:sticky lg:top-0 lg:order-1 lg:max-h-[calc(100dvh-8rem)]"
           >
             <div
               className="flex flex-col items-center gap-4 py-4"
@@ -224,7 +213,7 @@ export function DocumentDetail() {
             >
               {pages}
             </div>
-          </div>
+          </DetailPaper>
           <div className="order-1 flex flex-col lg:order-2">
             <Textarea
               ref={editeurRef}
@@ -239,14 +228,14 @@ export function DocumentDetail() {
           </div>
         </div>
       ) : (
-        <div ref={lectureRef} className="flex-1 rounded-xl bg-muted/30">
+        <DetailPaper ref={lectureRef} className="flex-1">
           <div
             className="flex flex-col items-center gap-4 py-4"
             style={{ zoom: lectureScale }}
           >
             {pages}
           </div>
-        </div>
+        </DetailPaper>
       )}
 
       <PrintPreview

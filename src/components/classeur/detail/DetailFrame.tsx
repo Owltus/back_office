@@ -1,27 +1,36 @@
-import type { ReactNode } from 'react'
+import type { ComponentProps, ReactNode } from 'react'
 import { Link } from '@tanstack/react-router'
 import {
-  AlertCircle,
   ArrowLeft,
   FileDown,
   Loader2,
   Pencil,
+  Printer,
   Save,
   X,
 } from 'lucide-react'
 
+import { ChapterDrawerButton } from '#/components/classeur/ChapterDrawer.tsx'
+import { IconAction } from '#/components/classeur/IconAction.tsx'
+import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
+import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
-import { Alert, AlertDescription } from '#/components/ui/alert.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { messageErreur } from '#/lib/classeur/erreur.ts'
 import { usePageScale } from '#/lib/classeur/print/usePageScale.ts'
+import { ITEM_LABEL } from '#/lib/classeur/types.ts'
+import type { ItemKind } from '#/lib/classeur/types.ts'
+import { cn } from '#/lib/utils.ts'
 
 /*
  * Cadre commun des quatre pages de détail (document, feuille de suivi,
  * feuille de signature, intercalaire) — factorise ce que les quatre pages de
- * Registre répétaient : barre Retour / titre / actions, état « introuvable »,
- * squelette, viewport d'une page A4 à l'échelle, alerte d'erreur.
+ * Registre répétaient : en-tête (Retour / titre / actions), champs
+ * d'édition, état « introuvable », squelette, viewport d'une page A4 à
+ * l'échelle, erreur en ligne. L'en-tête est le `PageHeader` de l'app : le
+ * bouton Retour occupe son `leading` (l'usage prévu de cette prop), le titre
+ * son `title`, nature + chapitre son `meta`.
  */
 
 /** Cible du bouton Retour : la page du chapitre. */
@@ -30,46 +39,64 @@ export interface RetourVers {
   chapterId: string
 }
 
-/** Barre supérieure : Retour, titre (ou champs d'édition), actions à droite. */
+/** Première lettre en capitale (« Feuille de suivi · Sécurité incendie »). */
+function capitaliser(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
+/**
+ * En-tête d'une page de détail. `title` reste un texte (tronqué par le
+ * `PageHeader`) même en édition : le titre saisi s'y reflète en direct, les
+ * champs eux-mêmes vivent dans `DetailFields`, sous l'en-tête.
+ */
 export function DetailHeader({
   retour,
   title,
+  kind,
+  chapterName,
   actions,
 }: {
   retour: RetourVers
   title: ReactNode
+  /** Nature de l'élément, affichée dans la ligne secondaire. */
+  kind?: ItemKind
+  chapterName?: string
   actions?: ReactNode
 }) {
+  const meta = [kind ? capitaliser(ITEM_LABEL[kind]) : '', chapterName ?? '']
+    .filter((s) => s !== '')
+    .join(' · ')
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-      <div className="flex min-w-0 flex-1 items-center gap-2">
-        <Tip label="Retour au chapitre">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            asChild
-            aria-label="Retour au chapitre"
-          >
-            <Link to="/classeur/$classeurId/$chapterId" params={retour}>
-              <ArrowLeft />
-            </Link>
-          </Button>
-        </Tip>
-        <div className="min-w-0 flex-1">{title}</div>
-      </div>
-      {actions != null && (
-        <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
-          {actions}
+    <PageHeader
+      leading={
+        <div className="flex shrink-0 items-center gap-1">
+          <ChapterDrawerButton />
+          <Tip label="Retour au chapitre">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              asChild
+              aria-label="Retour au chapitre"
+            >
+              <Link to="/classeur/$classeurId/$chapterId" params={retour}>
+                <ArrowLeft />
+              </Link>
+            </Button>
+          </Tip>
         </div>
-      )}
-    </div>
+      }
+      title={title}
+      meta={meta !== '' ? meta : undefined}
+      actions={actions}
+    />
   )
 }
 
 /**
- * Les boutons d'action standard : en lecture, Modifier (droit `ecriture`) et
- * Imprimer / PDF ; en édition, Annuler et Sauvegarder. `extra` s'insère
- * après Imprimer (export Markdown du document).
+ * Les boutons d'action standard : en lecture, un groupe Modifier (droit
+ * `ecriture`) / Imprimer-PDF / `extra` (export Markdown du document) ; en
+ * édition, Annuler (outline, icône) puis Sauvegarder — l'action principale
+ * d'un formulaire reste pleine, comme dans les dialogues.
  */
 export function DetailActions({
   editing,
@@ -93,15 +120,12 @@ export function DetailActions({
   if (editing) {
     return (
       <>
-        <Button
-          variant="outline"
-          size="sm"
+        <IconAction
+          label="Annuler les modifications"
+          icon={<X />}
           onClick={onCancel}
           disabled={saving}
-        >
-          <X />
-          Annuler
-        </Button>
+        />
         <Button size="sm" onClick={onSave} disabled={saving}>
           {saving ? <Loader2 className="animate-spin" /> : <Save />}
           Sauvegarder
@@ -110,26 +134,40 @@ export function DetailActions({
     )
   }
   return (
-    <>
+    <ButtonGroup>
       {canWrite && (
-        <Button variant="outline" size="sm" onClick={onEdit}>
-          <Pencil />
-          Modifier
-        </Button>
+        <IconAction label="Modifier" icon={<Pencil />} onClick={onEdit} />
       )}
-      <Tip label="Imprimer ou enregistrer en PDF">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onPrint}
-          aria-label="Imprimer ou enregistrer en PDF"
-        >
-          <FileDown />
-          PDF
-        </Button>
-      </Tip>
+      <IconAction
+        label="Imprimer ou enregistrer en PDF"
+        icon={<Printer />}
+        onClick={onPrint}
+      />
       {extra}
-    </>
+    </ButtonGroup>
+  )
+}
+
+/** Bouton d'export Markdown d'un document (`extra` de `DetailActions`). */
+export function DetailMarkdownAction({ onClick }: { onClick: () => void }) {
+  return (
+    <IconAction
+      label="Exporter en Markdown"
+      icon={<FileDown />}
+      onClick={onClick}
+    />
+  )
+}
+
+/**
+ * Carte des champs d'édition (titre, description, périodicité…), sous
+ * l'en-tête : une rangée à partir de `sm`, empilée en dessous.
+ */
+export function DetailFields({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center">
+      {children}
+    </div>
   )
 }
 
@@ -142,8 +180,8 @@ export function DetailIntrouvable({
   retour: RetourVers
 }) {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border px-4 py-16 text-center">
-      <p className="text-sm text-muted-foreground">{label}</p>
+    <div className="flex flex-col items-center gap-3 rounded-xl border border-border bg-card p-8 text-center text-muted-foreground">
+      <p className="text-sm">{label}</p>
       <Button asChild size="sm" variant="outline">
         <Link to="/classeur/$classeurId/$chapterId" params={retour}>
           <ArrowLeft />
@@ -154,17 +192,19 @@ export function DetailIntrouvable({
   )
 }
 
-/** Silhouette d'une page de détail : barre + une page A4 grisée. */
+/** Silhouette d'une page de détail : en-tête + une page A4 grisée. */
 export function DetailSkeleton({ retour }: { retour: RetourVers }) {
   return (
     <div className="flex flex-1 flex-col gap-4" aria-busy="true">
       <DetailHeader retour={retour} title={<Skeleton className="h-6 w-64" />} />
-      <div className="flex flex-1 items-start justify-center rounded-xl bg-muted/30 p-6">
-        <Skeleton
-          className="w-full max-w-[420px] rounded-sm"
-          style={{ aspectRatio: '210 / 297' }}
-        />
-      </div>
+      <DetailPaper>
+        <div className="flex justify-center p-6">
+          <Skeleton
+            className="w-full max-w-[420px] rounded-sm"
+            style={{ aspectRatio: '210 / 297' }}
+          />
+        </div>
+      </DetailPaper>
     </div>
   )
 }
@@ -178,10 +218,29 @@ export function DetailErreur({
   action: string
 }) {
   return (
-    <Alert variant="destructive">
-      <AlertCircle />
-      <AlertDescription>{messageErreur(err, action)}</AlertDescription>
-    </Alert>
+    <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
+      {messageErreur(err, action)}
+    </div>
+  )
+}
+
+/**
+ * Cadre de l'aperçu : la carte de l'app autour des pages A4, qui restent
+ * blanches (fond `bg-card`, jamais nu). `className` pour le défilement ou
+ * la hauteur propre à chaque usage.
+ */
+export function DetailPaper({
+  className,
+  children,
+  ...props
+}: ComponentProps<'div'>) {
+  return (
+    <div
+      className={cn('rounded-xl border border-border bg-card', className)}
+      {...props}
+    >
+      {children}
+    </div>
   )
 }
 
@@ -194,9 +253,9 @@ export function DetailErreur({
 export function PageFitViewport({ children }: { children: ReactNode }) {
   const { containerRef, scale } = usePageScale('fit')
   return (
-    <div
+    <DetailPaper
       ref={containerRef}
-      className="relative min-h-[70vh] flex-1 overflow-hidden rounded-xl bg-muted/30"
+      className="relative min-h-[70vh] flex-1 overflow-hidden"
     >
       <div
         style={{
@@ -208,6 +267,6 @@ export function PageFitViewport({ children }: { children: ReactNode }) {
       >
         {children}
       </div>
-    </div>
+    </DetailPaper>
   )
 }

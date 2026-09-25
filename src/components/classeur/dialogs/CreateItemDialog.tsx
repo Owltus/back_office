@@ -133,7 +133,10 @@ function CreateItemForm({
   onDone: (kind: ItemKind, id: number) => void
 }) {
   const [kind, setKind] = useState<ItemKind | null>(null)
-  const [title, setTitle] = useState(SANS_TITRE)
+  // Champ VIDE au départ (le placeholder guide) : prérempli « Sans titre »,
+  // une frappe donnait « Sans titreConsignes… ». Le repli `SANS_TITRE` ne
+  // s'applique qu'à la soumission d'un titre vide (`construire`).
+  const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [periodiciteId, setPeriodiciteId] = useState('')
   const periodicites = usePeriodicites()
@@ -245,7 +248,6 @@ function CreateItemForm({
           onChange={(e) => setTitle(e.target.value)}
           placeholder={nature.placeholder}
           autoFocus
-          onFocus={(e) => e.target.select()}
           maxLength={200}
         />
       </div>

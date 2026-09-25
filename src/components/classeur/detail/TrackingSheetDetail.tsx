@@ -3,6 +3,7 @@ import { useState } from 'react'
 import {
   DetailActions,
   DetailErreur,
+  DetailFields,
   DetailHeader,
   DetailIntrouvable,
   DetailSkeleton,
@@ -27,8 +28,8 @@ const LIGNES_REPLI = 8
 
 /**
  * Page d'une feuille de suivi — portée de Registre (`TrackingSheetDetail`) :
- * la page A4 à l'échelle ; en édition, titre et périodicité dans la barre,
- * l'aperçu suit la saisie.
+ * la page A4 à l'échelle ; en édition, titre et périodicité dans une carte
+ * sous l'en-tête, l'aperçu suit la saisie.
  */
 export function TrackingSheetDetail() {
   const page = useDetailPage('tracking_sheet')
@@ -94,34 +95,9 @@ export function TrackingSheetDetail() {
     <div className="flex flex-1 flex-col gap-4">
       <DetailHeader
         retour={retour}
-        title={
-          editing ? (
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <Input
-                value={titre}
-                onChange={(e) => setTitre(e.target.value)}
-                placeholder="Titre de la feuille"
-                aria-label="Titre de la feuille de suivi"
-                className="font-semibold sm:flex-1"
-                maxLength={200}
-              />
-              <Select value={periodiciteId} onValueChange={setPeriodiciteId}>
-                <SelectTrigger className="sm:w-48" aria-label="Périodicité">
-                  <SelectValue placeholder="Périodicité" />
-                </SelectTrigger>
-                <SelectContent>
-                  {liste.map((p) => (
-                    <SelectItem key={p.id} value={String(p.id)}>
-                      {p.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          ) : (
-            <h1 className="truncate text-lg font-semibold">{titreAffiche}</h1>
-          )
-        }
+        title={titreAffiche}
+        kind="tracking_sheet"
+        chapterName={page.chapter?.label}
         actions={
           <DetailActions
             editing={editing}
@@ -137,6 +113,31 @@ export function TrackingSheetDetail() {
           />
         }
       />
+
+      {editing && (
+        <DetailFields>
+          <Input
+            value={titre}
+            onChange={(e) => setTitre(e.target.value)}
+            placeholder="Titre de la feuille"
+            aria-label="Titre de la feuille de suivi"
+            className="font-medium sm:flex-1"
+            maxLength={200}
+          />
+          <Select value={periodiciteId} onValueChange={setPeriodiciteId}>
+            <SelectTrigger className="sm:w-48" aria-label="Périodicité">
+              <SelectValue placeholder="Périodicité" />
+            </SelectTrigger>
+            <SelectContent>
+              {liste.map((p) => (
+                <SelectItem key={p.id} value={String(p.id)}>
+                  {p.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </DetailFields>
+      )}
 
       {page.update.isError && (
         <DetailErreur err={page.update.error} action="Sauvegarde impossible" />

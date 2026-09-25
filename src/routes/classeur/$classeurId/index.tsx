@@ -12,9 +12,8 @@ export const Route = createFileRoute('/classeur/$classeurId/')({
  * l'identifiant sont faites par le layout parent (`$classeurId.tsx`), qui ne
  * rend cet `Outlet` que pour un identifiant entier.
  *
- * Sommaire, export PDF, Markdown et JSON sont branchés par
- * `ClasseurDashboardActions` (étape 5) ; l'import JSON (`onImporter`) le
- * sera par l'étape 6 — sa carte reste grisée « Bientôt disponible ».
+ * Sommaire, impression, exports, import-fusion et historique sont branchés
+ * par `ClasseurDashboardActions` sur les boutons de l'en-tête.
  */
 function ClasseurDashboardPage() {
   const { classeurId } = Route.useParams()

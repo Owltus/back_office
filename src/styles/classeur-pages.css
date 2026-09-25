@@ -6,14 +6,22 @@
  * seulement ce qui dépend du chrome de l'application.                  *
  * ------------------------------------------------------------------ */
 
-/* Colonne des chapitres (à partir de lg) : collée en haut du <main>, qui
- * est la zone de défilement de l'app (hauteur d'écran moins la Navbar de
- * 4 rem). Elle défile en interne au lieu de suivre la page. */
+/* Colonne des chapitres (à partir de lg) : une carte collée en haut du
+ * <main>, qui est la zone de défilement de l'app (hauteur d'écran moins la
+ * Navbar de 4 rem). `top` et la hauteur maximale tiennent compte du padding
+ * de la gouttière qui l'entoure (1 rem, 1.5 rem à partir de md — le même
+ * que `PageContainer`, pour que la carte s'aligne sur l'en-tête de page).
+ * Elle défile en interne au lieu de suivre la page. */
 .classeur-sidebar {
   position: sticky;
-  top: 0;
-  align-self: flex-start;
-  max-height: calc(100dvh - 4rem);
+  top: 1rem;
+  max-height: calc(100dvh - 4rem - 2rem);
+}
+@media (min-width: 768px) {
+  .classeur-sidebar {
+    top: 1.5rem;
+    max-height: calc(100dvh - 4rem - 3rem);
+  }
 }
 
 /* Chapitre de la colonne survolé par un élément en cours de glisser :
