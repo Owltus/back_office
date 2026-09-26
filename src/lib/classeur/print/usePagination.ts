@@ -108,24 +108,53 @@ const IMAGES_ATTENTE_MAX_MS = 8000
  * ne bloque pas : elle est paginée avec sa hauteur (nulle).
  */
 export function waitForImages(container: HTMLElement): Promise<void> {
-  const images = Array.from(container.querySelectorAll('img')).filter(
-    (img) => !img.complete,
-  )
-  if (images.length === 0) return Promise.resolve()
   return new Promise((resolve) => {
-    let restantes = images.length
     const minuteur = setTimeout(resolve, IMAGES_ATTENTE_MAX_MS)
-    const une = () => {
-      restantes -= 1
-      if (restantes === 0) {
-        clearTimeout(minuteur)
+    const fini = () => {
+      clearTimeout(minuteur)
+      resolve()
+    }
+    // 1) Les images du bucket privé se téléchargent d'abord par l'API
+    //    (`ImageDocument`, marqueur `data-image-status="pending"`) ;
+    //    2) puis chaque `<img>` doit avoir décodé sa source.
+    void attendreMarqueurs(container).then(() => {
+      const images = Array.from(container.querySelectorAll('img')).filter(
+        (img) => !img.complete,
+      )
+      if (images.length === 0) {
+        fini()
+        return
+      }
+      let restantes = images.length
+      const une = () => {
+        restantes -= 1
+        if (restantes === 0) fini()
+      }
+      for (const img of images) {
+        img.addEventListener('load', une, { once: true })
+        img.addEventListener('error', une, { once: true })
+      }
+    })
+  })
+}
+
+function attendreMarqueurs(container: HTMLElement): Promise<void> {
+  const selecteur = '[data-image-status="pending"]'
+  if (container.querySelectorAll(selecteur).length === 0) {
+    return Promise.resolve()
+  }
+  return new Promise((resolve) => {
+    const observer = new MutationObserver(() => {
+      if (container.querySelectorAll(selecteur).length === 0) {
+        observer.disconnect()
         resolve()
       }
-    }
-    for (const img of images) {
-      img.addEventListener('load', une, { once: true })
-      img.addEventListener('error', une, { once: true })
-    }
+    })
+    observer.observe(container, {
+      attributes: true,
+      childList: true,
+      subtree: true,
+    })
   })
 }
 

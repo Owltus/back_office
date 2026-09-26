@@ -5,6 +5,7 @@ import {
   MAX_IMAGE_SOURCE_BYTES,
   cheminImage,
   dimensionsReduites,
+  estCheminImage,
   estImage,
   formaterOctets,
   markdownImage,
@@ -71,6 +72,38 @@ describe('markdownImage', () => {
     expect(markdownImage('plan.png', 'https://x.test/a b(1).webp')).toBe(
       '![plan](https://x.test/a%20b%281%29.webp)',
     )
+  })
+  it('la ligne insérée porte le CHEMIN du bucket, jamais une URL', () => {
+    const chemin = cheminImage(2, '0f2a9b1c-1234-4abc-8def-0123456789ab')
+    expect(markdownImage('plan.png', chemin)).toBe(
+      '![plan](2/0f2a9b1c-1234-4abc-8def-0123456789ab.webp)',
+    )
+    expect(estCheminImage(chemin)).toBe(true)
+  })
+})
+
+describe('estCheminImage — ce que le rendu lit par l’API', () => {
+  it('accepte <classeurId>/<uuid>.webp et rien d’autre', () => {
+    expect(estCheminImage('2/0f2a9b1c-1234-4abc-8def-0123456789ab.webp')).toBe(
+      true,
+    )
+    expect(estCheminImage('2/0F2A9B1C-1234-4ABC-8DEF-0123456789AB.WEBP')).toBe(
+      true,
+    )
+    expect(
+      estCheminImage(
+        'https://x.test/2/0f2a9b1c-1234-4abc-8def-0123456789ab.webp',
+      ),
+    ).toBe(false)
+    expect(estCheminImage('2/photo.webp')).toBe(false)
+    expect(
+      estCheminImage('../2/0f2a9b1c-1234-4abc-8def-0123456789ab.webp'),
+    ).toBe(false)
+    expect(estCheminImage('2/0f2a9b1c-1234-4abc-8def-0123456789ab.png')).toBe(
+      false,
+    )
+    expect(estCheminImage(null)).toBe(false)
+    expect(estCheminImage(undefined)).toBe(false)
   })
 })
 

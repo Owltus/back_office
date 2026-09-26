@@ -16,34 +16,35 @@
 --   - chemin `<classeur_id>/<uuid>.webp` : le premier dossier est le
 --     classeur, la RLS d'écriture réutilise `private.classeur_write_ok` —
 --     un compte n'ajoute une image qu'à un classeur qu'il peut modifier ;
---   - bucket PUBLIC : les images sont référencées par leur URL dans le
---     Markdown (`![nom](url)`) et affichées par `<img>`, à l'écran comme
---     dans l'iframe d'impression — un `<img>` ne porte pas de jeton, un
---     bucket privé exigerait des URL signées à réécrire à chaque rendu.
---     Les noms sont des UUID aléatoires : une URL ne se devine pas, mais
---     quiconque la détient lit l'image. Pas de donnée nominative attendue
---     (photos d'équipements, plans, schémas) ;
+--   - bucket PRIVÉ (révisé le jour même sur refus de l'utilisateur d'une
+--     exposition publique) : AUCUNE URL publique. Le Markdown porte le
+--     CHEMIN (`![nom](2/uuid.webp)`), l'app télécharge l'image par l'API
+--     authentifiée (`storage.download`, RLS de lecture appliquée à chaque
+--     requête) et l'affiche par une URL `blob:` locale au navigateur — à
+--     l'écran comme dans l'iframe d'impression (même origine). Un chemin
+--     connu ne donne rien sans session ET sans droit de lecture sur la
+--     page Classeur ;
 --   - pas de policy UPDATE (une image ne se réécrit pas : on en ajoute une
 --     autre) ; DELETE aux mêmes conditions que l'INSERT.
 --
 -- Innocuité : insert … on conflict sur le bucket ; drop/create des 3
 --   policies (noms propres au bucket). Aucune donnée touchée.
 --
--- ⚠ CSP : `img-src` de `vercel.json` doit lister l'hôte Supabase (fait dans
---   le même commit).
+-- CSP : `img-src 'self' data: blob:` suffit (les images sont des `blob:`) ;
+--   l'hôte Supabase n'a PAS à y figurer.
 -- =============================================================================
 
 begin;
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('classeur-images', 'classeur-images', true, 2097152, array['image/webp'])
+values ('classeur-images', 'classeur-images', false, 2097152, array['image/webp'])
 on conflict (id) do update
   set public = excluded.public,
       file_size_limit = excluded.file_size_limit,
       allowed_mime_types = excluded.allowed_mime_types;
 
--- Listage / lecture par l'API authentifiée (la lecture par URL publique ne
--- passe pas par la RLS) : rang >= 1 sur la page.
+-- Lecture (download / list) par l'API authentifiée : rang >= 1 sur la page.
+-- C'est la SEULE voie de lecture : le bucket est privé.
 drop policy if exists "classeur-images read (page:classeur)" on storage.objects;
 create policy "classeur-images read (page:classeur)"
   on storage.objects for select to authenticated
@@ -78,9 +79,9 @@ create policy "classeur-images delete (page:classeur)"
 commit;
 
 -- Vérification (lecture seule) --------------------------------------------------
-select 'bucket public, 2 Mo, webp seul' as controle,
+select 'bucket PRIVE, 2 Mo, webp seul' as controle,
        ((select count(*) from storage.buckets
-          where id = 'classeur-images' and public
+          where id = 'classeur-images' and not public
             and file_size_limit = 2097152
             and allowed_mime_types = array['image/webp']) = 1)::text as ok
 union all

@@ -16,7 +16,15 @@
  *   → upload dans le bucket `classeur-images` sous `<classeurId>/<uuid>.webp`
  *     (le bucket n'accepte que `image/webp` ≤ 2 Mo, la RLS n'accepte que
  *     les classeurs modifiables par l'appelant :
- *     `supabase/classeur_images_2026-09-26.sql`).
+ *     `supabase/classeur_images_2026-09-26.sql`)
+ *   → le Markdown reçoit le CHEMIN, pas une URL : `![nom](2/uuid.webp)`.
+ *
+ * LECTURE — bucket PRIVÉ, aucune URL publique (décision utilisateur du
+ * 2026-09-26) : `telechargerImage(chemin)` passe par l'API authentifiée
+ * (`storage.download`, RLS de lecture à chaque requête) et
+ * `urlObjetImage` fournit une URL `blob:` locale au navigateur pour le
+ * `<img>` (`components/classeur/print/ImageDocument.tsx`). Un chemin connu
+ * ne donne rien sans session ni droit de lecture sur la page.
  *
  * Tout ce qui ne touche pas au DOM est pur et testé (`images.test.ts`).
  */
@@ -78,7 +86,17 @@ export function texteAlternatif(nomFichier: string): string {
   return propre === '' ? 'image' : propre
 }
 
-/** La ligne Markdown à insérer. */
+/** Vrai si `src` est un chemin du bucket (`<classeurId>/<uuid>.webp`), donc à lire par l'API. */
+export function estCheminImage(src: string | null | undefined): src is string {
+  return (
+    typeof src === 'string' &&
+    /^[0-9]{1,12}\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.webp$/i.test(
+      src,
+    )
+  )
+}
+
+/** La ligne Markdown à insérer : `![alt](chemin)` (jamais une URL). */
 export function markdownImage(nomFichier: string, url: string): string {
   // Espaces et parenthèses casseraient la syntaxe `![](…)` ;
   // `encodeURIComponent` laisse les parenthèses, on les encode à la main.
@@ -149,7 +167,7 @@ export async function convertirEnWebp(
 }
 
 export interface ImageTeleversee extends Dimensions {
-  url: string
+  /** Chemin dans le bucket (`<classeurId>/<uuid>.webp`), la référence portée par le Markdown. */
   chemin: string
   octetsSource: number
   octetsWebp: number
@@ -158,7 +176,7 @@ export interface ImageTeleversee extends Dimensions {
 }
 
 /**
- * Convertit puis envoie ; rend l'URL publique et la ligne Markdown.
+ * Convertit puis envoie ; rend le chemin et la ligne Markdown.
  * Erreurs : fichier refusé, conversion impossible, image encore trop lourde
  * après la passe serrée, refus du Storage (RLS : classeur d'un autre).
  */
@@ -189,16 +207,35 @@ export async function televerserImage(
     })
   if (error) throw error
 
-  const { data } = supabase.storage.from(BUCKET_IMAGES).getPublicUrl(chemin)
   return {
-    url: data.publicUrl,
     chemin,
     octetsSource: file.size,
     octetsWebp: image.blob.size,
     largeur: image.largeur,
     hauteur: image.hauteur,
-    markdown: markdownImage(file.name, data.publicUrl),
+    markdown: markdownImage(file.name, chemin),
   }
+}
+
+/** Télécharge une image par l'API authentifiée (RLS de lecture). */
+export async function telechargerImage(chemin: string): Promise<Blob> {
+  if (!estCheminImage(chemin)) throw new Error('Chemin d’image invalide.')
+  const { data, error } = await supabase.storage
+    .from(BUCKET_IMAGES)
+    .download(chemin)
+  if (error) throw error
+  return data
+}
+
+/** URL `blob:` par chemin, créée une fois et gardée pour la session (voir `ImageDocument`). */
+const urlsObjets = new Map<string, string>()
+
+export function urlObjetImage(chemin: string, blob: Blob): string {
+  const connue = urlsObjets.get(chemin)
+  if (connue !== undefined) return connue
+  const url = URL.createObjectURL(blob)
+  urlsObjets.set(chemin, url)
+  return url
 }
 
 export function formaterOctets(octets: number): string {

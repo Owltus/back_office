@@ -7,7 +7,9 @@ import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 
 import { MermaidBlock } from '#/components/classeur/MermaidBlock.tsx'
+import { ImageDocument } from '#/components/classeur/print/ImageDocument.tsx'
 import { A4Page } from '#/components/classeur/print/A4Page.tsx'
+import { estCheminImage } from '#/lib/classeur/images.ts'
 import { PAGE_FONT_FAMILY } from '#/lib/classeur/print/constants.ts'
 import {
   PAGEBREAK_MARKER,
@@ -65,6 +67,13 @@ const markdownComponents: Components = {
     if (isEmptyHeader(children)) return null
     return <thead>{children}</thead>
   },
+  // Image du bucket privé : lue par l'API authentifiée, jamais par URL.
+  img: ({ src, alt }) =>
+    estCheminImage(src) ? (
+      <ImageDocument chemin={src} alt={alt} />
+    ) : (
+      <img src={src} alt={alt ?? ''} />
+    ),
 }
 
 /*

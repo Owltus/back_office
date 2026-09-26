@@ -30,4 +30,9 @@ export const classeurKeys = {
   /** Historique des fusions d'un classeur. */
   mergeHistory: (classeurId: number) =>
     ['classeur', 'merge-history', classeurId] as const,
+  /**
+   * Une image de document (Blob, bucket privé). Immuable (UUID dans le
+   * chemin) ; jamais persistée : un Blob ne survit pas au JSON.
+   */
+  image: (chemin: string) => ['classeur', 'image', chemin] as const,
 }
