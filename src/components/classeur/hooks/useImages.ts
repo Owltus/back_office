@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
+import { useInvaliderClasseur } from '#/components/classeur/hooks/useClasseur.ts'
 import { classeurKeys } from '#/lib/classeur/keys.ts'
 import { supprimerImage, televerserImage } from '#/lib/classeur/images.ts'
 import type { PreparationImage } from '#/lib/classeur/images.ts'
@@ -53,11 +54,20 @@ export function useRenommerImage(classeurId: number) {
   })
 }
 
-/** Suppression : fichier du bucket PUIS fiche (douce). */
-export function useSupprimerImage(classeurId: number) {
-  const invalider = useInvaliderImages()
+/**
+ * Suppression propre : documents réécrits sans l'image, fichier retiré,
+ * fiche marquée. Invalide TOUT le classeur (les documents ont changé).
+ */
+export function useSupprimerImage() {
+  const invalider = useInvaliderClasseur()
   return useMutation({
-    mutationFn: (image: DbImage) => supprimerImage(image),
-    onSuccess: () => invalider(classeurId),
+    mutationFn: ({
+      image,
+      documents,
+    }: {
+      image: DbImage
+      documents: ReadonlyArray<{ id: number; content: string }>
+    }) => supprimerImage(image, documents),
+    onSuccess: () => invalider(),
   })
 }

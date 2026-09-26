@@ -29,7 +29,11 @@
  * Tout ce qui ne touche pas au DOM est pur et testé (`images.test.ts`).
  */
 
-import { insertImage, softDeleteImage } from '#/lib/classeur/service.ts'
+import {
+  insertImage,
+  softDeleteImage,
+  updateItem,
+} from '#/lib/classeur/service.ts'
 import type {
   ChapterContent,
   DbChapter,
@@ -374,16 +378,33 @@ export async function televerserImage(
 }
 
 /**
- * Supprime une image : le fichier du bucket d'abord (RLS : classeur
- * modifiable), puis la fiche (douce). Les documents qui la référencent
- * encore afficheront « Image indisponible » — le dialogue prévient avant.
+ * Supprime une image PROPREMENT (demande utilisateur du 2026-09-26) :
+ *   1. les documents qui la référencent sont réécrits sans elle
+ *      (`retirerImageDuMarkdown`, via `updateItem` : la garde des points
+ *      de restauration s'applique) — AVANT toute étape irréversible ;
+ *   2. le fichier est retiré du bucket (RLS : classeur modifiable) ;
+ *   3. la fiche est marquée supprimée.
+ * Un échec à l'étape 1 laisse l'image intacte (les documents déjà
+ * réécrits le restent : ils sont simplement sans l'image).
+ * Rend le nombre de documents modifiés.
  */
-export async function supprimerImage(image: DbImage): Promise<void> {
+export async function supprimerImage(
+  image: DbImage,
+  documents: ReadonlyArray<{ id: number; content: string }> = [],
+): Promise<{ documentsModifies: number }> {
+  let documentsModifies = 0
+  for (const doc of documents) {
+    const nouveau = retirerImageDuMarkdown(doc.content, image.chemin)
+    if (nouveau === doc.content) continue
+    await updateItem('document', doc.id, { content: nouveau })
+    documentsModifies += 1
+  }
   const { error } = await supabase.storage
     .from(BUCKET_IMAGES)
     .remove([image.chemin])
   if (error) throw error
   await softDeleteImage(image.id)
+  return { documentsModifies }
 }
 
 // ---------------------------------------------------------------------------
@@ -392,6 +413,41 @@ export async function supprimerImage(image: DbImage): Promise<void> {
 
 const REF_IMAGE =
   /!\[[^\]]*\]\(\s*<?([0-9]{1,12}\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.webp)>?(?:\s+"[^"]*")?\s*\)/gi
+
+/**
+ * Retire toute référence à `chemin` d'un Markdown : une ligne qui ne
+ * portait que l'image disparaît (avec la ligne vide qu'elle laisserait en
+ * double), une référence au milieu d'une ligne est ôtée seule, le reste du
+ * texte est conservé à l'octet près. Idempotent.
+ */
+export function retirerImageDuMarkdown(
+  markdown: string,
+  chemin: string,
+): string {
+  const cible = chemin.toLowerCase()
+  const sortie: string[] = []
+  let derniereRetiree = false
+  for (const ligne of markdown.split('\n')) {
+    const modifiee = ligne.replace(REF_IMAGE, (tout: string, ch: string) =>
+      ch.toLowerCase() === cible ? '' : tout,
+    )
+    if (modifiee !== ligne && modifiee.trim() === '') {
+      derniereRetiree = true
+      continue
+    }
+    if (
+      derniereRetiree &&
+      modifiee.trim() === '' &&
+      sortie.length > 0 &&
+      sortie[sortie.length - 1].trim() === ''
+    ) {
+      continue
+    }
+    derniereRetiree = false
+    sortie.push(modifiee)
+  }
+  return sortie.join('\n')
+}
 
 /** Les chemins d'images référencés par un Markdown (dédoublonnés, ordre d'apparition). */
 export function imagesReferencees(markdown: string): string[] {

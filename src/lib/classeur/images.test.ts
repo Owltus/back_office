@@ -13,6 +13,7 @@ import {
   largeurDepuisTitre,
   markdownImage,
   recadrageBorne,
+  retirerImageDuMarkdown,
   usagesImages,
   refusImageSource,
   texteAlternatif,
@@ -183,6 +184,33 @@ describe('recadrage et rotation — géométrie pure', () => {
     expect(b.largeur).toBeGreaterThan(400)
     expect(b.hauteur).toBeGreaterThan(300)
     expect(b.largeur).toBe(b.hauteur)
+  })
+})
+
+describe('retirerImageDuMarkdown — suppression propre d’une image', () => {
+  const A = '2/0f2a9b1c-1234-4abc-8def-0123456789ab.webp'
+  const B = '2/1a2b3c4d-1234-4abc-8def-0123456789ab.webp'
+  it('retire la ligne qui ne portait que l’image, sans laisser deux lignes vides', () => {
+    const md = `# Titre\n\n![Plan](${A})\n\nSuite du texte.`
+    expect(retirerImageDuMarkdown(md, A)).toBe('# Titre\n\nSuite du texte.')
+  })
+  it('retire seulement le jeton au milieu d’une ligne, garde les autres images', () => {
+    const md = `Voir ![a](${A}) puis ![b](${B}) fin\n![a](${A} "largeur=50")`
+    expect(retirerImageDuMarkdown(md, A)).toBe(`Voir  puis ![b](${B}) fin`)
+  })
+  it('conserve le reste à l’octet près et reste idempotent', () => {
+    const md = `Ligne 1\n\n\nLigne 2 (deux vides gardées)\n![x](${B})\n`
+    expect(retirerImageDuMarkdown(md, A)).toBe(md)
+    const une = retirerImageDuMarkdown(md, B)
+    expect(une).toBe('Ligne 1\n\n\nLigne 2 (deux vides gardées)\n')
+    expect(retirerImageDuMarkdown(une, B)).toBe(une)
+  })
+  it('insensible à la casse du chemin', () => {
+    expect(retirerImageDuMarkdown(`![a](${A.toUpperCase()})`, A)).toBe('')
+  })
+  it('après retrait, l’image n’est plus référencée', () => {
+    const md = `![a](${A})\n\ntexte\n\n![a](${A})`
+    expect(imagesReferencees(retirerImageDuMarkdown(md, A))).toEqual([])
   })
 })
 

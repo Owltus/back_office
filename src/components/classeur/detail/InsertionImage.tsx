@@ -12,6 +12,7 @@ import {
   estImage,
   formaterOctets,
   refusImageSource,
+  retirerImageDuMarkdown,
   televerserImage,
 } from '#/lib/classeur/images.ts'
 import type { PreparationImage } from '#/lib/classeur/images.ts'
@@ -188,6 +189,9 @@ export function useInsertionImage({
     enPreparation,
     annulerPreparation: () => setEnPreparation(null),
     envoyer,
+    /** Une image supprimée de la médiathèque disparaît aussi du texte en cours. */
+    retirerDuTexte: (chemin: string) =>
+      setContenu((prev) => retirerImageDuMarkdown(prev, chemin)),
   }
 }
 
@@ -221,6 +225,7 @@ export function BarreImage({
             image.insererMarkdown(markdown)
             image.setMediathequeOuverte(false)
           }}
+          onImageSupprimee={image.retirerDuTexte}
         />
       )}
       <input

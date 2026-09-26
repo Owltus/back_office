@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import type { ChangeEvent } from 'react'
 import {
   AlertCircle,
@@ -22,7 +23,7 @@ import {
   useSupprimerImage,
   useTeleverserImage,
 } from '#/components/classeur/hooks/useImages.ts'
-import { ConfirmDialog } from '#/components/shared/ConfirmDialog.tsx'
+import { SuppressionImageDialog } from '#/components/classeur/dialogs/SuppressionImageDialog.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Alert, AlertDescription } from '#/components/ui/alert.tsx'
 import { Button } from '#/components/ui/button.tsx'
@@ -36,6 +37,8 @@ import {
 import { Input } from '#/components/ui/input.tsx'
 import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { messageErreur } from '#/lib/classeur/erreur.ts'
+import { classeurKeys } from '#/lib/classeur/keys.ts'
+import { fetchClasseurContent } from '#/lib/classeur/service.ts'
 import {
   formaterOctets,
   imagesReferencees,
@@ -73,6 +76,7 @@ export function ImagesDialog({
   documentId,
   contenuCourant,
   onInserer,
+  onImageSupprimee,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -83,13 +87,19 @@ export function ImagesDialog({
   contenuCourant?: string
   /** Mode insertion : rend le bouton « Insérer » de chaque carte. */
   onInserer?: (markdown: string) => void
+  /**
+   * Une image vient d'être supprimée : l'éditeur ouvert retire aussi sa
+   * référence du texte en cours de frappe (non sauvegardé).
+   */
+  onImageSupprimee?: (chemin: string) => void
 }) {
   const { canWrite } = useDroitsClasseur(classeurId)
   const images = useImages(classeurId, open)
   const contenu = useClasseurContent(classeurId)
+  const queryClient = useQueryClient()
   const envoi = useTeleverserImage(classeurId)
   const renommage = useRenommerImage(classeurId)
-  const suppression = useSupprimerImage(classeurId)
+  const suppression = useSupprimerImage()
 
   const [vue, setVue] = useState<Vue>(
     documentId !== undefined ? 'document' : 'toutes',
@@ -451,7 +461,12 @@ export function ImagesDialog({
                                 variant="ghost"
                                 className="hover:bg-destructive/10 hover:text-destructive"
                                 aria-label={`Supprimer ${img.nom}`}
-                                onClick={() => setASupprimer(img)}
+                                onClick={() => {
+                                  // Décision de suppression : l'usage doit
+                                  // être lu FRAIS, pas depuis le cache.
+                                  void contenu.refetch()
+                                  setASupprimer(img)
+                                }}
                                 disabled={occupe}
                               >
                                 <Trash2 />
@@ -476,30 +491,45 @@ export function ImagesDialog({
         onValider={envoyerPrepare}
       />
 
-      <ConfirmDialog
-        open={aSupprimer !== null}
-        onOpenChange={(o) => {
-          if (!o) setASupprimer(null)
-        }}
-        title="Supprimer l’image"
-        description={
-          aSupprimer
-            ? (() => {
-                const u = usages.get(aSupprimer.chemin.toLowerCase()) ?? []
-                return u.length === 0
-                  ? `« ${aSupprimer.nom} » n'est utilisée par aucun document. Le fichier sera retiré du classeur.`
-                  : `« ${aSupprimer.nom} » est utilisée dans ${u.length} document(s) : ${u.map((x) => x.documentTitle).join(', ')}. Ils afficheront « Image indisponible ».`
-              })()
-            : undefined
+      <SuppressionImageDialog
+        image={aSupprimer}
+        usages={
+          aSupprimer ? (usages.get(aSupprimer.chemin.toLowerCase()) ?? []) : []
         }
-        confirmLabel="Supprimer"
-        destructive
-        onConfirm={() => {
-          if (aSupprimer) {
-            suppression.mutate(aSupprimer, {
-              onSuccess: () => setMessage(`« ${aSupprimer.nom} » supprimée.`),
-            })
-          }
+        occupe={suppression.isPending}
+        onAnnuler={() => setASupprimer(null)}
+        onConfirmer={async () => {
+          if (!aSupprimer) return
+          const image = aSupprimer
+          // Les documents SAUVEGARDÉS qui la référencent, relus À L'INSTANT
+          // (jamais le cache : un document ajouté par un autre poste il y a
+          // une minute serait manqué et resterait avec « Image
+          // indisponible »). Le texte en cours de frappe est traité par
+          // `onImageSupprimee`.
+          const frais = await queryClient.fetchQuery({
+            queryKey: classeurKeys.classeurItems(classeurId),
+            queryFn: () => fetchClasseurContent(classeurId),
+            staleTime: 0,
+          })
+          const documents = frais.content.documents.filter(
+            (d) =>
+              d.deleted_at === null &&
+              imagesReferencees(d.content).includes(image.chemin.toLowerCase()),
+          )
+          suppression.mutate(
+            { image, documents },
+            {
+              onSuccess: (res) => {
+                setASupprimer(null)
+                onImageSupprimee?.(image.chemin)
+                setMessage(
+                  res.documentsModifies === 0
+                    ? `« ${image.nom} » supprimée.`
+                    : `« ${image.nom} » supprimée et retirée de ${String(res.documentsModifies)} document${res.documentsModifies > 1 ? 's' : ''}.`,
+                )
+              },
+            },
+          )
         }}
       />
     </>
