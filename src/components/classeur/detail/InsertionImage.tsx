@@ -1,9 +1,12 @@
 import { useCallback, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import type { ChangeEvent, ClipboardEvent, DragEvent, RefObject } from 'react'
-import { ImagePlus, Loader2 } from 'lucide-react'
+import { ImagePlus, Images, Loader2 } from 'lucide-react'
 
+import { ImagesDialog } from '#/components/classeur/dialogs/ImagesDialog.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { messageErreur } from '#/lib/classeur/erreur.ts'
+import { classeurKeys } from '#/lib/classeur/keys.ts'
 import {
   estImage,
   formaterOctets,
@@ -32,39 +35,66 @@ export type EtatImage =
 
 export function useInsertionImage({
   classeurId,
+  documentId,
+  contenu,
   editeurRef,
   setContenu,
 }: {
   classeurId: number | null
+  /** Document en cours d'édition (vue « Ce document » de la médiathèque). */
+  documentId?: number
+  /** Markdown en cours de frappe (usage « ce document » calculé dessus). */
+  contenu: string
   editeurRef: RefObject<HTMLTextAreaElement | null>
   setContenu: (mise: (prev: string) => string) => void
 }) {
   const [etat, setEtat] = useState<EtatImage>({ type: 'repos' })
+  const [mediathequeOuverte, setMediathequeOuverte] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const invaliderImages = useQueryClient()
+
+  /** Insère une ligne Markdown à la position du curseur (relevée maintenant). */
+  const insererMarkdown = useCallback(
+    (
+      markdown: string,
+      position?: { debut: number | null; fin: number | null },
+    ) => {
+      const editeur = editeurRef.current
+      const debut = position?.debut ?? editeur?.selectionStart ?? null
+      const fin = position?.fin ?? editeur?.selectionEnd ?? debut
+      setContenu((prev) => {
+        const d = debut ?? prev.length
+        const f = fin ?? d
+        const avant = prev.slice(0, d)
+        const apres = prev.slice(f)
+        const sautAvant = avant === '' || avant.endsWith('\n') ? '' : '\n'
+        const sautApres = apres.startsWith('\n') ? '' : '\n'
+        return `${avant}${sautAvant}${markdown}${sautApres}${apres}`
+      })
+      editeur?.focus()
+    },
+    [editeurRef, setContenu],
+  )
 
   const inserer = useCallback(
     async (file: File) => {
       if (classeurId === null) return
       const editeur = editeurRef.current
-      const debut = editeur?.selectionStart ?? null
-      const fin = editeur?.selectionEnd ?? debut
+      const position = {
+        debut: editeur?.selectionStart ?? null,
+        fin: editeur?.selectionEnd ?? null,
+      }
       setEtat({ type: 'envoi', nom: file.name })
       try {
         const res = await televerserImage(classeurId, file)
-        setContenu((prev) => {
-          const d = debut ?? prev.length
-          const f = fin ?? d
-          const avant = prev.slice(0, d)
-          const apres = prev.slice(f)
-          const sautAvant = avant === '' || avant.endsWith('\n') ? '' : '\n'
-          const sautApres = apres.startsWith('\n') ? '' : '\n'
-          return `${avant}${sautAvant}${res.markdown}${sautApres}${apres}`
+        insererMarkdown(res.markdown, position)
+        void invaliderImages.invalidateQueries({
+          queryKey: classeurKeys.images(classeurId),
         })
         setEtat({
           type: 'ok',
-          message: `Image ajoutée : ${formaterOctets(res.octetsSource)} → ${formaterOctets(res.octetsWebp)} en WebP (${String(res.largeur)} × ${String(res.hauteur)}).`,
+          message: `Image ajoutée à la médiathèque : ${formaterOctets(res.octetsSource)} → ${formaterOctets(res.image.taille)} en WebP (${String(res.image.largeur)} × ${String(res.image.hauteur)}).`,
         })
-        editeur?.focus()
       } catch (err) {
         setEtat({
           type: 'erreur',
@@ -72,7 +102,7 @@ export function useInsertionImage({
         })
       }
     },
-    [classeurId, editeurRef, setContenu],
+    [classeurId, editeurRef, insererMarkdown, invaliderImages],
   )
 
   const premiereImage = (fichiers: FileList | null | undefined) =>
@@ -119,10 +149,16 @@ export function useInsertionImage({
     /** À poser sur le `textarea`. */
     editeurProps: { onPaste, onDragOver, onDrop },
     actif: classeurId !== null,
+    classeurId,
+    documentId,
+    contenu,
+    mediathequeOuverte,
+    setMediathequeOuverte,
+    insererMarkdown,
   }
 }
 
-/** Barre au-dessus de l'éditeur : bouton Image + état de l'envoi. */
+/** Barre au-dessus de l'éditeur : Image (nouvelle), Médiathèque, état de l'envoi. */
 export function BarreImage({
   image,
 }: {
@@ -132,6 +168,19 @@ export function BarreImage({
   const envoi = etat.type === 'envoi'
   return (
     <div className="flex items-center gap-3 pb-2">
+      {image.classeurId !== null && (
+        <ImagesDialog
+          open={image.mediathequeOuverte}
+          onOpenChange={image.setMediathequeOuverte}
+          classeurId={image.classeurId}
+          documentId={image.documentId}
+          contenuCourant={image.contenu}
+          onInserer={(markdown) => {
+            image.insererMarkdown(markdown)
+            image.setMediathequeOuverte(false)
+          }}
+        />
+      )}
       <input
         ref={image.inputRef}
         type="file"
@@ -150,6 +199,16 @@ export function BarreImage({
         {envoi ? <Loader2 className="animate-spin" /> : <ImagePlus />}
         Image
       </Button>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => image.setMediathequeOuverte(true)}
+        disabled={!image.actif}
+      >
+        <Images />
+        Médiathèque
+      </Button>
       <span
         role={etat.type === 'erreur' ? 'alert' : 'status'}
         className={cn(
@@ -158,7 +217,7 @@ export function BarreImage({
         )}
       >
         {etat.type === 'repos' &&
-          'Glissez ou collez une image dans l’éditeur : elle est convertie en WebP et compressée avant d’être rangée.'}
+          'Glissez ou collez une image dans l’éditeur, ou reprenez-en une de la médiathèque du classeur.'}
         {etat.type === 'envoi' && `Conversion et envoi de ${etat.nom}…`}
         {(etat.type === 'ok' || etat.type === 'erreur') && etat.message}
       </span>

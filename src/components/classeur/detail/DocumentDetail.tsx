@@ -61,6 +61,8 @@ export function DocumentDetail() {
   const synchronisation = useRef(false)
   const image = useInsertionImage({
     classeurId: page.classeur?.id ?? null,
+    documentId: doc?.id,
+    contenu,
     editeurRef,
     setContenu,
   })

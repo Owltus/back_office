@@ -29,6 +29,12 @@
  * Tout ce qui ne touche pas au DOM est pur et testé (`images.test.ts`).
  */
 
+import { insertImage, softDeleteImage } from '#/lib/classeur/service.ts'
+import type {
+  ChapterContent,
+  DbChapter,
+  DbImage,
+} from '#/lib/classeur/types.ts'
 import { supabase } from '#/lib/supabase.ts'
 
 export const BUCKET_IMAGES = 'classeur-images'
@@ -166,11 +172,10 @@ export async function convertirEnWebp(
   }
 }
 
-export interface ImageTeleversee extends Dimensions {
-  /** Chemin dans le bucket (`<classeurId>/<uuid>.webp`), la référence portée par le Markdown. */
-  chemin: string
+export interface ImageTeleversee {
+  /** La fiche créée dans `classeur_images` (médiathèque du classeur). */
+  image: DbImage
   octetsSource: number
-  octetsWebp: number
   /** La ligne Markdown prête à insérer. */
   markdown: string
 }
@@ -207,14 +212,95 @@ export async function televerserImage(
     })
   if (error) throw error
 
-  return {
-    chemin,
-    octetsSource: file.size,
-    octetsWebp: image.blob.size,
-    largeur: image.largeur,
-    hauteur: image.hauteur,
-    markdown: markdownImage(file.name, chemin),
+  // Fiche dans la médiathèque. Si elle échoue, le fichier ne doit pas
+  // rester orphelin dans le bucket : on le retire avant de remonter.
+  let fiche: DbImage
+  try {
+    fiche = await insertImage(classeurId, {
+      chemin,
+      nom: texteAlternatif(file.name),
+      taille: image.blob.size,
+      largeur: image.largeur,
+      hauteur: image.hauteur,
+    })
+  } catch (err) {
+    await supabase.storage.from(BUCKET_IMAGES).remove([chemin])
+    throw err
   }
+
+  return {
+    image: fiche,
+    octetsSource: file.size,
+    markdown: markdownImage(fiche.nom, chemin),
+  }
+}
+
+/**
+ * Supprime une image : le fichier du bucket d'abord (RLS : classeur
+ * modifiable), puis la fiche (douce). Les documents qui la référencent
+ * encore afficheront « Image indisponible » — le dialogue prévient avant.
+ */
+export async function supprimerImage(image: DbImage): Promise<void> {
+  const { error } = await supabase.storage
+    .from(BUCKET_IMAGES)
+    .remove([image.chemin])
+  if (error) throw error
+  await softDeleteImage(image.id)
+}
+
+// ---------------------------------------------------------------------------
+// Usages : quels documents référencent quelle image (calcul pur)
+// ---------------------------------------------------------------------------
+
+const REF_IMAGE =
+  /!\[[^\]]*\]\(\s*<?([0-9]{1,12}\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.webp)>?(?:\s+"[^"]*")?\s*\)/gi
+
+/** Les chemins d'images référencés par un Markdown (dédoublonnés, ordre d'apparition). */
+export function imagesReferencees(markdown: string): string[] {
+  const vus = new Set<string>()
+  for (const m of markdown.matchAll(REF_IMAGE)) {
+    vus.add(m[1].toLowerCase())
+  }
+  return Array.from(vus)
+}
+
+export interface UsageImage {
+  chapterId: number
+  chapterLabel: string
+  documentId: number
+  documentTitle: string
+}
+
+/**
+ * Pour chaque chemin d'image, les documents (non supprimés) qui le
+ * référencent, dans l'ordre des chapitres puis des documents.
+ */
+export function usagesImages(
+  chapters: ReadonlyArray<Pick<DbChapter, 'id' | 'label' | 'sort_order'>>,
+  content: Pick<ChapterContent, 'documents'>,
+): Map<string, UsageImage[]> {
+  const usages = new Map<string, UsageImage[]>()
+  const chapitres = new Map(chapters.map((c) => [c.id, c]))
+  const documents = [...content.documents]
+    .filter((d) => d.deleted_at === null)
+    .sort((a, b) => {
+      const ca = chapitres.get(a.chapter_id)?.sort_order ?? 0
+      const cb = chapitres.get(b.chapter_id)?.sort_order ?? 0
+      return ca - cb || a.sort_order - b.sort_order || a.id - b.id
+    })
+  for (const doc of documents) {
+    for (const chemin of imagesReferencees(doc.content)) {
+      const liste = usages.get(chemin) ?? []
+      liste.push({
+        chapterId: doc.chapter_id,
+        chapterLabel: chapitres.get(doc.chapter_id)?.label ?? '',
+        documentId: doc.id,
+        documentTitle: doc.title,
+      })
+      usages.set(chemin, liste)
+    }
+  }
+  return usages
 }
 
 /** Télécharge une image par l'API authentifiée (RLS de lecture). */

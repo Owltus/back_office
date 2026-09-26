@@ -16,6 +16,7 @@
 import { supabase } from '#/lib/supabase.ts'
 import type {
   ChapterContent,
+  DbImage,
   DbChapter,
   DbClasseur,
   DbDocument,
@@ -61,6 +62,7 @@ export const CLASSEURS_TABLE = 'classeur_classeurs'
 export const CHAPTERS_TABLE = 'classeur_chapters'
 export const PERIODICITES_TABLE = 'classeur_periodicites'
 export const MERGE_HISTORY_TABLE = 'classeur_merge_history'
+export const IMAGES_TABLE = 'classeur_images'
 
 const COLS_COMMUNES = 'id, uuid, sort_order, deleted_at, created_at, updated_at'
 const COLS_CLASSEUR = `${COLS_COMMUNES}, name, icon, etablissement, etablissement_complement, created_by`
@@ -71,6 +73,62 @@ const COLS_SIGNATURE = `${COLS_COMMUNES}, chapter_id, title, description, nombre
 const COLS_INTERCALAIRE = `${COLS_COMMUNES}, chapter_id, title, description`
 const COLS_HISTORY =
   'id, classeur_id, merged_at, kind, label, source_name, inserted, updated, unchanged, skipped, taille'
+const COLS_IMAGE =
+  'id, uuid, classeur_id, chemin, nom, taille, largeur, hauteur, deleted_at, created_at, updated_at, created_by'
+
+// ---------------------------------------------------------------------------
+// Images (médiathèque d'un classeur) — pas de point de restauration auto :
+// l'instantané ne couvre pas les images.
+// ---------------------------------------------------------------------------
+
+export async function fetchImages(classeurId: number): Promise<DbImage[]> {
+  const { data, error } = await supabase
+    .from(IMAGES_TABLE)
+    .select(COLS_IMAGE)
+    .eq('classeur_id', classeurId)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+  if (error) throw error
+  return data
+}
+
+export interface ImageInput {
+  chemin: string
+  nom: string
+  taille: number
+  largeur: number
+  hauteur: number
+}
+
+export async function insertImage(
+  classeurId: number,
+  input: ImageInput,
+): Promise<DbImage> {
+  const { data, error } = await supabase
+    .from(IMAGES_TABLE)
+    .insert({ ...input, classeur_id: classeurId })
+    .select(COLS_IMAGE)
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function updateImage(
+  id: number,
+  patch: Partial<Pick<DbImage, 'nom'>>,
+): Promise<void> {
+  const { error } = await supabase.from(IMAGES_TABLE).update(patch).eq('id', id)
+  if (error) throw error
+}
+
+export async function softDeleteImage(id: number): Promise<void> {
+  const { error } = await supabase
+    .from(IMAGES_TABLE)
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', id)
+  if (error) throw error
+}
 
 // ---------------------------------------------------------------------------
 // Classeurs

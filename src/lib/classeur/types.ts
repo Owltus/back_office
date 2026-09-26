@@ -104,6 +104,52 @@ export interface DbIntercalaire {
 }
 
 /**
+ * Ligne de `classeur_images` — la médiathèque d'un classeur (2026-09-26).
+ * Une image appartient au CLASSEUR et sert à tous ses documents ; le
+ * Markdown la référence par `chemin` (`![nom](<classeurId>/<uuid>.webp>`).
+ */
+export interface DbImage {
+  id: number
+  uuid: string
+  classeur_id: number
+  /** Chemin dans le bucket `classeur-images`. */
+  chemin: string
+  /** Nom lisible (le nom du fichier d'origine, renommable). */
+  nom: string
+  /** Poids du WebP en octets. */
+  taille: number
+  largeur: number
+  hauteur: number
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+  created_by: string | null
+}
+
+/**
+ * Ligne de `classeur_images` — la médiathèque d'un classeur (2026-09-26).
+ * Une image appartient au CLASSEUR et sert à tous ses documents ; le
+ * Markdown la référence par `chemin` (`![nom](<classeurId>/<uuid>.webp>`).
+ */
+export interface DbImage {
+  id: number
+  uuid: string
+  classeur_id: number
+  /** Chemin dans le bucket `classeur-images`. */
+  chemin: string
+  /** Nom lisible (le nom du fichier d'origine, renommable). */
+  nom: string
+  /** Poids du WebP en octets. */
+  taille: number
+  largeur: number
+  hauteur: number
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+  created_by: string | null
+}
+
+/**
  * Genre d'un point de restauration (`classeur_merge_history.kind`) :
  * `auto` mineur pris avant une session de modifications ; `manuel` majeur
  * nommé par l'utilisateur ; `fusion` avant un import JSON ; `securite` avant

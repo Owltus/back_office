@@ -8,6 +8,7 @@ import type {
   DashboardContexte,
 } from '#/components/classeur/ClasseurDashboard.tsx'
 import { HistoriqueDialog } from '#/components/classeur/dialogs/HistoriqueDialog.tsx'
+import { ImagesDialog } from '#/components/classeur/dialogs/ImagesDialog.tsx'
 import { MergePreviewDialog } from '#/components/classeur/dialogs/MergePreviewDialog.tsx'
 import { ClasseurCoverPage } from '#/components/classeur/print/ClasseurCoverPage.tsx'
 import { ChapterPrintPages } from '#/components/classeur/print/ItemPages.tsx'
@@ -81,6 +82,7 @@ export function ClasseurDashboardActions({
   const [periodicites, setPeriodicites] = useState<DbPeriodicite[]>([])
   const [fichierImport, setFichierImport] = useState<File | null>(null)
   const [historiqueOuvert, setHistoriqueOuvert] = useState(false)
+  const [imagesOuvertes, setImagesOuvertes] = useState(false)
   const [bilan, setBilan] = useState<string | null>(null)
   const [erreurFichier, setErreurFichier] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -188,6 +190,7 @@ export function ClasseurDashboardActions({
         onImporter={() => inputRef.current?.click()}
         onFichierDepose={recevoirFichier}
         onHistorique={() => setHistoriqueOuvert(true)}
+        onImages={() => setImagesOuvertes(true)}
         busy={busy}
       />
 
@@ -204,6 +207,11 @@ export function ClasseurDashboardActions({
         }}
       />
 
+      <ImagesDialog
+        open={imagesOuvertes}
+        onOpenChange={setImagesOuvertes}
+        classeurId={classeurId}
+      />
       <HistoriqueDialog
         open={historiqueOuvert}
         onOpenChange={setHistoriqueOuvert}

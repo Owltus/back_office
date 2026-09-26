@@ -8,7 +8,9 @@ import {
   estCheminImage,
   estImage,
   formaterOctets,
+  imagesReferencees,
   markdownImage,
+  usagesImages,
   refusImageSource,
   texteAlternatif,
 } from '#/lib/classeur/images.ts'
@@ -125,6 +127,52 @@ describe('refusImageSource', () => {
         size: MAX_IMAGE_SOURCE_BYTES + 1,
       }),
     ).toMatch(/trop volumineuse/)
+  })
+})
+
+describe('imagesReferencees / usagesImages — l’usage est CALCULÉ depuis les documents', () => {
+  const A = '2/0f2a9b1c-1234-4abc-8def-0123456789ab.webp'
+  const B = '2/1a2b3c4d-1234-4abc-8def-0123456789ab.webp'
+  it('extrait les chemins du bucket, une fois chacun, pas les URL externes', () => {
+    const md = `# Titre\n\n![Plan](${A})\n\ntexte ![ext](https://x.test/a.png)\n\n![Plan bis](${A} "titre")\n![B](<${B}>)`
+    expect(imagesReferencees(md)).toEqual([A, B])
+    expect(imagesReferencees('rien')).toEqual([])
+  })
+  it('associe chaque image à ses documents non supprimés, dans l’ordre des chapitres', () => {
+    const chapters = [
+      { id: 10, label: 'Gaz', sort_order: 2 },
+      { id: 20, label: 'Incendie', sort_order: 1 },
+    ]
+    const doc = (
+      id: number,
+      chapter_id: number,
+      content: string,
+      deleted_at: string | null = null,
+    ) => ({
+      id,
+      uuid: `d${String(id)}`,
+      chapter_id,
+      title: `Doc ${String(id)}`,
+      description: '',
+      content,
+      sort_order: id,
+      deleted_at,
+      created_at: '',
+      updated_at: '',
+    })
+    const usages = usagesImages(chapters, {
+      documents: [
+        doc(1, 10, `![a](${A})`),
+        doc(2, 20, `![a](${A}) ![b](${B})`),
+        doc(3, 20, `![b](${B})`, '2026-01-01T00:00:00Z'),
+      ],
+    })
+    expect(usages.get(A)?.map((u) => [u.chapterLabel, u.documentId])).toEqual([
+      ['Incendie', 2],
+      ['Gaz', 1],
+    ])
+    expect(usages.get(B)?.map((u) => u.documentId)).toEqual([2])
+    expect(usages.get('2/inconnue.webp')).toBeUndefined()
   })
 })
 

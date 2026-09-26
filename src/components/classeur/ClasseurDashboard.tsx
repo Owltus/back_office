@@ -8,6 +8,7 @@ import {
   FileText,
   FileUp,
   History,
+  Images,
   List,
   Pencil,
   PenLine,
@@ -99,6 +100,7 @@ export function ClasseurDashboard({
   onImporter,
   onFichierDepose,
   onHistorique,
+  onImages,
   busy = null,
   renderResult,
 }: {
@@ -114,6 +116,8 @@ export function ClasseurDashboard({
   /** Ouvre l'historique des imports (instantanés restaurables). Sans ctx : la
    * liste est lue par le dialogue lui-même. */
   onHistorique?: () => void
+  /** Ouvre la médiathèque du classeur. Absent, la carte n'est pas rendue. */
+  onImages?: () => void
   busy?: DashboardBusy
   renderResult?: (result: ClasseurSearchResult) => ReactNode
 }) {
@@ -376,16 +380,24 @@ export function ClasseurDashboard({
               </div>
             )}
 
+            {(onImages || onHistorique) && (
+              <div className="border-b border-border" />
+            )}
+            {onImages && (
+              <ActionCard
+                icon={Images}
+                title="Images du classeur"
+                subtitle="Photos et schémas utilisables dans tous les documents"
+                onClick={onImages}
+              />
+            )}
             {onHistorique && (
-              <>
-                <div className="border-b border-border" />
-                <ActionCard
-                  icon={History}
-                  title="Points de restauration"
-                  subtitle="Revenir à un état précédent du classeur"
-                  onClick={onHistorique}
-                />
-              </>
+              <ActionCard
+                icon={History}
+                title="Points de restauration"
+                subtitle="Revenir à un état précédent du classeur"
+                onClick={onHistorique}
+              />
             )}
           </div>
         </div>
