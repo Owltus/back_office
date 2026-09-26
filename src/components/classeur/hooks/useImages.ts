@@ -5,13 +5,18 @@ import { supprimerImage, televerserImage } from '#/lib/classeur/images.ts'
 import { fetchImages, updateImage } from '#/lib/classeur/service.ts'
 import type { DbImage } from '#/lib/classeur/types.ts'
 
-/** Médiathèque d'un classeur (images non supprimées, plus récentes d'abord). */
-export function useImages(classeurId: number) {
+/**
+ * Médiathèque d'un classeur (images non supprimées, plus récentes d'abord).
+ * `actif` : le dialogue passe son état d'ouverture, pour qu'une ouverture
+ * relise la liste si elle est périmée (la requête d'un dialogue fermé mais
+ * monté ne se rafraîchirait jamais).
+ */
+export function useImages(classeurId: number, actif = true) {
   return useQuery({
     queryKey: classeurKeys.images(classeurId),
     queryFn: () => fetchImages(classeurId),
     staleTime: 60_000,
-    enabled: Number.isInteger(classeurId),
+    enabled: actif && Number.isInteger(classeurId),
   })
 }
 

@@ -83,7 +83,7 @@ export function ImagesDialog({
   onInserer?: (markdown: string) => void
 }) {
   const { canWrite } = useDroitsClasseur(classeurId)
-  const images = useImages(classeurId)
+  const images = useImages(classeurId, open)
   const contenu = useClasseurContent(classeurId)
   const envoi = useTeleverserImage(classeurId)
   const renommage = useRenommerImage(classeurId)

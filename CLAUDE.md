@@ -613,10 +613,30 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
     déborde ; 8 s max). ⚠ `img.decode()` sur une `Image` DÉTACHÉE avec une
     URL `blob:` ne résout pas toujours dans Chrome : n'attendre que
     `load`/`error` sur un `<img>` du DOM.
-  - Mesuré : PNG 3,2 Mo → WebP 106 ko en 610 ms. Non fait, à dire si
-    demandé : purge des images qu'aucun document ne référence plus ; les
-    exports Markdown/JSON portent des chemins que Registre (bureau) ne
-    saura pas afficher.
+  - **Médiathèque (même jour, demande utilisateur : « si elles sont dans
+    le bucket je ne les vois pas… rangement à plusieurs niveaux »)** :
+    table `classeur_images` (fiche par image : chemin unique, nom, taille,
+    dimensions ; suppression douce ; RLS lecture ≥ 1, insert/update par
+    propriétaire, pas de delete ; `classeur_images_table_2026-09-26.sql`
+    JOUÉ, autorité à 9 tables / 26 policies / trigger × 8). Une image
+    appartient au CLASSEUR ; son USAGE est CALCULÉ (`imagesReferencees`,
+    `usagesImages`) depuis les contenus déjà chargés, jamais stocké — le
+    Markdown en cours de frappe fait foi pour le document ouvert. Dialogue
+    `dialogs/ImagesDialog.tsx` : vues Tout le classeur / Ce document /
+    Non utilisées (= les fichiers morts), renommer, supprimer (prévient si
+    utilisée ; fichier retiré PUIS fiche marquée), ajouter ; depuis
+    l'éditeur, bouton Médiathèque + « Insérer » au curseur ; depuis
+    l'accueil, carte « Images du classeur ». L'envoi crée la fiche et
+    retire le fichier si elle échoue (jamais d'orphelin). ⚠ La requête de
+    la liste est conditionnée à l'ouverture du dialogue (`useImages(id,
+    open)`) : un dialogue fermé mais monté ne se rafraîchirait jamais, et
+    le cache persisté (préfixe `classeur`) restaurait une liste vide.
+    Vérifié navigateur : ajout, carte « Non utilisée », suppression avec
+    confirmation, bucket vide et fiche `deleted_at` en base.
+  - Mesuré : PNG 3,2 Mo → WebP 106 ko en 610 ms. Non couvert, à dire si
+    demandé : les points de restauration et la fusion JSON ignorent les
+    fiches d'images ; les exports Markdown/JSON portent des chemins que
+    Registre (bureau) ne saura pas afficher.
 - **Droits PAR CLASSEUR (2026-09-26, demande utilisateur : « faire comme
   l'Affichage »)** : `supabase/classeur_proprietaire_2026-09-26.sql` (JOUÉ,
   autorité `classeur_2026-09-25.sql` §5 identique). `ecriture` crée des
