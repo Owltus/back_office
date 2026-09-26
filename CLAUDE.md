@@ -633,6 +633,24 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
     le cache persisté (préfixe `classeur`) restaurait une liste vide.
     Vérifié navigateur : ajout, carte « Non utilisée », suppression avec
     confirmation, bucket vide et fiche `deleted_at` en base.
+  - **Préparation avant envoi et mise en page (même jour, demande
+    utilisateur : « centrées automatiquement, option de crop, UX »)** :
+    `dialogs/ImagePreparationDialog.tsx` (`react-easy-crop`) s'ouvre pour
+    TOUT ajout (bouton, collage, dépôt, médiathèque) : cadre à ratio,
+    zoom, quarts de tour + redressement ±15°, largeur dans la page ;
+    « Utiliser telle quelle » saute cadre et rotation. `convertirEnWebp`
+    applique rotation PUIS recadrage (repère de react-easy-crop : pixels
+    de l'image TOURNÉE, `boiteTournee` + `recadrageBorne` testés). La
+    largeur voyage dans le TITRE Markdown (`![n](chemin "largeur=50")`,
+    `largeurDepuisTitre`) — seul canal que le Markdown standard laisse à
+    une image ; `.pdf-prose img` est en bloc centré (`break-inside:
+    avoid`). Pas de recadrage libre : react-easy-crop est un cadre fixe
+    que l'on déplace/zoome (ratios prédéfinis), choix assumé pour le
+    tactile. ⚠ Leçon de méthode (patchs Python rejoués) : un guard
+    « déjà appliqué » qui compare le texte APRÈS prettier ne détecte
+    rien — le rejeu a dupliqué un `<ImagePreparationDialog>` (deux
+    dialogues ouverts en même temps, trouvé au contrôle navigateur) ;
+    ne rejouer un patch qu'après `git diff`, jamais à l'aveugle.
   - Mesuré : PNG 3,2 Mo → WebP 106 ko en 610 ms. Non couvert, à dire si
     demandé : les points de restauration et la fusion JSON ignorent les
     fiches d'images ; les exports Markdown/JSON portent des chemins que
