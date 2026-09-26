@@ -587,23 +587,36 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   `lib/classeur/images.ts` convertit DANS LE NAVIGATEUR (`createImageBitmap`
   avec orientation EXIF, plus long côté 1600 px, `canvas.toBlob` WebP 0,8,
   seconde passe 1280 px / 0,65 si > 2 Mo) puis envoie dans le bucket
-  Storage `classeur-images` sous `<classeurId>/<uuid>.webp` et insère
-  `![nom](url)` (parenthèses et espaces de l'URL encodés à la main :
-  `encodeURIComponent` laisse les parenthèses, qui cassent la syntaxe).
-  Bucket créé par l'assistant dans le dashboard (public, 2 Mo, `image/webp`
-  seul — le serveur refuse tout autre format quel que soit le client) ;
-  `supabase/classeur_images_2026-09-26.sql` (JOUÉ) le porte en idempotent
-  + 3 policies `storage.objects` : lecture rang ≥ 1, insert/delete par
-  `private.classeur_write_ok(dossier)`. PUBLIC assumé : un `<img>` ne porte
-  pas de jeton, un bucket privé exigerait des URL signées réécrites à chaque
-  rendu (écran ET iframe d'impression) ; noms UUID, pas de donnée nominative
-  attendue. `vercel.json` : `img-src` autorise l'hôte Supabase (sans quoi la
-  prod n'afficherait rien). Éditeur : `detail/InsertionImage.tsx` (bouton
-  Image, collage, dépôt sur le textarea, insertion au curseur relevé AU
-  DÉPART, état inline « 3,2 Mo → 106 ko »). `usePagination` ATTEND le
-  chargement des `<img>` (sinon hauteur 0 et page qui déborde ; 8 s max).
-  Mesuré : PNG 3,2 Mo → WebP 106 ko en 610 ms. Non fait, à dire si demandé :
-  purge des images qu'aucun document ne référence plus.
+  Storage `classeur-images` sous `<classeurId>/<uuid>.webp`. Le Markdown
+  reçoit le CHEMIN, jamais une URL : `![nom](2/uuid.webp)`.
+  - **Bucket PRIVÉ, aucune URL publique** (l'utilisateur a REFUSÉ la
+    première version publique : « exposées sur le web sans RLS, pensé
+    sécurité »). Lecture par `storage.download` (API authentifiée, policy
+    select rang ≥ 1) dans `print/ImageDocument.tsx`, affichage par une URL
+    `blob:` locale (`urlObjetImage`, une par chemin, gardée pour la
+    session : les pages A4 sont des COPIES HTML du conteneur de mesure) —
+    à l'écran comme dans l'iframe d'impression (même origine). Blob en
+    cache TanStack (`classeurKeys.image`, `staleTime: Infinity`, jamais
+    persisté : `survitAuJson` refuse une instance). Vérifié : URL publique
+    et API sans session → 400 ; avec session → 6 ko en 3 ms.
+  - Bucket créé par l'assistant dans le dashboard à la demande de
+    l'utilisateur (2 Mo, `image/webp` seul — le serveur refuse tout autre
+    format), puis rendu privé par `supabase/classeur_images_2026-09-26.sql`
+    (JOUÉ, idempotent) qui porte aussi 3 policies `storage.objects` :
+    select rang ≥ 1, insert/delete par `private.classeur_write_ok(dossier)`.
+    `create policy on storage.objects` passe par le CLI sans souci
+    d'ownership. CSP `img-src 'self' data: blob:` inchangée.
+  - Éditeur : `detail/InsertionImage.tsx` (bouton Image, collage, dépôt
+    sur le textarea, insertion au curseur relevé AU DÉPART, état inline
+    « 3,2 Mo → 106 ko »). `usePagination` ATTEND `data-image-status=
+    "pending"` puis le décodage des `<img>` (sinon hauteur 0 et page qui
+    déborde ; 8 s max). ⚠ `img.decode()` sur une `Image` DÉTACHÉE avec une
+    URL `blob:` ne résout pas toujours dans Chrome : n'attendre que
+    `load`/`error` sur un `<img>` du DOM.
+  - Mesuré : PNG 3,2 Mo → WebP 106 ko en 610 ms. Non fait, à dire si
+    demandé : purge des images qu'aucun document ne référence plus ; les
+    exports Markdown/JSON portent des chemins que Registre (bureau) ne
+    saura pas afficher.
 - **Droits PAR CLASSEUR (2026-09-26, demande utilisateur : « faire comme
   l'Affichage »)** : `supabase/classeur_proprietaire_2026-09-26.sql` (JOUÉ,
   autorité `classeur_2026-09-25.sql` §5 identique). `ecriture` crée des
