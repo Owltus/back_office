@@ -583,6 +583,25 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   est cible de dépôt (`chapterDropId`), les cartes posent `ItemDragData`.
   Routes minces : la logique vit dans `ClasseurListActions` /
   `ClasseurDashboardActions`.
+- **Droits PAR CLASSEUR (2026-09-26, demande utilisateur : « faire comme
+  l'Affichage »)** : `supabase/classeur_proprietaire_2026-09-26.sql` (JOUÉ,
+  autorité `classeur_2026-09-25.sql` §5 identique). `ecriture` crée des
+  classeurs et ne modifie que LES SIENS (`created_by`, posé par
+  `classeur_stamp`) ; `gestion` tout ; lecture inchangée. Aides
+  `private.classeur_write_ok(classeur_id)` et
+  `private.classeur_chapter_write_ok(chapter_id)` (definer, déclarées dans
+  `verif_advisor.sql` contrôles 7-9, qui compte désormais 7 aides) ; les 12
+  policies insert/update de contenu et l'insert/delete des points de
+  restauration passent par elles ; l'insert d'un classeur reste au rang 2
+  (le créateur devient propriétaire) ; delete physique = gestion. Côté app,
+  `lib/classeur/droits.ts` (pure, matrice testée) + `useDroitsClasseur(id)`
+  remplacent `can('classeur','ecriture')` partout où un classeur est en jeu
+  (`canWrite` = peut modifier CE classeur, `false` tant qu'il n'est pas
+  chargé) ; la liste montre un cadenas « lecture seule » et ne se
+  réordonne (ordre partagé) qu'en gestion ou si tout est à soi. Vérifié par
+  un test RLS en transaction annulée (droit posé le temps du test) : 0 ligne
+  modifiable chez l'autre, création/modification/suppression douce des
+  siens OK. Un classeur orphelin (auteur supprimé) = gestion seule.
 - **Liste des classeurs `/classeur` (décision utilisateur du 2026-09-26,
   « plus comme d'origine »)** : la colonne centrée de Registre
   (`ClasseurListPage`), SANS titre de page — deux cartes pointillées côte à
