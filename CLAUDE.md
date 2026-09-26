@@ -633,6 +633,18 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
     le cache persisté (préfixe `classeur`) restaurait une liste vide.
     Vérifié navigateur : ajout, carte « Non utilisée », suppression avec
     confirmation, bucket vide et fiche `deleted_at` en base.
+    **Suppression PROPRE (même jour, demande utilisateur)** :
+    `supprimerImage(image, documents)` réécrit D'ABORD les documents qui
+    la référencent (`retirerImageDuMarkdown`, testé : ligne seule retirée
+    sans double vide, jeton en milieu de ligne ôté seul, idempotent) par
+    `updateItem` (garde des points de restauration), PUIS retire le
+    fichier, PUIS marque la fiche. `dialogs/SuppressionImageDialog.tsx`
+    liste les documents et l'ordre des opérations. ⚠ L'usage qui fonde la
+    décision est relu FRAIS (refetch à l'ouverture, `fetchQuery` staleTime
+    0 à la confirmation) : trouvé au contrôle, le cache de 60 s manquait
+    un document créé hors de l'onglet, qui serait resté avec « Image
+    indisponible ». L'éditeur ouvert retire aussi la référence de son
+    texte non sauvegardé (`onImageSupprimee`).
   - **Préparation avant envoi et mise en page (même jour, demande
     utilisateur : « centrées automatiquement, option de crop, UX »)** :
     `dialogs/ImagePreparationDialog.tsx` (`react-easy-crop`) s'ouvre pour
