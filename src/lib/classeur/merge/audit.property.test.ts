@@ -160,6 +160,7 @@ class Simulateur {
       deleted_at: null,
       created_at: T0,
       updated_at: T0,
+      created_by: null,
     },
   ]
   chapters: DbChapter[] = []
@@ -298,6 +299,7 @@ class Simulateur {
     this.classeurs.push({
       id,
       uuid: `cl-${id}`,
+      created_by: null,
       ...input,
       sort_order: this.classeurs.length + 1,
       deleted_at: null,

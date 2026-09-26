@@ -19,7 +19,6 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
-import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { ActionCard } from '#/components/classeur/ActionCard.tsx'
 import { ChapterDrawerButton } from '#/components/classeur/ChapterDrawer.tsx'
 import { ChapterDialog } from '#/components/classeur/dialogs/ChapterDialog.tsx'
@@ -29,6 +28,7 @@ import {
   useClasseur,
   useClasseurContent,
 } from '#/components/classeur/hooks/useClasseur.ts'
+import { useDroitsClasseur } from '#/components/classeur/hooks/useDroitsClasseur.ts'
 import { IconAction } from '#/components/classeur/IconAction.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { Input } from '#/components/ui/input.tsx'
@@ -117,8 +117,7 @@ export function ClasseurDashboard({
   busy?: DashboardBusy
   renderResult?: (result: ClasseurSearchResult) => ReactNode
 }) {
-  const { can } = useAuth()
-  const canWrite = can('classeur', 'ecriture')
+  const { canWrite } = useDroitsClasseur(classeurId)
   const navigate = useNavigate()
 
   const classeurQ = useClasseur(classeurId)

@@ -21,6 +21,8 @@ export interface DbClasseur {
   deleted_at: string | null
   created_at: string
   updated_at: string
+  /** Propriétaire (posé par trigger) : le niveau écriture ne modifie que les siens. */
+  created_by: string | null
 }
 
 /** Ligne de `classeur_chapters`. */

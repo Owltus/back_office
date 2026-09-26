@@ -21,11 +21,11 @@ import {
   X,
 } from 'lucide-react'
 
-import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { DocumentCard } from '#/components/classeur/cards/DocumentCard.tsx'
 import { IntercalaireCard } from '#/components/classeur/cards/IntercalaireCard.tsx'
 import { SignatureSheetCard } from '#/components/classeur/cards/SignatureSheetCard.tsx'
 import { TrackingSheetCard } from '#/components/classeur/cards/TrackingSheetCard.tsx'
+import { useDroitsClasseur } from '#/components/classeur/hooks/useDroitsClasseur.ts'
 import { ChapterDrawerButton } from '#/components/classeur/ChapterDrawer.tsx'
 import { BulkDeleteDialog } from '#/components/classeur/dialogs/BulkDeleteDialog.tsx'
 import { ChapterDialog } from '#/components/classeur/dialogs/ChapterDialog.tsx'
@@ -116,8 +116,7 @@ export function ChapterBoard({
   classeurId: number
   chapterId: number
 }) {
-  const { can } = useAuth()
-  const canWrite = can('classeur', 'ecriture')
+  const { canWrite } = useDroitsClasseur(classeurId)
   const navigate = useNavigate()
   const invalider = useInvaliderClasseur()
 

@@ -14,7 +14,7 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
-import { useAuth } from '#/components/auth/AuthContext.tsx'
+import { useDroitsClasseur } from '#/components/classeur/hooks/useDroitsClasseur.ts'
 import { useClasseur } from '#/components/classeur/hooks/useClasseur.ts'
 import {
   useCreerPointRestauration,
@@ -153,9 +153,7 @@ export function HistoriqueDialog({
   onOpenChange: (open: boolean) => void
   classeurId: number
 }) {
-  const { can } = useAuth()
-  const canWrite = can('classeur', 'ecriture')
-  const canManage = can('classeur', 'gestion')
+  const { canWrite, canManage } = useDroitsClasseur(classeurId)
   const historique = useMergeHistory(classeurId)
   const classeur = useClasseur(classeurId)
 

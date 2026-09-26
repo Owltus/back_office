@@ -63,7 +63,7 @@ export const PERIODICITES_TABLE = 'classeur_periodicites'
 export const MERGE_HISTORY_TABLE = 'classeur_merge_history'
 
 const COLS_COMMUNES = 'id, uuid, sort_order, deleted_at, created_at, updated_at'
-const COLS_CLASSEUR = `${COLS_COMMUNES}, name, icon, etablissement, etablissement_complement`
+const COLS_CLASSEUR = `${COLS_COMMUNES}, name, icon, etablissement, etablissement_complement, created_by`
 const COLS_CHAPTER = `${COLS_COMMUNES}, classeur_id, label, icon, description`
 const COLS_DOCUMENT = `${COLS_COMMUNES}, chapter_id, title, description, content`
 const COLS_TRACKING = `${COLS_COMMUNES}, chapter_id, title, periodicite_id`

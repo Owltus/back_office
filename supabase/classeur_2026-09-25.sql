@@ -292,27 +292,110 @@ begin
   end loop;
 end $$;
 
--- Écriture (insert + update) : rang >= 2 sur les 6 tables de contenu.
--- La suppression douce est un update : elle passe par ici.
+-- Écriture PAR PROPRIÉTAIRE (2026-09-26, classeur_proprietaire_2026-09-26.sql,
+-- modèle Affichage) : `ecriture` ne modifie que ses classeurs, `gestion` tout.
+-- Bloc IDENTIQUE à celui du script daté ; le faire évoluer aux deux endroits.
+
+-- 1) Aides ------------------------------------------------------------------
+
+create or replace function private.classeur_write_ok(p_classeur_id bigint)
+returns boolean
+language sql
+stable
+security definer
+set search_path to 'public'
+as $function$
+  select
+    (select private.get_page_level('classeur')) = 'gestion'
+    or (
+      (select private.page_level_rank(private.get_page_level('classeur'))) >= 2
+      and exists (
+        select 1 from public.classeur_classeurs c
+        where c.id = p_classeur_id and c.created_by = auth.uid()
+      )
+    );
+$function$;
+
+create or replace function private.classeur_chapter_write_ok(p_chapter_id bigint)
+returns boolean
+language sql
+stable
+security definer
+set search_path to 'public'
+as $function$
+  select coalesce(
+    (select private.classeur_write_ok(ch.classeur_id)
+       from public.classeur_chapters ch
+      where ch.id = p_chapter_id),
+    false);
+$function$;
+
+revoke execute on function private.classeur_write_ok(bigint) from public, anon;
+grant execute on function private.classeur_write_ok(bigint) to authenticated, service_role;
+revoke execute on function private.classeur_chapter_write_ok(bigint) from public, anon;
+grant execute on function private.classeur_chapter_write_ok(bigint) to authenticated, service_role;
+
+-- 2) Classeur : insert rang >= 2, update gestion ou propriétaire -------------
+
+drop policy if exists "classeur_classeurs insert (page:classeur)" on public.classeur_classeurs;
+create policy "classeur_classeurs insert (page:classeur)"
+  on public.classeur_classeurs for insert to authenticated
+  with check ((select private.page_level_rank(private.get_page_level('classeur'))) >= 2);
+
+drop policy if exists "classeur_classeurs update (page:classeur)" on public.classeur_classeurs;
+create policy "classeur_classeurs update (page:classeur)"
+  on public.classeur_classeurs for update to authenticated
+  using ((select private.classeur_write_ok(id)))
+  with check ((select private.classeur_write_ok(id)));
+
+-- 3) Chapitres : par le classeur parent ---------------------------------------
+
+drop policy if exists "classeur_chapters insert (page:classeur)" on public.classeur_chapters;
+create policy "classeur_chapters insert (page:classeur)"
+  on public.classeur_chapters for insert to authenticated
+  with check ((select private.classeur_write_ok(classeur_id)));
+
+drop policy if exists "classeur_chapters update (page:classeur)" on public.classeur_chapters;
+create policy "classeur_chapters update (page:classeur)"
+  on public.classeur_chapters for update to authenticated
+  using ((select private.classeur_write_ok(classeur_id)))
+  with check ((select private.classeur_write_ok(classeur_id)));
+
+-- 4) Éléments : par le chapitre parent ----------------------------------------
+
 do $$
 declare t text;
 begin
   foreach t in array array[
-    'classeur_classeurs', 'classeur_chapters', 'classeur_documents',
-    'classeur_tracking_sheets', 'classeur_signature_sheets',
-    'classeur_intercalaires'
+    'classeur_documents', 'classeur_tracking_sheets',
+    'classeur_signature_sheets', 'classeur_intercalaires'
   ] loop
     execute format('drop policy if exists "%s insert (page:classeur)" on public.%I', t, t);
     execute format(
       'create policy "%s insert (page:classeur)" on public.%I for insert to authenticated
-         with check ((select private.page_level_rank(private.get_page_level(''classeur''))) >= 2)', t, t);
+         with check ((select private.classeur_chapter_write_ok(chapter_id)))', t, t);
     execute format('drop policy if exists "%s update (page:classeur)" on public.%I', t, t);
     execute format(
       'create policy "%s update (page:classeur)" on public.%I for update to authenticated
-         using ((select private.page_level_rank(private.get_page_level(''classeur''))) >= 2)
-         with check ((select private.page_level_rank(private.get_page_level(''classeur''))) >= 2)', t, t);
+         using ((select private.classeur_chapter_write_ok(chapter_id)))
+         with check ((select private.classeur_chapter_write_ok(chapter_id)))', t, t);
   end loop;
 end $$;
+
+-- 5) Points de restauration : par le classeur ---------------------------------
+
+drop policy if exists "classeur_merge_history insert (page:classeur)" on public.classeur_merge_history;
+create policy "classeur_merge_history insert (page:classeur)"
+  on public.classeur_merge_history for insert to authenticated
+  with check ((select private.classeur_write_ok(classeur_id)));
+
+drop policy if exists "classeur_merge_history delete (page:classeur)" on public.classeur_merge_history;
+create policy "classeur_merge_history delete (page:classeur)"
+  on public.classeur_merge_history for delete to authenticated
+  using (
+    (select private.get_page_level('classeur')) = 'gestion'
+    or (kind = 'auto' and (select private.classeur_write_ok(classeur_id)))
+  );
 
 -- Suppression PHYSIQUE d'un classeur : gestion seule (les enfants suivent par
 -- cascade). Les chapitres et éléments n'ont PAS de policy delete : leur
@@ -321,27 +404,6 @@ drop policy if exists "classeur_classeurs delete (page:classeur)" on public.clas
 create policy "classeur_classeurs delete (page:classeur)"
   on public.classeur_classeurs for delete to authenticated
   using ((select private.get_page_level('classeur')) = 'gestion');
-
--- Historique de fusion : l'instantané est écrit par qui fusionne (rang >= 2) ;
--- jamais modifié ; purgé par la gestion seule.
-drop policy if exists "classeur_merge_history insert (page:classeur)" on public.classeur_merge_history;
-create policy "classeur_merge_history insert (page:classeur)"
-  on public.classeur_merge_history for insert to authenticated
-  with check ((select private.page_level_rank(private.get_page_level('classeur'))) >= 2);
-
--- 2026-09-26 : un point AUTO (mineur) est élagué par qui l'écrit (rang >= 2),
--- sinon l'historique d'un compte `ecriture` grandirait sans borne ; les
--- points majeurs restent réservés à `gestion`.
-drop policy if exists "classeur_merge_history delete (page:classeur)" on public.classeur_merge_history;
-create policy "classeur_merge_history delete (page:classeur)"
-  on public.classeur_merge_history for delete to authenticated
-  using (
-    (select private.get_page_level('classeur')) = 'gestion'
-    or (
-      kind = 'auto'
-      and (select private.page_level_rank(private.get_page_level('classeur'))) >= 2
-    )
-  );
 
 commit;
 

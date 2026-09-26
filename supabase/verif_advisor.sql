@@ -40,21 +40,24 @@ with checks(ordre, controle, ok) as (
     (7, 'policies : aucune reference a public.<aide>(',
       (select count(*) from pg_policies where schemaname = 'public'
          and (coalesce(qual,'') || coalesce(with_check,''))
-             ~ 'public\.(get_page_level|is_admin|get_user_role|page_level_rank|repjour_manual_forecast_allowed)\(') = 0),
-    (8, 'aides : 5 dans private, 0 dans public',
+             ~ 'public\.(get_page_level|is_admin|get_user_role|page_level_rank|repjour_manual_forecast_allowed|classeur_write_ok|classeur_chapter_write_ok)\(') = 0),
+    (8, 'aides : 7 dans private, 0 dans public',
       (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
        where n.nspname = 'private'
-         and p.proname in ('get_page_level','is_admin','get_user_role','page_level_rank','repjour_manual_forecast_allowed')) = 5
+         and p.proname in ('get_page_level','is_admin','get_user_role','page_level_rank','repjour_manual_forecast_allowed',
+                           'classeur_write_ok','classeur_chapter_write_ok')) = 7 -- 2026-09-26 : droits par classeur
       and (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
        where n.nspname = 'public'
-         and p.proname in ('get_page_level','is_admin','get_user_role','page_level_rank','repjour_manual_forecast_allowed')) = 0),
+         and p.proname in ('get_page_level','is_admin','get_user_role','page_level_rank','repjour_manual_forecast_allowed',
+                           'classeur_write_ok','classeur_chapter_write_ok')) = 0),
     (9, 'relais : chaque RPC privee (hors aides) a un relais invoker public de meme signature',
       (select count(*) from pg_proc q join pg_namespace m on m.oid = q.pronamespace
        where m.nspname = 'private' and q.prokind = 'f'
          and q.prorettype <> 'pg_catalog.trigger'::regtype -- 2026-09-06 : log_delete (trigger) vit dans private
          and q.proname not in ('get_page_level','is_admin','get_user_role','page_level_rank',
                                'repjour_manual_forecast_allowed','get_user_email',
-                               'keep_author') -- aide des triggers d'estampillage (2026-09-06)
+                               'keep_author', -- aide des triggers d'estampillage (2026-09-06)
+                               'classeur_write_ok','classeur_chapter_write_ok') -- droits par classeur (2026-09-26)
          and not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
                          where n.nspname = 'public' and p.proname = q.proname and not p.prosecdef
                            and pg_get_function_identity_arguments(p.oid) = pg_get_function_identity_arguments(q.oid)

@@ -18,7 +18,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { FileDown, FileUp, Plus, Trash2, Upload } from 'lucide-react'
+import { FileDown, FileUp, Lock, Plus, Trash2, Upload } from 'lucide-react'
 
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { ActionCard } from '#/components/classeur/ActionCard.tsx'
@@ -32,6 +32,10 @@ import { ConfirmDialog } from '#/components/shared/ConfirmDialog.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { FormeClasseurListe } from '#/components/shared/skeleton/PageShapes.tsx'
+import {
+  peutModifierClasseur,
+  peutReordonnerClasseurs,
+} from '#/lib/classeur/droits.ts'
 import { messageErreur } from '#/lib/classeur/erreur.ts'
 import { getIcon } from '#/lib/classeur/naming.ts'
 import { softDeleteClasseur } from '#/lib/classeur/service.ts'
@@ -47,7 +51,13 @@ import { cn } from '#/lib/utils.ts'
  * fichier déposé : « Déposez ici »), un séparateur, puis les classeurs en
  * liste verticale réordonnable (poignée = la carte entière, droit
  * `ecriture`), chaque carte révélant au survol Exporter en JSON et
- * Supprimer (douce, droit `gestion`, confirmation).
+ * Supprimer (douce, confirmation).
+ *
+ * DROITS PAR CLASSEUR (modèle Affichage, `lib/classeur/droits.ts`) : le
+ * niveau écriture crée des classeurs et ne modifie/supprime que LES SIENS
+ * (les autres portent un cadenas « lecture seule ») ; gestion tout.
+ * L'ordre de la liste est partagé : réordonnable par gestion, ou par
+ * écriture quand tous les classeurs sont à soi.
  *
  * Import et export JSON sont branchés par `ClasseurListActions` :
  *   - `onImporterJson(file)` : fichier choisi (carte Importer) ou déposé
@@ -62,14 +72,16 @@ export function ClasseurList({
   onImporterJson?: (file: File) => void | Promise<void>
   onExporterJson?: (classeur: DbClasseur) => void | Promise<void>
 }) {
-  const { can } = useAuth()
+  const { can, user } = useAuth()
   const canWrite = can('classeur', 'ecriture')
   const canManage = can('classeur', 'gestion')
+  const niveaux = { ecriture: canWrite, gestion: canManage }
   const navigate = useNavigate()
   const classeurs = useClasseurs()
   const reorder = useReorderClasseurs()
   const invalider = useInvaliderClasseur()
   const liste = classeurs.data ?? []
+  const peutReordonner = peutReordonnerClasseurs(niveaux, liste, user?.id)
 
   const [createOpen, setCreateOpen] = useState(false)
   const [aSupprimer, setASupprimer] = useState<DbClasseur | null>(null)
@@ -223,8 +235,11 @@ export function ClasseurList({
                   <ClasseurCard
                     key={c.id}
                     classeur={c}
-                    canWrite={canWrite}
-                    canManage={canManage}
+                    canDrag={peutReordonner}
+                    canModify={peutModifierClasseur(niveaux, c, user?.id)}
+                    lectureSeule={
+                      canWrite && !peutModifierClasseur(niveaux, c, user?.id)
+                    }
                     onDelete={() => setASupprimer(c)}
                     onExport={
                       onExporterJson ? () => void onExporterJson(c) : undefined
@@ -277,14 +292,19 @@ export function ClasseurList({
  */
 function ClasseurCard({
   classeur,
-  canWrite,
-  canManage,
+  canDrag,
+  canModify,
+  lectureSeule,
   onDelete,
   onExport,
 }: {
   classeur: DbClasseur
-  canWrite: boolean
-  canManage: boolean
+  /** Peut réordonner la liste (la carte entière est la poignée). */
+  canDrag: boolean
+  /** Peut modifier CE classeur (suppression douce). */
+  canModify: boolean
+  /** A le niveau écriture mais pas sur ce classeur : cadenas. */
+  lectureSeule: boolean
   onDelete: () => void
   onExport?: () => void
 }) {
@@ -301,7 +321,7 @@ function ClasseurCard({
     isDragging,
   } = useSortable({
     id: classeur.id,
-    disabled: !canWrite,
+    disabled: !canDrag,
     data: {
       type: 'classeur',
       classeurId: classeur.id,
@@ -309,17 +329,17 @@ function ClasseurCard({
       icon: classeur.icon,
     },
   })
-  const actions = (onExport !== undefined ? 1 : 0) + (canManage ? 1 : 0)
+  const actions = (onExport !== undefined ? 1 : 0) + (canModify ? 1 : 0)
 
   return (
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform), transition }}
       {...attributes}
-      {...(canWrite ? listeners : {})}
+      {...(canDrag ? listeners : {})}
       className={cn(
         'group relative',
-        canWrite && 'touch-none',
+        canDrag && 'touch-none',
         isDragging && 'z-50 opacity-30',
       )}
     >
@@ -341,6 +361,14 @@ function ClasseurCard({
             </span>
           )}
         </div>
+        {lectureSeule && (
+          <Tip label="Lecture seule : classeur d’un autre compte">
+            <Lock
+              className="size-3.5 shrink-0 text-muted-foreground"
+              aria-label="Lecture seule"
+            />
+          </Tip>
+        )}
       </Link>
 
       {actions > 0 && (
@@ -358,7 +386,7 @@ function ClasseurCard({
               </Button>
             </Tip>
           )}
-          {canManage && (
+          {canModify && (
             <Tip label="Supprimer">
               <Button
                 variant="ghost"

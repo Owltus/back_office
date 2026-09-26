@@ -9,7 +9,6 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { GripVertical, Home, Library } from 'lucide-react'
 
-import { useAuth } from '#/components/auth/AuthContext.tsx'
 import {
   chapterDropId,
   estItemDrag,
@@ -20,6 +19,7 @@ import {
   useChapters,
   useReorderChapters,
 } from '#/components/classeur/hooks/useClasseur.ts'
+import { useDroitsClasseur } from '#/components/classeur/hooks/useDroitsClasseur.ts'
 import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { messageErreur } from '#/lib/classeur/erreur.ts'
 import { getIcon } from '#/lib/classeur/naming.ts'
@@ -53,8 +53,7 @@ export function ChapterSidebar({
   classeurId: number
   onNavigate?: () => void
 }) {
-  const { can } = useAuth()
-  const canWrite = can('classeur', 'ecriture')
+  const { canWrite } = useDroitsClasseur(classeurId)
   const chapitres = useChapters(classeurId)
   const reorder = useReorderChapters(classeurId)
   const { registerHandler, unregisterHandler } = useDndRegistry()

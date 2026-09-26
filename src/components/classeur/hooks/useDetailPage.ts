@@ -1,13 +1,13 @@
 import { useMutation } from '@tanstack/react-query'
 import { useNavigate, useParams } from '@tanstack/react-router'
 
-import { useAuth } from '#/components/auth/AuthContext.tsx'
 import {
   useChapter,
   useChapterContent,
   useClasseur,
   useInvaliderClasseur,
 } from '#/components/classeur/hooks/useClasseur.ts'
+import { useDroitsClasseur } from '#/components/classeur/hooks/useDroitsClasseur.ts'
 import { updateItem } from '#/lib/classeur/service.ts'
 import type {
   DocumentInput,
@@ -72,8 +72,7 @@ export function useDetailPage<TKind extends ItemKind>(kind: TKind) {
   const chapterId = Number(params.chapterId)
   const id = Number(params.id)
   const navigate = useNavigate()
-  const { can } = useAuth()
-  const canWrite = can('classeur', 'ecriture')
+  const { canWrite } = useDroitsClasseur(classeurId)
 
   /** Cible du bouton « Retour » : la page du chapitre. */
   const backTo = '/classeur/$classeurId/$chapterId' as const
