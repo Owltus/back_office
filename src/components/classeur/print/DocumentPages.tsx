@@ -9,7 +9,7 @@ import remarkMath from 'remark-math'
 import { MermaidBlock } from '#/components/classeur/MermaidBlock.tsx'
 import { ImageDocument } from '#/components/classeur/print/ImageDocument.tsx'
 import { A4Page } from '#/components/classeur/print/A4Page.tsx'
-import { estCheminImage } from '#/lib/classeur/images.ts'
+import { estCheminImage, largeurDepuisTitre } from '#/lib/classeur/images.ts'
 import { PAGE_FONT_FAMILY } from '#/lib/classeur/print/constants.ts'
 import {
   PAGEBREAK_MARKER,
@@ -68,11 +68,19 @@ const markdownComponents: Components = {
     return <thead>{children}</thead>
   },
   // Image du bucket privé : lue par l'API authentifiée, jamais par URL.
-  img: ({ src, alt }) =>
+  img: ({ src, alt, title }) =>
     estCheminImage(src) ? (
-      <ImageDocument chemin={src} alt={alt} />
+      <ImageDocument chemin={src} alt={alt} title={title} />
     ) : (
-      <img src={src} alt={alt ?? ''} />
+      <img
+        src={src}
+        alt={alt ?? ''}
+        style={
+          largeurDepuisTitre(title) < 100
+            ? { width: `${String(largeurDepuisTitre(title))}%` }
+            : undefined
+        }
+      />
     ),
 }
 

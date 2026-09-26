@@ -1,7 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 
 import { classeurKeys } from '#/lib/classeur/keys.ts'
-import { telechargerImage, urlObjetImage } from '#/lib/classeur/images.ts'
+import {
+  largeurDepuisTitre,
+  telechargerImage,
+  urlObjetImage,
+} from '#/lib/classeur/images.ts'
 
 /*
  * Image d'un document, lue par l'API AUTHENTIFIÉE du Storage (bucket privé,
@@ -22,10 +26,14 @@ import { telechargerImage, urlObjetImage } from '#/lib/classeur/images.ts'
 export function ImageDocument({
   chemin,
   alt,
+  title,
 }: {
   chemin: string
   alt?: string
+  /** Titre Markdown : porte `largeur=NN` (voir `markdownImage`). */
+  title?: string
 }) {
+  const largeur = largeurDepuisTitre(title)
   const image = useQuery({
     queryKey: classeurKeys.image(chemin),
     queryFn: () => telechargerImage(chemin),
@@ -66,6 +74,7 @@ export function ImageDocument({
       src={urlObjetImage(chemin, image.data)}
       alt={alt ?? ''}
       data-image-status="rendered"
+      style={largeur < 100 ? { width: `${String(largeur)}%` } : undefined}
     />
   )
 }

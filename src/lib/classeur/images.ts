@@ -50,6 +50,75 @@ export const MAX_COTE_PX_SERRE = 1280
 /** Borne du bucket (file_size_limit). */
 export const MAX_WEBP_BYTES = 2 * 1024 * 1024
 
+/** Largeurs possibles d'une image dans la page (pourcentage de la zone de contenu). */
+export const LARGEURS_IMAGE = [100, 75, 50, 33] as const
+export type LargeurImage = (typeof LARGEURS_IMAGE)[number]
+
+export function libelleLargeur(largeur: number): string {
+  switch (largeur) {
+    case 100:
+      return 'Pleine largeur'
+    case 75:
+      return 'Trois quarts'
+    case 50:
+      return 'Moitié'
+    case 33:
+      return 'Tiers'
+    default:
+      return `${String(largeur)} %`
+  }
+}
+
+/** Rectangle de recadrage, en pixels de l'image (après rotation). */
+export interface Recadrage {
+  x: number
+  y: number
+  largeur: number
+  hauteur: number
+}
+
+/** Ce que le dialogue de préparation rend ; tout est facultatif. */
+export interface PreparationImage {
+  recadrage?: Recadrage
+  /** Degrés, sens horaire. */
+  rotation?: number
+  /** Largeur dans la page (défaut 100). */
+  largeur?: number
+}
+
+/**
+ * Borne un rectangle de recadrage à l'image (jamais vide, jamais hors
+ * champ). `null` si le rectangle couvre toute l'image (rien à recadrer).
+ */
+export function recadrageBorne(
+  largeur: number,
+  hauteur: number,
+  r: Recadrage | undefined,
+): Recadrage | null {
+  if (!r) return null
+  const x = Math.min(Math.max(0, Math.round(r.x)), Math.max(0, largeur - 1))
+  const y = Math.min(Math.max(0, Math.round(r.y)), Math.max(0, hauteur - 1))
+  const w = Math.max(1, Math.min(Math.round(r.largeur), largeur - x))
+  const h = Math.max(1, Math.min(Math.round(r.hauteur), hauteur - y))
+  if (x === 0 && y === 0 && w === largeur && h === hauteur) return null
+  return { x, y, largeur: w, hauteur: h }
+}
+
+/** Dimensions de la boîte englobante d'une image tournée de `rotation` degrés. */
+export function boiteTournee(
+  largeur: number,
+  hauteur: number,
+  rotation: number,
+): Dimensions {
+  const rad = (rotation * Math.PI) / 180
+  const c = Math.abs(Math.cos(rad))
+  const s = Math.abs(Math.sin(rad))
+  return {
+    largeur: Math.round(largeur * c + hauteur * s),
+    hauteur: Math.round(largeur * s + hauteur * c),
+  }
+}
+
 export interface Dimensions {
   largeur: number
   hauteur: number
@@ -102,14 +171,35 @@ export function estCheminImage(src: string | null | undefined): src is string {
   )
 }
 
-/** La ligne Markdown à insérer : `![alt](chemin)` (jamais une URL). */
-export function markdownImage(nomFichier: string, url: string): string {
+/**
+ * La ligne Markdown à insérer : `![alt](chemin)` (jamais une URL), avec le
+ * titre `"largeur=NN"` quand l'image ne prend pas toute la largeur — c'est
+ * le seul canal de mise en page que le Markdown standard laisse à une image
+ * (`ImageDocument` le lit, `largeurDepuisTitre`).
+ */
+export function markdownImage(
+  nomFichier: string,
+  url: string,
+  largeur: number = 100,
+): string {
   // Espaces et parenthèses casseraient la syntaxe `![](…)` ;
   // `encodeURIComponent` laisse les parenthèses, on les encode à la main.
   const urlSure = url.replace(/[\s()]/g, (c) =>
     c === '(' ? '%28' : c === ')' ? '%29' : encodeURIComponent(c),
   )
-  return `![${texteAlternatif(nomFichier)}](${urlSure})`
+  const titre =
+    largeur > 0 && largeur < 100
+      ? ` "largeur=${String(Math.round(largeur))}"`
+      : ''
+  return `![${texteAlternatif(nomFichier)}](${urlSure}${titre})`
+}
+
+/** Largeur (%) portée par le titre d'une image Markdown, `100` sinon. */
+export function largeurDepuisTitre(title: string | null | undefined): number {
+  const m = /(?:^|\s)largeur=(\d{1,3})(?:\s|$)/.exec(title ?? '')
+  if (!m) return 100
+  const n = Number(m[1])
+  return n >= 10 && n <= 100 ? n : 100
 }
 
 /** Vrai pour un fichier que le navigateur a des chances de décoder comme image. */
@@ -139,11 +229,22 @@ export interface ImageWebp extends Dimensions {
  * Convertit dans le navigateur. Rejette si le navigateur ne sait pas
  * encoder en WebP (Safari < 14) ou ne décode pas le format source.
  */
+export interface OptionsConversion {
+  maxCote?: number
+  qualite?: number
+  /** Rotation appliquée AVANT le recadrage (degrés, sens horaire). */
+  rotation?: number
+  /** Recadrage en pixels de l'image TOURNÉE (repère de `react-easy-crop`). */
+  recadrage?: Recadrage
+}
+
 export async function convertirEnWebp(
   file: Blob,
-  maxCote: number = MAX_COTE_PX,
-  qualite: number = QUALITE_WEBP,
+  options: OptionsConversion = {},
 ): Promise<ImageWebp> {
+  const maxCote = options.maxCote ?? MAX_COTE_PX
+  const qualite = options.qualite ?? QUALITE_WEBP
+  const rotation = (((options.rotation ?? 0) % 360) + 360) % 360
   let bitmap: ImageBitmap
   try {
     bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' })
@@ -153,13 +254,48 @@ export async function convertirEnWebp(
     )
   }
   try {
-    const dims = dimensionsReduites(bitmap.width, bitmap.height, maxCote)
+    // 1) Source tournée (canvas de la boîte englobante) ou bitmap tel quel.
+    let source: CanvasImageSource = bitmap
+    let sw = bitmap.width
+    let sh = bitmap.height
+    if (rotation !== 0) {
+      const boite = boiteTournee(bitmap.width, bitmap.height, rotation)
+      const tourne = document.createElement('canvas')
+      tourne.width = boite.largeur
+      tourne.height = boite.hauteur
+      const tctx = tourne.getContext('2d')
+      if (!tctx) throw new Error('Conversion impossible (canvas indisponible).')
+      tctx.translate(boite.largeur / 2, boite.hauteur / 2)
+      tctx.rotate((rotation * Math.PI) / 180)
+      tctx.drawImage(bitmap, -bitmap.width / 2, -bitmap.height / 2)
+      source = tourne
+      sw = boite.largeur
+      sh = boite.hauteur
+    }
+    // 2) Recadrage borné, puis réduction au plus long côté.
+    const zone = recadrageBorne(sw, sh, options.recadrage) ?? {
+      x: 0,
+      y: 0,
+      largeur: sw,
+      hauteur: sh,
+    }
+    const dims = dimensionsReduites(zone.largeur, zone.hauteur, maxCote)
     const canvas = document.createElement('canvas')
     canvas.width = dims.largeur
     canvas.height = dims.hauteur
     const ctx = canvas.getContext('2d')
     if (!ctx) throw new Error('Conversion impossible (canvas indisponible).')
-    ctx.drawImage(bitmap, 0, 0, dims.largeur, dims.hauteur)
+    ctx.drawImage(
+      source,
+      zone.x,
+      zone.y,
+      zone.largeur,
+      zone.hauteur,
+      0,
+      0,
+      dims.largeur,
+      dims.hauteur,
+    )
     const blob = await new Promise<Blob | null>((resolve) => {
       canvas.toBlob(resolve, 'image/webp', qualite)
     })
@@ -188,13 +324,22 @@ export interface ImageTeleversee {
 export async function televerserImage(
   classeurId: number,
   file: File,
+  preparation: PreparationImage = {},
 ): Promise<ImageTeleversee> {
   const refus = refusImageSource(file)
   if (refus) throw new Error(refus)
 
-  let image = await convertirEnWebp(file)
+  const base = {
+    rotation: preparation.rotation,
+    recadrage: preparation.recadrage,
+  }
+  let image = await convertirEnWebp(file, base)
   if (image.blob.size > MAX_WEBP_BYTES) {
-    image = await convertirEnWebp(file, MAX_COTE_PX_SERRE, QUALITE_WEBP_SERREE)
+    image = await convertirEnWebp(file, {
+      ...base,
+      maxCote: MAX_COTE_PX_SERRE,
+      qualite: QUALITE_WEBP_SERREE,
+    })
   }
   if (image.blob.size > MAX_WEBP_BYTES) {
     throw new Error(
@@ -231,7 +376,7 @@ export async function televerserImage(
   return {
     image: fiche,
     octetsSource: file.size,
-    markdown: markdownImage(fiche.nom, chemin),
+    markdown: markdownImage(fiche.nom, chemin, preparation.largeur ?? 100),
   }
 }
 

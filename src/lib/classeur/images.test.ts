@@ -7,9 +7,12 @@ import {
   dimensionsReduites,
   estCheminImage,
   estImage,
+  boiteTournee,
   formaterOctets,
   imagesReferencees,
+  largeurDepuisTitre,
   markdownImage,
+  recadrageBorne,
   usagesImages,
   refusImageSource,
   texteAlternatif,
@@ -127,6 +130,59 @@ describe('refusImageSource', () => {
         size: MAX_IMAGE_SOURCE_BYTES + 1,
       }),
     ).toMatch(/trop volumineuse/)
+  })
+})
+
+describe('largeur dans la page — portée par le titre Markdown', () => {
+  it('markdownImage ajoute "largeur=NN" sous 100 et rien à 100', () => {
+    const chemin = '2/0f2a9b1c-1234-4abc-8def-0123456789ab.webp'
+    expect(markdownImage('plan.png', chemin, 50)).toBe(
+      `![plan](${chemin} "largeur=50")`,
+    )
+    expect(markdownImage('plan.png', chemin, 100)).toBe(`![plan](${chemin})`)
+    expect(markdownImage('plan.png', chemin)).toBe(`![plan](${chemin})`)
+  })
+  it('largeurDepuisTitre lit la valeur, borne 10..100, 100 par défaut', () => {
+    expect(largeurDepuisTitre('largeur=50')).toBe(50)
+    expect(largeurDepuisTitre('note largeur=33 fin')).toBe(33)
+    expect(largeurDepuisTitre('largeur=5')).toBe(100)
+    expect(largeurDepuisTitre('largeur=150')).toBe(100)
+    expect(largeurDepuisTitre('rien')).toBe(100)
+    expect(largeurDepuisTitre(undefined)).toBe(100)
+  })
+  it('une image avec largeur reste référencée (usages) comme sans', () => {
+    const chemin = '2/0f2a9b1c-1234-4abc-8def-0123456789ab.webp'
+    expect(imagesReferencees(markdownImage('a', chemin, 33))).toEqual([chemin])
+  })
+})
+
+describe('recadrage et rotation — géométrie pure', () => {
+  it('recadrageBorne : borne à l’image, jamais vide, null si tout est couvert', () => {
+    expect(recadrageBorne(100, 80, undefined)).toBeNull()
+    expect(
+      recadrageBorne(100, 80, { x: 0, y: 0, largeur: 100, hauteur: 80 }),
+    ).toBeNull()
+    expect(
+      recadrageBorne(100, 80, { x: 10.4, y: 5.6, largeur: 50, hauteur: 40 }),
+    ).toEqual({ x: 10, y: 6, largeur: 50, hauteur: 40 })
+    expect(
+      recadrageBorne(100, 80, { x: -20, y: -20, largeur: 500, hauteur: 500 }),
+    ).toBeNull()
+    expect(
+      recadrageBorne(100, 80, { x: 90, y: 70, largeur: 50, hauteur: 50 }),
+    ).toEqual({ x: 90, y: 70, largeur: 10, hauteur: 10 })
+    expect(
+      recadrageBorne(100, 80, { x: 500, y: 500, largeur: 0, hauteur: 0 }),
+    ).toEqual({ x: 99, y: 79, largeur: 1, hauteur: 1 })
+  })
+  it('boiteTournee : quarts de tour échangent les côtés, 45° agrandit', () => {
+    expect(boiteTournee(400, 300, 0)).toEqual({ largeur: 400, hauteur: 300 })
+    expect(boiteTournee(400, 300, 90)).toEqual({ largeur: 300, hauteur: 400 })
+    expect(boiteTournee(400, 300, 180)).toEqual({ largeur: 400, hauteur: 300 })
+    const b = boiteTournee(400, 300, 45)
+    expect(b.largeur).toBeGreaterThan(400)
+    expect(b.hauteur).toBeGreaterThan(300)
+    expect(b.largeur).toBe(b.hauteur)
   })
 })
 

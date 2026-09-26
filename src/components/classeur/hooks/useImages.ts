@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { classeurKeys } from '#/lib/classeur/keys.ts'
 import { supprimerImage, televerserImage } from '#/lib/classeur/images.ts'
+import type { PreparationImage } from '#/lib/classeur/images.ts'
 import { fetchImages, updateImage } from '#/lib/classeur/service.ts'
 import type { DbImage } from '#/lib/classeur/types.ts'
 
@@ -32,7 +33,13 @@ function useInvaliderImages() {
 export function useTeleverserImage(classeurId: number) {
   const invalider = useInvaliderImages()
   return useMutation({
-    mutationFn: (file: File) => televerserImage(classeurId, file),
+    mutationFn: ({
+      file,
+      preparation,
+    }: {
+      file: File
+      preparation?: PreparationImage
+    }) => televerserImage(classeurId, file, preparation),
     onSuccess: () => invalider(classeurId),
   })
 }

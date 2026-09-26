@@ -12,6 +12,7 @@ import {
   X,
 } from 'lucide-react'
 
+import { ImagePreparationDialog } from '#/components/classeur/dialogs/ImagePreparationDialog.tsx'
 import { ImageDocument } from '#/components/classeur/print/ImageDocument.tsx'
 import { useClasseurContent } from '#/components/classeur/hooks/useClasseur.ts'
 import { useDroitsClasseur } from '#/components/classeur/hooks/useDroitsClasseur.ts'
@@ -36,9 +37,12 @@ import { Input } from '#/components/ui/input.tsx'
 import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { messageErreur } from '#/lib/classeur/erreur.ts'
 import {
+  LARGEURS_IMAGE,
   formaterOctets,
   imagesReferencees,
+  libelleLargeur,
   markdownImage,
+  refusImageSource,
   usagesImages,
 } from '#/lib/classeur/images.ts'
 import type { UsageImage } from '#/lib/classeur/images.ts'
@@ -98,6 +102,10 @@ export function ImagesDialog({
     nom: string
   } | null>(null)
   const [message, setMessage] = useState<string | null>(null)
+  const [enPreparation, setEnPreparation] = useState<File | null>(null)
+  const [refusFichier, setRefusFichier] = useState<string | null>(null)
+  /** Largeur appliquée par « Insérer » (mode insertion). */
+  const [largeurInsertion, setLargeurInsertion] = useState<number>(100)
   const inputRef = useRef<HTMLInputElement>(null)
 
   // Usages calculés depuis les documents sauvegardés ; pour le document en
@@ -136,29 +144,45 @@ export function ImagesDialog({
   const poidsTotal = liste.reduce((s, i) => s + i.taille, 0)
 
   const occupe = envoi.isPending || renommage.isPending || suppression.isPending
-  const erreur = envoi.isError
-    ? messageErreur(envoi.error, 'Image impossible à ajouter')
-    : renommage.isError
-      ? messageErreur(renommage.error, 'Renommage impossible')
-      : suppression.isError
-        ? messageErreur(suppression.error, 'Suppression impossible')
-        : images.isError
-          ? messageErreur(images.error, 'Images indisponibles')
-          : null
+  const erreur = refusFichier
+    ? refusFichier
+    : envoi.isError
+      ? messageErreur(envoi.error, 'Image impossible à ajouter')
+      : renommage.isError
+        ? messageErreur(renommage.error, 'Renommage impossible')
+        : suppression.isError
+          ? messageErreur(suppression.error, 'Suppression impossible')
+          : images.isError
+            ? messageErreur(images.error, 'Images indisponibles')
+            : null
 
   const onInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.item(0)
     e.target.value = ''
     if (!file) return
     setMessage(null)
-    envoi.mutate(file, {
-      onSuccess: (res) => {
-        setMessage(
-          `« ${res.image.nom} » ajoutée : ${formaterOctets(res.octetsSource)} → ${formaterOctets(res.image.taille)} en WebP.`,
-        )
-        setVue('toutes')
+    const refus = refusImageSource(file)
+    setRefusFichier(refus)
+    if (refus) return
+    setEnPreparation(file)
+  }
+
+  function envoyerPrepare(
+    preparation: Parameters<typeof envoi.mutate>[0]['preparation'],
+  ) {
+    if (!enPreparation) return
+    envoi.mutate(
+      { file: enPreparation, preparation },
+      {
+        onSuccess: (res) => {
+          setEnPreparation(null)
+          setMessage(
+            `« ${res.image.nom} » ajoutée : ${formaterOctets(res.octetsSource)} → ${formaterOctets(res.image.taille)} en WebP (${String(res.image.largeur)} × ${String(res.image.hauteur)}).`,
+          )
+          setVue('toutes')
+        },
       },
-    })
+    )
   }
 
   function validerRenommage() {
@@ -235,6 +259,23 @@ export function ImagesDialog({
             <span className="text-xs text-muted-foreground">
               {formaterOctets(poidsTotal)} en base
             </span>
+            {onInserer && (
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                Insérer en
+                <select
+                  value={largeurInsertion}
+                  onChange={(e) => setLargeurInsertion(Number(e.target.value))}
+                  className="h-7 rounded-md border border-input bg-transparent px-2 text-xs text-foreground"
+                  aria-label="Largeur à l'insertion"
+                >
+                  {LARGEURS_IMAGE.map((l) => (
+                    <option key={l} value={l}>
+                      {libelleLargeur(l).toLowerCase()}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             {canWrite && (
               <>
                 <input
@@ -401,7 +442,13 @@ export function ImagesDialog({
                             variant="outline"
                             className="flex-1"
                             onClick={() =>
-                              onInserer(markdownImage(img.nom, img.chemin))
+                              onInserer(
+                                markdownImage(
+                                  img.nom,
+                                  img.chemin,
+                                  largeurInsertion,
+                                ),
+                              )
                             }
                           >
                             <Plus />
@@ -448,6 +495,13 @@ export function ImagesDialog({
           </div>
         </DialogContent>
       </Dialog>
+
+      <ImagePreparationDialog
+        file={enPreparation}
+        envoi={envoi.isPending}
+        onAnnuler={() => setEnPreparation(null)}
+        onValider={envoyerPrepare}
+      />
 
       <ConfirmDialog
         open={aSupprimer !== null}

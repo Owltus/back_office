@@ -340,11 +340,19 @@
   color: #000;
   text-decoration: underline;
 }
+/* Image : TOUJOURS centrée, en bloc, largeur choisie à l'insertion
+   (`![alt](chemin "largeur=50")`, lue par ImageDocument). */
 .pdf-prose img {
+  display: block;
   max-width: 100%;
   max-height: 180mm;
   height: auto;
-  margin-bottom: 0.25cm;
+  margin: 0.15cm auto 0.35cm;
+  break-inside: avoid;
+}
+.pdf-prose p:has(> img:only-child) {
+  text-align: center;
+  margin: 0;
 }
 .pdf-prose strong {
   font-weight: 700;

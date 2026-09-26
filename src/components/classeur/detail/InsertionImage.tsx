@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import type { ChangeEvent, ClipboardEvent, DragEvent, RefObject } from 'react'
 import { ImagePlus, Images, Loader2 } from 'lucide-react'
 
+import { ImagePreparationDialog } from '#/components/classeur/dialogs/ImagePreparationDialog.tsx'
 import { ImagesDialog } from '#/components/classeur/dialogs/ImagesDialog.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { messageErreur } from '#/lib/classeur/erreur.ts'
@@ -10,8 +11,10 @@ import { classeurKeys } from '#/lib/classeur/keys.ts'
 import {
   estImage,
   formaterOctets,
+  refusImageSource,
   televerserImage,
 } from '#/lib/classeur/images.ts'
+import type { PreparationImage } from '#/lib/classeur/images.ts'
 import { cn } from '#/lib/utils.ts'
 
 /*
@@ -50,6 +53,15 @@ export function useInsertionImage({
 }) {
   const [etat, setEtat] = useState<EtatImage>({ type: 'repos' })
   const [mediathequeOuverte, setMediathequeOuverte] = useState(false)
+  /** Fichier en attente dans le dialogue de préparation (cadre, rotation, largeur). */
+  const [enPreparation, setEnPreparation] = useState<File | null>(null)
+  const positionPreparation = useRef<{
+    debut: number | null
+    fin: number | null
+  }>({
+    debut: null,
+    fin: null,
+  })
   const inputRef = useRef<HTMLInputElement>(null)
   const invaliderImages = useQueryClient()
 
@@ -76,17 +88,35 @@ export function useInsertionImage({
     [editeurRef, setContenu],
   )
 
+  /** Étape 1 : relève le curseur, refuse ce qui n'est pas une image, ouvre la préparation. */
   const inserer = useCallback(
-    async (file: File) => {
+    (file: File) => {
       if (classeurId === null) return
+      const refus = refusImageSource(file)
+      if (refus) {
+        setEtat({ type: 'erreur', message: refus })
+        return
+      }
       const editeur = editeurRef.current
-      const position = {
+      positionPreparation.current = {
         debut: editeur?.selectionStart ?? null,
         fin: editeur?.selectionEnd ?? null,
       }
+      setEtat({ type: 'repos' })
+      setEnPreparation(file)
+    },
+    [classeurId, editeurRef],
+  )
+
+  /** Étape 2 : conversion (cadre, rotation), envoi, insertion au curseur relevé. */
+  const envoyer = useCallback(
+    async (file: File, preparation: PreparationImage) => {
+      if (classeurId === null) return
+      const position = positionPreparation.current
       setEtat({ type: 'envoi', nom: file.name })
       try {
-        const res = await televerserImage(classeurId, file)
+        const res = await televerserImage(classeurId, file, preparation)
+        setEnPreparation(null)
         insererMarkdown(res.markdown, position)
         void invaliderImages.invalidateQueries({
           queryKey: classeurKeys.images(classeurId),
@@ -102,7 +132,7 @@ export function useInsertionImage({
         })
       }
     },
-    [classeurId, editeurRef, insererMarkdown, invaliderImages],
+    [classeurId, insererMarkdown, invaliderImages],
   )
 
   const premiereImage = (fichiers: FileList | null | undefined) =>
@@ -113,7 +143,7 @@ export function useInsertionImage({
       const file = premiereImage(e.clipboardData.files)
       if (!file) return
       e.preventDefault()
-      void inserer(file)
+      inserer(file)
     },
     [inserer],
   )
@@ -127,7 +157,7 @@ export function useInsertionImage({
       const file = premiereImage(e.dataTransfer.files)
       if (!file) return
       e.preventDefault()
-      void inserer(file)
+      inserer(file)
     },
     [inserer],
   )
@@ -136,7 +166,7 @@ export function useInsertionImage({
     (e: ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.item(0)
       e.target.value = ''
-      if (file) void inserer(file)
+      if (file) inserer(file)
     },
     [inserer],
   )
@@ -155,6 +185,9 @@ export function useInsertionImage({
     mediathequeOuverte,
     setMediathequeOuverte,
     insererMarkdown,
+    enPreparation,
+    annulerPreparation: () => setEnPreparation(null),
+    envoyer,
   }
 }
 
@@ -168,6 +201,15 @@ export function BarreImage({
   const envoi = etat.type === 'envoi'
   return (
     <div className="flex items-center gap-3 pb-2">
+      <ImagePreparationDialog
+        file={image.enPreparation}
+        envoi={etat.type === 'envoi'}
+        onAnnuler={image.annulerPreparation}
+        onValider={(preparation) => {
+          if (image.enPreparation)
+            void image.envoyer(image.enPreparation, preparation)
+        }}
+      />
       {image.classeurId !== null && (
         <ImagesDialog
           open={image.mediathequeOuverte}
