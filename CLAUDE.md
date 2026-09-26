@@ -583,6 +583,27 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   est cible de dépôt (`chapterDropId`), les cartes posent `ItemDragData`.
   Routes minces : la logique vit dans `ClasseurListActions` /
   `ClasseurDashboardActions`.
+- **Images dans les documents (2026-09-26, « un truc de très simple »)** :
+  `lib/classeur/images.ts` convertit DANS LE NAVIGATEUR (`createImageBitmap`
+  avec orientation EXIF, plus long côté 1600 px, `canvas.toBlob` WebP 0,8,
+  seconde passe 1280 px / 0,65 si > 2 Mo) puis envoie dans le bucket
+  Storage `classeur-images` sous `<classeurId>/<uuid>.webp` et insère
+  `![nom](url)` (parenthèses et espaces de l'URL encodés à la main :
+  `encodeURIComponent` laisse les parenthèses, qui cassent la syntaxe).
+  Bucket créé par l'assistant dans le dashboard (public, 2 Mo, `image/webp`
+  seul — le serveur refuse tout autre format quel que soit le client) ;
+  `supabase/classeur_images_2026-09-26.sql` (JOUÉ) le porte en idempotent
+  + 3 policies `storage.objects` : lecture rang ≥ 1, insert/delete par
+  `private.classeur_write_ok(dossier)`. PUBLIC assumé : un `<img>` ne porte
+  pas de jeton, un bucket privé exigerait des URL signées réécrites à chaque
+  rendu (écran ET iframe d'impression) ; noms UUID, pas de donnée nominative
+  attendue. `vercel.json` : `img-src` autorise l'hôte Supabase (sans quoi la
+  prod n'afficherait rien). Éditeur : `detail/InsertionImage.tsx` (bouton
+  Image, collage, dépôt sur le textarea, insertion au curseur relevé AU
+  DÉPART, état inline « 3,2 Mo → 106 ko »). `usePagination` ATTEND le
+  chargement des `<img>` (sinon hauteur 0 et page qui déborde ; 8 s max).
+  Mesuré : PNG 3,2 Mo → WebP 106 ko en 610 ms. Non fait, à dire si demandé :
+  purge des images qu'aucun document ne référence plus.
 - **Droits PAR CLASSEUR (2026-09-26, demande utilisateur : « faire comme
   l'Affichage »)** : `supabase/classeur_proprietaire_2026-09-26.sql` (JOUÉ,
   autorité `classeur_2026-09-25.sql` §5 identique). `ecriture` crée des
