@@ -77,13 +77,9 @@ export interface Recadrage {
   hauteur: number
 }
 
-/** Ce que le dialogue de préparation rend ; tout est facultatif. */
+/** Ce que le dialogue de préparation rend : un recadrage, facultatif. */
 export interface PreparationImage {
   recadrage?: Recadrage
-  /** Degrés, sens horaire. */
-  rotation?: number
-  /** Largeur dans la page (défaut 100). */
-  largeur?: number
 }
 
 /**
@@ -329,10 +325,7 @@ export async function televerserImage(
   const refus = refusImageSource(file)
   if (refus) throw new Error(refus)
 
-  const base = {
-    rotation: preparation.rotation,
-    recadrage: preparation.recadrage,
-  }
+  const base = { recadrage: preparation.recadrage }
   let image = await convertirEnWebp(file, base)
   if (image.blob.size > MAX_WEBP_BYTES) {
     image = await convertirEnWebp(file, {
@@ -376,7 +369,7 @@ export async function televerserImage(
   return {
     image: fiche,
     octetsSource: file.size,
-    markdown: markdownImage(fiche.nom, chemin, preparation.largeur ?? 100),
+    markdown: markdownImage(fiche.nom, chemin),
   }
 }
 

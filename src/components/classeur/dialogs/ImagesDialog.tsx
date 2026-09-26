@@ -37,10 +37,8 @@ import { Input } from '#/components/ui/input.tsx'
 import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { messageErreur } from '#/lib/classeur/erreur.ts'
 import {
-  LARGEURS_IMAGE,
   formaterOctets,
   imagesReferencees,
-  libelleLargeur,
   markdownImage,
   refusImageSource,
   usagesImages,
@@ -104,8 +102,6 @@ export function ImagesDialog({
   const [message, setMessage] = useState<string | null>(null)
   const [enPreparation, setEnPreparation] = useState<File | null>(null)
   const [refusFichier, setRefusFichier] = useState<string | null>(null)
-  /** Largeur appliquée par « Insérer » (mode insertion). */
-  const [largeurInsertion, setLargeurInsertion] = useState<number>(100)
   const inputRef = useRef<HTMLInputElement>(null)
 
   // Usages calculés depuis les documents sauvegardés ; pour le document en
@@ -259,23 +255,6 @@ export function ImagesDialog({
             <span className="text-xs text-muted-foreground">
               {formaterOctets(poidsTotal)} en base
             </span>
-            {onInserer && (
-              <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                Insérer en
-                <select
-                  value={largeurInsertion}
-                  onChange={(e) => setLargeurInsertion(Number(e.target.value))}
-                  className="h-7 rounded-md border border-input bg-transparent px-2 text-xs text-foreground"
-                  aria-label="Largeur à l'insertion"
-                >
-                  {LARGEURS_IMAGE.map((l) => (
-                    <option key={l} value={l}>
-                      {libelleLargeur(l).toLowerCase()}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
             {canWrite && (
               <>
                 <input
@@ -442,13 +421,7 @@ export function ImagesDialog({
                             variant="outline"
                             className="flex-1"
                             onClick={() =>
-                              onInserer(
-                                markdownImage(
-                                  img.nom,
-                                  img.chemin,
-                                  largeurInsertion,
-                                ),
-                              )
+                              onInserer(markdownImage(img.nom, img.chemin))
                             }
                           >
                             <Plus />

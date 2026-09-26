@@ -1,14 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Cropper from 'react-easy-crop'
 import type { Area, Point } from 'react-easy-crop'
-import {
-  Check,
-  Crop,
-  ImageUp,
-  Loader2,
-  RotateCcw,
-  RotateCw,
-} from 'lucide-react'
+import { Check, Crop, ImageUp, Loader2 } from 'lucide-react'
 
 import { Button } from '#/components/ui/button.tsx'
 import {
@@ -19,11 +12,7 @@ import {
   DialogTitle,
 } from '#/components/ui/dialog.tsx'
 import { Slider } from '#/components/ui/slider.tsx'
-import {
-  LARGEURS_IMAGE,
-  formaterOctets,
-  libelleLargeur,
-} from '#/lib/classeur/images.ts'
+import { formaterOctets } from '#/lib/classeur/images.ts'
 import type { PreparationImage } from '#/lib/classeur/images.ts'
 import { cn } from '#/lib/utils.ts'
 
@@ -32,15 +21,12 @@ import { cn } from '#/lib/utils.ts'
  * 2026-09-26 : « option de crop avant de la pousser dans le bucket, travail
  * sur l'UX et la mise en page »).
  *
- * Trois réglages, tous facultatifs :
- *   - le CADRE : un ratio (celui de l'image, 1:1, 4:3, 3:2, 16:9, A4) que
- *     l'on déplace et zoome sur l'image (`react-easy-crop`, tactile et
- *     molette compris) ;
- *   - la ROTATION : quarts de tour, plus un redressement fin ±15° ;
- *   - la LARGEUR dans la page : pleine, trois quarts, moitié, tiers —
- *     l'image est toujours CENTRÉE (`styles/classeur.css`).
- * « Utiliser telle quelle » saute le cadre et la rotation ; la largeur
- * choisie s'applique quand même.
+ * Un seul réglage, facultatif : le CADRE — un ratio (celui de l'image,
+ * 1:1, 4:3, 3:2, 16:9, A4) que l'on déplace et zoome sur l'image
+ * (`react-easy-crop`, tactile et molette compris). Pas de rotation ni de
+ * choix de largeur (retirés à la demande de l'utilisateur, 2026-09-26) :
+ * l'image est toujours droite, en pleine largeur et CENTRÉE
+ * (`styles/classeur.css`). « Utiliser telle quelle » saute le cadre.
  *
  * Le fichier n'est ni converti ni envoyé ici : le dialogue rend une
  * `PreparationImage` que `televerserImage` applique (`lib/classeur/images.ts`).
@@ -77,9 +63,7 @@ export function ImagePreparationDialog({
 
   const [crop, setCrop] = useState<Point>({ x: 0, y: 0 })
   const [zoom, setZoom] = useState(1)
-  const [rotation, setRotation] = useState(0)
   const [ratio, setRatio] = useState<string>('original')
-  const [largeur, setLargeur] = useState<number>(100)
   const [naturel, setNaturel] = useState<{ w: number; h: number } | null>(null)
   const [zone, setZone] = useState<Area | null>(null)
 
@@ -87,9 +71,7 @@ export function ImagePreparationDialog({
   useEffect(() => {
     setCrop({ x: 0, y: 0 })
     setZoom(1)
-    setRotation(0)
     setRatio('original')
-    setLargeur(100)
     setNaturel(null)
     setZone(null)
   }, [file])
@@ -105,27 +87,19 @@ export function ImagePreparationDialog({
     setZone(pixels)
   }, [])
 
-  const tourner = (delta: number) =>
-    setRotation(
-      (r) => ((((r + delta) % 360) + 360) % 360) - (r + delta > 180 ? 360 : 0),
-    )
-
   const recadrageActif =
     zone !== null &&
     naturel !== null &&
-    (rotation !== 0 ||
-      Math.round(zone.width) < naturel.w - 1 ||
+    (Math.round(zone.width) < naturel.w - 1 ||
       Math.round(zone.height) < naturel.h - 1)
 
   function valider(telleQuelle: boolean) {
     if (!file) return
     if (telleQuelle || !zone) {
-      onValider({ largeur })
+      onValider({})
       return
     }
     onValider({
-      largeur,
-      rotation,
       recadrage: {
         x: Math.round(zone.x),
         y: Math.round(zone.y),
@@ -147,7 +121,7 @@ export function ImagePreparationDialog({
           <DialogTitle>Préparer l'image</DialogTitle>
           <DialogDescription>
             {file
-              ? `${file.name} · ${formaterOctets(file.size)}${naturel ? ` · ${String(naturel.w)} × ${String(naturel.h)}` : ''}. Déplacez et zoomez l'image dans le cadre ; elle sera convertie en WebP et centrée dans la page.`
+              ? `${file.name} · ${formaterOctets(file.size)}${naturel ? ` · ${String(naturel.w)} × ${String(naturel.h)}` : ''}. Déplacez et zoomez l'image dans le cadre ; elle sera convertie en WebP et centrée en pleine largeur.`
               : ''}
           </DialogDescription>
         </DialogHeader>
@@ -158,7 +132,6 @@ export function ImagePreparationDialog({
               image={url}
               crop={crop}
               zoom={zoom}
-              rotation={rotation}
               aspect={aspect}
               minZoom={1}
               maxZoom={5}
@@ -166,7 +139,6 @@ export function ImagePreparationDialog({
               objectFit="contain"
               onCropChange={setCrop}
               onZoomChange={setZoom}
-              onRotationChange={setRotation}
               onCropComplete={onCropComplete}
               onMediaLoaded={(media) =>
                 setNaturel({ w: media.naturalWidth, h: media.naturalHeight })
@@ -183,16 +155,6 @@ export function ImagePreparationDialog({
               onChange={setRatio}
             />
           </Reglage>
-          <Reglage label="Largeur dans la page">
-            <Segments
-              valeur={String(largeur)}
-              options={LARGEURS_IMAGE.map((l) => ({
-                key: String(l),
-                label: libelleLargeur(l),
-              }))}
-              onChange={(v) => setLargeur(Number(v))}
-            />
-          </Reglage>
           <Reglage label={`Zoom × ${zoom.toFixed(1)}`}>
             <Slider
               value={[zoom]}
@@ -202,37 +164,6 @@ export function ImagePreparationDialog({
               onValueChange={([v]) => setZoom(v)}
               aria-label="Zoom"
             />
-          </Reglage>
-          <Reglage label={`Rotation ${String(Math.round(rotation))}°`}>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="icon-sm"
-                aria-label="Quart de tour à gauche"
-                onClick={() => tourner(-90)}
-              >
-                <RotateCcw />
-              </Button>
-              <Slider
-                value={[redressement(rotation)]}
-                min={-15}
-                max={15}
-                step={0.5}
-                onValueChange={([v]) => setRotation(quart(rotation) + v)}
-                aria-label="Redressement fin"
-                className="flex-1"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="icon-sm"
-                aria-label="Quart de tour à droite"
-                onClick={() => tourner(90)}
-              >
-                <RotateCw />
-              </Button>
-            </div>
           </Reglage>
         </div>
 
@@ -272,15 +203,6 @@ export function ImagePreparationDialog({
       </DialogContent>
     </Dialog>
   )
-}
-
-/** Le multiple de 90° le plus proche en dessous (le « quart »). */
-function quart(rotation: number): number {
-  return Math.round(rotation / 90) * 90
-}
-/** L'écart au quart de tour (redressement fin). */
-function redressement(rotation: number): number {
-  return rotation - quart(rotation)
 }
 
 function Reglage({
