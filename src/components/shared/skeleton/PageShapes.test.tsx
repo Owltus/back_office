@@ -221,11 +221,20 @@ describe('FormeProfil', () => {
 })
 
 describe('Classeur — quatre silhouettes relevées sur les boards', () => {
-  it('la liste dessine ses cartes sur la grille 2/3 colonnes', () => {
+  it('la liste dessine la colonne de Registre : deux cartes pointillées, un séparateur, puis les classeurs en liste', () => {
     const { container } = render(<FormeClasseurListe cartes={4} />)
-    const grille = container.querySelector('.xl\\:grid-cols-3')
-    expect(grille).not.toBeNull()
-    expect(container.querySelectorAll('.rounded-xl.border').length).toBe(4)
+    expect(container.querySelector('.max-w-md')).not.toBeNull()
+    expect(container.querySelectorAll('.grid-cols-2').length).toBe(1)
+    expect(container.querySelectorAll('.border-dashed').length).toBe(2)
+    expect(container.querySelectorAll('.border-b').length).toBe(1)
+    expect(container.querySelectorAll('.rounded-xl.border').length).toBe(6)
+    // Liste seule (pendant le chargement, sous les cartes d'action réelles)
+    const seule = render(<FormeClasseurListe cartes={2} actions={false} />)
+    expect(seule.container.querySelector('.max-w-md')).toBeNull()
+    expect(seule.container.querySelectorAll('.border-dashed').length).toBe(0)
+    expect(seule.container.querySelectorAll('.rounded-xl.border').length).toBe(
+      2,
+    )
   })
 
   it('l’accueil dessine la recherche puis la colonne de Registre : 7 cartes, 2 paires, 2 séparateurs', () => {

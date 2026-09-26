@@ -70,7 +70,7 @@ export function ClasseurListActions() {
   return (
     <>
       {erreur != null && (
-        <Alert variant="destructive" className="mx-auto mb-4 w-full max-w-5xl">
+        <Alert variant="destructive" className="mx-auto mb-4 w-full max-w-md">
           <AlertCircle />
           <AlertDescription>
             {messageErreur(

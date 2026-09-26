@@ -583,6 +583,17 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   est cible de dépôt (`chapterDropId`), les cartes posent `ItemDragData`.
   Routes minces : la logique vit dans `ClasseurListActions` /
   `ClasseurDashboardActions`.
+- **Liste des classeurs `/classeur` (décision utilisateur du 2026-09-26,
+  « plus comme d'origine »)** : la colonne centrée de Registre
+  (`ClasseurListPage`), SANS titre de page — deux cartes pointillées côte à
+  côte (« Nouveau classeur » ; « Importer classeur », qui reçoit aussi un
+  fichier déposé : « Déposez ici »), un séparateur, puis les classeurs en
+  LISTE VERTICALE réordonnable (la carte entière est la poignée, activation
+  à 5 px ; les actions Exporter/Supprimer vivent HORS du lien et arrêtent
+  le `pointerdown`). Plus de grille 2/3 colonnes ni de voile de dépôt sur
+  la page. `ActionCard` est partagée avec l'accueil
+  (`components/classeur/ActionCard.tsx`) ; `FormeClasseurListe` suit la
+  même colonne (`actions={false}` = liste seule sous les cartes réelles).
 - **Accueil d'un classeur (décision utilisateur du 2026-09-26)** : les
   chapitres ne sont PAS répétés dans la page (ils vivent dans la colonne de
   gauche, pleine hauteur, 20 rem — « trop petite » à 16 rem) ; le corps de

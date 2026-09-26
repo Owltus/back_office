@@ -9,7 +9,6 @@ import {
   FileUp,
   History,
   List,
-  Loader2,
   Pencil,
   PenLine,
   Plus,
@@ -21,6 +20,7 @@ import {
 import type { LucideIcon } from 'lucide-react'
 
 import { useAuth } from '#/components/auth/AuthContext.tsx'
+import { ActionCard } from '#/components/classeur/ActionCard.tsx'
 import { ChapterDrawerButton } from '#/components/classeur/ChapterDrawer.tsx'
 import { ChapterDialog } from '#/components/classeur/dialogs/ChapterDialog.tsx'
 import { ClasseurDialog } from '#/components/classeur/dialogs/ClasseurDialog.tsx'
@@ -43,7 +43,6 @@ import type {
   DbClasseur,
   ItemKind,
 } from '#/lib/classeur/types.ts'
-import { cn } from '#/lib/utils.ts'
 
 /** Ce que reçoivent les rappels d'action : le classeur et tout son contenu. */
 export interface DashboardContexte {
@@ -411,80 +410,6 @@ export function ClasseurDashboard({
         }
       />
     </div>
-  )
-}
-
-/**
- * Carte d'action de l'accueil (portée de Registre, dans la grammaire de
- * l'app : carte `bg-card`, icône, titre, sous-titre, survol `bg-accent`).
- * `dashed` distingue la création ; `busy` remplace l'icône par un `Loader2`
- * et le titre par `titreOccupe`. Les gestionnaires de glisser-déposer passent
- * au bouton (carte Importer).
- */
-function ActionCard({
-  icon: Icon,
-  title,
-  subtitle,
-  titreOccupe = 'En cours',
-  onClick,
-  disabled = false,
-  busy = false,
-  dashed = false,
-  className,
-  onDragEnter,
-  onDragOver,
-  onDragLeave,
-  onDrop,
-}: {
-  icon: LucideIcon
-  title: string
-  subtitle?: string
-  titreOccupe?: string
-  onClick?: () => void
-  disabled?: boolean
-  busy?: boolean
-  dashed?: boolean
-  className?: string
-  onDragEnter?: (e: DragEvent<HTMLButtonElement>) => void
-  onDragOver?: (e: DragEvent<HTMLButtonElement>) => void
-  onDragLeave?: (e: DragEvent<HTMLButtonElement>) => void
-  onDrop?: (e: DragEvent<HTMLButtonElement>) => void
-}) {
-  const inactif = disabled || busy
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={inactif}
-      aria-busy={busy || undefined}
-      onDragEnter={onDragEnter}
-      onDragOver={onDragOver}
-      onDragLeave={onDragLeave}
-      onDrop={onDrop}
-      className={cn(
-        'flex w-full items-center gap-4 rounded-xl border border-border bg-card px-5 py-4 text-left transition-colors',
-        'hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
-        'disabled:pointer-events-none disabled:opacity-40',
-        dashed && 'border-dashed',
-        className,
-      )}
-    >
-      {busy ? (
-        <Loader2 className="size-5 shrink-0 animate-spin text-muted-foreground" />
-      ) : (
-        <Icon className="size-5 shrink-0 text-muted-foreground" />
-      )}
-      <span className="flex min-w-0 flex-col gap-0.5">
-        <span className="truncate text-sm font-medium">
-          {busy ? titreOccupe : title}
-        </span>
-        {subtitle !== undefined && !busy && (
-          <span className="truncate text-xs text-muted-foreground">
-            {subtitle}
-          </span>
-        )}
-      </span>
-    </button>
   )
 }
 

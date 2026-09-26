@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react'
 
 import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { ALL_ROOMS } from '#/lib/hotel/rooms.ts'
+import { cn } from '#/lib/utils.ts'
 
 /*
  * Silhouettes de chargement PAR PAGE.
@@ -559,7 +560,6 @@ export function FormeProfil() {
  * ------------------------------------------------------------------------- */
 
 /** Grille de la liste des classeurs et des chapitres du tableau de bord. */
-const GRILLE_CARTES = 'grid gap-3 sm:grid-cols-2 xl:grid-cols-3'
 
 /** Colonnes par défaut de la grille du chapitre (`useChapterZoom`, LARGEUR_CIBLE). */
 const GRILLE_CHAPITRE: CSSProperties = {
@@ -567,21 +567,50 @@ const GRILLE_CHAPITRE: CSSProperties = {
 }
 
 /** /classeur : N cartes « icône + nom + établissement » (`ClasseurCard`). */
-export function FormeClasseurListe({ cartes = 3 }: { cartes?: number }) {
+export function FormeClasseurListe({
+  cartes = 3,
+  actions = true,
+}: {
+  cartes?: number
+  /** Avec la paire de cartes d'action et le séparateur (page entière) ou sans (liste seule). */
+  actions?: boolean
+}) {
+  const carte = (k: string, dashed = false) => (
+    <div
+      key={k}
+      className={cn(
+        'flex items-center gap-4 rounded-xl border border-border bg-card px-5 py-4',
+        dashed && 'border-dashed',
+      )}
+    >
+      <Skeleton className="size-5 rounded-sm" />
+      <div className="flex min-h-10 flex-1 flex-col justify-center">
+        <Skeleton className="h-4 w-40" />
+        <Skeleton className="mt-2 h-3 w-28" />
+      </div>
+    </div>
+  )
+  const liste = Array.from({ length: cartes }).map((_, i) => carte(`c${i}`))
+  if (!actions) {
+    return (
+      <div className="flex flex-col gap-4" aria-hidden="true">
+        {liste}
+      </div>
+    )
+  }
   return (
-    <div className={GRILLE_CARTES} aria-hidden="true">
-      {Array.from({ length: cartes }).map((_, i) => (
-        <div
-          key={i}
-          className="flex items-center gap-4 rounded-xl border border-border bg-card px-5 py-4"
-        >
-          <Skeleton className="size-5 rounded-sm" />
-          <div className="flex-1">
-            <Skeleton className="h-4 w-40" />
-            <Skeleton className="mt-2 h-3 w-28" />
-          </div>
+    <div
+      className="flex flex-1 items-center justify-center py-6"
+      aria-hidden="true"
+    >
+      <div className="flex w-full max-w-md flex-col gap-4">
+        <div className="grid grid-cols-2 gap-3">
+          {carte('nouveau', true)}
+          {carte('importer', true)}
         </div>
-      ))}
+        <div className="border-b border-border" />
+        {liste}
+      </div>
     </div>
   )
 }
