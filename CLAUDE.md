@@ -534,6 +534,24 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   ici : le contenu est mis en page par le DOM. Pages A4 TOUJOURS blanches
   (pas de variante thématique). Classes `.a4-page`, `.pdf-prose`,
   `.tracking-table` dans `styles/classeur.css` : le moteur en dépend.
+  ⚠ **Le document imprimé doit être stylé EXACTEMENT comme la page**
+  (défaut trouvé par l'utilisateur le 2026-09-26 : « très grosse différence
+  entre l'aperçu et l'impression, liens colorés, mise en page différente »).
+  Cause : `buildPrintHtml` (porté de Registre) inlinait les `<link>` par
+  `fetch()`, et en dev Vite répond à un `fetch()` de `/src/styles.css` par
+  un MODULE JAVASCRIPT (`text/javascript`, « import { createHotContext }
+  … »), pas par du CSS : l'iframe n'avait AUCUN style de l'app. Désormais
+  les feuilles sont réémises en `<link>` (demandées par le navigateur
+  comme feuilles, donc servies comme telles, dev comme prod) et attendues
+  (`attendreFeuilles`) avant `fonts.ready` et `print()` ; `<html>` reprend
+  la classe `dark` et les `data-*` de la page (mêmes tokens) ; le bloc
+  `@page { margin: 0 }` du classeur est émis EN DERNIER parce que RepJour,
+  PDJ, Rapro et Analytique déclarent chacun un `@page` à 10-12 mm dans la
+  même feuille globale. Contrôle fait par import du module compilé par
+  Vite dans la page et comparaison des styles calculés page/iframe
+  (`buildPrintHtml.test.ts` fige les trois garanties). Règle générale :
+  ne JAMAIS `fetch()` une ressource servie par Vite pour en lire le
+  contenu — demander au navigateur de la charger dans son rôle.
 - **Fusion JSON** (`lib/classeur/merge/`) : `planifierFusion` est PURE et
   reproduit les 12 règles de `do_merge` côté Rust (documentées en tête du
   fichier, tests R1…R12), avec 5 écarts assumés (E1…E5) qui corrigent des
