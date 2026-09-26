@@ -16,6 +16,10 @@ import {
   DetailSkeleton,
 } from '#/components/classeur/detail/DetailFrame.tsx'
 import { useDetailPage } from '#/components/classeur/hooks/useDetailPage.ts'
+import {
+  BarreImage,
+  useInsertionImage,
+} from '#/components/classeur/detail/InsertionImage.tsx'
 import { DocumentPages } from '#/components/classeur/print/DocumentPages.tsx'
 import { PrintPreview } from '#/components/classeur/print/PrintPreview.tsx'
 import { Input } from '#/components/ui/input.tsx'
@@ -55,6 +59,11 @@ export function DocumentDetail() {
   const apercuScrollRef = useRef<HTMLDivElement | null>(null)
   const editeurRef = useRef<HTMLTextAreaElement | null>(null)
   const synchronisation = useRef(false)
+  const image = useInsertionImage({
+    classeurId: page.classeur?.id ?? null,
+    editeurRef,
+    setContenu,
+  })
 
   const apercuRef = useCallback(
     (node: HTMLDivElement | null) => {
@@ -215,11 +224,13 @@ export function DocumentDetail() {
             </div>
           </DetailPaper>
           <div className="order-1 flex flex-col lg:order-2">
+            {page.canWrite && <BarreImage image={image} />}
             <Textarea
               ref={editeurRef}
               value={contenu}
               onChange={(e) => setContenu(e.target.value)}
               onScroll={synchroniserDefilement}
+              {...image.editeurProps}
               placeholder="Écrivez en Markdown. Tableaux, formules et diagrammes Mermaid sont pris en charge ; une ligne === force un saut de page."
               aria-label="Contenu Markdown"
               spellCheck

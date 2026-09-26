@@ -49,16 +49,20 @@ export function usePagination(contentKey?: string): PaginationResult {
         setMeasuring(true)
       }
 
-      // Attendre que le DOM ait fini de peindre + que les Mermaid soient rendus
+      // Attendre que le DOM ait fini de peindre, que les Mermaid soient
+      // rendus ET que les images soient chargées (une image non chargée
+      // mesure 0 px : la page déborderait à l'affichage).
       requestAnimationFrame(() => {
-        void waitForMermaid(node).then(() => {
-          const maxHeight = mmToPx(CONTENT_HEIGHT_MM)
-          const pageData = paginate(node, maxHeight)
+        void Promise.all([waitForMermaid(node), waitForImages(node)]).then(
+          () => {
+            const maxHeight = mmToPx(CONTENT_HEIGHT_MM)
+            const pageData = paginate(node, maxHeight)
 
-          setPages(pageData)
-          setMeasuring(false)
-          hasPaginated.current = true
-        })
+            setPages(pageData)
+            setMeasuring(false)
+            hasPaginated.current = true
+          },
+        )
       })
     },
     [contentKey],
@@ -92,6 +96,36 @@ function waitForMermaid(container: HTMLElement): Promise<void> {
       childList: true,
       subtree: true,
     })
+  })
+}
+
+/** Délai au-delà duquel on pagine sans attendre une image qui ne vient pas. */
+const IMAGES_ATTENTE_MAX_MS = 8000
+
+/**
+ * Attend le chargement (ou l'échec) de toutes les `<img>` du conteneur —
+ * ajout du 2026-09-26 avec les images des documents. Une image en erreur
+ * ne bloque pas : elle est paginée avec sa hauteur (nulle).
+ */
+export function waitForImages(container: HTMLElement): Promise<void> {
+  const images = Array.from(container.querySelectorAll('img')).filter(
+    (img) => !img.complete,
+  )
+  if (images.length === 0) return Promise.resolve()
+  return new Promise((resolve) => {
+    let restantes = images.length
+    const minuteur = setTimeout(resolve, IMAGES_ATTENTE_MAX_MS)
+    const une = () => {
+      restantes -= 1
+      if (restantes === 0) {
+        clearTimeout(minuteur)
+        resolve()
+      }
+    }
+    for (const img of images) {
+      img.addEventListener('load', une, { once: true })
+      img.addEventListener('error', une, { once: true })
+    }
   })
 }
 
