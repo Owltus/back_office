@@ -15,6 +15,7 @@ import {
   DOCUMENT_CONTENT_HEIGHT_WITH_SUBTITLE_MM,
   PAGE_FONT_FAMILY,
 } from '#/lib/classeur/print/constants.ts'
+import { rehypeLignesSource } from '#/lib/classeur/print/lignesSource.ts'
 import {
   PAGEBREAK_MARKER,
   preprocessPageBreaks,
@@ -34,6 +35,8 @@ interface DocumentPagesProps {
   establishment?: string
   /** Masquer la numérotation des pages (pour impression de masse) */
   hidePagination?: boolean
+  /** Nombre de pages, remonté à chaque pagination terminée (éditeur). */
+  onPageCount?: (pages: number) => void
 }
 
 /** Vérifie si tous les enfants textuels d'un nœud React sont vides */
@@ -50,7 +53,8 @@ function isEmptyHeader(children: React.ReactNode): boolean {
 
 /** Composants custom pour ReactMarkdown (sauts de page + Mermaid + thead vide) */
 const markdownComponents: Components = {
-  p: ({ children }) => {
+  // `rest` porte `data-ligne` (lien aperçu ⇄ texte, `rehypeLignesSource`).
+  p: ({ children, node: _node, ...rest }) => {
     const text = React.Children.toArray(children)
     if (
       text.length === 1 &&
@@ -59,7 +63,7 @@ const markdownComponents: Components = {
     ) {
       return <div data-page-break="true" />
     }
-    return <p>{children}</p>
+    return <p {...rest}>{children}</p>
   },
   code: ({ className, children }) => {
     if (className === 'language-mermaid') {
@@ -101,6 +105,7 @@ export function DocumentPages({
   classeurName,
   establishment,
   hidePagination,
+  onPageCount,
 }: DocumentPagesProps) {
   const processedContent = React.useMemo(
     () => preprocessPageBreaks(content),
@@ -116,6 +121,10 @@ export function DocumentPages({
   )
 
   const contentWidthPx = getContentWidthPx()
+
+  React.useEffect(() => {
+    if (!measuring && pages.length > 0) onPageCount?.(pages.length)
+  }, [measuring, pages.length, onPageCount])
 
   return (
     <>
@@ -140,7 +149,7 @@ export function DocumentPages({
         >
           <ReactMarkdown
             remarkPlugins={[remarkGfm, remarkMath]}
-            rehypePlugins={[rehypeKatex]}
+            rehypePlugins={[rehypeKatex, rehypeLignesSource]}
             components={markdownComponents}
           >
             {processedContent}

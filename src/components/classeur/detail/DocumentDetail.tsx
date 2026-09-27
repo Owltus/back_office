@@ -1,6 +1,8 @@
-import { History, Pencil } from 'lucide-react'
+import { History, PanelLeftClose, PanelLeftOpen, Pencil } from 'lucide-react'
+import type { MouseEvent } from 'react'
 import {
   useCallback,
+  useMemo,
   useDeferredValue,
   useEffect,
   useRef,
@@ -28,6 +30,12 @@ import {
   useInsertionImage,
 } from '#/components/classeur/detail/InsertionImage.tsx'
 import { useEditionDocument } from '#/components/classeur/detail/useEditionDocument.ts'
+import { AlertesRelecture } from '#/components/classeur/detail/AlertesRelecture.tsx'
+import {
+  allerALigne,
+  ligneDePosition,
+} from '#/components/classeur/detail/editionTextarea.ts'
+import { useImages } from '#/components/classeur/hooks/useImages.ts'
 import { AbandonModificationsDialog } from '#/components/classeur/dialogs/AbandonModificationsDialog.tsx'
 import { ConflitDocumentDialog } from '#/components/classeur/dialogs/ConflitDocumentDialog.tsx'
 import { AideMiseEnFormeDialog } from '#/components/classeur/dialogs/AideMiseEnFormeDialog.tsx'
@@ -41,8 +49,14 @@ import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { Textarea } from '#/components/ui/textarea.tsx'
 import { exporterDocumentMarkdown } from '#/lib/classeur/exportMarkdown.ts'
+import {
+  ligneRendueVersSource,
+  ligneSourceVersRendue,
+} from '#/lib/classeur/print/lignesSource.ts'
 import { usePageScale } from '#/lib/classeur/print/usePageScale.ts'
+import { alertesRelecture } from '#/lib/classeur/relecture.ts'
 import { titreOuDefaut } from '#/lib/classeur/sommaire.ts'
+import { cn } from '#/lib/utils.ts'
 
 /**
  * Page d'un document Markdown — portée de Registre (`DocumentDetail`).
@@ -76,6 +90,10 @@ export function DocumentDetail() {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [aideOuverte, setAideOuverte] = useState(false)
   const [titreOuvert, setTitreOuvert] = useState(false)
+  /** 17. Aperçu masqué : le texte prend toute la largeur. */
+  const [apercuMasque, setApercuMasque] = useState(false)
+  /** 19. Nombre de pages de l'aperçu, affiché discrètement en édition. */
+  const [nbPages, setNbPages] = useState<number | null>(null)
 
   const { containerRef: lectureRef, scale: lectureScale } =
     usePageScale('width')
@@ -115,9 +133,14 @@ export function DocumentDetail() {
     return () => window.removeEventListener('keydown', handler)
   }, [editing, sauvegarder])
 
-  // Défilement proportionnel éditeur → aperçu.
+  /** Instant du dernier défilement PILOTÉ (clic dans l'aperçu, alerte). */
+  const defilementPilote = useRef(0)
+
+  // Défilement proportionnel éditeur → aperçu. Muet juste après un
+  // défilement piloté : il ramènerait l'aperçu ailleurs que sur le bloc.
   const synchroniserDefilement = useCallback(() => {
     if (synchronisation.current) return
+    if (performance.now() - defilementPilote.current < 400) return
     synchronisation.current = true
     const apercu = apercuScrollRef.current
     const editeur = editeurRef.current
@@ -132,6 +155,77 @@ export function DocumentDetail() {
       synchronisation.current = false
     })
   }, [])
+
+  /** Curseur au début d'une ligne du texte, texte défilé jusqu'à elle. */
+  const allerA = useCallback((ligne: number) => {
+    const ta = editeurRef.current
+    if (!ta) return
+    defilementPilote.current = performance.now()
+    allerALigne(ta, ligne)
+  }, [])
+
+  // 16. Aperçu → texte : un clic sur un bloc de l'aperçu amène le curseur
+  // sur sa ligne (`data-ligne`, posé par `rehypeLignesSource`).
+  const surClicApercu = useCallback(
+    (e: MouseEvent<HTMLDivElement>) => {
+      const ta = editeurRef.current
+      if (!ta || !(e.target instanceof Element)) return
+      const bloc = e.target.closest<HTMLElement>('.a4-page [data-ligne]')
+      const rendue = Number(bloc?.dataset.ligne)
+      if (!Number.isFinite(rendue) || rendue < 1) return
+      allerA(ligneRendueVersSource(ta.value, rendue))
+    },
+    [allerA],
+  )
+
+  // 16. Texte → aperçu : quand le curseur change de ligne, l'aperçu montre
+  // le bloc correspondant s'il n'est pas déjà visible.
+  useEffect(() => {
+    if (!editing) return
+    let derniere = -1
+    const surSelection = () => {
+      const ta = editeurRef.current
+      const apercu = apercuScrollRef.current
+      if (!ta || !apercu || document.activeElement !== ta) return
+      const ligne = ligneDePosition(ta.value, ta.selectionStart)
+      if (ligne === derniere) return
+      derniere = ligne
+      const rendue = ligneSourceVersRendue(ta.value, ligne)
+      let bloc: HTMLElement | null = null
+      let meilleure = 0
+      for (const el of apercu.querySelectorAll<HTMLElement>(
+        '.a4-page [data-ligne]',
+      )) {
+        const n = Number(el.dataset.ligne)
+        // Le plus proche au-dessus ; à égalité, le plus imbriqué (après).
+        if (n <= rendue && n >= meilleure) {
+          meilleure = n
+          bloc = el
+        }
+      }
+      if (!bloc) return
+      const r = bloc.getBoundingClientRect()
+      const c = apercu.getBoundingClientRect()
+      if (r.top >= c.top && r.bottom <= c.bottom) return
+      apercu.scrollTop += r.top - c.top - c.height / 3
+    }
+    document.addEventListener('selectionchange', surSelection)
+    return () => document.removeEventListener('selectionchange', surSelection)
+  }, [editing])
+
+  // 18. Alertes de relecture, sur le texte différé (comme l'aperçu).
+  const images = useImages(page.classeur?.id ?? Number.NaN, editing)
+  const imagesConnues = useMemo(
+    () =>
+      images.data
+        ? new Set(images.data.map((i) => i.chemin.toLowerCase()))
+        : null,
+    [images.data],
+  )
+  const alertes = useMemo(
+    () => (editing ? alertesRelecture(contenuDiffere, imagesConnues) : []),
+    [editing, contenuDiffere, imagesConnues],
+  )
 
   if (page.isPending) return <DetailSkeleton retour={retour} />
   if (page.isError) {
@@ -158,6 +252,7 @@ export function DocumentDetail() {
       chapterName={page.chapter?.label}
       classeurName={page.classeurName}
       establishment={page.establishment}
+      onPageCount={setNbPages}
     />
   )
 
@@ -183,6 +278,15 @@ export function DocumentDetail() {
                     icon={<Pencil />}
                     onClick={() => setTitreOuvert(true)}
                   />
+                  <IconAction
+                    label={
+                      apercuMasque ? "Afficher l'aperçu" : "Masquer l'aperçu"
+                    }
+                    icon={apercuMasque ? <PanelLeftOpen /> : <PanelLeftClose />}
+                    aria-pressed={apercuMasque}
+                    className="hidden lg:inline-flex"
+                    onClick={() => setApercuMasque((m) => !m)}
+                  />
                 </ButtonGroup>
               ) : undefined
             }
@@ -190,10 +294,20 @@ export function DocumentDetail() {
             canWrite={page.canWrite}
             saving={edition.saving}
             statut={
-              <IndicateurEnregistrement
-                modifie={edition.modifie}
-                brouillonEcritLe={edition.brouillonEcritLe}
-              />
+              <>
+                {nbPages !== null && (
+                  <span
+                    className="hidden text-xs text-muted-foreground tabular-nums md:inline"
+                    title="Nombre de pages imprimées"
+                  >
+                    {nbPages} {nbPages > 1 ? 'pages' : 'page'}
+                  </span>
+                )}
+                <IndicateurEnregistrement
+                  modifie={edition.modifie}
+                  brouillonEcritLe={edition.brouillonEcritLe}
+                />
+              </>
             }
             onEdit={edition.commencer}
             onCancel={edition.annuler}
@@ -226,7 +340,10 @@ export function DocumentDetail() {
         // redimensionne plus à la main, chaque colonne défile en interne.
         <div
           ref={zoneEdition.ref}
-          className="grid gap-4 lg:grid-cols-2"
+          className={cn(
+            'grid gap-4',
+            apercuMasque ? 'lg:grid-cols-1' : 'lg:grid-cols-2',
+          )}
           style={
             zoneEdition.hauteur === null
               ? undefined
@@ -235,7 +352,12 @@ export function DocumentDetail() {
         >
           <DetailPaper
             ref={apercuRef}
-            className="order-2 overflow-y-auto lg:order-1 lg:h-full"
+            className={cn(
+              'order-2 cursor-text overflow-y-auto lg:order-1 lg:h-full',
+              apercuMasque && 'lg:hidden',
+            )}
+            title="Cliquez sur un passage pour y aller dans le texte"
+            onClick={surClicApercu}
           >
             <div
               className="flex flex-col items-center gap-4 py-4"
@@ -253,6 +375,7 @@ export function DocumentDetail() {
                   fin={<BoutonsImage image={image} />}
                 />
                 <EtatImageLigne image={image} />
+                <AlertesRelecture alertes={alertes} onAller={allerA} />
               </div>
             )}
             <Textarea

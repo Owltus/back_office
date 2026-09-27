@@ -78,3 +78,83 @@ export function appliquerQuandLibre(
   }
   essayer()
 }
+
+/** Numéro de ligne (1 = première) d'une position du texte. */
+export function ligneDePosition(valeur: string, position: number): number {
+  let n = 1
+  for (let i = 0; i < Math.min(position, valeur.length); i++) {
+    if (valeur.charCodeAt(i) === 10) n++
+  }
+  return n
+}
+
+/** Position du début d'une ligne (1 = première), bornée au texte. */
+export function debutDeLigne(valeur: string, ligne: number): number {
+  let pos = 0
+  for (let n = 1; n < ligne; n++) {
+    const saut = valeur.indexOf('\n', pos)
+    if (saut === -1) return valeur.length
+    pos = saut + 1
+  }
+  return pos
+}
+
+const STYLES_COPIES = [
+  'boxSizing',
+  'width',
+  'paddingTop',
+  'paddingRight',
+  'paddingBottom',
+  'paddingLeft',
+  'borderTopWidth',
+  'borderRightWidth',
+  'borderBottomWidth',
+  'borderLeftWidth',
+  'fontFamily',
+  'fontSize',
+  'fontWeight',
+  'fontStyle',
+  'letterSpacing',
+  'lineHeight',
+  'textTransform',
+  'wordSpacing',
+  'tabSize',
+] as const
+
+/**
+ * Hauteur, dans le `textarea`, du haut de la ligne qui contient `position`
+ * — lignes repliées comprises. Mesurée sur une copie invisible du champ
+ * (mêmes police, largeur, marges) : un `textarea` ne sait pas dire où se
+ * trouve un caractère.
+ */
+function hauteurDe(ta: HTMLTextAreaElement, position: number): number {
+  const style = getComputedStyle(ta)
+  const miroir = document.createElement('div')
+  for (const p of STYLES_COPIES) miroir.style[p] = style[p]
+  miroir.style.position = 'absolute'
+  miroir.style.visibility = 'hidden'
+  miroir.style.top = '0'
+  miroir.style.left = '-9999px'
+  miroir.style.whiteSpace = 'pre-wrap'
+  miroir.style.overflowWrap = 'break-word'
+  miroir.textContent = ta.value.slice(0, position)
+  const repere = document.createElement('span')
+  repere.textContent = '​'
+  miroir.appendChild(repere)
+  document.body.appendChild(miroir)
+  const haut = repere.offsetTop
+  miroir.remove()
+  return haut
+}
+
+/**
+ * Place le curseur au début d'une ligne et fait défiler le texte pour
+ * qu'elle soit au premier tiers de la zone visible (clic dans l'aperçu,
+ * alerte de relecture).
+ */
+export function allerALigne(ta: HTMLTextAreaElement, ligne: number): void {
+  const position = debutDeLigne(ta.value, ligne)
+  ta.focus({ preventScroll: true })
+  ta.setSelectionRange(position, position)
+  ta.scrollTop = Math.max(0, hauteurDe(ta, position) - ta.clientHeight / 3)
+}

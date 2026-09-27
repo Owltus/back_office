@@ -31,7 +31,7 @@ export interface TableauTrouve extends Grille {
   fin: number
 }
 
-const RE_SEPARATEUR = /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$/
+export const RE_SEPARATEUR = /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$/
 
 /** Découpe une ligne de tableau en cases (bords facultatifs, `\|` gardé). */
 export function decouperLigne(ligne: string): string[] {

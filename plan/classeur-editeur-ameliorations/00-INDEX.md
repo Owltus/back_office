@@ -26,16 +26,16 @@ Légende : FAIT · EN COURS · À FAIRE
 15. Rechercher et remplacer dans le document — REFUSÉ (2026-09-27)
 
 ## Relire et vérifier
-16. Aperçu synchronisé dans les deux sens (clic dans l'aperçu → curseur) — À FAIRE
-17. Mode plein écran (masquer / rappeler l'aperçu) — À FAIRE
-18. Alertes de relecture (image introuvable, lien vide, tableau mal formé, titre sauté) — À FAIRE
-19. Nombre de pages en direct près de Sauvegarder — À FAIRE
+16. Aperçu synchronisé dans les deux sens (clic dans l'aperçu → curseur) — FAIT (2026-09-27)
+17. Mode plein écran (masquer / rappeler l'aperçu) — FAIT (2026-09-27)
+18. Alertes de relecture (image introuvable, lien vide, tableau mal formé, titre sauté) — FAIT (2026-09-27)
+19. Nombre de pages en direct près de Sauvegarder — FAIT (2026-09-27)
 
 ## Suivi des versions
-20. Historique d'un document (versions, qui, quand) — À FAIRE
-21. Comparer deux versions — À FAIRE
-22. Date de mise à jour automatique dans la description — À FAIRE
-23. Statut et validation (brouillon, à relire, validé) — À FAIRE
+20. Historique d'un document (versions, qui, quand) — ACCEPTÉ
+21. Comparer deux versions — ACCEPTÉ (façon comparaison GitHub)
+22. Date de mise à jour automatique dans la description — ACCEPTÉ, forme précisée : mention sur le PAPIER, sous le pied de page, centrée, opacité 0,2, sans casser la mise en page
+23. Statut et validation (brouillon, à relire, validé) — REFUSÉ (« trop compliqué, trop contraignant »)
 
 ## Navigation et lecture
 24. Table des matières d'un document (depuis ses titres) — À FAIRE
