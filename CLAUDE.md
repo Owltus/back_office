@@ -704,6 +704,12 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   `dialogs/TitreDocumentDialog.tsx`, qui ne fait que reporter dans le
   brouillon (écrit par Sauvegarder). Les trois autres pages de détail
   gardent leur encart `DetailFields`.
+  Zone d'édition NON redimensionnable (`resize-none`, `[field-sizing:fixed]`
+  contre le `field-sizing-content` du `Textarea` shadcn) : à partir de
+  `lg`, la grille éditeur + aperçu reçoit une hauteur MESURÉE jusqu'au bas
+  de la fenêtre (`hooks/useHauteurJusquEnBas.ts`, depuis `.app-scroll`,
+  rembourrages bas des ancêtres déduits, remesure au redimensionnement),
+  chaque colonne défile en interne ; en dessous, 60 dvh.
 - **Droits PAR CLASSEUR (2026-09-26, demande utilisateur : « faire comme
   l'Affichage »)** : `supabase/classeur_proprietaire_2026-09-26.sql` (JOUÉ,
   autorité `classeur_2026-09-25.sql` §5 identique). `ecriture` crée des

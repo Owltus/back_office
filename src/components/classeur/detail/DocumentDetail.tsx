@@ -16,6 +16,7 @@ import {
   DetailSkeleton,
 } from '#/components/classeur/detail/DetailFrame.tsx'
 import { useDetailPage } from '#/components/classeur/hooks/useDetailPage.ts'
+import { useHauteurJusquEnBas } from '#/components/classeur/hooks/useHauteurJusquEnBas.ts'
 import {
   BarreMiseEnForme,
   useMiseEnForme,
@@ -78,6 +79,7 @@ export function DocumentDetail() {
     editeurRef,
     setContenu,
   })
+  const zoneEdition = useHauteurJusquEnBas()
   const miseEnForme = useMiseEnForme(editeurRef, !page.canWrite)
 
   const apercuRef = useCallback(
@@ -221,10 +223,20 @@ export function DocumentDetail() {
       )}
 
       {editing ? (
-        <div className="grid flex-1 gap-4 lg:grid-cols-2">
+        // Hauteur fixée sur la fenêtre (grand écran) : l'éditeur ne se
+        // redimensionne plus à la main, chaque colonne défile en interne.
+        <div
+          ref={zoneEdition.ref}
+          className="grid gap-4 lg:grid-cols-2"
+          style={
+            zoneEdition.hauteur === null
+              ? undefined
+              : { height: zoneEdition.hauteur }
+          }
+        >
           <DetailPaper
             ref={apercuRef}
-            className="order-2 overflow-y-auto lg:sticky lg:top-0 lg:order-1 lg:max-h-[calc(100dvh-8rem)]"
+            className="order-2 overflow-y-auto lg:order-1 lg:h-full"
           >
             <div
               className="flex flex-col items-center gap-4 py-4"
@@ -233,7 +245,7 @@ export function DocumentDetail() {
               {pages}
             </div>
           </DetailPaper>
-          <div className="order-1 flex flex-col lg:order-2">
+          <div className="order-1 flex min-h-0 flex-col lg:order-2 lg:h-full">
             {page.canWrite && (
               <div className="flex flex-col gap-1.5 pb-2">
                 <DialoguesImage image={image} />
@@ -254,7 +266,7 @@ export function DocumentDetail() {
               placeholder="Écrivez ici. La barre ci-dessus met en forme (titres, gras, listes, tableaux, images) ; le bouton ? en haut explique tout."
               aria-label="Contenu du document"
               spellCheck
-              className="h-[70vh] resize-y font-mono text-sm leading-relaxed"
+              className="h-[60dvh] resize-none font-mono text-sm leading-relaxed [field-sizing:fixed] lg:h-auto lg:min-h-0 lg:flex-1"
             />
           </div>
         </div>
