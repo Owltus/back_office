@@ -15,15 +15,15 @@ Légende : FAIT · EN COURS · À FAIRE
 
 ## Écrire plus facilement
 6. Coller depuis Word / un e-mail en gardant la mise en forme — REFUSÉ (2026-09-27)
-7. Éditeur de tableau visuel (grille dans un modal) — REFUSÉ tel quel : garder la syntaxe Markdown officielle ; à rediscuter seulement si l'outil ne fait qu'écrire du tableau Markdown standard
+7. Éditeur de tableau visuel (grille dans un modal) — EN DISCUSSION : grille de saisie qui n'écrit que du tableau Markdown standard
 8. Retour à la ligne simple (sans ligne vide obligatoire) — EN ATTENTE (utilisateur : « garde-le de côté »)
 9. Renumérotation automatique des listes numérotées — REFUSÉ (« fausse bonne idée, trop rigide »)
 10. Encadrés colorés « Attention », « Important », « Astuce » — REFUSÉ (rester en noir et blanc, style simple)
-11. Modèles de document (Procédure, Fiche réflexe) — ACCEPTÉ sur le principe — à préciser : modèles de contenu vs nouveaux types d'élément
+11. Modèles de document (Procédure, Fiche réflexe) — ACCEPTÉ sur le principe — REFUSÉ (2026-09-27)
 12. Menu « / » en début de ligne — ACCEPTÉ, priorité basse (« pas obligatoire »)
 13. Police normale (non chasse fixe) dans l'éditeur — FAIT (2026-09-27)
-14. Gras / italique affichés comme actifs sous le curseur — À EXPLIQUER
-15. Rechercher et remplacer dans le document — À EXPLIQUER
+14. Gras / italique affichés comme actifs sous le curseur — REFUSÉ (2026-09-27)
+15. Rechercher et remplacer dans le document — REFUSÉ (2026-09-27)
 
 ## Relire et vérifier
 16. Aperçu synchronisé dans les deux sens (clic dans l'aperçu → curseur) — À FAIRE
