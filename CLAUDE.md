@@ -740,6 +740,11 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
     Le retrait d'une image SUPPRIMÉE reste hors historique, volontairement.
   - (5) indicateur « Non enregistré » / « Aucune modification » à gauche
     d'Annuler (`statut` de `DetailActions`).
+  Point 13 (même jour) : l'éditeur est en police NORMALE de l'app (plus
+  de `font-mono`, décision utilisateur). Décisions sur la suite, notées
+  dans le plan : 6, 9, 10 refusés (rester en noir et blanc, Markdown
+  officiel), 7 refusé sauf outil qui n'écrit que du tableau Markdown
+  standard, 8 en attente.
   Vérifié navigateur sans rien écrire (base et points de restauration
   inchangés). ⚠ Fenêtre Chrome non affichée = captures en échec et
   animations de sortie figées (`data-state="closed"` reste dans le DOM) :

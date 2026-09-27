@@ -265,7 +265,7 @@ export function DocumentDetail() {
               placeholder="Écrivez ici. La barre ci-dessus met en forme (titres, gras, listes, tableaux, images) ; le bouton ? en haut explique tout."
               aria-label="Contenu du document"
               spellCheck
-              className="h-[60dvh] resize-none font-mono text-sm leading-relaxed [field-sizing:fixed] lg:h-auto lg:min-h-0 lg:flex-1"
+              className="h-[60dvh] resize-none text-[15px] leading-relaxed [field-sizing:fixed] lg:h-auto lg:min-h-0 lg:flex-1"
             />
           </div>
         </div>

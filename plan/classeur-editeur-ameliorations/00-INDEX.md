@@ -14,16 +14,16 @@ Légende : FAIT · EN COURS · À FAIRE
 5. Indicateur « modifié, non sauvegardé » près de Sauvegarder — FAIT (2026-09-27)
 
 ## Écrire plus facilement
-6. Coller depuis Word / un e-mail en gardant la mise en forme — À FAIRE
-7. Éditeur de tableau visuel (grille dans un modal) — À FAIRE
-8. Retour à la ligne simple (sans ligne vide obligatoire) — À FAIRE
-9. Renumérotation automatique des listes numérotées — À FAIRE
-10. Encadrés colorés « Attention », « Important », « Astuce » — À FAIRE
-11. Modèles de document (Procédure, Fiche réflexe) — À FAIRE
-12. Menu « / » en début de ligne — À FAIRE
-13. Police normale (non chasse fixe) dans l'éditeur — À FAIRE
-14. Gras / italique affichés comme actifs sous le curseur — À FAIRE
-15. Rechercher et remplacer dans le document — À FAIRE
+6. Coller depuis Word / un e-mail en gardant la mise en forme — REFUSÉ (2026-09-27)
+7. Éditeur de tableau visuel (grille dans un modal) — REFUSÉ tel quel : garder la syntaxe Markdown officielle ; à rediscuter seulement si l'outil ne fait qu'écrire du tableau Markdown standard
+8. Retour à la ligne simple (sans ligne vide obligatoire) — EN ATTENTE (utilisateur : « garde-le de côté »)
+9. Renumérotation automatique des listes numérotées — REFUSÉ (« fausse bonne idée, trop rigide »)
+10. Encadrés colorés « Attention », « Important », « Astuce » — REFUSÉ (rester en noir et blanc, style simple)
+11. Modèles de document (Procédure, Fiche réflexe) — ACCEPTÉ sur le principe — à préciser : modèles de contenu vs nouveaux types d'élément
+12. Menu « / » en début de ligne — ACCEPTÉ, priorité basse (« pas obligatoire »)
+13. Police normale (non chasse fixe) dans l'éditeur — FAIT (2026-09-27)
+14. Gras / italique affichés comme actifs sous le curseur — À EXPLIQUER
+15. Rechercher et remplacer dans le document — À EXPLIQUER
 
 ## Relire et vérifier
 16. Aperçu synchronisé dans les deux sens (clic dans l'aperçu → curseur) — À FAIRE
