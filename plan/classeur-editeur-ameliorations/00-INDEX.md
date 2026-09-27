@@ -16,11 +16,11 @@ Légende : FAIT · EN COURS · À FAIRE
 ## Écrire plus facilement
 6. Coller depuis Word / un e-mail en gardant la mise en forme — REFUSÉ (2026-09-27)
 7. Éditeur de tableau visuel (grille dans un modal) — FAIT (2026-09-27) : grille de saisie qui n'écrit que du tableau Markdown officiel
-8. Retour à la ligne simple (sans ligne vide obligatoire) — EN ATTENTE (utilisateur : « garde-le de côté »)
+8. Retour à la ligne simple (sans ligne vide obligatoire) — REFUSÉ (2026-09-27)
 9. Renumérotation automatique des listes numérotées — REFUSÉ (« fausse bonne idée, trop rigide »)
 10. Encadrés colorés « Attention », « Important », « Astuce » — REFUSÉ (rester en noir et blanc, style simple)
 11. Modèles de document (Procédure, Fiche réflexe) — ACCEPTÉ sur le principe — REFUSÉ (2026-09-27)
-12. Menu « / » en début de ligne — ACCEPTÉ, priorité basse (« pas obligatoire »)
+12. Menu « / » en début de ligne — REFUSÉ (2026-09-27)
 13. Police normale (non chasse fixe) dans l'éditeur — FAIT (2026-09-27)
 14. Gras / italique affichés comme actifs sous le curseur — REFUSÉ (2026-09-27)
 15. Rechercher et remplacer dans le document — REFUSÉ (2026-09-27)
@@ -34,7 +34,7 @@ Légende : FAIT · EN COURS · À FAIRE
 ## Suivi des versions
 20. Historique d'un document (versions, qui, quand) — FAIT (2026-09-27)
 21. Comparer deux versions — FAIT (2026-09-27)
-22. Date de mise à jour automatique dans la description — FAIT (2026-09-27)
+22. Date de mise à jour automatique dans la description — FAIT (2026-09-27) — la date seule « jj/mm/aaaa », sans texte ni heure (précision utilisateur)
 23. Statut et validation (brouillon, à relire, validé) — REFUSÉ (« trop compliqué, trop contraignant »)
 
 ## Navigation et lecture

@@ -35,7 +35,7 @@ interface DocumentPagesProps {
   establishment?: string
   /** Masquer la numérotation des pages (pour impression de masse) */
   hidePagination?: boolean
-  /** Mention discrète sous le pied de page (version, `mentionVersion`). */
+  /** Date discrète sous le pied de page (jj/mm/aaaa, `mentionVersion`). */
   mention?: string
   /** Nombre de pages, remonté à chaque pagination terminée (éditeur). */
   onPageCount?: (pages: number) => void

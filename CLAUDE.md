@@ -769,11 +769,14 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   invalide, titre sauté ; blocs de code ignorés), repliable sous la barre,
   clic = aller à la ligne, jamais bloquant. 19 : « N pages » discret
   (`onPageCount` de `DocumentPages`). 23 refusé.
-  Point 22 FAIT : `mentionVersion` (heure de Paris) → prop `mention` de
+  Point 22 FAIT : `mentionVersion` = LA DATE SEULE « jj/mm/aaaa » (fuseau
+  de Paris ; l'utilisateur a refusé tout texte et l'heure) ; date du jour
+  dans l'aperçu d'édition → prop `mention` de
   `A4Page`, positionnée en ABSOLU dans la marge basse (sous le pied de
   page, centrée, opacité 0,2) : hors flux, la pagination ne la voit pas ;
   posée par `DocumentPages` depuis `ItemPages`, `DocumentCard` et
-  `DocumentDetail` (« Version en cours de modification » en édition).
+  `DocumentDetail`. Refusés aussi : 8 (retour à la ligne simple), 12
+  (menu « / »).
   Points 20-21 FAITS : table `classeur_document_versions`
   (`supabase/classeur_versions_documents_2026-09-27.sql`, JOUÉ, 5/5 ;
   bloc identique en §7 de l'autorité) écrite par le trigger definer
