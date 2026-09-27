@@ -755,6 +755,42 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   Vérifié sur « Dégradations constatées – prix » (20 lignes) : relire puis
   remplacer sans rien changer ne modifie QUE le séparateur (`|----|` →
   `| --- |`). Refusés le même jour : 11, 14, 15.
+  Points 16 à 19 FAITS (même jour). 16 : `rehypeLignesSource`
+  (`lib/classeur/print/lignesSource.ts`) pose `data-ligne` sur chaque
+  élément rendu — les pages A4 étant des COPIES HTML, l'attribut les suit ;
+  ⚠ tout composant Markdown surchargé doit transmettre ses props (`p` le
+  fait) ; chaque `===` devient 3 lignes rendues (`ligneRendueVersSource` /
+  `ligneSourceVersRendue` compensent). Clic dans l'aperçu → `allerALigne`
+  (défilement du textarea MESURÉ sur un miroir invisible) ; curseur → bloc
+  de l'aperçu montré s'il est hors vue (`selectionchange`) ; la synchro
+  proportionnelle se tait 400 ms après un défilement piloté. 17 : bouton
+  masquer/afficher l'aperçu (≥ lg). 18 : `lib/classeur/relecture.ts`
+  (image supprimée, lien vide, tableau aux cases en trop ou au séparateur
+  invalide, titre sauté ; blocs de code ignorés), repliable sous la barre,
+  clic = aller à la ligne, jamais bloquant. 19 : « N pages » discret
+  (`onPageCount` de `DocumentPages`). 23 refusé.
+  Point 22 FAIT : `mentionVersion` (heure de Paris) → prop `mention` de
+  `A4Page`, positionnée en ABSOLU dans la marge basse (sous le pied de
+  page, centrée, opacité 0,2) : hors flux, la pagination ne la voit pas ;
+  posée par `DocumentPages` depuis `ItemPages`, `DocumentCard` et
+  `DocumentDetail` (« Version en cours de modification » en édition).
+  Points 20-21 FAITS : table `classeur_document_versions`
+  (`supabase/classeur_versions_documents_2026-09-27.sql`, JOUÉ, 5/5 ;
+  bloc identique en §7 de l'autorité) écrite par le trigger definer
+  `private.classeur_document_version` après tout changement de titre,
+  description ou texte, quel que soit le chemin ; état d'avant conservé
+  au 1er enregistrement (`etat_initial`) ; auteur FIGÉ en clair (prénom
+  nom / nom affiché, jamais l'e-mail : les lecteurs ne lisent pas les
+  profils des autres) ; 50 versions par document ; lecture rang ≥ 1, AUCUN
+  grant d'écriture (insert direct → 42501, testé en transaction annulée).
+  Clé `classeurKeys.versions` EXCLUE du cache disque (noms de collègues,
+  `PREFIXES_SENSIBLES`). UI `dialogs/HistoriqueDocumentDialog.tsx` +
+  `lib/classeur/diff.ts` (LCS ligne à ligne, préfixe/suffixe communs
+  retirés, repli des parties inchangées, propriété « le diff reconstitue
+  les deux versions » testée) ; « Reprendre cette version » = l'éditeur
+  s'ouvre dessus avec la base ACTUELLE, rien n'est écrit avant
+  Sauvegarder. ⚠ Doublons de patchs rejoués retirés ce jour : interface
+  `DbImage` (types.ts) et bloc Médiathèque de `classeur_2026-09-25.sql`.
   Vérifié navigateur sans rien écrire (base et points de restauration
   inchangés). ⚠ Fenêtre Chrome non affichée = captures en échec et
   animations de sortie figées (`data-state="closed"` reste dans le DOM) :

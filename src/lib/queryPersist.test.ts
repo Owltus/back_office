@@ -30,9 +30,9 @@ describe('estSensible — ce qui ne doit jamais toucher le disque', () => {
     // ⚠ Cette clé est construite par une FONCTION (`reservationsKey` dans
     // ParkingBoard) et n'apparaît pas dans une recherche de `queryKey:`.
     // Elle a failli être oubliée le 2026-09-24 : ce test est son filet.
-    expect(estSensible(['parking', 'reservations', '2026-09-01', '2026-09-30'])).toBe(
-      true,
-    )
+    expect(
+      estSensible(['parking', 'reservations', '2026-09-01', '2026-09-30']),
+    ).toBe(true)
   })
 
   it('refuse les identités du personnel', () => {
@@ -44,6 +44,10 @@ describe('estSensible — ce qui ne doit jamais toucher le disque', () => {
     expect(estSensible(['facturation', 'issuers'])).toBe(true)
   })
 
+  it('refuse l’historique des documents du Classeur (noms des collègues)', () => {
+    expect(estSensible(['classeur', 'versions', 17])).toBe(true)
+    expect(estSensible(['classeur', 'items', 3])).toBe(false)
+  })
   it('refuse les cautions, lues en select(*) avec commentaire libre', () => {
     expect(estSensible(['caisse', 'cautions'])).toBe(true)
   })
@@ -52,7 +56,9 @@ describe('estSensible — ce qui ne doit jamais toucher le disque', () => {
 describe('estSensible — ce qui a le droit d’être conservé', () => {
   it('accepte les agrégats et analytiques, qui n’ont aucun nom', () => {
     expect(estSensible(['pdj', 'analytics', 2026])).toBe(false)
-    expect(estSensible(['pdj', 'agg-range', '2026-09-01', '2026-09-24'])).toBe(false)
+    expect(estSensible(['pdj', 'agg-range', '2026-09-01', '2026-09-24'])).toBe(
+      false,
+    )
     expect(estSensible(['rapro', 'daily-agg', 2026])).toBe(false)
     expect(estSensible(['parking', 'daily-occ', 2026, 9])).toBe(false)
     expect(estSensible(['repjour', 'dashboard', '2026-09-24'])).toBe(false)
@@ -86,7 +92,9 @@ describe('doitPersister', () => {
   it('ne conserve que des lectures RÉUSSIES', () => {
     // Persister une erreur reviendrait à restaurer une panne au démarrage
     // suivant.
-    expect(doitPersister(requete(['repjour', 'dashboard', '2026-09-24']))).toBe(true)
+    expect(doitPersister(requete(['repjour', 'dashboard', '2026-09-24']))).toBe(
+      true,
+    )
     expect(
       doitPersister(requete(['repjour', 'dashboard', '2026-09-24'], 'error')),
     ).toBe(false)
@@ -109,7 +117,9 @@ describe('doitPersister', () => {
       materialized: new Set<number>(),
     }
     expect(
-      doitPersister(requete(['rapro', 'day', '2026-09-24'], 'success', raproDay)),
+      doitPersister(
+        requete(['rapro', 'day', '2026-09-24'], 'success', raproDay),
+      ),
     ).toBe(false)
   })
 })
@@ -122,7 +132,9 @@ describe('survitAuJson — ce que le disque sait rendre intact', () => {
     expect(survitAuJson(false)).toBe(true)
     expect(survitAuJson([])).toBe(true)
     expect(survitAuJson({})).toBe(true)
-    expect(survitAuJson({ a: [{ b: [1, 'deux', null, { c: true }] }] })).toBe(true)
+    expect(survitAuJson({ a: [{ b: [1, 'deux', null, { c: true }] }] })).toBe(
+      true,
+    )
     expect(survitAuJson(Object.create(null))).toBe(true)
   })
 

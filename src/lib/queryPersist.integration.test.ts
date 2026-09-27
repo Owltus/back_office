@@ -110,9 +110,11 @@ describe('brancherPersistance — le cache atteint vraiment le disque', () => {
     brancherPersistance(second)
     await vi.advanceTimersByTimeAsync(0)
     expect(second.getQueryData(['rapro', 'day', '2026-09-24'])).toBeUndefined()
-    expect(second.getQueryData(['repjour', 'dashboard', '2026-09-24'])).toEqual({
-      caJour: 4242,
-    })
+    expect(second.getQueryData(['repjour', 'dashboard', '2026-09-24'])).toEqual(
+      {
+        caJour: 4242,
+      },
+    )
   })
 
   it('efface le cache v1 périmé au branchement', () => {
@@ -139,9 +141,9 @@ describe('brancherPersistance — le cache atteint vraiment le disque', () => {
     await vi.advanceTimersByTimeAsync(0)
 
     // C'est TOUT l'objet du chantier : l'écran a encore quelque chose à montrer.
-    expect(
-      second.getQueryData(['repjour', 'dashboard', '2026-09-24']),
-    ).toEqual({ caJour: 4242 })
+    expect(second.getQueryData(['repjour', 'dashboard', '2026-09-24'])).toEqual(
+      { caJour: 4242 },
+    )
   })
 
   it('ne fait pas tomber l’application si localStorage refuse', () => {

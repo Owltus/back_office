@@ -35,6 +35,12 @@ export const classeurKeys = {
    * chemin) ; jamais persistée : un Blob ne survit pas au JSON.
    */
   image: (chemin: string) => ['classeur', 'image', chemin] as const,
+  /**
+   * Versions d'un document. Portent des NOMS de collègues : exclues du
+   * cache disque (`PREFIXES_SENSIBLES`, poste partagé).
+   */
+  versions: (documentId: number) =>
+    ['classeur', 'versions', documentId] as const,
   /** Médiathèque d'un classeur (fiches `classeur_images`). */
   images: (classeurId: number) => ['classeur', 'images', classeurId] as const,
 }

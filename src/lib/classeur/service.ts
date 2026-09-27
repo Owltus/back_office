@@ -16,6 +16,7 @@
 import { supabase } from '#/lib/supabase.ts'
 import type {
   ChapterContent,
+  DbDocumentVersion,
   DbImage,
   DbChapter,
   DbClasseur,
@@ -80,6 +81,25 @@ const COLS_IMAGE =
 // Images (médiathèque d'un classeur) — pas de point de restauration auto :
 // l'instantané ne couvre pas les images.
 // ---------------------------------------------------------------------------
+
+/**
+ * Versions d'un document, la plus récente d'abord (50 au plus : borne du
+ * trigger). Lecture seule : la table n'accepte aucune écriture de l'app.
+ */
+export async function fetchVersionsDocument(
+  documentId: number,
+): Promise<DbDocumentVersion[]> {
+  const { data, error } = await supabase
+    .from('classeur_document_versions')
+    .select(
+      'id, document_id, title, description, content, origine, auteur, created_at',
+    )
+    .eq('document_id', documentId)
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+  if (error) throw error
+  return data
+}
 
 export async function fetchImages(classeurId: number): Promise<DbImage[]> {
   const { data, error } = await supabase

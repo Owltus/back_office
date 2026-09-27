@@ -38,6 +38,7 @@ import {
 import { useImages } from '#/components/classeur/hooks/useImages.ts'
 import { AbandonModificationsDialog } from '#/components/classeur/dialogs/AbandonModificationsDialog.tsx'
 import { ConflitDocumentDialog } from '#/components/classeur/dialogs/ConflitDocumentDialog.tsx'
+import { HistoriqueDocumentDialog } from '#/components/classeur/dialogs/HistoriqueDocumentDialog.tsx'
 import { AideMiseEnFormeDialog } from '#/components/classeur/dialogs/AideMiseEnFormeDialog.tsx'
 import { TitreDocumentDialog } from '#/components/classeur/dialogs/TitreDocumentDialog.tsx'
 import { IconAction } from '#/components/classeur/IconAction.tsx'
@@ -96,6 +97,8 @@ export function DocumentDetail() {
   const [titreOuvert, setTitreOuvert] = useState(false)
   /** 17. Aperçu masqué : le texte prend toute la largeur. */
   const [apercuMasque, setApercuMasque] = useState(false)
+  /** 20-21. Historique des versions du document. */
+  const [historiqueOuvert, setHistoriqueOuvert] = useState(false)
   /** 19. Nombre de pages de l'aperçu, affiché discrètement en édition. */
   const [nbPages, setNbPages] = useState<number | null>(null)
 
@@ -319,9 +322,18 @@ export function DocumentDetail() {
             onSave={sauvegarder}
             onPrint={() => setPreviewOpen(true)}
             extra={
-              <DetailMarkdownAction
-                onClick={() => exporterDocumentMarkdown(doc.title, doc.content)}
-              />
+              <>
+                <IconAction
+                  label="Historique des versions"
+                  icon={<History />}
+                  onClick={() => setHistoriqueOuvert(true)}
+                />
+                <DetailMarkdownAction
+                  onClick={() =>
+                    exporterDocumentMarkdown(doc.title, doc.content)
+                  }
+                />
+              </>
             }
           />
         }
@@ -417,6 +429,14 @@ export function DocumentDetail() {
           setTitre(t)
           setDescription(d)
         }}
+      />
+
+      <HistoriqueDocumentDialog
+        open={historiqueOuvert}
+        onOpenChange={setHistoriqueOuvert}
+        doc={doc}
+        peutReprendre={page.canWrite}
+        onReprendre={edition.reprendreVersion}
       />
 
       <AbandonModificationsDialog

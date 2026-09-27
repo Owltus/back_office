@@ -32,9 +32,9 @@ Légende : FAIT · EN COURS · À FAIRE
 19. Nombre de pages en direct près de Sauvegarder — FAIT (2026-09-27)
 
 ## Suivi des versions
-20. Historique d'un document (versions, qui, quand) — ACCEPTÉ
-21. Comparer deux versions — ACCEPTÉ (façon comparaison GitHub)
-22. Date de mise à jour automatique dans la description — ACCEPTÉ, forme précisée : mention sur le PAPIER, sous le pied de page, centrée, opacité 0,2, sans casser la mise en page
+20. Historique d'un document (versions, qui, quand) — FAIT (2026-09-27)
+21. Comparer deux versions — FAIT (2026-09-27)
+22. Date de mise à jour automatique dans la description — FAIT (2026-09-27)
 23. Statut et validation (brouillon, à relire, validé) — REFUSÉ (« trop compliqué, trop contraignant »)
 
 ## Navigation et lecture

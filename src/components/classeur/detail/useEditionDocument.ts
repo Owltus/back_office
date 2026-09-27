@@ -189,6 +189,24 @@ export function useEditionDocument(doc: DbDocument | null) {
     ouvrir(brouillonPropose, brouillonPropose.base, doc)
   }, [doc, brouillonPropose, ouvrir])
 
+  /**
+   * Historique (amélioration n° 20) : ouvre l'éditeur sur une ancienne
+   * version. Départ = le document ACTUEL (base de conflit comprise) : rien
+   * n'est écrit avant Sauvegarder, et l'écart se voit comme une
+   * modification (« Non enregistré »).
+   */
+  const reprendreVersion = useCallback(
+    (v: { title: string; description: string; content: string }) => {
+      if (!doc) return
+      ouvrir(
+        { titre: v.title, description: v.description, contenu: v.content },
+        doc.updated_at,
+        doc,
+      )
+    },
+    [doc, ouvrir],
+  )
+
   const ignorerBrouillon = useCallback(() => {
     if (doc && userId) effacerBrouillon(stockageNavigateur(), userId, doc.id)
     setBrouillonPropose(null)
@@ -304,5 +322,6 @@ export function useEditionDocument(doc: DbDocument | null) {
     brouillonPropose,
     reprendreBrouillon,
     ignorerBrouillon,
+    reprendreVersion,
   }
 }

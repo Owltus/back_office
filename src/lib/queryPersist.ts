@@ -97,6 +97,8 @@ const PREFIXES_SENSIBLES: ReadonlyArray<ReadonlyArray<string>> = [
   ['comptes'],
   ['facturation'],
   ['caisse', 'cautions'],
+  // Historique des documents du Classeur : noms des collègues (2026-09-27).
+  ['classeur', 'versions'],
 ]
 
 /** Vrai si la clé commence par l'un des préfixes sensibles. */

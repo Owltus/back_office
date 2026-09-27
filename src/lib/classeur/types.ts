@@ -127,6 +127,22 @@ export interface DbImage {
 }
 
 /**
+ * Version d'un document (`classeur_document_versions`, 2026-09-27) : son
+ * état complet après un enregistrement, écrit par trigger. `auteur` est le
+ * nom figé en clair ; vide pour `etat_initial` (l'état d'avant l'historique).
+ */
+export interface DbDocumentVersion {
+  id: number
+  document_id: number
+  title: string
+  description: string
+  content: string
+  origine: 'creation' | 'enregistrement' | 'etat_initial'
+  auteur: string
+  created_at: string
+}
+
+/**
  * Genre d'un point de restauration (`classeur_merge_history.kind`) :
  * `auto` mineur pris avant une session de modifications ; `manuel` majeur
  * nommé par l'utilisateur ; `fusion` avant un import JSON ; `securite` avant
