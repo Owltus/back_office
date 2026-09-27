@@ -30,7 +30,11 @@ export interface PaginationResult {
  * `eslint-disable` pour l'exclure des dépendances. `hasPaginated` (ref)
  * porte la même information sans directive.
  */
-export function usePagination(contentKey?: string): PaginationResult {
+export function usePagination(
+  contentKey?: string,
+  /** Hauteur utile de la zone contenu, en mm (défaut : sans sous-titre). */
+  contentHeightMm: number = CONTENT_HEIGHT_MM,
+): PaginationResult {
   const [pages, setPages] = useState<PageData[]>([])
   const [measuring, setMeasuring] = useState(true)
   const lastKey = useRef<string | undefined>(undefined)
@@ -40,8 +44,10 @@ export function usePagination(contentKey?: string): PaginationResult {
     (node: HTMLDivElement | null) => {
       if (!node) return
       // Ne re-mesurer que si la clé a changé (ou première mesure)
-      if (lastKey.current === contentKey && hasPaginated.current) return
-      lastKey.current = contentKey
+      // La hauteur utile fait partie de la clé : la changer re-pagine.
+      const cle = `${contentKey ?? ''}|${String(contentHeightMm)}`
+      if (lastKey.current === cle && hasPaginated.current) return
+      lastKey.current = cle
 
       // Ne montrer le spinner que lors de la première pagination,
       // pas lors des re-paginations (pour éviter de détruire le DOM et le scroll)
@@ -55,7 +61,7 @@ export function usePagination(contentKey?: string): PaginationResult {
       requestAnimationFrame(() => {
         void Promise.all([waitForMermaid(node), waitForImages(node)]).then(
           () => {
-            const maxHeight = mmToPx(CONTENT_HEIGHT_MM)
+            const maxHeight = mmToPx(contentHeightMm)
             const pageData = paginate(node, maxHeight)
 
             setPages(pageData)
@@ -65,7 +71,7 @@ export function usePagination(contentKey?: string): PaginationResult {
         )
       })
     },
-    [contentKey],
+    [contentKey, contentHeightMm],
   )
 
   return { pages, measuring, measureRef }

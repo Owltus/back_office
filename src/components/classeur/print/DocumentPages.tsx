@@ -10,7 +10,11 @@ import { MermaidBlock } from '#/components/classeur/MermaidBlock.tsx'
 import { ImageDocument } from '#/components/classeur/print/ImageDocument.tsx'
 import { A4Page } from '#/components/classeur/print/A4Page.tsx'
 import { estCheminImage, largeurDepuisTitre } from '#/lib/classeur/images.ts'
-import { PAGE_FONT_FAMILY } from '#/lib/classeur/print/constants.ts'
+import {
+  CONTENT_HEIGHT_MM,
+  DOCUMENT_CONTENT_HEIGHT_WITH_SUBTITLE_MM,
+  PAGE_FONT_FAMILY,
+} from '#/lib/classeur/print/constants.ts'
 import {
   PAGEBREAK_MARKER,
   preprocessPageBreaks,
@@ -102,7 +106,14 @@ export function DocumentPages({
     () => preprocessPageBreaks(content),
     [content],
   )
-  const { pages, measuring, measureRef } = usePagination(processedContent)
+  // La page réserve la ligne de sous-titre dès que `subtitle` est défini
+  // (`A4Page`) : le budget de pagination doit la retirer, sinon débordement.
+  const { pages, measuring, measureRef } = usePagination(
+    processedContent,
+    subtitle !== undefined
+      ? DOCUMENT_CONTENT_HEIGHT_WITH_SUBTITLE_MM
+      : CONTENT_HEIGHT_MM,
+  )
 
   const contentWidthPx = getContentWidthPx()
 

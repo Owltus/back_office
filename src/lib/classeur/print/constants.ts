@@ -68,6 +68,17 @@ export const CONTENT_HEIGHT_MM =
 /** Sous-titre (feuilles de suivi uniquement) */
 export const SUBTITLE_HEIGHT_MM = 7
 
+/**
+ * Zone contenu d'un DOCUMENT dont la page affiche la ligne de sous-titre
+ * (`A4Page` la réserve dès que `subtitle` est défini, même vide : 7 mm).
+ * Défaut hérité de Registre, corrigé le 2026-09-27 : la pagination des
+ * documents utilisait `CONTENT_HEIGHT_MM` alors que la page en retirait
+ * 7 mm — une page pleine débordait sur la marge basse, et le pied de page
+ * pouvait être rogné à l'impression (`overflow: hidden`).
+ */
+export const DOCUMENT_CONTENT_HEIGHT_WITH_SUBTITLE_MM =
+  CONTENT_HEIGHT_MM - SUBTITLE_HEIGHT_MM
+
 /** Zone contenu feuilles de suivi (réduite par le sous-titre + gap) */
 export const TRACKING_CONTENT_HEIGHT_MM =
   CONTENT_HEIGHT_MM - SUBTITLE_HEIGHT_MM - GAP_MM

@@ -534,6 +534,19 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   ici : le contenu est mis en page par le DOM. Pages A4 TOUJOURS blanches
   (pas de variante thématique). Classes `.a4-page`, `.pdf-prose`,
   `.tracking-table` dans `styles/classeur.css` : le moteur en dépend.
+  ⚠ **Budget de pagination d'un document (corrigé le 2026-09-27)** :
+  `A4Page` réserve la ligne de sous-titre (7 mm) dès que `subtitle` est
+  défini, même vide — donc TOUJOURS pour un document (sa description).
+  `usePagination` calculait avec `CONTENT_HEIGHT_MM` (sans sous-titre) :
+  une page pleine débordait jusqu'à 7 mm et rognait le pied de page à
+  l'impression (`overflow: hidden`). Défaut hérité de Registre.
+  `DocumentPages` passe désormais `DOCUMENT_CONTENT_HEIGHT_WITH_SUBTITLE_MM`
+  et la hauteur fait partie de la clé de re-mesure. Même famille :
+  l'espacement d'une image est un PADDING (une marge fusionnait avec le
+  paragraphe parent et échappait à la mesure, ~20 px par capture). Trouvés
+  en contrôlant les 31 documents du classeur « Procédures de la réception »
+  (id 5, 2026-09-27). ⚠ Pour mesurer une page, l'onglet doit être au premier
+  plan : Chrome y suspend `requestAnimationFrame`, donc la pagination.
   ⚠ **Le document imprimé doit être stylé EXACTEMENT comme la page**
   (défaut trouvé par l'utilisateur le 2026-09-26 : « très grosse différence
   entre l'aperçu et l'impression, liens colorés, mise en page différente »).
