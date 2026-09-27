@@ -17,7 +17,11 @@ import {
   TextQuote,
 } from 'lucide-react'
 
-import { appliquerDansEditeur } from '#/components/classeur/detail/editionTextarea.ts'
+import {
+  appliquerDansEditeur,
+  appliquerQuandLibre,
+} from '#/components/classeur/detail/editionTextarea.ts'
+import { TableauDialog } from '#/components/classeur/dialogs/TableauDialog.tsx'
 import { IconAction } from '#/components/classeur/IconAction.tsx'
 import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import {
@@ -27,6 +31,7 @@ import {
   indenterListe,
   insererBloc,
   insererLien,
+  insererTexteEnBloc,
   prefixeActif,
 } from '#/lib/classeur/markdownEdition.ts'
 import type {
@@ -35,6 +40,8 @@ import type {
   Entourage,
   Prefixe,
 } from '#/lib/classeur/markdownEdition.ts'
+import { grilleVide, trouverTableau } from '#/lib/classeur/tableauMarkdown.ts'
+import type { Grille } from '#/lib/classeur/tableauMarkdown.ts'
 import { cn } from '#/lib/utils.ts'
 
 /*
@@ -147,9 +154,62 @@ export function useMiseEnForme(
     [executer, lectureSeule, relever],
   )
 
+  // ── Tableau (amélioration n° 7) : grille de saisie, Markdown en sortie ──
+  const [tableau, setTableau] = useState<{
+    grille: Grille
+    /** Plage du tableau existant remplacé, ou de la sélection. */
+    debut: number
+    fin: number
+    modification: boolean
+  } | null>(null)
+
+  /** Grille pré-remplie si le curseur est dans un tableau, vide sinon. */
+  const ouvrirTableau = useCallback(() => {
+    const ed = editeurRef.current
+    if (!ed || lectureSeule) return
+    const trouve = trouverTableau(ed.value, ed.selectionStart)
+    setTableau(
+      trouve
+        ? {
+            grille: trouve,
+            debut: trouve.debut,
+            fin: trouve.fin,
+            modification: true,
+          }
+        : {
+            grille: grilleVide(),
+            debut: ed.selectionStart,
+            fin: ed.selectionEnd,
+            modification: false,
+          },
+    )
+  }, [editeurRef, lectureSeule])
+
+  /** Écrit le tableau Markdown, une fois la grille fermée (Ctrl + Z l'annule). */
+  const validerTableau = useCallback(
+    (markdown: string) => {
+      if (!tableau) return
+      const { debut, fin } = tableau
+      setTableau(null)
+      appliquerQuandLibre(
+        () => editeurRef.current,
+        (valeur) => insererTexteEnBloc(valeur, debut, fin, markdown),
+        () => undefined,
+      )
+    },
+    [tableau, editeurRef],
+  )
+
   return {
     executer,
     ligneActive,
+    tableau,
+    ouvrirTableau,
+    validerTableau,
+    annulerTableau: () => {
+      setTableau(null)
+      editeurRef.current?.focus()
+    },
     /** À poser sur le `textarea`. */
     editeurProps: { onKeyDown, onSelect: relever },
   }
@@ -193,7 +253,7 @@ export function BarreMiseEnForme({
   miseEnForme: MiseEnForme
   fin?: ReactNode
 }) {
-  const { executer, ligneActive } = miseEnForme
+  const { executer, ligneActive, tableau } = miseEnForme
   const prefixe = (valeur: Prefixe) => () =>
     executer({ type: 'prefixe', valeur })
   return (
@@ -202,6 +262,12 @@ export function BarreMiseEnForme({
       aria-label="Mise en forme"
       className="flex flex-wrap items-center gap-2"
     >
+      <TableauDialog
+        grille={tableau?.grille ?? null}
+        modification={tableau?.modification ?? false}
+        onAnnuler={miseEnForme.annulerTableau}
+        onValider={miseEnForme.validerTableau}
+      />
       <ButtonGroup>
         <Outil
           label="Grand titre"
@@ -272,9 +338,9 @@ export function BarreMiseEnForme({
           onClick={() => executer({ type: 'lien' })}
         />
         <Outil
-          label="Tableau"
+          label="Tableau (curseur dans un tableau : le modifier)"
           icon={<Table />}
-          onClick={() => executer({ type: 'bloc', valeur: 'tableau' })}
+          onClick={miseEnForme.ouvrirTableau}
         />
         <Outil
           label="Ligne de séparation"

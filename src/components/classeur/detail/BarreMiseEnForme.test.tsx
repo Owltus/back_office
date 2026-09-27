@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 import { useRef, useState } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react'
 
 import {
   BarreMiseEnForme,
@@ -81,11 +87,58 @@ describe('BarreMiseEnForme', () => {
     expect(evt).toBe(true) // pas de preventDefault
     expect(etat()).toBe('texte')
   })
-  it('tableau inséré sur ses propres lignes', () => {
+  it('Tableau ouvre la grille ; Insérer écrit un tableau Markdown standard', async () => {
     preparer('Intro', 5, 5)
-    fireEvent.click(screen.getByRole('button', { name: 'Tableau' }))
-    expect(etat()).toMatch(
-      /^Intro\n\n\| Colonne 1 \| Colonne 2 \|\n\| --- \| --- \|/,
+    fireEvent.click(screen.getByRole('button', { name: /^Tableau/ }))
+    expect(screen.getByRole('dialog').textContent).toContain('Nouveau tableau')
+    fireEvent.change(screen.getByLabelText('Ligne 1, colonne 1'), {
+      target: { value: 'a | b' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Insérer le tableau' }))
+    await waitFor(() =>
+      expect(etat()).toBe(
+        [
+          'Intro',
+          '',
+          '| Colonne 1 | Colonne 2 |',
+          '| --- | --- |',
+          '| a \\| b |  |',
+          '|  |  |',
+          '',
+        ].join('\n'),
+      ),
+    )
+  })
+  it('curseur dans un tableau : grille pré-remplie, le tableau est remplacé', async () => {
+    const md = [
+      'Avant',
+      '',
+      '| A | B |',
+      '| :---: | --- |',
+      '| 1 | 2 |',
+      '',
+      'Après',
+    ].join('\n')
+    preparer(md, md.indexOf('| 1'), md.indexOf('| 1'))
+    fireEvent.click(screen.getByRole('button', { name: /^Tableau/ }))
+    const case1 = screen.getByLabelText<HTMLInputElement>('Ligne 1, colonne 1')
+    expect(case1.value).toBe('1')
+    fireEvent.change(case1, { target: { value: 'un' } })
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Remplacer le tableau' }),
+    )
+    await waitFor(() =>
+      expect(etat()).toBe(
+        [
+          'Avant',
+          '',
+          '| A | B |',
+          '| :---: | --- |',
+          '| un | 2 |',
+          '',
+          'Après',
+        ].join('\n'),
+      ),
     )
   })
 })

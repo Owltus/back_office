@@ -9,6 +9,7 @@ import {
   insererBloc,
   insererLien,
   insererLigne,
+  insererTexteEnBloc,
   prefixeActif,
 } from '#/lib/classeur/markdownEdition.ts'
 import type { Edition } from '#/lib/classeur/markdownEdition.ts'
@@ -225,5 +226,22 @@ describe('insererLigne — image insérée au curseur relevé', () => {
       `abc\n${img}\n`,
     )
     expect(res('', insererLigne('', 0, 0, img))!.texte).toBe(`${img}\n`)
+  })
+})
+
+describe('insererTexteEnBloc — tableau de la grille', () => {
+  const t = '| A |\n| --- |'
+  it('isole le bloc et place le curseur après', () => {
+    const a = res('Intro', insererTexteEnBloc('Intro', 5, 5, t))!
+    expect(a.texte).toBe(`Intro\n\n${t}\n`)
+    expect(a.e.selection[0]).toBe(`Intro\n\n${t}`.length)
+  })
+  it('remplace un tableau existant sans toucher au voisinage', () => {
+    const v = `Avant\n\n| X |\n| --- |\n\nAprès`
+    const d = v.indexOf('| X')
+    const f = v.indexOf('\n\nAprès')
+    expect(res(v, insererTexteEnBloc(v, d, f, t))!.texte).toBe(
+      `Avant\n\n${t}\n\nAprès`,
+    )
   })
 })

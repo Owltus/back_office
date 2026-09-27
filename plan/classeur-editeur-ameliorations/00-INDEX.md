@@ -15,7 +15,7 @@ Légende : FAIT · EN COURS · À FAIRE
 
 ## Écrire plus facilement
 6. Coller depuis Word / un e-mail en gardant la mise en forme — REFUSÉ (2026-09-27)
-7. Éditeur de tableau visuel (grille dans un modal) — EN DISCUSSION : grille de saisie qui n'écrit que du tableau Markdown standard
+7. Éditeur de tableau visuel (grille dans un modal) — FAIT (2026-09-27) : grille de saisie qui n'écrit que du tableau Markdown officiel
 8. Retour à la ligne simple (sans ligne vide obligatoire) — EN ATTENTE (utilisateur : « garde-le de côté »)
 9. Renumérotation automatique des listes numérotées — REFUSÉ (« fausse bonne idée, trop rigide »)
 10. Encadrés colorés « Attention », « Important », « Astuce » — REFUSÉ (rester en noir et blanc, style simple)

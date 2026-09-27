@@ -437,3 +437,43 @@ export function insererLigne(
   const curseur = d + sautAvant.length + ligne.length + sautApres.length
   return { debut: d, fin: f, texte, selection: [curseur, curseur] }
 }
+
+/**
+ * Insère ou remplace un bloc quelconque (un tableau écrit par la grille)
+ * sur ses propres lignes, isolé par des lignes vides comme `insererBloc`.
+ * Le curseur se place juste après le bloc.
+ */
+export function insererTexteEnBloc(
+  valeur: string,
+  debut: number,
+  fin: number,
+  bloc: string,
+): Edition {
+  const d = Math.min(debut, fin, valeur.length)
+  const f = Math.min(Math.max(debut, fin), valeur.length)
+  const avant = valeur.slice(0, d)
+  const apres = valeur.slice(f)
+  const prefixe =
+    avant === ''
+      ? ''
+      : avant.endsWith('\n\n')
+        ? ''
+        : avant.endsWith('\n')
+          ? '\n'
+          : '\n\n'
+  const suffixe =
+    apres === ''
+      ? '\n'
+      : apres.startsWith('\n\n')
+        ? ''
+        : apres.startsWith('\n')
+          ? '\n'
+          : '\n\n'
+  const curseur = d + prefixe.length + bloc.length
+  return {
+    debut: d,
+    fin: f,
+    texte: prefixe + bloc + suffixe,
+    selection: [curseur, curseur],
+  }
+}

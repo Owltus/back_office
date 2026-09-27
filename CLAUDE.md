@@ -745,6 +745,16 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   dans le plan : 6, 9, 10 refusés (rester en noir et blanc, Markdown
   officiel), 7 refusé sauf outil qui n'écrit que du tableau Markdown
   standard, 8 en attente.
+  Point 7 FAIT (même jour, « fais ton truc avec le tableau ») : le bouton
+  Tableau ouvre `dialogs/TableauDialog.tsx`, grille vide ou PRÉ-REMPLIE
+  avec le tableau sous le curseur (`trouverTableau`) ; la validation écrit
+  du tableau GFM standard (`lib/classeur/tableauMarkdown.ts` :
+  `ecrireTableau` protège `|`, aplatit les retours, CONSERVE les
+  alignements `:---:` ; lecture tolérante, lignes courtes complétées, jamais
+  tronquées) via `insererTexteEnBloc` + `appliquerQuandLibre` (Ctrl + Z).
+  Vérifié sur « Dégradations constatées – prix » (20 lignes) : relire puis
+  remplacer sans rien changer ne modifie QUE le séparateur (`|----|` →
+  `| --- |`). Refusés le même jour : 11, 14, 15.
   Vérifié navigateur sans rien écrire (base et points de restauration
   inchangés). ⚠ Fenêtre Chrome non affichée = captures en échec et
   animations de sortie figées (`data-state="closed"` reste dans le DOM) :

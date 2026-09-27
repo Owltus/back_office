@@ -191,11 +191,16 @@ export function AideMiseEnFormeDialog({
 
           <Section title="Tableaux">
             <p>
-              <Bouton icon={<Table />} /> insère un tableau de deux colonnes à
-              compléter. Chaque ligne du tableau est une ligne de texte, les
-              cases sont séparées par des barres <code>|</code>. Pour une
-              colonne de plus, ajoutez une barre et un texte sur chaque ligne ;
-              pour une ligne de plus, copiez une ligne existante. La ligne{' '}
+              <Bouton icon={<Table />} /> ouvre une grille à remplir comme un
+              tableur : Tab passe à la case suivante, Entrée à la ligne du
+              dessous, et des boutons ajoutent ou retirent lignes et colonnes.
+              La première ligne est l'en-tête. Pour <Term>modifier</Term> un
+              tableau, placez le curseur dedans puis cliquez sur le même bouton
+              : la grille s'ouvre avec son contenu.
+            </p>
+            <p>
+              Dans le texte, le tableau s'écrit avec des barres <code>|</code> ;
+              on peut aussi le corriger directement. La ligne{' '}
               <code>| --- |</code> sépare l'en-tête du reste : ne la supprimez
               pas.
             </p>
