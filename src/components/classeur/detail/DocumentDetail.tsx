@@ -17,11 +17,20 @@ import {
 } from '#/components/classeur/detail/DetailFrame.tsx'
 import { useDetailPage } from '#/components/classeur/hooks/useDetailPage.ts'
 import {
-  BarreImage,
+  BarreMiseEnForme,
+  useMiseEnForme,
+} from '#/components/classeur/detail/BarreMiseEnForme.tsx'
+import {
+  BoutonsImage,
+  DialoguesImage,
+  EtatImageLigne,
   useInsertionImage,
 } from '#/components/classeur/detail/InsertionImage.tsx'
+import { AideMiseEnFormeDialog } from '#/components/classeur/dialogs/AideMiseEnFormeDialog.tsx'
+import { IconAction } from '#/components/classeur/IconAction.tsx'
 import { DocumentPages } from '#/components/classeur/print/DocumentPages.tsx'
 import { PrintPreview } from '#/components/classeur/print/PrintPreview.tsx'
+import { HelpGlyph } from '#/components/shared/HelpGlyph.tsx'
 import { Input } from '#/components/ui/input.tsx'
 import { Textarea } from '#/components/ui/textarea.tsx'
 import { exporterDocumentMarkdown } from '#/lib/classeur/exportMarkdown.ts'
@@ -51,6 +60,7 @@ export function DocumentDetail() {
   const [contenu, setContenu] = useState('')
   const contenuDiffere = useDeferredValue(contenu)
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [aideOuverte, setAideOuverte] = useState(false)
 
   const { containerRef: lectureRef, scale: lectureScale } =
     usePageScale('width')
@@ -66,6 +76,7 @@ export function DocumentDetail() {
     editeurRef,
     setContenu,
   })
+  const miseEnForme = useMiseEnForme(editeurRef, !page.canWrite)
 
   const apercuRef = useCallback(
     (node: HTMLDivElement | null) => {
@@ -171,6 +182,15 @@ export function DocumentDetail() {
         chapterName={page.chapter?.label}
         actions={
           <DetailActions
+            aide={
+              editing ? (
+                <IconAction
+                  label="Comment mettre en forme"
+                  icon={<HelpGlyph />}
+                  onClick={() => setAideOuverte(true)}
+                />
+              ) : undefined
+            }
             editing={editing}
             canWrite={page.canWrite}
             saving={page.update.isPending}
@@ -226,17 +246,27 @@ export function DocumentDetail() {
             </div>
           </DetailPaper>
           <div className="order-1 flex flex-col lg:order-2">
-            {page.canWrite && <BarreImage image={image} />}
+            {page.canWrite && (
+              <div className="flex flex-col gap-1.5 pb-2">
+                <DialoguesImage image={image} />
+                <BarreMiseEnForme
+                  miseEnForme={miseEnForme}
+                  fin={<BoutonsImage image={image} />}
+                />
+                <EtatImageLigne image={image} />
+              </div>
+            )}
             <Textarea
               ref={editeurRef}
               value={contenu}
               onChange={(e) => setContenu(e.target.value)}
               onScroll={synchroniserDefilement}
               {...image.editeurProps}
-              placeholder="Écrivez en Markdown. Tableaux, formules et diagrammes Mermaid sont pris en charge ; une ligne === force un saut de page."
-              aria-label="Contenu Markdown"
+              {...miseEnForme.editeurProps}
+              placeholder="Écrivez ici. La barre ci-dessus met en forme (titres, gras, listes, tableaux, images) ; le bouton ? en haut explique tout."
+              aria-label="Contenu du document"
               spellCheck
-              className="h-[70vh] resize-y font-mono text-sm"
+              className="h-[70vh] resize-y font-mono text-sm leading-relaxed"
             />
           </div>
         </div>
@@ -250,6 +280,8 @@ export function DocumentDetail() {
           </div>
         </DetailPaper>
       )}
+
+      <AideMiseEnFormeDialog open={aideOuverte} onOpenChange={setAideOuverte} />
 
       <PrintPreview
         open={previewOpen}

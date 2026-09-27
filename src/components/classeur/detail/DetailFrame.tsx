@@ -108,6 +108,7 @@ export function DetailActions({
   onSave,
   onPrint,
   extra,
+  aide,
 }: {
   editing: boolean
   canWrite: boolean
@@ -117,10 +118,13 @@ export function DetailActions({
   onSave: () => void
   onPrint: () => void
   extra?: ReactNode
+  /** Bouton d'aide « ? », en tête des actions (lecture comme édition). */
+  aide?: ReactNode
 }) {
   if (editing) {
     return (
       <>
+        {aide}
         <IconAction
           label="Annuler les modifications"
           icon={<X />}

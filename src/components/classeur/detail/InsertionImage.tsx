@@ -5,7 +5,8 @@ import { ImagePlus, Images, Loader2 } from 'lucide-react'
 
 import { ImagePreparationDialog } from '#/components/classeur/dialogs/ImagePreparationDialog.tsx'
 import { ImagesDialog } from '#/components/classeur/dialogs/ImagesDialog.tsx'
-import { Button } from '#/components/ui/button.tsx'
+import { IconAction } from '#/components/classeur/IconAction.tsx'
+import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { messageErreur } from '#/lib/classeur/erreur.ts'
 import { classeurKeys } from '#/lib/classeur/keys.ts'
 import {
@@ -195,19 +196,15 @@ export function useInsertionImage({
   }
 }
 
-/** Barre au-dessus de l'éditeur : Image (nouvelle), Médiathèque, état de l'envoi. */
-export function BarreImage({
-  image,
-}: {
-  image: ReturnType<typeof useInsertionImage>
-}) {
-  const { etat } = image
-  const envoi = etat.type === 'envoi'
+type ImageInsertion = ReturnType<typeof useInsertionImage>
+
+/** Dialogues (préparation, médiathèque) et sélecteur de fichier caché. */
+export function DialoguesImage({ image }: { image: ImageInsertion }) {
   return (
-    <div className="flex items-center gap-3 pb-2">
+    <>
       <ImagePreparationDialog
         file={image.enPreparation}
-        envoi={etat.type === 'envoi'}
+        envoi={image.etat.type === 'envoi'}
         onAnnuler={image.annulerPreparation}
         onValider={(preparation) => {
           if (image.enPreparation)
@@ -235,39 +232,53 @@ export function BarreImage({
         className="hidden"
         onChange={image.onInputChange}
       />
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={image.ouvrirSelecteur}
-        disabled={envoi || !image.actif}
-        aria-busy={envoi || undefined}
-      >
-        {envoi ? <Loader2 className="animate-spin" /> : <ImagePlus />}
-        Image
-      </Button>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={() => image.setMediathequeOuverte(true)}
+    </>
+  )
+}
+
+/** Boutons Image (nouvelle) et Médiathèque, pour la barre de l'éditeur. */
+export function BoutonsImage({ image }: { image: ImageInsertion }) {
+  const envoi = image.etat.type === 'envoi'
+  return (
+    <ButtonGroup>
+      <IconAction
+        label="Ajouter une image (ou collez-la, ou glissez-la dans le texte)"
+        icon={<ImagePlus />}
+        busy={envoi}
         disabled={!image.actif}
-      >
-        <Images />
-        Médiathèque
-      </Button>
-      <span
-        role={etat.type === 'erreur' ? 'alert' : 'status'}
-        className={cn(
-          'min-w-0 truncate text-xs',
-          etat.type === 'erreur' ? 'text-destructive' : 'text-muted-foreground',
-        )}
-      >
-        {etat.type === 'repos' &&
-          'Glissez ou collez une image dans l’éditeur, ou reprenez-en une de la médiathèque du classeur.'}
-        {etat.type === 'envoi' && `Conversion et envoi de ${etat.nom}…`}
-        {(etat.type === 'ok' || etat.type === 'erreur') && etat.message}
-      </span>
-    </div>
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={image.ouvrirSelecteur}
+      />
+      <IconAction
+        label="Médiathèque : reprendre une image du classeur"
+        icon={<Images />}
+        disabled={!image.actif}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => image.setMediathequeOuverte(true)}
+      />
+    </ButtonGroup>
+  )
+}
+
+/** Ligne d'état de l'envoi d'une image (rien au repos). */
+export function EtatImageLigne({ image }: { image: ImageInsertion }) {
+  const { etat } = image
+  if (etat.type === 'repos') return null
+  return (
+    <p
+      role={etat.type === 'erreur' ? 'alert' : 'status'}
+      className={cn(
+        'flex min-w-0 items-center gap-1.5 truncate text-xs',
+        etat.type === 'erreur' ? 'text-destructive' : 'text-muted-foreground',
+      )}
+    >
+      {etat.type === 'envoi' && (
+        <>
+          <Loader2 className="size-3 animate-spin" />
+          Conversion et envoi de {etat.nom}…
+        </>
+      )}
+      {(etat.type === 'ok' || etat.type === 'erreur') && etat.message}
+    </p>
   )
 }

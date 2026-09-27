@@ -681,6 +681,24 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
     demandé : les points de restauration et la fusion JSON ignorent les
     fiches d'images ; les exports Markdown/JSON portent des chemins que
     Registre (bureau) ne saura pas afficher.
+- **Éditeur des documents pour non-initiés (2026-09-27, demande
+  utilisateur : « le Markdown n'est pas inné, simplifier au maximum »)** :
+  barre `detail/BarreMiseEnForme.tsx` (titres 1-3, gras/italique/barré,
+  puces/numéros/cases/encadré, lien, tableau, séparateur, saut de page,
+  puis Image/Médiathèque) qui ÉCRIT le Markdown ; logique PURE dans
+  `lib/classeur/markdownEdition.ts` (chaque action rend une `Edition` :
+  plage, texte, sélection ; boutons en BASCULE ; un bloc est isolé par des
+  lignes vides — un `---` collé sous du texte en ferait un titre).
+  Raccourcis Ctrl + B / I / K, Entrée qui continue une liste (sort sur un
+  élément vide), Tab/Maj + Tab qui décale une liste (hors liste, Tab garde
+  son rôle d'accessibilité). ⚠ L'édition passe par
+  `execCommand('insertText')` pour que Ctrl + Z annule un clic de la barre ;
+  `setRangeText` n'est qu'un repli (jsdom). Bouton « ? » dans l'en-tête en
+  édition → `dialogs/AideMiseEnFormeDialog.tsx` : chaque exemple « vous
+  tapez / sur la page » est rendu par le vrai moteur et `.pdf-prose`
+  (figé par un test de rendu). Le rendu Markdown est INCHANGÉ : un retour
+  simple colle toujours les lignes (le tuto l'explique) — `remark-breaks`
+  changerait la mise en page des documents existants et l'interop Registre.
 - **Droits PAR CLASSEUR (2026-09-26, demande utilisateur : « faire comme
   l'Affichage »)** : `supabase/classeur_proprietaire_2026-09-26.sql` (JOUÉ,
   autorité `classeur_2026-09-25.sql` §5 identique). `ecriture` crée des
