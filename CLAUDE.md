@@ -699,6 +699,11 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   (figé par un test de rendu). Le rendu Markdown est INCHANGÉ : un retour
   simple colle toujours les lignes (le tuto l'explique) — `remark-breaks`
   changerait la mise en page des documents existants et l'interop Registre.
+  Titre et description d'un document en édition : plus d'encart au-dessus
+  de l'éditeur, crayon de l'en-tête (à côté du « ? ») →
+  `dialogs/TitreDocumentDialog.tsx`, qui ne fait que reporter dans le
+  brouillon (écrit par Sauvegarder). Les trois autres pages de détail
+  gardent leur encart `DetailFields`.
 - **Droits PAR CLASSEUR (2026-09-26, demande utilisateur : « faire comme
   l'Affichage »)** : `supabase/classeur_proprietaire_2026-09-26.sql` (JOUÉ,
   autorité `classeur_2026-09-25.sql` §5 identique). `ecriture` crée des

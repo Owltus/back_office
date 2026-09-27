@@ -1,3 +1,4 @@
+import { Pencil } from 'lucide-react'
 import {
   useCallback,
   useDeferredValue,
@@ -8,7 +9,6 @@ import {
 import {
   DetailActions,
   DetailErreur,
-  DetailFields,
   DetailHeader,
   DetailIntrouvable,
   DetailMarkdownAction,
@@ -27,11 +27,12 @@ import {
   useInsertionImage,
 } from '#/components/classeur/detail/InsertionImage.tsx'
 import { AideMiseEnFormeDialog } from '#/components/classeur/dialogs/AideMiseEnFormeDialog.tsx'
+import { TitreDocumentDialog } from '#/components/classeur/dialogs/TitreDocumentDialog.tsx'
 import { IconAction } from '#/components/classeur/IconAction.tsx'
 import { DocumentPages } from '#/components/classeur/print/DocumentPages.tsx'
 import { PrintPreview } from '#/components/classeur/print/PrintPreview.tsx'
+import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { HelpGlyph } from '#/components/shared/HelpGlyph.tsx'
-import { Input } from '#/components/ui/input.tsx'
 import { Textarea } from '#/components/ui/textarea.tsx'
 import { exporterDocumentMarkdown } from '#/lib/classeur/exportMarkdown.ts'
 import { usePageScale } from '#/lib/classeur/print/usePageScale.ts'
@@ -61,6 +62,7 @@ export function DocumentDetail() {
   const contenuDiffere = useDeferredValue(contenu)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [aideOuverte, setAideOuverte] = useState(false)
+  const [titreOuvert, setTitreOuvert] = useState(false)
 
   const { containerRef: lectureRef, scale: lectureScale } =
     usePageScale('width')
@@ -184,11 +186,18 @@ export function DocumentDetail() {
           <DetailActions
             aide={
               editing ? (
-                <IconAction
-                  label="Comment mettre en forme"
-                  icon={<HelpGlyph />}
-                  onClick={() => setAideOuverte(true)}
-                />
+                <ButtonGroup>
+                  <IconAction
+                    label="Comment mettre en forme"
+                    icon={<HelpGlyph />}
+                    onClick={() => setAideOuverte(true)}
+                  />
+                  <IconAction
+                    label="Titre et description"
+                    icon={<Pencil />}
+                    onClick={() => setTitreOuvert(true)}
+                  />
+                </ButtonGroup>
               ) : undefined
             }
             editing={editing}
@@ -206,27 +215,6 @@ export function DocumentDetail() {
           />
         }
       />
-
-      {editing && (
-        <DetailFields>
-          <Input
-            value={titre}
-            onChange={(e) => setTitre(e.target.value)}
-            placeholder="Titre du document"
-            aria-label="Titre du document"
-            className="font-medium sm:flex-1"
-            maxLength={200}
-          />
-          <Input
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Description"
-            aria-label="Description du document"
-            className="sm:w-56"
-            maxLength={1000}
-          />
-        </DetailFields>
-      )}
 
       {page.update.isError && (
         <DetailErreur err={page.update.error} action="Sauvegarde impossible" />
@@ -280,6 +268,17 @@ export function DocumentDetail() {
           </div>
         </DetailPaper>
       )}
+
+      <TitreDocumentDialog
+        open={titreOuvert}
+        onOpenChange={setTitreOuvert}
+        titre={titre}
+        description={description}
+        onAppliquer={(t, d) => {
+          setTitre(t)
+          setDescription(d)
+        }}
+      />
 
       <AideMiseEnFormeDialog open={aideOuverte} onOpenChange={setAideOuverte} />
 
