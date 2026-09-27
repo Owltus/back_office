@@ -7,7 +7,12 @@ import { ImagePreparationDialog } from '#/components/classeur/dialogs/ImagePrepa
 import { ImagesDialog } from '#/components/classeur/dialogs/ImagesDialog.tsx'
 import { IconAction } from '#/components/classeur/IconAction.tsx'
 import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
+import { appliquerQuandLibre } from '#/components/classeur/detail/editionTextarea.ts'
 import { messageErreur } from '#/lib/classeur/erreur.ts'
+import {
+  appliquerEdition,
+  insererLigne,
+} from '#/lib/classeur/markdownEdition.ts'
 import { classeurKeys } from '#/lib/classeur/keys.ts'
 import {
   estImage,
@@ -76,16 +81,17 @@ export function useInsertionImage({
       const editeur = editeurRef.current
       const debut = position?.debut ?? editeur?.selectionStart ?? null
       const fin = position?.fin ?? editeur?.selectionEnd ?? debut
-      setContenu((prev) => {
-        const d = debut ?? prev.length
-        const f = fin ?? d
-        const avant = prev.slice(0, d)
-        const apres = prev.slice(f)
-        const sautAvant = avant === '' || avant.endsWith('\n') ? '' : '\n'
-        const sautApres = apres.startsWith('\n') ? '' : '\n'
-        return `${avant}${sautAvant}${markdown}${sautApres}${apres}`
-      })
-      editeur?.focus()
+      // Par l'historique du navigateur : Ctrl + Z retire l'image insérée
+      // (amélioration n° 4). Attend la fermeture du dialogue d'où elle vient.
+      appliquerQuandLibre(
+        () => editeurRef.current,
+        (valeur) => insererLigne(valeur, debut, fin, markdown),
+        () => {
+          setContenu((prev) =>
+            appliquerEdition(prev, insererLigne(prev, debut, fin, markdown)),
+          )
+        },
+      )
     },
     [editeurRef, setContenu],
   )
@@ -191,6 +197,8 @@ export function useInsertionImage({
     annulerPreparation: () => setEnPreparation(null),
     envoyer,
     /** Une image supprimée de la médiathèque disparaît aussi du texte en cours. */
+    // Volontairement HORS de l'historique d'annulation : le fichier est
+    // supprimé du stockage, Ctrl + Z ramènerait une image introuvable.
     retirerDuTexte: (chemin: string) =>
       setContenu((prev) => retirerImageDuMarkdown(prev, chemin)),
   }

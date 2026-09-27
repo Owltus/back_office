@@ -1,4 +1,4 @@
-import { Pencil } from 'lucide-react'
+import { History, Pencil } from 'lucide-react'
 import {
   useCallback,
   useDeferredValue,
@@ -27,6 +27,9 @@ import {
   EtatImageLigne,
   useInsertionImage,
 } from '#/components/classeur/detail/InsertionImage.tsx'
+import { useEditionDocument } from '#/components/classeur/detail/useEditionDocument.ts'
+import { AbandonModificationsDialog } from '#/components/classeur/dialogs/AbandonModificationsDialog.tsx'
+import { ConflitDocumentDialog } from '#/components/classeur/dialogs/ConflitDocumentDialog.tsx'
 import { AideMiseEnFormeDialog } from '#/components/classeur/dialogs/AideMiseEnFormeDialog.tsx'
 import { TitreDocumentDialog } from '#/components/classeur/dialogs/TitreDocumentDialog.tsx'
 import { IconAction } from '#/components/classeur/IconAction.tsx'
@@ -34,32 +37,41 @@ import { DocumentPages } from '#/components/classeur/print/DocumentPages.tsx'
 import { PrintPreview } from '#/components/classeur/print/PrintPreview.tsx'
 import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { HelpGlyph } from '#/components/shared/HelpGlyph.tsx'
+import { Tip } from '#/components/shared/Tip.tsx'
+import { Button } from '#/components/ui/button.tsx'
 import { Textarea } from '#/components/ui/textarea.tsx'
 import { exporterDocumentMarkdown } from '#/lib/classeur/exportMarkdown.ts'
 import { usePageScale } from '#/lib/classeur/print/usePageScale.ts'
-import { SANS_TITRE, titreOuDefaut } from '#/lib/classeur/sommaire.ts'
+import { titreOuDefaut } from '#/lib/classeur/sommaire.ts'
 
 /**
  * Page d'un document Markdown — portée de Registre (`DocumentDetail`).
  * Lecture : les pages A4 empilées à l'échelle de la largeur. Édition :
- * titre et description dans une carte sous l'en-tête, aperçu A4 (gauche, collant) et
- * `textarea` Markdown (droite), Ctrl + S pour sauvegarder, défilement de
- * l'éditeur répercuté sur l'aperçu. Exports : PDF (`PrintPreview`) et
- * Markdown (`.md`).
+ * aperçu A4 (gauche) et texte Markdown (droite) avec barre de mise en
+ * forme, titre et description dans un dialogue (crayon), Ctrl + S pour
+ * sauvegarder, défilement de l'éditeur répercuté sur l'aperçu. Exports :
+ * PDF (`PrintPreview`) et Markdown (`.md`).
  *
- * L'état d'édition est initialisé au clic sur Modifier (pas de `useEffect`
- * de synchronisation) ; l'aperçu suit la frappe avec `useDeferredValue`
- * plutôt qu'une minuterie.
+ * L'état d'édition (brouillon de secours, garde de sortie, conflit) vit
+ * dans `useEditionDocument` ; l'aperçu suit la frappe avec
+ * `useDeferredValue` plutôt qu'une minuterie.
  */
 export function DocumentDetail() {
   const page = useDetailPage('document')
   const doc = page.item
   const retour = page.backParams
 
-  const [editing, setEditing] = useState(false)
-  const [titre, setTitre] = useState('')
-  const [description, setDescription] = useState('')
-  const [contenu, setContenu] = useState('')
+  const edition = useEditionDocument(doc)
+  const {
+    editing,
+    titre,
+    setTitre,
+    description,
+    setDescription,
+    contenu,
+    setContenu,
+    sauvegarder,
+  } = edition
   const contenuDiffere = useDeferredValue(contenu)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [aideOuverte, setAideOuverte] = useState(false)
@@ -90,41 +102,13 @@ export function DocumentDetail() {
     [apercuRefCallback],
   )
 
-  const commencerEdition = () => {
-    if (!doc) return
-    setTitre(doc.title)
-    setDescription(doc.description)
-    setContenu(doc.content)
-    page.update.reset()
-    setEditing(true)
-  }
-
-  const annuler = () => {
-    setEditing(false)
-    page.update.reset()
-  }
-
-  const sauvegarder = useCallback(async () => {
-    if (!doc || page.update.isPending) return
-    try {
-      await page.update.mutateAsync({
-        title: titre.trim() || SANS_TITRE,
-        description: description.trim(),
-        content: contenu,
-      })
-      setEditing(false)
-    } catch {
-      // L'erreur est affichée par `page.update.error`.
-    }
-  }, [doc, page.update, titre, description, contenu])
-
   // Ctrl + S en édition.
   useEffect(() => {
     if (!editing) return
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault()
-        void sauvegarder()
+        sauvegarder()
       }
     }
     window.addEventListener('keydown', handler)
@@ -204,10 +188,16 @@ export function DocumentDetail() {
             }
             editing={editing}
             canWrite={page.canWrite}
-            saving={page.update.isPending}
-            onEdit={commencerEdition}
-            onCancel={annuler}
-            onSave={() => void sauvegarder()}
+            saving={edition.saving}
+            statut={
+              <IndicateurEnregistrement
+                modifie={edition.modifie}
+                brouillonEcritLe={edition.brouillonEcritLe}
+              />
+            }
+            onEdit={edition.commencer}
+            onCancel={edition.annuler}
+            onSave={sauvegarder}
             onPrint={() => setPreviewOpen(true)}
             extra={
               <DetailMarkdownAction
@@ -218,8 +208,17 @@ export function DocumentDetail() {
         }
       />
 
-      {page.update.isError && (
-        <DetailErreur err={page.update.error} action="Sauvegarde impossible" />
+      {edition.erreur !== null && (
+        <DetailErreur err={edition.erreur} action="Sauvegarde impossible" />
+      )}
+
+      {!editing && page.canWrite && edition.brouillonPropose && (
+        <BandeauBrouillon
+          enregistreLe={edition.brouillonPropose.enregistreLe}
+          versionChangee={edition.brouillonPropose.base !== doc.updated_at}
+          onReprendre={edition.reprendreBrouillon}
+          onIgnorer={edition.ignorerBrouillon}
+        />
       )}
 
       {editing ? (
@@ -292,6 +291,21 @@ export function DocumentDetail() {
         }}
       />
 
+      <AbandonModificationsDialog
+        raison={edition.confirmation?.raison ?? null}
+        onContinuer={edition.continuerEdition}
+        onAbandonner={edition.abandonner}
+      />
+
+      <ConflitDocumentDialog
+        conflit={edition.conflit}
+        contenu={contenu}
+        saving={edition.saving}
+        onFermer={edition.fermerConflit}
+        onEcraser={edition.ecraser}
+        onPrendreLaSienne={() => void edition.prendreLaSienne()}
+      />
+
       <AideMiseEnFormeDialog open={aideOuverte} onOpenChange={setAideOuverte} />
 
       <PrintPreview
@@ -310,6 +324,99 @@ export function DocumentDetail() {
           />
         )}
       </PrintPreview>
+    </div>
+  )
+}
+
+/** « 27/09 à 14:05 », heure locale. */
+function dateHeure(ms: number): string {
+  const d = new Date(ms)
+  const date = d.toLocaleDateString('fr-FR', {
+    day: '2-digit',
+    month: '2-digit',
+  })
+  const heure = d.toLocaleTimeString('fr-FR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+  return `${date} à ${heure}`
+}
+
+/**
+ * Amélioration n° 5 : l'état d'enregistrement, à gauche des boutons
+ * Annuler / Sauvegarder. « Non enregistré » dès la première modification ;
+ * l'infobulle précise si la copie de secours du poste est à jour.
+ */
+function IndicateurEnregistrement({
+  modifie,
+  brouillonEcritLe,
+}: {
+  modifie: boolean
+  brouillonEcritLe: number | null
+}) {
+  if (!modifie) {
+    return (
+      <span className="hidden text-xs text-muted-foreground sm:inline">
+        Aucune modification
+      </span>
+    )
+  }
+  return (
+    <Tip
+      label={
+        brouillonEcritLe === null
+          ? 'Pensez à sauvegarder (Ctrl + S).'
+          : `Copie de secours gardée sur ce poste (${dateHeure(brouillonEcritLe)}). Pensez à sauvegarder (Ctrl + S).`
+      }
+    >
+      <span
+        role="status"
+        tabIndex={0}
+        className="flex items-center gap-1.5 rounded-md text-xs font-medium text-amber-600 dark:text-amber-400"
+      >
+        <span aria-hidden="true" className="size-2 rounded-full bg-amber-500" />
+        Non enregistré
+      </span>
+    </Tip>
+  )
+}
+
+/**
+ * Amélioration n° 3 : un brouillon de secours existe pour ce document (sur
+ * ce poste, pour ce compte). Proposé, jamais appliqué d'office.
+ */
+function BandeauBrouillon({
+  enregistreLe,
+  versionChangee,
+  onReprendre,
+  onIgnorer,
+}: {
+  enregistreLe: number
+  /** Le document a été enregistré depuis le début de ce brouillon. */
+  versionChangee: boolean
+  onReprendre: () => void
+  onIgnorer: () => void
+}) {
+  return (
+    <div
+      role="status"
+      className="flex flex-col gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm sm:flex-row sm:items-center"
+    >
+      <History className="hidden size-4 shrink-0 text-amber-600 sm:block dark:text-amber-400" />
+      <p className="flex-1">
+        Des modifications non enregistrées de ce document ont été retrouvées (le{' '}
+        {dateHeure(enregistreLe)}).
+        {versionChangee &&
+          ' Le document a été enregistré depuis : à la sauvegarde, vous pourrez choisir quelle version garder.'}
+      </p>
+      <div className="flex shrink-0 gap-2">
+        <Button variant="outline" size="sm" onClick={onIgnorer}>
+          Ignorer
+        </Button>
+        <Button size="sm" onClick={onReprendre}>
+          Reprendre
+        </Button>
+      </div>
     </div>
   )
 }

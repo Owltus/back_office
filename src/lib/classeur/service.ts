@@ -603,6 +603,54 @@ export async function updateItem(
   if (error) throw error
 }
 
+/** Issue d'une sauvegarde de document conditionnée à sa version. */
+export type ResultatSauvegarde =
+  { statut: 'ok'; updatedAt: string } | { statut: 'conflit'; updatedAt: string }
+
+/**
+ * Sauvegarde d'un document SEULEMENT s'il n'a pas changé depuis `base`
+ * (son `updated_at` au début de l'édition) — amélioration n° 2 de
+ * `plan/classeur-editeur-ameliorations` : deux personnes sur le même
+ * document ne s'écrasent plus en silence.
+ *
+ * Verrou optimiste : `update … where id = ? and updated_at = base`. Zéro
+ * ligne touchée peut vouloir dire trois choses, départagées par une
+ * relecture : un collègue a sauvegardé (→ `conflit`, avec sa date), le
+ * document a été supprimé, ou la RLS refuse l'écriture (le `update` ne
+ * lève pas d'erreur dans ce cas, il ne touche rien).
+ */
+export async function sauvegarderDocumentSiInchange(
+  id: number,
+  patch: Pick<ItemPatch, 'title' | 'description' | 'content'>,
+  base: string,
+): Promise<ResultatSauvegarde> {
+  await avantEcriture({ kind: 'document', id })
+  const { data, error } = await supabase
+    .from(ITEM_TABLE.document)
+    .update(patch)
+    .eq('id', id)
+    .eq('updated_at', base)
+    .select('updated_at')
+  if (error) throw error
+  const ecrit = (data as ReadonlyArray<{ updated_at: string }>).at(0)
+  if (ecrit) return { statut: 'ok', updatedAt: ecrit.updated_at }
+
+  const { data: actuel, error: errLecture } = await supabase
+    .from(ITEM_TABLE.document)
+    .select('updated_at, deleted_at')
+    .eq('id', id)
+    .maybeSingle<{ updated_at: string; deleted_at: string | null }>()
+  if (errLecture) throw errLecture
+  if (!actuel || actuel.deleted_at !== null) {
+    throw new Error('Ce document a été supprimé entre-temps.')
+  }
+  if (Date.parse(actuel.updated_at) !== Date.parse(base)) {
+    return { statut: 'conflit', updatedAt: actuel.updated_at }
+  }
+  // Même version, rien d'écrit : la RLS a refusé (droits retirés en cours).
+  throw Object.assign(new Error('Écriture refusée'), { code: '42501' })
+}
+
 export async function softDeleteItem(
   kind: ItemKind,
   id: number,

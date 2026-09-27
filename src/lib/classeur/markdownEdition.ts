@@ -414,3 +414,26 @@ export function prefixeActif(valeur: string, curseur: number): Prefixe | null {
   const m = RE_PREFIXE.exec(ligne)
   return m ? familleDe(m[2]) : null
 }
+
+/**
+ * Insère une ligne (une image `![nom](chemin)`) à la position donnée, sur
+ * sa propre ligne : un saut est ajouté avant ou après seulement s'il
+ * manque. Le curseur se place juste après la ligne insérée. Une position
+ * hors du texte (le texte a raccourci pendant l'envoi) est ramenée au bout.
+ */
+export function insererLigne(
+  valeur: string,
+  debut: number | null,
+  fin: number | null,
+  ligne: string,
+): Edition {
+  const d = Math.min(debut ?? valeur.length, valeur.length)
+  const f = Math.max(d, Math.min(fin ?? d, valeur.length))
+  const avant = valeur.slice(0, d)
+  const apres = valeur.slice(f)
+  const sautAvant = avant === '' || avant.endsWith('\n') ? '' : '\n'
+  const sautApres = apres.startsWith('\n') ? '' : '\n'
+  const texte = `${sautAvant}${ligne}${sautApres}`
+  const curseur = d + sautAvant.length + ligne.length + sautApres.length
+  return { debut: d, fin: f, texte, selection: [curseur, curseur] }
+}

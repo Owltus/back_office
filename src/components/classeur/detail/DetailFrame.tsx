@@ -109,6 +109,7 @@ export function DetailActions({
   onPrint,
   extra,
   aide,
+  statut,
 }: {
   editing: boolean
   canWrite: boolean
@@ -120,10 +121,13 @@ export function DetailActions({
   extra?: ReactNode
   /** Bouton d'aide « ? », en tête des actions (lecture comme édition). */
   aide?: ReactNode
+  /** État d'enregistrement, à gauche d'Annuler (édition seulement). */
+  statut?: ReactNode
 }) {
   if (editing) {
     return (
       <>
+        {statut}
         {aide}
         <IconAction
           label="Annuler les modifications"

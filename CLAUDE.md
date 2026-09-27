@@ -710,6 +710,40 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   de la fenêtre (`hooks/useHauteurJusquEnBas.ts`, depuis `.app-scroll`,
   rembourrages bas des ancêtres déduits, remesure au redimensionnement),
   chaque colonne défile en interne ; en dessous, 60 dvh.
+- **Éditeur : ne plus perdre de travail (2026-09-27, points 1 à 5 de la
+  liste NUMÉROTÉE `plan/classeur-editeur-ameliorations/00-INDEX.md` —
+  l'utilisateur demande par numéro, ne jamais renuméroter)**. Tout vit dans
+  `detail/useEditionDocument.ts` :
+  - (1) quitter avec des modifications = confirmation
+    (`dialogs/AbandonModificationsDialog.tsx`, défaut = continuer) : bouton
+    Annuler, navigation (`useBlocker` + `withResolver`), onglet fermé
+    (`enableBeforeUnload`). « Modifié » se mesure contre l'état AU DÉBUT de
+    l'édition, jamais contre le cache (un refetch ne doit rien inventer).
+    Sauvegarder sans modification sort sans écrire (ni point de restauration).
+  - (2) `sauvegarderDocumentSiInchange` (service) : `update … eq(updated_at,
+    base)` ; 0 ligne → relecture pour départager conflit / supprimé / refus
+    RLS (un `update` refusé par la RLS ne lève PAS d'erreur). Conflit →
+    `dialogs/ConflitDocumentDialog.tsx` (revenir, garder ma version = écrase
+    via `updateItem`, voir la sienne ; « Copier mon texte »). Pas de nom de
+    l'auteur : les tables n'ont pas d'`updated_by`. Testé par simulateur
+    (`sauvegardeDocument.test.ts`, mutation « sans filtre » attrapée).
+  - (3) brouillon de secours `lib/classeur/brouillon.ts` : `localStorage`,
+    clé PAR COMPTE et par document (poste partagé), 7 jours, écrit 500 ms
+    après la frappe et aussitôt sur `pagehide`/onglet caché, effacé à la
+    sauvegarde ou à l'abandon ; proposé (jamais appliqué d'office) par un
+    bandeau à la réouverture ; il garde SA `base`, donc reprendre un
+    brouillon périmé mène au dialogue de conflit, pas à un écrasement.
+  - (4) insertion d'image par `appliquerQuandLibre` (`detail/
+    editionTextarea.ts`) : `execCommand('insertText')` une fois le dialogue
+    d'origine FERMÉ (`[data-state="open"]` seulement ; minuterie, pas
+    `requestAnimationFrame`, suspendu fenêtre masquée) → Ctrl + Z la retire.
+    Le retrait d'une image SUPPRIMÉE reste hors historique, volontairement.
+  - (5) indicateur « Non enregistré » / « Aucune modification » à gauche
+    d'Annuler (`statut` de `DetailActions`).
+  Vérifié navigateur sans rien écrire (base et points de restauration
+  inchangés). ⚠ Fenêtre Chrome non affichée = captures en échec et
+  animations de sortie figées (`data-state="closed"` reste dans le DOM) :
+  contrôler par script, ne pas conclure à un défaut de l'app.
 - **Droits PAR CLASSEUR (2026-09-26, demande utilisateur : « faire comme
   l'Affichage »)** : `supabase/classeur_proprietaire_2026-09-26.sql` (JOUÉ,
   autorité `classeur_2026-09-25.sql` §5 identique). `ecriture` crée des

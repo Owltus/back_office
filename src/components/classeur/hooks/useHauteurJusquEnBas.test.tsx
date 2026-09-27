@@ -44,8 +44,8 @@ afterEach(() => {
 describe('useHauteurJusquEnBas', () => {
   it('descend jusqu’au bas visible, marge de page gardée', () => {
     const { zone } = monter(1440)
-    // 900 visibles − (260 − 60) de position − 24 de rembourrage.
-    expect(zone.dataset.hauteur).toBe('676')
+    // 900 visibles − (260 − 60) de position − 24 de rembourrage − 1.
+    expect(zone.dataset.hauteur).toBe('675')
   })
   it('sous la largeur deux colonnes : pas de hauteur imposée', () => {
     const { zone } = monter(800)

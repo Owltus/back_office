@@ -17,6 +17,7 @@ import {
   TextQuote,
 } from 'lucide-react'
 
+import { appliquerDansEditeur } from '#/components/classeur/detail/editionTextarea.ts'
 import { IconAction } from '#/components/classeur/IconAction.tsx'
 import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import {
@@ -43,9 +44,9 @@ import { cn } from '#/lib/utils.ts'
  * la place de l'utilisateur ; la logique est pure, dans
  * `lib/classeur/markdownEdition.ts`.
  *
- * L'édition passe par `execCommand('insertText')` : le navigateur l'inscrit
- * dans son historique, donc Ctrl + Z annule un clic de la barre comme une
- * frappe. `setRangeText` n'est qu'un repli (il vide l'historique).
+ * L'édition passe par `appliquerDansEditeur` (`execCommand('insertText')`) :
+ * le navigateur l'inscrit dans son historique, donc Ctrl + Z annule un clic
+ * de la barre comme une frappe.
  */
 
 type Action =
@@ -53,26 +54,6 @@ type Action =
   | { type: 'prefixe'; valeur: Prefixe }
   | { type: 'bloc'; valeur: Bloc }
   | { type: 'lien' }
-
-/** Applique une édition dans le `textarea`, historique d'annulation compris. */
-function appliquerDansEditeur(editeur: HTMLTextAreaElement, e: Edition) {
-  editeur.focus()
-  editeur.setSelectionRange(e.debut, e.fin)
-  let fait = false
-  try {
-    fait =
-      e.texte === '' && e.debut !== e.fin
-        ? document.execCommand('delete')
-        : document.execCommand('insertText', false, e.texte)
-  } catch {
-    fait = false
-  }
-  if (!fait) {
-    editeur.setRangeText(e.texte, e.debut, e.fin)
-    editeur.dispatchEvent(new Event('input', { bubbles: true }))
-  }
-  editeur.setSelectionRange(e.selection[0], e.selection[1])
-}
 
 function calculer(action: Action, v: string, d: number, f: number): Edition {
   switch (action.type) {

@@ -41,7 +41,9 @@ export function useHauteurJusquEnBas({
     for (let a = el.parentElement; a && a !== defileur; a = a.parentElement) {
       bas += parseFloat(getComputedStyle(a).paddingBottom) || 0
     }
-    setHauteur(Math.max(minimum, Math.floor(visible - haut - bas)))
+    // − 1 : les positions sont fractionnaires, l'arrondi du navigateur
+    // laissait la page défiler d'un pixel (constaté au contrôle du 27/09).
+    setHauteur(Math.max(minimum, Math.floor(visible - haut - bas) - 1))
   }, [el, minLargeur, minimum])
 
   useEffect(() => {

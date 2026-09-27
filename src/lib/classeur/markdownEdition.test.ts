@@ -8,6 +8,7 @@ import {
   indenterListe,
   insererBloc,
   insererLien,
+  insererLigne,
   prefixeActif,
 } from '#/lib/classeur/markdownEdition.ts'
 import type { Edition } from '#/lib/classeur/markdownEdition.ts'
@@ -201,5 +202,28 @@ describe('prefixeActif', () => {
     expect(prefixeActif(v, 7)).toBe('puces')
     expect(prefixeActif(v, 12)).toBe('numeros')
     expect(prefixeActif(v, v.length)).toBeNull()
+  })
+})
+
+describe('insererLigne — image insérée au curseur relevé', () => {
+  const img = '![plan](2/a.webp)'
+  it('isole la ligne et place le curseur après', () => {
+    const v = 'avant apres'
+    const a = res(v, insererLigne(v, 5, 5, img))!
+    expect(a.texte).toBe(`avant\n${img}\n apres`)
+    expect(a.e.selection[0]).toBe(`avant\n${img}\n`.length)
+  })
+  it('n’ajoute pas de saut en trop, remplace la sélection', () => {
+    const v = 'a\nXX\nb'
+    expect(res(v, insererLigne(v, 2, 4, img))!.texte).toBe(`a\n${img}\nb`)
+  })
+  it('position inconnue ou hors du texte : au bout', () => {
+    expect(res('abc', insererLigne('abc', null, null, img))!.texte).toBe(
+      `abc\n${img}\n`,
+    )
+    expect(res('abc', insererLigne('abc', 50, 60, img))!.texte).toBe(
+      `abc\n${img}\n`,
+    )
+    expect(res('', insererLigne('', 0, 0, img))!.texte).toBe(`${img}\n`)
   })
 })
