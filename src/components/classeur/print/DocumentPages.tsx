@@ -35,6 +35,8 @@ interface DocumentPagesProps {
   establishment?: string
   /** Masquer la numérotation des pages (pour impression de masse) */
   hidePagination?: boolean
+  /** Mention discrète sous le pied de page (version, `mentionVersion`). */
+  mention?: string
   /** Nombre de pages, remonté à chaque pagination terminée (éditeur). */
   onPageCount?: (pages: number) => void
 }
@@ -105,6 +107,7 @@ export function DocumentPages({
   classeurName,
   establishment,
   hidePagination,
+  mention,
   onPageCount,
 }: DocumentPagesProps) {
   const processedContent = React.useMemo(
@@ -170,6 +173,7 @@ export function DocumentPages({
           chapterName={chapterName}
           classeurName={classeurName}
           establishment={establishment}
+          mention={mention}
         >
           <div dangerouslySetInnerHTML={{ __html: page.html }} />
         </A4Page>

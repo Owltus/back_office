@@ -4,6 +4,7 @@ import { IntercalaireSheet } from '#/components/classeur/print/IntercalaireSheet
 import { SignatureSheetPage } from '#/components/classeur/print/SignatureSheetPage.tsx'
 import { TrackingSheetPage } from '#/components/classeur/print/TrackingSheetPage.tsx'
 import { cleRef } from '#/lib/classeur/ordre.ts'
+import { mentionVersion } from '#/lib/classeur/print/mentionVersion.ts'
 import { titreOuDefaut } from '#/lib/classeur/sommaire.ts'
 import { flattenItems } from '#/lib/classeur/types.ts'
 import type {
@@ -43,6 +44,7 @@ export function ItemPages({
           title={titreOuDefaut(item.data.title)}
           subtitle={item.data.description}
           content={item.data.content}
+          mention={mentionVersion(item.data.updated_at)}
           {...commun}
         />
       )

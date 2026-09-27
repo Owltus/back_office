@@ -23,6 +23,12 @@ interface A4PageProps {
   chapterName?: string
   classeurName?: string
   establishment?: string
+  /**
+   * Mention très discrète SOUS le pied de page (version d'un document) :
+   * positionnée dans la marge basse, hors du flux — la pagination et la
+   * mise en page ne la voient pas.
+   */
+  mention?: string
 }
 
 /*
@@ -44,6 +50,7 @@ export function A4Page({
   chapterName,
   classeurName,
   establishment,
+  mention,
 }: A4PageProps) {
   return (
     <div
@@ -61,6 +68,7 @@ export function A4Page({
         fontSize: '9pt',
         lineHeight: 1.6,
         boxSizing: 'border-box',
+        position: 'relative',
       }}
     >
       <PageHeader title={title} />
@@ -107,6 +115,26 @@ export function A4Page({
         pageNumber={pageNumber}
         totalPages={totalPages}
       />
+
+      {mention && (
+        <div
+          className="a4-mention"
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            bottom: `${String(MARGIN_BOTTOM_MM / 2 - 1.5)}mm`,
+            textAlign: 'center',
+            fontSize: '6.5pt',
+            lineHeight: 1,
+            color: '#000',
+            opacity: 0.2,
+            pointerEvents: 'none',
+          }}
+        >
+          {mention}
+        </div>
+      )}
     </div>
   )
 }

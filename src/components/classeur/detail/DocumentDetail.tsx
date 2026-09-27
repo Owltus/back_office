@@ -55,6 +55,10 @@ import {
 } from '#/lib/classeur/print/lignesSource.ts'
 import { usePageScale } from '#/lib/classeur/print/usePageScale.ts'
 import { alertesRelecture } from '#/lib/classeur/relecture.ts'
+import {
+  MENTION_EN_COURS,
+  mentionVersion,
+} from '#/lib/classeur/print/mentionVersion.ts'
 import { titreOuDefaut } from '#/lib/classeur/sommaire.ts'
 import { cn } from '#/lib/utils.ts'
 
@@ -252,6 +256,7 @@ export function DocumentDetail() {
       chapterName={page.chapter?.label}
       classeurName={page.classeurName}
       establishment={page.establishment}
+      mention={editing ? MENTION_EN_COURS : mentionVersion(doc.updated_at)}
       onPageCount={setNbPages}
     />
   )
@@ -444,6 +449,7 @@ export function DocumentDetail() {
             chapterName={page.chapter?.label}
             classeurName={page.classeurName}
             establishment={page.establishment}
+            mention={mentionVersion(doc.updated_at)}
           />
         )}
       </PrintPreview>
