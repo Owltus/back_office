@@ -832,8 +832,8 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   (`niveauEffectif`, `capacites`, propriétés fast-check),
   `useDroitsClasseur` (tout `false` tant que classeur ET `useMesAcces` ne
   sont pas chargés), `useDroitsPageClasseur` ; `dialogs/
-  AccesClasseurDialog.tsx` (carte « Accès au classeur » de l'accueil,
-  gestion) ; option Privé à la création (gestion) ; liste : suppression et
+  AccesClasseurDialog.tsx` (bouclier dans la barre du haut de l'accueil,
+  à côté du crayon « Modifier le classeur », gestion) ; option Privé à la création (gestion) ; liste : suppression et
   ordre = gestion, cadenas « lecture seule », icône « Privé ». Clés
   `['classeur','acces',…]` exclues du disque. ⚠ **Cache PAR COMPTE**
   (`lib/queryPersist.ts`, `changerDeCompte` appelé par `applyUser`) : le

@@ -33,6 +33,7 @@ import {
 } from '#/components/classeur/hooks/useClasseur.ts'
 import { useDroitsClasseur } from '#/components/classeur/hooks/useDroitsClasseur.ts'
 import { IconAction } from '#/components/classeur/IconAction.tsx'
+import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { Input } from '#/components/ui/input.tsx'
 import { Skeleton } from '#/components/ui/skeleton.tsx'
@@ -229,12 +230,28 @@ export function ClasseurDashboard({
         }
         meta={etablissement !== '' ? etablissement : undefined}
         actions={
-          canWrite && classeur ? (
-            <IconAction
-              label="Modifier le classeur"
-              icon={<Pencil />}
-              onClick={() => setEditOpen(true)}
-            />
+          classeur && (canWrite || canManage) ? (
+            <ButtonGroup>
+              {canWrite && (
+                <IconAction
+                  label="Modifier le classeur"
+                  icon={<Pencil />}
+                  onClick={() => setEditOpen(true)}
+                />
+              )}
+              {/* Accès au classeur : gestion et admin (2026-09-28). */}
+              {canManage && (
+                <IconAction
+                  label={
+                    classeur.acces_tous === 'aucun'
+                      ? 'Accès au classeur (privé)'
+                      : 'Accès au classeur'
+                  }
+                  icon={<ShieldCheck />}
+                  onClick={() => setAccesOuvert(true)}
+                />
+              )}
+            </ButtonGroup>
           ) : undefined
         }
       />
@@ -383,7 +400,7 @@ export function ClasseurDashboard({
               </div>
             )}
 
-            {(onImages || onHistorique || canManage) && (
+            {(onImages || onHistorique) && (
               <div className="border-b border-border" />
             )}
             {onImages && (
@@ -400,18 +417,6 @@ export function ClasseurDashboard({
                 title="Points de restauration"
                 subtitle="Revenir à un état précédent du classeur"
                 onClick={onHistorique}
-              />
-            )}
-            {canManage && classeur && (
-              <ActionCard
-                icon={ShieldCheck}
-                title="Accès au classeur"
-                subtitle={
-                  classeur.acces_tous === 'aucun'
-                    ? 'Privé : qui peut le lire ou le modifier'
-                    : 'Qui peut le lire ou le modifier'
-                }
-                onClick={() => setAccesOuvert(true)}
               />
             )}
           </div>
