@@ -123,11 +123,11 @@ Deno.serve(async (req) => {
   if (!(await secretMatches(req.headers.get('X-Import-Secret'), secret)))
     return json({ error: 'Non autorisé' }, 401)
 
-  // Client service_role (bypass RLS) — même schéma que send-report : nouvelle clé
-  // sb_secret si posée, sinon repli service_role legacy.
+  // Client à clé secrète (bypass RLS) — même schéma que send-report : la
+  // `sb_secret_…` du secret SB_SECRET_KEY, et elle seule. Aucun repli : la clé
+  // service_role legacy est révoquée depuis le 2026-07-27.
   const url = Deno.env.get('SUPABASE_URL')
-  const serviceKey =
-    Deno.env.get('SB_SECRET_KEY') // legacy service_role révoquée le 2026-07-27 : plus de repli
+  const serviceKey = Deno.env.get('SB_SECRET_KEY')
   if (!url || !serviceKey)
     return json({ error: 'Configuration serveur manquante' }, 500)
   const admin = createClient(url, serviceKey, {

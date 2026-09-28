@@ -56,10 +56,10 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'Méthode non autorisée' }, 405)
 
   const url = Deno.env.get('SUPABASE_URL')
-  // Clé secrète : la nouvelle `sb_secret_…` si le secret SB_SECRET_KEY est posé,
-  // sinon repli sur le service_role legacy auto-injecté (migration sans coupure).
-  const serviceKey =
-    Deno.env.get('SB_SECRET_KEY') // legacy service_role révoquée le 2026-07-27 : plus de repli
+  // Clé secrète : la `sb_secret_…` du secret SB_SECRET_KEY, et elle seule.
+  // Aucun repli : la clé service_role legacy est révoquée depuis le 2026-07-27
+  // (clés JWT legacy désactivées) ; secret absent = erreur 500 ci-dessous.
+  const serviceKey = Deno.env.get('SB_SECRET_KEY')
   if (!url || !serviceKey)
     return json({ error: 'Configuration serveur manquante' }, 500)
 
