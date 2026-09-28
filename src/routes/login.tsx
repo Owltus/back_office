@@ -10,6 +10,7 @@ import { Logo } from '#/components/Logo.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
 import { Label } from '#/components/ui/label.tsx'
+import { messageConnexion } from '#/lib/auth/messages.ts'
 
 export const Route = createFileRoute('/login')({
   component: LoginPage,
@@ -56,8 +57,8 @@ function LoginPage() {
     setSubmitting(true)
     try {
       await signIn(email, password)
-    } catch {
-      setError('Email ou mot de passe incorrect')
+    } catch (err) {
+      setError(messageConnexion(err))
     } finally {
       setSubmitting(false)
     }

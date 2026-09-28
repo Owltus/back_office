@@ -5,16 +5,14 @@ import { PageContainer } from '#/components/shared/PageContainer.tsx'
 import { FormeProfil } from '#/components/shared/skeleton/PageShapes.tsx'
 import { PasswordInput } from '#/components/repjour/PasswordInput.tsx'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
-import {
-  movedBy,
-  PageOrderList,
-} from '#/components/comptes/PageOrderList.tsx'
+import { movedBy, PageOrderList } from '#/components/comptes/PageOrderList.tsx'
 import { orderedPages } from '#/lib/permissions/navigation.ts'
 import { supabase } from '#/lib/supabase.ts'
 import { isPasswordValid } from '#/lib/repjour/password.ts'
 import { ROLE_LABELS } from '#/lib/repjour/roles.ts'
 import { Input } from '#/components/ui/input.tsx'
 import { Button } from '#/components/ui/button.tsx'
+import { messageMotDePasse } from '#/lib/auth/messages.ts'
 
 /*
  * Profil personnel (tous rôles) — porté de la source ProfilePage.
@@ -39,6 +37,9 @@ export function ProfilBoard() {
   const [confirmNewPassword, setConfirmNewPassword] = useState('')
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
+  // Couleur du message portée par l'ÉTAT, plus devinée au texte (un refus du
+  // serveur s'affichait en vert, comme un succès).
+  const [messageErreur, setMessageErreur] = useState(false)
 
   useEffect(() => {
     if (profile) {
@@ -59,6 +60,26 @@ export function ProfilBoard() {
     setSaving(true)
     setMessage('')
 
+    setMessageErreur(false)
+    const echec = (texte: string) => {
+      setMessage(texte)
+      setMessageErreur(true)
+      setSaving(false)
+    }
+    // Mot de passe validé AVANT toute écriture : sinon le nom était
+    // enregistré alors que le message annonçait un échec.
+    const changePassword = newPassword.trim() !== ''
+    if (changePassword) {
+      if (!isPasswordValid(newPassword)) {
+        echec('Le mot de passe ne respecte pas les critères')
+        return
+      }
+      if (newPassword !== confirmNewPassword) {
+        echec('Les mots de passe ne correspondent pas')
+        return
+      }
+    }
+
     try {
       const displayName = `${firstName} ${lastName}`.trim()
       const { error } = await supabase
@@ -70,33 +91,29 @@ export function ProfilBoard() {
         })
         .eq('id', user.id)
 
-      if (error) throw error
+      if (error) {
+        echec('Erreur : profil non enregistré. Réessayez.')
+        return
+      }
 
-      if (newPassword.trim()) {
-        if (!isPasswordValid(newPassword)) {
-          setMessage('Le mot de passe ne respecte pas les critères')
-          setSaving(false)
-          return
-        }
-        if (newPassword !== confirmNewPassword) {
-          setMessage('Les mots de passe ne correspondent pas')
-          setSaving(false)
-          return
-        }
+      if (changePassword) {
         const { error: pwError } = await supabase.auth.updateUser({
           password: newPassword,
         })
-        if (pwError) throw pwError
+        if (pwError) {
+          echec(`Nom enregistré. ${messageMotDePasse(pwError)}`)
+          return
+        }
         setNewPassword('')
         setConfirmNewPassword('')
       }
 
-      await refreshProfile()
+      // Relecture pour l'affichage : son échec ne change rien à ce qui est
+      // enregistré, il ne doit pas transformer le succès en erreur.
+      await refreshProfile().catch(() => undefined)
       setMessage('Profil mis à jour')
-    } catch (err) {
-      setMessage(
-        err instanceof Error ? err.message : 'Erreur lors de la mise à jour',
-      )
+    } catch {
+      echec('Erreur lors de la mise à jour. Réessayez.')
     } finally {
       setSaving(false)
     }
@@ -122,6 +139,7 @@ export function ProfilBoard() {
     )
     applyPageOrder(next)
     setMessage('')
+    setMessageErreur(false)
     void supabase
       .from('profiles')
       .update({ page_order: next })
@@ -130,14 +148,12 @@ export function ProfilBoard() {
         if (error) {
           applyPageOrder(previous)
           setMessage("Erreur : l'ordre des pages n'a pas pu être enregistré")
+          setMessageErreur(true)
         }
       })
   }
 
-  const isError =
-    message.includes('Erreur') ||
-    message.includes('critères') ||
-    message.includes('correspondent')
+  const isError = messageErreur
   // Profil pas encore chargé (chargement en arrière-plan) : squelette-reflet
   // plutôt qu'une carte d'identité vide (initiales « ? », nom « — »).
   //
