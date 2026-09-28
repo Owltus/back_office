@@ -110,11 +110,18 @@ export async function fetchOldestServiceDate(): Promise<string | null> {
   return data ? (data as { service_date: string }).service_date : null
 }
 
+/** Colonnes lues pour la grille du jour : EXACTEMENT celles de `PdjDayRow`
+ * (`DbPdjRow` + id + consommation). La table porte aussi l'estampillage
+ * (`created_at`, `updated_at`, `purged_at`, auteur…) que la page n'utilise pas.
+ * À tenir alignée sur le type. */
+export const PDJ_DAY_COLUMNS =
+  'id,service_date,room,guest_name,status,vip,adults,children,guests,no_of_nights,room_type,rate_plan,channel,company,guarantee,payment_type,addons,adr,arrival_date,departure_date,stay_count,breakfasts_included,source_file,manual_kind,breakfasts_served,served,breakfasts_offert'
+
 /** Toutes les lignes d'un jour de service, triées par chambre. */
 export async function fetchDay(serviceDate: string): Promise<PdjDayRow[]> {
   const { data, error } = await supabase
     .from(PDJ_TABLE)
-    .select('*')
+    .select(PDJ_DAY_COLUMNS)
     .eq('service_date', serviceDate)
     .order('room', { ascending: true })
   if (error) throw error
@@ -253,13 +260,22 @@ export async function setManualServe(
   kind: ManualKind,
 ): Promise<void> {
   if (breakfastsServed <= 0) {
-    const { error } = await supabase
+    // `.select('id')` : un DELETE refusé par la RLS ne lève PAS d'erreur, il
+    // supprime 0 ligne (même piège que `setServed`). Sans lire les lignes
+    // touchées, la case se vidait à l'écran et revenait au rechargement.
+    const { data, error } = await supabase
       .from(PDJ_TABLE)
       .delete()
       .eq('service_date', serviceDate)
       .eq('room', room)
       .not('manual_kind', 'is', null)
+      .select('id')
     if (error) throw error
+    if (data.length === 0) {
+      throw new Error(
+        `Saisie non retirée (${serviceDate}, chambre ${room}) : droit insuffisant ou déjà retirée.`,
+      )
+    }
     return
   }
   const { error } = await supabase.from(PDJ_TABLE).upsert(
@@ -293,13 +309,18 @@ export async function setManualServe(
  * (perf_audit_2026-09-06.sql) ; ne part qu'une fois par jour et par poste
  * (`purgeGate`, voir BreakfastBoard).
  */
-export async function purgeOldGuestNames(oldestKept: string): Promise<void> {
-  const { error } = await supabase
+export async function purgeOldGuestNames(oldestKept: string): Promise<number> {
+  // Rend le NOMBRE de lignes anonymisées. 0 est un résultat normal (rien à
+  // purger, ou compte sans droit d'écriture barré par la RLS) : on ne lève
+  // donc pas, mais le compte permet de distinguer « rien fait » de « fait ».
+  const { data, error } = await supabase
     .from(PDJ_TABLE)
     .update({ guest_name: null, purged_at: new Date().toISOString() })
     .lt('service_date', oldestKept)
     .not('guest_name', 'is', null)
+    .select('id')
   if (error) throw error
+  return data.length
 }
 
 /* --------------------------------------------------------------------------
@@ -331,6 +352,10 @@ export interface AddonProductionDbRow {
   source_file: string
 }
 
+/** Colonnes de `PdjAddonRow`, à tenir alignées sur le type. */
+export const PDJ_ADDON_COLUMNS =
+  'id,service_date,code,total_count,revenue_ttc,source_file'
+
 /** Toutes les lignes Addon d'UN jour de service. Non paginé : au plus quelques
  * codes par jour. Miroir de `fetchDay`. */
 export async function fetchAddonProduction(
@@ -338,7 +363,7 @@ export async function fetchAddonProduction(
 ): Promise<PdjAddonRow[]> {
   const { data, error } = await supabase
     .from(PDJ_ADDON_TABLE)
-    .select('*')
+    .select(PDJ_ADDON_COLUMNS)
     .eq('service_date', serviceDate)
   if (error) throw error
   return data as PdjAddonRow[]
@@ -381,7 +406,7 @@ export async function fetchAllAddonProduction(): Promise<PdjAddonRow[]> {
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await supabase
       .from(PDJ_ADDON_TABLE)
-      .select('*')
+      .select(PDJ_ADDON_COLUMNS)
       .range(from, from + PAGE - 1)
     if (error) throw error
     const rows = (data ?? []) as PdjAddonRow[]

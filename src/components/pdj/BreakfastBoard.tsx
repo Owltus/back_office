@@ -189,26 +189,41 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
   const level = pageLevel('pdj')
   const queryClient = useQueryClient()
 
-  // Jour hôtelier courant (Europe/Paris) figé au montage : jour affiché par
+  // Horloge de rendu (1 min) : le mode manuel s'ouvre à 03h sans autre signal,
+  // et le jour hôtelier bascule à 02h sans rechargement.
+  const now = useNow()
+
+  // Jour hôtelier courant (Europe/Paris), DÉRIVÉ de l'horloge : jour affiché par
   // défaut, repère RGPD, et borne « la plus récente » de la navigation. La
   // bascule se fait à 02h et non à minuit (`businessNow`) : entre minuit et 02h
-  // on reste sur la veille, dont le rapport est le dernier disponible.
-  const today = useMemo(() => localDateStr(businessNow()), [])
+  // on reste sur la veille, dont le rapport est le dernier disponible. Figé au
+  // montage jusqu'au 2026-09-28 : un onglet ouvert la nuit restait sur la veille
+  // (fenêtre d'écriture J-3 et purge RGPD décalées d'un jour).
+  const today = useMemo(() => localDateStr(businessNow(now)), [now])
 
   // Veille (J-1) : borne de conservation RGPD des noms. On garde les noms
   // d'aujourd'hui ET de J-1 (nécessaire au rapprochement parking↔PDJ) ; la purge
   // n'anonymise donc qu'à partir de J-2.
   const yesterday = useMemo(() => {
-    const d = businessNow()
+    const d = businessNow(now)
     d.setDate(d.getDate() - 1)
     return localDateStr(d)
-  }, [])
+  }, [now])
 
   // On affiche TOUJOURS le jour courant par défaut (jamais le dernier jour
   // importé, qui serait obsolète) ; l'utilisateur peut ensuite remonter le temps.
   // `initialDate` (lien « jour » depuis le rapport mensuel) ouvre directement ce
   // jour-là ; absent, le comportement reste identique (aujourd'hui).
   const [selectedDate, setSelectedDate] = useState(initialDate ?? today)
+  // Bascule du jour hôtelier onglet ouvert : qui regardait « aujourd'hui »
+  // passe au nouveau jour ; un jour choisi à la main ne bouge pas.
+  const previousToday = useRef(today)
+  useEffect(() => {
+    const avant = previousToday.current
+    if (avant === today) return
+    previousToday.current = today
+    setSelectedDate((d) => (d === avant ? today : d))
+  }, [today])
   // Le jour affiché est-il « cochable » ? Lecture : jamais. Écriture : fenêtre J-3.
   // Gestion : toujours. Gouverne la grille de saisie (pas l'import, gardé à part).
   const dayEditable = canEditPdjDay(selectedDate, today, level)
@@ -294,7 +309,12 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
         // peuvent être périmées. On n'invalide donc que `['pdj','day']` (ciblé), pas
         // le préfixe `['pdj']` entier qui rejouait aussi dates + agrégats + benchmark
         // (les scans lourds) sur CHAQUE montage éditeur.
-        .then(() => queryClient.invalidateQueries({ queryKey: ['pdj', 'day'] }))
+        // Rien d'anonymisé (0 ligne) → aucune vue à rafraîchir.
+        .then((n) =>
+          n > 0
+            ? queryClient.invalidateQueries({ queryKey: ['pdj', 'day'] })
+            : undefined,
+        )
         .catch((err) => {
           purgeGate.release(yesterday)
           console.error('[pdj] purge RGPD échouée', err)
@@ -328,8 +348,6 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
 
   const hasData = (dayRows?.length ?? 0) > 0
 
-  // Horloge de rendu (1 min) : le mode manuel s'ouvre à 03h sans autre signal.
-  const now = useNow()
   // MODE MANUEL (écriture) : l'ingestion du In-House est AUTOMATIQUE (Edge
   // Function import-report, vers 02h30). Si le PMS ne transmet pas, l'écriture
   // peut déposer l'extraction manuelle à partir de 03h, uniquement sur le JOUR
@@ -1069,12 +1087,21 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
       )
       setManualServe(selectedDate, room, n, kind).catch((err) => {
         console.error('[pdj] saisie manuelle échouée', err)
+        // Resynchronise ET explique le retour arrière (même règle que la
+        // coche) : une suppression refusée par la RLS ne lève plus en silence
+        // (0 ligne → erreur, cf. setManualServe), la case revient avec un mot.
         void queryClient.invalidateQueries({
           queryKey: ['pdj', 'day', selectedDate],
         })
+        flashAuto(
+          n <= 0
+            ? 'Suppression refusée : droit insuffisant.'
+            : 'Enregistrement refusé : jour hors fenêtre ou droit insuffisant.',
+          'warn',
+        )
       })
     },
-    [dayEditable, selectedDate, queryClient],
+    [dayEditable, selectedDate, queryClient, flashAuto],
   )
 
   // Impression : logique D'ORIGINE, INCHANGÉE — la feuille A4 mise en forme par
