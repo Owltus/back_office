@@ -433,16 +433,14 @@ export function ChapterBoard({
             /* Mode sélection : compteur puis UN groupe (tout sélectionner,
                supprimer la sélection, annuler). */
             <>
+              {/* Sous 640 px, compteur retiré de l'écran (demande
+                  utilisateur : inutile et encombrant) ; il reste annoncé aux
+                  lecteurs d'écran. */}
               <span
-                className="text-sm text-muted-foreground"
+                className="text-sm text-muted-foreground max-sm:sr-only"
                 aria-live="polite"
               >
-                {selection.count}
-                {/* Sous 640 px, le nombre seul : la recherche garde sa place. */}
-                <span className="max-sm:sr-only">
-                  {' '}
-                  sélectionné{selection.count > 1 ? 's' : ''}
-                </span>
+                {selection.count} sélectionné{selection.count > 1 ? 's' : ''}
               </span>
               <ButtonGroup>
                 <IconAction
