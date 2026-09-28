@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  caisseWindowToday,
   canActOnCaisseDay,
   isCaisseDayWithinGrace,
 } from '#/lib/caisse/editability.ts'
@@ -36,5 +37,20 @@ describe('canActOnCaisseDay — niveau + fenêtre', () => {
   it('gestion : oui partout, même loin dans le passé', () => {
     expect(canActOnCaisseDay(J2, TODAY, 'gestion')).toBe(true)
     expect(canActOnCaisseDay(addDays(TODAY, -400), TODAY, 'gestion')).toBe(true)
+  })
+})
+
+describe('caisseWindowToday — borne calendaire, pas la date du shift', () => {
+  it('à 08h, J-2 calendaire est hors fenêtre (la nuit affichée est datée J-1)', () => {
+    const now = new Date(2026, 8, 28, 8, 0) // 28/09 à 08h : shift = nuit du 27
+    const today = caisseWindowToday(now)
+    expect(today).toBe('2026-09-28')
+    expect(canActOnCaisseDay('2026-09-26', today, 'ecriture')).toBe(false)
+    expect(canActOnCaisseDay('2026-09-27', today, 'ecriture')).toBe(true)
+  })
+
+  it('à 01h (soir de la veille), la borne reste le jour calendaire', () => {
+    const now = new Date(2026, 8, 28, 1, 0)
+    expect(caisseWindowToday(now)).toBe('2026-09-28')
   })
 })

@@ -1,7 +1,7 @@
 import { CAISSE_GRACE_DAYS } from '#/lib/permissions/actions.ts'
 import { atLeastLevel } from '#/lib/permissions/levels.ts'
 import type { PageLevel } from '#/lib/permissions/levels.ts'
-import { addDays } from '#/lib/caisse/shift.ts'
+import { addDays, dateStr } from '#/lib/caisse/shift.ts'
 
 /* --------------------------------------------------------------------------
  * Éditabilité d'un jour de caisse (pur : sans React). Même principe que le
@@ -37,4 +37,14 @@ export function canActOnCaisseDay(
   if (atLeastLevel(level, 'gestion')) return true
   if (!atLeastLevel(level, 'ecriture')) return false
   return isCaisseDayWithinGrace(date, today)
+}
+
+/**
+ * « Aujourd'hui » au sens de la fenêtre d'écriture : la date CALENDAIRE locale,
+ * miroir de `current_date` dans la RLS. PAS `currentSlot(now).date` : entre 02h
+ * et 12h, le shift affiché est la nuit de la VEILLE, et borner sur cette date
+ * faisait paraître J-2 modifiable alors que la base refusait chaque sauvegarde.
+ */
+export function caisseWindowToday(now: Date): string {
+  return dateStr(now)
 }

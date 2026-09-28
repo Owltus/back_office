@@ -109,7 +109,10 @@ import {
   upsertSheet,
   validateSheet,
 } from '#/lib/caisse/service.ts'
-import { canActOnCaisseDay } from '#/lib/caisse/editability.ts'
+import {
+  caisseWindowToday,
+  canActOnCaisseDay,
+} from '#/lib/caisse/editability.ts'
 import {
   currentSlot,
   dateStr,
@@ -376,7 +379,11 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
   // rapprochement mais plus court : écriture n'agit que dans la fenêtre J-1
   // (aujourd'hui et J-1) ; la gestion agit sur n'importe quel jour (cf.
   // lib/caisse/editability.ts).
-  const todayDate = currentSlot(now).date
+  // Borne de la fenêtre d'écriture = date CALENDAIRE (miroir de la RLS
+  // `report_date >= current_date - 1`), pas la date de rattachement du shift
+  // (`currentSlot(now).date`, qui vaut la veille entre 02h et 12h : J-2 aurait
+  // alors paru modifiable et chaque sauvegarde aurait échoué en base).
+  const todayDate = caisseWindowToday(now)
   const dayEditable = canActOnCaisseDay(selectedDate, todayDate, caisseLevel)
   const editable = ready && dayEditable
   const isWriter = can('caisse', 'ecriture')
@@ -467,8 +474,11 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
       if (snapshot === lastSavedRef.current) return
       const qk = ['caisse', 'sheet', input.reportDate, input.shift] as const
       const prev = queryClient.getQueryData<CaisseSheet | null>(qk)
-      // Éditabilité du couple sauvegardé : jour dans la fenêtre (niveau + J-2).
+      // Éditabilité du couple sauvegardé : jour dans la fenêtre (niveau + J-1).
       if (!canActOnCaisseDay(input.reportDate, todayDate, caisseLevel)) return
+      // Feuille clôturée : figée, rien ne part (la base refuse aussi, voir
+      // supabase/feuilles_cloturees_figees_2026-09-28.sql).
+      if (prev?.status === 'validated') return
       // Les mutations d'indicateur / de baseline sont scopées au couple ENCORE
       // actif : la résolution asynchrone d'un flush d'un couple quitté ne doit
       // ni repeindre l'indicateur ni salir la baseline du couple courant.
@@ -730,10 +740,10 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
     // remboursement, lui, est toujours horodaté à aujourd'hui réel — une
     // caution future violerait la contrainte refunded_date >= taken_date au
     // premier remboursement). Comparaison à la vraie date calendaire du jour
-    // (`dateStr(now)`), PAS à `todayDate` : ce dernier suit le rattachement de
+    // (`dateStr(now)`), PAS à `currentSlot(now).date` : il suit le rattachement de
     // shift (la nuit 02h-12h reste datée la veille) et retarde d'un jour tant
     // qu'on est le matin — même quand le shift affiché a déjà avancé sur
-    // aujourd'hui (nuit de la veille déjà clôturée). Comparer à `todayDate`
+    // aujourd'hui (nuit de la veille déjà clôturée). Comparer à la date du shift
     // rejetait alors à tort une caution prise sur le matin du jour même.
     if (selectedDate > dateStr(now)) {
       setError('Impossible de prendre une caution à une date future.')
@@ -753,7 +763,7 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
     const id = confirmRefundCautionId
     setConfirmRefundCautionId(null)
     // Vraie date calendaire (comme la garde-fou de création, cf. handleSubmitCaution) :
-    // `todayDate` retarde d'un jour tant qu'on est le matin et que la nuit de la
+    // la date du shift retarde d'un jour tant qu'on est le matin et que la nuit de la
     // veille n'est pas close.
     refundCaution(id, dateStr(now))
       .then(invalidateCautions)
@@ -828,7 +838,7 @@ export function CaisseBoard({ initialDate }: { initialDate?: string }) {
 
   /* Bouton d'état de la feuille, rendu en bas de page (sous les commentaires),
      là où se termine la saisie : Réouvrir si la feuille est clôturée et
-     `editable` (gestion à tout moment, OU écriture dans la fenêtre J-2),
+     `editable` (gestion à tout moment, OU écriture dans la fenêtre J-1),
      Verrouillé sinon (écriture hors fenêtre), Clôturer sur un brouillon éditable.
 
      Le poids visuel suit l'intention : clôturer est la SUITE du travail (bouton

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   amountText,
   amountValue,
+  COUNT_MAX,
   countValue,
   sanitizeAmount,
   sanitizeCount,
@@ -79,5 +80,18 @@ describe('countValue', () => {
   it('jamais négatif', () => {
     expect(countValue('-5')).toBe(5)
     expect(sanitizeCount('-5')).toBe('5')
+  })
+})
+
+describe('bornes de saisie (colonnes numeric(10,2) et smallint)', () => {
+  it('sanitizeAmount garde au plus 2 décimales', () => {
+    expect(sanitizeAmount('12,345')).toBe('12,34')
+    expect(sanitizeAmount('0.999')).toBe('0,99')
+    expect(sanitizeAmount('-3,456', { allowNegative: true })).toBe('-3,45')
+  })
+  it('countValue plafonne à la borne d’un smallint', () => {
+    expect(countValue('32767')).toBe(32767)
+    expect(countValue('32768')).toBe(COUNT_MAX)
+    expect(countValue('999999')).toBe(32767)
   })
 })

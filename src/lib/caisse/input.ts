@@ -27,8 +27,14 @@ export function sanitizeAmount(
   let s = raw.replace(/[^0-9.,]/g, '').replace(/\./g, ',')
   const i = s.indexOf(',')
   if (i !== -1) {
-    // un seul séparateur : on retire les virgules suivantes
-    s = s.slice(0, i + 1) + s.slice(i + 1).replace(/,/g, '')
+    // un seul séparateur : on retire les virgules suivantes, puis on borne à
+    // 2 décimales (centimes) — la base arrondirait en silence (numeric(10,2)).
+    s =
+      s.slice(0, i + 1) +
+      s
+        .slice(i + 1)
+        .replace(/,/g, '')
+        .slice(0, 2)
   }
   return negative ? `-${s}` : s
 }
@@ -50,10 +56,14 @@ export function sanitizeCount(raw: string): string {
   return raw.replace(/[^0-9]/g, '')
 }
 
-/** Entier ≥ 0 à partir d'une saisie de comptage. */
+/** Plafond d'un comptage : borne d'un `smallint` (colonnes cnt_* en base). Au-
+ * delà, la sauvegarde échouerait en base. */
+export const COUNT_MAX = 32_767
+
+/** Entier dans [0, COUNT_MAX] à partir d'une saisie de comptage. */
 export function countValue(text: string): number {
   const s = sanitizeCount(text)
   if (s === '') return 0
   const n = parseInt(s, 10)
-  return Number.isFinite(n) ? Math.max(0, n) : 0
+  return Number.isFinite(n) ? Math.min(COUNT_MAX, Math.max(0, n)) : 0
 }

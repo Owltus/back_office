@@ -223,7 +223,7 @@ export async function validateSheet(id: string): Promise<void> {
 }
 
 /** Déverrouillage : remet la feuille en brouillon. En écriture, la RLS ne laisse
- * passer cet UPDATE que dans la fenêtre J-2 ; hors fenêtre, seule la gestion peut
+ * passer cet UPDATE que dans la fenêtre J-1 (aujourd'hui et la veille) ; hors fenêtre, seule la gestion peut
  * (voir lib/caisse/editability.ts et la policy caisse). */
 export async function reopenSheet(id: string): Promise<void> {
   const { error } = await supabase

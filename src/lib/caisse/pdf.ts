@@ -15,6 +15,7 @@ import type { jsPDF } from 'jspdf'
 import { DENOM_SVG } from '#/assets/euros/index.ts'
 import { openPrintablePdf } from '#/lib/print/openPdf.ts'
 import { computeEcarts, fundEcart, fundTotal, round2 } from '#/lib/caisse/calc.ts'
+import { fitCommentLines, maxCommentLines } from '#/lib/caisse/commentFit.ts'
 import {
   DENOMINATIONS,
   ECART_LABELS,
@@ -409,7 +410,14 @@ function renderCaisseDocument(
   const comment = form.comment.trim()
   if (comment) {
     pdf.setFont('helvetica', 'normal').setFontSize(9).setTextColor(60)
-    const lines = pdf.splitTextToSize(comment, CONTENT_W - 6) as string[]
+    // Coupé à la hauteur du cadre (« … ») : jamais de débordement sur les
+    // signatures.
+    const lineH = (9 * pdf.getLineHeightFactor()) / pdf.internal.scaleFactor
+    const lines = fitCommentLines(
+      pdf.splitTextToSize(comment, CONTENT_W - 6) as string[],
+      maxCommentLines(commentH, 5, lineH, 2),
+      (l) => pdf.getTextWidth(l) <= CONTENT_W - 6,
+    )
     pdf.text(lines, LEFT + 3, y + 5)
     pdf.setTextColor(26)
   }
