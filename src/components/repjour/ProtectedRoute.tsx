@@ -58,6 +58,9 @@ export function ProtectedRoute({
     role,
     loading,
     profileLoading,
+    permissionsLoading,
+    permsResolved,
+    backendDown,
     authReadError,
     permissions,
     grade,
@@ -89,6 +92,12 @@ export function ProtectedRoute({
   //    `ROLE_HOME` renvoyait sur /repjour en dur, d'où un second saut pour
   //    qui n'y a pas droit.
   if (!allowedRoles.includes(role)) {
+    // Même garde que PageGuard : droits pas encore obtenus → squelette, ou
+    // l'erreur de lecture ; jamais un faux « Aucune page accessible ».
+    if (permissionsLoading || (backendDown && !permsResolved))
+      return <GuardSkeleton pathname={pathname} />
+    if (!permsResolved && authReadError !== null)
+      return <AccessReadErrorNotice />
     const home = homePage(permissions, grade, profile?.page_order)
     return home ? (
       <Navigate to={PAGE_BY_KEY[home].route} replace />

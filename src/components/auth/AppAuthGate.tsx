@@ -32,7 +32,7 @@ function useDelayedFlag(delayMs: number): boolean {
  * coupe le trafic, et rien ne les relançait ensuite.
  *
  * UN SEUL abonné pour toute l'app : `AppAuthGate` est monté une fois, à la
- * racine. Seules les lectures en erreur ou périmées sont relancées, et
+ * racine. Seules les lectures en erreur sont relancées, et
  * `cancelRefetch: false` évite les doublons : une lecture déjà en vol
  * (relancée par le bouton « Réessayer » du bandeau, ou celle-là même dont le
  * succès a refermé le disjoncteur) n'est ni annulée ni redoublée. La salve
@@ -40,23 +40,28 @@ function useDelayedFlag(delayMs: number): boolean {
  */
 function useRefetchOnBackendRecovery() {
   const queryClient = useQueryClient()
-  useEffect(
-    () =>
-      onRecovery(backendHealth, () => {
-        void queryClient.refetchQueries(
-          {
-            type: 'active',
-            // Seulement ce qui en a besoin : la lecture qui vient de réussir
-            // (et de refermer le disjoncteur) est fraîche, inutile de la
-            // relire aussitôt.
-            predicate: (q) => q.state.status === 'error' || q.isStale(),
-          },
-          { cancelRefetch: false },
-        )
-      }),
-    [queryClient],
-  )
+  useEffect(() => {
+    // Contre-revue du 2026-09-28 : sur une base qui OSCILLE, chaque retour
+    // down → up relançait toute la page (toutes les 1 à 3 s), au moment même
+    // où l'instance se relève — l'inverse des règles « la base sature ».
+    // Deux freins : au plus une salve toutes les 30 s, et seulement les
+    // lectures EN ERREUR (le périmé se rafraîchit à la navigation ou au
+    // retour d'onglet, comme d'habitude).
+    let derniere = 0
+    return onRecovery(backendHealth, () => {
+      const t = Date.now()
+      if (t - derniere < RECOVERY_REFETCH_MIN_GAP_MS) return
+      derniere = t
+      void queryClient.refetchQueries(
+        { type: 'active', predicate: (q) => q.state.status === 'error' },
+        { cancelRefetch: false },
+      )
+    })
+  }, [queryClient])
 }
+
+/** Écart minimal entre deux relances « retour du backend ». */
+const RECOVERY_REFETCH_MIN_GAP_MS = 30_000
 
 /** Délai au-delà duquel le squelette de démarrage cesse d'être muet. */
 const SLOW_BOOT_MS = 5_000

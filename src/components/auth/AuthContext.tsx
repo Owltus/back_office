@@ -15,6 +15,7 @@ import {
   backendHealth,
   createSingleFlight,
   isOutageError,
+  onRecovery,
 } from '#/lib/backendHealth.ts'
 import { errorMessage } from '#/lib/errors.ts'
 import { parseMyAccess } from '#/lib/auth/access.ts'
@@ -442,8 +443,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     document.addEventListener('visibilitychange', onVisible)
     const interval = window.setInterval(revalidate, REVALIDATE_INTERVAL_MS)
 
+    // Retour du backend (disjoncteur down → up) : relire compte + droits
+    // AUSSITÔT (revue du 2026-09-28). Sans cela, un compte dont les droits
+    // n'avaient pas pu être lus pendant la panne (login disjoncteur ouvert,
+    // lecture refusée en file) restait sur un écran d'erreur jusqu'à la
+    // revalidation suivante (3 min). Une seule requête, single-flight.
+    const stopRecovery = onRecovery(backendHealth, () => {
+      const uid = userIdRef.current
+      if (uid) void resolveAccess(uid)
+    })
+
     return () => {
       active = false
+      stopRecovery()
       subscription.unsubscribe()
       document.removeEventListener('visibilitychange', onVisible)
       window.clearInterval(interval)
