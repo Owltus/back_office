@@ -29,6 +29,7 @@ import { useDroitsClasseur } from '#/components/classeur/hooks/useDroitsClasseur
 import { ChapterDrawerButton } from '#/components/classeur/ChapterDrawer.tsx'
 import { BulkDeleteDialog } from '#/components/classeur/dialogs/BulkDeleteDialog.tsx'
 import { ChapterDialog } from '#/components/classeur/dialogs/ChapterDialog.tsx'
+import { SuppressionChapitreDialog } from '#/components/classeur/dialogs/SuppressionChapitreDialog.tsx'
 import { CreateItemDialog } from '#/components/classeur/dialogs/CreateItemDialog.tsx'
 import { DeleteItemDialog } from '#/components/classeur/dialogs/DeleteItemDialog.tsx'
 import type { ItemASupprimer } from '#/components/classeur/dialogs/DeleteItemDialog.tsx'
@@ -60,7 +61,6 @@ import {
 import { PrintPreview } from '#/components/classeur/print/PrintPreview.tsx'
 import { MouseGlyph } from '#/components/parking/MouseGlyph.tsx'
 import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
-import { ConfirmDialog } from '#/components/shared/ConfirmDialog.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Alert, AlertDescription } from '#/components/ui/alert.tsx'
@@ -78,11 +78,7 @@ import {
 } from '#/lib/classeur/naming.ts'
 import { cleRef, deplacer, parseCleRef, refsDe } from '#/lib/classeur/ordre.ts'
 import type { ItemRef } from '#/lib/classeur/ordre.ts'
-import {
-  createItem,
-  moveItems,
-  softDeleteChapter,
-} from '#/lib/classeur/service.ts'
+import { createItem, moveItems } from '#/lib/classeur/service.ts'
 import { contientSansAccents, stripAccents } from '#/lib/classeur/slug.ts'
 import { ITEM_KINDS, flattenItems } from '#/lib/classeur/types.ts'
 import type { ChapterItem, DbTrackingSheet } from '#/lib/classeur/types.ts'
@@ -211,17 +207,6 @@ export function ChapterBoard({
     mutationFn: async () => {
       if (!chapter || !contenu) return
       await exporterChapitreZip(classeurName, chapter, contenu, periodicites)
-    },
-  })
-
-  const suppressionChapitre = useMutation({
-    mutationFn: () => softDeleteChapter(chapterId),
-    onSuccess: async () => {
-      await invalider()
-      await navigate({
-        to: '/classeur/$classeurId',
-        params: { classeurId: String(classeurId) },
-      })
     },
   })
 
@@ -360,12 +345,6 @@ export function ChapterBoard({
       err: exportZip.error,
       action: 'Export impossible',
     })
-  if (suppressionChapitre.isError)
-    erreurs.push({
-      cle: 'suppression',
-      err: suppressionChapitre.error,
-      action: 'Suppression impossible',
-    })
 
   return (
     <div
@@ -461,7 +440,6 @@ export function ChapterBoard({
                     icon={<Trash2 />}
                     className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                     onClick={() => setDeleteChapterOpen(true)}
-                    busy={suppressionChapitre.isPending}
                   />
                 </ButtonGroup>
               )}
@@ -676,18 +654,15 @@ export function ChapterBoard({
         chapter={chapter}
       />
 
-      <ConfirmDialog
-        open={deleteChapterOpen}
-        onOpenChange={setDeleteChapterOpen}
-        title="Supprimer le chapitre"
-        description={
-          chapter
-            ? `Le chapitre "${chapter.label}" et son contenu ne seront plus accessibles.`
-            : undefined
+      <SuppressionChapitreDialog
+        chapter={deleteChapterOpen ? chapter : null}
+        onClose={() => setDeleteChapterOpen(false)}
+        onSupprime={() =>
+          void navigate({
+            to: '/classeur/$classeurId',
+            params: { classeurId: String(classeurId) },
+          })
         }
-        confirmLabel="Supprimer"
-        destructive
-        onConfirm={() => suppressionChapitre.mutate()}
       />
     </div>
   )

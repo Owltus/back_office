@@ -868,6 +868,17 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
     point par frappe coûterait un instantané complet à chaque sauvegarde.
   - ⚠ `SOURCE_SAUVEGARDE` vit dans `merge/history.ts` (seul). Le simulateur
     de `audit.property.test.ts` porte `kind`/`label`/`taille`.
+- **Menu contextuel des chapitres + suppression avec sauvegarde
+  (2026-09-28, demande utilisateur)** : clic droit sur un chapitre de la
+  colonne (`ChapterSidebar`, droit d'écriture seulement — sinon le menu du
+  navigateur reste) → Modifier (`ChapterDialog`, celui de la barre de la
+  page chapitre) / Supprimer. `dialogs/SuppressionChapitreDialog.tsx` sert
+  AUSSI au bouton de la barre (l'ancien `ConfirmDialog` est retiré) :
+  point de restauration `manuel` « Avant suppression du chapitre « … » »
+  coché par défaut et pris AVANT `softDeleteChapter` — s'il échoue, rien
+  n'est supprimé (testé) ; copie ZIP Markdown téléchargeable à la demande ;
+  avertissement si la sauvegarde est décochée. Supprimer depuis la colonne
+  le chapitre ouvert ramène à l'accueil du classeur.
 - **Squelettes** : variante `classeur` de `RouteSkeleton`, forme choisie par
   `paramsClasseur(pathname)` (liste, tableau de bord, chapitre, détail) ;
   silhouettes `FormeClasseurListe`, `FormeClasseurDashboard`, `FormeChapitre`,

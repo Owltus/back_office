@@ -1,5 +1,5 @@
-import { useCallback, useEffect } from 'react'
-import { Link } from '@tanstack/react-router'
+import { useCallback, useEffect, useState } from 'react'
+import { Link, useNavigate, useParams } from '@tanstack/react-router'
 import type { DragEndEvent } from '@dnd-kit/core'
 import {
   SortableContext,
@@ -7,7 +7,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, Home, Library } from 'lucide-react'
+import { GripVertical, Home, Library, Pencil, Trash2 } from 'lucide-react'
 
 import {
   chapterDropId,
@@ -20,6 +20,15 @@ import {
   useReorderChapters,
 } from '#/components/classeur/hooks/useClasseur.ts'
 import { useDroitsClasseur } from '#/components/classeur/hooks/useDroitsClasseur.ts'
+import { ChapterDialog } from '#/components/classeur/dialogs/ChapterDialog.tsx'
+import { SuppressionChapitreDialog } from '#/components/classeur/dialogs/SuppressionChapitreDialog.tsx'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from '#/components/ui/context-menu.tsx'
 import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { messageErreur } from '#/lib/classeur/erreur.ts'
 import { getIcon } from '#/lib/classeur/naming.ts'
@@ -45,6 +54,11 @@ const LIEN_ACTIF =
  * Le glisser-déposer passe par le `DndProvider` du layout : chaque chapitre
  * est aussi une CIBLE DE DÉPÔT pour un élément de la page chapitre
  * (`chapterDropId`), mise en évidence quand elle est survolée.
+ *
+ * Clic droit sur un chapitre (droit d'écriture sur le classeur, demande
+ * utilisateur du 2026-09-28) : Modifier (le `ChapterDialog` de la barre de
+ * la page chapitre) et Supprimer (`SuppressionChapitreDialog`, avec
+ * sauvegarde avant suppression).
  */
 export function ChapterSidebar({
   classeurId,
@@ -58,6 +72,12 @@ export function ChapterSidebar({
   const reorder = useReorderChapters(classeurId)
   const { registerHandler, unregisterHandler } = useDndRegistry()
   const liste = chapitres.data ?? []
+  const [aModifier, setAModifier] = useState<DbChapter | null>(null)
+  const [aSupprimer, setASupprimer] = useState<DbChapter | null>(null)
+  const navigate = useNavigate()
+  const routeParams: Record<string, string | undefined> = useParams({
+    strict: false,
+  })
 
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
@@ -134,6 +154,8 @@ export function ChapterSidebar({
                 classeurId={classeurId}
                 canWrite={canWrite}
                 onNavigate={onNavigate}
+                onModifier={setAModifier}
+                onSupprimer={setASupprimer}
               />
             ))}
           </SortableContext>
@@ -145,6 +167,25 @@ export function ChapterSidebar({
           </p>
         )}
       </nav>
+
+      <ChapterDialog
+        open={aModifier !== null}
+        onOpenChange={(open) => {
+          if (!open) setAModifier(null)
+        }}
+        classeurId={classeurId}
+        chapter={aModifier}
+      />
+      <SuppressionChapitreDialog
+        chapter={aSupprimer}
+        onClose={() => setASupprimer(null)}
+        onSupprime={(c) => {
+          // On était sur la page (ou un élément) du chapitre supprimé.
+          if (routeParams.chapterId === String(c.id)) {
+            void navigate({ to: '/classeur/$classeurId', params })
+          }
+        }}
+      />
 
       <div className="mt-auto border-t border-border pt-2">
         <Link to="/classeur" onClick={onNavigate} className={LIEN}>
@@ -161,11 +202,15 @@ function ChapterNavItem({
   classeurId,
   canWrite,
   onNavigate,
+  onModifier,
+  onSupprimer,
 }: {
   chapter: DbChapter
   classeurId: number
   canWrite: boolean
   onNavigate?: () => void
+  onModifier: (chapter: DbChapter) => void
+  onSupprimer: (chapter: DbChapter) => void
 }) {
   const Icon = getIcon(chapter.icon)
   const dropId = chapterDropId(chapter.id)
@@ -191,7 +236,7 @@ function ChapterNavItem({
   const { activeDragType, activeOverId } = useDndRegistry()
   const cible = estItemDrag(activeDragType) && activeOverId === dropId
 
-  return (
+  const ligne = (
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform), transition }}
@@ -226,5 +271,27 @@ function ChapterNavItem({
         </button>
       )}
     </div>
+  )
+
+  // Lecture seule : pas de menu (le clic droit du navigateur reste).
+  if (!canWrite) return ligne
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>{ligne}</ContextMenuTrigger>
+      <ContextMenuContent className="w-52">
+        <ContextMenuItem onSelect={() => onModifier(chapter)}>
+          <Pencil />
+          Modifier le chapitre
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem
+          variant="destructive"
+          onSelect={() => onSupprimer(chapter)}
+        >
+          <Trash2 />
+          Supprimer le chapitre…
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   )
 }
