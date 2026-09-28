@@ -15,6 +15,32 @@ const CLE_RECHARGEMENT_CHUNK = 'bo.chunkReload.v1'
 /** Deux rechargements automatiques ne sont jamais séparés de moins d'une minute. */
 const ECART_MIN_RECHARGEMENT_MS = 60_000
 let rechargementChunkBranche = false
+/** Routeur courant, lu par l'écouteur au moment de l'erreur (pas à son branchement). */
+let routeurCourant: { state: { status: 'pending' | 'idle' } } | null = null
+
+/**
+ * Décision PURE du rechargement sur `vite:preloadError` (contre-revue du
+ * 2026-09-28). Recharger n'est justifié que si l'utilisateur est EN TRAIN DE
+ * QUITTER la page : une navigation vers une route est en cours
+ * (`router.state.status === 'pending'`). Sinon l'erreur vient :
+ *   - d'un préchargement au survol (`defaultPreload: 'intent'`) — l'état du
+ *     routeur n'est pas touché par un préchargement, il reste `idle` ;
+ *   - d'un `import()` dynamique d'une bibliothèque lourde (html2canvas,
+ *     jszip, mermaid…) au milieu d'une saisie.
+ * Dans ces deux cas, recharger ferait perdre une saisie en cours (feuille de
+ * caisse, document du classeur) : l'erreur suit son cours. Hors ligne non
+ * plus — le chunk n'a pas disparu, c'est le réseau, et le rechargement
+ * afficherait une page d'erreur du navigateur à la place de l'app.
+ */
+export function doitRechargerSurChunkPerdu(etat: {
+  navigationEnCours: boolean
+  enLigne: boolean
+  maintenant: number
+  dernierRechargement: number
+}): boolean {
+  if (!etat.navigationEnCours || !etat.enLigne) return false
+  return etat.maintenant - etat.dernierRechargement >= ECART_MIN_RECHARGEMENT_MS
+}
 
 /*
  * CHUNK DISPARU APRÈS UN DÉPLOIEMENT (2026-09-28). Un onglet ouvert avant un
@@ -24,6 +50,9 @@ let rechargementChunkBranche = false
  * chunks. `vercel.json` exclut `/assets/` de la réécriture SPA pour que le
  * fichier manquant réponde bien 404 (avant, le shell était servi à sa place,
  * en 200 et `immutable`).
+ *
+ * Seulement pendant une NAVIGATION et EN LIGNE : voir
+ * `doitRechargerSurChunkPerdu`.
  *
  * Garde anti-boucle en `sessionStorage` : pas de second rechargement
  * automatique dans la minute (un chunk VRAIMENT absent du déploiement courant
@@ -40,7 +69,15 @@ function brancherRechargementSurChunkPerdu() {
       const dernier = Number(
         window.sessionStorage.getItem(CLE_RECHARGEMENT_CHUNK) ?? 0,
       )
-      if (maintenant - dernier < ECART_MIN_RECHARGEMENT_MS) return
+      if (
+        !doitRechargerSurChunkPerdu({
+          navigationEnCours: routeurCourant?.state.status === 'pending',
+          enLigne: window.navigator.onLine,
+          maintenant,
+          dernierRechargement: dernier,
+        })
+      )
+        return
       window.sessionStorage.setItem(CLE_RECHARGEMENT_CHUNK, String(maintenant))
       event.preventDefault()
       window.location.reload()
@@ -99,6 +136,7 @@ export function getRouter() {
   })
 
   setupRouterSsrQueryIntegration({ router, queryClient: context.queryClient })
+  routeurCourant = router
 
   return router
 }
