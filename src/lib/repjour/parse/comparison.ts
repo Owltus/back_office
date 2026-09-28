@@ -49,9 +49,13 @@ export function parseComparison(csvText: string): ComparisonData {
   let vatToday = 0;
 
   for (const row of result.data.slice(headerIdx + 1)) {
-    const section = (row[0] || '').trim();
+    // Libellés comparés en MAJUSCULES, comme l'Edge Function (import-report/
+    // repjour.ts) : les deux chaînes d'import doivent lire le même fichier de la
+    // même façon, et un simple changement de casse côté PMS (« Room Revenue »)
+    // ne doit pas faire lire 0 à l'une seulement.
+    const section = (row[0] || '').trim().toUpperCase();
 
-    if (section === 'Occupied Rooms') {
+    if (section === 'OCCUPIED ROOMS') {
       occExclCompToday = parseFloat(row[todayIndex]) || 0;
       occExclCompMTD = parseFloat(row[mtdIndex]) || 0;
     } else if (section === 'ROOM REVENUE') {
