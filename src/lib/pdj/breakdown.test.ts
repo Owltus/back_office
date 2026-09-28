@@ -265,6 +265,28 @@ describe('nuit STAFF', () => {
     expect(ca.totalHt).toBe(0)
   })
 
+  it('ne retire pas les extras d une autre chambre (inclus STAFF compté 0)', () => {
+    // Nuit STAFF avec un inclus importé par erreur : 1 inclus, 2 servis.
+    // Tout son servi est offert (2) ; son extra doit donc valoir 2, pas 1,
+    // sinon l'écart mange l'extra facturable de la chambre 213.
+    const ca = computePdjCA(
+      [
+        { ...staff(2), addons: 'PDJ INCL', breakfasts_included: 1 },
+        { addons: 'PDJ INCL', breakfasts_included: 1, breakfasts_served: 2 },
+      ],
+      TARIFS,
+    )
+    expect(ca.extraNb).toBe(3)
+    expect(ca.offertNb).toBe(2)
+    // L'extra de la chambre ordinaire reste facturé : 19 € TTC → 17,27 € HT.
+    expect(ca.extrasHt).toBeCloseTo(17.27, 2)
+    // Même chiffre que la somme des lignes du détail financier.
+    expect(
+      roomFinance({ ...staff(2), addons: 'PDJ INCL', breakfasts_included: 1 }, TARIFS)
+        .htCa,
+    ).toBe(0)
+  })
+
   it('la ligne du détail financier affiche 0,00 €', () => {
     expect(roomFinance(staff(2, 'TARIF STAFF – 1 PDJ'), TARIFS).htCa).toBe(0)
   })

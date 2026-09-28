@@ -247,12 +247,19 @@ export function computePdjCA(
     // Inclus manuel (day-use, absent de l'Addon) → valorisé au prix PDJ.
     if (!code && r.manual_kind === 'inclus') code = 'PDJ'
     // Nuit STAFF : rien n'est dû, quoi que porte la ligne (cf. isStaffRow).
-    if (isStaffRow(r.rate_plan)) code = null
+    const staff = isStaffRow(r.rate_plan)
+    if (staff) code = null
     if (code && r.breakfasts_included > 0) {
       inclusNb += r.breakfasts_included
       rebuiltHt += round2(r.breakfasts_included * unitHt(code))
     }
-    extraNb += Math.max(0, r.breakfasts_served - r.breakfasts_included)
+    // Une nuit STAFF compte `included = 0` AVANT le calcul de l'extra, comme
+    // roomFinance et la vue pdj_daily_agg : tout son servi est un extra, et
+    // offertUnits le rend offert en totalité. Sans cela, l'extra (servi − inclus)
+    // restait inférieur à l'offert (tout le servi), et la différence retirait
+    // les extras FACTURABLES d'une autre chambre.
+    const included = staff ? 0 : r.breakfasts_included
+    extraNb += Math.max(0, r.breakfasts_served - included)
     offertNb += offertUnits(r)
   }
   rebuiltHt = round2(rebuiltHt)
