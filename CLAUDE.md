@@ -958,6 +958,28 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   Non fait (à rediscuter) : `PageHeader` partagé (tiroir sur sa propre
   ligne sous `sm`), zoom de grille au doigt, croix des dialogues, pages A4
   petites sur téléphone (pincement du navigateur), clavier virtuel.
+- **Audit de sécurité du 2026-09-28** (agent catalogue + agent code + tests
+  d'attaque en transaction annulée) : aucune faille critique. Base :
+  `supabase/classeur_securite_2026-09-28.sql` (autorité §9, APRÈS §8) —
+  `id` en `generated always` (un `id` choisi reprenait un classeur supprimé
+  physiquement et ses fichiers), horodatages bornés à now()+5 min, création
+  hors gestion forcée non supprimée et en fin de liste, CHECK chemin d'image
+  ↔ `classeur_id`, versions qui suivent un document ou un chapitre déplacé,
+  `search_path` vide ; ⚠ `classeur_images_table`, `classeur_points_restauration`
+  et `classeur_proprietaire` (2026-09-26) portent « NE PLUS REJOUER » :
+  chacun rouvrirait l'accès, et `verif_classeur_acces.sql` (33 contrôles)
+  échoue désormais s'ils ont été rejoués. Client : `messageErreur` ne montre
+  plus JAMAIS le message brut d'une erreur de la base (tables, contraintes),
+  image Markdown externe remplacée par un encart (la CSP la bloquait déjà),
+  SVG Mermaid assaini par DOMPurify (chargé à la demande, `foreignObject`
+  gardé, vérifié identique au brut dans Chrome), `getIcon` par `Object.hasOwn`.
+  Écartés sciemment : iframe d'impression non « sandboxée » (même origine,
+  contenu déjà rendu dans la page, risque de casser l'impression), brouillons
+  gardés à la déconnexion (c'est leur raison d'être, clé par compte).
+  Questions de conception laissées ouvertes : un classeur supprimé
+  doucement reste lisible et modifiable par ses ayants droit (seule
+  l'interface le masque) ; déplacer un chapitre vers son propre classeur
+  en garde l'écriture après un retrait de droits.
 - **Squelettes** : variante `classeur` de `RouteSkeleton`, forme choisie par
   `paramsClasseur(pathname)` (liste, tableau de bord, chapitre, détail) ;
   silhouettes `FormeClasseurListe`, `FormeClasseurDashboard`, `FormeChapitre`,

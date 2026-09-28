@@ -78,9 +78,26 @@ const markdownComponents: Components = {
     return <thead>{children}</thead>
   },
   // Image du bucket privé : lue par l'API authentifiée, jamais par URL.
+  // Une adresse EXTERNE n'est pas chargée (audit du 2026-09-28) : elle
+  // révélerait au site tiers qui lit le document et quand. La CSP de
+  // production la bloque déjà ; on l'annonce plutôt qu'une image cassée.
   img: ({ src, alt, title }) =>
     estCheminImage(src) ? (
       <ImageDocument chemin={src} alt={alt} title={title} />
+    ) : typeof src !== 'string' || !/^(data:image\/|blob:)/i.test(src) ? (
+      <span
+        role="img"
+        aria-label={alt ?? 'Image externe non affichée'}
+        style={{
+          display: 'inline-block',
+          border: '0.5pt dashed #666',
+          padding: '2mm 4mm',
+          color: '#666',
+          fontSize: '8pt',
+        }}
+      >
+        Image externe non affichée{alt ? ` : ${alt}` : ''}
+      </span>
     ) : (
       <img
         src={src}

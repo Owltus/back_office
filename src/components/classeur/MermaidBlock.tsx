@@ -2,24 +2,6 @@ import { useEffect, useState } from 'react'
 
 import { renderMermaid } from '#/lib/classeur/mermaid.ts'
 
-/**
- * Nettoie un SVG en supprimant les balises <script> et les attributs
- * d'événements (on*) pour prévenir les attaques XSS.
- */
-function sanitizeSvg(raw: string): string {
-  // Supprimer les balises <script>...</script> et <script ... />
-  let cleaned = raw.replace(/<script[\s\S]*?<\/script\s*>/gi, '')
-  cleaned = cleaned.replace(/<script[\s\S]*?\/?>/gi, '')
-  // Supprimer les attributs on* (onclick, onerror, onload, etc.)
-  cleaned = cleaned.replace(/\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-  // Supprimer les href/xlink:href javascript:
-  cleaned = cleaned.replace(
-    /\s+(href|xlink:href)\s*=\s*(?:"javascript:[^"]*"|'javascript:[^']*')/gi,
-    '',
-  )
-  return cleaned
-}
-
 /*
  * Rend un diagramme Mermaid en SVG — porté de Registre.
  *
@@ -37,7 +19,7 @@ export function MermaidBlock({ code }: { code: string }) {
     setFailed(false)
     renderMermaid(code)
       .then((result) => {
-        if (!cancelled) setSvg(sanitizeSvg(result))
+        if (!cancelled) setSvg(result)
       })
       .catch(() => {
         if (!cancelled) {

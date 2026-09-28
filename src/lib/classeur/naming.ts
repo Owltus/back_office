@@ -25,7 +25,9 @@ export const iconEntries = Object.entries(iconMap)
 
 /** Icône d'un nom Lucide, `FileText` si le nom est inconnu. */
 export function getIcon(name: string): LucideIcon {
-  return iconMap[name] ?? icons.FileText
+  // `Object.hasOwn` : un nom venu d'un fichier importé (« constructor »,
+  // « __proto__ »…) ne doit pas remonter la chaîne de prototypes.
+  return Object.hasOwn(iconMap, name) ? iconMap[name] : icons.FileText
 }
 
 /** Bloc établissement du pied de page : deux lignes au plus, vides retirées. */

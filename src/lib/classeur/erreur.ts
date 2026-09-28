@@ -34,13 +34,22 @@ export function messageErreur(
   if (estRefusDroits(err)) {
     return 'Modification refusée : vos droits sur la page Classeur ne le permettent pas.'
   }
-  const detail =
-    err instanceof Error
-      ? err.message
-      : typeof err === 'object' &&
-          err !== null &&
-          typeof (err as ErreurPostgres).message === 'string'
-        ? (err as ErreurPostgres).message
-        : null
+  const code =
+    typeof err === 'object' && err !== null
+      ? (err as ErreurPostgres).code
+      : undefined
+  // Erreur de la BASE (code SQLSTATE ou PostgREST) : jamais le message brut,
+  // qui nomme tables, contraintes et colonnes (audit de sécurité du
+  // 2026-09-28). Une phrase par famille suffit à l'utilisateur.
+  if (typeof code === 'string' && code !== '') {
+    if (code === '23505') return `${action} : cet élément existe déjà.`
+    if (code.startsWith('23') || code.startsWith('22')) {
+      return `${action} : la base a refusé ces données.`
+    }
+    return `${action}. Réessayez dans un instant.`
+  }
+  // Erreur du navigateur (réseau, conversion d'image…) : son message est
+  // le nôtre ou celui du navigateur, sans détail de la base.
+  const detail = err instanceof Error ? err.message : null
   return detail ? `${action} : ${detail}` : `${action}.`
 }

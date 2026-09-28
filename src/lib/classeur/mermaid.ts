@@ -94,12 +94,23 @@ export function loadMermaid(): Promise<MermaidModule> {
 let renderCounter = 0
 
 /**
- * Rend un diagramme Mermaid et retourne le SVG résultant (non assaini :
- * `MermaidBlock` s'en charge avant l'injection).
+ * Rend un diagramme Mermaid et retourne le SVG ASSAINI, prêt à injecter.
+ *
+ * `securityLevel: 'strict'` nettoie déjà les libellés ; DOMPurify repasse
+ * sur le SVG complet (audit du 2026-09-28 : le nettoyage par expressions
+ * régulières qui le précédait se contournait). `foreignObject` est gardé :
+ * Mermaid y pose ses libellés HTML. Chargé à la demande, comme Mermaid.
  */
 export async function renderMermaid(code: string): Promise<string> {
-  const mermaid = await loadMermaid()
+  const [mermaid, { default: DOMPurify }] = await Promise.all([
+    loadMermaid(),
+    import('dompurify'),
+  ])
   const id = `classeur-mermaid-${++renderCounter}`
   const { svg } = await mermaid.render(id, code)
-  return svg
+  return DOMPurify.sanitize(svg, {
+    USE_PROFILES: { svg: true, svgFilters: true, html: true },
+    ADD_TAGS: ['foreignObject'],
+    HTML_INTEGRATION_POINTS: { foreignobject: true },
+  })
 }
