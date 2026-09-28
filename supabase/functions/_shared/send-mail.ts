@@ -217,10 +217,11 @@ export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
     // Échec HTTP : ne retenter que si transitoire (5xx / 429). Détail dans les logs,
     // message générique renvoyé (ne pas exposer la structure interne de Resend).
     const transient = res.status >= 500 || res.status === 429
+    const corps = await res.text().catch(() => '')
     console.error(
       `Resend a échoué (tentative ${attempt}/${MAX_ATTEMPTS})`,
       res.status,
-      await res.text(),
+      corps,
     )
     if (transient && attempt < MAX_ATTEMPTS) {
       await sleep(1000 * 2 ** (attempt - 1))
@@ -231,17 +232,33 @@ export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
     // « réessayable ». Le classer AMBIGU conservait la réservation et brûlait la
     // journée : marquée envoyée, sans e-mail, sans reprise possible.
     if (res.status === 429) return fail('Envoi du message échoué', true, true)
-    // 409 : la clé d'idempotence est DÉJÀ connue de Resend (message identique
-    // déjà envoyé, ou envoi encore en cours sous cette clé). Ce n'est pas un
-    // rejet : l'e-mail est peut-être parti. Le classer « certainement pas
-    // envoyé » laissait l'appelant libérer la réservation, puis renvoyer sous
-    // une autre clé — doublon. Issue AMBIGUË : réservation conservée, pas de
-    // reprise.
-    if (res.status === 409) return fail('Envoi du message échoué', false, false)
+    // 409 « concurrent_idempotent_requests » : un envoi sous la MÊME clé est
+    // encore en cours chez Resend (typiquement notre propre tentative
+    // précédente, coupée côté réseau, réessayée dans ce même appel). L'e-mail
+    // est en train de partir : issue AMBIGUË, réservation conservée, pas de
+    // reprise — la libérer menait à un doublon.
+    // Tout AUTRE 409 (clé déjà vue avec un contenu différent, le PDF étant
+    // régénéré à chaque appel) reste un rejet explicite, visible et
+    // réessayable : le classer ambigu « brûlerait » la journée sans e-mail
+    // si la clé avait été retenue après un échec (comportement de Resend non
+    // vérifié ; revue du 2026-09-28 : un doublon vaut mieux qu'un silence).
+    if (res.status === 409 && nomErreurResend(corps) === 'concurrent_idempotent_requests') {
+      return fail('Envoi du message échoué', false, false)
+    }
     // 5xx épuisées = AMBIGU (le POST a pu aboutir) : réservation conservée, pas de
     // reprise. 4xx définitive = rejet explicite, rien n'est parti, inutile d'insister.
     return fail('Envoi du message échoué', !transient, false)
   }
 
   return fail('Envoi du message échoué', false, false)
+}
+
+/** `name` d'un corps d'erreur Resend (`{ "name": "…", "message": "…" }`), sinon null. */
+export function nomErreurResend(corps: string): string | null {
+  try {
+    const o = JSON.parse(corps) as { name?: unknown }
+    return typeof o.name === 'string' ? o.name : null
+  } catch {
+    return null
+  }
 }

@@ -43,7 +43,7 @@ const base = {
   idempotencyKey: 'repjour-2026-09-28',
 }
 
-Deno.test('409 (clé d idempotence déjà utilisée) = issue AMBIGUË', async () => {
+Deno.test('409 concurrent (même clé encore en cours) = issue AMBIGUË', async () => {
   const appels = await avecResend(
     409,
     '{"name":"concurrent_idempotent_requests"}',
@@ -57,6 +57,17 @@ Deno.test('409 (clé d idempotence déjà utilisée) = issue AMBIGUË', async ()
   )
   // Pas de nouvelle tentative : insister ne changerait rien et risquerait pire.
   assertEquals(appels, 1)
+})
+
+Deno.test('409 autre que « concurrent » = rejet visible, pas une journée brûlée', async () => {
+  await avecResend(409, '{"name":"invalid_idempotent_request"}', async () => {
+    const r = await sendMail(base)
+    assertEquals(r.ok, false)
+    // Clé déjà vue avec un AUTRE contenu : la classer ambiguë marquerait la
+    // journée envoyée sans e-mail. Échec visible, rattrapable à la main.
+    assertEquals(r.certainNotSent, true)
+    assertEquals(r.retryable, false)
+  })
 })
 
 Deno.test('422 (rejet explicite) reste « certainement pas envoyé »', async () => {
