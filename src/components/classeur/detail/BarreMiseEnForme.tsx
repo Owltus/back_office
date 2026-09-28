@@ -2,6 +2,8 @@ import { useCallback, useState } from 'react'
 import type { KeyboardEvent, ReactNode, RefObject } from 'react'
 import {
   Bold,
+  ListIndentDecrease,
+  ListIndentIncrease,
   Heading1,
   Heading2,
   Heading3,
@@ -104,6 +106,25 @@ export function useMiseEnForme(
     [editeurRef, lectureSeule, relever],
   )
 
+  /**
+   * Décaler / ramener une ligne de liste : Tab et Maj + Tab au clavier, ces
+   * boutons au doigt (les claviers virtuels n'ont pas de Tab).
+   */
+  const decaler = useCallback(
+    (sens: 1 | -1) => {
+      const ed = editeurRef.current
+      if (!ed || lectureSeule) return
+      const edition = indenterListe(
+        ed.value,
+        ed.selectionStart,
+        ed.selectionEnd,
+        sens,
+      )
+      if (edition) appliquerDansEditeur(ed, edition)
+    },
+    [editeurRef, lectureSeule],
+  )
+
   const onKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
       if (lectureSeule || e.nativeEvent.isComposing) return
@@ -202,6 +223,7 @@ export function useMiseEnForme(
 
   return {
     executer,
+    decaler,
     ligneActive,
     tableau,
     ouvrirTableau,
@@ -233,6 +255,9 @@ function Outil({
     <IconAction
       label={label}
       icon={icon}
+      // Garde le focus (et le clavier virtuel) dans l'éditeur : souris ET
+      // doigt (un toucher émet pointerdown avant tout événement souris).
+      onPointerDown={(e) => e.preventDefault()}
       onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
       aria-pressed={actif === undefined ? undefined : actif}
@@ -329,6 +354,19 @@ export function BarreMiseEnForme({
           icon={<TextQuote />}
           actif={ligneActive === 'citation'}
           onClick={prefixe('citation')}
+        />
+      </ButtonGroup>
+      {/* Au doigt seulement : pas de Tab sur un clavier virtuel. */}
+      <ButtonGroup className="hidden pointer-coarse:inline-flex">
+        <Outil
+          label="Ramener (sous-liste)"
+          icon={<ListIndentDecrease />}
+          onClick={() => miseEnForme.decaler(-1)}
+        />
+        <Outil
+          label="Décaler (sous-liste)"
+          icon={<ListIndentIncrease />}
+          onClick={() => miseEnForme.decaler(1)}
         />
       </ButtonGroup>
       <ButtonGroup>

@@ -116,7 +116,7 @@ export function ImagePreparationDialog({
         if (!o && !envoi) onAnnuler()
       }}
     >
-      <DialogContent className="flex max-h-[92vh] flex-col gap-4 sm:max-w-3xl">
+      <DialogContent className="flex max-h-[92dvh] flex-col gap-4 overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>Préparer l'image</DialogTitle>
           <DialogDescription>
@@ -126,7 +126,7 @@ export function ImagePreparationDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="relative h-[52vh] min-h-64 w-full overflow-hidden rounded-lg bg-black/80">
+        <div className="relative h-[38dvh] min-h-44 w-full shrink-0 overflow-hidden rounded-lg bg-black/80 sm:h-[52vh] sm:min-h-64">
           {url && (
             <Cropper
               image={url}

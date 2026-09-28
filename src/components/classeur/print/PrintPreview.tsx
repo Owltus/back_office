@@ -106,7 +106,11 @@ export function PrintPreview({
           ref={scrollRef}
           className="classeur-print-preview-scroll flex-1 overflow-y-auto bg-muted/50 p-6"
         >
-          <div className="flex flex-col items-center gap-6">{children}</div>
+          {/* `items-center-safe` : une page plus large que l'écran (téléphone)
+              déborde à droite, jamais à gauche où elle serait inatteignable. */}
+          <div className="flex flex-col items-center-safe gap-6">
+            {children}
+          </div>
         </div>
       </DialogContent>
     </Dialog>

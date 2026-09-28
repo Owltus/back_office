@@ -113,7 +113,10 @@ export function DocumentDetail() {
     editeurRef,
     setContenu,
   })
-  const zoneEdition = useHauteurJusquEnBas()
+  // Deux colonnes et hauteur fixe à partir de 1280 px seulement : à 1024,
+  // avec la colonne des chapitres, chaque moitié ne faisait que ~320 px
+  // (audit tactile 2026-09-28).
+  const zoneEdition = useHauteurJusquEnBas({ minLargeur: 1280 })
   const miseEnForme = useMiseEnForme(editeurRef, !page.canWrite)
 
   const apercuRef = useCallback(
@@ -289,7 +292,6 @@ export function DocumentDetail() {
                     }
                     icon={apercuMasque ? <PanelLeftOpen /> : <PanelLeftClose />}
                     aria-pressed={apercuMasque}
-                    className="hidden lg:inline-flex"
                     onClick={() => setApercuMasque((m) => !m)}
                   />
                 </ButtonGroup>
@@ -356,7 +358,7 @@ export function DocumentDetail() {
           ref={zoneEdition.ref}
           className={cn(
             'grid gap-4',
-            apercuMasque ? 'lg:grid-cols-1' : 'lg:grid-cols-2',
+            apercuMasque ? 'xl:grid-cols-1' : 'xl:grid-cols-2',
           )}
           style={
             zoneEdition.hauteur === null
@@ -367,8 +369,8 @@ export function DocumentDetail() {
           <DetailPaper
             ref={apercuRef}
             className={cn(
-              'order-2 cursor-text overflow-y-auto lg:order-1 lg:h-full',
-              apercuMasque && 'lg:hidden',
+              'order-2 cursor-text overflow-y-auto xl:order-1 xl:h-full',
+              apercuMasque && 'hidden',
             )}
             title="Cliquez sur un passage pour y aller dans le texte"
             onClick={surClicApercu}
@@ -380,7 +382,7 @@ export function DocumentDetail() {
               {pages}
             </div>
           </DetailPaper>
-          <div className="order-1 flex min-h-0 flex-col lg:order-2 lg:h-full">
+          <div className="order-1 flex min-h-0 flex-col xl:order-2 xl:h-full">
             {page.canWrite && (
               <div className="flex flex-col gap-1.5 pb-2">
                 <DialoguesImage image={image} />
@@ -402,7 +404,7 @@ export function DocumentDetail() {
               placeholder="Écrivez ici. La barre ci-dessus met en forme (titres, gras, listes, tableaux, images) ; le bouton ? en haut explique tout."
               aria-label="Contenu du document"
               spellCheck
-              className="h-[60dvh] resize-none text-[15px] leading-relaxed [field-sizing:fixed] lg:h-auto lg:min-h-0 lg:flex-1"
+              className="h-[60dvh] resize-none text-[15px] leading-relaxed [field-sizing:fixed] xl:h-auto xl:min-h-0 xl:flex-1"
             />
           </div>
         </div>

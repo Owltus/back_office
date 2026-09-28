@@ -58,7 +58,7 @@ export function SuppressionChapitreDialog({
         if (!open) onClose()
       }}
     >
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
         {chapter && (
           <Contenu
             key={chapter.id}

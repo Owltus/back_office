@@ -83,7 +83,7 @@ function ClasseurShell({ classeurId }: { classeurId: number }) {
             <Sheet open={tiroirOuvert} onOpenChange={setTiroirOuvert}>
               <SheetContent
                 side="left"
-                className="w-80 p-0"
+                className="w-[85vw] max-w-80 p-0"
                 showCloseButton={false}
               >
                 <SheetHeader className="sr-only">

@@ -52,7 +52,7 @@ export function ActionCard({
       onDragLeave={onDragLeave}
       onDrop={onDrop}
       className={cn(
-        'flex w-full items-center gap-4 rounded-xl border border-border bg-card px-5 py-4 text-left transition-colors',
+        'flex w-full items-center gap-3 rounded-xl border border-border bg-card px-3 py-4 text-left transition-colors sm:gap-4 sm:px-5',
         'hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
         'disabled:pointer-events-none disabled:opacity-40',
         dashed && 'border-dashed',
@@ -65,11 +65,11 @@ export function ActionCard({
         <Icon className="size-5 shrink-0 text-muted-foreground" />
       )}
       <span className="flex min-w-0 flex-col gap-0.5">
-        <span className="truncate text-sm font-medium">
+        <span className="truncate text-sm font-medium max-sm:line-clamp-2 max-sm:whitespace-normal">
           {busy ? titreOccupe : title}
         </span>
         {subtitle !== undefined && !busy && (
-          <span className="truncate text-xs text-muted-foreground">
+          <span className="truncate text-xs text-muted-foreground max-sm:line-clamp-2 max-sm:whitespace-normal">
             {subtitle}
           </span>
         )}

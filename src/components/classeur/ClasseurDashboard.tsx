@@ -1,5 +1,6 @@
 import { useDeferredValue, useMemo, useState } from 'react'
 import type { DragEvent, ReactNode } from 'react'
+import { useMutation } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import {
   Archive,
@@ -18,6 +19,7 @@ import {
   Table2,
   Upload,
   ShieldCheck,
+  Trash2,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -30,15 +32,18 @@ import {
   useChapters,
   useClasseur,
   useClasseurContent,
+  useInvaliderClasseur,
 } from '#/components/classeur/hooks/useClasseur.ts'
 import { useDroitsClasseur } from '#/components/classeur/hooks/useDroitsClasseur.ts'
 import { IconAction } from '#/components/classeur/IconAction.tsx'
 import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
+import { ConfirmDialog } from '#/components/shared/ConfirmDialog.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { Input } from '#/components/ui/input.tsx'
 import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { messageErreur } from '#/lib/classeur/erreur.ts'
 import { DEFAULT_REGISTRY_NAME, getIcon } from '#/lib/classeur/naming.ts'
+import { softDeleteClasseur } from '#/lib/classeur/service.ts'
 import { contientSansAccents } from '#/lib/classeur/slug.ts'
 import { ITEM_LABEL, flattenItems } from '#/lib/classeur/types.ts'
 import type {
@@ -126,7 +131,16 @@ export function ClasseurDashboard({
 }) {
   const { canWrite, canManage } = useDroitsClasseur(classeurId)
   const [accesOuvert, setAccesOuvert] = useState(false)
+  const [suppressionOuverte, setSuppressionOuverte] = useState(false)
   const navigate = useNavigate()
+  const invaliderTout = useInvaliderClasseur()
+  const suppression = useMutation({
+    mutationFn: () => softDeleteClasseur(classeurId),
+    onSuccess: async () => {
+      await invaliderTout()
+      await navigate({ to: '/classeur' })
+    },
+  })
 
   const classeurQ = useClasseur(classeurId)
   const chapitresQ = useChapters(classeurId)
@@ -251,6 +265,17 @@ export function ClasseurDashboard({
                   onClick={() => setAccesOuvert(true)}
                 />
               )}
+              {/* Supprimer le classeur : gestion. Seule voie au doigt (la
+                  croix de la liste n'apparaît qu'au survol à la souris). */}
+              {canManage && (
+                <IconAction
+                  label="Supprimer le classeur"
+                  icon={<Trash2 />}
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  onClick={() => setSuppressionOuverte(true)}
+                  busy={suppression.isPending}
+                />
+              )}
             </ButtonGroup>
           ) : undefined
         }
@@ -267,6 +292,8 @@ export function ClasseurDashboard({
         <Input
           value={recherche}
           onChange={(e) => setRecherche(e.target.value)}
+          type="search"
+          enterKeyHint="search"
           placeholder="Rechercher dans le classeur"
           aria-label="Rechercher dans le classeur"
           className="pl-9"
@@ -421,6 +448,25 @@ export function ClasseurDashboard({
             )}
           </div>
         </div>
+      )}
+
+      <ConfirmDialog
+        open={suppressionOuverte}
+        onOpenChange={setSuppressionOuverte}
+        title="Supprimer le classeur"
+        description={
+          classeur
+            ? `Supprimer le classeur « ${classeur.name} » et tout son contenu (chapitres, documents, fiches de suivi et de signature) ?`
+            : undefined
+        }
+        confirmLabel="Supprimer"
+        destructive
+        onConfirm={() => suppression.mutate()}
+      />
+      {suppression.isError && (
+        <p className="text-sm text-destructive">
+          {messageErreur(suppression.error, 'Suppression impossible')}
+        </p>
       )}
 
       <AccesClasseurDialog

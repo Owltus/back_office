@@ -3,6 +3,7 @@ import {
   useDeferredValue,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react'
 import { useMutation } from '@tanstack/react-query'
@@ -12,6 +13,9 @@ import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable'
 import {
   Archive,
   CheckSquare,
+  FileUp,
+  FolderInput,
+  ListChecks,
   Loader2,
   Pencil,
   Plus,
@@ -46,12 +50,20 @@ import { useChapterZoom } from '#/components/classeur/hooks/useChapterZoom.ts'
 import {
   useChapter,
   useChapterContent,
+  useChapters,
   useClasseur,
   useInvaliderClasseur,
   usePeriodicites,
   useReorderItems,
 } from '#/components/classeur/hooks/useClasseur.ts'
 import { useDropZone } from '#/components/classeur/hooks/useDropZone.ts'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from '#/components/ui/dropdown-menu.tsx'
 import { useSelection } from '#/components/classeur/hooks/useSelection.ts'
 import { IconAction } from '#/components/classeur/IconAction.tsx'
 import {
@@ -218,7 +230,12 @@ export function ChapterBoard({
     },
     [importation],
   )
-  const { isDragOver, dragProps } = useDropZone(onImport, setRefus)
+  const { isDragOver, dragProps, importer } = useDropZone(onImport, setRefus)
+  const inputFichiersRef = useRef<HTMLInputElement>(null)
+  const chapitres = useChapters(classeurId)
+  const autresChapitres = (chapitres.data ?? []).filter(
+    (c) => c.id !== chapterId,
+  )
 
   // Glisser-déposer : réordonnancement dans la grille OU dépôt sur un
   // chapitre de la colonne (déplacement, de la sélection s'il y en a une).
@@ -381,12 +398,53 @@ export function ChapterBoard({
                   icon={<CheckSquare />}
                   onClick={() => selection.selectAll(filtres)}
                 />
+                {/* Déplacer vers un autre chapitre : sans glisser (seule voie
+                    au doigt et sous 1024 px, où la colonne est un tiroir). */}
+                {canWrite && autresChapitres.length > 0 && (
+                  <DropdownMenu>
+                    <Tip label="Déplacer vers un autre chapitre">
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="icon-sm"
+                          aria-label="Déplacer vers un autre chapitre"
+                          disabled={
+                            selection.count === 0 || deplacement.isPending
+                          }
+                        >
+                          {deplacement.isPending ? (
+                            <Loader2 className="animate-spin" />
+                          ) : (
+                            <FolderInput />
+                          )}
+                        </Button>
+                      </DropdownMenuTrigger>
+                    </Tip>
+                    <DropdownMenuContent align="end" className="w-60">
+                      <DropdownMenuLabel>Déplacer vers…</DropdownMenuLabel>
+                      {autresChapitres.map((c) => (
+                        <DropdownMenuItem
+                          key={c.id}
+                          onSelect={() =>
+                            deplacement.mutate({
+                              refs: selection.refs,
+                              cible: c.id,
+                            })
+                          }
+                        >
+                          <span className="truncate">{c.label}</span>
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
                 {canWrite && (
                   <IconAction
                     label="Supprimer la sélection"
                     icon={<Trash2 />}
                     className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                     onClick={() => setBulkOpen(true)}
+                    disabled={selection.count === 0}
                   />
                 )}
                 <IconAction
@@ -413,6 +471,35 @@ export function ChapterBoard({
                   </Button>
                 </Tip>
               )}
+              {canWrite && chapter && (
+                <ButtonGroup>
+                  {/* Sélection et import SANS clavier ni glisser de
+                      fichiers : les seules voies au doigt. */}
+                  <IconAction
+                    label="Sélectionner des éléments"
+                    icon={<ListChecks />}
+                    onClick={selection.commencer}
+                    disabled={items.length === 0}
+                  />
+                  <IconAction
+                    label="Importer des fichiers .md ou .txt"
+                    icon={<FileUp />}
+                    onClick={() => inputFichiersRef.current?.click()}
+                    busy={importation.isPending}
+                  />
+                </ButtonGroup>
+              )}
+              <input
+                ref={inputFichiersRef}
+                type="file"
+                multiple
+                accept=".md,.markdown,.txt,text/markdown,text/plain"
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files) importer(e.target.files)
+                  e.target.value = ''
+                }}
+              />
               <ButtonGroup>
                 <IconAction
                   label="Imprimer le chapitre ou l'enregistrer en PDF"
@@ -477,6 +564,8 @@ export function ChapterBoard({
         <Input
           value={recherche}
           onChange={(e) => setRecherche(e.target.value)}
+          type="search"
+          enterKeyHint="search"
           placeholder="Rechercher dans le chapitre"
           aria-label="Rechercher dans le chapitre"
           className="pl-9"
@@ -576,16 +665,31 @@ export function ChapterBoard({
       {/* Repères sous la grille — même ligne que la légende de Literie ou
           du planning des lits bébé : gestes souris à gauche. */}
       {items.length > 0 && (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
-          {canWrite && !enRecherche && (
-            <span className="flex items-center gap-1.5">
-              <MouseGlyph side="left" />
-              glisser : réordonner, ou déposer sur un chapitre de la colonne
-            </span>
+        <>
+          {/* Souris : gestes souris. */}
+          <div className="hidden flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground pointer-fine:flex">
+            {canWrite && !enRecherche && (
+              <span className="flex items-center gap-1.5">
+                <MouseGlyph side="left" />
+                glisser : réordonner, ou déposer sur un chapitre de la colonne
+              </span>
+            )}
+            <span>Ctrl + clic : sélectionner</span>
+            <span>Ctrl + molette : zoom de la grille</span>
+          </div>
+          {/* Doigt : les gestes qui existent vraiment. */}
+          {canWrite && (
+            <div className="hidden flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground pointer-coarse:flex">
+              {!enRecherche && (
+                <span>appui long puis glisser : réordonner</span>
+              )}
+              <span>
+                bouton Sélectionner : choisir plusieurs éléments, les déplacer
+                ou les supprimer
+              </span>
+            </div>
           )}
-          <span>Ctrl + clic : sélectionner</span>
-          <span>Ctrl + molette : zoom de la grille</span>
-        </div>
+        </>
       )}
 
       {/* Aperçu avant impression : un élément ou le chapitre entier */}

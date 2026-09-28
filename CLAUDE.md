@@ -906,6 +906,38 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   n'est supprimé (testé) ; copie ZIP Markdown téléchargeable à la demande ;
   avertissement si la sauvegarde est décochée. Supprimer depuis la colonne
   le chapitre ouvert ramène à l'accueil du classeur.
+- **Tactile / téléphone / tablette (audit par 3 agents, 2026-09-28 ;
+  signalement utilisateur : « en faisant défiler un chapitre au doigt,
+  j'attrape un document »)**. Cause : un seul `PointerSensor` à 5 px (il
+  capte AUSSI le doigt) + `touch-none` sur les cartes ENTIÈRES. Désormais
+  `dnd/useCapteursClasseur.ts` : `MouseSensor` 5 px + `TouchSensor` appui
+  long 250 ms / tolérance 8 px + clavier, partagé par `DndProvider` et
+  `ClasseurList` ; cartes en `CLASSES_CARTE_GLISSABLE` (touch-manipulation,
+  pas de loupe iOS) ; ⚠ un bouton DANS une carte glissable arrête
+  `onMouseDown`/`onTouchStart` (`neDemarrePasDeGlisser`), plus
+  `onPointerDown` que ces capteurs n'écoutent pas ; `touch-none` gardé sur
+  la seule poignée des chapitres (qui arrête `pointerdown` pour ne pas
+  ouvrir le menu contextuel Radix, appui long 700 ms). Tailwind v4 met
+  `hover:` sous `@media (hover: hover)` : les actions `opacity-0
+  group-hover:` étaient INVISIBLES mais CLIQUABLES au doigt →
+  `pointer-coarse:opacity-100` partout (cartes, liste, poignée, case de
+  sélection agrandie). Voies au doigt ajoutées : bouton « Sélectionner »
+  (`useSelection.commencer`, mode ouvert sans élément coché ; Échap ne vide
+  pas la sélection si un menu/dialogue est ouvert), « Déplacer vers… »
+  (menu des autres chapitres, seule voie sous 1024 px où la colonne est un
+  tiroir), « Importer des fichiers .md/.txt » (`useDropZone().importer`),
+  « Supprimer le classeur » dans la barre de l'accueil (gestion), boutons
+  Décaler/Ramener (sous-listes) au doigt, légende tactile distincte de la
+  légende souris, « Privé »/« Lecture » en texte au doigt. Écran : éditeur
+  en deux colonnes à partir de `xl` (1280) seulement, bouton de l'aperçu à
+  toute largeur ; aperçu d'impression `items-center-safe` (page plus large
+  que l'écran atteignable) ; préparation d'image et 10 dialogues bornés en
+  `dvh` avec défilement ; cartes d'action sur 2 lignes sous `sm` ;
+  squelettes sans débordement ; tiroir `w-[85vw] max-w-80`. Rien de ce qui
+  S'IMPRIME n'a changé. Garde-fou : `useCapteursClasseur.test.tsx`.
+  Non fait (à rediscuter) : `PageHeader` partagé (tiroir sur sa propre
+  ligne sous `sm`), zoom de grille au doigt, croix des dialogues, pages A4
+  petites sur téléphone (pincement du navigateur), clavier virtuel.
 - **Squelettes** : variante `classeur` de `RouteSkeleton`, forme choisie par
   `paramsClasseur(pathname)` (liste, tableau de bord, chapitre, détail) ;
   silhouettes `FormeClasseurListe`, `FormeClasseurDashboard`, `FormeChapitre`,

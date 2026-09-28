@@ -7,6 +7,10 @@ import { Check, FileDown, Pencil, Printer, Trash2 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
 import { A4Miniature } from '#/components/classeur/cards/A4Miniature.tsx'
+import {
+  CLASSES_CARTE_GLISSABLE,
+  neDemarrePasDeGlisser,
+} from '#/components/classeur/dnd/useCapteursClasseur.ts'
 import type { ItemDragData } from '#/components/classeur/dnd/useDndRegistry.ts'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
@@ -157,7 +161,7 @@ export function ItemCardShell({
       aria-pressed={selectionMode ? isSelected : undefined}
       className={cn(
         'group relative flex cursor-pointer flex-col overflow-hidden rounded-xl border border-border bg-card transition-colors hover:border-primary/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
-        !glisserDesactive && 'touch-none',
+        !glisserDesactive && CLASSES_CARTE_GLISSABLE,
         !selectionMode && isDragging && 'z-50 opacity-30',
         selectionDragging && isSelected && 'opacity-30',
         isSelected && 'border-primary bg-primary/5 ring-1 ring-primary/20',
@@ -178,9 +182,12 @@ export function ItemCardShell({
             'flex size-4 shrink-0 items-center justify-center rounded border transition-all',
             isSelected
               ? 'border-primary bg-primary text-primary-foreground'
-              : 'border-muted-foreground/30 opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
+              : 'border-muted-foreground/30 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100',
             selectionMode && 'opacity-100',
+            // Au doigt : visible (pas de survol) et assez grande à toucher.
+            'pointer-coarse:size-6',
           )}
+          {...neDemarrePasDeGlisser}
           onClick={stop(onToggleSelect)}
           aria-label={isSelected ? 'Désélectionner' : 'Sélectionner'}
           aria-pressed={isSelected}
@@ -194,7 +201,10 @@ export function ItemCardShell({
         <A4Miniature>{children}</A4Miniature>
 
         {!selectionMode && (
-          <div className="absolute right-0 bottom-2 left-0 flex justify-center opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+          <div
+            {...neDemarrePasDeGlisser}
+            className="absolute right-0 bottom-2 left-0 flex justify-center opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100"
+          >
             <div className="flex items-center gap-0.5 rounded-md border border-border bg-background/90 px-1 py-0.5 shadow-sm">
               {onPrint && (
                 <Tip label="Imprimer / PDF">

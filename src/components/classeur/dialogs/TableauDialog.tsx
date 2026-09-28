@@ -188,6 +188,7 @@ function Editeur({
                       data-c={i}
                       value={c}
                       onChange={(e) => changer(-1, i, e.target.value)}
+                      enterKeyHint="next"
                       onKeyDown={(e) => surTouche(e, -1, i)}
                       aria-label={`En-tête, colonne ${String(i + 1)}`}
                       className="min-w-24 flex-1 rounded-sm bg-transparent px-2 py-1.5 font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
@@ -199,7 +200,7 @@ function Editeur({
                           tabIndex={-1}
                           onClick={() => retirerColonne(i)}
                           aria-label={`Supprimer la colonne ${String(i + 1)}`}
-                          className="rounded-sm p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+                          className="rounded-sm p-1 text-muted-foreground hover:bg-accent hover:text-foreground pointer-coarse:p-2.5"
                         >
                           <X className="size-3.5" />
                         </button>
@@ -221,6 +222,7 @@ function Editeur({
                       data-c={i}
                       value={c}
                       onChange={(e) => changer(j, i, e.target.value)}
+                      enterKeyHint="next"
                       onKeyDown={(e) => surTouche(e, j, i)}
                       aria-label={`Ligne ${String(j + 1)}, colonne ${String(i + 1)}`}
                       className="w-full min-w-24 rounded-sm bg-transparent px-2 py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
@@ -234,7 +236,7 @@ function Editeur({
                       tabIndex={-1}
                       onClick={() => retirerLigne(j)}
                       aria-label={`Supprimer la ligne ${String(j + 1)}`}
-                      className="rounded-sm p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+                      className="rounded-sm p-1 text-muted-foreground hover:bg-accent hover:text-foreground pointer-coarse:p-2.5"
                     >
                       <X className="size-3.5" />
                     </button>

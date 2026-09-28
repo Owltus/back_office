@@ -584,8 +584,8 @@ export function FormeClasseurListe({
       )}
     >
       <Skeleton className="size-5 rounded-sm" />
-      <div className="flex min-h-10 flex-1 flex-col justify-center">
-        <Skeleton className="h-4 w-40" />
+      <div className="flex min-h-10 min-w-0 flex-1 flex-col justify-center">
+        <Skeleton className="h-4 w-full max-w-40" />
         <Skeleton className="mt-2 h-3 w-28" />
       </div>
     </div>
@@ -627,9 +627,9 @@ export function FormeClasseurDashboard() {
       className="flex items-center gap-4 rounded-xl border border-border bg-card px-5 py-4"
     >
       <Skeleton className="size-5 rounded-sm" />
-      <div className="flex-1">
-        <Skeleton className="h-4 w-28" />
-        <Skeleton className="mt-2 h-3 w-40" />
+      <div className="min-w-0 flex-1">
+        <Skeleton className="h-4 w-full max-w-28" />
+        <Skeleton className="mt-2 h-3 w-full max-w-40" />
       </div>
     </div>
   )

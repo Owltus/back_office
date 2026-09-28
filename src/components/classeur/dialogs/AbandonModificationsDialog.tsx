@@ -31,7 +31,7 @@ export function AbandonModificationsDialog({
         if (!open) onContinuer()
       }}
     >
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
             {raison === 'quitter'

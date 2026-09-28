@@ -36,9 +36,9 @@ import type { DbChapter } from '#/lib/classeur/types.ts'
 import { cn } from '#/lib/utils.ts'
 
 const LIEN =
-  'flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground'
+  'flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 pointer-coarse:py-2.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground'
 const LIEN_ACTIF =
-  'flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-sm bg-accent font-medium text-accent-foreground transition-colors'
+  'flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 pointer-coarse:py-2.5 text-sm bg-accent font-medium text-accent-foreground transition-colors'
 
 /**
  * Colonne « chapitres du classeur » — la partie liste de la `Sidebar` de
@@ -265,7 +265,11 @@ function ChapterNavItem({
           {...attributes}
           {...listeners}
           aria-label={`Déplacer le chapitre ${chapter.label}`}
-          className="mr-0.5 shrink-0 cursor-grab touch-none rounded-md p-1 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:bg-accent focus-visible:opacity-100 active:cursor-grabbing"
+          // Poignée : visible au doigt (pas de survol) ; l'appui long y DÉPLACE
+          // le chapitre, il n'ouvre pas le menu contextuel (Radix écoute
+          // `pointerdown`, dnd-kit `mousedown` / `touchstart`).
+          onPointerDown={(e) => e.stopPropagation()}
+          className="mr-0.5 shrink-0 cursor-grab touch-none rounded-md p-1 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:bg-accent focus-visible:opacity-100 active:cursor-grabbing pointer-coarse:p-2 pointer-coarse:opacity-100"
         >
           <GripVertical className="size-4" />
         </button>

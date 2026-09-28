@@ -54,7 +54,7 @@ export function EditItemDialog({
         if (!open) onClose()
       }}
     >
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-md">
         {item && (
           <EditItemForm
             key={`${item.kind}:${item.id}`}

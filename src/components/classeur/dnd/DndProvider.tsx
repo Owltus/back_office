@@ -1,14 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import {
-  DndContext,
-  KeyboardSensor,
-  PointerSensor,
-  closestCenter,
-  pointerWithin,
-  useSensor,
-  useSensors,
-} from '@dnd-kit/core'
+import { DndContext, closestCenter, pointerWithin } from '@dnd-kit/core'
 import type {
   CollisionDetection,
   DragEndEvent,
@@ -16,9 +8,9 @@ import type {
   DragStartEvent,
   UniqueIdentifier,
 } from '@dnd-kit/core'
-import { sortableKeyboardCoordinates } from '@dnd-kit/sortable'
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers'
 
+import { useCapteursClasseur } from '#/components/classeur/dnd/useCapteursClasseur.ts'
 import {
   DndRegistryContext,
   estItemDrag,
@@ -57,12 +49,8 @@ export function DndProvider({ children }: { children: ReactNode }) {
     delete handlersRef.current[type]
   }, [])
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    }),
-  )
+  // Souris 5 px, doigt : appui long (audit tactile 2026-09-28).
+  const sensors = useCapteursClasseur()
 
   const reset = useCallback(() => {
     setActiveDragType(null)

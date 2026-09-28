@@ -107,7 +107,7 @@ export function CreateItemDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-md">
         {open && (
           <CreateItemForm
             chapterId={chapterId}

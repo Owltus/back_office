@@ -254,6 +254,7 @@ export function BoutonsImage({ image }: { image: ImageInsertion }) {
         icon={<ImagePlus />}
         busy={envoi}
         disabled={!image.actif}
+        onPointerDown={(e) => e.preventDefault()}
         onMouseDown={(e) => e.preventDefault()}
         onClick={image.ouvrirSelecteur}
       />
@@ -261,6 +262,7 @@ export function BoutonsImage({ image }: { image: ImageInsertion }) {
         label="Médiathèque : reprendre une image du classeur"
         icon={<Images />}
         disabled={!image.actif}
+        onPointerDown={(e) => e.preventDefault()}
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => image.setMediathequeOuverte(true)}
       />

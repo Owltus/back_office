@@ -6,6 +6,8 @@ import type { FichierImporte } from '#/lib/classeur/importFichiers.ts'
 
 export interface DropZoneResult {
   isDragOver: boolean
+  /** Fichiers CHOISIS (bouton « Importer ») : même tri, même lecture. */
+  importer: (files: FileList | File[]) => void
   dragProps: {
     onDragEnter: (e: DragEvent) => void
     onDragOver: (e: DragEvent) => void
@@ -72,8 +74,19 @@ export function useDropZone(
     [onImport, onRefus],
   )
 
+  const importer = useCallback(
+    (files: FileList | File[]) => {
+      const { acceptes, refus } = trierFichiers(Array.from(files))
+      if (refus.length > 0) onRefus?.(refus)
+      if (acceptes.length === 0) return
+      void lireFichiers(acceptes).then(onImport)
+    },
+    [onImport, onRefus],
+  )
+
   return {
     isDragOver,
+    importer,
     dragProps: { onDragEnter, onDragOver, onDragLeave, onDrop },
   }
 }

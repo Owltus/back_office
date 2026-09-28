@@ -2,18 +2,10 @@ import { useRef, useState } from 'react'
 import type { ChangeEvent, DragEvent } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
-import {
-  DndContext,
-  KeyboardSensor,
-  PointerSensor,
-  closestCenter,
-  useSensor,
-  useSensors,
-} from '@dnd-kit/core'
+import { DndContext, closestCenter } from '@dnd-kit/core'
 import type { DragEndEvent } from '@dnd-kit/core'
 import {
   SortableContext,
-  sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
@@ -30,6 +22,11 @@ import {
 
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { ActionCard } from '#/components/classeur/ActionCard.tsx'
+import {
+  CLASSES_CARTE_GLISSABLE,
+  neDemarrePasDeGlisser,
+  useCapteursClasseur,
+} from '#/components/classeur/dnd/useCapteursClasseur.ts'
 import { ClasseurDialog } from '#/components/classeur/dialogs/ClasseurDialog.tsx'
 import {
   useClasseurs,
@@ -111,12 +108,8 @@ export function ClasseurList({
     onSuccess: () => invalider(),
   })
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    }),
-  )
+  // Souris 5 px, doigt : appui long (audit tactile 2026-09-28).
+  const sensors = useCapteursClasseur()
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
@@ -363,7 +356,7 @@ function ClasseurCard({
       {...(canDrag ? listeners : {})}
       className={cn(
         'group relative',
-        canDrag && 'touch-none',
+        canDrag && CLASSES_CARTE_GLISSABLE,
         isDragging && 'z-50 opacity-30',
       )}
     >
@@ -387,31 +380,32 @@ function ClasseurCard({
         </div>
         {prive && (
           <Tip label="Privé : visible de la gestion et des accès donnés">
-            <EyeOff
-              className="size-3.5 shrink-0 text-muted-foreground"
-              aria-label="Privé"
-            />
+            <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+              <EyeOff className="size-3.5" aria-label="Privé" />
+              <span className="hidden pointer-coarse:inline">Privé</span>
+            </span>
           </Tip>
         )}
         {lectureSeule && (
           <Tip label="Lecture seule sur ce classeur">
-            <Lock
-              className="size-3.5 shrink-0 text-muted-foreground"
-              aria-label="Lecture seule"
-            />
+            <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+              <Lock className="size-3.5" aria-label="Lecture seule" />
+              <span className="hidden pointer-coarse:inline">Lecture</span>
+            </span>
           </Tip>
         )}
       </Link>
 
       {actions > 0 && (
-        <div className="absolute inset-y-0 right-3 flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+        // Au doigt, pas de survol : actions visibles en permanence.
+        <div className="absolute inset-y-0 right-3 flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100">
           {onExport && (
             <Tip label="Exporter en JSON">
               <Button
                 variant="ghost"
                 size="icon-sm"
                 aria-label={`Exporter le classeur ${classeur.name} en JSON`}
-                onPointerDown={(e) => e.stopPropagation()}
+                {...neDemarrePasDeGlisser}
                 onClick={onExport}
               >
                 <FileUp />
@@ -425,7 +419,7 @@ function ClasseurCard({
                 size="icon-sm"
                 aria-label={`Supprimer le classeur ${classeur.name}`}
                 className="hover:bg-destructive/10 hover:text-destructive"
-                onPointerDown={(e) => e.stopPropagation()}
+                {...neDemarrePasDeGlisser}
                 onClick={onDelete}
               >
                 <Trash2 />
