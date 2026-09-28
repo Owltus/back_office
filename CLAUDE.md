@@ -935,6 +935,17 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   `dvh` avec défilement ; cartes d'action sur 2 lignes sous `sm` ;
   squelettes sans débordement ; tiroir `w-[85vw] max-w-80`. Rien de ce qui
   S'IMPRIME n'a changé. Garde-fou : `useCapteursClasseur.test.tsx`.
+  En-têtes (même jour, « boutons à droite, bien en responsive ») :
+  `actionsAlign="end"` sur les `PageHeader` du chapitre et des détails
+  (le repli par défaut écartait les groupes aux deux bords sous 640 px au
+  doigt, un groupe tombait à GAUCHE) ; accueil d'un classeur : recherche à
+  gauche + boutons (Modifier, Accès, Supprimer) à droite sur UNE ligne,
+  plus de boutons dans l'en-tête ; sous 640 px, chapitre = créer +
+  sélectionner + menu « ⋯ » (le reste), document en édition = Sauvegarder
+  en icône, « Non enregistré » en point, flèche Retour masquée — avant, à
+  la souris (une seule ligne imposée par `PageHeader`), « Nouvel élément »
+  et le tiroir sortaient de l'écran par la gauche. Mesuré à 309 px : tout
+  entre 16 et 293 px.
   Non fait (à rediscuter) : `PageHeader` partagé (tiroir sur sa propre
   ligne sous `sm`), zoom de grille au doigt, croix des dialogues, pages A4
   petites sur téléphone (pincement du navigateur), clavier virtuel.

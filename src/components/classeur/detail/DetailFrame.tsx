@@ -56,9 +56,15 @@ export function DetailHeader({
   kind,
   chapterName,
   actions,
+  editing = false,
 }: {
   retour: RetourVers
   title: ReactNode
+  /**
+   * En édition, la flèche « Retour » est masquée sous 640 px : on quitte par
+   * Annuler / Sauvegarder, et la ligne tient enfin dans l'écran.
+   */
+  editing?: boolean
   /** Nature de l'élément, affichée dans la ligne secondaire. */
   kind?: ItemKind
   chapterName?: string
@@ -69,6 +75,7 @@ export function DetailHeader({
     .join(' · ')
   return (
     <PageHeader
+      actionsAlign="end"
       leading={
         <div className="flex shrink-0 items-center gap-1">
           <ChapterDrawerButton />
@@ -78,6 +85,7 @@ export function DetailHeader({
               size="icon-sm"
               asChild
               aria-label="Retour au chapitre"
+              className={editing ? 'max-sm:hidden' : undefined}
             >
               <Link to="/classeur/$classeurId/$chapterId" params={retour}>
                 <ArrowLeft />
@@ -137,7 +145,9 @@ export function DetailActions({
         />
         <Button size="sm" onClick={onSave} disabled={saving}>
           {saving ? <Loader2 className="animate-spin" /> : <Save />}
-          Sauvegarder
+          {/* Icône seule sous 640 px : la ligne tenait plus large que
+              l'écran et le bouton du tiroir sortait par la gauche. */}
+          <span className="max-sm:sr-only">Sauvegarder</span>
         </Button>
       </>
     )

@@ -268,6 +268,7 @@ export function DocumentDetail() {
     <div className="flex flex-1 flex-col gap-4">
       <DetailHeader
         retour={retour}
+        editing={editing}
         title={titreAffiche}
         kind="document"
         chapterName={page.chapter?.label}
@@ -523,7 +524,8 @@ function IndicateurEnregistrement({
         className="flex items-center gap-1.5 rounded-md text-xs font-medium text-amber-600 dark:text-amber-400"
       >
         <span aria-hidden="true" className="size-2 rounded-full bg-amber-500" />
-        Non enregistré
+        {/* Sous 640 px : le point seul (le texte reste pour les lecteurs d'écran). */}
+        <span className="max-sm:sr-only">Non enregistré</span>
       </span>
     </Tip>
   )

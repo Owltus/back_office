@@ -243,8 +243,36 @@ export function ClasseurDashboard({
           )
         }
         meta={etablissement !== '' ? etablissement : undefined}
-        actions={
-          classeur && (canWrite || canManage) ? (
+      />
+
+      {erreurLecture !== null && (
+        <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {messageErreur(erreurLecture, 'Classeur indisponible')}
+        </div>
+      )}
+
+      {/* Recherche à gauche, boutons du classeur à droite, sur UNE ligne à
+          toute largeur (demande utilisateur du 2026-09-28) : la recherche
+          absorbe le rétrécissement, les boutons gardent leur taille. */}
+      <div className="flex items-center gap-2">
+        <div className="relative min-w-0 flex-1">
+          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={recherche}
+            onChange={(e) => setRecherche(e.target.value)}
+            type="search"
+            enterKeyHint="search"
+            placeholder="Rechercher dans le classeur"
+            aria-label="Rechercher dans le classeur"
+            className="pl-9"
+            disabled={!content}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setRecherche('')
+            }}
+          />
+        </div>
+        {classeur && (canWrite || canManage) && (
+          <div className="shrink-0">
             <ButtonGroup>
               {canWrite && (
                 <IconAction
@@ -277,31 +305,8 @@ export function ClasseurDashboard({
                 />
               )}
             </ButtonGroup>
-          ) : undefined
-        }
-      />
-
-      {erreurLecture !== null && (
-        <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {messageErreur(erreurLecture, 'Classeur indisponible')}
-        </div>
-      )}
-
-      <div className="relative">
-        <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={recherche}
-          onChange={(e) => setRecherche(e.target.value)}
-          type="search"
-          enterKeyHint="search"
-          placeholder="Rechercher dans le classeur"
-          aria-label="Rechercher dans le classeur"
-          className="pl-9"
-          disabled={!content}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') setRecherche('')
-          }}
-        />
+          </div>
+        )}
       </div>
 
       {requete !== '' ? (

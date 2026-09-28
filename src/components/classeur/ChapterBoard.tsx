@@ -16,6 +16,7 @@ import {
   FileUp,
   FolderInput,
   ListChecks,
+  MoreHorizontal,
   Loader2,
   Pencil,
   Plus,
@@ -369,6 +370,7 @@ export function ChapterBoard({
       {...(canWrite ? dragProps : {})}
     >
       <PageHeader
+        actionsAlign="end"
         leading={<ChapterDrawerButton />}
         title={
           chapterQ.isPending ? (
@@ -459,36 +461,6 @@ export function ChapterBoard({
                groupe lecture (impression, export) et le groupe écriture
                (modifier, supprimer — icône rouge, jamais de fond plein). */
             <>
-              {canWrite && chapter && (
-                <Tip label="Ajouter un document, une feuille ou un intercalaire">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCreateOpen(true)}
-                  >
-                    <Plus />
-                    Nouvel élément
-                  </Button>
-                </Tip>
-              )}
-              {canWrite && chapter && (
-                <ButtonGroup>
-                  {/* Sélection et import SANS clavier ni glisser de
-                      fichiers : les seules voies au doigt. */}
-                  <IconAction
-                    label="Sélectionner des éléments"
-                    icon={<ListChecks />}
-                    onClick={selection.commencer}
-                    disabled={items.length === 0}
-                  />
-                  <IconAction
-                    label="Importer des fichiers .md ou .txt"
-                    icon={<FileUp />}
-                    onClick={() => inputFichiersRef.current?.click()}
-                    busy={importation.isPending}
-                  />
-                </ButtonGroup>
-              )}
               <input
                 ref={inputFichiersRef}
                 type="file"
@@ -500,36 +472,139 @@ export function ChapterBoard({
                   e.target.value = ''
                 }}
               />
-              <ButtonGroup>
-                <IconAction
-                  label="Imprimer le chapitre ou l'enregistrer en PDF"
-                  icon={<Printer />}
-                  onClick={() => setApercu({ type: 'tout' })}
-                  disabled={!chapter || items.length === 0}
-                />
-                <IconAction
-                  label="Exporter le chapitre en Markdown (ZIP)"
-                  icon={<Archive />}
-                  onClick={() => exportZip.mutate()}
-                  disabled={!chapter || !contenu}
-                  busy={exportZip.isPending}
-                />
-              </ButtonGroup>
-              {canWrite && chapter && (
+              {/* ≥ 640 px : tous les boutons, comme avant. */}
+              <div className="contents max-sm:hidden">
+                {canWrite && chapter && (
+                  <Tip label="Ajouter un document, une feuille ou un intercalaire">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCreateOpen(true)}
+                    >
+                      <Plus />
+                      Nouvel élément
+                    </Button>
+                  </Tip>
+                )}
+                {canWrite && chapter && (
+                  <ButtonGroup>
+                    {/* Sélection et import SANS clavier ni glisser de
+                        fichiers : les seules voies au doigt. */}
+                    <IconAction
+                      label="Sélectionner des éléments"
+                      icon={<ListChecks />}
+                      onClick={selection.commencer}
+                      disabled={items.length === 0}
+                    />
+                    <IconAction
+                      label="Importer des fichiers .md ou .txt"
+                      icon={<FileUp />}
+                      onClick={() => inputFichiersRef.current?.click()}
+                      busy={importation.isPending}
+                    />
+                  </ButtonGroup>
+                )}
                 <ButtonGroup>
                   <IconAction
-                    label="Modifier le chapitre"
-                    icon={<Pencil />}
-                    onClick={() => setEditChapterOpen(true)}
+                    label="Imprimer le chapitre ou l'enregistrer en PDF"
+                    icon={<Printer />}
+                    onClick={() => setApercu({ type: 'tout' })}
+                    disabled={!chapter || items.length === 0}
                   />
                   <IconAction
-                    label="Supprimer le chapitre"
-                    icon={<Trash2 />}
-                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                    onClick={() => setDeleteChapterOpen(true)}
+                    label="Exporter le chapitre en Markdown (ZIP)"
+                    icon={<Archive />}
+                    onClick={() => exportZip.mutate()}
+                    disabled={!chapter || !contenu}
+                    busy={exportZip.isPending}
                   />
                 </ButtonGroup>
-              )}
+                {canWrite && chapter && (
+                  <ButtonGroup>
+                    <IconAction
+                      label="Modifier le chapitre"
+                      icon={<Pencil />}
+                      onClick={() => setEditChapterOpen(true)}
+                    />
+                    <IconAction
+                      label="Supprimer le chapitre"
+                      icon={<Trash2 />}
+                      className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                      onClick={() => setDeleteChapterOpen(true)}
+                    />
+                  </ButtonGroup>
+                )}
+              </div>
+              {/* < 640 px : l'essentiel reste visible (créer, sélectionner),
+                  le reste passe dans « ⋯ » — sinon la ligne débordait et
+                  « Nouvel élément » sortait de l'écran par la gauche. */}
+              <div className="hidden max-sm:contents">
+                {canWrite && chapter && (
+                  <>
+                    <IconAction
+                      label="Ajouter un document, une feuille ou un intercalaire"
+                      icon={<Plus />}
+                      onClick={() => setCreateOpen(true)}
+                    />
+                    <IconAction
+                      label="Sélectionner des éléments"
+                      icon={<ListChecks />}
+                      onClick={selection.commencer}
+                      disabled={items.length === 0}
+                    />
+                  </>
+                )}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="icon-sm"
+                      aria-label="Autres actions du chapitre"
+                    >
+                      <MoreHorizontal />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-64">
+                    <DropdownMenuItem
+                      disabled={!chapter || items.length === 0}
+                      onSelect={() => setApercu({ type: 'tout' })}
+                    >
+                      <Printer />
+                      Imprimer ou PDF
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      disabled={!chapter || !contenu}
+                      onSelect={() => exportZip.mutate()}
+                    >
+                      <Archive />
+                      Exporter en Markdown (ZIP)
+                    </DropdownMenuItem>
+                    {canWrite && chapter && (
+                      <>
+                        <DropdownMenuItem
+                          onSelect={() => inputFichiersRef.current?.click()}
+                        >
+                          <FileUp />
+                          Importer des fichiers .md ou .txt
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onSelect={() => setEditChapterOpen(true)}
+                        >
+                          <Pencil />
+                          Modifier le chapitre
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          variant="destructive"
+                          onSelect={() => setDeleteChapterOpen(true)}
+                        >
+                          <Trash2 />
+                          Supprimer le chapitre
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </>
           )
         }
