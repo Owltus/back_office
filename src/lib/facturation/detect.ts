@@ -91,8 +91,13 @@ const INVOICE_RE =
  * espace ASCII, « 1 488,60 € » était lu « 488,60 » — mille euros perdus en
  * silence (Martin, 2026-09-15).
  */
+/*
+ * Borne À GAUCHE (aucun chiffre juste avant) et partie entière SANS groupage
+ * acceptée (`\d+`) : sans cela, « 1488,60 € » (milliers non séparés) ne
+ * pouvait être lu qu'à partir du 4, soit « 488,60 ».
+ */
 const AMOUNT_RE =
-  /(\d{1,3}(?:[ .\u00a0\u202f\u2009]\d{3})*(?:[,.]\d{2}))\s*(?:€|eur|ttc)/gi
+  /(?<!\d)((?:\d{1,3}(?:[ .\u00a0\u202f\u2009]\d{3})+|\d+)[,.]\d{2})\s*(?:€|eur|ttc)/gi
 
 /**
  * Valeur numérique d'un montant écrit à la française OU à l'anglaise.

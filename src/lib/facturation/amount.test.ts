@@ -86,3 +86,15 @@ describe('montant — choix du plus gros, les deux conventions décimales', () =
     expect(montantLu('')).toBeNull()
   })
 })
+
+describe('montant — milliers NON séparés', () => {
+  it('lit « 1488,60 € » en entier, pas « 488,60 »', () => {
+    expect(montantLu('Total TTC 1488,60 €')).toBe('1488,60')
+  })
+  it('lit « 12345.00 EUR » en entier', () => {
+    expect(montantLu('Net à payer : 12345.00 EUR')).toBe('12345.00')
+  })
+  it('garde la lecture groupée « 1 488,60 € »', () => {
+    expect(montantLu('Total 1 488,60 €')).toBe('1 488,60')
+  })
+})

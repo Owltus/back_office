@@ -1,4 +1,6 @@
 import {
+  EncryptedPDFError,
+  PDFArray,
   PDFDocument,
   PDFDict,
   PDFName,
@@ -8,7 +10,7 @@ import {
   StandardFonts,
   rgb,
 } from 'pdf-lib'
-import type { PDFFont } from 'pdf-lib'
+import type { PDFFont, PDFRef } from 'pdf-lib'
 
 import {
   STAMP_BORDER,
@@ -67,7 +69,75 @@ function download(bytes: Uint8Array, name: string): void {
   a.href = url
   a.download = name
   a.click()
-  URL.revokeObjectURL(url)
+  // Révocation DIFFÉRÉE : révoquer juste après click() peut annuler le
+  // téléchargement avant que le navigateur n'ait lu le blob (Firefox, Safari).
+  setTimeout(() => URL.revokeObjectURL(url), 30_000)
+}
+
+/** Message affiché quand le PDF est chiffré (protégé par mot de passe). */
+export const ENCRYPTED_PDF_MESSAGE =
+  'Ce PDF est protégé par mot de passe : le tampon ne peut pas y être posé. Enregistrez-en une copie non protégée, puis réessayez.'
+
+/**
+ * Ajoute l'OCG du tampon aux calques DÉJÀ déclarés par le document, au lieu
+ * d'écraser `OCProperties` (ce qui rendait orphelins les calques existants et
+ * les faisait disparaître des lecteurs).
+ */
+function registerOcg(pdf: PDFDocument, ocg: PDFRef): void {
+  const key = PDFName.of('OCProperties')
+  const existing = pdf.catalog.lookupMaybe(key, PDFDict)
+  if (!existing) {
+    pdf.catalog.set(
+      key,
+      pdf.context.obj({
+        OCGs: [ocg],
+        D: pdf.context.obj({ Order: [ocg], ON: [ocg] }),
+      }),
+    )
+    return
+  }
+  const ocgs = existing.lookupMaybe(PDFName.of('OCGs'), PDFArray)
+  if (ocgs) ocgs.push(ocg)
+  else existing.set(PDFName.of('OCGs'), pdf.context.obj([ocg]))
+  let d = existing.lookupMaybe(PDFName.of('D'), PDFDict)
+  if (!d) {
+    d = pdf.context.obj({})
+    existing.set(PDFName.of('D'), d)
+  }
+  // Visible par défaut (même si l'état de base du document est OFF).
+  const on = d.lookupMaybe(PDFName.of('ON'), PDFArray)
+  if (on) on.push(ocg)
+  else d.set(PDFName.of('ON'), pdf.context.obj([ocg]))
+  // Order absent = le lecteur liste tous les calques : rien à ajouter.
+  d.lookupMaybe(PDFName.of('Order'), PDFArray)?.push(ocg)
+}
+
+/** Premier nom `MC<n>` libre dans le dictionnaire `Properties` de la page :
+ * une ressource `/MC0` existante n'est jamais écrasée. */
+function freePropertyName(properties: PDFDict): PDFName {
+  for (let i = 0; ; i++) {
+    const name = PDFName.of(`MC${i}`)
+    if (!properties.has(name)) return name
+  }
+}
+
+/** `instanceof EncryptedPDFError` ne suffit pas : pdf-lib est compilé en ES5,
+ * où une sous-classe d'`Error` perd son prototype (l'erreur levée n'est alors
+ * qu'une `Error`). On reconnaît aussi son message. */
+function isEncryptedPdfError(e: unknown): boolean {
+  return (
+    e instanceof EncryptedPDFError ||
+    (e instanceof Error && /PDFDocument\.load`? is encrypted/.test(e.message))
+  )
+}
+
+async function loadPdf(src: ArrayBuffer | Uint8Array): Promise<PDFDocument> {
+  try {
+    return await PDFDocument.load(src)
+  } catch (e) {
+    if (isEncryptedPdfError(e)) throw new Error(ENCRYPTED_PDF_MESSAGE)
+    throw e
+  }
 }
 
 /**
@@ -93,7 +163,7 @@ export async function buildStampedPdf(
   data: StampData,
   position?: StampPosition | null,
 ): Promise<Uint8Array> {
-  const pdf = await PDFDocument.load(src)
+  const pdf = await loadPdf(src)
   const font = await pdf.embedFont(StandardFonts.Helvetica)
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold)
 
@@ -122,13 +192,7 @@ export async function buildStampedPdf(
   const ocg = pdf.context.register(
     pdf.context.obj({ Type: 'OCG', Name: PDFString.of('Tampon') }),
   )
-  pdf.catalog.set(
-    PDFName.of('OCProperties'),
-    pdf.context.obj({
-      OCGs: [ocg],
-      D: pdf.context.obj({ Order: [ocg], ON: [ocg] }),
-    }),
-  )
+  registerOcg(pdf, ocg)
   let resources = page.node.Resources()
   if (!resources) {
     resources = pdf.context.obj({})
@@ -139,11 +203,12 @@ export async function buildStampedPdf(
     properties = pdf.context.obj({})
     resources.set(PDFName.of('Properties'), properties)
   }
-  properties.set(PDFName.of('MC0'), ocg)
+  const propName = freePropertyName(properties)
+  properties.set(propName, ocg)
   page.pushOperators(
     PDFOperator.of(PDFOperatorNames.BeginMarkedContentSequence, [
       PDFName.of('OC'),
-      PDFName.of('MC0'),
+      propName,
     ]),
   )
 
