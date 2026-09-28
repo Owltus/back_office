@@ -39,18 +39,18 @@ Légende : FAIT · EN COURS · À FAIRE
 
 ## Navigation et lecture
 24. Table des matières d'un document (depuis ses titres) — REFUSÉ (2026-09-28)
-25. Liens entre procédures du classeur — À FAIRE
-26. Recherche dans le contenu de tous les documents — À FAIRE
-27. Lien direct vers une procédure — À FAIRE
+25. Liens entre procédures du classeur — REFUSÉ (2026-09-28)
+26. Recherche dans le contenu de tous les documents — REFUSÉ (2026-09-28)
+27. Lien direct vers une procédure — REFUSÉ (2026-09-28)
 
 ## Tablette et accessibilité
-28. Barre adaptée au tactile (boutons plus grands, défilement horizontal) — À FAIRE
-29. Hauteur qui tient compte du clavier virtuel — À FAIRE
-30. Navigation au clavier dans la barre (flèches) — À FAIRE
+28. Barre adaptée au tactile (boutons plus grands, défilement horizontal) — REMPLACÉ (2026-09-28) par un audit tactile / mobile de toute la page Classeur
+29. Hauteur qui tient compte du clavier virtuel — REFUSÉ (2026-09-28)
+30. Navigation au clavier dans la barre (flèches) — REFUSÉ (2026-09-28)
 
 ## Même confort ailleurs dans le classeur
-31. Crayon + modal du titre sur les feuilles de suivi, de signature, intercalaires — À FAIRE
-32. Même barre et même tuto partout où un texte est saisi — À FAIRE
+31. Crayon + modal du titre sur les feuilles de suivi, de signature, intercalaires — REFUSÉ (2026-09-28)
+32. Même barre et même tuto partout où un texte est saisi — REFUSÉ (2026-09-28)
 
 ## Défauts relevés au contrôle navigateur (hors numérotation)
 - La page défile d'1 px en édition (arrondi de `useHauteurJusquEnBas`) — CORRIGÉ le 2026-09-27.
