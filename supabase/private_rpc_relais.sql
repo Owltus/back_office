@@ -1075,7 +1075,9 @@ CREATE OR REPLACE FUNCTION private.set_user_grade(p_user uuid, p_grade text)
 AS $function$
 begin
   if not private.is_admin() then raise exception 'not authorized'; end if;
-  if p_grade not in ('admin', 'utilisateur') then
+  -- 2026-09-28 (set_user_grade_garde_null_2026-09-28.sql) : NULL-sûr ;
+  -- `NULL not in (…)` sautait cette garde ET celle du dernier admin.
+  if p_grade is null or p_grade not in ('admin', 'utilisateur') then
     raise exception 'invalid grade: %', p_grade;
   end if;
   if p_grade <> 'admin'
