@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { invert } from '#/lib/parking/history.ts'
+import { invert, restoreDeleted, restorePatch } from '#/lib/parking/history.ts'
 import type { ParkingCommand } from '#/lib/parking/history.ts'
 import type { Reservation } from '#/lib/parking/model.ts'
 
@@ -49,5 +49,27 @@ describe('invert — inverse d\'une commande parking', () => {
     for (const cmd of cmds) {
       expect(invert(invert(cmd))).toEqual(cmd)
     }
+  })
+})
+
+describe('retour arrière d’une écriture refusée par la base', () => {
+  it('restorePatch ne reprend QUE les champs envoyés', () => {
+    // Glisser refusé : la barre revient à sa place de départ, mais le nom
+    // changé entre-temps par un collègue (temps réel) n'est pas écrasé.
+    const avant = { spot: 3, startDay: 2, nights: 2 }
+    const envoye = { spot: 5, startDay: 4, nights: 2 }
+    const restore = restorePatch(envoye, avant)
+    expect(restore).toEqual(avant)
+    const affiche = { ...RES, ...envoye, client: 'Martin' }
+    expect({ ...affiche, ...restore }).toEqual({ ...RES, client: 'Martin' })
+  })
+
+  it('restorePatch lit la source donnée (réservation entière ou position de départ)', () => {
+    expect(restorePatch({ status: 'paye' }, RES)).toEqual({ status: 'reserve' })
+  })
+
+  it('restoreDeleted remet la réservation, sans doublon', () => {
+    expect(restoreDeleted([], RES)).toEqual([RES])
+    expect(restoreDeleted([RES], RES)).toEqual([RES])
   })
 })

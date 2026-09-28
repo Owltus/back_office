@@ -96,6 +96,7 @@ import {
 } from '#/lib/parking/editability.ts'
 import { useParkingHistory } from '#/components/parking/useParkingHistory.ts'
 import { useUndoRedoShortcut } from '#/components/shared/useUndoRedoShortcut.ts'
+import { restoreDeleted, restorePatch } from '#/lib/parking/history.ts'
 import type { ReservationPatch } from '#/lib/parking/history.ts'
 import { printParkingSheets } from '#/lib/parking/pdf.ts'
 import type { ParkingSheetPdfData } from '#/lib/parking/pdf.ts'
@@ -1005,13 +1006,28 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
     const target = reservationsRef.current.find((r) => r.id === id)
     if (!target) return false
     if (!canEditReservation(target, todayOffset, level)) return false
+    setActionError(null)
     setReservations((prev) => prev.filter((r) => r.id !== id))
-    deleteReservation(id).catch(console.error)
+    deleteReservation(id).catch((err) => {
+      // Refus de la base (erreur, ou 0 ligne supprimée par la RLS) : la barre
+      // revient à l'écran, sinon elle réapparaîtrait au prochain chargement.
+      console.error(err)
+      setReservations((prev) => restoreDeleted(prev, target))
+      setActionError(describeWriteError(err))
+    })
     return true
   }
 
   // Patche les seuls champs fournis (préserve le reste, dont le travail concurrent).
-  function applyUpdate(id: string, patch: ReservationPatch): boolean {
+  // `rollback` : valeurs à remettre en cas d'échec, pour les champs du patch.
+  // Par défaut, celles de la réservation AVANT le patch ; un geste (glisser,
+  // redimensionner) a déjà bougé la barre à l'écran et passe donc sa position
+  // de départ.
+  function applyUpdate(
+    id: string,
+    patch: ReservationPatch,
+    rollback?: ReservationPatch,
+  ): boolean {
     if (!startDate) return false
     const target = reservationsRef.current.find((r) => r.id === id)
     if (!target) return false
@@ -1026,13 +1042,18 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
         return false
     }
     setActionError(null)
-    const before = target
+    // Retour arrière CHAMP PAR CHAMP : seuls les champs du patch reprennent
+    // leur valeur d'avant, le reste (travail concurrent reçu entre-temps par le
+    // temps réel) est préservé.
+    const restore = restorePatch(patch, rollback ?? target)
     setReservations((prev) =>
       prev.map((r) => (r.id === id ? { ...r, ...patch } : r)),
     )
     updateReservation(id, toDbPatch(patch, startDate)).catch((err) => {
       console.error(err)
-      setReservations((prev) => prev.map((r) => (r.id === id ? before : r)))
+      setReservations((prev) =>
+        prev.map((r) => (r.id === id ? { ...r, ...restore } : r)),
+      )
       setActionError(describeWriteError(err))
     })
     return true
@@ -1322,22 +1343,27 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
           r.startDay !== orig.startDay ||
           r.nights !== orig.nights)
       ) {
-        updateReservation(res.id, {
+        const before: ReservationPatch = {
+          spot: orig.spot,
+          startDay: orig.startDay,
+          nights: orig.nights,
+        }
+        const after: ReservationPatch = {
           spot: r.spot,
-          start_date: startDayToDate(r.startDay, startDate),
+          startDay: r.startDay,
           nights: r.nights,
-        }).catch(console.error)
+        }
+        // Persistance par `applyUpdate` : mêmes gardes, et un refus de la base
+        // ramène la barre à sa position de départ avec un message. Refusé dès
+        // la garde (cas limite) : la barre revient aussi, rien n'est écrit.
+        if (!applyUpdate(res.id, after, before)) {
+          setReservations((prev) =>
+            prev.map((x) => (x.id === res.id ? { ...x, ...before } : x)),
+          )
+          return
+        }
         // Historise le geste : patch géométrique (place/jour/durée) seulement.
-        record({
-          kind: 'update',
-          id: res.id,
-          before: {
-            spot: orig.spot,
-            startDay: orig.startDay,
-            nights: orig.nights,
-          },
-          after: { spot: r.spot, startDay: r.startDay, nights: r.nights },
-        })
+        record({ kind: 'update', id: res.id, before, after })
       }
     }
     window.addEventListener('pointermove', onMove)

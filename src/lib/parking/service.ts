@@ -202,6 +202,12 @@ export async function fetchParkingDailyOccupation(
   return all
 }
 
+/** Messages d'un refus silencieux (0 ligne touchée, sans erreur de la base). */
+export const RIEN_ENREGISTRE =
+  "Rien n'a été enregistré : droit insuffisant ou réservation supprimée entre-temps."
+export const RIEN_SUPPRIME =
+  "Rien n'a été supprimé : droit insuffisant ou réservation déjà supprimée."
+
 export async function createReservation(
   // Les horodatages sont posés par la BASE (défaut `now()` + trigger
   // `parking_set_updated_at`) : les envoyer serait leur retirer leur valeur.
@@ -215,11 +221,24 @@ export async function updateReservation(
   id: string,
   patch: Partial<Omit<DbReservation, 'id'>>,
 ): Promise<void> {
-  const { error } = await supabase.from(PARKING_TABLE).update(patch).eq('id', id)
+  // `.select('id')` : un UPDATE refusé par la RLS (hors fenêtre, droit
+  // insuffisant) ne lève PAS d'erreur, il modifie 0 ligne. Sans lire les lignes
+  // touchées, le refus passerait pour un succès (même modèle que `setServed`).
+  const { data, error } = await supabase
+    .from(PARKING_TABLE)
+    .update(patch)
+    .eq('id', id)
+    .select('id')
   if (error) throw error
+  if (data.length === 0) throw new Error(RIEN_ENREGISTRE)
 }
 
 export async function deleteReservation(id: string): Promise<void> {
-  const { error } = await supabase.from(PARKING_TABLE).delete().eq('id', id)
+  const { data, error } = await supabase
+    .from(PARKING_TABLE)
+    .delete()
+    .eq('id', id)
+    .select('id')
   if (error) throw error
+  if (data.length === 0) throw new Error(RIEN_SUPPRIME)
 }
