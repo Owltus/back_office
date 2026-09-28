@@ -1,3 +1,18 @@
+-- =============================================================================
+-- REMPLACÉ — NE PLUS REJOUER (bannière posée le 2026-09-28, revue des rejeux).
+-- Pourquoi : son bloc « MIGRATION statuts » repose un CHECK de statut à 3
+-- valeurs ('reserve','paye','checkout'). Or la prod en a 5 depuis
+-- parking_status_employe.sql puis parking_status_gratuite.sql (+ 'employe',
+-- 'gratuite'). Rejoué, il échouerait s'il existe une ligne employe/gratuite,
+-- et sinon RÉTRÉCIRAIT le CHECK en silence (les statuts employé et gratuité
+-- deviendraient impossibles à enregistrer). Il contient aussi un DELETE (lignes
+-- 'annule') : destructif. Font autorité : parking_status_gratuite.sql (CHECK),
+-- parking_rls_fenetre_7j.sql et page_permissions_rls*.sql (policies),
+-- parking_no_overlap.sql, lint_hardening_functions.sql (search_path du
+-- trigger) ; la table reste publiée en Realtime (realtime_reduction_2026-09-20).
+-- Conservé pour l'historique.
+-- =============================================================================
+
 -- ============================================================================
 -- Parking — table des réservations + RLS + Realtime
 --

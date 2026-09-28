@@ -1,3 +1,15 @@
+-- =============================================================================
+-- ⚠ NE PLUS REJOUER TEL QUEL (bannière posée le 2026-09-28, revue des rejeux).
+-- Pourquoi : `create or replace function public.easter_eggs_set_updated_at()`
+-- n'a pas de clause `set search_path` ; un CREATE OR REPLACE remplace TOUS les
+-- attributs, donc le rejeu EFFACERAIT le search_path figé par
+-- lint_hardening_functions.sql et remediation_securite_2026-08-04.sql (F4) —
+-- lint 0011 rouvert. Le seed ré-insérerait aussi « chloé » / « claudia » si un
+-- admin les a supprimés. Si un rejeu est nécessaire : le faire suivre du bloc
+-- F4 de remediation_securite_2026-08-04.sql. « Ré-exécutable (idempotent) »
+-- plus bas n'est vrai qu'à cette condition.
+-- =============================================================================
+
 -- ============================================================================
 -- easter_eggs — déclencheurs clavier configurables (mot-clé → effet visuel).
 --

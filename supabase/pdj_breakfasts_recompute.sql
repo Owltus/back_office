@@ -1,4 +1,18 @@
 -- =============================================================================
+-- ⚠ ÉTAPE 2 À NE PLUS REJOUER (bannière posée le 2026-09-28, revue des rejeux).
+-- L'ÉTAPE 1 (aperçu) reste en lecture seule. L'ÉTAPE 2 est un UPDATE DE MASSE
+-- (sans filtre sur manual_kind) : elle ÉCRASERAIT `breakfasts_included` des
+-- lignes MANUELLES (day-use, no-show, offert : manual_kind non NULL, valeur
+-- posée exprès par la saisie) — souvent à 0 faute d'addon PDJ. Elle est de
+-- toute façon devenue inutile : le trigger pdj_breakfasts_clamp_included
+-- (pdj_breakfasts_included_guard.sql, ACTIF en prod) applique la même règle
+-- à toute écriture d'une ligne d'import. Si un recalcul était un jour
+-- nécessaire : ajouter `and manual_kind is null`, et confirmation explicite
+-- (UPDATE de masse, CLAUDE.md). « Idempotent (rejouable) » plus bas ne vaut
+-- que pour l'ÉTAPE 1.
+-- =============================================================================
+
+-- =============================================================================
 -- pdj_breakfasts — RECALCUL rétroactif de `breakfasts_included`
 --
 -- À EXÉCUTER PAR L'UTILISATEUR dans Supabase → SQL Editor, EN DEUX TEMPS :

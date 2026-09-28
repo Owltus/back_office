@@ -1,4 +1,16 @@
 -- =============================================================================
+-- REMPLACÉ — NE PLUS REJOUER (bannière posée le 2026-09-28, revue des rejeux).
+-- Pourquoi : son `create or replace view public.pdj_daily_agg` porte une
+-- définition ANCIENNE (sans revenue_ttc, sans STAFF à 0 €, sans la réécriture
+-- UNION ALL du 2026-09-20). Rejoué, il échouerait (colonnes de vue retirées)
+-- ou ramènerait l'agrégat à l'ancienne forme (CA faux, 98 ms au lieu de 11) ;
+-- son `grant` est aussi celui d'avant perf_audit_2026-09-06.sql. La colonne
+-- breakfasts_offert et le CHECK manual_kind sont déjà en prod. Fait autorité
+-- pour la vue : pdj_daily_agg_pushdown_2026-09-20.sql. « Ré-exécutable » plus
+-- bas n'est plus vrai. Conservé pour l'historique.
+-- =============================================================================
+
+-- =============================================================================
 -- pdj_breakfasts — statut « offert » (petit-déjeuner gratuit, geste commercial)
 --
 -- À EXÉCUTER PAR L'UTILISATEUR dans Supabase → SQL Editor. Ré-exécutable.

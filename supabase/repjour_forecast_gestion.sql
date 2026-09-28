@@ -1,4 +1,15 @@
 -- =============================================================================
+-- REMPLACÉ — NE PLUS REJOUER (bannière posée le 2026-09-28, revue des rejeux).
+-- Pourquoi : il repose les 3 policies d'écriture de forecast_days en « gestion
+-- seule ». Depuis le 2026-09-03, INSERT et UPDATE acceptent aussi l'écriture en
+-- MODE MANUEL (private.repjour_manual_forecast_allowed) : rejouer ce fichier
+-- SUPPRIMERAIT cette exception et bloquerait l'import de secours RepJour d'un
+-- compte écriture. Font autorité : page_permissions_rls_repjour.sql (section
+-- forecast_days) et perf_rls_ecriture_2026-09-05.sql (forme enveloppée).
+-- Conservé pour l'historique.
+-- =============================================================================
+
+-- =============================================================================
 -- REPJOUR — RLS : import des FORECAST réservé à la GESTION
 --
 -- À EXÉCUTER PAR L'UTILISATEUR dans Supabase → SQL Editor. Idempotent.

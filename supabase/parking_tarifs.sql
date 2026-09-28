@@ -1,4 +1,14 @@
 -- =============================================================================
+-- ⚠ REJEU PARTIEL SEULEMENT (bannière posée le 2026-09-28, revue des rejeux).
+-- Le bloc set_parking_tarif (plus bas, marqué SUPPRIMÉE) recréerait une
+-- fonction SECURITY DEFINER dans public, appelant `public.get_page_level(` qui
+-- n'existe plus ; elle a été supprimée de la prod le 2026-09-05
+-- (rpc_invoker_2026-09.sql, confirmé par l'utilisateur). NE PAS rejouer ce bloc.
+-- Le reste (table if not exists, policy de lecture en private.) est conforme
+-- à la prod. Les tarifs se modifient désormais par le SQL Editor.
+-- =============================================================================
+
+-- =============================================================================
 -- Parking — table de tarifs VERSIONNÉE (prix TTC + taux de TVA, avec date
 -- d'effet), pour calculer un chiffre d'affaires sans jamais casser les
 -- calculs déjà effectués sur une période passée.

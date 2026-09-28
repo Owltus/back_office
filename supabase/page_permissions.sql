@@ -1,4 +1,18 @@
 -- =============================================================================
+-- REMPLACÉ — NE PLUS REJOUER (bannière posée le 2026-09-28, revue des rejeux).
+-- Pourquoi : ses `create or replace function public.…` (is_admin,
+-- page_level_rank, get_page_level, set_page_permission, remove_page_permission,
+-- set_user_grade) recréeraient des SECURITY DEFINER dans public, exposés à
+-- l'API, alors qu'ils vivent dans private depuis le 2026-09-05 ; pour les trois
+-- RPC, ils REMPLACERAIENT les relais invoker de public (corps appelant
+-- `public.is_admin()`, qui n'existe plus : RPC cassées). Font autorité :
+-- private_schema_aides.sql section (3) (aides), private_rpc_relais.sql (RPC
+-- + relais), securite_audit_2026-09-06.sql puis page_classeur_2026-09-25.sql
+-- (CHECK de user_page_permissions.page, 9 pages), securite_blindage_2026-09-06
+-- (journal des droits). La table existe en prod. Conservé pour l'historique.
+-- =============================================================================
+
+-- =============================================================================
 -- page_permissions — socle des droits PAR PAGE (grades + niveaux)
 --
 -- À EXÉCUTER PAR L'UTILISATEUR dans Supabase → SQL Editor. Ré-exécutable.

@@ -34,7 +34,11 @@
 --     hotel_rooms directement ; le stock est abandonné (src/lib/literie/
 --     types.ts). parking_tarifs se modifie par le SQL Editor. Suppression
 --     confirmée par l'utilisateur le 2026-09-05. Rollback : parking_tarifs.sql
---     et literie.sql portent encore les définitions (en-tête « REMPLACÉ »).
+--     et literie.sql portent encore les définitions. (Correction du
+--     2026-09-28 : ces deux fichiers ne portaient PAS d'en-tête « REMPLACÉ »,
+--     seulement un commentaire « SUPPRIMÉE » au-dessus de chaque bloc ; une
+--     bannière de rejeu a été ajoutée en tête des deux ce jour-là, et les
+--     blocs de literie.sql sont désormais mis en commentaire.)
 -- =============================================================================
 
 -- (1) dismiss_send_reminder → invoker

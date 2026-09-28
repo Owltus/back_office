@@ -63,6 +63,10 @@ comment on column public.profiles.page_order is
   'périmé : le client réconcilie avec les droits à la lecture.';
 
 -- ---- Garde-fou --------------------------------------------------------------
+-- ⚠ 2026-09-28 : CHECK à 8 pages REMPLACÉ par page_classeur_2026-09-25.sql
+-- (9 pages, borne 9). Ne pas rejouer ce bloc seul : il échouerait dès qu'un
+-- profil a 'classeur' dans page_order, ou retirerait la page du CHECK. Tout
+-- rejeu de ce fichier doit être suivi de page_classeur_2026-09-25.sql.
 -- Inclusion dans les 8 clés connues + longueur bornée. Volontairement PAS de
 -- contrôle d'unicité : l'expression nécessaire (`array(select distinct …)`)
 -- n'est pas immutable, donc inutilisable dans un CHECK. Les doublons sont

@@ -1,4 +1,15 @@
 -- =============================================================================
+-- REMPLACÉ — NE PLUS REJOUER (bannière posée le 2026-09-28, revue des rejeux).
+-- Pourquoi : il repose un CHECK de `status` à 3 valeurs. La prod en a 5 (+
+-- 'rattrapage', 'non_vendue', et NULL = aucune couleur) : rejoué, il
+-- échouerait s'il existe une ligne rattrapage/non_vendue, et sinon
+-- RÉTRÉCIRAIT le CHECK en silence (ces statuts deviendraient impossibles à
+-- enregistrer). Fait autorité : remediation_securite_2026-08-05.sql, bloc B7
+-- (contrainte finale unique). « Idempotent » plus bas n'est plus vrai.
+-- Conservé pour l'historique.
+-- =============================================================================
+
+-- =============================================================================
 -- RAPRO — RETRAIT du statut `noshow` (« No-show »).
 --
 -- À EXÉCUTER PAR L'UTILISATEUR dans Supabase → SQL Editor. Idempotent.

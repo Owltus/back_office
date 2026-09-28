@@ -1,4 +1,15 @@
 -- =============================================================================
+-- REMPLACÉ — NE PLUS REJOUER (bannière posée le 2026-09-28, revue des rejeux).
+-- Pourquoi : il repose un CHECK de `status` à 4 valeurs, dont 'noshow' (retiré
+-- depuis) et sans 'rattrapage' ni 'non_vendue'. Rejoué, il échouerait s'il
+-- existe une ligne rattrapage/non_vendue, et sinon remettrait un statut mort
+-- et interdirait deux statuts vivants. La colonne `qualifier` est déjà
+-- supprimée. Fait autorité : remediation_securite_2026-08-05.sql, bloc B7.
+-- « SÛR EN PRODUCTION … Idempotent » plus bas n'est plus vrai.
+-- Conservé pour l'historique.
+-- =============================================================================
+
+-- =============================================================================
 -- RAPRO — RETRAIT du SUR-STATUT (colonne `qualifier`) UNIQUEMENT.
 --
 -- À EXÉCUTER PAR L'UTILISATEUR dans Supabase → SQL Editor.

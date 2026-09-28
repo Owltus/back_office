@@ -1,4 +1,15 @@
 -- =============================================================================
+-- ONE-SHOT DÉJÀ APPLIQUÉ — NE PLUS REJOUER (bannière posée le 2026-09-28).
+-- Pourquoi : c'est un UPDATE DE MASSE sans WHERE qui remet imported_at de
+-- TOUTES les lignes de forecast_days à l'an 2000. Il fermait la fenêtre
+-- transitoire du backfill du 2026-08-08 ; rejoué aujourd'hui, il rendrait
+-- « périmé » le Forecast réellement importé du mois, et le garde-fou
+-- d'envoi automatique du RepJour (Forecast FRAIS exigé) bloquerait l'envoi de
+-- la nuit jusqu'au prochain import. La mention « Réexécutable sans dommage »
+-- ci-dessous est FAUSSE depuis la mise en service de l'envoi automatique.
+-- =============================================================================
+
+-- =============================================================================
 -- forecast_days_reset_imported_at — ferme la fenêtre transitoire du backfill.
 --
 -- PROBLÈME : forecast_days_imported_at.sql a ajouté imported_at avec DEFAULT now(),

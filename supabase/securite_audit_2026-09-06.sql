@@ -147,6 +147,10 @@ alter table public.profiles add constraint profiles_role_check
   check (role in ('utilisateur', 'admin'));
 
 -- (7) CHECK user_page_permissions.page --------------------------------------
+-- ⚠ 2026-09-28 : CHECK à 8 pages REMPLACÉ par page_classeur_2026-09-25.sql
+-- (9 pages, + 'classeur'). Ne pas rejouer ce bloc seul : il échouerait dès
+-- qu'un droit 'classeur' existe, ou retirerait la page classeur du CHECK.
+-- Tout rejeu de ce fichier doit être suivi de page_classeur_2026-09-25.sql.
 alter table public.user_page_permissions drop constraint if exists user_page_permissions_page_check;
 alter table public.user_page_permissions add constraint user_page_permissions_page_check
   check (page in ('repjour', 'pdj', 'parking', 'rapro', 'caisse', 'affichage', 'facturation', 'literie'));

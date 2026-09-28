@@ -1,3 +1,21 @@
+-- =============================================================================
+-- ⚠ BANNIÈRE DE REJEU (revue du 2026-09-28) — ce fichier N'EST PLUS « rejouable
+-- sans risque » tel qu'il l'affirmait : trois de ses blocs contredisaient la
+-- prod et sont désormais NEUTRALISÉS (mis en commentaire /* … */, conservés
+-- pour l'historique et le rollback) :
+--   * literie_record_movement et literie_toggle_bedding : SUPPRIMÉES de la
+--     prod le 2026-09-05 (rpc_invoker_2026-09.sql). Les recréer remettrait des
+--     SECURITY DEFINER dans public, appelant `public.get_page_level(` qui
+--     n'existe plus.
+--   * publication Realtime de baby_cot_assignments : RETIRÉE le 2026-09-20
+--     (realtime_reduction_2026-09-20.sql, décision utilisateur ; seul
+--     parking_reservations reste publiée). La rajouter relancerait le coût CPU
+--     du poller Realtime mesuré ce jour-là.
+-- Le bilan final (section 5) attend désormais l'état de la prod ACTUELLE :
+-- 0 RPC literie dans public et baby_cot_assignments HORS publication.
+-- Le reste (tables if not exists, triggers d'estampillage avec keep_author,
+-- policies enveloppées en (select …)) est conforme à la prod à cette date.
+-- =============================================================================
 -- ⚠ 2026-09-05/06 : les blocs literie_record_movement / literie_toggle_bedding
 -- de ce fichier décrivent des fonctions SUPPRIMÉES de la prod (aucun appelant,
 -- rpc_invoker_2026-09.sql). NE PLUS REJOUER ces blocs : ils recréeraient des
@@ -13,8 +31,8 @@
 -- À EXÉCUTER PAR L'UTILISATEUR dans Supabase → SQL Editor, EN UNE FOIS, du
 -- début à la fin. Entièrement idempotent (create table if not exists, add/
 -- drop column if not exists/if exists, create or replace function, drop
--- policy if exists puis create) : rejouable sans risque sur une base déjà à
--- jour comme sur une base neuve.
+-- policy if exists puis create). « Rejouable sans risque » n'est vrai que
+-- depuis la neutralisation du 2026-09-28 (voir la bannière en tête).
 --
 -- Remplace (et absorbe le contenu de) les anciens fichiers séparés
 -- hotel_rooms.sql, literie_stock.sql, baby_cots.sql,
@@ -101,6 +119,7 @@ create index if not exists literie_stock_movements_room_idx
 -- RPC bas niveau : UN mouvement + ajustement du compteur (utilisée en interne
 -- par literie_toggle_bedding ci-dessous ; reste appelable seule pour un futur
 -- ajustement manuel du stock).
+/* NEUTRALISÉ le 2026-09-28 (fonction supprimée de la prod) — ne pas décommenter
 create or replace function public.literie_record_movement(
   p_room smallint, p_item text, p_direction text, p_quantity smallint default 1
 ) returns void
@@ -133,6 +152,7 @@ begin
 end;
 $$;
 grant execute on function public.literie_record_movement(smallint, text, text, smallint) to authenticated;
+*/
 
 -- ---------------------------------------------------------------------------
 -- SUPPRIMÉE le 2026-09-05 : literie_toggle_bedding n'existe plus en prod
@@ -144,6 +164,7 @@ grant execute on function public.literie_record_movement(smallint, text, text, s
 -- RPC atomique (celle appelée par l'app) : chambre + les 2 mouvements + le
 -- compteur dans UNE seule transaction — si le stock est insuffisant, TOUT
 -- annule, y compris le statut de la chambre (pas de désynchronisation).
+/* NEUTRALISÉ le 2026-09-28 (fonction supprimée de la prod) — ne pas décommenter
 create or replace function public.literie_toggle_bedding(
   p_room smallint, p_synthetic boolean
 ) returns void
@@ -165,6 +186,7 @@ begin
 end;
 $$;
 grant execute on function public.literie_toggle_bedding(smallint, boolean) to authenticated;
+*/
 
 alter table public.literie_stock enable row level security;
 alter table public.literie_stock_movements enable row level security;
@@ -257,6 +279,10 @@ create trigger baby_cot_assignments_stamp
   before insert or update on public.baby_cot_assignments
   for each row execute function public.baby_cot_assignments_stamp();
 
+-- NEUTRALISÉ le 2026-09-28 : la publication Realtime de baby_cot_assignments a
+-- été RETIRÉE le 2026-09-20 (realtime_reduction_2026-09-20.sql, qui porte le
+-- retour arrière). Ne pas décommenter sans décision utilisateur.
+/*
 do $$
 begin
   alter publication supabase_realtime add table public.baby_cot_assignments;
@@ -264,6 +290,7 @@ exception
   when duplicate_object then null;
 end
 $$;
+*/
 
 alter table public.baby_cots enable row level security;
 alter table public.baby_cot_assignments enable row level security;
@@ -377,12 +404,14 @@ select
     where table_schema = 'public' and table_name = 'baby_cot_assignments'
       and column_name in ('room', 'guest_name')
   )) as schema_label_ok,
-  (select count(*) = 2 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-    where n.nspname = 'public' and p.proname in ('literie_toggle_bedding', 'literie_record_movement')
-  ) as rpc_ok,
-  (select count(*) = 1 from pg_publication_tables
+  -- 2026-09-28 : RPC literie SUPPRIMÉES (rpc_invoker_2026-09.sql) → attendu 0.
+  (select count(*) = 0 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname in ('public', 'private') and p.proname in ('literie_toggle_bedding', 'literie_record_movement')
+  ) as rpc_supprimees_ok,
+  -- 2026-09-28 : publication RETIRÉE (realtime_reduction_2026-09-20.sql) → attendu 0.
+  (select count(*) = 0 from pg_publication_tables
     where pubname = 'supabase_realtime' and tablename = 'baby_cot_assignments'
-  ) as realtime_ok,
+  ) as realtime_retire_ok,
   (select count(*) = 10 from pg_policies where schemaname = 'public' and tablename in (
     'hotel_rooms', 'literie_stock', 'literie_stock_movements',
     'baby_cots', 'baby_cot_assignments')
