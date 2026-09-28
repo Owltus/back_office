@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Navigate, useRouterState } from '@tanstack/react-router'
+import { useQueryClient } from '@tanstack/react-query'
 
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { BackendStatusBanner } from '#/components/shared/BackendStatusBanner.tsx'
 import { EasterEggs } from '#/components/shared/EasterEggs.tsx'
 import { Navbar } from '#/components/Navbar.tsx'
 import { Skeleton } from '#/components/ui/skeleton.tsx'
+import { backendHealth, onRecovery } from '#/lib/backendHealth.ts'
 import {
   RouteSkeleton,
   SHELL_VARIANT,
@@ -21,6 +23,39 @@ function useDelayedFlag(delayMs: number): boolean {
     return () => window.clearTimeout(id)
   }, [delayMs])
   return flag
+}
+
+/**
+ * Relance les lectures actives quand le backend REVIENT (disjoncteur
+ * `down` → `up`). Sans elle, une page restée ouverte pendant une panne gardait
+ * ses erreurs : les réessais TanStack s'épuisent pendant que le disjoncteur
+ * coupe le trafic, et rien ne les relançait ensuite.
+ *
+ * UN SEUL abonné pour toute l'app : `AppAuthGate` est monté une fois, à la
+ * racine. Seules les lectures en erreur ou périmées sont relancées, et
+ * `cancelRefetch: false` évite les doublons : une lecture déjà en vol
+ * (relancée par le bouton « Réessayer » du bandeau, ou celle-là même dont le
+ * succès a refermé le disjoncteur) n'est ni annulée ni redoublée. La salve
+ * passe par la file de six de `lib/supabase.ts`.
+ */
+function useRefetchOnBackendRecovery() {
+  const queryClient = useQueryClient()
+  useEffect(
+    () =>
+      onRecovery(backendHealth, () => {
+        void queryClient.refetchQueries(
+          {
+            type: 'active',
+            // Seulement ce qui en a besoin : la lecture qui vient de réussir
+            // (et de refermer le disjoncteur) est fraîche, inutile de la
+            // relire aussitôt.
+            predicate: (q) => q.state.status === 'error' || q.isStale(),
+          },
+          { cancelRefetch: false },
+        )
+      }),
+    [queryClient],
+  )
 }
 
 /** Délai au-delà duquel le squelette de démarrage cesse d'être muet. */
@@ -119,6 +154,7 @@ function BootSkeleton({ pathname }: { pathname: string }) {
 export function AppAuthGate({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth()
   const pathname = useRouterState({ select: (s) => s.location.pathname })
+  useRefetchOnBackendRecovery()
 
   // La page de connexion est toujours accessible, sans Navbar. `main` en BLOC
   // (pas flex) + `overflow-y-auto` : sur une fenêtre très courte, le formulaire

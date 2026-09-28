@@ -21,6 +21,8 @@ import { useNow } from '#/components/shared/useNow.ts'
  *
  * « Réessayer » rend la prochaine tentative due immédiatement et relance les
  * requêtes actives (une salve, puis le backoff reprend si ça échoue encore).
+ * Le décompte n'annonce pas une tentative automatique (il n'y en a pas) : il
+ * dit quand le disjoncteur laissera de nouveau passer le trafic.
  */
 export function BackendStatusBanner() {
   const state = useSyncExternalStore(
@@ -40,13 +42,23 @@ export function BackendStatusBanner() {
   return (
     <div className="flex flex-wrap items-center gap-3 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-500 print:hidden">
       <WifiOff className="size-4 shrink-0" aria-hidden="true" />
-      <span role="status" aria-live="polite" className="min-w-0 text-amber-500/90">
+      <span
+        role="status"
+        aria-live="polite"
+        className="min-w-0 text-amber-500/90"
+      >
         Connexion au serveur interrompue.
       </span>
       <span className="min-w-0 flex-1 text-amber-500/70" aria-hidden="true">
+        {/* Rien ne relance AUTOMATIQUEMENT à l'échéance : le décompte dit
+            quand le trafic sera de nouveau autorisé (fin du backoff), pas
+            quand une tentative partira. À zéro, la prochaine requête (ou le
+            bouton) passera ; l'ancien « Nouvelle tentative en cours. » ne
+            correspondait à aucune requête réelle. Au retour du backend,
+            `AppAuthGate` relance les lectures actives. */}
         {seconds > 0
-          ? `Nouvelle tentative dans ${seconds} s.`
-          : 'Nouvelle tentative en cours.'}
+          ? `Nouvel essai possible dans ${seconds} s.`
+          : 'Vous pouvez réessayer.'}
       </span>
       <Button
         variant="outline"

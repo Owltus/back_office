@@ -45,6 +45,43 @@ describe('createLimiteur', () => {
     expect(l.enAttente).toBe(0)
   })
 
+  it('ne dépasse pas le plafond quand un appel arrive entre la libération et la reprise du réveillé', async () => {
+    /*
+     * Course réelle : la tâche A se termine dans une microtâche M1 qui réveille
+     * B (sa reprise, M2, part en fin de file). Une microtâche X, mise en file
+     * APRÈS M1 mais AVANT M2 (ici par le même tick qui termine A), appelle
+     * `run(C)`. Sans transfert du jeton, X voit un jeton libre et une file
+     * vide, passe, puis B reprend : deux tâches en vol pour un plafond de un.
+     */
+    const l = createLimiteur(1)
+    let enVol = 0
+    let sommet = 0
+    const suivie = async () => {
+      enVol++
+      sommet = Math.max(sommet, enVol)
+      await respirer()
+      enVol--
+    }
+    const a = differee()
+
+    const pA = l.run(() => a.promesse)
+    const pB = l.run(suivie)
+    await respirer()
+    expect(l.enAttente).toBe(1)
+
+    let pC: Promise<void> | undefined
+    a.resoudre()
+    void Promise.resolve().then(() => {
+      pC = l.run(suivie)
+    })
+    await respirer()
+    await Promise.all([pA, pB, pC])
+
+    expect(sommet).toBe(1)
+    expect(l.enCours).toBe(0)
+    expect(l.enAttente).toBe(0)
+  })
+
   it('met bien les surnuméraires en attente', async () => {
     const l = createLimiteur(2)
     const a = differee()

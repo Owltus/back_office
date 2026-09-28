@@ -14,8 +14,7 @@ import { createLimiteur } from '#/lib/requestQueue.ts'
  */
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as
-  | string
-  | undefined
+  string | undefined
 
 if (!supabaseUrl || !supabaseAnonKey) {
   // On ne jette pas d'erreur pour laisser l'app démarrer sans clés,
@@ -126,7 +125,20 @@ export async function fetchWithTimeout(
    */
   if (backendHealth.shouldSkip()) throw new BackendIndisponible()
 
-  return limiteur.run(() => executerFetch(input, init))
+  /*
+   * SECONDE CONSULTATION, au moment où la tâche obtient son jeton (ajoutée le
+   * 2026-09-28). La première ne voit que l'état à l'ENTRÉE dans la file : une
+   * requête en attente derrière six autres partait ensuite quoi qu'il
+   * arrive, même si ces six venaient d'ouvrir le disjoncteur en échouant.
+   * C'est précisément la salve à éteindre : une page lance une vingtaine de
+   * lectures, les six premières tombent en panne, les quatorze suivantes ne
+   * doivent plus rien émettre. Le jeton est rendu aussitôt (le `throw` passe
+   * par le `finally` du limiteur).
+   */
+  return limiteur.run(() => {
+    if (backendHealth.shouldSkip()) throw new BackendIndisponible()
+    return executerFetch(input, init)
+  })
 }
 
 /**

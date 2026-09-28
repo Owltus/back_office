@@ -17,7 +17,10 @@ import { backendHealth } from '#/lib/backendHealth.ts'
  */
 
 const reponseOk = () =>
-  new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } })
+  new Response('{}', {
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+  })
 
 /** Rouvre le disjoncteur : un backend qui répond le referme. */
 function refermerDisjoncteur() {
@@ -50,7 +53,9 @@ describe('fetchWithTimeout — disjoncteur', () => {
   })
 
   it('laisse passer quand le backend répond', async () => {
-    const res = await fetchWithTimeout('https://exemple.test/rest/v1/hotel_config')
+    const res = await fetchWithTimeout(
+      'https://exemple.test/rest/v1/hotel_config',
+    )
     expect(res.status).toBe(200)
     expect(appels).toHaveLength(1)
   })
@@ -98,5 +103,37 @@ describe('fetchWithTimeout — disjoncteur', () => {
 
     await fetchWithTimeout('https://exemple.test/rest/v1/hotel_config')
     expect(appels).toHaveLength(1)
+  })
+
+  it('une requête EN FILE n’est pas émise si le disjoncteur s’ouvre pendant qu’elle attend', async () => {
+    // Six requêtes occupent les six jetons ; la septième attend. Les six
+    // échouent en 503 (panne) : la septième obtient alors un jeton, mais le
+    // disjoncteur est ouvert — elle ne doit RIEN émettre.
+    const enAttente: Array<(r: Response) => void> = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        appels.push(typeof input === 'string' ? input : String(input))
+        return new Promise<Response>((res) => enAttente.push(res))
+      }),
+    )
+
+    const occupantes = Array.from({ length: 6 }, (_, i) =>
+      fetchWithTimeout(`https://exemple.test/rest/v1/t${i}`),
+    )
+    const septieme = fetchWithTimeout('https://exemple.test/rest/v1/t6').catch(
+      (e: unknown) => e,
+    )
+    await new Promise((r) => setTimeout(r, 0))
+    expect(appels).toHaveLength(6)
+
+    for (const res of enAttente) res(new Response('', { status: 503 }))
+    await Promise.all(occupantes)
+
+    const err = await septieme
+    expect((err as { status?: number }).status).toBe(503)
+    expect((err as Error).message).toMatch(/disjoncteur ouvert/i)
+    // LE point du correctif : la septième n'a jamais atteint le réseau.
+    expect(appels).toHaveLength(6)
   })
 })

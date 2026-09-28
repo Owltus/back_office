@@ -36,7 +36,7 @@
 
 export interface Limiteur {
   /** Exécute `tache` dès qu'un jeton se libère. */
-  run<T>(tache: () => Promise<T>): Promise<T>
+  run: <T>(tache: () => Promise<T>) => Promise<T>
   /** Nombre de tâches en cours d'exécution. */
   readonly enCours: number
   /** Nombre de tâches en attente d'un jeton. */
@@ -53,21 +53,30 @@ export interface Limiteur {
  */
 export function createLimiteur(max: number): Limiteur {
   if (!Number.isInteger(max) || max < 1) {
-    throw new Error(`createLimiteur: max doit être un entier >= 1 (reçu ${max})`)
+    throw new Error(
+      `createLimiteur: max doit être un entier >= 1 (reçu ${max})`,
+    )
   }
 
   let actifs = 0
   const file: Array<() => void> = []
 
   /*
-   * Libère EXACTEMENT un attendant. Appelé une fois par tâche terminée, après
-   * la décrémentation : décrémentations et réveils restent donc à parité, ce
-   * qui interdit à `actifs` de dépasser `max`.
+   * TRANSFERT DU JETON (corrigé le 2026-09-28). Une tâche qui se termine ne
+   * rend PAS son jeton au pot quand quelqu'un attend : elle le passe au
+   * premier de la file, et `actifs` ne bouge pas. Le réveillé ne fait donc
+   * PAS `actifs++`.
+   *
+   * L'ancienne version décrémentait, puis laissait le réveillé réincrémenter
+   * à sa reprise — une microtâche PLUS TARD. Entre les deux, un `run()`
+   * concurrent voyait un jeton libre et une file vide (le réveillé venait
+   * d'en sortir), passait, et le réveillé reprenait par-dessus : un de plus
+   * que le plafond. Reproduit par `requestQueue.test.ts`.
    */
-  const reveillerUn = () => {
-    if (actifs >= max) return
-    const reprendre = file.shift()
-    if (reprendre) reprendre()
+  const liberer = () => {
+    const suivant = file.shift()
+    if (suivant) suivant()
+    else actifs--
   }
 
   return {
@@ -84,14 +93,16 @@ export function createLimiteur(max: number): Limiteur {
        * la file équitable et non simplement bornée.
        */
       if (actifs >= max || file.length > 0) {
+        // Réveillé par `liberer`, qui nous a TRANSMIS son jeton : `actifs`
+        // le compte déjà.
         await new Promise<void>((resoudre) => file.push(resoudre))
+      } else {
+        actifs++
       }
-      actifs++
       try {
         return await tache()
       } finally {
-        actifs--
-        reveillerUn()
+        liberer()
       }
     },
   }

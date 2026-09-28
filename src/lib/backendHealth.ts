@@ -38,8 +38,14 @@ export const BACKOFF_MAX_MS = 30_000
  * [base, min(max, base·2^failures)]. `failures` = nombre d'échecs déjà subis
  * (0 → entre 1 s et 1 s, 1 → 1 à 2 s, 2 → 1 à 4 s, … 5+ → 1 à 30 s).
  */
-export function backoffMs(failures: number, random: () => number = Math.random): number {
-  const exp = Math.min(BACKOFF_MAX_MS, BACKOFF_BASE_MS * 2 ** Math.max(0, failures))
+export function backoffMs(
+  failures: number,
+  random: () => number = Math.random,
+): number {
+  const exp = Math.min(
+    BACKOFF_MAX_MS,
+    BACKOFF_BASE_MS * 2 ** Math.max(0, failures),
+  )
   const r = Math.min(1, Math.max(0, random()))
   return Math.round(BACKOFF_BASE_MS + r * (exp - BACKOFF_BASE_MS))
 }
@@ -60,14 +66,25 @@ export function isOutageStatus(status: number): boolean {
 export function isOutageError(err: unknown): boolean {
   if (err === null || err === undefined) return false
   if (typeof err === 'object') {
-    const o = err as { status?: unknown; name?: unknown; message?: unknown; code?: unknown }
+    const o = err as {
+      status?: unknown
+      name?: unknown
+      message?: unknown
+      code?: unknown
+    }
     if (typeof o.status === 'number') {
-      return isOutageStatus(o.status) || (o.status === 0 && o.name === 'AuthRetryableFetchError')
+      return (
+        isOutageStatus(o.status) ||
+        (o.status === 0 && o.name === 'AuthRetryableFetchError')
+      )
     }
     if (o.name === 'AbortError' || o.name === 'TimeoutError') return true
     if (o.name === 'AuthRetryableFetchError') return true
     if (err instanceof TypeError) return true
-    if (typeof o.message === 'string' && /failed to fetch|networkerror|load failed/i.test(o.message)) {
+    if (
+      typeof o.message === 'string' &&
+      /failed to fetch|networkerror|load failed/i.test(o.message)
+    ) {
       return true
     }
   }
@@ -79,31 +96,37 @@ function outageMessage(err: unknown): string {
   if (typeof err === 'object' && err !== null) {
     const o = err as { status?: unknown; name?: unknown }
     if (typeof o.status === 'number' && o.status > 0) return `HTTP ${o.status}`
-    if (o.name === 'AbortError' || o.name === 'TimeoutError') return 'délai dépassé'
+    if (o.name === 'AbortError' || o.name === 'TimeoutError')
+      return 'délai dépassé'
   }
   return 'réseau'
 }
 
 export interface BackendHealth {
-  getState(): BackendHealthState
-  subscribe(listener: (state: BackendHealthState) => void): () => void
+  getState: () => BackendHealthState
+  subscribe: (listener: (state: BackendHealthState) => void) => () => void
   /** Le backend a répondu (2xx ou 4xx) : disjoncteur refermé. */
-  reportSuccess(): void
+  reportSuccess: () => void
   /** Échec : ne compte QUE s'il s'agit d'une panne (`isOutageError`). */
-  reportFailure(err: unknown): void
+  reportFailure: (err: unknown) => void
   /** Vrai tant que la prochaine tentative n'est pas due : les lectures NON
    *  critiques s'abstiennent et retenteront à l'échéance. */
-  shouldSkip(): boolean
+  shouldSkip: () => boolean
   /** Réouverture manuelle (bouton Réessayer) : la prochaine tentative est
    *  due immédiatement, sans remettre `failures` à zéro. */
-  retryNow(): void
+  retryNow: () => void
 }
 
 export function createBackendHealth(
   now: () => number = () => Date.now(),
   random: () => number = Math.random,
 ): BackendHealth {
-  let state: BackendHealthState = { status: 'up', failures: 0, nextRetryAt: null, lastError: null }
+  let state: BackendHealthState = {
+    status: 'up',
+    failures: 0,
+    nextRetryAt: null,
+    lastError: null,
+  }
   const listeners = new Set<(s: BackendHealthState) => void>()
 
   const emit = (next: BackendHealthState) => {
@@ -134,7 +157,11 @@ export function createBackendHealth(
       })
     },
     shouldSkip() {
-      return state.status === 'down' && state.nextRetryAt !== null && state.nextRetryAt > now()
+      return (
+        state.status === 'down' &&
+        state.nextRetryAt !== null &&
+        state.nextRetryAt > now()
+      )
     },
     retryNow() {
       if (state.status !== 'down') return
@@ -145,6 +172,32 @@ export function createBackendHealth(
 
 /** Instance partagée de l'application (client Supabase, gardes, bandeau). */
 export const backendHealth: BackendHealth = createBackendHealth()
+
+/**
+ * Appelle `callback` à chaque RETOUR du backend : passage `down` → `up`, et
+ * seulement celui-là. Renvoie la fonction de désabonnement.
+ *
+ * Pourquoi (2026-09-28) : après une panne, les lectures en erreur restaient en
+ * erreur. Leurs réessais s'épuisent pendant que le disjoncteur est ouvert
+ * (échec instantané, sans réseau), et rien ne les relançait quand une autre
+ * requête prouvait ensuite que la base répondait de nouveau. L'app branche ici
+ * UN SEUL `refetchQueries` des requêtes actives (`AppAuthGate`).
+ *
+ * Pas de boucle : l'abonné n'est appelé que sur une TRANSITION. Si la relance
+ * échoue, le disjoncteur se rouvre (`up` → `down`, ignoré) ; il faudra un
+ * nouveau succès réel pour rappeler l'abonné.
+ */
+export function onRecovery(
+  health: BackendHealth,
+  callback: () => void,
+): () => void {
+  let precedent = health.getState().status
+  return health.subscribe((state) => {
+    const retour = precedent === 'down' && state.status === 'up'
+    precedent = state.status
+    if (retour) callback()
+  })
+}
 
 /**
  * Single-flight : une seule exécution en vol par clé ; les appelants

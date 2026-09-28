@@ -7,6 +7,7 @@ import {
   createBackendHealth,
   createSingleFlight,
   isOutageError,
+  onRecovery,
 } from './backendHealth.ts'
 
 describe('backoffMs', () => {
@@ -42,13 +43,21 @@ describe('isOutageError', () => {
     expect(isOutageError({ status: 544 })).toBe(true)
     expect(isOutageError(new DOMException('aborted', 'AbortError'))).toBe(true)
     expect(isOutageError(new TypeError('Failed to fetch'))).toBe(true)
-    expect(isOutageError({ name: 'AuthRetryableFetchError', status: 0, message: 'x' })).toBe(true)
+    expect(
+      isOutageError({
+        name: 'AuthRetryableFetchError',
+        status: 0,
+        message: 'x',
+      }),
+    ).toBe(true)
   })
 
   it('ne classe PAS une erreur métier en panne', () => {
     expect(isOutageError({ status: 403 })).toBe(false)
     expect(isOutageError({ status: 401, name: 'AuthApiError' })).toBe(false)
-    expect(isOutageError({ code: '23505', message: 'duplicate key' })).toBe(false)
+    expect(isOutageError({ code: '23505', message: 'duplicate key' })).toBe(
+      false,
+    )
     expect(isOutageError(new Error('boom'))).toBe(false)
     expect(isOutageError(null)).toBe(false)
     expect(isOutageError(undefined)).toBe(false)
@@ -58,12 +67,19 @@ describe('isOutageError', () => {
 describe('createBackendHealth', () => {
   it('ouvre sur une panne, espace les tentatives, referme sur succès', () => {
     let t = 1_000_000
-    const h = createBackendHealth(() => t, () => 1)
+    const h = createBackendHealth(
+      () => t,
+      () => 1,
+    )
     expect(h.getState().status).toBe('up')
     expect(h.shouldSkip()).toBe(false)
 
     h.reportFailure({ status: 504 })
-    expect(h.getState()).toMatchObject({ status: 'down', failures: 1, lastError: 'HTTP 504' })
+    expect(h.getState()).toMatchObject({
+      status: 'down',
+      failures: 1,
+      lastError: 'HTTP 504',
+    })
     expect(h.getState().nextRetryAt).toBe(t + 1_000)
     expect(h.shouldSkip()).toBe(true)
 
@@ -75,13 +91,21 @@ describe('createBackendHealth', () => {
     expect(h.getState().nextRetryAt).toBe(t + 2_000)
 
     h.reportSuccess()
-    expect(h.getState()).toEqual({ status: 'up', failures: 0, nextRetryAt: null, lastError: null })
+    expect(h.getState()).toEqual({
+      status: 'up',
+      failures: 0,
+      nextRetryAt: null,
+      lastError: null,
+    })
     expect(h.shouldSkip()).toBe(false)
   })
 
   it('ignore une erreur métier et retryNow rend la tentative due sans effacer les échecs', () => {
     let t = 5_000
-    const h = createBackendHealth(() => t, () => 1)
+    const h = createBackendHealth(
+      () => t,
+      () => 1,
+    )
     h.reportFailure({ status: 403 })
     expect(h.getState().status).toBe('up')
 
@@ -96,7 +120,10 @@ describe('createBackendHealth', () => {
   })
 
   it('notifie les abonnés et permet le désabonnement', () => {
-    const h = createBackendHealth(() => 0, () => 1)
+    const h = createBackendHealth(
+      () => 0,
+      () => 1,
+    )
     const seen: string[] = []
     const off = h.subscribe((s) => seen.push(s.status))
     h.reportFailure({ status: 503 })
@@ -131,7 +158,61 @@ describe('createSingleFlight', () => {
 
   it('libère la clé aussi après un rejet', async () => {
     const single = createSingleFlight<number>()
-    await expect(single('k', () => Promise.reject(new Error('x')))).rejects.toThrow('x')
+    await expect(
+      single('k', () => Promise.reject(new Error('x'))),
+    ).rejects.toThrow('x')
     await expect(single('k', () => Promise.resolve(1))).resolves.toBe(1)
+  })
+})
+
+describe('onRecovery', () => {
+  it('appelle l’abonné au seul passage down → up', () => {
+    const h = createBackendHealth(
+      () => 0,
+      () => 0,
+    )
+    let appels = 0
+    onRecovery(h, () => appels++)
+
+    h.reportSuccess() // up → up : rien
+    expect(appels).toBe(0)
+    h.reportFailure({ status: 503 }) // up → down
+    h.reportFailure({ status: 503 }) // down → down
+    h.retryNow() // down → down (échéance ramenée)
+    expect(appels).toBe(0)
+    h.reportSuccess() // down → up
+    expect(appels).toBe(1)
+    h.reportSuccess() // up → up : pas de doublon
+    expect(appels).toBe(1)
+  })
+
+  it('pas de boucle : une relance qui échoue n’appelle pas l’abonné', () => {
+    const h = createBackendHealth(
+      () => 0,
+      () => 0,
+    )
+    let appels = 0
+    onRecovery(h, () => {
+      appels++
+      // La relance échoue aussitôt : le disjoncteur se rouvre.
+      h.reportFailure({ status: 503 })
+    })
+    h.reportFailure({ status: 503 })
+    h.reportSuccess()
+    expect(appels).toBe(1)
+    expect(h.getState().status).toBe('down')
+  })
+
+  it('se désabonne', () => {
+    const h = createBackendHealth(
+      () => 0,
+      () => 0,
+    )
+    let appels = 0
+    const stop = onRecovery(h, () => appels++)
+    stop()
+    h.reportFailure({ status: 503 })
+    h.reportSuccess()
+    expect(appels).toBe(0)
   })
 })
