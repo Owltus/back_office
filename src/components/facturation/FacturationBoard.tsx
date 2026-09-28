@@ -67,6 +67,7 @@ import {
   issuerFamilyPrior,
 } from '#/lib/facturation/issuerFamilies.ts'
 import { stampDataOf } from '#/lib/facturation/stampLayout.ts'
+import { createLimiter } from '#/lib/facturation/limiter.ts'
 import {
   addInvoices,
   clearFacturation,
@@ -140,6 +141,10 @@ function issuerHintFor(
 /** Lecture d'un PDF puis mise à jour du store (continue même après démontage).
  *  `pool` (graine + nuages serveur) et `issuerCodes` sont passés explicitement car cette
  *  fonction vit hors composant et ne peut pas lire le cache TanStack Query. */
+/** Une seule file pour la page : au plus 2 PDF traités en même temps, même
+ * sur plusieurs dépôts successifs. */
+const runInvoice = createLimiter(2)
+
 async function processInvoice(
   record: InvoiceRecord,
   pool: WordPool,
@@ -324,15 +329,19 @@ export function FacturationBoard() {
       error: null,
     }))
     addInvoices(created)
+    // File de 2 fichiers à la fois (pdf.js + OCR) : les autres restent « en
+    // cours » et partent dès qu'une place se libère.
     created.forEach((r) =>
-      processInvoice(
-        r,
-        pool,
-        issuers,
-        issuerCodes,
-        issuerDenylist,
-        issuerMemory,
-        knownHashes,
+      void runInvoice(() =>
+        processInvoice(
+          r,
+          pool,
+          issuers,
+          issuerCodes,
+          issuerDenylist,
+          issuerMemory,
+          knownHashes,
+        ),
       ),
     )
   }

@@ -21,25 +21,50 @@ import type {
 
 const TABLE = 'facturation_wordpool'
 
+/** Taille d'une page de lecture (plafond PostgREST par défaut). */
+const PAGE = 1000
+
+/**
+ * Lit TOUTES les lignes d'une table page par page. `page(from, to)` doit
+ * appliquer un tri STABLE sur une clé UNIQUE avant `.range()` : sans tri,
+ * PostgreSQL ne garantit aucun ordre d'une requête à l'autre, et la
+ * pagination peut sauter ou doubler des lignes.
+ */
+async function readAllPages<T>(
+  page: (
+    from: number,
+    to: number,
+  ) => PromiseLike<{ data: unknown[] | null; error: unknown }>,
+): Promise<T[]> {
+  const all: T[] = []
+  let from = 0
+  for (;;) {
+    const { data, error } = await page(from, from + PAGE - 1)
+    if (error) throw error
+    const rows = (data ?? []) as T[]
+    all.push(...rows)
+    if (rows.length < PAGE) break
+    from += PAGE
+  }
+  return all
+}
+
 /** Lit tout le modèle serveur → WordPool. Propage l'erreur (table absente, etc.). */
 export async function fetchClouds(): Promise<WordPool> {
   const perCode: WordPool['perCode'] = {}
-  let from = 0
-  for (;;) {
-    const { data, error } = await supabase
+  const rows = await readAllPages<{
+    code: string
+    token: string
+    count: number
+  }>((from, to) =>
+    supabase
       .from(TABLE)
       .select('code, token, count')
-      .range(from, from + 999)
-    if (error) throw error
-    const rows = (data ?? []) as {
-      code: string
-      token: string
-      count: number
-    }[]
-    for (const r of rows) (perCode[r.code] ??= {})[r.token] = r.count
-    if (rows.length < 1000) break
-    from += 1000
-  }
+      .order('code', { ascending: true })
+      .order('token', { ascending: true })
+      .range(from, to),
+  )
+  for (const r of rows) (perCode[r.code] ??= {})[r.token] = r.count
   return { perCode }
 }
 
@@ -73,13 +98,16 @@ export async function pruneClouds(
   if (error) throw error
 }
 
-/** Dictionnaire des émetteurs connus (petit → pas de pagination). */
+/** Dictionnaire des émetteurs connus. Paginé : sans pagination, PostgREST
+ * coupait en silence à 1 000 émetteurs. */
 export async function fetchIssuers(): Promise<Issuer[]> {
-  const { data, error } = await supabase
-    .from('facturation_issuers')
-    .select('name, display, count')
-  if (error) throw error
-  return (data ?? []) as Issuer[]
+  return readAllPages<Issuer>((from, to) =>
+    supabase
+      .from('facturation_issuers')
+      .select('name, display, count')
+      .order('name', { ascending: true })
+      .range(from, to),
+  )
 }
 
 // --- Référentiel des imputations (facturation_ref_imputations) ----------------
@@ -262,22 +290,19 @@ const ISSUER_CODES_TABLE = 'facturation_issuer_codes'
 /** Lit tout le modèle émetteur→codes. Propage l'erreur (table absente, etc.). */
 export async function fetchIssuerCodes(): Promise<IssuerCodes> {
   const perIssuer: IssuerCodes['perIssuer'] = {}
-  let from = 0
-  for (;;) {
-    const { data, error } = await supabase
+  const rows = await readAllPages<{
+    issuer: string
+    code: string
+    count: number
+  }>((from, to) =>
+    supabase
       .from(ISSUER_CODES_TABLE)
       .select('issuer, code, count')
-      .range(from, from + 999)
-    if (error) throw error
-    const rows = (data ?? []) as {
-      issuer: string
-      code: string
-      count: number
-    }[]
-    for (const r of rows) (perIssuer[r.issuer] ??= {})[r.code] = r.count
-    if (rows.length < 1000) break
-    from += 1000
-  }
+      .order('issuer', { ascending: true })
+      .order('code', { ascending: true })
+      .range(from, to),
+  )
+  for (const r of rows) (perIssuer[r.issuer] ??= {})[r.code] = r.count
   return { perIssuer }
 }
 
@@ -334,18 +359,16 @@ const ISSUER_DENYLIST_TABLE = 'facturation_issuer_denylist'
 /** Lit toute la denylist → { perIssuer: { issuer: Set<code> } }. Propage l'erreur. */
 export async function fetchIssuerDenylist(): Promise<IssuerDenylist> {
   const perIssuer: IssuerDenylist['perIssuer'] = {}
-  let from = 0
-  for (;;) {
-    const { data, error } = await supabase
-      .from(ISSUER_DENYLIST_TABLE)
-      .select('issuer, code')
-      .range(from, from + 999)
-    if (error) throw error
-    const rows = (data ?? []) as { issuer: string; code: string }[]
-    for (const r of rows) (perIssuer[r.issuer] ??= new Set()).add(r.code)
-    if (rows.length < 1000) break
-    from += 1000
-  }
+  const rows = await readAllPages<{ issuer: string; code: string }>(
+    (from, to) =>
+      supabase
+        .from(ISSUER_DENYLIST_TABLE)
+        .select('issuer, code')
+        .order('issuer', { ascending: true })
+        .order('code', { ascending: true })
+        .range(from, to),
+  )
+  for (const r of rows) (perIssuer[r.issuer] ??= new Set()).add(r.code)
   return { perIssuer }
 }
 
@@ -441,34 +464,28 @@ const JOURNAL_TABLE = 'facturation_learned_docs'
 
 /** Lit tout le journal d'apprentissage → { entries }. Propage l'erreur (table absente, etc.). */
 export async function fetchJournal(): Promise<{ entries: JournalEntry[] }> {
-  const entries: JournalEntry[] = []
-  let from = 0
-  for (;;) {
-    const { data, error } = await supabase
+  const rows = await readAllPages<{
+    hash: string
+    issuer: string | null
+    codes: string[] | null
+    deltas: Record<string, number> | null
+    method: string
+    created_at: string
+  }>((from, to) =>
+    supabase
       .from(JOURNAL_TABLE)
       .select('hash, issuer, codes, deltas, method, created_at')
-      .range(from, from + 999)
-    if (error) throw error
-    const rows = (data ?? []) as {
-      hash: string
-      issuer: string | null
-      codes: string[] | null
-      deltas: Record<string, number> | null
-      method: string
-      created_at: string
-    }[]
-    for (const r of rows)
-      entries.push({
-        hash: r.hash,
-        issuerKey: r.issuer,
-        codes: r.codes ?? [],
-        deltas: r.deltas ?? {},
-        method: r.method === 'ocr' ? 'ocr' : 'native',
-        learnedAt: r.created_at,
-      })
-    if (rows.length < 1000) break
-    from += 1000
-  }
+      .order('hash', { ascending: true })
+      .range(from, to),
+  )
+  const entries: JournalEntry[] = rows.map((r) => ({
+    hash: r.hash,
+    issuerKey: r.issuer,
+    codes: r.codes ?? [],
+    deltas: r.deltas ?? {},
+    method: r.method === 'ocr' ? 'ocr' : 'native',
+    learnedAt: r.created_at,
+  }))
   return { entries }
 }
 
@@ -521,26 +538,25 @@ export async function recordLearnedDoc(entry: JournalEntry): Promise<void> {
  *  → modèle vide côté appelant, dégradation gracieuse). */
 export async function fetchIssuerMemory(): Promise<IssuerMemory> {
   const perIssuer: IssuerMemory['perIssuer'] = {}
-  let from = 0
-  for (;;) {
-    const { data, error } = await supabase
+  // Clé unique de la vue = son GROUP BY (issuer, code, compte).
+  const rows = await readAllPages<{
+    issuer: string
+    code_analytique: string
+    compte: string
+    n: number
+  }>((from, to) =>
+    supabase
       .from('facturation_issuer_memory')
       .select('issuer, code_analytique, compte, n')
-      .range(from, from + 999)
-    if (error) throw error
-    const rows = (data ?? []) as {
-      issuer: string
-      code_analytique: string
-      compte: string
-      n: number
-    }[]
-    for (const r of rows) {
-      const byCode = (perIssuer[r.issuer] ??= {})
-      const byCompte = (byCode[r.code_analytique] ??= {})
-      byCompte[r.compte] = r.n
-    }
-    if (rows.length < 1000) break
-    from += 1000
+      .order('issuer', { ascending: true })
+      .order('code_analytique', { ascending: true })
+      .order('compte', { ascending: true })
+      .range(from, to),
+  )
+  for (const r of rows) {
+    const byCode = (perIssuer[r.issuer] ??= {})
+    const byCompte = (byCode[r.code_analytique] ??= {})
+    byCompte[r.compte] = r.n
   }
   return { perIssuer }
 }
