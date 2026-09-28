@@ -993,6 +993,66 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   ouvert depuis le `leading` du PageHeader sous `lg` et nom du classeur en
   sous-titre de Navbar (`useNavbarSubtitle`), pages A4 encadrées `bg-card`.
 
+## Audit complet du 2026-09-28 (relecture de code, 6 zones)
+
+Six relectures en parallèle (auth, RepJour, PDJ/Parking/Literie,
+Rapro/Caisse/Facturation, socle, scripts SQL), SANS accès à la base, puis
+correctifs par zone avec tests vérifiés par mutation. ~35 commits, rien
+poussé. Règles qui en sortent :
+
+- **`<>` sur un rôle ou un niveau laisse passer NULL — PARTOUT, pas
+  seulement en facturation.** `admin_update_password` (`<> 'admin'` :
+  appelant SANS profil accepté, prise de contrôle des comptes non admin par
+  un compte révoqué au jeton encore valide) et `set_user_grade`
+  (`p_grade not in (…)` : grade NULL, garde « dernier admin » sautée).
+  Scripts `admin_update_password_garde_null_2026-09-28.sql` et
+  `set_user_grade_garde_null_2026-09-28.sql`, autorité
+  `private_rpc_relais.sql` alignée. `verif_advisor.sql` compte désormais les
+  gardes `<>`/`!=` sur 'gestion'/'admin' (attendu 0).
+- **supabase-js ne lève JAMAIS : lire `{ error }`, et un `update`/`delete`
+  refusé par la RLS rend 0 ligne SANS erreur.** Trouvé à nouveau sur :
+  ban de `delete-user` (`.catch` inopérant, « banni » annoncé à tort ;
+  désormais ban AVANT le retrait du profil), annulation de création de
+  compte, Parking, Lits bébé, Literie, Affichage, RepJour (données),
+  saisies manuelles PDJ. Règle : `.select('id')` + erreur si 0 ligne, et
+  retour arrière visible à l'écran.
+- **`signOut()` n'efface pas la session si le renouvellement du jeton
+  échoue** (auth-js `_signOut` rend `sessionError` avant `_removeSession`) :
+  poste partagé reconnecté tout seul après une panne. `effacerSessionLocale`
+  (`lib/auth/sessionLocale.ts`) + `changerDeCompte(null)` explicite.
+- **Une garde qui ne distingue pas « erreur » de « rien » ment** :
+  `PageGuard`/`ProtectedRoute` affichaient « Aucune page accessible » /
+  « Aucun rôle » après une simple erreur de lecture → `AccessReadErrorNotice`
+  (Réessayer). `ROLE_HOME` retiré : l'accueil vient de `homePage` partout.
+- **La purge RGPD des noms PDJ ne doit pas dépendre d'une visite** : elle est
+  aussi jouée par l'import In-House nocturne (`import-report/pdj.ts`,
+  `purgerNomsAnciens`, clé serveur).
+- **Un script « rejouable » doit l'être AUJOURD'HUI.** ~25 fichiers SQL
+  portent désormais « REMPLACÉ — NE PLUS REJOUER » ou une note d'ordre ;
+  `private_rpc_relais.sql` (section 2) doit être suivi de
+  `facturation_garde_null_2026-09-05.sql` puis des deux scripts du
+  2026-09-28 ; la section (4) de `private_schema_aides.sql` ne se rejoue
+  JAMAIS. Les `verif_securite*.sql` ne plantent plus sur `email_recipients`.
+- Feuilles clôturées (caisse, rapprochement) figées EN BASE par
+  `feuilles_cloturees_figees_2026-09-28.sql` (compatible avec la clôture et
+  la réouverture, lire son en-tête) ; fenêtre caisse sur la date CALENDAIRE
+  (`caisseWindowToday`).
+- Scripts écrits, commités, NON appliqués (application = utilisateur) :
+  `classeur_securite_2026-09-28.sql`, `admin_update_password_garde_null`,
+  `set_user_grade_garde_null`, `pdj_delete_manuel_ecriture`,
+  `feuilles_cloturees_figees`, `affiche_templates_icon_check`,
+  `default_privileges_fonctions` (lire son diagnostic (0) avant). Edge
+  Functions à redéployer : `import-report` (`--no-verify-jwt`),
+  `send-report`, `delete-user`.
+- Laissés à l'utilisateur (décisions) : contrôle SPF/DKIM du Worker trop
+  permissif (tout `dkim=pass`, même d'un autre domaine, est accepté —
+  durcir sans en-têtes RÉELS observés a déjà bloqué l'import le 07/09) ;
+  rejet permanent du Worker sur un 5xx transitoire ; projeté `pm_*` recalculé
+  quand le Forecast arrive après le Comparison ; PDJ « inclus » manuels face
+  à l'Addon ; cautions sans borne de date en base ; commentaire de la feuille
+  de caisse persisté sur disque (choix documenté par `queryPersist.test.ts`) ;
+  `signOut` global (déconnecte TOUS les postes du compte Réception partagé).
+
 ## Faits base de données (vérifiés en lecture)
 
 - Tables : profiles, daily_reports, forecast_days, budget, email_recipients,
