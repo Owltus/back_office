@@ -1,6 +1,8 @@
 -- =============================================================================
--- pdj_delete_manuel_ecriture_2026-09-28 — un compte ÉCRITURE peut retirer SA
--- saisie manuelle PDJ (day-use, no-show revenu…) dans la fenêtre J-3
+-- pdj_delete_manuel_ecriture_2026-09-28 — un compte ÉCRITURE peut retirer
+-- une saisie manuelle PDJ (day-use, no-show revenu…) dans la fenêtre J-3 —
+-- la SIENNE comme celle d'un collègue, exactement comme il peut déjà les
+-- créer et les modifier (insert et update ouverts sur la même fenêtre)
 --
 -- ⚠ NON APPLIQUÉ. À jouer par l'utilisateur :
 --   `supabase db query --linked -f supabase/pdj_delete_manuel_ecriture_2026-09-28.sql`

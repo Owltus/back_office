@@ -156,13 +156,17 @@ begin
   begin
     insert into public.classeur_classeurs (id, name) values (987654321, 'TEST ID');
     ko := array_append(ko, ('ecriture : identifiant de classeur choisi accepté')::text);
-  exception when others then ok := ok + 1;
+  -- Seul le refus ATTENDU compte (identité « generated always ») : un refus
+  -- pour une autre raison (RLS, not null…) ne prouverait rien.
+  exception when generated_always then ok := ok + 1;
+            when others then ko := array_append(ko, (format('ecriture : id choisi refusé pour une autre raison (%s)', sqlstate))::text);
   end;
   begin
     insert into public.classeur_images (classeur_id, chemin, nom)
       values (v_a, v_b::text || '/' || gen_random_uuid()::text || '.webp', 'TEST');   -- A modifiable, dossier de B
     ko := array_append(ko, ('ecriture : fiche image dans le dossier d''un autre classeur')::text);
-  exception when others then ok := ok + 1;
+  exception when check_violation then ok := ok + 1;
+            when others then ko := array_append(ko, (format('ecriture : fiche incohérente refusée pour une autre raison (%s)', sqlstate))::text);
   end;
 
   -- Catalogue (rôle propriétaire) : un ancien fichier rejoué ne doit pas

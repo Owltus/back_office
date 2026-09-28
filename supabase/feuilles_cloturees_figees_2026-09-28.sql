@@ -58,6 +58,10 @@
 -- =============================================================================
 
 -- 1) CAISSE ------------------------------------------------------------------
+-- Une seule transaction (contre-revue du 2026-09-28) : une erreur au milieu
+-- ne doit pas laisser la caisse figée sans le rapprochement.
+begin;
+
 create or replace function private.caisse_cloturee_figee()
 returns trigger
 language plpgsql
@@ -144,6 +148,8 @@ create trigger rapro_jour_cloture_fige
   for each row execute function private.rapro_jour_cloture_fige();
 
 -- 3) VÉRIFICATION (lecture seule) — doit lister les 2 triggers.
+commit;
+
 select event_object_table as table_name, trigger_name,
        string_agg(event_manipulation, ', ' order by event_manipulation) as evenements
 from information_schema.triggers

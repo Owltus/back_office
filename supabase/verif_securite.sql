@@ -9,14 +9,16 @@ select item, status, detail from (
   -- 2026-09-28 : public (relais invoker) ET private (fonctions definer depuis
   -- le 2026-09-05, private_rpc_relais.sql).
   select 1 as ord, 'anon revoke (4 RPC sensibles, public + private)' as item,
+    -- 2026-09-28 : has_function_privilege et non plus aclexplode ⨝ pg_roles.
+    -- Le droit accordé à PUBLIC a grantee = 0, absent de pg_roles : la
+    -- jointure le perdait, et une fonction à l'ACL par défaut (exécutable par
+    -- anon via PUBLIC) passait pour OK — le contrôle ne pouvait pas échouer.
     case when not exists (
       select 1 from pg_proc p
       join pg_namespace n on n.oid = p.pronamespace
-      cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
-      join pg_roles r on r.oid = a.grantee
       where n.nspname in ('public', 'private')
         and p.proname in ('admin_update_password','set_user_grade','set_page_permission','remove_page_permission')
-        and a.privilege_type = 'EXECUTE' and r.rolname = 'anon'
+        and has_function_privilege('anon', p.oid, 'execute')
     ) then 'OK' else 'A FAIRE' end as status, '' as detail
 
   -- 2) admin_update_password : search_path figé (C1)

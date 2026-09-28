@@ -151,6 +151,21 @@ Deno.serve(async (req) => {
   if (profDelErr) {
     // Détail côté serveur uniquement (B3) ; message générique au client.
     console.error('delete-user: suppression profil', profDelErr)
+    // Le ban vient d'être posé (3quinquies) : le lever, sinon le compte
+    // resterait bloqué tout en paraissant actif dans /comptes.
+    const { error: unbanErr } = await admin.auth.admin.updateUserById(userId, {
+      ban_duration: 'none',
+    })
+    if (unbanErr) {
+      console.error('delete-user: levée du blocage', unbanErr)
+      return json(
+        {
+          error:
+            'Suppression du profil échouée, et l’accès du compte est resté bloqué. Réessayez la suppression.',
+        },
+        500,
+      )
+    }
     return json({ error: 'Suppression du profil échouée' }, 400)
   }
 
