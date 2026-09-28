@@ -12,6 +12,8 @@ import type { EffectDefinition } from '#/lib/artefact/effects/types.ts'
  *
  * - Détecteur de séquence : buffer glissant des dernières frappes, insensible à
  *   la casse ET aux accents (« chloé » comme « chloe » marchent).
+ * - Frappes dans un champ (INPUT / TEXTAREA / SELECT / contenteditable)
+ *   ignorées, comme dans `useKeySequence.ts`.
  * - L'overlay est en `pointer-events: none` : il n'intercepte JAMAIS clics ni
  *   saisie — d'où le « n'importe où » sans rien casser.
  * - SSR-safe : l'écouteur clavier est posé côté client dans un effet ; rien n'est
@@ -56,6 +58,15 @@ export function SecretEffect({ keyword, load }: SecretEffectProps) {
     const target = normalize(keyword)
     if (!target) return
     function onKeyDown(e: KeyboardEvent) {
+      // Ne pas capter une frappe destinée à un champ de saisie (même garde
+      // que `useKeySequence.ts`) : sans elle, taper le mot-clé dans un
+      // commentaire, un document du Classeur ou un nom de modèle déclenchait
+      // l'effet en pleine saisie.
+      const el = e.target as HTMLElement | null
+      const tag = el?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      if (el?.isContentEditable) return
+
       if (e.key.length !== 1) return // ignore Shift, Entrée, flèches, etc.
       const typed = normalize(e.key)
       if (!typed) return // touche non-lettre : n'altère pas le buffer
