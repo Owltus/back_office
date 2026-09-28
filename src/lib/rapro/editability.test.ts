@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { canReconcileDay, isDayWithinGrace } from '#/lib/rapro/editability.ts'
+import {
+  canReconcileDay,
+  clotureAutorisee,
+  grilleEditable,
+  isDayWithinGrace,
+  reouvertureAutorisee,
+} from '#/lib/rapro/editability.ts'
 import { addDays } from '#/lib/rapro/day.ts'
 
 const TODAY = '2026-08-03'
@@ -46,5 +52,30 @@ describe('canReconcileDay — niveau + fenêtre', () => {
     expect(canReconcileDay(TODAY, TODAY, 'gestion')).toBe(true)
     expect(canReconcileDay(J3, TODAY, 'gestion')).toBe(true)
     expect(canReconcileDay(addDays(TODAY, -400), TODAY, 'gestion')).toBe(true)
+  })
+})
+
+describe('actions gardées par les lectures (contre-revue 2026-09-28)', () => {
+  it('clôture : exige le jour ET l’occupation lus', () => {
+    expect(clotureAutorisee({ jourLu: true, occupationLue: true })).toBe(true)
+    expect(clotureAutorisee({ jourLu: false, occupationLue: true })).toBe(false)
+    expect(clotureAutorisee({ jourLu: true, occupationLue: false })).toBe(false)
+  })
+
+  it('réouverture : exige le jour lu', () => {
+    expect(reouvertureAutorisee({ jourLu: true })).toBe(true)
+    expect(reouvertureAutorisee({ jourLu: false })).toBe(false)
+  })
+
+  it('grille : champs éditables, jour lu et occupation disponible', () => {
+    const ok = {
+      champsEditables: true,
+      jourLu: true,
+      occupationDisponible: true,
+    }
+    expect(grilleEditable(ok)).toBe(true)
+    expect(grilleEditable({ ...ok, champsEditables: false })).toBe(false)
+    expect(grilleEditable({ ...ok, jourLu: false })).toBe(false)
+    expect(grilleEditable({ ...ok, occupationDisponible: false })).toBe(false)
   })
 })

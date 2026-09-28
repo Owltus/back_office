@@ -44,7 +44,12 @@ import {
   nextFill,
 } from '#/lib/rapro/constants.ts'
 import { addDays, clampDay, today } from '#/lib/rapro/day.ts'
-import { canReconcileDay } from '#/lib/rapro/editability.ts'
+import {
+  canReconcileDay,
+  clotureAutorisee,
+  grilleEditable,
+  reouvertureAutorisee,
+} from '#/lib/rapro/editability.ts'
 import { printRaproSheet } from '#/lib/rapro/pdf.ts'
 import { reconcile } from '#/lib/rapro/reconcile.ts'
 import { FLOORS } from '#/lib/rapro/rooms.ts'
@@ -289,6 +294,23 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   const hasOccupancy = occupied.size > 0
   // Requête PDJ résolue mais vide → occupation indisponible ce jour (≠ chargement).
   const noOccupancy = pdjRows !== undefined && occupied.size === 0
+
+  // Gardes d'écriture (contre-revue du 2026-09-28, règles dans
+  // lib/rapro/editability.ts) : une lecture en ERREUR rend des valeurs par
+  // défaut indiscernables de vraies données. Clôture et réouverture réécrivent
+  // en masse → jour lu avec SUCCÈS (`isSuccess`). Les cases n'écrivent qu'une
+  // chambre → occupation lue au moins une fois (`pdjRows !== undefined`) : un
+  // réessai d'arrière-plan raté ne verrouille pas la grille.
+  const canClose = clotureAutorisee({
+    jourLu: isSuccess,
+    occupationLue: occupancyLoaded,
+  })
+  const canReopen = reouvertureAutorisee({ jourLu: isSuccess })
+  const canEditGrid = grilleEditable({
+    champsEditables: canEditFields,
+    jourLu: isSuccess,
+    occupationDisponible: pdjRows !== undefined,
+  })
 
   // Gate d'affichage : tant que l'occupation (PDJ), la feuille du jour OU les
   // statuts ménage (`day`) ne sont pas résolus, cartes et grille afficheraient des
@@ -569,6 +591,9 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   // d'occupation). Le liseré « bloquée la veille » (clic droit) est ORTHOGONAL et
   // préservé.
   function toggle(room: number) {
+    // Sans occupation lue, `occupied` est vide : le cycle traiterait une chambre
+    // vendue comme « non vendue » et écrirait une couleur fausse.
+    if (!canEditGrid) return
     const current = statuses.get(room) ?? null
     return setColor(
       room,
@@ -698,7 +723,9 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
     setCloseOpen(true)
   }
   function handleConfirmClose() {
-    if (!user) return
+    // Jour non lu = statuts vides : la matérialisation écraserait les refus et
+    // bloquées réels. Occupation non lue = rien à matérialiser.
+    if (!user || !canClose) return
     const name = hotelierName.trim()
     if (!name) return
     setCloseOpen(false)
@@ -726,6 +753,9 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
       )
   }
   function handleReopen() {
+    // Jour non lu = aucune ligne matérialisée connue : la réouverture ne
+    // purgerait rien et les nettoyées fantômes resteraient facturées.
+    if (!canReopen) return
     // A5 : à la réouverture, purger les lignes 'nettoyee' MATÉRIALISÉES à la
     // clôture (une vente annulée depuis ne doit plus être facturée ELIOR en
     // fantôme). Les corrections manuelles (materialized = false) sont épargnées ;
@@ -891,11 +921,13 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
       }
     >
       {/* Occupation non lue = aucune chambre à matérialiser : clôturer
-          ferait disparaître les nettoyées par défaut du récap facturable. */}
+          ferait disparaître les nettoyées par défaut du récap facturable.
+          Jour non lu = statuts vides : la matérialisation écraserait les
+          refus et bloquées réels (`canClose`). */}
       <Button
         className="w-full"
         onClick={openCloseModal}
-        disabled={!occupancyLoaded}
+        disabled={!canClose}
       >
         Clôturer le rapprochement
       </Button>
@@ -906,6 +938,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
         variant="outline"
         className="w-full border-emerald-500/40 text-emerald-500 hover:bg-emerald-500/10 hover:text-emerald-500 dark:hover:bg-emerald-500/10"
         onClick={handleReopen}
+        disabled={!canReopen}
       >
         Réouvrir le rapprochement
       </Button>
@@ -1197,7 +1230,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
             </div>
           )}
 
-          <div className={cn('rapro-floors', !canEditFields && 'is-locked')}>
+          <div className={cn('rapro-floors', !canEditGrid && 'is-locked')}>
             {FLOORS.map(({ floor, rooms }) => {
               // Bouton de rollback actif seulement si au moins une chambre de
               // l'étage porte une couleur OU un liseré manuel à annuler.
@@ -1208,7 +1241,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
                 <div key={floor} className="rapro-floor">
                   <div className="rapro-floor-head">
                     <span className="rapro-floor-title">Étage {floor}</span>
-                    {canEditFields && (
+                    {canEditGrid && (
                       <button
                         type="button"
                         className="rapro-floor-action"
@@ -1237,7 +1270,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
                         sold={occupied.has(room)}
                         carried={carried.has(room)}
                         pressing={pressingRoom === room}
-                        disabled={!isSuccess}
+                        disabled={!canEditGrid}
                         onTap={handleRoomTap}
                         onContext={toggleManual}
                         onPointerDown={startLongPress}
