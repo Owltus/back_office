@@ -9,12 +9,23 @@ import type { PdjAddonRow, PdjDayRow } from '#/lib/pdj/service.ts'
  * lit alors 0 ligne, sans erreur.
  */
 
-const sim = vi.hoisted(() => ({ lignes: 0, selects: [] as string[] }))
+const sim = vi.hoisted(() => ({
+  lignes: 0,
+  selects: [] as string[],
+  /** Relecture après un retrait à 0 ligne : la saisie existe-t-elle encore ? */
+  presente: true,
+  relectureErreur: null as { message: string } | null,
+}))
 
 vi.mock('#/lib/supabase.ts', () => {
   const from = () => {
     let select: string | null = null
+    let unique = false
     const q = {
+      maybeSingle() {
+        unique = true
+        return q
+      },
       update: () => q,
       delete: () => q,
       eq: () => q,
@@ -27,7 +38,14 @@ vi.mock('#/lib/supabase.ts', () => {
         sim.selects.push(cols)
         return q
       },
-      then(resolve: (r: { data: unknown; error: null }) => void) {
+      then(resolve: (r: { data: unknown; error: unknown }) => void) {
+        if (unique) {
+          resolve({
+            data: sim.presente ? { id: 'x' } : null,
+            error: sim.relectureErreur,
+          })
+          return
+        }
         const data =
           select === null
             ? null
@@ -43,6 +61,7 @@ vi.mock('#/lib/supabase.ts', () => {
 const {
   PDJ_ADDON_COLUMNS,
   PDJ_DAY_COLUMNS,
+  SaisieNonRetireeError,
   fetchAddonProduction,
   fetchDay,
   purgeOldGuestNames,
@@ -52,6 +71,8 @@ const {
 beforeEach(() => {
   sim.lignes = 1
   sim.selects = []
+  sim.presente = true
+  sim.relectureErreur = null
 })
 
 describe('setManualServe — retrait d’une saisie manuelle', () => {
@@ -61,11 +82,33 @@ describe('setManualServe — retrait d’une saisie manuelle', () => {
     ).resolves.toBeUndefined()
   })
 
-  it('0 ligne (refus RLS silencieux) : erreur', async () => {
+  it('0 ligne et saisie encore là (refus RLS silencieux) : refus typé', async () => {
     sim.lignes = 0
+    sim.presente = true
     await expect(
       setManualServe('2026-09-28', 101, 0, 'inclus'),
-    ).rejects.toThrow(/Saisie non retirée/)
+    ).rejects.toBeInstanceOf(SaisieNonRetireeError)
+  })
+
+  it('0 ligne et saisie absente (déjà retirée ailleurs) : succès', async () => {
+    sim.lignes = 0
+    sim.presente = false
+    await expect(
+      setManualServe('2026-09-28', 101, 0, 'inclus'),
+    ).resolves.toBeUndefined()
+  })
+
+  it('0 ligne et relecture en échec : erreur non typée « refus »', async () => {
+    sim.lignes = 0
+    sim.relectureErreur = { message: 'réseau' }
+    const err: unknown = await setManualServe(
+      '2026-09-28',
+      101,
+      0,
+      'inclus',
+    ).catch((e: unknown) => e)
+    expect(err).toEqual({ message: 'réseau' })
+    expect(err).not.toBeInstanceOf(SaisieNonRetireeError)
   })
 })
 

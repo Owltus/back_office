@@ -242,6 +242,15 @@ export async function setServed(
   }
 }
 
+/** Retrait d'une saisie manuelle REFUSÉ (la ligne est toujours là après le
+ * DELETE) — distinct d'une erreur réseau, pour un message juste. */
+export class SaisieNonRetireeError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'SaisieNonRetireeError'
+  }
+}
+
 /**
  * Saisie MANUELLE d'un PDJ dans une chambre non check-in (day-use, no-show
  * revenu…). Contrairement à `setServed` (UPDATE d'une ligne existante), ceci
@@ -271,9 +280,23 @@ export async function setManualServe(
       .not('manual_kind', 'is', null)
       .select('id')
     if (error) throw error
-    if (data.length === 0) {
-      throw new Error(
-        `Saisie non retirée (${serviceDate}, chambre ${room}) : droit insuffisant ou déjà retirée.`,
+    if (data.length > 0) return
+    // 0 ligne : refus de la RLS OU saisie déjà retirée par un collègue
+    // (contre-revue du 2026-09-28 : on annonçait « droit insuffisant » à
+    // tort). On relit pour départager — au plus une ligne, unique
+    // (service_date, room) : absente = le but est atteint, succès ; présente
+    // = vrai refus. Une relecture en échec reste une erreur.
+    const { data: encore, error: relecture } = await supabase
+      .from(PDJ_TABLE)
+      .select('id')
+      .eq('service_date', serviceDate)
+      .eq('room', room)
+      .not('manual_kind', 'is', null)
+      .maybeSingle()
+    if (relecture) throw relecture
+    if (encore) {
+      throw new SaisieNonRetireeError(
+        `Saisie non retirée (${serviceDate}, chambre ${room}) : droit insuffisant.`,
       )
     }
     return

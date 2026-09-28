@@ -84,6 +84,7 @@ import {
   PDJ_DATES_KEY,
   importRows,
   purgeOldGuestNames,
+  SaisieNonRetireeError,
   setExternalsCount,
   setManualServe,
   setServed,
@@ -1093,9 +1094,14 @@ export function BreakfastBoard({ initialDate }: { initialDate?: string }) {
         void queryClient.invalidateQueries({
           queryKey: ['pdj', 'day', selectedDate],
         })
+        // Retrait : « refusée » SEULEMENT si la ligne est toujours là
+        // (SaisieNonRetireeError) ; déjà retirée par un collègue = succès côté
+        // service, jamais ici ; toute autre erreur (réseau) = message neutre.
         flashAuto(
           n <= 0
-            ? 'Suppression refusée : droit insuffisant.'
+            ? err instanceof SaisieNonRetireeError
+              ? 'Suppression refusée : droit insuffisant.'
+              : "La suppression n'a pas pu être enregistrée. Réessayez."
             : 'Enregistrement refusé : jour hors fenêtre ou droit insuffisant.',
           'warn',
         )
