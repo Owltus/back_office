@@ -39,5 +39,5 @@
       ]
     }
   ],
-  "rewrites": [{ "source": "/(.*)", "destination": "/_shell.html" }]
+  "rewrites": [{ "source": "/((?!assets/).*)", "destination": "/_shell.html" }]
 }

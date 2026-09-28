@@ -7,8 +7,52 @@ import { NotFound } from '#/components/shared/NotFound.tsx'
 import { RouteError } from '#/components/shared/RouteError.tsx'
 import { PendingRoute } from '#/components/shared/skeleton/RouteSkeleton.tsx'
 
+/**
+ * Clé de la garde anti-boucle du rechargement sur chunk disparu : horodatage
+ * (ms) du dernier rechargement DÉCLENCHÉ par cet écouteur, dans cet onglet.
+ */
+const CLE_RECHARGEMENT_CHUNK = 'bo.chunkReload.v1'
+/** Deux rechargements automatiques ne sont jamais séparés de moins d'une minute. */
+const ECART_MIN_RECHARGEMENT_MS = 60_000
+let rechargementChunkBranche = false
+
+/*
+ * CHUNK DISPARU APRÈS UN DÉPLOIEMENT (2026-09-28). Un onglet ouvert avant un
+ * déploiement réclame, à la navigation suivante, des fichiers `/assets/…`
+ * empreintés qui n'existent plus. Vite émet alors `vite:preloadError` : on
+ * recharge la page UNE fois, ce qui récupère le nouveau shell et ses nouveaux
+ * chunks. `vercel.json` exclut `/assets/` de la réécriture SPA pour que le
+ * fichier manquant réponde bien 404 (avant, le shell était servi à sa place,
+ * en 200 et `immutable`).
+ *
+ * Garde anti-boucle en `sessionStorage` : pas de second rechargement
+ * automatique dans la minute (un chunk VRAIMENT absent du déploiement courant
+ * laisse alors l'erreur remonter à `RouteError`, au lieu de recharger sans
+ * fin). Stockage inaccessible (navigation privée stricte) = on ne recharge
+ * PAS : mieux vaut une erreur visible qu'une boucle.
+ */
+function brancherRechargementSurChunkPerdu() {
+  if (typeof window === 'undefined' || rechargementChunkBranche) return
+  rechargementChunkBranche = true
+  window.addEventListener('vite:preloadError', (event) => {
+    try {
+      const maintenant = Date.now()
+      const dernier = Number(
+        window.sessionStorage.getItem(CLE_RECHARGEMENT_CHUNK) ?? 0,
+      )
+      if (maintenant - dernier < ECART_MIN_RECHARGEMENT_MS) return
+      window.sessionStorage.setItem(CLE_RECHARGEMENT_CHUNK, String(maintenant))
+      event.preventDefault()
+      window.location.reload()
+    } catch {
+      // Stockage indisponible : pas de rechargement, l'erreur suit son cours.
+    }
+  })
+}
+
 export function getRouter() {
   const context = getContext()
+  brancherRechargementSurChunkPerdu()
 
   const router = createTanStackRouter({
     routeTree,
