@@ -851,6 +851,152 @@ revoke execute on function public.classeur_personnes() from public, anon;
 grant execute on function public.classeur_personnes() to authenticated;
 
 
+-- =============================================================================
+-- 9) DURCISSEMENT (2026-09-28) — bloc IDENTIQUE à
+--    classeur_securite_2026-09-28.sql (voir son en-tête pour le pourquoi).
+--    DOIT rester APRÈS la section 8 : il remplace classeur_stamp (section 3)
+--    et classeur_garde (section 8).
+-- =============================================================================
+-- 1) Identifiants : generated always ------------------------------------------
+do $$
+declare t text;
+begin
+  for t in
+    select c.relname
+      from pg_attribute a
+      join pg_class c on c.oid = a.attrelid
+      join pg_namespace n on n.oid = c.relnamespace
+     where n.nspname = 'public' and c.relkind = 'r'
+       and c.relname like 'classeur\_%'
+       and a.attname = 'id' and a.attidentity = 'd'
+  loop
+    execute format('alter table public.%I alter column id set generated always', t);
+  end loop;
+end $$;
+
+-- 2) Estampillage : horodatages bornés au présent ------------------------------
+create or replace function public.classeur_stamp()
+returns trigger
+language plpgsql
+security invoker
+set search_path to 'public'
+as $function$
+begin
+  -- 2026-09-25 (classeur_stamp_updated_at_2026-09-25.sql) : un `updated_at`
+  -- FOURNI par le client est respecté (fusion JSON : horodatage du fichier,
+  -- règle « dernier écrit gagne ») ; sinon now(), comme avant.
+  -- 2026-09-28 (classeur_securite_2026-09-28.sql) : jamais dans le futur
+  -- (au-delà de 5 min de dérive d'horloge, ramené à now()).
+  if tg_op = 'INSERT' then
+    new.created_by := auth.uid();
+    if new.updated_at is null then
+      new.updated_at := now();
+    end if;
+    if new.created_at > now() + interval '5 minutes' then
+      new.created_at := now();
+    end if;
+  else
+    new.created_by := private.keep_author(new.created_by, old.created_by);
+    if new.updated_at is not distinct from old.updated_at then
+      new.updated_at := now();
+    end if;
+  end if;
+  if new.updated_at > now() + interval '5 minutes' then
+    new.updated_at := now();
+  end if;
+  return new;
+end;
+$function$;
+revoke execute on function public.classeur_stamp() from public, anon, authenticated;
+
+-- 3) Garde du classeur : création rangée en fin de liste -----------------------
+create or replace function private.classeur_garde()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  -- Contexte système (CLI, service) : aucune garde.
+  if auth.uid() is null or private.classeur_gestion_ok() then
+    return new;
+  end if;
+  if tg_op = 'INSERT' then
+    -- « Privé » à la création : réservé à la gestion.
+    new.acces_tous := 'lecture';
+    -- Ni créé supprimé, ni placé où l'on veut dans la liste PARTAGÉE
+    -- (réordonner = gestion) : toujours en fin de liste.
+    new.deleted_at := null;
+    new.sort_order := coalesce(
+      (select max(c.sort_order) from public.classeur_classeurs c), 0) + 1;
+    return new;
+  end if;
+  if new.acces_tous is distinct from old.acces_tous then
+    raise exception 'Seule la gestion modifie l''accès d''un classeur.' using errcode = '42501';
+  end if;
+  if new.deleted_at is distinct from old.deleted_at then
+    raise exception 'Seule la gestion supprime un classeur.' using errcode = '42501';
+  end if;
+  if new.sort_order is distinct from old.sort_order then
+    raise exception 'Seule la gestion réordonne la liste des classeurs.' using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+revoke execute on function private.classeur_garde() from public, anon, authenticated;
+
+-- 4) Fiche image : chemin dans le dossier de SON classeur ----------------------
+do $$ begin
+  if not exists (select 1 from pg_constraint
+                  where conname = 'classeur_images_chemin_du_classeur') then
+    alter table public.classeur_images
+      add constraint classeur_images_chemin_du_classeur
+      check (split_part(chemin, '/', 1) = classeur_id::text);
+  end if;
+end $$;
+
+-- 5) L'historique suit le document ------------------------------------------------
+create or replace function private.classeur_versions_suivent()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if tg_table_name = 'classeur_documents' then
+    if new.chapter_id is distinct from old.chapter_id then
+      update public.classeur_document_versions v
+         set classeur_id = ch.classeur_id
+        from public.classeur_chapters ch
+       where ch.id = new.chapter_id
+         and v.document_id = new.id
+         and v.classeur_id is distinct from ch.classeur_id;
+    end if;
+  elsif new.classeur_id is distinct from old.classeur_id then
+    update public.classeur_document_versions v
+       set classeur_id = new.classeur_id
+      from public.classeur_documents d
+     where d.chapter_id = new.id
+       and v.document_id = d.id
+       and v.classeur_id is distinct from new.classeur_id;
+  end if;
+  return null;
+end;
+$$;
+revoke execute on function private.classeur_versions_suivent() from public, anon, authenticated;
+
+drop trigger if exists classeur_versions_suivent on public.classeur_documents;
+create trigger classeur_versions_suivent
+  after update of chapter_id on public.classeur_documents
+  for each row execute function private.classeur_versions_suivent();
+drop trigger if exists classeur_versions_suivent on public.classeur_chapters;
+create trigger classeur_versions_suivent
+  after update of classeur_id on public.classeur_chapters
+  for each row execute function private.classeur_versions_suivent();
+
+-- 6) search_path vide ----------------------------------------------------------------
+alter function private.classeur_chapter_write_ok(bigint) set search_path = '';
+
 commit;
 
 -- =============================================================================

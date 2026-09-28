@@ -152,6 +152,43 @@ begin
   select count(*) into v_n from public.classeur_classeurs where id = v_neuf;
   if v_n = 0 then ok := ok + 1; else ko := array_append(ko, ('ecriture : créateur voit encore après retrait')::text); end if;
 
+  -- Durcissement du 2026-09-28 (classeur_securite_2026-09-28.sql) ---------
+  begin
+    insert into public.classeur_classeurs (id, name) values (987654321, 'TEST ID');
+    ko := array_append(ko, ('ecriture : identifiant de classeur choisi accepté')::text);
+  exception when others then ok := ok + 1;
+  end;
+  begin
+    insert into public.classeur_images (classeur_id, chemin, nom)
+      values (v_a, v_b::text || '/' || gen_random_uuid()::text || '.webp', 'TEST');   -- A modifiable, dossier de B
+    ko := array_append(ko, ('ecriture : fiche image dans le dossier d''un autre classeur')::text);
+  exception when others then ok := ok + 1;
+  end;
+
+  -- Catalogue (rôle propriétaire) : un ancien fichier rejoué ne doit pas
+  -- avoir rouvert la lecture ou la suppression au seul rang de page.
+  perform set_config('role', 'postgres', true);
+  select sort_order into v_n from public.classeur_classeurs where id = v_neuf;
+  if v_n = (select max(sort_order) from public.classeur_classeurs where id <> v_neuf) + 1 then ok := ok + 1;
+  else ko := array_append(ko, (format('ecriture : classeur créé au rang %s, pas en fin de liste', v_n))::text); end if;
+  select count(*) into v_n from pg_policies
+   where schemaname = 'public' and tablename like 'classeur\_%' and cmd = 'SELECT'
+     and tablename not in ('classeur_periodicites', 'classeur_acces')
+     and qual !~ 'classeur_(lecture_ok|lecture_ligne|chapter_read_ok)';
+  if v_n = 0 then ok := ok + 1; else ko := array_append(ko, (format('catalogue : %s lecture(s) au seul rang de page (ancien fichier rejoué ?)', v_n))::text); end if;
+  select count(*) into v_n from pg_policies
+   where schemaname = 'public' and tablename = 'classeur_merge_history' and cmd = 'DELETE'
+     and qual ~ 'auto' and qual !~ 'classeur_write_ok';
+  if v_n = 0 then ok := ok + 1; else ko := array_append(ko, ('catalogue : suppression des points auto sans classeur_write_ok')::text); end if;
+  select count(*) into v_n from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'private' and p.proname = 'classeur_write_ok' and p.prosrc ~ 'classeur_niveau';
+  if v_n = 1 then ok := ok + 1; else ko := array_append(ko, ('catalogue : classeur_write_ok n''est plus le niveau effectif')::text); end if;
+  select count(*) into v_n from pg_attribute a join pg_class c on c.oid = a.attrelid
+   where c.relname like 'classeur\_%' and c.relkind = 'r' and a.attname = 'id' and a.attidentity = 'd';
+  if v_n = 0 then ok := ok + 1; else ko := array_append(ko, (format('catalogue : %s identifiant(s) encore « by default »', v_n))::text); end if;
+  select count(*) into v_n from pg_trigger where tgname = 'classeur_versions_suivent' and not tgisinternal;
+  if v_n = 2 then ok := ok + 1; else ko := array_append(ko, (format('catalogue : %s/2 triggers classeur_versions_suivent', v_n))::text); end if;
+
   raise exception 'RESULTAT % % / % : %', case when cardinality(ko) = 0 then 'OK' else 'ECARTS' end,
     ok, ok + cardinality(ko), array_to_string(ko, ' | ');
 end $$;

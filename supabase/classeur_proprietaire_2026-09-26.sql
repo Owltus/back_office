@@ -1,4 +1,11 @@
 -- =============================================================================
+-- REMPLACÉ — NE PLUS REJOUER (audit de sécurité du 2026-09-28).
+-- Rejoué, il remettrait l'ancienne `classeur_write_ok` (créateur seul) :
+-- les exceptions par personne et `acces_tous` ne compteraient plus.
+-- Autorité : classeur_2026-09-25.sql (sections 8 et 9). Contrôle :
+-- verif_classeur_acces.sql (échoue si ce fichier a été rejoué).
+-- =============================================================================
+-- =============================================================================
 -- classeur_proprietaire_2026-09-26.sql — droits PAR CLASSEUR, sur le modèle
 -- de l'Affichage (affiche_owner_model.sql) : le niveau `ecriture` ne modifie
 -- que les classeurs qu'il a créés, `gestion` (et l'admin) tout.

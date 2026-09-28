@@ -1,4 +1,11 @@
 -- =============================================================================
+-- REMPLACÉ — NE PLUS REJOUER (audit de sécurité du 2026-09-28).
+-- Rejoué, il laisserait tout compte `ecriture` supprimer les points
+-- automatiques de n'importe quel classeur, même caché.
+-- Autorité : classeur_2026-09-25.sql (sections 8 et 9). Contrôle :
+-- verif_classeur_acces.sql (échoue si ce fichier a été rejoué).
+-- =============================================================================
+-- =============================================================================
 -- classeur_points_restauration_2026-09-26.sql — l'historique des fusions
 -- devient un système de POINTS DE RESTAURATION (mineurs / majeurs).
 --

@@ -1,4 +1,11 @@
 -- =============================================================================
+-- REMPLACÉ — NE PLUS REJOUER (audit de sécurité du 2026-09-28).
+-- Rejoué, il rouvrirait la lecture de la médiathèque de TOUS les classeurs
+-- (privés compris) au seul rang de page.
+-- Autorité : classeur_2026-09-25.sql (sections 8 et 9). Contrôle :
+-- verif_classeur_acces.sql (échoue si ce fichier a été rejoué).
+-- =============================================================================
+-- =============================================================================
 -- classeur_images_table_2026-09-26.sql — MÉDIATHÈQUE d'un classeur : la
 -- table `classeur_images` qui décrit chaque image du bucket.
 --
