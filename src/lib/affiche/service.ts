@@ -48,8 +48,27 @@ export interface DbAfficheTemplate {
   created_by: string | null
 }
 
+/** Colonnes ajoutées après la création de la table (état complet du modèle). */
+type ColonnesTardives =
+  | 'date_start'
+  | 'date_end'
+  | 'time_start'
+  | 'time_end'
+  | 'is_auto_size_mode'
+  | 'font_size_icon'
+  | 'font_size_title'
+  | 'font_size_message'
+  | 'font_size_info'
+  | 'gap'
+
+/** Ligne telle que LUE : sur une base pas encore migrée, les colonnes
+ *  tardives manquent (et `created_by` est nul pour les seeds). Le typage le dit,
+ *  ce qui rend les replis ci-dessous légitimes aux yeux du linter. */
+export type DbAfficheTemplateLu = Omit<DbAfficheTemplate, ColonnesTardives> &
+  Partial<Pick<DbAfficheTemplate, ColonnesTardives>>
+
 /** DB → modèle applicatif (PosterContent + name + id + createdBy). */
-export function toAfficheTemplate(row: DbAfficheTemplate): AfficheTemplate {
+export function toAfficheTemplate(row: DbAfficheTemplateLu): AfficheTemplate {
   return {
     id: row.id,
     name: row.name,

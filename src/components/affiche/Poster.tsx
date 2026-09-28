@@ -109,6 +109,7 @@ export const Poster = memo(function Poster(props: PosterProps) {
   // inatteignable (color.icon est un littéral toujours truthy) et la typerait
   // `never`. On préserve la sémantique du fork (`color.icon || color.text`).
   const textColor: string = color.text
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- sémantique du fork conservée (voir ci-dessus)
   const iconColor = color.icon || textColor
 
   // Section EN + divider pilotés par la présence de contenu anglais.
