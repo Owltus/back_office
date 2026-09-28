@@ -4,6 +4,10 @@
 -- Application : `supabase db query --linked -f supabase/private_rpc_relais.sql`
 -- EN UNE FOIS (une transaction). Fichier GÉNÉRÉ depuis le catalogue de prod
 -- (pg_get_functiondef, pg_get_function_arguments, 2026-09-05) puis relu.
+-- ⚠ ORDRE (revue du 2026-09-28) : les 28 corps facturation_* de ce fichier
+-- portent encore la garde `<> 'gestion'` (NULL passe). Tout rejeu DOIT être
+-- suivi de facturation_garde_null_2026-09-05.sql, sinon un compte sans droit
+-- facturation peut de nouveau écrire.
 -- Rejeu : les `alter … set schema` échouent si déjà appliqué ; rejouer les
 -- sections (2) et (3) après `drop function public.<relais>` si besoin.
 --
@@ -73,7 +77,8 @@ CREATE OR REPLACE FUNCTION private.admin_update_password(target_user_id uuid, ne
  SET search_path TO 'public', 'extensions'
 AS $function$
 begin
-  if (select role from public.profiles where id = auth.uid()) <> 'admin' then
+  -- 2026-09-28 (admin_update_password_garde_null_2026-09-28.sql) : NULL-sûr.
+  if not private.is_admin() then
     raise exception 'Accès refusé : rôle admin requis';
   end if;
   if target_user_id <> auth.uid()
