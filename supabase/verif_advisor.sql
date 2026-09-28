@@ -69,7 +69,32 @@ with checks(ordre, controle, ok) as (
       (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
        where n.nspname = 'private' and p.prokind = 'f'
          and (case when p.prokind = 'f' then pg_get_functiondef(p.oid) end)
-             ~ ('public\.(' || (select string_agg(q.proname, '|') from pg_proc q join pg_namespace m on m.oid = q.pronamespace where m.nspname = 'private') || ')\(')) = 0)
+             ~ ('public\.(' || (select string_agg(q.proname, '|') from pg_proc q join pg_namespace m on m.oid = q.pronamespace where m.nspname = 'private') || ')\(')) = 0),
+    -- 2026-09-28 (revue des rejeux) : une garde `x <> 'gestion'` / `<> 'admin'`
+    -- laisse passer NULL (compte sans droit / sans profil) : `NULL <> 'gestion'`
+    -- vaut NULL, et `if NULL` ne lève rien. Seules formes admises :
+    -- `is distinct from`, `private.is_admin()`, `page_level_rank(...) >= n`.
+    -- Commentaires SQL retirés avant la recherche (les correctifs citent
+    -- l'ancienne garde en commentaire). Les comparaisons d'un PARAMÈTRE
+    -- (`p_xxx <> 'admin'`, validation d'entrée et non garde d'appelant) sont
+    -- écartées. Le libellé nomme les fonctions fautives.
+    (11, 'aucune garde <> / != sur ''gestion'' ou ''admin'' (public + private) : '
+         || coalesce((select string_agg(n.nspname || '.' || p.proname, ', ' order by p.proname)
+                      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+                      where n.nspname in ('public','private') and p.prokind = 'f'
+                        and regexp_replace(regexp_replace(
+                              (case when p.prokind = 'f' then pg_get_functiondef(p.oid) end),
+                              '--[^\n]*', '', 'g'),
+                              '\mp_[a-z0-9_]+\s*(<>|!=)\s*''[a-z_]+''', '', 'g')
+                            ~ '((<>|!=)\s*''(gestion|admin)'')|(''(gestion|admin)''\s*(<>|!=))'),
+                     'aucune'),
+      (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+       where n.nspname in ('public','private') and p.prokind = 'f'
+         and regexp_replace(regexp_replace(
+               (case when p.prokind = 'f' then pg_get_functiondef(p.oid) end),
+               '--[^\n]*', '', 'g'),
+               '\mp_[a-z0-9_]+\s*(<>|!=)\s*''[a-z_]+''', '', 'g')
+             ~ '((<>|!=)\s*''(gestion|admin)'')|(''(gestion|admin)''\s*(<>|!=))') = 0)
 )
 select controle,
        case when ok then 'OK' else 'KO' end as verdict

@@ -43,10 +43,15 @@ with checks(ordre, controle, ok) as (
          and (coalesce(qual,'')||coalesce(with_check,'')) ilike '%current_date - 1%') >= 2),
 
     -- FACTURATION
-    (7, 'facturation : aucune garde < 2 restante (tout gestion)',
+    -- 2026-09-28 : étendu à `private` (les 28 RPC facturation y vivent depuis
+    -- le 2026-09-05 : ne scanner que public ne pouvait plus rien trouver) et à
+    -- la garde `<> 'gestion'` / `!= 'gestion'`, qui laisse passer NULL
+    -- (facturation_garde_null_2026-09-05.sql).
+    (7, 'facturation : aucune garde < 2 ni <> ''gestion'' restante (public + private)',
       (select count(*) from pg_proc
-       where pronamespace='public'::regnamespace
-         and prosrc like '%get_page_level(''facturation'')) < 2%') = 0),
+       where pronamespace in ('public'::regnamespace, 'private'::regnamespace)
+         and (prosrc like '%get_page_level(''facturation'')) < 2%'
+              or prosrc ~ 'get_page_level\(''facturation''\)\)?\s*(<>|!=)\s*''gestion''')) = 0),
 
     -- AFFICHAGE
     (8, 'affichage : colonne created_by',

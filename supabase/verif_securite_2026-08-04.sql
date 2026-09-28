@@ -51,12 +51,16 @@ select 'M2c — daily_reports_occ pas d''exec anon/public' as controle,
   ) as ok;
 
 -- I6 — set_user_grade porte la garde « dernier admin »
-select 'I6 — garde dernier admin' as controle,
-  (
+-- 2026-09-28 : mis à jour. Depuis le 2026-09-05 (private_rpc_relais.sql), la
+-- garde vit dans private.set_user_grade ; public.set_user_grade n'est qu'un
+-- relais invoker (`select private.set_user_grade(...)`) : l'ancien contrôle,
+-- qui lisait le corps PUBLIC, échouait pour toujours.
+select 'I6 — garde dernier admin (private.set_user_grade)' as controle,
+  coalesce((
     select pg_get_functiondef(p.oid) like '%dernier admin%'
     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-    where n.nspname = 'public' and p.proname = 'set_user_grade'
-  ) as ok;
+    where n.nspname = 'private' and p.proname = 'set_user_grade'
+  ), false) as ok;
 
 -- F4 — search_path figé sur les 7 fonctions d'estampillage présentes
 select 'F4 — search_path triggers stamp' as controle,
@@ -71,11 +75,16 @@ select 'F4 — search_path triggers stamp' as controle,
   ) as ok;
 
 -- F2 — CHECK de format email posé
-select 'F2 — CHECK format email' as controle,
-  exists (
+-- 2026-09-28 : OBSOLÈTE — la table email_recipients a été SUPPRIMÉE le
+-- 2026-09-06 (email_recipients_drop_2026-09-06.sql). L'ancien
+-- `'public.email_recipients'::regclass` levait une erreur et interrompait le
+-- script. to_regclass rend NULL sans erreur : table absente = sans objet (ok).
+select 'F2 — CHECK format email (OBSOLÈTE : table supprimée le 2026-09-06)' as controle,
+  to_regclass('public.email_recipients') is null
+  or exists (
     select 1 from pg_constraint
     where conname = 'email_recipients_email_format'
-      and conrelid = 'public.email_recipients'::regclass
+      and conrelid = to_regclass('public.email_recipients')
   ) as ok;
 
 -- Contrôle transverse — aucune table publique sans RLS

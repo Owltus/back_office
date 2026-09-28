@@ -6,23 +6,27 @@
 select item, status, detail from (
 
   -- 1) anon ne peut plus exécuter les 4 RPC sensibles
-  select 1 as ord, 'anon revoke (4 RPC sensibles)' as item,
+  -- 2026-09-28 : public (relais invoker) ET private (fonctions definer depuis
+  -- le 2026-09-05, private_rpc_relais.sql).
+  select 1 as ord, 'anon revoke (4 RPC sensibles, public + private)' as item,
     case when not exists (
       select 1 from pg_proc p
       join pg_namespace n on n.oid = p.pronamespace
       cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
       join pg_roles r on r.oid = a.grantee
-      where n.nspname = 'public'
+      where n.nspname in ('public', 'private')
         and p.proname in ('admin_update_password','set_user_grade','set_page_permission','remove_page_permission')
         and a.privilege_type = 'EXECUTE' and r.rolname = 'anon'
     ) then 'OK' else 'A FAIRE' end as status, '' as detail
 
   -- 2) admin_update_password : search_path figé (C1)
   union all
-  select 2, 'C1 admin_update_password search_path figé',
+  -- 2026-09-28 : la fonction privilégiée vit dans private (le relais public
+  -- a lui aussi un search_path) : exiger la version private.
+  select 2, 'C1 admin_update_password search_path figé (private)',
     case when exists (
       select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-      where n.nspname = 'public' and p.proname = 'admin_update_password'
+      where n.nspname = 'private' and p.proname = 'admin_update_password'
         and p.proconfig is not null
         and exists (select 1 from unnest(p.proconfig) c where c like 'search_path=%')
     ) then 'OK' else 'A FAIRE' end, ''
@@ -62,11 +66,18 @@ select item, status, detail from (
     then 'OK' else 'A FAIRE' end, ''
 
   -- 6) M4 : contrainte de format email
+  -- 2026-09-28 : OBSOLÈTE — la table email_recipients a été SUPPRIMÉE le
+  -- 2026-09-06 (email_recipients_drop_2026-09-06.sql) ; l'ancien
+  -- `'public.email_recipients'::regclass` faisait planter tout le script.
+  -- to_regclass rend NULL sans erreur : table absente = sans objet.
   union all
-  select 6, 'M4 contrainte format email',
-    case when exists (select 1 from pg_constraint
-      where conrelid='public.email_recipients'::regclass and conname='email_recipients_email_format')
-    then 'OK' else 'A FAIRE' end, ''
+  select 6, 'M4 contrainte format email (OBSOLÈTE si table supprimée)',
+    case when to_regclass('public.email_recipients') is null then 'SANS OBJET'
+         when exists (select 1 from pg_constraint
+      where conrelid=to_regclass('public.email_recipients') and conname='email_recipients_email_format')
+    then 'OK' else 'A FAIRE' end,
+    case when to_regclass('public.email_recipients') is null
+         then 'table supprimee le 2026-09-06 (seule liste : server_report_recipients)' else '' end
 
   -- 7) B5 : easter_eggs écritures via is_admin() (plus get_user_role)
   union all
