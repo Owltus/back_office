@@ -951,6 +951,9 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   rangée `items-stretch` ; seules les pages du Classeur passent `leading`,
   rendu inchangé ailleurs), en `outline`, 48 px de large, aussi haut que
   titre + sous-titre (`self-stretch`).
+  Page d'un chapitre (même jour) : comme l'accueil, recherche à gauche et
+  boutons à droite sur UNE ligne (plus d'actions dans le `PageHeader`) ;
+  sous 640 px en mode sélection, le compteur n'affiche que le nombre.
   Non fait (à rediscuter) : `PageHeader` partagé (tiroir sur sa propre
   ligne sous `sm`), zoom de grille au doigt, croix des dialogues, pages A4
   petites sur téléphone (pincement du navigateur), clavier virtuel.

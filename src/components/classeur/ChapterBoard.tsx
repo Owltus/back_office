@@ -370,7 +370,6 @@ export function ChapterBoard({
       {...(canWrite ? dragProps : {})}
     >
       <PageHeader
-        actionsAlign="end"
         leading={<ChapterDrawerButton />}
         title={
           chapterQ.isPending ? (
@@ -383,8 +382,54 @@ export function ChapterBoard({
           )
         }
         meta={chapter?.description.trim() ? chapter.description : undefined}
-        actions={
-          selection.selectionMode ? (
+      />
+
+      {erreurs.map((e) => (
+        <div
+          key={e.cle}
+          className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive"
+        >
+          {messageErreur(e.err, e.action)}
+        </div>
+      ))}
+
+      {refus.length > 0 && (
+        <ul className="list-inside list-disc rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {refus.map((m) => (
+            <li key={m}>{m}</li>
+          ))}
+        </ul>
+      )}
+
+      {importation.isPending && (
+        <Alert>
+          <Loader2 className="animate-spin" />
+          <AlertDescription>Import des fichiers en cours.</AlertDescription>
+        </Alert>
+      )}
+
+      {/* Recherche à gauche, boutons du chapitre à droite, sur UNE ligne à
+          toute largeur (demande utilisateur du 2026-09-28, comme l'accueil
+          du classeur) : la recherche absorbe le rétrécissement. */}
+      <div className="flex items-center gap-2">
+        <div className="relative min-w-0 flex-1">
+          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={recherche}
+            onChange={(e) => setRecherche(e.target.value)}
+            type="search"
+            enterKeyHint="search"
+            placeholder="Rechercher dans le chapitre"
+            aria-label="Rechercher dans le chapitre"
+            className="pl-9"
+            disabled={!contenu}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setRecherche('')
+            }}
+          />
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {selection.selectionMode ? (
             /* Mode sélection : compteur puis UN groupe (tout sélectionner,
                supprimer la sélection, annuler). */
             <>
@@ -392,7 +437,12 @@ export function ChapterBoard({
                 className="text-sm text-muted-foreground"
                 aria-live="polite"
               >
-                {selection.count} sélectionné{selection.count > 1 ? 's' : ''}
+                {selection.count}
+                {/* Sous 640 px, le nombre seul : la recherche garde sa place. */}
+                <span className="max-sm:sr-only">
+                  {' '}
+                  sélectionné{selection.count > 1 ? 's' : ''}
+                </span>
               </span>
               <ButtonGroup>
                 <IconAction
@@ -606,49 +656,8 @@ export function ChapterBoard({
                 </DropdownMenu>
               </div>
             </>
-          )
-        }
-      />
-
-      {erreurs.map((e) => (
-        <div
-          key={e.cle}
-          className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive"
-        >
-          {messageErreur(e.err, e.action)}
+          )}
         </div>
-      ))}
-
-      {refus.length > 0 && (
-        <ul className="list-inside list-disc rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {refus.map((m) => (
-            <li key={m}>{m}</li>
-          ))}
-        </ul>
-      )}
-
-      {importation.isPending && (
-        <Alert>
-          <Loader2 className="animate-spin" />
-          <AlertDescription>Import des fichiers en cours.</AlertDescription>
-        </Alert>
-      )}
-
-      <div className="relative">
-        <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={recherche}
-          onChange={(e) => setRecherche(e.target.value)}
-          type="search"
-          enterKeyHint="search"
-          placeholder="Rechercher dans le chapitre"
-          aria-label="Rechercher dans le chapitre"
-          className="pl-9"
-          disabled={!contenu}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') setRecherche('')
-          }}
-        />
       </div>
 
       {/* Zone de dépôt : prend tout l'espace restant */}
