@@ -21,11 +21,10 @@
  * aux cartes affichées (même intention que le PDF analytique, qui lit le DOM).
  */
 
-import { format } from 'npm:date-fns@4.4.0'
-import { fr } from 'npm:date-fns@4.4.0/locale'
 import { jsPDF } from 'npm:jspdf@4.2.1'
 
 import { fmt } from './format.ts'
+import { formatImportStamp } from './importStamp.ts'
 import { fmtJours, monthPace } from './summaryMetrics.ts'
 import type { Ecart, KPIBlock, MonthBudget } from './types.ts'
 
@@ -485,9 +484,8 @@ function renderReportDocument(pdf: jsPDF, data: RepjourPdfData): void {
 
   // ===== Pied : horodatage d'import =======================================
   if (importedAt) {
-    const when = format(new Date(importedAt), "d MMMM yyyy 'à' HH'h'mm", {
-      locale: fr,
-    })
+    // Heure de PARIS, pas celle du processus (UTC sur l'Edge) : voir importStamp.ts.
+    const when = formatImportStamp(importedAt)
     setText(pdf, GRAY)
     pdf.setFont('helvetica', 'normal').setFontSize(8)
     pdf.text(`Rapport importé le ${when}`, LEFT, 287)
