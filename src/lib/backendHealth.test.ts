@@ -52,6 +52,25 @@ describe('isOutageError', () => {
     ).toBe(true)
   })
 
+  it('reconnaît une panne vue à travers postgrest-js (message préfixé, sans status)', () => {
+    for (const message of [
+      'AbortError: signal is aborted without reason',
+      'TimeoutError: signal timed out',
+      'BackendIndisponible: Backend injoignable : requête non émise (disjoncteur ouvert).',
+      'TypeError: Failed to fetch',
+    ]) {
+      expect(isOutageError({ message, details: '', hint: '', code: '' })).toBe(
+        true,
+      )
+    }
+    expect(
+      isOutageError({
+        message: 'permission denied for table x',
+        code: '42501',
+      }),
+    ).toBe(false)
+  })
+
   it('ne classe PAS une erreur métier en panne', () => {
     expect(isOutageError({ status: 403 })).toBe(false)
     expect(isOutageError({ status: 401, name: 'AuthApiError' })).toBe(false)

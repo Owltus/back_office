@@ -60,7 +60,14 @@ export function isOutageStatus(status: number): boolean {
  *   - `Response` ou objet porteur d'un `status` 5xx ;
  *   - AbortError (timeout du wrapper fetch) ;
  *   - TypeError levé par `fetch` (DNS, connexion refusée, hors ligne) ;
- *   - erreurs auth-js « AuthRetryableFetchError » (status 0 ou 5xx).
+ *   - erreurs auth-js « AuthRetryableFetchError » (status 0 ou 5xx) ;
+ *   - la MÊME chose vue à travers postgrest-js (revue du 2026-09-28) : il
+ *     transforme toute exception de `fetch` en objet `{ message: "<nom>:
+ *     <message>", code: '' }`, sans `status` ni `name`. Le délai de garde de
+ *     20 s (« AbortError: … ») et le refus du disjoncteur
+ *     (« BackendIndisponible: … ») passaient donc pour des erreurs MÉTIER :
+ *     un seul réessai, et « vos accès n'ont pas pu être lus » au lieu du
+ *     squelette de panne.
  * Tout le reste (PostgrestError avec `code`, 4xx, null…) = non.
  */
 export function isOutageError(err: unknown): boolean {
@@ -83,7 +90,9 @@ export function isOutageError(err: unknown): boolean {
     if (err instanceof TypeError) return true
     if (
       typeof o.message === 'string' &&
-      /failed to fetch|networkerror|load failed/i.test(o.message)
+      /failed to fetch|networkerror|load failed|^(AbortError|TimeoutError|BackendIndisponible):/i.test(
+        o.message,
+      )
     ) {
       return true
     }
