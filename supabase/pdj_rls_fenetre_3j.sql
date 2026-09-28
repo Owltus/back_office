@@ -50,6 +50,9 @@ create policy "pdj update (page:pdj)"
     )
   );
 -- 2026-09-05 : appels enveloppés en (select …), voir perf_rls_ecriture_2026-09-05.sql
+-- ⚠ 2026-09-28 : policy « pdj delete (page:pdj) » REMPLACÉE par
+-- pdj_delete_manuel_ecriture_2026-09-28.sql (le rang écriture peut retirer
+-- SES saisies manuelles de la fenêtre J-3). Rejouer ce bloc l'annulerait.
 create policy "pdj delete (page:pdj)"
   on public.pdj_breakfasts for delete to authenticated
   using ((select private.get_page_level('pdj')) = 'gestion');

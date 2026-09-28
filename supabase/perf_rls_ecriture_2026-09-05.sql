@@ -269,6 +269,9 @@ create policy "pdj addon update (page:pdj)" on public.pdj_addon_production
   with check ((((select private.get_page_level('pdj')) = 'gestion') OR (((select private.page_level_rank(private.get_page_level('pdj'))) >= 2) AND (service_date >= (CURRENT_DATE - 3)))));
 
 -- pdj_breakfasts / DELETE
+-- ⚠ 2026-09-28 : policy « pdj delete (page:pdj) » REMPLACÉE par
+-- pdj_delete_manuel_ecriture_2026-09-28.sql (le rang écriture peut retirer
+-- SES saisies manuelles de la fenêtre J-3). Rejouer ce bloc l'annulerait.
 drop policy if exists "pdj delete (page:pdj)" on public.pdj_breakfasts;
 create policy "pdj delete (page:pdj)" on public.pdj_breakfasts
   for delete to authenticated
