@@ -1,7 +1,23 @@
 -- =============================================================================
+-- REMPLACÉ — NE PLUS REJOUER (bannière posée le 2026-09-28, revue des rejeux).
+-- Pourquoi : les RPC de ce fichier (`create or replace function public.…`,
+-- SECURITY DEFINER) ont été déplacées dans le schéma private le 2026-09-05,
+-- avec un relais SECURITY INVOKER de même nom dans public. Rejouer ce fichier
+-- REMPLACERAIT ces relais par des fonctions definer exposées à l'API (Security
+-- Advisor rouvert), avec la garde périmée `<> 'gestion'` (NULL passe : un
+-- compte sans droit facturation pourrait écrire) et des appels à
+-- `public.get_page_level(`, qui n'existe plus (la RPC casserait à l'appel).
+-- Font autorité : private_rpc_relais.sql (RPC + relais), PUIS
+-- facturation_garde_null_2026-09-05.sql (gardes `is distinct from 'gestion'`) ;
+-- policies de lecture : page_permissions_rls_lectures.sql,
+-- facturation_admin_only.sql et securite_audit_2026-09-06.sql. Les tables
+-- existent en prod. Conservé pour l'historique.
+-- =============================================================================
+
+-- =============================================================================
 -- facturation_corrections — outils de CORRECTION de l'apprentissage facturation.
 --
--- À EXÉCUTER PAR L'UTILISATEUR dans Supabase → SQL Editor. Ré-exécutable.
+-- À EXÉCUTER PAR L'UTILISATEUR dans Supabase → SQL Editor. (Historique : « Ré-exécutable » n'est plus vrai, voir la bannière REMPLACÉ ci-dessus.)
 --
 -- Complète facturation_wordpool.sql / facturation_issuers.sql (déjà déployés). Les
 -- apprentissages y sont ADDITIFS (compteurs). Ces RPC permettent de RÉPARER une erreur

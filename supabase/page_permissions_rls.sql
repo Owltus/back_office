@@ -373,11 +373,13 @@ create policy "caisse delete (page:caisse gestion)"
 
 -- =============================================================================
 -- COMPLÉMENTS (dans d'autres fichiers, à exécuter à la bascule) :
---   - facturation_*  : les écritures passent par des RPC SECURITY DEFINER. Leur
---     garde a été durcie EN PLACE (get_user_role() → page_level_rank(
---     get_page_level('facturation')) < 2) dans facturation_{wordpool,issuers,
---     issuer_codes,issuer_denylist,learned_docs,corrections,budget_lines_rpc}.sql.
---     → Ré-exécuter ces 7 fichiers (idempotents).
+--   - facturation_*  : les écritures passent par des RPC SECURITY DEFINER.
+--     ⚠ 2026-09-28 : l'ancienne consigne « ré-exécuter les 7 fichiers
+--     facturation_{wordpool,issuers,issuer_codes,issuer_denylist,learned_docs,
+--     corrections,budget_lines_rpc}.sql » est RETIRÉE. Ces fichiers sont
+--     REMPLACÉS (bannière en tête de chacun) : les rejouer recréerait des
+--     definer dans public avec une garde `<> 'gestion'` (NULL passe). Autorité
+--     des RPC : private_rpc_relais.sql PUIS facturation_garde_null_2026-09-05.sql.
 --   - daily_reports / forecast_days : durcies dans page_permissions_rls_repjour.sql
 --     (budget reste réservé au grade admin — policy « Admin manages budget »,
 --     inchangée).
