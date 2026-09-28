@@ -1037,6 +1037,33 @@ poussé. Règles qui en sortent :
   `feuilles_cloturees_figees_2026-09-28.sql` (compatible avec la clôture et
   la réouverture, lire son en-tête) ; fenêtre caisse sur la date CALENDAIRE
   (`caisseWindowToday`).
+- **Contre-revue adverse des correctifs (même soir)** — ils avaient
+  eux-mêmes introduit des régressions, d'où la règle : toute vague de
+  correctifs passe par une relecture adverse avant d'être poussée.
+  Trouvés et corrigés : /rapro pouvait CLÔTURER un jour dont la grille
+  n'avait pas été lue (la garde `isPending` laissait afficher une grille
+  vide ; la matérialisation écrasait les statuts réels) → clôture et
+  réouverture exigent `isSuccess` du jour (`lib/rapro/editability.ts`) ;
+  le rechargement sur chunk perdu ne part que pendant une VRAIE navigation
+  et en ligne (`doitRechargerSurChunkPerdu`), jamais au survol ni en pleine
+  saisie ; une suppression déjà faite par un collègue (0 ligne) ne fait
+  plus réapparaître l'élément (relecture de l'id) ; la relance au retour du
+  backend est bornée (erreurs seules, une salve / 30 s) et `AuthContext`
+  relit les droits au retour.
+- ⚠ **postgrest-js masque la nature des pannes** : une exception de `fetch`
+  devient `{ message: "<Nom>: …", code: '' }`, SANS `status` ni `name`.
+  `isOutageError` reconnaît donc aussi les préfixes `AbortError:`,
+  `TimeoutError:`, `BackendIndisponible:` — avant, le délai de 20 s et le
+  refus du disjoncteur passaient pour des erreurs MÉTIER.
+- Resend : seul un 409 `concurrent_idempotent_requests` est ambigu (même
+  clé en cours) ; les autres 409 restent un échec visible (un doublon vaut
+  mieux qu'une journée marquée envoyée sans e-mail).
+- Vérifié en prod (lecture seule) : `verif_advisor.sql` n'a qu'un KO, la
+  garde `<> 'admin'` de `private.admin_update_password` (donc bien en
+  production) ; 0 compte sans profil aujourd'hui (faille non exploitable à
+  l'instant, elle le redevient à chaque suppression de compte) ;
+  `verif_securite.sql` OK ; `verif_classeur_acces.sql` 28/33 en attendant
+  `classeur_securite`.
 - Scripts écrits, commités, NON appliqués (application = utilisateur) :
   `classeur_securite_2026-09-28.sql`, `admin_update_password_garde_null`,
   `set_user_grade_garde_null`, `pdj_delete_manuel_ecriture`,
