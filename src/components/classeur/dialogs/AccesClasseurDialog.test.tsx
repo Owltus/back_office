@@ -108,7 +108,9 @@ describe('AccesClasseurDialog', () => {
     await waitFor(() =>
       expect(definirAcces).toHaveBeenCalledWith(5, 'u-ecri', 'ecriture'),
     )
-    choisir('Accès de Léa Martin', /Comme tout le monde/)
+    // Léa a une exception « écriture » ; « Lecture » = le défaut (lecture
+    // pour tous) : l'exception est retirée plutôt que dupliquée.
+    choisir('Accès de Léa Martin', 'Lecture')
     await waitFor(() =>
       expect(definirAcces).toHaveBeenCalledWith(5, 'u-lect', null),
     )

@@ -56,9 +56,6 @@ const CHOIX_TOUS: ReadonlyArray<[NiveauClasseur, string, string]> = [
   ],
 ]
 
-/** Pas d'exception : Radix refuse une valeur vide, d'où un repère. */
-const DEFAUT = 'defaut'
-
 function nomDe(p: PersonneClasseur): string {
   const complet = `${p.prenom} ${p.nom}`.trim()
   return complet !== ''
@@ -191,11 +188,14 @@ function Contenu({ classeur }: { classeur: DbClasseur }) {
             {(personnes.data ?? []).map((p) => {
               const ex = exceptions.get(p.id) ?? null
               const createur = classeur.created_by === p.id
+              // Sans exception : le droit par défaut (créateur, ou pour tous).
+              const parDefaut: NiveauClasseur = createur
+                ? 'ecriture'
+                : classeur.acces_tous
+              const droit = ex ?? parDefaut
               const effectif = niveauEffectif(p.niveau_page, classeur, ex, p.id)
               const plafonne =
-                p.niveau_page === 'lecture' &&
-                (ex ?? (createur ? 'ecriture' : classeur.acces_tous)) ===
-                  'ecriture'
+                p.niveau_page === 'lecture' && droit === 'ecriture'
               const enCours =
                 exception.isPending && exception.variables.userId === p.id
               return (
@@ -230,28 +230,26 @@ function Contenu({ classeur }: { classeur: DbClasseur }) {
                         <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
                       )}
                       <Select
-                        value={ex ?? DEFAUT}
+                        value={droit}
                         disabled={exception.isPending}
                         onValueChange={(v) => {
+                          if (!estNiveauClasseur(v) || v === droit) return
+                          // Revenir au défaut = retirer l'exception : la
+                          // personne suit de nouveau « Pour tout le monde ».
                           exception.mutate({
                             userId: p.id,
-                            niveau: estNiveauClasseur(v) ? v : null,
+                            niveau: v === parDefaut ? null : v,
                           })
                         }}
                       >
                         <SelectTrigger
                           size="sm"
-                          className="w-56"
+                          className="w-36"
                           aria-label={`Accès de ${nomDe(p)}`}
                         >
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value={DEFAUT}>
-                            {createur
-                              ? 'Par défaut (créateur : écriture)'
-                              : `Comme tout le monde (${LIBELLE_NIVEAU[classeur.acces_tous].toLowerCase()})`}
-                          </SelectItem>
                           <SelectItem value="aucun">Aucun accès</SelectItem>
                           <SelectItem value="lecture">Lecture</SelectItem>
                           <SelectItem value="ecriture">Écriture</SelectItem>
