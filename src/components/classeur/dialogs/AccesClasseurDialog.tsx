@@ -196,7 +196,7 @@ function Contenu({ classeur }: { classeur: DbClasseur }) {
               return (
                 <li
                   key={p.id}
-                  className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm"
+                  className="flex min-h-13 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm"
                 >
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium">
