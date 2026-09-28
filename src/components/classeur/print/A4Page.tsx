@@ -123,7 +123,12 @@ export function A4Page({
             position: 'absolute',
             left: 0,
             right: 0,
-            bottom: `${String(MARGIN_BOTTOM_MM / 2 - 1.5)}mm`,
+            // 6,5 mm du bord : hors de la bande que la plupart des
+            // imprimantes n'impriment pas (~4-5 mm, la date y était coupée
+            // à 3,5 mm), et toujours sous le pied de page (qui s'arrête à
+            // MARGIN_BOTTOM_MM = 10 mm ; la date haute de ~2,3 mm laisse
+            // ~1 mm d'écart). Seule cette position a changé (2026-09-28).
+            bottom: '6.5mm',
             textAlign: 'center',
             fontSize: '6.5pt',
             lineHeight: 1,

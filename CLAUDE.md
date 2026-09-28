@@ -773,7 +773,9 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   de Paris ; l'utilisateur a refusé tout texte et l'heure) ; date du jour
   dans l'aperçu d'édition → prop `mention` de
   `A4Page`, positionnée en ABSOLU dans la marge basse (sous le pied de
-  page, centrée, opacité 0,2) : hors flux, la pagination ne la voit pas ;
+  page, centrée, opacité 0,2, à 6,5 mm du bord — à 3,5 mm les
+  imprimantes la coupaient, 2026-09-28) : hors flux, la pagination ne la
+  voit pas ;
   posée par `DocumentPages` depuis `ItemPages`, `DocumentCard` et
   `DocumentDetail`. Refusés aussi : 8 (retour à la ligne simple), 12
   (menu « / »).
