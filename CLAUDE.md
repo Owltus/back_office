@@ -946,6 +946,11 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   la souris (une seule ligne imposée par `PageHeader`), « Nouvel élément »
   et le tiroir sortaient de l'écran par la gauche. Mesuré à 309 px : tout
   entre 16 et 293 px.
+  Bouton du tiroir des chapitres (même jour) : sur la LIGNE DU TITRE à
+  toute largeur (`PageHeader` range `leading` avec le bloc titre dans une
+  rangée `items-stretch` ; seules les pages du Classeur passent `leading`,
+  rendu inchangé ailleurs), en `outline`, 48 px de large, aussi haut que
+  titre + sous-titre (`self-stretch`).
   Non fait (à rediscuter) : `PageHeader` partagé (tiroir sur sa propre
   ligne sous `sm`), zoom de grille au doigt, croix des dialogues, pages A4
   petites sur téléphone (pincement du navigateur), clavier virtuel.

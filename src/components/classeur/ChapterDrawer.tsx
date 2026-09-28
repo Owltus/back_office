@@ -48,11 +48,14 @@ export function ChapterDrawerButton() {
   if (!ctx || !ctx.mobile) return null
   return (
     <Tip label="Chapitres">
+      {/* Aussi haut que le bloc titre + sous-titre à côté duquel il se
+          trouve (`self-stretch`, 48 px de large), et bien visible (demande
+          utilisateur du 2026-09-28 : « vraiment plus gros »). */}
       <Button
-        variant="ghost"
-        size="icon-sm"
+        variant="outline"
         aria-label="Ouvrir la liste des chapitres"
         onClick={ctx.open}
+        className="h-auto min-h-10 w-12 shrink-0 self-stretch p-0 [&_svg:not([class*='size-'])]:size-5"
       >
         <PanelLeft />
       </Button>

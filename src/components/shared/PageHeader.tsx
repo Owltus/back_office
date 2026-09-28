@@ -109,9 +109,64 @@ export function PageHeader({
   // de lui. Seul `null` sort vraiment PageHeader du flux (Rapprochement, en
   // dessous de 640px : titre/badge confiés à la Navbar, actions à la barre
   // d'outils basse — tout absent au sens strict, pas juste masqué en CSS).
-  if (leading == null && !title && badge == null && meta == null && actions == null) {
+  if (
+    leading == null &&
+    !title &&
+    badge == null &&
+    meta == null &&
+    actions == null
+  ) {
     return null
   }
+  const blocTitre = (title || badge != null || meta != null) && (
+    <div className="min-w-0 flex-1">
+      {(title || badge != null) && (
+        <div
+          className={cn(
+            'flex min-w-0 flex-nowrap items-center gap-2',
+            badgeAlign === 'end' &&
+              (!title
+                ? // Pas de titre à côté duquel écarter le badge (page qui le
+                  // garde affiché même quand le titre part dans la Navbar,
+                  // ex. le contrôle service/financier de PDJ) : `justify-
+                  // between` n'a alors qu'un seul enfant, et
+                  // `space-between` avec un seul élément le colle au bord
+                  // de DÉPART, pas de fin — l'inverse de ce que `badgeAlign
+                  // ="end"` demande. `justify-end` direct, à toute largeur.
+                  'justify-end'
+                : badgeAlignBreakpoint === 'none'
+                  ? 'justify-between'
+                  : 'justify-between lg:justify-start'),
+          )}
+        >
+          {title && (
+            <h1 className="min-w-0 truncate text-xl font-semibold">{title}</h1>
+          )}
+          {badge != null && (
+            <div
+              className={cn(
+                'shrink-0',
+                badgeAlign === 'end' &&
+                  badgeWidth &&
+                  cn(
+                    badgeWidth,
+                    'sm:w-auto',
+                    '[&>*]:flex [&>*]:w-full [&>*]:justify-center',
+                    'sm:[&>*]:inline-flex sm:[&>*]:w-auto',
+                  ),
+              )}
+            >
+              {badge}
+            </div>
+          )}
+        </div>
+      )}
+      {meta != null && (
+        <p className="truncate text-sm text-muted-foreground">{meta}</p>
+      )}
+    </div>
+  )
+
   return (
     <div
       className={cn(
@@ -132,54 +187,17 @@ export function PageHeader({
         className,
       )}
     >
-      {leading}
-      {(title || badge != null || meta != null) && (
-        <div className="min-w-0 flex-1">
-          {(title || badge != null) && (
-            <div
-              className={cn(
-                'flex min-w-0 flex-nowrap items-center gap-2',
-                badgeAlign === 'end' &&
-                  (!title
-                    ? // Pas de titre à côté duquel écarter le badge (page qui le
-                      // garde affiché même quand le titre part dans la Navbar,
-                      // ex. le contrôle service/financier de PDJ) : `justify-
-                      // between` n'a alors qu'un seul enfant, et
-                      // `space-between` avec un seul élément le colle au bord
-                      // de DÉPART, pas de fin — l'inverse de ce que `badgeAlign
-                      // ="end"` demande. `justify-end` direct, à toute largeur.
-                      'justify-end'
-                    : badgeAlignBreakpoint === 'none'
-                      ? 'justify-between'
-                      : 'justify-between lg:justify-start'),
-              )}
-            >
-              {title && (
-                <h1 className="min-w-0 truncate text-xl font-semibold">{title}</h1>
-              )}
-              {badge != null && (
-                <div
-                  className={cn(
-                    'shrink-0',
-                    badgeAlign === 'end' &&
-                      badgeWidth &&
-                      cn(
-                        badgeWidth,
-                        'sm:w-auto',
-                        '[&>*]:flex [&>*]:w-full [&>*]:justify-center',
-                        'sm:[&>*]:inline-flex sm:[&>*]:w-auto',
-                      ),
-                  )}
-                >
-                  {badge}
-                </div>
-              )}
-            </div>
-          )}
-          {meta != null && (
-            <p className="truncate text-sm text-muted-foreground">{meta}</p>
-          )}
+      {/* `leading` (seules les pages du Classeur s'en servent : le bouton du
+          tiroir des chapitres) vit sur la LIGNE DU TITRE, à toute largeur :
+          empilé seul sous 640 px, il laissait une ligne presque vide
+          (retour utilisateur du 2026-09-28). Sans `leading`, rendu inchangé. */}
+      {leading != null ? (
+        <div className="flex min-w-0 flex-1 items-stretch gap-3">
+          {leading}
+          {blocTitre}
         </div>
+      ) : (
+        blocTitre
       )}
       {actions != null && (
         <div

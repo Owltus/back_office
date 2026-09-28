@@ -77,7 +77,7 @@ export function DetailHeader({
     <PageHeader
       actionsAlign="end"
       leading={
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex shrink-0 items-stretch gap-1">
           <ChapterDrawerButton />
           <Tip label="Retour au chapitre">
             <Button
@@ -85,7 +85,7 @@ export function DetailHeader({
               size="icon-sm"
               asChild
               aria-label="Retour au chapitre"
-              className={editing ? 'max-sm:hidden' : undefined}
+              className={cn('self-center', editing && 'max-sm:hidden')}
             >
               <Link to="/classeur/$classeurId/$chapterId" params={retour}>
                 <ArrowLeft />
