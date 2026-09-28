@@ -6,6 +6,10 @@ import {
   REPORT_EMAIL_CONTAINER_STYLE,
   type EmailData,
 } from '#/lib/repjour/reportHtml.ts'
+import {
+  MESSAGE_ENVOI_ECHOUE,
+  messageErreurEnvoi,
+} from '#/lib/repjour/sendServerError.ts'
 
 /*
  * Envoi du rapport par e-mail CÔTÉ SERVEUR (Edge Function `send-report` + Resend).
@@ -118,11 +122,13 @@ export async function sendReportViaServer(
 
   if (error) {
     console.error("Envoi serveur échoué :", error.message)
-    return { ok: false, message: "L'envoi a échoué. Réessaie dans un instant." }
+    // Un refus du serveur (anti-spam 429, droits…) porte son message dans le
+    // corps de la réponse : on l'affiche plutôt qu'un « échec » générique.
+    return { ok: false, message: await messageErreurEnvoi(error) }
   }
   if (data?.error) {
     console.error("Envoi serveur (fonction) échoué :", data.error)
-    return { ok: false, message: "L'envoi a échoué. Réessaie dans un instant." }
+    return { ok: false, message: MESSAGE_ENVOI_ECHOUE }
   }
 
   const to = typeof data?.to === 'number' ? data.to : 0
