@@ -106,15 +106,31 @@ export async function assertWriteRole(): Promise<void> {
 
 // ── Édition d'un rapport / d'une prévision ──
 
+/**
+ * Un `update` refusé par la RLS ne LÈVE PAS d'erreur : il touche 0 ligne et
+ * répond `data: []`. Sans ce contrôle, l'écran annonçait « Données mises à
+ * jour » alors que rien n'avait été écrit. Même garde si la ligne a disparu
+ * entre la lecture et l'écriture.
+ */
+export function assertLigneEcrite(data: unknown[] | null): void {
+  if (!data || data.length === 0) {
+    throw new Error(
+      "Rien n'a été enregistré : tu n'as pas le droit de modifier ces données, ou elles ont été supprimées entre-temps.",
+    )
+  }
+}
+
 export async function updateReport(
   id: number,
   updates: Partial<DailyReport>,
 ): Promise<void> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('daily_reports')
     .update(updates)
     .eq('id', id)
+    .select('id')
   if (error) throw error
+  assertLigneEcrite(data)
 }
 
 export async function updateForecast(
@@ -127,11 +143,13 @@ export async function updateForecast(
     occ_percent: number
   },
 ): Promise<void> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('forecast_days')
     .update(updates)
     .eq('id', id)
+    .select('id')
   if (error) throw error
+  assertLigneEcrite(data)
 }
 
 // ── Suppressions (toutes gardées par assertWriteRole) ──

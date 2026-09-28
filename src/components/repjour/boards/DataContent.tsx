@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 
 import {
   fetchUnifiedDays,
@@ -240,6 +241,14 @@ export function DataContent({ readOnly = false }: { readOnly?: boolean }) {
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
   const [selectedRow, setSelectedRow] = useState<UnifiedDayRow | null>(null)
+  const queryClient = useQueryClient()
+
+  // Après toute écriture (même partielle, même en échec : une première table a
+  // pu être écrite), le tableau de bord et les analytiques RepJour relisent la
+  // base au lieu de servir un cache périmé (clés `['repjour', …]`).
+  const invaliderRepjour = () => {
+    void queryClient.invalidateQueries({ queryKey: ['repjour'] })
+  }
 
   async function load() {
     setLoading(true)
@@ -281,6 +290,8 @@ export function DataContent({ readOnly = false }: { readOnly?: boolean }) {
       setMessage(
         'Erreur : ' + (err instanceof Error ? err.message : 'inconnue'),
       )
+    } finally {
+      invaliderRepjour()
     }
   }
 
@@ -298,6 +309,8 @@ export function DataContent({ readOnly = false }: { readOnly?: boolean }) {
       setMessage(
         'Erreur : ' + (err instanceof Error ? err.message : 'inconnue'),
       )
+    } finally {
+      invaliderRepjour()
     }
   }
 
@@ -503,6 +516,8 @@ export function DataContent({ readOnly = false }: { readOnly?: boolean }) {
               setMessage(
                 'Erreur : ' + (err instanceof Error ? err.message : 'inconnue'),
               )
+            } finally {
+              invaliderRepjour()
             }
           }}
           className="text-sm font-medium text-destructive/70 transition-colors hover:text-destructive"
