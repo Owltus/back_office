@@ -1011,6 +1011,8 @@ export function ParkingBoard({ initialDate }: { initialDate?: string }) {
     deleteReservation(id).catch((err) => {
       // Refus de la base (erreur, ou 0 ligne supprimée par la RLS) : la barre
       // revient à l'écran, sinon elle réapparaîtrait au prochain chargement.
+      // Une réservation DÉJÀ supprimée par un collègue n'arrive pas ici :
+      // `deleteReservation` relit l'id et résout sans erreur (rien à restaurer).
       console.error(err)
       setReservations((prev) => restoreDeleted(prev, target))
       setActionError(describeWriteError(err))

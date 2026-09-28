@@ -7,12 +7,23 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
  * alors 0 ligne, sans erreur.
  */
 
-const sim = vi.hoisted(() => ({ lignes: 0, appels: [] as string[] }))
+const sim = vi.hoisted(() => ({
+  lignes: 0,
+  appels: [] as string[],
+  /** Relecture après une suppression à 0 ligne : la ligne existe-t-elle encore ? */
+  presente: true,
+  relectureErreur: null as { message: string } | null,
+}))
 
 vi.mock('#/lib/supabase.ts', () => {
   const from = () => {
     let select: string | null = null
+    let unique = false
     const q = {
+      maybeSingle() {
+        unique = true
+        return q
+      },
       update: () => q,
       delete: () => q,
       eq: () => q,
@@ -21,7 +32,14 @@ vi.mock('#/lib/supabase.ts', () => {
         sim.appels.push(cols)
         return q
       },
-      then(resolve: (r: { data: unknown; error: null }) => void) {
+      then(resolve: (r: { data: unknown; error: unknown }) => void) {
+        if (unique) {
+          resolve({
+            data: sim.presente ? { id: 'x' } : null,
+            error: sim.relectureErreur,
+          })
+          return
+        }
         const data =
           select === null
             ? null
@@ -40,6 +58,8 @@ const { deleteReservation, updateReservation } =
 beforeEach(() => {
   sim.lignes = 1
   sim.appels = []
+  sim.presente = true
+  sim.relectureErreur = null
 })
 
 describe('updateReservation', () => {
@@ -64,10 +84,23 @@ describe('deleteReservation', () => {
     expect(sim.appels).toEqual(['id'])
   })
 
-  it('0 ligne (refus RLS silencieux) : erreur', async () => {
+  it('0 ligne et ligne encore là (refus RLS silencieux) : erreur', async () => {
     sim.lignes = 0
+    sim.presente = true
     await expect(deleteReservation('r1')).rejects.toThrow(
       /Rien n'a été supprimé/,
     )
+  })
+
+  it('0 ligne et ligne absente (déjà supprimée ailleurs) : succès', async () => {
+    sim.lignes = 0
+    sim.presente = false
+    await expect(deleteReservation('r1')).resolves.toBeUndefined()
+  })
+
+  it('0 ligne et relecture en échec : erreur (le board restaure)', async () => {
+    sim.lignes = 0
+    sim.relectureErreur = { message: 'réseau' }
+    await expect(deleteReservation('r1')).rejects.toEqual({ message: 'réseau' })
   })
 })
