@@ -43,6 +43,7 @@ export function classeur(over: Partial<DbClasseur> = {}): DbClasseur {
     created_at: T0,
     updated_at: T0,
     created_by: null,
+    acces_tous: 'lecture',
     ...over,
   }
 }

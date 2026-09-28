@@ -16,6 +16,7 @@
 import { supabase } from '#/lib/supabase.ts'
 import type {
   ChapterContent,
+  DbAccesClasseur,
   DbDocumentVersion,
   DbImage,
   DbChapter,
@@ -27,6 +28,7 @@ import type {
   DbSignatureSheet,
   DbTrackingSheet,
   ItemKind,
+  PersonneClasseur,
   PointKind,
 } from '#/lib/classeur/types.ts'
 import { ITEM_TABLE } from '#/lib/classeur/types.ts'
@@ -66,7 +68,7 @@ export const MERGE_HISTORY_TABLE = 'classeur_merge_history'
 export const IMAGES_TABLE = 'classeur_images'
 
 const COLS_COMMUNES = 'id, uuid, sort_order, deleted_at, created_at, updated_at'
-const COLS_CLASSEUR = `${COLS_COMMUNES}, name, icon, etablissement, etablissement_complement, created_by`
+const COLS_CLASSEUR = `${COLS_COMMUNES}, name, icon, etablissement, etablissement_complement, created_by, acces_tous`
 const COLS_CHAPTER = `${COLS_COMMUNES}, classeur_id, label, icon, description`
 const COLS_DOCUMENT = `${COLS_COMMUNES}, chapter_id, title, description, content`
 const COLS_TRACKING = `${COLS_COMMUNES}, chapter_id, title, periodicite_id`
@@ -81,6 +83,83 @@ const COLS_IMAGE =
 // Images (médiathèque d'un classeur) — pas de point de restauration auto :
 // l'instantané ne couvre pas les images.
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Accès par classeur (2026-09-28) — écritures réservées à la gestion (RLS).
+// ---------------------------------------------------------------------------
+
+/** Mes exceptions d'accès (la RLS ne rend que les miennes, sauf gestion). */
+export async function fetchMesAcces(
+  userId: string,
+): Promise<DbAccesClasseur[]> {
+  const { data, error } = await supabase
+    .from('classeur_acces')
+    .select('id, classeur_id, user_id, niveau')
+    .eq('user_id', userId)
+  if (error) throw error
+  return data
+}
+
+/** Toutes les exceptions d'un classeur (gestion). */
+export async function fetchAccesClasseur(
+  classeurId: number,
+): Promise<DbAccesClasseur[]> {
+  const { data, error } = await supabase
+    .from('classeur_acces')
+    .select('id, classeur_id, user_id, niveau')
+    .eq('classeur_id', classeurId)
+  if (error) throw error
+  return data
+}
+
+/**
+ * Pose (`niveau`) ou retire (`null` = « comme tout le monde ») l'exception
+ * d'une personne sur un classeur.
+ */
+export async function definirAcces(
+  classeurId: number,
+  userId: string,
+  niveau: DbAccesClasseur['niveau'] | null,
+): Promise<void> {
+  if (niveau === null) {
+    const { error } = await supabase
+      .from('classeur_acces')
+      .delete()
+      .eq('classeur_id', classeurId)
+      .eq('user_id', userId)
+    if (error) throw error
+    return
+  }
+  const { error } = await supabase
+    .from('classeur_acces')
+    .upsert(
+      { classeur_id: classeurId, user_id: userId, niveau },
+      { onConflict: 'classeur_id,user_id' },
+    )
+  if (error) throw error
+}
+
+/** Accès pour tous d'un classeur (gestion). */
+export async function definirAccesTous(
+  classeurId: number,
+  acces_tous: DbClasseur['acces_tous'],
+): Promise<void> {
+  const { data, error } = await supabase
+    .from(CLASSEURS_TABLE)
+    .update({ acces_tous })
+    .eq('id', classeurId)
+    .select('id')
+  if (error) throw error
+  if (data.length === 0)
+    throw Object.assign(new Error('Écriture refusée'), { code: '42501' })
+}
+
+/** Personnes ayant un droit sur la page Classeur (RPC, gestion seule). */
+export async function fetchPersonnesClasseur(): Promise<PersonneClasseur[]> {
+  const { data, error } = await supabase.rpc('classeur_personnes')
+  if (error) throw error
+  return data as PersonneClasseur[]
+}
 
 /**
  * Versions d'un document, la plus récente d'abord (50 au plus : borne du
@@ -185,12 +264,20 @@ export interface ClasseurInput {
 }
 
 /** Crée un classeur en fin de liste ; rend son identifiant. */
-export async function createClasseur(input: ClasseurInput): Promise<number> {
+/**
+ * Crée un classeur en fin de liste ; rend son identifiant. `acces_tous`
+ * (« privé ») n'est retenu par la base que pour la gestion : sinon elle le
+ * force à `lecture` (trigger `classeur_garde`).
+ */
+export async function createClasseur(
+  input: ClasseurInput,
+  acces_tous: DbClasseur['acces_tous'] = 'lecture',
+): Promise<number> {
   const existants = await fetchClasseurs()
   const sort_order = (existants.at(-1)?.sort_order ?? 0) + 1
   const { data, error } = await supabase
     .from(CLASSEURS_TABLE)
-    .insert({ ...input, sort_order })
+    .insert({ ...input, sort_order, acces_tous })
     .select('id')
     .single()
   if (error) throw error

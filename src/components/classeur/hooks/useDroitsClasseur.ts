@@ -1,30 +1,86 @@
+import { useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
+
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { useClasseur } from '#/components/classeur/hooks/useClasseur.ts'
-import { estProprietaire, peutModifierClasseur } from '#/lib/classeur/droits.ts'
+import {
+  capacites,
+  niveauEffectif,
+  niveauPage,
+  peutCreerClasseur,
+  peutCreerPrive,
+  peutReordonnerListe,
+} from '#/lib/classeur/droits.ts'
+import type { NiveauClasseur } from '#/lib/classeur/droits.ts'
+import { classeurKeys } from '#/lib/classeur/keys.ts'
+import { fetchMesAcces } from '#/lib/classeur/service.ts'
 
 /**
- * Droits de l'utilisateur sur UN classeur (modèle Affichage, voir
- * `lib/classeur/droits.ts`). Remplace `can('classeur', 'ecriture')` partout
- * où un classeur est en jeu :
+ * Mes exceptions d'accès, par classeur (2026-09-28). Propres au compte : la
+ * clé porte l'identifiant, et elle n'est jamais écrite sur disque.
+ */
+export function useMesAcces() {
+  const { user } = useAuth()
+  const userId = user?.id ?? null
+  const q = useQuery({
+    queryKey: classeurKeys.mesAcces(userId ?? ''),
+    queryFn: () => fetchMesAcces(userId ?? ''),
+    enabled: userId !== null,
+    staleTime: 60_000,
+  })
+  const parClasseur = useMemo(() => {
+    const m = new Map<number, NiveauClasseur>()
+    for (const a of q.data ?? []) m.set(a.classeur_id, a.niveau)
+    return m
+  }, [q.data])
+  return { parClasseur, isPending: q.isPending && userId !== null }
+}
+
+/** Niveau de l'utilisateur sur la PAGE Classeur, et ce qu'il permet. */
+export function useDroitsPageClasseur() {
+  const { can } = useAuth()
+  const page = niveauPage(can)
+  return {
+    page,
+    canCreate: peutCreerClasseur(page),
+    canCreatePrive: peutCreerPrive(page),
+    canReorderList: peutReordonnerListe(page),
+    canManage: page === 'gestion',
+  }
+}
+
+/**
+ * Droits de l'utilisateur sur UN classeur — miroir de la base
+ * (`lib/classeur/droits.ts`). Tout est `false` tant que le classeur et mes
+ * accès ne sont pas chargés : on masque, jamais l'inverse.
  *
- *   canWrite   modifier CE classeur (gestion, ou écriture ET propriétaire) ;
- *              `false` tant que le classeur n'est pas chargé (on masque).
- *   canManage  niveau gestion sur la page.
- *   canCreate  niveau écriture sur la page (créer, importer un classeur).
+ *   canWrite   modifier le contenu (écriture effective ou gestion) ;
+ *   canManage  gestion : accès, suppression, restauration, purge ;
+ *   canCreate  créer, importer un classeur (écriture sur la page).
  */
 export function useDroitsClasseur(classeurId: number) {
-  const { can, user } = useAuth()
+  const { user } = useAuth()
+  const pagesDroits = useDroitsPageClasseur()
   const classeurQ = useClasseur(classeurId)
-  const niveaux = {
-    ecriture: can('classeur', 'ecriture'),
-    gestion: can('classeur', 'gestion'),
-  }
+  const mesAcces = useMesAcces()
+  const pret = !classeurQ.isPending && !mesAcces.isPending
+  const niveau = pret
+    ? niveauEffectif(
+        pagesDroits.page,
+        classeurQ.data,
+        mesAcces.parClasseur.get(classeurId) ?? null,
+        user?.id,
+      )
+    : 'aucun'
+  const cap = capacites(niveau)
   return {
-    canWrite: peutModifierClasseur(niveaux, classeurQ.data, user?.id),
-    canManage: niveaux.gestion,
-    canCreate: niveaux.ecriture,
-    estProprietaire: estProprietaire(classeurQ.data, user?.id),
-    /** Le classeur est chargé : `canWrite` est définitif. */
-    pret: !classeurQ.isPending,
+    niveau,
+    ...cap,
+    canWrite: cap.modifier,
+    canManage: cap.gererAcces,
+    canCreate: pagesDroits.canCreate,
+    estCreateur: user?.id != null && classeurQ.data?.created_by === user.id,
+    /** Le classeur et mes accès sont chargés : les droits sont définitifs. */
+    pret,
   }
 }

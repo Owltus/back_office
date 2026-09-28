@@ -63,7 +63,8 @@ const DOCUMENT: DbDocument = {
   chapter_id: 10,
   title: 'Consignes d’évacuation',
   description: '',
-  content: 'Sortir **calmement**.\n\n| Étage | Issue |\n| --- | --- |\n| 1 | A |\n',
+  content:
+    'Sortir **calmement**.\n\n| Étage | Issue |\n| --- | --- |\n| 1 | A |\n',
   sort_order: 2,
   ...HORODATAGE,
 }
@@ -134,7 +135,9 @@ describe('construireArchiveMarkdown — arborescence exacte', () => {
   })
 
   it('le document porte son titre en tête, puis son Markdown intact', async () => {
-    const zip = await relire(await construireArchiveMarkdown(CHAPITRES, CONTENU))
+    const zip = await relire(
+      await construireArchiveMarkdown(CHAPITRES, CONTENU),
+    )
     const texte = await zip
       .file('1 - Sécurité incendie/2 - Consignes d’évacuation.md')!
       .async('string')
@@ -170,7 +173,9 @@ describe('construireArchiveMarkdown — arborescence exacte', () => {
   })
 
   it('la feuille de signature et l’intercalaire sont rendus', async () => {
-    const zip = await relire(await construireArchiveMarkdown(CHAPITRES, CONTENU))
+    const zip = await relire(
+      await construireArchiveMarkdown(CHAPITRES, CONTENU),
+    )
     const signature = await zip
       .file('2 - Gaz contrôles/1 - Émargement formation.md')!
       .async('string')
@@ -219,25 +224,35 @@ describe('construireArchiveMarkdown — arborescence exacte', () => {
 
 describe('rendus Markdown unitaires', () => {
   it('documentEnMarkdown ne double pas un titre déjà présent', () => {
-    expect(documentEnMarkdown('Titre', '# Déjà là\n\ncorps')).toBe('# Déjà là\n\ncorps')
+    expect(documentEnMarkdown('Titre', '# Déjà là\n\ncorps')).toBe(
+      '# Déjà là\n\ncorps',
+    )
     expect(documentEnMarkdown('Titre', '\n\n# Déjà là')).toBe('\n\n# Déjà là')
   })
 
   it('documentEnMarkdown ajoute le titre sinon (« ## » ou « #tag » ne comptent pas)', () => {
-    expect(documentEnMarkdown('Titre', '## Sous-titre')).toBe('# Titre\n\n## Sous-titre\n')
+    expect(documentEnMarkdown('Titre', '## Sous-titre')).toBe(
+      '# Titre\n\n## Sous-titre\n',
+    )
     expect(documentEnMarkdown('Titre', '#tag')).toBe('# Titre\n\n#tag\n')
     expect(documentEnMarkdown('  ', '')).toBe('# Sans titre\n')
   })
 
   it('feuilleSuiviEnMarkdown : périodicité inconnue = 8 lignes sans sous-titre', () => {
     const texte = feuilleSuiviEnMarkdown('Suivi', undefined)
-    expect(texte.startsWith('# Suivi\n\n| Date | Note | Signature |\n')).toBe(true)
+    expect(texte.startsWith('# Suivi\n\n| Date | Note | Signature |\n')).toBe(
+      true,
+    )
     expect(texte.match(/\| {3}\| {3}\| {3}\|/g)).toHaveLength(8)
   })
 
   it('feuilleSuiviEnMarkdown : « Non défini » n’affiche pas de périodicité', () => {
-    expect(feuilleSuiviEnMarkdown('S', PERIODICITES[2])).not.toContain('Périodicité')
-    expect(feuilleSuiviEnMarkdown('S', PERIODICITES[0])).toContain('Périodicité : Mensuel')
+    expect(feuilleSuiviEnMarkdown('S', PERIODICITES[2])).not.toContain(
+      'Périodicité',
+    )
+    expect(feuilleSuiviEnMarkdown('S', PERIODICITES[0])).toContain(
+      'Périodicité : Mensuel',
+    )
   })
 
   it('feuilleSignatureEnMarkdown sans description, intercalaire sans description', () => {

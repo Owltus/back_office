@@ -99,6 +99,8 @@ const PREFIXES_SENSIBLES: ReadonlyArray<ReadonlyArray<string>> = [
   ['caisse', 'cautions'],
   // Historique des documents du Classeur : noms des collègues (2026-09-27).
   ['classeur', 'versions'],
+  // Accès par classeur : identifiants, droits et noms des personnes (2026-09-28).
+  ['classeur', 'acces'],
 ]
 
 /** Vrai si la clé commence par l'un des préfixes sensibles. */
@@ -166,6 +168,66 @@ export function doitPersister(query: Query): boolean {
   return survitAuJson(query.state.data)
 }
 
+// ---------------------------------------------------------------------------
+// UN cache PAR COMPTE (2026-09-28, plan classeur-acces-par-classeur, étape 5)
+// ---------------------------------------------------------------------------
+//
+// Le poste de la réception est PARTAGÉ. Avant ce jour, le cache survivait à
+// la déconnexion et n'était pas rattaché à un compte : B pouvait voir
+// s'afficher depuis le cache ce que A avait lu — jusqu'ici des données que B
+// avait le droit de lire aussi (droits par PAGE), mais plus avec les accès
+// par CLASSEUR (un classeur privé à A). Désormais :
+//   - le cache est marqué du compte qui l'a écrit (`CLE_PROPRIETAIRE`) ;
+//   - au démarrage, un cache d'un autre compte n'est pas restauré ;
+//   - à chaque changement de compte ou déconnexion (`changerDeCompte`,
+//     appelé par `AuthContext`), mémoire ET disque sont vidés.
+// Une PANNE ne vide rien : le compte ne change pas (règle du 2026-09-05).
+
+const CLE_PROPRIETAIRE = 'bo.query.cache.proprietaire'
+let clientBranche: QueryClient | null = null
+
+/** Identifiant du compte de la session enregistrée par supabase-js, sinon `null`. */
+function compteDeLaSession(): string | null {
+  try {
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const cle = window.localStorage.key(i)
+      if (cle === null || !/^sb-.+-auth-token$/.test(cle)) continue
+      const brut = window.localStorage.getItem(cle)
+      const session = brut === null ? null : (JSON.parse(brut) as unknown)
+      const user =
+        typeof session === 'object' && session !== null && 'user' in session
+          ? (session as { user?: { id?: unknown } }).user
+          : undefined
+      return typeof user?.id === 'string' ? user.id : null
+    }
+  } catch {
+    // Session illisible : traitée comme absente.
+  }
+  return null
+}
+
+/**
+ * À appeler à chaque résolution du compte connecté (`null` = déconnecté).
+ * Même compte : rien. Autre compte ou déconnexion : le cache (mémoire et
+ * disque) est vidé AVANT que la page ne lise quoi que ce soit.
+ */
+export function changerDeCompte(userId: string | null): void {
+  if (typeof window === 'undefined') return
+  try {
+    const avant = window.localStorage.getItem(CLE_PROPRIETAIRE)
+    if (userId !== null && avant === userId) return
+    if (userId === null || avant !== userId) {
+      clientBranche?.clear()
+      window.localStorage.removeItem(CLE_STOCKAGE)
+    }
+    if (userId === null) window.localStorage.removeItem(CLE_PROPRIETAIRE)
+    else window.localStorage.setItem(CLE_PROPRIETAIRE, userId)
+  } catch {
+    // Stockage indisponible : on vide au moins la mémoire si le compte change.
+    if (userId === null) clientBranche?.clear()
+  }
+}
+
 /**
  * Branche la persistance. Sans effet hors navigateur (le shell est prérendu).
  *
@@ -185,9 +247,18 @@ export function doitPersister(query: Query): boolean {
  */
 export function brancherPersistance(queryClient: QueryClient): void {
   if (typeof window === 'undefined') return
+  clientBranche = queryClient
 
   try {
     for (const cle of CLES_PERIMEES) window.localStorage.removeItem(cle)
+    // Le cache d'un AUTRE compte n'est même pas restauré (poste partagé).
+    const session = compteDeLaSession()
+    const proprietaire = window.localStorage.getItem(CLE_PROPRIETAIRE)
+    // Propriétaire inconnu (cache d'avant le 2026-09-28) : traité comme étranger.
+    if (proprietaire === null || proprietaire !== session) {
+      window.localStorage.removeItem(CLE_STOCKAGE)
+      window.localStorage.removeItem(CLE_PROPRIETAIRE)
+    }
 
     const persister = createSyncStoragePersister({
       storage: window.localStorage,

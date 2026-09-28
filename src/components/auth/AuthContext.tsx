@@ -10,6 +10,7 @@ import type { ReactNode } from 'react'
 import type { User } from '@supabase/supabase-js'
 
 import { supabase } from '#/lib/supabase.ts'
+import { changerDeCompte } from '#/lib/queryPersist.ts'
 import {
   backendHealth,
   createSingleFlight,
@@ -329,6 +330,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     function applyUser(nextUser: User | null) {
+      // Cache de données : un compte, un cache (poste partagé, accès par
+      // classeur). Vidé AVANT que la page ne lise quoi que ce soit.
+      changerDeCompte(nextUser && !expiredByInactivity() ? nextUser.id : null)
       if (nextUser && expiredByInactivity()) {
         clearLastActive()
         clearProfile()

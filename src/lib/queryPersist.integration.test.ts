@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { QueryClient } from '@tanstack/react-query'
 
-import { brancherPersistance } from '#/lib/queryPersist.ts'
+import { brancherPersistance, changerDeCompte } from '#/lib/queryPersist.ts'
 
 /*
  * TEST DE BRANCHEMENT, pas de filtre.
@@ -30,6 +30,13 @@ function clientNeuf() {
 describe('brancherPersistance — le cache atteint vraiment le disque', () => {
   beforeEach(() => {
     window.localStorage.clear()
+    // Un compte connecté, propriétaire du cache (sinon, depuis le
+    // 2026-09-28, rien n'est restauré : voir « un cache par compte »).
+    window.localStorage.setItem(
+      'sb-projet-auth-token',
+      JSON.stringify({ user: { id: 'T' } }),
+    )
+    window.localStorage.setItem('bo.query.cache.proprietaire', 'T')
     vi.useFakeTimers()
   })
 
@@ -157,5 +164,71 @@ describe('brancherPersistance — le cache atteint vraiment le disque', () => {
     const qc = clientNeuf()
     expect(() => brancherPersistance(qc)).not.toThrow()
     stockage.mockRestore()
+  })
+})
+
+describe('un cache par compte (poste partagé, 2026-09-28)', () => {
+  beforeEach(() => {
+    window.localStorage.clear()
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+    window.localStorage.clear()
+  })
+
+  const session = (id: string) =>
+    window.localStorage.setItem(
+      'sb-projet-auth-token',
+      JSON.stringify({ user: { id } }),
+    )
+
+  async function ecrirePour(id: string) {
+    session(id)
+    const qc = clientNeuf()
+    brancherPersistance(qc)
+    changerDeCompte(id)
+    await qc.fetchQuery({
+      queryKey: ['classeur', 'items', 5],
+      queryFn: () => Promise.resolve({ secret: 'de-' + id }),
+    })
+    await vi.advanceTimersByTimeAsync(3_000)
+    return qc
+  }
+
+  it('le même compte retrouve son cache au démarrage suivant', async () => {
+    await ecrirePour('A')
+    const suivant = clientNeuf()
+    brancherPersistance(suivant)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(suivant.getQueryData(['classeur', 'items', 5])).toEqual({
+      secret: 'de-A',
+    })
+  })
+
+  it('un AUTRE compte sur le même poste ne voit rien de A, même un instant', async () => {
+    await ecrirePour('A')
+    session('B')
+    const suivant = clientNeuf()
+    brancherPersistance(suivant)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(suivant.getQueryData(['classeur', 'items', 5])).toBeUndefined()
+    expect(window.localStorage.getItem(CLE) ?? '').not.toContain('de-A')
+  })
+
+  it('changement de compte en cours de session : mémoire et disque vidés', async () => {
+    const qc = await ecrirePour('A')
+    changerDeCompte('B')
+    expect(qc.getQueryData(['classeur', 'items', 5])).toBeUndefined()
+    expect(window.localStorage.getItem(CLE)).toBeNull()
+  })
+
+  it('déconnexion : tout est vidé ; même compte : rien n’est vidé', async () => {
+    const qc = await ecrirePour('A')
+    changerDeCompte('A')
+    expect(qc.getQueryData(['classeur', 'items', 5])).toBeDefined()
+    changerDeCompte(null)
+    expect(qc.getQueryData(['classeur', 'items', 5])).toBeUndefined()
+    expect(window.localStorage.getItem(CLE)).toBeNull()
   })
 })

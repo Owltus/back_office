@@ -153,6 +153,8 @@ export function HistoriqueDialog({
   onOpenChange: (open: boolean) => void
   classeurId: number
 }) {
+  // Restaurer (écrase tout le classeur) et supprimer un point : gestion
+  // seule (décision utilisateur du 2026-09-28). Créer un point : écriture.
   const { canWrite, canManage } = useDroitsClasseur(classeurId)
   const historique = useMergeHistory(classeurId)
   const classeur = useClasseur(classeurId)
@@ -328,8 +330,7 @@ export function HistoriqueDialog({
                   const genre = GENRES[entry.kind]
                   const Icone = genre.icone
                   const cetteLigne = enCours === entry.id
-                  const supprimable =
-                    canManage || (canWrite && !estMajeur(entry.kind))
+                  const supprimable = canManage
                   return (
                     <li
                       key={entry.id}
@@ -366,7 +367,7 @@ export function HistoriqueDialog({
                           )}
                         </span>
                       </div>
-                      {canWrite && (
+                      {canManage && (
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Button

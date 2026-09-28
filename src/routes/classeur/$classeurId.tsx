@@ -64,7 +64,9 @@ function ClasseurShell({ classeurId }: { classeurId: number }) {
     return (
       <PageContainer>
         <div className="mx-auto flex w-full max-w-5xl flex-col items-center gap-3 rounded-xl border border-border bg-card p-8 text-center text-muted-foreground">
-          <p className="text-sm">Ce classeur n'existe plus.</p>
+          <p className="text-sm">
+            Ce classeur n'existe pas, ou vous n'y avez pas accès.
+          </p>
           <Button asChild size="sm" variant="outline">
             <Link to="/classeur">Tous les classeurs</Link>
           </Button>

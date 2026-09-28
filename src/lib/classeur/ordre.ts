@@ -9,7 +9,11 @@
  * chapitres), qui partage le même `DndContext`.
  */
 
-import type { ChapterContent, ChapterItem, ItemKind } from '#/lib/classeur/types.ts'
+import type {
+  ChapterContent,
+  ChapterItem,
+  ItemKind,
+} from '#/lib/classeur/types.ts'
 import { ITEM_KINDS } from '#/lib/classeur/types.ts'
 
 export interface ItemRef {
@@ -42,9 +46,14 @@ export function refsDe(items: ReadonlyArray<ChapterItem>): ItemRef[] {
 }
 
 /** Déplace l'élément d'index `de` à l'index `vers` (nouvelle liste). */
-export function deplacer<T>(liste: ReadonlyArray<T>, de: number, vers: number): T[] {
+export function deplacer<T>(
+  liste: ReadonlyArray<T>,
+  de: number,
+  vers: number,
+): T[] {
   const copie = [...liste]
-  if (de < 0 || de >= copie.length || vers < 0 || vers >= copie.length) return copie
+  if (de < 0 || de >= copie.length || vers < 0 || vers >= copie.length)
+    return copie
   const [bouge] = copie.splice(de, 1)
   copie.splice(vers, 0, bouge)
   return copie

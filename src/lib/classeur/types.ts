@@ -21,8 +21,30 @@ export interface DbClasseur {
   deleted_at: string | null
   created_at: string
   updated_at: string
-  /** Propriétaire (posé par trigger) : le niveau écriture ne modifie que les siens. */
+  /** Créateur (posé par trigger) : écriture par défaut, sauf exception. */
   created_by: string | null
+  /**
+   * Accès pour tous (2026-09-28) : niveau des personnes sans exception.
+   * `aucun` = classeur privé. Modifiable par la gestion seule.
+   */
+  acces_tous: 'aucun' | 'lecture' | 'ecriture'
+}
+
+/** Exception d'accès d'une personne sur un classeur (`classeur_acces`). */
+export interface DbAccesClasseur {
+  id: number
+  classeur_id: number
+  user_id: string
+  niveau: 'aucun' | 'lecture' | 'ecriture'
+}
+
+/** Personne ayant un droit sur la page Classeur (RPC, gestion seule). */
+export interface PersonneClasseur {
+  id: string
+  prenom: string
+  nom: string
+  nom_affiche: string
+  niveau_page: 'lecture' | 'ecriture' | 'gestion'
 }
 
 /** Ligne de `classeur_chapters`. */

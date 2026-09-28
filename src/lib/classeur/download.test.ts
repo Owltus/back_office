@@ -24,8 +24,14 @@ beforeEach(() => {
     return URL_FACTICE
   })
   revoquerUrl = vi.fn()
-  Object.defineProperty(URL, 'createObjectURL', { value: creerUrl, configurable: true })
-  Object.defineProperty(URL, 'revokeObjectURL', { value: revoquerUrl, configurable: true })
+  Object.defineProperty(URL, 'createObjectURL', {
+    value: creerUrl,
+    configurable: true,
+  })
+  Object.defineProperty(URL, 'revokeObjectURL', {
+    value: revoquerUrl,
+    configurable: true,
+  })
   vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
     this: HTMLAnchorElement,
   ) {

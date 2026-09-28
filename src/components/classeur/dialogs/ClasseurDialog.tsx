@@ -17,7 +17,9 @@ import {
 import { Input } from '#/components/ui/input.tsx'
 import { Label } from '#/components/ui/label.tsx'
 import { messageErreur } from '#/lib/classeur/erreur.ts'
+import { useDroitsPageClasseur } from '#/components/classeur/hooks/useDroitsClasseur.ts'
 import { createClasseur, updateClasseur } from '#/lib/classeur/service.ts'
+import { cn } from '#/lib/utils.ts'
 import type { ClasseurInput } from '#/lib/classeur/service.ts'
 import type { DbClasseur } from '#/lib/classeur/types.ts'
 
@@ -92,6 +94,9 @@ function ClasseurForm({
     classeur?.etablissement_complement ?? '',
   )
   const invalider = useInvaliderClasseur()
+  // « Privé » à la création : gestion seule (la base force `lecture` sinon).
+  const { canCreatePrive } = useDroitsPageClasseur()
+  const [prive, setPrive] = useState(false)
 
   const mutation = useMutation({
     mutationFn: async (input: ClasseurInput) => {
@@ -99,7 +104,10 @@ function ClasseurForm({
         await updateClasseur(classeur.id, input)
         return classeur.id
       }
-      return createClasseur(input)
+      return createClasseur(
+        input,
+        canCreatePrive && prive ? 'aucun' : 'lecture',
+      )
     },
     onSuccess: async (id) => {
       await invalider()
@@ -161,6 +169,49 @@ function ClasseurForm({
           maxLength={200}
         />
       </div>
+
+      {!classeur && canCreatePrive && (
+        <div className="flex flex-col gap-2">
+          <Label>Visibilité</Label>
+          <div
+            role="radiogroup"
+            aria-label="Visibilité du classeur"
+            className="grid grid-cols-2 gap-2"
+          >
+            {(
+              [
+                [
+                  false,
+                  'Lecture pour tous',
+                  'Tous ceux qui ont la page le lisent.',
+                ],
+                [
+                  true,
+                  'Privé',
+                  'Personne, sauf la gestion et les accès donnés.',
+                ],
+              ] as const
+            ).map(([valeur, titre, aide]) => (
+              <button
+                key={titre}
+                type="button"
+                role="radio"
+                aria-checked={prive === valeur}
+                onClick={() => setPrive(valeur)}
+                className={cn(
+                  'rounded-md border p-2.5 text-left text-sm transition-colors',
+                  prive === valeur
+                    ? 'border-primary bg-primary/10'
+                    : 'border-border hover:bg-accent',
+                )}
+              >
+                <span className="block font-medium">{titre}</span>
+                <span className="text-xs text-muted-foreground">{aide}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {mutation.isError && (
         <Alert variant="destructive">

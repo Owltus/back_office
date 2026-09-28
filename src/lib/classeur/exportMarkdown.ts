@@ -108,7 +108,10 @@ export function feuilleSignatureEnMarkdown(
 }
 
 /** Intercalaire : titre et description (page de séparation, rien d'autre). */
-export function intercalaireEnMarkdown(titre: string, description: string): string {
+export function intercalaireEnMarkdown(
+  titre: string,
+  description: string,
+): string {
   const t = titre.trim() || SANS_TITRE
   const desc = description.trim()
   return desc === '' ? `# ${t}\n` : `# ${t}\n\n${desc}\n`
@@ -214,12 +217,21 @@ export async function construireArchiveMarkdown(
 }
 
 /** Les quatre familles d'un seul chapitre, extraites d'un contenu global. */
-function contenuDuChapitre(content: ChapterContent, chapterId: number): ChapterContent {
+function contenuDuChapitre(
+  content: ChapterContent,
+  chapterId: number,
+): ChapterContent {
   return {
     documents: content.documents.filter((d) => d.chapter_id === chapterId),
-    tracking_sheets: content.tracking_sheets.filter((d) => d.chapter_id === chapterId),
-    signature_sheets: content.signature_sheets.filter((d) => d.chapter_id === chapterId),
-    intercalaires: content.intercalaires.filter((d) => d.chapter_id === chapterId),
+    tracking_sheets: content.tracking_sheets.filter(
+      (d) => d.chapter_id === chapterId,
+    ),
+    signature_sheets: content.signature_sheets.filter(
+      (d) => d.chapter_id === chapterId,
+    ),
+    intercalaires: content.intercalaires.filter(
+      (d) => d.chapter_id === chapterId,
+    ),
   }
 }
 

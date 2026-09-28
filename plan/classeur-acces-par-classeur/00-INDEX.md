@@ -102,6 +102,12 @@ Tous les classeurs existants : **accès pour tous = lecture**, créateurs en
 
 ---
 
+## État (2026-09-28)
+
+Étapes 1 à 7 FAITES : SQL joué (matrice 25/25 en production), métier,
+cache par compte, interface. Étape 8 : contrôle par l'UTILISATEUR avec son
+compte de test (il l'a demandé) ; documentation faite.
+
 ## Phases
 
 | # | Fichier | Phase | Dépend de | Priorité | Effort | Livrable | Critique |

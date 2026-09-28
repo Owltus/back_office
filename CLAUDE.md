@@ -798,25 +798,50 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   inchangés). ⚠ Fenêtre Chrome non affichée = captures en échec et
   animations de sortie figées (`data-state="closed"` reste dans le DOM) :
   contrôler par script, ne pas conclure à un défaut de l'app.
-- **Droits PAR CLASSEUR (2026-09-26, demande utilisateur : « faire comme
-  l'Affichage »)** : `supabase/classeur_proprietaire_2026-09-26.sql` (JOUÉ,
-  autorité `classeur_2026-09-25.sql` §5 identique). `ecriture` crée des
-  classeurs et ne modifie que LES SIENS (`created_by`, posé par
-  `classeur_stamp`) ; `gestion` tout ; lecture inchangée. Aides
-  `private.classeur_write_ok(classeur_id)` et
-  `private.classeur_chapter_write_ok(chapter_id)` (definer, déclarées dans
-  `verif_advisor.sql` contrôles 7-9, qui compte désormais 7 aides) ; les 12
-  policies insert/update de contenu et l'insert/delete des points de
-  restauration passent par elles ; l'insert d'un classeur reste au rang 2
-  (le créateur devient propriétaire) ; delete physique = gestion. Côté app,
-  `lib/classeur/droits.ts` (pure, matrice testée) + `useDroitsClasseur(id)`
-  remplacent `can('classeur','ecriture')` partout où un classeur est en jeu
-  (`canWrite` = peut modifier CE classeur, `false` tant qu'il n'est pas
-  chargé) ; la liste montre un cadenas « lecture seule » et ne se
-  réordonne (ordre partagé) qu'en gestion ou si tout est à soi. Vérifié par
-  un test RLS en transaction annulée (droit posé le temps du test) : 0 ligne
-  modifiable chez l'autre, création/modification/suppression douce des
-  siens OK. Un classeur orphelin (auteur supprimé) = gestion seule.
+- **ACCÈS PAR CLASSEUR (2026-09-28, remplace le modèle « Affichage » du
+  26/09 ; plan `plan/classeur-acces-par-classeur/`)**. Règle validée par
+  l'utilisateur : **niveau effectif = le plus petit de (droit sur la PAGE,
+  droit sur le CLASSEUR)** ; gestion de la page et admin : tout. Droit sur
+  le classeur, par priorité : exception de la personne (`classeur_acces`,
+  aucun/lecture/ecriture, dans les DEUX sens — y compris retirer le
+  créateur), sinon créateur → écriture, sinon `classeur_classeurs.acces_tous`
+  (défaut `lecture` = bascule ; `aucun` = « Privé »). Source de vérité
+  UNIQUE en base : `private.classeur_niveau_de(id, created_by, acces_tous)`
+  (⚠ la policy de lecture de `classeur_classeurs` l'appelle avec les
+  COLONNES de la ligne : une recherche par `id` rendait invisible la ligne
+  en cours d'insertion et refusait toute création — trouvé à la
+  répétition) ; `classeur_niveau(id)`, `classeur_lecture_ok`,
+  `classeur_write_ok` (même nom qu'avant : les policies d'écriture suivent),
+  `classeur_chapter_read_ok`, `classeur_gestion_ok`. Lecture filtrée sur
+  TOUT le contenu : classeurs, chapitres, 4 familles d'éléments,
+  médiathèque, points de restauration (copies complètes), versions,
+  fichiers du stockage (sinon un classeur masqué reste lisible par ses
+  à-côtés). Trigger `private.classeur_garde` : `acces_tous`, `deleted_at`,
+  `sort_order` du classeur = gestion seule (42501), « privé » à la création
+  forcé à `lecture` hors gestion. Journal : `log_row_change` sur
+  `classeur_acces` et sur `acces_tous`. RPC `classeur_personnes` (gestion,
+  prénom/nom/droit de page, JAMAIS l'e-mail). Réservé gestion côté UI (la
+  base ne peut pas distinguer une restauration d'une saisie) : restaurer
+  un point, supprimer un point. Autorité : `classeur_acces_2026-09-28.sql`
+  (JOUÉ) = §8 de `classeur_2026-09-25.sql` (EN DERNIER : il remplace les
+  lectures « rang ≥ 1 ») ; les fichiers images et versions sont alignés
+  (ne jamais y remettre « rang ≥ 1 »). Matrice `verif_classeur_acces.sql` :
+  25/25, rejouable, s'annule toute seule (exception finale), 3 mutations
+  vérifiées détectées ; `verif_advisor` 11/11 (13 aides), `verif_complet`
+  20/20. Côté app : `lib/classeur/droits.ts` = miroir exact
+  (`niveauEffectif`, `capacites`, propriétés fast-check),
+  `useDroitsClasseur` (tout `false` tant que classeur ET `useMesAcces` ne
+  sont pas chargés), `useDroitsPageClasseur` ; `dialogs/
+  AccesClasseurDialog.tsx` (carte « Accès au classeur » de l'accueil,
+  gestion) ; option Privé à la création (gestion) ; liste : suppression et
+  ordre = gestion, cadenas « lecture seule », icône « Privé ». Clés
+  `['classeur','acces',…]` exclues du disque. ⚠ **Cache PAR COMPTE**
+  (`lib/queryPersist.ts`, `changerDeCompte` appelé par `applyUser`) : le
+  cache n'est restauré que pour le compte qui l'a écrit
+  (`bo.query.cache.proprietaire`, lu face à la session `sb-*-auth-token`),
+  vidé (mémoire + disque) à chaque changement de compte et à la
+  déconnexion — jamais sur une panne (même compte). Avant ce jour, B
+  pouvait voir depuis le cache ce que A avait lu sur le poste partagé.
 - **Liste des classeurs `/classeur` (décision utilisateur du 2026-09-26,
   « plus comme d'origine »)** : la colonne centrée de Registre
   (`ClasseurListPage`), SANS titre de page — deux cartes pointillées côte à

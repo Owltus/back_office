@@ -28,15 +28,25 @@ export function contenuDuChapitre(
 ): ChapterContent {
   return {
     documents: content.documents.filter((d) => d.chapter_id === chapterId),
-    tracking_sheets: content.tracking_sheets.filter((d) => d.chapter_id === chapterId),
-    signature_sheets: content.signature_sheets.filter((d) => d.chapter_id === chapterId),
-    intercalaires: content.intercalaires.filter((d) => d.chapter_id === chapterId),
+    tracking_sheets: content.tracking_sheets.filter(
+      (d) => d.chapter_id === chapterId,
+    ),
+    signature_sheets: content.signature_sheets.filter(
+      (d) => d.chapter_id === chapterId,
+    ),
+    intercalaires: content.intercalaires.filter(
+      (d) => d.chapter_id === chapterId,
+    ),
   }
 }
 
 /** Chapitres triés par `sort_order` puis `id` (l'ordre d'impression). */
-export function trierChapitres(chapters: ReadonlyArray<DbChapter>): DbChapter[] {
-  return [...chapters].sort((a, b) => a.sort_order - b.sort_order || a.id - b.id)
+export function trierChapitres(
+  chapters: ReadonlyArray<DbChapter>,
+): DbChapter[] {
+  return [...chapters].sort(
+    (a, b) => a.sort_order - b.sort_order || a.id - b.id,
+  )
 }
 
 /** Titre affiché d'un élément : « Sans titre » si vide. */

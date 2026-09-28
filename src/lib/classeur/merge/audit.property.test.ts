@@ -161,6 +161,7 @@ class Simulateur {
       created_at: T0,
       updated_at: T0,
       created_by: null,
+      acces_tous: 'lecture',
     },
   ]
   chapters: DbChapter[] = []
@@ -300,6 +301,7 @@ class Simulateur {
       id,
       uuid: `cl-${id}`,
       created_by: null,
+      acces_tous: 'lecture',
       ...input,
       sort_order: this.classeurs.length + 1,
       deleted_at: null,

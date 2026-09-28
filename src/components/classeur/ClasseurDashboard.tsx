@@ -17,11 +17,13 @@ import {
   Search,
   Table2,
   Upload,
+  ShieldCheck,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
 import { ActionCard } from '#/components/classeur/ActionCard.tsx'
 import { ChapterDrawerButton } from '#/components/classeur/ChapterDrawer.tsx'
+import { AccesClasseurDialog } from '#/components/classeur/dialogs/AccesClasseurDialog.tsx'
 import { ChapterDialog } from '#/components/classeur/dialogs/ChapterDialog.tsx'
 import { ClasseurDialog } from '#/components/classeur/dialogs/ClasseurDialog.tsx'
 import {
@@ -121,7 +123,8 @@ export function ClasseurDashboard({
   busy?: DashboardBusy
   renderResult?: (result: ClasseurSearchResult) => ReactNode
 }) {
-  const { canWrite } = useDroitsClasseur(classeurId)
+  const { canWrite, canManage } = useDroitsClasseur(classeurId)
+  const [accesOuvert, setAccesOuvert] = useState(false)
   const navigate = useNavigate()
 
   const classeurQ = useClasseur(classeurId)
@@ -380,7 +383,7 @@ export function ClasseurDashboard({
               </div>
             )}
 
-            {(onImages || onHistorique) && (
+            {(onImages || onHistorique || canManage) && (
               <div className="border-b border-border" />
             )}
             {onImages && (
@@ -399,9 +402,26 @@ export function ClasseurDashboard({
                 onClick={onHistorique}
               />
             )}
+            {canManage && classeur && (
+              <ActionCard
+                icon={ShieldCheck}
+                title="Accès au classeur"
+                subtitle={
+                  classeur.acces_tous === 'aucun'
+                    ? 'Privé : qui peut le lire ou le modifier'
+                    : 'Qui peut le lire ou le modifier'
+                }
+                onClick={() => setAccesOuvert(true)}
+              />
+            )}
           </div>
         </div>
       )}
+
+      <AccesClasseurDialog
+        classeur={accesOuvert ? classeur : null}
+        onClose={() => setAccesOuvert(false)}
+      />
 
       <ClasseurDialog
         open={editOpen}
