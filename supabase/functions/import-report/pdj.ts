@@ -400,7 +400,32 @@ export async function importInhouse(
         throw new Error('Écriture des données PDJ échouée. Réessaie dans un instant.')
       }
     }
+    await purgerNomsAnciens(admin)
   }
 
   return deduped.length
+}
+
+/**
+ * Purge RGPD des noms, CÔTÉ SERVEUR (revue du 2026-09-28). Jusque-là, seule
+ * l'app la jouait, au montage de /pdj et pour un compte ayant le droit
+ * d'écriture — dont la RLS borne l'UPDATE à J-3 : un week-end sans visite
+ * suffisait pour que des noms restent en base indéfiniment (pg_cron n'est pas
+ * installé). L'import nocturne tourne chaque nuit avec la clé serveur : il
+ * anonymise tout ce qui précède la veille, même fenêtre que `keepName`
+ * ci-dessus. Idempotent ; un échec est journalisé sans faire échouer
+ * l'import, déjà écrit.
+ */
+async function purgerNomsAnciens(admin: SupabaseClient): Promise<void> {
+  const veille = parisDateStr(new Date(Date.now() - 24 * 60 * 60 * 1000))
+  const { error, count } = await admin
+    .from(PDJ_TABLE)
+    .update({ guest_name: null, purged_at: new Date().toISOString() }, { count: 'exact' })
+    .lt('service_date', veille)
+    .not('guest_name', 'is', null)
+  if (error) {
+    console.error('Purge RGPD des noms PDJ échouée :', error.message)
+    return
+  }
+  if (count) console.log(`Purge RGPD : ${count} nom(s) anonymisé(s) avant le ${veille}.`)
 }
