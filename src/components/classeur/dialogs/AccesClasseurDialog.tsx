@@ -4,6 +4,13 @@ import { AlertCircle, Loader2, ShieldCheck } from 'lucide-react'
 
 import { Alert, AlertDescription } from '#/components/ui/alert.tsx'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '#/components/ui/select.tsx'
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -48,6 +55,9 @@ const CHOIX_TOUS: ReadonlyArray<[NiveauClasseur, string, string]> = [
     'Tous ceux qui ont l’écriture sur la page le modifient',
   ],
 ]
+
+/** Pas d'exception : Radix refuse une valeur vide, d'où un repère. */
+const DEFAUT = 'defaut'
 
 function nomDe(p: PersonneClasseur): string {
   const complet = `${p.prenom} ${p.nom}`.trim()
@@ -219,28 +229,34 @@ function Contenu({ classeur }: { classeur: DbClasseur }) {
                       {enCours && (
                         <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
                       )}
-                      <select
-                        aria-label={`Accès de ${nomDe(p)}`}
-                        value={ex ?? ''}
+                      <Select
+                        value={ex ?? DEFAUT}
                         disabled={exception.isPending}
-                        onChange={(e) => {
-                          const v = e.target.value
+                        onValueChange={(v) => {
                           exception.mutate({
                             userId: p.id,
                             niveau: estNiveauClasseur(v) ? v : null,
                           })
                         }}
-                        className="h-8 rounded-md border border-input bg-background px-2 text-sm dark:bg-input/30"
                       >
-                        <option value="">
-                          {createur
-                            ? 'Par défaut (créateur : écriture)'
-                            : `Comme tout le monde (${LIBELLE_NIVEAU[classeur.acces_tous].toLowerCase()})`}
-                        </option>
-                        <option value="aucun">Aucun accès</option>
-                        <option value="lecture">Lecture</option>
-                        <option value="ecriture">Écriture</option>
-                      </select>
+                        <SelectTrigger
+                          size="sm"
+                          className="w-56"
+                          aria-label={`Accès de ${nomDe(p)}`}
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={DEFAUT}>
+                            {createur
+                              ? 'Par défaut (créateur : écriture)'
+                              : `Comme tout le monde (${LIBELLE_NIVEAU[classeur.acces_tous].toLowerCase()})`}
+                          </SelectItem>
+                          <SelectItem value="aucun">Aucun accès</SelectItem>
+                          <SelectItem value="lecture">Lecture</SelectItem>
+                          <SelectItem value="ecriture">Écriture</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </span>
                   )}
                 </li>

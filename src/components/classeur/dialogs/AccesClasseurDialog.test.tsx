@@ -66,6 +66,20 @@ const classeur = {
 
 afterEach(cleanup)
 
+// Radix Select dans jsdom : capture du pointeur et défilement absents.
+Object.assign(Element.prototype, {
+  hasPointerCapture: () => false,
+  releasePointerCapture: () => {},
+  scrollIntoView: () => {},
+})
+
+/** Ouvre le menu d'une personne et choisit une option (clavier + clic). */
+function choisir(libelle: string, option: string | RegExp) {
+  const declencheur = screen.getByLabelText(libelle)
+  fireEvent.keyDown(declencheur, { key: 'Enter' })
+  fireEvent.click(screen.getByRole('option', { name: option }))
+}
+
 function ouvrir() {
   render(
     <QueryClientProvider client={new QueryClient()}>
@@ -90,15 +104,11 @@ describe('AccesClasseurDialog', () => {
   it('changer l’accès d’une personne, et l’accès pour tous', async () => {
     ouvrir()
     await waitFor(() => screen.getByText('Hugo Petit'))
-    fireEvent.change(screen.getByLabelText('Accès de Hugo Petit'), {
-      target: { value: 'ecriture' },
-    })
+    choisir('Accès de Hugo Petit', 'Écriture')
     await waitFor(() =>
       expect(definirAcces).toHaveBeenCalledWith(5, 'u-ecri', 'ecriture'),
     )
-    fireEvent.change(screen.getByLabelText('Accès de Léa Martin'), {
-      target: { value: '' },
-    })
+    choisir('Accès de Léa Martin', /Comme tout le monde/)
     await waitFor(() =>
       expect(definirAcces).toHaveBeenCalledWith(5, 'u-lect', null),
     )
