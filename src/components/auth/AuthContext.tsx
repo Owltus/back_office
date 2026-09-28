@@ -18,6 +18,7 @@ import {
 } from '#/lib/backendHealth.ts'
 import { errorMessage } from '#/lib/errors.ts'
 import { parseMyAccess } from '#/lib/auth/access.ts'
+import { effacerSessionLocale } from '#/lib/auth/sessionLocale.ts'
 import {
   clearCachedPerms,
   readCachedPerms,
@@ -459,7 +460,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     clearLastActive()
-    await supabase.auth.signOut()
+    // Pendant une panne, signOut() peut rendre une erreur SANS effacer la
+    // session (jeton expiré, renouvellement impossible) : on l'efface
+    // nous-mêmes, sinon le compte se reconnecte au retour du backend sur un
+    // poste partagé. Et comme SIGNED_OUT n'est alors pas émis, le cache du
+    // compte est vidé ici explicitement.
+    const { error } = await supabase.auth
+      .signOut()
+      .catch((err: unknown) => ({ error: err }))
+    if (error) {
+      try {
+        effacerSessionLocale(window.localStorage)
+      } catch {
+        // Stockage indisponible : rien à effacer.
+      }
+    }
+    changerDeCompte(null)
     setUser(null)
     userIdRef.current = null
     setProfile(null)
