@@ -27,13 +27,6 @@ function fromTTC(ttc: number): number {
   return ttc / VAT_FACTOR
 }
 
-// Mois en français, index 1-12 (recopié de lib/shared/dates.ts), pour le message
-// « aucun objectif défini pour <mois> <année> ».
-const MONTHS = [
-  '', 'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
-  'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre',
-]
-
 // Auteur des imports automatiques. `daily_reports.imported_by` est une FK vers
 // public.profiles(id) (donc vers un VRAI compte auth.users) et est NULLABLE :
 // pour l'import robot, on laisse `null` (pas d'auteur nommé) — aucune création de
@@ -668,7 +661,8 @@ async function upsertDailyMetrics(
  * des `forecast_days` DÉJÀ en base, pas du fichier.
  *
  * Renvoie le nombre de lignes de détail écrites (pms_daily_metrics), au moins 1.
- * Lève une Error sur validation bloquante (négatifs, nuitées > 80) ou budget absent.
+ * Lève une Error sur validation bloquante (négatifs, nuitées > 80). Le budget du
+ * mois n'est PAS exigé (voir plus bas).
  */
 export async function importComparison(
   admin: SupabaseClient,
@@ -690,19 +684,10 @@ export async function importComparison(
   const realiseJour = computeRealiseJour(comparison)
   const realiseMTD = computeRealiseMTD(comparison, reportDate.dayOfMonth)
 
-  // Budget du mois : OBLIGATOIRE (comme l'orchestrateur).
-  const { data: budget, error: budgetError } = await admin
-    .from('budget')
-    .select('*')
-    .eq('year', reportDate.year)
-    .eq('month', reportDate.month)
-    .single()
-
-  if (budgetError || !budget) {
-    throw new Error(
-      `Aucun objectif n'est défini pour ${MONTHS[reportDate.month]} ${reportDate.year}. Ajoute-le dans la gestion budgétaire avant d'importer.`,
-    )
-  }
+  // Budget du mois : PAS exigé ici. Il n'est écrit nulle part à l'import, et un
+  // rejet (422) perdait définitivement un Comparison que le PMS ne renverra pas.
+  // Le seul consommateur est l'envoi automatique, qui contrôle déjà sa présence
+  // (autoSend.ts : « budget absent » → pas d'envoi) ; l'écran le lit à l'affichage.
 
   // Projeté du mois (pm_*) depuis les forecast_days déjà importés.
   const { data: existingForecasts, error: forecastErr } = await admin
