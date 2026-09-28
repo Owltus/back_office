@@ -38,7 +38,7 @@ Légende : FAIT · EN COURS · À FAIRE
 23. Statut et validation (brouillon, à relire, validé) — REFUSÉ (« trop compliqué, trop contraignant »)
 
 ## Navigation et lecture
-24. Table des matières d'un document (depuis ses titres) — À FAIRE
+24. Table des matières d'un document (depuis ses titres) — REFUSÉ (2026-09-28)
 25. Liens entre procédures du classeur — À FAIRE
 26. Recherche dans le contenu de tous les documents — À FAIRE
 27. Lien direct vers une procédure — À FAIRE
