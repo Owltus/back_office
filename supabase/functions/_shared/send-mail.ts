@@ -231,6 +231,13 @@ export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
     // « réessayable ». Le classer AMBIGU conservait la réservation et brûlait la
     // journée : marquée envoyée, sans e-mail, sans reprise possible.
     if (res.status === 429) return fail('Envoi du message échoué', true, true)
+    // 409 : la clé d'idempotence est DÉJÀ connue de Resend (message identique
+    // déjà envoyé, ou envoi encore en cours sous cette clé). Ce n'est pas un
+    // rejet : l'e-mail est peut-être parti. Le classer « certainement pas
+    // envoyé » laissait l'appelant libérer la réservation, puis renvoyer sous
+    // une autre clé — doublon. Issue AMBIGUË : réservation conservée, pas de
+    // reprise.
+    if (res.status === 409) return fail('Envoi du message échoué', false, false)
     // 5xx épuisées = AMBIGU (le POST a pu aboutir) : réservation conservée, pas de
     // reprise. 4xx définitive = rejet explicite, rien n'est parti, inutile d'insister.
     return fail('Envoi du message échoué', !transient, false)
