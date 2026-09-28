@@ -89,17 +89,20 @@ function ouvrir() {
 }
 
 describe('AccesClasseurDialog', () => {
-  it('niveau effectif : l’écriture d’une personne en lecture sur la page est plafonnée', async () => {
+  it('liste les utilisateurs avec leur droit actuel, jamais d’e-mail', async () => {
     ouvrir()
     await waitFor(() => screen.getByText('Léa Martin'))
-    const lea = screen.getByText('Léa Martin').closest('li')!
-    expect(lea.textContent).toContain('Effectif : Lecture')
-    expect(lea.textContent).toContain('plafonné par la page')
-    const hugo = screen.getByText('Hugo Petit').closest('li')!
-    expect(hugo.textContent).toContain('Effectif : Lecture')
+    expect(screen.getByText('Exceptions par utilisateur')).toBeTruthy()
+    // Léa : exception écriture ; Hugo : lecture pour tous (défaut).
+    expect(screen.getByLabelText('Accès de Léa Martin').textContent).toBe(
+      'Écriture',
+    )
+    expect(screen.getByLabelText('Accès de Hugo Petit').textContent).toBe(
+      'Lecture',
+    )
     // La gestion n'a pas de réglage : accès complet.
     expect(screen.getByText('Accès complet')).toBeTruthy()
-    expect(document.body.textContent).not.toMatch(/@/)
+    expect(document.body.textContent).not.toMatch(/@|Effectif/)
   })
   it('changer l’accès d’une personne, et l’accès pour tous', async () => {
     ouvrir()

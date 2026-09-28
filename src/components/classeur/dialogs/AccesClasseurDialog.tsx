@@ -17,11 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '#/components/ui/dialog.tsx'
-import {
-  LIBELLE_NIVEAU,
-  estNiveauClasseur,
-  niveauEffectif,
-} from '#/lib/classeur/droits.ts'
+import { estNiveauClasseur } from '#/lib/classeur/droits.ts'
 import type { NiveauClasseur } from '#/lib/classeur/droits.ts'
 import { messageErreur } from '#/lib/classeur/erreur.ts'
 import { classeurKeys } from '#/lib/classeur/keys.ts'
@@ -40,7 +36,9 @@ import { cn } from '#/lib/utils.ts'
  *
  *   - Accès pour tous : aucun (privé) / lecture / écriture ;
  *   - une exception par personne ayant la page, dans les deux sens, avec le
- *     niveau EFFECTIF affiché (le droit de page plafonne).
+ *     trois choix (aucun, lecture, écriture) ; le droit de page reste un
+ *     plafond, rappelé dans la description (sous-texte retiré à la demande
+ *     de l'utilisateur, 2026-09-28).
  *
  * Chaque changement est enregistré aussitôt (et journalisé en base) ; pas
  * de bouton « Enregistrer » à oublier.
@@ -177,7 +175,7 @@ function Contenu({ classeur }: { classeur: DbClasseur }) {
 
       <section className="flex min-h-0 flex-col gap-2">
         <h3 className="shrink-0 text-sm font-medium">
-          Exceptions par personne
+          Exceptions par utilisateur
         </h3>
         {personnes.isPending || acces.isPending ? (
           <div className="flex justify-center py-6 text-muted-foreground">
@@ -193,9 +191,6 @@ function Contenu({ classeur }: { classeur: DbClasseur }) {
                 ? 'ecriture'
                 : classeur.acces_tous
               const droit = ex ?? parDefaut
-              const effectif = niveauEffectif(p.niveau_page, classeur, ex, p.id)
-              const plafonne =
-                p.niveau_page === 'lecture' && droit === 'ecriture'
               const enCours =
                 exception.isPending && exception.variables.userId === p.id
               return (
@@ -211,13 +206,6 @@ function Contenu({ classeur }: { classeur: DbClasseur }) {
                           créateur
                         </span>
                       )}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Page : {LIBELLE_NIVEAU[p.niveau_page]} · Effectif :{' '}
-                      <span className="font-medium text-foreground">
-                        {LIBELLE_NIVEAU[effectif]}
-                      </span>
-                      {plafonne && ' (plafonné par la page)'}
                     </p>
                   </div>
                   {p.niveau_page === 'gestion' ? (
