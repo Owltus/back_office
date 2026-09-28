@@ -30,6 +30,7 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2.115.0'
 
 import { sendMail } from '../_shared/send-mail.ts'
+import { poserMarqueurManuel } from './marker.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -212,19 +213,8 @@ Deno.serve(async (req) => {
   // après un envoi auto. On réutilise le marqueur existant `daily_reports.auto_sent_at`
   // — « auto_sent_at » signifie donc « envoyé (auto ou manuel) ». Best-effort : un
   // échec ici n'annule pas le mail parti.
-  if (/^\d{4}-\d{2}-\d{2}$/.test(reportDate)) {
-    try {
-      await admin
-        .from('daily_reports')
-        .update({ auto_sent_at: new Date(nowMs).toISOString() })
-        .eq('date', reportDate)
-    } catch (e) {
-      console.error(
-        "Marqueur d'envoi manuel non posé :",
-        e instanceof Error ? e.message : String(e),
-      )
-    }
-  }
+  // (supabase-js RENVOIE ses erreurs sans lever : lues et journalisées là-bas.)
+  await poserMarqueurManuel(admin, reportDate, nowMs)
 
   return json(
     {
