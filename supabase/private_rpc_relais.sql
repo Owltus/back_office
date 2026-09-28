@@ -8,8 +8,26 @@
 -- portent encore la garde `<> 'gestion'` (NULL passe). Tout rejeu DOIT être
 -- suivi de facturation_garde_null_2026-09-05.sql, sinon un compte sans droit
 -- facturation peut de nouveau écrire.
--- Rejeu : les `alter … set schema` échouent si déjà appliqué ; rejouer les
--- sections (2) et (3) après `drop function public.<relais>` si besoin.
+-- REJEU (note réécrite le 2026-09-28 — l'ancienne consigne « rejouer les
+-- sections (2) et (3) » était DANGEREUSE seule) :
+--   * Section (1) : déjà appliquée en prod ; les `alter … set schema`
+--     échouent (fonctions déjà déplacées). Ne pas la rejouer.
+--   * Section (2) : PÉRIMÉE pour les 28 corps facturation_* (garde
+--     `<> 'gestion'`, NULL passe). La rejouer seule ROUVRE la faille
+--     corrigée le 2026-09-05. Si on la rejoue, enchaîner AUSSITÔT, dans la
+--     même session, facturation_garde_null_2026-09-05.sql (autorité des 28
+--     gardes, `is distinct from 'gestion'`), puis
+--     admin_update_password_garde_null_2026-09-28.sql (autorité de
+--     admin_update_password — le corps ci-dessous lui est déjà aligné). Les
+--     5 autres corps (set_user_grade, set_page_permission,
+--     remove_page_permission, daily_reports_occ, rapro_occupancy) sont
+--     conformes à la prod à la date de cette note.
+--   * Section (3) : relais `create function` (sans `or replace`) : échoue si
+--     les relais existent. Ne la rejouer qu'après `drop function
+--     public.<relais>(<signature>)` du SEUL relais à recréer — opération
+--     destructive, confirmation explicite requise (CLAUDE.md).
+--   * Contrôle après tout rejeu : verif_advisor.sql (dont le contrôle des
+--     gardes `<>`/`!=` sur 'gestion'/'admin', attendu 0).
 --
 -- INNOCUITÉ : aucune table, aucune donnée, aucune policy. Chaque fonction est
 -- déplacée (OID, privilèges et dépendances conservés), son corps régénéré À

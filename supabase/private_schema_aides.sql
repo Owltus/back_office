@@ -1,15 +1,18 @@
 -- ⚠ 2026-09-05/06 : les blocs literie_record_movement / literie_toggle_bedding
 -- de ce fichier décrivent des fonctions SUPPRIMÉES de la prod (aucun appelant,
 -- rpc_invoker_2026-09.sql). NE PLUS REJOUER ces blocs : ils recréeraient des
--- fonctions security definer dans public.
+-- fonctions security definer dans public. Plus largement, TOUTE la section
+-- (4) est périmée et ne doit plus être rejouée (note de rejeu en fin de
+-- fichier, revue du 2026-09-28).
 -- =============================================================================
 -- private_schema_aides — schéma privé + fonctions d'aide des règles de sécurité
 --
 -- Application : `supabase db query --linked -f supabase/private_schema_aides.sql`
 -- EN UNE FOIS (une transaction). Fichier GÉNÉRÉ depuis le catalogue de prod
--- (pg_get_functiondef, 2026-09-05) puis relu. Rejouable : `create schema if
--- not exists`, `alter … set schema` échoue proprement si déjà fait (voir la
--- note de rejeu en fin de fichier).
+-- (pg_get_functiondef, 2026-09-05) puis relu. ⚠ PAS REJOUABLE EN L'ÉTAT
+-- (revue du 2026-09-28) : voir la NOTE DE REJEU en fin de fichier. En bref,
+-- seules les sections (1) et (3) peuvent l'être ; la section (4) ne doit
+-- JAMAIS l'être.
 --
 -- INNOCUITÉ : aucune table, aucune donnée, aucune policy supprimée ou recréée
 -- (les policies référencent les fonctions par OID : `alter function … set
@@ -128,6 +131,8 @@ grant execute on function private.page_level_rank(text) to authenticated;
 revoke execute on function private.repjour_manual_forecast_allowed(integer,integer) from public, anon;
 grant execute on function private.repjour_manual_forecast_allowed(integer,integer) to authenticated;
 
+-- ⚠⚠ SECTION (4) PÉRIMÉE — NE JAMAIS REJOUER (voir NOTE DE REJEU en fin de
+-- fichier) : elle recréerait des definer dans public, gardes NULL-perméables.
 -- (4) 39 fonctions et triggers de public dont le CORPS référence une aide :
 --     régénérés à l'identique avec les appels en private.<aide>( (search_path figé oblige).
 -- daily_reports_occ(date)
@@ -1252,6 +1257,24 @@ select 'anon usage sur private', has_schema_privilege('anon', 'private', 'usage'
 union all
 select 'authenticated usage sur private', has_schema_privilege('authenticated', 'private', 'usage')::text;
 
--- NOTE DE REJEU : après application, `alter function public.<aide> set schema
--- private` échoue (fonction déjà déplacée). Pour rejouer uniquement les corps,
--- exécuter le fichier à partir de la section (3).
+-- NOTE DE REJEU (réécrite le 2026-09-28 — l'ancienne consigne « exécuter à
+-- partir de la section (3) » embarquait la section (4), DANGEREUSE) :
+--   * Section (1) : idempotente, rejouable.
+--   * Section (2) : déjà appliquée ; `alter function public.<aide> set schema
+--     private` échoue (fonctions déjà déplacées). Ne pas la rejouer.
+--   * Section (3) : corps des 5 aides en private, conformes à la prod
+--     (get_user_role y est déjà STABLE, cf. perf_2026-09-05.sql). SEULE
+--     section de corps rejouable, et SEULE (s'arrêter AVANT le titre (4)).
+--   * Section (4) : NE JAMAIS REJOUER. Elle est PÉRIMÉE depuis
+--     private_rpc_relais.sql : ses `CREATE OR REPLACE FUNCTION public.…`
+--     remplaceraient les relais SECURITY INVOKER de public par des fonctions
+--     SECURITY DEFINER exposées à l'API (lint 0029 rouvert), dont les 28
+--     facturation_* avec la garde `<> 'gestion'` (NULL passe : un compte sans
+--     droit facturation pourrait écrire). Elle recréerait aussi
+--     literie_record_movement, literie_toggle_bedding et set_parking_tarif,
+--     supprimées de la prod (rpc_invoker_2026-09.sql).
+--     Autorités actuelles : private_rpc_relais.sql (34 RPC + relais), PUIS
+--     facturation_garde_null_2026-09-05.sql (28 gardes facturation) et
+--     admin_update_password_garde_null_2026-09-28.sql ; triggers :
+--     securite_audit_2026-09-06.sql. Si la section (4) a été rejouée par
+--     erreur : rejouer ces autorités dans cet ordre, puis verif_advisor.sql.
