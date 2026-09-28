@@ -108,10 +108,14 @@ export async function setStatus(
   room: number,
   status: RoomStatus,
 ): Promise<void> {
+  // `materialized: false` : une pose manuelle n'est JAMAIS une matérialisation
+  // de clôture. Sans ce retour à false, une correction posée après une
+  // réouverture sur une ligne encore marquée serait purgée à la réouverture
+  // suivante (purgeMaterialized).
   const { error } = await supabase
     .from(RAPRO_TABLE)
     .upsert(
-      { report_date: reportDate, room, status },
+      { report_date: reportDate, room, status, materialized: false },
       { onConflict: 'report_date,room' },
     )
   if (error) throw error
@@ -154,12 +158,19 @@ export async function setRoom(
   if (status === null && !carriedManual) {
     return clearRoom(reportDate, room)
   }
-  const { error } = await supabase
-    .from(RAPRO_TABLE)
-    .upsert(
-      { report_date: reportDate, room, status, carried_manual: carriedManual },
-      { onConflict: 'report_date,room' },
-    )
+  // `materialized: false` : toute action manuelle retire la marque de
+  // matérialisation (voir setStatus), sinon la réouverture suivante effacerait
+  // la correction.
+  const { error } = await supabase.from(RAPRO_TABLE).upsert(
+    {
+      report_date: reportDate,
+      room,
+      status,
+      carried_manual: carriedManual,
+      materialized: false,
+    },
+    { onConflict: 'report_date,room' },
+  )
   if (error) throw error
 }
 

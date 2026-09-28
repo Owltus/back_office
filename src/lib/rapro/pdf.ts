@@ -15,6 +15,7 @@ import { fr } from 'date-fns/locale'
 import type { jsPDF } from 'jspdf'
 
 import { openPrintablePdf } from '#/lib/print/openPdf.ts'
+import { fitCommentLines, maxCommentLines } from '#/lib/rapro/commentFit.ts'
 import {
   CELL_STATES,
   cellState,
@@ -245,7 +246,15 @@ function renderRaproDocument(
   const c = comment.trim()
   if (c) {
     pdf.setFont('helvetica', 'normal').setFontSize(9).setTextColor(60)
-    pdf.text(pdf.splitTextToSize(c, CONTENT_W - 6) as string[], LEFT + 3, y + 5)
+    // Coupé à la hauteur du cadre (« … ») : jamais de débordement sur la
+    // mention de clôture ni les signatures.
+    const lineH = (9 * pdf.getLineHeightFactor()) / pdf.internal.scaleFactor
+    const lines = fitCommentLines(
+      pdf.splitTextToSize(c, CONTENT_W - 6) as string[],
+      maxCommentLines(commentH, 5, lineH, 2),
+      (l) => pdf.getTextWidth(l) <= CONTENT_W - 6,
+    )
+    pdf.text(lines, LEFT + 3, y + 5)
   }
 
   // --- Mention de clôture (petite, au-dessus des signatures) ----------------

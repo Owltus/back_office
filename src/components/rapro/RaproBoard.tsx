@@ -64,6 +64,7 @@ import {
 } from '#/lib/rapro/service.ts'
 import type { RaproDay, RaproSheet, RoomStatus } from '#/lib/rapro/types.ts'
 import { capitalize, cn } from '#/lib/utils.ts'
+import { errorMessage } from '#/lib/errors.ts'
 
 const EMPTY: ReadonlyMap<number, RoomStatus> = new Map()
 const EMPTY_MANUAL: ReadonlySet<number> = new Set()
@@ -183,6 +184,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
     data: day,
     isError,
     isSuccess,
+    isPending: dayPending,
   } = useQuery({
     queryKey: ['rapro', 'day', selectedDate],
     queryFn: () => fetchDay(selectedDate),
@@ -192,7 +194,12 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   const dayMaterialized = day?.materialized ?? EMPTY_MATERIALIZED
 
   // Feuille jour : clôture + commentaire (table rapro_sheets, au niveau jour).
-  const { data: sheet } = useQuery({
+  const {
+    data: sheet,
+    isPending: sheetPending,
+    isError: sheetError,
+    isSuccess: sheetLoaded,
+  } = useQuery({
     queryKey: ['rapro', 'sheet', selectedDate],
     queryFn: () => fetchSheet(selectedDate),
   })
@@ -200,7 +207,15 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   // Verrou : éditable seulement si le jour est actionnable (niveau + fenêtre) ET
   // non clôturé. Un jour clôturé se fige ; un jour hors fenêtre (écriture) aussi,
   // même s'il n'est pas clôturé.
-  const canEditFields = dayEditable && !isValidated
+  // Feuille non LUE (chargement ou erreur) = statut inconnu : rien d'éditable,
+  // sinon une erreur de lecture ouvrirait à la saisie un jour peut-être clôturé.
+  const canEditFields = dayEditable && sheetLoaded && !isValidated
+  // Erreur d'une action (clôture, réouverture, saisie) : affichée au-dessus de
+  // la grille, comme `guard` sur la caisse. Effacée au changement de jour.
+  const [actionError, setActionError] = useState('')
+  useEffect(() => {
+    setActionError('')
+  }, [selectedDate])
   // Commentaire COMMITÉ (hydraté depuis la feuille, mis à jour au blur du champ ;
   // la frappe vit dans RaproCommentCard). Lu par le PDF et la clôture.
   const [comment, setComment] = useState('')
@@ -226,7 +241,9 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
               validatedAt: null,
             },
     )
-    saveComment(selectedDate, next).catch(() => {})
+    saveComment(selectedDate, next).catch((err: unknown) => {
+      setActionError(`Commentaire non enregistré : ${errorMessage(err)}`)
+    })
   }
   const [pdfBusy, setPdfBusy] = useState(false)
   // Modal d'aide : tutoriel factuel de la page (bouton « ? » de la barre d'actions).
@@ -250,7 +267,12 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   // grisé. Lue via la vue `rapro_occupancy` (sans nom client, gardée sur la page
   // rapro) et non directement dans pdj_breakfasts : un compte rapro sans droit pdj
   // voit quand même l'occupation, sans recevoir de donnée nominative.
-  const { data: pdjRows } = useQuery({
+  const {
+    data: pdjRows,
+    isPending: occupancyPending,
+    isError: occupancyError,
+    isSuccess: occupancyLoaded,
+  } = useQuery({
     queryKey: ['rapro', 'occupancy', selectedDate],
     queryFn: () => fetchOccupancy(selectedDate),
   })
@@ -277,10 +299,13 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
   // 7 jours) ne bloque PAS ici — trop coûteux au premier rendu ; elle est gérée
   // plus bas par une garde ciblée sur l'état vide. Le contrôle comptable et le plus
   // ancien jour s'hydratent après, sans bloquer.
+  // `isPending` (et non la présence des données) : sur une erreur, la page sort
+  // du squelette et le bandeau d'erreur s'affiche, au lieu d'un squelette
+  // éternel.
   const loading =
-    pdjRows === undefined ||
-    sheet === undefined ||
-    day === undefined ||
+    occupancyPending ||
+    sheetPending ||
+    dayPending ||
     /*
      * ⚠ AJOUTÉ le 2026-09-24. Le contrôle comptable était volontairement HORS
      * de cette garde (« s'hydrate après, sans bloquer ») — mais c'est lui qui
@@ -505,9 +530,11 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
       // inchangé → on le reporte tel quel (vide sur un jour ouvert en pratique).
       materialized: new Set(dayMaterialized),
     })
+    setActionError('')
     try {
       await persist()
-    } catch {
+    } catch (err) {
+      setActionError(`Modification refusée ou échouée : ${errorMessage(err)}`)
       queryClient.setQueryData(
         key,
         prev ?? {
@@ -680,9 +707,12 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
     // nom de l'hôtelier dans le même upsert ; validated_by posé serveur). On
     // invalide aussi le jour (nouvelles lignes nettoyée) et l'analytique.
     const toMaterialize = [...occupied].filter((r) => !statuses.has(r))
+    setActionError('')
     materializeCleaned(selectedDate, toMaterialize)
       .then(() => validateSheet(selectedDate, comment, name))
-      .catch(() => {})
+      .catch((err: unknown) => {
+        setActionError(`Clôture refusée ou échouée : ${errorMessage(err)}`)
+      })
       .finally(() =>
         Promise.all([
           queryClient.invalidateQueries({
@@ -704,11 +734,14 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
       room,
       carriedManual: dayCarriedManual.has(room),
     }))
+    setActionError('')
     reopenSheet(selectedDate)
       .then(() =>
         toPurge.length ? purgeMaterialized(selectedDate, toPurge) : undefined,
       )
-      .catch(() => {})
+      .catch((err: unknown) => {
+        setActionError(`Réouverture refusée ou échouée : ${errorMessage(err)}`)
+      })
       .finally(() =>
         Promise.all([
           queryClient.invalidateQueries({
@@ -847,7 +880,7 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
      Le poids visuel suit l'intention, comme sur la feuille de caisse : clôturer
      est la SUITE du travail (bouton plein), réouvrir en est le RETOUR EN ARRIÈRE
      (contour vert, accordé à la pastille d'en-tête). */
-  const stateAction = !dayEditable ? null : !isValidated ? (
+  const stateAction = !dayEditable || !sheetLoaded ? null : !isValidated ? (
     // Avertissement non bloquant (D5) au survol si la balance n'est pas à zéro ;
     // le compteur visible vit dans la card « Reste à faire ».
     <Tip
@@ -857,7 +890,13 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
           : 'Fige la grille et le commentaire du jour'
       }
     >
-      <Button className="w-full" onClick={openCloseModal}>
+      {/* Occupation non lue = aucune chambre à matérialiser : clôturer
+          ferait disparaître les nettoyées par défaut du récap facturable. */}
+      <Button
+        className="w-full"
+        onClick={openCloseModal}
+        disabled={!occupancyLoaded}
+      >
         Clôturer le rapprochement
       </Button>
     </Tip>
@@ -989,11 +1028,24 @@ export function RaproBoard({ initialDate }: { initialDate?: string }) {
         actionsAlign="end"
       />
 
-      {(isError || oldestError || windowError) && (
+      {(isError ||
+        oldestError ||
+        windowError ||
+        occupancyError ||
+        sheetError) && (
         <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
           Impossible de charger les données (connexion ?). La navigation dans
           l'historique peut être limitée ; réessayez en changeant de jour puis
           en revenant.
+        </div>
+      )}
+
+      {actionError && (
+        <div
+          role="alert"
+          className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive"
+        >
+          {actionError}
         </div>
       )}
 
