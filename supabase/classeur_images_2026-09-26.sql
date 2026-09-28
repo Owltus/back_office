@@ -43,14 +43,20 @@ on conflict (id) do update
       file_size_limit = excluded.file_size_limit,
       allowed_mime_types = excluded.allowed_mime_types;
 
--- Lecture (download / list) par l'API authentifiée : rang >= 1 sur la page.
--- C'est la SEULE voie de lecture : le bucket est privé.
+-- Lecture (download / list) par l'API authentifiée. C'est la SEULE voie de
+-- lecture : le bucket est privé. Depuis le 2026-09-28 : NIVEAU EFFECTIF sur
+-- le classeur du dossier (classeur_acces_2026-09-28.sql, qui définit
+-- `private.classeur_lecture_ok` : à jouer avant ce fichier sur une base neuve).
+-- Ne JAMAIS revenir à « rang >= 1 » : un classeur privé resterait lisible
+-- par ses images.
 drop policy if exists "classeur-images read (page:classeur)" on storage.objects;
 create policy "classeur-images read (page:classeur)"
   on storage.objects for select to authenticated
   using (
     bucket_id = 'classeur-images'
-    and (select private.page_level_rank(private.get_page_level('classeur'))) >= 1
+    and array_length(storage.foldername(name), 1) = 1
+    and (storage.foldername(name))[1] ~ '^[0-9]{1,12}$'
+    and (select private.classeur_lecture_ok(((storage.foldername(name))[1])::bigint))
   );
 
 -- Écriture : chemin `<classeur_id>/<uuid>.webp`, classeur modifiable par

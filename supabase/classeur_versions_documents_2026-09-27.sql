@@ -130,7 +130,8 @@ revoke all on sequence public.classeur_document_versions_id_seq from public, ano
 drop policy if exists "classeur_document_versions read (page:classeur)" on public.classeur_document_versions;
 create policy "classeur_document_versions read (page:classeur)"
   on public.classeur_document_versions for select to authenticated
-  using ((select private.page_level_rank(private.get_page_level('classeur'))) >= 1);
+  -- Depuis le 2026-09-28 : niveau effectif sur le classeur (classeur_acces_2026-09-28.sql).
+  using ((select private.classeur_lecture_ok(classeur_id)));
 
 commit;
 
