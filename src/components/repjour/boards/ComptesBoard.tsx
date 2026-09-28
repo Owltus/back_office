@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, Trash2 } from 'lucide-react'
 
@@ -24,10 +24,7 @@ import type {
   PagePermissions,
 } from '#/lib/permissions/index.ts'
 import { orderedPages } from '#/lib/permissions/navigation.ts'
-import {
-  movedBy,
-  PageOrderList,
-} from '#/components/comptes/PageOrderList.tsx'
+import { movedBy, PageOrderList } from '#/components/comptes/PageOrderList.tsx'
 import { PasswordInput } from '#/components/repjour/PasswordInput.tsx'
 import {
   Dialog,
@@ -162,7 +159,11 @@ export function ComptesBoard() {
    * exactement les champs lus par cet écran. */
   const PROFILE_COLUMNS =
     'id,email,display_name,first_name,last_name,role,created_at,page_order'
-  const { data: profiles = [], isPending: loadingProfiles } = useQuery({
+  const {
+    data: profiles = [],
+    isPending: loadingProfiles,
+    isError: profilesError,
+  } = useQuery({
     queryKey: ['comptes', 'profiles'],
     queryFn: async (): Promise<Profile[]> => {
       const { data, error } = await supabase
@@ -193,6 +194,14 @@ export function ComptesBoard() {
   })
   const [editPerms, setEditPerms] = useState<PagePermissions>({})
   const [permBusy, setPermBusy] = useState<PageKey | null>(null)
+  // Lecture des droits du compte ouvert : tant qu'elle n'est pas arrivée (ou
+  // si elle a échoué), la matrice est VERROUILLÉE — sinon elle affichait
+  // « Aucun accès » partout, et une réponse tardive d'un autre compte pouvait
+  // s'y afficher (revue du 2026-09-28).
+  const [permsState, setPermsState] = useState<'pret' | 'lecture' | 'erreur'>(
+    'pret',
+  )
+  const permsPourRef = useRef<string | null>(null)
   // Préférence d'ordre du compte édité (`profiles.page_order`) : `null` = aucune
   // préférence, donc ordre du registre.
   const [editOrder, setEditOrder] = useState<string[] | null>(null)
@@ -264,18 +273,19 @@ export function ComptesBoard() {
       })
       if (profileError) {
         // Compte auth créé mais profil KO → on annule le compte orphelin côté
-        // serveur (best-effort) pour ne pas bloquer un nouvel essai (409).
-        try {
-          await supabase.functions.invoke('create-user', {
-            body: { rollbackUserId: data.userId },
-          })
-        } catch {
-          // annulation impossible : l'orphelin persiste, le réessai le signalera
-        }
+        // serveur pour ne pas bloquer un nouvel essai (409). `invoke` ne lève
+        // pas sur une erreur HTTP : son `error` est LU (revue du 2026-09-28),
+        // sinon on annonçait « annulé » pour un compte resté connectable.
+        const annule = await supabase.functions
+          .invoke('create-user', { body: { rollbackUserId: data.userId } })
+          .then((r) => !r.error)
+          .catch(() => false)
         throw new Error(
-          'Profil non créé (' +
-            profileError.message +
-            '). Compte annulé, réessayez.',
+          annule
+            ? 'Profil non créé. Compte annulé, réessayez.'
+            : 'Profil non créé, et l’annulation du compte a échoué. Signalez-le : un compte sans profil existe pour ' +
+                normalizedEmail +
+                '.',
         )
       }
 
@@ -302,12 +312,24 @@ export function ComptesBoard() {
     setConfirmEditPassword('')
     setMessage('')
     // Droits par page du compte (l'admin les voit via la policy SELECT self-or-admin).
-    const { data } = await supabase
+    permsPourRef.current = p.id
+    setPermsState('lecture')
+    const { data, error } = await supabase
       .from('user_page_permissions')
       .select('page, level')
       .eq('user_id', p.id)
+    // Un autre compte a été ouvert entre-temps : cette réponse est périmée.
+    if (permsPourRef.current !== p.id) return
+    if (error) {
+      setPermsState('erreur')
+      return
+    }
+    setPermsState('pret')
     const map: PagePermissions = {}
-    for (const row of (data ?? []) as Array<{ page: PageKey; level: PageLevel }>) {
+    for (const row of data as Array<{
+      page: PageKey
+      level: PageLevel
+    }>) {
       map[row.page] = row.level
     }
     setEditPerms(map)
@@ -493,7 +515,9 @@ export function ComptesBoard() {
   }
 
   const badgeClass = (g: Grade) =>
-    g === 'admin' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
+    g === 'admin'
+      ? 'bg-primary/10 text-primary'
+      : 'bg-muted text-muted-foreground'
 
   // Le seul message de succès commence par « Compte créé pour » ; tout le reste
   // (validation, erreurs serveur, annulation) est une erreur → style rouge.
@@ -537,6 +561,10 @@ export function ComptesBoard() {
 
         {loadingProfiles ? (
           <SkeletonList rows={6} />
+        ) : profilesError ? (
+          <div className="rounded-xl border border-border bg-card p-8 text-center text-destructive">
+            Liste des comptes illisible. Réessayez dans un instant.
+          </div>
         ) : profiles.length === 0 ? (
           <div className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground">
             Aucun compte. Cliquez sur « Ajouter un compte » pour commencer.
@@ -742,13 +770,20 @@ export function ComptesBoard() {
                       (appliqué immédiatement)
                     </span>
                   </label>
+                  {permsState === 'erreur' && (
+                    <p className="text-sm text-destructive">
+                      Droits illisibles. Fermez et rouvrez le compte.
+                    </p>
+                  )}
                   <div className="space-y-2 rounded-lg border border-border p-3">
                     {PAGES.map((page) => (
                       <PermRow
                         key={page.key}
                         page={page}
                         level={editPerms[page.key]}
-                        disabled={permBusy === page.key}
+                        disabled={
+                          permsState !== 'pret' || permBusy === page.key
+                        }
                         onChange={(next) => changePerm(page.key, next)}
                       />
                     ))}
@@ -763,9 +798,7 @@ export function ComptesBoard() {
               <div className="space-y-2.5">
                 <label className="block text-sm text-muted-foreground">
                   Ordre des pages
-                  <span className="ml-1 text-xs">
-                    (appliqué immédiatement)
-                  </span>
+                  <span className="ml-1 text-xs">(appliqué immédiatement)</span>
                 </label>
                 <PageOrderList
                   pages={orderedPages(

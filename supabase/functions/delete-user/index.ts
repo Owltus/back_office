@@ -123,6 +123,24 @@ Deno.serve(async (req) => {
       403,
     )
 
+  // 3quinquies. Accès coupé AVANT toute suppression (revue du 2026-09-28).
+  //   Avant, le ban n'était tenté qu'en repli, APRÈS le retrait du profil,
+  //   et son échec était avalé (`.catch` inopérant : supabase-js rend
+  //   `{ error }` sans lever) : un compte pouvait rester actif sans profil,
+  //   invisible de la gestion, alors que la réponse affirmait « banni ».
+  //   Bannir d'abord : un échec ici ne change rien, l'admin peut réessayer.
+  //   Si la suppression définitive réussit ensuite, le ban part avec elle.
+  const { error: banErr } = await admin.auth.admin.updateUserById(userId, {
+    ban_duration: BAN_DURATION,
+  })
+  if (banErr) {
+    console.error('delete-user: blocage de l’accès', banErr)
+    return json(
+      { error: 'Blocage de l’accès impossible. Rien n’a été supprimé, réessayez.' },
+      500,
+    )
+  }
+
   // 4. Retrait de la ligne `profiles` (retire la FK profiles→auth.users qui
   //    bloquerait la suppression de l'identité ; idempotent). Le compte quitte
   //    la gestion des comptes.
@@ -140,12 +158,10 @@ Deno.serve(async (req) => {
   const { error: delErr } = await admin.auth.admin.deleteUser(userId)
   if (delErr) {
     // Des données de l'app repjour (rapports, audit…) sont liées à ce compte et
-    // empêchent la suppression dure. On ne casse rien : on coupe l'accès par un
-    // ban (réversible) et on le signale. `profiles` est déjà retiré → le compte
+    // empêchent la suppression dure. On ne casse rien : l'accès est déjà coupé
+    // par le ban posé à l'étape 3quinquies. `profiles` est retiré → le compte
     // a bien quitté la gestion, mais son identité subsiste (bannie).
-    await admin.auth.admin
-      .updateUserById(userId, { ban_duration: BAN_DURATION })
-      .catch(() => {})
+    console.error('delete-user: suppression définitive', delErr)
     return json(
       {
         deleted: userId,

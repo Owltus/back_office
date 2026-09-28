@@ -1,11 +1,14 @@
 import type { ReactNode } from 'react'
-import { Link, Navigate, useRouterState } from '@tanstack/react-router'
-import { ShieldAlert } from 'lucide-react'
+import { Navigate, useRouterState } from '@tanstack/react-router'
 
 import { useAuth } from '#/components/auth/AuthContext.tsx'
-import { ROLE_HOME } from '#/lib/repjour/roles.ts'
+import {
+  AccessReadErrorNotice,
+  NoAccessNotice,
+} from '#/components/auth/PageGuard.tsx'
+import { PAGE_BY_KEY } from '#/lib/permissions/index.ts'
+import { homePage } from '#/lib/permissions/navigation.ts'
 import type { UserRole } from '#/lib/repjour/roles.ts'
-import { Button } from '#/components/ui/button.tsx'
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
 import { RouteSkeleton } from '#/components/shared/skeleton/RouteSkeleton.tsx'
 
@@ -25,31 +28,6 @@ function GuardSkeleton({ pathname }: { pathname: string }) {
 }
 
 /**
- * Message affiché quand un utilisateur est authentifié mais n'a AUCUN profil/rôle
- * en base (ligne `profiles` absente). Sans ce garde-fou, `role` resterait `null`
- * et la garde tournerait en spinner infini. On offre une sortie vers l'accueil.
- */
-function NoRoleNotice() {
-  return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-4 px-4 py-24 text-center">
-      <ShieldAlert className="size-10 text-muted-foreground" />
-      <div className="space-y-1">
-        <p className="text-base font-medium text-foreground">
-          Aucun rôle n'est attribué à ton compte
-        </p>
-        <p className="max-w-sm text-sm text-muted-foreground">
-          Ton compte est connecté mais n'a pas encore de profil actif. Demande un
-          accès à un administrateur.
-        </p>
-      </div>
-      <Button asChild variant="outline">
-        <Link to="/">Retour à l'accueil</Link>
-      </Button>
-    </div>
-  )
-}
-
-/**
  * Garde de route par rôle pour l'îlot `/repjour`.
  *
  * L'authentification globale (`AppAuthGate`) garantit déjà qu'un utilisateur est
@@ -62,7 +40,7 @@ function NoRoleNotice() {
  *   3. `role === null` → RESTER en spinner sans afficher `children`
  *      (correction D13 bug#2 : la source rendait le contenu protégé alors que
  *      le profil n'était pas encore chargé, provoquant un flash) ;
- *   4. rôle non autorisé → redirection vers `ROLE_HOME[role]` ;
+ *   4. rôle non autorisé → page d'accueil du compte (`homePage`) ;
  *   5. sinon → `children`.
  *
  * La garde est ERGONOMIQUE ; la sécurité réelle reste assurée par les RLS
@@ -75,7 +53,16 @@ export function ProtectedRoute({
   allowedRoles: UserRole[]
   children: ReactNode
 }) {
-  const { user, role, loading, profileLoading } = useAuth()
+  const {
+    user,
+    role,
+    loading,
+    profileLoading,
+    authReadError,
+    permissions,
+    grade,
+    profile,
+  } = useAuth()
   const pathname = useRouterState({ select: (s) => s.location.pathname })
 
   // 1. Session en cours de résolution.
@@ -84,22 +71,30 @@ export function ProtectedRoute({
   // 2. Non connecté → page de login (normalement déjà intercepté par AppAuthGate).
   if (!user) return <Navigate to="/login" replace />
 
-  // 3. Connecté, session résolue, mais pas encore de rôle. Deux cas à distinguer
-  //    (le profil est désormais chargé EN ARRIÈRE-PLAN, voir AuthContext) :
-  //    - `profileLoading` → le fetch du profil est en cours : spinner, PAS de
-  //      contenu protégé (ex-D13 bug#2, évite un flash) ;
-  //    - sinon → la ligne `profiles` est réellement absente : notice avec une
-  //      sortie vers l'accueil (plutôt qu'un spinner infini).
+  // 3. Connecté, session résolue, mais pas encore de rôle (le profil est
+  //    chargé EN ARRIÈRE-PLAN, voir AuthContext) : squelette, PAS de contenu
+  //    protégé (ex-D13 bug#2). Un profil réellement absent ÉJECTE la session
+  //    (AuthContext) : l'ancien écran « aucun rôle » n'avait donc aucun cas
+  //    légitime et mentait après une simple erreur de lecture (revue du
+  //    2026-09-28) — on montre l'erreur, avec « Réessayer ».
   if (role === null)
-    return profileLoading ? (
-      <GuardSkeleton pathname={pathname} />
+    return !profileLoading && authReadError !== null ? (
+      <AccessReadErrorNotice />
     ) : (
-      <NoRoleNotice />
+      <GuardSkeleton pathname={pathname} />
     )
 
-  // 4. Rôle connu mais non autorisé → accueil du rôle.
+  // 4. Rôle connu mais non autorisé → page d'accueil DU COMPTE, même source
+  //    que PageGuard et la racine (`profiles.page_order`) : l'ancien
+  //    `ROLE_HOME` renvoyait sur /repjour en dur, d'où un second saut pour
+  //    qui n'y a pas droit.
   if (!allowedRoles.includes(role)) {
-    return <Navigate to={ROLE_HOME[role]} replace />
+    const home = homePage(permissions, grade, profile?.page_order)
+    return home ? (
+      <Navigate to={PAGE_BY_KEY[home].route} replace />
+    ) : (
+      <NoAccessNotice />
+    )
   }
 
   // 5. Autorisé.

@@ -1,6 +1,7 @@
+import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { Navigate, useRouterState } from '@tanstack/react-router'
-import { ShieldAlert } from 'lucide-react'
+import { RefreshCw, ShieldAlert } from 'lucide-react'
 
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { atLeast, PAGE_BY_KEY } from '#/lib/permissions/index.ts'
@@ -8,6 +9,7 @@ import { homePage } from '#/lib/permissions/navigation.ts'
 import type { PageKey, PageLevel } from '#/lib/permissions/index.ts'
 import { PageContainer } from '#/components/shared/PageContainer.tsx'
 import { RouteSkeleton } from '#/components/shared/skeleton/RouteSkeleton.tsx'
+import { Button } from '#/components/ui/button.tsx'
 
 /**
  * Squelette de page tant que session/profil/permissions ne sont pas résolus —
@@ -39,6 +41,44 @@ export function NoAccessNotice() {
           administrateur pour obtenir des accès.
         </p>
       </div>
+    </div>
+  )
+}
+
+/**
+ * Droits ILLISIBLES (revue du 2026-09-28) : une erreur de lecture qui n'est
+ * pas une panne (jeton refusé, réponse inattendue…) laissait les gardes
+ * conclure « aucun accès » ou « aucun rôle » — une affirmation fausse. On
+ * dit ce qui se passe et on propose de relire.
+ */
+export function AccessReadErrorNotice() {
+  const { refreshProfile } = useAuth()
+  const [enCours, setEnCours] = useState(false)
+  const [echec, setEchec] = useState(false)
+  const relire = () => {
+    setEnCours(true)
+    setEchec(false)
+    refreshProfile()
+      .catch(() => setEchec(true))
+      .finally(() => setEnCours(false))
+  }
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-4 px-4 py-24 text-center">
+      <ShieldAlert className="size-10 text-muted-foreground" />
+      <div className="space-y-1">
+        <p className="text-base font-medium text-foreground">
+          Vos accès n'ont pas pu être lus
+        </p>
+        <p className="max-w-sm text-sm text-muted-foreground">
+          {echec
+            ? 'Nouvel échec. Réessayez dans un instant, ou reconnectez-vous.'
+            : 'Réessayez dans un instant.'}
+        </p>
+      </div>
+      <Button variant="outline" onClick={relire} disabled={enCours}>
+        <RefreshCw className={enCours ? 'animate-spin' : undefined} />
+        Réessayer
+      </Button>
     </div>
   )
 }
@@ -80,6 +120,7 @@ export function PageGuard({
     permissionsLoading,
     permsResolved,
     backendDown,
+    authReadError,
     permissions,
     grade,
     profile,
@@ -95,6 +136,10 @@ export function PageGuard({
     // Jamais « Aucune page accessible » sur une simple panne.
     if (profileLoading || permissionsLoading || (backendDown && !permsResolved))
       return <GuardSkeleton pathname={pathname} />
+    // Droits jamais obtenus pour ce compte à cause d'une ERREUR (hors panne) :
+    // « aucun accès » serait faux, on le dit et on propose de relire.
+    if (!permsResolved && authReadError !== null)
+      return <AccessReadErrorNotice />
     // MÊME source d'ordre que la racine et la Navbar (`profiles.page_order`),
     // sans quoi les deux notions d'accueil divergeraient et se renverraient la
     // balle. `homePage` dérive de l'ordre DÉJÀ filtré par les droits : elle ne
