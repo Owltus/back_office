@@ -122,6 +122,26 @@ export function toDbUpdate(
   return toDbFields(input)
 }
 
+/**
+ * Un `update` ou un `delete` REFUSÉ par la RLS ne lève PAS d'erreur : PostgREST
+ * répond 200 avec zéro ligne touchée. Sans ce contrôle, l'écran affichait
+ * « Enregistré » pour une écriture qui n'avait pas eu lieu (modèle d'un autre
+ * auteur, droit retiré entre-temps, modèle supprimé ailleurs). On demande donc
+ * les lignes touchées (`.select('id')`) et zéro ligne devient une erreur.
+ */
+export class AfficheNonModifiee extends Error {
+  constructor(verbe: string) {
+    super(
+      `Le modèle n'a pas été ${verbe} : il n'existe plus ou vous n'avez pas le droit de le modifier.`,
+    )
+    this.name = 'AfficheNonModifiee'
+  }
+}
+
+function exigerUneLigne(data: unknown[] | null, verbe: string): void {
+  if (!data || data.length === 0) throw new AfficheNonModifiee(verbe)
+}
+
 export async function fetchTemplates(): Promise<AfficheTemplate[]> {
   const { data, error } = await supabase
     .from(AFFICHE_TEMPLATES_TABLE)
@@ -143,17 +163,21 @@ export async function updateTemplate(
   id: string,
   patch: Partial<Omit<DbAfficheTemplate, 'id'>>,
 ): Promise<void> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from(AFFICHE_TEMPLATES_TABLE)
     .update(patch)
     .eq('id', id)
+    .select('id')
   if (error) throw error
+  exigerUneLigne(data, 'modifié')
 }
 
 export async function deleteTemplate(id: string): Promise<void> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from(AFFICHE_TEMPLATES_TABLE)
     .delete()
     .eq('id', id)
+    .select('id')
   if (error) throw error
+  exigerUneLigne(data, 'supprimé')
 }

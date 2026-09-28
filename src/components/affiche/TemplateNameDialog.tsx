@@ -23,10 +23,13 @@ export function TemplateNameDialog({
   open,
   onOpenChange,
   onSubmit,
+  error = null,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSubmit: (name: string) => void
+  /** Échec de la dernière création, affiché dans la modale restée ouverte. */
+  error?: string | null
 }) {
   const [name, setName] = useState('')
 
@@ -56,6 +59,12 @@ export function TemplateNameDialog({
             placeholder="Nom affiché dans la liste"
           />
         </Field>
+
+        {error && (
+          <p role="alert" className="text-xs text-destructive">
+            {error}
+          </p>
+        )}
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>

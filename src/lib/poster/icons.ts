@@ -434,12 +434,23 @@ export const ICONS: Record<string, { name: string; svg: string }> = {
 }
 
 /**
+ * L'icône d'une clé, ou `undefined` si la clé n'est PAS une icône du registre.
+ *
+ * `Object.hasOwn` et non `ICONS[key]` : la clé vient de la base
+ * (`affiche_templates.icon`), et `ICONS['constructor']` rend la fonction
+ * `Object` héritée du prototype — objet « vrai » dont `.svg` vaut `undefined`,
+ * sur lequel l'aperçu appelait `.replace` et plantait la page.
+ */
+function iconeDe(key: string): { name: string; svg: string } | undefined {
+  return Object.hasOwn(ICONS, key) ? ICONS[key] : undefined
+}
+
+/**
  * Retourne le SVG d'une icône (chaîne), avec repli sur `alert` si la clé est inconnue.
  * Équivalent de `Icons.getSVG` du fork.
  */
 export function getIconSvg(key: string): string {
-  const icon = ICONS[key]
-  return icon ? icon.svg : ICONS.alert.svg
+  return (iconeDe(key) ?? ICONS.alert).svg
 }
 
 /**
@@ -447,8 +458,7 @@ export function getIconSvg(key: string): string {
  * Équivalent de `Icons.getName` du fork.
  */
 export function getIconName(key: string): string {
-  const icon = ICONS[key]
-  return icon ? icon.name : 'Alerte'
+  return iconeDe(key)?.name ?? 'Alerte'
 }
 
 /**

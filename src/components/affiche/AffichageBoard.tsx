@@ -54,6 +54,7 @@ import {
   setAffiche,
 } from '#/lib/afficheStore.ts'
 import { printWithTitle } from '#/lib/print.ts'
+import { errorMessage } from '#/lib/errors.ts'
 
 /* --------------------------------------------------------------------------
  * AffichageBoard — panneau de contrôle + orchestration du générateur d'affiches A3.
@@ -160,6 +161,9 @@ export function AffichageBoard() {
 
   // Feedback bref à l'enregistrement : le bouton passe à « Enregistré ✓ » ~1,8 s.
   const [savedFlash, setSavedFlash] = useState(false)
+  // Échec d'écriture d'un modèle, affiché sous le bouton (et dans la modale de
+  // création). Avant, il n'allait qu'en console : un refus passait inaperçu.
+  const [actionError, setActionError] = useState<string | null>(null)
   const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   function flashSaved() {
     setSavedFlash(true)
@@ -209,14 +213,17 @@ export function AffichageBoard() {
     if (!canWrite) return
     const id = crypto.randomUUID()
     try {
-      await createTemplate(toDbInsert({ ...currentInput(name), id }, templates.length))
+      await createTemplate(
+        toDbInsert({ ...currentInput(name), id }, templates.length),
+      )
       await invalidateTemplates()
       // Le nouveau modèle devient le modèle sélectionné (l'état colle déjà).
       setAffiche({ selectedTemplate: id })
       setNameOpen(false)
+      setActionError(null)
       flashSaved()
     } catch (err) {
-      console.error('[affiche] création du modèle échouée', err)
+      setActionError(`Création impossible : ${errorMessage(err)}`)
     }
   }
 
@@ -227,9 +234,10 @@ export function AffichageBoard() {
     try {
       await updateTemplate(selected.id, toDbUpdate(currentInput(selected.name)))
       await invalidateTemplates()
+      setActionError(null)
       flashSaved()
     } catch (err) {
-      console.error('[affiche] sauvegarde du modèle échouée', err)
+      setActionError(`Sauvegarde impossible : ${errorMessage(err)}`)
     }
   }
 
@@ -246,8 +254,9 @@ export function AffichageBoard() {
       await deleteTemplate(selected.id)
       if (selectedTemplate === selected.id) setAffiche({ selectedTemplate: '' })
       await invalidateTemplates()
+      setActionError(null)
     } catch (err) {
-      console.error('[affiche] suppression du modèle échouée', err)
+      setActionError(`Suppression impossible : ${errorMessage(err)}`)
     }
   }
 
@@ -338,6 +347,18 @@ export function AffichageBoard() {
   //    NOUVEAU modèle (pas de cul-de-sac : éditer un seed puis « Créer »).
   const renderSaveOrCreate = () => {
     if (!canWrite) return null
+    return (
+      <>
+        {renderSaveOrCreateButton()}
+        {actionError && (
+          <p role="alert" className="mt-2 text-xs text-destructive">
+            {actionError}
+          </p>
+        )}
+      </>
+    )
+  }
+  const renderSaveOrCreateButton = () => {
     // Feedback bref après un enregistrement réussi (création ou sauvegarde) :
     // pastille verte inerte pendant ~1,8 s, puis retour au bouton normal.
     if (savedFlash) {
@@ -359,7 +380,13 @@ export function AffichageBoard() {
         </Button>
       </Tip>
     ) : (
-      <Button onClick={() => setNameOpen(true)} className="w-full">
+      <Button
+        onClick={() => {
+          setActionError(null)
+          setNameOpen(true)
+        }}
+        className="w-full"
+      >
         <Plus />
         Créer un modèle
       </Button>
@@ -443,7 +470,11 @@ export function AffichageBoard() {
         {/* Card impression — ancrée EN HAUT (desktop ; en responsive Imprimer vit
             sous l'aperçu). */}
         <div className="hidden shrink-0 rounded-xl border border-border bg-card p-4 lg:block">
-          <PrintButton onClick={handlePrint} label="Imprimer" className="w-full" />
+          <PrintButton
+            onClick={handlePrint}
+            label="Imprimer"
+            className="w-full"
+          />
         </div>
 
         {/* Card MODÈLE (sa propre card, comme les cards boutons) : sélection
@@ -683,6 +714,7 @@ export function AffichageBoard() {
           open={nameOpen}
           onOpenChange={setNameOpen}
           onSubmit={handleCreate}
+          error={actionError}
         />
       )}
       {confirmDialog}
