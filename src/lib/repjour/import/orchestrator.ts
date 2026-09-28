@@ -150,6 +150,12 @@ export async function importForecastDays(
       'Ce fichier de prévisions est vide. Vérifie que tu as exporté le bon fichier.',
     )
   }
+  // `imported_at` estampillé à CHAQUE import, même valeur pour tout le lot, comme
+  // l'Edge Function (import-report/repjour.ts). Sans lui, un upsert sur des
+  // dates déjà présentes gardait l'ancien horodatage (le DEFAULT ne joue qu'à
+  // l'insertion) : l'import de secours ne rendait pas le Forecast « frais », et
+  // l'envoi automatique comme le bandeau PMS le jugeaient périmé.
+  const importedAt = new Date().toISOString()
   const data = rows.map((r) => ({
     date: r.date,
     month: r.month,
@@ -159,6 +165,7 @@ export async function importForecastDays(
     rev_ttc: r.revTTC,
     adr_ttc: r.occ > 0 ? r.revTTC / r.occ : 0,
     occ_percent: (r.occ / TOTAL_ROOMS) * 100,
+    imported_at: importedAt,
   }))
   const { error } = await supabase
     .from('forecast_days')
@@ -497,7 +504,8 @@ export async function processImport(
     throw new Error("Le rapport n'a pas pu être enregistré. Réessaie dans un instant.")
   }
 
-  // UPSERT forecast_days
+  // UPSERT forecast_days — `imported_at` rafraîchi (voir importForecastDays).
+  const forecastImportedAt = new Date().toISOString()
   const forecastData = forecastRows.map((r) => ({
     date: r.date,
     month: r.month,
@@ -507,6 +515,7 @@ export async function processImport(
     rev_ttc: r.revTTC,
     adr_ttc: r.occ > 0 ? r.revTTC / r.occ : 0,
     occ_percent: (r.occ / TOTAL_ROOMS) * 100,
+    imported_at: forecastImportedAt,
   }))
 
   if (forecastData.length > 0) {
