@@ -51,6 +51,14 @@ describe('estSensible — ce qui ne doit jamais toucher le disque', () => {
   it('refuse les cautions, lues en select(*) avec commentaire libre', () => {
     expect(estSensible(['caisse', 'cautions'])).toBe(true)
   })
+
+  it('refuse les lits bébé attribués (texte libre « Nom / chambre »)', () => {
+    expect(
+      estSensible(['baby-cots', 'assignments', '2026-09-01', '2026-09-30']),
+    ).toBe(true)
+    // La liste des lits, elle, ne porte aucun nom.
+    expect(estSensible(['baby-cots', 'cots'])).toBe(false)
+  })
 })
 
 describe('estSensible — ce qui a le droit d’être conservé', () => {

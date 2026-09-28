@@ -56,6 +56,7 @@ import {
 } from '#/components/ui/tooltip.tsx'
 import { hasOverlapWithAny } from '#/lib/baby-cots/model.ts'
 import type { CotAssignment } from '#/lib/baby-cots/types.ts'
+import { restoreDeleted, restorePatch } from '#/lib/baby-cots/history.ts'
 import type { CotAssignmentPatch } from '#/lib/baby-cots/history.ts'
 import {
   createAssignment,
@@ -448,6 +449,14 @@ export function BabyCotBoard() {
   const [commentId, setCommentId] = useState<string | null>(null)
   const [commentDraft, setCommentDraft] = useState('')
 
+  // Écriture refusée par la base (erreur, ou 0 ligne touchée par la RLS) :
+  // l'écran est remis dans son état d'avant et ce message dit pourquoi.
+  const [actionError, setActionError] = useState<string | null>(null)
+  function describeWriteError(err: unknown): string {
+    const message = err instanceof Error ? err.message : String(err)
+    return `L'enregistrement a échoué, action annulée. ${message}`
+  }
+
   /* Primitives d'écriture partagées : état local optimiste + persistance
    * Supabase + gardes (temporelle, anti-chevauchement). Utilisées PAR les
    * handlers ET par l'undo/redo — pas de duplication. Chacune renvoie un
@@ -476,6 +485,7 @@ export function BabyCotBoard() {
     if (!today) return false
     if (!canCreateAssignment(a.startDate, today, level)) return false
     if (hasOverlapWithAny(assignmentsRef.current, a.cotId, a)) return false
+    setActionError(null)
     setAssignments((prev) => (prev.some((x) => x.id === a.id) ? prev : [...prev, a]))
     createAssignment({
       id: a.id,
@@ -487,6 +497,7 @@ export function BabyCotBoard() {
     }).catch((err) => {
       console.error(err)
       setAssignments((prev) => prev.filter((x) => x.id !== a.id))
+      setActionError(describeWriteError(err))
     })
     return true
   }
@@ -496,13 +507,25 @@ export function BabyCotBoard() {
     const target = assignmentsRef.current.find((x) => x.id === id)
     if (!target) return false
     if (!canEditAssignment(target, today, level)) return false
+    setActionError(null)
     setAssignments((prev) => prev.filter((x) => x.id !== id))
-    deleteAssignment(id).catch(console.error)
+    deleteAssignment(id).catch((err) => {
+      console.error(err)
+      setAssignments((prev) => restoreDeleted(prev, target))
+      setActionError(describeWriteError(err))
+    })
     return true
   }
 
   // Patche les seuls champs fournis (préserve le reste, dont le travail concurrent).
-  function applyUpdate(id: string, patch: CotAssignmentPatch): boolean {
+  // `rollback` : valeurs à remettre en cas d'échec, pour les champs du patch.
+  // Par défaut, celles d'AVANT le patch ; un glisser a déjà bougé la barre à
+  // l'écran et passe donc sa position de départ.
+  function applyUpdate(
+    id: string,
+    patch: CotAssignmentPatch,
+    rollback?: CotAssignmentPatch,
+  ): boolean {
     if (!today) return false
     const target = assignmentsRef.current.find((x) => x.id === id)
     if (!target) return false
@@ -517,8 +540,14 @@ export function BabyCotBoard() {
       if (hasOverlapWithAny(assignmentsRef.current, cotId, { startDate, endDate }, id))
         return false
     }
+    setActionError(null)
+    const restore = restorePatch(patch, rollback ?? target)
     setAssignments((prev) => prev.map((x) => (x.id === id ? { ...x, ...patch } : x)))
-    updateAssignment(id, toDbPatch(patch)).catch(console.error)
+    updateAssignment(id, toDbPatch(patch)).catch((err) => {
+      console.error(err)
+      setAssignments((prev) => prev.map((x) => (x.id === id ? { ...x, ...restore } : x)))
+      setActionError(describeWriteError(err))
+    })
     return true
   }
 
@@ -724,18 +753,27 @@ export function BabyCotBoard() {
         r &&
         (r.cotId !== orig.cotId || r.startDate !== orig.startDate || r.endDate !== orig.endDate)
       ) {
-        updateAssignment(a.id, {
-          cot_id: r.cotId,
-          start_date: r.startDate,
-          end_date: r.endDate,
-        }).catch(console.error)
+        const before: CotAssignmentPatch = {
+          cotId: orig.cotId,
+          startDate: orig.startDate,
+          endDate: orig.endDate,
+        }
+        const after: CotAssignmentPatch = {
+          cotId: r.cotId,
+          startDate: r.startDate,
+          endDate: r.endDate,
+        }
+        // Persistance par `applyUpdate` : mêmes gardes, et un refus de la base
+        // ramène la barre à sa position de départ avec un message. Refusé dès
+        // la garde (cas limite) : la barre revient aussi, rien n'est écrit.
+        if (!applyUpdate(a.id, after, before)) {
+          setAssignments((prev) =>
+            prev.map((x) => (x.id === a.id ? { ...x, ...before } : x)),
+          )
+          return
+        }
         // Historise le geste : patch géométrique (lit/dates) seulement.
-        record({
-          kind: 'update',
-          id: a.id,
-          before: { cotId: orig.cotId, startDate: orig.startDate, endDate: orig.endDate },
-          after: { cotId: r.cotId, startDate: r.startDate, endDate: r.endDate },
-        })
+        record({ kind: 'update', id: a.id, before, after })
       }
     }
     window.addEventListener('pointermove', onMove)
@@ -871,6 +909,12 @@ export function BabyCotBoard() {
           <AlertDescription>
             Erreur de chargement du planning. Réessayez plus tard.
           </AlertDescription>
+        </Alert>
+      )}
+
+      {actionError && (
+        <Alert variant="destructive">
+          <AlertDescription>{actionError}</AlertDescription>
         </Alert>
       )}
 

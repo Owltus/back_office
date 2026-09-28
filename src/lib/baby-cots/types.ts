@@ -32,7 +32,9 @@ export interface CotAssignment {
   comment: string
 }
 
-/** Ligne `baby_cot_assignments` telle que stockée en base (snake_case). */
+/** Ligne `baby_cot_assignments` telle que LUE par le planning (snake_case) :
+ * exactement les colonnes de `fetchAssignments`. La table porte aussi
+ * `created_by` / `created_at` / `updated_at`, posés serveur, jamais lus. */
 export interface DbCotAssignment {
   id: string
   cot_id: string
@@ -40,7 +42,4 @@ export interface DbCotAssignment {
   start_date: string // 'YYYY-MM-DD'
   end_date: string // 'YYYY-MM-DD'
   comment: string
-  created_by: string
-  created_at: string
-  updated_at: string
 }

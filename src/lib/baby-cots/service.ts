@@ -34,6 +34,11 @@ export async function fetchCots(): Promise<BabyCot[]> {
   return (data ?? []) as BabyCot[]
 }
 
+/** Colonnes lues par le planning, alignées sur `DbCotAssignment`. Liste
+ * explicite : `label` est un texte libre (nom, chambre) et l'auteur n'a rien à
+ * faire dans le navigateur. */
+const ASSIGNMENT_COLUMNS = 'id, cot_id, label, start_date, end_date, comment'
+
 /**
  * Assignations dont la période RECOUVRE la fenêtre [from, to] (bornes
  * 'YYYY-MM-DD' incluses) : `start_date <= to` ET `end_date >= from`. Paginé
@@ -49,7 +54,7 @@ export async function fetchAssignments(
   for (;;) {
     const { data, error } = await supabase
       .from(BABY_COT_ASSIGNMENTS_TABLE)
-      .select('*')
+      .select(ASSIGNMENT_COLUMNS)
       .lte('start_date', to)
       .gte('end_date', from)
       .order('id', { ascending: true })
@@ -74,6 +79,12 @@ export interface NewCotAssignment {
   comment: string
 }
 
+/** Messages d'un refus silencieux (0 ligne touchée, sans erreur de la base). */
+export const RIEN_ENREGISTRE =
+  "Rien n'a été enregistré : droit insuffisant ou lit déjà libéré."
+export const RIEN_SUPPRIME =
+  "Rien n'a été supprimé : droit insuffisant ou lit déjà libéré."
+
 export async function createAssignment(row: NewCotAssignment): Promise<void> {
   const { error } = await supabase.from(BABY_COT_ASSIGNMENTS_TABLE).insert(row)
   if (error) throw error
@@ -83,17 +94,24 @@ export async function updateAssignment(
   id: string,
   patch: Partial<Omit<NewCotAssignment, 'id'>>,
 ): Promise<void> {
-  const { error } = await supabase
+  // `.select('id')` : un UPDATE refusé par la RLS ne lève PAS d'erreur, il
+  // modifie 0 ligne. Sans lire les lignes touchées, le refus passerait pour un
+  // succès (même modèle que `setServed`, lib/pdj/service.ts).
+  const { data, error } = await supabase
     .from(BABY_COT_ASSIGNMENTS_TABLE)
     .update(patch)
     .eq('id', id)
+    .select('id')
   if (error) throw error
+  if (data.length === 0) throw new Error(RIEN_ENREGISTRE)
 }
 
 export async function deleteAssignment(id: string): Promise<void> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from(BABY_COT_ASSIGNMENTS_TABLE)
     .delete()
     .eq('id', id)
+    .select('id')
   if (error) throw error
+  if (data.length === 0) throw new Error(RIEN_SUPPRIME)
 }

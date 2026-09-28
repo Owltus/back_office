@@ -101,6 +101,8 @@ const PREFIXES_SENSIBLES: ReadonlyArray<ReadonlyArray<string>> = [
   ['classeur', 'versions'],
   // Accès par classeur : identifiants, droits et noms des personnes (2026-09-28).
   ['classeur', 'acces'],
+  // Lits bébé : `label` est un texte libre « Nom / chambre » (2026-09-28).
+  ['baby-cots', 'assignments'],
 ]
 
 /** Vrai si la clé commence par l'un des préfixes sensibles. */

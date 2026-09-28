@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { invert } from '#/lib/baby-cots/history.ts'
+import { invert, restoreDeleted, restorePatch } from '#/lib/baby-cots/history.ts'
 import type { CotCommand } from '#/lib/baby-cots/history.ts'
 import type { CotAssignment } from '#/lib/baby-cots/types.ts'
 
@@ -48,5 +48,27 @@ describe('invert — inverse d\'une commande lits bébé', () => {
     for (const cmd of cmds) {
       expect(invert(invert(cmd))).toEqual(cmd)
     }
+  })
+})
+
+describe('retour arrière d’une écriture refusée par la base', () => {
+  it('restorePatch ne reprend QUE les champs envoyés', () => {
+    const avant = { cotId: 'cot-1', startDate: '2026-08-10', endDate: '2026-08-12' }
+    const envoye = { cotId: 'cot-2', startDate: '2026-08-11', endDate: '2026-08-13' }
+    const restore = restorePatch(envoye, avant)
+    expect(restore).toEqual(avant)
+    const affiche = { ...A, ...envoye, comment: 'reçu entre-temps' }
+    expect({ ...affiche, ...restore }).toEqual({ ...A, comment: 'reçu entre-temps' })
+  })
+
+  it('restorePatch lit la source donnée (assignation entière)', () => {
+    expect(restorePatch({ label: 'Martin' }, A)).toEqual({
+      label: 'Dupont — ch. 205',
+    })
+  })
+
+  it('restoreDeleted remet l’assignation, sans doublon', () => {
+    expect(restoreDeleted([], A)).toEqual([A])
+    expect(restoreDeleted([A], A)).toEqual([A])
   })
 })

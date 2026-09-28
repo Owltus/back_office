@@ -27,9 +27,17 @@ export async function toggleBedding(
   room: number,
   synthetic: boolean,
 ): Promise<void> {
-  const { error } = await supabase
+  // `.select('room')` : un UPDATE refusé par la RLS ne lève PAS d'erreur, il
+  // modifie 0 ligne. Sans lire les lignes touchées, le refus passerait pour un
+  // succès (même modèle que `setServed`, lib/pdj/service.ts).
+  const { data, error } = await supabase
     .from(HOTEL_ROOMS_TABLE)
     .update({ literie_synthetique: synthetic })
     .eq('room', room)
+    .select('room')
   if (error) throw error
+  // Le board préfixe déjà la chambre : message court.
+  if (data.length === 0) {
+    throw new Error("droit insuffisant, rien n'a été enregistré.")
+  }
 }

@@ -14,6 +14,29 @@ import type { CotAssignment } from '#/lib/baby-cots/types.ts'
 /** Patch limité aux champs modifiables d'une assignation (tout sauf l'id). */
 export type CotAssignmentPatch = Partial<Omit<CotAssignment, 'id'>>
 
+/**
+ * Retour arrière d'une écriture refusée par la base, CHAMP PAR CHAMP : pour
+ * chaque champ du `patch` envoyé, la valeur qu'il avait dans `source` (l'état
+ * d'avant). Les autres champs ne sont pas touchés, pour ne pas écraser un
+ * travail concurrent reçu entre-temps.
+ */
+export function restorePatch(patch: CotAssignmentPatch, source: CotAssignmentPatch): CotAssignmentPatch {
+  const out: CotAssignmentPatch = {}
+  for (const key of Object.keys(patch) as (keyof CotAssignmentPatch)[]) {
+    Object.assign(out, { [key]: source[key] })
+  }
+  return out
+}
+
+/** Remet un élément supprimé à tort (suppression refusée par la base), sauf
+ *  s'il est déjà revenu (temps réel, rechargement). */
+export function restoreDeleted<TItem extends { id: string }>(
+  list: TItem[],
+  item: TItem,
+): TItem[] {
+  return list.some((x) => x.id === item.id) ? list : [...list, item]
+}
+
 /** Une action annulable, telle qu'elle a déjà été appliquée par le board. */
 export type CotCommand =
   | { kind: 'create'; snapshot: CotAssignment }
