@@ -82,8 +82,7 @@ export interface NewCotAssignment {
 /** Messages d'un refus silencieux (0 ligne touchée, sans erreur de la base). */
 export const RIEN_ENREGISTRE =
   "Rien n'a été enregistré : droit insuffisant ou lit déjà libéré."
-export const RIEN_SUPPRIME =
-  "Rien n'a été supprimé : droit insuffisant ou lit déjà libéré."
+export const RIEN_SUPPRIME = "Rien n'a été supprimé : droit insuffisant."
 
 export async function createAssignment(row: NewCotAssignment): Promise<void> {
   const { error } = await supabase.from(BABY_COT_ASSIGNMENTS_TABLE).insert(row)
@@ -113,5 +112,17 @@ export async function deleteAssignment(id: string): Promise<void> {
     .eq('id', id)
     .select('id')
   if (error) throw error
-  if (data.length === 0) throw new Error(RIEN_SUPPRIME)
+  if (data.length > 0) return
+  // 0 ligne : refus de la RLS OU assignation déjà supprimée par un collègue
+  // (contre-revue du 2026-09-28 : le board la faisait réapparaître). On relit
+  // l'id pour départager : absent = le but est atteint, succès sans message ;
+  // présent = vrai refus. Une relecture en échec reste une erreur (le board
+  // restaure, prudence).
+  const { data: encore, error: relecture } = await supabase
+    .from(BABY_COT_ASSIGNMENTS_TABLE)
+    .select('id')
+    .eq('id', id)
+    .maybeSingle()
+  if (relecture) throw relecture
+  if (encore) throw new Error(RIEN_SUPPRIME)
 }

@@ -510,6 +510,8 @@ export function BabyCotBoard() {
     setActionError(null)
     setAssignments((prev) => prev.filter((x) => x.id !== id))
     deleteAssignment(id).catch((err) => {
+      // Vrai refus seulement : une assignation DÉJÀ supprimée ailleurs est
+      // résolue sans erreur par `deleteAssignment` (relecture de l'id).
       console.error(err)
       setAssignments((prev) => restoreDeleted(prev, target))
       setActionError(describeWriteError(err))
