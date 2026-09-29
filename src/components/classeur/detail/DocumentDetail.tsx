@@ -1,4 +1,10 @@
-import { History, PanelLeftClose, PanelLeftOpen, Pencil } from 'lucide-react'
+import {
+  Braces,
+  History,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Pencil,
+} from 'lucide-react'
 import type { MouseEvent } from 'react'
 import {
   useCallback,
@@ -39,6 +45,7 @@ import { useImages } from '#/components/classeur/hooks/useImages.ts'
 import { AbandonModificationsDialog } from '#/components/classeur/dialogs/AbandonModificationsDialog.tsx'
 import { ConflitDocumentDialog } from '#/components/classeur/dialogs/ConflitDocumentDialog.tsx'
 import { HistoriqueDocumentDialog } from '#/components/classeur/dialogs/HistoriqueDocumentDialog.tsx'
+import { EchangeJsonDialog } from '#/components/classeur/dialogs/EchangeJsonDialog.tsx'
 import { AideMiseEnFormeDialog } from '#/components/classeur/dialogs/AideMiseEnFormeDialog.tsx'
 import { TitreDocumentDialog } from '#/components/classeur/dialogs/TitreDocumentDialog.tsx'
 import { IconAction } from '#/components/classeur/IconAction.tsx'
@@ -96,6 +103,8 @@ export function DocumentDetail() {
   const [apercuMasque, setApercuMasque] = useState(false)
   /** 20-21. Historique des versions du document. */
   const [historiqueOuvert, setHistoriqueOuvert] = useState(false)
+  /** Export / réimport JSON du document pour un LLM (2026-09-29). */
+  const [jsonOuvert, setJsonOuvert] = useState(false)
   /** 19. Nombre de pages de l'aperçu, affiché discrètement en édition. */
   const [nbPages, setNbPages] = useState<number | null>(null)
 
@@ -333,6 +342,12 @@ export function DocumentDetail() {
                     exporterDocumentMarkdown(doc.title, doc.content)
                   }
                 />
+                <IconAction
+                  label="JSON pour un LLM : exporter, réimporter"
+                  icon={<Braces />}
+                  onClick={() => setJsonOuvert(true)}
+                  disabled={!page.chapter}
+                />
               </>
             }
           />
@@ -429,6 +444,18 @@ export function DocumentDetail() {
           setTitre(t)
           setDescription(d)
         }}
+      />
+
+      <EchangeJsonDialog
+        open={jsonOuvert}
+        onOpenChange={setJsonOuvert}
+        classeur={page.classeur}
+        sujet={
+          page.chapter
+            ? { type: 'document', chapitre: page.chapter, document: doc }
+            : null
+        }
+        canWrite={page.canWrite}
       />
 
       <HistoriqueDocumentDialog

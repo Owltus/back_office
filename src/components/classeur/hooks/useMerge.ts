@@ -4,12 +4,14 @@ import { useInvaliderClasseur } from '#/components/classeur/hooks/useClasseur.ts
 import { classeurKeys } from '#/lib/classeur/keys.ts'
 import {
   appliquerFusion,
+  appliquerFusionPortee,
   importerCommeNouveauClasseur,
 } from '#/lib/classeur/merge/apply.ts'
 import {
   restaurerInstantane,
   supprimerEntreeHistorique,
 } from '#/lib/classeur/merge/history.ts'
+import type { CiblePortee } from '#/lib/classeur/merge/portee.ts'
 import type { ClasseurJson } from '#/lib/classeur/merge/schema.ts'
 import { creerPoint } from '#/lib/classeur/restauration.ts'
 import { fetchMergeHistory } from '#/lib/classeur/service.ts'
@@ -47,6 +49,33 @@ export function useAppliquerFusion() {
   return useMutation({
     mutationFn: ({ classeurId, fichier, replace, sourceName }: FusionArgs) =>
       appliquerFusion(classeurId, fichier, { replace, sourceName }),
+    onSettled: () => invalider(),
+  })
+}
+
+export interface FusionPorteeArgs {
+  classeurId: number
+  fichier: ClasseurJson
+  cible: CiblePortee
+  supprimerAbsents: boolean
+  sourceName: string
+}
+
+/** Réimporte un chapitre ou un document (portée limitée, `portee.ts`). */
+export function useAppliquerFusionPortee() {
+  const invalider = useInvaliderClasseur()
+  return useMutation({
+    mutationFn: ({
+      classeurId,
+      fichier,
+      cible,
+      supprimerAbsents,
+      sourceName,
+    }: FusionPorteeArgs) =>
+      appliquerFusionPortee(classeurId, fichier, cible, {
+        supprimerAbsents,
+        sourceName,
+      }),
     onSettled: () => invalider(),
   })
 }

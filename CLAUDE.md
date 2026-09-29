@@ -587,6 +587,29 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   fichiers v1 à titres ou slugs en doublon écrasaient/dupliquaient
   (appariement par titre désormais consommé un à un). Règle de méthode :
   « fidèle au Rust » n'est pas « correct » — le Rust avait ces défauts.
+- **JSON d'un chapitre ou d'un document « pour un LLM » (2026-09-29,
+  demande utilisateur)** : bouton accolades `{}` sur la page d'un chapitre
+  (et menu « ⋯ ») et d'un document → `dialogs/EchangeJsonDialog.tsx` :
+  1) exporter (Copier / Télécharger), 2) réimporter (coller la réponse du
+  LLM, même entourée de texte ou de ```json — `extraireJson` —, ou choisir
+  un fichier), aperçu, Importer (droit d'écriture). MÊME format v2 que le
+  classeur complet : un classeur à UN chapitre (ou un chapitre contenant ce
+  seul document), `_metadata` enrichi de `portee` (uuid) et `instructions`
+  (consignes pour le LLM : ce qu'il peut modifier, jamais `uuid`/`kind`/
+  chemins d'images, conventions Markdown de la page — ligne vide, `===`,
+  `> `, `- [ ]`, tableaux GFM). Logique pure `lib/classeur/merge/portee.ts`
+  (14 tests, mutations vérifiées) : `planifierFusion` en REMPLACEMENT
+  (le LLM ne met pas `updated_at` à jour : en fusion « le plus récent
+  gagne », ses modifications seraient ignorées) puis FILTRÉ à la portée —
+  jamais d'autre chapitre, position du chapitre conservée, suppression des
+  absents seulement sur option (un LLM tronque parfois), chapitre ignoré
+  pour un document ; `updated_at` du fichier RETIRÉ (sinon le document
+  reprendrait sa date d'export et un éditeur ouvert avant écraserait le
+  travail sans conflit). Refus clair d'un JSON d'un autre chapitre/document.
+  Application : `appliquerFusionPortee` = même circuit que la fusion
+  (point `fusion` AVANT toute écriture, élagage). Vérifié navigateur sans
+  écrire (aperçus chapitre, option de suppression, mauvais chapitre,
+  document) ; base inchangée.
 - **UI** : TanStack Query partout (`useClasseur.ts`, `useMerge.ts`,
   invalidation de `classeurKeys.all`, optimistes pour le réordonnancement),
   `isPending` pour les gardes, pas de toasts (alertes inline,

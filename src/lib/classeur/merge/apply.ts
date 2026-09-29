@@ -41,6 +41,8 @@ import type {
   OptionsFusion,
 } from '#/lib/classeur/merge/merge.ts'
 import { planifierFusion } from '#/lib/classeur/merge/merge.ts'
+import { planifierFusionPortee } from '#/lib/classeur/merge/portee.ts'
+import type { CiblePortee, OptionsPortee } from '#/lib/classeur/merge/portee.ts'
 import type { ClasseurJson } from '#/lib/classeur/merge/schema.ts'
 import { construireExport } from '#/lib/classeur/merge/schema.ts'
 import { entreesAElaguerParGenre } from '#/lib/classeur/merge/snapshot.ts'
@@ -288,12 +290,54 @@ export async function appliquerFusion(
   options: OptionsApplication,
 ): Promise<MergeResult> {
   const { sourceName, ...optionsFusion } = options
+  return appliquerPlanifie(
+    classeurId,
+    (local) => planifierFusion(local, fichier, optionsFusion),
+    sourceName,
+  )
+}
 
+/** Plan d'un réimport limité à un chapitre ou un document (`portee.ts`), sans écriture. */
+export async function previsualiserFusionPortee(
+  classeurId: number,
+  fichier: ClasseurJson,
+  cible: CiblePortee,
+  options: OptionsPortee,
+): Promise<PlanFusion> {
+  const local = await chargerEtatLocal(classeurId)
+  return planifierFusionPortee(local, fichier, cible, options)
+}
+
+/**
+ * Réimport limité à un chapitre ou un document : MÊME circuit que
+ * `appliquerFusion` (instantané du classeur AVANT toute écriture, actions
+ * dans l'ordre, élagage) — seul le plan change. Le plan est recalculé sur
+ * l'état relu à l'instant, jamais repris de l'aperçu.
+ */
+export async function appliquerFusionPortee(
+  classeurId: number,
+  fichier: ClasseurJson,
+  cible: CiblePortee,
+  options: OptionsPortee & { sourceName: string },
+): Promise<MergeResult> {
+  return appliquerPlanifie(
+    classeurId,
+    (local) => planifierFusionPortee(local, fichier, cible, options),
+    options.sourceName,
+  )
+}
+
+/** Étapes (a) à (e) d'une fusion, quel que soit le planificateur. */
+async function appliquerPlanifie(
+  classeurId: number,
+  planifier: (local: EtatLocal) => PlanFusion,
+  sourceName: string,
+): Promise<MergeResult> {
   // (a) état courant et plan
   const classeur = await fetchClasseur(classeurId)
   if (classeur === null) throw new Error('Classeur introuvable ou supprimé.')
   const local = await chargerEtatLocal(classeurId)
-  const plan = planifierFusion(local, fichier, optionsFusion)
+  const plan = planifier(local)
   if (plan.actions.length === 0) return plan.resultat
 
   // (b) instantané AVANT la première écriture — `construireExport` ne

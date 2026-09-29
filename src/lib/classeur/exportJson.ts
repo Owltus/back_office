@@ -32,6 +32,15 @@ export function nomFichierJson(classeurName: string): string {
   return `${sanitizeFilename(classeurName.trim() || NOM_CLASSEUR_REPLI) || NOM_CLASSEUR_REPLI}.json`
 }
 
+/** `<classeur> - <chapitre>[ - <document>].json`, nettoyé (export limité). */
+export function nomFichierPortee(...parties: string[]): string {
+  const nom = parties
+    .map((p) => p.trim())
+    .filter((p) => p !== '')
+    .join(' - ')
+  return nomFichierJson(nom)
+}
+
 /**
  * Télécharge le classeur complet au format JSON v2. `content` porte les
  * éléments de TOUS les chapitres (`fetchClasseurContent`).

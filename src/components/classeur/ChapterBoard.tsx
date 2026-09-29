@@ -12,6 +12,7 @@ import type { DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable'
 import {
   Archive,
+  Braces,
   CheckSquare,
   FileUp,
   FolderInput,
@@ -34,6 +35,7 @@ import { useDroitsClasseur } from '#/components/classeur/hooks/useDroitsClasseur
 import { ChapterDrawerButton } from '#/components/classeur/ChapterDrawer.tsx'
 import { BulkDeleteDialog } from '#/components/classeur/dialogs/BulkDeleteDialog.tsx'
 import { ChapterDialog } from '#/components/classeur/dialogs/ChapterDialog.tsx'
+import { EchangeJsonDialog } from '#/components/classeur/dialogs/EchangeJsonDialog.tsx'
 import { SuppressionChapitreDialog } from '#/components/classeur/dialogs/SuppressionChapitreDialog.tsx'
 import { CreateItemDialog } from '#/components/classeur/dialogs/CreateItemDialog.tsx'
 import { DeleteItemDialog } from '#/components/classeur/dialogs/DeleteItemDialog.tsx'
@@ -182,6 +184,8 @@ export function ChapterBoard({
     null,
   )
   const [apercu, setApercu] = useState<Apercu>(null)
+  /** Export / réimport JSON du chapitre pour un LLM (2026-09-29). */
+  const [jsonOuvert, setJsonOuvert] = useState(false)
   /** Messages des fichiers refusés au dépôt (extension, taille). */
   const [refus, setRefus] = useState<string[]>([])
 
@@ -566,6 +570,12 @@ export function ChapterBoard({
                     disabled={!chapter || !contenu}
                     busy={exportZip.isPending}
                   />
+                  <IconAction
+                    label="JSON pour un LLM : exporter, réimporter"
+                    icon={<Braces />}
+                    onClick={() => setJsonOuvert(true)}
+                    disabled={!chapter || !contenu}
+                  />
                 </ButtonGroup>
                 {canWrite && chapter && (
                   <ButtonGroup>
@@ -626,6 +636,13 @@ export function ChapterBoard({
                     >
                       <Archive />
                       Exporter en Markdown (ZIP)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      disabled={!chapter || !contenu}
+                      onSelect={() => setJsonOuvert(true)}
+                    >
+                      <Braces />
+                      JSON pour un LLM
                     </DropdownMenuItem>
                     {canWrite && chapter && (
                       <>
@@ -831,6 +848,18 @@ export function ChapterBoard({
         onOpenChange={setBulkOpen}
         refs={selection.refs}
         onDone={selection.clear}
+      />
+
+      <EchangeJsonDialog
+        open={jsonOuvert}
+        onOpenChange={setJsonOuvert}
+        classeur={classeur}
+        sujet={
+          chapter && contenu
+            ? { type: 'chapitre', chapitre: chapter, contenu }
+            : null
+        }
+        canWrite={canWrite}
       />
 
       <ChapterDialog
