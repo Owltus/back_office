@@ -1064,7 +1064,12 @@ poussé. Règles qui en sortent :
   l'instant, elle le redevient à chaque suppression de compte) ;
   `verif_securite.sql` OK ; `verif_classeur_acces.sql` 28/33 en attendant
   `classeur_securite`.
-- Scripts écrits, commités, NON appliqués (application = utilisateur) :
+- ✅ **Les 7 scripts ci-dessous ont été JOUÉS en prod le 2026-09-29 vers 9 h**
+  (par l'assistant, à la demande explicite de l'utilisateur) : `verif_advisor`
+  12/12 « TOUT EST EN PLACE », `verif_classeur_acces` 33/33, attaque
+  `admin_update_password` sans profil refusée. Diagnostic des privilèges
+  par défaut relu avant application (défaut Supabase standard confirmé).
+- Scripts (historique : écrits le 2026-09-28, application = utilisateur) :
   `classeur_securite_2026-09-28.sql`, `admin_update_password_garde_null`,
   `set_user_grade_garde_null`, `pdj_delete_manuel_ecriture`,
   `feuilles_cloturees_figees`, `affiche_templates_icon_check`,
