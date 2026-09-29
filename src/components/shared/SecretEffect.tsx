@@ -3,6 +3,11 @@ import { useEffect, useRef } from 'react'
 import { useEffectTrigger } from './EffectOverlay.tsx'
 
 import type { EffectDefinition } from '#/lib/artefact/effects/types.ts'
+import {
+  creerDetecteur,
+  estChampSecret,
+  estChampTexte,
+} from '#/lib/easter-eggs/detecteur.ts'
 
 /*
  * Easter egg clavier générique — taper un MOT-CLÉ (n'importe où, à la Konami)
@@ -12,8 +17,8 @@ import type { EffectDefinition } from '#/lib/artefact/effects/types.ts'
  *
  * - Détecteur de séquence : buffer glissant des dernières frappes, insensible à
  *   la casse ET aux accents (« chloé » comme « chloe » marchent).
- * - Frappes dans un champ (INPUT / TEXTAREA / SELECT / contenteditable)
- *   ignorées, comme dans `useKeySequence.ts`.
+ * - PARTOUT, champs de saisie compris (demande utilisateur du 2026-09-29),
+ *   SAUF les champs de mot de passe : voir `lib/easter-eggs/detecteur.ts`.
  * - L'overlay est en `pointer-events: none` : il n'intercepte JAMAIS clics ni
  *   saisie — d'où le « n'importe où » sans rien casser.
  * - SSR-safe : l'écouteur clavier est posé côté client dans un effet ; rien n'est
@@ -32,16 +37,6 @@ interface SecretEffectProps {
   load: () => Promise<EffectDefinition>
 }
 
-// Une frappe → minuscule sans accent : NFD décompose « é » en « e » + accent
-// combinant, et on ne garde que les lettres a–z (accents et autres touches
-// ignorés). « chloé » comme « chloe » produisent donc « chloe ».
-function normalize(text: string): string {
-  return text
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[^a-z]/g, '')
-}
-
 export function SecretEffect({ keyword, load }: SecretEffectProps) {
   const { trigger, overlay } = useEffectTrigger()
   // `trigger` n'est pas mémoïsé (nouvelle fonction à chaque rendu) : on le lit
@@ -52,40 +47,61 @@ export function SecretEffect({ keyword, load }: SecretEffectProps) {
   // l'écouteur clavier ne doit pas être réattaché pour autant.
   const loadRef = useRef(load)
   loadRef.current = load
-  const bufferRef = useRef('')
 
   useEffect(() => {
-    const target = normalize(keyword)
-    if (!target) return
-    function onKeyDown(e: KeyboardEvent) {
-      // Ne pas capter une frappe destinée à un champ de saisie (même garde
-      // que `useKeySequence.ts`) : sans elle, taper le mot-clé dans un
-      // commentaire, un document du Classeur ou un nom de modèle déclenchait
-      // l'effet en pleine saisie.
-      const el = e.target as HTMLElement | null
-      const tag = el?.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
-      if (el?.isContentEditable) return
-
-      if (e.key.length !== 1) return // ignore Shift, Entrée, flèches, etc.
-      const typed = normalize(e.key)
-      if (!typed) return // touche non-lettre : n'altère pas le buffer
-      const next = (bufferRef.current + typed).slice(-target.length)
-      bufferRef.current = next
-      if (next === target) {
-        bufferRef.current = ''
-        // Premier déclenchement = un aller-retour réseau pour le chunk de
-        // l'effet ; les suivants sont instantanés (module mis en cache par le
-        // navigateur). Un échec de chargement ne doit jamais casser la page :
-        // l'easter egg ne se déclenche simplement pas.
-        void loadRef.current().then(
-          (effect) => triggerRef.current(effect),
-          () => {},
-        )
-      }
+    const detecteur = creerDetecteur(keyword)
+    if (!detecteur.actif) return
+    const declencher = () => {
+      // Premier déclenchement = un aller-retour réseau pour le chunk de
+      // l'effet ; les suivants sont instantanés (module mis en cache par le
+      // navigateur). Un échec de chargement ne doit jamais casser la page :
+      // l'easter egg ne se déclenche simplement pas.
+      void loadRef.current().then(
+        (effect) => triggerRef.current(effect),
+        () => {},
+      )
     }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+
+    // Hors champ : la touche. Dans un champ de texte, c'est `beforeinput`
+    // qui lit (jamais les deux pour une même frappe).
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.isComposing) return
+      const el = e.target instanceof Element ? e.target : null
+      if (estChampSecret(el)) {
+        detecteur.vider()
+        return
+      }
+      if (estChampTexte(el) || e.key.length !== 1) return
+      if (e.ctrlKey || e.metaKey || e.altKey) return // raccourcis
+      if (detecteur.ajouter(e.key)) declencher()
+    }
+
+    // Dans un champ : le TEXTE inséré — clavier physique comme virtuel
+    // (téléphone), lettres accentuées comprises. Coller n'en fait pas partie.
+    function onBeforeInput(e: Event) {
+      const el = e.target instanceof Element ? e.target : null
+      if (estChampSecret(el)) {
+        detecteur.vider()
+        return
+      }
+      if (!estChampTexte(el)) return
+      const saisie = e as InputEvent
+      if (
+        saisie.inputType !== 'insertText' &&
+        saisie.inputType !== 'insertCompositionText'
+      )
+        return
+      if (saisie.data !== null && detecteur.ajouter(saisie.data)) declencher()
+    }
+
+    // Phase de CAPTURE : un composant qui arrête la propagation (éditeur,
+    // glisser-déposer, dialogue) ne peut pas masquer la frappe.
+    window.addEventListener('keydown', onKeyDown, true)
+    window.addEventListener('beforeinput', onBeforeInput, true)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown, true)
+      window.removeEventListener('beforeinput', onBeforeInput, true)
+    }
   }, [keyword])
 
   return overlay
