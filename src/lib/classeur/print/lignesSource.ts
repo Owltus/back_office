@@ -9,7 +9,8 @@
  *    conteneur de mesure : l'attribut les suit, et n'a aucun effet sur la
  *    mise en page ni sur l'impression.
  * 2. Le texte rendu n'est pas tout à fait le texte tapé : chaque ligne
- *    `===` (saut de page) y devient trois lignes (`preprocessPageBreaks`).
+ *    `===` (saut de page) et `+++` (sous l'image) y deviennent trois lignes
+ *    (`preprocessPageBreaks`).
  *    `ligneRendueVersSource` / `ligneSourceVersRendue` compensent.
  */
 
@@ -37,7 +38,7 @@ export function rehypeLignesSource() {
   }
 }
 
-const RE_SAUT = /^===\s*$/
+const RE_SAUT = /^(===|\+\+\+)\s*$/
 
 /** Ligne du texte TAPÉ (1 = première) pour une ligne du texte rendu. */
 export function ligneRendueVersSource(

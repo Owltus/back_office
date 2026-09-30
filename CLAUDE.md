@@ -769,7 +769,18 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
     « Mettre en forme » et consignes LLM de l'export JSON mises à jour.
     Vérifié navigateur sans rien écrire : texte à côté des deux images, titre
     sous l'image, image de bas de page reportée entière, 0 débordement.
-    `.pdf-prose img`
+    **`+++` « reprendre sous l'image »** (même jour, retour utilisateur : du
+    texte venait se placer à côté alors qu'il ne devait pas) : ligne `+++`
+    seule, bouton de la barre (flèche vers le bas, après le saut de page) ;
+    même mécanique que `===` (`preprocessPageBreaks` → repère →
+    `<div data-sous-image>` en `clear: both`, trois lignes rendues compensées
+    par `lignesSource`) ; la pagination le traite comme tout bloc qui
+    dégage. Aide et consignes LLM à jour. ⚠ Serveur Vite sous Windows : une
+    écriture rapide en deux temps d'un même fichier (script puis prettier) a
+    été servie dans sa version INTERMÉDIAIRE, et le resta après rechargement
+    (transformation en cache) — `touch` du fichier la force à relire ; ne pas
+    conclure à un défaut du code avant d'avoir comparé le module SERVI
+    (`curl` du chemin `/src/…`) au fichier. `.pdf-prose img`
     est en bloc centré (`break-inside: avoid`). Pas de recadrage libre :
     react-easy-crop est un cadre fixe
     que l'on déplace/zoome (ratios prédéfinis), choix assumé pour le

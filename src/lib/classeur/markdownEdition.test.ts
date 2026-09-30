@@ -132,6 +132,12 @@ describe('insererBloc', () => {
     expect(res(v, insererBloc(v, 3, 3, 'saut'))!.texte).toBe('a\n\n===\n')
     expect(res('', insererBloc('', 0, 0, 'saut'))!.texte).toBe('===\n')
   })
+  it('« Reprendre sous l’image » insère `+++` isolé', () => {
+    const w = 'a\nb'
+    expect(res(w, insererBloc(w, 1, 1, 'sousImage'))!.texte).toBe(
+      'a\n\n+++\n\nb',
+    )
+  })
   it('tableau : la première cellule est sélectionnée', () => {
     const a = res('', insererBloc('', 0, 0, 'tableau'))!
     expect(a.choisi).toBe('Colonne 1')

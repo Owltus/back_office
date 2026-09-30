@@ -13,6 +13,7 @@ import {
   ListOrdered,
   ListTodo,
   ScissorsLineDashed,
+  ArrowDownToLine,
   SeparatorHorizontal,
   Strikethrough,
   Table,
@@ -389,6 +390,11 @@ export function BarreMiseEnForme({
           label="Saut de page"
           icon={<ScissorsLineDashed />}
           onClick={() => executer({ type: 'bloc', valeur: 'saut' })}
+        />
+        <Outil
+          label="Reprendre sous l'image (la suite ne se met plus à côté d'une image à gauche ou à droite)"
+          icon={<ArrowDownToLine />}
+          onClick={() => executer({ type: 'bloc', valeur: 'sousImage' })}
         />
       </ButtonGroup>
       {fin}

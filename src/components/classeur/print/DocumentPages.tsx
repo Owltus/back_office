@@ -19,6 +19,7 @@ import { rehypeLignesSource } from '#/lib/classeur/print/lignesSource.ts'
 import {
   PAGEBREAK_MARKER,
   preprocessPageBreaks,
+  SOUS_IMAGE_MARKER,
 } from '#/lib/classeur/print/preprocessPageBreaks.ts'
 import {
   getContentWidthPx,
@@ -64,6 +65,13 @@ const markdownComponents: Components = {
       text[0].trim() === PAGEBREAK_MARKER
     ) {
       return <div data-page-break="true" />
+    }
+    if (
+      text.length === 1 &&
+      typeof text[0] === 'string' &&
+      text[0].trim() === SOUS_IMAGE_MARKER
+    ) {
+      return <div data-sous-image="true" />
     }
     return <p {...rest}>{children}</p>
   },

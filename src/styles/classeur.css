@@ -378,6 +378,10 @@
   :is(ul, ol, blockquote, pre, h1, h2, h3, h4, h5, h6) {
   display: flow-root;
 }
+/* `+++` : « la suite passe sous l'image » (bloc invisible). */
+.pdf-prose [data-sous-image] {
+  clear: both;
+}
 /* Un TITRE ouvre une nouvelle partie : il passe sous l'image flottante au
    lieu de démarrer à côté (`paginate.ts` en tient compte : `degage`). */
 .pdf-prose:has(img[data-position]) :is(h1, h2, h3, h4, h5, h6) {

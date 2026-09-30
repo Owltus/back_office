@@ -216,7 +216,7 @@ export function basculerPrefixe(
  * Blocs : tableau, séparateur, saut de page, lien.
  * ------------------------------------------------------------------------ */
 
-export type Bloc = 'tableau' | 'separateur' | 'saut'
+export type Bloc = 'tableau' | 'separateur' | 'saut' | 'sousImage'
 
 const BLOCS: Record<Bloc, { texte: string; selection?: [number, number] }> = {
   tableau: {
@@ -226,6 +226,7 @@ const BLOCS: Record<Bloc, { texte: string; selection?: [number, number] }> = {
   },
   separateur: { texte: '---' },
   saut: { texte: '===' },
+  sousImage: { texte: '+++' },
 }
 
 /**

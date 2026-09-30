@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import {
+  ArrowDownToLine,
   Bold,
   Heading1,
   Heading2,
@@ -237,6 +238,13 @@ export function AideMiseEnFormeDialog({
               proportions sont toujours gardées) et sa <Term>position</Term> :
               au centre, ou à gauche ou à droite avec le texte qui l'entoure.
               Une page miniature montre le résultat.
+            </p>
+            <p>
+              Le texte entoure une image placée à gauche ou à droite. Pour que
+              la suite reparte <Term>sous l'image</Term>,{' '}
+              <Bouton icon={<ArrowDownToLine />} /> insère une ligne{' '}
+              <code>+++</code> à l'endroit voulu : ce qui suit ne se met plus à
+              côté. Un titre, lui, passe toujours sous l'image.
             </p>
             <p>
               Pour <Term>retoucher</Term> une image déjà placée,{' '}
