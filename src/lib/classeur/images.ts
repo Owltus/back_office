@@ -81,10 +81,21 @@ export interface Recadrage {
   hauteur: number
 }
 
-/** Ce que le dialogue de préparation rend : un recadrage, facultatif. */
+/**
+ * Ce que le dialogue de préparation rend : un recadrage et une largeur sur
+ * la page, tous deux facultatifs (largeur absente = pleine largeur). La
+ * largeur est de nouveau réglable depuis le 2026-09-30 (demande utilisateur :
+ * « une image a vite fait de prendre toute la place »).
+ */
 export interface PreparationImage {
   recadrage?: Recadrage
+  /** Pourcentage de la largeur de la zone de contenu (10 à 100). */
+  largeur?: number
 }
+
+/** Bornes du réglage de largeur (%), et pas du curseur. */
+export const LARGEUR_MIN = 20
+export const LARGEUR_PAS = 5
 
 /**
  * Borne un rectangle de recadrage à l'image (jamais vide, jamais hors
@@ -373,7 +384,7 @@ export async function televerserImage(
   return {
     image: fiche,
     octetsSource: file.size,
-    markdown: markdownImage(fiche.nom, chemin),
+    markdown: markdownImage(fiche.nom, chemin, preparation.largeur ?? 100),
   }
 }
 
@@ -522,4 +533,64 @@ export function formaterOctets(octets: number): string {
   if (octets < 1024) return `${String(octets)} o`
   if (octets < 1024 * 1024) return `${String(Math.round(octets / 1024))} ko`
   return `${(octets / (1024 * 1024)).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} Mo`
+}
+
+/* ------------------------------------------------------------------------ *
+ * Retoucher une image DÉJÀ placée (2026-09-30) : sa ligne est réécrite.
+ * ------------------------------------------------------------------------ */
+
+/** Une image Markdown du texte : `![alt](chemin "titre")`. */
+const JETON_IMAGE = /!\[([^\]]*)\]\(\s*<?([^)\s>]+)>?(?:\s+"([^"]*)")?\s*\)/g
+
+export interface ImageDansTexte {
+  /** Position du jeton dans le texte. */
+  debut: number
+  fin: number
+  alt: string
+  chemin: string
+  largeur: number
+}
+
+/**
+ * Trouve l'image `chemin` : d'abord sur la ligne `ligne` (1-based, celle
+ * cliquée dans l'aperçu), sinon sa première occurrence dans le texte (une
+ * même image peut figurer deux fois : la ligne fait foi quand elle est
+ * connue). `null` si l'image n'est plus dans le texte.
+ */
+export function trouverImage(
+  valeur: string,
+  chemin: string,
+  ligne?: number,
+): ImageDansTexte | null {
+  const occurrences: ImageDansTexte[] = []
+  for (const m of valeur.matchAll(JETON_IMAGE)) {
+    if (m[2] !== chemin) continue
+    occurrences.push({
+      debut: m.index,
+      fin: m.index + m[0].length,
+      alt: m[1],
+      chemin: m[2],
+      largeur: largeurDepuisTitre(m[3]),
+    })
+  }
+  if (occurrences.length === 0) return null
+  if (ligne !== undefined) {
+    const numero = (pos: number) => valeur.slice(0, pos).split('\n').length
+    const surLaLigne = occurrences.find((o) => numero(o.debut) === ligne)
+    if (surLaLigne) return surLaLigne
+  }
+  return occurrences[0]
+}
+
+/** Le jeton réécrit : même texte alternatif, chemin et largeur donnés. */
+export function jetonImage(
+  alt: string,
+  chemin: string,
+  largeur: number,
+): string {
+  const titre =
+    largeur > 0 && largeur < 100
+      ? ` "largeur=${String(Math.round(largeur))}"`
+      : ''
+  return `![${alt}](${chemin}${titre})`
 }

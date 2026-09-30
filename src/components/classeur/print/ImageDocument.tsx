@@ -74,6 +74,9 @@ export function ImageDocument({
       src={urlObjetImage(chemin, image.data)}
       alt={alt ?? ''}
       data-image-status="rendered"
+      // Lu au clic dans l'aperçu d'édition (retouche de l'image) ; suit les
+      // pages A4, qui sont des copies HTML.
+      data-chemin={chemin}
       style={largeur < 100 ? { width: `${String(largeur)}%` } : undefined}
     />
   )

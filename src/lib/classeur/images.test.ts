@@ -10,7 +10,9 @@ import {
   boiteTournee,
   formaterOctets,
   imagesReferencees,
+  jetonImage,
   largeurDepuisTitre,
+  trouverImage,
   markdownImage,
   recadrageBorne,
   retirerImageDuMarkdown,
@@ -265,5 +267,53 @@ describe('formaterOctets', () => {
     expect(formaterOctets(512)).toBe('512 o')
     expect(formaterOctets(180 * 1024)).toBe('180 ko')
     expect(formaterOctets(2.4 * 1024 * 1024)).toBe('2,4 Mo')
+  })
+})
+
+describe('trouverImage / jetonImage — retoucher une image placée', () => {
+  const A = '12/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.webp'
+  const B = '12/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb.webp'
+  const texte = [
+    '# Titre',
+    '',
+    `![Accueil](${A})`,
+    '',
+    `Texte ![Plan](${B} "largeur=50") en ligne.`,
+    '',
+    `![Accueil bis](${A} "largeur=75")`,
+  ].join('\n')
+
+  it('trouve l’image sur la ligne cliquée, avec sa largeur', () => {
+    const t = trouverImage(texte, A, 7)
+    expect(t).toMatchObject({ alt: 'Accueil bis', largeur: 75 })
+    expect(texte.slice(t!.debut, t!.fin)).toBe(
+      `![Accueil bis](${A} "largeur=75")`,
+    )
+  })
+
+  it('sans ligne (ou ligne fausse) : la première occurrence', () => {
+    expect(trouverImage(texte, A)?.alt).toBe('Accueil')
+    expect(trouverImage(texte, A, 1)?.alt).toBe('Accueil')
+  })
+
+  it('image au milieu d’une ligne, largeur lue', () => {
+    expect(trouverImage(texte, B, 5)).toMatchObject({
+      alt: 'Plan',
+      largeur: 50,
+    })
+  })
+
+  it('image absente du texte : null', () => {
+    expect(
+      trouverImage(texte, '12/cccccccc-cccc-4ccc-8ccc-cccccccccccc.webp'),
+    ).toBe(null)
+  })
+
+  it('réécrit le jeton : largeur posée, retirée à 100 %, chemin changé', () => {
+    expect(jetonImage('Plan', B, 40)).toBe(`![Plan](${B} "largeur=40")`)
+    expect(jetonImage('Plan', B, 100)).toBe(`![Plan](${B})`)
+    expect(jetonImage('Plan', A, 60)).toBe(`![Plan](${A} "largeur=60")`)
+    // Relu tel quel par le moteur de rendu.
+    expect(largeurDepuisTitre('largeur=40')).toBe(40)
   })
 })

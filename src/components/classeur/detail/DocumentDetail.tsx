@@ -188,10 +188,21 @@ export function DocumentDetail() {
       if (!ta || !(e.target instanceof Element)) return
       const bloc = e.target.closest<HTMLElement>('.a4-page [data-ligne]')
       const rendue = Number(bloc?.dataset.ligne)
-      if (!Number.isFinite(rendue) || rendue < 1) return
-      allerA(ligneRendueVersSource(ta.value, rendue))
+      const ligne =
+        Number.isFinite(rendue) && rendue >= 1
+          ? ligneRendueVersSource(ta.value, rendue)
+          : undefined
+      // Un clic sur une IMAGE la retouche (taille, recadrage — 2026-09-30).
+      const img = e.target.closest<HTMLImageElement>(
+        '.a4-page img[data-chemin]',
+      )
+      if (img?.dataset.chemin && page.canWrite) {
+        image.retoucher(img.dataset.chemin, img.src, ligne)
+        return
+      }
+      if (ligne !== undefined) allerA(ligne)
     },
-    [allerA],
+    [allerA, image, page.canWrite],
   )
 
   // 16. Texte → aperçu : quand le curseur change de ligne, l'aperçu montre
@@ -386,9 +397,12 @@ export function DocumentDetail() {
             ref={apercuRef}
             className={cn(
               'order-2 cursor-text overflow-y-auto xl:order-1 xl:h-full',
+              // Une image se retouche au clic : on le montre au survol.
+              page.canWrite &&
+                '[&_img[data-chemin]]:cursor-pointer [&_img[data-chemin]:hover]:outline-2 [&_img[data-chemin]:hover]:outline-offset-2 [&_img[data-chemin]:hover]:outline-primary',
               apercuMasque && 'hidden',
             )}
-            title="Cliquez sur un passage pour y aller dans le texte"
+            title="Cliquez sur un passage pour y aller dans le texte, ou sur une image pour la redimensionner ou la recadrer"
             onClick={surClicApercu}
           >
             <div

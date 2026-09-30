@@ -17,10 +17,13 @@ import { classeurKeys } from '#/lib/classeur/keys.ts'
 import {
   estImage,
   formaterOctets,
+  jetonImage,
   refusImageSource,
   retirerImageDuMarkdown,
   televerserImage,
+  trouverImage,
 } from '#/lib/classeur/images.ts'
+import type { Edition } from '#/lib/classeur/markdownEdition.ts'
 import type { PreparationImage } from '#/lib/classeur/images.ts'
 import { cn } from '#/lib/utils.ts'
 
@@ -71,6 +74,14 @@ export function useInsertionImage({
   })
   const inputRef = useRef<HTMLInputElement>(null)
   const invaliderImages = useQueryClient()
+  /** Image placée en cours de retouche (cliquée dans l'aperçu). */
+  const [enRetouche, setEnRetouche] = useState<{
+    chemin: string
+    ligne?: number
+    url: string
+    nom: string
+    largeur: number
+  } | null>(null)
 
   /** Insère une ligne Markdown à la position du curseur (relevée maintenant). */
   const insererMarkdown = useCallback(
@@ -143,6 +154,88 @@ export function useInsertionImage({
     [classeurId, insererMarkdown, invaliderImages],
   )
 
+  /**
+   * Retouche d'une image DÉJÀ placée (2026-09-30) : ouvre le dialogue sur
+   * l'image cliquée dans l'aperçu, avec sa largeur actuelle.
+   */
+  const retoucher = useCallback(
+    (chemin: string, url: string, ligne?: number) => {
+      const valeur = editeurRef.current?.value ?? contenu
+      const t = trouverImage(valeur, chemin, ligne)
+      if (!t) {
+        setEtat({
+          type: 'erreur',
+          message: "Cette image n'est plus dans le texte.",
+        })
+        return
+      }
+      setEtat({ type: 'repos' })
+      setEnRetouche({ chemin, ligne, url, nom: t.alt, largeur: t.largeur })
+    },
+    [contenu, editeurRef],
+  )
+
+  /**
+   * Applique la retouche : un recadrage envoie une NOUVELLE version (le
+   * fichier d'origine reste dans la médiathèque, il peut servir ailleurs),
+   * puis la ligne de l'image est réécrite dans le texte — par l'historique du
+   * navigateur : Ctrl + Z la ramène.
+   */
+  const appliquerRetouche = useCallback(
+    async (preparation: PreparationImage) => {
+      const cible = enRetouche
+      if (classeurId === null || cible === null) return
+      const largeur = preparation.largeur ?? cible.largeur
+      let chemin = cible.chemin
+      try {
+        if (preparation.recadrage) {
+          setEtat({ type: 'envoi', nom: cible.nom })
+          const blob = await fetch(cible.url).then((r) => r.blob())
+          const fichier = new File([blob], `${cible.nom}.webp`, {
+            type: blob.type || 'image/webp',
+          })
+          const res = await televerserImage(classeurId, fichier, {
+            recadrage: preparation.recadrage,
+          })
+          chemin = res.image.chemin
+          void invaliderImages.invalidateQueries({
+            queryKey: classeurKeys.images(classeurId),
+          })
+        }
+      } catch (err) {
+        setEtat({
+          type: 'erreur',
+          message: messageErreur(err, 'Recadrage impossible'),
+        })
+        return
+      }
+      const calculer = (valeur: string): Edition => {
+        const t = trouverImage(valeur, cible.chemin, cible.ligne)
+        if (!t) return { debut: 0, fin: 0, texte: '', selection: [0, 0] }
+        const jeton = jetonImage(t.alt, chemin, largeur)
+        return {
+          debut: t.debut,
+          fin: t.fin,
+          texte: jeton,
+          selection: [t.debut + jeton.length, t.debut + jeton.length],
+        }
+      }
+      setEnRetouche(null)
+      appliquerQuandLibre(
+        () => editeurRef.current,
+        calculer,
+        () => setContenu((prev) => appliquerEdition(prev, calculer(prev))),
+      )
+      setEtat({
+        type: 'ok',
+        message: preparation.recadrage
+          ? `Image recadrée, ${String(largeur)} % de la largeur (l'originale reste dans la médiathèque).`
+          : `Image à ${String(largeur)} % de la largeur.`,
+      })
+    },
+    [classeurId, editeurRef, enRetouche, invaliderImages, setContenu],
+  )
+
   const premiereImage = (fichiers: FileList | null | undefined) =>
     fichiers ? Array.from(fichiers).find(estImage) : undefined
 
@@ -196,6 +289,10 @@ export function useInsertionImage({
     enPreparation,
     annulerPreparation: () => setEnPreparation(null),
     envoyer,
+    enRetouche,
+    retoucher,
+    annulerRetouche: () => setEnRetouche(null),
+    appliquerRetouche,
     /** Une image supprimée de la médiathèque disparaît aussi du texte en cours. */
     // Volontairement HORS de l'historique d'annulation : le fichier est
     // supprimé du stockage, Ctrl + Z ramènerait une image introuvable.
@@ -218,6 +315,17 @@ export function DialoguesImage({ image }: { image: ImageInsertion }) {
           if (image.enPreparation)
             void image.envoyer(image.enPreparation, preparation)
         }}
+      />
+      <ImagePreparationDialog
+        existante={
+          image.enRetouche
+            ? { url: image.enRetouche.url, nom: image.enRetouche.nom }
+            : null
+        }
+        largeurInitiale={image.enRetouche?.largeur ?? 100}
+        envoi={image.etat.type === 'envoi'}
+        onAnnuler={image.annulerRetouche}
+        onValider={(preparation) => void image.appliquerRetouche(preparation)}
       />
       {image.classeurId !== null && (
         <ImagesDialog

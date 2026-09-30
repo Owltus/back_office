@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import Cropper from 'react-easy-crop'
-import type { Area, Point } from 'react-easy-crop'
-import { Check, Crop, ImageUp, Loader2 } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import ReactCrop, { centerCrop, makeAspectCrop } from 'react-image-crop'
+import type { PercentCrop } from 'react-image-crop'
+import 'react-image-crop/dist/ReactCrop.css'
+import { Check, Crop, Loader2, RotateCcw } from 'lucide-react'
 
 import { Button } from '#/components/ui/button.tsx'
 import {
@@ -12,159 +13,268 @@ import {
   DialogTitle,
 } from '#/components/ui/dialog.tsx'
 import { Slider } from '#/components/ui/slider.tsx'
-import { formaterOctets } from '#/lib/classeur/images.ts'
+import {
+  LARGEUR_MIN,
+  LARGEUR_PAS,
+  formaterOctets,
+} from '#/lib/classeur/images.ts'
 import type { PreparationImage } from '#/lib/classeur/images.ts'
+import {
+  CONTENT_WIDTH_MM,
+  PAGE_WIDTH_MM,
+} from '#/lib/classeur/print/constants.ts'
 import { cn } from '#/lib/utils.ts'
 
 /*
- * PRÉPARATION d'une image avant son envoi (demande utilisateur du
- * 2026-09-26 : « option de crop avant de la pousser dans le bucket, travail
- * sur l'UX et la mise en page »).
+ * PRÉPARATION / RETOUCHE d'une image (refonte du 2026-09-30, demande
+ * utilisateur : « redimensionner en gardant le ratio, une image prend vite
+ * toute la place ; recadrer plus simplement, pouvoir la toucher pour la
+ * mettre en forme »).
  *
- * Un seul réglage, facultatif : le CADRE — un ratio (celui de l'image,
- * 1:1, 4:3, 3:2, 16:9, A4) que l'on déplace et zoome sur l'image
- * (`react-easy-crop`, tactile et molette compris). Pas de rotation ni de
- * choix de largeur (retirés à la demande de l'utilisateur, 2026-09-26) :
- * l'image est toujours droite, en pleine largeur et CENTRÉE
- * (`styles/classeur.css`). « Utiliser telle quelle » saute le cadre.
+ * Deux réglages, visibles d'un coup d'œil :
+ *   - le CADRE : un rectangle que l'on tire par ses coins et ses bords
+ *     (`react-image-crop`, souris et doigt), libre ou à un format donné ;
+ *   - la TAILLE SUR LA PAGE : Petite / Moyenne / Grande / Pleine largeur, ou
+ *     au curseur. Les proportions sont toujours gardées (seule la largeur est
+ *     choisie ; la hauteur suit). Une page A4 miniature montre le résultat.
  *
- * Le fichier n'est ni converti ni envoyé ici : le dialogue rend une
- * `PreparationImage` que `televerserImage` applique (`lib/classeur/images.ts`).
+ * Sert à l'AJOUT (`file`) comme à la RETOUCHE d'une image déjà placée
+ * (`existante`, cliquée dans l'aperçu). Le fichier n'est ni converti ni
+ * envoyé ici : le dialogue rend une `PreparationImage`.
  */
 
-const RATIOS: { key: string; label: string; valeur: number | 'original' }[] = [
+const FORMATS: {
+  key: string
+  label: string
+  valeur: number | 'libre' | 'original'
+}[] = [
+  { key: 'libre', label: 'Libre', valeur: 'libre' },
   { key: 'original', label: 'Original', valeur: 'original' },
   { key: '1:1', label: 'Carré', valeur: 1 },
   { key: '4:3', label: '4:3', valeur: 4 / 3 },
-  { key: '3:2', label: '3:2', valeur: 3 / 2 },
   { key: '16:9', label: '16:9', valeur: 16 / 9 },
-  { key: 'a4', label: 'A4', valeur: 210 / 297 },
 ]
 
+const TAILLES: { valeur: number; label: string }[] = [
+  { valeur: 33, label: 'Petite' },
+  { valeur: 50, label: 'Moyenne' },
+  { valeur: 75, label: 'Grande' },
+  { valeur: 100, label: 'Pleine largeur' },
+]
+
+const CADRE_ENTIER: PercentCrop = {
+  unit: '%',
+  x: 0,
+  y: 0,
+  width: 100,
+  height: 100,
+}
+
+/** Le cadre couvre-t-il (presque) toute l'image ? */
+function estEntier(c: PercentCrop): boolean {
+  return c.width >= 99.5 && c.height >= 99.5
+}
+
 export function ImagePreparationDialog({
-  file,
+  file = null,
+  existante = null,
+  largeurInitiale = 100,
   envoi = false,
   onAnnuler,
   onValider,
 }: {
-  /** Le fichier à préparer ; `null` = dialogue fermé. */
-  file: File | null
+  /** Nouvelle image à préparer (ajout). */
+  file?: File | null
+  /** Image déjà placée à retoucher : son URL locale et son nom. */
+  existante?: { url: string; nom: string } | null
+  /** Largeur actuelle sur la page (%), pour une retouche. */
+  largeurInitiale?: number
   /** Envoi en cours (boutons figés, loader). */
   envoi?: boolean
   onAnnuler: () => void
   onValider: (preparation: PreparationImage) => void
 }) {
-  const url = useMemo(() => (file ? URL.createObjectURL(file) : null), [file])
+  const urlFichier = useMemo(
+    () => (file ? URL.createObjectURL(file) : null),
+    [file],
+  )
   useEffect(() => {
     return () => {
-      if (url) URL.revokeObjectURL(url)
+      if (urlFichier) URL.revokeObjectURL(urlFichier)
     }
-  }, [url])
+  }, [urlFichier])
+  const url = urlFichier ?? existante?.url ?? null
+  const ouvert = url !== null
+  const retouche = file === null && existante !== null
 
-  const [crop, setCrop] = useState<Point>({ x: 0, y: 0 })
-  const [zoom, setZoom] = useState(1)
-  const [ratio, setRatio] = useState<string>('original')
+  const imgRef = useRef<HTMLImageElement>(null)
   const [naturel, setNaturel] = useState<{ w: number; h: number } | null>(null)
-  const [zone, setZone] = useState<Area | null>(null)
+  const [format, setFormat] = useState('libre')
+  const [cadre, setCadre] = useState<PercentCrop>(CADRE_ENTIER)
+  const [largeur, setLargeur] = useState(largeurInitiale)
 
-  // Remise à zéro à chaque nouveau fichier.
+  // Remise à zéro à chaque ouverture sur une nouvelle image.
   useEffect(() => {
-    setCrop({ x: 0, y: 0 })
-    setZoom(1)
-    setRatio('original')
     setNaturel(null)
-    setZone(null)
-  }, [file])
+    setFormat('libre')
+    setCadre(CADRE_ENTIER)
+    setLargeur(largeurInitiale)
+  }, [url, largeurInitiale])
 
-  const aspect =
-    ratio === 'original'
-      ? naturel
-        ? naturel.w / naturel.h
-        : 4 / 3
-      : (RATIOS.find((r) => r.key === ratio)?.valeur as number)
-
-  const onCropComplete = useCallback((_: Area, pixels: Area) => {
-    setZone(pixels)
-  }, [])
-
-  const recadrageActif =
-    zone !== null &&
-    naturel !== null &&
-    (Math.round(zone.width) < naturel.w - 1 ||
-      Math.round(zone.height) < naturel.h - 1)
-
-  function valider(telleQuelle: boolean) {
-    if (!file) return
-    if (telleQuelle || !zone) {
-      onValider({})
-      return
-    }
-    onValider({
-      recadrage: {
-        x: Math.round(zone.x),
-        y: Math.round(zone.y),
-        largeur: Math.round(zone.width),
-        hauteur: Math.round(zone.height),
-      },
-    })
+  const aspectFormat = (key: string, n = naturel): number | undefined => {
+    const f = FORMATS.find((x) => x.key === key)?.valeur
+    if (f === undefined || f === 'libre') return undefined
+    if (f === 'original') return n ? n.w / n.h : undefined
+    return f
   }
+
+  function choisirFormat(key: string) {
+    setFormat(key)
+    const aspect = aspectFormat(key)
+    const img = imgRef.current
+    if (aspect === undefined || !img) return
+    const { width, height } = img
+    setCadre(
+      centerCrop(
+        makeAspectCrop({ unit: '%', width: 90 }, aspect, width, height),
+        width,
+        height,
+      ),
+    )
+  }
+
+  function reinitialiser() {
+    setFormat('libre')
+    setCadre(CADRE_ENTIER)
+  }
+
+  const recadrageActif = !estEntier(cadre)
+
+  function valider() {
+    if (!naturel) return
+    const preparation: PreparationImage = { largeur }
+    if (recadrageActif) {
+      preparation.recadrage = {
+        x: Math.round((cadre.x / 100) * naturel.w),
+        y: Math.round((cadre.y / 100) * naturel.h),
+        largeur: Math.round((cadre.width / 100) * naturel.w),
+        hauteur: Math.round((cadre.height / 100) * naturel.h),
+      }
+    }
+    onValider(preparation)
+  }
+
+  const nom = file?.name ?? existante?.nom ?? ''
+  const largeurCm = ((CONTENT_WIDTH_MM * largeur) / 100 / 10)
+    .toFixed(1)
+    .replace('.', ',')
 
   return (
     <Dialog
-      open={file !== null}
+      open={ouvert}
       onOpenChange={(o) => {
         if (!o && !envoi) onAnnuler()
       }}
     >
-      <DialogContent className="flex max-h-[92dvh] flex-col gap-4 overflow-y-auto sm:max-w-3xl">
+      <DialogContent className="flex max-h-[92dvh] flex-col gap-4 overflow-y-auto sm:max-w-4xl">
         <DialogHeader>
-          <DialogTitle>Préparer l'image</DialogTitle>
+          <DialogTitle>
+            {retouche ? "Modifier l'image" : "Ajouter l'image"}
+          </DialogTitle>
           <DialogDescription>
-            {file
-              ? `${file.name} · ${formaterOctets(file.size)}${naturel ? ` · ${String(naturel.w)} × ${String(naturel.h)}` : ''}. Déplacez et zoomez l'image dans le cadre ; elle sera convertie en WebP et centrée en pleine largeur.`
-              : ''}
+            {nom}
+            {file ? ` · ${formaterOctets(file.size)}` : ''}
+            {naturel ? ` · ${String(naturel.w)} × ${String(naturel.h)}` : ''}.
+            Tirez les coins du cadre pour recadrer, puis choisissez la taille
+            sur la page.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="relative h-[38dvh] min-h-44 w-full shrink-0 overflow-hidden rounded-lg bg-black/80 sm:h-[52vh] sm:min-h-64">
-          {url && (
-            <Cropper
-              image={url}
-              crop={crop}
-              zoom={zoom}
-              aspect={aspect}
-              minZoom={1}
-              maxZoom={5}
-              showGrid
-              objectFit="contain"
-              onCropChange={setCrop}
-              onZoomChange={setZoom}
-              onCropComplete={onCropComplete}
-              onMediaLoaded={(media) =>
-                setNaturel({ w: media.naturalWidth, h: media.naturalHeight })
-              }
-            />
-          )}
-        </div>
+        <div className="grid gap-4 md:grid-cols-[1fr_19rem]">
+          {/* Cadre de recadrage */}
+          <div className="flex min-h-44 items-center justify-center overflow-hidden rounded-lg bg-black/80 p-2">
+            {url && (
+              <ReactCrop
+                crop={cadre}
+                onChange={(_, pourcent) => setCadre(pourcent)}
+                aspect={aspectFormat(format)}
+                keepSelection
+                ruleOfThirds
+                minWidth={24}
+                minHeight={24}
+                className="max-w-full"
+              >
+                <img
+                  ref={imgRef}
+                  src={url}
+                  alt={nom}
+                  onLoad={(e) =>
+                    setNaturel({
+                      w: e.currentTarget.naturalWidth,
+                      h: e.currentTarget.naturalHeight,
+                    })
+                  }
+                  className="block max-h-[42dvh] max-w-full object-contain md:max-h-[56vh]"
+                />
+              </ReactCrop>
+            )}
+          </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Reglage label="Cadre">
-            <Segments
-              valeur={ratio}
-              options={RATIOS.map((r) => ({ key: r.key, label: r.label }))}
-              onChange={setRatio}
-            />
-          </Reglage>
-          <Reglage label={`Zoom × ${zoom.toFixed(1)}`}>
-            <Slider
-              value={[zoom]}
-              min={1}
-              max={5}
-              step={0.05}
-              onValueChange={([v]) => setZoom(v)}
-              aria-label="Zoom"
-            />
-          </Reglage>
+          {/* Réglages et aperçu de la page */}
+          <div className="flex flex-col gap-4">
+            <Reglage
+              label="Cadre"
+              action={
+                recadrageActif ? (
+                  <button
+                    type="button"
+                    onClick={reinitialiser}
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    <RotateCcw className="size-3" />
+                    Image entière
+                  </button>
+                ) : null
+              }
+            >
+              <Segments
+                valeur={format}
+                options={FORMATS.map((f) => ({ key: f.key, label: f.label }))}
+                onChange={choisirFormat}
+              />
+            </Reglage>
+
+            <Reglage
+              label={`Taille sur la page · ${String(largeur)} % (≈ ${largeurCm} cm)`}
+            >
+              <Segments
+                valeur={String(largeur)}
+                options={TAILLES.map((t) => ({
+                  key: String(t.valeur),
+                  label: t.label,
+                }))}
+                onChange={(k) => setLargeur(Number(k))}
+              />
+              <Slider
+                value={[largeur]}
+                min={LARGEUR_MIN}
+                max={100}
+                step={LARGEUR_PAS}
+                onValueChange={([v]) => setLargeur(v)}
+                aria-label="Taille sur la page"
+                className="mt-2"
+              />
+            </Reglage>
+
+            {url && (
+              <ApercuPage
+                url={url}
+                cadre={cadre}
+                naturel={naturel}
+                largeur={largeur}
+              />
+            )}
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-3">
@@ -176,20 +286,7 @@ export function ImagePreparationDialog({
           >
             Annuler
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => valider(true)}
-            disabled={envoi || !naturel}
-          >
-            <ImageUp />
-            Utiliser telle quelle
-          </Button>
-          <Button
-            type="button"
-            onClick={() => valider(false)}
-            disabled={envoi || !naturel || !zone}
-          >
+          <Button type="button" onClick={valider} disabled={envoi || !naturel}>
             {envoi ? (
               <Loader2 className="animate-spin" />
             ) : recadrageActif ? (
@@ -197,7 +294,7 @@ export function ImagePreparationDialog({
             ) : (
               <Check />
             )}
-            {recadrageActif ? 'Recadrer et ajouter' : 'Ajouter'}
+            {retouche ? 'Appliquer' : 'Ajouter'}
           </Button>
         </div>
       </DialogContent>
@@ -205,16 +302,88 @@ export function ImagePreparationDialog({
   )
 }
 
+/**
+ * Page A4 miniature : du texte figuré, puis l'image telle qu'elle sera
+ * placée (recadrée, à la largeur choisie, centrée, proportions gardées).
+ */
+function ApercuPage({
+  url,
+  cadre,
+  naturel,
+  largeur,
+}: {
+  url: string
+  cadre: PercentCrop
+  naturel: { w: number; h: number } | null
+  largeur: number
+}) {
+  const marge = ((PAGE_WIDTH_MM - CONTENT_WIDTH_MM) / 2 / PAGE_WIDTH_MM) * 100
+  const ratio = naturel
+    ? (cadre.width * naturel.w) / Math.max(1, cadre.height * naturel.h)
+    : 4 / 3
+  const tailleFond = `${String(10000 / Math.max(cadre.width, 1))}% ${String(10000 / Math.max(cadre.height, 1))}%`
+  const position = (debut: number, taille: number) =>
+    taille >= 99.9 ? '0%' : `${String((debut / (100 - taille)) * 100)}%`
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-xs font-medium text-muted-foreground">
+        Sur la page
+      </span>
+      <div
+        aria-hidden="true"
+        className="mx-auto w-40 rounded-sm bg-white shadow-sm ring-1 ring-border"
+        style={{ aspectRatio: '210 / 297', padding: `${String(marge)}%` }}
+      >
+        <div className="flex flex-col gap-[3px]">
+          <div className="mb-1 h-1.5 w-1/2 self-center rounded-full bg-neutral-300" />
+          {[90, 100, 80].map((w, i) => (
+            <div
+              key={i}
+              className="h-1 rounded-full bg-neutral-200"
+              style={{ width: `${String(w)}%` }}
+            />
+          ))}
+          <div
+            className="my-1 self-center"
+            style={{
+              width: `${String(largeur)}%`,
+              aspectRatio: String(ratio),
+              backgroundImage: `url("${url}")`,
+              backgroundSize: tailleFond,
+              backgroundPosition: `${position(cadre.x, cadre.width)} ${position(cadre.y, cadre.height)}`,
+              backgroundRepeat: 'no-repeat',
+            }}
+          />
+          {[100, 70].map((w, i) => (
+            <div
+              key={i}
+              className="h-1 rounded-full bg-neutral-200"
+              style={{ width: `${String(w)}%` }}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function Reglage({
   label,
+  action,
   children,
 }: {
   label: string
+  action?: React.ReactNode
   children: React.ReactNode
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium text-muted-foreground">
+          {label}
+        </span>
+        {action}
+      </div>
       {children}
     </div>
   )
@@ -238,7 +407,7 @@ function Segments({
           onClick={() => onChange(o.key)}
           aria-pressed={valeur === o.key}
           className={cn(
-            'rounded px-2.5 py-1 text-xs transition-colors',
+            'min-h-8 rounded px-2.5 py-1 text-xs transition-colors',
             valeur === o.key
               ? 'bg-accent text-foreground'
               : 'text-muted-foreground hover:text-foreground',

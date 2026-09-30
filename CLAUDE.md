@@ -725,7 +725,24 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
     qu'un `recadrage` ; `convertirEnWebp` garde l'option `rotation`
     (pure, testée : `boiteTournee`, `recadrageBorne`) sans UI, et
     `largeurDepuisTitre` lit encore un `"largeur=NN"` écrit à la main
-    dans le Markdown — ne pas les réexposer sans demande. `.pdf-prose img`
+    dans le Markdown — ne pas les réexposer sans demande. ⚠ **LARGEUR
+    RÉEXPOSÉE le 2026-09-30 à la demande de l'utilisateur** (« une image a
+    vite fait de prendre toute la place ; recadrer plus simplement ; pouvoir
+    la toucher ») : `ImagePreparationDialog` refait — recadrage LIBRE à
+    poignées (`react-image-crop`, souris et doigt ; formats Libre / Original
+    / Carré / 4:3 / 16:9 ; « Image entière »), taille sur la page (Petite 33
+    / Moyenne 50 / Grande 75 / Pleine largeur + curseur 20-100 %, hauteur
+    toujours proportionnelle) et page A4 miniature qui montre le résultat.
+    RETOUCHE d'une image placée : en édition, un clic sur l'image dans
+    l'aperçu (`img[data-chemin]`, contour au survol) rouvre le dialogue ;
+    la taille ne fait que réécrire la ligne (`trouverImage` sur la ligne
+    cliquée puis 1re occurrence, `jetonImage`), un recadrage envoie une
+    NOUVELLE version (l'originale reste en médiathèque, elle peut servir
+    ailleurs) ; ligne réécrite par `appliquerQuandLibre` (Ctrl + Z). Rotation
+    toujours non exposée. Vérifié navigateur sans rien écrire (retouche 50 %
+    → seule la ligne changée, aperçu à 50 %, collage d'une image, format
+    Carré, abandon) ; le recadrage d'une image placée (qui envoie) n'a pas
+    été exercé contre la prod. `.pdf-prose img`
     est en bloc centré (`break-inside: avoid`). Pas de recadrage libre :
     react-easy-crop est un cadre fixe
     que l'on déplace/zoome (ratios prédéfinis), choix assumé pour le
