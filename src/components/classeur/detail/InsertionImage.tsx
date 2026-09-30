@@ -20,6 +20,7 @@ import {
   jetonImage,
   refusImageSource,
   retirerImageDuMarkdown,
+  telechargerImage,
   televerserImage,
   trouverImage,
 } from '#/lib/classeur/images.ts'
@@ -190,7 +191,16 @@ export function useInsertionImage({
       try {
         if (preparation.recadrage) {
           setEtat({ type: 'envoi', nom: cible.nom })
-          const blob = await fetch(cible.url).then((r) => r.blob())
+          // Le fichier vient du CACHE qui sert déjà à l'afficher (sinon de
+          // l'API Storage authentifiée), JAMAIS d'un `fetch` de son URL
+          // `blob:` : la CSP (`connect-src`) ne l'autorise pas, et c'est
+          // voulu — en production, ce `fetch` échouait (« Failed to fetch »,
+          // retour utilisateur du 2026-09-30 ; invisible en local, sans CSP).
+          const blob = await invaliderImages.ensureQueryData({
+            queryKey: classeurKeys.image(cible.chemin),
+            queryFn: () => telechargerImage(cible.chemin),
+            staleTime: Infinity,
+          })
           const fichier = new File([blob], `${cible.nom}.webp`, {
             type: blob.type || 'image/webp',
           })

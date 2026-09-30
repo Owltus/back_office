@@ -742,7 +742,14 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
     toujours non exposée. Vérifié navigateur sans rien écrire (retouche 50 %
     → seule la ligne changée, aperçu à 50 %, collage d'une image, format
     Carré, abandon) ; le recadrage d'une image placée (qui envoie) n'a pas
-    été exercé contre la prod. `.pdf-prose img`
+    été exercé contre la prod — et il ÉCHOUAIT en production (« Recadrage
+    impossible : Failed to fetch », trouvé par l'utilisateur le même jour) :
+    il relisait l'image par `fetch(<url blob:>)`, que la CSP `connect-src`
+    interdit (rien en local : pas de CSP en dev). Il lit désormais le cache
+    TanStack de l'image (`ensureQueryData` sur `classeurKeys.image`, repli
+    API Storage). ⚠ Règle : ne JAMAIS `fetch()` une URL `blob:` ni `data:`
+    non prévue — et tout parcours qui touche le réseau se vérifie SOUS CSP
+    (la production), pas seulement en local. `.pdf-prose img`
     est en bloc centré (`break-inside: avoid`). Pas de recadrage libre :
     react-easy-crop est un cadre fixe
     que l'on déplace/zoome (ratios prédéfinis), choix assumé pour le
