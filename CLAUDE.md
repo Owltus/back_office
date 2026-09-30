@@ -950,8 +950,9 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   (menu des autres chapitres, seule voie sous 1024 px où la colonne est un
   tiroir), « Importer des fichiers .md/.txt » (`useDropZone().importer`),
   « Supprimer le classeur » dans la barre de l'accueil (gestion), boutons
-  Décaler/Ramener (sous-listes) au doigt, légende tactile distincte de la
-  légende souris, « Privé »/« Lecture » en texte au doigt. Écran : éditeur
+  Décaler/Ramener (sous-listes) au doigt (légendes souris / doigt sous la
+  grille d'un chapitre RETIRÉES le 2026-09-30, demande utilisateur : « c'est
+  de trop »), « Privé »/« Lecture » en texte au doigt. Écran : éditeur
   en deux colonnes à partir de `xl` (1280) seulement, bouton de l'aperçu à
   toute largeur ; aperçu d'impression `items-center-safe` (page plus large
   que l'écran atteignable) ; préparation d'image et 10 dialogues bornés en

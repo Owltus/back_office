@@ -74,7 +74,6 @@ import {
   ItemPages,
 } from '#/components/classeur/print/ItemPages.tsx'
 import { PrintPreview } from '#/components/classeur/print/PrintPreview.tsx'
-import { MouseGlyph } from '#/components/parking/MouseGlyph.tsx'
 import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
@@ -760,36 +759,6 @@ export function ChapterBoard({
           </SortableContext>
         )}
       </div>
-
-      {/* Repères sous la grille — même ligne que la légende de Literie ou
-          du planning des lits bébé : gestes souris à gauche. */}
-      {items.length > 0 && (
-        <>
-          {/* Souris : gestes souris. */}
-          <div className="hidden flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground pointer-fine:flex">
-            {canWrite && !enRecherche && (
-              <span className="flex items-center gap-1.5">
-                <MouseGlyph side="left" />
-                glisser : réordonner, ou déposer sur un chapitre de la colonne
-              </span>
-            )}
-            <span>Ctrl + clic : sélectionner</span>
-            <span>Ctrl + molette : zoom de la grille</span>
-          </div>
-          {/* Doigt : les gestes qui existent vraiment. */}
-          {canWrite && (
-            <div className="hidden flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground pointer-coarse:flex">
-              {!enRecherche && (
-                <span>appui long puis glisser : réordonner</span>
-              )}
-              <span>
-                bouton Sélectionner : choisir plusieurs éléments, les déplacer
-                ou les supprimer
-              </span>
-            </div>
-          )}
-        </>
-      )}
 
       {/* Aperçu avant impression : un élément ou le chapitre entier */}
       <PrintPreview
