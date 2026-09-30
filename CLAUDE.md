@@ -749,7 +749,27 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
     TanStack de l'image (`ensureQueryData` sur `classeurKeys.image`, repli
     API Storage). ⚠ Règle : ne JAMAIS `fetch()` une URL `blob:` ni `data:`
     non prévue — et tout parcours qui touche le réseau se vérifie SOUS CSP
-    (la production), pas seulement en local. `.pdf-prose img`
+    (la production), pas seulement en local.
+    **POSITION (même jour, demande utilisateur : « une petite image laisse
+    beaucoup de vide, la placer à gauche ou à droite avec le texte à
+    côté »)** : titre `"largeur=40 position=gauche|droite"` (`titreImage`,
+    `positionDepuisTitre` ; jamais de position à 100 % — pas de place pour du
+    texte), `data-position` sur l'`<img>` → `float` (`classeur.css`). Sur une
+    page qui en contient une (`:has(img[data-position])`, les autres
+    documents ne changent pas) : listes, encadrés, code et titres en
+    `display: flow-root` (rangés À CÔTÉ, pas dessous — sinon puces et filets
+    chevauchent l'image) et TITRES en `clear: both` (une nouvelle partie
+    démarre sous l'image). ⚠ Pagination : un flottant ne compte pas dans la
+    hauteur de son paragraphe — `paginate.ts` mesure son DÉBORD
+    (`debordFlottant`) et tient une `pile` { somme, occupe } : le texte coule
+    à côté (somme), l'image doit tenir ENTIÈRE (occupe) ; un bloc qui dégage
+    (`degage`, `clear`) repart de la fin de l'image. Tests 9-11, mutations
+    vérifiées. Réglage « Position » (Gauche / Centre / Droite, grisé en
+    pleine largeur) dans le dialogue, miniature avec texte à côté ; aide
+    « Mettre en forme » et consignes LLM de l'export JSON mises à jour.
+    Vérifié navigateur sans rien écrire : texte à côté des deux images, titre
+    sous l'image, image de bas de page reportée entière, 0 débordement.
+    `.pdf-prose img`
     est en bloc centré (`break-inside: avoid`). Pas de recadrage libre :
     react-easy-crop est un cadre fixe
     que l'on déplace/zoome (ratios prédéfinis), choix assumé pour le

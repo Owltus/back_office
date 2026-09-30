@@ -227,15 +227,27 @@ export function AideMiseEnFormeDialog({
               <Bouton icon={<ImagePlus />} /> pour choisir un fichier, ou plus
               simplement <Term>collez</Term> une capture d'écran (
               <Kbd>Ctrl</Kbd> <KbdPlus /> <Kbd>V</Kbd>) ou <Term>glissez</Term>{' '}
-              une image dans le texte. Vous pouvez la recadrer avant l'envoi ;
-              elle est ensuite centrée sur toute la largeur de la page.{' '}
-              <Bouton icon={<Images />} /> reprend une image déjà envoyée dans
-              ce classeur.
+              une image dans le texte. <Bouton icon={<Images />} /> reprend une
+              image déjà envoyée dans ce classeur.
+            </p>
+            <p>
+              Avant l'envoi, une fenêtre permet de la <Term>recadrer</Term>{' '}
+              (tirez les coins du cadre), de choisir sa <Term>taille</Term> sur
+              la page (petite, moyenne, grande ou pleine largeur ; ses
+              proportions sont toujours gardées) et sa <Term>position</Term> :
+              au centre, ou à gauche ou à droite avec le texte qui l'entoure.
+              Une page miniature montre le résultat.
+            </p>
+            <p>
+              Pour <Term>retoucher</Term> une image déjà placée,{' '}
+              <Term>cliquez dessus</Term> dans l'aperçu de la page : la même
+              fenêtre s'ouvre. <Kbd>Ctrl</Kbd> <KbdPlus /> <Kbd>Z</Kbd> annule.
             </p>
             <p>
               Dans le texte, une image apparaît comme une ligne{' '}
-              <code>![nom](…)</code> : ne la modifiez pas, déplacez-la ou
-              supprimez-la entière.
+              <code>![nom](…)</code>, suivie de ses réglages entre guillemets (
+              <code>"largeur=40 position=gauche"</code>) : ne la modifiez pas à
+              la main, déplacez-la ou supprimez-la entière.
             </p>
           </Section>
 

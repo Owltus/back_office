@@ -18,7 +18,7 @@ import {
   LARGEUR_PAS,
   formaterOctets,
 } from '#/lib/classeur/images.ts'
-import type { PreparationImage } from '#/lib/classeur/images.ts'
+import type { PositionImage, PreparationImage } from '#/lib/classeur/images.ts'
 import {
   CONTENT_WIDTH_MM,
   PAGE_WIDTH_MM,
@@ -62,6 +62,12 @@ const TAILLES: { valeur: number; label: string }[] = [
   { valeur: 100, label: 'Pleine largeur' },
 ]
 
+const POSITIONS: { key: PositionImage; label: string }[] = [
+  { key: 'gauche', label: 'À gauche' },
+  { key: 'centre', label: 'Au centre' },
+  { key: 'droite', label: 'À droite' },
+]
+
 const CADRE_ENTIER: PercentCrop = {
   unit: '%',
   x: 0,
@@ -79,6 +85,7 @@ export function ImagePreparationDialog({
   file = null,
   existante = null,
   largeurInitiale = 100,
+  positionInitiale = 'centre',
   envoi = false,
   onAnnuler,
   onValider,
@@ -89,6 +96,8 @@ export function ImagePreparationDialog({
   existante?: { url: string; nom: string } | null
   /** Largeur actuelle sur la page (%), pour une retouche. */
   largeurInitiale?: number
+  /** Position actuelle sur la page, pour une retouche. */
+  positionInitiale?: PositionImage
   /** Envoi en cours (boutons figés, loader). */
   envoi?: boolean
   onAnnuler: () => void
@@ -112,6 +121,9 @@ export function ImagePreparationDialog({
   const [format, setFormat] = useState('libre')
   const [cadre, setCadre] = useState<PercentCrop>(CADRE_ENTIER)
   const [largeur, setLargeur] = useState(largeurInitiale)
+  const [position, setPosition] = useState<PositionImage>(positionInitiale)
+  // En pleine largeur, pas de place pour du texte à côté : centrée.
+  const positionEffective: PositionImage = largeur >= 100 ? 'centre' : position
 
   // Remise à zéro à chaque ouverture sur une nouvelle image.
   useEffect(() => {
@@ -119,7 +131,8 @@ export function ImagePreparationDialog({
     setFormat('libre')
     setCadre(CADRE_ENTIER)
     setLargeur(largeurInitiale)
-  }, [url, largeurInitiale])
+    setPosition(positionInitiale)
+  }, [url, largeurInitiale, positionInitiale])
 
   const aspectFormat = (key: string, n = naturel): number | undefined => {
     const f = FORMATS.find((x) => x.key === key)?.valeur
@@ -152,7 +165,10 @@ export function ImagePreparationDialog({
 
   function valider() {
     if (!naturel) return
-    const preparation: PreparationImage = { largeur }
+    const preparation: PreparationImage = {
+      largeur,
+      position: positionEffective,
+    }
     if (recadrageActif) {
       preparation.recadrage = {
         x: Math.round((cadre.x / 100) * naturel.w),
@@ -266,12 +282,28 @@ export function ImagePreparationDialog({
               />
             </Reglage>
 
+            <Reglage
+              label={
+                largeur >= 100
+                  ? 'Position · réduisez la taille pour mettre du texte à côté'
+                  : 'Position · à gauche ou à droite, le texte l’entoure'
+              }
+            >
+              <Segments
+                valeur={positionEffective}
+                options={POSITIONS}
+                onChange={(k) => setPosition(k as PositionImage)}
+                desactive={largeur >= 100}
+              />
+            </Reglage>
+
             {url && (
               <ApercuPage
                 url={url}
                 cadre={cadre}
                 naturel={naturel}
                 largeur={largeur}
+                position={positionEffective}
               />
             )}
           </div>
@@ -304,25 +336,28 @@ export function ImagePreparationDialog({
 
 /**
  * Page A4 miniature : du texte figuré, puis l'image telle qu'elle sera
- * placée (recadrée, à la largeur choisie, centrée, proportions gardées).
+ * placée (recadrée, à la largeur choisie, proportions gardées) — centrée, ou
+ * à gauche / à droite avec le texte qui l'entoure.
  */
 function ApercuPage({
   url,
   cadre,
   naturel,
   largeur,
+  position,
 }: {
   url: string
   cadre: PercentCrop
   naturel: { w: number; h: number } | null
   largeur: number
+  position: PositionImage
 }) {
   const marge = ((PAGE_WIDTH_MM - CONTENT_WIDTH_MM) / 2 / PAGE_WIDTH_MM) * 100
   const ratio = naturel
     ? (cadre.width * naturel.w) / Math.max(1, cadre.height * naturel.h)
     : 4 / 3
   const tailleFond = `${String(10000 / Math.max(cadre.width, 1))}% ${String(10000 / Math.max(cadre.height, 1))}%`
-  const position = (debut: number, taille: number) =>
+  const decalage = (debut: number, taille: number) =>
     taille >= 99.9 ? '0%' : `${String((debut / (100 - taille)) * 100)}%`
   return (
     <div className="flex flex-col gap-1.5">
@@ -344,23 +379,66 @@ function ApercuPage({
             />
           ))}
           <div
-            className="my-1 self-center"
+            className={cn(
+              'my-1 self-center',
+              position !== 'centre' && 'hidden',
+            )}
             style={{
               width: `${String(largeur)}%`,
               aspectRatio: String(ratio),
               backgroundImage: `url("${url}")`,
               backgroundSize: tailleFond,
-              backgroundPosition: `${position(cadre.x, cadre.width)} ${position(cadre.y, cadre.height)}`,
+              backgroundPosition: `${decalage(cadre.x, cadre.width)} ${decalage(cadre.y, cadre.height)}`,
               backgroundRepeat: 'no-repeat',
             }}
           />
-          {[100, 70].map((w, i) => (
+          {/* Texte qui suit : à côté de l'image si elle est à gauche ou à
+              droite (lignes plus courtes), dessous si elle est centrée. */}
+          {position === 'centre' ? (
+            [100, 70].map((w, i) => (
+              <div
+                key={i}
+                className="h-1 rounded-full bg-neutral-200"
+                style={{ width: `${String(w)}%` }}
+              />
+            ))
+          ) : (
             <div
-              key={i}
-              className="h-1 rounded-full bg-neutral-200"
-              style={{ width: `${String(w)}%` }}
-            />
-          ))}
+              className={cn(
+                'flex items-start gap-1.5',
+                position === 'droite' && 'flex-row-reverse',
+              )}
+            >
+              <div
+                className="shrink-0"
+                style={{
+                  width: `${String(largeur)}%`,
+                  aspectRatio: String(ratio),
+                  backgroundImage: `url("${url}")`,
+                  backgroundSize: tailleFond,
+                  backgroundPosition: `${decalage(cadre.x, cadre.width)} ${decalage(cadre.y, cadre.height)}`,
+                  backgroundRepeat: 'no-repeat',
+                }}
+              />
+              <div className="flex min-w-0 flex-1 flex-col gap-[3px]">
+                {[100, 95, 100, 85, 100, 60].map((w, i) => (
+                  <div
+                    key={i}
+                    className="h-1 rounded-full bg-neutral-200"
+                    style={{ width: `${String(w)}%` }}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+          {position !== 'centre' &&
+            [100, 75].map((w, i) => (
+              <div
+                key={`fin-${String(i)}`}
+                className="h-1 rounded-full bg-neutral-200"
+                style={{ width: `${String(w)}%` }}
+              />
+            ))}
         </div>
       </div>
     </div>
@@ -393,19 +471,27 @@ function Segments({
   valeur,
   options,
   onChange,
+  desactive = false,
 }: {
   valeur: string
   options: { key: string; label: string }[]
   onChange: (key: string) => void
+  desactive?: boolean
 }) {
   return (
-    <div className="flex flex-wrap gap-1 rounded-md border border-border p-0.5">
+    <div
+      className={cn(
+        'flex flex-wrap gap-1 rounded-md border border-border p-0.5',
+        desactive && 'opacity-50',
+      )}
+    >
       {options.map((o) => (
         <button
           key={o.key}
           type="button"
           onClick={() => onChange(o.key)}
           aria-pressed={valeur === o.key}
+          disabled={desactive}
           className={cn(
             'min-h-8 rounded px-2.5 py-1 text-xs transition-colors',
             valeur === o.key

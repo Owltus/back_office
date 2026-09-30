@@ -257,4 +257,42 @@ describe('paginate', () => {
     })
     expect(pages).toHaveLength(1)
   })
+
+  it('(9) une image flottante qui ne tient plus part ENTIÈRE sur la page suivante', () => {
+    // 8 × 30 = 240 ; le paragraphe de l'image ne mesure rien (flottant),
+    // mais l'image dépasse de 120 : 240 + 120 > 300 → page suivante.
+    const html = `${paragraphes(8)}<p data-h="0" data-flottant="120">image</p>${paragraphes(1, 30, 'a-cote')}`
+    const pages = paginate(conteneur(html), 300, mesure, {
+      debordFlottant: (el) => Number(el.getAttribute('data-flottant') ?? 0),
+    })
+    expect(pages).toHaveLength(2)
+    expect(fragment(pages[0].html).textContent).not.toContain('image')
+    expect(fragment(pages[1].html).textContent).toContain('image')
+  })
+
+  it('(10) le texte À CÔTÉ d’une image flottante n’est pas compté deux fois', () => {
+    // Image flottante de 150 puis 5 paragraphes de 30 qui l'entourent :
+    // la pile vaut max(5 × 30, 150) = 150, pas 300. Avec 4 paragraphes
+    // avant (120), tout tient : 120 + max(150, 150) = 270 ≤ 300.
+    const html = `${paragraphes(4)}<p data-h="0" data-flottant="150">image</p>${paragraphes(5, 30, 'a-cote')}`
+    const pages = paginate(conteneur(html), 300, mesure, {
+      debordFlottant: (el) => Number(el.getAttribute('data-flottant') ?? 0),
+    })
+    expect(pages).toHaveLength(1)
+  })
+
+  it('(11) un titre qui passe SOUS une image flottante démarre après elle', () => {
+    // 4 × 30 = 120 ; image flottante de 150 (fin à 270) ; un paragraphe à
+    // côté (30 → somme 150). Le titre dégage : il démarre à 270, et avec
+    // les 30 px de son paragraphe on dépasse 300 → nouvelle page. Sans le
+    // dégagement, 150 + 30 + 30 = 210 aurait été jugé tenir (et la page
+    // aurait débordé à l'écran).
+    const html = `${paragraphes(4)}<p data-h="0" data-flottant="150">image</p>${paragraphes(1, 30, 'a-cote')}<h2 data-h="30" data-degage="1">Suite</h2>${paragraphes(1, 30, 'suite')}`
+    const pages = paginate(conteneur(html), 300, mesure, {
+      debordFlottant: (el) => Number(el.getAttribute('data-flottant') ?? 0),
+      degage: (el) => el.hasAttribute('data-degage'),
+    })
+    expect(pages).toHaveLength(2)
+    expect(fragment(pages[1].html).firstElementChild?.tagName).toBe('H2')
+  })
 })

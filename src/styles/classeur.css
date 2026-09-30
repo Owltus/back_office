@@ -358,6 +358,31 @@
   padding: 0.15cm 0 0.35cm;
   break-inside: avoid;
 }
+/* Image à GAUCHE ou à DROITE (`position=…`, 2026-09-30) : elle flotte et
+   les paragraphes l'entourent. Sa hauteur ne compte pas dans celle de son
+   paragraphe : `paginate.ts` la mesure à part (`debordFlottant`) pour ne
+   jamais la laisser déborder de la page. */
+.pdf-prose img[data-position='gauche'] {
+  float: left;
+  margin: 0 0.45cm 0 0;
+}
+.pdf-prose img[data-position='droite'] {
+  float: right;
+  margin: 0 0 0 0.45cm;
+}
+/* Sur une page qui en contient une, les blocs dont le décor passerait SOUS
+   l'image (puces des listes, soulignement des titres, filet des encadrés,
+   fond des blocs de code) se rangent À CÔTÉ d'elle plutôt que dessous.
+   Limité à ces pages : les documents sans image flottante ne changent pas. */
+.pdf-prose:has(img[data-position])
+  :is(ul, ol, blockquote, pre, h1, h2, h3, h4, h5, h6) {
+  display: flow-root;
+}
+/* Un TITRE ouvre une nouvelle partie : il passe sous l'image flottante au
+   lieu de démarrer à côté (`paginate.ts` en tient compte : `degage`). */
+.pdf-prose:has(img[data-position]) :is(h1, h2, h3, h4, h5, h6) {
+  clear: both;
+}
 .pdf-prose p:has(> img:only-child) {
   text-align: center;
   margin: 0;

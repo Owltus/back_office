@@ -91,6 +91,38 @@ export interface PreparationImage {
   recadrage?: Recadrage
   /** Pourcentage de la largeur de la zone de contenu (10 à 100). */
   largeur?: number
+  /** Gauche / droite : le texte coule à côté (2026-09-30). Défaut : centre. */
+  position?: PositionImage
+}
+
+/** Place d'une image dans la page. Gauche et droite : le texte l'entoure. */
+export type PositionImage = 'gauche' | 'centre' | 'droite'
+
+/**
+ * Titre Markdown d'une image : `largeur=NN` sous 100 %, `position=…` hors
+ * centre. Une image en pleine largeur ne peut pas avoir de texte à côté :
+ * elle est toujours centrée.
+ */
+export function titreImage(
+  largeur: number,
+  position: PositionImage = 'centre',
+): string {
+  const parties: string[] = []
+  const l = Math.round(largeur)
+  if (l > 0 && l < 100) {
+    parties.push(`largeur=${String(l)}`)
+    if (position !== 'centre') parties.push(`position=${position}`)
+  }
+  return parties.length > 0 ? ` "${parties.join(' ')}"` : ''
+}
+
+/** Position portée par le titre d'une image Markdown, `centre` sinon. */
+export function positionDepuisTitre(
+  title: string | null | undefined,
+): PositionImage {
+  if (largeurDepuisTitre(title) >= 100) return 'centre'
+  const m = /(?:^|\s)position=(gauche|droite|centre)(?:\s|$)/.exec(title ?? '')
+  return (m?.[1] as PositionImage | undefined) ?? 'centre'
 }
 
 /** Bornes du réglage de largeur (%), et pas du curseur. */
@@ -192,17 +224,14 @@ export function markdownImage(
   nomFichier: string,
   url: string,
   largeur: number = 100,
+  position: PositionImage = 'centre',
 ): string {
   // Espaces et parenthèses casseraient la syntaxe `![](…)` ;
   // `encodeURIComponent` laisse les parenthèses, on les encode à la main.
   const urlSure = url.replace(/[\s()]/g, (c) =>
     c === '(' ? '%28' : c === ')' ? '%29' : encodeURIComponent(c),
   )
-  const titre =
-    largeur > 0 && largeur < 100
-      ? ` "largeur=${String(Math.round(largeur))}"`
-      : ''
-  return `![${texteAlternatif(nomFichier)}](${urlSure}${titre})`
+  return `![${texteAlternatif(nomFichier)}](${urlSure}${titreImage(largeur, position)})`
 }
 
 /** Largeur (%) portée par le titre d'une image Markdown, `100` sinon. */
@@ -384,7 +413,12 @@ export async function televerserImage(
   return {
     image: fiche,
     octetsSource: file.size,
-    markdown: markdownImage(fiche.nom, chemin, preparation.largeur ?? 100),
+    markdown: markdownImage(
+      fiche.nom,
+      chemin,
+      preparation.largeur ?? 100,
+      preparation.position,
+    ),
   }
 }
 
@@ -549,6 +583,7 @@ export interface ImageDansTexte {
   alt: string
   chemin: string
   largeur: number
+  position: PositionImage
 }
 
 /**
@@ -571,6 +606,7 @@ export function trouverImage(
       alt: m[1],
       chemin: m[2],
       largeur: largeurDepuisTitre(m[3]),
+      position: positionDepuisTitre(m[3]),
     })
   }
   if (occurrences.length === 0) return null
@@ -582,15 +618,12 @@ export function trouverImage(
   return occurrences[0]
 }
 
-/** Le jeton réécrit : même texte alternatif, chemin et largeur donnés. */
+/** Le jeton réécrit : même texte alternatif, chemin, largeur et position donnés. */
 export function jetonImage(
   alt: string,
   chemin: string,
   largeur: number,
+  position: PositionImage = 'centre',
 ): string {
-  const titre =
-    largeur > 0 && largeur < 100
-      ? ` "largeur=${String(Math.round(largeur))}"`
-      : ''
-  return `![${alt}](${chemin}${titre})`
+  return `![${alt}](${chemin}${titreImage(largeur, position)})`
 }

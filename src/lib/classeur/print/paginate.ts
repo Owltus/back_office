@@ -58,6 +58,13 @@ export type CoupeTexte = (
 
 export interface OutilsPagination {
   marges?: Marges
+  /**
+   * De combien une image FLOTTANTE (à gauche ou à droite, le texte l'entoure)
+   * dépasse sous la boîte de l'élément qui la contient, en px (0 sinon).
+   */
+  debordFlottant?: (el: Element) => number
+  /** Vrai si l'élément passe SOUS les images flottantes (`clear`). */
+  degage?: (el: Element) => boolean
   /** Hauteur d'une ligne de texte de l'élément, en px (0 = inconnue). */
   hauteurLigne?: (el: Element) => number
   couperTexte?: CoupeTexte
@@ -84,6 +91,24 @@ function margesCalculees(el: Element): { haut: number; bas: number } {
     haut: parseFloat(style.marginTop) || 0,
     bas: parseFloat(style.marginBottom) || 0,
   }
+}
+
+/**
+ * Débord d'une image flottante (`img[data-position]`, 2026-09-30) : un
+ * flottant ne compte pas dans la hauteur de son paragraphe (qui ne mesure
+ * alors presque rien), il faut donc le mesurer à part — sinon l'image
+ * déborderait en bas de page.
+ */
+function debordFlottantCalcule(el: Element): number {
+  const flottants = el.querySelectorAll('img[data-position]')
+  if (flottants.length === 0) return 0
+  const bas = el.getBoundingClientRect().bottom
+  let debord = 0
+  for (const f of Array.from(flottants)) {
+    const fin = f.getBoundingClientRect().bottom + margesCalculees(f).bas
+    debord = Math.max(debord, fin - bas)
+  }
+  return debord
 }
 
 function hauteurLigneCalculee(el: Element): number {
@@ -388,22 +413,35 @@ interface PageEl {
   box: number
   mt: number
   mb: number
+  /** Débord d'une image flottante sous la boîte (0 sinon). */
+  flottant: number
+  /** Passe sous les images flottantes (`clear`) : démarre après leur fin. */
+  degage?: boolean
 }
 
-/** Espace occupé par une suite de blocs : boîtes + marges FUSIONNÉES entre eux. */
-function hauteurUtilisee(els: PageEl[]): number {
-  let h = 0
+/**
+ * Espace occupé par une suite de blocs. `somme` : boîtes + marges FUSIONNÉES
+ * entre eux — là où commencera le bloc suivant. `occupe` : ce que la page
+ * doit contenir, image flottante comprise — le texte coule à côté d'elle
+ * (sa hauteur n'est pas dans `somme`), mais elle doit tenir ENTIÈRE.
+ */
+function pile(els: PageEl[]): { somme: number; occupe: number } {
+  let somme = 0
+  let finFlottant = 0
   els.forEach((e, i) => {
-    h += e.box
-    if (i > 0) h += Math.max(els[i - 1].mb, e.mt)
+    if (i > 0) somme += Math.max(els[i - 1].mb, e.mt)
+    // Un bloc qui « dégage » démarre sous la fin de l'image flottante.
+    if (e.degage) somme = Math.max(somme, finFlottant)
+    somme += e.box
+    if (e.flottant > 0) finFlottant = Math.max(finFlottant, somme + e.flottant)
   })
-  return h
+  return { somme, occupe: Math.max(somme, finFlottant) }
 }
 
-/** Espace à ajouter pour poser `el` après `els` (marge fusionnée + boîte). */
-function ajout(els: PageEl[], mt: number, box: number): number {
+/** Marge fusionnée entre le dernier bloc posé et un bloc de marge haute `mt`. */
+function ecart(els: PageEl[], mt: number): number {
   const dernier = els[els.length - 1] as PageEl | undefined
-  return (dernier === undefined ? 0 : Math.max(dernier.mb, mt)) + box
+  return dernier === undefined ? 0 : Math.max(dernier.mb, mt)
 }
 
 /**
@@ -420,6 +458,12 @@ export function paginate(
   const marges = outils.marges ?? margesCalculees
   const hauteurLigne = outils.hauteurLigne ?? hauteurLigneCalculee
   const couperTexte = outils.couperTexte ?? couperTexteDom
+  const debordFlottant = outils.debordFlottant ?? debordFlottantCalcule
+  const degage =
+    outils.degage ??
+    ((el: Element) =>
+      getComputedStyle(el).clear !== 'none' &&
+      getComputedStyle(el).clear !== '')
 
   const children = Array.from(container.children)
   if (children.length === 0) return [{ html: '' }]
@@ -559,6 +603,7 @@ export function paginate(
         box: c.height,
         mt: n === 0 ? mt : 0,
         mb: n === chunks.length - 1 ? mb : 0,
+        flottant: 0,
       })
     })
   }
@@ -573,30 +618,37 @@ export function paginate(
     }
 
     const { box, mt, mb } = infos(child)
-    const pageEl: PageEl = { html: child.outerHTML, tag, box, mt, mb }
+    const pageEl: PageEl = {
+      html: child.outerHTML,
+      tag,
+      box,
+      mt,
+      mb,
+      flottant: debordFlottant(child),
+      degage: degage(child),
+    }
 
     // ─── Titre : jamais seul en bas de page ───
     if (isHeading(tag) && els.length > 0) {
       const apres = besoinApresTitre(index)
-      if (hauteurUtilisee(els) + ajout(els, mt, box) + apres > maxHeightPx) {
+      const avec = pile([...els, pageEl])
+      if (Math.max(avec.somme + apres, avec.occupe) > maxHeightPx) {
         nouvellePageAvecTitres()
       }
       els.push(pageEl)
       return
     }
 
-    // ─── Le bloc tient sur la page courante ───
-    const utilise = hauteurUtilisee(els)
-    if (utilise + ajout(els, mt, box) <= maxHeightPx) {
+    // ─── Le bloc tient sur la page courante (image flottante comprise) ───
+    if (pile([...els, pageEl]).occupe <= maxHeightPx) {
       els.push(pageEl)
       return
     }
 
     // ─── Il ne tient pas : le couper dans la place RESTANTE si possible ───
-    const reste =
-      maxHeightPx -
-      utilise -
-      (els.length > 0 ? Math.max(els[els.length - 1].mb, mt) : 0)
+    // (À côté d'une image flottante déjà posée : le texte coule, seule la
+    // fin de la pile compte — l'image, elle, tient déjà.)
+    const reste = maxHeightPx - pile(els).somme - ecart(els, mt)
     const coupe = morceaux(child, reste, maxHeightPx)
     if (coupe !== null && coupe.length > 1 && coupe[0].height <= reste) {
       poserMorceaux(coupe, tag, mt, mb)
@@ -605,10 +657,7 @@ export function paginate(
 
     // ─── Sinon, page suivante (avec ses titres), coupé si trop grand ───
     if (els.length > 0 && !isOnlyHeadings()) nouvellePageAvecTitres()
-    const dispo =
-      maxHeightPx -
-      hauteurUtilisee(els) -
-      (els.length > 0 ? Math.max(els[els.length - 1].mb, mt) : 0)
+    const dispo = maxHeightPx - pile(els).somme - ecart(els, mt)
     if (dispo < box) {
       const coupe2 = morceaux(child, dispo, maxHeightPx)
       if (coupe2 !== null && coupe2.length > 1) {

@@ -25,7 +25,7 @@ import {
   trouverImage,
 } from '#/lib/classeur/images.ts'
 import type { Edition } from '#/lib/classeur/markdownEdition.ts'
-import type { PreparationImage } from '#/lib/classeur/images.ts'
+import type { PositionImage, PreparationImage } from '#/lib/classeur/images.ts'
 import { cn } from '#/lib/utils.ts'
 
 /*
@@ -40,6 +40,12 @@ import { cn } from '#/lib/utils.ts'
  * geste) ; le texte tapé pendant l'envoi n'est pas perdu, l'image arrive à
  * la position relevée.
  */
+
+/** « , à gauche » / « , à droite » (rien au centre ni en pleine largeur). */
+function libellePosition(largeur: number, position: PositionImage): string {
+  if (largeur >= 100 || position === 'centre') return ''
+  return position === 'gauche' ? ', à gauche' : ', à droite'
+}
 
 export type EtatImage =
   | { type: 'repos' }
@@ -82,6 +88,7 @@ export function useInsertionImage({
     url: string
     nom: string
     largeur: number
+    position: PositionImage
   } | null>(null)
 
   /** Insère une ligne Markdown à la position du curseur (relevée maintenant). */
@@ -171,7 +178,14 @@ export function useInsertionImage({
         return
       }
       setEtat({ type: 'repos' })
-      setEnRetouche({ chemin, ligne, url, nom: t.alt, largeur: t.largeur })
+      setEnRetouche({
+        chemin,
+        ligne,
+        url,
+        nom: t.alt,
+        largeur: t.largeur,
+        position: t.position,
+      })
     },
     [contenu, editeurRef],
   )
@@ -187,6 +201,7 @@ export function useInsertionImage({
       const cible = enRetouche
       if (classeurId === null || cible === null) return
       const largeur = preparation.largeur ?? cible.largeur
+      const position = preparation.position ?? cible.position
       let chemin = cible.chemin
       try {
         if (preparation.recadrage) {
@@ -222,7 +237,7 @@ export function useInsertionImage({
       const calculer = (valeur: string): Edition => {
         const t = trouverImage(valeur, cible.chemin, cible.ligne)
         if (!t) return { debut: 0, fin: 0, texte: '', selection: [0, 0] }
-        const jeton = jetonImage(t.alt, chemin, largeur)
+        const jeton = jetonImage(t.alt, chemin, largeur, position)
         return {
           debut: t.debut,
           fin: t.fin,
@@ -239,8 +254,8 @@ export function useInsertionImage({
       setEtat({
         type: 'ok',
         message: preparation.recadrage
-          ? `Image recadrée, ${String(largeur)} % de la largeur (l'originale reste dans la médiathèque).`
-          : `Image à ${String(largeur)} % de la largeur.`,
+          ? `Image recadrée, ${String(largeur)} % de la largeur${libellePosition(largeur, position)} (l'originale reste dans la médiathèque).`
+          : `Image à ${String(largeur)} % de la largeur${libellePosition(largeur, position)}.`,
       })
     },
     [classeurId, editeurRef, enRetouche, invaliderImages, setContenu],
@@ -333,6 +348,7 @@ export function DialoguesImage({ image }: { image: ImageInsertion }) {
             : null
         }
         largeurInitiale={image.enRetouche?.largeur ?? 100}
+        positionInitiale={image.enRetouche?.position ?? 'centre'}
         envoi={image.etat.type === 'envoi'}
         onAnnuler={image.annulerRetouche}
         onValider={(preparation) => void image.appliquerRetouche(preparation)}

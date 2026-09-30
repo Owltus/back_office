@@ -12,6 +12,8 @@ import {
   imagesReferencees,
   jetonImage,
   largeurDepuisTitre,
+  positionDepuisTitre,
+  titreImage,
   trouverImage,
   markdownImage,
   recadrageBorne,
@@ -315,5 +317,38 @@ describe('trouverImage / jetonImage — retoucher une image placée', () => {
     expect(jetonImage('Plan', A, 60)).toBe(`![Plan](${A} "largeur=60")`)
     // Relu tel quel par le moteur de rendu.
     expect(largeurDepuisTitre('largeur=40')).toBe(40)
+  })
+})
+
+describe('position d’une image — gauche, centre, droite', () => {
+  const A = '12/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.webp'
+
+  it('écrit la position seulement hors centre et sous 100 %', () => {
+    expect(titreImage(40, 'gauche')).toBe(' "largeur=40 position=gauche"')
+    expect(titreImage(40, 'centre')).toBe(' "largeur=40"')
+    // Pleine largeur : jamais de texte à côté, donc jamais de position.
+    expect(titreImage(100, 'droite')).toBe('')
+    expect(jetonImage('Plan', A, 50, 'droite')).toBe(
+      `![Plan](${A} "largeur=50 position=droite")`,
+    )
+  })
+
+  it('relit la position (centre par défaut, et à 100 %)', () => {
+    expect(positionDepuisTitre('largeur=40 position=gauche')).toBe('gauche')
+    expect(positionDepuisTitre('position=droite largeur=60')).toBe('droite')
+    expect(positionDepuisTitre('largeur=40')).toBe('centre')
+    expect(positionDepuisTitre('position=gauche')).toBe('centre')
+    expect(positionDepuisTitre(undefined)).toBe('centre')
+    // La largeur se lit toujours, position présente ou non.
+    expect(largeurDepuisTitre('largeur=40 position=gauche')).toBe(40)
+  })
+
+  it('trouverImage rend la position, jetonImage la conserve', () => {
+    const texte = `![Plan](${A} "largeur=40 position=gauche")`
+    const t = trouverImage(texte, A)
+    expect(t).toMatchObject({ largeur: 40, position: 'gauche' })
+    expect(jetonImage(t!.alt, A, 60, t!.position)).toBe(
+      `![Plan](${A} "largeur=60 position=gauche")`,
+    )
   })
 })
