@@ -525,17 +525,15 @@ export function ChapterBoard({
               />
               {/* ≥ 640 px : tous les boutons, comme avant. */}
               <div className="contents max-sm:hidden">
+                {/* Icône seule (demande utilisateur du 2026-09-30), comme
+                    sur téléphone ; le libellé reste dans l'infobulle et
+                    pour les lecteurs d'écran. */}
                 {canWrite && chapter && (
-                  <Tip label="Ajouter un document, une feuille ou un intercalaire">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCreateOpen(true)}
-                    >
-                      <Plus />
-                      Nouvel élément
-                    </Button>
-                  </Tip>
+                  <IconAction
+                    label="Ajouter un document, une feuille ou un intercalaire"
+                    icon={<Plus />}
+                    onClick={() => setCreateOpen(true)}
+                  />
                 )}
                 {canWrite && chapter && (
                   <ButtonGroup>
