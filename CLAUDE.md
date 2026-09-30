@@ -547,6 +547,28 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   en contrôlant les 31 documents du classeur « Procédures de la réception »
   (id 5, 2026-09-27). ⚠ Pour mesurer une page, l'onglet doit être au premier
   plan : Chrome y suspend `requestAnimationFrame`, donc la pagination.
+  ⚠ **Pagination RÉVISÉE le 2026-09-30** (retour utilisateur : « le contenu
+  saute trop vite d'une page à l'autre ») — `print/paginate.ts`, cinq
+  rigidités héritées de Registre corrigées : (1) paragraphes et encadrés
+  COUPÉS entre deux lignes (`couperTexteDom`, lignes lues NŒUD DE TEXTE par
+  nœud — un Range sur tout le bloc inclut la boîte entière du `<p>` d'un
+  encadré ; 2 lignes min. de chaque côté ; images, blocs de code, diagrammes
+  restent insécables) ; (2) un titre n'exige plus 15 % de page libre mais le
+  DÉBUT MINIMAL de ce qui suit (2 lignes, 2 items, en-tête + 2 lignes, ou le
+  bloc insécable entier) ; (3) listes et tableaux coupables dès 4 éléments,
+  dernier morceau RÉÉQUILIBRÉ (2+2) au lieu d'être recollé ; (4) un grand
+  bloc remplit d'abord la place restante au lieu d'ouvrir une page neuve ;
+  (5) marges FUSIONNÉES comme le navigateur, sans la marge haute du 1er bloc
+  (annulée par le CSS) ni la basse du dernier. Tout ce qui demande un
+  navigateur est injectable (`OutilsPagination`), 15 tests jsdom. Mesuré en
+  navigateur sur les 86 documents réels (banc temporaire, lecture seule) :
+  252 → 231 pages, 20 documents raccourcis, AUCUN allongé, AUCUN débordement,
+  AUCUN mot perdu ni dupliqué (en-têtes de tableau répétés exclus de la
+  comparaison), pages non finales remplies à 89 % en moyenne ; les pages
+  encore peu remplies s'expliquent toutes par un `===` ou une capture qui ne
+  tient pas. ⚠ Mesurer en onglet caché : Chrome suspend
+  `requestAnimationFrame` et ralentit `setTimeout` à 1/min — remplacer les
+  deux par `MessageChannel` le temps d'un banc.
   ⚠ **Le document imprimé doit être stylé EXACTEMENT comme la page**
   (défaut trouvé par l'utilisateur le 2026-09-26 : « très grosse différence
   entre l'aperçu et l'impression, liens colorés, mise en page différente »).
