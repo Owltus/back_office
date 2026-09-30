@@ -8,6 +8,7 @@ import { AuthProvider } from '#/components/auth/AuthContext.tsx'
 import { AppAuthGate } from '#/components/auth/AppAuthGate.tsx'
 import { TooltipProvider } from '#/components/ui/tooltip.tsx'
 import { THEME_INIT_SCRIPT } from '#/lib/theme.ts'
+import { AUTO_REPARATION_SCRIPT } from '#/lib/autoReparationAssets.ts'
 
 import appCss from '../styles.css?url'
 // Sous-ensemble LATIN de la graisse variable d'Inter — le seul que tire un
@@ -109,6 +110,9 @@ function RootDocument({ children }: { children: React.ReactNode }) {
     <html lang="fr" className="dark" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        {/* Avant l'application : répare un fichier /assets/ resté en cache
+            en 404 après une mise en ligne (voir lib/autoReparationAssets.ts). */}
+        <script dangerouslySetInnerHTML={{ __html: AUTO_REPARATION_SCRIPT }} />
         <HeadContent />
       </head>
       <body>

@@ -227,6 +227,18 @@ Le temps de chargement perçu vient surtout de l'auth cliente + du mode SPA. Rè
   - **Cache des fichiers statiques** : `/assets/*` en `immutable` dans
     `vercel.json` (ils étaient servis en `max-age=0, must-revalidate`, mesuré en
     production). ⚠ Ne JAMAIS étendre cette règle à `/_shell.html`.
+    ⚠ **Effet de bord constaté le 2026-09-30** : Vercel applique cet en-tête
+    aussi aux 404 (impossible de conditionner un en-tête au code de réponse
+    dans `vercel.json`). Un navigateur qui demande le point d'entrée PENDANT
+    une mise en ligne reçoit un 404 et le garde un an : page blanche sur ce
+    poste seulement (PC de travail de l'utilisateur ; Ctrl + Maj + R répare).
+    Parade : `lib/autoReparationAssets.ts`, script autonome en tête de
+    `<head>` (comme celui du thème) — sur l'échec d'un `<script>`/`<link>`
+    `/assets/` du site, re-téléchargement `cache: 'reload'` (remplace l'entrée
+    en cache) puis UN rechargement si le fichier existe, au plus 1 / min ;
+    rien si le fichier est vraiment absent (vieil onglet → `vite:preloadError`).
+    Alternative écartée faute de préversion : réécrire `vercel.json` en
+    `routes` (ancien format) avec un 404 `no-store` après `handle: filesystem`.
   - Trois suppositions de l'audit **démenties par la mesure**, à ne pas
     ressusciter : la simulation de la galaxie (22 nœuds actifs, pas 200), les
     colonnes du planning parking (`days` ne contient déjà que le visible), et la
