@@ -644,6 +644,17 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   (point `fusion` AVANT toute écriture, élagage). Vérifié navigateur sans
   écrire (aperçus chapitre, option de suppression, mauvais chapitre,
   document) ; base inchangée.
+  ⚠ **Consignes LLM : UNE source, TROIS exports** (retour utilisateur du
+  2026-09-30 : le classeur complet n'en avait aucune, son `content` était
+  décrit « texte libre en Markdown ») — `lib/classeur/merge/consignes.ts`
+  (`consignesClasseur` / `consignesChapitre` / `consignesDocument`, même
+  socle : champs modifiables, `uuid` intouchable, Markdown de la page,
+  images `largeur`/`position`, `===`, `+++`). `construireExport` (classeur
+  complet, et donc aussi les points de restauration) pose
+  `_metadata.instructions` ; `lireMetadata` le relit (aller-retour
+  identique). Registre accepte la clé (serde sans `deny_unknown_fields`,
+  vérifié dans `files.rs`). Test « les TROIS exports » : toute convention
+  ajoutée à la page doit l'être ici, et le test la réclame.
 - **UI** : TanStack Query partout (`useClasseur.ts`, `useMerge.ts`,
   invalidation de `classeurKeys.all`, optimistes pour le réordonnancement),
   `isPending` pour les gardes, pas de toasts (alertes inline,

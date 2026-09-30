@@ -22,6 +22,7 @@ import type {
   ItemKind,
 } from '#/lib/classeur/types.ts'
 import { ITEM_KINDS, flattenItems } from '#/lib/classeur/types.ts'
+import { consignesClasseur } from '#/lib/classeur/merge/consignes.ts'
 
 // ---------------------------------------------------------------------------
 // Types du fichier
@@ -54,6 +55,8 @@ export interface MetadataJson {
   note: string
   schema: unknown
   periodicites: MetadataPeriodiciteJson[]
+  /** Consignes pour un LLM (`consignes.ts`) — ajout du Back Office, ignoré par Registre. */
+  instructions?: string[]
 }
 
 /**
@@ -232,7 +235,8 @@ export const SCHEMA_DESCRIPTIF = {
     },
     types: {
       document: {
-        _description: 'Document texte libre en Markdown.',
+        _description:
+          'Document texte libre en Markdown (GitHub), avec les conventions de la page décrites dans `_metadata.instructions` : images à largeur et position réglables, `===` saut de page, `+++` reprise sous une image.',
         specific_fields: {
           description: { type: 'string', required: false, default: '' },
           content: { type: 'string', required: false, default: '' },
@@ -466,13 +470,20 @@ function lireMetadata(v: unknown): MetadataJson | undefined {
       }
     }
   }
-  return {
+  const metadata: MetadataJson = {
     description: typeof v.description === 'string' ? v.description : '',
     generated_at: typeof v.generated_at === 'string' ? v.generated_at : '',
     note: typeof v.note === 'string' ? v.note : '',
     schema: v.schema ?? null,
     periodicites,
   }
+  if (
+    Array.isArray(v.instructions) &&
+    v.instructions.every((x) => typeof x === 'string')
+  ) {
+    metadata.instructions = v.instructions
+  }
+  return metadata
 }
 
 /**
@@ -588,11 +599,12 @@ export function construireExport(
       description:
         "Classeur exporté depuis le Back Office (page Classeur), au format d'échange Registre.",
       generated_at: horodatageExport(maintenant),
-      note: "Ce bloc _metadata est informatif et ignoré lors de l'import.",
+      note: "Lis d'abord `instructions`. Ce bloc _metadata est informatif et ignoré lors de l'import.",
       schema: SCHEMA_DESCRIPTIF,
       periodicites: [...periodicites]
         .sort((a, b) => a.id - b.id)
         .map((p) => ({ id: p.id, label: p.label, nombre: p.nombre })),
+      instructions: consignesClasseur(classeur.name),
     },
     // `COALESCE(icon, 'BookOpen')` côté Rust : une icône vide prend le défaut.
     classeur: {

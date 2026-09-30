@@ -20,7 +20,10 @@ import {
   lirePortee,
   planifierFusionPortee,
 } from '#/lib/classeur/merge/portee.ts'
-import { parseImportJson } from '#/lib/classeur/merge/schema.ts'
+import {
+  construireExport,
+  parseImportJson,
+} from '#/lib/classeur/merge/schema.ts'
 import type { ClasseurJson } from '#/lib/classeur/merge/schema.ts'
 
 /*
@@ -314,5 +317,52 @@ describe('extraireJson', () => {
     ).toBe(json)
     expect(extraireJson('  ' + json + '  ')).toBe(json)
     expect(extraireJson('rien ici')).toBe('rien ici')
+  })
+})
+
+describe('consignes LLM — les TROIS exports (classeur, chapitre, document)', () => {
+  const exports = {
+    classeur: construireExport(
+      classeur(),
+      [A, B],
+      local().content,
+      PERIODICITES,
+    ),
+    chapitre: construireExportChapitre(
+      classeur(),
+      A,
+      local().content,
+      PERIODICITES,
+    ),
+    document: construireExportDocument(classeur(), A, docA1, PERIODICITES),
+  }
+
+  it('portent tous les conventions de la page', () => {
+    for (const [nom, e] of Object.entries(exports)) {
+      const texte = (e._metadata?.instructions ?? []).join(' ')
+      for (const convention of [
+        'Ne modifie JAMAIS',
+        '`===`',
+        '`+++`',
+        'largeur=',
+        'position=',
+        'Conserve le CHEMIN',
+      ]) {
+        expect(texte, `${nom} : ${convention}`).toContain(convention)
+      }
+    }
+  })
+
+  it('chacun annonce SA portée', () => {
+    expect(exports.classeur._metadata?.instructions?.[0]).toMatch(/en entier/)
+    expect(exports.chapitre._metadata.instructions[0]).toMatch(/chapitre/)
+    expect(exports.document._metadata.instructions[0]).toMatch(/seul document/)
+  })
+
+  it('les consignes survivent à la relecture du fichier (aller-retour)', () => {
+    const relu = parseImportJson(JSON.stringify(exports.classeur))
+    expect(relu._metadata?.instructions).toEqual(
+      exports.classeur._metadata?.instructions,
+    )
   })
 })
