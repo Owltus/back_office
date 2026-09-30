@@ -165,7 +165,7 @@ export function ChapterBoard({
   }, [items, requete, enRecherche])
 
   const selection = useSelection()
-  const { gridStyle, containerRef } = useChapterZoom()
+  const { gridStyle, containerRef, zoneRef } = useChapterZoom()
   const { registerHandler, unregisterHandler, activeDragType } =
     useDndRegistry()
   const selectionDragging = selection.selectionMode && activeDragType !== null
@@ -675,7 +675,7 @@ export function ChapterBoard({
       </div>
 
       {/* Zone de dépôt : prend tout l'espace restant */}
-      <div className="relative flex flex-1 flex-col">
+      <div ref={zoneRef} className="relative flex flex-1 flex-col">
         {isDragOver && <DropOverlay />}
 
         {contenuQ.isPending ? (

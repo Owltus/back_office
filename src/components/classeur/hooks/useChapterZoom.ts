@@ -4,15 +4,19 @@ import type { CSSProperties } from 'react'
 /*
  * Zoom de la grille des cartes d'un chapitre — porté de Registre
  * (`lib/hooks/useChapterZoom.ts`). Le nombre de colonnes se règle par
- * Ctrl + molette SUR LA GRILLE, ou Ctrl + « + » / « - » / « 0 » ; `0` (auto)
+ * Ctrl + molette SUR LA ZONE des documents, ou Ctrl + « + » / « - » / « 0 » ; `0` (auto)
  * laisse le navigateur remplir la largeur avec des cartes d'environ 280 px.
  *
  * Écarts avec la source :
  *   - la préférence était en SQLite (table `preferences`) ; ici,
  *     `localStorage` (clé `bo.classeur.colonnes.v1`), lecture et écriture
  *     sous `try/catch` — un poste partagé peut refuser le stockage ;
- *   - la molette n'est écoutée que sur la grille (et non sur `window`) :
- *     Ctrl + molette ailleurs dans l'application reste le zoom du navigateur.
+ *   - la molette n'est écoutée que sur la ZONE qui contient les documents
+ *     (`zoneRef`, et non sur `window`) : Ctrl + molette ailleurs dans
+ *     l'application reste le zoom du navigateur. Jusqu'au 2026-09-30 elle
+ *     l'était sur la seule grille — il fallait viser une carte, et le
+ *     moindre espace vide (sous les cartes, entre deux) zoomait toute la
+ *     page du navigateur (retour utilisateur).
  */
 
 const CLE_STOCKAGE = 'bo.classeur.colonnes.v1'
@@ -86,14 +90,10 @@ export function useChapterZoom() {
   }, [zoom, reset])
 
   /**
-   * Ref de rappel à poser sur la grille : ResizeObserver (borne haute du
-   * nombre de colonnes) + Ctrl + molette (`onWheel` React est passif, donc
-   * incapable de `preventDefault` : écouteur DOM explicite).
+   * Ref de rappel à poser sur la GRILLE : ResizeObserver (borne haute du
+   * nombre de colonnes).
    */
-  const detacherRef = useRef<(() => void) | null>(null)
   const containerRef = useCallback((node: HTMLElement | null) => {
-    detacherRef.current?.()
-    detacherRef.current = null
     if (observerRef.current) {
       observerRef.current.disconnect()
       observerRef.current = null
@@ -111,7 +111,19 @@ export function useChapterZoom() {
     })
     observer.observe(node)
     observerRef.current = observer
+  }, [])
 
+  /**
+   * Ref de rappel à poser sur la ZONE qui contient les documents (toute la
+   * hauteur restante de la page, vide compris) : Ctrl + molette. `onWheel`
+   * React est passif, donc incapable de `preventDefault` : écouteur DOM
+   * explicite.
+   */
+  const detacherRef = useRef<(() => void) | null>(null)
+  const zoneRef = useCallback((node: HTMLElement | null) => {
+    detacherRef.current?.()
+    detacherRef.current = null
+    if (!node) return
     const onWheel = (e: WheelEvent) => {
       if (!e.ctrlKey) return
       e.preventDefault()
@@ -153,5 +165,5 @@ export function useChapterZoom() {
     [effectives],
   )
 
-  return { gridStyle, containerRef }
+  return { gridStyle, containerRef, zoneRef }
 }
