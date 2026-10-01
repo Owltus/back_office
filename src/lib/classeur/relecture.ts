@@ -34,6 +34,7 @@
 import {
   cadreDepuisTitre,
   estCheminImage,
+  estImageAInserer,
   tailleDepuisTitre,
 } from '#/lib/classeur/images.ts'
 import { estLegendeGenerique } from '#/lib/classeur/legende.ts'
@@ -101,6 +102,7 @@ export function alertesRelecture(
   let niveauPrecedent = 0
   const pile: { nom: string; ligne: number }[] = []
   const sansLegende: number[] = []
+  const aInserer: number[] = []
 
   // Lignes hors blocs de code (les autres sont masquées par '').
   const utiles = lignes.map((l) => {
@@ -145,6 +147,10 @@ export function alertesRelecture(
     )
     for (const m of jetons) {
       const [, alt, src, titre] = m
+      if (estImageAInserer(src)) {
+        aInserer.push(ligne)
+        continue
+      }
       if (estLegendeGenerique(alt)) sansLegende.push(ligne)
       if (!imagesConnues || !estCheminImage(src)) continue
       const info = imagesConnues.get(src.toLowerCase())
@@ -266,6 +272,15 @@ export function alertesRelecture(
     alertes.push({
       ligne: b.ligne,
       message: `Bloc « :::${b.nom} » jamais fermé : ajoutez une ligne « ::: » à sa fin, sinon tout ce qui suit y sera rangé.`,
+    })
+  }
+
+  // Emplacements d'image encore vides : UNE alerte, sur le premier.
+  if (aInserer.length > 0) {
+    const n = aInserer.length
+    alertes.push({
+      ligne: aInserer[0],
+      message: `${String(n)} ${n > 1 ? "emplacements d'image à remplir" : "emplacement d'image à remplir"} : cliquez sur le cadre gris dans l'aperçu pour y mettre la photo.`,
     })
   }
 

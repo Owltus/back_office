@@ -10,7 +10,10 @@ import {
   boiteTournee,
   formaterOctets,
   imagesReferencees,
+  IMAGE_A_INSERER,
+  ajustementDepuisTitre,
   cadreDepuisTitre,
+  estImageAInserer,
   cheminOriginalImage,
   jetonImage,
   tailleDepuisTitre,
@@ -397,5 +400,36 @@ describe('cadre NON destructif — réglage écrit dans le titre', () => {
     expect(
       estCheminImage('5/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.original.webp'),
     ).toBe(false)
+  })
+})
+
+describe('ajustement dans une case et emplacement à remplir', () => {
+  const C = '5/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.webp'
+  it('remplir par défaut, `entiere` seulement quand demandé', () => {
+    expect(ajustementDepuisTitre(undefined)).toBe('remplir')
+    expect(ajustementDepuisTitre('petite cadre=1,1,50,50')).toBe('remplir')
+    expect(ajustementDepuisTitre('entiere cadre=1,1,50,50')).toBe('entiere')
+    expect(titreImage('auto', null, 'entiere')).toBe(' "entiere"')
+    expect(titreImage('auto', null, 'remplir')).toBe('')
+    const jeton = jetonImage(
+      'Vanne',
+      C,
+      'auto',
+      { x: 0, y: 0, largeur: 50, hauteur: 50 },
+      'entiere',
+    )
+    expect(jeton).toBe(`![Vanne](${C} "entiere cadre=0,0,50,50")`)
+    expect(trouverImage(jeton, C)).toMatchObject({ ajustement: 'entiere' })
+  })
+  it('emplacement : reconnu, retrouvé par sa ligne, jamais pris pour une image stockée', () => {
+    expect(estImageAInserer(IMAGE_A_INSERER)).toBe(true)
+    expect(estImageAInserer(C)).toBe(false)
+    expect(estCheminImage(IMAGE_A_INSERER)).toBe(false)
+    const texte = '![Vanne](a-inserer)\n\n![Thermomètre](a-inserer "petite")'
+    expect(trouverImage(texte, IMAGE_A_INSERER, 3)).toMatchObject({
+      alt: 'Thermomètre',
+      taille: 'petite',
+    })
+    expect(imagesReferencees(texte)).toEqual([])
   })
 })

@@ -93,6 +93,8 @@ export interface Recadrage {
 export interface PreparationImage {
   /** Cadre retenu, en % de l'image entière ; absent = image entière. */
   cadre?: CadreImage | null
+  /** Dans une case de planche : remplir (défaut) ou image entière. */
+  ajustement?: AjustementImage
   /** Absente = automatique. */
   taille?: TailleImage
   /** Texte imprimé sous l'image (`![légende](…)`). */
@@ -172,13 +174,43 @@ export const TAILLES_IMAGE: readonly TailleImage[] = [
   'pleine',
 ]
 
-/** Titre Markdown (avec son espace) : taille hors automatique, cadre s'il y en a un. */
+/*
+ * AJUSTEMENT dans une case de planche (2026-10-01, demande utilisateur :
+ * « que les images occupent vraiment la zone disponible, sans vide, mais
+ * que l'autre manière reste possible »). Par défaut la photo REMPLIT sa case
+ * (ce qui dépasse est masqué, jamais coupé : l'image entière reste en base) ;
+ * le mot `entiere` dans le titre la montre entière, avec des bandes.
+ */
+export type AjustementImage = 'remplir' | 'entiere'
+
+/** Ajustement porté par le titre d'une image Markdown (`remplir` par défaut). */
+export function ajustementDepuisTitre(
+  title: string | null | undefined,
+): AjustementImage {
+  return /(?:^|\s)entiere(?:\s|$)/i.test(title ?? '') ? 'entiere' : 'remplir'
+}
+
+/**
+ * EMPLACEMENT D'IMAGE à remplir (2026-10-01) : `![ce que la photo doit
+ * montrer](a-inserer)` — un cadre gris « Image à insérer » sur la page, un
+ * pré-rendu sans la photo (rédigé par une personne ou par un LLM). Un clic
+ * dessus dans l'éditeur y met la vraie image.
+ */
+export const IMAGE_A_INSERER = 'a-inserer'
+
+export function estImageAInserer(src: string | null | undefined): boolean {
+  return src === IMAGE_A_INSERER
+}
+
+/** Titre Markdown (avec son espace) : taille hors automatique, ajustement, cadre. */
 export function titreImage(
   taille: TailleImage = 'auto',
   cadre: CadreImage | null = null,
+  ajustement: AjustementImage = 'remplir',
 ): string {
   const parties: string[] = []
   if (taille !== 'auto') parties.push(taille)
+  if (ajustement === 'entiere') parties.push('entiere')
   const c = cadreBorne(cadre)
   if (c)
     parties.push(
@@ -303,13 +335,14 @@ export function markdownImage(
   url: string,
   taille: TailleImage = 'auto',
   cadre: CadreImage | null = null,
+  ajustement: AjustementImage = 'remplir',
 ): string {
   // Espaces et parenthèses casseraient la syntaxe `![](…)` ;
   // `encodeURIComponent` laisse les parenthèses, on les encode à la main.
   const urlSure = url.replace(/[\s()]/g, (c) =>
     c === '(' ? '%28' : c === ')' ? '%29' : encodeURIComponent(c),
   )
-  return `![${nettoyerLegende(legende)}](${urlSure}${titreImage(taille, cadre)})`
+  return `![${nettoyerLegende(legende)}](${urlSure}${titreImage(taille, cadre, ajustement)})`
 }
 
 /** Vrai pour un fichier que le navigateur a des chances de décoder comme image. */
@@ -516,6 +549,7 @@ export async function televerserImage(
       chemin,
       preparation.taille ?? 'auto',
       preparation.cadre ?? null,
+      preparation.ajustement ?? 'remplir',
     ),
   }
 }
@@ -687,6 +721,7 @@ export interface ImageDansTexte {
   chemin: string
   taille: TailleImage
   cadre: CadreImage | null
+  ajustement: AjustementImage
 }
 
 /**
@@ -710,6 +745,7 @@ export function trouverImage(
       chemin: m[2],
       taille: tailleDepuisTitre(m[3]),
       cadre: cadreDepuisTitre(m[3]),
+      ajustement: ajustementDepuisTitre(m[3]),
     })
   }
   if (occurrences.length === 0) return null
@@ -727,6 +763,7 @@ export function jetonImage(
   chemin: string,
   taille: TailleImage = 'auto',
   cadre: CadreImage | null = null,
+  ajustement: AjustementImage = 'remplir',
 ): string {
-  return `![${nettoyerLegende(legende)}](${chemin}${titreImage(taille, cadre)})`
+  return `![${nettoyerLegende(legende)}](${chemin}${titreImage(taille, cadre, ajustement)})`
 }

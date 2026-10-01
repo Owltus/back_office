@@ -16,6 +16,7 @@ import { Input } from '#/components/ui/input.tsx'
 import { dimensionsReduites, formaterOctets } from '#/lib/classeur/images.ts'
 import { boiteSurPage, conseilsImage } from '#/lib/classeur/miseEnPageImage.ts'
 import type {
+  AjustementImage,
   CadreImage,
   PreparationImage,
   TailleImage,
@@ -87,6 +88,7 @@ export function ImagePreparationDialog({
   legendeInitiale = '',
   cadreInitial = null,
   estPhotoExistante = false,
+  ajustementInitial = 'remplir',
   contexte = 'page',
   envoi = false,
   onAnnuler,
@@ -104,6 +106,8 @@ export function ImagePreparationDialog({
   cadreInitial?: CadreImage | null
   /** Retouche : l'image est une photo (`data-genre`), pas une capture. */
   estPhotoExistante?: boolean
+  /** Dans une planche : remplir la case (défaut) ou image entière. */
+  ajustementInitial?: AjustementImage
   /** Dans une planche de photos, la taille ne s'applique pas. */
   contexte?: 'page' | 'planche'
   /** Envoi en cours (boutons figés, loader). */
@@ -135,6 +139,8 @@ export function ImagePreparationDialog({
   const [cadre, setCadre] = useState<PercentCrop>(CADRE_ENTIER)
   const [taille, setTaille] = useState<TailleImage>(tailleInitiale)
   const [legende, setLegende] = useState('')
+  const [ajustement, setAjustement] =
+    useState<AjustementImage>(ajustementInitial)
 
   // Remise à zéro à chaque ouverture sur une nouvelle image.
   useEffect(() => {
@@ -154,8 +160,9 @@ export function ImagePreparationDialog({
         : CADRE_ENTIER,
     )
     setTaille(tailleInitiale)
+    setAjustement(ajustementInitial)
     setLegende(estLegendeGenerique(legendeInitiale) ? '' : legendeInitiale)
-  }, [url, tailleInitiale, legendeInitiale, cadreInitial])
+  }, [url, tailleInitiale, legendeInitiale, cadreInitial, ajustementInitial])
 
   const aspectFormat = (key: string, n = naturel): number | undefined => {
     const f = FORMATS.find((x) => x.key === key)?.valeur
@@ -212,6 +219,7 @@ export function ImagePreparationDialog({
     const preparation: PreparationImage = {
       taille: contexte === 'planche' ? 'auto' : taille,
       legende: legende.trim(),
+      ajustement: contexte === 'planche' ? ajustement : 'remplir',
     }
     // Le cadre est un RÉGLAGE (en % de l'image entière), jamais appliqué au
     // fichier : l'image reste complète en base.
@@ -321,10 +329,21 @@ export function ImagePreparationDialog({
                 />
               </Reglage>
             ) : (
-              <p className="text-xs text-muted-foreground">
-                Dans une planche, toutes les photos ont le même cadre : la
-                taille se règle toute seule.
-              </p>
+              <Reglage label="Dans la case de la planche">
+                <Segments
+                  valeur={ajustement}
+                  options={[
+                    { key: 'remplir', label: 'Remplir la case' },
+                    { key: 'entiere', label: 'Image entière' },
+                  ]}
+                  onChange={(k) => setAjustement(k as AjustementImage)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {ajustement === 'remplir'
+                    ? 'La photo occupe toute la case ; ce qui dépasse est masqué, jamais coupé. Recadrez au format 4:3 pour choisir la partie visible.'
+                    : 'La photo est montrée entière ; la case garde des bandes grises si les formats diffèrent.'}
+                </p>
+              </Reglage>
             )}
 
             {conseils.length > 0 && (

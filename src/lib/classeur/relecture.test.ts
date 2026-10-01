@@ -187,3 +187,19 @@ describe('alertesRelecture — écriture (2026-10-01)', () => {
     ).toEqual([3])
   })
 })
+
+describe('alertesRelecture — emplacements à remplir', () => {
+  it('UNE alerte pour tous les emplacements, jamais « sans légende » ni « introuvable »', () => {
+    const md = [
+      'a',
+      '',
+      '![Vanne, vue de face](a-inserer)',
+      '',
+      '![Thermomètre](a-inserer)',
+    ].join('\n')
+    const a = alertesRelecture(md, new Map())
+    expect(a).toHaveLength(1)
+    expect(a[0].ligne).toBe(3)
+    expect(a[0].message).toMatch(/^2 emplacements/)
+  })
+})

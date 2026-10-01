@@ -871,6 +871,19 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
       −8 / −27 mm, 0 débordement ; dialogue rouvert sur le cadre. Envoi
       réel (deux fichiers) NON exercé contre la prod : à tester par
       l'utilisateur.
+    - **Emplacements à remplir et cases pleines (même jour, demande
+      utilisateur)**. (1) `![description](a-inserer)` (`IMAGE_A_INSERER`) :
+      cadre gris clair pointillé « Image à insérer », 4:3, même structure
+      que l'image (`ImageAInserer`, tailles / planche / étape sans règle de
+      plus), description en légende — un PRÉ-RENDU sans les photos, rédigé
+      par une personne ou par un LLM (consignes des trois exports JSON) ;
+      un clic dessus dans l'éditeur ouvre l'ajout et l'image REMPLACE
+      l'emplacement (légende et taille reprises) ; la relecture compte les
+      emplacements vides (une alerte). (2) Dans une planche, la photo
+      REMPLIT sa case par défaut (couverture centrée de la zone cadrée :
+      `--wd: max(100cqw, 100cqh × r)`, ce qui dépasse est masqué, jamais
+      coupé) ; le mot `entiere` dans le titre la garde entière (bandes) —
+      réglage « Dans la case » du dialogue en contexte planche.
     - **Encadrés TYPÉS (même jour, décision utilisateur)** : syntaxe des
       alertes GitHub, `> [!WARNING]` / `[!IMPORTANT]` / `[!TIP]` /
       `[!NOTE]` en 1re ligne (`CAUTION` = attention) — Markdown standard,

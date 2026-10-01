@@ -47,6 +47,12 @@ describe('AideMiseEnFormeDialog', () => {
     const etape = dialogue.querySelector('.pdf-prose [data-bloc="etape"]')
     expect(etape?.querySelector('.etape-texte ol')).not.toBeNull()
     expect(etape?.querySelector('.etape-photos figure')).not.toBeNull()
+    // Emplacements à remplir : cadres gris dans une planche.
+    expect(
+      dialogue.querySelectorAll(
+        '.pdf-prose [data-bloc="photos"] [data-a-inserer]',
+      ),
+    ).toHaveLength(2)
     // Plus aucune trace de l'ancienne syntaxe d'habillage.
     expect(dialogue.textContent).not.toMatch(/\+\+\+|position=/)
   })

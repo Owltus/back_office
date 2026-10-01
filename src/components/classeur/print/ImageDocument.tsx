@@ -5,6 +5,7 @@ import { useImages } from '#/components/classeur/hooks/useImages.ts'
 import { classeurKeys } from '#/lib/classeur/keys.ts'
 import { estPhoto } from '#/lib/classeur/miseEnPageImage.ts'
 import {
+  ajustementDepuisTitre,
   cadreDepuisTitre,
   tailleDepuisTitre,
   telechargerImage,
@@ -131,6 +132,7 @@ export function ImageDocument({
       className="classeur-image"
       data-taille={taille}
       data-genre={genre}
+      data-ajustement={ajustementDepuisTitre(title)}
       style={style}
     >
       <span className="classeur-image-cadre">{img}</span>
@@ -140,3 +142,42 @@ export function ImageDocument({
 
 /** Un pixel CSS en millimètres (96 px par pouce). */
 const PX_EN_MM = 25.4 / 96
+
+/**
+ * EMPLACEMENT d'image à remplir (`![légende](a-inserer)`, 2026-10-01) : un
+ * cadre gris clair au format 4:3, « Image à insérer », qui occupe la place
+ * qu'aura la photo — un pré-rendu de la page sans les images. Même
+ * structure que l'image (`classeur-image` > `classeur-image-cadre`) : tailles,
+ * planche et étape s'y appliquent sans règle de plus. `data-a-inserer` :
+ * un clic dessus, dans l'éditeur, ouvre l'ajout d'une vraie image.
+ */
+export function ImageAInserer({
+  alt,
+  title,
+}: {
+  alt?: string
+  title?: string
+}) {
+  const style = {
+    '--r': String(4 / 3),
+    '--nat': '120mm',
+    '--cx': '0',
+    '--cy': '0',
+    '--cl': '100',
+    '--ch': '100',
+  } as CSSProperties
+  return (
+    <span
+      className="classeur-image classeur-a-inserer"
+      data-taille={tailleDepuisTitre(title)}
+      data-a-inserer="true"
+      role="img"
+      aria-label={alt ? `Image à insérer : ${alt}` : 'Image à insérer'}
+      style={style}
+    >
+      <span className="classeur-image-cadre">
+        <span className="classeur-a-inserer-texte">Image à insérer</span>
+      </span>
+    </span>
+  )
+}

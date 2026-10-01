@@ -24,6 +24,8 @@ import { HelpDialogHeader } from '#/components/shared/HelpDialogHeader.tsx'
 import { HelpGlyph } from '#/components/shared/HelpGlyph.tsx'
 import { Kbd, KbdPlus, Shortcut } from '#/components/shared/Kbd.tsx'
 import { Dialog, DialogContent } from '#/components/ui/dialog.tsx'
+import { ImageAInserer } from '#/components/classeur/print/ImageDocument.tsx'
+import { estImageAInserer } from '#/lib/classeur/images.ts'
 import { PAGE_FONT_FAMILY } from '#/lib/classeur/print/constants.ts'
 import {
   REHYPE_CLASSEUR,
@@ -50,9 +52,12 @@ const VIGNETTE = `data:image/svg+xml;utf8,${encodeURIComponent(
 )}`
 
 const COMPOSANTS_EXEMPLE: Components = {
-  img: ({ alt, title }) => (
-    <img src={VIGNETTE} alt={alt ?? ''} data-taille={title ?? 'auto'} />
-  ),
+  img: ({ src, alt, title }) =>
+    estImageAInserer(src) ? (
+      <ImageAInserer alt={alt} title={title} />
+    ) : (
+      <img src={VIGNETTE} alt={alt ?? ''} data-taille={title ?? 'auto'} />
+    ),
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -306,6 +311,23 @@ export function AideMiseEnFormeDialog({
             </p>
           </Section>
 
+          <Section title="Emplacement d'image à remplir">
+            <p>
+              Pour préparer un document <Term>avant d'avoir les photos</Term>,
+              écrivez <code>![ce que la photo doit montrer](a-inserer)</code> :
+              la page montre un <Term>cadre gris</Term> « Image à insérer » à la
+              place de la photo, avec la description en légende. Quand la photo
+              est prise, <Term>cliquez sur le cadre gris</Term> dans l'aperçu :
+              elle prend sa place. Un document préparé par un LLM peut en
+              contenir.
+            </p>
+            <Exemple
+              source={
+                ':::photos\n![Vanne du by-pass, vue de face](a-inserer)\n![Thermomètre du retour](a-inserer)\n:::'
+              }
+            />
+          </Section>
+
           <Section title="Planche de photos">
             <p>
               Pour montrer <Term>plusieurs photos</Term> d'un coup (repérer des
@@ -313,8 +335,10 @@ export function AideMiseEnFormeDialog({
               <Bouton icon={<LayoutGrid />} /> : choisissez toutes les photos,
               elles sont rangées en <Term>grille</Term>, toutes au même format
               (2 photos côte à côte, 4 en carré, 3 ou 6 sur trois colonnes).
-              Cliquez ensuite sur chaque photo dans l'aperçu pour lui écrire sa
-              légende.
+              Chaque photo <Term>remplit sa case</Term> : ce qui dépasse est
+              masqué, jamais coupé. Cliquez ensuite sur chaque photo dans
+              l'aperçu pour lui écrire sa légende, choisir la partie visible
+              (recadrage au format 4:3) ou la montrer entière.
             </p>
             <Exemple
               source={

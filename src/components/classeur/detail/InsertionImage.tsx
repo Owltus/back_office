@@ -20,6 +20,7 @@ import {
 } from '#/lib/classeur/markdownEdition.ts'
 import { classeurKeys } from '#/lib/classeur/keys.ts'
 import {
+  IMAGE_A_INSERER,
   estImage,
   formaterOctets,
   jetonImage,
@@ -30,6 +31,7 @@ import {
 } from '#/lib/classeur/images.ts'
 import type { Edition } from '#/lib/classeur/markdownEdition.ts'
 import type {
+  AjustementImage,
   CadreImage,
   PreparationImage,
   TailleImage,
@@ -106,6 +108,7 @@ export function useInsertionImage({
     nom: string
     taille: TailleImage
     cadre: CadreImage | null
+    ajustement: AjustementImage
     contexte: 'page' | 'planche'
     photo: boolean
   } | null>(null)
@@ -132,6 +135,37 @@ export function useInsertionImage({
       )
     },
     [editeurRef, setContenu],
+  )
+
+  /**
+   * EMPLACEMENT à remplir (`![…](a-inserer)`, 2026-10-01) : cliqué dans
+   * l'aperçu, il attend une vraie image ; l'image choisie le REMPLACE (sa
+   * légende et sa taille sont reprises dans le dialogue). Toute autre voie
+   * d'ajout (bouton, collage, dépôt) l'oublie.
+   */
+  const [emplacement, setEmplacement] = useState<{
+    ligne?: number
+    alt: string
+    taille: TailleImage
+    contexte: 'page' | 'planche'
+  } | null>(null)
+
+  const remplirEmplacement = useCallback(
+    (ligne: number | undefined, contexte: 'page' | 'planche') => {
+      const valeur = editeurRef.current?.value ?? contenu
+      const t = trouverImage(valeur, IMAGE_A_INSERER, ligne)
+      if (!t) {
+        setEtat({
+          type: 'erreur',
+          message: "Cet emplacement n'est plus dans le texte.",
+        })
+        return
+      }
+      setEtat({ type: 'repos' })
+      setEmplacement({ ligne, alt: t.alt, taille: t.taille, contexte })
+      inputRef.current?.click()
+    },
+    [contenu, editeurRef],
   )
 
   /** Étape 1 : relève le curseur, refuse ce qui n'est pas une image, ouvre la préparation. */
@@ -163,7 +197,37 @@ export function useInsertionImage({
       try {
         const res = await televerserImage(classeurId, file, preparation)
         setEnPreparation(null)
-        insererMarkdown(res.markdown, position)
+        const cible = emplacement
+        setEmplacement(null)
+        if (cible) {
+          // L'image prend la place de l'emplacement gris (Ctrl + Z le ramène).
+          const remplacer = (valeur: string): Edition => {
+            const t = trouverImage(valeur, IMAGE_A_INSERER, cible.ligne)
+            if (!t)
+              return insererLigne(
+                valeur,
+                valeur.length,
+                valeur.length,
+                res.markdown,
+              )
+            return {
+              debut: t.debut,
+              fin: t.fin,
+              texte: res.markdown,
+              selection: [
+                t.debut + res.markdown.length,
+                t.debut + res.markdown.length,
+              ],
+            }
+          }
+          appliquerQuandLibre(
+            () => editeurRef.current,
+            remplacer,
+            () => setContenu((prev) => appliquerEdition(prev, remplacer(prev))),
+          )
+        } else {
+          insererMarkdown(res.markdown, position)
+        }
         void invaliderImages.invalidateQueries({
           queryKey: classeurKeys.images(classeurId),
         })
@@ -178,7 +242,14 @@ export function useInsertionImage({
         })
       }
     },
-    [classeurId, insererMarkdown, invaliderImages],
+    [
+      classeurId,
+      editeurRef,
+      emplacement,
+      insererMarkdown,
+      invaliderImages,
+      setContenu,
+    ],
   )
 
   /**
@@ -294,6 +365,7 @@ export function useInsertionImage({
         nom: t.alt,
         taille: t.taille,
         cadre: t.cadre,
+        ajustement: t.ajustement,
         contexte,
         photo,
       })
@@ -318,10 +390,17 @@ export function useInsertionImage({
       const legende = preparation.legende ?? cible.nom
       const cadre =
         preparation.cadre === undefined ? cible.cadre : preparation.cadre
+      const ajustement = preparation.ajustement ?? cible.ajustement
       const calculer = (valeur: string): Edition => {
         const t = trouverImage(valeur, cible.chemin, cible.ligne)
         if (!t) return { debut: 0, fin: 0, texte: '', selection: [0, 0] }
-        const jeton = jetonImage(legende, cible.chemin, taille, cadre)
+        const jeton = jetonImage(
+          legende,
+          cible.chemin,
+          taille,
+          cadre,
+          ajustement,
+        )
         return {
           debut: t.debut,
           fin: t.fin,
@@ -353,6 +432,7 @@ export function useInsertionImage({
       const file = premiereImage(e.clipboardData.files)
       if (!file) return
       e.preventDefault()
+      setEmplacement(null)
       inserer(file)
     },
     [inserer],
@@ -367,6 +447,7 @@ export function useInsertionImage({
       const file = premiereImage(e.dataTransfer.files)
       if (!file) return
       e.preventDefault()
+      setEmplacement(null)
       inserer(file)
     },
     [inserer],
@@ -396,7 +477,12 @@ export function useInsertionImage({
     plancheRef,
     onInputChange,
     onPlancheChange,
-    ouvrirSelecteur: () => inputRef.current?.click(),
+    ouvrirSelecteur: () => {
+      setEmplacement(null)
+      inputRef.current?.click()
+    },
+    emplacement,
+    remplirEmplacement,
     ouvrirPlanche: () => plancheRef.current?.click(),
     etapeIllustree,
     /** À poser sur le `textarea`. */
@@ -409,7 +495,10 @@ export function useInsertionImage({
     setMediathequeOuverte,
     insererMarkdown,
     enPreparation,
-    annulerPreparation: () => setEnPreparation(null),
+    annulerPreparation: () => {
+      setEnPreparation(null)
+      setEmplacement(null)
+    },
     envoyer,
     enRetouche,
     retoucher,
@@ -431,6 +520,9 @@ export function DialoguesImage({ image }: { image: ImageInsertion }) {
     <>
       <ImagePreparationDialog
         file={image.enPreparation}
+        legendeInitiale={image.emplacement?.alt ?? ''}
+        tailleInitiale={image.emplacement?.taille ?? 'auto'}
+        contexte={image.emplacement?.contexte ?? 'page'}
         envoi={image.etat.type === 'envoi'}
         onAnnuler={image.annulerPreparation}
         onValider={(preparation) => {
@@ -447,6 +539,7 @@ export function DialoguesImage({ image }: { image: ImageInsertion }) {
         tailleInitiale={image.enRetouche?.taille ?? 'auto'}
         legendeInitiale={image.enRetouche?.nom ?? ''}
         cadreInitial={image.enRetouche?.cadre ?? null}
+        ajustementInitial={image.enRetouche?.ajustement ?? 'remplir'}
         estPhotoExistante={image.enRetouche?.photo ?? false}
         contexte={image.enRetouche?.contexte ?? 'page'}
         envoi={image.etat.type === 'envoi'}

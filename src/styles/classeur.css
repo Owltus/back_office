@@ -592,6 +592,64 @@
   margin: 0;
   width: min(100cqw, calc(100cqh * var(--r)));
 }
+/* Dans une planche, par DÉFAUT la photo REMPLIT sa case (2026-10-01) : la
+   zone cadrée est agrandie jusqu'à couvrir la case, centrée, et ce qui
+   dépasse est masqué (jamais coupé : l'image entière reste en base). Le mot
+   `entiere` dans le titre garde l'image entière, avec des bandes.
+   --wd = largeur affichée de la zone cadrée pour couvrir 100cqw × 100cqh. */
+.pdf-prose
+  [data-bloc='photos']
+  > figure
+  > .classeur-image:not([data-ajustement='entiere'])
+  > .classeur-image-cadre {
+  width: 100cqw;
+  height: 100cqh;
+  aspect-ratio: auto;
+}
+.pdf-prose
+  [data-bloc='photos']
+  > figure
+  > .classeur-image:not([data-ajustement='entiere'])
+  > .classeur-image-cadre
+  > img {
+  --wd: max(100cqw, calc(100cqh * var(--r)));
+  width: calc(var(--wd) * 100 / var(--cl));
+  left: calc((100cqw - var(--wd)) / 2 - var(--wd) * var(--cx) / var(--cl));
+  top: calc(
+    (100cqh - var(--wd) / var(--r)) / 2 - var(--wd) / var(--r) * var(--cy) /
+      var(--ch)
+  );
+}
+
+/* EMPLACEMENT d'image à remplir (`![…](a-inserer)`) : gris clair, trait
+   pointillé, « Image à insérer » au centre — visible à l'impression aussi,
+   pour qu'un document pré-rendu montre où vont les photos. */
+.pdf-prose .classeur-a-inserer > .classeur-image-cadre {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #eeeeee;
+  border: 0.75pt dashed #9a9a9a;
+  box-sizing: border-box;
+}
+.pdf-prose .classeur-a-inserer-texte {
+  font-size: 8pt;
+  font-style: normal;
+  color: #666;
+  letter-spacing: 0.02em;
+}
+.pdf-prose [data-bloc='photos'] > figure > .classeur-a-inserer {
+  border-style: dashed;
+  border-color: #9a9a9a;
+}
+/* Dans une case : un seul trait, celui de la case. */
+.pdf-prose
+  [data-bloc='photos']
+  > figure
+  > .classeur-a-inserer
+  > .classeur-image-cadre {
+  border: none;
+}
 /* Dans une étape : la colonne de droite, 6 cm de haut au plus. */
 .pdf-prose
   [data-bloc='etape']:not([data-deroule])

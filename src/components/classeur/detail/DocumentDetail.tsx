@@ -193,6 +193,20 @@ export function DocumentDetail() {
         Number.isFinite(rendue) && rendue >= 1
           ? ligneRendueVersSource(ta.value, rendue)
           : undefined
+      // Un clic sur un EMPLACEMENT gris y met une vraie image.
+      const vide = e.target.closest<HTMLElement>('.a4-page [data-a-inserer]')
+      if (vide && page.canWrite) {
+        const ligneVide = Number(
+          vide.closest<HTMLElement>('[data-ligne]')?.dataset.ligne,
+        )
+        image.remplirEmplacement(
+          Number.isFinite(ligneVide) && ligneVide >= 1
+            ? ligneRendueVersSource(ta.value, ligneVide)
+            : undefined,
+          vide.closest('[data-bloc="photos"]') ? 'planche' : 'page',
+        )
+        return
+      }
       // Un clic sur une IMAGE la retouche (légende, taille, recadrage).
       const img = e.target.closest<HTMLImageElement>(
         '.a4-page img[data-chemin]',
