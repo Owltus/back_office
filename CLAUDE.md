@@ -649,7 +649,7 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   décrit « texte libre en Markdown ») — `lib/classeur/merge/consignes.ts`
   (`consignesClasseur` / `consignesChapitre` / `consignesDocument`, même
   socle : champs modifiables, `uuid` intouchable, Markdown de la page,
-  images `largeur`/`position`, `===`, `+++`). `construireExport` (classeur
+  images légende/taille, blocs `:::photos`/`:::etape`, `===`). `construireExport` (classeur
   complet, et donc aussi les points de restauration) pose
   `_metadata.instructions` ; `lireMetadata` le relit (aller-retour
   identique). Registre accepte la clé (serde sans `deny_unknown_fields`,
@@ -761,45 +761,91 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
     API Storage). ⚠ Règle : ne JAMAIS `fetch()` une URL `blob:` ni `data:`
     non prévue — et tout parcours qui touche le réseau se vérifie SOUS CSP
     (la production), pas seulement en local.
-    **POSITION (même jour, demande utilisateur : « une petite image laisse
-    beaucoup de vide, la placer à gauche ou à droite avec le texte à
-    côté »)** : titre `"largeur=40 position=gauche|droite"` (`titreImage`,
-    `positionDepuisTitre` ; jamais de position à 100 % — pas de place pour du
-    texte), `data-position` sur l'`<img>` → `float` (`classeur.css`). Sur une
-    page qui en contient une (`:has(img[data-position])`, les autres
-    documents ne changent pas) : listes, encadrés, code et titres en
-    `display: flow-root` (rangés À CÔTÉ, pas dessous — sinon puces et filets
-    chevauchent l'image) et TITRES en `clear: both` (une nouvelle partie
-    démarre sous l'image). ⚠ Pagination : un flottant ne compte pas dans la
-    hauteur de son paragraphe — `paginate.ts` mesure son DÉBORD
-    (`debordFlottant`) et tient une `pile` { somme, occupe } : le texte coule
-    à côté (somme), l'image doit tenir ENTIÈRE (occupe) ; un bloc qui dégage
-    (`degage`, `clear`) repart de la fin de l'image. Tests 9-11, mutations
-    vérifiées. Réglage « Position » (Gauche / Centre / Droite, grisé en
-    pleine largeur) dans le dialogue, miniature avec texte à côté ; aide
-    « Mettre en forme » et consignes LLM de l'export JSON mises à jour.
-    Vérifié navigateur sans rien écrire : texte à côté des deux images, titre
-    sous l'image, image de bas de page reportée entière, 0 débordement.
-    **`+++` « reprendre sous l'image »** (même jour, retour utilisateur : du
-    texte venait se placer à côté alors qu'il ne devait pas) : ligne `+++`
-    seule, bouton de la barre (flèche vers le bas, après le saut de page) ;
-    même mécanique que `===` (`preprocessPageBreaks` → repère →
-    `<div data-sous-image>` en `clear: both`, trois lignes rendues compensées
-    par `lignesSource`) ; la pagination le traite comme tout bloc qui
-    dégage. Aide et consignes LLM à jour. ⚠ Serveur Vite sous Windows : une
-    écriture rapide en deux temps d'un même fichier (script puis prettier) a
-    été servie dans sa version INTERMÉDIAIRE, et le resta après rechargement
-    (transformation en cache) — `touch` du fichier la force à relire ; ne pas
-    conclure à un défaut du code avant d'avoir comparé le module SERVI
-    (`curl` du chemin `/src/…`) au fichier. `.pdf-prose img`
-    est en bloc centré (`break-inside: avoid`). Pas de recadrage libre :
-    react-easy-crop est un cadre fixe
-    que l'on déplace/zoome (ratios prédéfinis), choix assumé pour le
-    tactile. ⚠ Leçon de méthode (patchs Python rejoués) : un guard
-    « déjà appliqué » qui compare le texte APRÈS prettier ne détecte
-    rien — le rejeu a dupliqué un `<ImagePreparationDialog>` (deux
-    dialogues ouverts en même temps, trouvé au contrôle navigateur) ;
-    ne rejouer un patch qu'après `git diff`, jamais à l'aveugle.
+    **POSITION et `+++` (2026-09-30) : RETIRÉS le 2026-10-01** — voir
+    « Images en trois blocs » ci-dessous. Ce qu'il en reste : LECTURE
+    tolérante (`largeur=NN` → taille la plus proche, `position=` ignoré,
+    une ligne `+++` devient une ligne vide, même nombre de lignes).
+    ⚠ Serveur Vite sous Windows : une écriture rapide en deux temps d'un
+    même fichier (script puis prettier) a été servie dans sa version
+    INTERMÉDIAIRE, et le resta après rechargement (transformation en
+    cache) — `touch` du fichier la force à relire ; ne pas conclure à un
+    défaut du code avant d'avoir comparé le module SERVI (`curl` du chemin
+    `/src/…`) au fichier. ⚠ Leçon de méthode (patchs Python rejoués) : un
+    guard « déjà appliqué » qui compare le texte APRÈS prettier ne détecte
+    rien — ne rejouer un patch qu'après `git diff`, jamais à l'aveugle.
+    ⚠ Un script Python passé en heredoc par l'outil Bash a vu ses `\n`
+    réduits en vrais retours : écrire le script dans un fichier (Write)
+    puis l'exécuter.
+  - **IMAGES EN TROIS BLOCS ÉTABLIS (2026-10-01, plan
+    `plan/classeur-images-blocs/`, retour utilisateur : « la mise en place
+    des images, une vraie catastrophe… je ne veux pas réinventer la roue…
+    c'est l'humain qui pose souci, il faut le guider »)**. Audit par quatre
+    agents (données réelles, pratiques établies, code, genres de
+    documents) : l'HABILLAGE est le mauvais modèle pour une procédure
+    (iFixit, Dozuki, gabarits Word « Action | Photo », Word et Google Docs
+    insèrent « aligné sur le texte ») ; avec des phrases courtes, une photo
+    flottante laissait 20 à 45 mm de vide.
+    - **Figure** : une image seule SUR SA LIGNE — dans un paragraphe OU en
+      continuation d'une étape de liste (44 captures réelles sont écrites
+      `- Cliquer…` puis `![…]` à la ligne, rangées DANS l'étape par
+      Markdown) — devient `figure > img + figcaption` (convention Pandoc
+      `implicit_figures`, `print/rehypeFigures.ts` ; le paragraphe est coupé
+      en deux, une figure ne vit pas dans un `<p>`). ⚠ Bord du parent :
+      jamais `enfants.at(i - 1)` (`at(-1)` lit le DERNIER enfant), mutation
+      attrapée par un test.
+    - **Légende** = le texte entre crochets ; les textes GÉNÉRIQUES ne sont
+      pas imprimés (`legende.ts` : « – capture N » des 93 captures
+      importées, noms de fichiers `PXL_…`). Décision utilisateur : rien
+      n'est réécrit en base, la relecture signale « N images sans légende ».
+    - **Taille** décidée par l'app : automatique (aucun titre) / `"petite"`
+      / `"moyenne"` / `"pleine"` dans le titre de l'image ; plus de curseur
+      ni de position. Hauteurs (`classeur.css`, MIROIR dans
+      `miseEnPageImage.ts`) : automatique 9 cm pour une PHOTO, 15 cm pour
+      une CAPTURE (son texte doit rester lisible) ; petite 33 % / 5,5 cm,
+      moyenne 50 % / 8,5 cm, pleine 100 % / 17 cm ; `object-fit: contain`
+      dès qu'une largeur est imposée. Photo ou capture = `data-genre`, lu
+      par `ImageDocument` dans la fiche de la médiathèque (`estPhoto` : nom
+      d'origine `PXL_`, `IMG_`, `DSC`…) — la pagination attend cette
+      lecture comme celle de l'image.
+    - **`:::photos`** (planche) : grille régulière, cases 4:3 en `contain`
+      (rien rogné), colonnes posées par `rehypeBlocs` (1, 2, 3, 2 × 2,
+      puis 3), texte éventuel sur une rangée entière (`photos-hors`) ;
+      `paginate` la coupe ENTRE deux rangées (une rangée minimum).
+    - **`:::etape`** (étape illustrée) : texte à gauche (`etape-texte`),
+      photos à droite (`etape-photos`, 32 %, 6 cm) ; insécable, DÉROULÉE si
+      plus haute qu'une page (`paginate` mesure une copie `data-deroule`
+      posée à côté puis la RETIRE : le conteneur appartient à React).
+    - **Directives** : `remark-directive` (plugin officiel) filtré par
+      `remarkBlocs` en LISTE BLANCHE ; toute autre directive est remise en
+      texte À L'IDENTIQUE depuis la source — sans cela « 10:30 » et
+      « code:4400 » perdaient leur fin en silence (vérifié au banc).
+      `::: photos` (avec espace) n'est pas reconnu : la relecture le dit.
+    - **UN pipeline** (`print/pipeline.ts`) pour la page, l'impression et
+      l'aide (l'aide n'avait que `remark-gfm`).
+    - **Éditeur** : dialogue Légende / Cadre / Taille avec CONSEILS tirés
+      de l'image (capture trop large, bandeau, image haute) et page
+      miniature À L'ÉCHELLE ; boutons « Planche de photos » (plusieurs
+      fichiers, bloc écrit d'un coup) et « Étape illustrée »
+      (`entourerDeBloc` : la ligne ou la sélection entourée, titre laissé
+      AU-DESSUS, curseur dans le bloc, puis choix de la photo) ; retouche au
+      clic consciente du contexte (dans une planche, pas de taille).
+    - **Relecture** : capture trop large, bandeau, capture ou image très
+      haute, images sans légende (UNE alerte), bloc mal écrit / inconnu /
+      jamais fermé, texte dans une planche, page remplie à moins de 50 %
+      à cause d'un `===` (la pagination remonte `remplissage` et le numéro
+      du saut, `PageData.saut`, via `onPagination`).
+    - Aide et consignes LLM (trois exports) à jour ; le test des trois
+      exports REFUSE `position=gauche|droite`.
+    - Vérifié : banc des 86 documents réels (lecture seule) — 102 images
+      sur 102 en figures, texte identique ; doc 89 refait en blocs par
+      l'éditeur (4 pages au lieu de 7, aucun débordement) ; doc 38 :
+      captures à 141-150 mm.
+    - Même jour, hors images : après « Sauvegarder », l'éditeur RELIT le
+      document avant de se fermer (`useEditionDocument`) — avant,
+      l'ancienne version restait affichée le temps de la relecture.
+    - Suite notée dans le plan, NON faite : gabarits par genre de document,
+      encadrés typés `> [!WARNING]`, alertes de rédaction (faux titres en
+      gras, étapes trop longues, émojis, « null » dans les tableaux).
   - Mesuré : PNG 3,2 Mo → WebP 106 ko en 610 ms. Non couvert, à dire si
     demandé : les points de restauration et la fusion JSON ignorent les
     fiches d'images ; les exports Markdown/JSON portent des chemins que

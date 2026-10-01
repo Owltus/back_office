@@ -1,5 +1,17 @@
 # Plan — Images du Classeur : trois blocs établis à la place de l'habillage
 
+> **EXÉCUTÉ le 2026-10-01** (commits `3a21e26`, `a73a972`), sur le « go »
+> de l'utilisateur (« je te fais confiance »). Angles tranchés en cours de
+> route : taille écrite `"petite"` / `"moyenne"` / `"pleine"` dans le titre ;
+> blocs `:::photos` / `:::etape` ; repli d'une étape trop haute = déroulée.
+> Écarts au plan, nés du contrôle : (1) une image écrite à la ligne sous une
+> étape de liste devient aussi une figure (44 captures réelles) ; (2) la
+> hauteur automatique dépend du GENRE (photo 9 cm, capture 15 cm) — 10 cm
+> pour tout aurait rendu illisibles les captures des guides ; (3) après
+> « Sauvegarder », l'éditeur relit avant de fermer (défaut préexistant).
+> Doc 89 refait en blocs (4 pages au lieu de 7). Reste : la « Suite »
+> ci-dessous.
+
 ## Contexte
 
 Retour utilisateur du 2026-09-30 sur le document 89 « Suivi sanitaire
