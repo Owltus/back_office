@@ -165,12 +165,13 @@ export function cadreDepuisTitre(
  * contenus (2026-09-30) : `largeur=NN` donne la taille la plus proche,
  * `position=…` est ignoré.
  */
-export type TailleImage = 'auto' | 'petite' | 'moyenne' | 'pleine'
+export type TailleImage = 'auto' | 'petite' | 'moyenne' | 'grande' | 'pleine'
 
 export const TAILLES_IMAGE: readonly TailleImage[] = [
   'auto',
   'petite',
   'moyenne',
+  'grande',
   'pleine',
 ]
 
@@ -224,14 +225,14 @@ export function tailleDepuisTitre(
   title: string | null | undefined,
 ): TailleImage {
   const t = (title ?? '').trim().toLowerCase()
-  const mot = /(?:^|\s)(petite|moyenne|pleine)(?:\s|$)/.exec(t)
+  const mot = /(?:^|\s)(petite|moyenne|grande|pleine)(?:\s|$)/.exec(t)
   if (mot) return mot[1] as TailleImage
   // Ancienne syntaxe (2026-09-30).
   const m = /(?:^|\s)largeur=(\d{1,3})(?:\s|$)/.exec(t)
   if (!m) return 'auto'
   const n = Number(m[1])
   if (n < 10 || n >= 100) return 'auto'
-  return n <= 40 ? 'petite' : n <= 62 ? 'moyenne' : 'pleine'
+  return n <= 40 ? 'petite' : n <= 62 ? 'moyenne' : n <= 87 ? 'grande' : 'pleine'
 }
 
 /**

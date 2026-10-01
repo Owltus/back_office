@@ -24,6 +24,7 @@ interface Point {
 interface NoeudMd {
   type: string
   name?: string
+  attributes?: Record<string, string | null | undefined> | null
   value?: string
   children?: NoeudMd[]
   position?: { start: Point; end: Point }
@@ -59,7 +60,19 @@ function traiter(parent: NoeudMd, source: string): void {
   const sortie: NoeudMd[] = []
   for (const n of parent.children) {
     if (n.type === 'containerDirective' && estBloc(n.name)) {
-      n.data = { ...n.data, hName: 'div', hProperties: { dataBloc: n.name } }
+      // `:::etape{photo=gauche}` : la photo à gauche du texte (droite par
+      // défaut). Seul attribut lu ; toute autre valeur est ignorée.
+      const cote = n.attributes?.photo
+      n.data = {
+        ...n.data,
+        hName: 'div',
+        hProperties: {
+          dataBloc: n.name,
+          ...(n.name === 'etape' && cote === 'gauche'
+            ? { dataCote: 'gauche' }
+            : {}),
+        },
+      }
       traiter(n, source)
       sortie.push(n)
     } else if (n.type === 'textDirective') {

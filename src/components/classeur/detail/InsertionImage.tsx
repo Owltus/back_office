@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import type { ChangeEvent, ClipboardEvent, DragEvent, RefObject } from 'react'
-import { Columns2, ImagePlus, Images, LayoutGrid, Loader2 } from 'lucide-react'
+import { ImagePlus, Images, LayoutGrid, Loader2 } from 'lucide-react'
 
 import { ImagePreparationDialog } from '#/components/classeur/dialogs/ImagePreparationDialog.tsx'
 import { ImagesDialog } from '#/components/classeur/dialogs/ImagesDialog.tsx'
@@ -14,11 +14,16 @@ import {
 import { messageErreur } from '#/lib/classeur/erreur.ts'
 import {
   appliquerEdition,
-  entourerDeBloc,
   insererLigne,
   insererTexteEnBloc,
 } from '#/lib/classeur/markdownEdition.ts'
 import { classeurKeys } from '#/lib/classeur/keys.ts'
+import {
+  changerDisposition,
+  dispositionImage,
+  editionEntre,
+} from '#/lib/classeur/disposition.ts'
+import type { Disposition } from '#/lib/classeur/disposition.ts'
 import {
   IMAGE_A_INSERER,
   estImage,
@@ -61,7 +66,32 @@ const LIBELLE_TAILLE: Record<TailleImage, string> = {
   auto: 'taille automatique',
   petite: 'petite',
   moyenne: 'moyenne',
+  grande: 'grande',
   pleine: 'pleine largeur',
+}
+
+const LIBELLE_DISPOSITION: Record<Disposition, string> = {
+  centre: 'au centre',
+  gauche: 'à gauche du texte',
+  droite: 'à droite du texte',
+}
+
+/**
+ * L'édition qui donne à l'image (jeton `[debut, fin)` de `valeur`, remplacé
+ * par `jeton`) la disposition voulue : une seule plage remplacée, donc un
+ * seul Ctrl + Z (`editionEntre`).
+ */
+function editionDisposee(
+  valeur: string,
+  debut: number,
+  fin: number,
+  jeton: string,
+  disposition: Disposition,
+): Edition {
+  return editionEntre(
+    valeur,
+    changerDisposition(valeur, debut, fin, jeton, disposition),
+  )
 }
 
 export type EtatImage =
@@ -109,6 +139,8 @@ export function useInsertionImage({
     taille: TailleImage
     cadre: CadreImage | null
     ajustement: AjustementImage
+    disposition: Disposition
+    recadrer: boolean
     contexte: 'page' | 'planche'
     photo: boolean
   } | null>(null)
@@ -190,7 +222,10 @@ export function useInsertionImage({
 
   /** Étape 2 : conversion (cadre, rotation), envoi, insertion au curseur relevé. */
   const envoyer = useCallback(
-    async (file: File, preparation: PreparationImage) => {
+    async (
+      file: File,
+      preparation: PreparationImage & { disposition?: Disposition },
+    ) => {
       if (classeurId === null) return
       const position = positionPreparation.current
       setEtat({ type: 'envoi', nom: file.name })
@@ -210,20 +245,45 @@ export function useInsertionImage({
                 valeur.length,
                 res.markdown,
               )
-            return {
-              debut: t.debut,
-              fin: t.fin,
-              texte: res.markdown,
-              selection: [
-                t.debut + res.markdown.length,
-                t.debut + res.markdown.length,
-              ],
-            }
+            return editionDisposee(
+              valeur,
+              t.debut,
+              t.fin,
+              res.markdown,
+              preparation.disposition ?? 'centre',
+            )
           }
           appliquerQuandLibre(
             () => editeurRef.current,
             remplacer,
             () => setContenu((prev) => appliquerEdition(prev, remplacer(prev))),
+          )
+        } else if ((preparation.disposition ?? 'centre') !== 'centre') {
+          // Insérée au curseur, puis mise en colonnes avec son texte.
+          const disposer = (valeur: string): Edition => {
+            const ins = insererLigne(
+              valeur,
+              position.debut,
+              position.fin,
+              res.markdown,
+            )
+            const v2 = appliquerEdition(valeur, ins)
+            const p = v2.indexOf(res.markdown, ins.debut)
+            return editionEntre(
+              valeur,
+              changerDisposition(
+                v2,
+                p,
+                p + res.markdown.length,
+                res.markdown,
+                preparation.disposition ?? 'centre',
+              ),
+            )
+          }
+          appliquerQuandLibre(
+            () => editeurRef.current,
+            disposer,
+            () => setContenu((prev) => appliquerEdition(prev, disposer(prev))),
           )
         } else {
           insererMarkdown(res.markdown, position)
@@ -322,21 +382,6 @@ export function useInsertionImage({
   )
 
   /**
-   * Étape illustrée : la ligne du curseur (ou la sélection) passe dans un
-   * bloc `:::etape`, puis le choix de la photo s'ouvre — elle arrivera dans
-   * le bloc, à droite du texte. Ctrl + Z défait le bloc.
-   */
-  const etapeIllustree = useCallback(() => {
-    const ed = editeurRef.current
-    if (!ed || classeurId === null) return
-    appliquerDansEditeur(
-      ed,
-      entourerDeBloc(ed.value, ed.selectionStart, ed.selectionEnd, 'etape'),
-    )
-    inputRef.current?.click()
-  }, [classeurId, editeurRef])
-
-  /**
    * Retouche d'une image DÉJÀ placée : ouvre le dialogue sur l'image cliquée
    * dans l'aperçu, avec sa légende et sa taille actuelles.
    */
@@ -347,6 +392,7 @@ export function useInsertionImage({
       ligne?: number,
       contexte: 'page' | 'planche' = 'page',
       photo = false,
+      recadrer = false,
     ) => {
       const valeur = editeurRef.current?.value ?? contenu
       const t = trouverImage(valeur, chemin, ligne)
@@ -366,11 +412,52 @@ export function useInsertionImage({
         taille: t.taille,
         cadre: t.cadre,
         ajustement: t.ajustement,
+        disposition: dispositionImage(valeur, t.debut),
+        recadrer,
         contexte,
         photo,
       })
     },
     [contenu, editeurRef],
+  )
+
+  /**
+   * Réglage RAPIDE depuis la barre flottante (2026-10-01) : disposition,
+   * taille ou ajustement changés d'un clic, sans dialogue — la ligne (et au
+   * besoin le bloc de colonnes) est réécrite ; Ctrl + Z l'annule.
+   */
+  const ajusterImage = useCallback(
+    (
+      chemin: string,
+      ligne: number | undefined,
+      changement: {
+        disposition?: Disposition
+        taille?: TailleImage
+        ajustement?: AjustementImage
+      },
+    ) => {
+      const ed = editeurRef.current
+      if (!ed) return
+      const t = trouverImage(ed.value, chemin, ligne)
+      if (!t) return
+      const disposition =
+        changement.disposition ?? dispositionImage(ed.value, t.debut)
+      let taille = changement.taille ?? t.taille
+      // Pleine largeur : pas de place pour du texte à côté.
+      if (disposition !== 'centre' && taille === 'pleine') taille = 'grande'
+      const jeton = jetonImage(
+        t.alt,
+        chemin,
+        taille,
+        t.cadre,
+        changement.ajustement ?? t.ajustement,
+      )
+      appliquerDansEditeur(
+        ed,
+        editionDisposee(ed.value, t.debut, t.fin, jeton, disposition),
+      )
+    },
+    [editeurRef],
   )
 
   /**
@@ -380,7 +467,7 @@ export function useInsertionImage({
    * base). Par l'historique du navigateur : Ctrl + Z la ramène.
    */
   const appliquerRetouche = useCallback(
-    (preparation: PreparationImage) => {
+    (preparation: PreparationImage & { disposition?: Disposition }) => {
       const cible = enRetouche
       if (cible === null) return
       const taille =
@@ -391,6 +478,7 @@ export function useInsertionImage({
       const cadre =
         preparation.cadre === undefined ? cible.cadre : preparation.cadre
       const ajustement = preparation.ajustement ?? cible.ajustement
+      const disposition = preparation.disposition ?? cible.disposition
       const calculer = (valeur: string): Edition => {
         const t = trouverImage(valeur, cible.chemin, cible.ligne)
         if (!t) return { debut: 0, fin: 0, texte: '', selection: [0, 0] }
@@ -401,12 +489,7 @@ export function useInsertionImage({
           cadre,
           ajustement,
         )
-        return {
-          debut: t.debut,
-          fin: t.fin,
-          texte: jeton,
-          selection: [t.debut + jeton.length, t.debut + jeton.length],
-        }
+        return editionDisposee(valeur, t.debut, t.fin, jeton, disposition)
       }
       setEnRetouche(null)
       appliquerQuandLibre(
@@ -416,9 +499,7 @@ export function useInsertionImage({
       )
       setEtat({
         type: 'ok',
-        message: cadre
-          ? `Image recadrée, ${LIBELLE_TAILLE[taille]} (l'image entière reste conservée).`
-          : `Image mise à jour, ${LIBELLE_TAILLE[taille]}.`,
+        message: `Image ${LIBELLE_DISPOSITION[disposition]}, ${LIBELLE_TAILLE[taille]}${cadre ? ", recadrée (l'image entière reste conservée)" : ''}.`,
       })
     },
     [editeurRef, enRetouche, setContenu],
@@ -484,7 +565,6 @@ export function useInsertionImage({
     emplacement,
     remplirEmplacement,
     ouvrirPlanche: () => plancheRef.current?.click(),
-    etapeIllustree,
     /** À poser sur le `textarea`. */
     editeurProps: { onPaste, onDragOver, onDrop },
     actif: classeurId !== null,
@@ -502,6 +582,7 @@ export function useInsertionImage({
     envoyer,
     enRetouche,
     retoucher,
+    ajusterImage,
     annulerRetouche: () => setEnRetouche(null),
     appliquerRetouche,
     /** Une image supprimée de la médiathèque disparaît aussi du texte en cours. */
@@ -539,6 +620,8 @@ export function DialoguesImage({ image }: { image: ImageInsertion }) {
         tailleInitiale={image.enRetouche?.taille ?? 'auto'}
         legendeInitiale={image.enRetouche?.nom ?? ''}
         cadreInitial={image.enRetouche?.cadre ?? null}
+        dispositionInitiale={image.enRetouche?.disposition ?? 'centre'}
+        recadrerDOffice={image.enRetouche?.recadrer ?? false}
         ajustementInitial={image.enRetouche?.ajustement ?? 'remplir'}
         estPhotoExistante={image.enRetouche?.photo ?? false}
         contexte={image.enRetouche?.contexte ?? 'page'}
@@ -603,14 +686,6 @@ export function BoutonsImage({ image }: { image: ImageInsertion }) {
         onPointerDown={(e) => e.preventDefault()}
         onMouseDown={(e) => e.preventDefault()}
         onClick={image.ouvrirPlanche}
-      />
-      <IconAction
-        label="Étape illustrée : la ligne du curseur à gauche, une photo à droite"
-        icon={<Columns2 />}
-        disabled={!image.actif || envoi}
-        onPointerDown={(e) => e.preventDefault()}
-        onMouseDown={(e) => e.preventDefault()}
-        onClick={image.etapeIllustree}
       />
       <IconAction
         label="Médiathèque : reprendre une image du classeur"

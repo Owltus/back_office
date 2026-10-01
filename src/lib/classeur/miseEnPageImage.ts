@@ -27,12 +27,14 @@ const HAUTEUR_MAX_MM: Record<TailleImage, number> = {
   auto: 150,
   petite: 55,
   moyenne: 85,
+  grande: 130,
   pleine: 170,
 }
 const HAUTEUR_MAX_PHOTO_AUTO_MM = 90
 const LARGEUR_TAILLE: Record<Exclude<TailleImage, 'auto'>, number> = {
   petite: 0.33,
   moyenne: 0.5,
+  grande: 0.75,
   pleine: 1,
 }
 

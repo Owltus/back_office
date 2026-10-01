@@ -422,6 +422,11 @@
   max-height: 85mm;
   object-fit: contain;
 }
+.pdf-prose figure > img[data-taille='grande'] {
+  width: 75%;
+  max-height: 130mm;
+  object-fit: contain;
+}
 .pdf-prose figure > img[data-taille='pleine'] {
   width: 100%;
   max-height: 170mm;
@@ -481,7 +486,12 @@
    normaux. */
 .pdf-prose [data-bloc='etape'][data-photos] {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 32%;
+  /* Colonne photo selon la taille de sa première image (`rehypeBlocs`) :
+     petite 25 %, moyenne 33 %, grande 45 % ; photo à droite par défaut,
+     à gauche avec `:::etape{photo=gauche}` (2026-10-01). */
+  --colonne: 33%;
+  --hmax-etape: 60mm;
+  grid-template-columns: minmax(0, 1fr) var(--colonne);
   column-gap: 0.5cm;
   align-items: start;
   margin: 0 0 0.35cm;
@@ -506,7 +516,7 @@
   > figure
   > img {
   width: 100%;
-  max-height: 60mm;
+  max-height: var(--hmax-etape, 60mm);
   object-fit: contain;
 }
 .pdf-prose [data-bloc='etape'][data-deroule] {
@@ -548,6 +558,9 @@
 }
 .pdf-prose .classeur-image[data-taille='moyenne'] > .classeur-image-cadre {
   width: min(50cqw, calc(85mm * var(--r)));
+}
+.pdf-prose .classeur-image[data-taille='grande'] > .classeur-image-cadre {
+  width: min(75cqw, calc(130mm * var(--r)));
 }
 .pdf-prose .classeur-image[data-taille='pleine'] > .classeur-image-cadre {
   width: min(100cqw, calc(170mm * var(--r)));
@@ -656,7 +669,7 @@
   .etape-photos
   .classeur-image
   > .classeur-image-cadre {
-  width: min(100cqw, var(--nat), calc(60mm * var(--r)));
+  width: min(100cqw, var(--nat), calc(var(--hmax-etape, 60mm) * var(--r)));
 }
 .pdf-prose strong {
   font-weight: 700;
@@ -755,4 +768,23 @@
 }
 .a4-debug .dbg-rule {
   background-color: rgba(255, 0, 0, 0.5) !important;
+}
+
+/* Étape : largeur de la colonne photo et côté (2026-10-01). */
+.pdf-prose [data-bloc='etape'][data-largeur='petite'] {
+  --colonne: 25%;
+  --hmax-etape: 45mm;
+}
+.pdf-prose [data-bloc='etape'][data-largeur='grande'],
+.pdf-prose [data-bloc='etape'][data-largeur='pleine'] {
+  --colonne: 45%;
+  --hmax-etape: 90mm;
+}
+.pdf-prose [data-bloc='etape'][data-photos][data-cote='gauche'] {
+  grid-template-columns: var(--colonne) minmax(0, 1fr);
+}
+.pdf-prose
+  [data-bloc='etape'][data-cote='gauche']:not([data-deroule])
+  > .etape-photos {
+  order: -1;
 }

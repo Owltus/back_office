@@ -50,11 +50,24 @@ function planche(n: NoeudHast): void {
   }
 }
 
+/** Taille de la première image d'une figure (titre Markdown), `auto` sinon. */
+function tailleFigure(f: NoeudHast): string {
+  const img = (f.children ?? []).find((c) => estElement(c, 'img'))
+  const titre = img?.properties?.title
+  const m = /(?:^|\s)(petite|moyenne|grande|pleine)(?:\s|$)/.exec(
+    typeof titre === 'string' ? titre : '',
+  )
+  return m ? m[1] : 'moyenne'
+}
+
 function etape(n: NoeudHast): void {
   const enfants = significatifs(n)
   const photos = enfants.filter((c) => estElement(c, 'figure'))
   if (photos.length === 0) return
   const texte = enfants.filter((c) => !estElement(c, 'figure'))
+  // Largeur de la colonne photo : taille de la première image (petite 25 %,
+  // moyenne 33 %, grande et pleine 45 %, `classeur.css`).
+  n.properties = { ...n.properties, dataLargeur: tailleFigure(photos[0]) }
   n.children = [
     {
       type: 'element',

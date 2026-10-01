@@ -161,7 +161,8 @@ describe('taille sur la page — portée par le titre Markdown', () => {
     expect(tailleDepuisTitre('petite')).toBe('petite')
     expect(tailleDepuisTitre(' Moyenne ')).toBe('moyenne')
     expect(tailleDepuisTitre('pleine')).toBe('pleine')
-    expect(tailleDepuisTitre('grande')).toBe('auto')
+    expect(tailleDepuisTitre('grande')).toBe('grande')
+    expect(tailleDepuisTitre('enorme')).toBe('auto')
     expect(tailleDepuisTitre('rien')).toBe('auto')
     expect(tailleDepuisTitre(undefined)).toBe('auto')
   })
@@ -169,7 +170,8 @@ describe('taille sur la page — portée par le titre Markdown', () => {
     expect(tailleDepuisTitre('largeur=20 position=droite')).toBe('petite')
     expect(tailleDepuisTitre('largeur=25 position=gauche')).toBe('petite')
     expect(tailleDepuisTitre('largeur=50')).toBe('moyenne')
-    expect(tailleDepuisTitre('largeur=75')).toBe('pleine')
+    expect(tailleDepuisTitre('largeur=75')).toBe('grande')
+    expect(tailleDepuisTitre('largeur=95')).toBe('pleine')
     expect(tailleDepuisTitre('largeur=100')).toBe('auto')
     expect(tailleDepuisTitre('largeur=5')).toBe('auto')
   })
@@ -306,7 +308,7 @@ describe('trouverImage / jetonImage — retoucher une image placée', () => {
 
   it('trouve l’image sur la ligne cliquée, avec sa taille', () => {
     const t = trouverImage(texte, A, 7)
-    expect(t).toMatchObject({ alt: 'Accueil bis', taille: 'pleine' })
+    expect(t).toMatchObject({ alt: 'Accueil bis', taille: 'grande' })
     expect(texte.slice(t!.debut, t!.fin)).toBe(
       `![Accueil bis](${A} "largeur=75 position=gauche")`,
     )

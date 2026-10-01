@@ -42,6 +42,10 @@ import {
   ligneDePosition,
 } from '#/components/classeur/detail/editionTextarea.ts'
 import { useImages } from '#/components/classeur/hooks/useImages.ts'
+import { BarreImage } from '#/components/classeur/detail/BarreImage.tsx'
+import type { CibleBarre } from '#/components/classeur/detail/BarreImage.tsx'
+import { dispositionImage } from '#/lib/classeur/disposition.ts'
+import { trouverImage } from '#/lib/classeur/images.ts'
 import { AbandonModificationsDialog } from '#/components/classeur/dialogs/AbandonModificationsDialog.tsx'
 import { ConflitDocumentDialog } from '#/components/classeur/dialogs/ConflitDocumentDialog.tsx'
 import { HistoriqueDocumentDialog } from '#/components/classeur/dialogs/HistoriqueDocumentDialog.tsx'
@@ -127,6 +131,14 @@ export function DocumentDetail() {
   // avec la colonne des chapitres, chaque moitié ne faisait que ~320 px
   // (audit tactile 2026-09-28).
   const zoneEdition = useHauteurJusquEnBas({ minLargeur: 1280 })
+  // Barre flottante de l'image cliquée dans l'aperçu (2026-10-01).
+  const [barre, setBarre] = useState<
+    (CibleBarre & { url: string; photo: boolean }) | null
+  >(null)
+  const fermerBarre = useCallback(() => setBarre(null), [])
+  useEffect(() => {
+    if (!editing) setBarre(null)
+  }, [editing])
   const miseEnForme = useMiseEnForme(editeurRef, !page.canWrite)
 
   const apercuRef = useCallback(
@@ -211,14 +223,16 @@ export function DocumentDetail() {
       const img = e.target.closest<HTMLImageElement>(
         '.a4-page img[data-chemin]',
       )
+      // Un clic sur une IMAGE ouvre sa barre flottante (disposition, taille,
+      // recadrage, mise en page complète).
       if (img?.dataset.chemin && page.canWrite) {
-        image.retoucher(
-          img.dataset.chemin,
-          img.src,
+        setBarre({
+          chemin: img.dataset.chemin,
           ligne,
-          img.closest('[data-bloc="photos"]') ? 'planche' : 'page',
-          img.dataset.genre === 'photo',
-        )
+          contexte: img.closest('[data-bloc="photos"]') ? 'planche' : 'page',
+          url: img.src,
+          photo: img.dataset.genre === 'photo',
+        })
         return
       }
       if (ligne !== undefined) allerA(ligne)
@@ -447,6 +461,40 @@ export function DocumentDetail() {
             {page.canWrite && (
               <div className="flex flex-col gap-1.5 pb-2">
                 <DialoguesImage image={image} />
+                {barre &&
+                  (() => {
+                    const t = trouverImage(contenu, barre.chemin, barre.ligne)
+                    if (!t) return null
+                    const ouvrir = (recadrer: boolean) => {
+                      image.retoucher(
+                        barre.chemin,
+                        barre.url,
+                        barre.ligne,
+                        barre.contexte,
+                        barre.photo,
+                        recadrer,
+                      )
+                      setBarre(null)
+                    }
+                    return (
+                      <BarreImage
+                        cible={barre}
+                        disposition={dispositionImage(contenu, t.debut)}
+                        taille={t.taille}
+                        ajustement={t.ajustement}
+                        onAjuster={(changement) =>
+                          image.ajusterImage(
+                            barre.chemin,
+                            barre.ligne,
+                            changement,
+                          )
+                        }
+                        onRecadrer={() => ouvrir(true)}
+                        onReglages={() => ouvrir(false)}
+                        onFermer={fermerBarre}
+                      />
+                    )
+                  })()}
                 <BarreMiseEnForme
                   miseEnForme={miseEnForme}
                   fin={<BoutonsImage image={image} />}

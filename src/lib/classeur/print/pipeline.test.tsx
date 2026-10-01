@@ -202,3 +202,20 @@ describe('encadrés typés', () => {
     expect(texte(b!)).toContain('[!FOO]')
   })
 })
+
+describe('étape : côté et largeur de la colonne photo', () => {
+  it('`:::etape{photo=gauche}` → data-cote, largeur prise de l’image', () => {
+    const e = rendre(
+      ':::etape{photo=gauche}\nTexte.\n\n![Vanne](1/a.webp "petite")\n:::',
+    ).querySelector('[data-bloc="etape"]')
+    expect(e?.getAttribute('data-cote')).toBe('gauche')
+    expect(e?.getAttribute('data-largeur')).toBe('petite')
+  })
+  it('par défaut : à droite, colonne moyenne ; attribut inconnu ignoré', () => {
+    const e = rendre(
+      ':::etape{photo=haut}\nTexte.\n\n![Vanne](1/a.webp)\n:::',
+    ).querySelector('[data-bloc="etape"]')
+    expect(e?.hasAttribute('data-cote')).toBe(false)
+    expect(e?.getAttribute('data-largeur')).toBe('moyenne')
+  })
+})

@@ -3,7 +3,6 @@ import ReactMarkdown from 'react-markdown'
 import type { Components } from 'react-markdown'
 import {
   Bold,
-  Columns2,
   Heading1,
   Heading2,
   ImagePlus,
@@ -352,22 +351,37 @@ export function AideMiseEnFormeDialog({
             </p>
           </Section>
 
-          <Section title="Étape illustrée">
+          <Section title="Placer une image : au centre, à gauche, à droite">
             <p>
-              Pour mettre une <Term>photo à côté d'une consigne</Term>, placez
-              le curseur sur la consigne (ou sélectionnez-en plusieurs lignes),
-              puis <Bouton icon={<Columns2 />} /> et choisissez la photo : le
-              texte reste à gauche, la photo se place dans une colonne à droite.
+              <Term>Cliquez sur une image</Term> dans l'aperçu : une petite
+              barre apparaît au-dessus. Choisissez où elle va :{' '}
+              <Term>au centre</Term> (seule sur sa ligne), <Term>à gauche</Term>{' '}
+              ou <Term>à droite</Term> du texte (la consigne qui la précède se
+              range dans une colonne à côté), puis sa <Term>taille</Term> (Auto,
+              Petite, Moyenne, Grande, Pleine largeur ; à côté du texte, la
+              largeur de la colonne photo). Le bouton de recadrage et « Mise en
+              page… » (légende, recadrage, tous les réglages) sont dans la même
+              barre.
             </p>
             <Exemple
-              source={
-                ':::etape\nSur le boîtier, appuyer sur le **bouton rouge** :\n\n1. Un appui court.\n2. Un appui long.\n\n![Boîtier du ballon](photo.webp)\n:::'
-              }
+              source={[
+                ':::etape{photo=gauche}',
+                'Sur le boîtier, appuyer sur le **bouton rouge** :',
+                '',
+                '1. Un appui court.',
+                '2. Un appui long.',
+                '',
+                '![Boîtier du ballon](photo.webp)',
+                ':::',
+              ].join('\n')}
             />
             <p>
-              Un titre au-dessus d'une étape reste au-dessus : il l'emporte avec
-              lui si elle passe à la page suivante. Une étape plus haute qu'une
-              page s'imprime simplement texte puis photo.
+              Dans le texte, une image à côté du texte est entourée de{' '}
+              <code>:::etape</code> (photo à droite) ou{' '}
+              <code>:::etape{'{photo=gauche}'}</code>, et de <code>:::</code>.
+              La barre les écrit et les retire pour vous. Un titre au-dessus
+              reste au-dessus ; une étape plus haute qu'une page s'imprime texte
+              puis photo.
             </p>
           </Section>
 

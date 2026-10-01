@@ -884,6 +884,34 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
       `--wd: max(100cqw, 100cqh × r)`, ce qui dépasse est masqué, jamais
       coupé) ; le mot `entiere` dans le titre la garde entière (bandes) —
       réglage « Dans la case » du dialogue en contexte planche.
+    - **DISPOSITION et interface d'image refaites (même jour, demande
+      utilisateur : « repense, plus simple, une bonne UI/UX ; regarde
+      comment font les autres »)** — étude de Word, Google Docs, Notion,
+      Confluence, WordPress Gutenberg, Medium, Canva. UNE question « où va
+      l'image ? » : au centre / à gauche du texte / à droite du texte (deux
+      colonnes, jamais un habillage). `lib/classeur/disposition.ts` (PUR,
+      testé) écrit la structure : centrée → côté = l'image ET le texte qui
+      la précède jusqu'au titre de l'étape (sans traverser titre, bloc,
+      autre image, `===`) entourés de `:::etape` / `:::etape{photo=gauche}`
+      ; côté → autre côté = la seule ligne d'ouverture ; côté → centrée = le
+      bloc défait (aller-retour exact, testé) ; `editionEntre` = une seule
+      plage, donc un seul Ctrl + Z. Taille `grande` ajoutée (75 % / 13 cm ;
+      à côté du texte : colonne petite 25 % / moyenne 33 % / grande 45 %,
+      `data-largeur` posé par `rehypeBlocs`, `data-cote` par `remarkBlocs`).
+      Interface à DEUX niveaux : un clic sur une image de l'aperçu ouvre la
+      BARRE FLOTTANTE (`detail/BarreImage.tsx` : 3 dispositions dessinées,
+      paliers de taille, Recadrer, « Mise en page… », appliqués d'un clic,
+      barre qui suit l'image, Échap / clic ailleurs) ; le DIALOGUE « Mise
+      en page de l'image » (ajout et « Mise en page… ») : aperçu A4 en direct
+      à gauche (ou l'outil de recadrage), à droite Disposition en vignettes
+      dessinées (comme Word), Taille en paliers à barre (comme Medium),
+      Recadrage (« Recadrer… » / « Image entière »), Légende, « Dans la
+      case » en planche ; réglage sans objet masqué ou grisé avec sa raison
+      (pleine largeur → pas de côté). Le bouton « Étape illustrée » est
+      RETIRÉ (la disposition le remplace). Vérifié navigateur sans
+      enregistrer : centrée → gauche → petite → droite → moyenne, rendu
+      `data-cote=gauche data-largeur=petite`, retour au texte d'origine
+      (au mot `"moyenne"` près), dialogue ouvert sur l'état de l'image.
     - **Encadrés TYPÉS (même jour, décision utilisateur)** : syntaxe des
       alertes GitHub, `> [!WARNING]` / `[!IMPORTANT]` / `[!TIP]` /
       `[!NOTE]` en 1re ligne (`CAUTION` = attention) — Markdown standard,
