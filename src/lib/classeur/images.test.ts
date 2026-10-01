@@ -10,6 +10,8 @@ import {
   boiteTournee,
   formaterOctets,
   imagesReferencees,
+  cadreDepuisTitre,
+  cheminOriginalImage,
   jetonImage,
   tailleDepuisTitre,
   titreImage,
@@ -331,5 +333,69 @@ describe('trouverImage / jetonImage — retoucher une image placée', () => {
     expect(jetonImage('Plan [v2]', A)).toBe(`![Plan v2](${A})`)
     // Relu tel quel par le moteur de rendu.
     expect(tailleDepuisTitre('petite')).toBe('petite')
+  })
+})
+
+describe('cadre NON destructif — réglage écrit dans le titre', () => {
+  const C = '5/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.webp'
+  it('écrit taille et cadre, rien pour l’image entière en automatique', () => {
+    expect(titreImage('auto', { x: 10, y: 5, largeur: 80, hauteur: 60 })).toBe(
+      ' "cadre=10,5,80,60"',
+    )
+    expect(
+      titreImage('petite', { x: 12.34, y: 0, largeur: 50.06, hauteur: 100 }),
+    ).toBe(' "petite cadre=12.3,0,50.1,100"')
+    // Cadre (presque) entier = pas de cadre.
+    expect(
+      titreImage('auto', { x: 0, y: 0, largeur: 100, hauteur: 99.8 }),
+    ).toBe('')
+  })
+  it('relit le cadre, borné à l’image ; invalide = image entière', () => {
+    expect(cadreDepuisTitre('petite cadre=10,5,80,60')).toEqual({
+      x: 10,
+      y: 5,
+      largeur: 80,
+      hauteur: 60,
+    })
+    // Débordement ramené dans l'image.
+    expect(cadreDepuisTitre('cadre=50,50,80,80')).toEqual({
+      x: 50,
+      y: 50,
+      largeur: 50,
+      hauteur: 50,
+    })
+    expect(cadreDepuisTitre('cadre=a,b,c,d')).toBeNull()
+    expect(cadreDepuisTitre('petite')).toBeNull()
+    expect(cadreDepuisTitre(undefined)).toBeNull()
+    // La taille se lit toujours à côté du cadre.
+    expect(tailleDepuisTitre('moyenne cadre=1,2,3,4')).toBe('moyenne')
+  })
+  it('aller-retour : trouverImage rend le cadre, jetonImage le réécrit', () => {
+    const texte = `![Vanne](${C} "moyenne cadre=10,5,80,60")`
+    const t = trouverImage(texte, C)
+    expect(t).toMatchObject({
+      taille: 'moyenne',
+      cadre: { x: 10, y: 5, largeur: 80, hauteur: 60 },
+    })
+    expect(jetonImage(t!.alt, C, t!.taille, t!.cadre)).toBe(texte)
+    // « Image entière » : le cadre disparaît, le fichier n'a jamais changé.
+    expect(jetonImage('Vanne', C, 'moyenne', null)).toBe(
+      `![Vanne](${C} "moyenne")`,
+    )
+  })
+  it('une image cadrée reste référencée (usages, suppression)', () => {
+    expect(imagesReferencees(`![a](${C} "cadre=1,1,50,50")`)).toEqual([C])
+    expect(
+      retirerImageDuMarkdown(`a\n\n![a](${C} "cadre=1,1,50,50")\n\nb`, C),
+    ).toBe('a\n\nb')
+  })
+  it('chemin de l’original : même uuid, suffixe `.original.webp`', () => {
+    expect(cheminOriginalImage(5, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')).toBe(
+      '5/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.original.webp',
+    )
+    // L'original n'est jamais un chemin que le rendu affiche.
+    expect(
+      estCheminImage('5/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.original.webp'),
+    ).toBe(false)
   })
 })

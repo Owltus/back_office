@@ -1,9 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
+import type { CSSProperties } from 'react'
 
 import { useImages } from '#/components/classeur/hooks/useImages.ts'
 import { classeurKeys } from '#/lib/classeur/keys.ts'
 import { estPhoto } from '#/lib/classeur/miseEnPageImage.ts'
 import {
+  cadreDepuisTitre,
   tailleDepuisTitre,
   telechargerImage,
   urlObjetImage,
@@ -83,18 +85,58 @@ export function ImageDocument({
       </span>
     )
   }
-  return (
+  const genre = fiche ? (estPhoto(fiche.nom) ? 'photo' : 'capture') : undefined
+  const img = (
     <img
       src={urlObjetImage(chemin, image.data)}
       alt={alt ?? ''}
       data-image-status="rendered"
       data-taille={taille}
-      data-genre={
-        fiche ? (estPhoto(fiche.nom) ? 'photo' : 'capture') : undefined
-      }
+      data-genre={genre}
       // Lu au clic dans l'aperçu d'édition (retouche de l'image) ; suit les
       // pages A4, qui sont des copies HTML.
       data-chemin={chemin}
     />
   )
+  // Sans fiche (image hors médiathèque) : l'image seule, règles historiques.
+  if (!fiche || fiche.largeur <= 0 || fiche.hauteur <= 0) return img
+
+  /*
+   * RECADRAGE NON DESTRUCTIF (2026-10-01) : l'image ENTIÈRE est chargée, et
+   * seule la zone du cadre est montrée — une fenêtre (`classeur-image-cadre`,
+   * proportions du cadre, `overflow: hidden`) dans laquelle l'image est
+   * agrandie et décalée. Toutes les dimensions sont du CSS (`classeur.css`,
+   * requêtes de conteneur) : elles valent à l'identique dans la mesure, les
+   * pages A4 copiées et l'iframe d'impression.
+   */
+  const cadre = cadreDepuisTitre(title) ?? {
+    x: 0,
+    y: 0,
+    largeur: 100,
+    hauteur: 100,
+  }
+  const largeurPx = (fiche.largeur * cadre.largeur) / 100
+  const hauteurPx = (fiche.hauteur * cadre.hauteur) / 100
+  const style = {
+    '--r': String(largeurPx / hauteurPx),
+    // Taille naturelle de la zone (jamais agrandie en automatique).
+    '--nat': `${String(largeurPx * PX_EN_MM)}mm`,
+    '--cx': String(cadre.x),
+    '--cy': String(cadre.y),
+    '--cl': String(cadre.largeur),
+    '--ch': String(cadre.hauteur),
+  } as CSSProperties
+  return (
+    <span
+      className="classeur-image"
+      data-taille={taille}
+      data-genre={genre}
+      style={style}
+    >
+      <span className="classeur-image-cadre">{img}</span>
+    </span>
+  )
 }
+
+/** Un pixel CSS en millimètres (96 px par pouce). */
+const PX_EN_MM = 25.4 / 96

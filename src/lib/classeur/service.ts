@@ -77,7 +77,7 @@ const COLS_INTERCALAIRE = `${COLS_COMMUNES}, chapter_id, title, description`
 const COLS_HISTORY =
   'id, classeur_id, merged_at, kind, label, source_name, inserted, updated, unchanged, skipped, taille'
 const COLS_IMAGE =
-  'id, uuid, classeur_id, chemin, nom, taille, largeur, hauteur, deleted_at, created_at, updated_at, created_by'
+  'id, uuid, classeur_id, chemin, nom, taille, largeur, hauteur, original_chemin, original_largeur, original_hauteur, original_taille, deleted_at, created_at, updated_at, created_by'
 
 // ---------------------------------------------------------------------------
 // Images (médiathèque d'un classeur) — pas de point de restauration auto :
@@ -198,6 +198,10 @@ export interface ImageInput {
   taille: number
   largeur: number
   hauteur: number
+  original_chemin?: string | null
+  original_largeur?: number | null
+  original_hauteur?: number | null
+  original_taille?: number | null
 }
 
 export async function insertImage(

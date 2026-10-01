@@ -147,7 +147,11 @@ export function ImagesDialog({
   const nbOrphelines = liste.filter(
     (img) => (usages.get(img.chemin.toLowerCase()) ?? []).length === 0,
   ).length
-  const poidsTotal = liste.reduce((s, i) => s + i.taille, 0)
+  // Affichage + original conservé : ce que le classeur occupe vraiment.
+  const poidsTotal = liste.reduce(
+    (s, i) => s + i.taille + (i.original_taille ?? 0),
+    0,
+  )
 
   const occupe = envoi.isPending || renommage.isPending || suppression.isPending
   const erreur = refusFichier
@@ -183,7 +187,7 @@ export function ImagesDialog({
         onSuccess: (res) => {
           setEnPreparation(null)
           setMessage(
-            `« ${res.image.nom} » ajoutée : ${formaterOctets(res.octetsSource)} → ${formaterOctets(res.image.taille)} en WebP (${String(res.image.largeur)} × ${String(res.image.hauteur)}).`,
+            `« ${res.image.nom} » ajoutée : ${formaterOctets(res.octetsSource)} → ${formaterOctets(res.image.taille)} pour l'affichage (${String(res.image.largeur)} × ${String(res.image.hauteur)}), original conservé en ${formaterOctets(res.image.original_taille ?? 0)}.`,
           )
           setVue('toutes')
         },
@@ -402,6 +406,16 @@ export function ImagesDialog({
                             {img.largeur} × {img.hauteur} ·{' '}
                             {formaterOctets(img.taille)}
                           </div>
+                          {img.original_chemin && (
+                            <div
+                              className="text-xs text-muted-foreground"
+                              title="L'image d'origine, conservée entière : un recadrage ne la coupe jamais."
+                            >
+                              Original {img.original_largeur} ×{' '}
+                              {img.original_hauteur} ·{' '}
+                              {formaterOctets(img.original_taille ?? 0)}
+                            </div>
+                          )}
                           <div
                             className={cn(
                               'truncate text-xs',

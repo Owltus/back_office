@@ -843,6 +843,34 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
     - Même jour, hors images : après « Sauvegarder », l'éditeur RELIT le
       document avant de se fermer (`useEditionDocument`) — avant,
       l'ancienne version restait affichée le temps de la relecture.
+    - **RECADRAGE NON DESTRUCTIF + ORIGINAL CONSERVÉ (même jour, demande
+      utilisateur : « si je la recadre je perds les données de base ; garder
+      le brut compressé et pouvoir remettre en forme comme je veux »)**.
+      Chaque envoi écrit DEUX fichiers : la copie d'AFFICHAGE (image
+      ENTIÈRE, 1600 px, WebP 0,8 — `chemin`, celle que les documents
+      référencent) et l'ORIGINAL (résolution d'origine, WebP 0,85,
+      `<classeur>/<uuid>.original.webp`, colonnes `original_*` de
+      `classeur_images`, jamais retouché ; bucket relevé à 20 Mo —
+      `supabase/classeur_images_original_2026-10-01.sql`, JOUÉ). Plus aucun
+      fichier n'est coupé : le cadre est un RÉGLAGE du document,
+      `cadre=x,y,l,h` (en % de l'image entière) dans le titre de l'image à
+      côté de la taille (`titreImage`, `cadreDepuisTitre`, `cadreBorne`).
+      `ImageDocument` enveloppe l'image : `.classeur-image` (conteneur,
+      variables `--r`, `--nat`, `--cx/--cy/--cl/--ch`) >
+      `.classeur-image-cadre` (fenêtre aux proportions du cadre,
+      `overflow: hidden`) > `img` agrandie et décalée ; TOUTES les tailles
+      en CSS par requêtes de conteneur (`cqw`/`cqh` : planche 4:3 en
+      `container-type: size`), donc identiques dans la mesure, les pages
+      copiées et l'impression. La retouche n'envoie plus RIEN : elle
+      réécrit la ligne ; le dialogue se rouvre sur l'image entière avec le
+      cadre en place (« Image entière » le retire). Médiathèque : taille de
+      l'original affichée, poids total compté avec. Images envoyées AVANT
+      ce jour : pas d'original (`original_* = null`), et celles déjà
+      recadrées sont restées coupées. Vérifié navigateur sans enregistrer :
+      fenêtre 61 × 54 mm sur une image entière de 76 × 108 mm décalée de
+      −8 / −27 mm, 0 débordement ; dialogue rouvert sur le cadre. Envoi
+      réel (deux fichiers) NON exercé contre la prod : à tester par
+      l'utilisateur.
     - **Encadrés TYPÉS (même jour, décision utilisateur)** : syntaxe des
       alertes GitHub, `> [!WARNING]` / `[!IMPORTANT]` / `[!TIP]` /
       `[!NOTE]` en 1re ligne (`CAUTION` = attention) — Markdown standard,

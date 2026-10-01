@@ -15,7 +15,11 @@ import {
 import { Input } from '#/components/ui/input.tsx'
 import { dimensionsReduites, formaterOctets } from '#/lib/classeur/images.ts'
 import { boiteSurPage, conseilsImage } from '#/lib/classeur/miseEnPageImage.ts'
-import type { PreparationImage, TailleImage } from '#/lib/classeur/images.ts'
+import type {
+  CadreImage,
+  PreparationImage,
+  TailleImage,
+} from '#/lib/classeur/images.ts'
 import { estLegendeGenerique } from '#/lib/classeur/legende.ts'
 import {
   CONTENT_WIDTH_MM,
@@ -81,6 +85,8 @@ export function ImagePreparationDialog({
   existante = null,
   tailleInitiale = 'auto',
   legendeInitiale = '',
+  cadreInitial = null,
+  estPhotoExistante = false,
   contexte = 'page',
   envoi = false,
   onAnnuler,
@@ -94,6 +100,10 @@ export function ImagePreparationDialog({
   tailleInitiale?: TailleImage
   /** Légende actuelle, pour une retouche (une légende générique est vidée). */
   legendeInitiale?: string
+  /** Cadre actuel (en % de l'image entière), pour une retouche. */
+  cadreInitial?: CadreImage | null
+  /** Retouche : l'image est une photo (`data-genre`), pas une capture. */
+  estPhotoExistante?: boolean
   /** Dans une planche de photos, la taille ne s'applique pas. */
   contexte?: 'page' | 'planche'
   /** Envoi en cours (boutons figés, loader). */
@@ -114,7 +124,10 @@ export function ImagePreparationDialog({
   const ouvert = url !== null
   const retouche = file === null && existante !== null
   // Photo d'appareil (JPEG, HEIC) : jamais « capture trop large ».
-  const photo = file !== null && /jpe?g|hei[cf]/i.test(file.type || file.name)
+  const photo =
+    file !== null
+      ? /jpe?g|hei[cf]/i.test(file.type || file.name)
+      : estPhotoExistante
 
   const imgRef = useRef<HTMLImageElement>(null)
   const [naturel, setNaturel] = useState<{ w: number; h: number } | null>(null)
@@ -127,10 +140,22 @@ export function ImagePreparationDialog({
   useEffect(() => {
     setNaturel(null)
     setFormat('libre')
-    setCadre(CADRE_ENTIER)
+    // Le cadre se rouvre tel qu'il est, sur l'image ENTIÈRE : rien n'a été
+    // coupé, on peut l'élargir ou revenir à l'image complète.
+    setCadre(
+      cadreInitial
+        ? {
+            unit: '%',
+            x: cadreInitial.x,
+            y: cadreInitial.y,
+            width: cadreInitial.largeur,
+            height: cadreInitial.hauteur,
+          }
+        : CADRE_ENTIER,
+    )
     setTaille(tailleInitiale)
     setLegende(estLegendeGenerique(legendeInitiale) ? '' : legendeInitiale)
-  }, [url, tailleInitiale, legendeInitiale])
+  }, [url, tailleInitiale, legendeInitiale, cadreInitial])
 
   const aspectFormat = (key: string, n = naturel): number | undefined => {
     const f = FORMATS.find((x) => x.key === key)?.valeur
@@ -163,11 +188,20 @@ export function ImagePreparationDialog({
 
   // Dimensions de l'image telle qu'elle sera ENVOYÉE (cadrée puis réduite à
   // 1600 px de côté, `convertirEnWebp`) : c'est elle que la page affichera.
-  const finale = naturel
-    ? dimensionsReduites(
-        Math.max(1, Math.round((cadre.width / 100) * naturel.w)),
-        Math.max(1, Math.round((cadre.height / 100) * naturel.h)),
-      )
+  // Zone cadrée de la copie d'AFFICHAGE (image entière réduite à 1600 px,
+  // `televerserImage`) : c'est elle que la page montrera.
+  const affichage = naturel ? dimensionsReduites(naturel.w, naturel.h) : null
+  const finale = affichage
+    ? {
+        largeur: Math.max(
+          1,
+          Math.round((cadre.width / 100) * affichage.largeur),
+        ),
+        hauteur: Math.max(
+          1,
+          Math.round((cadre.height / 100) * affichage.hauteur),
+        ),
+      }
     : null
   const conseils = finale
     ? conseilsImage(finale.largeur, finale.hauteur, { photo })
@@ -179,14 +213,16 @@ export function ImagePreparationDialog({
       taille: contexte === 'planche' ? 'auto' : taille,
       legende: legende.trim(),
     }
-    if (recadrageActif) {
-      preparation.recadrage = {
-        x: Math.round((cadre.x / 100) * naturel.w),
-        y: Math.round((cadre.y / 100) * naturel.h),
-        largeur: Math.round((cadre.width / 100) * naturel.w),
-        hauteur: Math.round((cadre.height / 100) * naturel.h),
-      }
-    }
+    // Le cadre est un RÉGLAGE (en % de l'image entière), jamais appliqué au
+    // fichier : l'image reste complète en base.
+    preparation.cadre = recadrageActif
+      ? {
+          x: cadre.x,
+          y: cadre.y,
+          largeur: cadre.width,
+          hauteur: cadre.height,
+        }
+      : null
     onValider(preparation)
   }
 
@@ -255,7 +291,7 @@ export function ImagePreparationDialog({
             </Reglage>
 
             <Reglage
-              label="Cadre · tirez les coins pour recadrer"
+              label="Cadre · l'image entière reste conservée"
               action={
                 recadrageActif ? (
                   <button

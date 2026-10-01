@@ -25,12 +25,15 @@ import {
   jetonImage,
   refusImageSource,
   retirerImageDuMarkdown,
-  telechargerImage,
   televerserImage,
   trouverImage,
 } from '#/lib/classeur/images.ts'
 import type { Edition } from '#/lib/classeur/markdownEdition.ts'
-import type { PreparationImage, TailleImage } from '#/lib/classeur/images.ts'
+import type {
+  CadreImage,
+  PreparationImage,
+  TailleImage,
+} from '#/lib/classeur/images.ts'
 import { cn } from '#/lib/utils.ts'
 
 /*
@@ -102,7 +105,9 @@ export function useInsertionImage({
     url: string
     nom: string
     taille: TailleImage
+    cadre: CadreImage | null
     contexte: 'page' | 'planche'
+    photo: boolean
   } | null>(null)
 
   /** Insère une ligne Markdown à la position du curseur (relevée maintenant). */
@@ -164,7 +169,7 @@ export function useInsertionImage({
         })
         setEtat({
           type: 'ok',
-          message: `Image ajoutée à la médiathèque : ${formaterOctets(res.octetsSource)} → ${formaterOctets(res.image.taille)} en WebP (${String(res.image.largeur)} × ${String(res.image.hauteur)}).`,
+          message: `Image ajoutée : ${formaterOctets(res.octetsSource)} → ${formaterOctets(res.image.taille)} pour l'affichage, original conservé entier (${String(res.image.original_largeur ?? res.image.largeur)} × ${String(res.image.original_hauteur ?? res.image.hauteur)}, ${formaterOctets(res.image.original_taille ?? 0)}).`,
         })
       } catch (err) {
         setEtat({
@@ -270,6 +275,7 @@ export function useInsertionImage({
       url: string,
       ligne?: number,
       contexte: 'page' | 'planche' = 'page',
+      photo = false,
     ) => {
       const valeur = editeurRef.current?.value ?? contenu
       const t = trouverImage(valeur, chemin, ligne)
@@ -287,63 +293,35 @@ export function useInsertionImage({
         url,
         nom: t.alt,
         taille: t.taille,
+        cadre: t.cadre,
         contexte,
+        photo,
       })
     },
     [contenu, editeurRef],
   )
 
   /**
-   * Applique la retouche : un recadrage envoie une NOUVELLE version (le
-   * fichier d'origine reste dans la médiathèque, il peut servir ailleurs),
-   * puis la ligne de l'image est réécrite dans le texte — par l'historique du
-   * navigateur : Ctrl + Z la ramène.
+   * Applique la retouche (2026-10-01, recadrage NON destructif) : rien
+   * n'est envoyé ni coupé — la ligne de l'image est réécrite avec sa légende,
+   * sa taille et son cadre (réglages du document ; l'image reste entière en
+   * base). Par l'historique du navigateur : Ctrl + Z la ramène.
    */
   const appliquerRetouche = useCallback(
-    async (preparation: PreparationImage) => {
+    (preparation: PreparationImage) => {
       const cible = enRetouche
-      if (classeurId === null || cible === null) return
+      if (cible === null) return
       const taille =
         cible.contexte === 'planche'
           ? 'auto'
           : (preparation.taille ?? cible.taille)
       const legende = preparation.legende ?? cible.nom
-      let chemin = cible.chemin
-      try {
-        if (preparation.recadrage) {
-          setEtat({ type: 'envoi', nom: cible.nom })
-          // Le fichier vient du CACHE qui sert déjà à l'afficher (sinon de
-          // l'API Storage authentifiée), JAMAIS d'un `fetch` de son URL
-          // `blob:` : la CSP (`connect-src`) ne l'autorise pas, et c'est
-          // voulu — en production, ce `fetch` échouait (« Failed to fetch »,
-          // retour utilisateur du 2026-09-30 ; invisible en local, sans CSP).
-          const blob = await invaliderImages.ensureQueryData({
-            queryKey: classeurKeys.image(cible.chemin),
-            queryFn: () => telechargerImage(cible.chemin),
-            staleTime: Infinity,
-          })
-          const fichier = new File([blob], 'image.webp', {
-            type: blob.type || 'image/webp',
-          })
-          const res = await televerserImage(classeurId, fichier, {
-            recadrage: preparation.recadrage,
-          })
-          chemin = res.image.chemin
-          void invaliderImages.invalidateQueries({
-            queryKey: classeurKeys.images(classeurId),
-          })
-        }
-      } catch (err) {
-        setEtat({
-          type: 'erreur',
-          message: messageErreur(err, 'Recadrage impossible'),
-        })
-        return
-      }
+      const cadre =
+        preparation.cadre === undefined ? cible.cadre : preparation.cadre
       const calculer = (valeur: string): Edition => {
         const t = trouverImage(valeur, cible.chemin, cible.ligne)
         if (!t) return { debut: 0, fin: 0, texte: '', selection: [0, 0] }
-        const jeton = jetonImage(legende, chemin, taille)
+        const jeton = jetonImage(legende, cible.chemin, taille, cadre)
         return {
           debut: t.debut,
           fin: t.fin,
@@ -359,12 +337,12 @@ export function useInsertionImage({
       )
       setEtat({
         type: 'ok',
-        message: preparation.recadrage
-          ? `Image recadrée, ${LIBELLE_TAILLE[taille]} (l'originale reste dans la médiathèque).`
+        message: cadre
+          ? `Image recadrée, ${LIBELLE_TAILLE[taille]} (l'image entière reste conservée).`
           : `Image mise à jour, ${LIBELLE_TAILLE[taille]}.`,
       })
     },
-    [classeurId, editeurRef, enRetouche, invaliderImages, setContenu],
+    [editeurRef, enRetouche, setContenu],
   )
 
   const premiereImage = (fichiers: FileList | null | undefined) =>
@@ -468,10 +446,12 @@ export function DialoguesImage({ image }: { image: ImageInsertion }) {
         }
         tailleInitiale={image.enRetouche?.taille ?? 'auto'}
         legendeInitiale={image.enRetouche?.nom ?? ''}
+        cadreInitial={image.enRetouche?.cadre ?? null}
+        estPhotoExistante={image.enRetouche?.photo ?? false}
         contexte={image.enRetouche?.contexte ?? 'page'}
         envoi={image.etat.type === 'envoi'}
         onAnnuler={image.annulerRetouche}
-        onValider={(preparation) => void image.appliquerRetouche(preparation)}
+        onValider={image.appliquerRetouche}
       />
       {image.classeurId !== null && (
         <ImagesDialog

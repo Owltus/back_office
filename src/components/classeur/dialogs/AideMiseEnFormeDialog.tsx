@@ -289,10 +289,13 @@ export function AideMiseEnFormeDialog({
               source={'Ouvrir le bac à sel.\n\n![Bac à sel ouvert](photo.webp)'}
             />
             <p>
-              Pour <Term>retoucher</Term> une image déjà placée (légende,
-              taille, cadre), <Term>cliquez dessus</Term> dans l'aperçu de la
-              page : la même fenêtre s'ouvre. <Kbd>Ctrl</Kbd> <KbdPlus />{' '}
-              <Kbd>Z</Kbd> annule.
+              Recadrer ne <Term>coupe jamais</Term> la photo : l'image entière
+              reste conservée, en pleine résolution. Pour <Term>retoucher</Term>{' '}
+              une image déjà placée (légende, taille, cadre),{' '}
+              <Term>cliquez dessus</Term> dans l'aperçu de la page : la même
+              fenêtre s'ouvre sur l'image complète, avec votre cadre ; « Image
+              entière » le retire. <Kbd>Ctrl</Kbd> <KbdPlus /> <Kbd>Z</Kbd>{' '}
+              annule.
             </p>
             <p>
               Dans le texte, une image est une ligne <code>![légende](…)</code>,

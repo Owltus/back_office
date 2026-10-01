@@ -142,6 +142,14 @@ export interface DbImage {
   taille: number
   largeur: number
   hauteur: number
+  /**
+   * L'ORIGINAL conservé (2026-10-01) : résolution d'origine, WebP compressé,
+   * jamais retouché. `null` pour une image envoyée avant ce jour.
+   */
+  original_chemin: string | null
+  original_largeur: number | null
+  original_hauteur: number | null
+  original_taille: number | null
   deleted_at: string | null
   created_at: string
   updated_at: string

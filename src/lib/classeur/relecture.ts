@@ -31,7 +31,11 @@
  * Le contenu des blocs de code (```) est ignoré.
  */
 
-import { estCheminImage, tailleDepuisTitre } from '#/lib/classeur/images.ts'
+import {
+  cadreDepuisTitre,
+  estCheminImage,
+  tailleDepuisTitre,
+} from '#/lib/classeur/images.ts'
 import { estLegendeGenerique } from '#/lib/classeur/legende.ts'
 import { boiteSurPage, estPhoto } from '#/lib/classeur/miseEnPageImage.ts'
 import { BLOCS } from '#/lib/classeur/print/remarkBlocs.ts'
@@ -155,14 +159,19 @@ export function alertesRelecture(
       // Dans une planche ou une étape, le cadre est imposé : rien à régler.
       if (bloc !== null) continue
       const photo = estPhoto(info.nom)
-      const boite = boiteSurPage(
-        info.largeur,
-        info.hauteur,
-        tailleDepuisTitre(titre),
-        { photo },
-      )
-      const ratio = info.largeur / Math.max(1, info.hauteur)
-      if (info.largeur > 1100 && !photo) {
+      // La zone CADRÉE (le fichier reste entier, 2026-10-01).
+      const cadre = cadreDepuisTitre(titre)
+      const largeur = cadre
+        ? (info.largeur * cadre.largeur) / 100
+        : info.largeur
+      const hauteur = cadre
+        ? (info.hauteur * cadre.hauteur) / 100
+        : info.hauteur
+      const boite = boiteSurPage(largeur, hauteur, tailleDepuisTitre(titre), {
+        photo,
+      })
+      const ratio = largeur / Math.max(1, hauteur)
+      if (largeur > 1100 && !photo) {
         alertes.push({
           ligne,
           message:

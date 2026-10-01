@@ -54,6 +54,10 @@ export const QUALITE_WEBP_SERREE = 0.65
 export const MAX_COTE_PX_SERRE = 1280
 /** Borne du bucket (file_size_limit). */
 export const MAX_WEBP_BYTES = 2 * 1024 * 1024
+/** Qualité de l'ORIGINAL conservé (2026-10-01) : compressé, mais fidèle. */
+export const QUALITE_WEBP_ORIGINAL = 0.85
+/** Plafond de l'original (limite du bucket relevée à 20 Mo le 2026-10-01). */
+export const MAX_ORIGINAL_BYTES = 20 * 1024 * 1024
 
 /** Largeurs possibles d'une image dans la page (pourcentage de la zone de contenu). */
 export const LARGEURS_IMAGE = [100, 75, 50, 33] as const
@@ -87,11 +91,60 @@ export interface Recadrage {
  * légende, tous facultatifs.
  */
 export interface PreparationImage {
-  recadrage?: Recadrage
+  /** Cadre retenu, en % de l'image entière ; absent = image entière. */
+  cadre?: CadreImage | null
   /** Absente = automatique. */
   taille?: TailleImage
   /** Texte imprimé sous l'image (`![légende](…)`). */
   legende?: string
+}
+
+/*
+ * RECADRAGE NON DESTRUCTIF (2026-10-01, demande utilisateur : « si je la
+ * recadre, je ne perds pas les données de base ; pouvoir la remettre en forme
+ * comme je veux »). Le fichier n'est JAMAIS coupé : le cadre est un réglage
+ * du document, écrit dans le titre de l'image (`cadre=x,y,l,h`, en % de
+ * l'image entière) et appliqué à l'affichage et à l'impression
+ * (`ImageDocument`). Une même image peut être cadrée différemment dans deux
+ * documents ; « Image entière » revient à tout moment à la photo complète.
+ */
+export interface CadreImage {
+  x: number
+  y: number
+  largeur: number
+  hauteur: number
+}
+
+const arrondi = (n: number) => Math.round(n * 10) / 10
+
+/** Cadre borné à l'image, `null` s'il la couvre (presque) entière. */
+export function cadreBorne(
+  c: CadreImage | null | undefined,
+): CadreImage | null {
+  if (!c) return null
+  const x = Math.min(Math.max(0, arrondi(c.x)), 99)
+  const y = Math.min(Math.max(0, arrondi(c.y)), 99)
+  const largeur = Math.min(Math.max(1, arrondi(c.largeur)), 100 - x)
+  const hauteur = Math.min(Math.max(1, arrondi(c.hauteur)), 100 - y)
+  if (x <= 0.2 && y <= 0.2 && largeur >= 99.6 && hauteur >= 99.6) return null
+  return { x, y, largeur, hauteur }
+}
+
+/** Cadre porté par le titre d'une image Markdown, `null` = image entière. */
+export function cadreDepuisTitre(
+  title: string | null | undefined,
+): CadreImage | null {
+  const m =
+    /(?:^|\s)cadre=(\d{1,3}(?:\.\d+)?),(\d{1,3}(?:\.\d+)?),(\d{1,3}(?:\.\d+)?),(\d{1,3}(?:\.\d+)?)(?:\s|$)/.exec(
+      title ?? '',
+    )
+  if (!m) return null
+  return cadreBorne({
+    x: Number(m[1]),
+    y: Number(m[2]),
+    largeur: Number(m[3]),
+    hauteur: Number(m[4]),
+  })
 }
 
 /*
@@ -119,9 +172,19 @@ export const TAILLES_IMAGE: readonly TailleImage[] = [
   'pleine',
 ]
 
-/** Titre Markdown d'une taille (avec son espace), vide en automatique. */
-export function titreImage(taille: TailleImage = 'auto'): string {
-  return taille === 'auto' ? '' : ` "${taille}"`
+/** Titre Markdown (avec son espace) : taille hors automatique, cadre s'il y en a un. */
+export function titreImage(
+  taille: TailleImage = 'auto',
+  cadre: CadreImage | null = null,
+): string {
+  const parties: string[] = []
+  if (taille !== 'auto') parties.push(taille)
+  const c = cadreBorne(cadre)
+  if (c)
+    parties.push(
+      `cadre=${[c.x, c.y, c.largeur, c.hauteur].map(String).join(',')}`,
+    )
+  return parties.length > 0 ? ` "${parties.join(' ')}"` : ''
 }
 
 /** Taille portée par le titre d'une image Markdown. */
@@ -193,6 +256,11 @@ export function dimensionsReduites(
   }
 }
 
+/** Chemin de l'ORIGINAL conservé : `<classeurId>/<uuid>.original.webp`. */
+export function cheminOriginalImage(classeurId: number, uuid: string): string {
+  return cheminImage(classeurId, uuid).replace(/\.webp$/, '.original.webp')
+}
+
 /** Chemin dans le bucket : `<classeurId>/<uuid>.webp` (le dossier porte la RLS). */
 export function cheminImage(
   classeurId: number,
@@ -234,13 +302,14 @@ export function markdownImage(
   legende: string,
   url: string,
   taille: TailleImage = 'auto',
+  cadre: CadreImage | null = null,
 ): string {
   // Espaces et parenthèses casseraient la syntaxe `![](…)` ;
   // `encodeURIComponent` laisse les parenthèses, on les encode à la main.
   const urlSure = url.replace(/[\s()]/g, (c) =>
     c === '(' ? '%28' : c === ')' ? '%29' : encodeURIComponent(c),
   )
-  return `![${nettoyerLegende(legende)}](${urlSure}${titreImage(taille)})`
+  return `![${nettoyerLegende(legende)}](${urlSure}${titreImage(taille, cadre)})`
 }
 
 /** Vrai pour un fichier que le navigateur a des chances de décoder comme image. */
@@ -370,11 +439,11 @@ export async function televerserImage(
   const refus = refusImageSource(file)
   if (refus) throw new Error(refus)
 
-  const base = { recadrage: preparation.recadrage }
-  let image = await convertirEnWebp(file, base)
+  // 1) Copie d'AFFICHAGE : l'image ENTIÈRE, allégée (jamais coupée : le
+  //    cadre s'applique à l'affichage).
+  let image = await convertirEnWebp(file)
   if (image.blob.size > MAX_WEBP_BYTES) {
     image = await convertirEnWebp(file, {
-      ...base,
       maxCote: MAX_COTE_PX_SERRE,
       qualite: QUALITE_WEBP_SERREE,
     })
@@ -384,19 +453,43 @@ export async function televerserImage(
       `Image encore trop lourde après compression (${formaterOctets(image.blob.size)}, 2 Mo maximum).`,
     )
   }
+  // 2) ORIGINAL : résolution d'origine, compressé, jamais retouché ; repli
+  //    à 4096 px s'il dépassait encore la limite du stockage.
+  let original = await convertirEnWebp(file, {
+    maxCote: Number.POSITIVE_INFINITY,
+    qualite: QUALITE_WEBP_ORIGINAL,
+  })
+  if (original.blob.size > MAX_ORIGINAL_BYTES) {
+    original = await convertirEnWebp(file, {
+      maxCote: 4096,
+      qualite: QUALITE_WEBP_ORIGINAL,
+    })
+  }
+  if (original.blob.size > MAX_ORIGINAL_BYTES) {
+    throw new Error(
+      `Original trop lourd après compression (${formaterOctets(original.blob.size)}, 20 Mo maximum).`,
+    )
+  }
 
-  const chemin = cheminImage(classeurId)
-  const { error } = await supabase.storage
-    .from(BUCKET_IMAGES)
-    .upload(chemin, image.blob, {
+  const uuid = crypto.randomUUID()
+  const chemin = cheminImage(classeurId, uuid)
+  const cheminOriginal = cheminOriginalImage(classeurId, uuid)
+  const envoyer = (c: string, blob: Blob) =>
+    supabase.storage.from(BUCKET_IMAGES).upload(c, blob, {
       contentType: 'image/webp',
       cacheControl: '31536000',
       upsert: false,
     })
-  if (error) throw error
+  const envoiOriginal = await envoyer(cheminOriginal, original.blob)
+  if (envoiOriginal.error) throw envoiOriginal.error
+  const envoiAffichage = await envoyer(chemin, image.blob)
+  if (envoiAffichage.error) {
+    await supabase.storage.from(BUCKET_IMAGES).remove([cheminOriginal])
+    throw envoiAffichage.error
+  }
 
-  // Fiche dans la médiathèque. Si elle échoue, le fichier ne doit pas
-  // rester orphelin dans le bucket : on le retire avant de remonter.
+  // Fiche dans la médiathèque. Si elle échoue, les fichiers ne doivent pas
+  // rester orphelins dans le bucket : on les retire avant de remonter.
   let fiche: DbImage
   try {
     fiche = await insertImage(classeurId, {
@@ -405,9 +498,13 @@ export async function televerserImage(
       taille: image.blob.size,
       largeur: image.largeur,
       hauteur: image.hauteur,
+      original_chemin: cheminOriginal,
+      original_largeur: original.largeur,
+      original_hauteur: original.hauteur,
+      original_taille: original.blob.size,
     })
   } catch (err) {
-    await supabase.storage.from(BUCKET_IMAGES).remove([chemin])
+    await supabase.storage.from(BUCKET_IMAGES).remove([chemin, cheminOriginal])
     throw err
   }
 
@@ -418,6 +515,7 @@ export async function televerserImage(
       preparation.legende ?? '',
       chemin,
       preparation.taille ?? 'auto',
+      preparation.cadre ?? null,
     ),
   }
 }
@@ -444,9 +542,14 @@ export async function supprimerImage(
     await updateItem('document', doc.id, { content: nouveau })
     documentsModifies += 1
   }
+  // La copie d'affichage ET l'original conservé.
   const { error } = await supabase.storage
     .from(BUCKET_IMAGES)
-    .remove([image.chemin])
+    .remove(
+      image.original_chemin
+        ? [image.chemin, image.original_chemin]
+        : [image.chemin],
+    )
   if (error) throw error
   await softDeleteImage(image.id)
   return { documentsModifies }
@@ -583,6 +686,7 @@ export interface ImageDansTexte {
   alt: string
   chemin: string
   taille: TailleImage
+  cadre: CadreImage | null
 }
 
 /**
@@ -605,6 +709,7 @@ export function trouverImage(
       alt: m[1],
       chemin: m[2],
       taille: tailleDepuisTitre(m[3]),
+      cadre: cadreDepuisTitre(m[3]),
     })
   }
   if (occurrences.length === 0) return null
@@ -616,11 +721,12 @@ export function trouverImage(
   return occurrences[0]
 }
 
-/** Le jeton réécrit : légende, chemin et taille donnés. */
+/** Le jeton réécrit : légende, chemin, taille et cadre donnés. */
 export function jetonImage(
   legende: string,
   chemin: string,
   taille: TailleImage = 'auto',
+  cadre: CadreImage | null = null,
 ): string {
-  return `![${nettoyerLegende(legende)}](${chemin}${titreImage(taille)})`
+  return `![${nettoyerLegende(legende)}](${chemin}${titreImage(taille, cadre)})`
 }

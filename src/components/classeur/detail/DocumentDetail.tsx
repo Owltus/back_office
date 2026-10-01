@@ -203,6 +203,7 @@ export function DocumentDetail() {
           img.src,
           ligne,
           img.closest('[data-bloc="photos"]') ? 'planche' : 'page',
+          img.dataset.genre === 'photo',
         )
         return
       }

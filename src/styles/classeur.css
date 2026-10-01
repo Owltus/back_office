@@ -388,7 +388,7 @@
   height: auto;
 }
 /* Image au fil d'une phrase ou d'un tableau : petite, alignée au texte. */
-.pdf-prose :not(figure) > img {
+.pdf-prose :not(figure, .classeur-image-cadre) > img {
   display: inline-block;
   max-height: 30mm;
   vertical-align: middle;
@@ -515,6 +515,90 @@
 .pdf-prose [data-bloc='etape'][data-deroule] > .etape-texte,
 .pdf-prose [data-bloc='etape'][data-deroule] > .etape-photos {
   display: contents;
+}
+
+/* ─── Fenêtre de recadrage NON DESTRUCTIF (2026-10-01) ───
+   `ImageDocument` charge l'image ENTIÈRE et l'enveloppe :
+     .classeur-image (conteneur, porte --r, --nat, --cx/--cy/--cl/--ch)
+       > .classeur-image-cadre (fenêtre aux proportions du cadre)
+         > img (agrandie et décalée pour ne montrer que le cadre)
+   Les tailles se calculent ici, en requêtes de conteneur (`cqw`, `cqh`) :
+   elles valent pareil dans la mesure, les pages copiées et l'impression.
+   Mêmes repères que les règles `figure > img` ci-dessus (image sans fiche)
+   et que `lib/classeur/miseEnPageImage.ts`. */
+.pdf-prose .classeur-image {
+  --hmax: 150mm;
+  display: block;
+  container-type: inline-size;
+}
+.pdf-prose .classeur-image[data-genre='photo'] {
+  --hmax: 90mm;
+}
+.pdf-prose .classeur-image-cadre {
+  display: block;
+  position: relative;
+  overflow: hidden;
+  margin: 0 auto;
+  aspect-ratio: var(--r);
+  /* Automatique : jamais agrandie, bornée à la largeur et à --hmax. */
+  width: min(100cqw, var(--nat), calc(var(--hmax) * var(--r)));
+}
+.pdf-prose .classeur-image[data-taille='petite'] > .classeur-image-cadre {
+  width: min(33cqw, calc(55mm * var(--r)));
+}
+.pdf-prose .classeur-image[data-taille='moyenne'] > .classeur-image-cadre {
+  width: min(50cqw, calc(85mm * var(--r)));
+}
+.pdf-prose .classeur-image[data-taille='pleine'] > .classeur-image-cadre {
+  width: min(100cqw, calc(170mm * var(--r)));
+}
+.pdf-prose .classeur-image-cadre > img {
+  position: absolute;
+  display: block;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  width: calc(100% * 100 / var(--cl));
+  height: auto;
+  left: calc(-100% * var(--cx) / var(--cl));
+  top: calc(-100% * var(--cy) / var(--ch));
+}
+/* Au fil d'une phrase : petite, alignée au texte. */
+.pdf-prose :not(figure) > .classeur-image {
+  display: inline-block;
+  vertical-align: middle;
+  container-type: normal;
+}
+.pdf-prose :not(figure) > .classeur-image > .classeur-image-cadre {
+  width: min(var(--nat), calc(30mm * var(--r)));
+}
+/* Dans une planche : case 4:3, la zone cadrée y tient ENTIÈRE, centrée. */
+.pdf-prose [data-bloc='photos'] > figure > .classeur-image {
+  container-type: size;
+  aspect-ratio: 4 / 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f4f4f4;
+  border: 0.5pt solid #d4d4d4;
+  box-sizing: border-box;
+}
+.pdf-prose
+  [data-bloc='photos']
+  > figure
+  > .classeur-image
+  > .classeur-image-cadre {
+  margin: 0;
+  width: min(100cqw, calc(100cqh * var(--r)));
+}
+/* Dans une étape : la colonne de droite, 6 cm de haut au plus. */
+.pdf-prose
+  [data-bloc='etape']:not([data-deroule])
+  .etape-photos
+  .classeur-image
+  > .classeur-image-cadre {
+  width: min(100cqw, var(--nat), calc(60mm * var(--r)));
 }
 .pdf-prose strong {
   font-weight: 700;
