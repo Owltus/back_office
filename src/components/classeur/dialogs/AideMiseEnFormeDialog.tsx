@@ -260,7 +260,7 @@ export function AideMiseEnFormeDialog({
               (imprimée sous l'image : dites ce qu'elle montre), permet de la{' '}
               <Term>recadrer</Term> (tirez les coins du cadre) et de choisir sa{' '}
               <Term>taille</Term>. En <Term>Automatique</Term>, l'application
-              s'occupe de tout : l'image est centrée et ne dépasse jamais 10 cm
+              s'occupe de tout : l'image est centrée et ne dépasse jamais 9 cm
               de haut, même une photo prise en hauteur. Petite, moyenne et
               pleine largeur restent possibles ; une capture d'écran à lire se
               met en pleine largeur.

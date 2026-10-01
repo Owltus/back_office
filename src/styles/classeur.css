@@ -370,15 +370,23 @@
   display: block;
   margin: 0 auto;
   /* Automatique : taille naturelle, bornée en largeur ET en hauteur — une
-     photo en portrait se réduit d'elle-même au lieu d'occuper la page. */
-  max-height: 100mm;
+     photo en portrait se réduit d'elle-même au lieu d'occuper la page.
+     Une CAPTURE garde jusqu'à 15 cm (son texte doit rester lisible), une
+     PHOTO 9 cm (`data-genre`, lu dans la médiathèque par ImageDocument).
+     Repères tenus à l'identique dans `lib/classeur/miseEnPageImage.ts`. */
+  max-height: 150mm;
+}
+.pdf-prose figure > img[data-genre='photo'] {
+  max-height: 90mm;
 }
 .pdf-prose figure > img[data-taille='petite'] {
   width: 33%;
+  max-height: 55mm;
   object-fit: contain;
 }
 .pdf-prose figure > img[data-taille='moyenne'] {
   width: 50%;
+  max-height: 85mm;
   object-fit: contain;
 }
 .pdf-prose figure > img[data-taille='pleine'] {
@@ -440,7 +448,7 @@
    normaux. */
 .pdf-prose [data-bloc='etape'][data-photos] {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 38%;
+  grid-template-columns: minmax(0, 1fr) 32%;
   column-gap: 0.5cm;
   align-items: start;
   margin: 0 0 0.35cm;
@@ -465,7 +473,7 @@
   > figure
   > img {
   width: 100%;
-  max-height: 90mm;
+  max-height: 60mm;
   object-fit: contain;
 }
 .pdf-prose [data-bloc='etape'][data-deroule] {

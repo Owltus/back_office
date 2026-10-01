@@ -101,7 +101,7 @@ export interface PreparationImage {
  * à côté des phrases courtes d'une procédure ; aucun référentiel de modes
  * opératoires ne le pratique).
  *
- *   auto     largeur naturelle, bornée à la page ET à ~100 mm de haut
+ *   auto     largeur naturelle, bornée à la page ET à 90 mm de haut
  *   petite   un tiers de la largeur      moyenne   la moitié
  *   pleine   toute la largeur (captures d'écran à lire)
  *

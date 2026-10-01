@@ -28,7 +28,7 @@
 
 import { estCheminImage, tailleDepuisTitre } from '#/lib/classeur/images.ts'
 import { estLegendeGenerique } from '#/lib/classeur/legende.ts'
-import { boiteSurPage } from '#/lib/classeur/miseEnPageImage.ts'
+import { boiteSurPage, estPhoto } from '#/lib/classeur/miseEnPageImage.ts'
 import { BLOCS } from '#/lib/classeur/print/remarkBlocs.ts'
 import { RE_SEPARATEUR, decouperLigne } from '#/lib/classeur/tableauMarkdown.ts'
 
@@ -51,9 +51,6 @@ export interface InfoPage {
   remplissage?: number
   saut?: number
 }
-
-/** Photo d'appareil (nom de fichier de téléphone) : jamais « capture trop large ». */
-const NOM_PHOTO = /^(PXL|IMG|DSC|DSCN|MVIMG)[_-]?\d/i
 
 /** Moitié de la hauteur utile d'une page de document, en mm. */
 const DEMI_PAGE_MM = 115
@@ -146,13 +143,15 @@ export function alertesRelecture(
       }
       // Dans une planche ou une étape, le cadre est imposé : rien à régler.
       if (bloc !== null) continue
+      const photo = estPhoto(info.nom)
       const boite = boiteSurPage(
         info.largeur,
         info.hauteur,
         tailleDepuisTitre(titre),
+        { photo },
       )
       const ratio = info.largeur / Math.max(1, info.hauteur)
-      if (info.largeur > 1100 && !NOM_PHOTO.test(info.nom)) {
+      if (info.largeur > 1100 && !photo) {
         alertes.push({
           ligne,
           message:
@@ -168,7 +167,10 @@ export function alertesRelecture(
       if (boite.hauteur > DEMI_PAGE_MM) {
         alertes.push({
           ligne,
-          message: `Image très haute (environ ${String(Math.round(boite.hauteur / 10))} cm, plus d'une demi-page) : choisissez la taille Automatique ou recadrez-la.`,
+          message:
+            tailleDepuisTitre(titre) === 'auto'
+              ? `Capture très haute (environ ${String(Math.round(boite.hauteur / 10))} cm, plus d'une demi-page) : cliquez dessus dans l'aperçu et recadrez sur la partie utile.`
+              : `Image très haute (environ ${String(Math.round(boite.hauteur / 10))} cm, plus d'une demi-page) : choisissez la taille Automatique ou recadrez-la.`,
         })
       }
     }

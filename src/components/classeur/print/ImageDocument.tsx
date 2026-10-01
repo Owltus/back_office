@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 
+import { useImages } from '#/components/classeur/hooks/useImages.ts'
 import { classeurKeys } from '#/lib/classeur/keys.ts'
+import { estPhoto } from '#/lib/classeur/miseEnPageImage.ts'
 import {
   tailleDepuisTitre,
   telechargerImage,
@@ -36,6 +38,14 @@ export function ImageDocument({
   // Taille : `data-taille`, mise en page par `classeur.css` (jamais de style
   // en ligne : une planche ou une étape imposent leur propre cadre).
   const taille = tailleDepuisTitre(title)
+  // Photo ou capture (`data-genre`) : une photo se réduit sans perte, une
+  // capture non (son texte deviendrait illisible). Lu dans la fiche de la
+  // médiathèque, une seule lecture par classeur (cache partagé).
+  const classeurId = Number(chemin.split('/')[0])
+  const fiches = useImages(classeurId)
+  const fiche = fiches.data?.find(
+    (f) => f.chemin.toLowerCase() === chemin.toLowerCase(),
+  )
   const image = useQuery({
     queryKey: classeurKeys.image(chemin),
     queryFn: () => telechargerImage(chemin),
@@ -43,7 +53,9 @@ export function ImageDocument({
     retry: 1,
   })
 
-  if (image.isPending) {
+  // La médiathèque est attendue aussi : sa réponse change la hauteur de
+  // l'image, et la pagination ne mesure qu'une fois tout chargé.
+  if (image.isPending || fiches.isPending) {
     return (
       <span
         data-image-status="pending"
@@ -77,6 +89,9 @@ export function ImageDocument({
       alt={alt ?? ''}
       data-image-status="rendered"
       data-taille={taille}
+      data-genre={
+        fiche ? (estPhoto(fiche.nom) ? 'photo' : 'capture') : undefined
+      }
       // Lu au clic dans l'aperçu d'édition (retouche de l'image) ; suit les
       // pages A4, qui sont des copies HTML.
       data-chemin={chemin}

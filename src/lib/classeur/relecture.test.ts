@@ -100,12 +100,22 @@ describe('alertesRelecture — images (2026-10-01)', () => {
       ),
     ).toEqual([expect.stringMatching(/Bandeau/)])
   })
-  it('image très haute en pleine largeur, pas en automatique', () => {
-    const portrait = mediatheque([A], { largeur: 900, hauteur: 1600 })
-    expect(messages(`![Panneau](${A} "pleine")`, portrait)).toEqual([
-      expect.stringMatching(/très haute/),
+  it('image très haute : pleine largeur, capture automatique, jamais une photo réduite', () => {
+    const capture = mediatheque([A], { largeur: 900, hauteur: 1600 })
+    expect(messages(`![Panneau](${A} "pleine")`, capture)).toEqual([
+      expect.stringMatching(/^Image très haute.*Automatique/),
     ])
-    expect(messages(`![Panneau](${A})`, portrait)).toEqual([])
+    // Une capture garde 15 cm en automatique (lisible) : recadrer, pas réduire.
+    expect(messages(`![Panneau](${A})`, capture)).toEqual([
+      expect.stringMatching(/^Capture très haute.*recadrez/),
+    ])
+    // Une photo de téléphone est bornée à 9 cm : rien à signaler.
+    const photo = mediatheque([A], {
+      largeur: 900,
+      hauteur: 1600,
+      nom: 'PXL_20260930_090804989',
+    })
+    expect(messages(`![Ballon](${A})`, photo)).toEqual([])
   })
   it('dans une planche ou une étape, la taille est imposée : rien à régler', () => {
     const large = mediatheque([A], { largeur: 1600, hauteur: 900 })

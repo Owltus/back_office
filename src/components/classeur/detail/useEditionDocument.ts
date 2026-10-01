@@ -253,8 +253,11 @@ export function useEditionDocument(doc: DbDocument | null) {
         setConflit({ updatedAt: resultat.updatedAt })
         return
       }
-      fermer()
+      // Relire AVANT de fermer : sinon la page affiche l'ancienne version
+      // le temps de la relecture, puis se remet en page une seconde fois
+      // (constaté le 2026-10-01). « Sauvegarder » reste en cours jusque-là.
       await invalider()
+      fermer()
     },
   })
 

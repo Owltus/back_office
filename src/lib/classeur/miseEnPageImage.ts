@@ -8,14 +8,28 @@
 import type { TailleImage } from '#/lib/classeur/images.ts'
 import { CONTENT_WIDTH_MM } from '#/lib/classeur/print/constants.ts'
 
+/*
+ * PHOTO ou CAPTURE : une photo de téléphone peut être réduite sans perte
+ * (9 cm de haut au plus en automatique), une capture d'écran non — son texte
+ * deviendrait illisible (15 cm au plus, jamais agrandie). Reconnue au nom
+ * d'origine gardé par la médiathèque (`PXL_…`, `IMG_…`) ; une image collée
+ * depuis le presse-papiers est une capture.
+ */
+const NOM_PHOTO = /^(PXL|IMG|DSC|DSCN|MVIMG)[_-]?\d/i
+
+export function estPhoto(nom: string | null | undefined): boolean {
+  return NOM_PHOTO.test((nom ?? '').trim())
+}
+
 /* Repères de `classeur.css`, en mm (zone de contenu 190 mm). */
 const PX_EN_MM = 25.4 / 96
 const HAUTEUR_MAX_MM: Record<TailleImage, number> = {
-  auto: 100,
-  petite: 100,
-  moyenne: 100,
+  auto: 150,
+  petite: 55,
+  moyenne: 85,
   pleine: 170,
 }
+const HAUTEUR_MAX_PHOTO_AUTO_MM = 90
 const LARGEUR_TAILLE: Record<Exclude<TailleImage, 'auto'>, number> = {
   petite: 0.33,
   moyenne: 0.5,
@@ -27,9 +41,13 @@ export function boiteSurPage(
   largeurPx: number,
   hauteurPx: number,
   taille: TailleImage,
+  { photo = false }: { photo?: boolean } = {},
 ): { largeur: number; hauteur: number } {
   const ratio = largeurPx / Math.max(1, hauteurPx)
-  const hMax = HAUTEUR_MAX_MM[taille]
+  const hMax =
+    taille === 'auto' && photo
+      ? HAUTEUR_MAX_PHOTO_AUTO_MM
+      : HAUTEUR_MAX_MM[taille]
   let l =
     taille === 'auto'
       ? Math.min(CONTENT_WIDTH_MM, largeurPx * PX_EN_MM)

@@ -306,7 +306,9 @@ export function ImagePreparationDialog({
               <ApercuPage
                 url={url}
                 cadre={cadre}
-                boite={boiteSurPage(finale.largeur, finale.hauteur, taille)}
+                boite={boiteSurPage(finale.largeur, finale.hauteur, taille, {
+                  photo,
+                })}
                 legende={legende.trim()}
               />
             )}
