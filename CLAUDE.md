@@ -857,9 +857,13 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
       « : »), étape de liste de plus de 35 mots, émoji, case « null ».
     - **Refusé par l'utilisateur** : modèles / gabarits de document à la
       création (« pas de nouveau modèle de document »), ne pas re-proposer.
-    - Doc 89 : code de la boîte à clés RETIRÉ du texte (décision
-      utilisateur) ; ⚠ il reste dans ses anciennes versions et points de
-      restauration (purge = suppression, sur confirmation seulement).
+    - Doc 89 : code de la boîte à clés RETIRÉ du texte, de ses anciennes
+      versions (14 supprimées, `classeur_doc89_purge_code_2026-10-01.sql`)
+      et des 11 points de restauration qui le portaient (code remplacé par
+      « (retiré) », `classeur_points_purge_code_2026-10-01.sql`) — JOUÉS le
+      2026-10-01 sur demande explicite de l'utilisateur. Contrôle : plus
+      aucun « 4400 » en base hors le code postal 44000 du Registre de
+      Sécurité.
   - Mesuré : PNG 3,2 Mo → WebP 106 ko en 610 ms. Non couvert, à dire si
     demandé : les points de restauration et la fusion JSON ignorent les
     fiches d'images ; les exports Markdown/JSON portent des chemins que
