@@ -26,18 +26,31 @@ import {
 import { TableauDialog } from '#/components/classeur/dialogs/TableauDialog.tsx'
 import { IconAction } from '#/components/classeur/IconAction.tsx'
 import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
+import { Tip } from '#/components/shared/Tip.tsx'
+import { Button } from '#/components/ui/button.tsx'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '#/components/ui/dropdown-menu.tsx'
 import {
   basculerEntourage,
   basculerPrefixe,
   continuerListe,
+  encadrer,
   indenterListe,
   insererBloc,
   insererLien,
   insererTexteEnBloc,
+  LIBELLE_ENCADRE,
   prefixeActif,
 } from '#/lib/classeur/markdownEdition.ts'
 import type {
   Bloc,
+  TypeEncadre,
   Edition,
   Entourage,
   Prefixe,
@@ -62,6 +75,7 @@ type Action =
   | { type: 'entourage'; valeur: Entourage }
   | { type: 'prefixe'; valeur: Prefixe }
   | { type: 'bloc'; valeur: Bloc }
+  | { type: 'encadre'; valeur: TypeEncadre }
   | { type: 'lien' }
 
 function calculer(action: Action, v: string, d: number, f: number): Edition {
@@ -72,6 +86,8 @@ function calculer(action: Action, v: string, d: number, f: number): Edition {
       return basculerPrefixe(v, d, f, action.valeur)
     case 'bloc':
       return insererBloc(v, d, f, action.valeur)
+    case 'encadre':
+      return encadrer(v, d, f, action.valeur)
     case 'lien':
       return insererLien(v, d, f)
   }
@@ -239,6 +255,74 @@ export function useMiseEnForme(
 
 type MiseEnForme = ReturnType<typeof useMiseEnForme>
 
+const TYPES_ENCADRE: { valeur: TypeEncadre; aide: string }[] = [
+  { valeur: 'attention', aide: 'un danger, une erreur à ne pas commettre' },
+  { valeur: 'important', aide: 'une règle à ne pas oublier' },
+  { valeur: 'astuce', aide: 'un conseil, une phrase à dire au client' },
+  { valeur: 'note', aide: 'une précision, une source' },
+]
+
+/**
+ * Bouton Encadré : un menu (2026-10-01) — encadré simple, ou typé
+ * (Attention, Important, Astuce, Note : le mot s'imprime en tête). Le menu
+ * rend le focus à l'éditeur, dont la sélection est gardée.
+ */
+function MenuEncadre({
+  actif,
+  onSimple,
+  onType,
+}: {
+  actif: boolean
+  onSimple: () => void
+  onType: (type: TypeEncadre) => void
+}) {
+  return (
+    <DropdownMenu>
+      <Tip label="Encadré : attention, important, astuce, note">
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="outline"
+            size="icon-sm"
+            aria-label="Encadré"
+            aria-pressed={actif}
+            onPointerDown={(e) => {
+              // Garde la sélection de l'éditeur (le menu s'ouvre au clic).
+              if (e.pointerType === 'mouse') e.preventDefault()
+            }}
+            className={cn(actif && 'bg-accent text-accent-foreground')}
+          >
+            <TextQuote />
+          </Button>
+        </DropdownMenuTrigger>
+      </Tip>
+      <DropdownMenuContent
+        align="start"
+        className="w-72"
+        onCloseAutoFocus={(e) => e.preventDefault()}
+      >
+        <DropdownMenuLabel>Encadré</DropdownMenuLabel>
+        {TYPES_ENCADRE.map((t) => (
+          <DropdownMenuItem key={t.valeur} onSelect={() => onType(t.valeur)}>
+            <span className="flex flex-col">
+              <span className="font-medium">{LIBELLE_ENCADRE[t.valeur]}</span>
+              <span className="text-xs text-muted-foreground">{t.aide}</span>
+            </span>
+          </DropdownMenuItem>
+        ))}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={onSimple}>
+          <span className="flex flex-col">
+            <span className="font-medium">Encadré simple</span>
+            <span className="text-xs text-muted-foreground">
+              une citation, une remarque ; un second clic le retire
+            </span>
+          </span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
 /** Un bouton de la barre : garde le focus (et la sélection) dans l'éditeur. */
 function Outil({
   label,
@@ -349,11 +433,10 @@ export function BarreMiseEnForme({
           actif={ligneActive === 'cases'}
           onClick={prefixe('cases')}
         />
-        <Outil
-          label="Encadré (citation, remarque)"
-          icon={<TextQuote />}
+        <MenuEncadre
           actif={ligneActive === 'citation'}
-          onClick={prefixe('citation')}
+          onSimple={prefixe('citation')}
+          onType={(valeur) => executer({ type: 'encadre', valeur })}
         />
       </ButtonGroup>
       {/* Au doigt seulement : pas de Tab sur un clavier virtuel. */}

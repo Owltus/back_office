@@ -15,6 +15,7 @@ import remarkMath from 'remark-math'
 import type { Options } from 'react-markdown'
 
 import { rehypeBlocs } from '#/lib/classeur/print/rehypeBlocs.ts'
+import { rehypeEncadres } from '#/lib/classeur/print/rehypeEncadres.ts'
 import { rehypeFigures } from '#/lib/classeur/print/rehypeFigures.ts'
 import { rehypeLignesSource } from '#/lib/classeur/print/lignesSource.ts'
 import { remarkBlocs } from '#/lib/classeur/print/remarkBlocs.ts'
@@ -32,5 +33,6 @@ export const REHYPE_CLASSEUR: Plugins = [
   rehypeKatex,
   rehypeFigures,
   rehypeBlocs,
+  rehypeEncadres,
   rehypeLignesSource,
 ]

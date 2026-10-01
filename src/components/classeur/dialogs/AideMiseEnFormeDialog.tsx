@@ -198,8 +198,7 @@ export function AideMiseEnFormeDialog({
               <Bouton icon={<List />} /> puces,{' '}
               <Bouton icon={<ListOrdered />} /> numéros,{' '}
               <Bouton icon={<ListTodo />} /> cases à cocher (pratique pour une
-              liste de contrôle imprimée), <Bouton icon={<TextQuote />} />{' '}
-              encadré pour une remarque.
+              liste de contrôle imprimée).
             </p>
             <p>
               Dans une liste, <Kbd>Entrée</Kbd> crée l'élément suivant (le
@@ -209,9 +208,30 @@ export function AideMiseEnFormeDialog({
             </p>
             <Exemple
               source={
-                '1. Accueillir le client\n2. Vérifier la réservation\n   - nom\n   - dates\n\n- [ ] Clé remise\n\n> Une remarque à ne pas oublier.'
+                '1. Accueillir le client\n2. Vérifier la réservation\n   - nom\n   - dates\n\n- [ ] Clé remise'
               }
             />
+          </Section>
+
+          <Section title="Encadrés">
+            <p>
+              <Bouton icon={<TextQuote />} /> ouvre un menu. Choisissez le{' '}
+              <Term>type</Term> : <Term>Attention</Term> pour un danger ou une
+              erreur à ne pas commettre, <Term>Important</Term> pour une règle à
+              ne pas oublier, <Term>Astuce</Term> pour un conseil ou une phrase
+              à dire au client, <Term>Note</Term> pour une précision. Le mot
+              s'imprime en tête de l'encadré ; en noir et blanc, le type se
+              reconnaît à ce mot et au trait, jamais à une couleur.
+            </p>
+            <Exemple
+              source={
+                '> [!WARNING]\n> Ne jamais fermer les vannes avant d’avoir ouvert le by-pass.\n\n> [!TIP]\n> Phrase à dire : « Je vérifie tout de suite. »'
+              }
+            />
+            <p>
+              Réservez <Term>Attention</Term> aux vrais dangers : un document où
+              tout est encadré n'attire plus l'œil sur rien.
+            </p>
           </Section>
 
           <Section title="Tableaux">

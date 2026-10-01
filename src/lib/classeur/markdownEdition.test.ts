@@ -6,6 +6,7 @@ import {
   basculerPrefixe,
   continuerListe,
   indenterListe,
+  encadrer,
   entourerDeBloc,
   insererBloc,
   insererLien,
@@ -281,5 +282,25 @@ describe('entourerDeBloc — étape illustrée, planche', () => {
     const v = 'un\ndeux\ntrois'
     const t = appliquerEdition(v, entourerDeBloc(v, 0, 3, 'etape'))
     expect(t).toBe(':::etape\nun\n\n:::\n\ndeux\ntrois')
+  })
+})
+
+describe('encadrer — encadrés typés', () => {
+  it('encadre la ligne du curseur avec son type', () => {
+    const v = 'Avant.\n\nCouper l’eau.\n\nAprès.'
+    expect(appliquerEdition(v, encadrer(v, 10, 10, 'attention'))).toBe(
+      'Avant.\n\n> [!WARNING]\n> Couper l’eau.\n\nAprès.',
+    )
+  })
+  it('reprend un encadré existant sans doubler les `>` ni le type', () => {
+    const v = '> [!NOTE]\n> Ligne 1\n>\n> Ligne 2'
+    expect(appliquerEdition(v, encadrer(v, 0, v.length, 'astuce'))).toBe(
+      '> [!TIP]\n> Ligne 1\n>\n> Ligne 2\n',
+    )
+  })
+  it('ligne vide : encadré prêt à écrire', () => {
+    expect(appliquerEdition('', encadrer('', 0, 0, 'important'))).toBe(
+      '> [!IMPORTANT]\n>\n',
+    )
   })
 })

@@ -843,9 +843,23 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
     - Même jour, hors images : après « Sauvegarder », l'éditeur RELIT le
       document avant de se fermer (`useEditionDocument`) — avant,
       l'ancienne version restait affichée le temps de la relecture.
-    - Suite notée dans le plan, NON faite : gabarits par genre de document,
-      encadrés typés `> [!WARNING]`, alertes de rédaction (faux titres en
-      gras, étapes trop longues, émojis, « null » dans les tableaux).
+    - **Encadrés TYPÉS (même jour, décision utilisateur)** : syntaxe des
+      alertes GitHub, `> [!WARNING]` / `[!IMPORTANT]` / `[!TIP]` /
+      `[!NOTE]` en 1re ligne (`CAUTION` = attention) — Markdown standard,
+      Registre y voit un encadré ordinaire. `rehypeEncadres` pose
+      `data-encadre` et le mot en tête (Attention, Important, Astuce,
+      Note) ; noir et blanc : Attention = cadre complet, Important = trait
+      épais, Astuce / Note = trait fin gris. Bouton Encadré = MENU
+      (`encadrer` dans `markdownEdition.ts`, reprend un encadré existant
+      sans doubler `>` ni le type) ; l'encadré simple reste.
+    - **Relecture de l'ÉCRITURE (même jour, décision utilisateur)** : ligne
+      en gras seule qui joue le titre (pas une introduction finie par
+      « : »), étape de liste de plus de 35 mots, émoji, case « null ».
+    - **Refusé par l'utilisateur** : modèles / gabarits de document à la
+      création (« pas de nouveau modèle de document »), ne pas re-proposer.
+    - Doc 89 : code de la boîte à clés RETIRÉ du texte (décision
+      utilisateur) ; ⚠ il reste dans ses anciennes versions et points de
+      restauration (purge = suppression, sur confirmation seulement).
   - Mesuré : PNG 3,2 Mo → WebP 106 ko en 610 ms. Non couvert, à dire si
     demandé : les points de restauration et la fusion JSON ignorent les
     fiches d'images ; les exports Markdown/JSON portent des chemins que

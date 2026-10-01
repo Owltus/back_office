@@ -330,6 +330,39 @@
   color: #000;
   font-style: italic;
 }
+/* Encadrés TYPÉS (`> [!WARNING]`…, `rehypeEncadres`, 2026-10-01) : en noir
+   et blanc, le type se lit au MOT en tête et au trait, jamais à la couleur.
+   Attention = cadre complet ; Important = trait épais ; Astuce et Note =
+   trait fin gris, plus discrets. Texte droit (pas d'italique). */
+.pdf-prose blockquote[data-encadre] {
+  font-style: normal;
+  padding: 0.2cm 0.3cm 0.2cm 0.4cm;
+}
+.pdf-prose blockquote[data-encadre] > :last-child {
+  margin-bottom: 0;
+}
+.pdf-prose blockquote[data-encadre='attention'] {
+  border: 1pt solid #000;
+  border-left-width: 4pt;
+}
+.pdf-prose blockquote[data-encadre='important'] {
+  border-left-width: 4pt;
+}
+.pdf-prose blockquote[data-encadre='astuce'],
+.pdf-prose blockquote[data-encadre='note'] {
+  border-left: 1.5pt solid #777;
+}
+.pdf-prose blockquote[data-encadre] > .encadre-titre {
+  margin: 0 0 0.08cm;
+  font-size: 7.5pt;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.pdf-prose blockquote[data-encadre='astuce'] > .encadre-titre,
+.pdf-prose blockquote[data-encadre='note'] > .encadre-titre {
+  color: #555;
+}
 .pdf-prose hr {
   border: none;
   height: 0.75pt;

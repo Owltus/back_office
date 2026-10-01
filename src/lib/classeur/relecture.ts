@@ -23,6 +23,11 @@
  *   - une page remplie à moins de la moitié parce qu'un saut `===` l'a
  *     terminée (remplissage remonté par la pagination).
  *
+ * Et l'ÉCRITURE (même jour, décision utilisateur) : une ligne en gras qui
+ * joue le titre (elle peut rester seule en bas de page, un vrai titre non),
+ * une étape de liste de plus de 35 mots (une action par étape), un émoji
+ * (mal imprimé en noir et blanc), une case de tableau « null ».
+ *
  * Le contenu des blocs de code (```) est ignoré.
  */
 
@@ -51,6 +56,12 @@ export interface InfoPage {
   remplissage?: number
   saut?: number
 }
+
+/** Une étape de plus de ce nombre de mots est signalée (une action par étape). */
+const MOTS_PAR_ETAPE = 35
+
+/** Pictogrammes et émojis (pas les flèches ni les signes typographiques). */
+const EMOJI = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B50}\u{2B55}]/u
 
 /** Moitié de la hauteur utile d'une page de document, en mm. */
 const DEMI_PAGE_MM = 115
@@ -184,6 +195,40 @@ export function alertesRelecture(
       })
     }
 
+    // Ligne en gras seule qui joue le titre (une phrase d'introduction
+    // finie par « : » n'en est pas un).
+    const faux = /^\s*(\*\*|__)([^*_]{1,80})\1\s*$/.exec(l)
+    if (faux && !faux[2].trim().endsWith(':')) {
+      alertes.push({
+        ligne,
+        message: `Ligne en gras utilisée comme titre : « ${extrait(faux[2])} ». Utilisez le bouton Sous-titre : un vrai titre ne reste jamais seul en bas de page.`,
+      })
+    }
+
+    // Étape trop longue.
+    const etape = /^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?(.*)$/.exec(l)
+    if (etape) {
+      const mots = etape[1]
+        .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+        .split(/\s+/)
+        .filter((m) => /[\p{L}\p{N}]/u.test(m)).length
+      if (mots > MOTS_PAR_ETAPE) {
+        alertes.push({
+          ligne,
+          message: `Étape longue (${String(mots)} mots) : découpez-la en étapes plus courtes, une action par étape.`,
+        })
+      }
+    }
+
+    // Émojis.
+    if (EMOJI.test(l)) {
+      alertes.push({
+        ligne,
+        message:
+          "Émoji : il s'imprime mal en noir et blanc. Remplacez-le par un mot, ou par un encadré Attention, Important ou Astuce.",
+      })
+    }
+
     // Liens sans adresse (pas les images).
     for (const m of l.matchAll(/(!?)\[([^\]]*)\]\(\s*(https?:\/\/)?\s*\)/g)) {
       if (m[1] === '!') continue
@@ -260,7 +305,15 @@ export function alertesRelecture(
         })
       }
       bloc.forEach((l, k) => {
-        if (k <= 1) return
+        if (k === 1) return
+        if (decouperLigne(l).some((c) => /^null$/i.test(c.trim()))) {
+          alertes.push({
+            ligne: i + k + 1,
+            message:
+              'Tableau : une case contient « null ». Laissez-la vide, ou écrivez ce qui manque.',
+          })
+        }
+        if (k === 0) return
         const cases = decouperLigne(l).length
         if (cases > n) {
           alertes.push({

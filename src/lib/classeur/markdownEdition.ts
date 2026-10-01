@@ -517,3 +517,78 @@ export function entourerDeBloc(
   const curseur = origine + ouverture.length + corps.length
   return { ...edition, selection: [curseur, curseur] }
 }
+
+/*
+ * ENCADRÉS TYPÉS (2026-10-01, décision utilisateur) : syntaxe des « alertes »
+ * de GitHub, `> [!WARNING]` en première ligne d'un encadré — du Markdown
+ * standard (un logiciel qui ne la connaît pas montre un encadré ordinaire,
+ * Registre compris). Rendus par `rehypeEncadres`, mot imprimé en tête.
+ */
+
+export type TypeEncadre = 'attention' | 'important' | 'astuce' | 'note'
+
+/** Mot GitHub écrit dans le texte, pour chaque type. */
+export const MOT_ENCADRE: Record<TypeEncadre, string> = {
+  attention: 'WARNING',
+  important: 'IMPORTANT',
+  astuce: 'TIP',
+  note: 'NOTE',
+}
+
+/** Libellé imprimé en tête de l'encadré. */
+export const LIBELLE_ENCADRE: Record<TypeEncadre, string> = {
+  attention: 'Attention',
+  important: 'Important',
+  astuce: 'Astuce',
+  note: 'Note',
+}
+
+/** Type d'un mot GitHub (`CAUTION` compte comme attention), `null` sinon. */
+export function typeDepuisMot(mot: string): TypeEncadre | null {
+  switch (mot.toUpperCase()) {
+    case 'WARNING':
+    case 'CAUTION':
+      return 'attention'
+    case 'IMPORTANT':
+      return 'important'
+    case 'TIP':
+      return 'astuce'
+    case 'NOTE':
+      return 'note'
+    default:
+      return null
+  }
+}
+
+/**
+ * Encadré typé autour des lignes sélectionnées (ou de la ligne du curseur) :
+ * `> [!WARNING]` puis chaque ligne préfixée de `> `. Un encadré déjà présent
+ * (préfixes `> `, ancienne ligne de type) est repris, jamais doublé. Isolé
+ * par des lignes vides ; curseur en fin d'encadré, prêt à écrire.
+ */
+export function encadrer(
+  valeur: string,
+  debut: number,
+  fin: number,
+  type: TypeEncadre,
+): Edition {
+  const d = Math.min(debut, fin, valeur.length)
+  const f = Math.min(Math.max(debut, fin), valeur.length)
+  const debutLigne = valeur.lastIndexOf('\n', d - 1) + 1
+  const borne = f > d && valeur[f - 1] === '\n' ? f - 1 : f
+  const i = valeur.indexOf('\n', borne)
+  const finLigne = i === -1 ? valeur.length : i
+  const lignes = valeur
+    .slice(debutLigne, finLigne)
+    .split('\n')
+    .map((l) => l.replace(/^\s*>\s?/, ''))
+    .filter((l) => !/^\s*\[![A-Za-z]+\]\s*$/.test(l))
+  while (lignes.length > 0 && lignes[0].trim() === '') lignes.shift()
+  while (lignes.length > 0 && lignes[lignes.length - 1].trim() === '')
+    lignes.pop()
+  const corps = (lignes.length > 0 ? lignes : ['']).map((l) =>
+    l.trim() === '' ? '>' : `> ${l}`,
+  )
+  const bloc = [`> [!${MOT_ENCADRE[type]}]`, ...corps].join('\n')
+  return insererTexteEnBloc(valeur, debutLigne, finLigne, bloc)
+}

@@ -160,3 +160,30 @@ describe('alertesRelecture — blocs et pages (2026-10-01)', () => {
     expect(a[0].message).toMatch(/30 %/)
   })
 })
+
+describe('alertesRelecture — écriture (2026-10-01)', () => {
+  it('ligne en gras qui joue le titre, pas une phrase d’introduction', () => {
+    expect(
+      lignes(
+        '**Manchette 1**\n\n**Pour chaque manchette :**\n\n**Fréquence :** chaque semaine.',
+      ),
+    ).toEqual([1])
+  })
+  it('étape de plus de 35 mots', () => {
+    const longue = `1. ${Array.from({ length: 36 }, (_, i) => `mot${String(i)}`).join(' ')}`
+    const courte = `2. ${Array.from({ length: 35 }, (_, i) => `mot${String(i)}`).join(' ')}`
+    expect(lignes(`${longue}\n${courte}`)).toEqual([1])
+  })
+  it('émojis, mais pas les flèches ni les degrés', () => {
+    expect(lignes('👉 Cliquer\n⚠️ Danger\nAller → retour, 55 °C')).toEqual([
+      1, 2,
+    ])
+  })
+  it('case « null » dans un tableau', () => {
+    expect(
+      lignes(
+        '| Champ | Valeur |\n| --- | --- |\n| Modèle | null |\n| Série | 12 |',
+      ),
+    ).toEqual([3])
+  })
+})

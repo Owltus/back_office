@@ -178,3 +178,27 @@ describe('étape illustrée :::etape', () => {
     expect(e?.textContent).toBe('Rien à montrer.')
   })
 })
+
+describe('encadrés typés', () => {
+  it('`> [!WARNING]` : type posé, mot en tête, repère retiré', () => {
+    const b = rendre(
+      '> [!WARNING]\n> Ne jamais fermer les vannes.',
+    ).querySelector('blockquote')
+    expect(b?.getAttribute('data-encadre')).toBe('attention')
+    expect(b?.querySelector('.encadre-titre')?.textContent).toBe('Attention')
+    expect(texte(b!)).toBe('Attention Ne jamais fermer les vannes.')
+  })
+  it('repère seul sur sa ligne puis paragraphe', () => {
+    const b = rendre('> [!TIP]\n>\n> Astuce utile.').querySelector('blockquote')
+    expect(b?.getAttribute('data-encadre')).toBe('astuce')
+    expect(b?.querySelectorAll('p')).toHaveLength(2)
+  })
+  it('encadré ordinaire et type inconnu : inchangés', () => {
+    expect(
+      rendre('> **Attention :** texte').querySelector('[data-encadre]'),
+    ).toBeNull()
+    const b = rendre('> [!FOO]\n> texte').querySelector('blockquote')
+    expect(b?.hasAttribute('data-encadre')).toBe(false)
+    expect(texte(b!)).toContain('[!FOO]')
+  })
+})

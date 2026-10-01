@@ -23,7 +23,11 @@ describe('AideMiseEnFormeDialog', () => {
       dialogue.querySelector('.pdf-prose input[type="checkbox"]'),
     ).not.toBeNull()
     expect(dialogue.querySelectorAll('.pdf-prose table td')).toHaveLength(4)
-    expect(dialogue.querySelector('.pdf-prose blockquote')).not.toBeNull()
+    expect(
+      dialogue.querySelector(
+        '.pdf-prose blockquote[data-encadre="attention"] .encadre-titre',
+      )?.textContent,
+    ).toBe('Attention')
     // Une ligne vide sépare deux paragraphes ; un retour simple les colle.
     const paragraphes = Array.from(
       dialogue.querySelectorAll('.pdf-prose p'),

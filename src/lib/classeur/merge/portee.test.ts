@@ -345,6 +345,7 @@ describe('consignes LLM — les TROIS exports (classeur, chapitre, document)', (
         '`===`',
         '`:::photos`',
         '`:::etape`',
+        '[!WARNING]',
         'LÉGENDE',
         '"pleine"',
         'Conserve le CHEMIN',
