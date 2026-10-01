@@ -1,17 +1,22 @@
 import { useCallback, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import type { ChangeEvent, ClipboardEvent, DragEvent, RefObject } from 'react'
-import { ImagePlus, Images, Loader2 } from 'lucide-react'
+import { Columns2, ImagePlus, Images, LayoutGrid, Loader2 } from 'lucide-react'
 
 import { ImagePreparationDialog } from '#/components/classeur/dialogs/ImagePreparationDialog.tsx'
 import { ImagesDialog } from '#/components/classeur/dialogs/ImagesDialog.tsx'
 import { IconAction } from '#/components/classeur/IconAction.tsx'
 import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
-import { appliquerQuandLibre } from '#/components/classeur/detail/editionTextarea.ts'
+import {
+  appliquerDansEditeur,
+  appliquerQuandLibre,
+} from '#/components/classeur/detail/editionTextarea.ts'
 import { messageErreur } from '#/lib/classeur/erreur.ts'
 import {
   appliquerEdition,
+  entourerDeBloc,
   insererLigne,
+  insererTexteEnBloc,
 } from '#/lib/classeur/markdownEdition.ts'
 import { classeurKeys } from '#/lib/classeur/keys.ts'
 import {
@@ -25,7 +30,7 @@ import {
   trouverImage,
 } from '#/lib/classeur/images.ts'
 import type { Edition } from '#/lib/classeur/markdownEdition.ts'
-import type { PositionImage, PreparationImage } from '#/lib/classeur/images.ts'
+import type { PreparationImage, TailleImage } from '#/lib/classeur/images.ts'
 import { cn } from '#/lib/utils.ts'
 
 /*
@@ -39,17 +44,24 @@ import { cn } from '#/lib/utils.ts'
  * La position d'insertion est relevée AU DÉPART (le curseur au moment du
  * geste) ; le texte tapé pendant l'envoi n'est pas perdu, l'image arrive à
  * la position relevée.
+ *
+ * 2026-10-01 (plan `classeur-images-blocs`) : deux blocs prêts à l'emploi
+ * s'ajoutent à l'image simple — la PLANCHE de photos (plusieurs fichiers
+ * d'un coup, écrite en `:::photos`) et l'ÉTAPE ILLUSTRÉE (la ligne ou la
+ * sélection entourée de `:::etape`, puis le choix de la photo). Personne n'a
+ * à taper une directive.
  */
 
-/** « , à gauche » / « , à droite » (rien au centre ni en pleine largeur). */
-function libellePosition(largeur: number, position: PositionImage): string {
-  if (largeur >= 100 || position === 'centre') return ''
-  return position === 'gauche' ? ', à gauche' : ', à droite'
+const LIBELLE_TAILLE: Record<TailleImage, string> = {
+  auto: 'taille automatique',
+  petite: 'petite',
+  moyenne: 'moyenne',
+  pleine: 'pleine largeur',
 }
 
 export type EtatImage =
   | { type: 'repos' }
-  | { type: 'envoi'; nom: string }
+  | { type: 'envoi'; nom: string; rang?: { n: number; sur: number } }
   | { type: 'ok'; message: string }
   | { type: 'erreur'; message: string }
 
@@ -80,6 +92,8 @@ export function useInsertionImage({
     fin: null,
   })
   const inputRef = useRef<HTMLInputElement>(null)
+  /** Sélecteur MULTIPLE de la planche de photos. */
+  const plancheRef = useRef<HTMLInputElement>(null)
   const invaliderImages = useQueryClient()
   /** Image placée en cours de retouche (cliquée dans l'aperçu). */
   const [enRetouche, setEnRetouche] = useState<{
@@ -87,8 +101,8 @@ export function useInsertionImage({
     ligne?: number
     url: string
     nom: string
-    largeur: number
-    position: PositionImage
+    taille: TailleImage
+    contexte: 'page' | 'planche'
   } | null>(null)
 
   /** Insère une ligne Markdown à la position du curseur (relevée maintenant). */
@@ -163,11 +177,100 @@ export function useInsertionImage({
   )
 
   /**
-   * Retouche d'une image DÉJÀ placée (2026-09-30) : ouvre le dialogue sur
-   * l'image cliquée dans l'aperçu, avec sa largeur actuelle.
+   * Planche de photos : chaque fichier est converti et envoyé tel quel
+   * (taille et cadre décidés par la planche), puis le bloc `:::photos`
+   * complet est inséré au curseur relevé au départ. Les légendes se posent
+   * ensuite d'un clic sur chaque photo dans l'aperçu.
+   */
+  const envoyerPlanche = useCallback(
+    async (fichiers: File[]) => {
+      if (classeurId === null || fichiers.length === 0) return
+      const refus = fichiers.map(refusImageSource).find((r) => r !== null)
+      if (refus) {
+        setEtat({ type: 'erreur', message: refus })
+        return
+      }
+      const editeur = editeurRef.current
+      const debut = editeur?.selectionStart ?? null
+      const fin = editeur?.selectionEnd ?? debut
+      const lignes: string[] = []
+      try {
+        for (const [n, f] of fichiers.entries()) {
+          setEtat({
+            type: 'envoi',
+            nom: f.name,
+            rang: { n: n + 1, sur: fichiers.length },
+          })
+          const res = await televerserImage(classeurId, f, {})
+          lignes.push(res.markdown)
+        }
+      } catch (err) {
+        setEtat({
+          type: 'erreur',
+          message: `${messageErreur(err, 'Planche impossible à créer')}${
+            lignes.length > 0
+              ? ` (${String(lignes.length)} photo(s) déjà envoyée(s), dans la médiathèque).`
+              : ''
+          }`,
+        })
+        return
+      } finally {
+        void invaliderImages.invalidateQueries({
+          queryKey: classeurKeys.images(classeurId),
+        })
+      }
+      const bloc = [':::photos', ...lignes, ':::'].join('\n')
+      appliquerQuandLibre(
+        () => editeurRef.current,
+        (valeur) =>
+          insererTexteEnBloc(
+            valeur,
+            Math.min(debut ?? valeur.length, valeur.length),
+            Math.min(fin ?? debut ?? valeur.length, valeur.length),
+            bloc,
+          ),
+        () =>
+          setContenu((prev) =>
+            appliquerEdition(
+              prev,
+              insererTexteEnBloc(prev, prev.length, prev.length, bloc),
+            ),
+          ),
+      )
+      setEtat({
+        type: 'ok',
+        message: `Planche de ${String(lignes.length)} photo(s) ajoutée. Cliquez sur une photo dans l'aperçu pour lui donner une légende ou la recadrer.`,
+      })
+    },
+    [classeurId, editeurRef, invaliderImages, setContenu],
+  )
+
+  /**
+   * Étape illustrée : la ligne du curseur (ou la sélection) passe dans un
+   * bloc `:::etape`, puis le choix de la photo s'ouvre — elle arrivera dans
+   * le bloc, à droite du texte. Ctrl + Z défait le bloc.
+   */
+  const etapeIllustree = useCallback(() => {
+    const ed = editeurRef.current
+    if (!ed || classeurId === null) return
+    appliquerDansEditeur(
+      ed,
+      entourerDeBloc(ed.value, ed.selectionStart, ed.selectionEnd, 'etape'),
+    )
+    inputRef.current?.click()
+  }, [classeurId, editeurRef])
+
+  /**
+   * Retouche d'une image DÉJÀ placée : ouvre le dialogue sur l'image cliquée
+   * dans l'aperçu, avec sa légende et sa taille actuelles.
    */
   const retoucher = useCallback(
-    (chemin: string, url: string, ligne?: number) => {
+    (
+      chemin: string,
+      url: string,
+      ligne?: number,
+      contexte: 'page' | 'planche' = 'page',
+    ) => {
       const valeur = editeurRef.current?.value ?? contenu
       const t = trouverImage(valeur, chemin, ligne)
       if (!t) {
@@ -183,8 +286,8 @@ export function useInsertionImage({
         ligne,
         url,
         nom: t.alt,
-        largeur: t.largeur,
-        position: t.position,
+        taille: t.taille,
+        contexte,
       })
     },
     [contenu, editeurRef],
@@ -200,8 +303,11 @@ export function useInsertionImage({
     async (preparation: PreparationImage) => {
       const cible = enRetouche
       if (classeurId === null || cible === null) return
-      const largeur = preparation.largeur ?? cible.largeur
-      const position = preparation.position ?? cible.position
+      const taille =
+        cible.contexte === 'planche'
+          ? 'auto'
+          : (preparation.taille ?? cible.taille)
+      const legende = preparation.legende ?? cible.nom
       let chemin = cible.chemin
       try {
         if (preparation.recadrage) {
@@ -216,7 +322,7 @@ export function useInsertionImage({
             queryFn: () => telechargerImage(cible.chemin),
             staleTime: Infinity,
           })
-          const fichier = new File([blob], `${cible.nom}.webp`, {
+          const fichier = new File([blob], 'image.webp', {
             type: blob.type || 'image/webp',
           })
           const res = await televerserImage(classeurId, fichier, {
@@ -237,7 +343,7 @@ export function useInsertionImage({
       const calculer = (valeur: string): Edition => {
         const t = trouverImage(valeur, cible.chemin, cible.ligne)
         if (!t) return { debut: 0, fin: 0, texte: '', selection: [0, 0] }
-        const jeton = jetonImage(t.alt, chemin, largeur, position)
+        const jeton = jetonImage(legende, chemin, taille)
         return {
           debut: t.debut,
           fin: t.fin,
@@ -254,8 +360,8 @@ export function useInsertionImage({
       setEtat({
         type: 'ok',
         message: preparation.recadrage
-          ? `Image recadrée, ${String(largeur)} % de la largeur${libellePosition(largeur, position)} (l'originale reste dans la médiathèque).`
-          : `Image à ${String(largeur)} % de la largeur${libellePosition(largeur, position)}.`,
+          ? `Image recadrée, ${LIBELLE_TAILLE[taille]} (l'originale reste dans la médiathèque).`
+          : `Image mise à jour, ${LIBELLE_TAILLE[taille]}.`,
       })
     },
     [classeurId, editeurRef, enRetouche, invaliderImages, setContenu],
@@ -297,11 +403,24 @@ export function useInsertionImage({
     [inserer],
   )
 
+  const onPlancheChange = useCallback(
+    (e: ChangeEvent<HTMLInputElement>) => {
+      const fichiers = Array.from(e.target.files ?? []).filter(estImage)
+      e.target.value = ''
+      void envoyerPlanche(fichiers)
+    },
+    [envoyerPlanche],
+  )
+
   return {
     etat,
     inputRef,
+    plancheRef,
     onInputChange,
+    onPlancheChange,
     ouvrirSelecteur: () => inputRef.current?.click(),
+    ouvrirPlanche: () => plancheRef.current?.click(),
+    etapeIllustree,
     /** À poser sur le `textarea`. */
     editeurProps: { onPaste, onDragOver, onDrop },
     actif: classeurId !== null,
@@ -347,8 +466,9 @@ export function DialoguesImage({ image }: { image: ImageInsertion }) {
             ? { url: image.enRetouche.url, nom: image.enRetouche.nom }
             : null
         }
-        largeurInitiale={image.enRetouche?.largeur ?? 100}
-        positionInitiale={image.enRetouche?.position ?? 'centre'}
+        tailleInitiale={image.enRetouche?.taille ?? 'auto'}
+        legendeInitiale={image.enRetouche?.nom ?? ''}
+        contexte={image.enRetouche?.contexte ?? 'page'}
         envoi={image.etat.type === 'envoi'}
         onAnnuler={image.annulerRetouche}
         onValider={(preparation) => void image.appliquerRetouche(preparation)}
@@ -374,11 +494,22 @@ export function DialoguesImage({ image }: { image: ImageInsertion }) {
         className="hidden"
         onChange={image.onInputChange}
       />
+      <input
+        ref={image.plancheRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={image.onPlancheChange}
+      />
     </>
   )
 }
 
-/** Boutons Image (nouvelle) et Médiathèque, pour la barre de l'éditeur. */
+/**
+ * Boutons d'image de la barre : image seule, planche de photos, étape
+ * illustrée, médiathèque.
+ */
 export function BoutonsImage({ image }: { image: ImageInsertion }) {
   const envoi = image.etat.type === 'envoi'
   return (
@@ -391,6 +522,22 @@ export function BoutonsImage({ image }: { image: ImageInsertion }) {
         onPointerDown={(e) => e.preventDefault()}
         onMouseDown={(e) => e.preventDefault()}
         onClick={image.ouvrirSelecteur}
+      />
+      <IconAction
+        label="Planche de photos : plusieurs photos rangées en grille, légendées"
+        icon={<LayoutGrid />}
+        disabled={!image.actif || envoi}
+        onPointerDown={(e) => e.preventDefault()}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={image.ouvrirPlanche}
+      />
+      <IconAction
+        label="Étape illustrée : la ligne du curseur à gauche, une photo à droite"
+        icon={<Columns2 />}
+        disabled={!image.actif || envoi}
+        onPointerDown={(e) => e.preventDefault()}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={image.etapeIllustree}
       />
       <IconAction
         label="Médiathèque : reprendre une image du classeur"
@@ -419,7 +566,9 @@ export function EtatImageLigne({ image }: { image: ImageInsertion }) {
       {etat.type === 'envoi' && (
         <>
           <Loader2 className="size-3 animate-spin" />
-          Conversion et envoi de {etat.nom}…
+          {etat.rang
+            ? `Envoi de la photo ${String(etat.rang.n)} sur ${String(etat.rang.sur)}…`
+            : `Conversion et envoi de ${etat.nom}…`}
         </>
       )}
       {(etat.type === 'ok' || etat.type === 'erreur') && etat.message}

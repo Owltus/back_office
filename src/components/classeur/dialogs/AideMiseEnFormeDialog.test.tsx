@@ -30,4 +30,20 @@ describe('AideMiseEnFormeDialog', () => {
     ).map((p) => p.textContent)
     expect(paragraphes).toContain('Première ligne\ncollée à la suivante.')
   })
+
+  it('montre les vrais blocs d’images : figure légendée, planche, étape', () => {
+    render(<AideMiseEnFormeDialog open onOpenChange={() => {}} />)
+    const dialogue = screen.getByRole('dialog')
+    expect(
+      dialogue.querySelector('.pdf-prose figure figcaption')?.textContent,
+    ).toBe('Bac à sel ouvert')
+    const planche = dialogue.querySelector('.pdf-prose [data-bloc="photos"]')
+    expect(planche?.getAttribute('data-colonnes')).toBe('2')
+    expect(planche?.querySelectorAll('figure')).toHaveLength(2)
+    const etape = dialogue.querySelector('.pdf-prose [data-bloc="etape"]')
+    expect(etape?.querySelector('.etape-texte ol')).not.toBeNull()
+    expect(etape?.querySelector('.etape-photos figure')).not.toBeNull()
+    // Plus aucune trace de l'ancienne syntaxe d'habillage.
+    expect(dialogue.textContent).not.toMatch(/\+\+\+|position=/)
+  })
 })

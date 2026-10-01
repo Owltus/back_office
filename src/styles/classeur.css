@@ -340,56 +340,140 @@
   color: #000;
   text-decoration: underline;
 }
-/* Image : TOUJOURS centrée, en bloc, largeur choisie à l'insertion
-   (`![alt](chemin "largeur=50")`, lue par ImageDocument).
-   ⚠ L'espacement vertical est un PADDING, pas une marge : une marge d'image
-   fusionne avec celle du paragraphe qui l'entoure (collapse), sort de la
-   hauteur mesurée par `paginate` (hauteur + marges PROPRES de chaque bloc)
-   et faisait déborder la page — ~20 px par capture, constaté le 2026-09-27
-   sur le classeur « Procédures de la réception ». Le padding, lui, est dans
-   la boîte de l'image, donc toujours compté. */
+/* ─── Images (2026-10-01, plan `classeur-images-blocs`) ───
+   Une image seule sur sa ligne devient une FIGURE centrée, légendée
+   (`rehypeFigures`), jamais habillée de texte : l'habillage laissait de
+   grands vides à côté des phrases courtes d'une procédure. La taille est
+   décidée ici (`data-taille`, `ImageDocument`), pas par un curseur.
+   ⚠ L'espacement vertical est un PADDING, jamais une marge : une marge
+   fusionne avec ses voisines, sort de la hauteur mesurée par `paginate` et
+   faisait déborder la page (~20 px par capture, constaté le 2026-09-27).
+   ⚠ Avec une largeur imposée ET une hauteur bornée, seul `object-fit:
+   contain` garde les proportions (CSS 2.1 §10.4). */
 .pdf-prose img {
-  display: block;
-  box-sizing: content-box;
   max-width: 100%;
-  max-height: 180mm;
   height: auto;
-  margin: 0 auto;
+}
+/* Image au fil d'une phrase ou d'un tableau : petite, alignée au texte. */
+.pdf-prose :not(figure) > img {
+  display: inline-block;
+  max-height: 30mm;
+  vertical-align: middle;
+}
+.pdf-prose figure {
+  margin: 0;
   padding: 0.15cm 0 0.35cm;
+  text-align: center;
   break-inside: avoid;
 }
-/* Image à GAUCHE ou à DROITE (`position=…`, 2026-09-30) : elle flotte et
-   les paragraphes l'entourent. Sa hauteur ne compte pas dans celle de son
-   paragraphe : `paginate.ts` la mesure à part (`debordFlottant`) pour ne
-   jamais la laisser déborder de la page. */
-.pdf-prose img[data-position='gauche'] {
-  float: left;
-  margin: 0 0.45cm 0 0;
+.pdf-prose figure > img {
+  display: block;
+  margin: 0 auto;
+  /* Automatique : taille naturelle, bornée en largeur ET en hauteur — une
+     photo en portrait se réduit d'elle-même au lieu d'occuper la page. */
+  max-height: 100mm;
 }
-.pdf-prose img[data-position='droite'] {
-  float: right;
-  margin: 0 0 0 0.45cm;
+.pdf-prose figure > img[data-taille='petite'] {
+  width: 33%;
+  object-fit: contain;
 }
-/* Sur une page qui en contient une, les blocs dont le décor passerait SOUS
-   l'image (puces des listes, soulignement des titres, filet des encadrés,
-   fond des blocs de code) se rangent À CÔTÉ d'elle plutôt que dessous.
-   Limité à ces pages : les documents sans image flottante ne changent pas. */
-.pdf-prose:has(img[data-position])
-  :is(ul, ol, blockquote, pre, h1, h2, h3, h4, h5, h6) {
-  display: flow-root;
+.pdf-prose figure > img[data-taille='moyenne'] {
+  width: 50%;
+  object-fit: contain;
 }
-/* `+++` : « la suite passe sous l'image » (bloc invisible). */
-.pdf-prose [data-sous-image] {
-  clear: both;
+.pdf-prose figure > img[data-taille='pleine'] {
+  width: 100%;
+  max-height: 170mm;
+  object-fit: contain;
 }
-/* Un TITRE ouvre une nouvelle partie : il passe sous l'image flottante au
-   lieu de démarrer à côté (`paginate.ts` en tient compte : `degage`). */
-.pdf-prose:has(img[data-position]) :is(h1, h2, h3, h4, h5, h6) {
-  clear: both;
+.pdf-prose figcaption {
+  margin-top: 0.12cm;
+  font-size: 8pt;
+  font-style: italic;
+  line-height: 1.35;
+  color: #333;
 }
-.pdf-prose p:has(> img:only-child) {
-  text-align: center;
+
+/* Planche de photos `:::photos` : grille régulière, cases de MÊME format
+   (4:3), photo entière dans sa case (`contain` : rien n'est rogné, une vanne
+   au bord d'une photo reste visible). Colonnes posées par `rehypeBlocs`. */
+.pdf-prose [data-bloc='photos'] {
+  display: grid;
+  grid-template-columns: repeat(var(--colonnes, 2), minmax(0, 1fr));
+  column-gap: 0.4cm;
+  row-gap: 0.3cm;
+  margin: 0 0 0.35cm;
+}
+.pdf-prose [data-bloc='photos'][data-colonnes='1'] {
+  --colonnes: 1;
+  width: 60%;
+  margin-left: auto;
+  margin-right: auto;
+}
+.pdf-prose [data-bloc='photos'][data-colonnes='2'] {
+  --colonnes: 2;
+}
+.pdf-prose [data-bloc='photos'][data-colonnes='3'] {
+  --colonnes: 3;
+}
+.pdf-prose [data-bloc='photos'] > figure {
+  padding: 0;
+}
+.pdf-prose [data-bloc='photos'] > figure > img {
+  width: 100%;
+  max-height: none;
+  aspect-ratio: 4 / 3;
+  object-fit: contain;
+  background: #f4f4f4;
+  border: 0.5pt solid #d4d4d4;
+  box-sizing: border-box;
+}
+.pdf-prose [data-bloc='photos'] > .photos-hors {
+  grid-column: 1 / -1;
   margin: 0;
+}
+
+/* Étape illustrée `:::etape` : le texte à gauche, la ou les photos dans une
+   colonne fixe à droite — le tableau « Action | Photo » des modes
+   opératoires, pas un habillage. Plus haute qu'une page, l'étape se DÉROULE
+   (`data-deroule`, posé par `paginate`) : texte puis photos, en blocs
+   normaux. */
+.pdf-prose [data-bloc='etape'][data-photos] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 38%;
+  column-gap: 0.5cm;
+  align-items: start;
+  margin: 0 0 0.35cm;
+}
+.pdf-prose [data-bloc='etape']:not([data-deroule]) .etape-texte > :first-child {
+  margin-top: 0;
+}
+.pdf-prose [data-bloc='etape']:not([data-deroule]) .etape-texte > :last-child {
+  margin-bottom: 0;
+}
+.pdf-prose [data-bloc='etape']:not([data-deroule]) .etape-photos {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3cm;
+}
+.pdf-prose [data-bloc='etape']:not([data-deroule]) .etape-photos > figure {
+  padding: 0;
+}
+.pdf-prose
+  [data-bloc='etape']:not([data-deroule])
+  .etape-photos
+  > figure
+  > img {
+  width: 100%;
+  max-height: 90mm;
+  object-fit: contain;
+}
+.pdf-prose [data-bloc='etape'][data-deroule] {
+  display: block;
+}
+.pdf-prose [data-bloc='etape'][data-deroule] > .etape-texte,
+.pdf-prose [data-bloc='etape'][data-deroule] > .etape-photos {
+  display: contents;
 }
 .pdf-prose strong {
   font-weight: 700;

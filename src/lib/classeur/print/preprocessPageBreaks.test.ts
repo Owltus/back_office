@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 
 import {
   PAGEBREAK_MARKER,
-  SOUS_IMAGE_MARKER,
   preprocessPageBreaks,
 } from '#/lib/classeur/print/preprocessPageBreaks.ts'
 
@@ -43,12 +42,10 @@ describe('preprocessPageBreaks', () => {
   })
 })
 
-describe('`+++` : reprendre sous l’image', () => {
-  it('remplace `+++` seul sur une ligne par son repère, sur ses propres lignes', () => {
-    expect(preprocessPageBreaks('a\n+++\nb')).toBe(
-      `a\n\n${SOUS_IMAGE_MARKER}\n\nb`,
-    )
-    expect(preprocessPageBreaks('+++   ')).toContain(SOUS_IMAGE_MARKER)
+describe('ancien `+++` (retiré le 2026-10-01) : une ligne vide', () => {
+  it('devient une ligne vide, même nombre de lignes', () => {
+    expect(preprocessPageBreaks('a\n+++\nb')).toBe('a\n\nb')
+    expect(preprocessPageBreaks('+++   ')).toBe('')
   })
   it('laisse `++++`, `a+++` et `+++` en milieu de ligne intacts', () => {
     for (const t of ['++++', 'a+++', 'x +++ y', '++']) {
@@ -58,6 +55,6 @@ describe('`+++` : reprendre sous l’image', () => {
   it('se combine avec `===`', () => {
     const r = preprocessPageBreaks('===\n+++')
     expect(r).toContain(PAGEBREAK_MARKER)
-    expect(r).toContain(SOUS_IMAGE_MARKER)
+    expect(r).not.toContain('+++')
   })
 })

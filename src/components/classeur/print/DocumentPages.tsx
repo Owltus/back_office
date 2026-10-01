@@ -2,29 +2,29 @@ import React from 'react'
 import { createPortal } from 'react-dom'
 import ReactMarkdown from 'react-markdown'
 import type { Components } from 'react-markdown'
-import rehypeKatex from 'rehype-katex'
-import remarkGfm from 'remark-gfm'
-import remarkMath from 'remark-math'
 
 import { MermaidBlock } from '#/components/classeur/MermaidBlock.tsx'
 import { ImageDocument } from '#/components/classeur/print/ImageDocument.tsx'
 import { A4Page } from '#/components/classeur/print/A4Page.tsx'
-import { estCheminImage, largeurDepuisTitre } from '#/lib/classeur/images.ts'
+import { estCheminImage, tailleDepuisTitre } from '#/lib/classeur/images.ts'
 import {
   CONTENT_HEIGHT_MM,
   DOCUMENT_CONTENT_HEIGHT_WITH_SUBTITLE_MM,
   PAGE_FONT_FAMILY,
 } from '#/lib/classeur/print/constants.ts'
-import { rehypeLignesSource } from '#/lib/classeur/print/lignesSource.ts'
+import {
+  REHYPE_CLASSEUR,
+  REMARK_CLASSEUR,
+} from '#/lib/classeur/print/pipeline.ts'
 import {
   PAGEBREAK_MARKER,
   preprocessPageBreaks,
-  SOUS_IMAGE_MARKER,
 } from '#/lib/classeur/print/preprocessPageBreaks.ts'
 import {
   getContentWidthPx,
   usePagination,
 } from '#/lib/classeur/print/usePagination.ts'
+import type { PageData } from '#/lib/classeur/print/usePagination.ts'
 
 interface DocumentPagesProps {
   title: string
@@ -40,6 +40,8 @@ interface DocumentPagesProps {
   mention?: string
   /** Nombre de pages, remonté à chaque pagination terminée (éditeur). */
   onPageCount?: (pages: number) => void
+  /** Les pages paginées (remplissage, sauts) : relecture de l'éditeur. */
+  onPagination?: (pages: readonly PageData[]) => void
 }
 
 /** Vérifie si tous les enfants textuels d'un nœud React sont vides */
@@ -65,13 +67,6 @@ const markdownComponents: Components = {
       text[0].trim() === PAGEBREAK_MARKER
     ) {
       return <div data-page-break="true" />
-    }
-    if (
-      text.length === 1 &&
-      typeof text[0] === 'string' &&
-      text[0].trim() === SOUS_IMAGE_MARKER
-    ) {
-      return <div data-sous-image="true" />
     }
     return <p {...rest}>{children}</p>
   },
@@ -107,15 +102,7 @@ const markdownComponents: Components = {
         Image externe non affichée{alt ? ` : ${alt}` : ''}
       </span>
     ) : (
-      <img
-        src={src}
-        alt={alt ?? ''}
-        style={
-          largeurDepuisTitre(title) < 100
-            ? { width: `${String(largeurDepuisTitre(title))}%` }
-            : undefined
-        }
-      />
+      <img src={src} alt={alt ?? ''} data-taille={tailleDepuisTitre(title)} />
     ),
 }
 
@@ -134,6 +121,7 @@ export function DocumentPages({
   hidePagination,
   mention,
   onPageCount,
+  onPagination,
 }: DocumentPagesProps) {
   const processedContent = React.useMemo(
     () => preprocessPageBreaks(content),
@@ -153,6 +141,10 @@ export function DocumentPages({
   React.useEffect(() => {
     if (!measuring && pages.length > 0) onPageCount?.(pages.length)
   }, [measuring, pages.length, onPageCount])
+
+  React.useEffect(() => {
+    if (!measuring && pages.length > 0) onPagination?.(pages)
+  }, [measuring, pages, onPagination])
 
   return (
     <>
@@ -176,8 +168,8 @@ export function DocumentPages({
           }}
         >
           <ReactMarkdown
-            remarkPlugins={[remarkGfm, remarkMath]}
-            rehypePlugins={[rehypeKatex, rehypeLignesSource]}
+            remarkPlugins={REMARK_CLASSEUR}
+            rehypePlugins={REHYPE_CLASSEUR}
             components={markdownComponents}
           >
             {processedContent}

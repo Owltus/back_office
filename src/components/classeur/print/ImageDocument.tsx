@@ -2,8 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 
 import { classeurKeys } from '#/lib/classeur/keys.ts'
 import {
-  largeurDepuisTitre,
-  positionDepuisTitre,
+  tailleDepuisTitre,
   telechargerImage,
   urlObjetImage,
 } from '#/lib/classeur/images.ts'
@@ -31,14 +30,12 @@ export function ImageDocument({
 }: {
   chemin: string
   alt?: string
-  /** Titre Markdown : porte `largeur=NN` (voir `markdownImage`). */
+  /** Titre Markdown : porte la taille (voir `markdownImage`). */
   title?: string
 }) {
-  const largeur = largeurDepuisTitre(title)
-  // Gauche / droite : image FLOTTANTE, le texte l'entoure (styles dans
-  // `classeur.css`, sur `data-position` ; la pagination compte sa hauteur
-  // réelle, `paginate.ts`).
-  const position = positionDepuisTitre(title)
+  // Taille : `data-taille`, mise en page par `classeur.css` (jamais de style
+  // en ligne : une planche ou une étape imposent leur propre cadre).
+  const taille = tailleDepuisTitre(title)
   const image = useQuery({
     queryKey: classeurKeys.image(chemin),
     queryFn: () => telechargerImage(chemin),
@@ -79,11 +76,10 @@ export function ImageDocument({
       src={urlObjetImage(chemin, image.data)}
       alt={alt ?? ''}
       data-image-status="rendered"
-      data-position={position === 'centre' ? undefined : position}
+      data-taille={taille}
       // Lu au clic dans l'aperçu d'édition (retouche de l'image) ; suit les
       // pages A4, qui sont des copies HTML.
       data-chemin={chemin}
-      style={largeur < 100 ? { width: `${String(largeur)}%` } : undefined}
     />
   )
 }

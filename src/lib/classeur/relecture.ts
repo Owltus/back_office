@@ -13,10 +13,23 @@
  *   - un titre qui saute un niveau (un sous-titre juste après un grand
  *     titre, sans titre de partie entre les deux).
  *
+ * 2026-10-01 (plan `classeur-images-blocs`), pour GUIDER vers une page
+ * propre plutôt que d'interdire :
+ *   - une capture trop large pour être lue imprimée, une image très haute,
+ *     un bandeau très fin (dimensions de la médiathèque) ;
+ *   - les images sans légende, en UNE alerte par document ;
+ *   - un bloc `:::photos` / `:::etape` mal écrit (espace après `:::`, nom
+ *     inconnu, jamais fermé), du texte rangé dans une planche ;
+ *   - une page remplie à moins de la moitié parce qu'un saut `===` l'a
+ *     terminée (remplissage remonté par la pagination).
+ *
  * Le contenu des blocs de code (```) est ignoré.
  */
 
-import { estCheminImage } from '#/lib/classeur/images.ts'
+import { estCheminImage, tailleDepuisTitre } from '#/lib/classeur/images.ts'
+import { estLegendeGenerique } from '#/lib/classeur/legende.ts'
+import { boiteSurPage } from '#/lib/classeur/miseEnPageImage.ts'
+import { BLOCS } from '#/lib/classeur/print/remarkBlocs.ts'
 import { RE_SEPARATEUR, decouperLigne } from '#/lib/classeur/tableauMarkdown.ts'
 
 export interface Alerte {
@@ -24,6 +37,26 @@ export interface Alerte {
   ligne: number
   message: string
 }
+
+/** Ce que la relecture sait d'une image de la médiathèque. */
+export interface InfoImage {
+  largeur: number
+  hauteur: number
+  /** Nom dans la médiathèque (souvent le nom du fichier d'origine). */
+  nom: string
+}
+
+/** Ce que la relecture sait d'une page paginée. */
+export interface InfoPage {
+  remplissage?: number
+  saut?: number
+}
+
+/** Photo d'appareil (nom de fichier de téléphone) : jamais « capture trop large ». */
+const NOM_PHOTO = /^(PXL|IMG|DSC|DSCN|MVIMG)[_-]?\d/i
+
+/** Moitié de la hauteur utile d'une page de document, en mm. */
+const DEMI_PAGE_MM = 115
 
 const NOM_NIVEAU: Record<number, string> = {
   1: 'grand titre',
@@ -41,17 +74,21 @@ function extrait(s: string, max = 40): string {
 }
 
 /**
- * @param imagesConnues chemins des images du classeur (en minuscules), ou
- *   `null` tant que la médiathèque n'est pas chargée (contrôle sauté).
+ * @param imagesConnues images du classeur par chemin (en minuscules), ou
+ *   `null` tant que la médiathèque n'est pas chargée (contrôles sautés).
+ * @param pages pages paginées de l'aperçu (remplissage, sauts), facultatif.
  */
 export function alertesRelecture(
   markdown: string,
-  imagesConnues: ReadonlySet<string> | null,
+  imagesConnues: ReadonlyMap<string, InfoImage> | null,
+  pages: readonly InfoPage[] = [],
 ): Alerte[] {
   const lignes = markdown.split('\n')
   const alertes: Alerte[] = []
   let dansCode = false
   let niveauPrecedent = 0
+  const pile: { nom: string; ligne: number }[] = []
+  const sansLegende: number[] = []
 
   // Lignes hors blocs de code (les autres sont masquées par '').
   const utiles = lignes.map((l) => {
@@ -65,18 +102,84 @@ export function alertesRelecture(
   utiles.forEach((l, i) => {
     const ligne = i + 1
 
-    // Images du classeur introuvables.
-    if (imagesConnues) {
-      for (const m of l.matchAll(/!\[[^\]]*\]\(\s*<?([^)\s>]+)>?/g)) {
-        const src = m[1]
-        if (estCheminImage(src) && !imagesConnues.has(src.toLowerCase())) {
+    // Blocs `:::` : ouverture, fermeture, fautes de frappe.
+    const directive = /^\s*(:{3,})([^\s{[]*)/.exec(l)
+    if (directive) {
+      const nom = directive[2]
+      if (nom === '') {
+        if (/^\s*:{3,}\s*$/.test(l)) {
+          if (pile.length > 0) pile.pop()
+        } else {
           alertes.push({
             ligne,
-            message:
-              'Image introuvable : elle a été supprimée de la médiathèque.',
+            message: `Bloc mal écrit : « ${extrait(l)} ». Écrivez « :::photos » ou « :::etape » sans espace après les deux-points.`,
           })
         }
+      } else if ((BLOCS as readonly string[]).includes(nom)) {
+        pile.push({ nom, ligne })
+      } else {
+        alertes.push({
+          ligne,
+          message: `Bloc inconnu « :::${extrait(nom, 20)} » : seuls « :::photos » et « :::etape » existent, cette ligne sera imprimée telle quelle.`,
+        })
       }
+      return
+    }
+    const bloc = pile.length > 0 ? pile[pile.length - 1].nom : null
+
+    // Images : introuvables, trop larges, trop hautes, bandeaux, légendes.
+    const jetons = Array.from(
+      l.matchAll(/!\[([^\]]*)\]\(\s*<?([^)\s>]+)>?(?:\s+"([^"]*)")?\s*\)/g),
+    )
+    for (const m of jetons) {
+      const [, alt, src, titre] = m
+      if (estLegendeGenerique(alt)) sansLegende.push(ligne)
+      if (!imagesConnues || !estCheminImage(src)) continue
+      const info = imagesConnues.get(src.toLowerCase())
+      if (!info) {
+        alertes.push({
+          ligne,
+          message:
+            'Image introuvable : elle a été supprimée de la médiathèque.',
+        })
+        continue
+      }
+      // Dans une planche ou une étape, le cadre est imposé : rien à régler.
+      if (bloc !== null) continue
+      const boite = boiteSurPage(
+        info.largeur,
+        info.hauteur,
+        tailleDepuisTitre(titre),
+      )
+      const ratio = info.largeur / Math.max(1, info.hauteur)
+      if (info.largeur > 1100 && !NOM_PHOTO.test(info.nom)) {
+        alertes.push({
+          ligne,
+          message:
+            "Capture très large : une fois imprimé, son texte sera trop petit pour être lu. Cliquez sur l'image dans l'aperçu et recadrez sur la partie utile.",
+        })
+      } else if (ratio > 6 && boite.hauteur < 15) {
+        alertes.push({
+          ligne,
+          message:
+            "Bandeau très fin : cliquez sur l'image dans l'aperçu et recadrez sur l'élément utile (un bouton, une case).",
+        })
+      }
+      if (boite.hauteur > DEMI_PAGE_MM) {
+        alertes.push({
+          ligne,
+          message: `Image très haute (environ ${String(Math.round(boite.hauteur / 10))} cm, plus d'une demi-page) : choisissez la taille Automatique ou recadrez-la.`,
+        })
+      }
+    }
+
+    // Du texte rangé dans une planche : une rangée entière à lui seul.
+    if (bloc === 'photos' && jetons.length === 0 && l.trim() !== '') {
+      alertes.push({
+        ligne,
+        message:
+          'Planche de photos : ce texte occupera une rangée entière. Placez-le plutôt au-dessus de la planche, ou en légende d’une photo.',
+      })
     }
 
     // Liens sans adresse (pas les images).
@@ -101,6 +204,38 @@ export function alertesRelecture(
       niveauPrecedent = niveau
     }
   })
+
+  // Blocs jamais fermés.
+  for (const b of pile) {
+    alertes.push({
+      ligne: b.ligne,
+      message: `Bloc « :::${b.nom} » jamais fermé : ajoutez une ligne « ::: » à sa fin, sinon tout ce qui suit y sera rangé.`,
+    })
+  }
+
+  // Images sans légende : UNE alerte, sur la première.
+  if (sansLegende.length > 0) {
+    const n = sansLegende.length
+    alertes.push({
+      ligne: sansLegende[0],
+      message: `${String(n)} ${n > 1 ? 'images sans légende' : 'image sans légende'} : cliquez sur une image dans l'aperçu pour écrire ce qu'elle montre.`,
+    })
+  }
+
+  // Pages presque vides à cause d'un saut de page `===`.
+  const lignesSaut = lignes.flatMap((l, k) =>
+    /^===\s*$/.test(l) ? [k + 1] : [],
+  )
+  for (const p of pages) {
+    if (p.saut === undefined || p.remplissage === undefined) continue
+    if (p.remplissage >= 0.5) continue
+    const ligne = lignesSaut[p.saut - 1] as number | undefined
+    if (ligne === undefined) continue
+    alertes.push({
+      ligne,
+      message: `Saut de page : la page d'avant n'est remplie qu'à ${String(Math.round(p.remplissage * 100))} %. Retirez-le si rien ne l'impose, la mise en page s'en charge.`,
+    })
+  }
 
   // Tableaux : blocs de lignes contiguës qui commencent par `|`.
   let i = 0

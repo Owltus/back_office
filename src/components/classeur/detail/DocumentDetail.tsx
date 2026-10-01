@@ -63,6 +63,7 @@ import {
 } from '#/lib/classeur/print/lignesSource.ts'
 import { usePageScale } from '#/lib/classeur/print/usePageScale.ts'
 import { alertesRelecture } from '#/lib/classeur/relecture.ts'
+import type { InfoPage } from '#/lib/classeur/relecture.ts'
 import { mentionVersion } from '#/lib/classeur/print/mentionVersion.ts'
 import { titreOuDefaut } from '#/lib/classeur/sommaire.ts'
 import { cn } from '#/lib/utils.ts'
@@ -192,12 +193,17 @@ export function DocumentDetail() {
         Number.isFinite(rendue) && rendue >= 1
           ? ligneRendueVersSource(ta.value, rendue)
           : undefined
-      // Un clic sur une IMAGE la retouche (taille, recadrage — 2026-09-30).
+      // Un clic sur une IMAGE la retouche (légende, taille, recadrage).
       const img = e.target.closest<HTMLImageElement>(
         '.a4-page img[data-chemin]',
       )
       if (img?.dataset.chemin && page.canWrite) {
-        image.retoucher(img.dataset.chemin, img.src, ligne)
+        image.retoucher(
+          img.dataset.chemin,
+          img.src,
+          ligne,
+          img.closest('[data-bloc="photos"]') ? 'planche' : 'page',
+        )
         return
       }
       if (ligne !== undefined) allerA(ligne)
@@ -245,13 +251,22 @@ export function DocumentDetail() {
   const imagesConnues = useMemo(
     () =>
       images.data
-        ? new Set(images.data.map((i) => i.chemin.toLowerCase()))
+        ? new Map(
+            images.data.map((i) => [
+              i.chemin.toLowerCase(),
+              { largeur: i.largeur, hauteur: i.hauteur, nom: i.nom },
+            ]),
+          )
         : null,
     [images.data],
   )
+  const [pagesApercu, setPagesApercu] = useState<readonly InfoPage[]>([])
   const alertes = useMemo(
-    () => (editing ? alertesRelecture(contenuDiffere, imagesConnues) : []),
-    [editing, contenuDiffere, imagesConnues],
+    () =>
+      editing
+        ? alertesRelecture(contenuDiffere, imagesConnues, pagesApercu)
+        : [],
+    [editing, contenuDiffere, imagesConnues, pagesApercu],
   )
 
   if (page.isPending) return <DetailSkeleton retour={retour} />
@@ -281,6 +296,7 @@ export function DocumentDetail() {
       establishment={page.establishment}
       mention={mentionVersion(editing ? Date.now() : doc.updated_at)}
       onPageCount={setNbPages}
+      onPagination={setPagesApercu}
     />
   )
 

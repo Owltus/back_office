@@ -6,6 +6,7 @@ import {
   basculerPrefixe,
   continuerListe,
   indenterListe,
+  entourerDeBloc,
   insererBloc,
   insererLien,
   insererLigne,
@@ -132,12 +133,6 @@ describe('insererBloc', () => {
     expect(res(v, insererBloc(v, 3, 3, 'saut'))!.texte).toBe('a\n\n===\n')
     expect(res('', insererBloc('', 0, 0, 'saut'))!.texte).toBe('===\n')
   })
-  it('« Reprendre sous l’image » insère `+++` isolé', () => {
-    const w = 'a\nb'
-    expect(res(w, insererBloc(w, 1, 1, 'sousImage'))!.texte).toBe(
-      'a\n\n+++\n\nb',
-    )
-  })
   it('tableau : la première cellule est sélectionnée', () => {
     const a = res('', insererBloc('', 0, 0, 'tableau'))!
     expect(a.choisi).toBe('Colonne 1')
@@ -249,5 +244,42 @@ describe('insererTexteEnBloc — tableau de la grille', () => {
     expect(res(v, insererTexteEnBloc(v, d, f, t))!.texte).toBe(
       `Avant\n\n${t}\n\nAprès`,
     )
+  })
+})
+
+describe('entourerDeBloc — étape illustrée, planche', () => {
+  it('entoure la ligne du curseur, curseur sur la ligne de fermeture', () => {
+    const v = 'Avant.\n\nOuvrir la porte.\n\nAprès.'
+    const e = entourerDeBloc(v, 12, 12, 'etape')
+    const t = appliquerEdition(v, e)
+    expect(t).toBe('Avant.\n\n:::etape\nOuvrir la porte.\n\n:::\n\nAprès.')
+    // Une image insérée au curseur arrive DANS le bloc, sur sa ligne.
+    const img = appliquerEdition(
+      t,
+      insererLigne(t, e.selection[0], e.selection[1], '![X](1/a.webp)'),
+    )
+    expect(img).toContain('Ouvrir la porte.\n\n![X](1/a.webp)\n:::')
+  })
+
+  it('entoure toutes les lignes sélectionnées, garde le titre AU-DESSUS', () => {
+    const v = '### 4. Ballon\nAppuyer :\n1. court\n2. long'
+    const t = appliquerEdition(v, entourerDeBloc(v, 0, v.length, 'etape'))
+    expect(t).toBe(
+      '### 4. Ballon\n\n:::etape\nAppuyer :\n1. court\n2. long\n\n:::\n',
+    )
+  })
+
+  it('ligne vide : bloc vide prêt à recevoir une photo', () => {
+    const v = 'a\n\n\nb'
+    const e = entourerDeBloc(v, 2, 2, 'etape')
+    const t = appliquerEdition(v, e)
+    expect(t).toContain(':::etape\n\n:::')
+    expect(t.slice(e.selection[0], e.selection[0] + 3)).toBe(':::')
+  })
+
+  it('une sélection qui finit au début d’une ligne n’entraîne pas cette ligne', () => {
+    const v = 'un\ndeux\ntrois'
+    const t = appliquerEdition(v, entourerDeBloc(v, 0, 3, 'etape'))
+    expect(t).toBe(':::etape\nun\n\n:::\n\ndeux\ntrois')
   })
 })

@@ -58,10 +58,10 @@ describe('correspondance texte tapé ⇄ texte rendu (sauts de page)', () => {
   })
 })
 
-describe('correspondance texte tapé ⇄ texte rendu (`+++`)', () => {
+describe('correspondance texte tapé ⇄ texte rendu (ancien `+++`)', () => {
   const source = 'a\n+++\nb\n===\nc'
   const traite = preprocessPageBreaks(source)
-  it('aller-retour exact et même texte visé, `+++` comme `===`', () => {
+  it('un ancien `+++` compte UNE ligne (ligne vide), `===` trois', () => {
     source.split('\n').forEach((_, i) => {
       expect(
         ligneRendueVersSource(source, ligneSourceVersRendue(source, i + 1)),
@@ -70,6 +70,7 @@ describe('correspondance texte tapé ⇄ texte rendu (`+++`)', () => {
     const rendues = traite.split('\n')
     for (const [s, texte] of [
       [1, 'a'],
+      [2, ''],
       [3, 'b'],
       [5, 'c'],
     ] as const) {

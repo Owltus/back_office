@@ -11,8 +11,7 @@ import {
   formaterOctets,
   imagesReferencees,
   jetonImage,
-  largeurDepuisTitre,
-  positionDepuisTitre,
+  tailleDepuisTitre,
   titreImage,
   trouverImage,
   markdownImage,
@@ -75,18 +74,22 @@ describe('cheminImage — le dossier est le classeur (RLS)', () => {
 })
 
 describe('markdownImage', () => {
-  it('alt = nom sans extension, sans crochets ; URL sans espace ni parenthèse', () => {
+  it('légende nettoyée (ni crochets ni retours) ; URL sans espace ni parenthèse', () => {
     expect(texteAlternatif('Chaudière [salle] 2.JPG')).toBe('Chaudière salle 2')
     expect(texteAlternatif('.png')).toBe('image')
     expect(texteAlternatif('   ')).toBe('image')
-    expect(markdownImage('plan.png', 'https://x.test/a b(1).webp')).toBe(
-      '![plan](https://x.test/a%20b%281%29.webp)',
+    expect(markdownImage('Plan [RDC]\n', 'https://x.test/a b(1).webp')).toBe(
+      '![Plan RDC](https://x.test/a%20b%281%29.webp)',
+    )
+    // Pas de légende : crochets vides, rien n'est imprimé sous l'image.
+    expect(markdownImage('', 'https://x.test/a.webp')).toBe(
+      '![](https://x.test/a.webp)',
     )
   })
   it('la ligne insérée porte le CHEMIN du bucket, jamais une URL', () => {
     const chemin = cheminImage(2, '0f2a9b1c-1234-4abc-8def-0123456789ab')
-    expect(markdownImage('plan.png', chemin)).toBe(
-      '![plan](2/0f2a9b1c-1234-4abc-8def-0123456789ab.webp)',
+    expect(markdownImage('Plan', chemin)).toBe(
+      '![Plan](2/0f2a9b1c-1234-4abc-8def-0123456789ab.webp)',
     )
     expect(estCheminImage(chemin)).toBe(true)
   })
@@ -138,26 +141,37 @@ describe('refusImageSource', () => {
   })
 })
 
-describe('largeur dans la page — portée par le titre Markdown', () => {
-  it('markdownImage ajoute "largeur=NN" sous 100 et rien à 100', () => {
-    const chemin = '2/0f2a9b1c-1234-4abc-8def-0123456789ab.webp'
-    expect(markdownImage('plan.png', chemin, 50)).toBe(
-      `![plan](${chemin} "largeur=50")`,
+describe('taille sur la page — portée par le titre Markdown', () => {
+  const chemin = '2/0f2a9b1c-1234-4abc-8def-0123456789ab.webp'
+  it('markdownImage écrit la taille, rien en automatique', () => {
+    expect(markdownImage('Plan', chemin, 'moyenne')).toBe(
+      `![Plan](${chemin} "moyenne")`,
     )
-    expect(markdownImage('plan.png', chemin, 100)).toBe(`![plan](${chemin})`)
-    expect(markdownImage('plan.png', chemin)).toBe(`![plan](${chemin})`)
+    expect(markdownImage('Plan', chemin, 'auto')).toBe(`![Plan](${chemin})`)
+    expect(markdownImage('Plan', chemin)).toBe(`![Plan](${chemin})`)
+    expect(titreImage('pleine')).toBe(' "pleine"')
+    expect(titreImage()).toBe('')
   })
-  it('largeurDepuisTitre lit la valeur, borne 10..100, 100 par défaut', () => {
-    expect(largeurDepuisTitre('largeur=50')).toBe(50)
-    expect(largeurDepuisTitre('note largeur=33 fin')).toBe(33)
-    expect(largeurDepuisTitre('largeur=5')).toBe(100)
-    expect(largeurDepuisTitre('largeur=150')).toBe(100)
-    expect(largeurDepuisTitre('rien')).toBe(100)
-    expect(largeurDepuisTitre(undefined)).toBe(100)
+  it('tailleDepuisTitre lit les trois mots, automatique sinon', () => {
+    expect(tailleDepuisTitre('petite')).toBe('petite')
+    expect(tailleDepuisTitre(' Moyenne ')).toBe('moyenne')
+    expect(tailleDepuisTitre('pleine')).toBe('pleine')
+    expect(tailleDepuisTitre('grande')).toBe('auto')
+    expect(tailleDepuisTitre('rien')).toBe('auto')
+    expect(tailleDepuisTitre(undefined)).toBe('auto')
   })
-  it('une image avec largeur reste référencée (usages) comme sans', () => {
-    const chemin = '2/0f2a9b1c-1234-4abc-8def-0123456789ab.webp'
-    expect(imagesReferencees(markdownImage('a', chemin, 33))).toEqual([chemin])
+  it('lecture TOLÉRANTE de l’ancienne syntaxe (2026-09-30)', () => {
+    expect(tailleDepuisTitre('largeur=20 position=droite')).toBe('petite')
+    expect(tailleDepuisTitre('largeur=25 position=gauche')).toBe('petite')
+    expect(tailleDepuisTitre('largeur=50')).toBe('moyenne')
+    expect(tailleDepuisTitre('largeur=75')).toBe('pleine')
+    expect(tailleDepuisTitre('largeur=100')).toBe('auto')
+    expect(tailleDepuisTitre('largeur=5')).toBe('auto')
+  })
+  it('une image avec taille reste référencée (usages) comme sans', () => {
+    expect(imagesReferencees(markdownImage('a', chemin, 'petite'))).toEqual([
+      chemin,
+    ])
   })
 })
 
@@ -280,16 +294,16 @@ describe('trouverImage / jetonImage — retoucher une image placée', () => {
     '',
     `![Accueil](${A})`,
     '',
-    `Texte ![Plan](${B} "largeur=50") en ligne.`,
+    `Texte ![Plan](${B} "moyenne") en ligne.`,
     '',
-    `![Accueil bis](${A} "largeur=75")`,
+    `![Accueil bis](${A} "largeur=75 position=gauche")`,
   ].join('\n')
 
-  it('trouve l’image sur la ligne cliquée, avec sa largeur', () => {
+  it('trouve l’image sur la ligne cliquée, avec sa taille', () => {
     const t = trouverImage(texte, A, 7)
-    expect(t).toMatchObject({ alt: 'Accueil bis', largeur: 75 })
+    expect(t).toMatchObject({ alt: 'Accueil bis', taille: 'pleine' })
     expect(texte.slice(t!.debut, t!.fin)).toBe(
-      `![Accueil bis](${A} "largeur=75")`,
+      `![Accueil bis](${A} "largeur=75 position=gauche")`,
     )
   })
 
@@ -298,10 +312,10 @@ describe('trouverImage / jetonImage — retoucher une image placée', () => {
     expect(trouverImage(texte, A, 1)?.alt).toBe('Accueil')
   })
 
-  it('image au milieu d’une ligne, largeur lue', () => {
+  it('image au milieu d’une ligne, taille lue', () => {
     expect(trouverImage(texte, B, 5)).toMatchObject({
       alt: 'Plan',
-      largeur: 50,
+      taille: 'moyenne',
     })
   })
 
@@ -311,44 +325,11 @@ describe('trouverImage / jetonImage — retoucher une image placée', () => {
     ).toBe(null)
   })
 
-  it('réécrit le jeton : largeur posée, retirée à 100 %, chemin changé', () => {
-    expect(jetonImage('Plan', B, 40)).toBe(`![Plan](${B} "largeur=40")`)
-    expect(jetonImage('Plan', B, 100)).toBe(`![Plan](${B})`)
-    expect(jetonImage('Plan', A, 60)).toBe(`![Plan](${A} "largeur=60")`)
+  it('réécrit le jeton : légende et taille posées, ancienne syntaxe remplacée', () => {
+    expect(jetonImage('Plan', B, 'petite')).toBe(`![Plan](${B} "petite")`)
+    expect(jetonImage('Plan', B, 'auto')).toBe(`![Plan](${B})`)
+    expect(jetonImage('Plan [v2]', A)).toBe(`![Plan v2](${A})`)
     // Relu tel quel par le moteur de rendu.
-    expect(largeurDepuisTitre('largeur=40')).toBe(40)
-  })
-})
-
-describe('position d’une image — gauche, centre, droite', () => {
-  const A = '12/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.webp'
-
-  it('écrit la position seulement hors centre et sous 100 %', () => {
-    expect(titreImage(40, 'gauche')).toBe(' "largeur=40 position=gauche"')
-    expect(titreImage(40, 'centre')).toBe(' "largeur=40"')
-    // Pleine largeur : jamais de texte à côté, donc jamais de position.
-    expect(titreImage(100, 'droite')).toBe('')
-    expect(jetonImage('Plan', A, 50, 'droite')).toBe(
-      `![Plan](${A} "largeur=50 position=droite")`,
-    )
-  })
-
-  it('relit la position (centre par défaut, et à 100 %)', () => {
-    expect(positionDepuisTitre('largeur=40 position=gauche')).toBe('gauche')
-    expect(positionDepuisTitre('position=droite largeur=60')).toBe('droite')
-    expect(positionDepuisTitre('largeur=40')).toBe('centre')
-    expect(positionDepuisTitre('position=gauche')).toBe('centre')
-    expect(positionDepuisTitre(undefined)).toBe('centre')
-    // La largeur se lit toujours, position présente ou non.
-    expect(largeurDepuisTitre('largeur=40 position=gauche')).toBe(40)
-  })
-
-  it('trouverImage rend la position, jetonImage la conserve', () => {
-    const texte = `![Plan](${A} "largeur=40 position=gauche")`
-    const t = trouverImage(texte, A)
-    expect(t).toMatchObject({ largeur: 40, position: 'gauche' })
-    expect(jetonImage(t!.alt, A, 60, t!.position)).toBe(
-      `![Plan](${A} "largeur=60 position=gauche")`,
-    )
+    expect(tailleDepuisTitre('petite')).toBe('petite')
   })
 })

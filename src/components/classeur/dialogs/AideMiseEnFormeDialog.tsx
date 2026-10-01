@@ -1,14 +1,15 @@
 import type { ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import type { Components } from 'react-markdown'
 import {
-  ArrowDownToLine,
   Bold,
+  Columns2,
   Heading1,
   Heading2,
   ImagePlus,
   Images,
   Italic,
+  LayoutGrid,
   Link,
   List,
   ListOrdered,
@@ -24,6 +25,10 @@ import { HelpGlyph } from '#/components/shared/HelpGlyph.tsx'
 import { Kbd, KbdPlus, Shortcut } from '#/components/shared/Kbd.tsx'
 import { Dialog, DialogContent } from '#/components/ui/dialog.tsx'
 import { PAGE_FONT_FAMILY } from '#/lib/classeur/print/constants.ts'
+import {
+  REHYPE_CLASSEUR,
+  REMARK_CLASSEUR,
+} from '#/lib/classeur/print/pipeline.ts'
 
 /*
  * Mode d'emploi de l'éditeur des documents (bouton « ? » de l'en-tête,
@@ -33,9 +38,22 @@ import { PAGE_FONT_FAMILY } from '#/lib/classeur/print/constants.ts'
  *
  * Chaque exemple montre ce que l'on TAPE et ce que ça DONNE sur la page ;
  * le résultat est rendu par le même moteur Markdown et les mêmes styles
- * que les pages A4 (`.pdf-prose`) — une illustration redessinée à la main
- * finirait par mentir sur ce que la page imprime.
+ * que les pages A4 (`.pdf-prose`, pipeline PARTAGÉ `print/pipeline.ts`) —
+ * une illustration redessinée à la main finirait par mentir sur ce que la
+ * page imprime. Les images des exemples sont des vignettes neutres : le
+ * texte tapé montre un nom de fichier lisible, pas un chemin du stockage.
  */
+
+/** Vignette grise 4:3 (montagne et soleil), pour les exemples d'images. */
+const VIGNETTE = `data:image/svg+xml;utf8,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"><rect width="400" height="300" fill="#e5e5e5"/><circle cx="290" cy="90" r="34" fill="#c4c4c4"/><path d="M40 260 150 120l70 90 50-55 90 105z" fill="#bdbdbd"/></svg>',
+)}`
+
+const COMPOSANTS_EXEMPLE: Components = {
+  img: ({ alt, title }) => (
+    <img src={VIGNETTE} alt={alt ?? ''} data-taille={title ?? 'auto'} />
+  ),
+}
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -88,7 +106,13 @@ function Exemple({ source }: { source: string }) {
             lineHeight: 1.6,
           }}
         >
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{source}</ReactMarkdown>
+          <ReactMarkdown
+            remarkPlugins={REMARK_CLASSEUR}
+            rehypePlugins={REHYPE_CLASSEUR}
+            components={COMPOSANTS_EXEMPLE}
+          >
+            {source}
+          </ReactMarkdown>
         </div>
       </div>
     </div>
@@ -232,30 +256,71 @@ export function AideMiseEnFormeDialog({
               image déjà envoyée dans ce classeur.
             </p>
             <p>
-              Avant l'envoi, une fenêtre permet de la <Term>recadrer</Term>{' '}
-              (tirez les coins du cadre), de choisir sa <Term>taille</Term> sur
-              la page (petite, moyenne, grande ou pleine largeur ; ses
-              proportions sont toujours gardées) et sa <Term>position</Term> :
-              au centre, ou à gauche ou à droite avec le texte qui l'entoure.
-              Une page miniature montre le résultat.
+              Avant l'envoi, une fenêtre demande une <Term>légende</Term>{' '}
+              (imprimée sous l'image : dites ce qu'elle montre), permet de la{' '}
+              <Term>recadrer</Term> (tirez les coins du cadre) et de choisir sa{' '}
+              <Term>taille</Term>. En <Term>Automatique</Term>, l'application
+              s'occupe de tout : l'image est centrée et ne dépasse jamais 10 cm
+              de haut, même une photo prise en hauteur. Petite, moyenne et
+              pleine largeur restent possibles ; une capture d'écran à lire se
+              met en pleine largeur.
+            </p>
+            <Exemple
+              source={'Ouvrir le bac à sel.\n\n![Bac à sel ouvert](photo.webp)'}
+            />
+            <p>
+              Pour <Term>retoucher</Term> une image déjà placée (légende,
+              taille, cadre), <Term>cliquez dessus</Term> dans l'aperçu de la
+              page : la même fenêtre s'ouvre. <Kbd>Ctrl</Kbd> <KbdPlus />{' '}
+              <Kbd>Z</Kbd> annule.
             </p>
             <p>
-              Le texte entoure une image placée à gauche ou à droite. Pour que
-              la suite reparte <Term>sous l'image</Term>,{' '}
-              <Bouton icon={<ArrowDownToLine />} /> insère une ligne{' '}
-              <code>+++</code> à l'endroit voulu : ce qui suit ne se met plus à
-              côté. Un titre, lui, passe toujours sous l'image.
+              Dans le texte, une image est une ligne <code>![légende](…)</code>,
+              parfois suivie de sa taille entre guillemets (
+              <code>"petite"</code>, <code>"moyenne"</code>,{' '}
+              <code>"pleine"</code>). Ne modifiez pas la partie entre
+              parenthèses : déplacez ou supprimez la ligne entière.
             </p>
+          </Section>
+
+          <Section title="Planche de photos">
             <p>
-              Pour <Term>retoucher</Term> une image déjà placée,{' '}
-              <Term>cliquez dessus</Term> dans l'aperçu de la page : la même
-              fenêtre s'ouvre. <Kbd>Ctrl</Kbd> <KbdPlus /> <Kbd>Z</Kbd> annule.
+              Pour montrer <Term>plusieurs photos</Term> d'un coup (repérer des
+              vannes, comparer un avant / après),{' '}
+              <Bouton icon={<LayoutGrid />} /> : choisissez toutes les photos,
+              elles sont rangées en <Term>grille</Term>, toutes au même format
+              (2 photos côte à côte, 4 en carré, 3 ou 6 sur trois colonnes).
+              Cliquez ensuite sur chaque photo dans l'aperçu pour lui écrire sa
+              légende.
             </p>
+            <Exemple
+              source={
+                ':::photos\n![Manchette 1 : en haut](photo1.webp)\n![Manchette 2 : en bas](photo2.webp)\n:::'
+              }
+            />
             <p>
-              Dans le texte, une image apparaît comme une ligne{' '}
-              <code>![nom](…)</code>, suivie de ses réglages entre guillemets (
-              <code>"largeur=40 position=gauche"</code>) : ne la modifiez pas à
-              la main, déplacez-la ou supprimez-la entière.
+              Dans le texte, la planche commence par <code>:::photos</code> et
+              finit par <code>:::</code>, chacun seul sur sa ligne et sans
+              espace. Entre les deux, une photo par ligne.
+            </p>
+          </Section>
+
+          <Section title="Étape illustrée">
+            <p>
+              Pour mettre une <Term>photo à côté d'une consigne</Term>, placez
+              le curseur sur la consigne (ou sélectionnez-en plusieurs lignes),
+              puis <Bouton icon={<Columns2 />} /> et choisissez la photo : le
+              texte reste à gauche, la photo se place dans une colonne à droite.
+            </p>
+            <Exemple
+              source={
+                ':::etape\nSur le boîtier, appuyer sur le **bouton rouge** :\n\n1. Un appui court.\n2. Un appui long.\n\n![Boîtier du ballon](photo.webp)\n:::'
+              }
+            />
+            <p>
+              Un titre au-dessus d'une étape reste au-dessus : il l'emporte avec
+              lui si elle passe à la page suivante. Une étape plus haute qu'une
+              page s'imprime simplement texte puis photo.
             </p>
           </Section>
 

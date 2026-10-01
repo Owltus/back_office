@@ -39,6 +39,7 @@ import type {
   DbChapter,
   DbImage,
 } from '#/lib/classeur/types.ts'
+import { nettoyerLegende } from '#/lib/classeur/legende.ts'
 import { supabase } from '#/lib/supabase.ts'
 
 export const BUCKET_IMAGES = 'classeur-images'
@@ -82,52 +83,61 @@ export interface Recadrage {
 }
 
 /**
- * Ce que le dialogue de préparation rend : un recadrage et une largeur sur
- * la page, tous deux facultatifs (largeur absente = pleine largeur). La
- * largeur est de nouveau réglable depuis le 2026-09-30 (demande utilisateur :
- * « une image a vite fait de prendre toute la place »).
+ * Ce que le dialogue de préparation rend : un recadrage, une taille et une
+ * légende, tous facultatifs.
  */
 export interface PreparationImage {
   recadrage?: Recadrage
-  /** Pourcentage de la largeur de la zone de contenu (10 à 100). */
-  largeur?: number
-  /** Gauche / droite : le texte coule à côté (2026-09-30). Défaut : centre. */
-  position?: PositionImage
+  /** Absente = automatique. */
+  taille?: TailleImage
+  /** Texte imprimé sous l'image (`![légende](…)`). */
+  legende?: string
 }
 
-/** Place d'une image dans la page. Gauche et droite : le texte l'entoure. */
-export type PositionImage = 'gauche' | 'centre' | 'droite'
-
-/**
- * Titre Markdown d'une image : `largeur=NN` sous 100 %, `position=…` hors
- * centre. Une image en pleine largeur ne peut pas avoir de texte à côté :
- * elle est toujours centrée.
+/*
+ * TAILLE d'une image (2026-10-01, plan `classeur-images-blocs`) : l'app
+ * décide, l'utilisateur ne choisit qu'entre quatre options — plus de curseur
+ * libre ni de position gauche / droite (l'habillage laissait de grands vides
+ * à côté des phrases courtes d'une procédure ; aucun référentiel de modes
+ * opératoires ne le pratique).
+ *
+ *   auto     largeur naturelle, bornée à la page ET à ~100 mm de haut
+ *   petite   un tiers de la largeur      moyenne   la moitié
+ *   pleine   toute la largeur (captures d'écran à lire)
+ *
+ * Écrite dans le TITRE de l'image, seul canal que le Markdown standard laisse
+ * à une image : `![légende](chemin "petite")`. Lecture TOLÉRANTE des anciens
+ * contenus (2026-09-30) : `largeur=NN` donne la taille la plus proche,
+ * `position=…` est ignoré.
  */
-export function titreImage(
-  largeur: number,
-  position: PositionImage = 'centre',
-): string {
-  const parties: string[] = []
-  const l = Math.round(largeur)
-  if (l > 0 && l < 100) {
-    parties.push(`largeur=${String(l)}`)
-    if (position !== 'centre') parties.push(`position=${position}`)
-  }
-  return parties.length > 0 ? ` "${parties.join(' ')}"` : ''
+export type TailleImage = 'auto' | 'petite' | 'moyenne' | 'pleine'
+
+export const TAILLES_IMAGE: readonly TailleImage[] = [
+  'auto',
+  'petite',
+  'moyenne',
+  'pleine',
+]
+
+/** Titre Markdown d'une taille (avec son espace), vide en automatique. */
+export function titreImage(taille: TailleImage = 'auto'): string {
+  return taille === 'auto' ? '' : ` "${taille}"`
 }
 
-/** Position portée par le titre d'une image Markdown, `centre` sinon. */
-export function positionDepuisTitre(
+/** Taille portée par le titre d'une image Markdown. */
+export function tailleDepuisTitre(
   title: string | null | undefined,
-): PositionImage {
-  if (largeurDepuisTitre(title) >= 100) return 'centre'
-  const m = /(?:^|\s)position=(gauche|droite|centre)(?:\s|$)/.exec(title ?? '')
-  return (m?.[1] as PositionImage | undefined) ?? 'centre'
+): TailleImage {
+  const t = (title ?? '').trim().toLowerCase()
+  const mot = /(?:^|\s)(petite|moyenne|pleine)(?:\s|$)/.exec(t)
+  if (mot) return mot[1] as TailleImage
+  // Ancienne syntaxe (2026-09-30).
+  const m = /(?:^|\s)largeur=(\d{1,3})(?:\s|$)/.exec(t)
+  if (!m) return 'auto'
+  const n = Number(m[1])
+  if (n < 10 || n >= 100) return 'auto'
+  return n <= 40 ? 'petite' : n <= 62 ? 'moyenne' : 'pleine'
 }
-
-/** Bornes du réglage de largeur (%), et pas du curseur. */
-export const LARGEUR_MIN = 20
-export const LARGEUR_PAS = 5
 
 /**
  * Borne un rectangle de recadrage à l'image (jamais vide, jamais hors
@@ -215,31 +225,22 @@ export function estCheminImage(src: string | null | undefined): src is string {
 }
 
 /**
- * La ligne Markdown à insérer : `![alt](chemin)` (jamais une URL), avec le
- * titre `"largeur=NN"` quand l'image ne prend pas toute la largeur — c'est
- * le seul canal de mise en page que le Markdown standard laisse à une image
- * (`ImageDocument` le lit, `largeurDepuisTitre`).
+ * La ligne Markdown à insérer : `![légende](chemin)` (jamais une URL), avec
+ * la taille en titre hors automatique (`ImageDocument` la lit,
+ * `tailleDepuisTitre`). Légende vide par défaut : un nom de fichier n'en est
+ * pas une (`legende.ts`).
  */
 export function markdownImage(
-  nomFichier: string,
+  legende: string,
   url: string,
-  largeur: number = 100,
-  position: PositionImage = 'centre',
+  taille: TailleImage = 'auto',
 ): string {
   // Espaces et parenthèses casseraient la syntaxe `![](…)` ;
   // `encodeURIComponent` laisse les parenthèses, on les encode à la main.
   const urlSure = url.replace(/[\s()]/g, (c) =>
     c === '(' ? '%28' : c === ')' ? '%29' : encodeURIComponent(c),
   )
-  return `![${texteAlternatif(nomFichier)}](${urlSure}${titreImage(largeur, position)})`
-}
-
-/** Largeur (%) portée par le titre d'une image Markdown, `100` sinon. */
-export function largeurDepuisTitre(title: string | null | undefined): number {
-  const m = /(?:^|\s)largeur=(\d{1,3})(?:\s|$)/.exec(title ?? '')
-  if (!m) return 100
-  const n = Number(m[1])
-  return n >= 10 && n <= 100 ? n : 100
+  return `![${nettoyerLegende(legende)}](${urlSure}${titreImage(taille)})`
 }
 
 /** Vrai pour un fichier que le navigateur a des chances de décoder comme image. */
@@ -414,10 +415,9 @@ export async function televerserImage(
     image: fiche,
     octetsSource: file.size,
     markdown: markdownImage(
-      fiche.nom,
+      preparation.legende ?? '',
       chemin,
-      preparation.largeur ?? 100,
-      preparation.position,
+      preparation.taille ?? 'auto',
     ),
   }
 }
@@ -582,8 +582,7 @@ export interface ImageDansTexte {
   fin: number
   alt: string
   chemin: string
-  largeur: number
-  position: PositionImage
+  taille: TailleImage
 }
 
 /**
@@ -605,8 +604,7 @@ export function trouverImage(
       fin: m.index + m[0].length,
       alt: m[1],
       chemin: m[2],
-      largeur: largeurDepuisTitre(m[3]),
-      position: positionDepuisTitre(m[3]),
+      taille: tailleDepuisTitre(m[3]),
     })
   }
   if (occurrences.length === 0) return null
@@ -618,12 +616,11 @@ export function trouverImage(
   return occurrences[0]
 }
 
-/** Le jeton réécrit : même texte alternatif, chemin, largeur et position donnés. */
+/** Le jeton réécrit : légende, chemin et taille donnés. */
 export function jetonImage(
-  alt: string,
+  legende: string,
   chemin: string,
-  largeur: number,
-  position: PositionImage = 'centre',
+  taille: TailleImage = 'auto',
 ): string {
-  return `![${alt}](${chemin}${titreImage(largeur, position)})`
+  return `![${nettoyerLegende(legende)}](${chemin}${titreImage(taille)})`
 }

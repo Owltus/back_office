@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import ReactCrop, { centerCrop, makeAspectCrop } from 'react-image-crop'
 import type { PercentCrop } from 'react-image-crop'
 import 'react-image-crop/dist/ReactCrop.css'
-import { Check, Crop, Loader2, RotateCcw } from 'lucide-react'
+import { Check, Crop, Info, Loader2, RotateCcw } from 'lucide-react'
 
 import { Button } from '#/components/ui/button.tsx'
 import {
@@ -12,13 +12,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '#/components/ui/dialog.tsx'
-import { Slider } from '#/components/ui/slider.tsx'
-import {
-  LARGEUR_MIN,
-  LARGEUR_PAS,
-  formaterOctets,
-} from '#/lib/classeur/images.ts'
-import type { PositionImage, PreparationImage } from '#/lib/classeur/images.ts'
+import { Input } from '#/components/ui/input.tsx'
+import { dimensionsReduites, formaterOctets } from '#/lib/classeur/images.ts'
+import { boiteSurPage, conseilsImage } from '#/lib/classeur/miseEnPageImage.ts'
+import type { PreparationImage, TailleImage } from '#/lib/classeur/images.ts'
+import { estLegendeGenerique } from '#/lib/classeur/legende.ts'
 import {
   CONTENT_WIDTH_MM,
   PAGE_WIDTH_MM,
@@ -26,21 +24,24 @@ import {
 import { cn } from '#/lib/utils.ts'
 
 /*
- * PRÉPARATION / RETOUCHE d'une image (refonte du 2026-09-30, demande
- * utilisateur : « redimensionner en gardant le ratio, une image prend vite
- * toute la place ; recadrer plus simplement, pouvoir la toucher pour la
- * mettre en forme »).
+ * PRÉPARATION / RETOUCHE d'une image (refonte du 2026-10-01, plan
+ * `classeur-images-blocs` — retour utilisateur : « la mise en place des
+ * images, une vraie catastrophe ; c'est l'humain qui pose souci, il faut le
+ * guider »).
  *
- * Deux réglages, visibles d'un coup d'œil :
- *   - le CADRE : un rectangle que l'on tire par ses coins et ses bords
- *     (`react-image-crop`, souris et doigt), libre ou à un format donné ;
- *   - la TAILLE SUR LA PAGE : Petite / Moyenne / Grande / Pleine largeur, ou
- *     au curseur. Les proportions sont toujours gardées (seule la largeur est
- *     choisie ; la hauteur suit). Une page A4 miniature montre le résultat.
+ * Trois réglages, dans l'ordre où on les pense :
+ *   - la LÉGENDE, imprimée sous l'image (vide par défaut : un nom de fichier
+ *     n'en est pas une) ;
+ *   - le CADRE, que l'on tire par ses coins (`react-image-crop`, souris et
+ *     doigt), libre ou à un format donné ;
+ *   - la TAILLE : Automatique (l'app borne largeur ET hauteur), Petite,
+ *     Moyenne, Pleine largeur. Plus de curseur ni de position gauche/droite.
+ * Des CONSEILS tirés de l'image elle-même (capture trop large pour être lue,
+ * bandeau, image haute) et une page A4 miniature À L'ÉCHELLE montrent le
+ * résultat avant de valider.
  *
- * Sert à l'AJOUT (`file`) comme à la RETOUCHE d'une image déjà placée
- * (`existante`, cliquée dans l'aperçu). Le fichier n'est ni converti ni
- * envoyé ici : le dialogue rend une `PreparationImage`.
+ * Dans une planche de photos (`contexte="planche"`), la taille ne s'applique
+ * pas (toutes les cases ont le même cadre) : le réglage est masqué.
  */
 
 const FORMATS: {
@@ -55,17 +56,11 @@ const FORMATS: {
   { key: '16:9', label: '16:9', valeur: 16 / 9 },
 ]
 
-const TAILLES: { valeur: number; label: string }[] = [
-  { valeur: 33, label: 'Petite' },
-  { valeur: 50, label: 'Moyenne' },
-  { valeur: 75, label: 'Grande' },
-  { valeur: 100, label: 'Pleine largeur' },
-]
-
-const POSITIONS: { key: PositionImage; label: string }[] = [
-  { key: 'gauche', label: 'À gauche' },
-  { key: 'centre', label: 'Au centre' },
-  { key: 'droite', label: 'À droite' },
+const TAILLES: { key: TailleImage; label: string }[] = [
+  { key: 'auto', label: 'Automatique' },
+  { key: 'petite', label: 'Petite' },
+  { key: 'moyenne', label: 'Moyenne' },
+  { key: 'pleine', label: 'Pleine largeur' },
 ]
 
 const CADRE_ENTIER: PercentCrop = {
@@ -84,8 +79,9 @@ function estEntier(c: PercentCrop): boolean {
 export function ImagePreparationDialog({
   file = null,
   existante = null,
-  largeurInitiale = 100,
-  positionInitiale = 'centre',
+  tailleInitiale = 'auto',
+  legendeInitiale = '',
+  contexte = 'page',
   envoi = false,
   onAnnuler,
   onValider,
@@ -94,10 +90,12 @@ export function ImagePreparationDialog({
   file?: File | null
   /** Image déjà placée à retoucher : son URL locale et son nom. */
   existante?: { url: string; nom: string } | null
-  /** Largeur actuelle sur la page (%), pour une retouche. */
-  largeurInitiale?: number
-  /** Position actuelle sur la page, pour une retouche. */
-  positionInitiale?: PositionImage
+  /** Taille actuelle, pour une retouche. */
+  tailleInitiale?: TailleImage
+  /** Légende actuelle, pour une retouche (une légende générique est vidée). */
+  legendeInitiale?: string
+  /** Dans une planche de photos, la taille ne s'applique pas. */
+  contexte?: 'page' | 'planche'
   /** Envoi en cours (boutons figés, loader). */
   envoi?: boolean
   onAnnuler: () => void
@@ -115,24 +113,24 @@ export function ImagePreparationDialog({
   const url = urlFichier ?? existante?.url ?? null
   const ouvert = url !== null
   const retouche = file === null && existante !== null
+  // Photo d'appareil (JPEG, HEIC) : jamais « capture trop large ».
+  const photo = file !== null && /jpe?g|hei[cf]/i.test(file.type || file.name)
 
   const imgRef = useRef<HTMLImageElement>(null)
   const [naturel, setNaturel] = useState<{ w: number; h: number } | null>(null)
   const [format, setFormat] = useState('libre')
   const [cadre, setCadre] = useState<PercentCrop>(CADRE_ENTIER)
-  const [largeur, setLargeur] = useState(largeurInitiale)
-  const [position, setPosition] = useState<PositionImage>(positionInitiale)
-  // En pleine largeur, pas de place pour du texte à côté : centrée.
-  const positionEffective: PositionImage = largeur >= 100 ? 'centre' : position
+  const [taille, setTaille] = useState<TailleImage>(tailleInitiale)
+  const [legende, setLegende] = useState('')
 
   // Remise à zéro à chaque ouverture sur une nouvelle image.
   useEffect(() => {
     setNaturel(null)
     setFormat('libre')
     setCadre(CADRE_ENTIER)
-    setLargeur(largeurInitiale)
-    setPosition(positionInitiale)
-  }, [url, largeurInitiale, positionInitiale])
+    setTaille(tailleInitiale)
+    setLegende(estLegendeGenerique(legendeInitiale) ? '' : legendeInitiale)
+  }, [url, tailleInitiale, legendeInitiale])
 
   const aspectFormat = (key: string, n = naturel): number | undefined => {
     const f = FORMATS.find((x) => x.key === key)?.valeur
@@ -163,11 +161,23 @@ export function ImagePreparationDialog({
 
   const recadrageActif = !estEntier(cadre)
 
+  // Dimensions de l'image telle qu'elle sera ENVOYÉE (cadrée puis réduite à
+  // 1600 px de côté, `convertirEnWebp`) : c'est elle que la page affichera.
+  const finale = naturel
+    ? dimensionsReduites(
+        Math.max(1, Math.round((cadre.width / 100) * naturel.w)),
+        Math.max(1, Math.round((cadre.height / 100) * naturel.h)),
+      )
+    : null
+  const conseils = finale
+    ? conseilsImage(finale.largeur, finale.hauteur, { photo })
+    : []
+
   function valider() {
     if (!naturel) return
     const preparation: PreparationImage = {
-      largeur,
-      position: positionEffective,
+      taille: contexte === 'planche' ? 'auto' : taille,
+      legende: legende.trim(),
     }
     if (recadrageActif) {
       preparation.recadrage = {
@@ -181,9 +191,6 @@ export function ImagePreparationDialog({
   }
 
   const nom = file?.name ?? existante?.nom ?? ''
-  const largeurCm = ((CONTENT_WIDTH_MM * largeur) / 100 / 10)
-    .toFixed(1)
-    .replace('.', ',')
 
   return (
     <Dialog
@@ -200,9 +207,7 @@ export function ImagePreparationDialog({
           <DialogDescription>
             {nom}
             {file ? ` · ${formaterOctets(file.size)}` : ''}
-            {naturel ? ` · ${String(naturel.w)} × ${String(naturel.h)}` : ''}.
-            Tirez les coins du cadre pour recadrer, puis choisissez la taille
-            sur la page.
+            {naturel ? ` · ${String(naturel.w)} × ${String(naturel.h)}` : ''}
           </DialogDescription>
         </DialogHeader>
 
@@ -238,8 +243,19 @@ export function ImagePreparationDialog({
 
           {/* Réglages et aperçu de la page */}
           <div className="flex flex-col gap-4">
+            <Reglage label="Légende · imprimée sous l'image">
+              <Input
+                value={legende}
+                onChange={(e) => setLegende(e.target.value)}
+                placeholder="Ex. : Vanne du by-pass, en haut à gauche"
+                maxLength={160}
+                aria-label="Légende"
+                autoFocus={!retouche}
+              />
+            </Reglage>
+
             <Reglage
-              label="Cadre"
+              label="Cadre · tirez les coins pour recadrer"
               action={
                 recadrageActif ? (
                   <button
@@ -260,50 +276,38 @@ export function ImagePreparationDialog({
               />
             </Reglage>
 
-            <Reglage
-              label={`Taille sur la page · ${String(largeur)} % (≈ ${largeurCm} cm)`}
-            >
-              <Segments
-                valeur={String(largeur)}
-                options={TAILLES.map((t) => ({
-                  key: String(t.valeur),
-                  label: t.label,
-                }))}
-                onChange={(k) => setLargeur(Number(k))}
-              />
-              <Slider
-                value={[largeur]}
-                min={LARGEUR_MIN}
-                max={100}
-                step={LARGEUR_PAS}
-                onValueChange={([v]) => setLargeur(v)}
-                aria-label="Taille sur la page"
-                className="mt-2"
-              />
-            </Reglage>
+            {contexte === 'page' ? (
+              <Reglage label="Taille sur la page">
+                <Segments
+                  valeur={taille}
+                  options={TAILLES}
+                  onChange={(k) => setTaille(k as TailleImage)}
+                />
+              </Reglage>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Dans une planche, toutes les photos ont le même cadre : la
+                taille se règle toute seule.
+              </p>
+            )}
 
-            <Reglage
-              label={
-                largeur >= 100
-                  ? 'Position · réduisez la taille pour mettre du texte à côté'
-                  : 'Position · à gauche ou à droite, le texte l’entoure'
-              }
-            >
-              <Segments
-                valeur={positionEffective}
-                options={POSITIONS}
-                onChange={(k) => setPosition(k as PositionImage)}
-                desactive={largeur >= 100}
-              />
-            </Reglage>
+            {conseils.length > 0 && (
+              <ul className="flex flex-col gap-1.5 rounded-md border border-border bg-muted/40 p-2.5 text-xs">
+                {conseils.map((c) => (
+                  <li key={c} className="flex gap-1.5">
+                    <Info className="mt-px size-3.5 shrink-0 text-muted-foreground" />
+                    <span>{c}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
 
-            {url && (
+            {url && contexte === 'page' && finale && (
               <ApercuPage
                 url={url}
                 cadre={cadre}
-                naturel={naturel}
-                largeur={largeur}
-                position={positionEffective}
+                boite={boiteSurPage(finale.largeur, finale.hauteur, taille)}
+                legende={legende.trim()}
               />
             )}
           </div>
@@ -335,34 +339,28 @@ export function ImagePreparationDialog({
 }
 
 /**
- * Page A4 miniature : du texte figuré, puis l'image telle qu'elle sera
- * placée (recadrée, à la largeur choisie, proportions gardées) — centrée, ou
- * à gauche / à droite avec le texte qui l'entoure.
+ * Page A4 miniature À L'ÉCHELLE : du texte figuré, puis l'image centrée telle
+ * qu'elle sera imprimée (boîte calculée comme `classeur.css`) et sa légende.
  */
 function ApercuPage({
   url,
   cadre,
-  naturel,
-  largeur,
-  position,
+  boite,
+  legende,
 }: {
   url: string
   cadre: PercentCrop
-  naturel: { w: number; h: number } | null
-  largeur: number
-  position: PositionImage
+  boite: { largeur: number; hauteur: number }
+  legende: string
 }) {
   const marge = ((PAGE_WIDTH_MM - CONTENT_WIDTH_MM) / 2 / PAGE_WIDTH_MM) * 100
-  const ratio = naturel
-    ? (cadre.width * naturel.w) / Math.max(1, cadre.height * naturel.h)
-    : 4 / 3
   const tailleFond = `${String(10000 / Math.max(cadre.width, 1))}% ${String(10000 / Math.max(cadre.height, 1))}%`
   const decalage = (debut: number, taille: number) =>
     taille >= 99.9 ? '0%' : `${String((debut / (100 - taille)) * 100)}%`
   return (
     <div className="flex flex-col gap-1.5">
       <span className="text-xs font-medium text-muted-foreground">
-        Sur la page
+        Sur la page · environ {cm(boite.largeur)} × {cm(boite.hauteur)} cm
       </span>
       <div
         aria-hidden="true"
@@ -379,70 +377,37 @@ function ApercuPage({
             />
           ))}
           <div
-            className={cn(
-              'my-1 self-center',
-              position !== 'centre' && 'hidden',
-            )}
+            className="mt-1 self-center"
             style={{
-              width: `${String(largeur)}%`,
-              aspectRatio: String(ratio),
+              width: `${String((boite.largeur / CONTENT_WIDTH_MM) * 100)}%`,
+              aspectRatio: `${String(boite.largeur)} / ${String(boite.hauteur)}`,
               backgroundImage: `url("${url}")`,
               backgroundSize: tailleFond,
               backgroundPosition: `${decalage(cadre.x, cadre.width)} ${decalage(cadre.y, cadre.height)}`,
               backgroundRepeat: 'no-repeat',
             }}
           />
-          {/* Texte qui suit : à côté de l'image si elle est à gauche ou à
-              droite (lignes plus courtes), dessous si elle est centrée. */}
-          {position === 'centre' ? (
-            [100, 70].map((w, i) => (
-              <div
-                key={i}
-                className="h-1 rounded-full bg-neutral-200"
-                style={{ width: `${String(w)}%` }}
-              />
-            ))
-          ) : (
+          <div
+            className={cn(
+              'mb-1 h-[3px] w-1/3 self-center rounded-full bg-neutral-300',
+              legende === '' && 'invisible',
+            )}
+          />
+          {[100, 70].map((w, i) => (
             <div
-              className={cn(
-                'flex items-start gap-1.5',
-                position === 'droite' && 'flex-row-reverse',
-              )}
-            >
-              <div
-                className="shrink-0"
-                style={{
-                  width: `${String(largeur)}%`,
-                  aspectRatio: String(ratio),
-                  backgroundImage: `url("${url}")`,
-                  backgroundSize: tailleFond,
-                  backgroundPosition: `${decalage(cadre.x, cadre.width)} ${decalage(cadre.y, cadre.height)}`,
-                  backgroundRepeat: 'no-repeat',
-                }}
-              />
-              <div className="flex min-w-0 flex-1 flex-col gap-[3px]">
-                {[100, 95, 100, 85, 100, 60].map((w, i) => (
-                  <div
-                    key={i}
-                    className="h-1 rounded-full bg-neutral-200"
-                    style={{ width: `${String(w)}%` }}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-          {position !== 'centre' &&
-            [100, 75].map((w, i) => (
-              <div
-                key={`fin-${String(i)}`}
-                className="h-1 rounded-full bg-neutral-200"
-                style={{ width: `${String(w)}%` }}
-              />
-            ))}
+              key={i}
+              className="h-1 rounded-full bg-neutral-200"
+              style={{ width: `${String(w)}%` }}
+            />
+          ))}
         </div>
       </div>
     </div>
   )
+}
+
+function cm(mm: number): string {
+  return (mm / 10).toLocaleString('fr-FR', { maximumFractionDigits: 1 })
 }
 
 function Reglage({
@@ -471,27 +436,19 @@ function Segments({
   valeur,
   options,
   onChange,
-  desactive = false,
 }: {
   valeur: string
   options: { key: string; label: string }[]
   onChange: (key: string) => void
-  desactive?: boolean
 }) {
   return (
-    <div
-      className={cn(
-        'flex flex-wrap gap-1 rounded-md border border-border p-0.5',
-        desactive && 'opacity-50',
-      )}
-    >
+    <div className="flex flex-wrap gap-1 rounded-md border border-border p-0.5">
       {options.map((o) => (
         <button
           key={o.key}
           type="button"
           onClick={() => onChange(o.key)}
           aria-pressed={valeur === o.key}
-          disabled={desactive}
           className={cn(
             'min-h-8 rounded px-2.5 py-1 text-xs transition-colors',
             valeur === o.key

@@ -216,7 +216,7 @@ export function basculerPrefixe(
  * Blocs : tableau, séparateur, saut de page, lien.
  * ------------------------------------------------------------------------ */
 
-export type Bloc = 'tableau' | 'separateur' | 'saut' | 'sousImage'
+export type Bloc = 'tableau' | 'separateur' | 'saut'
 
 const BLOCS: Record<Bloc, { texte: string; selection?: [number, number] }> = {
   tableau: {
@@ -226,7 +226,6 @@ const BLOCS: Record<Bloc, { texte: string; selection?: [number, number] }> = {
   },
   separateur: { texte: '---' },
   saut: { texte: '===' },
-  sousImage: { texte: '+++' },
 }
 
 /**
@@ -477,4 +476,44 @@ export function insererTexteEnBloc(
     texte: prefixe + bloc + suffixe,
     selection: [curseur, curseur],
   }
+}
+
+/**
+ * Entoure les lignes sélectionnées (ou la ligne du curseur) d'un bloc
+ * `:::nom` … `:::` (2026-10-01, plan `classeur-images-blocs`), isolé par des
+ * lignes vides. Le curseur se place au début de la ligne `:::` de fermeture :
+ * une image insérée là s'ajoute À L'INTÉRIEUR du bloc, sur sa propre ligne.
+ * Un titre de la sélection reste AU-DESSUS du bloc : il doit emporter le bloc
+ * avec lui en haut de page, pas y être enfermé.
+ */
+export function entourerDeBloc(
+  valeur: string,
+  debut: number,
+  fin: number,
+  nom: 'etape' | 'photos',
+): Edition {
+  const d = Math.min(debut, fin, valeur.length)
+  const f = Math.min(Math.max(debut, fin), valeur.length)
+  const debutLigne = valeur.lastIndexOf('\n', d - 1) + 1
+  // Une sélection qui s'arrête au début d'une ligne n'inclut pas celle-ci.
+  const borne = f > d && valeur[f - 1] === '\n' ? f - 1 : f
+  const i = valeur.indexOf('\n', borne)
+  const finLigne = i === -1 ? valeur.length : i
+  const lignes = valeur.slice(debutLigne, finLigne).split('\n')
+  const titres: string[] = []
+  while (lignes.length > 0 && /^#{1,6}\s/.test(lignes[0])) {
+    titres.push(lignes.shift()!)
+  }
+  while (lignes.length > 0 && lignes[0].trim() === '') lignes.shift()
+  while (lignes.length > 0 && lignes[lignes.length - 1].trim() === '')
+    lignes.pop()
+  const contenu = lignes.join('\n')
+  const avantBloc = titres.length > 0 ? `${titres.join('\n')}\n\n` : ''
+  const ouverture = `${avantBloc}:::${nom}\n`
+  const corps = contenu === '' ? '\n' : `${contenu}\n\n`
+  const bloc = `${ouverture}${corps}:::`
+  const edition = insererTexteEnBloc(valeur, debutLigne, finLigne, bloc)
+  const origine = edition.selection[0] - bloc.length
+  const curseur = origine + ouverture.length + corps.length
+  return { ...edition, selection: [curseur, curseur] }
 }

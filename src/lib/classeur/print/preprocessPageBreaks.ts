@@ -12,17 +12,16 @@ export const PAGEBREAK_MARKER = '⧨SAUT_DE_PAGE⧩' // ⧨SAUT_DE_PAGE⧩
 const PAGEBREAK_REGEX = /^===\s*$/gm
 
 /**
- * `+++` seul sur une ligne (2026-09-30) : « la suite passe SOUS l'image »
- * — arrête le texte qui entoure une image placée à gauche ou à droite. Même
- * mécanique que `===` (trois lignes rendues), rendu en `<div
- * data-sous-image>` (`clear: both`, `classeur.css`), que la pagination
- * traite comme tout bloc qui dégage. `+++` n'a aucun sens en Markdown.
+ * `+++` seul sur une ligne : ancienne commande « reprendre sous l'image »
+ * (2026-09-30), RETIRÉE le 2026-10-01 avec l'habillage des images (plan
+ * `classeur-images-blocs`). Les anciens textes, versions et points de
+ * restauration peuvent encore en contenir : elle devient une LIGNE VIDE —
+ * même nombre de lignes, donc rien à compenser dans `lignesSource`.
  */
-export const SOUS_IMAGE_MARKER = '⧨SOUS_L_IMAGE⧩'
-const SOUS_IMAGE_REGEX = /^\+\+\+\s*$/gm
+const ANCIEN_SOUS_IMAGE_REGEX = /^\+\+\+[ \t]*$/gm
 
 export function preprocessPageBreaks(content: string): string {
   return content
+    .replace(ANCIEN_SOUS_IMAGE_REGEX, '')
     .replace(PAGEBREAK_REGEX, `\n${PAGEBREAK_MARKER}\n`)
-    .replace(SOUS_IMAGE_REGEX, `\n${SOUS_IMAGE_MARKER}\n`)
 }

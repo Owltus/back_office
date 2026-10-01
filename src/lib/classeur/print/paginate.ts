@@ -30,6 +30,12 @@
  * titres part d'un bloc, `<thead>` répété, numérotation des listes
  * préservée (`start`), saut forcé `===`.
  *
+ * Blocs d'images (2026-10-01, plan `classeur-images-blocs`) : une figure est
+ * insécable ; une planche `:::photos` se coupe ENTRE deux rangées (une rangée
+ * au moins par morceau) ; une étape `:::etape` est insécable, et se DÉROULE
+ * (texte puis photos, en blocs normaux) si elle dépasse une page entière.
+ * Les images flottantes (habillage) ont disparu avec leur double compte.
+ *
  * Tout ce qui demande un navigateur est INJECTABLE (`OutilsPagination`),
  * parce que jsdom n'a pas de layout — et qu'un moteur non testable n'est pas
  * un garde-fou.
@@ -37,6 +43,14 @@
 
 export interface PageData {
   html: string
+  /** Part de la hauteur utile occupée (0 à 1). */
+  remplissage?: number
+  /**
+   * La page a été terminée par le n-ième saut de page `===` du document
+   * (1 = premier) : la relecture signale une page presque vide à cause d'un
+   * saut.
+   */
+  saut?: number
 }
 
 /** Hauteur extérieure d'un élément (boîte + marges verticales), en px. */
@@ -58,13 +72,8 @@ export type CoupeTexte = (
 
 export interface OutilsPagination {
   marges?: Marges
-  /**
-   * De combien une image FLOTTANTE (à gauche ou à droite, le texte l'entoure)
-   * dépasse sous la boîte de l'élément qui la contient, en px (0 sinon).
-   */
-  debordFlottant?: (el: Element) => number
-  /** Vrai si l'élément passe SOUS les images flottantes (`clear`). */
-  degage?: (el: Element) => boolean
+  /** Écart vertical entre deux rangées d'une planche de photos, en px. */
+  ecartRangees?: (el: Element) => number
   /** Hauteur d'une ligne de texte de l'élément, en px (0 = inconnue). */
   hauteurLigne?: (el: Element) => number
   couperTexte?: CoupeTexte
@@ -93,22 +102,8 @@ function margesCalculees(el: Element): { haut: number; bas: number } {
   }
 }
 
-/**
- * Débord d'une image flottante (`img[data-position]`, 2026-09-30) : un
- * flottant ne compte pas dans la hauteur de son paragraphe (qui ne mesure
- * alors presque rien), il faut donc le mesurer à part — sinon l'image
- * déborderait en bas de page.
- */
-function debordFlottantCalcule(el: Element): number {
-  const flottants = el.querySelectorAll('img[data-position]')
-  if (flottants.length === 0) return 0
-  const bas = el.getBoundingClientRect().bottom
-  let debord = 0
-  for (const f of Array.from(flottants)) {
-    const fin = f.getBoundingClientRect().bottom + margesCalculees(f).bas
-    debord = Math.max(debord, fin - bas)
-  }
-  return debord
+function ecartRangeesCalcule(el: Element): number {
+  return parseFloat(getComputedStyle(el).rowGap) || 0
 }
 
 function hauteurLigneCalculee(el: Element): number {
@@ -180,13 +175,14 @@ function grouper(
   socle: number,
   premier: number,
   plein: number,
+  min: number = MIN_PAR_MORCEAU,
 ): number[][] {
   const groupes: number[][] = []
   let courant: number[] = []
   let hauteur = socle
   let dispo = premier
   hauteurs.forEach((h, i) => {
-    if (courant.length >= MIN_PAR_MORCEAU && hauteur + h > dispo) {
+    if (courant.length >= min && hauteur + h > dispo) {
       groupes.push(courant)
       courant = []
       hauteur = socle
@@ -201,13 +197,10 @@ function grouper(
     // morceau recollé ne tenait plus dans sa page, et le bloc entier
     // repartait sur la page suivante.
     const precedent = groupes[groupes.length - 1]
-    while (
-      courant.length < MIN_PAR_MORCEAU &&
-      precedent.length > MIN_PAR_MORCEAU
-    ) {
+    while (courant.length < min && precedent.length > min) {
       courant.unshift(precedent.pop()!)
     }
-    if (courant.length < MIN_PAR_MORCEAU) precedent.push(...courant)
+    if (courant.length < min) precedent.push(...courant)
     else groupes.push(courant)
   } else if (courant.length > 0) {
     groupes.push(courant)
@@ -260,6 +253,70 @@ function splitList(
       height: g.reduce((s, i) => s + hauteurs[i], 0),
     }
   })
+}
+
+/* ─── Découpage des planches de photos ─── */
+
+/** Vrai pour une planche `:::photos` (`rehypeBlocs`). */
+function estPlanche(el: Element): boolean {
+  return el.getAttribute('data-bloc') === 'photos'
+}
+
+/** Vrai pour une étape illustrée `:::etape` qui a des photos. */
+function estEtape(el: Element): boolean {
+  return (
+    el.getAttribute('data-bloc') === 'etape' && el.hasAttribute('data-photos')
+  )
+}
+
+/**
+ * Rangées d'une planche : les photos par `data-colonnes`, tout autre contenu
+ * (`photos-hors`) sur une rangée à lui.
+ */
+function rangeesPlanche(el: Element): Element[][] {
+  const colonnes = Math.max(
+    1,
+    parseInt(el.getAttribute('data-colonnes') ?? '1', 10) || 1,
+  )
+  const rangees: Element[][] = []
+  let courante: Element[] = []
+  for (const c of Array.from(el.children)) {
+    if (c.tagName.toLowerCase() !== 'figure') {
+      if (courante.length > 0) rangees.push(courante)
+      courante = []
+      rangees.push([c])
+      continue
+    }
+    courante.push(c)
+    if (courante.length === colonnes) {
+      rangees.push(courante)
+      courante = []
+    }
+  }
+  if (courante.length > 0) rangees.push(courante)
+  return rangees
+}
+
+function splitPlanche(
+  el: Element,
+  premier: number,
+  plein: number,
+  mesure: Mesure,
+  ecartRangee: number,
+): Chunk[] {
+  const rangees = rangeesPlanche(el)
+  const hauteurs = rangees.map((r) => Math.max(...r.map((c) => mesure(c))))
+  // L'écart est compté AVANT chaque rangée pour grouper (léger excès sur la
+  // première rangée d'un morceau : sûr), puis exactement par morceau.
+  const avecEcart = hauteurs.map((h, i) => (i > 0 ? h + ecartRangee : h))
+  const ouvrante = buildOpenTag(el)
+  return grouper(avecEcart, 0, premier, plein, 1).map((g) => ({
+    html: `${ouvrante}${g
+      .flatMap((i) => rangees[i].map((c) => c.outerHTML))
+      .join('')}</div>`,
+    height:
+      g.reduce((s, i) => s + hauteurs[i], 0) + ecartRangee * (g.length - 1),
+  }))
 }
 
 /* ─── Découpage des paragraphes (navigateur réel) ─── */
@@ -413,29 +470,16 @@ interface PageEl {
   box: number
   mt: number
   mb: number
-  /** Débord d'une image flottante sous la boîte (0 sinon). */
-  flottant: number
-  /** Passe sous les images flottantes (`clear`) : démarre après leur fin. */
-  degage?: boolean
 }
 
-/**
- * Espace occupé par une suite de blocs. `somme` : boîtes + marges FUSIONNÉES
- * entre eux — là où commencera le bloc suivant. `occupe` : ce que la page
- * doit contenir, image flottante comprise — le texte coule à côté d'elle
- * (sa hauteur n'est pas dans `somme`), mais elle doit tenir ENTIÈRE.
- */
-function pile(els: PageEl[]): { somme: number; occupe: number } {
+/** Espace occupé par une suite de blocs : boîtes + marges FUSIONNÉES. */
+function pile(els: PageEl[]): number {
   let somme = 0
-  let finFlottant = 0
   els.forEach((e, i) => {
     if (i > 0) somme += Math.max(els[i - 1].mb, e.mt)
-    // Un bloc qui « dégage » démarre sous la fin de l'image flottante.
-    if (e.degage) somme = Math.max(somme, finFlottant)
     somme += e.box
-    if (e.flottant > 0) finFlottant = Math.max(finFlottant, somme + e.flottant)
   })
-  return { somme, occupe: Math.max(somme, finFlottant) }
+  return somme
 }
 
 /** Marge fusionnée entre le dernier bloc posé et un bloc de marge haute `mt`. */
@@ -458,12 +502,7 @@ export function paginate(
   const marges = outils.marges ?? margesCalculees
   const hauteurLigne = outils.hauteurLigne ?? hauteurLigneCalculee
   const couperTexte = outils.couperTexte ?? couperTexteDom
-  const debordFlottant = outils.debordFlottant ?? debordFlottantCalcule
-  const degage =
-    outils.degage ??
-    ((el: Element) =>
-      getComputedStyle(el).clear !== 'none' &&
-      getComputedStyle(el).clear !== '')
+  const ecartRangees = outils.ecartRangees ?? ecartRangeesCalcule
 
   const children = Array.from(container.children)
   if (children.length === 0) return [{ html: '' }]
@@ -480,8 +519,14 @@ export function paginate(
     }
   }
 
-  function finalizePage() {
-    if (els.length > 0) pages.push({ html: els.map((e) => e.html).join('') })
+  let sauts = 0
+  function finalizePage(saut?: number) {
+    if (els.length > 0)
+      pages.push({
+        html: els.map((e) => e.html).join(''),
+        remplissage: pile(els) / maxHeightPx,
+        ...(saut !== undefined ? { saut } : {}),
+      })
     els = []
   }
 
@@ -505,8 +550,12 @@ export function paginate(
     els.push(...orphans)
   }
 
-  function kind(el: Element): 'table' | 'liste' | 'texte' | null {
+  function kind(
+    el: Element,
+  ): 'table' | 'liste' | 'texte' | 'planche' | 'etape' | null {
     const tag = el.tagName.toLowerCase()
+    if (estPlanche(el)) return 'planche'
+    if (estEtape(el)) return 'etape'
     if (tag === 'table') return 'table'
     if (tag === 'ul' || tag === 'ol') return 'liste'
     // Paragraphe, et encadré (`> `) : coupés entre deux lignes. Pas les blocs
@@ -534,6 +583,10 @@ export function paginate(
       }
       case 'texte':
         return couperTexte(el, premier, plein)
+      case 'planche': {
+        if (rangeesPlanche(el).length < 2) return null
+        return splitPlanche(el, premier, plein, mesure, ecartRangees(el))
+      }
       default:
         return null
     }
@@ -568,6 +621,16 @@ export function paginate(
           rows.slice(0, MIN_PAR_MORCEAU).reduce((s, r) => s + mesure(r), 0)
         )
       }
+      case 'planche': {
+        const premiere = rangeesPlanche(el)[0] as Element[] | undefined
+        return premiere ? Math.max(...premiere.map((c) => mesure(c))) : box
+      }
+      case 'etape': {
+        // Plus haute qu'une page : elle sera déroulée, son début suffit.
+        if (box <= maxHeightPx) return box
+        const ligne = hauteurLigne(el)
+        return ligne > 0 ? MIN_PAR_MORCEAU * ligne : box
+      }
       default:
         return box
     }
@@ -577,11 +640,11 @@ export function paginate(
    * Espace exigé SOUS le titre d'index `i` pour qu'il ne reste pas seul :
    * le début minimal de ce qui suit (une suite de titres compte en entier).
    */
-  function besoinApresTitre(i: number): number {
+  function besoinApresTitre(liste: Element[], i: number): number {
     let besoin = 0
-    let precedentMb = infos(children[i]).mb
-    for (let j = i + 1; j < children.length; j++) {
-      const suivant = children[j]
+    let precedentMb = infos(liste[i]).mb
+    for (let j = i + 1; j < liste.length; j++) {
+      const suivant = liste[j]
       if ((suivant as HTMLElement).dataset.pageBreak) return besoin
       const s = infos(suivant)
       const gap = Math.max(precedentMb, s.mt)
@@ -603,70 +666,93 @@ export function paginate(
         box: c.height,
         mt: n === 0 ? mt : 0,
         mb: n === chunks.length - 1 ? mb : 0,
-        flottant: 0,
       })
     })
   }
 
-  children.forEach((child, index) => {
-    const tag = child.tagName.toLowerCase()
+  /**
+   * Étape illustrée plus haute qu'une page : une COPIE marquée
+   * `data-deroule` (texte puis photos en blocs normaux, `classeur.css`) est
+   * posée à côté pour être mesurée, et ses blocs sont paginés un à un. Les
+   * copies sont retirées avant de rendre la main (le conteneur appartient à
+   * React).
+   */
+  const copies: Element[] = []
+  function derouler(etape: Element): Element[] {
+    const copie = etape.cloneNode(true) as Element
+    copie.setAttribute('data-deroule', 'true')
+    etape.after(copie)
+    copies.push(copie)
+    return Array.from(
+      copie.querySelectorAll(
+        ':scope > .etape-texte > *, :scope > .etape-photos > *',
+      ),
+    )
+  }
 
-    // ─── Saut de page forcé (`===` seul sur une ligne) ───
-    if ((child as HTMLElement).dataset.pageBreak) {
-      finalizePage()
-      return
-    }
+  function traiterListe(liste: Element[]) {
+    liste.forEach((child, index) => {
+      const tag = child.tagName.toLowerCase()
 
-    const { box, mt, mb } = infos(child)
-    const pageEl: PageEl = {
-      html: child.outerHTML,
-      tag,
-      box,
-      mt,
-      mb,
-      flottant: debordFlottant(child),
-      degage: degage(child),
-    }
-
-    // ─── Titre : jamais seul en bas de page ───
-    if (isHeading(tag) && els.length > 0) {
-      const apres = besoinApresTitre(index)
-      const avec = pile([...els, pageEl])
-      if (Math.max(avec.somme + apres, avec.occupe) > maxHeightPx) {
-        nouvellePageAvecTitres()
-      }
-      els.push(pageEl)
-      return
-    }
-
-    // ─── Le bloc tient sur la page courante (image flottante comprise) ───
-    if (pile([...els, pageEl]).occupe <= maxHeightPx) {
-      els.push(pageEl)
-      return
-    }
-
-    // ─── Il ne tient pas : le couper dans la place RESTANTE si possible ───
-    // (À côté d'une image flottante déjà posée : le texte coule, seule la
-    // fin de la pile compte — l'image, elle, tient déjà.)
-    const reste = maxHeightPx - pile(els).somme - ecart(els, mt)
-    const coupe = morceaux(child, reste, maxHeightPx)
-    if (coupe !== null && coupe.length > 1 && coupe[0].height <= reste) {
-      poserMorceaux(coupe, tag, mt, mb)
-      return
-    }
-
-    // ─── Sinon, page suivante (avec ses titres), coupé si trop grand ───
-    if (els.length > 0 && !isOnlyHeadings()) nouvellePageAvecTitres()
-    const dispo = maxHeightPx - pile(els).somme - ecart(els, mt)
-    if (dispo < box) {
-      const coupe2 = morceaux(child, dispo, maxHeightPx)
-      if (coupe2 !== null && coupe2.length > 1) {
-        poserMorceaux(coupe2, tag, mt, mb)
+      // ─── Saut de page forcé (`===` seul sur une ligne) ───
+      if ((child as HTMLElement).dataset.pageBreak) {
+        sauts += 1
+        finalizePage(sauts)
         return
       }
-    }
-    els.push(pageEl)
-  })
+
+      const { box, mt, mb } = infos(child)
+      const pageEl: PageEl = { html: child.outerHTML, tag, box, mt, mb }
+
+      // ─── Titre : jamais seul en bas de page ───
+      if (isHeading(tag) && els.length > 0) {
+        const apres = besoinApresTitre(liste, index)
+        if (pile([...els, pageEl]) + apres > maxHeightPx) {
+          nouvellePageAvecTitres()
+        }
+        els.push(pageEl)
+        return
+      }
+
+      // ─── Le bloc tient sur la page courante ───
+      if (pile([...els, pageEl]) <= maxHeightPx) {
+        els.push(pageEl)
+        return
+      }
+
+      // ─── Étape plus haute qu'une page entière : déroulée ───
+      if (kind(child) === 'etape' && box > maxHeightPx) {
+        traiterListe(derouler(child))
+        return
+      }
+
+      // ─── Il ne tient pas : le couper dans la place RESTANTE si possible ───
+      const reste = maxHeightPx - pile(els) - ecart(els, mt)
+      const coupe = morceaux(child, reste, maxHeightPx)
+      if (coupe !== null && coupe.length > 1 && coupe[0].height <= reste) {
+        poserMorceaux(coupe, tag, mt, mb)
+        return
+      }
+
+      // ─── Sinon, page suivante (avec ses titres), coupé si trop grand ───
+      if (els.length > 0 && !isOnlyHeadings()) nouvellePageAvecTitres()
+      const dispo = maxHeightPx - pile(els) - ecart(els, mt)
+      if (dispo < box) {
+        const coupe2 = morceaux(child, dispo, maxHeightPx)
+        if (coupe2 !== null && coupe2.length > 1) {
+          poserMorceaux(coupe2, tag, mt, mb)
+          return
+        }
+      }
+      els.push(pageEl)
+    })
+  }
+
+  try {
+    traiterListe(children)
+  } finally {
+    copies.forEach((c) => c.remove())
+  }
 
   finalizePage()
   return pages

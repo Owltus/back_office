@@ -236,7 +236,7 @@ export const SCHEMA_DESCRIPTIF = {
     types: {
       document: {
         _description:
-          'Document texte libre en Markdown (GitHub), avec les conventions de la page décrites dans `_metadata.instructions` : images à largeur et position réglables, `===` saut de page, `+++` reprise sous une image.',
+          'Document texte libre en Markdown (GitHub), avec les conventions de la page décrites dans `_metadata.instructions` : images légendées à taille automatique, blocs `:::photos` (grille de photos) et `:::etape` (consigne et photo côte à côte), `===` saut de page.',
         specific_fields: {
           description: { type: 'string', required: false, default: '' },
           content: { type: 'string', required: false, default: '' },

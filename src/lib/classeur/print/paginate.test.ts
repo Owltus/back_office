@@ -258,41 +258,69 @@ describe('paginate', () => {
     expect(pages).toHaveLength(1)
   })
 
-  it('(9) une image flottante qui ne tient plus part ENTIÈRE sur la page suivante', () => {
-    // 8 × 30 = 240 ; le paragraphe de l'image ne mesure rien (flottant),
-    // mais l'image dépasse de 120 : 240 + 120 > 300 → page suivante.
-    const html = `${paragraphes(8)}<p data-h="0" data-flottant="120">image</p>${paragraphes(1, 30, 'a-cote')}`
-    const pages = paginate(conteneur(html), 300, mesure, {
-      debordFlottant: (el) => Number(el.getAttribute('data-flottant') ?? 0),
-    })
+  it('(9) une figure est insécable : elle part ENTIÈRE sur la page suivante', () => {
+    const html = `${paragraphes(8)}<figure data-h="120"><img alt=""><figcaption>Vanne</figcaption></figure>`
+    const pages = paginate(conteneur(html), 300, mesure)
     expect(pages).toHaveLength(2)
-    expect(fragment(pages[0].html).textContent).not.toContain('image')
-    expect(fragment(pages[1].html).textContent).toContain('image')
+    expect(fragment(pages[0].html).querySelector('figure')).toBeNull()
+    expect(
+      fragment(pages[1].html).querySelector('figcaption')?.textContent,
+    ).toBe('Vanne')
   })
 
-  it('(10) le texte À CÔTÉ d’une image flottante n’est pas compté deux fois', () => {
-    // Image flottante de 150 puis 5 paragraphes de 30 qui l'entourent :
-    // la pile vaut max(5 × 30, 150) = 150, pas 300. Avec 4 paragraphes
-    // avant (120), tout tient : 120 + max(150, 150) = 270 ≤ 300.
-    const html = `${paragraphes(4)}<p data-h="0" data-flottant="150">image</p>${paragraphes(5, 30, 'a-cote')}`
+  it('(10) une planche se coupe ENTRE deux rangées, jamais au milieu', () => {
+    // 2 colonnes, 6 photos de 100 → 3 rangées, écart 10 : 320 au total.
+    // Après un paragraphe (30), il reste 270 : deux rangées (100 + 10 + 100).
+    const photos = Array.from(
+      { length: 6 },
+      (_, i) => `<figure data-h="100"><img alt="${String(i + 1)}"></figure>`,
+    ).join('')
+    const html = `${paragraphes(1)}<div data-bloc="photos" data-colonnes="2" data-h="320">${photos}</div>`
     const pages = paginate(conteneur(html), 300, mesure, {
-      debordFlottant: (el) => Number(el.getAttribute('data-flottant') ?? 0),
-    })
-    expect(pages).toHaveLength(1)
-  })
-
-  it('(11) un titre qui passe SOUS une image flottante démarre après elle', () => {
-    // 4 × 30 = 120 ; image flottante de 150 (fin à 270) ; un paragraphe à
-    // côté (30 → somme 150). Le titre dégage : il démarre à 270, et avec
-    // les 30 px de son paragraphe on dépasse 300 → nouvelle page. Sans le
-    // dégagement, 150 + 30 + 30 = 210 aurait été jugé tenir (et la page
-    // aurait débordé à l'écran).
-    const html = `${paragraphes(4)}<p data-h="0" data-flottant="150">image</p>${paragraphes(1, 30, 'a-cote')}<h2 data-h="30" data-degage="1">Suite</h2>${paragraphes(1, 30, 'suite')}`
-    const pages = paginate(conteneur(html), 300, mesure, {
-      debordFlottant: (el) => Number(el.getAttribute('data-flottant') ?? 0),
-      degage: (el) => el.hasAttribute('data-degage'),
+      ecartRangees: () => 10,
     })
     expect(pages).toHaveLength(2)
-    expect(fragment(pages[1].html).firstElementChild?.tagName).toBe('H2')
+    const morceaux = pages.map((p) =>
+      fragment(p.html).querySelector('[data-bloc="photos"]')!,
+    )
+    expect(morceaux[0].querySelectorAll('figure')).toHaveLength(4)
+    expect(morceaux[1].querySelectorAll('figure')).toHaveLength(2)
+    // Chaque morceau garde sa grille (mêmes colonnes) et rien n'est perdu.
+    expect(morceaux[1].getAttribute('data-colonnes')).toBe('2')
+    expect(
+      morceaux.flatMap((m) =>
+        Array.from(m.querySelectorAll('img')).map((i) => i.alt),
+      ),
+    ).toEqual(['1', '2', '3', '4', '5', '6'])
+  })
+
+  it('(11) une étape plus haute qu’une page se DÉROULE : texte puis photo, rien de perdu', () => {
+    const texte = paragraphes(9, 30, 'geste')
+    const html = `<div data-bloc="etape" data-photos="1" data-h="400"><div class="etape-texte">${texte}</div><div class="etape-photos"><figure data-h="100"><img alt="photo"></figure></div></div>`
+    const c = conteneur(html)
+    const pages = paginate(c, 300, mesure)
+    const tout = pages.map((p) => fragment(p.html))
+    // Plus aucun bloc étape dans les pages : des blocs normaux.
+    expect(tout.some((f) => f.querySelector('[data-bloc]') !== null)).toBe(
+      false,
+    )
+    expect(tout.reduce((n, f) => n + f.querySelectorAll('p').length, 0)).toBe(9)
+    expect(
+      tout.reduce((n, f) => n + f.querySelectorAll('figure').length, 0),
+    ).toBe(1)
+    // La photo vient APRÈS le texte.
+    expect(tout[tout.length - 1].querySelector('figure')).not.toBeNull()
+    // La copie de mesure a été retirée du conteneur (il appartient à React).
+    expect(c.querySelector('[data-deroule]')).toBeNull()
+    expect(c.children).toHaveLength(1)
+  })
+
+  it('(12) une étape qui tient sur une page reste ENTIÈRE (insécable)', () => {
+    const html = `${paragraphes(5)}<div data-bloc="etape" data-photos="1" data-h="200"><div class="etape-texte">${paragraphes(2)}</div><div class="etape-photos"><figure data-h="200"><img alt=""></figure></div></div>`
+    const pages = paginate(conteneur(html), 300, mesure)
+    expect(pages).toHaveLength(2)
+    expect(
+      fragment(pages[1].html).querySelector('[data-bloc="etape"]'),
+    ).not.toBeNull()
   })
 })
