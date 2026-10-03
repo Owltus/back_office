@@ -87,7 +87,7 @@ export function CartoucheDocument({
           whiteSpace: 'nowrap',
         }}
       >
-        Version {version}
+        V {version}
       </span>
     </div>
   )
