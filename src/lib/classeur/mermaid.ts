@@ -15,6 +15,18 @@
 // Import de TYPE seulement : effacé à la compilation, il ne tire pas la lib.
 import type { Mermaid } from 'mermaid'
 
+import {
+  ECHELLE_LISIBLE,
+  affichageSchema,
+  echelleAffichee,
+  orientationAlternative,
+  tailleNaturelle,
+} from '#/lib/classeur/mermaidMiseEnPage.ts'
+import type {
+  AffichageSchema,
+  TailleSchema,
+} from '#/lib/classeur/mermaidMiseEnPage.ts'
+
 type MermaidModule = Mermaid
 
 /**
@@ -96,16 +108,59 @@ let renderCounter = 0
  * régulières qui le précédait se contournait). `foreignObject` est gardé :
  * Mermaid y pose ses libellés HTML. Chargé à la demande, comme Mermaid.
  */
-export async function renderMermaid(code: string): Promise<string> {
+/** Un schéma prêt à poser : SVG assaini, taille naturelle, affichage. */
+export interface SchemaRendu {
+  svg: string
+  taille: TailleSchema | null
+  affichage: AffichageSchema
+  /** Vrai si l'organigramme a été retourné (LR ↔ TD) pour rester lisible. */
+  retourne: boolean
+}
+
+async function rendreBrut(code: string): Promise<string> {
   const [mermaid, { default: DOMPurify }] = await Promise.all([
     loadMermaid(),
     import('dompurify'),
   ])
-  const id = `classeur-mermaid-${++renderCounter}`
+  const id = `classeur-mermaid-${String(++renderCounter)}`
   const { svg } = await mermaid.render(id, code)
   return DOMPurify.sanitize(svg, {
     USE_PROFILES: { svg: true, svgFilters: true, html: true },
     ADD_TAGS: ['foreignObject'],
     HTML_INTEGRATION_POINTS: { foreignobject: true },
   })
+}
+
+/**
+ * Rend un schéma et choisit son affichage (`mermaidMiseEnPage.ts`) : un
+ * organigramme trop réduit dans son sens est essayé dans l'autre, le plus
+ * lisible est gardé.
+ */
+export async function renderMermaid(code: string): Promise<SchemaRendu> {
+  const svg = await rendreBrut(code)
+  const taille = tailleNaturelle(svg)
+  if (taille && echelleAffichee(taille) < ECHELLE_LISIBLE) {
+    const autre = orientationAlternative(code)
+    if (autre) {
+      try {
+        const svg2 = await rendreBrut(autre)
+        const taille2 = tailleNaturelle(svg2)
+        if (taille2 && echelleAffichee(taille2) > echelleAffichee(taille) * 1.1)
+          return {
+            svg: svg2,
+            taille: taille2,
+            affichage: affichageSchema(taille2),
+            retourne: true,
+          }
+      } catch {
+        // L'autre sens ne se dessine pas : on garde le premier.
+      }
+    }
+  }
+  return {
+    svg,
+    taille,
+    affichage: taille ? affichageSchema(taille) : 'page',
+    retourne: false,
+  }
 }

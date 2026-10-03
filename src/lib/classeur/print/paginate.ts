@@ -41,6 +41,8 @@
  * un garde-fou.
  */
 
+import { coupesSchema } from '#/lib/classeur/mermaidMiseEnPage.ts'
+
 export interface PageData {
   html: string
   /** Part de la hauteur utile occupée (0 à 1). */
@@ -70,6 +72,12 @@ export type CoupeTexte = (
   plein: number,
 ) => Chunk[] | null
 
+/**
+ * Cases d'un SCHÉMA découpable (`.classeur-mermaid[data-affichage=decoupe]`) :
+ * [haut, bas] de chaque case et étiquette, en px depuis le haut du bloc.
+ */
+export type BandesSchema = (el: Element) => Array<readonly [number, number]>
+
 export interface OutilsPagination {
   marges?: Marges
   /** Écart vertical entre deux rangées d'une planche de photos, en px. */
@@ -77,6 +85,8 @@ export interface OutilsPagination {
   /** Hauteur d'une ligne de texte de l'élément, en px (0 = inconnue). */
   hauteurLigne?: (el: Element) => number
   couperTexte?: CoupeTexte
+  /** Cases d'un schéma Mermaid découpé (navigateur : boîtes des nœuds). */
+  bandesSchema?: BandesSchema
 }
 
 /* ─── Seuils ─── */
@@ -298,6 +308,55 @@ function splitList(
 }
 
 /* ─── Découpage des planches de photos ─── */
+
+/* ─── Découpage des schémas Mermaid trop hauts (2026-10-03) ─── */
+
+/** Bloc qui porte un schéma marqué « découpé » par `MermaidBlock`. */
+function estSchemaDecoupe(el: Element): boolean {
+  return (
+    el.matches('.classeur-mermaid[data-affichage="decoupe"]') ||
+    el.querySelector('.classeur-mermaid[data-affichage="decoupe"]') !== null
+  )
+}
+
+/** Navigateur : boîtes des cases et étiquettes du schéma, depuis le bloc. */
+function bandesSchemaCalculees(el: Element): Array<readonly [number, number]> {
+  const haut = el.getBoundingClientRect().top
+  return Array.from(
+    el.querySelectorAll('svg g.node, svg g.edgeLabel, svg g.label'),
+  )
+    .map((n) => n.getBoundingClientRect())
+    .filter((r) => r.height > 0)
+    .map((r) => [r.top - haut, r.bottom - haut] as const)
+}
+
+/**
+ * Tranches d'un schéma trop haut pour une page : la même image, montrée par
+ * fenêtres successives (`overflow: hidden`, décalage vertical), coupées entre
+ * deux cases (`coupesSchema`). Rien n'est redessiné : chaque tranche est une
+ * copie du bloc entier, décalée.
+ */
+function splitSchema(
+  el: Element,
+  hauteur: number,
+  bandes: ReadonlyArray<readonly [number, number]>,
+  premier: number,
+  plein: number,
+): Chunk[] | null {
+  const coupes = coupesSchema(hauteur, bandes, premier, plein)
+  if (coupes.length === 0) return null
+  const bornes = [0, ...coupes, hauteur]
+  const tranches: Chunk[] = []
+  for (let i = 0; i < bornes.length - 1; i++) {
+    const h = bornes[i + 1] - bornes[i]
+    if (h <= 0) continue
+    tranches.push({
+      html: `<div class="classeur-mermaid-tranche" style="height:${String(h)}px;overflow:hidden;position:relative"><div style="position:relative;top:${String(-bornes[i])}px">${el.outerHTML}</div></div>`,
+      height: h,
+    })
+  }
+  return tranches.length > 1 ? tranches : null
+}
 
 /** Vrai pour une planche `:::photos` (`rehypeBlocs`). */
 function estPlanche(el: Element): boolean {
@@ -547,6 +606,7 @@ export function paginate(
   const hauteurLigne = outils.hauteurLigne ?? hauteurLigneCalculee
   const couperTexte = outils.couperTexte ?? couperTexteDom
   const ecartRangees = outils.ecartRangees ?? ecartRangeesCalcule
+  const bandesSchema = outils.bandesSchema ?? bandesSchemaCalculees
 
   const children = Array.from(container.children)
   if (children.length === 0) return [{ html: '' }]
@@ -619,8 +679,9 @@ export function paginate(
 
   function kind(
     el: Element,
-  ): 'table' | 'liste' | 'texte' | 'planche' | 'etape' | null {
+  ): 'table' | 'liste' | 'texte' | 'planche' | 'etape' | 'schema' | null {
     const tag = el.tagName.toLowerCase()
+    if (estSchemaDecoupe(el)) return 'schema'
     if (estPlanche(el)) return 'planche'
     if (estEtape(el)) return 'etape'
     if (tag === 'table') return 'table'
@@ -657,6 +718,8 @@ export function paginate(
         if (rangeesPlanche(el).length < 2) return null
         return splitPlanche(el, premier, plein, mesure, ecartRangees(el))
       }
+      case 'schema':
+        return splitSchema(el, infos(el).box, bandesSchema(el), premier, plein)
       default:
         return null
     }
@@ -695,6 +758,8 @@ export function paginate(
         const premiere = rangeesPlanche(el)[0] as Element[] | undefined
         return premiere ? Math.max(...premiere.map((c) => mesure(c))) : box
       }
+      case 'schema':
+        return Math.min(box, maxHeightPx / 4)
       case 'etape': {
         // Plus haute qu'une page : elle sera déroulée, son début suffit.
         if (box <= maxHeightPx) return box

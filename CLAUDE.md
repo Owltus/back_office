@@ -947,6 +947,22 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
       automatique, modèle de procédure complète ; chacun montre la syntaxe
       (bloc de code) puis le rendu, photos en emplacements « Image à
       insérer ». À tenir à jour quand une fonction de document s'ajoute.
+    - **SCHÉMAS Mermaid longs (même jour, demande utilisateur : « voir
+      comment l'app encaisse »)** — doc 107 enrichi (horizontal/vertical,
+      simple/complexe). Mesuré AVANT : horizontal chargé à 190 × 23 mm
+      (illisible), vertical chargé à 164 × 941 mm (débordait, rogné).
+      `lib/classeur/mermaidMiseEnPage.ts` (pur, testé) + `MermaidBlock`
+      (conteneur `.classeur-mermaid`, `--l` largeur naturelle, `--r`
+      proportions) + `renderMermaid` : (1) tenu dans la colonne ET 205 mm
+      de haut, jamais agrandi ; (2) organigramme trop réduit (< 60 %)
+      essayé dans l'AUTRE sens LR ↔ TD, le plus lisible gardé
+      (`data-retourne`) ; (3) trop haut mais lisible en largeur → DÉCOUPÉ
+      par `paginate` (type `schema`, `splitSchema`) en tranches = copies
+      décalées sous `overflow: hidden`, coupées ENTRE deux cases
+      (`coupesSchema`, boîtes `g.node` / étiquettes ; une case plus haute
+      que la place est coupée sous elle), affiché à 70 %
+      (`ECHELLE_DECOUPE`, miroir CSS). Doc 107 : 10 → 7 pages, aucun
+      débordement.
     - **REMPLACER une image (2026-10-03, « aussi simple que changer un
       texte »)** : barre de l'image → « Remplacer » (fichier de
       l'ordinateur ou image de la médiathèque, `ImagesDialog` en mode

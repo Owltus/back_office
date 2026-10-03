@@ -863,10 +863,24 @@
   overflow-x: auto;
   overflow-y: hidden;
 }
-/* Diagrammes Mermaid : bornés à la largeur de la zone contenu. */
-.pdf-prose svg[id^='classeur-mermaid-'] {
-  max-width: 100%;
-  height: auto;
+/* Schémas Mermaid (2026-10-03, `lib/classeur/mermaidMiseEnPage.ts`) : le
+   conteneur porte la taille naturelle (--l) et les proportions (--r) du
+   dessin. Sur une page : tenu dans la colonne ET dans 205 mm de haut,
+   jamais agrandi. Découpé : pleine largeur de colonne, `paginate` le coupe
+   entre deux cases. Le SVG suit son conteneur. */
+.pdf-prose .classeur-mermaid {
+  margin: 0 auto;
+  width: min(100%, var(--l, 100%), calc(205mm * var(--r, 1)));
+}
+.pdf-prose .classeur-mermaid[data-affichage='decoupe'] {
+  /* 70 % de la taille naturelle (ECHELLE_DECOUPE) : lisible, moins de pages. */
+  width: min(100%, calc(var(--l, 100%) * 0.7));
+}
+.pdf-prose .classeur-mermaid > svg[id^='classeur-mermaid-'] {
+  display: block;
+  width: 100% !important;
+  max-width: none !important;
+  height: auto !important;
 }
 /* Le diagramme vit dans un `pre` (bloc de code) : pas de fond gris ni de
    cadre autour, le dessin se suffit (relecture du 2026-10-03). Étiquettes

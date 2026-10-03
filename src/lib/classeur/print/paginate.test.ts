@@ -362,3 +362,42 @@ describe('paginate', () => {
     ).not.toBeNull()
   })
 })
+
+describe('schémas Mermaid trop hauts (2026-10-03)', () => {
+  const bandes = () =>
+    Array.from({ length: 20 }, (_, i) => [i * 60, i * 60 + 40] as const)
+  it('un schéma découpé se coupe en tranches, entre deux cases, rien de perdu', () => {
+    const html = `${paragraphes(2)}<pre data-h="1200"><div class="classeur-mermaid" data-affichage="decoupe"><svg></svg></div></pre>`
+    const pages = paginate(conteneur(html), 300, mesure, {
+      bandesSchema: bandes,
+    })
+    const tranches = pages.flatMap((p) =>
+      Array.from(
+        fragment(p.html).querySelectorAll('.classeur-mermaid-tranche'),
+      ),
+    )
+    expect(tranches.length).toBeGreaterThanOrEqual(4)
+    let total = 0
+    for (const t of tranches) {
+      const h = parseFloat((t as HTMLElement).style.height)
+      expect(h).toBeLessThanOrEqual(300)
+      total += h
+      // Chaque coupe tombe entre deux cases (jamais dans [i*60, i*60+40]).
+      const haut = -parseFloat(
+        ((t as HTMLElement).firstElementChild as HTMLElement).style.top,
+      )
+      expect(bandes().some(([a, b]) => a < haut && b > haut)).toBe(false)
+    }
+    expect(total).toBe(1200)
+  })
+  it('un schéma tenu sur une page reste ENTIER', () => {
+    const html = `${paragraphes(8)}<pre data-h="120"><div class="classeur-mermaid" data-affichage="page"><svg></svg></div></pre>`
+    const pages = paginate(conteneur(html), 300, mesure, {
+      bandesSchema: bandes,
+    })
+    expect(pages).toHaveLength(2)
+    expect(
+      fragment(pages[1].html).querySelector('.classeur-mermaid-tranche'),
+    ).toBeNull()
+  })
+})
