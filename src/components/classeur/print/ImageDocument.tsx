@@ -176,6 +176,15 @@ export function ImageAInserer({
       style={style}
     >
       <span className="classeur-image-cadre">
+        {/* Silhouette d'image vide (soleil + montagnes), comme un squelette. */}
+        <svg
+          className="classeur-a-inserer-ombre"
+          viewBox="0 0 48 36"
+          aria-hidden="true"
+        >
+          <circle cx="34" cy="10" r="4.5" />
+          <path d="M2 34 L17 15 L27 27 L32 21 L46 34 Z" />
+        </svg>
         <span className="classeur-a-inserer-texte">Image à insérer</span>
       </span>
     </span>

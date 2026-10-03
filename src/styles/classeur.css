@@ -639,16 +639,25 @@
    pour qu'un document pré-rendu montre où vont les photos. */
 .pdf-prose .classeur-a-inserer > .classeur-image-cadre {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: #eeeeee;
-  border: 0.75pt dashed #9a9a9a;
+  gap: 1.5mm;
+  background: linear-gradient(160deg, #f3f3f3, #e6e6e6);
+  border: 0.75pt dashed #b5b5b5;
+  border-radius: 1mm;
   box-sizing: border-box;
 }
+/* Ombre d'image : soleil et montagnes en gris doux, proportionnés à la case. */
+.pdf-prose .classeur-a-inserer-ombre {
+  width: min(30%, 22mm);
+  height: auto;
+  fill: #c4c4c4;
+}
 .pdf-prose .classeur-a-inserer-texte {
-  font-size: 8pt;
+  font-size: 7.5pt;
   font-style: normal;
-  color: #666;
+  color: #8a8a8a;
   letter-spacing: 0.02em;
 }
 .pdf-prose [data-bloc='photos'] > figure > .classeur-a-inserer {
