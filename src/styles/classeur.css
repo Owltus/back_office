@@ -214,22 +214,24 @@
   line-height: 1.25;
 }
 .pdf-prose h1 {
-  /* `#` : grande PARTIE — capitales espacées, trait noir épais sur toute
-     la largeur (styles de titre d'une documentation technique, 2026-10-03,
-     demande utilisateur : un style par niveau). */
+  /* `#` : grande PARTIE — BANDEAU gris sur toute la largeur, comme un
+     surlignage, capitales espacées, sans trait (demande utilisateur du
+     2026-10-03 : « # et ## trop identiques »). Gris : le document reste
+     lisible photocopié en noir et blanc ; imprimé grâce à
+     `print-color-adjust: exact`. */
   font-size: 13pt;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  padding-bottom: 1.2mm;
-  border-bottom: 1.5pt solid #000;
+  background: #e2e2e2;
+  padding: 1.6mm 2.5mm;
   margin-top: 0.8cm;
   margin-bottom: 0.35cm;
 }
 .pdf-prose h2 {
-  /* `##` : section — gras, filet gris fin sur toute la largeur. */
+  /* `##` : section — gras, trait noir fin sur toute la largeur. */
   font-size: 12.5pt;
   padding-bottom: 0.8mm;
-  border-bottom: 0.5pt solid #999;
+  border-bottom: 0.75pt solid #000;
   margin-top: 0.6cm;
   margin-bottom: 0.25cm;
 }

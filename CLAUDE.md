@@ -995,8 +995,9 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
       L'en-tête de page sera retravaillé plus tard À L'INITIATIVE de
       l'utilisateur : ne pas y toucher d'ici là.
     - **Titres : un style par niveau (même jour, demande utilisateur)** —
-      `#` capitales espacées 13 pt + trait noir 1,5 pt pleine largeur ;
-      `##` 12,5 pt gras + filet gris 0,5 pt ; `###` 11 pt gras sans trait ;
+      `#` capitales espacées 13 pt sur BANDEAU gris #e2e2e2 pleine largeur
+      (« surlignage », sans trait, révisé le même jour) ; `##` 12,5 pt gras
+      + trait noir 0,75 pt ; `###` 11 pt gras sans trait ;
       `####` petites capitales 8,5 pt gris foncé. Usage réel mesuré :
       `##` 330, `###` 190, `#` 40, `####` 1. Doc 89 : 4 pages, aucun
       débordement.
