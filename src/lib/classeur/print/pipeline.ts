@@ -18,6 +18,7 @@ import { rehypeBlocs } from '#/lib/classeur/print/rehypeBlocs.ts'
 import { rehypeEncadres } from '#/lib/classeur/print/rehypeEncadres.ts'
 import { rehypeFigures } from '#/lib/classeur/print/rehypeFigures.ts'
 import { rehypeLignesSource } from '#/lib/classeur/print/lignesSource.ts'
+import { rehypePastilles } from '#/lib/classeur/print/rehypePastilles.ts'
 import { remarkBlocs } from '#/lib/classeur/print/remarkBlocs.ts'
 
 type Plugins = NonNullable<Options['remarkPlugins']>
@@ -34,5 +35,6 @@ export const REHYPE_CLASSEUR: Plugins = [
   rehypeFigures,
   rehypeBlocs,
   rehypeEncadres,
+  rehypePastilles,
   rehypeLignesSource,
 ]

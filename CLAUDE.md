@@ -970,6 +970,23 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
       de page refait — ne pas re-proposer. Écartés faute de source établie :
       réduction automatique d'une image pour la faire tenir (aucun outil de
       référence ne le fait), échelle constante des captures (à rediscuter).
+    - **Même jour, décisions utilisateur** : (1) CADRE NOIR 0,75 pt autour
+      de TOUTE image (« propre et pro ») — `outline` sur la fenêtre de
+      l'image (n'entre pas dans la mesure), trait de CASE en planche,
+      pointillé gardé pour un emplacement ; (2) un EMPLACEMENT gris ouvre la
+      MÊME barre qu'une image (disposition, taille) avec « Insérer une
+      image » (ordinateur ou médiathèque) qui le remplit SANS dialogue,
+      légende/taille/place gardées (`remplacerParFichier` avec
+      `IMAGE_A_INSERER`) — l'ancien circuit `remplirEmplacement` est
+      retiré ; la barre d'un emplacement le retrouve par sa LIGNE (chemin
+      partagé), et `ajusterImage` rend la nouvelle ligne quand un bloc
+      `:::etape` l'a décalé ; (3) NUMÉROS D'ÉTAPE EN PASTILLE
+      (`print/rehypePastilles.ts` : titre h2-h4 « 1. … » ou « 1) … » → rond
+      noir, Markdown inchangé, « 1.2 » et les années exclus) ; (4) classeur
+      d'essai : TOUTES les images fictives remplacées par des emplacements
+      (les 15 fichiers restent en médiathèque, « Non utilisées »).
+      L'en-tête de page sera retravaillé plus tard À L'INITIATIVE de
+      l'utilisateur : ne pas y toucher d'ici là.
   - Mesuré : PNG 3,2 Mo → WebP 106 ko en 610 ms. Non couvert, à dire si
     demandé : les points de restauration et la fusion JSON ignorent les
     fiches d'images ; les exports Markdown/JSON portent des chemins que

@@ -234,6 +234,25 @@
   margin-bottom: 0.15cm;
   font-weight: 600;
 }
+/* NUMÉRO D'ÉTAPE en pastille (`rehypePastilles`, 2026-10-03) : rond noir,
+   chiffre blanc, devant un titre « 1. … » — signature des fiches iFixit. */
+.pdf-prose .etape-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 1.45em;
+  height: 1.45em;
+  padding: 0 0.35em;
+  margin-right: 0.15em;
+  border-radius: 999px;
+  background: #000;
+  color: #fff;
+  font-size: 0.85em;
+  font-weight: 700;
+  line-height: 1;
+  vertical-align: 0.1em;
+}
 /* Premier élément de chaque page paginée : pas de marge haute
    (s'applique au conteneur de mesure ET aux pages rendues) */
 .pdf-prose > :first-child,
@@ -531,7 +550,7 @@
   aspect-ratio: 4 / 3;
   object-fit: contain;
   background: #f4f4f4;
-  border: 0.5pt solid #d4d4d4;
+  border: 0.75pt solid #000;
   box-sizing: border-box;
 }
 .pdf-prose [data-bloc='photos'] > .photos-hors {
@@ -604,15 +623,18 @@
 .pdf-prose .classeur-image[data-genre='photo'] {
   --hmax: 90mm;
 }
-/* Une CAPTURE d'écran a souvent un fond clair qui se fond dans la page :
-   filet gris fin (même trait que les cases d'une planche). Pas sur les
-   photos. */
+/* CADRE NOIR autour de toute image (décision utilisateur du 2026-10-03 :
+   « le genre de bordure, c'est propre et pro »). Un `outline` : hors de la
+   boîte, il ne change aucune hauteur mesurée par la pagination. Dans une
+   planche, c'est la CASE qui porte le trait (règle plus bas) ; un
+   emplacement à remplir garde son pointillé. */
 .pdf-prose
   :not([data-bloc='photos'])
   > figure
-  > .classeur-image[data-genre='capture']
-  > .classeur-image-cadre {
-  outline: 0.5pt solid #c8c8c8;
+  > .classeur-image:not(.classeur-a-inserer)
+  > .classeur-image-cadre,
+.pdf-prose :not([data-bloc='photos']) > figure > img {
+  outline: 0.75pt solid #000;
 }
 .pdf-prose .classeur-image-cadre {
   display: block;
@@ -664,7 +686,7 @@
   align-items: center;
   justify-content: center;
   background: #f4f4f4;
-  border: 0.5pt solid #d4d4d4;
+  border: 0.75pt solid #000;
   box-sizing: border-box;
 }
 .pdf-prose

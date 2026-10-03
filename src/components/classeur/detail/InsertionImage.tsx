@@ -25,8 +25,8 @@ import {
 } from '#/lib/classeur/disposition.ts'
 import type { Disposition } from '#/lib/classeur/disposition.ts'
 import {
-  IMAGE_A_INSERER,
   cheminDuJeton,
+  estImageAInserer,
   estImage,
   formaterOctets,
   jetonImage,
@@ -171,37 +171,6 @@ export function useInsertionImage({
     [editeurRef, setContenu],
   )
 
-  /**
-   * EMPLACEMENT à remplir (`![…](a-inserer)`, 2026-10-01) : cliqué dans
-   * l'aperçu, il attend une vraie image ; l'image choisie le REMPLACE (sa
-   * légende et sa taille sont reprises dans le dialogue). Toute autre voie
-   * d'ajout (bouton, collage, dépôt) l'oublie.
-   */
-  const [emplacement, setEmplacement] = useState<{
-    ligne?: number
-    alt: string
-    taille: TailleImage
-    contexte: 'page' | 'planche'
-  } | null>(null)
-
-  const remplirEmplacement = useCallback(
-    (ligne: number | undefined, contexte: 'page' | 'planche') => {
-      const valeur = editeurRef.current?.value ?? contenu
-      const t = trouverImage(valeur, IMAGE_A_INSERER, ligne)
-      if (!t) {
-        setEtat({
-          type: 'erreur',
-          message: "Cet emplacement n'est plus dans le texte.",
-        })
-        return
-      }
-      setEtat({ type: 'repos' })
-      setEmplacement({ ligne, alt: t.alt, taille: t.taille, contexte })
-      inputRef.current?.click()
-    },
-    [contenu, editeurRef],
-  )
-
   /** Étape 1 : relève le curseur, refuse ce qui n'est pas une image, ouvre la préparation. */
   const inserer = useCallback(
     (file: File) => {
@@ -222,18 +191,6 @@ export function useInsertionImage({
     [classeurId, editeurRef],
   )
 
-  /** Un fichier DÉPOSÉ sur un emplacement gris de l'aperçu le remplit. */
-  const remplirEmplacementAvec = useCallback(
-    (file: File, ligne: number | undefined, contexte: 'page' | 'planche') => {
-      const valeur = editeurRef.current?.value ?? contenu
-      const t = trouverImage(valeur, IMAGE_A_INSERER, ligne)
-      if (!t) return
-      setEmplacement({ ligne, alt: t.alt, taille: t.taille, contexte })
-      inserer(file)
-    },
-    [contenu, editeurRef, inserer],
-  )
-
   /** Étape 2 : conversion (cadre, rotation), envoi, insertion au curseur relevé. */
   const envoyer = useCallback(
     async (
@@ -246,33 +203,7 @@ export function useInsertionImage({
       try {
         const res = await televerserImage(classeurId, file, preparation)
         setEnPreparation(null)
-        const cible = emplacement
-        setEmplacement(null)
-        if (cible) {
-          // L'image prend la place de l'emplacement gris (Ctrl + Z le ramène).
-          const remplacer = (valeur: string): Edition => {
-            const t = trouverImage(valeur, IMAGE_A_INSERER, cible.ligne)
-            if (!t)
-              return insererLigne(
-                valeur,
-                valeur.length,
-                valeur.length,
-                res.markdown,
-              )
-            return editionDisposee(
-              valeur,
-              t.debut,
-              t.fin,
-              res.markdown,
-              preparation.disposition ?? 'centre',
-            )
-          }
-          appliquerQuandLibre(
-            () => editeurRef.current,
-            remplacer,
-            () => setContenu((prev) => appliquerEdition(prev, remplacer(prev))),
-          )
-        } else if ((preparation.disposition ?? 'centre') !== 'centre') {
+        if ((preparation.disposition ?? 'centre') !== 'centre') {
           // Insérée au curseur, puis mise en colonnes avec son texte.
           const disposer = (valeur: string): Edition => {
             const ins = insererLigne(
@@ -316,14 +247,7 @@ export function useInsertionImage({
         })
       }
     },
-    [
-      classeurId,
-      editeurRef,
-      emplacement,
-      insererMarkdown,
-      invaliderImages,
-      setContenu,
-    ],
+    [classeurId, editeurRef, insererMarkdown, invaliderImages, setContenu],
   )
 
   /**
@@ -390,8 +314,9 @@ export function useInsertionImage({
         if (appliquerRemplacement(cible, res.image.chemin))
           setEtat({
             type: 'ok',
-            message:
-              "Image remplacée (légende, taille et place gardées ; l'ancienne reste dans la médiathèque).",
+            message: estImageAInserer(cible.chemin)
+              ? "Image placée dans l'emplacement (légende, taille et place gardées)."
+              : "Image remplacée (légende, taille et place gardées ; l'ancienne reste dans la médiathèque).",
           })
       } catch (err) {
         setEtat({
@@ -438,7 +363,9 @@ export function useInsertionImage({
         if (appliquerRemplacement(cible, nouveau))
           setEtat({
             type: 'ok',
-            message: 'Image remplacée (légende, taille et place gardées).',
+            message: estImageAInserer(cible.chemin)
+              ? "Image placée dans l'emplacement (légende, taille et place gardées)."
+              : 'Image remplacée (légende, taille et place gardées).',
           })
         return
       }
@@ -570,11 +497,11 @@ export function useInsertionImage({
         taille?: TailleImage
         ajustement?: AjustementImage
       },
-    ) => {
+    ): number | undefined => {
       const ed = editeurRef.current
-      if (!ed) return
+      if (!ed) return undefined
       const t = trouverImage(ed.value, chemin, ligne)
-      if (!t) return
+      if (!t) return undefined
       const disposition =
         changement.disposition ?? dispositionImage(ed.value, t.debut)
       let taille = changement.taille ?? t.taille
@@ -587,10 +514,32 @@ export function useInsertionImage({
         t.cadre,
         changement.ajustement ?? t.ajustement,
       )
-      appliquerDansEditeur(
-        ed,
-        editionDisposee(ed.value, t.debut, t.fin, jeton, disposition),
+      const nouveau = changerDisposition(
+        ed.value,
+        t.debut,
+        t.fin,
+        jeton,
+        disposition,
       )
+      appliquerDansEditeur(ed, editionEntre(ed.value, nouveau))
+      // Nouvelle ligne de l'image (un bloc ouvert ou défait la décale) : la
+      // barre la suit — indispensable pour un EMPLACEMENT, dont le « chemin »
+      // (`a-inserer`) est partagé par tous les emplacements du document.
+      let meilleur = -1
+      for (
+        let k = nouveau.indexOf(jeton);
+        k !== -1;
+        k = nouveau.indexOf(jeton, k + 1)
+      ) {
+        if (
+          meilleur === -1 ||
+          Math.abs(k - t.debut) < Math.abs(meilleur - t.debut)
+        )
+          meilleur = k
+      }
+      return meilleur === -1
+        ? ligne
+        : nouveau.slice(0, meilleur).split('\n').length
     },
     [editeurRef],
   )
@@ -648,7 +597,6 @@ export function useInsertionImage({
       const file = premiereImage(e.clipboardData.files)
       if (!file) return
       e.preventDefault()
-      setEmplacement(null)
       inserer(file)
     },
     [inserer],
@@ -663,7 +611,6 @@ export function useInsertionImage({
       const file = premiereImage(e.dataTransfer.files)
       if (!file) return
       e.preventDefault()
-      setEmplacement(null)
       inserer(file)
     },
     [inserer],
@@ -694,12 +641,8 @@ export function useInsertionImage({
     onInputChange,
     onPlancheChange,
     ouvrirSelecteur: () => {
-      setEmplacement(null)
       inputRef.current?.click()
     },
-    emplacement,
-    remplirEmplacement,
-    remplirEmplacementAvec,
     remplacerRef,
     onRemplacerChange,
     remplacerDepuisOrdinateur,
@@ -724,7 +667,6 @@ export function useInsertionImage({
     enPreparation,
     annulerPreparation: () => {
       setEnPreparation(null)
-      setEmplacement(null)
     },
     envoyer,
     enRetouche,
@@ -748,9 +690,6 @@ export function DialoguesImage({ image }: { image: ImageInsertion }) {
     <>
       <ImagePreparationDialog
         file={image.enPreparation}
-        legendeInitiale={image.emplacement?.alt ?? ''}
-        tailleInitiale={image.emplacement?.taille ?? 'auto'}
-        contexte={image.emplacement?.contexte ?? 'page'}
         envoi={image.etat.type === 'envoi'}
         onAnnuler={image.annulerPreparation}
         onValider={(preparation) => {

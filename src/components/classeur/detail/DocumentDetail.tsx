@@ -45,7 +45,7 @@ import { useImages } from '#/components/classeur/hooks/useImages.ts'
 import { BarreImage } from '#/components/classeur/detail/BarreImage.tsx'
 import type { CibleBarre } from '#/components/classeur/detail/BarreImage.tsx'
 import { dispositionImage } from '#/lib/classeur/disposition.ts'
-import { trouverImage } from '#/lib/classeur/images.ts'
+import { IMAGE_A_INSERER, trouverImage } from '#/lib/classeur/images.ts'
 import { AbandonModificationsDialog } from '#/components/classeur/dialogs/AbandonModificationsDialog.tsx'
 import { ConflitDocumentDialog } from '#/components/classeur/dialogs/ConflitDocumentDialog.tsx'
 import { HistoriqueDocumentDialog } from '#/components/classeur/dialogs/HistoriqueDocumentDialog.tsx'
@@ -137,6 +137,20 @@ export function DocumentDetail() {
     (CibleBarre & { url: string; photo: boolean }) | null
   >(null)
   const fermerBarre = useCallback(() => setBarre(null), [])
+  /** L'emplacement gris de la barre, retrouvé par sa ligne (chemin partagé). */
+  const ligneBarre = barre?.emplacement ? barre.ligne : undefined
+  const trouverEmplacement = useCallback((): Element | null => {
+    const ta = editeurRef.current
+    if (!ta || ligneBarre === undefined) return null
+    const rendue = ligneSourceVersRendue(ta.value, ligneBarre)
+    const bloc = document.querySelector(
+      `.a4-page [data-ligne="${String(rendue)}"]`,
+    )
+    if (!bloc) return null
+    return bloc.matches('[data-a-inserer]')
+      ? bloc
+      : bloc.querySelector('[data-a-inserer]')
+  }, [ligneBarre])
   useEffect(() => {
     if (!editing) setBarre(null)
   }, [editing])
@@ -206,18 +220,24 @@ export function DocumentDetail() {
         Number.isFinite(rendue) && rendue >= 1
           ? ligneRendueVersSource(ta.value, rendue)
           : undefined
-      // Un clic sur un EMPLACEMENT gris y met une vraie image.
+      // Un clic sur un EMPLACEMENT gris ouvre la MÊME barre qu'une image
+      // (disposition, taille, « Insérer une image »), 2026-10-03.
       const vide = e.target.closest<HTMLElement>('.a4-page [data-a-inserer]')
       if (vide && page.canWrite) {
         const ligneVide = Number(
           vide.closest<HTMLElement>('[data-ligne]')?.dataset.ligne,
         )
-        image.remplirEmplacement(
-          Number.isFinite(ligneVide) && ligneVide >= 1
-            ? ligneRendueVersSource(ta.value, ligneVide)
-            : undefined,
-          vide.closest('[data-bloc="photos"]') ? 'planche' : 'page',
-        )
+        setBarre({
+          chemin: IMAGE_A_INSERER,
+          ligne:
+            Number.isFinite(ligneVide) && ligneVide >= 1
+              ? ligneRendueVersSource(ta.value, ligneVide)
+              : undefined,
+          contexte: vide.closest('[data-bloc="photos"]') ? 'planche' : 'page',
+          emplacement: true,
+          url: '',
+          photo: false,
+        })
         return
       }
       // Un clic sur une IMAGE la retouche (légende, taille, recadrage).
@@ -238,7 +258,7 @@ export function DocumentDetail() {
       }
       if (ligne !== undefined) allerA(ligne)
     },
-    [allerA, image, page.canWrite],
+    [allerA, page.canWrite],
   )
 
   // REMPLACER par dépôt (2026-10-03) : un fichier lâché SUR une image de
@@ -282,13 +302,11 @@ export function DocumentDetail() {
           ? ligneRendueVersSource(ta.value, rendue)
           : undefined
       const chemin = cible.dataset.chemin
-      if (chemin) void image.remplacerParFichier({ chemin, ligne }, file)
-      else
-        image.remplirEmplacementAvec(
-          file,
-          ligne,
-          cible.closest('[data-bloc="photos"]') ? 'planche' : 'page',
-        )
+      // Image ou emplacement : même geste, seul le fichier arrive.
+      void image.remplacerParFichier(
+        { chemin: chemin ?? IMAGE_A_INSERER, ligne },
+        file,
+      )
     },
     [cibleDepot, image],
   )
@@ -556,12 +574,18 @@ export function DocumentDetail() {
                         disposition={dispositionImage(contenu, t.debut)}
                         taille={t.taille}
                         ajustement={t.ajustement}
-                        onAjuster={(changement) =>
-                          image.ajusterImage(
+                        onAjuster={(changement) => {
+                          const nouvelle = image.ajusterImage(
                             barre.chemin,
                             barre.ligne,
                             changement,
                           )
+                          // La barre suit l'image si un bloc l'a décalée.
+                          if (nouvelle !== barre.ligne)
+                            setBarre({ ...barre, ligne: nouvelle })
+                        }}
+                        trouverElement={
+                          barre.emplacement ? trouverEmplacement : undefined
                         }
                         onRecadrer={() => ouvrir(true)}
                         onReglages={() => ouvrir(false)}

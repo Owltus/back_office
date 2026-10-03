@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import {
   Crop,
   FolderUp,
+  ImagePlus,
   Images,
   Replace,
   SlidersHorizontal,
@@ -40,6 +41,12 @@ export interface CibleBarre {
   chemin: string
   ligne?: number
   contexte: 'page' | 'planche'
+  /**
+   * EMPLACEMENT gris à remplir (2026-10-03) : même barre (disposition,
+   * taille), mais « Insérer une image » au lieu de Remplacer, et ni
+   * recadrage ni réglage de case — il n'y a pas encore d'image.
+   */
+  emplacement?: boolean
 }
 
 const TAILLES_CENTRE: { key: TailleImage; court: string; long: string }[] = [
@@ -169,6 +176,7 @@ export function BarreImage({
   onRemplacerOrdinateur,
   onRemplacerMediatheque,
   onFermer,
+  trouverElement,
 }: {
   cible: CibleBarre
   disposition: Disposition
@@ -186,6 +194,11 @@ export function BarreImage({
   /** … ou une image déjà dans la médiathèque du classeur. */
   onRemplacerMediatheque: () => void
   onFermer: () => void
+  /**
+   * L'élément à suivre dans l'aperçu. Par défaut, l'image de ce chemin ; un
+   * emplacement (chemin partagé) est retrouvé par sa ligne.
+   */
+  trouverElement?: () => Element | null
 }) {
   const barreRef = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
@@ -193,11 +206,13 @@ export function BarreImage({
   // Suit l'image : la page se repagine après chaque réglage.
   useLayoutEffect(() => {
     const mesurer = () => {
-      const img = document.querySelector<HTMLElement>(
-        `.a4-page img[data-chemin="${CSS.escape(cible.chemin)}"]`,
-      )
+      const img = trouverElement
+        ? trouverElement()
+        : document.querySelector<HTMLElement>(
+            `.a4-page img[data-chemin="${CSS.escape(cible.chemin)}"]`,
+          )
       const boite = (img?.closest('.classeur-image-cadre') ?? img) as
-        HTMLElement | null | undefined
+        Element | null | undefined
       if (!boite) return
       const r = boite.getBoundingClientRect()
       const hauteur = barreRef.current?.offsetHeight ?? 40
@@ -220,7 +235,7 @@ export function BarreImage({
       window.removeEventListener('scroll', mesurer, true)
       window.removeEventListener('resize', mesurer)
     }
-  }, [cible.chemin])
+  }, [cible.chemin, trouverElement])
 
   // Échap ou clic ailleurs (hors barre, hors image) : fermeture.
   useEffect(() => {
@@ -231,7 +246,8 @@ export function BarreImage({
       const t = e.target as Element | null
       if (!t) return
       if (barreRef.current?.contains(t)) return
-      if (t.closest('.a4-page img[data-chemin]')) return
+      if (t.closest('.a4-page img[data-chemin], .a4-page [data-a-inserer]'))
+        return
       if (t.closest('[role="dialog"], [data-radix-popper-content-wrapper]'))
         return
       onFermer()
@@ -245,6 +261,7 @@ export function BarreImage({
   }, [onFermer])
 
   const aCote = disposition !== 'centre'
+  const vide = cible.emplacement === true
   const tailles = aCote ? TAILLES_COTE : TAILLES_CENTRE
 
   return createPortal(
@@ -294,7 +311,7 @@ export function BarreImage({
             </Bouton>
           ))}
         </>
-      ) : (
+      ) : vide ? null : (
         <>
           <Bouton
             label="Remplir la case (ce qui dépasse est masqué)"
@@ -314,19 +331,31 @@ export function BarreImage({
       )}
       <Separateur />
       <DropdownMenu>
-        <Tip label="Remplacer l'image (légende, taille et place gardées)">
+        <Tip
+          label={
+            vide
+              ? 'Mettre une vraie image ici (légende, taille et place gardées)'
+              : "Remplacer l'image (légende, taille et place gardées)"
+          }
+        >
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              aria-label="Remplacer l'image"
+              aria-label={vide ? 'Insérer une image' : "Remplacer l'image"}
               className={cn(
                 'inline-flex h-8 items-center justify-center gap-1 rounded-md px-2 text-xs font-medium transition-colors',
-                'text-muted-foreground hover:bg-accent hover:text-foreground',
                 'focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+                vide
+                  ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                  : 'text-muted-foreground hover:bg-accent hover:text-foreground',
               )}
             >
-              <Replace className="size-4" />
-              Remplacer
+              {vide ? (
+                <ImagePlus className="size-4" />
+              ) : (
+                <Replace className="size-4" />
+              )}
+              {vide ? 'Insérer une image' : 'Remplacer'}
             </button>
           </DropdownMenuTrigger>
         </Tip>
@@ -341,15 +370,19 @@ export function BarreImage({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <Bouton label="Recadrer" onClick={onRecadrer}>
-        <Crop className="size-4" />
-      </Bouton>
-      <Bouton
-        label="Mise en page… (légende, taille, recadrage)"
-        onClick={onReglages}
-      >
-        <SlidersHorizontal className="size-4" />
-      </Bouton>
+      {!vide && (
+        <>
+          <Bouton label="Recadrer" onClick={onRecadrer}>
+            <Crop className="size-4" />
+          </Bouton>
+          <Bouton
+            label="Mise en page… (légende, taille, recadrage)"
+            onClick={onReglages}
+          >
+            <SlidersHorizontal className="size-4" />
+          </Bouton>
+        </>
+      )}
       <Bouton label="Fermer" onClick={onFermer}>
         <X className="size-4" />
       </Bouton>

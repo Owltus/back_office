@@ -219,3 +219,21 @@ describe('étape : côté et largeur de la colonne photo', () => {
     expect(e?.getAttribute('data-largeur')).toBe('moyenne')
   })
 })
+
+describe('numéros d’étape en pastille', () => {
+  it('« ### 1. Préparation » : le numéro passe dans une pastille, le texte reste', () => {
+    const h = rendre('### 1. Préparation').querySelector('h3')
+    expect(h?.querySelector('.etape-num')?.textContent).toBe('1')
+    expect(h?.getAttribute('data-etape')).toBe('1')
+    expect(texte(h!)).toBe('1 Préparation')
+    expect(
+      rendre('## 12) Contrôle').querySelector('h2 .etape-num')?.textContent,
+    ).toBe('12')
+  })
+  it('pas de pastille : sous-numéro, année, titre de document, liste', () => {
+    const d = rendre(
+      '## 1.2 Sous-partie\n\n## 2026. Bilan\n\n# 1. Titre\n\n1. Une étape de liste',
+    )
+    expect(d.querySelectorAll('.etape-num')).toHaveLength(0)
+  })
+})
