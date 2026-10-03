@@ -987,9 +987,11 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
       `IMAGE_A_INSERER`) — l'ancien circuit `remplirEmplacement` est
       retiré ; la barre d'un emplacement le retrouve par sa LIGNE (chemin
       partagé), et `ajusterImage` rend la nouvelle ligne quand un bloc
-      `:::etape` l'a décalé ; (3) NUMÉROS D'ÉTAPE EN PASTILLE
-      (`print/rehypePastilles.ts` : titre h2-h4 « 1. … » ou « 1) … » → rond
-      noir, Markdown inchangé, « 1.2 » et les années exclus) ; (4) classeur
+      `:::etape` l'a décalé ; (3) NUMÉROS EN PASTILLE
+      (`print/rehypePastilles.ts` : TOUT niveau de titre `#` à `######`,
+      élargi le même jour ; « 1. », « 1) », « 1.2 », « 1.2.3. », numéro en
+      gras « **4.** » compris — le titre est lu comme un seul texte ; rond
+      noir, Markdown inchangé ; années et « 3 vannes » sans point exclus) ; (4) classeur
       d'essai : TOUTES les images fictives remplacées par des emplacements
       (les 15 fichiers restent en médiathèque, « Non utilisées »).
       L'en-tête de page sera retravaillé plus tard À L'INITIATIVE de

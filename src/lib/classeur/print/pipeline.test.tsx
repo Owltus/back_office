@@ -230,9 +230,28 @@ describe('numéros d’étape en pastille', () => {
       rendre('## 12) Contrôle').querySelector('h2 .etape-num')?.textContent,
     ).toBe('12')
   })
-  it('pas de pastille : sous-numéro, année, titre de document, liste', () => {
+  it('tous les niveaux de titre, de # à ######', () => {
     const d = rendre(
-      '## 1.2 Sous-partie\n\n## 2026. Bilan\n\n# 1. Titre\n\n1. Une étape de liste',
+      ['#', '##', '###', '####', '#####', '######']
+        .map((h, i) => `${h} ${String(i + 1)}. Niveau`)
+        .join('\n\n'),
+    )
+    expect(
+      [...d.querySelectorAll('.etape-num')].map((e) => e.textContent),
+    ).toEqual(['1', '2', '3', '4', '5', '6'])
+  })
+  it('numérotation à plusieurs niveaux et numéro en gras', () => {
+    const d = rendre(
+      '## 1.2 Sous-partie\n\n### 1.2.3. Détail\n\n### **4.** Gras',
+    )
+    expect(
+      [...d.querySelectorAll('.etape-num')].map((e) => e.textContent),
+    ).toEqual(['1.2', '1.2.3', '4'])
+    expect(texte(d.querySelectorAll('h3')[1])).toBe('4 Gras')
+  })
+  it('pas de pastille : année, numéro sans point, liste numérotée', () => {
+    const d = rendre(
+      '## 2026. Bilan\n\n## 3 vannes à contrôler\n\n1. Une étape de liste',
     )
     expect(d.querySelectorAll('.etape-num')).toHaveLength(0)
   })
