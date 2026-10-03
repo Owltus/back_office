@@ -940,6 +940,13 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
       Chrome avec la session de l'utilisateur ; à supprimer sur demande
       (ce classeur et ses images seulement). Emplacement vide = silhouette
       d'image (soleil + montagnes) sur fond gris.
+      Chapitre 34 « Tout ce qu'un document sait faire » (même jour,
+      demande utilisateur) : VITRINE en 10 documents (100 à 109) — titres et
+      texte, listes et cases, encadrés, tableaux, images seules, images à
+      côté du texte, planches, code/formules/diagrammes, mise en page
+      automatique, modèle de procédure complète ; chacun montre la syntaxe
+      (bloc de code) puis le rendu, photos en emplacements « Image à
+      insérer ». À tenir à jour quand une fonction de document s'ajoute.
     - **REMPLACER une image (2026-10-03, « aussi simple que changer un
       texte »)** : barre de l'image → « Remplacer » (fichier de
       l'ordinateur ou image de la médiathèque, `ImagesDialog` en mode
