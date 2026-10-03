@@ -870,11 +870,23 @@
    entre deux cases. Le SVG suit son conteneur. */
 .pdf-prose .classeur-mermaid {
   margin: 0 auto;
-  width: min(100%, var(--l, 100%), calc(205mm * var(--r, 1)));
+  /* --hmax : posé par `paginate` quand le schéma se réduit pour finir une
+     page (70 % au moins, texte toujours lisible). */
+  width: min(100%, var(--l, 100%), calc(var(--hmax, 205mm) * var(--r, 1)));
 }
 .pdf-prose .classeur-mermaid[data-affichage='decoupe'] {
-  /* 70 % de la taille naturelle (ECHELLE_DECOUPE) : lisible, moins de pages. */
-  width: min(100%, calc(var(--l, 100%) * 0.7));
+  /* 75 % de la taille naturelle (ECHELLE_DECOUPE) : texte ≈ 7 pt. */
+  width: min(100%, calc(var(--l, 100%) * 0.75));
+}
+/* Raccord d'un schéma découpé : une mention discrète, de hauteur FIXE
+   (HAUTEUR_SUITE_PX, comptée par la pagination). */
+.pdf-prose .classeur-mermaid-suite {
+  height: 16px;
+  line-height: 16px;
+  font-size: 7pt;
+  font-style: italic;
+  color: #888;
+  text-align: center;
 }
 .pdf-prose .classeur-mermaid > svg[id^='classeur-mermaid-'] {
   display: block;

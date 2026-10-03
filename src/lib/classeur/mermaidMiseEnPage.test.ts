@@ -60,7 +60,29 @@ describe('mise en page des schémas Mermaid', () => {
     })
   })
 
+  it('la coupe tombe au milieu du plus grand espace vide du bas de la place', () => {
+    const bandes = [
+      [0, 50],
+      [55, 100],
+      [100, 190],
+      [230, 240],
+      [250, 400],
+    ] as const
+    // Place 250 : dernier quart = [187,5 ; 250] ; plus grand vide [190, 230].
+    expect(coupesSchema(400, bandes, 250, 400)[0]).toBe(210)
+  })
   it('une case plus haute que la place : coupe sous elle, sans boucler', () => {
     expect(coupesSchema(500, [[10, 400]], 100, 100)).toEqual([10, 400])
+  })
+})
+
+describe('pas de queue de schéma', () => {
+  it('le dernier morceau n’est jamais minuscule : les deux derniers se partagent', () => {
+    // 610 px sur des pages de 300 : 300 + 300 + 10 sans la règle.
+    const coupes = coupesSchema(610, [], 300, 300)
+    const bornes = [0, ...coupes, 610]
+    const morceaux = bornes.slice(1).map((b, i) => b - bornes[i])
+    expect(Math.min(...morceaux)).toBeGreaterThanOrEqual(75)
+    expect(Math.max(...morceaux)).toBeLessThanOrEqual(300)
   })
 })

@@ -41,7 +41,11 @@
  * un garde-fou.
  */
 
-import { coupesSchema } from '#/lib/classeur/mermaidMiseEnPage.ts'
+import {
+  ECHELLE_LISIBLE,
+  HAUTEUR_SUITE_PX,
+  coupesSchema,
+} from '#/lib/classeur/mermaidMiseEnPage.ts'
 
 export interface PageData {
   html: string
@@ -87,6 +91,8 @@ export interface OutilsPagination {
   couperTexte?: CoupeTexte
   /** Cases d'un schéma Mermaid découpé (navigateur : boîtes des nœuds). */
   bandesSchema?: BandesSchema
+  /** Échelle actuelle d'un schéma tenu sur une page (affiché ÷ naturel). */
+  echelleSchema?: (el: Element) => number
 }
 
 /* ─── Seuils ─── */
@@ -319,6 +325,17 @@ function estSchemaDecoupe(el: Element): boolean {
   )
 }
 
+/** Navigateur : échelle d'affichage d'un schéma (largeur affichée ÷ naturelle). */
+function echelleSchemaCalculee(el: Element): number {
+  const svg = el.querySelector('.classeur-mermaid > svg')
+  const vb = svg
+    ?.getAttribute('viewBox')
+    ?.split(/[\s,]+/)
+    .map(Number)
+  if (!svg || !vb || vb.length < 4 || !(vb[2] > 0)) return 0
+  return svg.getBoundingClientRect().width / vb[2]
+}
+
 /** Navigateur : boîtes des cases et étiquettes du schéma, depuis le bloc. */
 function bandesSchemaCalculees(el: Element): Array<readonly [number, number]> {
   const haut = el.getBoundingClientRect().top
@@ -332,9 +349,11 @@ function bandesSchemaCalculees(el: Element): Array<readonly [number, number]> {
 
 /**
  * Tranches d'un schéma trop haut pour une page : la même image, montrée par
- * fenêtres successives (`overflow: hidden`, décalage vertical), coupées entre
- * deux cases (`coupesSchema`). Rien n'est redessiné : chaque tranche est une
- * copie du bloc entier, décalée.
+ * fenêtres successives (`overflow: hidden`, décalage vertical), coupées dans
+ * les espaces vides entre les cases (`coupesSchema`). Au raccord, une
+ * mention discrète de hauteur fixe : « Suite page suivante ▼ » sous une
+ * tranche, « ▲ Suite du schéma » au-dessus de la suivante. Rien n'est
+ * redessiné : chaque fenêtre est une copie du bloc entier, décalée.
  */
 function splitSchema(
   el: Element,
@@ -343,16 +362,24 @@ function splitSchema(
   premier: number,
   plein: number,
 ): Chunk[] | null {
-  const coupes = coupesSchema(hauteur, bandes, premier, plein)
+  const M = HAUTEUR_SUITE_PX
+  const coupes = coupesSchema(hauteur, bandes, premier - M, plein - 2 * M)
   if (coupes.length === 0) return null
   const bornes = [0, ...coupes, hauteur]
+  const n = bornes.length - 1
   const tranches: Chunk[] = []
-  for (let i = 0; i < bornes.length - 1; i++) {
+  for (let i = 0; i < n; i++) {
     const h = bornes[i + 1] - bornes[i]
     if (h <= 0) continue
+    const avant =
+      i > 0 ? '<div class="classeur-mermaid-suite">▲ Suite du schéma</div>' : ''
+    const apres =
+      i < n - 1
+        ? '<div class="classeur-mermaid-suite">Suite page suivante ▼</div>'
+        : ''
     tranches.push({
-      html: `<div class="classeur-mermaid-tranche" style="height:${String(h)}px;overflow:hidden;position:relative"><div style="position:relative;top:${String(-bornes[i])}px">${el.outerHTML}</div></div>`,
-      height: h,
+      html: `<div class="classeur-mermaid-tranche">${avant}<div class="classeur-mermaid-fenetre" style="height:${String(h)}px;overflow:hidden;position:relative"><div style="position:relative;top:${String(-bornes[i])}px">${el.outerHTML}</div></div>${apres}</div>`,
+      height: h + (avant ? M : 0) + (apres ? M : 0),
     })
   }
   return tranches.length > 1 ? tranches : null
@@ -607,6 +634,7 @@ export function paginate(
   const couperTexte = outils.couperTexte ?? couperTexteDom
   const ecartRangees = outils.ecartRangees ?? ecartRangeesCalcule
   const bandesSchema = outils.bandesSchema ?? bandesSchemaCalculees
+  const echelleSchema = outils.echelleSchema ?? echelleSchemaCalculee
 
   const children = Array.from(container.children)
   if (children.length === 0) return [{ html: '' }]
@@ -677,6 +705,49 @@ export function paginate(
     return ligne > 0 && box <= MAX_LIGNES_INTRODUCTION * ligne + 1
   }
 
+  /**
+   * Un schéma TENU SUR UNE PAGE qui dépasse de peu la place restante y est
+   * réduit (copie avec `--hmax`, `classeur.css`) plutôt que d'ouvrir une
+   * page et de laisser un blanc — si son texte reste lisible
+   * (`ECHELLE_LISIBLE`) et qu'il garde au moins 70 % de sa taille.
+   */
+  /** Plus petit facteur auquel un schéma « page » peut se réduire, ou null. */
+  function reductionMinimale(el: Element): number | null {
+    const schema = el.matches('.classeur-mermaid')
+      ? el
+      : el.querySelector('.classeur-mermaid')
+    if (!schema || schema.getAttribute('data-affichage') !== 'page') return null
+    const echelle = echelleSchema(el)
+    if (!(echelle > 0)) return null
+    const f = Math.max(0.7, ECHELLE_LISIBLE / echelle)
+    return f < 1 ? f : null
+  }
+
+  function schemaReduit(
+    el: Element,
+    box: number,
+    reste: number,
+  ): string | null {
+    const schema = el.matches('.classeur-mermaid')
+      ? el
+      : el.querySelector('.classeur-mermaid')
+    if (!schema || schema.getAttribute('data-affichage') !== 'page') return null
+    if (reste <= 0 || box <= 0 || reste >= box) return null
+    const f = reste / box
+    if (f < 0.7 || echelleSchema(el) * f < ECHELLE_LISIBLE) return null
+    const copie = el.cloneNode(true) as Element
+    const cible = copie.matches('.classeur-mermaid')
+      ? copie
+      : copie.querySelector('.classeur-mermaid')
+    if (!cible) return null
+    const style = cible.getAttribute('style') ?? ''
+    cible.setAttribute(
+      'style',
+      `${style};--hmax:${String(Math.floor(reste))}px`,
+    )
+    return copie.outerHTML
+  }
+
   function kind(
     el: Element,
   ): 'table' | 'liste' | 'texte' | 'planche' | 'etape' | 'schema' | null {
@@ -719,6 +790,8 @@ export function paginate(
         return splitPlanche(el, premier, plein, mesure, ecartRangees(el))
       }
       case 'schema':
+        // Jamais un petit bout de schéma en bas de page : 40 % au moins.
+        if (premier < maxHeightPx * 0.4) return null
         return splitSchema(el, infos(el).box, bandesSchema(el), premier, plein)
       default:
         return null
@@ -732,6 +805,9 @@ export function paginate(
    */
   function debutMinimal(el: Element): number {
     const { box } = infos(el)
+    // Schéma tenu sur une page : il peut se réduire jusqu'à 70 % (lisible).
+    const reductible = reductionMinimale(el)
+    if (reductible !== null) return box * reductible
     switch (kind(el)) {
       case 'texte': {
         const ligne = hauteurLigne(el)
@@ -759,7 +835,7 @@ export function paginate(
         return premiere ? Math.max(...premiere.map((c) => mesure(c))) : box
       }
       case 'schema':
-        return Math.min(box, maxHeightPx / 4)
+        return Math.min(box, maxHeightPx * 0.4)
       case 'etape': {
         // Plus haute qu'une page : elle sera déroulée, son début suffit.
         if (box <= maxHeightPx) return box
@@ -870,12 +946,21 @@ export function paginate(
         return
       }
 
+      // ─── Schéma tenu sur une page : il se RÉDUIT pour finir la page, tant
+      //     qu'il reste lisible et ne perd pas plus de 30 % (2026-10-03) ───
+      const reduit = schemaReduit(child, box, reste)
+      if (reduit !== null) {
+        els.push({ ...pageEl, html: reduit, box: reste })
+        return
+      }
+
       // ─── Sinon, page suivante (avec ses titres), coupé si trop grand ───
       if (els.length > 0 && !isOnlyHeadings())
         nouvellePageAvecTitres(
           tag === 'figure' ||
             kind(child) === 'planche' ||
-            kind(child) === 'etape',
+            kind(child) === 'etape' ||
+            child.querySelector('.classeur-mermaid') !== null,
         )
       const dispo = maxHeightPx - pile(els) - ecart(els, mt)
       if (dispo < box) {

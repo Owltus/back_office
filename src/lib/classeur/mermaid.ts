@@ -83,7 +83,26 @@ export function loadMermaid(): Promise<MermaidModule> {
         mermaid.initialize({
           startOnLoad: false,
           theme: 'base',
-          themeVariables: lightVars,
+          // DESSIN COMPACT (2026-10-03, revue des pages du classeur d'essai) :
+          // texte à 12 px (≈ 9 pt, comme le document — Mermaid écrit en
+          // 16 px, plus gros que le corps), cases et espacements resserrés.
+          // Un schéma moyen tient alors sur une page à taille lisible.
+          themeVariables: { ...lightVars, fontSize: '12px' },
+          flowchart: {
+            nodeSpacing: 28,
+            rankSpacing: 34,
+            padding: 8,
+            diagramPadding: 4,
+            wrappingWidth: 160,
+          },
+          sequence: {
+            actorFontSize: 12,
+            messageFontSize: 12,
+            noteFontSize: 12,
+            boxMargin: 6,
+            actorMargin: 40,
+            height: 40,
+          },
           securityLevel: 'strict',
         })
         return mermaid

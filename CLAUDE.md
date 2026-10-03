@@ -962,7 +962,24 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
       (`coupesSchema`, boîtes `g.node` / étiquettes ; une case plus haute
       que la place est coupée sous elle), affiché à 70 %
       (`ECHELLE_DECOUPE`, miroir CSS). Doc 107 : 10 → 7 pages, aucun
-      débordement.
+      débordement. RÉVISÉ le 2026-10-04 après revue des pages par
+      l'utilisateur (« sur plusieurs pages, pas très beau ») : DESSIN
+      COMPACT (`mermaid.initialize` : texte 12 px ≈ 9 pt comme le
+      document — Mermaid écrivait en 16 px —, espacements resserrés ;
+      mesuré : l'espacement ne gagne presque rien, ce sont les losanges à
+      deux lignes qui prennent la hauteur) ; seuil de lisibilité 0,67
+      (≈ 6 pt) ; découpé à 75 % (≈ 7 pt) ; coupe au MILIEU du plus grand
+      vide du dernier quart de la place ; mentions « Suite page suivante ▼
+      » / « ▲ Suite du schéma » de hauteur fixe (`HAUTEUR_SUITE_PX`,
+      comptées) ; jamais un bout de schéma sous 40 % de page en bas, ni une
+      queue sous un quart de page (la coupe remonte juste assez — un
+      partage à parts égales, essayé, vidait la moitié de la page) ; un
+      schéma « page » qui dépasse de peu se RÉDUIT (≥ 70 %, toujours
+      lisible) pour finir la page (`--hmax`, `schemaReduit`, connu de la
+      règle des titres via `reductionMinimale`) ; relecture : « schéma
+      découpé, coupez-le en deux » (`InfoPage.schemas`). Fait établi : un
+      organigramme de 33 étapes ne tient PAS lisiblement sur une page A4
+      (≈ 3 pt) ; découper ou le scinder sont les seules voies.
     - **REMPLACER une image (2026-10-03, « aussi simple que changer un
       texte »)** : barre de l'image → « Remplacer » (fichier de
       l'ordinateur ou image de la médiathèque, `ImagesDialog` en mode

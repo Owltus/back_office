@@ -19,14 +19,21 @@
 export const LARGEUR_UTILE_PX = 718
 export const HAUTEUR_SCHEMA_PX = 775
 
-/** En dessous, le texte du schéma devient difficile à lire (≈ 6 pt). */
-export const ECHELLE_LISIBLE = 0.6
 /**
- * Échelle d'un schéma DÉCOUPÉ : 70 % (texte ≈ 8 pt, lisible), pour tenir
- * en moins de pages qu'en taille réelle — moins si la colonne l'impose.
- * MIROIR de `classeur.css` (`.classeur-mermaid[data-affichage='decoupe']`).
+ * Texte dessiné à 12 px (≈ 9 pt, `mermaid.ts`). En dessous de cette
+ * échelle, il passerait sous ≈ 6 pt : la page n'est plus lisible, le schéma
+ * est retourné ou découpé.
  */
-export const ECHELLE_DECOUPE = 0.7
+export const ECHELLE_LISIBLE = 0.67
+/**
+ * Échelle d'un schéma DÉCOUPÉ : 75 % (texte ≈ 7 pt, lisible), moins si la
+ * colonne l'impose. MIROIR de `classeur.css`
+ * (`.classeur-mermaid[data-affichage='decoupe']`).
+ */
+export const ECHELLE_DECOUPE = 0.75
+
+/** Hauteur (px) d'une mention « Suite… » au raccord de deux tranches. */
+export const HAUTEUR_SUITE_PX = 16
 
 export interface TailleSchema {
   largeur: number
@@ -97,8 +104,10 @@ export function echelleAffichee(t: TailleSchema): number {
 /**
  * Points de COUPE d'un schéma découpé, en px affichés depuis son haut :
  * le premier morceau tient dans `premier`, les suivants dans `plein`, et
- * aucune coupe ne traverse une case (`bandes` : [haut, bas] de chaque case).
- * Si une case est plus haute que la place, la coupe se fait sous elle.
+ * aucune coupe ne traverse une case (`bandes` : [haut, bas] de chaque case
+ * ou étiquette). La coupe tombe au MILIEU du plus grand espace vide situé
+ * dans le dernier quart de la place : le raccord passe là où le
+ * schéma « respire ». Une case plus haute que la place est coupée sous elle.
  */
 export function coupesSchema(
   hauteur: number,
@@ -106,21 +115,55 @@ export function coupesSchema(
   premier: number,
   plein: number,
 ): number[] {
+  const tri = [...bandes].sort((a, b) => a[0] - b[0])
+  const coupee = (v: number) => tri.find(([h, b]) => h < v && b > v)
   const coupes: number[] = []
   let depart = 0
   let place = premier
   while (hauteur - depart > place) {
-    let y = depart + place
-    const coupee = (v: number) => bandes.find(([h, b]) => h < v && b > v)
-    // Remonte au-dessus de toute case coupée par y…
-    let c = coupee(y)
-    while (c && c[0] > depart) {
-      y = c[0]
-      c = coupee(y)
+    // Dernier morceau minuscule (moins d'un quart de page) : la coupe
+    // remonte juste assez pour qu'il garde un quart de page — la page
+    // courante reste presque pleine, et jamais une « queue » de schéma
+    // seule en haut d'une page (un partage à parts égales laissait la
+    // moitié de la page vide, vu au contrôle).
+    if (hauteur - (depart + place) < plein * 0.25)
+      place = Math.max(place / 2, hauteur - depart - plein * 0.25)
+    const limite = depart + place
+    const plancher = depart + place * 0.75
+    // Espaces libres entre les cases, depuis le départ du morceau.
+    const vides: Array<[number, number]> = []
+    let curseur = depart
+    for (const [h, b] of tri) {
+      if (b <= curseur) continue
+      if (h > curseur) vides.push([curseur, h])
+      curseur = Math.max(curseur, b)
     }
-    // … sauf une case qui commence avec le morceau et ne tient pas dans la
-    // place : impossible de l'éviter, la coupe se fait sous elle.
-    if (c) y = c[1]
+    vides.push([curseur, hauteur])
+    // Le plus grand, rogné au bas de la place.
+    let meilleurY = -1
+    let meilleureTaille = 1
+    for (const [g0, g1] of vides) {
+      const a = Math.max(g0, plancher)
+      const b = Math.min(g1, limite)
+      if (b - a > meilleureTaille) {
+        meilleureTaille = b - a
+        meilleurY = (a + b) / 2
+      }
+    }
+    let y: number
+    if (meilleurY >= 0) {
+      y = meilleurY
+    } else {
+      // Aucun espace dans le bas : au-dessus de la case coupée…
+      y = limite
+      let c = coupee(y)
+      while (c && c[0] > depart) {
+        y = c[0]
+        c = coupee(y)
+      }
+      // … sauf une case qui commence avec le morceau et ne tient pas.
+      if (c) y = c[1]
+    }
     coupes.push(y)
     depart = y
     place = plein

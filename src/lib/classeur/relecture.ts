@@ -62,6 +62,8 @@ export interface InfoPage {
   saut?: number
   /** Ligne SOURCE du premier bloc de la page suivante (cause d'un vide). */
   suivante?: number
+  /** Lignes SOURCE des schémas DÉCOUPÉS présents sur la page. */
+  schemas?: number[]
 }
 
 /** Sous ce remplissage, une page (non finale, sans `===`) est signalée. */
@@ -325,6 +327,17 @@ export function alertesRelecture(
       message: `Page ${String(n + 1)} remplie à ${String(Math.round(p.remplissage * 100))} % : ce qui suit ne tenait pas dans la place restante. Une taille plus petite pour cette image, ou une étape plus courte, la ferait remonter.`,
     })
   })
+
+  // Schémas trop grands pour une page, donc découpés (2026-10-03) : la
+  // mise en page s'en charge, mais un schéma par page se lit mieux.
+  const schemas = new Set(pages.flatMap((p) => p.schemas ?? []))
+  for (const ligne of [...schemas].sort((a, b) => a - b)) {
+    alertes.push({
+      ligne,
+      message:
+        'Schéma trop grand pour une page : il est découpé sur plusieurs pages. Pour le garder sur une seule, coupez-le en deux schémas (par exemple un par groupe).',
+    })
+  }
 
   // Tableaux : blocs de lignes contiguës qui commencent par `|`.
   let i = 0

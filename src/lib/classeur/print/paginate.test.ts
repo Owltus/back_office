@@ -379,16 +379,60 @@ describe('schémas Mermaid trop hauts (2026-10-03)', () => {
     expect(tranches.length).toBeGreaterThanOrEqual(4)
     let total = 0
     for (const t of tranches) {
-      const h = parseFloat((t as HTMLElement).style.height)
+      const fenetre = t.querySelector(
+        '.classeur-mermaid-fenetre',
+      ) as HTMLElement
+      const h = parseFloat(fenetre.style.height)
       expect(h).toBeLessThanOrEqual(300)
       total += h
       // Chaque coupe tombe entre deux cases (jamais dans [i*60, i*60+40]).
       const haut = -parseFloat(
-        ((t as HTMLElement).firstElementChild as HTMLElement).style.top,
+        (fenetre.firstElementChild as HTMLElement).style.top,
       )
       expect(bandes().some(([a, b]) => a < haut && b > haut)).toBe(false)
     }
     expect(total).toBe(1200)
+    // Raccords annoncés : « Suite page suivante » sur toutes sauf la
+    // dernière, « Suite du schéma » sur toutes sauf la première.
+    expect(tranches[0].textContent).toContain('Suite page suivante')
+    expect(tranches.at(-1)?.textContent).toContain('Suite du schéma')
+    expect(tranches.at(-1)?.textContent).not.toContain('Suite page suivante')
+  })
+  it('un schéma qui dépasse de peu se réduit pour finir la page (≥ 70 %, lisible)', () => {
+    const schema = (h: number) =>
+      `<pre data-h="${String(h)}"><div class="classeur-mermaid" data-affichage="page"><svg></svg></div></pre>`
+    // 6 × 30 = 180 ; reste 120 pour un schéma de 150 : réduit à 80 %.
+    const reduit = paginate(
+      conteneur(`${paragraphes(6)}${schema(150)}`),
+      300,
+      mesure,
+      {
+        echelleSchema: () => 1,
+      },
+    )
+    expect(reduit).toHaveLength(1)
+    expect(reduit[0].html).toContain('--hmax:120px')
+    // Réduit à 50 % : trop, il part entier sur la page suivante.
+    const entier = paginate(
+      conteneur(`${paragraphes(8)}${schema(120)}`),
+      300,
+      mesure,
+      {
+        echelleSchema: () => 1,
+      },
+    )
+    expect(entier).toHaveLength(2)
+    expect(entier[1].html).not.toContain('--hmax')
+    // Déjà petit (échelle 0,7) : réduit, il deviendrait illisible.
+    const illisible = paginate(
+      conteneur(`${paragraphes(6)}${schema(150)}`),
+      300,
+      mesure,
+      {
+        echelleSchema: () => 0.7,
+      },
+    )
+    expect(illisible).toHaveLength(2)
   })
   it('un schéma tenu sur une page reste ENTIER', () => {
     const html = `${paragraphes(8)}<pre data-h="120"><div class="classeur-mermaid" data-affichage="page"><svg></svg></div></pre>`

@@ -380,6 +380,13 @@ export function DocumentDetail() {
             suivante: m
               ? ligneRendueVersSource(contenuDiffere, Number(m[1]))
               : undefined,
+            // Schémas découpés (une tranche porte la copie du bloc, donc sa
+            // ligne `data-ligne`) : signalés par la relecture.
+            schemas: [
+              ...p.html.matchAll(
+                /classeur-mermaid-tranche[\s\S]*?data-ligne="(\d+)"/g,
+              ),
+            ].map((x) => ligneRendueVersSource(contenuDiffere, Number(x[1]))),
           }
         }),
       ),

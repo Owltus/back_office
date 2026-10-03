@@ -148,6 +148,16 @@ describe('alertesRelecture — blocs et pages (2026-10-01)', () => {
   it('du texte dans une planche', () => {
     expect(lignes(`:::photos\nRepérage\n![Vanne](${A})\n:::`, [A])).toEqual([2])
   })
+  it('schéma découpé sur plusieurs pages : une alerte par schéma', () => {
+    const a = alertesRelecture('x', new Map(), [
+      { remplissage: 0.9, schemas: [12] },
+      { remplissage: 0.9, schemas: [12] },
+      { remplissage: 0.5 },
+    ])
+    expect(a).toHaveLength(1)
+    expect(a[0].ligne).toBe(12)
+    expect(a[0].message).toMatch(/découpé/)
+  })
   it('page à moitié vide sans saut : alerte sur le bloc qui a sauté', () => {
     const md = 'a\n\nb\n\nc'
     const a = alertesRelecture(md, new Map(), [
