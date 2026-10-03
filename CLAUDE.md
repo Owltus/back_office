@@ -1001,6 +1001,28 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
       `####` petites capitales 8,5 pt gris foncé. Usage réel mesuré :
       `##` 330, `###` 190, `#` 40, `####` 1. Doc 89 : 4 pages, aucun
       débordement.
+    - **CARTOUCHE + VERSION X.Y des documents (même jour, décision
+      utilisateur)** : l'en-tête d'une page de DOCUMENT devient
+      `print/CartoucheDocument.tsx` (titre + description à gauche, case
+      « Version » grise à droite, cadre noir) dans EXACTEMENT les 19 mm de
+      l'ancien en-tête + sous-titre (`A4Page` prop `version`) — pagination
+      inchangée ; les autres pages gardent `PageHeader`. Classeur, chapitre,
+      établissement et date restent au pied (refus du doublon). Numéro
+      calculé SANS IA par `lib/classeur/versionDocument.ts` (forme ≤ 3 mots
+      = inchangé ; contenu, image, titre, description, CHIFFRE changé =
+      +0.1 ; étape, partie, encadré Attention/Important, > 30 % des mots =
+      X+1.0), appliqué par `avecVersion` dans `service.ts` à TOUTE écriture
+      d'un document (updateItem, restaurerItem, sauvegarde) depuis l'état en
+      base : il part toujours du numéro actuel, une reprise donne un NOUVEAU
+      numéro. Base (`classeur_version_documents_2026-10-03.sql`, JOUÉ par
+      l'utilisateur, 5/5) : colonnes `version_majeure/mineure/raison`,
+      `version/raison` figées dans l'historique, trigger
+      `classeur_version_monotone` (un numéro ne recule jamais). Aperçu
+      d'édition = numéro que prendra l'enregistrement ; Historique = « v2.0
+      · étape ajoutée ». Vérifié Chrome sans enregistrer (doc 89 : forme
+      1.0, 55 → 57 °C 1.1, étape ajoutée 2.0, base inchangée). ⚠ Le
+      vérificateur de débordement compte à tort une image RECADRÉE (l'img
+      dépasse sa fenêtre masquée) : regarder `overflow` du parent.
   - Mesuré : PNG 3,2 Mo → WebP 106 ko en 610 ms. Non couvert, à dire si
     demandé : les points de restauration et la fusion JSON ignorent les
     fiches d'images ; les exports Markdown/JSON portent des chemins que
