@@ -86,6 +86,12 @@ const MIN_PAR_MORCEAU = 2
 /** Un bloc est coupable s'il permet au moins deux morceaux. */
 const MIN_POUR_COUPER = MIN_PAR_MORCEAU * 2
 /**
+ * Lignes minimum d'un morceau de TABLEAU (relecture visuelle du 2026-10-03 :
+ * deux lignes seules en haut d'une page, sous l'en-tête répété, se lisaient
+ * comme un oubli). Un tableau est coupable à partir du double.
+ */
+const MIN_LIGNES_TABLEAU = 3
+/**
  * Un paragraphe de 3 lignes au plus (ou fini par « : ») qui précède une
  * figure ou une planche l'ANNONCE : il la suit sur la page suivante plutôt
  * que de rester seul en bas de page (2026-10-03 ; InDesign « conserver avec
@@ -225,12 +231,41 @@ function splitTable(
   const thead = table.querySelector('thead')
   const theadHtml = thead ? thead.outerHTML : ''
   const theadHeight = thead ? mesure(thead) : 0
-  const tableOpen = buildOpenTag(table)
   const hauteurs = rows.map((r) => mesure(r))
-  return grouper(hauteurs, theadHeight, premier, plein).map((g) => ({
-    html: `${tableOpen}${theadHtml}<tbody>${g.map((i) => rows[i].outerHTML).join('')}</tbody></table>`,
+  const groupes = grouper(
+    hauteurs,
+    theadHeight,
+    premier,
+    plein,
+    MIN_LIGNES_TABLEAU,
+  )
+  // Colonnes FIGÉES sur tous les morceaux (relecture du 2026-10-03) : sans
+  // cela, chaque morceau recalculait ses largeurs (`table-layout: auto`) et
+  // les colonnes bougeaient d'une page à l'autre. Largeurs lues sur le
+  // tableau entier, en %, posées par `<colgroup>` + `table-layout: fixed`.
+  const colgroup = groupes.length > 1 ? colonnesFigees(table) : ''
+  const tableOpen =
+    colgroup !== ''
+      ? buildOpenTag(table, { style: 'table-layout: fixed' })
+      : buildOpenTag(table)
+  return groupes.map((g) => ({
+    html: `${tableOpen}${colgroup}${theadHtml}<tbody>${g.map((i) => rows[i].outerHTML).join('')}</tbody></table>`,
     height: theadHeight + g.reduce((s, i) => s + hauteurs[i], 0),
   }))
+}
+
+/** `<colgroup>` aux largeurs mesurées de la 1re ligne ('' si inconnues). */
+function colonnesFigees(table: HTMLTableElement): string {
+  const premiere = table.querySelector('tr')
+  if (!premiere) return ''
+  const largeurs = Array.from(premiere.children).map(
+    (c) => c.getBoundingClientRect().width,
+  )
+  const total = largeurs.reduce((a, b) => a + b, 0)
+  if (total <= 0 || largeurs.some((l) => l <= 0)) return ''
+  return `<colgroup>${largeurs
+    .map((l) => `<col style="width: ${((l / total) * 100).toFixed(2)}%">`)
+    .join('')}</colgroup>`
 }
 
 /* ─── Découpage des listes ─── */
@@ -577,7 +612,7 @@ export function paginate(
   function estIntroduction(el: Element, box: number): boolean {
     if (el.tagName.toLowerCase() !== 'p') return false
     if (el.querySelector('img, figure')) return false
-    if ((el.textContent ?? '').trim().endsWith(':')) return true
+    if (el.textContent.trim().endsWith(':')) return true
     const ligne = hauteurLigne(el)
     return ligne > 0 && box <= MAX_LIGNES_INTRODUCTION * ligne + 1
   }
@@ -604,7 +639,10 @@ export function paginate(
   ): Chunk[] | null {
     switch (kind(el)) {
       case 'table': {
-        if (getTableRows(el as HTMLTableElement).length < MIN_POUR_COUPER)
+        if (
+          getTableRows(el as HTMLTableElement).length <
+          2 * MIN_LIGNES_TABLEAU
+        )
           return null
         return splitTable(el as HTMLTableElement, premier, plein, mesure)
       }
@@ -646,11 +684,11 @@ export function paginate(
       case 'table': {
         const t = el as HTMLTableElement
         const rows = getTableRows(t)
-        if (rows.length < MIN_POUR_COUPER) return box
+        if (rows.length < 2 * MIN_LIGNES_TABLEAU) return box
         const thead = t.querySelector('thead')
         return (
           (thead ? mesure(thead) : 0) +
-          rows.slice(0, MIN_PAR_MORCEAU).reduce((s, r) => s + mesure(r), 0)
+          rows.slice(0, MIN_LIGNES_TABLEAU).reduce((s, r) => s + mesure(r), 0)
         )
       }
       case 'planche': {
@@ -769,7 +807,11 @@ export function paginate(
 
       // ─── Sinon, page suivante (avec ses titres), coupé si trop grand ───
       if (els.length > 0 && !isOnlyHeadings())
-        nouvellePageAvecTitres(tag === 'figure' || kind(child) === 'planche')
+        nouvellePageAvecTitres(
+          tag === 'figure' ||
+            kind(child) === 'planche' ||
+            kind(child) === 'etape',
+        )
       const dispo = maxHeightPx - pile(els) - ecart(els, mt)
       if (dispo < box) {
         const coupe2 = morceaux(child, dispo, maxHeightPx)

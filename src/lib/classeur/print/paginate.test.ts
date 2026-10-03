@@ -163,6 +163,17 @@ describe('paginate', () => {
     )
   })
 
+  it('(4 quater) jamais moins de 3 lignes de tableau sur une page', () => {
+    // En-tête 20 + 16 lignes de 20 = 340 : 14 + 2 → rééquilibré en 13 + 3.
+    const pages = paginate(conteneur(tableau(16)), 300, mesure)
+    expect(pages.length).toBeGreaterThan(1)
+    for (const page of pages) {
+      expect(
+        fragment(page.html).querySelectorAll('tbody tr').length,
+      ).toBeGreaterThanOrEqual(3)
+    }
+  })
+
   it('(5) un tableau de 3 lignes reste intact, déplacé entier sur la page suivante', () => {
     // 10 × 30 = 300 : page pleine ; le tableau (20 + 60 = 80) ne tient pas
     // et, avec moins de 4 lignes, il n'est jamais découpé (2 par morceau).

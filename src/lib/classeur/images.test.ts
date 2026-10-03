@@ -11,6 +11,7 @@ import {
   formaterOctets,
   imagesReferencees,
   IMAGE_A_INSERER,
+  ajustementApplique,
   ajustementDepuisTitre,
   cadreDepuisTitre,
   estImageAInserer,
@@ -474,5 +475,16 @@ Texte.
   it('lit le chemin d’une ligne Markdown', () => {
     expect(cheminDuJeton(`![x](${A} "petite")`)).toBe(A)
     expect(cheminDuJeton('du texte')).toBeNull()
+  })
+})
+
+describe('ajustement appliqué dans une case de planche', () => {
+  it('4:3 et 3:4 remplissent ; panorama et photo très haute restent entiers', () => {
+    expect(ajustementApplique('remplir', 4 / 3)).toBe('remplir')
+    expect(ajustementApplique('remplir', 3 / 4)).toBe('remplir')
+    expect(ajustementApplique('remplir', 4)).toBe('entiere')
+    expect(ajustementApplique('remplir', 1 / 3)).toBe('entiere')
+    expect(ajustementApplique('entiere', 4 / 3)).toBe('entiere')
+    expect(ajustementApplique('remplir', Number.NaN)).toBe('remplir')
   })
 })

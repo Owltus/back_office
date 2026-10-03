@@ -205,9 +205,13 @@
 .pdf-prose h4,
 .pdf-prose h5,
 .pdf-prose h6 {
+  /* Gras, JAMAIS soulignés (relecture visuelle du 2026-10-03 : le
+     soulignement « fait machine à écrire » et se confond avec un lien ;
+     Butterick, Bringhurst). Interligne serré : un titre sur deux lignes
+     reste un bloc. */
   color: #000;
-  text-decoration: underline;
-  text-underline-offset: 0.15em;
+  font-weight: 700;
+  line-height: 1.25;
 }
 .pdf-prose h1 {
   font-size: 13pt;
@@ -254,6 +258,13 @@
 .pdf-prose li {
   margin-bottom: 0.1cm;
 }
+/* Sous-liste : pas de marge de bloc, sinon un blanc plus grand s'ouvre
+   avant l'élément suivant du niveau parent. */
+.pdf-prose li > ul,
+.pdf-prose li > ol {
+  margin-top: 0.1cm;
+  margin-bottom: 0;
+}
 /* Listes imbriquées — styles différenciés par niveau */
 .pdf-prose ul ul {
   list-style-type: circle;
@@ -275,6 +286,28 @@
   display: flex;
   align-items: baseline;
   gap: 0.3cm;
+}
+/* Case NATIVE remplacée : le contrôle du navigateur héritait du thème
+   sombre de l'app et s'imprimait en carré NOIR PLEIN, lu comme coché
+   (relecture du 2026-10-03). Carré vide à bord noir, coche dessinée. */
+.pdf-prose li.task-list-item input[type='checkbox'] {
+  appearance: none;
+  flex: none;
+  width: 3.2mm;
+  height: 3.2mm;
+  margin: 0;
+  border: 0.75pt solid #000;
+  border-radius: 0.4mm;
+  background: #fff center / 80% no-repeat;
+  transform: translateY(0.45mm);
+}
+.pdf-prose li.task-list-item input[type='checkbox']:checked {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3 8.5l3.2 3.2L13 4.8' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+.pdf-prose code,
+.pdf-prose pre {
+  /* « === » devenait un « ≡ » (ligature de Cascadia Code). */
+  font-variant-ligatures: none;
 }
 .pdf-prose :not(pre) > code {
   font-family: 'Cascadia Code', Consolas, 'Courier New', monospace;
@@ -305,30 +338,36 @@
   width: 100%;
   border-collapse: collapse;
   margin-bottom: 0.35cm;
-  font-size: 9.5pt;
+  font-size: 9pt;
   table-layout: auto;
   word-break: break-word;
 }
 .pdf-prose thead {
   display: table-header-group;
 }
+/* Filets HORIZONTAUX seulement, plus serrés (relecture du 2026-10-03 ;
+   Butterick, Tufte) : la grille complète alourdissait, une ligne de 8 mm
+   en valait 6. Trait noir sous l'en-tête, gris entre les lignes. */
 .pdf-prose th {
-  background-color: #f5f5f5;
+  background-color: #f2f2f2;
   font-weight: 600;
   text-align: left;
-  padding: 4pt 6pt;
-  border: 0.75pt solid #ccc;
+  padding: 3pt 6pt;
+  border: 0;
+  border-bottom: 1pt solid #000;
 }
 .pdf-prose td {
-  padding: 4pt 6pt;
-  border: 0.75pt solid #ccc;
+  padding: 2.5pt 6pt;
+  border: 0;
+  border-bottom: 0.5pt solid #c4c4c4;
 }
+/* Encadré SIMPLE : trait gris fin, texte droit — il ne doit jamais peser
+   plus qu'un encadré typé (relecture du 2026-10-03). */
 .pdf-prose blockquote {
-  border-left: 2.5pt solid #000;
+  border-left: 1.5pt solid #999;
   margin: 0 0 0.35cm 0;
   padding-left: 0.4cm;
   color: #000;
-  font-style: italic;
 }
 /* Encadrés TYPÉS (`> [!WARNING]`…, `rehypeEncadres`, 2026-10-01) : en noir
    et blanc, le type se lit au MOT en tête et au trait, jamais à la couleur.
@@ -346,15 +385,17 @@
   border-left-width: 4pt;
 }
 .pdf-prose blockquote[data-encadre='important'] {
-  border-left-width: 4pt;
+  border-left: 4pt solid #000;
 }
-.pdf-prose blockquote[data-encadre='astuce'],
-.pdf-prose blockquote[data-encadre='note'] {
+.pdf-prose blockquote[data-encadre='astuce'] {
   border-left: 1.5pt solid #777;
 }
+.pdf-prose blockquote[data-encadre='note'] {
+  border-left: 1.5pt dashed #777;
+}
 .pdf-prose blockquote[data-encadre] > .encadre-titre {
-  margin: 0 0 0.08cm;
-  font-size: 7.5pt;
+  margin: 0 0 1mm;
+  font-size: 8pt;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -362,6 +403,13 @@
 .pdf-prose blockquote[data-encadre='astuce'] > .encadre-titre,
 .pdf-prose blockquote[data-encadre='note'] > .encadre-titre {
   color: #555;
+}
+/* Attention : le mot d'alerte est l'élément le plus saillant (ANSI
+   Z535.6), précédé du triangle. */
+.pdf-prose blockquote[data-encadre='attention'] > .encadre-titre::before {
+  content: '⚠\00a0';
+  font-size: 1.15em;
+  letter-spacing: 0;
 }
 .pdf-prose hr {
   border: none;
@@ -432,6 +480,19 @@
   max-height: 170mm;
   object-fit: contain;
 }
+.pdf-prose figure:not(:has(figcaption)) {
+  padding-bottom: 0.5cm;
+}
+/* Image dans une étape de liste : alignée sur le TEXTE de l'étape, pas
+   centrée sur l'item (iFixit, gabarits « Action | Photo » : l'œil descend
+   sur une seule verticale). */
+.pdf-prose li > figure {
+  text-align: left;
+}
+.pdf-prose li > figure .classeur-image-cadre,
+.pdf-prose li > figure > img {
+  margin-left: 0;
+}
 .pdf-prose figcaption {
   margin-top: 0.12cm;
   font-size: 8pt;
@@ -446,8 +507,7 @@
 .pdf-prose [data-bloc='photos'] {
   display: grid;
   grid-template-columns: repeat(var(--colonnes, 2), minmax(0, 1fr));
-  column-gap: 0.4cm;
-  row-gap: 0.3cm;
+  gap: 0.4cm;
   margin: 0 0 0.35cm;
 }
 .pdf-prose [data-bloc='photos'][data-colonnes='1'] {
@@ -543,6 +603,16 @@
 }
 .pdf-prose .classeur-image[data-genre='photo'] {
   --hmax: 90mm;
+}
+/* Une CAPTURE d'écran a souvent un fond clair qui se fond dans la page :
+   filet gris fin (même trait que les cases d'une planche). Pas sur les
+   photos. */
+.pdf-prose
+  :not([data-bloc='photos'])
+  > figure
+  > .classeur-image[data-genre='capture']
+  > .classeur-image-cadre {
+  outline: 0.5pt solid #c8c8c8;
 }
 .pdf-prose .classeur-image-cadre {
   display: block;
@@ -644,8 +714,7 @@
   justify-content: center;
   gap: 1.5mm;
   background: linear-gradient(160deg, #f3f3f3, #e6e6e6);
-  border: 0.75pt dashed #b5b5b5;
-  border-radius: 1mm;
+  border: 1pt dashed #999;
   box-sizing: border-box;
 }
 /* Ombre d'image : soleil et montagnes en gris doux, proportionnés à la case. */
@@ -655,14 +724,13 @@
   fill: #c4c4c4;
 }
 .pdf-prose .classeur-a-inserer-texte {
-  font-size: 7.5pt;
+  font-size: 8pt;
   font-style: normal;
-  color: #8a8a8a;
+  color: #666;
   letter-spacing: 0.02em;
 }
 .pdf-prose [data-bloc='photos'] > figure > .classeur-a-inserer {
-  border-style: dashed;
-  border-color: #9a9a9a;
+  border: 1pt dashed #999;
 }
 /* Dans une case : un seul trait, celui de la case. */
 .pdf-prose
@@ -700,6 +768,17 @@
 .pdf-prose svg[id^='classeur-mermaid-'] {
   max-width: 100%;
   height: auto;
+}
+/* Le diagramme vit dans un `pre` (bloc de code) : pas de fond gris ni de
+   cadre autour, le dessin se suffit (relecture du 2026-10-03). Étiquettes
+   des flèches sur fond blanc. */
+.pdf-prose pre:has(svg[id^='classeur-mermaid-']) {
+  background: none;
+  border: none;
+  padding: 0;
+}
+.pdf-prose svg[id^='classeur-mermaid-'] :is(.edgeLabel, .labelBkg) {
+  background-color: #fff !important;
 }
 .classeur-mermaid-error {
   border: 0.75pt dashed #999;
@@ -796,4 +875,13 @@
   [data-bloc='etape'][data-cote='gauche']:not([data-deroule])
   > .etape-photos {
   order: -1;
+}
+
+/* Les fonds gris (en-têtes de tableau, cases de planche, emplacements à
+   remplir, blocs de code) s'impriment même si « Graphiques d'arrière-plan »
+   est décoché dans Chrome (relecture du 2026-10-03). */
+.a4-page,
+.a4-page * {
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
 }

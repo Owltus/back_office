@@ -192,6 +192,22 @@ export function ajustementDepuisTitre(
 }
 
 /**
+ * Ajustement APPLIQUÉ dans une case de planche (relecture visuelle du
+ * 2026-10-03) : une image de format extrême (panorama, photo très haute)
+ * qui « remplirait » sa case 4:3 n'en montrerait qu'un tiers — c'est une
+ * perte d'information, pas un cadrage. Hors de [0,6 ; 2,4] (largeur ÷
+ * hauteur de la zone montrée), elle est gardée ENTIÈRE ; 4:3 et 3:4
+ * remplissent toujours leur case.
+ */
+export function ajustementApplique(
+  ajustement: AjustementImage,
+  ratio: number,
+): AjustementImage {
+  if (!Number.isFinite(ratio) || ratio <= 0) return ajustement
+  return ratio < 0.6 || ratio > 2.4 ? 'entiere' : ajustement
+}
+
+/**
  * EMPLACEMENT D'IMAGE à remplir (2026-10-01) : `![ce que la photo doit
  * montrer](a-inserer)` — un cadre gris « Image à insérer » sur la page, un
  * pré-rendu sans la photo (rédigé par une personne ou par un LLM). Un clic

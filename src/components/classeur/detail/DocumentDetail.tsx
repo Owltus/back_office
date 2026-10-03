@@ -68,6 +68,7 @@ import {
 import { usePageScale } from '#/lib/classeur/print/usePageScale.ts'
 import { alertesRelecture } from '#/lib/classeur/relecture.ts'
 import type { InfoPage } from '#/lib/classeur/relecture.ts'
+import type { PageData } from '#/lib/classeur/print/paginate.ts'
 import { mentionVersion } from '#/lib/classeur/print/mentionVersion.ts'
 import { titreOuDefaut } from '#/lib/classeur/sommaire.ts'
 import { cn } from '#/lib/utils.ts'
@@ -342,6 +343,25 @@ export function DocumentDetail() {
     [images.data],
   )
   const [pagesApercu, setPagesApercu] = useState<readonly InfoPage[]>([])
+  // Stable (useCallback) : `DocumentPages` rappelle `onPagination` quand il
+  // change — une fonction neuve à chaque rendu bouclerait.
+  const surPagination = useCallback(
+    (paginees: readonly PageData[]) =>
+      setPagesApercu(
+        paginees.map((p, n) => {
+          // Premier bloc de la page suivante, ramené à sa ligne SOURCE.
+          const m = /data-ligne="(\d+)"/.exec(paginees[n + 1]?.html ?? '')
+          return {
+            remplissage: p.remplissage,
+            saut: p.saut,
+            suivante: m
+              ? ligneRendueVersSource(contenuDiffere, Number(m[1]))
+              : undefined,
+          }
+        }),
+      ),
+    [contenuDiffere],
+  )
   const alertes = useMemo(
     () =>
       editing
@@ -377,7 +397,7 @@ export function DocumentDetail() {
       establishment={page.establishment}
       mention={mentionVersion(editing ? Date.now() : doc.updated_at)}
       onPageCount={setNbPages}
-      onPagination={setPagesApercu}
+      onPagination={surPagination}
     />
   )
 

@@ -60,7 +60,12 @@ export interface InfoImage {
 export interface InfoPage {
   remplissage?: number
   saut?: number
+  /** Ligne SOURCE du premier bloc de la page suivante (cause d'un vide). */
+  suivante?: number
 }
+
+/** Sous ce remplissage, une page (non finale, sans `===`) est signalée. */
+const REMPLISSAGE_MIN = 0.6
 
 /** Une étape de plus de ce nombre de mots est signalée (une action par étape). */
 const MOTS_PAR_ETAPE = 35
@@ -307,6 +312,19 @@ export function alertesRelecture(
       message: `Saut de page : la page d'avant n'est remplie qu'à ${String(Math.round(p.remplissage * 100))} %. Retirez-le si rien ne l'impose, la mise en page s'en charge.`,
     })
   }
+
+  // Pages à moitié vides SANS saut de page : le bloc suivant (image,
+  // planche, étape) ne tenait pas dans la place restante (relecture visuelle
+  // du 2026-10-03 : « le logiciel n'a pas su »). L'alerte pointe ce bloc.
+  pages.forEach((p, n) => {
+    if (n === pages.length - 1 || p.saut !== undefined) return
+    if (p.remplissage === undefined || p.remplissage >= REMPLISSAGE_MIN) return
+    if (p.suivante === undefined) return
+    alertes.push({
+      ligne: p.suivante,
+      message: `Page ${String(n + 1)} remplie à ${String(Math.round(p.remplissage * 100))} % : ce qui suit ne tenait pas dans la place restante. Une taille plus petite pour cette image, ou une étape plus courte, la ferait remonter.`,
+    })
+  })
 
   // Tableaux : blocs de lignes contiguës qui commencent par `|`.
   let i = 0

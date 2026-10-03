@@ -5,6 +5,7 @@ import { useImages } from '#/components/classeur/hooks/useImages.ts'
 import { classeurKeys } from '#/lib/classeur/keys.ts'
 import { estPhoto } from '#/lib/classeur/miseEnPageImage.ts'
 import {
+  ajustementApplique,
   ajustementDepuisTitre,
   cadreDepuisTitre,
   tailleDepuisTitre,
@@ -132,7 +133,10 @@ export function ImageDocument({
       className="classeur-image"
       data-taille={taille}
       data-genre={genre}
-      data-ajustement={ajustementDepuisTitre(title)}
+      data-ajustement={ajustementApplique(
+        ajustementDepuisTitre(title),
+        largeurPx / hauteurPx,
+      )}
       style={style}
     >
       <span className="classeur-image-cadre">{img}</span>

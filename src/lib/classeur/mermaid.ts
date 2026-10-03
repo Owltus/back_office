@@ -18,47 +18,42 @@ import type { Mermaid } from 'mermaid'
 type MermaidModule = Mermaid
 
 /**
- * Variables de thème alignées sur la palette slate/indigo de l'app, en
- * version claire (celle du papier).
+ * Variables de thème NOIR ET BLANC, comme le reste du document imprimé
+ * (relecture visuelle du 2026-10-03 : les nœuds bleu pastel détonnaient
+ * dans une procédure en noir et blanc, photocopiable).
  */
 const lightVars = {
-  // Nœuds principaux — bleu doux, cohérent avec le primary navy de l'app
-  primaryColor: '#dbeafe',
-  primaryTextColor: '#1e3a5f',
-  primaryBorderColor: '#93c5fd',
-  // Lignes et flèches
-  lineColor: '#475569',
-  // Nœuds secondaires — indigo très clair
-  secondaryColor: '#e0e7ff',
-  secondaryTextColor: '#1e3a5f',
-  secondaryBorderColor: '#a5b4fc',
-  // Nœuds tertiaires — slate neutre
-  tertiaryColor: '#f1f5f9',
-  tertiaryTextColor: '#0f172a',
-  tertiaryBorderColor: '#cbd5e1',
-  // Général
-  textColor: '#0f172a',
-  mainBkg: '#dbeafe',
-  nodeBorder: '#93c5fd',
-  clusterBkg: '#eff6ff',
-  clusterBorder: '#bfdbfe',
+  primaryColor: '#ffffff',
+  primaryTextColor: '#000000',
+  primaryBorderColor: '#000000',
+  lineColor: '#333333',
+  secondaryColor: '#f2f2f2',
+  secondaryTextColor: '#000000',
+  secondaryBorderColor: '#555555',
+  tertiaryColor: '#f7f7f7',
+  tertiaryTextColor: '#000000',
+  tertiaryBorderColor: '#888888',
+  textColor: '#000000',
+  mainBkg: '#ffffff',
+  nodeBorder: '#000000',
+  clusterBkg: '#f7f7f7',
+  clusterBorder: '#888888',
   edgeLabelBackground: '#ffffff',
-  titleColor: '#0f172a',
-  nodeTextColor: '#1e3a5f',
-  // Diagrammes de séquence
-  actorBkg: '#dbeafe',
-  actorTextColor: '#1e3a5f',
-  actorBorder: '#93c5fd',
-  actorLineColor: '#93c5fd',
-  signalColor: '#475569',
-  signalTextColor: '#0f172a',
-  labelBoxBkgColor: '#eff6ff',
-  labelTextColor: '#0f172a',
-  noteBkgColor: '#e0e7ff',
-  noteTextColor: '#1e3a5f',
-  noteBorderColor: '#a5b4fc',
-  activationBkgColor: '#dbeafe',
-  activationBorderColor: '#93c5fd',
+  titleColor: '#000000',
+  nodeTextColor: '#000000',
+  actorBkg: '#ffffff',
+  actorTextColor: '#000000',
+  actorBorder: '#000000',
+  actorLineColor: '#555555',
+  signalColor: '#333333',
+  signalTextColor: '#000000',
+  labelBoxBkgColor: '#f2f2f2',
+  labelTextColor: '#000000',
+  noteBkgColor: '#f2f2f2',
+  noteTextColor: '#000000',
+  noteBorderColor: '#888888',
+  activationBkgColor: '#f2f2f2',
+  activationBorderColor: '#555555',
 }
 
 /** Chargement unique (single-flight) : la promesse est partagée. */

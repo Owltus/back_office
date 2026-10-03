@@ -148,6 +148,17 @@ describe('alertesRelecture — blocs et pages (2026-10-01)', () => {
   it('du texte dans une planche', () => {
     expect(lignes(`:::photos\nRepérage\n![Vanne](${A})\n:::`, [A])).toEqual([2])
   })
+  it('page à moitié vide sans saut : alerte sur le bloc qui a sauté', () => {
+    const md = 'a\n\nb\n\nc'
+    const a = alertesRelecture(md, new Map(), [
+      { remplissage: 0.45, suivante: 5 },
+      { remplissage: 0.9, suivante: 7 },
+      { remplissage: 0.1 },
+    ])
+    expect(a).toHaveLength(1)
+    expect(a[0].ligne).toBe(5)
+    expect(a[0].message).toMatch(/Page 1 remplie à 45 %/)
+  })
   it('page presque vide à cause d’un saut de page : alerte sur le bon `===`', () => {
     const md = 'a\n\n===\n\nb\n\n===\n\nc'
     const a = alertesRelecture(md, new Map(), [
