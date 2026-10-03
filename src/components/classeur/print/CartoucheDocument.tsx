@@ -4,18 +4,20 @@ import {
 } from '#/lib/classeur/print/constants.ts'
 
 /*
- * CARTOUCHE d'un DOCUMENT (2026-10-03, demande utilisateur : « toucher au
- * header, un genre de cartouche, sans toucher à la hauteur des pages, que
- * pour les documents »). Il occupe EXACTEMENT la place de l'ancien en-tête :
- * titre (`HEADER_HEIGHT_MM`) + sous-titre (`SUBTITLE_HEIGHT_MM`), soit 19 mm
- * — la pagination (`DOCUMENT_CONTENT_HEIGHT_WITH_SUBTITLE_MM`) ne change
- * pas. Les autres pages (suivi, signature, intercalaire, sommaire) gardent
+ * EN-TÊTE d'un DOCUMENT (2026-10-03, demande utilisateur : « toucher au
+ * header sans toucher à la hauteur des pages, que pour les documents »).
+ * Il occupe EXACTEMENT la place de l'ancien en-tête : titre
+ * (`HEADER_HEIGHT_MM`) + sous-titre (`SUBTITLE_HEIGHT_MM`), soit 19 mm — la
+ * pagination (`DOCUMENT_CONTENT_HEIGHT_WITH_SUBTITLE_MM`) ne change pas. Les
+ * autres pages (suivi, signature, intercalaire, sommaire) gardent
  * `PageHeader`.
  *
- * Titre et description à gauche, case VERSION à droite ; cadre noir fin,
- * même trait que celui des images. Classeur, chapitre et établissement
- * restent dans le pied de page (décision utilisateur : pas de doublon) ;
- * la date aussi.
+ * Version SOBRE (retour utilisateur du même jour sur la première, encadrée
+ * avec une case grise : « très moche, la version a trop d'importance, le
+ * côté cartouche est trop fort ») : titre et description centrés comme
+ * avant, filet fin dessous, et le numéro de version en petite mention grise
+ * dans le coin haut droit. Classeur, chapitre, établissement et date restent
+ * au pied de page.
  */
 export function CartoucheDocument({
   title,
@@ -31,89 +33,62 @@ export function CartoucheDocument({
     <div
       className="pdf-cartouche"
       style={{
+        position: 'relative',
         height: `${String(hauteur)}mm`,
         flexShrink: 0,
         display: 'flex',
-        alignItems: 'stretch',
-        border: '0.75pt solid #000',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '1mm',
+        padding: '0 22mm',
+        borderBottom: '0.5pt solid #bbb',
         boxSizing: 'border-box',
+        textAlign: 'center',
       }}
     >
       <div
         style={{
-          flex: 1,
-          minWidth: 0,
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'center',
-          gap: '0.8mm',
-          padding: '0 4mm',
+          maxWidth: '100%',
+          fontSize: '14pt',
+          fontWeight: 700,
+          lineHeight: 1.2,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
         }}
       >
+        {title}
+      </div>
+      {subtitle && (
         <div
           style={{
-            fontSize: '14pt',
-            fontWeight: 700,
-            lineHeight: 1.15,
+            fontSize: '9.5pt',
+            lineHeight: 1.3,
+            color: '#555',
             overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
           }}
         >
-          {title}
+          {subtitle}
         </div>
-        {subtitle && (
-          <div
-            style={{
-              fontSize: '9pt',
-              lineHeight: 1.3,
-              color: '#555',
-              overflow: 'hidden',
-              display: '-webkit-box',
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: 'vertical',
-            }}
-          >
-            {subtitle}
-          </div>
-        )}
-      </div>
-      <div
+      )}
+      <span
         style={{
-          width: '24mm',
-          flexShrink: 0,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '0.6mm',
-          borderLeft: '0.75pt solid #000',
-          background: '#e2e2e2',
+          position: 'absolute',
+          top: '1.5mm',
+          right: 0,
+          fontSize: '7pt',
+          lineHeight: 1,
+          color: '#888',
+          fontVariantNumeric: 'tabular-nums',
+          whiteSpace: 'nowrap',
         }}
       >
-        <span
-          style={{
-            fontSize: '6.5pt',
-            fontWeight: 700,
-            letterSpacing: '0.12em',
-            textTransform: 'uppercase',
-            color: '#444',
-            lineHeight: 1,
-          }}
-        >
-          Version
-        </span>
-        <span
-          style={{
-            fontSize: '15pt',
-            fontWeight: 700,
-            lineHeight: 1,
-            fontVariantNumeric: 'tabular-nums',
-          }}
-        >
-          {version}
-        </span>
-      </div>
+        Version {version}
+      </span>
     </div>
   )
 }

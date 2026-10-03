@@ -1003,8 +1003,11 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
       débordement.
     - **CARTOUCHE + VERSION X.Y des documents (même jour, décision
       utilisateur)** : l'en-tête d'une page de DOCUMENT devient
-      `print/CartoucheDocument.tsx` (titre + description à gauche, case
-      « Version » grise à droite, cadre noir) dans EXACTEMENT les 19 mm de
+      `print/CartoucheDocument.tsx` — version SOBRE (la première, encadrée
+      avec une case grise, refusée : « très moche, version trop importante,
+      cartouche trop fort ») : titre et description CENTRÉS comme avant,
+      filet gris fin dessous, « Version 1.0 » en 7 pt gris dans le coin haut
+      droit — dans EXACTEMENT les 19 mm de
       l'ancien en-tête + sous-titre (`A4Page` prop `version`) — pagination
       inchangée ; les autres pages gardent `PageHeader`. Classeur, chapitre,
       établissement et date restent au pied (refus du doublon). Numéro
