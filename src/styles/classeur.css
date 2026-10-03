@@ -250,6 +250,24 @@
   margin-top: 0.4cm;
   margin-bottom: 0.1cm;
 }
+.pdf-prose h5 {
+  /* `#####` : petit intertitre — gras, à la taille du texte, gris foncé
+     (sans style propre, il paraissait plus gros que `####`). */
+  font-size: 9pt;
+  color: #444;
+  margin-top: 0.35cm;
+  margin-bottom: 0.1cm;
+}
+.pdf-prose h6 {
+  /* `######` : le plus petit — italique gris, à peine plus marqué que le
+     texte. */
+  font-size: 8.5pt;
+  font-weight: 600;
+  font-style: italic;
+  color: #555;
+  margin-top: 0.3cm;
+  margin-bottom: 0.1cm;
+}
 /* NUMÉRO D'ÉTAPE en pastille (`rehypePastilles`, 2026-10-03) : rond noir,
    chiffre blanc, devant un titre « 1. … » — signature des fiches iFixit. */
 .pdf-prose .etape-num {
