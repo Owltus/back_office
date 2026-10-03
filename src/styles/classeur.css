@@ -268,9 +268,33 @@
   margin-top: 0.3cm;
   margin-bottom: 0.1cm;
 }
-/* NUMÉRO D'ÉTAPE en pastille (`rehypePastilles`, 2026-10-03) : rond noir,
-   chiffre blanc, devant un titre « 1. … » — signature des fiches iFixit. */
+/* NUMÉROS DE TITRE (`rehypePastilles`, 2026-10-03) : un style PAR NIVEAU,
+   accordé à la forme du titre (demande utilisateur : « le rond ne
+   correspond pas à tous les modes ; plus stylisé et simple, en fonction du
+   contexte ») :
+     #       bloc noir collé à gauche du bandeau, chiffre blanc (onglet) ;
+     ##      chiffre gras, puis une fine barre verticale grise ;
+     ###     rond noir, chiffre blanc — l'étape de procédure (iFixit) ;
+     ####+   chiffre simple suivi d'un point, dans le style du titre. */
 .pdf-prose .etape-num {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+.pdf-prose h1 > .etape-num {
+  /* Le bloc remplit la hauteur du bandeau : marges négatives = son
+     rembourrage, la hauteur de la ligne ne change pas. */
+  display: inline-block;
+  background: #000;
+  color: #fff;
+  padding: 1.6mm 2.6mm;
+  margin: -1.6mm 2.4mm -1.6mm -2.5mm;
+}
+.pdf-prose h2 > .etape-num {
+  padding-right: 2.4mm;
+  margin-right: 2.2mm;
+  border-right: 1pt solid #b4b4b4;
+}
+.pdf-prose h3 > .etape-num {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -286,6 +310,14 @@
   font-weight: 700;
   line-height: 1;
   vertical-align: 0.1em;
+}
+/* « 1.2 » dans le rond : une pilule plus large, le chiffre respire. */
+.pdf-prose h3[data-etape*='.'] > .etape-num {
+  padding: 0 0.55em;
+  letter-spacing: 0.02em;
+}
+.pdf-prose :is(h4, h5, h6) > .etape-num::after {
+  content: '.';
 }
 /* Premier élément de chaque page paginée : pas de marge haute
    (s'applique au conteneur de mesure ET aux pages rendues) */

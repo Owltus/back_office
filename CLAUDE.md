@@ -990,8 +990,12 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
       `:::etape` l'a décalé ; (3) NUMÉROS EN PASTILLE
       (`print/rehypePastilles.ts` : TOUT niveau de titre `#` à `######`,
       élargi le même jour ; « 1. », « 1) », « 1.2 », « 1.2.3. », numéro en
-      gras « **4.** » compris — le titre est lu comme un seul texte ; rond
-      noir, Markdown inchangé ; années et « 3 vannes » sans point exclus) ; (4) classeur
+      gras « **4.** » compris — le titre est lu comme un seul texte ;
+      Markdown inchangé ; années et « 3 vannes » sans point exclus). Style
+      PAR NIVEAU (demande utilisateur : « le rond ne correspond pas à tous
+      les modes ») : `#` bloc noir collé à gauche du bandeau (onglet),
+      `##` chiffre gras + barre verticale grise, `###` rond noir (pilule
+      pour « 1.2 »), `####`+ chiffre suivi d'un point ; (4) classeur
       d'essai : TOUTES les images fictives remplacées par des emplacements
       (les 15 fichiers restent en médiathèque, « Non utilisées »).
       L'en-tête de page sera retravaillé plus tard À L'INITIATIVE de
