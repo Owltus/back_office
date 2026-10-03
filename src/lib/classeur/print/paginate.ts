@@ -995,6 +995,13 @@ export function paginate(
           els.push({ ...pageEl, html: reduit2, box: dispo })
           return
         }
+        // Une étape qui tient seule sur une page mais pas avec ses titres
+        // est DÉROULÉE (audit du 2026-10-04 : 232,6 mm + son titre
+        // poussaient le pied de page de 5 mm).
+        if (kind(child) === 'etape') {
+          traiterListe(derouler(child))
+          return
+        }
       }
       els.push(pageEl)
     })

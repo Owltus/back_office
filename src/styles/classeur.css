@@ -334,6 +334,15 @@
 .pdf-prose > div > :first-child {
   margin-top: 0 !important;
 }
+/* … ni de marge basse sous le DERNIER (audit du 2026-10-04) : `paginate`
+   ne la compte pas (« sans la basse du dernier »), mais la zone de
+   contenu est un élément flex, où cette marge ne fusionne pas — une page
+   pleine finissant sur un bloc de code (marge 3,5 mm) poussait le pied de
+   page de 2 à 3 mm, rogné à l'impression. */
+.pdf-prose > :last-child,
+.pdf-prose > div > :last-child {
+  margin-bottom: 0 !important;
+}
 .pdf-prose p {
   margin-bottom: 0.3cm;
   orphans: 3;

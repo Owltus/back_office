@@ -474,3 +474,19 @@ describe('audit du 2026-10-04 : aucun débordement', () => {
     expect(pages.map((p) => p.html).join('')).not.toContain('--hmax')
   })
 })
+
+describe('étape qui ne tient qu’à elle seule (audit du 2026-10-04)', () => {
+  it('titre + étape plus hauts qu’une page : l’étape est déroulée, rien ne déborde', () => {
+    const texte = paragraphes(6, 30, 'geste')
+    const html = `<h2 data-h="30">6. Étape longue</h2><div data-bloc="etape" data-photos="1" data-h="280"><div class="etape-texte">${texte}</div><div class="etape-photos"><figure data-h="100"><img alt=""></figure></div></div>`
+    const pages = paginate(conteneur(html), 300, mesure)
+    for (const p of pages) {
+      const f = fragment(p.html)
+      const h = Array.from(f.children).reduce((s, e) => s + mesure(e), 0)
+      expect(h).toBeLessThanOrEqual(300)
+    }
+    // Le titre ouvre la page de l'étape, avec son début.
+    expect(fragment(pages[0].html).querySelector('h2')).not.toBeNull()
+    expect(fragment(pages[0].html).querySelector('p')).not.toBeNull()
+  })
+})

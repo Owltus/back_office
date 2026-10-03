@@ -980,6 +980,30 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
       découpé, coupez-le en deux » (`InfoPage.schemas`). Fait établi : un
       organigramme de 33 étapes ne tient PAS lisiblement sur une page A4
       (≈ 3 pt) ; découper ou le scinder sont les seules voies.
+    - **AUDIT du 2026-10-04 (3 agents : versionnage, mise en page, rendu
+      vu par un utilisateur)** — corrigé (`12a2184` + suivant) :
+      versionnage (document neuf qui passait en 2.0, étapes comparées par
+      texte et ordre, négations, marqueurs/uuid hors décompte, plancher de
+      10 mots, écriture gardée par `updated_at` — `ecrireDocumentVersionne`),
+      remplacement d'image STRICT sur la ligne visée, pagination
+      (introduction emportée seulement si elle tient, schéma réduit aussi
+      sur la page neuve, réduction limitée au schéma direct d'un `pre`,
+      tranche jamais plus haute que la place, bandes = tout libellé),
+      pastilles (mesure « 2.5 tonnes » exclue, reste du titre en
+      `.titre-texte` sinon le `##` en flex perdait ses espaces), cache v3.
+      Deux DÉBORDEMENTS ANCIENS trouvés par un contrôle plus strict (hauteur
+      RÉELLE de `.pdf-prose` ≤ 236,6 mm et bas du pied ≤ 287,2 mm — le
+      contrôle « éléments sous le haut du pied » ne les voyait pas, le pied
+      étant poussé avec le contenu) : (1) la marge basse du DERNIER bloc
+      n'était pas annulée (zone de contenu en flex, pas de fusion) alors que
+      `paginate` ne la compte pas → `.pdf-prose > :last-child { margin-bottom:
+      0 !important }` ; (2) une étape qui tient seule sur une page mais pas
+      avec son titre était posée entière → déroulée. Contrôle strict : 22
+      documents (89, 79, 90-109) conformes. Remarques de l'audit visuel
+      NON appliquées (décisions utilisateur antérieures ou contenu) : V 1.0
+      pâle (opacité 0,3 demandée), pied de page (gardé), six niveaux de
+      titre, étapes du doc 89 à deux niveaux (`##`/`###` mélangés : contenu,
+      pas moteur), tableau de contrôle à remplir au stylo (lignes basses).
     - **REMPLACER une image (2026-10-03, « aussi simple que changer un
       texte »)** : barre de l'image → « Remplacer » (fichier de
       l'ordinateur ou image de la médiathèque, `ImagesDialog` en mode
