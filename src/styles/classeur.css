@@ -214,25 +214,39 @@
   line-height: 1.25;
 }
 .pdf-prose h1 {
-  font-size: 14pt;
-  margin-top: 0.7cm;
-  margin-bottom: 0.3cm;
+  /* `#` : grande PARTIE — capitales espacées, trait noir épais sur toute
+     la largeur (styles de titre d'une documentation technique, 2026-10-03,
+     demande utilisateur : un style par niveau). */
+  font-size: 13pt;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding-bottom: 1.2mm;
+  border-bottom: 1.5pt solid #000;
+  margin-top: 0.8cm;
+  margin-bottom: 0.35cm;
 }
 .pdf-prose h2 {
+  /* `##` : section — gras, filet gris fin sur toute la largeur. */
   font-size: 12.5pt;
-  margin-top: 0.55cm;
+  padding-bottom: 0.8mm;
+  border-bottom: 0.5pt solid #999;
+  margin-top: 0.6cm;
   margin-bottom: 0.25cm;
 }
 .pdf-prose h3 {
+  /* `###` : sous-section — gras, sans trait. */
   font-size: 11pt;
   margin-top: 0.45cm;
-  margin-bottom: 0.2cm;
+  margin-bottom: 0.15cm;
 }
 .pdf-prose h4 {
-  font-size: 10pt;
-  margin-top: 0.35cm;
-  margin-bottom: 0.15cm;
-  font-weight: 600;
+  /* `####` : intertitre — petites capitales espacées, gris foncé. */
+  font-size: 8.5pt;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #444;
+  margin-top: 0.4cm;
+  margin-bottom: 0.1cm;
 }
 /* NUMÉRO D'ÉTAPE en pastille (`rehypePastilles`, 2026-10-03) : rond noir,
    chiffre blanc, devant un titre « 1. … » — signature des fiches iFixit. */
