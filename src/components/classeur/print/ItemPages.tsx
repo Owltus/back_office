@@ -1,4 +1,8 @@
 import { CoverPage } from '#/components/classeur/print/CoverPage.tsx'
+import {
+  libelleVersion,
+  numeroDocument,
+} from '#/lib/classeur/versionDocument.ts'
 import { DocumentPages } from '#/components/classeur/print/DocumentPages.tsx'
 import { IntercalaireSheet } from '#/components/classeur/print/IntercalaireSheet.tsx'
 import { SignatureSheetPage } from '#/components/classeur/print/SignatureSheetPage.tsx'
@@ -45,6 +49,7 @@ export function ItemPages({
           subtitle={item.data.description}
           content={item.data.content}
           mention={mentionVersion(item.data.updated_at)}
+          version={libelleVersion(numeroDocument(item.data))}
           {...commun}
         />
       )

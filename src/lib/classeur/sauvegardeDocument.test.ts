@@ -51,9 +51,17 @@ vi.mock('#/lib/supabase.ts', () => {
       maybeSingle() {
         const l = base.ligne
         return Promise.resolve({
+          // La ligne entière : le numéro de version lit aussi titre,
+          // description, texte et numéro actuel avant d'écrire.
           data:
             l && filtres.id === l.id
-              ? { updated_at: l.updated_at, deleted_at: l.deleted_at }
+              ? {
+                  title: 'Titre',
+                  description: '',
+                  version_majeure: 1,
+                  version_mineure: 0,
+                  ...l,
+                }
               : null,
           error: null,
         })
@@ -80,6 +88,17 @@ describe('sauvegarderDocumentSiInchange', () => {
     const r = await sauvegarderDocumentSiInchange(17, { content: 'moi' }, V1)
     expect(r).toEqual({ statut: 'ok', updatedAt: 'T-nouveau' })
     expect(base.ligne?.content).toBe('moi')
+  })
+  it('le numéro de version est écrit AVEC le texte, depuis le numéro actuel', async () => {
+    await sauvegarderDocumentSiInchange(
+      17,
+      { content: 'avant\n\n### 1. Une étape\n\nNouvelle consigne complète.' },
+      V1,
+    )
+    const l = base.ligne as unknown as Record<string, unknown>
+    expect(l.version_majeure).toBe(2)
+    expect(l.version_mineure).toBe(0)
+    expect(l.version_raison).toBe('étape ajoutée')
   })
   it('un collègue a sauvegardé entre-temps : conflit, RIEN d’écrit', async () => {
     base.ligne!.updated_at = '2026-09-27T09:00:00.000001+00:00'

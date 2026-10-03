@@ -1,4 +1,8 @@
 import { FileText } from 'lucide-react'
+import {
+  libelleVersion,
+  numeroDocument,
+} from '#/lib/classeur/versionDocument.ts'
 
 import { ItemCardShell } from '#/components/classeur/cards/ItemCardShell.tsx'
 import type { ItemCardCommonProps } from '#/components/classeur/cards/ItemCardShell.tsx'
@@ -27,6 +31,7 @@ export function DocumentCard({
         subtitle={doc.description}
         content={doc.content}
         mention={mentionVersion(doc.updated_at)}
+        version={libelleVersion(numeroDocument(doc))}
         chapterName={commun.chapterName}
         classeurName={commun.classeurName}
         establishment={commun.establishment}

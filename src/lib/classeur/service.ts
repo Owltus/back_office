@@ -32,6 +32,7 @@ import type {
   PointKind,
 } from '#/lib/classeur/types.ts'
 import { ITEM_TABLE } from '#/lib/classeur/types.ts'
+import { evolutionVersion } from '#/lib/classeur/versionDocument.ts'
 
 // ---------------------------------------------------------------------------
 // Garde d'écriture : points de restauration automatiques
@@ -70,7 +71,7 @@ export const IMAGES_TABLE = 'classeur_images'
 const COLS_COMMUNES = 'id, uuid, sort_order, deleted_at, created_at, updated_at'
 const COLS_CLASSEUR = `${COLS_COMMUNES}, name, icon, etablissement, etablissement_complement, created_by, acces_tous`
 const COLS_CHAPTER = `${COLS_COMMUNES}, classeur_id, label, icon, description`
-const COLS_DOCUMENT = `${COLS_COMMUNES}, chapter_id, title, description, content`
+const COLS_DOCUMENT = `${COLS_COMMUNES}, chapter_id, title, description, content, version_majeure, version_mineure`
 const COLS_TRACKING = `${COLS_COMMUNES}, chapter_id, title, periodicite_id`
 const COLS_SIGNATURE = `${COLS_COMMUNES}, chapter_id, title, description, nombre`
 const COLS_INTERCALAIRE = `${COLS_COMMUNES}, chapter_id, title, description`
@@ -171,7 +172,7 @@ export async function fetchVersionsDocument(
   const { data, error } = await supabase
     .from('classeur_document_versions')
     .select(
-      'id, document_id, title, description, content, origine, auteur, created_at',
+      'id, document_id, title, description, content, origine, auteur, created_at, version, raison',
     )
     .eq('document_id', documentId)
     .order('created_at', { ascending: false })
@@ -687,6 +688,66 @@ export type ItemPatch = Partial<
   updated_at?: string
 }
 
+/** Champs du numéro de version d'un document (`versionDocument.ts`). */
+interface PatchVersion {
+  version_majeure?: number
+  version_mineure?: number
+  version_raison?: string
+}
+
+/**
+ * NUMÉRO DE VERSION (2026-10-03) : calculé ICI, au passage de TOUTE écriture
+ * d'un document par l'app (éditeur, import JSON, fusion, restauration), à
+ * partir de l'état ACTUEL en base — le numéro part donc toujours du numéro
+ * courant, et reprendre une ancienne version en donne un nouveau. La base
+ * fige numéro et raison dans l'historique et refuse qu'un numéro recule
+ * (`classeur_version_documents_2026-10-03.sql`).
+ */
+async function avecVersion(
+  id: number,
+  patch: Pick<ItemPatch, 'title' | 'description' | 'content'>,
+): Promise<PatchVersion> {
+  if (
+    patch.title === undefined &&
+    patch.description === undefined &&
+    patch.content === undefined
+  )
+    return {}
+  const { data: actuel, error } = await supabase
+    .from(ITEM_TABLE.document)
+    .select('title, description, content, version_majeure, version_mineure')
+    .eq('id', id)
+    .maybeSingle<{
+      title: string
+      description: string
+      content: string
+      version_majeure: number
+      version_mineure: number
+    }>()
+  if (error) throw error
+  if (!actuel) return {}
+  const apres = {
+    title: patch.title ?? actuel.title,
+    description: patch.description ?? actuel.description,
+    content: patch.content ?? actuel.content,
+  }
+  if (
+    apres.title === actuel.title &&
+    apres.description === actuel.description &&
+    apres.content === actuel.content
+  )
+    return {}
+  const e = evolutionVersion(actuel, apres, {
+    majeure: actuel.version_majeure,
+    mineure: actuel.version_mineure,
+  })
+  return {
+    version_majeure: e.suivante.majeure,
+    version_mineure: e.suivante.mineure,
+    version_raison: e.saut === 'aucun' ? 'correction de forme' : e.raison,
+  }
+}
+
 /** Annule la suppression douce, avec les champs du fichier s'il y en a (fusion). */
 export async function restaurerItem(
   kind: ItemKind,
@@ -694,9 +755,10 @@ export async function restaurerItem(
   patch: ItemPatch = {},
 ): Promise<void> {
   await avantEcriture({ kind, id })
+  const version = kind === 'document' ? await avecVersion(id, patch) : {}
   const { error } = await supabase
     .from(ITEM_TABLE[kind])
-    .update({ ...patch, deleted_at: null })
+    .update({ ...patch, ...version, deleted_at: null })
     .eq('id', id)
   if (error) throw error
 }
@@ -707,9 +769,10 @@ export async function updateItem(
   patch: ItemPatch,
 ): Promise<void> {
   await avantEcriture({ kind, id })
+  const version = kind === 'document' ? await avecVersion(id, patch) : {}
   const { error } = await supabase
     .from(ITEM_TABLE[kind])
-    .update(patch)
+    .update({ ...patch, ...version })
     .eq('id', id)
   if (error) throw error
 }
@@ -736,9 +799,10 @@ export async function sauvegarderDocumentSiInchange(
   base: string,
 ): Promise<ResultatSauvegarde> {
   await avantEcriture({ kind: 'document', id })
+  const version = await avecVersion(id, patch)
   const { data, error } = await supabase
     .from(ITEM_TABLE.document)
-    .update(patch)
+    .update({ ...patch, ...version })
     .eq('id', id)
     .eq('updated_at', base)
     .select('updated_at')

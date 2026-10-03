@@ -47,6 +47,8 @@ interface DocumentPagesProps {
   hidePagination?: boolean
   /** Date discrète sous le pied de page (jj/mm/aaaa, `mentionVersion`). */
   mention?: string
+  /** Numéro de version (« 2.3 ») : en-tête en CARTOUCHE. */
+  version?: string
   /** Nombre de pages, remonté à chaque pagination terminée (éditeur). */
   onPageCount?: (pages: number) => void
   /** Les pages paginées (remplissage, sauts) : relecture de l'éditeur. */
@@ -131,6 +133,7 @@ export function DocumentPages({
   establishment,
   hidePagination,
   mention,
+  version,
   onPageCount,
   onPagination,
 }: DocumentPagesProps) {
@@ -202,6 +205,7 @@ export function DocumentPages({
           classeurName={classeurName}
           establishment={establishment}
           mention={mention}
+          version={version}
         >
           <div dangerouslySetInnerHTML={{ __html: page.html }} />
         </A4Page>

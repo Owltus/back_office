@@ -187,6 +187,20 @@ function ListeVersions({
                   : 'border-transparent hover:bg-accent',
               )}
             >
+              {/* Numéro de version et sa raison (2026-10-03) ; vide pour
+                  l'historique antérieur au versionnage. */}
+              {v.version && (
+                <span className="flex items-baseline gap-2 text-xs">
+                  <span className="rounded bg-muted px-1.5 py-0.5 font-semibold tabular-nums text-foreground">
+                    v{v.version}
+                  </span>
+                  {v.raison && (
+                    <span className="truncate text-muted-foreground">
+                      {v.raison}
+                    </span>
+                  )}
+                </span>
+              )}
               <span className="block font-medium tabular-nums">
                 {quand(v.created_at)}
                 {i === 0 && (

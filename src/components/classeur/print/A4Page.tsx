@@ -14,6 +14,7 @@ import {
 } from '#/lib/classeur/print/constants.ts'
 import { PageFooter } from '#/components/classeur/print/PageFooter.tsx'
 import { PageHeader } from '#/components/classeur/print/PageHeader.tsx'
+import { CartoucheDocument } from '#/components/classeur/print/CartoucheDocument.tsx'
 
 interface A4PageProps {
   title: string
@@ -31,6 +32,12 @@ interface A4PageProps {
    * mise en page ne la voient pas.
    */
   mention?: string
+  /**
+   * Numéro de version d'un DOCUMENT (« 2.3 ») : l'en-tête devient le
+   * CARTOUCHE (titre, sous-titre, version), à hauteur identique — titre et
+   * sous-titre réunis. Absent : en-tête historique (autres pages).
+   */
+  version?: string
 }
 
 /*
@@ -53,6 +60,7 @@ export function A4Page({
   classeurName,
   establishment,
   mention,
+  version,
 }: A4PageProps) {
   return (
     <div
@@ -73,10 +81,19 @@ export function A4Page({
         position: 'relative',
       }}
     >
-      <PageHeader title={title} />
+      {version !== undefined ? (
+        <CartoucheDocument
+          title={title}
+          subtitle={subtitle}
+          version={version}
+        />
+      ) : (
+        <PageHeader title={title} />
+      )}
 
-      {/* Sous-titre — toujours présent si la prop est définie (même vide) */}
-      {subtitle !== undefined && (
+      {/* Sous-titre — toujours présent si la prop est définie (même vide) ;
+          dans le cartouche d'un document, il y est déjà. */}
+      {subtitle !== undefined && version === undefined && (
         <div
           className="dbg-subtitle"
           style={{

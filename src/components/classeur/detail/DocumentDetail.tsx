@@ -1,4 +1,9 @@
 import {
+  evolutionVersion,
+  libelleVersion,
+  numeroDocument,
+} from '#/lib/classeur/versionDocument.ts'
+import {
   Braces,
   History,
   PanelLeftClose,
@@ -405,6 +410,17 @@ export function DocumentDetail() {
   const titreAffiche = editing ? titreOuDefaut(titre) : titreOuDefaut(doc.title)
   const descriptionAffichee = editing ? description : doc.description
   const contenuAffiche = editing ? contenuDiffere : doc.content
+  // En édition, l'aperçu montre le numéro que PRENDRA l'enregistrement
+  // (calculé comme le fera le service, depuis le document en base).
+  const versionAffichee = libelleVersion(
+    editing
+      ? evolutionVersion(
+          doc,
+          { title: titre, description, content: contenuDiffere },
+          numeroDocument(doc),
+        ).suivante
+      : numeroDocument(doc),
+  )
   const pages = (
     <DocumentPages
       title={titreAffiche}
@@ -414,6 +430,7 @@ export function DocumentDetail() {
       classeurName={page.classeurName}
       establishment={page.establishment}
       mention={mentionVersion(editing ? Date.now() : doc.updated_at)}
+      version={versionAffichee}
       onPageCount={setNbPages}
       onPagination={surPagination}
     />
@@ -702,6 +719,7 @@ export function DocumentDetail() {
             classeurName={page.classeurName}
             establishment={page.establishment}
             mention={mentionVersion(doc.updated_at)}
+            version={libelleVersion(numeroDocument(doc))}
           />
         )}
       </PrintPreview>

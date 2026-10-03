@@ -82,6 +82,10 @@ export interface DbDocument {
   deleted_at: string | null
   created_at: string
   updated_at: string
+  /** Numéro de version X.Y (2026-10-03, `versionDocument.ts`). Absent d'un
+   * cache écrit avant ce jour : lire avec un repli 1.0. */
+  version_majeure?: number
+  version_mineure?: number
 }
 
 /** Ligne de `classeur_tracking_sheets` — feuille de suivi périodique. */
@@ -170,6 +174,10 @@ export interface DbDocumentVersion {
   origine: 'creation' | 'enregistrement' | 'etat_initial'
   auteur: string
   created_at: string
+  /** « 2.3 » ; vide pour l'historique antérieur au versionnage. */
+  version?: string
+  /** Pourquoi le numéro a bougé (« étape ajoutée »…). */
+  raison?: string
 }
 
 /**
