@@ -993,9 +993,11 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
       gras « **4.** » compris — le titre est lu comme un seul texte ;
       Markdown inchangé ; années et « 3 vannes » sans point exclus). Style
       PAR NIVEAU (demande utilisateur : « le rond ne correspond pas à tous
-      les modes ») : `#` bloc noir collé à gauche du bandeau (onglet),
-      `##` chiffre gras + barre verticale grise, `###` rond noir (pilule
-      pour « 1.2 »), `####`+ chiffre suivi d'un point ; (4) classeur
+      les modes », puis retouches du même jour) : `#` case GRISE chiffre
+      noir collée à gauche du bandeau, séparée par un filet blanc ; `##`
+      CARRÉ à bordures ouvert en bas, posé sur le trait de section qui le
+      ferme (`h2[data-etape]` en flex, carré étiré jusqu'au trait) ; `###`
+      petit carré à bordure ; `####`+ chiffre suivi d'un point ; (4) classeur
       d'essai : TOUTES les images fictives remplacées par des emplacements
       (les 15 fichiers restent en médiathèque, « Non utilisées »).
       L'en-tête de page sera retravaillé plus tard À L'INITIATIVE de
