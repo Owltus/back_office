@@ -39,11 +39,19 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
       },
     ],
     links: [
+      // Icônes (2026-10-03) : la lampe en SVG pour les onglets récents, le
+      // .ico pour tout ce qui demande `/favicon.ico` (favoris, historique,
+      // barre des tâches Windows), l'icône Apple et le manifeste pour un
+      // raccourci d'écran d'accueil. Jusque-là, le .ico et les PNG étaient
+      // encore ceux du modèle de départ (l'atome de React).
+      { rel: 'icon', href: '/favicon.ico', sizes: '48x48' },
       {
         rel: 'icon',
         type: 'image/svg+xml',
         href: '/favicon.svg',
       },
+      { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
+      { rel: 'manifest', href: '/manifest.json' },
       // Inter est AUTO-HÉBERGÉE depuis le 2026-09-20 (voir src/styles.css) :
       // plus aucune feuille de style tierce, donc plus aucune requête bloquante
       // vers un domaine que le réseau de l'hôtel peut filtrer. Ne pas
