@@ -155,7 +155,27 @@ async function rendreBrut(code: string): Promise<string> {
  * organigramme trop réduit dans son sens est essayé dans l'autre, le plus
  * lisible est gardé.
  */
-export async function renderMermaid(code: string): Promise<SchemaRendu> {
+export function renderMermaid(code: string): Promise<SchemaRendu> {
+  // Un même schéma n'est dessiné qu'UNE fois (carte, aperçu, éditeur,
+  // impression) — jusqu'à deux rendus quand il est retourné (audit du
+  // 2026-10-04). Un échec n'est pas gardé : le prochain affichage retente.
+  const connu = rendus.get(code)
+  if (connu) return connu
+  const promesse = rendreSchema(code).catch((err: unknown) => {
+    rendus.delete(code)
+    throw err
+  })
+  rendus.set(code, promesse)
+  if (rendus.size > 60) {
+    const plusAncien = rendus.keys().next().value
+    if (plusAncien !== undefined) rendus.delete(plusAncien)
+  }
+  return promesse
+}
+
+const rendus = new Map<string, Promise<SchemaRendu>>()
+
+async function rendreSchema(code: string): Promise<SchemaRendu> {
   const svg = await rendreBrut(code)
   const taille = tailleNaturelle(svg)
   if (taille && echelleAffichee(taille) < ECHELLE_LISIBLE) {

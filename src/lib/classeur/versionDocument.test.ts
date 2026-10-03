@@ -157,3 +157,47 @@ describe('numéro de version automatique', () => {
     expect(e.suivante).toEqual({ majeure: 2, mineure: 2 })
   })
 })
+
+describe('audit du 2026-10-04 : cas corrigés', () => {
+  const v = { majeure: 1, mineure: 0 }
+  const evo2 = (a: string, b: string) => evolutionVersion(doc(a), doc(b), v)
+  it('première rédaction d’un document vide : il reste en 1.0', () => {
+    const e = evo2('', 'Bonjour à tous, voici la consigne.')
+    expect(e.suivante).toEqual(v)
+    expect(e.raison).toBe('première rédaction')
+  })
+  it('deux étapes inversées → majeure', () => {
+    const a =
+      '1. Couper le courant\n2. Ouvrir le tableau\n3. Remplacer le fusible'
+    const b =
+      '1. Ouvrir le tableau\n2. Couper le courant\n3. Remplacer le fusible'
+    expect(evo2(a, b).raison).toBe('ordre des étapes modifié')
+  })
+  it('une négation ajoutée n’est jamais une correction de forme', () => {
+    const a = `${BASE}\nIl faut couper le courant avant toute intervention sur le tableau électrique.`
+    const b = `${BASE}\nIl ne faut pas couper le courant avant toute intervention sur le tableau électrique.`
+    expect(evo2(a, b).saut).toBe('mineur')
+    expect(evo2(a, b).raison).toMatch(/consigne/)
+  })
+  it('cocher une case, remplir un emplacement : pas de version majeure', () => {
+    const a = '- [ ] Vérifier la vanne\n- [ ] Noter la valeur'
+    expect(evo2(a, a.replace('- [ ] Vérifier', '- [x] Vérifier')).saut).toBe(
+      'aucun',
+    )
+    const e = '![Vanne](a-inserer)\n\nTexte court.'
+    expect(
+      evo2(
+        e,
+        e.replace('a-inserer', '5/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.webp'),
+      ).saut,
+    ).toBe('mineur')
+  })
+  it('puces passées en liste numérotée : simple mise en forme', () => {
+    const a = '- Ouvrir\n- Vérifier\n- Fermer'
+    const b = '1. Ouvrir\n2. Vérifier\n3. Fermer'
+    expect(evo2(a, b).saut).toBe('aucun')
+  })
+  it('document court : deux mots changés ne font pas une réécriture', () => {
+    expect(evo2('Fermer la porte.', 'Ouvrir la fenêtre.').saut).toBe('mineur')
+  })
+})

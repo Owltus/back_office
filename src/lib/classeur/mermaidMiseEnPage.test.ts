@@ -72,7 +72,11 @@ describe('mise en page des schémas Mermaid', () => {
     expect(coupesSchema(400, bandes, 250, 400)[0]).toBe(210)
   })
   it('une case plus haute que la place : coupe sous elle, sans boucler', () => {
-    expect(coupesSchema(500, [[10, 400]], 100, 100)).toEqual([10, 400])
+    // Aucune tranche plus haute que la place, même en coupant la case.
+    const coupes = coupesSchema(500, [[10, 400]], 100, 100)
+    const bornes = [0, ...coupes, 500]
+    for (let i = 1; i < bornes.length; i++)
+      expect(bornes[i] - bornes[i - 1]).toBeLessThanOrEqual(100)
   })
 })
 

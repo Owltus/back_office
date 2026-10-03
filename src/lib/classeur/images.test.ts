@@ -488,3 +488,18 @@ describe('ajustement appliqué dans une case de planche', () => {
     expect(ajustementApplique('remplir', Number.NaN)).toBe('remplir')
   })
 })
+
+describe('remplacement strict (audit du 2026-10-04)', () => {
+  it('ligne périmée et plusieurs emplacements : rien n’est remplacé', () => {
+    const v = 'Texte ajouté\n![A](a-inserer)\n\n![B](a-inserer)'
+    // L'utilisateur visait le 2e emplacement (ligne 3 avant l'ajout) :
+    // la ligne 3 est maintenant vide → refus, pas le 1er emplacement.
+    expect(remplacementImage(v, 'a-inserer', 3, '5/x.webp')).toBeNull()
+  })
+  it('ligne périmée mais occurrence unique : elle est remplacée', () => {
+    const v = 'Texte ajouté\n\n![A](5/a.webp "petite")'
+    expect(remplacementImage(v, '5/a.webp', 1, '5/b.webp')?.texte).toBe(
+      '![A](5/b.webp "petite")',
+    )
+  })
+})

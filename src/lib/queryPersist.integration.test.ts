@@ -17,7 +17,7 @@ import { brancherPersistance, changerDeCompte } from '#/lib/queryPersist.ts'
  * `pg_stat_statements` qui répondait sans rien mesurer).
  */
 
-const CLE = 'bo.query.cache.v2'
+const CLE = 'bo.query.cache.v3'
 
 function clientNeuf() {
   return new QueryClient({

@@ -263,3 +263,23 @@ describe('numéros d’étape en pastille', () => {
     expect(d.querySelectorAll('.etape-num')).toHaveLength(0)
   })
 })
+
+describe('pastilles : audit du 2026-10-04', () => {
+  it('une mesure n’est pas un numéro ; « A » de « Accès » n’est pas une unité', () => {
+    expect(
+      rendre('## 2.5 tonnes maximum').querySelector('.etape-num'),
+    ).toBeNull()
+    expect(rendre('## 1.5 m de hauteur').querySelector('.etape-num')).toBeNull()
+    expect(
+      rendre('### 1. Accès').querySelector('.etape-num')?.textContent,
+    ).toBe('1')
+  })
+  it('un titre numéroté mis en forme garde ses espaces (un seul bloc de texte)', () => {
+    const h = rendre('## 1. Vérifier **la vanne** principale').querySelector(
+      'h2',
+    )
+    expect(h?.querySelector('.titre-texte')?.textContent).toBe(
+      'Vérifier la vanne principale',
+    )
+  })
+})

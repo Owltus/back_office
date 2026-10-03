@@ -706,16 +706,18 @@ interface PatchVersion {
 async function avecVersion(
   id: number,
   patch: Pick<ItemPatch, 'title' | 'description' | 'content'>,
-): Promise<PatchVersion> {
+): Promise<{ version: PatchVersion; base?: string }> {
   if (
     patch.title === undefined &&
     patch.description === undefined &&
     patch.content === undefined
   )
-    return {}
+    return { version: {} }
   const { data: actuel, error } = await supabase
     .from(ITEM_TABLE.document)
-    .select('title, description, content, version_majeure, version_mineure')
+    .select(
+      'title, description, content, version_majeure, version_mineure, updated_at',
+    )
     .eq('id', id)
     .maybeSingle<{
       title: string
@@ -723,9 +725,10 @@ async function avecVersion(
       content: string
       version_majeure: number
       version_mineure: number
+      updated_at: string
     }>()
   if (error) throw error
-  if (!actuel) return {}
+  if (!actuel) return { version: {} }
   const apres = {
     title: patch.title ?? actuel.title,
     description: patch.description ?? actuel.description,
@@ -736,16 +739,56 @@ async function avecVersion(
     apres.description === actuel.description &&
     apres.content === actuel.content
   )
-    return {}
+    return { version: {} }
   const e = evolutionVersion(actuel, apres, {
     majeure: actuel.version_majeure,
     mineure: actuel.version_mineure,
   })
   return {
-    version_majeure: e.suivante.majeure,
-    version_mineure: e.suivante.mineure,
-    version_raison: e.saut === 'aucun' ? 'correction de forme' : e.raison,
+    version: {
+      version_majeure: e.suivante.majeure,
+      version_mineure: e.suivante.mineure,
+      version_raison: e.raison || 'correction de forme',
+    },
+    base: actuel.updated_at,
   }
+}
+
+/**
+ * Écrit un document AVEC son numéro de version, sans course (audit du
+ * 2026-10-04) : le numéro est calculé sur l'état lu, et l'écriture n'a
+ * lieu que si cet état n'a pas changé (`updated_at`) — sinon relecture et
+ * nouveau calcul. Sans cela, deux enregistrements rapprochés pouvaient
+ * porter le MÊME numéro pour deux textes différents.
+ */
+async function ecrireDocumentVersionne(
+  id: number,
+  patch: ItemPatch,
+  extra: Record<string, unknown> = {},
+): Promise<void> {
+  for (let essai = 0; essai < 3; essai++) {
+    const { version, base } = await avecVersion(id, patch)
+    const q = supabase
+      .from(ITEM_TABLE.document)
+      .update({ ...patch, ...version, ...extra })
+      .eq('id', id)
+    if (base === undefined) {
+      const { error } = await q
+      if (error) throw error
+      return
+    }
+    const { data, error } = await q.eq('updated_at', base).select('id')
+    if (error) throw error
+    if ((data as unknown[]).length > 0) return
+  }
+  // Trois écritures concurrentes de suite, ou un refus des droits : on
+  // écrit sans la garde (comportement d'avant le versionnage).
+  const { version } = await avecVersion(id, patch)
+  const { error } = await supabase
+    .from(ITEM_TABLE.document)
+    .update({ ...patch, ...version, ...extra })
+    .eq('id', id)
+  if (error) throw error
 }
 
 /** Annule la suppression douce, avec les champs du fichier s'il y en a (fusion). */
@@ -755,10 +798,13 @@ export async function restaurerItem(
   patch: ItemPatch = {},
 ): Promise<void> {
   await avantEcriture({ kind, id })
-  const version = kind === 'document' ? await avecVersion(id, patch) : {}
+  if (kind === 'document') {
+    await ecrireDocumentVersionne(id, patch, { deleted_at: null })
+    return
+  }
   const { error } = await supabase
     .from(ITEM_TABLE[kind])
-    .update({ ...patch, ...version, deleted_at: null })
+    .update({ ...patch, deleted_at: null })
     .eq('id', id)
   if (error) throw error
 }
@@ -769,10 +815,13 @@ export async function updateItem(
   patch: ItemPatch,
 ): Promise<void> {
   await avantEcriture({ kind, id })
-  const version = kind === 'document' ? await avecVersion(id, patch) : {}
+  if (kind === 'document') {
+    await ecrireDocumentVersionne(id, patch)
+    return
+  }
   const { error } = await supabase
     .from(ITEM_TABLE[kind])
-    .update({ ...patch, ...version })
+    .update(patch)
     .eq('id', id)
   if (error) throw error
 }
@@ -799,7 +848,7 @@ export async function sauvegarderDocumentSiInchange(
   base: string,
 ): Promise<ResultatSauvegarde> {
   await avantEcriture({ kind: 'document', id })
-  const version = await avecVersion(id, patch)
+  const { version } = await avecVersion(id, patch)
   const { data, error } = await supabase
     .from(ITEM_TABLE.document)
     .update({ ...patch, ...version })

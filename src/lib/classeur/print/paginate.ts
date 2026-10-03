@@ -325,6 +325,18 @@ function estSchemaDecoupe(el: Element): boolean {
   )
 }
 
+/**
+ * Le schéma porté DIRECTEMENT par ce bloc (le bloc lui-même ou le `pre` qui
+ * l'enveloppe) — jamais un schéma niché dans une liste ou un encadré, dont
+ * la réduction ne réduirait pas tout le bloc (audit du 2026-10-04).
+ */
+function schemaDirect(el: Element): Element | null {
+  if (el.matches('.classeur-mermaid')) return el
+  if (el.tagName.toLowerCase() === 'pre')
+    return el.querySelector(':scope > .classeur-mermaid')
+  return null
+}
+
 /** Navigateur : échelle d'affichage d'un schéma (largeur affichée ÷ naturelle). */
 function echelleSchemaCalculee(el: Element): number {
   const svg = el.querySelector('.classeur-mermaid > svg')
@@ -340,7 +352,11 @@ function echelleSchemaCalculee(el: Element): number {
 function bandesSchemaCalculees(el: Element): Array<readonly [number, number]> {
   const haut = el.getBoundingClientRect().top
   return Array.from(
-    el.querySelectorAll('svg g.node, svg g.edgeLabel, svg g.label'),
+    // `text` / `foreignObject` : les diagrammes de séquence n'ont pas de
+    // `g.node` (audit du 2026-10-04), mais tout libellé est l'un des deux.
+    el.querySelectorAll(
+      'svg g.node, svg g.edgeLabel, svg g.label, svg text, svg foreignObject',
+    ),
   )
     .map((n) => n.getBoundingClientRect())
     .filter((r) => r.height > 0)
@@ -680,18 +696,24 @@ export function paginate(
    * avant une figure ou une planche (`annonce`), aussi le court paragraphe
    * qui l'annonce et ses titres — jamais au point de vider la page.
    */
-  function nouvellePageAvecTitres(annonce = false) {
-    let intro: PageEl[] = []
+  function nouvellePageAvecTitres(annonce = false, besoin = 0) {
+    // Ce qu'on emporte doit TENIR avec le bloc sur la page neuve (audit du
+    // 2026-10-04 : une introduction emportée faisait déborder la page).
+    const tient = (emportes: PageEl[]) =>
+      besoin <= 0 || pile(emportes) + besoin <= maxHeightPx
+    let orphans: PageEl[] = []
     const dernier = els.at(-1)
     if (annonce && dernier?.intro) {
       const sansIntro = els.slice(0, -1)
       let k = sansIntro.length
       while (k > 0 && isHeading(sansIntro[k - 1].tag)) k--
-      if (k > 0) {
-        intro = els.splice(k)
-      }
+      if (k > 0 && tient(els.slice(k))) orphans = els.splice(k)
     }
-    const orphans = intro.length > 0 ? intro : removeTrailingHeadings()
+    if (orphans.length === 0) {
+      const titres = removeTrailingHeadings()
+      if (tient(titres)) orphans = titres
+      else els.push(...titres)
+    }
     finalizePage()
     els.push(...orphans)
   }
@@ -700,8 +722,11 @@ export function paginate(
   function estIntroduction(el: Element, box: number): boolean {
     if (el.tagName.toLowerCase() !== 'p') return false
     if (el.querySelector('img, figure')) return false
-    if (el.textContent.trim().endsWith(':')) return true
     const ligne = hauteurLigne(el)
+    // Fini par « : » : une introduction, mais pas un long paragraphe (deux
+    // fois la borne au plus).
+    if (el.textContent.trim().endsWith(':'))
+      return ligne === 0 || box <= 2 * MAX_LIGNES_INTRODUCTION * ligne + 1
     return ligne > 0 && box <= MAX_LIGNES_INTRODUCTION * ligne + 1
   }
 
@@ -713,9 +738,7 @@ export function paginate(
    */
   /** Plus petit facteur auquel un schéma « page » peut se réduire, ou null. */
   function reductionMinimale(el: Element): number | null {
-    const schema = el.matches('.classeur-mermaid')
-      ? el
-      : el.querySelector('.classeur-mermaid')
+    const schema = schemaDirect(el)
     if (!schema || schema.getAttribute('data-affichage') !== 'page') return null
     const echelle = echelleSchema(el)
     if (!(echelle > 0)) return null
@@ -728,17 +751,13 @@ export function paginate(
     box: number,
     reste: number,
   ): string | null {
-    const schema = el.matches('.classeur-mermaid')
-      ? el
-      : el.querySelector('.classeur-mermaid')
+    const schema = schemaDirect(el)
     if (!schema || schema.getAttribute('data-affichage') !== 'page') return null
     if (reste <= 0 || box <= 0 || reste >= box) return null
     const f = reste / box
     if (f < 0.7 || echelleSchema(el) * f < ECHELLE_LISIBLE) return null
     const copie = el.cloneNode(true) as Element
-    const cible = copie.matches('.classeur-mermaid')
-      ? copie
-      : copie.querySelector('.classeur-mermaid')
+    const cible = schemaDirect(copie)
     if (!cible) return null
     const style = cible.getAttribute('style') ?? ''
     cible.setAttribute(
@@ -961,12 +980,19 @@ export function paginate(
             kind(child) === 'planche' ||
             kind(child) === 'etape' ||
             child.querySelector('.classeur-mermaid') !== null,
+          debutMinimal(child) + mt,
         )
       const dispo = maxHeightPx - pile(els) - ecart(els, mt)
       if (dispo < box) {
         const coupe2 = morceaux(child, dispo, maxHeightPx)
         if (coupe2 !== null && coupe2.length > 1) {
           poserMorceaux(coupe2, tag, mt, mb)
+          return
+        }
+        // Sur la page neuve aussi, un schéma se réduit pour tenir.
+        const reduit2 = schemaReduit(child, box, dispo)
+        if (reduit2 !== null) {
+          els.push({ ...pageEl, html: reduit2, box: dispo })
           return
         }
       }

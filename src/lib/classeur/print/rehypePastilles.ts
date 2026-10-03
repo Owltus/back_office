@@ -21,6 +21,9 @@ import type { NoeudHast } from '#/lib/classeur/print/rehypeFigures.ts'
 /** « 1. », « 1) », « 1.2 », « 1.2. » ou « 1.2) » suivi d'une espace. */
 const NUMERO = /^(\d{1,6}(?:\.\d{1,6})+)[.)]?\s+|^(\d{1,6})[.)]\s+/
 const TITRES = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']
+/** Unité juste après le nombre : c'est une mesure, pas un numéro. */
+const UNITE =
+  /^(?:kg|g|t|tonnes?|m|cm|mm|km|l|litres?|ml|°c?|%|€|eur|h|min|s|bars?|kw|w|v|a)(?![\p{L}\p{N}])/iu
 
 /** Nœuds texte du titre, dans l'ordre (le numéro peut être en gras…). */
 function textes(n: NoeudHast, out: NoeudHast[] = []): NoeudHast[] {
@@ -49,8 +52,12 @@ function nettoyer(n: NoeudHast): void {
 function pastiller(titre: NoeudHast): void {
   // Le titre lu comme UN texte, quelle que soit sa mise en forme.
   const noeuds = textes(titre)
-  const m = NUMERO.exec(noeuds.map((t) => t.value ?? '').join(''))
+  const complet = noeuds.map((t) => t.value ?? '').join('')
+  const m = NUMERO.exec(complet)
   if (!m) return
+  // « 2.5 tonnes », « 1.5 m » : une MESURE, pas un numéro (audit du
+  // 2026-10-04).
+  if (UNITE.test(complet.slice(m[0].length))) return
   const numero = m[1] || m[2]
   // Le numéro (et l'espace qui le suit) est retiré, nœud après nœud.
   let reste = m[0].length
@@ -72,7 +79,15 @@ function pastiller(titre: NoeudHast): void {
       children: [{ type: 'text', value: numero }],
     },
     { type: 'text', value: ' ' },
-    ...(titre.children ?? []),
+    // Le reste du titre dans UN élément : un `##` numéroté est en flex
+    // (`classeur.css`), et chaque morceau en gras ou en italique y serait
+    // devenu une colonne, sans espaces (audit du 2026-10-04).
+    {
+      type: 'element',
+      tagName: 'span',
+      properties: { className: ['titre-texte'] },
+      children: titre.children ?? [],
+    },
   ]
   titre.properties = { ...titre.properties, dataEtape: numero }
 }

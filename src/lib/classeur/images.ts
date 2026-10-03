@@ -804,8 +804,17 @@ export function remplacementImage(
   ligne: number | undefined,
   nouveau: string,
 ): { debut: number; fin: number; texte: string } | null {
+  // STRICT (audit du 2026-10-04) : la ligne cliquée fait foi. Si le texte
+  // a bougé pendant l'envoi, on ne retombe sur une autre occurrence que si
+  // elle est UNIQUE — jamais « le premier emplacement du document », qui
+  // aurait rempli la mauvaise case (chemin `a-inserer` partagé).
   const t = trouverImage(valeur, ancien, ligne)
   if (!t) return null
+  if (ligne !== undefined) {
+    const numero = valeur.slice(0, t.debut).split('\n').length
+    const occurrences = valeur.split(`](${ancien}`).length - 1
+    if (numero !== ligne && occurrences > 1) return null
+  }
   return {
     debut: t.debut,
     fin: t.fin,

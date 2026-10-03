@@ -162,7 +162,9 @@ export function coupesSchema(
         c = coupee(y)
       }
       // … sauf une case qui commence avec le morceau et ne tient pas.
-      if (c) y = c[1]
+      // Jamais plus haut que la place : une case plus haute qu'une page
+      // est coupée à la limite (audit du 2026-10-04).
+      if (c) y = Math.min(c[1], limite)
     }
     coupes.push(y)
     depart = y

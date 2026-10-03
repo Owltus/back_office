@@ -445,3 +445,32 @@ describe('schémas Mermaid trop hauts (2026-10-03)', () => {
     ).toBeNull()
   })
 })
+
+describe('audit du 2026-10-04 : aucun débordement', () => {
+  const hauteurPage = (html: string) =>
+    Array.from(fragment(html).querySelectorAll('[data-h]')).reduce(
+      (s, e) => s + Number(e.getAttribute('data-h')),
+      0,
+    )
+  it('B1 : l’introduction emportée doit tenir avec sa figure, sinon elle reste', () => {
+    const html = `${paragraphes(2)}<h2 data-h="30">Titre</h2><p data-h="30">Voici :</p><figure data-h="260"><img alt=""></figure>`
+    const pages = paginate(conteneur(html), 300, mesure)
+    for (const p of pages) expect(hauteurPage(p.html)).toBeLessThanOrEqual(300)
+  })
+  it('B2 : sur la page neuve aussi, un schéma trop haut se réduit', () => {
+    const html = `${paragraphes(5)}<h1 data-h="30">T</h1><p data-h="30">Voici :</p><pre data-h="250"><div class="classeur-mermaid" data-affichage="page"><svg></svg></div></pre>`
+    const pages = paginate(conteneur(html), 300, mesure, {
+      echelleSchema: () => 0.72,
+    })
+    const derniere = pages.at(-1)!
+    // Titre + introduction (60) + schéma réduit à la place restante (240).
+    expect(derniere.html).toContain('--hmax')
+  })
+  it('B3 : un schéma niché dans une liste ne se « réduit » pas', () => {
+    const html = `<p data-h="230">x</p><ul><li data-h="20">a</li><li><div class="classeur-mermaid" data-affichage="page" data-h="60"><svg></svg></div></li></ul>`
+    const pages = paginate(conteneur(html), 300, mesure, {
+      echelleSchema: () => 1,
+    })
+    expect(pages.map((p) => p.html).join('')).not.toContain('--hmax')
+  })
+})

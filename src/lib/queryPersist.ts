@@ -47,14 +47,18 @@ import type { Query, QueryClient } from '@tanstack/react-query'
  *                   restauration (« carriedManual is not iterable »). Le
  *                   changement de version les jette, et `CLES_PERIMEES` les
  *                   efface du disque.
+ *   v3  2026-10-04  les documents du Classeur portent leur numéro de version
+ *                   (`version_majeure`/`version_mineure`) : un cache v2,
+ *                   restauré pendant une panne, aurait affiché et IMPRIMÉ
+ *                   « V 1.0 » pour tous (audit du 2026-10-04).
  */
-const VERSION_CACHE = 'v2'
+const VERSION_CACHE = 'v3'
 
 const CLE_STOCKAGE = `bo.query.cache.${VERSION_CACHE}`
 
 /** Clés des versions précédentes, à effacer au branchement : un cache que plus
  * personne ne lit n'a rien à faire sur un poste partagé. */
-const CLES_PERIMEES = ['bo.query.cache.v1']
+const CLES_PERIMEES = ['bo.query.cache.v1', 'bo.query.cache.v2']
 
 /**
  * Durée au-delà de laquelle un cache restauré est jeté.

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import type { ChangeEvent, ClipboardEvent, DragEvent, RefObject } from 'react'
 import { ImagePlus, Images, LayoutGrid, Loader2 } from 'lucide-react'
@@ -264,6 +264,14 @@ export function useInsertionImage({
     ligne?: number
   } | null>(null)
   const remplacerRef = useRef<HTMLInputElement>(null)
+  // Sélecteur fermé sans fichier : le remplacement en suspens est oublié.
+  useEffect(() => {
+    const champ = remplacerRef.current
+    if (!champ) return
+    const annuler = () => setARemplacer(null)
+    champ.addEventListener('cancel', annuler)
+    return () => champ.removeEventListener('cancel', annuler)
+  }, [])
 
   const appliquerRemplacement = useCallback(
     (cible: { chemin: string; ligne?: number }, nouveau: string): boolean => {
@@ -650,6 +658,12 @@ export function useInsertionImage({
     remplacerParFichier,
     choisirDansMediatheque,
     remplacementEnCours: aRemplacer !== null,
+    /** Médiathèque en mode INSERTION : oublie un remplacement resté en
+     * suspens (sélecteur de fichier annulé, audit du 2026-10-04). */
+    ouvrirMediatheque: () => {
+      setARemplacer(null)
+      setMediathequeOuverte(true)
+    },
     fermerMediatheque: () => {
       setMediathequeOuverte(false)
       setARemplacer(null)
@@ -788,7 +802,7 @@ export function BoutonsImage({ image }: { image: ImageInsertion }) {
         disabled={!image.actif}
         onPointerDown={(e) => e.preventDefault()}
         onMouseDown={(e) => e.preventDefault()}
-        onClick={() => image.setMediathequeOuverte(true)}
+        onClick={image.ouvrirMediatheque}
       />
     </ButtonGroup>
   )
