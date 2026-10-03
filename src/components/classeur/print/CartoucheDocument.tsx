@@ -90,7 +90,9 @@ export function CartoucheDocument({
           right: 0,
           fontSize: '7pt',
           lineHeight: 1,
-          color: '#888',
+          // Noir à 30 % (décision utilisateur), comme la date pâle du pied.
+          color: '#000',
+          opacity: 0.3,
           fontVariantNumeric: 'tabular-nums',
           whiteSpace: 'nowrap',
         }}
