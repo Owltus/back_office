@@ -382,14 +382,16 @@
 }
 /* Filets HORIZONTAUX seulement, plus serrés (relecture du 2026-10-03 ;
    Butterick, Tufte) : la grille complète alourdissait, une ligne de 8 mm
-   en valait 6. Trait noir sous l'en-tête, gris entre les lignes. */
+   en valait 6. Trait gris partout ; l'en-tête se lit à son fond et à sa
+   graisse. */
 .pdf-prose th {
   background-color: #f2f2f2;
   font-weight: 600;
   text-align: left;
   padding: 3pt 6pt;
   border: 0;
-  border-bottom: 1pt solid #000;
+  /* Gris comme les lignes (décision utilisateur : moins de traits noirs). */
+  border-bottom: 0.5pt solid #c4c4c4;
 }
 .pdf-prose td {
   padding: 2.5pt 6pt;

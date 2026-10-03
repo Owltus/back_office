@@ -20,7 +20,9 @@ import {
  * au pied de page.
  */
 /** Air ajouté sous le filet, pris DANS les 19 mm (2026-10-03, par paliers). */
-const ESPACE_SOUS_FILET_MM = 2
+// 3 mm : au-delà, une description sur deux lignes ne tiendrait plus dans
+// les 16 mm restants (titre 5,9 + écart 1 + 2 × 4,35 = 15,6 mm).
+const ESPACE_SOUS_FILET_MM = 3
 
 export function CartoucheDocument({
   title,
