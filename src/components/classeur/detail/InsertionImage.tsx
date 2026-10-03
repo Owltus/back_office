@@ -26,10 +26,12 @@ import {
 import type { Disposition } from '#/lib/classeur/disposition.ts'
 import {
   IMAGE_A_INSERER,
+  cheminDuJeton,
   estImage,
   formaterOctets,
   jetonImage,
   refusImageSource,
+  remplacementImage,
   retirerImageDuMarkdown,
   televerserImage,
   trouverImage,
@@ -220,6 +222,18 @@ export function useInsertionImage({
     [classeurId, editeurRef],
   )
 
+  /** Un fichier DÉPOSÉ sur un emplacement gris de l'aperçu le remplit. */
+  const remplirEmplacementAvec = useCallback(
+    (file: File, ligne: number | undefined, contexte: 'page' | 'planche') => {
+      const valeur = editeurRef.current?.value ?? contenu
+      const t = trouverImage(valeur, IMAGE_A_INSERER, ligne)
+      if (!t) return
+      setEmplacement({ ligne, alt: t.alt, taille: t.taille, contexte })
+      inserer(file)
+    },
+    [contenu, editeurRef, inserer],
+  )
+
   /** Étape 2 : conversion (cadre, rotation), envoi, insertion au curseur relevé. */
   const envoyer = useCallback(
     async (
@@ -310,6 +324,127 @@ export function useInsertionImage({
       invaliderImages,
       setContenu,
     ],
+  )
+
+  /**
+   * REMPLACER une image placée (2026-10-03, demande utilisateur : « aussi
+   * simple que de changer un texte ») : depuis la barre de l'image (un
+   * fichier de l'ordinateur ou une image de la médiathèque) ou en déposant
+   * un fichier SUR l'image de l'aperçu. Aucun dialogue : seul le fichier
+   * change, légende, taille, disposition et ajustement restent
+   * (`remplacementImage`) ; Ctrl + Z ramène l'ancienne, qui reste dans la
+   * médiathèque.
+   */
+  const [aRemplacer, setARemplacer] = useState<{
+    chemin: string
+    ligne?: number
+  } | null>(null)
+  const remplacerRef = useRef<HTMLInputElement>(null)
+
+  const appliquerRemplacement = useCallback(
+    (cible: { chemin: string; ligne?: number }, nouveau: string): boolean => {
+      const calculer = (valeur: string): Edition | null => {
+        const e = remplacementImage(valeur, cible.chemin, cible.ligne, nouveau)
+        return e
+          ? { ...e, selection: [e.debut, e.debut + e.texte.length] as const }
+          : null
+      }
+      const valeur = editeurRef.current?.value ?? contenu
+      if (calculer(valeur) === null) {
+        setEtat({
+          type: 'erreur',
+          message: "Cette image n'est plus dans le texte.",
+        })
+        return false
+      }
+      appliquerQuandLibre(
+        () => editeurRef.current,
+        (v) =>
+          calculer(v) ?? { debut: 0, fin: 0, texte: '', selection: [0, 0] },
+        () =>
+          setContenu((prev) => {
+            const e = calculer(prev)
+            return e ? appliquerEdition(prev, e) : prev
+          }),
+      )
+      return true
+    },
+    [contenu, editeurRef, setContenu],
+  )
+
+  /** Envoie le nouveau fichier puis le met à la place de l'ancien. */
+  const remplacerParFichier = useCallback(
+    async (cible: { chemin: string; ligne?: number }, file: File) => {
+      if (classeurId === null) return
+      const refus = refusImageSource(file)
+      if (refus) {
+        setEtat({ type: 'erreur', message: refus })
+        return
+      }
+      setEtat({ type: 'envoi', nom: file.name })
+      try {
+        const res = await televerserImage(classeurId, file)
+        void invaliderImages.invalidateQueries({
+          queryKey: classeurKeys.images(classeurId),
+        })
+        if (appliquerRemplacement(cible, res.image.chemin))
+          setEtat({
+            type: 'ok',
+            message:
+              "Image remplacée (légende, taille et place gardées ; l'ancienne reste dans la médiathèque).",
+          })
+      } catch (err) {
+        setEtat({
+          type: 'erreur',
+          message: messageErreur(err, 'Image impossible à remplacer'),
+        })
+      }
+    },
+    [appliquerRemplacement, classeurId, invaliderImages],
+  )
+
+  const remplacerDepuisOrdinateur = useCallback(
+    (chemin: string, ligne?: number) => {
+      setARemplacer({ chemin, ligne })
+      remplacerRef.current?.click()
+    },
+    [],
+  )
+  const remplacerDepuisMediatheque = useCallback(
+    (chemin: string, ligne?: number) => {
+      setARemplacer({ chemin, ligne })
+      setMediathequeOuverte(true)
+    },
+    [],
+  )
+  const onRemplacerChange = useCallback(
+    (e: ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.item(0)
+      e.target.value = ''
+      const cible = aRemplacer
+      setARemplacer(null)
+      if (file && cible) void remplacerParFichier(cible, file)
+    },
+    [aRemplacer, remplacerParFichier],
+  )
+  /** Choix dans la médiathèque : remplace si un remplacement est en cours. */
+  const choisirDansMediatheque = useCallback(
+    (markdown: string) => {
+      const cible = aRemplacer
+      const nouveau = cheminDuJeton(markdown)
+      setARemplacer(null)
+      setMediathequeOuverte(false)
+      if (cible && nouveau) {
+        if (appliquerRemplacement(cible, nouveau))
+          setEtat({
+            type: 'ok',
+            message: 'Image remplacée (légende, taille et place gardées).',
+          })
+        return
+      }
+      insererMarkdown(markdown)
+    },
+    [aRemplacer, appliquerRemplacement, insererMarkdown],
   )
 
   /**
@@ -564,6 +699,18 @@ export function useInsertionImage({
     },
     emplacement,
     remplirEmplacement,
+    remplirEmplacementAvec,
+    remplacerRef,
+    onRemplacerChange,
+    remplacerDepuisOrdinateur,
+    remplacerDepuisMediatheque,
+    remplacerParFichier,
+    choisirDansMediatheque,
+    remplacementEnCours: aRemplacer !== null,
+    fermerMediatheque: () => {
+      setMediathequeOuverte(false)
+      setARemplacer(null)
+    },
     ouvrirPlanche: () => plancheRef.current?.click(),
     /** À poser sur le `textarea`. */
     editeurProps: { onPaste, onDragOver, onDrop },
@@ -632,14 +779,16 @@ export function DialoguesImage({ image }: { image: ImageInsertion }) {
       {image.classeurId !== null && (
         <ImagesDialog
           open={image.mediathequeOuverte}
-          onOpenChange={image.setMediathequeOuverte}
+          onOpenChange={(ouvert) =>
+            ouvert
+              ? image.setMediathequeOuverte(true)
+              : image.fermerMediatheque()
+          }
           classeurId={image.classeurId}
           documentId={image.documentId}
           contenuCourant={image.contenu}
-          onInserer={(markdown) => {
-            image.insererMarkdown(markdown)
-            image.setMediathequeOuverte(false)
-          }}
+          onInserer={image.choisirDansMediatheque}
+          remplacement={image.remplacementEnCours}
           onImageSupprimee={image.retirerDuTexte}
         />
       )}
@@ -649,6 +798,13 @@ export function DialoguesImage({ image }: { image: ImageInsertion }) {
         accept="image/*"
         className="hidden"
         onChange={image.onInputChange}
+      />
+      <input
+        ref={image.remplacerRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={image.onRemplacerChange}
       />
       <input
         ref={image.plancheRef}

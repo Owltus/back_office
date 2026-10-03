@@ -1,9 +1,22 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { Crop, SlidersHorizontal, X } from 'lucide-react'
+import {
+  Crop,
+  FolderUp,
+  Images,
+  Replace,
+  SlidersHorizontal,
+  X,
+} from 'lucide-react'
 
 import { Tip } from '#/components/shared/Tip.tsx'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '#/components/ui/dropdown-menu.tsx'
 import type { Disposition } from '#/lib/classeur/disposition.ts'
 import type { AjustementImage, TailleImage } from '#/lib/classeur/images.ts'
 import { cn } from '#/lib/utils.ts'
@@ -19,6 +32,8 @@ import { cn } from '#/lib/utils.ts'
  * La barre suit l'image (remesurée pendant qu'elle est ouverte : la page se
  * repagine après chaque réglage), se ferme par Échap, la croix ou un clic
  * ailleurs. Icônes avec infobulle et `aria-label` ; cibles de 32 px.
+ * « Remplacer » (2026-10-03) : un autre fichier à la même place, sans
+ * dialogue — ou un fichier déposé directement sur l'image de l'aperçu.
  */
 
 export interface CibleBarre {
@@ -151,6 +166,8 @@ export function BarreImage({
   onAjuster,
   onRecadrer,
   onReglages,
+  onRemplacerOrdinateur,
+  onRemplacerMediatheque,
   onFermer,
 }: {
   cible: CibleBarre
@@ -164,6 +181,10 @@ export function BarreImage({
   }) => void
   onRecadrer: () => void
   onReglages: () => void
+  /** Remplacer l'image (seul le fichier change) : un fichier de l'ordinateur… */
+  onRemplacerOrdinateur: () => void
+  /** … ou une image déjà dans la médiathèque du classeur. */
+  onRemplacerMediatheque: () => void
   onFermer: () => void
 }) {
   const barreRef = useRef<HTMLDivElement>(null)
@@ -292,6 +313,34 @@ export function BarreImage({
         </>
       )}
       <Separateur />
+      <DropdownMenu>
+        <Tip label="Remplacer l'image (légende, taille et place gardées)">
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label="Remplacer l'image"
+              className={cn(
+                'inline-flex h-8 items-center justify-center gap-1 rounded-md px-2 text-xs font-medium transition-colors',
+                'text-muted-foreground hover:bg-accent hover:text-foreground',
+                'focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+              )}
+            >
+              <Replace className="size-4" />
+              Remplacer
+            </button>
+          </DropdownMenuTrigger>
+        </Tip>
+        <DropdownMenuContent align="center" sideOffset={6}>
+          <DropdownMenuItem onSelect={onRemplacerOrdinateur}>
+            <FolderUp />
+            Une photo de l'ordinateur…
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={onRemplacerMediatheque}>
+            <Images />
+            Une image du classeur…
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
       <Bouton label="Recadrer" onClick={onRecadrer}>
         <Crop className="size-4" />
       </Bouton>

@@ -268,6 +268,33 @@ describe('paginate', () => {
     ).toBe('Vanne')
   })
 
+  it('(9 bis) le titre et le court paragraphe qui ANNONCENT une figure la suivent', () => {
+    // 6 × 30 = 180 ; h2 30 + intro 30 → 240 ; la figure (120) ne tient pas.
+    const html = `${paragraphes(6)}<h2 data-h="30">Grande</h2><p data-h="30">Une phrase.</p><figure data-h="120"><img alt=""></figure>`
+    const pages = paginate(conteneur(html), 300, mesure, {
+      hauteurLigne: () => 15,
+    })
+    expect(pages).toHaveLength(2)
+    const p2 = fragment(pages[1].html)
+    expect(p2.querySelector('h2')?.textContent).toBe('Grande')
+    expect(p2.textContent).toContain('Une phrase.')
+    expect(fragment(pages[0].html).querySelector('h2')).toBeNull()
+  })
+
+  it('(9 ter) un long paragraphe reste ; une introduction seule sur sa page aussi', () => {
+    const long = `${paragraphes(4)}<p data-h="120">long</p><figure data-h="120"><img alt=""></figure>`
+    const pages = paginate(conteneur(long), 300, mesure, {
+      hauteurLigne: () => 15,
+    })
+    expect(fragment(pages[0].html).textContent).toContain('long')
+    // Rien d'autre sur la page : l'introduction ne la vide pas.
+    const seule = `<h2 data-h="30">T</h2><p data-h="200">Voici :</p><figure data-h="120"><img alt=""></figure>`
+    const p2 = paginate(conteneur(seule), 300, mesure, {
+      hauteurLigne: () => 15,
+    })
+    expect(fragment(p2[0].html).textContent).toContain('Voici :')
+  })
+
   it('(10) une planche se coupe ENTRE deux rangées, jamais au milieu', () => {
     // 2 colonnes, 6 photos de 100 → 3 rangées, écart 10 : 320 au total.
     // Après un paragraphe (30), il reste 270 : deux rangées (100 + 10 + 100).

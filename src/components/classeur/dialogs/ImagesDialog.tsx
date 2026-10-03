@@ -9,6 +9,7 @@ import {
   Loader2,
   Pencil,
   Plus,
+  Replace,
   Trash2,
   X,
 } from 'lucide-react'
@@ -76,6 +77,7 @@ export function ImagesDialog({
   documentId,
   contenuCourant,
   onInserer,
+  remplacement = false,
   onImageSupprimee,
 }: {
   open: boolean
@@ -87,6 +89,8 @@ export function ImagesDialog({
   contenuCourant?: string
   /** Mode insertion : rend le bouton « Insérer » de chaque carte. */
   onInserer?: (markdown: string) => void
+  /** Choisir la REMPLAÇANTE d'une image placée : « Choisir » au lieu d'« Insérer ». */
+  remplacement?: boolean
   /**
    * Une image vient d'être supprimée : l'éditeur ouvert retire aussi sa
    * référence du texte en cours de frappe (non sauvegardé).
@@ -236,8 +240,12 @@ export function ImagesDialog({
       >
         <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Images du classeur</DialogTitle>
+            <DialogTitle>
+              {remplacement ? "Remplacer l'image par…" : 'Images du classeur'}
+            </DialogTitle>
             <DialogDescription>
+              {remplacement &&
+                "Choisissez la nouvelle image : légende, taille et place de l'ancienne sont gardées. "}
               Une image appartient au classeur et peut servir dans plusieurs
               documents. « Non utilisées » liste celles qu'aucun document ne
               référence : c'est là que se cachent les fichiers morts.
@@ -448,8 +456,8 @@ export function ImagesDialog({
                               onInserer(markdownImage(img.nom, img.chemin))
                             }
                           >
-                            <Plus />
-                            Insérer
+                            {remplacement ? <Replace /> : <Plus />}
+                            {remplacement ? 'Choisir' : 'Insérer'}
                           </Button>
                         )}
                         {canWrite && !renomme && (

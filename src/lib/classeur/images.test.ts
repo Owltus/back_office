@@ -22,6 +22,8 @@ import {
   markdownImage,
   recadrageBorne,
   retirerImageDuMarkdown,
+  remplacementImage,
+  cheminDuJeton,
   usagesImages,
   refusImageSource,
   texteAlternatif,
@@ -433,5 +435,44 @@ describe('ajustement dans une case et emplacement à remplir', () => {
       taille: 'petite',
     })
     expect(imagesReferencees(texte)).toEqual([])
+  })
+})
+
+describe('remplacer une image', () => {
+  const A = '5/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.webp'
+  const B = '5/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb.webp'
+  const appliquer = (
+    v: string,
+    e: { debut: number; fin: number; texte: string },
+  ) => v.slice(0, e.debut) + e.texte + v.slice(e.fin)
+  it('seul le fichier change : légende, taille, ajustement et bloc gardés, cadre retiré', () => {
+    const v = `:::etape{photo=gauche}
+Texte.
+
+![Vanne](${A} "grande entiere cadre=10,10,50,50")
+:::`
+    const e = remplacementImage(v, A, undefined, B)!
+    expect(appliquer(v, e)).toBe(
+      `:::etape{photo=gauche}
+Texte.
+
+![Vanne](${B} "grande entiere")
+:::`,
+    )
+  })
+  it('la ligne départage deux occurrences ; image absente → null', () => {
+    const v = `![Un](${A})
+
+![Deux](${A} "petite")`
+    expect(appliquer(v, remplacementImage(v, A, 3, B)!)).toBe(
+      `![Un](${A})
+
+![Deux](${B} "petite")`,
+    )
+    expect(remplacementImage(v, B, undefined, A)).toBeNull()
+  })
+  it('lit le chemin d’une ligne Markdown', () => {
+    expect(cheminDuJeton(`![x](${A} "petite")`)).toBe(A)
+    expect(cheminDuJeton('du texte')).toBeNull()
   })
 })

@@ -85,6 +85,13 @@ export interface OutilsPagination {
 const MIN_PAR_MORCEAU = 2
 /** Un bloc est coupable s'il permet au moins deux morceaux. */
 const MIN_POUR_COUPER = MIN_PAR_MORCEAU * 2
+/**
+ * Un paragraphe de 3 lignes au plus (ou fini par « : ») qui précède une
+ * figure ou une planche l'ANNONCE : il la suit sur la page suivante plutôt
+ * que de rester seul en bas de page (2026-10-03 ; InDesign « conserver avec
+ * la suivante », guide de style Google « introduire l'image »).
+ */
+const MAX_LIGNES_INTRODUCTION = 3
 
 /* ─── Mesures par défaut (navigateur réel) ─── */
 
@@ -470,6 +477,8 @@ interface PageEl {
   box: number
   mt: number
   mb: number
+  /** Paragraphe court qui ANNONCE ce qui suit (voir `estIntroduction`). */
+  intro?: boolean
 }
 
 /** Espace occupé par une suite de blocs : boîtes + marges FUSIONNÉES. */
@@ -543,11 +552,34 @@ export function paginate(
     return orphans
   }
 
-  /** Nouvelle page en y emportant les titres qui terminaient la précédente. */
-  function nouvellePageAvecTitres() {
-    const orphans = removeTrailingHeadings()
+  /**
+   * Nouvelle page en y emportant les titres qui terminaient la précédente ;
+   * avant une figure ou une planche (`annonce`), aussi le court paragraphe
+   * qui l'annonce et ses titres — jamais au point de vider la page.
+   */
+  function nouvellePageAvecTitres(annonce = false) {
+    let intro: PageEl[] = []
+    const dernier = els.at(-1)
+    if (annonce && dernier?.intro) {
+      const sansIntro = els.slice(0, -1)
+      let k = sansIntro.length
+      while (k > 0 && isHeading(sansIntro[k - 1].tag)) k--
+      if (k > 0) {
+        intro = els.splice(k)
+      }
+    }
+    const orphans = intro.length > 0 ? intro : removeTrailingHeadings()
     finalizePage()
     els.push(...orphans)
+  }
+
+  /** Paragraphe court ou fini par « : » : il annonce le bloc qui suit. */
+  function estIntroduction(el: Element, box: number): boolean {
+    if (el.tagName.toLowerCase() !== 'p') return false
+    if (el.querySelector('img, figure')) return false
+    if ((el.textContent ?? '').trim().endsWith(':')) return true
+    const ligne = hauteurLigne(el)
+    return ligne > 0 && box <= MAX_LIGNES_INTRODUCTION * ligne + 1
   }
 
   function kind(
@@ -716,6 +748,7 @@ export function paginate(
 
       // ─── Le bloc tient sur la page courante ───
       if (pile([...els, pageEl]) <= maxHeightPx) {
+        if (estIntroduction(child, box)) pageEl.intro = true
         els.push(pageEl)
         return
       }
@@ -735,7 +768,8 @@ export function paginate(
       }
 
       // ─── Sinon, page suivante (avec ses titres), coupé si trop grand ───
-      if (els.length > 0 && !isOnlyHeadings()) nouvellePageAvecTitres()
+      if (els.length > 0 && !isOnlyHeadings())
+        nouvellePageAvecTitres(tag === 'figure' || kind(child) === 'planche')
       const dispo = maxHeightPx - pile(els) - ecart(els, mt)
       if (dispo < box) {
         const coupe2 = morceaux(child, dispo, maxHeightPx)

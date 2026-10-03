@@ -5,7 +5,7 @@ import {
   PanelLeftOpen,
   Pencil,
 } from 'lucide-react'
-import type { MouseEvent } from 'react'
+import type { DragEvent, MouseEvent } from 'react'
 import {
   useCallback,
   useMemo,
@@ -240,6 +240,58 @@ export function DocumentDetail() {
     [allerA, image, page.canWrite],
   )
 
+  // REMPLACER par dépôt (2026-10-03) : un fichier lâché SUR une image de
+  // l'aperçu la remplace (légende, taille, place gardées) ; sur un
+  // emplacement gris, il le remplit. Ailleurs, rien (le texte reçoit les
+  // dépôts d'insertion).
+  const cibleDepot = useCallback(
+    (e: DragEvent<HTMLDivElement>) => {
+      if (!page.canWrite || !(e.target instanceof Element)) return null
+      if (!e.dataTransfer.types.includes('Files')) return null
+      return e.target.closest<HTMLElement>(
+        '.a4-page img[data-chemin], .a4-page [data-a-inserer]',
+      )
+    },
+    [page.canWrite],
+  )
+  const surSurvolDepot = useCallback(
+    (e: DragEvent<HTMLDivElement>) => {
+      const cible = cibleDepot(e)
+      if (!cible) return
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'copy'
+    },
+    [cibleDepot],
+  )
+  const surDepot = useCallback(
+    (e: DragEvent<HTMLDivElement>) => {
+      const cible = cibleDepot(e)
+      const ta = editeurRef.current
+      if (!cible || !ta) return
+      e.preventDefault()
+      const file = Array.from(e.dataTransfer.files).find((f) =>
+        f.type.startsWith('image/'),
+      )
+      if (!file) return
+      const rendue = Number(
+        cible.closest<HTMLElement>('[data-ligne]')?.dataset.ligne,
+      )
+      const ligne =
+        Number.isFinite(rendue) && rendue >= 1
+          ? ligneRendueVersSource(ta.value, rendue)
+          : undefined
+      const chemin = cible.dataset.chemin
+      if (chemin) void image.remplacerParFichier({ chemin, ligne }, file)
+      else
+        image.remplirEmplacementAvec(
+          file,
+          ligne,
+          cible.closest('[data-bloc="photos"]') ? 'planche' : 'page',
+        )
+    },
+    [cibleDepot, image],
+  )
+
   // 16. Texte → aperçu : quand le curseur change de ligne, l'aperçu montre
   // le bloc correspondant s'il n'est pas déjà visible.
   useEffect(() => {
@@ -447,8 +499,10 @@ export function DocumentDetail() {
                 '[&_img[data-chemin]]:cursor-pointer [&_img[data-chemin]:hover]:outline-2 [&_img[data-chemin]:hover]:outline-offset-2 [&_img[data-chemin]:hover]:outline-primary',
               apercuMasque && 'hidden',
             )}
-            title="Cliquez sur un passage pour y aller dans le texte, ou sur une image pour la redimensionner ou la recadrer"
+            title="Cliquez sur un passage pour y aller dans le texte, ou sur une image pour la régler ; déposez un fichier sur une image pour la remplacer"
             onClick={surClicApercu}
+            onDragOver={surSurvolDepot}
+            onDrop={surDepot}
           >
             <div
               className="flex flex-col items-center gap-4 py-4"
@@ -491,6 +545,20 @@ export function DocumentDetail() {
                         }
                         onRecadrer={() => ouvrir(true)}
                         onReglages={() => ouvrir(false)}
+                        onRemplacerOrdinateur={() => {
+                          image.remplacerDepuisOrdinateur(
+                            barre.chemin,
+                            barre.ligne,
+                          )
+                          setBarre(null)
+                        }}
+                        onRemplacerMediatheque={() => {
+                          image.remplacerDepuisMediatheque(
+                            barre.chemin,
+                            barre.ligne,
+                          )
+                          setBarre(null)
+                        }}
                         onFermer={fermerBarre}
                       />
                     )

@@ -232,7 +232,13 @@ export function tailleDepuisTitre(
   if (!m) return 'auto'
   const n = Number(m[1])
   if (n < 10 || n >= 100) return 'auto'
-  return n <= 40 ? 'petite' : n <= 62 ? 'moyenne' : n <= 87 ? 'grande' : 'pleine'
+  return n <= 40
+    ? 'petite'
+    : n <= 62
+      ? 'moyenne'
+      : n <= 87
+        ? 'grande'
+        : 'pleine'
 }
 
 /**
@@ -767,4 +773,32 @@ export function jetonImage(
   ajustement: AjustementImage = 'remplir',
 ): string {
   return `![${nettoyerLegende(legende)}](${chemin}${titreImage(taille, cadre, ajustement)})`
+}
+
+/**
+ * REMPLACER une image (2026-10-03, demande utilisateur : « aussi simple que
+ * de changer un texte ») : seul le FICHIER change. Légende, taille et
+ * ajustement restent ; la disposition aussi, puisque le bloc qui l'entoure
+ * n'est pas touché. Le cadre est retiré : il visait l'ancienne image.
+ * Rend la plage à réécrire, `null` si l'image n'est plus dans le texte.
+ */
+export function remplacementImage(
+  valeur: string,
+  ancien: string,
+  ligne: number | undefined,
+  nouveau: string,
+): { debut: number; fin: number; texte: string } | null {
+  const t = trouverImage(valeur, ancien, ligne)
+  if (!t) return null
+  return {
+    debut: t.debut,
+    fin: t.fin,
+    texte: jetonImage(t.alt, nouveau, t.taille, null, t.ajustement),
+  }
+}
+
+/** Chemin de la première image d'une ligne Markdown (`![…](chemin "…")`). */
+export function cheminDuJeton(markdown: string): string | null {
+  const m = /!\[[^\]]*\]\(([^)\s]+)/.exec(markdown)
+  return m ? m[1] : null
 }
