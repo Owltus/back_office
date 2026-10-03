@@ -19,6 +19,9 @@ import {
  * dans le coin haut droit. Classeur, chapitre, établissement et date restent
  * au pied de page.
  */
+/** Air ajouté sous le filet, pris DANS les 19 mm (2026-10-03, par paliers). */
+const ESPACE_SOUS_FILET_MM = 2
+
 export function CartoucheDocument({
   title,
   subtitle,
@@ -34,7 +37,12 @@ export function CartoucheDocument({
       className="pdf-cartouche"
       style={{
         position: 'relative',
-        height: `${String(hauteur)}mm`,
+        // Le filet est REMONTÉ de `ESPACE_SOUS_FILET_MM` dans les 19 mm, qui
+        // deviennent une marge sous lui : plus d'air entre l'en-tête et le
+        // contenu (retour utilisateur), encombrement total INCHANGÉ — la
+        // zone de contenu et la pagination ne bougent pas.
+        height: `${String(hauteur - ESPACE_SOUS_FILET_MM)}mm`,
+        marginBottom: `${String(ESPACE_SOUS_FILET_MM)}mm`,
         flexShrink: 0,
         display: 'flex',
         flexDirection: 'column',
