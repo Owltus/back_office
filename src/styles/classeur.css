@@ -273,8 +273,9 @@
      #       case GRISE, chiffre noir, séparée du bandeau par un filet blanc ;
      ##      CARRÉ à bordures, ouvert en bas : le trait de la section, qui
              traverse la page, en forme le quatrième côté ;
-     ###     ROND à bordure (l'étape de procédure), qui s'étire en pilule
-             pour un numéro long (« 1.2 », « 1991 ») ;
+     ###     CARRÉ à bordure (l'étape de procédure), qui s'élargit en
+             rectangle pour un numéro long (« 1.2 », « 1991 ») — le rond
+             essayé a été refusé ;
      ####+   chiffre simple suivi d'un point, dans le style du titre. */
 .pdf-prose .etape-num {
   font-variant-numeric: tabular-nums;
@@ -319,7 +320,6 @@
   padding: 0 0.4em;
   margin-right: 0.2em;
   border: 1pt solid #000;
-  border-radius: 999px;
   font-size: 0.85em;
   font-weight: 700;
   line-height: 1;

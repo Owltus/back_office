@@ -997,7 +997,8 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
       noir collée à gauche du bandeau, séparée par un filet blanc ; `##`
       CARRÉ à bordures ouvert en bas, posé sur le trait de section qui le
       ferme (`h2[data-etape]` en flex, carré étiré jusqu'au trait) ; `###`
-      ROND à bordure, pilule pour un numéro long ; `####`+ chiffre suivi
+      CARRÉ à bordure, élargi pour un numéro long (le rond, essayé deux
+      fois, est refusé : ne pas le reproposer) ; `####`+ chiffre suivi
       d'un point. Numéros jusqu'à 6 chiffres par niveau (« 1991 »,
       « 123456 », décision utilisateur) : les cases s'élargissent
       (`white-space: nowrap`) ; une année suivie d'un point devient donc un
