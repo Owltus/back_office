@@ -991,13 +991,17 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
       (`print/rehypePastilles.ts` : TOUT niveau de titre `#` à `######`,
       élargi le même jour ; « 1. », « 1) », « 1.2 », « 1.2.3. », numéro en
       gras « **4.** » compris — le titre est lu comme un seul texte ;
-      Markdown inchangé ; années et « 3 vannes » sans point exclus). Style
+      Markdown inchangé ; « 3 vannes » sans point exclu). Style
       PAR NIVEAU (demande utilisateur : « le rond ne correspond pas à tous
       les modes », puis retouches du même jour) : `#` case GRISE chiffre
       noir collée à gauche du bandeau, séparée par un filet blanc ; `##`
       CARRÉ à bordures ouvert en bas, posé sur le trait de section qui le
       ferme (`h2[data-etape]` en flex, carré étiré jusqu'au trait) ; `###`
-      petit carré à bordure ; `####`+ chiffre suivi d'un point ; (4) classeur
+      ROND à bordure, pilule pour un numéro long ; `####`+ chiffre suivi
+      d'un point. Numéros jusqu'à 6 chiffres par niveau (« 1991 »,
+      « 123456 », décision utilisateur) : les cases s'élargissent
+      (`white-space: nowrap`) ; une année suivie d'un point devient donc un
+      numéro ; (4) classeur
       d'essai : TOUTES les images fictives remplacées par des emplacements
       (les 15 fichiers restent en médiathèque, « Non utilisées »).
       L'en-tête de page sera retravaillé plus tard À L'INITIATIVE de

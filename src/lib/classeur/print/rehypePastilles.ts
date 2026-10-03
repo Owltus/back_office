@@ -8,16 +8,18 @@
  *   « 1. Préparation », « 2) Intervention », « 1.2 Sous-partie »,
  *   « 1.2. Sous-partie », et aussi « **1.** Préparation » (numéro en gras).
  * Rien à écrire de plus : le Markdown reste « ### 1. Préparation », lisible
- * tel quel par Registre et par un LLM. Les années (« 2026. Bilan », plus de
- * deux chiffres) ne sont pas des numéros ; les listes numérotées gardent
- * leur numérotation propre.
+ * tel quel par Registre et par un LLM. Jusqu'à 6 chiffres par niveau
+ * (décision utilisateur : « 1991 » doit pouvoir s'afficher ; les cases
+ * s'élargissent, `classeur.css`) — une année suivie d'un point devient donc
+ * un numéro. Un nombre sans point ni parenthèse (« 3 vannes ») reste du
+ * texte ; les listes numérotées gardent leur numérotation propre.
  */
 
 import { estElement } from '#/lib/classeur/print/rehypeFigures.ts'
 import type { NoeudHast } from '#/lib/classeur/print/rehypeFigures.ts'
 
 /** « 1. », « 1) », « 1.2 », « 1.2. » ou « 1.2) » suivi d'une espace. */
-const NUMERO = /^(\d{1,2}(?:\.\d{1,2})+)[.)]?\s+|^(\d{1,2})[.)]\s+/
+const NUMERO = /^(\d{1,6}(?:\.\d{1,6})+)[.)]?\s+|^(\d{1,6})[.)]\s+/
 const TITRES = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']
 
 /** Nœuds texte du titre, dans l'ordre (le numéro peut être en gras…). */

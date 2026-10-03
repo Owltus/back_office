@@ -273,11 +273,15 @@
      #       case GRISE, chiffre noir, séparée du bandeau par un filet blanc ;
      ##      CARRÉ à bordures, ouvert en bas : le trait de la section, qui
              traverse la page, en forme le quatrième côté ;
-     ###     petit carré à bordure (l'étape de procédure) ;
+     ###     ROND à bordure (l'étape de procédure), qui s'étire en pilule
+             pour un numéro long (« 1.2 », « 1991 ») ;
      ####+   chiffre simple suivi d'un point, dans le style du titre. */
 .pdf-prose .etape-num {
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
+  /* Un numéro long (jusqu'à 6 chiffres par niveau) élargit sa case, il
+     ne se coupe jamais. */
+  white-space: nowrap;
 }
 .pdf-prose h1 > .etape-num {
   /* La case remplit la hauteur du bandeau (marges négatives = son
@@ -310,11 +314,12 @@
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  min-width: 1.45em;
-  height: 1.45em;
-  padding: 0 0.3em;
+  min-width: 1.5em;
+  height: 1.5em;
+  padding: 0 0.4em;
   margin-right: 0.2em;
   border: 1pt solid #000;
+  border-radius: 999px;
   font-size: 0.85em;
   font-weight: 700;
   line-height: 1;

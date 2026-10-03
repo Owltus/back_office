@@ -249,10 +249,17 @@ describe('numéros d’étape en pastille', () => {
     ).toEqual(['1.2', '1.2.3', '4'])
     expect(texte(d.querySelectorAll('h3')[1])).toBe('4 Gras')
   })
-  it('pas de pastille : année, numéro sans point, liste numérotée', () => {
-    const d = rendre(
-      '## 2026. Bilan\n\n## 3 vannes à contrôler\n\n1. Une étape de liste',
-    )
+  it('numéros longs : jusqu’à 6 chiffres par niveau', () => {
+    const d = rendre('# 1991. Fondation\n\n## 123456) Long\n\n### 2026.12 Mois')
+    expect(
+      [...d.querySelectorAll('.etape-num')].map((e) => e.textContent),
+    ).toEqual(['1991', '123456', '2026.12'])
+    expect(
+      rendre('## 1234567. Trop long').querySelector('.etape-num'),
+    ).toBeNull()
+  })
+  it('pas de pastille : nombre sans point, liste numérotée', () => {
+    const d = rendre('## 3 vannes à contrôler\n\n1. Une étape de liste')
     expect(d.querySelectorAll('.etape-num')).toHaveLength(0)
   })
 })
