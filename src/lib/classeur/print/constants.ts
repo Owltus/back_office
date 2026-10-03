@@ -96,3 +96,13 @@ export const PX_PER_MM = 3.7795275591
 export function mmToPx(mm: number): number {
   return mm * PX_PER_MM
 }
+
+/**
+ * Corps et interligne du texte des pages A4 — UNE source pour la page ET le
+ * conteneur de mesure de la pagination (s'ils divergeaient, la pagination
+ * serait fausse). 10 pt depuis le 2026-10-03 (décision utilisateur, relecture
+ * visuelle : 9 pt était sous la norme d'un document imprimé, 10-12 pt) ;
+ * interligne 1,45 (1,6 était trop lâche, Butterick 120-145 %).
+ */
+export const PAGE_FONT_SIZE = '10pt'
+export const PAGE_LINE_HEIGHT = 1.45

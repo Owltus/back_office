@@ -18,6 +18,8 @@ import {
   CONTENT_HEIGHT_MM,
   DOCUMENT_CONTENT_HEIGHT_WITH_SUBTITLE_MM,
   PAGE_FONT_FAMILY,
+  PAGE_FONT_SIZE,
+  PAGE_LINE_HEIGHT,
 } from '#/lib/classeur/print/constants.ts'
 import {
   REHYPE_CLASSEUR,
@@ -172,8 +174,8 @@ export function DocumentPages({
             width: `${contentWidthPx}px`,
             visibility: 'hidden',
             fontFamily: PAGE_FONT_FAMILY,
-            fontSize: '9pt',
-            lineHeight: 1.6,
+            fontSize: PAGE_FONT_SIZE,
+            lineHeight: PAGE_LINE_HEIGHT,
           }}
         >
           <ReactMarkdown

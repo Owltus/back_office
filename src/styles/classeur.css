@@ -214,22 +214,22 @@
   line-height: 1.25;
 }
 .pdf-prose h1 {
-  font-size: 13pt;
+  font-size: 14pt;
   margin-top: 0.7cm;
   margin-bottom: 0.3cm;
 }
 .pdf-prose h2 {
-  font-size: 11.5pt;
+  font-size: 12.5pt;
   margin-top: 0.55cm;
   margin-bottom: 0.25cm;
 }
 .pdf-prose h3 {
-  font-size: 10pt;
+  font-size: 11pt;
   margin-top: 0.45cm;
   margin-bottom: 0.2cm;
 }
 .pdf-prose h4 {
-  font-size: 9.5pt;
+  font-size: 10pt;
   margin-top: 0.35cm;
   margin-bottom: 0.15cm;
   font-weight: 600;

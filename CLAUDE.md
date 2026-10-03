@@ -933,6 +933,43 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
       2026-10-01 sur demande explicite de l'utilisateur. Contrôle : plus
       aucun « 4400 » en base hors le code postal 44000 du Registre de
       Sécurité.
+    - **Classeur d'ESSAI n° 24 « Essai mise en page (lorem ipsum) »
+      (2026-10-03, demande utilisateur)** : 3 chapitres (31, 32, 33),
+      documents 90 à 99, 15 images fictives dessinées (photos `PXL_…`,
+      captures) envoyées par `televerserImage`. Créé par l'assistant dans
+      Chrome avec la session de l'utilisateur ; à supprimer sur demande
+      (ce classeur et ses images seulement). Emplacement vide = silhouette
+      d'image (soleil + montagnes) sur fond gris.
+    - **REMPLACER une image (2026-10-03, « aussi simple que changer un
+      texte »)** : barre de l'image → « Remplacer » (fichier de
+      l'ordinateur ou image de la médiathèque, `ImagesDialog` en mode
+      `remplacement`), ou fichier DÉPOSÉ sur l'image de l'aperçu (sur un
+      emplacement gris : il le remplit). `remplacementImage` : seul le
+      chemin change, légende/taille/ajustement/disposition gardés, cadre
+      retiré ; Ctrl + Z ; l'ancienne reste en médiathèque.
+    - **Revue visuelle par 5 agents (2026-10-03)** sur les 31 pages du
+      classeur d'essai (captures PNG assemblées, zoom CSS 2,2 + `zoom`
+      d'outil en deux moitiés) : verdict 6-7/10 « propre mais outil
+      maison ». Corrigé : titres gras NON soulignés ; corps 10 pt /
+      interligne 1,45 (`PAGE_FONT_SIZE`/`PAGE_LINE_HEIGHT`, UNE source pour
+      la page et la mesure) ; cases à cocher vides (le contrôle natif
+      s'imprimait en carré NOIR, lu coché) ; pas de ligature dans le code ;
+      tableaux à filets horizontaux, plus serrés, colonnes FIGÉES entre
+      morceaux (`colgroup` mesuré + `table-layout: fixed`), 3 lignes min.
+      par morceau ; encadré simple plus léger que les typés, Note en
+      pointillé, ⚠ devant Attention ; capture bordée d'un filet gris ;
+      image d'une étape de liste alignée sur son texte ; panorama / photo
+      très haute gardés ENTIERS dans une case (`ajustementApplique`, hors
+      [0,6 ; 2,4]) ; fonds imprimés (`print-color-adjust: exact`) ; Mermaid
+      en noir et blanc sans cadre ; pagination : un paragraphe court
+      (≤ 3 lignes ou fini par « : ») qui ANNONCE une figure, une planche ou
+      une étape la suit sur la page suivante ; relecture : page remplie à
+      moins de 60 % sans `===`, pointée sur le bloc qui a sauté.
+      **Refusé par l'utilisateur** (pochettes plastique, pas de
+      perforation) : marge de reliure, en-tête réduit après la page 1, pied
+      de page refait — ne pas re-proposer. Écartés faute de source établie :
+      réduction automatique d'une image pour la faire tenir (aucun outil de
+      référence ne le fait), échelle constante des captures (à rediscuter).
   - Mesuré : PNG 3,2 Mo → WebP 106 ko en 610 ms. Non couvert, à dire si
     demandé : les points de restauration et la fusion JSON ignorent les
     fiches d'images ; les exports Markdown/JSON portent des chemins que

@@ -25,7 +25,11 @@ import { Kbd, KbdPlus, Shortcut } from '#/components/shared/Kbd.tsx'
 import { Dialog, DialogContent } from '#/components/ui/dialog.tsx'
 import { ImageAInserer } from '#/components/classeur/print/ImageDocument.tsx'
 import { estImageAInserer } from '#/lib/classeur/images.ts'
-import { PAGE_FONT_FAMILY } from '#/lib/classeur/print/constants.ts'
+import {
+  PAGE_FONT_FAMILY,
+  PAGE_FONT_SIZE,
+  PAGE_LINE_HEIGHT,
+} from '#/lib/classeur/print/constants.ts'
 import {
   REHYPE_CLASSEUR,
   REMARK_CLASSEUR,
@@ -106,8 +110,8 @@ function Exemple({ source }: { source: string }) {
           className="pdf-prose rounded-md border border-border bg-white px-3 py-2 text-black"
           style={{
             fontFamily: PAGE_FONT_FAMILY,
-            fontSize: '9.5pt',
-            lineHeight: 1.6,
+            fontSize: PAGE_FONT_SIZE,
+            lineHeight: PAGE_LINE_HEIGHT,
           }}
         >
           <ReactMarkdown
