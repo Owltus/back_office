@@ -32,10 +32,76 @@ import {
  * Mise à l'échelle : la page capturée est un CLONE (le document cloné par
  * html2canvas-pro), sorti de l'aperçu et posé en `fixed` en haut à gauche,
  * `transform`/`zoom` neutralisés : la capture fait toujours 210 × 297 mm,
- * quel que soit l'affichage de l'aperçu. Les AUTRES pages sont exclues du
- * clone (`ignoreElements`) : cloner N pages pour en capturer une serait N²
- * sur un classeur entier.
+ * quel que soit l'affichage de l'aperçu (zoom de l'écran compris).
+ *
+ * Performance (audit du 2026-10-04 : 64 pages gelaient l'onglet ~3 min,
+ * 1,2 puis 2 s par page et plus) : html2canvas-pro clone TOUT le document à
+ * chaque page, styles calculés compris, puis attend chaque image du clone.
+ * Or le corps de la page contient l'application entière sous le dialogue
+ * et les conteneurs de MESURE de chaque document (portails cachés, avec
+ * leurs images et leurs schémas). `filtreClone` ne garde que la chaîne des
+ * ancêtres de la page, la page elle-même, et les feuilles de style : le
+ * reste n'est jamais cloné. Entre deux pages, `rendreLaMain` laisse le
+ * navigateur afficher la progression et répondre (Annuler, Fermer).
+ *
+ * Annulation : `signal` (AbortSignal) est relu avant et après chaque page,
+ * et transmis à html2canvas-pro. Annulé, rien n'est enregistré et
+ * `PdfAnnule` est levée.
  */
+
+/** Levée quand la création est annulée (aucun fichier enregistré). */
+export class PdfAnnule extends Error {
+  constructor() {
+    super('Création du PDF annulée.')
+    this.name = 'PdfAnnule'
+  }
+}
+
+/** Balises toujours gardées dans le clone : ce sont les styles. */
+const BALISES_STYLE = new Set(['STYLE', 'LINK'])
+
+/**
+ * Filtre `ignoreElements` pour capturer `page` : vrai (= ne pas cloner)
+ * pour tout élément du CORPS qui ne contient pas la page et n'y est pas
+ * contenu. La tête du document (`head`, ses `style` et `link`) et tout
+ * `style`/`link` du corps sont gardés : la page en a besoin pour être
+ * dessinée comme à l'écran.
+ */
+export function filtreClone(page: HTMLElement): (el: Element) => boolean {
+  return (el) => {
+    if (el === page) return false
+    if (BALISES_STYLE.has(el.tagName)) return false
+    const body = el.ownerDocument.body as HTMLElement | null
+    // Hors du corps (tête, élément détaché) : jamais filtré.
+    if (!body || el === body || !body.contains(el)) return false
+    return !el.contains(page) && !page.contains(el)
+  }
+}
+
+/**
+ * Rend la main au navigateur (une tâche) : rendu de la progression,
+ * clics. `MessageChannel` plutôt que `setTimeout` : pas de bridage à 4 ms
+ * ni à 1 s quand l'onglet passe en arrière-plan.
+ */
+export function rendreLaMain(): Promise<void> {
+  return new Promise<void>((resolve) => {
+    if (typeof MessageChannel === 'undefined') {
+      setTimeout(resolve, 0)
+      return
+    }
+    const canal = new MessageChannel()
+    canal.port1.onmessage = () => {
+      canal.port1.close()
+      canal.port2.close()
+      resolve()
+    }
+    canal.port2.postMessage(null)
+  })
+}
+
+function verifierAnnulation(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) throw new PdfAnnule()
+}
 
 /** Qualité JPEG des pages (0,92 : texte net, ~300 à 800 ko par page). */
 export const QUALITE_JPEG = 0.92
@@ -49,8 +115,10 @@ export function echelleCapture(dpr: number | undefined): number {
 export interface OptionsCapture {
   scale: number
   backgroundColor: string
-  /** Pages à exclure du clone (toutes sauf celle capturée). */
+  /** Tout ce qui n'est ni la page, ni un de ses ancêtres, ni un style. */
   ignoreElements: (el: Element) => boolean
+  /** Annulation transmise à html2canvas-pro. */
+  signal?: AbortSignal
   onclone: (doc: Document, element: HTMLElement) => void
   useCORS: false
   allowTaint: false
@@ -90,6 +158,8 @@ export interface OptionsPdfDirect {
   onProgression?: (fait: number, total: number) => void
   /** Injection (tests) : par défaut html2canvas-pro et jspdf. */
   outils?: OutilsPdf
+  /** Annulation : arrêt entre deux pages, aucun fichier, `PdfAnnule`. */
+  signal?: AbortSignal
 }
 
 /** Nom du fichier téléchargé : « Classeur - Titre.pdf ». */
@@ -193,21 +263,26 @@ export function redessinerContoursMasques(
 /**
  * Produit et télécharge le PDF des pages A4 contenues dans `conteneur`.
  * Lève `MiseEnPageEnCours` si un document mesure encore au bout de 15 s,
- * et toute erreur de capture (aucun fichier partiel n'est enregistré).
+ * `PdfAnnule` si `signal` est annulé, et toute erreur de capture (aucun
+ * fichier partiel n'est enregistré).
  */
 export async function telechargerPdf(
   conteneur: HTMLElement,
   options: OptionsPdfDirect = {},
 ): Promise<{ pages: number; nom: string }> {
+  const { signal } = options
+  verifierAnnulation(signal)
   // AVANT tout : un document qui mesure encore manquerait au PDF.
   await attendrePagination(conteneur)
   const doc = conteneur.ownerDocument
   await attendrePolices(doc)
+  verifierAnnulation(signal)
 
   const pages = Array.from(conteneur.querySelectorAll<HTMLElement>('.a4-page'))
   if (pages.length === 0) throw new Error('Aucune page A4 trouvée')
 
   const outils = options.outils ?? (await outilsParDefaut())
+  verifierAnnulation(signal)
   const total = pages.length
   options.onProgression?.(0, total)
 
@@ -216,18 +291,31 @@ export async function telechargerPdf(
   const pdf = outils.creerPdf()
 
   for (let i = 0; i < total; i++) {
+    // Entre deux pages : le navigateur affiche la progression et traite un
+    // clic sur Annuler ou Fermer AVANT la capture suivante.
+    await rendreLaMain()
+    verifierAnnulation(signal)
     const page = pages[i]
-    const canvas = await outils.capturer(page, {
-      scale,
-      backgroundColor: '#ffffff',
-      ignoreElements: (el) => el !== page && el.classList.contains('a4-page'),
-      onclone: (_doc, clone) => isolerPageClonee(_doc, clone),
-      useCORS: false,
-      allowTaint: false,
-      logging: false,
-      windowWidth: Math.max(vue?.innerWidth ?? 0, 1200),
-      windowHeight: Math.max(vue?.innerHeight ?? 0, 1200),
-    })
+    let canvas: HTMLCanvasElement
+    try {
+      canvas = await outils.capturer(page, {
+        scale,
+        backgroundColor: '#ffffff',
+        ignoreElements: filtreClone(page),
+        onclone: (_doc, clone) => isolerPageClonee(_doc, clone),
+        useCORS: false,
+        allowTaint: false,
+        logging: false,
+        windowWidth: Math.max(vue?.innerWidth ?? 0, 1200),
+        windowHeight: Math.max(vue?.innerHeight ?? 0, 1200),
+        ...(signal ? { signal } : {}),
+      })
+    } catch (err) {
+      // html2canvas-pro lève sa propre erreur sur un signal annulé.
+      verifierAnnulation(signal)
+      throw err
+    }
+    verifierAnnulation(signal)
     const image = canvas.toDataURL('image/jpeg', QUALITE_JPEG)
     // Libère la mémoire de la page avant la suivante.
     canvas.width = 0
@@ -244,10 +332,10 @@ export async function telechargerPdf(
       'FAST',
     )
     options.onProgression?.(i + 1, total)
-    // Laisse respirer l'interface (progression affichée) entre deux pages.
-    await new Promise<void>((r) => setTimeout(r, 0))
   }
 
+  await rendreLaMain()
+  verifierAnnulation(signal)
   const nom = nomFichierPdf(options.nomFichier)
   pdf.save(nom)
   return { pages: total, nom }

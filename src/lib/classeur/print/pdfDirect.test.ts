@@ -3,8 +3,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { MiseEnPageEnCours } from '#/lib/classeur/print/buildPrintHtml.ts'
 import {
+  PdfAnnule,
   QUALITE_JPEG,
   echelleCapture,
+  filtreClone,
+  rendreLaMain,
   isolerPageClonee,
   nomFichierPdf,
   redessinerContoursMasques,
@@ -249,5 +252,150 @@ describe('echelleCapture', () => {
     expect(echelleCapture(Number.NaN)).toBe(2)
     expect(echelleCapture(2.5)).toBe(2.5)
     expect(echelleCapture(4)).toBe(3)
+  })
+})
+
+describe('filtreClone (audit du 2026-10-04 : 64 pages gelaient l’onglet)', () => {
+  it('ne garde que la page, ses ancêtres, son contenu et les styles', () => {
+    const lien = document.createElement('link')
+    document.head.appendChild(lien)
+    const app = document.createElement('div')
+    app.innerHTML = '<nav><a>menu</a></nav>'
+    const dialogue = document.createElement('div')
+    const defile = document.createElement('div')
+    const page = document.createElement('div')
+    page.className = 'a4-page'
+    page.innerHTML = '<p><img alt="x"></p>'
+    const autre = document.createElement('div')
+    autre.className = 'a4-page'
+    defile.append(page, autre)
+    dialogue.appendChild(defile)
+    // Conteneur de mesure d'un document, posé par portail dans body.
+    const mesure = document.createElement('div')
+    mesure.innerHTML = '<img alt="m"><svg></svg>'
+    const style = document.createElement('style')
+    document.body.append(app, dialogue, mesure, style)
+
+    const ignorer = filtreClone(page)
+    for (const garde of [
+      document.head,
+      lien,
+      dialogue,
+      defile,
+      page,
+      page.querySelector('p') as Element,
+      page.querySelector('img') as Element,
+      style,
+      document.createElement('span'), // détaché
+    ]) {
+      expect(ignorer(garde)).toBe(false)
+    }
+    for (const exclu of [
+      app,
+      app.querySelector('a') as Element,
+      autre,
+      mesure,
+      mesure.querySelector('img') as Element,
+    ]) {
+      expect(ignorer(exclu)).toBe(true)
+    }
+  })
+})
+
+/** Une tâche posée « par le navigateur » (clic, rendu) : un message. */
+function poserTache(fn: () => void): void {
+  const canal = new MessageChannel()
+  canal.port1.onmessage = () => {
+    canal.port1.close()
+    fn()
+  }
+  canal.port2.postMessage(null)
+}
+
+describe('telechargerPdf — rendre la main et annuler', () => {
+  it('une tâche du navigateur passe entre deux captures', async () => {
+    const j = journalVide()
+    const vus: boolean[] = []
+    let tache = false
+    const outils = faux(j)
+    const capturer = outils.capturer
+    outils.capturer = async (page, o) => {
+      vus.push(tache)
+      tache = false
+      poserTache(() => {
+        tache = true
+      })
+      return capturer(page, o)
+    }
+    await telechargerPdf(apercu(['1', '2', '3']), { outils })
+    expect(vus).toEqual([false, true, true])
+  })
+
+  it('rendreLaMain se résout après une tâche', async () => {
+    let tache = false
+    poserTache(() => {
+      tache = true
+    })
+    await Promise.resolve()
+    expect(tache).toBe(false)
+    await rendreLaMain()
+    expect(tache).toBe(true)
+  })
+
+  it('annulé avant de commencer : PdfAnnule, rien capturé', async () => {
+    const j = journalVide()
+    const ctrl = new AbortController()
+    ctrl.abort()
+    await expect(
+      telechargerPdf(apercu(['1']), { outils: faux(j), signal: ctrl.signal }),
+    ).rejects.toBeInstanceOf(PdfAnnule)
+    expect(j.capturees).toEqual([])
+    expect(j.sauve).toEqual([])
+  })
+
+  it('annulé après la page 1 : arrêt entre deux pages, aucun fichier', async () => {
+    const j = journalVide()
+    const ctrl = new AbortController()
+    await expect(
+      telechargerPdf(apercu(['1', '2', '3']), {
+        outils: faux(j),
+        signal: ctrl.signal,
+        onProgression: (fait) => {
+          if (fait === 1) ctrl.abort()
+        },
+      }),
+    ).rejects.toBeInstanceOf(PdfAnnule)
+    expect(j.capturees).toEqual(['1'])
+    expect(j.sauve).toEqual([])
+  })
+
+  it('annulé après la dernière page : aucun fichier', async () => {
+    const j = journalVide()
+    const ctrl = new AbortController()
+    await expect(
+      telechargerPdf(apercu(['1', '2']), {
+        outils: faux(j),
+        signal: ctrl.signal,
+        onProgression: (fait, total) => {
+          if (fait === total) ctrl.abort()
+        },
+      }),
+    ).rejects.toBeInstanceOf(PdfAnnule)
+    expect(j.sauve).toEqual([])
+  })
+
+  it('signal transmis à la capture ; son erreur d’abandon devient PdfAnnule', async () => {
+    const j = journalVide()
+    const ctrl = new AbortController()
+    const outils = faux(j)
+    outils.capturer = async (_p, o) => {
+      j.options.push(o)
+      ctrl.abort()
+      throw new DOMException('aborted', 'AbortError')
+    }
+    await expect(
+      telechargerPdf(apercu(['1']), { outils, signal: ctrl.signal }),
+    ).rejects.toBeInstanceOf(PdfAnnule)
+    expect(j.options[0].signal).toBe(ctrl.signal)
   })
 })

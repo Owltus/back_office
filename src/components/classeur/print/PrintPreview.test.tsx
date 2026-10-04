@@ -41,6 +41,7 @@ let imprimes: string[] = []
 
 beforeEach(() => {
   imprimes = []
+  pdfMock.mockReset()
   resoudreMermaid = null
   const original = document.body.appendChild.bind(document.body)
   vi.spyOn(document.body, 'appendChild').mockImplementation(
@@ -83,8 +84,7 @@ function Apercu() {
   )
 }
 
-const bouton = () =>
-  screen.getByRole('button', { name: /Imprimer ou enregistrer en PDF/ })
+const bouton = () => screen.getByRole('button', { name: /^Imprimer$/ })
 
 describe('PrintPreview — jamais d’impression avant la fin de la pagination', () => {
   it('pendant la mesure : bouton « Préparation… » désactivé, aucun print()', async () => {
@@ -104,7 +104,7 @@ describe('PrintPreview — jamais d’impression avant la fin de la pagination',
       resoudreMermaid?.()
     })
     await waitFor(() => expect(bouton()).toHaveProperty('disabled', false))
-    expect(bouton().textContent).toContain('Imprimer / PDF')
+    expect(bouton().textContent).toBe('Imprimer')
     fireEvent.click(bouton())
     await waitFor(() => expect(imprimes.length).toBe(1))
     expect(imprimes[0]).toContain('Document A')
@@ -174,7 +174,7 @@ describe('PrintPreview — « Télécharger le PDF »', () => {
     expect(pdfBouton().textContent).toContain('Télécharger le PDF')
     fireEvent.click(pdfBouton())
     await waitFor(() =>
-      expect(pdfBouton().textContent).toContain('Création du PDF… (3 / 12)'),
+      expect(pdfBouton().textContent).toContain('Création du PDF… 3 / 12'),
     )
     expect(pdfBouton()).toHaveProperty('disabled', true)
     expect(bouton()).toHaveProperty('disabled', true)
@@ -200,5 +200,225 @@ describe('PrintPreview — « Télécharger le PDF »', () => {
     const alerte = await screen.findByRole('alert')
     expect(alerte.textContent).toContain('Création du PDF impossible')
     expect(alerte.textContent).not.toContain('boom')
+  })
+})
+
+describe('PrintPreview — hiérarchie, état propre à chaque bouton, annulation (audit du 2026-10-04)', () => {
+  const pdfBouton = () =>
+    screen.getByRole('button', { name: /Télécharger le PDF/ })
+
+  function PagesSimples({
+    n,
+    onOpenChange = () => {},
+  }: {
+    n: number
+    onOpenChange?: (o: boolean) => void
+  }) {
+    return (
+      <PrintPreview open onOpenChange={onOpenChange} nomFichier="Essai">
+        {Array.from({ length: n }, (_, i) => (
+          <div key={i} className="a4-page">
+            Page {i + 1}
+          </div>
+        ))}
+      </PrintPreview>
+    )
+  }
+
+  /** Création suspendue : garde le signal reçu. */
+  function creationSuspendue() {
+    const etat: { signal: AbortSignal | null } = { signal: null }
+    pdfMock.mockImplementation(
+      (
+        _c: HTMLElement,
+        o: {
+          signal?: AbortSignal
+          onProgression?: (f: number, t: number) => void
+        },
+      ) => {
+        etat.signal = o.signal ?? null
+        o.onProgression?.(2, 12)
+        return new Promise((_resolve, reject) => {
+          o.signal?.addEventListener('abort', () => reject(new Error('annulé')))
+        })
+      },
+    )
+    return etat
+  }
+
+  it('Télécharger le PDF est le bouton principal, Imprimer le secondaire ; aide complète', () => {
+    render(<PagesSimples n={2} />)
+    expect(pdfBouton().getAttribute('data-variant')).toBe('default')
+    expect(bouton().getAttribute('data-variant')).toBe('outline')
+    const aide = document.querySelector('[data-aide-pdf]') as HTMLElement
+    expect(aide.textContent).toContain(
+      'Télécharger le PDF : un fichier prêt à envoyer.',
+    )
+    expect(aide.textContent).toContain('Enregistrer au format PDF')
+    expect(aide.className).not.toContain('truncate')
+    expect(aide.textContent).not.toMatch(/[«»—]/)
+    // Fermer toujours là, même sans la croix du dialogue.
+    expect(screen.getByRole('button', { name: "Fermer l'aperçu" })).toBeTruthy()
+  })
+
+  it('pendant la création : seul le bouton PDF montre n / N, Imprimer garde son libellé ; Annuler arrête sans message', async () => {
+    const etat = creationSuspendue()
+    render(<PagesSimples n={2} />)
+    fireEvent.click(pdfBouton())
+    await waitFor(() =>
+      expect(pdfBouton().textContent).toContain('Création du PDF… 3 / 12'),
+    )
+    expect(bouton().textContent).toBe('Imprimer')
+    expect(bouton()).toHaveProperty('disabled', true)
+    expect(screen.getByRole('status').textContent).toContain(
+      "Fermer l'aperçu annule",
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Annuler' }))
+    expect(etat.signal?.aborted).toBe(true)
+    await waitFor(() =>
+      expect(pdfBouton().textContent).toBe('Télécharger le PDF'),
+    )
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Annuler' })).toBeNull()
+  })
+
+  it('fermer l’aperçu pendant la création ANNULE', async () => {
+    const etat = creationSuspendue()
+    const fermer = vi.fn()
+    render(<PagesSimples n={2} onOpenChange={fermer} />)
+    fireEvent.click(pdfBouton())
+    await waitFor(() => expect(etat.signal).not.toBeNull())
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: "Fermer l'aperçu et annuler le PDF",
+      }),
+    )
+    expect(etat.signal?.aborted).toBe(true)
+    expect(fermer).toHaveBeenCalledWith(false)
+  })
+
+  it('démonté pendant la création : annulé', async () => {
+    const etat = creationSuspendue()
+    const { unmount } = render(<PagesSimples n={2} />)
+    fireEvent.click(pdfBouton())
+    await waitFor(() => expect(etat.signal).not.toBeNull())
+    unmount()
+    expect(etat.signal?.aborted).toBe(true)
+  })
+
+  it('autoTelecharger : part seul une fois la pagination prête, une seule fois', async () => {
+    pdfMock.mockResolvedValue({ pages: 2, nom: 'Essai.pdf' })
+    const termine = vi.fn()
+    render(
+      <PrintPreview
+        open
+        onOpenChange={() => {}}
+        nomFichier="Essai"
+        autoTelecharger
+        onPdfTermine={termine}
+      >
+        <div className="a4-page">Document A</div>
+        <DocumentPages
+          title="Document B"
+          content={'Avant\n\n```mermaid\ngraph TD\nA-->B\n```\n'}
+        />
+      </PrintPreview>,
+    )
+    await waitFor(() => expect(resoudreMermaid).not.toBeNull())
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 30))
+    })
+    // Pagination en cours : rien n'est parti.
+    expect(pdfMock).not.toHaveBeenCalled()
+    await act(async () => {
+      resoudreMermaid?.()
+    })
+    await waitFor(() => expect(pdfMock).toHaveBeenCalledTimes(1))
+    await waitFor(() =>
+      expect(termine).toHaveBeenCalledWith({ pages: 2, nom: 'Essai.pdf' }),
+    )
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 30))
+    })
+    expect(pdfMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('autoTelecharger : pas relancé quand les pages changent ensuite', async () => {
+    pdfMock.mockResolvedValue({ pages: 1, nom: 'Essai.pdf' })
+    const Apercu = ({ n }: { n: number }) => (
+      <PrintPreview open onOpenChange={() => {}} autoTelecharger>
+        {Array.from({ length: n }, (_, i) => (
+          <div key={i} className="a4-page">
+            P{i}
+          </div>
+        ))}
+      </PrintPreview>
+    )
+    const { rerender } = render(<Apercu n={1} />)
+    await waitFor(() => expect(pdfMock).toHaveBeenCalledTimes(1))
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20))
+    })
+    rerender(<Apercu n={2} />)
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 30))
+    })
+    expect(pdfMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('sans autoTelecharger : rien ne part seul', async () => {
+    pdfMock.mockResolvedValue({ pages: 2, nom: 'Essai.pdf' })
+    render(<PagesSimples n={2} />)
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 30))
+    })
+    expect(pdfMock).not.toHaveBeenCalled()
+  })
+
+  it('au-delà de 40 pages : avertissement de durée et de poids, sans bloquer', () => {
+    const { unmount } = render(<PagesSimples n={40} />)
+    expect(screen.queryByRole('status')).toBeNull()
+    unmount()
+    render(<PagesSimples n={41} />)
+    expect(screen.getByRole('status').textContent).toContain('41 pages')
+    expect(pdfBouton()).toHaveProperty('disabled', false)
+  })
+})
+
+describe('PrintPreview — écran étroit : pages ajustées, sans toucher aux pages', () => {
+  it('371 px de large : enveloppe zoomée à la largeur, page à l’échelle 1', async () => {
+    const original = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      'clientWidth',
+    )
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+      configurable: true,
+      get(this: HTMLElement) {
+        return this.classList.contains('classeur-print-preview-scroll')
+          ? 371
+          : 0
+      },
+    })
+    try {
+      render(
+        <PrintPreview open onOpenChange={() => {}}>
+          <div className="a4-page">A</div>
+        </PrintPreview>,
+      )
+      const env = document.querySelector<HTMLElement>('[data-zoom-pages]')
+      await waitFor(() => expect(env?.style.zoom).not.toBe(''))
+      const zoom = Number(env?.style.zoom)
+      expect(zoom).toBeGreaterThan(0.45)
+      expect(zoom).toBeLessThan(0.48)
+      const page = document.querySelector<HTMLElement>('.a4-page')
+      expect(page?.style.zoom).toBe('')
+      expect(
+        screen.getByRole('button', { name: /Zoom de l'aperçu/ }).textContent,
+      ).toContain('Ajusté')
+    } finally {
+      if (original) {
+        Object.defineProperty(HTMLElement.prototype, 'clientWidth', original)
+      }
+    }
   })
 })
