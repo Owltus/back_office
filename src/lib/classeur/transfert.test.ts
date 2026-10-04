@@ -771,6 +771,8 @@ describe('planTransfert — exemples', () => {
         id: 1,
         chapterId: 70,
         sortOrder: 5,
+        // uuid NEUF vers un autre classeur, tiré APRÈS ceux des images.
+        uuid: '00000000-0000-4000-8000-000000000002',
       },
       {
         type: 'deplacerElement',
@@ -779,6 +781,7 @@ describe('planTransfert — exemples', () => {
         chapterId: 70,
         sortOrder: 6,
         content: `![](${chemin(ARRIVEE, '00000000-0000-4000-8000-000000000001')})`,
+        uuid: '00000000-0000-4000-8000-000000000003',
       },
     ])
   })
@@ -811,6 +814,7 @@ describe('planTransfert — exemples', () => {
       id: 13,
       chapterId: 70,
       sortOrder: 5,
+      uuid: '00000000-0000-4000-8000-000000000001',
     })
   })
 

@@ -552,8 +552,11 @@ describe('déplacer vers un autre classeur', () => {
       content: CONTENU_100_REECRIT,
       version_majeure: 3,
       version_mineure: 2,
-      uuid: 'u-100',
+      // uuid NEUF (unique sur toute la table : le point de l'origine doit
+      // pouvoir recréer l'élément avec l'ancien), tiré après les images.
+      uuid: uuidN(3),
     })
+    expect(ligne('classeur_intercalaires', 102).uuid).toBe(uuidN(4))
     expect(ligne('classeur_intercalaires', 102)).toMatchObject({
       chapter_id: 50,
       sort_order: 5,

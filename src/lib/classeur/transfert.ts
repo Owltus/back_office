@@ -62,6 +62,8 @@ export type ModeTransfert = 'copier' | 'deplacer'
  * la fin du texte (une définition en dernière ligne).
  * Groupe 1 = ce qui précède (gardé tel quel), groupe 2 = le chemin.
  */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+
 const DESTINATION =
   /(\]\(\s*<?|\]:[ \t]*<?)([0-9]{1,12}\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.webp)(?=[>\s)]|$)/gi
 
@@ -143,7 +145,10 @@ export function peutTransferer(
  *     comportements dans un dialogue « vers un autre classeur ».
  */
 export function classeursCibles<
-  TClasseur extends ClasseurPourDroits & { id: number; deleted_at: string | null },
+  TClasseur extends ClasseurPourDroits & {
+    id: number
+    deleted_at: string | null
+  },
 >(
   classeurs: readonly TClasseur[],
   droitsParClasseur: DroitsUtilisateur,
@@ -208,7 +213,10 @@ export type OperationTransfert =
       chapterId: number
       sortOrder: number
     } & ChampsCopie)
-  /** Déplacement (D10 = A) : chapitre et ordre ; `content` si réécrit. */
+  /**
+   * Déplacement (D10 = A) : chapitre et ordre ; `content` si réécrit ;
+   * `uuid` NEUF vers un autre classeur (voir `planTransfert`).
+   */
   | {
       type: 'deplacerElement'
       kind: ItemKind
@@ -216,6 +224,7 @@ export type OperationTransfert =
       chapterId: number
       sortOrder: number
       content?: string
+      uuid?: string
     }
 
 export interface CorrespondanceImage {
@@ -377,6 +386,24 @@ export function planTransfert(demande: DemandeTransfert): PlanTransfert {
   }
 
   const table = new Map(correspondances.map((c) => [c.source, c.destination]))
+  // UUID NEUF pour un élément qui CHANGE DE CLASSEUR (relecture adverse du
+  // 2026-10-04). `uuid` est unique sur TOUTE la table, pas par classeur
+  // (`classeur_documents_uuid_key`, etc.) : un élément déplacé qui gardait
+  // le sien rendait IMPOSSIBLE la restauration du point de l'origine pris
+  // juste avant (le plan y recrée l'élément avec cet uuid → 23505), alors
+  // que l'erreur du transfert renvoie à ces points. L'uuid est la clé de
+  // fusion D'UN classeur : les instantanés et exports de l'origine gardent
+  // l'ancien. La ligne, son historique et son numéro restent (D10 = A).
+  // Tirés APRÈS ceux des images.
+  const uuidsElements = new Set<string>()
+  const uuidNeuf = (): string => {
+    const uuid = demande.nouveauxUuids().toLowerCase()
+    if (!UUID.test(uuid) || uuidsElements.has(uuid)) {
+      throw new Error('Identifiant d’élément généré invalide.')
+    }
+    uuidsElements.add(uuid)
+    return uuid
+  }
   elements.forEach((item, i) => {
     const sortOrder = demande.ordreSuivant + i
     if (mode === 'copier') {
@@ -403,6 +430,7 @@ export function planTransfert(demande: DemandeTransfert): PlanTransfert {
       const content = reecrireChemins(item.data.content, table)
       if (content !== item.data.content) deplacement.content = content
     }
+    if (!memeClasseur) deplacement.uuid = uuidNeuf()
     operations.push(deplacement)
   })
 

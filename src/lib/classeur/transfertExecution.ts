@@ -257,14 +257,13 @@ async function deplacer(
 ): Promise<void> {
   // Numéro de version GARDÉ : seuls les chemins changent (D9), ce n'est
   // pas une modification du document.
-  const patch: Record<string, unknown> =
-    op.content === undefined
-      ? { chapter_id: op.chapterId, sort_order: op.sortOrder }
-      : {
-          chapter_id: op.chapterId,
-          sort_order: op.sortOrder,
-          content: op.content,
-        }
+  // `uuid` neuf vers un autre classeur : voir `planTransfert`.
+  const patch: Record<string, unknown> = {
+    chapter_id: op.chapterId,
+    sort_order: op.sortOrder,
+  }
+  if (op.content !== undefined) patch.content = op.content
+  if (op.uuid !== undefined) patch.uuid = op.uuid
   let q = supabase.from(ITEM_TABLE[op.kind]).update(patch).eq('id', op.id)
   if (op.content !== undefined) q = q.eq('updated_at', base)
   const { data, error } = await q.select('id')
