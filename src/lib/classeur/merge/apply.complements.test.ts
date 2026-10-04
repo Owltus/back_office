@@ -338,7 +338,10 @@ describe('importerCommeNouveauClasseur', () => {
     // Le chapitre neuf est rangé en fin de liste (fusion), pas à l'ordre du fichier.
     expect(mocks.createChapter.mock.calls[0][2]).toMatchObject({
       sort_order: 1,
-      uuid: A.uuid,
     })
+    // Uuid NEUF (tiré par la base) : celui du fichier est déjà pris si le
+    // fichier est l'export d'un classeur de cette base (UNIQUE sur la table).
+    expect(mocks.createChapter.mock.calls[0][2]).not.toHaveProperty('uuid')
+    expect(mocks.createItem.mock.calls[0][2]).not.toHaveProperty('uuid')
   })
 })

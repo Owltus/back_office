@@ -441,20 +441,22 @@ export async function elaguerHistorique(classeurId: number): Promise<void> {
  * résoluble sont ignorés (avertissements du plan). Rend l'identifiant.
  *
  * Aucune entrée d'historique, comme chez Registre : un classeur neuf n'a
- * pas d'état antérieur à restaurer. Sans transaction : si une écriture
- * échoue, le classeur existe avec un contenu partiel (l'utilisateur le voit
- * dans la liste et peut le supprimer).
+ * pas d'état antérieur à restaurer.
+ *
+ * Uuids NEUFS (relecture adverse du 2026-10-04) : la base impose
+ * `UNIQUE (uuid)` sur toute la table, pas par classeur. Reprendre ceux du
+ * fichier — l'export d'un classeur de cette base, cas ordinaire — heurtait
+ * la contrainte dès le premier chapitre. Ils sont retirés : la base en tire
+ * de nouveaux.
+ *
+ * Sans transaction : si une écriture échoue, le classeur existe avec un
+ * contenu partiel ; l'erreur le DIT (« incomplet »), la cause d'origine en
+ * `cause`. Le plan est calculé AVANT la création du classeur.
  */
 export async function importerCommeNouveauClasseur(
   fichier: ClasseurJson,
 ): Promise<number> {
   const periodicites = await fetchPeriodicites()
-  const classeurId = await createClasseur({
-    name: fichier.classeur.name,
-    icon: fichier.classeur.icon,
-    etablissement: fichier.classeur.etablissement,
-    etablissement_complement: fichier.classeur.etablissement_complement,
-  })
   const vide: EtatLocal = {
     chapters: [],
     content: {
@@ -465,8 +467,31 @@ export async function importerCommeNouveauClasseur(
     },
     periodicites,
   }
+  // Planifié AVEC les uuid du fichier (E8 : un titre vide porteur d'uuid est
+  // importé), écrit SANS : toutes les actions sont des créations.
   const plan = planifierFusion(vide, fichier, { replace: false })
-  // Sans points auto : un classeur neuf n'a pas d'état antérieur à figer.
-  await sansPointsAuto(() => executerPlan(classeurId, plan.actions))
+  const actions = plan.actions.map(sansUuid)
+  const classeurId = await createClasseur({
+    name: fichier.classeur.name,
+    icon: fichier.classeur.icon,
+    etablissement: fichier.classeur.etablissement,
+    etablissement_complement: fichier.classeur.etablissement_complement,
+  })
+  try {
+    // Sans points auto : un classeur neuf n'a pas d'état antérieur à figer.
+    await sansPointsAuto(() => executerPlan(classeurId, actions))
+  } catch (err) {
+    throw new Error(
+      `Import interrompu : le classeur « ${fichier.classeur.name} » a été créé mais son contenu est incomplet. Supprimez-le, puis réessayez l'import.`,
+      { cause: err },
+    )
+  }
   return classeurId
+}
+
+/** Une création sans l'uuid du fichier (la base en tire un neuf). */
+function sansUuid(action: ActionFusion): ActionFusion {
+  return action.type === 'creerChapitre' || action.type === 'creerItem'
+    ? { ...action, uuid: null }
+    : action
 }

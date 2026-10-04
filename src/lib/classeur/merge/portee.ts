@@ -656,6 +656,27 @@ function planChapitre(
       `Ce fichier concerne un autre chapitre (« ${chJson.label} »), pas « ${chapitre.label} ».`,
     )
   }
+  // Un élément du fichier qui porte l'uuid d'un élément HORS du chapitre
+  // (relecture adverse du 2026-10-04) : la fusion l'appariait par uuid
+  // (R5, tout le classeur), le déplaçait ici et l'écrasait. Rien hors de la
+  // portée n'est touché : uuid retiré (unique en base), l'élément est créé.
+  const horsPortee = new Set(
+    flattenItems(local.content)
+      .filter((it) => it.data.chapter_id !== chapitre.id && it.data.uuid)
+      .map((it) => it.data.uuid),
+  )
+  const avertissements: string[] = []
+  const itemsCibles = chJson.items.map((item) => {
+    const propre = sansHorodatage(item)
+    if (item.uuid === undefined || !horsPortee.has(item.uuid)) return propre
+    const { uuid: _etranger, ...sansUuid } = propre
+    avertissements.push(
+      item.title.trim() === ''
+        ? "Un élément sans titre portait l'identifiant d'un élément d'un autre chapitre : ignoré"
+        : `« ${item.title} » portait l'identifiant d'un élément d'un autre chapitre : créé comme nouvel élément`,
+    )
+    return sansUuid
+  })
   // Le chapitre du fichier EST le chapitre ouvert (même sans uuid, fichier
   // v1 ou uuid retiré) ; sa position dans le classeur n'est pas à lui.
   const fichierCible: ClasseurJson = {
@@ -665,11 +686,12 @@ function planChapitre(
         ...chJson,
         uuid: chapitre.uuid,
         sort_order: chapitre.sort_order,
-        items: chJson.items.map(sansHorodatage),
+        items: itemsCibles,
       },
     ],
   }
-  const plan = planifierFusion(local, fichierCible, { replace: true })
+  const fusion = planifierFusion(local, fichierCible, { replace: true })
+  const plan = { ...fusion, warnings: [...avertissements, ...fusion.warnings] }
 
   const items = indexItems(local.content)
   const actions: ActionFusion[] = []

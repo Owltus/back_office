@@ -35,8 +35,8 @@
  *  R9  Élément apparié et retenu : `update` si un champ de sa nature diffère
  *      (document : title/description/content ; suivi : title/periodicite ;
  *      signature : title/description/nombre ; intercalaire :
- *      title/description), ou si son chapitre, son ordre ou son uuid
- *      diffèrent du fichier (E6), sinon `unchanged`.
+ *      title/description), ou si son chapitre ou son ordre
+ *      diffèrent du fichier (E6 ; uuid : voir E11), sinon `unchanged`.
  *  R10 Élément non apparié : `insert` avec le `sort_order` du fichier et
  *      son `uuid` s'il en a un.
  *  R11 Mode remplacement : tout élément local non supprimé et non apparié
@@ -64,9 +64,9 @@
  *      (sort_order, id) et non celui d'une HashMap.
  *  E6  (audit adverse du 2026-09-25, 7 défauts rouges) Quand le fichier
  *      gagne (remplacement, ou plus récent en fusion), l'élément reçoit AUSSI
- *      son chapitre, son `sort_order`, son `uuid` (apparié par titre) et son
- *      `updated_at` du fichier — le trigger `classeur_stamp` respecte cet
- *      horodatage, ce qui répare « dernier écrit gagne » après une première
+ *      son chapitre, son `sort_order`, son `uuid` (apparié par titre ; retiré
+ *      par E11) et son `updated_at` du fichier — le trigger `classeur_stamp`
+ *      respecte cet horodatage, ce qui répare « dernier écrit gagne » après une première
  *      fusion (la base réestampillait « now », et tout fichier antérieur à la
  *      fusion était ensuite jugé plus vieux). La restauration d'un instantané
  *      redevient exacte (ordre, emplacement, contenu des éléments supprimés
@@ -82,6 +82,21 @@
  *      moitiés produisait deux modifications du même document — la seconde
  *      écrasait la première, une moitié était perdue. La copie est créée,
  *      sans l'uuid déjà pris (unique en base).
+ *  E10 (même relecture) La règle E9 vaut pour les CHAPITRES : deux chapitres
+ *      du fichier au même uuid, ou un chapitre apparié par uuid puis un autre
+ *      de même slug, appariaient deux fois le même chapitre local (la seconde
+ *      écriture écrasait la première, et ses éléments y atterrissaient). Le
+ *      chapitre local est consommé une fois (uuid puis file des slugs, qui
+ *      saute les déjà appariés) ; la copie est créée SANS uuid. De même, un
+ *      uuid déjà donné à une création (chapitre, ou élément de même nature)
+ *      n'est pas redonné : la seconde insertion aurait violé l'unicité en
+ *      base au milieu de l'application. Un export normal (uuids uniques) ne
+ *      passe par aucune de ces branches : plan inchangé (`e10.property.test.ts`).
+ *  E11 (même relecture, transfert) L'uuid est UNIQUE sur toute la table, pas
+ *      par classeur. Un élément apparié par TITRE ne reçoit plus l'uuid du
+ *      fichier (E6 le lui donnait) : venu de l'export d'un AUTRE classeur,
+ *      invisible d'ici, il heurtait la contrainte au milieu de la fusion.
+ *      L'élément garde le sien ; l'appariement suivant se refait par titre.
  */
 
 import { slugify } from '#/lib/classeur/slug.ts'
@@ -208,7 +223,7 @@ export type ActionFusion =
       /** Présent si l'élément change de chapitre (E6). */
       chapitre?: RefChapitre
       sort_order?: number
-      /** Présent si l'élément a été apparié par titre et que le fichier porte un uuid (E6). */
+      /** Plus jamais posé par le plan (E11) ; gardé pour `executerPlan`. */
       uuid?: string
       updated_at?: string
     }
@@ -485,6 +500,9 @@ export function planifierFusion(
 
   const chapitresApparies = new Set<number>()
   const itemsApparies = new Set<string>()
+  // E10 : uuids déjà donnés à une création (unique en base).
+  const uuidsChapitresCrees = new Set<string>()
+  const uuidsItemsCrees = new Set<string>()
   let prochainOrdreChapitre =
     Math.max(
       0,
@@ -529,7 +547,6 @@ export function planifierFusion(
         existant !== undefined &&
         itemsApparies.has(cleItem(existant.kind, existant.data.id))
       if (uuidPris) existant = undefined
-      let parTitre = false
       if (existant === undefined && chapterIdLocal !== null) {
         const file = itemsParRepli.get(
           cleRepli(chapterIdLocal, kind, item.title),
@@ -544,20 +561,12 @@ export function planifierFusion(
             break
           }
         }
-        parTitre = existant !== undefined
       }
 
       if (existant !== undefined) {
         itemsApparies.add(cleItem(existant.kind, existant.data.id))
-        // Un uuid du fichier adopté par un élément apparié par titre (E6) :
-        // les fusions suivantes s'apparieront par uuid.
-        const uuid =
-          parTitre &&
-          !uuidPris &&
-          item.uuid !== undefined &&
-          item.uuid !== existant.data.uuid
-            ? item.uuid
-            : undefined
+        // E11 : un élément apparié par titre GARDE son uuid (plus d'adoption
+        // de celui du fichier).
 
         // R6 (+ E1, E6)
         if (existant.data.deleted_at !== null) {
@@ -581,7 +590,6 @@ export function planifierFusion(
               item: champs,
               chapitre: ref,
               sort_order: item.sort_order,
-              ...(uuid !== undefined ? { uuid } : {}),
               ...(updated_at !== undefined ? { updated_at } : {}),
             })
             resultat.inserted += 1
@@ -619,19 +627,13 @@ export function planifierFusion(
         const bouge =
           chapterIdLocal === null || existant.data.chapter_id !== chapterIdLocal
         const ordreDiffere = existant.data.sort_order !== item.sort_order
-        if (
-          champsDifferent(champs, existant) ||
-          bouge ||
-          ordreDiffere ||
-          uuid !== undefined
-        ) {
+        if (champsDifferent(champs, existant) || bouge || ordreDiffere) {
           actions.push({
             type: 'modifierItem',
             id: existant.data.id,
             item: champs,
             ...(bouge ? { chapitre: ref } : {}),
             ...(ordreDiffere ? { sort_order: item.sort_order } : {}),
-            ...(uuid !== undefined ? { uuid } : {}),
             ...(updated_at !== undefined ? { updated_at } : {}),
           })
           resultat.updated += 1
@@ -656,10 +658,17 @@ export function planifierFusion(
         apercu.push(ligne('skip', kind, titreAffiche, chJson))
         continue
       }
+      const uuidCree =
+        uuidPris ||
+        item.uuid === undefined ||
+        uuidsItemsCrees.has(`${kind}:${item.uuid}`)
+          ? null
+          : item.uuid
+      if (uuidCree !== null) uuidsItemsCrees.add(`${kind}:${uuidCree}`)
       actions.push({
         type: 'creerItem',
         chapitre: ref,
-        uuid: uuidPris ? null : (item.uuid ?? null),
+        uuid: uuidCree,
         sort_order: item.sort_order,
         ...(updated_at !== undefined ? { updated_at } : {}),
         item: champs,
@@ -712,17 +721,38 @@ export function planifierFusion(
   } {
     let apparie =
       chJson.uuid !== undefined ? chapitresParUuid.get(chJson.uuid) : undefined
-    apparie ??= chapitresParSlug.get(slugify(chJson.label))?.shift()
+    // E10 : un chapitre local déjà apparié ne l'est pas une seconde fois.
+    if (apparie !== undefined && chapitresApparies.has(apparie.id))
+      apparie = undefined
+    if (apparie === undefined) {
+      const file = chapitresParSlug.get(slugify(chJson.label))
+      while (file !== undefined && file.length > 0) {
+        const candidat = file.shift()
+        if (candidat !== undefined && !chapitresApparies.has(candidat.id)) {
+          apparie = candidat
+          break
+        }
+      }
+    }
 
     if (apparie === undefined) {
       const index = indexNouveau
       indexNouveau += 1
+      // E10 : un uuid connu localement ou déjà donné à une création ne
+      // repart pas en base (unique) ; la copie est créée sans.
+      const uuid =
+        chJson.uuid === undefined ||
+        chapitresParUuid.has(chJson.uuid) ||
+        uuidsChapitresCrees.has(chJson.uuid)
+          ? null
+          : chJson.uuid
+      if (uuid !== null) uuidsChapitresCrees.add(uuid)
       // R3 en fusion : en fin de liste. En remplacement (E6) : l'ordre du
       // fichier, sinon la passe suivante réordonnerait ce qu'elle vient de créer.
       actions.push({
         type: 'creerChapitre',
         index,
-        uuid: chJson.uuid ?? null,
+        uuid,
         label: chJson.label,
         icon: chJson.icon,
         description: chJson.description,
