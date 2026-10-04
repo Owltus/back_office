@@ -33,6 +33,7 @@ import type {
 } from '#/lib/classeur/types.ts'
 import { ITEM_TABLE } from '#/lib/classeur/types.ts'
 import { evolutionVersion } from '#/lib/classeur/versionDocument.ts'
+import type { VersionModifiee } from '#/lib/classeur/selectionImpression.ts'
 
 // ---------------------------------------------------------------------------
 // Garde d'écriture : points de restauration automatiques
@@ -179,6 +180,37 @@ export async function fetchVersionsDocument(
     .order('id', { ascending: false })
   if (error) throw error
   return data
+}
+
+/**
+ * Plafond de lignes lues par `fetchVersionsDepuis` (celui de PostgREST par
+ * défaut). Atteint, la liste peut être incomplète : le dialogue le dit.
+ */
+export const MAX_VERSIONS_DEPUIS = 1000
+
+/**
+ * Versions des documents d'un classeur enregistrées STRICTEMENT après
+ * `depuis` (instant ISO), hors `etat_initial` — impression des modifiés
+ * (étape 5). Une seule requête, sans le contenu ; la plus récente d'abord,
+ * dédoublonnée côté application (`derniereVersionParDocument`), PostgREST
+ * n'ayant pas de `distinct on`. Porte des NOMS d'auteurs : clé exclue du
+ * cache disque.
+ */
+export async function fetchVersionsDepuis(
+  classeurId: number,
+  depuis: string,
+): Promise<VersionModifiee[]> {
+  const { data, error } = await supabase
+    .from('classeur_document_versions')
+    .select('id, document_id, origine, auteur, created_at, version, raison')
+    .eq('classeur_id', classeurId)
+    .gt('created_at', depuis)
+    .neq('origine', 'etat_initial')
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(MAX_VERSIONS_DEPUIS)
+  if (error) throw error
+  return data as VersionModifiee[]
 }
 
 export async function fetchImages(classeurId: number): Promise<DbImage[]> {

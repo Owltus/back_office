@@ -103,6 +103,9 @@ const PREFIXES_SENSIBLES: ReadonlyArray<ReadonlyArray<string>> = [
   ['caisse', 'cautions'],
   // Historique des documents du Classeur : noms des collègues (2026-09-27).
   ['classeur', 'versions'],
+  // Versions modifiées depuis une date (impression des modifiés, 2026-10-04) :
+  // mêmes noms d'auteurs, autre clé (l'invalidation compare élément par élément).
+  ['classeur', 'modifies'],
   // Accès par classeur : identifiants, droits et noms des personnes (2026-09-28).
   ['classeur', 'acces'],
   // Lits bébé : `label` est un texte libre « Nom / chambre » (2026-09-28).

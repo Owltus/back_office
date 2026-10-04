@@ -237,10 +237,23 @@ describe('Classeur — quatre silhouettes relevées sur les boards', () => {
     )
   })
 
-  it('l’accueil dessine la recherche puis la colonne de Registre : 7 cartes, 2 paires, 2 séparateurs', () => {
+  it('l’accueil dessine la recherche puis la colonne de Registre : 9 cartes, 2 paires, 2 séparateurs', () => {
     const { container } = render(<FormeClasseurDashboard />)
     expect(container.querySelectorAll('.h-9.w-full').length).toBe(1)
-    expect(container.querySelectorAll('.rounded-xl.border').length).toBe(7)
+    expect(container.querySelectorAll('.rounded-xl.border').length).toBe(9)
+    // « Imprimer les modifications » (étape 5) : pleine largeur, juste sous
+    // la paire Sommaire | Exporter PDF, avant le premier séparateur.
+    const paire = container.querySelector('.grid-cols-2')
+    expect(paire?.nextElementSibling?.matches('.rounded-xl.border')).toBe(true)
+    expect(
+      paire?.nextElementSibling?.nextElementSibling?.matches('.border-b'),
+    ).toBe(true)
+    // Images du classeur puis Points de restauration, après le second.
+    const colonne = container.querySelector('.max-w-md')
+    const enfants = Array.from(colonne?.children ?? [])
+    expect(
+      enfants.slice(-2).every((e) => e.matches('.rounded-xl.border')),
+    ).toBe(true)
     expect(container.querySelectorAll('.grid-cols-2').length).toBe(2)
     expect(container.querySelectorAll('.border-b').length).toBe(2)
     expect(container.querySelector('.max-w-md')).not.toBeNull()

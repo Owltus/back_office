@@ -617,8 +617,10 @@ export function FormeClasseurListe({
 
 /**
  * /classeur/$id (accueil) : champ de recherche pleine largeur puis la colonne
- * centrée de Registre (28 rem) : une carte, deux côte à côte, un séparateur,
- * une carte, deux côte à côte, un séparateur, une carte — sept cartes.
+ * centrée de Registre (28 rem), relevée sur le DOM de l'accueil : Nouveau
+ * chapitre ; Sommaire | Exporter PDF ; Imprimer les modifications (étape 5,
+ * 2026-10-04) ; un séparateur ; Markdown ; JSON | Importer ; un séparateur ;
+ * Images du classeur ; Points de restauration — neuf cartes.
  */
 export function FormeClasseurDashboard() {
   const carte = (k: string) => (
@@ -646,6 +648,7 @@ export function FormeClasseurDashboard() {
             {carte('sommaire')}
             {carte('pdf')}
           </div>
+          {carte('modifies')}
           <div className="border-b border-border" />
           {carte('markdown')}
           <div className="grid grid-cols-2 gap-3">
@@ -653,6 +656,7 @@ export function FormeClasseurDashboard() {
             {carte('import')}
           </div>
           <div className="border-b border-border" />
+          {carte('images')}
           {carte('historique')}
         </div>
       </div>
