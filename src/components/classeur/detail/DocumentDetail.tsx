@@ -41,9 +41,7 @@ import {
   useInsertionImage,
 } from '#/components/classeur/detail/InsertionImage.tsx'
 import { useEditionDocument } from '#/components/classeur/detail/useEditionDocument.ts'
-import { ZoomApercu } from '#/components/classeur/detail/ZoomApercu.tsx'
 import { useZoomApercu } from '#/components/classeur/hooks/useZoomApercu.ts'
-import type { ZoomApercu as ZoomApercuEtat } from '#/components/classeur/hooks/useZoomApercu.ts'
 import { AlertesRelecture } from '#/components/classeur/detail/AlertesRelecture.tsx'
 import {
   allerALigne,
@@ -492,10 +490,20 @@ export function DocumentDetail() {
             canWrite={page.canWrite}
             saving={edition.saving}
             statut={
-              <IndicateurEnregistrement
-                modifie={edition.modifie}
-                brouillonEcritLe={edition.brouillonEcritLe}
-              />
+              <>
+                {nbPages !== null && (
+                  <span
+                    className="hidden text-xs text-muted-foreground tabular-nums md:inline"
+                    title="Nombre de pages imprimées"
+                  >
+                    {nbPages} {nbPages > 1 ? 'pages' : 'page'}
+                  </span>
+                )}
+                <IndicateurEnregistrement
+                  modifie={edition.modifie}
+                  brouillonEcritLe={edition.brouillonEcritLe}
+                />
+              </>
             }
             onEdit={edition.commencer}
             onCancel={edition.annuler}
@@ -563,8 +571,8 @@ export function DocumentDetail() {
           }
         >
           {/* Colonne d'aperçu : la carte est la zone d'écoute du zoom
-              (Ctrl + molette, raccourcis) ; elle porte la partie qui défile
-              puis la barre du zoom, HORS des pages (audit B6). */}
+              (Ctrl + molette, raccourcis), sans contrôle à l'écran, comme
+              la grille d'un chapitre (décision utilisateur du 2026-10-04). */}
           <DetailPaper
             ref={zoom.zoneRef}
             className={cn(
@@ -597,7 +605,6 @@ export function DocumentDetail() {
                 {pages}
               </div>
             </div>
-            <BarreZoom zoom={zoom} nbPages={nbPages} />
           </DetailPaper>
           <div className="order-1 flex min-h-0 flex-col xl:order-2 xl:h-full">
             {page.canWrite && (
@@ -681,12 +688,13 @@ export function DocumentDetail() {
         </div>
       ) : (
         // Lecture : la page défile avec la fenêtre ; la carte défile seule
-        // en largeur quand le zoom dépasse la colonne. Même barre de zoom
-        // qu'en édition, sous les pages (audit A4, B6).
+        // en largeur quand le zoom dépasse la colonne. Zoom par Ctrl +
+        // molette, comme en édition et dans la grille d'un chapitre.
         <DetailPaper ref={zoom.zoneRef} className="flex flex-1 flex-col">
           <div
             ref={zoom.defilementRef}
             data-apercu-defilement=""
+            title="Ctrl + molette pour zoomer, Ctrl + 0 pour revenir à la largeur."
             className="flex-1 overflow-x-auto"
           >
             <div
@@ -696,7 +704,6 @@ export function DocumentDetail() {
               {pages}
             </div>
           </div>
-          <BarreZoom zoom={zoom} nbPages={nbPages} />
         </DetailPaper>
       )}
 
@@ -771,42 +778,6 @@ export function DocumentDetail() {
           />
         )}
       </PrintPreview>
-    </div>
-  )
-}
-
-/**
- * Barre du zoom, SOUS les pages et hors de la partie qui défile (audit B6 :
- * le contrôle flottait sur la page et masquait des lignes). Grand écran en
- * édition : dernière rangée de la colonne à hauteur fixe. Ailleurs : collée
- * au bas de l'écran tant que l'aperçu est visible (`sticky`), puis à sa
- * place sous la dernière page en fin de défilement : rien n'est jamais
- * masqué pour de bon. À gauche, le nombre de pages imprimées.
- */
-function BarreZoom({
-  zoom,
-  nbPages,
-}: {
-  zoom: ZoomApercuEtat
-  nbPages: number | null
-}) {
-  return (
-    <div
-      data-zoom-apercu=""
-      className="sticky bottom-0 z-10 flex shrink-0 items-center justify-between gap-3 rounded-b-xl border-t border-border bg-card px-3 py-1.5"
-    >
-      <span
-        className="text-xs text-muted-foreground tabular-nums"
-        title="Nombre de pages imprimées"
-      >
-        {nbPages === null ? '' : `${nbPages} ${nbPages > 1 ? 'pages' : 'page'}`}
-      </span>
-      <ZoomApercu
-        mode={zoom.mode}
-        echelle={zoom.echelle}
-        onMode={zoom.definirMode}
-        onZoomer={zoom.zoomer}
-      />
     </div>
   )
 }

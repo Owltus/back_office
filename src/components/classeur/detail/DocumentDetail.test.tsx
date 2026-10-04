@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -126,11 +126,6 @@ function monter() {
   )
 }
 
-/** Le bouton central du zoom (son nom accessible commence ainsi). */
-function boutonZoom(): HTMLElement {
-  return screen.getByRole('button', { name: /^Zoom de l'aperçu/ })
-}
-
 beforeEach(() => {
   window.localStorage.clear()
   etat.editing = false
@@ -162,40 +157,67 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-/** La barre du zoom n'est PAS dans la partie qui défile (B6). */
-function verifierBarreHorsPages() {
-  const barre = document.querySelector('[data-zoom-apercu]')
+/** La zone qui écoute Ctrl + molette : la carte qui porte l'aperçu. */
+function zoneZoom(): HTMLElement {
   const defilement = document.querySelector('[data-apercu-defilement]')
-  expect(barre).not.toBeNull()
   expect(defilement).not.toBeNull()
-  expect(defilement?.contains(barre)).toBe(false)
-  expect(barre?.contains(boutonZoom())).toBe(true)
-  // Et la barre suit les pages, dans la même carte.
-  expect(defilement?.parentElement).toBe(barre?.parentElement)
-  expect(defilement?.nextElementSibling).toBe(barre)
+  return defilement!.parentElement!
 }
 
-describe('DocumentDetail : zoom de l’aperçu', () => {
-  it('en LECTURE : contrôle présent, pourcentage visible, échelle appliquée', () => {
+function pagesZoomees(): HTMLElement {
+  return screen.getByTestId('pages-a4').parentElement!
+}
+
+/** Ctrl + molette vers le haut (agrandir) ; rend l'événement envoyé. */
+function ctrlMolette(cible: HTMLElement): WheelEvent {
+  const e = new WheelEvent('wheel', {
+    deltaY: -100,
+    ctrlKey: true,
+    bubbles: true,
+    cancelable: true,
+  })
+  act(() => {
+    cible.dispatchEvent(e)
+  })
+  return e
+}
+
+describe('DocumentDetail : zoom de l’aperçu (Ctrl + molette, sans contrôle)', () => {
+  it('en LECTURE : aucun contrôle à l’écran, ajusté par défaut, Ctrl + molette agrandit', () => {
     monter()
-    expect(boutonZoom().textContent).toBe('Ajusté · 50 %')
-    expect(boutonZoom().getAttribute('aria-label')).toBe(
-      "Zoom de l'aperçu : Ajusté · 50 %",
-    )
-    verifierBarreHorsPages()
-    const pages = screen.getByTestId('pages-a4').parentElement
-    expect(Number(pages?.style.zoom)).toBeCloseTo(0.504, 2)
-    fireEvent.click(screen.getByRole('button', { name: "Agrandir l'aperçu" }))
-    expect(boutonZoom().textContent).toBe('75 %')
-    expect(pages?.style.zoom).toBe('0.75')
+    // Décision utilisateur du 2026-10-04 : comme la grille d'un chapitre,
+    // pas de barre ni de bouton de zoom.
+    expect(document.querySelector('[data-zoom-apercu]')).toBeNull()
+    expect(
+      screen.queryByRole('button', { name: /^Zoom de l'aperçu/ }),
+    ).toBeNull()
+    // Ajusté : 400 px utiles ÷ 793,7 px de page A4.
+    expect(Number(pagesZoomees().style.zoom)).toBeCloseTo(0.504, 2)
+    const e = ctrlMolette(zoneZoom())
+    expect(e.defaultPrevented).toBe(true)
+    expect(Number(pagesZoomees().style.zoom)).toBeGreaterThan(0.504)
   })
 
-  it('en ÉDITION : même contrôle, même réglage mémorisé', () => {
+  it('molette SANS Ctrl : défilement normal, aucun zoom', () => {
+    monter()
+    const e = new WheelEvent('wheel', {
+      deltaY: -100,
+      bubbles: true,
+      cancelable: true,
+    })
+    act(() => {
+      zoneZoom().dispatchEvent(e)
+    })
+    expect(e.defaultPrevented).toBe(false)
+    expect(Number(pagesZoomees().style.zoom)).toBeCloseTo(0.504, 2)
+  })
+
+  it('en ÉDITION : même réglage mémorisé, aucun contrôle à l’écran', () => {
     window.localStorage.setItem('bo.classeur.zoomApercu.v1', '1.25')
     etat.editing = true
     monter()
-    expect(boutonZoom().textContent).toBe('125 %')
-    verifierBarreHorsPages()
+    expect(document.querySelector('[data-zoom-apercu]')).toBeNull()
+    expect(pagesZoomees().style.zoom).toBe('1.25')
     // Le texte d'édition est bien là : c'est la page d'édition.
     expect(screen.getByLabelText('Contenu du document')).toBeTruthy()
   })
