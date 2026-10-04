@@ -39,6 +39,9 @@ export function BulkDeleteDialog({
       onOpenChange(false)
       onDone()
     },
+    // Lot non atomique : sur refus (42501), d'autres familles ont pu être
+    // supprimées. On relit pour ne pas afficher un état faux.
+    onError: () => invalider(),
   })
   const n = refs.length
   const pluriel = n > 1 ? 's' : ''

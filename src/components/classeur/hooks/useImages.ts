@@ -56,7 +56,8 @@ export function useRenommerImage(classeurId: number) {
 
 /**
  * Suppression propre : documents réécrits sans l'image, fichier retiré,
- * fiche marquée. Invalide TOUT le classeur (les documents ont changé).
+ * fiche marquée. Invalide TOUT le classeur (les documents ont changé),
+ * réussite OU échec.
  */
 export function useSupprimerImage() {
   const invalider = useInvaliderClasseur()
@@ -68,6 +69,8 @@ export function useSupprimerImage() {
       image: DbImage
       documents: ReadonlyArray<{ id: number; content: string }>
     }) => supprimerImage(image, documents),
-    onSuccess: () => invalider(),
+    // onSettled : sur un refus au 2e ou 3e temps, les documents ont déjà pu
+    // être réécrits sans l'image ; le cache doit les relire.
+    onSettled: () => invalider(),
   })
 }

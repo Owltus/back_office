@@ -114,6 +114,89 @@ const COLS_IMAGE =
   'id, uuid, classeur_id, chemin, nom, taille, largeur, hauteur, original_chemin, original_largeur, original_hauteur, original_taille, deleted_at, created_at, updated_at, created_by'
 
 // ---------------------------------------------------------------------------
+// Écritures RELUES (audit du 2026-09-28, suite de l'étape 7b)
+// ---------------------------------------------------------------------------
+//
+// supabase-js ne lève jamais, et un `update` / `delete` refusé par la RLS rend
+// 0 ligne SANS erreur. Toute écriture du service est donc relue
+// (`.select('id')`) ; une ligne non touchée est :
+//   - une ERREUR 42501 (`refusEcriture`) pour une modification ciblée
+//     (`updateChapter`, `updateClasseur`, `updateImage`, restaurations…) ;
+//   - DÉPARTAGÉE par une relecture (`departagerNonTouchees`) pour une
+//     opération qui peut déjà avoir été faite par un collègue : suppression
+//     douce (filtrée sur `deleted_at is null`, l'horodatage du collègue est
+//     gardé), suppression physique, réordonnancement d'une ligne disparue.
+//     Ligne relue ABSENTE (supprimée physiquement, ou illisible pour ce
+//     compte) ou déjà dans l'état voulu : succès silencieux, l'élément ne
+//     « réapparaît » pas. Ligne relue présente et pas dans l'état voulu :
+//     refus RLS, erreur 42501.
+
+/** L'erreur d'une écriture refusée (lisible par `messageErreur`). */
+export function refusEcriture(): Error & { code: string } {
+  return Object.assign(new Error('Écriture refusée'), { code: '42501' })
+}
+
+/** Ids de `ids` absents des lignes rendues par une écriture relue. */
+function nonTouchees(ids: ReadonlyArray<number>, data: unknown): number[] {
+  const rendus = new Set(
+    (Array.isArray(data) ? (data as Array<{ id: number }>) : []).map(
+      (l) => l.id,
+    ),
+  )
+  return ids.filter((id) => !rendus.has(id))
+}
+
+/**
+ * Relit les lignes `ids` qu'une écriture n'a pas touchées. `colonnes` doit
+ * contenir `id` ; `dejaFait` dit si la ligne relue est déjà dans l'état
+ * voulu. Absente ou déjà faite : rien. Sinon : 42501.
+ */
+async function departagerNonTouchees(
+  table: string,
+  ids: ReadonlyArray<number>,
+  colonnes: string,
+  dejaFait: (ligne: Record<string, unknown>) => boolean,
+): Promise<void> {
+  if (ids.length === 0) return
+  const { data, error } = await supabase
+    .from(table)
+    .select(colonnes)
+    .in('id', ids as number[])
+  if (error) throw error
+  const relues = data as unknown as Array<Record<string, unknown>>
+  if (relues.some((l) => !dejaFait(l))) throw refusEcriture()
+}
+
+const estSupprimee = (l: Record<string, unknown>) => l.deleted_at != null
+
+/**
+ * Suppression DOUCE relue de lignes d'une même table. Seules les lignes
+ * encore présentes sont marquées (l'horodatage d'un collègue qui a supprimé
+ * avant nous est conservé) ; une ligne déjà supprimée ou disparue n'est pas
+ * une erreur, une ligne toujours là après coup est un refus (42501).
+ */
+async function supprimerDoucement(
+  table: string,
+  ids: ReadonlyArray<number>,
+  deleted_at: string = new Date().toISOString(),
+): Promise<void> {
+  if (ids.length === 0) return
+  const { data, error } = await supabase
+    .from(table)
+    .update({ deleted_at })
+    .in('id', ids as number[])
+    .is('deleted_at', null)
+    .select('id')
+  if (error) throw error
+  await departagerNonTouchees(
+    table,
+    nonTouchees(ids, data),
+    'id, deleted_at',
+    estSupprimee,
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Images (médiathèque d'un classeur) — pas de point de restauration auto :
 // l'instantané ne couvre pas les images.
 // ---------------------------------------------------------------------------
@@ -156,14 +239,27 @@ export async function definirAcces(
   niveau: DbAccesClasseur['niveau'] | null,
 ): Promise<void> {
   if (niveau === null) {
-    const { error } = await supabase
+    // Relue : 0 ligne = aucune exception à retirer (déjà « comme tout le
+    // monde ») OU refus RLS ; une relecture départage.
+    const { data, error } = await supabase
       .from('classeur_acces')
       .delete()
       .eq('classeur_id', classeurId)
       .eq('user_id', userId)
+      .select('id')
     if (error) throw error
+    if ((data as unknown[]).length > 0) return
+    const { data: reste, error: errLecture } = await supabase
+      .from('classeur_acces')
+      .select('id')
+      .eq('classeur_id', classeurId)
+      .eq('user_id', userId)
+    if (errLecture) throw errLecture
+    if ((reste as unknown[]).length > 0) throw refusEcriture()
     return
   }
+  // L'upsert n'a pas besoin de relecture : un refus RLS (insert comme
+  // `on conflict do update`) y lève une erreur.
   const { error } = await supabase
     .from('classeur_acces')
     .upsert(
@@ -184,8 +280,7 @@ export async function definirAccesTous(
     .eq('id', classeurId)
     .select('id')
   if (error) throw error
-  if (data.length === 0)
-    throw Object.assign(new Error('Écriture refusée'), { code: '42501' })
+  exigerUneLigne(data)
 }
 
 /** Personnes ayant un droit sur la page Classeur (RPC, gestion seule). */
@@ -286,16 +381,21 @@ export async function updateImage(
   id: number,
   patch: Partial<Pick<DbImage, 'nom'>>,
 ): Promise<void> {
-  const { error } = await supabase.from(IMAGES_TABLE).update(patch).eq('id', id)
+  const { data, error } = await supabase
+    .from(IMAGES_TABLE)
+    .update(patch)
+    .eq('id', id)
+    .select('id')
   if (error) throw error
+  exigerUneLigne(data)
 }
 
+/**
+ * Dernier temps de la suppression d'une image (`images.ts`) : la fiche est
+ * marquée. Déjà marquée par un collègue : succès (voir `supprimerDoucement`).
+ */
 export async function softDeleteImage(id: number): Promise<void> {
-  const { error } = await supabase
-    .from(IMAGES_TABLE)
-    .update({ deleted_at: new Date().toISOString() })
-    .eq('id', id)
-  if (error) throw error
+  await supprimerDoucement(IMAGES_TABLE, [id])
 }
 
 // ---------------------------------------------------------------------------
@@ -358,11 +458,13 @@ export async function updateClasseur(
   patch: Partial<ClasseurInput>,
 ): Promise<void> {
   await avantEcriture({ classeurId: id })
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from(CLASSEURS_TABLE)
     .update(patch)
     .eq('id', id)
+    .select('id')
   if (error) throw error
+  exigerUneLigne(data)
 }
 
 /**
@@ -371,11 +473,7 @@ export async function updateClasseur(
  * physique (RLS : gestion seule) n'est pas exposée par l'app.
  */
 export async function softDeleteClasseur(id: number): Promise<void> {
-  const { error } = await supabase
-    .from(CLASSEURS_TABLE)
-    .update({ deleted_at: new Date().toISOString() })
-    .eq('id', id)
-  if (error) throw error
+  await supprimerDoucement(CLASSEURS_TABLE, [id])
 }
 
 // ---------------------------------------------------------------------------
@@ -512,11 +610,16 @@ export async function restaurerChapter(
     return
   }
   await avantEcriture({ chapterId })
-  const { error } = await supabase
+  // Relue (fusion, restauration d'un point) : un refus RLS au milieu d'un
+  // plan remonte au lieu d'un succès annoncé ; l'instantané pris avant le
+  // plan reste le filet.
+  const { data, error } = await supabase
     .from(CHAPTERS_TABLE)
     .update({ ...patch, deleted_at: null })
     .eq('id', chapterId)
+    .select('id')
   if (error) throw error
+  exigerUneLigne(data)
 }
 
 /**
@@ -542,20 +645,19 @@ export async function updateChapter(
   patch: ChapterPatch,
 ): Promise<void> {
   await avantEcriture({ chapterId })
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from(CHAPTERS_TABLE)
     .update(patch)
     .eq('id', chapterId)
+    .select('id')
   if (error) throw error
+  exigerUneLigne(data)
 }
 
+/** Déjà supprimé par un collègue : succès (voir `supprimerDoucement`). */
 export async function softDeleteChapter(chapterId: number): Promise<void> {
   await avantEcriture({ chapterId })
-  const { error } = await supabase
-    .from(CHAPTERS_TABLE)
-    .update({ deleted_at: new Date().toISOString() })
-    .eq('id', chapterId)
-  if (error) throw error
+  await supprimerDoucement(CHAPTERS_TABLE, [chapterId])
 }
 
 /**
@@ -563,24 +665,41 @@ export async function softDeleteChapter(chapterId: number): Promise<void> {
  * Une écriture par ligne (pas de RPC) ; les listes font quelques dizaines de
  * lignes au plus. Les écritures partent en parallèle, sous le plafond global
  * de six requêtes (`lib/requestQueue.ts`).
+ *
+ * Relues : une ligne non touchée encore lisible est un refus RLS (42501) ;
+ * une ligne disparue entre-temps n'a plus d'ordre à recevoir (succès). Le
+ * lot n'est pas atomique : sur erreur, l'appelant annule son affichage
+ * optimiste et relit (`useClasseur.ts`).
  */
-async function reorder(table: string, ids: number[]): Promise<void> {
+async function reorder(
+  lignes: ReadonlyArray<{ table: string; id: number }>,
+): Promise<void> {
   const results = await Promise.all(
-    ids.map((id, index) =>
+    lignes.map((l, index) =>
       supabase
-        .from(table)
+        .from(l.table)
         .update({ sort_order: index + 1 })
-        .eq('id', id),
+        .eq('id', l.id)
+        .select('id'),
     ),
   )
   const echec = results.find((r) => r.error)
   if (echec?.error) throw echec.error
+  const parTable = new Map<string, number[]>()
+  lignes.forEach((l, i) => {
+    if (nonTouchees([l.id], results[i].data).length === 0) return
+    parTable.set(l.table, [...(parTable.get(l.table) ?? []), l.id])
+  })
+  for (const [table, ids] of parTable) {
+    await departagerNonTouchees(table, ids, 'id', () => false)
+  }
 }
 
-export const reorderClasseurs = (ids: number[]) => reorder(CLASSEURS_TABLE, ids)
+export const reorderClasseurs = (ids: number[]) =>
+  reorder(ids.map((id) => ({ table: CLASSEURS_TABLE, id })))
 export async function reorderChapters(ids: number[]): Promise<void> {
   if (ids.length > 0) await avantEcriture({ chapterId: ids[0] })
-  await reorder(CHAPTERS_TABLE, ids)
+  await reorder(ids.map((id) => ({ table: CHAPTERS_TABLE, id })))
 }
 
 // ---------------------------------------------------------------------------
@@ -1051,11 +1170,14 @@ export async function restaurerItem(
     await ecrireDocumentVersionne(id, patch, { deleted_at: null })
     return
   }
-  const { error } = await supabase
+  // Relue (fusion, restauration d'un point) : voir `restaurerChapter`.
+  const { data, error } = await supabase
     .from(ITEM_TABLE[kind])
     .update({ ...patch, deleted_at: null })
     .eq('id', id)
+    .select('id')
   if (error) throw error
+  exigerUneLigne(data)
 }
 
 export async function updateItem(
@@ -1132,49 +1254,40 @@ export async function softDeleteItem(
   id: number,
 ): Promise<void> {
   await avantEcriture({ kind, id })
-  const { error } = await supabase
-    .from(ITEM_TABLE[kind])
-    .update({ deleted_at: new Date().toISOString() })
-    .eq('id', id)
-  if (error) throw error
+  await supprimerDoucement(ITEM_TABLE[kind], [id])
 }
 
-/** Suppression douce groupée (sélection multiple). */
+/**
+ * Suppression douce groupée (sélection multiple) : une écriture par famille,
+ * en parallèle. Déjà supprimés par un collègue : succès ; le moindre refus
+ * RLS : 42501 (les autres familles ont pu être supprimées : l'appelant
+ * relit).
+ */
 export async function softDeleteItems(
   refs: ReadonlyArray<{ kind: ItemKind; id: number }>,
 ): Promise<void> {
   if (refs.length > 0) await avantEcriture(refs[0])
   const now = new Date().toISOString()
-  const results = await Promise.all(
-    refs.map((r) =>
-      supabase
-        .from(ITEM_TABLE[r.kind])
-        .update({ deleted_at: now })
-        .eq('id', r.id),
+  await Promise.all(
+    ITEM_KINDS.map((kind) =>
+      supprimerDoucement(
+        ITEM_TABLE[kind],
+        refs.filter((r) => r.kind === kind).map((r) => r.id),
+        now,
+      ),
     ),
   )
-  const echec = results.find((r) => r.error)
-  if (echec?.error) throw echec.error
 }
 
 /**
  * Réordonne les éléments d'un chapitre, toutes natures confondues :
- * `refs` dans l'ordre voulu.
+ * `refs` dans l'ordre voulu. Relu (voir `reorder`).
  */
 export async function reorderItems(
   refs: ReadonlyArray<{ kind: ItemKind; id: number }>,
 ): Promise<void> {
   if (refs.length > 0) await avantEcriture(refs[0])
-  const results = await Promise.all(
-    refs.map((r, index) =>
-      supabase
-        .from(ITEM_TABLE[r.kind])
-        .update({ sort_order: index + 1 })
-        .eq('id', r.id),
-    ),
-  )
-  const echec = results.find((r) => r.error)
-  if (echec?.error) throw echec.error
+  await reorder(refs.map((r) => ({ table: ITEM_TABLE[r.kind], id: r.id })))
 }
 
 /**
@@ -1273,11 +1386,23 @@ export async function insertMergeHistory(entry: {
   return data.id as number
 }
 
-/** Suppression PHYSIQUE d'une entrée (RLS : gestion seule). */
+/**
+ * Suppression PHYSIQUE d'une entrée (RLS : gestion seule, et le rang
+ * `ecriture` sur les seuls points `auto`). Relue : une entrée encore là
+ * après coup est un refus (42501 — que l'élagage ignore, et que le
+ * dialogue affiche) ; déjà supprimée par un collègue : succès.
+ */
 export async function deleteMergeHistory(entryId: number): Promise<void> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from(MERGE_HISTORY_TABLE)
     .delete()
     .eq('id', entryId)
+    .select('id')
   if (error) throw error
+  await departagerNonTouchees(
+    MERGE_HISTORY_TABLE,
+    nonTouchees([entryId], data),
+    'id',
+    () => false,
+  )
 }
