@@ -1493,6 +1493,28 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
     l'UTILISATEUR (écritures réelles) : un import avec refus, une
     restauration depuis la corbeille, un déplacement et une copie vers un
     autre classeur, un vrai « Enregistrer au format PDF ».
+  - **AUDIT « répond-il à la demande ? » (même jour, après le signalement
+    de l'utilisateur « je ne vois que Imprimer, pas Générer le PDF »)** —
+    leçon : trancher à la place de l'utilisateur dans le sens le plus
+    PRUDENT a produit des fonctions plus PETITES que ce qu'il avait accepté.
+    Renversés : D19 (bouton « Télécharger le PDF » PRINCIPAL, html2canvas-pro
+    + jsPDF, `pdfDirect.ts` ; accès en 1 clic depuis un document, un
+    chapitre, une sélection via `PrintPreview autoTelecharger` ; Annuler,
+    `rendreLaMain` entre deux pages, avertissement au-delà de 40 pages ;
+    `filtreClone` : html2canvas-pro clonait TOUT le document à chaque page —
+    64 pages : gel de ~3 min → 14-21 s, 0 pixel de différence), D25 (import
+    du classeur COMPLET avec comparaison, refus, relecture —
+    `MergePreviewDialog` sur `ApercuImport`, `appliquerFusion({exclus})` ;
+    demandes LLM à l'export complet, `ExportJsonClasseurDialog`,
+    `DemandesLlm.tsx`), D27 (zoom aussi en lecture et dans l'aperçu
+    d'impression, ajusté à la largeur sur téléphone ; barre `BarreZoom` sous
+    les pages, ne masque plus le texte). « Copier vers un autre classeur »
+    est une entrée VISIBLE du menu (plus caché derrière Déplacer). Échap
+    dans un dialogue ne vide plus la sélection (`useSelection` en capture).
+    Gestion de la page jamais bloquée par une lecture d'exceptions en échec.
+    Images exclues de l'invalidation après écriture (`invaliderClasseur` :
+    ~93 téléchargements évités). Messages des nouveautés sans « » ni tiret
+    cadratin (l'ancien Classeur en garde : harmonisation à décider).
 - **Squelettes** : variante `classeur` de `RouteSkeleton`, forme choisie par
   `paramsClasseur(pathname)` (liste, tableau de bord, chapitre, détail) ;
   silhouettes `FormeClasseurListe`, `FormeClasseurDashboard`, `FormeChapitre`,
