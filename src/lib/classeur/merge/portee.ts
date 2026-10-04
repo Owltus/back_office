@@ -76,7 +76,12 @@ export type Portee =
 
 /** Fichier d'export limité : `_metadata` enrichi de la portée et des consignes. */
 export interface ExportPortee extends ClasseurJson {
-  _metadata: MetadataJson & { portee: Portee; instructions: string[] }
+  _metadata: MetadataJson & {
+    portee: Portee
+    instructions: string[]
+    /** Demande de l'utilisateur (`llmDemandes.ts`), posée seulement si non vide. */
+    demande?: string
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -120,6 +125,7 @@ export function construireExportChapitre(
   content: ChapterContent,
   periodicites: DbPeriodicite[],
   maintenant: Date = new Date(),
+  demande: string | null = null,
 ): ExportPortee {
   const base = construireExport(
     classeur,
@@ -135,6 +141,7 @@ export function construireExportChapitre(
       ...metadata,
       description: `Chapitre « ${chapitre.label} » du classeur « ${classeur.name} », exporté depuis le Back Office (page Classeur), au format d'échange Registre.`,
       note: "Lis d'abord `instructions`. Ce bloc _metadata est informatif et ignoré lors de l'import.",
+      ...(demande === null ? {} : { demande }),
       portee: {
         type: 'chapitre',
         chapitre_uuid: chapitre.uuid,
@@ -152,6 +159,7 @@ export function construireExportDocument(
   document: DbDocument,
   periodicites: DbPeriodicite[],
   maintenant: Date = new Date(),
+  demande: string | null = null,
 ): ExportPortee {
   const base = construireExport(
     classeur,
@@ -167,6 +175,7 @@ export function construireExportDocument(
       ...metadata,
       description: `Document « ${document.title} » (chapitre « ${chapitre.label} », classeur « ${classeur.name} »), exporté depuis le Back Office (page Classeur), au format d'échange Registre.`,
       note: "Lis d'abord `instructions`. Ce bloc _metadata est informatif et ignoré lors de l'import.",
+      ...(demande === null ? {} : { demande }),
       portee: {
         type: 'document',
         document_uuid: document.uuid,

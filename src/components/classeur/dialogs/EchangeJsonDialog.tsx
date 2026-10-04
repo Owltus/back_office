@@ -34,6 +34,12 @@ import { Textarea } from '#/components/ui/textarea.tsx'
 import { telechargerTexte } from '#/lib/classeur/download.ts'
 import { messageErreur } from '#/lib/classeur/erreur.ts'
 import {
+  DEMANDES_LLM,
+  composerDemande,
+  demandeMajeure,
+  texteACopier,
+} from '#/lib/classeur/llmDemandes.ts'
+import {
   nomFichierPortee,
   serialiserExport,
 } from '#/lib/classeur/exportJson.ts'
@@ -126,6 +132,10 @@ export function EchangeJsonDialog({
       ? 'indisponible'
       : 'pret'
   const [copie, setCopie] = useState<'ok' | 'erreur' | null>(null)
+  // Demandes pour le LLM (étape 3) : jamais mémorisées (D26, poste partagé),
+  // remises à zéro à chaque fermeture.
+  const [demandes, setDemandes] = useState<ReadonlySet<string>>(new Set())
+  const [autreDemande, setAutreDemande] = useState('')
   const [texte, setTexte] = useState('')
   const [supprimerAbsents, setSupprimerAbsents] = useState(false)
   const [applique, setApplique] = useState<string | null>(null)
@@ -201,6 +211,8 @@ export function EchangeJsonDialog({
     if (open) return
     setTexte('')
     setCopie(null)
+    setDemandes(new Set())
+    setAutreDemande('')
     setSupprimerAbsents(false)
     setApplique(null)
     setErreurFichier(null)
@@ -217,6 +229,19 @@ export function EchangeJsonDialog({
       ? `le chapitre « ${sujet.chapitre.label} »`
       : `le document « ${sujet.document.title} »`
 
+  const demande = composerDemande(demandes, autreDemande)
+
+  function basculerDemande(id: string) {
+    setCopie(null)
+    setDemandes((avant) => {
+      const s = new Set(avant)
+      if (s.has(id)) s.delete(id)
+      else s.add(id)
+      return s
+    })
+  }
+
+  /** Le fichier JSON (la demande éventuelle dans `_metadata.demande`). */
   function construire(): string | null {
     if (classeur === null || sujet === null) return null
     const periodicites = periodicitesQ.data ?? []
@@ -227,12 +252,16 @@ export function EchangeJsonDialog({
             sujet.chapitre,
             sujet.contenu,
             periodicites,
+            undefined,
+            demande,
           )
         : construireExportDocument(
             classeur,
             sujet.chapitre,
             sujet.document,
             periodicites,
+            undefined,
+            demande,
           )
     return serialiserExport(donnees)
   }
@@ -241,7 +270,8 @@ export function EchangeJsonDialog({
     const json = construire()
     if (json === null) return
     try {
-      await navigator.clipboard.writeText(json)
+      // Copié : la demande en tête, lisible dans la conversation, puis le JSON.
+      await navigator.clipboard.writeText(texteACopier(json, demande))
       setCopie('ok')
       window.setTimeout(() => setCopie(null), 2500)
     } catch {
@@ -347,6 +377,49 @@ export function EchangeJsonDialog({
             peut modifier, ce qu'il ne doit jamais toucher, la mise en forme de
             la page. Collez-le tel quel dans la conversation.
           </p>
+          <fieldset className="flex flex-col gap-1.5">
+            <legend className="mb-1 text-xs text-muted-foreground">
+              Demandes au LLM (facultatif) : ajoutées au JSON et en tête du
+              texte copié.
+            </legend>
+            <div className="grid grid-cols-1 gap-x-3 sm:grid-cols-2">
+              {DEMANDES_LLM.map((d) => (
+                <label
+                  key={d.id}
+                  title={d.aide}
+                  className="flex min-h-8 cursor-pointer items-center gap-2 text-sm pointer-coarse:min-h-11"
+                >
+                  <input
+                    type="checkbox"
+                    checked={demandes.has(d.id)}
+                    onChange={() => basculerDemande(d.id)}
+                    className="size-4 shrink-0 accent-primary"
+                  />
+                  <span>
+                    {d.libelle}
+                    <span className="sr-only"> : {d.aide}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            <Textarea
+              value={autreDemande}
+              onChange={(e) => {
+                setCopie(null)
+                setAutreDemande(e.target.value)
+              }}
+              placeholder="Autre demande…"
+              aria-label="Autre demande"
+              rows={2}
+              className="min-h-14 resize-none text-sm [field-sizing:fixed]"
+            />
+            {demandeMajeure(demandes) && (
+              <p className="text-xs text-muted-foreground">
+                Traduire ou Raccourcir créeront une nouvelle version majeure à
+                l'import.
+              </p>
+            )}
+          </fieldset>
           <div className="flex flex-wrap gap-2">
             <Button
               size="sm"

@@ -69,6 +69,10 @@ vi.mock('#/components/classeur/hooks/useClasseur.ts', () => ({
   useInvaliderClasseur: () => () => Promise.resolve(),
 }))
 vi.mock('#/lib/supabase.ts', () => ({ supabase: {} }))
+const telecharge = vi.fn()
+vi.mock('#/lib/classeur/download.ts', () => ({
+  telechargerTexte: (...args: unknown[]) => telecharge(...args),
+}))
 
 const { EchangeJsonDialog } =
   await import('#/components/classeur/dialogs/EchangeJsonDialog.tsx')
@@ -186,5 +190,103 @@ describe('EchangeJsonDialog — aperçu, refus, import', () => {
     expect(screen.getByRole('status').textContent).toBe(
       'Import appliqué : 0 ajout(s), 2 modification(s), 0 suppression(s).',
     )
+  })
+})
+
+describe('EchangeJsonDialog — demandes toutes prêtes (étape 3)', () => {
+  const ecrit = vi.fn<(t: string) => Promise<void>>()
+  beforeEach(() => {
+    ecrit.mockReset()
+    ecrit.mockResolvedValue(undefined)
+    telecharge.mockReset()
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: ecrit },
+      configurable: true,
+    })
+  })
+
+  function dialogue(open: boolean) {
+    return (
+      <QueryClientProvider client={new QueryClient()}>
+        <EchangeJsonDialog
+          open={open}
+          onOpenChange={() => {}}
+          classeur={classeur()}
+          sujet={{ type: 'chapitre', chapitre: A, contenu: local.content }}
+          canWrite={false}
+        />
+      </QueryClientProvider>
+    )
+  }
+  const copier = () =>
+    fireEvent.click(screen.getByRole('button', { name: /Copier le JSON/ }))
+  const caseDe = (libelle: RegExp) =>
+    screen.getByRole('checkbox', { name: libelle }) as HTMLInputElement
+
+  it('rien de coché : le presse-papiers reçoit le JSON seul, sans demande', async () => {
+    render(dialogue(true))
+    copier()
+    await waitFor(() => expect(ecrit).toHaveBeenCalledTimes(1))
+    const texte = ecrit.mock.calls[0][0]
+    expect(texte.startsWith('{')).toBe(true)
+    const brut = JSON.parse(texte) as { _metadata: Record<string, unknown> }
+    expect('demande' in brut._metadata).toBe(false)
+  })
+
+  it('« Corriger » coché : le texte copié commence par la demande, le JSON la porte', async () => {
+    render(dialogue(true))
+    fireEvent.click(caseDe(/^Corriger/))
+    copier()
+    await waitFor(() => expect(ecrit).toHaveBeenCalledTimes(1))
+    const texte = ecrit.mock.calls[0][0]
+    expect(texte.startsWith('Demande :\n- Corrige l')).toBe(true)
+    const json = texte.slice(texte.indexOf('\n\n{') + 2)
+    const brut = JSON.parse(json) as { _metadata: { demande?: string } }
+    expect(brut._metadata.demande).toMatch(/^- Corrige l/)
+    expect(texte.indexOf(brut._metadata.demande!)).toBe('Demande :\n'.length)
+  })
+
+  it('champ libre seul : recopié en tête ; le fichier téléchargé est du JSON valide qui le porte', async () => {
+    const libre = 'Tutoyer "le" client \\ 😀 </script>'
+    render(dialogue(true))
+    fireEvent.change(screen.getByLabelText('Autre demande'), {
+      target: { value: `  ${libre}  ` },
+    })
+    copier()
+    await waitFor(() => expect(ecrit).toHaveBeenCalledTimes(1))
+    expect(
+      ecrit.mock.calls[0][0].startsWith(`Demande :\n- ${libre}\n\n{`),
+    ).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: /Télécharger/ }))
+    const contenu = telecharge.mock.calls[0][1] as string
+    expect(contenu.startsWith('{')).toBe(true)
+    expect(
+      (JSON.parse(contenu) as { _metadata: { demande?: string } })._metadata
+        .demande,
+    ).toBe(`- ${libre}`)
+  })
+
+  it('note de version majeure seulement pour Traduire / Raccourcir', () => {
+    render(dialogue(true))
+    expect(screen.queryByText(/version majeure/)).toBeNull()
+    fireEvent.click(caseDe(/^Corriger/))
+    expect(screen.queryByText(/version majeure/)).toBeNull()
+    fireEvent.click(caseDe(/^Raccourcir/))
+    expect(screen.getByText(/version majeure/)).toBeTruthy()
+  })
+
+  it('rien n’est mémorisé : fermer puis rouvrir décoche tout et vide le champ', () => {
+    const { rerender } = render(dialogue(true))
+    fireEvent.click(caseDe(/^Traduire/))
+    fireEvent.change(screen.getByLabelText('Autre demande'), {
+      target: { value: 'x' },
+    })
+    expect(caseDe(/^Traduire/).checked).toBe(true)
+    rerender(dialogue(false))
+    rerender(dialogue(true))
+    expect(caseDe(/^Traduire/).checked).toBe(false)
+    expect(
+      (screen.getByLabelText('Autre demande') as HTMLTextAreaElement).value,
+    ).toBe('')
   })
 })

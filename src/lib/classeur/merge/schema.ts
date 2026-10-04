@@ -57,6 +57,8 @@ export interface MetadataJson {
   periodicites: MetadataPeriodiciteJson[]
   /** Consignes pour un LLM (`consignes.ts`) — ajout du Back Office, ignoré par Registre. */
   instructions?: string[]
+  /** Demande de l'utilisateur pour un LLM (`llmDemandes.ts`), export chapitre / document. */
+  demande?: string
 }
 
 /**
@@ -483,6 +485,7 @@ function lireMetadata(v: unknown): MetadataJson | undefined {
   ) {
     metadata.instructions = v.instructions
   }
+  if (typeof v.demande === 'string') metadata.demande = v.demande
   return metadata
 }
 

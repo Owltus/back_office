@@ -351,6 +351,8 @@ describe('consignes LLM — les TROIS exports (classeur, chapitre, document)', (
         'LÉGENDE',
         '"pleine"',
         'Conserve le CHEMIN',
+        '`_metadata.demande`',
+        'prime',
       ]) {
         expect(texte, `${nom} : ${convention}`).toContain(convention)
       }
@@ -365,6 +367,11 @@ describe('consignes LLM — les TROIS exports (classeur, chapitre, document)', (
     expect(lesExports.classeur._metadata?.instructions?.[0]).toMatch(
       /en entier/,
     )
+    const classeurTexte = (
+      lesExports.classeur._metadata?.instructions ?? []
+    ).join(' ')
+    expect(classeurTexte).toMatch(/réimporte en REMPLACEMENT/)
+    expect(classeurTexte).toMatch(/AJOUTER un chapitre/)
     expect(lesExports.chapitre._metadata.instructions[0]).toMatch(/chapitre/)
     expect(lesExports.document._metadata.instructions[0]).toMatch(
       /seul document/,
