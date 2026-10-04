@@ -77,6 +77,7 @@ import { alertesRelecture } from '#/lib/classeur/relecture.ts'
 import type { InfoPage } from '#/lib/classeur/relecture.ts'
 import type { PageData } from '#/lib/classeur/print/paginate.ts'
 import { mentionVersion } from '#/lib/classeur/print/mentionVersion.ts'
+import { nomFichierImpression } from '#/lib/classeur/print/nomFichierImpression.ts'
 import { titreOuDefaut } from '#/lib/classeur/sommaire.ts'
 import { cn } from '#/lib/utils.ts'
 
@@ -751,6 +752,10 @@ export function DocumentDetail() {
         open={previewOpen}
         onOpenChange={setPreviewOpen}
         title={titreAffiche}
+        nomFichier={nomFichierImpression({
+          classeur: page.classeurName,
+          titre: titreAffiche,
+        })}
       >
         {previewOpen && (
           <DocumentPages

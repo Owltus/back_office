@@ -18,6 +18,12 @@ interface PrintPreviewProps {
   /** Titre du dialogue. Par défaut « Aperçu avant impression ». */
   title?: string
   /**
+   * Nom du fichier proposé par « Enregistrer au format PDF » (le `<title>`
+   * du document imprimé), construit par `nomFichierImpression`. À défaut,
+   * « Classeur ».
+   */
+  nomFichier?: string
+  /**
    * Ref du conteneur défilant qui contient les pages A4, pour appeler
    * `printViaIframe` (ou `imprimerApercu`) depuis l'extérieur. Facultatif :
    * le bouton Imprimer / PDF du dialogue s'en charge déjà.
@@ -33,13 +39,15 @@ interface PrintPreviewProps {
  * Affiche les pages A4 (blanches, à l'échelle 1) dans un dialogue plein
  * écran défilant. L'impression passe par un iframe caché
  * (`lib/classeur/print/printIframe.ts`) : c'est aussi le chemin « PDF »
- * (« Enregistrer en PDF » dans le dialogue du navigateur). Le bouton
+ * (« Enregistrer en PDF » dans le dialogue du navigateur, avec le nom de
+ * fichier `nomFichier` et une ligne d'aide sous le titre). Le bouton
  * « Télécharger » de Registre (Edge headless via Rust) n'a pas été porté.
  */
 export function PrintPreview({
   open,
   onOpenChange,
   title = 'Aperçu avant impression',
+  nomFichier,
   containerRef,
   children,
 }: PrintPreviewProps) {
@@ -54,7 +62,7 @@ export function PrintPreview({
     setBusy(true)
     setError(null)
     try {
-      await printViaIframe(container)
+      await printViaIframe(container, { nomFichier })
     } catch {
       setError("Impression impossible. Réessayez ou fermez l'aperçu.")
     } finally {
@@ -77,6 +85,15 @@ export function PrintPreview({
             <DialogDescription className="sr-only">
               Aperçu des pages A4 telles qu'elles seront imprimées.
             </DialogDescription>
+            {/* Étape 9 (D19 = A) : le PDF passe par le dialogue du
+                navigateur, qui garde le texte net et cherchable. */}
+            <p
+              className="truncate text-xs text-muted-foreground"
+              title="Pour un fichier PDF, choisissez « Enregistrer au format PDF » comme imprimante."
+            >
+              Pour un fichier PDF, choisissez « Enregistrer au format PDF »
+              comme imprimante.
+            </p>
           </div>
           <div className="flex items-center gap-2">
             {error && (

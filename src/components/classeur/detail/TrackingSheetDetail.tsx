@@ -21,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '#/components/ui/select.tsx'
+import { nomFichierImpression } from '#/lib/classeur/print/nomFichierImpression.ts'
 import { SANS_TITRE, titreOuDefaut } from '#/lib/classeur/sommaire.ts'
 
 /** Nombre de lignes quand la périodicité est inconnue (comme Registre). */
@@ -164,6 +165,10 @@ export function TrackingSheetDetail() {
         open={previewOpen}
         onOpenChange={setPreviewOpen}
         title={titreOuDefaut(sheet.title)}
+        nomFichier={nomFichierImpression({
+          classeur: page.classeurName,
+          titre: titreOuDefaut(sheet.title),
+        })}
       >
         <TrackingSheetPage
           title={titreOuDefaut(sheet.title)}

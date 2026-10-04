@@ -1,11 +1,16 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   PRINT_CSS,
   buildPrintHtml,
 } from '#/lib/classeur/print/buildPrintHtml.ts'
-import { attendreFeuilles } from '#/lib/classeur/print/printIframe.ts'
+import { nomFichierImpression } from '#/lib/classeur/print/nomFichierImpression.ts'
+import {
+  attendreFeuilles,
+  printViaIframe,
+  titreTemporaire,
+} from '#/lib/classeur/print/printIframe.ts'
 
 /*
  * Le document imprimé doit être stylé comme la page qui affiche l'aperçu
@@ -13,6 +18,9 @@ import { attendreFeuilles } from '#/lib/classeur/print/printIframe.ts'
  * JavaScript, donc AUCUN style dans l'iframe). Ces tests figent les trois
  * garanties : feuilles réémises telles quelles (jamais par fetch), thème de
  * la racine repris, bloc d'impression du classeur en dernier.
+ *
+ * Quatrième garantie (étape 9, D19 = A) : le `<title>` du document imprimé
+ * est le nom de fichier proposé par « Enregistrer au format PDF ».
  */
 
 function monterPage(): HTMLElement {
@@ -98,9 +106,124 @@ describe('buildPrintHtml — mêmes feuilles que la page', () => {
     )
   })
 
+  it('pose le <title> = nom du fichier PDF (« Classeur - Titre »)', () => {
+    const cas: Array<[string, string, string]> = [
+      ['Registre', 'Extincteurs', 'Registre - Extincteurs'],
+      ['Procédures', 'Accueil : arrivée', 'Procédures - Accueil - arrivée'],
+      [
+        'Procédures',
+        'Modifications depuis le 04/10/2026',
+        'Procédures - Modifications depuis le 04-10-2026',
+      ],
+      ['Carnet', 'Le "bon" geste', 'Carnet - Le -bon- geste'],
+    ]
+    for (const [classeur, titre, attendu] of cas) {
+      const html = buildPrintHtml(monterPage(), {
+        nomFichier: nomFichierImpression({ classeur, titre }),
+      })
+      const doc = new DOMParser().parseFromString(html, 'text/html')
+      expect(doc.title).toBe(attendu)
+      expect(doc.head.querySelectorAll('title').length).toBe(1)
+      document.body.innerHTML = ''
+    }
+  })
+
+  it('sans nom : <title> « Classeur », jamais vide ni le titre de l’app', () => {
+    document.title = 'Back Office'
+    const html = buildPrintHtml(monterPage())
+    const doc = new DOMParser().parseFromString(html, 'text/html')
+    expect(doc.title).toBe('Classeur')
+    // Un nom non nettoyé est nettoyé quand même.
+    const html2 = buildPrintHtml(monterPage(), { nomFichier: 'a/b<c>' })
+    expect(html2).toContain('<title>a-b-c</title>')
+  })
+
   it('refuse un conteneur sans page', () => {
     const vide = document.createElement('div')
     expect(() => buildPrintHtml(vide)).toThrow('Aucune page A4 trouvée')
+  })
+})
+
+/** Des pages A4 sans <link> : jsdom ne charge jamais une feuille. */
+function pagesSansFeuille(): HTMLElement {
+  const conteneur = document.createElement('div')
+  conteneur.innerHTML = '<div class="a4-page">1</div>'
+  document.body.appendChild(conteneur)
+  return conteneur
+}
+
+describe('titre du document parent pendant l’impression', () => {
+  it('titreTemporaire pose le titre puis remet l’ancien, une seule fois', () => {
+    document.title = 'Back Office'
+    const remettre = titreTemporaire(document, 'Registre - Extincteurs')
+    expect(document.title).toBe('Registre - Extincteurs')
+    remettre()
+    expect(document.title).toBe('Back Office')
+    document.title = 'Autre page'
+    remettre()
+    expect(document.title).toBe('Autre page')
+  })
+
+  it('ne remet pas l’ancien titre si l’app l’a changé entre-temps', () => {
+    document.title = 'Back Office'
+    const remettre = titreTemporaire(document, 'X')
+    document.title = 'Nouvelle page'
+    remettre()
+    expect(document.title).toBe('Nouvelle page')
+  })
+
+  it('printViaIframe : iframe et parent portent le nom au moment de print(), puis le parent est remis', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'requestAnimationFrame'] })
+    try {
+      document.title = 'Back Office'
+      const vus: Array<[string, string]> = []
+      const original = document.body.appendChild.bind(document.body)
+      const espion = vi
+        .spyOn(document.body, 'appendChild')
+        .mockImplementation(<T extends Node>(n: T): T => {
+          const r = original(n)
+          if (n instanceof HTMLIFrameElement && n.contentWindow) {
+            const win = n.contentWindow
+            Object.defineProperty(win.document, 'fonts', {
+              value: { ready: Promise.resolve() },
+              configurable: true,
+            })
+            win.print = () => {
+              vus.push([win.document.title, document.title])
+            }
+            win.requestAnimationFrame = (cb) => {
+              cb(0)
+              return 0
+            }
+          }
+          return r
+        })
+      await printViaIframe(pagesSansFeuille(), {
+        nomFichier: nomFichierImpression({
+          classeur: 'Registre',
+          titre: 'Extincteurs',
+        }),
+      })
+      espion.mockRestore()
+      expect(vus).toEqual([
+        ['Registre - Extincteurs', 'Registre - Extincteurs'],
+      ])
+      vi.advanceTimersByTime(1000)
+      expect(document.title).toBe('Back Office')
+      expect(document.querySelector('iframe')).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('printViaIframe : le titre du parent est remis même en cas d’erreur', async () => {
+    document.title = 'Back Office'
+    // jsdom n'a pas `document.fonts` : l'attente des polices lève.
+    await expect(
+      printViaIframe(pagesSansFeuille(), { nomFichier: 'Registre - X' }),
+    ).rejects.toThrow()
+    expect(document.title).toBe('Back Office')
+    expect(document.querySelector('iframe')).toBeNull()
   })
 })
 

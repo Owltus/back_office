@@ -93,6 +93,7 @@ import {
 } from '#/lib/classeur/naming.ts'
 import { cleRef, deplacer, parseCleRef, refsDe } from '#/lib/classeur/ordre.ts'
 import type { ItemRef } from '#/lib/classeur/ordre.ts'
+import { nomFichierImpression } from '#/lib/classeur/print/nomFichierImpression.ts'
 import { elementsAImprimer } from '#/lib/classeur/selectionImpression.ts'
 import { createItem, moveItems } from '#/lib/classeur/service.ts'
 import { contientSansAccents, stripAccents } from '#/lib/classeur/slug.ts'
@@ -786,6 +787,15 @@ export function ChapterBoard({
         onOpenChange={(open) => {
           if (!open) setApercu(null)
         }}
+        nomFichier={nomFichierImpression({
+          classeur: classeurName,
+          titre:
+            apercu?.type === 'selection'
+              ? `${chapter?.label ?? 'Chapitre'} - sélection`
+              : apercu?.type === 'item'
+                ? apercu.item.data.title || 'Sans titre'
+                : chapter?.label,
+        })}
         title={
           apercu?.type === 'tout'
             ? `${chapter?.label ?? 'Chapitre'} — chapitre complet`

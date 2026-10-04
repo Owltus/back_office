@@ -1,4 +1,8 @@
-import { buildPrintHtml } from '#/lib/classeur/print/buildPrintHtml.ts'
+import {
+  buildPrintHtml,
+  titreImpression,
+} from '#/lib/classeur/print/buildPrintHtml.ts'
+import type { OptionsImpression } from '#/lib/classeur/print/buildPrintHtml.ts'
 
 /*
  * Impression via iframe caché — porté de Registre.
@@ -15,6 +19,25 @@ import { buildPrintHtml } from '#/lib/classeur/print/buildPrintHtml.ts'
  * HTML A4 (décision du plan `page-classeur` : pas de jsPDF, le contenu est
  * du Markdown mis en page par le DOM).
  */
+
+/**
+ * Pose `titre` sur le document parent le temps de l'impression et rend la
+ * fonction qui remet l'ancien (une seule fois). Le nom de fichier proposé
+ * par « Enregistrer au format PDF » vient du `<title>` du document
+ * imprimé — l'iframe ; on pose aussi celui du parent par prudence (selon le
+ * navigateur, c'est lui qui est lu). Le titre n'est remis que s'il n'a pas
+ * été changé entre-temps par l'app.
+ */
+export function titreTemporaire(doc: Document, titre: string): () => void {
+  const avant = doc.title
+  doc.title = titre
+  let fait = false
+  return () => {
+    if (fait) return
+    fait = true
+    if (doc.title === titre) doc.title = avant
+  }
+}
 
 /** Délai maximal d'attente des feuilles et des polices avant d'imprimer quand même. */
 const ATTENTE_MAX_MS = 5000
@@ -61,6 +84,7 @@ function avecDelai(promesse: Promise<unknown>, ms: number): Promise<void> {
 
 export async function printViaIframe(
   scrollContainer: HTMLElement,
+  options: OptionsImpression = {},
 ): Promise<void> {
   const iframe = document.createElement('iframe')
   iframe.style.position = 'fixed'
@@ -72,7 +96,9 @@ export async function printViaIframe(
   iframe.setAttribute('aria-hidden', 'true')
   document.body.appendChild(iframe)
 
+  let remettreTitre: () => void = () => {}
   const nettoyer = () => {
+    remettreTitre()
     if (iframe.parentNode) {
       document.body.removeChild(iframe)
     }
@@ -85,7 +111,8 @@ export async function printViaIframe(
       return
     }
 
-    const html = buildPrintHtml(scrollContainer)
+    const html = buildPrintHtml(scrollContainer, options)
+    remettreTitre = titreTemporaire(document, titreImpression(options))
 
     iframeDoc.open()
     iframeDoc.write(html)

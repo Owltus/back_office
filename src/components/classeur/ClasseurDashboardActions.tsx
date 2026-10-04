@@ -18,6 +18,7 @@ import {
   ItemPages,
 } from '#/components/classeur/print/ItemPages.tsx'
 import { mentionVersion } from '#/lib/classeur/print/mentionVersion.ts'
+import { nomFichierImpression } from '#/lib/classeur/print/nomFichierImpression.ts'
 import { cleRef } from '#/lib/classeur/ordre.ts'
 import { PrintPreview } from '#/components/classeur/print/PrintPreview.tsx'
 import { TableOfContentsPage } from '#/components/classeur/print/TableOfContentsPage.tsx'
@@ -260,6 +261,15 @@ export function ClasseurDashboardActions({
         onOpenChange={(open) => {
           if (!open) setApercu(null)
         }}
+        nomFichier={nomFichierImpression({
+          classeur: classeurName,
+          titre:
+            apercu?.type === 'sommaire'
+              ? 'Sommaire'
+              : apercu?.type === 'modifies'
+                ? `Modifications depuis le ${mentionVersion(apercu.depuis) ?? ''}`
+                : undefined,
+        })}
         title={
           apercu?.type === 'sommaire'
             ? `${classeurName} — Sommaire`

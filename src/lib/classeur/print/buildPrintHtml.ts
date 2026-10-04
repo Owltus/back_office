@@ -27,7 +27,16 @@
  *    leurs propres `@page { margin: 10-12mm; size: A4 portrait }` dans la
  *    feuille globale ; le bloc d'impression du classeur est émis EN
  *    DERNIER pour l'emporter (`margin: 0`, la marge est dans la page A4).
+ *
+ * 4. Le `<title>` est le nom de fichier proposé par « Enregistrer au format
+ *    PDF » (étape 9, D19 = A) : « Classeur - Titre », déjà nettoyé par
+ *    `nomFichierImpression` ; à défaut, « Classeur ».
  */
+
+import {
+  NOM_REPLI,
+  nettoyerNomFichier,
+} from '#/lib/classeur/print/nomFichierImpression.ts'
 
 /** Bloc d'impression propre au classeur — toujours émis en dernier. */
 export const PRINT_CSS = `
@@ -80,7 +89,20 @@ function feuillesDeLaPage(doc: Document): string {
   return parts.join('\n')
 }
 
-export function buildPrintHtml(scrollContainer: HTMLElement): string {
+export interface OptionsImpression {
+  /** Nom du fichier PDF proposé (voir `nomFichierImpression`). */
+  nomFichier?: string
+}
+
+/** Le `<title>` du document imprimé : nom nettoyé, « Classeur » à défaut. */
+export function titreImpression(options: OptionsImpression = {}): string {
+  return nettoyerNomFichier(options.nomFichier ?? '') || NOM_REPLI
+}
+
+export function buildPrintHtml(
+  scrollContainer: HTMLElement,
+  options: OptionsImpression = {},
+): string {
   const doc = scrollContainer.ownerDocument
   const pages = scrollContainer.querySelectorAll<HTMLElement>('.a4-page')
   if (pages.length === 0) throw new Error('Aucune page A4 trouvée')
@@ -89,10 +111,13 @@ export function buildPrintHtml(scrollContainer: HTMLElement): string {
     .map((page) => page.outerHTML)
     .join('\n')
 
+  const titre = titreImpression(options)
+
   return `<!DOCTYPE html>
 <html ${attributsRacine(doc.documentElement)}>
 <head>
 <meta charset="utf-8">
+<title>${echapperAttribut(titre)}</title>
 <base href="${echapperAttribut(doc.baseURI)}">
 ${feuillesDeLaPage(doc)}
 <style>${PRINT_CSS}</style>

@@ -13,6 +13,7 @@ import { useDetailPage } from '#/components/classeur/hooks/useDetailPage.ts'
 import { IntercalaireSheet } from '#/components/classeur/print/IntercalaireSheet.tsx'
 import { PrintPreview } from '#/components/classeur/print/PrintPreview.tsx'
 import { Input } from '#/components/ui/input.tsx'
+import { nomFichierImpression } from '#/lib/classeur/print/nomFichierImpression.ts'
 import { SANS_TITRE, titreOuDefaut } from '#/lib/classeur/sommaire.ts'
 
 /**
@@ -135,6 +136,10 @@ export function IntercalaireDetail() {
         open={previewOpen}
         onOpenChange={setPreviewOpen}
         title={titreOuDefaut(inter.title)}
+        nomFichier={nomFichierImpression({
+          classeur: page.classeurName,
+          titre: titreOuDefaut(inter.title),
+        })}
       >
         <IntercalaireSheet
           title={titreOuDefaut(inter.title)}

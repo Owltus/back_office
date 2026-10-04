@@ -13,6 +13,7 @@ import { useDetailPage } from '#/components/classeur/hooks/useDetailPage.ts'
 import { PrintPreview } from '#/components/classeur/print/PrintPreview.tsx'
 import { SignatureSheetPage } from '#/components/classeur/print/SignatureSheetPage.tsx'
 import { Input } from '#/components/ui/input.tsx'
+import { nomFichierImpression } from '#/lib/classeur/print/nomFichierImpression.ts'
 import { SANS_TITRE, titreOuDefaut } from '#/lib/classeur/sommaire.ts'
 
 /** Bornes du nombre de lignes de signature (CHECK en base : 1..60). */
@@ -168,6 +169,10 @@ export function SignatureSheetDetail() {
         open={previewOpen}
         onOpenChange={setPreviewOpen}
         title={titreOuDefaut(sheet.title)}
+        nomFichier={nomFichierImpression({
+          classeur: page.classeurName,
+          titre: titreOuDefaut(sheet.title),
+        })}
       >
         <SignatureSheetPage
           title={titreOuDefaut(sheet.title)}
