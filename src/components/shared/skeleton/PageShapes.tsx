@@ -658,6 +658,7 @@ export function FormeClasseurDashboard() {
           <div className="border-b border-border" />
           {carte('images')}
           {carte('historique')}
+          {carte('corbeille')}
         </div>
       </div>
     </>

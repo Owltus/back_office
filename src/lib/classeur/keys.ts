@@ -57,6 +57,12 @@ export const classeurKeys = {
   acces: (classeurId: number) =>
     ['classeur', 'acces', 'classeur', classeurId] as const,
   personnes: () => ['classeur', 'acces', 'personnes'] as const,
+  /**
+   * Corbeille d'un classeur (étape 6) : titres et dates de suppression,
+   * aucune donnée nominative — persistable.
+   */
+  corbeille: (classeurId: number) =>
+    ['classeur', 'corbeille', classeurId] as const,
   /** Médiathèque d'un classeur (fiches `classeur_images`). */
   images: (classeurId: number) => ['classeur', 'images', classeurId] as const,
 }

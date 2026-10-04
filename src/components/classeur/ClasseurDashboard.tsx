@@ -20,6 +20,7 @@ import {
   Table2,
   Upload,
   ShieldCheck,
+  Trash,
   Trash2,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -111,6 +112,7 @@ export function ClasseurDashboard({
   onHistorique,
   onImages,
   onImprimerModifies,
+  onCorbeille,
   busy = null,
   renderResult,
 }: {
@@ -130,6 +132,8 @@ export function ClasseurDashboard({
   onImages?: () => void
   /** Ouvre « Imprimer les modifications » (étape 5). Absent, pas de carte. */
   onImprimerModifies?: (ctx: DashboardContexte) => void
+  /** Ouvre la corbeille (étape 6). Carte rendue seulement avec l'écriture. */
+  onCorbeille?: () => void
   busy?: DashboardBusy
   renderResult?: (result: ClasseurSearchResult) => ReactNode
 }) {
@@ -448,7 +452,7 @@ export function ClasseurDashboard({
               </div>
             )}
 
-            {(onImages || onHistorique) && (
+            {(onImages || onHistorique || (canWrite && onCorbeille)) && (
               <div className="border-b border-border" />
             )}
             {onImages && (
@@ -465,6 +469,16 @@ export function ClasseurDashboard({
                 title="Points de restauration"
                 subtitle="Revenir à un état précédent du classeur"
                 onClick={onHistorique}
+              />
+            )}
+            {/* Étape 6 : corbeille, avec le droit d'écriture (D16). Sans
+                compteur : aucune lecture de plus au premier rendu. */}
+            {canWrite && onCorbeille && (
+              <ActionCard
+                icon={Trash}
+                title="Corbeille"
+                subtitle="Retrouver un chapitre ou un élément supprimé"
+                onClick={onCorbeille}
               />
             )}
           </div>

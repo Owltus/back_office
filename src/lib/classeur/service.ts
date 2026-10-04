@@ -31,7 +31,12 @@ import type {
   PersonneClasseur,
   PointKind,
 } from '#/lib/classeur/types.ts'
-import { ITEM_TABLE } from '#/lib/classeur/types.ts'
+import { ITEM_KINDS, ITEM_TABLE } from '#/lib/classeur/types.ts'
+import type {
+  ChapitreBrut,
+  DonneesCorbeille,
+  ElementBrut,
+} from '#/lib/classeur/corbeille.ts'
 import { evolutionVersion } from '#/lib/classeur/versionDocument.ts'
 import type { VersionModifiee } from '#/lib/classeur/selectionImpression.ts'
 
@@ -426,6 +431,34 @@ export async function createChapter(
 }
 
 /**
+ * Restauration depuis la CORBEILLE (étape 6), dernier paramètre de
+ * `restaurerChapter` / `restaurerItem`. Sans lui, comportement d'origine,
+ * celui de la FUSION : son plan pose lui-même `sort_order` et `chapter_id`,
+ * et ses points auto sont suspendus (`sansPointsAuto`) — rien n'y change.
+ *
+ * Avec lui :
+ *   - la garde d'écriture (point de restauration auto) part sur le
+ *     CLASSEUR : par élément ou par chapitre, elle relit la ligne en
+ *     excluant les supprimés et ne trouverait rien ;
+ *   - la ligne revient EN FIN de son chapitre (élément) ou du classeur
+ *     (chapitre), pas à son ancienne place, occupée entre-temps ;
+ *   - un refus RLS (0 ligne, sans erreur côté supabase-js) devient une
+ *     erreur 42501.
+ */
+export interface OptionsCorbeille {
+  classeurId: number
+  /** Élément : chapitre d'arrivée (par défaut, son chapitre d'origine). */
+  chapterId?: number
+}
+
+/** Une écriture `.select('id')` qui n'a touché aucune ligne = refus RLS. */
+function exigerUneLigne(data: unknown): void {
+  if (!Array.isArray(data) || data.length === 0) {
+    throw Object.assign(new Error('Écriture refusée'), { code: '42501' })
+  }
+}
+
+/**
  * Annule la suppression douce d'un chapitre (fusion : chapitre supprimé
  * puis réimporté, règle E1 de `merge.ts` ; restauration d'un instantané).
  * `patch` réécrit ses champs dans le même aller-retour.
@@ -433,7 +466,24 @@ export async function createChapter(
 export async function restaurerChapter(
   chapterId: number,
   patch: ChapterPatch = {},
+  corbeille?: OptionsCorbeille,
 ): Promise<void> {
+  if (corbeille !== undefined) {
+    // Corbeille (étape 6) : garde sur le CLASSEUR (la ref par chapitre ne
+    // résout pas un chapitre supprimé : le point auto serait sauté), fin de
+    // la liste des chapitres, refus RLS détecté.
+    await avantEcriture({ classeurId: corbeille.classeurId })
+    const existants = await fetchChapters(corbeille.classeurId)
+    const sort_order = Math.max(0, ...existants.map((c) => c.sort_order)) + 1
+    const { data, error } = await supabase
+      .from(CHAPTERS_TABLE)
+      .update({ ...patch, deleted_at: null, sort_order })
+      .eq('id', chapterId)
+      .select('id')
+    if (error) throw error
+    exigerUneLigne(data)
+    return
+  }
   await avantEcriture({ chapterId })
   const { error } = await supabase
     .from(CHAPTERS_TABLE)
@@ -823,12 +873,113 @@ async function ecrireDocumentVersionne(
   if (error) throw error
 }
 
+/**
+ * Branche corbeille de `restaurerItem` (voir `OptionsCorbeille`). Sans
+ * champ de texte, aucun numéro de version ne change : restaurer n'est pas
+ * modifier. Le chapitre d'arrivée est celui de l'élément, sauf choix
+ * contraire (orphelin remis ailleurs).
+ */
+async function restaurerItemCorbeille(
+  kind: ItemKind,
+  id: number,
+  patch: ItemPatch,
+  corbeille: OptionsCorbeille,
+): Promise<void> {
+  await avantEcriture({ classeurId: corbeille.classeurId })
+  let chapterId = corbeille.chapterId
+  if (chapterId === undefined) {
+    const { data: ligne, error } = await supabase
+      .from(ITEM_TABLE[kind])
+      .select('chapter_id')
+      .eq('id', id)
+      .maybeSingle<{ chapter_id: number }>()
+    if (error) throw error
+    if (!ligne) {
+      throw Object.assign(new Error('Écriture refusée'), { code: '42501' })
+    }
+    chapterId = ligne.chapter_id
+  }
+  const sort_order = await prochainOrdre(chapterId)
+  const place = { deleted_at: null, chapter_id: chapterId, sort_order }
+  if (
+    kind === 'document' &&
+    (patch.title !== undefined ||
+      patch.description !== undefined ||
+      patch.content !== undefined)
+  ) {
+    await ecrireDocumentVersionne(id, patch, place)
+    return
+  }
+  const { data, error } = await supabase
+    .from(ITEM_TABLE[kind])
+    .update({ ...patch, ...place })
+    .eq('id', id)
+    .select('id')
+  if (error) throw error
+  exigerUneLigne(data)
+}
+
+/**
+ * Corbeille : un élément ORPHELIN (son chapitre est aussi supprimé) revient
+ * AVEC son chapitre. Le chapitre d'abord — sinon l'élément reviendrait dans
+ * un chapitre invisible si la seconde écriture échouait —, séquentiel.
+ */
+export async function restaurerAvecChapitre(
+  classeurId: number,
+  kind: ItemKind,
+  id: number,
+  chapterId: number,
+): Promise<void> {
+  await restaurerChapter(chapterId, {}, { classeurId })
+  await restaurerItem(kind, id, {}, { classeurId, chapterId })
+}
+
+/**
+ * Tout le classeur pour la corbeille : chapitres et éléments, SUPPRIMÉS
+ * COMPRIS, en colonnes légères (jamais le Markdown). Les non supprimés
+ * servent au nom du chapitre d'origine, aux chapitres d'arrivée et au
+ * compte des éléments qu'un chapitre supprimé emporte. Titres seulement,
+ * aucune donnée nominative : persistable. Lue à l'ouverture du dialogue.
+ */
+export async function fetchCorbeille(
+  classeurId: number,
+): Promise<DonneesCorbeille> {
+  const { data: chapitres, error } = await supabase
+    .from(CHAPTERS_TABLE)
+    .select('id, label, sort_order, deleted_at')
+    .eq('classeur_id', classeurId)
+    .order('sort_order', { ascending: true })
+    .order('id', { ascending: true })
+  if (error) throw error
+  const lus = chapitres as ChapitreBrut[]
+  if (lus.length === 0) return { chapitres: [], elements: [] }
+  const ids = lus.map((c) => c.id)
+  const familles = await Promise.all(
+    ITEM_KINDS.map(async (kind) => {
+      const { data, error: err } = await supabase
+        .from(ITEM_TABLE[kind])
+        .select('id, chapter_id, title, deleted_at')
+        .in('chapter_id', ids)
+      if (err) throw err
+      return (data as Array<Omit<ElementBrut, 'kind'>>).map(
+        (e): ElementBrut => ({ ...e, kind }),
+      )
+    }),
+  )
+  return { chapitres: lus, elements: familles.flat() }
+}
+
 /** Annule la suppression douce, avec les champs du fichier s'il y en a (fusion). */
 export async function restaurerItem(
   kind: ItemKind,
   id: number,
   patch: ItemPatch = {},
+  corbeille?: OptionsCorbeille,
 ): Promise<void> {
+  if (corbeille !== undefined) {
+    await restaurerItemCorbeille(kind, id, patch, corbeille)
+    return
+  }
   await avantEcriture({ kind, id })
   if (kind === 'document') {
     await ecrireDocumentVersionne(id, patch, { deleted_at: null })

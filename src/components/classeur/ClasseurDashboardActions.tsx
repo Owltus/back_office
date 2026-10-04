@@ -7,10 +7,12 @@ import type {
   DashboardBusy,
   DashboardContexte,
 } from '#/components/classeur/ClasseurDashboard.tsx'
+import { CorbeilleDialog } from '#/components/classeur/dialogs/CorbeilleDialog.tsx'
 import { HistoriqueDialog } from '#/components/classeur/dialogs/HistoriqueDialog.tsx'
 import { ImagesDialog } from '#/components/classeur/dialogs/ImagesDialog.tsx'
 import { MergePreviewDialog } from '#/components/classeur/dialogs/MergePreviewDialog.tsx'
 import { ClasseurCoverPage } from '#/components/classeur/print/ClasseurCoverPage.tsx'
+import { useDroitsClasseur } from '#/components/classeur/hooks/useDroitsClasseur.ts'
 import { ImprimerModifiesDialog } from '#/components/classeur/dialogs/ImprimerModifiesDialog.tsx'
 import type { ElementAImprimer } from '#/components/classeur/dialogs/ImprimerModifiesDialog.tsx'
 import {
@@ -99,6 +101,8 @@ export function ClasseurDashboardActions({
   const [historiqueOuvert, setHistoriqueOuvert] = useState(false)
   const [imagesOuvertes, setImagesOuvertes] = useState(false)
   const [modifiesOuvert, setModifiesOuvert] = useState(false)
+  const [corbeilleOuverte, setCorbeilleOuverte] = useState(false)
+  const { canWrite } = useDroitsClasseur(classeurId)
   // Contexte du classeur au moment où la carte a été cliquée (nom,
   // établissement du pied de page de l'aperçu des modifiés).
   const [ctxModifies, setCtxModifies] = useState<DashboardContexte | null>(null)
@@ -210,6 +214,7 @@ export function ClasseurDashboardActions({
         onFichierDepose={recevoirFichier}
         onHistorique={() => setHistoriqueOuvert(true)}
         onImages={() => setImagesOuvertes(true)}
+        onCorbeille={() => setCorbeilleOuverte(true)}
         onImprimerModifies={(c) => {
           setCtxModifies(c)
           setModifiesOuvert(true)
@@ -249,6 +254,12 @@ export function ClasseurDashboardActions({
         open={imagesOuvertes}
         onOpenChange={setImagesOuvertes}
         classeurId={classeurId}
+      />
+      <CorbeilleDialog
+        open={corbeilleOuverte}
+        onOpenChange={setCorbeilleOuverte}
+        classeurId={classeurId}
+        canWrite={canWrite}
       />
       <HistoriqueDialog
         open={historiqueOuvert}
