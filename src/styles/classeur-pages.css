@@ -6,16 +6,6 @@
  * seulement ce qui dépend du chrome de l'application.                  *
  * ------------------------------------------------------------------ */
 
-/* Colonne des chapitres (à partir de lg) : une carte collée en haut du
- * <main>, qui est la zone de défilement de l'app (hauteur d'écran moins la
- * Navbar de 4 rem) : la colonne occupe exactement cette hauteur, collée
- * sous la Navbar, et défile en interne au lieu de suivre la page. */
-.classeur-sidebar {
-  position: sticky;
-  top: 0;
-  height: calc(100dvh - 4rem);
-}
-
 /* Chapitre de la colonne survolé par un élément en cours de glisser :
  * c'est une cible de dépôt (déplacement vers ce chapitre). */
 .classeur-drop-over {

@@ -1,5 +1,6 @@
 import { useRouterState } from '@tanstack/react-router'
 
+import { cn } from '#/lib/utils.ts'
 import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { SkeletonCardsRow } from '#/components/shared/skeleton/SkeletonCardsRow.tsx'
 import { SkeletonTable } from '#/components/shared/skeleton/SkeletonTable.tsx'
@@ -261,7 +262,13 @@ export function RouteSkeleton({
     const forme = paramsClasseur(pathname)
     return (
       <div
-        className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4"
+        className={cn(
+          'mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4',
+          // Chapitre et détails tiennent dans la fenêtre (en-tête fixe,
+          // contenu qui défile dessous) : la silhouette ne déborde pas.
+          (forme === 'chapitre' || forme === 'detail') &&
+            'min-h-0 overflow-hidden',
+        )}
         aria-hidden="true"
       >
         <HeaderRow />

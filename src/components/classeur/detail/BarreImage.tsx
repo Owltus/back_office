@@ -218,8 +218,17 @@ export function BarreImage({
       const hauteur = barreRef.current?.offsetHeight ?? 40
       const largeur = barreRef.current?.offsetWidth ?? 360
       const dessus = r.top - hauteur - 8
+      // Au-dessus de l'image s'il y a la place SOUS l'en-tête fixe de la
+      // page (haut de la zone qui défile, ou de l'aperçu qui défile seul) ;
+      // sinon en dessous. 64 : la Navbar.
+      const plafond = Math.max(
+        64,
+        ...['[data-apercu-defilement]', '[data-page-zone]'].map(
+          (sel) => boite.closest(sel)?.getBoundingClientRect().top ?? 0,
+        ),
+      )
       setPos({
-        top: dessus > 64 ? dessus : r.bottom + 8,
+        top: dessus > plafond ? dessus : r.bottom + 8,
         left: Math.min(
           Math.max(8, r.left + r.width / 2 - largeur / 2),
           window.innerWidth - largeur - 8,

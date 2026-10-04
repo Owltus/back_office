@@ -16,7 +16,7 @@ export const Route = createFileRoute('/classeur/$classeurId/$chapterId/')({
 function ChapterPage() {
   const { classeurId, chapterId } = Route.useParams()
   return (
-    <PageContainer>
+    <PageContainer fillHeight>
       <ChapterBoard
         key={chapterId}
         classeurId={Number(classeurId)}

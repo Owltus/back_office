@@ -1,5 +1,6 @@
 import { useState } from 'react'
 
+import { PageAvecEnTete } from '#/components/classeur/PageAvecEnTete.tsx'
 import {
   DetailActions,
   DetailErreur,
@@ -55,10 +56,9 @@ export function IntercalaireDetail() {
   if (page.isPending) return <DetailSkeleton retour={retour} />
   if (page.isError) {
     return (
-      <div className="flex flex-1 flex-col gap-4">
-        <DetailHeader retour={retour} title={null} />
+      <PageAvecEnTete entete={<DetailHeader retour={retour} title={null} />}>
         <DetailErreur err={page.error} action="Intercalaire indisponible" />
-      </div>
+      </PageAvecEnTete>
     )
   }
   if (!inter) {
@@ -75,28 +75,30 @@ export function IntercalaireDetail() {
     : titreOuDefaut(inter.title)
 
   return (
-    <div className="flex flex-1 flex-col gap-4">
-      <DetailHeader
-        retour={retour}
-        title={titreAffiche}
-        kind="intercalaire"
-        chapterName={page.chapter?.label}
-        actions={
-          <DetailActions
-            editing={editing}
-            canWrite={page.canWrite}
-            saving={page.update.isPending}
-            onEdit={commencerEdition}
-            onCancel={() => {
-              setEditing(false)
-              page.update.reset()
-            }}
-            onSave={() => void sauvegarder()}
-            onPrint={() => setPreviewOpen(true)}
-          />
-        }
-      />
-
+    <PageAvecEnTete
+      entete={
+        <DetailHeader
+          retour={retour}
+          title={titreAffiche}
+          kind="intercalaire"
+          chapterName={page.chapter?.label}
+          actions={
+            <DetailActions
+              editing={editing}
+              canWrite={page.canWrite}
+              saving={page.update.isPending}
+              onEdit={commencerEdition}
+              onCancel={() => {
+                setEditing(false)
+                page.update.reset()
+              }}
+              onSave={() => void sauvegarder()}
+              onPrint={() => setPreviewOpen(true)}
+            />
+          }
+        />
+      }
+    >
       {editing && (
         <DetailFields>
           <Input
@@ -149,6 +151,6 @@ export function IntercalaireDetail() {
           establishment={page.establishment}
         />
       </PrintPreview>
-    </div>
+    </PageAvecEnTete>
   )
 }

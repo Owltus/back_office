@@ -1131,10 +1131,18 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   gardent leur encart `DetailFields`.
   Zone d'édition NON redimensionnable (`resize-none`, `[field-sizing:fixed]`
   contre le `field-sizing-content` du `Textarea` shadcn) : à partir de
-  `lg`, la grille éditeur + aperçu reçoit une hauteur MESURÉE jusqu'au bas
-  de la fenêtre (`hooks/useHauteurJusquEnBas.ts`, depuis `.app-scroll`,
-  rembourrages bas des ancêtres déduits, remesure au redimensionnement),
-  chaque colonne défile en interne ; en dessous, 60 dvh.
+  `xl`, la grille éditeur + aperçu REMPLIT la zone qui défile (flex
+  `min-h-0`, 360 px au moins ; `useHauteurJusquEnBas` retiré le
+  2026-10-04), chaque colonne défile en interne ; en dessous, 60 dvh.
+- **En-tête FIXE + contenu qui défile (décision utilisateur du
+  2026-10-04, remplace l'en-tête collant essayé le même jour, « pas
+  beau »)** : page d'un chapitre et quatre pages de détail dans
+  `components/classeur/PageAvecEnTete.tsx` — en-tête (titre, recherche,
+  boutons) hors défilement, zone `overflow-y-auto` dessous (messages,
+  grille, aperçu), barre au bord droit SOUS l'en-tête, gouttière stable des
+  deux côtés (boutons alignés). Rangée de `ClasseurShell` en `min-h-0` : le
+  `<main>` ne défile plus sous `/classeur/$id` ; l'accueil défile dans sa
+  propre zone, la colonne des chapitres à hauteur de fenêtre.
 - **Éditeur : ne plus perdre de travail (2026-09-27, points 1 à 5 de la
   liste NUMÉROTÉE `plan/classeur-editeur-ameliorations/00-INDEX.md` —
   l'utilisateur demande par numéro, ne jamais renuméroter)**. Tout vit dans

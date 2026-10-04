@@ -24,9 +24,12 @@ export const Route = createFileRoute('/classeur/$classeurId')({
 })
 
 /**
- * Layout d'un classeur : colonne des chapitres à gauche (`ChapterSidebar`,
- * une carte collante dans la gouttière de page), page à droite (`Outlet` :
- * tableau de bord, chapitre, détails). Sous `lg`, la colonne devient un
+ * Layout d'un classeur : colonne des chapitres à gauche (`ChapterSidebar`),
+ * page à droite (`Outlet` : tableau de bord, chapitre, détails). La rangée
+ * tient EXACTEMENT dans la hauteur du `<main>` (`min-h-0`), qui ne défile
+ * donc plus sur ces pages : chacune défile en interne — la colonne dans sa
+ * liste, l'accueil dans sa propre zone, le chapitre et les détails SOUS leur
+ * en-tête fixe (`PageAvecEnTete`, décision utilisateur du 2026-10-04). Sous `lg`, la colonne devient un
  * tiroir (`ui/sheet`) que chaque page ouvre depuis le `leading` de son
  * `PageHeader` (`ChapterDrawerButton`) ; le nom du classeur passe alors en
  * sous-titre de la Navbar, comme le jour affiché sur les autres pages.
@@ -78,7 +81,7 @@ function ClasseurShell({ classeurId }: { classeurId: number }) {
   return (
     <DndProvider>
       <ChapterDrawerProvider open={ouvrirTiroir} mobile={isNavbarMobile}>
-        <div className="flex flex-1">
+        <div className="flex min-h-0 flex-1">
           {isNavbarMobile ? (
             <Sheet open={tiroirOuvert} onOpenChange={setTiroirOuvert}>
               <SheetContent
@@ -102,16 +105,17 @@ function ClasseurShell({ classeurId }: { classeurId: number }) {
             /* Colonne PLEINE HAUTEUR collée au bord gauche, bordure à droite,
                comme la sidebar de Registre — décision utilisateur du
                2026-09-26 (« trop petite ») : 20 rem au lieu d'une carte de
-               16 rem dans une gouttière. Elle défile en interne. */
+               16 rem dans une gouttière. Hauteur de la rangée, donc de la
+               fenêtre ; elle défile en interne. */
             <aside
               aria-label="Chapitres"
-              className="classeur-sidebar hidden w-80 shrink-0 border-r border-border bg-card lg:flex lg:flex-col"
+              className="hidden min-h-0 w-80 shrink-0 border-r border-border bg-card lg:flex lg:flex-col"
             >
               <ChapterSidebar classeurId={classeurId} />
             </aside>
           )}
 
-          <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <Outlet />
           </div>
         </div>

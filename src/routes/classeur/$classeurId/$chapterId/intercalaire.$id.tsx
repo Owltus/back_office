@@ -13,7 +13,7 @@ export const Route = createFileRoute(
 function IntercalairePage() {
   const { id } = Route.useParams()
   return (
-    <PageContainer>
+    <PageContainer fillHeight>
       <IntercalaireDetail key={id} />
     </PageContainer>
   )

@@ -13,7 +13,7 @@ export const Route = createFileRoute(
 function DocumentPage() {
   const { id } = Route.useParams()
   return (
-    <PageContainer>
+    <PageContainer fillHeight>
       <DocumentDetail key={id} />
     </PageContainer>
   )

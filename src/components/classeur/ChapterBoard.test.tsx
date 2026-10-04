@@ -13,6 +13,8 @@ import { TooltipProvider } from '#/components/ui/tooltip.tsx'
  * lit les props qu'il reçoit. Services simulés : la base n'est pas touchée.
  */
 
+const etatTest = vi.hoisted(() => ({ ordreEnErreur: false }))
+
 vi.mock('#/lib/supabase.ts', () => ({ supabase: {} }))
 vi.mock('#/lib/classeur/service.ts', () => ({ createItem: vi.fn() }))
 vi.mock('@tanstack/react-router', () => ({
@@ -145,7 +147,11 @@ vi.mock('#/components/classeur/hooks/useClasseur.ts', () => ({
   }),
   useChapters: () => ({ data: [], isPending: false, isError: false }),
   usePeriodicites: () => ({ data: [] }),
-  useReorderItems: mutation,
+  useReorderItems: () => ({
+    ...mutation(),
+    isError: etatTest.ordreEnErreur,
+    error: etatTest.ordreEnErreur ? new Error('refus') : null,
+  }),
   useDeplacerItems: mutation,
   useInvaliderClasseur: () => vi.fn(),
 }))
@@ -166,6 +172,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
+  etatTest.ordreEnErreur = false
 })
 
 function monter() {
@@ -222,5 +229,48 @@ describe('ChapterBoard, accès direct au PDF (A2)', () => {
     expect(apercu().dataset.auto).toBe('true')
     expect(apercu().dataset.titre).toBe('Accueil : 1 élément sélectionné')
     expect(apercu().dataset.titre).not.toMatch(/[«»—]/)
+  })
+})
+
+/*
+ * Cadre « en-tête fixe + contenu qui défile » (décision utilisateur du
+ * 2026-10-04) : titre, recherche et boutons dans l'en-tête, HORS de la zone
+ * qui défile ; messages et grille DANS la zone, messages au-dessus.
+ */
+describe('ChapterBoard, en-tête fixe et zone qui défile', () => {
+  it('recherche et boutons dans l’en-tête, grille et messages dans la zone', () => {
+    etatTest.ordreEnErreur = true
+    monter()
+    const entete = document.querySelector<HTMLElement>('[data-page-en-tete]')
+    const zone = document.querySelector<HTMLElement>('[data-page-zone]')
+    expect(entete).not.toBeNull()
+    expect(zone).not.toBeNull()
+    expect(zone!.className).toContain('overflow-y-auto')
+    expect(zone!.className).toContain('min-h-0')
+    // L'en-tête ne défile pas : il n'est ni dans la zone, ni l'inverse.
+    expect(zone!.contains(entete)).toBe(false)
+    expect(entete!.contains(zone)).toBe(false)
+    expect(entete!.className).toContain('shrink-0')
+
+    const recherche = screen.getByRole('searchbox', {
+      name: 'Rechercher dans le chapitre',
+    })
+    expect(entete!.contains(recherche)).toBe(true)
+    expect(
+      entete!.contains(
+        screen.getByRole('button', { name: TELECHARGER_CHAPITRE }),
+      ),
+    ).toBe(true)
+
+    const ouverture = screen.getByRole('button', { name: 'cocher Ouverture' })
+    expect(zone!.contains(ouverture)).toBe(true)
+    const message = screen.getByText(/Ordre non enregistré/)
+    expect(zone!.contains(message)).toBe(true)
+    expect(entete!.contains(message)).toBe(false)
+    // Le message passe AVANT la grille.
+    expect(
+      message.compareDocumentPosition(ouverture) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
   })
 })

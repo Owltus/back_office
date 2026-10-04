@@ -12,8 +12,8 @@ import {
 } from 'lucide-react'
 
 import { ChapterDrawerButton } from '#/components/classeur/ChapterDrawer.tsx'
-import { EnTeteCollant } from '#/components/classeur/EnTeteCollant.tsx'
 import { IconAction } from '#/components/classeur/IconAction.tsx'
+import { PageAvecEnTete } from '#/components/classeur/PageAvecEnTete.tsx'
 import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
@@ -33,7 +33,8 @@ import { cn } from '#/lib/utils.ts'
  * d'édition, état « introuvable », squelette, viewport d'une page A4 à
  * l'échelle, erreur en ligne. L'en-tête est le `PageHeader` de l'app : le
  * bouton Retour occupe son `leading` (l'usage prévu de cette prop), le titre
- * son `title`, nature + chapitre son `meta`.
+ * son `title`, nature + chapitre son `meta`. Chaque page le pose en en-tête
+ * FIXE d'un `PageAvecEnTete` : tout le reste défile dessous.
  */
 
 /** Cible du bouton Retour : la page du chapitre. */
@@ -75,35 +76,31 @@ export function DetailHeader({
   const meta = [kind ? capitaliser(ITEM_LABEL[kind]) : '', chapterName ?? '']
     .filter((s) => s !== '')
     .join(' · ')
-  // Collé en haut au défilement (demande utilisateur du 2026-10-04), pour
-  // les quatre pages de détail et leur squelette.
   return (
-    <EnTeteCollant>
-      <PageHeader
-        actionsAlign="end"
-        leading={
-          <div className="flex shrink-0 items-stretch gap-1">
-            <ChapterDrawerButton />
-            <Tip label="Retour au chapitre">
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                asChild
-                aria-label="Retour au chapitre"
-                className={cn('self-center', editing && 'max-sm:hidden')}
-              >
-                <Link to="/classeur/$classeurId/$chapterId" params={retour}>
-                  <ArrowLeft />
-                </Link>
-              </Button>
-            </Tip>
-          </div>
-        }
-        title={title}
-        meta={meta !== '' ? meta : undefined}
-        actions={actions}
-      />
-    </EnTeteCollant>
+    <PageHeader
+      actionsAlign="end"
+      leading={
+        <div className="flex shrink-0 items-stretch gap-1">
+          <ChapterDrawerButton />
+          <Tip label="Retour au chapitre">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              asChild
+              aria-label="Retour au chapitre"
+              className={cn('self-center', editing && 'max-sm:hidden')}
+            >
+              <Link to="/classeur/$classeurId/$chapterId" params={retour}>
+                <ArrowLeft />
+              </Link>
+            </Button>
+          </Tip>
+        </div>
+      }
+      title={title}
+      meta={meta !== '' ? meta : undefined}
+      actions={actions}
+    />
   )
 }
 
@@ -229,11 +226,18 @@ export function DetailIntrouvable({
 /** Silhouette d'une page de détail : en-tête + une page A4 grisée. */
 export function DetailSkeleton({ retour }: { retour: RetourVers }) {
   return (
-    <div className="flex flex-1 flex-col gap-4" aria-busy="true">
-      <DetailHeader retour={retour} title={<Skeleton className="h-6 w-64" />} />
+    <PageAvecEnTete
+      aria-busy="true"
+      entete={
+        <DetailHeader
+          retour={retour}
+          title={<Skeleton className="h-6 w-64" />}
+        />
+      }
+    >
       {/* DÉLÈGUE à `FormeDetail` : même cadre que `DetailPaper`, une page A4. */}
       <FormeDetail />
-    </div>
+    </PageAvecEnTete>
   )
 }
 
@@ -275,15 +279,16 @@ export function DetailPaper({
 /**
  * Une page A4 unique, mise à l'échelle pour tenir dans le viewport
  * (`usePageScale('fit')`) — feuilles de suivi, de signature, intercalaires.
- * La hauteur minimale borne le calcul : sans elle, un conteneur en flux
- * libre n'aurait pas de hauteur à offrir.
+ * La page remplit la zone qui défile sous l'en-tête (`flex-1`) ; la
+ * hauteur minimale garde une page lisible quand des champs d'édition ou une
+ * fenêtre basse ne laissent presque rien (la zone défile alors).
  */
 export function PageFitViewport({ children }: { children: ReactNode }) {
   const { containerRef, scale } = usePageScale('fit')
   return (
     <DetailPaper
       ref={containerRef}
-      className="relative min-h-[70vh] flex-1 overflow-hidden"
+      className="relative min-h-80 flex-1 overflow-hidden"
     >
       <div
         style={{

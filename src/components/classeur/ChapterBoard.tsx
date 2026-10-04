@@ -79,7 +79,7 @@ import {
   DropdownMenuTrigger,
 } from '#/components/ui/dropdown-menu.tsx'
 import { useSelection } from '#/components/classeur/hooks/useSelection.ts'
-import { EnTeteCollant } from '#/components/classeur/EnTeteCollant.tsx'
+import { PageAvecEnTete } from '#/components/classeur/PageAvecEnTete.tsx'
 import { IconAction } from '#/components/classeur/IconAction.tsx'
 import {
   ChapterPrintPages,
@@ -409,320 +409,323 @@ export function ChapterBoard({
     })
 
   return (
-    <div
-      className="flex w-full flex-1 flex-col gap-4"
+    // En-tête FIXE (titre, sous-titre, recherche, boutons) et zone qui
+    // défile dessous avec sa propre barre (décision utilisateur du
+    // 2026-10-04) : messages, puis la grille, dans la zone.
+    <PageAvecEnTete
       {...(canWrite ? dragProps : {})}
-    >
-      {/* En-tête collé en haut (demande utilisateur du 2026-10-04) : titre,
-          sous-titre, recherche et boutons restent visibles au défilement.
-          Les messages passent DESSOUS, hors de la partie collée. */}
-      <EnTeteCollant>
-        <PageHeader
-          leading={<ChapterDrawerButton />}
-          title={
-            chapterQ.isPending ? (
-              <Skeleton className="h-7 w-56" />
-            ) : (
-              <span className="flex items-center gap-2">
-                <IconeChapitre className="size-5 shrink-0 text-muted-foreground" />
-                {chapter?.label}
-              </span>
-            )
-          }
-          meta={chapter?.description.trim() ? chapter.description : undefined}
-        />
+      entete={
+        <>
+          <PageHeader
+            leading={<ChapterDrawerButton />}
+            title={
+              chapterQ.isPending ? (
+                <Skeleton className="h-7 w-56" />
+              ) : (
+                <span className="flex items-center gap-2">
+                  <IconeChapitre className="size-5 shrink-0 text-muted-foreground" />
+                  {chapter?.label}
+                </span>
+              )
+            }
+            meta={chapter?.description.trim() ? chapter.description : undefined}
+          />
 
-        {/* Recherche à gauche, boutons du chapitre à droite, sur UNE ligne à
+          {/* Recherche à gauche, boutons du chapitre à droite, sur UNE ligne à
           toute largeur (demande utilisateur du 2026-09-28, comme l'accueil
           du classeur) : la recherche absorbe le rétrécissement. */}
-        <div className="flex items-center gap-2">
-          <div className="relative min-w-0 flex-1">
-            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={recherche}
-              onChange={(e) => setRecherche(e.target.value)}
-              type="search"
-              enterKeyHint="search"
-              placeholder="Rechercher dans le chapitre"
-              aria-label="Rechercher dans le chapitre"
-              className="pl-9"
-              disabled={!contenu}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') setRecherche('')
-              }}
-            />
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            {selection.selectionMode ? (
-              /* Mode sélection : compteur puis UN groupe (tout sélectionner,
+          <div className="flex items-center gap-2">
+            <div className="relative min-w-0 flex-1">
+              <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={recherche}
+                onChange={(e) => setRecherche(e.target.value)}
+                type="search"
+                enterKeyHint="search"
+                placeholder="Rechercher dans le chapitre"
+                aria-label="Rechercher dans le chapitre"
+                className="pl-9"
+                disabled={!contenu}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') setRecherche('')
+                }}
+              />
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              {selection.selectionMode ? (
+                /* Mode sélection : compteur puis UN groupe (tout sélectionner,
                déplacer, imprimer, supprimer la sélection, annuler). */
-              <>
-                {/* Sous 640 px, compteur retiré de l'écran (demande
+                <>
+                  {/* Sous 640 px, compteur retiré de l'écran (demande
                   utilisateur : inutile et encombrant) ; il reste annoncé aux
                   lecteurs d'écran. */}
-                <span
-                  className="text-sm text-muted-foreground max-sm:sr-only"
-                  aria-live="polite"
-                >
-                  {selection.count} sélectionné{selection.count > 1 ? 's' : ''}
-                </span>
-                <ButtonGroup>
-                  <IconAction
-                    label="Tout sélectionner"
-                    icon={<CheckSquare />}
-                    onClick={() => selection.selectAll(filtres)}
-                  />
-                  {/* Déplacer vers un autre chapitre ou un autre classeur :
-                    sans glisser (seule voie au doigt et sous 1024 px, où la
-                    colonne est un tiroir). */}
-                  {canWrite && (
-                    <MenuDeplacerVers
-                      origineId={classeurId}
-                      autresChapitres={autresChapitres}
-                      tip={TIP_DEPLACER_COPIER}
-                      onChapitre={(cible) =>
-                        deplacement.mutate({ refs: selection.refs, cible })
-                      }
-                      onAutreClasseur={(mode) =>
-                        setTransfert({
-                          elements: items.filter((it) =>
-                            selection.selected.has(cleRef(it.kind, it.data.id)),
-                          ),
-                          depuisSelection: true,
-                          mode,
-                        })
-                      }
-                    >
-                      <Button
-                        variant="outline"
-                        size="icon-sm"
-                        aria-label={TIP_DEPLACER_COPIER}
-                        disabled={
-                          selection.count === 0 || deplacement.isPending
-                        }
-                      >
-                        {deplacement.isPending ? (
-                          <Loader2 className="animate-spin" />
-                        ) : (
-                          <FolderInput />
-                        )}
-                      </Button>
-                    </MenuDeplacerVers>
-                  )}
-                  {/* Lecture suffit : imprimer n'écrit rien. */}
-                  <BoutonImprimerSelection
-                    count={aImprimer.length}
-                    onClick={() => setApercu({ type: 'selection' })}
-                  />
-                  {/* Accès direct au PDF : l'aperçu s'ouvre et lance le
-                    téléchargement tout seul (A2). */}
-                  <IconAction
-                    label={TELECHARGER_SELECTION}
-                    icon={<Download />}
-                    onClick={() =>
-                      setApercu({ type: 'selection', telecharger: true })
-                    }
-                    disabled={aImprimer.length === 0}
-                  />
-                  {canWrite && (
-                    <IconAction
-                      label="Supprimer la sélection"
-                      icon={<Trash2 />}
-                      className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                      onClick={() => setBulkOpen(true)}
-                      disabled={selection.count === 0}
-                    />
-                  )}
-                  <IconAction
-                    label="Annuler la sélection"
-                    icon={<X />}
-                    onClick={selection.clear}
-                  />
-                </ButtonGroup>
-              </>
-            ) : (
-              /* Création (outline sm, comme « Ajouter un compte »), puis le
-               groupe lecture (impression, export) et le groupe écriture
-               (modifier, supprimer — icône rouge, jamais de fond plein). */
-              <>
-                <input
-                  ref={inputFichiersRef}
-                  type="file"
-                  multiple
-                  accept=".md,.markdown,.txt,text/markdown,text/plain"
-                  className="hidden"
-                  onChange={(e) => {
-                    if (e.target.files) importer(e.target.files)
-                    e.target.value = ''
-                  }}
-                />
-                {/* ≥ 640 px : tous les boutons, comme avant. */}
-                <div className="contents max-sm:hidden">
-                  {/* Icône seule (demande utilisateur du 2026-09-30), comme
-                    sur téléphone ; le libellé reste dans l'infobulle et
-                    pour les lecteurs d'écran. */}
-                  {canWrite && chapter && (
-                    <IconAction
-                      label="Ajouter un document, une feuille ou un intercalaire"
-                      icon={<Plus />}
-                      onClick={() => setCreateOpen(true)}
-                    />
-                  )}
-                  {canWrite && chapter && (
-                    <ButtonGroup>
-                      {/* Sélection et import SANS clavier ni glisser de
-                        fichiers : les seules voies au doigt. */}
-                      <IconAction
-                        label="Sélectionner des éléments"
-                        icon={<ListChecks />}
-                        onClick={selection.commencer}
-                        disabled={items.length === 0}
-                      />
-                      <IconAction
-                        label="Importer des fichiers .md ou .txt"
-                        icon={<FileUp />}
-                        onClick={() => inputFichiersRef.current?.click()}
-                        busy={importation.isPending}
-                      />
-                    </ButtonGroup>
-                  )}
+                  <span
+                    className="text-sm text-muted-foreground max-sm:sr-only"
+                    aria-live="polite"
+                  >
+                    {selection.count} sélectionné
+                    {selection.count > 1 ? 's' : ''}
+                  </span>
                   <ButtonGroup>
                     <IconAction
-                      label="Imprimer le chapitre ou l'enregistrer en PDF"
-                      icon={<Printer />}
-                      onClick={() => setApercu({ type: 'tout' })}
-                      disabled={!chapter || items.length === 0}
+                      label="Tout sélectionner"
+                      icon={<CheckSquare />}
+                      onClick={() => selection.selectAll(filtres)}
                     />
+                    {/* Déplacer vers un autre chapitre ou un autre classeur :
+                    sans glisser (seule voie au doigt et sous 1024 px, où la
+                    colonne est un tiroir). */}
+                    {canWrite && (
+                      <MenuDeplacerVers
+                        origineId={classeurId}
+                        autresChapitres={autresChapitres}
+                        tip={TIP_DEPLACER_COPIER}
+                        onChapitre={(cible) =>
+                          deplacement.mutate({ refs: selection.refs, cible })
+                        }
+                        onAutreClasseur={(mode) =>
+                          setTransfert({
+                            elements: items.filter((it) =>
+                              selection.selected.has(
+                                cleRef(it.kind, it.data.id),
+                              ),
+                            ),
+                            depuisSelection: true,
+                            mode,
+                          })
+                        }
+                      >
+                        <Button
+                          variant="outline"
+                          size="icon-sm"
+                          aria-label={TIP_DEPLACER_COPIER}
+                          disabled={
+                            selection.count === 0 || deplacement.isPending
+                          }
+                        >
+                          {deplacement.isPending ? (
+                            <Loader2 className="animate-spin" />
+                          ) : (
+                            <FolderInput />
+                          )}
+                        </Button>
+                      </MenuDeplacerVers>
+                    )}
+                    {/* Lecture suffit : imprimer n'écrit rien. */}
+                    <BoutonImprimerSelection
+                      count={aImprimer.length}
+                      onClick={() => setApercu({ type: 'selection' })}
+                    />
+                    {/* Accès direct au PDF : l'aperçu s'ouvre et lance le
+                    téléchargement tout seul (A2). */}
                     <IconAction
-                      label={TELECHARGER_CHAPITRE}
+                      label={TELECHARGER_SELECTION}
                       icon={<Download />}
                       onClick={() =>
-                        setApercu({ type: 'tout', telecharger: true })
+                        setApercu({ type: 'selection', telecharger: true })
                       }
-                      disabled={!chapter || items.length === 0}
+                      disabled={aImprimer.length === 0}
                     />
-                    <IconAction
-                      label="Exporter le chapitre en Markdown (ZIP)"
-                      icon={<Archive />}
-                      onClick={() => exportZip.mutate()}
-                      disabled={!chapter || !contenu}
-                      busy={exportZip.isPending}
-                    />
-                    <IconAction
-                      label="JSON pour un LLM : exporter, réimporter"
-                      icon={<Braces />}
-                      onClick={() => setJsonOuvert(true)}
-                      disabled={!chapter || !contenu}
-                    />
-                  </ButtonGroup>
-                  {canWrite && chapter && (
-                    <ButtonGroup>
+                    {canWrite && (
                       <IconAction
-                        label="Modifier le chapitre"
-                        icon={<Pencil />}
-                        onClick={() => setEditChapterOpen(true)}
-                      />
-                      <IconAction
-                        label="Supprimer le chapitre"
+                        label="Supprimer la sélection"
                         icon={<Trash2 />}
                         className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                        onClick={() => setDeleteChapterOpen(true)}
+                        onClick={() => setBulkOpen(true)}
+                        disabled={selection.count === 0}
                       />
-                    </ButtonGroup>
-                  )}
-                </div>
-                {/* < 640 px : l'essentiel reste visible (créer, sélectionner),
-                  le reste passe dans « ⋯ » — sinon la ligne débordait et
-                  « Nouvel élément » sortait de l'écran par la gauche. */}
-                <div className="hidden max-sm:contents">
-                  {canWrite && chapter && (
-                    <>
+                    )}
+                    <IconAction
+                      label="Annuler la sélection"
+                      icon={<X />}
+                      onClick={selection.clear}
+                    />
+                  </ButtonGroup>
+                </>
+              ) : (
+                /* Création (outline sm, comme « Ajouter un compte »), puis le
+               groupe lecture (impression, export) et le groupe écriture
+               (modifier, supprimer — icône rouge, jamais de fond plein). */
+                <>
+                  <input
+                    ref={inputFichiersRef}
+                    type="file"
+                    multiple
+                    accept=".md,.markdown,.txt,text/markdown,text/plain"
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files) importer(e.target.files)
+                      e.target.value = ''
+                    }}
+                  />
+                  {/* ≥ 640 px : tous les boutons, comme avant. */}
+                  <div className="contents max-sm:hidden">
+                    {/* Icône seule (demande utilisateur du 2026-09-30), comme
+                    sur téléphone ; le libellé reste dans l'infobulle et
+                    pour les lecteurs d'écran. */}
+                    {canWrite && chapter && (
                       <IconAction
                         label="Ajouter un document, une feuille ou un intercalaire"
                         icon={<Plus />}
                         onClick={() => setCreateOpen(true)}
                       />
+                    )}
+                    {canWrite && chapter && (
+                      <ButtonGroup>
+                        {/* Sélection et import SANS clavier ni glisser de
+                        fichiers : les seules voies au doigt. */}
+                        <IconAction
+                          label="Sélectionner des éléments"
+                          icon={<ListChecks />}
+                          onClick={selection.commencer}
+                          disabled={items.length === 0}
+                        />
+                        <IconAction
+                          label="Importer des fichiers .md ou .txt"
+                          icon={<FileUp />}
+                          onClick={() => inputFichiersRef.current?.click()}
+                          busy={importation.isPending}
+                        />
+                      </ButtonGroup>
+                    )}
+                    <ButtonGroup>
                       <IconAction
-                        label="Sélectionner des éléments"
-                        icon={<ListChecks />}
-                        onClick={selection.commencer}
-                        disabled={items.length === 0}
+                        label="Imprimer le chapitre ou l'enregistrer en PDF"
+                        icon={<Printer />}
+                        onClick={() => setApercu({ type: 'tout' })}
+                        disabled={!chapter || items.length === 0}
                       />
-                    </>
-                  )}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="icon-sm"
-                        aria-label="Autres actions du chapitre"
-                      >
-                        <MoreHorizontal />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-64">
-                      <DropdownMenuItem
-                        disabled={!chapter || items.length === 0}
-                        onSelect={() => setApercu({ type: 'tout' })}
-                      >
-                        <Printer />
-                        Imprimer ou PDF
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        disabled={!chapter || items.length === 0}
-                        onSelect={() =>
+                      <IconAction
+                        label={TELECHARGER_CHAPITRE}
+                        icon={<Download />}
+                        onClick={() =>
                           setApercu({ type: 'tout', telecharger: true })
                         }
-                      >
-                        <Download />
-                        {TELECHARGER_CHAPITRE}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
+                        disabled={!chapter || items.length === 0}
+                      />
+                      <IconAction
+                        label="Exporter le chapitre en Markdown (ZIP)"
+                        icon={<Archive />}
+                        onClick={() => exportZip.mutate()}
                         disabled={!chapter || !contenu}
-                        onSelect={() => exportZip.mutate()}
-                      >
-                        <Archive />
-                        Exporter en Markdown (ZIP)
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
+                        busy={exportZip.isPending}
+                      />
+                      <IconAction
+                        label="JSON pour un LLM : exporter, réimporter"
+                        icon={<Braces />}
+                        onClick={() => setJsonOuvert(true)}
                         disabled={!chapter || !contenu}
-                        onSelect={() => setJsonOuvert(true)}
-                      >
-                        <Braces />
-                        JSON pour un LLM
-                      </DropdownMenuItem>
-                      {canWrite && chapter && (
-                        <>
-                          <DropdownMenuItem
-                            onSelect={() => inputFichiersRef.current?.click()}
-                          >
-                            <FileUp />
-                            Importer des fichiers .md ou .txt
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onSelect={() => setEditChapterOpen(true)}
-                          >
-                            <Pencil />
-                            Modifier le chapitre
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            variant="destructive"
-                            onSelect={() => setDeleteChapterOpen(true)}
-                          >
-                            <Trash2 />
-                            Supprimer le chapitre
-                          </DropdownMenuItem>
-                        </>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </>
-            )}
+                      />
+                    </ButtonGroup>
+                    {canWrite && chapter && (
+                      <ButtonGroup>
+                        <IconAction
+                          label="Modifier le chapitre"
+                          icon={<Pencil />}
+                          onClick={() => setEditChapterOpen(true)}
+                        />
+                        <IconAction
+                          label="Supprimer le chapitre"
+                          icon={<Trash2 />}
+                          className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          onClick={() => setDeleteChapterOpen(true)}
+                        />
+                      </ButtonGroup>
+                    )}
+                  </div>
+                  {/* < 640 px : l'essentiel reste visible (créer, sélectionner),
+                  le reste passe dans « ⋯ » — sinon la ligne débordait et
+                  « Nouvel élément » sortait de l'écran par la gauche. */}
+                  <div className="hidden max-sm:contents">
+                    {canWrite && chapter && (
+                      <>
+                        <IconAction
+                          label="Ajouter un document, une feuille ou un intercalaire"
+                          icon={<Plus />}
+                          onClick={() => setCreateOpen(true)}
+                        />
+                        <IconAction
+                          label="Sélectionner des éléments"
+                          icon={<ListChecks />}
+                          onClick={selection.commencer}
+                          disabled={items.length === 0}
+                        />
+                      </>
+                    )}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="icon-sm"
+                          aria-label="Autres actions du chapitre"
+                        >
+                          <MoreHorizontal />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-64">
+                        <DropdownMenuItem
+                          disabled={!chapter || items.length === 0}
+                          onSelect={() => setApercu({ type: 'tout' })}
+                        >
+                          <Printer />
+                          Imprimer ou PDF
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          disabled={!chapter || items.length === 0}
+                          onSelect={() =>
+                            setApercu({ type: 'tout', telecharger: true })
+                          }
+                        >
+                          <Download />
+                          {TELECHARGER_CHAPITRE}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          disabled={!chapter || !contenu}
+                          onSelect={() => exportZip.mutate()}
+                        >
+                          <Archive />
+                          Exporter en Markdown (ZIP)
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          disabled={!chapter || !contenu}
+                          onSelect={() => setJsonOuvert(true)}
+                        >
+                          <Braces />
+                          JSON pour un LLM
+                        </DropdownMenuItem>
+                        {canWrite && chapter && (
+                          <>
+                            <DropdownMenuItem
+                              onSelect={() => inputFichiersRef.current?.click()}
+                            >
+                              <FileUp />
+                              Importer des fichiers .md ou .txt
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onSelect={() => setEditChapterOpen(true)}
+                            >
+                              <Pencil />
+                              Modifier le chapitre
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              variant="destructive"
+                              onSelect={() => setDeleteChapterOpen(true)}
+                            >
+                              <Trash2 />
+                              Supprimer le chapitre
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
-        </div>
-      </EnTeteCollant>
-
+        </>
+      }
+    >
       {erreurs.map((e) => (
         <div
           key={e.cle}
@@ -1023,6 +1026,6 @@ export function ChapterBoard({
           })
         }
       />
-    </div>
+    </PageAvecEnTete>
   )
 }

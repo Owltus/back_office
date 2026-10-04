@@ -1,5 +1,6 @@
 import { useState } from 'react'
 
+import { PageAvecEnTete } from '#/components/classeur/PageAvecEnTete.tsx'
 import {
   DetailActions,
   DetailErreur,
@@ -69,10 +70,9 @@ export function TrackingSheetDetail() {
   if (page.isPending) return <DetailSkeleton retour={retour} />
   if (page.isError) {
     return (
-      <div className="flex flex-1 flex-col gap-4">
-        <DetailHeader retour={retour} title={null} />
+      <PageAvecEnTete entete={<DetailHeader retour={retour} title={null} />}>
         <DetailErreur err={page.error} action="Feuille de suivi indisponible" />
-      </div>
+      </PageAvecEnTete>
     )
   }
   if (!sheet) {
@@ -93,28 +93,30 @@ export function TrackingSheetDetail() {
     : titreOuDefaut(sheet.title)
 
   return (
-    <div className="flex flex-1 flex-col gap-4">
-      <DetailHeader
-        retour={retour}
-        title={titreAffiche}
-        kind="tracking_sheet"
-        chapterName={page.chapter?.label}
-        actions={
-          <DetailActions
-            editing={editing}
-            canWrite={page.canWrite}
-            saving={page.update.isPending}
-            onEdit={commencerEdition}
-            onCancel={() => {
-              setEditing(false)
-              page.update.reset()
-            }}
-            onSave={() => void sauvegarder()}
-            onPrint={() => setPreviewOpen(true)}
-          />
-        }
-      />
-
+    <PageAvecEnTete
+      entete={
+        <DetailHeader
+          retour={retour}
+          title={titreAffiche}
+          kind="tracking_sheet"
+          chapterName={page.chapter?.label}
+          actions={
+            <DetailActions
+              editing={editing}
+              canWrite={page.canWrite}
+              saving={page.update.isPending}
+              onEdit={commencerEdition}
+              onCancel={() => {
+                setEditing(false)
+                page.update.reset()
+              }}
+              onSave={() => void sauvegarder()}
+              onPrint={() => setPreviewOpen(true)}
+            />
+          }
+        />
+      }
+    >
       {editing && (
         <DetailFields>
           <Input
@@ -179,6 +181,6 @@ export function TrackingSheetDetail() {
           establishment={page.establishment}
         />
       </PrintPreview>
-    </div>
+    </PageAvecEnTete>
   )
 }

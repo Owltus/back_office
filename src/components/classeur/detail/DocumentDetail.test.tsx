@@ -137,6 +137,17 @@ beforeEach(() => {
       disconnect() {}
     },
   )
+  // jsdom n'a pas `matchMedia` : fenêtre étroite (une colonne).
+  vi.stubGlobal(
+    'matchMedia',
+    (query: string) =>
+      ({
+        matches: false,
+        media: query,
+        addEventListener() {},
+        removeEventListener() {},
+      }) as unknown as MediaQueryList,
+  )
   // Colonne mesurée à 448 px : « ajusté » = 400 ÷ 793,7 ≈ 50 %.
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
     x: 0,
@@ -239,5 +250,51 @@ describe('DocumentDetail : accès direct au PDF', () => {
     expect(
       screen.getByTestId('apercu-impression').getAttribute('data-auto'),
     ).toBe('true')
+  })
+})
+
+/*
+ * Cadre « en-tête fixe + contenu qui défile » (décision utilisateur du
+ * 2026-10-04) : boutons dans l'en-tête, HORS de la zone qui défile ; aperçu
+ * (lecture) et grille d'édition DANS la zone, la grille la remplissant à
+ * partir de 1280 px (flex `min-h-0`, plus de hauteur mesurée).
+ */
+describe('DocumentDetail : en-tête fixe et zone qui défile', () => {
+  function cadre() {
+    const entete = document.querySelector<HTMLElement>('[data-page-en-tete]')
+    const zone = document.querySelector<HTMLElement>('[data-page-zone]')
+    expect(entete).not.toBeNull()
+    expect(zone).not.toBeNull()
+    expect(zone!.className).toContain('overflow-y-auto')
+    expect(zone!.contains(entete)).toBe(false)
+    expect(entete!.contains(zone)).toBe(false)
+    return { entete: entete!, zone: zone! }
+  }
+
+  it('en LECTURE : actions dans l’en-tête, pages A4 dans la zone', () => {
+    monter()
+    const { entete, zone } = cadre()
+    const imprimer = screen.getByRole('button', { name: 'Imprimer' })
+    expect(entete.contains(imprimer)).toBe(true)
+    expect(zone.contains(screen.getByTestId('pages-a4'))).toBe(true)
+  })
+
+  it('en ÉDITION : texte et aperçu dans la zone, la grille la remplit', () => {
+    etat.editing = true
+    monter()
+    const { entete, zone } = cadre()
+    expect(
+      entete.contains(
+        screen.getByRole('button', { name: 'Annuler les modifications' }),
+      ),
+    ).toBe(true)
+    const texte = screen.getByLabelText('Contenu du document')
+    expect(zone.contains(texte)).toBe(true)
+    const grille = zone.querySelector<HTMLElement>('[data-grille-edition]')
+    expect(grille?.parentElement).toBe(zone)
+    expect(grille?.className).toContain('xl:flex-1')
+    expect(grille?.className).toContain('xl:min-h-90')
+    // Plus de hauteur imposée en ligne : c'est le cadre qui la donne.
+    expect(grille?.style.height).toBe('')
   })
 })

@@ -19,6 +19,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import { PageAvecEnTete } from '#/components/classeur/PageAvecEnTete.tsx'
 import {
   DetailActions,
   DetailErreur,
@@ -29,7 +30,6 @@ import {
   DetailSkeleton,
 } from '#/components/classeur/detail/DetailFrame.tsx'
 import { useDetailPage } from '#/components/classeur/hooks/useDetailPage.ts'
-import { useHauteurJusquEnBas } from '#/components/classeur/hooks/useHauteurJusquEnBas.ts'
 import {
   BarreMiseEnForme,
   useMiseEnForme,
@@ -62,6 +62,7 @@ import { IconAction } from '#/components/classeur/IconAction.tsx'
 import { DocumentPages } from '#/components/classeur/print/DocumentPages.tsx'
 import { PrintPreview } from '#/components/classeur/print/PrintPreview.tsx'
 import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
+import { useMatchMedia } from '#/components/shared/useMatchMedia.ts'
 import { HelpGlyph } from '#/components/shared/HelpGlyph.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
@@ -134,16 +135,17 @@ export function DocumentDetail() {
   })
   // Deux colonnes et hauteur fixe à partir de 1280 px seulement : à 1024,
   // avec la colonne des chapitres, chaque moitié ne faisait que ~320 px
-  // (audit tactile 2026-09-28).
-  const zoneEdition = useHauteurJusquEnBas({ minLargeur: 1280 })
+  // (audit tactile 2026-09-28). La hauteur vient du cadre : la grille
+  // remplit la zone qui défile sous l'en-tête fixe (`PageAvecEnTete`).
+  const deuxColonnes = useMatchMedia('(min-width: 1280px)')
   // Étape 8 : zoom de l'aperçu, en lecture comme en édition (audit A4 :
   // la page en lecture est l'aperçu le plus regardé), même réglage mémorisé.
   // `zoom.echelle` est la SEULE échelle de l'aperçu ; la synchro texte ⇄
   // aperçu et la barre d'image lisent des rapports de défilement et des
-  // boîtes déjà à cette échelle. En lecture, la page défile avec la
-  // fenêtre : hauteur non bornée.
+  // boîtes déjà à cette échelle. En lecture, les pages défilent avec la
+  // zone sous l'en-tête : hauteur non bornée.
   const zoom = useZoomApercu({
-    hauteurBornee: editing && zoneEdition.hauteur !== null,
+    hauteurBornee: editing && deuxColonnes,
   })
   const apercuRefCallback = zoom.defilementRef
   // Barre flottante de l'image cliquée dans l'aperçu (2026-10-01).
@@ -412,10 +414,9 @@ export function DocumentDetail() {
   if (page.isPending) return <DetailSkeleton retour={retour} />
   if (page.isError) {
     return (
-      <div className="flex flex-1 flex-col gap-4">
-        <DetailHeader retour={retour} title={null} />
+      <PageAvecEnTete entete={<DetailHeader retour={retour} title={null} />}>
         <DetailErreur err={page.error} action="Document indisponible" />
-      </div>
+      </PageAvecEnTete>
     )
   }
   if (!doc)
@@ -453,93 +454,97 @@ export function DocumentDetail() {
   )
 
   return (
-    <div className="flex flex-1 flex-col gap-4">
-      <DetailHeader
-        retour={retour}
-        editing={editing}
-        title={titreAffiche}
-        kind="document"
-        chapterName={page.chapter?.label}
-        actions={
-          <DetailActions
-            aide={
-              editing ? (
-                <ButtonGroup>
-                  <IconAction
-                    label="Comment mettre en forme"
-                    icon={<HelpGlyph />}
-                    onClick={() => setAideOuverte(true)}
+    <PageAvecEnTete
+      entete={
+        <DetailHeader
+          retour={retour}
+          editing={editing}
+          title={titreAffiche}
+          kind="document"
+          chapterName={page.chapter?.label}
+          actions={
+            <DetailActions
+              aide={
+                editing ? (
+                  <ButtonGroup>
+                    <IconAction
+                      label="Comment mettre en forme"
+                      icon={<HelpGlyph />}
+                      onClick={() => setAideOuverte(true)}
+                    />
+                    <IconAction
+                      label="Titre et description"
+                      icon={<Pencil />}
+                      onClick={() => setTitreOuvert(true)}
+                    />
+                    <IconAction
+                      label={
+                        apercuMasque ? "Afficher l'aperçu" : "Masquer l'aperçu"
+                      }
+                      icon={
+                        apercuMasque ? <PanelLeftOpen /> : <PanelLeftClose />
+                      }
+                      aria-pressed={apercuMasque}
+                      onClick={() => setApercuMasque((m) => !m)}
+                    />
+                  </ButtonGroup>
+                ) : undefined
+              }
+              editing={editing}
+              canWrite={page.canWrite}
+              saving={edition.saving}
+              statut={
+                <>
+                  {nbPages !== null && (
+                    <span
+                      className="hidden text-xs text-muted-foreground tabular-nums md:inline"
+                      title="Nombre de pages imprimées"
+                    >
+                      {nbPages} {nbPages > 1 ? 'pages' : 'page'}
+                    </span>
+                  )}
+                  <IndicateurEnregistrement
+                    modifie={edition.modifie}
+                    brouillonEcritLe={edition.brouillonEcritLe}
                   />
+                </>
+              }
+              onEdit={edition.commencer}
+              onCancel={edition.annuler}
+              onSave={sauvegarder}
+              onPrint={() => {
+                setPdfDirect(false)
+                setPreviewOpen(true)
+              }}
+              onPdf={() => {
+                setPdfDirect(true)
+                setPreviewOpen(true)
+              }}
+              extra={
+                <>
                   <IconAction
-                    label="Titre et description"
-                    icon={<Pencil />}
-                    onClick={() => setTitreOuvert(true)}
+                    label="Historique des versions"
+                    icon={<History />}
+                    onClick={() => setHistoriqueOuvert(true)}
                   />
-                  <IconAction
-                    label={
-                      apercuMasque ? "Afficher l'aperçu" : "Masquer l'aperçu"
+                  <DetailMarkdownAction
+                    onClick={() =>
+                      exporterDocumentMarkdown(doc.title, doc.content)
                     }
-                    icon={apercuMasque ? <PanelLeftOpen /> : <PanelLeftClose />}
-                    aria-pressed={apercuMasque}
-                    onClick={() => setApercuMasque((m) => !m)}
                   />
-                </ButtonGroup>
-              ) : undefined
-            }
-            editing={editing}
-            canWrite={page.canWrite}
-            saving={edition.saving}
-            statut={
-              <>
-                {nbPages !== null && (
-                  <span
-                    className="hidden text-xs text-muted-foreground tabular-nums md:inline"
-                    title="Nombre de pages imprimées"
-                  >
-                    {nbPages} {nbPages > 1 ? 'pages' : 'page'}
-                  </span>
-                )}
-                <IndicateurEnregistrement
-                  modifie={edition.modifie}
-                  brouillonEcritLe={edition.brouillonEcritLe}
-                />
-              </>
-            }
-            onEdit={edition.commencer}
-            onCancel={edition.annuler}
-            onSave={sauvegarder}
-            onPrint={() => {
-              setPdfDirect(false)
-              setPreviewOpen(true)
-            }}
-            onPdf={() => {
-              setPdfDirect(true)
-              setPreviewOpen(true)
-            }}
-            extra={
-              <>
-                <IconAction
-                  label="Historique des versions"
-                  icon={<History />}
-                  onClick={() => setHistoriqueOuvert(true)}
-                />
-                <DetailMarkdownAction
-                  onClick={() =>
-                    exporterDocumentMarkdown(doc.title, doc.content)
-                  }
-                />
-                <IconAction
-                  label="JSON pour un LLM : exporter, réimporter"
-                  icon={<Braces />}
-                  onClick={() => setJsonOuvert(true)}
-                  disabled={!page.chapter}
-                />
-              </>
-            }
-          />
-        }
-      />
-
+                  <IconAction
+                    label="JSON pour un LLM : exporter, réimporter"
+                    icon={<Braces />}
+                    onClick={() => setJsonOuvert(true)}
+                    disabled={!page.chapter}
+                  />
+                </>
+              }
+            />
+          }
+        />
+      }
+    >
       {edition.erreur !== null && (
         <DetailErreur err={edition.erreur} action="Sauvegarde impossible" />
       )}
@@ -554,21 +559,18 @@ export function DocumentDetail() {
       )}
 
       {editing ? (
-        // Hauteur fixée sur la fenêtre (grand écran) : l'éditeur ne se
-        // redimensionne plus à la main, chaque colonne défile en interne.
+        // Grand écran : la grille REMPLIT la zone sous l'en-tête (flex
+        // `min-h-0`, 360 px au moins), l'éditeur ne se redimensionne plus à
+        // la main, chaque colonne défile en interne. En dessous : flux
+        // naturel (éditeur 60 dvh puis l'aperçu), la zone défile.
         <div
-          ref={zoneEdition.ref}
+          data-grille-edition=""
           className={cn(
             // `grid-cols-1` (minmax(0, 1fr)) : sous 1280 px, une colonne `auto`
             // s'élargissait à l'aperçu zoomé, barre du zoom hors de l'écran.
-            'grid grid-cols-1 gap-4',
+            'grid grid-cols-1 gap-4 xl:min-h-90 xl:flex-1',
             apercuMasque ? 'xl:grid-cols-1' : 'xl:grid-cols-2',
           )}
-          style={
-            zoneEdition.hauteur === null
-              ? undefined
-              : { height: zoneEdition.hauteur }
-          }
         >
           {/* Colonne d'aperçu : la carte est la zone d'écoute du zoom
               (Ctrl + molette, raccourcis), sans contrôle à l'écran, comme
@@ -778,7 +780,7 @@ export function DocumentDetail() {
           />
         )}
       </PrintPreview>
-    </div>
+    </PageAvecEnTete>
   )
 }
 

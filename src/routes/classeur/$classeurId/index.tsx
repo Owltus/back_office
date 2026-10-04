@@ -14,12 +14,17 @@ export const Route = createFileRoute('/classeur/$classeurId/')({
  *
  * Sommaire, impression, exports, import-fusion et historique sont branchés
  * par `ClasseurDashboardActions` sur les boutons de l'en-tête.
+ *
+ * La rangée du classeur tient dans la hauteur du `<main>` (qui ne défile
+ * plus) : l'accueil défile dans SA zone, barre au bord droit de la fenêtre.
  */
 function ClasseurDashboardPage() {
   const { classeurId } = Route.useParams()
   return (
-    <PageContainer>
-      <ClasseurDashboardActions classeurId={Number(classeurId)} />
-    </PageContainer>
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+      <PageContainer>
+        <ClasseurDashboardActions classeurId={Number(classeurId)} />
+      </PageContainer>
+    </div>
   )
 }
