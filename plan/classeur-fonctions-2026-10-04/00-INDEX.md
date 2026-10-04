@@ -47,7 +47,7 @@ tableau des 17 questions d'origine est en [annexe](#annexe--les-17-questions-dor
 | 8 | [8-zoom-apercu.md](./8-zoom-apercu.md) | Zoom de l'aperçu A4 (UI/UX pensée) | 0 | P1 | 4 h | Contrôle de zoom, molette, Ctrl + 0 | |
 | 1 | [1-llm-comparaison.md](./1-llm-comparaison.md) | LLM : voir les changements, refuser un document | 0 | P0 | 6 h | Diff par document, cases, « Importer N » — **FAIT c1381e0** (Stryker portee 83,3 %, apply 90,7 %) | ⚠ |
 | 2 | [2-llm-relecture.md](./2-llm-relecture.md) | LLM : relecture avant import | 1 | P0 | 2 h | Alertes par document dans l'aperçu — **FAIT 8e78701** (Stryker relecture 71,2 → 93,65 %) | |
-| 3 | [3-llm-demandes.md](./3-llm-demandes.md) | LLM : demandes toutes prêtes | 1 (même fichier) | P1 | 3 h | Demandes cochables, `_metadata.demande` | |
+| 3 | [3-llm-demandes.md](./3-llm-demandes.md) | LLM : demandes toutes prêtes | 1 (même fichier) | P1 | 3 h | Demandes cochables, `_metadata.demande` — **FAIT 2b0c4df** (7 demandes + champ libre, rien mémorisé ; Stryker llmDemandes 100 %, consignes 65,2 → 100 %) | |
 | 4 | [4-imprimer-selection.md](./4-imprimer-selection.md) | Imprimer une sélection | 0 | P1 | 2 h | « Imprimer (N) » dans la barre de sélection — FAIT a91170b | |
 | 5 | [5-imprimer-modifies.md](./5-imprimer-modifies.md) | Imprimer ce qui a changé depuis une date | 4 | P1 | 4 h (+ SQL éventuel) | Carte d'accueil, liste, aperçu — FAIT 8753e48 (aucun SQL : explain 0,19 ms, D30 sans index) | ⚠ |
 | 6 | [6-corbeille.md](./6-corbeille.md) | Corbeille | 0 | P1 | 4 h | Carte d'accueil, Restaurer — FAIT 9389d46 (restaurerItem/Chapter : option corbeille, fin de chapitre, refus RLS détecté, garde sur le classeur ; Stryker corbeille.ts 100 %) | ⚠ |
