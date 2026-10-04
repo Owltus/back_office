@@ -64,8 +64,34 @@ export function definirGardeEcriture(
   gardeEcriture = garde
 }
 
-async function avantEcriture(ref: RefEcriture): Promise<void> {
+/**
+ * Appelle la garde (point de restauration auto) AVANT une écriture. Jamais
+ * bloquante : la garde avale ses erreurs. Exportée pour le transfert
+ * (`transfertExecution.ts`), qui l'appelle sur CHAQUE classeur touché.
+ */
+export async function avantEcriture(ref: RefEcriture): Promise<void> {
   if (gardeEcriture !== null) await gardeEcriture(ref)
+}
+
+type RefsElements = ReadonlyArray<{ kind: ItemKind; id: number }>
+
+let oubliDeplacement: ((refs: RefsElements) => void) | null = null
+
+/**
+ * Pose le rappel qui OUBLIE la résolution mémorisée élément → chapitre de
+ * la garde (`restauration.ts`). Sans lui, un élément déplacé vers un AUTRE
+ * classeur gardait son ancien chapitre en mémoire : ses écritures suivantes
+ * auraient pris leur point de restauration sur le classeur de DÉPART.
+ */
+export function definirOubliDeplacement(
+  oubli: ((refs: RefsElements) => void) | null,
+): void {
+  oubliDeplacement = oubli
+}
+
+/** À appeler après tout changement de chapitre d'un élément. */
+export function signalerDeplacement(refs: RefsElements): void {
+  if (oubliDeplacement !== null) oubliDeplacement(refs)
 }
 
 export const CLASSEURS_TABLE = 'classeur_classeurs'
@@ -452,7 +478,7 @@ export interface OptionsCorbeille {
 }
 
 /** Une écriture `.select('id')` qui n'a touché aucune ligne = refus RLS. */
-function exigerUneLigne(data: unknown): void {
+export function exigerUneLigne(data: unknown): void {
   if (!Array.isArray(data) || data.length === 0) {
     throw Object.assign(new Error('Écriture refusée'), { code: '42501' })
   }
@@ -717,7 +743,7 @@ export type ItemInput =
   | { kind: 'intercalaire'; input: IntercalaireInput }
 
 /** Prochain `sort_order` d'un chapitre, toutes natures confondues. */
-async function prochainOrdre(chapterId: number): Promise<number> {
+export async function prochainOrdre(chapterId: number): Promise<number> {
   const contenu = await fetchChapterContent(chapterId)
   const max = Math.max(
     0,
@@ -848,6 +874,12 @@ async function ecrireDocumentVersionne(
   patch: ItemPatch,
   extra: Record<string, unknown> = {},
 ): Promise<void> {
+  // REFUS RLS (étape 7b) : un `update` refusé rend 0 ligne SANS erreur.
+  // Avant, l'écriture finale n'était pas relue : un import ou une
+  // sauvegarde refusés se disaient réussis. Toute écriture est désormais
+  // relue (`.select('id')`) ; 0 ligne devient une erreur 42501, sauf quand
+  // c'est une COURSE (l'état relu a changé : on recalcule le numéro).
+  let basePrecedente: string | undefined
   for (let essai = 0; essai < 3; essai++) {
     const { version, base } = await avecVersion(id, patch)
     const q = supabase
@@ -855,22 +887,29 @@ async function ecrireDocumentVersionne(
       .update({ ...patch, ...version, ...extra })
       .eq('id', id)
     if (base === undefined) {
-      const { error } = await q
+      const { data, error } = await q.select('id')
       if (error) throw error
+      exigerUneLigne(data)
       return
     }
+    // Même état relu qu'à l'essai précédent, où rien n'avait été écrit :
+    // ce n'est pas une course, c'est la RLS qui refuse.
+    if (base === basePrecedente) exigerUneLigne([])
     const { data, error } = await q.eq('updated_at', base).select('id')
     if (error) throw error
     if ((data as unknown[]).length > 0) return
+    basePrecedente = base
   }
-  // Trois écritures concurrentes de suite, ou un refus des droits : on
-  // écrit sans la garde (comportement d'avant le versionnage).
+  // Trois écritures concurrentes de suite : on écrit sans la garde
+  // (comportement d'avant le versionnage), mais relu.
   const { version } = await avecVersion(id, patch)
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from(ITEM_TABLE.document)
     .update({ ...patch, ...version, ...extra })
     .eq('id', id)
+    .select('id')
   if (error) throw error
+  exigerUneLigne(data)
 }
 
 /**
@@ -1002,11 +1041,14 @@ export async function updateItem(
     await ecrireDocumentVersionne(id, patch)
     return
   }
-  const { error } = await supabase
+  // Relue : un refus RLS (0 ligne, sans erreur) n'est plus un succès.
+  const { data, error } = await supabase
     .from(ITEM_TABLE[kind])
     .update(patch)
     .eq('id', id)
+    .select('id')
   if (error) throw error
+  exigerUneLigne(data)
 }
 
 /** Issue d'une sauvegarde de document conditionnée à sa version. */
@@ -1108,19 +1150,35 @@ export async function reorderItems(
   if (echec?.error) throw echec.error
 }
 
-/** Déplace des éléments vers un autre chapitre, en fin de liste. */
+/**
+ * Déplace des éléments vers un autre chapitre, en fin de liste.
+ *
+ * Corrigé à l'étape 7b :
+ *   - point de restauration sur l'ORIGINE puis sur l'ARRIVÉE (avant : la
+ *     seule arrivée). La garde résout l'origine par le premier élément
+ *     (élément → chapitre → classeur) : elle passe donc AVANT le
+ *     déplacement. Une sélection vient d'un seul chapitre ;
+ *   - chaque écriture est relue : un refus RLS (0 ligne, aucune erreur)
+ *     arrête le déplacement par une erreur 42501 au lieu d'un succès
+ *     annoncé. Les éléments déjà déplacés le restent (séquentiel).
+ */
 export async function moveItems(
   refs: ReadonlyArray<{ kind: ItemKind; id: number }>,
   targetChapterId: number,
 ): Promise<void> {
+  if (refs.length === 0) return
+  await avantEcriture(refs[0])
   await avantEcriture({ chapterId: targetChapterId })
   let ordre = await prochainOrdre(targetChapterId)
   for (const r of refs) {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from(ITEM_TABLE[r.kind])
       .update({ chapter_id: targetChapterId, sort_order: ordre })
       .eq('id', r.id)
+      .select('id')
     if (error) throw error
+    exigerUneLigne(data)
+    signalerDeplacement([r])
     ordre += 1
   }
 }

@@ -57,6 +57,8 @@ beforeEach(() => {
 })
 
 const docs = () => sim.client.from('classeur_documents')
+const statut = (r: { error: unknown }) =>
+  (r.error as { statusCode?: string } | null)?.statusCode
 
 describe('simulateur Supabase — témoins', () => {
   it('update refusé par la RLS : 0 ligne, AUCUNE erreur, rien d’écrit', async () => {
@@ -120,6 +122,70 @@ describe('simulateur Supabase — témoins', () => {
     expect((await b.copy('1/absent.webp', '2/x.webp')).error).not.toBeNull()
     expect((await b.remove(['1/a.webp'])).data).toEqual([{ name: '1/a.webp' }])
     expect([...sim.stockage['classeur-images'].keys()]).toEqual(['2/a.webp'])
+  })
+
+  it('politique : using masque (0 ligne), check refuse la NOUVELLE ligne (42501)', async () => {
+    sim.politique('classeur_documents', 'update', {
+      using: (l) => l.id !== 17,
+      check: (l) => l.content !== 'interdit',
+    })
+    const masque = await docs()
+      .update({ content: 'a' })
+      .eq('id', 17)
+      .select('id')
+    expect(masque).toEqual({ data: [], error: null })
+    const refuse = await docs()
+      .update({ content: 'interdit' })
+      .eq('id', 18)
+      .select('id')
+    expect(refuse.error?.code).toBe('42501')
+    expect(sim.table('classeur_documents')[1].content).not.toBe('interdit')
+    sim.politique('classeur_documents', 'insert', {
+      check: (l) => l.chapter_id === 7,
+    })
+    expect((await docs().insert({ chapter_id: 8 })).error?.code).toBe('42501')
+    expect((await docs().insert({ chapter_id: 7 })).error).toBeNull()
+  })
+
+  it('stockage sous RLS : lecture de la source, insert de la destination, ni écrasement ni upsert', async () => {
+    const b = sim.client.storage.from('classeur-images')
+    await b.upload('1/a.webp', 'octets')
+    await b.upload('2/b.webp', 'autre')
+    sim.politiqueStockage('classeur-images', 'select', (c) =>
+      c.startsWith('1/'),
+    )
+    sim.politiqueStockage('classeur-images', 'insert', (c) =>
+      c.startsWith('2/'),
+    )
+    sim.politiqueStockage('classeur-images', 'delete', (c) =>
+      c.startsWith('2/'),
+    )
+    expect((await b.copy('2/b.webp', '2/c.webp')).error?.message).toBe(
+      'Object not found',
+    )
+    expect(statut(await b.copy('1/a.webp', '1/c.webp'))).toBe('403')
+    expect(statut(await b.copy('1/a.webp', '2/b.webp'))).toBe('409')
+    const avecUpsert = await b.copy('1/a.webp', '2/d.webp', { upsert: true })
+    expect(statut(avecUpsert)).toBe('403')
+    expect(sim.journal.at(-1)?.options).toEqual({ upsert: true })
+    expect((await b.copy('1/a.webp', '2/d.webp')).error).toBeNull()
+    // remove : ce que la policy refuse est ignoré EN SILENCE.
+    expect((await b.remove(['1/a.webp', '2/d.webp'])).data).toEqual([
+      { name: '2/d.webp' },
+    ])
+    sim.refuserStockage('classeur-images', 'remove')
+    expect(await b.remove(['2/b.webp'])).toEqual({ data: [], error: null })
+  })
+
+  it('surAppel : appelé AVANT l’exécution, avec le rang de l’appel', async () => {
+    const vus: string[] = []
+    sim.surAppel = (n, cible, op) => {
+      vus.push(`${String(n)}:${cible}:${op}`)
+      sim.table('classeur_documents')[0].content = 'collègue'
+    }
+    const r = await docs().select('content').eq('id', 17).single()
+    expect(r.data).toEqual({ content: 'collègue' })
+    expect(vus).toEqual(['1:classeur_documents:select'])
   })
 })
 

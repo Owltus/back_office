@@ -52,6 +52,7 @@ import {
 } from '#/lib/classeur/merge/snapshot.ts'
 import {
   definirGardeEcriture,
+  definirOubliDeplacement,
   deleteMergeHistory,
   fetchChapter,
   fetchChapters,
@@ -291,3 +292,9 @@ export function reinitialiserPointsAuto(): void {
 // passe par `assurerPointAuto` dès que ce module est importé (il l'est par
 // les hooks de la page Classeur).
 definirGardeEcriture(assurerPointAuto)
+// Un élément déplacé (`moveItems`, transfert) change de chapitre, parfois
+// de classeur : sa résolution mémorisée est oubliée, sinon ses écritures
+// suivantes prendraient leur point sur le classeur de départ.
+definirOubliDeplacement((refs) => {
+  for (const r of refs) chapitreDeLElement.delete(`${r.kind}:${String(r.id)}`)
+})

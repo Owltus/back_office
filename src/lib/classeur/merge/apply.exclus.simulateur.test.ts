@@ -226,15 +226,12 @@ describe('appliquerFusionPortee + refus, contre le simulateur', () => {
   })
 
   /*
-   * DÉFAUT EXISTANT, hors du périmètre de l'étape 1 (signalé) : un refus RLS
-   * sur l'`update` d'un document rend 0 ligne SANS erreur, et
-   * `ecrireDocumentVersionne` finit par une écriture sans garde dont le
-   * résultat n'est pas relu — l'import se dit réussi alors que rien n'est
-   * écrit. `it.fails` : ce test passera au ROUGE le jour où le service
-   * relira `.select('id')` (règle transverse du plan), il faudra alors
-   * l'inverser en `it`.
+   * DÉFAUT corrigé à l'étape 7b (était un `it.fails`) : un refus RLS sur
+   * l'`update` d'un document rend 0 ligne SANS erreur, et
+   * `ecrireDocumentVersionne` finissait par une écriture non relue —
+   * l'import se disait réussi alors que rien n'était écrit.
    */
-  it.fails(
+  it(
     'refus RLS d’une écriture de document : l’erreur devrait remonter',
     async () => {
       sim.refuser('classeur_documents', 'update')

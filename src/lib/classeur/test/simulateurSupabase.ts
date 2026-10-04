@@ -16,7 +16,18 @@
  * - un refus RLS par (table, opération) : `select`/`update`/`delete` rendent
  *   0 ligne SANS erreur (comme la vraie RLS), `insert` rend 42501 ;
  * - une panne injectable au N-ième appel (base ou stockage) : `error`
- *   PostgREST, aucun effet.
+ *   PostgREST, aucun effet ;
+ * - des POLITIQUES par ligne (étape 7b), comme la vraie RLS : `using` rend
+ *   invisibles les lignes refusées (select, update, delete : 0 ligne, sans
+ *   erreur) ; `check` refuse une ligne écrite (insert, ou update dont la
+ *   NOUVELLE ligne échoue) par une erreur 42501, sans rien écrire ;
+ * - le stockage sous RLS : `copy` exige la lecture de la source (sinon
+ *   « Object not found ») et l'insert de la destination (sinon 403), refuse
+ *   une destination existante (409) et toute option `upsert` (aucune policy
+ *   UPDATE sur `storage.objects`) ; `remove` ignore EN SILENCE ce que la
+ *   policy delete refuse (comme le vrai stockage) ;
+ * - `surAppel` : rappel avant chaque appel (simuler un collègue qui écrit
+ *   entre deux requêtes).
  */
 
 export type Ligne = Record<string, unknown>
@@ -49,6 +60,31 @@ const TABLES_ESTAMPILLEES = new Set([
 
 type Filtre = (l: Ligne) => boolean
 
+/** Politique RLS d'une (table, opération) : voir l'en-tête. */
+export interface Politique {
+  using?: (l: Ligne) => boolean
+  check?: (l: Ligne) => boolean
+}
+
+export type OperationStockage = 'select' | 'insert' | 'delete'
+
+const ERREUR_RLS: ErreurPostgrest = {
+  message: 'new row violates row-level security policy',
+  code: '42501',
+  details: null,
+  hint: null,
+}
+
+/** Erreur du stockage (forme de `StorageApiError` : pas de `code`). */
+function erreurStockage(statusCode: string, message: string) {
+  return {
+    name: 'StorageApiError',
+    message,
+    status: Number(statusCode),
+    statusCode,
+  }
+}
+
 const OPERATEURS: Record<string, (a: unknown, b: unknown) => boolean> = {
   eq: (a, b) => a === b,
   neq: (a, b) => a !== b,
@@ -76,8 +112,13 @@ export class SimulateurSupabase {
   tables: Record<string, Ligne[]> = {}
   stockage: Record<string, Map<string, unknown>> = {}
   /** Appels attendus (base et stockage), dans l'ordre. */
-  journal: Array<{ cible: string; operation: string }> = []
+  journal: Array<{ cible: string; operation: string; options?: unknown }> = []
+  /** Rappel AVANT chaque appel (n = son rang, compté depuis 1). */
+  surAppel: ((n: number, cible: string, operation: string) => void) | null =
+    null
   private refus = new Set<string>()
+  private politiques = new Map<string, Politique>()
+  private politiquesStockage = new Map<string, (chemin: string) => boolean>()
   private panne: { au: number; erreur: ErreurPostgrest } | null = null
   private prochainId = 1000
   private tic = 0
@@ -98,6 +139,51 @@ export class SimulateurSupabase {
     this.refus.add(`${table}:${operation}`)
   }
 
+  /** Politique par ligne (`using` / `check`), voir l'en-tête. */
+  politique(
+    table: string,
+    operation: 'select' | 'insert' | 'update' | 'delete',
+    p: Politique,
+  ): void {
+    this.politiques.set(`${table}:${operation}`, p)
+  }
+
+  /** Refus GLOBAL d'une opération de stockage. */
+  refuserStockage(
+    bucket: string,
+    operation: 'upload' | 'copy' | 'remove',
+  ): void {
+    this.refus.add(`storage:${bucket}:${operation}`)
+  }
+
+  /** Politique de `storage.objects` par chemin. */
+  politiqueStockage(
+    bucket: string,
+    operation: OperationStockage,
+    autorise: (chemin: string) => boolean,
+  ): void {
+    this.politiquesStockage.set(`${bucket}:${operation}`, autorise)
+  }
+
+  private autoriseStockage(
+    bucket: string,
+    operation: OperationStockage,
+    chemin: string,
+  ): boolean {
+    const p = this.politiquesStockage.get(`${bucket}:${operation}`)
+    return p === undefined || p(chemin)
+  }
+
+  private visible(table: string, operation: Operation, l: Ligne): boolean {
+    const p = this.politiques.get(`${table}:${operation}`)
+    return p?.using === undefined || p.using(l)
+  }
+
+  private accepte(table: string, operation: Operation, l: Ligne): boolean {
+    const p = this.politiques.get(`${table}:${operation}`)
+    return p?.check === undefined || p.check(l)
+  }
+
   /** Le N-ième appel (1 = le premier, compté depuis le début) échoue. */
   panneAuAppel(n: number, code = '08006', message = 'Panne simulée'): void {
     this.panne = { au: n, erreur: { message, code, details: null, hint: null } }
@@ -110,8 +196,16 @@ export class SimulateurSupabase {
   private enregistrer(
     cible: string,
     operation: string,
+    options?: unknown,
   ): ErreurPostgrest | null {
-    this.journal.push({ cible, operation })
+    if (this.surAppel !== null) {
+      this.surAppel(this.journal.length + 1, cible, operation)
+    }
+    this.journal.push(
+      options === undefined
+        ? { cible, operation }
+        : { cible, operation, options },
+    )
     return this.panne?.au === this.journal.length ? this.panne.erreur : null
   }
 
@@ -173,27 +267,46 @@ export class SimulateurSupabase {
 
   private bucket(nom: string) {
     const objets = (this.stockage[nom] ??= new Map())
-    const appel = (operation: string) =>
-      this.enregistrer(`storage:${nom}`, operation)
+    const appel = (operation: string, options?: unknown) =>
+      this.enregistrer(`storage:${nom}`, operation, options)
+    const refuse = (operation: string) =>
+      this.refus.has(`storage:${nom}:${operation}`)
+    const refusRls = () =>
+      erreurStockage('403', 'new row violates row-level security policy')
     return {
       upload: async (chemin: string, contenu: unknown) => {
         const error = appel('upload')
         if (error) return { data: null, error }
+        if (refuse('upload') || !this.autoriseStockage(nom, 'insert', chemin)) {
+          return { data: null, error: refusRls() }
+        }
         objets.set(chemin, contenu)
         return { data: { path: chemin }, error: null }
       },
-      copy: async (de: string, vers: string) => {
-        const error = appel('copy')
+      copy: async (de: string, vers: string, options?: unknown) => {
+        const error = appel('copy', options)
         if (error) return { data: null, error }
-        if (!objets.has(de)) {
+        if (
+          refuse('copy') ||
+          (typeof options === 'object' &&
+            options !== null &&
+            'upsert' in options)
+        ) {
+          return { data: null, error: refusRls() }
+        }
+        if (!objets.has(de) || !this.autoriseStockage(nom, 'select', de)) {
           return {
             data: null,
-            error: {
-              message: 'Object not found',
-              code: '404',
-              details: null,
-              hint: null,
-            },
+            error: erreurStockage('404', 'Object not found'),
+          }
+        }
+        if (!this.autoriseStockage(nom, 'insert', vers)) {
+          return { data: null, error: refusRls() }
+        }
+        if (objets.has(vers)) {
+          return {
+            data: null,
+            error: erreurStockage('409', 'The resource already exists'),
           }
         }
         objets.set(vers, objets.get(de))
@@ -202,7 +315,10 @@ export class SimulateurSupabase {
       remove: async (chemins: ReadonlyArray<string>) => {
         const error = appel('remove')
         if (error) return { data: null, error }
-        const retires = chemins.filter((c) => objets.delete(c))
+        if (refuse('remove')) return { data: [], error: null }
+        const retires = chemins.filter(
+          (c) => this.autoriseStockage(nom, 'delete', c) && objets.delete(c),
+        )
         return { data: retires.map((name) => ({ name })), error: null }
       },
     }
@@ -216,16 +332,13 @@ export class SimulateurSupabase {
     const lignes = this.table(r.table)
     let touchees: Ligne[]
     if (r.operation === 'insert' || r.operation === 'upsert') {
-      if (refus) {
-        return {
-          data: null,
-          error: {
-            message: 'new row violates row-level security policy',
-            code: '42501',
-            details: null,
-            hint: null,
-          },
-        }
+      if (
+        refus ||
+        r.valeurs.some(
+          (v) => !this.accepte(r.table, 'insert', { deleted_at: null, ...v }),
+        )
+      ) {
+        return { data: null, error: ERREUR_RLS }
       }
       touchees = r.valeurs.map((v) => {
         const existante =
@@ -239,7 +352,21 @@ export class SimulateurSupabase {
         return this.inserer(r.table, v)
       })
     } else {
-      touchees = refus ? [] : lignes.filter((l) => r.filtres.every((f) => f(l)))
+      touchees = refus
+        ? []
+        : lignes.filter(
+            (l) =>
+              this.visible(r.table, r.operation, l) &&
+              r.filtres.every((f) => f(l)),
+          )
+      if (
+        r.operation === 'update' &&
+        touchees.some(
+          (l) => !this.accepte(r.table, 'update', { ...l, ...r.valeurs[0] }),
+        )
+      ) {
+        return { data: null, error: ERREUR_RLS }
+      }
       if (r.operation === 'update') {
         for (const l of touchees) this.modifier(r.table, l, r.valeurs[0])
       } else if (r.operation === 'delete') {

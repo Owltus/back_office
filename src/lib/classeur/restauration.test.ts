@@ -12,6 +12,7 @@ import {
 // `vi.mock` est hissé par vitest : les imports ci-dessus voient le service simulé.
 vi.mock('#/lib/classeur/service.ts', () => ({
   definirGardeEcriture: vi.fn(),
+  definirOubliDeplacement: vi.fn(),
   deleteMergeHistory: vi.fn(),
   fetchChapter: vi.fn(),
   fetchChapters: vi.fn(),
