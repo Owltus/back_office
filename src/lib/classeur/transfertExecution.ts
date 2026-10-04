@@ -391,8 +391,10 @@ export async function transfererItems(
     await annulerCopies(enAttente, fiches, ecrits, arrivee)
     if (transferes === 0) throw err
     throw new Error(
-      `transfert interrompu après ${String(transferes)} élément(s) sur ${String(elements.length)} ; ` +
-        'un point de restauration a été pris avant dans chaque classeur',
+      // Pas de promesse : le point auto est sauté si un point récent existe
+      // (15 min) et son échec est silencieux.
+      `transfert interrompu après ${String(transferes)} élément(s) sur ${String(elements.length)}. ` +
+        'Pour revenir en arrière, voyez les points de restauration des deux classeurs.',
       { cause: err },
     )
   }

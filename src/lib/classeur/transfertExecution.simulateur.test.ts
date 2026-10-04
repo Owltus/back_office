@@ -634,6 +634,12 @@ describe('déplacer vers un autre classeur', () => {
     expect(String((err as Error).message)).toMatch(
       /interrompu après 1 élément\(s\) sur 2/,
     )
+    // Le point auto peut être sauté (un point récent sert) ou échouer en
+    // silence : le message ne promet pas qu'un point vient d'être pris.
+    expect(String((err as Error).message)).not.toMatch(/a été pris/)
+    expect(String((err as Error).message)).toMatch(
+      /points de restauration des deux classeurs/,
+    )
     expect(ligne('classeur_documents', 100).chapter_id).toBe(50)
     expect(ligne('classeur_documents', 101).chapter_id).toBe(20)
     // Le document déplacé pointe vers ses copies : elles restent.

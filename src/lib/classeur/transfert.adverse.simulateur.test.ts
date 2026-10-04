@@ -132,8 +132,8 @@ describe('retour arrière d’un DÉPLACEMENT par les points pris avant', () => 
     await deplacer()
     const point = pointAuto(2)
     expect(point).toBeDefined()
-    // Le transfert annonce ce filet (« un point de restauration a été pris
-    // avant dans chaque classeur ») : il doit servir.
+    // Le transfert renvoie à ce filet (« voyez les points de restauration
+    // des deux classeurs ») : il doit servir.
     await restaurerInstantane(point?.id as number)
     const vivantsDans = (chapterId: number) =>
       sim
