@@ -46,7 +46,20 @@ export interface Alerte {
   /** Ligne concernée, 1 = première ligne du texte. */
   ligne: number
   message: string
+  /**
+   * Alerte tirée de la MÉDIATHÈQUE (image introuvable, trop large, trop
+   * haute, bandeau) : jamais émise tant qu'elle n'est pas chargée.
+   */
+  image?: true
 }
+
+/**
+ * Où la relecture est faite. `editeur` (défaut) : le document ouvert.
+ * `import` : la réponse d'un LLM avant import (étape 2 du plan
+ * `classeur-fonctions-2026-10-04`) — toute image absente de la médiathèque
+ * y est signalée, même un chemin mal formé, parce que le LLM l'a inventée.
+ */
+export type ContexteRelecture = 'editeur' | 'import'
 
 /** Ce que la relecture sait d'une image de la médiathèque. */
 export interface InfoImage {
@@ -96,13 +109,17 @@ function extrait(s: string, max = 40): string {
 /**
  * @param imagesConnues images du classeur par chemin (en minuscules), ou
  *   `null` tant que la médiathèque n'est pas chargée (contrôles sautés).
- * @param pages pages paginées de l'aperçu (remplissage, sauts), facultatif.
+ * @param pages pages paginées de l'aperçu (remplissage, sauts), facultatif ;
+ *   `null` = pas de pagination (alertes de page non produites).
+ * @param contexte voir `ContexteRelecture`.
  */
 export function alertesRelecture(
   markdown: string,
   imagesConnues: ReadonlyMap<string, InfoImage> | null,
-  pages: readonly InfoPage[] = [],
+  pagesOuNull: readonly InfoPage[] | null = [],
+  contexte: ContexteRelecture = 'editeur',
 ): Alerte[] {
+  const pages = pagesOuNull ?? []
   const lignes = markdown.split('\n')
   const alertes: Alerte[] = []
   let dansCode = false
@@ -159,13 +176,19 @@ export function alertesRelecture(
         continue
       }
       if (estLegendeGenerique(alt)) sansLegende.push(ligne)
-      if (!imagesConnues || !estCheminImage(src)) continue
+      if (!imagesConnues) continue
+      // Dans l'éditeur, un chemin qui n'est pas du classeur est laissé à
+      // l'encart du rendu ; dans un import, le LLM l'a inventé.
+      if (contexte === 'editeur' && !estCheminImage(src)) continue
       const info = imagesConnues.get(src.toLowerCase())
       if (!info) {
         alertes.push({
           ligne,
           message:
-            'Image introuvable : elle a été supprimée de la médiathèque.',
+            contexte === 'import'
+              ? `Image « ${extrait(src)} » introuvable dans la médiathèque (inventée par le LLM ?).`
+              : 'Image introuvable : elle a été supprimée de la médiathèque.',
+          image: true,
         })
         continue
       }
@@ -187,12 +210,14 @@ export function alertesRelecture(
       if (largeur > 1100 && !photo) {
         alertes.push({
           ligne,
+          image: true,
           message:
             "Capture très large : une fois imprimé, son texte sera trop petit pour être lu. Cliquez sur l'image dans l'aperçu et recadrez sur la partie utile.",
         })
       } else if (ratio > 6 && boite.hauteur < 15) {
         alertes.push({
           ligne,
+          image: true,
           message:
             "Bandeau très fin : cliquez sur l'image dans l'aperçu et recadrez sur l'élément utile (un bouton, une case).",
         })
@@ -200,6 +225,7 @@ export function alertesRelecture(
       if (boite.hauteur > DEMI_PAGE_MM) {
         alertes.push({
           ligne,
+          image: true,
           message:
             tailleDepuisTitre(titre) === 'auto'
               ? `Capture très haute (environ ${String(Math.round(boite.hauteur / 10))} cm, plus d'une demi-page) : cliquez dessus dans l'aperçu et recadrez sur la partie utile.`
@@ -396,4 +422,22 @@ export function alertesRelecture(
   }
 
   return alertes.sort((a, b) => a.ligne - b.ligne)
+}
+
+/**
+ * Relecture d'une ligne de l'aperçu d'un import LLM (étape 2 du plan
+ * `classeur-fonctions-2026-10-04`) : seuls les DOCUMENTS créés, modifiés ou
+ * restaurés sont relus, sur leur NOUVEAU texte, sans pagination (le
+ * dialogue n'en a pas). `null` = ligne non relue (chapitre, suppression,
+ * autre nature d'élément). `images` à `null` tant que la médiathèque n'est
+ * pas chargée : aucune alerte d'image, plutôt que de les dire toutes
+ * introuvables.
+ */
+export function relireLigneImport(
+  ligne: { kind: string; genre: string; apres: { content: string } },
+  images: ReadonlyMap<string, InfoImage> | null,
+): Alerte[] | null {
+  if (ligne.kind !== 'document') return null
+  if (ligne.genre === 'suppression' || ligne.genre === 'chapitre') return null
+  return alertesRelecture(ligne.apres.content, images, null, 'import')
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import {
   AlertCircle,
@@ -14,7 +14,9 @@ import {
   ApercuImport,
   compterImport,
 } from '#/components/classeur/dialogs/ApercuImport.tsx'
+import type { EtatImages } from '#/components/classeur/dialogs/ApercuImport.tsx'
 import { usePeriodicites } from '#/components/classeur/hooks/useClasseur.ts'
+import { useImages } from '#/components/classeur/hooks/useImages.ts'
 import { useAppliquerFusionPortee } from '#/components/classeur/hooks/useMerge.ts'
 import { Alert, AlertDescription, AlertTitle } from '#/components/ui/alert.tsx'
 import { Button } from '#/components/ui/button.tsx'
@@ -103,6 +105,26 @@ export function EchangeJsonDialog({
   canWrite: boolean
 }) {
   const periodicitesQ = usePeriodicites()
+  // Médiathèque, lue à l'ouverture seulement : la relecture de l'aperçu
+  // (étape 2) y cherche les images citées par le LLM.
+  const imagesQ = useImages(classeur?.id ?? Number.NaN, open)
+  const imagesConnues = useMemo(
+    () =>
+      imagesQ.data
+        ? new Map(
+            imagesQ.data.map((i) => [
+              i.chemin.toLowerCase(),
+              { largeur: i.largeur, hauteur: i.hauteur, nom: i.nom },
+            ]),
+          )
+        : null,
+    [imagesQ.data],
+  )
+  const etatImages: EtatImages = imagesQ.isPending
+    ? 'en-cours'
+    : imagesConnues === null
+      ? 'indisponible'
+      : 'pret'
   const [copie, setCopie] = useState<'ok' | 'erreur' | null>(null)
   const [texte, setTexte] = useState('')
   const [supprimerAbsents, setSupprimerAbsents] = useState(false)
@@ -451,6 +473,8 @@ export function EchangeJsonDialog({
                     ouvertes={ouvertes}
                     onOuvertes={setOuvertes}
                     disabled={fusion.isPending}
+                    images={imagesConnues}
+                    etatImages={etatImages}
                   />
                 )}
                 <p className="text-xs text-muted-foreground">

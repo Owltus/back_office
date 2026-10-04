@@ -1,5 +1,5 @@
 import { useId, useMemo } from 'react'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, TriangleAlert } from 'lucide-react'
 
 import {
   ChampsDiff,
@@ -8,6 +8,8 @@ import {
 import { Button } from '#/components/ui/button.tsx'
 import { bilan, comparerLignes } from '#/lib/classeur/diff.ts'
 import type { LigneImport } from '#/lib/classeur/merge/portee.ts'
+import { relireLigneImport } from '#/lib/classeur/relecture.ts'
+import type { Alerte, InfoImage } from '#/lib/classeur/relecture.ts'
 import {
   evolutionVersion,
   libelleVersion,
@@ -25,6 +27,16 @@ import { cn } from '#/lib/utils.ts'
  * pour un petit texte (`CELLULES_EN_TETE`) dont le bilan « +n −m » s'affiche
  * replié : une table LCS peut peser plusieurs Mo pour un long document.
  */
+
+/**
+ * État de la médiathèque pour la relecture (étape 2) : tant qu'elle n'est
+ * pas lue, AUCUNE alerte d'image (elles passeraient toutes pour inventées).
+ */
+export type EtatImages = 'pret' | 'en-cours' | 'indisponible'
+
+function points(n: number): string {
+  return `${String(n)} ${n > 1 ? 'points à vérifier' : 'point à vérifier'}`
+}
 
 /** Au-delà (lignes avant × lignes après), le bilan attend le dépliage. */
 const CELLULES_EN_TETE = 250_000
@@ -111,6 +123,8 @@ export function ApercuImport({
   ouvertes,
   onOuvertes,
   disabled,
+  images = null,
+  etatImages = 'pret',
 }: {
   lignes: readonly LigneImport[]
   refuses: ReadonlySet<string>
@@ -118,11 +132,51 @@ export function ApercuImport({
   ouvertes: ReadonlySet<string>
   onOuvertes: (ouvertes: ReadonlySet<string>) => void
   disabled: boolean
+  /** Médiathèque par chemin en minuscules ; `null` tant qu'elle n'est pas lue. */
+  images?: ReadonlyMap<string, InfoImage> | null
+  etatImages?: EtatImages
 }) {
   const ids = lignes.map(idLigne)
   const toutOuvert = ids.length > 0 && ids.every((id) => ouvertes.has(id))
+  // Relecture (étape 2) : une fois par ligne, recalculée seulement quand
+  // l'aperçu ou la médiathèque change (pas à chaque case cochée).
+  const alertes = useMemo(
+    () =>
+      lignes.map((l) =>
+        relireLigneImport(l, etatImages === 'pret' ? images : null),
+      ),
+    [lignes, images, etatImages],
+  )
+  const aVerifier = lignes.filter(
+    (l, i) =>
+      (alertes[i]?.length ?? 0) > 0 && !(l.cle !== null && refuses.has(l.cle)),
+  ).length
+  const relus = alertes.some((a) => a !== null)
   return (
     <div className="flex flex-col gap-1">
+      {(aVerifier > 0 || (relus && etatImages !== 'pret')) && (
+        <div className="flex flex-col gap-0.5 text-xs">
+          {aVerifier > 0 && (
+            <p className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
+              <TriangleAlert className="size-3.5 shrink-0" />
+              {aVerifier > 1
+                ? `${String(aVerifier)} documents ont des points à vérifier`
+                : '1 document a des points à vérifier'}
+              . L'import reste possible.
+            </p>
+          )}
+          {relus && etatImages === 'en-cours' && (
+            <p className="text-muted-foreground">
+              Vérification des images en cours…
+            </p>
+          )}
+          {relus && etatImages === 'indisponible' && (
+            <p className="text-muted-foreground">
+              Images non vérifiées : la médiathèque n'a pas pu être lue.
+            </p>
+          )}
+        </div>
+      )}
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs text-muted-foreground">
           Décochez un élément pour ne pas l'importer.
@@ -144,6 +198,7 @@ export function ApercuImport({
             <LigneApercu
               key={id}
               ligne={l}
+              alertes={alertes[i]}
               refusee={l.cle !== null && refuses.has(l.cle)}
               onBasculerRefus={onBasculerRefus}
               ouverte={ouvertes.has(id)}
@@ -164,6 +219,7 @@ export function ApercuImport({
 
 function LigneApercu({
   ligne,
+  alertes,
   refusee,
   onBasculerRefus,
   ouverte,
@@ -171,6 +227,8 @@ function LigneApercu({
   disabled,
 }: {
   ligne: LigneImport
+  /** Relecture du nouveau texte ; `null` = ligne non relue. */
+  alertes: readonly Alerte[] | null
   refusee: boolean
   onBasculerRefus: (cle: string) => void
   ouverte: boolean
@@ -251,6 +309,12 @@ function LigneApercu({
               +{b.ajouts} −{b.retraits}
             </span>
           )}
+          {alertes !== null && alertes.length > 0 && (
+            <span className="flex shrink-0 items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-xs text-amber-700 dark:text-amber-300">
+              <TriangleAlert className="size-3" aria-hidden />
+              {points(alertes.length)}
+            </span>
+          )}
           <span className="shrink-0 text-xs text-muted-foreground">
             {refusee ? 'ignoré' : etiquette(ligne)}
           </span>
@@ -282,6 +346,31 @@ function LigneApercu({
                 className="max-h-80 overflow-auto"
               />
             )
+          )}
+          {alertes !== null && (
+            <div className="flex flex-col gap-1 text-xs">
+              {alertes.length > 0 && (
+                <ul
+                  aria-label={points(alertes.length)}
+                  className="flex flex-col gap-0.5 rounded-md border border-amber-500/30 bg-amber-500/5 px-2 py-1.5"
+                >
+                  {alertes.map((a, k) => (
+                    <li
+                      key={`${String(a.ligne)}-${String(k)}`}
+                      className="text-muted-foreground"
+                    >
+                      <span className="tabular-nums text-foreground">
+                        Ligne {a.ligne}
+                      </span>{' '}
+                      · {a.message}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="text-muted-foreground">
+                La mise en page (pages, schémas) sera vérifiée dans l'éditeur.
+              </p>
+            </div>
           )}
         </div>
       )}
