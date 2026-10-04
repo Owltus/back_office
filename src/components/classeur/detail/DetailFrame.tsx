@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 
 import { ChapterDrawerButton } from '#/components/classeur/ChapterDrawer.tsx'
+import { EnTeteCollant } from '#/components/classeur/EnTeteCollant.tsx'
 import { IconAction } from '#/components/classeur/IconAction.tsx'
 import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
@@ -74,31 +75,35 @@ export function DetailHeader({
   const meta = [kind ? capitaliser(ITEM_LABEL[kind]) : '', chapterName ?? '']
     .filter((s) => s !== '')
     .join(' · ')
+  // Collé en haut au défilement (demande utilisateur du 2026-10-04), pour
+  // les quatre pages de détail et leur squelette.
   return (
-    <PageHeader
-      actionsAlign="end"
-      leading={
-        <div className="flex shrink-0 items-stretch gap-1">
-          <ChapterDrawerButton />
-          <Tip label="Retour au chapitre">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              asChild
-              aria-label="Retour au chapitre"
-              className={cn('self-center', editing && 'max-sm:hidden')}
-            >
-              <Link to="/classeur/$classeurId/$chapterId" params={retour}>
-                <ArrowLeft />
-              </Link>
-            </Button>
-          </Tip>
-        </div>
-      }
-      title={title}
-      meta={meta !== '' ? meta : undefined}
-      actions={actions}
-    />
+    <EnTeteCollant>
+      <PageHeader
+        actionsAlign="end"
+        leading={
+          <div className="flex shrink-0 items-stretch gap-1">
+            <ChapterDrawerButton />
+            <Tip label="Retour au chapitre">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                asChild
+                aria-label="Retour au chapitre"
+                className={cn('self-center', editing && 'max-sm:hidden')}
+              >
+                <Link to="/classeur/$classeurId/$chapterId" params={retour}>
+                  <ArrowLeft />
+                </Link>
+              </Button>
+            </Tip>
+          </div>
+        }
+        title={title}
+        meta={meta !== '' ? meta : undefined}
+        actions={actions}
+      />
+    </EnTeteCollant>
   )
 }
 
