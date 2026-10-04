@@ -38,7 +38,12 @@ export function useMesAcces() {
     for (const a of q.data ?? []) m.set(a.classeur_id, a.niveau)
     return m
   }, [q.data])
-  return { parClasseur, isPending: q.isPending && userId !== null }
+  return {
+    parClasseur,
+    isPending: q.isPending && userId !== null,
+    isError: q.isError,
+    error: q.error,
+  }
 }
 
 /** Niveau de l'utilisateur sur la PAGE Classeur, et ce qu'il permet. */
@@ -105,6 +110,11 @@ export function useClasseursCibles(origineId: number, actif: boolean) {
   const liste = useClasseurs(actif)
   const mesAcces = useMesAcces()
   const pret = !liste.isPending && !mesAcces.isPending
+  // Mes exceptions illisibles : on ne les suppose pas absentes (une
+  // exception peut RETIRER l'écriture d'un classeur ouvert à tous) : erreur,
+  // comme pour la liste (dialogue et menu n'offrent alors aucune cible).
+  const erreur = liste.isError ? liste.error : mesAcces.error
+  const isError = liste.isError || mesAcces.isError
   const cibles = useMemo(
     () =>
       pret
@@ -128,7 +138,7 @@ export function useClasseursCibles(origineId: number, actif: boolean) {
     cibles,
     niveauDe,
     isPending: !pret,
-    isError: liste.isError,
-    error: liste.error,
+    isError,
+    error: erreur,
   }
 }
