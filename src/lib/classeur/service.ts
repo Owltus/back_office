@@ -16,6 +16,7 @@
 import { supabase } from '#/lib/supabase.ts'
 import type {
   ChapterContent,
+  ChapterItem,
   DbAccesClasseur,
   DbDocumentVersion,
   DbImage,
@@ -720,6 +721,32 @@ export async function fetchItem<T>(
     .maybeSingle()
   if (error) throw error
   return data as T | null
+}
+
+/**
+ * Éléments par références (non supprimés), une lecture par famille citée —
+ * transfert (étape 7b) : relire FRAIS ce qui va être copié ou déplacé, sans
+ * charger tout le classeur. Ordre quelconque ; un absent est omis.
+ */
+export async function fetchItemsParRefs(
+  refs: ReadonlyArray<{ kind: ItemKind; id: number }>,
+): Promise<ChapterItem[]> {
+  const familles = await Promise.all(
+    ITEM_KINDS.map(async (kind) => {
+      const ids = refs.filter((r) => r.kind === kind).map((r) => r.id)
+      if (ids.length === 0) return []
+      const { data, error } = await supabase
+        .from(ITEM_TABLE[kind])
+        .select(COLS_PAR_KIND[kind])
+        .in('id', ids)
+        .is('deleted_at', null)
+      if (error) throw error
+      return (data as unknown as ChapterItem['data'][]).map(
+        (d) => ({ kind, data: d }) as ChapterItem,
+      )
+    }),
+  )
+  return familles.flat()
 }
 
 export type DocumentInput = Pick<

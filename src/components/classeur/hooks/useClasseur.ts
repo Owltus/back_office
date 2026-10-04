@@ -14,6 +14,8 @@ import {
   reorderClasseurs,
   reorderItems,
 } from '#/lib/classeur/service.ts'
+import { transfererItems } from '#/lib/classeur/transfertExecution.ts'
+import type { DemandeTransfertService } from '#/lib/classeur/transfertExecution.ts'
 import { appliquerOrdre } from '#/lib/classeur/ordre.ts'
 import type { ItemRef } from '#/lib/classeur/ordre.ts'
 import type {
@@ -206,6 +208,21 @@ export function useReorderItems(chapterId: number) {
     onError: (_err, _refs, ctx) => {
       if (ctx?.avant) queryClient.setQueryData(key, ctx.avant)
     },
+    onSettled: () => invalider(),
+  })
+}
+
+/**
+ * Copier / déplacer vers un autre classeur (étape 7b ; l'interface est
+ * l'étape 7c). Pas d'optimisme : l'écriture touche DEUX classeurs, leurs
+ * médiathèques et l'historique. Invalidation de `classeurKeys.all` à
+ * l'issue, réussie OU NON (un échec partiel a pu écrire) : elle couvre les
+ * deux classeurs (chapitres, éléments, images, corbeille, points).
+ */
+export function useTransfererItems() {
+  const invalider = useInvaliderClasseur()
+  return useMutation({
+    mutationFn: (demande: DemandeTransfertService) => transfererItems(demande),
     onSettled: () => invalider(),
   })
 }
