@@ -114,7 +114,7 @@ describe('ApercuImport — relecture', () => {
   it('jamais bloquant : la case d’import reste active', () => {
     rendre('pret')
     const caseA = screen.getByLabelText<HTMLInputElement>(
-      'Importer « Check-in »',
+      'Importer Check-in',
     )
     expect(caseA.disabled).toBe(false)
     expect(caseA.checked).toBe(true)

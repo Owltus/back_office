@@ -114,8 +114,8 @@ export function SegmentDiff({
         className="block w-full border-y border-border/60 bg-muted/40 px-3 py-1 text-left text-muted-foreground hover:bg-muted"
       >
         ⋯ {segment.nombre}{' '}
-        {segment.nombre > 1 ? 'lignes inchangées' : 'ligne inchangée'} —
-        afficher
+        {segment.nombre > 1 ? 'lignes inchangées' : 'ligne inchangée'}{' '}
+        (afficher)
       </button>
     )
   }

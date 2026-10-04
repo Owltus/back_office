@@ -42,7 +42,9 @@ const pluriel = (n: number, un: string, plusieurs: string) =>
 
 /**
  * Le résumé avant validation : « 3 éléments · 2 images seront copiées dans
- * « X » ». `images === null` : nombre inconnu, phrase générique.
+ * le classeur X ». `images === null` : nombre inconnu, phrase générique.
+ * Ponctuation simple (ni guillemets ni tiret cadratin dans un message,
+ * règle `ux-messages-hotelier`, audit du 2026-10-04).
  */
 export function resumeTransfert(
   nbElements: number,
@@ -50,7 +52,7 @@ export function resumeTransfert(
   classeur: string,
 ): string {
   const elements = pluriel(nbElements, 'élément', 'éléments')
-  const dans = `dans « ${classeur} »`
+  const dans = `dans le classeur ${classeur}`
   if (images === null) {
     return `${elements} · les images utilisées seront copiées ${dans}`
   }
@@ -59,8 +61,8 @@ export function resumeTransfert(
 }
 
 /**
- * Confirmation après succès : « 3 éléments déplacés vers « X », chapitre
- * « Y » (2 images copiées). » puis, s'il y en a, les images introuvables.
+ * Confirmation après succès : « 3 éléments déplacés vers le classeur X,
+ * chapitre Y (2 images copiées). » puis, s'il y en a, les images introuvables.
  */
 export function messageTransfert({
   resultat,
@@ -82,7 +84,7 @@ export function messageTransfert({
       : nbPerdues > 1
         ? ` ${String(nbPerdues)} images introuvables n’ont pas été copiées.`
         : ' 1 image introuvable n’a pas été copiée.'
-  return `${String(n)} élément${s(n)} ${copie ? 'copié' : 'déplacé'}${s(n)} vers « ${classeur.name} », chapitre « ${chapitre.label} »${images}.${perdues}`
+  return `${String(n)} élément${s(n)} ${copie ? 'copié' : 'déplacé'}${s(n)} vers le classeur ${classeur.name}, chapitre ${chapitre.label}${images}.${perdues}`
 }
 
 /**
@@ -294,7 +296,7 @@ function Contenu({
           data-testid="resume-transfert"
         >
           {resumeTransfert(elements.length, images, classeur.name)}
-          {chapitre && <>, chapitre « {chapitre.label} »</>}.
+          {chapitre && <>, chapitre {chapitre.label}</>}.
         </p>
       )}
 

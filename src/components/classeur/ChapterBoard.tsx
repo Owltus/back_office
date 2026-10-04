@@ -438,7 +438,7 @@ export function ChapterBoard({
               }}
               className="font-medium text-foreground underline underline-offset-4"
             >
-              Ouvrir « {transfere.classeur.name} »
+              Ouvrir le classeur {transfere.classeur.name}
             </Link>
             <Button
               variant="ghost"

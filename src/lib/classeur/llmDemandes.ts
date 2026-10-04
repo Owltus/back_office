@@ -48,14 +48,14 @@ export const DEMANDES_LLM: readonly DemandeLlm[] = [
   {
     id: 'photos',
     libelle: 'Prévoir les photos',
-    aide: 'Des emplacements « Image à insérer » là où une photo aide.',
+    aide: 'Des emplacements de photo à remplir, là où une photo aide.',
     consigne:
       "Là où une photo aiderait le lecteur (un appareil, un bouton, un écran, un endroit), ajoute un emplacement d'image seul sur sa ligne : `![ce que la photo doit montrer](a-inserer)`, en décrivant précisément la prise de vue. N'invente jamais de chemin d'image ; ne retire aucune image existante.",
   },
   {
     id: 'avertissements',
     libelle: 'Ajouter les avertissements',
-    aide: 'Encadrés « Attention » avant les gestes à risque.',
+    aide: "Un encadré d'alerte avant chaque geste à risque.",
     consigne:
       "Avant chaque geste à risque (électricité, eau chaude, produit chimique, sécurité des personnes, argent), ajoute un encadré d'avertissement : une ligne `> [!WARNING]` puis le texte de l'avertissement sur des lignes commençant par `> `. Réserve-le aux vrais dangers ; n'en ajoute pas ailleurs.",
   },

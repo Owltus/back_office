@@ -269,7 +269,7 @@ function LigneApercu({
               checked={!refusee}
               onChange={() => onBasculerRefus(cle)}
               disabled={disabled}
-              aria-label={`Importer « ${titre} »`}
+              aria-label={`Importer ${titre}`}
               className="size-4 accent-primary"
             />
           </label>

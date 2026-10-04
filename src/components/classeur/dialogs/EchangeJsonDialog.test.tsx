@@ -105,7 +105,7 @@ async function ouvrirAvecApercu() {
   fireEvent.change(screen.getByLabelText('JSON à réimporter'), {
     target: { value: jsonLlm() },
   })
-  await waitFor(() => screen.getByLabelText('Importer « Check-in »'), {
+  await waitFor(() => screen.getByLabelText('Importer Check-in'), {
     timeout: 3000,
   })
 }
@@ -119,16 +119,16 @@ describe('EchangeJsonDialog — aperçu, refus, import', () => {
     expect(bouton().textContent).toBe('Importer 2 documents')
     expect(bouton().disabled).toBe(false)
 
-    fireEvent.click(screen.getByLabelText('Importer « Check-out »'))
+    fireEvent.click(screen.getByLabelText('Importer Check-out'))
     expect(bouton().textContent).toBe('Importer 1 document')
     // Refusé : la ligne le dit.
     expect(screen.getByText('ignoré')).toBeTruthy()
 
-    fireEvent.click(screen.getByLabelText('Importer « Check-in »'))
+    fireEvent.click(screen.getByLabelText('Importer Check-in'))
     expect(bouton().textContent).toBe('Importer 0 document')
     expect(bouton().disabled).toBe(true)
 
-    fireEvent.click(screen.getByLabelText('Importer « Check-out »'))
+    fireEvent.click(screen.getByLabelText('Importer Check-out'))
     expect(bouton().textContent).toBe('Importer 1 document')
     expect(bouton().disabled).toBe(false)
   })
@@ -162,7 +162,7 @@ describe('EchangeJsonDialog — aperçu, refus, import', () => {
       ignores: 1,
     })
     await ouvrirAvecApercu()
-    fireEvent.click(screen.getByLabelText('Importer « Check-out »'))
+    fireEvent.click(screen.getByLabelText('Importer Check-out'))
     fireEvent.click(bouton())
     await waitFor(() => screen.getByRole('status'))
     expect(appliquer).toHaveBeenCalledTimes(1)
@@ -295,7 +295,7 @@ describe('EchangeJsonDialog — résumé du plan (relecture adverse 2026-10-04)'
   it('le résumé sous l’aperçu compte les refus', async () => {
     await ouvrirAvecApercu()
     expect(screen.getByText(/0 ajout, 2 modifications/)).toBeTruthy()
-    fireEvent.click(screen.getByLabelText('Importer « Check-out »'))
+    fireEvent.click(screen.getByLabelText('Importer Check-out'))
     expect(screen.queryByText(/2 modifications/)).toBeNull()
     expect(
       screen.getByText(/^0 ajout, 1 modification, 2 inchangés. Un point/),
@@ -307,8 +307,8 @@ describe('EchangeJsonDialog — tout refuser', () => {
   it('n’annonce plus de point de restauration', async () => {
     await ouvrirAvecApercu()
     expect(screen.getByText(/Un point de restauration/)).toBeTruthy()
-    fireEvent.click(screen.getByLabelText('Importer « Check-out »'))
-    fireEvent.click(screen.getByLabelText('Importer « Check-in »'))
+    fireEvent.click(screen.getByLabelText('Importer Check-out'))
+    fireEvent.click(screen.getByLabelText('Importer Check-in'))
     expect(screen.queryByText(/Un point de restauration/)).toBeNull()
   })
 })

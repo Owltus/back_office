@@ -215,7 +215,7 @@ describe('TransfertDialog', () => {
     ouvrirDialogue()
     await choisirArrivee()
     expect(screen.getByTestId('resume-transfert').textContent).toBe(
-      '2 éléments · 2 images seront copiées dans « Arrivée », chapitre « Annexes ».',
+      '2 éléments · 2 images seront copiées dans le classeur Arrivée, chapitre Annexes.',
     )
     // L'historique suit un document déplacé (D8).
     expect(screen.getByText(/historique des versions suit/)).toBeTruthy()
@@ -309,13 +309,13 @@ describe('TransfertDialog', () => {
 describe('textes', () => {
   it('résumé : singulier, pluriel, zéro, inconnu', () => {
     expect(resumeTransfert(1, 1, 'X')).toBe(
-      '1 élément · 1 image sera copiée dans « X »',
+      '1 élément · 1 image sera copiée dans le classeur X',
     )
     expect(resumeTransfert(3, 0, 'X')).toBe(
-      '3 éléments · aucune image à copier dans « X »',
+      '3 éléments · aucune image à copier dans le classeur X',
     )
     expect(resumeTransfert(2, null, 'X')).toBe(
-      '2 éléments · les images utilisées seront copiées dans « X »',
+      '2 éléments · les images utilisées seront copiées dans le classeur X',
     )
   })
   it('confirmation : mode, images copiées, introuvables', () => {
@@ -335,7 +335,7 @@ describe('textes', () => {
         },
       }),
     ).toBe(
-      '3 éléments déplacés vers « Arrivée », chapitre « Annexes » (2 images copiées). 2 images introuvables n’ont pas été copiées.',
+      '3 éléments déplacés vers le classeur Arrivée, chapitre Annexes (2 images copiées). 2 images introuvables n’ont pas été copiées.',
     )
     expect(
       messageTransfert({
@@ -348,7 +348,7 @@ describe('textes', () => {
           introuvables: [],
         },
       }),
-    ).toBe('1 élément copié vers « Arrivée », chapitre « Annexes ».')
+    ).toBe('1 élément copié vers le classeur Arrivée, chapitre Annexes.')
   })
 })
 
