@@ -5,7 +5,6 @@ import { Link, useNavigate } from '@tanstack/react-router'
 import {
   Archive,
   Bookmark,
-  FileClock,
   FileDown,
   FileText,
   FileUp,
@@ -78,7 +77,7 @@ export interface ClasseurSearchResult {
 
 /** Action en cours, pour l'état de la carte concernée (Loader2). */
 export type DashboardBusy =
-  'pdf' | 'markdown' | 'json' | 'import' | 'sommaire' | 'modifies' | null
+  'pdf' | 'markdown' | 'json' | 'import' | 'sommaire' | null
 
 const ICONE_KIND: Record<ItemKind, LucideIcon> = {
   document: FileText,
@@ -115,7 +114,6 @@ export function ClasseurDashboard({
   onFichierDepose,
   onHistorique,
   onImages,
-  onImprimerModifies,
   onCorbeille,
   busy = null,
   renderResult,
@@ -134,8 +132,6 @@ export function ClasseurDashboard({
   onHistorique?: () => void
   /** Ouvre la médiathèque du classeur. Absent, la carte n'est pas rendue. */
   onImages?: () => void
-  /** Ouvre « Imprimer les modifications » (étape 5). Absent, pas de carte. */
-  onImprimerModifies?: (ctx: DashboardContexte) => void
   /** Ouvre la corbeille (étape 6). Carte rendue seulement avec l'écriture. */
   onCorbeille?: () => void
   busy?: DashboardBusy
@@ -411,18 +407,6 @@ export function ClasseurDashboard({
                   />
                 )}
               </div>
-            )}
-            {/* Étape 5 : ne réimprimer que ce qui a changé (pochettes). La
-                lecture lisible suffit : imprimer n'écrit rien. */}
-            {onImprimerModifies && (
-              <ActionCard
-                icon={FileClock}
-                title="Imprimer les modifications"
-                subtitle="Seulement ce qui a changé depuis une date"
-                onClick={action(onImprimerModifies)}
-                disabled={!pret}
-                busy={busy === 'modifies'}
-              />
             )}
 
             {(onExporterMarkdown || onExporterJson || onImporter) && (

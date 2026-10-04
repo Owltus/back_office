@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
 import { doitPersister, estSensible, survitAuJson } from '#/lib/queryPersist.ts'
-import { classeurKeys } from '#/lib/classeur/keys.ts'
 import type { Query } from '@tanstack/react-query'
 
 /*
@@ -50,11 +49,6 @@ describe('estSensible — ce qui ne doit jamais toucher le disque', () => {
     expect(estSensible(['classeur', 'items', 3])).toBe(false)
   })
 
-  it('refuse les versions modifiées depuis une date (noms des auteurs)', () => {
-    expect(
-      estSensible(classeurKeys.modifies(24, '2026-09-26T22:00:00.000Z')),
-    ).toBe(true)
-  })
   it('refuse les cautions, lues en select(*) avec commentaire libre', () => {
     expect(estSensible(['caisse', 'cautions'])).toBe(true)
   })

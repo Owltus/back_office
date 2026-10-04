@@ -1447,10 +1447,11 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
     fois sans uuid, avec « N éléments ont reçu un nouvel identifiant » ;
     jamais pour une autre contrainte ni un 42501.
   - **Impression** : sélection d'un chapitre (`selectionImpression.ts`,
-    ordre du chapitre), « Imprimer les modifications » depuis une date
-    (versions de documents, `updated_at` pour les feuilles ; minuit de
-    Paris ; clé `['classeur','modifies']` hors disque ; plafond 1000 signalé
-    même quand la liste est vide), nom de fichier PDF « Classeur - Titre »
+    ordre du chapitre) ; « Imprimer les modifications » depuis une date
+    (étape 5) **RETIRÉE le 2026-10-04 à la demande de l'utilisateur (trop
+    complexe à utiliser), ne pas reproposer** — carte, dialogue,
+    `modifiesDepuis`, `fetchVersionsDepuis`, clé `['classeur','modifies']`
+    supprimés, aucun SQL n'avait été créé ; nom de fichier PDF « Classeur - Titre »
     (`nomFichierImpression`, noms réservés Windows avec extension).
     **« Télécharger le PDF »** (D19 RENVERSÉE par l'utilisateur le
     2026-10-04 → voie B navigateur) : bouton outline à côté d'Imprimer dans

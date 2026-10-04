@@ -14,15 +14,8 @@ import { ImagesDialog } from '#/components/classeur/dialogs/ImagesDialog.tsx'
 import { MergePreviewDialog } from '#/components/classeur/dialogs/MergePreviewDialog.tsx'
 import { ClasseurCoverPage } from '#/components/classeur/print/ClasseurCoverPage.tsx'
 import { useDroitsClasseur } from '#/components/classeur/hooks/useDroitsClasseur.ts'
-import { ImprimerModifiesDialog } from '#/components/classeur/dialogs/ImprimerModifiesDialog.tsx'
-import type { ElementAImprimer } from '#/components/classeur/dialogs/ImprimerModifiesDialog.tsx'
-import {
-  ChapterPrintPages,
-  ItemPages,
-} from '#/components/classeur/print/ItemPages.tsx'
-import { mentionVersion } from '#/lib/classeur/print/mentionVersion.ts'
+import { ChapterPrintPages } from '#/components/classeur/print/ItemPages.tsx'
 import { nomFichierImpression } from '#/lib/classeur/print/nomFichierImpression.ts'
-import { cleRef } from '#/lib/classeur/ordre.ts'
 import { PrintPreview } from '#/components/classeur/print/PrintPreview.tsx'
 import { TableOfContentsPage } from '#/components/classeur/print/TableOfContentsPage.tsx'
 import { Alert, AlertDescription } from '#/components/ui/alert.tsx'
@@ -45,13 +38,6 @@ import { MAX_JSON_BYTES, fileTooLarge } from '#/lib/shared/files.ts'
 type Apercu =
   | { type: 'sommaire'; ctx: DashboardContexte }
   | { type: 'pdf'; ctx: DashboardContexte }
-  /** Étape 5 : les éléments modifiés depuis `depuis`, chacun sa numérotation. */
-  | {
-      type: 'modifies'
-      ctx: DashboardContexte
-      elements: ElementAImprimer[]
-      depuis: string
-    }
   | null
 
 /** Un export à télécharger (Markdown ZIP ; le JSON passe par son dialogue). */
@@ -106,14 +92,10 @@ export function ClasseurDashboardActions({
   const [fichierImport, setFichierImport] = useState<File | null>(null)
   const [historiqueOuvert, setHistoriqueOuvert] = useState(false)
   const [imagesOuvertes, setImagesOuvertes] = useState(false)
-  const [modifiesOuvert, setModifiesOuvert] = useState(false)
   const [corbeilleOuverte, setCorbeilleOuverte] = useState(false)
   // Export JSON du classeur complet : son dialogue (demandes pour un LLM).
   const [exportJson, setExportJson] = useState<DashboardContexte | null>(null)
   const { canWrite } = useDroitsClasseur(classeurId)
-  // Contexte du classeur au moment où la carte a été cliquée (nom,
-  // établissement du pied de page de l'aperçu des modifiés).
-  const [ctxModifies, setCtxModifies] = useState<DashboardContexte | null>(null)
   const [bilan, setBilan] = useState<string | null>(null)
   const [erreurFichier, setErreurFichier] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -219,26 +201,7 @@ export function ClasseurDashboardActions({
         onHistorique={() => setHistoriqueOuvert(true)}
         onImages={() => setImagesOuvertes(true)}
         onCorbeille={() => setCorbeilleOuverte(true)}
-        onImprimerModifies={(c) => {
-          setCtxModifies(c)
-          setModifiesOuvert(true)
-        }}
         busy={busy}
-      />
-
-      <ImprimerModifiesDialog
-        open={modifiesOuvert}
-        onOpenChange={setModifiesOuvert}
-        classeurId={classeurId}
-        onApercu={(elements, depuis) => {
-          if (ctxModifies)
-            ouvrirApercu.mutate({
-              type: 'modifies',
-              ctx: ctxModifies,
-              elements,
-              depuis,
-            })
-        }}
       />
 
       <MergePreviewDialog
@@ -286,36 +249,16 @@ export function ClasseurDashboardActions({
         }}
         nomFichier={nomFichierImpression({
           classeur: classeurName,
-          titre:
-            apercu?.type === 'sommaire'
-              ? 'Sommaire'
-              : apercu?.type === 'modifies'
-                ? `Modifications depuis le ${mentionVersion(apercu.depuis) ?? ''}`
-                : undefined,
+          titre: apercu?.type === 'sommaire' ? 'Sommaire' : undefined,
         })}
         title={
           apercu?.type === 'sommaire'
             ? `${classeurName} : sommaire`
             : apercu?.type === 'pdf'
               ? `${classeurName} : classeur complet`
-              : apercu?.type === 'modifies'
-                ? `${classeurName} : modifications depuis le ${mentionVersion(apercu.depuis) ?? ''}`
-                : undefined
+              : undefined
         }
       >
-        {/* Modifiés (étape 5) : chaque élément avec sa propre numérotation,
-            sans page de garde ni sommaire, comme la sélection (étape 4). */}
-        {apercu?.type === 'modifies' &&
-          apercu.elements.map(({ item, chapterName }) => (
-            <ItemPages
-              key={cleRef(item.kind, item.data.id)}
-              item={item}
-              chapterName={chapterName}
-              classeurName={classeurName}
-              establishment={establishment}
-              periodicites={periodicites}
-            />
-          ))}
         {apercu?.type === 'sommaire' && ctx && (
           <TableOfContentsPage
             chapters={sommaire}

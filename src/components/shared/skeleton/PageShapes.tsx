@@ -639,11 +639,10 @@ export function CarteActionSquelette() {
 /**
  * /classeur/$id (accueil) : champ de recherche pleine largeur puis la colonne
  * centrée de Registre (28 rem), relevée sur le DOM de l'accueil : Nouveau
- * chapitre ; Sommaire | Exporter PDF ; Imprimer les modifications (étape 5,
- * 2026-10-04) ; un séparateur ; Markdown ; JSON | Importer ; un séparateur ;
- * Images du classeur ; Points de restauration ; Corbeille. Dix cartes : la
- * forme de qui peut écrire (Nouveau chapitre, Importer et Corbeille sont
- * réservés à l'écriture ; un lecteur en voit sept).
+ * chapitre ; Sommaire | Exporter PDF ; un séparateur ; Markdown ; JSON |
+ * Importer ; un séparateur ; Images du classeur ; Points de restauration ;
+ * Corbeille. Neuf cartes : la forme de qui peut écrire (Nouveau chapitre,
+ * Importer et Corbeille sont réservés à l'écriture ; un lecteur en voit six).
  */
 export function FormeClasseurDashboard() {
   const carte = (k: string) => <CarteActionSquelette key={k} />
@@ -661,7 +660,6 @@ export function FormeClasseurDashboard() {
             {carte('sommaire')}
             {carte('pdf')}
           </div>
-          {carte('modifies')}
           <div className="border-b border-border" />
           {carte('markdown')}
           <div className="grid grid-cols-2 gap-3">

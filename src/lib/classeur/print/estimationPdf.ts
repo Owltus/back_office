@@ -4,7 +4,7 @@
  * un long document sans charger `pdfDirect` (chargé seulement au clic).
  *
  * Repères MESURÉS au navigateur le 2026-10-04 (classeur d'essai n° 24,
- * « Imprimer les modifications » depuis le 27/09, 64 pages, Chrome, écran
+ * 64 pages — fonction d'impression depuis retirée —, Chrome, écran
  * de densité 1, capture à l'échelle 2) après l'allègement du clone
  * (`filtreClone`) : 64 pages en 14,3 à 21,2 s (0,22 à 0,33 s par page, ~1 s
  * pour une page à schéma Mermaid), fichier de 14,0 Mo (219 ko par page,

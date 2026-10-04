@@ -42,13 +42,6 @@ export const classeurKeys = {
   versions: (documentId: number) =>
     ['classeur', 'versions', documentId] as const,
   /**
-   * Versions des documents d'un classeur enregistrées après un instant
-   * (impression des modifiés, étape 5). NOMS d'auteurs : exclues du cache
-   * disque (`PREFIXES_SENSIBLES`).
-   */
-  modifies: (classeurId: number, depuis: string) =>
-    ['classeur', 'modifies', classeurId, depuis] as const,
-  /**
    * Accès par classeur (2026-09-28). Mes exceptions, celles d'un classeur
    * (gestion), la liste des personnes : identifiants et NOMS — exclues du
    * cache disque (`PREFIXES_SENSIBLES`), et propres au compte connecté.
