@@ -621,77 +621,78 @@ export function FormeClasseurListe({
 }
 
 /**
- * Une carte d'action (`ActionCard`) en silhouette : celles du squelette de
- * route, et les places que l'accueil réserve aux cartes d'écriture tant que
- * les droits du classeur ne sont pas lus. Même boîte que la carte réelle :
- * carré d'icône de 36 px, titre et une ligne de description.
+ * Panneau de l'accueil d'un classeur (décision utilisateur du 2026-10-04 :
+ * une liste façon page de réglages, la grille de tuiles est abandonnée).
+ * UNE source de classes pour l'accueil et sa silhouette : la carte (sections
+ * séparées d'un trait plein), l'intitulé d'une section, la liste de ses
+ * lignes (traits plus discrets, aucun avant la première).
  */
-export function CarteActionSquelette() {
+export const PANNEAU_ACCUEIL_CLASSEUR =
+  'divide-y divide-border overflow-hidden rounded-xl border border-border bg-card'
+export const INTITULE_SECTION_CLASSEUR =
+  'px-4 pt-4 pb-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase'
+export const LIGNES_SECTION_CLASSEUR = 'divide-y divide-border/60'
+
+/**
+ * Une ligne d'action (`LigneAction`) en silhouette : celles du squelette de
+ * route, et les places que l'accueil réserve aux lignes d'écriture tant que
+ * les droits du classeur ne sont pas lus. Même boîte que la ligne réelle :
+ * `h-14` (`h-16` au doigt), carré d'icône de 32 px, titre et description.
+ */
+export function LigneActionSquelette() {
   return (
     <div
-      className="flex h-full items-start gap-3 rounded-xl border border-border bg-card px-3 py-3.5 sm:px-4"
+      className="flex h-14 items-center gap-3 px-4 pointer-coarse:h-16"
       aria-hidden="true"
-      data-carte-squelette=""
+      data-ligne-squelette=""
     >
-      <Skeleton className="size-9 shrink-0 rounded-lg" />
-      <div className="min-w-0 flex-1 pt-1">
-        <Skeleton className="h-4 w-full max-w-32" />
-        <Skeleton className="mt-2 h-3 w-full max-w-48" />
+      <Skeleton className="size-8 shrink-0 rounded-md" />
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        <Skeleton className="h-3.5 w-full max-w-36" />
+        <Skeleton className="h-3 w-full max-w-56" />
       </div>
     </div>
   )
 }
 
 /**
- * Grille des cartes d'un groupe de l'accueil d'un classeur : 1 colonne au
- * téléphone, 2 dès `sm`, 3 dès `xl` (la colonne des chapitres de 20 rem
- * occupe la gauche à partir de `lg`). UNE source pour l'accueil et sa
- * silhouette.
+ * Les sections du panneau de l'accueil et leurs lignes, dans l'ordre du DOM
+ * de `ClasseurDashboard`. Forme de qui peut écrire : Nouveau chapitre,
+ * Importer et Corbeille sont réservés à l'écriture (un lecteur voit six
+ * lignes).
  */
-export const GRILLE_ACTIONS_CLASSEUR =
-  'grid gap-3 sm:grid-cols-2 xl:grid-cols-3'
-
-/**
- * Les groupes de l'accueil d'un classeur et leurs cartes, dans l'ordre du
- * DOM de `ClasseurDashboard` (disposition du 2026-10-04). Forme de qui
- * peut écrire : Nouveau chapitre, Importer et Corbeille sont réservés à
- * l'écriture (un lecteur voit six cartes).
- */
-const GROUPES_ACCUEIL: { cle: string; cartes: string[] }[] = [
-  { cle: 'contenu', cartes: ['nouveau', 'images'] },
-  { cle: 'imprimer', cartes: ['pdf', 'sommaire'] },
-  { cle: 'echanger', cartes: ['json', 'import', 'markdown'] },
-  { cle: 'historique', cartes: ['historique', 'corbeille'] },
+const SECTIONS_ACCUEIL: { cle: string; lignes: string[] }[] = [
+  { cle: 'contenu', lignes: ['nouveau', 'images'] },
+  { cle: 'imprimer', lignes: ['pdf', 'sommaire'] },
+  { cle: 'echanger', lignes: ['json', 'import', 'markdown'] },
+  { cle: 'historique', lignes: ['historique', 'corbeille'] },
 ]
 
 /**
- * /classeur/$id (accueil) : champ de recherche pleine largeur puis les
- * quatre groupes de cartes (intitulé, ligne d'aide, grille), relevés sur le
- * DOM de l'accueil : Contenu (2), Imprimer (2), Échanger et sauvegarder (3),
- * Historique et sécurité (2). Neuf cartes.
+ * /classeur/$id (accueil) : champ de recherche pleine largeur puis LE
+ * panneau, relevé sur le DOM de l'accueil : quatre sections (intitulé puis
+ * lignes) Contenu (2), Imprimer (2), Échanger et sauvegarder (3),
+ * Historique et sécurité (2). Neuf lignes.
  */
 export function FormeClasseurDashboard() {
   return (
     <>
       <Skeleton className="h-9 w-full rounded-md" aria-hidden="true" />
       <div
-        className="flex flex-col gap-6 pt-1 pb-2"
+        className={PANNEAU_ACCUEIL_CLASSEUR}
         aria-hidden="true"
-        data-accueil-groupes=""
+        data-accueil-panneau=""
       >
-        {GROUPES_ACCUEIL.map((g) => (
-          <div
-            key={g.cle}
-            className="flex flex-col gap-2.5"
-            data-groupe-actions=""
-          >
-            <div className="flex flex-col gap-1.5 py-0.5">
-              <Skeleton className="h-3 w-24" />
-              <Skeleton className="h-3 w-full max-w-72" />
+        {SECTIONS_ACCUEIL.map((s) => (
+          <div key={s.cle} data-section-actions="">
+            <div className={INTITULE_SECTION_CLASSEUR}>
+              <div className="flex h-4 items-center">
+                <Skeleton className="h-3 w-28" />
+              </div>
             </div>
-            <div className={GRILLE_ACTIONS_CLASSEUR}>
-              {g.cartes.map((c) => (
-                <CarteActionSquelette key={c} />
+            <div className={LIGNES_SECTION_CLASSEUR}>
+              {s.lignes.map((l) => (
+                <LigneActionSquelette key={l} />
               ))}
             </div>
           </div>

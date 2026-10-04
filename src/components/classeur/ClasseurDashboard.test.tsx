@@ -153,7 +153,7 @@ describe('ClasseurDashboard — places des cartes d’écriture', () => {
         </TooltipProvider>
       </QueryClientProvider>,
     )
-    return container.querySelectorAll('[data-carte-squelette]').length
+    return container.querySelectorAll('[data-ligne-squelette]').length
   }
 
   it('droits en lecture, page en écriture : trois places réservées', () => {
@@ -195,10 +195,11 @@ describe('ClasseurDashboard — places des cartes d’écriture', () => {
 
 /*
  * Disposition du 2026-10-04 (décision utilisateur) : en-tête FIXE hors de
- * la zone qui défile (comme un chapitre), cartes regroupées par usage. La
- * silhouette `FormeClasseurDashboard` doit suivre CE DOM, groupe par groupe.
+ * la zone qui défile (comme un chapitre), puis UN panneau en liste en quatre
+ * sections, en-tête et panneau sur la même largeur. La silhouette
+ * `FormeClasseurDashboard` doit suivre CE DOM, section par section.
  */
-describe('ClasseurDashboard — en-tête fixe et groupes', () => {
+describe('ClasseurDashboard — en-tête fixe et panneau', () => {
   function monterTout() {
     const { container } = render(
       <QueryClientProvider client={new QueryClient()}>
@@ -210,6 +211,7 @@ describe('ClasseurDashboard — en-tête fixe et groupes', () => {
             onExporterMarkdown={() => {}}
             onExporterJson={() => {}}
             onImporter={() => {}}
+            onFichierDepose={() => {}}
             onHistorique={() => {}}
             onImages={() => {}}
             onCorbeille={() => {}}
@@ -222,13 +224,13 @@ describe('ClasseurDashboard — en-tête fixe et groupes', () => {
   }
 
   function groupes(container: HTMLElement) {
-    return Array.from(container.querySelectorAll('[data-groupe-actions]')).map(
+    return Array.from(container.querySelectorAll('[data-section-actions]')).map(
       (g) => ({
         titre: g.querySelector('h2')?.textContent,
         cartes: Array.from(g.querySelectorAll('button')).map((b) =>
           b.textContent.trim(),
         ),
-        reservees: g.querySelectorAll('[data-carte-squelette]').length,
+        reservees: g.querySelectorAll('[data-ligne-squelette]').length,
       }),
     )
   }
@@ -250,12 +252,66 @@ describe('ClasseurDashboard — en-tête fixe et groupes', () => {
     })
     expect(entete?.contains(modifier)).toBe(true)
     expect(zone?.contains(screen.getByText('Fusion terminée'))).toBe(true)
-    // Toutes les cartes sont dans la zone, aucune dans l'en-tête.
-    expect(entete?.querySelector('[data-groupe-actions]')).toBeNull()
-    expect(zone?.querySelectorAll('[data-groupe-actions]').length).toBe(4)
+    // Toutes les lignes sont dans la zone, aucune dans l'en-tête.
+    expect(entete?.querySelector('[data-section-actions]')).toBeNull()
+    expect(zone?.querySelectorAll('[data-section-actions]').length).toBe(4)
   })
 
-  it('écriture : quatre groupes, neuf cartes, comme la silhouette', () => {
+  it('UN panneau, sous les messages, aligné sur l’en-tête ; lignes de même hauteur', () => {
+    const container = monterTout()
+    const panneaux = container.querySelectorAll('[data-accueil-panneau]')
+    expect(panneaux.length).toBe(1)
+    const panneau = panneaux[0]
+    // Les quatre sections sont les enfants directs du panneau (un trait
+    // plein entre deux), dans une carte.
+    expect(
+      Array.from(panneau.children).every((s) =>
+        s.hasAttribute('data-section-actions'),
+      ),
+    ).toBe(true)
+    expect(panneau.className).toContain('divide-y')
+    expect(panneau.className).toContain('rounded-xl')
+    // Alertes au-dessus du panneau, dans la même colonne.
+    const message = screen.getByText('Fusion terminée')
+    expect(message.parentElement).toBe(panneau.parentElement)
+    expect(
+      message.compareDocumentPosition(panneau) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    // Même largeur pour l'en-tête et le panneau : bords alignés.
+    const colEntete = container.querySelector('[data-page-en-tete] > div')
+    expect(colEntete?.className).toContain('max-w-3xl')
+    expect(panneau.parentElement?.className).toContain('max-w-3xl')
+    // Toutes les lignes ont la même hauteur, description sur une ligne.
+    const lignes = Array.from(
+      panneau.querySelectorAll<HTMLElement>('[data-ligne-action]'),
+    )
+    expect(lignes.length).toBe(9)
+    for (const l of lignes) {
+      expect(l.className).toMatch(/(^| )h-14( |$)/)
+      const d = l.querySelector('[data-testid="ligne-action-description"]')
+      expect(d?.className).toContain('truncate')
+      // Descriptions COURTES : elles tiennent sans troncature.
+      expect(d?.textContent.length).toBeLessThanOrEqual(52)
+    }
+    // Plus de phrase d'aide sous les intitulés : la section n'a que son
+    // titre et ses lignes.
+    for (const s of panneau.children) {
+      expect(s.children.length).toBe(2)
+    }
+  })
+
+  it('dépôt d’un fichier sur Importer : la ligne l’annonce', () => {
+    monterTout()
+    const ligne = screen.getByRole('button', { name: /Importer un JSON/ })
+    fireEvent.dragOver(ligne, { dataTransfer: { types: ['Files'] } })
+    expect(ligne.textContent).toContain('Déposez le fichier ici')
+    expect(ligne.className).toContain('bg-primary/10')
+    fireEvent.dragLeave(ligne)
+    expect(ligne.textContent).toContain('Mettre à jour depuis un export')
+  })
+
+  it('écriture : quatre sections, neuf lignes, comme la silhouette', () => {
     const container = monterTout()
     expect(groupes(container)).toEqual([
       {
@@ -306,7 +362,7 @@ describe('ClasseurDashboard — en-tête fixe et groupes', () => {
     ).toBeNull()
   })
 
-  it('droits pas encore lus : les places réservées tombent dans LEUR groupe', () => {
+  it('droits pas encore lus : les places réservées tombent dans LEUR section', () => {
     Object.assign(droits, { canWrite: false, pret: false })
     const container = monterTout()
     expect(groupes(container).map((x) => x.reservees)).toEqual([1, 0, 1, 1])

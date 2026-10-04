@@ -263,7 +263,10 @@ export function RouteSkeleton({
     return (
       <div
         className={cn(
-          'mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4',
+          'mx-auto flex w-full flex-1 flex-col gap-4',
+          // Accueil : le panneau en liste et son en-tête sur `max-w-3xl`
+          // (2026-10-04) ; les autres pages sur `max-w-5xl`.
+          forme === 'dashboard' ? 'max-w-3xl' : 'max-w-5xl',
           // Accueil, chapitre et détails tiennent dans la fenêtre (en-tête
           // fixe, contenu qui défile dessous) : la silhouette ne déborde pas.
           (forme === 'dashboard' ||

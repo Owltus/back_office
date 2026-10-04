@@ -1295,22 +1295,30 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   hauteur, 20 rem — « trop petite » à 16 rem). En-tête FIXE
   (`PageAvecEnTete` : titre, sous-titre, recherche, Modifier / Accès /
   Supprimer), zone qui défile dessous (alertes de `ClasseurDashboardActions`
-  passées par le prop `messages`, puis le contenu) ; en-tête et contenu en
-  `max-w-5xl` centré. Cartes REGROUPÉES par usage (`GroupeActions` :
-  intitulé discret en capitales + une phrase d'aide), grille
-  `GRILLE_ACTIONS_CLASSEUR` (1 / 2 dès `sm` / 3 dès `xl`, une source pour la
-  page et la silhouette) : **Contenu** (Nouveau chapitre en pointillé si
-  écriture, Images du classeur) ; **Imprimer** (Classeur complet = aperçu
-  couverture + sommaire + chapitres, puis Télécharger le PDF / Imprimer ;
-  Sommaire, qui est lui aussi un aperçu d'impression) ; **Échanger et
-  sauvegarder** (Exporter en JSON, Importer un JSON avec dépôt de fichier,
-  Exporter en Markdown) ; **Historique et sécurité** (Points de
-  restauration, Corbeille si écriture). `ActionCard` : carré d'icône
-  `bg-muted` 36 px, titre et description sur 2 lignes au plus, `h-full`
-  (même hauteur dans une rangée) — la liste `/classeur` en hérite. Places
-  réservées (`CarteActionSquelette`) dans LEUR groupe tant que les droits ne
-  sont pas lus. Libellés de Registre conservés (« Export en cours... »,
-  « Déposez ici »).
+  passées par le prop `messages`, puis le contenu) ; en-tête, alertes et
+  panneau sur la MÊME largeur `max-w-3xl` centrée (bords alignés).
+  **PANNEAU EN LISTE, façon page de réglages (même jour, décision
+  utilisateur : la grille de tuiles 2, 2, 3, 2 était « éclatée », hauteurs
+  inégales, tuile pointillée qui détonnait — ABANDONNÉE, ne pas la
+  reproposer)** : UNE carte (`PANNEAU_ACCUEIL_CLASSEUR`, sections séparées
+  d'un trait plein), quatre sections à intitulé en capitales SANS phrase
+  d'aide : **Contenu** (Nouveau chapitre si écriture, carré d'icône teinté
+  `primary`, pas de pointillé ; Images du classeur) ; **Imprimer** (Classeur
+  complet = aperçu couverture + sommaire + chapitres, puis Télécharger le
+  PDF / Imprimer ; Sommaire, lui aussi un aperçu) ; **Échanger et
+  sauvegarder** (Exporter en JSON, Importer un JSON avec dépôt de fichier :
+  fond `primary/10` et « Déposez le fichier ici », Exporter en Markdown) ;
+  **Historique et sécurité** (Points de restauration, Corbeille si
+  écriture). `LigneAction` : `h-14` (`h-16` au doigt) pour TOUTES, carré
+  d'icône 32 px, titre et description sur une ligne (descriptions COURTES,
+  sans troncature à 1100 px ; sous `sm` la description passe sur deux
+  lignes dans la même hauteur au lieu d'être coupée), chevron à droite,
+  `Loader2` pendant l'action. Résultats de recherche dans la même carte, en
+  lignes de même forme. Places réservées (`LigneActionSquelette`, même
+  hauteur) dans LEUR section tant que les droits ne sont pas lus ; la
+  silhouette `FormeClasseurDashboard` dessine le même panneau (9 lignes).
+  `ActionCard` ne sert plus qu'à la liste `/classeur`. Libellés de Registre
+  conservés (« Export en cours... »).
 - **Points de restauration (2026-09-26, demande de l'utilisateur : « de
   vraies sauvegardes, faciles, une dizaine, mineures et majeures »)** :
   `classeur_merge_history` n'est plus l'historique des seules fusions mais

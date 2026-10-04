@@ -5,6 +5,7 @@ import { Link, useNavigate } from '@tanstack/react-router'
 import {
   Archive,
   Bookmark,
+  ChevronRight,
   FileDown,
   FileText,
   FileUp,
@@ -24,7 +25,6 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
-import { ActionCard } from '#/components/classeur/ActionCard.tsx'
 import { ChapterDrawerButton } from '#/components/classeur/ChapterDrawer.tsx'
 import { AccesClasseurDialog } from '#/components/classeur/dialogs/AccesClasseurDialog.tsx'
 import { ChapterDialog } from '#/components/classeur/dialogs/ChapterDialog.tsx'
@@ -40,13 +40,16 @@ import {
   useDroitsPageClasseur,
 } from '#/components/classeur/hooks/useDroitsClasseur.ts'
 import { IconAction } from '#/components/classeur/IconAction.tsx'
+import { LigneAction } from '#/components/classeur/LigneAction.tsx'
 import { PageAvecEnTete } from '#/components/classeur/PageAvecEnTete.tsx'
 import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { ConfirmDialog } from '#/components/shared/ConfirmDialog.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import {
-  CarteActionSquelette,
-  GRILLE_ACTIONS_CLASSEUR,
+  INTITULE_SECTION_CLASSEUR,
+  LIGNES_SECTION_CLASSEUR,
+  LigneActionSquelette,
+  PANNEAU_ACCUEIL_CLASSEUR,
 } from '#/components/shared/skeleton/PageShapes.tsx'
 import { Input } from '#/components/ui/input.tsx'
 import { Skeleton } from '#/components/ui/skeleton.tsx'
@@ -54,6 +57,7 @@ import { messageErreur } from '#/lib/classeur/erreur.ts'
 import { DEFAULT_REGISTRY_NAME, getIcon } from '#/lib/classeur/naming.ts'
 import { softDeleteClasseur } from '#/lib/classeur/service.ts'
 import { contientSansAccents } from '#/lib/classeur/slug.ts'
+import { cn } from '#/lib/utils.ts'
 import { ITEM_LABEL, flattenItems } from '#/lib/classeur/types.ts'
 import type {
   ChapterContent,
@@ -95,19 +99,20 @@ const ICONE_KIND: Record<ItemKind, LucideIcon> = {
  *
  * Décision utilisateur du 2026-09-26 : les chapitres vivent DÉJÀ dans la
  * colonne de gauche, l'accueil ne les répète pas. Le corps de la page est
- * fait de CARTES D'ACTIONS, sous la recherche instantanée dans tout le
+ * fait d'ACTIONS, sous la recherche instantanée dans tout le
  * classeur (titres, descriptions, contenus, accents ignorés).
  *
  * Disposition du 2026-10-04 (décision utilisateur, remplace la colonne de
- * 28 rem de Registre) : en-tête FIXE (`PageAvecEnTete`, comme un chapitre),
- * cartes regroupées par usage (Contenu, Imprimer, Échanger et sauvegarder,
- * Historique et sécurité) dans une grille 1 / 2 / 3 colonnes de `max-w-5xl`.
+ * 28 rem de Registre puis la grille de tuiles) : en-tête FIXE
+ * (`PageAvecEnTete`, comme un chapitre) et UN panneau en liste, façon page
+ * de réglages, en quatre sections (Contenu, Imprimer, Échanger et
+ * sauvegarder, Historique et sécurité), en-tête et panneau sur `max-w-3xl`.
  *
  * POINTS D'EXTENSION (branchés par `ClasseurDashboardActions`) : les
  * rappels `onSommaire`, `onExporterPdf`, `onExporterMarkdown`,
  * `onExporterJson`, `onImporter` reçoivent le `DashboardContexte` chargé ;
- * `onHistorique` ouvre le dialogue d'historique. Absent, la carte n'est pas
- * rendue. `busy` fait tourner la carte de l'action en cours ; toutes sont
+ * `onHistorique` ouvre le dialogue d'historique. Absent, la ligne n'est pas
+ * rendue. `busy` fait tourner la ligne de l'action en cours ; toutes sont
  * désactivées tant que le contenu n'est pas chargé. `renderResult` remplace
  * le rendu par défaut d'un résultat de recherche.
  */
@@ -138,9 +143,9 @@ export function ClasseurDashboard({
   /** Ouvre l'historique des imports (instantanés restaurables). Sans ctx : la
    * liste est lue par le dialogue lui-même. */
   onHistorique?: () => void
-  /** Ouvre la médiathèque du classeur. Absent, la carte n'est pas rendue. */
+  /** Ouvre la médiathèque du classeur. Absent, la ligne n'est pas rendue. */
   onImages?: () => void
-  /** Ouvre la corbeille (étape 6). Carte rendue seulement avec l'écriture. */
+  /** Ouvre la corbeille (étape 6). Ligne rendue seulement avec l'écriture. */
   onCorbeille?: () => void
   busy?: DashboardBusy
   renderResult?: (result: ClasseurSearchResult) => ReactNode
@@ -150,10 +155,10 @@ export function ClasseurDashboard({
 }) {
   const droits = useDroitsClasseur(classeurId)
   const { canWrite, canManage } = droits
-  // Places des cartes d'écriture (Nouveau chapitre, Importer, Corbeille)
+  // Places des lignes d'écriture (Nouveau chapitre, Importer, Corbeille)
   // réservées en silhouette tant que les droits du classeur ne sont pas lus,
-  // pour qui PEUT écrire sur la page : sans cela la colonne grandissait de
-  // deux cartes à leur arrivée. Un lecteur de la page n'écrira jamais : rien
+  // pour qui PEUT écrire sur la page : sans cela le panneau grandissait de
+  // trois lignes à leur arrivée. Un lecteur de la page n'écrira jamais : rien
   // à réserver.
   const { page } = useDroitsPageClasseur()
   const reserverEcriture =
@@ -258,23 +263,23 @@ export function ClasseurDashboard({
         ? contenuQ.error
         : null
 
-  const grilleImprimer = onExporterPdf || onSommaire
-  const grilleEchanger =
+  const sectionImprimer = onExporterPdf || onSommaire
+  const sectionEchanger =
     onExporterJson ||
     onExporterMarkdown ||
     ((canWrite || reserverEcriture) && onImporter)
-  const grilleHistorique =
+  const sectionHistorique =
     onHistorique || ((canWrite || reserverEcriture) && onCorbeille)
-  const grilleContenu = canWrite || reserverEcriture || onImages
+  const sectionContenu = canWrite || reserverEcriture || onImages
 
   return (
     // En-tête FIXE (titre, sous-titre, recherche, boutons) et zone qui
     // défile dessous avec sa propre barre, comme la page d'un chapitre
     // (décision utilisateur du 2026-10-04). En-tête et contenu partagent la
-    // même largeur confortable (`max-w-5xl` centré).
+    // même largeur confortable (`max-w-3xl` centré).
     <PageAvecEnTete
       entete={
-        <div className="mx-auto flex w-full max-w-5xl flex-col gap-3">
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-3">
           <PageHeader
             leading={<ChapterDrawerButton />}
             title={
@@ -351,7 +356,7 @@ export function ClasseurDashboard({
         </div>
       }
     >
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
         {messages}
         {erreurLecture !== null && (
           <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
@@ -373,22 +378,25 @@ export function ClasseurDashboard({
         )}
 
         {requete !== '' ? (
-          <section className="flex flex-col gap-3" aria-live="polite">
+          <section className="flex flex-col gap-2" aria-live="polite">
             {resultats.length === 0 ? (
               <div className="rounded-xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
                 Aucun élément ne correspond à cette recherche.
               </div>
             ) : (
               <>
-                <p className="text-xs text-muted-foreground">
+                <p className="px-1 text-xs text-muted-foreground">
                   {resultats.length} résultat{resultats.length > 1 ? 's' : ''}
                 </p>
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                <div
+                  className={cn(PANNEAU_ACCUEIL_CLASSEUR, 'divide-border/60')}
+                  data-resultats=""
+                >
                   {resultats.map((r) =>
                     renderResult ? (
                       <div key={`${r.kind}-${r.id}`}>{renderResult(r)}</div>
                     ) : (
-                      <ResultatCard
+                      <ResultatLigne
                         key={`${r.kind}-${r.id}`}
                         classeurId={classeurId}
                         result={r}
@@ -401,79 +409,67 @@ export function ClasseurDashboard({
           </section>
         ) : (
           /* Le corps de l'accueil (décision utilisateur du 2026-10-04, remplace
-             la colonne de 28 rem de Registre) : les cartes REGROUPÉES par
-             usage, chaque groupe sous un intitulé discret et une phrase
-             d'aide, dans une grille 1 / 2 / 3 colonnes. La silhouette
-             `FormeClasseurDashboard` suit cette structure. */
-          <div
-            className="flex flex-col gap-6 pt-1 pb-2"
-            data-accueil-groupes=""
-          >
-            {grilleContenu && (
-              <GroupeActions
-                titre="Contenu"
-                aide="Les chapitres du classeur et les images communes à tous ses documents."
-              >
+             la grille de tuiles jugée « éclatée ») : UN panneau en liste,
+             façon page de réglages, en quatre sections. Toutes les lignes ont
+             la même hauteur. La silhouette `FormeClasseurDashboard` suit
+             cette structure. */
+          <div className={PANNEAU_ACCUEIL_CLASSEUR} data-accueil-panneau="">
+            {sectionContenu && (
+              <SectionActions titre="Contenu">
                 {canWrite ? (
-                  <ActionCard
+                  <LigneAction
                     icon={Plus}
                     title="Nouveau chapitre"
-                    subtitle="Ajouter un chapitre au classeur"
+                    description="Ajouter un chapitre au classeur"
                     onClick={() => setCreateOpen(true)}
-                    dashed
+                    creation
                   />
                 ) : (
-                  reserverEcriture && <CarteActionSquelette />
+                  reserverEcriture && <LigneActionSquelette />
                 )}
                 {onImages && (
-                  <ActionCard
+                  <LigneAction
                     icon={Images}
                     title="Images du classeur"
-                    subtitle="Photos et schémas utilisables dans tous les documents"
+                    description="Photos et schémas communs aux documents"
                     onClick={onImages}
                   />
                 )}
-              </GroupeActions>
+              </SectionActions>
             )}
 
-            {grilleImprimer && (
-              <GroupeActions
-                titre="Imprimer"
-                aide="Un aperçu des pages A4, puis Télécharger le PDF ou Imprimer."
-              >
+            {sectionImprimer && (
+              <SectionActions titre="Imprimer">
                 {onExporterPdf && (
-                  <ActionCard
+                  <LigneAction
                     icon={Printer}
                     title="Classeur complet"
-                    subtitle="Couverture, sommaire et tous les chapitres"
+                    description="Couverture, sommaire et chapitres, en PDF ou imprimé"
                     onClick={action(onExporterPdf)}
                     disabled={!pret}
                     busy={busy === 'pdf'}
                   />
                 )}
                 {onSommaire && (
-                  <ActionCard
+                  <LigneAction
                     icon={List}
                     title="Sommaire"
-                    subtitle="La table des matières seule"
+                    description="La table des matières seule"
                     onClick={action(onSommaire)}
                     disabled={!pret}
                     busy={busy === 'sommaire'}
                   />
                 )}
-              </GroupeActions>
+              </SectionActions>
             )}
 
-            {grilleEchanger && (
-              <GroupeActions
-                titre="Échanger et sauvegarder"
-                aide="Des fichiers à garder, à retoucher ailleurs ou à réimporter."
-              >
+            {sectionEchanger && (
+              <SectionActions titre="Échanger et sauvegarder">
                 {onExporterJson && (
-                  <ActionCard
+                  <LigneAction
                     icon={FileUp}
                     title="Exporter en JSON"
-                    subtitle="Copie éditable, avec vos demandes pour un LLM"
+                    description="Copie éditable, avec vos demandes pour un LLM"
                     titreOccupe="Export en cours..."
                     onClick={action(onExporterJson)}
                     disabled={!pret || busy !== null}
@@ -481,23 +477,15 @@ export function ClasseurDashboard({
                   />
                 )}
                 {canWrite && onImporter && (
-                  <ActionCard
+                  <LigneAction
                     icon={survolDepot ? Upload : FileDown}
-                    title={survolDepot ? 'Déposez ici' : 'Importer un JSON'}
-                    subtitle={
-                      survolDepot
-                        ? undefined
-                        : 'Mettre à jour depuis un export, ou déposer le fichier ici'
-                    }
+                    title="Importer un JSON"
+                    description="Mettre à jour depuis un export"
                     titreOccupe="Import en cours..."
                     onClick={action(onImporter)}
                     disabled={!pret || busy !== null}
                     busy={busy === 'import'}
-                    className={
-                      survolDepot
-                        ? 'border-dashed border-primary bg-primary/5'
-                        : undefined
-                    }
+                    survolDepot={survolDepot}
                     onDragEnter={surDragOver}
                     onDragOver={surDragOver}
                     onDragLeave={surDragLeave}
@@ -505,49 +493,46 @@ export function ClasseurDashboard({
                   />
                 )}
                 {!canWrite && reserverEcriture && onImporter && (
-                  <CarteActionSquelette />
+                  <LigneActionSquelette />
                 )}
                 {onExporterMarkdown && (
-                  <ActionCard
+                  <LigneAction
                     icon={Archive}
                     title="Exporter en Markdown"
-                    subtitle="Archive ZIP contenant tous les documents"
+                    description="Archive ZIP de tous les documents"
                     titreOccupe="Export en cours..."
                     onClick={action(onExporterMarkdown)}
                     disabled={!pret || busy !== null}
                     busy={busy === 'markdown'}
                   />
                 )}
-              </GroupeActions>
+              </SectionActions>
             )}
 
-            {grilleHistorique && (
-              <GroupeActions
-                titre="Historique et sécurité"
-                aide="Revenir à un état précédent ou retrouver ce qui a été supprimé."
-              >
+            {sectionHistorique && (
+              <SectionActions titre="Historique et sécurité">
                 {onHistorique && (
-                  <ActionCard
+                  <LigneAction
                     icon={History}
                     title="Points de restauration"
-                    subtitle="Revenir à un état précédent du classeur"
+                    description="Revenir à un état précédent"
                     onClick={onHistorique}
                   />
                 )}
                 {/* Étape 6 : corbeille, avec le droit d'écriture (D16). Sans
                     compteur : aucune lecture de plus au premier rendu. */}
                 {canWrite && onCorbeille && (
-                  <ActionCard
+                  <LigneAction
                     icon={Trash}
                     title="Corbeille"
-                    subtitle="Retrouver un chapitre ou un élément supprimé"
+                    description="Retrouver ce qui a été supprimé"
                     onClick={onCorbeille}
                   />
                 )}
                 {!canWrite && reserverEcriture && onCorbeille && (
-                  <CarteActionSquelette />
+                  <LigneActionSquelette />
                 )}
-              </GroupeActions>
+              </SectionActions>
             )}
           </div>
         )}
@@ -594,46 +579,31 @@ export function ClasseurDashboard({
 }
 
 /**
- * Un groupe de cartes de l'accueil : intitulé discret, une phrase d'aide,
- * puis la grille (1 colonne au téléphone, 2 dès `sm`, 3 dès `xl` — la
- * colonne des chapitres de 20 rem occupe la gauche à partir de `lg`).
- * `items-stretch` (défaut de la grille) + `h-full` des cartes : même
- * hauteur dans une rangée.
+ * Une section du panneau de l'accueil : intitulé en ligne, puis ses lignes
+ * séparées d'un trait discret. Le trait plein entre deux sections vient du
+ * panneau (`divide-y`).
  */
-function GroupeActions({
+function SectionActions({
   titre,
-  aide,
   children,
 }: {
   titre: string
-  aide?: string
   children: ReactNode
 }) {
   const id = useId()
   return (
-    <section
-      aria-labelledby={id}
-      className="flex flex-col gap-2.5"
-      data-groupe-actions=""
-    >
-      <div className="flex flex-col gap-0.5">
-        <h2
-          id={id}
-          className="text-xs font-semibold tracking-wide text-muted-foreground uppercase"
-        >
-          {titre}
-        </h2>
-        {aide !== undefined && (
-          <p className="text-xs text-muted-foreground/80">{aide}</p>
-        )}
-      </div>
-      <div className={GRILLE_ACTIONS_CLASSEUR}>{children}</div>
+    <section aria-labelledby={id} data-section-actions="">
+      <h2 id={id} className={INTITULE_SECTION_CLASSEUR}>
+        {titre}
+      </h2>
+      <div className={LIGNES_SECTION_CLASSEUR}>{children}</div>
     </section>
   )
 }
 
-/** Rendu par défaut d'un résultat : vers la page du chapitre qui le contient. */
-function ResultatCard({
+/** Rendu par défaut d'un résultat : une ligne du panneau, vers la page du
+ * chapitre qui le contient. */
+function ResultatLigne({
   classeurId,
   result,
 }: {
@@ -641,6 +611,7 @@ function ResultatCard({
   result: ClasseurSearchResult
 }) {
   const Icon = ICONE_KIND[result.kind]
+  const description = result.description.trim()
   return (
     <Link
       to="/classeur/$classeurId/$chapterId"
@@ -648,22 +619,29 @@ function ResultatCard({
         classeurId: String(classeurId),
         chapterId: String(result.chapterId),
       }}
-      className="flex flex-col gap-1 rounded-xl border border-border bg-card p-4 transition-colors hover:bg-accent"
+      className="flex h-14 items-center gap-3 px-4 transition-colors pointer-coarse:h-16 hover:bg-muted/50 focus-visible:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset"
     >
-      <div className="flex min-w-0 items-center gap-2">
-        <Icon className="size-4 shrink-0 text-muted-foreground" />
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-foreground/80">
+        <Icon className="size-4" />
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-sm font-medium">
           {result.title.trim() !== '' ? result.title : 'Sans titre'}
         </span>
-      </div>
-      {result.description.trim() !== '' && (
-        <p className="line-clamp-2 text-xs text-muted-foreground">
-          {result.description}
-        </p>
-      )}
-      <p className="truncate text-xs text-muted-foreground">
-        {ITEM_LABEL[result.kind]} · {result.chapterName}
-      </p>
+        <span className="truncate text-xs text-muted-foreground">
+          {majuscule(ITEM_LABEL[result.kind])} · {result.chapterName}
+          {description !== '' && ` · ${description}`}
+        </span>
+      </span>
+      <ChevronRight
+        className="size-4 shrink-0 text-muted-foreground"
+        aria-hidden="true"
+      />
     </Link>
   )
+}
+
+/** « document » → « Document » (début de la ligne de détail d'un résultat). */
+function majuscule(s: string) {
+  return s.charAt(0).toUpperCase() + s.slice(1)
 }

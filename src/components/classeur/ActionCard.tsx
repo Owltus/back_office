@@ -5,7 +5,8 @@ import type { LucideIcon } from 'lucide-react'
 import { cn } from '#/lib/utils.ts'
 
 /**
- * Carte d'action (liste des classeurs, accueil d'un classeur), dans la
+ * Carte d'action (liste des classeurs ; l'accueil d'un classeur a ses
+ * lignes, `LigneAction`, depuis le 2026-10-04), dans la
  * grammaire de l'app : carte `bg-card`, icône dans un petit carré teinté
  * (`bg-muted`), titre, description sur deux lignes au plus, survol
  * `bg-accent`, anneau de focus clavier. `h-full` : dans une grille, les

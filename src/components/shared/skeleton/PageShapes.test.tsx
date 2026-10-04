@@ -237,30 +237,39 @@ describe('Classeur — quatre silhouettes relevées sur les boards', () => {
     )
   })
 
-  it('l’accueil dessine la recherche puis 4 groupes de cartes : 2, 2, 3, 2 (9 cartes)', () => {
+  it('l’accueil dessine la recherche puis UN panneau de 4 sections : 2, 2, 3, 2 lignes (9)', () => {
     const { container } = render(<FormeClasseurDashboard />)
     expect(container.querySelectorAll('.h-9.w-full').length).toBe(1)
-    expect(container.querySelectorAll('[data-carte-squelette]').length).toBe(9)
-    // Disposition du 2026-10-04 : Contenu (Nouveau chapitre, Images),
-    // Imprimer (Classeur complet, Sommaire), Échanger et sauvegarder (JSON,
-    // Importer, Markdown), Historique et sécurité (Points, Corbeille).
-    const groupes = Array.from(
-      container.querySelectorAll('[data-groupe-actions]'),
-    )
+    // Disposition du 2026-10-04 (panneau en liste) : Contenu (Nouveau
+    // chapitre, Images), Imprimer (Classeur complet, Sommaire), Échanger et
+    // sauvegarder (JSON, Importer, Markdown), Historique et sécurité
+    // (Points, Corbeille).
+    const panneaux = container.querySelectorAll('[data-accueil-panneau]')
+    expect(panneaux.length).toBe(1)
+    const panneau = panneaux[0]
+    expect(panneau.className).toContain('rounded-xl')
+    expect(panneau.className).toContain('divide-y')
+    const sections = Array.from(panneau.children)
     expect(
-      groupes.map((g) => g.querySelectorAll('[data-carte-squelette]').length),
+      sections.map((s) => s.querySelectorAll('[data-ligne-squelette]').length),
     ).toEqual([2, 2, 3, 2])
-    // Chaque groupe : un intitulé (deux barres) puis LA grille de l'accueil.
-    for (const g of groupes) {
-      const grille = g.lastElementChild
-      expect(grille?.className).toBe('grid gap-3 sm:grid-cols-2 xl:grid-cols-3')
-      expect(g.firstElementChild?.querySelectorAll('[data-slot]').length).toBe(
-        2,
+    for (const s of sections) {
+      expect(s.hasAttribute('data-section-actions')).toBe(true)
+      // Un intitulé (UNE barre), puis la liste des lignes.
+      expect(s.children.length).toBe(2)
+      expect(s.firstElementChild?.querySelectorAll('[data-slot]').length).toBe(
+        1,
       )
+      expect(s.lastElementChild?.className).toBe('divide-y divide-border/60')
     }
-    // Plus de colonne étroite de Registre ni de séparateurs.
+    // Lignes de la hauteur des vraies : h-14, carré d'icône de 32 px.
+    for (const l of container.querySelectorAll('[data-ligne-squelette]')) {
+      expect(l.className).toMatch(/(^| )h-14( |$)/)
+      expect(l.querySelector('.size-8')).not.toBeNull()
+    }
+    // Plus de grille de tuiles ni de colonne étroite.
+    expect(container.querySelector('[class*="grid-cols"]')).toBeNull()
     expect(container.querySelector('.max-w-md')).toBeNull()
-    expect(container.querySelectorAll('.border-b').length).toBe(0)
   })
 
   it('le chapitre dessine N miniatures au rapport A4 et sa recherche', () => {
