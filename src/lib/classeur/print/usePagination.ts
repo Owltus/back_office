@@ -76,7 +76,19 @@ export function usePagination(
         void Promise.all([waitForMermaid(node), waitForImages(node)]).then(
           () => {
             const maxHeight = mmToPx(contentHeightMm)
-            const pageData = paginate(node, maxHeight)
+            let pageData: PageData[]
+            try {
+              pageData = paginate(node, maxHeight)
+            } catch (err) {
+              // Une mesure qui lève ne laisse jamais le marqueur « en
+              // cours » posé (impression bloquée sans fin, sans un mot) :
+              // le document est rendu d'un seul bloc, et on le dit.
+              console.error(
+                '[classeur] Pagination impossible : document rendu d’un seul bloc.',
+                err,
+              )
+              pageData = [{ html: node.innerHTML }]
+            }
 
             setPages(pageData)
             setMeasuring(false)
