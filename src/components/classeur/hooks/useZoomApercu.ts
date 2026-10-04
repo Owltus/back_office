@@ -251,6 +251,10 @@ export function useZoomApercu({
   useEffect(() => {
     function surTouche(e: KeyboardEvent) {
       if (!e.ctrlKey && !e.metaKey) return
+      // AltGr arrive sous Windows comme Ctrl + Alt : AltGr + à tape « @ »
+      // en AZERTY (« } » en QWERTZ) avec `code` Digit0. Ce n'est jamais un
+      // zoom : on laisse passer la frappe.
+      if (e.altKey) return
       const zone = zoneNode.current
       if (!zone) return
       const focus = document.activeElement

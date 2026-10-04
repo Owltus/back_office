@@ -232,6 +232,28 @@ describe('ZoomApercu', () => {
     expect(touche({ key: '0', ctrlKey: true }).defaultPrevented).toBe(false)
   })
 
+  it('AltGr (Ctrl + Alt sous Windows) n’est jamais volé : « @ » se tape', () => {
+    render(<Banc />)
+    fireEvent.pointerEnter(screen.getByTestId('zone'))
+    fireEvent.click(screen.getByRole('button', { name: "Agrandir l'aperçu" }))
+    expect(libelle()).toBe('75 %')
+    // AZERTY : AltGr + à = « @ », touche Digit0.
+    const arobase = touche({
+      key: '@',
+      code: 'Digit0',
+      ctrlKey: true,
+      altKey: true,
+    })
+    expect(arobase.defaultPrevented).toBe(false)
+    expect(libelle()).toBe('75 %')
+    // QWERTZ : AltGr + 0 = « } ».
+    expect(
+      touche({ key: '}', code: 'Digit0', ctrlKey: true, altKey: true })
+        .defaultPrevented,
+    ).toBe(false)
+    expect(libelle()).toBe('75 %')
+  })
+
   it('le focus dans l’aperçu suffit pour Ctrl + 0', () => {
     render(<Banc />)
     fireEvent.click(screen.getByRole('button', { name: "Agrandir l'aperçu" }))
