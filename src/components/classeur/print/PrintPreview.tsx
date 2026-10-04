@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode, RefObject } from 'react'
-import { Printer } from 'lucide-react'
+import { Download, Printer } from 'lucide-react'
 
 import { Button } from '#/components/ui/button.tsx'
 import {
@@ -15,6 +15,21 @@ import {
   SELECTEUR_PAGINATION_EN_COURS,
 } from '#/lib/classeur/print/buildPrintHtml.ts'
 import { printViaIframe } from '#/lib/classeur/print/printIframe.ts'
+
+const AIDE_PDF =
+  'Télécharger le PDF : fichier prêt à envoyer. Pour un texte sélectionnable, Imprimer puis « Enregistrer au format PDF ».'
+
+function libelleBoutonPdf(
+  preparation: boolean,
+  pdf: { fait: number; total: number } | null,
+): string {
+  if (pdf) {
+    return pdf.total > 0
+      ? `Création du PDF… (${Math.min(pdf.fait + 1, pdf.total)} / ${pdf.total})`
+      : 'Création du PDF…'
+  }
+  return preparation ? 'Préparation…' : 'Télécharger le PDF'
+}
 
 interface PrintPreviewProps {
   open: boolean
@@ -44,8 +59,12 @@ interface PrintPreviewProps {
  * écran défilant. L'impression passe par un iframe caché
  * (`lib/classeur/print/printIframe.ts`) : c'est aussi le chemin « PDF »
  * (« Enregistrer en PDF » dans le dialogue du navigateur, avec le nom de
- * fichier `nomFichier` et une ligne d'aide sous le titre). Le bouton
- * « Télécharger » de Registre (Edge headless via Rust) n'a pas été porté.
+ * fichier `nomFichier` et une ligne d'aide sous le titre).
+ *
+ * « Télécharger le PDF » (D19 renversée par l'utilisateur le 2026-10-04) :
+ * fichier produit dans le navigateur, pages capturées en image
+ * (`lib/classeur/print/pdfDirect.ts`, chargé au clic avec html2canvas-pro
+ * et jspdf). Même nom de fichier que l'impression.
  */
 export function PrintPreview({
   open,
@@ -90,9 +109,35 @@ export function PrintPreview({
     return () => observer.disconnect()
   }, [noeud])
 
+  // Progression du PDF téléchargé : null = aucun en cours.
+  const [pdf, setPdf] = useState<{ fait: number; total: number } | null>(null)
+
+  const handlePdf = async () => {
+    const container = scrollRef.current
+    if (!container || busy || preparation || pdf) return
+    setPdf({ fait: 0, total: 0 })
+    setError(null)
+    try {
+      const { telechargerPdf } =
+        await import('#/lib/classeur/print/pdfDirect.ts')
+      await telechargerPdf(container, {
+        nomFichier,
+        onProgression: (fait, total) => setPdf({ fait, total }),
+      })
+    } catch (err) {
+      setError(
+        err instanceof MiseEnPageEnCours
+          ? err.message
+          : 'Création du PDF impossible. Réessayez, ou utilisez Imprimer.',
+      )
+    } finally {
+      setPdf(null)
+    }
+  }
+
   const handlePrint = async () => {
     const container = scrollRef.current
-    if (!container || busy || preparation) return
+    if (!container || busy || preparation || pdf) return
     setBusy(true)
     setError(null)
     try {
@@ -123,14 +168,13 @@ export function PrintPreview({
             <DialogDescription className="sr-only">
               Aperçu des pages A4 telles qu'elles seront imprimées.
             </DialogDescription>
-            {/* Étape 9 (D19 = A) : le PDF passe par le dialogue du
-                navigateur, qui garde le texte net et cherchable. */}
+            {/* Étape 9 : le PDF téléchargé est fait d'images ; le texte
+                net et cherchable reste celui du dialogue du navigateur. */}
             <p
               className="truncate text-xs text-muted-foreground"
-              title="Pour un fichier PDF, choisissez « Enregistrer au format PDF » comme imprimante."
+              title={AIDE_PDF}
             >
-              Pour un fichier PDF, choisissez « Enregistrer au format PDF »
-              comme imprimante.
+              {AIDE_PDF}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -141,8 +185,18 @@ export function PrintPreview({
             )}
             <Button
               size="sm"
+              variant="outline"
+              onClick={handlePdf}
+              disabled={busy || preparation || pdf !== null}
+              aria-label="Télécharger le PDF"
+            >
+              <Download className="size-4" aria-hidden />
+              {libelleBoutonPdf(preparation, pdf)}
+            </Button>
+            <Button
+              size="sm"
               onClick={handlePrint}
-              disabled={busy || preparation}
+              disabled={busy || preparation || pdf !== null}
               aria-label="Imprimer ou enregistrer en PDF"
             >
               <Printer className="size-4" aria-hidden />

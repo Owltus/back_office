@@ -30,7 +30,7 @@ facilement.
 | D25 | **A** : demandes à l'export chapitre / document | Dialogue existant ; pas de nouvel écran |
 | D26 | **non** : rien n'est mémorisé | Poste partagé |
 | D27 | **B** : zoom dans l'éditeur seulement | Périmètre demandé |
-| D19 | **A** : bon nom de fichier, plus une aide « Enregistrer en PDF » | Texte vectoriel, aucune dépendance nouvelle ; la voie B reste ouverte (voir l'étape 9) |
+| D19 | ~~A~~ → **B, voie navigateur** (RENVERSÉE par l'utilisateur le 2026-10-04 : bouton « Télécharger le PDF » sans fenêtre d'impression) | Pages capturées en image par html2canvas-pro (lit `oklch`, MIT), assemblées par jsPDF, chargées au clic ; « Imprimer » reste la voie vectorielle. D5 tranchée (html2canvas-pro), D20 sans objet |
 | D21 | **B** : lecture du catalogue, plus un test réel par l'utilisateur | Docker est éteint ; écrire en production est interdit |
 
 ## A. Questions pour l'utilisateur (11)

@@ -9,11 +9,12 @@ Parking, PDJ, Affichage, Rapprochement/Caisse (à venir).
 - **TanStack Start** (SSR) + **TanStack Router** (routing par fichier) + TanStack Query
 - **React 19**, TypeScript, **Tailwind CSS v4**, **shadcn/ui** (thème dark navy forcé sur `<html>`)
 - **Supabase** (Auth + PostgreSQL + RLS + Storage)
-- Recharts, papaparse. ⚠ html2canvas n'est PLUS installé (constaté le
-  2026-10-04 : aucun import dans `src`, `lib/repjour/email.ts` n'existe plus ;
-  seuls des commentaires de `reportHtml.ts` en parlent). La 1.4.1 ne lisait
-  pas les couleurs `oklch` de Tailwind v4 : ne pas la réintroduire sans un
-  équivalent qui les lit.
+- Recharts, papaparse. ⚠ html2canvas (1.4.1) n'est PLUS installé : elle ne
+  lisait pas les couleurs `oklch` de Tailwind v4, ne pas la réintroduire.
+  Depuis le 2026-10-04, **html2canvas-pro** (fork MIT qui lit `oklch`) sert
+  au seul « Télécharger le PDF » du Classeur (`lib/classeur/print/pdfDirect.ts`,
+  chargé par `import()` au clic). (jspdf tire encore un chunk html2canvas
+  facultatif à lui, jamais chargé par l'app.)
 
 ## Backend Supabase — DÉDIÉ à cette app (prod live)
 
@@ -1442,8 +1443,23 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
     (versions de documents, `updated_at` pour les feuilles ; minuit de
     Paris ; clé `['classeur','modifies']` hors disque ; plafond 1000 signalé
     même quand la liste est vide), nom de fichier PDF « Classeur - Titre »
-    (`nomFichierImpression`, noms réservés Windows avec extension) + aide
-    « Enregistrer au format PDF » (D19 = A ; aucun PDF généré). ⚠ On
+    (`nomFichierImpression`, noms réservés Windows avec extension).
+    **« Télécharger le PDF »** (D19 RENVERSÉE par l'utilisateur le
+    2026-10-04 → voie B navigateur) : bouton outline à côté d'Imprimer dans
+    `PrintPreview`, « Création du PDF… (3 / 12) » ; `pdfDirect.ts` (import
+    dynamique, html2canvas-pro + jspdf eux aussi) attend la pagination et
+    les polices, capture chaque `.a4-page` À PART dans le clone (sortie de
+    l'aperçu, `fixed` en haut à gauche, sans `transform`/`zoom`, autres
+    pages exclues), échelle 2 (densité de l'écran, ≤ 3), JPEG 0,92 pleine
+    page A4, `pdf.save(« Classeur - Titre.pdf »)`. Texte EN IMAGE (l'aide le
+    dit : texte sélectionnable = Imprimer puis « Enregistrer au format
+    PDF »). Images privées : rechargées par `new Image(blob:)`, jamais par
+    `fetch` (vérifié dans le code de la librairie). ⚠ html2canvas-pro 2.5.1
+    rogne l'`outline` d'un élément en `overflow: hidden` (le cadre noir des
+    images disparaissait) : `redessinerContoursMasques` le redessine par un
+    calque en `border` dans le clone. Mesuré Chrome : doc 104 4 p. 565 ko
+    4,3 s ; doc 107 (Mermaid, libellés présents, tranches correctes) 8 p.
+    1,1 Mo ; doc 38 (captures réelles) 8 p. 1,9 Mo 7-8 s. ⚠ On
     n'imprime plus pendant la pagination : `data-pagination="en-cours"` posé
     par `DocumentPages`, bouton « Préparation… », `attendrePagination` (15 s),
     `waitForMermaid` borné à 10 s — avant, un document dont les images ou le

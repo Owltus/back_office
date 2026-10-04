@@ -31,6 +31,11 @@ vi.mock('#/lib/classeur/mermaid.ts', () => ({
     }),
 }))
 
+const { pdfMock } = vi.hoisted(() => ({ pdfMock: vi.fn() }))
+vi.mock('#/lib/classeur/print/pdfDirect.ts', () => ({
+  telechargerPdf: pdfMock,
+}))
+
 /** HTML de chaque impression lancée (lu dans l'iframe au moment de print()). */
 let imprimes: string[] = []
 
@@ -134,5 +139,66 @@ describe('PrintPreview — jamais d’impression avant la fin de la pagination',
     expect(imprimes.length).toBe(1)
     expect(imprimes[0]).toContain('Document A')
     expect(imprimes[0]).toContain('Document B')
+  })
+})
+
+describe('PrintPreview — « Télécharger le PDF »', () => {
+  const pdfBouton = () =>
+    screen.getByRole('button', { name: /Télécharger le PDF/ })
+
+  it('désactivé pendant la mesure, puis progression et nom transmis', async () => {
+    let finir: (() => void) | null = null
+    pdfMock.mockImplementation(
+      (
+        _c: HTMLElement,
+        o: {
+          nomFichier?: string
+          onProgression?: (f: number, t: number) => void
+        },
+      ) => {
+        o.onProgression?.(0, 12)
+        o.onProgression?.(2, 12)
+        return new Promise<void>((r) => {
+          finir = r
+        })
+      },
+    )
+    render(<Apercu />)
+    await waitFor(() => expect(resoudreMermaid).not.toBeNull())
+    expect(pdfBouton()).toHaveProperty('disabled', true)
+    expect(pdfBouton().textContent).toContain('Préparation…')
+    await act(async () => {
+      resoudreMermaid?.()
+    })
+    await waitFor(() => expect(pdfBouton()).toHaveProperty('disabled', false))
+    expect(pdfBouton().textContent).toContain('Télécharger le PDF')
+    fireEvent.click(pdfBouton())
+    await waitFor(() =>
+      expect(pdfBouton().textContent).toContain('Création du PDF… (3 / 12)'),
+    )
+    expect(pdfBouton()).toHaveProperty('disabled', true)
+    expect(bouton()).toHaveProperty('disabled', true)
+    expect(pdfMock.mock.calls[0][1].nomFichier).toBe('Essai')
+    await act(async () => {
+      finir?.()
+    })
+    await waitFor(() =>
+      expect(pdfBouton().textContent).toContain('Télécharger le PDF'),
+    )
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('erreur affichée en clair', async () => {
+    pdfMock.mockRejectedValue(new Error('boom interne'))
+    render(<Apercu />)
+    await waitFor(() => expect(resoudreMermaid).not.toBeNull())
+    await act(async () => {
+      resoudreMermaid?.()
+    })
+    await waitFor(() => expect(pdfBouton()).toHaveProperty('disabled', false))
+    fireEvent.click(pdfBouton())
+    const alerte = await screen.findByRole('alert')
+    expect(alerte.textContent).toContain('Création du PDF impossible')
+    expect(alerte.textContent).not.toContain('boom')
   })
 })
