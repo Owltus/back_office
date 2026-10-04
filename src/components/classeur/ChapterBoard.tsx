@@ -238,7 +238,8 @@ export function ChapterBoard({
       }
       return fichiers.length
     },
-    onSuccess: () => invalider(),
+    // Aussi après un échec : les fichiers déjà créés doivent apparaître.
+    onSettled: () => invalider(),
   })
 
   const exportZip = useMutation({
