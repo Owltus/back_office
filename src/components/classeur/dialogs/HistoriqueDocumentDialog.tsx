@@ -2,6 +2,10 @@ import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { AlertCircle, History, Loader2, RotateCcw } from 'lucide-react'
 
+import {
+  ChampsDiff,
+  DiffTexte,
+} from '#/components/classeur/detail/DiffTexte.tsx'
 import { Alert, AlertDescription } from '#/components/ui/alert.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import {
@@ -11,8 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '#/components/ui/dialog.tsx'
-import { bilan, comparerLignes, segmenter } from '#/lib/classeur/diff.ts'
-import type { LigneDiff, Segment } from '#/lib/classeur/diff.ts'
+import { bilan, comparerLignes } from '#/lib/classeur/diff.ts'
 import { messageErreur } from '#/lib/classeur/erreur.ts'
 import { classeurKeys } from '#/lib/classeur/keys.ts'
 import { fetchVersionsDocument } from '#/lib/classeur/service.ts'
@@ -263,7 +266,6 @@ function Comparaison({
     [de, vers],
   )
   const b = bilan(lignes)
-  const segments = useMemo(() => segmenter(lignes), [lignes])
   const titreChange = de.title !== vers.title
   const descriptionChange = de.description !== vers.description
   const identique =
@@ -308,20 +310,7 @@ function Comparaison({
         )}
       </div>
 
-      {(titreChange || descriptionChange) && (
-        <div className="space-y-1 rounded-md border border-border p-2 text-xs">
-          {titreChange && (
-            <Champ nom="Titre" avant={de.title} apres={vers.title} />
-          )}
-          {descriptionChange && (
-            <Champ
-              nom="Description"
-              avant={de.description}
-              apres={vers.description}
-            />
-          )}
-        </div>
-      )}
+      <ChampsDiff avant={de} apres={vers} />
 
       <p className="text-xs text-muted-foreground">
         {identique
@@ -333,95 +322,12 @@ function Comparaison({
           : `${String(b.ajouts)} ${b.ajouts > 1 ? 'lignes ajoutées' : 'ligne ajoutée'}, ${String(b.retraits)} ${b.retraits > 1 ? 'lignes retirées' : 'ligne retirée'}.`}
       </p>
 
-      <div
+      <DiffTexte
         key={`${String(version.id)}-${mode}`}
-        className="min-h-0 flex-1 overflow-auto rounded-md border border-border bg-card font-mono text-xs leading-relaxed"
-      >
-        {segments.map((s, i) => (
-          <SegmentDiff key={i} segment={s} ouvertParDefaut={identique} />
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function Champ({
-  nom,
-  avant,
-  apres,
-}: {
-  nom: string
-  avant: string
-  apres: string
-}) {
-  return (
-    <p>
-      <span className="font-medium">{nom} : </span>
-      <span className="text-muted-foreground line-through">
-        {avant || '(vide)'}
-      </span>
-      {' → '}
-      <span className="bg-foreground/10 px-0.5">{apres || '(vide)'}</span>
-    </p>
-  )
-}
-
-function SegmentDiff({
-  segment,
-  ouvertParDefaut,
-}: {
-  segment: Segment
-  ouvertParDefaut: boolean
-}) {
-  const [ouvert, setOuvert] = useState(ouvertParDefaut)
-  if (segment.type === 'replie' && !ouvert) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOuvert(true)}
-        className="block w-full border-y border-border/60 bg-muted/40 px-3 py-1 text-left text-muted-foreground hover:bg-muted"
-      >
-        ⋯ {segment.nombre}{' '}
-        {segment.nombre > 1 ? 'lignes inchangées' : 'ligne inchangée'} —
-        afficher
-      </button>
-    )
-  }
-  return (
-    <>
-      {segment.lignes.map((l, i) => (
-        <LigneAffichee key={i} ligne={l} />
-      ))}
-    </>
-  )
-}
-
-function LigneAffichee({ ligne }: { ligne: LigneDiff }) {
-  const signe =
-    ligne.type === 'ajout' ? '+' : ligne.type === 'retrait' ? '−' : ' '
-  return (
-    <div
-      className={cn(
-        'grid grid-cols-[2.5rem_2.5rem_1.25rem_1fr]',
-        ligne.type === 'ajout' && 'bg-foreground/10',
-        ligne.type === 'retrait' && 'text-muted-foreground',
-      )}
-    >
-      <span className="select-none pr-2 text-right text-muted-foreground/70 tabular-nums">
-        {ligne.avant ?? ''}
-      </span>
-      <span className="select-none pr-2 text-right text-muted-foreground/70 tabular-nums">
-        {ligne.apres ?? ''}
-      </span>
-      <span className="select-none text-center font-semibold">{signe}</span>
-      <span
-        className={cn(
-          'whitespace-pre-wrap break-words pr-3',
-          ligne.type === 'retrait' && 'line-through',
-        )}
-      >
-        {ligne.texte === '' ? ' ' : ligne.texte}
-      </span>
+        lignes={lignes}
+        ouvertParDefaut={identique}
+        className="min-h-0 flex-1 overflow-auto"
+      />
     </div>
   )
 }

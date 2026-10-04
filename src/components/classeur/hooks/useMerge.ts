@@ -59,6 +59,8 @@ export interface FusionPorteeArgs {
   cible: CiblePortee
   supprimerAbsents: boolean
   sourceName: string
+  /** Clés des éléments refusés dans l'aperçu (`clesActions`). */
+  exclus: ReadonlySet<string>
 }
 
 /** Réimporte un chapitre ou un document (portée limitée, `portee.ts`). */
@@ -71,10 +73,12 @@ export function useAppliquerFusionPortee() {
       cible,
       supprimerAbsents,
       sourceName,
+      exclus,
     }: FusionPorteeArgs) =>
       appliquerFusionPortee(classeurId, fichier, cible, {
         supprimerAbsents,
         sourceName,
+        exclus,
       }),
     onSettled: () => invalider(),
   })

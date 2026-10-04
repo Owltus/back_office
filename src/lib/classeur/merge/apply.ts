@@ -41,8 +41,16 @@ import type {
   OptionsFusion,
 } from '#/lib/classeur/merge/merge.ts'
 import { planifierFusion } from '#/lib/classeur/merge/merge.ts'
-import { planifierFusionPortee } from '#/lib/classeur/merge/portee.ts'
-import type { CiblePortee, OptionsPortee } from '#/lib/classeur/merge/portee.ts'
+import {
+  filtrerPlan,
+  lignesImport,
+  planifierFusionPortee,
+} from '#/lib/classeur/merge/portee.ts'
+import type {
+  CiblePortee,
+  LigneImport,
+  OptionsPortee,
+} from '#/lib/classeur/merge/portee.ts'
 import type { ClasseurJson } from '#/lib/classeur/merge/schema.ts'
 import { construireExport } from '#/lib/classeur/merge/schema.ts'
 import { entreesAElaguerParGenre } from '#/lib/classeur/merge/snapshot.ts'
@@ -297,15 +305,27 @@ export async function appliquerFusion(
   )
 }
 
+/** Aperçu d'un réimport limité : le plan et, par action, l'avant / après. */
+export interface ApercuPortee {
+  plan: PlanFusion
+  lignes: LigneImport[]
+}
+
 /** Plan d'un réimport limité à un chapitre ou un document (`portee.ts`), sans écriture. */
 export async function previsualiserFusionPortee(
   classeurId: number,
   fichier: ClasseurJson,
   cible: CiblePortee,
   options: OptionsPortee,
-): Promise<PlanFusion> {
+): Promise<ApercuPortee> {
   const local = await chargerEtatLocal(classeurId)
-  return planifierFusionPortee(local, fichier, cible, options)
+  const plan = planifierFusionPortee(local, fichier, cible, options)
+  return { plan, lignes: lignesImport(local, plan) }
+}
+
+/** Compteurs d'un réimport limité, plus les actions refusées dans l'aperçu. */
+export interface ResultatPortee extends MergeResult {
+  ignores: number
 }
 
 /**
@@ -313,18 +333,35 @@ export async function previsualiserFusionPortee(
  * `appliquerFusion` (instantané du classeur AVANT toute écriture, actions
  * dans l'ordre, élagage) — seul le plan change. Le plan est recalculé sur
  * l'état relu à l'instant, jamais repris de l'aperçu.
+ *
+ * `exclus` (clés de `clesActions`) : éléments refusés dans l'aperçu. Le
+ * filtre agit DANS le planificateur, donc avant le test « aucune action »
+ * et avant l'instantané : tout refuser n'écrit rien, pas même un point de
+ * restauration, et les compteurs de l'instantané sont ceux du plan filtré.
  */
 export async function appliquerFusionPortee(
   classeurId: number,
   fichier: ClasseurJson,
   cible: CiblePortee,
-  options: OptionsPortee & { sourceName: string },
-): Promise<MergeResult> {
-  return appliquerPlanifie(
+  options: OptionsPortee & {
+    sourceName: string
+    exclus?: ReadonlySet<string>
+  },
+): Promise<ResultatPortee> {
+  let ignores = 0
+  const resultat = await appliquerPlanifie(
     classeurId,
-    (local) => planifierFusionPortee(local, fichier, cible, options),
+    (local) => {
+      const filtre = filtrerPlan(
+        planifierFusionPortee(local, fichier, cible, options),
+        options.exclus ?? new Set(),
+      )
+      ignores = filtre.ignores
+      return filtre.plan
+    },
     options.sourceName,
   )
+  return { ...resultat, ignores }
 }
 
 /** Étapes (a) à (e) d'une fusion, quel que soit le planificateur. */

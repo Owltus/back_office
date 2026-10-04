@@ -36,6 +36,7 @@ import type {
   DbClasseur,
   DbDocument,
   DbPeriodicite,
+  ItemKind,
 } from '#/lib/classeur/types.ts'
 import { flattenItems } from '#/lib/classeur/types.ts'
 import {
@@ -49,8 +50,12 @@ import type {
   MetadataJson,
 } from '#/lib/classeur/merge/schema.ts'
 import { planifierFusion } from '#/lib/classeur/merge/merge.ts'
+import { numeroDocument } from '#/lib/classeur/versionDocument.ts'
+import type { NumeroVersion } from '#/lib/classeur/versionDocument.ts'
 import type {
+  ActionApercu,
   ActionFusion,
+  ChampsItem,
   EtatLocal,
   MergePreviewItem,
   PlanFusion,
@@ -259,21 +264,346 @@ function sansHorodatage(item: ItemJson): ItemJson {
  * Plan d'un réimport limité à `cible`. Jette une `Error` au message destiné
  * à l'utilisateur si le fichier ne correspond pas à la cible (autre
  * chapitre, autre document, plusieurs chapitres…).
+ *
+ * `exclus` : clés (`clesActions`) des éléments que l'utilisateur a refusés
+ * dans l'aperçu ; leurs actions sont retirées du plan (`filtrerPlan`). Sans
+ * `exclus`, ou vide, le plan est exactement celui d'avant le refus.
  */
 export function planifierFusionPortee(
   local: EtatLocal,
   fichier: ClasseurJson,
   cible: CiblePortee,
   options: OptionsPortee,
+  exclus?: ReadonlySet<string>,
 ): PlanFusion {
   if (fichier.chapters.length !== 1) {
     throw new Error(
       `Ce fichier contient ${fichier.chapters.length} chapitres : un export de chapitre ou de document n'en contient qu'un. Pour un classeur complet, utilisez l'import depuis l'accueil du classeur.`,
     )
   }
-  return cible.type === 'chapitre'
-    ? planChapitre(local, fichier, cible.chapitreId, options)
-    : planDocument(local, fichier, cible.documentId)
+  const plan =
+    cible.type === 'chapitre'
+      ? planChapitre(local, fichier, cible.chapitreId, options)
+      : planDocument(local, fichier, cible.documentId)
+  return exclus === undefined ? plan : filtrerPlan(plan, exclus).plan
+}
+
+// ---------------------------------------------------------------------------
+// Refus d'un élément dans l'aperçu (étape 1 du plan classeur-fonctions)
+// ---------------------------------------------------------------------------
+
+/**
+ * Clé de refus d'une action (décision D13). Le plan est RECALCULÉ à l'import
+ * sur l'état relu : un refus ne peut donc pas viser un indice, il vise une
+ * clé qui survit au recalcul.
+ *   - modification, restauration, suppression : `kind:id` (l'id local) ;
+ *   - création (ni id, souvent ni uuid quand un LLM l'invente) : la position
+ *     et le titre du fichier, `nouveau:kind:position:titre` ;
+ *   - action de chapitre : `null`, jamais refusable (le libellé ou la
+ *     description du chapitre suivent le fichier).
+ */
+export function cleAction(a: ActionFusion): string | null {
+  switch (a.type) {
+    case 'modifierItem':
+    case 'restaurerItem':
+      return cleItem(a.item.kind, a.id)
+    case 'supprimerItem':
+      return cleItem(a.kind, a.id)
+    case 'creerItem':
+      return `nouveau:${a.item.kind}:${String(a.sort_order)}:${a.item.input.title}`
+    default:
+      return null
+  }
+}
+
+/**
+ * Les clés de toutes les actions, dans l'ordre. Deux créations de même
+ * position et de même titre recevraient la même clé : la seconde prend le
+ * suffixe `#2`, la troisième `#3`… — stable d'un recalcul à l'autre, le plan
+ * suivant l'ordre du fichier.
+ */
+export function clesActions(
+  actions: ReadonlyArray<ActionFusion>,
+): Array<string | null> {
+  const vues = new Map<string, number>()
+  return actions.map((a) => {
+    const base = cleAction(a)
+    if (base === null) return null
+    const rang = (vues.get(base) ?? 0) + 1
+    vues.set(base, rang)
+    return rang === 1 ? base : `${base}#${String(rang)}`
+  })
+}
+
+/** Ligne d'aperçu attendue pour une action : son `action` et son `kind`. */
+function signatureApercu(a: ActionFusion): [ActionApercu, string] {
+  switch (a.type) {
+    case 'creerChapitre':
+    case 'restaurerChapitre':
+      return ['insert', 'chapter']
+    case 'modifierChapitre':
+      return ['update', 'chapter']
+    case 'supprimerChapitre':
+      return ['delete', 'chapter']
+    case 'creerItem':
+    case 'restaurerItem':
+      return ['insert', a.item.kind]
+    case 'modifierItem':
+      return ['update', a.item.kind]
+    case 'supprimerItem':
+      return ['delete', a.kind]
+  }
+}
+
+/**
+ * Indice, dans `apercu`, de la ligne de chaque action (−1 si aucune). Le
+ * planificateur pousse une ligne par action, dans le MÊME ordre (les lignes
+ * « ignoré » n'ont pas d'action) : on apparie donc en avançant, chaque ligne
+ * servant une seule fois.
+ */
+export function alignerApercu(
+  actions: ReadonlyArray<ActionFusion>,
+  apercu: ReadonlyArray<MergePreviewItem>,
+): number[] {
+  let curseur = 0
+  return actions.map((a) => {
+    const [action, kind] = signatureApercu(a)
+    for (let i = curseur; i < apercu.length; i++) {
+      if (apercu[i].action === action && apercu[i].kind === kind) {
+        curseur = i + 1
+        return i
+      }
+    }
+    return -1
+  })
+}
+
+/**
+ * Retire du plan les actions refusées, AVANT toute écriture (le circuit
+ * d'`appliquerPlanifie` teste ensuite « plus aucune action » : tout refuser
+ * n'écrit rien, pas même un point de restauration).
+ *
+ * Compteurs recalculés : une modification ou une suppression refusée laisse
+ * l'élément local tel quel (`unchanged`) ; une création ou une restauration
+ * refusée laisse un élément du fichier non importé (`skipped`). L'aperçu
+ * perd les lignes des actions retirées. `ignores` = nombre d'actions
+ * retirées (message « N document(s) ignoré(s) à votre demande »).
+ *
+ * Aucun refus effectif : le plan est rendu TEL QUEL (même objet).
+ */
+export function filtrerPlan(
+  plan: PlanFusion,
+  exclus: ReadonlySet<string>,
+): { plan: PlanFusion; ignores: number } {
+  const cles = clesActions(plan.actions)
+  const retirees = new Set<number>()
+  cles.forEach((cle, i) => {
+    if (cle !== null && exclus.has(cle)) retirees.add(i)
+  })
+  if (retirees.size === 0) return { plan, ignores: 0 }
+
+  const resultat = { ...plan.resultat }
+  for (const i of retirees) {
+    const a = plan.actions[i]
+    if (a.type === 'modifierItem') {
+      resultat.updated -= 1
+      resultat.unchanged += 1
+    } else if (a.type === 'supprimerItem') {
+      resultat.deleted -= 1
+      resultat.unchanged += 1
+    } else {
+      // creerItem, restaurerItem : seules autres actions à clé.
+      resultat.inserted -= 1
+      resultat.skipped += 1
+    }
+  }
+  const lignesRetirees = new Set(
+    alignerApercu(plan.actions, plan.apercu).filter((_, i) => retirees.has(i)),
+  )
+  return {
+    plan: {
+      actions: plan.actions.filter((_, i) => !retirees.has(i)),
+      warnings: plan.warnings,
+      resultat,
+      apercu: plan.apercu.filter((_, i) => !lignesRetirees.has(i)),
+    },
+    ignores: retirees.size,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Lignes de l'aperçu d'import : avant / après de chaque action
+// ---------------------------------------------------------------------------
+
+/** Les champs de texte d'un élément (vides quand la famille n'en a pas). */
+export interface EtatTexte {
+  title: string
+  description: string
+  content: string
+}
+
+export type GenreLigne =
+  'chapitre' | 'creation' | 'modification' | 'restauration' | 'suppression'
+
+/**
+ * Ce qui change dans une modification : le texte, l'ordre seul (« déplacé »,
+ * textes et réglages identiques) ou un autre réglage (périodicité, nombre de
+ * lignes, identifiant adopté) sans changement de texte.
+ */
+export type Changement = 'texte' | 'ordre' | 'autre'
+
+export interface LigneImport {
+  /** Clé de refus (`clesActions`) ; `null` = ligne sans case (chapitre). */
+  cle: string | null
+  genre: GenreLigne
+  kind: ItemKind | 'chapter'
+  titre: string
+  avant: EtatTexte
+  apres: EtatTexte
+  changement: Changement
+  /**
+   * Modification d'un élément dont la position (ou le chapitre) change :
+   * la refuser peut laisser deux positions égales (ordre ambigu, signalé).
+   * Toujours faux pour un chapitre (jamais refusable).
+   */
+  ordreChange: boolean
+  /** Numéro actuel d'un document existant (version prévue) ; `null` sinon. */
+  numero: NumeroVersion | null
+}
+
+const TEXTE_VIDE: EtatTexte = { title: '', description: '', content: '' }
+
+function texteDe(champs: {
+  title: string
+  description?: string
+  content?: string
+}): EtatTexte {
+  return {
+    title: champs.title,
+    description: champs.description ?? '',
+    content: champs.content ?? '',
+  }
+}
+
+function memesTextes(a: EtatTexte, b: EtatTexte): boolean {
+  return (
+    a.title === b.title &&
+    a.description === b.description &&
+    a.content === b.content
+  )
+}
+
+/** Réglages hors texte d'une famille (périodicité, nombre de lignes). */
+function memesReglages(item: ChampsItem, existant: ChapterItem): boolean {
+  if (item.kind === 'tracking_sheet' && existant.kind === 'tracking_sheet')
+    return item.input.periodicite_id === existant.data.periodicite_id
+  if (item.kind === 'signature_sheet' && existant.kind === 'signature_sheet')
+    return item.input.nombre === existant.data.nombre
+  return true
+}
+
+/**
+ * Une ligne par action du plan, dans l'ordre du plan, avec l'état AVANT (lu
+ * dans `local`, l'état qui a servi au plan) et l'état APRÈS. Pur et léger :
+ * aucune comparaison de texte ici — le diff ligne à ligne est calculé par
+ * l'interface au dépliage seulement (une table LCS peut peser des Mo).
+ */
+export function lignesImport(
+  local: EtatLocal,
+  plan: PlanFusion,
+): LigneImport[] {
+  const items = indexItems(local.content)
+  const cles = clesActions(plan.actions)
+  const lignes: LigneImport[] = []
+  plan.actions.forEach((a, i) => {
+    const cle = cles[i]
+    if (
+      a.type === 'creerChapitre' ||
+      a.type === 'restaurerChapitre' ||
+      a.type === 'modifierChapitre' ||
+      a.type === 'supprimerChapitre'
+    ) {
+      const ch =
+        a.type === 'creerChapitre'
+          ? undefined
+          : local.chapters.find((c) => c.id === a.id)
+      const avant =
+        ch === undefined
+          ? TEXTE_VIDE
+          : texteDe({ title: ch.label, description: ch.description })
+      const apres =
+        a.type === 'supprimerChapitre'
+          ? TEXTE_VIDE
+          : texteDe({ title: a.label, description: a.description })
+      lignes.push({
+        cle: null,
+        genre: 'chapitre',
+        kind: 'chapter',
+        titre: a.type === 'supprimerChapitre' ? avant.title : apres.title,
+        avant,
+        apres,
+        changement: memesTextes(avant, apres) ? 'autre' : 'texte',
+        ordreChange: false,
+        numero: null,
+      })
+      return
+    }
+    if (a.type === 'supprimerItem') {
+      const existant = items.get(cleItem(a.kind, a.id))
+      const avant = existant === undefined ? TEXTE_VIDE : texteDe(existant.data)
+      lignes.push({
+        cle,
+        genre: 'suppression',
+        kind: a.kind,
+        titre: avant.title,
+        avant,
+        apres: TEXTE_VIDE,
+        changement: 'texte',
+        ordreChange: false,
+        numero: null,
+      })
+      return
+    }
+    const apres = texteDe(a.item.input)
+    if (a.type === 'creerItem') {
+      lignes.push({
+        cle,
+        genre: 'creation',
+        kind: a.item.kind,
+        titre: apres.title,
+        avant: TEXTE_VIDE,
+        apres,
+        changement: 'texte',
+        ordreChange: false,
+        numero: null,
+      })
+      return
+    }
+    const existant = items.get(cleItem(a.item.kind, a.id))
+    const avant = existant === undefined ? TEXTE_VIDE : texteDe(existant.data)
+    const ordreChange = a.sort_order !== undefined || a.chapitre !== undefined
+    const changement: Changement = !memesTextes(avant, apres)
+      ? 'texte'
+      : existant !== undefined &&
+          memesReglages(a.item, existant) &&
+          a.uuid === undefined &&
+          ordreChange
+        ? 'ordre'
+        : 'autre'
+    lignes.push({
+      cle,
+      genre: a.type === 'modifierItem' ? 'modification' : 'restauration',
+      kind: a.item.kind,
+      titre: apres.title,
+      avant,
+      apres,
+      changement,
+      ordreChange: a.type === 'modifierItem' && ordreChange,
+      numero:
+        existant?.kind === 'document' ? numeroDocument(existant.data) : null,
+    })
+  })
+  return lignes
 }
 
 function planChapitre(

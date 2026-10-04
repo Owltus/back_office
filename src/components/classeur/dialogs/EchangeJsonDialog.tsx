@@ -6,16 +6,14 @@ import {
   Check,
   Copy,
   Download,
-  Equal,
   FileUp,
   Loader2,
-  Minus,
-  Pencil,
-  Plus,
-  Trash2,
 } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
 
+import {
+  ApercuImport,
+  compterImport,
+} from '#/components/classeur/dialogs/ApercuImport.tsx'
 import { usePeriodicites } from '#/components/classeur/hooks/useClasseur.ts'
 import { useAppliquerFusionPortee } from '#/components/classeur/hooks/useMerge.ts'
 import { Alert, AlertDescription, AlertTitle } from '#/components/ui/alert.tsx'
@@ -39,13 +37,13 @@ import {
 } from '#/lib/classeur/exportJson.ts'
 import { previsualiserFusionPortee } from '#/lib/classeur/merge/apply.ts'
 import { resumerPlan } from '#/lib/classeur/merge/merge.ts'
-import type { ActionApercu, PlanFusion } from '#/lib/classeur/merge/merge.ts'
+import type { PlanFusion } from '#/lib/classeur/merge/merge.ts'
 import {
   construireExportChapitre,
   construireExportDocument,
   extraireJson,
 } from '#/lib/classeur/merge/portee.ts'
-import type { CiblePortee } from '#/lib/classeur/merge/portee.ts'
+import type { CiblePortee, LigneImport } from '#/lib/classeur/merge/portee.ts'
 import { parseImportJson } from '#/lib/classeur/merge/schema.ts'
 import type { ClasseurJson } from '#/lib/classeur/merge/schema.ts'
 import type {
@@ -55,7 +53,6 @@ import type {
   DbDocument,
 } from '#/lib/classeur/types.ts'
 import { MAX_JSON_BYTES, fileTooLarge } from '#/lib/shared/files.ts'
-import { cn } from '#/lib/utils.ts'
 
 /*
  * « JSON pour un LLM » d'un chapitre ou d'un document (demande utilisateur du
@@ -74,27 +71,18 @@ export type SujetJson =
   | { type: 'chapitre'; chapitre: DbChapter; contenu: ChapterContent }
   | { type: 'document'; chapitre: DbChapter; document: DbDocument }
 
-const ACTIONS: Record<
-  ActionApercu,
-  { label: string; icon: LucideIcon; className: string }
-> = {
-  insert: { label: 'ajouté', icon: Plus, className: 'text-emerald-500' },
-  update: { label: 'modifié', icon: Pencil, className: 'text-amber-500' },
-  delete: { label: 'supprimé', icon: Trash2, className: 'text-destructive' },
-  skip: { label: 'ignoré', icon: Minus, className: 'text-destructive' },
-  unchanged: {
-    label: 'inchangé',
-    icon: Equal,
-    className: 'text-muted-foreground',
-  },
-}
-
 /** Délai après la dernière frappe (ou le collage) avant de calculer l'aperçu. */
 const ATTENTE_APERCU_MS = 400
 
 interface Preparation {
   fichier: ClasseurJson
   plan: PlanFusion
+  /** Une ligne par action, avec l'ancien contenu (pour la comparaison). */
+  lignes: LigneImport[]
+}
+
+function pluriel(n: number, singulier: string, plurielForme: string): string {
+  return `${String(n)} ${n > 1 ? plurielForme : singulier}`
 }
 
 function tailleOctets(texte: string): number {
@@ -120,6 +108,11 @@ export function EchangeJsonDialog({
   const [supprimerAbsents, setSupprimerAbsents] = useState(false)
   const [applique, setApplique] = useState<string | null>(null)
   const [erreurFichier, setErreurFichier] = useState<string | null>(null)
+  // Éléments refusés (clés `clesActions`) et lignes dépliées de l'aperçu.
+  // Les refus survivent à un recalcul (bascule « supprimer les absents ») :
+  // seuls comptent ceux dont la clé est encore dans l'aperçu.
+  const [refuses, setRefuses] = useState<ReadonlySet<string>>(new Set())
+  const [ouvertes, setOuvertes] = useState<ReadonlySet<string>>(new Set())
   const inputRef = useRef<HTMLInputElement>(null)
 
   const cible: CiblePortee | null =
@@ -139,13 +132,13 @@ export function EchangeJsonDialog({
       if (tailleOctets(args.texte) > MAX_JSON_BYTES)
         throw new Error('Texte trop volumineux pour un import.')
       const fichier = parseImportJson(extraireJson(args.texte))
-      const plan = await previsualiserFusionPortee(
+      const { plan, lignes } = await previsualiserFusionPortee(
         args.classeurId,
         fichier,
         args.cible,
         { supprimerAbsents: args.supprimerAbsents },
       )
-      return { fichier, plan }
+      return { fichier, plan, lignes }
     },
   })
   const fusion = useAppliquerFusionPortee()
@@ -189,6 +182,8 @@ export function EchangeJsonDialog({
     setSupprimerAbsents(false)
     setApplique(null)
     setErreurFichier(null)
+    setRefuses(new Set())
+    setOuvertes(new Set())
     oublierPreparation()
     oublierFusion()
   }, [open, oublierPreparation, oublierFusion])
@@ -255,9 +250,18 @@ export function EchangeJsonDialog({
   }
 
   const plan = preparation.data?.plan ?? null
-  const aDesChangements =
-    plan !== null &&
-    plan.resultat.inserted + plan.resultat.updated + plan.resultat.deleted > 0
+  const lignes = preparation.data?.lignes ?? []
+  const comptes = compterImport(lignes, refuses)
+  const aDesChangements = comptes.retenus > 0 || comptes.chapitre
+
+  function basculerRefus(cle: string) {
+    setRefuses((avant) => {
+      const s = new Set(avant)
+      if (s.has(cle)) s.delete(cle)
+      else s.add(cle)
+      return s
+    })
+  }
 
   function appliquer() {
     if (
@@ -274,18 +278,24 @@ export function EchangeJsonDialog({
         fichier: preparation.data.fichier,
         cible,
         supprimerAbsents,
+        exclus: comptes.exclus,
         sourceName:
           sujet.type === 'chapitre'
             ? `Import JSON du chapitre « ${sujet.chapitre.label} »`
             : `Import JSON du document « ${sujet.document.title} »`,
       },
       {
-        onSuccess: (resultat) => {
-          const r = resultat
+        onSuccess: (r) => {
+          const ignores =
+            r.ignores > 0
+              ? ` ${pluriel(r.ignores, `${comptes.nom} ignoré`, `${comptes.noms} ignorés`)} à votre demande.`
+              : ''
           setApplique(
-            `Import appliqué : ${r.inserted} ajout(s), ${r.updated} modification(s), ${r.deleted} suppression(s).`,
+            `Import appliqué : ${r.inserted} ajout(s), ${r.updated} modification(s), ${r.deleted} suppression(s).${ignores}`,
           )
           setTexte('')
+          setRefuses(new Set())
+          setOuvertes(new Set())
           preparation.reset()
         },
       },
@@ -428,38 +438,22 @@ export function EchangeJsonDialog({
               </Alert>
             )}
             {plan && (
-              <div className="rounded-md border px-3 py-2">
-                {plan.apercu.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
+              <div className="flex flex-col gap-2">
+                {lignes.length === 0 ? (
+                  <p className="rounded-md border px-3 py-2 text-sm text-muted-foreground">
                     Aucun changement : le contenu est identique.
                   </p>
                 ) : (
-                  <ul className="flex flex-col gap-0.5">
-                    {plan.apercu.map((l, i) => {
-                      const cfg = ACTIONS[l.action]
-                      return (
-                        <li
-                          key={`${l.kind}:${l.title}:${i}`}
-                          className="flex items-center gap-2 text-sm"
-                        >
-                          <cfg.icon
-                            className={cn('size-3.5 shrink-0', cfg.className)}
-                          />
-                          <span className="truncate">
-                            {l.kind === 'chapter' ? 'Chapitre : ' : ''}
-                            {l.title || 'Sans titre'}
-                          </span>
-                          <span
-                            className={cn('ml-auto text-xs', cfg.className)}
-                          >
-                            {cfg.label}
-                          </span>
-                        </li>
-                      )
-                    })}
-                  </ul>
+                  <ApercuImport
+                    lignes={lignes}
+                    refuses={refuses}
+                    onBasculerRefus={basculerRefus}
+                    ouvertes={ouvertes}
+                    onOuvertes={setOuvertes}
+                    disabled={fusion.isPending}
+                  />
                 )}
-                <p className="mt-2 text-xs text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   {resumerPlan(plan)}. Un point de restauration est pris avant
                   d'appliquer.
                 </p>
@@ -497,7 +491,9 @@ export function EchangeJsonDialog({
               }
             >
               {fusion.isPending && <Loader2 className="animate-spin" />}
-              Importer
+              {comptes.retenus === 0 && comptes.chapitre
+                ? 'Importer le chapitre'
+                : `Importer ${pluriel(comptes.retenus, comptes.nom, comptes.noms)}`}
             </Button>
           )}
         </DialogFooter>
