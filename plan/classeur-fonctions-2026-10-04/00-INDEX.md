@@ -143,6 +143,29 @@ lui est propre.
 | **Vite à chaud** | Une mutation se vérifie par vitest SEUL, jamais pendant un contrôle navigateur (incident du 2026-09-25). |
 | **Familles** | A. propriétés fast-check (pur) ; B. simulateur PostgREST en mémoire (refus RLS = 0 ligne) ; C. RLS (selon D21) ; D. rendu jsdom ; E. clôture. Pas d'E2E (pas de Playwright). |
 
+### Score de mutation de départ (étape 0)
+
+Relevé le 2026-10-04 (Stryker 10, `--mutate` limité aux 5 fichiers
+existants, 3 min 13 s). Score = (tués + délais) / mutants ; entre
+parenthèses, sur le seul code couvert.
+
+| Fichier | Mutants | Tués | Délai | Survivants | Sans couverture | Score |
+|---|---|---|---|---|---|---|
+| `merge/portee.ts` | 274 | 180 | 0 | 72 | 22 | **65,7 %** (71,4 %) |
+| `merge/apply.ts` | 126 | 96 | 0 | 22 | 8 | **76,2 %** (81,4 %) |
+| `merge/consignes.ts` | 23 | 15 | 0 | 8 | 0 | **65,2 %** (65,2 %) |
+| `relecture.ts` | 472 | 333 | 3 | 123 | 13 | **71,2 %** (73,2 %) |
+| `diff.ts` | 239 | 160 | 28 | 40 | 11 | **78,7 %** (82,5 %) |
+| **Total** | 1 134 | 784 | 31 | 265 | 54 | **71,9 %** (75,5 %) |
+
+Aucun n'atteint 80 %. Les fichiers à venir (`llmDemandes`,
+`selectionImpression`, `corbeille`, `transfert`, `zoom`) sont déjà listés
+dans `stryker.config.json` : un fichier absent n'est qu'un avertissement
+(« did not result in any files »), pas une erreur.
+
+Simulateur partagé : `src/lib/classeur/test/simulateurSupabase.ts`
+(témoins dans `simulateurSupabase.test.ts`).
+
 ---
 
 ## Angles à clarifier
