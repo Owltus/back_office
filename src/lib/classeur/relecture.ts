@@ -186,7 +186,7 @@ export function alertesRelecture(
           ligne,
           message:
             contexte === 'import'
-              ? `Image « ${extrait(src)} » introuvable dans la médiathèque (inventée par le LLM ?).`
+              ? `Image introuvable dans la médiathèque : ${extrait(src)} (inventée par le LLM ?).`
               : 'Image introuvable : elle a été supprimée de la médiathèque.',
           image: true,
         })
@@ -212,14 +212,18 @@ export function alertesRelecture(
           ligne,
           image: true,
           message:
-            "Capture très large : une fois imprimé, son texte sera trop petit pour être lu. Cliquez sur l'image dans l'aperçu et recadrez sur la partie utile.",
+            contexte === 'import'
+              ? "Capture très large : une fois imprimé, son texte sera trop petit pour être lu. Après l'import, recadrez-la dans l'éditeur sur la partie utile."
+              : "Capture très large : une fois imprimé, son texte sera trop petit pour être lu. Cliquez sur l'image dans l'aperçu et recadrez sur la partie utile.",
         })
       } else if (ratio > 6 && boite.hauteur < 15) {
         alertes.push({
           ligne,
           image: true,
           message:
-            "Bandeau très fin : cliquez sur l'image dans l'aperçu et recadrez sur l'élément utile (un bouton, une case).",
+            contexte === 'import'
+              ? "Bandeau très fin : après l'import, recadrez-le dans l'éditeur sur l'élément utile (un bouton, une case)."
+              : "Bandeau très fin : cliquez sur l'image dans l'aperçu et recadrez sur l'élément utile (un bouton, une case).",
         })
       }
       if (boite.hauteur > DEMI_PAGE_MM) {
@@ -228,7 +232,7 @@ export function alertesRelecture(
           image: true,
           message:
             tailleDepuisTitre(titre) === 'auto'
-              ? `Capture très haute (environ ${String(Math.round(boite.hauteur / 10))} cm, plus d'une demi-page) : cliquez dessus dans l'aperçu et recadrez sur la partie utile.`
+              ? `Capture très haute (environ ${String(Math.round(boite.hauteur / 10))} cm, plus d'une demi-page) : ${contexte === 'import' ? "après l'import, recadrez-la dans l'éditeur sur la partie utile." : "cliquez dessus dans l'aperçu et recadrez sur la partie utile."}`
               : `Image très haute (environ ${String(Math.round(boite.hauteur / 10))} cm, plus d'une demi-page) : choisissez la taille Automatique ou recadrez-la.`,
         })
       }
@@ -313,7 +317,7 @@ export function alertesRelecture(
     const n = aInserer.length
     alertes.push({
       ligne: aInserer[0],
-      message: `${String(n)} ${n > 1 ? "emplacements d'image à remplir" : "emplacement d'image à remplir"} : cliquez sur le cadre gris dans l'aperçu pour y mettre la photo.`,
+      message: `${String(n)} ${n > 1 ? "emplacements d'image à remplir" : "emplacement d'image à remplir"} : ${contexte === 'import' ? "après l'import, ouvrez le document et cliquez sur chaque cadre gris pour y mettre la photo." : "cliquez sur le cadre gris dans l'aperçu pour y mettre la photo."}`,
     })
   }
 
@@ -322,7 +326,7 @@ export function alertesRelecture(
     const n = sansLegende.length
     alertes.push({
       ligne: sansLegende[0],
-      message: `${String(n)} ${n > 1 ? 'images sans légende' : 'image sans légende'} : cliquez sur une image dans l'aperçu pour écrire ce qu'elle montre.`,
+      message: `${String(n)} ${n > 1 ? 'images sans légende' : 'image sans légende'} : ${contexte === 'import' ? "après l'import, ouvrez le document et cliquez sur chaque image pour écrire ce qu'elle montre." : "cliquez sur une image dans l'aperçu pour écrire ce qu'elle montre."}`,
     })
   }
 

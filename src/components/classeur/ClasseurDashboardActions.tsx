@@ -8,6 +8,7 @@ import type {
   DashboardContexte,
 } from '#/components/classeur/ClasseurDashboard.tsx'
 import { CorbeilleDialog } from '#/components/classeur/dialogs/CorbeilleDialog.tsx'
+import { ExportJsonClasseurDialog } from '#/components/classeur/dialogs/ExportJsonClasseurDialog.tsx'
 import { HistoriqueDialog } from '#/components/classeur/dialogs/HistoriqueDialog.tsx'
 import { ImagesDialog } from '#/components/classeur/dialogs/ImagesDialog.tsx'
 import { MergePreviewDialog } from '#/components/classeur/dialogs/MergePreviewDialog.tsx'
@@ -26,10 +27,9 @@ import { PrintPreview } from '#/components/classeur/print/PrintPreview.tsx'
 import { TableOfContentsPage } from '#/components/classeur/print/TableOfContentsPage.tsx'
 import { Alert, AlertDescription } from '#/components/ui/alert.tsx'
 import { messageErreur } from '#/lib/classeur/erreur.ts'
-import { exporterClasseurJson } from '#/lib/classeur/exportJson.ts'
 import { exporterClasseurZip } from '#/lib/classeur/exportMarkdown.ts'
 import { classeurKeys } from '#/lib/classeur/keys.ts'
-import type { MergeResult } from '#/lib/classeur/merge/merge.ts'
+import type { ResultatFusion } from '#/lib/classeur/merge/apply.ts'
 import { buildEstablishment } from '#/lib/classeur/naming.ts'
 import { fetchPeriodicites } from '#/lib/classeur/service.ts'
 import {
@@ -54,14 +54,14 @@ type Apercu =
     }
   | null
 
-/** Un export à télécharger (Markdown ZIP ou JSON v2). */
+/** Un export à télécharger (Markdown ZIP ; le JSON passe par son dialogue). */
 interface Export {
-  type: 'markdown' | 'json'
+  type: 'markdown'
   ctx: DashboardContexte
 }
 
 /** Phrase de bilan d'une fusion, au pluriel simple. */
-function bilanFusion(r: MergeResult): string {
+export function bilanFusion(r: ResultatFusion): string {
   const parts = [
     `${r.inserted} ajout${r.inserted > 1 ? 's' : ''}`,
     `${r.updated} modification${r.updated > 1 ? 's' : ''}`,
@@ -72,15 +72,20 @@ function bilanFusion(r: MergeResult): string {
   if (r.deleted > 0)
     parts.push(`${r.deleted} supprimé${r.deleted > 1 ? 's' : ''}`)
   const avertissements = (r.avertissements ?? []).map((a) => ` ${a}`).join('')
-  return `Fusion terminée : ${parts.join(', ')}.${avertissements}`
+  const ignores =
+    r.ignores !== undefined && r.ignores > 0
+      ? ` ${r.ignores > 1 ? `${r.ignores} éléments ignorés` : '1 élément ignoré'} à votre demande.`
+      : ''
+  return `Fusion terminée : ${parts.join(', ')}.${ignores}${avertissements}`
 }
 
 /**
  * Tableau de bord d'un classeur AVEC ses actions branchées :
  *   - Sommaire et Exporter en PDF ouvrent un `PrintPreview` (impression via
  *     iframe, « Enregistrer en PDF » dans le dialogue du navigateur) ;
- *   - Exporter en Markdown télécharge l'archive ZIP, Exporter en JSON le
- *     fichier v2 (étape 5) ;
+ *   - Exporter en Markdown télécharge l'archive ZIP ; Exporter en JSON ouvre
+ *     son dialogue (`ExportJsonClasseurDialog` : demandes pour un LLM,
+ *     Copier ou Télécharger le fichier v2) ;
  *   - Importer un JSON ouvre le sélecteur de fichier puis la prévisualisation
  *     de fusion (`MergePreviewDialog`), qui écrit un instantané avant toute
  *     écriture ; Historique ouvre les instantanés restaurables (étape 6).
@@ -103,6 +108,8 @@ export function ClasseurDashboardActions({
   const [imagesOuvertes, setImagesOuvertes] = useState(false)
   const [modifiesOuvert, setModifiesOuvert] = useState(false)
   const [corbeilleOuverte, setCorbeilleOuverte] = useState(false)
+  // Export JSON du classeur complet : son dialogue (demandes pour un LLM).
+  const [exportJson, setExportJson] = useState<DashboardContexte | null>(null)
   const { canWrite } = useDroitsClasseur(classeurId)
   // Contexte du classeur au moment où la carte a été cliquée (nom,
   // établissement du pied de page de l'aperçu des modifiés).
@@ -119,18 +126,14 @@ export function ClasseurDashboardActions({
     })
 
   const exporter = useMutation({
-    mutationFn: async ({ type, ctx }: Export) => {
+    mutationFn: async ({ ctx }: Export) => {
       const perios = await lirePeriodicites()
-      if (type === 'markdown') {
-        await exporterClasseurZip(
-          ctx.classeur.name,
-          ctx.chapters,
-          ctx.content,
-          perios,
-        )
-      } else {
-        exporterClasseurJson(ctx.classeur, ctx.chapters, ctx.content, perios)
-      }
+      await exporterClasseurZip(
+        ctx.classeur.name,
+        ctx.chapters,
+        ctx.content,
+        perios,
+      )
     },
   })
 
@@ -210,7 +213,7 @@ export function ClasseurDashboardActions({
         onExporterMarkdown={(c) =>
           exporter.mutate({ type: 'markdown', ctx: c })
         }
-        onExporterJson={(c) => exporter.mutate({ type: 'json', ctx: c })}
+        onExporterJson={setExportJson}
         onImporter={() => inputRef.current?.click()}
         onFichierDepose={recevoirFichier}
         onHistorique={() => setHistoriqueOuvert(true)}
@@ -251,6 +254,14 @@ export function ClasseurDashboardActions({
         }}
       />
 
+      <ExportJsonClasseurDialog
+        open={exportJson !== null}
+        onOpenChange={(open) => {
+          if (!open) setExportJson(null)
+        }}
+        sujet={exportJson}
+      />
+
       <ImagesDialog
         open={imagesOuvertes}
         onOpenChange={setImagesOuvertes}
@@ -284,11 +295,11 @@ export function ClasseurDashboardActions({
         })}
         title={
           apercu?.type === 'sommaire'
-            ? `${classeurName} — Sommaire`
+            ? `${classeurName} : sommaire`
             : apercu?.type === 'pdf'
-              ? `${classeurName} — classeur complet`
+              ? `${classeurName} : classeur complet`
               : apercu?.type === 'modifies'
-                ? `${classeurName} — modifications depuis le ${mentionVersion(apercu.depuis) ?? ''}`
+                ? `${classeurName} : modifications depuis le ${mentionVersion(apercu.depuis) ?? ''}`
                 : undefined
         }
       >

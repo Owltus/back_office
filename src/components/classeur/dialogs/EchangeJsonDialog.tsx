@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import {
   AlertCircle,
@@ -13,10 +13,13 @@ import {
 import {
   ApercuImport,
   compterImport,
+  useImagesRelecture,
 } from '#/components/classeur/dialogs/ApercuImport.tsx'
-import type { EtatImages } from '#/components/classeur/dialogs/ApercuImport.tsx'
+import {
+  ChoixDemandesLlm,
+  useDemandesLlm,
+} from '#/components/classeur/dialogs/DemandesLlm.tsx'
 import { usePeriodicites } from '#/components/classeur/hooks/useClasseur.ts'
-import { useImages } from '#/components/classeur/hooks/useImages.ts'
 import { useAppliquerFusionPortee } from '#/components/classeur/hooks/useMerge.ts'
 import { Alert, AlertDescription, AlertTitle } from '#/components/ui/alert.tsx'
 import { Button } from '#/components/ui/button.tsx'
@@ -33,12 +36,7 @@ import { Switch } from '#/components/ui/switch.tsx'
 import { Textarea } from '#/components/ui/textarea.tsx'
 import { telechargerTexte } from '#/lib/classeur/download.ts'
 import { messageErreur } from '#/lib/classeur/erreur.ts'
-import {
-  DEMANDES_LLM,
-  composerDemande,
-  demandeMajeure,
-  texteACopier,
-} from '#/lib/classeur/llmDemandes.ts'
+import { texteACopier } from '#/lib/classeur/llmDemandes.ts'
 import {
   nomFichierPortee,
   serialiserExport,
@@ -114,29 +112,15 @@ export function EchangeJsonDialog({
   const periodicitesQ = usePeriodicites()
   // Médiathèque, lue à l'ouverture seulement : la relecture de l'aperçu
   // (étape 2) y cherche les images citées par le LLM.
-  const imagesQ = useImages(classeur?.id ?? Number.NaN, open)
-  const imagesConnues = useMemo(
-    () =>
-      imagesQ.data
-        ? new Map(
-            imagesQ.data.map((i) => [
-              i.chemin.toLowerCase(),
-              { largeur: i.largeur, hauteur: i.hauteur, nom: i.nom },
-            ]),
-          )
-        : null,
-    [imagesQ.data],
+  const { images: imagesConnues, etatImages } = useImagesRelecture(
+    classeur?.id ?? null,
+    open,
   )
-  const etatImages: EtatImages = imagesQ.isPending
-    ? 'en-cours'
-    : imagesConnues === null
-      ? 'indisponible'
-      : 'pret'
   const [copie, setCopie] = useState<'ok' | 'erreur' | null>(null)
   // Demandes pour le LLM (étape 3) : jamais mémorisées (D26, poste partagé),
   // remises à zéro à chaque fermeture.
-  const [demandes, setDemandes] = useState<ReadonlySet<string>>(new Set())
-  const [autreDemande, setAutreDemande] = useState('')
+  const demandesLlm = useDemandesLlm()
+  const { oublier: oublierDemandes } = demandesLlm
   const [texte, setTexte] = useState('')
   const [supprimerAbsents, setSupprimerAbsents] = useState(false)
   const [applique, setApplique] = useState<string | null>(null)
@@ -147,6 +131,9 @@ export function EchangeJsonDialog({
   const [refuses, setRefuses] = useState<ReadonlySet<string>>(new Set())
   const [ouvertes, setOuvertes] = useState<ReadonlySet<string>>(new Set())
   const inputRef = useRef<HTMLInputElement>(null)
+  // C4 (audit) : l'aperçu arrive sous la partie Exporter, hors de la vue
+  // après un collage. On y fait défiler UNE fois, à son apparition.
+  const apercuRef = useRef<HTMLDivElement>(null)
 
   const cible: CiblePortee | null =
     sujet === null
@@ -212,8 +199,7 @@ export function EchangeJsonDialog({
     if (open) return
     setTexte('')
     setCopie(null)
-    setDemandes(new Set())
-    setAutreDemande('')
+    oublierDemandes()
     setSupprimerAbsents(false)
     setApplique(null)
     setErreurFichier(null)
@@ -221,26 +207,25 @@ export function EchangeJsonDialog({
     setOuvertes(new Set())
     oublierPreparation()
     oublierFusion()
-  }, [open, oublierPreparation, oublierFusion])
+  }, [open, oublierPreparation, oublierFusion, oublierDemandes])
+
+  const apercuPret = preparation.data !== undefined
+  useEffect(() => {
+    if (!apercuPret) return
+    const el = apercuRef.current
+    // `scrollIntoView` est absent de jsdom.
+    if (el !== null && typeof el.scrollIntoView === 'function')
+      el.scrollIntoView({ block: 'start', behavior: 'smooth' })
+  }, [apercuPret])
 
   if (sujet === null) return null
 
   const libelle =
     sujet.type === 'chapitre'
-      ? `le chapitre « ${sujet.chapitre.label} »`
-      : `le document « ${sujet.document.title} »`
+      ? `le chapitre ${sujet.chapitre.label}`
+      : `le document ${sujet.document.title}`
 
-  const demande = composerDemande(demandes, autreDemande)
-
-  function basculerDemande(id: string) {
-    setCopie(null)
-    setDemandes((avant) => {
-      const s = new Set(avant)
-      if (s.has(id)) s.delete(id)
-      else s.add(id)
-      return s
-    })
-  }
+  const demande = demandesLlm.demande
 
   /** Le fichier JSON (la demande éventuelle dans `_metadata.demande`). */
   function construire(): string | null {
@@ -337,8 +322,8 @@ export function EchangeJsonDialog({
         exclus: comptes.exclus,
         sourceName:
           sujet.type === 'chapitre'
-            ? `Import JSON du chapitre « ${sujet.chapitre.label} »`
-            : `Import JSON du document « ${sujet.document.title} »`,
+            ? `Import JSON du chapitre ${sujet.chapitre.label}`
+            : `Import JSON du document ${sujet.document.title}`,
       },
       {
         onSuccess: (r) => {
@@ -381,49 +366,18 @@ export function EchangeJsonDialog({
             peut modifier, ce qu'il ne doit jamais toucher, la mise en forme de
             la page. Collez-le tel quel dans la conversation.
           </p>
-          <fieldset className="flex flex-col gap-1.5">
-            <legend className="mb-1 text-xs text-muted-foreground">
-              Demandes au LLM (facultatif) : ajoutées au JSON et en tête du
-              texte copié.
-            </legend>
-            <div className="grid grid-cols-1 gap-x-3 sm:grid-cols-2">
-              {DEMANDES_LLM.map((d) => (
-                <label
-                  key={d.id}
-                  title={d.aide}
-                  className="flex min-h-8 cursor-pointer items-center gap-2 text-sm pointer-coarse:min-h-11"
-                >
-                  <input
-                    type="checkbox"
-                    checked={demandes.has(d.id)}
-                    onChange={() => basculerDemande(d.id)}
-                    className="size-4 shrink-0 accent-primary"
-                  />
-                  <span>
-                    {d.libelle}
-                    <span className="sr-only"> : {d.aide}</span>
-                  </span>
-                </label>
-              ))}
-            </div>
-            <Textarea
-              value={autreDemande}
-              onChange={(e) => {
-                setCopie(null)
-                setAutreDemande(e.target.value)
-              }}
-              placeholder="Autre demande…"
-              aria-label="Autre demande"
-              rows={2}
-              className="min-h-14 resize-none text-sm [field-sizing:fixed]"
-            />
-            {demandeMajeure(demandes) && (
-              <p className="text-xs text-muted-foreground">
-                Traduire ou Raccourcir créeront une nouvelle version majeure à
-                l'import.
-              </p>
-            )}
-          </fieldset>
+          <ChoixDemandesLlm
+            demandes={demandesLlm.demandes}
+            onBasculer={(id) => {
+              setCopie(null)
+              demandesLlm.basculer(id)
+            }}
+            autre={demandesLlm.autre}
+            onAutre={(t) => {
+              setCopie(null)
+              demandesLlm.setAutre(t)
+            }}
+          />
           <div className="flex flex-wrap gap-2">
             <Button
               size="sm"
@@ -537,7 +491,7 @@ export function EchangeJsonDialog({
               </Alert>
             )}
             {plan && (
-              <div className="flex flex-col gap-2">
+              <div ref={apercuRef} className="flex flex-col gap-2 scroll-mt-4">
                 {lignes.length === 0 ? (
                   <p className="rounded-md border px-3 py-2 text-sm text-muted-foreground">
                     Aucun changement : le contenu est identique.
@@ -593,9 +547,13 @@ export function EchangeJsonDialog({
               }
             >
               {fusion.isPending && <Loader2 className="animate-spin" />}
-              {comptes.retenus === 0 && comptes.chapitre
-                ? 'Importer le chapitre'
-                : `Importer ${pluriel(comptes.retenus, comptes.nom, comptes.noms)}`}
+              {/* B8 (audit) : pas de « Importer 0 document » pendant la
+                  lecture du JSON, ni avant tout aperçu. */}
+              {preparation.isPending || plan === null
+                ? 'Importer'
+                : comptes.retenus === 0 && comptes.chapitre
+                  ? 'Importer le chapitre'
+                  : `Importer ${pluriel(comptes.retenus, comptes.nom, comptes.noms)}`}
             </Button>
           )}
         </DialogFooter>

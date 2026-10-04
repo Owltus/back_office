@@ -57,7 +57,7 @@ export interface MetadataJson {
   periodicites: MetadataPeriodiciteJson[]
   /** Consignes pour un LLM (`consignes.ts`) — ajout du Back Office, ignoré par Registre. */
   instructions?: string[]
-  /** Demande de l'utilisateur pour un LLM (`llmDemandes.ts`), export chapitre / document. */
+  /** Demande de l'utilisateur pour un LLM (`llmDemandes.ts`), posée seulement si non vide. */
   demande?: string
 }
 
@@ -552,6 +552,10 @@ function horodatageExport(d: Date): string {
  * `sort_order`, `uid` = slug dédoublonné (`-2`, `-3`…), éléments non
  * supprimés triés par `sort_order` avec les seuls champs de leur nature.
  * `maintenant` n'existe que pour les tests (`generated_at`).
+ * `demande` (export du classeur complet pour un LLM, `llmDemandes.ts`) :
+ * posée dans `_metadata.demande` seulement si elle n'est pas `null` ; sans
+ * elle, le fichier est identique à celui d'avant (points de restauration
+ * compris).
  */
 export function construireExport(
   classeur: DbClasseur,
@@ -559,6 +563,7 @@ export function construireExport(
   content: ChapterContent,
   periodicites: DbPeriodicite[],
   maintenant: Date = new Date(),
+  demande: string | null = null,
 ): ClasseurJson {
   const itemsTries = flattenItems({
     documents: content.documents.filter((d) => d.deleted_at === null),
@@ -603,6 +608,7 @@ export function construireExport(
         "Classeur exporté depuis le Back Office (page Classeur), au format d'échange Registre.",
       generated_at: horodatageExport(maintenant),
       note: "Lis d'abord `instructions`. Ce bloc _metadata est informatif et ignoré lors de l'import.",
+      ...(demande === null ? {} : { demande }),
       schema: SCHEMA_DESCRIPTIF,
       periodicites: [...periodicites]
         .sort((a, b) => a.id - b.id)

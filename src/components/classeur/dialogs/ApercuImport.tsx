@@ -1,13 +1,14 @@
-import { useId, useMemo } from 'react'
+import { Fragment, useId, useMemo } from 'react'
 import { ChevronRight, TriangleAlert } from 'lucide-react'
 
 import {
   ChampsDiff,
   DiffTexte,
 } from '#/components/classeur/detail/DiffTexte.tsx'
+import { useImages } from '#/components/classeur/hooks/useImages.ts'
 import { Button } from '#/components/ui/button.tsx'
 import { bilan, comparerLignes } from '#/lib/classeur/diff.ts'
-import type { LigneImport } from '#/lib/classeur/merge/portee.ts'
+import type { ChapitreLigne, LigneImport } from '#/lib/classeur/merge/portee.ts'
 import { relireLigneImport } from '#/lib/classeur/relecture.ts'
 import type { Alerte, InfoImage } from '#/lib/classeur/relecture.ts'
 import {
@@ -33,6 +34,58 @@ import { cn } from '#/lib/utils.ts'
  * pas lue, AUCUNE alerte d'image (elles passeraient toutes pour inventées).
  */
 export type EtatImages = 'pret' | 'en-cours' | 'indisponible'
+
+/**
+ * Médiathèque du classeur pour la relecture, lue à l'OUVERTURE du dialogue
+ * seulement (`actif`) : les deux dialogues d'import (classeur complet,
+ * chapitre ou document) la partagent.
+ */
+export function useImagesRelecture(
+  classeurId: number | null,
+  actif: boolean,
+): {
+  images: ReadonlyMap<string, InfoImage> | null
+  etatImages: EtatImages
+} {
+  const imagesQ = useImages(classeurId ?? Number.NaN, actif)
+  const images = useMemo(
+    () =>
+      imagesQ.data
+        ? new Map(
+            imagesQ.data.map((i) => [
+              i.chemin.toLowerCase(),
+              { largeur: i.largeur, hauteur: i.hauteur, nom: i.nom },
+            ]),
+          )
+        : null,
+    [imagesQ.data],
+  )
+  const etatImages: EtatImages = imagesQ.isPending
+    ? 'en-cours'
+    : images === null
+      ? 'indisponible'
+      : 'pret'
+  return { images, etatImages }
+}
+
+/**
+ * Version que prendra un document existant : « version prévue X.Y · raison »,
+ * ou « version inchangée (X.Y) » quand le numéro ne bouge pas (une retouche
+ * de forme garde le numéro : annoncer « prévue 3.1 » d'un document déjà en
+ * 3.1 laissait croire à un changement).
+ */
+export function texteVersion(l: LigneImport): string | null {
+  if (l.kind !== 'document') return null
+  if (l.genre === 'creation') return 'version 1.0 · nouveau document'
+  if (l.genre === 'suppression' || l.numero === null) return null
+  const e = evolutionVersion(l.avant, l.apres, l.numero)
+  if (
+    e.suivante.majeure === l.numero.majeure &&
+    e.suivante.mineure === l.numero.mineure
+  )
+    return `version inchangée (${libelleVersion(l.numero)})${e.raison === '' ? '' : ` · ${e.raison}`}`
+  return `version prévue ${libelleVersion(e.suivante)}${e.raison === '' ? '' : ` · ${e.raison}`}`
+}
 
 function points(n: number): string {
   return `${String(n)} ${n > 1 ? 'points à vérifier' : 'point à vérifier'}`
@@ -125,6 +178,8 @@ export function ApercuImport({
   disabled,
   images = null,
   etatImages = 'pret',
+  chapitres,
+  verrous,
 }: {
   lignes: readonly LigneImport[]
   refuses: ReadonlySet<string>
@@ -135,6 +190,14 @@ export function ApercuImport({
   /** Médiathèque par chemin en minuscules ; `null` tant qu'elle n'est pas lue. */
   images?: ReadonlyMap<string, InfoImage> | null
   etatImages?: EtatImages
+  /**
+   * Classeur complet : le chapitre de chaque ligne (même ordre que
+   * `lignes`). Présent, l'aperçu est GROUPÉ par chapitre, dans l'ordre de
+   * première apparition ; absent (chapitre ou document seul), une liste.
+   */
+  chapitres?: readonly ChapitreLigne[]
+  /** Lignes qu'on ne peut pas refuser (clé → raison affichée). */
+  verrous?: ReadonlyMap<string, string>
 }) {
   const ids = lignes.map(idLigne)
   const toutOuvert = ids.length > 0 && ids.every((id) => ouvertes.has(id))
@@ -191,30 +254,68 @@ export function ApercuImport({
           {toutOuvert ? 'Tout replier' : 'Tout déplier'}
         </Button>
       </div>
-      <ul className="flex flex-col divide-y divide-border rounded-md border border-border">
-        {lignes.map((l, i) => {
-          const id = ids[i]
-          return (
-            <LigneApercu
-              key={id}
-              ligne={l}
-              alertes={alertes[i]}
-              refusee={l.cle !== null && refuses.has(l.cle)}
-              onBasculerRefus={onBasculerRefus}
-              ouverte={ouvertes.has(id)}
-              onBasculer={() => {
-                const s = new Set(ouvertes)
-                if (s.has(id)) s.delete(id)
-                else s.add(id)
-                onOuvertes(s)
-              }}
-              disabled={disabled}
-            />
-          )
-        })}
-      </ul>
+      {groupes(lignes.length, chapitres).map((g) => (
+        <Fragment key={g.cle}>
+          {g.libelle !== null && (
+            <h4 className="mt-2 truncate text-xs font-semibold text-muted-foreground first:mt-0">
+              {g.libelle}
+            </h4>
+          )}
+          <ul
+            aria-label={g.libelle ?? undefined}
+            className="flex flex-col divide-y divide-border rounded-md border border-border"
+          >
+            {g.indices.map((i) => {
+              const l = lignes[i]
+              const id = ids[i]
+              return (
+                <LigneApercu
+                  key={id}
+                  ligne={l}
+                  alertes={alertes[i]}
+                  refusee={l.cle !== null && refuses.has(l.cle)}
+                  onBasculerRefus={onBasculerRefus}
+                  ouverte={ouvertes.has(id)}
+                  onBasculer={() => {
+                    const s = new Set(ouvertes)
+                    if (s.has(id)) s.delete(id)
+                    else s.add(id)
+                    onOuvertes(s)
+                  }}
+                  disabled={disabled}
+                  verrou={l.cle === null ? undefined : verrous?.get(l.cle)}
+                />
+              )
+            })}
+          </ul>
+        </Fragment>
+      ))}
     </div>
   )
+}
+
+/** Indices des lignes par chapitre, dans l'ordre de première apparition. */
+function groupes(
+  n: number,
+  chapitres: readonly ChapitreLigne[] | undefined,
+): Array<{ cle: string; libelle: string | null; indices: number[] }> {
+  const tous = Array.from({ length: n }, (_, i) => i)
+  if (chapitres === undefined)
+    return [{ cle: 'tout', libelle: null, indices: tous }]
+  const m = new Map<
+    string,
+    { cle: string; libelle: string | null; indices: number[] }
+  >()
+  for (const i of tous) {
+    const c = chapitres.at(i) ?? { cle: '?', libelle: 'Sans chapitre' }
+    let g = m.get(c.cle)
+    if (!g) {
+      g = { cle: c.cle, libelle: c.libelle, indices: [] }
+      m.set(c.cle, g)
+    }
+    g.indices.push(i)
+  }
+  return [...m.values()]
 }
 
 function LigneApercu({
@@ -225,6 +326,7 @@ function LigneApercu({
   ouverte,
   onBasculer,
   disabled,
+  verrou,
 }: {
   ligne: LigneImport
   /** Relecture du nouveau texte ; `null` = ligne non relue. */
@@ -234,6 +336,8 @@ function LigneApercu({
   ouverte: boolean
   onBasculer: () => void
   disabled: boolean
+  /** Raison pour laquelle la ligne ne peut pas être refusée. */
+  verrou?: string
 }) {
   const idDetail = useId()
   const { avant, apres } = ligne
@@ -248,13 +352,7 @@ function LigneApercu({
     [ouverte, petit, avant.content, apres.content],
   )
   const b = diff === null ? null : bilan(diff)
-  const version = useMemo(() => {
-    if (ligne.kind !== 'document') return null
-    if (ligne.genre === 'creation') return 'version 1.0 · nouveau document'
-    if (ligne.numero === null) return null
-    const e = evolutionVersion(avant, apres, ligne.numero)
-    return `version prévue ${libelleVersion(e.suivante)}${e.raison === '' ? '' : ` · ${e.raison}`}`
-  }, [ligne, avant, apres])
+  const version = useMemo(() => texteVersion(ligne), [ligne])
 
   const titre = ligne.titre.trim() === '' ? 'Sans titre' : ligne.titre
   const nature = NATURES[ligne.kind] ?? ligne.kind
@@ -268,7 +366,7 @@ function LigneApercu({
               type="checkbox"
               checked={!refusee}
               onChange={() => onBasculerRefus(cle)}
-              disabled={disabled}
+              disabled={disabled || verrou !== undefined}
               aria-label={`Importer ${titre}`}
               className="size-4 accent-primary"
             />
@@ -320,6 +418,9 @@ function LigneApercu({
           </span>
         </button>
       </div>
+      {verrou !== undefined && (
+        <p className="px-3 pb-2 text-xs text-muted-foreground">{verrou}</p>
+      )}
       {refusee && ligne.ordreChange && (
         <p className="px-3 pb-2 text-xs text-muted-foreground">
           Il garde sa place actuelle : l'ordre du chapitre peut devenir ambigu.

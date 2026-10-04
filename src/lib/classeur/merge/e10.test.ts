@@ -105,7 +105,7 @@ describe('portée CHAPITRE : un uuid d’un autre chapitre ne touche jamais cet 
           sort_order: 2,
         })
         expect(plan.warnings).toContain(
-          "« Copie » portait l'identifiant d'un élément d'un autre chapitre : créé comme nouvel élément",
+          "Copie portait l'identifiant d'un élément d'un autre chapitre : créé comme nouvel élément",
         )
         expect(plan.resultat).toMatchObject({ inserted: 1, updated: 0 })
       }

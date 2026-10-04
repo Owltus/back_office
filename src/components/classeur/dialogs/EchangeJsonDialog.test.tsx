@@ -312,3 +312,40 @@ describe('EchangeJsonDialog — tout refuser', () => {
     expect(screen.queryByText(/Un point de restauration/)).toBeNull()
   })
 })
+
+describe('EchangeJsonDialog — audit du 2026-10-04 (B8, C4)', () => {
+  it('B8 : sans aperçu, bouton neutre et désactivé, jamais « Importer 0 document »', async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <EchangeJsonDialog
+          open
+          onOpenChange={() => {}}
+          classeur={classeur()}
+          sujet={{ type: 'chapitre', chapitre: A, contenu: local.content }}
+          canWrite
+        />
+      </QueryClientProvider>,
+    )
+    expect(bouton().textContent).toBe('Importer')
+    expect(bouton().disabled).toBe(true)
+    fireEvent.change(screen.getByLabelText('JSON à réimporter'), {
+      target: { value: jsonLlm() },
+    })
+    // Pendant l'attente puis la lecture : toujours neutre.
+    expect(bouton().textContent).toBe('Importer')
+    await waitFor(() =>
+      expect(bouton().textContent).toBe('Importer 2 documents'),
+    )
+  })
+
+  it('C4 : l’aperçu est amené à l’écran quand il apparaît', async () => {
+    const defile = vi.fn()
+    Element.prototype.scrollIntoView = defile
+    try {
+      await ouvrirAvecApercu()
+      await waitFor(() => expect(defile).toHaveBeenCalledTimes(1))
+    } finally {
+      delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView
+    }
+  })
+})

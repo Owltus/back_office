@@ -41,14 +41,26 @@ export interface FusionArgs {
   fichier: ClasseurJson
   replace: boolean
   sourceName: string
+  /** Clés des éléments refusés dans l'aperçu (`clesActions`) ; absent = tout. */
+  exclus?: ReadonlySet<string>
 }
 
 /** Fusionne un fichier déjà lu et validé dans un classeur existant. */
 export function useAppliquerFusion() {
   const invalider = useInvaliderClasseur()
   return useMutation({
-    mutationFn: ({ classeurId, fichier, replace, sourceName }: FusionArgs) =>
-      appliquerFusion(classeurId, fichier, { replace, sourceName }),
+    mutationFn: ({
+      classeurId,
+      fichier,
+      replace,
+      sourceName,
+      exclus,
+    }: FusionArgs) =>
+      appliquerFusion(classeurId, fichier, {
+        replace,
+        sourceName,
+        ...(exclus !== undefined ? { exclus } : {}),
+      }),
     onSettled: () => invalider(),
   })
 }

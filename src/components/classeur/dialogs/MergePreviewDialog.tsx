@@ -1,21 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
-import {
-  AlertCircle,
-  AlertTriangle,
-  BookOpen,
-  ClipboardList,
-  Equal,
-  FileText,
-  Loader2,
-  Minus,
-  Pencil,
-  Plus,
-  Trash2,
-  Users,
-} from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
+import { AlertCircle, AlertTriangle, Loader2 } from 'lucide-react'
 
+import {
+  ApercuImport,
+  compterImport,
+  useImagesRelecture,
+} from '#/components/classeur/dialogs/ApercuImport.tsx'
 import { useAppliquerFusion } from '#/components/classeur/hooks/useMerge.ts'
 import { Alert, AlertDescription, AlertTitle } from '#/components/ui/alert.tsx'
 import { Button } from '#/components/ui/button.tsx'
@@ -30,120 +21,42 @@ import {
 import { Label } from '#/components/ui/label.tsx'
 import { Switch } from '#/components/ui/switch.tsx'
 import { messageErreur } from '#/lib/classeur/erreur.ts'
-import { previsualiserFusion } from '#/lib/classeur/merge/apply.ts'
-import { resumerPlan } from '#/lib/classeur/merge/merge.ts'
+import { previsualiserFusionComplete } from '#/lib/classeur/merge/apply.ts'
 import type {
-  ActionApercu,
-  MergePreviewItem,
-  MergeResult,
-  PlanFusion,
-} from '#/lib/classeur/merge/merge.ts'
+  ApercuFusion,
+  ResultatFusion,
+} from '#/lib/classeur/merge/apply.ts'
+import { resumerPlan } from '#/lib/classeur/merge/merge.ts'
+import type { PlanFusion } from '#/lib/classeur/merge/merge.ts'
+import { filtrerPlan } from '#/lib/classeur/merge/portee.ts'
+import type { ChapitreLigne, LigneImport } from '#/lib/classeur/merge/portee.ts'
 import { parseImportJson } from '#/lib/classeur/merge/schema.ts'
 import type { ClasseurJson } from '#/lib/classeur/merge/schema.ts'
-import { getIcon } from '#/lib/classeur/naming.ts'
 import { MAX_JSON_BYTES, fileTooLarge } from '#/lib/shared/files.ts'
-import { cn } from '#/lib/utils.ts'
 
 /*
- * Prévisualisation puis application d'une fusion JSON dans un classeur
- * existant — portée de Registre (`features/merge/MergePreviewDialog.tsx`),
- * avec la lecture du fichier et la bascule « Remplacer » intégrées (chez
- * Registre, la page les portait).
+ * Prévisualisation puis application de l'import JSON d'un classeur COMPLET
+ * (carte « Importer un JSON » de l'accueil), portée de Registre puis alignée
+ * sur l'aperçu du réimport chapitre / document (audit du 2026-10-04 : la
+ * question « voir le texte modifié par le LLM avant d'importer, refuser un
+ * document » n'était remplie que pour le dialogue `{}`).
  *
- * Le fichier est lu par `File.text()` (borné par `MAX_JSON_BYTES`), validé
- * par `parseImportJson`, puis le plan est calculé SANS écriture
- * (`previsualiserFusion`). La préparation est une mutation et non une
- * `useQuery` : ce n'est pas une ressource à mettre en cache (un `File` n'est
- * pas sérialisable et le plan ne doit jamais atteindre le cache persisté),
- * c'est un calcul à la demande, refait quand la bascule change.
+ * Même aperçu (`ApercuImport`), GROUPÉ par chapitre : une ligne par action,
+ * diff au dépliage, case de refus, version prévue, relecture avec la
+ * médiathèque lue à l'ouverture. Les actions de chapitre (création,
+ * modification, suppression) sont des lignes à part, sans case. Les modes
+ * fusion / remplacement sont inchangés.
+ *
+ * Le refus passe par `filtrerPlan` DANS le planificateur d'`appliquerFusion`
+ * (avant le test « aucune action » et avant le point de restauration), le
+ * plan étant recalculé sur l'état relu : seules les clés comptent.
+ *
+ * La préparation est une mutation et non une `useQuery` : un `File` n'est
+ * pas sérialisable et le plan ne doit jamais atteindre le cache persisté.
  */
 
-const ACTIONS: Record<
-  ActionApercu,
-  { label: string; icon: LucideIcon; className: string }
-> = {
-  insert: { label: 'ajouté', icon: Plus, className: 'text-emerald-500' },
-  update: { label: 'modifié', icon: Pencil, className: 'text-amber-500' },
-  delete: { label: 'supprimé', icon: Trash2, className: 'text-destructive' },
-  skip: { label: 'ignoré', icon: Minus, className: 'text-destructive' },
-  unchanged: {
-    label: 'inchangé',
-    icon: Equal,
-    className: 'text-muted-foreground',
-  },
-}
-
-const ORDRE_BADGES: ActionApercu[] = [
-  'insert',
-  'update',
-  'delete',
-  'unchanged',
-  'skip',
-]
-
-const NATURES: Record<string, { label: string; icon: LucideIcon }> = {
-  document: { label: 'Document', icon: FileText },
-  tracking_sheet: { label: 'Feuille de suivi', icon: ClipboardList },
-  signature_sheet: { label: 'Feuille de signature', icon: Users },
-  intercalaire: { label: 'Intercalaire', icon: BookOpen },
-}
-
-interface Groupe {
-  label: string
-  chapitre: MergePreviewItem | null
-  items: MergePreviewItem[]
-}
-
-/** Regroupe l'aperçu par chapitre et applique le filtre (port du `useMemo` source). */
-export function grouperApercu(
-  apercu: ReadonlyArray<MergePreviewItem>,
-  filtre: ActionApercu | null,
-): Groupe[] {
-  const groupes = new Map<string, Groupe>()
-  const groupe = (cle: string) => {
-    let g = groupes.get(cle)
-    if (!g) {
-      g = { label: cle, chapitre: null, items: [] }
-      groupes.set(cle, g)
-    }
-    return g
-  }
-  for (const item of apercu) {
-    const cle = item.chapter_label || 'Sans chapitre'
-    const retenu = filtre === null || item.action === filtre
-    if (item.kind === 'chapter') {
-      const g = groupe(cle)
-      if (retenu) g.chapitre = item
-    } else if (retenu) {
-      groupe(cle).items.push(item)
-    }
-  }
-  if (filtre !== null) {
-    for (const [cle, g] of groupes) {
-      if (g.chapitre === null && g.items.length === 0) groupes.delete(cle)
-    }
-  }
-  return [...groupes.values()]
-}
-
-function compteur(plan: PlanFusion, action: ActionApercu): number {
-  switch (action) {
-    case 'insert':
-      return plan.resultat.inserted
-    case 'update':
-      return plan.resultat.updated
-    case 'delete':
-      return plan.resultat.deleted
-    case 'unchanged':
-      return plan.resultat.unchanged
-    case 'skip':
-      return plan.resultat.skipped
-  }
-}
-
-interface Preparation {
+interface Preparation extends ApercuFusion {
   fichier: ClasseurJson
-  plan: PlanFusion
 }
 
 async function preparer(
@@ -154,8 +67,47 @@ async function preparer(
   const trop = fileTooLarge(file, MAX_JSON_BYTES)
   if (trop) throw new Error(trop)
   const fichier = parseImportJson(await file.text())
-  const plan = await previsualiserFusion(classeurId, fichier, { replace })
-  return { fichier, plan }
+  const apercu = await previsualiserFusionComplete(classeurId, fichier, {
+    replace,
+  })
+  return { fichier, ...apercu }
+}
+
+/** Raison affichée sous une suppression qu'on ne peut pas refuser. */
+export const VERROU_CHAPITRE_SUPPRIME =
+  'Supprimé avec son chapitre : il ne peut pas être gardé seul.'
+
+/**
+ * Lignes NON refusables : la suppression d'un élément dont le chapitre est
+ * lui-même supprimé par le plan (remplacement). Refusée, elle laisserait un
+ * élément vivant dans un chapitre supprimé, invisible partout.
+ */
+export function verrousFusion(
+  plan: PlanFusion,
+  lignes: readonly LigneImport[],
+  chapitres: readonly ChapitreLigne[],
+): ReadonlyMap<string, string> {
+  const supprimes = new Set(
+    plan.actions.flatMap((a) =>
+      a.type === 'supprimerChapitre' ? [`local:${String(a.id)}`] : [],
+    ),
+  )
+  const verrous = new Map<string, string>()
+  lignes.forEach((l, i) => {
+    const ch = chapitres.at(i)
+    if (
+      l.cle !== null &&
+      l.genre === 'suppression' &&
+      ch !== undefined &&
+      supprimes.has(ch.cle)
+    )
+      verrous.set(l.cle, VERROU_CHAPITRE_SUPPRIME)
+  })
+  return verrous
+}
+
+function pluriel(n: number, singulier: string, plurielForme: string): string {
+  return `${String(n)} ${n > 1 ? plurielForme : singulier}`
 }
 
 export function MergePreviewDialog({
@@ -170,11 +122,15 @@ export function MergePreviewDialog({
   classeurId: number
   /** Fichier `.json` choisi ou déposé ; `null` tant qu'il n'y en a pas. */
   file: File | null
-  /** Appelé après une fusion réussie, avec ses compteurs. */
-  onDone?: (result: MergeResult) => void
+  /** Appelé après une fusion réussie, avec ses compteurs (`ignores` compris). */
+  onDone?: (result: ResultatFusion) => void
 }) {
   const [replace, setReplace] = useState(false)
-  const [filtre, setFiltre] = useState<ActionApercu | null>(null)
+  // Refus (clés `clesActions`) et lignes dépliées. Les refus survivent à la
+  // bascule fusion / remplacement : seuls comptent ceux encore à l'écran.
+  const [refuses, setRefuses] = useState<ReadonlySet<string>>(new Set())
+  const [ouvertes, setOuvertes] = useState<ReadonlySet<string>>(new Set())
+  const { images, etatImages } = useImagesRelecture(classeurId, open)
 
   const preparation = useMutation({
     mutationFn: (args: { file: File; replace: boolean }) =>
@@ -186,28 +142,54 @@ export function MergePreviewDialog({
   const { mutate: lancerPreparation, reset: oublierPreparation } = preparation
   useEffect(() => {
     if (!open || file === null) return
-    setFiltre(null)
     lancerPreparation({ file, replace })
   }, [open, file, replace, classeurId, lancerPreparation])
+
+  // Un autre fichier : les refus du précédent n'ont plus de sens.
+  useEffect(() => {
+    setRefuses(new Set())
+    setOuvertes(new Set())
+  }, [file])
 
   const { reset: oublierFusion } = fusion
   useEffect(() => {
     if (open) return
     setReplace(false)
-    setFiltre(null)
+    setRefuses(new Set())
+    setOuvertes(new Set())
     oublierPreparation()
     oublierFusion()
   }, [open, oublierPreparation, oublierFusion])
 
-  const plan = preparation.data?.plan ?? null
-  const groupes = useMemo(
-    () => (plan ? grouperApercu(plan.apercu, filtre) : []),
-    [plan, filtre],
+  const donnees = preparation.data
+  const plan = donnees?.plan ?? null
+  const lignes = useMemo(() => donnees?.lignes ?? [], [donnees])
+  const verrous = useMemo(
+    () =>
+      donnees
+        ? verrousFusion(donnees.plan, donnees.lignes, donnees.chapitres)
+        : new Map<string, string>(),
+    [donnees],
   )
-  const aDesChangements =
-    plan !== null &&
-    plan.resultat.inserted + plan.resultat.updated + plan.resultat.deleted > 0
+  // Une ligne verrouillée n'est jamais refusée, même cochée avant la bascule.
+  const refusesEffectifs = useMemo(
+    () => new Set([...refuses].filter((k) => !verrous.has(k))),
+    [refuses, verrous],
+  )
+  const comptes = compterImport(lignes, refusesEffectifs)
+  const planRetenu =
+    plan === null ? null : filtrerPlan(plan, comptes.exclus).plan
+  const aDesChangements = planRetenu !== null && planRetenu.actions.length > 0
   const occupe = preparation.isPending || fusion.isPending
+
+  function basculerRefus(cle: string) {
+    setRefuses((avant) => {
+      const s = new Set(avant)
+      if (s.has(cle)) s.delete(cle)
+      else s.add(cle)
+      return s
+    })
+  }
 
   function fusionner() {
     if (!preparation.data || !aDesChangements || fusion.isPending) return
@@ -216,6 +198,7 @@ export function MergePreviewDialog({
         classeurId,
         fichier: preparation.data.fichier,
         replace,
+        exclus: comptes.exclus,
         sourceName: file?.name ?? preparation.data.fichier.classeur.name,
       },
       {
@@ -227,6 +210,16 @@ export function MergePreviewDialog({
     )
   }
 
+  // B8 (audit) : libellé neutre tant que l'aperçu n'est pas calculé.
+  const libelleBouton =
+    plan === null || preparation.isPending
+      ? 'Importer'
+      : plan.actions.length === 0
+        ? 'Aucun changement'
+        : comptes.retenus === 0 && comptes.chapitre
+          ? 'Importer les chapitres'
+          : `Importer ${pluriel(comptes.retenus, comptes.nom, comptes.noms)}`
+
   return (
     <Dialog
       open={open}
@@ -235,7 +228,7 @@ export function MergePreviewDialog({
         onOpenChange(o)
       }}
     >
-      <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-2xl">
+      <DialogContent className="flex max-h-[90dvh] flex-col sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Prévisualisation de l'import</DialogTitle>
           <DialogDescription>
@@ -262,148 +255,57 @@ export function MergePreviewDialog({
           />
         </div>
 
-        {preparation.isError && (
-          <Alert variant="destructive">
-            <AlertCircle />
-            <AlertDescription>
-              {messageErreur(preparation.error, 'Lecture impossible')}
-            </AlertDescription>
-          </Alert>
-        )}
+        <div className="flex min-h-24 flex-1 flex-col gap-2 overflow-y-auto pr-1">
+          {preparation.isError && (
+            <Alert variant="destructive">
+              <AlertCircle />
+              <AlertDescription>
+                {messageErreur(preparation.error, 'Lecture impossible')}
+              </AlertDescription>
+            </Alert>
+          )}
 
-        {plan && plan.warnings.length > 0 && (
-          <Alert>
-            <AlertTriangle />
-            <AlertTitle>
-              {plan.warnings.length}{' '}
-              {plan.warnings.length > 1 ? 'avertissements' : 'avertissement'}
-            </AlertTitle>
-            <AlertDescription>
-              <ul className="list-disc pl-4">
-                {plan.warnings.map((w) => (
-                  <li key={w}>{w}</li>
-                ))}
-              </ul>
-            </AlertDescription>
-          </Alert>
-        )}
+          {plan && plan.warnings.length > 0 && (
+            <Alert>
+              <AlertTriangle />
+              <AlertTitle>
+                {plan.warnings.length}{' '}
+                {plan.warnings.length > 1 ? 'avertissements' : 'avertissement'}
+              </AlertTitle>
+              <AlertDescription>
+                <ul className="list-disc pl-4">
+                  {plan.warnings.map((w) => (
+                    <li key={w}>{w}</li>
+                  ))}
+                </ul>
+              </AlertDescription>
+            </Alert>
+          )}
 
-        {plan && (
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            {ORDRE_BADGES.map((action) => {
-              const n = compteur(plan, action)
-              if (n === 0 && action !== 'insert' && action !== 'update')
-                return null
-              const cfg = ACTIONS[action]
-              const actif = filtre === action
-              return (
-                <button
-                  key={action}
-                  type="button"
-                  onClick={() => setFiltre(actif ? null : action)}
-                  className={cn(
-                    'rounded-md px-2 py-0.5 font-medium transition-colors hover:bg-accent',
-                    cfg.className,
-                    actif && 'bg-accent ring-1 ring-border',
-                  )}
-                >
-                  {n} {cfg.label}
-                  {n > 1 ? 's' : ''}
-                </button>
-              )
-            })}
-            {filtre !== null && (
-              <button
-                type="button"
-                onClick={() => setFiltre(null)}
-                className="ml-auto text-xs text-muted-foreground hover:text-foreground"
-              >
-                Tout afficher
-              </button>
-            )}
-          </div>
-        )}
-
-        <div className="min-h-24 flex-1 overflow-y-auto pr-1">
           {preparation.isPending ? (
             <p className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="size-4 animate-spin" />
               Lecture du fichier et calcul de l'aperçu…
             </p>
-          ) : plan === null ? null : plan.apercu.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
+          ) : plan === null ? null : lignes.length === 0 ? (
+            <p className="rounded-md border px-3 py-2 text-sm text-muted-foreground">
               {plan.resultat.unchanged > 0
                 ? 'Tout est déjà à jour : aucun changement à appliquer.'
                 : 'Aucun élément dans le fichier importé.'}
             </p>
-          ) : groupes.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Aucun élément pour ce filtre.
-            </p>
           ) : (
-            <div className="flex flex-col gap-3">
-              {groupes.map((g) => {
-                const IconeChapitre = getIcon(
-                  g.chapitre?.icon ?? g.items[0]?.icon ?? 'FileText',
-                )
-                const actionChapitre =
-                  g.chapitre && g.chapitre.action !== 'unchanged'
-                    ? ACTIONS[g.chapitre.action]
-                    : null
-                return (
-                  <div key={g.label}>
-                    <div className="mb-1 flex items-center gap-2 rounded-md bg-muted/50 px-3 py-2">
-                      <IconeChapitre className="size-4 shrink-0" />
-                      <span className="flex-1 truncate text-sm font-semibold">
-                        {g.label}
-                      </span>
-                      {actionChapitre && (
-                        <span
-                          className={cn(
-                            'flex items-center gap-1 text-xs',
-                            actionChapitre.className,
-                          )}
-                        >
-                          <actionChapitre.icon className="size-3.5" />
-                          {actionChapitre.label}
-                        </span>
-                      )}
-                    </div>
-                    {g.items.length > 0 && (
-                      <ul className="flex flex-col gap-0.5 pl-5">
-                        {g.items.map((item, i) => {
-                          const cfg = ACTIONS[item.action]
-                          const nature = NATURES[item.kind] as
-                            { label: string; icon: LucideIcon } | undefined
-                          const IconeNature = nature?.icon ?? FileText
-                          return (
-                            <li
-                              key={`${item.kind}:${item.title}:${i}`}
-                              className="flex items-center gap-2.5 rounded px-2 py-1 text-sm hover:bg-accent/50"
-                            >
-                              <IconeNature className="size-3.5 shrink-0 text-muted-foreground" />
-                              <span className="truncate">
-                                {item.title || 'Sans titre'}
-                              </span>
-                              <span className="text-xs text-muted-foreground">
-                                {nature?.label ?? item.kind}
-                              </span>
-                              <cfg.icon
-                                className={cn(
-                                  'ml-auto size-3.5 shrink-0',
-                                  cfg.className,
-                                )}
-                                aria-label={cfg.label}
-                              />
-                            </li>
-                          )
-                        })}
-                      </ul>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
+            <ApercuImport
+              lignes={lignes}
+              chapitres={donnees?.chapitres}
+              verrous={verrous}
+              refuses={refusesEffectifs}
+              onBasculerRefus={basculerRefus}
+              ouvertes={ouvertes}
+              onOuvertes={setOuvertes}
+              disabled={fusion.isPending}
+              images={images}
+              etatImages={etatImages}
+            />
           )}
         </div>
 
@@ -411,17 +313,20 @@ export function MergePreviewDialog({
           <Alert variant="destructive">
             <AlertCircle />
             <AlertDescription>
-              {messageErreur(fusion.error, 'Fusion impossible')}
+              {messageErreur(fusion.error, 'Import impossible')}
             </AlertDescription>
           </Alert>
         )}
 
-        <DialogFooter className="items-center">
-          {plan && (
-            <span className="mr-auto text-xs text-muted-foreground">
-              {resumerPlan(plan)}
-            </span>
-          )}
+        {plan && !preparation.isPending && (
+          <p className="text-xs text-muted-foreground">
+            {resumerPlan(planRetenu ?? plan)}.
+            {aDesChangements &&
+              " Un point de restauration est pris avant d'appliquer."}
+          </p>
+        )}
+
+        <DialogFooter>
           <Button
             type="button"
             variant="outline"
@@ -436,7 +341,7 @@ export function MergePreviewDialog({
             disabled={!plan || occupe || !aDesChangements}
           >
             {fusion.isPending && <Loader2 className="animate-spin" />}
-            {plan && !aDesChangements ? 'Aucun changement' : 'Fusionner'}
+            {libelleBouton}
           </Button>
         </DialogFooter>
       </DialogContent>

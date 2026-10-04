@@ -639,6 +639,71 @@ export function lignesImport(
   return lignes
 }
 
+/** Chapitre où une ligne de l'aperçu prend place (regroupement à l'écran). */
+export interface ChapitreLigne {
+  /** Identité stable : `local:<id>` ou `nouveau:<index>`. */
+  cle: string
+  /** Libellé APRÈS l'import (celui du fichier quand il le renomme). */
+  libelle: string
+}
+
+/**
+ * Le chapitre de chaque ligne de `lignesImport` (même ordre, une entrée par
+ * action) : celui où l'élément ARRIVE (création, déplacement, restauration),
+ * celui qu'il quitte pour une suppression, le chapitre lui-même pour une
+ * action de chapitre. Libellé après l'import : un chapitre renommé par le
+ * fichier est affiché sous son nouveau nom. Pur, sans écriture.
+ */
+export function chapitresDesLignes(
+  local: EtatLocal,
+  plan: PlanFusion,
+): ChapitreLigne[] {
+  const items = indexItems(local.content)
+  const libelles = new Map<string, string>()
+  for (const c of local.chapters) libelles.set(`local:${String(c.id)}`, c.label)
+  for (const a of plan.actions) {
+    if (a.type === 'creerChapitre')
+      libelles.set(`nouveau:${String(a.index)}`, a.label)
+    else if (a.type === 'modifierChapitre' || a.type === 'restaurerChapitre')
+      libelles.set(`local:${String(a.id)}`, a.label)
+  }
+  const deRef = (
+    ref: { type: 'local'; id: number } | { type: 'nouveau'; index: number },
+  ) =>
+    ref.type === 'local'
+      ? `local:${String(ref.id)}`
+      : `nouveau:${String(ref.index)}`
+  const deLocal = (id: number | undefined) =>
+    id === undefined ? 'local:?' : `local:${String(id)}`
+  return plan.actions.map((a) => {
+    let cle: string
+    switch (a.type) {
+      case 'creerChapitre':
+        cle = `nouveau:${String(a.index)}`
+        break
+      case 'modifierChapitre':
+      case 'restaurerChapitre':
+      case 'supprimerChapitre':
+        cle = deLocal(a.id)
+        break
+      case 'creerItem':
+      case 'restaurerItem':
+        cle = deRef(a.chapitre)
+        break
+      case 'modifierItem':
+        cle =
+          a.chapitre !== undefined
+            ? deRef(a.chapitre)
+            : deLocal(items.get(cleItem(a.item.kind, a.id))?.data.chapter_id)
+        break
+      case 'supprimerItem':
+        cle = deLocal(items.get(cleItem(a.kind, a.id))?.data.chapter_id)
+        break
+    }
+    return { cle, libelle: libelles.get(cle) ?? 'Sans chapitre' }
+  })
+}
+
 function planChapitre(
   local: EtatLocal,
   fichier: ClasseurJson,
@@ -653,7 +718,7 @@ function planChapitre(
   const chJson = fichier.chapters[0]
   if (chJson.uuid !== undefined && chJson.uuid !== chapitre.uuid) {
     throw new Error(
-      `Ce fichier concerne un autre chapitre (« ${chJson.label} »), pas « ${chapitre.label} ».`,
+      `Ce fichier concerne un autre chapitre (${chJson.label}), pas celui-ci (${chapitre.label}).`,
     )
   }
   // Un élément du fichier qui porte l'uuid d'un élément HORS du chapitre
@@ -673,7 +738,7 @@ function planChapitre(
     avertissements.push(
       item.title.trim() === ''
         ? "Un élément sans titre portait l'identifiant d'un élément d'un autre chapitre : ignoré"
-        : `« ${item.title} » portait l'identifiant d'un élément d'un autre chapitre : créé comme nouvel élément`,
+        : `${item.title} portait l'identifiant d'un élément d'un autre chapitre : créé comme nouvel élément`,
     )
     return sansUuid
   })
@@ -745,7 +810,7 @@ function planDocument(
     throw new Error(
       docJson.uuid === undefined
         ? "Le document du fichier n'a plus d'identifiant (uuid) : impossible de savoir qu'il s'agit de celui-ci."
-        : `Ce fichier concerne un autre document (« ${docJson.title} »), pas « ${document.title} ».`,
+        : `Ce fichier concerne un autre document (${docJson.title}), pas celui-ci (${document.title}).`,
     )
   }
   // Chapitre et position LOCAUX : seul le document peut changer.

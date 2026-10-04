@@ -101,7 +101,7 @@ describe('ApercuImport — relecture', () => {
     rendre('pret', new Map(), new Set(), new Set(['document:1']))
     const liste = screen.getByRole('list', { name: '2 points à vérifier' })
     expect(liste.textContent).toContain(
-      'Image « 24/inexistant.webp » introuvable dans la médiathèque (inventée par le LLM ?).',
+      'Image introuvable dans la médiathèque : 24/inexistant.webp (inventée par le LLM ?).',
     )
     expect(liste.textContent).toContain('cases en trop')
     expect(
@@ -113,9 +113,7 @@ describe('ApercuImport — relecture', () => {
 
   it('jamais bloquant : la case d’import reste active', () => {
     rendre('pret')
-    const caseA = screen.getByLabelText<HTMLInputElement>(
-      'Importer Check-in',
-    )
+    const caseA = screen.getByLabelText<HTMLInputElement>('Importer Check-in')
     expect(caseA.disabled).toBe(false)
     expect(caseA.checked).toBe(true)
     fireEvent.click(caseA)

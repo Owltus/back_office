@@ -42,11 +42,13 @@ import type {
 } from '#/lib/classeur/merge/merge.ts'
 import { planifierFusion } from '#/lib/classeur/merge/merge.ts'
 import {
+  chapitresDesLignes,
   filtrerPlan,
   lignesImport,
   planifierFusionPortee,
 } from '#/lib/classeur/merge/portee.ts'
 import type {
+  ChapitreLigne,
   CiblePortee,
   LigneImport,
   OptionsPortee,
@@ -364,6 +366,17 @@ export async function previsualiserFusion(
 export interface OptionsApplication extends OptionsFusion {
   /** Libellé de l'entrée d'historique (nom du fichier ou du classeur importé). */
   sourceName: string
+  /**
+   * Clés (`clesActions`) des éléments refusés dans l'aperçu de l'import du
+   * classeur complet. Absent (restauration, appelants d'avant) : le plan est
+   * celui de `planifierFusion`, inchangé.
+   */
+  exclus?: ReadonlySet<string>
+}
+
+/** Compteurs d'une fusion complète ; `ignores` posé seulement si `exclus` l'était. */
+export interface ResultatFusion extends MergeResult {
+  ignores?: number
 }
 
 /**
@@ -371,18 +384,54 @@ export interface OptionsApplication extends OptionsFusion {
  * pour l'ORDRE STRICT (instantané avant toute écriture) et l'absence de
  * transaction. Rend les compteurs du plan (ceux qui ont été appliqués si
  * tout a réussi ; en cas d'échec, l'erreur remonte).
+ *
+ * `exclus` : même filtrage que le réimport limité (`filtrerPlan`), DANS le
+ * planificateur, donc avant le test « aucune action » et avant le point de
+ * restauration. Sans refus effectif, `filtrerPlan` rend le plan TEL QUEL.
  */
 export async function appliquerFusion(
   classeurId: number,
   fichier: ClasseurJson,
   options: OptionsApplication,
-): Promise<MergeResult> {
-  const { sourceName, ...optionsFusion } = options
-  return appliquerPlanifie(
+): Promise<ResultatFusion> {
+  const { sourceName, exclus, ...optionsFusion } = options
+  let ignores = 0
+  const resultat = await appliquerPlanifie(
     classeurId,
-    (local) => planifierFusion(local, fichier, optionsFusion),
+    (local) => {
+      const filtre = filtrerPlan(
+        planifierFusion(local, fichier, optionsFusion),
+        exclus ?? new Set(),
+      )
+      ignores = filtre.ignores
+      return filtre.plan
+    },
     sourceName,
   )
+  return exclus === undefined ? resultat : { ...resultat, ignores }
+}
+
+/** Aperçu de l'import du classeur complet : plan, lignes et leur chapitre. */
+export interface ApercuFusion {
+  plan: PlanFusion
+  lignes: LigneImport[]
+  /** Chapitre de chaque ligne (même ordre que `lignes`), pour les grouper. */
+  chapitres: ChapitreLigne[]
+}
+
+/** Plan de l'import d'un classeur complet, avec ses lignes, sans écriture. */
+export async function previsualiserFusionComplete(
+  classeurId: number,
+  fichier: ClasseurJson,
+  options: OptionsFusion,
+): Promise<ApercuFusion> {
+  const local = await chargerEtatLocal(classeurId)
+  const plan = planifierFusion(local, fichier, options)
+  return {
+    plan,
+    lignes: lignesImport(local, plan),
+    chapitres: chapitresDesLignes(local, plan),
+  }
 }
 
 /** Aperçu d'un réimport limité : le plan et, par action, l'avant / après. */
@@ -565,7 +614,7 @@ export async function importerCommeNouveauClasseur(
     await sansPointsAuto(() => executerPlan(classeurId, actions))
   } catch (err) {
     throw new Error(
-      `Import interrompu : le classeur « ${fichier.classeur.name} » a été créé mais son contenu est incomplet. Supprimez-le, puis réessayez l'import.`,
+      `Import interrompu : le classeur ${fichier.classeur.name} a été créé, mais son contenu est incomplet. Supprimez-le, puis réessayez l'import.`,
       { cause: err },
     )
   }

@@ -46,7 +46,7 @@ describe('relecture — contexte import (exemples écrits à la main)', () => {
         ligne: 1,
         image: true,
         message:
-          'Image « 24/inexistant.webp » introuvable dans la médiathèque (inventée par le LLM ?).',
+          'Image introuvable dans la médiathèque : 24/inexistant.webp (inventée par le LLM ?).',
       },
       {
         ligne: 5,
@@ -236,5 +236,41 @@ describe('relecture — propriétés', () => {
       }),
       { numRuns: 300, seed: 20261006 },
     )
+  })
+})
+
+describe('relecture — gestes proposés selon le contexte (audit C3)', () => {
+  const md = ['![](24/x.webp)', '', '![Plan](a-inserer)'].join('\n')
+
+  it('à l’import : aucun « cliquez dans l’aperçu », le geste vient après l’import', () => {
+    const a = relireImport(md, null)
+    expect(a.map((x) => x.message)).toEqual([
+      "1 image sans légende : après l'import, ouvrez le document et cliquez sur chaque image pour écrire ce qu'elle montre.",
+      "1 emplacement d'image à remplir : après l'import, ouvrez le document et cliquez sur chaque cadre gris pour y mettre la photo.",
+    ])
+  })
+
+  it('dans l’éditeur : les messages d’avant, inchangés', () => {
+    const a = alertesRelecture(md, null)
+    expect(a.map((x) => x.message)).toEqual([
+      "1 image sans légende : cliquez sur une image dans l'aperçu pour écrire ce qu'elle montre.",
+      "1 emplacement d'image à remplir : cliquez sur le cadre gris dans l'aperçu pour y mettre la photo.",
+    ])
+  })
+
+  it('à l’import : capture trop large ou trop haute, recadrage après l’import', () => {
+    const images = new Map([
+      ['24/large.webp', { largeur: 1600, hauteur: 300, nom: 'Capture' }],
+      ['24/haute.webp', { largeur: 600, hauteur: 2400, nom: 'Capture' }],
+    ])
+    const a = relireImport(
+      '![Écran](24/large.webp)\n\n![Liste](24/haute.webp)',
+      images,
+    )
+    expect(a.length).toBeGreaterThanOrEqual(2)
+    for (const x of a) {
+      expect(x.message).not.toMatch(/dans l'aperçu|cliquez/i)
+      expect(x.message).toMatch(/après l'import/i)
+    }
   })
 })
