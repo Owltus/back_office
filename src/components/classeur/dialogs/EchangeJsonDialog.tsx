@@ -50,6 +50,7 @@ import {
   construireExportChapitre,
   construireExportDocument,
   extraireJson,
+  filtrerPlan,
 } from '#/lib/classeur/merge/portee.ts'
 import type { CiblePortee, LigneImport } from '#/lib/classeur/merge/portee.ts'
 import { parseImportJson } from '#/lib/classeur/merge/schema.ts'
@@ -305,6 +306,9 @@ export function EchangeJsonDialog({
   const lignes = preparation.data?.lignes ?? []
   const comptes = compterImport(lignes, refuses)
   const aDesChangements = comptes.retenus > 0 || comptes.chapitre
+  // Résumé du plan RETENU : les refus de l'aperçu y sont décomptés.
+  const planRetenu =
+    plan === null ? null : filtrerPlan(plan, comptes.exclus).plan
 
   function basculerRefus(cle: string) {
     setRefuses((avant) => {
@@ -551,8 +555,9 @@ export function EchangeJsonDialog({
                   />
                 )}
                 <p className="text-xs text-muted-foreground">
-                  {resumerPlan(plan)}. Un point de restauration est pris avant
-                  d'appliquer.
+                  {resumerPlan(planRetenu ?? plan)}.
+                  {aDesChangements &&
+                    " Un point de restauration est pris avant d'appliquer."}
                 </p>
               </div>
             )}

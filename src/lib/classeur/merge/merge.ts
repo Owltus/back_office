@@ -76,6 +76,12 @@
  *      l'ordre, au lieu de tous tomber sur le premier (doublons / écrasement).
  *  E8  Un élément au titre vide n'est ignoré que s'il n'a pas d'uuid (sinon il
  *      s'apparie par uuid) : un export est un point fixe du remplacement.
+ *  E9  (relecture adverse du 2026-10-04, import LLM) Un élément local n'est
+ *      apparié qu'UNE fois, par uuid comme par titre : un LLM qui scinde un
+ *      document en gardant le même uuid (ou le même titre) sur les deux
+ *      moitiés produisait deux modifications du même document — la seconde
+ *      écrasait la première, une moitié était perdue. La copie est créée,
+ *      sans l'uuid déjà pris (unique en base).
  */
 
 import { slugify } from '#/lib/classeur/slug.ts'
@@ -513,16 +519,31 @@ export function planifierFusion(
         item.title.trim() === '' ? '(sans titre)' : item.title
       const updated_at = horodatageIso(item.updated_at)
 
-      // R5 (+ E2, E7)
+      // R5 (+ E2, E7, E9)
       let existant =
         item.uuid !== undefined ? itemsParUuid.get(item.uuid) : undefined
       if (existant !== undefined && existant.kind !== kind) existant = undefined
+      // E9 : un élément local déjà apparié ne l'est pas une seconde fois, et
+      // son uuid (unique en base) n'est pas réutilisé par une création.
+      const uuidPris =
+        existant !== undefined &&
+        itemsApparies.has(cleItem(existant.kind, existant.data.id))
+      if (uuidPris) existant = undefined
       let parTitre = false
       if (existant === undefined && chapterIdLocal !== null) {
         const file = itemsParRepli.get(
           cleRepli(chapterIdLocal, kind, item.title),
         )
-        existant = file?.shift()
+        while (file !== undefined && file.length > 0) {
+          const candidat = file.shift()
+          if (
+            candidat !== undefined &&
+            !itemsApparies.has(cleItem(candidat.kind, candidat.data.id))
+          ) {
+            existant = candidat
+            break
+          }
+        }
         parTitre = existant !== undefined
       }
 
@@ -532,6 +553,7 @@ export function planifierFusion(
         // les fusions suivantes s'apparieront par uuid.
         const uuid =
           parTitre &&
+          !uuidPris &&
           item.uuid !== undefined &&
           item.uuid !== existant.data.uuid
             ? item.uuid
@@ -637,7 +659,7 @@ export function planifierFusion(
       actions.push({
         type: 'creerItem',
         chapitre: ref,
-        uuid: item.uuid ?? null,
+        uuid: uuidPris ? null : (item.uuid ?? null),
         sort_order: item.sort_order,
         ...(updated_at !== undefined ? { updated_at } : {}),
         item: champs,

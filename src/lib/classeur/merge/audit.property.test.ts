@@ -1396,7 +1396,7 @@ describe('P3 — ajout : chapitres et éléments nouveaux', () => {
     )
   })
 
-  it('documenté — un élément NEUF (uuid inconnu) portant le titre d’un élément local du même chapitre n’est pas ajouté : il est fusionné dedans (R5, repli titre, comme le Rust) et l’élément local ADOPTE l’uuid du fichier (E6)', async () => {
+  it('E9 — un élément NEUF (uuid inconnu) portant le titre d’un élément local DÉJÀ apparié par uuid est ajouté, pas fusionné dedans', async () => {
     const s = demarrer(etatSimple())
     const f = exporter(s)
     f.chapters[0].items.push({
@@ -1409,14 +1409,13 @@ describe('P3 — ajout : chapitres et éléments nouveaux', () => {
       sort_order: 2,
     })
     const r = await fusionner(f, false)
-    // Attendu par un utilisateur : 2 documents « Consignes ». Observé : 1,
-    // dont le contenu local « v1 » est ÉCRASÉ. Depuis E6, l'uuid du fichier
-    // est adopté : les fusions suivantes s'apparient par uuid, sans repli.
-    expect(r.inserted).toBe(0)
-    expect(r.updated).toBe(1)
+    // Avant E9 : 1 seul document, le local « v1 » ÉCRASÉ (repli par titre
+    // sur un élément déjà apparié par uuid). Désormais : 2 documents.
+    expect(r.inserted).toBe(1)
+    expect(r.updated).toBe(0)
     const docs = s.vue()[0].items
-    expect(docs).toHaveLength(1)
-    expect(docs[0].content).toBe('contenu venu d’ailleurs')
+    expect(docs).toHaveLength(2)
+    expect(docs.map((d) => d.content)).toContain('contenu venu d’ailleurs')
     expect(s.itemsParUuid('autre-base-uuid')).toHaveLength(1)
   })
 })

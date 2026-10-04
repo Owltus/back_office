@@ -233,12 +233,36 @@ export function lirePortee(texte: string): Portee | null {
  * ```json … ``` ou d'une phrase (« Voici le fichier : »). On garde du premier
  * `{` au dernier `}` ; un texte sans accolades est rendu tel quel (le parse
  * dira pourquoi il échoue).
+ *
+ * Une accolade AVANT le JSON (relecture adverse du 2026-10-04) : la demande
+ * « Traduire » copiée en tête cite `:::etape{photo=gauche}`, et un LLM qui la
+ * reprend dans sa phrase d'introduction faisait échouer l'import. Si la
+ * tranche depuis la première `{` n'est pas du JSON, on essaie les suivantes
+ * (au plus `ESSAIS_EXTRACTION`) ; aucune ne l'est : la première, pour que le
+ * message d'erreur porte sur le vrai texte.
  */
+const ESSAIS_EXTRACTION = 50
+
 export function extraireJson(texte: string): string {
   const debut = texte.indexOf('{')
   const fin = texte.lastIndexOf('}')
   if (debut === -1 || fin <= debut) return texte.trim()
-  return texte.slice(debut, fin + 1)
+  const premier = texte.slice(debut, fin + 1)
+  let d = debut
+  for (
+    let essai = 0;
+    essai < ESSAIS_EXTRACTION && d !== -1 && d < fin;
+    essai++
+  ) {
+    const tranche = texte.slice(d, fin + 1)
+    try {
+      JSON.parse(tranche)
+      return tranche
+    } catch {
+      d = texte.indexOf('{', d + 1)
+    }
+  }
+  return premier
 }
 
 // ---------------------------------------------------------------------------

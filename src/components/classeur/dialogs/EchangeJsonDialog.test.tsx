@@ -290,3 +290,25 @@ describe('EchangeJsonDialog — demandes toutes prêtes (étape 3)', () => {
     ).toBe('')
   })
 })
+
+describe('EchangeJsonDialog — résumé du plan (relecture adverse 2026-10-04)', () => {
+  it('le résumé sous l’aperçu compte les refus', async () => {
+    await ouvrirAvecApercu()
+    expect(screen.getByText(/0 ajout, 2 modifications/)).toBeTruthy()
+    fireEvent.click(screen.getByLabelText('Importer « Check-out »'))
+    expect(screen.queryByText(/2 modifications/)).toBeNull()
+    expect(
+      screen.getByText(/^0 ajout, 1 modification, 2 inchangés. Un point/),
+    ).toBeTruthy()
+  })
+})
+
+describe('EchangeJsonDialog — tout refuser', () => {
+  it('n’annonce plus de point de restauration', async () => {
+    await ouvrirAvecApercu()
+    expect(screen.getByText(/Un point de restauration/)).toBeTruthy()
+    fireEvent.click(screen.getByLabelText('Importer « Check-out »'))
+    fireEvent.click(screen.getByLabelText('Importer « Check-in »'))
+    expect(screen.queryByText(/Un point de restauration/)).toBeNull()
+  })
+})
