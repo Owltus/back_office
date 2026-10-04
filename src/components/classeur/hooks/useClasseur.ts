@@ -1,5 +1,6 @@
 import { useCallback } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import type { QueryClient } from '@tanstack/react-query'
 
 import { classeurKeys } from '#/lib/classeur/keys.ts'
 import {
@@ -119,13 +120,23 @@ export function usePeriodicites() {
  * mutation, c'est le réflexe le moins risqué : l'invalidation compare la clé
  * élément par élément, et un chapitre déplacé touche à la fois `chapters`,
  * `items` et `classeur-items`.
+ *
+ * SAUF les images des documents (`classeurKeys.image`) : immuables (UUID dans
+ * le chemin), lues en `staleTime: Infinity`, mais une invalidation relance
+ * toute requête ACTIVE — chaque image des miniatures d'un chapitre repartait
+ * au stockage (et au contrôle RLS en base) après chaque écriture (audit du
+ * 2026-10-04, base Nano). Une image remplacée a un NOUVEAU chemin.
  */
+export function invaliderClasseur(queryClient: QueryClient) {
+  return queryClient.invalidateQueries({
+    queryKey: classeurKeys.all,
+    predicate: (q) => q.queryKey[1] !== classeurKeys.image('')[1],
+  })
+}
+
 export function useInvaliderClasseur() {
   const queryClient = useQueryClient()
-  return useCallback(
-    () => queryClient.invalidateQueries({ queryKey: classeurKeys.all }),
-    [queryClient],
-  )
+  return useCallback(() => invaliderClasseur(queryClient), [queryClient])
 }
 
 /** Réordonne une liste : `ids` dans le nouvel ordre. */

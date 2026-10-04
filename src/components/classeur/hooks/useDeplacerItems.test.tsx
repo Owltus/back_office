@@ -60,7 +60,9 @@ describe('useDeplacerItems', () => {
     await waitFor(() => {
       expect(result.current.isError).toBe(true)
     })
-    expect(invalidation).toHaveBeenCalledWith({ queryKey: classeurKeys.all })
+    expect(invalidation).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: classeurKeys.all }),
+    )
     expect(onDeplace).not.toHaveBeenCalled()
   })
 
@@ -74,7 +76,9 @@ describe('useDeplacerItems', () => {
       expect(result.current.isSuccess).toBe(true)
     })
     expect(service.moveItems).toHaveBeenCalledWith(demande.refs, 7)
-    expect(invalidation).toHaveBeenCalledWith({ queryKey: classeurKeys.all })
+    expect(invalidation).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: classeurKeys.all }),
+    )
     expect(onDeplace).toHaveBeenCalledTimes(1)
   })
 })

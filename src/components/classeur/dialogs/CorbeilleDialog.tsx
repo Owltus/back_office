@@ -35,6 +35,7 @@ import {
 } from '#/lib/classeur/corbeille.ts'
 import type { ChapitreBrut, EntreeCorbeille } from '#/lib/classeur/corbeille.ts'
 import { messageErreur } from '#/lib/classeur/erreur.ts'
+import { invaliderClasseur } from '#/components/classeur/hooks/useClasseur.ts'
 import { classeurKeys } from '#/lib/classeur/keys.ts'
 import { mentionVersion } from '#/lib/classeur/print/mentionVersion.ts'
 import {
@@ -153,8 +154,7 @@ export function CorpsCorbeille({
     onSuccess: (_d, r) => setRestaure(titreOuDefaut(r.entree.titre)),
     // Succès comme échec : l'état réel est relu (un échec à mi-chemin de
     // « avec son chapitre » a pu remettre le chapitre seul).
-    onSettled: () =>
-      queryClient.invalidateQueries({ queryKey: classeurKeys.all }),
+    onSettled: () => invaliderClasseur(queryClient),
   })
 
   const enCours = restauration.isPending
@@ -169,7 +169,7 @@ export function CorpsCorbeille({
       {restaure !== null && (
         <Alert className="mb-3">
           <CheckCircle2 />
-          <AlertDescription>« {restaure} » est restauré.</AlertDescription>
+          <AlertDescription>{restaure} est restauré.</AlertDescription>
         </Alert>
       )}
       {corbeilleQ.isError ? (
@@ -305,13 +305,12 @@ function LigneCorbeille({
                 <SelectContent>
                   {avecSonChapitre && (
                     <SelectItem value={AVEC_SON_CHAPITRE}>
-                      Avec son chapitre « {titreOuDefaut(e.chapitreLabel ?? '')}{' '}
-                      »
+                      Avec son chapitre {titreOuDefaut(e.chapitreLabel ?? '')}
                     </SelectItem>
                   )}
                   {cibles.map((c) => (
                     <SelectItem key={c.id} value={String(c.id)}>
-                      Dans « {titreOuDefaut(c.label)} »
+                      Dans le chapitre {titreOuDefaut(c.label)}
                     </SelectItem>
                   ))}
                 </SelectContent>

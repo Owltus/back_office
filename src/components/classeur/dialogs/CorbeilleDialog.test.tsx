@@ -144,7 +144,10 @@ describe('CorbeilleDialog', () => {
         { classeurId: 24 },
       ),
     )
-    await screen.findByText(/« Procédure » est restauré/)
+    await screen.findByText(/Procédure est restauré/)
+    // L'état réel est relu après la restauration (audit du 2026-10-04 :
+    // l'invalidation retirée ne faisait échouer aucun test).
+    await waitFor(() => expect(service.fetchCorbeille).toHaveBeenCalledTimes(2))
   })
 
   it('orphelin : « Restaurer avec son chapitre » par défaut', async () => {
@@ -194,6 +197,8 @@ describe('CorbeilleDialog', () => {
     )
     expect(document.querySelector('li[data-cle="document:10"]')).not.toBeNull()
     expect(screen.queryByText(/est restauré/)).toBeNull()
+    // Échec aussi : un échec à mi-chemin a pu écrire, l'état réel est relu.
+    await waitFor(() => expect(service.fetchCorbeille).toHaveBeenCalledTimes(2))
   })
 
   it('sans droit d’écriture : aucun bouton', async () => {
