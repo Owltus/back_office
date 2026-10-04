@@ -11,7 +11,14 @@ import { TooltipProvider } from '#/components/ui/tooltip.tsx'
  * corbeille au premier rendu (base Nano : sans compteur).
  */
 
-const droits = vi.hoisted(() => ({ canWrite: true, canManage: false }))
+const droits = vi.hoisted(() => ({
+  canWrite: true,
+  canManage: false,
+  pret: true,
+  isError: false,
+  error: null,
+}))
+const droitsPage = vi.hoisted(() => ({ page: 'ecriture' }))
 const service = vi.hoisted(() => ({ fetchCorbeille: vi.fn() }))
 
 vi.mock('#/lib/supabase.ts', () => ({ supabase: {} }))
@@ -37,6 +44,7 @@ vi.mock('#/components/classeur/dialogs/ClasseurDialog.tsx', () => ({
 }))
 vi.mock('#/components/classeur/hooks/useDroitsClasseur.ts', () => ({
   useDroitsClasseur: () => droits,
+  useDroitsPageClasseur: () => droitsPage,
 }))
 vi.mock('#/components/classeur/hooks/useClasseur.ts', () => ({
   useClasseur: () => ({
@@ -89,6 +97,13 @@ function monter(onCorbeille = vi.fn()) {
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
+  Object.assign(droits, {
+    canWrite: true,
+    pret: true,
+    isError: false,
+    error: null,
+  })
+  droitsPage.page = 'ecriture'
 })
 
 describe('ClasseurDashboard — carte Corbeille', () => {
@@ -112,6 +127,68 @@ describe('ClasseurDashboard — carte Corbeille', () => {
     expect(screen.queryByRole('button', { name: /Corbeille/ })).toBeNull()
     expect(
       screen.getByRole('button', { name: /Points de restauration/ }),
+    ).toBeTruthy()
+  })
+})
+
+/*
+ * Audit du 2026-10-04 : les trois cartes d'écriture (Nouveau chapitre,
+ * Importer, Corbeille) n'arrivent qu'avec les droits du classeur, lus APRÈS
+ * le premier rendu. Leur place est réservée en silhouette pour qui peut
+ * écrire sur la page (sinon la colonne grandissait de deux cartes), jamais
+ * pour un lecteur de la page, et jamais une fois les droits connus.
+ */
+describe('ClasseurDashboard — places des cartes d’écriture', () => {
+  function monterComplet() {
+    const { container } = render(
+      <QueryClientProvider client={new QueryClient()}>
+        <TooltipProvider>
+          <ClasseurDashboard
+            classeurId={24}
+            onHistorique={() => {}}
+            onCorbeille={() => {}}
+            onExporterJson={() => {}}
+            onImporter={() => {}}
+          />
+        </TooltipProvider>
+      </QueryClientProvider>,
+    )
+    return container.querySelectorAll('[data-carte-squelette]').length
+  }
+
+  it('droits en lecture, page en écriture : trois places réservées', () => {
+    Object.assign(droits, { canWrite: false, pret: false })
+    expect(monterComplet()).toBe(3)
+    expect(screen.queryByRole('button', { name: /Corbeille/ })).toBeNull()
+  })
+
+  it('lecteur de la page : rien de réservé, même avant les droits', () => {
+    Object.assign(droits, { canWrite: false, pret: false })
+    droitsPage.page = 'lecture'
+    expect(monterComplet()).toBe(0)
+  })
+
+  it('droits connus : les vraies cartes, ou rien', () => {
+    expect(monterComplet()).toBe(0)
+    expect(screen.getByRole('button', { name: /Corbeille/ })).toBeTruthy()
+    cleanup()
+    Object.assign(droits, { canWrite: false, pret: true })
+    expect(monterComplet()).toBe(0)
+    expect(
+      screen.queryByRole('button', { name: /Nouveau chapitre/ }),
+    ).toBeNull()
+  })
+
+  it('exceptions illisibles : le dit, sans place réservée', () => {
+    Object.assign(droits, {
+      canWrite: false,
+      pret: false,
+      isError: true,
+      error: new Error('Failed to fetch'),
+    })
+    expect(monterComplet()).toBe(0)
+    expect(
+      screen.getByText(/Droits indisponibles, modifications désactivées/),
     ).toBeTruthy()
   })
 })

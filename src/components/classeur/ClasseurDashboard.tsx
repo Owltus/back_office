@@ -36,11 +36,15 @@ import {
   useClasseurContent,
   useInvaliderClasseur,
 } from '#/components/classeur/hooks/useClasseur.ts'
-import { useDroitsClasseur } from '#/components/classeur/hooks/useDroitsClasseur.ts'
+import {
+  useDroitsClasseur,
+  useDroitsPageClasseur,
+} from '#/components/classeur/hooks/useDroitsClasseur.ts'
 import { IconAction } from '#/components/classeur/IconAction.tsx'
 import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { ConfirmDialog } from '#/components/shared/ConfirmDialog.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
+import { CarteActionSquelette } from '#/components/shared/skeleton/PageShapes.tsx'
 import { Input } from '#/components/ui/input.tsx'
 import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { messageErreur } from '#/lib/classeur/erreur.ts'
@@ -139,6 +143,16 @@ export function ClasseurDashboard({
 }) {
   const droits = useDroitsClasseur(classeurId)
   const { canWrite, canManage } = droits
+  // Places des cartes d'écriture (Nouveau chapitre, Importer, Corbeille)
+  // réservées en silhouette tant que les droits du classeur ne sont pas lus,
+  // pour qui PEUT écrire sur la page : sans cela la colonne grandissait de
+  // deux cartes à leur arrivée. Un lecteur de la page n'écrira jamais : rien
+  // à réserver.
+  const { page } = useDroitsPageClasseur()
+  const reserverEcriture =
+    !droits.pret &&
+    !droits.isError &&
+    (page === 'ecriture' || page === 'gestion')
   const [accesOuvert, setAccesOuvert] = useState(false)
   const [suppressionOuverte, setSuppressionOuverte] = useState(false)
   const navigate = useNavigate()
@@ -362,7 +376,7 @@ export function ClasseurDashboard({
            les Paramètres de Registre, vient en dernier sous un séparateur. */
         <div className="flex flex-1 items-center justify-center py-6">
           <div className="flex w-full max-w-md flex-col gap-4">
-            {canWrite && (
+            {canWrite ? (
               <ActionCard
                 icon={Plus}
                 title="Nouveau chapitre"
@@ -370,6 +384,8 @@ export function ClasseurDashboard({
                 onClick={() => setCreateOpen(true)}
                 dashed
               />
+            ) : (
+              reserverEcriture && <CarteActionSquelette />
             )}
 
             {(onSommaire || onExporterPdf) && (
@@ -425,7 +441,8 @@ export function ClasseurDashboard({
               />
             )}
 
-            {(onExporterJson || (canWrite && onImporter)) && (
+            {(onExporterJson ||
+              ((canWrite || reserverEcriture) && onImporter)) && (
               <div className="grid grid-cols-2 gap-3">
                 {onExporterJson && (
                   <ActionCard
@@ -458,10 +475,15 @@ export function ClasseurDashboard({
                     onDrop={surDrop}
                   />
                 )}
+                {!canWrite && reserverEcriture && onImporter && (
+                  <CarteActionSquelette />
+                )}
               </div>
             )}
 
-            {(onImages || onHistorique || (canWrite && onCorbeille)) && (
+            {(onImages ||
+              onHistorique ||
+              ((canWrite || reserverEcriture) && onCorbeille)) && (
               <div className="border-b border-border" />
             )}
             {onImages && (
@@ -489,6 +511,9 @@ export function ClasseurDashboard({
                 subtitle="Retrouver un chapitre ou un élément supprimé"
                 onClick={onCorbeille}
               />
+            )}
+            {!canWrite && reserverEcriture && onCorbeille && (
+              <CarteActionSquelette />
             )}
           </div>
         </div>

@@ -616,17 +616,16 @@ export function FormeClasseurListe({
 }
 
 /**
- * /classeur/$id (accueil) : champ de recherche pleine largeur puis la colonne
- * centrée de Registre (28 rem), relevée sur le DOM de l'accueil : Nouveau
- * chapitre ; Sommaire | Exporter PDF ; Imprimer les modifications (étape 5,
- * 2026-10-04) ; un séparateur ; Markdown ; JSON | Importer ; un séparateur ;
- * Images du classeur ; Points de restauration — neuf cartes.
+ * Une carte d'action de l'accueil d'un classeur (`ActionCard`) en silhouette :
+ * celles du squelette de route, et les places que l'accueil réserve aux
+ * cartes d'écriture tant que les droits du classeur ne sont pas lus.
  */
-export function FormeClasseurDashboard() {
-  const carte = (k: string) => (
+export function CarteActionSquelette() {
+  return (
     <div
-      key={k}
       className="flex items-center gap-4 rounded-xl border border-border bg-card px-5 py-4"
+      aria-hidden="true"
+      data-carte-squelette=""
     >
       <Skeleton className="size-5 rounded-sm" />
       <div className="min-w-0 flex-1">
@@ -635,6 +634,20 @@ export function FormeClasseurDashboard() {
       </div>
     </div>
   )
+}
+
+/**
+ * /classeur/$id (accueil) : champ de recherche pleine largeur puis la colonne
+ * centrée de Registre (28 rem), relevée sur le DOM de l'accueil : Nouveau
+ * chapitre ; Sommaire | Exporter PDF ; Imprimer les modifications (étape 5,
+ * 2026-10-04) ; un séparateur ; Markdown ; JSON | Importer ; un séparateur ;
+ * Images du classeur ; Points de restauration ; Corbeille. Dix cartes : la
+ * forme de qui peut écrire (Nouveau chapitre, Importer et Corbeille sont
+ * réservés à l'écriture ; un lecteur en voit sept).
+ */
+export function FormeClasseurDashboard() {
+  const carte = (k: string) => <CarteActionSquelette key={k} />
+
   return (
     <>
       <Skeleton className="h-9 w-full rounded-md" aria-hidden="true" />
