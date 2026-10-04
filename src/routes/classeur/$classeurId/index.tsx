@@ -13,18 +13,17 @@ export const Route = createFileRoute('/classeur/$classeurId/')({
  * rend cet `Outlet` que pour un identifiant entier.
  *
  * Sommaire, impression, exports, import-fusion et historique sont branchés
- * par `ClasseurDashboardActions` sur les boutons de l'en-tête.
+ * par `ClasseurDashboardActions` sur les cartes de l'accueil.
  *
- * La rangée du classeur tient dans la hauteur du `<main>` (qui ne défile
- * plus) : l'accueil défile dans SA zone, barre au bord droit de la fenêtre.
+ * Comme la page d'un chapitre (2026-10-04) : la page tient dans la hauteur
+ * du `<main>`, l'en-tête reste fixe et seule la zone du contenu défile
+ * (`PageAvecEnTete`, barre au bord droit de la fenêtre).
  */
 function ClasseurDashboardPage() {
   const { classeurId } = Route.useParams()
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-      <PageContainer>
-        <ClasseurDashboardActions classeurId={Number(classeurId)} />
-      </PageContainer>
-    </div>
+    <PageContainer fillHeight>
+      <ClasseurDashboardActions classeurId={Number(classeurId)} />
+    </PageContainer>
   )
 }

@@ -583,7 +583,12 @@ export function FormeClasseurListe({
         dashed && 'border-dashed',
       )}
     >
-      <Skeleton className="size-5 rounded-sm" />
+      <Skeleton
+        className={cn(
+          'shrink-0',
+          dashed ? 'size-9 rounded-lg' : 'size-5 rounded-sm',
+        )}
+      />
       <div className="flex min-h-10 min-w-0 flex-1 flex-col justify-center">
         <Skeleton className="h-4 w-full max-w-40" />
         <Skeleton className="mt-2 h-3 w-28" />
@@ -616,61 +621,81 @@ export function FormeClasseurListe({
 }
 
 /**
- * Une carte d'action de l'accueil d'un classeur (`ActionCard`) en silhouette :
- * celles du squelette de route, et les places que l'accueil réserve aux
- * cartes d'écriture tant que les droits du classeur ne sont pas lus.
+ * Une carte d'action (`ActionCard`) en silhouette : celles du squelette de
+ * route, et les places que l'accueil réserve aux cartes d'écriture tant que
+ * les droits du classeur ne sont pas lus. Même boîte que la carte réelle :
+ * carré d'icône de 36 px, titre et une ligne de description.
  */
 export function CarteActionSquelette() {
   return (
     <div
-      className="flex items-center gap-4 rounded-xl border border-border bg-card px-5 py-4"
+      className="flex h-full items-start gap-3 rounded-xl border border-border bg-card px-3 py-3.5 sm:px-4"
       aria-hidden="true"
       data-carte-squelette=""
     >
-      <Skeleton className="size-5 rounded-sm" />
-      <div className="min-w-0 flex-1">
-        <Skeleton className="h-4 w-full max-w-28" />
-        <Skeleton className="mt-2 h-3 w-full max-w-40" />
+      <Skeleton className="size-9 shrink-0 rounded-lg" />
+      <div className="min-w-0 flex-1 pt-1">
+        <Skeleton className="h-4 w-full max-w-32" />
+        <Skeleton className="mt-2 h-3 w-full max-w-48" />
       </div>
     </div>
   )
 }
 
 /**
- * /classeur/$id (accueil) : champ de recherche pleine largeur puis la colonne
- * centrée de Registre (28 rem), relevée sur le DOM de l'accueil : Nouveau
- * chapitre ; Sommaire | Exporter PDF ; un séparateur ; Markdown ; JSON |
- * Importer ; un séparateur ; Images du classeur ; Points de restauration ;
- * Corbeille. Neuf cartes : la forme de qui peut écrire (Nouveau chapitre,
- * Importer et Corbeille sont réservés à l'écriture ; un lecteur en voit six).
+ * Grille des cartes d'un groupe de l'accueil d'un classeur : 1 colonne au
+ * téléphone, 2 dès `sm`, 3 dès `xl` (la colonne des chapitres de 20 rem
+ * occupe la gauche à partir de `lg`). UNE source pour l'accueil et sa
+ * silhouette.
+ */
+export const GRILLE_ACTIONS_CLASSEUR =
+  'grid gap-3 sm:grid-cols-2 xl:grid-cols-3'
+
+/**
+ * Les groupes de l'accueil d'un classeur et leurs cartes, dans l'ordre du
+ * DOM de `ClasseurDashboard` (disposition du 2026-10-04). Forme de qui
+ * peut écrire : Nouveau chapitre, Importer et Corbeille sont réservés à
+ * l'écriture (un lecteur voit six cartes).
+ */
+const GROUPES_ACCUEIL: { cle: string; cartes: string[] }[] = [
+  { cle: 'contenu', cartes: ['nouveau', 'images'] },
+  { cle: 'imprimer', cartes: ['pdf', 'sommaire'] },
+  { cle: 'echanger', cartes: ['json', 'import', 'markdown'] },
+  { cle: 'historique', cartes: ['historique', 'corbeille'] },
+]
+
+/**
+ * /classeur/$id (accueil) : champ de recherche pleine largeur puis les
+ * quatre groupes de cartes (intitulé, ligne d'aide, grille), relevés sur le
+ * DOM de l'accueil : Contenu (2), Imprimer (2), Échanger et sauvegarder (3),
+ * Historique et sécurité (2). Neuf cartes.
  */
 export function FormeClasseurDashboard() {
-  const carte = (k: string) => <CarteActionSquelette key={k} />
-
   return (
     <>
       <Skeleton className="h-9 w-full rounded-md" aria-hidden="true" />
       <div
-        className="flex flex-1 items-center justify-center py-6"
+        className="flex flex-col gap-6 pt-1 pb-2"
         aria-hidden="true"
+        data-accueil-groupes=""
       >
-        <div className="flex w-full max-w-md flex-col gap-4">
-          {carte('nouveau')}
-          <div className="grid grid-cols-2 gap-3">
-            {carte('sommaire')}
-            {carte('pdf')}
+        {GROUPES_ACCUEIL.map((g) => (
+          <div
+            key={g.cle}
+            className="flex flex-col gap-2.5"
+            data-groupe-actions=""
+          >
+            <div className="flex flex-col gap-1.5 py-0.5">
+              <Skeleton className="h-3 w-24" />
+              <Skeleton className="h-3 w-full max-w-72" />
+            </div>
+            <div className={GRILLE_ACTIONS_CLASSEUR}>
+              {g.cartes.map((c) => (
+                <CarteActionSquelette key={c} />
+              ))}
+            </div>
           </div>
-          <div className="border-b border-border" />
-          {carte('markdown')}
-          <div className="grid grid-cols-2 gap-3">
-            {carte('json')}
-            {carte('import')}
-          </div>
-          <div className="border-b border-border" />
-          {carte('images')}
-          {carte('historique')}
-          {carte('corbeille')}
-        </div>
+        ))}
       </div>
     </>
   )

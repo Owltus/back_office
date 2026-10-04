@@ -264,9 +264,11 @@ export function RouteSkeleton({
       <div
         className={cn(
           'mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4',
-          // Chapitre et détails tiennent dans la fenêtre (en-tête fixe,
-          // contenu qui défile dessous) : la silhouette ne déborde pas.
-          (forme === 'chapitre' || forme === 'detail') &&
+          // Accueil, chapitre et détails tiennent dans la fenêtre (en-tête
+          // fixe, contenu qui défile dessous) : la silhouette ne déborde pas.
+          (forme === 'dashboard' ||
+            forme === 'chapitre' ||
+            forme === 'detail') &&
             'min-h-0 overflow-hidden',
         )}
         aria-hidden="true"

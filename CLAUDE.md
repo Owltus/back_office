@@ -1136,13 +1136,14 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   2026-10-04), chaque colonne défile en interne ; en dessous, 60 dvh.
 - **En-tête FIXE + contenu qui défile (décision utilisateur du
   2026-10-04, remplace l'en-tête collant essayé le même jour, « pas
-  beau »)** : page d'un chapitre et quatre pages de détail dans
+  beau »)** : accueil d'un classeur (même jour), page d'un chapitre et
+  quatre pages de détail dans
   `components/classeur/PageAvecEnTete.tsx` — en-tête (titre, recherche,
   boutons) hors défilement, zone `overflow-y-auto` dessous (messages,
   grille, aperçu), barre au bord droit SOUS l'en-tête, gouttière stable des
   deux côtés (boutons alignés). Rangée de `ClasseurShell` en `min-h-0` : le
-  `<main>` ne défile plus sous `/classeur/$id` ; l'accueil défile dans sa
-  propre zone, la colonne des chapitres à hauteur de fenêtre.
+  `<main>` ne défile plus sous `/classeur/$id` (routes en `PageContainer
+  fillHeight`), la colonne des chapitres à hauteur de fenêtre.
 - **Éditeur : ne plus perdre de travail (2026-09-27, points 1 à 5 de la
   liste NUMÉROTÉE `plan/classeur-editeur-ameliorations/00-INDEX.md` —
   l'utilisateur demande par numéro, ne jamais renuméroter)**. Tout vit dans
@@ -1288,15 +1289,28 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   la page. `ActionCard` est partagée avec l'accueil
   (`components/classeur/ActionCard.tsx`) ; `FormeClasseurListe` suit la
   même colonne (`actions={false}` = liste seule sous les cartes réelles).
-- **Accueil d'un classeur (décision utilisateur du 2026-09-26)** : les
-  chapitres ne sont PAS répétés dans la page (ils vivent dans la colonne de
-  gauche, pleine hauteur, 20 rem — « trop petite » à 16 rem) ; le corps de
-  l'accueil est la COLONNE de cartes d'actions de Registre, à l'identique
-  (28 rem centrés : nouveau chapitre ; Sommaire | Exporter PDF ; séparateur ;
-  Exporter en Markdown ; Exporter en JSON | Importer un JSON avec dépôt de
-  fichier ; puis, ajout à nous, séparateur + Points de restauration) sous la
-  recherche ; l'en-tête ne garde que l'édition du classeur. Libellés de
-  Registre conservés (« Export en cours... », « Déposez ici »).
+- **Accueil d'un classeur (décision utilisateur du 2026-10-04, remplace la
+  colonne de 28 rem de Registre du 2026-09-26)** : les chapitres ne sont PAS
+  répétés dans la page (ils vivent dans la colonne de gauche, pleine
+  hauteur, 20 rem — « trop petite » à 16 rem). En-tête FIXE
+  (`PageAvecEnTete` : titre, sous-titre, recherche, Modifier / Accès /
+  Supprimer), zone qui défile dessous (alertes de `ClasseurDashboardActions`
+  passées par le prop `messages`, puis le contenu) ; en-tête et contenu en
+  `max-w-5xl` centré. Cartes REGROUPÉES par usage (`GroupeActions` :
+  intitulé discret en capitales + une phrase d'aide), grille
+  `GRILLE_ACTIONS_CLASSEUR` (1 / 2 dès `sm` / 3 dès `xl`, une source pour la
+  page et la silhouette) : **Contenu** (Nouveau chapitre en pointillé si
+  écriture, Images du classeur) ; **Imprimer** (Classeur complet = aperçu
+  couverture + sommaire + chapitres, puis Télécharger le PDF / Imprimer ;
+  Sommaire, qui est lui aussi un aperçu d'impression) ; **Échanger et
+  sauvegarder** (Exporter en JSON, Importer un JSON avec dépôt de fichier,
+  Exporter en Markdown) ; **Historique et sécurité** (Points de
+  restauration, Corbeille si écriture). `ActionCard` : carré d'icône
+  `bg-muted` 36 px, titre et description sur 2 lignes au plus, `h-full`
+  (même hauteur dans une rangée) — la liste `/classeur` en hérite. Places
+  réservées (`CarteActionSquelette`) dans LEUR groupe tant que les droits ne
+  sont pas lus. Libellés de Registre conservés (« Export en cours... »,
+  « Déposez ici »).
 - **Points de restauration (2026-09-26, demande de l'utilisateur : « de
   vraies sauvegardes, faciles, une dizaine, mineures et majeures »)** :
   `classeur_merge_history` n'est plus l'historique des seules fusions mais

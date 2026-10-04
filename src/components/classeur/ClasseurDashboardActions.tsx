@@ -155,27 +155,6 @@ export function ClasseurDashboardActions({
 
   return (
     <>
-      {erreur != null && (
-        <Alert variant="destructive" className="mx-auto mb-4 w-full max-w-5xl">
-          <AlertCircle />
-          <AlertDescription>
-            {messageErreur(erreur, 'Export impossible')}
-          </AlertDescription>
-        </Alert>
-      )}
-      {erreurFichier && (
-        <Alert variant="destructive" className="mx-auto mb-4 w-full max-w-5xl">
-          <AlertCircle />
-          <AlertDescription>{erreurFichier}</AlertDescription>
-        </Alert>
-      )}
-      {bilan && (
-        <Alert className="mx-auto mb-4 w-full max-w-5xl">
-          <CheckCircle2 />
-          <AlertDescription>{bilan}</AlertDescription>
-        </Alert>
-      )}
-
       {/* Sélecteur de fichier caché : le clic sur la carte Importer l'ouvre. */}
       <input
         ref={inputRef}
@@ -190,6 +169,31 @@ export function ClasseurDashboardActions({
 
       <ClasseurDashboard
         classeurId={classeurId}
+        // Alertes en tête de la zone qui défile, sous l'en-tête fixe.
+        messages={
+          <>
+            {erreur != null && (
+              <Alert variant="destructive">
+                <AlertCircle />
+                <AlertDescription>
+                  {messageErreur(erreur, 'Export impossible')}
+                </AlertDescription>
+              </Alert>
+            )}
+            {erreurFichier && (
+              <Alert variant="destructive">
+                <AlertCircle />
+                <AlertDescription>{erreurFichier}</AlertDescription>
+              </Alert>
+            )}
+            {bilan && (
+              <Alert>
+                <CheckCircle2 />
+                <AlertDescription>{bilan}</AlertDescription>
+              </Alert>
+            )}
+          </>
+        }
         onSommaire={(c) => ouvrirApercu.mutate({ type: 'sommaire', ctx: c })}
         onExporterPdf={(c) => ouvrirApercu.mutate({ type: 'pdf', ctx: c })}
         onExporterMarkdown={(c) =>

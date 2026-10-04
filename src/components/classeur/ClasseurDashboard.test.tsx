@@ -192,3 +192,126 @@ describe('ClasseurDashboard — places des cartes d’écriture', () => {
     ).toBeTruthy()
   })
 })
+
+/*
+ * Disposition du 2026-10-04 (décision utilisateur) : en-tête FIXE hors de
+ * la zone qui défile (comme un chapitre), cartes regroupées par usage. La
+ * silhouette `FormeClasseurDashboard` doit suivre CE DOM, groupe par groupe.
+ */
+describe('ClasseurDashboard — en-tête fixe et groupes', () => {
+  function monterTout() {
+    const { container } = render(
+      <QueryClientProvider client={new QueryClient()}>
+        <TooltipProvider>
+          <ClasseurDashboard
+            classeurId={24}
+            onSommaire={() => {}}
+            onExporterPdf={() => {}}
+            onExporterMarkdown={() => {}}
+            onExporterJson={() => {}}
+            onImporter={() => {}}
+            onHistorique={() => {}}
+            onImages={() => {}}
+            onCorbeille={() => {}}
+            messages={<p>Fusion terminée</p>}
+          />
+        </TooltipProvider>
+      </QueryClientProvider>,
+    )
+    return container
+  }
+
+  function groupes(container: HTMLElement) {
+    return Array.from(container.querySelectorAll('[data-groupe-actions]')).map(
+      (g) => ({
+        titre: g.querySelector('h2')?.textContent,
+        cartes: Array.from(g.querySelectorAll('button')).map((b) =>
+          b.textContent.trim(),
+        ),
+        reservees: g.querySelectorAll('[data-carte-squelette]').length,
+      }),
+    )
+  }
+
+  it('en-tête (titre, recherche, boutons) hors de la zone qui défile ; messages dans la zone', () => {
+    const container = monterTout()
+    const entete = container.querySelector('[data-page-en-tete]')
+    const zone = container.querySelector('[data-page-zone]')
+    expect(entete).not.toBeNull()
+    expect(zone).not.toBeNull()
+    const recherche = screen.getByRole('searchbox', {
+      name: 'Rechercher dans le classeur',
+    })
+    expect(entete?.contains(recherche)).toBe(true)
+    expect(zone?.contains(recherche)).toBe(false)
+    expect(entete?.textContent).toContain('Essai')
+    const modifier = screen.getByRole('button', {
+      name: 'Modifier le classeur',
+    })
+    expect(entete?.contains(modifier)).toBe(true)
+    expect(zone?.contains(screen.getByText('Fusion terminée'))).toBe(true)
+    // Toutes les cartes sont dans la zone, aucune dans l'en-tête.
+    expect(entete?.querySelector('[data-groupe-actions]')).toBeNull()
+    expect(zone?.querySelectorAll('[data-groupe-actions]').length).toBe(4)
+  })
+
+  it('écriture : quatre groupes, neuf cartes, comme la silhouette', () => {
+    const container = monterTout()
+    expect(groupes(container)).toEqual([
+      {
+        titre: 'Contenu',
+        cartes: [
+          expect.stringContaining('Nouveau chapitre'),
+          expect.stringContaining('Images du classeur'),
+        ],
+        reservees: 0,
+      },
+      {
+        titre: 'Imprimer',
+        cartes: [
+          expect.stringContaining('Classeur complet'),
+          expect.stringContaining('Sommaire'),
+        ],
+        reservees: 0,
+      },
+      {
+        titre: 'Échanger et sauvegarder',
+        cartes: [
+          expect.stringContaining('Exporter en JSON'),
+          expect.stringContaining('Importer un JSON'),
+          expect.stringContaining('Exporter en Markdown'),
+        ],
+        reservees: 0,
+      },
+      {
+        titre: 'Historique et sécurité',
+        cartes: [
+          expect.stringContaining('Points de restauration'),
+          expect.stringContaining('Corbeille'),
+        ],
+        reservees: 0,
+      },
+    ])
+  })
+
+  it('lecteur : ni Nouveau chapitre, ni Importer, ni Corbeille', () => {
+    Object.assign(droits, { canWrite: false, pret: true })
+    const container = monterTout()
+    const g = groupes(container)
+    expect(g.map((x) => x.cartes.length)).toEqual([1, 2, 2, 1])
+    const tout = g.flatMap((x) => x.cartes).join(' | ')
+    expect(tout).not.toMatch(/Nouveau chapitre|Importer|Corbeille/)
+    expect(
+      screen.queryByRole('button', { name: 'Modifier le classeur' }),
+    ).toBeNull()
+  })
+
+  it('droits pas encore lus : les places réservées tombent dans LEUR groupe', () => {
+    Object.assign(droits, { canWrite: false, pret: false })
+    const container = monterTout()
+    expect(groupes(container).map((x) => x.reservees)).toEqual([1, 0, 1, 1])
+    expect(
+      groupes(container).map((x) => x.cartes.length + x.reservees),
+    ).toEqual([2, 2, 3, 2])
+  })
+})

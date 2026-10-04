@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo, useState } from 'react'
+import { useDeferredValue, useId, useMemo, useState } from 'react'
 import type { DragEvent, ReactNode } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
@@ -40,10 +40,14 @@ import {
   useDroitsPageClasseur,
 } from '#/components/classeur/hooks/useDroitsClasseur.ts'
 import { IconAction } from '#/components/classeur/IconAction.tsx'
+import { PageAvecEnTete } from '#/components/classeur/PageAvecEnTete.tsx'
 import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { ConfirmDialog } from '#/components/shared/ConfirmDialog.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
-import { CarteActionSquelette } from '#/components/shared/skeleton/PageShapes.tsx'
+import {
+  CarteActionSquelette,
+  GRILLE_ACTIONS_CLASSEUR,
+} from '#/components/shared/skeleton/PageShapes.tsx'
 import { Input } from '#/components/ui/input.tsx'
 import { Skeleton } from '#/components/ui/skeleton.tsx'
 import { messageErreur } from '#/lib/classeur/erreur.ts'
@@ -90,11 +94,14 @@ const ICONE_KIND: Record<ItemKind, LucideIcon> = {
  * Accueil d'un classeur — porté de Registre (`DashboardPage`).
  *
  * Décision utilisateur du 2026-09-26 : les chapitres vivent DÉJÀ dans la
- * colonne de gauche, l'accueil ne les répète pas. Comme dans Registre, le
- * corps de la page est la grille de CARTES D'ACTIONS (nouveau chapitre,
- * sommaire, impression, exports, import-fusion, historique), sous la
- * recherche instantanée dans tout le classeur (titres, descriptions,
- * contenus, accents ignorés). L'en-tête ne garde que l'édition du classeur.
+ * colonne de gauche, l'accueil ne les répète pas. Le corps de la page est
+ * fait de CARTES D'ACTIONS, sous la recherche instantanée dans tout le
+ * classeur (titres, descriptions, contenus, accents ignorés).
+ *
+ * Disposition du 2026-10-04 (décision utilisateur, remplace la colonne de
+ * 28 rem de Registre) : en-tête FIXE (`PageAvecEnTete`, comme un chapitre),
+ * cartes regroupées par usage (Contenu, Imprimer, Échanger et sauvegarder,
+ * Historique et sécurité) dans une grille 1 / 2 / 3 colonnes de `max-w-5xl`.
  *
  * POINTS D'EXTENSION (branchés par `ClasseurDashboardActions`) : les
  * rappels `onSommaire`, `onExporterPdf`, `onExporterMarkdown`,
@@ -117,6 +124,7 @@ export function ClasseurDashboard({
   onCorbeille,
   busy = null,
   renderResult,
+  messages,
 }: {
   classeurId: number
   onSommaire?: (ctx: DashboardContexte) => void
@@ -136,6 +144,9 @@ export function ClasseurDashboard({
   onCorbeille?: () => void
   busy?: DashboardBusy
   renderResult?: (result: ClasseurSearchResult) => ReactNode
+  /** Alertes de la page (export, fichier, bilan d'import), affichées en
+   * tête de la zone qui défile, sous l'en-tête fixe. */
+  messages?: ReactNode
 }) {
   const droits = useDroitsClasseur(classeurId)
   const { canWrite, canManage } = droits
@@ -247,192 +258,222 @@ export function ClasseurDashboard({
         ? contenuQ.error
         : null
 
+  const grilleImprimer = onExporterPdf || onSommaire
+  const grilleEchanger =
+    onExporterJson ||
+    onExporterMarkdown ||
+    ((canWrite || reserverEcriture) && onImporter)
+  const grilleHistorique =
+    onHistorique || ((canWrite || reserverEcriture) && onCorbeille)
+  const grilleContenu = canWrite || reserverEcriture || onImages
+
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4">
-      <PageHeader
-        leading={<ChapterDrawerButton />}
-        title={
-          classeurQ.isPending ? (
-            <Skeleton className="h-7 w-48" />
-          ) : (
-            <span className="flex items-center gap-2">
-              <IconeClasseur className="size-5 shrink-0 text-muted-foreground" />
-              {classeurName}
-            </span>
-          )
-        }
-        meta={etablissement !== '' ? etablissement : undefined}
-      />
-
-      {erreurLecture !== null && (
-        <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {messageErreur(erreurLecture, 'Classeur indisponible')}
-        </div>
-      )}
-      {droits.isError && (
-        <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {messageErreur(
-            droits.error,
-            'Droits indisponibles, modifications désactivées',
-          )}
-        </div>
-      )}
-
-      {/* Recherche à gauche, boutons du classeur à droite, sur UNE ligne à
-          toute largeur (demande utilisateur du 2026-09-28) : la recherche
-          absorbe le rétrécissement, les boutons gardent leur taille. */}
-      <div className="flex items-center gap-2">
-        <div className="relative min-w-0 flex-1">
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={recherche}
-            onChange={(e) => setRecherche(e.target.value)}
-            type="search"
-            enterKeyHint="search"
-            placeholder="Rechercher dans le classeur"
-            aria-label="Rechercher dans le classeur"
-            className="pl-9"
-            disabled={!content}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') setRecherche('')
-            }}
+    // En-tête FIXE (titre, sous-titre, recherche, boutons) et zone qui
+    // défile dessous avec sa propre barre, comme la page d'un chapitre
+    // (décision utilisateur du 2026-10-04). En-tête et contenu partagent la
+    // même largeur confortable (`max-w-5xl` centré).
+    <PageAvecEnTete
+      entete={
+        <div className="mx-auto flex w-full max-w-5xl flex-col gap-3">
+          <PageHeader
+            leading={<ChapterDrawerButton />}
+            title={
+              classeurQ.isPending ? (
+                <Skeleton className="h-7 w-48" />
+              ) : (
+                <span className="flex items-center gap-2">
+                  <IconeClasseur className="size-5 shrink-0 text-muted-foreground" />
+                  {classeurName}
+                </span>
+              )
+            }
+            meta={etablissement !== '' ? etablissement : undefined}
           />
+
+          {/* Recherche à gauche, boutons du classeur à droite, sur UNE ligne
+              à toute largeur (demande utilisateur du 2026-09-28) : la
+              recherche absorbe le rétrécissement, les boutons gardent leur
+              taille. */}
+          <div className="flex items-center gap-2">
+            <div className="relative min-w-0 flex-1">
+              <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={recherche}
+                onChange={(e) => setRecherche(e.target.value)}
+                type="search"
+                enterKeyHint="search"
+                placeholder="Rechercher dans le classeur"
+                aria-label="Rechercher dans le classeur"
+                className="pl-9"
+                disabled={!content}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') setRecherche('')
+                }}
+              />
+            </div>
+            {classeur && (canWrite || canManage) && (
+              <div className="shrink-0">
+                <ButtonGroup>
+                  {canWrite && (
+                    <IconAction
+                      label="Modifier le classeur"
+                      icon={<Pencil />}
+                      onClick={() => setEditOpen(true)}
+                    />
+                  )}
+                  {/* Accès au classeur : gestion et admin (2026-09-28). */}
+                  {canManage && (
+                    <IconAction
+                      label={
+                        classeur.acces_tous === 'aucun'
+                          ? 'Accès au classeur (privé)'
+                          : 'Accès au classeur'
+                      }
+                      icon={<ShieldCheck />}
+                      onClick={() => setAccesOuvert(true)}
+                    />
+                  )}
+                  {/* Supprimer le classeur : gestion. Seule voie au doigt (la
+                      croix de la liste n'apparaît qu'au survol à la souris). */}
+                  {canManage && (
+                    <IconAction
+                      label="Supprimer le classeur"
+                      icon={<Trash2 />}
+                      className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                      onClick={() => setSuppressionOuverte(true)}
+                      busy={suppression.isPending}
+                    />
+                  )}
+                </ButtonGroup>
+              </div>
+            )}
+          </div>
         </div>
-        {classeur && (canWrite || canManage) && (
-          <div className="shrink-0">
-            <ButtonGroup>
-              {canWrite && (
-                <IconAction
-                  label="Modifier le classeur"
-                  icon={<Pencil />}
-                  onClick={() => setEditOpen(true)}
-                />
-              )}
-              {/* Accès au classeur : gestion et admin (2026-09-28). */}
-              {canManage && (
-                <IconAction
-                  label={
-                    classeur.acces_tous === 'aucun'
-                      ? 'Accès au classeur (privé)'
-                      : 'Accès au classeur'
-                  }
-                  icon={<ShieldCheck />}
-                  onClick={() => setAccesOuvert(true)}
-                />
-              )}
-              {/* Supprimer le classeur : gestion. Seule voie au doigt (la
-                  croix de la liste n'apparaît qu'au survol à la souris). */}
-              {canManage && (
-                <IconAction
-                  label="Supprimer le classeur"
-                  icon={<Trash2 />}
-                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                  onClick={() => setSuppressionOuverte(true)}
-                  busy={suppression.isPending}
-                />
-              )}
-            </ButtonGroup>
+      }
+    >
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
+        {messages}
+        {erreurLecture !== null && (
+          <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            {messageErreur(erreurLecture, 'Classeur indisponible')}
           </div>
         )}
-      </div>
-
-      {requete !== '' ? (
-        <section className="flex flex-col gap-3" aria-live="polite">
-          {resultats.length === 0 ? (
-            <div className="rounded-xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
-              Aucun élément ne correspond à cette recherche.
-            </div>
-          ) : (
-            <>
-              <p className="text-xs text-muted-foreground">
-                {resultats.length} résultat{resultats.length > 1 ? 's' : ''}
-              </p>
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {resultats.map((r) =>
-                  renderResult ? (
-                    <div key={`${r.kind}-${r.id}`}>{renderResult(r)}</div>
-                  ) : (
-                    <ResultatCard
-                      key={`${r.kind}-${r.id}`}
-                      classeurId={classeurId}
-                      result={r}
-                    />
-                  ),
-                )}
-              </div>
-            </>
-          )}
-        </section>
-      ) : (
-        /* Le corps de l'accueil, ORGANISÉ COMME DANS REGISTRE (décision
-           utilisateur du 2026-09-26) : une colonne centrée de 28 rem —
-           « Nouveau chapitre » seul, Sommaire et PDF côte à côte, un
-           séparateur, l'export Markdown seul, puis les deux JSON côte à côte
-           (l'import accepte un fichier déposé). L'historique, qui vivait dans
-           les Paramètres de Registre, vient en dernier sous un séparateur. */
-        <div className="flex flex-1 items-center justify-center py-6">
-          <div className="flex w-full max-w-md flex-col gap-4">
-            {canWrite ? (
-              <ActionCard
-                icon={Plus}
-                title="Nouveau chapitre"
-                subtitle="Ajouter un chapitre au classeur"
-                onClick={() => setCreateOpen(true)}
-                dashed
-              />
-            ) : (
-              reserverEcriture && <CarteActionSquelette />
+        {droits.isError && (
+          <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            {messageErreur(
+              droits.error,
+              'Droits indisponibles, modifications désactivées',
             )}
+          </div>
+        )}
+        {suppression.isError && (
+          <p className="text-sm text-destructive">
+            {messageErreur(suppression.error, 'Suppression impossible')}
+          </p>
+        )}
 
-            {(onSommaire || onExporterPdf) && (
-              <div className="grid grid-cols-2 gap-3">
-                {onSommaire && (
+        {requete !== '' ? (
+          <section className="flex flex-col gap-3" aria-live="polite">
+            {resultats.length === 0 ? (
+              <div className="rounded-xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
+                Aucun élément ne correspond à cette recherche.
+              </div>
+            ) : (
+              <>
+                <p className="text-xs text-muted-foreground">
+                  {resultats.length} résultat{resultats.length > 1 ? 's' : ''}
+                </p>
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {resultats.map((r) =>
+                    renderResult ? (
+                      <div key={`${r.kind}-${r.id}`}>{renderResult(r)}</div>
+                    ) : (
+                      <ResultatCard
+                        key={`${r.kind}-${r.id}`}
+                        classeurId={classeurId}
+                        result={r}
+                      />
+                    ),
+                  )}
+                </div>
+              </>
+            )}
+          </section>
+        ) : (
+          /* Le corps de l'accueil (décision utilisateur du 2026-10-04, remplace
+             la colonne de 28 rem de Registre) : les cartes REGROUPÉES par
+             usage, chaque groupe sous un intitulé discret et une phrase
+             d'aide, dans une grille 1 / 2 / 3 colonnes. La silhouette
+             `FormeClasseurDashboard` suit cette structure. */
+          <div
+            className="flex flex-col gap-6 pt-1 pb-2"
+            data-accueil-groupes=""
+          >
+            {grilleContenu && (
+              <GroupeActions
+                titre="Contenu"
+                aide="Les chapitres du classeur et les images communes à tous ses documents."
+              >
+                {canWrite ? (
                   <ActionCard
-                    icon={List}
-                    title="Sommaire"
-                    subtitle="Table des matières"
-                    onClick={action(onSommaire)}
-                    disabled={!pret}
-                    busy={busy === 'sommaire'}
+                    icon={Plus}
+                    title="Nouveau chapitre"
+                    subtitle="Ajouter un chapitre au classeur"
+                    onClick={() => setCreateOpen(true)}
+                    dashed
+                  />
+                ) : (
+                  reserverEcriture && <CarteActionSquelette />
+                )}
+                {onImages && (
+                  <ActionCard
+                    icon={Images}
+                    title="Images du classeur"
+                    subtitle="Photos et schémas utilisables dans tous les documents"
+                    onClick={onImages}
                   />
                 )}
+              </GroupeActions>
+            )}
+
+            {grilleImprimer && (
+              <GroupeActions
+                titre="Imprimer"
+                aide="Un aperçu des pages A4, puis Télécharger le PDF ou Imprimer."
+              >
                 {onExporterPdf && (
                   <ActionCard
                     icon={Printer}
-                    title="Exporter PDF"
-                    subtitle="Classeur complet"
+                    title="Classeur complet"
+                    subtitle="Couverture, sommaire et tous les chapitres"
                     onClick={action(onExporterPdf)}
                     disabled={!pret}
                     busy={busy === 'pdf'}
                   />
                 )}
-              </div>
+                {onSommaire && (
+                  <ActionCard
+                    icon={List}
+                    title="Sommaire"
+                    subtitle="La table des matières seule"
+                    onClick={action(onSommaire)}
+                    disabled={!pret}
+                    busy={busy === 'sommaire'}
+                  />
+                )}
+              </GroupeActions>
             )}
 
-            {(onExporterMarkdown || onExporterJson || onImporter) && (
-              <div className="border-b border-border" />
-            )}
-
-            {onExporterMarkdown && (
-              <ActionCard
-                icon={Archive}
-                title="Exporter en Markdown"
-                subtitle="Archive ZIP contenant tous les documents"
-                titreOccupe="Export en cours..."
-                onClick={action(onExporterMarkdown)}
-                disabled={!pret || busy !== null}
-                busy={busy === 'markdown'}
-              />
-            )}
-
-            {(onExporterJson ||
-              ((canWrite || reserverEcriture) && onImporter)) && (
-              <div className="grid grid-cols-2 gap-3">
+            {grilleEchanger && (
+              <GroupeActions
+                titre="Échanger et sauvegarder"
+                aide="Des fichiers à garder, à retoucher ailleurs ou à réimporter."
+              >
                 {onExporterJson && (
                   <ActionCard
                     icon={FileUp}
                     title="Exporter en JSON"
-                    subtitle="Sauvegarde éditable du classeur"
+                    subtitle="Copie éditable, avec vos demandes pour un LLM"
                     titreOccupe="Export en cours..."
                     onClick={action(onExporterJson)}
                     disabled={!pret || busy !== null}
@@ -444,14 +485,18 @@ export function ClasseurDashboard({
                     icon={survolDepot ? Upload : FileDown}
                     title={survolDepot ? 'Déposez ici' : 'Importer un JSON'}
                     subtitle={
-                      survolDepot ? undefined : 'Mettre à jour depuis un export'
+                      survolDepot
+                        ? undefined
+                        : 'Mettre à jour depuis un export, ou déposer le fichier ici'
                     }
                     titreOccupe="Import en cours..."
                     onClick={action(onImporter)}
                     disabled={!pret || busy !== null}
                     busy={busy === 'import'}
                     className={
-                      survolDepot ? 'border-primary bg-primary/5' : undefined
+                      survolDepot
+                        ? 'border-dashed border-primary bg-primary/5'
+                        : undefined
                     }
                     onDragEnter={surDragOver}
                     onDragOver={surDragOver}
@@ -462,46 +507,51 @@ export function ClasseurDashboard({
                 {!canWrite && reserverEcriture && onImporter && (
                   <CarteActionSquelette />
                 )}
-              </div>
+                {onExporterMarkdown && (
+                  <ActionCard
+                    icon={Archive}
+                    title="Exporter en Markdown"
+                    subtitle="Archive ZIP contenant tous les documents"
+                    titreOccupe="Export en cours..."
+                    onClick={action(onExporterMarkdown)}
+                    disabled={!pret || busy !== null}
+                    busy={busy === 'markdown'}
+                  />
+                )}
+              </GroupeActions>
             )}
 
-            {(onImages ||
-              onHistorique ||
-              ((canWrite || reserverEcriture) && onCorbeille)) && (
-              <div className="border-b border-border" />
-            )}
-            {onImages && (
-              <ActionCard
-                icon={Images}
-                title="Images du classeur"
-                subtitle="Photos et schémas utilisables dans tous les documents"
-                onClick={onImages}
-              />
-            )}
-            {onHistorique && (
-              <ActionCard
-                icon={History}
-                title="Points de restauration"
-                subtitle="Revenir à un état précédent du classeur"
-                onClick={onHistorique}
-              />
-            )}
-            {/* Étape 6 : corbeille, avec le droit d'écriture (D16). Sans
-                compteur : aucune lecture de plus au premier rendu. */}
-            {canWrite && onCorbeille && (
-              <ActionCard
-                icon={Trash}
-                title="Corbeille"
-                subtitle="Retrouver un chapitre ou un élément supprimé"
-                onClick={onCorbeille}
-              />
-            )}
-            {!canWrite && reserverEcriture && onCorbeille && (
-              <CarteActionSquelette />
+            {grilleHistorique && (
+              <GroupeActions
+                titre="Historique et sécurité"
+                aide="Revenir à un état précédent ou retrouver ce qui a été supprimé."
+              >
+                {onHistorique && (
+                  <ActionCard
+                    icon={History}
+                    title="Points de restauration"
+                    subtitle="Revenir à un état précédent du classeur"
+                    onClick={onHistorique}
+                  />
+                )}
+                {/* Étape 6 : corbeille, avec le droit d'écriture (D16). Sans
+                    compteur : aucune lecture de plus au premier rendu. */}
+                {canWrite && onCorbeille && (
+                  <ActionCard
+                    icon={Trash}
+                    title="Corbeille"
+                    subtitle="Retrouver un chapitre ou un élément supprimé"
+                    onClick={onCorbeille}
+                  />
+                )}
+                {!canWrite && reserverEcriture && onCorbeille && (
+                  <CarteActionSquelette />
+                )}
+              </GroupeActions>
             )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       <ConfirmDialog
         open={suppressionOuverte}
@@ -516,11 +566,6 @@ export function ClasseurDashboard({
         destructive
         onConfirm={() => suppression.mutate()}
       />
-      {suppression.isError && (
-        <p className="text-sm text-destructive">
-          {messageErreur(suppression.error, 'Suppression impossible')}
-        </p>
-      )}
 
       <AccesClasseurDialog
         classeur={accesOuvert ? classeur : null}
@@ -544,7 +589,46 @@ export function ClasseurDashboard({
           })
         }
       />
-    </div>
+    </PageAvecEnTete>
+  )
+}
+
+/**
+ * Un groupe de cartes de l'accueil : intitulé discret, une phrase d'aide,
+ * puis la grille (1 colonne au téléphone, 2 dès `sm`, 3 dès `xl` — la
+ * colonne des chapitres de 20 rem occupe la gauche à partir de `lg`).
+ * `items-stretch` (défaut de la grille) + `h-full` des cartes : même
+ * hauteur dans une rangée.
+ */
+function GroupeActions({
+  titre,
+  aide,
+  children,
+}: {
+  titre: string
+  aide?: string
+  children: ReactNode
+}) {
+  const id = useId()
+  return (
+    <section
+      aria-labelledby={id}
+      className="flex flex-col gap-2.5"
+      data-groupe-actions=""
+    >
+      <div className="flex flex-col gap-0.5">
+        <h2
+          id={id}
+          className="text-xs font-semibold tracking-wide text-muted-foreground uppercase"
+        >
+          {titre}
+        </h2>
+        {aide !== undefined && (
+          <p className="text-xs text-muted-foreground/80">{aide}</p>
+        )}
+      </div>
+      <div className={GRILLE_ACTIONS_CLASSEUR}>{children}</div>
+    </section>
   )
 }
 

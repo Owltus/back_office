@@ -5,11 +5,14 @@ import type { LucideIcon } from 'lucide-react'
 import { cn } from '#/lib/utils.ts'
 
 /**
- * Carte d'action de Registre (liste des classeurs, accueil d'un classeur),
- * dans la grammaire de l'app : carte `bg-card`, icône, titre, sous-titre,
- * survol `bg-accent`. `dashed` distingue la création et l'import ; `busy`
- * remplace l'icône par un `Loader2` et le titre par `titreOccupe`. Les
- * gestionnaires de glisser-déposer passent au bouton (carte Importer).
+ * Carte d'action (liste des classeurs, accueil d'un classeur), dans la
+ * grammaire de l'app : carte `bg-card`, icône dans un petit carré teinté
+ * (`bg-muted`), titre, description sur deux lignes au plus, survol
+ * `bg-accent`, anneau de focus clavier. `h-full` : dans une grille, les
+ * cartes d'une même rangée ont la même hauteur. `dashed` distingue la
+ * création et l'import ; `busy` remplace l'icône par un `Loader2` et le
+ * titre par `titreOccupe`. Les gestionnaires de glisser-déposer passent au
+ * bouton (carte Importer).
  */
 export function ActionCard({
   icon: Icon,
@@ -52,20 +55,27 @@ export function ActionCard({
       onDragLeave={onDragLeave}
       onDrop={onDrop}
       className={cn(
-        'flex w-full items-center gap-3 rounded-xl border border-border bg-card px-3 py-4 text-left transition-colors sm:gap-4 sm:px-5',
+        'group/carte flex h-full min-h-11 w-full items-start gap-3 rounded-xl border border-border bg-card px-3 py-3.5 text-left transition-colors sm:px-4',
         'hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
         'disabled:pointer-events-none disabled:opacity-40',
         dashed && 'border-dashed',
         className,
       )}
     >
-      {busy ? (
-        <Loader2 className="size-5 shrink-0 animate-spin text-muted-foreground" />
-      ) : (
-        <Icon className="size-5 shrink-0 text-muted-foreground" />
-      )}
-      <span className="flex min-w-0 flex-col gap-0.5">
-        <span className="truncate text-sm font-medium max-sm:line-clamp-2 max-sm:whitespace-normal">
+      <span
+        className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground transition-colors group-hover/carte:text-foreground"
+        data-testid="action-card-icone"
+      >
+        {busy ? (
+          <Loader2 className="size-[18px] animate-spin" />
+        ) : (
+          <Icon className="size-[18px]" />
+        )}
+      </span>
+      <span className="flex min-w-0 flex-col gap-0.5 pt-0.5">
+        {/* Titre sur deux lignes au plus, jamais coupé d'un « … » au milieu
+            d'un mot dans une colonne étroite. */}
+        <span className="line-clamp-2 text-sm font-medium">
           {busy ? titreOccupe : title}
         </span>
         {subtitle !== undefined && !busy && (

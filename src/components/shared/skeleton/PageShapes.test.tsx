@@ -237,25 +237,30 @@ describe('Classeur — quatre silhouettes relevées sur les boards', () => {
     )
   })
 
-  it('l’accueil dessine la recherche puis la colonne de Registre : 9 cartes, 2 paires, 2 séparateurs', () => {
+  it('l’accueil dessine la recherche puis 4 groupes de cartes : 2, 2, 3, 2 (9 cartes)', () => {
     const { container } = render(<FormeClasseurDashboard />)
     expect(container.querySelectorAll('.h-9.w-full').length).toBe(1)
-    expect(container.querySelectorAll('.rounded-xl.border').length).toBe(9)
-    // La paire Sommaire | Exporter PDF est suivie directement du premier
-    // séparateur (« Imprimer les modifications » retirée le 2026-10-04).
-    const paire = container.querySelector('.grid-cols-2')
-    expect(paire?.nextElementSibling?.matches('.border-b')).toBe(true)
-    // Images du classeur, Points de restauration puis Corbeille (étape 6),
-    // après le second séparateur.
-    const colonne = container.querySelector('.max-w-md')
-    const enfants = Array.from(colonne?.children ?? [])
+    expect(container.querySelectorAll('[data-carte-squelette]').length).toBe(9)
+    // Disposition du 2026-10-04 : Contenu (Nouveau chapitre, Images),
+    // Imprimer (Classeur complet, Sommaire), Échanger et sauvegarder (JSON,
+    // Importer, Markdown), Historique et sécurité (Points, Corbeille).
+    const groupes = Array.from(
+      container.querySelectorAll('[data-groupe-actions]'),
+    )
     expect(
-      enfants.slice(-3).every((e) => e.matches('.rounded-xl.border')),
-    ).toBe(true)
-    expect(enfants.at(-4)?.matches('.border-b')).toBe(true)
-    expect(container.querySelectorAll('.grid-cols-2').length).toBe(2)
-    expect(container.querySelectorAll('.border-b').length).toBe(2)
-    expect(container.querySelector('.max-w-md')).not.toBeNull()
+      groupes.map((g) => g.querySelectorAll('[data-carte-squelette]').length),
+    ).toEqual([2, 2, 3, 2])
+    // Chaque groupe : un intitulé (deux barres) puis LA grille de l'accueil.
+    for (const g of groupes) {
+      const grille = g.lastElementChild
+      expect(grille?.className).toBe('grid gap-3 sm:grid-cols-2 xl:grid-cols-3')
+      expect(g.firstElementChild?.querySelectorAll('[data-slot]').length).toBe(
+        2,
+      )
+    }
+    // Plus de colonne étroite de Registre ni de séparateurs.
+    expect(container.querySelector('.max-w-md')).toBeNull()
+    expect(container.querySelectorAll('.border-b').length).toBe(0)
   })
 
   it('le chapitre dessine N miniatures au rapport A4 et sa recherche', () => {
