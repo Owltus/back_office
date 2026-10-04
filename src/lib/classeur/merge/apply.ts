@@ -139,28 +139,43 @@ const ECRIVAIN_SERVICE: Ecrivain = {
  * les `creerItem` qui suivent. Une référence vers un chapitre pas encore
  * créé est une incohérence du plan : erreur explicite, aucune écriture.
  *
+ * Uuid déjà pris AILLEURS (décision du 2026-10-04) : `UNIQUE (uuid)` porte
+ * sur toute la table, et le fichier peut être l'export d'un AUTRE classeur,
+ * invisible du plan. Une création (chapitre ou élément) refusée pour cette
+ * contrainte (`estDoublonUuid`) est réessayée UNE fois sans uuid — la base
+ * en tire un neuf — et comptée dans `suivi.renumerotes`. Le plan n'est pas
+ * touché : dans le cas normal, rien ne change. Le chapitre recréé ainsi
+ * range son nouvel id à son `index` comme les autres : ses éléments le
+ * visent.
+ *
  * Rend les identifiants des chapitres créés, dans l'ordre des `index`.
  */
 export async function executerPlan(
   classeurId: number,
   actions: ReadonlyArray<ActionFusion>,
   ecrivain: Ecrivain = ECRIVAIN_SERVICE,
+  suivi: SuiviExecution = { renumerotes: 0 },
 ): Promise<number[]> {
   const idsNouveaux: number[] = []
   for (const action of actions) {
     switch (action.type) {
       case 'creerChapitre': {
-        const id = await ecrivain.createChapter(
-          classeurId,
-          {
-            label: action.label,
-            icon: action.icon,
-            description: action.description,
-          },
-          {
-            sort_order: action.sort_order,
-            ...(action.uuid !== null ? { uuid: action.uuid } : {}),
-          },
+        const id = await avecRepliUuid(
+          action.uuid,
+          (uuid) =>
+            ecrivain.createChapter(
+              classeurId,
+              {
+                label: action.label,
+                icon: action.icon,
+                description: action.description,
+              },
+              {
+                sort_order: action.sort_order,
+                ...(uuid !== null ? { uuid } : {}),
+              },
+            ),
+          suivi,
         )
         idsNouveaux[action.index] = id
         break
@@ -190,13 +205,18 @@ export async function executerPlan(
         break
       case 'creerItem': {
         const chapterId = resoudreChapitre(action.chapitre, idsNouveaux)
-        await ecrivain.createItem(chapterId, action.item, {
-          sort_order: action.sort_order,
-          ...(action.uuid !== null ? { uuid: action.uuid } : {}),
-          ...(action.updated_at !== undefined
-            ? { updated_at: action.updated_at }
-            : {}),
-        })
+        await avecRepliUuid(
+          action.uuid,
+          (uuid) =>
+            ecrivain.createItem(chapterId, action.item, {
+              sort_order: action.sort_order,
+              ...(uuid !== null ? { uuid } : {}),
+              ...(action.updated_at !== undefined
+                ? { updated_at: action.updated_at }
+                : {}),
+            }),
+          suivi,
+        )
         break
       }
       case 'modifierItem':
@@ -231,6 +251,66 @@ export async function executerPlan(
     }
   }
   return idsNouveaux
+}
+
+/** Bilan d'une exécution : créations réessayées sans uuid. */
+export interface SuiviExecution {
+  renumerotes: number
+}
+
+/**
+ * Refus d'unicité sur l'UUID (23505). Le nom de contrainte et le détail
+ * (« Key (uuid)=(…) already exists ») mentionnent `uuid` : s'ils sont là et
+ * ne le mentionnent pas, c'est une AUTRE contrainte, jamais réessayée. Sans
+ * message ni détail, le code seul décide (l'appelant n'essaie que si
+ * l'action portait un uuid).
+ */
+export function estDoublonUuid(err: unknown): boolean {
+  if (typeof err !== 'object' || err === null) return false
+  const e = err as { code?: unknown; message?: unknown; details?: unknown }
+  if (e.code !== '23505') return false
+  const textes = [e.message, e.details].filter(
+    (t): t is string => typeof t === 'string' && t !== '',
+  )
+  return textes.length === 0 || textes.some((t) => /uuid/i.test(t))
+}
+
+/** `creer(uuid)`, puis UNE fois `creer(null)` si l'uuid est déjà pris. */
+async function avecRepliUuid(
+  uuid: string | null,
+  creer: (uuid: string | null) => Promise<number>,
+  suivi: SuiviExecution,
+): Promise<number> {
+  try {
+    return await creer(uuid)
+  } catch (err) {
+    if (uuid === null || !estDoublonUuid(err)) throw err
+    const id = await creer(null)
+    suivi.renumerotes += 1
+    return id
+  }
+}
+
+/** Avertissement du bilan, ou rien. */
+export function avertissementsExecution(suivi: SuiviExecution): string[] {
+  const n = suivi.renumerotes
+  if (n === 0) return []
+  return [
+    n === 1
+      ? '1 élément a reçu un nouvel identifiant : il existait ailleurs.'
+      : `${String(n)} éléments ont reçu un nouvel identifiant : ils existaient ailleurs.`,
+  ]
+}
+
+/** `resultat` augmenté des avertissements de l'exécution, s'il y en a. */
+export function avecAvertissements(
+  resultat: MergeResult,
+  suivi: SuiviExecution,
+): MergeResult {
+  const avertissements = avertissementsExecution(suivi)
+  return avertissements.length === 0
+    ? resultat
+    : { ...resultat, avertissements }
 }
 
 /** Identifiant local d'un chapitre cible ; jette si le plan est incohérent. */
@@ -399,13 +479,16 @@ async function appliquerPlanifie(
 
   // (c) écritures, dans l'ordre du plan — sans points auto : l'instantané
   // de fusion vient d'être pris.
-  await sansPointsAuto(() => executerPlan(classeurId, plan.actions))
+  const suivi: SuiviExecution = { renumerotes: 0 }
+  await sansPointsAuto(() =>
+    executerPlan(classeurId, plan.actions, ECRIVAIN_SERVICE, suivi),
+  )
 
   // (d) élagage
   await elaguerHistorique(classeurId)
 
   // (e)
-  return plan.resultat
+  return avecAvertissements(plan.resultat, suivi)
 }
 
 /**

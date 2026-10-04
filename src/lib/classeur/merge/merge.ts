@@ -138,6 +138,11 @@ export interface MergeResult {
   unchanged: number
   skipped: number
   deleted: number
+  /**
+   * Remarques de l'EXÉCUTION (jamais posées par le plan) : créations
+   * réessayées sans uuid, voir `executerPlan`. Absent si rien à dire.
+   */
+  avertissements?: string[]
 }
 
 export type ActionApercu = 'insert' | 'update' | 'unchanged' | 'skip' | 'delete'

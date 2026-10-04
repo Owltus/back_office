@@ -71,7 +71,8 @@ function bilanFusion(r: MergeResult): string {
     parts.push(`${r.skipped} ignoré${r.skipped > 1 ? 's' : ''}`)
   if (r.deleted > 0)
     parts.push(`${r.deleted} supprimé${r.deleted > 1 ? 's' : ''}`)
-  return `Fusion terminée : ${parts.join(', ')}.`
+  const avertissements = (r.avertissements ?? []).map((a) => ` ${a}`).join('')
+  return `Fusion terminée : ${parts.join(', ')}.${avertissements}`
 }
 
 /**

@@ -27,8 +27,10 @@
 import {
   chargerEtatLocal,
   elaguerHistorique,
+  avecAvertissements,
   executerPlan,
 } from '#/lib/classeur/merge/apply.ts'
+import type { SuiviExecution } from '#/lib/classeur/merge/apply.ts'
 import type { MergeResult } from '#/lib/classeur/merge/merge.ts'
 import { planifierFusion } from '#/lib/classeur/merge/merge.ts'
 import {
@@ -90,12 +92,13 @@ export async function restaurerInstantane(
   // Champs du classeur (le plan ne couvre que chapitres et éléments), puis
   // le plan — sans points auto : le point de sécurité vient d'être pris.
   const plan = planifierFusion(local, snapshot, { replace: true })
+  const suivi: SuiviExecution = { renumerotes: 0 }
   await sansPointsAuto(async () => {
     await updateClasseur(classeurId, snapshot.classeur)
-    await executerPlan(classeurId, plan.actions)
+    await executerPlan(classeurId, plan.actions, undefined, suivi)
   })
   await elaguerHistorique(classeurId)
-  return plan.resultat
+  return avecAvertissements(plan.resultat, suivi)
 }
 
 /** Suppression PHYSIQUE d'une entrée (RLS : gestion seule ; 42501 sinon). */

@@ -347,7 +347,7 @@ export function EchangeJsonDialog({
               ? ` ${pluriel(r.ignores, `${comptes.nom} ignoré`, `${comptes.noms} ignorés`)} à votre demande.`
               : ''
           setApplique(
-            `Import appliqué : ${r.inserted} ajout(s), ${r.updated} modification(s), ${r.deleted} suppression(s).${ignores}`,
+            `Import appliqué : ${r.inserted} ajout(s), ${r.updated} modification(s), ${r.deleted} suppression(s).${ignores}${(r.avertissements ?? []).map((a) => ` ${a}`).join('')}`,
           )
           setTexte('')
           setRefuses(new Set())

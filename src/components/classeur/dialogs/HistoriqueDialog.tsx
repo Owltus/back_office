@@ -235,7 +235,7 @@ export function HistoriqueDialog({
             ? 'Le classeur est déjà dans cet état : rien à restaurer.'
             : resultat.inserted + resultat.updated + resultat.deleted === 0
               ? 'Point restauré : seuls le nom, l’icône ou l’établissement du classeur différaient.'
-              : `Point restauré : ${resultat.inserted} ajouté(s), ${resultat.updated} modifié(s), ${resultat.deleted} supprimé(s).`,
+              : `Point restauré : ${resultat.inserted} ajouté(s), ${resultat.updated} modifié(s), ${resultat.deleted} supprimé(s).${(resultat.avertissements ?? []).map((a) => ` ${a}`).join('')}`,
         )
       },
     })
