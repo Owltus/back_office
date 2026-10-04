@@ -238,12 +238,15 @@ function CorpsModifies({
               <Skeleton key={i} className="h-12 w-full rounded-lg" />
             ))}
           </div>
-        ) : groupes.length === 0 ? (
+        ) : groupes.length === 0 && !tronque ? (
           <p className="text-sm text-muted-foreground">
             Aucune modification depuis le {dateLisible}.
           </p>
         ) : (
           <div className="flex flex-col gap-4">
+            {/* Plafond atteint : jamais « aucune modification », même si
+                les versions lues ne concernent que des documents supprimés
+                (les plus anciennes, celles qui manquent, pouvaient compter). */}
             {tronque && (
               <Alert>
                 <AlertCircle />

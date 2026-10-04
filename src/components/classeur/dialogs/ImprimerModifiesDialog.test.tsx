@@ -199,4 +199,34 @@ describe('ImprimerModifiesDialog', () => {
     ).toEqual(['document:90@Accueil'])
     expect(depuis).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:00:00\.000Z$/)
   })
+
+  it('plafond atteint sans élément visible : prévient, n’affirme pas « aucune modification »', async () => {
+    etat.contenu = true
+    // 1000 versions (le plafond), toutes d'un document absent du classeur
+    // (supprimé) : les plus anciennes, non lues, pouvaient compter.
+    etat.versions = Promise.resolve(
+      Array.from({ length: 1000 }, (_, i) => ({
+        id: i + 1,
+        document_id: 999,
+        origine: 'enregistrement' as const,
+        auteur: '',
+        created_at: '2098-12-31T08:00:00Z',
+        version: '1.1',
+        raison: '',
+      })),
+    )
+    const garde = contenu.signature_sheets
+    contenu.signature_sheets = []
+    try {
+      ouvrir()
+      await screen.findByText(/la liste peut être incomplète/)
+      expect(screen.queryByText(/Aucune modification/)).toBeNull()
+      expect(screen.getByRole('button', { name: /Aperçu/ })).toHaveProperty(
+        'disabled',
+        true,
+      )
+    } finally {
+      contenu.signature_sheets = garde
+    }
+  })
 })
