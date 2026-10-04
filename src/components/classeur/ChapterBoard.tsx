@@ -74,6 +74,7 @@ import {
   ItemPages,
 } from '#/components/classeur/print/ItemPages.tsx'
 import { PrintPreview } from '#/components/classeur/print/PrintPreview.tsx'
+import { BoutonImprimerSelection } from '#/components/classeur/BoutonImprimerSelection.tsx'
 import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
@@ -92,6 +93,7 @@ import {
 } from '#/lib/classeur/naming.ts'
 import { cleRef, deplacer, parseCleRef, refsDe } from '#/lib/classeur/ordre.ts'
 import type { ItemRef } from '#/lib/classeur/ordre.ts'
+import { elementsAImprimer } from '#/lib/classeur/selectionImpression.ts'
 import { createItem, moveItems } from '#/lib/classeur/service.ts'
 import { contientSansAccents, stripAccents } from '#/lib/classeur/slug.ts'
 import { ITEM_KINDS, flattenItems } from '#/lib/classeur/types.ts'
@@ -101,8 +103,16 @@ import { cn } from '#/lib/utils.ts'
 /** Stratégie de tri sans effet : la grille ne bouge pas en mode sélection. */
 const strategieInerte = () => null
 
-/** Ce que montre l'aperçu avant impression : un élément, ou tout le chapitre. */
-type Apercu = { type: 'item'; item: ChapterItem } | { type: 'tout' } | null
+/**
+ * Ce que montre l'aperçu avant impression : un élément, tout le chapitre, ou
+ * les éléments cochés (étape 4, calculés à l'affichage depuis la sélection :
+ * un élément disparu entre-temps est ignoré).
+ */
+type Apercu =
+  | { type: 'item'; item: ChapterItem }
+  | { type: 'tout' }
+  | { type: 'selection' }
+  | null
 
 /**
  * Page d'un chapitre — portée de Registre (`ChapterPage`, 940 l.) :
@@ -169,6 +179,11 @@ export function ChapterBoard({
   const { registerHandler, unregisterHandler, activeDragType } =
     useDndRegistry()
   const selectionDragging = selection.selectionMode && activeDragType !== null
+  /** Les éléments cochés à imprimer, dans l'ordre du chapitre. */
+  const aImprimer = useMemo(
+    () => elementsAImprimer(items, selection.selected),
+    [items, selection.selected],
+  )
 
   // Dialogues
   const [createOpen, setCreateOpen] = useState(false)
@@ -434,7 +449,7 @@ export function ChapterBoard({
         <div className="flex shrink-0 items-center gap-2">
           {selection.selectionMode ? (
             /* Mode sélection : compteur puis UN groupe (tout sélectionner,
-               supprimer la sélection, annuler). */
+               déplacer, imprimer, supprimer la sélection, annuler). */
             <>
               {/* Sous 640 px, compteur retiré de l'écran (demande
                   utilisateur : inutile et encombrant) ; il reste annoncé aux
@@ -491,6 +506,11 @@ export function ChapterBoard({
                     </DropdownMenuContent>
                   </DropdownMenu>
                 )}
+                {/* Lecture suffit : imprimer n'écrit rien. */}
+                <BoutonImprimerSelection
+                  count={aImprimer.length}
+                  onClick={() => setApercu({ type: 'selection' })}
+                />
                 {canWrite && (
                   <IconAction
                     label="Supprimer la sélection"
@@ -758,7 +778,9 @@ export function ChapterBoard({
         )}
       </div>
 
-      {/* Aperçu avant impression : un élément ou le chapitre entier */}
+      {/* Aperçu avant impression : un élément, le chapitre entier ou la
+          sélection. Le fermer ne vide PAS la sélection (on peut la retoucher
+          et réimprimer). */}
       <PrintPreview
         open={apercu !== null}
         onOpenChange={(open) => {
@@ -767,11 +789,26 @@ export function ChapterBoard({
         title={
           apercu?.type === 'tout'
             ? `${chapter?.label ?? 'Chapitre'} — chapitre complet`
-            : apercu?.type === 'item'
-              ? apercu.item.data.title || 'Sans titre'
-              : undefined
+            : apercu?.type === 'selection'
+              ? `${chapter?.label ?? 'Chapitre'} — ${aImprimer.length} élément${aImprimer.length > 1 ? 's' : ''} sélectionné${aImprimer.length > 1 ? 's' : ''}`
+              : apercu?.type === 'item'
+                ? apercu.item.data.title || 'Sans titre'
+                : undefined
         }
       >
+        {/* Sélection : chaque élément avec sa propre numérotation, sans
+            page de garde ni sommaire. */}
+        {apercu?.type === 'selection' &&
+          aImprimer.map((it) => (
+            <ItemPages
+              key={cleRef(it.kind, it.data.id)}
+              item={it}
+              chapterName={chapter?.label}
+              classeurName={classeurName}
+              establishment={establishment}
+              periodicites={periodicites}
+            />
+          ))}
         {apercu?.type === 'item' && (
           <ItemPages
             item={apercu.item}
