@@ -54,7 +54,7 @@ tableau des 17 questions d'origine est en [annexe](#annexe--les-17-questions-dor
 | 7a | [7a-transfert-plan.md](./7a-transfert-plan.md) | Transfert : plan pur | 6 | P2 | 3 h | `transfert.ts` prouvé | |
 | 7b | [7b-transfert-service.md](./7b-transfert-service.md) | Transfert : service, `moveItems` corrigé | 7a | P2 | 5 h | Écriture multi-classeur sûre | ⚠ |
 | 7c | [7c-transfert-interface.md](./7c-transfert-interface.md) | Transfert : interface | 7b | P2 | 3 h | « Déplacer vers… » groupé par classeur | |
-| 9 | [9-pdf-direct.md](./9-pdf-direct.md) | PDF direct (selon le besoin) | 4, 8 | P2 | 1 h à 1,5 j | Selon décision D19 | ⚠ |
+| 9 | [9-pdf-direct.md](./9-pdf-direct.md) | PDF direct (selon le besoin) | 4, 8 | P2 | 1 h à 1,5 j | FAIT, voie A (D19) bd44445 : `<title>` « Classeur - Titre » + aide « Enregistrer au format PDF » ; vérifié Chrome sans dialogue (print espionné) | ⚠ |
 | 10 | [10-cloture.md](./10-cloture.md) | Clôture : vérifications, CLAUDE.md, revue adverse | toutes | P0 | 2 h | Tout vert, documentation à jour | ⚠ |
 
 ---
