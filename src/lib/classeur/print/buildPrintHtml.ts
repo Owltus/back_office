@@ -89,6 +89,24 @@ function feuillesDeLaPage(doc: Document): string {
   return parts.join('\n')
 }
 
+/** Marqueur posé par `DocumentPages` tant que sa pagination mesure. */
+export const SELECTEUR_PAGINATION_EN_COURS = '[data-pagination="en-cours"]'
+
+/** Message montré à l'utilisateur quand la mise en page n'a pas fini à temps. */
+export const MESSAGE_MISE_EN_PAGE_EN_COURS =
+  "La mise en page n'est pas terminée, réessayez."
+
+/**
+ * Levée quand on tente d'imprimer un aperçu dont un document mesure encore
+ * (images, schéma Mermaid) : ses pages manqueraient au document imprimé.
+ */
+export class MiseEnPageEnCours extends Error {
+  constructor() {
+    super(MESSAGE_MISE_EN_PAGE_EN_COURS)
+    this.name = 'MiseEnPageEnCours'
+  }
+}
+
 export interface OptionsImpression {
   /** Nom du fichier PDF proposé (voir `nomFichierImpression`). */
   nomFichier?: string
@@ -104,6 +122,11 @@ export function buildPrintHtml(
   options: OptionsImpression = {},
 ): string {
   const doc = scrollContainer.ownerDocument
+  // Jamais une impression incomplète : un document encore en mesure n'a
+  // pas (ou pas toutes) ses pages A4 dans le conteneur.
+  if (scrollContainer.querySelector(SELECTEUR_PAGINATION_EN_COURS)) {
+    throw new MiseEnPageEnCours()
+  }
   const pages = scrollContainer.querySelectorAll<HTMLElement>('.a4-page')
   if (pages.length === 0) throw new Error('Aucune page A4 trouvée')
 

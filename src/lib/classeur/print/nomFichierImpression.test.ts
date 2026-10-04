@@ -104,6 +104,28 @@ describe('nomFichierImpression — exemples', () => {
     expect(nomFichierImpression({ titre: 'CON' })).toBe('Classeur - CON')
   })
 
+  it('nom réservé AVEC une extension, quelle que soit la casse → préfixé', () => {
+    for (const titre of [
+      'NUL.txt',
+      'COM1.x',
+      'con.pdf',
+      'Lpt9.tar.gz',
+      'aux.',
+      'PrN.doc',
+      'nul .txt',
+    ]) {
+      const nom = nomFichierImpression({ titre })
+      expect(nom.startsWith(`${NOM_REPLI} - `)).toBe(true)
+    }
+    expect(nomFichierImpression({ titre: 'NUL.txt' })).toBe(
+      'Classeur - NUL.txt',
+    )
+    // Pas un nom réservé : seulement un préfixe commun.
+    expect(nomFichierImpression({ titre: 'Console.pdf' })).toBe('Console.pdf')
+    expect(nomFichierImpression({ titre: 'COM.txt' })).toBe('COM.txt')
+    expect(nomFichierImpression({ titre: 'auxiliaire' })).toBe('auxiliaire')
+  })
+
   it('très long : borné, sans couper un émoji ni finir par une espace', () => {
     const titre = `${'mot '.repeat(29)}🌞🌞 suite`
     const nom = nomFichierImpression({ titre })

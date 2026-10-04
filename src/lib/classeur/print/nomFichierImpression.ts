@@ -30,8 +30,12 @@ const INTERDITS = /[\\/:*?"<>|]/g
 const CONTROLES = /[\u0000-\u001f\u007f-\u009f]/g
 /** Largeur nulle et contrôles de direction (U+202E maquille une extension). */
 const INVISIBLES = /[​-‏‪-‮⁠-⁩﻿]/g
-/** Noms réservés par Windows (un fichier « CON.pdf » est refusé). */
-const RESERVES = /^(con|prn|aux|nul|com\d|lpt\d)$/i
+/**
+ * Noms réservés par Windows, SEULS OU AVEC une extension (« CON.pdf »,
+ * « NUL.txt », « com1.x » sont tous refusés), sans tenir compte de la casse
+ * ni des espaces avant le point.
+ */
+const RESERVES = /^(con|prn|aux|nul|com\d|lpt\d)\s*(\..*)?$/i
 /** Ce qui ne doit ni commencer ni finir un nom. */
 const BORDS = /^[\s.-]+|[\s.-]+$/g
 

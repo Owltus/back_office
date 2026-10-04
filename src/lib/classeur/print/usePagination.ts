@@ -13,6 +13,13 @@ export type { PageData }
 export interface PaginationResult {
   pages: PageData[]
   measuring: boolean
+  /**
+   * Vrai tant qu'une mesure est en vol, Y COMPRIS une re-pagination (où
+   * `measuring` reste faux pour garder les anciennes pages à l'écran). Le
+   * conteneur du document en tire le marqueur `data-pagination="en-cours"`
+   * que l'impression attend (`printIframe.ts`).
+   */
+  enCours: boolean
   measureRef: (node: HTMLDivElement | null) => void
 }
 
@@ -37,6 +44,10 @@ export function usePagination(
 ): PaginationResult {
   const [pages, setPages] = useState<PageData[]>([])
   const [measuring, setMeasuring] = useState(true)
+  const [enCours, setEnCours] = useState(true)
+  // Numéro de la dernière mesure lancée : une mesure périmée qui se
+  // termine ne lève pas le marqueur d'une plus récente encore en vol.
+  const generation = useRef(0)
   const lastKey = useRef<string | undefined>(undefined)
   const hasPaginated = useRef(false)
 
@@ -48,6 +59,9 @@ export function usePagination(
       const cle = `${contentKey ?? ''}|${String(contentHeightMm)}`
       if (lastKey.current === cle && hasPaginated.current) return
       lastKey.current = cle
+      generation.current += 1
+      const mienne = generation.current
+      setEnCours(true)
 
       // Ne montrer le spinner que lors de la première pagination,
       // pas lors des re-paginations (pour éviter de détruire le DOM et le scroll)
@@ -67,6 +81,7 @@ export function usePagination(
             setPages(pageData)
             setMeasuring(false)
             hasPaginated.current = true
+            if (mienne === generation.current) setEnCours(false)
           },
         )
       })
@@ -74,23 +89,40 @@ export function usePagination(
     [contentKey, contentHeightMm],
   )
 
-  return { pages, measuring, measureRef }
+  return { pages, measuring, enCours, measureRef }
 }
+
+/** Délai au-delà duquel on pagine avec les schémas déjà rendus. */
+export const MERMAID_ATTENTE_MAX_MS = 10000
 
 /**
  * Attend que tous les diagrammes Mermaid soient rendus dans le conteneur.
- * Résout immédiatement si aucun diagramme n'est en attente.
+ * Résout immédiatement si aucun diagramme n'est en attente, et au plus tard
+ * après `maxMs` (audit du 2026-10-04 : sans borne, un schéma qui ne se
+ * rendait jamais bloquait la pagination, donc l'impression, pour toujours)
+ * — on pagine alors avec ce qui est rendu, et on le signale en console.
  */
-function waitForMermaid(container: HTMLElement): Promise<void> {
+export function waitForMermaid(
+  container: HTMLElement,
+  maxMs: number = MERMAID_ATTENTE_MAX_MS,
+): Promise<void> {
   const pending = container.querySelectorAll('[data-mermaid-status="pending"]')
   if (pending.length === 0) return Promise.resolve()
 
   return new Promise((resolve) => {
+    const minuteur = setTimeout(() => {
+      observer.disconnect()
+      console.warn(
+        `[classeur] Schéma Mermaid toujours en cours de rendu après ${String(maxMs)} ms : pagination avec ce qui est rendu.`,
+      )
+      resolve()
+    }, maxMs)
     const observer = new MutationObserver(() => {
       const still = container.querySelectorAll(
         '[data-mermaid-status="pending"]',
       )
       if (still.length === 0) {
+        clearTimeout(minuteur)
         observer.disconnect()
         resolve()
       }

@@ -143,7 +143,7 @@ export function DocumentPages({
   )
   // La page réserve la ligne de sous-titre dès que `subtitle` est défini
   // (`A4Page`) : le budget de pagination doit la retirer, sinon débordement.
-  const { pages, measuring, measureRef } = usePagination(
+  const { pages, measuring, enCours, measureRef } = usePagination(
     processedContent,
     subtitle !== undefined
       ? DOCUMENT_CONTENT_HEIGHT_WITH_SUBTITLE_MM
@@ -210,6 +210,12 @@ export function DocumentPages({
           <div dangerouslySetInnerHTML={{ __html: page.html }} />
         </A4Page>
       ))}
+
+      {/* Marqueur « pagination en cours » (audit du 2026-10-04) : tant
+          qu'il est là, `PrintPreview` n'imprime pas et `printViaIframe`
+          attend — sinon ce document manquerait au document imprimé.
+          `hidden` : aucune place dans la mise en page. */}
+      {enCours && <span hidden data-pagination="en-cours" />}
 
       {/* Spinner uniquement lors du tout premier chargement */}
       {measuring && pages.length === 0 && (

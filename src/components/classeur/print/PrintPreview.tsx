@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode, RefObject } from 'react'
 import { Printer } from 'lucide-react'
 
@@ -10,6 +10,10 @@ import {
   DialogDescription,
   DialogTitle,
 } from '#/components/ui/dialog.tsx'
+import {
+  MiseEnPageEnCours,
+  SELECTEUR_PAGINATION_EN_COURS,
+} from '#/lib/classeur/print/buildPrintHtml.ts'
 import { printViaIframe } from '#/lib/classeur/print/printIframe.ts'
 
 interface PrintPreviewProps {
@@ -55,16 +59,50 @@ export function PrintPreview({
   const scrollRef = containerRef ?? innerRef
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Audit du 2026-10-04 : imprimer pendant qu'un document mesure encore
+  // (images, schéma Mermaid) l'omettait du document imprimé, sans un mot.
+  // Le bouton attend que plus aucun marqueur `data-pagination="en-cours"`
+  // ne reste dans l'aperçu (`printViaIframe` attend aussi, borné).
+  const [noeud, setNoeud] = useState<HTMLDivElement | null>(null)
+  const [preparation, setPreparation] = useState(false)
+  const poserRef = useCallback(
+    (n: HTMLDivElement | null) => {
+      scrollRef.current = n
+      setNoeud(n)
+    },
+    [scrollRef],
+  )
+
+  useEffect(() => {
+    if (!noeud) return
+    const relire = () =>
+      setPreparation(
+        noeud.querySelector(SELECTEUR_PAGINATION_EN_COURS) !== null,
+      )
+    relire()
+    const observer = new MutationObserver(relire)
+    observer.observe(noeud, {
+      attributes: true,
+      attributeFilter: ['data-pagination'],
+      childList: true,
+      subtree: true,
+    })
+    return () => observer.disconnect()
+  }, [noeud])
 
   const handlePrint = async () => {
     const container = scrollRef.current
-    if (!container || busy) return
+    if (!container || busy || preparation) return
     setBusy(true)
     setError(null)
     try {
       await printViaIframe(container, { nomFichier })
-    } catch {
-      setError("Impression impossible. Réessayez ou fermez l'aperçu.")
+    } catch (err) {
+      setError(
+        err instanceof MiseEnPageEnCours
+          ? err.message
+          : "Impression impossible. Réessayez ou fermez l'aperçu.",
+      )
     } finally {
       setBusy(false)
     }
@@ -104,11 +142,11 @@ export function PrintPreview({
             <Button
               size="sm"
               onClick={handlePrint}
-              disabled={busy}
+              disabled={busy || preparation}
               aria-label="Imprimer ou enregistrer en PDF"
             >
               <Printer className="size-4" aria-hidden />
-              Imprimer / PDF
+              {preparation ? 'Préparation…' : 'Imprimer / PDF'}
             </Button>
             <DialogClose asChild>
               <Button size="sm" variant="outline">
@@ -120,7 +158,7 @@ export function PrintPreview({
 
         {/* Zone scrollable avec les pages A4 */}
         <div
-          ref={scrollRef}
+          ref={poserRef}
           className="classeur-print-preview-scroll flex-1 overflow-y-auto bg-muted/50 p-6"
         >
           {/* `items-center-safe` : une page plus large que l'écran (téléphone)

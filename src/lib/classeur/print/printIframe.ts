@@ -1,4 +1,6 @@
 import {
+  MiseEnPageEnCours,
+  SELECTEUR_PAGINATION_EN_COURS,
   buildPrintHtml,
   titreImpression,
 } from '#/lib/classeur/print/buildPrintHtml.ts'
@@ -82,10 +84,51 @@ function avecDelai(promesse: Promise<unknown>, ms: number): Promise<void> {
   })
 }
 
+/** Délai maximal d'attente de la fin de la pagination avant d'abandonner. */
+export const PAGINATION_ATTENTE_MAX_MS = 15000
+
+/**
+ * Résout quand plus aucun document du conteneur ne mesure (marqueur
+ * `data-pagination="en-cours"` de `DocumentPages`), et LÈVE
+ * `MiseEnPageEnCours` au bout de `maxMs` — jamais une impression
+ * incomplète, jamais une attente sans fin (Chrome suspend
+ * `requestAnimationFrame` dans un onglet caché : la mesure peut ne pas
+ * finir). Aucune boucle : un MutationObserver et un minuteur.
+ */
+export function attendrePagination(
+  conteneur: HTMLElement,
+  maxMs: number = PAGINATION_ATTENTE_MAX_MS,
+): Promise<void> {
+  const enCours = () =>
+    conteneur.querySelector(SELECTEUR_PAGINATION_EN_COURS) !== null
+  if (!enCours()) return Promise.resolve()
+  return new Promise((resolve, reject) => {
+    const observer = new MutationObserver(() => {
+      if (enCours()) return
+      clearTimeout(minuteur)
+      observer.disconnect()
+      resolve()
+    })
+    const minuteur = setTimeout(() => {
+      observer.disconnect()
+      reject(new MiseEnPageEnCours())
+    }, maxMs)
+    observer.observe(conteneur, {
+      attributes: true,
+      attributeFilter: ['data-pagination'],
+      childList: true,
+      subtree: true,
+    })
+  })
+}
+
 export async function printViaIframe(
   scrollContainer: HTMLElement,
   options: OptionsImpression = {},
 ): Promise<void> {
+  // AVANT tout : un document qui mesure encore manquerait à l'impression.
+  await attendrePagination(scrollContainer)
+
   const iframe = document.createElement('iframe')
   iframe.style.position = 'fixed'
   iframe.style.left = '-9999px'
