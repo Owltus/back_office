@@ -45,7 +45,7 @@ tableau des 17 questions d'origine est en [annexe](#annexe--les-17-questions-dor
 |---|---|---|---|---|---|---|---|
 | 0 | [0-preparation-tests.md](./0-preparation-tests.md) | Outillage de test (Stryker, simulateur) | — | P0 | 2 h | Score de mutation de départ, simulateur partagé | |
 | 8 | [8-zoom-apercu.md](./8-zoom-apercu.md) | Zoom de l'aperçu A4 (UI/UX pensée) | 0 | P1 | 4 h | Contrôle de zoom, molette, Ctrl + 0 | |
-| 1 | [1-llm-comparaison.md](./1-llm-comparaison.md) | LLM : voir les changements, refuser un document | 0 | P0 | 6 h | Diff par document, cases, « Importer N » | ⚠ |
+| 1 | [1-llm-comparaison.md](./1-llm-comparaison.md) | LLM : voir les changements, refuser un document | 0 | P0 | 6 h | Diff par document, cases, « Importer N » — **FAIT c1381e0** (Stryker portee 83,3 %, apply 90,7 %) | ⚠ |
 | 2 | [2-llm-relecture.md](./2-llm-relecture.md) | LLM : relecture avant import | 1 | P0 | 2 h | Alertes par document dans l'aperçu | |
 | 3 | [3-llm-demandes.md](./3-llm-demandes.md) | LLM : demandes toutes prêtes | 1 (même fichier) | P1 | 3 h | Demandes cochables, `_metadata.demande` | |
 | 4 | [4-imprimer-selection.md](./4-imprimer-selection.md) | Imprimer une sélection | 0 | P1 | 2 h | « Imprimer (N) » dans la barre de sélection — FAIT a91170b | |
