@@ -1,9 +1,10 @@
 # Plan — Classeur : fonctions retenues le 2026-10-04
 
-> **NON EXÉCUTÉ** — plan réorganisé le 2026-10-04 (5 agents d'exploration,
-> critique socratique, synthèse « sans lisser »). Aucune ligne de code tant
-> que l'utilisateur n'a pas tranché les questions de
-> [D-decisions.md](./D-decisions.md) et dit « go ».
+> **EXÉCUTÉ le 2026-10-04**, en autonomie, à la demande de l'utilisateur
+> (« prends tout en compte et implémente tout sans me demander »). Les
+> décisions D6-D27 ont été prises par l'assistant : voir
+> [D-decisions.md](./D-decisions.md), toutes réversibles. Rien n'est poussé,
+> aucun SQL n'a été joué, aucune écriture en base.
 
 ---
 
@@ -44,20 +45,52 @@ tableau des 17 questions d'origine est en [annexe](#annexe--les-17-questions-dor
 | # | Fichier | Phase | Dépend de | Priorité | Effort | Livrable | Critique |
 |---|---|---|---|---|---|---|---|
 | 0 | [0-preparation-tests.md](./0-preparation-tests.md) | Outillage de test (Stryker, simulateur) | — | P0 | 2 h | Score de mutation de départ, simulateur partagé | |
-| 8 | [8-zoom-apercu.md](./8-zoom-apercu.md) | Zoom de l'aperçu A4 (UI/UX pensée) | 0 | P1 | 4 h | Contrôle de zoom, molette, Ctrl + 0 | |
+| 8 | [8-zoom-apercu.md](./8-zoom-apercu.md) | Zoom de l'aperçu A4 (UI/UX pensée) | 0 | P1 | 4 h | Contrôle de zoom, molette, Ctrl + 0 — FAIT 86b7c27 (Stryker zoom 98,1 %) | |
 | 1 | [1-llm-comparaison.md](./1-llm-comparaison.md) | LLM : voir les changements, refuser un document | 0 | P0 | 6 h | Diff par document, cases, « Importer N » — **FAIT c1381e0** (Stryker portee 83,3 %, apply 90,7 %) | ⚠ |
 | 2 | [2-llm-relecture.md](./2-llm-relecture.md) | LLM : relecture avant import | 1 | P0 | 2 h | Alertes par document dans l'aperçu — **FAIT 8e78701** (Stryker relecture 71,2 → 93,65 %) | |
 | 3 | [3-llm-demandes.md](./3-llm-demandes.md) | LLM : demandes toutes prêtes | 1 (même fichier) | P1 | 3 h | Demandes cochables, `_metadata.demande` — **FAIT 2b0c4df** (7 demandes + champ libre, rien mémorisé ; Stryker llmDemandes 100 %, consignes 65,2 → 100 %) | |
 | 4 | [4-imprimer-selection.md](./4-imprimer-selection.md) | Imprimer une sélection | 0 | P1 | 2 h | « Imprimer (N) » dans la barre de sélection — FAIT a91170b | |
 | 5 | [5-imprimer-modifies.md](./5-imprimer-modifies.md) | Imprimer ce qui a changé depuis une date | 4 | P1 | 4 h (+ SQL éventuel) | Carte d'accueil, liste, aperçu — FAIT 8753e48 (aucun SQL : explain 0,19 ms, D30 sans index) | ⚠ |
 | 6 | [6-corbeille.md](./6-corbeille.md) | Corbeille | 0 | P1 | 4 h | Carte d'accueil, Restaurer — FAIT 9389d46 (restaurerItem/Chapter : option corbeille, fin de chapitre, refus RLS détecté, garde sur le classeur ; Stryker corbeille.ts 100 %) | ⚠ |
-| 7a | [7a-transfert-plan.md](./7a-transfert-plan.md) | Transfert : plan pur | 6 | P2 | 3 h | `transfert.ts` prouvé | |
+| 7a | [7a-transfert-plan.md](./7a-transfert-plan.md) | Transfert : plan pur | 6 | P2 | 3 h | `transfert.ts` prouvé — FAIT a4276b3 (Stryker 100 %) | |
 | 7b | [7b-transfert-service.md](./7b-transfert-service.md) | Transfert : service, `moveItems` corrigé | 7a | P2 | 5 h | Écriture multi-classeur sûre — FAIT 4454de8 (moveItems/updateItem/ecrireDocumentVersionne : refus RLS = 42501, point origine + arrivée) + c620968 (`transfertExecution.ts`, `useTransfererItems` ; simulateur à RLS modélisée sur pg_policies, pannes à chaque appel × refus exhaustifs, mutations 9/9 + 13/13) | ⚠ |
 | 7c | [7c-transfert-interface.md](./7c-transfert-interface.md) | Transfert : interface | 7b | P2 | 3 h | « Déplacer vers… » groupé par classeur — FAIT 013941c (menu partagé sélection + carte, « Vers un autre classeur… » → `TransfertDialog` : classeur, chapitre, Déplacer / Copier, résumé images, confirmation + lien ; 17 tests jsdom, mutations filtre de droits / garde canWrite attrapées ; navigateur sans écrire, classeur 24 ch. 34) | |
 | 9 | [9-pdf-direct.md](./9-pdf-direct.md) | PDF direct (selon le besoin) | 4, 8 | P2 | 1 h à 1,5 j | FAIT, voie A (D19) bd44445 : `<title>` « Classeur - Titre » + aide « Enregistrer au format PDF » ; vérifié Chrome sans dialogue (print espionné) | ⚠ |
-| 10 | [10-cloture.md](./10-cloture.md) | Clôture : vérifications, CLAUDE.md, revue adverse | toutes | P0 | 2 h | Tout vert, documentation à jour | ⚠ |
+| 10 | [10-cloture.md](./10-cloture.md) | Clôture : vérifications, CLAUDE.md, revue adverse | toutes | P0 | 2 h | FAIT — voir « Bilan de clôture » | ⚠ |
 
 ---
+
+## Bilan de clôture (étape 10)
+
+- **Revue adverse** en trois zones, défauts reproduits par test avant
+  correction :
+  - import LLM (2b91650) : moitié de document perdue quand un LLM scinde un
+    document (E9), résumé faux après un refus, accolade avant le JSON ;
+  - transfert / corbeille (b3911c2, 8b4b6b9) : uuid unique sur toute la table
+    (point de restauration de l'origine non restaurable après un
+    déplacement), cibles proposées malgré une erreur de lecture des droits ;
+  - impression / zoom (7f360cf, 7c610aa) : AltGr avalé par le zoom, état
+    vide affirmé sur une liste tronquée.
+- **Correctifs complémentaires** :
+  - impression bloquée tant que la pagination n'est pas finie (d318790) ;
+  - portée d'un import de chapitre, E10 / E11, « Importer classeur » sans
+    uuid (848aaa8), réessai sans uuid sur 23505 (cd4ef9b) ;
+  - toutes les écritures du service relues (95d985f) ;
+  - droits fermés tant que les exceptions ne sont pas lues (74a5f2b, 450534f) ;
+  - import de fichiers rafraîchi après un échec (c72f40a), lint (f9d05eb).
+- **Contrôles** : 1990 tests verts, `tsc` et `build` OK, lint propre sur les
+  fichiers du chantier (dette de lint ancienne ailleurs inchangée).
+- **Reste à faire par l'utilisateur** (écritures réelles, interdites à
+  l'assistant) :
+  - un import LLM avec un document refusé ;
+  - une restauration depuis la corbeille ;
+  - un déplacement et une copie vers un autre classeur ;
+  - un vrai « Enregistrer au format PDF ».
+- **Ouvert** :
+  - un document restauré ou transféré n'apparaît pas dans « Imprimer les
+    modifications », faute de nouvelle version ;
+  - le squelette de l'accueil dessine 10 cartes, un lecteur en voit 7 ;
+  - une copie interrompue puis relancée recopie tout.
 
 ## Ordre d'exécution
 

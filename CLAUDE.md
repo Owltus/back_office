@@ -9,7 +9,11 @@ Parking, PDJ, Affichage, Rapprochement/Caisse (à venir).
 - **TanStack Start** (SSR) + **TanStack Router** (routing par fichier) + TanStack Query
 - **React 19**, TypeScript, **Tailwind CSS v4**, **shadcn/ui** (thème dark navy forcé sur `<html>`)
 - **Supabase** (Auth + PostgreSQL + RLS + Storage)
-- Recharts, papaparse, html2canvas (pour l'onglet RepJour)
+- Recharts, papaparse. ⚠ html2canvas n'est PLUS installé (constaté le
+  2026-10-04 : aucun import dans `src`, `lib/repjour/email.ts` n'existe plus ;
+  seuls des commentaires de `reportHtml.ts` en parlent). La 1.4.1 ne lisait
+  pas les couleurs `oklch` de Tailwind v4 : ne pas la réintroduire sans un
+  équivalent qui les lit.
 
 ## Backend Supabase — DÉDIÉ à cette app (prod live)
 
@@ -1401,6 +1405,78 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   doucement reste lisible et modifiable par ses ayants droit (seule
   l'interface le masque) ; déplacer un chapitre vers son propre classeur
   en garde l'écriture après un retrait de droits.
+- **FONCTIONS DU 2026-10-04** (plan `plan/classeur-fonctions-2026-10-04/`,
+  exécuté en autonomie à la demande de l'utilisateur ; décisions D6-D27 PRISES
+  PAR L'ASSISTANT et listées dans `D-decisions.md`, toutes réversibles — à
+  revoir avec l'utilisateur). Aucun SQL joué, aucune écriture en base.
+  - **Import LLM** (`EchangeJsonDialog`, `ApercuImport.tsx`, `detail/DiffTexte.tsx`
+    extrait de l'Historique, noir et blanc) : diff par document, case pour
+    refuser, « version prévue », « N ignorés à votre demande ». Refus par clé
+    stable (`cleAction` : `kind:id`, création `nouveau:kind:position:titre#n`),
+    filtré DANS le planificateur (`filtrerPlan`) avant le test « aucune
+    action » et avant le point de restauration : tout refuser = aucune
+    écriture ni point. Relecture avant import (`alertesRelecture(…, 'import')`,
+    image hors médiathèque = « inventée par le LLM ? », `a-inserer` jamais,
+    aucune alerte d'image tant que la médiathèque charge). Demandes toutes
+    prêtes (`llmDemandes.ts`, `_metadata.demande` posée SEULEMENT si une
+    demande existe, rien mémorisé — poste partagé).
+  - **Fusion — E9 à E11** (en tête de `merge.ts`) : un élément ou un chapitre
+    local n'est apparié qu'UNE fois (un LLM qui coupe un document en deux
+    gardait l'uuid sur les deux moitiés : la 2e écrasait la 1re, moitié
+    perdue) ; un apparié par titre n'adopte plus l'uuid du fichier ; en
+    portée chapitre, un uuid d'un élément d'un AUTRE chapitre est retiré
+    (créé comme nouveau + avertissement) — avant, il était déplacé et écrasé.
+    ⚠ **`uuid` est UNIQUE sur TOUTE la table** (4 familles, chapitres,
+    images), pas par classeur : « Importer classeur » écrit désormais ses
+    créations SANS uuid (il échouait en 23505 sur l'export d'un classeur
+    existant), un élément déplacé vers un autre classeur reçoit un uuid NEUF
+    (sinon le point de restauration de l'origine ne se restaurait plus :
+    23505) — la règle « uuid jamais réécrit » a donc UNE exception, le
+    transfert entre classeurs. Filet général (`executerPlan`,
+    `estDoublonUuid`) : une CRÉATION refusée pour un uuid déjà pris ailleurs
+    (export d'un autre classeur fusionné, restauration) est réessayée UNE
+    fois sans uuid, avec « N éléments ont reçu un nouvel identifiant » ;
+    jamais pour une autre contrainte ni un 42501.
+  - **Impression** : sélection d'un chapitre (`selectionImpression.ts`,
+    ordre du chapitre), « Imprimer les modifications » depuis une date
+    (versions de documents, `updated_at` pour les feuilles ; minuit de
+    Paris ; clé `['classeur','modifies']` hors disque ; plafond 1000 signalé
+    même quand la liste est vide), nom de fichier PDF « Classeur - Titre »
+    (`nomFichierImpression`, noms réservés Windows avec extension) + aide
+    « Enregistrer au format PDF » (D19 = A ; aucun PDF généré). ⚠ On
+    n'imprime plus pendant la pagination : `data-pagination="en-cours"` posé
+    par `DocumentPages`, bouton « Préparation… », `attendrePagination` (15 s),
+    `waitForMermaid` borné à 10 s — avant, un document dont les images ou le
+    schéma n'étaient pas prêts MANQUAIT à l'impression sans message.
+  - **Zoom de l'aperçu** (éditeur seulement) : `lib/classeur/zoom.ts`,
+    `useZoomApercu`, `ZoomApercu.tsx` ; Ctrl + molette / Ctrl + 0 / = / −
+    seulement au-dessus de l'aperçu, ⚠ jamais avec Alt (AltGr = Ctrl + Alt
+    sous Windows : le « @ » AZERTY était avalé) ; mémorisé par poste.
+  - **Corbeille** (`corbeille.ts`, `CorbeilleDialog`, carte avec le droit
+    d'écriture) : restauration en FIN de chapitre, orphelin avec son
+    chapitre ou un autre (`OptionsCorbeille`, `restaurerAvecChapitre`).
+    ⚠ `avantEcriture` passait par `fetchItem`, qui exclut les supprimés : le
+    point auto d'une restauration était SAUTÉ en silence.
+  - **Transfert vers un autre classeur** (`transfert.ts` pur, 
+    `transfertExecution.ts`, `TransfertDialog`, `MenuDeplacerVers`) :
+    déplacer (update `chapter_id`, historique suivi) ou copier (version 1.0) ;
+    écriture exigée des DEUX côtés ; images copiées par `storage.copy`
+    (affichage + original, jamais `upsert`), chemins réécrits SANS toucher au
+    cadre (pas `remplacementImage`) ; points des deux classeurs ; retour
+    arrière des copies sur échec. La garde des points oublie la résolution
+    élément → classeur après un déplacement.
+  - **Fiabilité** : TOUTES les écritures du service sont relues (0 ligne =
+    42501), y compris `moveItems`, `updateItem`, `ecrireDocumentVersionne`,
+    suppressions douces (`supprimerDoucement` : déjà supprimé = succès, date
+    du collègue gardée), réordonnancements, restaurations de la fusion.
+    `useDroitsClasseur` est tout `false` tant que les exceptions d'accès ne
+    sont pas lues (avant : erreur de lecture = droits ouverts).
+  - Tests : simulateur PostgREST partagé `lib/classeur/test/simulateurSupabase.ts`
+    (RLS ligne à ligne, unicité émulable par `check`, stockage, pannes) ;
+    Stryker étendu à `lib/classeur` (départ 71,9 %). À faire par
+    l'UTILISATEUR (écritures réelles) : un import avec refus, une
+    restauration depuis la corbeille, un déplacement et une copie vers un
+    autre classeur, un vrai « Enregistrer au format PDF ».
 - **Squelettes** : variante `classeur` de `RouteSkeleton`, forme choisie par
   `paramsClasseur(pathname)` (liste, tableau de bord, chapitre, détail) ;
   silhouettes `FormeClasseurListe`, `FormeClasseurDashboard`, `FormeChapitre`,
