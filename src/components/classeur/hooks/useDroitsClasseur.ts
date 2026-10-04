@@ -82,8 +82,11 @@ export function useDroitsClasseur(classeurId: number) {
   // pour être dite à l'écran (jamais un « lecture seule » muet). Un
   // rafraîchissement raté garde la dernière liste lue : pas de droits qui
   // disparaissent en pleine édition sur une panne passagère.
-  const erreurAcces = mesAcces.isError && !mesAcces.lues
-  const pret = !classeurQ.isPending && mesAcces.lues
+  // La GESTION a tout sur tout classeur, quelles que soient ses exceptions
+  // (`niveauEffectif`) : elle n'a pas à les attendre, ni à en subir l'échec.
+  const exceptionsInutiles = pagesDroits.page === 'gestion'
+  const erreurAcces = !exceptionsInutiles && mesAcces.isError && !mesAcces.lues
+  const pret = !classeurQ.isPending && (exceptionsInutiles || mesAcces.lues)
   const niveau = pret
     ? niveauEffectif(
         pagesDroits.page,
