@@ -37,12 +37,16 @@ import type {
 
 const STALE_60S = 60_000
 
-/** Liste des classeurs (non supprimés). */
-export function useClasseurs() {
+/**
+ * Liste des classeurs (non supprimés). `actif = false` : pas de lecture
+ * (dialogue fermé — base Nano, lecture à l'ouverture seulement).
+ */
+export function useClasseurs(actif = true) {
   return useQuery({
     queryKey: classeurKeys.list(),
     queryFn: fetchClasseurs,
     staleTime: STALE_60S,
+    enabled: actif,
   })
 }
 
@@ -56,13 +60,13 @@ export function useClasseur(classeurId: number) {
   })
 }
 
-/** Chapitres (non supprimés) d'un classeur, triés. */
-export function useChapters(classeurId: number) {
+/** Chapitres (non supprimés) d'un classeur, triés. `actif` : comme `useClasseurs`. */
+export function useChapters(classeurId: number, actif = true) {
   return useQuery({
     queryKey: classeurKeys.chapters(classeurId),
     queryFn: () => fetchChapters(classeurId),
     staleTime: STALE_60S,
-    enabled: Number.isInteger(classeurId),
+    enabled: actif && Number.isInteger(classeurId),
   })
 }
 

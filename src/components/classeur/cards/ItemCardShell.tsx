@@ -46,6 +46,12 @@ export interface ItemCardCommonProps {
   onPrint?: () => void
   onEdit?: () => void
   onDelete?: () => void
+  /**
+   * Menu « Déplacer vers… » de l'élément (`MenuDeplacerVers` et son bouton),
+   * posé par `ChapterBoard` avec le droit d'écriture. Clic et clavier y sont
+   * arrêtés : ils ouvriraient la page de détail ou démarreraient un glisser.
+   */
+  menuDeplacer?: ReactNode
 }
 
 interface ItemCardShellProps extends ItemCardCommonProps {
@@ -86,6 +92,7 @@ export function ItemCardShell({
   onPrint,
   onEdit,
   onDelete,
+  menuDeplacer,
   onExportMarkdown,
   children,
 }: ItemCardShellProps) {
@@ -241,6 +248,15 @@ export function ItemCardShell({
                     <Pencil />
                   </Button>
                 </Tip>
+              )}
+              {canWrite && menuDeplacer && (
+                <span
+                  className="contents"
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                >
+                  {menuDeplacer}
+                </span>
               )}
               {canWrite && onDelete && (
                 <Tip label="Supprimer">

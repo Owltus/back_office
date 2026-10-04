@@ -13,6 +13,7 @@ import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable'
 import {
   Archive,
   Braces,
+  CheckCircle2,
   CheckSquare,
   FileUp,
   FolderInput,
@@ -44,6 +45,12 @@ import { EditItemDialog } from '#/components/classeur/dialogs/EditItemDialog.tsx
 import type { EditableItem } from '#/components/classeur/dialogs/EditItemDialog.tsx'
 import { EditTrackingSheetDialog } from '#/components/classeur/dialogs/EditTrackingSheetDialog.tsx'
 import {
+  TransfertDialog,
+  messageTransfert,
+} from '#/components/classeur/dialogs/TransfertDialog.tsx'
+import type { TransfertReussi } from '#/components/classeur/dialogs/TransfertDialog.tsx'
+import { MenuDeplacerVers } from '#/components/classeur/MenuDeplacerVers.tsx'
+import {
   parseChapterDropId,
   useDndRegistry,
 } from '#/components/classeur/dnd/useDndRegistry.ts'
@@ -64,7 +71,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuTrigger,
 } from '#/components/ui/dropdown-menu.tsx'
 import { useSelection } from '#/components/classeur/hooks/useSelection.ts'
@@ -77,7 +83,6 @@ import { PrintPreview } from '#/components/classeur/print/PrintPreview.tsx'
 import { BoutonImprimerSelection } from '#/components/classeur/BoutonImprimerSelection.tsx'
 import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
-import { Tip } from '#/components/shared/Tip.tsx'
 import { Alert, AlertDescription } from '#/components/ui/alert.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
@@ -137,7 +142,7 @@ export function ChapterBoard({
   classeurId: number
   chapterId: number
 }) {
-  const { canWrite } = useDroitsClasseur(classeurId)
+  const { canWrite, niveau } = useDroitsClasseur(classeurId)
   const navigate = useNavigate()
   const invalider = useInvaliderClasseur()
 
@@ -201,6 +206,16 @@ export function ChapterBoard({
   const [apercu, setApercu] = useState<Apercu>(null)
   /** Export / réimport JSON du chapitre pour un LLM (2026-09-29). */
   const [jsonOuvert, setJsonOuvert] = useState(false)
+  /**
+   * Transfert vers un autre classeur (étape 7c) : les éléments, et s'ils
+   * viennent de la sélection (vidée après succès).
+   */
+  const [transfert, setTransfert] = useState<{
+    elements: ChapterItem[]
+    depuisSelection: boolean
+  } | null>(null)
+  /** Confirmation du dernier transfert, avec lien vers l'arrivée. */
+  const [transfere, setTransfere] = useState<TransfertReussi | null>(null)
   /** Messages des fichiers refusés au dépôt (extension, taille). */
   const [refus, setRefus] = useState<string[]>([])
 
@@ -412,6 +427,34 @@ export function ChapterBoard({
         </div>
       ))}
 
+      {transfere && (
+        <Alert>
+          <CheckCircle2 />
+          <AlertDescription className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span>{messageTransfert(transfere)}</span>
+            <Link
+              to="/classeur/$classeurId/$chapterId"
+              params={{
+                classeurId: String(transfere.classeur.id),
+                chapterId: String(transfere.chapitre.id),
+              }}
+              className="font-medium text-foreground underline underline-offset-4"
+            >
+              Ouvrir « {transfere.classeur.name} »
+            </Link>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="ml-auto"
+              aria-label="Fermer le message"
+              onClick={() => setTransfere(null)}
+            >
+              <X />
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {refus.length > 0 && (
         <ul className="list-inside list-disc rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {refus.map((m) => (
@@ -467,45 +510,39 @@ export function ChapterBoard({
                   icon={<CheckSquare />}
                   onClick={() => selection.selectAll(filtres)}
                 />
-                {/* Déplacer vers un autre chapitre : sans glisser (seule voie
-                    au doigt et sous 1024 px, où la colonne est un tiroir). */}
-                {canWrite && autresChapitres.length > 0 && (
-                  <DropdownMenu>
-                    <Tip label="Déplacer vers un autre chapitre">
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="icon-sm"
-                          aria-label="Déplacer vers un autre chapitre"
-                          disabled={
-                            selection.count === 0 || deplacement.isPending
-                          }
-                        >
-                          {deplacement.isPending ? (
-                            <Loader2 className="animate-spin" />
-                          ) : (
-                            <FolderInput />
-                          )}
-                        </Button>
-                      </DropdownMenuTrigger>
-                    </Tip>
-                    <DropdownMenuContent align="end" className="w-60">
-                      <DropdownMenuLabel>Déplacer vers…</DropdownMenuLabel>
-                      {autresChapitres.map((c) => (
-                        <DropdownMenuItem
-                          key={c.id}
-                          onSelect={() =>
-                            deplacement.mutate({
-                              refs: selection.refs,
-                              cible: c.id,
-                            })
-                          }
-                        >
-                          <span className="truncate">{c.label}</span>
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                {/* Déplacer vers un autre chapitre ou un autre classeur :
+                    sans glisser (seule voie au doigt et sous 1024 px, où la
+                    colonne est un tiroir). */}
+                {canWrite && (
+                  <MenuDeplacerVers
+                    origineId={classeurId}
+                    autresChapitres={autresChapitres}
+                    tip="Déplacer vers un autre chapitre ou classeur"
+                    onChapitre={(cible) =>
+                      deplacement.mutate({ refs: selection.refs, cible })
+                    }
+                    onAutreClasseur={() =>
+                      setTransfert({
+                        elements: items.filter((it) =>
+                          selection.selected.has(cleRef(it.kind, it.data.id)),
+                        ),
+                        depuisSelection: true,
+                      })
+                    }
+                  >
+                    <Button
+                      variant="outline"
+                      size="icon-sm"
+                      aria-label="Déplacer vers un autre chapitre ou classeur"
+                      disabled={selection.count === 0 || deplacement.isPending}
+                    >
+                      {deplacement.isPending ? (
+                        <Loader2 className="animate-spin" />
+                      ) : (
+                        <FolderInput />
+                      )}
+                    </Button>
+                  </MenuDeplacerVers>
                 )}
                 {/* Lecture suffit : imprimer n'écrit rien. */}
                 <BoutonImprimerSelection
@@ -745,6 +782,31 @@ export function ChapterBoard({
                   onPrint: () => setApercu({ type: 'item', item: it }),
                   onEdit: () => modifier(it),
                   onDelete: () => supprimer(it),
+                  menuDeplacer: canWrite ? (
+                    <MenuDeplacerVers
+                      origineId={classeurId}
+                      autresChapitres={autresChapitres}
+                      tip="Déplacer vers…"
+                      onChapitre={(cible) =>
+                        deplacement.mutate({
+                          refs: [{ kind: it.kind, id: it.data.id }],
+                          cible,
+                        })
+                      }
+                      onAutreClasseur={() =>
+                        setTransfert({ elements: [it], depuisSelection: false })
+                      }
+                    >
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label="Déplacer vers un autre chapitre ou classeur"
+                        disabled={deplacement.isPending}
+                      >
+                        <FolderInput />
+                      </Button>
+                    </MenuDeplacerVers>
+                  ) : undefined,
                 }
                 switch (it.kind) {
                   case 'document':
@@ -862,6 +924,20 @@ export function ChapterBoard({
         onOpenChange={setBulkOpen}
         refs={selection.refs}
         onDone={selection.clear}
+      />
+
+      <TransfertDialog
+        open={transfert !== null}
+        onOpenChange={(open) => {
+          if (!open) setTransfert(null)
+        }}
+        origineId={classeurId}
+        elements={transfert?.elements ?? []}
+        niveauOrigine={niveau}
+        onTransfere={(r) => {
+          if (transfert?.depuisSelection) selection.clear()
+          setTransfere(r)
+        }}
       />
 
       <EchangeJsonDialog
