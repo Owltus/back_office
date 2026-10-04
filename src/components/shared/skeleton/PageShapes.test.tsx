@@ -247,8 +247,9 @@ describe('Classeur — quatre silhouettes relevées sur les boards', () => {
     const panneaux = container.querySelectorAll('[data-accueil-panneau]')
     expect(panneaux.length).toBe(1)
     const panneau = panneaux[0]
-    expect(panneau.className).toContain('rounded-xl')
-    expect(panneau.className).toContain('divide-y')
+    // 2026-10-05 : sections SÉPARÉES par un espace, une carte chacune.
+    expect(panneau.className).toContain('gap-6')
+    expect(panneau.className).not.toContain('rounded-xl')
     const sections = Array.from(panneau.children)
     expect(
       sections.map((s) => s.querySelectorAll('[data-ligne-squelette]').length),
@@ -260,7 +261,9 @@ describe('Classeur — quatre silhouettes relevées sur les boards', () => {
       expect(s.firstElementChild?.querySelectorAll('[data-slot]').length).toBe(
         1,
       )
-      expect(s.lastElementChild?.className).toBe('divide-y divide-border/60')
+      expect(s.lastElementChild?.className).toContain('divide-y')
+      expect(s.lastElementChild?.className).toContain('rounded-xl')
+      expect(s.lastElementChild?.className).toContain('border')
     }
     // Lignes de la hauteur des vraies : h-14, carré d'icône de 32 px.
     for (const l of container.querySelectorAll('[data-ligne-squelette]')) {

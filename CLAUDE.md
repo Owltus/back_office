@@ -1300,8 +1300,12 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   **PANNEAU EN LISTE, façon page de réglages (même jour, décision
   utilisateur : la grille de tuiles 2, 2, 3, 2 était « éclatée », hauteurs
   inégales, tuile pointillée qui détonnait — ABANDONNÉE, ne pas la
-  reproposer)** : UNE carte (`PANNEAU_ACCUEIL_CLASSEUR`, sections séparées
-  d'un trait plein), quatre sections à intitulé en capitales SANS phrase
+  reproposer)** : ⚠ RÉVISÉ le 2026-10-05 (demande utilisateur : « un gap
+  entre les parties au lieu de tout fusionner ») — UNE CARTE PAR SECTION,
+  séparées par `gap-6` (`SECTIONS_ACCUEIL_CLASSEUR`), intitulé AU-DESSUS de
+  sa carte (`LIGNES_SECTION_CLASSEUR` porte la carte) ;
+  `PANNEAU_ACCUEIL_CLASSEUR` ne sert plus qu'aux résultats de recherche ;
+  quatre sections à intitulé en capitales SANS phrase
   d'aide : **Contenu** (Nouveau chapitre si écriture, carré d'icône teinté
   `primary`, pas de pointillé ; Images du classeur) ; **Imprimer** (Classeur
   complet = aperçu couverture + sommaire + chapitres, puis Télécharger le

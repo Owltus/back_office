@@ -629,9 +629,17 @@ export function FormeClasseurListe({
  */
 export const PANNEAU_ACCUEIL_CLASSEUR =
   'divide-y divide-border overflow-hidden rounded-xl border border-border bg-card'
+/**
+ * Les sections de l'accueil, SÉPARÉES par un espace (demande utilisateur du
+ * 2026-10-05 : « un gap entre les parties au lieu de tout fusionner ») :
+ * intitulé au-dessus, puis la carte de ses lignes. `PANNEAU_ACCUEIL_CLASSEUR`
+ * ne sert plus qu'aux résultats de recherche.
+ */
+export const SECTIONS_ACCUEIL_CLASSEUR = 'flex flex-col gap-6'
 export const INTITULE_SECTION_CLASSEUR =
-  'px-4 pt-4 pb-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase'
-export const LIGNES_SECTION_CLASSEUR = 'divide-y divide-border/60'
+  'px-1 pb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase'
+export const LIGNES_SECTION_CLASSEUR =
+  'divide-y divide-border/60 overflow-hidden rounded-xl border border-border bg-card'
 
 /**
  * Une ligne d'action (`LigneAction`) en silhouette : celles du squelette de
@@ -679,7 +687,7 @@ export function FormeClasseurDashboard() {
     <>
       <Skeleton className="h-9 w-full rounded-md" aria-hidden="true" />
       <div
-        className={PANNEAU_ACCUEIL_CLASSEUR}
+        className={SECTIONS_ACCUEIL_CLASSEUR}
         aria-hidden="true"
         data-accueil-panneau=""
       >

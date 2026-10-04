@@ -269,8 +269,13 @@ describe('ClasseurDashboard — en-tête fixe et panneau', () => {
         s.hasAttribute('data-section-actions'),
       ),
     ).toBe(true)
-    expect(panneau.className).toContain('divide-y')
-    expect(panneau.className).toContain('rounded-xl')
+    // 2026-10-05 : un espace entre les sections, une carte par section.
+    expect(panneau.className).toContain('gap-6')
+    expect(panneau.className).not.toContain('rounded-xl')
+    for (const s of Array.from(panneau.children)) {
+      expect(s.lastElementChild?.className).toContain('rounded-xl')
+      expect(s.lastElementChild?.className).toContain('border')
+    }
     // Alertes au-dessus du panneau, dans la même colonne.
     const message = screen.getByText('Fusion terminée')
     expect(message.parentElement).toBe(panneau.parentElement)

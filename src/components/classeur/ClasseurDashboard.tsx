@@ -50,6 +50,7 @@ import {
   LIGNES_SECTION_CLASSEUR,
   LigneActionSquelette,
   PANNEAU_ACCUEIL_CLASSEUR,
+  SECTIONS_ACCUEIL_CLASSEUR,
 } from '#/components/shared/skeleton/PageShapes.tsx'
 import { Input } from '#/components/ui/input.tsx'
 import { Skeleton } from '#/components/ui/skeleton.tsx'
@@ -413,7 +414,7 @@ export function ClasseurDashboard({
              façon page de réglages, en quatre sections. Toutes les lignes ont
              la même hauteur. La silhouette `FormeClasseurDashboard` suit
              cette structure. */
-          <div className={PANNEAU_ACCUEIL_CLASSEUR} data-accueil-panneau="">
+          <div className={SECTIONS_ACCUEIL_CLASSEUR} data-accueil-panneau="">
             {sectionContenu && (
               <SectionActions titre="Contenu">
                 {canWrite ? (
