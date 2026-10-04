@@ -78,6 +78,10 @@ tableau des 17 questions d'origine est en [annexe](#annexe--les-17-questions-dor
   - toutes les écritures du service relues (95d985f) ;
   - droits fermés tant que les exceptions ne sont pas lues (74a5f2b, 450534f) ;
   - import de fichiers rafraîchi après un échec (c72f40a), lint (f9d05eb).
+- **Mutation finale** (10 fichiers purs) : **90,07 %** contre 71,9 % au
+  départ (5 fichiers). Par fichier : portee 82,6, apply 91,8, consignes 100,
+  relecture 93,7, diff 78,7 (inchangé, sous 80), llmDemandes 100,
+  selectionImpression 96,2, corbeille 100, transfert 99,0, zoom 98,1.
 - **Contrôles** : 1990 tests verts, `tsc` et `build` OK, lint propre sur les
   fichiers du chantier (dette de lint ancienne ailleurs inchangée).
 - **Reste à faire par l'utilisateur** (écritures réelles, interdites à
