@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as ServiceModule from '#/lib/classeur/service.ts'
 
 import { SimulateurSupabase } from '#/lib/classeur/test/simulateurSupabase.ts'
 import type { ClasseurJson } from '#/lib/classeur/merge/schema.ts'
@@ -44,8 +45,7 @@ function garde(table: string, uuid: string | undefined): void {
 }
 
 vi.mock('#/lib/classeur/service.ts', async (importOriginal) => {
-  const reel =
-    await importOriginal<typeof import('#/lib/classeur/service.ts')>()
+  const reel = await importOriginal<typeof ServiceModule>()
   return {
     ...reel,
     createChapter: (async (classeurId, input, options = {}) => {

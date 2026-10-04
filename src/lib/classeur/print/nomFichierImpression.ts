@@ -29,7 +29,7 @@ const INTERDITS = /[\\/:*?"<>|]/g
 // eslint-disable-next-line no-control-regex
 const CONTROLES = /[\u0000-\u001f\u007f-\u009f]/g
 /** Largeur nulle et contrôles de direction (U+202E maquille une extension). */
-const INVISIBLES = /[​-‏‪-‮⁠-⁩﻿]/g
+const INVISIBLES = /[\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/g
 /**
  * Noms réservés par Windows, SEULS OU AVEC une extension (« CON.pdf »,
  * « NUL.txt », « com1.x » sont tous refusés), sans tenir compte de la casse

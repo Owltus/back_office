@@ -136,6 +136,7 @@ describe('nomFichierImpression — exemples', () => {
   })
 })
 
+// eslint-disable-next-line no-control-regex
 const INTERDIT = /[\\/:*?"<>|\u0000-\u001f\u007f-\u009f]/
 
 describe('nomFichierImpression — propriétés', () => {

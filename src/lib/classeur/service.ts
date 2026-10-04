@@ -337,7 +337,7 @@ export async function fetchVersionsDepuis(
     .order('id', { ascending: false })
     .limit(MAX_VERSIONS_DEPUIS)
   if (error) throw error
-  return data as VersionModifiee[]
+  return data
 }
 
 export async function fetchImages(classeurId: number): Promise<DbImage[]> {

@@ -111,7 +111,7 @@ async function ouvrirAvecApercu() {
 }
 
 const bouton = () =>
-  screen.getByRole('button', { name: /^Importer/ }) as HTMLButtonElement
+  screen.getByRole<HTMLButtonElement>('button', { name: /^Importer/ })
 
 describe('EchangeJsonDialog — aperçu, refus, import', () => {
   it('le compteur du bouton suit les cases ; désactivé à 0', async () => {
@@ -221,7 +221,7 @@ describe('EchangeJsonDialog — demandes toutes prêtes (étape 3)', () => {
   const copier = () =>
     fireEvent.click(screen.getByRole('button', { name: /Copier le JSON/ }))
   const caseDe = (libelle: RegExp) =>
-    screen.getByRole('checkbox', { name: libelle }) as HTMLInputElement
+    screen.getByRole<HTMLInputElement>('checkbox', { name: libelle })
 
   it('rien de coché : le presse-papiers reçoit le JSON seul, sans demande', async () => {
     render(dialogue(true))
@@ -286,7 +286,7 @@ describe('EchangeJsonDialog — demandes toutes prêtes (étape 3)', () => {
     rerender(dialogue(true))
     expect(caseDe(/^Traduire/).checked).toBe(false)
     expect(
-      (screen.getByLabelText('Autre demande') as HTMLTextAreaElement).value,
+      screen.getByLabelText<HTMLTextAreaElement>('Autre demande').value,
     ).toBe('')
   })
 })
