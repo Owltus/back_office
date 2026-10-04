@@ -69,7 +69,12 @@ export function ActionCard({
           {busy ? titreOccupe : title}
         </span>
         {subtitle !== undefined && !busy && (
-          <span className="truncate text-xs text-muted-foreground max-sm:line-clamp-2 max-sm:whitespace-normal">
+          // Deux lignes à toute largeur, jamais coupée d'un « … » au milieu
+          // d'un mot (audit du 2026-10-04, B5 : « Sauvegarde éditable d… »).
+          <span
+            className="line-clamp-2 text-xs text-muted-foreground"
+            data-testid="action-card-sous-titre"
+          >
             {subtitle}
           </span>
         )}

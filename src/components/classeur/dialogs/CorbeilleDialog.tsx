@@ -16,8 +16,10 @@ import { Alert, AlertDescription } from '#/components/ui/alert.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '#/components/ui/dialog.tsx'
@@ -107,6 +109,15 @@ export function CorbeilleDialog({
           </DialogDescription>
         </DialogHeader>
         {open && <CorpsCorbeille classeurId={classeurId} canWrite={canWrite} />}
+        {/* Audit du 2026-10-04 (C8) : une sortie visible en plus de la
+            croix, en bas, là où la liste se termine. */}
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button type="button" variant="outline">
+              Fermer
+            </Button>
+          </DialogClose>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

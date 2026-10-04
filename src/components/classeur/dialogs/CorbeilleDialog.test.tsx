@@ -212,3 +212,33 @@ describe('CorbeilleDialog', () => {
     ).toHaveLength(0)
   })
 })
+
+describe('pied de la corbeille (audit du 2026-10-04, C8)', () => {
+  it('un bouton Fermer en pied, en plus de la croix, qui ferme', async () => {
+    service.lecture = Promise.resolve(DONNEES)
+    const onOpenChange = vi.fn()
+    render(
+      <QueryClientProvider
+        client={
+          new QueryClient({ defaultOptions: { queries: { retry: false } } })
+        }
+      >
+        <CorbeilleDialog
+          open
+          onOpenChange={onOpenChange}
+          classeurId={24}
+          canWrite
+        />
+      </QueryClientProvider>,
+    )
+    await screen.findByText('Procédure')
+    const fermer = screen.getByRole('button', { name: 'Fermer' })
+    // En pied : APRÈS la liste dans l'ordre du document.
+    const liste = document.querySelector('li[data-cle]')!
+    expect(
+      liste.compareDocumentPosition(fermer) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    fireEvent.click(fermer)
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+  })
+})

@@ -96,7 +96,7 @@ vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }))
 
 const { TransfertDialog, messageTransfert, resumeTransfert } =
   await import('#/components/classeur/dialogs/TransfertDialog.tsx')
-const { MenuDeplacerVers, AUCUNE_CIBLE } =
+const { MenuDeplacerVers, AUCUNE_CIBLE, LIBELLE_COPIER, LIBELLE_DEPLACER } =
   await import('#/components/classeur/MenuDeplacerVers.tsx')
 const { ItemCardShell } =
   await import('#/components/classeur/cards/ItemCardShell.tsx')
@@ -141,7 +141,7 @@ function avecClient(children: ReactNode) {
   )
 }
 
-function ouvrirDialogue() {
+function ouvrirDialogue(modeInitial?: 'deplacer' | 'copier') {
   const onTransfere = vi.fn()
   const onOpenChange = vi.fn()
   render(
@@ -151,6 +151,7 @@ function ouvrirDialogue() {
         onOpenChange={onOpenChange}
         origineId={ORIGINE}
         elements={elements}
+        modeInitial={modeInitial}
         niveauOrigine="ecriture"
         onTransfere={onTransfere}
       />,
@@ -215,8 +216,13 @@ describe('TransfertDialog', () => {
     ouvrirDialogue()
     await choisirArrivee()
     expect(screen.getByTestId('resume-transfert').textContent).toBe(
-      '2 éléments · 2 images seront copiées dans le classeur Arrivée, chapitre Annexes.',
+      "2 éléments seront déplacés vers le classeur Arrivée, chapitre Annexes. 2 images seront copiées dans le classeur d'arrivée. L'historique suit chaque document.",
     )
+    fireEvent.click(screen.getByRole('radio', { name: 'Copier' }))
+    expect(screen.getByTestId('resume-transfert').textContent).toBe(
+      '2 éléments seront copiés vers le classeur Arrivée, chapitre Annexes. 2 images seront copiées avec eux.',
+    )
+    fireEvent.click(screen.getByRole('radio', { name: 'Déplacer' }))
     // L'historique suit un document déplacé (D8).
     expect(screen.getByText(/historique des versions suit/)).toBeTruthy()
   })
@@ -306,17 +312,87 @@ describe('TransfertDialog', () => {
   })
 })
 
+describe('mode et mise en page du dialogue (audit du 2026-10-04)', () => {
+  it('ouvert depuis Copier vers : Copier présélectionné, modifiable (A5)', () => {
+    ouvrirDialogue('copier')
+    expect(
+      screen.getByRole('heading', { name: 'Copier vers un autre classeur' }),
+    ).toBeTruthy()
+    expect(screen.getByRole('radio', { name: 'Copier' })).toHaveProperty(
+      'checked',
+      true,
+    )
+    expect(screen.getByRole('button', { name: 'Copier' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('radio', { name: 'Déplacer' }))
+    expect(screen.getByRole('button', { name: 'Déplacer' })).toBeTruthy()
+    expect(
+      screen.getByRole('heading', { name: 'Déplacer vers un autre classeur' }),
+    ).toBeTruthy()
+  })
+
+  it('ouvert depuis Déplacer vers : Déplacer présélectionné', () => {
+    ouvrirDialogue('deplacer')
+    expect(screen.getByRole('radio', { name: 'Déplacer' })).toHaveProperty(
+      'checked',
+      true,
+    )
+  })
+
+  it('pied FIXE hors de la zone qui défile, aucun défilement imbriqué (B2)', async () => {
+    ouvrirDialogue()
+    await choisirArrivee()
+    const zone = screen.getByTestId('transfert-defilement')
+    expect(zone.className).toContain('overflow-y-auto')
+    expect(zone.className).toContain('min-h-0')
+    // Les listes (classeurs, chapitres) sont DANS la zone, sans défilement propre.
+    expect(within(zone).getByRole('radio', { name: 'Annexes' })).toBeTruthy()
+    expect(zone.querySelector('[class*="overflow-y"]')).toBeNull()
+    expect(zone.querySelector('[class*="max-h-"]')).toBeNull()
+    // Les boutons du pied sont HORS de la zone, dans le même bloc.
+    const annuler = screen.getByRole('button', { name: 'Annuler' })
+    const valider = screen.getByRole('button', { name: 'Déplacer' })
+    expect(zone.contains(annuler)).toBe(false)
+    expect(zone.contains(valider)).toBe(false)
+    expect(zone.parentElement?.contains(annuler)).toBe(true)
+    // Le dialogue lui-même ne défile plus (sinon le pied repartirait avec).
+    const dialogue = screen.getByRole('dialog')
+    expect(dialogue.className).not.toContain('overflow-y-auto')
+    expect(dialogue.className).toContain('flex-col')
+  })
+})
+
 describe('textes', () => {
-  it('résumé : singulier, pluriel, zéro, inconnu', () => {
-    expect(resumeTransfert(1, 1, 'X')).toBe(
-      '1 élément · 1 image sera copiée dans le classeur X',
+  it('résumé de la copie : singulier, pluriel, zéro, inconnu', () => {
+    expect(resumeTransfert('copier', 1, 1, 'X', null)).toBe(
+      '1 élément sera copié vers le classeur X. 1 image sera copiée avec eux.',
     )
-    expect(resumeTransfert(3, 0, 'X')).toBe(
-      '3 éléments · aucune image à copier dans le classeur X',
+    expect(resumeTransfert('copier', 3, 0, 'X', 'Y')).toBe(
+      '3 éléments seront copiés vers le classeur X, chapitre Y. Aucune image à copier.',
     )
-    expect(resumeTransfert(2, null, 'X')).toBe(
-      '2 éléments · les images utilisées seront copiées dans le classeur X',
+    expect(resumeTransfert('copier', 2, null, 'X', null)).toBe(
+      '2 éléments seront copiés vers le classeur X. Les images utilisées seront copiées avec eux.',
     )
+  })
+  it('résumé du déplacement : jamais aucune image à copier (C2)', () => {
+    expect(resumeTransfert('deplacer', 1, 0, 'X', 'Y')).toBe(
+      "1 élément sera déplacé vers le classeur X, chapitre Y. L'historique suit chaque document.",
+    )
+    expect(resumeTransfert('deplacer', 2, 1, 'X', null)).toBe(
+      "2 éléments seront déplacés vers le classeur X. 1 image sera copiée dans le classeur d'arrivée. L'historique suit chaque document.",
+    )
+    expect(resumeTransfert('deplacer', 2, null, 'X', null)).toBe(
+      "2 éléments seront déplacés vers le classeur X. Les images utilisées seront copiées dans le classeur d'arrivée si besoin. L'historique suit chaque document.",
+    )
+  })
+  it('ni guillemets ni tiret cadratin dans les textes de la zone', () => {
+    const textes = [
+      resumeTransfert('copier', 2, 0, 'X', 'Y'),
+      resumeTransfert('deplacer', 2, null, 'X', 'Y'),
+      LIBELLE_COPIER,
+      LIBELLE_DEPLACER,
+      AUCUNE_CIBLE,
+    ]
+    for (const t of textes) expect(t).not.toMatch(/[«»—]/)
   })
   it('confirmation : mode, images copiées, introuvables', () => {
     const base = {
@@ -396,36 +472,47 @@ describe('MenuDeplacerVers', () => {
     await waitFor(() => expect(fetchClasseurs).toHaveBeenCalled())
   })
 
-  it('chapitres du classeur puis « Vers un autre classeur… »', async () => {
+  it('chapitres puis Déplacer ET Copier vers un autre classeur, visibles (A5)', async () => {
     const { onChapitre, onAutreClasseur } = monterMenu()
     ouvrirMenu()
-    const autre = await screen.findByRole('menuitem', {
-      name: 'Vers un autre classeur…',
+    const deplacer = await screen.findByRole('menuitem', {
+      name: LIBELLE_DEPLACER,
     })
     expect(screen.getAllByRole('menuitem').map((i) => i.textContent)).toEqual([
       'Voisin',
-      'Vers un autre classeur…',
+      'Déplacer vers un autre classeur…',
+      'Copier vers un autre classeur…',
     ])
-    fireEvent.click(autre)
-    expect(onAutreClasseur).toHaveBeenCalled()
+    await waitFor(() =>
+      expect(deplacer.getAttribute('aria-disabled')).toBeNull(),
+    )
+    fireEvent.click(deplacer)
+    expect(onAutreClasseur).toHaveBeenLastCalledWith('deplacer')
+    ouvrirMenu()
+    const copier = await screen.findByRole('menuitem', { name: LIBELLE_COPIER })
+    await waitFor(() => expect(copier.getAttribute('aria-disabled')).toBeNull())
+    fireEvent.click(copier)
+    expect(onAutreClasseur).toHaveBeenLastCalledWith('copier')
+    expect(onAutreClasseur).toHaveBeenCalledTimes(2)
     ouvrirMenu()
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Voisin' }))
     expect(onChapitre).toHaveBeenCalledWith(51)
   })
 
-  it('sans cible : entrée grisée avec sa raison', async () => {
+  it('sans cible : les deux entrées grisées, avec la raison', async () => {
     classeurs = [
       classeur(ORIGINE, 'Courant', 'ecriture', USER),
       classeur(7, 'Lecture seule', 'lecture'),
     ]
     const { onAutreClasseur } = monterMenu()
     ouvrirMenu()
-    const entree = await screen.findByRole('menuitem', {
-      name: /^Vers un autre classeur…/,
-    })
-    await waitFor(() => expect(entree.textContent).toContain(AUCUNE_CIBLE))
-    expect(entree.getAttribute('aria-disabled')).toBe('true')
-    fireEvent.click(entree)
+    const menu = await screen.findByRole('menu')
+    await waitFor(() => expect(menu.textContent).toContain(AUCUNE_CIBLE))
+    for (const nom of [LIBELLE_DEPLACER, LIBELLE_COPIER]) {
+      const entree = screen.getByRole('menuitem', { name: nom })
+      expect(entree.getAttribute('aria-disabled')).toBe('true')
+      fireEvent.click(entree)
+    }
     expect(onAutreClasseur).not.toHaveBeenCalled()
   })
 
@@ -501,6 +588,7 @@ describe('carte d’un élément', () => {
     expect(onCarte.click).not.toHaveBeenCalled()
     fireEvent.keyDown(bouton, { key: 'Enter' })
     const menu = await screen.findByRole('menu')
-    expect(within(menu).getByText('Vers un autre classeur…')).toBeTruthy()
+    expect(within(menu).getByText(LIBELLE_DEPLACER)).toBeTruthy()
+    expect(within(menu).getByText(LIBELLE_COPIER)).toBeTruthy()
   })
 })

@@ -230,3 +230,53 @@ describe('ImprimerModifiesDialog', () => {
     }
   })
 })
+
+describe('Tout cocher / Tout décocher (audit du 2026-10-04, C6)', () => {
+  const feuille = (id: number) => ({
+    ...contenu.signature_sheets[0],
+    id,
+    uuid: `s${String(id)}`,
+    title: `Feuille ${String(id)}`,
+    sort_order: id,
+  })
+
+  it('absent sous 5 lignes', async () => {
+    etat.contenu = true
+    etat.versions = Promise.resolve([])
+    ouvrir()
+    await screen.findByText('Émargement')
+    expect(screen.queryByRole('button', { name: 'Tout cocher' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Tout décocher' })).toBeNull()
+  })
+
+  it('à 5 lignes : tout décocher puis tout cocher', async () => {
+    etat.contenu = true
+    etat.versions = Promise.resolve([])
+    const garde = contenu.signature_sheets
+    contenu.signature_sheets = [garde[0], ...[6, 7, 8, 9].map(feuille)]
+    try {
+      ouvrir()
+      await screen.findByText('Feuille 9')
+      const cases = () =>
+        screen
+          .getAllByRole('checkbox')
+          .map((c) => (c as HTMLInputElement).checked)
+      expect(cases()).toEqual([true, true, true, true, true])
+      const cocher = screen.getByRole('button', { name: 'Tout cocher' })
+      expect(cocher).toHaveProperty('disabled', true)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Tout décocher' }))
+      expect(cases()).toEqual([false, false, false, false, false])
+      screen.getByRole('button', { name: 'Aperçu (0)' })
+      expect(
+        screen.getByRole('button', { name: 'Tout décocher' }),
+      ).toHaveProperty('disabled', true)
+
+      fireEvent.click(cocher)
+      expect(cases()).toEqual([true, true, true, true, true])
+      screen.getByRole('button', { name: 'Aperçu (5)' })
+    } finally {
+      contenu.signature_sheets = garde
+    }
+  })
+})

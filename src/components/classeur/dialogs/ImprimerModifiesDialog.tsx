@@ -60,6 +60,9 @@ const ICONE_KIND: Record<ItemKind, LucideIcon> = {
 /** Recul proposé à l'ouverture (D15 : choisi à chaque fois, rien n'est gardé). */
 const JOURS_PAR_DEFAUT = 7
 
+/** À partir de combien de lignes « Tout cocher / Tout décocher » apparaît. */
+export const SEUIL_TOUT_COCHER = 5
+
 /** « v1.2 · étape ajoutée · par Marie Dupont », ou la mention d'une feuille. */
 function libelleMotif(motif: MotifModification): string {
   const le = mentionVersion(motif.date) ?? ''
@@ -220,6 +223,34 @@ function CorpsModifies({
           onChange={(e) => setJour(e.target.value)}
           className="w-auto"
         />
+        {/* Audit du 2026-10-04 (C6) : décocher une longue liste case par
+            case est fastidieux. */}
+        {lu && tous.length >= SEUIL_TOUT_COCHER && (
+          <div className="ml-auto flex gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setDecochees(new Set())}
+              disabled={decochees.size === 0}
+            >
+              Tout cocher
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                setDecochees(
+                  new Set(tous.map((it) => cleRef(it.kind, it.data.id))),
+                )
+              }
+              disabled={coches.length === 0}
+            >
+              Tout décocher
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto pr-1">

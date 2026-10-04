@@ -41,23 +41,43 @@ const pluriel = (n: number, un: string, plusieurs: string) =>
   `${String(n)} ${n > 1 ? plusieurs : un}`
 
 /**
- * Le résumé avant validation : « 3 éléments · 2 images seront copiées dans
- * le classeur X ». `images === null` : nombre inconnu, phrase générique.
+ * Le résumé avant validation, PROPRE AU MODE (audit utilisateur du
+ * 2026-10-04, C2 : un déplacement annonçait « aucune image à copier ») :
+ * « 3 éléments seront déplacés vers le classeur X, chapitre Y. 2 images
+ * seront copiées dans le classeur d'arrivée. L'historique suit chaque
+ * document. » `images === null` : nombre inconnu, phrase générique.
  * Ponctuation simple (ni guillemets ni tiret cadratin dans un message,
- * règle `ux-messages-hotelier`, audit du 2026-10-04).
+ * règle `ux-messages-hotelier`).
  */
 export function resumeTransfert(
+  mode: ModeTransfert,
   nbElements: number,
   images: number | null,
   classeur: string,
+  chapitre: string | null,
 ): string {
-  const elements = pluriel(nbElements, 'élément', 'éléments')
-  const dans = `dans le classeur ${classeur}`
+  const copie = mode === 'copier'
+  const verbe = nbElements > 1 ? 'seront' : 'sera'
+  const participe = `${copie ? 'copié' : 'déplacé'}${nbElements > 1 ? 's' : ''}`
+  const vers = `vers le classeur ${classeur}${chapitre !== null ? `, chapitre ${chapitre}` : ''}`
+  const phrases = [
+    `${pluriel(nbElements, 'élément', 'éléments')} ${verbe} ${participe} ${vers}.`,
+  ]
   if (images === null) {
-    return `${elements} · les images utilisées seront copiées ${dans}`
+    phrases.push(
+      copie
+        ? 'Les images utilisées seront copiées avec eux.'
+        : "Les images utilisées seront copiées dans le classeur d'arrivée si besoin.",
+    )
+  } else if (images > 0) {
+    phrases.push(
+      `${pluriel(images, 'image sera copiée', 'images seront copiées')} ${copie ? 'avec eux' : "dans le classeur d'arrivée"}.`,
+    )
+  } else if (copie) {
+    phrases.push('Aucune image à copier.')
   }
-  if (images === 0) return `${elements} · aucune image à copier ${dans}`
-  return `${elements} · ${pluriel(images, 'image sera copiée', 'images seront copiées')} ${dans}`
+  if (!copie) phrases.push("L'historique suit chaque document.")
+  return phrases.join(' ')
 }
 
 /**
@@ -100,6 +120,7 @@ export function TransfertDialog({
   onOpenChange,
   origineId,
   elements,
+  modeInitial = 'deplacer',
   niveauOrigine,
   onTransfere,
 }: {
@@ -108,16 +129,22 @@ export function TransfertDialog({
   origineId: number
   /** Éléments à transférer, dans l'ordre du chapitre. */
   elements: readonly ChapterItem[]
+  /** Mode choisi dans le menu (entrée Déplacer ou Copier), modifiable ici. */
+  modeInitial?: ModeTransfert
   niveauOrigine: NiveauEffectif
   onTransfere: (r: TransfertReussi) => void
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
+      {/* Pied FIXE, seule la zone centrale défile (audit du 2026-10-04,
+          B2 : à 735 px de haut, Annuler et Déplacer sortaient de l'écran,
+          sous deux défilements imbriqués). */}
+      <DialogContent className="flex max-h-[90dvh] flex-col sm:max-w-lg">
         {open && (
           <Contenu
             origineId={origineId}
             elements={elements}
+            modeInitial={modeInitial}
             niveauOrigine={niveauOrigine}
             onTransfere={(r) => {
               onTransfere(r)
@@ -134,12 +161,14 @@ export function TransfertDialog({
 function Contenu({
   origineId,
   elements,
+  modeInitial,
   niveauOrigine,
   onTransfere,
   onAnnuler,
 }: {
   origineId: number
   elements: readonly ChapterItem[]
+  modeInitial: ModeTransfert
   niveauOrigine: NiveauEffectif
   onTransfere: (r: TransfertReussi) => void
   onAnnuler: () => void
@@ -147,7 +176,8 @@ function Contenu({
   const cibles = useClasseursCibles(origineId, true)
   const [classeurId, setClasseurId] = useState<number | null>(null)
   const [chapitreId, setChapitreId] = useState<number | null>(null)
-  const [mode, setMode] = useState<ModeTransfert>('deplacer')
+  // Monté à chaque ouverture (`open &&`) : repart du mode du menu.
+  const [mode, setMode] = useState<ModeTransfert>(modeInitial)
   const classeur = cibles.cibles.find((c) => c.id === classeurId) ?? null
   const chapitres = useChapters(classeur?.id ?? Number.NaN, classeur !== null)
   const chapitre =
@@ -185,9 +215,11 @@ function Contenu({
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
       <DialogHeader>
-        <DialogTitle>Vers un autre classeur</DialogTitle>
+        <DialogTitle>
+          {mode === 'copier' ? 'Copier' : 'Déplacer'} vers un autre classeur
+        </DialogTitle>
         <DialogDescription>
           {pluriel(
             elements.length,
@@ -198,119 +230,133 @@ function Contenu({
         </DialogDescription>
       </DialogHeader>
 
-      <fieldset className="flex flex-col gap-2" disabled={occupe}>
-        <legend className="mb-2 text-sm font-medium">Classeur</legend>
-        {cibles.isError ? (
-          <p className="text-sm text-destructive">
-            {messageErreur(cibles.error, 'Liste des classeurs indisponible')}
-          </p>
-        ) : cibles.isPending ? (
-          <Skeleton className="h-10 w-full" />
-        ) : cibles.cibles.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{AUCUNE_CIBLE}.</p>
-        ) : (
-          <div className="flex max-h-48 flex-col gap-1 overflow-y-auto">
-            {cibles.cibles.map((c) => (
-              <Choix
-                key={c.id}
-                name="transfert-classeur"
-                checked={classeurId === c.id}
-                onChange={() => {
-                  setClasseurId(c.id)
-                  setChapitreId(null)
-                }}
-              >
-                {c.name}
-              </Choix>
-            ))}
-          </div>
-        )}
-      </fieldset>
-
-      {classeur && (
+      {/* La SEULE zone qui défile : les listes n'ont pas de hauteur propre
+          (un second défilement dans le premier, au doigt, piégeait). */}
+      <div
+        className="-mx-1 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-1"
+        data-testid="transfert-defilement"
+      >
         <fieldset className="flex flex-col gap-2" disabled={occupe}>
-          <legend className="mb-2 text-sm font-medium">Chapitre</legend>
-          {chapitres.isError ? (
+          <legend className="mb-2 text-sm font-medium">Classeur</legend>
+          {cibles.isError ? (
             <p className="text-sm text-destructive">
-              {messageErreur(chapitres.error, 'Chapitres indisponibles')}
+              {messageErreur(cibles.error, 'Liste des classeurs indisponible')}
             </p>
-          ) : chapitres.isPending ? (
+          ) : cibles.isPending ? (
             <Skeleton className="h-10 w-full" />
-          ) : chapitres.data.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Ce classeur n'a aucun chapitre : créez-en un d'abord.
-            </p>
+          ) : cibles.cibles.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{AUCUNE_CIBLE}.</p>
           ) : (
-            <div className="flex max-h-48 flex-col gap-1 overflow-y-auto">
-              {chapitres.data.map((c) => (
+            <div className="flex flex-col gap-1">
+              {cibles.cibles.map((c) => (
                 <Choix
                   key={c.id}
-                  name="transfert-chapitre"
-                  checked={chapitreId === c.id}
-                  onChange={() => setChapitreId(c.id)}
+                  name="transfert-classeur"
+                  checked={classeurId === c.id}
+                  onChange={() => {
+                    setClasseurId(c.id)
+                    setChapitreId(null)
+                  }}
                 >
-                  {c.label}
+                  {c.name}
                 </Choix>
               ))}
             </div>
           )}
         </fieldset>
-      )}
 
-      <fieldset disabled={occupe}>
-        <legend className="mb-2 text-sm font-medium">Action</legend>
-        {/* Segment : deux boutons radio côte à côte. */}
-        <div className="grid grid-cols-2 gap-1 rounded-lg border border-border p-1">
-          {(['deplacer', 'copier'] as const).map((m) => (
-            <label
-              key={m}
-              className={cn(
-                'flex min-h-9 cursor-pointer items-center justify-center rounded-md text-sm transition-colors pointer-coarse:min-h-11 has-focus-visible:ring-2 has-focus-visible:ring-ring',
-                mode === m
-                  ? 'bg-primary text-primary-foreground'
-                  : 'hover:bg-muted',
-              )}
-            >
-              <input
-                type="radio"
-                name="transfert-mode"
-                className="sr-only"
-                checked={mode === m}
-                onChange={() => setMode(m)}
-              />
-              {m === 'copier' ? 'Copier' : 'Déplacer'}
-            </label>
-          ))}
-        </div>
-        <p className="mt-2 text-xs text-muted-foreground">
-          {mode === 'copier'
-            ? 'Les originaux restent ici ; les copies repartent en version 1.0.'
-            : "Les éléments quittent ce chapitre. L'historique des versions suit chaque document déplacé."}
-        </p>
-      </fieldset>
-
-      {classeur && (
-        <p
-          role="status"
-          className="rounded-lg bg-muted px-3 py-2 text-sm"
-          data-testid="resume-transfert"
-        >
-          {resumeTransfert(elements.length, images, classeur.name)}
-          {chapitre && <>, chapitre {chapitre.label}</>}.
-        </p>
-      )}
-
-      {transfert.isError && (
-        <Alert variant="destructive">
-          <AlertCircle />
-          <AlertDescription>
-            {messageErreur(
-              transfert.error,
-              mode === 'copier' ? 'Copie impossible' : 'Déplacement impossible',
+        {classeur && (
+          <fieldset className="flex flex-col gap-2" disabled={occupe}>
+            <legend className="mb-2 text-sm font-medium">Chapitre</legend>
+            {chapitres.isError ? (
+              <p className="text-sm text-destructive">
+                {messageErreur(chapitres.error, 'Chapitres indisponibles')}
+              </p>
+            ) : chapitres.isPending ? (
+              <Skeleton className="h-10 w-full" />
+            ) : chapitres.data.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Ce classeur n'a aucun chapitre : créez-en un d'abord.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-1">
+                {chapitres.data.map((c) => (
+                  <Choix
+                    key={c.id}
+                    name="transfert-chapitre"
+                    checked={chapitreId === c.id}
+                    onChange={() => setChapitreId(c.id)}
+                  >
+                    {c.label}
+                  </Choix>
+                ))}
+              </div>
             )}
-          </AlertDescription>
-        </Alert>
-      )}
+          </fieldset>
+        )}
+
+        <fieldset disabled={occupe}>
+          <legend className="mb-2 text-sm font-medium">Action</legend>
+          {/* Segment : deux boutons radio côte à côte. */}
+          <div className="grid grid-cols-2 gap-1 rounded-lg border border-border p-1">
+            {(['deplacer', 'copier'] as const).map((m) => (
+              <label
+                key={m}
+                className={cn(
+                  'flex min-h-9 cursor-pointer items-center justify-center rounded-md text-sm transition-colors pointer-coarse:min-h-11 has-focus-visible:ring-2 has-focus-visible:ring-ring',
+                  mode === m
+                    ? 'bg-primary text-primary-foreground'
+                    : 'hover:bg-muted',
+                )}
+              >
+                <input
+                  type="radio"
+                  name="transfert-mode"
+                  className="sr-only"
+                  checked={mode === m}
+                  onChange={() => setMode(m)}
+                />
+                {m === 'copier' ? 'Copier' : 'Déplacer'}
+              </label>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            {mode === 'copier'
+              ? 'Les originaux restent ici ; les copies repartent en version 1.0.'
+              : "Les éléments quittent ce chapitre. L'historique des versions suit chaque document déplacé."}
+          </p>
+        </fieldset>
+
+        {classeur && (
+          <p
+            role="status"
+            className="rounded-lg bg-muted px-3 py-2 text-sm"
+            data-testid="resume-transfert"
+          >
+            {resumeTransfert(
+              mode,
+              elements.length,
+              images,
+              classeur.name,
+              chapitre?.label ?? null,
+            )}
+          </p>
+        )}
+
+        {transfert.isError && (
+          <Alert variant="destructive">
+            <AlertCircle />
+            <AlertDescription>
+              {messageErreur(
+                transfert.error,
+                mode === 'copier'
+                  ? 'Copie impossible'
+                  : 'Déplacement impossible',
+              )}
+            </AlertDescription>
+          </Alert>
+        )}
+      </div>
 
       <DialogFooter>
         <Button variant="outline" onClick={onAnnuler} disabled={occupe}>

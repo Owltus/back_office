@@ -49,7 +49,10 @@ import {
   messageTransfert,
 } from '#/components/classeur/dialogs/TransfertDialog.tsx'
 import type { TransfertReussi } from '#/components/classeur/dialogs/TransfertDialog.tsx'
-import { MenuDeplacerVers } from '#/components/classeur/MenuDeplacerVers.tsx'
+import {
+  MenuDeplacerVers,
+  TIP_DEPLACER_COPIER,
+} from '#/components/classeur/MenuDeplacerVers.tsx'
 import {
   parseChapterDropId,
   useDndRegistry,
@@ -103,6 +106,7 @@ import { nomFichierImpression } from '#/lib/classeur/print/nomFichierImpression.
 import { elementsAImprimer } from '#/lib/classeur/selectionImpression.ts'
 import { createItem } from '#/lib/classeur/service.ts'
 import { contientSansAccents, stripAccents } from '#/lib/classeur/slug.ts'
+import type { ModeTransfert } from '#/lib/classeur/transfert.ts'
 import { ITEM_KINDS, flattenItems } from '#/lib/classeur/types.ts'
 import type { ChapterItem, DbTrackingSheet } from '#/lib/classeur/types.ts'
 import { cn } from '#/lib/utils.ts'
@@ -215,6 +219,8 @@ export function ChapterBoard({
   const [transfert, setTransfert] = useState<{
     elements: ChapterItem[]
     depuisSelection: boolean
+    /** Mode choisi dans le menu (modifiable dans le dialogue). */
+    mode: ModeTransfert
   } | null>(null)
   /** Confirmation du dernier transfert, avec lien vers l'arrivée. */
   const [transfere, setTransfere] = useState<TransfertReussi | null>(null)
@@ -515,23 +521,24 @@ export function ChapterBoard({
                   <MenuDeplacerVers
                     origineId={classeurId}
                     autresChapitres={autresChapitres}
-                    tip="Déplacer vers un autre chapitre ou classeur"
+                    tip={TIP_DEPLACER_COPIER}
                     onChapitre={(cible) =>
                       deplacement.mutate({ refs: selection.refs, cible })
                     }
-                    onAutreClasseur={() =>
+                    onAutreClasseur={(mode) =>
                       setTransfert({
                         elements: items.filter((it) =>
                           selection.selected.has(cleRef(it.kind, it.data.id)),
                         ),
                         depuisSelection: true,
+                        mode,
                       })
                     }
                   >
                     <Button
                       variant="outline"
                       size="icon-sm"
-                      aria-label="Déplacer vers un autre chapitre ou classeur"
+                      aria-label={TIP_DEPLACER_COPIER}
                       disabled={selection.count === 0 || deplacement.isPending}
                     >
                       {deplacement.isPending ? (
@@ -784,21 +791,25 @@ export function ChapterBoard({
                     <MenuDeplacerVers
                       origineId={classeurId}
                       autresChapitres={autresChapitres}
-                      tip="Déplacer vers…"
+                      tip={TIP_DEPLACER_COPIER}
                       onChapitre={(cible) =>
                         deplacement.mutate({
                           refs: [{ kind: it.kind, id: it.data.id }],
                           cible,
                         })
                       }
-                      onAutreClasseur={() =>
-                        setTransfert({ elements: [it], depuisSelection: false })
+                      onAutreClasseur={(mode) =>
+                        setTransfert({
+                          elements: [it],
+                          depuisSelection: false,
+                          mode,
+                        })
                       }
                     >
                       <Button
                         variant="ghost"
                         size="icon-sm"
-                        aria-label="Déplacer vers un autre chapitre ou classeur"
+                        aria-label={TIP_DEPLACER_COPIER}
                         disabled={deplacement.isPending}
                       >
                         <FolderInput />
@@ -858,9 +869,9 @@ export function ChapterBoard({
         })}
         title={
           apercu?.type === 'tout'
-            ? `${chapter?.label ?? 'Chapitre'} — chapitre complet`
+            ? `${chapter?.label ?? 'Chapitre'} : chapitre complet`
             : apercu?.type === 'selection'
-              ? `${chapter?.label ?? 'Chapitre'} — ${aImprimer.length} élément${aImprimer.length > 1 ? 's' : ''} sélectionné${aImprimer.length > 1 ? 's' : ''}`
+              ? `${chapter?.label ?? 'Chapitre'} : ${aImprimer.length} élément${aImprimer.length > 1 ? 's' : ''} sélectionné${aImprimer.length > 1 ? 's' : ''}`
               : apercu?.type === 'item'
                 ? apercu.item.data.title || 'Sans titre'
                 : undefined
@@ -931,6 +942,7 @@ export function ChapterBoard({
         }}
         origineId={classeurId}
         elements={transfert?.elements ?? []}
+        modeInitial={transfert?.mode ?? 'deplacer'}
         niveauOrigine={niveau}
         onTransfere={(r) => {
           if (transfert?.depuisSelection) selection.clear()

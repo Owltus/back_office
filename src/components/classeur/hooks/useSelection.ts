@@ -47,6 +47,13 @@ export function useSelection() {
       if (e.key === 'Escape') {
         // Échap ferme d'abord un menu ou un dialogue ouvert (« Déplacer
         // vers… ») : il ne doit pas vider la sélection en même temps.
+        // ⚠ Écoute en CAPTURE sur `window` (audit du 2026-10-04, B3) :
+        // Radix ferme sur Échap par un écouteur en capture sur `document`,
+        // et le navigateur rend la main aux microtâches entre deux
+        // écouteurs ; en phase de bouillonnement, le dialogue était DÉJÀ
+        // fermé (`data-state="closed"` ou démonté) quand on le cherchait.
+        // La capture sur `window` passe avant celle de `document`.
+        if (e.defaultPrevented) return
         if (
           document.querySelector(
             '[role="menu"][data-state="open"], [role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]',
@@ -57,8 +64,9 @@ export function useSelection() {
         clear()
       }
     }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
+    window.addEventListener('keydown', handler, { capture: true })
+    return () =>
+      window.removeEventListener('keydown', handler, { capture: true })
   }, [selectionMode, clear])
 
   /** Les références sélectionnées, pour les écritures groupées. */
