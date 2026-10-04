@@ -50,7 +50,7 @@ tableau des 17 questions d'origine est en [annexe](#annexe--les-17-questions-dor
 | 3 | [3-llm-demandes.md](./3-llm-demandes.md) | LLM : demandes toutes prêtes | 1 (même fichier) | P1 | 3 h | Demandes cochables, `_metadata.demande` | |
 | 4 | [4-imprimer-selection.md](./4-imprimer-selection.md) | Imprimer une sélection | 0 | P1 | 2 h | « Imprimer (N) » dans la barre de sélection — FAIT a91170b | |
 | 5 | [5-imprimer-modifies.md](./5-imprimer-modifies.md) | Imprimer ce qui a changé depuis une date | 4 | P1 | 4 h (+ SQL éventuel) | Carte d'accueil, liste, aperçu — FAIT 8753e48 (aucun SQL : explain 0,19 ms, D30 sans index) | ⚠ |
-| 6 | [6-corbeille.md](./6-corbeille.md) | Corbeille | 0 | P1 | 4 h | Carte d'accueil, Restaurer | ⚠ |
+| 6 | [6-corbeille.md](./6-corbeille.md) | Corbeille | 0 | P1 | 4 h | Carte d'accueil, Restaurer — FAIT 9389d46 (restaurerItem/Chapter : option corbeille, fin de chapitre, refus RLS détecté, garde sur le classeur ; Stryker corbeille.ts 100 %) | ⚠ |
 | 7a | [7a-transfert-plan.md](./7a-transfert-plan.md) | Transfert : plan pur | 6 | P2 | 3 h | `transfert.ts` prouvé | |
 | 7b | [7b-transfert-service.md](./7b-transfert-service.md) | Transfert : service, `moveItems` corrigé | 7a | P2 | 5 h | Écriture multi-classeur sûre | ⚠ |
 | 7c | [7c-transfert-interface.md](./7c-transfert-interface.md) | Transfert : interface | 7b | P2 | 3 h | « Déplacer vers… » groupé par classeur | |
