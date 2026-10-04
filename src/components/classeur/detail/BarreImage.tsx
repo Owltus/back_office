@@ -250,6 +250,8 @@ export function BarreImage({
         return
       if (t.closest('[role="dialog"], [data-radix-popper-content-wrapper]'))
         return
+      // Zoomer l'aperçu ne ferme pas la barre : elle suit l'image.
+      if (t.closest('[data-zoom-apercu]')) return
       onFermer()
     }
     document.addEventListener('keydown', touche)

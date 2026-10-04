@@ -41,6 +41,8 @@ import {
   useInsertionImage,
 } from '#/components/classeur/detail/InsertionImage.tsx'
 import { useEditionDocument } from '#/components/classeur/detail/useEditionDocument.ts'
+import { ZoomApercu } from '#/components/classeur/detail/ZoomApercu.tsx'
+import { useZoomApercu } from '#/components/classeur/hooks/useZoomApercu.ts'
 import { AlertesRelecture } from '#/components/classeur/detail/AlertesRelecture.tsx'
 import {
   allerALigne,
@@ -121,8 +123,6 @@ export function DocumentDetail() {
 
   const { containerRef: lectureRef, scale: lectureScale } =
     usePageScale('width')
-  const { containerRef: apercuRefCallback, scale: apercuScale } =
-    usePageScale('width')
   const apercuScrollRef = useRef<HTMLDivElement | null>(null)
   const editeurRef = useRef<HTMLTextAreaElement | null>(null)
   const synchronisation = useRef(false)
@@ -137,6 +137,12 @@ export function DocumentDetail() {
   // avec la colonne des chapitres, chaque moitié ne faisait que ~320 px
   // (audit tactile 2026-09-28).
   const zoneEdition = useHauteurJusquEnBas({ minLargeur: 1280 })
+  // Étape 8 : zoom de l'aperçu d'édition (D27 : éditeur seulement).
+  // `zoom.echelle` est la SEULE échelle de l'aperçu ; la synchro texte ⇄
+  // aperçu et la barre d'image lisent des rapports de défilement et des
+  // boîtes déjà à cette échelle.
+  const zoom = useZoomApercu({ hauteurBornee: zoneEdition.hauteur !== null })
+  const apercuRefCallback = zoom.defilementRef
   // Barre flottante de l'image cliquée dans l'aperçu (2026-10-01).
   const [barre, setBarre] = useState<
     (CibleBarre & { url: string; photo: boolean }) | null
@@ -552,27 +558,56 @@ export function DocumentDetail() {
               : { height: zoneEdition.hauteur }
           }
         >
-          <DetailPaper
-            ref={apercuRef}
+          {/* Colonne d'aperçu : zone d'écoute du zoom (Ctrl + molette,
+              raccourcis) qui porte aussi le contrôle flottant, hors de la
+              partie qui défile pour qu'il reste en place. */}
+          <div
+            ref={zoom.zoneRef}
             className={cn(
-              'order-2 cursor-text overflow-y-auto xl:order-1 xl:h-full',
-              // Une image se retouche au clic : on le montre au survol.
-              page.canWrite &&
-                '[&_img[data-chemin]]:cursor-pointer [&_img[data-chemin]:hover]:outline-2 [&_img[data-chemin]:hover]:outline-offset-2 [&_img[data-chemin]:hover]:outline-primary',
+              'relative order-2 flex min-h-0 flex-col xl:order-1 xl:h-full',
               apercuMasque && 'hidden',
             )}
-            title="Cliquez sur un passage pour y aller dans le texte, ou sur une image pour la régler ; déposez un fichier sur une image pour la remplacer"
-            onClick={surClicApercu}
-            onDragOver={surSurvolDepot}
-            onDrop={surDepot}
           >
-            <div
-              className="flex flex-col items-center gap-4 py-4"
-              style={{ zoom: apercuScale }}
+            <DetailPaper
+              ref={apercuRef}
+              className={cn(
+                // `overflow-auto` : agrandi au-delà de la colonne, l'aperçu
+                // défile aussi en largeur.
+                'cursor-text overflow-auto xl:min-h-0 xl:flex-1',
+                // Une image se retouche au clic : on le montre au survol.
+                page.canWrite &&
+                  '[&_img[data-chemin]]:cursor-pointer [&_img[data-chemin]:hover]:outline-2 [&_img[data-chemin]:hover]:outline-offset-2 [&_img[data-chemin]:hover]:outline-primary',
+              )}
+              title="Cliquez sur un passage pour y aller dans le texte, ou sur une image pour la régler ; déposez un fichier sur une image pour la remplacer. Ctrl + molette pour zoomer."
+              onClick={surClicApercu}
+              onDragOver={surSurvolDepot}
+              onDrop={surDepot}
             >
-              {pages}
+              {/* `items-center-safe` : une page plus large que la colonne
+                  reste atteignable par la gauche (centrée sinon). */}
+              <div
+                className="flex flex-col items-center-safe gap-4 py-4"
+                style={{ zoom: zoom.echelle }}
+              >
+                {pages}
+              </div>
+            </DetailPaper>
+            {/* Grand écran : en bas à droite de la colonne (qui a une
+                hauteur fixe). Plus étroit : collé au bas de l'écran tant
+                que l'aperçu est visible. Écarté des barres de défilement. */}
+            <div
+              data-zoom-apercu=""
+              className="pointer-events-none sticky bottom-3 z-10 -mt-14 flex justify-end pr-3 xl:absolute xl:right-5 xl:bottom-5 xl:mt-0 xl:pr-0"
+            >
+              <ZoomApercu
+                className="pointer-events-auto"
+                mode={zoom.mode}
+                echelle={zoom.echelle}
+                onMode={zoom.definirMode}
+                onZoomer={zoom.zoomer}
+              />
             </div>
-          </DetailPaper>
+          </div>
           <div className="order-1 flex min-h-0 flex-col xl:order-2 xl:h-full">
             {page.canWrite && (
               <div className="flex flex-col gap-1.5 pb-2">
