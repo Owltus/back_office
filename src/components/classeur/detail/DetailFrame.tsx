@@ -2,6 +2,7 @@ import type { ComponentProps, ReactNode } from 'react'
 import { Link } from '@tanstack/react-router'
 import {
   ArrowLeft,
+  Download,
   FileDown,
   Loader2,
   Pencil,
@@ -103,7 +104,7 @@ export function DetailHeader({
 
 /**
  * Les boutons d'action standard : en lecture, un groupe Modifier (droit
- * `ecriture`) / Imprimer-PDF / `extra` (export Markdown du document) ; en
+ * `ecriture`) / Imprimer / Télécharger le PDF (si `onPdf`) / `extra` (export Markdown du document) ; en
  * édition, Annuler (outline, icône) puis Sauvegarder — l'action principale
  * d'un formulaire reste pleine, comme dans les dialogues.
  */
@@ -115,6 +116,7 @@ export function DetailActions({
   onCancel,
   onSave,
   onPrint,
+  onPdf,
   extra,
   aide,
   statut,
@@ -126,6 +128,11 @@ export function DetailActions({
   onCancel: () => void
   onSave: () => void
   onPrint: () => void
+  /**
+   * Accès direct au PDF (audit A2) : ouvre l'aperçu d'impression qui lance
+   * le téléchargement seul. Absent : pas de bouton.
+   */
+  onPdf?: () => void
   extra?: ReactNode
   /** Bouton d'aide « ? », en tête des actions (lecture comme édition). */
   aide?: ReactNode
@@ -157,11 +164,14 @@ export function DetailActions({
       {canWrite && (
         <IconAction label="Modifier" icon={<Pencil />} onClick={onEdit} />
       )}
-      <IconAction
-        label="Imprimer ou enregistrer en PDF"
-        icon={<Printer />}
-        onClick={onPrint}
-      />
+      <IconAction label="Imprimer" icon={<Printer />} onClick={onPrint} />
+      {onPdf && (
+        <IconAction
+          label="Télécharger le PDF"
+          icon={<Download />}
+          onClick={onPdf}
+        />
+      )}
       {extra}
     </ButtonGroup>
   )

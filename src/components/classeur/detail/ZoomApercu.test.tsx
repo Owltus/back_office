@@ -14,6 +14,8 @@ import { TooltipProvider } from '#/components/ui/tooltip.tsx'
  */
 
 const CLE = 'bo.classeur.zoomApercu.v1'
+/** C7 : le mode ajusté montre AUSSI le pourcentage réel. */
+const AJUSTE = 'Ajusté · 50 %'
 
 function Banc() {
   const zoom = useZoomApercu()
@@ -98,12 +100,12 @@ afterEach(() => {
 describe('ZoomApercu', () => {
   it('« Ajusté » par défaut, échelle mesurée sur la colonne', () => {
     render(<Banc />)
-    expect(libelle()).toBe('Ajusté')
+    expect(libelle()).toBe(AJUSTE)
     const pages = screen.getByTestId('pages')
     expect(Number(pages.style.zoom)).toBeCloseTo(400 / ((210 * 96) / 25.4), 6)
-    // L'infobulle d'accessibilité donne le pourcentage réel.
+    // Le nom accessible reprend le libellé visible.
     expect(
-      screen.getByRole('button', { name: "Zoom de l'aperçu : Ajusté (50 %)" }),
+      screen.getByRole('button', { name: "Zoom de l'aperçu : " + AJUSTE }),
     ).toBeTruthy()
   })
 
@@ -136,7 +138,7 @@ describe('ZoomApercu', () => {
       '200 %',
     ])
     fireEvent.click(screen.getByRole('menuitemradio', { name: 'Page entière' }))
-    expect(libelle()).toBe('Page entière')
+    expect(libelle()).toBe('Page entière · 50 %')
     expect(window.localStorage.getItem(CLE)).toBe('page')
 
     fireEvent.keyDown(
@@ -157,7 +159,7 @@ describe('ZoomApercu', () => {
     cleanup()
     window.localStorage.setItem(CLE, 'n’importe quoi')
     render(<Banc />)
-    expect(libelle()).toBe('Ajusté')
+    expect(libelle()).toBe(AJUSTE)
   })
 
   it('stockage refusé : rien ne casse', () => {
@@ -168,7 +170,7 @@ describe('ZoomApercu', () => {
       throw new Error('refusé')
     })
     render(<Banc />)
-    expect(libelle()).toBe('Ajusté')
+    expect(libelle()).toBe(AJUSTE)
     fireEvent.click(screen.getByRole('button', { name: "Agrandir l'aperçu" }))
     expect(libelle()).toBe('75 %')
   })
@@ -177,7 +179,7 @@ describe('ZoomApercu', () => {
     render(<Banc />)
     const e = molette(screen.getByTestId('defilement'), { deltaY: -100 })
     expect(e.defaultPrevented).toBe(false)
-    expect(libelle()).toBe('Ajusté')
+    expect(libelle()).toBe(AJUSTE)
   })
 
   it('Ctrl + molette au-dessus de l’aperçu : zoom, preventDefault', () => {
@@ -204,7 +206,7 @@ describe('ZoomApercu', () => {
       ctrlKey: true,
     })
     expect(e.defaultPrevented).toBe(false)
-    expect(libelle()).toBe('Ajusté')
+    expect(libelle()).toBe(AJUSTE)
   })
 
   it('Ctrl + « + » / « − » / 0 seulement pointeur sur l’aperçu', () => {
@@ -212,7 +214,7 @@ describe('ZoomApercu', () => {
     // Pointeur ailleurs, focus ailleurs : le navigateur garde ses raccourcis.
     const dehors = touche({ key: '+', ctrlKey: true })
     expect(dehors.defaultPrevented).toBe(false)
-    expect(libelle()).toBe('Ajusté')
+    expect(libelle()).toBe(AJUSTE)
 
     fireEvent.pointerEnter(screen.getByTestId('zone'))
     expect(touche({ key: '=', ctrlKey: true }).defaultPrevented).toBe(true)
@@ -224,7 +226,7 @@ describe('ZoomApercu', () => {
     expect(
       touche({ key: 'à', code: 'Digit0', ctrlKey: true }).defaultPrevented,
     ).toBe(true)
-    expect(libelle()).toBe('Ajusté')
+    expect(libelle()).toBe(AJUSTE)
     // Sans Ctrl : rien.
     expect(touche({ key: '+' }).defaultPrevented).toBe(false)
 
@@ -260,7 +262,7 @@ describe('ZoomApercu', () => {
     expect(libelle()).toBe('75 %')
     screen.getByRole('button', { name: "Agrandir l'aperçu" }).focus()
     expect(touche({ key: '0', ctrlKey: true }).defaultPrevented).toBe(true)
-    expect(libelle()).toBe('Ajusté')
+    expect(libelle()).toBe(AJUSTE)
   })
 
   it('bornes : « − » grisé à 25 %, « + » grisé à 400 %', () => {

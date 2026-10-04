@@ -19,8 +19,9 @@ import {
 import type { ModeZoom, PlaceApercu } from '#/lib/classeur/zoom.ts'
 
 /*
- * Zoom de l'aperçu A4 de l'éditeur d'un document (étape 8, décisions D27 :
- * éditeur seulement, D28 : Ctrl + molette / Ctrl + 0 / Ctrl + « + » / « − »
+ * Zoom de l'aperçu A4 d'un document, en lecture comme en édition (étape 8 ;
+ * D27 « éditeur seulement » révisée par l'audit A4 du 2026-10-04 : la page
+ * en lecture est l'aperçu le plus regardé), D28 : Ctrl + molette / Ctrl + 0 / Ctrl + « + » / « − »
  * interceptés AU-DESSUS de l'aperçu seulement, ailleurs le zoom du
  * navigateur reste). Sur le modèle de `useChapterZoom`.
  *

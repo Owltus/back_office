@@ -52,17 +52,17 @@ export function ZoomApercu({
   className,
 }: {
   mode: ModeZoom
-  /** Échelle effective : sert aux bornes des boutons et à l'infobulle. */
+  /** Échelle effective : bornes des boutons et pourcentage du libellé. */
   echelle: number
   onMode: (mode: ModeZoom) => void
   onZoomer: (direction: 1 | -1) => void
   className?: string
 }) {
-  const libelle = libelleZoom(mode)
+  // C7 : « Ajusté · 35 % », le pourcentage réel se VOIT (il n'était que
+  // dans l'aria-label).
+  const libelle = libelleZoom(mode, echelle)
   return (
-    <ButtonGroup
-      className={cn('rounded-md bg-background shadow-md', className)}
-    >
+    <ButtonGroup className={cn('rounded-md bg-background', className)}>
       <IconAction
         label="Réduire l'aperçu"
         icon={<Minus />}
@@ -75,10 +75,8 @@ export function ZoomApercu({
           <Button
             variant="outline"
             size="sm"
-            aria-label={`Zoom de l'aperçu : ${libelle}${
-              typeof mode === 'number' ? '' : ` (${pourcentage(echelle)})`
-            }`}
-            className="min-w-[6.5rem] justify-between gap-1 px-2.5 text-xs tabular-nums pointer-coarse:h-11"
+            aria-label={`Zoom de l'aperçu : ${libelle}`}
+            className="min-w-[6.5rem] justify-between whitespace-nowrap gap-1 px-2.5 text-xs tabular-nums pointer-coarse:h-11"
           >
             {libelle}
             <ChevronDown className="size-3.5 opacity-60" />

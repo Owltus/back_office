@@ -43,6 +43,7 @@ import {
 import { useEditionDocument } from '#/components/classeur/detail/useEditionDocument.ts'
 import { ZoomApercu } from '#/components/classeur/detail/ZoomApercu.tsx'
 import { useZoomApercu } from '#/components/classeur/hooks/useZoomApercu.ts'
+import type { ZoomApercu as ZoomApercuEtat } from '#/components/classeur/hooks/useZoomApercu.ts'
 import { AlertesRelecture } from '#/components/classeur/detail/AlertesRelecture.tsx'
 import {
   allerALigne,
@@ -72,7 +73,6 @@ import {
   ligneRendueVersSource,
   ligneSourceVersRendue,
 } from '#/lib/classeur/print/lignesSource.ts'
-import { usePageScale } from '#/lib/classeur/print/usePageScale.ts'
 import { alertesRelecture } from '#/lib/classeur/relecture.ts'
 import type { InfoPage } from '#/lib/classeur/relecture.ts'
 import type { PageData } from '#/lib/classeur/print/paginate.ts'
@@ -111,6 +111,8 @@ export function DocumentDetail() {
   } = edition
   const contenuDiffere = useDeferredValue(contenu)
   const [previewOpen, setPreviewOpen] = useState(false)
+  /** Audit A2 : l'aperçu a été ouvert par « Télécharger le PDF ». */
+  const [pdfDirect, setPdfDirect] = useState(false)
   const [aideOuverte, setAideOuverte] = useState(false)
   const [titreOuvert, setTitreOuvert] = useState(false)
   /** 17. Aperçu masqué : le texte prend toute la largeur. */
@@ -122,8 +124,6 @@ export function DocumentDetail() {
   /** 19. Nombre de pages de l'aperçu, affiché discrètement en édition. */
   const [nbPages, setNbPages] = useState<number | null>(null)
 
-  const { containerRef: lectureRef, scale: lectureScale } =
-    usePageScale('width')
   const apercuScrollRef = useRef<HTMLDivElement | null>(null)
   const editeurRef = useRef<HTMLTextAreaElement | null>(null)
   const synchronisation = useRef(false)
@@ -138,11 +138,15 @@ export function DocumentDetail() {
   // avec la colonne des chapitres, chaque moitié ne faisait que ~320 px
   // (audit tactile 2026-09-28).
   const zoneEdition = useHauteurJusquEnBas({ minLargeur: 1280 })
-  // Étape 8 : zoom de l'aperçu d'édition (D27 : éditeur seulement).
+  // Étape 8 : zoom de l'aperçu, en lecture comme en édition (audit A4 :
+  // la page en lecture est l'aperçu le plus regardé), même réglage mémorisé.
   // `zoom.echelle` est la SEULE échelle de l'aperçu ; la synchro texte ⇄
   // aperçu et la barre d'image lisent des rapports de défilement et des
-  // boîtes déjà à cette échelle.
-  const zoom = useZoomApercu({ hauteurBornee: zoneEdition.hauteur !== null })
+  // boîtes déjà à cette échelle. En lecture, la page défile avec la
+  // fenêtre : hauteur non bornée.
+  const zoom = useZoomApercu({
+    hauteurBornee: editing && zoneEdition.hauteur !== null,
+  })
   const apercuRefCallback = zoom.defilementRef
   // Barre flottante de l'image cliquée dans l'aperçu (2026-10-01).
   const [barre, setBarre] = useState<
@@ -488,25 +492,22 @@ export function DocumentDetail() {
             canWrite={page.canWrite}
             saving={edition.saving}
             statut={
-              <>
-                {nbPages !== null && (
-                  <span
-                    className="hidden text-xs text-muted-foreground tabular-nums md:inline"
-                    title="Nombre de pages imprimées"
-                  >
-                    {nbPages} {nbPages > 1 ? 'pages' : 'page'}
-                  </span>
-                )}
-                <IndicateurEnregistrement
-                  modifie={edition.modifie}
-                  brouillonEcritLe={edition.brouillonEcritLe}
-                />
-              </>
+              <IndicateurEnregistrement
+                modifie={edition.modifie}
+                brouillonEcritLe={edition.brouillonEcritLe}
+              />
             }
             onEdit={edition.commencer}
             onCancel={edition.annuler}
             onSave={sauvegarder}
-            onPrint={() => setPreviewOpen(true)}
+            onPrint={() => {
+              setPdfDirect(false)
+              setPreviewOpen(true)
+            }}
+            onPdf={() => {
+              setPdfDirect(true)
+              setPreviewOpen(true)
+            }}
             extra={
               <>
                 <IconAction
@@ -550,7 +551,9 @@ export function DocumentDetail() {
         <div
           ref={zoneEdition.ref}
           className={cn(
-            'grid gap-4',
+            // `grid-cols-1` (minmax(0, 1fr)) : sous 1280 px, une colonne `auto`
+            // s'élargissait à l'aperçu zoomé, barre du zoom hors de l'écran.
+            'grid grid-cols-1 gap-4',
             apercuMasque ? 'xl:grid-cols-1' : 'xl:grid-cols-2',
           )}
           style={
@@ -559,18 +562,19 @@ export function DocumentDetail() {
               : { height: zoneEdition.hauteur }
           }
         >
-          {/* Colonne d'aperçu : zone d'écoute du zoom (Ctrl + molette,
-              raccourcis) qui porte aussi le contrôle flottant, hors de la
-              partie qui défile pour qu'il reste en place. */}
-          <div
+          {/* Colonne d'aperçu : la carte est la zone d'écoute du zoom
+              (Ctrl + molette, raccourcis) ; elle porte la partie qui défile
+              puis la barre du zoom, HORS des pages (audit B6). */}
+          <DetailPaper
             ref={zoom.zoneRef}
             className={cn(
-              'relative order-2 flex min-h-0 flex-col xl:order-1 xl:h-full',
+              'order-2 flex min-h-0 flex-col xl:order-1 xl:h-full',
               apercuMasque && 'hidden',
             )}
           >
-            <DetailPaper
+            <div
               ref={apercuRef}
+              data-apercu-defilement=""
               className={cn(
                 // `overflow-auto` : agrandi au-delà de la colonne, l'aperçu
                 // défile aussi en largeur.
@@ -592,23 +596,9 @@ export function DocumentDetail() {
               >
                 {pages}
               </div>
-            </DetailPaper>
-            {/* Grand écran : en bas à droite de la colonne (qui a une
-                hauteur fixe). Plus étroit : collé au bas de l'écran tant
-                que l'aperçu est visible. Écarté des barres de défilement. */}
-            <div
-              data-zoom-apercu=""
-              className="pointer-events-none sticky bottom-3 z-10 -mt-14 flex justify-end pr-3 xl:absolute xl:right-5 xl:bottom-5 xl:mt-0 xl:pr-0"
-            >
-              <ZoomApercu
-                className="pointer-events-auto"
-                mode={zoom.mode}
-                echelle={zoom.echelle}
-                onMode={zoom.definirMode}
-                onZoomer={zoom.zoomer}
-              />
             </div>
-          </div>
+            <BarreZoom zoom={zoom} nbPages={nbPages} />
+          </DetailPaper>
           <div className="order-1 flex min-h-0 flex-col xl:order-2 xl:h-full">
             {page.canWrite && (
               <div className="flex flex-col gap-1.5 pb-2">
@@ -690,13 +680,23 @@ export function DocumentDetail() {
           </div>
         </div>
       ) : (
-        <DetailPaper ref={lectureRef} className="flex-1">
+        // Lecture : la page défile avec la fenêtre ; la carte défile seule
+        // en largeur quand le zoom dépasse la colonne. Même barre de zoom
+        // qu'en édition, sous les pages (audit A4, B6).
+        <DetailPaper ref={zoom.zoneRef} className="flex flex-1 flex-col">
           <div
-            className="flex flex-col items-center gap-4 py-4"
-            style={{ zoom: lectureScale }}
+            ref={zoom.defilementRef}
+            data-apercu-defilement=""
+            className="flex-1 overflow-x-auto"
           >
-            {pages}
+            <div
+              className="flex flex-col items-center-safe gap-4 py-4"
+              style={{ zoom: zoom.echelle }}
+            >
+              {pages}
+            </div>
           </div>
+          <BarreZoom zoom={zoom} nbPages={nbPages} />
         </DetailPaper>
       )}
 
@@ -751,6 +751,7 @@ export function DocumentDetail() {
       <PrintPreview
         open={previewOpen}
         onOpenChange={setPreviewOpen}
+        autoTelecharger={pdfDirect}
         title={titreAffiche}
         nomFichier={nomFichierImpression({
           classeur: page.classeurName,
@@ -770,6 +771,42 @@ export function DocumentDetail() {
           />
         )}
       </PrintPreview>
+    </div>
+  )
+}
+
+/**
+ * Barre du zoom, SOUS les pages et hors de la partie qui défile (audit B6 :
+ * le contrôle flottait sur la page et masquait des lignes). Grand écran en
+ * édition : dernière rangée de la colonne à hauteur fixe. Ailleurs : collée
+ * au bas de l'écran tant que l'aperçu est visible (`sticky`), puis à sa
+ * place sous la dernière page en fin de défilement : rien n'est jamais
+ * masqué pour de bon. À gauche, le nombre de pages imprimées.
+ */
+function BarreZoom({
+  zoom,
+  nbPages,
+}: {
+  zoom: ZoomApercuEtat
+  nbPages: number | null
+}) {
+  return (
+    <div
+      data-zoom-apercu=""
+      className="sticky bottom-0 z-10 flex shrink-0 items-center justify-between gap-3 rounded-b-xl border-t border-border bg-card px-3 py-1.5"
+    >
+      <span
+        className="text-xs text-muted-foreground tabular-nums"
+        title="Nombre de pages imprimées"
+      >
+        {nbPages === null ? '' : `${nbPages} ${nbPages > 1 ? 'pages' : 'page'}`}
+      </span>
+      <ZoomApercu
+        mode={zoom.mode}
+        echelle={zoom.echelle}
+        onMode={zoom.definirMode}
+        onZoomer={zoom.zoomer}
+      />
     </div>
   )
 }

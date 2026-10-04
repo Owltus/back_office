@@ -276,6 +276,11 @@ describe('libellés', () => {
     expect(libelleZoom(1.25)).toBe('125 %')
     expect(libelleZoom(0.5)).toBe('50 %')
     expect(libelleZoom(1.234)).toBe('123 %')
+    // C7 : le pourcentage réel d'un mode ajusté se voit dans le libellé.
+    expect(libelleZoom('ajuster', 0.354)).toBe('Ajusté · 35 %')
+    expect(libelleZoom('page', 0.42)).toBe('Page entière · 42 %')
+    // Échelle fixe : le pourcentage du mode, pas un second.
+    expect(libelleZoom(1.25, 0.5)).toBe('125 %')
     expect(pourcentage(9)).toBe('400 %')
     expect(pourcentage(0.1)).toBe('25 %')
   })
