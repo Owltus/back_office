@@ -1507,8 +1507,11 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
     `MergePreviewDialog` sur `ApercuImport`, `appliquerFusion({exclus})` ;
     demandes LLM à l'export complet, `ExportJsonClasseurDialog`,
     `DemandesLlm.tsx`), D27 (zoom aussi en lecture et dans l'aperçu
-    d'impression, ajusté à la largeur sur téléphone ; barre `BarreZoom` sous
-    les pages, ne masque plus le texte). « Copier vers un autre classeur »
+    d'impression, ajusté à la largeur sur téléphone). ⚠ Page d'un document :
+    AUCUN contrôle de zoom à l'écran (barre retirée à la demande de
+    l'utilisateur), Ctrl + molette et Ctrl + 0 seulement, comme la grille
+    d'un chapitre ; « N pages » revenu dans l'en-tête en édition. Le
+    contrôle `ZoomApercu` ne reste que dans l'aperçu d'impression. « Copier vers un autre classeur »
     est une entrée VISIBLE du menu (plus caché derrière Déplacer). Échap
     dans un dialogue ne vide plus la sélection (`useSelection` en capture).
     Gestion de la page jamais bloquée par une lecture d'exceptions en échec.
