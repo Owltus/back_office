@@ -137,7 +137,8 @@ export function ClasseurDashboard({
   busy?: DashboardBusy
   renderResult?: (result: ClasseurSearchResult) => ReactNode
 }) {
-  const { canWrite, canManage } = useDroitsClasseur(classeurId)
+  const droits = useDroitsClasseur(classeurId)
+  const { canWrite, canManage } = droits
   const [accesOuvert, setAccesOuvert] = useState(false)
   const [suppressionOuverte, setSuppressionOuverte] = useState(false)
   const navigate = useNavigate()
@@ -256,6 +257,14 @@ export function ClasseurDashboard({
       {erreurLecture !== null && (
         <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {messageErreur(erreurLecture, 'Classeur indisponible')}
+        </div>
+      )}
+      {droits.isError && (
+        <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {messageErreur(
+            droits.error,
+            'Droits indisponibles, modifications désactivées',
+          )}
         </div>
       )}
 

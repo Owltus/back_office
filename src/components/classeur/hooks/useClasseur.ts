@@ -10,6 +10,7 @@ import {
   fetchClasseurContent,
   fetchClasseurs,
   fetchPeriodicites,
+  moveItems,
   reorderChapters,
   reorderClasseurs,
   reorderItems,
@@ -212,6 +213,28 @@ export function useReorderItems(chapterId: number) {
     onError: (_err, _refs, ctx) => {
       if (ctx?.avant) queryClient.setQueryData(key, ctx.avant)
     },
+    onSettled: () => invalider(),
+  })
+}
+
+/**
+ * Déplacer des éléments vers un autre chapitre du même classeur
+ * (glisser-déposer sur la colonne). `moveItems` écrit élément par élément :
+ * une panne au milieu laisse les premiers déplacés. Invalidation de
+ * `classeurKeys.all` à l'issue, réussie OU NON, sinon l'affichage resterait
+ * sur l'état d'avant. `onDeplace` (vider la sélection) : succès seulement.
+ */
+export function useDeplacerItems(onDeplace?: () => void) {
+  const invalider = useInvaliderClasseur()
+  return useMutation({
+    mutationFn: ({
+      refs,
+      cible,
+    }: {
+      refs: ReadonlyArray<ItemRef>
+      cible: number
+    }) => moveItems(refs, cible),
+    onSuccess: () => onDeplace?.(),
     onSettled: () => invalider(),
   })
 }

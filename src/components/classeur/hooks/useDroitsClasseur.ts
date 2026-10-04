@@ -41,6 +41,9 @@ export function useMesAcces() {
   return {
     parClasseur,
     isPending: q.isPending && userId !== null,
+    /** Lues avec succès au moins une fois (un rafraîchissement raté garde la
+     *  dernière liste connue). */
+    lues: q.data !== undefined,
     isError: q.isError,
     error: q.error,
   }
@@ -73,7 +76,14 @@ export function useDroitsClasseur(classeurId: number) {
   const pagesDroits = useDroitsPageClasseur()
   const classeurQ = useClasseur(classeurId)
   const mesAcces = useMesAcces()
-  const pret = !classeurQ.isPending && !mesAcces.isPending
+  // Mes exceptions jamais lues avec succès (chargement OU erreur) : on ne
+  // les suppose pas absentes (une exception peut RETIRER l'écriture d'un
+  // classeur ouvert à tous). Tout reste `false`, et l'erreur est exposée
+  // pour être dite à l'écran (jamais un « lecture seule » muet). Un
+  // rafraîchissement raté garde la dernière liste lue : pas de droits qui
+  // disparaissent en pleine édition sur une panne passagère.
+  const erreurAcces = mesAcces.isError && !mesAcces.lues
+  const pret = !classeurQ.isPending && mesAcces.lues
   const niveau = pret
     ? niveauEffectif(
         pagesDroits.page,
@@ -92,6 +102,9 @@ export function useDroitsClasseur(classeurId: number) {
     estCreateur: user?.id != null && classeurQ.data?.created_by === user.id,
     /** Le classeur et mes accès sont chargés : les droits sont définitifs. */
     pret,
+    /** Mes exceptions d'accès n'ont pas pu être lues (droits retenus). */
+    isError: erreurAcces,
+    error: erreurAcces ? mesAcces.error : null,
   }
 }
 

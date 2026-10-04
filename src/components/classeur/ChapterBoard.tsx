@@ -62,6 +62,7 @@ import {
   useChapterContent,
   useChapters,
   useClasseur,
+  useDeplacerItems,
   useInvaliderClasseur,
   usePeriodicites,
   useReorderItems,
@@ -100,7 +101,7 @@ import { cleRef, deplacer, parseCleRef, refsDe } from '#/lib/classeur/ordre.ts'
 import type { ItemRef } from '#/lib/classeur/ordre.ts'
 import { nomFichierImpression } from '#/lib/classeur/print/nomFichierImpression.ts'
 import { elementsAImprimer } from '#/lib/classeur/selectionImpression.ts'
-import { createItem, moveItems } from '#/lib/classeur/service.ts'
+import { createItem } from '#/lib/classeur/service.ts'
 import { contientSansAccents, stripAccents } from '#/lib/classeur/slug.ts'
 import { ITEM_KINDS, flattenItems } from '#/lib/classeur/types.ts'
 import type { ChapterItem, DbTrackingSheet } from '#/lib/classeur/types.ts'
@@ -142,7 +143,8 @@ export function ChapterBoard({
   classeurId: number
   chapterId: number
 }) {
-  const { canWrite, niveau } = useDroitsClasseur(classeurId)
+  const droits = useDroitsClasseur(classeurId)
+  const { canWrite, niveau } = droits
   const navigate = useNavigate()
   const invalider = useInvaliderClasseur()
 
@@ -222,19 +224,8 @@ export function ChapterBoard({
   // Écritures
   const reorder = useReorderItems(chapterId)
 
-  const deplacement = useMutation({
-    mutationFn: ({
-      refs,
-      cible,
-    }: {
-      refs: ReadonlyArray<ItemRef>
-      cible: number
-    }) => moveItems(refs, cible),
-    onSuccess: async () => {
-      await invalider()
-      selection.clear()
-    },
-  })
+  // Invalide aussi après un échec partiel (panne au milieu) : voir le hook.
+  const deplacement = useDeplacerItems(selection.clear)
 
   const importation = useMutation({
     mutationFn: async (fichiers: FichierImporte[]) => {
@@ -372,6 +363,12 @@ export function ChapterBoard({
       cle: 'contenu',
       err: contenuQ.error,
       action: 'Éléments indisponibles',
+    })
+  if (droits.isError)
+    erreurs.push({
+      cle: 'droits',
+      err: droits.error,
+      action: 'Droits indisponibles, modifications désactivées',
     })
   if (reorder.isError)
     erreurs.push({
