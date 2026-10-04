@@ -10,6 +10,29 @@ seront pas renumérotés.
 
 ---
 
+## Décisions retenues le 2026-10-04 (déléguées à l'assistant)
+
+L'utilisateur a demandé, en partant : « prends tout en compte et implémente
+tout sans me demander ». Pour chaque question, l'assistant a retenu la voie la
+plus sûre : sans SQL, sans nouvelle dépendance, sans écriture en production
+pour les tests, et la plus fidèle aux choix déjà exprimés. Chacune se renverse
+facilement.
+
+| # | Retenu | Raison |
+|---|---|---|
+| D18 | **oui** : Copier, limité à un AUTRE classeur | « Copier / déplacer » a été accepté ; la limite évite le « Dupliquer » refusé |
+| D10 | **A** : déplacement par changement de chapitre | La base vérifie les deux côtés ; historique et numéro gardés |
+| D8 | **oui** : l'historique suit le document | C'est déjà le comportement de la base ; rien à purger |
+| D6 | **oui** : Copier exige aussi l'écriture sur l'origine | Le plus prudent ; c'était le texte du plan d'origine |
+| D16 | **A** : corbeille visible avec le droit d'écriture | Même règle que la suppression |
+| D15 | **A** : date choisie, préremplie à « il y a 7 jours » | Aucun SQL ; poste partagé |
+| D14 | **A** : noir et blanc comme l'Historique | L'utilisateur a refusé la couleur dans l'éditeur |
+| D25 | **A** : demandes à l'export chapitre / document | Dialogue existant ; pas de nouvel écran |
+| D26 | **non** : rien n'est mémorisé | Poste partagé |
+| D27 | **B** : zoom dans l'éditeur seulement | Périmètre demandé |
+| D19 | **A** : bon nom de fichier, plus une aide « Enregistrer en PDF » | Texte vectoriel, aucune dépendance nouvelle ; la voie B reste ouverte (voir l'étape 9) |
+| D21 | **B** : lecture du catalogue, plus un test réel par l'utilisateur | Docker est éteint ; écrire en production est interdit |
+
 ## A. Questions pour l'utilisateur (11)
 
 | # | Question | Choix | Étape | Ce qui en dépend |
