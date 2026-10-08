@@ -202,9 +202,14 @@ describe('PrintPreview — écran étroit : pages ajustées, sans toucher aux pa
       expect(zoom).toBeLessThan(0.48)
       const page = document.querySelector<HTMLElement>('.a4-page')
       expect(page?.style.zoom).toBe('')
+      // Boutons de zoom retirés le 2026-10-08 (demande utilisateur) : aucun
+      // contrôle de zoom dans l'aperçu.
       expect(
-        screen.getByRole('button', { name: /Zoom de l'aperçu/ }).textContent,
-      ).toContain('Ajusté')
+        screen.queryByRole('button', { name: /Zoom de l'aperçu/ }),
+      ).toBeNull()
+      expect(
+        screen.queryByRole('button', { name: /Agrandir|Réduire/ }),
+      ).toBeNull()
     } finally {
       if (original) {
         Object.defineProperty(HTMLElement.prototype, 'clientWidth', original)

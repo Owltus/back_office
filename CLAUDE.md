@@ -1510,7 +1510,7 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
     `waitForMermaid` borné à 10 s — avant, un document dont les images ou le
     schéma n'étaient pas prêts MANQUAIT à l'impression sans message.
   - **Zoom de l'aperçu** (éditeur seulement) : `lib/classeur/zoom.ts`,
-    `useZoomApercu`, `ZoomApercu.tsx` ; Ctrl + molette / Ctrl + 0 / = / −
+    `useZoomApercu` (`ZoomApercu.tsx` SUPPRIMÉ le 2026-10-08) ; Ctrl + molette / Ctrl + 0 / = / −
     seulement au-dessus de l'aperçu, ⚠ jamais avec Alt (AltGr = Ctrl + Alt
     sous Windows : le « @ » AZERTY était avalé) ; mémorisé par poste.
   - **Corbeille** (`corbeille.ts`, `CorbeilleDialog`, carte avec le droit
@@ -1556,7 +1556,7 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
     AUCUN contrôle de zoom à l'écran (barre retirée à la demande de
     l'utilisateur), Ctrl + molette et Ctrl + 0 seulement, comme la grille
     d'un chapitre ; « N pages » revenu dans l'en-tête en édition. Le
-    contrôle `ZoomApercu` ne reste que dans l'aperçu d'impression. « Copier vers un autre classeur »
+    aperçu d'impression : plus AUCUN bouton de zoom (retirés le 2026-10-08 à la demande de l'utilisateur), pages seulement ajustées à la largeur sur écran étroit. « Copier vers un autre classeur »
     est une entrée VISIBLE du menu (plus caché derrière Déplacer). Échap
     dans un dialogue ne vide plus la sélection (`useSelection` en capture).
     Gestion de la page jamais bloquée par une lecture d'exceptions en échec.

@@ -82,18 +82,6 @@ export function palierPrecedent(echelle: number): number {
   return dessous.length > 0 ? dessous[dessous.length - 1] : ECHELLE_MIN
 }
 
-/**
- * Libellé du bouton central : « 125 % » pour une échelle fixe ; pour un
- * mode ajusté, le mode ET le pourcentage réel (« Ajusté · 35 % », audit
- * C7 : le pourcentage seul dans l'aria-label ne se voyait pas). Sans
- * `echelle` (pas encore mesurée), le mode seul.
- */
-export function libelleZoom(mode: ModeZoom, echelle?: number): string {
-  if (typeof mode === 'number') return pourcentage(mode)
-  const nom = mode === 'ajuster' ? 'Ajusté' : 'Page entière'
-  return echelle === undefined ? nom : nom + ' · ' + pourcentage(echelle)
-}
-
 const ESPACE_INSECABLE = ' '
 
 /** « 125 % » (espace insécable), arrondi au pour cent. */

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode, RefObject } from 'react'
 import { Printer, X } from 'lucide-react'
 
-import { ZoomApercu } from '#/components/classeur/detail/ZoomApercu.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import {
   Dialog,
@@ -11,18 +10,12 @@ import {
   DialogDescription,
   DialogTitle,
 } from '#/components/ui/dialog.tsx'
-import { TooltipProvider } from '#/components/ui/tooltip.tsx'
 import {
   MiseEnPageEnCours,
   SELECTEUR_PAGINATION_EN_COURS,
 } from '#/lib/classeur/print/buildPrintHtml.ts'
 import { printViaIframe } from '#/lib/classeur/print/printIframe.ts'
-import {
-  echelleEffective,
-  palierPrecedent,
-  palierSuivant,
-} from '#/lib/classeur/zoom.ts'
-import type { ModeZoom } from '#/lib/classeur/zoom.ts'
+import { echelleEffective } from '#/lib/classeur/zoom.ts'
 
 /**
  * Aide sous le titre, TOUJOURS lisible (retour à la ligne, jamais tronquée).
@@ -74,8 +67,8 @@ interface PrintPreviewProps {
  *
  * Écran étroit (B1, A4) : l'en-tête passe à la ligne, le bouton Fermer reste
  * à côté du titre ; les pages sont AJUSTÉES à la largeur par défaut
- * (`echelleEffective('ajuster', …)`, même logique que l'éditeur) avec le
- * contrôle `ZoomApercu`. Le zoom est un `zoom` CSS sur l'enveloppe des
+ * (`echelleEffective('ajuster', …)`, même logique que l'éditeur), sans
+ * aucun contrôle de zoom. Le zoom est un `zoom` CSS sur l'enveloppe des
  * pages : la page elle-même n'est pas touchée, donc l'impression (copie des
  * `.a4-page`) ne change pas.
  */
@@ -134,13 +127,11 @@ export function PrintPreview({
     return () => ro.disconnect()
   }, [noeud])
 
-  const [modeZoom, setModeZoom] = useState<ModeZoom>('ajuster')
-  // Place inconnue (premier rendu, jsdom) : 100 %, comme avant.
-  const echelle = place.largeur > 0 ? echelleEffective(modeZoom, place) : 1
-  const zoomer = (direction: 1 | -1) =>
-    setModeZoom(
-      direction > 0 ? palierSuivant(echelle) : palierPrecedent(echelle),
-    )
+  // Ajusté à la largeur, sans contrôle à l'écran (boutons de zoom retirés
+  // le 2026-10-08 à la demande de l'utilisateur) ; plafonné à 100 %, donc
+  // seul un écran étroit réduit les pages. Place inconnue (premier rendu,
+  // jsdom) : 100 %.
+  const echelle = place.largeur > 0 ? echelleEffective('ajuster', place) : 1
 
   const handlePrint = async () => {
     const container = scrollRef.current
@@ -167,7 +158,7 @@ export function PrintPreview({
         className="classeur-print-preview flex h-[92dvh] w-[95vw] max-w-[880px] flex-col gap-0 overflow-hidden p-0 sm:max-w-[880px]"
       >
         {/* En-tête. Ligne 1 : titre + aide (qui passent à la ligne) et
-            Fermer, toujours visible. Ligne 2 : zoom et Imprimer, qui passent
+            Fermer, toujours visible. Ligne 2 : Imprimer, qui passe
             à la ligne sur un écran étroit (B1). */}
         <div className="flex shrink-0 flex-col gap-2 border-b border-border px-3 py-2 sm:px-4">
           <div className="flex items-start justify-between gap-3">
@@ -195,17 +186,6 @@ export function PrintPreview({
             </DialogClose>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
-            {/* Fournisseur local : l'aperçu est aussi rendu hors de
-                l'application (tests, pages isolées). */}
-            <TooltipProvider>
-              <ZoomApercu
-                className="mr-auto"
-                mode={modeZoom}
-                echelle={echelle}
-                onMode={setModeZoom}
-                onZoomer={zoomer}
-              />
-            </TooltipProvider>
             <Button
               size="sm"
               className="pointer-coarse:h-11"
