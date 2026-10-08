@@ -14,7 +14,6 @@ import {
   Archive,
   Braces,
   CheckCircle2,
-  Download,
   CheckSquare,
   FileUp,
   FolderInput,
@@ -123,13 +122,9 @@ const strategieInerte = () => null
  */
 type Apercu =
   | { type: 'item'; item: ChapterItem }
-  | { type: 'tout'; telecharger?: boolean }
-  | { type: 'selection'; telecharger?: boolean }
+  | { type: 'tout' }
+  | { type: 'selection' }
   | null
-
-/** Libellés de l'accès direct au PDF (audit du 2026-10-04, A2). */
-export const TELECHARGER_CHAPITRE = 'Télécharger le PDF du chapitre'
-export const TELECHARGER_SELECTION = 'Télécharger la sélection en PDF'
 
 /**
  * Page d'un chapitre — portée de Registre (`ChapterPage`, 940 l.) :
@@ -516,16 +511,6 @@ export function ChapterBoard({
                       count={aImprimer.length}
                       onClick={() => setApercu({ type: 'selection' })}
                     />
-                    {/* Accès direct au PDF : l'aperçu s'ouvre et lance le
-                    téléchargement tout seul (A2). */}
-                    <IconAction
-                      label={TELECHARGER_SELECTION}
-                      icon={<Download />}
-                      onClick={() =>
-                        setApercu({ type: 'selection', telecharger: true })
-                      }
-                      disabled={aImprimer.length === 0}
-                    />
                     {canWrite && (
                       <IconAction
                         label="Supprimer la sélection"
@@ -596,14 +581,6 @@ export function ChapterBoard({
                         disabled={!chapter || items.length === 0}
                       />
                       <IconAction
-                        label={TELECHARGER_CHAPITRE}
-                        icon={<Download />}
-                        onClick={() =>
-                          setApercu({ type: 'tout', telecharger: true })
-                        }
-                        disabled={!chapter || items.length === 0}
-                      />
-                      <IconAction
                         label="Exporter le chapitre en Markdown (ZIP)"
                         icon={<Archive />}
                         onClick={() => exportZip.mutate()}
@@ -669,15 +646,6 @@ export function ChapterBoard({
                         >
                           <Printer />
                           Imprimer ou PDF
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          disabled={!chapter || items.length === 0}
-                          onSelect={() =>
-                            setApercu({ type: 'tout', telecharger: true })
-                          }
-                        >
-                          <Download />
-                          {TELECHARGER_CHAPITRE}
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           disabled={!chapter || !contenu}
@@ -901,10 +869,6 @@ export function ChapterBoard({
         onOpenChange={(open) => {
           if (!open) setApercu(null)
         }}
-        autoTelecharger={
-          (apercu?.type === 'tout' || apercu?.type === 'selection') &&
-          apercu.telecharger === true
-        }
         nomFichier={nomFichierImpression({
           classeur: classeurName,
           titre:

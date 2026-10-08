@@ -11,9 +11,9 @@ Parking, PDJ, Affichage, Rapprochement/Caisse (à venir).
 - **Supabase** (Auth + PostgreSQL + RLS + Storage)
 - Recharts, papaparse. ⚠ html2canvas (1.4.1) n'est PLUS installé : elle ne
   lisait pas les couleurs `oklch` de Tailwind v4, ne pas la réintroduire.
-  Depuis le 2026-10-04, **html2canvas-pro** (fork MIT qui lit `oklch`) sert
-  au seul « Télécharger le PDF » du Classeur (`lib/classeur/print/pdfDirect.ts`,
-  chargé par `import()` au clic). (jspdf tire encore un chunk html2canvas
+  **html2canvas-pro** (fork MIT qui lit `oklch`), ajoutée le 2026-10-04 pour
+  « Télécharger le PDF » du Classeur, a été RETIRÉE le 2026-10-08 avec cette
+  fonction (décision utilisateur). (jspdf tire encore un chunk html2canvas
   facultatif à lui, jamais chargé par l'app.)
 
 ## Backend Supabase — DÉDIÉ à cette app (prod live)
@@ -1479,6 +1479,16 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
     `modifiesDepuis`, `fetchVersionsDepuis`, clé `['classeur','modifies']`
     supprimés, aucun SQL n'avait été créé ; nom de fichier PDF « Classeur - Titre »
     (`nomFichierImpression`, noms réservés Windows avec extension).
+    ⚠ **« Télécharger le PDF » RETIRÉ le 2026-10-08 à la demande de
+    l'utilisateur (« trop complexe »)** : bouton de l'aperçu, accès directs
+    (document, chapitre, sélection, `autoTelecharger`), `pdfDirect.ts`,
+    `estimationPdf.ts` et la dépendance html2canvas-pro supprimés ;
+    « Imprimer » redevient le bouton PRINCIPAL de `PrintPreview`, avec une
+    aide d'une ligne (Enregistrer au format PDF comme imprimante = vrai PDF
+    vectoriel). NE PAS reproposer de PDF en images ; la voie serveur (Chrome
+    sans écran) a été présentée et jugée trop complexe. Gardés :
+    `nomFichierImpression` / `<title>`, l'attente de la pagination, le zoom.
+    Historique de la fonction retirée, pour mémoire —
     **« Télécharger le PDF »** (D19 RENVERSÉE par l'utilisateur le
     2026-10-04 → voie B navigateur) : bouton outline à côté d'Imprimer dans
     `PrintPreview`, « Création du PDF… (3 / 12) » ; `pdfDirect.ts` (import
@@ -1532,7 +1542,7 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
     de l'utilisateur « je ne vois que Imprimer, pas Générer le PDF »)** —
     leçon : trancher à la place de l'utilisateur dans le sens le plus
     PRUDENT a produit des fonctions plus PETITES que ce qu'il avait accepté.
-    Renversés : D19 (bouton « Télécharger le PDF » PRINCIPAL, html2canvas-pro
+    Renversés : D19 (RETIRÉ ensuite le 2026-10-08, voir plus haut ; bouton « Télécharger le PDF » PRINCIPAL, html2canvas-pro
     + jsPDF, `pdfDirect.ts` ; accès en 1 clic depuis un document, un
     chapitre, une sélection via `PrintPreview autoTelecharger` ; Annuler,
     `rendreLaMain` entre deux pages, avertissement au-delà de 40 pages ;

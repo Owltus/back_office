@@ -110,8 +110,6 @@ export function DocumentDetail() {
   } = edition
   const contenuDiffere = useDeferredValue(contenu)
   const [previewOpen, setPreviewOpen] = useState(false)
-  /** Audit A2 : l'aperçu a été ouvert par « Télécharger le PDF ». */
-  const [pdfDirect, setPdfDirect] = useState(false)
   const [aideOuverte, setAideOuverte] = useState(false)
   const [titreOuvert, setTitreOuvert] = useState(false)
   /** 17. Aperçu masqué : le texte prend toute la largeur. */
@@ -512,14 +510,7 @@ export function DocumentDetail() {
               onEdit={edition.commencer}
               onCancel={edition.annuler}
               onSave={sauvegarder}
-              onPrint={() => {
-                setPdfDirect(false)
-                setPreviewOpen(true)
-              }}
-              onPdf={() => {
-                setPdfDirect(true)
-                setPreviewOpen(true)
-              }}
+              onPrint={() => setPreviewOpen(true)}
               extra={
                 <>
                   <IconAction
@@ -760,7 +751,6 @@ export function DocumentDetail() {
       <PrintPreview
         open={previewOpen}
         onOpenChange={setPreviewOpen}
-        autoTelecharger={pdfDirect}
         title={titreAffiche}
         nomFichier={nomFichierImpression({
           classeur: page.classeurName,

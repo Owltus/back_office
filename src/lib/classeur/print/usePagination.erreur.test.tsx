@@ -3,8 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, waitFor } from '@testing-library/react'
 
 /*
- * Le marqueur `data-pagination="en-cours"` (d318790) bloque « Imprimer » et
- * « Télécharger le PDF » tant qu'il est là. Une pagination qui LÈVE ne doit
+ * Le marqueur `data-pagination="en-cours"` (d318790) bloque « Imprimer »
+ * tant qu'il est là. Une pagination qui LÈVE ne doit
  * pas le laisser posé pour toujours (bouton « Préparation… » désactivé
  * sans fin, aucun message) : le document est rendu d'un seul bloc, et
  * l'erreur est dite en console.

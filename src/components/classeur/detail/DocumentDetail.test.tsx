@@ -8,8 +8,8 @@ import { TooltipProvider } from '#/components/ui/tooltip.tsx'
 /*
  * Page d'un document (audit du 2026-10-04) : le zoom existe en LECTURE
  * comme en ÉDITION (A4), sa barre vit HORS des pages (B6), son libellé
- * montre le pourcentage réel (C7), et « Télécharger le PDF » ouvre l'aperçu
- * d'impression avec `autoTelecharger` (A2). Tout ce qui lit la base est
+ * montre le pourcentage réel (C7), et « Imprimer » ouvre l'aperçu
+ * d'impression. Tout ce qui lit la base est
  * remplacé par un bouchon : seul l'assemblage de la page est jugé ici.
  */
 
@@ -86,13 +86,8 @@ vi.mock('#/components/classeur/print/DocumentPages.tsx', () => ({
 
 // L'aperçu d'impression : on ne lit que ce qu'il reçoit.
 vi.mock('#/components/classeur/print/PrintPreview.tsx', () => ({
-  PrintPreview: (p: { open: boolean; autoTelecharger?: boolean }) =>
-    p.open ? (
-      <div
-        data-testid="apercu-impression"
-        data-auto={String(p.autoTelecharger === true)}
-      />
-    ) : null,
+  PrintPreview: (p: { open: boolean }) =>
+    p.open ? <div data-testid="apercu-impression" /> : null,
 }))
 
 const vide = () => null
@@ -234,22 +229,13 @@ describe('DocumentDetail : zoom de l’aperçu (Ctrl + molette, sans contrôle)'
   })
 })
 
-describe('DocumentDetail : accès direct au PDF', () => {
-  it('« Imprimer » ouvre l’aperçu SANS téléchargement automatique', () => {
-    monter()
-    fireEvent.click(screen.getByRole('button', { name: 'Imprimer' }))
-    expect(
-      screen.getByTestId('apercu-impression').getAttribute('data-auto'),
-    ).toBe('false')
-  })
-
-  it('« Télécharger le PDF » ouvre l’aperçu avec autoTelecharger', () => {
+describe('DocumentDetail : impression (PDF en images retiré le 2026-10-08)', () => {
+  it('« Imprimer » ouvre l’aperçu ; aucun bouton « Télécharger le PDF »', () => {
     monter()
     expect(screen.queryByTestId('apercu-impression')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Télécharger le PDF' }))
-    expect(
-      screen.getByTestId('apercu-impression').getAttribute('data-auto'),
-    ).toBe('true')
+    expect(screen.queryByRole('button', { name: /Télécharger/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Imprimer' }))
+    expect(screen.getByTestId('apercu-impression')).toBeTruthy()
   })
 })
 

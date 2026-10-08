@@ -6,11 +6,11 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { TooltipProvider } from '#/components/ui/tooltip.tsx'
 
 /*
- * Page d'un chapitre : accès direct « Télécharger le PDF » (audit du
- * 2026-10-04, A2) — barre du chapitre (≥ 640 px), menu « ⋯ » (< 640 px) et
- * barre de sélection ouvrent l'aperçu AVEC `autoTelecharger` ; Imprimer
- * l'ouvre SANS. Titres d'aperçu sans tiret cadratin. Aperçu simulé : on
- * lit les props qu'il reçoit. Services simulés : la base n'est pas touchée.
+ * Page d'un chapitre : Imprimer (barre du chapitre ≥ 640 px, menu « ⋯ »
+ * < 640 px, barre de sélection) ouvre l'aperçu ; aucun bouton « Télécharger
+ * le PDF » (PDF en images retiré le 2026-10-08). Titres d'aperçu sans tiret
+ * cadratin. Aperçu simulé : on lit les props qu'il reçoit. Services simulés :
+ * la base n'est pas touchée.
  */
 
 const etatTest = vi.hoisted(() => ({ ordreEnErreur: false }))
@@ -25,22 +25,8 @@ vi.mock('#/components/classeur/ChapterDrawer.tsx', () => ({
   ChapterDrawerButton: () => null,
 }))
 vi.mock('#/components/classeur/print/PrintPreview.tsx', () => ({
-  PrintPreview: ({
-    open,
-    title,
-    autoTelecharger,
-  }: {
-    open: boolean
-    title?: string
-    autoTelecharger?: boolean
-  }) =>
-    open ? (
-      <div
-        data-testid="apercu"
-        data-auto={String(autoTelecharger === true)}
-        data-titre={title}
-      />
-    ) : null,
+  PrintPreview: ({ open, title }: { open: boolean; title?: string }) =>
+    open ? <div data-testid="apercu" data-titre={title} /> : null,
 }))
 vi.mock('#/components/classeur/print/ItemPages.tsx', () => ({
   ItemPages: () => null,
@@ -156,8 +142,7 @@ vi.mock('#/components/classeur/hooks/useClasseur.ts', () => ({
   useInvaliderClasseur: () => vi.fn(),
 }))
 
-const { ChapterBoard, TELECHARGER_CHAPITRE, TELECHARGER_SELECTION } =
-  await import('#/components/classeur/ChapterBoard.tsx')
+const { ChapterBoard } = await import('#/components/classeur/ChapterBoard.tsx')
 
 beforeEach(() => {
   vi.stubGlobal(
@@ -187,46 +172,49 @@ function monter() {
 
 const apercu = () => screen.getByTestId('apercu')
 
-describe('ChapterBoard, accès direct au PDF (A2)', () => {
-  it('barre du chapitre : Télécharger ouvre l’aperçu en téléchargement automatique', () => {
+describe('ChapterBoard, impression (PDF en images retiré le 2026-10-08)', () => {
+  it('aucun bouton ni entrée « Télécharger le PDF »', async () => {
     monter()
-    fireEvent.click(screen.getByRole('button', { name: TELECHARGER_CHAPITRE }))
-    expect(apercu().dataset.auto).toBe('true')
-    expect(apercu().dataset.titre).toBe('Accueil : chapitre complet')
+    expect(screen.queryByRole('button', { name: /Télécharger/ })).toBeNull()
+    fireEvent.keyDown(
+      screen.getByRole('button', { name: 'Autres actions du chapitre' }),
+      { key: 'Enter' },
+    )
+    await screen.findByRole('menuitem', { name: /Imprimer ou PDF/ })
+    expect(screen.queryByRole('menuitem', { name: /Télécharger/ })).toBeNull()
   })
 
-  it('Imprimer, lui, ouvre l’aperçu SANS téléchargement automatique', () => {
+  it('barre du chapitre : Imprimer ouvre l’aperçu du chapitre complet', () => {
     monter()
     fireEvent.click(
       screen.getByRole('button', {
         name: "Imprimer le chapitre ou l'enregistrer en PDF",
       }),
     )
-    expect(apercu().dataset.auto).toBe('false')
+    expect(apercu().dataset.titre).toBe('Accueil : chapitre complet')
   })
 
-  it('sous 640 px : l’entrée est dans le menu ⋯', async () => {
+  it('sous 640 px : Imprimer est dans le menu ⋯', async () => {
     monter()
     fireEvent.keyDown(
       screen.getByRole('button', { name: 'Autres actions du chapitre' }),
       { key: 'Enter' },
     )
     fireEvent.click(
-      await screen.findByRole('menuitem', { name: TELECHARGER_CHAPITRE }),
+      await screen.findByRole('menuitem', { name: /Imprimer ou PDF/ }),
     )
-    expect(apercu().dataset.auto).toBe('true')
+    expect(apercu().dataset.titre).toBe('Accueil : chapitre complet')
   })
 
-  it('barre de sélection : la sélection seule, téléchargée, titre sans tiret cadratin', () => {
+  it('barre de sélection : la sélection seule, titre sans tiret cadratin', () => {
     monter()
     fireEvent.click(
       screen.getAllByRole('button', { name: 'Sélectionner des éléments' })[0],
     )
-    const bouton = screen.getByRole('button', { name: TELECHARGER_SELECTION })
-    expect(bouton).toHaveProperty('disabled', true)
     fireEvent.click(screen.getByRole('button', { name: 'cocher Fermeture' }))
-    fireEvent.click(screen.getByRole('button', { name: TELECHARGER_SELECTION }))
-    expect(apercu().dataset.auto).toBe('true')
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Imprimer la sélection (1)' }),
+    )
     expect(apercu().dataset.titre).toBe('Accueil : 1 élément sélectionné')
     expect(apercu().dataset.titre).not.toMatch(/[«»—]/)
   })
@@ -258,7 +246,9 @@ describe('ChapterBoard, en-tête fixe et zone qui défile', () => {
     expect(entete!.contains(recherche)).toBe(true)
     expect(
       entete!.contains(
-        screen.getByRole('button', { name: TELECHARGER_CHAPITRE }),
+        screen.getByRole('button', {
+          name: "Imprimer le chapitre ou l'enregistrer en PDF",
+        }),
       ),
     ).toBe(true)
 
