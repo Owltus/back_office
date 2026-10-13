@@ -16,18 +16,49 @@ Parking, PDJ, Affichage, Rapprochement/Caisse (à venir).
   fonction (décision utilisateur). (jspdf tire encore un chunk html2canvas
   facultatif à lui, jamais chargé par l'app.)
 
-## Backend Supabase — DÉDIÉ à cette app (prod live)
+## Environnements — dev LOCAL, prod intouchable (depuis le 2026-10-13)
 
-> ⚠ **Depuis le 2026-10-13 (plan `environnement-dev-docker-2026-10-12`)** : le
-> poste n'est PLUS lié à la prod (`supabase unlink`) et le hook
-> `scripts/garde-prod.mjs` (PreToolUse, branché dans
-> `.claude/settings.local.json`) refuse toute commande qui la vise sans
-> `PROD_CONFIRME=1`, posé uniquement sur demande explicite de l'utilisateur.
-> Cible par défaut = base LOCALE (`supabase db query --local`). Dans le
-> NAVIGATEUR, l'assistant n'écrit que sur `localhost:3000` ;
-> `backoffice.naostack.com` en lecture seule et sur demande (le hook ne voit
-> pas les clics). Ce qui suit sur `--linked` est l'ancien régime, réécrit à la
-> fin du chantier.
+Plan `plan/environnement-dev-docker-2026-10-12/`. Deux applications ÉTANCHES ;
+la prod se met à jour en UNE commande.
+
+| | Dev (poste) | Prod |
+|---|---|---|
+| Base | Supabase locale dans Docker (`pnpm db:start`) : API `127.0.0.1:54321`, Postgres `:54322`, Studio `:54323`, Mailpit `:54324` | projet `ozpavwghrmmkrnmkxodg` |
+| App | `pnpm dev` / `start.bat` → `localhost:3000`, bandeau ambre « DEV · base locale » | Vercel, `backoffice.naostack.com` |
+| Données | fictives (`pnpm db:reset`, seed généré par `supabase/seed/generer.ts`, comptes `*@exemple.test` / `DevLocal2026x`) OU copie de la prod (`copier-prod.bat`, noms de clients remplacés) | réelles |
+| E-mails | Mailpit, par construction (`supabase/functions/_shared/environnement.ts`) | Resend |
+
+- **Schéma** : la vérité est `supabase/migrations/` (baseline du 2026-10-13 =
+  dump exact de la prod). Les ~150 `supabase/*.sql` à plat sont de
+  l'HISTORIQUE, jamais rejoués. Un changement = une migration (`supabase
+  migration new`, ou essais dans Studio puis `supabase db diff --local -f
+  <nom>`), essayée en local (`pnpm db:reset`), livrée par `livrer.bat`.
+  Discipline sans exception, même en urgence (décision utilisateur R4).
+- **Livrer** = `livrer.bat`, lancé par l'UTILISATEUR : contrôles, dérive,
+  résumé, `LIVRER`, puis base → fonctions → site → étiquette git `prod`.
+  `--essai` s'arrête au résumé. Seuls code et schéma partent, JAMAIS de
+  données. Une migration qui retire (`drop`, `rename`) exige `SUPPRIMER` :
+  ajouter d'abord, retirer à la livraison suivante.
+- **Garde de l'assistant** : poste DÉLIÉ ; hook `scripts/garde-prod.mjs`
+  (PreToolUse Bash/PowerShell, `.claude/settings.local.json`) qui refuse toute
+  commande visant la prod (ref, `--linked`, `--project-ref`, `--db-url`
+  distant, `link`, `db push`, `functions deploy`, `secrets set`, `wrangler
+  deploy`, `vercel`, `git push`, lancement de `livrer`/`copier-prod`) sans
+  `PROD_CONFIRME=1`, posé UNIQUEMENT sur demande explicite de l'utilisateur
+  dans le chat. Il refuse aussi une commande qui ne fait que CITER ces mots
+  (heredoc, message de commit) : écrire ces fichiers avec Write/Edit.
+- **Navigateur de l'assistant** : essais et écritures UNIQUEMENT sur
+  `localhost:3000` ; `backoffice.naostack.com` en lecture seule, sur demande
+  (le hook ne voit pas les clics ; le classeur n° 24 a été créé en prod par
+  ce chemin le 2026-10-03).
+- **Étanchéité du navigateur** : `lib/environnement.ts` ; `pnpm dev` refuse
+  de démarrer vers une base non locale ; les sessions `sb-<ref>-auth-token`
+  d'une autre base sont effacées au démarrage ; le cache persisté est marqué
+  `<base>:<compte>`.
+- **L'assistant teste les écritures EN LOCAL, toujours** (plus de « l'utilisateur
+  teste en prod à sa place »).
+
+## Backend Supabase — DÉDIÉ à cette app (prod live)
 
 Le projet Supabase est désormais **dédié à cette application** : il n'est **plus
 partagé** avec `repjour-okko-nantes` (le partage a pris fin). L'ancien principe
@@ -42,16 +73,15 @@ tourne dessus) : la prudence reste de mise.
 - **Opérations destructrices = confirmation explicite à chaque fois** : `DROP`,
   `TRUNCATE`, `DELETE`/`UPDATE` de masse (sans `WHERE` ciblé), suppression de
   colonnes, réécriture de données. Ne jamais les lancer par réflexe.
-- **Exécution du SQL** : depuis le 2026-09-05, l'assistant a un **accès direct**
-  via le CLI (`supabase db query --linked`, skill `bob-assistant-supabase`,
-  liaison `supabase link --project-ref ozpavwghrmmkrnmkxodg` faite une fois par
-  poste). Le fichier `supabase/*.sql` reste la source de vérité (écrit et commité
-  AVANT d'être appliqué avec `-f`), et la règle destructif = confirmation
-  explicite reste entière. Repli : l'utilisateur colle le script dans le SQL
-  Editor.
+- **Exécution du SQL (révisé le 2026-10-13)** : l'assistant travaille sur la
+  base LOCALE (`supabase db query --local`, skill `bob-assistant-supabase`).
+  La prod ne reçoit plus de SQL « à la main » : migration dans
+  `supabase/migrations/`, livrée par `livrer.bat`. Lecture d'enquête en prod
+  (panne, mesure) : seulement sur demande explicite, `PROD_CONFIRME=1`,
+  liaison temporaire puis `supabase unlink`. La règle destructif =
+  confirmation explicite reste entière.
 - Les écritures via l'app (RPC `SECURITY DEFINER` à garde de rôle + RLS) restent
-  le canal normal pour les features ; l'assistant ne teste pas les écritures
-  applicatives contre la prod à la place de l'utilisateur.
+  le canal normal pour les features.
 
 ## Clés Supabase (`.env`, jamais committé, gitignoré)
 

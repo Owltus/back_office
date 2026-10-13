@@ -24,23 +24,47 @@ Application web interne de gestion opérationnelle hôtelière : suivi du parkin
 
 ## Démarrage
 
-Prérequis : [Node.js](https://nodejs.org/) et [pnpm](https://pnpm.io/).
+Le développement se fait sur une base Supabase **locale** (Docker), jamais sur la prod.
+
+Prérequis : [Node.js](https://nodejs.org/), [pnpm](https://pnpm.io/), [Docker Desktop](https://www.docker.com/products/docker-desktop/) démarré, [Supabase CLI](https://supabase.com/docs/guides/cli) ≥ 2.120.
 
 ```bash
 pnpm install
-pnpm dev
+# .env.development.local : copier le bloc DÉVELOPPEMENT de .env.example
+# supabase/functions/.env : copier supabase/functions/.env.example
+pnpm db:start     # la base locale (premier lancement : quelques minutes)
+pnpm db:reset     # migrations + données fictives
+pnpm dev          # http://localhost:3000, bandeau « DEV · base locale »
 ```
 
-L'application tourne sur [http://localhost:3000](http://localhost:3000). Sous Windows, `start.bat` lance le serveur de dev directement.
+Sous Windows, `start.bat` fait tout (il démarre la base si besoin). Comptes de test : `admin@`, `gestion@`, `ecriture@`, `lecture@`, `aucun@`, `reception@exemple.test`, mot de passe `DevLocal2026x`.
 
-### Variables d'environnement
+Outils locaux : Studio [http://127.0.0.1:54323](http://127.0.0.1:54323) (la base à la souris), Mailpit [http://127.0.0.1:54324](http://127.0.0.1:54324) (tous les e-mails envoyés en local).
 
-Copier `.env.example` en `.env` et renseigner les clés du projet Supabase (Project Settings → API dans le dashboard Supabase) :
+### Travailler
 
-```bash
-VITE_SUPABASE_URL=https://votre-projet.supabase.co
-VITE_SUPABASE_ANON_KEY=votre-cle-anon-publique
-```
+| Je veux… | Commande |
+| --- | --- |
+| Arrêter / relancer la base | `pnpm db:stop` / `pnpm db:start` (les données restent) |
+| Tout remettre à zéro (données fictives) | `pnpm db:reset` |
+| Voir les **vraies** données (noms de clients remplacés) | `copier-prod.bat` (la prod est seulement lue ; la base locale est remplacée) |
+| Changer le schéma | `supabase migration new <nom>`, ou essais dans Studio puis `supabase db diff --local -f <nom>` ; `pnpm db:reset` pour vérifier |
+| Essayer l'import nocturne | `pnpm fn:import-essai` |
+| **Mettre la prod à jour** | `livrer.bat` (résumé, puis taper `LIVRER`) ; `livrer.bat --essai` pour voir sans envoyer |
+
+### Ce qui part en prod, ce qui n'y part jamais
+
+| Développé en local | En prod ? |
+| --- | --- |
+| Code de l'app | Oui (`livrer.bat` → Vercel) |
+| Schéma : tables, policies, fonctions SQL, buckets | Oui (migrations) |
+| Edge Functions modifiées | Oui |
+| Données (fictives, copiées, saisies en local) | **Jamais** : le vrai contenu se saisit dans l'app en ligne |
+| Réglages Auth de `config.toml`, secrets, Worker Cloudflare | Non : signalés par `livrer.bat`, faits à la main |
+
+Une migration qui **retire** quelque chose (`drop`, `rename`) demande une seconde confirmation : pendant une ou deux minutes, l'ancien code tourne encore sur la nouvelle base. Ajouter d'abord, retirer à la livraison suivante.
+
+Première fois seulement : `livrer.bat --amorcer` (inscrit en prod les migrations de départ, sans rien rejouer).
 
 ## Scripts
 
@@ -54,6 +78,9 @@ VITE_SUPABASE_ANON_KEY=votre-cle-anon-publique
 | `pnpm format` | Formatage (Prettier + ESLint --fix) |
 | `pnpm check` | Vérification du formatage |
 | `pnpm generate-routes` | Régénère `src/routeTree.gen.ts` (TanStack Router) |
+| `pnpm db:start` / `db:stop` / `db:reset` / `db:statut` | Base Supabase locale |
+| `pnpm db:seed:generer` | Régénère `supabase/seed.sql` (fenêtre centrée sur aujourd'hui) |
+| `pnpm fn:import-essai` | Poste les e-mails d'import fictifs aux fonctions locales |
 
 ## Structure du projet
 
