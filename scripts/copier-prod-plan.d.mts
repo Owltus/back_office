@@ -2,6 +2,13 @@
 export declare const REF_PROD: string
 export declare const SCHEMAS: ReadonlyArray<string>
 export declare const EXCLUES: ReadonlyArray<string>
+export declare const COMPTES: ReadonlyArray<string>
+export declare function lectureComptes(table: string): string
+export declare function insertionComptes(
+  table: string,
+  json: string,
+  etiquette?: string,
+): string
 export declare const BUCKETS: ReadonlyArray<string>
 export declare function derniereMigration(
   versionsProd: ReadonlyArray<string>,
