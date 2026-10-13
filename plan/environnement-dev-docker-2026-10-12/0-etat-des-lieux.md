@@ -36,6 +36,10 @@ indépendants de l'étape 6 : on ne compare jamais la base locale à elle-même.
    l'étape 5) : domaines des e-mails clients et noms de fournisseurs, sous
    forme de motifs génériques. Jamais de valeur nominative recopiée dans
    `releve-prod.md`.
+8. **Inventaire des colonnes nominatives** (pour l'étape 14) : noms et types
+   des colonnes texte de toutes les tables (`information_schema.columns`),
+   AUCUNE valeur lue. Chaque colonne qui peut porter un nom de client, une
+   plaque ou un commentaire libre est rangée « à anonymiser ».
 
 ## Implications propres
 
@@ -50,6 +54,6 @@ indépendants de l'étape 6 : on ne compare jamais la base locale à elle-même.
 
 ## Critère de validation
 
-- `releve-prod.md` contient les 7 rubriques, chiffrées.
+- `releve-prod.md` contient les 8 rubriques, chiffrées.
 - D7 et D18 sont tranchables sur pièces.
 - Commit sans push.

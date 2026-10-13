@@ -17,7 +17,7 @@ Questions posées à l'utilisateur une à une ; les points techniques non posés
 | D3 | **A** — dump du schéma seul | Choix utilisateur |
 | D4 | **A** | Recommandation |
 | D5 | **B** — garde-fous d'abord, dump en exception confirmée | Choix utilisateur |
-| D6 | **B** — générateur fictif réaliste | Choix utilisateur |
+| D6 | **B** — générateur fictif réaliste, pour les tests automatiques | Choix utilisateur ; complété par D21 |
 | D7 | Selon le relevé de l'étape 0 | Recommandation |
 | D8 | **A** — migrations + `db push`, `migration repair` confirmé | Choix utilisateur |
 | D8b | **A** — scripts à plat laissés en place, README | Choix utilisateur |
@@ -33,6 +33,9 @@ Questions posées à l'utilisateur une à une ; les points techniques non posés
 | D18 | **A** | Recommandation |
 | D19 | Mot de passe de la base demandé à chaque livraison, jamais stocké ; `livrer` lancé par l'utilisateur | Relecture du 2026-10-13 : `db push` / `db dump` exigent une liaison ou une connexion directe (CLI vérifiée) |
 | D20 | UNE commande de livraison (`livrer.bat`) : code + schéma + fonctions, contrôles, résumé, `LIVRER` | Relecture du 2026-10-13 : objectif « mettre à jour la prod simplement » |
+| D21 | Copie des DONNÉES de la prod vers le local, à la demande, par `copier-prod.bat` lancé par l'utilisateur (étape 14) | Demande utilisateur du 2026-10-13 : « voir des données réelles et non des données fictives » |
+| D22 | Noms des clients remplacés à la copie (« Client n », même n pour le même nom) ; plaques remplacées, commentaires de caution vidés | Choix utilisateur |
+| D23 | Vrais comptes copiés (`auth.users`, `auth.identities`, profils, droits) ; sessions et jetons jamais | Choix utilisateur |
 | R4 | Discipline STRICTE : aucun correctif en prod hors migration locale, **même en urgence** | Engagement de l'utilisateur (angle /rodin n° 4) |
 
 ---

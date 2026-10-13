@@ -63,9 +63,11 @@ atteinte que par un geste explicite, visible et confirmé.
 | 10 | [10-tests-base-reelle.md](./10-tests-base-reelle.md) | Tests RLS réels, simulateur confronté | 6 | P1 | 4h | `pnpm test:db`, mutations de policies attrapées |  |
 | 11 | [11-vite-conteneur.md](./11-vite-conteneur.md) | (Optionnel) Vite dans un conteneur | 7 | P2 | 2h | RETIRÉE (D2-B) | |
 | 12 | [12-documentation.md](./12-documentation.md) | CLAUDE.md, README, start.bat, mémoire | 7 à 10 | P0 | 1h30 | Une seule façon de travailler, écrite |  |
+| 14 | [14-copie-prod.md](./14-copie-prod.md) | Copier les données de la prod en local, à la demande (noms clients remplacés, vrais comptes) | 4, 5, 7, 8 | P0 | 4h | `copier-prod.bat`, 0 nom réel en local | ⚠ |
 | 13 | [13-cloture.md](./13-cloture.md) | Parcours de bout en bout, prod intacte | toutes | P0 | 1h30 | Bilan, essais « zinzin », témoins identiques | ⚠ |
 
-Total estimé : environ 30 h (sans l'étape 11).
+Total estimé : environ 34 h (sans l'étape 11). L'étape 14, ajoutée le
+2026-10-13, s'exécute avant la 13.
 
 ---
 
@@ -75,9 +77,10 @@ Total estimé : environ 30 h (sans l'étape 11).
 2. **1** : les garde-fous d'abord. Tant qu'ils n'existent pas, tout le reste se fait avec une prod à portée de main.
 3. **2 → 3 → 4 → 5** : la base locale, du vide au rempli, strictement en série.
 4. **6** : preuve d'équivalence. Rien ne se raccorde à une base non prouvée.
-5. **7 et 8** en parallèle possible (fichiers disjoints), puis **9** et **10**.
+5. **7 et 8** en parallèle possible (fichiers disjoints), puis **9** et **10**,
+   puis **14** (exige 8 : les vrais destinataires arrivent avec la copie).
 6. **11** seulement si D2 = A.
-7. **12 → 13**.
+7. **12 → 13** (12 décrit aussi `copier-prod`).
 
 Sprints : S1 = 0, 1 (sécurité immédiate, utile même si la suite attend) ;
 S2 = 2 à 6 (la base) ; S3 = 7, 8 (l'app sur la base) ; S4 = 9, 10, 12, 13.
@@ -125,7 +128,7 @@ Relecture du 2026-10-13. Un canal non listé ici est un trou.
 | Edge Functions locales → e-mails | Resend réel | Mailpit, par construction | 8 |
 | Edge Functions locales → base | clé prod collable | clé `sb_secret_` refusée en local | 8 |
 | Worker Cloudflare | prod | prod, inchangé, rien en dev | — |
-| Prod → local | — | AUCUNE donnée : schéma seul, une fois ; seed inventé | 3, 5 |
+| Prod → local | — | schéma une fois (3) ; DONNÉES à la demande par `copier-prod.bat` (lancé par vous, lecture seule, noms clients remplacés, sessions et jetons exclus) ; seed fictif pour les tests | 3, 5, 14 |
 | Local → prod | scripts à la main, 4 gestes | `livrer.bat` seulement | 9 |
 | Previews Vercel | inconnu | relevé à l'étape 0, signalé | 0 |
 
@@ -140,8 +143,10 @@ qu'à `livrer` et aux commandes que vous lancez vous-même.
 ### Sécurité
 - La prod n'est plus JAMAIS la cible par défaut d'aucun outil : app, CLI,
   assistant, Martin.
-- Aucune donnée réelle ne quitte la prod : le dump est en `--schema-only`, et
-  le seed est fabriqué. Contrôle : recherche de motifs réels (domaines
+- Le dépôt ne contient aucune donnée réelle : la baseline est en
+  `--schema-only`, le seed est fabriqué. Les données réelles n'arrivent en
+  local que par `copier-prod` (étape 14, D21), noms de clients remplacés,
+  dump hors dépôt et effacé. Contrôle : recherche de motifs réels (domaines
   clients, noms tirés de la prod lus à l'étape 0, plaques) sur le dépôt.
 - Les clés locales (JWT de démonstration de la CLI) sont publiques par nature.
   Le fichier `supabase/functions/.env.local` est gitignoré quand même. Une clé
@@ -207,7 +212,8 @@ D13 (front local jamais sur la prod) ; étape 11 retirée (D2-B) ; angle 4
    le poste (D2), avec une étape 11 optionnelle.
 3. **Une base locale vide ne montre pas les vrais problèmes** : pagination de
    documents réels, volumes PDJ, lenteurs Nano. D'où D6 : un générateur à
-   volume réaliste, jamais de copie.
+   volume réaliste. Complété le 2026-10-13 par D21 : copie des données de la
+   prod à la demande (étape 14).
 4. **La dérive.** Si demain un correctif est encore joué en prod « à la main »,
    la base locale diverge en silence. Le chantier ne tient que si TOUT
    changement de schéma passe d'abord par une migration testée en local

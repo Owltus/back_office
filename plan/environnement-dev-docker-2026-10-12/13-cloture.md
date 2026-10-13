@@ -35,10 +35,13 @@ de tout casser de l'autre côté ».
    inoffensive (commentaire sur une table) + un petit changement visible,
    capturés en local puis livrés par `livrer.bat` ; contrôle après :
    `verif_*` en prod, site en ligne à jour, `migration list` aligné.
+11. **Copie de la prod, par l'utilisateur** : `copier-prod.bat`, connexion
+   avec son vrai compte, pages remplies ; contrôle en lecture locale : 0 nom
+   réel, 0 session copiée, dump effacé, poste délié.
 
 ## Critère de validation
 
-- Les 10 points cochés, avec preuves dans le bilan.
+- Les 11 points cochés, avec preuves dans le bilan.
 - Commit sans push ; le push est demandé à l'utilisateur.
 
 ## Contrôle /borg

@@ -23,7 +23,8 @@ et l'assistant la liront.
    - noter que les 150 fichiers à plat sont de l'historique.
 2. **`README.md`** : démarrer (Docker Desktop, `start.bat`), arrêter, tout
    remettre à zéro, capturer un essai Studio (`db:capturer`), livrer
-   (`livrer.bat`), et le tableau « ce qui part en prod / ce qui n'y part
+   (`livrer.bat`), copier les données de la prod (`copier-prod.bat`, ce
+   qu'elle copie et ce qu'elle remplace), et le tableau « ce qui part en prod / ce qui n'y part
    jamais » de l'étape 9.
 3. **Mémoire** : mise à jour des deux fiches et nouvelle fiche ; renvoi depuis
    la D21 du plan Classeur (« base locale disponible depuis le … »).
