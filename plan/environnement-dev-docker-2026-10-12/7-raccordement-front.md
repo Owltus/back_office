@@ -90,3 +90,24 @@ octet de comportement.
 - Chemin de panne (`readPersistedSessionUser`) toujours fonctionnel en prod.
 - Aucune régression de `queryPersist` (cache par compte).
 - Le site Vercel ne montre aucun bandeau.
+
+## Bilan d'exécution (2026-10-13)
+
+- Corrigé dans le plan : le « 127 » d'`AuthContext` n'était PAS un défaut.
+  supabase-js 2.110 nomme la clé `sb-${hostname.split('.')[0]}-auth-token`,
+  donc `sb-127-auth-token` en local (distinct de la clé prod). `cleSession`
+  reproduit ce nommage.
+- Garde exemptée sous vitest (`MODE === 'test'`) ; toutes les branches de dev
+  sont précédées de `import.meta.env.DEV` : `pnpm build` ne contient ni
+  « DEV · base locale », ni `127.0.0.1:54321`, ni « [DEV] » (grep sur `dist/`).
+- Navigateur (port 3001, le 3000 étant occupé — voir ci-dessous) : connexion
+  `admin@exemple.test`, données fictives affichées, bandeau ambre, 0 requête
+  vers `supabase.co` ; fausse session prod + cache marqué prod implantés à
+  la main → effacés au rechargement, cache remarqué `127:<compte>`.
+- Le titre « [DEV] » n'apparaît que sur les pages sans titre propre (les
+  routes posent le leur, ex. « RepJour — Back Office ») : le bandeau suffit.
+- ⚠ Un ANCIEN `pnpm dev` (lancé le 2026-10-08, port 3000) tourne encore avec
+  l'ancien `.env` (prod) : il répond désormais 500 (garde de démarrage). À
+  fermer par l'utilisateur, puis relancer `start.bat`.
+- Famille D (stack arrêtée pendant que l'app tourne) : à faire à l'étape 13.
+- Stryker `environnement.ts` 97,8 % ; mutation « première clé » attrapée.

@@ -55,10 +55,10 @@ atteinte que par un geste explicite, visible et confirmé.
 | 2 | [2-stack-locale.md](./2-stack-locale.md) | `supabase start` + `config.toml` complet | 1 | P0 | 1h30 | API 54321, Studio 54323, Mailpit 54324 |  |
 | 3 | [3-baseline-schema.md](./3-baseline-schema.md) | Baseline `migrations/` depuis le schéma prod | 2 | P0 | 3h | FAIT ff6beb0 — schéma local = dump prod (1 ligne équivalente) | ⚠ |
 | 4 | [4-objets-hors-public.md](./4-objets-hors-public.md) | auth, storage, realtime, extensions, rôles | 3 | P0 | 2h | FAIT ff6beb0 — bucket, policies identiques, publication, rôles (pas de trigger auth en prod) ; essais d'envoi après l'étape 5 | ⚠ |
-| 5 | [5-donnees-fictives.md](./5-donnees-fictives.md) | Seed fictif + comptes de test par rôle | 4 | P0 | 4h | `seed.sql` + générateur, 0 donnée réelle | ⚠ |
-| 6 | [6-acceptation-base.md](./6-acceptation-base.md) | La base locale équivaut à la prod | 5 | P0 | 1h30 | verif_* locaux = témoins de l'étape 0 |  |
-| 7 | [7-raccordement-front.md](./7-raccordement-front.md) | `pnpm dev` = local, bandeau, sessions, garde | 5 | P0 | 3h | `lib/environnement.ts` testé, bandeau DEV/PROD | ⚠ |
-| 8 | [8-edge-functions-locales.md](./8-edge-functions-locales.md) | Fonctions en local, e-mails vers Mailpit | 5 | P1 | 3h | Création de compte et rapport en local, 0 e-mail réel | ⚠ |
+| 5 | [5-donnees-fictives.md](./5-donnees-fictives.md) | Seed fictif + comptes de test par rôle | 4 | P0 | 4h | FAIT a01cbed — 6 comptes, ~16 000 lignes, 3 classeurs ; `verif_classeur_acces` 33/33 en local | ⚠ |
+| 6 | [6-acceptation-base.md](./6-acceptation-base.md) | La base locale équivaut à la prod | 5 | P0 | 1h30 | FAIT — `db dump --local` = dump prod à 1 ligne près ; verif_* identiques à la prod (KO obsolètes compris) |  |
+| 7 | [7-raccordement-front.md](./7-raccordement-front.md) | `pnpm dev` = local, bandeau, sessions, garde | 5 | P0 | 3h | FAIT e96fb0b — garde, ménage des sessions (essayé en navigateur), bandeau, bundle prod sans trace | ⚠ |
+| 8 | [8-edge-functions-locales.md](./8-edge-functions-locales.md) | Fonctions en local, e-mails vers Mailpit | 5 | P1 | 3h | FAIT b1f7e15 — send-report → Mailpit, create-user, 0 appel Resend ; fixtures .eml en cours | ⚠ |
 | 9 | [9-flux-livraison.md](./9-flux-livraison.md) | Livrer en UNE commande : code + schéma + fonctions | 6, 7, 8 | P0 | 4h | `livrer.bat` jusqu'au résumé, essai à blanc | ⚠ |
 | 10 | [10-tests-base-reelle.md](./10-tests-base-reelle.md) | Tests RLS réels, simulateur confronté | 6 | P1 | 4h | `pnpm test:db`, mutations de policies attrapées |  |
 | 11 | [11-vite-conteneur.md](./11-vite-conteneur.md) | (Optionnel) Vite dans un conteneur | 7 | P2 | 2h | RETIRÉE (D2-B) | |
