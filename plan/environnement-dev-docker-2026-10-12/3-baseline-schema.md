@@ -41,6 +41,32 @@ seul témoin fidèle est la prod elle-même.
    et pourquoi, la règle « la vérité du schéma est désormais
    `supabase/migrations/` ».
 
+## Bilan d'exécution (2026-10-13)
+
+- Confirmé par l'utilisateur dans le chat (« Continue, vas-y »). Liaison
+  temporaire `PROD_CONFIRME=1 supabase link`, `db dump --linked --schema
+  public,private`, lecture des policies storage, `unlink` : poste délié
+  vérifié.
+- **AUCUN mot de passe demandé** : la CLI 2.120.0 crée un rôle de connexion
+  temporaire (« Initialising login role »). D19 est donc peut-être trop
+  prudente pour `livrer` : à VÉRIFIER à l'étape 9 (`db push --dry-run`),
+  jamais par une écriture.
+- Dump : 6 621 lignes, 0 COPY, 0 INSERT, aucun secret.
+- Deux ajouts en tête, commentés : `btree_gist` (contrainte d'exclusion du
+  parking ; `db dump` ne sort pas les extensions) et les PRIVILÈGES PAR
+  DÉFAUT ramenés à l'état prod avant tout objet (sans eux, chaque fonction
+  naissait exécutable par anon : `verif_advisor` 0028 rouge en local).
+- Oracle : `db dump --local` de la base reconstruite comparé au dump prod →
+  **une seule ligne d'écart**, un `CHECK` de `classeur_documents` réimprimé
+  avec d'autres parenthèses (même expression). Empreinte identique (47 tables,
+  6 vues, 124 fonctions, 123 policies, 44 triggers).
+- Les corps de fonctions de la prod contiennent des CRLF : `.gitattributes`
+  marque `supabase/migrations/*.sql` en `-text` (octets exacts).
+- `verif_advisor` 12/12 en local ; `verif_complet` et `verif_audit` : mêmes
+  KO obsolètes qu'en prod, plus « au moins un compte admin » (base vide,
+  attendu jusqu'à l'étape 5). `verif_classeur_acces` exige des comptes :
+  rejoué à l'étape 5.
+
 ## Implications propres
 
 - Lecture en prod : une connexion `pg_dump`, catalogue seulement.

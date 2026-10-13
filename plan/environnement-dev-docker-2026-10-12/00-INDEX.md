@@ -53,8 +53,8 @@ atteinte que par un geste explicite, visible et confirmé.
 | 0 | [0-etat-des-lieux.md](./0-etat-des-lieux.md) | Témoins de la prod (lecture), état du poste | — | P0 | 1h | FAIT eeea8bf — `releve-prod.md` |  |
 | 1 | [1-garde-fous-prod.md](./1-garde-fous-prod.md) | Verrou anti-prod : délier, hook, Bob, Martin | 0 | P0 | 2h | FAIT — hook actif, poste délié, Stryker 96,97 % | ⚠ |
 | 2 | [2-stack-locale.md](./2-stack-locale.md) | `supabase start` + `config.toml` complet | 1 | P0 | 1h30 | API 54321, Studio 54323, Mailpit 54324 |  |
-| 3 | [3-baseline-schema.md](./3-baseline-schema.md) | Baseline `migrations/` depuis le schéma prod | 2 | P0 | 3h | `supabase db reset` sans erreur sur base vide | ⚠ |
-| 4 | [4-objets-hors-public.md](./4-objets-hors-public.md) | auth, storage, realtime, extensions, rôles | 3 | P0 | 2h | Trigger profils, bucket, policies, publication | ⚠ |
+| 3 | [3-baseline-schema.md](./3-baseline-schema.md) | Baseline `migrations/` depuis le schéma prod | 2 | P0 | 3h | FAIT ff6beb0 — schéma local = dump prod (1 ligne équivalente) | ⚠ |
+| 4 | [4-objets-hors-public.md](./4-objets-hors-public.md) | auth, storage, realtime, extensions, rôles | 3 | P0 | 2h | FAIT ff6beb0 — bucket, policies identiques, publication, rôles (pas de trigger auth en prod) ; essais d'envoi après l'étape 5 | ⚠ |
 | 5 | [5-donnees-fictives.md](./5-donnees-fictives.md) | Seed fictif + comptes de test par rôle | 4 | P0 | 4h | `seed.sql` + générateur, 0 donnée réelle | ⚠ |
 | 6 | [6-acceptation-base.md](./6-acceptation-base.md) | La base locale équivaut à la prod | 5 | P0 | 1h30 | verif_* locaux = témoins de l'étape 0 |  |
 | 7 | [7-raccordement-front.md](./7-raccordement-front.md) | `pnpm dev` = local, bandeau, sessions, garde | 5 | P0 | 3h | `lib/environnement.ts` testé, bandeau DEV/PROD | ⚠ |
