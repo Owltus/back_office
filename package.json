@@ -14,7 +14,11 @@
     "lint": "eslint",
     "format": "prettier --write . && eslint --fix",
     "check": "prettier --check .",
-    "test:mutation": "stryker run"
+    "test:mutation": "stryker run",
+    "db:start": "supabase start -x vector",
+    "db:stop": "supabase stop",
+    "db:reset": "supabase db reset",
+    "db:statut": "supabase status"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

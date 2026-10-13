@@ -80,7 +80,9 @@ dashboard (Settings → Environment Variables) ; rien n'est changé (D18-A).
 
 ## 6. Poste
 
-- Supabase CLI 2.101.0 (2.120.0 disponible, D14-B).
+- Supabase CLI 2.101.0 (2.120.0 disponible, D14-B) → **mise à jour en
+  2.120.0** (scoop) à l'étape 2. Postgres local : 17.11 (prod 17.6, même
+  majeure).
 - Docker Desktop installé, WSL2 (distribution `docker-desktop`), **moteur
   arrêté** au moment du relevé : à démarrer avant l'étape 2.
 - RAM : 31,8 Go, 8,5 Go libres.
