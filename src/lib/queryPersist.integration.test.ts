@@ -4,6 +4,13 @@ import { QueryClient } from '@tanstack/react-query'
 
 import { brancherPersistance, changerDeCompte } from '#/lib/queryPersist.ts'
 
+// La base visée, lue par queryPersist au chargement (avant les imports, d'où
+// `vi.hoisted`) : depuis le 2026-10-13, seule la session de CETTE base compte
+// (`sb-projet-auth-token`), et le cache est marqué `projet:<compte>`.
+vi.hoisted(() => {
+  import.meta.env.VITE_SUPABASE_URL = 'https://projet.supabase.co'
+})
+
 /*
  * TEST DE BRANCHEMENT, pas de filtre.
  *
@@ -36,7 +43,7 @@ describe('brancherPersistance — le cache atteint vraiment le disque', () => {
       'sb-projet-auth-token',
       JSON.stringify({ user: { id: 'T' } }),
     )
-    window.localStorage.setItem('bo.query.cache.proprietaire', 'T')
+    window.localStorage.setItem('bo.query.cache.proprietaire', 'projet:T')
     vi.useFakeTimers()
   })
 

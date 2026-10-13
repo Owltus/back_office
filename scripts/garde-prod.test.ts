@@ -153,12 +153,18 @@ describe('verdict : table des commandes', () => {
 
   it.each(REFUSEES)('le marqueur autorise %s', (commande) => {
     expect(verdict(`PROD_CONFIRME=1 ${commande}`)).toEqual({ autorise: true })
-    expect(verdict(`$env:PROD_CONFIRME='1'; ${commande}`)).toEqual({ autorise: true })
+    expect(verdict(`$env:PROD_CONFIRME='1'; ${commande}`)).toEqual({
+      autorise: true,
+    })
   })
 
   it('--local ne blanchit pas une commande qui vise aussi la prod', () => {
     expect(verdict('supabase db push --local --linked').autorise).toBe(false)
-    expect(verdict(`supabase db query --local "select 1" && curl ${REF_PROD}.supabase.co`).autorise).toBe(false)
+    expect(
+      verdict(
+        `supabase db query --local "select 1" && curl ${REF_PROD}.supabase.co`,
+      ).autorise,
+    ).toBe(false)
     expect(verdict('supabase link --local').autorise).toBe(false)
   })
 
@@ -180,19 +186,31 @@ describe('verdict : table des commandes', () => {
   // Chaque motif a sa propre raison, lisible et distincte : c'est ce que
   // l'assistant lit pour comprendre le refus.
   it.each([
-    ['curl https://x.pooler.supabase.com', 'connexion au pooler Supabase (prod)'],
+    [
+      'curl https://x.pooler.supabase.com',
+      'connexion au pooler Supabase (prod)',
+    ],
     ['curl https://backoffice.naostack.com', 'domaine de production'],
     ['supabase link', '`supabase link` relie le poste à un projet distant'],
     ['supabase functions deploy x', 'déploiement d’Edge Functions'],
     ['supabase secrets set X=1', 'modification des secrets distants'],
-    ['supabase migration repair', '`migration repair` écrit l’historique distant'],
-    ['supabase db query --db-url postgres://u@h:1/d', '`--db-url` vers une base qui n’est pas locale'],
+    [
+      'supabase migration repair',
+      '`migration repair` écrit l’historique distant',
+    ],
+    [
+      'supabase db query --db-url postgres://u@h:1/d',
+      '`--db-url` vers une base qui n’est pas locale',
+    ],
     ['wrangler deploy', 'déploiement du Worker Cloudflare'],
     ['wrangler secret put X', 'secrets du Worker Cloudflare'],
     ['vercel deploy', 'commande Vercel sur la production'],
     ['vercel --prod', '`vercel --prod` déploie en production'],
     ['git push', '`git push` déclenche le déploiement Vercel'],
-    ['pnpm livrer', '`livrer` / `copier-prod` atteignent la prod : c’est l’utilisateur qui les lance'],
+    [
+      'pnpm livrer',
+      '`livrer` / `copier-prod` atteignent la prod : c’est l’utilisateur qui les lance',
+    ],
   ])('%s → %s', (commande, raison) => {
     expect(verdict(commande).raisons).toEqual([raison])
   })
@@ -205,21 +223,35 @@ describe('normaliser', () => {
 })
 
 describe('verdict : propriétés', () => {
-  test.prop([fc.string(), fc.string()])('toute commande contenant la ref, sans marqueur, est refusée', (a, b) => {
-    fc.pre(!normaliser(a + b).includes(MARQUEUR.toLowerCase()))
-    expect(verdict(`${a}${REF_PROD}${b}`).autorise).toBe(false)
-  })
+  test.prop([fc.string(), fc.string()])(
+    'toute commande contenant la ref, sans marqueur, est refusée',
+    (a, b) => {
+      fc.pre(!normaliser(a + b).includes(MARQUEUR.toLowerCase()))
+      expect(verdict(`${a}${REF_PROD}${b}`).autorise).toBe(false)
+    },
+  )
 
-  test.prop([fc.string(), fc.string()])('toute commande contenant --linked, sans marqueur, est refusée', (a, b) => {
-    fc.pre(!normaliser(a + b).includes(MARQUEUR.toLowerCase()))
-    expect(verdict(`${a} --linked ${b}`).autorise).toBe(false)
-  })
+  test.prop([fc.string(), fc.string()])(
+    'toute commande contenant --linked, sans marqueur, est refusée',
+    (a, b) => {
+      fc.pre(!normaliser(a + b).includes(MARQUEUR.toLowerCase()))
+      expect(verdict(`${a} --linked ${b}`).autorise).toBe(false)
+    },
+  )
 
   test.prop([fc.string(), fc.string()])('le marqueur autorise tout', (a, b) => {
     expect(verdict(`${a}${MARQUEUR}${b}`).autorise).toBe(true)
   })
 
-  const motLocal = fc.constantFrom('start', 'stop', 'status', 'db reset', 'db diff', 'migration list', 'db query')
+  const motLocal = fc.constantFrom(
+    'start',
+    'stop',
+    'status',
+    'db reset',
+    'db diff',
+    'migration list',
+    'db query',
+  )
   test.prop([motLocal, fc.stringMatching(/^[a-z0-9 _.-]{0,30}$/)])(
     'une commande supabase --local sans motif prod est autorisée',
     (mot, args) => {
@@ -231,15 +263,42 @@ describe('verdict : propriétés', () => {
 
 describe('commandeDuHook', () => {
   it('lit la commande de Bash et de PowerShell', () => {
-    expect(commandeDuHook(JSON.stringify({ tool_name: 'Bash', tool_input: { command: 'ls' } }))).toBe('ls')
-    expect(commandeDuHook(JSON.stringify({ tool_name: 'PowerShell', tool_input: { command: 'dir' } }))).toBe('dir')
+    expect(
+      commandeDuHook(
+        JSON.stringify({ tool_name: 'Bash', tool_input: { command: 'ls' } }),
+      ),
+    ).toBe('ls')
+    expect(
+      commandeDuHook(
+        JSON.stringify({
+          tool_name: 'PowerShell',
+          tool_input: { command: 'dir' },
+        }),
+      ),
+    ).toBe('dir')
   })
 
   it('ignore les autres outils et les entrées invalides', () => {
-    expect(commandeDuHook(JSON.stringify({ tool_name: 'Read', tool_input: { file_path: REF_PROD } }))).toBeNull()
-    expect(commandeDuHook(JSON.stringify({ tool_name: 'Write', tool_input: { command: 'git push' } }))).toBeNull()
+    expect(
+      commandeDuHook(
+        JSON.stringify({
+          tool_name: 'Read',
+          tool_input: { file_path: REF_PROD },
+        }),
+      ),
+    ).toBeNull()
+    expect(
+      commandeDuHook(
+        JSON.stringify({
+          tool_name: 'Write',
+          tool_input: { command: 'git push' },
+        }),
+      ),
+    ).toBeNull()
     expect(commandeDuHook('pas du json')).toBeNull()
-    expect(commandeDuHook(JSON.stringify({ tool_name: 'Bash', tool_input: {} }))).toBeNull()
+    expect(
+      commandeDuHook(JSON.stringify({ tool_name: 'Bash', tool_input: {} })),
+    ).toBeNull()
     expect(commandeDuHook('null')).toBeNull()
   })
 })
@@ -261,13 +320,23 @@ describe('hook réel (processus node)', () => {
     spawnSync(process.execPath, [script], { input: entree, encoding: 'utf8' })
 
   it('code 2 et message sur stderr pour une commande prod', () => {
-    const r = lancer(JSON.stringify({ tool_name: 'Bash', tool_input: { command: 'supabase db query --linked "select 1"' } }))
+    const r = lancer(
+      JSON.stringify({
+        tool_name: 'Bash',
+        tool_input: { command: 'supabase db query --linked "select 1"' },
+      }),
+    )
     expect(r.status).toBe(2)
     expect(r.stderr).toContain('Garde anti-prod')
   })
 
   it('code 0 pour une commande locale', () => {
-    const r = lancer(JSON.stringify({ tool_name: 'Bash', tool_input: { command: 'supabase db query --local "select 1"' } }))
+    const r = lancer(
+      JSON.stringify({
+        tool_name: 'Bash',
+        tool_input: { command: 'supabase db query --local "select 1"' },
+      }),
+    )
     expect(r.status).toBe(0)
   })
 

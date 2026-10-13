@@ -2,6 +2,8 @@ import { persistQueryClient } from '@tanstack/query-persist-client-core'
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister'
 import type { Query, QueryClient } from '@tanstack/react-query'
 
+import { cleSession, proprietaireCache } from '#/lib/environnement.ts'
+
 /*
  * PERSISTANCE DU CACHE DE DONNÉES SUR DISQUE.
  *
@@ -189,23 +191,34 @@ export function doitPersister(query: Query): boolean {
 //     appelé par `AuthContext`), mémoire ET disque sont vidés.
 // Une PANNE ne vide rien : le compte ne change pas (règle du 2026-09-05).
 
+//
+// ⚠ ÉTANCHÉITÉ ENTRE BASES (2026-10-13, plan environnement-dev-docker-
+// 2026-10-12, étape 7) : le cache est marqué `<base>:<compte>`
+// (`proprietaireCache`), et la session lue est celle de LA base visée
+// (`cleSession`), jamais « la première clé `sb-*` trouvée ». Avant, sur
+// `localhost:3000` passé de la prod à la base locale, la session prod restée
+// dans le navigateur pouvait faire passer le cache de la PROD pour celui du
+// compte, et l'app de dev aurait affiché des données réelles. La copie de la
+// prod en local (`copier-prod`) garde les mêmes identifiants de compte : la
+// base doit donc faire partie de la marque. Les caches marqués de l'ancienne
+// façon (identifiant seul) sont traités comme étrangers, une seule fois.
+
 const CLE_PROPRIETAIRE = 'bo.query.cache.proprietaire'
+const URL_BASE = import.meta.env.VITE_SUPABASE_URL as string | undefined
 let clientBranche: QueryClient | null = null
 
-/** Identifiant du compte de la session enregistrée par supabase-js, sinon `null`. */
+/** Identifiant du compte de la session de LA base visée, sinon `null`. */
 function compteDeLaSession(): string | null {
   try {
-    for (let i = 0; i < window.localStorage.length; i++) {
-      const cle = window.localStorage.key(i)
-      if (cle === null || !/^sb-.+-auth-token$/.test(cle)) continue
-      const brut = window.localStorage.getItem(cle)
-      const session = brut === null ? null : (JSON.parse(brut) as unknown)
-      const user =
-        typeof session === 'object' && session !== null && 'user' in session
-          ? (session as { user?: { id?: unknown } }).user
-          : undefined
-      return typeof user?.id === 'string' ? user.id : null
-    }
+    const cle = cleSession(URL_BASE)
+    if (cle === null) return null
+    const brut = window.localStorage.getItem(cle)
+    const session = brut === null ? null : (JSON.parse(brut) as unknown)
+    const user =
+      typeof session === 'object' && session !== null && 'user' in session
+        ? (session as { user?: { id?: unknown } }).user
+        : undefined
+    return typeof user?.id === 'string' ? user.id : null
   } catch {
     // Session illisible : traitée comme absente.
   }
@@ -221,13 +234,12 @@ export function changerDeCompte(userId: string | null): void {
   if (typeof window === 'undefined') return
   try {
     const avant = window.localStorage.getItem(CLE_PROPRIETAIRE)
-    if (userId !== null && avant === userId) return
-    if (userId === null || avant !== userId) {
-      clientBranche?.clear()
-      window.localStorage.removeItem(CLE_STOCKAGE)
-    }
-    if (userId === null) window.localStorage.removeItem(CLE_PROPRIETAIRE)
-    else window.localStorage.setItem(CLE_PROPRIETAIRE, userId)
+    const marque = userId === null ? null : proprietaireCache(URL_BASE, userId)
+    if (marque !== null && avant === marque) return
+    clientBranche?.clear()
+    window.localStorage.removeItem(CLE_STOCKAGE)
+    if (marque === null) window.localStorage.removeItem(CLE_PROPRIETAIRE)
+    else window.localStorage.setItem(CLE_PROPRIETAIRE, marque)
   } catch {
     // Stockage indisponible : on vide au moins la mémoire si le compte change.
     if (userId === null) clientBranche?.clear()
@@ -260,8 +272,13 @@ export function brancherPersistance(queryClient: QueryClient): void {
     // Le cache d'un AUTRE compte n'est même pas restauré (poste partagé).
     const session = compteDeLaSession()
     const proprietaire = window.localStorage.getItem(CLE_PROPRIETAIRE)
-    // Propriétaire inconnu (cache d'avant le 2026-09-28) : traité comme étranger.
-    if (proprietaire === null || proprietaire !== session) {
+    // Propriétaire inconnu (cache d'avant le 2026-09-28), autre compte ou
+    // autre BASE : traité comme étranger.
+    if (
+      proprietaire === null ||
+      session === null ||
+      proprietaire !== proprietaireCache(URL_BASE, session)
+    ) {
       window.localStorage.removeItem(CLE_STOCKAGE)
       window.localStorage.removeItem(CLE_PROPRIETAIRE)
     }

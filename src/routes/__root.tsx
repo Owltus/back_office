@@ -9,6 +9,8 @@ import { AppAuthGate } from '#/components/auth/AppAuthGate.tsx'
 import { TooltipProvider } from '#/components/ui/tooltip.tsx'
 import { THEME_INIT_SCRIPT } from '#/lib/theme.ts'
 import { AUTO_REPARATION_SCRIPT } from '#/lib/autoReparationAssets.ts'
+import { titreDe } from '#/lib/environnement.ts'
+import { BandeauEnvironnement } from '#/components/shared/BandeauEnvironnement.tsx'
 
 import appCss from '../styles.css?url'
 // Sous-ensemble LATIN de la graisse variable d'Inter — le seul que tire un
@@ -19,6 +21,15 @@ import appCss from '../styles.css?url'
 import interLatin from '@fontsource-variable/inter/files/inter-latin-wght-normal.woff2?url'
 
 import type { QueryClient } from '@tanstack/react-query'
+
+/** Origine de la base configurée, pour le `preconnect` (absente : pas de lien). */
+const SUPABASE_ORIGINE = (() => {
+  try {
+    return new URL(import.meta.env.VITE_SUPABASE_URL as string).origin
+  } catch {
+    return null
+  }
+})()
 
 interface MyRouterContext {
   queryClient: QueryClient
@@ -35,7 +46,9 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
         content: 'width=device-width, initial-scale=1',
       },
       {
-        title: 'Back Office',
+        title: import.meta.env.DEV
+          ? titreDe('Back Office', true)
+          : 'Back Office',
       },
     ],
     links: [
@@ -70,12 +83,19 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
        * `crossOrigin` est nécessaire : les requêtes vers Supabase portent des
        * en-têtes d'authentification, donc en mode CORS. Sans cet attribut, la
        * connexion ouverte ne serait pas celle réutilisée.
+       *
+       * Vers l'URL CONFIGURÉE (2026-10-13) : en local, la base du poste.
+       * Avant, la prod était écrite en dur, et le front local s'y connectait.
        */
-      {
-        rel: 'preconnect',
-        href: 'https://ozpavwghrmmkrnmkxodg.supabase.co',
-        crossOrigin: 'anonymous',
-      },
+      ...(SUPABASE_ORIGINE
+        ? [
+            {
+              rel: 'preconnect',
+              href: SUPABASE_ORIGINE,
+              crossOrigin: 'anonymous' as const,
+            },
+          ]
+        : []),
       {
         rel: 'stylesheet',
         href: appCss,
@@ -130,6 +150,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
             `disableHoverableContent` : la bulle n'est PAS survolable — dès que la
             souris quitte le déclencheur elle se ferme (on ne peut ni la garder
             ouverte en glissant dessus, ni sélectionner son texte). */}
+        <BandeauEnvironnement />
         <TooltipProvider delayDuration={300} disableHoverableContent>
           <AuthProvider>
             <AppAuthGate>{children}</AppAuthGate>

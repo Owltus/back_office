@@ -34,6 +34,19 @@ if not exist "node_modules" (
   )
 )
 
+REM -- Base de donnees LOCALE (Docker) : l'app ne demarre que sur elle
+REM    (plan environnement-dev-docker-2026-10-12). Demarree si besoin.
+call supabase status >nul 2>nul
+if errorlevel 1 (
+  echo Demarrage de la base locale ^(Docker^)...
+  call pnpm db:start
+  if errorlevel 1 (
+    echo [ERREUR] La base locale ne demarre pas. Docker Desktop est-il lance ?
+    pause
+    exit /b 1
+  )
+)
+
 REM -- Ouvre le navigateur UNE FOIS le serveur pret (sonde le port 3000
 REM    en arriere-plan pendant 60 s max, puis lance l'URL)
 start "" /min powershell -NoProfile -Command "for ($i = 0; $i -lt 120; $i++) { try { $c = New-Object Net.Sockets.TcpClient('localhost', 3000); $c.Close(); Start-Process 'http://localhost:3000'; break } catch { Start-Sleep -Milliseconds 500 } }"

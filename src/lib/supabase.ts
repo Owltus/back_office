@@ -1,6 +1,12 @@
 import { createClient } from '@supabase/supabase-js'
 
 import { backendHealth, isOutageStatus } from '#/lib/backendHealth.ts'
+import {
+  MESSAGE_DEMARRAGE_REFUSE,
+  cibleDe,
+  clesSessionEtrangeres,
+  demarrageRefuse,
+} from '#/lib/environnement.ts'
 import { createLimiteur } from '#/lib/requestQueue.ts'
 
 /**
@@ -15,6 +21,44 @@ import { createLimiteur } from '#/lib/requestQueue.ts'
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as
   string | undefined
+
+/**
+ * Garde de démarrage (plan environnement-dev-docker-2026-10-12, étape 7) :
+ * sous `vite dev`, l'app ne vise QUE la base locale. Une URL prod ou absente
+ * arrête tout ICI, avant la création du client — donc sans une seule
+ * requête. C'est ce qui empêche un `.env.development.local` manquant de
+ * retomber en silence sur la prod.
+ */
+export const CIBLE = cibleDe(supabaseUrl)
+// Vitest tourne aussi en `DEV` (mode `test`) : ses tests simulent le réseau et
+// n'ont pas de base, la garde ne les concerne pas.
+// `import.meta.env.DEV` EN TÊTE : remplacé par `false` au build, le bloc et
+// son message disparaissent du bundle de production.
+if (
+  import.meta.env.DEV &&
+  demarrageRefuse(CIBLE, import.meta.env.MODE !== 'test')
+) {
+  throw new Error(MESSAGE_DEMARRAGE_REFUSE)
+}
+
+/**
+ * Ménage du navigateur : seule la session de LA base visée reste dans
+ * `localStorage`. `localhost:3000` a longtemps servi l'app branchée sur la
+ * prod ; sa session (jeton de renouvellement compris) y dormait encore. En
+ * prod, une seule clé existe : rien n'est supprimé.
+ */
+if (typeof window !== 'undefined') {
+  try {
+    const cles = Array.from({ length: window.localStorage.length }, (_, i) =>
+      window.localStorage.key(i),
+    ).filter((c): c is string => c !== null)
+    for (const cle of clesSessionEtrangeres(cles, supabaseUrl)) {
+      window.localStorage.removeItem(cle)
+    }
+  } catch {
+    // Stockage indisponible : rien à nettoyer.
+  }
+}
 
 if (!supabaseUrl || !supabaseAnonKey) {
   // On ne jette pas d'erreur pour laisser l'app démarrer sans clés,

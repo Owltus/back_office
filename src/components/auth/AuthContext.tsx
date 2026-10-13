@@ -36,6 +36,7 @@ import {
 import type { MyAccess } from '#/lib/auth/access.ts'
 import type { Profile, UserRole } from '#/lib/repjour/types.ts'
 import { atLeast, gradeOf, levelOf } from '#/lib/permissions/index.ts'
+import { cleSession } from '#/lib/environnement.ts'
 import type {
   Grade,
   PageKey,
@@ -143,8 +144,9 @@ function readPersistedSessionUser(): User | null {
   try {
     const url = import.meta.env.VITE_SUPABASE_URL as string | undefined
     if (!url) return null
-    const ref = new URL(url).hostname.split('.')[0]
-    const raw = localStorage.getItem(`sb-${ref}-auth-token`)
+    const cle = cleSession(url)
+    if (!cle) return null
+    const raw = localStorage.getItem(cle)
     if (!raw) return null
     const parsed = JSON.parse(raw) as { user?: User } | null
     return parsed?.user && typeof parsed.user.id === 'string'
