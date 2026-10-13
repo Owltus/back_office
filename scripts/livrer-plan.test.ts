@@ -1,0 +1,263 @@
+import { describe, expect, it } from 'vitest'
+import { fc, test } from '@fast-check/vitest'
+
+import {
+  REF_PROD,
+  arretAvantProd,
+  bilanEchec,
+  ecartSchema,
+  fonctionsModifiees,
+  lignesDestructrices,
+  planEnvoi,
+  secretsManquants,
+} from './livrer-plan.mjs'
+
+// Oracle : le plan (étape 9) — contrôles avant toute prod, LIVRER exact,
+// seconde confirmation si une migration retire quelque chose, ordre base →
+// fonctions → site, jamais le seed.
+
+const TOUTES = ['create-user', 'delete-user', 'import-report', 'send-report']
+
+const etatSain = {
+  branche: 'main',
+  arbrePropre: true,
+  enRetard: false,
+  etiquetteProd: true,
+  controles: [
+    { nom: 'tsc', ok: true },
+    { nom: 'test', ok: true },
+  ],
+  migrationsNonJoueesEnLocal: [] as Array<string>,
+}
+
+describe('arretAvantProd', () => {
+  it('état sain : aucune raison d’arrêt', () => {
+    expect(arretAvantProd(etatSain)).toBeNull()
+  })
+
+  it.each([
+    [{ branche: 'essai' }, 'main'],
+    [{ arbrePropre: false }, 'commitées'],
+    [{ enRetard: true }, 'git pull'],
+    [{ etiquetteProd: false }, 'amorçage'],
+    [{ controles: [{ nom: 'tsc', ok: false }] }, 'tsc'],
+    [
+      { migrationsNonJoueesEnLocal: ['20261101000000_x.sql'] },
+      '20261101000000_x.sql',
+    ],
+  ])('%o → arrêt (%s)', (modif, mot) => {
+    const r = arretAvantProd({ ...etatSain, ...modif })
+    expect(r).toContain(mot)
+  })
+
+  test.prop([
+    fc.record({
+      branche: fc.constantFrom('main', 'autre'),
+      arbrePropre: fc.boolean(),
+      enRetard: fc.boolean(),
+      etiquetteProd: fc.boolean(),
+      controles: fc.array(fc.record({ nom: fc.string(), ok: fc.boolean() }), {
+        maxLength: 4,
+      }),
+      migrationsNonJoueesEnLocal: fc.array(fc.string(), { maxLength: 2 }),
+    }),
+  ])('aucun arrêt SEULEMENT si tout est sain', (e) => {
+    const sain =
+      e.branche === 'main' &&
+      e.arbrePropre &&
+      !e.enRetard &&
+      e.etiquetteProd &&
+      e.controles.every((c) => c.ok) &&
+      e.migrationsNonJoueesEnLocal.length === 0
+    expect(arretAvantProd(e) === null).toBe(sain)
+  })
+})
+
+describe('planEnvoi', () => {
+  const base = {
+    reponse: 'LIVRER',
+    confirmationSuppression: null,
+    migrations: [
+      { nom: '20261101000000_a.sql', destructrices: [] as Array<string> },
+    ],
+    fonctions: ['import-report', 'send-report'],
+    commits: 3,
+  }
+
+  it('ordre base → fonctions → site → étiquette', () => {
+    const { etapes } = planEnvoi(base)
+    expect(etapes.map((e) => e.nom)).toEqual([
+      'Base de données',
+      'Fonction import-report',
+      'Fonction send-report',
+      'Site (Vercel)',
+      'Étiquette prod',
+    ])
+    expect(etapes[0].cmd).toEqual(['supabase', 'db', 'push', '--linked'])
+    expect(etapes[1].cmd).toEqual([
+      'supabase',
+      'functions',
+      'deploy',
+      'import-report',
+      '--project-ref',
+      REF_PROD,
+      '--no-verify-jwt',
+    ])
+    expect(etapes[2].cmd).not.toContain('--no-verify-jwt')
+    expect(etapes[3].cmd).toEqual(['git', 'push', 'origin', 'main'])
+  })
+
+  test.prop([fc.string()])(
+    'toute autre réponse que LIVRER : rien ne part',
+    (r) => {
+      fc.pre(r.trim() !== 'LIVRER')
+      expect(planEnvoi({ ...base, reponse: r }).etapes).toEqual([])
+    },
+  )
+
+  it('LIVRER entouré d’espaces est accepté, livrer en minuscules non', () => {
+    expect(
+      planEnvoi({ ...base, reponse: '  LIVRER\n' }).etapes.length,
+    ).toBeGreaterThan(0)
+    expect(planEnvoi({ ...base, reponse: 'livrer' }).etapes).toEqual([])
+  })
+
+  it('migration destructrice sans SUPPRIMER : rien ne part ; avec : tout part', () => {
+    const d = {
+      ...base,
+      migrations: [{ nom: 'x.sql', destructrices: ['drop column y'] }],
+    }
+    expect(planEnvoi(d).etapes).toEqual([])
+    expect(planEnvoi({ ...d, confirmationSuppression: 'non' }).etapes).toEqual(
+      [],
+    )
+    expect(
+      planEnvoi({ ...d, confirmationSuppression: 'SUPPRIMER' }).etapes.length,
+    ).toBe(5)
+    expect(
+      planEnvoi({ ...d, confirmationSuppression: ' SUPPRIMER\n' }).etapes
+        .length,
+    ).toBe(5)
+  })
+
+  it('jamais le seed, jamais --include-seed', () => {
+    for (const e of planEnvoi(base).etapes)
+      expect(e.cmd.join(' ')).not.toMatch(/seed/i)
+  })
+
+  it('sans migration ni fonction ni commit : rien à livrer', () => {
+    const r = planEnvoi({ ...base, migrations: [], fonctions: [], commits: 0 })
+    expect(r.etapes).toEqual([])
+    expect(r.raison).toContain('déjà à jour')
+  })
+
+  it('seulement du code : site et étiquette', () => {
+    expect(
+      planEnvoi({ ...base, migrations: [], fonctions: [] }).etapes.map(
+        (e) => e.nom,
+      ),
+    ).toEqual(['Site (Vercel)', 'Étiquette prod'])
+  })
+})
+
+describe('fonctionsModifiees', () => {
+  it('les dossiers touchés, triés, sans doublon', () => {
+    expect(
+      fonctionsModifiees(
+        [
+          'supabase/functions/send-report/index.ts',
+          'src/x.ts',
+          'supabase/functions/send-report/marker.ts',
+          'supabase/functions/create-user/index.ts',
+        ],
+        TOUTES,
+      ),
+    ).toEqual(['create-user', 'send-report'])
+  })
+
+  it('_shared touché : toutes', () => {
+    expect(
+      fonctionsModifiees(['supabase/functions/_shared/send-mail.ts'], TOUTES),
+    ).toEqual([...TOUTES].sort())
+  })
+
+  it('chemins Windows et dossiers inconnus', () => {
+    expect(
+      fonctionsModifiees(
+        [
+          'supabase\\functions\\delete-user\\index.ts',
+          'supabase/functions/disparue/x.ts',
+        ],
+        TOUTES,
+      ),
+    ).toEqual(['delete-user'])
+  })
+})
+
+describe('lignesDestructrices', () => {
+  it('repère drop, rename, truncate ; ignore les commentaires et create', () => {
+    const sql = [
+      'create table t (id int);',
+      '-- drop table t;  (commentaire)',
+      'alter table t drop column x;',
+      'ALTER TABLE t RENAME COLUMN a TO b;',
+      'drop policy "p" on t;',
+      '  truncate t;',
+      'select 1; -- rename to',
+      'create policy "drop" on t using (true);',
+    ].join('\n')
+    expect(lignesDestructrices(sql)).toEqual([
+      'alter table t drop column x;',
+      'ALTER TABLE t RENAME COLUMN a TO b;',
+      'drop policy "p" on t;',
+      'truncate t;',
+    ])
+  })
+})
+
+describe('ecartSchema', () => {
+  it('fins de ligne et espaces de fin ignorés', () => {
+    expect(ecartSchema('a\r\nb  \n', 'a\nb')).toEqual({
+      absentes: [],
+      ajoutees: [],
+    })
+  })
+
+  it('lignes disparues et apparues, doublons comptés', () => {
+    expect(ecartSchema('a\nb\nb', 'a\nb\nc')).toEqual({
+      absentes: ['b'],
+      ajoutees: ['c'],
+    })
+  })
+
+  test.prop([fc.array(fc.string({ unit: fc.constantFrom('a', 'b', ' ') }))])(
+    'un schéma est sans écart avec lui-même',
+    (l) => {
+      const s = l.join('\n')
+      expect(ecartSchema(s, s)).toEqual({ absentes: [], ajoutees: [] })
+    },
+  )
+})
+
+describe('bilanEchec et secrets', () => {
+  it('ce qui est parti, ce qui ne l’est pas', () => {
+    const etapes = [{ nom: 'A' }, { nom: 'B' }, { nom: 'C' }].map((e) => ({
+      ...e,
+      cmd: [] as Array<string>,
+    }))
+    expect(bilanEchec(etapes, 1)).toEqual({
+      parti: ['A'],
+      echoue: 'B',
+      pasParti: ['C'],
+    })
+    expect(bilanEchec(etapes, 0)).toEqual({
+      parti: [],
+      echoue: 'A',
+      pasParti: ['B', 'C'],
+    })
+  })
+
+  it('secrets manquants', () => {
+    expect(secretsManquants(['A', 'B', 'C'], ['B', 'X'])).toEqual(['A', 'C'])
+  })
+})

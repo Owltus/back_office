@@ -1,0 +1,165 @@
+// Livraison en prod — logique PURE (plan environnement-dev-docker-2026-10-12,
+// étape 9, D20). Aucune commande ici : `livrer.mjs` relève l'état, cette page
+// décide, `livrer.mjs` exécute. Tout ce qui peut empêcher une livraison est
+// décidé ici et testé (`livrer-plan.test.ts`).
+
+export const REF_PROD = 'ozpavwghrmmkrnmkxodg'
+
+/** Fonctions qui ne vérifient pas le JWT (appelées par le Worker). */
+export const SANS_VERIF_JWT = new Set(['import-report'])
+
+/**
+ * Fonctions à déployer d'après les fichiers changés depuis la dernière
+ * livraison. `_shared/` changé = toutes (elles l'embarquent).
+ */
+export function fonctionsModifiees(fichiers, toutes) {
+  const touchees = new Set()
+  for (const f of fichiers) {
+    const m = /^supabase\/functions\/([^/]+)\//.exec(f.replace(/\\/g, '/'))
+    if (!m) continue
+    if (m[1] === '_shared') return [...toutes].sort()
+    if (toutes.includes(m[1])) touchees.add(m[1])
+  }
+  return [...touchees].sort()
+}
+
+/** Instructions qui RETIRENT quelque chose : l'ancien code tourne encore dessus. */
+const DESTRUCTIF =
+  /\b(drop\s+(table|column|function|view|policy|trigger|schema|type|index)|rename\s+(column|to)|alter\s+table\s+\S+\s+rename|truncate)\b/i
+
+/** Les lignes destructrices d'une migration, commentaires SQL ôtés. */
+export function lignesDestructrices(sql) {
+  return sql
+    .split(/\r?\n/)
+    .map((l) => l.replace(/--.*$/, ''))
+    .filter((l) => DESTRUCTIF.test(l))
+    .map((l) => l.trim())
+}
+
+/** Schéma comparable : fins de ligne et espaces de fin ignorés. */
+export function normaliserSchema(sql) {
+  return sql
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((l) => l.trimEnd())
+    .join('\n')
+    .trim()
+}
+
+/** Les lignes qui diffèrent entre deux schémas (ensemble, pas ordre). */
+export function ecartSchema(attendu, reel) {
+  const a = normaliserSchema(attendu).split('\n')
+  const r = normaliserSchema(reel).split('\n')
+  const compter = (lignes) => {
+    const m = new Map()
+    for (const l of lignes) m.set(l, (m.get(l) ?? 0) + 1)
+    return m
+  }
+  const ma = compter(a)
+  const mr = compter(r)
+  const absentes = []
+  const ajoutees = []
+  for (const [l, n] of ma)
+    for (let i = mr.get(l) ?? 0; i < n; i++) absentes.push(l)
+  for (const [l, n] of mr)
+    for (let i = ma.get(l) ?? 0; i < n; i++) ajoutees.push(l)
+  return { absentes, ajoutees }
+}
+
+/**
+ * Contrôles AVANT tout contact avec la prod. Rend la première raison
+ * d'arrêt, ou `null`.
+ *
+ * @param {{
+ *   branche: string, arbrePropre: boolean, enRetard: boolean,
+ *   etiquetteProd: boolean, controles: Array<{nom: string, ok: boolean}>,
+ *   migrationsNonJoueesEnLocal: Array<string>,
+ * }} e
+ */
+export function arretAvantProd(e) {
+  if (e.branche !== 'main')
+    return `Vous êtes sur la branche « ${e.branche} » : la prod se livre depuis main.`
+  if (!e.arbrePropre)
+    return 'Des modifications ne sont pas commitées : commitez-les (ou annulez-les) avant de livrer.'
+  if (e.enRetard)
+    return 'main est en retard sur origin/main : récupérez d’abord les commits distants (git pull).'
+  if (!e.etiquetteProd)
+    return 'Aucune livraison connue (étiquette git « prod » absente) : lancez d’abord l’amorçage (livrer.bat --amorcer).'
+  for (const c of e.controles)
+    if (!c.ok)
+      return `Contrôle en échec : ${c.nom}. Corrigez-le avant de livrer.`
+  if (e.migrationsNonJoueesEnLocal.length > 0)
+    return `Migrations jamais jouées sur la base locale : ${e.migrationsNonJoueesEnLocal.join(', ')}. Lancez « pnpm db:reset » (ou « supabase migration up --local ») et vérifiez l’app avant de livrer.`
+  return null
+}
+
+/**
+ * Le plan d'envoi, dans l'ordre qui ne casse pas l'app en service : le
+ * schéma d'abord (l'ancien code doit le supporter), puis les fonctions,
+ * puis le site. Vide si rien n'est confirmé.
+ *
+ * @param {{
+ *   reponse: string, confirmationSuppression: string | null,
+ *   migrations: Array<{nom: string, destructrices: Array<string>}>,
+ *   fonctions: Array<string>, commits: number,
+ * }} e
+ */
+export function planEnvoi(e) {
+  if (e.reponse.trim() !== 'LIVRER')
+    return { etapes: [], raison: 'Livraison annulée : rien n’est parti.' }
+  const destructives = e.migrations.filter((m) => m.destructrices.length > 0)
+  if (
+    destructives.length > 0 &&
+    e.confirmationSuppression?.trim() !== 'SUPPRIMER'
+  )
+    return {
+      etapes: [],
+      raison:
+        'Une migration RETIRE quelque chose et la seconde confirmation n’a pas été donnée : rien n’est parti.',
+    }
+  const etapes = []
+  if (e.migrations.length > 0)
+    etapes.push({
+      nom: 'Base de données',
+      cmd: ['supabase', 'db', 'push', '--linked'],
+    })
+  for (const f of e.fonctions) {
+    const cmd = [
+      'supabase',
+      'functions',
+      'deploy',
+      f,
+      '--project-ref',
+      REF_PROD,
+    ]
+    if (SANS_VERIF_JWT.has(f)) cmd.push('--no-verify-jwt')
+    etapes.push({ nom: `Fonction ${f}`, cmd })
+  }
+  if (e.commits > 0)
+    etapes.push({
+      nom: 'Site (Vercel)',
+      cmd: ['git', 'push', 'origin', 'main'],
+    })
+  if (etapes.length === 0)
+    return { etapes: [], raison: 'Rien à livrer : la prod est déjà à jour.' }
+  etapes.push({
+    nom: 'Étiquette prod',
+    cmd: ['git', 'tag', '-f', 'prod', 'HEAD'],
+  })
+  return { etapes, raison: null }
+}
+
+/** Ce qui est parti et ce qui ne l'est pas, après un échec à l'étape `i`. */
+export function bilanEchec(etapes, i) {
+  return {
+    parti: etapes.slice(0, i).map((e) => e.nom),
+    echoue: etapes[i]?.nom ?? null,
+    pasParti: etapes.slice(i + 1).map((e) => e.nom),
+  }
+}
+
+/** Secrets attendus en prod, absents de la liste relevée. */
+export function secretsManquants(attendus, presents) {
+  const p = new Set(presents)
+  return attendus.filter((s) => !p.has(s))
+}
