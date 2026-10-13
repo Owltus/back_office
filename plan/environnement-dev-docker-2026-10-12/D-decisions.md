@@ -5,12 +5,33 @@ s'écrit `~~A~~ → **B**`.
 
 ---
 
-## Décisions retenues le …
+## Décisions retenues le 2026-10-13
 
-(À remplir après la réponse de l'utilisateur.)
+Questions posées à l'utilisateur une à une ; les points techniques non posés
+(D4, D7, D15-D18, B1-B7) suivent la recommandation.
 
 | # | Retenu | Raison |
 |---|---|---|
+| D1 | **A** — base sur le poste, Docker | Choix utilisateur |
+| D2 | **B** — Vite sur le poste, base seule en Docker | Choix utilisateur ; étape 11 RETIRÉE |
+| D3 | **A** — dump du schéma seul | Choix utilisateur |
+| D4 | **A** | Recommandation |
+| D5 | **B** — garde-fous d'abord, dump en exception confirmée | Choix utilisateur |
+| D6 | **B** — générateur fictif réaliste | Choix utilisateur |
+| D7 | Selon le relevé de l'étape 0 | Recommandation |
+| D8 | **A** — migrations + `db push`, `migration repair` confirmé | Choix utilisateur |
+| D8b | **A** — scripts à plat laissés en place, README | Choix utilisateur |
+| D9 | **A** — `supabase unlink` | Choix utilisateur |
+| D10 | **B** — hook `garde-prod.mjs` | Choix utilisateur |
+| D11 | **A** — pas de Worker en dev | Choix utilisateur |
+| D12 | **B** — Mailpit | Choix utilisateur |
+| D13 | ~~B~~ → **A** — front local JAMAIS sur la prod | Choix utilisateur : pour voir la prod, le site en ligne |
+| D14 | **B** — CLI mise à jour | Choix utilisateur |
+| D15 | **A** | Recommandation |
+| D16 | **A** | Recommandation |
+| D17 | **A + B** | Recommandation |
+| D18 | **A** | Recommandation |
+| R4 | Discipline STRICTE : aucun correctif en prod hors migration locale, **même en urgence** | Engagement de l'utilisateur (angle /rodin n° 4) |
 
 ---
 
@@ -47,10 +68,10 @@ La colonne « Recommandé » donne le choix de l'assistant. Une réponse globale
 
 | # | Point | Réponse par défaut | Raison |
 |---|---|---|---|
-| B1 | Ports | Stack Supabase sur les ports par défaut (54321-54324) ; app locale 3000, app prod 3001 | Convention CLI ; deux origines = deux `localStorage` |
+| B1 | Ports | Stack Supabase sur les ports par défaut (54321-54324) ; app locale 3000 (plus de port prod : D13-A) | Convention CLI |
 | B2 | Conteneurs inutiles | `analytics` et `vector` exclus (`-x`) | ≈ 1 Go de RAM gagné, aucun usage par l'app |
 | B3 | Comptes de test | Mot de passe commun écrit dans `supabase/seed.sql` (local seulement) ; e-mails en `@exemple.test` | Domaine réservé, jamais livrable |
 | B4 | Nom du projet local | `project_id = "back-office"` | Préfixe des conteneurs Docker |
-| B5 | Bandeau | Ambre « DEV · base locale » ; rouge « PRODUCTION depuis le poste » ; rien sur Vercel | Critère = la CIBLE, pas le mode Vite |
+| B5 | Bandeau | Ambre « DEV · base locale » ; rien sur Vercel (pas de bandeau rouge : D13-A) | Critère = la CIBLE, pas le mode Vite |
 | B6 | Seed reproductible | Générateur à graine fixe : les mêmes données à chaque `db reset` | Tests et captures comparables |
 | B7 | Volume du générateur | 90 jours glissants autour de la date du jour | Fenêtres RLS (3 j, 7 j, 30 j) toutes exercées |

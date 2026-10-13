@@ -3,8 +3,8 @@
 ## Objectif
 
 `pnpm dev` ouvre l'app sur la base locale, sans configuration à retenir.
-L'environnement est toujours visible à l'écran. Viser la prod depuis le poste
-est un geste distinct, signalé en rouge. Le site Vercel ne change pas d'un
+L'environnement est toujours visible à l'écran. Le front du poste ne vise
+JAMAIS la prod (D13-A) : pour la voir, le site en ligne. Le site Vercel ne change pas d'un
 octet de comportement.
 
 ## Fichier(s) impacté(s)
@@ -14,8 +14,7 @@ octet de comportement.
 - `src/lib/supabase.ts:15-16,177` (lecture de la cible, garde de démarrage)
 - `src/components/auth/AuthContext.tsx:144-148` (ref de session)
 - `src/routes/__root.tsx:38,76,135` (titre, preconnect conditionnel, bandeau)
-- `.env.example`, `.env.development.local` et `.env.production.local`
-  (gitignorés), `package.json`, `start.bat`
+- `.env.example`, `.env.development.local` (gitignoré), `package.json`, `start.bat`
 
 ## Travail à réaliser
 
@@ -27,13 +26,12 @@ octet de comportement.
    `bandeau(cible, modeVite)`.
 2. **Modes Vite** : `pnpm dev` = `vite dev --port 3000 --mode development`,
    qui lit `.env.development.local` (URL locale + clé anon locale de
-   `supabase status`). `pnpm dev:prod` = `vite dev --port 3001 --mode
-   prodlocale`, qui lit `.env.prodlocale.local`. `.env` est vidé des clés
-   prod (il ne sert plus) ; `pnpm build` lit les variables Vercel, comme
+   `supabase status`). Aucune commande `dev:prod` (D13-A). `.env` est vidé
+   des clés prod (il ne sert plus) ; `pnpm build` lit les variables Vercel, comme
    aujourd'hui.
-3. **Garde de démarrage** : en mode `development`, une cible `prod` ou
+3. **Garde de démarrage** : sous `vite dev` (tout mode), une cible `prod` ou
    `autre` → erreur claire à l'écran, sans aucune requête (« pnpm dev vise
-   la base locale ; pour la prod, utilisez pnpm dev:prod »). C'est elle qui
+   la base locale ; la prod se consulte sur le site en ligne »). C'est elle qui
    empêche la retombée silencieuse sur la prod.
 4. **Bandeau** (B5) dans `__root.tsx`, au-dessus de `AppAuthGate` (donc
    aussi sur `/login`) ; rien en build de production.
@@ -45,7 +43,7 @@ octet de comportement.
 
 ## Implications propres
 
-- Ports 3000 / 3001 = deux origines : sessions et cache séparés (D13).
+- Une seule origine locale (3000), qui ne voit que des sessions locales.
 - Le cache persisté local ne contient que des données fictives.
 
 ## Phase de test /martin
@@ -54,7 +52,8 @@ octet de comportement.
   pour un hôte `supabase.co`, jamais `prod` pour une IP de bouclage) ;
   `refSession` = la clé réellement écrite par supabase-js (test qui lit
   `localStorage` après un `signIn` simulé).
-- Rendu : bandeau ambre / rouge / absent selon (cible, mode).
+- Rendu : bandeau ambre en local, absent en build ; garde = erreur sur toute
+  cible non locale sous `vite dev` (fast-check sur des URL arbitraires).
 - Stryker sur `environnement.ts` ≥ 80 %.
 - Navigateur : `pnpm dev` → connexion `admin@exemple.test`, bandeau ambre,
   aucune requête vers `supabase.co` (onglet Réseau).

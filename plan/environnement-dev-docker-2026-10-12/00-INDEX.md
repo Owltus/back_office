@@ -61,7 +61,7 @@ atteinte que par un geste explicite, visible et confirmé.
 | 8 | [8-edge-functions-locales.md](./8-edge-functions-locales.md) | Fonctions en local, e-mails vers Mailpit | 5 | P1 | 3h | Création de compte et rapport en local, 0 e-mail réel | ⚠ |
 | 9 | [9-flux-livraison.md](./9-flux-livraison.md) | Du local à la prod : migrations, checklist | 6 | P0 | 3h | `pnpm db:livrer` en essai à blanc, procédure écrite | ⚠ |
 | 10 | [10-tests-base-reelle.md](./10-tests-base-reelle.md) | Tests RLS réels, simulateur confronté | 6 | P1 | 4h | `pnpm test:db`, mutations de policies attrapées |  |
-| 11 | [11-vite-conteneur.md](./11-vite-conteneur.md) | (Optionnel) Vite dans un conteneur | 7 | P2 | 2h | `docker compose up` = app complète | |
+| 11 | [11-vite-conteneur.md](./11-vite-conteneur.md) | (Optionnel) Vite dans un conteneur | 7 | P2 | 2h | RETIRÉE (D2-B) | |
 | 12 | [12-documentation.md](./12-documentation.md) | CLAUDE.md, README, start.bat, mémoire | 7 à 10 | P0 | 1h30 | Une seule façon de travailler, écrite |  |
 | 13 | [13-cloture.md](./13-cloture.md) | Parcours de bout en bout, prod intacte | toutes | P0 | 1h30 | Bilan, essais « zinzin », témoins identiques | ⚠ |
 
@@ -98,8 +98,8 @@ S2 = 2 à 6 (la base) ; S3 = 7, 8 (l'app sur la base) ; S4 = 9, 10, 12, 13.
  │  │ Studio (54323)   Mailpit (54324) ◄── tous les e-mails   │  │
  │  └──────────────────────────────────────────────────────────┘  │
  │                                                               │
- │  pnpm dev:prod (port 3001) ── bandeau ROUGE « PRODUCTION »     │
- │  (lecture d'enquête seulement, geste volontaire)              │
+ │  aucun front local vers la prod (D13-A) : la prod se consulte │
+ │  sur le site en ligne                                         │
  └───────────────────────────────┬───────────────────────────────┘
                                  │ seul canal d'écriture :
                                  │ pnpm db:livrer  (migrations, confirmé)
@@ -133,15 +133,15 @@ S2 = 2 à 6 (la base) ; S3 = 7, 8 (l'app sur la base) ; S4 = 9, 10, 12, 13.
   avec confirmation explicite.
 
 ### Cache et sessions
-- Port 3000 = local, port 3001 = prod. Ce sont deux origines, donc deux
-  `localStorage`, et aucun mélange de session ni de cache par compte.
+- Port 3000 = local, seul. Le front du poste ne parle jamais à la prod
+  (D13-A), donc aucun mélange de session ni de cache par compte.
 - `lib/queryPersist.ts` : la version de cache n'est pas changée (les clés ne
   dépendent pas de la cible).
 
 ### Interface
 - Un bandeau d'environnement fin en haut de chaque page, `/login` compris.
-  En local : discret, ambre, « DEV · base locale ». Sur la prod servie par
-  `vite dev` : rouge. Sur le site Vercel : rien. Le titre de l'onglet est
+  En local : discret, ambre, « DEV · base locale ». Sur le site Vercel :
+  rien. `vite dev` vers la prod : refusé au démarrage. Le titre de l'onglet est
   préfixé en dev (« [DEV] Back Office »).
 
 ### Écritures réelles
@@ -168,9 +168,11 @@ S2 = 2 à 6 (la base) ; S3 = 7, 8 (l'app sur la base) ; S4 = 9, 10, 12, 13.
 
 ## Angles à clarifier
 
-Les 18 questions sont dans [D-decisions.md](./D-decisions.md) (partie A, avec
-une recommandation pour chacune), et les questions de fond, ci-dessous,
-viennent de la remise en cause /rodin :
+TRANCHÉS le 2026-10-13 : voir « Décisions retenues » dans
+[D-decisions.md](./D-decisions.md). Toutes les recommandations retenues sauf
+D13 (front local jamais sur la prod) ; étape 11 retirée (D2-B) ; angle 4
+(discipline) accepté sans exception d'urgence. Questions de fond issues de
+/rodin, pour mémoire :
 
 1. **Le vrai problème est-il Docker, ou « on écrit en prod » ?** Les
    garde-fous (étape 1) suppriment l'essentiel du risque en 2 h, Docker

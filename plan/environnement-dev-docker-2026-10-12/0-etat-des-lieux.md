@@ -31,7 +31,7 @@ indépendants de l'étape 6 : on ne compare jamais la base locale à elle-même.
    Development) pour `VITE_SUPABASE_*` (D18). Une preview pointe-t-elle sur la
    prod ? Le dire, ne rien changer.
 6. **Poste** : Docker Desktop démarré, backend WSL2, RAM libre (≥ 4 Go
-   conseillés), `supabase --version`, ports 54321-54324 et 3001 libres.
+   conseillés), `supabase --version`, ports 54321-54324 libres.
 7. **Motifs à ne jamais retrouver dans le dépôt** (pour le contrôle PII de
    l'étape 5) : domaines des e-mails clients et noms de fournisseurs, sous
    forme de motifs génériques. Jamais de valeur nominative recopiée dans
