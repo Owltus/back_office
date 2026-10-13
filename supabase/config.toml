@@ -35,7 +35,11 @@ minimum_password_length = 12
 password_requirements = "lower_upper_letters_digits"
 
 [auth.email]
-enable_signup = false
+# ⚠ `true` : pour la CLI, cette clé ACTIVE le fournisseur e-mail tout entier
+# (GOTRUE_EXTERNAL_EMAIL_ENABLED). À `false`, plus personne ne peut se
+# connecter (« Email logins are disabled »). Les inscriptions restent fermées
+# par `[auth] enable_signup = false` (GOTRUE_DISABLE_SIGNUP).
+enable_signup = true
 # Les e-mails d'Auth partent dans Mailpit (http://127.0.0.1:54324).
 enable_confirmations = false
 

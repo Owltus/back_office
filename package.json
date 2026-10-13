@@ -17,7 +17,8 @@
     "test:mutation": "stryker run",
     "db:start": "supabase start -x vector",
     "db:stop": "supabase stop",
-    "db:reset": "supabase db reset",
+    "db:seed:generer": "node --experimental-strip-types supabase/seed/generer.ts",
+    "db:reset": "pnpm db:seed:generer && supabase db reset",
     "db:statut": "supabase status"
   },
   "dependencies": {

@@ -19,6 +19,9 @@
 import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2.115.0'
 import { encodeBase64 } from 'jsr:@std/encoding@1.0.11/base64'
 
+import { corpsMailpit, transportMail } from './environnement.ts'
+import type { LireVariable } from './environnement.ts'
+
 interface Recipient {
   email: string
   type: 'to' | 'cc'
@@ -52,6 +55,9 @@ export interface SendMailInput {
    *  elle, l'idempotence reposait entièrement sur une seule colonne. Omise, une clé
    *  aléatoire est tirée (comportement historique : retries seuls). */
   idempotencyKey?: string | null
+  /** Lecture des variables d'environnement (défaut : `Deno.env.get`) ; les
+   *  tests l'injectent pour choisir le transport. */
+  lire?: LireVariable
 }
 
 export interface SendMailResult {
@@ -163,6 +169,40 @@ export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
         : null
   if (attachmentContent)
     payload.attachments = [{ filename: pdfName, content: attachmentContent }]
+
+  // EN LOCAL : Mailpit, et rien d'autre (plan environnement-dev-docker-
+  // 2026-10-12, D12-B). Décidé par SUPABASE_URL, pas par une clé : aucune
+  // combinaison de secrets ne mène à Resend depuis la stack locale.
+  const transport = transportMail(input.lire ?? ((n) => Deno.env.get(n)))
+  if (transport.genre === 'mailpit') {
+    try {
+      const res = await fetch(`${transport.url}/api/v1/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          corpsMailpit({
+            from,
+            to,
+            cc,
+            subject,
+            html,
+            piece: attachmentContent
+              ? { filename: pdfName, content: attachmentContent }
+              : null,
+          }),
+        ),
+      })
+      if (!res.ok) {
+        console.error('Mailpit a refusé le message', res.status, await res.text().catch(() => ''))
+        return fail('Envoi du message échoué', true, true)
+      }
+      const out = await res.json().catch(() => ({}))
+      return { ok: true, id: out?.ID ?? null, to: to.length, cc: cc.length, testMode: Boolean(test) }
+    } catch (err) {
+      console.error('Mailpit injoignable', err instanceof Error ? err.message : String(err))
+      return fail('Envoi du message échoué', true, true)
+    }
+  }
 
   // Envoi Resend avec RETRY : jusqu'à 5 tentatives, ARRÊT DÈS SUCCÈS. On ne retente
   // que sur erreur TRANSITOIRE (erreur réseau, 5xx, 429) ; une 4xx (hors 429) est

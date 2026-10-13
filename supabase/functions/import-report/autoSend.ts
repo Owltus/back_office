@@ -41,6 +41,7 @@ import {
   isWithinPipelineWindow,
   shiftDateStr,
 } from '../_shared/businessDay.ts'
+import { cleResend } from '../_shared/environnement.ts'
 
 const TOTAL_ROOMS = 80
 
@@ -165,7 +166,7 @@ export async function maybeAutoSendRepjour(
     return { sent: false, note: 'hors fenêtre horaire — envoi auto ignoré', retryable: false }
 
   // Secrets / config d'envoi.
-  const resendKey = Deno.env.get('RESEND_API_KEY')
+  const resendKey = cleResend((n) => Deno.env.get(n))
   const from =
     Deno.env.get('REPORT_FROM') ?? 'Rep Jour <onboarding@resend.dev>'
   const testTo = Deno.env.get('REPORT_TEST_TO')?.trim() || null

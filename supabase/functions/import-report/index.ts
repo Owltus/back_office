@@ -4,8 +4,9 @@
 // « stayntouch_in_to_supabase », en extrait la/les pièce(s) jointe(s) CSV, détecte
 // quel rapport StayNTouch c'est, puis délègue à l'importeur correspondant.
 //
-// NE FAIT QUE RECEVOIR / IMPORTER. N'envoie AUCUN e-mail (rien à voir avec
-// send-report). Aucune réponse sortante autre que le compte rendu JSON au Worker.
+// Reçoit et importe ; puis, quand les deux rapports du cycle sont là, déclenche
+// l'ENVOI AUTOMATIQUE du rapport du jour (`autoSend.ts`, via `_shared/send-mail.ts`
+// — en local, vers Mailpit seulement). Répond au Worker par un compte rendu JSON.
 //
 // SÉCURITÉ (non négociable, dans cet ordre) :
 //   1. Méthode POST uniquement.
@@ -31,6 +32,7 @@ import {
   scheduleAutoSend,
   waitThenAutoSend,
 } from './waitAndSend.ts'
+import { cleServeur } from '../_shared/environnement.ts'
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -127,7 +129,7 @@ Deno.serve(async (req) => {
   // `sb_secret_…` du secret SB_SECRET_KEY, et elle seule. Aucun repli : la clé
   // service_role legacy est révoquée depuis le 2026-07-27.
   const url = Deno.env.get('SUPABASE_URL')
-  const serviceKey = Deno.env.get('SB_SECRET_KEY')
+  const serviceKey = cleServeur((n) => Deno.env.get(n))
   if (!url || !serviceKey)
     return json({ error: 'Configuration serveur manquante' }, 500)
   const admin = createClient(url, serviceKey, {

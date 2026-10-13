@@ -28,6 +28,7 @@
 //   3. Garde anti-auto-exclusion : un admin ne peut pas révoquer son propre compte.
 
 import { createClient } from 'jsr:@supabase/supabase-js@2.115.0'
+import { cleServeur } from '../_shared/environnement.ts'
 
 // Ban « quasi permanent » (Go duration). 'none' lèverait le ban (réactivation).
 const BAN_DURATION = '876000h' // ~100 ans
@@ -53,7 +54,7 @@ Deno.serve(async (req) => {
   // Clé secrète : la `sb_secret_…` du secret SB_SECRET_KEY, et elle seule.
   // Aucun repli : la clé service_role legacy est révoquée depuis le 2026-07-27
   // (clés JWT legacy désactivées) ; secret absent = erreur 500 ci-dessous.
-  const serviceKey = Deno.env.get('SB_SECRET_KEY')
+  const serviceKey = cleServeur((n) => Deno.env.get(n))
   if (!url || !serviceKey)
     return json({ error: 'Configuration serveur manquante' }, 500)
 
