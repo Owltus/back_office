@@ -1,5 +1,5 @@
 # Étape 11 — (Optionnelle) Vite dans un conteneur
-n> **RETIRÉE le 2026-10-13 (D2-B, choix utilisateur).** Conservée pour mémoire.
+> **RETIRÉE le 2026-10-13 (D2-B, choix utilisateur).** Conservée pour mémoire.
 
 ## Objectif
 
