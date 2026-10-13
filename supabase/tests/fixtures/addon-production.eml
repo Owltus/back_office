@@ -1,0 +1,34 @@
+Return-Path: <no-reply@stayntouch.exemple.test>
+From: StayNTouch Reports (fictif) <no-reply@stayntouch.exemple.test>
+To: import-pms@exemple.test
+Subject: Scheduled report: Addon Production - 9999DEMO
+Date: Wed, 14 Oct 2026 12:05:02 +0200
+Message-ID: <fixture-addon-20261014120502@stayntouch.exemple.test>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="=_fixture_addon_9999DEMO"
+
+This is a multi-part message in MIME format.
+
+--=_fixture_addon_9999DEMO
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+E-MAIL FICTIF (fixture de dev, supabase/tests/fixtures) : aucune donnée réelle.
+Please find attached the scheduled report "Addon Production".
+
+--=_fixture_addon_9999DEMO
+Content-Type: text/csv; charset=utf-8; name="9999DEMO_addon_production_report_DAILY_20261014120502.csv"
+Content-Disposition: attachment; filename="9999DEMO_addon_production_report_DAILY_20261014120502.csv"
+Content-Transfer-Encoding: 8bit
+
+Hotel Code,Hotel Name,Generated Date,Generated Time,Report Name
+9999DEMO,Hotel de Demonstration (fictif),14-10-2026,12:05:02,Addon Production
+Date Range,Total number,Total Revenue,Average revenue
+2026-10-13 - 2026-10-13,38,1121.84,29.52
+"",Total Count,Total Revenue,Average revenue,2026-10-13,""
+PDJ,14,532.00,38.00,14,532.00
+PDJBB,4,80.00,20.00,4,80.00
+PARKING,6,96.00,16.00,6,96.00
+TAXE DE SEJOUR,14,413.84,29.56,14,413.84
+
+--=_fixture_addon_9999DEMO--

@@ -1,0 +1,44 @@
+Return-Path: <no-reply@stayntouch.exemple.test>
+From: StayNTouch Reports (fictif) <no-reply@stayntouch.exemple.test>
+To: import-pms@exemple.test
+Subject: Scheduled report: Comparison By Date - 9999DEMO
+Date: Wed, 14 Oct 2026 02:30:12 +0200
+Message-ID: <fixture-comparison-20261014023012@stayntouch.exemple.test>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="=_fixture_comparison_9999DEMO"
+
+This is a multi-part message in MIME format.
+
+--=_fixture_comparison_9999DEMO
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+E-MAIL FICTIF (fixture de dev, supabase/tests/fixtures) : aucune donnée réelle.
+Please find attached the scheduled report "Comparison By Date".
+
+--=_fixture_comparison_9999DEMO
+Content-Type: text/csv; charset=utf-8; name="9999DEMO_comparison_report_DAILY_20261014023012.csv"
+Content-Disposition: attachment; filename="9999DEMO_comparison_report_DAILY_20261014023012.csv"
+Content-Transfer-Encoding: 8bit
+
+Hotel Code,Hotel Name,Generated Date,Generated Time,Report Name
+9999DEMO,Hotel de Demonstration (fictif),14-10-2026,02:30:12,Comparison By Date
+SECTION,TODAY,MTD,LAST YEAR MTD,MTD VARIANCE,YTD,LAST YEAR YTD,YTD VARIANCE,REPORT DATE
+ Available Rooms,80.00,1040.00,1040.00,0.00,22880.00,22880.00,0.00,13-10-2026
+ Occupied Rooms,59.00,778.00,801.00,-23.00,16904.00,16512.00,392.00,13-10-2026
+ Complimentary Rooms,0.00,2.00,3.00,-1.00,41.00,38.00,3.00,13-10-2026
+ House Use Rooms,1.00,6.00,4.00,2.00,97.00,90.00,7.00,13-10-2026
+ Out Of Order Rooms,0.00,3.00,0.00,3.00,64.00,51.00,13.00,13-10-2026
+ No Show Rooms,1.00,5.00,7.00,-2.00,118.00,109.00,9.00,13-10-2026
+ Guests (Adults / Children),71 / 4,941 / 37,972 / 41,-31 / -4,20311 / 902,19874 / 866,437 / 36,13-10-2026
+ Total Occupancy %,73.75%,74.81%,77.02%,-2.21%,73.88%,72.17%,1.71%,13-10-2026
+ ADR,132.70,116.14,113.52,2.62,118.27,115.03,3.24,13-10-2026
+ RevPAR,97.87,86.88,87.43,-0.55,87.38,83.01,4.37,13-10-2026
+ROOM REVENUE,7829.56,90358.39,90929.52,-571.13,1999266.08,1899375.36,99890.72,13-10-2026
+Petit-déjeuner,512.00,6458.00,6210.00,248.00,139822.00,131406.00,8416.00,13-10-2026
+Parking,96.00,1344.00,1188.00,156.00,28032.00,26112.00,1920.00,13-10-2026
+Taxe de séjour,169.92,2240.64,2306.88,-66.24,48683.52,47554.56,1128.96,13-10-2026
+VAT,782.96,9035.84,9092.95,-57.11,199926.61,189937.54,9989.07,13-10-2026
+TOTAL REVENUE,9390.44,109436.87,109727.35,-290.48,2415730.21,2294385.46,121344.75,13-10-2026
+
+--=_fixture_comparison_9999DEMO--

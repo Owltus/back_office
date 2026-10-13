@@ -1,0 +1,51 @@
+Return-Path: <no-reply@stayntouch.exemple.test>
+From: StayNTouch Reports (fictif) <no-reply@stayntouch.exemple.test>
+To: import-pms@exemple.test
+Subject: Scheduled report: In-House Guests - 9999DEMO
+Date: Wed, 14 Oct 2026 03:02:58 +0200
+Message-ID: <fixture-inhouse-20261014030258@stayntouch.exemple.test>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="=_fixture_inhouse_9999DEMO"
+
+This is a multi-part message in MIME format.
+
+--=_fixture_inhouse_9999DEMO
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+E-MAIL FICTIF (fixture de dev, supabase/tests/fixtures) : aucune donnée réelle,
+tous les noms sont inventés (« FICTIF, Client NN »).
+Please find attached the scheduled report "In-House Guests".
+
+--=_fixture_inhouse_9999DEMO
+Content-Type: text/csv; charset=utf-8; name="9999DEMO_in_house_guests_report_DAILY_20261014030258.csv"
+Content-Disposition: attachment; filename="9999DEMO_in_house_guests_report_DAILY_20261014030258.csv"
+Content-Transfer-Encoding: 8bit
+
+Hotel Code,Hotel Name,Generated Date,Generated Time,Report Name
+9999DEMO,Hotel de Demonstration (fictif),14-10-2026,03:02:58,In-House Guests
+Room,Status,Guest Name,VIP,Adults,Children,Addons,Rate,Room Type,No of Nights,TravelAgent,Company,Guarantee,Payment Type,Adr,Arrival,Departure,Stay Count,Confirmation No,Balance,Market Segment,Source,Group,License Plate,Accompanying Guests,Res. Notes,Guest Notes,Party
+102,IN HOUSE,"FICTIF, Client 01",,2,0,PDJ;TAXE DE SEJOUR 5.76,BAR BB2PAX,Chambre confort,3,BOOKING.COM,,Deposit Received,Credit Card,138.60,12-10-2026 03:00 PM,15-10-2026 11:00 AM,1,FX-000102,0.00,LEISURE,OTA,,,,,,
+103,DUE OUT,"FICTIF, Client 02",,1,0,TAXE DE SEJOUR 2.88,BAR,Chambre classique,2,,,Credit Card,Credit Card,109.00,12-10-2026 06:40 PM,14-10-2026 11:00 AM,0,FX-000103,0.00,LEISURE,DIRECT,,,,,,
+105,IN HOUSE,"FICTIF, Client 03",X,2,1,PDJ;TAXE DE SEJOUR 5.76,CORPO PDJ INCLUS 2 PAX,Chambre confort,4,,SOCIETE FICTIVE SAS,Company Billing,Direct Bill,152.00,11-10-2026 04:15 PM,15-10-2026 11:00 AM,6,FX-000105,0.00,CORPORATE,DIRECT,,,,"Arrivée tardive prévue
+lit bébé demandé",,
+108,IN HOUSE,"FICTIF, Client 04",,1,0,PDJBB;TAXE DE SEJOUR 2.88,BAR BB1PAX,Chambre classique,2,EXPEDIA,,Deposit Received,Credit Card,121.00,13-10-2026 05:20 PM,15-10-2026 11:00 AM,0,FX-000108,0.00,LEISURE,OTA,,,,,,
+111,DUE OUT,"FICTIF, Client 05",,2,0,TAXE DE SEJOUR 5.76,OTA NR,Chambre confort,1,BOOKING.COM,,Deposit Received,Virtual Card,118.80,13-10-2026 08:05 PM,14-10-2026 11:00 AM,0,FX-000111,0.00,LEISURE,OTA,,,,,,
+201,IN HOUSE,"FICTIF, Client 06",,1,0,PDJ;TAXE DE SEJOUR 2.88,CORPO,Chambre classique,5,,ENTREPRISE EXEMPLE SARL,Company Billing,Direct Bill,115.00,10-10-2026 07:30 PM,15-10-2026 11:00 AM,3,FX-000201,0.00,CORPORATE,DIRECT,,,,,,
+204,IN HOUSE,"FICTIF, Client 07",,2,0,TAXE DE SEJOUR 5.76,BAR,Chambre confort,2,,,Credit Card,Credit Card,134.00,13-10-2026 02:45 PM,15-10-2026 11:00 AM,0,FX-000204,0.00,LEISURE,DIRECT,,,,,,
+207,DUE OUT,"FICTIF, Client 08",,2,0,PDJ;TAXE DE SEJOUR 5.76,BAR BB2PAX,Chambre confort,1,,,Credit Card,Credit Card,147.40,13-10-2026 06:10 PM,14-10-2026 11:00 AM,2,FX-000207,0.00,LEISURE,DIRECT,,,,,,
+210,CHECKED OUT,"FICTIF, Client 09",,1,0,PDJ;TAXE DE SEJOUR 2.88,CORPO,Chambre classique,1,,SOCIETE FICTIVE SAS,Company Billing,Direct Bill,115.00,13-10-2026 09:00 PM,14-10-2026 02:41 AM,1,FX-000210,0.00,CORPORATE,DIRECT,,,,,,
+213,IN HOUSE,"FICTIF, Client 10",,3,0,PDJ;TAXE DE SEJOUR 8.64,GROUPE,Chambre familiale,2,,,Deposit Received,Bank Transfer,165.00,13-10-2026 04:00 PM,15-10-2026 11:00 AM,0,FX-000213,0.00,GROUP,DIRECT,GROUPE FICTIF,,,,,
+302,IN HOUSE,"FICTIF, Client 11",,1,0,TAXE DE SEJOUR 2.88,OTA NR,Chambre classique,3,EXPEDIA,,Deposit Received,Virtual Card,99.00,12-10-2026 03:30 PM,15-10-2026 11:00 AM,0,FX-000302,0.00,LEISURE,OTA,,,,,,
+306,DUE OUT,"FICTIF, Client 12",,2,2,PDJ;TAXE DE SEJOUR 5.76,BAR BB2PAX,Chambre familiale,2,BOOKING.COM,,Deposit Received,Credit Card,176.00,12-10-2026 05:00 PM,14-10-2026 11:00 AM,1,FX-000306,0.00,LEISURE,OTA,,,,,,
+309,IN HOUSE,"FICTIF, Client 13",,1,0,PDJBB;TAXE DE SEJOUR 2.88,BAR BB1PAX,Chambre classique,4,,,Credit Card,Credit Card,119.00,11-10-2026 06:20 PM,15-10-2026 11:00 AM,4,FX-000309,0.00,LEISURE,DIRECT,,,,,,
+314,IN HOUSE,"FICTIF, Client 14",,1,0,TAXE DE SEJOUR 0.00,STAFF,Chambre classique,1,,,House Use,Cash,0.00,13-10-2026 10:00 PM,14-10-2026 10:00 AM,9,FX-000314,0.00,HOUSE USE,DIRECT,,,,,,
+405,IN HOUSE,"FICTIF, Client 15",,2,0,PDJ;TAXE DE SEJOUR 5.76,CORPO PDJ INCLUS 2 PAX,Chambre confort,3,,ENTREPRISE EXEMPLE SARL,Company Billing,Direct Bill,149.00,12-10-2026 07:00 PM,15-10-2026 11:00 AM,2,FX-000405,0.00,CORPORATE,DIRECT,,,,,,
+412,DUE OUT,"FICTIF, Client 16",,1,0,TAXE DE SEJOUR 2.88,BAR,Chambre classique,1,,,Credit Card,Credit Card,112.00,13-10-2026 07:45 PM,14-10-2026 11:00 AM,0,FX-000412,0.00,LEISURE,DIRECT,,,,,,
+503,IN HOUSE,"FICTIF, Client 17",,2,0,PDJBB;TAXE DE SEJOUR 5.76,BAR BB2PAX,Chambre confort,2,EXPEDIA,,Deposit Received,Virtual Card,141.00,13-10-2026 03:15 PM,15-10-2026 11:00 AM,0,FX-000503,0.00,LEISURE,OTA,,,,,,
+508,IN HOUSE,"FICTIF, Client 18",,1,0,TAXE DE SEJOUR 2.88,OTA NR,Chambre classique,6,BOOKING.COM,,Deposit Received,Virtual Card,97.00,09-10-2026 04:30 PM,15-10-2026 11:00 AM,0,FX-000508,0.00,LEISURE,OTA,,,,,,
+624,IN HOUSE,"FICTIF, Client 19",,2,0,PDJ;TAXE DE SEJOUR 5.76,BAR BB2PAX,Chambre supérieure,2,,,Credit Card,Credit Card,168.00,13-10-2026 05:50 PM,15-10-2026 11:00 AM,1,FX-000624,0.00,LEISURE,DIRECT,,,,,,
+629,DUE OUT,"FICTIF, Client 20",X,2,0,PDJ;TAXE DE SEJOUR 5.76,BAR BB2PAX,Chambre supérieure,3,,,Credit Card,Credit Card,172.00,11-10-2026 02:30 PM,14-10-2026 11:00 AM,5,FX-000629,0.00,LEISURE,DIRECT,,,,,,
+TOTAL ROOMS,20,,,,,,,,,,,,,,,,,,,,,,,,,,
+
+--=_fixture_inhouse_9999DEMO--
