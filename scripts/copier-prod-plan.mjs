@@ -4,38 +4,60 @@
 
 export const REF_PROD = 'ozpavwghrmmkrnmkxodg'
 
-/** Schémas lus en prod (données seules). */
-export const SCHEMAS = ['public', 'private', 'auth', 'storage']
+/**
+ * Schémas lus en prod par `db dump --data-only` : les NÔTRES seulement.
+ * `auth` et `storage` appartiennent à Supabase, leurs tables internes
+ * varient d'une version à l'autre (répétition du 2026-10-13 : le chargement
+ * échouait sur `storage.buckets_vectors`, que la stack locale protège).
+ */
+export const SCHEMAS = ['public', 'private']
 
 /**
- * Jamais copié. Sessions et jetons de la prod : jamais sur le poste (les
- * COMPTES, eux, sont copiés : connexion locale avec le mot de passe
- * habituel). Le reste est interne à Supabase ou recréé par les migrations
- * locales (le bucket : `hors_public`).
+ * Comptes : SEULES ces deux tables de `auth` sont copiées (lues en JSON,
+ * réinsérées par `json_populate_recordset`, tolérant une colonne de plus ou
+ * de moins entre versions de GoTrue). Connexion locale avec le mot de passe
+ * habituel. Sessions, jetons de renouvellement, MFA, journaux : JAMAIS — ils
+ * ne sont même pas lus.
  */
-export const EXCLUES = [
-  'auth.sessions',
-  'auth.refresh_tokens',
-  'auth.mfa_factors',
-  'auth.mfa_challenges',
-  'auth.mfa_amr_claims',
-  'auth.flow_state',
-  'auth.one_time_tokens',
-  'auth.audit_log_entries',
-  'auth.saml_providers',
-  'auth.saml_relay_states',
-  'auth.sso_providers',
-  'auth.sso_domains',
-  'auth.schema_migrations',
-  'auth.instances',
-  'storage.buckets',
-  // Les lignes des fichiers sont recréées par l'envoi des fichiers eux-mêmes
-  // dans le stockage local ; copiées ici, elles entreraient en conflit.
-  'storage.objects',
-  'storage.migrations',
-  'storage.s3_multipart_uploads',
-  'storage.s3_multipart_uploads_parts',
-]
+export const COMPTES = ['auth.users', 'auth.identities']
+
+/** Requête de lecture d'une table de comptes, en un seul JSON. */
+export function lectureComptes(table) {
+  if (!COMPTES.includes(table))
+    throw new Error(`Table non autorisée : ${table}`)
+  return `select coalesce(json_agg(t), '[]'::json) as lignes from ${table} t`
+}
+
+/**
+ * Réinsertion locale d'une table de comptes. Le JSON est écrit entre
+ * délimiteurs `$…$` dont l'étiquette est choisie absente du texte (pas
+ * d'échappement possible à rater) ; passé par l'entrée standard de psql,
+ * jamais en argument de commande (trop long, et visible des autres
+ * processus).
+ */
+export function insertionComptes(table, json, etiquette = 'c') {
+  if (!COMPTES.includes(table))
+    throw new Error(`Table non autorisée : ${table}`)
+  let tag = etiquette
+  while (json.includes(`$${tag}$`)) tag += 'x'
+  const [schema, nom] = table.split('.')
+  // Seules les colonnes ORDINAIRES de la table locale : GoTrue en calcule
+  // certaines (`confirmed_at`, `identities.email`), qu'on ne peut insérer
+  // (répétition du 2026-10-13).
+  return [
+    `create temp table _comptes on commit drop as select * from json_populate_recordset(null::${table}, $${tag}$${json}$${tag}$::json);`,
+    `do $do$ declare cols text; begin`,
+    `  select string_agg(quote_ident(column_name), ', ' order by ordinal_position) into cols`,
+    `  from information_schema.columns where table_schema = '${schema}' and table_name = '${nom}'`,
+    `    and is_generated = 'NEVER' and coalesce(identity_generation, '') <> 'ALWAYS';`,
+    `  execute format('insert into ${table} (%s) select %s from _comptes', cols, cols);`,
+    `end $do$;`,
+    `drop table _comptes;`,
+  ].join('\n')
+}
+
+/** Tables de nos schémas jamais copiées (aucune à ce jour). */
+export const EXCLUES = []
 
 /** Buckets dont les FICHIERS sont copiés (les lignes viennent du dump). */
 export const BUCKETS = ['classeur-images']

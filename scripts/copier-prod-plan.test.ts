@@ -2,11 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { fc, test } from '@fast-check/vitest'
 
 import {
+  COMPTES,
   EXCLUES,
   SCHEMAS,
   argumentsDump,
   arretAvantCopie,
   derniereMigration,
+  insertionComptes,
+  lectureComptes,
   migrationsNonLivrees,
 } from './copier-prod-plan.mjs'
 
@@ -15,19 +18,48 @@ import {
 // sans Mailpit ni sur un arbre sale.
 
 describe('ce qui est copié', () => {
-  it('sessions et jetons exclus, comptes gardés', () => {
+  it('nos schémas seulement ; de auth, les comptes et rien d’autre', () => {
+    expect(SCHEMAS).toEqual(['public', 'private'])
+    expect(COMPTES).toEqual(['auth.users', 'auth.identities'])
+  })
+
+  it('sessions et jetons ne sont même pas lisibles par le script', () => {
     for (const t of [
       'auth.sessions',
       'auth.refresh_tokens',
       'auth.one_time_tokens',
-      'auth.flow_state',
       'auth.mfa_factors',
     ])
-      expect(EXCLUES).toContain(t)
-    expect(EXCLUES).not.toContain('auth.users')
-    expect(EXCLUES).not.toContain('auth.identities')
-    expect(SCHEMAS).toEqual(['public', 'private', 'auth', 'storage'])
+      expect(() => lectureComptes(t)).toThrow('non autorisée')
+    expect(lectureComptes('auth.users')).toBe(
+      "select coalesce(json_agg(t), '[]'::json) as lignes from auth.users t",
+    )
   })
+
+  it('réinsertion : délimiteur absent du JSON, quel qu’il soit', () => {
+    const sql0 = insertionComptes('auth.identities', '[]')
+    expect(sql0).toContain(
+      'json_populate_recordset(null::auth.identities, $c$[]$c$::json);',
+    )
+    // Colonnes calculées et identités « always » jamais insérées.
+    expect(sql0).toContain("is_generated = 'NEVER'")
+    expect(sql0).toContain("identity_generation, '') <> 'ALWAYS'")
+    expect(sql0).toContain('insert into auth.identities (%s)')
+    const piege = '[{"x":"$c$ et $cx$"}]'
+    const sql = insertionComptes('auth.users', piege)
+    expect(sql).toContain('$cxx$' + piege + '$cxx$')
+    expect(() => insertionComptes('auth.sessions', '[]')).toThrow()
+  })
+
+  test.prop([fc.string()])(
+    'le JSON est toujours repris intact entre ses délimiteurs',
+    (json) => {
+      const sql = insertionComptes('auth.users', json)
+      const m = /\$(c+x*)\$([\s\S]*)\$\1\$::json\);\n/.exec(sql)
+      expect(m?.[2]).toBe(json)
+      expect(json.includes(`$${m?.[1]}$`)).toBe(false)
+    },
+  )
 
   it('la commande ne fait que LIRE : dump de données, chaque exclusion passée', () => {
     const a = argumentsDump('f.sql')

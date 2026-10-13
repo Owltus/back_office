@@ -22,6 +22,9 @@ import { createInterface } from 'node:readline/promises'
 
 import {
   BUCKETS,
+  COMPTES,
+  insertionComptes,
+  lectureComptes,
   REF_PROD,
   argumentsDump,
   arretAvantCopie,
@@ -55,7 +58,7 @@ function lancer(cmd, { voir = false, accepterEchec = false, entree } = {}) {
 const titre = (t) => console.log(`\n=== ${t} ===`)
 
 /** psql DANS le conteneur de la base locale : jamais une autre base. */
-function psqlLocal(sql) {
+function psqlLocal(sql, { uneTransaction = true } = {}) {
   return lancer(
     [
       'docker',
@@ -69,6 +72,8 @@ function psqlLocal(sql) {
       'postgres',
       '-v',
       'ON_ERROR_STOP=1',
+      // UNE transaction : une erreur n'y laisse jamais une copie à moitié faite.
+      ...(uneTransaction ? ['-1'] : []),
       '-q',
       '-At',
     ],
@@ -167,6 +172,21 @@ try {
   const dump = join(travail, 'donnees.sql')
   titre('Lecture des données de la prod')
   lancer(argumentsDump(dump), { voir: true })
+  // Comptes : deux tables seulement, gardées en MÉMOIRE (jamais sur le disque).
+  const comptes = COMPTES.map((table) => {
+    const s = lancer([
+      'supabase',
+      'db',
+      'query',
+      '--linked',
+      '-o',
+      'json',
+      `"${lectureComptes(table)}"`,
+    ]).sortie
+    const lignes = JSON.parse(s.slice(s.indexOf('{'))).rows?.[0]?.lignes ?? []
+    return { table, json: JSON.stringify(lignes), n: lignes.length }
+  })
+  console.log(comptes.map((c) => `${c.table} : ${c.n}`).join(' · '))
 
   const images = join(travail, 'images')
   for (const b of BUCKETS) {
@@ -210,9 +230,17 @@ try {
   titre('Chargement et anonymisation')
   const sql = readFileSync(dump, 'utf8')
   psqlLocal(
-    `set session_replication_role = replica;\n${sql}\nset session_replication_role = origin;\n`,
+    [
+      'set session_replication_role = replica;',
+      ...comptes.map((c) => insertionComptes(c.table, c.json)),
+      sql,
+      'set session_replication_role = origin;',
+    ].join('\n'),
   )
-  psqlLocal(readFileSync(join(RACINE, 'supabase', 'anonymiser.sql'), 'utf8'))
+  // Sa propre transaction (begin … commit dans le fichier) : hors `-1`.
+  psqlLocal(readFileSync(join(RACINE, 'supabase', 'anonymiser.sql'), 'utf8'), {
+    uneTransaction: false,
+  })
   rmSync(dump, { force: true })
   console.log(
     'Données chargées, noms de clients remplacés, fichier de copie effacé.',

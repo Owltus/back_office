@@ -15,6 +15,7 @@
     "format": "prettier --write . && eslint --fix",
     "check": "prettier --check .",
     "test:mutation": "stryker run",
+    "test:db": "supabase test db",
     "db:start": "supabase start -x vector",
     "db:stop": "supabase stop",
     "db:seed:generer": "node --experimental-strip-types supabase/seed/generer.ts",
