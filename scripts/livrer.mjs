@@ -2,14 +2,17 @@
 // étape 9). Lancée par l'UTILISATEUR (`livrer.bat` ou `pnpm livrer`) ;
 // l'assistant ne la lance jamais (le hook garde-prod refuse son lancement).
 //
-//   livrer.bat             contrôles → résumé → LIVRER → base, fonctions, site
-//   livrer.bat --essai     contrôles → résumé, puis s'arrête (rien ne part)
-//   livrer.bat --amorcer   une seule fois : inscrit en prod les migrations déjà
-//                          présentes (baseline), sans rien rejouer
+//   livrer.bat                       contrôles → résumé → LIVRER → envoi
+//   livrer.bat --essai               contrôles → résumé, puis s'arrête
+//   livrer.bat --amorcer             UNE fois : inscrit la baseline en prod
+//   livrer.bat --reprendre-instantane  réaccepte le schéma prod actuel comme
+//                                      référence (autre poste, livraison
+//                                      interrompue), après l'avoir montré
 //
 // La décision est dans `livrer-plan.mjs` (pur, testé) ; ici, seulement les
 // commandes. Le poste est relié à la prod le temps de la livraison, puis
-// délié dans un `finally` — succès, échec ou Ctrl + C.
+// délié dans TOUS les cas : fin, erreur, Ctrl + C (y compris à une question),
+// fenêtre fermée. Revue adverse du 2026-10-13 intégrée.
 
 import { spawnSync } from 'node:child_process'
 import {
@@ -22,7 +25,7 @@ import {
 } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createInterface } from 'node:readline/promises'
+import { createInterface } from 'node:readline'
 
 import {
   REF_PROD,
@@ -31,11 +34,13 @@ import {
   ecartSchema,
   fonctionsModifiees,
   lignesDestructrices,
+  lignesJson,
   planEnvoi,
   secretsManquants,
 } from './livrer-plan.mjs'
 
 const RACINE = join(import.meta.dirname, '..')
+const LIAISON = join(RACINE, 'supabase', '.temp', 'project-ref')
 const DOSSIER_ETAT = join(homedir(), '.back-office')
 const INSTANTANE = join(DOSSIER_ETAT, 'schema-prod.sql')
 const SECRETS_ATTENDUS = [
@@ -44,11 +49,20 @@ const SECRETS_ATTENDUS = [
   'RESEND_API_KEY',
   'SB_SECRET_KEY',
 ]
+/** Les SEULES migrations que l'amorçage inscrit sans les jouer : celles qui
+ *  décrivent la prod du 2026-10-13. Toute migration plus récente part par
+ *  `db push`, jamais par `repair`. */
+const BASELINE = ['20261013000000', '20261013000001']
+/** Écart connu entre le schéma local reconstruit et la prod : le CHECK de
+ *  `classeur_documents` réimprimé avec d'autres parenthèses (2 lignes). */
+const ECART_AMORCAGE_ATTENDU = 2
 const MODE = process.argv.includes('--amorcer')
   ? 'amorcer'
-  : process.argv.includes('--essai')
-    ? 'essai'
-    : 'livrer'
+  : process.argv.includes('--reprendre-instantane')
+    ? 'reprendre'
+    : process.argv.includes('--essai')
+      ? 'essai'
+      : 'livrer'
 
 // ── commandes ──────────────────────────────────────────────────────────────
 
@@ -60,30 +74,34 @@ function lancer(cmd, { voir = false, accepterEchec = false } = {}) {
     stdio: voir ? 'inherit' : ['inherit', 'pipe', 'pipe'],
     maxBuffer: 64 * 1024 * 1024,
   })
-  if (r.status !== 0 && !accepterEchec) {
-    const detail = voir
-      ? ''
-      : `\n${(r.stderr || r.stdout || '').trim().slice(-1500)}`
+  const res = {
+    ok: r.status === 0,
+    sortie: (r.stdout ?? '').trim(),
+    erreur: (r.stderr ?? '').trim(),
+  }
+  if (!res.ok && !accepterEchec) {
+    const detail = voir ? '' : `\n${(res.erreur || res.sortie).slice(-1500)}`
     throw new Error(`« ${cmd.join(' ')} » a échoué.${detail}`)
   }
-  return { ok: r.status === 0, sortie: (r.stdout ?? '').trim() }
+  return res
 }
 
 const titre = (t) => console.log(`\n=== ${t} ===`)
 
-/** Lignes d'un `supabase db query -o json`. */
+/** Lignes d'une requête (`--agent no` : sortie de personne, pas d'agent). */
 function requete(cible, sql) {
   const { sortie } = lancer([
     'supabase',
     'db',
     'query',
     cible,
+    '--agent',
+    'no',
     '-o',
     'json',
     `"${sql}"`,
   ])
-  const json = JSON.parse(sortie.slice(sortie.indexOf('{')))
-  return json.rows ?? []
+  return lignesJson(sortie)
 }
 
 function versionsMigrationsLocales() {
@@ -92,17 +110,17 @@ function versionsMigrationsLocales() {
     .sort()
 }
 
-function dumpProd() {
-  const f = join(tmpdir(), `schema-prod-${Date.now()}.sql`)
+function dump(cible) {
+  const f = join(tmpdir(), `schema-${cible.slice(2)}-${Date.now()}.sql`)
   lancer([
     'supabase',
     'db',
     'dump',
-    '--linked',
+    cible,
     '--schema',
     'public,private',
     '-f',
-    f,
+    `"${f}"`,
   ])
   const sql = readFileSync(f, 'utf8')
   rmSync(f, { force: true })
@@ -114,20 +132,56 @@ function enregistrerInstantane(sql) {
   writeFileSync(INSTANTANE, sql)
 }
 
-async function demander(question) {
-  const rl = createInterface({ input: process.stdin, output: process.stdout })
-  try {
-    return await rl.question(question)
-  } finally {
-    rl.close()
+function afficherEcart({ absentes, ajoutees }, a, b, max = 30) {
+  for (const l of [
+    ...absentes.map((x) => `  ${a} : ${x}`),
+    ...ajoutees.map((x) => `  ${b} : ${x}`),
+  ].slice(0, max))
+    console.log(l)
+}
+
+/** Question à l'écran ; Ctrl + C la REJETTE (sinon Node sortait sans délier). */
+function demander(question) {
+  return new Promise((resolve, reject) => {
+    const rl = createInterface({ input: process.stdin, output: process.stdout })
+    rl.on('SIGINT', () => {
+      rl.close()
+      reject(new Error('Interrompu.'))
+    })
+    rl.question(question, (r) => {
+      rl.close()
+      resolve(r)
+    })
+  })
+}
+
+// ── déliaison garantie ─────────────────────────────────────────────────────
+
+function delier() {
+  if (existsSync(LIAISON)) {
+    spawnSync('supabase', ['unlink'], {
+      cwd: RACINE,
+      shell: process.platform === 'win32',
+      stdio: 'ignore',
+    })
+    console.log('\nPoste délié de la prod.')
   }
 }
+// `exit` est synchrone : il couvre aussi une sortie imprévue de Node.
+process.on('exit', delier)
+for (const signal of ['SIGINT', 'SIGHUP', 'SIGBREAK', 'SIGTERM'])
+  process.on(signal, () => {
+    console.log('\nInterrompu.')
+    process.exit(130)
+  })
 
 // ── étapes ─────────────────────────────────────────────────────────────────
 
 function controlesLocaux() {
   titre('Contrôles locaux (rien ne touche la prod)')
-  lancer(['git', 'fetch', 'origin', '--tags', '--quiet'])
+  // `--force` : l'étiquette `prod` bouge à chaque livraison ; sans lui, git
+  // refuse dès que la locale diffère de la distante.
+  lancer(['git', 'fetch', 'origin', '--tags', '--force', '--quiet'])
   const branche = lancer(['git', 'rev-parse', '--abbrev-ref', 'HEAD']).sortie
   const arbrePropre = lancer(['git', 'status', '--porcelain']).sortie === ''
   const enRetard =
@@ -149,19 +203,28 @@ function controlesLocaux() {
   const controles = []
   for (const [nom, cmd] of aVerifier) {
     process.stdout.write(`- ${nom}… `)
-    const ok = lancer(cmd, { accepterEchec: true }).ok
-    console.log(ok ? 'OK' : 'ÉCHEC')
-    controles.push({ nom, ok })
-    if (!ok) break
+    const r = lancer(cmd, { accepterEchec: true })
+    console.log(r.ok ? 'OK' : 'ÉCHEC')
+    controles.push({ nom, ok: r.ok })
+    if (!r.ok) {
+      console.log((r.erreur || r.sortie).split('\n').slice(-25).join('\n'))
+      if (nom.startsWith('tests de la base'))
+        console.log(
+          '(Si la base locale contient une copie de la prod, ces tests attendent les données fictives : « pnpm db:reset », puis relancez.)',
+        )
+      break
+    }
   }
-  let jouees = []
+  let jouees
   try {
     jouees = requete(
       '--local',
       'select version from supabase_migrations.schema_migrations',
     ).map((r) => r.version)
-  } catch {
-    throw new Error('Base locale injoignable : lancez « pnpm db:start ».')
+  } catch (err) {
+    throw new Error(
+      `Base locale : ${err instanceof Error ? err.message : err} (lancée ? « pnpm db:start »)`,
+    )
   }
   const migrationsNonJoueesEnLocal = versionsMigrationsLocales().filter(
     (f) => !jouees.includes(f.slice(0, 14)),
@@ -170,7 +233,7 @@ function controlesLocaux() {
     branche,
     arbrePropre,
     enRetard,
-    etiquetteProd: MODE === 'amorcer' ? true : etiquetteProd,
+    etiquetteProd: MODE === 'livrer' || MODE === 'essai' ? etiquetteProd : true,
     controles,
     migrationsNonJoueesEnLocal,
   })
@@ -184,7 +247,7 @@ async function amorcer() {
     }).ok
   )
     throw new Error(
-      'Déjà amorcé (étiquette « prod » présente). Utilisez livrer.bat.',
+      'Déjà amorcé (étiquette « prod » présente). Autre poste ? livrer.bat --reprendre-instantane.',
     )
   const deja = requete(
     '--linked',
@@ -194,42 +257,34 @@ async function amorcer() {
     throw new Error(
       'La prod a déjà un historique de migrations : amorçage inutile.',
     )
-  const versions = versionsMigrationsLocales().map((f) => f.slice(0, 14))
-  const prod = dumpProd()
-  const local = (() => {
-    const f = join(tmpdir(), `schema-local-${Date.now()}.sql`)
-    lancer([
-      'supabase',
-      'db',
-      'dump',
-      '--local',
-      '--schema',
-      'public,private',
-      '-f',
-      f,
-    ])
-    const s = readFileSync(f, 'utf8')
-    rmSync(f, { force: true })
-    return s
-  })()
-  const { absentes, ajoutees } = ecartSchema(local, prod)
+  const locales = versionsMigrationsLocales().map((f) => f.slice(0, 14))
+  if (BASELINE.some((v) => !locales.includes(v)))
+    throw new Error(
+      'Migrations de départ introuvables dans supabase/migrations.',
+    )
+  const prod = dump('--linked')
+  const ecart = ecartSchema(dump('--local'), prod)
+  const n = ecart.absentes.length + ecart.ajoutees.length
   console.log(
-    `Schéma prod comparé à la base locale : ${absentes.length + ajoutees.length} ligne(s) d'écart.`,
+    `Schéma prod comparé à la base locale : ${n} ligne(s) d'écart (attendu : ${ECART_AMORCAGE_ATTENDU}, le CHECK de classeur_documents réimprimé).`,
   )
-  for (const l of [
-    ...absentes.map((x) => `  local seulement : ${x}`),
-    ...ajoutees.map((x) => `  prod seulement  : ${x}`),
-  ].slice(0, 20))
-    console.log(l)
+  afficherEcart(ecart, 'local seulement', 'prod seulement ', 20)
+  if (locales.length > BASELINE.length)
+    console.log(
+      `Migrations plus récentes (${locales.length - BASELINE.length}) : non inscrites, elles partiront par la livraison.`,
+    )
   console.log(
-    `\nMigrations à INSCRIRE en prod comme déjà appliquées (rien n'est rejoué) : ${versions.join(', ')}`,
+    `\nMigrations INSCRITES en prod comme déjà appliquées (rien n'est rejoué) : ${BASELINE.join(', ')}`,
   )
   console.log(
     'C’est la seule écriture : la table supabase_migrations.schema_migrations est créée et remplie.',
   )
-  if (
-    (await demander('\nTapez AMORCER pour continuer : ')).trim() !== 'AMORCER'
-  ) {
+  const mot = n > ECART_AMORCAGE_ATTENDU ? 'AMORCER MALGRE ECART' : 'AMORCER'
+  if (n > ECART_AMORCAGE_ATTENDU)
+    console.log(
+      `⚠ Écart PLUS GRAND que prévu : la base locale ne reproduit pas la prod. À examiner avant d'amorcer.`,
+    )
+  if ((await demander(`\nTapez ${mot} pour continuer : `)).trim() !== mot) {
     console.log('Amorçage annulé : rien n’a été écrit.')
     return
   }
@@ -240,43 +295,72 @@ async function amorcer() {
       'repair',
       '--status',
       'applied',
-      ...versions,
+      ...BASELINE,
       '--linked',
+      '--yes',
     ],
     { voir: true },
   )
-  const apres = dumpProd()
+  const apres = dump('--linked')
   const e = ecartSchema(prod, apres)
   console.log(
     `Schéma avant / après l'amorçage : ${e.absentes.length + e.ajoutees.length} ligne(s) d'écart (attendu : 0).`,
   )
   enregistrerInstantane(apres)
   lancer(['git', 'tag', '-f', 'prod', 'origin/main'])
+  pousserEtiquette()
   console.log(
     'Amorcé. Étiquette « prod » posée sur origin/main. Les prochaines livraisons : livrer.bat.',
   )
 }
 
+async function reprendreInstantane() {
+  titre('Reprendre le schéma actuel de la prod comme référence')
+  const prod = dump('--linked')
+  if (existsSync(INSTANTANE)) {
+    const e = ecartSchema(readFileSync(INSTANTANE, 'utf8'), prod)
+    console.log(
+      `Écart avec la référence actuelle : ${e.absentes.length + e.ajoutees.length} ligne(s).`,
+    )
+    afficherEcart(e, 'référence', 'prod     ')
+  } else console.log('Aucune référence sur ce poste.')
+  console.log(
+    '\nÀ faire SEULEMENT si cet écart est connu (livraison interrompue, autre poste).',
+  )
+  if (
+    (await demander('Tapez REPRENDRE pour l’accepter : ')).trim() !==
+    'REPRENDRE'
+  ) {
+    console.log('Annulé : référence inchangée.')
+    return
+  }
+  enregistrerInstantane(prod)
+  console.log('Référence du schéma prod mise à jour.')
+}
+
+function pousserEtiquette() {
+  const r = lancer(
+    ['git', 'push', 'origin', '+refs/tags/prod:refs/tags/prod'],
+    { accepterEchec: true },
+  )
+  if (!r.ok)
+    console.log(
+      `⚠ L'étiquette « prod » n'a pas pu être poussée (${(r.erreur || '').split('\n').pop()}). À refaire : git push origin +refs/tags/prod:refs/tags/prod`,
+    )
+}
+
 async function livrer() {
   if (!existsSync(INSTANTANE))
     throw new Error(
-      `Instantané du schéma prod absent (${INSTANTANE}) : amorçage à faire (livrer.bat --amorcer).`,
+      `Référence du schéma prod absente sur ce poste (${INSTANTANE}). Premier usage : livrer.bat --amorcer. Autre poste : livrer.bat --reprendre-instantane.`,
     )
 
   titre('Dérive : la prod a-t-elle été modifiée hors livraison ?')
-  const prod = dumpProd()
-  const { absentes, ajoutees } = ecartSchema(
-    readFileSync(INSTANTANE, 'utf8'),
-    prod,
-  )
-  if (absentes.length + ajoutees.length > 0) {
-    for (const l of [
-      ...absentes.map((x) => `  disparu : ${x}`),
-      ...ajoutees.map((x) => `  apparu  : ${x}`),
-    ].slice(0, 30))
-      console.log(l)
+  const ecart = ecartSchema(readFileSync(INSTANTANE, 'utf8'), dump('--linked'))
+  if (ecart.absentes.length + ecart.ajoutees.length > 0) {
+    afficherEcart(ecart, 'disparu', 'apparu ')
     throw new Error(
-      'Le schéma de la prod a changé depuis la dernière livraison, hors migration. On ne livre pas par-dessus : capturez ce changement en migration, ou annulez-le en prod.',
+      'Le schéma de la prod diffère de la référence de la dernière livraison. Si c’est une livraison interrompue ou un autre poste : livrer.bat --reprendre-instantane. Sinon, quelqu’un a modifié la prod à la main : capturez ce changement en migration avant de livrer.',
     )
   }
   console.log('Aucune dérive.')
@@ -333,13 +417,15 @@ async function livrer() {
     avert.push(
       'supabase/config.toml a changé : les réglages Auth ne partent PAS, reportez-les à la main dans le dashboard.',
     )
-  if (changes.some((f) => f.startsWith('worker/')))
+  if (
+    changes.some((f) => f.startsWith('cloudflare/') || f.startsWith('worker/'))
+  )
     avert.push(
-      'worker/ a changé : il ne part pas avec livrer. Ensuite : wrangler deploy, wrangler triggers deploy, puis wrangler tail.',
+      'Le Worker Cloudflare a changé : il ne part pas avec livrer (déploiement Wrangler à faire à la main, puis surveiller ses journaux).',
     )
   for (const m of migrations.filter((x) => x.destructrices.length))
     avert.push(
-      `${m.nom} RETIRE quelque chose (l'ancien code tourne encore 1 à 2 min dessus) :\n      ${m.destructrices.join('\n      ')}`,
+      `${m.nom} RETIRE ou CHANGE quelque chose (l'ancien code tourne encore 1 à 2 min dessus) :\n      ${m.destructrices.join('\n      ')}`,
     )
   for (const a of avert) console.log(`⚠ ${a}`)
   if (manquants.length)
@@ -350,11 +436,13 @@ async function livrer() {
     return
   }
   const reponse = await demander('\nTapez LIVRER pour envoyer en prod : ')
-  const confirmationSuppression = migrations.some((m) => m.destructrices.length)
-    ? await demander(
-        'Une migration RETIRE quelque chose. Tapez SUPPRIMER pour confirmer : ',
-      )
-    : null
+  const confirmationSuppression =
+    reponse.trim() === 'LIVRER' &&
+    migrations.some((m) => m.destructrices.length)
+      ? await demander(
+          'Une migration RETIRE ou CHANGE quelque chose. Tapez SUPPRIMER pour confirmer : ',
+        )
+      : null
   const plan = planEnvoi({
     reponse,
     confirmationSuppression,
@@ -377,50 +465,63 @@ async function livrer() {
       const b = bilanEchec(plan.etapes, i)
       console.log(`\nÉCHEC à l'étape « ${b.echoue} ».`)
       console.log(`Parti : ${b.parti.join(', ') || 'rien'}`)
+      if (b.peutEtreEnPartie)
+        console.log(
+          'Base de données : peut-être EN PARTIE (les migrations passent une à une). Relancez livrer.bat --essai pour voir ce qui reste, après livrer.bat --reprendre-instantane.',
+        )
       console.log(`Pas parti : ${b.pasParti.join(', ') || 'rien'}`)
       throw err
     }
+    // La référence suit la base DÈS qu'elle a changé : une suite en échec ne
+    // doit pas faire passer la livraison réussie pour une dérive.
+    if (e.nom === 'Base de données') enregistrerInstantane(dump('--linked'))
   }
-  lancer(['git', 'push', '-f', 'origin', 'prod'], { accepterEchec: true })
+  pousserEtiquette()
 
   titre('Contrôle après livraison (lecture)')
   for (const f of ['verif_advisor.sql', 'verif_classeur_acces.sql']) {
     const r = lancer(
-      ['supabase', 'db', 'query', '--linked', '-f', `supabase/${f}`],
+      [
+        'supabase',
+        'db',
+        'query',
+        '--linked',
+        '--agent',
+        'no',
+        '-f',
+        `supabase/${f}`,
+      ],
       { accepterEchec: true },
     )
-    const verdict = /TOUT EST EN PLACE|RESULTAT OK/.exec(r.sortie + ' ')
-      ? 'OK'
-      : 'à relire'
-    console.log(`- ${f} : ${verdict}`)
+    // verif_classeur_acces finit volontairement par une exception (annulation) :
+    // son verdict est sur la sortie d'erreur.
+    const ok = /TOUT EST EN PLACE|RESULTAT OK/.test(`${r.sortie}\n${r.erreur}`)
+    console.log(`- ${f} : ${ok ? 'OK' : 'à relire'}`)
   }
-  enregistrerInstantane(dumpProd())
-  console.log('\nLivré. Instantané du schéma prod mis à jour.')
+  if (!plan.etapes.some((e) => e.nom === 'Base de données'))
+    enregistrerInstantane(dump('--linked'))
+  console.log('\nLivré.')
 }
 
 // ── programme ──────────────────────────────────────────────────────────────
 
-let lie = false
-// Ctrl + C : `finally` ne s'exécute pas sur un signal, on délie ici.
-process.on('SIGINT', () => {
-  lancer(['supabase', 'unlink'], { accepterEchec: true })
-  console.log('\nInterrompu. Poste délié de la prod.')
-  process.exit(130)
-})
 try {
+  if (existsSync(LIAISON)) {
+    console.log(
+      '⚠ Le poste était resté relié à la prod (fenêtre fermée pendant un usage précédent ?) : déliaison.',
+    )
+    delier()
+  }
   const arret = controlesLocaux()
   if (arret) throw new Error(arret)
   titre('Liaison temporaire à la prod')
   lancer(['supabase', 'link', '--project-ref', REF_PROD], { voir: true })
-  lie = true
   if (MODE === 'amorcer') await amorcer()
+  else if (MODE === 'reprendre') await reprendreInstantane()
   else await livrer()
 } catch (err) {
   console.error(`\n✗ ${err instanceof Error ? err.message : String(err)}`)
   process.exitCode = 1
 } finally {
-  if (lie || existsSync(join(RACINE, 'supabase', '.temp', 'project-ref'))) {
-    lancer(['supabase', 'unlink'], { accepterEchec: true })
-    console.log('\nPoste délié de la prod.')
-  }
+  delier()
 }

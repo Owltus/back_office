@@ -8,6 +8,7 @@ import {
   ecartSchema,
   fonctionsModifiees,
   lignesDestructrices,
+  lignesJson,
   planEnvoi,
   secretsManquants,
 } from './livrer-plan.mjs'
@@ -93,7 +94,13 @@ describe('planEnvoi', () => {
       'Site (Vercel)',
       'Étiquette prod',
     ])
-    expect(etapes[0].cmd).toEqual(['supabase', 'db', 'push', '--linked'])
+    expect(etapes[0].cmd).toEqual([
+      'supabase',
+      'db',
+      'push',
+      '--linked',
+      '--yes',
+    ])
     expect(etapes[1].cmd).toEqual([
       'supabase',
       'functions',
@@ -207,11 +214,69 @@ describe('lignesDestructrices', () => {
       'create policy "drop" on t using (true);',
     ].join('\n')
     expect(lignesDestructrices(sql)).toEqual([
-      'alter table t drop column x;',
-      'ALTER TABLE t RENAME COLUMN a TO b;',
-      'drop policy "p" on t;',
-      'truncate t;',
+      'alter table t drop column x',
+      'ALTER TABLE t RENAME COLUMN a TO b',
+      'drop policy "p" on t',
+      'truncate t',
     ])
+  })
+
+  // Faux négatifs trouvés par la revue adverse du 2026-10-13.
+  it.each([
+    'alter table t drop constraint c',
+    'alter table t drop col',
+    'drop materialized view v',
+    'drop sequence s',
+    'drop extension e',
+    'alter type e rename value $$a$$ to $$b$$',
+    'alter table if exists x rename constraint a to b',
+    'revoke select on t from authenticated',
+    'alter table t alter column c type bigint',
+    'alter table t alter column c set data type text',
+    'alter table t alter column c set not null',
+    'delete from t',
+    'update public.t set a = 1',
+    'drop\n  table\n  t',
+    'DROP /* x */ TABLE t',
+  ])('destructif : %s', (sql) => {
+    expect(lignesDestructrices(`${sql};`)).toHaveLength(1)
+  })
+
+  it.each([
+    'alter table t alter column c drop default',
+    'alter table t alter column c drop not null',
+    'create table t (a int references u on delete cascade)',
+    'create trigger x before insert or update on t for each row execute function f()',
+    'grant update on t to authenticated',
+    '-- drop table t',
+    '/* drop table t */ select 1',
+  ])('pas destructif : %s', (sql) => {
+    expect(lignesDestructrices(`${sql};`)).toEqual([])
+  })
+})
+
+describe('lignesJson', () => {
+  it('tableau nu (personne) et { rows } (agent), avant-propos ignoré', () => {
+    expect(lignesJson('[{"a":1}]')).toEqual([{ a: 1 }])
+    expect(lignesJson('Initialising login role...\n[]')).toEqual([])
+    expect(
+      lignesJson('{"boundary":"x","rows":[{"a":2}],"warning":"w"}'),
+    ).toEqual([{ a: 2 }])
+  })
+  it('illisible : erreur claire', () => {
+    expect(() => lignesJson('rien')).toThrow('illisible')
+    expect(() => lignesJson('{"autre":1}')).toThrow('illisible')
+  })
+})
+
+describe('normaliserSchema', () => {
+  it('ignore les lignes volatiles d’un dump', () => {
+    expect(
+      ecartSchema(
+        'a\n\\restrict ABC\nb\n\\unrestrict ABC',
+        'a\n\\restrict XYZ\n-- Dumped from database version 17.7\nb',
+      ),
+    ).toEqual({ absentes: [], ajoutees: [] })
   })
 })
 
@@ -249,12 +314,23 @@ describe('bilanEchec et secrets', () => {
       parti: ['A'],
       echoue: 'B',
       pasParti: ['C'],
+      peutEtreEnPartie: false,
     })
     expect(bilanEchec(etapes, 0)).toEqual({
       parti: [],
       echoue: 'A',
       pasParti: ['B', 'C'],
+      peutEtreEnPartie: false,
     })
+  })
+
+  it('échec pendant la base : peut-être en partie', () => {
+    const etapes = [
+      { nom: 'Base de données', cmd: [] as Array<string> },
+      { nom: 'Site (Vercel)', cmd: [] as Array<string> },
+    ]
+    expect(bilanEchec(etapes, 0).peutEtreEnPartie).toBe(true)
+    expect(bilanEchec(etapes, 1).peutEtreEnPartie).toBe(false)
   })
 
   it('secrets manquants', () => {

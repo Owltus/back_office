@@ -23,25 +23,49 @@ export function fonctionsModifiees(fichiers, toutes) {
   return [...touchees].sort()
 }
 
-/** Instructions qui RETIRENT quelque chose : l'ancien code tourne encore dessus. */
-const DESTRUCTIF =
-  /\b(drop\s+(table|column|function|view|policy|trigger|schema|type|index)|rename\s+(column|to)|alter\s+table\s+\S+\s+rename|truncate)\b/i
+/**
+ * Instructions qui RETIRENT ou CHANGENT ce dont l'ancien code dépend (il
+ * tourne encore 1 à 2 min sur la nouvelle base). Large exprès : un faux
+ * positif coûte une saisie, un faux négatif casse l'app (revue adverse du
+ * 2026-10-13 : `drop constraint`, `drop col` sans `column`, `revoke`,
+ * `alter column … type`, `delete`/`update` de masse passaient).
+ */
+const DESTRUCTIF = [
+  /\bdrop\s+(?!default\b|not\s+null\b|identity\b)\w+/i,
+  /\brename\b/i,
+  /\brevoke\b/i,
+  /\btruncate\b/i,
+  /\bdelete\s+from\b/i,
+  /\bupdate\s+[\w."]+\s+set\b/i,
+  /\balter\s+column\s+\S+\s+(?:set\s+data\s+)?type\b/i,
+  /\balter\s+column\s+\S+\s+set\s+not\s+null\b/i,
+]
 
-/** Les lignes destructrices d'une migration, commentaires SQL ôtés. */
+/**
+ * Les INSTRUCTIONS destructrices d'une migration (commentaires ôtés, texte
+ * entier découpé sur `;` : une instruction sur deux lignes est vue entière).
+ */
 export function lignesDestructrices(sql) {
   return sql
-    .split(/\r?\n/)
-    .map((l) => l.replace(/--.*$/, ''))
-    .filter((l) => DESTRUCTIF.test(l))
-    .map((l) => l.trim())
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/--[^\n]*/g, ' ')
+    .split(';')
+    .map((s) => s.replace(/\s+/g, ' ').trim())
+    .filter((s) => s && DESTRUCTIF.some((re) => re.test(s)))
+    .map((s) => (s.length > 160 ? `${s.slice(0, 157)}…` : s))
 }
 
-/** Schéma comparable : fins de ligne et espaces de fin ignorés. */
+/**
+ * Schéma comparable : fins de ligne et espaces de fin ignorés, ainsi que les
+ * lignes VOLATILES d'un dump (`\restrict <jeton aléatoire>` des pg_dump
+ * récents, en-têtes datés) qui signaleraient une dérive à chaque fois.
+ */
 export function normaliserSchema(sql) {
   return sql
     .replace(/\r\n/g, '\n')
     .split('\n')
     .map((l) => l.trimEnd())
+    .filter((l) => !/^\\(?:un)?restrict\b|^-- Dumped (?:from|by)\b/.test(l))
     .join('\n')
     .trim()
 }
@@ -121,7 +145,8 @@ export function planEnvoi(e) {
   if (e.migrations.length > 0)
     etapes.push({
       nom: 'Base de données',
-      cmd: ['supabase', 'db', 'push', '--linked'],
+      // `--yes` : LIVRER vaut confirmation (sinon une 3e question, en anglais).
+      cmd: ['supabase', 'db', 'push', '--linked', '--yes'],
     })
   for (const f of e.fonctions) {
     const cmd = [
@@ -155,7 +180,25 @@ export function bilanEchec(etapes, i) {
     parti: etapes.slice(0, i).map((e) => e.nom),
     echoue: etapes[i]?.nom ?? null,
     pasParti: etapes.slice(i + 1).map((e) => e.nom),
+    // `db push` applique les migrations une à une : un échec au milieu en
+    // laisse une partie en prod.
+    peutEtreEnPartie: etapes[i]?.nom === 'Base de données',
   }
+}
+
+/**
+ * Lignes d'une sortie `supabase db query -o json` : un tableau nu (lancé par
+ * une personne) ou `{ rows }` (détecté « agent »). Revue adverse du
+ * 2026-10-13 : seule la seconde forme était lue, or c'est la première que
+ * l'utilisateur obtient.
+ */
+export function lignesJson(sortie) {
+  const debut = sortie.search(/[[{]/)
+  if (debut < 0) throw new Error('Réponse de la base illisible (pas de JSON).')
+  const j = JSON.parse(sortie.slice(debut))
+  if (Array.isArray(j)) return j
+  if (j && Array.isArray(j.rows)) return j.rows
+  throw new Error('Réponse de la base illisible (forme inattendue).')
 }
 
 /** Secrets attendus en prod, absents de la liste relevée. */

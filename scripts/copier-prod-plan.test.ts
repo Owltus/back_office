@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { fc, test } from '@fast-check/vitest'
 
 import {
+  BUCKETS,
+  REF_PROD,
   COMPTES,
   EXCLUES,
   SCHEMAS,
@@ -105,7 +107,47 @@ describe('arretAvantCopie', () => {
   )
 })
 
+describe('valeurs figées', () => {
+  it('bucket, exclusions, référence', () => {
+    expect(BUCKETS).toEqual(['classeur-images'])
+    expect(EXCLUES).toEqual([])
+    expect(REF_PROD).toMatch(/^[a-z]{20}$/)
+  })
+
+  it('réinsertion : le SQL complet, colonnes ordinaires seulement', () => {
+    expect(insertionComptes('auth.users', '[1]').split('\n')).toEqual([
+      'create temp table _comptes on commit drop as select * from json_populate_recordset(null::auth.users, $c$[1]$c$::json);',
+      'do $do$ declare cols text; begin',
+      "  select string_agg(quote_ident(column_name), ', ' order by ordinal_position) into cols",
+      "  from information_schema.columns where table_schema = 'auth' and table_name = 'users'",
+      "    and is_generated = 'NEVER' and coalesce(identity_generation, '') <> 'ALWAYS';",
+      "  execute format('insert into auth.users (%s) select %s from _comptes', cols, cols);",
+      'end $do$;',
+      'drop table _comptes;',
+    ])
+  })
+})
+
 describe('versions', () => {
+  it('seules les versions de 14 chiffres exactement comptent', () => {
+    expect(
+      derniereMigration([
+        'x20991231000000',
+        '209912310000001',
+        '20261013000000',
+      ]),
+    ).toBe('20261013000000')
+  })
+
+  it('sans version prod connue : tout est à rejouer ; noms mal formés ignorés', () => {
+    expect(
+      migrationsNonLivrees(
+        ['b20261020000000_a.sql', '20261020000000_a.sql', '20261013000000.sql'],
+        null,
+      ),
+    ).toEqual(['20261020000000_a.sql'])
+  })
+
   it('dernière migration de la prod', () => {
     expect(
       derniereMigration(['20261013000001', '20261013000000', 'pasuneversion']),

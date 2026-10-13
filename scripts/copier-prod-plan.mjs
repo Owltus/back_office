@@ -59,7 +59,8 @@ export function insertionComptes(table, json, etiquette = 'c') {
 /** Tables de nos schémas jamais copiées (aucune à ce jour). */
 export const EXCLUES = []
 
-/** Buckets dont les FICHIERS sont copiés (les lignes viennent du dump). */
+/** Buckets dont les FICHIERS sont copiés (leurs lignes `storage.objects`
+ *  naissent de l'envoi des fichiers dans le stockage local). */
 export const BUCKETS = ['classeur-images']
 
 /** Dernière migration appliquée en prod : la base locale y est ramenée. */

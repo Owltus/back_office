@@ -151,11 +151,114 @@ describe('verdict : table des commandes', () => {
     expect(verdict(commande)).toEqual({ autorise: true })
   })
 
-  it.each(REFUSEES)('le marqueur autorise %s', (commande) => {
-    expect(verdict(`PROD_CONFIRME=1 ${commande}`)).toEqual({ autorise: true })
-    expect(verdict(`$env:PROD_CONFIRME='1'; ${commande}`)).toEqual({
-      autorise: true,
-    })
+  // Le marqueur ne vaut que pour le segment qu'il préfixe (revue adverse du
+  // 2026-10-13) : ici, les commandes SIMPLES de la liste.
+  it.each(REFUSEES.filter((c) => !/[;&|]/.test(c)))(
+    'le marqueur en préfixe autorise %s',
+    (commande) => {
+      expect(verdict(`PROD_CONFIRME=1 ${commande}`)).toEqual({ autorise: true })
+      expect(verdict(`$env:PROD_CONFIRME='1'; ${commande}`)).toEqual({
+        autorise: true,
+      })
+    },
+  )
+
+  it('le marqueur ne déborde pas sur les segments suivants ni ne vaut cité', () => {
+    expect(
+      verdict('PROD_CONFIRME=1 supabase db dump --linked && git push').raisons,
+    ).toEqual(['`git push` déclenche le déploiement Vercel'])
+    expect(
+      verdict('echo PROD_CONFIRME=1 ; supabase db push --linked').autorise,
+    ).toBe(false)
+    expect(
+      verdict('git commit -m "PROD_CONFIRME=1" && git push').autorise,
+    ).toBe(false)
+    expect(
+      verdict(
+        'PROD_CONFIRME=1 supabase link --project-ref x && PROD_CONFIRME=1 supabase db dump --linked',
+      ),
+    ).toEqual({ autorise: true })
+  })
+
+  // Contournements trouvés par la revue adverse du 2026-10-13.
+  it.each([
+    'wrangler -c cloudflare/wrangler.toml deploy',
+    'wrangler --config cloudflare/wrangler.toml deploy',
+    'npx wrangler@latest deploy',
+    'npx wrangler@4 triggers deploy',
+    'wrangler rollback',
+    'wrangler delete',
+    'npx wrangler versions upload',
+    'npx supabase@latest db push',
+    'npx supabase@latest functions deploy import-report --no-verify-jwt',
+    'pnpm dlx supabase@2 secrets set X=1',
+    'supabase db push --local && supabase db push',
+    'pnpm --silent livrer',
+    'pnpm -s copier-prod',
+    'npm run -s livrer',
+    'yarn livrer',
+    'node --env-file=.env scripts/livrer.mjs',
+    'powershell -c ./livrer.bat',
+    'vercel',
+    'vercel .',
+    'vc --prod',
+    'vc deploy',
+    'npx vercel@latest deploy',
+    'vercel rollback',
+    'vercel alias set a b',
+    'gh pr merge 12 --merge',
+    'gh repo sync',
+    'gh api -X POST repos/o/r/merges',
+    'git subtree push --prefix x origin main',
+  ])('contournement refusé : %s', (commande) => {
+    expect(verdict(commande).autorise).toBe(false)
+  })
+
+  it('poste resté lié : toute commande supabase sans --local est refusée', () => {
+    for (const c of [
+      'supabase migration list',
+      'supabase db dump -f x.sql',
+      'supabase config push',
+      'supabase storage rm -r ss:///classeur-images',
+      'supabase functions delete import-report',
+      'supabase db query "select 1"',
+    ]) {
+      expect(verdict(c, { lie: true }).autorise, c).toBe(false)
+      expect(
+        verdict(c, { lie: false }).autorise === false ||
+          c.includes('config push'),
+      ).toBe(verdict(c).autorise === false || c.includes('config push'))
+    }
+    for (const c of [
+      'supabase unlink',
+      'supabase status',
+      'supabase db query --local "select 1"',
+      'git status',
+    ])
+      expect(verdict(c, { lie: true }), c).toEqual({ autorise: true })
+  })
+
+  it('une version épinglée ne casse pas une URL locale', () => {
+    expect(
+      verdict(
+        'supabase db query --db-url postgresql://postgres:postgres@127.0.0.1:54322/postgres "select 1"',
+      ),
+    ).toEqual({ autorise: true })
+    expect(normaliser('npx supabase@latest status')).toBe('npx supabase status')
+  })
+
+  it('outils en lecture : autorisés', () => {
+    for (const c of [
+      'wrangler tail',
+      'wrangler whoami',
+      'wrangler dev',
+      'vercel whoami',
+      'vercel ls',
+      'vc logs x',
+      'cat vercel.json',
+      'git add vercel.json',
+    ])
+      expect(verdict(c), c).toEqual({ autorise: true })
   })
 
   it('--local ne blanchit pas une commande qui vise aussi la prod', () => {
@@ -202,10 +305,15 @@ describe('verdict : table des commandes', () => {
       'supabase db query --db-url postgres://u@h:1/d',
       '`--db-url` vers une base qui n’est pas locale',
     ],
-    ['wrangler deploy', 'déploiement du Worker Cloudflare'],
-    ['wrangler secret put X', 'secrets du Worker Cloudflare'],
-    ['vercel deploy', 'commande Vercel sur la production'],
-    ['vercel --prod', '`vercel --prod` déploie en production'],
+    [
+      'wrangler deploy',
+      'Wrangler hors lecture (déploiement, retour arrière, secrets du Worker)',
+    ],
+    [
+      'vercel deploy',
+      'Vercel hors lecture (déploiement, alias, retour arrière)',
+    ],
+    ['gh pr merge 3', 'fusion sur GitHub (déclenche le déploiement Vercel)'],
     ['git push', '`git push` déclenche le déploiement Vercel'],
     [
       'pnpm livrer',
@@ -239,9 +347,12 @@ describe('verdict : propriétés', () => {
     },
   )
 
-  test.prop([fc.string(), fc.string()])('le marqueur autorise tout', (a, b) => {
-    expect(verdict(`${a}${MARQUEUR}${b}`).autorise).toBe(true)
-  })
+  test.prop([fc.stringMatching(/^[a-z0-9 ._:/=-]{0,40}$/)])(
+    'le marqueur en préfixe autorise toute commande SIMPLE',
+    (cmd) => {
+      expect(verdict(`${MARQUEUR} ${cmd}`).autorise).toBe(true)
+    },
+  )
 
   const motLocal = fc.constantFrom(
     'start',

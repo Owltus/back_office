@@ -17,8 +17,14 @@
 --   - baby_cot_assignments.label : texte libre ; gardé s'il n'est qu'un
 --     numéro de chambre, sinon traité comme un nom.
 --   - audit_log.old_data : ces clés sont retirées des copies de lignes.
--- Conservé : personnel (profiles, auteurs), sociétés (pdj.company),
--- adresses des destinataires du rapport (e-mails locaux → Mailpit, D12).
+-- Conservé : personnel (profiles, auteurs), sociétés (pdj.company, sauf
+-- égale au nom), adresses des destinataires du rapport (e-mails locaux →
+-- Mailpit, D12), contenu des classeurs (documents internes, PAS des données
+-- de client), textes d'affichage, apprentissage de facturation hors mots.
+--
+-- `copier-prod` retire les lignes `begin;` et `commit;` de ce fichier pour le
+-- jouer DANS la transaction du chargement : un échec ici annule aussi le
+-- chargement, jamais de vrais noms laissés en local.
 -- =====================================================================
 
 begin;
@@ -27,8 +33,29 @@ begin;
 -- rien réécrire ni refuser : ce n'est pas une saisie.
 set local session_replication_role = replica;
 
+-- Société = nom du client (réservation d'un particulier) : vidée AVANT que
+-- le nom ne soit remplacé (revue adverse du 2026-10-13).
+update public.pdj_breakfasts
+set company = null
+where company is not null and lower(btrim(company)) = lower(btrim(guest_name));
+
+-- Mots extraits des factures PDF (`lib/facturation/wordpool.ts` : « nom du
+-- fournisseur, du client… ») : vidés, le jeu de mots se réapprend.
+delete from public.facturation_wordpool;
+
+-- Comptes copiés (D23) : les jetons à usage unique de la prod ne viennent
+-- pas avec (récupération, confirmation, changement d'adresse).
+update auth.users
+set confirmation_token = '', recovery_token = '', email_change_token_new = '',
+    email_change_token_current = '', phone_change_token = '',
+    reauthentication_token = '', email_change = '';
+
+-- Numérotation : ordre tiré d'une empreinte SALÉE à chaque copie, pour qu'on
+-- ne puisse pas retrouver un client à partir d'une liste de noms.
+create temp table sel on commit drop as select gen_random_uuid()::text as s;
+
 create temp table noms_clients on commit drop as
-select cle, row_number() over (order by md5(cle)) as n
+select cle, row_number() over (order by md5(cle || (select s from sel))) as n
 from (
   select lower(btrim(guest_name)) as cle from public.pdj_breakfasts
   union

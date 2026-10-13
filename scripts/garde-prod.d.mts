@@ -7,8 +7,10 @@ export declare const MOTIFS: ReadonlyArray<{
   saufLocal?: boolean
 }>
 export declare function normaliser(commande: string): string
+export declare function segments(c: string): Array<string>
 export declare function verdict(
   commande: string,
+  options?: { lie?: boolean },
 ):
   | { autorise: true; raisons?: undefined }
   | { autorise: false; raisons: Array<string> }

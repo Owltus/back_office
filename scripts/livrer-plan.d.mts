@@ -36,7 +36,15 @@ export declare function planEnvoi(e: {
 export declare function bilanEchec(
   etapes: ReadonlyArray<Etape>,
   i: number,
-): { parti: Array<string>; echoue: string | null; pasParti: Array<string> }
+): {
+  parti: Array<string>
+  echoue: string | null
+  pasParti: Array<string>
+  peutEtreEnPartie: boolean
+}
+export declare function lignesJson(
+  sortie: string,
+): Array<Record<string, unknown>>
 export declare function secretsManquants(
   attendus: ReadonlyArray<string>,
   presents: ReadonlyArray<string>,
