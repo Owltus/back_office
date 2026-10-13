@@ -59,12 +59,12 @@ atteinte que par un geste explicite, visible et confirmé.
 | 6 | [6-acceptation-base.md](./6-acceptation-base.md) | La base locale équivaut à la prod | 5 | P0 | 1h30 | FAIT — `db dump --local` = dump prod à 1 ligne près ; verif_* identiques à la prod (KO obsolètes compris) |  |
 | 7 | [7-raccordement-front.md](./7-raccordement-front.md) | `pnpm dev` = local, bandeau, sessions, garde | 5 | P0 | 3h | FAIT e96fb0b — garde, ménage des sessions (essayé en navigateur), bandeau, bundle prod sans trace | ⚠ |
 | 8 | [8-edge-functions-locales.md](./8-edge-functions-locales.md) | Fonctions en local, e-mails vers Mailpit | 5 | P1 | 3h | FAIT b1f7e15 — send-report → Mailpit, create-user, 0 appel Resend ; fixtures .eml en cours | ⚠ |
-| 9 | [9-flux-livraison.md](./9-flux-livraison.md) | Livrer en UNE commande : code + schéma + fonctions | 6, 7, 8 | P0 | 4h | `livrer.bat` jusqu'au résumé, essai à blanc | ⚠ |
-| 10 | [10-tests-base-reelle.md](./10-tests-base-reelle.md) | Tests RLS réels, simulateur confronté | 6 | P1 | 4h | `pnpm test:db`, mutations de policies attrapées |  |
+| 9 | [9-flux-livraison.md](./9-flux-livraison.md) | Livrer en UNE commande : code + schéma + fonctions | 6, 7, 8 | P0 | 4h | FAIT 8e46d7e + 3adce31 — essai à blanc et amorçage À FAIRE PAR L'UTILISATEUR (touchent la prod) | ⚠ |
+| 10 | [10-tests-base-reelle.md](./10-tests-base-reelle.md) | Tests RLS réels, simulateur confronté | 6 | P1 | 4h | FAIT 7809202 — 3 202 tests pgTAP, PASS ×3 après reset, 5 mutations attrapées, 5 écarts du simulateur relevés |  |
 | 11 | [11-vite-conteneur.md](./11-vite-conteneur.md) | (Optionnel) Vite dans un conteneur | 7 | P2 | 2h | RETIRÉE (D2-B) | |
-| 12 | [12-documentation.md](./12-documentation.md) | CLAUDE.md, README, start.bat, mémoire | 7 à 10 | P0 | 1h30 | Une seule façon de travailler, écrite |  |
-| 14 | [14-copie-prod.md](./14-copie-prod.md) | Copier les données de la prod en local, à la demande (noms clients remplacés, vrais comptes) | 4, 5, 7, 8 | P0 | 4h | `copier-prod.bat`, 0 nom réel en local | ⚠ |
-| 13 | [13-cloture.md](./13-cloture.md) | Parcours de bout en bout, prod intacte | toutes | P0 | 1h30 | Bilan, essais « zinzin », témoins identiques | ⚠ |
+| 12 | [12-documentation.md](./12-documentation.md) | CLAUDE.md, README, start.bat, mémoire | 7 à 10 | P0 | 1h30 | FAIT c743e63 |  |
+| 14 | [14-copie-prod.md](./14-copie-prod.md) | Copier les données de la prod en local, à la demande (noms clients remplacés, vrais comptes) | 4, 5, 7, 8 | P0 | 4h | FAIT ab46456 + 3adce31 — répétition locale complète ; 1re vraie copie PAR L'UTILISATEUR | ⚠ |
+| 13 | [13-cloture.md](./13-cloture.md) | Parcours de bout en bout, prod intacte | toutes | P0 | 1h30 | Revue adverse (3 agents) faite et corrigée ; gestes réels restants à l'utilisateur, voir « Bilan » | ⚠ |
 
 Total estimé : environ 34 h (sans l'étape 11). L'étape 14, ajoutée le
 2026-10-13, s'exécute avant la 13.
@@ -194,6 +194,29 @@ qu'à `livrer` et aux commandes que vous lancez vous-même.
 | Familles | A propriétés (détection d'environnement, garde d'envoi) ; B matrices RLS rôle × table × opération ; C acceptation `verif_*` ; D chaos (stack arrêtée = bandeau panne, pas d'éjection) ; E sécurité (aucun chemin vers la prod sans geste explicite) |
 
 ---
+
+## Bilan au 2026-10-13
+
+Étapes 0 à 12 et 14 exécutées par l'assistant, rien poussé. Tests : 2 367
+vitest, 59 Deno, 3 202 pgTAP ; Stryker garde 89,8 %, livraison 84 %, copie
+93 %, environnement 97,8 %. Revue adverse par 3 agents indépendants (chemins
+vers la prod, données réelles, scripts de livraison et de copie) : défauts
+bloquants et dangereux corrigés (3adce31), dont : JSON de la CLI lu sous la
+mauvaise forme (livraison impossible au premier lancement), anonymisation hors
+transaction, poste qui restait relié après une fenêtre fermée, contournements
+du garde (`-c x deploy`, `outil@version`, `--local` sur toute la ligne).
+
+Reste à faire PAR L'UTILISATEUR (chacun touche la prod) :
+1. Fermer l'ancien `pnpm dev` du 2026-10-08 (port 3000, encore sur l'ancien
+   `.env`), relancer `start.bat`.
+2. `livrer.bat --amorcer` (seule écriture en prod du chantier).
+3. `livrer.bat --essai` puis une première vraie livraison.
+4. `copier-prod.bat`, connexion avec son vrai compte.
+5. Les 4 essais du 2026-10-04, désormais en local.
+
+Hors chantier, signalé par la revue : le code de la boîte à clés est dans
+des scripts SQL déjà poussés (`classeur_*_purge_code_2026-10-01.sql`) ; des
+noms plausibles de personnes figurent dans les aides PDJ et Parking.
 
 ## Angles à clarifier
 

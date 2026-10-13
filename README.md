@@ -64,7 +64,7 @@ Outils locaux : Studio [http://127.0.0.1:54323](http://127.0.0.1:54323) (la base
 
 Une migration qui **retire** quelque chose (`drop`, `rename`) demande une seconde confirmation : pendant une ou deux minutes, l'ancien code tourne encore sur la nouvelle base. Ajouter d'abord, retirer à la livraison suivante.
 
-Première fois seulement : `livrer.bat --amorcer` (inscrit en prod les migrations de départ, sans rien rejouer).
+Première fois seulement : `livrer.bat --amorcer` (inscrit en prod les migrations de départ, sans rien rejouer). Sur un autre poste, ou après une livraison interrompue : `livrer.bat --reprendre-instantane` (montre l'écart, puis reprend le schéma actuel de la prod comme référence).
 
 ## Scripts
 
