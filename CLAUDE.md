@@ -18,6 +18,17 @@ Parking, PDJ, Affichage, Rapprochement/Caisse (à venir).
 
 ## Backend Supabase — DÉDIÉ à cette app (prod live)
 
+> ⚠ **Depuis le 2026-10-13 (plan `environnement-dev-docker-2026-10-12`)** : le
+> poste n'est PLUS lié à la prod (`supabase unlink`) et le hook
+> `scripts/garde-prod.mjs` (PreToolUse, branché dans
+> `.claude/settings.local.json`) refuse toute commande qui la vise sans
+> `PROD_CONFIRME=1`, posé uniquement sur demande explicite de l'utilisateur.
+> Cible par défaut = base LOCALE (`supabase db query --local`). Dans le
+> NAVIGATEUR, l'assistant n'écrit que sur `localhost:3000` ;
+> `backoffice.naostack.com` en lecture seule et sur demande (le hook ne voit
+> pas les clics). Ce qui suit sur `--linked` est l'ancien régime, réécrit à la
+> fin du chantier.
+
 Le projet Supabase est désormais **dédié à cette application** : il n'est **plus
 partagé** avec `repjour-okko-nantes` (le partage a pris fin). L'ancien principe
 « tout en LECTURE SEULE parce qu'une autre app en dépend » **ne s'applique plus**.

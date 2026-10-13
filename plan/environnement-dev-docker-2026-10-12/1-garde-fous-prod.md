@@ -52,6 +52,28 @@ Faire de la prod une cible EXPLICITE. Aucun outil (CLI, assistant, Martin,
    `supabase login` (gestion) et de ceux de Vercel / Cloudflare, gardés pour
    livrer.
 
+## Bilan d'exécution (2026-10-13)
+
+- Poste délié : `supabase/.temp/project-ref` absent.
+- `scripts/garde-prod.mjs` + 201 tests (table de commandes, propriétés
+  fast-check, hook lancé par node) ; Stryker **96,97 %** (4 survivants
+  équivalents : chaînage optionnel sous `try/catch`, l'adaptateur exclu car
+  il tourne dans un processus à part, couvert par les tests « hook réel »).
+- Ajouté au plan initial : `--db-url` non local refusé, `vercel`, `git push`
+  (déploie Vercel) et le LANCEMENT de `livrer` / `copier-prod` (ces scripts
+  lancent eux-mêmes des commandes vers la prod, que le hook ne verrait pas).
+  `db push` / `migration repair` permis en `--local`.
+- Essai réel : `supabase db query --linked "select 1"` (Bash) et
+  `supabase secrets list --project-ref …` (PowerShell) lancés par
+  l'assistant → REFUSÉS par le hook, actif sans redémarrer la session.
+- Bob réécrit (local par défaut, « Atteindre la prod », navigateur), Martin
+  (cible sûre réelle), `~/.claude/settings.json` (environnement),
+  avertissement en tête de la section Supabase de `CLAUDE.md`.
+- **Point 7 (`.env`) REPORTÉ à l'étape 7** : vider `.env` maintenant
+  casserait `pnpm dev` jusqu'au raccordement de la base locale, et sa seule
+  clé est la clé PUBLIQUE (protégée par les RLS). Il est remplacé à
+  l'étape 7, au moment où la base locale prend le relais.
+
 ## Implications propres
 
 - Le dump de l'étape 3 devient la PREMIÈRE exception confirmée (D5-B) : il
