@@ -28,9 +28,11 @@ Questions posées à l'utilisateur une à une ; les points techniques non posés
 | D13 | ~~B~~ → **A** — front local JAMAIS sur la prod | Choix utilisateur : pour voir la prod, le site en ligne |
 | D14 | **B** — CLI mise à jour | Choix utilisateur |
 | D15 | **A** | Recommandation |
-| D16 | **A** | Recommandation |
+| D16 | ~~A~~ → **B** — bucket en migration | Relecture du 2026-10-13 : `config.toml` ne part jamais en prod, une migration si |
 | D17 | **A + B** | Recommandation |
 | D18 | **A** | Recommandation |
+| D19 | Mot de passe de la base demandé à chaque livraison, jamais stocké ; `livrer` lancé par l'utilisateur | Relecture du 2026-10-13 : `db push` / `db dump` exigent une liaison ou une connexion directe (CLI vérifiée) |
+| D20 | UNE commande de livraison (`livrer.bat`) : code + schéma + fonctions, contrôles, résumé, `LIVRER` | Relecture du 2026-10-13 : objectif « mettre à jour la prod simplement » |
 | R4 | Discipline STRICTE : aucun correctif en prod hors migration locale, **même en urgence** | Engagement de l'utilisateur (angle /rodin n° 4) |
 
 ---

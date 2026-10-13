@@ -40,6 +40,17 @@ Faire de la prod une cible EXPLICITE. Aucun outil (CLI, assistant, Martin,
    (SQL commité avant, destructif = confirmation).
 5. **Martin** : cibles sûres = `127.0.0.1:54321/54322` ; le reste est
    inchangé.
+6. **Navigateur de l'assistant (ajouté le 2026-10-13)** : l'assistant pilote
+   Chrome avec la session de l'utilisateur ; c'est ainsi que le classeur
+   d'essai n° 24 a été créé EN PROD le 2026-10-03. Règle écrite dans
+   `CLAUDE.md`, Bob et Martin : essais et écritures dans le navigateur
+   uniquement sur `localhost:3000` ; `backoffice.naostack.com` seulement en
+   LECTURE et sur demande. (Un hook ne voit pas les clics : la règle est
+   déclarative, d'où sa présence dans les trois fichiers.)
+7. **`.env` vidé des clés prod** (fait ici plutôt qu'à l'étape 7) : plus
+   aucune URL ni clé de la prod sur le poste, en dehors du jeton
+   `supabase login` (gestion) et de ceux de Vercel / Cloudflare, gardés pour
+   livrer.
 
 ## Implications propres
 

@@ -17,12 +17,14 @@ et l'assistant la liront.
    - dev = stack locale, commandes, comptes de test, Mailpit ;
    - prod = geste explicite (`PROD_CONFIRME=1`, `--project-ref`) ;
    - réécrire « Exécution du SQL » : la source de vérité devient
-     `supabase/migrations/`, livrée par `pnpm db:livrer` ;
+     `supabase/migrations/`, livrée par `livrer.bat` (code + schéma + fonctions) ;
    - « l'assistant ne teste pas les écritures contre la prod » devient
      « l'assistant teste les écritures en LOCAL, toujours » ;
    - noter que les 150 fichiers à plat sont de l'historique.
 2. **`README.md`** : démarrer (Docker Desktop, `start.bat`), arrêter, tout
-   remettre à zéro, livrer.
+   remettre à zéro, capturer un essai Studio (`db:capturer`), livrer
+   (`livrer.bat`), et le tableau « ce qui part en prod / ce qui n'y part
+   jamais » de l'étape 9.
 3. **Mémoire** : mise à jour des deux fiches et nouvelle fiche ; renvoi depuis
    la D21 du plan Classeur (« base locale disponible depuis le … »).
 

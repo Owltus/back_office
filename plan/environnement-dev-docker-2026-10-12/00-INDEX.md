@@ -59,7 +59,7 @@ atteinte que par un geste explicite, visible et confirmé.
 | 6 | [6-acceptation-base.md](./6-acceptation-base.md) | La base locale équivaut à la prod | 5 | P0 | 1h30 | verif_* locaux = témoins de l'étape 0 |  |
 | 7 | [7-raccordement-front.md](./7-raccordement-front.md) | `pnpm dev` = local, bandeau, sessions, garde | 5 | P0 | 3h | `lib/environnement.ts` testé, bandeau DEV/PROD | ⚠ |
 | 8 | [8-edge-functions-locales.md](./8-edge-functions-locales.md) | Fonctions en local, e-mails vers Mailpit | 5 | P1 | 3h | Création de compte et rapport en local, 0 e-mail réel | ⚠ |
-| 9 | [9-flux-livraison.md](./9-flux-livraison.md) | Du local à la prod : migrations, checklist | 6 | P0 | 3h | `pnpm db:livrer` en essai à blanc, procédure écrite | ⚠ |
+| 9 | [9-flux-livraison.md](./9-flux-livraison.md) | Livrer en UNE commande : code + schéma + fonctions | 6, 7, 8 | P0 | 4h | `livrer.bat` jusqu'au résumé, essai à blanc | ⚠ |
 | 10 | [10-tests-base-reelle.md](./10-tests-base-reelle.md) | Tests RLS réels, simulateur confronté | 6 | P1 | 4h | `pnpm test:db`, mutations de policies attrapées |  |
 | 11 | [11-vite-conteneur.md](./11-vite-conteneur.md) | (Optionnel) Vite dans un conteneur | 7 | P2 | 2h | RETIRÉE (D2-B) | |
 | 12 | [12-documentation.md](./12-documentation.md) | CLAUDE.md, README, start.bat, mémoire | 7 à 10 | P0 | 1h30 | Une seule façon de travailler, écrite |  |
@@ -101,13 +101,37 @@ S2 = 2 à 6 (la base) ; S3 = 7, 8 (l'app sur la base) ; S4 = 9, 10, 12, 13.
  │  aucun front local vers la prod (D13-A) : la prod se consulte │
  │  sur le site en ligne                                         │
  └───────────────────────────────┬───────────────────────────────┘
-                                 │ seul canal d'écriture :
-                                 │ pnpm db:livrer  (migrations, confirmé)
-                                 │ supabase functions deploy --project-ref …
+                                 │ seul canal : livrer.bat (lancé par vous)
+                                 │ contrôles → résumé → LIVRER → db push
+                                 │ → functions deploy → git push → Vercel
                                  ▼
           PRODUCTION : Supabase ozpavwghrmmkrnmkxodg + Vercel (main)
                       + Worker Cloudflare (inchangé)
 ```
+
+---
+
+## Étanchéité : chaque canal entre le poste et la prod
+
+Relecture du 2026-10-13. Un canal non listé ici est un trou.
+
+| Canal | Aujourd'hui | Après le chantier | Étape |
+|---|---|---|---|
+| App locale → base | `.env` = prod | base locale seule ; cible non locale = refus au démarrage ; `.env` vidé | 1, 7 |
+| Navigateur `localhost:3000` | session prod + cache prod dans `localStorage` | ménage au démarrage, cache marqué `<ref>:<compte>` | 7 |
+| CLI Supabase | poste lié à la prod | délié ; liaison temporaire dans `livrer` seulement | 1, 9 |
+| Assistant (terminal) | `db query --linked` autorisé | hook `garde-prod.mjs`, `PROD_CONFIRME=1` sur demande | 1 |
+| Assistant (navigateur) | écrit en prod avec votre session | `localhost:3000` seulement ; prod en lecture sur demande | 1 |
+| Edge Functions locales → e-mails | Resend réel | Mailpit, par construction | 8 |
+| Edge Functions locales → base | clé prod collable | clé `sb_secret_` refusée en local | 8 |
+| Worker Cloudflare | prod | prod, inchangé, rien en dev | — |
+| Prod → local | — | AUCUNE donnée : schéma seul, une fois ; seed inventé | 3, 5 |
+| Local → prod | scripts à la main, 4 gestes | `livrer.bat` seulement | 9 |
+| Previews Vercel | inconnu | relevé à l'étape 0, signalé | 0 |
+
+Hors d'atteinte, et c'est voulu : les jetons `supabase login`, Vercel et
+Cloudflare restent sur le poste, puisqu'il faut bien livrer. Ils ne servent
+qu'à `livrer` et aux commandes que vous lancez vous-même.
 
 ---
 
@@ -128,7 +152,7 @@ S2 = 2 à 6 (la base) ; S3 = 7, 8 (l'app sur la base) ; S4 = 9, 10, 12, 13.
   l'étape 3 (dump du schéma). Environ 10 requêtes de catalogue, sans charge.
   Respecter le repos de 2 à 3 minutes avant une mesure (règle du
   2026-09-23).
-- Écriture en prod dans tout le chantier : UNE seule, optionnelle
+- Écriture en prod dans tout le chantier : UNE seule
   (D8-A : `migration repair` qui crée `supabase_migrations.schema_migrations`),
   avec confirmation explicite.
 

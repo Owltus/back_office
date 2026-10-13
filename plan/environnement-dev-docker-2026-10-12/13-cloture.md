@@ -27,10 +27,18 @@ de tout casser de l'autre côté ».
    `migration list` aligné.
 8. `pnpm build`, `npx tsc --noEmit`, `pnpm test`, `pnpm test:db`,
    `deno test`, Stryker sur les nouveaux modules.
+9. **Étanchéité, canal par canal** : chaque ligne du tableau « Étanchéité »
+   de l'index essayée exprès (navigateur avec une ancienne session prod,
+   `.env` vide, clé prod dans les fonctions locales, `--linked` par
+   l'assistant) → refus ou ménage constaté.
+10. **Première livraison réelle, par l'utilisateur** : une migration
+   inoffensive (commentaire sur une table) + un petit changement visible,
+   capturés en local puis livrés par `livrer.bat` ; contrôle après :
+   `verif_*` en prod, site en ligne à jour, `migration list` aligné.
 
 ## Critère de validation
 
-- Les 8 points cochés, avec preuves dans le bilan.
+- Les 10 points cochés, avec preuves dans le bilan.
 - Commit sans push ; le push est demandé à l'utilisateur.
 
 ## Contrôle /borg

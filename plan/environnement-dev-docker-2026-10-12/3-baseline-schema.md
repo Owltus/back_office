@@ -24,6 +24,11 @@ seul témoin fidèle est la prod elle-même.
    PROD_CONFIRME=1 supabase db dump --project-ref ozpavwghrmmkrnmkxodg \
      --schema public,private -f supabase/migrations/<ts>_baseline.sql
    ```
+   ⚠ CLI vérifiée le 2026-10-13 : `db dump`, `db push`, `migration repair`
+   et `migration list` n'ont PAS de `--project-ref` ; seulement `--linked`
+   ou `--db-url` (connexion Postgres directe). Le poste étant délié, le dump
+   se fait par une liaison TEMPORAIRE (`link` puis `unlink`, comme
+   `livrer`), lancée par l'utilisateur s'il faut le mot de passe (D19).
    Par défaut, `db dump` ne sort QUE le schéma (`--data-only` serait l'inverse).
    Avant tout commit, vérifier par `grep -i "^copy\|insert into"` qu'il
    n'y a aucune donnée.

@@ -9,7 +9,7 @@ images ne s'envoient pas, et le planning parking ne se rafraîchit pas.
 ## Fichier(s) impacté(s)
 
 - `supabase/migrations/<ts>_hors_public.sql` (nouveau)
-- `supabase/config.toml` (`[storage.buckets.classeur-images]`, D16)
+- (bucket dans la migration, D16-B : `config.toml` ne part pas en prod)
 
 ## Travail à réaliser
 
@@ -17,7 +17,9 @@ images ne s'envoient pas, et le planning parking ne se rafraîchit pas.
    reprises du catalogue de la prod (`pg_get_triggerdef`,
    `pg_get_functiondef`, lus à l'étape 0, jamais recopiés de mémoire).
 2. **Bucket** `classeur-images` : `public = false`, 20 MiB, types autorisés
-   `image/webp`, déclaré dans `config.toml`.
+   `image/webp`, par `insert into storage.buckets … on conflict do nothing`
+   dans la migration (D16-B) — un futur bucket suivra le même chemin et
+   partira donc en prod par `livrer`.
 3. **Policies `storage.objects`** : les trois policies d'autorité
    (`classeur_acces_2026-09-28.sql`, section storage), lecture par
    `private.classeur_lecture_ok`, écriture par `private.classeur_write_ok`.
