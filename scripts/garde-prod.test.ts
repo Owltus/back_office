@@ -339,6 +339,23 @@ describe('normaliser', () => {
   })
 })
 
+describe('normaliser : versions épinglées', () => {
+  it('retire un vrai numéro de version', () => {
+    expect(normaliser('npx supabase@2.120.0 db push')).toBe(
+      'npx supabase db push',
+    )
+    expect(normaliser('npx wrangler@4.0.0-rc.1 deploy')).toBe(
+      'npx wrangler deploy',
+    )
+    expect(normaliser('npx supabase@latest link')).toBe('npx supabase link')
+  })
+
+  it('ne fait jamais disparaître la référence de la prod (contre-exemple « A@0 »)', () => {
+    expect(verdict(`A@0${REF_PROD}`).autorise).toBe(false)
+    expect(verdict(`x@1.2${REF_PROD} y`).autorise).toBe(false)
+  })
+})
+
 describe('verdict : propriétés', () => {
   test.prop([fc.string(), fc.string()])(
     'toute commande contenant la ref, sans marqueur, est refusée',

@@ -137,8 +137,11 @@ export function normaliser(commande) {
       // retirée, sinon `\bsupabase ` ne reconnaissait plus l'outil. Seulement
       // un mot SANS `:` ni `/` avant le `@` : une URL `postgres://u:p@hôte`
       // reste intacte.
+      // Seulement un VRAI numéro (`2`, `2.1.0`, `4.0.0-rc.1`) : `\d[^ ]*`
+      // avalait `a@0<ref>` et effaçait la référence de la prod (trouvé par
+      // la propriété « ref refusée », le 2026-10-15).
       .replace(
-        /(^| )(@?[a-z][\w.-]*)@(?:\d[^ ]*|latest|next|beta|canary)(?= |$)/g,
+        /(^| )(@?[a-z][\w.-]*)@(?:\d+(?:\.\d+)*(?:-[a-z0-9.]+)?|latest|next|beta|canary)(?= |$)/g,
         '$1$2',
       )
   )
