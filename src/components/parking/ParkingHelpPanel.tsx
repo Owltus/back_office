@@ -343,7 +343,7 @@ export function ParkingHelpPanel({ canEdit }: { canEdit: boolean }) {
             }),
             demoRes({
               spot: 3,
-              client: 'HAMON, Albane',
+              client: 'GARNIER, Élise',
               startDay: 1,
               nights: 2,
               status: 'reserve',
@@ -366,7 +366,7 @@ export function ParkingHelpPanel({ canEdit }: { canEdit: boolean }) {
           en filigrane rappelle le numéro de la semaine.
         </p>
         <p>
-          La bulle sur la barre d'Albane Hamon signale un commentaire ;
+          La bulle sur la barre d'Élise Garnier signale un commentaire ;
           survolez-la sur la page pour le lire.
         </p>
       </Section>
@@ -436,14 +436,14 @@ export function ParkingHelpPanel({ canEdit }: { canEdit: boolean }) {
           reservations={[
             demoRes({
               spot: 1,
-              client: 'LEBOUCHER, Teddy',
+              client: 'MOREAU, Lucien',
               startDay: 0,
               nights: 3,
               status: 'paye',
             }),
             demoRes({
               spot: 2,
-              client: 'HAMON, Albane',
+              client: 'GARNIER, Élise',
               startDay: 1,
               nights: 2,
               status: 'reserve',
@@ -502,7 +502,7 @@ export function ParkingHelpPanel({ canEdit }: { canEdit: boolean }) {
             reservations={[
               demoRes({
                 spot: 2,
-                client: 'HAMON, Albane',
+                client: 'GARNIER, Élise',
                 startDay: 1,
                 nights: 2,
                 status: 'paye',
@@ -539,7 +539,7 @@ export function ParkingHelpPanel({ canEdit }: { canEdit: boolean }) {
             reservations={[
               demoRes({
                 spot: 1,
-                client: 'LEBOUCHER, Teddy',
+                client: 'MOREAU, Lucien',
                 nights: 2,
                 status: 'paye',
               }),

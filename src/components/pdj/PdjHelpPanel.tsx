@@ -85,7 +85,7 @@ function demoRow(over: Partial<PdjDayRow>): PdjDayRow {
     id: 'demo',
     service_date: '2026-09-08',
     room: 114,
-    guest_name: 'LEBOUCHER, Teddy',
+    guest_name: 'MOREAU, Lucien',
     status: 'DUE OUT',
     vip: false,
     adults: 2,
@@ -164,10 +164,10 @@ function DemoLine({
  * l'étage 1 (l'inventaire s'arrête à la 114) : on suit les mêmes clients d'une
  * section à la suivante au lieu de repartir de zéro à chaque fois.
  * Les noms suivent la forme du PMS, telle qu'elle arrive dans l'In-House :
- * NOM en capitales, virgule, prénom capitalisé (« LEBOUCHER, Teddy »).
- *   114 LEBOUCHER, Teddy         — deux personnes, petit-déjeuner inclus, départ
+ * NOM en capitales, virgule, prénom capitalisé (« MOREAU, Lucien »).
+ *   114 MOREAU, Lucien           — deux personnes, petit-déjeuner inclus, départ
  *   113 BESSONNEAU, Pierre-Louis — VIP, seul, un inclus, reste une nuit de plus
- *   112 HAMON, Albane            — occupée sans PDJ au tarif, des extras servis
+ *   112 GARNIER, Élise           — occupée sans PDJ au tarif, des extras servis
  *   111 chambre vide · 110 ligne saisie à la main
  */
 const PIERRE_LOUIS: Partial<PdjDayRow> & { room: number } = {
@@ -184,9 +184,9 @@ const PIERRE_LOUIS: Partial<PdjDayRow> & { room: number } = {
   served: false,
 }
 
-const ALBANE: Partial<PdjDayRow> & { room: number } = {
+const ELISE: Partial<PdjDayRow> & { room: number } = {
   room: 112,
-  guest_name: 'HAMON, Albane',
+  guest_name: 'GARNIER, Élise',
   status: 'IN HOUSE',
   channel: 'Direct',
   addons: 'TAXE SEJOUR',
@@ -258,7 +258,7 @@ export function PdjHelpPanel() {
         </p>
         <Demo>
           <DemoLine room={111} empty />
-          <DemoLine {...ALBANE} breakfasts_served={0} served={false} />
+          <DemoLine {...ELISE} breakfasts_served={0} served={false} />
           <DemoLine {...PIERRE_LOUIS} />
           <DemoLine room={114} />
         </Demo>
@@ -398,7 +398,7 @@ export function PdjHelpPanel() {
           facture :
         </p>
         <Demo>
-          <DemoLine {...ALBANE} breakfasts_served={2} breakfasts_offert={1} />
+          <DemoLine {...ELISE} breakfasts_served={2} breakfasts_offert={1} />
           <DemoLine room={114} />
         </Demo>
         <Caption>
@@ -654,7 +654,7 @@ export function PdjHelpPanel() {
           à la chambre.
         </p>
         <Demo finance>
-          <DemoLine {...ALBANE} breakfasts_served={2} breakfasts_offert={1} />
+          <DemoLine {...ELISE} breakfasts_served={2} breakfasts_offert={1} />
           <DemoLine {...PIERRE_LOUIS} />
           <DemoLine room={114} />
         </Demo>
