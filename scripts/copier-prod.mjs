@@ -1,5 +1,5 @@
 // Copier les DONNÉES de la prod dans la base locale (plan environnement-dev-
-// docker-2026-10-12, étape 14). Lancé par l'UTILISATEUR (`copier-prod.bat`) ;
+// docker-2026-10-12, étape 14). Lancé par l'UTILISATEUR (`start.bat`, réponse O) ;
 // l'assistant ne le lance jamais (le hook garde-prod le refuse).
 //
 // Sens UNIQUE : la prod est LUE (données de public et private, et les deux
@@ -208,7 +208,11 @@ try {
   console.log(
     '(noms de clients remplacés). Vos essais locaux actuels seront perdus.',
   )
-  if ((await demander('Tapez COPIER pour continuer : ')).trim() !== 'COPIER') {
+  // `--confirme` : la question a déjà été posée par `start.bat` (O/N).
+  if (
+    !process.argv.includes('--confirme') &&
+    (await demander('Tapez COPIER pour continuer : ')).trim() !== 'COPIER'
+  ) {
     console.log('Copie annulée : rien n’a changé.')
     process.exit(0)
   }

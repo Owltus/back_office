@@ -25,7 +25,16 @@ la prod se met à jour en UNE commande.
 |---|---|---|
 | Base | Supabase locale dans Docker (`pnpm db:start`) : API `127.0.0.1:54321`, Postgres `:54322`, Studio `:54323`, Mailpit `:54324` | projet `ozpavwghrmmkrnmkxodg` |
 | App | `pnpm dev` / `start.bat` → `localhost:3000`, bandeau ambre « DEV · base locale » | Vercel, `backoffice.naostack.com` |
-| Données | fictives (`pnpm db:reset`, seed généré par `supabase/seed/generer.ts`, comptes `*@exemple.test` / `DevLocal2026x`) OU copie de la prod (`copier-prod.bat`, noms de clients remplacés) | réelles |
+| Données | fictives (`pnpm db:reset`, seed généré par `supabase/seed/generer.ts`, comptes `*@exemple.test` / `DevLocal2026x`) OU copie de la prod (`start.bat` réponse O, ou `node scripts/copier-prod.mjs` ; noms de clients remplacés) | réelles |
+
+`start.bat` = LE script de démarrage (2026-10-14, demande utilisateur : un
+seul script) : Docker Desktop → base locale (réessais, fonctions relancées
+après une coupure) → copie de la prod (O/N, OUI par défaut au bout de
+10 s ; `copier-prod.mjs --confirme` ; un échec n'empêche pas de démarrer) →
+`pnpm dev`. `copier-prod.bat` est supprimé ; `livrer.bat` reste À PART
+(sens inverse, geste volontaire). ⚠ Le hook refuse que l'assistant lance
+`start.bat` (il lit la prod, et son « oui » part tout seul) : l'assistant
+démarre avec `pnpm db:start` puis `pnpm dev`.
 | E-mails | Mailpit, par construction (`supabase/functions/_shared/environnement.ts`) | Resend |
 
 - **Schéma** : la vérité est `supabase/migrations/` (baseline du 2026-10-13 =

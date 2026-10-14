@@ -87,6 +87,10 @@ const REFUSEES: Array<string> = [
   'cmd /c copier-prod.bat',
   'git status && pnpm livrer',
   'git status;livrer.bat',
+  'start.bat',
+  './start.bat',
+  'cmd /c start.bat',
+  'cmd //c C:\\Users\\x\\back_office\\start.bat',
   // PowerShell
   '$env:X = 1; supabase db query --linked "select 1"',
   'supabase db query --linked "select 1"; if ($?) { echo ok }',
@@ -130,7 +134,12 @@ const AUTORISEES: Array<string> = [
   'npx vitest run scripts/livrer.test.ts',
   'pnpm test scripts/copier-prod',
   'cat livrer.bat',
+  'cat start.bat',
+  'git add start.bat',
   'pnpm livrer-quelque-chose',
+  // `start` sans `.bat` n'est pas le script de démarrage
+  'pnpm db:start',
+  'start "" http://localhost:3000',
   // la sous-commande seule, sans l'outil, n'est pas l'outil
   'echo x link',
   'echo x functions deploy',

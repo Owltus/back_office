@@ -37,7 +37,7 @@ pnpm db:reset     # migrations + données fictives
 pnpm dev          # http://localhost:3000, bandeau « DEV · base locale »
 ```
 
-Sous Windows, `start.bat` fait tout (il démarre la base si besoin). Comptes de test : `admin@`, `gestion@`, `ecriture@`, `lecture@`, `aucun@`, `reception@exemple.test`, mot de passe `DevLocal2026x`.
+Sous Windows, **`start.bat` fait tout** : il lance Docker Desktop, la base locale et ses fonctions, propose de récupérer les données fraîches de la prod (O/N, oui par défaut au bout de 10 s), puis lance l'app et ouvre le navigateur. Comptes de test : `admin@`, `gestion@`, `ecriture@`, `lecture@`, `aucun@`, `reception@exemple.test`, mot de passe `DevLocal2026x`.
 
 Outils locaux : Studio [http://127.0.0.1:54323](http://127.0.0.1:54323) (la base à la souris), Mailpit [http://127.0.0.1:54324](http://127.0.0.1:54324) (tous les e-mails envoyés en local).
 
@@ -47,7 +47,7 @@ Outils locaux : Studio [http://127.0.0.1:54323](http://127.0.0.1:54323) (la base
 | --- | --- |
 | Arrêter / relancer la base | `pnpm db:stop` / `pnpm db:start` (les données restent) |
 | Tout remettre à zéro (données fictives) | `pnpm db:reset` |
-| Voir les **vraies** données (noms de clients remplacés) | `copier-prod.bat` (la prod est seulement lue ; la base locale est remplacée) |
+| Voir les **vraies** données (noms de clients remplacés) | `start.bat`, répondre O (la prod est seulement lue ; la base locale est remplacée ; il faut un arbre git propre, sinon la copie est sautée) |
 | Changer le schéma | `supabase migration new <nom>`, ou essais dans Studio puis `supabase db diff --local -f <nom>` ; `pnpm db:reset` pour vérifier |
 | Essayer l'import nocturne | `pnpm fn:import-essai` |
 | **Mettre la prod à jour** | `livrer.bat` (résumé, puis taper `LIVRER`) ; `livrer.bat --essai` pour voir sans envoyer |
