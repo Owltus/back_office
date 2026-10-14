@@ -43,11 +43,37 @@ démarre avec `pnpm db:start` puis `pnpm dev`.
   migration new`, ou essais dans Studio puis `supabase db diff --local -f
   <nom>`), essayée en local (`pnpm db:reset`), livrée par `livrer.bat`.
   Discipline sans exception, même en urgence (décision utilisateur R4).
-- **Livrer** = `livrer.bat`, lancé par l'UTILISATEUR : contrôles, dérive,
+- **Livrer** = `livrer.bat`, lancé par l'UTILISATEUR, ou par l'assistant
+  quand l'utilisateur demande « push » (protocole ci-dessous) : contrôles, dérive,
   résumé, `LIVRER`, puis base → fonctions → site → étiquette git `prod`.
   `--essai` s'arrête au résumé. Seuls code et schéma partent, JAMAIS de
   données. Une migration qui retire (`drop`, `rename`) exige `SUPPRIMER` :
   ajouter d'abord, retirer à la livraison suivante.
+- **PROTOCOLE DE L'ASSISTANT (décision utilisateur du 2026-10-14, « je veux
+  que ce soit solide »)** :
+  1. **Toute demande de modifier la base** (« change la table X », « corrige
+     les données », « ajoute une colonne », même formulée comme visant la
+     prod) se fait D'ABORD en local : migration dans `supabase/migrations/`,
+     jouée sur la base locale (`supabase migration up --local` ou
+     `pnpm db:reset`), app et tests vérifiés, commit. Jamais de SQL écrit
+     directement en prod. Une correction de DONNÉES réelles (pas de schéma)
+     n'a pas de chemin par migration : la dire à l'utilisateur et passer par
+     l'app, ou demander son accord explicite pour ce SQL précis.
+  2. **« Push » = LIVRAISON COMPLÈTE**, jamais un `git push` seul (Vercel
+     déploierait le code SANS le schéma ni les fonctions → app cassée). Sur
+     demande explicite (« push », « pousse », « mets en ligne », « livre »),
+     l'assistant lance lui-même : `PROD_CONFIRME=1 node scripts/livrer.mjs
+     --essai` (contrôles + dérive + résumé, rien ne part), lit et résume à
+     l'utilisateur ce qui part (commits, migrations, fonctions), puis
+     `printf 'LIVRER\n' | PROD_CONFIRME=1 node scripts/livrer.mjs`
+     (base → fonctions → site → étiquette `prod`). Il S'ARRÊTE et demande si
+     : migration qui retire (`SUPPRIMER`), dérive du schéma prod, secret
+     manquant, `config.toml` ou Worker modifiés, contrôle en échec, ou tout
+     résumé inattendu. Si seuls les tests de la base échouent parce que la
+     base locale contient une copie de la prod : `pnpm db:reset` (local),
+     puis relancer. Après : bilan + `verif_advisor` / `verif_classeur_acces`.
+     L'accord vaut pour CE push seulement.
+  3. Sans demande de push : commit, jamais d'envoi.
 - **Garde de l'assistant** : poste DÉLIÉ ; hook `scripts/garde-prod.mjs`
   (PreToolUse Bash/PowerShell, `.claude/settings.local.json`) qui refuse toute
   commande visant la prod (ref, `--linked`, `--project-ref`, `--db-url`
