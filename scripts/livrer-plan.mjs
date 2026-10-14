@@ -209,13 +209,16 @@ export function lignesJson(sortie) {
  * (le 2026-10-15, une lecture ratée annonçait les 4 secrets absents).
  */
 export function nomsSecrets(sortie) {
+  // CLI 2.120 (relevé le 2026-10-15) : `{"secrets":[{name, value, …}], …}`.
   let noms = []
-  const debut = sortie.search(/\[/)
+  const debut = sortie.search(/[[{]/)
   if (debut >= 0) {
     try {
-      const j = JSON.parse(sortie.slice(debut))
-      if (Array.isArray(j))
-        noms = j.map((s) => String(s?.name ?? s?.Name ?? '').trim())
+      const fin = Math.max(sortie.lastIndexOf(']'), sortie.lastIndexOf('}'))
+      const j = JSON.parse(sortie.slice(debut, fin + 1))
+      const liste = Array.isArray(j) ? j : j?.secrets
+      if (Array.isArray(liste))
+        noms = liste.map((s) => String(s?.name ?? s?.Name ?? '').trim())
     } catch {
       noms = []
     }

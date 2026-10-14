@@ -338,6 +338,14 @@ describe('bilanEchec et secrets', () => {
     expect(secretsManquants(['A', 'B', 'C'], ['B', 'X'])).toEqual(['A', 'C'])
   })
 
+  it('noms des secrets : forme réelle de la CLI 2.120 (objet secrets), suivie de son avis de version', () => {
+    expect(
+      nomsSecrets(
+        '{"secrets":[{"name":"IMPORT_SECRET","value":"63ab","updated_at":"2026-08-07T21:25:49.500Z"},{"name":"SUPABASE_URL","value":"a4f6","updated_at":"2026-09-29T08:43:18.289Z"}],"message":""}\nA new version of Supabase CLI is available: v2.121.0 (currently installed v2.120.0)',
+      ),
+    ).toEqual(['IMPORT_SECRET', 'SUPABASE_URL'])
+  })
+
   it('noms des secrets : JSON, tableau ASCII, tableau Unicode', () => {
     expect(
       nomsSecrets(
