@@ -3,7 +3,13 @@ import { describe, expect, it } from 'vitest'
 
 import { fromTTC, toTTC, VAT_FACTOR } from '#/lib/repjour/constants.ts'
 
-const arbMontant = fc.double({ min: -1_000_000, max: 1_000_000, noNaN: true })
+// Montants au CENTIME, comme ceux de l'app. Un `fc.double` libre tirait des
+// flottants sous-normaux (7,4e-323) : deux voisins y deviennent égaux une fois
+// divisés par 1,10, et la croissance « stricte » échouait sans aucun rapport
+// avec un montant réel (échec aléatoire vu le 2026-10-14).
+const arbMontant = fc
+  .integer({ min: -100_000_000, max: 100_000_000 })
+  .map((centimes) => centimes / 100)
 
 describe('toTTC / fromTTC — aller-retour', () => {
   it('9. fromTTC(toTTC(x)) redonne x, à la tolérance flottante près', () => {
