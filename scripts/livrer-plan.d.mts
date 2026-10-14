@@ -45,6 +45,7 @@ export declare function bilanEchec(
 export declare function lignesJson(
   sortie: string,
 ): Array<Record<string, unknown>>
+export declare function nomsSecrets(sortie: string): Array<string>
 export declare function secretsManquants(
   attendus: ReadonlyArray<string>,
   presents: ReadonlyArray<string>,

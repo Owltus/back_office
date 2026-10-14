@@ -36,6 +36,7 @@ import {
   lignesDestructrices,
   lignesJson,
   planEnvoi,
+  nomsSecrets,
   secretsManquants,
 } from './livrer-plan.mjs'
 
@@ -390,16 +391,16 @@ async function livrer() {
     .filter((d) => d.isDirectory() && !d.name.startsWith('_'))
     .map((d) => d.name)
   const fonctions = fonctionsModifiees(changes, toutes)
-  const secrets = lancer([
+  const lecture = lancer([
     'supabase',
     'secrets',
     'list',
     '--project-ref',
     REF_PROD,
+    '-o',
+    'json',
   ])
-    .sortie.split('\n')
-    .map((l) => l.split('|')[0].trim())
-    .filter((n) => /^[A-Z0-9_]+$/.test(n))
+  const secrets = nomsSecrets(`${lecture.sortie}\n${lecture.erreur}`)
   const manquants = secretsManquants(SECRETS_ATTENDUS, secrets)
 
   console.log(`Commits (${commits.length}) :`)

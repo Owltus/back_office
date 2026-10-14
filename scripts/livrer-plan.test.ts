@@ -10,6 +10,7 @@ import {
   lignesDestructrices,
   lignesJson,
   planEnvoi,
+  nomsSecrets,
   secretsManquants,
 } from './livrer-plan.mjs'
 
@@ -335,5 +336,26 @@ describe('bilanEchec et secrets', () => {
 
   it('secrets manquants', () => {
     expect(secretsManquants(['A', 'B', 'C'], ['B', 'X'])).toEqual(['A', 'C'])
+  })
+
+  it('noms des secrets : JSON, tableau ASCII, tableau Unicode', () => {
+    expect(
+      nomsSecrets(
+        'Bavardage\n[{"name":"RESEND_API_KEY","value":"ab"},{"name":"SB_SECRET_KEY","value":"cd"}]',
+      ),
+    ).toEqual(['RESEND_API_KEY', 'SB_SECRET_KEY'])
+    expect(
+      nomsSecrets(
+        '  NAME | DIGEST\n  -----|------\n  REPORT_FROM | 12ab\n  IMPORT_SECRET | 34cd\n',
+      ),
+    ).toEqual(['REPORT_FROM', 'IMPORT_SECRET'])
+    expect(
+      nomsSecrets('│ NAME          │ DIGEST │\n│ IMPORT_SECRET │ 34cd   │\n'),
+    ).toEqual(['IMPORT_SECRET'])
+  })
+
+  it('noms des secrets : une liste illisible est une erreur, jamais « tout manque »', () => {
+    expect(() => nomsSecrets('')).toThrow('illisible')
+    expect(() => nomsSecrets('Error: unauthorized')).toThrow('illisible')
   })
 })

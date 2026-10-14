@@ -201,6 +201,41 @@ export function lignesJson(sortie) {
   throw new Error('Réponse de la base illisible (forme inattendue).')
 }
 
+/**
+ * Noms des secrets d'une sortie `supabase secrets list` : JSON (`-o json`,
+ * tableau d'objets `name`) ou tableau texte, séparé par `|` ou par les
+ * filets Unicode des CLI récentes. Une liste VIDE est une erreur de lecture,
+ * jamais « tout manque » : la prod porte toujours les secrets `SUPABASE_*`
+ * (le 2026-10-15, une lecture ratée annonçait les 4 secrets absents).
+ */
+export function nomsSecrets(sortie) {
+  let noms = []
+  const debut = sortie.search(/\[/)
+  if (debut >= 0) {
+    try {
+      const j = JSON.parse(sortie.slice(debut))
+      if (Array.isArray(j))
+        noms = j.map((s) => String(s?.name ?? s?.Name ?? '').trim())
+    } catch {
+      noms = []
+    }
+  }
+  if (noms.length === 0)
+    noms = sortie.split(/\r?\n/).map(
+      (l) =>
+        l
+          .split(/[|│┃]/)
+          .map((c) => c.trim())
+          .find(Boolean) ?? '',
+    )
+  noms = noms.filter((n) => /^[A-Z0-9_]+$/.test(n) && n !== 'NAME')
+  if (noms.length === 0)
+    throw new Error(
+      'Liste des secrets de la prod illisible : vérification impossible, rien ne part.',
+    )
+  return noms
+}
+
 /** Secrets attendus en prod, absents de la liste relevée. */
 export function secretsManquants(attendus, presents) {
   const p = new Set(presents)
