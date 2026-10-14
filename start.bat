@@ -36,16 +36,26 @@ if not exist "node_modules" (
 
 REM -- Base de donnees LOCALE (Docker) : l'app ne demarre que sur elle
 REM    (plan environnement-dev-docker-2026-10-12). Demarree si besoin.
+REM    Juste apres le lancement de Docker (ou apres une coupure), la base
+REM    est encore "starting" : on reessaie jusqu'a 6 fois, 15 s d'ecart.
+set ESSAIS=0
+:base
 call supabase status >nul 2>nul
-if errorlevel 1 (
-  echo Demarrage de la base locale ^(Docker^)...
-  call pnpm db:start
-  if errorlevel 1 (
-    echo [ERREUR] La base locale ne demarre pas. Docker Desktop est-il lance ?
-    pause
-    exit /b 1
-  )
+if not errorlevel 1 goto base_ok
+set /a ESSAIS+=1
+if %ESSAIS% gtr 6 (
+  echo [ERREUR] La base locale ne demarre pas. Docker Desktop est-il lance ?
+  pause
+  exit /b 1
 )
+echo Demarrage de la base locale ^(Docker^), essai %ESSAIS%...
+call pnpm db:start >nul 2>nul
+if errorlevel 1 timeout /t 15 /nobreak >nul
+goto base
+:base_ok
+REM -- Fonctions serveur locales : apres une coupure, leur conteneur reste
+REM    arrete et "supabase start" ne le relance pas (constate le 2026-10-14).
+docker start supabase_edge_runtime_back-office >nul 2>nul
 
 REM -- Ouvre le navigateur UNE FOIS le serveur pret (sonde le port 3000
 REM    en arriere-plan pendant 60 s max, puis lance l'URL)
