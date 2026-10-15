@@ -1,0 +1,344 @@
+// Tests de l'Edge Function `delete-user` (gestionnaire `traiter`, handler.ts).
+//
+// Lancer : `deno test --no-check supabase/functions/delete-user/`
+// (`--no-check` : voir `send-report/marker.test.ts`.)
+//
+// Faux client service_role injecté (`_shared/test/fauxClientAdmin.ts`) : aucun
+// réseau, journal ORDONNÉ des opérations. Oracles : en-tête de index.ts,
+// commentaires du gestionnaire, CLAUDE.md (audit du 2026-09-28 : « ban AVANT
+// le retrait du profil »).
+
+import {
+  assert,
+  AssertionError,
+  assertEquals,
+  assertRejects,
+} from 'jsr:@std/assert@1'
+
+import { traiter } from './handler.ts'
+import {
+  DETAIL_INTERNE,
+  erreur,
+  etatDeBase,
+  fauxClientAdmin,
+  lire,
+  requete,
+} from '../_shared/test/fauxClientAdmin.ts'
+import type { EtatFaux } from '../_shared/test/fauxClientAdmin.ts'
+
+const BAN = 'updateUserById(user-1, ban=876000h)'
+const UNBAN = 'updateUserById(user-1, ban=none)'
+
+async function appeler(
+  req: Request,
+  etat: EtatFaux = etatDeBase(),
+  variables?: Record<string, string | undefined>,
+) {
+  const faux = fauxClientAdmin(etat)
+  const logs: unknown[][] = []
+  const original = console.error
+  console.error = (...a: unknown[]) => void logs.push(a)
+  try {
+    const r = await lire(await traiter(req, faux.deps(variables)))
+    return { ...r, journal: faux.journal, appels: faux.appels, etat, logs }
+  } finally {
+    console.error = original
+  }
+}
+
+/** Aucune écriture : ni ban, ni profil retiré, ni identité supprimée. */
+function rienTouche(journal: string[]) {
+  assert(
+    !journal.some(
+      (l) =>
+        l.startsWith('updateUserById') ||
+        l.startsWith('supprimerProfil') ||
+        l.startsWith('deleteUser'),
+    ),
+    `écriture inattendue : ${journal.join(' > ')}`,
+  )
+}
+
+const cible = (userId: unknown = 'user-1') => ({ userId })
+
+// ─── Transport ────────────────────────────────────────────────────────────
+
+Deno.test('OPTIONS → pré-vol CORS, rien touché ; GET → 405', async () => {
+  // Oracle : `Access-Control-Allow-Methods: POST, OPTIONS`.
+  const o = await appeler(requete(null, { methode: 'OPTIONS' }))
+  assertEquals(o.status, 200)
+  assertEquals(o.journal, [])
+  const g = await appeler(requete(null, { methode: 'GET' }))
+  assertEquals(g.status, 405)
+  assertEquals(g.journal, [])
+})
+
+Deno.test('configuration absente → 500, aucun client', async () => {
+  // Oracle : « secret absent = erreur 500 », aucun repli legacy hors local.
+  const r = await appeler(requete(cible()), undefined, {
+    SUPABASE_URL: 'https://p.supabase.co',
+    SUPABASE_SERVICE_ROLE_KEY: 'legacy',
+  })
+  assertEquals(r.status, 500)
+  assertEquals(r.appels, [])
+})
+
+// ─── Authentification et autorisation (priorité) ──────────────────────────
+
+Deno.test('sans jeton → 401, aucune lecture', async () => {
+  // Oracle : en-tête, défense n° 1-2.
+  const r = await appeler(requete(cible(), { jeton: null }))
+  assertEquals(r.status, 401)
+  assertEquals(r.corps.error, 'Non authentifié')
+  assertEquals(r.journal, [])
+  // « Bearer » seul : l'en-tête est rogné par Headers, le mot part comme
+  // jeton et GoTrue le refuse — 401 quand même, rien touché.
+  const vide = await appeler(requete(cible(), { jeton: '' }))
+  assertEquals(vide.status, 401)
+  rienTouche(vide.journal)
+})
+
+Deno.test('jeton invalide ou GoTrue en panne → 401, rien touché', async () => {
+  // Oracle : « Identité de l'appelant (JWT validé côté serveur) » ; erreurs
+  // génériques.
+  const r1 = await appeler(requete(cible(), { jeton: 'forge' }))
+  assertEquals(r1.status, 401)
+  assertEquals(r1.corps.error, 'Session invalide')
+  rienTouche(r1.journal)
+  const etat = etatDeBase()
+  etat.pannes.getUser = erreur()
+  const r2 = await appeler(requete(cible()), etat)
+  assertEquals(r2.status, 401)
+  assert(!r2.texte.includes(DETAIL_INTERNE))
+  rienTouche(r2.journal)
+})
+
+Deno.test('appelant non admin → 403, la cible reste intacte', async () => {
+  // Oracle : « SEUL un `admin` peut poursuivre (403 sinon) ».
+  for (const role of ['utilisateur', 'super_utilisateur', 'gestion', 'ADMIN']) {
+    const etat = etatDeBase()
+    etat.jetons['jeton-autre'] = 'autre'
+    etat.identites.set('autre', { id: 'autre', email: 'o@exemple.test', created_at: '2026-01-01T00:00:00Z' })
+    etat.profils.set('autre', { id: 'autre', role })
+    const r = await appeler(requete(cible(), { jeton: 'jeton-autre' }), etat)
+    assertEquals(r.status, 403, `rôle ${role}`)
+    assertEquals(r.corps.error, 'Réservé aux administrateurs')
+    rienTouche(r.journal)
+    assert(etat.profils.has('user-1'))
+  }
+})
+
+Deno.test('appelant sans profil ou rôle illisible → 403 (garde FERMÉE)', async () => {
+  // Oracle : audit 2026-09-28 — un rôle NULL ne passe jamais une garde.
+  const e1 = etatDeBase()
+  e1.profils.delete('user-1')
+  e1.profils.set('cible-2', { id: 'cible-2', role: 'utilisateur' })
+  const r1 = await appeler(requete(cible('cible-2'), { jeton: 'jeton-user' }), e1)
+  assertEquals(r1.status, 403)
+  rienTouche(r1.journal)
+  const e2 = etatDeBase()
+  e2.pannes.lireProfil = erreur()
+  const r2 = await appeler(requete(cible()), e2)
+  assertEquals(r2.status, 403)
+  assert(!r2.texte.includes(DETAIL_INTERNE))
+  rienTouche(r2.journal)
+})
+
+// ─── Entrées ──────────────────────────────────────────────────────────────
+
+Deno.test('JSON cassé → 400 « Corps de requête invalide »', async () => {
+  // Oracle : étape 3 ; refus clair.
+  const r = await appeler(requete(null, { brut: 'pas du json' }))
+  assertEquals(r.status, 400)
+  assertEquals(r.corps.error, 'Corps de requête invalide')
+  rienTouche(r.journal)
+})
+
+Deno.test('identifiant absent ou blanc → 400', async () => {
+  // Oracle : « Identifiant du compte requis ».
+  for (const corps of [{}, { userId: '' }, { userId: '   ' }]) {
+    const r = await appeler(requete(corps))
+    assertEquals(r.status, 400, JSON.stringify(corps))
+    assertEquals(r.corps.error, 'Identifiant du compte requis')
+    rienTouche(r.journal)
+  }
+})
+
+Deno.test('un admin ne peut pas supprimer son propre compte (même entouré d’espaces)', async () => {
+  // Oracle : 3bis « Garde anti-auto-exclusion : jamais son propre compte ».
+  const etat = etatDeBase()
+  const r = await appeler(requete(cible('  admin-1 ')), etat)
+  assertEquals(r.status, 400)
+  assertEquals(r.corps.error, 'Vous ne pouvez pas supprimer votre propre compte')
+  rienTouche(r.journal)
+  assert(etat.identites.has('admin-1') && etat.profils.has('admin-1'))
+})
+
+Deno.test('cible sans profil → 404, rien touché', async () => {
+  // Oracle : 3ter « Le compte cible DOIT avoir un profil ».
+  const etat = etatDeBase()
+  etat.identites.set('orphelin', { id: 'orphelin', email: 'o@exemple.test', created_at: '2026-01-01T00:00:00Z' })
+  const r = await appeler(requete(cible('orphelin')), etat)
+  assertEquals(r.status, 404)
+  rienTouche(r.journal)
+  assert(etat.identites.has('orphelin'))
+})
+
+Deno.test('lecture du profil cible en erreur → 400 générique, rien touché', async () => {
+  // Oracle : « Détail côté serveur uniquement (B3) ; message générique ».
+  const etat = etatDeBase()
+  const faux = fauxClientAdmin(etat)
+  // 1re lecture (rôle de l'appelant) réussie, 2e (cible) en panne.
+  let n = 0
+  const from = faux.client.from.bind(faux.client)
+  faux.client.from = (t: string) => {
+    const q = from(t)
+    const select = q.select
+    q.select = (c: string) => {
+      if (++n === 2) etat.pannes.lireProfil = erreur()
+      return select(c)
+    }
+    return q
+  }
+  const original = console.error
+  const logs: unknown[][] = []
+  console.error = (...a: unknown[]) => void logs.push(a)
+  try {
+    const r = await lire(await traiter(requete(cible()), faux.deps()))
+    assertEquals(r.status, 400)
+    assertEquals(r.corps, { error: 'Vérification du compte échouée' })
+    assert(!r.texte.includes(DETAIL_INTERNE))
+    assert(JSON.stringify(logs).includes(DETAIL_INTERNE))
+    rienTouche(faux.journal)
+  } finally {
+    console.error = original
+  }
+})
+
+Deno.test('cible ADMIN → 403, jamais supprimée', async () => {
+  // Oracle : 3quater « Ne jamais supprimer un autre ADMIN ».
+  const etat = etatDeBase()
+  etat.profils.set('admin-2', { id: 'admin-2', role: 'admin' })
+  etat.identites.set('admin-2', { id: 'admin-2', email: 'a2@exemple.test', created_at: '2026-01-01T00:00:00Z' })
+  const r = await appeler(requete(cible('admin-2')), etat)
+  assertEquals(r.status, 403)
+  assertEquals(r.corps.error, 'Impossible de supprimer un compte administrateur.')
+  rienTouche(r.journal)
+  assert(etat.profils.has('admin-2') && etat.identites.has('admin-2'))
+})
+
+// ─── Ordre des opérations ─────────────────────────────────────────────────
+
+Deno.test('chemin nominal : ban → retrait du profil → suppression définitive', async () => {
+  // Oracle : 3quinquies « Accès coupé AVANT toute suppression » (revue
+  // 2026-09-28), puis étape 4 (profil, à cause de la FK) puis étape 5.
+  const etat = etatDeBase()
+  const r = await appeler(requete(cible()), etat)
+  assertEquals(r.status, 200)
+  assertEquals(r.corps, { deleted: 'user-1', mode: 'deleted' })
+  assertEquals(r.journal, [
+    'getUser',
+    'lireProfil(admin-1)',
+    'lireProfil(user-1)',
+    BAN,
+    'supprimerProfil(user-1)',
+    'deleteUser(user-1)',
+  ])
+  assertEquals(etat.profils.has('user-1'), false)
+  assertEquals(etat.identites.has('user-1'), false)
+})
+
+Deno.test('échec du ban → 500 visible, RIEN supprimé', async () => {
+  // Oracle : « Bannir d'abord : un échec ici ne change rien, l'admin peut
+  // réessayer » ; message « Rien n'a été supprimé ».
+  const etat = etatDeBase()
+  etat.pannes.updateUserById = erreur()
+  const r = await appeler(requete(cible()), etat)
+  assertEquals(r.status, 500)
+  assert(String(r.corps.error).includes('Rien n’a été supprimé'))
+  assert(!r.texte.includes(DETAIL_INTERNE))
+  assert(!r.journal.some((l) => l.startsWith('supprimerProfil') || l.startsWith('deleteUser')))
+  assert(etat.profils.has('user-1') && etat.identites.has('user-1'))
+})
+
+Deno.test('échec du retrait du profil → ban LEVÉ, 400, identité gardée', async () => {
+  // Oracle : étape 4 « Le ban vient d'être posé : le lever, sinon le compte
+  // resterait bloqué tout en paraissant actif dans /comptes ».
+  const etat = etatDeBase()
+  etat.pannes.supprimerProfil = erreur()
+  const r = await appeler(requete(cible()), etat)
+  assertEquals(r.status, 400)
+  assertEquals(r.corps, { error: 'Suppression du profil échouée' })
+  assertEquals(r.journal.slice(-3), [BAN, 'supprimerProfil(user-1)', UNBAN])
+  assert(!r.journal.some((l) => l.startsWith('deleteUser')))
+  assertEquals(etat.identites.get('user-1')?.banned_until, undefined)
+  assert(etat.profils.has('user-1'))
+})
+
+Deno.test('échec du retrait du profil ET de la levée du ban → 500 qui le dit', async () => {
+  // Oracle : « l'accès du compte est resté bloqué. Réessayez la suppression. »
+  const etat = etatDeBase()
+  etat.pannes.supprimerProfil = erreur()
+  etat.panneLeveeBan = erreur()
+  const r = await appeler(requete(cible()), etat)
+  assertEquals(r.status, 500)
+  assert(String(r.corps.error).includes('resté bloqué'))
+  assert(!r.texte.includes(DETAIL_INTERNE))
+  assert(!r.journal.some((l) => l.startsWith('deleteUser')))
+})
+
+Deno.test('suppression définitive refusée (FK) → 200 « banned » SEULEMENT ban posé', async () => {
+  // Oracle : étape 5 — repli documenté : profil retiré, identité subsiste mais
+  // BANNIE ; « warning » explicite. Le 200 n'est légitime que parce que le ban
+  // a réussi plus haut (sinon on serait sorti en 500).
+  const etat = etatDeBase()
+  etat.pannes.deleteUser = erreur('23503')
+  const r = await appeler(requete(cible()), etat)
+  assertEquals(r.status, 200)
+  assertEquals(r.corps.mode, 'banned')
+  assert(typeof r.corps.warning === 'string')
+  assert(!r.texte.includes(DETAIL_INTERNE))
+  assertEquals(etat.identites.get('user-1')?.banned_until, 'ban:876000h')
+  assertEquals(etat.profils.has('user-1'), false)
+})
+
+Deno.test('aucun 200 quand une étape d’écriture a échoué avant la suppression', async () => {
+  // Oracle : consigne de l'audit 2026-09-28 — « jamais de succès annoncé à
+  // tort » ; balayage de toutes les pannes avant l'étape 5.
+  for (const op of ['getUser', 'lireProfil', 'updateUserById', 'supprimerProfil'] as const) {
+    const etat = etatDeBase()
+    etat.pannes[op] = erreur()
+    const r = await appeler(requete(cible()), etat)
+    assert(r.status >= 400, `${op} → ${r.status}`)
+    assertEquals(r.corps.deleted, undefined, op)
+    assert(!r.texte.includes(DETAIL_INTERNE), op)
+  }
+})
+
+// ─── Défauts reproduits ───────────────────────────────────────────────────
+// Écrits comme le comportement ATTENDU ; `defaut` vérifie qu'ils échouent
+// aujourd'hui, et de la nature prévue (équivalent Deno de `it.fails`).
+
+function defaut(
+  nom: string,
+  attendue: typeof AssertionError | typeof TypeError,
+  fn: () => Promise<void>,
+) {
+  Deno.test(`DÉFAUT : ${nom}`, async () => {
+    const e = await assertRejects(fn)
+    assert(e instanceof attendue, `échec d'une autre nature : ${e}`)
+  })
+}
+
+defaut('identifiant non textuel (`{"userId": 42}`) → plantage au lieu d’un 400', TypeError, async () => {
+  // Oracle : « refus clair » d'une entrée invalide ; `(42).trim` lève et
+  // Deno.serve rend un 500 opaque.
+  const r = await appeler(requete(cible(42)))
+  assertEquals(r.status, 400)
+})
+
+defaut('corps JSON `null` → plantage au lieu d’un 400', TypeError, async () => {
+  // Oracle : idem ; `null.userId` lève.
+  const r = await appeler(requete(null, { brut: 'null' }))
+  assertEquals(r.status, 400)
+})
