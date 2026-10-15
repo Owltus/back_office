@@ -87,6 +87,8 @@ const REFUSEES: Array<string> = [
   'cmd /c copier-prod.bat',
   'git status && pnpm livrer',
   'git status;livrer.bat',
+  'pnpm livrer:essai',
+  'npm run copier-prod:oui',
   'start.bat',
   './start.bat',
   'cmd /c start.bat',
@@ -137,6 +139,7 @@ const AUTORISEES: Array<string> = [
   'cat start.bat',
   'git add start.bat',
   'pnpm livrer-quelque-chose',
+  'pnpm commit C:/tmp/message.txt',
   // `start` sans `.bat` n'est pas le script de démarrage
   'pnpm db:start',
   'start "" http://localhost:3000',
@@ -326,7 +329,7 @@ describe('verdict : table des commandes', () => {
     ['git push', '`git push` déclenche le déploiement Vercel'],
     [
       'pnpm livrer',
-      '`livrer` / `copier-prod` atteignent la prod : c’est l’utilisateur qui les lance',
+      '`livrer` / `copier-prod` atteignent la prod : seulement sur demande de l’utilisateur',
     ],
   ])('%s → %s', (commande, raison) => {
     expect(verdict(commande).raisons).toEqual([raison])

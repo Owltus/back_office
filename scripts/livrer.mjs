@@ -1,9 +1,12 @@
 // Livrer en prod : UNE commande (plan environnement-dev-docker-2026-10-12,
-// étape 9). Lancée par l'UTILISATEUR (`livrer.bat` ou `pnpm livrer`) ;
-// l'assistant ne la lance jamais (le hook garde-prod refuse son lancement).
+// étape 9). Lancée par l'utilisateur (`livrer.bat`), ou par l'assistant
+// quand l'utilisateur demande « push » (`PROD_CONFIRME=1`, CLAUDE.md).
 //
 //   livrer.bat                       contrôles → résumé → LIVRER → envoi
-//   livrer.bat --essai               contrôles → résumé, puis s'arrête
+//   livrer.bat --essai               contrôles → résumé + empreinte, arrêt
+//   … --confirme=<empreinte>         envoi SANS clavier (assistant) si rien
+//                                    n'a changé depuis l'essai ; refuse ce
+//                                    qui demande un geste (SUPPRIMER…)
 //   livrer.bat --amorcer             UNE fois : inscrit la baseline en prod
 //   livrer.bat --reprendre-instantane  réaccepte le schéma prod actuel comme
 //                                      référence (autre poste, livraison
@@ -15,6 +18,7 @@
 // fenêtre fermée. Revue adverse du 2026-10-13 intégrée.
 
 import { spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import {
   existsSync,
   mkdirSync,
@@ -31,7 +35,9 @@ import {
   REF_PROD,
   arretAvantProd,
   bilanEchec,
+  arretsSansClavier,
   choixControles,
+  descriptionLivraison,
   ecartSchema,
   fonctionsModifiees,
   lignesDestructrices,
@@ -67,6 +73,11 @@ const MODE = process.argv.includes('--amorcer')
     : process.argv.includes('--essai')
       ? 'essai'
       : 'livrer'
+/** `--confirme=<empreinte>` : envoi sans clavier, après un essai lu. */
+const CONFIRME =
+  process.argv
+    .find((a) => a.startsWith('--confirme='))
+    ?.slice('--confirme='.length) ?? null
 
 // ── commandes ──────────────────────────────────────────────────────────────
 
@@ -480,11 +491,46 @@ async function livrer() {
   if (manquants.length)
     throw new Error('Secret manquant en prod : rien ne part.')
 
+  const empreinte = createHash('sha256')
+    .update(
+      descriptionLivraison({
+        head: lancer(['git', 'rev-parse', 'HEAD']).sortie,
+        migrations: migrations.map((m) => m.nom),
+        fonctions,
+      }),
+    )
+    .digest('hex')
+    .slice(0, 8)
+
   if (MODE === 'essai') {
-    console.log('\nMode essai : arrêt ici, rien n’est parti.')
+    console.log(`\nEmpreinte : ${empreinte}`)
+    console.log('Mode essai : arrêt ici, rien n’est parti.')
     return
   }
-  const reponse = await demander('\nTapez LIVRER pour envoyer en prod : ')
+  if (CONFIRME !== null) {
+    if (CONFIRME !== empreinte)
+      throw new Error(
+        `Empreinte ${CONFIRME} périmée (attendue ${empreinte}) : ce qui part a changé depuis l'essai. Relancez --essai.`,
+      )
+    const arrets = arretsSansClavier({
+      destructives: migrations
+        .filter((m) => m.destructrices.length)
+        .map((m) => m.nom),
+      configToml: changes.includes('supabase/config.toml'),
+      worker: changes.some(
+        (f) => f.startsWith('cloudflare/') || f.startsWith('worker/'),
+      ),
+    })
+    if (arrets.length)
+      throw new Error(`Envoi sans clavier refusé :\n- ${arrets.join('\n- ')}`)
+  } else if (!process.stdin.isTTY)
+    throw new Error(
+      'Pas de clavier : lancez --essai, puis --confirme=<empreinte> (plus de réponse passée par un tube).',
+    )
+  const reponse =
+    CONFIRME !== null
+      ? 'LIVRER'
+      : await demander('\nTapez LIVRER pour envoyer en prod : ')
   const confirmationSuppression =
     reponse.trim() === 'LIVRER' &&
     migrations.some((m) => m.destructrices.length)
@@ -505,6 +551,10 @@ async function livrer() {
   }
 
   titre('Envoi')
+  // Laisse passer le hook git `pre-push` (`.githooks/`), qui refuse tout
+  // envoi de main hors livraison : un envoi seul mettrait le site en ligne
+  // sans la base ni les fonctions.
+  process.env.LIVRAISON_EN_COURS = '1'
   for (let i = 0; i < plan.etapes.length; i++) {
     const e = plan.etapes[i]
     console.log(`→ ${e.nom}`)

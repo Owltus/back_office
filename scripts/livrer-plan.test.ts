@@ -4,8 +4,10 @@ import { fc, test } from '@fast-check/vitest'
 import {
   REF_PROD,
   arretAvantProd,
+  arretsSansClavier,
   bilanEchec,
   choixControles,
+  descriptionLivraison,
   ecartSchema,
   fonctionsModifiees,
   lignesDestructrices,
@@ -406,5 +408,57 @@ describe('choixControles', () => {
         migrationsModifiees: [],
       }),
     ).toEqual({ jouer: true, testsBase: true, note: null })
+  })
+})
+
+describe('descriptionLivraison', () => {
+  it('ne dépend pas de l’ordre, mais de chaque élément', () => {
+    const a = descriptionLivraison({
+      head: 'h',
+      migrations: ['2', '1'],
+      fonctions: ['b', 'a'],
+    })
+    expect(
+      descriptionLivraison({
+        head: 'h',
+        migrations: ['1', '2'],
+        fonctions: ['a', 'b'],
+      }),
+    ).toBe(a)
+    expect(
+      descriptionLivraison({
+        head: 'h2',
+        migrations: ['1', '2'],
+        fonctions: ['a', 'b'],
+      }),
+    ).not.toBe(a)
+    expect(
+      descriptionLivraison({
+        head: 'h',
+        migrations: ['1'],
+        fonctions: ['a', 'b'],
+      }),
+    ).not.toBe(a)
+    expect(
+      descriptionLivraison({
+        head: 'h',
+        migrations: ['1', '2'],
+        fonctions: ['a'],
+      }),
+    ).not.toBe(a)
+  })
+})
+
+describe('arretsSansClavier', () => {
+  const rien = { destructives: [], configToml: false, worker: false }
+  it('laisse passer une livraison ordinaire', () => {
+    expect(arretsSansClavier(rien)).toEqual([])
+  })
+  it('arrête sur une migration destructive, config.toml ou le Worker', () => {
+    expect(
+      arretsSansClavier({ ...rien, destructives: ['1_x.sql'] })[0],
+    ).toMatch(/SUPPRIMER/)
+    expect(arretsSansClavier({ ...rien, configToml: true })).toHaveLength(1)
+    expect(arretsSansClavier({ ...rien, worker: true })).toHaveLength(1)
   })
 })

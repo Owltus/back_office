@@ -23,7 +23,9 @@
     "db:statut": "supabase status",
     "fn:import-essai": "node scripts/import-essai.mjs",
     "livrer": "node scripts/livrer.mjs",
-    "copier-prod": "node scripts/copier-prod.mjs"
+    "copier-prod": "node scripts/copier-prod.mjs",
+    "commit": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/commit.mjs",
+    "prepare": "git config core.hooksPath .githooks || exit 0"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

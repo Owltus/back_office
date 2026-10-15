@@ -102,8 +102,10 @@ export const MOTIFS = [
 // (`scripts\livrer.mjs` → `scriptslivrer.mjs`).
 // `start.bat` aussi (2026-10-14) : il lance la copie de la prod, et sa
 // question O/N répond « oui » toute seule au bout de 10 s.
+// `:xxx` aussi (revue du 2026-10-15) : un script pnpm `livrer:essai` lance
+// lui-même la livraison et passait.
 const NOMME_UN_SCRIPT_PROD =
-  /(?:(?:livrer|copier-prod)(?:\.bat|\.mjs)?|start\.bat)(?= |$)/
+  /(?:(?:livrer|copier-prod)(?:\.bat|\.mjs|:[\w-]+)?|start\.bat)(?= |$)/
 const LECTEURS =
   /^(?:git|cat|type|grep|rg|head|tail|sed|ls|dir|echo|wc|diff|less|more|code|npx (?:vitest|prettier|eslint|tsc)|pnpm (?:test|vitest|lint|check|format)|node --check)\b/
 
@@ -176,7 +178,7 @@ export function verdict(commande, { lie = false } = {}) {
       if (m.re.test(s) && !(m.saufLocal && local)) ajouter(m.raison)
     if (NOMME_UN_SCRIPT_PROD.test(s) && !LECTEURS.test(s))
       ajouter(
-        '`livrer` / `copier-prod` atteignent la prod : c’est l’utilisateur qui les lance',
+        '`livrer` / `copier-prod` atteignent la prod : seulement sur demande de l’utilisateur',
       )
     if (lie && /\bsupabase\b/.test(s) && !local && !SUPABASE_SANS_CIBLE.test(s))
       ajouter(

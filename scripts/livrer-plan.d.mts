@@ -55,3 +55,13 @@ export declare function choixControles(e: {
   copieDeLaProd: boolean
   migrationsModifiees: Array<string>
 }): { jouer: boolean; testsBase: boolean; note: string | null }
+export declare function descriptionLivraison(e: {
+  head: string
+  migrations: Array<string>
+  fonctions: Array<string>
+}): string
+export declare function arretsSansClavier(e: {
+  destructives: Array<string>
+  configToml: boolean
+  worker: boolean
+}): Array<string>

@@ -1,0 +1,17 @@
+#!/bin/sh
+# Refuse tout envoi de la branche main hors livraison (2026-10-15).
+# Vercel met en ligne tout ce qui arrive sur main : un envoi seul publierait
+# le site SANS la base ni les fonctions. La livraison (livrer.bat) pose
+# LIVRAISON_EN_COURS=1 pour son propre envoi. Les etiquettes passent.
+while read local_ref local_sha remote_ref remote_sha; do
+  case "$remote_ref" in
+    refs/heads/main)
+      if [ "$LIVRAISON_EN_COURS" != "1" ]; then
+        echo "Envoi de main refuse : passez par livrer.bat (base, fonctions, puis site)." >&2
+        echo "Urgence assumee : ajouter --no-verify a l'envoi git." >&2
+        exit 1
+      fi
+      ;;
+  esac
+done
+exit 0

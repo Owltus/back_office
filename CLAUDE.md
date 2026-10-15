@@ -21,11 +21,11 @@ Parking, PDJ, Affichage, Rapprochement/Caisse (à venir).
 Plan `plan/environnement-dev-docker-2026-10-12/`. Deux applications ÉTANCHES ;
 la prod se met à jour en UNE commande.
 
-| | Dev (poste) | Prod |
-|---|---|---|
-| Base | Supabase locale dans Docker (`pnpm db:start`) : API `127.0.0.1:54321`, Postgres `:54322`, Studio `:54323`, Mailpit `:54324` | projet `ozpavwghrmmkrnmkxodg` |
-| App | `pnpm dev` / `start.bat` → `localhost:3000`, bandeau ambre « DEV · base locale » | Vercel, `backoffice.naostack.com` |
-| Données | fictives (`pnpm db:reset`, seed généré par `supabase/seed/generer.ts`, comptes `*@exemple.test` / `DevLocal2026x`) OU copie de la prod (`start.bat` réponse O, ou `node scripts/copier-prod.mjs` ; noms de clients remplacés) | réelles |
+|         | Dev (poste)                                                                                                                                                                                                                   | Prod                              |
+| ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| Base    | Supabase locale dans Docker (`pnpm db:start`) : API `127.0.0.1:54321`, Postgres `:54322`, Studio `:54323`, Mailpit `:54324`                                                                                                   | projet `ozpavwghrmmkrnmkxodg`     |
+| App     | `pnpm dev` / `start.bat` → `localhost:3000`, bandeau ambre « DEV · base locale »                                                                                                                                              | Vercel, `backoffice.naostack.com` |
+| Données | fictives (`pnpm db:reset`, seed généré par `supabase/seed/generer.ts`, comptes `*@exemple.test` / `DevLocal2026x`) OU copie de la prod (`start.bat` réponse O, ou `node scripts/copier-prod.mjs` ; noms de clients remplacés) | réelles                           |
 
 `start.bat` = LE script de démarrage (2026-10-14, demande utilisateur : un
 seul script) : Docker Desktop → base locale (réessais, fonctions relancées
@@ -40,8 +40,8 @@ démarre avec `pnpm db:start` puis `pnpm dev`.
 - **Schéma** : la vérité est `supabase/migrations/` (baseline du 2026-10-13 =
   dump exact de la prod). Les ~150 `supabase/*.sql` à plat sont de
   l'HISTORIQUE, jamais rejoués. Un changement = une migration (`supabase
-  migration new`, ou essais dans Studio puis `supabase db diff --local -f
-  <nom>`), essayée en local (`pnpm db:reset`), livrée par `livrer.bat`.
+migration new`, ou essais dans Studio puis `supabase db diff --local -f
+<nom>`), essayée en local (`pnpm db:reset`), livrée par `livrer.bat`.
   Discipline sans exception, même en urgence (décision utilisateur R4).
 - **Livrer** = `livrer.bat`, lancé par l'UTILISATEUR, ou par l'assistant
   quand l'utilisateur demande « push » (protocole ci-dessous) : contrôles, dérive,
@@ -62,30 +62,34 @@ démarre avec `pnpm db:start` puis `pnpm dev`.
   2. **« Push » = LIVRAISON COMPLÈTE**, jamais un `git push` seul (Vercel
      déploierait le code SANS le schéma ni les fonctions → app cassée). Sur
      demande explicite (« push », « pousse », « mets en ligne », « livre »),
-     l'assistant lance lui-même : `PROD_CONFIRME=1 node scripts/livrer.mjs
-     --essai` (contrôles + dérive + résumé, rien ne part), lit et résume à
-     l'utilisateur ce qui part (commits, migrations, fonctions), puis
-     `printf 'LIVRER\n' | PROD_CONFIRME=1 node scripts/livrer.mjs`
-     (base → fonctions → site → étiquette `prod`). Il S'ARRÊTE et demande si
-     : migration qui retire (`SUPPRIMER`), dérive du schéma prod, secret
-     manquant, `config.toml` ou Worker modifiés, contrôle en échec, ou tout
-     résumé inattendu. Allègements (2026-10-15, « c'est long de ouf ») :
-     les contrôles passés à l'essai ne sont PAS rejoués par la livraison
-     (même commit, arbre propre : `~/.back-office/controles-ok`) ; sur une
-     base locale qui porte la copie de la prod, les tests de la base sont
-     sautés SAUF si une migration part (alors `pnpm db:reset`, puis
-     relancer). `supabase/seed.sql` n'est plus suivi par git (généré par
-     `db:start` / `db:reset`). Après : bilan + `verif_advisor` /
-     `verif_classeur_acces`. L'accord vaut pour CE push seulement.
-  3. Sans demande de push : commit, jamais d'envoi. Un commit ne rejoue PAS
-     toute la batterie : seulement les tests du domaine touché (+ `tsc` si
-     des types changent) ; la batterie complète tourne une fois, à la
-     livraison.
+     l'assistant lance lui-même DEUX commandes (méthode du 2026-10-15) :
+     `PROD_CONFIRME=1 node scripts/livrer.mjs --essai` (contrôles, dérive,
+     résumé, `Empreinte : xxxxxxxx` ; rien ne part), résumé à l'utilisateur,
+     puis `PROD_CONFIRME=1 node scripts/livrer.mjs --confirme=<empreinte>`
+     (base → fonctions → site → étiquette `prod`, sans clavier). Le script
+     REFUSE lui-même ce qui exige l'utilisateur — empreinte changée,
+     migration qui retire (`SUPPRIMER` au clavier seulement, `livrer.bat`),
+     `config.toml` ou Worker modifiés, dérive, secret manquant, contrôle en
+     échec — et sans clavier ni `--confirme` (plus de `printf | node`).
+     Tout refus : s'arrêter et le dire. Les contrôles passés à l'essai ne
+     sont pas rejoués (`~/.back-office/controles-ok`) ; sur une copie de la
+     prod en local, `test:db` est sauté SAUF si une migration part (alors
+     `pnpm db:reset`). Après : bilan. L'accord vaut pour CE push seulement.
+     Hook git `.githooks/pre-push` (activé par `prepare`) : un envoi de
+     main hors livraison est refusé, pour l'utilisateur aussi.
+  3. **Commit = `pnpm commit <fichier-message> [fichiers…]`** : message
+     écrit avec Write dans le scratchpad (sujet Conventional Commits, ligne
+     vide, corps, puis Co-Authored-By et Claude-Session — exigés quand
+     `CLAUDECODE` est posé) ; le script indexe, formate (prettier), lance
+     `tsc` si un fichier typé ou un script change et `vitest related` sur
+     les fichiers touchés, puis commite. Jamais de `git commit -m` avec un
+     long message (le garde lit la ligne). Sans demande de push : jamais
+     d'envoi. Batterie complète (build, pgTAP) : une fois, à la livraison.
 - **Garde de l'assistant** : poste DÉLIÉ ; hook `scripts/garde-prod.mjs`
   (PreToolUse Bash/PowerShell, `.claude/settings.local.json`) qui refuse toute
   commande visant la prod (ref, `--linked`, `--project-ref`, `--db-url`
   distant, `link`, `db push`, `functions deploy`, `secrets set`, `wrangler
-  deploy`, `vercel`, `git push`, lancement de `livrer`/`copier-prod`) sans
+deploy`, `vercel`, `git push`, lancement de `livrer`/`copier-prod`) sans
   `PROD_CONFIRME=1`, posé UNIQUEMENT sur demande explicite de l'utilisateur
   dans le chat. Il refuse aussi une commande qui ne fait que CITER ces mots
   (heredoc, message de commit) : écrire ces fichiers avec Write/Edit.
@@ -343,13 +347,13 @@ Le temps de chargement perçu vient surtout de l'auth cliente + du mode SPA. Rè
     servies en 1,9 s. C'est le **coût** qui compte, pas le nombre
     (`pdj_service_dates` 1 057 ms de moyenne, `pdj_daily_agg` 684 ms,
     `rapro_daily_agg` 541 ms — relevés `pg_stat_statements`).
-  Conséquence : sur cette instance, **N requêtes chères simultanées ne se
-  parallélisent pas, elles se font concurrence**. Scinder une salve en deux
-  vagues n'ajoute pas une attente, elle en retire une pour le contenu regardé.
-  `DayCrossSummary` a donc un prop `armed` (`armed={!reportPending}` dans
-  `DashboardBoard`) : médiane du rapport du jour **5 906 → ~1 700 ms**, tout
-  prêt **6 461 → ~4 000 ms** (6 chargements de production). Avant d'ajouter une
-  lecture à une page, se demander dans QUELLE vague elle tombe.
+    Conséquence : sur cette instance, **N requêtes chères simultanées ne se
+    parallélisent pas, elles se font concurrence**. Scinder une salve en deux
+    vagues n'ajoute pas une attente, elle en retire une pour le contenu regardé.
+    `DayCrossSummary` a donc un prop `armed` (`armed={!reportPending}` dans
+    `DashboardBoard`) : médiane du rapport du jour **5 906 → ~1 700 ms**, tout
+    prêt **6 461 → ~4 000 ms** (6 chargements de production). Avant d'ajouter une
+    lecture à une page, se demander dans QUELLE vague elle tombe.
 - ⚠ **`duration` d'un `fetch()` n'est pas un temps serveur.** Sans
   `Timing-Allow-Origin`, `connectStart`/`requestStart` valent 0 et `duration`
   court jusqu'à la lecture du corps. Vingt requêtes qui finissent toutes dans la
@@ -364,7 +368,7 @@ Le temps de chargement perçu vient surtout de l'auth cliente + du mode SPA. Rè
   du jeton de file. Ne pas relever le plafond sans refaire la mesure de débit :
   le sommet est à 9, l'effondrement à 14, et le plafond est PAR ONGLET.
 - **`select distinct` nu = scan complet.** `pdj_service_dates` (`select distinct
-  service_date from pdj_breakfasts`) coûtait 1 057 ms de moyenne alors que
+service_date from pdj_breakfasts`) coûtait 1 057 ms de moyenne alors que
   l'index sur `service_date` EXISTAIT : le planificateur ne saute pas tout seul.
   Réécrite en CTE récursive (« loose index scan », `Index Only Scan`, 251 sondes
   au lieu de 13 601 lignes) : **317,9 → 27,7 ms**, autorité
@@ -394,12 +398,12 @@ Le temps de chargement perçu vient surtout de l'auth cliente + du mode SPA. Rè
     d'inactivité), dont cette app n'a même pas besoin (usage quotidien + import
     nocturne). Le gain de chaleur (1,37 → 0,17 s) exigeait une charge continue
     qui ne laissait qu'une heure de repos par 24 h.
-  Désormais : `sonder()` dans le Worker, UNE requête `/auth/v1/health` toutes
-  les 10 min (cron `*/10 4-22 * * *`), 200 = silence, échec = `console.error`
-  visible comme ERREUR dans Cloudflare. Elle a répondu 504 pendant toute la
-  panne : elle l'aurait vue. ⚠ Elle ne prouve PAS que Postgres sert : une vraie
-  sonde de lecture exigerait `public.ping()` exécutable par `anon`, ce qui
-  contredit `verif_advisor.sql` n° 2 — décision de sécurité, pas de plomberie.
+    Désormais : `sonder()` dans le Worker, UNE requête `/auth/v1/health` toutes
+    les 10 min (cron `*/10 4-22 * * *`), 200 = silence, échec = `console.error`
+    visible comme ERREUR dans Cloudflare. Elle a répondu 504 pendant toute la
+    panne : elle l'aurait vue. ⚠ Elle ne prouve PAS que Postgres sert : une vraie
+    sonde de lecture exigerait `public.ping()` exécutable par `anon`, ce qui
+    contredit `verif_advisor.sql` n° 2 — décision de sécurité, pas de plomberie.
 - **Planificateur Cloudflare : le calendrier ACTIF n'est pas celui que le
   dashboard affiche** (constaté le 13/09, puis à nouveau le 24/09 avec preuves).
   Après `deploy` + `triggers deploy` annonçant `*/10 4-22`, l'ancien
@@ -411,7 +415,7 @@ Le temps de chargement perçu vient surtout de l'auth cliente + du mode SPA. Rè
   pouvoir déclencher, or l'ancien code traitait tout inconnu comme la veille et
   a appelé l'Edge Function d'import une fois par minute pendant onze minutes ;
   (2) **constater dans les logs**, pas déduire du déploiement : `wrangler
-  tail --format json > fichier` pendant un tick complet, puis compter
+tail --format json > fichier` pendant un tick complet, puis compter
   `[sonde]` et `cron inconnu`. Ne pas redéployer en rafale pour « réveiller »
   le planificateur : c'est ce qui l'avait figé le 13/09.
 - **Le mécanisme de la panne du 2026-09-24 est un BUG SUPABASE CONNU, non
@@ -466,8 +470,9 @@ Le temps de chargement perçu vient surtout de l'auth cliente + du mode SPA. Rè
   - `x-envoy-upstream-service-time` dans les en-têtes de réponse sépare le temps
     PostgREST du temps de la couche edge : c'est l'outil qui tranche entre
     « la base rame » et « la plateforme rame ».
+
 - **Squelettes de chargement — chantier du 2026-09-23/24** (`components/shared/
-  skeleton/PageShapes.tsx`). Quatre règles nées d'erreurs commises pendant ce
+skeleton/PageShapes.tsx`). Quatre règles nées d'erreurs commises pendant ce
   chantier même, toutes vérifiées par une passe d'agents adverses :
   - **UNE seule silhouette par page.** Chaque board avait son squelette local ET
     recevait celui de la route ; les deux dérivaient en silence. Sur /pdj,
@@ -554,7 +559,7 @@ Le temps de chargement perçu vient surtout de l'auth cliente + du mode SPA. Rè
     invocations se chevauchaient et la pression montait quand la base
     ralentissait. Désormais : arrêt au premier échec, délai par tir à 5 s, pire
     cas 5 s. ⚠ **Le Worker n'est pas déployé automatiquement** — `wrangler
-    deploy` PUIS `wrangler triggers deploy`, et CONSTATER un déclenchement.
+deploy` PUIS `wrangler triggers deploy`, et CONSTATER un déclenchement.
 - **Panne du 2026-09-24 — trois règles payées cher** (post-mortem complet :
   `plan/panne-supabase-2026-09-24/00-INDEX.md`). Toute la couche de service est
   tombée (PostgREST en boucle de redémarrage, Auth à 100 % d'échecs, Storage et
@@ -712,37 +717,37 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
 - **JSON d'un chapitre ou d'un document « pour un LLM » (2026-09-29,
   demande utilisateur)** : bouton accolades `{}` sur la page d'un chapitre
   (et menu « ⋯ ») et d'un document → `dialogs/EchangeJsonDialog.tsx` :
-  1) exporter (Copier / Télécharger), 2) réimporter (coller la réponse du
-  LLM, même entourée de texte ou de ```json — `extraireJson` —, ou choisir
-  un fichier), aperçu, Importer (droit d'écriture). MÊME format v2 que le
-  classeur complet : un classeur à UN chapitre (ou un chapitre contenant ce
-  seul document), `_metadata` enrichi de `portee` (uuid) et `instructions`
-  (consignes pour le LLM : ce qu'il peut modifier, jamais `uuid`/`kind`/
-  chemins d'images, conventions Markdown de la page — ligne vide, `===`,
-  `> `, `- [ ]`, tableaux GFM). Logique pure `lib/classeur/merge/portee.ts`
-  (14 tests, mutations vérifiées) : `planifierFusion` en REMPLACEMENT
-  (le LLM ne met pas `updated_at` à jour : en fusion « le plus récent
-  gagne », ses modifications seraient ignorées) puis FILTRÉ à la portée —
-  jamais d'autre chapitre, position du chapitre conservée, suppression des
-  absents seulement sur option (un LLM tronque parfois), chapitre ignoré
-  pour un document ; `updated_at` du fichier RETIRÉ (sinon le document
-  reprendrait sa date d'export et un éditeur ouvert avant écraserait le
-  travail sans conflit). Refus clair d'un JSON d'un autre chapitre/document.
-  Application : `appliquerFusionPortee` = même circuit que la fusion
-  (point `fusion` AVANT toute écriture, élagage). Vérifié navigateur sans
-  écrire (aperçus chapitre, option de suppression, mauvais chapitre,
-  document) ; base inchangée.
-  ⚠ **Consignes LLM : UNE source, TROIS exports** (retour utilisateur du
-  2026-09-30 : le classeur complet n'en avait aucune, son `content` était
-  décrit « texte libre en Markdown ») — `lib/classeur/merge/consignes.ts`
-  (`consignesClasseur` / `consignesChapitre` / `consignesDocument`, même
-  socle : champs modifiables, `uuid` intouchable, Markdown de la page,
-  images légende/taille, blocs `:::photos`/`:::etape`, `===`). `construireExport` (classeur
-  complet, et donc aussi les points de restauration) pose
-  `_metadata.instructions` ; `lireMetadata` le relit (aller-retour
-  identique). Registre accepte la clé (serde sans `deny_unknown_fields`,
-  vérifié dans `files.rs`). Test « les TROIS exports » : toute convention
-  ajoutée à la page doit l'être ici, et le test la réclame.
+  1. exporter (Copier / Télécharger), 2) réimporter (coller la réponse du
+     LLM, même entourée de texte ou de ```json — `extraireJson` —, ou choisir
+     un fichier), aperçu, Importer (droit d'écriture). MÊME format v2 que le
+     classeur complet : un classeur à UN chapitre (ou un chapitre contenant ce
+     seul document), `_metadata` enrichi de `portee` (uuid) et `instructions`
+     (consignes pour le LLM : ce qu'il peut modifier, jamais `uuid`/`kind`/
+     chemins d'images, conventions Markdown de la page — ligne vide, `===`,
+     `> `, `- [ ]`, tableaux GFM). Logique pure `lib/classeur/merge/portee.ts`
+     (14 tests, mutations vérifiées) : `planifierFusion` en REMPLACEMENT
+     (le LLM ne met pas `updated_at` à jour : en fusion « le plus récent
+     gagne », ses modifications seraient ignorées) puis FILTRÉ à la portée —
+     jamais d'autre chapitre, position du chapitre conservée, suppression des
+     absents seulement sur option (un LLM tronque parfois), chapitre ignoré
+     pour un document ; `updated_at` du fichier RETIRÉ (sinon le document
+     reprendrait sa date d'export et un éditeur ouvert avant écraserait le
+     travail sans conflit). Refus clair d'un JSON d'un autre chapitre/document.
+     Application : `appliquerFusionPortee` = même circuit que la fusion
+     (point `fusion` AVANT toute écriture, élagage). Vérifié navigateur sans
+     écrire (aperçus chapitre, option de suppression, mauvais chapitre,
+     document) ; base inchangée.
+     ⚠ **Consignes LLM : UNE source, TROIS exports** (retour utilisateur du
+     2026-09-30 : le classeur complet n'en avait aucune, son `content` était
+     décrit « texte libre en Markdown ») — `lib/classeur/merge/consignes.ts`
+     (`consignesClasseur` / `consignesChapitre` / `consignesDocument`, même
+     socle : champs modifiables, `uuid` intouchable, Markdown de la page,
+     images légende/taille, blocs `:::photos`/`:::etape`, `===`). `construireExport` (classeur
+     complet, et donc aussi les points de restauration) pose
+     `_metadata.instructions` ; `lireMetadata` le relit (aller-retour
+     identique). Registre accepte la clé (serde sans `deny_unknown_fields`,
+     vérifié dans `files.rs`). Test « les TROIS exports » : toute convention
+     ajoutée à la page doit l'être ici, et le test la réclame.
 - **UI** : TanStack Query partout (`useClasseur.ts`, `useMerge.ts`,
   invalidation de `classeurKeys.all`, optimistes pour le réordonnancement),
   `isPending` pour les gardes, pas de toasts (alertes inline,
@@ -778,7 +783,7 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   - Éditeur : `detail/InsertionImage.tsx` (bouton Image, collage, dépôt
     sur le textarea, insertion au curseur relevé AU DÉPART, état inline
     « 3,2 Mo → 106 ko »). `usePagination` ATTEND `data-image-status=
-    "pending"` puis le décodage des `<img>` (sinon hauteur 0 et page qui
+"pending"` puis le décodage des `<img>` (sinon hauteur 0 et page qui
     déborde ; 8 s max). ⚠ `img.decode()` sur une `Image` DÉTACHÉE avec une
     URL `blob:` ne résout pas toujours dans Chrome : n'attendre que
     `load`/`error` sur un `<img>` du DOM.
@@ -798,7 +803,7 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
     l'accueil, carte « Images du classeur ». L'envoi crée la fiche et
     retire le fichier si elle échoue (jamais d'orphelin). ⚠ La requête de
     la liste est conditionnée à l'ouverture du dialogue (`useImages(id,
-    open)`) : un dialogue fermé mais monté ne se rafraîchirait jamais, et
+open)`) : un dialogue fermé mais monté ne se rafraîchirait jamais, et
     le cache persisté (préfixe `classeur`) restaurait une liste vide.
     Vérifié navigateur : ajout, carte « Non utilisée », suppression avec
     confirmation, bucket vide et fiche `deleted_at` en base.
@@ -1085,7 +1090,7 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
       étant poussé avec le contenu) : (1) la marge basse du DERNIER bloc
       n'était pas annulée (zone de contenu en flex, pas de fusion) alors que
       `paginate` ne la compte pas → `.pdf-prose > :last-child { margin-bottom:
-      0 !important }` ; (2) une étape qui tient seule sur une page mais pas
+0 !important }` ; (2) une étape qui tient seule sur une page mais pas
       avec son titre était posée entière → déroulée. Contrôle strict : 22
       documents (89, 79, 90-109) conformes. Remarques de l'audit visuel
       NON appliquées (décisions utilisateur antérieures ou contenu) : V 1.0
@@ -1155,11 +1160,11 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
     - **Titres : un style par niveau (même jour, demande utilisateur)** —
       `#` capitales espacées 13 pt sur BANDEAU gris #e2e2e2 pleine largeur
       (« surlignage », sans trait, révisé le même jour) ; `##` 12,5 pt gras
-      + trait noir 0,75 pt ; `###` 11 pt gras sans trait ;
-      `####` petites capitales 8,5 pt gris foncé ; `#####` 9 pt gras gris ;
-      `######` 8,5 pt italique gris (sans style, ils dépassaient `####`). Usage réel mesuré :
-      `##` 330, `###` 190, `#` 40, `####` 1. Doc 89 : 4 pages, aucun
-      débordement.
+      - trait noir 0,75 pt ; `###` 11 pt gras sans trait ;
+        `####` petites capitales 8,5 pt gris foncé ; `#####` 9 pt gras gris ;
+        `######` 8,5 pt italique gris (sans style, ils dépassaient `####`). Usage réel mesuré :
+        `##` 330, `###` 190, `#` 40, `####` 1. Doc 89 : 4 pages, aucun
+        débordement.
     - **CARTOUCHE + VERSION X.Y des documents (même jour, décision
       utilisateur)** : l'en-tête d'une page de DOCUMENT devient
       `print/CartoucheDocument.tsx` — version SOBRE (la première, encadrée
@@ -1226,7 +1231,7 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   grille, aperçu), barre au bord droit SOUS l'en-tête, gouttière stable des
   deux côtés (boutons alignés). Rangée de `ClasseurShell` en `min-h-0` : le
   `<main>` ne défile plus sous `/classeur/$id` (routes en `PageContainer
-  fillHeight`), la colonne des chapitres à hauteur de fenêtre.
+fillHeight`), la colonne des chapitres à hauteur de fenêtre.
 - **Éditeur : ne plus perdre de travail (2026-09-27, points 1 à 5 de la
   liste NUMÉROTÉE `plan/classeur-editeur-ameliorations/00-INDEX.md` —
   l'utilisateur demande par numéro, ne jamais renuméroter)**. Tout vit dans
@@ -1238,7 +1243,7 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
     l'édition, jamais contre le cache (un refetch ne doit rien inventer).
     Sauvegarder sans modification sort sans écrire (ni point de restauration).
   - (2) `sauvegarderDocumentSiInchange` (service) : `update … eq(updated_at,
-    base)` ; 0 ligne → relecture pour départager conflit / supprimé / refus
+base)` ; 0 ligne → relecture pour départager conflit / supprimé / refus
     RLS (un `update` refusé par la RLS ne lève PAS d'erreur). Conflit →
     `dialogs/ConflitDocumentDialog.tsx` (revenir, garder ma version = écrase
     via `updateItem`, voir la sienne ; « Copier mon texte »). Pas de nom de
@@ -1251,72 +1256,72 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
     bandeau à la réouverture ; il garde SA `base`, donc reprendre un
     brouillon périmé mène au dialogue de conflit, pas à un écrasement.
   - (4) insertion d'image par `appliquerQuandLibre` (`detail/
-    editionTextarea.ts`) : `execCommand('insertText')` une fois le dialogue
+editionTextarea.ts`) : `execCommand('insertText')` une fois le dialogue
     d'origine FERMÉ (`[data-state="open"]` seulement ; minuterie, pas
     `requestAnimationFrame`, suspendu fenêtre masquée) → Ctrl + Z la retire.
     Le retrait d'une image SUPPRIMÉE reste hors historique, volontairement.
   - (5) indicateur « Non enregistré » / « Aucune modification » à gauche
     d'Annuler (`statut` de `DetailActions`).
-  Point 13 (même jour) : l'éditeur est en police NORMALE de l'app (plus
-  de `font-mono`, décision utilisateur). Décisions sur la suite, notées
-  dans le plan : 6, 9, 10 refusés (rester en noir et blanc, Markdown
-  officiel), 7 refusé sauf outil qui n'écrit que du tableau Markdown
-  standard, 8 en attente.
-  Point 7 FAIT (même jour, « fais ton truc avec le tableau ») : le bouton
-  Tableau ouvre `dialogs/TableauDialog.tsx`, grille vide ou PRÉ-REMPLIE
-  avec le tableau sous le curseur (`trouverTableau`) ; la validation écrit
-  du tableau GFM standard (`lib/classeur/tableauMarkdown.ts` :
-  `ecrireTableau` protège `|`, aplatit les retours, CONSERVE les
-  alignements `:---:` ; lecture tolérante, lignes courtes complétées, jamais
-  tronquées) via `insererTexteEnBloc` + `appliquerQuandLibre` (Ctrl + Z).
-  Vérifié sur « Dégradations constatées – prix » (20 lignes) : relire puis
-  remplacer sans rien changer ne modifie QUE le séparateur (`|----|` →
-  `| --- |`). Refusés le même jour : 11, 14, 15.
-  Points 16 à 19 FAITS (même jour). 16 : `rehypeLignesSource`
-  (`lib/classeur/print/lignesSource.ts`) pose `data-ligne` sur chaque
-  élément rendu — les pages A4 étant des COPIES HTML, l'attribut les suit ;
-  ⚠ tout composant Markdown surchargé doit transmettre ses props (`p` le
-  fait) ; chaque `===` devient 3 lignes rendues (`ligneRendueVersSource` /
-  `ligneSourceVersRendue` compensent). Clic dans l'aperçu → `allerALigne`
-  (défilement du textarea MESURÉ sur un miroir invisible) ; curseur → bloc
-  de l'aperçu montré s'il est hors vue (`selectionchange`) ; la synchro
-  proportionnelle se tait 400 ms après un défilement piloté. 17 : bouton
-  masquer/afficher l'aperçu (≥ lg). 18 : `lib/classeur/relecture.ts`
-  (image supprimée, lien vide, tableau aux cases en trop ou au séparateur
-  invalide, titre sauté ; blocs de code ignorés), repliable sous la barre,
-  clic = aller à la ligne, jamais bloquant. 19 : « N pages » discret
-  (`onPageCount` de `DocumentPages`). 23 refusé.
-  Point 22 FAIT : `mentionVersion` = LA DATE SEULE « jj/mm/aaaa » (fuseau
-  de Paris ; l'utilisateur a refusé tout texte et l'heure) ; date du jour
-  dans l'aperçu d'édition → prop `mention` de
-  `A4Page`, positionnée en ABSOLU dans la marge basse (sous le pied de
-  page, centrée, opacité 0,2, à 6,5 mm du bord — à 3,5 mm les
-  imprimantes la coupaient, 2026-09-28) : hors flux, la pagination ne la
-  voit pas ;
-  posée par `DocumentPages` depuis `ItemPages`, `DocumentCard` et
-  `DocumentDetail`. Refusés aussi : 8 (retour à la ligne simple), 12
-  (menu « / »).
-  Points 20-21 FAITS : table `classeur_document_versions`
-  (`supabase/classeur_versions_documents_2026-09-27.sql`, JOUÉ, 5/5 ;
-  bloc identique en §7 de l'autorité) écrite par le trigger definer
-  `private.classeur_document_version` après tout changement de titre,
-  description ou texte, quel que soit le chemin ; état d'avant conservé
-  au 1er enregistrement (`etat_initial`) ; auteur FIGÉ en clair (prénom
-  nom / nom affiché, jamais l'e-mail : les lecteurs ne lisent pas les
-  profils des autres) ; 50 versions par document ; lecture rang ≥ 1, AUCUN
-  grant d'écriture (insert direct → 42501, testé en transaction annulée).
-  Clé `classeurKeys.versions` EXCLUE du cache disque (noms de collègues,
-  `PREFIXES_SENSIBLES`). UI `dialogs/HistoriqueDocumentDialog.tsx` +
-  `lib/classeur/diff.ts` (LCS ligne à ligne, préfixe/suffixe communs
-  retirés, repli des parties inchangées, propriété « le diff reconstitue
-  les deux versions » testée) ; « Reprendre cette version » = l'éditeur
-  s'ouvre dessus avec la base ACTUELLE, rien n'est écrit avant
-  Sauvegarder. ⚠ Doublons de patchs rejoués retirés ce jour : interface
-  `DbImage` (types.ts) et bloc Médiathèque de `classeur_2026-09-25.sql`.
-  Vérifié navigateur sans rien écrire (base et points de restauration
-  inchangés). ⚠ Fenêtre Chrome non affichée = captures en échec et
-  animations de sortie figées (`data-state="closed"` reste dans le DOM) :
-  contrôler par script, ne pas conclure à un défaut de l'app.
+    Point 13 (même jour) : l'éditeur est en police NORMALE de l'app (plus
+    de `font-mono`, décision utilisateur). Décisions sur la suite, notées
+    dans le plan : 6, 9, 10 refusés (rester en noir et blanc, Markdown
+    officiel), 7 refusé sauf outil qui n'écrit que du tableau Markdown
+    standard, 8 en attente.
+    Point 7 FAIT (même jour, « fais ton truc avec le tableau ») : le bouton
+    Tableau ouvre `dialogs/TableauDialog.tsx`, grille vide ou PRÉ-REMPLIE
+    avec le tableau sous le curseur (`trouverTableau`) ; la validation écrit
+    du tableau GFM standard (`lib/classeur/tableauMarkdown.ts` :
+    `ecrireTableau` protège `|`, aplatit les retours, CONSERVE les
+    alignements `:---:` ; lecture tolérante, lignes courtes complétées, jamais
+    tronquées) via `insererTexteEnBloc` + `appliquerQuandLibre` (Ctrl + Z).
+    Vérifié sur « Dégradations constatées – prix » (20 lignes) : relire puis
+    remplacer sans rien changer ne modifie QUE le séparateur (`|----|` →
+    `| --- |`). Refusés le même jour : 11, 14, 15.
+    Points 16 à 19 FAITS (même jour). 16 : `rehypeLignesSource`
+    (`lib/classeur/print/lignesSource.ts`) pose `data-ligne` sur chaque
+    élément rendu — les pages A4 étant des COPIES HTML, l'attribut les suit ;
+    ⚠ tout composant Markdown surchargé doit transmettre ses props (`p` le
+    fait) ; chaque `===` devient 3 lignes rendues (`ligneRendueVersSource` /
+    `ligneSourceVersRendue` compensent). Clic dans l'aperçu → `allerALigne`
+    (défilement du textarea MESURÉ sur un miroir invisible) ; curseur → bloc
+    de l'aperçu montré s'il est hors vue (`selectionchange`) ; la synchro
+    proportionnelle se tait 400 ms après un défilement piloté. 17 : bouton
+    masquer/afficher l'aperçu (≥ lg). 18 : `lib/classeur/relecture.ts`
+    (image supprimée, lien vide, tableau aux cases en trop ou au séparateur
+    invalide, titre sauté ; blocs de code ignorés), repliable sous la barre,
+    clic = aller à la ligne, jamais bloquant. 19 : « N pages » discret
+    (`onPageCount` de `DocumentPages`). 23 refusé.
+    Point 22 FAIT : `mentionVersion` = LA DATE SEULE « jj/mm/aaaa » (fuseau
+    de Paris ; l'utilisateur a refusé tout texte et l'heure) ; date du jour
+    dans l'aperçu d'édition → prop `mention` de
+    `A4Page`, positionnée en ABSOLU dans la marge basse (sous le pied de
+    page, centrée, opacité 0,2, à 6,5 mm du bord — à 3,5 mm les
+    imprimantes la coupaient, 2026-09-28) : hors flux, la pagination ne la
+    voit pas ;
+    posée par `DocumentPages` depuis `ItemPages`, `DocumentCard` et
+    `DocumentDetail`. Refusés aussi : 8 (retour à la ligne simple), 12
+    (menu « / »).
+    Points 20-21 FAITS : table `classeur_document_versions`
+    (`supabase/classeur_versions_documents_2026-09-27.sql`, JOUÉ, 5/5 ;
+    bloc identique en §7 de l'autorité) écrite par le trigger definer
+    `private.classeur_document_version` après tout changement de titre,
+    description ou texte, quel que soit le chemin ; état d'avant conservé
+    au 1er enregistrement (`etat_initial`) ; auteur FIGÉ en clair (prénom
+    nom / nom affiché, jamais l'e-mail : les lecteurs ne lisent pas les
+    profils des autres) ; 50 versions par document ; lecture rang ≥ 1, AUCUN
+    grant d'écriture (insert direct → 42501, testé en transaction annulée).
+    Clé `classeurKeys.versions` EXCLUE du cache disque (noms de collègues,
+    `PREFIXES_SENSIBLES`). UI `dialogs/HistoriqueDocumentDialog.tsx` +
+    `lib/classeur/diff.ts` (LCS ligne à ligne, préfixe/suffixe communs
+    retirés, repli des parties inchangées, propriété « le diff reconstitue
+    les deux versions » testée) ; « Reprendre cette version » = l'éditeur
+    s'ouvre dessus avec la base ACTUELLE, rien n'est écrit avant
+    Sauvegarder. ⚠ Doublons de patchs rejoués retirés ce jour : interface
+    `DbImage` (types.ts) et bloc Médiathèque de `classeur_2026-09-25.sql`.
+    Vérifié navigateur sans rien écrire (base et points de restauration
+    inchangés). ⚠ Fenêtre Chrome non affichée = captures en échec et
+    animations de sortie figées (`data-state="closed"` reste dans le DOM) :
+    contrôler par script, ne pas conclure à un défaut de l'app.
 - **ACCÈS PAR CLASSEUR (2026-09-28, remplace le modèle « Affichage » du
   26/09 ; plan `plan/classeur-acces-par-classeur/`)**. Règle validée par
   l'utilisateur : **niveau effectif = le plus petit de (droit sur la PAGE,
@@ -1351,7 +1356,7 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   (`niveauEffectif`, `capacites`, propriétés fast-check),
   `useDroitsClasseur` (tout `false` tant que classeur ET `useMesAcces` ne
   sont pas chargés), `useDroitsPageClasseur` ; `dialogs/
-  AccesClasseurDialog.tsx` (bouclier dans la barre du haut de l'accueil,
+AccesClasseurDialog.tsx` (bouclier dans la barre du haut de l'accueil,
   à côté du crayon « Modifier le classeur », gestion) ; option Privé à la création (gestion) ; liste : suppression et
   ordre = gestion, cadenas « lecture seule », icône « Privé ». Clés
   `['classeur','acces',…]` exclues du disque. ⚠ **Cache PAR COMPTE**
@@ -1461,7 +1466,7 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   la seule poignée des chapitres (qui arrête `pointerdown` pour ne pas
   ouvrir le menu contextuel Radix, appui long 700 ms). Tailwind v4 met
   `hover:` sous `@media (hover: hover)` : les actions `opacity-0
-  group-hover:` étaient INVISIBLES mais CLIQUABLES au doigt →
+group-hover:` étaient INVISIBLES mais CLIQUABLES au doigt →
   `pointer-coarse:opacity-100` partout (cartes, liste, poignée, case de
   sélection agrandie). Voies au doigt ajoutées : bouton « Sélectionner »
   (`useSelection.commencer`, mode ouvert sans élément coché ; Échap ne vide
@@ -1548,8 +1553,7 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
     images), pas par classeur : « Importer classeur » écrit désormais ses
     créations SANS uuid (il échouait en 23505 sur l'export d'un classeur
     existant), un élément déplacé vers un autre classeur reçoit un uuid NEUF
-    (sinon le point de restauration de l'origine ne se restaurait plus :
-    23505) — la règle « uuid jamais réécrit » a donc UNE exception, le
+    (sinon le point de restauration de l'origine ne se restaurait plus : 23505) — la règle « uuid jamais réécrit » a donc UNE exception, le
     transfert entre classeurs. Filet général (`executerPlan`,
     `estDoublonUuid`) : une CRÉATION refusée pour un uuid déjà pris ailleurs
     (export d'un autre classeur fusionné, restauration) est réessayée UNE
@@ -1601,7 +1605,7 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
     chapitre ou un autre (`OptionsCorbeille`, `restaurerAvecChapitre`).
     ⚠ `avantEcriture` passait par `fetchItem`, qui exclut les supprimés : le
     point auto d'une restauration était SAUTÉ en silence.
-  - **Transfert vers un autre classeur** (`transfert.ts` pur, 
+  - **Transfert vers un autre classeur** (`transfert.ts` pur,
     `transfertExecution.ts`, `TransfertDialog`, `MenuDeplacerVers`) :
     déplacer (update `chapter_id`, historique suivi) ou copier (version 1.0) ;
     écriture exigée des DEUX côtés ; images copiées par `storage.copy`
@@ -1626,26 +1630,26 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
     leçon : trancher à la place de l'utilisateur dans le sens le plus
     PRUDENT a produit des fonctions plus PETITES que ce qu'il avait accepté.
     Renversés : D19 (RETIRÉ ensuite le 2026-10-08, voir plus haut ; bouton « Télécharger le PDF » PRINCIPAL, html2canvas-pro
-    + jsPDF, `pdfDirect.ts` ; accès en 1 clic depuis un document, un
-    chapitre, une sélection via `PrintPreview autoTelecharger` ; Annuler,
-    `rendreLaMain` entre deux pages, avertissement au-delà de 40 pages ;
-    `filtreClone` : html2canvas-pro clonait TOUT le document à chaque page —
-    64 pages : gel de ~3 min → 14-21 s, 0 pixel de différence), D25 (import
-    du classeur COMPLET avec comparaison, refus, relecture —
-    `MergePreviewDialog` sur `ApercuImport`, `appliquerFusion({exclus})` ;
-    demandes LLM à l'export complet, `ExportJsonClasseurDialog`,
-    `DemandesLlm.tsx`), D27 (zoom aussi en lecture et dans l'aperçu
-    d'impression, ajusté à la largeur sur téléphone). ⚠ Page d'un document :
-    AUCUN contrôle de zoom à l'écran (barre retirée à la demande de
-    l'utilisateur), Ctrl + molette et Ctrl + 0 seulement, comme la grille
-    d'un chapitre ; « N pages » revenu dans l'en-tête en édition. Le
-    aperçu d'impression : plus AUCUN bouton de zoom (retirés le 2026-10-08 à la demande de l'utilisateur), pages seulement ajustées à la largeur sur écran étroit. « Copier vers un autre classeur »
-    est une entrée VISIBLE du menu (plus caché derrière Déplacer). Échap
-    dans un dialogue ne vide plus la sélection (`useSelection` en capture).
-    Gestion de la page jamais bloquée par une lecture d'exceptions en échec.
-    Images exclues de l'invalidation après écriture (`invaliderClasseur` :
-    ~93 téléchargements évités). Messages des nouveautés sans « » ni tiret
-    cadratin (l'ancien Classeur en garde : harmonisation à décider).
+    - jsPDF, `pdfDirect.ts` ; accès en 1 clic depuis un document, un
+      chapitre, une sélection via `PrintPreview autoTelecharger` ; Annuler,
+      `rendreLaMain` entre deux pages, avertissement au-delà de 40 pages ;
+      `filtreClone` : html2canvas-pro clonait TOUT le document à chaque page —
+      64 pages : gel de ~3 min → 14-21 s, 0 pixel de différence), D25 (import
+      du classeur COMPLET avec comparaison, refus, relecture —
+      `MergePreviewDialog` sur `ApercuImport`, `appliquerFusion({exclus})` ;
+      demandes LLM à l'export complet, `ExportJsonClasseurDialog`,
+      `DemandesLlm.tsx`), D27 (zoom aussi en lecture et dans l'aperçu
+      d'impression, ajusté à la largeur sur téléphone). ⚠ Page d'un document :
+      AUCUN contrôle de zoom à l'écran (barre retirée à la demande de
+      l'utilisateur), Ctrl + molette et Ctrl + 0 seulement, comme la grille
+      d'un chapitre ; « N pages » revenu dans l'en-tête en édition. Le
+      aperçu d'impression : plus AUCUN bouton de zoom (retirés le 2026-10-08 à la demande de l'utilisateur), pages seulement ajustées à la largeur sur écran étroit. « Copier vers un autre classeur »
+      est une entrée VISIBLE du menu (plus caché derrière Déplacer). Échap
+      dans un dialogue ne vide plus la sélection (`useSelection` en capture).
+      Gestion de la page jamais bloquée par une lecture d'exceptions en échec.
+      Images exclues de l'invalidation après écriture (`invaliderClasseur` :
+      ~93 téléchargements évités). Messages des nouveautés sans « » ni tiret
+      cadratin (l'ancien Classeur en garde : harmonisation à décider).
 - **Squelettes** : variante `classeur` de `RouteSkeleton`, forme choisie par
   `paramsClasseur(pathname)` (liste, tableau de bord, chapitre, détail) ;
   silhouettes `FormeClasseurListe`, `FormeClasseurDashboard`, `FormeChapitre`,

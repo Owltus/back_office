@@ -147,6 +147,46 @@ export function choixControles(e) {
 }
 
 /**
+ * Ce qui identifie une livraison : le commit, les migrations et les
+ * fonctions qui partent. L'essai en affiche l'empreinte ; `--confirme=` ne
+ * livre que si elle n'a pas changé (ce qui part = ce qui a été lu).
+ *
+ * @param {{ head: string, migrations: Array<string>, fonctions: Array<string> }} e
+ */
+export function descriptionLivraison(e) {
+  return [
+    e.head,
+    [...e.migrations].sort().join(','),
+    [...e.fonctions].sort().join(','),
+  ].join('|')
+}
+
+/**
+ * Cas où `--confirme=` (envoi SANS clavier, celui de l'assistant) refuse :
+ * ils exigent un geste de l'utilisateur, au clavier, par `livrer.bat`.
+ * Avant le 2026-10-15, `printf 'LIVRER\nSUPPRIMER\n'` aurait suffi à
+ * franchir la seconde confirmation.
+ *
+ * @param {{ destructives: Array<string>, configToml: boolean, worker: boolean }} e
+ */
+export function arretsSansClavier(e) {
+  const arrets = []
+  if (e.destructives.length)
+    arrets.push(
+      `Migration qui RETIRE ou CHANGE quelque chose (${e.destructives.join(', ')}) : la confirmation SUPPRIMER se tape au clavier, livrer.bat.`,
+    )
+  if (e.configToml)
+    arrets.push(
+      'supabase/config.toml a changé : réglages à reporter à la main dans le dashboard, à voir avec l’utilisateur.',
+    )
+  if (e.worker)
+    arrets.push(
+      'Le Worker Cloudflare a changé : son déploiement est à part, à voir avec l’utilisateur.',
+    )
+  return arrets
+}
+
+/**
  * Le plan d'envoi, dans l'ordre qui ne casse pas l'app en service : le
  * schéma d'abord (l'ancien code doit le supporter), puis les fonctions,
  * puis le site. Vide si rien n'est confirmé.

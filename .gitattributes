@@ -2,3 +2,5 @@
 # contient des fins de ligne CRLF ; une conversion par git les changerait
 # (étape 3 du plan environnement-dev-docker-2026-10-12).
 supabase/migrations/*.sql -text
+# Hooks git : scripts shell, fins de ligne LF obligatoires.
+.githooks/* text eol=lf
