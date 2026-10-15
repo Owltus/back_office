@@ -36,7 +36,9 @@ export async function fetchLatestReport(): Promise<DailyReport | null> {
  * sur repjour — admins inclus). Ne touche PAS `auto_sent_at` : l'envoi reste possible.
  */
 export async function dismissSendReminder(date: string): Promise<void> {
-  const { error } = await supabase.rpc('dismiss_send_reminder', { p_date: date })
+  const { error } = await supabase.rpc('dismiss_send_reminder', {
+    p_date: date,
+  })
   if (error) throw error
 }
 
@@ -390,7 +392,8 @@ export async function fetchYearAnalytics(
     const last = lastDayByMonth.get(month)
     const count = countByMonth.get(month) ?? 0
     const fc = forecastByMonth.get(month)
-    const daysInMonth = last?.days_in_month ?? new Date(year, month, 0).getDate()
+    const daysInMonth =
+      last?.days_in_month ?? new Date(year, month, 0).getDate()
 
     if (last && count > 0) {
       // On a des rapports → réalisé (mois complet) ou projeté (mois en cours).
@@ -638,9 +641,38 @@ export async function upsertBudget(
   if (error) throw error
 }
 
-/** Supprime tout le budget d'une année — gardé par `assertWriteRole` (D17). */
+/**
+ * Supprime tout le budget d'une année — gardé par `assertWriteRole` (D17).
+ *
+ * Un `delete` REFUSÉ par la RLS ne lève PAS d'erreur : PostgREST répond 200
+ * avec zéro ligne (règle de l'audit du 2026-09-28). On demande donc les lignes
+ * supprimées (`.select('id')`). Zéro ligne a deux sens, départagés par une
+ * relecture :
+ *   - des lignes de l'année restent visibles → suppression refusée : erreur ;
+ *   - aucune ligne → l'année n'avait pas de budget en base (l'écran le
+ *     permet : une année « ajoutée » mais jamais sauvegardée, ou l'année en
+ *     cours vide, ont aussi leur bouton « Supprimer ») : rien à supprimer,
+ *     ce n'est PAS un échec.
+ */
 export async function deleteYearBudget(year: number): Promise<void> {
   await assertWriteRole()
-  const { error } = await supabase.from('budget').delete().eq('year', year)
+  const { data, error } = await supabase
+    .from('budget')
+    .delete()
+    .eq('year', year)
+    .select('id')
   if (error) throw error
+  if (data.length > 0) return
+
+  const relu = await supabase
+    .from('budget')
+    .select('id')
+    .eq('year', year)
+    .limit(1)
+  if (relu.error) throw relu.error
+  if (relu.data.length > 0) {
+    throw new Error(
+      `Erreur : le budget ${year} n'a pas été supprimé (droit insuffisant).`,
+    )
+  }
 }

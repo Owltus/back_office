@@ -67,6 +67,13 @@ export function BudgetContent({ readOnly = false }: { readOnly?: boolean }) {
    * zéros. Le tableau n'est plus rendu du tout dans ce cas. */
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
+  // Couleur portée par l'appelant : une erreur brute de la base (42501…) ne
+  // contient pas « Erreur » et s'affichait en vert.
+  const [messageErreur, setMessageErreur] = useState(false)
+  const afficher = (texte: string, erreur = false) => {
+    setMessage(texte)
+    setMessageErreur(erreur)
+  }
   const [showAddYear, setShowAddYear] = useState(false)
   const [newYear, setNewYear] = useState('')
 
@@ -100,9 +107,7 @@ export function BudgetContent({ readOnly = false }: { readOnly?: boolean }) {
       .catch((err) => {
         console.error('[repjour] chargement du budget annuel échoué', err)
         setBudgets([])
-        setLoadError(
-          err instanceof Error ? err.message : 'Lecture impossible',
-        )
+        setLoadError(err instanceof Error ? err.message : 'Lecture impossible')
       })
       .finally(() => setLoading(false))
   }, [year])
@@ -121,37 +126,39 @@ export function BudgetContent({ readOnly = false }: { readOnly?: boolean }) {
 
   const handleSave = async () => {
     setSaving(true)
-    setMessage('')
+    afficher('')
     try {
       await upsertBudget(
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         budgets.map(({ id, ...rest }) => rest),
       )
-      setMessage('Budget sauvegardé')
+      afficher('Budget sauvegardé')
       // Rafraîchir la liste des années.
       const yrs = await fetchBudgetYears()
       setYears(yrs.length > 0 ? yrs : [currentYear])
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Erreur')
+      afficher(err instanceof Error ? err.message : 'Erreur', true)
     } finally {
       setSaving(false)
     }
   }
 
   const handleDeleteYear = async () => {
-    if (!confirm(`Supprimer le budget ${year} ? Cette action est irréversible.`))
+    if (
+      !confirm(`Supprimer le budget ${year} ? Cette action est irréversible.`)
+    )
       return
     setSaving(true)
-    setMessage('')
+    afficher('')
     try {
       await deleteYearBudget(year)
       const yrs = await fetchBudgetYears()
       const updated = yrs.length > 0 ? yrs : [currentYear]
       setYears(updated)
       setYear(updated[updated.length - 1])
-      setMessage(`Budget ${year} supprimé`)
+      afficher(`Budget ${year} supprimé`)
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Erreur')
+      afficher(err instanceof Error ? err.message : 'Erreur', true)
     } finally {
       setSaving(false)
     }
@@ -160,7 +167,7 @@ export function BudgetContent({ readOnly = false }: { readOnly?: boolean }) {
   const handleAddYear = () => {
     const y = parseInt(newYear, 10)
     if (isNaN(y) || y < 2020 || y > 2099) {
-      setMessage('Année invalide (2020-2099)')
+      afficher('Année invalide (2020-2099)', true)
       return
     }
     if (years.includes(y)) {
@@ -173,7 +180,7 @@ export function BudgetContent({ readOnly = false }: { readOnly?: boolean }) {
     setYear(y)
     setShowAddYear(false)
     setNewYear('')
-    setMessage('')
+    afficher('')
   }
 
   return (
@@ -420,9 +427,7 @@ export function BudgetContent({ readOnly = false }: { readOnly?: boolean }) {
                 {message && (
                   <span
                     className={`text-sm ${
-                      message.includes('Erreur') || message.includes('invalide')
-                        ? 'text-destructive'
-                        : 'text-emerald-500'
+                      messageErreur ? 'text-destructive' : 'text-emerald-500'
                     }`}
                   >
                     {message}

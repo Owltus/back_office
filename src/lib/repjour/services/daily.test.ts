@@ -929,17 +929,32 @@ describe('écritures budget', () => {
     expect(etat.sim.table('budget')).toHaveLength(1)
   })
 
-  it.fails(
-    'DÉFAUT : deleteYearBudget refusé par la RLS (0 ligne, sans erreur) est annoncé comme un succès',
-    async () => {
-      // ORACLE : règle de l'audit du 2026-09-28 (CLAUDE.md) — un delete refusé
-      // par la RLS rend 0 ligne SANS erreur ; il faut `.select('id')` et une
-      // erreur si 0 ligne. BudgetContent affiche alors « Budget 2026
-      // supprimé » alors que rien n'a bougé (budget = grade admin en RLS).
-      initialiser({ budget: [{ id: 1, year: 2026, month: 1 }] })
-      etat.sim.refuser('budget', 'delete')
-      await expect(daily.deleteYearBudget(2026)).rejects.toThrow()
-      expect(etat.sim.table('budget')).toHaveLength(1)
-    },
-  )
+  it('deleteYearBudget refusé par la RLS (0 ligne, sans erreur) → rejet, budget intact', async () => {
+    // ORACLE : règle de l'audit du 2026-09-28 (CLAUDE.md) — un delete refusé
+    // par la RLS rend 0 ligne SANS erreur ; il faut `.select('id')` et une
+    // erreur si 0 ligne. Avant le correctif, BudgetContent affichait « Budget
+    // 2026 supprimé » alors que rien n'avait bougé (budget = grade admin).
+    initialiser({ budget: [{ id: 1, year: 2026, month: 1 }] })
+    etat.sim.refuser('budget', 'delete')
+    // Le message commence par « Erreur » : BudgetContent l'affiche en rouge.
+    await expect(daily.deleteYearBudget(2026)).rejects.toThrow(/^Erreur.*2026/)
+    expect(etat.sim.table('budget')).toHaveLength(1)
+    // Les lignes supprimées sont demandées (colonne explicite).
+    expect(etat.traces[0].colonnes).toBe('id')
+  })
+
+  it('deleteYearBudget : année sans aucune ligne en base → succès (rien à supprimer)', async () => {
+    // L'écran propose « Supprimer » pour une année ajoutée mais jamais
+    // sauvegardée : 0 ligne n'y est pas un refus.
+    initialiser({ budget: [{ id: 3, year: 2025, month: 1 }] })
+    await expect(daily.deleteYearBudget(2026)).resolves.toBeUndefined()
+    expect(etat.sim.table('budget').map((b) => b.id)).toEqual([3])
+  })
+
+  it('deleteYearBudget : panne à la relecture qui départage → rejet', async () => {
+    initialiser({ budget: [{ id: 1, year: 2026, month: 1 }] })
+    etat.sim.refuser('budget', 'delete')
+    etat.sim.panneAuAppel(2)
+    await expect(daily.deleteYearBudget(2026)).rejects.toMatchObject(PANNE)
+  })
 })
