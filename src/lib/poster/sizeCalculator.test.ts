@@ -226,64 +226,58 @@ describe('calculateAutoSizes — propriétés', () => {
   })
 
   /*
-   * DÉFAUT : le nombre de lignes du message est estimé depuis la LONGUEUR
-   * MOYENNE des mots. Ajouter un mot court (« a ») fait baisser la moyenne,
-   * donc monter le nombre de mots par ligne, donc BAISSER le nombre de lignes
-   * estimé : le texte s'allonge et le titre grandit (78 → 80 px). Oracle :
-   * monotonie (plus de texte ⇒ pas plus gros). Même sans icône.
+   * Ancien DÉFAUT (corrigé) : le nombre de lignes du message est estimé depuis
+   * la LONGUEUR MOYENNE des mots. Ajouter un mot court (« a ») faisait baisser
+   * la moyenne, donc monter le nombre de mots par ligne, donc BAISSER le
+   * nombre de lignes estimé : le texte s'allongeait et le titre grandissait
+   * (78 → 80 px). Oracle : monotonie (plus de texte ⇒ pas plus gros).
    */
-  it.fails(
-    'DÉFAUT : ajouter un mot court au message fait grandir le titre (sans icône)',
-    () => {
-      fc.assert(
-        fc.property(
-          contenu,
-          fc.constantFrom('a', 'à', 'y', 'ô'),
-          options,
-          (t, ajout, o) => {
-            const opt = { ...o, icone: false }
-            const avant = tailles(t, opt)
-            const apres = tailles(
-              { ...t, messageFr: `${t.messageFr} ${ajout}`.trim() },
-              opt,
-            )
-            expect(apres.fontSizeTitle).toBeLessThanOrEqual(avant.fontSizeTitle)
-          },
-        ),
-        { numRuns: 10000 },
-      )
-    },
-  )
+  it('MONOTONIE : ajouter un mot court au message ne fait jamais grandir le titre (sans icône)', () => {
+    fc.assert(
+      fc.property(
+        contenu,
+        fc.constantFrom('a', 'à', 'y', 'ô'),
+        options,
+        (t, ajout, o) => {
+          const opt = { ...o, icone: false }
+          const avant = tailles(t, opt)
+          const apres = tailles(
+            { ...t, messageFr: `${t.messageFr} ${ajout}`.trim() },
+            opt,
+          )
+          expect(apres.fontSizeTitle).toBeLessThanOrEqual(avant.fontSizeTitle)
+        },
+      ),
+      { numRuns: 20000 },
+    )
+  })
 
-  it.fails(
-    'DÉFAUT (reproduction) : « … aaaaaaa » + « a » → titre 78 → 80 px',
-    () => {
-      const titre = 'aaa aaaaaaaaaaaa aaaaaaaa aaa aaaaaaaaa'
-      const message =
-        'aaaaaaaa aaaaaaaaa aaaaaaaaaaa, aaaaaaaaaaaa a aaaaaa, aaaaaaa'
-      const avant = calculateAutoSizes(
-        titre,
-        message,
-        '',
-        '',
-        false,
-        false,
-        true,
-        true,
-      )
-      const apres = calculateAutoSizes(
-        titre,
-        `${message} a`,
-        '',
-        '',
-        false,
-        false,
-        true,
-        true,
-      )
-      expect(apres.fontSizeTitle).toBeLessThanOrEqual(avant.fontSizeTitle)
-    },
-  )
+  it('reproduction de l’ancien défaut : « … aaaaaaa » + « a » ne fait plus passer le titre de 78 à 80 px', () => {
+    const titre = 'aaa aaaaaaaaaaaa aaaaaaaa aaa aaaaaaaaa'
+    const message =
+      'aaaaaaaa aaaaaaaaa aaaaaaaaaaa, aaaaaaaaaaaa a aaaaaa, aaaaaaa'
+    const avant = calculateAutoSizes(
+      titre,
+      message,
+      '',
+      '',
+      false,
+      false,
+      true,
+      true,
+    )
+    const apres = calculateAutoSizes(
+      titre,
+      `${message} a`,
+      '',
+      '',
+      false,
+      false,
+      true,
+      true,
+    )
+    expect(apres.fontSizeTitle).toBeLessThanOrEqual(avant.fontSizeTitle)
+  })
 
   it('MONOTONIE (icône masquée) : allonger le titre FR ne fait jamais grandir le titre', () => {
     fc.assert(
@@ -323,54 +317,77 @@ describe('calculateAutoSizes — propriétés', () => {
   })
 
   /*
-   * DÉFAUT : avec l'icône affichée, allonger le texte peut faire GRANDIR le
-   * titre. `calculateIconSize` rétrécit l'icône par paliers (175 → 160 px à
+   * Ancien DÉFAUT (corrigé) : avec l'icône affichée, allonger le texte pouvait
+   * faire GRANDIR le titre. `calculateIconSize` rétrécit l'icône par paliers (175 → 160 px à
    * 101 caractères) ; les 15 px libérés peuvent suffire à faire tenir un cran
    * de police de plus, alors que le texte ajouté n'occupait aucune ligne
    * nouvelle. Sur l'affiche, taper un caractère fait sauter le titre vers le
    * haut. Oracle : la monotonie demandée (plus de texte ⇒ pas plus gros).
    */
-  it.fails(
-    'DÉFAUT : avec icône, allonger le message peut faire grandir le titre',
-    () => {
-      fc.assert(
-        fc.property(contenu, texte(30), options, (t, ajout, o) => {
-          const opt = { ...o, icone: true }
-          const avant = tailles(t, opt)
-          const apres = tailles(
-            { ...t, messageFr: `${t.messageFr} ${ajout}`.trim() },
-            opt,
-          )
-          expect(apres.fontSizeTitle).toBeLessThanOrEqual(avant.fontSizeTitle)
-        }),
-        { numRuns: RUNS },
-      )
-    },
-  )
+  it('MONOTONIE (icône affichée) : allonger le message ne fait jamais grandir le titre', () => {
+    fc.assert(
+      fc.property(contenu, texte(30), options, (t, ajout, o) => {
+        const opt = { ...o, icone: true }
+        const avant = tailles(t, opt)
+        const apres = tailles(
+          { ...t, messageFr: `${t.messageFr} ${ajout}`.trim() },
+          opt,
+        )
+        expect(apres.fontSizeTitle).toBeLessThanOrEqual(avant.fontSizeTitle)
+      }),
+      { numRuns: 20000 },
+    )
+  })
+
+  // Même règle pour CHACUN des quatre champs, caractère par caractère (la
+  // frappe au clavier, y compris au milieu d'un mot), icône ou non : le
+  // franchissement d'un palier d'icône par n'importe quel champ est couvert.
+  it('MONOTONIE : taper dans n’importe quel champ ne fait jamais grandir le titre', () => {
+    const champ = fc.constantFrom(
+      'titreFr' as const,
+      'messageFr' as const,
+      'titreEn' as const,
+      'messageEn' as const,
+    )
+    const frappe = fc.array(fc.constantFrom('a', 'é', 'w', ' ', ', ', '\n'), {
+      minLength: 1,
+      maxLength: 40,
+    })
+    fc.assert(
+      fc.property(contenu, champ, frappe, options, (t, k, touches, o) => {
+        let courant = t
+        let precedent = tailles(courant, o).fontSizeTitle
+        for (const touche of touches) {
+          courant = { ...courant, [k]: courant[k] + touche }
+          const s = tailles(courant, o).fontSizeTitle
+          expect(s).toBeLessThanOrEqual(precedent)
+          precedent = s
+        }
+      }),
+      { numRuns: 3000 },
+    )
+  })
 
   // Reproduction figée (contre-exemple réduit par fast-check) : l'ajout de
   // 65 caractères au message FR fait passer le total de 46 à 111 caractères,
-  // l'icône de 175 à 160 px, et le titre GRANDIT.
-  it.fails(
-    'DÉFAUT (reproduction) : +65 caractères, le titre passe au cran supérieur',
-    () => {
-      const en = 'a\naaaaaaaaa, aaa\naaaaaa aaaaaaa\naaaa'
-      const ajout =
-        'aaaaaaaa, aaaaaaaaaa aaaaaa aaaaaaaaaa a aaaaaaaaaaaa, aaaaaa aa'
-      const avant = calculateAutoSizes('', '', 'a', en, true, false, true, true)
-      const apres = calculateAutoSizes(
-        '',
-        ajout,
-        'a',
-        en,
-        true,
-        false,
-        true,
-        true,
-      )
-      expect(apres.fontSizeTitle).toBeLessThanOrEqual(avant.fontSizeTitle)
-    },
-  )
+  // l'icône de 175 à 160 px, et le titre GRANDISSAIT.
+  it('reproduction de l’ancien défaut : +65 caractères, le titre ne passe plus au cran supérieur', () => {
+    const en = 'a\naaaaaaaaa, aaa\naaaaaa aaaaaaa\naaaa'
+    const ajout =
+      'aaaaaaaa, aaaaaaaaaa aaaaaa aaaaaaaaaa a aaaaaaaaaaaa, aaaaaa aa'
+    const avant = calculateAutoSizes('', '', 'a', en, true, false, true, true)
+    const apres = calculateAutoSizes(
+      '',
+      ajout,
+      'a',
+      en,
+      true,
+      false,
+      true,
+      true,
+    )
+    expect(apres.fontSizeTitle).toBeLessThanOrEqual(avant.fontSizeTitle)
+  })
 
   it('TIENT DANS L’AFFICHE : texte coupé mot à mot + infos ≤ hauteur utile de l’A3', () => {
     // Zone = A3 moins les marges verticales, moins le logo (toujours là),

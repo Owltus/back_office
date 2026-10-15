@@ -18,22 +18,70 @@ export interface TimeString {
 }
 
 /**
+ * Lit une date « AAAA-MM-JJ » (recherchée dans la chaîne, comme le fork) et
+ * la refuse si elle n'existe pas au calendrier grégorien : mois hors 01-12
+ * (sinon « undefined » s'imprimait sur l'affiche), jour 00, 30 février,
+ * 29 février d'une année non bissextile. Refusée → `null` : les formateurs
+ * rendent alors le texte tel quel, même chemin qu'un texte non daté.
+ */
+function lireDateCalendrier(
+  dateStr: string,
+): { year: string; month: number; day: number } | null {
+  const match = dateStr.match(/(\d{4})-(\d{2})-(\d{2})/)
+  if (!match) return null
+  const month = parseInt(match[2])
+  const day = parseInt(match[3])
+  if (!estDateCalendrier(parseInt(match[1]), month, day)) return null
+  return { year: match[1], month, day }
+}
+
+// Vrai si (année, mois 1-12, jour) existe au calendrier grégorien.
+function estDateCalendrier(year: number, month: number, day: number): boolean {
+  if (month < 1 || month > 12 || day < 1) return false
+  const bissextile = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0
+  const jours = [
+    31,
+    bissextile ? 29 : 28,
+    31,
+    30,
+    31,
+    30,
+    31,
+    31,
+    30,
+    31,
+    30,
+    31,
+  ]
+  return day <= jours[month - 1]
+}
+
+/**
  * Formatte une date au format français (ex: "15 octobre 2024")
  * Accepte le format YYYY-MM-DD (natif du navigateur)
  */
 export function formatDateFr(dateStr: string): string {
   if (!dateStr) return ''
-  // Format natif: YYYY-MM-DD
-  const match = dateStr.match(/(\d{4})-(\d{2})-(\d{2})/)
-  if (match) {
-    const year = match[1]
-    const month = parseInt(match[2])
-    const day = parseInt(match[3])
+  // Format natif: YYYY-MM-DD (date impossible → texte rendu tel quel)
+  const date = lireDateCalendrier(dateStr)
+  if (date) {
+    const { year, month, day } = date
     const months = [
-      'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
-      'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre',
+      'janvier',
+      'février',
+      'mars',
+      'avril',
+      'mai',
+      'juin',
+      'juillet',
+      'août',
+      'septembre',
+      'octobre',
+      'novembre',
+      'décembre',
     ]
-    return `${day} ${months[month - 1]} ${year}`
+    // Typographie française : « 1er » pour le premier jour du mois seulement.
+    return `${day === 1 ? '1er' : day} ${months[month - 1]} ${year}`
   }
   return dateStr
 }
@@ -44,15 +92,23 @@ export function formatDateFr(dateStr: string): string {
  */
 export function formatDateEn(dateStr: string): string {
   if (!dateStr) return ''
-  // Format natif: YYYY-MM-DD
-  const match = dateStr.match(/(\d{4})-(\d{2})-(\d{2})/)
-  if (match) {
-    const year = match[1]
-    const month = parseInt(match[2])
-    const day = parseInt(match[3])
+  // Format natif: YYYY-MM-DD (date impossible → texte rendu tel quel)
+  const date = lireDateCalendrier(dateStr)
+  if (date) {
+    const { year, month, day } = date
     const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December',
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
     ]
     return `${months[month - 1]} ${day}, ${year}`
   }
@@ -69,15 +125,18 @@ export function formatTimeFr(time: string): string {
   // Gérer les plages d'heures (format: HH:MM - HH:MM)
   const rangeMatch = time.match(/(\d{2}):(\d{2})\s*-\s*(\d{2}):(\d{2})/)
   if (rangeMatch) {
-    const sh = parseInt(rangeMatch[1]), sm = rangeMatch[2]
-    const eh = parseInt(rangeMatch[3]), em = rangeMatch[4]
+    const sh = parseInt(rangeMatch[1]),
+      sm = rangeMatch[2]
+    const eh = parseInt(rangeMatch[3]),
+      em = rangeMatch[4]
     return `${sh}h${sm} - ${eh}h${em}`
   }
 
   // Gérer une heure unique (format: HH:MM)
   const singleMatch = time.match(/(\d{2}):(\d{2})/)
   if (singleMatch) {
-    const h = parseInt(singleMatch[1]), m = singleMatch[2]
+    const h = parseInt(singleMatch[1]),
+      m = singleMatch[2]
     return `${h}h${m}`
   }
 
@@ -94,21 +153,24 @@ export function formatTimeEn(time: string): string {
   // Gérer les plages d'heures (format: HH:MM - HH:MM)
   const rangeMatch = time.match(/(\d{2}):(\d{2})\s*-\s*(\d{2}):(\d{2})/)
   if (rangeMatch) {
-    const sh = parseInt(rangeMatch[1]), sm = rangeMatch[2]
-    const eh = parseInt(rangeMatch[3]), em = rangeMatch[4]
+    const sh = parseInt(rangeMatch[1]),
+      sm = rangeMatch[2]
+    const eh = parseInt(rangeMatch[3]),
+      em = rangeMatch[4]
     const sap = sh >= 12 ? 'PM' : 'AM'
     const eap = eh >= 12 ? 'PM' : 'AM'
-    const sh12 = sh > 12 ? sh - 12 : (sh === 0 ? 12 : sh)
-    const eh12 = eh > 12 ? eh - 12 : (eh === 0 ? 12 : eh)
+    const sh12 = sh > 12 ? sh - 12 : sh === 0 ? 12 : sh
+    const eh12 = eh > 12 ? eh - 12 : eh === 0 ? 12 : eh
     return `${sh12}:${sm} ${sap} - ${eh12}:${em} ${eap}`
   }
 
   // Gérer une heure unique (format: HH:MM)
   const singleMatch = time.match(/(\d{2}):(\d{2})/)
   if (singleMatch) {
-    const h = parseInt(singleMatch[1]), m = singleMatch[2]
+    const h = parseInt(singleMatch[1]),
+      m = singleMatch[2]
     const ap = h >= 12 ? 'PM' : 'AM'
-    const h12 = h > 12 ? h - 12 : (h === 0 ? 12 : h)
+    const h12 = h > 12 ? h - 12 : h === 0 ? 12 : h
     return `${h12}:${m} ${ap}`
   }
 
@@ -158,6 +220,10 @@ export function getTimeString(timeStart: string, timeEnd: string): TimeString {
 export function parseDateStr(value: string): Date | undefined {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
   if (!m) return undefined
+  // Date impossible (30 février, mois 13…) refusée : `new Date` la ferait
+  // déborder en silence sur une AUTRE date réelle (30 février → 2 mars).
+  if (!estDateCalendrier(Number(m[1]), Number(m[2]), Number(m[3])))
+    return undefined
   return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
 }
 

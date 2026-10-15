@@ -90,33 +90,53 @@ describe('formatDateFr', () => {
   })
 
   /*
-   * DÉFAUT : la typographie française écrit le premier jour du mois « 1er »
-   * (Imprimerie nationale ; « le 1er janvier »). L'affiche imprime « Du 1
-   * janvier 2027 », faute visible sur un document affiché aux clients.
+   * Ancien DÉFAUT (corrigé) : la typographie française écrit le premier jour
+   * du mois « 1er » (Imprimerie nationale ; « le 1er janvier »). L'affiche
+   * imprimait « Du 1 janvier 2027 ». Le « er » ne vaut QUE pour le 1 : pas
+   * de « 11er », « 21er » ni « 31er ».
    */
-  it.fails(
-    'DÉFAUT : le premier du mois s’écrit « 1er » (« 1er janvier 2027 »)',
-    () => {
-      expect(formatDateFr('2027-01-01')).toBe('1er janvier 2027')
-    },
-  )
+  it('le premier du mois s’écrit « 1er » (« 1er janvier 2027 »)', () => {
+    expect(formatDateFr('2027-01-01')).toBe('1er janvier 2027')
+    fc.assert(
+      fc.property(dateValide, ({ a, m, j, iso }) => {
+        fc.pre(j === 1)
+        expect(formatDateFr(iso)).toBe(`1er ${MOIS_FR[m - 1]} ${a}`)
+      }),
+      { numRuns: 200 },
+    )
+    for (const j of [10, 11, 21, 31]) {
+      expect(formatDateFr(`2026-12-${deux(j)}`)).toBe(`${j} décembre 2026`)
+    }
+  })
 
   /*
-   * DÉFAUT : un mois hors 01-12 (valeur venue d'un modèle en base, pas d'un
-   * input natif) imprime le mot « undefined » sur l'affiche. Oracle : une
-   * date impossible ne doit jamais produire « undefined » ; le module rend
-   * tel quel ce qu'il ne sait pas lire.
+   * Ancien DÉFAUT (corrigé) : un mois hors 01-12 (valeur venue d'un modèle en
+   * base, pas d'un input natif) imprimait « undefined » sur l'affiche. Une
+   * date impossible prend le chemin des textes non datés : rendue telle quelle.
    */
-  it.fails(
-    'DÉFAUT : mois 13 → « 5 undefined 2026 » au lieu du texte d’origine',
-    () => {
-      expect(formatDateFr('2026-13-05')).not.toContain('undefined')
-    },
-  )
+  it('mois hors 01-12 → texte d’origine, jamais « undefined »', () => {
+    for (const v of ['2026-13-05', '2026-00-05', '2026-99-01']) {
+      expect(formatDateFr(v)).toBe(v)
+      expect(formatDateEn(v)).toBe(v)
+    }
+  })
 
-  it.fails('DÉFAUT : 30 février accepté comme date réelle', () => {
-    // Oracle : calendrier grégorien, février a au plus 29 jours.
-    expect(formatDateFr('2026-02-30')).toBe('2026-02-30')
+  it('date impossible (30 février, 31 avril, 29 février non bissextile, jour 00) refusée', () => {
+    // Oracle : calendrier grégorien.
+    for (const v of [
+      '2026-02-30',
+      '2026-02-29',
+      '1900-02-29',
+      '2026-04-31',
+      '2026-01-00',
+      '2026-01-32',
+    ]) {
+      expect(formatDateFr(v)).toBe(v)
+      expect(formatDateEn(v)).toBe(v)
+    }
+    // Bissextiles réelles toujours acceptées (dont 2000, divisible par 400).
+    expect(formatDateFr('2000-02-29')).toBe('29 février 2000')
+    expect(formatDateEn('2028-02-29')).toBe('February 29, 2028')
   })
 })
 
@@ -331,16 +351,21 @@ describe('parseDateStr / formatDateStr — fuseaux', () => {
   })
 
   /*
-   * DÉFAUT : `new Date(2026, 1, 30)` déborde silencieusement au 2 mars. Une
-   * valeur stockée impossible est donc affichée par le sélecteur de date
-   * (`form/fields.tsx`) comme une AUTRE date réelle, sans signal. Oracle :
-   * l'aller-retour doit rendre la chaîne d'origine, ou `undefined`.
+   * Ancien DÉFAUT (corrigé) : `new Date(2026, 1, 30)` déborde silencieusement
+   * au 2 mars. Une valeur stockée impossible était affichée par le sélecteur
+   * de date (`form/fields.tsx`) comme une AUTRE date réelle. Elle est
+   * désormais refusée (`undefined` → « Choisir », comme un format inconnu).
    */
-  it.fails(
-    'DÉFAUT : « 2026-02-30 » est lu comme le 2 mars au lieu d’être refusé',
-    () => {
-      const d = parseDateStr('2026-02-30')
-      expect(d === undefined || formatDateStr(d) === '2026-02-30').toBe(true)
-    },
-  )
+  it('« 2026-02-30 » et toute date impossible sont refusées', () => {
+    for (const v of [
+      '2026-02-30',
+      '2026-02-29',
+      '2026-13-05',
+      '2026-04-31',
+      '2026-01-00',
+    ]) {
+      expect(parseDateStr(v)).toBeUndefined()
+    }
+    expect(formatDateStr(parseDateStr('2028-02-29')!)).toBe('2028-02-29')
+  })
 })
