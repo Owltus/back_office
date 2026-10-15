@@ -59,3 +59,8 @@ enabled = false
 # verify_jwt = true (appelées avec le JWT admin) — inutile de les lister ici.
 [functions.import-report]
 verify_jwt = false
+
+# montre-resume est appelée par la montre Garmin, qui n'a pas de session : PAS de
+# JWT, la barrière est le secret `X-Montre-Cle` (MONTRE_CLE), vérifié dans le code.
+[functions.montre-resume]
+verify_jwt = false

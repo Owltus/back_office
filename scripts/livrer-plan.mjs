@@ -6,7 +6,7 @@
 export const REF_PROD = 'ozpavwghrmmkrnmkxodg'
 
 /** Fonctions qui ne vérifient pas le JWT (appelées par le Worker). */
-export const SANS_VERIF_JWT = new Set(['import-report'])
+export const SANS_VERIF_JWT = new Set(['import-report', 'montre-resume'])
 
 /**
  * Fonctions à déployer d'après les fichiers changés depuis la dernière

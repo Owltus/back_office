@@ -57,6 +57,7 @@ const INSTANTANE = join(DOSSIER_ETAT, 'schema-prod.sql')
 const CONTROLES_OK = join(DOSSIER_ETAT, 'controles-ok')
 const SECRETS_ATTENDUS = [
   'IMPORT_SECRET',
+  'MONTRE_CLE',
   'REPORT_FROM',
   'RESEND_API_KEY',
   'SB_SECRET_KEY',

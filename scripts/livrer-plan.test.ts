@@ -118,6 +118,21 @@ describe('planEnvoi', () => {
     expect(etapes[3].cmd).toEqual(['git', 'push', 'origin', 'main'])
   })
 
+  it('montre-resume part sans vérification JWT (la montre n’a pas de session)', () => {
+    // Oracle : la montre appelle avec la seule clé X-Montre-Cle, sans JWT ;
+    // une vérification JWT réactivée au déploiement la couperait (401).
+    const { etapes } = planEnvoi({ ...base, fonctions: ['montre-resume'] })
+    expect(etapes[1].cmd).toEqual([
+      'supabase',
+      'functions',
+      'deploy',
+      'montre-resume',
+      '--project-ref',
+      REF_PROD,
+      '--no-verify-jwt',
+    ])
+  })
+
   test.prop([fc.string()])(
     'toute autre réponse que LIVRER : rien ne part',
     (r) => {
