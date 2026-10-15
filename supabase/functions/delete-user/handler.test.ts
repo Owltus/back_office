@@ -10,9 +10,7 @@
 
 import {
   assert,
-  AssertionError,
   assertEquals,
-  assertRejects,
 } from 'jsr:@std/assert@1'
 
 import { traiter } from './handler.ts'
@@ -315,30 +313,37 @@ Deno.test('aucun 200 quand une étape d’écriture a échoué avant la suppress
   }
 })
 
-// ─── Défauts reproduits ───────────────────────────────────────────────────
-// Écrits comme le comportement ATTENDU ; `defaut` vérifie qu'ils échouent
-// aujourd'hui, et de la nature prévue (équivalent Deno de `it.fails`).
+// ─── Défauts corrigés ─────────────────────────────────────────────────────
+// Anciens tests « DÉFAUT » (échec attendu), basculés en tests normaux une
+// fois le gestionnaire corrigé.
 
-function defaut(
-  nom: string,
-  attendue: typeof AssertionError | typeof TypeError,
-  fn: () => Promise<void>,
-) {
-  Deno.test(`DÉFAUT : ${nom}`, async () => {
-    const e = await assertRejects(fn)
-    assert(e instanceof attendue, `échec d'une autre nature : ${e}`)
-  })
-}
-
-defaut('identifiant non textuel (`{"userId": 42}`) → plantage au lieu d’un 400', TypeError, async () => {
-  // Oracle : « refus clair » d'une entrée invalide ; `(42).trim` lève et
-  // Deno.serve rend un 500 opaque.
-  const r = await appeler(requete(cible(42)))
-  assertEquals(r.status, 400)
+Deno.test('identifiant non textuel (`{"userId": 42}`…) → 400, rien touché', async () => {
+  // Oracle : « refus clair » d'une entrée invalide. Avant le correctif,
+  // `(42).trim` levait et Deno.serve rendait un 500 opaque.
+  for (const userId of [42, true, ['user-1'], { id: 'user-1' }]) {
+    const etat = etatDeBase()
+    const r = await appeler(requete(cible(userId)), etat)
+    const nom = JSON.stringify(userId)
+    assertEquals(r.status, 400, nom)
+    assertEquals(r.corps, { error: 'Corps de requête invalide' }, nom)
+    rienTouche(r.journal)
+  }
 })
 
-defaut('corps JSON `null` → plantage au lieu d’un 400', TypeError, async () => {
-  // Oracle : idem ; `null.userId` lève.
-  const r = await appeler(requete(null, { brut: 'null' }))
+Deno.test('identifiant `null` → traité comme absent (« Identifiant du compte requis »)', async () => {
+  const r = await appeler(requete(cible(null)))
   assertEquals(r.status, 400)
+  assertEquals(r.corps.error, 'Identifiant du compte requis')
+  rienTouche(r.journal)
+})
+
+Deno.test('corps JSON valide mais non objet (null, 42, [], "x") → 400, rien touché', async () => {
+  // Oracle : « refus clair » d'une entrée invalide, même réponse que le JSON
+  // cassé. Avant le correctif, `null.userId` levait : 500 opaque.
+  for (const brut of ['null', '42', '[]', '"x"', 'true']) {
+    const r = await appeler(requete(null, { brut }))
+    assertEquals(r.status, 400, brut)
+    assertEquals(r.corps, { error: 'Corps de requête invalide' }, brut)
+    rienTouche(r.journal)
+  }
 })

@@ -90,6 +90,16 @@ export async function traiter(
   } catch {
     return json({ error: 'Corps de requête invalide' }, 400)
   }
+  // Un JSON valide n'est pas forcément un objet (`null`, `42`, `[]`, `"x"`) :
+  // sans ce refus, `null.rollbackUserId` lèverait et Deno.serve rendrait un 500.
+  if (typeof body !== 'object' || body === null || Array.isArray(body))
+    return json({ error: 'Corps de requête invalide' }, 400)
+  // Champs texte : absents (ou null) acceptés, sinon CHAÎNES seulement.
+  // Sans ce refus, `(5).trim` lèverait (500 opaque).
+  const champs = body as Record<string, unknown>
+  for (const champ of ['email', 'password', 'displayName', 'rollbackUserId'])
+    if (champs[champ] != null && typeof champs[champ] !== 'string')
+      return json({ error: 'Corps de requête invalide' }, 400)
 
   // 3bis. ROLLBACK d'un compte ORPHELIN : le front appelle ce mode quand la
   // création `auth.users` a réussi mais que l'insertion `profiles` a échoué,
@@ -98,11 +108,18 @@ export async function traiter(
   // `profiles` n'existe pour cet id → impossible de détruire un compte établi.
   if (body.rollbackUserId) {
     const uid = body.rollbackUserId
-    const { data: existing } = await admin
+    const { data: existing, error: existingErr } = await admin
       .from('profiles')
       .select('id')
       .eq('id', uid)
       .maybeSingle()
+    // supabase-js ne lève jamais : une lecture en ÉCHEC ne prouve pas
+    // l'absence de profil. On ne supprime que sur une lecture RÉUSSIE et vide.
+    if (existingErr) {
+      // Détail côté serveur uniquement ; message générique au client.
+      console.error('create-user: lecture profil (rollback)', existingErr)
+      return json({ error: 'Vérification du compte échouée' }, 400)
+    }
     if (existing)
       return json(
         { error: 'Ce compte possède un profil : gérez-le via la gestion des comptes.' },

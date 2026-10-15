@@ -77,6 +77,14 @@ export async function traiter(
   } catch {
     return json({ error: 'Corps de requête invalide' }, 400)
   }
+  // Un JSON valide n'est pas forcément un objet (`null`, `42`, `[]`, `"x"`) :
+  // sans ce refus, `null.userId` lèverait et Deno.serve rendrait un 500.
+  if (typeof body !== 'object' || body === null || Array.isArray(body))
+    return json({ error: 'Corps de requête invalide' }, 400)
+  // Identifiant : absent (ou null) accepté (refusé plus bas), sinon CHAÎNE
+  // seulement. Sans ce refus, `(42).trim` lèverait (500 opaque).
+  if (body.userId != null && typeof body.userId !== 'string')
+    return json({ error: 'Corps de requête invalide' }, 400)
   const userId = (body.userId ?? '').trim()
   if (!userId) return json({ error: 'Identifiant du compte requis' }, 400)
 

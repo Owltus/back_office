@@ -11,9 +11,7 @@
 
 import {
   assert,
-  AssertionError,
   assertEquals,
-  assertRejects,
 } from 'jsr:@std/assert@1'
 
 import { traiter } from './handler.ts'
@@ -359,32 +357,17 @@ Deno.test('annulation : échec de deleteUser → 400 générique, jamais 200', a
   assert(!r.texte.includes(DETAIL_INTERNE))
 })
 
-// ─── Défauts reproduits ───────────────────────────────────────────────────
-// Écrits comme le comportement ATTENDU ; `defaut` vérifie qu'ils ÉCHOUENT
-// aujourd'hui (équivalent Deno de `it.fails`). Le jour où le défaut est
-// corrigé, le test devient rouge : le basculer en `Deno.test`.
+// ─── Défauts corrigés ─────────────────────────────────────────────────────
+// Anciens tests « DÉFAUT » (échec attendu), basculés en tests normaux une
+// fois le gestionnaire corrigé.
 
-// La classe attendue borne l'échec : une panne du faux client (Error) ne
-// peut pas passer pour le défaut.
-function defaut(
-  nom: string,
-  attendue: typeof AssertionError | typeof TypeError,
-  fn: () => Promise<void>,
-) {
-  Deno.test(`DÉFAUT : ${nom}`, async () => {
-    const e = await assertRejects(fn)
-    assert(e instanceof attendue, `échec d'une autre nature : ${e}`)
-  })
-}
-
-defaut(
-  'annulation : la lecture du profil en ERREUR est prise pour « aucun profil » et le compte est supprimé',
-  AssertionError,
+Deno.test(
+  'annulation : la lecture du profil en ERREUR refuse la suppression (400 générique)',
   async () => {
     // Oracle : 3bis « on ne supprime QUE si AUCUNE ligne `profiles` n'existe »
-    // — une lecture en échec ne prouve pas l'absence. Aujourd'hui
-    // `{ data: existing }` ignore `error` : un compte de moins de 10 min AVEC
-    // profil est supprimé si cette lecture échoue (garde ouverte en panne).
+    // — une lecture en échec ne prouve pas l'absence. Avant le correctif,
+    // `{ data: existing }` ignorait `error` : un compte de moins de 10 min AVEC
+    // profil était supprimé si cette lecture échouait (garde ouverte en panne).
     const etat = etatAvecOrphelin(60_000)
     etat.profils.set('orphelin', { id: 'orphelin', role: 'utilisateur' })
     // La lecture du rôle de l'appelant réussit, celle de la cible échoue.
@@ -401,27 +384,66 @@ defaut(
       }
       return q
     }
+    const logs: unknown[][] = []
     const original = console.error
-    console.error = () => {}
+    console.error = (...a: unknown[]) => void logs.push(a)
     try {
       const r = await lire(await traiter(requete({ rollbackUserId: 'orphelin' }), faux.deps()))
+      assertEquals(lectures.n, 2, 'la lecture du profil cible doit avoir eu lieu')
       assertEquals(etat.identites.has('orphelin'), true, 'compte avec profil supprimé')
-      assert(r.status !== 200)
+      rienEcrit(faux.journal)
+      assertEquals(r.status, 400)
+      assertEquals(r.corps, { error: 'Vérification du compte échouée' })
+      assert(!r.texte.includes(DETAIL_INTERNE), 'détail de la base exposé au client')
+      assert(JSON.stringify(logs).includes(DETAIL_INTERNE), 'le détail doit aller au journal')
     } finally {
       console.error = original
     }
   },
 )
 
-defaut('corps JSON valide mais non objet (`null`) → plantage au lieu d’un 400', TypeError, async () => {
-  // Oracle : « refus clair » d'une entrée invalide. `null.rollbackUserId`
-  // lève une TypeError : Deno.serve rend un 500 opaque, sans message utile.
-  const r = await appeler(requete(null, { brut: 'null' }))
-  assertEquals(r.status, 400)
+Deno.test('corps JSON valide mais non objet (null, 42, [], "x") → 400, rien écrit', async () => {
+  // Oracle : « refus clair » d'une entrée invalide, même réponse que le JSON
+  // cassé. Avant le correctif, `null.rollbackUserId` levait une TypeError :
+  // Deno.serve rendait un 500 opaque.
+  for (const brut of ['null', '42', '[]', '"x"', 'true']) {
+    const r = await appeler(requete(null, { brut }))
+    assertEquals(r.status, 400, brut)
+    assertEquals(r.corps, { error: 'Corps de requête invalide' }, brut)
+    rienEcrit(r.journal)
+  }
 })
 
-defaut('e-mail non textuel (`{"email": 5}`) → plantage au lieu d’un 400', TypeError, async () => {
-  // Oracle : idem ; `(5).trim` n'existe pas.
-  const r = await appeler(requete({ email: 5, password: MDP_OK }))
-  assertEquals(r.status, 400)
+Deno.test('champ texte non chaîne (`{"email": 5}`…) → 400, rien écrit', async () => {
+  // Oracle : idem. Avant le correctif, `(5).trim` levait : 500 opaque.
+  const mail = 'a@exemple.test'
+  for (const corps of [
+    { email: 5, password: MDP_OK },
+    { email: ['a@exemple.test'], password: MDP_OK },
+    { email: mail, password: 123456789012 },
+    { email: mail, password: { v: MDP_OK } },
+    { email: mail, password: MDP_OK, displayName: 7 },
+    { email: mail, password: MDP_OK, displayName: false },
+    { rollbackUserId: 42 },
+    { rollbackUserId: true },
+    { rollbackUserId: { id: 'orphelin' } },
+  ]) {
+    const etat = etatAvecOrphelin(60_000)
+    const r = await appeler(requete(corps), etat)
+    const nom = JSON.stringify(corps)
+    assertEquals(r.status, 400, nom)
+    assertEquals(r.corps, { error: 'Corps de requête invalide' }, nom)
+    assertEquals(etat.identites.has('orphelin'), true, nom)
+    rienEcrit(r.journal)
+  }
+})
+
+Deno.test('champ texte facultatif à `null` → traité comme absent', async () => {
+  // Oracle : `displayName` absent = nom tiré de l'e-mail ; `null` n'est pas
+  // une valeur invalide, juste une absence.
+  const r = await appeler(
+    requete({ email: 'nul@exemple.test', password: MDP_OK, displayName: null, rollbackUserId: null }),
+  )
+  assertEquals(r.status, 200)
+  assertEquals(r.corps.displayName, 'nul')
 })
