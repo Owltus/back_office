@@ -118,6 +118,35 @@ export function arretAvantProd(e) {
 }
 
 /**
+ * Quels contrôles locaux jouer (demande utilisateur du 2026-10-15 : « c'est
+ * long de ouf »). Deux allègements, et seulement deux :
+ * - le commit a déjà passé TOUS les contrôles (l'essai juste avant, arbre
+ *   propre) : même code, même verdict, on ne les rejoue pas ;
+ * - la base locale porte une copie de la prod (aucun compte fictif) et aucune
+ *   migration ne part : les tests de la base attendent les données fictives
+ *   et ne vérifieraient rien de neuf. Dès qu'une migration part, ils sont
+ *   exigés (il faudra `pnpm db:reset`).
+ *
+ * @param {{ dejaVerifie: boolean, copieDeLaProd: boolean,
+ *   migrationsModifiees: Array<string> }} e
+ */
+export function choixControles(e) {
+  if (e.dejaVerifie)
+    return {
+      jouer: false,
+      testsBase: false,
+      note: 'Contrôles déjà passés sur ce commit (essai) : non rejoués.',
+    }
+  if (e.copieDeLaProd && e.migrationsModifiees.length === 0)
+    return {
+      jouer: true,
+      testsBase: false,
+      note: 'Tests de la base non joués : la base locale porte la copie de la prod et aucune migration ne part.',
+    }
+  return { jouer: true, testsBase: true, note: null }
+}
+
+/**
  * Le plan d'envoi, dans l'ordre qui ne casse pas l'app en service : le
  * schéma d'abord (l'ancien code doit le supporter), puis les fonctions,
  * puis le site. Vide si rien n'est confirmé.

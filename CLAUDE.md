@@ -69,11 +69,18 @@ démarre avec `pnpm db:start` puis `pnpm dev`.
      (base → fonctions → site → étiquette `prod`). Il S'ARRÊTE et demande si
      : migration qui retire (`SUPPRIMER`), dérive du schéma prod, secret
      manquant, `config.toml` ou Worker modifiés, contrôle en échec, ou tout
-     résumé inattendu. Si seuls les tests de la base échouent parce que la
-     base locale contient une copie de la prod : `pnpm db:reset` (local),
-     puis relancer. Après : bilan + `verif_advisor` / `verif_classeur_acces`.
-     L'accord vaut pour CE push seulement.
-  3. Sans demande de push : commit, jamais d'envoi.
+     résumé inattendu. Allègements (2026-10-15, « c'est long de ouf ») :
+     les contrôles passés à l'essai ne sont PAS rejoués par la livraison
+     (même commit, arbre propre : `~/.back-office/controles-ok`) ; sur une
+     base locale qui porte la copie de la prod, les tests de la base sont
+     sautés SAUF si une migration part (alors `pnpm db:reset`, puis
+     relancer). `supabase/seed.sql` n'est plus suivi par git (généré par
+     `db:start` / `db:reset`). Après : bilan + `verif_advisor` /
+     `verif_classeur_acces`. L'accord vaut pour CE push seulement.
+  3. Sans demande de push : commit, jamais d'envoi. Un commit ne rejoue PAS
+     toute la batterie : seulement les tests du domaine touché (+ `tsc` si
+     des types changent) ; la batterie complète tourne une fois, à la
+     livraison.
 - **Garde de l'assistant** : poste DÉLIÉ ; hook `scripts/garde-prod.mjs`
   (PreToolUse Bash/PowerShell, `.claude/settings.local.json`) qui refuse toute
   commande visant la prod (ref, `--linked`, `--project-ref`, `--db-url`

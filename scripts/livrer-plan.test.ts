@@ -5,6 +5,7 @@ import {
   REF_PROD,
   arretAvantProd,
   bilanEchec,
+  choixControles,
   ecartSchema,
   fonctionsModifiees,
   lignesDestructrices,
@@ -365,5 +366,45 @@ describe('bilanEchec et secrets', () => {
   it('noms des secrets : une liste illisible est une erreur, jamais « tout manque »', () => {
     expect(() => nomsSecrets('')).toThrow('illisible')
     expect(() => nomsSecrets('Error: unauthorized')).toThrow('illisible')
+  })
+})
+
+describe('choixControles', () => {
+  it('ne rejoue rien sur un commit déjà vérifié', () => {
+    const c = choixControles({
+      dejaVerifie: true,
+      copieDeLaProd: false,
+      migrationsModifiees: ['supabase/migrations/x.sql'],
+    })
+    expect(c).toMatchObject({ jouer: false, testsBase: false })
+  })
+
+  it('saute les tests de la base sur une copie de la prod sans migration', () => {
+    const c = choixControles({
+      dejaVerifie: false,
+      copieDeLaProd: true,
+      migrationsModifiees: [],
+    })
+    expect(c).toMatchObject({ jouer: true, testsBase: false })
+    expect(c.note).toMatch(/copie de la prod/)
+  })
+
+  it('exige les tests de la base dès qu’une migration part', () => {
+    const c = choixControles({
+      dejaVerifie: false,
+      copieDeLaProd: true,
+      migrationsModifiees: ['supabase/migrations/20261020000000_x.sql'],
+    })
+    expect(c).toEqual({ jouer: true, testsBase: true, note: null })
+  })
+
+  it('joue tout sur des données fictives', () => {
+    expect(
+      choixControles({
+        dejaVerifie: false,
+        copieDeLaProd: false,
+        migrationsModifiees: [],
+      }),
+    ).toEqual({ jouer: true, testsBase: true, note: null })
   })
 })

@@ -31,6 +31,7 @@ import {
   REF_PROD,
   arretAvantProd,
   bilanEchec,
+  choixControles,
   ecartSchema,
   fonctionsModifiees,
   lignesDestructrices,
@@ -44,6 +45,8 @@ const RACINE = join(import.meta.dirname, '..')
 const LIAISON = join(RACINE, 'supabase', '.temp', 'project-ref')
 const DOSSIER_ETAT = join(homedir(), '.back-office')
 const INSTANTANE = join(DOSSIER_ETAT, 'schema-prod.sql')
+/** Dernier commit dont TOUS les contrôles locaux sont passés. */
+const CONTROLES_OK = join(DOSSIER_ETAT, 'controles-ok')
 const SECRETS_ATTENDUS = [
   'IMPORT_SECRET',
   'REPORT_FROM',
@@ -103,6 +106,21 @@ function requete(cible, sql) {
     `"${sql}"`,
   ])
   return lignesJson(sortie)
+}
+
+/** Vrai si la base locale a des comptes et aucun compte fictif : c'est la
+ *  copie de la prod (`copier-prod.mjs`). Base injoignable = faux (l'erreur
+ *  sortira plus loin, avec son message). */
+function baseLocaleCopieDeLaProd() {
+  try {
+    const [r] = requete(
+      '--local',
+      "select count(*) as total, count(*) filter (where right(email, 13) = '@exemple.test') as fictifs from auth.users",
+    )
+    return Number(r?.total) > 0 && Number(r?.fictifs) === 0
+  } catch {
+    return false
+  }
 }
 
 function versionsMigrationsLocales() {
@@ -192,15 +210,39 @@ function controlesLocaux() {
     ['git', 'rev-parse', '-q', '--verify', 'refs/tags/prod'],
     { accepterEchec: true },
   ).ok
+  const head = lancer(['git', 'rev-parse', 'HEAD']).sortie
+  const migrationsModifiees = etiquetteProd
+    ? lancer([
+        'git',
+        'diff',
+        '--name-only',
+        'prod..HEAD',
+        '--',
+        'supabase/migrations',
+      ])
+        .sortie.split('\n')
+        .filter(Boolean)
+    : []
+  const choix = choixControles({
+    dejaVerifie:
+      arbrePropre &&
+      existsSync(CONTROLES_OK) &&
+      readFileSync(CONTROLES_OK, 'utf8').trim() === head,
+    copieDeLaProd: baseLocaleCopieDeLaProd(),
+    migrationsModifiees,
+  })
+  if (choix.note) console.log(choix.note)
   const pkg = JSON.parse(readFileSync(join(RACINE, 'package.json'), 'utf8'))
-  const aVerifier = [
-    ['types (tsc)', ['npx', 'tsc', '--noEmit']],
-    ['tests (vitest)', ['pnpm', 'test']],
-    ['build', ['pnpm', 'build']],
-    ...(pkg.scripts?.['test:db']
-      ? [['tests de la base (test:db)', ['pnpm', 'test:db']]]
-      : []),
-  ]
+  const aVerifier = choix.jouer
+    ? [
+        ['types (tsc)', ['npx', 'tsc', '--noEmit']],
+        ['tests (vitest)', ['pnpm', 'test']],
+        ['build', ['pnpm', 'build']],
+        ...(pkg.scripts?.['test:db'] && choix.testsBase
+          ? [['tests de la base (test:db)', ['pnpm', 'test:db']]]
+          : []),
+      ]
+    : []
   const controles = []
   for (const [nom, cmd] of aVerifier) {
     process.stdout.write(`- ${nom}… `)
@@ -215,6 +257,12 @@ function controlesLocaux() {
         )
       break
     }
+  }
+  // Retenu pour la livraison qui suit l'essai : seulement si TOUT est passé
+  // sur un arbre propre (sinon le commit ne décrit pas le code vérifié).
+  if (choix.jouer && arbrePropre && controles.every((c) => c.ok)) {
+    mkdirSync(DOSSIER_ETAT, { recursive: true })
+    writeFileSync(CONTROLES_OK, `${head}\n`)
   }
   let jouees
   try {

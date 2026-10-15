@@ -87,3 +87,6 @@ todos.json
 # Test de mutation (Stryker) — rapports et cache incrémental
 reports/
 .stryker-tmp/
+# Généré par `pnpm db:seed:generer` (daté du jour : le suivre salissait git à
+# chaque remise à zéro). Recréé par `pnpm db:start` et `pnpm db:reset`.
+supabase/seed.sql
