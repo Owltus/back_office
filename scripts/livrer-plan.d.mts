@@ -50,3 +50,8 @@ export declare function secretsManquants(
   attendus: ReadonlyArray<string>,
   presents: ReadonlyArray<string>,
 ): Array<string>
+export declare function choixControles(e: {
+  dejaVerifie: boolean
+  copieDeLaProd: boolean
+  migrationsModifiees: Array<string>
+}): { jouer: boolean; testsBase: boolean; note: string | null }
