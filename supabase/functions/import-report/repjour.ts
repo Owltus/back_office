@@ -374,7 +374,23 @@ function parseComparisonMetrics(csvText: string): ComparisonMetricRow[] {
 // =============================================================================
 // parse/forecast.ts — parseForecastAll (toutes les lignes, REV = TTC)
 // =============================================================================
-function parseForecastAll(csvText: string): ForecastRow[] {
+// Montant lu d'une cellule REV. MIROIR EXACT de `lireMontant`
+// (src/lib/repjour/parse/forecast.ts), règles documentées là-bas : espaces
+// et signe € retirés (U+00A0, U+202F compris) ; UN seul séparateur (point ou virgule) =
+// décimal, donc « 1,234 » vaut 1,234 ; plusieurs = milliers par groupes de
+// trois ; tout le reste (« 12abc », « 1e3 », « Infinity », « NaN ») → null.
+export function lireMontant(cellule: string | undefined): number | null {
+  const s = (cellule ?? '').replace(/[\s\u00A0\u202F\u20AC]/g, '')
+  let norme: string | null = null
+  if (/^[+-]?\d+([.,]\d+)?$/.test(s)) norme = s.replace(',', '.')
+  else if (/^[+-]?\d{1,3}(,\d{3})+(\.\d+)?$/.test(s)) norme = s.replace(/,/g, '')
+  else if (/^[+-]?\d{1,3}(\.\d{3})+(,\d+)?$/.test(s)) norme = s.replace(/\./g, '').replace(',', '.')
+  if (norme === null) return null
+  const n = Number(norme)
+  return Number.isFinite(n) ? n : null
+}
+
+export function parseForecastAll(csvText: string): ForecastRow[] {
   const result = Papa.parse<string[]>(csvText, {
     header: false,
     skipEmptyLines: true,
@@ -407,6 +423,7 @@ function parseForecastAll(csvText: string): ForecastRow[] {
   const revCol = up.indexOf('REV')
 
   const rows: ForecastRow[] = []
+  const dates = new Set<string>()
   for (const row of result.data.slice(headerIdx + 1)) {
     const dateStr = (row[dateCol] || '').trim()
     if (dateStr.toUpperCase() === 'TOTALS' || dateStr === '') continue
@@ -418,13 +435,29 @@ function parseForecastAll(csvText: string): ForecastRow[] {
     const month = parseInt(dateParts[1], 10)
     const year = parseInt(dateParts[2], 10)
     if (isNaN(day) || isNaN(month) || isNaN(year)) continue
+    // Date impossible (31-02, 29-02 hors bissextile, mois 13) : même sort que
+    // les autres dates mal formées, la ligne est écartée.
+    if (!dateCalendaireUtc(year, month, day)) continue
+
+    const date = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    // Jour en double : REFUS du fichier entier. L'upsert `onConflict: 'date'`
+    // refuserait deux fois la même clé dans une instruction (tout le lot
+    // échouerait sur une erreur générique), et garder l'une des deux lignes en
+    // silence reviendrait à deviner laquelle est la bonne.
+    if (dates.has(date)) {
+      throw new Error(
+        `Ce fichier de prévisions contient deux fois le jour ${dateStr}. Recommence l'export.`,
+      )
+    }
+    dates.add(date)
 
     const occ = parseInt(row[occCol], 10) || 0
-    const revTTC = parseFloat(row[revCol]) || 0
+    // Montant invalide (vide, texte, Infinity, NaN) → 0, comme une cellule vide.
+    const revTTC = lireMontant(row[revCol]) ?? 0
     const revHT = fromTTC(revTTC) // REV du forecast est déjà TTC
 
     rows.push({
-      date: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+      date,
       month,
       year,
       occ,

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 import { VAT_FACTOR } from '#/lib/repjour/constants.ts'
 import {
+  lireMontant,
   parseForecast,
   parseForecastAll,
 } from '#/lib/repjour/parse/forecast.ts'
@@ -19,11 +20,13 @@ import type { ForecastRow } from '#/lib/repjour/types.ts'
  *   (VAT_FACTOR = 1,10, constants.ts) → revHT × 1,10 = revTTC.
  * - CONTRAT DE SORTIE : date ISO aaaa-mm-jj (clé `onConflict: 'date'` de
  *   l'upsert forecast_days), month/year numériques du jour.
- * - MESSAGES D'ERREUR : les deux seules erreurs que l'app sait afficher.
+ * - MESSAGES D'ERREUR : les trois seules erreurs que l'app sait afficher
+ *   (vide, format, jour en double).
  */
 
 const ERR_VIDE = 'vide ou incomplet'
 const ERR_FORMAT = "n'a pas le bon format"
+const ERR_DOUBLON = 'contient deux fois le jour'
 
 const EN_TETE = 'DATE,OCC,OCC %,ADR,REV'
 
@@ -230,43 +233,201 @@ describe('parseForecastAll — entrées hostiles', () => {
     expect(r[0]).toMatchObject({ date: '2026-01-01', occ: 8, revTTC: 800.5 })
   })
 
-  it.fails(
-    'virgule décimale française « 7500,20 » lue en entier ou refusée, jamais tronquée',
-    () => {
-      // DÉFAUT : un fichier réenregistré sous Excel FR (« ; » + virgule
-      // décimale) est accepté, et `parseFloat('7500,20')` rend 7500 — les
-      // centimes disparaissent EN SILENCE (« 1 234,56 » donnerait même 1).
-      // Oracle : REV est un montant ; une valeur mal lue doit être soit
-      // correcte, soit refusée.
-      let r: ForecastRow[] | null = null
-      try {
-        r = parseForecastAll(
-          csv(['DATE;OCC;OCC %;ADR;REV', '01-01-2026;8;10%;100;7500,20']),
-        )
-      } catch {
-        return // refus explicite : acceptable
-      }
-      expect(r[0].revTTC).toBe(7500.2)
-    },
-  )
-
-  it.fails(
-    'une date impossible (31-02-2026) n est pas rendue comme une date',
-    () => {
-      // DÉFAUT : « 31-02-2026 » devient « 2026-02-31 », « 00-13-2026 »
-      // devient « 2026-13-00 » : chaînes non valides comme date Postgres, qui
-      // feraient échouer TOUT l'upsert du fichier au lieu d'écarter la ligne.
-      // Oracle : contrat de sortie, `date` est une date calendaire valide.
-      const r = parseForecastAll(
-        csv([EN_TETE, '31-02-2026,1,,1,1', '00-13-2026,1,,1,1']),
+  it('virgule décimale française « 7500,20 » lue en entier ou refusée, jamais tronquée', () => {
+    // Ancien défaut : `parseFloat('7500,20')` rendait 7500, les centimes
+    // disparaissaient EN SILENCE (« 1 234,56 » donnait même 1).
+    // Oracle : REV est un montant ; une valeur mal lue doit être soit
+    // correcte, soit refusée.
+    let r: ForecastRow[] | null = null
+    try {
+      r = parseForecastAll(
+        csv(['DATE;OCC;OCC %;ADR;REV', '01-01-2026;8;10%;100;7500,20']),
       )
-      for (const x of r) {
-        const d = new Date(`${x.date}T00:00:00Z`)
-        expect(Number.isNaN(d.getTime())).toBe(false)
-        expect(d.toISOString().slice(0, 10)).toBe(x.date)
-      }
-    },
-  )
+    } catch {
+      return // refus explicite : acceptable
+    }
+    expect(r[0].revTTC).toBe(7500.2)
+  })
+
+  it('une date impossible (31-02-2026) n est pas rendue comme une date', () => {
+    // Ancien défaut : « 31-02-2026 » devenait « 2026-02-31 » : chaîne non
+    // valide comme date Postgres, qui ferait échouer TOUT l'upsert du fichier
+    // au lieu d'écarter la ligne.
+    // Oracle : contrat de sortie, `date` est une date calendaire valide.
+    const r = parseForecastAll(
+      csv([EN_TETE, '31-02-2026,1,,1,1', '00-13-2026,1,,1,1']),
+    )
+    for (const x of r) {
+      const d = new Date(`${x.date}T00:00:00Z`)
+      expect(Number.isNaN(d.getTime())).toBe(false)
+      expect(d.toISOString().slice(0, 10)).toBe(x.date)
+    }
+  })
+
+  it('date impossible écartée comme les autres dates mal formées, le reste est lu', () => {
+    // Oracle : même chemin que « 2026/01/01 » ou « abc-def-ghi » (ligne ignorée).
+    const r = parseForecastAll(
+      csv([
+        EN_TETE,
+        '31-02-2026,1,,1,1',
+        '31-04-2026,1,,1,1',
+        '00-01-2026,1,,1,1',
+        '01-13-2026,1,,1,1',
+        '01-01-2026,7,,1,70',
+      ]),
+    )
+    expect(r.map((x) => x.date)).toEqual(['2026-01-01'])
+  })
+
+  it('29 février : accepté en 2024 (bissextile), refusé en 2026', () => {
+    // Oracle : calendrier grégorien (2024 divisible par 4, 2026 non).
+    const r = parseForecastAll(
+      csv([EN_TETE, '29-02-2024,1,,1,10', '29-02-2026,2,,1,20']),
+    )
+    expect(r.map((x) => x.date)).toEqual(['2024-02-29'])
+  })
+
+  it('29 février : 2000 bissextile, 2100 non (règle des siècles)', () => {
+    // Oracle : grégorien, siècle bissextile seulement s'il est divisible par 400.
+    const r = parseForecastAll(
+      csv([EN_TETE, '29-02-2000,1,,1,10', '29-02-2100,2,,1,20']),
+    )
+    expect(r.map((x) => x.date)).toEqual(['2000-02-29'])
+  })
+
+  it('Infinity, -Infinity, NaN et nombres non finis : valeur invalide → 0', () => {
+    // Oracle : même traitement que « n/a » (valeur invalide → 0, ligne gardée).
+    const r = parseForecastAll(
+      csv([
+        EN_TETE,
+        '01-01-2026,1,,1,Infinity',
+        '02-01-2026,1,,1,-Infinity',
+        '03-01-2026,1,,1,NaN',
+        '04-01-2026,1,,1,1e400',
+        '05-01-2026,1,,1,' + '9'.repeat(400),
+      ]),
+    )
+    expect(r.map((x) => [x.revTTC, x.revHT])).toEqual([
+      [0, 0],
+      [0, 0],
+      [0, 0],
+      [0, 0],
+      [0, 0],
+    ])
+    for (const x of r) {
+      expect(Number.isFinite(x.revTTC)).toBe(true)
+      expect(Number.isFinite(x.revHT)).toBe(true)
+    }
+  })
+
+  it('un jour présent deux fois → le fichier est refusé (jamais d écrasement silencieux)', () => {
+    // Oracle : l'appelant fait un upsert `onConflict: 'date'` ; deux lignes de
+    // même date ne peuvent pas être écrites ensemble, et choisir l'une serait
+    // deviner. Le message nomme le jour tel qu'écrit dans le fichier.
+    const t = csv([EN_TETE, '01-01-2026,1,,1,100', '1-1-2026,2,,1,200'])
+    expect(() => parseForecastAll(t)).toThrow(ERR_DOUBLON)
+    expect(() => parseForecastAll(t)).toThrow('1-1-2026')
+    // Même identiques, deux lignes du même jour sont refusées.
+    expect(() =>
+      parseForecastAll(
+        csv([EN_TETE, '01-01-2026,1,,1,1', '01-01-2026,1,,1,1']),
+      ),
+    ).toThrow(ERR_DOUBLON)
+    // Le filtre par mois ne masque pas le doublon d'un autre mois.
+    expect(() =>
+      parseForecast(
+        csv([
+          EN_TETE,
+          '01-02-2026,1,,1,1',
+          '01-02-2026,1,,1,1',
+          '01-03-2026,1,,1,1',
+        ]),
+        3,
+        2026,
+      ),
+    ).toThrow(ERR_DOUBLON)
+  })
+})
+
+describe('lireMontant — formats acceptés', () => {
+  it.each([
+    // Format source (StayNTouch) : point décimal, aucun séparateur de milliers.
+    ['7500.20', 7500.2],
+    ['444711.13', 444711.13],
+    ['1100', 1100],
+    ['555.5', 555.5],
+    ['-12.50', -12.5],
+    // Excel français : virgule décimale, milliers en espace / insécable / fine.
+    ['7500,20', 7500.2],
+    ['7 500,20', 7500.2],
+    ['7\u00A0500,20', 7500.2],
+    ['444\u202F711,13', 444711.13],
+    [' 1100,00 ', 1100],
+    // Milliers explicites de l'autre signe.
+    ['7.500,20', 7500.2],
+    ['1.234.567', 1234567],
+    ['1.234.567,5', 1234567.5],
+    ['7,500.20', 7500.2],
+    ['1,234,567', 1234567],
+    // AMBIGUÏTÉ documentée : UN seul séparateur est toujours décimal.
+    ['1,234', 1.234],
+    ['1.234', 1.234],
+    // Signe € toléré (l'ancien parseFloat le lisait).
+    ['7500.20 €', 7500.2],
+    ['7 500,20 €', 7500.2],
+  ])('« %s » → %d', (cellule, attendu) => {
+    expect(lireMontant(cellule)).toBeCloseTo(attendu, 9)
+  })
+
+  it.each([
+    '',
+    '   ',
+    undefined,
+    'n/a',
+    'abc',
+    '12abc',
+    '1e3',
+    'Infinity',
+    '-Infinity',
+    'NaN',
+    '1,2,3',
+    '1.23.4',
+    '12,34.56',
+    '1,234,56',
+    '.5',
+    '5.',
+    '9'.repeat(400),
+  ])('« %s » → invalide (null)', (cellule) => {
+    expect(lireMontant(cellule)).toBeNull()
+  })
+
+  it('propriété : tout montant au centime relu à l identique, point ou virgule, avec ou sans milliers', () => {
+    // Oracle : format source et ses écritures Excel FR décrivent le même nombre.
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 0, max: 100_000_000 }),
+        fc.constantFrom(' ', '\u00A0', '\u202F', ''),
+        (centimes, milliers) => {
+          const v = centimes / 100
+          const [ent, dec] = v.toFixed(2).split('.')
+          const groupe = ent.replace(/\B(?=(\d{3})+(?!\d))/g, milliers)
+          expect(lireMontant(`${ent}.${dec}`)).toBeCloseTo(v, 9)
+          expect(lireMontant(`${groupe},${dec}`)).toBeCloseTo(v, 9)
+        },
+      ),
+    )
+  })
+
+  it('propriété : le résultat est toujours fini ou null', () => {
+    // Oracle : aucun Infinity/NaN ne doit atteindre la base.
+    fc.assert(
+      fc.property(fc.string({ maxLength: 40 }), (s) => {
+        const n = lireMontant(s)
+        expect(n === null || Number.isFinite(n)).toBe(true)
+      }),
+      { numRuns: 500 },
+    )
+  })
 })
 
 describe('parseForecast — filtre sur le mois du rapport', () => {
@@ -305,6 +466,12 @@ const jourArb = fc.record({
   occ: fc.integer({ min: 0, max: 80 }),
   centimes: fc.integer({ min: 0, max: 5_000_000 }),
 })
+// Jours DISTINCTS : un jour en double refuse le fichier (testé à part).
+const joursArb = (c: { minLength?: number; maxLength: number }) =>
+  fc.uniqueArray(jourArb, {
+    ...c,
+    selector: (j) => `${j.year}-${j.month}-${j.day}`,
+  })
 type Jour = typeof jourArb extends fc.Arbitrary<infer T> ? T : never
 
 const p2 = (n: number) => String(n).padStart(2, '0')
@@ -312,7 +479,7 @@ const ligneJour = (j: Jour) =>
   `${p2(j.day)}-${p2(j.month)}-${j.year},${j.occ},,1,${(j.centimes / 100).toFixed(2)}`
 
 describe('parseForecastAll — propriétés', () => {
-  it('ne jette jamais autre chose que les deux erreurs attendues', () => {
+  it('ne jette jamais autre chose que les trois erreurs attendues', () => {
     // Oracle : l'UI n'affiche que ces deux messages ; toute autre exception
     // serait un écran d'erreur brut.
     fc.assert(
@@ -321,7 +488,11 @@ describe('parseForecastAll — propriétés', () => {
           parseForecastAll(s)
         } catch (e) {
           const m = (e as Error).message
-          expect(m.includes(ERR_VIDE) || m.includes(ERR_FORMAT)).toBe(true)
+          expect(
+            m.includes(ERR_VIDE) ||
+              m.includes(ERR_FORMAT) ||
+              m.includes(ERR_DOUBLON),
+          ).toBe(true)
         }
       }),
       { numRuns: 400 },
@@ -331,7 +502,7 @@ describe('parseForecastAll — propriétés', () => {
   it('aller-retour : chaque jour bien formé est relu à l identique, dans l ordre', () => {
     // Oracle : format source → contrat de sortie, TVA 10 %.
     fc.assert(
-      fc.property(fc.array(jourArb, { maxLength: 40 }), (jours) => {
+      fc.property(joursArb({ maxLength: 40 }), (jours) => {
         const r = parseForecastAll(
           csv([
             'Hotel Code,X',
@@ -360,7 +531,7 @@ describe('parseForecastAll — propriétés', () => {
     // LF ou CRLF : mêmes données.
     fc.assert(
       fc.property(
-        fc.array(jourArb, { minLength: 1, maxLength: 20 }),
+        joursArb({ minLength: 1, maxLength: 20 }),
         fc.array(
           fc.constantFrom('Hotel Code,Hotel Name', 'X,Y,14-10-2026', 'Report'),
           {
@@ -382,22 +553,19 @@ describe('parseForecastAll — propriétés', () => {
     // Oracle : parseForecast = filtre (mois, année) ; chaque jour appartient
     // à exactement un mois.
     fc.assert(
-      fc.property(
-        fc.array(jourArb, { minLength: 1, maxLength: 30 }),
-        (jours) => {
-          const texte = csv([EN_TETE, ...jours.map(ligneJour)])
-          const tout = parseForecastAll(texte)
-          const mois = new Set(tout.map((r) => `${r.year}-${r.month}`))
-          let total = 0
-          for (const k of mois) {
-            const [y, m] = k.split('-').map(Number)
-            const part = parseForecast(texte, m, y)
-            expect(part.every((r) => r.month === m && r.year === y)).toBe(true)
-            total += part.length
-          }
-          expect(total).toBe(tout.length)
-        },
-      ),
+      fc.property(joursArb({ minLength: 1, maxLength: 30 }), (jours) => {
+        const texte = csv([EN_TETE, ...jours.map(ligneJour)])
+        const tout = parseForecastAll(texte)
+        const mois = new Set(tout.map((r) => `${r.year}-${r.month}`))
+        let total = 0
+        for (const k of mois) {
+          const [y, m] = k.split('-').map(Number)
+          const part = parseForecast(texte, m, y)
+          expect(part.every((r) => r.month === m && r.year === y)).toBe(true)
+          total += part.length
+        }
+        expect(total).toBe(tout.length)
+      }),
     )
   })
 
@@ -416,6 +584,49 @@ describe('parseForecastAll — propriétés', () => {
             ]),
           )
           expect(y.revHT).toBeGreaterThan(x.revHT)
+        },
+      ),
+    )
+  })
+})
+
+describe('parseForecastAll — propriétés des doublons et du calendrier', () => {
+  it('un jour répété n importe où dans le fichier le fait refuser', () => {
+    // Oracle : upsert sur la date, deux lignes du même jour = fichier refusé.
+    fc.assert(
+      fc.property(
+        joursArb({ minLength: 1, maxLength: 20 }),
+        fc.nat(),
+        fc.nat(),
+        (jours, i, pos) => {
+          const corps = jours.map(ligneJour)
+          const doublon = corps[i % corps.length]
+          corps.splice(pos % (corps.length + 1), 0, doublon)
+          expect(() => parseForecastAll(csv([EN_TETE, ...corps]))).toThrow(
+            ERR_DOUBLON,
+          )
+        },
+      ),
+    )
+  })
+
+  it('toute date rendue est une vraie date du calendrier', () => {
+    // Oracle : contrat de sortie, date ISO valide (jour 1..31 tiré au hasard,
+    // tous mois, années bissextiles ou non).
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 1, max: 31 }),
+        fc.integer({ min: 1, max: 12 }),
+        fc.integer({ min: 1999, max: 2101 }),
+        (d, m, y) => {
+          const r = parseForecastAll(csv([EN_TETE, `${d}-${m}-${y},1,,1,1`]))
+          const attendu = new Date(Date.UTC(y, m - 1, d)).getUTCDate() === d
+          expect(r).toHaveLength(attendu ? 1 : 0)
+          for (const x of r) {
+            expect(
+              new Date(`${x.date}T00:00:00Z`).toISOString().slice(0, 10),
+            ).toBe(x.date)
+          }
         },
       ),
     )
