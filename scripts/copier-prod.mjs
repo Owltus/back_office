@@ -33,7 +33,7 @@ import {
   lectureComptes,
   migrationsNonLivrees,
 } from './copier-prod-plan.mjs'
-import { lignesJson } from './livrer-plan.mjs'
+import { ecartNonCapture, lignesJson } from './livrer-plan.mjs'
 
 const RACINE = join(import.meta.dirname, '..')
 const LIAISON = join(RACINE, 'supabase', '.temp', 'project-ref')
@@ -201,6 +201,24 @@ try {
     arbrePropre: lancer(['git', 'status', '--porcelain']).sortie === '',
   })
   if (arret) throw new Error(arret)
+
+  // La copie REMET la base locale aux migrations : une table modifiée dans
+  // Studio sans migration serait effacée, en silence, à chaque démarrage
+  // (2026-10-15). Structure seulement : le contenu local, lui, est remplacé
+  // par la copie, c'est son rôle.
+  const diff = lancer(
+    ['supabase', 'db', 'diff', '--local', '--schema', 'public,private,storage'],
+    { accepterEchec: true },
+  )
+  if (!diff.ok)
+    throw new Error(
+      'Comparaison de la structure locale impossible : copie annulée, rien n’a changé.',
+    )
+  const ecart = ecartNonCapture(`${diff.sortie}\n${diff.erreur}`)
+  if (ecart)
+    throw new Error(
+      `La structure de la base locale a changé SANS migration : la copie l'effacerait. Copie annulée, rien n'a changé. Faites d'abord capturer ce changement en migration (supabase db diff --local -f <nom>).\n${ecart.split('\n').slice(0, 15).join('\n')}`,
+    )
 
   console.log(
     'La base locale va être ENTIÈREMENT remplacée par les données de la prod',

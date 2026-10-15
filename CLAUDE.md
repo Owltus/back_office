@@ -77,6 +77,16 @@ migration new`, ou essais dans Studio puis `supabase db diff --local -f
      `pnpm db:reset`). Après : bilan. L'accord vaut pour CE push seulement.
      Hook git `.githooks/pre-push` (activé par `prepare`) : un envoi de
      main hors livraison est refusé, pour l'utilisateur aussi.
+     **STRUCTURE oui, CONTENU jamais** (décision utilisateur du 2026-10-15) :
+     seules les migrations partent ; les données de la base de dev
+     (fictives, copiées ou saisies) restent sur le poste, et la prod garde
+     les siennes. Garanties : la livraison et la copie de la prod refusent
+     si la structure locale a changé SANS migration (`supabase db diff
+--local`, schémas public/private/storage — une table changée dans
+     Studio ne partirait pas, et la copie l'effacerait) → la capturer
+     (`supabase db diff --local -f <nom>`) ; une migration qui écrit du
+     contenu (`insert`/`update`/`delete`/`copy`) est signalée au résumé et
+     ne part sans clavier qu'avec `--avec-donnees`, après accord explicite.
   3. **Commit = `pnpm commit <fichier-message> [fichiers…]`** : message
      écrit avec Write dans le scratchpad (sujet Conventional Commits, ligne
      vide, corps, puis Co-Authored-By et Claude-Session — exigés quand

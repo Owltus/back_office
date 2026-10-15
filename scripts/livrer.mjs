@@ -38,9 +38,11 @@ import {
   arretsSansClavier,
   choixControles,
   descriptionLivraison,
+  ecartNonCapture,
   ecartSchema,
   fonctionsModifiees,
   lignesDestructrices,
+  lignesDonnees,
   lignesJson,
   planEnvoi,
   nomsSecrets,
@@ -289,7 +291,22 @@ function controlesLocaux() {
   const migrationsNonJoueesEnLocal = versionsMigrationsLocales().filter(
     (f) => !jouees.includes(f.slice(0, 14)),
   )
+  // Seules les migrations partent : une table changée dans Studio sans
+  // migration ne partirait pas, en silence. Structure seulement, jamais le
+  // contenu (base fantôme rejouée depuis les migrations).
+  process.stdout.write('- structure locale = migrations… ')
+  const diff = lancer(
+    ['supabase', 'db', 'diff', '--local', '--schema', 'public,private,storage'],
+    { accepterEchec: true },
+  )
+  if (!diff.ok)
+    throw new Error(
+      `Comparaison de la structure locale impossible (base lancée ?).\n${(diff.erreur || diff.sortie).split('\n').slice(-10).join('\n')}`,
+    )
+  const ecart = ecartNonCapture(`${diff.sortie}\n${diff.erreur}`)
+  console.log(ecart ? 'ÉCART' : 'OK')
   return arretAvantProd({
+    ecartNonCapture: ecart,
     branche,
     arbrePropre,
     enRetard,
@@ -437,6 +454,9 @@ async function livrer() {
       destructrices: lignesDestructrices(
         readFileSync(join(RACINE, 'supabase', 'migrations', nom), 'utf8'),
       ),
+      donnees: lignesDonnees(
+        readFileSync(join(RACINE, 'supabase', 'migrations', nom), 'utf8'),
+      ),
     }))
   const commits = lancer(['git', 'log', '--oneline', 'prod..HEAD'])
     .sortie.split('\n')
@@ -487,6 +507,10 @@ async function livrer() {
     avert.push(
       `${m.nom} RETIRE ou CHANGE quelque chose (l'ancien code tourne encore 1 à 2 min dessus) :\n      ${m.destructrices.join('\n      ')}`,
     )
+  for (const m of migrations.filter((x) => x.donnees.length))
+    avert.push(
+      `${m.nom} écrit du CONTENU en prod (le reste n'est que de la structure) :\n      ${m.donnees.join('\n      ')}`,
+    )
   for (const a of avert) console.log(`⚠ ${a}`)
   if (manquants.length)
     throw new Error('Secret manquant en prod : rien ne part.')
@@ -520,6 +544,8 @@ async function livrer() {
       worker: changes.some(
         (f) => f.startsWith('cloudflare/') || f.startsWith('worker/'),
       ),
+      avecDonnees: migrations.filter((m) => m.donnees.length).map((m) => m.nom),
+      donneesAcceptees: process.argv.includes('--avec-donnees'),
     })
     if (arrets.length)
       throw new Error(`Envoi sans clavier refusé :\n- ${arrets.join('\n- ')}`)

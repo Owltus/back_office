@@ -56,6 +56,56 @@ export function lignesDestructrices(sql) {
 }
 
 /**
+ * Instructions qui écrivent du CONTENU dans une migration (demande
+ * utilisateur du 2026-10-15 : la structure part, jamais le contenu). Une
+ * liste de référence peut en avoir besoin : c'est permis, mais jamais sans
+ * que l'utilisateur l'ait vu.
+ */
+const DONNEES = [
+  /\binsert\s+into\b/i,
+  /\bupdate\s+[\w."]+\s+set\b/i,
+  /\bdelete\s+from\b/i,
+  /\bcopy\s+[\w."]+/i,
+  /\btruncate\b/i,
+]
+
+/** Les instructions d'une migration qui écrivent des données. */
+export function lignesDonnees(sql) {
+  return sql
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/--[^\n]*/g, ' ')
+    .split(';')
+    .map((s) => s.replace(/\s+/g, ' ').trim())
+    .filter((s) => s && DONNEES.some((re) => re.test(s)))
+    .map((s) => (s.length > 160 ? `${s.slice(0, 157)}…` : s))
+}
+
+/**
+ * Structure de la base locale changée SANS migration ? Sortie de
+ * `supabase db diff --local` (base locale contre migrations rejouées dans une
+ * base fantôme). Rend le SQL de l'écart, vide s'il n'y en a pas. Sortie
+ * illisible = erreur : on ne conclut jamais « rien » sans l'avoir lu.
+ */
+export function ecartNonCapture(sortie) {
+  const ligne = sortie
+    .split(/\r?\n/)
+    .reverse()
+    .find((l) => l.trim().startsWith('{') && l.includes('"diff"'))
+  if (ligne) {
+    try {
+      const j = JSON.parse(ligne)
+      if (typeof j.diff === 'string') return j.diff.trim()
+    } catch {
+      // repli texte ci-dessous
+    }
+  }
+  if (/No schema changes found/.test(sortie)) return ''
+  throw new Error(
+    'Comparaison de la structure locale illisible : vérification impossible.',
+  )
+}
+
+/**
  * Schéma comparable : fins de ligne et espaces de fin ignorés, ainsi que les
  * lignes VOLATILES d'un dump (`\restrict <jeton aléatoire>` des pg_dump
  * récents, en-têtes datés) qui signaleraient une dérive à chaque fois.
@@ -97,7 +147,7 @@ export function ecartSchema(attendu, reel) {
  * @param {{
  *   branche: string, arbrePropre: boolean, enRetard: boolean,
  *   etiquetteProd: boolean, controles: Array<{nom: string, ok: boolean}>,
- *   migrationsNonJoueesEnLocal: Array<string>,
+ *   migrationsNonJoueesEnLocal: Array<string>, ecartNonCapture?: string,
  * }} e
  */
 export function arretAvantProd(e) {
@@ -112,6 +162,8 @@ export function arretAvantProd(e) {
   for (const c of e.controles)
     if (!c.ok)
       return `Contrôle en échec : ${c.nom}. Corrigez-le avant de livrer.`
+  if (e.ecartNonCapture)
+    return `La structure de la base locale a changé SANS migration (modification faite dans Studio ?) : rien ne partirait. Capturez-la : « supabase db diff --local -f <nom> », relisez le fichier, puis « pnpm db:reset » pour l'essayer.\n${e.ecartNonCapture.split('\n').slice(0, 15).join('\n')}`
   if (e.migrationsNonJoueesEnLocal.length > 0)
     return `Migrations jamais jouées sur la base locale : ${e.migrationsNonJoueesEnLocal.join(', ')}. Lancez « pnpm db:reset » (ou « supabase migration up --local ») et vérifiez l’app avant de livrer.`
   return null
@@ -167,10 +219,15 @@ export function descriptionLivraison(e) {
  * Avant le 2026-10-15, `printf 'LIVRER\nSUPPRIMER\n'` aurait suffi à
  * franchir la seconde confirmation.
  *
- * @param {{ destructives: Array<string>, configToml: boolean, worker: boolean }} e
+ * @param {{ destructives: Array<string>, configToml: boolean, worker: boolean,
+ *   avecDonnees?: Array<string>, donneesAcceptees?: boolean }} e
  */
 export function arretsSansClavier(e) {
   const arrets = []
+  if (e.avecDonnees?.length && !e.donneesAcceptees)
+    arrets.push(
+      `Migration qui écrit du CONTENU (${e.avecDonnees.join(', ')}) : à montrer à l’utilisateur ; avec son accord, relancer avec --avec-donnees.`,
+    )
   if (e.destructives.length)
     arrets.push(
       `Migration qui RETIRE ou CHANGE quelque chose (${e.destructives.join(', ')}) : la confirmation SUPPRIMER se tape au clavier, livrer.bat.`,

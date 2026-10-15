@@ -22,6 +22,7 @@ export declare function arretAvantProd(e: {
   etiquetteProd: boolean
   controles: ReadonlyArray<{ nom: string; ok: boolean }>
   migrationsNonJoueesEnLocal: ReadonlyArray<string>
+  ecartNonCapture?: string
 }): string | null
 export declare function planEnvoi(e: {
   reponse: string
@@ -61,7 +62,11 @@ export declare function descriptionLivraison(e: {
   fonctions: Array<string>
 }): string
 export declare function arretsSansClavier(e: {
+  avecDonnees?: Array<string>
+  donneesAcceptees?: boolean
   destructives: Array<string>
   configToml: boolean
   worker: boolean
 }): Array<string>
+export declare function lignesDonnees(sql: string): Array<string>
+export declare function ecartNonCapture(sortie: string): string
