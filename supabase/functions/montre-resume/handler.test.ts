@@ -13,7 +13,7 @@ import { traiter } from './handler.ts'
 import type { Dependances } from './handler.ts'
 import { COLONNES, sourceSupabase } from './source.ts'
 import type { Source } from './source.ts'
-import { ALL_ROOMS, comptesPdj, resumeRep } from './regles.ts'
+import { ALL_ROOMS, comptesPdj, euroEntier, resumeRep } from './regles.ts'
 
 const CLE = 'cle-de-test-montre-0123456789abcdef'
 // 16/10/2026 08:00 à Paris (UTC+2) : jour hôtelier du 16, REP jour du 15.
@@ -21,6 +21,7 @@ const MATIN = new Date('2026-10-16T06:00:00Z')
 
 const RAPPORT = {
   rj_to: 78.75,
+  rj_nuitees: 63,
   rj_room_revenue: 6000,
   rmtd_room_revenue: 90000,
   pm_room_revenue: 180000,
@@ -31,6 +32,7 @@ type Faux = Partial<{ [K in keyof Source]: Source[K] }>
 function source(faux: Faux = {}): Source {
   return {
     rapport: async () => RAPPORT,
+    pmPrecedent: async () => 176500,
     dernierCumulDuMois: async () => 80000,
     forecastMois: async () => 170000,
     budgetMois: async () => 200000,
@@ -141,6 +143,9 @@ Deno.test('cas nominal : chiffres de l’écran, en % du budget', async () => {
       pct_veille: 3,
       pct_projete: 45,
       to: 78.8,
+      // 63 nuitées ; pris = 180000 − 176500 = 3500 € (projeté vs rapport précédent).
+      chambres: 63,
+      pris_veille: 3500,
     },
     pdj: { date: '2026-10-16', disponible: true, restent: 1, departs: 2, inclus: 3 },
   })
@@ -150,7 +155,7 @@ Deno.test('sortie en liste blanche : aucune clé inattendue, à aucun niveau', a
   // Même si la source renvoie des champs en trop (nom du client, montants),
   // rien d'autre que le contrat ne sort.
   const bavarde = source({
-    rapport: async () => ({ ...RAPPORT, rj_nuitees: 63, guest_name: 'X' } as typeof RAPPORT),
+    rapport: async () => ({ ...RAPPORT, rj_pm: 95.2, guest_name: 'X' } as typeof RAPPORT),
     pdj: async () => [
       { room: 102, status: 'IN HOUSE', breakfasts_included: 2, guest_name: 'Dupont' } as never,
     ],
@@ -158,18 +163,28 @@ Deno.test('sortie en liste blanche : aucune clé inattendue, à aucun niveau', a
   const r = await appeler(get(), deps(bavarde))
   assertEquals(Object.keys(r.corps).sort(), ['pdj', 'rep'])
   assertEquals(Object.keys(r.corps.rep).sort(), [
-    'date', 'partiel', 'pct_precedent', 'pct_projete', 'pct_veille', 'to',
+    'chambres', 'date', 'partiel', 'pct_precedent', 'pct_projete', 'pct_veille',
+    'pris_veille', 'to',
   ])
   assertEquals(Object.keys(r.corps.pdj).sort(), [
     'date', 'departs', 'disponible', 'inclus', 'restent',
   ])
   const texte = JSON.stringify(r.corps)
   assert(!texte.includes('Dupont') && !texte.includes('guest'), texte)
-  assert(!texte.includes('6000') && !texte.includes('200000'), 'aucun euro')
+  assert(!texte.includes('6000') && !texte.includes('200000'), 'seul pris_veille est en euros')
+  assert(!texte.includes('95.2'), 'champ en trop recopié')
 })
 
 Deno.test('rapport absent : mode partiel comme l’écran', async () => {
-  const r = await appeler(get(), deps(source({ rapport: async () => null })))
+  let precedentLu = false
+  const r = await appeler(get(), deps(source({
+    rapport: async () => null,
+    pmPrecedent: async () => {
+      precedentLu = true
+      return 176500
+    },
+  })))
+  assert(!precedentLu, 'le précédent ne sert qu’avec un rapport')
   // acquis = dernier cumul 80000 → 40 % ; projete = 170000 − 80000 → 45 %.
   assertEquals(r.corps.rep, {
     date: '2026-10-15',
@@ -178,7 +193,42 @@ Deno.test('rapport absent : mode partiel comme l’écran', async () => {
     pct_veille: null,
     pct_projete: 45,
     to: null,
+    chambres: null,
+    pris_veille: null,
   })
+})
+
+Deno.test('pris_veille : null sans rapport antérieur dans le mois (1er du mois)', async () => {
+  const r = await appeler(get(), deps(source({ pmPrecedent: async () => null })))
+  assertEquals(r.corps.rep.pris_veille, null)
+  assertEquals(r.corps.rep.chambres, 63)
+})
+
+Deno.test('pris_veille : négatif quand les annulations l’emportent', async () => {
+  // 180000 − 181234,6 = −1234,6 → −1235 € (l'écran affiche « -1 235 € »).
+  const r = await appeler(get(), deps(source({ pmPrecedent: async () => 181234.6 })))
+  assertEquals(r.corps.rep.pris_veille, -1235)
+})
+
+Deno.test('pris_veille : précédent cherché dans le mois du rapport, avant sa date', async () => {
+  const vus: unknown[] = []
+  await appeler(get(), deps(source({
+    pmPrecedent: async (d, a, m) => {
+      vus.push([d, a, m])
+      return 0
+    },
+  })))
+  assertEquals(vus, [['2026-10-15', 2026, 10]])
+})
+
+Deno.test('euroEntier : arrondi de l’écran (demi loin de zéro), jamais -0', () => {
+  // Oracle : Intl.NumberFormat fr-FR maximumFractionDigits 0 (format.ts:5).
+  const nf0 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 })
+  for (const n of [0.5, -0.5, 1.5, -1.5, 2.4999, -2.4999, 1234.5, -1234.5, -0.4, 0]) {
+    const attendu = Number(nf0.format(n).replace(/\s/g, '').replace('−', '-'))
+    assertEquals(euroEntier(n), attendu === 0 ? 0 : attendu, String(n))
+  }
+  assert(!Object.is(euroEntier(-0.4), -0))
 })
 
 Deno.test('rapport absent et mois vide : partiel, 0 % mais pas d’erreur', async () => {
@@ -214,7 +264,7 @@ Deno.test('panne de base, quelle que soit la lecture : 503 sans détail ni clé'
   const panne = async () => {
     throw new Error('daily_reports : connexion refusée')
   }
-  for (const k of ['rapport', 'budgetMois', 'pdj'] as const) {
+  for (const k of ['rapport', 'budgetMois', 'pdj', 'pmPrecedent'] as const) {
     const r = await appeler(get(), deps(source({ [k]: panne })))
     assertEquals(r.status, 503, k)
     assertEquals(r.corps, { error: 'Service indisponible' })
@@ -264,7 +314,8 @@ Deno.test('comptes PDJ : chambres hors liste ignorées, statuts inconnus non com
 
 Deno.test('barre : rien de négatif quand le projeté passe sous le cumul', () => {
   const r = resumeRep({
-    rapport: { rj_to: 50, rj_room_revenue: 9000, rmtd_room_revenue: 5000, pm_room_revenue: 4000 },
+    rapport: { rj_to: 50, rj_nuitees: 40, rj_room_revenue: 9000, rmtd_room_revenue: 5000, pm_room_revenue: 4000 },
+    pmPrecedent: null,
     dernierCumulDuMois: null,
     forecastMois: null,
     budgetMois: 10000,
@@ -286,6 +337,7 @@ function fauxClient(reponse: { data: unknown; error: { message: string } | null 
       const q = {
         select(c: string) { a.select = c; return q },
         eq(k: string, v: unknown) { a.filtres.push(`${k}=${v}`); return q },
+        lt(k: string, v: unknown) { a.filtres.push(`${k}<${v}`); return q },
         order() { return q },
         limit() { return q },
         maybeSingle: () => Promise.resolve(reponse),
@@ -308,8 +360,13 @@ Deno.test('lectures : colonnes explicites, jamais * ni guest_name', async () => 
   await s2.rapport('2026-10-15')
   await s2.budgetMois(2026, 10)
   await s2.dernierCumulDuMois(2026, 10)
+  await s2.pmPrecedent('2026-10-15', 2026, 10)
   const tous = [...appels, ...f2.appels]
-  assertEquals(tous.length, 5)
+  assertEquals(tous.length, 6)
+  assertEquals(f2.appels[3], {
+    table: 'daily_reports', select: 'pm_room_revenue',
+    filtres: ['year=2026', 'month=10', 'date<2026-10-15'],
+  })
   for (const a of tous) {
     assert(a.select && a.select !== '*' && !a.select.includes('guest'), a.select)
   }
@@ -328,6 +385,7 @@ Deno.test('lectures : une erreur lève (→ 503), jamais un « vide »', async (
     () => s.budgetMois(2026, 10),
     () => s.forecastMois(2026, 10),
     () => s.dernierCumulDuMois(2026, 10),
+    () => s.pmPrecedent('2026-10-15', 2026, 10),
   ]) {
     let leve = false
     try { await appel() } catch { leve = true }

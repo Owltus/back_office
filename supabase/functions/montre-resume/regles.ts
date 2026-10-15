@@ -7,6 +7,7 @@
 //   - stayKind             : src/lib/pdj/csv.ts
 //   - compteurs PDJ        : BreakfastBoard.tsx (`stats`, boucle sur ALL_ROOMS)
 //   - barre de progression : SummaryCards.tsx (precedent / caJour / projete)
+//   - « Pris depuis la veille » : DashboardBoard.tsx (pickup)
 
 const plage = (debut: number, fin: number) =>
   Array.from({ length: fin - debut + 1 }, (_, i) => debut + i)
@@ -64,10 +65,13 @@ export interface EntreeRep {
   /** Rapport du jour (J-1), ou null s'il n'est pas arrivé. */
   rapport: {
     rj_to: number
+    rj_nuitees: number
     rj_room_revenue: number
     rmtd_room_revenue: number
     pm_room_revenue: number
   } | null
+  /** pm_room_revenue du dernier rapport ANTÉRIEUR du même mois, ou null. */
+  pmPrecedent: number | null
   /** Cumul du dernier rapport du mois (mode partiel seulement). */
   dernierCumulDuMois: number | null
   /** Σ forecast_days.rev_ttc du mois, ou null si aucune prévision. */
@@ -82,6 +86,14 @@ export interface ResumeRep {
   pct_veille: number | null
   pct_projete: number | null
   to: number | null
+  chambres: number | null
+  pris_veille: number | null
+}
+
+/** Arrondi à l'euro comme l'écran (Intl, demi-valeur loin de zéro), sans -0. */
+export function euroEntier(n: number): number {
+  const r = Math.sign(n) * Math.round(Math.abs(n))
+  return r === 0 ? 0 : r
 }
 
 /** Une décimale : la montre n'en affiche pas plus, et la réponse reste courte. */
@@ -117,5 +129,13 @@ export function resumeRep(e: EntreeRep): ResumeRep {
     pct_veille: partiel ? null : pct(caJour),
     pct_projete: pct(projete),
     to: e.rapport ? arrondi(e.rapport.rj_to) : null,
+    chambres: e.rapport ? e.rapport.rj_nuitees : null,
+    // Carte « Pris depuis la veille » (DashboardBoard.tsx:339-340) : écart du
+    // projeté fin de mois avec le dernier rapport antérieur du MÊME mois ; null
+    // sans rapport du jour ou sans rapport antérieur (1er du mois). En TTC.
+    pris_veille:
+      e.rapport && e.pmPrecedent != null
+        ? euroEntier(e.rapport.pm_room_revenue - e.pmPrecedent)
+        : null,
   }
 }

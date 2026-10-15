@@ -7,8 +7,10 @@
 //     comparé EN TEMPS CONSTANT au secret MONTRE_CLE (distinct d'IMPORT_SECRET,
 //     révocable seul : changer le secret, puis recompiler l'app de la montre).
 //   - Lecture seule, colonnes explicites (source.ts), réponse construite champ
-//     par champ (liste blanche, figée par les tests) : aucun montant en euros,
-//     aucune donnée nominative.
+//     par champ (liste blanche, figée par les tests) : aucune donnée
+//     nominative, et un SEUL montant en euros, `pris_veille` (carte « Pris
+//     depuis la veille », demandé explicitement par l'utilisateur) ; CA et
+//     budget ne sortent qu'en pourcentages.
 //   - Pas d'en-tête CORS (la montre n'est pas un navigateur), `no-store`, et la
 //     clé n'est jamais journalisée.
 //
@@ -86,15 +88,25 @@ export async function traiter(
       source.budgetMois(annee, mois),
       source.pdj(jourPdj),
     ])
-    // Mode partiel seulement : deux lectures de plus, sinon inutiles.
-    const [dernierCumulDuMois, forecastMois] = rapport
-      ? [null, null]
-      : await Promise.all([
-          source.dernierCumulDuMois(annee, mois),
-          source.forecastMois(annee, mois),
-        ])
+    // Avec rapport : le précédent du mois (« Pris depuis la veille »). En mode
+    // partiel : cumul et Forecast du mois. Jamais les trois.
+    const [pmPrecedent, dernierCumulDuMois, forecastMois] = rapport
+      ? [await source.pmPrecedent(jourRep, annee, mois), null, null]
+      : [
+          null,
+          ...(await Promise.all([
+            source.dernierCumulDuMois(annee, mois),
+            source.forecastMois(annee, mois),
+          ])),
+        ]
 
-    const rep = resumeRep({ rapport, dernierCumulDuMois, forecastMois, budgetMois })
+    const rep = resumeRep({
+      rapport,
+      pmPrecedent,
+      dernierCumulDuMois,
+      forecastMois,
+      budgetMois,
+    })
     const pdj = comptesPdj(lignesPdj)
     // Liste blanche : chaque champ est recopié un par un.
     return json({
@@ -105,6 +117,8 @@ export async function traiter(
         pct_veille: rep.pct_veille,
         pct_projete: rep.pct_projete,
         to: rep.to,
+        chambres: rep.chambres,
+        pris_veille: rep.pris_veille,
       },
       pdj: {
         date: jourPdj,

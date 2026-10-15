@@ -9,10 +9,17 @@ import type { LignePdj } from './regles.ts'
 export interface Source {
   rapport(date: string): Promise<{
     rj_to: number
+    rj_nuitees: number
     rj_room_revenue: number
     rmtd_room_revenue: number
     pm_room_revenue: number
   } | null>
+  /** pm_room_revenue du dernier rapport ANTÉRIEUR à `date` dans le même mois. */
+  pmPrecedent(
+    date: string,
+    annee: number,
+    mois: number,
+  ): Promise<number | null>
   dernierCumulDuMois(annee: number, mois: number): Promise<number | null>
   forecastMois(annee: number, mois: number): Promise<number | null>
   budgetMois(annee: number, mois: number): Promise<number | null>
@@ -21,7 +28,9 @@ export interface Source {
 
 /** Colonnes lues, figées ici et vérifiées par les tests. */
 export const COLONNES = {
-  rapport: 'rj_to,rj_room_revenue,rmtd_room_revenue,pm_room_revenue',
+  rapport:
+    'rj_to,rj_nuitees,rj_room_revenue,rmtd_room_revenue,pm_room_revenue',
+  precedent: 'pm_room_revenue',
   cumul: 'rmtd_room_revenue',
   forecast: 'rev_ttc',
   budget: 'room_revenue',
@@ -48,6 +57,21 @@ export function sourceSupabase(client: ClientLecture): Source {
         .eq('date', date)
         .maybeSingle()
       return donnees(r, 'daily_reports')
+    },
+    async pmPrecedent(date, annee, mois) {
+      // Même lecture que 'rapportPrecedent' de repjour_dashboard : même mois,
+      // date strictement antérieure, la plus récente.
+      const r = await client
+        .from('daily_reports')
+        .select(COLONNES.precedent)
+        .eq('year', annee)
+        .eq('month', mois)
+        .lt('date', date)
+        .order('date', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      const l = donnees<{ pm_room_revenue: number } | null>(r, 'daily_reports')
+      return l ? l.pm_room_revenue : null
     },
     async dernierCumulDuMois(annee, mois) {
       const r = await client
