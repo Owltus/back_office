@@ -1,10 +1,14 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { fc, test } from '@fast-check/vitest'
 
 import {
   REF_PROD,
   arretAvantProd,
+  arretsReglagesFonctions,
   arretsSansClavier,
+  changementsConfig,
   bilanEchec,
   choixControles,
   descriptionLivraison,
@@ -475,5 +479,136 @@ describe('arretsSansClavier', () => {
     ).toMatch(/SUPPRIMER/)
     expect(arretsSansClavier({ ...rien, configToml: true })).toHaveLength(1)
     expect(arretsSansClavier({ ...rien, worker: true })).toHaveLength(1)
+  })
+  it('reprend les arrêts des réglages de fonctions', () => {
+    expect(
+      arretsSansClavier({ ...rien, reglagesFonctions: ['x', 'y'] }),
+    ).toEqual(['x', 'y'])
+  })
+})
+
+// Oracle : décision utilisateur du 2026-10-16 — seul un changement HORS
+// [functions.*] (Auth…) exige le clavier ; un réglage de fonction doit partir
+// avec sa fonction et rester d'accord avec SANS_VERIF_JWT.
+describe('changementsConfig', () => {
+  const base = [
+    'project_id = "back_office"',
+    '[auth]',
+    'site_url = "http://localhost:3000"',
+    '# commentaire',
+    '[functions.import-report]',
+    'verify_jwt = false',
+  ].join('\n')
+
+  it('rien de changé', () => {
+    expect(changementsConfig(base, base)).toEqual({
+      horsFonctions: false,
+      fonctions: [],
+    })
+  })
+  it('commentaires et lignes vides ne comptent pas', () => {
+    const apres = base.replace('# commentaire', '\n# autre\n\n')
+    expect(changementsConfig(base, apres).horsFonctions).toBe(false)
+  })
+  it('section de fonction ajoutée : seulement cette fonction', () => {
+    const apres = `${base}\n\n# montre\n[functions.montre-resume]\nverify_jwt = false\n`
+    expect(changementsConfig(base, apres)).toEqual({
+      horsFonctions: false,
+      fonctions: ['montre-resume'],
+    })
+  })
+  it('section de fonction retirée ou modifiée : comptée', () => {
+    const sans = base.replace(
+      '[functions.import-report]\nverify_jwt = false',
+      '',
+    )
+    expect(changementsConfig(base, sans).fonctions).toEqual(['import-report'])
+    const autre = base.replace('verify_jwt = false', 'verify_jwt = true')
+    expect(changementsConfig(base, autre).fonctions).toEqual(['import-report'])
+  })
+  it('réglage Auth changé : hors fonctions', () => {
+    const apres = base.replace('localhost:3000', 'exemple.test')
+    expect(changementsConfig(base, apres).horsFonctions).toBe(true)
+  })
+  it('préambule ou nouvelle section non fonction : hors fonctions', () => {
+    expect(changementsConfig(base, `x = 1\n${base}`).horsFonctions).toBe(true)
+    expect(
+      changementsConfig(base, `${base}\n[auth.email]\nenable_signup = true`)
+        .horsFonctions,
+    ).toBe(true)
+  })
+  it('une ligne déplacée d’une section Auth vers une fonction : hors fonctions', () => {
+    const apres = base
+      .replace('site_url = "http://localhost:3000"\n', '')
+      .concat('\nsite_url = "http://localhost:3000"')
+    expect(changementsConfig(base, apres).horsFonctions).toBe(true)
+  })
+  test.prop([fc.string(), fc.string()])(
+    'toute ligne ajoutée hors [functions.*] est vue',
+    (cle, val) => {
+      const ligne = `${cle.replace(/[\r\n#[\]]/g, '')}k = "${val.replace(/[\r\n]/g, '')}"`
+      const apres = base.replace('[auth]', `[auth]\n${ligne}`)
+      expect(changementsConfig(base, apres).horsFonctions).toBe(true)
+    },
+  )
+})
+
+describe('arretsReglagesFonctions', () => {
+  const toml = [
+    '[functions.import-report]',
+    'verify_jwt = false',
+    '[functions.montre-resume]',
+    'verify_jwt = false',
+  ].join('\n')
+  const sansVerif = new Set(['import-report', 'montre-resume'])
+
+  it('cas de la montre : rien à redire', () => {
+    expect(
+      arretsReglagesFonctions({
+        apres: toml,
+        changees: ['montre-resume'],
+        deployees: ['montre-resume'],
+        sansVerif,
+      }),
+    ).toEqual([])
+  })
+  it('section changée pour une fonction qui ne part pas : arrêt', () => {
+    expect(
+      arretsReglagesFonctions({
+        apres: toml,
+        changees: ['montre-resume'],
+        deployees: [],
+        sansVerif,
+      })[0],
+    ).toMatch(/ne part pas/)
+  })
+  it('verify_jwt = false absent de SANS_VERIF_JWT : arrêt', () => {
+    expect(
+      arretsReglagesFonctions({
+        apres: toml,
+        changees: [],
+        deployees: [],
+        sansVerif: new Set(['import-report']),
+      })[0],
+    ).toMatch(/montre-resume.*SANS_VERIF_JWT/)
+  })
+  it('SANS_VERIF_JWT sans verify_jwt = false : arrêt', () => {
+    expect(
+      arretsReglagesFonctions({
+        apres: toml.replace(/verify_jwt = false$/, 'verify_jwt = true'),
+        changees: [],
+        deployees: [],
+        sansVerif,
+      })[0],
+    ).toMatch(/montre-resume.*diffèrent/)
+  })
+  it('le vrai config.toml est d’accord avec le vrai SANS_VERIF_JWT', () => {
+    const vrai = readFileSync(
+      join(import.meta.dirname, '..', 'supabase', 'config.toml'),
+      'utf8',
+    )
+    expect(
+      arretsReglagesFonctions({ apres: vrai, changees: [], deployees: [] }),
+    ).toEqual([])
   })
 })

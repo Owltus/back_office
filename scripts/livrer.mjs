@@ -35,7 +35,9 @@ import {
   REF_PROD,
   arretAvantProd,
   bilanEchec,
+  arretsReglagesFonctions,
   arretsSansClavier,
+  changementsConfig,
   choixControles,
   descriptionLivraison,
   ecartNonCapture,
@@ -471,6 +473,31 @@ async function livrer() {
     .filter((d) => d.isDirectory() && !d.name.startsWith('_'))
     .map((d) => d.name)
   const fonctions = fonctionsModifiees(changes, toutes)
+  // config.toml : réglages de fonctions (partent avec le déploiement) ou
+  // autres réglages (Auth…, à reporter à la main : arrêt sans clavier).
+  const config = changes.includes('supabase/config.toml')
+    ? (() => {
+        const apres = lancer([
+          'git',
+          'show',
+          'HEAD:supabase/config.toml',
+        ]).sortie
+        const avant = lancer(['git', 'show', 'prod:supabase/config.toml'], {
+          accepterEchec: true,
+        })
+        const c = avant.ok
+          ? changementsConfig(avant.sortie, apres)
+          : { horsFonctions: true, fonctions: [] }
+        return {
+          ...c,
+          arrets: arretsReglagesFonctions({
+            apres,
+            changees: c.fonctions,
+            deployees: fonctions,
+          }),
+        }
+      })()
+    : { horsFonctions: false, fonctions: [], arrets: [] }
   const lecture = lancer([
     'supabase',
     'secrets',
@@ -494,10 +521,15 @@ async function livrer() {
   const avert = []
   if (manquants.length)
     avert.push(`Secrets absents en prod : ${manquants.join(', ')}`)
-  if (changes.includes('supabase/config.toml'))
+  if (config.horsFonctions)
     avert.push(
       'supabase/config.toml a changé : les réglages Auth ne partent PAS, reportez-les à la main dans le dashboard.',
     )
+  else if (config.fonctions.length)
+    console.log(
+      `config.toml : seuls les réglages de fonctions ont changé (${config.fonctions.join(', ')}), appliqués au déploiement.`,
+    )
+  for (const a of config.arrets) avert.push(a)
   if (
     changes.some((f) => f.startsWith('cloudflare/') || f.startsWith('worker/'))
   )
@@ -541,7 +573,8 @@ async function livrer() {
       destructives: migrations
         .filter((m) => m.destructrices.length)
         .map((m) => m.nom),
-      configToml: changes.includes('supabase/config.toml'),
+      configToml: config.horsFonctions,
+      reglagesFonctions: config.arrets,
       worker: changes.some(
         (f) => f.startsWith('cloudflare/') || f.startsWith('worker/'),
       ),

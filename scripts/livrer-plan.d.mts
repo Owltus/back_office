@@ -67,6 +67,18 @@ export declare function arretsSansClavier(e: {
   destructives: Array<string>
   configToml: boolean
   worker: boolean
+  reglagesFonctions?: Array<string>
+}): Array<string>
+export declare function sectionsToml(texte: string): Map<string, Array<string>>
+export declare function changementsConfig(
+  avant: string,
+  apres: string,
+): { horsFonctions: boolean; fonctions: Array<string> }
+export declare function arretsReglagesFonctions(e: {
+  apres: string
+  changees: Array<string>
+  deployees: Array<string>
+  sansVerif?: ReadonlySet<string>
 }): Array<string>
 export declare function lignesDonnees(sql: string): Array<string>
 export declare function ecartNonCapture(sortie: string): string

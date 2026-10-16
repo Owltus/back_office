@@ -219,8 +219,12 @@ export function descriptionLivraison(e) {
  * Avant le 2026-10-15, `printf 'LIVRER\nSUPPRIMER\n'` aurait suffi à
  * franchir la seconde confirmation.
  *
+ * `configToml` = un réglage HORS sections [functions.*] a changé ;
+ * `reglagesFonctions` = arrêts de `arretsReglagesFonctions`.
+ *
  * @param {{ destructives: Array<string>, configToml: boolean, worker: boolean,
- *   avecDonnees?: Array<string>, donneesAcceptees?: boolean }} e
+ *   avecDonnees?: Array<string>, donneesAcceptees?: boolean,
+ *   reglagesFonctions?: Array<string> }} e
  */
 export function arretsSansClavier(e) {
   const arrets = []
@@ -240,6 +244,103 @@ export function arretsSansClavier(e) {
     arrets.push(
       'Le Worker Cloudflare a changé : son déploiement est à part, à voir avec l’utilisateur.',
     )
+  for (const r of e.reglagesFonctions ?? []) arrets.push(r)
+  return arrets
+}
+
+// ── config.toml : réglages de fonctions ou réglages Auth ? ────────────────
+// Décision utilisateur du 2026-10-16 : un config.toml qui ne change QUE des
+// sections [functions.*] ne bloque plus l'envoi sans clavier. Ces réglages
+// partent avec le déploiement de la fonction (verify_jwt via SANS_VERIF_JWT),
+// alors que les réglages Auth, eux, ne partent jamais et restent un arrêt.
+
+const estSectionFonction = (entete) => /^\[functions\.[^\]]+\]$/.test(entete)
+
+/**
+ * Sections d'un config.toml : en-tête → lignes utiles (commentaires pleine
+ * ligne et lignes vides ignorés). Le préambule a l'en-tête ''. Un en-tête
+ * répété (`[[x]]`) reçoit un rang pour rester distinct.
+ *
+ * @param {string} texte
+ * @returns {Map<string, Array<string>>}
+ */
+export function sectionsToml(texte) {
+  const sections = new Map([['', []]])
+  let courante = ''
+  for (const brute of texte.split(/\r?\n/)) {
+    const l = brute.trim()
+    if (!l || l.startsWith('#')) continue
+    if (/^\[.*\]$/.test(l)) {
+      let cle = l
+      for (let n = 2; sections.has(cle); n++) cle = `${l}#${n}`
+      sections.set(cle, [])
+      courante = cle
+      continue
+    }
+    sections.get(courante)?.push(l)
+  }
+  return sections
+}
+
+/** Nom de la fonction d'un en-tête `[functions.<nom>]`. */
+const nomFonction = (entete) => entete.slice('[functions.'.length, -1)
+
+/**
+ * Ce qui a changé entre deux config.toml : `horsFonctions` = un réglage
+ * AUTRE qu'une section [functions.*] (Auth, API…, à reporter à la main) ;
+ * `fonctions` = les fonctions dont la section a changé, apparu ou disparu.
+ *
+ * @param {string} avant
+ * @param {string} apres
+ */
+export function changementsConfig(avant, apres) {
+  const a = sectionsToml(avant)
+  const b = sectionsToml(apres)
+  let horsFonctions = false
+  const fonctions = new Set()
+  for (const cle of new Set([...a.keys(), ...b.keys()])) {
+    const egal = (a.get(cle) ?? []).join('\n') === (b.get(cle) ?? []).join('\n')
+    const present = a.has(cle) && b.has(cle)
+    if (egal && present) continue
+    if (estSectionFonction(cle)) fonctions.add(nomFonction(cle))
+    else horsFonctions = true
+  }
+  return { horsFonctions, fonctions: [...fonctions].sort() }
+}
+
+/**
+ * Arrêts propres aux réglages de fonctions : une section changée pour une
+ * fonction qui ne part pas (le réglage ne serait pas appliqué), ou un
+ * verify_jwt du config.toml qui contredit SANS_VERIF_JWT (la prod et le
+ * local ne protégeraient pas la fonction de la même façon).
+ *
+ * @param {{ apres: string, changees: Array<string>, deployees: Array<string>,
+ *   sansVerif?: ReadonlySet<string> }} e
+ */
+export function arretsReglagesFonctions(e) {
+  const sansVerif = e.sansVerif ?? SANS_VERIF_JWT
+  const arrets = []
+  for (const f of e.changees)
+    if (!e.deployees.includes(f))
+      arrets.push(
+        `config.toml : la section de ${f} a changé mais la fonction ne part pas, son réglage ne serait pas appliqué.`,
+      )
+  const sansJwtToml = new Set()
+  for (const [cle, lignes] of sectionsToml(e.apres)) {
+    if (!estSectionFonction(cle)) continue
+    if (lignes.some((l) => /^verify_jwt\s*=\s*false$/.test(l)))
+      sansJwtToml.add(nomFonction(cle))
+  }
+  for (const f of sansJwtToml)
+    if (!sansVerif.has(f))
+      arrets.push(
+        `config.toml : ${f} est sans vérification JWT en local mais pas dans SANS_VERIF_JWT : la prod la protégerait autrement.`,
+      )
+  for (const f of sansVerif)
+    if (!sansJwtToml.has(f))
+      arrets.push(
+        `config.toml : ${f} est dans SANS_VERIF_JWT sans verify_jwt = false dans config.toml : la prod et le local diffèrent.`,
+      )
   return arrets
 }
 
