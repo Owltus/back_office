@@ -45,6 +45,7 @@ import {
   fonctionsModifiees,
   lignesDestructrices,
   lignesDonnees,
+  workerModifie,
   lignesJson,
   planEnvoi,
   nomsSecrets,
@@ -538,9 +539,7 @@ async function livrer() {
       `config.toml : seuls les réglages de fonctions ont changé (${config.fonctions.join(', ')}), appliqués au déploiement.`,
     )
   for (const a of config.arrets) avert.push(a)
-  if (
-    changes.some((f) => f.startsWith('cloudflare/') || f.startsWith('worker/'))
-  )
+  if (workerModifie(changes))
     avert.push(
       'Le Worker Cloudflare a changé : il ne part pas avec livrer (déploiement Wrangler à faire à la main, puis surveiller ses journaux).',
     )
@@ -583,9 +582,7 @@ async function livrer() {
         .map((m) => m.nom),
       configToml: config.horsFonctions,
       reglagesFonctions: config.arrets,
-      worker: changes.some(
-        (f) => f.startsWith('cloudflare/') || f.startsWith('worker/'),
-      ),
+      worker: workerModifie(changes),
       avecDonnees: migrations.filter((m) => m.donnees.length).map((m) => m.nom),
       donneesAcceptees: process.argv.includes('--avec-donnees'),
     })

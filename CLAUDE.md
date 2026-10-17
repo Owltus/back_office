@@ -48,7 +48,11 @@ migration new`, ou essais dans Studio puis `supabase db diff --local -f
   résumé, `LIVRER`, puis base → fonctions → site → étiquette git `prod`.
   `--essai` s'arrête au résumé. Seuls code et schéma partent, JAMAIS de
   données. Une migration qui retire (`drop`, `rename`) exige `SUPPRIMER` :
-  ajouter d'abord, retirer à la livraison suivante.
+  ajouter d'abord, retirer à la livraison suivante. Ne comptent PAS comme
+  retrait (décision utilisateur du 2026-10-17, « pour que tout soit
+  fluide ») : le corps d'un `create function`, une policy ou un trigger
+  retiré puis recréé sous le même nom sur la même table, un `revoke` sur une
+  fonction créée par la même migration, un fichier de test sous `cloudflare/`.
 - **PROTOCOLE DE L'ASSISTANT (décision utilisateur du 2026-10-14, « je veux
   que ce soit solide »)** :
   1. **Toute demande de modifier la base** (« change la table X », « corrige

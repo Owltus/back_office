@@ -81,4 +81,5 @@ export declare function arretsReglagesFonctions(e: {
   sansVerif?: ReadonlySet<string>
 }): Array<string>
 export declare function lignesDonnees(sql: string): Array<string>
+export declare function workerModifie(fichiers: Array<string>): boolean
 export declare function ecartNonCapture(sortie: string): string

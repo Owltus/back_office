@@ -69,11 +69,20 @@ export function instructionsSql(sql) {
   const res = []
   let texte = ''
   let masque = ''
+  // Même masque, corps `$…$` VIDÉS : ce que voit la recherche dans un
+  // `create function` (son corps ne tourne pas pendant la migration).
+  let sansCorps = ''
   const pousser = () => {
     const t = texte.replace(/\s+/g, ' ').trim()
-    if (t) res.push({ texte: t, masque: masque.replace(/\s+/g, ' ').trim() })
+    if (t)
+      res.push({
+        texte: t,
+        masque: masque.replace(/\s+/g, ' ').trim(),
+        sansCorps: sansCorps.replace(/\s+/g, ' ').trim(),
+      })
     texte = ''
     masque = ''
+    sansCorps = ''
   }
   const n = sql.length
   let i = 0
@@ -85,6 +94,7 @@ export function instructionsSql(sql) {
       i = fin < 0 ? n : fin
       texte += ' '
       masque += ' '
+      sansCorps += ' '
       continue
     }
     if (c === '/' && suiv === '*') {
@@ -101,6 +111,7 @@ export function instructionsSql(sql) {
       }
       texte += ' '
       masque += ' '
+      sansCorps += ' '
       continue
     }
     if (c === "'" || c === '"') {
@@ -118,6 +129,7 @@ export function instructionsSql(sql) {
       }
       texte += sql.slice(i, j + 1)
       masque += c + c
+      sansCorps += c + c
       i = j + 1
       continue
     }
@@ -128,6 +140,7 @@ export function instructionsSql(sql) {
         const j = fin < 0 ? n : fin + m[0].length
         texte += sql.slice(i, j)
         masque += sql.slice(i, j)
+        sansCorps += `${m[0]}${m[0]}`
         i = j
         continue
       }
@@ -139,6 +152,7 @@ export function instructionsSql(sql) {
     }
     texte += c
     masque += c
+    sansCorps += c
     i++
   }
   pousser()
@@ -147,10 +161,45 @@ export function instructionsSql(sql) {
 
 const tronquer = (s) => (s.length > 160 ? `${s.slice(0, 157)}…` : s)
 
+// Fausses alertes levées le 2026-10-17 (demande utilisateur : « ce ne sont
+// pas des mises à jour destructrices ») : le corps d'un `create function`
+// ne tourne pas pendant la migration (un `do $$ … $$`, lui, tourne) ; une
+// policy ou un trigger retiré puis RECRÉÉ sous le même nom dans la même
+// migration est un remplacement ; un `revoke` sur une fonction que la
+// migration crée elle-même n'enlève rien dont l'ancien code dépende.
+const CREE_ROUTINE = /^create\s+(?:or\s+replace\s+)?(?:function|procedure)\b/i
+
+/** Le masque à chercher : sans le corps d'une fonction créée. */
+const masqueUtile = ({ masque, sansCorps }) =>
+  CREE_ROUTINE.test(masque) ? sansCorps : masque
+
+/** Nom d'objet comparable : guillemets gardés, le reste en minuscules. */
+const nomSql = (n) =>
+  n.replace(/"[^"]*"|[^"]+/g, (p) => (p.startsWith('"') ? p : p.toLowerCase()))
+
+const NOM = String.raw`((?:"[^"]*"|[\w$]+)(?:\.(?:"[^"]*"|[\w$]+))?)`
+const CREE_OBJET = new RegExp(
+  String.raw`^create\s+(?:or\s+replace\s+)?(?:constraint\s+)?(policy|trigger)\s+${NOM}\s.*?\bon\s+${NOM}`,
+  'i',
+)
+const RETIRE_OBJET = new RegExp(
+  String.raw`^drop\s+(policy|trigger)\s+(?:if\s+exists\s+)?${NOM}\s+on\s+${NOM}\s*(?:restrict)?$`,
+  'i',
+)
+const CREE_FONCTION = new RegExp(
+  String.raw`^create\s+(?:or\s+replace\s+)?(?:function|procedure)\s+${NOM}\s*\(`,
+  'i',
+)
+const REVOKE_FONCTION = new RegExp(
+  String.raw`^revoke\s+(?:all|execute)(?:\s+privileges)?\s+on\s+(?:function|procedure|routine)\s+${NOM}\s*\([^)]*\)\s+from\s+[\w\s,]+$`,
+  'i',
+)
+
 /** Les instructions dont le masque répond à l'un des motifs. */
-const instructionsQui = (sql, motifs) =>
+const instructionsQui = (sql, motifs, ignorer = () => false) =>
   instructionsSql(sql)
-    .filter(({ masque }) => motifs.some((re) => re.test(masque)))
+    .filter((i) => !ignorer(i))
+    .filter((i) => motifs.some((re) => re.test(masqueUtile(i))))
     .map(({ texte }) => tronquer(texte))
 
 /**
@@ -158,7 +207,25 @@ const instructionsQui = (sql, motifs) =>
  * découpé en instructions : une instruction sur deux lignes est vue entière).
  */
 export function lignesDestructrices(sql) {
-  return instructionsQui(sql, DESTRUCTIF)
+  const instructions = instructionsSql(sql)
+  const recrees = new Set()
+  const fonctions = new Set()
+  for (const { texte } of instructions) {
+    const o = CREE_OBJET.exec(texte)
+    if (o) recrees.add(`${o[1].toLowerCase()} ${nomSql(o[2])} ${nomSql(o[3])}`)
+    const f = CREE_FONCTION.exec(texte)
+    if (f) fonctions.add(nomSql(f[1]))
+  }
+  const remplacement = ({ texte }) => {
+    const r = RETIRE_OBJET.exec(texte)
+    if (r)
+      return recrees.has(
+        `${r[1].toLowerCase()} ${nomSql(r[2])} ${nomSql(r[3])}`,
+      )
+    const v = REVOKE_FONCTION.exec(texte)
+    return Boolean(v && fonctions.has(nomSql(v[1])))
+  }
+  return instructionsQui(sql, DESTRUCTIF, remplacement)
 }
 
 /**
@@ -175,6 +242,21 @@ const DONNEES = [
   /\bcopy\s+[\w."]+/i,
   /\btruncate\b/i,
 ]
+
+/**
+ * Le code du Worker Cloudflare a-t-il changé ? Un fichier de test
+ * (`*.test.*`) ne se déploie pas : il ne compte pas (2026-10-17, l'ajout de
+ * `worker.audit.test.ts` arrêtait la livraison pour rien).
+ */
+export function workerModifie(fichiers) {
+  return fichiers
+    .map((f) => f.replace(/\\/g, '/'))
+    .some(
+      (f) =>
+        (f.startsWith('cloudflare/') || f.startsWith('worker/')) &&
+        !/\.test\.[cm]?[jt]sx?$/.test(f),
+    )
+}
 
 /** Les instructions d'une migration qui écrivent des données. */
 export function lignesDonnees(sql) {
