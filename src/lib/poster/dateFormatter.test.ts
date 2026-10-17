@@ -295,7 +295,14 @@ describe('parseDateStr / formatDateStr — fuseaux', () => {
       process.env.TZ = tz
       fc.assert(
         fc.property(
-          dateValide.filter((d) => d.a >= 1900 && d.a <= 2100),
+          // Kiritimati est passé de UTC−10 à UTC+14 en SAUTANT le 31/12/1994 :
+          // ce jour n'existe pas en heure locale, aucun aller-retour possible.
+          dateValide.filter(
+            (d) =>
+              d.a >= 1900 &&
+              d.a <= 2100 &&
+              !(tz === 'Pacific/Kiritimati' && d.iso === '1994-12-31'),
+          ),
           ({ a, m, j, iso }) => {
             const d = parseDateStr(iso)
             expect(d).toBeDefined()
