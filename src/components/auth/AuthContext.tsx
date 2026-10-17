@@ -19,7 +19,10 @@ import {
 } from '#/lib/backendHealth.ts'
 import { errorMessage } from '#/lib/errors.ts'
 import { parseMyAccess } from '#/lib/auth/access.ts'
-import { effacerSessionLocale } from '#/lib/auth/sessionLocale.ts'
+import {
+  deconnexionDurcie,
+  fermerSessionInactive,
+} from '#/lib/auth/sessionLocale.ts'
 import {
   clearCachedPerms,
   readCachedPerms,
@@ -280,7 +283,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // séance (signOut → onAuthStateChange → AppAuthGate renvoie vers /login).
         if (!access.profile) {
           clearProfile()
-          await supabase.auth.signOut()
+          // Déconnexion durcie : un signOut() nu qui échoue laisserait la
+          // session du compte supprimé sur le poste partagé.
+          await deconnexionDurcie(supabase.auth, () => window.localStorage)
           return
         }
 
@@ -333,18 +338,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return isInactiveTooLong(readLastActive(), Date.now())
     }
 
+    /**
+     * Fermeture pour inactivité : état vidé AUSSITÔT (renvoi sur /login),
+     * puis déconnexion DURCIE (audit du 2026-10-17) — un `signOut()` nu
+     * échouait en panne et laissait la session sur le poste partagé, rouverte
+     * au démarrage suivant. L'horodatage n'est effacé qu'après (voir
+     * `fermerSessionInactive`). Appelée par applyUser ET revalidate.
+     */
+    function fermerParInactivite() {
+      changerDeCompte(null)
+      clearProfile()
+      clearPerms()
+      setUser(null)
+      userIdRef.current = null
+      setLoading(false)
+      void fermerSessionInactive(supabase.auth, () => window.localStorage)
+    }
+
     function applyUser(nextUser: User | null) {
       // Cache de données : un compte, un cache (poste partagé, accès par
       // classeur). Vidé AVANT que la page ne lise quoi que ce soit.
       changerDeCompte(nextUser && !expiredByInactivity() ? nextUser.id : null)
       if (nextUser && expiredByInactivity()) {
-        clearLastActive()
-        clearProfile()
-        clearPerms()
-        setUser(null)
-        userIdRef.current = null
-        setLoading(false)
-        void supabase.auth.signOut()
+        fermerParInactivite()
         return
       }
       if (nextUser) writeLastActive(Date.now())
@@ -428,8 +444,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (document.visibilityState !== 'visible') return
       // Retour après plus de 24 h sans activité : fermeture de session.
       if (expiredByInactivity()) {
-        clearLastActive()
-        void supabase.auth.signOut()
+        fermerParInactivite()
         return
       }
       writeLastActive(Date.now())
@@ -479,16 +494,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // nous-mêmes, sinon le compte se reconnecte au retour du backend sur un
     // poste partagé. Et comme SIGNED_OUT n'est alors pas émis, le cache du
     // compte est vidé ici explicitement.
-    const { error } = await supabase.auth
-      .signOut()
-      .catch((err: unknown) => ({ error: err }))
-    if (error) {
-      try {
-        effacerSessionLocale(window.localStorage)
-      } catch {
-        // Stockage indisponible : rien à effacer.
-      }
-    }
+    await deconnexionDurcie(supabase.auth, () => window.localStorage)
     changerDeCompte(null)
     setUser(null)
     userIdRef.current = null

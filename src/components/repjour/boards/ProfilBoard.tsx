@@ -13,6 +13,7 @@ import { ROLE_LABELS } from '#/lib/repjour/roles.ts'
 import { Input } from '#/components/ui/input.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { messageMotDePasse } from '#/lib/auth/messages.ts'
+import { verifierMotDePasseActuel } from '#/lib/auth/motDePasseActuel.ts'
 
 /*
  * Profil personnel (tous rôles) — porté de la source ProfilePage.
@@ -20,7 +21,8 @@ import { messageMotDePasse } from '#/lib/auth/messages.ts'
  * Deux écritures, reprises À L'IDENTIQUE de la source :
  *   1. update de SA PROPRE ligne `profiles` (prénom / nom / display_name) ;
  *   2. changement de SON PROPRE mot de passe via `supabase.auth.updateUser`
- *      (self-service, PAS la RPC admin).
+ *      (self-service, PAS la RPC admin), APRÈS vérification du mot de passe
+ *      ACTUEL (audit du 2026-10-17, `lib/auth/motDePasseActuel.ts`).
  *
  * S'appuie sur `useAuth` (user / profile / refreshProfile). Aucun DDL. Restylé
  * du thème CLAIR source vers le thème DARK du Back Office (tokens shadcn).
@@ -33,6 +35,7 @@ export function ProfilBoard() {
   // profil arrive après coup (chargement en arrière-plan).
   const [firstName, setFirstName] = useState(() => profile?.first_name ?? '')
   const [lastName, setLastName] = useState(() => profile?.last_name ?? '')
+  const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmNewPassword, setConfirmNewPassword] = useState('')
   const [saving, setSaving] = useState(false)
@@ -78,6 +81,17 @@ export function ProfilBoard() {
         echec('Les mots de passe ne correspondent pas')
         return
       }
+      // Mot de passe ACTUEL exigé (poste partagé : une session restée
+      // ouverte ne doit pas suffire). Vérifié AVANT toute écriture.
+      const verification = await verifierMotDePasseActuel(
+        supabase.auth,
+        user.email,
+        currentPassword,
+      )
+      if (!verification.ok) {
+        echec(verification.message)
+        return
+      }
     }
 
     try {
@@ -104,6 +118,7 @@ export function ProfilBoard() {
           echec(`Nom enregistré. ${messageMotDePasse(pwError)}`)
           return
         }
+        setCurrentPassword('')
         setNewPassword('')
         setConfirmNewPassword('')
       }
@@ -240,6 +255,22 @@ export function ProfilBoard() {
           <h2 className="text-sm font-semibold text-foreground">
             Modifier le mot de passe
           </h2>
+          <div>
+            <label
+              htmlFor="profil-mot-de-passe-actuel"
+              className="mb-1 block text-xs text-muted-foreground"
+            >
+              Mot de passe actuel (exigé pour le modifier)
+            </label>
+            <Input
+              id="profil-mot-de-passe-actuel"
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              placeholder="Mot de passe actuel"
+              autoComplete="current-password"
+            />
+          </div>
           <PasswordInput
             value={newPassword}
             onChange={setNewPassword}
