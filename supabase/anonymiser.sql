@@ -16,7 +16,8 @@
 --   - Commentaires libres → '' (colonnes NOT NULL).
 --   - baby_cot_assignments.label : texte libre ; gardé s'il n'est qu'un
 --     numéro de chambre, sinon traité comme un nom.
---   - audit_log.old_data : ces clés sont retirées des copies de lignes.
+--   - audit_log.old_data : ces clés (et `company`) sont retirées des copies
+--     de lignes, à la racine et dans les copies `old` / `new` d'un UPDATE.
 -- Conservé : personnel (profiles, auteurs), sociétés (pdj.company, sauf
 -- égale au nom), adresses des destinataires du rapport (e-mails locaux →
 -- Mailpit, D12), contenu des classeurs (documents internes, PAS des données
@@ -88,11 +89,26 @@ update public.caisse_sheets set comment = '' where comment <> '';
 update public.literie_sheets set comment = '' where comment <> '';
 update public.rapro_sheets set comment = '' where comment <> '';
 
+-- Copies de lignes du journal : les clés nominatives sont retirées à la
+-- racine (INSERT, DELETE) ET dans les copies `old` / `new` d'un UPDATE
+-- (`private.log_row_change` écrit {old, new}). `company` aussi (audit du
+-- 2026-10-17) : la société d'un particulier est son nom, et la copie du
+-- journal n'a pas été vidée comme pdj_breakfasts.company plus haut.
 update public.audit_log
-set old_data = old_data - 'guest_name' - 'client' - 'comment' - 'label'
-where old_data ?| array['guest_name', 'client', 'comment', 'label'];
+set old_data = (old_data - array['guest_name', 'client', 'comment', 'label', 'company'])
+  || case when jsonb_typeof(old_data -> 'old') = 'object'
+       then jsonb_build_object('old', (old_data -> 'old') - array['guest_name', 'client', 'comment', 'label', 'company'])
+       else '{}'::jsonb end
+  || case when jsonb_typeof(old_data -> 'new') = 'object'
+       then jsonb_build_object('new', (old_data -> 'new') - array['guest_name', 'client', 'comment', 'label', 'company'])
+       else '{}'::jsonb end
+where jsonb_typeof(old_data) = 'object'
+  and (old_data ?| array['guest_name', 'client', 'comment', 'label', 'company']
+    or (old_data -> 'old') ?| array['guest_name', 'client', 'comment', 'label', 'company']
+    or (old_data -> 'new') ?| array['guest_name', 'client', 'comment', 'label', 'company']);
 
--- Contrôle : plus aucun nom hors « Client n » (sinon tout est annulé).
+-- Contrôle : plus aucun nom hors « Client n », ni aucune clé nominative dans
+-- le journal (sinon tout est annulé).
 do $$
 declare
   restes bigint;
@@ -104,6 +120,11 @@ begin
       where btrim(client) <> '' and client !~ '^Client [0-9]+$')
   + (select count(*) from public.baby_cot_assignments
       where btrim(label) <> '' and label !~ '^Client [0-9]+$' and btrim(label) !~ '^[0-9]{1,4}$')
+  + (select count(*) from public.audit_log
+      where jsonb_typeof(old_data) = 'object'
+        and (old_data ?| array['guest_name', 'client', 'comment', 'label', 'company']
+          or (old_data -> 'old') ?| array['guest_name', 'client', 'comment', 'label', 'company']
+          or (old_data -> 'new') ?| array['guest_name', 'client', 'comment', 'label', 'company']))
   into restes;
   if restes > 0 then
     raise exception 'Anonymisation incomplète : % nom(s) restant(s)', restes;

@@ -30,29 +30,135 @@ export function fonctionsModifiees(fichiers, toutes) {
  * 2026-10-13 : `drop constraint`, `drop col` sans `column`, `revoke`,
  * `alter column … type`, `delete`/`update` de masse passaient).
  */
+// `update [only] t [[as] alias] set` (audit du 2026-10-17 : l'alias et `only`
+// passaient). Un nom entre guillemets est déjà réduit à `""` par le masque.
+const UPDATE =
+  /\bupdate\s+(?:only\s+)?[\w."$]+(?:\s*\*)?(?:\s+(?:as\s+)?(?!set\b)[\w"$]+)?\s+set\b/i
+// Nom de colonne : `ALTER [ COLUMN ] c` — `COLUMN` est FACULTATIF.
+const COLONNE = String.raw`\balter\s+(?:column\s+)?(?:""|[\w$]+)\s+`
+
 const DESTRUCTIF = [
   /\bdrop\s+(?!default\b|not\s+null\b|identity\b)\w+/i,
   /\brename\b/i,
   /\brevoke\b/i,
   /\btruncate\b/i,
   /\bdelete\s+from\b/i,
-  /\bupdate\s+[\w."]+\s+set\b/i,
-  /\balter\s+column\s+\S+\s+(?:set\s+data\s+)?type\b/i,
-  /\balter\s+column\s+\S+\s+set\s+not\s+null\b/i,
+  UPDATE,
+  /\bmerge\s+into\b/i,
+  new RegExp(`${COLONNE}(?:set\\s+data\\s+)?type\\b`, 'i'),
+  new RegExp(`${COLONNE}set\\s+not\\s+null\\b`, 'i'),
+  // Déplacer un objet = le renommer pour l'ancien code.
+  /\balter\b.*\bset\s+schema\b/i,
 ]
 
 /**
+ * Découpe une migration en instructions, à la manière de PostgreSQL : un `;`,
+ * un `--` ou un `/*` DANS une chaîne `'…'` (`''` doublé, `E'\''`), un nom
+ * `"…"` ou un corps `$tag$…$tag$` n'est ni une fin d'instruction ni un
+ * commentaire (audit du 2026-10-17 : `'a -- b'` effaçait la suite de la
+ * ligne, donc un `drop` posé derrière). Commentaires remplacés par une espace
+ * (commentaires en bloc imbriqués compris).
+ *
+ * Rend, par instruction, `texte` (le texte d'origine, à montrer) et `masque`
+ * (chaînes et noms entre guillemets VIDÉS, pour la recherche : un commentaire
+ * `'drop table'` ou une policy `"drop"` ne sont pas des instructions). Les
+ * corps `$…$` sont GARDÉS dans le masque : un bloc `do $$ … $$` exécute ce
+ * qu'il contient.
+ */
+export function instructionsSql(sql) {
+  const res = []
+  let texte = ''
+  let masque = ''
+  const pousser = () => {
+    const t = texte.replace(/\s+/g, ' ').trim()
+    if (t) res.push({ texte: t, masque: masque.replace(/\s+/g, ' ').trim() })
+    texte = ''
+    masque = ''
+  }
+  const n = sql.length
+  let i = 0
+  while (i < n) {
+    const c = sql[i]
+    const suiv = sql[i + 1]
+    if (c === '-' && suiv === '-') {
+      const fin = sql.indexOf('\n', i)
+      i = fin < 0 ? n : fin
+      texte += ' '
+      masque += ' '
+      continue
+    }
+    if (c === '/' && suiv === '*') {
+      let prof = 1
+      i += 2
+      while (i < n && prof > 0) {
+        if (sql[i] === '/' && sql[i + 1] === '*') {
+          prof++
+          i += 2
+        } else if (sql[i] === '*' && sql[i + 1] === '/') {
+          prof--
+          i += 2
+        } else i++
+      }
+      texte += ' '
+      masque += ' '
+      continue
+    }
+    if (c === "'" || c === '"') {
+      // `E'…'` : la barre oblique inverse échappe.
+      const echappe =
+        c === "'" &&
+        /[eE]/.test(sql[i - 1] ?? '') &&
+        !/[\w$]/.test(sql[i - 2] ?? '')
+      let j = i + 1
+      while (j < n) {
+        if (echappe && sql[j] === '\\') j += 2
+        else if (sql[j] === c && sql[j + 1] === c) j += 2
+        else if (sql[j] === c) break
+        else j++
+      }
+      texte += sql.slice(i, j + 1)
+      masque += c + c
+      i = j + 1
+      continue
+    }
+    if (c === '$' && !/[\w$]/.test(sql[i - 1] ?? '')) {
+      const m = /^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/.exec(sql.slice(i))
+      if (m) {
+        const fin = sql.indexOf(m[0], i + m[0].length)
+        const j = fin < 0 ? n : fin + m[0].length
+        texte += sql.slice(i, j)
+        masque += sql.slice(i, j)
+        i = j
+        continue
+      }
+    }
+    if (c === ';') {
+      pousser()
+      i++
+      continue
+    }
+    texte += c
+    masque += c
+    i++
+  }
+  pousser()
+  return res
+}
+
+const tronquer = (s) => (s.length > 160 ? `${s.slice(0, 157)}…` : s)
+
+/** Les instructions dont le masque répond à l'un des motifs. */
+const instructionsQui = (sql, motifs) =>
+  instructionsSql(sql)
+    .filter(({ masque }) => motifs.some((re) => re.test(masque)))
+    .map(({ texte }) => tronquer(texte))
+
+/**
  * Les INSTRUCTIONS destructrices d'une migration (commentaires ôtés, texte
- * entier découpé sur `;` : une instruction sur deux lignes est vue entière).
+ * découpé en instructions : une instruction sur deux lignes est vue entière).
  */
 export function lignesDestructrices(sql) {
-  return sql
-    .replace(/\/\*[\s\S]*?\*\//g, ' ')
-    .replace(/--[^\n]*/g, ' ')
-    .split(';')
-    .map((s) => s.replace(/\s+/g, ' ').trim())
-    .filter((s) => s && DESTRUCTIF.some((re) => re.test(s)))
-    .map((s) => (s.length > 160 ? `${s.slice(0, 157)}…` : s))
+  return instructionsQui(sql, DESTRUCTIF)
 }
 
 /**
@@ -63,21 +169,16 @@ export function lignesDestructrices(sql) {
  */
 const DONNEES = [
   /\binsert\s+into\b/i,
-  /\bupdate\s+[\w."]+\s+set\b/i,
+  UPDATE,
   /\bdelete\s+from\b/i,
+  /\bmerge\s+into\b/i,
   /\bcopy\s+[\w."]+/i,
   /\btruncate\b/i,
 ]
 
 /** Les instructions d'une migration qui écrivent des données. */
 export function lignesDonnees(sql) {
-  return sql
-    .replace(/\/\*[\s\S]*?\*\//g, ' ')
-    .replace(/--[^\n]*/g, ' ')
-    .split(';')
-    .map((s) => s.replace(/\s+/g, ' ').trim())
-    .filter((s) => s && DONNEES.some((re) => re.test(s)))
-    .map((s) => (s.length > 160 ? `${s.slice(0, 157)}…` : s))
+  return instructionsQui(sql, DONNEES)
 }
 
 /**

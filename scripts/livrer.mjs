@@ -177,6 +177,14 @@ function afficherEcart({ absentes, ajoutees }, a, b, max = 30) {
 
 /** Question à l'écran ; Ctrl + C la REJETTE (sinon Node sortait sans délier). */
 function demander(question) {
+  // Filet (audit du 2026-10-17) : une réponse ne se lit JAMAIS sur une entrée
+  // qui n'est pas un clavier (tube, fichier, `printf … | node`).
+  if (!process.stdin.isTTY)
+    return Promise.reject(
+      new Error(
+        'Pas de clavier : cette confirmation se tape au clavier (une réponse passée par un tube est refusée).',
+      ),
+    )
   return new Promise((resolve, reject) => {
     const rl = createInterface({ input: process.stdin, output: process.stdout })
     rl.on('SIGINT', () => {
@@ -665,6 +673,13 @@ async function livrer() {
 // ── programme ──────────────────────────────────────────────────────────────
 
 try {
+  // `--amorcer` et `--reprendre-instantane` n'ont pas de voie sans clavier :
+  // refus AVANT toute liaison, comme le mode principal (audit du 2026-10-17 :
+  // leur réponse se lisait sur l'entrée standard, même passée par un tube).
+  if ((MODE === 'amorcer' || MODE === 'reprendre') && !process.stdin.isTTY)
+    throw new Error(
+      'Pas de clavier : ce mode se lance au clavier par l’utilisateur (livrer.bat), jamais avec une réponse passée par un tube.',
+    )
   if (existsSync(LIAISON)) {
     console.log(
       '⚠ Le poste était resté relié à la prod (fenêtre fermée pendant un usage précédent ?) : déliaison.',

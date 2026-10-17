@@ -27,7 +27,14 @@ export const REF_PROD = 'ozpavwghrmmkrnmkxodg'
  * « link » ne doit pas être pris pour la commande.
  */
 const OPTIONS = '(?:-[^ ]+ )*'
-const outil = (debut, fin) => new RegExp(`\\b${debut} ${OPTIONS}${fin}\\b`)
+// Exécutable nommé avec son extension Windows (`git.exe`, `wrangler.cmd`,
+// `supabase.exe` : audit du 2026-10-17, ils passaient).
+const EXT = '(?:\\.(?:exe|cmd|bat|ps1))?'
+const outil = (debut, fin) =>
+  new RegExp(`\\b${debut}${EXT} ${OPTIONS}${fin}\\b`)
+// Options globales de git qui prennent une VALEUR séparée par une espace.
+const OPTIONS_GIT =
+  '(?:-c [^ ]+ |--(?:work-tree|git-dir|namespace|exec-path|config-env|super-prefix) [^ ]+ |-[^ ]+ )*'
 
 export const MOTIFS = [
   { re: new RegExp(REF_PROD), raison: 'référence du projet de production' },
@@ -69,12 +76,16 @@ export const MOTIFS = [
   // prod (revue adverse du 2026-10-13 : `wrangler -c x deploy`, `rollback`,
   // `delete`, `versions upload`, `vercel` seul, `vc` passaient).
   {
-    re: /\bwrangler (?!(?:dev|whoami|tail|login|logout|types|docs|--help|-h|--version|-v)\b)/,
+    re: new RegExp(
+      `\\bwrangler${EXT} (?!(?:dev|whoami|tail|login|logout|types|docs|--help|-h|--version|-v)\\b)`,
+    ),
     raison:
       'Wrangler hors lecture (déploiement, retour arrière, secrets du Worker)',
   },
   {
-    re: /\bv(?:ercel|c)(?: |$)(?!(?:whoami|ls|list|inspect|logs|login|logout|--help|-h|--version|-v)\b)/,
+    re: new RegExp(
+      `\\bv(?:ercel|c)${EXT}(?: |$)(?!(?:whoami|ls|list|inspect|logs|login|logout|--help|-h|--version|-v)\\b)`,
+    ),
     raison: 'Vercel hors lecture (déploiement, alias, retour arrière)',
   },
   {
@@ -82,12 +93,21 @@ export const MOTIFS = [
     raison: '`--prod` : production Vercel',
   },
   {
-    re: /\bgh (?:pr merge|repo sync|api\b.*\bmerges\b)/,
+    re: new RegExp(`\\bgh${EXT} (?:pr merge|repo sync|api\\b.*\\bmerges\\b)`),
     raison: 'fusion sur GitHub (déclenche le déploiement Vercel)',
   },
-  // `git -c clé=valeur push` : `-c` est la seule option à valeur courante.
+  // `gh api` n'est permis qu'en LECTURE (GET, la méthode par défaut sans
+  // champ) : `-X PUT …/pulls/1/merge`, `-X PATCH …/git/refs/heads/main`
+  // passaient (audit du 2026-10-17). Un champ (`-f`, `-F`, `--field`,
+  // `--input`) fait passer gh en POST.
   {
-    re: new RegExp(`\\bgit (?:-c [^ ]+ |-[^ ]+ )*(?:subtree )?push\\b`),
+    re: new RegExp(
+      `\\bgh${EXT} api\\b(?=.*(?: -x ?(?!get\\b)[a-z]| --method[ =]?(?!get\\b)[a-z]| -f | --(?:raw-)?field\\b| --input\\b))`,
+    ),
+    raison: '`gh api` en écriture (fusion, mise à jour de branche)',
+  },
+  {
+    re: new RegExp(`\\bgit${EXT} ${OPTIONS_GIT}(?:subtree )?push\\b`),
     raison: '`git push` déclenche le déploiement Vercel',
   },
 ]
@@ -104,14 +124,20 @@ export const MOTIFS = [
 // question O/N répond « oui » toute seule au bout de 10 s.
 // `:xxx` aussi (revue du 2026-10-15) : un script pnpm `livrer:essai` lance
 // lui-même la livraison et passait.
+// Fin du nom : espace, `)`, redirection, séparateur ou fin (audit du
+// 2026-10-17 : `(cd scripts && node <script>.mjs)` et `<script>.mjs>log`
+// passaient). `start` sans `.bat` mais derrière un chemin (`.\start`,
+// `./start`, `C:\…\start` : PowerShell complète par PATHEXT ; `\` lu comme
+// `/` par la seconde lecture de `verdict`) aussi ; `start`
+// seul (commande de Windows) et `db:start` restent permis.
 const NOMME_UN_SCRIPT_PROD =
-  /(?:(?:livrer|copier-prod)(?:\.bat|\.mjs|:[\w-]+)?|start\.bat)(?= |$)/
+  /(?:(?:livrer|copier-prod)(?:\.bat|\.mjs|:[\w-]+)?|start\.bat|\/start)(?=[ )>|;&<]|$)/
 const LECTEURS =
   /^(?:git|cat|type|grep|rg|head|tail|sed|ls|dir|echo|wc|diff|less|more|code|npx (?:vitest|prettier|eslint|tsc)|pnpm (?:test|vitest|lint|check|format)|node --check)\b/
 
 /** Sous-commandes `supabase` sans cible distante (sûres même poste lié). */
 const SUPABASE_SANS_CIBLE =
-  /\bsupabase (?:-[^ ]+ )*(?:unlink|start|stop|status|init|login|logout|help|--help|-h|--version|-v)\b/
+  /\bsupabase(?:\.(?:exe|cmd|bat|ps1))? (?:-[^ ]+ )*(?:unlink|start|stop|status|init|login|logout|help|--help|-h|--version|-v)\b/
 
 const PREFIXE_MARQUEUR = /^(?:\$env:)?prod_confirme=1(?: |$)/
 const MARQUEUR_SEUL = /^\$env:prod_confirme=1$/
@@ -169,14 +195,21 @@ export function verdict(commande, { lie = false } = {}) {
     if (!raisons.includes(r)) raisons.push(r)
   }
   let parMarqueurPrecedent = false
-  for (const s of segments(normaliser(commande))) {
+  // Seconde lecture où `\` devient `/` au lieu de disparaître : un chemin
+  // Windows (`C:\…\cmd\git.exe push`, `.\start`) garde ses séparateurs, donc
+  // ses limites de mot. La première lecture, elle, déjoue `git pu\sh`.
+  const chemins = segments(normaliser(String(commande).replace(/\\/g, '/')))
+  for (const [i, s] of segments(normaliser(commande)).entries()) {
     const marque = parMarqueurPrecedent || PREFIXE_MARQUEUR.test(s)
     parMarqueurPrecedent = MARQUEUR_SEUL.test(s)
     if (marque) continue
-    const local = /--local\b/.test(s)
+    const formes = [s, chemins[i] ?? '']
+    // `--local` ne compte qu'AVANT un commentaire (`db push # --local`).
+    const local = /--local\b/.test(s.replace(/(?:^| )#.*$/, ''))
     for (const m of MOTIFS)
-      if (m.re.test(s) && !(m.saufLocal && local)) ajouter(m.raison)
-    if (NOMME_UN_SCRIPT_PROD.test(s) && !LECTEURS.test(s))
+      if (formes.some((f) => m.re.test(f)) && !(m.saufLocal && local))
+        ajouter(m.raison)
+    if (formes.some((f) => NOMME_UN_SCRIPT_PROD.test(f)) && !LECTEURS.test(s))
       ajouter(
         '`livrer` / `copier-prod` atteignent la prod : seulement sur demande de l’utilisateur',
       )
