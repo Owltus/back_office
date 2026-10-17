@@ -8,6 +8,8 @@
 //   - compteurs PDJ        : BreakfastBoard.tsx (`stats`, boucle sur ALL_ROOMS)
 //   - barre de progression : SummaryCards.tsx (precedent / caJour / projete)
 //   - « Pris depuis la veille » : DashboardBoard.tsx (pickup)
+//   - PARKING_TOTAL        : SPOTS de src/lib/parking/model.ts
+//   - occupation parking   : ParkingBoard.tsx (`dayInfo`, tout statut compté)
 
 const plage = (debut: number, fin: number) =>
   Array.from({ length: fin - debut + 1 }, (_, i) => debut + i)
@@ -59,6 +61,41 @@ export function comptesPdj(lignes: LignePdj[]): ComptesPdj {
     else if (kind === 'departing') departs++
   }
   return { disponible: lignes.length > 0, restent, departs, inclus }
+}
+
+/** Les 14 places, personnel 13 et 14 comprises (miroir de SPOTS). */
+export const PARKING_TOTAL = 14
+
+/**
+ * Recul de lecture : une réservation commencée plus tôt que ce nombre de jours
+ * avant le jour demandé n'est pas lue. L'écran Parking n'en lit que 45 ; un an
+ * et un mois couvre largement le plus long séjour possible d'un employé.
+ */
+export const PARKING_RECUL_JOURS = 400
+
+export interface LigneParking {
+  spot: number
+  start_date: string
+  nights: number
+}
+
+const jourNumero = (d: string) => Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10)) / 86_400_000
+
+/**
+ * Places libres le jour `jour` (décision utilisateur du 2026-10-17) : une
+ * place est prise par toute voiture prévue ce jour-là, QUEL QUE SOIT son
+ * statut (employé compris, comme l'écran Parking) ; une réservation de
+ * `nights` nuits occupe les jours start_date … start_date + nights − 1 ; une
+ * place partagée par deux lignes compte une fois ; jamais sous 0 (surbooking).
+ */
+export function placesDisponibles(lignes: LigneParking[], jour: string): number {
+  const j = jourNumero(jour)
+  const prises = new Set<number>()
+  for (const l of lignes) {
+    const debut = jourNumero(l.start_date)
+    if (debut <= j && j < debut + l.nights) prises.add(l.spot)
+  }
+  return Math.max(0, PARKING_TOTAL - prises.size)
 }
 
 export interface EntreeRep {

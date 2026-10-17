@@ -17,11 +17,19 @@
 // RÉPONSES : 200 résumé · 401 clé absente ou fausse (toujours le même corps) ·
 // 405 autre méthode que GET · 500 MONTRE_CLE ou configuration absente ·
 // 503 lecture en échec (la montre garde alors ses derniers chiffres).
+// Exception : le PARKING en échec n'empêche pas le reste — le bloc `parking`
+// est alors omis (la montre affiche « -- »), décision du 2026-10-17.
 
 import { cleServeur } from '../_shared/environnement.ts'
 import type { LireVariable } from '../_shared/environnement.ts'
 import { businessDateStr, shiftDateStr } from '../_shared/businessDay.ts'
-import { comptesPdj, resumeRep } from './regles.ts'
+import {
+  PARKING_RECUL_JOURS,
+  PARKING_TOTAL,
+  comptesPdj,
+  placesDisponibles,
+  resumeRep,
+} from './regles.ts'
 import type { Source } from './source.ts'
 
 export type Dependances = {
@@ -83,6 +91,20 @@ export async function traiter(
 
   try {
     const source = deps.creerSource(url, serviceKey)
+    // Lu en parallèle, mais son échec est rattrapé ICI : il ne fait pas tomber
+    // le reste de la réponse.
+    const parking = Promise.resolve()
+      .then(() =>
+        source.parking(shiftDateStr(jourPdj, -PARKING_RECUL_JOURS), jourPdj),
+      )
+      .then((lignes) => placesDisponibles(lignes, jourPdj))
+      .catch((e) => {
+        console.error(
+          'montre-resume : parking illisible',
+          e instanceof Error ? e.message : e,
+        )
+        return null
+      })
     const [rapport, budgetMois, lignesPdj] = await Promise.all([
       source.rapport(jourRep),
       source.budgetMois(annee, mois),
@@ -108,6 +130,7 @@ export async function traiter(
       budgetMois,
     })
     const pdj = comptesPdj(lignesPdj)
+    const disponibles = await parking
     // Liste blanche : chaque champ est recopié un par un.
     return json({
       rep: {
@@ -127,6 +150,15 @@ export async function traiter(
         departs: pdj.departs,
         inclus: pdj.inclus,
       },
+      ...(disponibles === null
+        ? {}
+        : {
+            parking: {
+              date: jourPdj,
+              disponibles,
+              total: PARKING_TOTAL,
+            },
+          }),
     })
   } catch (e) {
     // Détail côté serveur seulement ; jamais la clé ni les en-têtes.

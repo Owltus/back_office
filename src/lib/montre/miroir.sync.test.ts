@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest'
 import fc from 'fast-check'
 
 import { ALL_ROOMS } from '#/lib/hotel/rooms.ts'
+import { SPOTS } from '#/lib/parking/model.ts'
 import { stayKind } from '#/lib/pdj/csv.ts'
 import {
   ALL_ROOMS as ALL_ROOMS_MONTRE,
+  PARKING_TOTAL,
   stayKind as stayKindMontre,
 } from '../../../supabase/functions/montre-resume/regles.ts'
 
@@ -18,6 +20,10 @@ import {
 describe('montre-resume — les copies Edge ne doivent pas diverger', () => {
   it('même inventaire des chambres', () => {
     expect(ALL_ROOMS_MONTRE).toEqual(ALL_ROOMS)
+  })
+
+  it('même nombre de places de parking', () => {
+    expect(PARKING_TOTAL).toBe(SPOTS)
   })
 
   it('même nature de séjour pour les statuts connus', () => {

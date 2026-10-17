@@ -13,7 +13,15 @@ import { traiter } from './handler.ts'
 import type { Dependances } from './handler.ts'
 import { COLONNES, sourceSupabase } from './source.ts'
 import type { Source } from './source.ts'
-import { ALL_ROOMS, comptesPdj, euroEntier, resumeRep } from './regles.ts'
+import {
+  ALL_ROOMS,
+  PARKING_RECUL_JOURS,
+  PARKING_TOTAL,
+  comptesPdj,
+  euroEntier,
+  placesDisponibles,
+  resumeRep,
+} from './regles.ts'
 
 const CLE = 'cle-de-test-montre-0123456789abcdef'
 // 16/10/2026 08:00 à Paris (UTC+2) : jour hôtelier du 16, REP jour du 15.
@@ -40,6 +48,13 @@ function source(faux: Faux = {}): Source {
       { room: 102, status: 'IN HOUSE', breakfasts_included: 2 },
       { room: 103, status: 'DUE OUT', breakfasts_included: 1 },
       { room: 104, status: 'CHECKED OUT', breakfasts_included: 0 },
+    ],
+    // Le 16/10 : place 1 (arrivée le 14, 3 nuits → 14, 15, 16), place 13
+    // (employé, le 16), place 2 partie le 16 (14, 15). → 2 prises, 12 libres.
+    parking: async () => [
+      { spot: 1, start_date: '2026-10-14', nights: 3 },
+      { spot: 13, start_date: '2026-10-16', nights: 1 },
+      { spot: 2, start_date: '2026-10-14', nights: 2 },
     ],
     ...faux,
   }
@@ -148,6 +163,7 @@ Deno.test('cas nominal : chiffres de l’écran, en % du budget', async () => {
       pris_veille: 3500,
     },
     pdj: { date: '2026-10-16', disponible: true, restent: 1, departs: 2, inclus: 3 },
+    parking: { date: '2026-10-16', disponibles: 12, total: 14 },
   })
 })
 
@@ -159,9 +175,13 @@ Deno.test('sortie en liste blanche : aucune clé inattendue, à aucun niveau', a
     pdj: async () => [
       { room: 102, status: 'IN HOUSE', breakfasts_included: 2, guest_name: 'Dupont' } as never,
     ],
+    parking: async () => [
+      { spot: 3, start_date: '2026-10-16', nights: 1, client: 'Martin', comment: 'VIP' } as never,
+    ],
   })
   const r = await appeler(get(), deps(bavarde))
-  assertEquals(Object.keys(r.corps).sort(), ['pdj', 'rep'])
+  assertEquals(Object.keys(r.corps).sort(), ['parking', 'pdj', 'rep'])
+  assertEquals(Object.keys(r.corps.parking).sort(), ['date', 'disponibles', 'total'])
   assertEquals(Object.keys(r.corps.rep).sort(), [
     'chambres', 'date', 'partiel', 'pct_precedent', 'pct_projete', 'pct_veille',
     'pris_veille', 'to',
@@ -171,6 +191,7 @@ Deno.test('sortie en liste blanche : aucune clé inattendue, à aucun niveau', a
   ])
   const texte = JSON.stringify(r.corps)
   assert(!texte.includes('Dupont') && !texte.includes('guest'), texte)
+  assert(!texte.includes('Martin') && !texte.includes('VIP') && !texte.includes('client'), texte)
   assert(!texte.includes('6000') && !texte.includes('200000'), 'seul pris_veille est en euros')
   assert(!texte.includes('95.2'), 'champ en trop recopié')
 })
@@ -299,6 +320,81 @@ Deno.test('changement de mois : budget du mois du RAPPORT', async () => {
   assertEquals(vus, ['2026-10'])
 })
 
+// ─── Parking ──────────────────────────────────────────────────────────────
+// Oracle : contrat validé par l'utilisateur le 2026-10-17 (14 places, tout
+// statut compté, place distincte, jamais sous 0, date = jour hôtelier, bloc
+// omis si la lecture échoue).
+
+Deno.test('parking en échec : bloc omis, le reste répond 200', async () => {
+  const r = await appeler(get(), deps(source({
+    parking: async () => {
+      throw new Error('parking_reservations : timeout')
+    },
+  })))
+  assertEquals(r.status, 200)
+  assertEquals(Object.keys(r.corps).sort(), ['pdj', 'rep'])
+  assertEquals(r.corps.pdj.restent, 1)
+  assert(!JSON.stringify(r.logs).includes(CLE), 'clé journalisée')
+})
+
+Deno.test('parking : levée synchrone rattrapée aussi', async () => {
+  const r = await appeler(get(), deps(source({
+    parking: (() => {
+      throw new Error('boum')
+    }) as never,
+  })))
+  assertEquals(r.status, 200)
+  assertEquals(r.corps.parking, undefined)
+})
+
+Deno.test('parking : lu du jour hôtelier moins le recul jusqu’au jour hôtelier', async () => {
+  const vus: unknown[] = []
+  const d = deps(source({
+    parking: async (depuis, jour) => {
+      vus.push([depuis, jour])
+      return []
+    },
+  }))
+  d.maintenant = () => new Date('2026-10-15T23:30:00Z') // 16/10 01:30 Paris → jour du 15
+  const r = await appeler(get(), d)
+  assertEquals(PARKING_RECUL_JOURS, 400)
+  // 15/10/2026 − 400 jours = 10/09/2025.
+  assertEquals(vus, [['2025-09-10', '2026-10-15']])
+  assertEquals(r.corps.parking, { date: '2026-10-15', disponibles: 14, total: 14 })
+})
+
+Deno.test('places : jour sans voiture → 14', () => {
+  assertEquals(PARKING_TOTAL, 14)
+  assertEquals(placesDisponibles([], '2026-10-16'), 14)
+})
+
+Deno.test('places : surbooking → 0, jamais négatif', () => {
+  const lignes = Array.from({ length: 14 }, (_, i) => ({
+    spot: i + 1, start_date: '2026-10-16', nights: 1,
+  }))
+  assertEquals(placesDisponibles(lignes, '2026-10-16'), 0)
+  assertEquals(placesDisponibles([...lignes, ...lignes], '2026-10-16'), 0)
+})
+
+Deno.test('places : une place partagée par deux lignes compte une fois', () => {
+  assertEquals(placesDisponibles([
+    { spot: 5, start_date: '2026-10-15', nights: 2 },
+    { spot: 5, start_date: '2026-10-16', nights: 1 },
+  ], '2026-10-16'), 13)
+})
+
+Deno.test('places : du jour d’arrivée à la veille du départ, bornes comprises', () => {
+  const l = [{ spot: 1, start_date: '2026-10-30', nights: 3 }] // 30, 31, 1er
+  assertEquals(placesDisponibles(l, '2026-10-29'), 14)
+  assertEquals(placesDisponibles(l, '2026-10-30'), 13)
+  assertEquals(placesDisponibles(l, '2026-11-01'), 13)
+  assertEquals(placesDisponibles(l, '2026-11-02'), 14)
+  // Passage à l'heure d'hiver (25/10/2026) sans effet.
+  const h = [{ spot: 2, start_date: '2026-10-24', nights: 1 }]
+  assertEquals(placesDisponibles(h, '2026-10-24'), 13)
+  assertEquals(placesDisponibles(h, '2026-10-25'), 14)
+})
+
 // ─── Règles ───────────────────────────────────────────────────────────────
 
 Deno.test('comptes PDJ : chambres hors liste ignorées, statuts inconnus non comptés', () => {
@@ -338,6 +434,9 @@ function fauxClient(reponse: { data: unknown; error: { message: string } | null 
         select(c: string) { a.select = c; return q },
         eq(k: string, v: unknown) { a.filtres.push(`${k}=${v}`); return q },
         lt(k: string, v: unknown) { a.filtres.push(`${k}<${v}`); return q },
+        gte(k: string, v: unknown) { a.filtres.push(`${k}>=${v}`); return q },
+        lte(k: string, v: unknown) { a.filtres.push(`${k}<=${v}`); return q },
+        range(de: number, fin: number) { a.filtres.push(`range=${de}-${fin}`); return q },
         order() { return q },
         limit() { return q },
         maybeSingle: () => Promise.resolve(reponse),
@@ -386,6 +485,7 @@ Deno.test('lectures : une erreur lève (→ 503), jamais un « vide »', async (
     () => s.forecastMois(2026, 10),
     () => s.dernierCumulDuMois(2026, 10),
     () => s.pmPrecedent('2026-10-15', 2026, 10),
+    () => s.parking('2025-09-11', '2026-10-16'),
   ]) {
     let leve = false
     try { await appel() } catch { leve = true }
@@ -401,4 +501,41 @@ Deno.test('forecast : null sans prévision, somme sinon', async () => {
     ).forecastMois(2026, 10),
     150.5,
   )
+})
+
+Deno.test('parking : colonnes sans client ni statut, bornes de dates, pages de 1000', async () => {
+  const { client, appels } = fauxClient({ data: [], error: null })
+  await sourceSupabase(client).parking('2025-09-11', '2026-10-16')
+  assertEquals(appels, [{
+    table: 'parking_reservations',
+    select: 'spot,start_date,nights',
+    filtres: ['start_date>=2025-09-11', 'start_date<=2026-10-16', 'range=0-999'],
+  }])
+})
+
+Deno.test('parking : lit toutes les pages jusqu’à une page incomplète', async () => {
+  const pages = [1000, 1000, 3]
+  const debuts: number[] = []
+  const client = {
+    from() {
+      const q = {
+        select() { return q },
+        gte() { return q },
+        lte() { return q },
+        order() { return q },
+        range(de: number) {
+          debuts.push(de)
+          const n = pages[debuts.length - 1]
+          return Promise.resolve({
+            data: Array.from({ length: n }, () => ({ spot: 1, start_date: '2026-10-16', nights: 1 })),
+            error: null,
+          })
+        },
+      }
+      return q
+    },
+  }
+  const lignes = await sourceSupabase(client).parking('2025-09-11', '2026-10-16')
+  assertEquals(lignes.length, 2003)
+  assertEquals(debuts, [0, 1000, 2000])
 })

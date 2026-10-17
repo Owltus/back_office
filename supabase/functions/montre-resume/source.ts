@@ -3,7 +3,7 @@
 // autre donnée nominative. Toute erreur de lecture LÈVE : le gestionnaire la
 // rend en 503 (panne), jamais en « rien à afficher ».
 
-import type { LignePdj } from './regles.ts'
+import type { LigneParking, LignePdj } from './regles.ts'
 
 /** Ce que le gestionnaire lit ; injecté pour les tests. */
 export interface Source {
@@ -24,6 +24,8 @@ export interface Source {
   forecastMois(annee: number, mois: number): Promise<number | null>
   budgetMois(annee: number, mois: number): Promise<number | null>
   pdj(date: string): Promise<LignePdj[]>
+  /** Réservations commencées entre `depuis` et `jour` inclus (toutes pages). */
+  parking(depuis: string, jour: string): Promise<LigneParking[]>
 }
 
 /** Colonnes lues, figées ici et vérifiées par les tests. */
@@ -35,7 +37,12 @@ export const COLONNES = {
   forecast: 'rev_ttc',
   budget: 'room_revenue',
   pdj: 'room,status,breakfasts_included',
+  // Jamais `client` ni `comment` : seulement ce qui décide d'une place prise.
+  parking: 'spot,start_date,nights',
 } as const
+
+/** Page de lecture : au-delà de 1000 lignes, l'API tronque sans le dire. */
+export const PAGE_PARKING = 1000
 
 type Reponse = { data: unknown; error: { message: string } | null }
 
@@ -111,6 +118,23 @@ export function sourceSupabase(client: ClientLecture): Source {
         .select(COLONNES.pdj)
         .eq('service_date', date)
       return donnees<LignePdj[]>(r, 'pdj_breakfasts')
+    },
+    async parking(depuis, jour) {
+      // Comme fetchReservations (src/lib/parking/service.ts) : ordre stable par
+      // id, page par page jusqu'à une page incomplète.
+      const toutes: LigneParking[] = []
+      for (let debut = 0; ; debut += PAGE_PARKING) {
+        const r = await client
+          .from('parking_reservations')
+          .select(COLONNES.parking)
+          .gte('start_date', depuis)
+          .lte('start_date', jour)
+          .order('id', { ascending: true })
+          .range(debut, debut + PAGE_PARKING - 1)
+        const page = donnees<LigneParking[]>(r, 'parking_reservations')
+        toutes.push(...page)
+        if (page.length < PAGE_PARKING) return toutes
+      }
     },
   }
 }
