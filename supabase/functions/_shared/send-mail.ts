@@ -121,6 +121,18 @@ export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
     retryable,
   })
 
+  // Contrôle de TYPE (audit du 2026-10-17) : le module ne lève jamais, et un
+  // appelant futur pourrait relayer un JSON non validé — un tableau en `html`
+  // ou en `pdfBase64` passerait sinon tel quel au transport, et un nombre en
+  // `subject` ferait lever `.trim()`.
+  if (
+    typeof subject !== 'string' ||
+    typeof html !== 'string' ||
+    typeof pdfName !== 'string' ||
+    (pdfBase64 != null && typeof pdfBase64 !== 'string') ||
+    (pdfBytes != null && !(pdfBytes instanceof Uint8Array))
+  )
+    return fail('Contenu du message invalide')
   if (!subject.trim() || !html) return fail('Sujet ou corps manquant')
   if (!/^[\w .()-]+\.pdf$/i.test(pdfName))
     return fail('Nom de pièce jointe invalide')

@@ -13,6 +13,8 @@
 
 import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2.115.0'
 
+import { lireChambre, lireOccupants } from '../_shared/chambres.ts'
+
 // Table cible (cf. src/lib/pdj/service.ts:13 — PDJ_TABLE).
 const PDJ_TABLE = 'pdj_breakfasts'
 
@@ -150,7 +152,14 @@ interface ParsedRow {
 // Parsing des lignes clients (porté de parseGuestRows, csv.ts:137).
 // ---------------------------------------------------------------------------
 
-function parseGuestRows(content: string, serviceDate: string): ParsedRow[] {
+/** Lignes retenues + nombre de lignes ÉCARTÉES (chambre hors inventaire ou
+ *  occupants invalides) : une ligne invalide ne fait pas échouer l'import. */
+interface ParseResult {
+  rows: ParsedRow[]
+  ecartees: number
+}
+
+function parseGuestRows(content: string, serviceDate: string): ParseResult {
   // Retrait d'un BOM éventuel en tête (export PMS/Windows) : sinon il se colle au
   // premier en-tête « Room » et casse la détection des colonnes.
   const clean = content.charCodeAt(0) === 0xfeff ? content.slice(1) : content
@@ -248,6 +257,7 @@ function parseGuestRows(content: string, serviceDate: string): ParsedRow[] {
   }
 
   const result: ParsedRow[] = []
+  let ecartees = 0
   for (const v of rows) {
     const status = v[col.status]?.trim() ?? ''
     const departureDate = csvDateToIso(v[col.departure] ?? '')
@@ -269,8 +279,15 @@ function parseGuestRows(content: string, serviceDate: string): ParsedRow[] {
     const addons = v[col.addons] ?? ''
     const rate = v[col.rate] ?? ''
     const hasPDJ = addons.toUpperCase().includes('PDJ')
-    const adults = parseInt(v[col.adults]) || 0
-    const children = parseInt(v[col.children]) || 0
+    // Audit 2026-10-17 (F2) : chambre de l'inventaire seulement, occupants
+    // bornés (cf. _shared/chambres.ts). Sinon la ligne est écartée et comptée.
+    const room = lireChambre(v[col.room])
+    const adults = lireOccupants(v[col.adults])
+    const children = lireOccupants(v[col.children])
+    if (room === null || adults === null || children === null) {
+      ecartees++
+      continue
+    }
     const guests = adults + children
     // PDJ inclus (dû facturé) : le tarif fait foi quand il précise un nombre de PAX
     // (« BB1PAX », « BB2PAX », « PDJ INCLUS 2 PAX »…) = nb de PDJ VENDUS, mais borné
@@ -284,7 +301,7 @@ function parseGuestRows(content: string, serviceDate: string): ParsedRow[] {
     const breakfastsIncluded = hasPDJ ? Math.min(paxOrAdults, guests, 2) : 0
 
     result.push({
-      room: Number(v[col.room].trim()),
+      room,
       status,
       guestName: v[col.guestName]?.replace(/"/g, '').trim() || '',
       vip: Boolean(v[col.vip]?.trim()),
@@ -307,14 +324,17 @@ function parseGuestRows(content: string, serviceDate: string): ParsedRow[] {
     })
   }
 
-  return result
+  return { rows: result, ecartees }
 }
 
 // ---------------------------------------------------------------------------
 // Mapping vers lignes DB + RGPD (porté de csvToDbRows, csv.ts:308).
 // ---------------------------------------------------------------------------
 
-function csvToDbRows(content: string, fileName: string): DbPdjRow[] {
+function csvToDbRows(
+  content: string,
+  fileName: string,
+): { rows: DbPdjRow[]; ecartees: number } {
   const serviceDate = serviceDateFromFilename(fileName)
   if (!serviceDate) {
     throw new Error('Date non extractible du nom de fichier.')
@@ -326,7 +346,8 @@ function csvToDbRows(content: string, fileName: string): DbPdjRow[] {
   const keepName =
     serviceDate === parisDateStr(now) || serviceDate === parisDateStr(yesterday)
 
-  return parseGuestRows(content, serviceDate).map((r) => ({
+  const { rows, ecartees } = parseGuestRows(content, serviceDate)
+  const dbRows = rows.map((r) => ({
     service_date: serviceDate,
     room: r.room,
     guest_name: keepName ? r.guestName || null : null,
@@ -351,6 +372,7 @@ function csvToDbRows(content: string, fileName: string): DbPdjRow[] {
     source_file: fileName,
     manual_kind: null, // un import efface toute saisie manuelle (aligné sur csv.ts)
   }))
+  return { rows: dbRows, ecartees }
 }
 
 // ---------------------------------------------------------------------------
@@ -373,7 +395,13 @@ export async function importInhouse(
   filename: string,
   dryRun = false,
 ): Promise<number> {
-  const rows = csvToDbRows(csv, filename)
+  const { rows, ecartees } = csvToDbRows(csv, filename)
+  // Lignes invalides : écartées sans faire échouer l'import, mais COMPTÉES dans
+  // les logs (aucune donnée de la ligne journalisée : PII).
+  if (ecartees > 0)
+    console.warn(
+      `[IMPORT] In-House : ${ecartees} ligne(s) écartée(s) (chambre hors inventaire ou occupants invalides).`,
+    )
 
   // Dédoublonnage final par (service_date, room) : une clé de conflit répétée
   // dans un même lot ferait échouer l'upsert Postgres ON CONFLICT (cf.

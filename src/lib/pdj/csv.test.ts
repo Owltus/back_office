@@ -139,7 +139,7 @@ describe('csvToDbRows', () => {
     const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
     const mini =
       'Room,Status,Guest Name,VIP,Adults,Children,Addons,Rate\n' +
-      '118,IN HOUSE,"SEUL, S",,1,0,PDJ INCL,BOOKING - FLEX - PDJ INCLUS 2 PAX\n'
+      '113,IN HOUSE,"SEUL, S",,1,0,PDJ INCL,BOOKING - FLEX - PDJ INCLUS 2 PAX\n'
 
     const rows = csvToDbRows(mini, `In-House Guests _${stamp}.csv`)
 

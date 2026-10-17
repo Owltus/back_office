@@ -31,6 +31,7 @@ import { createClient } from 'jsr:@supabase/supabase-js@2.115.0'
 
 import { sendMail } from '../_shared/send-mail.ts'
 import { poserMarqueurManuel } from './marker.ts'
+import { validerCorps } from './corps.ts'
 import { cleServeur, cleResend } from '../_shared/environnement.ts'
 
 const cors = {
@@ -122,43 +123,25 @@ Deno.serve(async (req) => {
   }
 
   // 3. Corps de requête (produit par le front : jsPDF + rendu HTML).
-  let body: {
-    date?: string
-    subject?: string
-    htmlBody?: string
-    pdfBase64?: string
-    pdfName?: string
-  }
+  let brut: unknown
   try {
-    body = await req.json()
+    brut = await req.json()
   } catch {
     return json({ error: 'Corps de requête invalide' }, 400)
   }
-  // Date du rapport (YYYY-MM-DD) — optionnelle : sert UNIQUEMENT à poser le marqueur
-  // d'envoi après succès (pour que le bandeau « pas encore envoyé » se retire).
-  const reportDate = (body.date ?? '').trim()
-  const subject = (body.subject ?? '').trim()
-  const htmlBody = body.htmlBody ?? ''
-  const pdfBase64 = body.pdfBase64 ?? ''
-  const pdfName = (body.pdfName ?? 'rapport.pdf').trim()
-  if (!subject || !htmlBody)
-    return json({ error: 'Sujet ou corps manquant' }, 400)
+  // Validation PURE (corps.ts) : objet, champs CHAÎNES seulement (audit
+  // 2026-10-17 : un tableau contournait les plafonds de taille, un nombre
+  // faisait lever → 500), nom de pièce jointe simple, tailles plafonnées.
+  // La date (YYYY-MM-DD, optionnelle) ne sert qu'au marqueur d'envoi.
+  const valide = validerCorps(brut)
+  if (!valide.ok) return json({ error: valide.error }, valide.status)
+  const { reportDate, subject, htmlBody, pdfBase64, pdfName } = valide.corps
 
   // Expéditeur + table de destinataires (Rep Jour). `onboarding@resend.dev` en
   // repli test (Resend n'accepte alors QUE ton adresse d'inscription). Bascule vers
   // le domaine vérifié (repjour.naostack.com) une fois les DNS en place.
   const from = Deno.env.get('REPORT_FROM') ?? 'Rep Jour <onboarding@resend.dev>'
   const recipientsTable = 'server_report_recipients'
-
-  // Durcissement (B2) : le contenu est piloté par l'appelant (admin), on le borne.
-  //   - pdfName : nom de fichier simple .pdf, jamais de chemin (../, /).
-  //   - tailles plafonnées (charge mémoire / Resend).
-  if (!/^[\w .()-]+\.pdf$/i.test(pdfName))
-    return json({ error: 'Nom de pièce jointe invalide' }, 400)
-  if (subject.length > 300 || htmlBody.length > 200_000)
-    return json({ error: 'Contenu trop volumineux' }, 413)
-  if (pdfBase64.length > 8_000_000)
-    return json({ error: 'Pièce jointe trop volumineuse' }, 413)
 
   // ANTI-SPAM : on RÉSERVE le créneau AVANT l'envoi (et non après), pour qu'un 2e
   // clic concurrent (double-clic, deux onglets) voie immédiatement cet envoi en cours

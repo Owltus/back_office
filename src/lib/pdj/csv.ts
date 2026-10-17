@@ -19,7 +19,37 @@
 
 // 80 chambres réparties sur 6 étages (les chambres vides restent affichées).
 // Inventaire remonté dans un module partagé (réutilisé par le Rapprochement).
-export { ALL_ROOMS } from '#/lib/hotel/rooms.ts'
+import { ALL_ROOMS } from '#/lib/hotel/rooms.ts'
+
+export { ALL_ROOMS }
+
+const CHAMBRES = new Set<number>(ALL_ROOMS)
+
+/** Plafond d'adultes (et, séparément, d'enfants) sur une ligne. Une chambre de
+ *  l'hôtel en loge 4 au plus (maximum observé en base : 3-4) ; 20 laisse une
+ *  large marge à une saisie PMS atypique tout en refusant l'absurde.
+ *  MIROIR : supabase/functions/_shared/chambres.ts (chambresEdge.sync.test.ts). */
+export const MAX_OCCUPANTS = 20
+
+/** Numéro de chambre d'une cellule CSV : 1 à 4 chiffres ET chambre de l'hôtel,
+ *  sinon null (ligne écartée). Audit du 2026-10-17 : `Number()` acceptait
+ *  « -7 », « 0x10 » (16), « 1e3 » (1000), « 9001 ». */
+export function lireChambre(cellule: string | undefined): number | null {
+  const s = (cellule ?? '').trim()
+  if (!/^\d{1,4}$/.test(s)) return null
+  const n = Number(s)
+  return CHAMBRES.has(n) ? n : null
+}
+
+/** Nombre d'adultes ou d'enfants : cellule vide = 0 (comportement historique),
+ *  sinon 1 à 2 chiffres entre 0 et MAX_OCCUPANTS ; autre chose = null. */
+export function lireOccupants(cellule: string | undefined): number | null {
+  const s = (cellule ?? '').trim()
+  if (s === '') return 0
+  if (!/^\d{1,2}$/.test(s)) return null
+  const n = Number(s)
+  return n <= MAX_OCCUPANTS ? n : null
+}
 
 export const REQUIRED_COLUMNS = [
   'Room',
@@ -138,6 +168,15 @@ export function parseGuestRows(
   content: string,
   serviceDate?: string | null,
 ): ParsedRow[] {
+  return parseGuestRowsDetail(content, serviceDate).rows
+}
+
+/** Comme `parseGuestRows`, avec le nombre de lignes ÉCARTÉES (chambre hors
+ *  inventaire, occupants invalides) : une ligne invalide ne bloque pas l'import. */
+export function parseGuestRowsDetail(
+  content: string,
+  serviceDate?: string | null,
+): { rows: ParsedRow[]; ecartees: number } {
   // Robustesse aux exports PMS/Windows : on retire un éventuel BOM en tête (sinon
   // il se colle au premier en-tête « Room » et fait échouer la détection des
   // colonnes → 0 ligne, faux problème « fichier invalide »).
@@ -148,7 +187,8 @@ export function parseGuestRows(
   // précédé d'un préambule (Hotel Code…), alors que l'export manuel « In-House
   // Guests » a l'en-tête en 1re ligne. On la cherche donc (les deux formats passent).
   const headerLineIdx = lines.findIndex(
-    (l) => l.includes('Room') && l.includes('Status') && l.includes('Guest Name'),
+    (l) =>
+      l.includes('Room') && l.includes('Status') && l.includes('Guest Name'),
   )
   if (headerLineIdx === -1) {
     throw new Error(
@@ -224,6 +264,7 @@ export function parseGuestRows(
   }
 
   const result: ParsedRow[] = []
+  let ecartees = 0
   for (const v of rows) {
     const status = v[col.status]?.trim() ?? ''
     const departureDate = csvDateToIso(v[col.departure] ?? '')
@@ -247,8 +288,15 @@ export function parseGuestRows(
     const addons = v[col.addons] ?? ''
     const rate = v[col.rate] ?? ''
     const hasPDJ = addons.toUpperCase().includes('PDJ')
-    const adults = parseInt(v[col.adults]) || 0
-    const children = parseInt(v[col.children]) || 0
+    // Audit 2026-10-17 : chambre de l'inventaire seulement, occupants bornés.
+    // Sinon la ligne est écartée et comptée (aligné sur import-report/pdj.ts).
+    const room = lireChambre(v[col.room])
+    const adults = lireOccupants(v[col.adults])
+    const children = lireOccupants(v[col.children])
+    if (room === null || adults === null || children === null) {
+      ecartees++
+      continue
+    }
     const guests = adults + children
     // Nombre de PDJ inclus (dû facturé). Le tarif fait foi quand il précise un
     // nombre de PAX (« BB1PAX », « BB2PAX », « PDJ INCLUS 2 PAX »…) : ce PAX = le
@@ -265,7 +313,7 @@ export function parseGuestRows(
     const breakfastsIncluded = hasPDJ ? Math.min(paxOrAdults, guests, 2) : 0
 
     result.push({
-      room: Number(v[col.room].trim()),
+      room,
       status,
       guestName: v[col.guestName]?.replace(/"/g, '').trim() || '',
       vip: Boolean(v[col.vip]?.trim()),
@@ -288,7 +336,7 @@ export function parseGuestRows(
     })
   }
 
-  return result
+  return { rows: result, ecartees }
 }
 
 /** Nature d'un PDJ saisi À LA MAIN dans une chambre non check-in (day-use,
@@ -334,6 +382,14 @@ export interface DbPdjRow {
  * « by design »).
  */
 export function csvToDbRows(content: string, fileName: string): DbPdjRow[] {
+  return csvToDbRowsDetail(content, fileName).rows
+}
+
+/** Comme `csvToDbRows`, avec le nombre de lignes écartées (voir `lireChambre`). */
+export function csvToDbRowsDetail(
+  content: string,
+  fileName: string,
+): { rows: DbPdjRow[]; ecartees: number } {
   const date = dateFromFilename(fileName)
   if (!date) {
     throw new Error(
@@ -348,7 +404,8 @@ export function csvToDbRows(content: string, fileName: string): DbPdjRow[] {
   const keepName =
     serviceDate === localDateStr(now) || serviceDate === localDateStr(yesterday)
 
-  return parseGuestRows(content, serviceDate).map((r) => ({
+  const { rows, ecartees } = parseGuestRowsDetail(content, serviceDate)
+  const dbRows = rows.map((r): DbPdjRow => ({
     service_date: serviceDate,
     room: r.room,
     guest_name: keepName ? r.guestName || null : null,
@@ -375,6 +432,7 @@ export function csvToDbRows(content: string, fileName: string): DbPdjRow[] {
     // check-in reprend la main sur une chambre auparavant renseignée à la main.
     manual_kind: null,
   }))
+  return { rows: dbRows, ecartees }
 }
 
 /** Fichier candidat à l'import (nom + contenu déjà lu). */
@@ -393,6 +451,9 @@ export interface MergeCsvResult {
   imported: string[]
   /** Fichiers écartés (non exploitables ou doublon plus ancien) + raison. */
   ignored: { name: string; reason: string }[]
+  /** Lignes écartées (chambre hors inventaire, occupants invalides) dans les
+   *  fichiers RETENUS. */
+  lignesEcartees: number
 }
 
 /**
@@ -414,12 +475,16 @@ export interface MergeCsvResult {
  */
 export function mergeCsvFiles(files: CsvFileInput[]): MergeCsvResult {
   const ignored: { name: string; reason: string }[] = []
-  const bestByDate = new Map<string, { name: string; rows: DbPdjRow[] }>()
+  const bestByDate = new Map<
+    string,
+    { name: string; rows: DbPdjRow[]; ecartees: number }
+  >()
 
   for (const f of files) {
     let rows: DbPdjRow[]
+    let ecartees: number
     try {
-      rows = csvToDbRows(f.content, f.name)
+      ;({ rows, ecartees } = csvToDbRowsDetail(f.content, f.name))
     } catch (err) {
       ignored.push({
         name: f.name,
@@ -434,11 +499,11 @@ export function mergeCsvFiles(files: CsvFileInput[]): MergeCsvResult {
     const date = rows[0].service_date
     const current = bestByDate.get(date)
     if (!current) {
-      bestByDate.set(date, { name: f.name, rows })
+      bestByDate.set(date, { name: f.name, rows, ecartees })
     } else if (f.name > current.name) {
       // Nom « plus grand » = timestamp plus tardif → il remplace l'ancien.
       ignored.push({ name: current.name, reason: `Doublon du ${date} écarté.` })
-      bestByDate.set(date, { name: f.name, rows })
+      bestByDate.set(date, { name: f.name, rows, ecartees })
     } else {
       ignored.push({ name: f.name, reason: `Doublon du ${date} écarté.` })
     }
@@ -455,5 +520,9 @@ export function mergeCsvFiles(files: CsvFileInput[]): MergeCsvResult {
     dates: [...bestByDate.keys()].sort((a, b) => (a > b ? -1 : 1)),
     imported: [...bestByDate.values()].map((b) => b.name),
     ignored,
+    lignesEcartees: [...bestByDate.values()].reduce(
+      (n, b) => n + b.ecartees,
+      0,
+    ),
   }
 }

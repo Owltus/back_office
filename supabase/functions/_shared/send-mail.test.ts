@@ -86,3 +86,28 @@ Deno.test('200 = succès', async () => {
     assertEquals(r.id, 'abc')
   })
 })
+
+Deno.test('contenu non chaîne (tableau, nombre) refusé AVANT tout envoi', async () => {
+  // Audit du 2026-10-17 : un tableau en `html` / `pdfBase64` passait tel quel
+  // au transport ; un nombre en `subject` faisait lever `.trim()`.
+  for (const mauvais of [
+    { html: ['<p>x</p>'] },
+    { subject: 5 },
+    { pdfBase64: ['JVBERi0='] },
+    { pdfName: ['a.pdf'] },
+    { pdfBytes: [1, 2, 3] },
+  ]) {
+    const appels = await avecResend(200, '{"id":"x"}', async () => {
+      const r = await sendMail({ ...base, ...(mauvais as object) } as never)
+      assertEquals(r.ok, false, JSON.stringify(mauvais))
+      assertEquals(r.error, 'Contenu du message invalide')
+      assertEquals(r.certainNotSent, true)
+    })
+    assertEquals(appels, 0)
+  }
+  // Témoin : le contenu légitime part.
+  const appels = await avecResend(200, '{"id":"x"}', async () => {
+    assertEquals((await sendMail(base)).ok, true)
+  })
+  assertEquals(appels, 1)
+})

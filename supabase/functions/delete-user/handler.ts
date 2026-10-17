@@ -15,6 +15,21 @@ export type Dependances = {
   creerClient: (url: string, cle: string) => SupabaseClient
 }
 
+/** Forme canonique d'un UUID (minuscules), ou null si `brut` n'en est pas un.
+ *
+ *  Audit du 2026-10-17 : la garde « pas soi-même » comparait des chaînes
+ *  exactes, alors que Postgres (`uuid`) et GoTrue acceptent aussi un UUID en
+ *  MAJUSCULES ou entre accolades — `"ADMIN-UUID"` passait la garde et désignait
+ *  pourtant le compte de l'appelant. On n'accepte donc que la forme stricte
+ *  8-4-4-4-12 hexadécimale (sans accolades), ramenée en minuscules, et c'est
+ *  CETTE forme qui sert à la comparaison et à toutes les opérations. */
+export function normaliserUuid(brut: string): string | null {
+  const s = brut.trim().toLowerCase()
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(s)
+    ? s
+    : null
+}
+
 // Ban « quasi permanent » (Go duration). 'none' lèverait le ban (réactivation).
 const BAN_DURATION = '876000h' // ~100 ans
 
@@ -85,11 +100,14 @@ export async function traiter(
   // seulement. Sans ce refus, `(42).trim` lèverait (500 opaque).
   if (body.userId != null && typeof body.userId !== 'string')
     return json({ error: 'Corps de requête invalide' }, 400)
-  const userId = (body.userId ?? '').trim()
-  if (!userId) return json({ error: 'Identifiant du compte requis' }, 400)
+  const saisi = (body.userId ?? '').trim()
+  if (!saisi) return json({ error: 'Identifiant du compte requis' }, 400)
+  const userId = normaliserUuid(saisi)
+  if (!userId) return json({ error: 'Identifiant du compte invalide' }, 400)
 
-  // 3bis. Garde anti-auto-exclusion : jamais son propre compte.
-  if (userId === caller.id)
+  // 3bis. Garde anti-auto-exclusion : jamais son propre compte (formes
+  //       canoniques des DEUX côtés, cf. normaliserUuid).
+  if (userId === caller.id.toLowerCase())
     return json({ error: 'Vous ne pouvez pas supprimer votre propre compte' }, 400)
 
   // 3ter. Le compte cible DOIT avoir un profil (compte réellement géré). Empêche
