@@ -10,6 +10,9 @@
 //   - « Pris depuis la veille » : DashboardBoard.tsx (pickup)
 //   - PARKING_TOTAL        : SPOTS de src/lib/parking/model.ts
 //   - occupation parking   : ParkingBoard.tsx (`dayInfo`, tout statut compté)
+//   - écran Petit-déjeuner : BreakfastBoard.tsx (`stats.guests`,
+//     `roomExtrasCount` + externes, `captageDay`) ; no-show = vue pdj_daily_agg
+//     + analytics.ts aggregatePdjDaily ; CA = ca.ts (computePdjCA)
 
 const plage = (debut: number, fin: number) =>
   Array.from({ length: fin - debut + 1 }, (_, i) => debut + i)
@@ -36,6 +39,14 @@ export interface LignePdj {
   room: number
   status: string | null
   breakfasts_included: number | null
+  // Écran Petit-déjeuner de la montre (2026-10-17) : facultatifs pour que les
+  // anciens appelants restent valides ; absents = 0 / null.
+  guests?: number | null
+  breakfasts_served?: number | null
+  breakfasts_offert?: number | null
+  manual_kind?: string | null
+  rate_plan?: string | null
+  addons?: string | null
 }
 
 export interface ComptesPdj {
@@ -61,6 +72,78 @@ export function comptesPdj(lignes: LignePdj[]): ComptesPdj {
     else if (kind === 'departing') departs++
   }
   return { disponible: lignes.length > 0, restent, departs, inclus }
+}
+
+export interface DetailPdj {
+  clients: number | null
+  extras: number | null
+  total: number | null
+  ca_ht: number | null
+  captage: number | null
+  no_show: number | null
+}
+
+const DETAIL_VIDE: DetailPdj = {
+  clients: null,
+  extras: null,
+  total: null,
+  ca_ht: null,
+  captage: null,
+  no_show: null,
+}
+
+/**
+ * Écran Petit-déjeuner de la montre (contrat validé le 2026-10-17), calculé
+ * comme la page PDJ :
+ *   - clients = Σ guests (personnes) sur ALL_ROOMS ;
+ *   - extras  = Σ PAR CHAMBRE max(0, servis − inclus), toutes lignes (comme
+ *     `roomExtrasCount`, sans filtre ALL_ROOMS), + externes ; gratuités comprises ;
+ *   - total   = inclus (ALL_ROOMS, `comptesPdj`) + extras ;
+ *   - captage = total ÷ clients × 100, une décimale, null sans client ;
+ *   - no_show = Σ par chambre max(0, inclus − servis), inclus STAFF à 0 (vue
+ *     pdj_daily_agg), null tant qu'aucun couvert n'est servi (aggregatePdjDaily) ;
+ *   - ca_ht   = `ca` en euros entiers HT, déjà calculé (null s'il n'a pu l'être).
+ * `externes` null (lecture en échec) → extras, total, captage à null.
+ * Rien d'importé ce jour → tout à null.
+ */
+export function detailPdj(
+  lignes: LignePdj[],
+  externes: number | null,
+  ca: number | null,
+): DetailPdj {
+  if (lignes.length === 0) return DETAIL_VIDE
+  const parChambre = new Map<number, LignePdj>()
+  for (const l of lignes) parChambre.set(l.room, l)
+  let clients = 0
+  let inclus = 0
+  for (const room of ALL_ROOMS) {
+    const l = parChambre.get(room)
+    if (!l) continue
+    clients += l.guests ?? 0
+    inclus += l.breakfasts_included ?? 0
+  }
+  let extrasChambres = 0
+  let servis = 0
+  let noShow = 0
+  for (const l of lignes) {
+    const inc = l.breakfasts_included ?? 0
+    const serv = l.breakfasts_served ?? 0
+    extrasChambres += Math.max(0, serv - inc)
+    servis += serv
+    const du = (l.rate_plan ?? '').toUpperCase().includes('STAFF') ? 0 : inc
+    noShow += Math.max(0, du - serv)
+  }
+  const extras = externes == null ? null : extrasChambres + externes
+  const total = extras == null ? null : inclus + extras
+  return {
+    clients,
+    extras,
+    total,
+    ca_ht: ca == null ? null : euroEntier(ca),
+    captage:
+      total == null || clients <= 0 ? null : arrondi((total / clients) * 100),
+    no_show: servis > 0 ? noShow : null,
+  }
 }
 
 /** Les 14 places, personnel 13 et 14 comprises (miroir de SPOTS). */

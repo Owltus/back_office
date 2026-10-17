@@ -18,15 +18,19 @@
 // 405 autre méthode que GET · 500 MONTRE_CLE ou configuration absente ·
 // 503 lecture en échec (la montre garde alors ses derniers chiffres).
 // Exception : le PARKING en échec n'empêche pas le reste — le bloc `parking`
-// est alors omis (la montre affiche « -- »), décision du 2026-10-17.
+// est alors omis (la montre affiche « -- »), décision du 2026-10-17. De même
+// pour l'écran Petit-déjeuner : externes, recette ou prix illisibles → les
+// seuls champs qui en dépendent passent à null.
 
 import { cleServeur } from '../_shared/environnement.ts'
 import type { LireVariable } from '../_shared/environnement.ts'
 import { businessDateStr, shiftDateStr } from '../_shared/businessDay.ts'
+import { billedRevenueTtc, caTotalHt, cardPrices, detectTarifs } from './ca.ts'
 import {
   PARKING_RECUL_JOURS,
   PARKING_TOTAL,
   comptesPdj,
+  detailPdj,
   placesDisponibles,
   resumeRep,
 } from './regles.ts'
@@ -66,6 +70,20 @@ async function secretMatches(
   return diff === 0
 }
 
+/** Lecture facultative : son échec (même synchrone) rend null et est journalisé,
+ * sans jamais faire tomber la réponse. */
+function sansEchec<T>(quoi: string, lire: () => Promise<T>): Promise<T | null> {
+  return Promise.resolve()
+    .then(lire)
+    .catch((e) => {
+      console.error(
+        `montre-resume : ${quoi} illisible`,
+        e instanceof Error ? e.message : e,
+      )
+      return null
+    })
+}
+
 export async function traiter(
   req: Request,
   deps: Dependances,
@@ -91,20 +109,23 @@ export async function traiter(
 
   try {
     const source = deps.creerSource(url, serviceKey)
-    // Lu en parallèle, mais son échec est rattrapé ICI : il ne fait pas tomber
-    // le reste de la réponse.
-    const parking = Promise.resolve()
-      .then(() =>
-        source.parking(shiftDateStr(jourPdj, -PARKING_RECUL_JOURS), jourPdj),
-      )
-      .then((lignes) => placesDisponibles(lignes, jourPdj))
-      .catch((e) => {
-        console.error(
-          'montre-resume : parking illisible',
-          e instanceof Error ? e.message : e,
-        )
-        return null
-      })
+    // Lectures facultatives, en parallèle ; leur échec est rattrapé ICI.
+    const parking = sansEchec('parking', () =>
+      source
+        .parking(shiftDateStr(jourPdj, -PARKING_RECUL_JOURS), jourPdj)
+        .then((lignes) => placesDisponibles(lignes, jourPdj)),
+    )
+    const externes = sansEchec('externes', () => source.externes(jourPdj))
+    const addonJour = sansEchec('recette', () => source.addonJour(jourPdj))
+    // Prix de la carte comme BreakfastBoard : mode sur 21 jours jusqu'au jour
+    // affiché, repli detectTarifs sur tout l'historique Addon.
+    const tarifs = sansEchec('prix', async () => {
+      const [agg, tout] = await Promise.all([
+        source.aggPrix(jourPdj),
+        source.addonTout(),
+      ])
+      return cardPrices(agg, detectTarifs(tout), jourPdj)
+    })
     const [rapport, budgetMois, lignesPdj] = await Promise.all([
       source.rapport(jourRep),
       source.budgetMois(annee, mois),
@@ -130,7 +151,31 @@ export async function traiter(
       budgetMois,
     })
     const pdj = comptesPdj(lignesPdj)
-    const disponibles = await parking
+    const [disponibles, nbExternes, recette, prix] = await Promise.all([
+      parking,
+      externes,
+      addonJour,
+      tarifs,
+    ])
+    // CA : exige les trois lectures (une recette illisible n'est PAS une
+    // recette absente, qui, elle, fait estimer au prix de la carte).
+    const ca =
+      nbExternes == null || recette == null || prix == null
+        ? null
+        : caTotalHt(
+            lignesPdj.map((l) => ({
+              addons: l.addons ?? null,
+              breakfasts_included: l.breakfasts_included ?? 0,
+              breakfasts_served: l.breakfasts_served ?? 0,
+              breakfasts_offert: l.breakfasts_offert ?? 0,
+              manual_kind: l.manual_kind ?? null,
+              rate_plan: l.rate_plan ?? null,
+            })),
+            prix,
+            nbExternes,
+            billedRevenueTtc(recette),
+          )
+    const detail = detailPdj(lignesPdj, nbExternes, ca)
     // Liste blanche : chaque champ est recopié un par un.
     return json({
       rep: {
@@ -149,6 +194,12 @@ export async function traiter(
         restent: pdj.restent,
         departs: pdj.departs,
         inclus: pdj.inclus,
+        clients: detail.clients,
+        extras: detail.extras,
+        total: detail.total,
+        ca_ht: detail.ca_ht,
+        captage: detail.captage,
+        no_show: detail.no_show,
       },
       ...(disponibles === null
         ? {}

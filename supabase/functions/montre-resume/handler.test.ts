@@ -18,6 +18,7 @@ import {
   PARKING_RECUL_JOURS,
   PARKING_TOTAL,
   comptesPdj,
+  detailPdj,
   euroEntier,
   placesDisponibles,
   resumeRep,
@@ -44,11 +45,19 @@ function source(faux: Faux = {}): Source {
     dernierCumulDuMois: async () => 80000,
     forecastMois: async () => 170000,
     budgetMois: async () => 200000,
+    // 102 : 2 inclus servis ; 103 : 1 inclus pas venu ; 104 : 1 extra servi.
     pdj: async () => [
-      { room: 102, status: 'IN HOUSE', breakfasts_included: 2 },
-      { room: 103, status: 'DUE OUT', breakfasts_included: 1 },
-      { room: 104, status: 'CHECKED OUT', breakfasts_included: 0 },
+      { room: 102, status: 'IN HOUSE', breakfasts_included: 2, guests: 2, breakfasts_served: 2, addons: 'PDJ' },
+      { room: 103, status: 'DUE OUT', breakfasts_included: 1, guests: 1, breakfasts_served: 0, addons: 'PDJ' },
+      { room: 104, status: 'CHECKED OUT', breakfasts_included: 0, guests: 2, breakfasts_served: 1, addons: null },
     ],
+    externes: async () => 1,
+    addonJour: async () => [{ code: 'PDJ', revenue_ttc: 57 }],
+    addonTout: async () => [],
+    // Trois journées à 190 € pour 10 inclus : carte PDJ = 19,00 € TTC.
+    aggPrix: async () => ['2026-10-13', '2026-10-14', '2026-10-15'].map((d) => ({
+      service_date: d, code: 'PDJ', included: 10, revenue_ttc: 190,
+    })),
     // Le 16/10 : place 1 (arrivée le 14, 3 nuits → 14, 15, 16), place 13
     // (employé, le 16), place 2 partie le 16 (14, 15). → 2 prises, 12 libres.
     parking: async () => [
@@ -162,7 +171,13 @@ Deno.test('cas nominal : chiffres de l’écran, en % du budget', async () => {
       chambres: 63,
       pris_veille: 3500,
     },
-    pdj: { date: '2026-10-16', disponible: true, restent: 1, departs: 2, inclus: 3 },
+    // clients 2+1+2 = 5 ; extras 1 (chambre 104) + 1 externe = 2 ; total 3+2 = 5 ;
+    // captage 5/5 = 100 % ; no-show 1 (chambre 103) ;
+    // CA = 57/1,10 = 51,82 + 2 extras × round2(19/1,10) = 34,54 → 86,36 → 86 €.
+    pdj: {
+      date: '2026-10-16', disponible: true, restent: 1, departs: 2, inclus: 3,
+      clients: 5, extras: 2, total: 5, ca_ht: 86, captage: 100, no_show: 1,
+    },
     parking: { date: '2026-10-16', disponibles: 12, total: 14 },
   })
 })
@@ -187,11 +202,12 @@ Deno.test('sortie en liste blanche : aucune clé inattendue, à aucun niveau', a
     'pris_veille', 'to',
   ])
   assertEquals(Object.keys(r.corps.pdj).sort(), [
-    'date', 'departs', 'disponible', 'inclus', 'restent',
+    'ca_ht', 'captage', 'clients', 'date', 'departs', 'disponible', 'extras',
+    'inclus', 'no_show', 'restent', 'total',
   ])
   const texte = JSON.stringify(r.corps)
   assert(!texte.includes('Dupont') && !texte.includes('guest'), texte)
-  assert(!texte.includes('Martin') && !texte.includes('VIP') && !texte.includes('client'), texte)
+  assert(!texte.includes('Martin') && !texte.includes('VIP'), texte)
   assert(!texte.includes('6000') && !texte.includes('200000'), 'seul pris_veille est en euros')
   assert(!texte.includes('95.2'), 'champ en trop recopié')
 })
@@ -278,6 +294,7 @@ Deno.test('PDJ absent : disponible=false, compteurs à 0', async () => {
   const r = await appeler(get(), deps(source({ pdj: async () => [] })))
   assertEquals(r.corps.pdj, {
     date: '2026-10-16', disponible: false, restent: 0, departs: 0, inclus: 0,
+    clients: null, extras: null, total: null, ca_ht: null, captage: null, no_show: null,
   })
 })
 
@@ -435,6 +452,8 @@ function fauxClient(reponse: { data: unknown; error: { message: string } | null 
         eq(k: string, v: unknown) { a.filtres.push(`${k}=${v}`); return q },
         lt(k: string, v: unknown) { a.filtres.push(`${k}<${v}`); return q },
         gte(k: string, v: unknown) { a.filtres.push(`${k}>=${v}`); return q },
+        gt(k: string, v: unknown) { a.filtres.push(`${k}>${v}`); return q },
+        not(k: string, _op: string, v: unknown) { a.filtres.push(`${k}!${v}`); return q },
         lte(k: string, v: unknown) { a.filtres.push(`${k}<=${v}`); return q },
         range(de: number, fin: number) { a.filtres.push(`range=${de}-${fin}`); return q },
         order() { return q },
@@ -467,7 +486,10 @@ Deno.test('lectures : colonnes explicites, jamais * ni guest_name', async () => 
     filtres: ['year=2026', 'month=10', 'date<2026-10-15'],
   })
   for (const a of tous) {
-    assert(a.select && a.select !== '*' && !a.select.includes('guest'), a.select)
+    const cols = (a.select ?? '').split(',')
+    assert(a.select && a.select !== '*', a.select)
+    for (const nominatif of ['guest_name', 'company', 'vip', 'client', 'comment'])
+      assert(!cols.includes(nominatif), a.select)
   }
   assertEquals(appels[0], {
     table: 'pdj_breakfasts', select: COLONNES.pdj, filtres: ['service_date=2026-10-16'],
@@ -538,4 +560,126 @@ Deno.test('parking : lit toutes les pages jusqu’à une page incomplète', asyn
   const lignes = await sourceSupabase(client).parking('2025-09-11', '2026-10-16')
   assertEquals(lignes.length, 2003)
   assertEquals(debuts, [0, 1000, 2000])
+})
+
+// ─── Écran Petit-déjeuner ─────────────────────────────────────────────────
+// Oracle : contrat validé le 2026-10-17 et calculs de BreakfastBoard.tsx,
+// recalculés à la main.
+
+const L = (o: Record<string, unknown>) =>
+  ({ status: 'IN HOUSE', breakfasts_included: 0, guests: 0, breakfasts_served: 0, addons: null, ...o }) as never
+
+Deno.test('PDJ : externes illisibles → extras, total, captage, CA à null ; le reste répond', async () => {
+  const r = await appeler(get(), deps(source({
+    externes: async () => {
+      throw new Error('pdj_externals : timeout')
+    },
+  })))
+  assertEquals(r.status, 200)
+  assertEquals(r.corps.pdj.clients, 5)
+  assertEquals(r.corps.pdj.no_show, 1)
+  for (const k of ['extras', 'total', 'captage', 'ca_ht']) assertEquals(r.corps.pdj[k], null, k)
+  assertEquals(r.corps.parking.disponibles, 12)
+})
+
+Deno.test('PDJ : recette ou prix illisibles → seul le CA à null', async () => {
+  const panne = async () => {
+    throw new Error('x')
+  }
+  for (const k of ['addonJour', 'aggPrix', 'addonTout'] as const) {
+    const r = await appeler(get(), deps(source({ [k]: panne })))
+    assertEquals(r.status, 200, k)
+    assertEquals(r.corps.pdj.ca_ht, null, k)
+    assertEquals(r.corps.pdj.total, 5, k)
+    assertEquals(r.corps.pdj.captage, 100, k)
+  }
+})
+
+Deno.test('PDJ : sans recette du jour, CA estimé au prix de la carte', async () => {
+  // 3 inclus × round2(19/1,10) = 3 × 17,27 = 51,81 + 2 extras × 17,27 = 34,54 → 86,35 → 86.
+  const r = await appeler(get(), deps(source({ addonJour: async () => [] })))
+  assertEquals(r.corps.pdj.ca_ht, 86)
+  // Prix de repli detectTarifs quand la fenêtre ne dit rien (moins de 3 jours).
+  const r2 = await appeler(get(), deps(source({
+    addonJour: async () => [],
+    aggPrix: async () => [],
+    addonTout: async () => [{ code: 'PDJ', revenue_ttc: 50 }, { code: 'PDJ', revenue_ttc: 75 }, { code: 'PDJ', revenue_ttc: 25 }],
+  })))
+  // Carte 25 € : 3 × round2(25/1,1)=22,73 → 68,19 + 2 × 22,73 = 45,46 → 113,65 → 114.
+  assertEquals(r2.corps.pdj.ca_ht, 114)
+})
+
+Deno.test('PDJ : gratuités comptées dans extras et total, exclues du CA', async () => {
+  const r = await appeler(get(), deps(source({
+    externes: async () => 0,
+    addonJour: async () => [],
+    pdj: async () => [
+      L({ room: 102, guests: 2, breakfasts_served: 2, breakfasts_offert: 1 }), // 2 extras dont 1 offert
+      L({ room: 503, guests: 1, breakfasts_served: 1, rate_plan: 'TARIF STAFF – 1 PDJ' }), // offert
+    ],
+  })))
+  assertEquals(r.corps.pdj.extras, 3)
+  assertEquals(r.corps.pdj.total, 3)
+  assertEquals(r.corps.pdj.captage, 100)
+  // Seul 1 extra est facturé : 17,27 → 17.
+  assertEquals(r.corps.pdj.ca_ht, 17)
+})
+
+Deno.test('PDJ : no-show null tant que rien n’est servi, STAFF jamais dû', async () => {
+  const rien = await appeler(get(), deps(source({
+    pdj: async () => [L({ room: 102, guests: 2, breakfasts_included: 2, addons: 'PDJ' })],
+  })))
+  assertEquals(rien.corps.pdj.no_show, null)
+  const r = await appeler(get(), deps(source({
+    pdj: async () => [
+      L({ room: 102, guests: 2, breakfasts_included: 2, breakfasts_served: 1, addons: 'PDJ' }),
+      L({ room: 503, guests: 1, breakfasts_included: 1, rate_plan: 'GRATUITE - STAFF' }),
+    ],
+  })))
+  assertEquals(r.corps.pdj.no_show, 1)
+})
+
+Deno.test('PDJ : extras calculés PAR CHAMBRE, jamais sur les totaux', () => {
+  // Σservis − Σinclus = 3 − 3 = 0, mais la 104 a bien 1 extra.
+  const d = detailPdj([
+    L({ room: 102, breakfasts_included: 2, breakfasts_served: 1, guests: 2 }),
+    L({ room: 104, breakfasts_included: 1, breakfasts_served: 2, guests: 1 }),
+  ], 0, null)
+  assertEquals(d.extras, 1)
+  assertEquals(d.no_show, 1)
+  assertEquals(d.total, 4)
+})
+
+Deno.test('PDJ : clients et inclus sur ALL_ROOMS, extras sur toutes les lignes', () => {
+  const d = detailPdj([
+    L({ room: 102, guests: 2, breakfasts_included: 2 }),
+    L({ room: 999, guests: 4, breakfasts_included: 4, breakfasts_served: 5 }),
+  ], 0, 12.5)
+  assertEquals(d.clients, 2)
+  assertEquals(d.extras, 1) // la 999 compte, comme roomExtrasCount
+  assertEquals(d.total, 3)
+  assertEquals(d.captage, 150)
+  assertEquals(d.ca_ht, 13) // 12,5 → 13 (demi loin de zéro)
+})
+
+Deno.test('PDJ : captage null sans client, une décimale sinon', () => {
+  assertEquals(detailPdj([L({ room: 102, breakfasts_served: 1 })], 0, 0).captage, null)
+  assertEquals(detailPdj([L({ room: 102, guests: 3, breakfasts_included: 1 })], 0, 0).captage, 33.3)
+})
+
+Deno.test('lectures PDJ : externes, recette, historique ; colonnes et filtres', async () => {
+  const { client, appels } = fauxClient({ data: [], error: null })
+  const s = sourceSupabase(client)
+  await s.addonJour('2026-10-16')
+  await s.addonTout()
+  await s.aggPrix('2026-10-16')
+  const f2 = fauxClient({ data: null, error: null })
+  assertEquals(await sourceSupabase(f2.client).externes('2026-10-16'), 0)
+  assertEquals(f2.appels[0], { table: 'pdj_externals', select: 'count', filtres: ['service_date=2026-10-16'] })
+  assertEquals(appels[0], { table: 'pdj_addon_production', select: 'code,revenue_ttc', filtres: ['service_date=2026-10-16'] })
+  assertEquals(appels[1], { table: 'pdj_addon_production', select: 'code,revenue_ttc', filtres: ['range=0-999'] })
+  assertEquals(appels[2], {
+    table: 'pdj_daily_agg', select: 'service_date,code,included,revenue_ttc',
+    filtres: ['service_date<=2026-10-16', 'code!null', 'included>0', 'revenue_ttc>0', 'range=0-999'],
+  })
 })
