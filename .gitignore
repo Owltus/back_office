@@ -19,6 +19,8 @@ dist-ssr
 .env.*
 !.env.example
 *.local
+# Secrets locaux de Wrangler (Worker Cloudflare) : .dev.vars, .dev.vars.<env>
+.dev.vars*
 
 # Logs
 logs
