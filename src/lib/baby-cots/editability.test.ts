@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { canCreateAssignment, canEditAssignment, graceFloor } from '#/lib/baby-cots/editability.ts'
+import {
+  canCreateAssignment,
+  canEditAssignment,
+  canMoveStart,
+  graceFloor,
+} from '#/lib/baby-cots/editability.ts'
 import { LITERIE_GRACE_DAYS } from '#/lib/permissions/actions.ts'
 import type { PageLevel } from '#/lib/permissions/levels.ts'
 
@@ -38,8 +43,14 @@ function addDaysLocal(date: string, delta: number): string {
 // (hors fenêtre), pile le plancher (borne INCLUSE), juste après (dans la
 // fenêtre), aujourd'hui, et dans le futur (toujours dans la fenêtre).
 const DATES: Array<{ label: string; date: string }> = [
-  { label: 'loin dans le passé (plancher − 400 j)', date: addDaysLocal(FLOOR, -400) },
-  { label: 'juste avant le plancher (hors fenêtre)', date: addDaysLocal(FLOOR, -1) },
+  {
+    label: 'loin dans le passé (plancher − 400 j)',
+    date: addDaysLocal(FLOOR, -400),
+  },
+  {
+    label: 'juste avant le plancher (hors fenêtre)',
+    date: addDaysLocal(FLOOR, -1),
+  },
   { label: 'pile le plancher (borne incluse)', date: FLOOR },
   { label: 'juste après le plancher', date: addDaysLocal(FLOOR, 1) },
   { label: 'aujourd’hui', date: TODAY },
@@ -60,7 +71,10 @@ const LEVELS: Array<PageLevel | null | undefined> = [
  * `ecriture` seulement dans la fenêtre [plancher, +∞[ ; en dessous (lecture,
  * null, undefined), jamais — miroir textuel de la policy RLS citée en tête de
  * editability.ts, pas une copie de l'implémentation testée. */
-function expectedAllowed(date: string, level: PageLevel | null | undefined): boolean {
+function expectedAllowed(
+  date: string,
+  level: PageLevel | null | undefined,
+): boolean {
   if (level === 'gestion') return true
   if (level === 'ecriture') return date >= FLOOR
   return false
@@ -88,8 +102,32 @@ describe('canEditAssignment — matrice exhaustive niveau × ancienneté (fin)',
     for (const { label, date } of DATES) {
       const expected = expectedAllowed(date, level)
       it(`niveau=${String(level)} / fin ${label} → ${expected}`, () => {
-        expect(canEditAssignment({ endDate: date }, TODAY, level)).toBe(expected)
+        expect(canEditAssignment({ endDate: date }, TODAY, level)).toBe(
+          expected,
+        )
       })
     }
   }
+})
+
+describe('canMoveStart — miroir du trigger baby_cot_assignments_no_past_rewrite', () => {
+  const avant = addDaysLocal(FLOOR, -1)
+  const loin = addDaysLocal(FLOOR, -10)
+  it('gestion : tout recul permis', () => {
+    expect(canMoveStart(TODAY, loin, TODAY, 'gestion')).toBe(true)
+  })
+  it('ecriture : recul sous le plancher refusé, plancher inclus permis', () => {
+    expect(canMoveStart(TODAY, avant, TODAY, 'ecriture')).toBe(false)
+    expect(canMoveStart(TODAY, FLOOR, TODAY, 'ecriture')).toBe(true)
+  })
+  it('ecriture : avancer un début déjà ancien reste permis', () => {
+    expect(canMoveStart(loin, avant, TODAY, 'ecriture')).toBe(true)
+    expect(canMoveStart(loin, loin, TODAY, 'ecriture')).toBe(true)
+  })
+  it('lecture, aucun : jamais', () => {
+    expect(canMoveStart(TODAY, addDaysLocal(TODAY, 1), TODAY, 'lecture')).toBe(
+      false,
+    )
+    expect(canMoveStart(TODAY, addDaysLocal(TODAY, 1), TODAY, null)).toBe(false)
+  })
 })

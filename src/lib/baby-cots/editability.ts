@@ -15,6 +15,9 @@ import type { PageLevel } from '#/lib/permissions/levels.ts'
  *     et à la ligne PROPOSÉE si une modification déplace la fin (le nouvel
  *     `end_date` doit, lui aussi, rester dans la fenêtre pour un compte
  *     `ecriture`).
+ *   - UPDATE du DÉBUT : trigger `baby_cot_assignments_no_past_rewrite`
+ *     (2026-10-17) — hors gestion, un début ne recule pas sous le plancher
+ *     (`canMoveStart`).
  * ------------------------------------------------------------------------ */
 
 /** 'YYYY-MM-DD' décalé de `delta` jours (heure locale). */
@@ -61,4 +64,22 @@ export function canEditAssignment(
   if (atLeastLevel(level, 'gestion')) return true
   if (!atLeastLevel(level, 'ecriture')) return false
   return assignment.endDate >= graceFloor(today)
+}
+
+/**
+ * Déplacer le DÉBUT d'une assignation de `oldStart` à `newStart` : miroir du
+ * trigger `baby_cot_assignments_no_past_rewrite` (migration
+ * 20261017110000_regles_ecriture). `gestion` toujours ; `ecriture` peut
+ * avancer le début, ou le reculer tant qu'il reste dans la fenêtre de grâce
+ * (même plancher que la création) ; en dessous, jamais.
+ */
+export function canMoveStart(
+  oldStart: string,
+  newStart: string,
+  today: string,
+  level: PageLevel | null | undefined,
+): boolean {
+  if (atLeastLevel(level, 'gestion')) return true
+  if (!atLeastLevel(level, 'ecriture')) return false
+  return newStart >= oldStart || newStart >= graceFloor(today)
 }

@@ -66,7 +66,11 @@ import {
   toCotAssignment,
   updateAssignment,
 } from '#/lib/baby-cots/service.ts'
-import { canCreateAssignment, canEditAssignment } from '#/lib/baby-cots/editability.ts'
+import {
+  canCreateAssignment,
+  canEditAssignment,
+  canMoveStart,
+} from '#/lib/baby-cots/editability.ts'
 import { clamp, cn } from '#/lib/utils.ts'
 
 /* --------------------------------------------------------------------------
@@ -178,7 +182,10 @@ export function BabyCotBoard() {
 
   function dateFromIndex(idx: number): string {
     if (!range) return ''
-    return format(addDays(new Date(range.from + 'T00:00:00'), idx), 'yyyy-MM-dd')
+    return format(
+      addDays(new Date(range.from + 'T00:00:00'), idx),
+      'yyyy-MM-dd',
+    )
   }
 
   function clampOffset(o: number): number {
@@ -193,7 +200,9 @@ export function BabyCotBoard() {
   const days = useMemo(() => {
     if (!range) return [] as Date[]
     const from = new Date(range.from + 'T00:00:00')
-    return Array.from({ length: VISIBLE_DAYS }, (_, i) => addDays(from, offset + i))
+    return Array.from({ length: VISIBLE_DAYS }, (_, i) =>
+      addDays(from, offset + i),
+    )
   }, [range, offset])
 
   // Plages de jours ouvrés (lundi→vendredi) visibles, pour le n° de semaine
@@ -248,7 +257,9 @@ export function BabyCotBoard() {
 
   // Cible du bouton « Aujourd'hui » (sert aussi à son état désactivé).
   const framedOffset =
-    range && today ? clampOffset(dayIndex(today) - Math.min(2, VISIBLE_DAYS - 1)) : 0
+    range && today
+      ? clampOffset(dayIndex(today) - Math.min(2, VISIBLE_DAYS - 1))
+      : 0
   function goToday() {
     if (!range || !today) return
     setOffset(framedOffset)
@@ -291,7 +302,9 @@ export function BabyCotBoard() {
     const startOffset = offset
     setPanning(true)
     const onMove = (ev: PointerEvent) => {
-      setOffset(clampOffset(startOffset + Math.round((startX - ev.clientX) / dayW)))
+      setOffset(
+        clampOffset(startOffset + Math.round((startX - ev.clientX) / dayW)),
+      )
     }
     const onUp = () => {
       window.removeEventListener('pointermove', onMove)
@@ -429,7 +442,8 @@ export function BabyCotBoard() {
   // état de pixels — la mise en page elle-même reste 100 % CSS.
   const gridRef = useRef<HTMLDivElement>(null)
 
-  const loading = !today || !range || cotsData === undefined || rows === undefined
+  const loading =
+    !today || !range || cotsData === undefined || rows === undefined
 
   // Renommage EN LIGNE (input dans le bloc) : id de l'assignation en cours
   // d'édition, ou null. Ni dialog, ni formulaire — même mécanique que
@@ -440,7 +454,10 @@ export function BabyCotBoard() {
   // assignation"), capturée AVANT l'ouverture du menu contextuel — même
   // mécanique que `pendingCell` de ParkingBoard (le clic droit du navigateur
   // ne donne pas la position finale autrement).
-  const pendingCell = useRef<{ cotId: string; dayIdx: number }>({ cotId: '', dayIdx: 0 })
+  const pendingCell = useRef<{ cotId: string; dayIdx: number }>({
+    cotId: '',
+    dayIdx: 0,
+  })
 
   // Commentaire : petit textarea minimal dans un dialog réduit (titre +
   // champ), PAS le formulaire complet retiré — même principe que la modale de
@@ -486,7 +503,9 @@ export function BabyCotBoard() {
     if (!canCreateAssignment(a.startDate, today, level)) return false
     if (hasOverlapWithAny(assignmentsRef.current, a.cotId, a)) return false
     setActionError(null)
-    setAssignments((prev) => (prev.some((x) => x.id === a.id) ? prev : [...prev, a]))
+    setAssignments((prev) =>
+      prev.some((x) => x.id === a.id) ? prev : [...prev, a],
+    )
     createAssignment({
       id: a.id,
       cot_id: a.cotId,
@@ -532,28 +551,46 @@ export function BabyCotBoard() {
     const target = assignmentsRef.current.find((x) => x.id === id)
     if (!target) return false
     if (!canEditAssignment(target, today, level)) return false
-    const geometry = patch.cotId != null || patch.startDate != null || patch.endDate != null
+    const geometry =
+      patch.cotId != null || patch.startDate != null || patch.endDate != null
     if (geometry) {
       const cotId = patch.cotId ?? target.cotId
       const startDate = patch.startDate ?? target.startDate
       const endDate = patch.endDate ?? target.endDate
       if (endDate < startDate) return false
       if (!canEditAssignment({ endDate }, today, level)) return false
-      if (hasOverlapWithAny(assignmentsRef.current, cotId, { startDate, endDate }, id))
+      // Le début ne recule pas hors fenêtre (trigger serveur, 42501).
+      if (!canMoveStart(target.startDate, startDate, today, level)) return false
+      if (
+        hasOverlapWithAny(
+          assignmentsRef.current,
+          cotId,
+          { startDate, endDate },
+          id,
+        )
+      )
         return false
     }
     setActionError(null)
     const restore = restorePatch(patch, rollback ?? target)
-    setAssignments((prev) => prev.map((x) => (x.id === id ? { ...x, ...patch } : x)))
+    setAssignments((prev) =>
+      prev.map((x) => (x.id === id ? { ...x, ...patch } : x)),
+    )
     updateAssignment(id, toDbPatch(patch)).catch((err) => {
       console.error(err)
-      setAssignments((prev) => prev.map((x) => (x.id === id ? { ...x, ...restore } : x)))
+      setAssignments((prev) =>
+        prev.map((x) => (x.id === id ? { ...x, ...restore } : x)),
+      )
       setActionError(describeWriteError(err))
     })
     return true
   }
 
-  const { record, undo, redo } = useCotHistory({ applyCreate, applyDelete, applyUpdate })
+  const { record, undo, redo } = useCotHistory({
+    applyCreate,
+    applyDelete,
+    applyUpdate,
+  })
 
   // Vrai le temps d'un drag/redimension : neutralise Ctrl+Z pendant le geste
   // (rejouerait une action à moitié posée).
@@ -651,7 +688,12 @@ export function BabyCotBoard() {
         return
       }
       const rect = el.getBoundingClientRect()
-      const next = clientX < rect.left + EDGE_PX ? -1 : clientX > rect.right - EDGE_PX ? 1 : 0
+      const next =
+        clientX < rect.left + EDGE_PX
+          ? -1
+          : clientX > rect.right - EDGE_PX
+            ? 1
+            : 0
       if (next === dir) return
       dir = next
       if (intervalId) {
@@ -670,7 +712,11 @@ export function BabyCotBoard() {
     return { updateDir, stop }
   }
 
-  function startInteraction(e: ReactPointerEvent, a: CotAssignment, mode: Mode) {
+  function startInteraction(
+    e: ReactPointerEvent,
+    a: CotAssignment,
+    mode: Mode,
+  ) {
     if (!canEdit || !today || cots.length === 0) return
     if (!canEditAssignment(a, today, level)) return
     e.preventDefault()
@@ -727,9 +773,19 @@ export function BabyCotBoard() {
       // l'une ou l'autre est ignoré, l'assignation reste à sa dernière
       // position valide (même principe que ParkingBoard.applyPosition).
       if (!canEditAssignment({ endDate }, today!, level)) return
-      if (hasOverlapWithAny(assignmentsRef.current, cotId, { startDate, endDate }, a.id)) return
+      if (
+        hasOverlapWithAny(
+          assignmentsRef.current,
+          cotId,
+          { startDate, endDate },
+          a.id,
+        )
+      )
+        return
       setAssignments((prev) =>
-        prev.map((x) => (x.id === a.id ? { ...x, cotId, startDate, endDate } : x)),
+        prev.map((x) =>
+          x.id === a.id ? { ...x, cotId, startDate, endDate } : x,
+        ),
       )
     }
 
@@ -753,7 +809,9 @@ export function BabyCotBoard() {
       const r = assignmentsRef.current.find((x) => x.id === a.id)
       if (
         r &&
-        (r.cotId !== orig.cotId || r.startDate !== orig.startDate || r.endDate !== orig.endDate)
+        (r.cotId !== orig.cotId ||
+          r.startDate !== orig.startDate ||
+          r.endDate !== orig.endDate)
       ) {
         const before: CotAssignmentPatch = {
           cotId: orig.cotId,
@@ -788,9 +846,17 @@ export function BabyCotBoard() {
   function captureCell(e: ReactMouseEvent<HTMLDivElement>) {
     const rect = e.currentTarget.getBoundingClientRect()
     const dayW = rect.width / VISIBLE_DAYS
-    const rel = clamp(Math.floor((e.clientX - rect.left) / dayW), 0, VISIBLE_DAYS - 1)
+    const rel = clamp(
+      Math.floor((e.clientX - rect.left) / dayW),
+      0,
+      VISIBLE_DAYS - 1,
+    )
     const dayIdx = clamp(rel + offset, 0, Math.max(0, totalDays - 1))
-    const rowIdx = clamp(Math.floor((e.clientY - rect.top) / ROW_H), 0, Math.max(0, cots.length - 1))
+    const rowIdx = clamp(
+      Math.floor((e.clientY - rect.top) / ROW_H),
+      0,
+      Math.max(0, cots.length - 1),
+    )
     pendingCell.current = { cotId: cots[rowIdx]?.id ?? '', dayIdx }
   }
 
@@ -866,41 +932,41 @@ export function BabyCotBoard() {
               prevLabel="Reculer d’une semaine"
               nextLabel="Avancer d’une semaine"
             >
-            <Popover open={calOpen} onOpenChange={setCalOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="icon-sm"
-                  aria-label="Choisir une date"
-                  disabled={loading}
-                >
-                  <CalendarDays />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="end">
-                <Calendar
-                  mode="single"
-                  locale={fr}
-                  selected={days[0]}
-                  defaultMonth={days[0]}
-                  onSelect={goToDate}
-                />
-                <div className="border-t border-border p-2">
+              <Popover open={calOpen} onOpenChange={setCalOpen}>
+                <PopoverTrigger asChild>
                   <Button
-                    variant="ghost"
-                    size="sm"
-                    className="w-full"
-                    onClick={() => {
-                      goToday()
-                      setCalOpen(false)
-                    }}
-                    disabled={offset === framedOffset}
+                    variant="outline"
+                    size="icon-sm"
+                    aria-label="Choisir une date"
+                    disabled={loading}
                   >
-                    Aujourd’hui
+                    <CalendarDays />
                   </Button>
-                </div>
-              </PopoverContent>
-            </Popover>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="end">
+                  <Calendar
+                    mode="single"
+                    locale={fr}
+                    selected={days[0]}
+                    defaultMonth={days[0]}
+                    onSelect={goToDate}
+                  />
+                  <div className="border-t border-border p-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => {
+                        goToday()
+                        setCalOpen(false)
+                      }}
+                      disabled={offset === framedOffset}
+                    >
+                      Aujourd’hui
+                    </Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
             </StepNav>
           </>
         }
@@ -922,7 +988,10 @@ export function BabyCotBoard() {
 
       <div className="flex overflow-hidden rounded-2xl border border-border bg-card">
         {/* Colonne fixe des lits */}
-        <div className="shrink-0 border-r border-border" style={{ width: LABEL_W }}>
+        <div
+          className="shrink-0 border-r border-border"
+          style={{ width: LABEL_W }}
+        >
           <div
             className="flex items-center justify-center border-b border-border text-xs font-medium text-muted-foreground"
             style={{ height: HEADER_H }}
@@ -971,7 +1040,9 @@ export function BabyCotBoard() {
                 const day = d.getDay()
                 if (day !== 6 && day !== 0) return null
                 const leftPct =
-                  day === 6 ? (i / VISIBLE_DAYS) * 100 : ((i + 1) / VISIBLE_DAYS) * 100
+                  day === 6
+                    ? (i / VISIBLE_DAYS) * 100
+                    : ((i + 1) / VISIBLE_DAYS) * 100
                 return (
                   <div
                     key={`we-${i}`}
@@ -985,7 +1056,10 @@ export function BabyCotBoard() {
                   parking — pas de bande mois séparée) */}
               <div
                 className="grid border-b border-border"
-                style={{ height: HEADER_H, gridTemplateColumns: `repeat(${VISIBLE_DAYS}, 1fr)` }}
+                style={{
+                  height: HEADER_H,
+                  gridTemplateColumns: `repeat(${VISIBLE_DAYS}, 1fr)`,
+                }}
               >
                 {days.map((d, i) => {
                   const isToday = todayDate ? isSameDay(d, todayDate) : false
@@ -1013,17 +1087,26 @@ export function BabyCotBoard() {
                 })}
               </div>
               {/* Lignes des lits + assignations */}
-              <div ref={gridRef} className="relative" style={{ height: gridHeight }}>
+              <div
+                ref={gridRef}
+                className="relative"
+                style={{ height: gridHeight }}
+              >
                 {canEdit ? (
                   <ContextMenu>
-                    <ContextMenuTrigger asChild>{gridBackground}</ContextMenuTrigger>
+                    <ContextMenuTrigger asChild>
+                      {gridBackground}
+                    </ContextMenuTrigger>
                     <ContextMenuContent
                       className="w-44"
                       onCloseAutoFocus={(e) => e.preventDefault()}
                     >
                       <ContextMenuItem
                         onSelect={() =>
-                          addAssignment(pendingCell.current.cotId, pendingCell.current.dayIdx)
+                          addAssignment(
+                            pendingCell.current.cotId,
+                            pendingCell.current.dayIdx,
+                          )
                         }
                       >
                         <Plus />
@@ -1045,7 +1128,9 @@ export function BabyCotBoard() {
                       width: `${(b.span / VISIBLE_DAYS) * 100}%`,
                     }}
                   >
-                    <span className="text-4xl font-bold text-foreground/[0.06]">{b.week}</span>
+                    <span className="text-4xl font-bold text-foreground/[0.06]">
+                      {b.week}
+                    </span>
                   </div>
                 ))}
 
@@ -1071,7 +1156,8 @@ export function BabyCotBoard() {
                       // bloc s'arrête à la borne du jour de départ, sans le couvrir
                       // (pas de `+ 1`) — la case du jour de départ reste réutilisable.
                       const endIdx = dayIndex(a.endDate)
-                      const locked = canEdit && !canEditAssignment(a, today, level)
+                      const locked =
+                        canEdit && !canEditAssignment(a, today, level)
                       // `+0.5` jour : le bloc démarre à MI-COLONNE du jour d'arrivée et
                       // finit à mi-colonne du jour de départ — À CHEVAL sur les deux
                       // jours limitrophes, comme les réservations du parking (arrivée
@@ -1194,7 +1280,11 @@ interface AssignmentBarProps {
   locked: boolean
   style: React.CSSProperties
   editing: boolean
-  onStartInteraction: (e: ReactPointerEvent, a: CotAssignment, mode: Mode) => void
+  onStartInteraction: (
+    e: ReactPointerEvent,
+    a: CotAssignment,
+    mode: Mode,
+  ) => void
   onStartEdit: (id: string) => void
   onStopEdit: () => void
   onRename: (id: string, value: string) => void
@@ -1255,7 +1345,9 @@ function AssignmentBar({
     <div
       role="button"
       tabIndex={0}
-      onPointerDown={interactive ? (e) => onStartInteraction(e, a, 'move') : undefined}
+      onPointerDown={
+        interactive ? (e) => onStartInteraction(e, a, 'move') : undefined
+      }
       onDoubleClick={interactive ? () => onStartEdit(a.id) : undefined}
       onClick={(e) => e.stopPropagation()}
       className={cn(
@@ -1287,12 +1379,19 @@ function AssignmentBar({
           className="w-full min-w-0 bg-transparent font-medium outline-none placeholder:text-current placeholder:opacity-50"
         />
       ) : (
-        <span className={cn('min-w-0 flex-1 truncate font-medium', !a.label && 'opacity-50')}>
+        <span
+          className={cn(
+            'min-w-0 flex-1 truncate font-medium',
+            !a.label && 'opacity-50',
+          )}
+        >
           {a.label || 'Sans nom'}
         </span>
       )}
 
-      {a.comment && <MessageSquare className="mr-1 size-3 shrink-0 opacity-70" />}
+      {a.comment && (
+        <MessageSquare className="mr-1 size-3 shrink-0 opacity-70" />
+      )}
 
       {interactive && (
         <span

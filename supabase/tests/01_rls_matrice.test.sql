@@ -222,6 +222,10 @@ insert into t_cas (tbl, page, op, cas, regle, sql, prep) values
 ('pdj_breakfasts','pdj','update','J-3','r2', $q$update public.pdj_breakfasts set served = not served where id = 'f0000000-0000-4000-8000-000000000001'$q$, null),
 ('pdj_breakfasts','pdj','update','J-4','g', $q$update public.pdj_breakfasts set served = not served where id = 'f0000000-0000-4000-8000-000000000002'$q$, null),
 ('pdj_breakfasts','pdj','update','J-3 → J-5 (sortie de fenêtre)','g?', $q$update public.pdj_breakfasts set service_date = current_date - 5 where id = 'f0000000-0000-4000-8000-000000000001'$q$, null),
+-- Une ligne IMPORTÉE ne devient pas manuelle hors gestion (sinon supprimable
+-- et hors plafond) : trigger pdj_breakfasts_manual_kind_fige, 42501.
+('pdj_breakfasts','pdj','update','import → manuel','g?', $q$update public.pdj_breakfasts set manual_kind = 'extra' where id = 'f0000000-0000-4000-8000-000000000003'$q$, null),
+('pdj_breakfasts','pdj','update','manuel extra → inclus','r2', $q$update public.pdj_breakfasts set manual_kind = 'inclus' where id = 'f0000000-0000-4000-8000-000000000001'$q$, null),
 ('pdj_breakfasts','pdj','delete','manuel J-3','r2', $q$delete from public.pdj_breakfasts where id = 'f0000000-0000-4000-8000-000000000001'$q$, null),
 ('pdj_breakfasts','pdj','delete','manuel J-4','g', $q$delete from public.pdj_breakfasts where id = 'f0000000-0000-4000-8000-000000000002'$q$, null),
 ('pdj_breakfasts','pdj','delete','import J-3','g', $q$delete from public.pdj_breakfasts where id = 'f0000000-0000-4000-8000-000000000003'$q$, null),
@@ -298,6 +302,10 @@ insert into t_cas (tbl, page, op, cas, regle, sql, prep) values
 ('baby_cot_assignments','literie','insert','début J-3','g', $q$insert into public.baby_cot_assignments (cot_id, start_date, end_date) values ('f0000000-0000-4000-8000-000000000019', current_date - 3, current_date)$q$, null),
 ('baby_cot_assignments','literie','update','fin J-2','r2', $q$update public.baby_cot_assignments set comment = 'x' where id = 'f0000000-0000-4000-8000-000000000020'$q$, null),
 ('baby_cot_assignments','literie','update','fin J-3','g', $q$update public.baby_cot_assignments set comment = 'x' where id = 'f0000000-0000-4000-8000-000000000021'$q$, null),
+-- Début reculé hors fenêtre (J-5 → J-6) : gestion seule (trigger
+-- baby_cot_assignments_no_past_rewrite, 42501) ; avancé : écriture.
+('baby_cot_assignments','literie','update','début reculé J-6','g?', $q$update public.baby_cot_assignments set start_date = current_date - 6 where id = 'f0000000-0000-4000-8000-000000000020'$q$, null),
+('baby_cot_assignments','literie','update','début avancé J-4','r2', $q$update public.baby_cot_assignments set start_date = current_date - 4 where id = 'f0000000-0000-4000-8000-000000000020'$q$, null),
 ('baby_cot_assignments','literie','delete','fin J-2','r2', $q$delete from public.baby_cot_assignments where id = 'f0000000-0000-4000-8000-000000000020'$q$, null),
 ('baby_cot_assignments','literie','delete','fin J-3','g', $q$delete from public.baby_cot_assignments where id = 'f0000000-0000-4000-8000-000000000021'$q$, null),
 ('baby_cots','literie','select','fixture','r1', $q$select count(*) from public.baby_cots where id = 'f0000000-0000-4000-8000-000000000019'$q$, null),
@@ -307,6 +315,8 @@ insert into t_cas (tbl, page, op, cas, regle, sql, prep) values
 ('hotel_rooms','literie','select','seed','r1', $q$select count(*) from public.hotel_rooms where room = 102$q$, null),
 ('hotel_rooms','literie','insert','-','jamais', $q$insert into public.hotel_rooms (room) values (999)$q$, null),
 ('hotel_rooms','literie','update','-','r2', $q$update public.hotel_rooms set literie_synthetique = not literie_synthetique where room = 102$q$, null),
+-- Numéro de chambre figé pour tout compte (trigger hotel_rooms_room_fige).
+('hotel_rooms','literie','update','renuméroter','jamais?', $q$update public.hotel_rooms set room = 999 where room = 102$q$, null),
 ('hotel_rooms','literie','delete','-','jamais', $q$delete from public.hotel_rooms where room = 102$q$, null),
 ('literie_stock','literie','select','seed','r1', $q$select count(*) from public.literie_stock$q$, null),
 ('literie_stock','literie','insert','-','jamais', $q$insert into public.literie_stock default values$q$, null),
@@ -401,13 +411,14 @@ insert into t_cas (tbl, page, op, cas, regle, sql, prep, comptes) values
 -- l'oracle est donc « aucune ligne admin au retour ».
 ('profiles','-','update','se nommer admin','jamais', $q$with u as (update public.profiles set role = 'admin' where id = auth.uid() returning role) select count(*) from u where role = 'admin'$q$, null,
   array['gestion','ecriture','lecture','aucun','reception']),
--- Compte révoqué (auth.users sans profil) : ne se recrée pas un profil admin
--- (le trigger force « utilisateur »).
-('profiles','-','insert','se recréer admin','jamais0', $q$with i as (insert into public.profiles (id, email, role) values (auth.uid(), 'revoque@exemple.test', 'admin') returning role) select count(*) from i where role = 'admin'$q$, null,
+-- Compte révoqué (auth.users sans profil) : ne se recrée pas un profil admin.
+-- Refus par la RLS (42501) depuis 20261017110000_regles_ecriture ; avant, la
+-- ligne passait et le trigger forçait « utilisateur » (oracle « 0 admin »).
+('profiles','-','insert','se recréer admin','jamais', $q$with i as (insert into public.profiles (id, email, role) values (auth.uid(), 'revoque@exemple.test', 'admin') returning role) select count(*) from i where role = 'admin'$q$, null,
   array['sans_profil']),
--- Constaté (comportement voulu par la policy « profiles insert (bornee) ») :
--- un compte révoqué PEUT se recréer un profil « utilisateur ».
-('profiles','-','insert','se recréer utilisateur (accepté)','uid', $q$insert into public.profiles (id, email, role) values (auth.uid(), 'revoque@exemple.test', 'utilisateur')$q$, null,
+-- Un compte révoqué ne se recrée pas non plus un profil « utilisateur »
+-- (insertion réservée à l'admin depuis 20261017110000_regles_ecriture).
+('profiles','-','insert','se recréer utilisateur','jamais', $q$insert into public.profiles (id, email, role) values (auth.uid(), 'revoque@exemple.test', 'utilisateur')$q$, null,
   array['sans_profil']),
 -- Un compte non admin ne crée pas le profil d'un AUTRE.
 ('profiles','-','insert','profil d''un autre, rôle admin','jamais', $q$with i as (insert into public.profiles (id, email, role) values ('c0000000-0000-4000-8000-000000000001', 'neuf@exemple.test', 'admin') returning role) select count(*) from i$q$, null,
