@@ -155,6 +155,12 @@ describe('ClasseurList — tableau', () => {
       'Accès',
     ])
     expect(container.querySelectorAll('tbody tr')).toHaveLength(3)
+    // Comme l'analytique : en-tête collant dans une zone qui défile.
+    const thead = container.querySelector('thead')!
+    expect(thead.className).toContain('sticky')
+    expect(thead.parentElement!.parentElement!.className).toContain(
+      'lg:overflow-y-auto',
+    )
     const l1 = cellules(container, 1)
     expect(l1[1]).toBe('10')
     expect(l1[2]).toBe('13')

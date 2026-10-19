@@ -1401,6 +1401,13 @@ AccesClasseurDialog.tsx` (bouclier dans la barre du haut de l'accueil,
   par `agregerStats` (pur, testé), clé `classeurKeys.stats()`, lue APRÈS la
   liste ; place réservée pendant la lecture, jamais un faux zéro.
   `ActionCard` est SUPPRIMÉE (plus aucun usage).
+  HAUTEUR (même jour, « comme les pages analytiques ») : bornage
+  d'`AnalytiqueTable` — à partir de `lg` la carte descend jusqu'au bas de la
+  fenêtre et son corps défile, en-tête collant opaque (trait en ombre) ; sous
+  `lg`, flux naturel. Les lignes gardent leur hauteur (pas d'étirement comme
+  les 12 mois). Chaîne `lg:min-h-0` : route, `ClasseurList`, carte ; classes
+  dans `TABLEAU_CLASSEURS` (carte, defilement, thead), partagées avec la
+  silhouette. La silhouette de route de la liste n'a plus de titre.
   MENU D'UN CLASSEUR (même jour, demande utilisateur) : clic droit sur la
   ligne SEULEMENT (bouton « ⋯ » refusé : « je veux juste le clic droit » ;
   plus de colonne Actions, Exporter et Supprimer sont dans le menu) — Ouvrir, Modifier le classeur, Accès,

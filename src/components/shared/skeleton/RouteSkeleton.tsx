@@ -273,10 +273,14 @@ export function RouteSkeleton({
             forme === 'chapitre' ||
             forme === 'detail') &&
             'min-h-0 overflow-hidden',
+          // Liste : comme la page, bornée à partir de `lg` seulement.
+          forme === 'liste' && 'lg:min-h-0',
         )}
         aria-hidden="true"
       >
-        <HeaderRow />
+        {/* La liste n'a pas de titre : sa barre de boutons est dans
+            `FormeClasseurListe`. */}
+        {forme !== 'liste' && <HeaderRow />}
         {forme === 'liste' && <FormeClasseurListe />}
         {forme === 'dashboard' && <FormeClasseurDashboard />}
         {forme === 'chapitre' && <FormeChapitre />}

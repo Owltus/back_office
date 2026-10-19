@@ -571,8 +571,21 @@ const GRILLE_CHAPITRE: CSSProperties = {
  * 2026-10-19). UNE source de classes pour le tableau et sa silhouette.
  */
 export const TABLEAU_CLASSEURS = {
-  carte: 'overflow-hidden rounded-xl border border-border bg-card',
-  entete: 'border-b border-border bg-muted/50',
+  /*
+   * Même bornage que `AnalytiqueTable` (2026-10-19, demande utilisateur) :
+   * sous `lg`, la carte prend sa hauteur naturelle et la page défile ; à
+   * partir de `lg`, elle descend jusqu'au bas de la fenêtre et son corps
+   * défile en interne, en-tête de colonnes collant. Les lignes gardent
+   * leur hauteur (contrairement aux 12 mois de l'analytique, étirés) : peu
+   * de classeurs ne doivent pas donner des lignes géantes.
+   */
+  carte:
+    'overflow-hidden rounded-xl border border-border bg-card lg:flex lg:min-h-0 lg:flex-1 lg:flex-col',
+  defilement:
+    'no-scrollbar overflow-x-auto lg:min-h-0 lg:flex-1 lg:overflow-y-auto',
+  /* Opaque (il passe au-dessus des lignes qui défilent) ; le trait est une
+     ombre : une bordure de `tr` collant disparaît avec `border-collapse`. */
+  thead: 'sticky top-0 z-10 bg-muted shadow-[inset_0_-1px_0_var(--border)]',
   th: 'px-3 py-2 text-xs font-medium text-muted-foreground',
   ligne:
     'border-b border-border/50 transition-colors last:border-b-0 hover:bg-accent/50',
@@ -596,73 +609,89 @@ export function FormeClasseurListe({
 }) {
   const tableau = (
     <div className={TABLEAU_CLASSEURS.carte}>
-      <table className="w-full text-sm">
-        <thead>
-          <tr className={TABLEAU_CLASSEURS.entete}>
-            <th className={cn(TABLEAU_CLASSEURS.th, 'text-left')}>
-              <Skeleton className="h-3 w-16" />
-            </th>
-            <th
-              className={cn(TABLEAU_CLASSEURS.th, 'hidden w-24 sm:table-cell')}
-            >
-              <Skeleton className="ml-auto h-3 w-14" />
-            </th>
-            <th
-              className={cn(TABLEAU_CLASSEURS.th, 'hidden w-24 sm:table-cell')}
-            >
-              <Skeleton className="ml-auto h-3 w-14" />
-            </th>
-            <th
-              className={cn(TABLEAU_CLASSEURS.th, 'hidden w-24 md:table-cell')}
-            >
-              <Skeleton className="h-3 w-16" />
-            </th>
-            {acces && (
+      <div className={TABLEAU_CLASSEURS.defilement}>
+        <table className="w-full text-sm">
+          <thead className={TABLEAU_CLASSEURS.thead}>
+            <tr>
+              <th className={cn(TABLEAU_CLASSEURS.th, 'text-left')}>
+                <Skeleton className="h-3 w-16" />
+              </th>
               <th
                 className={cn(
                   TABLEAU_CLASSEURS.th,
-                  'hidden w-12 sm:table-cell',
+                  'hidden w-24 sm:table-cell',
                 )}
-              />
-            )}
-          </tr>
-        </thead>
-        <tbody>
-          {Array.from({ length: cartes }).map((_, i) => (
-            <tr key={i} className={TABLEAU_CLASSEURS.ligne}>
-              <td className="px-3 py-2">
-                <div className="flex items-center gap-3">
-                  <Skeleton className="size-11 shrink-0 rounded-xl" />
-                  <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                    <Skeleton className="h-4 w-full max-w-48" />
-                    <Skeleton className="h-3 w-28" />
-                  </div>
-                </div>
-              </td>
-              <td className="hidden px-3 py-3 sm:table-cell">
-                <Skeleton className="ml-auto h-3.5 w-6" />
-              </td>
-              <td className="hidden px-3 py-3 sm:table-cell">
-                <Skeleton className="ml-auto h-3.5 w-6" />
-              </td>
-              <td className="hidden px-3 py-3 md:table-cell">
-                <Skeleton className="h-3.5 w-14" />
-              </td>
+              >
+                <Skeleton className="ml-auto h-3 w-14" />
+              </th>
+              <th
+                className={cn(
+                  TABLEAU_CLASSEURS.th,
+                  'hidden w-24 sm:table-cell',
+                )}
+              >
+                <Skeleton className="ml-auto h-3 w-14" />
+              </th>
+              <th
+                className={cn(
+                  TABLEAU_CLASSEURS.th,
+                  'hidden w-24 md:table-cell',
+                )}
+              >
+                <Skeleton className="h-3 w-16" />
+              </th>
               {acces && (
-                <td className="hidden px-3 py-3 sm:table-cell">
-                  <Skeleton className="mx-auto size-4 rounded-sm" />
-                </td>
+                <th
+                  className={cn(
+                    TABLEAU_CLASSEURS.th,
+                    'hidden w-12 sm:table-cell',
+                  )}
+                />
               )}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {Array.from({ length: cartes }).map((_, i) => (
+              <tr key={i} className={TABLEAU_CLASSEURS.ligne}>
+                <td className="px-3 py-2">
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="size-11 shrink-0 rounded-xl" />
+                    <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                      <Skeleton className="h-4 w-full max-w-48" />
+                      <Skeleton className="h-3 w-28" />
+                    </div>
+                  </div>
+                </td>
+                <td className="hidden px-3 py-3 sm:table-cell">
+                  <Skeleton className="ml-auto h-3.5 w-6" />
+                </td>
+                <td className="hidden px-3 py-3 sm:table-cell">
+                  <Skeleton className="ml-auto h-3.5 w-6" />
+                </td>
+                <td className="hidden px-3 py-3 md:table-cell">
+                  <Skeleton className="h-3.5 w-14" />
+                </td>
+                {acces && (
+                  <td className="hidden px-3 py-3 sm:table-cell">
+                    <Skeleton className="mx-auto size-4 rounded-sm" />
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
-  if (!actions) return <div aria-hidden="true">{tableau}</div>
+  if (!actions)
+    return (
+      <div aria-hidden="true" className="flex flex-col lg:min-h-0 lg:flex-1">
+        {tableau}
+      </div>
+    )
   return (
     <div
-      className="mx-auto flex w-full max-w-4xl flex-col gap-4"
+      className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-4 lg:min-h-0"
       aria-hidden="true"
     >
       <div className="flex justify-end gap-2">

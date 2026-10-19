@@ -211,7 +211,9 @@ export function ClasseurList({
   const colonnes = { acces: colonneAcces }
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
+    // `flex-1 lg:min-h-0` : à partir de `lg`, la colonne tient dans la
+    // fenêtre et le tableau prend la place restante (voir `TABLEAU_CLASSEURS`).
+    <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-4 lg:min-h-0">
       {importActif && (
         <input
           ref={inputRef}
@@ -274,116 +276,118 @@ export function ClasseurList({
         <FormeClasseurListe actions={false} {...colonnes} />
       ) : classeurs.isError ? null : (
         <div className={TABLEAU_CLASSEURS.carte}>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className={TABLEAU_CLASSEURS.entete}>
-                <th className={cn(TABLEAU_CLASSEURS.th, 'text-left')}>
-                  Classeur
-                </th>
-                <th
-                  className={cn(
-                    TABLEAU_CLASSEURS.th,
-                    'hidden w-24 text-right sm:table-cell',
-                  )}
-                >
-                  Chapitres
-                </th>
-                <th
-                  className={cn(
-                    TABLEAU_CLASSEURS.th,
-                    'hidden w-24 text-right sm:table-cell',
-                  )}
-                >
-                  Documents
-                </th>
-                <th
-                  className={cn(
-                    TABLEAU_CLASSEURS.th,
-                    'hidden w-24 text-left md:table-cell',
-                  )}
-                >
-                  Modifié le
-                </th>
-                {colonnes.acces && (
+          <div className={TABLEAU_CLASSEURS.defilement}>
+            <table className="w-full text-sm">
+              <thead className={TABLEAU_CLASSEURS.thead}>
+                <tr>
+                  <th className={cn(TABLEAU_CLASSEURS.th, 'text-left')}>
+                    Classeur
+                  </th>
                   <th
                     className={cn(
                       TABLEAU_CLASSEURS.th,
-                      'hidden w-12 sm:table-cell',
+                      'hidden w-24 text-right sm:table-cell',
                     )}
                   >
-                    <span className="sr-only">Accès</span>
+                    Chapitres
                   </th>
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {liste.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={6}
-                    className="px-4 py-8 text-center text-sm text-muted-foreground"
+                  <th
+                    className={cn(
+                      TABLEAU_CLASSEURS.th,
+                      'hidden w-24 text-right sm:table-cell',
+                    )}
                   >
-                    Aucun classeur.
-                    {canWrite ? ' Créez-en un pour commencer.' : ''}
-                  </td>
+                    Documents
+                  </th>
+                  <th
+                    className={cn(
+                      TABLEAU_CLASSEURS.th,
+                      'hidden w-24 text-left md:table-cell',
+                    )}
+                  >
+                    Modifié le
+                  </th>
+                  {colonnes.acces && (
+                    <th
+                      className={cn(
+                        TABLEAU_CLASSEURS.th,
+                        'hidden w-12 sm:table-cell',
+                      )}
+                    >
+                      <span className="sr-only">Accès</span>
+                    </th>
+                  )}
                 </tr>
-              ) : (
-                <DndContext
-                  sensors={sensors}
-                  collisionDetection={closestCenter}
-                  onDragEnd={handleDragEnd}
-                >
-                  <SortableContext
-                    items={liste.map((c) => c.id)}
-                    strategy={verticalListSortingStrategy}
+              </thead>
+              <tbody>
+                {liste.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="px-4 py-8 text-center text-sm text-muted-foreground"
+                    >
+                      Aucun classeur.
+                      {canWrite ? ' Créez-en un pour commencer.' : ''}
+                    </td>
+                  </tr>
+                ) : (
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleDragEnd}
                   >
-                    {liste.map((c) => (
-                      <LigneClasseur
-                        key={c.id}
-                        classeur={c}
-                        stats={statsDe.get(c.id)}
-                        statsEtat={
-                          stats.isPending
-                            ? 'chargement'
-                            : stats.isError
-                              ? 'erreur'
-                              : 'ok'
-                        }
-                        canDrag={peutReordonner}
-                        menu={entreesMenu(niveauDe(c), {
-                          ouvrir: () =>
+                    <SortableContext
+                      items={liste.map((c) => c.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      {liste.map((c) => (
+                        <LigneClasseur
+                          key={c.id}
+                          classeur={c}
+                          stats={statsDe.get(c.id)}
+                          statsEtat={
+                            stats.isPending
+                              ? 'chargement'
+                              : stats.isError
+                                ? 'erreur'
+                                : 'ok'
+                          }
+                          canDrag={peutReordonner}
+                          menu={entreesMenu(niveauDe(c), {
+                            ouvrir: () =>
+                              navigate({
+                                to: '/classeur/$classeurId',
+                                params: { classeurId: String(c.id) },
+                              }),
+                            modifier: () => setAModifier(c),
+                            acces: () => setAccesDe(c),
+                            exporter: onExporterJson
+                              ? () => void onExporterJson(c)
+                              : undefined,
+                            supprimer: () => setASupprimer(c),
+                          })}
+                          avecAcces={colonnes.acces}
+                          acces={
+                            !colonnes.acces
+                              ? null
+                              : canManage
+                                ? accesPourTous(c.acces_tous)
+                                : accesPersonnel(niveauDe(c))
+                          }
+                          onOpen={() =>
                             navigate({
                               to: '/classeur/$classeurId',
                               params: { classeurId: String(c.id) },
-                            }),
-                          modifier: () => setAModifier(c),
-                          acces: () => setAccesDe(c),
-                          exporter: onExporterJson
-                            ? () => void onExporterJson(c)
-                            : undefined,
-                          supprimer: () => setASupprimer(c),
-                        })}
-                        avecAcces={colonnes.acces}
-                        acces={
-                          !colonnes.acces
-                            ? null
-                            : canManage
-                              ? accesPourTous(c.acces_tous)
-                              : accesPersonnel(niveauDe(c))
-                        }
-                        onOpen={() =>
-                          navigate({
-                            to: '/classeur/$classeurId',
-                            params: { classeurId: String(c.id) },
-                          })
-                        }
-                      />
-                    ))}
-                  </SortableContext>
-                </DndContext>
-              )}
-            </tbody>
-          </table>
+                            })
+                          }
+                        />
+                      ))}
+                    </SortableContext>
+                  </DndContext>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
