@@ -728,17 +728,18 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   fichiers v1 à titres ou slugs en doublon écrasaient/dupliquaient
   (appariement par titre désormais consommé un à un). Règle de méthode :
   « fidèle au Rust » n'est pas « correct » — le Rust avait ces défauts.
-- **JSON d'un chapitre ou d'un document « pour un LLM » (2026-09-29,
-  demande utilisateur)** : bouton accolades `{}` sur la page d'un chapitre
-  (et menu « ⋯ ») et d'un document → `dialogs/EchangeJsonDialog.tsx` :
-  1. exporter (Copier / Télécharger), 2) réimporter (coller la réponse du
-     LLM, même entourée de texte ou de ```json — `extraireJson` —, ou choisir
-     un fichier), aperçu, Importer (droit d'écriture). MÊME format v2 que le
+- **JSON d'un chapitre ou d'un document pour une IA (2026-09-29, demande
+  utilisateur ; refait le 2026-10-19, voir « Échange avec une IA » plus
+  bas)** : bouton accolades `{}` « Échange avec une IA » (libellé « JSON
+  pour un LLM » jusqu'au 2026-10-20) sur la page d'un chapitre (et menu
+  « ⋯ ») et d'un document → `dialogs/EchangeJsonDialog.tsx` :
+  1. exporter (Copier / Télécharger, aucun choix), 2) réimporter (coller la
+     réponse de l'IA, même entourée de texte ou de ```json — `extraireJson` —,
+     ou choisir un fichier), aperçu, Importer (droit d'écriture). MÊME format v2 que le
      classeur complet : un classeur à UN chapitre (ou un chapitre contenant ce
      seul document), `_metadata` enrichi de `portee` (uuid) et `instructions`
-     (consignes pour le LLM : ce qu'il peut modifier, jamais `uuid`/`kind`/
-     chemins d'images, conventions Markdown de la page — ligne vide, `===`,
-     `> `, `- [ ]`, tableaux GFM). Logique pure `lib/classeur/merge/portee.ts`
+     (mode d'emploi pour l'IA, voir plus bas). Validation V1-V8 avant le
+     plan. Logique pure `lib/classeur/merge/portee.ts`
      (14 tests, mutations vérifiées) : `planifierFusion` en REMPLACEMENT
      (le LLM ne met pas `updated_at` à jour : en fusion « le plus récent
      gagne », ses modifications seraient ignorées) puis FILTRÉ à la portée —
@@ -751,17 +752,91 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
      (point `fusion` AVANT toute écriture, élagage). Vérifié navigateur sans
      écrire (aperçus chapitre, option de suppression, mauvais chapitre,
      document) ; base inchangée.
-     ⚠ **Consignes LLM : UNE source, TROIS exports** (retour utilisateur du
-     2026-09-30 : le classeur complet n'en avait aucune, son `content` était
-     décrit « texte libre en Markdown ») — `lib/classeur/merge/consignes.ts`
-     (`consignesClasseur` / `consignesChapitre` / `consignesDocument`, même
-     socle : champs modifiables, `uuid` intouchable, Markdown de la page,
-     images légende/taille, blocs `:::photos`/`:::etape`, `===`). `construireExport` (classeur
-     complet, et donc aussi les points de restauration) pose
-     `_metadata.instructions` ; `lireMetadata` le relit (aller-retour
+     ⚠ **Consignes pour l'IA : UNE source, TROIS exports** (retour
+     utilisateur du 2026-09-30 ; réécrites en MODE D'EMPLOI le 2026-10-19) —
+     `lib/classeur/merge/consignes.ts` (`consignesClasseur` /
+     `consignesChapitre` / `consignesDocument`, même socle : champs
+     modifiables, `uuid` intouchable, Markdown de la page, images
+     légende/taille, blocs `:::photos`/`:::etape`, `===`). `construireExport`
+     pose `_metadata.instructions` pour un export destiné à une personne
+     (défaut) et JAMAIS dans un point de restauration (`{ pourIa: false }`,
+     depuis le 2026-10-19) ; `lireMetadata` le relit (aller-retour
      identique). Registre accepte la clé (serde sans `deny_unknown_fields`,
      vérifié dans `files.rs`). Test « les TROIS exports » : toute convention
-     ajoutée à la page doit l'être ici, et le test la réclame.
+     ajoutée à la page doit l'être ici, et le test la réclame. Le libellé du
+     bouton `{}` est CITÉ dans les consignes (où importer) : le changer, c'est
+     changer `consignes.ts` aussi.
+- **Échange avec une IA (2026-10-19, plan `plan/classeur-echange-ia-2026-10-19/`,
+  exécuté avec les réponses par défaut de `D-decisions.md` partie B, à revoir
+  avec l'utilisateur)**. Demande : exporter SIMPLEMENT (cases « Demandes au
+  LLM » retirées), un fichier qui dit à l'IA tout ce qu'elle doit savoir pour
+  guider du personnel non initié, retour par un fichier réimportable, jamais
+  plusieurs classeurs.
+  - **Mode d'emploi** `_metadata.instructions` (`consignes.ts`) : portée en
+    tête (« un seul classeur par fichier »), puis 6 parties — à qui tu parles
+    (proposer 4 choix), répondre à une question depuis le contenu seul en
+    citant chapitre et élément (sans JSON), modifier (plan, accord, PUIS le
+    fichier complet et où l'importer), proposer des idées (feuilles de suivi,
+    de signature, intercalaires, `a-inserer`, `[!WARNING]`), l'application (4
+    natures, `periodicite_id` pris dans `_metadata.periodicites`, `nombre` 1 à
+    60, ajout d'élément et de chapitre), limites. ≤ 6 000 octets par export,
+    figé par `consignes.test.ts` (marge ~100 octets : tout ajout se paie).
+  - **Quatrième mur** (décision utilisateur) : l'IA rappelle ses limites
+    DANS LA CONVERSATION, jamais dans un titre, une description ou un contenu
+    (tout est imprimé). Filet : `relecture.ts`, liste FERMÉE `EXPRESSIONS_IA`
+    (27 tournures, texte normalisé, mots entiers, code ignoré ; « à vérifier »
+    seul jamais visé — 0 alerte sur les 107 documents de la base locale),
+    message « Phrase sur l'IA dans le texte. Elle serait imprimée. », non
+    bloquant, à l'import (titres et descriptions de toutes les natures) comme
+    dans l'éditeur.
+  - **Export** : Copier / Télécharger partout (`texteExportClasseur`,
+    `copierOuTelecharger` : refus du presse-papiers = téléchargement),
+    « Copier pour une IA » au clic droit d'une ligne de la liste. D3 : Copier
+    met TOUT (mode d'emploi compris) ; D5 : l'export d'un document reste au
+    document. Chaque feuille de suivi exportée porte le LIBELLÉ `periodicite`
+    (D8), relu par `lireItem` et contrôlé (V4), ignoré par Registre.
+    `_metadata.portee` de type `classeur` (uuid, nom) sur l'export d'un
+    classeur complet, pas dans les instantanés.
+  - **Instantanés** sans consignes : `construireExport(..., { pourIa: false })`
+    sur les trois chemins (`restauration.ts`, `apply.ts`, `history.ts`) ; les
+    cinq clés de Registre restent. Leur téléchargement depuis l'Historique est
+    une sauvegarde (infobulle « Télécharger cette sauvegarde »).
+  - **Import d'un classeur complet** (`MergePreviewDialog`, ligne Importer un
+    JSON, réponse COLLÉE ou fichier) : choix « Fichier rendu par une IA »
+    (défaut, D1) / « Fichier de Registre ou d'un autre poste » (D2, fusion /
+    remplacement INCHANGÉS). Mode IA = `merge/importIa.ts`,
+    `planifierImportIa` : `sansHorodatage` (déplacé de `portee.ts`) puis
+    remplacement, suppressions (éléments ET chapitres) retirées tant que la
+    case « Supprimer ce qui n'est plus dans le fichier » n'est pas cochée
+    (décochée par défaut). Couche AU-DESSUS de `planifierFusion` : R7, R8,
+    R11 intacts. `controlerPorteeClasseur` : export de chapitre ou de
+    document refusé, autre classeur averti (D10). Même circuit
+    (`appliquerImportIa` → `appliquerPlanifie`) : plan recalculé, refus
+    filtrés, point `fusion` AVANT la première écriture.
+  - **Validation V1-V8** (`merge/validationImport.ts`, pure) AVANT le plan,
+    donc avant le point de restauration : `nombre` borné 1..60, uuid non UUID
+    retiré (22P02), `periodicite_id` inconnu retiré, libellé différent averti,
+    feuille de suivi créée sans périodicité avertie, titre vidé = élément
+    ignoré (jamais supprimé), `_metadata.periodicites` retouché remplacé,
+    `sort_order` borné à int4. Fichier valide = même objet, plan identique.
+    Réglages en clair dans l'aperçu (« Mensuel → Annuel », « 14 → 20
+    lignes »).
+  - **D7** : l'import en NOUVEAU classeur depuis la liste valide puis relit ;
+    s'il y a quelque chose à dire, `dialogs/RelectureImportDialog.tsx`
+    (Créer le classeur / Annuler) avant de créer ; fichier propre = créé
+    aussitôt.
+  - **Écarts assumés** : `importerCommeNouveauClasseur` ne valide pas
+    lui-même (c'est l'appelant, `ClasseurListActions`) ; le mode Registre
+    n'est pas validé (D2, inchangé) ; un `nombre` non entier est déjà refusé
+    à la lecture (`parseImportJson`), la branche « non entier » de V1 ne sert
+    que d'appoint ; en mode IA, un élément supprimé localement que le fichier
+    contient encore (avec son uuid) est RESTAURÉ (le fichier fait foi).
+  - Libellés visibles « LLM » remplacés par « IA » le 2026-10-20 (bouton
+    `{}`, dialogue, message d'image inventée, aide de la mise en forme) ;
+    aide de la liste (« Travailler avec une IA »). Non fait : un vrai
+    aller-retour avec une IA (à faire par l'utilisateur) ; un fichier qui
+    MÉLANGE deux classeurs n'est pas détecté à l'import (seuls la consigne et
+    l'avertissement D10 sur `portee` le couvrent).
 - **UI** : TanStack Query partout (`useClasseur.ts`, `useMerge.ts`,
   invalidation de `classeurKeys.all`, optimistes pour le réordonnancement),
   `isPending` pour les gardes, pas de toasts (alertes inline,
@@ -1416,7 +1491,7 @@ AccesClasseurDialog.tsx` (bouclier dans la barre du haut de l'accueil,
   MENU D'UN CLASSEUR (même jour, demande utilisateur) : clic droit sur la
   ligne SEULEMENT (bouton « ⋯ » refusé : « je veux juste le clic droit » ;
   plus de colonne Actions, Exporter et Supprimer sont dans le menu) — Ouvrir, Modifier le classeur, Accès,
-  Exporter en JSON, Supprimer. Tout est TOUJOURS listé, grisé avec sa raison
+  Copier pour une IA (2026-10-19), Exporter en JSON, Supprimer. Tout est TOUJOURS listé, grisé avec sa raison
   (« Lecture seule », « Gestion seule ») selon `capacites(niveauEffectif)`,
   miroir des RLS ; droits pas encore lus = grisé. Au doigt : appui long =
   menu, sauf sur une ligne qui se glisse (gestion), où il reste au glisser
@@ -1583,10 +1658,12 @@ group-hover:` étaient INVISIBLES mais CLIQUABLES au doigt →
     filtré DANS le planificateur (`filtrerPlan`) avant le test « aucune
     action » et avant le point de restauration : tout refuser = aucune
     écriture ni point. Relecture avant import (`alertesRelecture(…, 'import')`,
-    image hors médiathèque = « inventée par le LLM ? », `a-inserer` jamais,
-    aucune alerte d'image tant que la médiathèque charge). Demandes toutes
-    prêtes (`llmDemandes.ts`, `_metadata.demande` posée SEULEMENT si une
-    demande existe, rien mémorisé — poste partagé).
+    image hors médiathèque = « inventée par l'IA ? », `a-inserer` jamais,
+    aucune alerte d'image tant que la médiathèque charge). ~~Demandes toutes
+    prêtes (`llmDemandes.ts`, `_metadata.demande`)~~ **RETIRÉES le
+    2026-10-19** à la demande de l'utilisateur (« pénibles ») : fichiers
+    supprimés, une clé `demande` d'un ancien fichier est ignorée (voir
+    « Échange avec une IA »).
   - **Fusion — E9 à E11** (en tête de `merge.ts`) : un élément ou un chapitre
     local n'est apparié qu'UNE fois (un LLM qui coupe un document en deux
     gardait l'uuid sur les deux moitiés : la 2e écrasait la 1re, moitié
@@ -1682,7 +1759,9 @@ group-hover:` étaient INVISIBLES mais CLIQUABLES au doigt →
       du classeur COMPLET avec comparaison, refus, relecture —
       `MergePreviewDialog` sur `ApercuImport`, `appliquerFusion({exclus})` ;
       demandes LLM à l'export complet, `ExportJsonClasseurDialog`,
-      `DemandesLlm.tsx`), D27 (zoom aussi en lecture et dans l'aperçu
+      `DemandesLlm.tsx` — demandes et `DemandesLlm.tsx` RETIRÉS le
+      2026-10-19, l'import du classeur complet a désormais un mode « Fichier
+      rendu par une IA », voir « Échange avec une IA »), D27 (zoom aussi en lecture et dans l'aperçu
       d'impression, ajusté à la largeur sur téléphone). ⚠ Page d'un document :
       AUCUN contrôle de zoom à l'écran (barre retirée à la demande de
       l'utilisateur), Ctrl + molette et Ctrl + 0 seulement, comme la grille

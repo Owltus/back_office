@@ -1,3 +1,5 @@
+> **REMPLACÉ le 2026-10-19 par `plan/classeur-echange-ia-2026-10-19/`** (demande utilisateur : les cases de demandes étaient pénibles). `llmDemandes.ts` et `DemandesLlm.tsx` sont supprimés ; ce document n'est plus qu'un historique.
+
 # Étape 3 — LLM : demandes toutes prêtes
 
 ## Objectif
@@ -15,16 +17,16 @@ non).
 
 ## Demandes proposées (une ligne chacune, à valider)
 
-| Demande | Consigne envoyée au LLM (résumé) |
-|---|---|
-| Corriger l'orthographe et la grammaire | Sans changer le sens ni la structure |
-| Mettre en étapes numérotées | Une action par étape, verbe à l'infinitif en tête |
-| Raccourcir | Phrases courtes, supprimer les redites, garder toutes les consignes |
-| Prévoir les photos | Ajouter des emplacements `![ce que la photo doit montrer](a-inserer)` là où une photo aide |
-| Ajouter les avertissements | Encadrés `> [!WARNING]` avant les gestes à risque |
-| Traduire en anglais | Garder les chemins d'images, les blocs et les uuid intacts |
-| Mettre en forme seulement | Titres, listes, encadrés ; ne pas toucher au texte |
-| Champ libre « Autre demande… » | Le texte saisi, tel quel |
+| Demande                                | Consigne envoyée au LLM (résumé)                                                           |
+| -------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Corriger l'orthographe et la grammaire | Sans changer le sens ni la structure                                                       |
+| Mettre en étapes numérotées            | Une action par étape, verbe à l'infinitif en tête                                          |
+| Raccourcir                             | Phrases courtes, supprimer les redites, garder toutes les consignes                        |
+| Prévoir les photos                     | Ajouter des emplacements `![ce que la photo doit montrer](a-inserer)` là où une photo aide |
+| Ajouter les avertissements             | Encadrés `> [!WARNING]` avant les gestes à risque                                          |
+| Traduire en anglais                    | Garder les chemins d'images, les blocs et les uuid intacts                                 |
+| Mettre en forme seulement              | Titres, listes, encadrés ; ne pas toucher au texte                                         |
+| Champ libre « Autre demande… »         | Le texte saisi, tel quel                                                                   |
 
 ## Fichier(s) impacté(s)
 

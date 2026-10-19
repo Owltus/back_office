@@ -1,6 +1,6 @@
 # Plan — Classeur : échange JSON avec une IA, refait pour des non-initiés
 
-> **EN COURS.** Plan écrit le 2026-10-19. Étapes 1 à 4 faites le 2026-10-19, 5 à 7 le 2026-10-20 (réponses par défaut de D-decisions.md, partie B) ; 8 à faire.
+> **TERMINÉ.** Plan écrit le 2026-10-19. Étapes 1 à 4 faites le 2026-10-19, 5 à 8 le 2026-10-20 (réponses par défaut de D-decisions.md, partie B, à revoir avec l'utilisateur). Rien n'est poussé. Bilan de clôture en fin de fichier.
 
 ---
 
@@ -58,7 +58,7 @@ référence (l'utilisateur demande par numéro ; ne jamais renuméroter).
 | 5   | [5-import-fichier-ia.md](./5-import-fichier-ia.md)                 | Import d'un fichier d'IA sans piège       | 2         | P0       | 5 h    | FAIT 1f6de60 : choix IA / Registre, collage, fichier qui fait foi sans horodatage, suppressions sur case, portée D10  | ⚠        |
 | 6   | [6-validation-avant-ecriture.md](./6-validation-avant-ecriture.md) | Validation avant toute écriture           | 5         | P0       | 3 h    | FAIT a7f16a0 : V1-V8 avant le plan et le point, fichier valide intact, réglages en clair, nouveau classeur validé     | ⚠        |
 | 7   | [7-relecture-quatrieme-mur.md](./7-relecture-quatrieme-mur.md)     | Relecture : quatrième mur et 4 natures    | 5         | P1       | 3 h    | FAIT 65cb569 : liste fermée sans faux positif sur la base locale, toutes natures, éditeur, relecture avant création   |          |
-| 8   | [8-cloture.md](./8-cloture.md)                                     | Aide, CLAUDE.md, contrôle global          | 1-7       | P0       | 2 h    | Doc à jour, vérification locale, `/borg`                                                                              | ⚠        |
+| 8   | [8-cloture.md](./8-cloture.md)                                     | Aide, CLAUDE.md, contrôle global          | 1-7       | P0       | 2 h    | FAIT 5533fc0 : aide, libellés IA, un seul classeur dans les consignes ; puis CLAUDE.md et bilan (commit de doc)       | ⚠        |
 
 ---
 
@@ -171,3 +171,60 @@ déjà posées à l'utilisateur et restent sans réponse (D2 et D3).
 | Tests                        | `portee.test.ts`, `portee.adverse.test.ts`, `schema.test.ts`, `fusionComplete.exclus.property.test.ts`, `ExportJsonClasseurDialog.test.tsx`, `EchangeJsonDialog.test.tsx`, `MergePreviewDialog.test.tsx`, `relecture.test.ts`                          | `importIa.test.ts`, `validationImport.test.ts`, `consignes.test.ts` |
 | Doc                          | `CLAUDE.md`, `plan/classeur-fonctions-2026-10-04/3-llm-demandes.md` (marqué remplacé)                                                                                                                                                                  | —                                                                   |
 | **Total**                    | **~27 modifiés**                                                                                                                                                                                                                                       | **5 nouveaux**                                                      |
+
+---
+
+## Bilan de clôture (2026-10-20)
+
+Commits : 483d563 (1), ed977a7 (2), 3ad1ccd (3), 1b49a3d (4), 1f6de60 (5),
+a7f16a0 (6), 65cb569 (7), 5533fc0 (8, interface) et le commit de
+documentation de l'étape 8 ; index : 574151d, b93435e. Rien n'est poussé.
+Suite complète au moment de la clôture : 228 fichiers, 2 915 tests verts ;
+`tsc` propre ; lint propre sur les fichiers touchés, sauf l'erreur
+préexistante `no-unnecessary-type-assertion` de `ClasseurList.test.tsx`
+l.17.
+
+### Audit « répond-il à la demande ? »
+
+| Exigence de l'utilisateur                                               | Couvert ?            | Où                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ----------------------------------------------------------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Exporter simplement, sans cases de demandes                             | Oui                  | Étape 1 (483d563) : cases et `_metadata.demande` retirées. Étape 3 (3ad1ccd) : Copier / Télécharger partout, Copier pour une IA au clic droit de la liste.                                                                                                                                                                                                                                                                                                                                                             |
+| `_metadata` = mode d'emploi complet qui guide un non-développeur        | Oui                  | Étape 2 (ed977a7) : 6 parties, l'IA demande d'abord ce que la personne veut, ne parle jamais de JSON avec elle.                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ... répondre aux questions sur le contenu                               | Oui                  | Partie 2 : depuis le contenu seul, en citant chapitre et élément, sans JSON ; document seul : renvoi vers l'export du chapitre ou du classeur (D5).                                                                                                                                                                                                                                                                                                                                                                    |
+| ... mettre à jour le classeur                                           | Oui                  | Partie 3 (plan, accord, fichier complet, où l'importer) ; étapes 5 (1f6de60) et 6 (a7f16a0) pour que l'import l'applique.                                                                                                                                                                                                                                                                                                                                                                                              |
+| ... ajouter des chapitres et des éléments                               | Oui                  | Partie 5 : forme d'un élément et d'un chapitre à ajouter (export du classeur ; un chapitre seul ne crée pas de chapitre, un document seul n'ajoute rien, c'est dit à l'IA).                                                                                                                                                                                                                                                                                                                                            |
+| ... générer des choses à partir des données                             | Oui, mais mince      | Partie 1 propose « créer quelque chose à partir du contenu (résumé, affiche, quiz, liste de contrôle) » ; aucune consigne ne dit si le résultat reste dans la conversation ou devient un document du classeur. L'IA le déduit des parties 2 et 3. À enrichir si l'usage le montre (marge de taille : ~100 octets).                                                                                                                                                                                                     |
+| Portée : classeur, chapitre ou document                                 | Oui                  | Étapes 2, 3 ; `_metadata.portee` des trois types ; import du classeur : export de chapitre ou de document refusé (5, `controlerPorteeClasseur`) ; chapitre / document : refus d'un fichier d'une autre portée (existant).                                                                                                                                                                                                                                                                                              |
+| Jamais plusieurs classeurs                                              | Oui, avec une limite | Le format ne porte qu'un objet `classeur` ; l'export n'en sort qu'un ; un fichier d'un autre classeur est averti (D10). Consigne explicite « Un seul classeur par fichier : n'en fusionne jamais deux » ajoutée seulement à l'étape 8 (5533fc0) : elle MANQUAIT. **Non couvert** : un fichier où l'IA a MÉLANGÉ deux classeurs (portée de celui-ci, chapitres de l'autre) n'est pas détecté ; ses éléments sont créés comme nouveaux (uuid d'ailleurs retiré ou renouvelé, E11), visibles dans l'aperçu et refusables. |
+| Autres modèles : feuilles de suivi, de signature, intercalaires         | Oui                  | Étape 2 (natures, quand les utiliser, idées, `periodicite_id`, `nombre` 1..60, D4) ; D8 libellé `periodicite` ; étape 6 (bornes, périodicité inconnue, réglages en clair) ; étape 7 (relecture des titres et descriptions de toutes les natures).                                                                                                                                                                                                                                                                      |
+| Retour par un JSON à réimporter                                         | Oui                  | Étape 5 : réponse collée ou fichier, mode IA par défaut, le fichier fait foi sans horodatage, suppressions seulement sur case ; étape 6 : rien ne casse au milieu ; D7 (65cb569) : relecture avant un nouveau classeur.                                                                                                                                                                                                                                                                                                |
+| L'IA propose des idées et rappelle ses limites, jamais dans le classeur | Oui                  | Parties 4 et 6 (ed977a7) ; filet à l'import et dans l'éditeur (65cb569, 27 tournures, non bloquant). Limite connue : liste fermée, une tournure nouvelle passe ; c'est voulu (zéro faux positif sur la base locale).                                                                                                                                                                                                                                                                                                   |
+
+### Contrôle global (lecture du code)
+
+- Interop Registre : `_metadata` garde `description`, `generated_at`, `note`
+  (chaîne), `schema`, `periodicites` `{ id, label, nombre }` dans les trois
+  exports et dans les instantanés ; `instructions`, `portee` et le libellé
+  `periodicite` d'une feuille sont des clés inconnues pour Registre
+  (ignorées, pas de `deny_unknown_fields`). Aucun changement de `slugify` ni
+  de l'ordre des clés.
+- Point de restauration avant toute écriture : fusion Registre, import IA et
+  réimport d'un chapitre ou d'un document passent tous par
+  `appliquerPlanifie` (instantané `fusion` puis écritures, plan vide = rien) ;
+  restauration : point `securite` avant `updateClasseur` et le plan ; import
+  en nouveau classeur : pas de point, par conception (rien à restaurer), la
+  validation et la relecture D7 précèdent la création.
+- Restauration et import Registre : `planifierFusion` inchangé (R7, R8, R11),
+  le mode IA est une couche au-dessus ; oracles et propriétés verts.
+- Problème trouvé : la consigne « jamais plusieurs classeurs » n'était pas
+  écrite (corrigé, 5533fc0) ; le mélange de deux classeurs dans un même
+  fichier reste non détecté (voir ci-dessus).
+
+### À faire par l'utilisateur
+
+- Un vrai aller-retour avec une IA, sur une copie locale : coller l'export du
+  classeur, poser une question (réponse citée, sans JSON), demander une
+  modification d'un chapitre (plan, accord, bloc), l'importer en mode IA,
+  puis ajouter une feuille de suivi et une feuille de signature.
+- Vérifier que l'IA ne glisse aucune phrase sur elle-même dans le contenu.
+- Revoir les décisions par défaut D1 à D10 (`D-decisions.md`, partie B).
