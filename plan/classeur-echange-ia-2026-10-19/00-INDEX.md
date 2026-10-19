@@ -1,0 +1,173 @@
+# Plan — Classeur : échange JSON avec une IA, refait pour des non-initiés
+
+> **EN COURS.** Plan écrit le 2026-10-19. Étapes 1 à 4 faites le 2026-10-19 (réponses par défaut de D-decisions.md, partie B) ; 5 à 8 à faire.
+
+---
+
+## Contexte
+
+L'export JSON « pour un LLM » existe depuis le 2026-09-29 (chapitre, document)
+et le 2026-10-04 (classeur complet, demandes toutes prêtes). Retour de
+l'utilisateur le 2026-10-19 : les cases « Demandes au LLM » (Corriger, Mettre
+en étapes, Raccourcir…) sont pénibles ; il veut **exporter simplement**, et que
+le JSON porte **tout ce qu'une IA doit savoir** sur l'app pour guider des
+personnes qui ne sont ni développeurs ni rompues aux bonnes pratiques :
+répondre à leurs questions sur le contenu (un « RAG simple »), proposer des
+idées, mettre à jour le classeur, ajouter des chapitres et des éléments,
+générer des choses à partir des données.
+
+Réponses de l'utilisateur (2026-10-19) :
+
+| Sujet                    | Réponse                                                                                                                                                                                                    |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Portée                   | Un classeur entier, un chapitre ou un document. **Jamais plusieurs classeurs** (trop de volume). Penser aux autres modèles (feuilles de suivi, de signature, intercalaires) quand c'est pertinent.         |
+| Demandes à cocher        | Les retirer.                                                                                                                                                                                               |
+| Retour des modifications | Un JSON à réimporter.                                                                                                                                                                                      |
+| Guidage                  | Proposer des idées et rappeler les limites. **Jamais** un avertissement du genre « je peux me tromper » écrit dans le contenu d'un classeur (« briser le quatrième mur ») : il reste dans la conversation. |
+
+**Numérotation** : les numéros d'étape ci-dessous sont les seuls numéros de
+référence (l'utilisateur demande par numéro ; ne jamais renuméroter).
+
+---
+
+## Ce que l'exploration a changé
+
+| Fait établi                                                                                                                                                                                                                                    | Conséquence                                                                                                                  |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `COMMUNES` (`consignes.ts` l.16) impose « ta réponse doit être le JSON complet… ».                                                                                                                                                             | L'IA ne peut ni dialoguer, ni répondre à une question. C'est le cœur à réécrire (étape 2).                                   |
+| `consignesClasseur` demande de réimporter en REMPLACEMENT ; en fusion, R7 (« le plus récent gagne », `merge.ts` l.282) classe `unchanged` tout élément dont l'IA a recopié `updated_at`.                                                       | L'import d'un classeur complet venant d'une IA ignore ses modifications en silence si l'on choisit mal. Étape 5.             |
+| Le moteur sait DÉJÀ créer les 4 natures (R10). Seul l'ajout de document est décrit à l'IA, et `periodicite_id` / `nombre` lui sont interdits.                                                                                                  | Pas de moteur à écrire pour les feuilles : des consignes (étape 2) et une validation (étape 6).                              |
+| `nombre` n'a aucune borne côté app ; la base a `CHECK (nombre BETWEEN 1 AND 60)`. Un uuid mal formé donne 22P02, non réessayé. Aucune transaction.                                                                                             | Un fichier d'IA peut casser un import AU MILIEU. Valider avant l'instantané (étape 6).                                       |
+| Aucun marqueur fiable de provenance : les exports, les instantanés et les fichiers d'IA portent tous `instructions`.                                                                                                                           | C'est l'écran d'import qui dit « fichier d'une IA », pas le contenu (D1).                                                    |
+| Registre (`files.rs` l.110-117) exige les cinq clés de `_metadata` s'il est présent (`description`, `generated_at`, `note`, `schema`, `periodicites`) ; il ignore les clés inconnues, y compris sur `ItemJson` (pas de `deny_unknown_fields`). | Le mode d'emploi reste dans `instructions` (ou une clé nouvelle) ; on peut ajouter un libellé de périodicité sur un élément. |
+| `construireExport` sert aussi aux points de restauration (`restauration.ts:142`, `apply.ts:511`, `history.ts:71`).                                                                                                                             | Un mode d'emploi plus long alourdit chaque instantané en base (étape 4).                                                     |
+| `SCHEMA_DESCRIPTIF` dit « le merge n'efface jamais » et « periodicites ignorée à l'import » : les deux sont faux dans le Back Office.                                                                                                          | À corriger avec les consignes (étape 2).                                                                                     |
+| `relireLigneImport` ne relit que le `content` des documents.                                                                                                                                                                                   | Une phrase « généré par IA » dans le titre d'une feuille passerait. Étape 7.                                                 |
+| L'export d'un document seul ne contient que ce document.                                                                                                                                                                                       | Une question qui dépasse le document doit passer par l'export du chapitre ou du classeur (D5).                               |
+
+---
+
+## Phases
+
+| #   | Fichier                                                            | Phase                                     | Dépend de | Priorité | Effort | Livrable                                                                                                              | Critique |
+| --- | ------------------------------------------------------------------ | ----------------------------------------- | --------- | -------- | ------ | --------------------------------------------------------------------------------------------------------------------- | -------- |
+| 1   | [1-retrait-demandes.md](./1-retrait-demandes.md)                   | Retirer les demandes au LLM               | —         | P0       | 2 h    | FAIT 483d563 : plus de cases, plus de `_metadata.demande` (ancien fichier lu, clé ignorée)                            |          |
+| 2   | [2-mode-emploi-ia.md](./2-mode-emploi-ia.md)                       | Mode d'emploi pour l'IA                   | 1         | P0       | 4 h    | FAIT ed977a7 : mode d'emploi en 6 parties + quatrième mur, 5,7 à 5,9 ko ; schéma corrigé ; libellé `periodicite` (D8) | ⚠        |
+| 3   | [3-export-un-clic.md](./3-export-un-clic.md)                       | Export en un clic partout                 | 1, 2      | P0       | 3 h    | FAIT 3ad1ccd : Copier / Télécharger partout, repli téléchargement, Copier pour une IA dans le menu de la liste        |          |
+| 4   | [4-instantanes-legers.md](./4-instantanes-legers.md)               | Points de restauration sans mode d'emploi | 2         | P2       | 1 h    | FAIT 1b49a3d : instantanés sans `instructions`, cinq clés de Registre gardées                                         |          |
+| 5   | [5-import-fichier-ia.md](./5-import-fichier-ia.md)                 | Import d'un fichier d'IA sans piège       | 2         | P0       | 5 h    | Le fichier fait foi, sans horodatage ; suppressions sur case                                                          | ⚠        |
+| 6   | [6-validation-avant-ecriture.md](./6-validation-avant-ecriture.md) | Validation avant toute écriture           | 5         | P0       | 3 h    | `nombre`, uuid, périodicités contrôlés avant l'instantané                                                             | ⚠        |
+| 7   | [7-relecture-quatrieme-mur.md](./7-relecture-quatrieme-mur.md)     | Relecture : quatrième mur et 4 natures    | 5         | P1       | 3 h    | Alerte sur « généré par IA », « à vérifier »… partout                                                                 |          |
+| 8   | [8-cloture.md](./8-cloture.md)                                     | Aide, CLAUDE.md, contrôle global          | 1-7       | P0       | 2 h    | Doc à jour, vérification locale, `/borg`                                                                              | ⚠        |
+
+---
+
+## Ordre d'exécution
+
+1. **1** : retirer d'abord les demandes, sinon les consignes réécrites
+   cohabiteraient avec une clé `demande` morte.
+2. **2** : la source unique des consignes ; 3, 4 et 5 en dépendent.
+3. **3** : l'export visible par l'utilisateur.
+4. **5 → 6 → 7** : même circuit d'import (`EchangeJsonDialog`,
+   `MergePreviewDialog`, `ApercuImport`), donc JAMAIS en parallèle.
+5. **4** : indépendante, faite quand 2 est figée.
+6. **8** : clôture.
+
+Chaque étape : tests purs + phase /martin + vérification navigateur sur
+`localhost:3000` SANS compte réel (si aucun compte de test local, le dire),
+puis commit par `pnpm commit`, sans push. Une étape ⚠ est suivie d'un audit
+`/borg` ; un problème critique arrête le chantier.
+
+---
+
+## Architecture cible
+
+```
+Exporter (classeur | chapitre | document)  ── un clic : Copier / Télécharger
+  └─ JSON v2 (Registre le lit toujours)
+       _metadata.description / generated_at / note / schema / periodicites
+       _metadata.instructions  = MODE D'EMPLOI (consignes.ts, une source)
+          1. à qui tu parles  2. répondre (citer chapitre + document)
+          3. modifier (plan, accord, JSON, comment l'importer)
+          4. proposer des idées (dont feuilles de suivi / signature)
+          5. l'app : 4 natures, périodicités, mise en page A4
+          6. limites : dans la conversation, JAMAIS dans le contenu
+       _metadata.portee (chapitre, document ; classeur selon D10)
+
+Importer
+  ├─ « Fichier rendu par une IA » (défaut, D1)
+  │    sansHorodatage → remplacement filtré → suppressions sur case
+  │    validation (étape 6) → aperçu + refus → relecture (étape 7)
+  │    → point de restauration → écritures
+  └─ « Fichier de Registre ou d'un autre poste » (D2) : fusion / remplacement actuels
+```
+
+---
+
+## Implications transverses
+
+### Interopérabilité Registre
+
+- Garder les cinq clés de `_metadata` avec leurs types ; ne jamais toucher
+  `slugify`, ni l'ordre des clés d'`itemVersJson`.
+- Toute nouvelle clé de `_metadata` posée par `construireExport` est relue par
+  `lireMetadata` (test d'aller-retour de `schema.test.ts`).
+
+### Restauration
+
+- `restaurerInstantane` passe par `planifierFusion` en remplacement AVEC les
+  `updated_at` (E6). Le mode IA est une COUCHE au-dessus (comme
+  `portee.ts` / `sansHorodatage`), jamais une modification de R7, R8 ou R11.
+- Les tests de propriétés (`audit.property.test.ts` P1-P10, `e10`, oracles
+  `fusionAvantE10`, `porteeAvantRefus`) doivent rester verts SANS changement :
+  l'option désactivée donne un plan identique.
+
+### Base
+
+- Aucune migration prévue. Si l'étape 4 change la taille des instantanés,
+  rien ne change dans le schéma.
+
+### Cache persisté et poste partagé
+
+- Rien n'est mémorisé du choix d'export ou d'import.
+
+### Interface
+
+- Règles de l'UI : phrases courtes, pas de jargon, ni tiret cadratin ni « » dans
+  les messages, un message seulement en cas d'anomalie.
+
+### Écritures réelles
+
+- À faire par l'utilisateur à la fin : un aller-retour réel avec une IA
+  (question, puis modification d'un chapitre, puis ajout d'une feuille de suivi).
+
+---
+
+## Phases de test /martin — règles communes
+
+| Règle              | Application                                                                                                              |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| Oracle indépendant | Pour l'import IA : un simulateur naïf « le fichier fait foi » comparé au plan filtré.                                    |
+| Mutation           | Chaque garde nouvelle (borne de `nombre`, format d'uuid, filtre de relecture) est mutée à la main et doit être attrapée. |
+| Non-régression     | Les plans des chemins NON-IA restent identiques (oracles existants).                                                     |
+| Stryker            | Au moins 80 % sur les fichiers purs nouveaux ou réécrits.                                                                |
+
+---
+
+## Angles à clarifier
+
+Voir [D-decisions.md](./D-decisions.md) : D1 à D10. Deux questions étaient
+déjà posées à l'utilisateur et restent sans réponse (D2 et D3).
+
+---
+
+## Fichiers impactés (résumé)
+
+| Couche                       | Fichiers modifiés                                                                                                                                                                                                                                      | Fichiers nouveaux                                                   |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------- |
+| Métier pur (`lib/classeur/`) | `merge/consignes.ts`, `merge/schema.ts`, `merge/portee.ts`, `merge/apply.ts`, `merge/history.ts` (commentaire), `exportJson.ts`, `restauration.ts`, `relecture.ts`                                                                                     | `merge/importIa.ts`, `merge/validationImport.ts`                    |
+| Composants                   | `dialogs/ExportJsonClasseurDialog.tsx`, `dialogs/EchangeJsonDialog.tsx`, `dialogs/MergePreviewDialog.tsx`, `dialogs/ApercuImport.tsx`, `ClasseurDashboard.tsx`, `ClasseurDashboardActions.tsx`, `ClasseurListActions.tsx`, `ClasseurListHelpPanel.tsx` | —                                                                   |
+| Supprimés                    | `llmDemandes.ts`, `dialogs/DemandesLlm.tsx`, `llmDemandes.test.ts`, `merge/portee.demande.test.ts`, `merge/__oracle__/export-portee-avant-demandes.json`                                                                                               | —                                                                   |
+| Tests                        | `portee.test.ts`, `portee.adverse.test.ts`, `schema.test.ts`, `fusionComplete.exclus.property.test.ts`, `ExportJsonClasseurDialog.test.tsx`, `EchangeJsonDialog.test.tsx`, `MergePreviewDialog.test.tsx`, `relecture.test.ts`                          | `importIa.test.ts`, `validationImport.test.ts`, `consignes.test.ts` |
+| Doc                          | `CLAUDE.md`, `plan/classeur-fonctions-2026-10-04/3-llm-demandes.md` (marqué remplacé)                                                                                                                                                                  | —                                                                   |
+| **Total**                    | **~27 modifiés**                                                                                                                                                                                                                                       | **5 nouveaux**                                                      |
