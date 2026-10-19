@@ -172,3 +172,46 @@ describe('ApercuImport — réglages des feuilles en clair (étape 6, D4)', () =
     ).toBeTruthy()
   })
 })
+
+describe('ApercuImport — quatrième mur (étape 7)', () => {
+  it('titre d’une feuille : signalé, « éléments » dans l’en-tête, « Titre » dans la liste', () => {
+    const feuille: LigneImport = {
+      cle: 'nouveau:signature_sheet:2:Émargement (brouillon généré)',
+      genre: 'creation',
+      kind: 'signature_sheet',
+      titre: 'Émargement (brouillon généré)',
+      avant: { title: '', description: '', content: '' },
+      apres: {
+        title: 'Émargement (brouillon généré)',
+        description: '',
+        content: '',
+      },
+      changement: 'texte',
+      ordreChange: false,
+      numero: null,
+    }
+    render(
+      <ApercuImport
+        lignes={[feuille, ligne(1, 'Check-in', 'Texte généré par une IA.')]}
+        refuses={new Set()}
+        onBasculerRefus={() => {}}
+        ouvertes={new Set([feuille.cle as string])}
+        onOuvertes={() => {}}
+        disabled={false}
+        images={new Map()}
+        etatImages="pret"
+      />,
+    )
+    expect(
+      screen.getByText(
+        "2 éléments ont des points à vérifier. L'import reste possible.",
+      ),
+    ).toBeTruthy()
+    const liste = screen.getByRole('list', { name: '1 point à vérifier' })
+    expect(liste.textContent).toBe(
+      "Titre · Phrase sur l'IA dans le texte. Elle serait imprimée.",
+    )
+    // Pas de note de mise en page pour une feuille.
+    expect(screen.queryByText(/sera vérifiée dans/)).toBeNull()
+  })
+})

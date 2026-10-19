@@ -28,6 +28,15 @@
  * une étape de liste de plus de 35 mots (une action par étape), un émoji
  * (mal imprimé en noir et blanc), une case de tableau « null ».
  *
+ * Et le « QUATRIÈME MUR » (plan `classeur-echange-ia-2026-10-19`, étape 7,
+ * D9) : une phrase sur l'IA ou sur le texte lui-même (« généré par IA »,
+ * « en tant qu'IA », « je peux me tromper », « vérifiez ce texte »,
+ * « brouillon généré »…) serait imprimée telle quelle dans un registre.
+ * Liste FERMÉE (`EXPRESSIONS_IA`), insensible à la casse et aux accents,
+ * établie sur le contenu réel des classeurs (aucune alerte sur l'existant) :
+ * « à vérifier » SEUL est légitime dans une procédure de contrôle, il n'est
+ * jamais visé. Alerte non bloquante, à l'import comme dans l'éditeur.
+ *
  * Le contenu des blocs de code (```) est ignoré.
  */
 
@@ -46,6 +55,11 @@ export interface Alerte {
   /** Ligne concernée, 1 = première ligne du texte. */
   ligne: number
   message: string
+  /**
+   * Alerte sur le TITRE ou la DESCRIPTION (pas sur une ligne du texte) :
+   * l'interface l'affiche sous ce nom au lieu de « Ligne N ».
+   */
+  champ?: 'titre' | 'description'
   /**
    * Alerte tirée de la MÉDIATHÈQUE (image introuvable, trop large, trop
    * haute, bandeau) : jamais émise tant qu'elle n'est pas chargée.
@@ -99,6 +113,96 @@ const NOM_NIVEAU: Record<number, string> = {
 
 function nomNiveau(n: number): string {
   return NOM_NIVEAU[n] ?? `titre de niveau ${String(n)}`
+}
+
+// ---------------------------------------------------------------------------
+// Quatrième mur : phrases sur l'IA ou sur le texte lui-même (étape 7)
+// ---------------------------------------------------------------------------
+
+/** Message unique d'une phrase sur l'IA (décision D9 : jamais bloquant). */
+export const MESSAGE_IA = "Phrase sur l'IA dans le texte. Elle serait imprimée."
+
+/**
+ * Minuscules, SANS ACCENTS, apostrophes droites, emphase Markdown retirée,
+ * espaces simples : « Généré par **l’IA** » devient « genere par l'ia ».
+ */
+export function normaliserPhrase(s: string): string {
+  return s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[\u2018\u2019\u02bc`\u00b4]/g, "'")
+    .replace(/[*_~]/g, '')
+    .replace(/\s+/g, ' ')
+}
+
+/** Une IA nommée, après « généré par » (le verbe le dit déjà). */
+const IA_LARGE =
+  "(?:une |un |l'|le |la )?(?:ia|i\\.a\\.|intelligence artificielle|chat ?gpt|gpt(?:-?\\d+)?|llm|modele de langage|modele d'ia|claude|gemini|copilot|mistral)"
+/** Après « rédigé par » : jamais un prénom (Claude) ni « l'assistant ». */
+const IA_STRICTE =
+  "(?:une |un |l'|le |la )?(?:ia|i\\.a\\.|intelligence artificielle|chat ?gpt|gpt(?:-?\\d+)?|llm|modele de langage|modele d'ia)"
+
+/**
+ * Liste FERMÉE, sur le texte NORMALISÉ (`normaliserPhrase`). Chaque entrée
+ * vise l'IA ou le texte lui-même, jamais un geste de contrôle : ni « à
+ * vérifier », ni « vérifier le contenu » (du coffre…), ni « en tant
+ * qu'assistant » (de direction), ni « généré automatiquement » (le rapport
+ * de nuit), ni « je peux vous proposer » (script de réception).
+ */
+export const EXPRESSIONS_IA: readonly string[] = [
+  `genere(?:e|s|es)? (?:par|avec|grace a) ${IA_LARGE}`,
+  `(?:redige|ecrit|cree|produit|traduit|reformule|resume)(?:e|s|es)? (?:par|avec|grace a) ${IA_STRICTE}`,
+  '(?:contenu|texte|brouillon|resume|reponse)s? genere(?:e|s|es)?',
+  "en tant qu'(?:ia|intelligence artificielle|assistant (?:virtuel|ia|numerique))",
+  "en tant que (?:modele de langage|modele d'ia|intelligence artificielle)",
+  'je suis (?:une ia|une intelligence artificielle|un assistant (?:virtuel|ia|numerique)|un modele de langage)',
+  'modele de langage',
+  'je (?:peux|pourrais|suis susceptible de) (?:me tromper|faire des erreurs|commettre des erreurs)',
+  '(?:ce|le|cette) (?:texte|contenu|resume|reponse|brouillon|document) (?:peut|pourrait) contenir des (?:erreurs|inexactitudes|approximations|imprecisions)',
+  'contenir des inexactitudes',
+  '(?:verifiez|verifier|relisez|relire) (?:ce|cette) (?:texte|contenu|brouillon|resume|proposition|reponse)',
+  "(?:verifie|relu|valide|controle|verification|relecture|validation)(?:e|s|es)? (?:par un |d'un )?(?:etre )?humain(?:e|s)?",
+  '(?:verification|relecture|validation) humaine',
+  '(?:est|ceci est) un brouillon',
+  'brouillon (?:genere|ia|automatique|a verifier|a relire|a valider)',
+  '[\\[(]brouillon[\\])]',
+  'a (?:verifier|relire|valider) avant (?:impression|publication|diffusion)',
+  'selon mes (?:connaissances|informations)',
+  'date (?:de coupure|limite) de (?:mes )?connaissances',
+  "j'ai (?:genere|reformule|restructure|reorganise|resume)",
+  "(?:note|remarque|avertissement) (?:de l'ia|de l'assistant ia|du modele)",
+  '(?:texte|contenu|informations?) non verifiee?s?',
+  'as an ai',
+  'ai[- ]generated',
+  'generated (?:by|with) (?:an )?ai',
+  'language model',
+  'i (?:may|might|could) be wrong',
+]
+
+const RE_IA = new RegExp(
+  `(?<![a-z0-9])(?:${EXPRESSIONS_IA.join('|')})(?![a-z0-9])`,
+)
+
+/** Une phrase sur l'IA ou sur le texte lui-même dans `texte` ? */
+export function contientPhraseIa(texte: string): boolean {
+  return RE_IA.test(normaliserPhrase(texte))
+}
+
+/**
+ * Alertes du quatrième mur sur le titre et la description d'un élément
+ * (toutes natures, chapitres compris).
+ */
+export function alertesChampsIa(champs: {
+  title: string
+  description?: string
+}): Alerte[] {
+  const alertes: Alerte[] = []
+  if (contientPhraseIa(champs.title))
+    alertes.push({ ligne: 1, champ: 'titre', message: MESSAGE_IA })
+  if (champs.description !== undefined && contientPhraseIa(champs.description))
+    alertes.push({ ligne: 1, champ: 'description', message: MESSAGE_IA })
+  return alertes
 }
 
 function extrait(s: string, max = 40): string {
@@ -272,6 +376,19 @@ export function alertesRelecture(
       }
     }
 
+    // Quatrième mur : la ligne seule, ou avec la suivante (une phrase
+    // coupée par un retour simple reste UN paragraphe une fois imprimée).
+    const suivante = utiles.at(i + 1) ?? ''
+    if (
+      contientPhraseIa(l) ||
+      (l.trim() !== '' &&
+        suivante.trim() !== '' &&
+        !contientPhraseIa(suivante) &&
+        contientPhraseIa(`${l} ${suivante}`))
+    ) {
+      alertes.push({ ligne, message: MESSAGE_IA })
+    }
+
     // Émojis.
     if (EMOJI.test(l)) {
       alertes.push({
@@ -430,18 +547,93 @@ export function alertesRelecture(
 
 /**
  * Relecture d'une ligne de l'aperçu d'un import LLM (étape 2 du plan
- * `classeur-fonctions-2026-10-04`) : seuls les DOCUMENTS créés, modifiés ou
- * restaurés sont relus, sur leur NOUVEAU texte, sans pagination (le
- * dialogue n'en a pas). `null` = ligne non relue (chapitre, suppression,
- * autre nature d'élément). `images` à `null` tant que la médiathèque n'est
- * pas chargée : aucune alerte d'image, plutôt que de les dire toutes
- * introuvables.
+ * `classeur-fonctions-2026-10-04`, étendue par l'étape 7 du plan
+ * `classeur-echange-ia-2026-10-19`) : TOUTE ligne créée, modifiée ou
+ * restaurée est relue sur son NOUVEL état — titre et description de toutes
+ * les natures et des chapitres (quatrième mur), plus le texte d'un document
+ * (toutes les règles, sans pagination : le dialogue n'en a pas). `null` =
+ * ligne non relue (suppression : rien ne sera imprimé). `images` à `null`
+ * tant que la médiathèque n'est pas chargée : aucune alerte d'image, plutôt
+ * que de les dire toutes introuvables.
  */
 export function relireLigneImport(
-  ligne: { kind: string; genre: string; apres: { content: string } },
+  ligne: {
+    kind: string
+    genre: string
+    apres: { title?: string; description?: string; content: string }
+  },
   images: ReadonlyMap<string, InfoImage> | null,
 ): Alerte[] | null {
-  if (ligne.kind !== 'document') return null
-  if (ligne.genre === 'suppression' || ligne.genre === 'chapitre') return null
-  return alertesRelecture(ligne.apres.content, images, null, 'import')
+  if (ligne.genre === 'suppression') return null
+  const champs = alertesChampsIa({
+    title: ligne.apres.title ?? '',
+    description: ligne.apres.description ?? '',
+  })
+  if (ligne.kind !== 'document' || ligne.genre === 'chapitre') return champs
+  return [
+    ...champs,
+    ...alertesRelecture(ligne.apres.content, images, null, 'import'),
+  ]
+}
+
+/** Ce que la relecture d'un FICHIER entier lit de chaque élément. */
+interface ElementRelu {
+  kind: string
+  title: string
+  description?: string
+  content?: string
+}
+
+/** Un élément (ou un chapitre) du fichier qui a des points à vérifier. */
+export interface RelectureElement {
+  chapitre: string
+  kind: string
+  titre: string
+  alertes: Alerte[]
+}
+
+/**
+ * Relecture d'un fichier ENTIER, sans aperçu (import comme nouveau
+ * classeur, D7 : rien n'existe encore à comparer). Chapitres (libellé,
+ * description) et éléments (titre, description, texte d'un document, sans
+ * médiathèque : un classeur neuf n'a pas d'images). Seuls les éléments qui
+ * ont des points à vérifier sont rendus, dans l'ordre du fichier.
+ */
+export function relireFichierImport(fichier: {
+  chapters: ReadonlyArray<{
+    label: string
+    description: string
+    items: readonly ElementRelu[]
+  }>
+}): RelectureElement[] {
+  const resultat: RelectureElement[] = []
+  for (const c of fichier.chapters) {
+    const duChapitre = alertesChampsIa({
+      title: c.label,
+      description: c.description,
+    })
+    if (duChapitre.length > 0)
+      resultat.push({
+        chapitre: c.label,
+        kind: 'chapter',
+        titre: c.label,
+        alertes: duChapitre,
+      })
+    for (const it of c.items) {
+      const alertes = [
+        ...alertesChampsIa({ title: it.title, description: it.description }),
+        ...(it.kind === 'document'
+          ? alertesRelecture(it.content ?? '', null, null, 'import')
+          : []),
+      ]
+      if (alertes.length > 0)
+        resultat.push({
+          chapitre: c.label,
+          kind: it.kind,
+          titre: it.title,
+          alertes,
+        })
+    }
+  }
+  return resultat
 }

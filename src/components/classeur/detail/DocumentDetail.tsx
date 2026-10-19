@@ -72,7 +72,7 @@ import {
   ligneRendueVersSource,
   ligneSourceVersRendue,
 } from '#/lib/classeur/print/lignesSource.ts'
-import { alertesRelecture } from '#/lib/classeur/relecture.ts'
+import { alertesChampsIa, alertesRelecture } from '#/lib/classeur/relecture.ts'
 import type { InfoPage } from '#/lib/classeur/relecture.ts'
 import type { PageData } from '#/lib/classeur/print/paginate.ts'
 import { mentionVersion } from '#/lib/classeur/print/mentionVersion.ts'
@@ -401,12 +401,18 @@ export function DocumentDetail() {
       ),
     [contenuDiffere],
   )
+  // Le titre et la description passent aussi la relecture du quatrième
+  // mur (étape 7 du plan `classeur-echange-ia-2026-10-19`) : imprimés en
+  // tête de chaque page, une phrase sur l'IA s'y verrait d'abord.
   const alertes = useMemo(
     () =>
       editing
-        ? alertesRelecture(contenuDiffere, imagesConnues, pagesApercu)
+        ? [
+            ...alertesChampsIa({ title: titre, description }),
+            ...alertesRelecture(contenuDiffere, imagesConnues, pagesApercu),
+          ]
         : [],
-    [editing, contenuDiffere, imagesConnues, pagesApercu],
+    [editing, titre, description, contenuDiffere, imagesConnues, pagesApercu],
   )
 
   if (page.isPending) return <DetailSkeleton retour={retour} />
@@ -662,7 +668,11 @@ export function DocumentDetail() {
                   fin={<BoutonsImage image={image} />}
                 />
                 <EtatImageLigne image={image} />
-                <AlertesRelecture alertes={alertes} onAller={allerA} />
+                <AlertesRelecture
+                  alertes={alertes}
+                  onAller={allerA}
+                  onChamp={() => setTitreOuvert(true)}
+                />
               </div>
             )}
             <Textarea

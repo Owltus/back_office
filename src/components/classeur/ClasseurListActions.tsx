@@ -1,8 +1,11 @@
+import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { AlertCircle } from 'lucide-react'
 
 import { ClasseurList } from '#/components/classeur/ClasseurList.tsx'
+import { RelectureImportDialog } from '#/components/classeur/dialogs/RelectureImportDialog.tsx'
+import type { RelectureNouveauClasseur } from '#/components/classeur/dialogs/RelectureImportDialog.tsx'
 import {
   MESSAGE_COPIE_REFUSEE,
   useCopieExport,
@@ -18,11 +21,13 @@ import {
 } from '#/lib/classeur/exportJson.ts'
 import { classeurKeys } from '#/lib/classeur/keys.ts'
 import { parseImportJson } from '#/lib/classeur/merge/schema.ts'
+import type { ClasseurJson } from '#/lib/classeur/merge/schema.ts'
 import { validerPourNouveauClasseur } from '#/lib/classeur/merge/validationImport.ts'
 import {
   fetchClasseurContent,
   fetchPeriodicites,
 } from '#/lib/classeur/service.ts'
+import { relireFichierImport } from '#/lib/classeur/relecture.ts'
 import type { DbClasseur } from '#/lib/classeur/types.ts'
 
 /** Même seuil que `useClasseurContent` (staleTime évalué par observateur). */
@@ -40,9 +45,14 @@ const STALE_60S = 60_000
  *     ignoré : le contenu n'est lu qu'une fois ;
  *   - import JSON comme NOUVEAU classeur (étape 6) : le fichier, déjà borné
  *     par `MAX_JSON_BYTES` dans `ClasseurList`, est lu, validé par
- *     `parseImportJson` (message français si le fichier est illisible), puis
- *     inséré ; on navigue vers le classeur créé. Aucune fusion ici : la
- *     fusion dans un classeur existant vit sur son tableau de bord.
+ *     `parseImportJson` (message français si le fichier est illisible),
+ *     CORRIGÉ par `validerPourNouveauClasseur` (ce que la base refuserait,
+ *     plan `classeur-echange-ia-2026-10-19`, étape 6) et RELU (D7, étape 7 :
+ *     quatrième mur, mise en forme). S'il y a quelque chose à dire, le
+ *     dialogue `RelectureImportDialog` le montre avant de créer ; sinon le
+ *     classeur est créé aussitôt. On navigue vers le classeur créé. Aucune
+ *     fusion ici : la fusion dans un classeur existant vit sur son tableau
+ *     de bord.
  */
 export function ClasseurListActions() {
   const queryClient = useQueryClient()
@@ -77,20 +87,16 @@ export function ClasseurListActions() {
     },
   })
 
-  const importer = useMutation({
-    mutationFn: async (file: File) => {
-      const fichier = parseImportJson(await file.text())
-      // Étape 6 : ce que la base refuserait est corrigé AVANT la création du
-      // classeur (sans transaction, un refus au milieu le laisserait à moitié).
-      const periodicites = await queryClient.ensureQueryData({
-        queryKey: classeurKeys.periodicites(),
-        queryFn: fetchPeriodicites,
-        staleTime: Infinity,
-      })
-      const valide = validerPourNouveauClasseur(fichier, periodicites)
-      return importerNouveau.mutateAsync(valide.fichier)
-    },
+  // Fichier lu, corrigé et relu, en attente de confirmation (D7).
+  const [aConfirmer, setAConfirmer] = useState<{
+    fichier: ClasseurJson
+    relecture: RelectureNouveauClasseur
+  } | null>(null)
+
+  const creer = useMutation({
+    mutationFn: (fichier: ClasseurJson) => importerNouveau.mutateAsync(fichier),
     onSuccess: (id) => {
+      setAConfirmer(null)
       void navigate({
         to: '/classeur/$classeurId',
         params: { classeurId: String(id) },
@@ -98,7 +104,39 @@ export function ClasseurListActions() {
     },
   })
 
-  const erreur = exporter.error ?? importer.error ?? copie.erreur
+  const importer = useMutation({
+    mutationFn: async (file: File) => {
+      const lu = parseImportJson(await file.text())
+      // Étape 6 : ce que la base refuserait est corrigé AVANT la création du
+      // classeur (sans transaction, un refus au milieu le laisserait à moitié).
+      const periodicites = await queryClient.ensureQueryData({
+        queryKey: classeurKeys.periodicites(),
+        queryFn: fetchPeriodicites,
+        staleTime: Infinity,
+      })
+      const { fichier, avertissements } = validerPourNouveauClasseur(
+        lu,
+        periodicites,
+      )
+      return {
+        fichier,
+        relecture: {
+          nom: fichier.classeur.name,
+          avertissements,
+          elements: relireFichierImport(fichier),
+        },
+      }
+    },
+    onSuccess: (prepare) => {
+      const { avertissements, elements } = prepare.relecture
+      if (avertissements.length === 0 && elements.length === 0)
+        creer.mutate(prepare.fichier)
+      else setAConfirmer(prepare)
+    },
+  })
+
+  const erreurImport = importer.error ?? creer.error
+  const erreur = exporter.error ?? erreurImport ?? copie.erreur
 
   return (
     <>
@@ -110,7 +148,7 @@ export function ClasseurListActions() {
               erreur,
               exporter.isError
                 ? 'Export impossible'
-                : importer.isError
+                : erreurImport != null
                   ? 'Import impossible'
                   : 'Copie impossible',
             )}
@@ -137,6 +175,14 @@ export function ClasseurListActions() {
         onExporterJson={(c) => exporter.mutate(c)}
         onCopierJson={(c) => copie.copier(() => lireExport(c))}
         onImporterJson={(file) => importer.mutate(file)}
+      />
+      <RelectureImportDialog
+        relecture={aConfirmer?.relecture ?? null}
+        onAnnuler={() => setAConfirmer(null)}
+        onImporter={() => {
+          if (aConfirmer !== null) creer.mutate(aConfirmer.fichier)
+        }}
+        enCours={creer.isPending}
       />
     </>
   )

@@ -176,13 +176,9 @@ export function validerFichierImport(
         `Chapitre ${c.label} : position hors limites, corrigée.`,
       )
     }
-    let itemsChanges = false
-    const items = c.items.flatMap((item) => {
-      const r = validerItem(item, c.label)
-      if (r !== item) itemsChanges = true
-      return r === null ? [] : [r]
-    })
-    if (ch === c && !itemsChanges) return c
+    const verifies = c.items.map((item) => validerItem(item, c.label))
+    const items = verifies.filter((r): r is ItemJson => r !== null)
+    if (ch === c && verifies.every((r, k) => r === c.items[k])) return c
     modifie = true
     return { ...ch, items }
   })

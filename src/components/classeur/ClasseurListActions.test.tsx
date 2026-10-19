@@ -46,9 +46,11 @@ vi.mock('#/lib/classeur/service.ts', () => ({
   fetchPeriodicites: () => Promise.resolve(PERIODICITES),
 }))
 vi.mock('#/lib/supabase.ts', () => ({ supabase: {} }))
+const creer = vi.fn<(f: unknown) => Promise<number>>()
 vi.mock('#/components/classeur/hooks/useMerge.ts', () => ({
-  useImporterNouveauClasseur: () => ({ mutateAsync: vi.fn() }),
+  useImporterNouveauClasseur: () => ({ mutateAsync: creer }),
 }))
+let aImporter: File | null = null
 vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }))
 const telecharge = vi.fn()
 vi.mock('#/lib/classeur/download.ts', () => ({
@@ -59,13 +61,18 @@ vi.mock('#/components/classeur/ClasseurList.tsx', () => ({
   ClasseurList: ({
     onCopierJson,
     onExporterJson,
+    onImporterJson,
   }: {
     onCopierJson: (c: DbClasseur) => void
     onExporterJson: (c: DbClasseur) => void
+    onImporterJson: (f: File) => void
   }) => (
     <>
       <button onClick={() => onCopierJson(C)}>Copier pour une IA</button>
       <button onClick={() => onExporterJson(C)}>Exporter en JSON</button>
+      <button onClick={() => aImporter && onImporterJson(aImporter)}>
+        Importer
+      </button>
     </>
   ),
 }))
@@ -82,6 +89,9 @@ beforeEach(() => {
   telecharge.mockReset()
   ecrit.mockReset()
   ecrit.mockResolvedValue(undefined)
+  creer.mockReset()
+  creer.mockResolvedValue(42)
+  aImporter = null
   finirLecture = null
   Object.defineProperty(navigator, 'clipboard', {
     value: { writeText: ecrit },
@@ -162,5 +172,73 @@ describe('ClasseurListActions — Copier pour une IA', () => {
       ),
     )
     expect(ecrit).not.toHaveBeenCalled()
+  })
+})
+
+describe('import en nouveau classeur : validation et relecture (étapes 6 et 7, D7)', () => {
+  const fichierDe = (
+    over: (f: ReturnType<typeof construireExport>) => void,
+  ) => {
+    const f = construireExport(C, [A], local.content, PERIODICITES)
+    // Des uuids de la base (canoniques) : les fixtures en ont de factices.
+    f.chapters[0].uuid = '00000000-0000-4000-8000-000000000010'
+    f.chapters[0].items[0].uuid = '00000000-0000-4000-8000-000000000001'
+    over(f)
+    return new File([JSON.stringify(f)], 'classeur.json')
+  }
+
+  it('un fichier propre : créé aussitôt, sans étape de plus', async () => {
+    aImporter = fichierDe(() => {})
+    rendre()
+    fireEvent.click(screen.getByText('Importer'))
+    await waitFor(() => expect(creer).toHaveBeenCalledTimes(1))
+    expect(screen.queryByText("Avant d'importer")).toBeNull()
+  })
+
+  it('corrections et phrase sur l’IA : montrées AVANT de créer ; Créer applique le fichier corrigé', async () => {
+    aImporter = fichierDe((f) => {
+      f.chapters[0].items[0].content = 'Accueillir.\n\nTexte généré par une IA.'
+      f.chapters[0].items.push({
+        kind: 'signature_sheet',
+        title: 'Émargement',
+        description: '',
+        nombre: 100,
+        sort_order: 2,
+      })
+    })
+    rendre()
+    fireEvent.click(screen.getByText('Importer'))
+    expect(await screen.findByText("Avant d'importer")).toBeTruthy()
+    expect(creer).not.toHaveBeenCalled()
+    expect(
+      screen.getByText(
+        'Feuille de signature Émargement : 100 lignes demandées, 60 au plus.',
+      ),
+    ).toBeTruthy()
+    expect(screen.getByText('1 élément a des points à vérifier.')).toBeTruthy()
+    expect(
+      screen.getByText(
+        /Phrase sur l'IA dans le texte\. Elle serait imprimée\./,
+      ),
+    ).toBeTruthy()
+    fireEvent.click(screen.getByText('Créer le classeur'))
+    await waitFor(() => expect(creer).toHaveBeenCalledTimes(1))
+    const f = creer.mock.calls[0][0] as {
+      chapters: Array<{ items: Array<{ nombre?: number }> }>
+    }
+    expect(f.chapters[0].items[1].nombre).toBe(60)
+  })
+
+  it('Annuler : rien n’est créé', async () => {
+    aImporter = fichierDe((f) => {
+      f.chapters[0].label = 'Accueil (brouillon)'
+    })
+    rendre()
+    fireEvent.click(screen.getByText('Importer'))
+    fireEvent.click(await screen.findByText('Annuler'))
+    await waitFor(() =>
+      expect(screen.queryByText("Avant d'importer")).toBeNull(),
+    )
+    expect(creer).not.toHaveBeenCalled()
   })
 })

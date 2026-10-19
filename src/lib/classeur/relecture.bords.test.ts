@@ -254,12 +254,14 @@ describe('relecture — tableaux', () => {
 })
 
 describe('relireLigneImport — natures', () => {
-  it('un document de genre « chapitre » n’est pas relu', () => {
+  it('une ligne de genre « chapitre » : titre et description seulement, jamais le texte', () => {
+    // Étape 7 (plan `classeur-echange-ia-2026-10-19`) : relue (quatrième
+    // mur), mais pas comme un document.
     expect(
       relireLigneImport(
         { kind: 'document', genre: 'chapitre', apres: { content: '**G**' } },
         null,
       ),
-    ).toBeNull()
+    ).toEqual([])
   })
 })

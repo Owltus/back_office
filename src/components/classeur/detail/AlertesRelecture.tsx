@@ -8,14 +8,18 @@ import { cn } from '#/lib/utils.ts'
  * Alertes de relecture sous la barre de l'éditeur (amélioration n° 18) :
  * une ligne discrète « 2 points à vérifier », dépliable ; chaque point
  * amène le curseur sur sa ligne. Rien quand tout va bien — un « tout va
- * bien » permanent serait du bruit.
+ * bien » permanent serait du bruit. Une alerte sur le titre ou la
+ * description (quatrième mur, étape 7 du plan `classeur-echange-ia`) ouvre
+ * leur dialogue (`onChamp`).
  */
 export function AlertesRelecture({
   alertes,
   onAller,
+  onChamp,
 }: {
   alertes: readonly Alerte[]
   onAller: (ligne: number) => void
+  onChamp?: () => void
 }) {
   const [ouvert, setOuvert] = useState(false)
   if (alertes.length === 0) return null
@@ -44,11 +48,19 @@ export function AlertesRelecture({
               <button
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => onAller(a.ligne)}
+                onClick={() =>
+                  a.champ !== undefined && onChamp !== undefined
+                    ? onChamp()
+                    : onAller(a.ligne)
+                }
                 className="w-full rounded-sm px-1 py-0.5 text-left text-muted-foreground hover:bg-accent hover:text-foreground"
               >
                 <span className="tabular-nums text-foreground">
-                  Ligne {a.ligne}
+                  {a.champ === 'titre'
+                    ? 'Titre'
+                    : a.champ === 'description'
+                      ? 'Description'
+                      : `Ligne ${String(a.ligne)}`}
                 </span>{' '}
                 · {a.message}
               </button>

@@ -211,11 +211,21 @@ export function ApercuImport({
       ),
     [lignes, images, etatImages],
   )
-  const aVerifier = lignes.filter(
+  const signalees = lignes.filter(
     (l, i) =>
       (alertes[i]?.length ?? 0) > 0 && !(l.cle !== null && refuses.has(l.cle)),
-  ).length
-  const relus = alertes.some((a) => a !== null)
+  )
+  const aVerifier = signalees.length
+  // Étape 7 : toutes les natures sont relues ; « documents » seulement si
+  // l'en-tête ne parle que de documents.
+  const queDesDocuments = signalees.every((l) => l.kind === 'document')
+  // Les images ne concernent que le texte d'un document.
+  const relus = lignes.some(
+    (l) =>
+      l.kind === 'document' &&
+      l.genre !== 'suppression' &&
+      l.genre !== 'chapitre',
+  )
   return (
     <div className="flex flex-col gap-1">
       {(aVerifier > 0 || (relus && etatImages !== 'pret')) && (
@@ -224,8 +234,8 @@ export function ApercuImport({
             <p className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
               <TriangleAlert className="size-3.5 shrink-0" />
               {aVerifier > 1
-                ? `${String(aVerifier)} documents ont des points à vérifier`
-                : '1 document a des points à vérifier'}
+                ? `${String(aVerifier)} ${queDesDocuments ? 'documents' : 'éléments'} ont des points à vérifier`
+                : `1 ${queDesDocuments ? 'document' : 'élément'} a des points à vérifier`}
               . L'import reste possible.
             </p>
           )}
@@ -469,16 +479,22 @@ function LigneApercu({
                       className="text-muted-foreground"
                     >
                       <span className="tabular-nums text-foreground">
-                        Ligne {a.ligne}
+                        {a.champ === 'titre'
+                          ? 'Titre'
+                          : a.champ === 'description'
+                            ? 'Description'
+                            : `Ligne ${String(a.ligne)}`}
                       </span>{' '}
                       · {a.message}
                     </li>
                   ))}
                 </ul>
               )}
-              <p className="text-muted-foreground">
-                La mise en page (pages, schémas) sera vérifiée dans l'éditeur.
-              </p>
+              {ligne.kind === 'document' && ligne.genre !== 'chapitre' && (
+                <p className="text-muted-foreground">
+                  La mise en page (pages, schémas) sera vérifiée dans l'éditeur.
+                </p>
+              )}
             </div>
           )}
         </div>

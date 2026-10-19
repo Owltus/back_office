@@ -122,16 +122,18 @@ describe('relireLigneImport', () => {
     }
   })
 
-  it('ne relit ni suppression, ni chapitre, ni autre nature', () => {
+  it('ne relit pas une suppression ; chapitre et autre nature : titre et description seuls', () => {
     expect(
       relireLigneImport(ligne('document', 'suppression'), new Map()),
     ).toBeNull()
-    expect(
-      relireLigneImport(ligne('chapter', 'chapitre'), new Map()),
-    ).toBeNull()
+    // Étape 7 : relus (quatrième mur), mais leur `content` n'est pas un
+    // texte imprimé : l'image inventée n'y est pas signalée.
+    expect(relireLigneImport(ligne('chapter', 'chapitre'), new Map())).toEqual(
+      [],
+    )
     expect(
       relireLigneImport(ligne('tracking_sheet', 'modification'), new Map()),
-    ).toBeNull()
+    ).toEqual([])
   })
 
   it('médiathèque inconnue : liste vide, pas d’alerte d’image', () => {
