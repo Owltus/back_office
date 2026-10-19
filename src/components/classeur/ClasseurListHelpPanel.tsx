@@ -96,7 +96,8 @@ export function ClasseurListHelpPanel({
       <Section title="Le menu d'un classeur">
         <GestureRow side="right">
           {fort('Clic droit')} sur une ligne : ouvrir, modifier le nom et
-          l'icône, régler les accès, exporter en JSON ou supprimer.
+          l'icône, régler les accès, copier pour une IA, exporter en JSON ou
+          supprimer.
         </GestureRow>
         <p>
           Une action que vos droits ne permettent pas reste visible mais grisée,

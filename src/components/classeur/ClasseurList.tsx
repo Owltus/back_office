@@ -11,6 +11,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import {
+  Copy,
   Eye,
   EyeOff,
   FileDown,
@@ -108,16 +109,20 @@ import { cn } from '#/lib/utils.ts'
  *
  * MENU D'UN CLASSEUR (2026-10-19, demande utilisateur) : clic droit sur la
  * ligne, rien d'autre (aucun bouton « ⋯ », décision utilisateur). Ouvrir,
- * Modifier le classeur, Accès, Exporter en JSON, Supprimer : toujours listés, grisés avec leur
+ * Modifier le classeur, Accès, Copier pour une IA, Exporter en JSON,
+ * Supprimer : toujours listés, grisés avec leur
  * raison quand le niveau EFFECTIF ne les permet pas (`capacites`, miroir
  * des RLS). La base reste juge : le menu ne fait que le montrer.
  */
 export function ClasseurList({
   onImporterJson,
   onExporterJson,
+  onCopierJson,
 }: {
   onImporterJson?: (file: File) => void | Promise<void>
   onExporterJson?: (classeur: DbClasseur) => void | Promise<void>
+  /** Copier pour une IA (étape 3 du plan `classeur-echange-ia-2026-10-19`). */
+  onCopierJson?: (classeur: DbClasseur) => void | Promise<void>
 }) {
   const { user } = useAuth()
   const droitsPage = useDroitsPageClasseur()
@@ -382,6 +387,9 @@ export function ClasseurList({
                             exporter: onExporterJson
                               ? () => void onExporterJson(c)
                               : undefined,
+                            copier: onCopierJson
+                              ? () => void onCopierJson(c)
+                              : undefined,
                             supprimer: () => setASupprimer(c),
                           })}
                           avecAcces={colonnes.acces}
@@ -533,6 +541,7 @@ function entreesMenu(
     modifier: () => void
     acces: () => void
     exporter?: () => void
+    copier?: () => void
     supprimer: () => void
   },
 ): EntreeMenu[] {
@@ -563,6 +572,16 @@ function entreesMenu(
       raison: raison(peut?.gererAcces, 'Gestion seule'),
     },
   ]
+  // Copier pour une IA et Exporter en JSON : mêmes droits (lire suffit).
+  if (actions.copier)
+    entrees.push({
+      cle: 'copier',
+      libelle: 'Copier pour une IA',
+      icone: Copy,
+      action: actions.copier,
+      raison: null,
+      separe: true,
+    })
   if (actions.exporter)
     entrees.push({
       cle: 'exporter',
@@ -570,7 +589,7 @@ function entreesMenu(
       icone: FileUp,
       action: actions.exporter,
       raison: null,
-      separe: true,
+      separe: !actions.copier,
     })
   entrees.push({
     cle: 'supprimer',

@@ -16,6 +16,10 @@ import {
   useImagesRelecture,
 } from '#/components/classeur/dialogs/ApercuImport.tsx'
 import { usePeriodicites } from '#/components/classeur/hooks/useClasseur.ts'
+import {
+  MESSAGE_COPIE_REFUSEE,
+  useCopieExport,
+} from '#/components/classeur/hooks/useCopieExport.ts'
 import { useAppliquerFusionPortee } from '#/components/classeur/hooks/useMerge.ts'
 import { Alert, AlertDescription, AlertTitle } from '#/components/ui/alert.tsx'
 import { Button } from '#/components/ui/button.tsx'
@@ -33,6 +37,7 @@ import { Textarea } from '#/components/ui/textarea.tsx'
 import { telechargerTexte } from '#/lib/classeur/download.ts'
 import { messageErreur } from '#/lib/classeur/erreur.ts'
 import {
+  MIME_JSON,
   nomFichierPortee,
   serialiserExport,
 } from '#/lib/classeur/exportJson.ts'
@@ -59,8 +64,9 @@ import { MAX_JSON_BYTES, fileTooLarge } from '#/lib/shared/files.ts'
 /*
  * « JSON pour un LLM » d'un chapitre ou d'un document (demande utilisateur du
  * 2026-09-29). Deux temps dans une seule fenêtre :
- *   1. EXPORTER : copier (le plus direct pour un LLM) ou télécharger le
- *      fichier, qui embarque ses consignes (`_metadata.instructions`) ;
+ *   1. EXPORTER : copier (le plus direct pour une IA) ou télécharger le
+ *      fichier, qui embarque son mode d'emploi (`_metadata.instructions`) ;
+ *      un refus du presse-papiers télécharge le fichier à la place ;
  *   2. RÉIMPORTER (droit d'écriture) : coller la réponse du LLM ou choisir un
  *      fichier, voir l'aperçu, puis appliquer. Réimport LIMITÉ à la portée
  *      (`portee.ts`) : rien d'autre dans le classeur ne peut changer, et un
@@ -111,7 +117,10 @@ export function EchangeJsonDialog({
     classeur?.id ?? null,
     open,
   )
-  const [copie, setCopie] = useState<'ok' | 'erreur' | null>(null)
+  // Copier : « Copié » 2 s, refus = fichier téléchargé (étape 3 du plan
+  // `classeur-echange-ia-2026-10-19`).
+  const copie = useCopieExport()
+  const { oublier: oublierCopie } = copie
   const [texte, setTexte] = useState('')
   const [supprimerAbsents, setSupprimerAbsents] = useState(false)
   const [applique, setApplique] = useState<string | null>(null)
@@ -189,7 +198,7 @@ export function EchangeJsonDialog({
   useEffect(() => {
     if (open) return
     setTexte('')
-    setCopie(null)
+    oublierCopie()
     setSupprimerAbsents(false)
     setApplique(null)
     setErreurFichier(null)
@@ -197,7 +206,7 @@ export function EchangeJsonDialog({
     setOuvertes(new Set())
     oublierPreparation()
     oublierFusion()
-  }, [open, oublierPreparation, oublierFusion])
+  }, [open, oublierPreparation, oublierFusion, oublierCopie])
 
   const apercuPret = preparation.data !== undefined
   useEffect(() => {
@@ -215,10 +224,18 @@ export function EchangeJsonDialog({
       ? `le chapitre ${sujet.chapitre.label}`
       : `le document ${sujet.document.title}`
 
-  /** Le fichier JSON, consignes comprises (`_metadata.instructions`). */
-  function construire(): string | null {
+  // Les périodicités nomment les feuilles de suivi et listent les `id` que
+  // l'IA peut choisir : pas d'export sans elles.
+  const pret = classeur !== null && periodicitesQ.data !== undefined
+
+  /**
+   * Le fichier JSON, mode d'emploi compris (`_metadata.instructions`) : le
+   * même texte pour Copier et Télécharger.
+   */
+  function construire(): { texte: string; nomFichier: string } | null {
     if (classeur === null || sujet === null) return null
-    const periodicites = periodicitesQ.data ?? []
+    const periodicites = periodicitesQ.data
+    if (periodicites === undefined) return null
     const donnees =
       sujet.type === 'chapitre'
         ? construireExportChapitre(
@@ -233,25 +250,7 @@ export function EchangeJsonDialog({
             sujet.document,
             periodicites,
           )
-    return serialiserExport(donnees)
-  }
-
-  async function copier() {
-    const json = construire()
-    if (json === null) return
-    try {
-      await navigator.clipboard.writeText(json)
-      setCopie('ok')
-      window.setTimeout(() => setCopie(null), 2500)
-    } catch {
-      setCopie('erreur')
-    }
-  }
-
-  function telecharger() {
-    const json = construire()
-    if (json === null || classeur === null || sujet === null) return
-    const nom =
+    const nomFichier =
       sujet.type === 'chapitre'
         ? nomFichierPortee(classeur.name, sujet.chapitre.label)
         : nomFichierPortee(
@@ -259,7 +258,12 @@ export function EchangeJsonDialog({
             sujet.chapitre.label,
             sujet.document.title,
           )
-    telechargerTexte(nom, json, 'application/json;charset=utf-8')
+    return { texte: serialiserExport(donnees), nomFichier }
+  }
+
+  function telecharger() {
+    const x = construire()
+    if (x !== null) telechargerTexte(x.nomFichier, x.texte, MIME_JSON)
   }
 
   async function choisirFichier(file: File) {
@@ -345,34 +349,30 @@ export function EchangeJsonDialog({
         <section className="flex flex-col gap-2">
           <h3 className="text-sm font-medium">1. Exporter</h3>
           <p className="text-sm text-muted-foreground">
-            Le JSON contient le texte et les consignes pour le LLM : ce qu'il
-            peut modifier, ce qu'il ne doit jamais toucher, la mise en forme de
-            la page. Collez-le tel quel dans la conversation.
+            Collez-le dans une IA : elle vous guide.
           </p>
           <div className="flex flex-wrap gap-2">
             <Button
               size="sm"
               variant="outline"
-              onClick={() => void copier()}
-              disabled={classeur === null}
+              onClick={() => void copie.copier(construire)}
+              disabled={!pret || copie.enCours}
             >
-              {copie === 'ok' ? <Check /> : <Copy />}
-              {copie === 'ok' ? 'Copié' : 'Copier le JSON'}
+              {copie.copie ? <Check /> : <Copy />}
+              {copie.copie ? 'Copié' : 'Copier'}
             </Button>
             <Button
               size="sm"
               variant="outline"
               onClick={telecharger}
-              disabled={classeur === null}
+              disabled={!pret}
             >
               <Download />
-              Télécharger (.json)
+              Télécharger
             </Button>
           </div>
-          {copie === 'erreur' && (
-            <p className="text-sm text-destructive">
-              Copie refusée par le navigateur : utilisez Télécharger.
-            </p>
+          {copie.refusee && (
+            <p className="text-sm text-destructive">{MESSAGE_COPIE_REFUSEE}</p>
           )}
         </section>
 

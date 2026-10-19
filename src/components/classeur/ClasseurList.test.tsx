@@ -18,6 +18,7 @@ const etat = vi.hoisted(() => ({
   statsPending: false,
   navigate: vi.fn(),
   exporter: vi.fn(),
+  copier: vi.fn(),
 }))
 
 const classeur = (id: number, x: Partial<DbClasseur> = {}): DbClasseur => ({
@@ -94,7 +95,11 @@ function rendre() {
   return render(
     <QueryClientProvider client={new QueryClient()}>
       <TooltipProvider>
-        <ClasseurList onImporterJson={vi.fn()} onExporterJson={etat.exporter} />
+        <ClasseurList
+          onImporterJson={vi.fn()}
+          onExporterJson={etat.exporter}
+          onCopierJson={etat.copier}
+        />
       </TooltipProvider>
     </QueryClientProvider>,
   )
@@ -116,6 +121,7 @@ beforeEach(() => {
   etat.statsPending = false
   etat.navigate.mockClear()
   etat.exporter.mockClear()
+  etat.copier.mockClear()
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -255,6 +261,7 @@ describe('ClasseurList — tableau', () => {
       Ouvrir: 'actif',
       'Modifier le classeur': 'actif',
       Accès: 'actif',
+      'Copier pour une IA': 'actif',
       'Exporter en JSON': 'actif',
       Supprimer: 'actif',
     })
@@ -267,6 +274,7 @@ describe('ClasseurList — tableau', () => {
       Ouvrir: 'actif',
       'Modifier le classeur': 'actif',
       'AccèsGestion seule': 'grisé',
+      'Copier pour une IA': 'actif',
       'Exporter en JSON': 'actif',
       'SupprimerGestion seule': 'grisé',
     })
@@ -283,6 +291,7 @@ describe('ClasseurList — tableau', () => {
       Ouvrir: 'actif',
       'Modifier le classeurLecture seule': 'grisé',
       'AccèsGestion seule': 'grisé',
+      'Copier pour une IA': 'actif',
       'Exporter en JSON': 'actif',
       'SupprimerGestion seule': 'grisé',
     })
@@ -295,6 +304,13 @@ describe('ClasseurList — tableau', () => {
     expect(etat.exporter).toHaveBeenCalledWith(
       expect.objectContaining({ id: 5 }),
     )
+    expect(etat.copier).not.toHaveBeenCalled()
+    await menuDe(2)
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: 'Copier pour une IA' }),
+    )
+    expect(etat.copier).toHaveBeenCalledWith(expect.objectContaining({ id: 5 }))
+    expect(etat.exporter).toHaveBeenCalledTimes(1)
     await menuDe(2)
     fireEvent.click(screen.getByRole('menuitem', { name: 'Accès' }))
     expect(screen.getByTestId('acces').textContent).toBe('Classeur 5')

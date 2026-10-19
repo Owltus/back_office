@@ -338,7 +338,7 @@ describe('ClasseurDashboard — en-tête fixe et panneau', () => {
       {
         titre: 'Échanger et sauvegarder',
         cartes: [
-          expect.stringContaining('Exporter en JSON'),
+          expect.stringMatching(/Exporter en JSON.*À coller dans une IA/),
           expect.stringContaining('Importer un JSON'),
           expect.stringContaining('Exporter en Markdown'),
         ],

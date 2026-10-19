@@ -470,7 +470,7 @@ export function ClasseurDashboard({
                   <LigneAction
                     icon={FileUp}
                     title="Exporter en JSON"
-                    description="Copie éditable, avec vos demandes pour un LLM"
+                    description="À coller dans une IA, ou en fichier"
                     titreOccupe="Export en cours..."
                     onClick={action(onExporterJson)}
                     disabled={!pret || busy !== null}

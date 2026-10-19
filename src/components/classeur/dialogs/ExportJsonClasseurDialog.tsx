@@ -1,7 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { Check, Copy, Download } from 'lucide-react'
 
 import { usePeriodicites } from '#/components/classeur/hooks/useClasseur.ts'
+import {
+  MESSAGE_COPIE_REFUSEE,
+  useCopieExport,
+} from '#/components/classeur/hooks/useCopieExport.ts'
 import { Button } from '#/components/ui/button.tsx'
 import {
   Dialog,
@@ -12,8 +16,11 @@ import {
   DialogTitle,
 } from '#/components/ui/dialog.tsx'
 import { telechargerTexte } from '#/lib/classeur/download.ts'
-import { nomFichierJson, serialiserExport } from '#/lib/classeur/exportJson.ts'
-import { construireExport } from '#/lib/classeur/merge/schema.ts'
+import {
+  MIME_JSON,
+  nomFichierJson,
+  texteExportClasseur,
+} from '#/lib/classeur/exportJson.ts'
 import type {
   ChapterContent,
   DbChapter,
@@ -21,11 +28,12 @@ import type {
 } from '#/lib/classeur/types.ts'
 
 /*
- * Export JSON du classeur COMPLET (carte « Exporter en JSON » de l'accueil).
- * Copier ou Télécharger, comme `EchangeJsonDialog`. Les demandes à cocher
- * du 2026-10-04 sont retirées (retour utilisateur du 2026-10-19 : « exporter
- * simplement ») ; le mode d'emploi pour l'IA est dans le fichier.
- * Rien n'est mémorisé : tout repart de zéro à la fermeture.
+ * Export JSON du classeur COMPLET (ligne « Exporter en JSON » de l'accueil).
+ * Deux gestes, aucun choix (étape 3 du plan `classeur-echange-ia-2026-10-19`) :
+ * Copier (à coller dans une IA, qui lit son mode d'emploi dans le fichier et
+ * guide la personne) et Télécharger. Les deux rendent EXACTEMENT le même
+ * texte (`texteExportClasseur`). Les demandes à cocher du 2026-10-04 sont
+ * retirées (« exporter simplement »). Rien n'est mémorisé.
  */
 
 export interface SujetExportClasseur {
@@ -45,66 +53,48 @@ export function ExportJsonClasseurDialog({
   sujet: SujetExportClasseur | null
 }) {
   const periodicitesQ = usePeriodicites()
-  const [copie, setCopie] = useState<'ok' | 'erreur' | null>(null)
+  const copie = useCopieExport()
+  const { oublier } = copie
 
   useEffect(() => {
-    if (open) return
-    setCopie(null)
-  }, [open])
+    if (!open) oublier()
+  }, [open, oublier])
 
   // Les périodicités nomment les feuilles de suivi dans le fichier.
   const pret = sujet !== null && periodicitesQ.data !== undefined
 
-  function construire(): string | null {
+  function construire(): { texte: string; nomFichier: string } | null {
     if (sujet === null || periodicitesQ.data === undefined) return null
-    return serialiserExport(
-      construireExport(
+    return {
+      texte: texteExportClasseur(
         sujet.classeur,
         sujet.chapters,
         sujet.content,
         periodicitesQ.data,
       ),
-    )
-  }
-
-  async function copier() {
-    const json = construire()
-    if (json === null) return
-    try {
-      await navigator.clipboard.writeText(json)
-      setCopie('ok')
-      window.setTimeout(() => setCopie(null), 2500)
-    } catch {
-      setCopie('erreur')
+      nomFichier: nomFichierJson(sujet.classeur.name),
     }
   }
 
   function telecharger() {
-    const json = construire()
-    if (json === null || sujet === null) return
-    telechargerTexte(
-      nomFichierJson(sujet.classeur.name),
-      json,
-      'application/json;charset=utf-8',
-    )
+    const x = construire()
+    if (x !== null) telechargerTexte(x.nomFichier, x.texte, MIME_JSON)
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[90dvh] flex-col overflow-y-auto sm:max-w-2xl">
+      <DialogContent className="flex max-h-[90dvh] flex-col overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Exporter en JSON</DialogTitle>
           <DialogDescription>
             {sujet === null
               ? 'Classeur en cours de lecture.'
-              : `Le classeur ${sujet.classeur.name} au complet, avec les consignes pour un LLM. Réimportez la réponse par la carte Importer un JSON.`}
+              : `Le classeur ${sujet.classeur.name} au complet. Collez-le dans une IA : elle vous guide.`}
           </DialogDescription>
         </DialogHeader>
 
-        {copie === 'erreur' && (
-          <p className="text-sm text-destructive">
-            Copie refusée par le navigateur : utilisez Télécharger.
-          </p>
+        {copie.refusee && (
+          <p className="text-sm text-destructive">{MESSAGE_COPIE_REFUSEE}</p>
         )}
         {periodicitesQ.isError && (
           <p className="text-sm text-destructive">
@@ -118,11 +108,14 @@ export function ExportJsonClasseurDialog({
           </Button>
           <Button variant="outline" onClick={telecharger} disabled={!pret}>
             <Download />
-            Télécharger (.json)
+            Télécharger
           </Button>
-          <Button onClick={() => void copier()} disabled={!pret}>
-            {copie === 'ok' ? <Check /> : <Copy />}
-            {copie === 'ok' ? 'Copié' : 'Copier le JSON'}
+          <Button
+            onClick={() => void copie.copier(construire)}
+            disabled={!pret || copie.enCours}
+          >
+            {copie.copie ? <Check /> : <Copy />}
+            {copie.copie ? 'Copié' : 'Copier'}
           </Button>
         </DialogFooter>
       </DialogContent>

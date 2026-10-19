@@ -22,6 +22,7 @@ import {
   planifierFusionPortee,
 } from '#/lib/classeur/merge/portee.ts'
 import type { CiblePortee } from '#/lib/classeur/merge/portee.ts'
+import type { SujetJson } from '#/components/classeur/dialogs/EchangeJsonDialog.tsx'
 import type { ClasseurJson } from '#/lib/classeur/merge/schema.ts'
 
 /*
@@ -76,6 +77,8 @@ vi.mock('#/lib/classeur/download.ts', () => ({
 
 const { EchangeJsonDialog } =
   await import('#/components/classeur/dialogs/EchangeJsonDialog.tsx')
+const { MESSAGE_COPIE_REFUSEE } =
+  await import('#/components/classeur/hooks/useCopieExport.ts')
 
 /** Le JSON du chapitre, les deux documents retravaillés. */
 function jsonLlm(): string {
@@ -193,7 +196,7 @@ describe('EchangeJsonDialog — aperçu, refus, import', () => {
   })
 })
 
-describe('EchangeJsonDialog — export simple (demandes retirées le 2026-10-19)', () => {
+describe('EchangeJsonDialog — export en un clic (étape 3, 2026-10-19)', () => {
   const ecrit = vi.fn<(t: string) => Promise<void>>()
   beforeEach(() => {
     ecrit.mockReset()
@@ -205,37 +208,68 @@ describe('EchangeJsonDialog — export simple (demandes retirées le 2026-10-19)
     })
   })
 
-  function dialogue(open: boolean) {
+  function dialogue(open: boolean, sujet?: SujetJson) {
     return (
       <QueryClientProvider client={new QueryClient()}>
         <EchangeJsonDialog
           open={open}
           onOpenChange={() => {}}
           classeur={classeur()}
-          sujet={{ type: 'chapitre', chapitre: A, contenu: local.content }}
+          sujet={
+            sujet ?? { type: 'chapitre', chapitre: A, contenu: local.content }
+          }
           canWrite={false}
         />
       </QueryClientProvider>
     )
   }
+  const copier = () =>
+    fireEvent.click(screen.getByRole('button', { name: /^Copier$/ }))
+  const sansDate = (t: string) => {
+    const o = JSON.parse(t) as { _metadata: Record<string, unknown> }
+    delete o._metadata.generated_at
+    return o
+  }
 
-  it('aucune case à cocher ; Copier et Télécharger rendent le même JSON, sans demande', async () => {
+  it('aucune case ; une phrase ; Copier et Télécharger rendent exactement l’export du chapitre', async () => {
     render(dialogue(true))
     expect(screen.queryAllByRole('checkbox')).toHaveLength(0)
-    fireEvent.click(screen.getByRole('button', { name: /Copier le JSON/ }))
+    expect(screen.getByText('Collez-le dans une IA : elle vous guide.'))
+    copier()
     await waitFor(() => expect(ecrit).toHaveBeenCalledTimes(1))
     const texte = ecrit.mock.calls[0][0]
-    expect(texte.startsWith('{')).toBe(true)
-    const brut = JSON.parse(texte) as { _metadata: Record<string, unknown> }
-    expect('demande' in brut._metadata).toBe(false)
+    const attendu = JSON.stringify(
+      construireExportChapitre(classeur(), A, local.content, PERIODICITES),
+      null,
+      2,
+    )
+    expect(sansDate(texte)).toEqual(sansDate(attendu))
+    expect('demande' in sansDate(texte)._metadata).toBe(false)
+    await screen.findByRole('button', { name: /Copié/ })
     fireEvent.click(screen.getByRole('button', { name: /Télécharger/ }))
-    const contenu = telecharge.mock.calls[0][1] as string
-    const sansDate = (t: string) => {
-      const o = JSON.parse(t) as { _metadata: Record<string, unknown> }
-      delete o._metadata.generated_at
-      return o
-    }
+    const [nom, contenu] = telecharge.mock.calls[0] as [string, string]
+    expect(nom).toBe('Registre de sécurité - Accueil.json')
     expect(sansDate(contenu)).toEqual(sansDate(texte))
+  })
+
+  it('document : l’export reste limité au document (D5)', async () => {
+    render(dialogue(true, { type: 'document', chapitre: A, document: d1 }))
+    copier()
+    await waitFor(() => expect(ecrit).toHaveBeenCalledTimes(1))
+    const brut = JSON.parse(ecrit.mock.calls[0][0]) as ClasseurJson
+    expect(brut.chapters).toHaveLength(1)
+    expect(brut.chapters[0].items.map((i) => i.title)).toEqual(['Check-in'])
+  })
+
+  it('copie refusée : une phrase, le fichier téléchargé à la place', async () => {
+    ecrit.mockRejectedValue(new Error('NotAllowedError'))
+    render(dialogue(true))
+    copier()
+    await screen.findByText(MESSAGE_COPIE_REFUSEE)
+    expect(telecharge).toHaveBeenCalledTimes(1)
+    expect(telecharge.mock.calls[0][0]).toBe(
+      'Registre de sécurité - Accueil.json',
+    )
   })
 })
 

@@ -70,8 +70,8 @@ export function bilanFusion(r: ResultatFusion): string {
  *   - Sommaire et Exporter en PDF ouvrent un `PrintPreview` (impression via
  *     iframe, « Enregistrer en PDF » dans le dialogue du navigateur) ;
  *   - Exporter en Markdown télécharge l'archive ZIP ; Exporter en JSON ouvre
- *     son dialogue (`ExportJsonClasseurDialog` : demandes pour un LLM,
- *     Copier ou Télécharger le fichier v2) ;
+ *     son dialogue (`ExportJsonClasseurDialog` : Copier pour une IA ou
+ *     Télécharger le fichier v2, sans aucun choix) ;
  *   - Importer un JSON ouvre le sélecteur de fichier puis la prévisualisation
  *     de fusion (`MergePreviewDialog`), qui écrit un instantané avant toute
  *     écriture ; Historique ouvre les instantanés restaurables (étape 6).
@@ -93,7 +93,7 @@ export function ClasseurDashboardActions({
   const [historiqueOuvert, setHistoriqueOuvert] = useState(false)
   const [imagesOuvertes, setImagesOuvertes] = useState(false)
   const [corbeilleOuverte, setCorbeilleOuverte] = useState(false)
-  // Export JSON du classeur complet : son dialogue (demandes pour un LLM).
+  // Export JSON du classeur complet : son dialogue (Copier / Télécharger).
   const [exportJson, setExportJson] = useState<DashboardContexte | null>(null)
   const { canWrite } = useDroitsClasseur(classeurId)
   const [bilan, setBilan] = useState<string | null>(null)

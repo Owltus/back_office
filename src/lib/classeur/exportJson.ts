@@ -41,20 +41,62 @@ export function nomFichierPortee(...parties: string[]): string {
   return nomFichierJson(nom)
 }
 
+/** Type MIME des fichiers JSON téléchargés. */
+export const MIME_JSON = 'application/json;charset=utf-8'
+
 /**
- * Télécharge le classeur complet au format JSON v2. `content` porte les
- * éléments de TOUS les chapitres (`fetchClasseurContent`).
+ * Le TEXTE de l'export du classeur complet : exactement ce que Copier met
+ * dans le presse-papiers et ce que Télécharger écrit dans le fichier (une
+ * seule source pour les deux gestes). `content` porte les éléments de TOUS
+ * les chapitres (`fetchClasseurContent`).
  */
-export function exporterClasseurJson(
+export function texteExportClasseur(
   classeur: DbClasseur,
   chapters: DbChapter[],
   content: ChapterContent,
   periodicites: DbPeriodicite[],
-): void {
-  const donnees = construireExport(classeur, chapters, content, periodicites)
-  telechargerTexte(
-    nomFichierJson(classeur.name),
-    serialiserExport(donnees),
-    'application/json;charset=utf-8',
+  maintenant?: Date,
+): string {
+  return serialiserExport(
+    construireExport(classeur, chapters, content, periodicites, maintenant),
   )
+}
+
+/** Issue d'une copie : dans le presse-papiers, ou téléchargée à la place. */
+export type IssueCopie = 'copie' | 'telecharge'
+
+/** Ce dont la copie a besoin du presse-papiers (injectable pour les tests). */
+export type PressePapiers = Pick<Clipboard, 'writeText'>
+
+/**
+ * Le presse-papiers du navigateur, ou `undefined` : il est ABSENT hors
+ * contexte sécurisé (http autre que localhost) malgré son type DOM.
+ */
+function pressePapiersDuNavigateur(): PressePapiers | undefined {
+  if (typeof navigator === 'undefined') return undefined
+  return (navigator as { clipboard?: PressePapiers }).clipboard
+}
+
+/**
+ * « Copier pour une IA » (étape 3 du plan `classeur-echange-ia-2026-10-19`,
+ * D3 : TOUT le JSON, mode d'emploi compris, l'IA guide dès le collage).
+ * Copie `texte` dans le presse-papiers ; si le navigateur refuse (API
+ * absente, page non sécurisée, permission, activation perdue après une
+ * lecture réseau), le fichier est TÉLÉCHARGÉ à la place, sous `nomFichier` :
+ * la personne a toujours son export, qu'elle joint à la conversation. Ne
+ * lève jamais pour un refus du presse-papiers.
+ */
+export async function copierOuTelecharger(
+  texte: string,
+  nomFichier: string,
+  presse: PressePapiers | undefined = pressePapiersDuNavigateur(),
+): Promise<IssueCopie> {
+  try {
+    if (presse === undefined) throw new Error('Presse-papiers absent')
+    await presse.writeText(texte)
+    return 'copie'
+  } catch {
+    telechargerTexte(nomFichier, texte, MIME_JSON)
+    return 'telecharge'
+  }
 }
