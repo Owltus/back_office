@@ -508,10 +508,10 @@ function LigneClasseur({
         isDragging && 'relative z-50 cursor-grabbing bg-card opacity-60',
       )}
     >
-      <td className="px-3 py-3">
+      <td className="px-3 py-2">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <Icon className="size-6" />
+          <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <Icon className="size-7" />
           </span>
           <div className="flex min-w-0 flex-col">
             <Link

@@ -633,9 +633,9 @@ export function FormeClasseurListe({
         <tbody>
           {Array.from({ length: cartes }).map((_, i) => (
             <tr key={i} className={TABLEAU_CLASSEURS.ligne}>
-              <td className="px-3 py-3">
+              <td className="px-3 py-2">
                 <div className="flex items-center gap-3">
-                  <Skeleton className="size-9 shrink-0 rounded-lg" />
+                  <Skeleton className="size-11 shrink-0 rounded-xl" />
                   <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                     <Skeleton className="h-4 w-full max-w-48" />
                     <Skeleton className="h-3 w-28" />
