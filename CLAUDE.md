@@ -1385,9 +1385,12 @@ AccesClasseurDialog.tsx` (bouclier dans la barre du haut de l'accueil,
   de cartes de Registre du 2026-09-26)** : `ClasseurList`, grammaire des
   tableaux de RepJour (carte `rounded-xl border bg-card`, en-tête
   `bg-muted/50`, classes partagées avec la silhouette par
-  `TABLEAU_CLASSEURS` de `PageShapes.tsx`). Pas de titre de page ; Importer
-  (reçoit aussi un .json déposé : « Déposez ici ») et Nouveau classeur en
-  boutons outline à droite (`PageHeader actionsAlign="end"`). Colonnes :
+  `TABLEAU_CLASSEURS` de `PageShapes.tsx`). Pas de titre de page. En-tête
+  à droite comme Caisse / Lits bébé (`PageHeader actionsAlign="end"`) :
+  Nouveau classeur (outline sm, libellé, écriture), puis `ButtonGroup`
+  d'icônes : « ? » (« Comment ça marche », POUR TOUS, contenu
+  `ClasseurListHelpPanel` selon les droits) et Importer (icône seule,
+  reçoit aussi un .json déposé). Colonnes :
   classeur (icône, nom = vrai lien, établissement), Modifié le (jj/mm/aa,
   ≥ 640 px), Accès (gestion :
   Privé / Tous en lecture / Tous en écriture ; compte en écriture : son

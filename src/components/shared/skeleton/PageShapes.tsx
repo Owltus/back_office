@@ -592,8 +592,8 @@ export const TABLEAU_CLASSEURS = {
 } as const
 
 /**
- * Silhouette de la liste des classeurs : la barre des deux boutons
- * (Importer, Nouveau classeur) puis le TABLEAU, mêmes colonnes et mêmes
+ * Silhouette de la liste des classeurs : la barre des boutons (Nouveau
+ * classeur, puis le groupe « ? » et Importer) puis le TABLEAU, mêmes colonnes et mêmes
  * points de bascule que `ClasseurList`. `actions = false` : le tableau seul
  * (pendant le chargement, sous la barre réelle). `acces` suit la colonne
  * que la page affichera (droits connus).
@@ -672,9 +672,13 @@ export function FormeClasseurListe({
       className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-4 lg:min-h-0"
       aria-hidden="true"
     >
+      {/* Nouveau classeur (libellé), puis le groupe « ? » + Importer. */}
       <div className="flex justify-end gap-2">
-        <Skeleton className="h-8 w-24 rounded-md" />
         <Skeleton className="h-8 w-40 rounded-md" />
+        <div className="inline-flex">
+          <Skeleton className="size-8 rounded-l-md rounded-r-none" />
+          <Skeleton className="size-8 rounded-l-none rounded-r-md" />
+        </div>
       </div>
       {tableau}
     </div>

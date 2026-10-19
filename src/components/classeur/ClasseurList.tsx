@@ -33,16 +33,21 @@ import {
 } from '#/components/classeur/dnd/useCapteursClasseur.ts'
 import { AccesClasseurDialog } from '#/components/classeur/dialogs/AccesClasseurDialog.tsx'
 import { ClasseurDialog } from '#/components/classeur/dialogs/ClasseurDialog.tsx'
+import { ClasseurListHelpPanel } from '#/components/classeur/ClasseurListHelpPanel.tsx'
 import {
   useClasseurs,
   useInvaliderClasseur,
   useReorderClasseurs,
   useStatsClasseurs,
 } from '#/components/classeur/hooks/useClasseur.ts'
+import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { ConfirmDialog } from '#/components/shared/ConfirmDialog.tsx'
+import { HelpDialogHeader } from '#/components/shared/HelpDialogHeader.tsx'
+import { HelpGlyph } from '#/components/shared/HelpGlyph.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
+import { Dialog, DialogContent } from '#/components/ui/dialog.tsx'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -77,8 +82,9 @@ import { cn } from '#/lib/utils.ts'
  * border bg-card`, en-tête `bg-muted/50` en petites lettres grises, lignes
  * séparées d'un trait discret. Colonnes : classeur (icône, nom,
  * établissement), dernière modification, accès (menu au clic droit, pas de
- * colonne d'actions). Pas de titre de page (l'onglet suffit) ; Importer et Nouveau
- * classeur en boutons outline à droite, comme les autres pages.
+ * colonne d'actions). Pas de titre de page (l'onglet suffit). En-tête à
+ * droite comme les autres pages : Nouveau classeur (libellé), puis le
+ * groupe d'icônes « ? » (aide, `ClasseurListHelpPanel`) et Importer.
  *
  * - Une ligne entière ouvre le classeur ; le nom est le vrai lien (clavier).
  * - Réordonner (ordre partagé) : gestion seule, la ligne entière se glisse
@@ -141,6 +147,7 @@ export function ClasseurList({
   const [aSupprimer, setASupprimer] = useState<DbClasseur | null>(null)
   const [aModifier, setAModifier] = useState<DbClasseur | null>(null)
   const [accesDe, setAccesDe] = useState<DbClasseur | null>(null)
+  const [aideOuverte, setAideOuverte] = useState(false)
   const [erreurImport, setErreurImport] = useState<string | null>(null)
 
   const suppression = useMutation({
@@ -227,28 +234,14 @@ export function ClasseurList({
         />
       )}
 
-      {canWrite && (
-        <PageHeader
-          actionsAlign="end"
-          actions={
-            <div className="flex items-center gap-2">
-              {importActif && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => inputRef.current?.click()}
-                  onDragEnter={surDragOver}
-                  onDragOver={surDragOver}
-                  onDragLeave={surDragLeave}
-                  onDrop={surDrop}
-                  className={cn(
-                    survolDepot && 'border-primary bg-primary/10 text-primary',
-                  )}
-                >
-                  {survolDepot ? <Upload /> : <FileDown />}
-                  {survolDepot ? 'Déposez ici' : 'Importer'}
-                </Button>
-              )}
+      {/* Grammaire des autres pages (Caisse, Lits bébé) : la création en
+          bouton à libellé, puis le groupe des boutons à icône, le « ? »
+          d'abord. Le « ? » est pour tout le monde, lecture comprise. */}
+      <PageHeader
+        actionsAlign="end"
+        actions={
+          <>
+            {canWrite && (
               <Button
                 variant="outline"
                 size="sm"
@@ -257,10 +250,48 @@ export function ClasseurList({
                 <Plus />
                 Nouveau classeur
               </Button>
-            </div>
-          }
-        />
-      )}
+            )}
+            <ButtonGroup>
+              <Tip label="Comment ça marche">
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  onClick={() => setAideOuverte(true)}
+                  aria-label="Comment ça marche"
+                >
+                  <HelpGlyph />
+                </Button>
+              </Tip>
+              {importActif && (
+                <Tip
+                  label={
+                    survolDepot
+                      ? 'Déposez le fichier ici'
+                      : 'Importer un classeur (fichier .json)'
+                  }
+                >
+                  <Button
+                    variant="outline"
+                    size="icon-sm"
+                    aria-label="Importer un classeur"
+                    onClick={() => inputRef.current?.click()}
+                    onDragEnter={surDragOver}
+                    onDragOver={surDragOver}
+                    onDragLeave={surDragLeave}
+                    onDrop={surDrop}
+                    className={cn(
+                      survolDepot &&
+                        'border-primary bg-primary/10 text-primary',
+                    )}
+                  >
+                    {survolDepot ? <Upload /> : <FileDown />}
+                  </Button>
+                </Tip>
+              )}
+            </ButtonGroup>
+          </>
+        }
+      />
 
       {classeurs.isError && (
         <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
@@ -401,6 +432,21 @@ export function ClasseurList({
         classeur={accesDe}
         onClose={() => setAccesDe(null)}
       />
+
+      {/* Aide de la page (bouton « ? »), même gabarit que les autres onglets. */}
+      <Dialog open={aideOuverte} onOpenChange={setAideOuverte}>
+        <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-2xl">
+          <HelpDialogHeader
+            icon={<HelpGlyph />}
+            title="Comment fonctionnent les classeurs"
+            description="Vos classeurs réglementaires, prêts à imprimer."
+          />
+          {/* Seul le corps défile : l'en-tête reste fixe en haut. */}
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <ClasseurListHelpPanel canWrite={canWrite} canManage={canManage} />
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <ConfirmDialog
         open={aSupprimer !== null}

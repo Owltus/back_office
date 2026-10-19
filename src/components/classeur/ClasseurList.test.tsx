@@ -169,7 +169,9 @@ describe('ClasseurList — tableau', () => {
       container.querySelector('thead th:nth-child(3) .sr-only'),
     ).not.toBeNull()
     expect(getByText('Nouveau classeur')).toBeTruthy()
-    expect(getByText('Importer')).toBeTruthy()
+    expect(
+      screen.getByRole('button', { name: 'Importer un classeur' }),
+    ).toBeTruthy()
     // Aucun bouton « ⋯ » : le menu est au clic droit seulement.
     expect(
       container.querySelectorAll('button[aria-label^="Actions"]'),
@@ -201,6 +203,33 @@ describe('ClasseurList — tableau', () => {
     const { container, queryByText } = rendre()
     expect(entetes(container)).not.toContain('Accès')
     expect(queryByText('Nouveau classeur')).toBeNull()
+    expect(
+      screen.queryByRole('button', { name: 'Importer un classeur' }),
+    ).toBeNull()
+    // Le « ? » est pour tout le monde.
+    expect(
+      screen.getByRole('button', { name: 'Comment ça marche' }),
+    ).toBeTruthy()
+  })
+
+  it('aide en lecture : ni création, ni rangement, ni légende des accès', async () => {
+    etat.page = 'lecture'
+    rendre()
+    fireEvent.click(screen.getByRole('button', { name: 'Comment ça marche' }))
+    await screen.findByText('Comment fonctionnent les classeurs')
+    expect(screen.getByText('À quoi sert cette page')).toBeTruthy()
+    expect(screen.queryByText('Créer ou importer')).toBeNull()
+    expect(screen.queryByText(/changer l'ordre/)).toBeNull()
+    expect(screen.queryByText('Tous le lisent.')).toBeNull()
+  })
+
+  it('aide en gestion : tout, dont le rangement et la légende des accès', async () => {
+    rendre()
+    fireEvent.click(screen.getByRole('button', { name: 'Comment ça marche' }))
+    await screen.findByText('Comment fonctionnent les classeurs')
+    expect(screen.getByText('Créer ou importer')).toBeTruthy()
+    expect(screen.getByText(/changer l'ordre/)).toBeTruthy()
+    expect(screen.getByText('Tous le lisent.')).toBeTruthy()
   })
 
   it('date en cours de lecture : place réservée, jamais une fausse date', () => {
