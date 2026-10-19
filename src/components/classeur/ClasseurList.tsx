@@ -63,7 +63,8 @@ import {
 import { capacites, niveauEffectif } from '#/lib/classeur/droits.ts'
 import type { NiveauEffectif } from '#/lib/classeur/droits.ts'
 import { messageErreur } from '#/lib/classeur/erreur.ts'
-import { formatDate, getIcon } from '#/lib/classeur/naming.ts'
+import { getIcon } from '#/lib/classeur/naming.ts'
+import { mentionVersion } from '#/lib/classeur/print/mentionVersion.ts'
 import { softDeleteClasseur } from '#/lib/classeur/service.ts'
 import type { StatsClasseur } from '#/lib/classeur/statsClasseurs.ts'
 import type { DbClasseur } from '#/lib/classeur/types.ts'
@@ -700,7 +701,8 @@ function LigneClasseur({
         {statsEtat === 'chargement' ? (
           <Skeleton className="h-3.5 w-20" />
         ) : (
-          formatDate(misAJour)
+          // jj/mm/aaaa, fuseau de Paris (demande utilisateur du 2026-10-19).
+          (mentionVersion(misAJour) ?? '—')
         )}
       </td>
       {avecAcces && <AccesCellule acces={acces} />}

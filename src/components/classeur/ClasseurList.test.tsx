@@ -158,6 +158,8 @@ describe('ClasseurList — tableau', () => {
     const l1 = cellules(container, 1)
     expect(l1[1]).toBe('10')
     expect(l1[2]).toBe('13')
+    // Date au format jj/mm/aaaa.
+    expect(l1[3]).toBe('02/10/2026')
     expect(l1[4]).toBe('Privé')
     expect(cellules(container, 2)[4]).toBe('Tous en écriture')
     // Colonne Accès : une icône seule, le libellé n'est lu que par les
