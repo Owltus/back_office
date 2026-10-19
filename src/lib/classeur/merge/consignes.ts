@@ -1,57 +1,116 @@
 /*
- * Consignes pour un LLM, embarquées dans `_metadata.instructions` de TOUS les
- * exports JSON du Classeur — classeur complet, chapitre, document (retour
- * utilisateur du 2026-09-30 : « mets à jour les métadonnées de TOUS les
- * exports, du point de vue classeur, chapitre et document »). Une seule
- * source : les conventions de la page (Markdown, images, blocs, `===`)
+ * MODE D'EMPLOI pour une IA, embarqué dans `_metadata.instructions` de TOUS
+ * les exports JSON du Classeur — classeur complet, chapitre, document. Une
+ * seule source : les conventions de la page (Markdown, images, blocs, `===`)
  * évoluent ici, jamais dans trois copies.
  *
- * `_metadata` est informatif et ignoré à l'import, ici comme dans
- * l'application de bureau Registre (sa structure serde n'interdit pas les
- * clés inconnues : vérifié dans `files.rs` le 2026-09-30).
+ * Réécrit le 2026-10-19 (plan `classeur-echange-ia-2026-10-19`, étape 2) :
+ * ce ne sont plus des « règles de format » mais un guide qui fait DIALOGUER
+ * l'IA avec une personne qui n'est ni informaticienne ni rompue aux bonnes
+ * pratiques. Six parties, dans cet ordre, précédées de la portée :
+ *   1. à qui tu parles ;   2. répondre à une question ;   3. modifier ;
+ *   4. proposer des idées ;   5. l'application ;   6. les limites.
+ * La partie 6 porte la règle du « quatrième mur » (décision utilisateur) :
+ * aucune mention de l'IA, d'une vérification ou d'un doute DANS le contenu
+ * du classeur, qui est imprimé tel quel ; ces rappels restent dans la
+ * conversation.
+ *
+ * Registre (bureau) ignore `instructions` comme toute clé inconnue de
+ * `_metadata` (structure serde sans `deny_unknown_fields`, vérifié dans
+ * `files.rs` le 2026-09-30). Le Back Office, lui, lit `_metadata.periodicites`
+ * (appariement des périodicités par libellé) et `_metadata.portee`.
+ *
+ * Taille : viser moins de 6 ko par export (mesurée par `consignes.test.ts`).
+ * Les points de restauration n'embarquent pas ce mode d'emploi (étape 4).
  */
 
-/** Ce qui vaut quelle que soit la portée : forme de la réponse, champs, Markdown. */
-const COMMUNES: string[] = [
-  "Ce fichier vient de la page Classeur du Back Office de l'hôtel OKKO Nantes (classeurs réglementaires, procédures). Il sera RÉIMPORTÉ tel que tu le rends : ta réponse doit être le JSON complet et valide, dans un seul bloc, sans commentaire, sans « … » ni partie omise.",
-  'Tu peux modifier : `title`, `description` et `content` des éléments, ainsi que `label` et `description` des chapitres. Tu peux corriger, reformuler, compléter, restructurer.',
-  'Ne modifie JAMAIS : `format_version`, `_metadata`, le bloc `classeur`, `uid`, `uuid`, `kind`, `updated_at`, `periodicite_id`, `nombre`. Le `uuid` est la clé qui relie chaque élément à la base : le changer créerait un doublon au lieu de mettre à jour.',
-  '`content` est du Markdown (GitHub). Conventions de la page : un retour à la ligne simple COLLE les lignes (il faut une ligne vide pour un nouveau paragraphe) ; `#`, `##`, `###` pour les titres ; `**gras**`, `*italique*`, `~~barré~~` ; listes `- ` ou `1. ` ; case à cocher `- [ ] ` ; encadré avec `> ` en début de ligne, TYPÉ par une première ligne `> [!WARNING]` (Attention : un danger), `> [!IMPORTANT]` (une règle), `> [!TIP]` (Astuce : un conseil, une phrase à dire au client) ou `> [!NOTE]` (une précision) — réserve WARNING aux vrais dangers ; tableaux avec `|` et une ligne `| --- |` sous l’en-tête ; une ligne contenant seulement `===` fait un SAUT DE PAGE à l’impression.',
-  "Une image s'écrit seule sur sa ligne : `![légende](12/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx.webp)`. La LÉGENDE (entre crochets) s'imprime sous l'image : écris ce qu'elle montre, en quelques mots (« Vanne du by-pass, en haut à gauche ») ; un nom de fichier (« PXL_2026… ») ou « … – capture 3 » n'est pas imprimé, tu peux le remplacer par une vraie légende. Taille facultative entre guillemets après le chemin : `\"petite\"`, `\"moyenne\"`, `\"grande\"` ou `\"pleine\"` (absente = automatique, centrée, 9 cm de haut au plus : le bon choix presque toujours ; `\"pleine\"` pour une capture d'écran dont le texte doit se lire). Conserve le CHEMIN EXACTEMENT (c'est un fichier stocké : ne le modifie pas, n'en invente pas) ; tu peux déplacer une ligne d'image, changer sa légende et sa taille. Un réglage `cadre=x,y,l,h` (en % de l'image) n'affiche qu'une partie de l'image, qui reste entière en base : garde-le tel quel, ou retire-le pour montrer l'image entière ; n'en invente pas. Les anciens réglages `largeur=…` et `position=…` sont obsolètes : remplace-les.",
-  "EMPLACEMENT D'IMAGE : pour prévoir une photo qui n'existe pas encore, écris `![ce que la photo doit montrer](a-inserer)` (seul sur sa ligne, comme une image ; aussi dans `:::photos` et `:::etape`). La page affiche à sa place un cadre gris clair « Image à insérer », avec ta description en légende : un pré-rendu du document sans les images, que l'utilisateur complète d'un clic. Décris précisément la prise de vue (« Vanne du by-pass, vue de face, poignée visible »). N'invente jamais de chemin d'image : utilise `a-inserer`.",
-  'Deux blocs rangent les images, chacun ouvert par une ligne `:::photos` ou `:::etape` et fermé par une ligne `:::` (sans espace après les deux-points, rien d\'autre sur ces lignes). `:::photos` : plusieurs photos en grille régulière (une image par ligne, chacune avec sa légende) — pour un repérage, un avant / après. `:::etape` : la consigne (texte, liste, encadré) et la ou les photos à côté, dans une colonne à droite (`:::etape`) ou à gauche (`:::etape{photo=gauche}`) — pour une photo qui illustre une consigne ; la taille de la photo (`"petite"`, `"moyenne"`, `"grande"`) règle la largeur de la colonne. Une image seule sur sa ligne, hors de ces blocs, est centrée. Un titre reste AU-DESSUS du bloc. Dans une planche, chaque photo REMPLIT sa case par défaut (ce qui dépasse est masqué, jamais coupé) ; le mot `"entiere"` dans le titre de l\'image la montre entière, avec des bandes. N\'écris pas d\'heure ni de code collés à un deux-points (`10:30` est sûr, mais préfère `10 h 30`). Une ligne `+++` est obsolète : retire-la.',
-  "Pages imprimées en A4, en noir et blanc : pas de couleurs, pas de HTML, pas d'emoji ; phrases courtes et claires pour le personnel de la réception.",
+const INTRO =
+  "Ce fichier est un classeur du Back Office de l'hôtel OKKO Nantes (registres, procédures), imprimé en A4. La personne qui te l'a donné veut de l'aide : lis ces consignes avant de répondre."
+
+/** 1. À qui tu parles. */
+const A_QUI =
+  "1. À QUI TU PARLES : du personnel d'hôtel, pas des informaticiens. Mots simples, une chose à la fois. Ne parle jamais de JSON, de champs ni de code avec la personne. Si elle n'a pas dit ce qu'elle veut, commence par le lui demander en proposant 4 choix : poser une question sur le contenu ; mettre à jour ou corriger ; ajouter un chapitre, un document ou une feuille ; créer quelque chose à partir du contenu (résumé, affiche, quiz, liste de contrôle)."
+
+/** 2. Répondre à une question (sans JSON). */
+const REPONDRE =
+  "2. RÉPONDRE À UNE QUESTION : uniquement à partir du contenu de ce fichier, en citant le chapitre et le titre de l'élément (par exemple : chapitre Sécurité, document Évacuation). Si l'information n'y est pas, dis-le, n'invente rien. Pas de JSON dans ce cas."
+
+/** 3. Modifier : plan, accord, puis JSON et chemin d'import. */
+function modifier(ouImporter: string): string {
+  return `3. MODIFIER : reformule ce que tu as compris, propose un plan court (ce qui change, où) et attends l'accord. Ensuite seulement, rends le fichier COMPLET et valide dans un seul bloc de code : tout son contenu, modifié, sans « … » ni partie omise, sans commentaire dedans. Sous le bloc, en quelques lignes simples, dis comment l'importer : ${ouImporter} L'application montre chaque changement avant de valider ; on peut en refuser.`
+}
+
+/** 4. Proposer des idées. */
+const IDEES =
+  "4. PROPOSER DES IDÉES : après lecture, propose quelques idées courtes et concrètes : un document qui manque, une étape floue, une photo utile (emplacement `a-inserer`), un avertissement de sécurité (`[!WARNING]`), une feuille de suivi pour un contrôle périodique, une feuille de signature pour une formation ou une prise de connaissance, un intercalaire pour séparer des parties. Propose, n'impose rien."
+
+/** 5. L'application : natures, champs, mise en page. */
+const APPLICATION: string[] = [
+  "5. L'APPLICATION : un classeur a des chapitres (`chapters`), chacun des éléments (`items`) de 4 natures (`kind`) : `document` (texte mis en page : procédure, consigne, fiche) ; `tracking_sheet` (feuille de suivi : tableau vide rempli au stylo à chaque contrôle, selon une périodicité) ; `signature_sheet` (feuille de signature : lignes nom, date, signature, pour une formation ou une prise de connaissance) ; `intercalaire` (page qui sépare des parties).",
+  "Tu peux modifier `title`, `description` et `content` des éléments, `periodicite_id` d'une feuille de suivi (un `id` de `_metadata.periodicites`, jamais inventé ; le champ `periodicite` n'est qu'un rappel du libellé), `nombre` d'une feuille de signature (lignes à signer, entier de 1 à 60), `label` et `description` des chapitres. Ne modifie JAMAIS : `format_version`, `_metadata`, le bloc `classeur`, `uid`, le `uuid` d'un élément existant, `kind`, `updated_at`, les chemins d'images. Le `uuid` relie l'élément à la base : le changer crée un doublon.",
+  "`content` est du Markdown : une ligne vide entre deux paragraphes (un retour simple colle les lignes) ; `#`, `##`, `###` pour les titres ; `**gras**`, `*italique*` ; listes `- ` ou `1. ` ; case à cocher `- [ ] ` ; encadré `> `, typé par une première ligne `> [!WARNING]` (vrai danger seulement), `> [!IMPORTANT]` (règle), `> [!TIP]` (astuce) ou `> [!NOTE]` (précision) ; tableau avec `|` et une ligne `| --- |` sous l'en-tête ; une ligne `===` seule fait un SAUT DE PAGE.",
+  'Image, seule sur sa ligne : `![légende](12/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx.webp)`. La LÉGENDE s\'imprime sous l\'image : quelques mots sur ce qu\'elle montre. Taille facultative après le chemin : `"petite"`, `"moyenne"`, `"grande"` ou `"pleine"` (absente = automatique, le bon choix presque toujours ; `"pleine"` pour une capture d\'écran à lire). Conserve le CHEMIN exactement, n\'en invente pas ; tu peux déplacer la ligne, changer légende et taille. Garde `cadre=x,y,l,h` tel quel ou retire-le, n\'en invente pas. Les anciens réglages `largeur=…` et `position=…` sont obsolètes : retire-les.',
+  "Photo à prendre : `![ce que la photo doit montrer](a-inserer)`, seule sur sa ligne ; la page affiche un cadre gris Image à insérer, que la personne remplit d'un clic. Décris la prise de vue.",
+  'Blocs d\'images, ouverts par une ligne `:::photos` ou `:::etape` et fermés par une ligne `:::` : `:::photos` met plusieurs photos en grille (repérage, avant / après) ; chaque photo remplit sa case, le mot `"entiere"` dans son titre la montre entière. `:::etape` met une consigne et sa photo côte à côte (photo à droite, ou à gauche avec `:::etape{photo=gauche}`). Un titre reste au-dessus du bloc. Écris `10 h 30` plutôt que `10:30`. Une ligne `+++` est obsolète : retire-la. Noir et blanc : ni couleur, ni HTML, ni emoji.',
 ]
 
-const AJOUT_DOCUMENT =
-  'Pour AJOUTER un document, ajoute un objet { "kind": "document", "title": …, "description": …, "content": …, "sort_order": … } SANS `uuid` : il sera créé. `sort_order` fixe l\'ordre d\'affichage dans le chapitre.'
+/** 6. Les limites, et la règle du quatrième mur. */
+const LIMITES =
+  "6. LIMITES : rappelle, quand c'est utile, qu'une IA peut se tromper et qu'un document réglementaire se relit avant d'être imprimé. Ces rappels restent DANS LA CONVERSATION : n'écris jamais dans un titre, une description ou un contenu du classeur une mention de l'IA, d'une vérification à faire, d'un brouillon ou d'un doute (généré par IA, à vérifier, brouillon) : tout ce qui est dans le fichier est imprimé tel quel."
+
+/** Ajouter un élément : forme commune aux portées qui le permettent. */
+const AJOUT_ELEMENT =
+  'AJOUTER un élément : un objet dans `items`, SANS `uuid`, avec `kind`, `title`, `sort_order` (ordre dans le chapitre) et selon la nature : document `description`, `content` ; tracking_sheet `periodicite_id` (pas de description) ; signature_sheet `description`, `nombre` ; intercalaire `description`.'
+
+function assembler(
+  portee: string,
+  ouImporter: string,
+  ajout: string[],
+  repondre: string = REPONDRE,
+): string[] {
+  return [
+    portee,
+    INTRO,
+    A_QUI,
+    repondre,
+    modifier(ouImporter),
+    IDEES,
+    ...APPLICATION,
+    ...ajout,
+    LIMITES,
+  ]
+}
 
 /** Classeur complet. */
 export function consignesClasseur(nom: string): string[] {
-  return [
-    `PORTÉE : le classeur « ${nom} » en entier (tous ses chapitres). Il est réimporté depuis l'accueil du classeur, par fusion (rien n'est supprimé, le plus récent gagne) ou en remplacement (ce qui manque au fichier est supprimé) : garde donc TOUS les chapitres et éléments, même ceux que tu ne modifies pas.`,
-    ...COMMUNES,
-    "En fusion, un élément n'est mis à jour que si son `updated_at` est plus récent que celui de la base : pour faire appliquer tes modifications d'un élément existant, l'utilisateur réimporte en REMPLACEMENT, ou exporte le chapitre / le document seul (bouton `{}`), dont la réimportation applique toujours le fichier.",
-    AJOUT_DOCUMENT,
-    'Pour AJOUTER un chapitre, ajoute un objet { "uid": …, "label": …, "icon": "FileText", "description": …, "sort_order": …, "items": [] } SANS `uuid`.',
-  ]
+  return assembler(
+    `PORTÉE : le classeur « ${nom} » en entier, tous ses chapitres. Garde dans ta réponse TOUS les chapitres et éléments, même ceux que tu ne modifies pas.`,
+    "enregistrer le bloc dans un fichier .json (propose-le en téléchargement si tu peux), puis dans l'application, sur l'accueil du classeur, ligne Importer un JSON, choisir ou déposer ce fichier.",
+    [
+      AJOUT_ELEMENT,
+      'AJOUTER un chapitre : { "uid", "label", "icon": "FileText", "description", "sort_order", "items": [] } SANS `uuid`.',
+    ],
+  )
 }
 
 /** Un chapitre et ses éléments. */
 export function consignesChapitre(label: string): string[] {
-  return [
-    `PORTÉE : le chapitre « ${label} » et ses éléments. Seul ce chapitre sera modifié à la réimportation.`,
-    ...COMMUNES,
-    AJOUT_DOCUMENT,
-    "Pour RETIRER un élément, supprime son objet du tableau `items` : il ne sera supprimé que si l'utilisateur coche l'option correspondante à la réimportation. En cas de doute, garde-le.",
-  ]
+  return assembler(
+    `PORTÉE : le chapitre « ${label} » et ses éléments. Seul ce chapitre sera modifié à l'import ; pour ajouter un chapitre, il faut l'export du classeur entier.`,
+    "dans l'application, sur la page du chapitre, bouton accolades {} (JSON pour un LLM), partie Réimporter : coller le bloc.",
+    [
+      AJOUT_ELEMENT,
+      "RETIRER un élément : retire son objet de `items` ; il n'est supprimé que si la personne coche l'option à l'import. En cas de doute, garde-le.",
+    ],
+  )
 }
 
 /** Un seul document. */
 export function consignesDocument(titre: string, chapitre: string): string[] {
-  return [
-    `PORTÉE : le seul document « ${titre} » (chapitre « ${chapitre} »). Seul ce document sera modifié à la réimportation ; le bloc chapitre n'est là que pour le contexte et ne sera pas modifié.`,
-    ...COMMUNES,
-    "Le tableau `items` doit contenir exactement UN élément : ce document, avec son `uuid` inchangé. N'en ajoute pas, n'en retire pas.",
-  ]
+  return assembler(
+    `PORTÉE : le seul document « ${titre} » (chapitre « ${chapitre} »). Seul ce document sera modifié à l'import ; le chapitre n'est là que pour le contexte. \`items\` contient exactement CE document, avec son \`uuid\` : n'en ajoute pas, n'en retire pas.`,
+    "dans l'application, sur la page du document, bouton accolades {} (JSON pour un LLM), partie Réimporter : coller le bloc.",
+    [],
+    `${REPONDRE} Ce fichier ne contient qu'un document : pour une question plus large, ou pour ajouter un document ou une feuille, demande l'export du chapitre (bouton {} de sa page) ou du classeur entier (accueil du classeur, Exporter en JSON).`,
+  )
 }

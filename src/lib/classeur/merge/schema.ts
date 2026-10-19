@@ -78,6 +78,14 @@ export interface ItemJson {
   nombre?: number | null
   updated_at?: string
   sort_order: number
+  /**
+   * Feuille de suivi : LIBELLÉ de sa périodicité (D8 du plan
+   * `classeur-echange-ia-2026-10-19`), posé à l'export pour qu'une IA n'ait
+   * pas à faire la jointure avec `_metadata.periodicites`. Rappel seulement :
+   * jamais relu (`lireItem` l'ignore, c'est `periodicite_id` qui compte) ;
+   * Registre l'ignore aussi (pas de `deny_unknown_fields` sur `ItemJson`).
+   */
+  periodicite?: string
 }
 
 export interface ChapterJson {
@@ -244,19 +252,32 @@ export const SCHEMA_DESCRIPTIF = {
       },
       tracking_sheet: {
         _description:
-          "Fiche de suivi périodique. N'a PAS de champ description.",
+          "Fiche de suivi périodique : tableau vide rempli à la main à chaque contrôle. N'a PAS de champ description.",
         specific_fields: {
-          periodicite_id: { type: 'integer|null', required: false },
+          periodicite_id: {
+            type: 'integer|null',
+            required: false,
+            description: 'Un id de _metadata.periodicites.',
+          },
+          periodicite: {
+            type: 'string',
+            required: false,
+            description:
+              "Libellé de la périodicité, ajouté à l'export pour la lecture. Ignoré à l'import : seul periodicite_id compte.",
+          },
         },
       },
       signature_sheet: {
-        _description: "Fiche d'émargement.",
+        _description:
+          "Fiche d'émargement : lignes nom, date, signature, pour une formation ou une prise de connaissance.",
         specific_fields: {
           description: { type: 'string', required: false, default: '' },
           nombre: {
             type: 'integer|null',
             required: false,
             default: DEFAUTS.signature_sheet.nombre,
+            description:
+              'Nombre de lignes à signer sur la feuille (entier de 1 à 60 dans le Back Office).',
           },
         },
       },
@@ -270,7 +291,7 @@ export const SCHEMA_DESCRIPTIF = {
   },
   periodicites: {
     _description:
-      "Table de référence des périodicités de suivi (informative, ignorée à l'import).",
+      "Table de référence des périodicités de suivi. Registre (bureau) l'ignore à l'import ; le Back Office s'en sert pour retrouver la périodicité d'une fiche de suivi par son LIBELLÉ, les id différant d'une base à l'autre.",
     fields: {
       id: {
         type: 'integer',
@@ -287,17 +308,17 @@ export const SCHEMA_DESCRIPTIF = {
     _description: "Règles de validation et de comportement à l'import.",
     format_version: 'Accepte 1 ou 2.',
     metadata_ignored:
-      "Le bloc _metadata est purement informatif, ignoré à l'import.",
+      "Registre ignore le bloc _metadata à l'import. Le Back Office en lit periodicites (voir ce bloc) et portee (export d'un chapitre ou d'un document : l'import est limité à cette portée) ; le reste est informatif.",
     matching_priority:
       '1) UUID si présent → recherche dans tout le classeur. 2) Fallback slug+titre (v1).',
     last_write_wins:
-      'Si un item est trouvé par UUID, la version la plus récente (updated_at) gagne.',
+      "Fusion : si un item est trouvé par UUID, la version la plus récente (updated_at) gagne. Back Office, en remplacement et à l'import d'un chapitre ou d'un document : le fichier fait foi, horodatages ignorés.",
     soft_delete_respected:
-      "Un item supprimé localement (soft delete) n'est pas recréé par le merge — compté comme 'skipped'.",
+      "Fusion : un item supprimé localement (soft delete) n'est pas recréé, compté comme 'skipped'. Back Office, en remplacement : il est restauré.",
     move_detection:
-      "Un item trouvé par UUID dans un chapitre différent n'est pas re-déplacé. Son contenu est mis à jour si plus récent.",
+      "Registre : un item trouvé par UUID dans un chapitre différent n'est pas re-déplacé, son contenu est mis à jour si plus récent. Back Office : quand le fichier l'emporte, l'item est aussi déplacé dans le chapitre du fichier.",
     no_deletion:
-      "Le merge n'efface jamais de données. Les items locaux absents du JSON sont conservés.",
+      "Registre : le merge n'efface jamais, les items locaux absents du JSON sont conservés. Back Office : la fusion n'efface rien non plus ; le remplacement (classeur complet) supprime, en corbeille restaurable, les items et chapitres absents du JSON ; à l'import d'un chapitre, un item absent n'est supprimé que si l'option est cochée.",
   },
 } as const
 
@@ -539,6 +560,13 @@ export function parseImportJson(texte: string): ClasseurJson {
 // Export (forme exacte de do_export_json)
 // ---------------------------------------------------------------------------
 
+/**
+ * `_metadata.note` des exports (chaîne exigée par Registre). Elle renvoie
+ * l'IA à son mode d'emploi ; `_metadata` reste intouchable pour elle.
+ */
+export const NOTE_EXPORT =
+  "Lis d'abord `instructions` : c'est ton mode d'emploi. Ne modifie pas ce bloc _metadata."
+
 /** `YYYY-MM-DDTHH:MM:SSZ`, comme `now_iso8601` côté Rust. */
 function horodatageExport(d: Date): string {
   return d.toISOString().replace(/\.\d{3}Z$/, 'Z')
@@ -567,10 +595,11 @@ export function construireExport(
     ),
     intercalaires: content.intercalaires.filter((d) => d.deleted_at === null),
   })
+  const libelles = new Map(periodicites.map((p) => [p.id, p.label]))
   const itemsParChapitre = new Map<number, ItemJson[]>()
   for (const it of itemsTries) {
     const liste = itemsParChapitre.get(it.data.chapter_id) ?? []
-    liste.push(itemVersJson(it))
+    liste.push(itemVersJson(it, libelles))
     itemsParChapitre.set(it.data.chapter_id, liste)
   }
 
@@ -599,7 +628,7 @@ export function construireExport(
       description:
         "Classeur exporté depuis le Back Office (page Classeur), au format d'échange Registre.",
       generated_at: horodatageExport(maintenant),
-      note: "Lis d'abord `instructions`. Ce bloc _metadata est informatif et ignoré lors de l'import.",
+      note: NOTE_EXPORT,
       schema: SCHEMA_DESCRIPTIF,
       periodicites: [...periodicites]
         .sort((a, b) => a.id - b.id)
@@ -617,8 +646,15 @@ export function construireExport(
   }
 }
 
-/** Ordre des clés = ordre du struct serde `ItemJson` (lisibilité des diffs). */
-function itemVersJson(it: ReturnType<typeof flattenItems>[number]): ItemJson {
+/**
+ * Ordre des clés = ordre du struct serde `ItemJson` (lisibilité des diffs) ;
+ * le libellé `periodicite` d'une feuille de suivi (D8) vient EN DERNIER, et
+ * seulement si sa périodicité est connue.
+ */
+function itemVersJson(
+  it: ReturnType<typeof flattenItems>[number],
+  libelles: ReadonlyMap<number, string>,
+): ItemJson {
   switch (it.kind) {
     case 'document':
       return {
@@ -630,7 +666,8 @@ function itemVersJson(it: ReturnType<typeof flattenItems>[number]): ItemJson {
         updated_at: it.data.updated_at,
         sort_order: it.data.sort_order,
       }
-    case 'tracking_sheet':
+    case 'tracking_sheet': {
+      const libelle = libelles.get(it.data.periodicite_id)
       return {
         kind: 'tracking_sheet',
         uuid: it.data.uuid,
@@ -638,7 +675,9 @@ function itemVersJson(it: ReturnType<typeof flattenItems>[number]): ItemJson {
         periodicite_id: it.data.periodicite_id,
         updated_at: it.data.updated_at,
         sort_order: it.data.sort_order,
+        ...(libelle === undefined ? {} : { periodicite: libelle }),
       }
+    }
     case 'signature_sheet':
       return {
         kind: 'signature_sheet',

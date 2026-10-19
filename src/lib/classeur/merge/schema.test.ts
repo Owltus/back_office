@@ -367,7 +367,10 @@ describe('construireExport — forme exacte de do_export_json', () => {
       'periodicite_id',
       'updated_at',
       'sort_order',
+      // D8 (2026-10-19) : libellé de la périodicité, EN DERNIER, ignoré à l'import.
+      'periodicite',
     ])
+    expect(items[0]).toMatchObject({ periodicite: 'Annuel' })
     expect(Object.keys(items[1])).toEqual([
       'kind',
       'uuid',
@@ -399,8 +402,63 @@ describe('construireExport — forme exacte de do_export_json', () => {
     expect(items[0]).toMatchObject({ periodicite_id: 44 })
   })
 
-  it('export → JSON → parse rend un objet identique (aller-retour)', () => {
-    expect(parseImportJson(JSON.stringify(exp))).toEqual(exp)
+  it('export → JSON → parse rend un objet identique (aller-retour), au libellé `periodicite` près', () => {
+    // Le libellé de périodicité (D8) est un RAPPEL pour l'IA : jamais relu.
+    // C'est la SEULE différence admise, et `_metadata` revient entier.
+    const sansLibelle = structuredClone(exp)
+    for (const c of sansLibelle.chapters)
+      for (const item of c.items) delete item.periodicite
+    const relu = parseImportJson(JSON.stringify(exp))
+    expect(relu).toEqual(sansLibelle)
+    expect(relu._metadata).toEqual(exp._metadata)
+    expect(JSON.stringify(exp)).toContain('"periodicite":"Annuel"')
+  })
+
+  it('libellé `periodicite` : absent si la périodicité de la feuille est inconnue', () => {
+    const e = construireExport(
+      classeur(),
+      [chapitre({ id: 1, label: 'A' })],
+      {
+        documents: [],
+        tracking_sheets: [
+          suivi({
+            id: 2,
+            chapter_id: 1,
+            title: 'Inconnue',
+            periodicite_id: 999,
+          }),
+          suivi({ id: 3, chapter_id: 1, title: 'Mensuel', periodicite_id: 41 }),
+        ],
+        signature_sheets: [],
+        intercalaires: [],
+      },
+      PERIODICITES,
+      date,
+    )
+    const parTitre = Object.fromEntries(
+      e.chapters[0].items.map((i) => [i.title, i]),
+    )
+    expect('periodicite' in parTitre.Inconnue).toBe(false)
+    expect(parTitre.Mensuel.periodicite).toBe('Mensuel')
+  })
+
+  it('`_metadata` garde les cinq clés de Registre, avec leurs types', () => {
+    const m = exp._metadata as unknown as Record<string, unknown>
+    expect(typeof m.description).toBe('string')
+    expect(typeof m.generated_at).toBe('string')
+    expect(typeof m.note).toBe('string')
+    expect(typeof m.schema).toBe('object')
+    expect(Array.isArray(m.periodicites)).toBe(true)
+  })
+
+  it('le schéma descriptif ne ment plus sur le Back Office (suppressions, périodicités, nombre)', () => {
+    const texte = JSON.stringify(SCHEMA_DESCRIPTIF)
+    expect(texte).not.toContain("Le merge n'efface jamais de données")
+    expect(texte).not.toContain("informative, ignorée à l'import")
+    expect(texte).toMatch(/Registre : le merge n'efface jamais/)
+    expect(texte).toMatch(/remplacement \(classeur complet\) supprime/)
+    expect(texte).toMatch(/par son LIBELLÉ/)
+    expect(texte).toMatch(/lignes à signer/)
   })
 
   it('une icône de classeur vide prend le défaut BookOpen (COALESCE)', () => {

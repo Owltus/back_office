@@ -6,7 +6,20 @@ import {
   instantaneEgal,
   retirerMetadata,
 } from '#/lib/classeur/merge/snapshot.ts'
-import { chJson, fichier, itJson } from '#/lib/classeur/merge/fixtures.ts'
+import {
+  PERIODICITES,
+  chJson,
+  chapitre,
+  classeur,
+  etat,
+  fichier,
+  itJson,
+  suivi,
+} from '#/lib/classeur/merge/fixtures.ts'
+import {
+  construireExport,
+  parseImportJson,
+} from '#/lib/classeur/merge/schema.ts'
 
 /*
  * Oracles : `strip_metadata` (retire la clé `_metadata` seule) et
@@ -21,6 +34,32 @@ const meta = (generated_at: string) => ({
   note: '',
   schema: null,
   periodicites: [],
+})
+
+describe('instantaneEgal — libellé `periodicite` (2026-10-19)', () => {
+  it('un export (avec libellés) est égal à son instantané relu (sans) ; un autre id ne l’est pas', () => {
+    const ch = [chapitre({ id: 1, label: 'A' })]
+    const contenu = etat(ch, {
+      tracking_sheets: [
+        suivi({ id: 1, chapter_id: 1, title: 'S', periodicite_id: 41 }),
+      ],
+    }).content
+    const courant = construireExport(classeur(), ch, contenu, PERIODICITES)
+    expect(JSON.stringify(courant)).toContain('"periodicite":"Mensuel"')
+    const relu = parseImportJson(JSON.stringify(courant))
+    expect(instantaneEgal(courant, relu)).toBe(true)
+    const autre = construireExport(
+      classeur(),
+      ch,
+      etat(ch, {
+        tracking_sheets: [
+          suivi({ id: 1, chapter_id: 1, title: 'S', periodicite_id: 44 }),
+        ],
+      }).content,
+      PERIODICITES,
+    )
+    expect(instantaneEgal(autre, relu)).toBe(false)
+  })
 })
 
 describe('instantaneEgal', () => {

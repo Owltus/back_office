@@ -8,7 +8,11 @@
  * de la comparaison, ainsi que les `updated_at` (2026-09-25 : Registre les
  * comparait, mais ici la base les réestampille à chaque écriture, donc deux
  * états au contenu identique n'étaient JAMAIS égaux et chaque restauration
- * empilait un instantané de sécurité inutile). Sert à ne pas empiler deux
+ * empilait un instantané de sécurité inutile), et le libellé `periodicite`
+ * d'une feuille de suivi (2026-10-19 : un RAPPEL dérivé de `periodicite_id`,
+ * que `parseImportJson` ne relit pas ; sans cela, l'état courant ne serait
+ * jamais égal à un instantané relu, ni à un instantané d'avant ce jour).
+ * Sert à ne pas empiler deux
  * fois le même état dans l'historique et à ne pas restaurer un état déjà
  * courant.
  */
@@ -40,7 +44,7 @@ function jsonEgal(a: unknown, b: unknown): boolean {
   const oa = a as Record<string, unknown>
   const ob = b as Record<string, unknown>
   const garder = (o: Record<string, unknown>) => (k: string) =>
-    o[k] !== undefined && k !== 'updated_at'
+    o[k] !== undefined && k !== 'updated_at' && k !== 'periodicite'
   const clesA = Object.keys(oa).filter(garder(oa))
   const clesB = Object.keys(ob).filter(garder(ob))
   if (clesA.length !== clesB.length) return false

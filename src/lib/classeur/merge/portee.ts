@@ -43,7 +43,7 @@ import {
   consignesChapitre,
   consignesDocument,
 } from '#/lib/classeur/merge/consignes.ts'
-import { construireExport } from '#/lib/classeur/merge/schema.ts'
+import { NOTE_EXPORT, construireExport } from '#/lib/classeur/merge/schema.ts'
 import type {
   ClasseurJson,
   ItemJson,
@@ -137,7 +137,7 @@ export function construireExportChapitre(
     _metadata: {
       ...metadata,
       description: `Chapitre « ${chapitre.label} » du classeur « ${classeur.name} », exporté depuis le Back Office (page Classeur), au format d'échange Registre.`,
-      note: "Lis d'abord `instructions`. Ce bloc _metadata est informatif et ignoré lors de l'import.",
+      note: NOTE_EXPORT,
       portee: {
         type: 'chapitre',
         chapitre_uuid: chapitre.uuid,
@@ -169,7 +169,7 @@ export function construireExportDocument(
     _metadata: {
       ...metadata,
       description: `Document « ${document.title} » (chapitre « ${chapitre.label} », classeur « ${classeur.name} »), exporté depuis le Back Office (page Classeur), au format d'échange Registre.`,
-      note: "Lis d'abord `instructions`. Ce bloc _metadata est informatif et ignoré lors de l'import.",
+      note: NOTE_EXPORT,
       portee: {
         type: 'document',
         document_uuid: document.uuid,

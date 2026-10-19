@@ -368,7 +368,10 @@ describe('consignes LLM — les TROIS exports (classeur, chapitre, document)', (
     const classeurTexte = (
       lesExports.classeur._metadata?.instructions ?? []
     ).join(' ')
-    expect(classeurTexte).toMatch(/réimporte en REMPLACEMENT/)
+    // Étape 2 du plan `classeur-echange-ia-2026-10-19` : la consigne de
+    // réimport en REMPLACEMENT est retirée (l'import d'un fichier d'IA
+    // n'impose plus ce choix, étape 5).
+    expect(classeurTexte).not.toMatch(/REMPLACEMENT/)
     expect(classeurTexte).toMatch(/AJOUTER un chapitre/)
     expect(lesExports.chapitre._metadata.instructions[0]).toMatch(/chapitre/)
     expect(lesExports.document._metadata.instructions[0]).toMatch(
