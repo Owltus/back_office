@@ -160,6 +160,14 @@ describe('ClasseurList — tableau', () => {
     expect(l1[2]).toBe('13')
     expect(l1[4]).toBe('Privé')
     expect(cellules(container, 2)[4]).toBe('Tous en écriture')
+    // Colonne Accès : une icône seule, le libellé n'est lu que par les
+    // lecteurs d'écran ; intitulé de colonne invisible.
+    const cellAcces = container.querySelector('tbody tr td:nth-child(5)')!
+    expect(cellAcces.querySelector('svg')).not.toBeNull()
+    expect(cellAcces.querySelector('.sr-only')!.textContent).toBe('Privé')
+    expect(
+      container.querySelector('thead th:nth-child(5) .sr-only'),
+    ).not.toBeNull()
     // Un classeur sans chapitre : zéro connu, pas un tiret.
     expect(cellules(container, 3).slice(1, 3)).toEqual(['0', '0'])
     expect(getByText('Nouveau classeur')).toBeTruthy()

@@ -11,6 +11,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import {
+  Eye,
   EyeOff,
   FileDown,
   FileUp,
@@ -91,11 +92,14 @@ import { cn } from '#/lib/utils.ts'
  * l'accès donné à tous (Privé / Tous en lecture / Tous en écriture) ; un
  * compte en écriture voit son propre niveau (Modification / Lecture) ; un
  * compte en lecture seule n'a pas la colonne (elle dirait partout la même
- * chose). Supprimer un classeur et réordonner : gestion seule.
+ * chose). Supprimer un classeur et réordonner : gestion seule. La colonne
+ * ne montre qu'une ICÔNE, sans texte ni intitulé visible (décision
+ * utilisateur du 2026-10-19) : le libellé passe par l'infobulle et reste
+ * lu par les lecteurs d'écran.
  *
  * MENU D'UN CLASSEUR (2026-10-19, demande utilisateur) : clic droit sur la
- * ligne, rien d'autre (aucun bouton « ⋯ », décision utilisateur). Ouvrir, Modifier le classeur,
- * Accès, Exporter en JSON, Supprimer : toujours listés, grisés avec leur
+ * ligne, rien d'autre (aucun bouton « ⋯ », décision utilisateur). Ouvrir,
+ * Modifier le classeur, Accès, Exporter en JSON, Supprimer : toujours listés, grisés avec leur
  * raison quand le niveau EFFECTIF ne les permet pas (`capacites`, miroir
  * des RLS). La base reste juge : le menu ne fait que le montrer.
  */
@@ -304,10 +308,10 @@ export function ClasseurList({
                   <th
                     className={cn(
                       TABLEAU_CLASSEURS.th,
-                      'hidden w-36 text-left sm:table-cell',
+                      'hidden w-12 sm:table-cell',
                     )}
                   >
-                    Accès
+                    <span className="sr-only">Accès</span>
                   </th>
                 )}
               </tr>
@@ -430,7 +434,7 @@ export function ClasseurList({
 
 interface Acces {
   libelle: string
-  icone: typeof Lock | null
+  icone: LucideIcon
   aide: string
 }
 
@@ -450,7 +454,7 @@ function accesPourTous(niveau: DbClasseur['acces_tous']): Acces {
       }
     : {
         libelle: 'Tous en lecture',
-        icone: Users,
+        icone: Eye,
         aide: 'Tout le monde peut lire',
       }
 }
@@ -459,7 +463,11 @@ function accesPourTous(niveau: DbClasseur['acces_tous']): Acces {
 function accesPersonnel(niveau: NiveauEffectif | null): Acces | null {
   if (niveau === null) return null
   return niveau === 'ecriture' || niveau === 'gestion'
-    ? { libelle: 'Modification', icone: null, aide: 'Vous pouvez le modifier' }
+    ? {
+        libelle: 'Modification',
+        icone: Pencil,
+        aide: 'Vous pouvez le modifier',
+      }
     : { libelle: 'Lecture', icone: Lock, aide: 'Lecture seule sur ce classeur' }
 }
 
@@ -714,10 +722,10 @@ function AccesCellule({ acces }: { acces: Acces | null }) {
   const Icone = acces.icone
   return (
     <td className="hidden px-3 py-3 sm:table-cell">
-      <Tip label={acces.aide}>
-        <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-          {Icone && <Icone className="size-3.5" />}
-          {acces.libelle}
+      <Tip label={`${acces.libelle} : ${acces.aide.toLowerCase()}`}>
+        <span className="flex justify-center text-muted-foreground">
+          <Icone className="size-4" aria-hidden="true" />
+          <span className="sr-only">{acces.libelle}</span>
         </span>
       </Tip>
     </td>

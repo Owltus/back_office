@@ -621,11 +621,9 @@ export function FormeClasseurListe({
               <th
                 className={cn(
                   TABLEAU_CLASSEURS.th,
-                  'hidden w-36 sm:table-cell',
+                  'hidden w-12 sm:table-cell',
                 )}
-              >
-                <Skeleton className="h-3 w-10" />
-              </th>
+              />
             )}
           </tr>
         </thead>
@@ -652,7 +650,7 @@ export function FormeClasseurListe({
               </td>
               {acces && (
                 <td className="hidden px-3 py-3 sm:table-cell">
-                  <Skeleton className="h-3.5 w-20" />
+                  <Skeleton className="mx-auto size-4 rounded-sm" />
                 </td>
               )}
             </tr>

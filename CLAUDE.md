@@ -1391,7 +1391,10 @@ AccesClasseurDialog.tsx` (bouclier dans la barre du haut de l'accueil,
   classeur (icône, nom = vrai lien, établissement), Chapitres, Documents
   (≥ 640 px, sinon sous le nom), Modifié le (≥ 768 px), Accès (gestion :
   Privé / Tous en lecture / Tous en écriture ; compte en écriture : son
-  niveau ; absente en lecture seule), Exporter / Supprimer (gestion). La
+  niveau ; absente en lecture seule ; ICÔNE seule, intitulé de colonne
+  vide, libellé en infobulle et pour les lecteurs d'écran — Privé œil
+  barré, Tous en lecture œil, Tous en écriture personnes, Modification
+  crayon, Lecture cadenas), Exporter / Supprimer (gestion). La
   LIGNE entière ouvre le classeur au clic et SE GLISSE pour réordonner (gestion ; souris 5 px, doigt appui long ; aucune poignée, demande du même jour). Le clic qui termine un glisser est arrêté par dnd-kit lui-même (testé).
   Compteurs : `fetchStatsClasseurs` (UNE lecture sur `classeur_chapters`
   avec deux embarqués `classeur_documents`, compte et plus récent) agrégés
