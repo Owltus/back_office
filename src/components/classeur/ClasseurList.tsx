@@ -63,8 +63,7 @@ import {
 import { capacites, niveauEffectif } from '#/lib/classeur/droits.ts'
 import type { NiveauEffectif } from '#/lib/classeur/droits.ts'
 import { messageErreur } from '#/lib/classeur/erreur.ts'
-import { getIcon } from '#/lib/classeur/naming.ts'
-import { mentionVersion } from '#/lib/classeur/print/mentionVersion.ts'
+import { formatDateCourte, getIcon } from '#/lib/classeur/naming.ts'
 import { softDeleteClasseur } from '#/lib/classeur/service.ts'
 import type { StatsClasseur } from '#/lib/classeur/statsClasseurs.ts'
 import type { DbClasseur } from '#/lib/classeur/types.ts'
@@ -300,7 +299,7 @@ export function ClasseurList({
                 <th
                   className={cn(
                     TABLEAU_CLASSEURS.th,
-                    'hidden w-32 text-left md:table-cell',
+                    'hidden w-24 text-left md:table-cell',
                   )}
                 >
                   Modifié le
@@ -699,10 +698,9 @@ function LigneClasseur({
       </td>
       <td className="hidden px-3 py-3 text-muted-foreground md:table-cell">
         {statsEtat === 'chargement' ? (
-          <Skeleton className="h-3.5 w-20" />
+          <Skeleton className="h-3.5 w-14" />
         ) : (
-          // jj/mm/aaaa, fuseau de Paris (demande utilisateur du 2026-10-19).
-          (mentionVersion(misAJour) ?? '—')
+          formatDateCourte(misAJour)
         )}
       </td>
       {avecAcces && <AccesCellule acces={acces} />}

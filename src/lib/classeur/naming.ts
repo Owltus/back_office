@@ -44,6 +44,22 @@ export function buildEstablishment(
 }
 
 /** Date courte française (« 25 sept. 2026 »), la chaîne brute si invalide. */
+/**
+ * Date courte « 02/10/26 » (jj/mm/aa), au fuseau de l'hôtel quel que soit
+ * le poste — colonne Modifié le de la liste des classeurs (demande
+ * utilisateur du 2026-10-19). `—` si la date est illisible.
+ */
+export function formatDateCourte(dateStr: string): string {
+  const d = new Date(dateStr)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString('fr-FR', {
+    timeZone: 'Europe/Paris',
+    day: '2-digit',
+    month: '2-digit',
+    year: '2-digit',
+  })
+}
+
 export function formatDate(dateStr: string): string {
   const d = new Date(dateStr)
   if (Number.isNaN(d.getTime())) return dateStr
