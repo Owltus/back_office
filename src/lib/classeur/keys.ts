@@ -13,7 +13,7 @@ export const classeurKeys = {
   all: ['classeur'] as const,
   /** Liste des classeurs (non supprimés). */
   list: () => ['classeur', 'list'] as const,
-  /** Compteurs du tableau des classeurs (chapitres, documents, date). */
+  /** Date de modification du tableau des classeurs. */
   stats: () => ['classeur', 'stats'] as const,
   /** Un classeur par identifiant. */
   one: (classeurId: number) => ['classeur', 'one', classeurId] as const,

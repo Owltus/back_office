@@ -227,9 +227,9 @@ describe('Classeur — quatre silhouettes relevées sur les boards', () => {
     expect(container.querySelectorAll('.justify-end > *').length).toBe(2)
     expect(container.querySelectorAll('thead tr').length).toBe(1)
     expect(container.querySelectorAll('tbody tr').length).toBe(4)
-    // Sans accès : classeur, chapitres, documents, date (le menu est au
-    // clic droit, pas de colonne d'actions).
-    expect(container.querySelectorAll('thead th').length).toBe(4)
+    // Sans accès : classeur, date (le menu est au clic droit, pas de
+    // colonne d'actions ; chapitres et documents retirés le 2026-10-19).
+    expect(container.querySelectorAll('thead th').length).toBe(2)
     // Tableau seul (pendant le chargement, sous la barre réelle), colonne
     // Accès en plus.
     const seule = render(
@@ -237,10 +237,10 @@ describe('Classeur — quatre silhouettes relevées sur les boards', () => {
     )
     expect(seule.container.querySelector('.max-w-4xl')).toBeNull()
     expect(seule.container.querySelectorAll('tbody tr').length).toBe(2)
-    expect(seule.container.querySelectorAll('thead th').length).toBe(5)
+    expect(seule.container.querySelectorAll('thead th').length).toBe(3)
     expect(
       seule.container.querySelectorAll('tbody tr:first-child td').length,
-    ).toBe(5)
+    ).toBe(3)
   })
 
   it('l’accueil dessine la recherche puis UN panneau de 4 sections : 2, 2, 3, 2 lignes (9)', () => {

@@ -1,10 +1,11 @@
 /*
- * Compteurs du tableau des classeurs (`/classeur`, 2026-10-19) : nombre de
- * chapitres, de documents et date de la dernière modification, par classeur.
+ * Date de la dernière modification de chaque classeur, pour le tableau de
+ * `/classeur` (2026-10-19 ; les compteurs de chapitres et de documents ont
+ * été retirés le même jour, décision utilisateur).
  *
- * Lus en UNE requête sur `classeur_chapters` (une ligne par chapitre non
- * supprimé, avec le compte de ses documents et le plus récent d'entre eux,
- * voir `fetchStatsClasseurs`), puis agrégés ici. Rendu en tableau d'objets
+ * Lue en UNE requête sur `classeur_chapters` (une ligne par chapitre non
+ * supprimé, avec son document le plus récent, voir `fetchStatsClasseurs`),
+ * puis agrégée ici. Rendu en tableau d'objets
  * nus : la donnée survit au JSON du cache persisté (`survitAuJson`).
  */
 
@@ -12,14 +13,11 @@
 export interface LigneStatsChapitre {
   classeur_id: number
   updated_at: string
-  documents: Array<{ count: number }> | null
   dernier: Array<{ updated_at: string }> | null
 }
 
 export interface StatsClasseur {
   classeurId: number
-  chapitres: number
-  documents: number
   /** Plus récente modification d'un chapitre ou d'un document (ISO). */
   misAJour: string | null
 }
@@ -39,12 +37,8 @@ export function agregerStats(lignes: LigneStatsChapitre[]): StatsClasseur[] {
   for (const l of lignes) {
     const s = parClasseur.get(l.classeur_id) ?? {
       classeurId: l.classeur_id,
-      chapitres: 0,
-      documents: 0,
       misAJour: null,
     }
-    s.chapitres += 1
-    s.documents += l.documents?.[0]?.count ?? 0
     s.misAJour = plusRecente(s.misAJour, l.updated_at)
     s.misAJour = plusRecente(s.misAJour, l.dernier?.[0]?.updated_at ?? null)
     parClasseur.set(l.classeur_id, s)

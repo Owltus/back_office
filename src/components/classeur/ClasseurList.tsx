@@ -76,16 +76,19 @@ import { cn } from '#/lib/utils.ts'
  * des tableaux de l'app (RepJour, Données, Budget) — carte `rounded-xl
  * border bg-card`, en-tête `bg-muted/50` en petites lettres grises, lignes
  * séparées d'un trait discret. Colonnes : classeur (icône, nom,
- * établissement), chapitres, documents, dernière modification, accès,
- * actions. Pas de titre de page (l'onglet suffit) ; Importer et Nouveau
+ * établissement), dernière modification, accès (menu au clic droit, pas de
+ * colonne d'actions). Pas de titre de page (l'onglet suffit) ; Importer et Nouveau
  * classeur en boutons outline à droite, comme les autres pages.
  *
  * - Une ligne entière ouvre le classeur ; le nom est le vrai lien (clavier).
  * - Réordonner (ordre partagé) : gestion seule, la ligne entière se glisse
  *   (souris 5 px, doigt : appui long, `useCapteursClasseur`).
  * - Importer : clic (sélecteur) ou fichier .json DÉPOSÉ sur le bouton.
- * - Compteurs lus APRÈS la liste (`useStatsClasseurs`) : la liste s'affiche
- *   d'abord, les chiffres ensuite (place réservée, jamais un faux zéro).
+ * - Date de modification lue APRÈS la liste (`useStatsClasseurs`) : la
+ *   liste s'affiche d'abord, la date ensuite (place réservée). Colonnes
+ *   Chapitres et Documents RETIRÉES (décision utilisateur du 2026-10-19 :
+ *   un document compte 1 qu'il fasse 1 ou 50 pages, les feuilles ne
+ *   comptent pas, le chiffre trompait).
  *
  * ACCÈS PAR CLASSEUR (2026-09-28, `lib/classeur/droits.ts`) : la liste ne
  * contient que les classeurs lisibles (la RLS filtre). La gestion voit
@@ -289,22 +292,6 @@ export function ClasseurList({
                       'hidden w-24 text-center sm:table-cell',
                     )}
                   >
-                    Chapitres
-                  </th>
-                  <th
-                    className={cn(
-                      TABLEAU_CLASSEURS.th,
-                      'hidden w-24 text-center sm:table-cell',
-                    )}
-                  >
-                    Documents
-                  </th>
-                  <th
-                    className={cn(
-                      TABLEAU_CLASSEURS.th,
-                      'hidden w-24 text-center md:table-cell',
-                    )}
-                  >
                     Modifié le
                   </th>
                   {colonnes.acces && (
@@ -323,7 +310,7 @@ export function ClasseurList({
                 {liste.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={3}
                       className="px-4 py-8 text-center text-sm text-muted-foreground"
                     >
                       Aucun classeur.
@@ -575,10 +562,6 @@ function EntreesMenu({ entrees }: { entrees: EntreeMenu[] }) {
   })
 }
 
-function pluriel(n: number, mot: string): string {
-  return `${n} ${mot}${n > 1 ? 's' : ''}`
-}
-
 /** Une ligne du tableau (Registre : `SortableClasseurCard`). */
 function LigneClasseur({
   classeur,
@@ -620,18 +603,8 @@ function LigneClasseur({
     data: { type: 'classeur', classeurId: classeur.id, title: classeur.name },
   })
 
-  // Un classeur sans chapitre n'a aucune ligne de compteurs : zéro, connu.
-  const chapitres = stats?.chapitres ?? 0
-  const documents = stats?.documents ?? 0
+  // Un classeur sans chapitre n'a aucune ligne lue : sa propre date.
   const misAJour = stats?.misAJour ?? classeur.updated_at
-  const chiffre = (n: number) =>
-    statsEtat === 'chargement' ? (
-      <Skeleton className="mx-auto h-3.5 w-6" />
-    ) : statsEtat === 'erreur' ? (
-      '—'
-    ) : (
-      n
-    )
 
   // Au doigt, sur une ligne qui se glisse, l'appui long sert au glisser :
   // le menu ne s'y ouvre pas (Radix l'ouvrirait en plein glisser). Sur une
@@ -684,23 +657,10 @@ function LigneClasseur({
                 {sousTitre}
               </span>
             )}
-            {/* Sous 640 px, les colonnes chiffrées passent sous le nom. */}
-            {statsEtat === 'ok' && (
-              <span className="truncate text-xs text-muted-foreground sm:hidden">
-                {pluriel(chapitres, 'chapitre')} ·{' '}
-                {pluriel(documents, 'document')}
-              </span>
-            )}
           </div>
         </div>
       </td>
-      <td className="hidden px-3 py-3 text-center tabular-nums sm:table-cell">
-        {chiffre(chapitres)}
-      </td>
-      <td className="hidden px-3 py-3 text-center tabular-nums sm:table-cell">
-        {chiffre(documents)}
-      </td>
-      <td className="hidden px-3 py-3 text-center text-muted-foreground md:table-cell">
+      <td className="hidden px-3 py-3 text-center text-muted-foreground sm:table-cell">
         {statsEtat === 'chargement' ? (
           <Skeleton className="mx-auto h-3.5 w-14" />
         ) : (

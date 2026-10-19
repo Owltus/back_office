@@ -54,9 +54,9 @@ export function useClasseurs(actif = true) {
 }
 
 /**
- * Compteurs du tableau des classeurs (chapitres, documents, dernière
- * modification). Lue APRÈS la liste (`actif`) : la liste s'affiche d'abord,
- * les colonnes chiffrées se remplissent ensuite.
+ * Date de dernière modification du tableau des classeurs (contenu compris).
+ * Lue APRÈS la liste (`actif`) : la liste s'affiche d'abord, la date
+ * ensuite.
  */
 export function useStatsClasseurs(actif = true) {
   return useQuery({

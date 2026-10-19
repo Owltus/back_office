@@ -68,11 +68,9 @@ vi.mock('#/components/classeur/hooks/useClasseur.ts', () => ({
       : [
           {
             classeurId: 2,
-            chapitres: 10,
-            documents: 13,
             misAJour: '2026-10-02T10:00:00Z',
           },
-          { classeurId: 5, chapitres: 8, documents: 33, misAJour: null },
+          { classeurId: 5, misAJour: null },
         ],
   }),
   useReorderClasseurs: () => ({ mutate: vi.fn(), isError: false }),
@@ -147,13 +145,7 @@ async function menuDe(ligne: number) {
 describe('ClasseurList — tableau', () => {
   it('gestion : lignes glissables, colonnes chiffrées, accès donné à tous', () => {
     const { container, getByText } = rendre()
-    expect(entetes(container)).toEqual([
-      'Classeur',
-      'Chapitres',
-      'Documents',
-      'Modifié le',
-      'Accès',
-    ])
+    expect(entetes(container)).toEqual(['Classeur', 'Modifié le', 'Accès'])
     expect(container.querySelectorAll('tbody tr')).toHaveLength(3)
     // Comme l'analytique : en-tête collant dans une zone qui défile.
     const thead = container.querySelector('thead')!
@@ -162,22 +154,20 @@ describe('ClasseurList — tableau', () => {
       'lg:overflow-y-auto',
     )
     const l1 = cellules(container, 1)
-    expect(l1[1]).toBe('10')
-    expect(l1[2]).toBe('13')
-    // Date au format jj/mm/aa.
-    expect(l1[3]).toBe('02/10/26')
-    expect(l1[4]).toBe('Privé')
-    expect(cellules(container, 2)[4]).toBe('Tous en écriture')
+    // Date au format jj/mm/aa, la plus récente du contenu.
+    expect(l1[1]).toBe('02/10/26')
+    expect(l1[2]).toBe('Privé')
+    expect(cellules(container, 2)[2]).toBe('Tous en écriture')
+    // Aucun contenu lu (pas de chapitre) : la date du classeur lui-même.
+    expect(cellules(container, 3)[1]).toBe('01/09/26')
     // Colonne Accès : une icône seule, le libellé n'est lu que par les
     // lecteurs d'écran ; intitulé de colonne invisible.
-    const cellAcces = container.querySelector('tbody tr td:nth-child(5)')!
+    const cellAcces = container.querySelector('tbody tr td:nth-child(3)')!
     expect(cellAcces.querySelector('svg')).not.toBeNull()
     expect(cellAcces.querySelector('.sr-only')!.textContent).toBe('Privé')
     expect(
-      container.querySelector('thead th:nth-child(5) .sr-only'),
+      container.querySelector('thead th:nth-child(3) .sr-only'),
     ).not.toBeNull()
-    // Un classeur sans chapitre : zéro connu, pas un tiret.
-    expect(cellules(container, 3).slice(1, 3)).toEqual(['0', '0'])
     expect(getByText('Nouveau classeur')).toBeTruthy()
     expect(getByText('Importer')).toBeTruthy()
     // Aucun bouton « ⋯ » : le menu est au clic droit seulement.
@@ -202,8 +192,8 @@ describe('ClasseurList — tableau', () => {
     expect(
       container.querySelector('tbody tr')!.getAttribute('aria-roledescription'),
     ).toBeNull()
-    expect(cellules(container, 1)[4]).toBe('Lecture')
-    expect(cellules(container, 2)[4]).toBe('Modification')
+    expect(cellules(container, 1)[2]).toBe('Lecture')
+    expect(cellules(container, 2)[2]).toBe('Modification')
   })
 
   it('lecture : ni colonne Accès, ni boutons de création', () => {
@@ -213,18 +203,16 @@ describe('ClasseurList — tableau', () => {
     expect(queryByText('Nouveau classeur')).toBeNull()
   })
 
-  it('compteurs en cours de lecture : place réservée, jamais un faux zéro', () => {
+  it('date en cours de lecture : place réservée, jamais une fausse date', () => {
     etat.statsPending = true
     const { container } = rendre()
-    const l1 = cellules(container, 1)
-    expect(l1[1]).toBe('')
-    expect(l1[2]).toBe('')
+    expect(cellules(container, 1)[1]).toBe('')
   })
 
   it('un clic sur la ligne ouvre le classeur', () => {
     const { container } = rendre()
     fireEvent.click(
-      container.querySelector('tbody tr:nth-child(2) td:nth-child(3)')!,
+      container.querySelector('tbody tr:nth-child(2) td:nth-child(2)')!,
     )
     expect(etat.navigate).toHaveBeenCalledWith({
       to: '/classeur/$classeurId',
