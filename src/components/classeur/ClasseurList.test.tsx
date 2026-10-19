@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 
@@ -17,6 +17,7 @@ const etat = vi.hoisted(() => ({
   page: 'gestion' as 'lecture' | 'ecriture' | 'gestion',
   statsPending: false,
   navigate: vi.fn(),
+  exporter: vi.fn(),
 }))
 
 const classeur = (id: number, x: Partial<DbClasseur> = {}): DbClasseur => ({
@@ -80,6 +81,10 @@ vi.mock('#/components/classeur/hooks/useClasseur.ts', () => ({
 vi.mock('#/components/classeur/dialogs/ClasseurDialog.tsx', () => ({
   ClasseurDialog: () => null,
 }))
+vi.mock('#/components/classeur/dialogs/AccesClasseurDialog.tsx', () => ({
+  AccesClasseurDialog: ({ classeur: c }: { classeur: DbClasseur | null }) =>
+    c ? <div data-testid="acces">{c.name}</div> : null,
+}))
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ children }: { children: ReactNode }) => <a href="#">{children}</a>,
   useNavigate: () => etat.navigate,
@@ -91,7 +96,7 @@ function rendre() {
   return render(
     <QueryClientProvider client={new QueryClient()}>
       <TooltipProvider>
-        <ClasseurList onImporterJson={vi.fn()} onExporterJson={vi.fn()} />
+        <ClasseurList onImporterJson={vi.fn()} onExporterJson={etat.exporter} />
       </TooltipProvider>
     </QueryClientProvider>,
   )
@@ -104,12 +109,40 @@ const cellules = (c: HTMLElement, ligne: number) =>
     (td) => td.textContent,
   )
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+})
 beforeEach(() => {
   etat.page = 'gestion'
   etat.statsPending = false
   etat.navigate.mockClear()
+  etat.exporter.mockClear()
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  )
 })
+
+/** Ouvre le menu d'une ligne par clic droit ; rend les entrées et leur état. */
+async function menuDe(ligne: number) {
+  fireEvent.contextMenu(
+    document.querySelector(`tbody tr:nth-child(${ligne}) td:nth-child(2)`)!,
+  )
+  await screen.findAllByRole('menuitem')
+  return Object.fromEntries(
+    screen
+      .getAllByRole('menuitem')
+      .map((m) => [
+        m.textContent,
+        m.getAttribute('aria-disabled') === 'true' ? 'grisé' : 'actif',
+      ]),
+  )
+}
 
 describe('ClasseurList — tableau', () => {
   it('gestion : lignes glissables, colonnes chiffrées, accès donné à tous', () => {
@@ -133,7 +166,7 @@ describe('ClasseurList — tableau', () => {
     expect(getByText('Nouveau classeur')).toBeTruthy()
     expect(getByText('Importer')).toBeTruthy()
     expect(
-      container.querySelectorAll('[aria-label^="Supprimer"]'),
+      container.querySelectorAll('[aria-label^="Actions du classeur"]'),
     ).toHaveLength(3)
     // Plus de poignée : c'est la ligne entière qui se glisse, et elle reste
     // une ligne de tableau (pas de role="button").
@@ -155,9 +188,6 @@ describe('ClasseurList — tableau', () => {
     ).toBeNull()
     expect(cellules(container, 1)[4]).toBe('Lecture')
     expect(cellules(container, 2)[4]).toBe('Modification')
-    expect(
-      container.querySelectorAll('[aria-label^="Supprimer"]'),
-    ).toHaveLength(0)
   })
 
   it('lecture : ni colonne Accès, ni boutons de création', () => {
@@ -186,10 +216,87 @@ describe('ClasseurList — tableau', () => {
     })
     etat.navigate.mockClear()
     fireEvent.click(
-      container.querySelector(
-        '[aria-label="Supprimer le classeur Classeur 5"]',
-      )!,
+      container.querySelector('[aria-label="Actions du classeur Classeur 5"]')!,
     )
+    expect(etat.navigate).not.toHaveBeenCalled()
+  })
+
+  it('menu, gestion : tout est permis', async () => {
+    rendre()
+    expect(await menuDe(2)).toEqual({
+      Ouvrir: 'actif',
+      'Modifier le classeur': 'actif',
+      Accès: 'actif',
+      'Exporter en JSON': 'actif',
+      Supprimer: 'actif',
+    })
+  })
+
+  it('menu, écriture : modifier ce qu’on peut écrire, accès et suppression grisés', async () => {
+    etat.page = 'ecriture'
+    rendre()
+    expect(await menuDe(2)).toEqual({
+      Ouvrir: 'actif',
+      'Modifier le classeur': 'actif',
+      'AccèsGestion seule': 'grisé',
+      'Exporter en JSON': 'actif',
+      'SupprimerGestion seule': 'grisé',
+    })
+    cleanup()
+    rendre()
+    // Classeur 2 : privé, créé par un autre, aucune exception.
+    expect((await menuDe(1))['Modifier le classeurLecture seule']).toBe('grisé')
+  })
+
+  it('menu, lecture : on ouvre et on exporte, rien d’autre', async () => {
+    etat.page = 'lecture'
+    rendre()
+    expect(await menuDe(3)).toEqual({
+      Ouvrir: 'actif',
+      'Modifier le classeurLecture seule': 'grisé',
+      'AccèsGestion seule': 'grisé',
+      'Exporter en JSON': 'actif',
+      'SupprimerGestion seule': 'grisé',
+    })
+  })
+
+  it('menu : une entrée choisie agit sans ouvrir le classeur', async () => {
+    rendre()
+    await menuDe(2)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Exporter en JSON' }))
+    expect(etat.exporter).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 5 }),
+    )
+    await menuDe(2)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Accès' }))
+    expect(screen.getByTestId('acces').textContent).toBe('Classeur 5')
+    expect(etat.navigate).not.toHaveBeenCalled()
+  })
+
+  it('menu par le bouton : mêmes entrées', async () => {
+    rendre()
+    fireEvent.keyDown(
+      screen.getByRole('button', { name: 'Actions du classeur Classeur 9' }),
+      { key: 'Enter' },
+    )
+    await screen.findByRole('menuitem', { name: 'Ouvrir' })
+    // Le menu est DANS la ligne glissable : appuyer sur une entrée puis
+    // bouger la souris ne doit pas emporter la ligne.
+    const supprimer = screen.getByRole('menuitem', { name: 'Supprimer' })
+    act(() => {
+      fireEvent.mouseDown(supprimer, { button: 0, clientX: 10, clientY: 10 })
+    })
+    act(() => {
+      fireEvent.mouseMove(document, { clientX: 10, clientY: 40 })
+    })
+    expect(
+      document.querySelector('tbody tr:nth-child(3)')!.className,
+    ).not.toContain('opacity-60')
+    act(() => {
+      fireEvent.mouseUp(document, { clientX: 10, clientY: 40 })
+    })
+    fireEvent.click(supprimer)
+    expect(screen.getByText(/Supprimer le classeur Classeur 9/)).toBeTruthy()
     expect(etat.navigate).not.toHaveBeenCalled()
   })
 

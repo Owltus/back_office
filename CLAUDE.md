@@ -1398,6 +1398,13 @@ AccesClasseurDialog.tsx` (bouclier dans la barre du haut de l'accueil,
   par `agregerStats` (pur, testé), clé `classeurKeys.stats()`, lue APRÈS la
   liste ; place réservée pendant la lecture, jamais un faux zéro.
   `ActionCard` est SUPPRIMÉE (plus aucun usage).
+  MENU D'UN CLASSEUR (même jour, demande utilisateur) : clic droit sur la
+  ligne, ou bouton « ⋯ » de la colonne Actions (doigt, clavier ; il remplace
+  les icônes Exporter / Supprimer) — Ouvrir, Modifier le classeur, Accès,
+  Exporter en JSON, Supprimer. Tout est TOUJOURS listé, grisé avec sa raison
+  (« Lecture seule », « Gestion seule ») selon `capacites(niveauEffectif)`,
+  miroir des RLS ; droits pas encore lus = grisé. Au doigt, l'appui long
+  reste au glisser : le menu du clic droit y est coupé (`pointerType`).
 - **Accueil d'un classeur (décision utilisateur du 2026-10-04, remplace la
   colonne de 28 rem de Registre du 2026-09-26)** : les chapitres ne sont PAS
   répétés dans la page (ils vivent dans la colonne de gauche, pleine

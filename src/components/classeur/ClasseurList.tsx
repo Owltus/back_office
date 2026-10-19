@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react'
-import type { ChangeEvent, DragEvent } from 'react'
+import { Fragment, useRef, useState } from 'react'
+import type { ChangeEvent, DragEvent, SyntheticEvent } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { DndContext, closestCenter } from '@dnd-kit/core'
@@ -14,12 +14,17 @@ import {
   EyeOff,
   FileDown,
   FileUp,
+  FolderOpen,
   Lock,
+  MoreHorizontal,
+  Pencil,
   Plus,
+  ShieldCheck,
   Trash2,
   Upload,
   Users,
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import {
@@ -27,6 +32,7 @@ import {
   neDemarrePasDeGlisser,
   useCapteursClasseur,
 } from '#/components/classeur/dnd/useCapteursClasseur.ts'
+import { AccesClasseurDialog } from '#/components/classeur/dialogs/AccesClasseurDialog.tsx'
 import { ClasseurDialog } from '#/components/classeur/dialogs/ClasseurDialog.tsx'
 import {
   useClasseurs,
@@ -38,6 +44,22 @@ import { ConfirmDialog } from '#/components/shared/ConfirmDialog.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuShortcut,
+  ContextMenuTrigger,
+} from '#/components/ui/context-menu.tsx'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuTrigger,
+} from '#/components/ui/dropdown-menu.tsx'
 import { Skeleton } from '#/components/ui/skeleton.tsx'
 import {
   FormeClasseurListe,
@@ -47,7 +69,7 @@ import {
   useDroitsPageClasseur,
   useMesAcces,
 } from '#/components/classeur/hooks/useDroitsClasseur.ts'
-import { niveauEffectif } from '#/lib/classeur/droits.ts'
+import { capacites, niveauEffectif } from '#/lib/classeur/droits.ts'
 import type { NiveauEffectif } from '#/lib/classeur/droits.ts'
 import { messageErreur } from '#/lib/classeur/erreur.ts'
 import { formatDate, getIcon } from '#/lib/classeur/naming.ts'
@@ -68,7 +90,7 @@ import { cn } from '#/lib/utils.ts'
  * classeur en boutons outline à droite, comme les autres pages.
  *
  * - Une ligne entière ouvre le classeur ; le nom est le vrai lien (clavier).
- * - Réordonner (ordre partagé) : gestion seule, par la poignée de la ligne
+ * - Réordonner (ordre partagé) : gestion seule, la ligne entière se glisse
  *   (souris 5 px, doigt : appui long, `useCapteursClasseur`).
  * - Importer : clic (sélecteur) ou fichier .json DÉPOSÉ sur le bouton.
  * - Compteurs lus APRÈS la liste (`useStatsClasseurs`) : la liste s'affiche
@@ -80,6 +102,12 @@ import { cn } from '#/lib/utils.ts'
  * compte en écriture voit son propre niveau (Modification / Lecture) ; un
  * compte en lecture seule n'a pas la colonne (elle dirait partout la même
  * chose). Supprimer un classeur et réordonner : gestion seule.
+ *
+ * MENU D'UN CLASSEUR (2026-10-19, demande utilisateur) : clic droit sur la
+ * ligne, ou bouton « ⋯ » (doigt, clavier). Ouvrir, Modifier le classeur,
+ * Accès, Exporter en JSON, Supprimer : toujours listés, grisés avec leur
+ * raison quand le niveau EFFECTIF ne les permet pas (`capacites`, miroir
+ * des RLS). La base reste juge : le menu ne fait que le montrer.
  */
 export function ClasseurList({
   onImporterJson,
@@ -114,6 +142,8 @@ export function ClasseurList({
 
   const [createOpen, setCreateOpen] = useState(false)
   const [aSupprimer, setASupprimer] = useState<DbClasseur | null>(null)
+  const [aModifier, setAModifier] = useState<DbClasseur | null>(null)
+  const [accesDe, setAccesDe] = useState<DbClasseur | null>(null)
   const [erreurImport, setErreurImport] = useState<string | null>(null)
 
   const suppression = useMutation({
@@ -290,7 +320,7 @@ export function ClasseurList({
                     Accès
                   </th>
                 )}
-                <th className="w-20 px-2">
+                <th className="w-12 px-2">
                   <span className="sr-only">Actions</span>
                 </th>
               </tr>
@@ -329,7 +359,19 @@ export function ClasseurList({
                               : 'ok'
                         }
                         canDrag={peutReordonner}
-                        canDelete={canManage}
+                        menu={entreesMenu(niveauDe(c), {
+                          ouvrir: () =>
+                            navigate({
+                              to: '/classeur/$classeurId',
+                              params: { classeurId: String(c.id) },
+                            }),
+                          modifier: () => setAModifier(c),
+                          acces: () => setAccesDe(c),
+                          exporter: onExporterJson
+                            ? () => void onExporterJson(c)
+                            : undefined,
+                          supprimer: () => setASupprimer(c),
+                        })}
                         avecAcces={colonnes.acces}
                         acces={
                           !colonnes.acces
@@ -343,12 +385,6 @@ export function ClasseurList({
                             to: '/classeur/$classeurId',
                             params: { classeurId: String(c.id) },
                           })
-                        }
-                        onDelete={() => setASupprimer(c)}
-                        onExport={
-                          onExporterJson
-                            ? () => void onExporterJson(c)
-                            : undefined
                         }
                       />
                     ))}
@@ -369,6 +405,19 @@ export function ClasseurList({
             params: { classeurId: String(id) },
           })
         }
+      />
+
+      <ClasseurDialog
+        open={aModifier !== null}
+        onOpenChange={(open) => {
+          if (!open) setAModifier(null)
+        }}
+        classeur={aModifier}
+      />
+
+      <AccesClasseurDialog
+        classeur={accesDe}
+        onClose={() => setAccesDe(null)}
       />
 
       <ConfirmDialog
@@ -427,6 +476,130 @@ function accesPersonnel(niveau: NiveauEffectif | null): Acces | null {
     : { libelle: 'Lecture', icone: Lock, aide: 'Lecture seule sur ce classeur' }
 }
 
+/** Une entrée du menu d'un classeur ; `raison` non nulle = grisée. */
+interface EntreeMenu {
+  cle: string
+  libelle: string
+  icone: LucideIcon
+  action: () => void
+  /** Pourquoi l'entrée est grisée (`''` : droits pas encore lus). */
+  raison: string | null
+  danger?: boolean
+  /** Trait de séparation au-dessus. */
+  separe?: boolean
+}
+
+/**
+ * Les entrées du menu d'un classeur selon le niveau EFFECTIF (page et
+ * classeur, `niveauEffectif`) ; `null` = droits pas encore lus, tout ce
+ * qui écrit reste grisé.
+ */
+function entreesMenu(
+  niveau: NiveauEffectif | null,
+  actions: {
+    ouvrir: () => void
+    modifier: () => void
+    acces: () => void
+    exporter?: () => void
+    supprimer: () => void
+  },
+): EntreeMenu[] {
+  const peut = niveau === null ? null : capacites(niveau)
+  const raison = (permis: boolean | undefined, sinon: string) =>
+    peut === null ? '' : permis ? null : sinon
+  const entrees: EntreeMenu[] = [
+    {
+      cle: 'ouvrir',
+      libelle: 'Ouvrir',
+      icone: FolderOpen,
+      action: actions.ouvrir,
+      raison: null,
+    },
+    {
+      cle: 'modifier',
+      libelle: 'Modifier le classeur',
+      icone: Pencil,
+      action: actions.modifier,
+      raison: raison(peut?.modifier, 'Lecture seule'),
+      separe: true,
+    },
+    {
+      cle: 'acces',
+      libelle: 'Accès',
+      icone: ShieldCheck,
+      action: actions.acces,
+      raison: raison(peut?.gererAcces, 'Gestion seule'),
+    },
+  ]
+  if (actions.exporter)
+    entrees.push({
+      cle: 'exporter',
+      libelle: 'Exporter en JSON',
+      icone: FileUp,
+      action: actions.exporter,
+      raison: null,
+      separe: true,
+    })
+  entrees.push({
+    cle: 'supprimer',
+    libelle: 'Supprimer',
+    icone: Trash2,
+    action: actions.supprimer,
+    raison: raison(peut?.supprimerClasseur, 'Gestion seule'),
+    danger: true,
+    separe: true,
+  })
+  return entrees
+}
+
+/*
+ * Le menu du bouton « ⋯ » est rendu dans un portail, mais React fait
+ * remonter ses événements jusqu'à la ligne qui le contient : un appui
+ * lancerait un glisser. On l'arrête au bord du menu (le clic, lui, est
+ * arrêté par la cellule des actions). Le clavier n'a pas besoin de garde : dnd-kit ignore une touche qui
+ * ne vient pas de la ligne elle-même. Le menu du clic droit, lui, est à côté de la ligne dans l'arbre
+ * React : rien à arrêter.
+ */
+const arreter = (e: SyntheticEvent) => e.stopPropagation()
+const RESTE_DANS_LE_MENU = {
+  onMouseDown: arreter,
+  onTouchStart: arreter,
+  onPointerDown: arreter,
+}
+
+function EntreesMenu({
+  entrees,
+  type,
+}: {
+  entrees: EntreeMenu[]
+  type: 'contexte' | 'bouton'
+}) {
+  const Item = type === 'contexte' ? ContextMenuItem : DropdownMenuItem
+  const Separateur =
+    type === 'contexte' ? ContextMenuSeparator : DropdownMenuSeparator
+  const Raison =
+    type === 'contexte' ? ContextMenuShortcut : DropdownMenuShortcut
+  return entrees.map((e) => {
+    const Icone = e.icone
+    return (
+      <Fragment key={e.cle}>
+        {e.separe && <Separateur />}
+        <Item
+          variant={e.danger ? 'destructive' : 'default'}
+          disabled={e.raison !== null}
+          onSelect={e.action}
+        >
+          <Icone />
+          {e.libelle}
+          {e.raison ? (
+            <Raison className="tracking-normal">{e.raison}</Raison>
+          ) : null}
+        </Item>
+      </Fragment>
+    )
+  })
+}
+
 function pluriel(n: number, mot: string): string {
   return `${n} ${mot}${n > 1 ? 's' : ''}`
 }
@@ -437,27 +610,23 @@ function LigneClasseur({
   stats,
   statsEtat,
   canDrag,
-  canDelete,
+  menu,
   avecAcces,
   acces,
   onOpen,
-  onDelete,
-  onExport,
 }: {
   classeur: DbClasseur
   stats: StatsClasseur | undefined
   statsEtat: 'chargement' | 'erreur' | 'ok'
   /** Peut réordonner la liste : la ligne entière se glisse. */
   canDrag: boolean
-  /** Supprimer le classeur : gestion seule. */
-  canDelete: boolean
+  /** Entrées du menu (clic droit et bouton « ⋯ »). */
+  menu: EntreeMenu[]
   /** La colonne Accès existe (gestion, ou écriture sur la page). */
   avecAcces: boolean
   /** Contenu de la colonne Accès ; `null` = pas encore lu. */
   acces: Acces | null
   onOpen: () => void
-  onDelete: () => void
-  onExport?: () => void
 }) {
   const Icon = getIcon(classeur.icon)
   const sousTitre = [classeur.etablissement, classeur.etablissement_complement]
@@ -489,7 +658,11 @@ function LigneClasseur({
       n
     )
 
-  return (
+  // Au doigt, l'appui long sert au glisser : le menu passe par le bouton
+  // « ⋯ », jamais par l'appui long (Radix l'ouvrirait en plein glisser).
+  const dernierPointeur = useRef('')
+
+  const ligne = (
     // La ligne entière : un clic ouvre le classeur, un glisser (souris
     // 5 px, doigt : appui long) le déplace. `role` retiré des attributs de
     // dnd-kit : une ligne de tableau reste une ligne pour les lecteurs
@@ -501,6 +674,13 @@ function LigneClasseur({
       {...(canDrag ? listeners : {})}
       role={undefined}
       onClick={onOpen}
+      onPointerDown={(e) => {
+        dernierPointeur.current = e.pointerType
+        if (e.pointerType === 'touch') e.preventDefault()
+      }}
+      onContextMenu={(e) => {
+        if (dernierPointeur.current === 'touch') e.preventDefault()
+      }}
       className={cn(
         TABLEAU_CLASSEURS.ligne,
         'cursor-pointer',
@@ -557,37 +737,40 @@ function LigneClasseur({
           className="flex items-center justify-end gap-0.5"
           onClick={(e) => e.stopPropagation()}
         >
-          {onExport && (
-            <Tip label="Exporter en JSON">
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`Exporter le classeur ${classeur.name} en JSON`}
-                className="text-muted-foreground"
-                {...neDemarrePasDeGlisser}
-                onClick={onExport}
-              >
-                <FileUp />
-              </Button>
+          <DropdownMenu>
+            <Tip label="Actions">
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`Actions du classeur ${classeur.name}`}
+                  className="text-muted-foreground"
+                  {...neDemarrePasDeGlisser}
+                >
+                  <MoreHorizontal />
+                </Button>
+              </DropdownMenuTrigger>
             </Tip>
-          )}
-          {canDelete && (
-            <Tip label="Supprimer">
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`Supprimer le classeur ${classeur.name}`}
-                className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                {...neDemarrePasDeGlisser}
-                onClick={onDelete}
-              >
-                <Trash2 />
-              </Button>
-            </Tip>
-          )}
+            <DropdownMenuContent
+              align="end"
+              className="w-60"
+              {...RESTE_DANS_LE_MENU}
+            >
+              <EntreesMenu entrees={menu} type="bouton" />
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </td>
     </tr>
+  )
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>{ligne}</ContextMenuTrigger>
+      <ContextMenuContent className="w-60">
+        <EntreesMenu entrees={menu} type="contexte" />
+      </ContextMenuContent>
+    </ContextMenu>
   )
 }
 
