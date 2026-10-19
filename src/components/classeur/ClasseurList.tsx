@@ -528,7 +528,7 @@ function LigneClasseur({
               to="/classeur/$classeurId"
               params={{ classeurId: String(classeur.id) }}
               onClick={(e) => e.stopPropagation()}
-              className="truncate font-medium text-foreground hover:underline focus-visible:underline focus-visible:outline-none"
+              className="truncate font-medium text-foreground focus-visible:underline focus-visible:outline-none"
             >
               {classeur.name}
             </Link>
