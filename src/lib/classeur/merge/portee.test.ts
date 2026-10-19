@@ -10,6 +10,7 @@ import {
   etat,
   fichier,
   itJson,
+  signature,
   suivi,
 } from '#/lib/classeur/merge/fixtures.ts'
 import { planifierFusion } from '#/lib/classeur/merge/merge.ts'
@@ -17,6 +18,7 @@ import {
   construireExportChapitre,
   construireExportDocument,
   extraireJson,
+  lignesImport,
   lirePortee,
   planifierFusionPortee,
 } from '#/lib/classeur/merge/portee.ts'
@@ -384,5 +386,44 @@ describe('consignes LLM — les TROIS exports (classeur, chapitre, document)', (
     expect(relu._metadata?.instructions).toEqual(
       lesExports.classeur._metadata?.instructions,
     )
+  })
+})
+
+describe('lignesImport — réglages en clair (étape 6, D4)', () => {
+  it('périodicité et nombre de lignes : avant → après, valeur à la création', () => {
+    const C = chapitre({ id: 10, label: 'Accueil' })
+    const local = etat([C], {
+      tracking_sheets: [suivi({ id: 3, chapter_id: 10, title: 'Relevé' })],
+      signature_sheets: [
+        signature({ id: 4, chapter_id: 10, title: 'Émargement', nombre: 14 }),
+      ],
+    })
+    const f = construireExportChapitre(
+      classeur(),
+      C,
+      local.content,
+      PERIODICITES,
+    )
+    const [ts, sig] = f.chapters[0].items
+    ts.periodicite_id = 44
+    sig.nombre = 20
+    f.chapters[0].items.push({
+      kind: 'signature_sheet',
+      title: 'Formation',
+      description: '',
+      nombre: 1,
+      sort_order: 9,
+    })
+    const plan = planifierFusionPortee(
+      local,
+      f,
+      { type: 'chapitre', chapitreId: 10 },
+      { supprimerAbsents: false },
+    )
+    expect(lignesImport(local, plan).map((l) => l.reglage)).toEqual([
+      'Mensuel → Annuel',
+      '14 → 20 lignes',
+      '1 ligne',
+    ])
   })
 })

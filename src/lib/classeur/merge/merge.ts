@@ -298,8 +298,10 @@ export function fichierPlusRecent(
 /**
  * Traduit le `periodicite_id` d'un fichier en id local. `null` si
  * intraduisible (l'appelant décide : conserver, défaut ou ignorer).
+ * Exportée pour la validation de l'import (`validationImport.ts`), qui
+ * applique la MÊME traduction avant le plan.
  */
-function resoudrePeriodicite(
+export function resoudrePeriodicite(
   idFichier: number | null | undefined,
   fichier: ClasseurJson,
   locales: DbPeriodicite[] | undefined,
@@ -321,7 +323,7 @@ function resoudrePeriodicite(
 }
 
 /** Périodicité par défaut d'une création : « Non défini », sinon la première. */
-function periodiciteParDefaut(
+export function periodiciteParDefaut(
   locales: DbPeriodicite[] | undefined,
 ): number | null {
   if (locales === undefined || locales.length === 0) return null

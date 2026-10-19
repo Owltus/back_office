@@ -119,3 +119,56 @@ describe('ApercuImport — relecture', () => {
     fireEvent.click(caseA)
   })
 })
+
+describe('ApercuImport — réglages des feuilles en clair (étape 6, D4)', () => {
+  const feuille = (over: Partial<LigneImport>): LigneImport => ({
+    cle: 'tracking_sheet:3',
+    genre: 'modification',
+    kind: 'tracking_sheet',
+    titre: 'Relevé',
+    avant: { title: 'Relevé', description: '', content: '' },
+    apres: { title: 'Relevé', description: '', content: '' },
+    changement: 'autre',
+    ordreChange: false,
+    numero: null,
+    ...over,
+  })
+
+  it('« Mensuel → Annuel », « 14 → 20 lignes » au lieu de « réglage modifié »', () => {
+    render(
+      <ApercuImport
+        lignes={[
+          feuille({ reglage: 'Mensuel → Annuel' }),
+          feuille({
+            cle: 'signature_sheet:4',
+            kind: 'signature_sheet',
+            titre: 'Émargement',
+            reglage: '14 → 20 lignes',
+          }),
+          feuille({
+            cle: 'nouveau:signature_sheet:5:Formation',
+            genre: 'creation',
+            kind: 'signature_sheet',
+            titre: 'Formation',
+            changement: 'texte',
+            reglage: '20 lignes',
+          }),
+        ]}
+        refuses={new Set()}
+        onBasculerRefus={() => {}}
+        ouvertes={new Set(['tracking_sheet:3'])}
+        onOuvertes={() => {}}
+        disabled={false}
+      />,
+    )
+    expect(screen.getByText('Mensuel → Annuel')).toBeTruthy()
+    expect(screen.getByText('14 → 20 lignes')).toBeTruthy()
+    expect(screen.queryByText('réglage modifié')).toBeNull()
+    expect(screen.getByText(/Feuille de signature · 20 lignes/)).toBeTruthy()
+    expect(
+      screen.getByText(
+        'Le texte ne change pas. Périodicité : Mensuel → Annuel.',
+      ),
+    ).toBeTruthy()
+  })
+})

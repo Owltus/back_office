@@ -18,6 +18,7 @@ import {
 } from '#/lib/classeur/exportJson.ts'
 import { classeurKeys } from '#/lib/classeur/keys.ts'
 import { parseImportJson } from '#/lib/classeur/merge/schema.ts'
+import { validerPourNouveauClasseur } from '#/lib/classeur/merge/validationImport.ts'
 import {
   fetchClasseurContent,
   fetchPeriodicites,
@@ -79,7 +80,15 @@ export function ClasseurListActions() {
   const importer = useMutation({
     mutationFn: async (file: File) => {
       const fichier = parseImportJson(await file.text())
-      return importerNouveau.mutateAsync(fichier)
+      // Étape 6 : ce que la base refuserait est corrigé AVANT la création du
+      // classeur (sans transaction, un refus au milieu le laisserait à moitié).
+      const periodicites = await queryClient.ensureQueryData({
+        queryKey: classeurKeys.periodicites(),
+        queryFn: fetchPeriodicites,
+        staleTime: Infinity,
+      })
+      const valide = validerPourNouveauClasseur(fichier, periodicites)
+      return importerNouveau.mutateAsync(valide.fichier)
     },
     onSuccess: (id) => {
       void navigate({

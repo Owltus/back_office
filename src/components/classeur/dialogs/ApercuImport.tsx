@@ -118,10 +118,11 @@ function etiquette(l: LigneImport): string {
     case 'chapitre':
       return 'modifié'
     case 'modification':
+      // D4 : le réglage changé se lit en clair (« Mensuel → Annuel »).
       return l.changement === 'ordre'
         ? 'déplacé'
         : l.changement === 'autre'
-          ? 'réglage modifié'
+          ? (l.reglage ?? 'réglage modifié')
           : 'modifié'
   }
 }
@@ -400,6 +401,11 @@ function LigneApercu({
             <span className="truncate text-xs text-muted-foreground">
               {ligne.kind === 'chapter' ? 'Libellé ou description' : nature}
               {version !== null && ` · ${version}`}
+              {ligne.reglage !== undefined &&
+                !(
+                  ligne.genre === 'modification' && ligne.changement === 'autre'
+                ) &&
+                ` · ${ligne.reglage}`}
             </span>
           </span>
           {b !== null && (b.ajouts > 0 || b.retraits > 0) && (
@@ -436,7 +442,9 @@ function LigneApercu({
           ) : ligne.changement === 'autre' &&
             avant.content === apres.content ? (
             <p className="text-xs text-muted-foreground">
-              Le texte ne change pas (réglage, place ou identifiant).
+              {ligne.reglage !== undefined && ligne.genre !== 'creation'
+                ? `Le texte ne change pas. ${ligne.kind === 'tracking_sheet' ? 'Périodicité' : 'Lignes à signer'} : ${ligne.reglage}.`
+                : 'Le texte ne change pas (réglage, place ou identifiant).'}
             </p>
           ) : (
             diff !== null &&

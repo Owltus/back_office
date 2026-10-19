@@ -402,16 +402,32 @@ describe('construireExport — forme exacte de do_export_json', () => {
     expect(items[0]).toMatchObject({ periodicite_id: 44 })
   })
 
-  it('export → JSON → parse rend un objet identique (aller-retour), au libellé `periodicite` près', () => {
-    // Le libellé de périodicité (D8) est un RAPPEL pour l'IA : jamais relu.
-    // C'est la SEULE différence admise, et `_metadata` revient entier.
-    const sansLibelle = structuredClone(exp)
-    for (const c of sansLibelle.chapters)
-      for (const item of c.items) delete item.periodicite
+  it('export → JSON → parse rend un objet identique (aller-retour EXACT)', () => {
+    // Le libellé de périodicité (D8) est relu depuis l'étape 6 (la
+    // validation de l'import le compare à l'id) : plus aucune différence.
     const relu = parseImportJson(JSON.stringify(exp))
-    expect(relu).toEqual(sansLibelle)
-    expect(relu._metadata).toEqual(exp._metadata)
+    expect(relu).toEqual(exp)
     expect(JSON.stringify(exp)).toContain('"periodicite":"Annuel"')
+  })
+
+  it('libellé `periodicite` : relu sur une feuille de suivi seulement, et s’il est un texte', () => {
+    const brut = {
+      format_version: 2,
+      chapters: [
+        {
+          label: 'A',
+          items: [
+            { kind: 'tracking_sheet', title: 'S', periodicite: 'Mensuel' },
+            { kind: 'tracking_sheet', title: 'T', periodicite: 12 },
+            { kind: 'document', title: 'D', periodicite: 'Mensuel' },
+          ],
+        },
+      ],
+    }
+    const [s, t, d] = parseImportJson(JSON.stringify(brut)).chapters[0].items
+    expect(s.periodicite).toBe('Mensuel')
+    expect('periodicite' in t).toBe(false)
+    expect('periodicite' in d).toBe(false)
   })
 
   it('libellé `periodicite` : absent si la périodicité de la feuille est inconnue', () => {

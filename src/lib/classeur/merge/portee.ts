@@ -465,6 +465,12 @@ export interface LigneImport {
   ordreChange: boolean
   /** Numéro actuel d'un document existant (version prévue) ; `null` sinon. */
   numero: NumeroVersion | null
+  /**
+   * Réglage d'une feuille, en clair (étape 6, D4) : « Mensuel → Annuel »,
+   * « 14 → 20 lignes » quand il change ; « Mensuel », « 20 lignes » pour une
+   * feuille créée. Absent sinon.
+   */
+  reglage?: string
 }
 
 const TEXTE_VIDE: EtatTexte = { title: '', description: '', content: '' }
@@ -496,6 +502,44 @@ function memesReglages(item: ChampsItem, existant: ChapterItem): boolean {
   if (item.kind === 'signature_sheet' && existant.kind === 'signature_sheet')
     return item.input.nombre === existant.data.nombre
   return true
+}
+
+/** Libellé d'une périodicité locale, ou son numéro si elle est inconnue. */
+function libellePeriodicite(local: EtatLocal, id: number): string {
+  return (
+    local.periodicites?.find((p) => p.id === id)?.label ?? `n° ${String(id)}`
+  )
+}
+
+function lignesSignature(n: number): string {
+  return `${String(n)} ${n > 1 ? 'lignes' : 'ligne'}`
+}
+
+/** Voir `LigneImport.reglage`. */
+function reglageEnClair(
+  local: EtatLocal,
+  item: ChampsItem,
+  existant: ChapterItem | undefined,
+): string | undefined {
+  if (item.kind === 'tracking_sheet') {
+    const apres = libellePeriodicite(local, item.input.periodicite_id)
+    if (existant === undefined) return apres
+    if (
+      existant.kind === 'tracking_sheet' &&
+      existant.data.periodicite_id !== item.input.periodicite_id
+    )
+      return `${libellePeriodicite(local, existant.data.periodicite_id)} → ${apres}`
+    return undefined
+  }
+  if (item.kind === 'signature_sheet') {
+    if (existant === undefined) return lignesSignature(item.input.nombre)
+    if (
+      existant.kind === 'signature_sheet' &&
+      existant.data.nombre !== item.input.nombre
+    )
+      return `${String(existant.data.nombre)} → ${lignesSignature(item.input.nombre)}`
+  }
+  return undefined
 }
 
 /**
@@ -562,6 +606,7 @@ export function lignesImport(
     }
     const apres = texteDe(a.item.input)
     if (a.type === 'creerItem') {
+      const reglage = reglageEnClair(local, a.item, undefined)
       lignes.push({
         cle,
         genre: 'creation',
@@ -572,10 +617,15 @@ export function lignesImport(
         changement: 'texte',
         ordreChange: false,
         numero: null,
+        ...(reglage === undefined ? {} : { reglage }),
       })
       return
     }
     const existant = items.get(cleItem(a.item.kind, a.id))
+    const reglage =
+      existant === undefined
+        ? undefined
+        : reglageEnClair(local, a.item, existant)
     const avant = existant === undefined ? TEXTE_VIDE : texteDe(existant.data)
     const ordreChange = a.sort_order !== undefined || a.chapitre !== undefined
     const changement: Changement = !memesTextes(avant, apres)
@@ -597,6 +647,7 @@ export function lignesImport(
       ordreChange: a.type === 'modifierItem' && ordreChange,
       numero:
         existant?.kind === 'document' ? numeroDocument(existant.data) : null,
+      ...(reglage === undefined ? {} : { reglage }),
     })
   })
   return lignes

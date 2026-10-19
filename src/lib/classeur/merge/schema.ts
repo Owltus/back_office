@@ -101,8 +101,10 @@ export interface ItemJson {
    * Feuille de suivi : LIBELLÉ de sa périodicité (D8 du plan
    * `classeur-echange-ia-2026-10-19`), posé à l'export pour qu'une IA n'ait
    * pas à faire la jointure avec `_metadata.periodicites`. Rappel seulement :
-   * jamais relu (`lireItem` l'ignore, c'est `periodicite_id` qui compte) ;
-   * Registre l'ignore aussi (pas de `deny_unknown_fields` sur `ItemJson`).
+   * c'est `periodicite_id` qui compte. `lireItem` le relit (aller-retour
+   * exact) pour que la validation de l'import (`validationImport.ts`, étape
+   * 6) signale un libellé changé sans l'id ; la fusion l'ignore. Registre
+   * l'ignore aussi (pas de `deny_unknown_fields` sur `ItemJson`).
    */
   periodicite?: string
 }
@@ -457,6 +459,10 @@ function lireItem(v: unknown, contexte: string, position: number): ItemJson {
   const sort_order = entier(v, 'sort_order', contexte)
   if (sort_order !== undefined && sort_order !== null)
     item.sort_order = sort_order
+  // D8 : rappel du libellé d'une feuille de suivi, EN DERNIER comme à
+  // l'export, relu tel quel s'il est un texte (sinon ignoré).
+  if (kind === 'tracking_sheet' && typeof v.periodicite === 'string')
+    item.periodicite = v.periodicite
   return item
 }
 

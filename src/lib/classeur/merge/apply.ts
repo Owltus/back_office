@@ -46,6 +46,7 @@ import {
   planifierImportIa,
 } from '#/lib/classeur/merge/importIa.ts'
 import type { OptionsImportIa } from '#/lib/classeur/merge/importIa.ts'
+import { planAvecValidation } from '#/lib/classeur/merge/validationImport.ts'
 import {
   chapitresDesLignes,
   filtrerPlan,
@@ -446,7 +447,8 @@ export async function previsualiserFusionComplete(
 /**
  * Plan d'un import « fichier rendu par une IA » : portée contrôlée (un
  * export de chapitre ou de document est refusé, un autre classeur averti),
- * puis `planifierImportIa`. Pur.
+ * validation (étape 6 : ce que la base refuserait est corrigé AVANT le plan,
+ * donc avant le point de restauration), puis `planifierImportIa`. Pur.
  */
 function planImportIa(
   local: EtatLocal,
@@ -455,10 +457,24 @@ function planImportIa(
   options: OptionsImportIa,
 ): PlanFusion {
   const avertissements = controlerPorteeClasseur(fichier, classeur)
-  const plan = planifierImportIa(local, fichier, options)
+  const plan = planAvecValidation(local, fichier, (f) =>
+    planifierImportIa(local, f, options),
+  )
   return avertissements.length === 0
     ? plan
     : { ...plan, warnings: [...avertissements, ...plan.warnings] }
+}
+
+/** Réimport d'un chapitre ou d'un document, précédé de la validation. */
+function planPortee(
+  local: EtatLocal,
+  fichier: ClasseurJson,
+  cible: CiblePortee,
+  options: OptionsPortee,
+): PlanFusion {
+  return planAvecValidation(local, fichier, (f) =>
+    planifierFusionPortee(local, f, cible, options),
+  )
 }
 
 /** Aperçu de l'import d'un fichier d'IA dans le classeur, sans écriture. */
@@ -528,7 +544,7 @@ export async function previsualiserFusionPortee(
   options: OptionsPortee,
 ): Promise<ApercuPortee> {
   const local = await chargerEtatLocal(classeurId)
-  const plan = planifierFusionPortee(local, fichier, cible, options)
+  const plan = planPortee(local, fichier, cible, options)
   return { plan, lignes: lignesImport(local, plan) }
 }
 
@@ -562,7 +578,7 @@ export async function appliquerFusionPortee(
     classeurId,
     (local) => {
       const filtre = filtrerPlan(
-        planifierFusionPortee(local, fichier, cible, options),
+        planPortee(local, fichier, cible, options),
         options.exclus ?? new Set(),
       )
       ignores = filtre.ignores
@@ -667,6 +683,11 @@ export async function elaguerHistorique(classeurId: number): Promise<void> {
  * Sans transaction : si une écriture échoue, le classeur existe avec un
  * contenu partiel ; l'erreur le DIT (« incomplet »), la cause d'origine en
  * `cause`. Le plan est calculé AVANT la création du classeur.
+ *
+ * Le fichier reçu ici est DÉJÀ validé par l'appelant (`validerFichierImport`,
+ * étape 6, dans `ClasseurListActions` : la relecture D7 en montre les
+ * avertissements avant l'import). Ce module garde son plan d'avant, à
+ * l'identique pour un même fichier (E8 compris, `audit.property.test.ts`).
  */
 export async function importerCommeNouveauClasseur(
   fichier: ClasseurJson,

@@ -27,6 +27,7 @@ import {
 import type { CiblePortee, OptionsPortee } from '#/lib/classeur/merge/portee.ts'
 import { ancienPlanifierFusionPortee } from '#/lib/classeur/merge/porteeAvantRefus.oracle.ts'
 import { parseImportJson } from '#/lib/classeur/merge/schema.ts'
+import { planAvecValidation } from '#/lib/classeur/merge/validationImport.ts'
 import type { ClasseurJson, ItemJson } from '#/lib/classeur/merge/schema.ts'
 import * as service from '#/lib/classeur/service.ts'
 import type { DbDocument, DbTrackingSheet } from '#/lib/classeur/types.ts'
@@ -447,9 +448,14 @@ describe('refus à l’import — (c) tout refusé', () => {
         mocks.fetchContentAvecSupprimes.mockResolvedValue(c.local.content)
         mocks.insertMergeHistory.mockResolvedValue(1)
         mocks.fetchMergeHistory.mockResolvedValue([])
+        // Le plan de l'application, VALIDATION comprise (étape 6 du plan
+        // `classeur-echange-ia-2026-10-19` : un élément au titre vidé est
+        // ignoré avant le plan, ses actions n'existent plus).
         let plan: PlanFusion
         try {
-          plan = planDe(c)
+          plan = planAvecValidation(c.local, c.fichier, (f) =>
+            planifierFusionPortee(c.local, f, c.cible, c.options),
+          )
         } catch {
           return
         }
