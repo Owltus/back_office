@@ -351,8 +351,6 @@ describe('consignes LLM — les TROIS exports (classeur, chapitre, document)', (
         'LÉGENDE',
         '"pleine"',
         'Conserve le CHEMIN',
-        '`_metadata.demande`',
-        'prime',
       ]) {
         expect(texte, `${nom} : ${convention}`).toContain(convention)
       }

@@ -193,7 +193,7 @@ describe('EchangeJsonDialog — aperçu, refus, import', () => {
   })
 })
 
-describe('EchangeJsonDialog — demandes toutes prêtes (étape 3)', () => {
+describe('EchangeJsonDialog — export simple (demandes retirées le 2026-10-19)', () => {
   const ecrit = vi.fn<(t: string) => Promise<void>>()
   beforeEach(() => {
     ecrit.mockReset()
@@ -218,76 +218,24 @@ describe('EchangeJsonDialog — demandes toutes prêtes (étape 3)', () => {
       </QueryClientProvider>
     )
   }
-  const copier = () =>
-    fireEvent.click(screen.getByRole('button', { name: /Copier le JSON/ }))
-  const caseDe = (libelle: RegExp) =>
-    screen.getByRole<HTMLInputElement>('checkbox', { name: libelle })
 
-  it('rien de coché : le presse-papiers reçoit le JSON seul, sans demande', async () => {
+  it('aucune case à cocher ; Copier et Télécharger rendent le même JSON, sans demande', async () => {
     render(dialogue(true))
-    copier()
+    expect(screen.queryAllByRole('checkbox')).toHaveLength(0)
+    fireEvent.click(screen.getByRole('button', { name: /Copier le JSON/ }))
     await waitFor(() => expect(ecrit).toHaveBeenCalledTimes(1))
     const texte = ecrit.mock.calls[0][0]
     expect(texte.startsWith('{')).toBe(true)
     const brut = JSON.parse(texte) as { _metadata: Record<string, unknown> }
     expect('demande' in brut._metadata).toBe(false)
-  })
-
-  it('« Corriger » coché : le texte copié commence par la demande, le JSON la porte', async () => {
-    render(dialogue(true))
-    fireEvent.click(caseDe(/^Corriger/))
-    copier()
-    await waitFor(() => expect(ecrit).toHaveBeenCalledTimes(1))
-    const texte = ecrit.mock.calls[0][0]
-    expect(texte.startsWith('Demande :\n- Corrige l')).toBe(true)
-    const json = texte.slice(texte.indexOf('\n\n{') + 2)
-    const brut = JSON.parse(json) as { _metadata: { demande?: string } }
-    expect(brut._metadata.demande).toMatch(/^- Corrige l/)
-    expect(texte.indexOf(brut._metadata.demande!)).toBe('Demande :\n'.length)
-  })
-
-  it('champ libre seul : recopié en tête ; le fichier téléchargé est du JSON valide qui le porte', async () => {
-    const libre = 'Tutoyer "le" client \\ 😀 </script>'
-    render(dialogue(true))
-    fireEvent.change(screen.getByLabelText('Autre demande'), {
-      target: { value: `  ${libre}  ` },
-    })
-    copier()
-    await waitFor(() => expect(ecrit).toHaveBeenCalledTimes(1))
-    expect(
-      ecrit.mock.calls[0][0].startsWith(`Demande :\n- ${libre}\n\n{`),
-    ).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: /Télécharger/ }))
     const contenu = telecharge.mock.calls[0][1] as string
-    expect(contenu.startsWith('{')).toBe(true)
-    expect(
-      (JSON.parse(contenu) as { _metadata: { demande?: string } })._metadata
-        .demande,
-    ).toBe(`- ${libre}`)
-  })
-
-  it('note de version majeure seulement pour Traduire / Raccourcir', () => {
-    render(dialogue(true))
-    expect(screen.queryByText(/version majeure/)).toBeNull()
-    fireEvent.click(caseDe(/^Corriger/))
-    expect(screen.queryByText(/version majeure/)).toBeNull()
-    fireEvent.click(caseDe(/^Raccourcir/))
-    expect(screen.getByText(/version majeure/)).toBeTruthy()
-  })
-
-  it('rien n’est mémorisé : fermer puis rouvrir décoche tout et vide le champ', () => {
-    const { rerender } = render(dialogue(true))
-    fireEvent.click(caseDe(/^Traduire/))
-    fireEvent.change(screen.getByLabelText('Autre demande'), {
-      target: { value: 'x' },
-    })
-    expect(caseDe(/^Traduire/).checked).toBe(true)
-    rerender(dialogue(false))
-    rerender(dialogue(true))
-    expect(caseDe(/^Traduire/).checked).toBe(false)
-    expect(
-      screen.getByLabelText<HTMLTextAreaElement>('Autre demande').value,
-    ).toBe('')
+    const sansDate = (t: string) => {
+      const o = JSON.parse(t) as { _metadata: Record<string, unknown> }
+      delete o._metadata.generated_at
+      return o
+    }
+    expect(sansDate(contenu)).toEqual(sansDate(texte))
   })
 })
 

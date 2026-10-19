@@ -420,38 +420,3 @@ describe('import du classeur complet — refus (propriétés)', () => {
     expect(vus.vide).toBeGreaterThan(2)
   })
 })
-
-describe('export du classeur complet — demande pour un LLM', () => {
-  const ch = [chapitre({ id: 10, label: 'Accueil' })]
-  const docs = etat(ch, {
-    documents: [document({ id: 1, chapter_id: 10, title: 'A', content: 'x' })],
-  }).content
-  const date = new Date('2026-10-04T10:00:00Z')
-
-  it('sans demande : identique à l’export d’avant ; avec : seule `demande` en plus, relue', () => {
-    fc.assert(
-      fc.property(fc.option(fc.string(), { nil: null }), (demande) => {
-        const sans = construireExport(classeur(), ch, docs, PERIODICITES, date)
-        const avec = construireExport(
-          classeur(),
-          ch,
-          docs,
-          PERIODICITES,
-          date,
-          demande,
-        )
-        const texte = JSON.stringify(avec)
-        if (demande === null) {
-          expect(texte).toBe(JSON.stringify(sans))
-          return
-        }
-        const meta = avec._metadata as unknown as Record<string, unknown>
-        expect(meta.demande).toBe(demande)
-        const { demande: _d, ...reste } = meta
-        expect(reste).toEqual(sans._metadata)
-        expect(parseImportJson(texte)._metadata?.demande).toBe(demande)
-      }),
-      { numRuns: 300, seed: 20261044 },
-    )
-  })
-})

@@ -79,8 +79,6 @@ export interface ExportPortee extends ClasseurJson {
   _metadata: MetadataJson & {
     portee: Portee
     instructions: string[]
-    /** Demande de l'utilisateur (`llmDemandes.ts`), posée seulement si non vide. */
-    demande?: string
   }
 }
 
@@ -125,7 +123,6 @@ export function construireExportChapitre(
   content: ChapterContent,
   periodicites: DbPeriodicite[],
   maintenant: Date = new Date(),
-  demande: string | null = null,
 ): ExportPortee {
   const base = construireExport(
     classeur,
@@ -141,7 +138,6 @@ export function construireExportChapitre(
       ...metadata,
       description: `Chapitre « ${chapitre.label} » du classeur « ${classeur.name} », exporté depuis le Back Office (page Classeur), au format d'échange Registre.`,
       note: "Lis d'abord `instructions`. Ce bloc _metadata est informatif et ignoré lors de l'import.",
-      ...(demande === null ? {} : { demande }),
       portee: {
         type: 'chapitre',
         chapitre_uuid: chapitre.uuid,
@@ -159,7 +155,6 @@ export function construireExportDocument(
   document: DbDocument,
   periodicites: DbPeriodicite[],
   maintenant: Date = new Date(),
-  demande: string | null = null,
 ): ExportPortee {
   const base = construireExport(
     classeur,
@@ -175,7 +170,6 @@ export function construireExportDocument(
       ...metadata,
       description: `Document « ${document.title} » (chapitre « ${chapitre.label} », classeur « ${classeur.name} »), exporté depuis le Back Office (page Classeur), au format d'échange Registre.`,
       note: "Lis d'abord `instructions`. Ce bloc _metadata est informatif et ignoré lors de l'import.",
-      ...(demande === null ? {} : { demande }),
       portee: {
         type: 'document',
         document_uuid: document.uuid,
@@ -234,9 +228,9 @@ export function lirePortee(texte: string): Portee | null {
  * `{` au dernier `}` ; un texte sans accolades est rendu tel quel (le parse
  * dira pourquoi il échoue).
  *
- * Une accolade AVANT le JSON (relecture adverse du 2026-10-04) : la demande
- * « Traduire » copiée en tête cite `:::etape{photo=gauche}`, et un LLM qui la
- * reprend dans sa phrase d'introduction faisait échouer l'import. Si la
+ * Une accolade AVANT le JSON (relecture adverse du 2026-10-04) : un LLM qui
+ * cite `:::etape{photo=gauche}` dans sa phrase d'introduction faisait échouer
+ * l'import. Si la
  * tranche depuis la première `{` n'est pas du JSON, on essaie les suivantes
  * (au plus `ESSAIS_EXTRACTION`) ; aucune ne l'est : la première, pour que le
  * message d'erreur porte sur le vrai texte.

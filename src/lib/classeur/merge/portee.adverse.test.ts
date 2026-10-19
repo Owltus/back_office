@@ -17,7 +17,6 @@ import {
   planifierFusionPortee,
 } from '#/lib/classeur/merge/portee.ts'
 import { parseImportJson } from '#/lib/classeur/merge/schema.ts'
-import { composerDemande, texteACopier } from '#/lib/classeur/llmDemandes.ts'
 
 /*
  * Relecture adverse du 2026-10-04 (import JSON pour un LLM) : cas qui
@@ -145,7 +144,7 @@ describe('E9 : uuid déjà pris, apparié par titre à un AUTRE élément', () =
   })
 })
 
-describe('extraireJson face à une demande copiée (étape 3)', () => {
+describe('extraireJson face à une accolade avant le JSON', () => {
   const exportJson = () =>
     JSON.stringify(
       construireExportChapitre(
@@ -154,17 +153,10 @@ describe('extraireJson face à une demande copiée (étape 3)', () => {
         etat([ch], { documents: [docX] }).content,
         PERIODICITES,
         new Date('2026-10-04T10:00:00Z'),
-        composerDemande(['traduire'], ''),
       ),
       null,
       2,
     )
-
-  it('le texte COPIÉ (demande « Traduire » en tête) se réimporte tel quel', () => {
-    const json = exportJson()
-    const copie = texteACopier(json, composerDemande(['traduire'], ''))
-    expect(() => parseImportJson(extraireJson(copie))).not.toThrow()
-  })
 
   it('une réponse de LLM qui cite `:::etape{photo=gauche}` avant le JSON', () => {
     const json = exportJson()

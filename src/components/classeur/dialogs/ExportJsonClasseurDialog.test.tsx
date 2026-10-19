@@ -18,11 +18,9 @@ import {
 import { construireExport } from '#/lib/classeur/merge/schema.ts'
 
 /*
- * Export JSON du classeur complet avec les demandes pour un LLM (D25
- * renversée par l'audit du 2026-10-04). Oracles : sans demande, le fichier
- * est celui de `construireExport` d'avant (au `generated_at` près) ; avec,
- * le texte copié commence par la demande et le JSON la porte ; rien n'est
- * mémorisé d'une ouverture à l'autre.
+ * Export JSON du classeur complet (demandes à cocher retirées le
+ * 2026-10-19). Oracle : le fichier téléchargé comme le texte copié sont
+ * exactement `construireExport` (au `generated_at` près).
  */
 
 vi.mock('#/components/classeur/hooks/useClasseur.ts', () => ({
@@ -60,7 +58,6 @@ beforeEach(() => {
 const dialogue = (open: boolean) => (
   <ExportJsonClasseurDialog open={open} onOpenChange={() => {}} sujet={sujet} />
 )
-const caseDe = (nom: RegExp) => screen.getByLabelText<HTMLInputElement>(nom)
 const sansDate = (texte: string) => {
   const o = JSON.parse(texte) as { _metadata: Record<string, unknown> }
   delete o._metadata.generated_at
@@ -82,29 +79,20 @@ describe('ExportJsonClasseurDialog', () => {
     expect('demande' in sansDate(contenu)._metadata).toBe(false)
   })
 
-  it('« Corriger » + champ libre : copié en tête et porté par le JSON', async () => {
+  it('Copier : le presse-papiers reçoit le JSON seul, sans demande', async () => {
     render(dialogue(true))
-    fireEvent.click(caseDe(/^Corriger/))
-    fireEvent.change(screen.getByLabelText('Autre demande'), {
-      target: { value: 'Tutoyer' },
-    })
+    expect(screen.queryAllByRole('checkbox')).toHaveLength(0)
     fireEvent.click(screen.getByRole('button', { name: /Copier le JSON/ }))
     await waitFor(() => expect(ecrit).toHaveBeenCalledTimes(1))
     const texte = ecrit.mock.calls[0][0]
-    expect(texte.startsWith('Demande :\n- Corrige l')).toBe(true)
-    const json = texte.slice(texte.indexOf('\n\n{') + 2)
-    const meta = (JSON.parse(json) as { _metadata: { demande?: string } })
-      ._metadata
-    expect(meta.demande).toMatch(/^- Corrige l[\s\S]*\n- Tutoyer$/)
+    expect(texte.startsWith('{')).toBe(true)
+    const attendu = JSON.stringify(
+      construireExport(classeur(), [A], local.content, PERIODICITES),
+      null,
+      2,
+    )
+    expect(sansDate(texte)).toEqual(sansDate(attendu))
+    expect('demande' in sansDate(texte)._metadata).toBe(false)
     await screen.findByText('Copié')
-  })
-
-  it('rien n’est mémorisé : fermer puis rouvrir décoche tout', () => {
-    const { rerender } = render(dialogue(true))
-    fireEvent.click(caseDe(/^Traduire/))
-    expect(screen.getByText(/version majeure/)).toBeTruthy()
-    rerender(dialogue(false))
-    rerender(dialogue(true))
-    expect(caseDe(/^Traduire/).checked).toBe(false)
   })
 })

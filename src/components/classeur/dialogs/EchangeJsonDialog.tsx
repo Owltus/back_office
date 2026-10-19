@@ -15,10 +15,6 @@ import {
   compterImport,
   useImagesRelecture,
 } from '#/components/classeur/dialogs/ApercuImport.tsx'
-import {
-  ChoixDemandesLlm,
-  useDemandesLlm,
-} from '#/components/classeur/dialogs/DemandesLlm.tsx'
 import { usePeriodicites } from '#/components/classeur/hooks/useClasseur.ts'
 import { useAppliquerFusionPortee } from '#/components/classeur/hooks/useMerge.ts'
 import { Alert, AlertDescription, AlertTitle } from '#/components/ui/alert.tsx'
@@ -36,7 +32,6 @@ import { Switch } from '#/components/ui/switch.tsx'
 import { Textarea } from '#/components/ui/textarea.tsx'
 import { telechargerTexte } from '#/lib/classeur/download.ts'
 import { messageErreur } from '#/lib/classeur/erreur.ts'
-import { texteACopier } from '#/lib/classeur/llmDemandes.ts'
 import {
   nomFichierPortee,
   serialiserExport,
@@ -117,10 +112,6 @@ export function EchangeJsonDialog({
     open,
   )
   const [copie, setCopie] = useState<'ok' | 'erreur' | null>(null)
-  // Demandes pour le LLM (étape 3) : jamais mémorisées (D26, poste partagé),
-  // remises à zéro à chaque fermeture.
-  const demandesLlm = useDemandesLlm()
-  const { oublier: oublierDemandes } = demandesLlm
   const [texte, setTexte] = useState('')
   const [supprimerAbsents, setSupprimerAbsents] = useState(false)
   const [applique, setApplique] = useState<string | null>(null)
@@ -199,7 +190,6 @@ export function EchangeJsonDialog({
     if (open) return
     setTexte('')
     setCopie(null)
-    oublierDemandes()
     setSupprimerAbsents(false)
     setApplique(null)
     setErreurFichier(null)
@@ -207,7 +197,7 @@ export function EchangeJsonDialog({
     setOuvertes(new Set())
     oublierPreparation()
     oublierFusion()
-  }, [open, oublierPreparation, oublierFusion, oublierDemandes])
+  }, [open, oublierPreparation, oublierFusion])
 
   const apercuPret = preparation.data !== undefined
   useEffect(() => {
@@ -225,9 +215,7 @@ export function EchangeJsonDialog({
       ? `le chapitre ${sujet.chapitre.label}`
       : `le document ${sujet.document.title}`
 
-  const demande = demandesLlm.demande
-
-  /** Le fichier JSON (la demande éventuelle dans `_metadata.demande`). */
+  /** Le fichier JSON, consignes comprises (`_metadata.instructions`). */
   function construire(): string | null {
     if (classeur === null || sujet === null) return null
     const periodicites = periodicitesQ.data ?? []
@@ -238,16 +226,12 @@ export function EchangeJsonDialog({
             sujet.chapitre,
             sujet.contenu,
             periodicites,
-            undefined,
-            demande,
           )
         : construireExportDocument(
             classeur,
             sujet.chapitre,
             sujet.document,
             periodicites,
-            undefined,
-            demande,
           )
     return serialiserExport(donnees)
   }
@@ -256,8 +240,7 @@ export function EchangeJsonDialog({
     const json = construire()
     if (json === null) return
     try {
-      // Copié : la demande en tête, lisible dans la conversation, puis le JSON.
-      await navigator.clipboard.writeText(texteACopier(json, demande))
+      await navigator.clipboard.writeText(json)
       setCopie('ok')
       window.setTimeout(() => setCopie(null), 2500)
     } catch {
@@ -366,18 +349,6 @@ export function EchangeJsonDialog({
             peut modifier, ce qu'il ne doit jamais toucher, la mise en forme de
             la page. Collez-le tel quel dans la conversation.
           </p>
-          <ChoixDemandesLlm
-            demandes={demandesLlm.demandes}
-            onBasculer={(id) => {
-              setCopie(null)
-              demandesLlm.basculer(id)
-            }}
-            autre={demandesLlm.autre}
-            onAutre={(t) => {
-              setCopie(null)
-              demandesLlm.setAutre(t)
-            }}
-          />
           <div className="flex flex-wrap gap-2">
             <Button
               size="sm"

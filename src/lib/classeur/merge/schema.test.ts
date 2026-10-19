@@ -203,6 +203,28 @@ describe('parseImportJson — format v1 et défauts du schéma', () => {
     expect(estKindConnu('video')).toBe(false)
     expect(estKindConnu('document')).toBe(true)
   })
+
+  it('un ancien fichier qui porte encore `_metadata.demande` se lit, la clé est ignorée', () => {
+    // Demandes au LLM retirées le 2026-10-19 : des exports du 2026-10-04 en
+    // portent encore une ; elle ne doit ni bloquer, ni revenir.
+    const relu = parseImportJson(
+      JSON.stringify({
+        format_version: 2,
+        _metadata: {
+          description: '',
+          generated_at: '',
+          note: '',
+          schema: null,
+          periodicites: [],
+          demande: '- Corrige l’orthographe',
+        },
+        chapters: [{ label: 'A', items: [] }],
+      }),
+    )
+    expect(relu.chapters).toHaveLength(1)
+    expect(relu._metadata).toBeDefined()
+    expect('demande' in (relu._metadata as object)).toBe(false)
+  })
 })
 
 describe('parseImportJson — refus', () => {
