@@ -442,6 +442,41 @@ describe('construireExport — forme exacte de do_export_json', () => {
     expect(parTitre.Mensuel.periodicite).toBe('Mensuel')
   })
 
+  it('option pourIa (étape 4, D6) : défaut = export pour une IA ; false = instantané sans mode d’emploi', () => {
+    const parDefaut = JSON.stringify(exp)
+    expect(
+      JSON.stringify(
+        construireExport(classeur(), chapters, content, PERIODICITES, date, {
+          pourIa: true,
+        }),
+      ),
+    ).toBe(parDefaut)
+    expect(exp._metadata?.instructions?.length).toBeGreaterThan(5)
+    const leger = construireExport(
+      classeur(),
+      chapters,
+      content,
+      PERIODICITES,
+      date,
+      { pourIa: false },
+    )
+    expect(Object.keys(leger._metadata ?? {})).toEqual([
+      'description',
+      'generated_at',
+      'note',
+      'schema',
+      'periodicites',
+    ])
+    expect(typeof leger._metadata?.note).toBe('string')
+    expect(leger._metadata?.periodicites).toEqual(exp._metadata?.periodicites)
+    // Les DONNÉES sont identiques : seul `_metadata` change.
+    expect(leger.chapters).toEqual(exp.chapters)
+    expect(leger.classeur).toEqual(exp.classeur)
+    expect(parseImportJson(JSON.stringify(leger))._metadata).toEqual(
+      leger._metadata,
+    )
+  })
+
   it('`_metadata` garde les cinq clés de Registre, avec leurs types', () => {
     const m = exp._metadata as unknown as Record<string, unknown>
     expect(typeof m.description).toBe('string')

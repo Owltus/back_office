@@ -17,9 +17,12 @@
  * l'élagage. Sans transaction (voir `apply.ts`).
  *
  * Écarts assumés :
- *   - `updated_at` des éléments est estampillé par la base (trigger
- *     `classeur_stamp`) : une ligne restaurée porte la date de la
- *     restauration, pas celle de l'instantané. Registre la recopiait.
+ *   - `updated_at` : depuis E6 (audit du 2026-09-25, `merge.ts`), la
+ *     restauration RECOPIE l'horodatage de l'instantané sur les éléments
+ *     qu'elle réécrit, comme Registre, et le trigger `classeur_stamp` le
+ *     respecte (`classeur_stamp_updated_at_2026-09-25.sql`). Une ligne
+ *     restaurée reprend donc sa date d'alors. (Ce commentaire disait le
+ *     contraire jusqu'au 2026-10-19 : il datait d'avant E6.)
  *   - la déduplication d'instantané (`snapshot_already_in_history`) n'est
  *     pas portée (voir `apply.ts`).
  */
@@ -68,11 +71,14 @@ export async function restaurerInstantane(
   const classeur = await fetchClasseur(classeurId)
   if (classeur === null) throw new Error('Classeur introuvable ou supprimé.')
   const local = await chargerEtatLocal(classeurId)
+  // Devient l'instantané de sécurité : sans mode d'emploi pour une IA (D6).
   const courant = construireExport(
     classeur,
     local.chapters,
     local.content,
     local.periodicites ?? [],
+    undefined,
+    { pourIa: false },
   )
   if (instantaneEgal(courant, snapshot)) return null
 

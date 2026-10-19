@@ -567,6 +567,27 @@ export function parseImportJson(texte: string): ClasseurJson {
 export const NOTE_EXPORT =
   "Lis d'abord `instructions` : c'est ton mode d'emploi. Ne modifie pas ce bloc _metadata."
 
+/** `_metadata.description` et `note` d'un POINT DE RESTAURATION (sans mode d'emploi). */
+export const DESCRIPTION_INSTANTANE =
+  "Point de restauration d'un classeur du Back Office (page Classeur), au format d'échange Registre."
+export const NOTE_INSTANTANE =
+  "Sauvegarde : ce bloc _metadata est informatif. Pour travailler avec une IA, exportez le classeur depuis l'application."
+
+/**
+ * Options de `construireExport` (étape 4 du plan
+ * `classeur-echange-ia-2026-10-19`, D6).
+ */
+export interface OptionsExport {
+  /**
+   * `true` (défaut) : export destiné à une personne, donc à une IA, avec le
+   * mode d'emploi (`instructions`). `false` : POINT DE RESTAURATION (auto,
+   * manuel, fusion, sécurité) : pas de mode d'emploi, qui pèserait sur
+   * chaque instantané en base sans y servir. Les cinq clés exigées par
+   * Registre restent, dont `periodicites` que la restauration relit (E3).
+   */
+  pourIa?: boolean
+}
+
 /** `YYYY-MM-DDTHH:MM:SSZ`, comme `now_iso8601` côté Rust. */
 function horodatageExport(d: Date): string {
   return d.toISOString().replace(/\.\d{3}Z$/, 'Z')
@@ -576,7 +597,8 @@ function horodatageExport(d: Date): string {
  * Construit le fichier v2 d'un classeur : chapitres non supprimés triés par
  * `sort_order`, `uid` = slug dédoublonné (`-2`, `-3`…), éléments non
  * supprimés triés par `sort_order` avec les seuls champs de leur nature.
- * `maintenant` n'existe que pour les tests (`generated_at`).
+ * `maintenant` n'existe que pour les tests (`generated_at`) ; `options`
+ * distingue un export pour une IA (défaut) d'un point de restauration.
  */
 export function construireExport(
   classeur: DbClasseur,
@@ -584,7 +606,9 @@ export function construireExport(
   content: ChapterContent,
   periodicites: DbPeriodicite[],
   maintenant: Date = new Date(),
+  options: OptionsExport = {},
 ): ClasseurJson {
+  const pourIa = options.pourIa ?? true
   const itemsTries = flattenItems({
     documents: content.documents.filter((d) => d.deleted_at === null),
     tracking_sheets: content.tracking_sheets.filter(
@@ -625,15 +649,16 @@ export function construireExport(
   return {
     format_version: FORMAT_VERSION,
     _metadata: {
-      description:
-        "Classeur exporté depuis le Back Office (page Classeur), au format d'échange Registre.",
+      description: pourIa
+        ? "Classeur exporté depuis le Back Office (page Classeur), au format d'échange Registre."
+        : DESCRIPTION_INSTANTANE,
       generated_at: horodatageExport(maintenant),
-      note: NOTE_EXPORT,
+      note: pourIa ? NOTE_EXPORT : NOTE_INSTANTANE,
       schema: SCHEMA_DESCRIPTIF,
       periodicites: [...periodicites]
         .sort((a, b) => a.id - b.id)
         .map((p) => ({ id: p.id, label: p.label, nombre: p.nombre })),
-      instructions: consignesClasseur(classeur.name),
+      ...(pourIa ? { instructions: consignesClasseur(classeur.name) } : {}),
     },
     // `COALESCE(icon, 'BookOpen')` côté Rust : une icône vide prend le défaut.
     classeur: {

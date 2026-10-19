@@ -139,7 +139,17 @@ export async function instantaneCourant(
     fetchPeriodicites(),
   ])
   const content = await fetchContentParChapitres(chapters.map((c) => c.id))
-  return construireExport(classeur, chapters, content, periodicites)
+  // Point de restauration : sans le mode d'emploi pour une IA (D6).
+  return construireExport(
+    classeur,
+    chapters,
+    content,
+    periodicites,
+    undefined,
+    {
+      pourIa: false,
+    },
+  )
 }
 
 export interface OptionsPoint {

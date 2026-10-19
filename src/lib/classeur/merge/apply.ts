@@ -507,12 +507,15 @@ async function appliquerPlanifie(
   if (plan.actions.length === 0) return plan.resultat
 
   // (b) instantané AVANT la première écriture — `construireExport` ne
-  // retient que les chapitres et éléments non supprimés.
+  // retient que les chapitres et éléments non supprimés ; point de
+  // restauration, donc sans le mode d'emploi pour une IA (D6).
   const instantane = construireExport(
     classeur,
     local.chapters,
     local.content,
     local.periodicites ?? [],
+    undefined,
+    { pourIa: false },
   )
   await insertMergeHistory({
     classeur_id: classeurId,
