@@ -204,6 +204,15 @@ describe("mode d'emploi — ce qui dépend de la portée", () => {
   })
 })
 
+describe("mode d'emploi — un seul classeur (décision utilisateur)", () => {
+  it('les TROIS exports interdisent de fusionner deux classeurs', () => {
+    for (const [nom, i] of Object.entries(LES_TROIS))
+      expect(texte(i), nom).toContain(
+        "Un seul classeur par fichier : n'en fusionne jamais deux.",
+      )
+  })
+})
+
 describe("mode d'emploi — taille", () => {
   it('moins de 6 ko par export (JSON sérialisé)', () => {
     for (const [nom, i] of Object.entries(LES_TROIS)) {

@@ -25,7 +25,7 @@
  */
 
 const INTRO =
-  "Ce fichier est un classeur du Back Office de l'hôtel OKKO Nantes (registres, procédures), imprimé en A4. La personne qui te l'a donné veut de l'aide : lis ces consignes avant de répondre."
+  "Ce fichier est un classeur du Back Office de l'hôtel OKKO Nantes (registres, procédures), imprimé en A4. La personne qui te l'a donné veut de l'aide : lis ces consignes avant de répondre. Un seul classeur par fichier : n'en fusionne jamais deux."
 
 /** 1. À qui tu parles. */
 const A_QUI =
@@ -97,7 +97,7 @@ export function consignesClasseur(nom: string): string[] {
 export function consignesChapitre(label: string): string[] {
   return assembler(
     `PORTÉE : le chapitre « ${label} » et ses éléments. Seul ce chapitre sera modifié à l'import ; pour ajouter un chapitre, il faut l'export du classeur entier.`,
-    "dans l'application, sur la page du chapitre, bouton accolades {} (JSON pour un LLM), partie Réimporter : coller le bloc.",
+    "dans l'application, sur la page du chapitre, bouton accolades {} (Échange avec une IA), partie Réimporter : coller le bloc.",
     [
       AJOUT_ELEMENT,
       "RETIRER un élément : retire son objet de `items` ; il n'est supprimé que si la personne coche l'option à l'import. En cas de doute, garde-le.",
@@ -109,7 +109,7 @@ export function consignesChapitre(label: string): string[] {
 export function consignesDocument(titre: string, chapitre: string): string[] {
   return assembler(
     `PORTÉE : le seul document « ${titre} » (chapitre « ${chapitre} »). Seul ce document sera modifié à l'import ; le chapitre n'est là que pour le contexte. \`items\` contient exactement CE document, avec son \`uuid\` : n'en ajoute pas, n'en retire pas.`,
-    "dans l'application, sur la page du document, bouton accolades {} (JSON pour un LLM), partie Réimporter : coller le bloc.",
+    "dans l'application, sur la page du document, bouton accolades {} (Échange avec une IA), partie Réimporter : coller le bloc.",
     [],
     `${REPONDRE} Ce fichier ne contient qu'un document : pour une question plus large, ou pour ajouter un document ou une feuille, demande l'export du chapitre (bouton {} de sa page) ou du classeur entier (accueil du classeur, Exporter en JSON).`,
   )

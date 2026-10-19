@@ -101,7 +101,7 @@ describe('ApercuImport — relecture', () => {
     rendre('pret', new Map(), new Set(), new Set(['document:1']))
     const liste = screen.getByRole('list', { name: '2 points à vérifier' })
     expect(liste.textContent).toContain(
-      'Image introuvable dans la médiathèque : 24/inexistant.webp (inventée par le LLM ?).',
+      "Image introuvable dans la médiathèque : 24/inexistant.webp (inventée par l'IA ?).",
     )
     expect(liste.textContent).toContain('cases en trop')
     expect(

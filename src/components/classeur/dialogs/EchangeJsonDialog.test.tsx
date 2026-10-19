@@ -105,7 +105,7 @@ async function ouvrirAvecApercu() {
       />
     </QueryClientProvider>,
   )
-  fireEvent.change(screen.getByLabelText('JSON à réimporter'), {
+  fireEvent.change(screen.getByLabelText("Réponse de l'IA à réimporter"), {
     target: { value: jsonLlm() },
   })
   await waitFor(() => screen.getByLabelText('Importer Check-in'), {
@@ -310,7 +310,7 @@ describe('EchangeJsonDialog — audit du 2026-10-04 (B8, C4)', () => {
     )
     expect(bouton().textContent).toBe('Importer')
     expect(bouton().disabled).toBe(true)
-    fireEvent.change(screen.getByLabelText('JSON à réimporter'), {
+    fireEvent.change(screen.getByLabelText("Réponse de l'IA à réimporter"), {
       target: { value: jsonLlm() },
     })
     // Pendant l'attente puis la lecture : toujours neutre.

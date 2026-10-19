@@ -227,6 +227,10 @@ describe('ClasseurList — tableau', () => {
     expect(screen.queryByText('Créer ou importer')).toBeNull()
     expect(screen.queryByText(/changer l'ordre/)).toBeNull()
     expect(screen.queryByText('Tous le lisent.')).toBeNull()
+    // Copier pour une IA est ouvert à la lecture ; reprendre ses modifications non.
+    expect(screen.getByText('Travailler avec une IA')).toBeTruthy()
+    expect(screen.getByText(/jamais dans le classeur/)).toBeTruthy()
+    expect(screen.queryByText(/Pour reprendre ses modifications/)).toBeNull()
   })
 
   it('aide en gestion : tout, dont le rangement et la légende des accès', async () => {
@@ -236,6 +240,11 @@ describe('ClasseurList — tableau', () => {
     expect(screen.getByText('Créer ou importer')).toBeTruthy()
     expect(screen.getByText(/changer l'ordre/)).toBeTruthy()
     expect(screen.getByText('Tous le lisent.')).toBeTruthy()
+    expect(screen.getByText(/Pour reprendre ses modifications/)).toBeTruthy()
+    expect(screen.getByText(/Rien n'est supprimé, sauf si/)).toBeTruthy()
+    expect(
+      screen.getByText(/point de restauration est pris avant/),
+    ).toBeTruthy()
   })
 
   it('date en cours de lecture : place réservée, jamais une fausse date', () => {

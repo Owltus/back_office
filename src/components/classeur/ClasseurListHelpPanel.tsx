@@ -131,13 +131,45 @@ export function ClasseurListHelpPanel({
         )}
       </Section>
 
+      <Section title="Travailler avec une IA">
+        <GestureRow side="right">
+          {fort('Clic droit')} sur une ligne, puis {fort('Copier pour une IA')}{' '}
+          : tout le classeur est copié, avec un mode d'emploi pour l'IA. Dans un
+          classeur, la ligne Exporter en JSON a le même bouton Copier.
+        </GestureRow>
+        <p>
+          Collez dans la conversation avec l'IA. Elle vous demande ce que vous
+          voulez faire : poser une question, corriger, ajouter un chapitre ou
+          une feuille. Elle rappelle ses limites dans la conversation, jamais
+          dans le classeur.
+        </p>
+        {canWrite && (
+          <>
+            <p>
+              Pour reprendre ses modifications : ouvrez le classeur, ligne{' '}
+              {fort('Importer un JSON')}, puis collez sa réponse. Laissez{' '}
+              {fort('Fichier rendu par une IA')} coché. Choisissez{' '}
+              {fort("Fichier de Registre ou d'un autre poste")} pour un fichier
+              qui ne vient pas d'une IA.
+            </p>
+            <p>
+              Rien n'est supprimé, sauf si vous cochez la case prévue pour cela.
+              Vous voyez chaque changement avant de valider, et vous pouvez en
+              refuser un. Un point de restauration est pris avant la première
+              modification.
+            </p>
+          </>
+        )}
+      </Section>
+
       {canWrite && (
         <Section title="Créer ou importer">
           <p>
-            {fort('Nouveau classeur')} en crée un vide. Le bouton Importer
-            reprend un classeur exporté en JSON, depuis cette page ou depuis
-            l'application Registre. Vous pouvez aussi déposer le fichier
-            directement sur le bouton.
+            {fort('Nouveau classeur')} en crée un vide. Le bouton Importer crée
+            un nouveau classeur à partir d'un fichier exporté, depuis cette
+            page, l'application Registre ou une IA. Vous pouvez aussi déposer le
+            fichier directement sur le bouton. Si le fichier pose question, vous
+            le voyez avant la création.
           </p>
         </Section>
       )}

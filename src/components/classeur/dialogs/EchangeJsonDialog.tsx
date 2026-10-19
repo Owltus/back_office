@@ -340,7 +340,7 @@ export function EchangeJsonDialog({
     >
       <DialogContent className="flex max-h-[90dvh] flex-col overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>JSON pour un LLM</DialogTitle>
+          <DialogTitle>Échange avec une IA</DialogTitle>
           <DialogDescription>
             Exporter {libelle}, le faire retravailler, puis le réimporter.
           </DialogDescription>
@@ -386,8 +386,8 @@ export function EchangeJsonDialog({
                 setErreurFichier(null)
                 setTexte(e.target.value)
               }}
-              placeholder="Collez ici le JSON rendu par le LLM (même entouré de texte ou de ```json)."
-              aria-label="JSON à réimporter"
+              placeholder="Collez ici la réponse de l'IA (même entourée de texte ou de ```json)."
+              aria-label="Réponse de l'IA à réimporter"
               spellCheck={false}
               className="h-32 resize-none font-mono text-xs [field-sizing:fixed]"
               disabled={fusion.isPending}
@@ -425,7 +425,7 @@ export function EchangeJsonDialog({
                     htmlFor="json-supprimer-absents"
                     className="text-sm font-normal"
                   >
-                    Supprimer les éléments absents du JSON
+                    Supprimer ce qui n'est plus dans le fichier
                   </Label>
                 </div>
               )}
@@ -437,7 +437,7 @@ export function EchangeJsonDialog({
             {preparation.isPending && (
               <p className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="size-4 animate-spin" />
-                Lecture du JSON…
+                Lecture du fichier…
               </p>
             )}
             {preparation.isError && (

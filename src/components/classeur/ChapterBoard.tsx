@@ -588,7 +588,7 @@ export function ChapterBoard({
                         busy={exportZip.isPending}
                       />
                       <IconAction
-                        label="JSON pour un LLM : exporter, réimporter"
+                        label="Échange avec une IA : exporter, réimporter"
                         icon={<Braces />}
                         onClick={() => setJsonOuvert(true)}
                         disabled={!chapter || !contenu}
@@ -659,7 +659,7 @@ export function ChapterBoard({
                           onSelect={() => setJsonOuvert(true)}
                         >
                           <Braces />
-                          JSON pour un LLM
+                          Échange avec une IA
                         </DropdownMenuItem>
                         {canWrite && chapter && (
                           <>

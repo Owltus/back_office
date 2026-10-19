@@ -403,7 +403,9 @@ export function HistoriqueDialog({
                             <span className="sr-only">Télécharger</span>
                           </Button>
                         </TooltipTrigger>
-                        <TooltipContent>Télécharger le JSON</TooltipContent>
+                        <TooltipContent>
+                          Télécharger cette sauvegarde
+                        </TooltipContent>
                       </Tooltip>
                       {supprimable && (
                         <Tooltip>

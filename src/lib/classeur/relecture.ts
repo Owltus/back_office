@@ -290,7 +290,7 @@ export function alertesRelecture(
           ligne,
           message:
             contexte === 'import'
-              ? `Image introuvable dans la médiathèque : ${extrait(src)} (inventée par le LLM ?).`
+              ? `Image introuvable dans la médiathèque : ${extrait(src)} (inventée par l'IA ?).`
               : 'Image introuvable : elle a été supprimée de la médiathèque.',
           image: true,
         })
