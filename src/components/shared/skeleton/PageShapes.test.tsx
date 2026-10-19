@@ -221,20 +221,25 @@ describe('FormeProfil', () => {
 })
 
 describe('Classeur — quatre silhouettes relevées sur les boards', () => {
-  it('la liste dessine la colonne de Registre : deux cartes pointillées, un séparateur, puis les classeurs en liste', () => {
+  it('la liste dessine le tableau : barre de deux boutons, en-tête, une ligne par classeur', () => {
     const { container } = render(<FormeClasseurListe cartes={4} />)
-    expect(container.querySelector('.max-w-md')).not.toBeNull()
-    expect(container.querySelectorAll('.grid-cols-2').length).toBe(1)
-    expect(container.querySelectorAll('.border-dashed').length).toBe(2)
-    expect(container.querySelectorAll('.border-b').length).toBe(1)
-    expect(container.querySelectorAll('.rounded-xl.border').length).toBe(6)
-    // Liste seule (pendant le chargement, sous les cartes d'action réelles)
-    const seule = render(<FormeClasseurListe cartes={2} actions={false} />)
-    expect(seule.container.querySelector('.max-w-md')).toBeNull()
-    expect(seule.container.querySelectorAll('.border-dashed').length).toBe(0)
-    expect(seule.container.querySelectorAll('.rounded-xl.border').length).toBe(
-      2,
+    expect(container.querySelector('.max-w-4xl')).not.toBeNull()
+    expect(container.querySelectorAll('.justify-end > *').length).toBe(2)
+    expect(container.querySelectorAll('thead tr').length).toBe(1)
+    expect(container.querySelectorAll('tbody tr').length).toBe(4)
+    // Sans poignée ni accès : classeur, chapitres, documents, date, actions.
+    expect(container.querySelectorAll('thead th').length).toBe(5)
+    // Tableau seul (pendant le chargement, sous la barre réelle), colonnes
+    // de la gestion : poignée et accès en plus.
+    const seule = render(
+      <FormeClasseurListe cartes={2} actions={false} poignee acces />,
     )
+    expect(seule.container.querySelector('.max-w-4xl')).toBeNull()
+    expect(seule.container.querySelectorAll('tbody tr').length).toBe(2)
+    expect(seule.container.querySelectorAll('thead th').length).toBe(7)
+    expect(
+      seule.container.querySelectorAll('tbody tr:first-child td').length,
+    ).toBe(7)
   })
 
   it('l’accueil dessine la recherche puis UN panneau de 4 sections : 2, 2, 3, 2 lignes (9)', () => {

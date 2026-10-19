@@ -566,56 +566,124 @@ const GRILLE_CHAPITRE: CSSProperties = {
   gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
 }
 
-/** /classeur : N cartes « icône + nom + établissement » (`ClasseurCard`). */
+/**
+ * Tableau des classeurs (`ClasseurList`, décision utilisateur du
+ * 2026-10-19). UNE source de classes pour le tableau et sa silhouette.
+ */
+export const TABLEAU_CLASSEURS = {
+  carte: 'overflow-hidden rounded-xl border border-border bg-card',
+  entete: 'border-b border-border bg-muted/50',
+  th: 'px-3 py-2 text-xs font-medium text-muted-foreground',
+  ligne:
+    'border-b border-border/50 transition-colors last:border-b-0 hover:bg-accent/50',
+} as const
+
+/**
+ * Silhouette de la liste des classeurs : la barre des deux boutons
+ * (Importer, Nouveau classeur) puis le TABLEAU, mêmes colonnes et mêmes
+ * points de bascule que `ClasseurList`. `actions = false` : le tableau seul
+ * (pendant le chargement, sous la barre réelle). `poignee` et `acces`
+ * suivent les colonnes que la page affichera (droits connus).
+ */
 export function FormeClasseurListe({
   cartes = 3,
   actions = true,
+  poignee = false,
+  acces = false,
 }: {
   cartes?: number
-  /** Avec la paire de cartes d'action et le séparateur (page entière) ou sans (liste seule). */
   actions?: boolean
+  poignee?: boolean
+  acces?: boolean
 }) {
-  const carte = (k: string, dashed = false) => (
-    <div
-      key={k}
-      className={cn(
-        'flex items-center gap-4 rounded-xl border border-border bg-card px-5 py-4',
-        dashed && 'border-dashed',
-      )}
-    >
-      <Skeleton
-        className={cn(
-          'shrink-0',
-          dashed ? 'size-9 rounded-lg' : 'size-5 rounded-sm',
-        )}
-      />
-      <div className="flex min-h-10 min-w-0 flex-1 flex-col justify-center">
-        <Skeleton className="h-4 w-full max-w-40" />
-        <Skeleton className="mt-2 h-3 w-28" />
-      </div>
+  const tableau = (
+    <div className={TABLEAU_CLASSEURS.carte}>
+      <table className="w-full text-sm">
+        <thead>
+          <tr className={TABLEAU_CLASSEURS.entete}>
+            {poignee && <th className="w-8 px-1" />}
+            <th className={cn(TABLEAU_CLASSEURS.th, 'text-left')}>
+              <Skeleton className="h-3 w-16" />
+            </th>
+            <th
+              className={cn(TABLEAU_CLASSEURS.th, 'hidden w-24 sm:table-cell')}
+            >
+              <Skeleton className="ml-auto h-3 w-14" />
+            </th>
+            <th
+              className={cn(TABLEAU_CLASSEURS.th, 'hidden w-24 sm:table-cell')}
+            >
+              <Skeleton className="ml-auto h-3 w-14" />
+            </th>
+            <th
+              className={cn(TABLEAU_CLASSEURS.th, 'hidden w-32 md:table-cell')}
+            >
+              <Skeleton className="h-3 w-16" />
+            </th>
+            {acces && (
+              <th
+                className={cn(
+                  TABLEAU_CLASSEURS.th,
+                  'hidden w-36 sm:table-cell',
+                )}
+              >
+                <Skeleton className="h-3 w-10" />
+              </th>
+            )}
+            <th className="w-20 px-2" />
+          </tr>
+        </thead>
+        <tbody>
+          {Array.from({ length: cartes }).map((_, i) => (
+            <tr key={i} className={TABLEAU_CLASSEURS.ligne}>
+              {poignee && (
+                <td className="w-8 px-1">
+                  <Skeleton className="mx-auto size-4 rounded-sm" />
+                </td>
+              )}
+              <td className="px-3 py-3">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="size-8 shrink-0 rounded-lg" />
+                  <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                    <Skeleton className="h-4 w-full max-w-48" />
+                    <Skeleton className="h-3 w-28" />
+                  </div>
+                </div>
+              </td>
+              <td className="hidden px-3 py-3 sm:table-cell">
+                <Skeleton className="ml-auto h-3.5 w-6" />
+              </td>
+              <td className="hidden px-3 py-3 sm:table-cell">
+                <Skeleton className="ml-auto h-3.5 w-6" />
+              </td>
+              <td className="hidden px-3 py-3 md:table-cell">
+                <Skeleton className="h-3.5 w-20" />
+              </td>
+              {acces && (
+                <td className="hidden px-3 py-3 sm:table-cell">
+                  <Skeleton className="h-3.5 w-20" />
+                </td>
+              )}
+              <td className="px-2 py-3">
+                <Skeleton className="ml-auto h-6 w-14" />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
-  const liste = Array.from({ length: cartes }).map((_, i) => carte(`c${i}`))
-  if (!actions) {
-    return (
-      <div className="flex flex-col gap-4" aria-hidden="true">
-        {liste}
-      </div>
-    )
-  }
+  if (!actions) return <div aria-hidden="true">{tableau}</div>
   return (
     <div
-      className="flex flex-1 items-center justify-center py-6"
+      className="mx-auto flex w-full max-w-4xl flex-col gap-4"
       aria-hidden="true"
     >
-      <div className="flex w-full max-w-md flex-col gap-4">
-        <div className="grid grid-cols-2 gap-3">
-          {carte('nouveau', true)}
-          {carte('importer', true)}
-        </div>
-        <div className="border-b border-border" />
-        {liste}
+      <div className="flex justify-end gap-2">
+        <Skeleton className="h-8 w-24 rounded-md" />
+        <Skeleton className="h-8 w-40 rounded-md" />
       </div>
+      {tableau}
     </div>
   )
 }

@@ -1380,17 +1380,24 @@ AccesClasseurDialog.tsx` (bouclier dans la barre du haut de l'accueil,
   vidé (mémoire + disque) à chaque changement de compte et à la
   déconnexion — jamais sur une panne (même compte). Avant ce jour, B
   pouvait voir depuis le cache ce que A avait lu sur le poste partagé.
-- **Liste des classeurs `/classeur` (décision utilisateur du 2026-09-26,
-  « plus comme d'origine »)** : la colonne centrée de Registre
-  (`ClasseurListPage`), SANS titre de page — deux cartes pointillées côte à
-  côte (« Nouveau classeur » ; « Importer classeur », qui reçoit aussi un
-  fichier déposé : « Déposez ici »), un séparateur, puis les classeurs en
-  LISTE VERTICALE réordonnable (la carte entière est la poignée, activation
-  à 5 px ; les actions Exporter/Supprimer vivent HORS du lien et arrêtent
-  le `pointerdown`). Plus de grille 2/3 colonnes ni de voile de dépôt sur
-  la page. `ActionCard` est partagée avec l'accueil
-  (`components/classeur/ActionCard.tsx`) ; `FormeClasseurListe` suit la
-  même colonne (`actions={false}` = liste seule sous les cartes réelles).
+- **Liste des classeurs `/classeur` EN TABLEAU (décision utilisateur du
+  2026-10-19, « genre tableau, avec le style de l'app » ; remplace la colonne
+  de cartes de Registre du 2026-09-26)** : `ClasseurList`, grammaire des
+  tableaux de RepJour (carte `rounded-xl border bg-card`, en-tête
+  `bg-muted/50`, classes partagées avec la silhouette par
+  `TABLEAU_CLASSEURS` de `PageShapes.tsx`). Pas de titre de page ; Importer
+  (reçoit aussi un .json déposé : « Déposez ici ») et Nouveau classeur en
+  boutons outline à droite (`PageHeader actionsAlign="end"`). Colonnes :
+  classeur (icône, nom = vrai lien, établissement), Chapitres, Documents
+  (≥ 640 px, sinon sous le nom), Modifié le (≥ 768 px), Accès (gestion :
+  Privé / Tous en lecture / Tous en écriture ; compte en écriture : son
+  niveau ; absente en lecture seule), Exporter / Supprimer (gestion). La
+  LIGNE entière ouvre le classeur ; réordonner = poignée de ligne (gestion).
+  Compteurs : `fetchStatsClasseurs` (UNE lecture sur `classeur_chapters`
+  avec deux embarqués `classeur_documents`, compte et plus récent) agrégés
+  par `agregerStats` (pur, testé), clé `classeurKeys.stats()`, lue APRÈS la
+  liste ; place réservée pendant la lecture, jamais un faux zéro.
+  `ActionCard` est SUPPRIMÉE (plus aucun usage).
 - **Accueil d'un classeur (décision utilisateur du 2026-10-04, remplace la
   colonne de 28 rem de Registre du 2026-09-26)** : les chapitres ne sont PAS
   répétés dans la page (ils vivent dans la colonne de gauche, pleine
@@ -1423,7 +1430,7 @@ AccesClasseurDialog.tsx` (bouclier dans la barre du haut de l'accueil,
   lignes de même forme. Places réservées (`LigneActionSquelette`, même
   hauteur) dans LEUR section tant que les droits ne sont pas lus ; la
   silhouette `FormeClasseurDashboard` dessine le même panneau (9 lignes).
-  `ActionCard` ne sert plus qu'à la liste `/classeur`. Libellés de Registre
+  Libellés de Registre
   conservés (« Export en cours... »).
 - **Points de restauration (2026-09-26, demande de l'utilisateur : « de
   vraies sauvegardes, faciles, une dizaine, mineures et majeures »)** :

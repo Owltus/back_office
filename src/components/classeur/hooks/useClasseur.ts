@@ -11,6 +11,7 @@ import {
   fetchClasseurContent,
   fetchClasseurs,
   fetchPeriodicites,
+  fetchStatsClasseurs,
   moveItems,
   reorderChapters,
   reorderClasseurs,
@@ -47,6 +48,20 @@ export function useClasseurs(actif = true) {
   return useQuery({
     queryKey: classeurKeys.list(),
     queryFn: fetchClasseurs,
+    staleTime: STALE_60S,
+    enabled: actif,
+  })
+}
+
+/**
+ * Compteurs du tableau des classeurs (chapitres, documents, dernière
+ * modification). Lue APRÈS la liste (`actif`) : la liste s'affiche d'abord,
+ * les colonnes chiffrées se remplissent ensuite.
+ */
+export function useStatsClasseurs(actif = true) {
+  return useQuery({
+    queryKey: classeurKeys.stats(),
+    queryFn: fetchStatsClasseurs,
     staleTime: STALE_60S,
     enabled: actif,
   })

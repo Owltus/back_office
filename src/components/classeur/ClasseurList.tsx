@@ -14,16 +14,16 @@ import {
   EyeOff,
   FileDown,
   FileUp,
+  GripVertical,
   Lock,
   Plus,
   Trash2,
   Upload,
+  Users,
 } from 'lucide-react'
 
 import { useAuth } from '#/components/auth/AuthContext.tsx'
-import { ActionCard } from '#/components/classeur/ActionCard.tsx'
 import {
-  CLASSES_CARTE_GLISSABLE,
   neDemarrePasDeGlisser,
   useCapteursClasseur,
 } from '#/components/classeur/dnd/useCapteursClasseur.ts'
@@ -32,44 +32,54 @@ import {
   useClasseurs,
   useInvaliderClasseur,
   useReorderClasseurs,
+  useStatsClasseurs,
 } from '#/components/classeur/hooks/useClasseur.ts'
 import { ConfirmDialog } from '#/components/shared/ConfirmDialog.tsx'
+import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
-import { FormeClasseurListe } from '#/components/shared/skeleton/PageShapes.tsx'
+import { Skeleton } from '#/components/ui/skeleton.tsx'
+import {
+  FormeClasseurListe,
+  TABLEAU_CLASSEURS,
+} from '#/components/shared/skeleton/PageShapes.tsx'
 import {
   useDroitsPageClasseur,
   useMesAcces,
 } from '#/components/classeur/hooks/useDroitsClasseur.ts'
 import { niveauEffectif } from '#/lib/classeur/droits.ts'
+import type { NiveauEffectif } from '#/lib/classeur/droits.ts'
 import { messageErreur } from '#/lib/classeur/erreur.ts'
-import { getIcon } from '#/lib/classeur/naming.ts'
+import { formatDate, getIcon } from '#/lib/classeur/naming.ts'
 import { softDeleteClasseur } from '#/lib/classeur/service.ts'
+import type { StatsClasseur } from '#/lib/classeur/statsClasseurs.ts'
 import type { DbClasseur } from '#/lib/classeur/types.ts'
 import { MAX_JSON_BYTES, fileTooLarge } from '#/lib/shared/files.ts'
 import { cn } from '#/lib/utils.ts'
 
 /**
- * Liste des classeurs — ORGANISÉE COMME DANS REGISTRE (`ClasseurListPage`,
- * décision utilisateur du 2026-09-26 : « plus comme d'origine ») : une
- * colonne centrée de 28 rem, sans titre de page — deux cartes pointillées
- * côte à côte (« Nouveau classeur », « Importer classeur » qui accepte un
- * fichier déposé : « Déposez ici »), un séparateur, puis les classeurs en
- * liste verticale réordonnable (poignée = la carte entière, droit
- * `ecriture`), chaque carte révélant au survol Exporter en JSON et
- * Supprimer (douce, confirmation).
+ * Liste des classeurs EN TABLEAU (décision utilisateur du 2026-10-19,
+ * remplace la colonne de cartes de Registre du 2026-09-26) : la grammaire
+ * des tableaux de l'app (RepJour, Données, Budget) — carte `rounded-xl
+ * border bg-card`, en-tête `bg-muted/50` en petites lettres grises, lignes
+ * séparées d'un trait discret. Colonnes : classeur (icône, nom,
+ * établissement), chapitres, documents, dernière modification, accès,
+ * actions. Pas de titre de page (l'onglet suffit) ; Importer et Nouveau
+ * classeur en boutons outline à droite, comme les autres pages.
+ *
+ * - Une ligne entière ouvre le classeur ; le nom est le vrai lien (clavier).
+ * - Réordonner (ordre partagé) : gestion seule, par la poignée de la ligne
+ *   (souris 5 px, doigt : appui long, `useCapteursClasseur`).
+ * - Importer : clic (sélecteur) ou fichier .json DÉPOSÉ sur le bouton.
+ * - Compteurs lus APRÈS la liste (`useStatsClasseurs`) : la liste s'affiche
+ *   d'abord, les chiffres ensuite (place réservée, jamais un faux zéro).
  *
  * ACCÈS PAR CLASSEUR (2026-09-28, `lib/classeur/droits.ts`) : la liste ne
- * contient que les classeurs lisibles (la RLS filtre) ; un cadenas marque
- * ceux en lecture seule pour un compte qui a l'écriture sur la page ; la
- * gestion voit « Privé » sur ceux fermés à tous. Supprimer un classeur et
- * réordonner la liste (ordre partagé) : gestion seule.
- *
- * Import et export JSON sont branchés par `ClasseurListActions` :
- *   - `onImporterJson(file)` : fichier choisi (carte Importer) ou déposé
- *     sur elle, déjà borné par `MAX_JSON_BYTES`. Absent : carte non rendue.
- *   - `onExporterJson(classeur)` : bouton d'export de chaque carte. Absent :
- *     bouton non rendu.
+ * contient que les classeurs lisibles (la RLS filtre). La gestion voit
+ * l'accès donné à tous (Privé / Tous en lecture / Tous en écriture) ; un
+ * compte en écriture voit son propre niveau (Modification / Lecture) ; un
+ * compte en lecture seule n'a pas la colonne (elle dirait partout la même
+ * chose). Supprimer un classeur et réordonner : gestion seule.
  */
 export function ClasseurList({
   onImporterJson,
@@ -85,19 +95,22 @@ export function ClasseurList({
   const canManage = droitsPage.canManage
   const navigate = useNavigate()
   const classeurs = useClasseurs()
+  const stats = useStatsClasseurs(classeurs.isSuccess)
   const reorder = useReorderClasseurs()
   const invalider = useInvaliderClasseur()
   const liste = classeurs.data ?? []
   const peutReordonner = droitsPage.canReorderList
-  const niveauDe = (c: DbClasseur) =>
+  const statsDe = new Map((stats.data ?? []).map((s) => [s.classeurId, s]))
+  const niveauDe = (c: DbClasseur): NiveauEffectif | null =>
     mesAcces.isPending
-      ? 'aucun'
+      ? null
       : niveauEffectif(
           droitsPage.page,
           c,
           mesAcces.parClasseur.get(c.id) ?? null,
           user?.id,
         )
+  const colonneAcces = canManage || canWrite
 
   const [createOpen, setCreateOpen] = useState(false)
   const [aSupprimer, setASupprimer] = useState<DbClasseur | null>(null)
@@ -123,9 +136,8 @@ export function ClasseurList({
     reorder.mutate(ids)
   }
 
-  // Import JSON : sélecteur de fichier (clic sur la carte) ou dépôt sur la
-  // carte Importer, comme dans Registre. On ne réagit qu'aux fichiers, pas
-  // aux glissers internes (dnd-kit).
+  // Import JSON : sélecteur de fichier (clic) ou dépôt sur le bouton
+  // Importer. On ne réagit qu'aux fichiers, pas aux glissers internes.
   const importActif = canWrite && onImporterJson !== undefined
   const inputRef = useRef<HTMLInputElement>(null)
   const [survolDepot, setSurvolDepot] = useState(false)
@@ -169,101 +181,186 @@ export function ClasseurList({
       ? messageErreur(suppression.error, 'Suppression impossible')
       : erreurImport
 
+  const colonnes = { poignee: peutReordonner, acces: colonneAcces }
+
   return (
-    <div className="flex flex-1 items-center justify-center py-6">
-      <div className="flex w-full max-w-md flex-col gap-4">
-        {importActif && (
-          <input
-            ref={inputRef}
-            type="file"
-            accept="application/json,.json"
-            className="hidden"
-            onChange={onInputChange}
-          />
-        )}
+    <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
+      {importActif && (
+        <input
+          ref={inputRef}
+          type="file"
+          accept="application/json,.json"
+          className="hidden"
+          onChange={onInputChange}
+        />
+      )}
 
-        {/* Nouveau classeur + Importer, côte à côte (droit écriture) */}
-        {canWrite && (
-          <div className="grid grid-cols-2 gap-3">
-            <ActionCard
-              icon={Plus}
-              title="Nouveau classeur"
-              subtitle="Créer un classeur vierge"
-              onClick={() => setCreateOpen(true)}
-              dashed
-            />
-            {importActif && (
-              <ActionCard
-                icon={survolDepot ? Upload : FileDown}
-                title={survolDepot ? 'Déposez ici' : 'Importer classeur'}
-                subtitle={survolDepot ? undefined : 'Depuis un fichier .json'}
-                onClick={() => inputRef.current?.click()}
-                dashed
-                className={
-                  survolDepot ? 'border-primary bg-primary/5' : undefined
-                }
-                onDragEnter={surDragOver}
-                onDragOver={surDragOver}
-                onDragLeave={surDragLeave}
-                onDrop={surDrop}
-              />
-            )}
-          </div>
-        )}
-
-        {classeurs.isError && (
-          <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            {messageErreur(classeurs.error, 'Classeurs indisponibles')}
-          </div>
-        )}
-
-        {erreurEcriture && (
-          <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            {erreurEcriture}
-          </div>
-        )}
-
-        {classeurs.isPending ? (
-          /* DÉLÈGUE à `FormeClasseurListe` : une seule silhouette par page. */
-          <FormeClasseurListe actions={false} />
-        ) : classeurs.isSuccess && liste.length === 0 ? (
-          <p className="text-center text-sm text-muted-foreground">
-            Aucun classeur.
-            {canWrite ? ' Créez-en un pour commencer.' : ''}
-          </p>
-        ) : (
-          <>
-            {canWrite && <div className="border-b border-border" />}
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEnd}
-            >
-              <SortableContext
-                items={liste.map((c) => c.id)}
-                strategy={verticalListSortingStrategy}
+      {canWrite && (
+        <PageHeader
+          actionsAlign="end"
+          actions={
+            <div className="flex items-center gap-2">
+              {importActif && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => inputRef.current?.click()}
+                  onDragEnter={surDragOver}
+                  onDragOver={surDragOver}
+                  onDragLeave={surDragLeave}
+                  onDrop={surDrop}
+                  className={cn(
+                    survolDepot && 'border-primary bg-primary/10 text-primary',
+                  )}
+                >
+                  {survolDepot ? <Upload /> : <FileDown />}
+                  {survolDepot ? 'Déposez ici' : 'Importer'}
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCreateOpen(true)}
               >
-                {liste.map((c) => (
-                  <ClasseurCard
-                    key={c.id}
-                    classeur={c}
-                    canDrag={peutReordonner}
-                    canDelete={canManage}
-                    lectureSeule={
-                      canWrite && !canManage && niveauDe(c) === 'lecture'
-                    }
-                    prive={canManage && c.acces_tous === 'aucun'}
-                    onDelete={() => setASupprimer(c)}
-                    onExport={
-                      onExporterJson ? () => void onExporterJson(c) : undefined
-                    }
-                  />
-                ))}
-              </SortableContext>
-            </DndContext>
-          </>
-        )}
-      </div>
+                <Plus />
+                Nouveau classeur
+              </Button>
+            </div>
+          }
+        />
+      )}
+
+      {classeurs.isError && (
+        <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {messageErreur(classeurs.error, 'Classeurs indisponibles')}
+        </div>
+      )}
+
+      {erreurEcriture && (
+        <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {erreurEcriture}
+        </div>
+      )}
+
+      {classeurs.isPending ? (
+        /* DÉLÈGUE à `FormeClasseurListe` : une seule silhouette par page. */
+        <FormeClasseurListe actions={false} {...colonnes} />
+      ) : classeurs.isError ? null : (
+        <div className={TABLEAU_CLASSEURS.carte}>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className={TABLEAU_CLASSEURS.entete}>
+                {colonnes.poignee && (
+                  <th className="w-8 px-1">
+                    <span className="sr-only">Ordre</span>
+                  </th>
+                )}
+                <th className={cn(TABLEAU_CLASSEURS.th, 'text-left')}>
+                  Classeur
+                </th>
+                <th
+                  className={cn(
+                    TABLEAU_CLASSEURS.th,
+                    'hidden w-24 text-right sm:table-cell',
+                  )}
+                >
+                  Chapitres
+                </th>
+                <th
+                  className={cn(
+                    TABLEAU_CLASSEURS.th,
+                    'hidden w-24 text-right sm:table-cell',
+                  )}
+                >
+                  Documents
+                </th>
+                <th
+                  className={cn(
+                    TABLEAU_CLASSEURS.th,
+                    'hidden w-32 text-left md:table-cell',
+                  )}
+                >
+                  Modifié le
+                </th>
+                {colonnes.acces && (
+                  <th
+                    className={cn(
+                      TABLEAU_CLASSEURS.th,
+                      'hidden w-36 text-left sm:table-cell',
+                    )}
+                  >
+                    Accès
+                  </th>
+                )}
+                <th className="w-20 px-2">
+                  <span className="sr-only">Actions</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {liste.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="px-4 py-8 text-center text-sm text-muted-foreground"
+                  >
+                    Aucun classeur.
+                    {canWrite ? ' Créez-en un pour commencer.' : ''}
+                  </td>
+                </tr>
+              ) : (
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext
+                    items={liste.map((c) => c.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    {liste.map((c) => (
+                      <LigneClasseur
+                        key={c.id}
+                        classeur={c}
+                        stats={statsDe.get(c.id)}
+                        statsEtat={
+                          stats.isPending
+                            ? 'chargement'
+                            : stats.isError
+                              ? 'erreur'
+                              : 'ok'
+                        }
+                        canDrag={peutReordonner}
+                        canDelete={canManage}
+                        avecAcces={colonnes.acces}
+                        acces={
+                          !colonnes.acces
+                            ? null
+                            : canManage
+                              ? accesPourTous(c.acces_tous)
+                              : accesPersonnel(niveauDe(c))
+                        }
+                        onOpen={() =>
+                          navigate({
+                            to: '/classeur/$classeurId',
+                            params: { classeurId: String(c.id) },
+                          })
+                        }
+                        onDelete={() => setASupprimer(c)}
+                        onExport={
+                          onExporterJson
+                            ? () => void onExporterJson(c)
+                            : undefined
+                        }
+                      />
+                    ))}
+                  </SortableContext>
+                </DndContext>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <ClasseurDialog
         open={createOpen}
@@ -284,7 +381,7 @@ export function ClasseurList({
         title="Supprimer le classeur"
         description={
           aSupprimer
-            ? `Supprimer le classeur « ${aSupprimer.name} » et tout son contenu (chapitres, documents, fiches de suivi et de signature) ?`
+            ? `Supprimer le classeur ${aSupprimer.name} et tout son contenu (chapitres, documents, feuilles de suivi et de signature) ?`
             : undefined
         }
         confirmLabel="Supprimer"
@@ -297,31 +394,70 @@ export function ClasseurList({
   )
 }
 
-/**
- * Carte d'un classeur (Registre : `SortableClasseurCard`). La carte entière
- * est la poignée de glisser (activation à 5 px, le clic navigue). Les
- * actions vivent HORS du lien (jamais de bouton dans un `<a>`), révélées
- * au survol ou au focus.
- */
-function ClasseurCard({
+interface Acces {
+  libelle: string
+  icone: typeof Lock | null
+  aide: string
+}
+
+/** Vu de la gestion : l'accès donné à tous. */
+function accesPourTous(niveau: DbClasseur['acces_tous']): Acces {
+  if (niveau === 'aucun')
+    return {
+      libelle: 'Privé',
+      icone: EyeOff,
+      aide: 'Visible de la gestion et des accès donnés',
+    }
+  return niveau === 'ecriture'
+    ? {
+        libelle: 'Tous en écriture',
+        icone: Users,
+        aide: 'Tout le monde peut modifier',
+      }
+    : {
+        libelle: 'Tous en lecture',
+        icone: Users,
+        aide: 'Tout le monde peut lire',
+      }
+}
+
+/** Vu d'un compte en écriture : son propre niveau sur ce classeur. */
+function accesPersonnel(niveau: NiveauEffectif | null): Acces | null {
+  if (niveau === null) return null
+  return niveau === 'ecriture' || niveau === 'gestion'
+    ? { libelle: 'Modification', icone: null, aide: 'Vous pouvez le modifier' }
+    : { libelle: 'Lecture', icone: Lock, aide: 'Lecture seule sur ce classeur' }
+}
+
+function pluriel(n: number, mot: string): string {
+  return `${n} ${mot}${n > 1 ? 's' : ''}`
+}
+
+/** Une ligne du tableau (Registre : `SortableClasseurCard`). */
+function LigneClasseur({
   classeur,
+  stats,
+  statsEtat,
   canDrag,
   canDelete,
-  lectureSeule,
-  prive,
+  avecAcces,
+  acces,
+  onOpen,
   onDelete,
   onExport,
 }: {
   classeur: DbClasseur
-  /** Peut réordonner la liste (la carte entière est la poignée). */
+  stats: StatsClasseur | undefined
+  statsEtat: 'chargement' | 'erreur' | 'ok'
+  /** Peut réordonner la liste (poignée de la ligne). */
   canDrag: boolean
-  /** Peut modifier CE classeur (suppression douce). */
   /** Supprimer le classeur : gestion seule. */
   canDelete: boolean
-  /** A le niveau écriture mais pas sur ce classeur : cadenas. */
-  lectureSeule: boolean
-  /** Fermé à tous (vu de la gestion). */
-  prive: boolean
+  /** La colonne Accès existe (gestion, ou écriture sur la page). */
+  avecAcces: boolean
+  /** Contenu de la colonne Accès ; `null` = pas encore lu. */
+  acces: Acces | null
+  onOpen: () => void
   onDelete: () => void
   onExport?: () => void
 }) {
@@ -333,78 +469,110 @@ function ClasseurCard({
     attributes,
     listeners,
     setNodeRef,
+    setActivatorNodeRef,
     transform,
     transition,
     isDragging,
   } = useSortable({
     id: classeur.id,
     disabled: !canDrag,
-    data: {
-      type: 'classeur',
-      classeurId: classeur.id,
-      title: classeur.name,
-      icon: classeur.icon,
-    },
+    data: { type: 'classeur', classeurId: classeur.id, title: classeur.name },
   })
-  const actions = (onExport !== undefined ? 1 : 0) + (canDelete ? 1 : 0)
+
+  // Un classeur sans chapitre n'a aucune ligne de compteurs : zéro, connu.
+  const chapitres = stats?.chapitres ?? 0
+  const documents = stats?.documents ?? 0
+  const misAJour = stats?.misAJour ?? classeur.updated_at
+  const chiffre = (n: number) =>
+    statsEtat === 'chargement' ? (
+      <Skeleton className="ml-auto h-3.5 w-6" />
+    ) : statsEtat === 'erreur' ? (
+      '—'
+    ) : (
+      n
+    )
 
   return (
-    <div
+    <tr
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform), transition }}
-      {...attributes}
-      {...(canDrag ? listeners : {})}
+      onClick={onOpen}
       className={cn(
-        'group relative',
-        canDrag && CLASSES_CARTE_GLISSABLE,
-        isDragging && 'z-50 opacity-30',
+        TABLEAU_CLASSEURS.ligne,
+        'cursor-pointer',
+        isDragging && 'relative z-50 bg-card opacity-60',
       )}
     >
-      <Link
-        to="/classeur/$classeurId"
-        params={{ classeurId: String(classeur.id) }}
-        className={cn(
-          'flex w-full items-center gap-4 rounded-xl border border-border bg-card px-5 py-4 text-left transition-colors hover:bg-accent',
-          actions === 2 && 'pr-20',
-          actions === 1 && 'pr-12',
-        )}
-      >
-        <Icon className="size-5 shrink-0 text-muted-foreground" />
-        <div className="flex min-h-10 min-w-0 flex-1 flex-col justify-center gap-0.5">
-          <span className="truncate text-sm font-medium">{classeur.name}</span>
-          {sousTitre !== '' && (
-            <span className="truncate text-xs text-muted-foreground">
-              {sousTitre}
-            </span>
-          )}
+      {canDrag && (
+        <td className="w-8 px-1">
+          <button
+            ref={setActivatorNodeRef}
+            type="button"
+            aria-label={`Déplacer le classeur ${classeur.name}`}
+            className="flex size-7 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground/60 hover:bg-accent hover:text-foreground active:cursor-grabbing"
+            onClick={(e) => e.stopPropagation()}
+            {...attributes}
+            {...listeners}
+          >
+            <GripVertical className="size-4" />
+          </button>
+        </td>
+      )}
+      <td className="px-3 py-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <Icon className="size-4" />
+          </span>
+          <div className="flex min-w-0 flex-col">
+            <Link
+              to="/classeur/$classeurId"
+              params={{ classeurId: String(classeur.id) }}
+              onClick={(e) => e.stopPropagation()}
+              className="truncate font-medium text-foreground hover:underline focus-visible:underline focus-visible:outline-none"
+            >
+              {classeur.name}
+            </Link>
+            {sousTitre !== '' && (
+              <span className="truncate text-xs text-muted-foreground">
+                {sousTitre}
+              </span>
+            )}
+            {/* Sous 640 px, les colonnes chiffrées passent sous le nom. */}
+            {statsEtat === 'ok' && (
+              <span className="truncate text-xs text-muted-foreground sm:hidden">
+                {pluriel(chapitres, 'chapitre')} ·{' '}
+                {pluriel(documents, 'document')}
+              </span>
+            )}
+          </div>
         </div>
-        {prive && (
-          <Tip label="Privé : visible de la gestion et des accès donnés">
-            <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
-              <EyeOff className="size-3.5" aria-label="Privé" />
-              <span className="hidden pointer-coarse:inline">Privé</span>
-            </span>
-          </Tip>
+      </td>
+      <td className="hidden px-3 py-3 text-right tabular-nums sm:table-cell">
+        {chiffre(chapitres)}
+      </td>
+      <td className="hidden px-3 py-3 text-right tabular-nums sm:table-cell">
+        {chiffre(documents)}
+      </td>
+      <td className="hidden px-3 py-3 text-muted-foreground md:table-cell">
+        {statsEtat === 'chargement' ? (
+          <Skeleton className="h-3.5 w-20" />
+        ) : (
+          formatDate(misAJour)
         )}
-        {lectureSeule && (
-          <Tip label="Lecture seule sur ce classeur">
-            <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
-              <Lock className="size-3.5" aria-label="Lecture seule" />
-              <span className="hidden pointer-coarse:inline">Lecture</span>
-            </span>
-          </Tip>
-        )}
-      </Link>
-
-      {actions > 0 && (
-        // Au doigt, pas de survol : actions visibles en permanence.
-        <div className="absolute inset-y-0 right-3 flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100">
+      </td>
+      {avecAcces && <AccesCellule acces={acces} />}
+      <td className="px-2 py-3">
+        <div
+          className="flex items-center justify-end gap-0.5"
+          onClick={(e) => e.stopPropagation()}
+        >
           {onExport && (
             <Tip label="Exporter en JSON">
               <Button
                 variant="ghost"
                 size="icon-sm"
                 aria-label={`Exporter le classeur ${classeur.name} en JSON`}
+                className="text-muted-foreground"
                 {...neDemarrePasDeGlisser}
                 onClick={onExport}
               >
@@ -418,7 +586,7 @@ function ClasseurCard({
                 variant="ghost"
                 size="icon-sm"
                 aria-label={`Supprimer le classeur ${classeur.name}`}
-                className="hover:bg-destructive/10 hover:text-destructive"
+                className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                 {...neDemarrePasDeGlisser}
                 onClick={onDelete}
               >
@@ -427,7 +595,22 @@ function ClasseurCard({
             </Tip>
           )}
         </div>
-      )}
-    </div>
+      </td>
+    </tr>
+  )
+}
+
+function AccesCellule({ acces }: { acces: Acces | null }) {
+  if (acces === null) return <td className="hidden px-3 py-3 sm:table-cell" />
+  const Icone = acces.icone
+  return (
+    <td className="hidden px-3 py-3 sm:table-cell">
+      <Tip label={acces.aide}>
+        <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+          {Icone && <Icone className="size-3.5" />}
+          {acces.libelle}
+        </span>
+      </Tip>
+    </td>
   )
 }

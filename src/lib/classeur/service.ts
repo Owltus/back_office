@@ -39,6 +39,8 @@ import type {
   ElementBrut,
 } from '#/lib/classeur/corbeille.ts'
 import { evolutionVersion } from '#/lib/classeur/versionDocument.ts'
+import { agregerStats } from '#/lib/classeur/statsClasseurs.ts'
+import type { StatsClasseur } from '#/lib/classeur/statsClasseurs.ts'
 
 // ---------------------------------------------------------------------------
 // Garde d'écriture : points de restauration automatiques
@@ -379,6 +381,27 @@ export async function fetchClasseurs(): Promise<DbClasseur[]> {
     .order('id', { ascending: true })
   if (error) throw error
   return data
+}
+
+/**
+ * Compteurs du tableau des classeurs : UNE lecture sur les chapitres non
+ * supprimés, chacun avec le compte de ses documents non supprimés et le plus
+ * récent d'entre eux (deux embarqués de la même table, filtrés et bornés à
+ * une ligne). La RLS ne rend que les chapitres des classeurs lisibles.
+ */
+export async function fetchStatsClasseurs(): Promise<StatsClasseur[]> {
+  const { data, error } = await supabase
+    .from(CHAPTERS_TABLE)
+    .select(
+      'classeur_id, updated_at, documents:classeur_documents(count), dernier:classeur_documents(updated_at)',
+    )
+    .is('deleted_at', null)
+    .is('documents.deleted_at', null)
+    .is('dernier.deleted_at', null)
+    .order('updated_at', { referencedTable: 'dernier', ascending: false })
+    .limit(1, { referencedTable: 'dernier' })
+  if (error) throw error
+  return agregerStats(data)
 }
 
 /** `null` si absent ou supprimé (la page affiche « introuvable »). */
