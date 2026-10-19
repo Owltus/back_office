@@ -43,15 +43,21 @@ import {
   consignesChapitre,
   consignesDocument,
 } from '#/lib/classeur/merge/consignes.ts'
-import { NOTE_EXPORT, construireExport } from '#/lib/classeur/merge/schema.ts'
+import {
+  NOTE_EXPORT,
+  construireExport,
+  lirePorteeObjet,
+} from '#/lib/classeur/merge/schema.ts'
 import type {
   ClasseurJson,
-  ItemJson,
   MetadataJson,
+  Portee,
 } from '#/lib/classeur/merge/schema.ts'
+import { sansHorodatage } from '#/lib/classeur/merge/importIa.ts'
 import { planifierFusion } from '#/lib/classeur/merge/merge.ts'
 import { numeroDocument } from '#/lib/classeur/versionDocument.ts'
 import type { NumeroVersion } from '#/lib/classeur/versionDocument.ts'
+
 import type {
   ActionApercu,
   ActionFusion,
@@ -61,18 +67,11 @@ import type {
   PlanFusion,
 } from '#/lib/classeur/merge/merge.ts'
 
+export type { Portee } from '#/lib/classeur/merge/schema.ts'
+
 // ---------------------------------------------------------------------------
 // Portée
 // ---------------------------------------------------------------------------
-
-export type Portee =
-  | { type: 'chapitre'; chapitre_uuid: string; chapitre_label: string }
-  | {
-      type: 'document'
-      document_uuid: string
-      document_title: string
-      chapitre_label: string
-    }
 
 /** Fichier d'export limité : `_metadata` enrichi de la portée et des consignes. */
 export interface ExportPortee extends ClasseurJson {
@@ -187,8 +186,9 @@ export function construireExportDocument(
 
 /**
  * `_metadata.portee` du texte brut, si bien formée ; `null` sinon (fichier
- * d'un classeur complet, ou portée retirée par le LLM). `parseImportJson`
- * ne la retient pas : elle n'existe pas chez Registre.
+ * de Registre, point de restauration, ou portée retirée par le LLM).
+ * `parseImportJson` la retient aussi, dans `_metadata.portee` (même lecture,
+ * `lirePorteeObjet`) ; Registre l'ignore.
  */
 export function lirePortee(texte: string): Portee | null {
   let brut: unknown
@@ -200,26 +200,7 @@ export function lirePortee(texte: string): Portee | null {
   if (typeof brut !== 'object' || brut === null) return null
   const meta = (brut as { _metadata?: unknown })._metadata
   if (typeof meta !== 'object' || meta === null) return null
-  const p = (meta as { portee?: unknown }).portee
-  if (typeof p !== 'object' || p === null) return null
-  const o = p as Record<string, unknown>
-  const texteOu = (v: unknown) => (typeof v === 'string' ? v : '')
-  if (o.type === 'chapitre' && typeof o.chapitre_uuid === 'string') {
-    return {
-      type: 'chapitre',
-      chapitre_uuid: o.chapitre_uuid,
-      chapitre_label: texteOu(o.chapitre_label),
-    }
-  }
-  if (o.type === 'document' && typeof o.document_uuid === 'string') {
-    return {
-      type: 'document',
-      document_uuid: o.document_uuid,
-      document_title: texteOu(o.document_title),
-      chapitre_label: texteOu(o.chapitre_label),
-    }
-  }
-  return null
+  return lirePorteeObjet((meta as { portee?: unknown }).portee)
 }
 
 /**
@@ -274,18 +255,6 @@ export interface OptionsPortee {
 }
 
 const cleItem = (kind: string, id: number) => `${kind}:${id}`
-
-/**
- * Horodatage du fichier RETIRÉ : la base date la réimportation à `now()`.
- * En remplacement, la fusion recopie l'`updated_at` du fichier (E6) — un
- * document réimporté aurait repris sa date d'EXPORT, et un éditeur ouvert
- * avant la réimportation (sauvegarde conditionnée à cette date) aurait
- * écrasé le travail du LLM sans voir de conflit.
- */
-function sansHorodatage(item: ItemJson): ItemJson {
-  const { updated_at: _ignore, ...reste } = item
-  return reste
-}
 
 /**
  * Plan d'un réimport limité à `cible`. Jette une `Error` au message destiné

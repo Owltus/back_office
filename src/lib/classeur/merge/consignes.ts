@@ -85,7 +85,7 @@ function assembler(
 export function consignesClasseur(nom: string): string[] {
   return assembler(
     `PORTÉE : le classeur « ${nom} » en entier, tous ses chapitres. Garde dans ta réponse TOUS les chapitres et éléments, même ceux que tu ne modifies pas.`,
-    "enregistrer le bloc dans un fichier .json (propose-le en téléchargement si tu peux), puis dans l'application, sur l'accueil du classeur, ligne Importer un JSON, choisir ou déposer ce fichier.",
+    "dans l'application, sur l'accueil du classeur, ligne Importer un JSON, choix Fichier rendu par une IA : coller le bloc (ou un fichier .json, si tu peux en proposer un).",
     [
       AJOUT_ELEMENT,
       'AJOUTER un chapitre : { "uid", "label", "icon": "FileText", "description", "sort_order", "items": [] } SANS `uuid`.',

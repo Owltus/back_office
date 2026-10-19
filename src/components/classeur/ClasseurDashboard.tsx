@@ -481,7 +481,7 @@ export function ClasseurDashboard({
                   <LigneAction
                     icon={survolDepot ? Upload : FileDown}
                     title="Importer un JSON"
-                    description="Mettre à jour depuis un export"
+                    description="Réponse d'une IA ou fichier"
                     titreOccupe="Import en cours..."
                     onClick={action(onImporter)}
                     disabled={!pret || busy !== null}

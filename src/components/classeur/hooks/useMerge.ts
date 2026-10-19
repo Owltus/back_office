@@ -5,6 +5,7 @@ import { classeurKeys } from '#/lib/classeur/keys.ts'
 import {
   appliquerFusion,
   appliquerFusionPortee,
+  appliquerImportIa,
   importerCommeNouveauClasseur,
 } from '#/lib/classeur/merge/apply.ts'
 import {
@@ -36,31 +37,52 @@ export function useMergeHistory(classeurId: number) {
   })
 }
 
+/**
+ * D'où vient le fichier du classeur complet (D1 du plan
+ * `classeur-echange-ia-2026-10-19`) : `ia` (défaut à l'écran) = le fichier
+ * fait foi, rien n'est supprimé sans `supprimerAbsents` ; `registre` =
+ * fusion ou remplacement, comme avant (D2).
+ */
+export type ProvenanceImport = 'ia' | 'registre'
+
 export interface FusionArgs {
   classeurId: number
   fichier: ClasseurJson
+  /** Absent : `registre` (appelants d'avant l'étape 5). */
+  provenance?: ProvenanceImport
+  /** Fichier de Registre : remplacer au lieu de fusionner. */
   replace: boolean
+  /** Fichier d'une IA : supprimer ce qui n'est plus dans le fichier. */
+  supprimerAbsents?: boolean
   sourceName: string
   /** Clés des éléments refusés dans l'aperçu (`clesActions`) ; absent = tout. */
   exclus?: ReadonlySet<string>
 }
 
-/** Fusionne un fichier déjà lu et validé dans un classeur existant. */
+/** Importe un fichier déjà lu et validé dans un classeur existant. */
 export function useAppliquerFusion() {
   const invalider = useInvaliderClasseur()
   return useMutation({
     mutationFn: ({
       classeurId,
       fichier,
+      provenance,
       replace,
+      supprimerAbsents,
       sourceName,
       exclus,
     }: FusionArgs) =>
-      appliquerFusion(classeurId, fichier, {
-        replace,
-        sourceName,
-        ...(exclus !== undefined ? { exclus } : {}),
-      }),
+      provenance === 'ia'
+        ? appliquerImportIa(classeurId, fichier, {
+            supprimerAbsents: supprimerAbsents ?? false,
+            sourceName,
+            ...(exclus !== undefined ? { exclus } : {}),
+          })
+        : appliquerFusion(classeurId, fichier, {
+            replace,
+            sourceName,
+            ...(exclus !== undefined ? { exclus } : {}),
+          }),
     onSettled: () => invalider(),
   })
 }

@@ -169,6 +169,10 @@ describe("mode d'emploi — ce qui dépend de la portée", () => {
     const t = texte(LES_TROIS.classeur)
     expect(t).toMatch(/^PORTÉE : le classeur/)
     expect(t).toContain("sur l'accueil du classeur, ligne Importer un JSON")
+    // Étape 5 : la réponse se COLLE, comme pour un chapitre ou un document.
+    expect(t).toContain('choix Fichier rendu par une IA')
+    expect(t).toContain('coller le bloc')
+    expect(t).not.toContain('enregistrer le bloc dans un fichier')
     expect(t).toContain('AJOUTER un chapitre')
     expect(t).toContain('AJOUTER un élément')
   })

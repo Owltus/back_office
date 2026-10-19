@@ -477,6 +477,32 @@ describe('construireExport — forme exacte de do_export_json', () => {
     )
   })
 
+  it('D10 (étape 5) : l’export d’un classeur porte sa portée, relue à l’identique', () => {
+    expect(exp._metadata?.portee).toEqual({
+      type: 'classeur',
+      classeur_uuid: classeur().uuid,
+      classeur_name: classeur().name,
+    })
+    expect(parseImportJson(JSON.stringify(exp))._metadata?.portee).toEqual(
+      exp._metadata?.portee,
+    )
+    // Portée abîmée (par une IA) : traitée comme absente, jamais une erreur.
+    for (const abimee of [
+      { type: 'classeur' },
+      { type: 'autre', classeur_uuid: 'x' },
+      'classeur',
+      null,
+    ]) {
+      const brut = JSON.parse(JSON.stringify(exp)) as {
+        _metadata: Record<string, unknown>
+      }
+      brut._metadata.portee = abimee
+      expect(
+        parseImportJson(JSON.stringify(brut))._metadata?.portee,
+      ).toBeUndefined()
+    }
+  })
+
   it('`_metadata` garde les cinq clés de Registre, avec leurs types', () => {
     const m = exp._metadata as unknown as Record<string, unknown>
     expect(typeof m.description).toBe('string')

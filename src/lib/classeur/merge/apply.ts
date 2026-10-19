@@ -42,6 +42,11 @@ import type {
 } from '#/lib/classeur/merge/merge.ts'
 import { planifierFusion } from '#/lib/classeur/merge/merge.ts'
 import {
+  controlerPorteeClasseur,
+  planifierImportIa,
+} from '#/lib/classeur/merge/importIa.ts'
+import type { OptionsImportIa } from '#/lib/classeur/merge/importIa.ts'
+import {
   chapitresDesLignes,
   filtrerPlan,
   lignesImport,
@@ -82,7 +87,7 @@ import type {
   ItemPatch,
   OptionsCreation,
 } from '#/lib/classeur/service.ts'
-import type { ItemKind } from '#/lib/classeur/types.ts'
+import type { DbClasseur, ItemKind } from '#/lib/classeur/types.ts'
 
 // ---------------------------------------------------------------------------
 // Écrivain : les huit écritures que le plan peut demander
@@ -434,6 +439,81 @@ export async function previsualiserFusionComplete(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Import d'un fichier rendu par une IA (étape 5, D1)
+// ---------------------------------------------------------------------------
+
+/**
+ * Plan d'un import « fichier rendu par une IA » : portée contrôlée (un
+ * export de chapitre ou de document est refusé, un autre classeur averti),
+ * puis `planifierImportIa`. Pur.
+ */
+function planImportIa(
+  local: EtatLocal,
+  classeur: Pick<DbClasseur, 'uuid' | 'name'>,
+  fichier: ClasseurJson,
+  options: OptionsImportIa,
+): PlanFusion {
+  const avertissements = controlerPorteeClasseur(fichier, classeur)
+  const plan = planifierImportIa(local, fichier, options)
+  return avertissements.length === 0
+    ? plan
+    : { ...plan, warnings: [...avertissements, ...plan.warnings] }
+}
+
+/** Aperçu de l'import d'un fichier d'IA dans le classeur, sans écriture. */
+export async function previsualiserImportIa(
+  classeurId: number,
+  fichier: ClasseurJson,
+  options: OptionsImportIa,
+): Promise<ApercuFusion> {
+  const [classeur, local] = await Promise.all([
+    fetchClasseur(classeurId),
+    chargerEtatLocal(classeurId),
+  ])
+  if (classeur === null) throw new Error('Classeur introuvable ou supprimé.')
+  const plan = planImportIa(local, classeur, fichier, options)
+  return {
+    plan,
+    lignes: lignesImport(local, plan),
+    chapitres: chapitresDesLignes(local, plan),
+  }
+}
+
+export interface OptionsImportIaApplication extends OptionsImportIa {
+  sourceName: string
+  /** Clés (`clesActions`) des éléments refusés dans l'aperçu. */
+  exclus?: ReadonlySet<string>
+}
+
+/**
+ * Applique un fichier d'IA au classeur : MÊME circuit que `appliquerFusion`
+ * (plan recalculé sur l'état relu, refus filtrés DANS le planificateur,
+ * point de restauration AVANT la première écriture, élagage). Tout refuser
+ * n'écrit rien, pas même un point.
+ */
+export async function appliquerImportIa(
+  classeurId: number,
+  fichier: ClasseurJson,
+  options: OptionsImportIaApplication,
+): Promise<ResultatFusion> {
+  const { sourceName, exclus, supprimerAbsents } = options
+  let ignores = 0
+  const resultat = await appliquerPlanifie(
+    classeurId,
+    (local, classeur) => {
+      const filtre = filtrerPlan(
+        planImportIa(local, classeur, fichier, { supprimerAbsents }),
+        exclus ?? new Set(),
+      )
+      ignores = filtre.ignores
+      return filtre.plan
+    },
+    sourceName,
+  )
+  return exclus === undefined ? resultat : { ...resultat, ignores }
+}
+
 /** Aperçu d'un réimport limité : le plan et, par action, l'avant / après. */
 export interface ApercuPortee {
   plan: PlanFusion
@@ -496,14 +576,14 @@ export async function appliquerFusionPortee(
 /** Étapes (a) à (e) d'une fusion, quel que soit le planificateur. */
 async function appliquerPlanifie(
   classeurId: number,
-  planifier: (local: EtatLocal) => PlanFusion,
+  planifier: (local: EtatLocal, classeur: DbClasseur) => PlanFusion,
   sourceName: string,
 ): Promise<MergeResult> {
   // (a) état courant et plan
   const classeur = await fetchClasseur(classeurId)
   if (classeur === null) throw new Error('Classeur introuvable ou supprimé.')
   const local = await chargerEtatLocal(classeurId)
-  const plan = planifier(local)
+  const plan = planifier(local, classeur)
   if (plan.actions.length === 0) return plan.resultat
 
   // (b) instantané AVANT la première écriture — `construireExport` ne

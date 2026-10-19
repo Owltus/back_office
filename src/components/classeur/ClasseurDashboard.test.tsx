@@ -313,7 +313,7 @@ describe('ClasseurDashboard — en-tête fixe et panneau', () => {
     expect(ligne.textContent).toContain('Déposez le fichier ici')
     expect(ligne.className).toContain('bg-primary/10')
     fireEvent.dragLeave(ligne)
-    expect(ligne.textContent).toContain('Mettre à jour depuis un export')
+    expect(ligne.textContent).toContain("Réponse d'une IA ou fichier")
   })
 
   it('écriture : quatre sections, neuf lignes, comme la silhouette', () => {

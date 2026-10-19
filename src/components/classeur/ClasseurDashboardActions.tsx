@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { AlertCircle, CheckCircle2 } from 'lucide-react'
 
@@ -62,7 +62,7 @@ export function bilanFusion(r: ResultatFusion): string {
     r.ignores !== undefined && r.ignores > 0
       ? ` ${r.ignores > 1 ? `${r.ignores} éléments ignorés` : '1 élément ignoré'} à votre demande.`
       : ''
-  return `Fusion terminée : ${parts.join(', ')}.${ignores}${avertissements}`
+  return `Import terminé : ${parts.join(', ')}.${ignores}${avertissements}`
 }
 
 /**
@@ -72,9 +72,10 @@ export function bilanFusion(r: ResultatFusion): string {
  *   - Exporter en Markdown télécharge l'archive ZIP ; Exporter en JSON ouvre
  *     son dialogue (`ExportJsonClasseurDialog` : Copier pour une IA ou
  *     Télécharger le fichier v2, sans aucun choix) ;
- *   - Importer un JSON ouvre le sélecteur de fichier puis la prévisualisation
- *     de fusion (`MergePreviewDialog`), qui écrit un instantané avant toute
- *     écriture ; Historique ouvre les instantanés restaurables (étape 6).
+ *   - Importer un JSON ouvre le dialogue d'import (`MergePreviewDialog`) :
+ *     coller la réponse d'une IA ou choisir un fichier (un fichier déposé sur
+ *     la ligne l'ouvre déjà chargé), aperçu, puis un point de restauration
+ *     avant toute écriture ; Historique ouvre les instantanés restaurables.
  *
  * Porte l'état (aperçu, export en cours, fichier à fusionner, bilan, erreur)
  * pour que la route reste mince. Les périodicités, nécessaires aux feuilles
@@ -89,6 +90,9 @@ export function ClasseurDashboardActions({
   const queryClient = useQueryClient()
   const [apercu, setApercu] = useState<Apercu>(null)
   const [periodicites, setPeriodicites] = useState<DbPeriodicite[]>([])
+  // Import du classeur : dialogue ouvert, avec le fichier déposé s'il y en a
+  // un (sinon la personne y colle la réponse de l'IA ou choisit un fichier).
+  const [importOuvert, setImportOuvert] = useState(false)
   const [fichierImport, setFichierImport] = useState<File | null>(null)
   const [historiqueOuvert, setHistoriqueOuvert] = useState(false)
   const [imagesOuvertes, setImagesOuvertes] = useState(false)
@@ -98,7 +102,6 @@ export function ClasseurDashboardActions({
   const { canWrite } = useDroitsClasseur(classeurId)
   const [bilan, setBilan] = useState<string | null>(null)
   const [erreurFichier, setErreurFichier] = useState<string | null>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
 
   const lirePeriodicites = () =>
     queryClient.ensureQueryData({
@@ -138,6 +141,14 @@ export function ClasseurDashboardActions({
     setErreurFichier(null)
     setBilan(null)
     setFichierImport(file)
+    setImportOuvert(true)
+  }
+
+  const ouvrirImport = () => {
+    setErreurFichier(null)
+    setBilan(null)
+    setFichierImport(null)
+    setImportOuvert(true)
   }
 
   const busy: DashboardBusy = exporter.isPending
@@ -155,18 +166,6 @@ export function ClasseurDashboardActions({
 
   return (
     <>
-      {/* Sélecteur de fichier caché : le clic sur la carte Importer l'ouvre. */}
-      <input
-        ref={inputRef}
-        type="file"
-        accept=".json,application/json"
-        className="hidden"
-        onChange={(e) => {
-          recevoirFichier(e.target.files?.[0])
-          e.target.value = ''
-        }}
-      />
-
       <ClasseurDashboard
         classeurId={classeurId}
         // Alertes en tête de la zone qui défile, sous l'en-tête fixe.
@@ -200,7 +199,7 @@ export function ClasseurDashboardActions({
           exporter.mutate({ type: 'markdown', ctx: c })
         }
         onExporterJson={setExportJson}
-        onImporter={() => inputRef.current?.click()}
+        onImporter={ouvrirImport}
         onFichierDepose={recevoirFichier}
         onHistorique={() => setHistoriqueOuvert(true)}
         onImages={() => setImagesOuvertes(true)}
@@ -209,14 +208,16 @@ export function ClasseurDashboardActions({
       />
 
       <MergePreviewDialog
-        open={fichierImport !== null}
+        open={importOuvert}
         onOpenChange={(open) => {
+          setImportOuvert(open)
           if (!open) setFichierImport(null)
         }}
         classeurId={classeurId}
         file={fichierImport}
         onDone={(r) => {
           setBilan(bilanFusion(r))
+          setImportOuvert(false)
           setFichierImport(null)
         }}
       />

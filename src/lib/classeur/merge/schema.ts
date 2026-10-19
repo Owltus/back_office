@@ -48,6 +48,23 @@ export interface MetadataPeriodiciteJson {
   nombre: number
 }
 
+/**
+ * Ce que représente un export (`_metadata.portee`, ajout du Back Office,
+ * ignoré par Registre) : un classeur entier (D10 du plan
+ * `classeur-echange-ia-2026-10-19` : avertir quand on importe le fichier
+ * d'un autre classeur), un chapitre ou un document (refuser un fichier
+ * appliqué au mauvais endroit).
+ */
+export type Portee =
+  | { type: 'classeur'; classeur_uuid: string; classeur_name: string }
+  | { type: 'chapitre'; chapitre_uuid: string; chapitre_label: string }
+  | {
+      type: 'document'
+      document_uuid: string
+      document_title: string
+      chapitre_label: string
+    }
+
 /** Bloc `_metadata` : informatif, jamais requis à l'import. */
 export interface MetadataJson {
   description: string
@@ -57,6 +74,8 @@ export interface MetadataJson {
   periodicites: MetadataPeriodiciteJson[]
   /** Consignes pour un LLM (`consignes.ts`) — ajout du Back Office, ignoré par Registre. */
   instructions?: string[]
+  /** Portée de l'export (voir `Portee`) ; absente d'un point de restauration. */
+  portee?: Portee
 }
 
 /**
@@ -308,17 +327,17 @@ export const SCHEMA_DESCRIPTIF = {
     _description: "Règles de validation et de comportement à l'import.",
     format_version: 'Accepte 1 ou 2.',
     metadata_ignored:
-      "Registre ignore le bloc _metadata à l'import. Le Back Office en lit periodicites (voir ce bloc) et portee (export d'un chapitre ou d'un document : l'import est limité à cette portée) ; le reste est informatif.",
+      "Registre ignore le bloc _metadata à l'import. Le Back Office en lit periodicites (voir ce bloc) et portee (ce que l'export représente : un fichier de chapitre ou de document n'est importé que dans sa portée, celui d'un autre classeur est signalé) ; le reste est informatif.",
     matching_priority:
       '1) UUID si présent → recherche dans tout le classeur. 2) Fallback slug+titre (v1).',
     last_write_wins:
-      "Fusion : si un item est trouvé par UUID, la version la plus récente (updated_at) gagne. Back Office, en remplacement et à l'import d'un chapitre ou d'un document : le fichier fait foi, horodatages ignorés.",
+      "Fusion : si un item est trouvé par UUID, la version la plus récente (updated_at) gagne. Back Office, en remplacement, à l'import d'un fichier rendu par une IA et à l'import d'un chapitre ou d'un document : le fichier fait foi, horodatages ignorés.",
     soft_delete_respected:
       "Fusion : un item supprimé localement (soft delete) n'est pas recréé, compté comme 'skipped'. Back Office, en remplacement : il est restauré.",
     move_detection:
       "Registre : un item trouvé par UUID dans un chapitre différent n'est pas re-déplacé, son contenu est mis à jour si plus récent. Back Office : quand le fichier l'emporte, l'item est aussi déplacé dans le chapitre du fichier.",
     no_deletion:
-      "Registre : le merge n'efface jamais, les items locaux absents du JSON sont conservés. Back Office : la fusion n'efface rien non plus ; le remplacement (classeur complet) supprime, en corbeille restaurable, les items et chapitres absents du JSON ; à l'import d'un chapitre, un item absent n'est supprimé que si l'option est cochée.",
+      "Registre : le merge n'efface jamais, les items locaux absents du JSON sont conservés. Back Office : la fusion n'efface rien non plus ; le remplacement (classeur complet) supprime, en corbeille restaurable, les items et chapitres absents du JSON ; à l'import d'un fichier rendu par une IA ou d'un chapitre, un item absent n'est supprimé que si l'option est cochée.",
   },
 } as const
 
@@ -475,6 +494,38 @@ function lireChapitre(v: unknown, position: number): ChapterJson {
   return chapitre
 }
 
+/**
+ * `_metadata.portee` si bien formée, sinon `null` (fichier de Registre, point
+ * de restauration, ou portée abîmée par l'IA : traitée comme absente).
+ */
+export function lirePorteeObjet(p: unknown): Portee | null {
+  if (!estObjet(p)) return null
+  const texteOu = (v: unknown) => (typeof v === 'string' ? v : '')
+  if (p.type === 'classeur' && typeof p.classeur_uuid === 'string') {
+    return {
+      type: 'classeur',
+      classeur_uuid: p.classeur_uuid,
+      classeur_name: texteOu(p.classeur_name),
+    }
+  }
+  if (p.type === 'chapitre' && typeof p.chapitre_uuid === 'string') {
+    return {
+      type: 'chapitre',
+      chapitre_uuid: p.chapitre_uuid,
+      chapitre_label: texteOu(p.chapitre_label),
+    }
+  }
+  if (p.type === 'document' && typeof p.document_uuid === 'string') {
+    return {
+      type: 'document',
+      document_uuid: p.document_uuid,
+      document_title: texteOu(p.document_title),
+      chapitre_label: texteOu(p.chapitre_label),
+    }
+  }
+  return null
+}
+
 /** `_metadata.periodicites` si bien formé, sinon `undefined` (bloc informatif). */
 function lireMetadata(v: unknown): MetadataJson | undefined {
   if (!estObjet(v)) return undefined
@@ -504,6 +555,8 @@ function lireMetadata(v: unknown): MetadataJson | undefined {
   ) {
     metadata.instructions = v.instructions
   }
+  const portee = lirePorteeObjet(v.portee)
+  if (portee !== null) metadata.portee = portee
   return metadata
 }
 
@@ -658,7 +711,17 @@ export function construireExport(
       periodicites: [...periodicites]
         .sort((a, b) => a.id - b.id)
         .map((p) => ({ id: p.id, label: p.label, nombre: p.nombre })),
-      ...(pourIa ? { instructions: consignesClasseur(classeur.name) } : {}),
+      ...(pourIa
+        ? {
+            instructions: consignesClasseur(classeur.name),
+            // D10 : l'import dira si le fichier vient d'un autre classeur.
+            portee: {
+              type: 'classeur' as const,
+              classeur_uuid: classeur.uuid,
+              classeur_name: classeur.name,
+            },
+          }
+        : {}),
     },
     // `COALESCE(icon, 'BookOpen')` côté Rust : une icône vide prend le défaut.
     classeur: {
