@@ -286,7 +286,7 @@ export function ClasseurList({
                   <th
                     className={cn(
                       TABLEAU_CLASSEURS.th,
-                      'hidden w-24 text-right sm:table-cell',
+                      'hidden w-24 text-center sm:table-cell',
                     )}
                   >
                     Chapitres
@@ -294,7 +294,7 @@ export function ClasseurList({
                   <th
                     className={cn(
                       TABLEAU_CLASSEURS.th,
-                      'hidden w-24 text-right sm:table-cell',
+                      'hidden w-24 text-center sm:table-cell',
                     )}
                   >
                     Documents
@@ -302,7 +302,7 @@ export function ClasseurList({
                   <th
                     className={cn(
                       TABLEAU_CLASSEURS.th,
-                      'hidden w-24 text-left md:table-cell',
+                      'hidden w-24 text-center md:table-cell',
                     )}
                   >
                     Modifié le
@@ -626,7 +626,7 @@ function LigneClasseur({
   const misAJour = stats?.misAJour ?? classeur.updated_at
   const chiffre = (n: number) =>
     statsEtat === 'chargement' ? (
-      <Skeleton className="ml-auto h-3.5 w-6" />
+      <Skeleton className="mx-auto h-3.5 w-6" />
     ) : statsEtat === 'erreur' ? (
       '—'
     ) : (
@@ -694,15 +694,15 @@ function LigneClasseur({
           </div>
         </div>
       </td>
-      <td className="hidden px-3 py-3 text-right tabular-nums sm:table-cell">
+      <td className="hidden px-3 py-3 text-center tabular-nums sm:table-cell">
         {chiffre(chapitres)}
       </td>
-      <td className="hidden px-3 py-3 text-right tabular-nums sm:table-cell">
+      <td className="hidden px-3 py-3 text-center tabular-nums sm:table-cell">
         {chiffre(documents)}
       </td>
-      <td className="hidden px-3 py-3 text-muted-foreground md:table-cell">
+      <td className="hidden px-3 py-3 text-center text-muted-foreground md:table-cell">
         {statsEtat === 'chargement' ? (
-          <Skeleton className="h-3.5 w-14" />
+          <Skeleton className="mx-auto h-3.5 w-14" />
         ) : (
           formatDateCourte(misAJour)
         )}

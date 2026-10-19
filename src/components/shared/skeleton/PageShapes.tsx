@@ -622,7 +622,7 @@ export function FormeClasseurListe({
                   'hidden w-24 sm:table-cell',
                 )}
               >
-                <Skeleton className="ml-auto h-3 w-14" />
+                <Skeleton className="mx-auto h-3 w-14" />
               </th>
               <th
                 className={cn(
@@ -630,7 +630,7 @@ export function FormeClasseurListe({
                   'hidden w-24 sm:table-cell',
                 )}
               >
-                <Skeleton className="ml-auto h-3 w-14" />
+                <Skeleton className="mx-auto h-3 w-14" />
               </th>
               <th
                 className={cn(
@@ -638,7 +638,7 @@ export function FormeClasseurListe({
                   'hidden w-24 md:table-cell',
                 )}
               >
-                <Skeleton className="h-3 w-16" />
+                <Skeleton className="mx-auto h-3 w-16" />
               </th>
               {acces && (
                 <th
@@ -669,7 +669,7 @@ export function FormeClasseurListe({
                   <Skeleton className="ml-auto h-3.5 w-6" />
                 </td>
                 <td className="hidden px-3 py-3 md:table-cell">
-                  <Skeleton className="h-3.5 w-14" />
+                  <Skeleton className="mx-auto h-3.5 w-14" />
                 </td>
                 {acces && (
                   <td className="hidden px-3 py-3 sm:table-cell">
