@@ -1,6 +1,6 @@
 # Plan — Classeur : échange JSON avec une IA, refait pour des non-initiés
 
-> **EN COURS.** Plan écrit le 2026-10-19. Étapes 1 à 4 faites le 2026-10-19 (réponses par défaut de D-decisions.md, partie B) ; 5 à 8 à faire.
+> **EN COURS.** Plan écrit le 2026-10-19. Étapes 1 à 4 faites le 2026-10-19, 5 à 7 le 2026-10-20 (réponses par défaut de D-decisions.md, partie B) ; 8 à faire.
 
 ---
 
@@ -55,9 +55,9 @@ référence (l'utilisateur demande par numéro ; ne jamais renuméroter).
 | 2   | [2-mode-emploi-ia.md](./2-mode-emploi-ia.md)                       | Mode d'emploi pour l'IA                   | 1         | P0       | 4 h    | FAIT ed977a7 : mode d'emploi en 6 parties + quatrième mur, 5,7 à 5,9 ko ; schéma corrigé ; libellé `periodicite` (D8) | ⚠        |
 | 3   | [3-export-un-clic.md](./3-export-un-clic.md)                       | Export en un clic partout                 | 1, 2      | P0       | 3 h    | FAIT 3ad1ccd : Copier / Télécharger partout, repli téléchargement, Copier pour une IA dans le menu de la liste        |          |
 | 4   | [4-instantanes-legers.md](./4-instantanes-legers.md)               | Points de restauration sans mode d'emploi | 2         | P2       | 1 h    | FAIT 1b49a3d : instantanés sans `instructions`, cinq clés de Registre gardées                                         |          |
-| 5   | [5-import-fichier-ia.md](./5-import-fichier-ia.md)                 | Import d'un fichier d'IA sans piège       | 2         | P0       | 5 h    | Le fichier fait foi, sans horodatage ; suppressions sur case                                                          | ⚠        |
-| 6   | [6-validation-avant-ecriture.md](./6-validation-avant-ecriture.md) | Validation avant toute écriture           | 5         | P0       | 3 h    | `nombre`, uuid, périodicités contrôlés avant l'instantané                                                             | ⚠        |
-| 7   | [7-relecture-quatrieme-mur.md](./7-relecture-quatrieme-mur.md)     | Relecture : quatrième mur et 4 natures    | 5         | P1       | 3 h    | Alerte sur « généré par IA », « à vérifier »… partout                                                                 |          |
+| 5   | [5-import-fichier-ia.md](./5-import-fichier-ia.md)                 | Import d'un fichier d'IA sans piège       | 2         | P0       | 5 h    | FAIT 1f6de60 : choix IA / Registre, collage, fichier qui fait foi sans horodatage, suppressions sur case, portée D10  | ⚠        |
+| 6   | [6-validation-avant-ecriture.md](./6-validation-avant-ecriture.md) | Validation avant toute écriture           | 5         | P0       | 3 h    | FAIT a7f16a0 : V1-V8 avant le plan et le point, fichier valide intact, réglages en clair, nouveau classeur validé     | ⚠        |
+| 7   | [7-relecture-quatrieme-mur.md](./7-relecture-quatrieme-mur.md)     | Relecture : quatrième mur et 4 natures    | 5         | P1       | 3 h    | FAIT 65cb569 : liste fermée sans faux positif sur la base locale, toutes natures, éditeur, relecture avant création   |          |
 | 8   | [8-cloture.md](./8-cloture.md)                                     | Aide, CLAUDE.md, contrôle global          | 1-7       | P0       | 2 h    | Doc à jour, vérification locale, `/borg`                                                                              | ⚠        |
 
 ---
