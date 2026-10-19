@@ -635,7 +635,7 @@ export function FormeClasseurListe({
             <tr key={i} className={TABLEAU_CLASSEURS.ligne}>
               <td className="px-3 py-3">
                 <div className="flex items-center gap-3">
-                  <Skeleton className="size-8 shrink-0 rounded-lg" />
+                  <Skeleton className="size-9 shrink-0 rounded-lg" />
                   <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                     <Skeleton className="h-4 w-full max-w-48" />
                     <Skeleton className="h-3 w-28" />

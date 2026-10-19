@@ -510,8 +510,8 @@ function LigneClasseur({
     >
       <td className="px-3 py-3">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <Icon className="size-5" />
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <Icon className="size-6" />
           </span>
           <div className="flex min-w-0 flex-col">
             <Link
