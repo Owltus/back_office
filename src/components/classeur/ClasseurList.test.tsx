@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 
@@ -112,10 +112,9 @@ beforeEach(() => {
 })
 
 describe('ClasseurList — tableau', () => {
-  it('gestion : poignée, colonnes chiffrées, accès donné à tous', () => {
+  it('gestion : lignes glissables, colonnes chiffrées, accès donné à tous', () => {
     const { container, getByText } = rendre()
     expect(entetes(container)).toEqual([
-      'Ordre',
       'Classeur',
       'Chapitres',
       'Documents',
@@ -125,26 +124,35 @@ describe('ClasseurList — tableau', () => {
     ])
     expect(container.querySelectorAll('tbody tr')).toHaveLength(3)
     const l1 = cellules(container, 1)
-    expect(l1[2]).toBe('10')
-    expect(l1[3]).toBe('13')
-    expect(l1[5]).toBe('Privé')
-    expect(cellules(container, 2)[5]).toBe('Tous en écriture')
+    expect(l1[1]).toBe('10')
+    expect(l1[2]).toBe('13')
+    expect(l1[4]).toBe('Privé')
+    expect(cellules(container, 2)[4]).toBe('Tous en écriture')
     // Un classeur sans chapitre : zéro connu, pas un tiret.
-    expect(cellules(container, 3).slice(2, 4)).toEqual(['0', '0'])
+    expect(cellules(container, 3).slice(1, 3)).toEqual(['0', '0'])
     expect(getByText('Nouveau classeur')).toBeTruthy()
     expect(getByText('Importer')).toBeTruthy()
     expect(
       container.querySelectorAll('[aria-label^="Supprimer"]'),
     ).toHaveLength(3)
+    // Plus de poignée : c'est la ligne entière qui se glisse, et elle reste
+    // une ligne de tableau (pas de role="button").
     expect(container.querySelectorAll('[aria-label^="Déplacer"]')).toHaveLength(
-      3,
+      0,
     )
+    const lignes = container.querySelectorAll('tbody tr')
+    for (const tr of lignes) {
+      expect(tr.getAttribute('aria-roledescription')).toBe('sortable')
+      expect(tr.getAttribute('role')).toBeNull()
+    }
   })
 
-  it('écriture : son propre niveau, ni poignée ni suppression', () => {
+  it('écriture : son propre niveau, lignes non glissables, pas de suppression', () => {
     etat.page = 'ecriture'
     const { container } = rendre()
-    expect(entetes(container)).not.toContain('Ordre')
+    expect(
+      container.querySelector('tbody tr')!.getAttribute('aria-roledescription'),
+    ).toBeNull()
     expect(cellules(container, 1)[4]).toBe('Lecture')
     expect(cellules(container, 2)[4]).toBe('Modification')
     expect(
@@ -163,8 +171,8 @@ describe('ClasseurList — tableau', () => {
     etat.statsPending = true
     const { container } = rendre()
     const l1 = cellules(container, 1)
+    expect(l1[1]).toBe('')
     expect(l1[2]).toBe('')
-    expect(l1[3]).toBe('')
   })
 
   it('un clic sur la ligne ouvre le classeur, pas un clic sur un bouton', () => {
@@ -182,6 +190,25 @@ describe('ClasseurList — tableau', () => {
         '[aria-label="Supprimer le classeur Classeur 5"]',
       )!,
     )
+    expect(etat.navigate).not.toHaveBeenCalled()
+  })
+
+  it('glisser une ligne puis la lâcher ne l’ouvre pas', () => {
+    const { container } = rendre()
+    const ligne = container.querySelector('tbody tr:nth-child(2)')!
+    const cellule = ligne.querySelector('td:nth-child(2)')!
+    // Souris : appui, déplacement au-delà des 5 px, relâchement, puis le
+    // clic que le navigateur émet sur le même élément.
+    act(() => {
+      fireEvent.mouseDown(cellule, { button: 0, clientX: 10, clientY: 10 })
+    })
+    act(() => {
+      fireEvent.mouseMove(document, { clientX: 10, clientY: 40 })
+    })
+    act(() => {
+      fireEvent.mouseUp(document, { clientX: 10, clientY: 40 })
+    })
+    fireEvent.click(cellule)
     expect(etat.navigate).not.toHaveBeenCalled()
   })
 })

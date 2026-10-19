@@ -14,7 +14,6 @@ import {
   EyeOff,
   FileDown,
   FileUp,
-  GripVertical,
   Lock,
   Plus,
   Trash2,
@@ -24,6 +23,7 @@ import {
 
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import {
+  CLASSES_CARTE_GLISSABLE,
   neDemarrePasDeGlisser,
   useCapteursClasseur,
 } from '#/components/classeur/dnd/useCapteursClasseur.ts'
@@ -124,6 +124,9 @@ export function ClasseurList({
   // Souris 5 px, doigt : appui long (audit tactile 2026-09-28).
   const sensors = useCapteursClasseur()
 
+  // Le clic qui termine un glisser n'ouvre pas le classeur : dnd-kit
+  // l'arrête lui-même (écouteur `click` en capture gardé jusqu'au tour
+  // suivant, `AbstractPointerSensor`), testé dans `ClasseurList.test.tsx`.
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
     if (!over || active.id === over.id) return
@@ -181,7 +184,7 @@ export function ClasseurList({
       ? messageErreur(suppression.error, 'Suppression impossible')
       : erreurImport
 
-  const colonnes = { poignee: peutReordonner, acces: colonneAcces }
+  const colonnes = { acces: colonneAcces }
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
@@ -250,11 +253,6 @@ export function ClasseurList({
           <table className="w-full text-sm">
             <thead>
               <tr className={TABLEAU_CLASSEURS.entete}>
-                {colonnes.poignee && (
-                  <th className="w-8 px-1">
-                    <span className="sr-only">Ordre</span>
-                  </th>
-                )}
                 <th className={cn(TABLEAU_CLASSEURS.th, 'text-left')}>
                   Classeur
                 </th>
@@ -449,7 +447,7 @@ function LigneClasseur({
   classeur: DbClasseur
   stats: StatsClasseur | undefined
   statsEtat: 'chargement' | 'erreur' | 'ok'
-  /** Peut réordonner la liste (poignée de la ligne). */
+  /** Peut réordonner la liste : la ligne entière se glisse. */
   canDrag: boolean
   /** Supprimer le classeur : gestion seule. */
   canDelete: boolean
@@ -469,7 +467,6 @@ function LigneClasseur({
     attributes,
     listeners,
     setNodeRef,
-    setActivatorNodeRef,
     transform,
     transition,
     isDragging,
@@ -493,31 +490,24 @@ function LigneClasseur({
     )
 
   return (
+    // La ligne entière : un clic ouvre le classeur, un glisser (souris
+    // 5 px, doigt : appui long) le déplace. `role` retiré des attributs de
+    // dnd-kit : une ligne de tableau reste une ligne pour les lecteurs
+    // d'écran.
     <tr
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform), transition }}
+      {...(canDrag ? attributes : {})}
+      {...(canDrag ? listeners : {})}
+      role={undefined}
       onClick={onOpen}
       className={cn(
         TABLEAU_CLASSEURS.ligne,
         'cursor-pointer',
-        isDragging && 'relative z-50 bg-card opacity-60',
+        canDrag && CLASSES_CARTE_GLISSABLE,
+        isDragging && 'relative z-50 cursor-grabbing bg-card opacity-60',
       )}
     >
-      {canDrag && (
-        <td className="w-8 px-1">
-          <button
-            ref={setActivatorNodeRef}
-            type="button"
-            aria-label={`Déplacer le classeur ${classeur.name}`}
-            className="flex size-7 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground/60 hover:bg-accent hover:text-foreground active:cursor-grabbing"
-            onClick={(e) => e.stopPropagation()}
-            {...attributes}
-            {...listeners}
-          >
-            <GripVertical className="size-4" />
-          </button>
-        </td>
-      )}
       <td className="px-3 py-3">
         <div className="flex min-w-0 items-center gap-3">
           <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -527,6 +517,7 @@ function LigneClasseur({
             <Link
               to="/classeur/$classeurId"
               params={{ classeurId: String(classeur.id) }}
+              draggable={false}
               onClick={(e) => e.stopPropagation()}
               className="truncate font-medium text-foreground focus-visible:underline focus-visible:outline-none"
             >

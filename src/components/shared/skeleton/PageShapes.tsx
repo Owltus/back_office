@@ -582,18 +582,16 @@ export const TABLEAU_CLASSEURS = {
  * Silhouette de la liste des classeurs : la barre des deux boutons
  * (Importer, Nouveau classeur) puis le TABLEAU, mêmes colonnes et mêmes
  * points de bascule que `ClasseurList`. `actions = false` : le tableau seul
- * (pendant le chargement, sous la barre réelle). `poignee` et `acces`
- * suivent les colonnes que la page affichera (droits connus).
+ * (pendant le chargement, sous la barre réelle). `acces` suit la colonne
+ * que la page affichera (droits connus).
  */
 export function FormeClasseurListe({
   cartes = 3,
   actions = true,
-  poignee = false,
   acces = false,
 }: {
   cartes?: number
   actions?: boolean
-  poignee?: boolean
   acces?: boolean
 }) {
   const tableau = (
@@ -601,7 +599,6 @@ export function FormeClasseurListe({
       <table className="w-full text-sm">
         <thead>
           <tr className={TABLEAU_CLASSEURS.entete}>
-            {poignee && <th className="w-8 px-1" />}
             <th className={cn(TABLEAU_CLASSEURS.th, 'text-left')}>
               <Skeleton className="h-3 w-16" />
             </th>
@@ -636,11 +633,6 @@ export function FormeClasseurListe({
         <tbody>
           {Array.from({ length: cartes }).map((_, i) => (
             <tr key={i} className={TABLEAU_CLASSEURS.ligne}>
-              {poignee && (
-                <td className="w-8 px-1">
-                  <Skeleton className="mx-auto size-4 rounded-sm" />
-                </td>
-              )}
               <td className="px-3 py-3">
                 <div className="flex items-center gap-3">
                   <Skeleton className="size-8 shrink-0 rounded-lg" />
