@@ -1,5 +1,5 @@
 import { Fragment, useRef, useState } from 'react'
-import type { ChangeEvent, DragEvent, SyntheticEvent } from 'react'
+import type { ChangeEvent, DragEvent } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { DndContext, closestCenter } from '@dnd-kit/core'
@@ -16,7 +16,6 @@ import {
   FileUp,
   FolderOpen,
   Lock,
-  MoreHorizontal,
   Pencil,
   Plus,
   ShieldCheck,
@@ -29,7 +28,6 @@ import type { LucideIcon } from 'lucide-react'
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import {
   CLASSES_CARTE_GLISSABLE,
-  neDemarrePasDeGlisser,
   useCapteursClasseur,
 } from '#/components/classeur/dnd/useCapteursClasseur.ts'
 import { AccesClasseurDialog } from '#/components/classeur/dialogs/AccesClasseurDialog.tsx'
@@ -52,14 +50,6 @@ import {
   ContextMenuShortcut,
   ContextMenuTrigger,
 } from '#/components/ui/context-menu.tsx'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuShortcut,
-  DropdownMenuTrigger,
-} from '#/components/ui/dropdown-menu.tsx'
 import { Skeleton } from '#/components/ui/skeleton.tsx'
 import {
   FormeClasseurListe,
@@ -104,7 +94,7 @@ import { cn } from '#/lib/utils.ts'
  * chose). Supprimer un classeur et réordonner : gestion seule.
  *
  * MENU D'UN CLASSEUR (2026-10-19, demande utilisateur) : clic droit sur la
- * ligne, ou bouton « ⋯ » (doigt, clavier). Ouvrir, Modifier le classeur,
+ * ligne, rien d'autre (aucun bouton « ⋯ », décision utilisateur). Ouvrir, Modifier le classeur,
  * Accès, Exporter en JSON, Supprimer : toujours listés, grisés avec leur
  * raison quand le niveau EFFECTIF ne les permet pas (`capacites`, miroir
  * des RLS). La base reste juge : le menu ne fait que le montrer.
@@ -320,16 +310,13 @@ export function ClasseurList({
                     Accès
                   </th>
                 )}
-                <th className="w-12 px-2">
-                  <span className="sr-only">Actions</span>
-                </th>
               </tr>
             </thead>
             <tbody>
               {liste.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={6}
                     className="px-4 py-8 text-center text-sm text-muted-foreground"
                   >
                     Aucun classeur.
@@ -552,39 +539,13 @@ function entreesMenu(
   return entrees
 }
 
-/*
- * Le menu du bouton « ⋯ » est rendu dans un portail, mais React fait
- * remonter ses événements jusqu'à la ligne qui le contient : un appui
- * lancerait un glisser. On l'arrête au bord du menu (le clic, lui, est
- * arrêté par la cellule des actions). Le clavier n'a pas besoin de garde : dnd-kit ignore une touche qui
- * ne vient pas de la ligne elle-même. Le menu du clic droit, lui, est à côté de la ligne dans l'arbre
- * React : rien à arrêter.
- */
-const arreter = (e: SyntheticEvent) => e.stopPropagation()
-const RESTE_DANS_LE_MENU = {
-  onMouseDown: arreter,
-  onTouchStart: arreter,
-  onPointerDown: arreter,
-}
-
-function EntreesMenu({
-  entrees,
-  type,
-}: {
-  entrees: EntreeMenu[]
-  type: 'contexte' | 'bouton'
-}) {
-  const Item = type === 'contexte' ? ContextMenuItem : DropdownMenuItem
-  const Separateur =
-    type === 'contexte' ? ContextMenuSeparator : DropdownMenuSeparator
-  const Raison =
-    type === 'contexte' ? ContextMenuShortcut : DropdownMenuShortcut
+function EntreesMenu({ entrees }: { entrees: EntreeMenu[] }) {
   return entrees.map((e) => {
     const Icone = e.icone
     return (
       <Fragment key={e.cle}>
-        {e.separe && <Separateur />}
-        <Item
+        {e.separe && <ContextMenuSeparator />}
+        <ContextMenuItem
           variant={e.danger ? 'destructive' : 'default'}
           disabled={e.raison !== null}
           onSelect={e.action}
@@ -592,9 +553,11 @@ function EntreesMenu({
           <Icone />
           {e.libelle}
           {e.raison ? (
-            <Raison className="tracking-normal">{e.raison}</Raison>
+            <ContextMenuShortcut className="tracking-normal">
+              {e.raison}
+            </ContextMenuShortcut>
           ) : null}
-        </Item>
+        </ContextMenuItem>
       </Fragment>
     )
   })
@@ -620,7 +583,7 @@ function LigneClasseur({
   statsEtat: 'chargement' | 'erreur' | 'ok'
   /** Peut réordonner la liste : la ligne entière se glisse. */
   canDrag: boolean
-  /** Entrées du menu (clic droit et bouton « ⋯ »). */
+  /** Entrées du menu du clic droit. */
   menu: EntreeMenu[]
   /** La colonne Accès existe (gestion, ou écriture sur la page). */
   avecAcces: boolean
@@ -658,8 +621,9 @@ function LigneClasseur({
       n
     )
 
-  // Au doigt, l'appui long sert au glisser : le menu passe par le bouton
-  // « ⋯ », jamais par l'appui long (Radix l'ouvrirait en plein glisser).
+  // Au doigt, sur une ligne qui se glisse, l'appui long sert au glisser :
+  // le menu ne s'y ouvre pas (Radix l'ouvrirait en plein glisser). Sur une
+  // ligne qui ne se glisse pas, l'appui long ouvre le menu.
   const dernierPointeur = useRef('')
 
   const ligne = (
@@ -676,10 +640,10 @@ function LigneClasseur({
       onClick={onOpen}
       onPointerDown={(e) => {
         dernierPointeur.current = e.pointerType
-        if (e.pointerType === 'touch') e.preventDefault()
+        if (canDrag && e.pointerType === 'touch') e.preventDefault()
       }}
       onContextMenu={(e) => {
-        if (dernierPointeur.current === 'touch') e.preventDefault()
+        if (canDrag && dernierPointeur.current === 'touch') e.preventDefault()
       }}
       className={cn(
         TABLEAU_CLASSEURS.ligne,
@@ -732,35 +696,6 @@ function LigneClasseur({
         )}
       </td>
       {avecAcces && <AccesCellule acces={acces} />}
-      <td className="px-2 py-3">
-        <div
-          className="flex items-center justify-end gap-0.5"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <DropdownMenu>
-            <Tip label="Actions">
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={`Actions du classeur ${classeur.name}`}
-                  className="text-muted-foreground"
-                  {...neDemarrePasDeGlisser}
-                >
-                  <MoreHorizontal />
-                </Button>
-              </DropdownMenuTrigger>
-            </Tip>
-            <DropdownMenuContent
-              align="end"
-              className="w-60"
-              {...RESTE_DANS_LE_MENU}
-            >
-              <EntreesMenu entrees={menu} type="bouton" />
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </td>
     </tr>
   )
 
@@ -768,7 +703,7 @@ function LigneClasseur({
     <ContextMenu>
       <ContextMenuTrigger asChild>{ligne}</ContextMenuTrigger>
       <ContextMenuContent className="w-60">
-        <EntreesMenu entrees={menu} type="contexte" />
+        <EntreesMenu entrees={menu} />
       </ContextMenuContent>
     </ContextMenu>
   )

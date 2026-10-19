@@ -153,7 +153,6 @@ describe('ClasseurList — tableau', () => {
       'Documents',
       'Modifié le',
       'Accès',
-      'Actions',
     ])
     expect(container.querySelectorAll('tbody tr')).toHaveLength(3)
     const l1 = cellules(container, 1)
@@ -165,9 +164,10 @@ describe('ClasseurList — tableau', () => {
     expect(cellules(container, 3).slice(1, 3)).toEqual(['0', '0'])
     expect(getByText('Nouveau classeur')).toBeTruthy()
     expect(getByText('Importer')).toBeTruthy()
+    // Aucun bouton « ⋯ » : le menu est au clic droit seulement.
     expect(
-      container.querySelectorAll('[aria-label^="Actions du classeur"]'),
-    ).toHaveLength(3)
+      container.querySelectorAll('button[aria-label^="Actions"]'),
+    ).toHaveLength(0)
     // Plus de poignée : c'est la ligne entière qui se glisse, et elle reste
     // une ligne de tableau (pas de role="button").
     expect(container.querySelectorAll('[aria-label^="Déplacer"]')).toHaveLength(
@@ -205,7 +205,7 @@ describe('ClasseurList — tableau', () => {
     expect(l1[2]).toBe('')
   })
 
-  it('un clic sur la ligne ouvre le classeur, pas un clic sur un bouton', () => {
+  it('un clic sur la ligne ouvre le classeur', () => {
     const { container } = rendre()
     fireEvent.click(
       container.querySelector('tbody tr:nth-child(2) td:nth-child(3)')!,
@@ -214,11 +214,6 @@ describe('ClasseurList — tableau', () => {
       to: '/classeur/$classeurId',
       params: { classeurId: '5' },
     })
-    etat.navigate.mockClear()
-    fireEvent.click(
-      container.querySelector('[aria-label="Actions du classeur Classeur 5"]')!,
-    )
-    expect(etat.navigate).not.toHaveBeenCalled()
   })
 
   it('menu, gestion : tout est permis', async () => {
@@ -273,29 +268,10 @@ describe('ClasseurList — tableau', () => {
     expect(etat.navigate).not.toHaveBeenCalled()
   })
 
-  it('menu par le bouton : mêmes entrées', async () => {
+  it('menu : Supprimer demande confirmation sans ouvrir le classeur', async () => {
     rendre()
-    fireEvent.keyDown(
-      screen.getByRole('button', { name: 'Actions du classeur Classeur 9' }),
-      { key: 'Enter' },
-    )
-    await screen.findByRole('menuitem', { name: 'Ouvrir' })
-    // Le menu est DANS la ligne glissable : appuyer sur une entrée puis
-    // bouger la souris ne doit pas emporter la ligne.
-    const supprimer = screen.getByRole('menuitem', { name: 'Supprimer' })
-    act(() => {
-      fireEvent.mouseDown(supprimer, { button: 0, clientX: 10, clientY: 10 })
-    })
-    act(() => {
-      fireEvent.mouseMove(document, { clientX: 10, clientY: 40 })
-    })
-    expect(
-      document.querySelector('tbody tr:nth-child(3)')!.className,
-    ).not.toContain('opacity-60')
-    act(() => {
-      fireEvent.mouseUp(document, { clientX: 10, clientY: 40 })
-    })
-    fireEvent.click(supprimer)
+    await menuDe(3)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Supprimer' }))
     expect(screen.getByText(/Supprimer le classeur Classeur 9/)).toBeTruthy()
     expect(etat.navigate).not.toHaveBeenCalled()
   })

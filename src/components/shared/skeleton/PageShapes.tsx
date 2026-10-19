@@ -627,7 +627,6 @@ export function FormeClasseurListe({
                 <Skeleton className="h-3 w-10" />
               </th>
             )}
-            <th className="w-20 px-2" />
           </tr>
         </thead>
         <tbody>
@@ -656,9 +655,6 @@ export function FormeClasseurListe({
                   <Skeleton className="h-3.5 w-20" />
                 </td>
               )}
-              <td className="px-2 py-3">
-                <Skeleton className="ml-auto h-6 w-14" />
-              </td>
             </tr>
           ))}
         </tbody>
