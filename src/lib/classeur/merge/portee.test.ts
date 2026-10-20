@@ -107,12 +107,10 @@ describe('réimport d’un chapitre', () => {
     expect(
       planifierFusion(local(), f, { replace: false }).resultat.updated,
     ).toBe(0)
-    const plan = planifierFusionPortee(
-      local(),
-      f,
-      { type: 'chapitre', chapitreId: 10 },
-      { supprimerAbsents: false },
-    )
+    const plan = planifierFusionPortee(local(), f, {
+      type: 'chapitre',
+      chapitreId: 10,
+    })
     const modif = plan.actions.find((a) => a.type === 'modifierItem')
     expect(modif).toMatchObject({
       type: 'modifierItem',
@@ -125,14 +123,16 @@ describe('réimport d’un chapitre', () => {
   })
 
   it('ne touche jamais aux autres chapitres ni à leurs éléments', () => {
+    // Tout le chapitre marqué « supprimer » : seuls SES éléments partent.
     const f = aller(exportA())
-    f.chapters[0].items = []
-    const plan = planifierFusionPortee(
-      local(),
-      f,
-      { type: 'chapitre', chapitreId: 10 },
-      { supprimerAbsents: true },
-    )
+    f.chapters[0].items = f.chapters[0].items.map((i) => ({
+      ...i,
+      supprimer: true as const,
+    }))
+    const plan = planifierFusionPortee(local(), f, {
+      type: 'chapitre',
+      chapitreId: 10,
+    })
     expect(plan.actions.some((a) => a.type === 'supprimerChapitre')).toBe(false)
     const supprimes = plan.actions.flatMap((a) =>
       a.type === 'supprimerItem' ? [`${a.kind}:${a.id}`] : [],
@@ -146,15 +146,13 @@ describe('réimport d’un chapitre', () => {
     expect(plan.apercu.filter((l) => l.action === 'delete')).toHaveLength(3)
   })
 
-  it('sans l’option, un élément absent du fichier n’est PAS supprimé', () => {
+  it('un élément absent du fichier n’est JAMAIS supprimé', () => {
     const f = aller(exportA())
     f.chapters[0].items = f.chapters[0].items.slice(0, 1)
-    const plan = planifierFusionPortee(
-      local(),
-      f,
-      { type: 'chapitre', chapitreId: 10 },
-      { supprimerAbsents: false },
-    )
+    const plan = planifierFusionPortee(local(), f, {
+      type: 'chapitre',
+      chapitreId: 10,
+    })
     expect(plan.actions.some((a) => a.type === 'supprimerItem')).toBe(false)
     expect(plan.resultat.deleted).toBe(0)
   })
@@ -169,12 +167,10 @@ describe('réimport d’un chapitre', () => {
         sort_order: 9,
       }),
     )
-    const plan = planifierFusionPortee(
-      local(),
-      f,
-      { type: 'chapitre', chapitreId: 10 },
-      { supprimerAbsents: false },
-    )
+    const plan = planifierFusionPortee(local(), f, {
+      type: 'chapitre',
+      chapitreId: 10,
+    })
     expect(plan.actions).toContainEqual(
       expect.objectContaining({
         type: 'creerItem',
@@ -188,12 +184,10 @@ describe('réimport d’un chapitre', () => {
     const f = aller(exportA())
     f.chapters[0].sort_order = 99
     f.chapters[0].description = 'Nouvelle description'
-    const plan = planifierFusionPortee(
-      local(),
-      f,
-      { type: 'chapitre', chapitreId: 10 },
-      { supprimerAbsents: false },
-    )
+    const plan = planifierFusionPortee(local(), f, {
+      type: 'chapitre',
+      chapitreId: 10,
+    })
     const ch = plan.actions.find((a) => a.type === 'modifierChapitre')
     expect(ch).toMatchObject({ id: 10, description: 'Nouvelle description' })
     expect(ch).not.toHaveProperty('sort_order')
@@ -202,24 +196,17 @@ describe('réimport d’un chapitre', () => {
   it('refuse un fichier d’un autre chapitre ou de plusieurs chapitres', () => {
     const f = aller(exportA())
     expect(() =>
-      planifierFusionPortee(
-        local(),
-        f,
-        { type: 'chapitre', chapitreId: 20 },
-        { supprimerAbsents: false },
-      ),
+      planifierFusionPortee(local(), f, { type: 'chapitre', chapitreId: 20 }),
     ).toThrow(/autre chapitre/)
     const deux: ClasseurJson = fichier([
       chJson({ label: 'Accueil' }),
       chJson({ label: 'Sécurité' }),
     ])
     expect(() =>
-      planifierFusionPortee(
-        local(),
-        deux,
-        { type: 'chapitre', chapitreId: 10 },
-        { supprimerAbsents: false },
-      ),
+      planifierFusionPortee(local(), deux, {
+        type: 'chapitre',
+        chapitreId: 10,
+      }),
     ).toThrow(/2 chapitres/)
   })
 })
@@ -243,12 +230,10 @@ describe('export et réimport d’un document', () => {
     f.chapters[0].label = 'Chapitre renommé par le LLM'
     f.chapters[0].items[0].content = 'Nouveau texte'
     f.chapters[0].items[0].sort_order = 50
-    const plan = planifierFusionPortee(
-      local(),
-      f,
-      { type: 'document', documentId: 1 },
-      { supprimerAbsents: true },
-    )
+    const plan = planifierFusionPortee(local(), f, {
+      type: 'document',
+      documentId: 1,
+    })
     expect(plan.actions).toHaveLength(1)
     expect(plan.actions[0]).toMatchObject({
       type: 'modifierItem',
@@ -260,47 +245,53 @@ describe('export et réimport d’un document', () => {
     expect(plan.resultat).toMatchObject({ updated: 1, deleted: 0 })
   })
 
+  it('document marqué « supprimer » : à la corbeille, et rien d’autre', () => {
+    const f = exportDoc()
+    f.chapters[0].items[0].supprimer = true
+    f.chapters[0].items[0].content = 'ignoré'
+    const plan = planifierFusionPortee(local(), f, {
+      type: 'document',
+      documentId: 1,
+    })
+    expect(plan.actions).toEqual([
+      { type: 'supprimerItem', kind: 'document', id: 1 },
+    ])
+    expect(plan.resultat).toMatchObject({ deleted: 1, updated: 0 })
+    expect(lignesImport(local(), plan).map((l) => [l.cle, l.genre])).toEqual([
+      ['document:1', 'suppression'],
+    ])
+  })
+
   it('sans changement : rien à appliquer', () => {
-    const plan = planifierFusionPortee(
-      local(),
-      exportDoc(),
-      { type: 'document', documentId: 1 },
-      { supprimerAbsents: false },
-    )
+    const plan = planifierFusionPortee(local(), exportDoc(), {
+      type: 'document',
+      documentId: 1,
+    })
     expect(plan.actions).toHaveLength(0)
     expect(plan.resultat.unchanged).toBe(1)
   })
 
   it('refuse un autre document, un uuid retiré ou plusieurs éléments', () => {
     expect(() =>
-      planifierFusionPortee(
-        local(),
-        exportDoc(),
-        { type: 'document', documentId: 2 },
-        { supprimerAbsents: false },
-      ),
+      planifierFusionPortee(local(), exportDoc(), {
+        type: 'document',
+        documentId: 2,
+      }),
     ).toThrow(/autre document/)
 
     const sansUuid = exportDoc()
     delete sansUuid.chapters[0].items[0].uuid
     expect(() =>
-      planifierFusionPortee(
-        local(),
-        sansUuid,
-        { type: 'document', documentId: 1 },
-        { supprimerAbsents: false },
-      ),
+      planifierFusionPortee(local(), sansUuid, {
+        type: 'document',
+        documentId: 1,
+      }),
     ).toThrow(/identifiant/)
 
     const deux = exportDoc()
     deux.chapters[0].items.push(itJson({ kind: 'document', title: 'Autre' }))
     expect(() =>
-      planifierFusionPortee(
-        local(),
-        deux,
-        { type: 'document', documentId: 1 },
-        { supprimerAbsents: false },
-      ),
+      planifierFusionPortee(local(), deux, { type: 'document', documentId: 1 }),
     ).toThrow(/exactement un document/)
   })
 
@@ -414,12 +405,10 @@ describe('lignesImport — réglages en clair (étape 6, D4)', () => {
       nombre: 1,
       sort_order: 9,
     })
-    const plan = planifierFusionPortee(
-      local,
-      f,
-      { type: 'chapitre', chapitreId: 10 },
-      { supprimerAbsents: false },
-    )
+    const plan = planifierFusionPortee(local, f, {
+      type: 'chapitre',
+      chapitreId: 10,
+    })
     expect(lignesImport(local, plan).map((l) => l.reglage)).toEqual([
       'Mensuel → Annuel',
       '14 → 20 lignes',

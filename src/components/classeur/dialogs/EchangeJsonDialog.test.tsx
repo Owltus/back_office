@@ -17,11 +17,16 @@ import {
   etat,
 } from '#/lib/classeur/merge/fixtures.ts'
 import {
+  destinationImport,
+  planifierVers,
+} from '#/lib/classeur/merge/importIa.ts'
+import type { ContexteImport } from '#/lib/classeur/merge/importIa.ts'
+import {
+  chapitresDesLignes,
   construireExportChapitre,
+  construireExportDocument,
   lignesImport,
-  planifierFusionPortee,
 } from '#/lib/classeur/merge/portee.ts'
-import type { CiblePortee } from '#/lib/classeur/merge/portee.ts'
 import type { SujetJson } from '#/components/classeur/dialogs/EchangeJsonDialog.tsx'
 import type { ClasseurJson } from '#/lib/classeur/merge/schema.ts'
 
@@ -32,6 +37,10 @@ import type { ClasseurJson } from '#/lib/classeur/merge/schema.ts'
  * simulées. Oracles : le compteur du bouton suit les cases, le bouton est
  * désactivé à 0, les clés refusées partent à l'import, le message dit
  * combien de documents ont été ignorés, le diff s'ouvre au dépliage.
+ *
+ * Décision du 2026-10-20 : aucune case de suppression ; la portée est
+ * déduite du fichier (un autre chapitre ou document de ce classeur
+ * s'applique à lui, une ligne le dit).
  */
 
 const A = chapitre({ id: 10, label: 'Accueil' })
@@ -49,21 +58,36 @@ const d2 = document({
   content: 'Rendre la clé',
   sort_order: 2,
 })
-const local = etat([A], { documents: [d1, d2] })
+const B = chapitre({ id: 20, label: 'Sécurité', sort_order: 2 })
+const d3 = document({
+  id: 3,
+  chapter_id: 20,
+  title: 'Extincteur',
+  content: 'Vérifier la pression',
+  sort_order: 1,
+})
+const local = etat([A, B], { documents: [d1, d2, d3] })
+const contenuA = etat([A], { documents: [d1, d2] }).content
 
 const appliquer = vi.fn()
 
 vi.mock('#/lib/classeur/merge/apply.ts', () => ({
-  previsualiserFusionPortee: (
+  previsualiserImport: (
     _id: number,
     fichier: ClasseurJson,
-    cible: CiblePortee,
-    options: { supprimerAbsents: boolean },
+    contexte: ContexteImport,
   ) => {
-    const plan = planifierFusionPortee(local, fichier, cible, options)
-    return Promise.resolve({ plan, lignes: lignesImport(local, plan) })
+    const destination = destinationImport(local, fichier, classeur(), contexte)
+    const plan = planifierVers(local, fichier, destination.cible)
+    return Promise.resolve({
+      plan,
+      lignes: lignesImport(local, plan),
+      chapitres: chapitresDesLignes(local, plan),
+      cible: destination.cible,
+      note: destination.note,
+    })
   },
-  appliquerFusionPortee: (...args: unknown[]) => appliquer(...args),
+  appliquerImport: (...args: unknown[]) => appliquer(...args),
 }))
 vi.mock('#/components/classeur/hooks/useClasseur.ts', () => ({
   usePeriodicites: () => ({ data: PERIODICITES }),
@@ -82,7 +106,7 @@ const { MESSAGE_COPIE_REFUSEE } =
 
 /** Le JSON du chapitre, les deux documents retravaillés. */
 function jsonLlm(): string {
-  const f = construireExportChapitre(classeur(), A, local.content, PERIODICITES)
+  const f = construireExportChapitre(classeur(), A, contenuA, PERIODICITES)
   f.chapters[0].items[0].content = 'Accueillir avec le sourire\nRemettre la clé'
   f.chapters[0].items[1].content = 'Rendre la clé\nDire au revoir'
   return JSON.stringify(f)
@@ -100,7 +124,7 @@ async function ouvrirAvecApercu() {
         open
         onOpenChange={() => {}}
         classeur={classeur()}
-        sujet={{ type: 'chapitre', chapitre: A, contenu: local.content }}
+        sujet={{ type: 'chapitre', chapitre: A, contenu: contenuA }}
         canWrite
       />
     </QueryClientProvider>,
@@ -172,7 +196,7 @@ describe('EchangeJsonDialog — aperçu, refus, import', () => {
     const options = appliquer.mock.calls[0][3] as { exclus: Set<string> }
     expect([...options.exclus]).toEqual(['document:2'])
     expect(screen.getByRole('status').textContent).toBe(
-      'Import appliqué : 0 ajout(s), 1 modification(s), 0 suppression(s). 1 document ignoré à votre demande.',
+      'Import appliqué : 0 ajout, 1 modification. 1 document ignoré à votre demande.',
     )
   })
 
@@ -191,7 +215,7 @@ describe('EchangeJsonDialog — aperçu, refus, import', () => {
     const options = appliquer.mock.calls[0][3] as { exclus: Set<string> }
     expect(options.exclus.size).toBe(0)
     expect(screen.getByRole('status').textContent).toBe(
-      'Import appliqué : 0 ajout(s), 2 modification(s), 0 suppression(s).',
+      'Import appliqué : 0 ajout, 2 modifications.',
     )
   })
 })
@@ -215,9 +239,7 @@ describe('EchangeJsonDialog — export en un clic (étape 3, 2026-10-19)', () =>
           open={open}
           onOpenChange={() => {}}
           classeur={classeur()}
-          sujet={
-            sujet ?? { type: 'chapitre', chapitre: A, contenu: local.content }
-          }
+          sujet={sujet ?? { type: 'chapitre', chapitre: A, contenu: contenuA }}
           canWrite={false}
         />
       </QueryClientProvider>
@@ -239,7 +261,7 @@ describe('EchangeJsonDialog — export en un clic (étape 3, 2026-10-19)', () =>
     await waitFor(() => expect(ecrit).toHaveBeenCalledTimes(1))
     const texte = ecrit.mock.calls[0][0]
     const attendu = JSON.stringify(
-      construireExportChapitre(classeur(), A, local.content, PERIODICITES),
+      construireExportChapitre(classeur(), A, contenuA, PERIODICITES),
       null,
       2,
     )
@@ -303,7 +325,7 @@ describe('EchangeJsonDialog — audit du 2026-10-04 (B8, C4)', () => {
           open
           onOpenChange={() => {}}
           classeur={classeur()}
-          sujet={{ type: 'chapitre', chapitre: A, contenu: local.content }}
+          sujet={{ type: 'chapitre', chapitre: A, contenu: contenuA }}
           canWrite
         />
       </QueryClientProvider>,
@@ -329,5 +351,102 @@ describe('EchangeJsonDialog — audit du 2026-10-04 (B8, C4)', () => {
     } finally {
       delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView
     }
+  })
+})
+
+describe('EchangeJsonDialog — sans case, portée déduite (2026-10-20)', () => {
+  function ouvrirChapitreA() {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <EchangeJsonDialog
+          open
+          onOpenChange={() => {}}
+          classeur={classeur()}
+          sujet={{ type: 'chapitre', chapitre: A, contenu: contenuA }}
+          canWrite
+        />
+      </QueryClientProvider>,
+    )
+  }
+  const coller = (texte: string) =>
+    fireEvent.change(screen.getByLabelText("Réponse de l'IA à réimporter"), {
+      target: { value: texte },
+    })
+
+  it('aucune case « supprimer », aucun mot technique', async () => {
+    await ouvrirAvecApercu()
+    expect(screen.queryAllByRole('switch')).toHaveLength(0)
+    // Le texte de l'écran, sans la réponse collée dans la zone de saisie.
+    const copie = window.document.body.cloneNode(true) as HTMLElement
+    for (const t of copie.querySelectorAll('textarea')) t.remove()
+    const texte = copie.textContent
+    for (const mot of ['Supprimer ce qui', 'JSON', 'LLM', 'uuid'])
+      expect(texte, mot).not.toContain(mot)
+  })
+
+  it('un document absent de la réponse : gardé ; marqué « supprimer » : mis à la corbeille', async () => {
+    ouvrirChapitreA()
+    const f = construireExportChapitre(classeur(), A, contenuA, PERIODICITES)
+    f.chapters[0].items = [f.chapters[0].items[0]]
+    coller(JSON.stringify(f))
+    await screen.findByText(
+      'Aucun changement : le contenu est identique.',
+      undefined,
+      { timeout: 3000 },
+    )
+    const g = construireExportChapitre(classeur(), A, contenuA, PERIODICITES)
+    g.chapters[0].items[1].supprimer = true
+    coller(JSON.stringify(g))
+    await waitFor(() => screen.getByLabelText('Importer Check-out'), {
+      timeout: 3000,
+    })
+    expect(screen.getByText('mis à la corbeille')).toBeTruthy()
+    expect(screen.getByText(/1 mis à la corbeille/)).toBeTruthy()
+  })
+
+  it('le fichier d’un AUTRE chapitre de ce classeur : appliqué à lui, et dit', async () => {
+    ouvrirChapitreA()
+    const f = construireExportChapitre(
+      classeur(),
+      B,
+      etat([B], { documents: [d3] }).content,
+      PERIODICITES,
+    )
+    f.chapters[0].items[0].content = 'Vérifier la pression chaque mois'
+    coller(JSON.stringify(f))
+    await screen.findByText(
+      'Ce fichier concerne le chapitre Sécurité. Le reste du classeur ne change pas.',
+      undefined,
+      { timeout: 3000 },
+    )
+    expect(screen.getByLabelText('Importer Extincteur')).toBeTruthy()
+    appliquer.mockResolvedValue({
+      inserted: 0,
+      updated: 1,
+      unchanged: 0,
+      skipped: 0,
+      deleted: 0,
+      ignores: 0,
+    })
+    fireEvent.click(bouton())
+    await waitFor(() => expect(appliquer).toHaveBeenCalledTimes(1))
+    // Le contexte d'origine est transmis ; la portée se redéduit à l'import.
+    expect(appliquer.mock.calls[0][2]).toEqual({
+      type: 'chapitre',
+      chapitreId: 10,
+    })
+  })
+
+  it('le fichier d’un document de ce classeur : appliqué à ce document', async () => {
+    ouvrirChapitreA()
+    const f = construireExportDocument(classeur(), B, d3, PERIODICITES)
+    f.chapters[0].items[0].content = 'Nouveau'
+    coller(JSON.stringify(f))
+    await screen.findByText(
+      'Ce fichier concerne le document Extincteur. Le reste du classeur ne change pas.',
+      undefined,
+      { timeout: 3000 },
+    )
+    expect(bouton().textContent).toBe('Importer 1 document')
   })
 })

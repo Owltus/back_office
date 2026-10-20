@@ -112,7 +112,7 @@ function etiquette(l: LigneImport): string {
     case 'creation':
       return 'ajouté'
     case 'suppression':
-      return 'supprimé'
+      return 'mis à la corbeille'
     case 'restauration':
       return 'restauré'
     case 'chapitre':
@@ -409,7 +409,11 @@ function LigneApercu({
               {titre}
             </span>
             <span className="truncate text-xs text-muted-foreground">
-              {ligne.kind === 'chapter' ? 'Libellé ou description' : nature}
+              {ligne.kind === 'chapter'
+                ? ligne.genre === 'suppression'
+                  ? 'Chapitre et son contenu'
+                  : 'Libellé ou description'
+                : nature}
               {version !== null && ` · ${version}`}
               {ligne.reglage !== undefined &&
                 !(

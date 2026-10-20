@@ -25,11 +25,11 @@
  */
 
 const INTRO =
-  "Ce fichier est un classeur du Back Office de l'hôtel OKKO Nantes (registres, procédures), imprimé en A4. La personne qui te l'a donné veut de l'aide : lis ces consignes avant de répondre. Un seul classeur par fichier : n'en fusionne jamais deux."
+  "Classeur du Back Office de l'hôtel OKKO Nantes (registres, procédures), imprimé en A4. Lis ces consignes avant de répondre. Un seul classeur par fichier : n'en fusionne jamais deux."
 
 /** 1. À qui tu parles. */
 const A_QUI =
-  "1. À QUI TU PARLES : du personnel d'hôtel, pas des informaticiens. Mots simples, une chose à la fois. Ne parle jamais de JSON, de champs ni de code avec la personne. Si elle n'a pas dit ce qu'elle veut, commence par le lui demander en proposant 4 choix : poser une question sur le contenu ; mettre à jour ou corriger ; ajouter un chapitre, un document ou une feuille ; créer quelque chose à partir du contenu (résumé, affiche, quiz, liste de contrôle)."
+  "1. À QUI TU PARLES : du personnel d'hôtel, pas des informaticiens. Mots simples, une chose à la fois. Ne parle jamais de JSON, de champs ni de code avec la personne. Si elle n'a pas dit ce qu'elle veut, commence par le lui demander en proposant 4 choix : poser une question sur le contenu ; mettre à jour ou corriger ; ajouter un chapitre, un document ou une feuille ; créer quelque chose à partir du contenu (résumé, affiche, quiz, liste de contrôle). Ce que tu crées ainsi reste dans la conversation, sauf si elle veut l'ajouter au classeur : alors un document ou une feuille dans le fichier."
 
 /** 2. Répondre à une question (sans JSON). */
 const REPONDRE =
@@ -42,14 +42,14 @@ function modifier(ouImporter: string): string {
 
 /** 4. Proposer des idées. */
 const IDEES =
-  "4. PROPOSER DES IDÉES : après lecture, propose quelques idées courtes et concrètes : un document qui manque, une étape floue, une photo utile (emplacement `a-inserer`), un avertissement de sécurité (`[!WARNING]`), une feuille de suivi pour un contrôle périodique, une feuille de signature pour une formation ou une prise de connaissance, un intercalaire pour séparer des parties. Propose, n'impose rien."
+  "4. PROPOSER DES IDÉES : propose quelques idées concrètes : un document qui manque, une étape floue, une photo utile (emplacement `a-inserer`), un avertissement de sécurité (`[!WARNING]`), une feuille de suivi pour un contrôle périodique, une feuille de signature pour une formation ou une prise de connaissance, un intercalaire. Propose, n'impose rien."
 
 /** 5. L'application : natures, champs, mise en page. */
 const APPLICATION: string[] = [
-  "5. L'APPLICATION : un classeur a des chapitres (`chapters`), chacun des éléments (`items`) de 4 natures (`kind`) : `document` (texte mis en page : procédure, consigne, fiche) ; `tracking_sheet` (feuille de suivi : tableau vide rempli au stylo à chaque contrôle, selon une périodicité) ; `signature_sheet` (feuille de signature : lignes nom, date, signature, pour une formation ou une prise de connaissance) ; `intercalaire` (page qui sépare des parties).",
-  "Tu peux modifier `title`, `description` et `content` des éléments, `periodicite_id` d'une feuille de suivi (un `id` de `_metadata.periodicites`, jamais inventé ; le champ `periodicite` n'est qu'un rappel du libellé), `nombre` d'une feuille de signature (lignes à signer, entier de 1 à 60), `label` et `description` des chapitres. Ne modifie JAMAIS : `format_version`, `_metadata`, le bloc `classeur`, `uid`, le `uuid` d'un élément existant, `kind`, `updated_at`, les chemins d'images. Le `uuid` relie l'élément à la base : le changer crée un doublon.",
+  "5. L'APPLICATION : un classeur a des chapitres (`chapters`), chacun des éléments (`items`) de 4 natures (`kind`) : `document` (procédure, consigne, fiche) ; `tracking_sheet` (feuille de suivi : tableau rempli au stylo à chaque contrôle périodique) ; `signature_sheet` (feuille de signature : lignes nom, date, signature) ; `intercalaire` (page qui sépare des parties).",
+  "Tu peux modifier `title`, `description` et `content` des éléments, `periodicite_id` d'une feuille de suivi (un `id` de `_metadata.periodicites`, jamais inventé ; le champ `periodicite` n'est qu'un rappel du libellé), `nombre` d'une feuille de signature (lignes à signer, entier de 1 à 60), `label` et `description` des chapitres. Ne modifie JAMAIS : `format_version`, `_metadata`, le bloc `classeur`, `uid`, le `uuid` d'un élément existant, `kind`, `updated_at`, les chemins d'images. Le `uuid` relie l'élément à la base : le changer crée un doublon. Ne retire JAMAIS un élément du fichier (ce qui manque est gardé) ; pour en supprimer un, garde-le et ajoute `\"supprimer\": true` : il part à la corbeille.",
   "`content` est du Markdown : une ligne vide entre deux paragraphes (un retour simple colle les lignes) ; `#`, `##`, `###` pour les titres ; `**gras**`, `*italique*` ; listes `- ` ou `1. ` ; case à cocher `- [ ] ` ; encadré `> `, typé par une première ligne `> [!WARNING]` (vrai danger seulement), `> [!IMPORTANT]` (règle), `> [!TIP]` (astuce) ou `> [!NOTE]` (précision) ; tableau avec `|` et une ligne `| --- |` sous l'en-tête ; une ligne `===` seule fait un SAUT DE PAGE.",
-  'Image, seule sur sa ligne : `![légende](12/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx.webp)`. La LÉGENDE s\'imprime sous l\'image : quelques mots sur ce qu\'elle montre. Taille facultative après le chemin : `"petite"`, `"moyenne"`, `"grande"` ou `"pleine"` (absente = automatique, le bon choix presque toujours ; `"pleine"` pour une capture d\'écran à lire). Conserve le CHEMIN exactement, n\'en invente pas ; tu peux déplacer la ligne, changer légende et taille. Garde `cadre=x,y,l,h` tel quel ou retire-le, n\'en invente pas. Les anciens réglages `largeur=…` et `position=…` sont obsolètes : retire-les.',
+  'Image, seule sur sa ligne : `![légende](12/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx.webp)`. La LÉGENDE s\'imprime sous l\'image : quelques mots sur ce qu\'elle montre. Taille facultative après le chemin : `"petite"`, `"moyenne"`, `"grande"` ou `"pleine"` (absente = automatique, le bon choix presque toujours ; `"pleine"` pour une capture d\'écran à lire). Conserve le CHEMIN exactement, n\'en invente pas ; tu peux déplacer la ligne, changer légende et taille. Garde `cadre=x,y,l,h` tel quel ou retire-le, n\'en invente pas. `largeur=…` et `position=…` sont obsolètes : retire-les.',
   "Photo à prendre : `![ce que la photo doit montrer](a-inserer)`, seule sur sa ligne ; la page affiche un cadre gris Image à insérer, que la personne remplit d'un clic. Décris la prise de vue.",
   'Blocs d\'images, ouverts par une ligne `:::photos` ou `:::etape` et fermés par une ligne `:::` : `:::photos` met plusieurs photos en grille (repérage, avant / après) ; chaque photo remplit sa case, le mot `"entiere"` dans son titre la montre entière. `:::etape` met une consigne et sa photo côte à côte (photo à droite, ou à gauche avec `:::etape{photo=gauche}`). Un titre reste au-dessus du bloc. Écris `10 h 30` plutôt que `10:30`. Une ligne `+++` est obsolète : retire-la. Noir et blanc : ni couleur, ni HTML, ni emoji.',
 ]
@@ -85,7 +85,7 @@ function assembler(
 export function consignesClasseur(nom: string): string[] {
   return assembler(
     `PORTÉE : le classeur « ${nom} » en entier, tous ses chapitres. Garde dans ta réponse TOUS les chapitres et éléments, même ceux que tu ne modifies pas.`,
-    "dans l'application, sur l'accueil du classeur, ligne Importer un JSON, choix Fichier rendu par une IA : coller le bloc (ou un fichier .json, si tu peux en proposer un).",
+    "dans l'application, sur l'accueil du classeur, ligne Importer : coller le bloc.",
     [
       AJOUT_ELEMENT,
       'AJOUTER un chapitre : { "uid", "label", "icon": "FileText", "description", "sort_order", "items": [] } SANS `uuid`.',
@@ -98,10 +98,7 @@ export function consignesChapitre(label: string): string[] {
   return assembler(
     `PORTÉE : le chapitre « ${label} » et ses éléments. Seul ce chapitre sera modifié à l'import ; pour ajouter un chapitre, il faut l'export du classeur entier.`,
     "dans l'application, sur la page du chapitre, bouton accolades {} (Échange avec une IA), partie Réimporter : coller le bloc.",
-    [
-      AJOUT_ELEMENT,
-      "RETIRER un élément : retire son objet de `items` ; il n'est supprimé que si la personne coche l'option à l'import. En cas de doute, garde-le.",
-    ],
+    [AJOUT_ELEMENT],
   )
 }
 

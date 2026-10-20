@@ -168,9 +168,9 @@ describe("mode d'emploi — ce qui dépend de la portée", () => {
   it('classeur : importer depuis l’accueil, ajouter un chapitre', () => {
     const t = texte(LES_TROIS.classeur)
     expect(t).toMatch(/^PORTÉE : le classeur/)
-    expect(t).toContain("sur l'accueil du classeur, ligne Importer un JSON")
-    // Étape 5 : la réponse se COLLE, comme pour un chapitre ou un document.
-    expect(t).toContain('choix Fichier rendu par une IA')
+    expect(t).toContain("sur l'accueil du classeur, ligne Importer :")
+    // Étape 9 (2026-10-20) : plus aucun choix à l'import.
+    expect(t).not.toContain('Fichier rendu par une IA')
     expect(t).toContain('coller le bloc')
     expect(t).not.toContain('enregistrer le bloc dans un fichier')
     expect(t).toContain('AJOUTER un chapitre')
@@ -211,6 +211,31 @@ describe("mode d'emploi — un seul classeur (décision utilisateur)", () => {
         "Un seul classeur par fichier : n'en fusionne jamais deux.",
       )
   })
+})
+
+describe("mode d'emploi — suppression explicite (décision du 2026-10-20)", () => {
+  it.each(Object.entries(LES_TROIS))(
+    '%s : ne jamais retirer, marquer `"supprimer": true`',
+    (_nom, instructions) => {
+      const t = texte(instructions)
+      expect(t).toContain('Ne retire JAMAIS un élément du fichier')
+      expect(t).toContain('garde-le et ajoute `"supprimer": true`')
+      expect(t).toContain('corbeille')
+      // Plus aucune case ni choix de provenance à l'import.
+      expect(t).not.toMatch(
+        /coche l'option|option à l'import|Fichier de Registre|Importer un JSON/,
+      )
+    },
+  )
+
+  it.each(Object.entries(LES_TROIS))(
+    '%s : ce qui est créé à partir du contenu reste dans la conversation',
+    (_nom, instructions) => {
+      const t = texte(instructions)
+      expect(t).toContain('reste dans la conversation')
+      expect(t).toContain("sauf si elle veut l'ajouter au classeur")
+    },
+  )
 })
 
 describe("mode d'emploi — taille", () => {

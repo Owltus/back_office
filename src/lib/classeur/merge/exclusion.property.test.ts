@@ -1,7 +1,7 @@
 import fc from 'fast-check'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { appliquerFusionPortee } from '#/lib/classeur/merge/apply.ts'
+import { appliquerImport } from '#/lib/classeur/merge/apply.ts'
 import {
   PERIODICITES,
   chapitre,
@@ -23,9 +23,11 @@ import {
   filtrerPlan,
   lignesImport,
   planifierFusionPortee,
+  sansMarquesSupprimer,
 } from '#/lib/classeur/merge/portee.ts'
-import type { CiblePortee, OptionsPortee } from '#/lib/classeur/merge/portee.ts'
+import type { CiblePortee } from '#/lib/classeur/merge/portee.ts'
 import { ancienPlanifierFusionPortee } from '#/lib/classeur/merge/porteeAvantRefus.oracle.ts'
+import type { OptionsPortee } from '#/lib/classeur/merge/porteeAvantRefus.oracle.ts'
 import { parseImportJson } from '#/lib/classeur/merge/schema.ts'
 import { planAvecValidation } from '#/lib/classeur/merge/validationImport.ts'
 import type { ClasseurJson, ItemJson } from '#/lib/classeur/merge/schema.ts'
@@ -204,7 +206,13 @@ const casArb: fc.Arbitrary<Cas> = fc
       }
       const id = visibles.find((d) => d.uuid === elt.uuid)?.id ?? 0
       const desc = g.docs[id - 1]
-      if (desc.sort === 3) continue
+      // Retiré par l'IA. Depuis le 2026-10-20 un absent est gardé : la
+      // suppression passe par la marque `supprimer` (même plan que l'ancienne
+      // case « supprimer les absents », oracle (b)).
+      if (desc.sort === 3) {
+        if (g.supprimerAbsents) items.push({ ...elt, supprimer: true })
+        continue
+      }
       const copie = { ...elt }
       if (desc.sort === 1) copie.content = desc.texteFichier
       if (desc.sort === 2) copie.title = desc.titreFichier
@@ -247,7 +255,7 @@ function relire(f: ClasseurJson): ClasseurJson {
 }
 
 function planDe(c: Cas, exclus?: ReadonlySet<string>): PlanFusion {
-  return planifierFusionPortee(c.local, c.fichier, c.cible, c.options, exclus)
+  return planifierFusionPortee(c.local, c.fichier, c.cible, exclus)
 }
 
 /** Les clés du plan, et un sous-ensemble refusé (plus des clés inconnues). */
@@ -304,7 +312,7 @@ describe('refus à l’import — propriétés (plans générés)', () => {
         try {
           ancien = ancienPlanifierFusionPortee(
             c.local,
-            c.fichier,
+            sansMarquesSupprimer(c.fichier),
             c.cible,
             c.options,
           )
@@ -454,7 +462,7 @@ describe('refus à l’import — (c) tout refusé', () => {
         let plan: PlanFusion
         try {
           plan = planAvecValidation(c.local, c.fichier, (f) =>
-            planifierFusionPortee(c.local, f, c.cible, c.options),
+            planifierFusionPortee(c.local, f, c.cible),
           )
         } catch {
           return
@@ -462,8 +470,7 @@ describe('refus à l’import — (c) tout refusé', () => {
         const toutes = new Set(
           clesActions(plan.actions).filter((k): k is string => k !== null),
         )
-        const r = await appliquerFusionPortee(1, c.fichier, c.cible, {
-          ...c.options,
+        const r = await appliquerImport(1, c.fichier, c.cible, {
           sourceName: 's',
           exclus: toutes,
         })

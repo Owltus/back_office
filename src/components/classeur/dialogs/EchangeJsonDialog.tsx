@@ -7,6 +7,7 @@ import {
   Copy,
   Download,
   FileUp,
+  Info,
   Loader2,
 } from 'lucide-react'
 
@@ -20,7 +21,7 @@ import {
   MESSAGE_COPIE_REFUSEE,
   useCopieExport,
 } from '#/components/classeur/hooks/useCopieExport.ts'
-import { useAppliquerFusionPortee } from '#/components/classeur/hooks/useMerge.ts'
+import { useAppliquerImport } from '#/components/classeur/hooks/useMerge.ts'
 import { Alert, AlertDescription, AlertTitle } from '#/components/ui/alert.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import {
@@ -31,8 +32,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '#/components/ui/dialog.tsx'
-import { Label } from '#/components/ui/label.tsx'
-import { Switch } from '#/components/ui/switch.tsx'
 import { Textarea } from '#/components/ui/textarea.tsx'
 import { telechargerTexte } from '#/lib/classeur/download.ts'
 import { messageErreur } from '#/lib/classeur/erreur.ts'
@@ -41,16 +40,17 @@ import {
   nomFichierPortee,
   serialiserExport,
 } from '#/lib/classeur/exportJson.ts'
-import { previsualiserFusionPortee } from '#/lib/classeur/merge/apply.ts'
-import { resumerPlan } from '#/lib/classeur/merge/merge.ts'
-import type { PlanFusion } from '#/lib/classeur/merge/merge.ts'
+import { previsualiserImport } from '#/lib/classeur/merge/apply.ts'
+import type { ApercuFusion } from '#/lib/classeur/merge/apply.ts'
+import { resumerImport } from '#/lib/classeur/merge/importIa.ts'
+import type { ContexteImport } from '#/lib/classeur/merge/importIa.ts'
+import type { CiblePortee } from '#/lib/classeur/merge/portee.ts'
 import {
   construireExportChapitre,
   construireExportDocument,
   extraireJson,
   filtrerPlan,
 } from '#/lib/classeur/merge/portee.ts'
-import type { CiblePortee, LigneImport } from '#/lib/classeur/merge/portee.ts'
 import { parseImportJson } from '#/lib/classeur/merge/schema.ts'
 import type { ClasseurJson } from '#/lib/classeur/merge/schema.ts'
 import type {
@@ -67,10 +67,13 @@ import { MAX_JSON_BYTES, fileTooLarge } from '#/lib/shared/files.ts'
  *   1. EXPORTER : copier (le plus direct pour une IA) ou télécharger le
  *      fichier, qui embarque son mode d'emploi (`_metadata.instructions`) ;
  *      un refus du presse-papiers télécharge le fichier à la place ;
- *   2. RÉIMPORTER (droit d'écriture) : coller la réponse du LLM ou choisir un
- *      fichier, voir l'aperçu, puis appliquer. Réimport LIMITÉ à la portée
- *      (`portee.ts`) : rien d'autre dans le classeur ne peut changer, et un
- *      point de restauration est pris avant la première écriture.
+ *   2. RÉIMPORTER (droit d'écriture) : coller la réponse de l'IA ou choisir
+ *      un fichier, voir l'aperçu, puis appliquer. Aucun réglage (décision
+ *      utilisateur du 2026-10-20) : rien d'absent n'est supprimé, et la
+ *      portée est DÉDUITE du fichier (`destinationImport`) — un fichier d'un
+ *      autre chapitre ou document de ce classeur s'applique à lui, une ligne
+ *      le dit ; rien d'autre ne change. Un point de restauration est pris
+ *      avant la première écriture.
  * L'aperçu est une mutation, pas une `useQuery` : un calcul à la demande sur
  * un texte collé, qui ne doit jamais atteindre le cache persisté.
  */
@@ -82,11 +85,8 @@ export type SujetJson =
 /** Délai après la dernière frappe (ou le collage) avant de calculer l'aperçu. */
 const ATTENTE_APERCU_MS = 400
 
-interface Preparation {
+interface Preparation extends ApercuFusion {
   fichier: ClasseurJson
-  plan: PlanFusion
-  /** Une ligne par action, avec l'ancien contenu (pour la comparaison). */
-  lignes: LigneImport[]
 }
 
 function pluriel(n: number, singulier: string, plurielForme: string): string {
@@ -122,12 +122,10 @@ export function EchangeJsonDialog({
   const copie = useCopieExport()
   const { oublier: oublierCopie } = copie
   const [texte, setTexte] = useState('')
-  const [supprimerAbsents, setSupprimerAbsents] = useState(false)
   const [applique, setApplique] = useState<string | null>(null)
   const [erreurFichier, setErreurFichier] = useState<string | null>(null)
   // Éléments refusés (clés `clesActions`) et lignes dépliées de l'aperçu.
-  // Les refus survivent à un recalcul (bascule « supprimer les absents ») :
-  // seuls comptent ceux dont la clé est encore dans l'aperçu.
+  // Seuls comptent les refus dont la clé est encore dans l'aperçu.
   const [refuses, setRefuses] = useState<ReadonlySet<string>>(new Set())
   const [ouvertes, setOuvertes] = useState<ReadonlySet<string>>(new Set())
   const inputRef = useRef<HTMLInputElement>(null)
@@ -135,7 +133,7 @@ export function EchangeJsonDialog({
   // après un collage. On y fait défiler UNE fois, à son apparition.
   const apercuRef = useRef<HTMLDivElement>(null)
 
-  const cible: CiblePortee | null =
+  const contexte: CiblePortee | null =
     sujet === null
       ? null
       : sujet.type === 'chapitre'
@@ -145,53 +143,43 @@ export function EchangeJsonDialog({
   const preparation = useMutation({
     mutationFn: async (args: {
       texte: string
-      cible: CiblePortee
+      contexte: ContexteImport
       classeurId: number
-      supprimerAbsents: boolean
     }): Promise<Preparation> => {
       if (tailleOctets(args.texte) > MAX_JSON_BYTES)
         throw new Error('Texte trop volumineux pour un import.')
       const fichier = parseImportJson(extraireJson(args.texte))
-      const { plan, lignes } = await previsualiserFusionPortee(
+      const apercu = await previsualiserImport(
         args.classeurId,
         fichier,
-        args.cible,
-        { supprimerAbsents: args.supprimerAbsents },
+        args.contexte,
       )
-      return { fichier, plan, lignes }
+      return { fichier, ...apercu }
     },
   })
-  const fusion = useAppliquerFusionPortee()
+  const fusion = useAppliquerImport()
 
-  // Aperçu recalculé après la frappe, le collage ou la bascule.
+  // Aperçu recalculé après la frappe ou le collage.
   const { mutate: preparer, reset: oublierPreparation } = preparation
-  const cleCible =
-    cible === null
+  const cleContexte =
+    contexte === null
       ? ''
-      : cible.type === 'chapitre'
-        ? `c${cible.chapitreId}`
-        : `d${cible.documentId}`
+      : contexte.type === 'chapitre'
+        ? `c${contexte.chapitreId}`
+        : `d${contexte.documentId}`
   useEffect(() => {
-    if (!open || cible === null || classeur === null) return
+    if (!open || contexte === null || classeur === null) return
     if (texte.trim() === '') {
       oublierPreparation()
       return
     }
     const minuteur = window.setTimeout(() => {
-      preparer({ texte, cible, classeurId: classeur.id, supprimerAbsents })
+      preparer({ texte, contexte, classeurId: classeur.id })
     }, ATTENTE_APERCU_MS)
     return () => window.clearTimeout(minuteur)
-    // `cible` est dérivée de `cleCible` (objet recréé à chaque rendu).
+    // `contexte` est dérivé de `cleContexte` (objet recréé à chaque rendu).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    open,
-    texte,
-    cleCible,
-    classeur,
-    supprimerAbsents,
-    preparer,
-    oublierPreparation,
-  ])
+  }, [open, texte, cleContexte, classeur, preparer, oublierPreparation])
 
   // Fermeture : tout repart de zéro.
   const { reset: oublierFusion } = fusion
@@ -199,7 +187,6 @@ export function EchangeJsonDialog({
     if (open) return
     setTexte('')
     oublierCopie()
-    setSupprimerAbsents(false)
     setApplique(null)
     setErreurFichier(null)
     setRefuses(new Set())
@@ -295,7 +282,7 @@ export function EchangeJsonDialog({
     if (
       !preparation.data ||
       !aDesChangements ||
-      cible === null ||
+      contexte === null ||
       classeur === null ||
       sujet === null
     )
@@ -304,13 +291,12 @@ export function EchangeJsonDialog({
       {
         classeurId: classeur.id,
         fichier: preparation.data.fichier,
-        cible,
-        supprimerAbsents,
+        contexte,
         exclus: comptes.exclus,
         sourceName:
           sujet.type === 'chapitre'
-            ? `Import JSON du chapitre ${sujet.chapitre.label}`
-            : `Import JSON du document ${sujet.document.title}`,
+            ? `Import dans le chapitre ${sujet.chapitre.label}`
+            : `Import dans le document ${sujet.document.title}`,
       },
       {
         onSuccess: (r) => {
@@ -319,7 +305,7 @@ export function EchangeJsonDialog({
               ? ` ${pluriel(r.ignores, `${comptes.nom} ignoré`, `${comptes.noms} ignorés`)} à votre demande.`
               : ''
           setApplique(
-            `Import appliqué : ${r.inserted} ajout(s), ${r.updated} modification(s), ${r.deleted} suppression(s).${ignores}${(r.avertissements ?? []).map((a) => ` ${a}`).join('')}`,
+            `Import appliqué : ${pluriel(r.inserted, 'ajout', 'ajouts')}, ${pluriel(r.updated, 'modification', 'modifications')}${r.deleted > 0 ? `, ${String(r.deleted)} mis à la corbeille` : ''}.${ignores}${(r.avertissements ?? []).map((a) => ` ${a}`).join('')}`,
           )
           setTexte('')
           setRefuses(new Set())
@@ -386,7 +372,7 @@ export function EchangeJsonDialog({
                 setErreurFichier(null)
                 setTexte(e.target.value)
               }}
-              placeholder="Collez ici la réponse de l'IA (même entourée de texte ou de ```json)."
+              placeholder="Collez ici la réponse de l'IA."
               aria-label="Réponse de l'IA à réimporter"
               spellCheck={false}
               className="h-32 resize-none font-mono text-xs [field-sizing:fixed]"
@@ -411,24 +397,8 @@ export function EchangeJsonDialog({
                 disabled={fusion.isPending}
               >
                 <FileUp />
-                Ou choisir un fichier .json
+                Ou choisir un fichier
               </Button>
-              {sujet.type === 'chapitre' && (
-                <div className="flex items-center gap-2">
-                  <Switch
-                    id="json-supprimer-absents"
-                    checked={supprimerAbsents}
-                    onCheckedChange={setSupprimerAbsents}
-                    disabled={fusion.isPending}
-                  />
-                  <Label
-                    htmlFor="json-supprimer-absents"
-                    className="text-sm font-normal"
-                  >
-                    Supprimer ce qui n'est plus dans le fichier
-                  </Label>
-                </div>
-              )}
             </div>
 
             {erreurFichier !== null && (
@@ -447,6 +417,12 @@ export function EchangeJsonDialog({
                   {messageErreur(preparation.error, 'Import impossible')}
                 </AlertDescription>
               </Alert>
+            )}
+            {preparation.data?.note != null && !preparation.isPending && (
+              <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Info className="size-4 shrink-0" />
+                {preparation.data.note}
+              </p>
             )}
             {plan && plan.warnings.length > 0 && (
               <Alert>
@@ -477,10 +453,16 @@ export function EchangeJsonDialog({
                     disabled={fusion.isPending}
                     images={imagesConnues}
                     etatImages={etatImages}
+                    // Fichier de tout le classeur : groupé par chapitre.
+                    chapitres={
+                      preparation.data?.cible.type === 'classeur'
+                        ? preparation.data.chapitres
+                        : undefined
+                    }
                   />
                 )}
                 <p className="text-xs text-muted-foreground">
-                  {resumerPlan(planRetenu ?? plan)}.
+                  {resumerImport(planRetenu ?? plan)}.
                   {aDesChangements &&
                     " Un point de restauration est pris avant d'appliquer."}
                 </p>

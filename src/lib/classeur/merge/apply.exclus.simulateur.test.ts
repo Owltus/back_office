@@ -26,7 +26,7 @@ vi.mock('#/lib/supabase.ts', () => ({
   },
 }))
 
-const { appliquerFusionPortee } = await import('#/lib/classeur/merge/apply.ts')
+const { appliquerImport } = await import('#/lib/classeur/merge/apply.ts')
 const { construireExportChapitre } =
   await import('#/lib/classeur/merge/portee.ts')
 const { parseImportJson } = await import('#/lib/classeur/merge/schema.ts')
@@ -124,10 +124,9 @@ beforeEach(() => {
   etat.sim = sim
 })
 
-describe('appliquerFusionPortee + refus, contre le simulateur', () => {
+describe('appliquerImport + refus, contre le simulateur', () => {
   it('point → écritures → élagage ; le document refusé reste intact', async () => {
-    const r = await appliquerFusionPortee(1, fichierLlm(), CIBLE, {
-      supprimerAbsents: false,
+    const r = await appliquerImport(1, fichierLlm(), CIBLE, {
       sourceName: 'Import JSON du chapitre « Accueil »',
       exclus: new Set(['document:2']),
     })
@@ -186,8 +185,7 @@ describe('appliquerFusionPortee + refus, contre le simulateur', () => {
   })
 
   it('tout refuser : aucune écriture, aucun point de restauration', async () => {
-    const r = await appliquerFusionPortee(1, fichierLlm(), CIBLE, {
-      supprimerAbsents: false,
+    const r = await appliquerImport(1, fichierLlm(), CIBLE, {
       sourceName: 's',
       exclus: new Set(['document:1', 'document:2']),
     })
@@ -200,8 +198,7 @@ describe('appliquerFusionPortee + refus, contre le simulateur', () => {
   })
 
   it('sans refus : les deux documents sont écrits (comportement d’avant)', async () => {
-    const r = await appliquerFusionPortee(1, fichierLlm(), CIBLE, {
-      supprimerAbsents: false,
+    const r = await appliquerImport(1, fichierLlm(), CIBLE, {
       sourceName: 's',
     })
     expect(r).toMatchObject({ updated: 2, unchanged: 1, ignores: 0 }) // le chapitre
@@ -215,8 +212,7 @@ describe('appliquerFusionPortee + refus, contre le simulateur', () => {
   it('refus RLS du point de restauration : erreur, aucune écriture de contenu', async () => {
     sim.refuser('classeur_merge_history', 'insert')
     await expect(
-      appliquerFusionPortee(1, fichierLlm(), CIBLE, {
-        supprimerAbsents: false,
+      appliquerImport(1, fichierLlm(), CIBLE, {
         sourceName: 's',
         exclus: new Set(['document:2']),
       }),
@@ -231,17 +227,13 @@ describe('appliquerFusionPortee + refus, contre le simulateur', () => {
    * `ecrireDocumentVersionne` finissait par une écriture non relue —
    * l'import se disait réussi alors que rien n'était écrit.
    */
-  it(
-    'refus RLS d’une écriture de document : l’erreur devrait remonter',
-    async () => {
-      sim.refuser('classeur_documents', 'update')
-      await expect(
-        appliquerFusionPortee(1, fichierLlm(), CIBLE, {
-          supprimerAbsents: false,
-          sourceName: 's',
-          exclus: new Set(['document:2']),
-        }),
-      ).rejects.toBeTruthy()
-    },
-  )
+  it('refus RLS d’une écriture de document : l’erreur devrait remonter', async () => {
+    sim.refuser('classeur_documents', 'update')
+    await expect(
+      appliquerImport(1, fichierLlm(), CIBLE, {
+        sourceName: 's',
+        exclus: new Set(['document:2']),
+      }),
+    ).rejects.toBeTruthy()
+  })
 })

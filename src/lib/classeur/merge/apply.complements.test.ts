@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
-  appliquerFusionPortee,
+  appliquerImport,
   executerPlan,
   importerCommeNouveauClasseur,
-  previsualiserFusionPortee,
+  previsualiserImport,
   resoudreChapitre,
 } from '#/lib/classeur/merge/apply.ts'
 import type { Ecrivain } from '#/lib/classeur/merge/apply.ts'
@@ -280,16 +280,12 @@ const fichierDoc = () =>
     }),
   ])
 
-describe('previsualiserFusionPortee', () => {
+describe('previsualiserImport', () => {
   it('rend le plan et une ligne avant / après par action, sans écrire', async () => {
-    const r = await previsualiserFusionPortee(
-      1,
-      fichierDoc(),
-      { type: 'document', documentId: 1 },
-      {
-        supprimerAbsents: false,
-      },
-    )
+    const r = await previsualiserImport(1, fichierDoc(), {
+      type: 'document',
+      documentId: 1,
+    })
     expect(r.plan.actions).toHaveLength(1)
     expect(r.lignes).toHaveLength(1)
     expect(r.lignes[0]).toMatchObject({
@@ -303,16 +299,15 @@ describe('previsualiserFusionPortee', () => {
   })
 })
 
-describe('appliquerFusionPortee : instantané', () => {
+describe('appliquerImport : instantané', () => {
   it('référentiel des périodicités absent : instantané avec une liste vide', async () => {
     // Un état local sans `periodicites` : le service n'en rend pas.
     mocks.fetchPeriodicites.mockResolvedValue(undefined as never)
-    await appliquerFusionPortee(
+    await appliquerImport(
       1,
       fichierDoc(),
       { type: 'document', documentId: 1 },
       {
-        supprimerAbsents: false,
         sourceName: 'Import',
       },
     )

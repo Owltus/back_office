@@ -256,7 +256,7 @@ describe('E10 / portée — un export normal donne EXACTEMENT le plan d’avant'
 
   it('portée chapitre (export d’un chapitre retravaillé)', () => {
     fc.assert(
-      fc.property(descArb, fc.boolean(), (d, supprimerAbsents) => {
+      fc.property(descArb, (d) => {
         const local = construireLocal(d)
         const visibles = local.chapters.filter((c) => c.deleted_at === null)
         fc.pre(visibles.length > 0)
@@ -276,10 +276,13 @@ describe('E10 / portée — un export normal donne EXACTEMENT le plan d’avant'
           ...exporte,
           chapters: [{ ...exporte.chapters[0], items }],
         })
-        const options = { supprimerAbsents }
+        // Depuis le 2026-10-20, un absent n'est jamais supprimé : l'ancien
+        // plan sans la case est la référence.
         const ciblePortee = { type: 'chapitre', chapitreId: cible.id } as const
-        expect(planifierFusionPortee(local, f, ciblePortee, options)).toEqual(
-          ancienPlanifierFusionPortee(local, f, ciblePortee, options),
+        expect(planifierFusionPortee(local, f, ciblePortee)).toEqual(
+          ancienPlanifierFusionPortee(local, f, ciblePortee, {
+            supprimerAbsents: false,
+          }),
         )
       }),
       { numRuns: NUM_RUNS, seed: SEED },

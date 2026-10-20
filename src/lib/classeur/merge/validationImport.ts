@@ -23,9 +23,11 @@
  *   V5 création d'une feuille de suivi sans `periodicite_id` : avertissement
  *      (plus de défaut muet).
  *   V6 titre vide : élément ignoré. S'il désigne un élément existant (par son
- *      uuid), celui-ci reste tel quel, et n'est jamais supprimé par la case
- *      « supprimer ce qui n'est plus dans le fichier » (`proteges`). Un
- *      élément DÉJÀ sans titre en base passe tel quel (E8).
+ *      uuid), celui-ci reste tel quel, et n'est jamais supprimé (`proteges` ;
+ *      depuis le 2026-10-20 un absent n'est de toute façon jamais supprimé,
+ *      le filet reste). Un élément DÉJÀ sans titre en base passe tel quel
+ *      (E8). Un élément marqué `"supprimer": true` n'est pas contrôlé : il
+ *      ne sert qu'à désigner ce qui part à la corbeille, rien n'en est écrit.
  *   V7 `_metadata.periodicites` retouché (E3 apparie les périodicités par ce
  *      bloc) : quand il vient de cette base (au moins une entrée identique au
  *      référentiel) mais qu'une entrée a changé, il est remplacé par le
@@ -191,6 +193,7 @@ export function validerFichierImport(
   }
 
   function validerItem(item: ItemJson, chapitre: string): ItemJson | null {
+    if (item.supprimer === true) return item
     const titre = item.title.trim()
     // V6
     if (titre === '') {

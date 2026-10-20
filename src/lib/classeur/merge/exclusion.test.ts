@@ -99,9 +99,10 @@ describe('cleAction / clesActions (D13)', () => {
         icon: '',
         description: '',
       },
-      { type: 'supprimerChapitre', id: 1 },
     ]
     for (const a of chapitres) expect(cleAction(a)).toBeNull()
+    // Mise à la corbeille d'un chapitre (2026-10-20) : refusable.
+    expect(cleAction({ type: 'supprimerChapitre', id: 1 })).toBe('chapitre:1')
   })
 
   it('deux créations identiques : la seconde porte #2, la troisième #3', () => {
@@ -180,6 +181,8 @@ function fichierRetravaille() {
   f.chapters[0].items = [
     items[0],
     items[1],
+    // Ancien : gardé dans le fichier, marqué pour la corbeille (2026-10-20).
+    { ...items[2], supprimer: true },
     {
       kind: 'document',
       title: 'Nouveau',
@@ -193,12 +196,10 @@ function fichierRetravaille() {
 }
 
 describe('lignesImport : avant / après de chaque action', () => {
-  const plan = planifierFusionPortee(
-    local,
-    fichierRetravaille(),
-    { type: 'chapitre', chapitreId: 10 },
-    { supprimerAbsents: true },
-  )
+  const plan = planifierFusionPortee(local, fichierRetravaille(), {
+    type: 'chapitre',
+    chapitreId: 10,
+  })
   const lignes = lignesImport(local, plan)
   const parCle = new Map(lignes.map((l) => [l.cle, l]))
 
@@ -498,7 +499,7 @@ describe('lignesImport : autres familles et cas limites', () => {
     expect(s.avant).toEqual({ title: '', description: '', content: '' })
   })
 
-  it('chapitre créé, restauré ou supprimé : lignes sans case', () => {
+  it('chapitre créé ou restauré : lignes sans case ; mis à la corbeille : refusable', () => {
     const loc = etat([chapitre({ id: 11, label: 'Ancien', description: 'd' })])
     const lignes = lignesImport(loc, {
       actions: [
@@ -536,7 +537,7 @@ describe('lignesImport : autres familles et cas limites', () => {
     ).toEqual([
       [null, 'chapitre', 'Neuf', 'texte', false],
       [null, 'chapitre', 'Ancien', 'autre', false],
-      [null, 'chapitre', 'Ancien', 'texte', false],
+      ['chapitre:11', 'suppression', 'Ancien', 'texte', false],
     ])
     expect(lignes[0].avant).toEqual({ title: '', description: '', content: '' })
     expect(lignes[2].apres).toEqual({ title: '', description: '', content: '' })
@@ -551,12 +552,10 @@ describe('lignesImport : autres familles et cas limites', () => {
 // ---------------------------------------------------------------------------
 
 describe('filtrerPlan : exemples', () => {
-  const plan = planifierFusionPortee(
-    local,
-    fichierRetravaille(),
-    { type: 'chapitre', chapitreId: 10 },
-    { supprimerAbsents: true },
-  )
+  const plan = planifierFusionPortee(local, fichierRetravaille(), {
+    type: 'chapitre',
+    chapitreId: 10,
+  })
 
   it('le plan de départ (vérifié à la main)', () => {
     expect(plan.resultat).toEqual({
@@ -779,17 +778,9 @@ describe('planifierFusionPortee(…, exclus) : document seul', () => {
       ),
     )
     const cible = { type: 'document' as const, documentId: 1 }
-    const plein = planifierFusionPortee(loc, f, cible, {
-      supprimerAbsents: false,
-    })
+    const plein = planifierFusionPortee(loc, f, cible)
     expect(clesActions(plein.actions)).toEqual(['document:1'])
-    const vide = planifierFusionPortee(
-      loc,
-      f,
-      cible,
-      { supprimerAbsents: false },
-      new Set(['document:1']),
-    )
+    const vide = planifierFusionPortee(loc, f, cible, new Set(['document:1']))
     expect(vide.actions).toEqual([])
     expect(vide.apercu).toEqual([])
     expect(vide.resultat).toEqual({
@@ -821,7 +812,7 @@ describe('compléments (mutants survivants de Stryker)', () => {
     expect(clesActions([m, m, { type: 'supprimerChapitre', id: 2 }])).toEqual([
       null,
       null,
-      null,
+      'chapitre:2',
     ])
   })
 

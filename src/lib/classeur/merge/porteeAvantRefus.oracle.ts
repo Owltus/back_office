@@ -19,7 +19,16 @@ import type {
   MergePreviewItem,
   PlanFusion,
 } from '#/lib/classeur/merge/merge.ts'
-import type { CiblePortee, OptionsPortee } from '#/lib/classeur/merge/portee.ts'
+import type { CiblePortee } from '#/lib/classeur/merge/portee.ts'
+
+/**
+ * Options de l'époque (la case « supprimer les absents », retirée de
+ * `portee.ts` le 2026-10-20). Définies ici pour que l'oracle reste conforme :
+ * ses comparaisons se font désormais avec `supprimerAbsents: false`.
+ */
+export interface OptionsPortee {
+  supprimerAbsents: boolean
+}
 
 export function ancienPlanifierFusionPortee(
   local: EtatLocal,

@@ -308,7 +308,7 @@ describe('ClasseurDashboard — en-tête fixe et panneau', () => {
 
   it('dépôt d’un fichier sur Importer : la ligne l’annonce', () => {
     monterTout()
-    const ligne = screen.getByRole('button', { name: /Importer un JSON/ })
+    const ligne = screen.getByRole('button', { name: /^Importer/ })
     fireEvent.dragOver(ligne, { dataTransfer: { types: ['Files'] } })
     expect(ligne.textContent).toContain('Déposez le fichier ici')
     expect(ligne.className).toContain('bg-primary/10')
@@ -339,7 +339,7 @@ describe('ClasseurDashboard — en-tête fixe et panneau', () => {
         titre: 'Échanger et sauvegarder',
         cartes: [
           expect.stringMatching(/Exporter en JSON.*À coller dans une IA/),
-          expect.stringContaining('Importer un JSON'),
+          expect.stringMatching(/^Importer.*Réponse d'une IA ou fichier/),
           expect.stringContaining('Exporter en Markdown'),
         ],
         reservees: 0,

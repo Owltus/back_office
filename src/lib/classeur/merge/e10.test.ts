@@ -88,13 +88,11 @@ describe('portée CHAPITRE : un uuid d’un autre chapitre ne touche jamais cet 
           ],
         }),
       ])
-      for (const supprimerAbsents of [false, true]) {
-        const plan = planifierFusionPortee(
-          local,
-          f,
-          { type: 'chapitre', chapitreId: 10 },
-          { supprimerAbsents },
-        )
+      {
+        const plan = planifierFusionPortee(local, f, {
+          type: 'chapitre',
+          chapitreId: 10,
+        })
         expect(touche(plan.actions, id)).toEqual([])
         const creations = plan.actions.filter((a) => a.type === 'creerItem')
         expect(creations).toHaveLength(1)
@@ -130,12 +128,10 @@ describe('portée CHAPITRE : un uuid d’un autre chapitre ne touche jamais cet 
         ],
       }),
     ])
-    const plan = planifierFusionPortee(
-      l,
-      f,
-      { type: 'chapitre', chapitreId: 10 },
-      { supprimerAbsents: false },
-    )
+    const plan = planifierFusionPortee(l, f, {
+      type: 'chapitre',
+      chapitreId: 10,
+    })
     expect(touche(plan.actions, 7)).toEqual([])
     expect(plan.actions).toContainEqual(
       expect.objectContaining({ type: 'creerItem', uuid: null }),
@@ -158,12 +154,10 @@ describe('portée CHAPITRE : un uuid d’un autre chapitre ne touche jamais cet 
         ],
       }),
     ])
-    const plan = planifierFusionPortee(
-      local,
-      f,
-      { type: 'chapitre', chapitreId: 10 },
-      { supprimerAbsents: false },
-    )
+    const plan = planifierFusionPortee(local, f, {
+      type: 'chapitre',
+      chapitreId: 10,
+    })
     expect(plan.actions).toEqual([
       expect.objectContaining({ type: 'modifierItem', id: 1 }),
     ])
@@ -190,12 +184,7 @@ describe('portée DOCUMENT : seul le document ciblé peut être touché', () => 
       }),
     ])
     expect(() =>
-      planifierFusionPortee(
-        local,
-        f,
-        { type: 'document', documentId: 1 },
-        { supprimerAbsents: false },
-      ),
+      planifierFusionPortee(local, f, { type: 'document', documentId: 1 }),
     ).toThrow(/autre document/)
   })
 
@@ -214,12 +203,10 @@ describe('portée DOCUMENT : seul le document ciblé peut être touché', () => 
         ],
       }),
     ])
-    const plan = planifierFusionPortee(
-      local,
-      f,
-      { type: 'document', documentId: 1 },
-      { supprimerAbsents: true },
-    )
+    const plan = planifierFusionPortee(local, f, {
+      type: 'document',
+      documentId: 1,
+    })
     expect(plan.actions).toHaveLength(1)
     expect(plan.actions[0]).toMatchObject({
       type: 'modifierItem',

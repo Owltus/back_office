@@ -149,8 +149,7 @@ describe('validerFichierImport — un fichier valide passe TEL QUEL', () => {
         expect(v.fichier).toBe(f)
         expect(v.avertissements).toEqual([])
         // Et le plan validé est celui d'avant l'étape 6.
-        const planifier = (x: ClasseurJson) =>
-          planifierImportIa(l, x, { supprimerAbsents: true })
+        const planifier = (x: ClasseurJson) => planifierImportIa(l, x)
         expect(planAvecValidation(l, f, planifier)).toEqual(planifier(f))
       }),
       { numRuns: 1000, seed: 20261020 },
@@ -249,7 +248,7 @@ describe('V3, V4, V5 — périodicités', () => {
     ])
     // Et le plan ne change pas la périodicité.
     const plan = planAvecValidation(local, f, (x) =>
-      planifierImportIa(local, x, { supprimerAbsents: false }),
+      planifierImportIa(local, x),
     )
     expect(plan.actions).toEqual([])
   })
@@ -324,15 +323,25 @@ describe('V6 — titre vide', () => {
     ])
   })
 
-  it('protégé : jamais supprimé, même case cochée ; le reste l’est', () => {
-    const f = avec([itJson({ kind: 'document', title: '', uuid: U(1) })])
+  it('protégé : jamais supprimé ; les marqués « supprimer » le sont', () => {
+    const f = avec([
+      itJson({ kind: 'document', title: '', uuid: U(1) }),
+      itJson({
+        kind: 'tracking_sheet',
+        title: 'Relevé',
+        uuid: U(3),
+        supprimer: true,
+      }),
+      // Marqué ET titre vidé : la marque l'emporte (V6 ne la contrôle pas).
+      itJson({
+        kind: 'signature_sheet',
+        title: '',
+        uuid: U(4),
+        supprimer: true,
+      }),
+    ])
     const plan = planAvecValidation(local, f, (x) =>
-      planifierFusionPortee(
-        local,
-        x,
-        { type: 'chapitre', chapitreId: 10 },
-        { supprimerAbsents: true },
-      ),
+      planifierFusionPortee(local, x, { type: 'chapitre', chapitreId: 10 }),
     )
     const supprimes = plan.actions.flatMap((a) =>
       a.type === 'supprimerItem' ? [`${a.kind}:${String(a.id)}`] : [],
@@ -424,7 +433,7 @@ describe('le cas du plan : nombre 100, uuid « doc-1 », périodicité 999', () 
       itJson({ kind: 'tracking_sheet', title: 'Neuve', periodicite_id: 999 }),
     ])
     const plan = planAvecValidation(local, f, (x) =>
-      planifierImportIa(local, x, { supprimerAbsents: false }),
+      planifierImportIa(local, x),
     )
     expect(plan.warnings).toEqual([
       'Feuille de signature Émargement : 100 lignes demandées, 60 au plus.',

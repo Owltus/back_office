@@ -62,7 +62,7 @@ vi.mock('#/lib/classeur/service.ts', async (importOriginal) => {
 const { reinitialiserPointsAuto } =
   await import('#/lib/classeur/restauration.ts')
 const { restaurerInstantane } = await import('#/lib/classeur/merge/history.ts')
-const { appliquerFusion, appliquerFusionPortee } =
+const { appliquerFusion, appliquerImport } =
   await import('#/lib/classeur/merge/apply.ts')
 const { construireExport } = await import('#/lib/classeur/merge/schema.ts')
 const {
@@ -254,11 +254,11 @@ describe('fusion de PORTÉE et restauration passent par le même repli', () => {
     })
     // Portée = un seul chapitre : garder celui d'Arrivée.
     fichier.chapters = fichier.chapters.slice(0, 1)
-    const r = await appliquerFusionPortee(
+    const r = await appliquerImport(
       5,
       fichier,
       { type: 'chapitre', chapitreId: 50 },
-      { supprimerAbsents: false, sourceName: 's' },
+      { sourceName: 's' },
     )
     expect(r.avertissements).toEqual([
       '1 élément a reçu un nouvel identifiant : il existait ailleurs.',

@@ -12,10 +12,16 @@ import {
   suivi,
 } from '#/lib/classeur/merge/fixtures.ts'
 import {
-  controlerPorteeClasseur,
+  destinationImport,
   fichierSansHorodatage,
   planifierImportIa,
+  planifierVers,
 } from '#/lib/classeur/merge/importIa.ts'
+import type { ContexteImport } from '#/lib/classeur/merge/importIa.ts'
+import {
+  construireExportChapitre,
+  planifierFusionPortee,
+} from '#/lib/classeur/merge/portee.ts'
 import { planifierFusion } from '#/lib/classeur/merge/merge.ts'
 import type {
   ActionFusion,
@@ -39,13 +45,16 @@ import { ITEM_KINDS, flattenItems } from '#/lib/classeur/types.ts'
  *   - chaque élément du fichier existe, non supprimé, dans le chapitre du
  *     fichier, avec EXACTEMENT les champs du fichier, quel que soit son
  *     `updated_at` (plus ancien, égal, plus récent, absent) ;
- *   - case décochée : AUCUN élément ni chapitre local n'est supprimé ;
- *   - case cochée : il ne reste que ce que le fichier contient ;
+ *   - AUCUN élément ni chapitre absent du fichier n'est supprimé (décision
+ *     utilisateur du 2026-10-20 : plus de case) ;
+ *   - un élément ou un chapitre gardé dans le fichier et marqué
+ *     `"supprimer": true` part à la corbeille (lui, ou son chapitre), et
+ *     RIEN d'autre n'est supprimé ;
  *   - aucune action ne porte d'horodatage, et le plan ne dépend pas des
  *     horodatages du fichier.
  * Les fichiers imitent ce qu'une IA fait d'un export : textes, titres,
- * réglages changés, éléments retirés, déplacés, ajoutés SANS uuid, chapitres
- * renommés, retirés ou ajoutés, et des éléments supprimés localement depuis
+ * réglages changés, éléments retirés (ou marqués), déplacés, ajoutés SANS
+ * uuid, chapitres renommés, retirés (ou marqués) ou ajoutés, et des éléments supprimés localement depuis
  * l'export (restaurés : le fichier fait foi).
  */
 
@@ -90,7 +99,11 @@ interface Desc {
   chapitresNeufs: number
   /** Éléments supprimés localement mais encore dans le fichier. */
   perimes: boolean
-  supprimerAbsents: boolean
+  /**
+   * Un élément ou un chapitre « retiré » : gardé et marqué `supprimer`
+   * (vrai), ou ôté du fichier comme le faisait une IA tronquée (faux).
+   */
+  marquer: boolean
 }
 
 const itemArb = fc.record({
@@ -139,7 +152,7 @@ const descArb: fc.Arbitrary<Desc> = fc.record({
   ),
   chapitresNeufs: fc.nat({ max: 2 }),
   perimes: fc.boolean(),
-  supprimerAbsents: fc.boolean(),
+  marquer: fc.boolean(),
 })
 
 function construireLocal(d: Desc): EtatLocal {
@@ -248,7 +261,7 @@ function construireFichier(local: EtatLocal, d: Desc): ClasseurJson {
             el.periodicite_id = PERIODICITES[g.periodicite].id
           break
         case 4:
-          return []
+          return d.marquer ? [{ ...el, supprimer: true as const }] : []
         case 5:
           deplaces.push({ item: el, vers: g.versChapitre % total })
           return []
@@ -277,11 +290,12 @@ function construireFichier(local: EtatLocal, d: Desc): ClasseurJson {
   })
   // Gestes sur les chapitres exportés, en dernier (un chapitre retiré emporte
   // ce qu'il contient, déplacés compris).
-  const gardes = f.chapters.filter((c, i) => {
-    if (i >= n) return true
+  const gardes = f.chapters.flatMap((c, i) => {
+    if (i >= n) return [c]
     const g = d.gestesChapitres[i % d.gestesChapitres.length]
     if (g === 1) c.label = `${c.label} renommé`
-    return g !== 2
+    if (g !== 2) return [c]
+    return d.marquer ? [{ ...c, supprimer: true as const }] : []
   })
   return { ...f, chapters: gardes }
 }
@@ -432,18 +446,31 @@ function attendu(item: ItemJson): Record<string, unknown> {
   })
 }
 
-function verifier(local: EtatLocal, f: ClasseurJson, d: Desc): void {
-  const plan = planifierImportIa(local, f, {
-    supprimerAbsents: d.supprimerAbsents,
-  })
+function verifier(local: EtatLocal, f: ClasseurJson): void {
+  const plan = planifierImportIa(local, f)
   // Aucun horodatage ne part en base.
   for (const a of plan.actions) expect('updated_at' in a).toBe(false)
 
   const avant = modeleDe(local)
   const apres = executer(modeleDe(local), plan.actions)
 
-  // Chapitre final de chaque chapitre du fichier.
+  const chapitresMarques = new Set(
+    f.chapters.flatMap((c) =>
+      c.supprimer === true && c.uuid !== undefined ? [c.uuid] : [],
+    ),
+  )
+  const itemsMarques = new Set(
+    f.chapters.flatMap((c) =>
+      c.items.flatMap((i) =>
+        (i.supprimer === true || c.supprimer === true) && i.uuid !== undefined
+          ? [i.uuid]
+          : [],
+      ),
+    ),
+  )
+  // Chapitre final de chaque chapitre NON marqué du fichier.
   const chapitreFinal = f.chapters.map((c) => {
+    if (c.supprimer === true) return null
     for (const [id, ch] of apres.chapitres) {
       if (ch.supprime) continue
       if (c.uuid !== undefined ? ch.uuid === c.uuid : ch.label === c.label)
@@ -451,10 +478,12 @@ function verifier(local: EtatLocal, f: ClasseurJson, d: Desc): void {
     }
     throw new Error(`chapitre ${c.label} absent`)
   })
-  // Le fichier fait foi : chaque élément, à sa place, avec ses champs.
-  const vus = new Set<string>()
+  // Le fichier fait foi : chaque élément non marqué, à sa place, avec ses
+  // champs.
   f.chapters.forEach((c, i) => {
+    if (c.supprimer === true) return
     for (const item of c.items) {
+      if (item.supprimer === true) continue
       const trouve = [...apres.items.entries()].find(([, el]) =>
         item.uuid !== undefined
           ? el.uuid === item.uuid
@@ -463,29 +492,48 @@ function verifier(local: EtatLocal, f: ClasseurJson, d: Desc): void {
             el.champs.title === item.title,
       )
       expect(trouve, item.title).toBeDefined()
-      const [cle, el] = trouve as [string, ItemModele]
-      vus.add(cle)
+      const [, el] = trouve as [string, ItemModele]
       expect(el.supprime, item.title).toBe(false)
       expect(el.chapter_id, item.title).toBe(chapitreFinal[i])
       expect(el.champs, item.title).toEqual(attendu(item))
     }
   })
-  // Suppressions : jamais sans la case ; avec, seul le fichier reste.
+  // AUCUN élément local absent du fichier (ou non marqué) n'est supprimé ;
+  // un marqué part à la corbeille, lui ou son chapitre.
   for (const [cle, el] of avant.items) {
-    const final = apres.items.get(cle)
-    if (!d.supprimerAbsents && !el.supprime)
-      expect(final?.supprime, cle).toBe(false)
-    if (d.supprimerAbsents && !vus.has(cle))
-      expect(final?.supprime, cle).toBe(true)
+    const final = apres.items.get(cle) as ItemModele
+    const marque = el.uuid !== null && itemsMarques.has(el.uuid)
+    if (!marque) {
+      if (!el.supprime) expect(final.supprime, cle).toBe(false)
+    } else {
+      const chapitre = apres.chapitres.get(final.chapter_id)
+      expect(final.supprime || chapitre?.supprime === true, cle).toBe(true)
+    }
   }
   for (const [id, c] of avant.chapitres) {
     const final = apres.chapitres.get(id)
-    if (!d.supprimerAbsents && !c.supprime)
-      expect(final?.supprime, c.label).toBe(false)
-    if (d.supprimerAbsents && !chapitreFinal.includes(id))
-      expect(final?.supprime, c.label).toBe(true)
+    const marque = c.uuid !== null && chapitresMarques.has(c.uuid)
+    if (!marque && !c.supprime) expect(final?.supprime, c.label).toBe(false)
+    if (marque) expect(final?.supprime, c.label).toBe(true)
   }
-  if (!d.supprimerAbsents) {
+  // Une suppression ne vise QUE ce qui est marqué.
+  for (const a of plan.actions) {
+    if (a.type === 'supprimerItem') {
+      const el = avant.items.get(`${a.kind}:${String(a.id)}`)
+      expect(el?.uuid != null && itemsMarques.has(el.uuid), String(a.id)).toBe(
+        true,
+      )
+    }
+    if (a.type === 'supprimerChapitre') {
+      const c = avant.chapitres.get(a.id)
+      expect(
+        c?.uuid != null && chapitresMarques.has(c.uuid),
+        String(a.id),
+      ).toBe(true)
+    }
+  }
+  const sansMarque = chapitresMarques.size === 0 && itemsMarques.size === 0
+  if (sansMarque) {
     expect(plan.actions.some((a) => a.type === 'supprimerItem')).toBe(false)
     expect(plan.actions.some((a) => a.type === 'supprimerChapitre')).toBe(false)
     expect(plan.resultat.deleted).toBe(0)
@@ -498,7 +546,7 @@ describe('planifierImportIa — propriétés (le fichier fait foi)', () => {
     fc.assert(
       fc.property(descArb, (d) => {
         const local = construireLocal(d)
-        verifier(local, construireFichier(local, d), d)
+        verifier(local, construireFichier(local, d))
       }),
       { numRuns: NUM_RUNS, seed: SEED },
     )
@@ -524,9 +572,8 @@ describe('planifierImportIa — propriétés (le fichier fait foi)', () => {
               if (n === null) delete el.updated_at
               else el.updated_at = DATES[n]
             }
-          const options = { supprimerAbsents: d.supprimerAbsents }
-          expect(planifierImportIa(local, autre, options)).toEqual(
-            planifierImportIa(local, f, options),
+          expect(planifierImportIa(local, autre)).toEqual(
+            planifierImportIa(local, f),
           )
         },
       ),
@@ -534,14 +581,27 @@ describe('planifierImportIa — propriétés (le fichier fait foi)', () => {
     )
   })
 
-  it('case cochée : exactement le remplacement sans horodatage', () => {
+  it('sans marque : le remplacement sans horodatage, moins TOUTES ses suppressions', () => {
     fc.assert(
       fc.property(descArb, (d) => {
         const local = construireLocal(d)
-        const f = construireFichier(local, d)
-        expect(planifierImportIa(local, f, { supprimerAbsents: true })).toEqual(
-          planifierFusion(local, fichierSansHorodatage(f), { replace: true }),
-        )
+        const f = construireFichier(local, { ...d, marquer: false })
+        const remplacement = planifierFusion(local, fichierSansHorodatage(f), {
+          replace: true,
+        })
+        const supprimer = (a: ActionFusion) =>
+          a.type === 'supprimerItem' || a.type === 'supprimerChapitre'
+        const n = remplacement.actions.filter(supprimer).length
+        expect(planifierImportIa(local, f)).toEqual({
+          actions: remplacement.actions.filter((a) => !supprimer(a)),
+          warnings: remplacement.warnings,
+          resultat: {
+            ...remplacement.resultat,
+            deleted: remplacement.resultat.deleted - n,
+            unchanged: remplacement.resultat.unchanged + n,
+          },
+          apercu: remplacement.apercu.filter((l) => l.action !== 'delete'),
+        })
       }),
       { numRuns: NUM_RUNS, seed: SEED + 2 },
     )
@@ -566,7 +626,7 @@ describe('planifierImportIa — cas posés à la main', () => {
     const f = exp()
     f.chapters[0].items[0].content = 'après'
     f.chapters[0].items[0].updated_at = DATES[0]
-    const plan = planifierImportIa(local, f, { supprimerAbsents: false })
+    const plan = planifierImportIa(local, f)
     expect(plan.actions).toEqual([
       {
         type: 'modifierItem',
@@ -581,10 +641,10 @@ describe('planifierImportIa — cas posés à la main', () => {
     expect(planifierFusion(local, f, { replace: false }).actions).toEqual([])
   })
 
-  it('un chapitre retiré : rien supprimé, compté inchangé ; case cochée : supprimé', () => {
+  it('un chapitre retiré : rien supprimé, compté inchangé ; marqué : à la corbeille', () => {
     const f = exp()
     f.chapters.splice(1, 1)
-    const sans = planifierImportIa(local, f, { supprimerAbsents: false })
+    const sans = planifierImportIa(local, f)
     expect(sans.actions).toEqual([])
     expect(sans.resultat).toEqual({
       inserted: 0,
@@ -593,12 +653,16 @@ describe('planifierImportIa — cas posés à la main', () => {
       skipped: 0,
       deleted: 0,
     })
-    const avec = planifierImportIa(local, f, { supprimerAbsents: true })
-    expect(avec.actions).toEqual([
-      { type: 'supprimerItem', kind: 'document', id: 2 },
-      { type: 'supprimerChapitre', id: 20 },
+    // Marqué : seul le chapitre part, son document le suit (aucune action
+    // à part, comme la suppression d'un chapitre à l'écran).
+    const marque = exp()
+    marque.chapters[1].supprimer = true
+    const avec = planifierImportIa(local, marque)
+    expect(avec.actions).toEqual([{ type: 'supprimerChapitre', id: 20 }])
+    expect(avec.resultat.deleted).toBe(1)
+    expect(avec.apercu).toEqual([
+      expect.objectContaining({ action: 'delete', kind: 'chapter' }),
     ])
-    expect(avec.resultat.deleted).toBe(2)
   })
 
   it('un document supprimé depuis l’export est restauré (le fichier fait foi)', () => {
@@ -606,34 +670,86 @@ describe('planifierImportIa — cas posés à la main', () => {
     const supprime = etat([A, B], {
       documents: [{ ...d1, deleted_at: T_SUPPR }, d2],
     })
-    const plan = planifierImportIa(supprime, f, { supprimerAbsents: false })
+    const plan = planifierImportIa(supprime, f)
     expect(plan.actions.map((a) => a.type)).toEqual(['restaurerItem'])
   })
 })
 
-describe('controlerPorteeClasseur (D10)', () => {
+describe('`"supprimer": true` sur un élément', () => {
   const A = chapitre({ id: 10, label: 'Accueil' })
+  const d1 = document({ id: 1, chapter_id: 10, title: 'Check-in' })
+  const d2 = document({ id: 2, chapter_id: 10, title: 'Check-out' })
+  const local = etat([A], { documents: [d1, d2] })
+  const exp = () => construireExport(classeur(), [A], local.content, [])
+
+  it('un élément marqué : mis à la corbeille (douce), le reste intact', () => {
+    const f = exp()
+    f.chapters[0].items[1].supprimer = true
+    const plan = planifierImportIa(local, f)
+    expect(plan.actions).toEqual([
+      { type: 'supprimerItem', kind: 'document', id: 2 },
+    ])
+    expect(plan.resultat).toMatchObject({ deleted: 1, unchanged: 2 })
+  })
+
+  it('marqué mais modifié : supprimé, la modification est ignorée', () => {
+    const f = exp()
+    f.chapters[0].items[1].supprimer = true
+    f.chapters[0].items[1].content = 'réécrit'
+    expect(planifierImportIa(local, f).actions).toEqual([
+      { type: 'supprimerItem', kind: 'document', id: 2 },
+    ])
+  })
+
+  it('un marqué inconnu ici, ou déjà à la corbeille : aucune action', () => {
+    const f = exp()
+    f.chapters[0].items.push({
+      kind: 'document',
+      title: 'Inventé',
+      sort_order: 9,
+      supprimer: true,
+    })
+    expect(planifierImportIa(local, f).actions).toEqual([])
+    const corbeille = etat([A], {
+      documents: [d1, { ...d2, deleted_at: T_SUPPR }],
+    })
+    const g = construireExport(classeur(), [A], local.content, [])
+    g.chapters[0].items[1].supprimer = true
+    expect(planifierImportIa(corbeille, g).actions).toEqual([])
+  })
+})
+
+describe('destinationImport : la portée déduite du fichier', () => {
+  const A = chapitre({ id: 10, label: 'Accueil' })
+  const B = chapitre({ id: 20, label: 'Sécurité', sort_order: 2 })
+  const d1 = document({ id: 1, chapter_id: 10, title: 'Check-in' })
+  const local = etat([A, B], { documents: [d1] })
   const cl = classeur()
   const base = () => construireExport(cl, [A], etat([A]).content, [])
 
-  it('le même classeur : rien à dire ; sans portée : rien à dire', () => {
-    expect(controlerPorteeClasseur(base(), cl)).toEqual([])
-    const f = base()
+  it('le même classeur : rien à dire ; sans portée : le classeur', () => {
+    expect(destinationImport(local, base(), cl, { type: 'classeur' })).toEqual({
+      cible: { type: 'classeur' },
+      note: null,
+      avertissements: [],
+    })
+    const f = construireExport(cl, [A, B], local.content, [])
     if (f._metadata) delete f._metadata.portee
-    expect(controlerPorteeClasseur(f, cl)).toEqual([])
-    expect(
-      controlerPorteeClasseur({ ...base(), _metadata: undefined }, cl),
-    ).toEqual([])
+    expect(destinationImport(local, f, cl, { type: 'classeur' }).cible).toEqual(
+      { type: 'classeur' },
+    )
   })
 
-  it('un autre classeur : un avertissement, nommé si possible', () => {
+  it('un autre classeur : un avertissement, nommé si possible (D10)', () => {
     const f = base()
     f._metadata!.portee = {
       type: 'classeur',
       classeur_uuid: 'autre',
       classeur_name: 'Carnet sanitaire',
     }
-    expect(controlerPorteeClasseur(f, cl)).toEqual([
+    expect(
+      destinationImport(local, f, cl, { type: 'classeur' }).avertissements,
+    ).toEqual([
       "Ce fichier vient du classeur Carnet sanitaire, pas de celui-ci. Relisez l'aperçu avant d'importer.",
     ])
     f._metadata!.portee = {
@@ -641,29 +757,115 @@ describe('controlerPorteeClasseur (D10)', () => {
       classeur_uuid: 'autre',
       classeur_name: ' ',
     }
-    expect(controlerPorteeClasseur(f, cl)).toEqual([
+    expect(
+      destinationImport(local, f, cl, { type: 'classeur' }).avertissements,
+    ).toEqual([
       "Ce fichier vient d'un autre classeur. Relisez l'aperçu avant d'importer.",
     ])
   })
 
-  it('l’export d’un chapitre ou d’un document : refusé', () => {
+  it('un chapitre ou un document de CE classeur : routé vers lui, dit', () => {
     const f = base()
     f._metadata!.portee = {
       type: 'chapitre',
-      chapitre_uuid: 'x',
+      chapitre_uuid: A.uuid,
       chapitre_label: 'Accueil',
     }
-    expect(() => controlerPorteeClasseur(f, cl)).toThrow(
-      /export du chapitre Accueil/,
-    )
-    f._metadata!.portee = {
+    expect(destinationImport(local, f, cl, { type: 'classeur' })).toEqual({
+      cible: { type: 'chapitre', chapitreId: 10 },
+      note: 'Ce fichier concerne le chapitre Accueil. Le reste du classeur ne change pas.',
+      avertissements: [],
+    })
+    // Depuis la page de ce chapitre : rien à dire.
+    expect(
+      destinationImport(local, f, cl, { type: 'chapitre', chapitreId: 10 })
+        .note,
+    ).toBeNull()
+    const doc = construireExport(cl, [A], local.content, [])
+    doc._metadata!.portee = {
       type: 'document',
-      document_uuid: 'x',
+      document_uuid: d1.uuid,
       document_title: 'Check-in',
       chapitre_label: 'Accueil',
     }
-    expect(() => controlerPorteeClasseur(f, cl)).toThrow(
-      /export du document Check-in/,
+    expect(
+      destinationImport(local, doc, cl, { type: 'chapitre', chapitreId: 20 }),
+    ).toMatchObject({
+      cible: { type: 'document', documentId: 1 },
+      note: 'Ce fichier concerne le document Check-in. Le reste du classeur ne change pas.',
+    })
+  })
+
+  it('un chapitre introuvable ici : le classeur, avec un avertissement', () => {
+    const f = base()
+    f.chapters[0].uuid = 'inconnu'
+    f._metadata!.portee = {
+      type: 'chapitre',
+      chapitre_uuid: 'inconnu',
+      chapitre_label: 'Ailleurs',
+    }
+    expect(
+      destinationImport(local, f, cl, { type: 'chapitre', chapitreId: 10 }),
+    ).toEqual({
+      cible: { type: 'classeur' },
+      note: 'Ce fichier concerne le chapitre Accueil.',
+      avertissements: [
+        "Le chapitre Ailleurs n'est pas dans ce classeur. Relisez l'aperçu avant d'importer.",
+      ],
+    })
+  })
+})
+
+describe('routage de la portée — propriété', () => {
+  // Un fichier de CHAPITRE importé depuis l'accueil du classeur, depuis la
+  // page d'un autre chapitre ou depuis la sienne : toujours le MÊME plan,
+  // celui de `planifierFusionPortee` sur ce chapitre (rien hors du chapitre).
+  it(`fichier de chapitre : même plan d'où qu'on l'importe, ${String(NUM_RUNS)} fichiers`, () => {
+    fc.assert(
+      fc.property(descArb, fc.nat({ max: 2 }), (d, rangCible) => {
+        const local = construireLocal(d)
+        const visibles = local.chapters.filter((c) => c.deleted_at === null)
+        fc.pre(visibles.length > 0)
+        const cible = visibles[rangCible % visibles.length]
+        const complet = construireFichier(local, d)
+        const chJson = complet.chapters.find((c) => c.uuid === cible.uuid)
+        fc.pre(chJson !== undefined && chJson.supprimer !== true)
+        const exporte = construireExportChapitre(
+          classeur(),
+          cible,
+          local.content,
+          PERIODICITES,
+        )
+        const f: ClasseurJson = {
+          ...exporte,
+          chapters: [{ ...exporte.chapters[0], items: chJson.items }],
+        }
+        const planAttendu = planifierFusionPortee(local, f, {
+          type: 'chapitre',
+          chapitreId: cible.id,
+        })
+        const contextes: ContexteImport[] = [
+          { type: 'classeur' },
+          { type: 'chapitre', chapitreId: cible.id },
+          ...visibles
+            .filter((c) => c.id !== cible.id)
+            .map((c) => ({ type: 'chapitre' as const, chapitreId: c.id })),
+        ]
+        for (const contexte of contextes) {
+          const dest = destinationImport(local, f, classeur(), contexte)
+          expect(dest.cible).toEqual({
+            type: 'chapitre',
+            chapitreId: cible.id,
+          })
+          expect(planifierVers(local, f, dest.cible)).toEqual(planAttendu)
+          // Rien hors du chapitre n'est supprimé ni déplacé.
+          for (const a of planAttendu.actions) {
+            if (a.type === 'supprimerChapitre') expect(a.id).toBe(cible.id)
+            if (a.type === 'modifierChapitre') expect(a.id).toBe(cible.id)
+          }
+        }
+      }),
+      { numRuns: NUM_RUNS, seed: SEED + 3 },
     )
   })
 })

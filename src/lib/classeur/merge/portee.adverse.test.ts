@@ -56,12 +56,10 @@ describe('un même élément local ne peut être apparié deux fois', () => {
         ],
       }),
     ])
-    const plan = planifierFusionPortee(
-      etat([ch], { documents: [docX] }),
-      f,
-      { type: 'chapitre', chapitreId: 1 },
-      { supprimerAbsents: false },
-    )
+    const plan = planifierFusionPortee(etat([ch], { documents: [docX] }), f, {
+      type: 'chapitre',
+      chapitreId: 1,
+    })
     const modifs = plan.actions.filter(
       (a) => a.type === 'modifierItem' && a.id === 5,
     )

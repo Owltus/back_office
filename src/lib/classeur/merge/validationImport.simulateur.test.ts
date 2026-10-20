@@ -34,8 +34,9 @@ vi.mock('#/lib/supabase.ts', () => ({
   },
 }))
 
-const { appliquerFusionPortee, appliquerImportIa, previsualiserImportIa } =
+const { appliquerImport, previsualiserImport } =
   await import('#/lib/classeur/merge/apply.ts')
+const CLASSEUR_CTX = { type: 'classeur' } as const
 const { construireExport } = await import('#/lib/classeur/merge/schema.ts')
 
 const T = '2026-09-01T10:00:00.000Z'
@@ -217,10 +218,27 @@ const casArb = fc.record({
     fc.uuid(),
   ),
   metaRetouche: fc.boolean(),
-  supprimerAbsents: fc.boolean(),
+  /** Un élément sur trois marqué `"supprimer": true` (2026-10-20). */
+  marquer: fc.boolean(),
 })
 
 type Cas = typeof casArb extends fc.Arbitrary<infer C> ? C : never
+
+/** Un élément sur trois du fichier, marqué pour la corbeille. */
+type FichierImport = Parameters<typeof appliquerImport>[1]
+function marquerUnSurTrois(f: FichierImport): FichierImport {
+  let k = 0
+  return {
+    ...f,
+    chapters: f.chapters.map((c) => ({
+      ...c,
+      items: c.items.map((i) => {
+        k += 1
+        return k % 3 === 0 ? { ...i, supprimer: true as const } : i
+      }),
+    })),
+  }
+}
 
 /** L'export du local, abîmé comme une IA pourrait le faire. */
 function fichierAbime(c: Cas, local: ReturnType<typeof construireLocal>) {
@@ -279,7 +297,7 @@ function fichierAbime(c: Cas, local: ReturnType<typeof construireLocal>) {
       ...f._metadata.periodicites[0],
       label: 'Trimestriel',
     }
-  return f as unknown as Parameters<typeof appliquerImportIa>[1]
+  return f as unknown as Parameters<typeof appliquerImport>[1]
 }
 
 const ecritures = (s: SimulateurSupabase) =>
@@ -307,16 +325,12 @@ describe('validation + simulateur contraint : aucune écriture refusée', () => 
         const local = construireLocal(c.local)
         const sim = nouveauSim(local)
         etat.sim = sim
-        const f = fichierAbime(c, local)
-        const a = await previsualiserImportIa(1, f, {
-          supprimerAbsents: c.supprimerAbsents,
-        })
+        const abime = fichierAbime(c, local)
+        const f = c.marquer ? marquerUnSurTrois(abime) : abime
+        const a = await previsualiserImport(1, f, CLASSEUR_CTX)
         if (a.plan.warnings.length > 0) vus.corrige += 1
         sim.journal.length = 0
-        await appliquerImportIa(1, f, {
-          supprimerAbsents: c.supprimerAbsents,
-          sourceName: 's',
-        })
+        await appliquerImport(1, f, CLASSEUR_CTX, { sourceName: 's' })
         const e = ecritures(sim)
         if (e.length > 0) vus.ecrit += 1
         if (e.some((j) => j.cible === 'classeur_signature_sheets'))
@@ -347,26 +361,18 @@ describe('validation + simulateur contraint : aucune écriture refusée', () => 
         const local = construireLocal(c.local)
         const sim = nouveauSim(local)
         etat.sim = sim
-        const f = fichierAbime(c, local)
+        const abime = fichierAbime(c, local)
+        const f = c.marquer ? marquerUnSurTrois(abime) : abime
         const unSeul = { ...f, chapters: [f.chapters[0]] }
-        try {
-          await appliquerFusionPortee(
-            1,
-            unSeul,
-            { type: 'chapitre', chapitreId: 10 },
-            {
-              supprimerAbsents: c.supprimerAbsents,
-              sourceName: 's',
-            },
-          )
-        } catch (err) {
-          // Seul refus admis : la portée (autre chapitre), avant toute
-          // écriture, jamais une erreur de la base.
-          expect((err as { code?: string }).code).toBeUndefined()
-          expect(String((err as Error).message)).toMatch(/autre chapitre/)
-          expect(ecritures(sim)).toEqual([])
-          return
-        }
+        // Depuis le 2026-10-20 la portée est déduite : un chapitre d'un autre
+        // uuid n'est plus refusé, il s'applique ailleurs (ou au classeur).
+        // Aucune erreur n'est admise.
+        await appliquerImport(
+          1,
+          unSeul,
+          { type: 'chapitre', chapitreId: 10 },
+          { sourceName: 's' },
+        )
         contraintesTenues(sim)
       }),
       { numRuns: 2000, seed: 20261021 },
@@ -460,12 +466,9 @@ describe('le critère du plan : nombre 100, uuid « doc-1 », périodicité 999'
         sort_order: 3,
       },
     )
-    const a = await previsualiserImportIa(1, f, { supprimerAbsents: false })
+    const a = await previsualiserImport(1, f, CLASSEUR_CTX)
     expect(a.plan.warnings).toHaveLength(3)
-    const r = await appliquerImportIa(1, f, {
-      supprimerAbsents: false,
-      sourceName: 's',
-    })
+    const r = await appliquerImport(1, f, CLASSEUR_CTX, { sourceName: 's' })
     expect(r.inserted).toBe(3)
     const sim = etat.sim
     expect(sim.table('classeur_signature_sheets')[0].nombre).toBe(60)

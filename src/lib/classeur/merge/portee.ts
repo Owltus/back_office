@@ -19,9 +19,11 @@
  *     récent gagne » ignorerait donc toutes ses modifications ;
  *   - RIEN hors de la portée n'est touché : ni les autres chapitres, ni les
  *     autres documents, ni la position du chapitre dans le classeur ;
- *   - un élément absent du fichier n'est supprimé (douce) que si
- *     `supprimerAbsents` est demandé, et seulement dans ce chapitre — un LLM
- *     tronque parfois sa réponse, la suppression ne doit jamais être implicite.
+ *   - un élément ABSENT du fichier n'est JAMAIS supprimé (décision
+ *     utilisateur du 2026-10-20 : plus de case « supprimer ce qui n'est plus
+ *     dans le fichier », une IA tronque parfois sa réponse). Seul un élément
+ *     marqué `"supprimer": true` part à la corbeille
+ *     (`planSuppressionsDemandees`), et seulement dans ce chapitre.
  * Le plan est celui de `planifierFusion` en mode remplacement, FILTRÉ : on
  * réutilise ses règles d'appariement (uuid, puis titre), ses périodicités et
  * son aperçu plutôt que d'en écrire une seconde version.
@@ -50,10 +52,10 @@ import {
 } from '#/lib/classeur/merge/schema.ts'
 import type {
   ClasseurJson,
+  ItemJson,
   MetadataJson,
   Portee,
 } from '#/lib/classeur/merge/schema.ts'
-import { sansHorodatage } from '#/lib/classeur/merge/importIa.ts'
 import { planifierFusion } from '#/lib/classeur/merge/merge.ts'
 import { numeroDocument } from '#/lib/classeur/versionDocument.ts'
 import type { NumeroVersion } from '#/lib/classeur/versionDocument.ts'
@@ -244,14 +246,21 @@ export function extraireJson(texte: string): string {
 // Fusion limitée à la portée
 // ---------------------------------------------------------------------------
 
-/** Où l'on réimporte : le chapitre ou le document OUVERT dans la page. */
+/** Où l'on réimporte : un chapitre ou un document du classeur. */
 export type CiblePortee =
   | { type: 'chapitre'; chapitreId: number }
   | { type: 'document'; documentId: number }
 
-export interface OptionsPortee {
-  /** Chapitre seulement : supprimer (douce) les éléments absents du fichier. */
-  supprimerAbsents: boolean
+/**
+ * Horodatage du fichier RETIRÉ : la base date l'import à `now()`. En
+ * remplacement, la fusion recopie l'`updated_at` du fichier (E6) — un
+ * élément importé aurait repris sa date d'EXPORT, et un éditeur ouvert avant
+ * l'import (sauvegarde conditionnée à cette date) aurait écrasé le travail
+ * de l'IA sans voir de conflit.
+ */
+export function sansHorodatage(item: ItemJson): ItemJson {
+  const { updated_at: _ignore, ...reste } = item
+  return reste
 }
 
 const cleItem = (kind: string, id: number) => `${kind}:${id}`
@@ -264,12 +273,15 @@ const cleItem = (kind: string, id: number) => `${kind}:${id}`
  * `exclus` : clés (`clesActions`) des éléments que l'utilisateur a refusés
  * dans l'aperçu ; leurs actions sont retirées du plan (`filtrerPlan`). Sans
  * `exclus`, ou vide, le plan est exactement celui d'avant le refus.
+ *
+ * L'interface passe par `planifierImport` (`importIa.ts`), qui DÉDUIT la
+ * cible du fichier : elle n'arrive jamais ici avec un fichier d'une autre
+ * portée.
  */
 export function planifierFusionPortee(
   local: EtatLocal,
   fichier: ClasseurJson,
   cible: CiblePortee,
-  options: OptionsPortee,
   exclus?: ReadonlySet<string>,
 ): PlanFusion {
   if (fichier.chapters.length !== 1) {
@@ -279,7 +291,7 @@ export function planifierFusionPortee(
   }
   const plan =
     cible.type === 'chapitre'
-      ? planChapitre(local, fichier, cible.chapitreId, options)
+      ? planChapitre(local, fichier, cible.chapitreId)
       : planDocument(local, fichier, cible.documentId)
   return exclus === undefined ? plan : filtrerPlan(plan, exclus).plan
 }
@@ -295,7 +307,9 @@ export function planifierFusionPortee(
  *   - modification, restauration, suppression : `kind:id` (l'id local) ;
  *   - création (ni id, souvent ni uuid quand un LLM l'invente) : la position
  *     et le titre du fichier, `nouveau:kind:position:titre` ;
- *   - action de chapitre : `null`, jamais refusable (le libellé ou la
+ *   - mise à la corbeille d'un chapitre (demandée par `"supprimer": true`) :
+ *     `chapitre:id`, refusable comme un élément ;
+ *   - autre action de chapitre : `null`, jamais refusable (le libellé ou la
  *     description du chapitre suivent le fichier).
  */
 export function cleAction(a: ActionFusion): string | null {
@@ -307,6 +321,8 @@ export function cleAction(a: ActionFusion): string | null {
       return cleItem(a.kind, a.id)
     case 'creerItem':
       return `nouveau:${a.item.kind}:${String(a.sort_order)}:${a.item.input.title}`
+    case 'supprimerChapitre':
+      return `chapitre:${String(a.id)}`
     default:
       return null
   }
@@ -404,7 +420,7 @@ export function filtrerPlan(
     if (a.type === 'modifierItem') {
       resultat.updated -= 1
       resultat.unchanged += 1
-    } else if (a.type === 'supprimerItem') {
+    } else if (a.type === 'supprimerItem' || a.type === 'supprimerChapitre') {
       resultat.deleted -= 1
       resultat.unchanged += 1
     } else {
@@ -575,11 +591,12 @@ export function lignesImport(
         a.type === 'supprimerChapitre'
           ? TEXTE_VIDE
           : texteDe({ title: a.label, description: a.description })
+      const corbeille = a.type === 'supprimerChapitre'
       lignes.push({
-        cle: null,
-        genre: 'chapitre',
+        cle: corbeille ? cle : null,
+        genre: corbeille ? 'suppression' : 'chapitre',
         kind: 'chapter',
-        titre: a.type === 'supprimerChapitre' ? avant.title : apres.title,
+        titre: corbeille ? avant.title : apres.title,
         avant,
         apres,
         changement: memesTextes(avant, apres) ? 'autre' : 'texte',
@@ -722,7 +739,6 @@ function planChapitre(
   local: EtatLocal,
   fichier: ClasseurJson,
   chapitreId: number,
-  options: OptionsPortee,
 ): PlanFusion {
   const chapitre = local.chapters.find(
     (c) => c.id === chapitreId && c.deleted_at === null,
@@ -739,22 +755,29 @@ function planChapitre(
   // (relecture adverse du 2026-10-04) : la fusion l'appariait par uuid
   // (R5, tout le classeur), le déplaçait ici et l'écrasait. Rien hors de la
   // portée n'est touché : uuid retiré (unique en base), l'élément est créé.
+  // Marqué `supprimer`, il est écarté : rien n'est supprimé hors du chapitre.
   const horsPortee = new Set(
     flattenItems(local.content)
       .filter((it) => it.data.chapter_id !== chapitre.id && it.data.uuid)
       .map((it) => it.data.uuid),
   )
   const avertissements: string[] = []
-  const itemsCibles = chJson.items.map((item) => {
+  const itemsCibles = chJson.items.flatMap((item) => {
     const propre = sansHorodatage(item)
-    if (item.uuid === undefined || !horsPortee.has(item.uuid)) return propre
+    if (item.uuid === undefined || !horsPortee.has(item.uuid)) return [propre]
+    if (item.supprimer === true) {
+      avertissements.push(
+        `${item.title.trim() === '' ? 'Un élément' : item.title} appartient à un autre chapitre : il n'est pas supprimé.`,
+      )
+      return []
+    }
     const { uuid: _etranger, ...sansUuid } = propre
     avertissements.push(
       item.title.trim() === ''
         ? "Un élément sans titre portait l'identifiant d'un élément d'un autre chapitre : ignoré"
         : `${item.title} portait l'identifiant d'un élément d'un autre chapitre : créé comme nouvel élément`,
     )
-    return sansUuid
+    return [sansUuid]
   })
   // Le chapitre du fichier EST le chapitre ouvert (même sans uuid, fichier
   // v1 ou uuid retiré) ; sa position dans le classeur n'est pas à lui.
@@ -769,33 +792,41 @@ function planChapitre(
       },
     ],
   }
-  const fusion = planifierFusion(local, fichierCible, { replace: true })
-  const plan = { ...fusion, warnings: [...avertissements, ...fusion.warnings] }
-
+  const plan = planSuppressionsDemandees(
+    local,
+    fichierCible,
+    (f) => planifierFusion(local, f, { replace: true }),
+    false,
+  )
+  // Garde-fou : aucune suppression hors du chapitre (les autres chapitres,
+  // absents du fichier, ne sont jamais « demandés », mais on ne le suppose pas).
   const items = indexItems(local.content)
-  const actions: ActionFusion[] = []
-  const supprimes: MergePreviewItem[] = []
-  for (const a of plan.actions) {
-    if (a.type === 'supprimerChapitre') continue
-    if (a.type === 'supprimerItem') {
-      const it = items.get(cleItem(a.kind, a.id))
-      if (!options.supprimerAbsents || it?.data.chapter_id !== chapitre.id)
-        continue
-      supprimes.push({
-        action: 'delete',
-        kind: a.kind,
-        title: it.data.title,
-        chapter_label: chJson.label,
-        icon: chJson.icon,
-      })
-    }
-    actions.push(a)
-  }
+  const garde = garderActions(
+    plan,
+    (a) =>
+      a.type === 'supprimerChapitre'
+        ? a.id === chapitre.id
+        : a.type === 'supprimerItem'
+          ? items.get(cleItem(a.kind, a.id))?.data.chapter_id === chapitre.id
+          : true,
+    false,
+  )
+  // Compteurs : ceux de la fusion, avec les seules suppressions retenues.
+  // Lignes d'aperçu des éléments mis à la corbeille : sous le libellé du
+  // chapitre du FICHIER, comme les autres lignes (et comme avant le
+  // 2026-10-20).
   return {
-    actions,
-    warnings: plan.warnings,
-    resultat: { ...plan.resultat, deleted: supprimes.length },
-    apercu: [...plan.apercu.filter((l) => l.action !== 'delete'), ...supprimes],
+    ...garde,
+    apercu: garde.apercu.map((l) =>
+      l.action === 'delete' && l.kind !== 'chapter'
+        ? { ...l, chapter_label: chJson.label, icon: chJson.icon }
+        : l,
+    ),
+    warnings: [...avertissements, ...garde.warnings],
+    resultat: {
+      ...garde.resultat,
+      deleted: garde.actions.filter((a) => cleSuppression(a) !== null).length,
+    },
   }
 }
 
@@ -826,6 +857,30 @@ function planDocument(
         ? "Le document du fichier n'a plus d'identifiant (uuid) : impossible de savoir qu'il s'agit de celui-ci."
         : `Ce fichier concerne un autre document (${docJson.title}), pas celui-ci (${document.title}).`,
     )
+  }
+  // Suppression DEMANDÉE (`"supprimer": true`) : le document part à la
+  // corbeille, rien d'autre ne change.
+  if (docJson.supprimer === true) {
+    return {
+      actions: [{ type: 'supprimerItem', kind: 'document', id: document.id }],
+      warnings: [],
+      resultat: {
+        inserted: 0,
+        updated: 0,
+        unchanged: 0,
+        skipped: 0,
+        deleted: 1,
+      },
+      apercu: [
+        {
+          action: 'delete',
+          kind: 'document',
+          title: document.title,
+          chapter_label: chapitre.label,
+          icon: chapitre.icon,
+        },
+      ],
+    }
   }
   // Chapitre et position LOCAUX : seul le document peut changer.
   const fichierCible: ClasseurJson = {
@@ -881,4 +936,120 @@ function indexItems(content: ChapterContent): Map<string, ChapterItem> {
   for (const it of flattenItems(content))
     m.set(cleItem(it.kind, it.data.id), it)
   return m
+}
+
+// ---------------------------------------------------------------------------
+// Suppressions demandées par le fichier (décision utilisateur du 2026-10-20)
+// ---------------------------------------------------------------------------
+
+/** Clé d'une suppression (`kind:id`, `chapitre:id`) ; `null` pour une autre action. */
+function cleSuppression(a: ActionFusion): string | null {
+  if (a.type === 'supprimerItem') return cleItem(a.kind, a.id)
+  if (a.type === 'supprimerChapitre') return `chapitre:${String(a.id)}`
+  return null
+}
+
+/**
+ * Le fichier sans ses éléments ni ses chapitres marqués `supprimer` ; le
+ * MÊME objet s'il n'y en a aucun.
+ */
+export function sansMarquesSupprimer(fichier: ClasseurJson): ClasseurJson {
+  const marque = fichier.chapters.some(
+    (c) => c.supprimer === true || c.items.some((i) => i.supprimer === true),
+  )
+  if (!marque) return fichier
+  return {
+    ...fichier,
+    chapters: fichier.chapters
+      .filter((c) => c.supprimer !== true)
+      .map((c) =>
+        c.items.some((i) => i.supprimer === true)
+          ? { ...c, items: c.items.filter((i) => i.supprimer !== true) }
+          : c,
+      ),
+  }
+}
+
+/**
+ * Garde les actions retenues par `garder`, et leurs lignes d'aperçu
+ * (`alignerApercu`). Une suppression retirée laisse l'élément tel quel :
+ * comptée `unchanged` si `compterGardes`, sinon les compteurs restent ceux
+ * du plan d'origine (l'appelant les recalcule). Rien de retiré : le plan
+ * TEL QUEL (même objet).
+ */
+export function garderActions(
+  plan: PlanFusion,
+  garder: (a: ActionFusion) => boolean,
+  compterGardes = true,
+): PlanFusion {
+  const retirees = new Set<number>()
+  plan.actions.forEach((a, i) => {
+    if (!garder(a)) retirees.add(i)
+  })
+  if (retirees.size === 0) return plan
+  const lignes = new Set(
+    alignerApercu(plan.actions, plan.apercu).filter((_, i) => retirees.has(i)),
+  )
+  const suppressions = [...retirees].filter(
+    (i) => cleSuppression(plan.actions[i]) !== null,
+  ).length
+  return {
+    actions: plan.actions.filter((_, i) => !retirees.has(i)),
+    warnings: plan.warnings,
+    resultat: compterGardes
+      ? {
+          ...plan.resultat,
+          deleted: plan.resultat.deleted - suppressions,
+          unchanged: plan.resultat.unchanged + suppressions,
+        }
+      : plan.resultat,
+    apercu: plan.apercu.filter((_, i) => !lignes.has(i)),
+  }
+}
+
+/**
+ * Plan d'un import où RIEN d'absent n'est supprimé, et où un élément (ou un
+ * chapitre) marqué `"supprimer": true` part à la corbeille.
+ *
+ * `planifier` est le plan BRUT en remplacement (R11 : tout absent y est
+ * supprimé). Il est calculé sur le fichier sans les marqués (`sans`) puis,
+ * s'il y en a, sur le fichier complet (`plein`). Une suppression de `sans`
+ * absente de `plein` vise exactement ce qu'un marqué appariait (mêmes règles
+ * R1, R5, E7, E9 que le reste : aucune seconde version de l'appariement) ;
+ * toutes les autres visent des absents et sont retirées. Un élément d'un
+ * chapitre mis à la corbeille le suit sans action à part, comme la
+ * suppression d'un chapitre à l'écran. Un marqué qui n'apparie rien
+ * (nouveau, ou déjà à la corbeille) ne fait rien.
+ */
+export function planSuppressionsDemandees(
+  local: EtatLocal,
+  fichier: ClasseurJson,
+  planifier: (fichier: ClasseurJson) => PlanFusion,
+  compterGardes = true,
+): PlanFusion {
+  const reduit = sansMarquesSupprimer(fichier)
+  const sans = planifier(reduit)
+  const demandees = new Set<string>()
+  if (reduit !== fichier) {
+    const plein = new Set(
+      planifier(fichier).actions.flatMap((a) => cleSuppression(a) ?? []),
+    )
+    for (const a of sans.actions) {
+      const c = cleSuppression(a)
+      if (c !== null && !plein.has(c)) demandees.add(c)
+    }
+  }
+  const items = indexItems(local.content)
+  return garderActions(
+    sans,
+    (a) => {
+      const c = cleSuppression(a)
+      if (c === null) return true
+      if (!demandees.has(c)) return false
+      if (a.type !== 'supprimerItem') return true
+      const ch = items.get(c)?.data.chapter_id
+      return ch === undefined || !demandees.has(`chapitre:${String(ch)}`)
+    },
+    compterGardes,
+  )
 }

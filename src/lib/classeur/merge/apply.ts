@@ -42,23 +42,20 @@ import type {
 } from '#/lib/classeur/merge/merge.ts'
 import { planifierFusion } from '#/lib/classeur/merge/merge.ts'
 import {
-  controlerPorteeClasseur,
-  planifierImportIa,
+  destinationImport,
+  planifierVers,
 } from '#/lib/classeur/merge/importIa.ts'
-import type { OptionsImportIa } from '#/lib/classeur/merge/importIa.ts'
+import type {
+  ContexteImport,
+  DestinationImport,
+} from '#/lib/classeur/merge/importIa.ts'
 import { planAvecValidation } from '#/lib/classeur/merge/validationImport.ts'
 import {
   chapitresDesLignes,
   filtrerPlan,
   lignesImport,
-  planifierFusionPortee,
 } from '#/lib/classeur/merge/portee.ts'
-import type {
-  ChapitreLigne,
-  CiblePortee,
-  LigneImport,
-  OptionsPortee,
-} from '#/lib/classeur/merge/portee.ts'
+import type { ChapitreLigne, LigneImport } from '#/lib/classeur/merge/portee.ts'
 import type { ClasseurJson } from '#/lib/classeur/merge/schema.ts'
 import { construireExport } from '#/lib/classeur/merge/schema.ts'
 import { entreesAElaguerParGenre } from '#/lib/classeur/merge/snapshot.ts'
@@ -355,16 +352,6 @@ export async function chargerEtatLocal(classeurId: number): Promise<EtatLocal> {
   return { chapters, content, periodicites }
 }
 
-/** Plan de fusion sans aucune écriture (dialogue de prévisualisation). */
-export async function previsualiserFusion(
-  classeurId: number,
-  fichier: ClasseurJson,
-  options: OptionsFusion,
-): Promise<PlanFusion> {
-  const local = await chargerEtatLocal(classeurId)
-  return planifierFusion(local, fichier, options)
-}
-
 // ---------------------------------------------------------------------------
 // Fusion dans un classeur existant
 // ---------------------------------------------------------------------------
@@ -417,168 +404,106 @@ export async function appliquerFusion(
   return exclus === undefined ? resultat : { ...resultat, ignores }
 }
 
-/** Aperçu de l'import du classeur complet : plan, lignes et leur chapitre. */
+// ---------------------------------------------------------------------------
+// Import d'un fichier dans un classeur existant (décision du 2026-10-20)
+// ---------------------------------------------------------------------------
+
+/**
+ * Aperçu d'un import : plan, une ligne par action, le chapitre de chaque
+ * ligne (pour les grouper) et la ligne d'information sur la portée.
+ */
 export interface ApercuFusion {
   plan: PlanFusion
   lignes: LigneImport[]
   /** Chapitre de chaque ligne (même ordre que `lignes`), pour les grouper. */
   chapitres: ChapitreLigne[]
+  /** Ce que le fichier modifie : sa portée déduite (`destinationImport`). */
+  cible: ContexteImport
+  /** « Ce fichier concerne le chapitre X. » ; `null` si c'est d'où l'on importe. */
+  note: string | null
 }
-
-/** Plan de l'import d'un classeur complet, avec ses lignes, sans écriture. */
-export async function previsualiserFusionComplete(
-  classeurId: number,
-  fichier: ClasseurJson,
-  options: OptionsFusion,
-): Promise<ApercuFusion> {
-  const local = await chargerEtatLocal(classeurId)
-  const plan = planifierFusion(local, fichier, options)
-  return {
-    plan,
-    lignes: lignesImport(local, plan),
-    chapitres: chapitresDesLignes(local, plan),
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Import d'un fichier rendu par une IA (étape 5, D1)
-// ---------------------------------------------------------------------------
 
 /**
- * Plan d'un import « fichier rendu par une IA » : portée contrôlée (un
- * export de chapitre ou de document est refusé, un autre classeur averti),
- * validation (étape 6 : ce que la base refuserait est corrigé AVANT le plan,
- * donc avant le point de restauration), puis `planifierImportIa`. Pur.
+ * Plan de l'import de `fichier` depuis `contexte` : portée DÉDUITE du
+ * fichier (`destinationImport`), validation (étape 6 : ce que la base
+ * refuserait est corrigé AVANT le plan, donc avant le point de
+ * restauration), puis le plan de la destination (`planifierVers`). Les
+ * avertissements de portée passent en tête. Pur.
  */
-function planImportIa(
+export function planImport(
   local: EtatLocal,
   classeur: Pick<DbClasseur, 'uuid' | 'name'>,
   fichier: ClasseurJson,
-  options: OptionsImportIa,
-): PlanFusion {
-  const avertissements = controlerPorteeClasseur(fichier, classeur)
+  contexte: ContexteImport,
+): { plan: PlanFusion; destination: DestinationImport } {
+  const destination = destinationImport(local, fichier, classeur, contexte)
   const plan = planAvecValidation(local, fichier, (f) =>
-    planifierImportIa(local, f, options),
+    planifierVers(local, f, destination.cible),
   )
-  return avertissements.length === 0
-    ? plan
-    : { ...plan, warnings: [...avertissements, ...plan.warnings] }
+  return {
+    destination,
+    plan:
+      destination.avertissements.length === 0
+        ? plan
+        : {
+            ...plan,
+            warnings: [...destination.avertissements, ...plan.warnings],
+          },
+  }
 }
 
-/** Réimport d'un chapitre ou d'un document, précédé de la validation. */
-function planPortee(
-  local: EtatLocal,
-  fichier: ClasseurJson,
-  cible: CiblePortee,
-  options: OptionsPortee,
-): PlanFusion {
-  return planAvecValidation(local, fichier, (f) =>
-    planifierFusionPortee(local, f, cible, options),
-  )
-}
-
-/** Aperçu de l'import d'un fichier d'IA dans le classeur, sans écriture. */
-export async function previsualiserImportIa(
+/** Aperçu de l'import d'un fichier, sans aucune écriture. */
+export async function previsualiserImport(
   classeurId: number,
   fichier: ClasseurJson,
-  options: OptionsImportIa,
+  contexte: ContexteImport,
 ): Promise<ApercuFusion> {
   const [classeur, local] = await Promise.all([
     fetchClasseur(classeurId),
     chargerEtatLocal(classeurId),
   ])
   if (classeur === null) throw new Error('Classeur introuvable ou supprimé.')
-  const plan = planImportIa(local, classeur, fichier, options)
+  const { plan, destination } = planImport(local, classeur, fichier, contexte)
   return {
     plan,
     lignes: lignesImport(local, plan),
     chapitres: chapitresDesLignes(local, plan),
+    cible: destination.cible,
+    note: destination.note,
   }
 }
 
-export interface OptionsImportIaApplication extends OptionsImportIa {
+export interface OptionsImport {
+  /** Libellé du point de restauration pris avant l'import. */
   sourceName: string
   /** Clés (`clesActions`) des éléments refusés dans l'aperçu. */
   exclus?: ReadonlySet<string>
 }
 
+/** Compteurs d'un import, plus les actions refusées dans l'aperçu. */
+export interface ResultatImport extends MergeResult {
+  ignores: number
+}
+
 /**
- * Applique un fichier d'IA au classeur : MÊME circuit que `appliquerFusion`
- * (plan recalculé sur l'état relu, refus filtrés DANS le planificateur,
- * point de restauration AVANT la première écriture, élagage). Tout refuser
- * n'écrit rien, pas même un point.
+ * Applique un fichier au classeur : MÊME circuit que `appliquerFusion`
+ * (plan recalculé sur l'état relu, jamais repris de l'aperçu ; refus filtrés
+ * DANS le planificateur, donc avant le test « aucune action » ; point de
+ * restauration AVANT la première écriture ; élagage). Tout refuser n'écrit
+ * rien, pas même un point.
  */
-export async function appliquerImportIa(
+export async function appliquerImport(
   classeurId: number,
   fichier: ClasseurJson,
-  options: OptionsImportIaApplication,
-): Promise<ResultatFusion> {
-  const { sourceName, exclus, supprimerAbsents } = options
+  contexte: ContexteImport,
+  options: OptionsImport,
+): Promise<ResultatImport> {
   let ignores = 0
   const resultat = await appliquerPlanifie(
     classeurId,
     (local, classeur) => {
       const filtre = filtrerPlan(
-        planImportIa(local, classeur, fichier, { supprimerAbsents }),
-        exclus ?? new Set(),
-      )
-      ignores = filtre.ignores
-      return filtre.plan
-    },
-    sourceName,
-  )
-  return exclus === undefined ? resultat : { ...resultat, ignores }
-}
-
-/** Aperçu d'un réimport limité : le plan et, par action, l'avant / après. */
-export interface ApercuPortee {
-  plan: PlanFusion
-  lignes: LigneImport[]
-}
-
-/** Plan d'un réimport limité à un chapitre ou un document (`portee.ts`), sans écriture. */
-export async function previsualiserFusionPortee(
-  classeurId: number,
-  fichier: ClasseurJson,
-  cible: CiblePortee,
-  options: OptionsPortee,
-): Promise<ApercuPortee> {
-  const local = await chargerEtatLocal(classeurId)
-  const plan = planPortee(local, fichier, cible, options)
-  return { plan, lignes: lignesImport(local, plan) }
-}
-
-/** Compteurs d'un réimport limité, plus les actions refusées dans l'aperçu. */
-export interface ResultatPortee extends MergeResult {
-  ignores: number
-}
-
-/**
- * Réimport limité à un chapitre ou un document : MÊME circuit que
- * `appliquerFusion` (instantané du classeur AVANT toute écriture, actions
- * dans l'ordre, élagage) — seul le plan change. Le plan est recalculé sur
- * l'état relu à l'instant, jamais repris de l'aperçu.
- *
- * `exclus` (clés de `clesActions`) : éléments refusés dans l'aperçu. Le
- * filtre agit DANS le planificateur, donc avant le test « aucune action »
- * et avant l'instantané : tout refuser n'écrit rien, pas même un point de
- * restauration, et les compteurs de l'instantané sont ceux du plan filtré.
- */
-export async function appliquerFusionPortee(
-  classeurId: number,
-  fichier: ClasseurJson,
-  cible: CiblePortee,
-  options: OptionsPortee & {
-    sourceName: string
-    exclus?: ReadonlySet<string>
-  },
-): Promise<ResultatPortee> {
-  let ignores = 0
-  const resultat = await appliquerPlanifie(
-    classeurId,
-    (local) => {
-      const filtre = filtrerPlan(
-        planPortee(local, fichier, cible, options),
+        planImport(local, classeur, fichier, contexte).plan,
         options.exclus ?? new Set(),
       )
       ignores = filtre.ignores

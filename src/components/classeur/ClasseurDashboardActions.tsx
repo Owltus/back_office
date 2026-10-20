@@ -55,8 +55,7 @@ export function bilanFusion(r: ResultatFusion): string {
   ]
   if (r.skipped > 0)
     parts.push(`${r.skipped} ignoré${r.skipped > 1 ? 's' : ''}`)
-  if (r.deleted > 0)
-    parts.push(`${r.deleted} supprimé${r.deleted > 1 ? 's' : ''}`)
+  if (r.deleted > 0) parts.push(`${r.deleted} mis à la corbeille`)
   const avertissements = (r.avertissements ?? []).map((a) => ` ${a}`).join('')
   const ignores =
     r.ignores !== undefined && r.ignores > 0
@@ -72,7 +71,7 @@ export function bilanFusion(r: ResultatFusion): string {
  *   - Exporter en Markdown télécharge l'archive ZIP ; Exporter en JSON ouvre
  *     son dialogue (`ExportJsonClasseurDialog` : Copier pour une IA ou
  *     Télécharger le fichier v2, sans aucun choix) ;
- *   - Importer un JSON ouvre le dialogue d'import (`MergePreviewDialog`) :
+ *   - Importer ouvre le dialogue d'import (`MergePreviewDialog`) :
  *     coller la réponse d'une IA ou choisir un fichier (un fichier déposé sur
  *     la ligne l'ouvre déjà chargé), aperçu, puis un point de restauration
  *     avant toute écriture ; Historique ouvre les instantanés restaurables.

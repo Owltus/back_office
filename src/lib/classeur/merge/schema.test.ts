@@ -12,6 +12,7 @@ import {
   chapitre,
   classeur,
   document,
+  etat,
   intercalaire,
   signature,
   suivi,
@@ -227,9 +228,43 @@ describe('parseImportJson — format v1 et défauts du schéma', () => {
   })
 })
 
+describe('parseImportJson — `"supprimer": true` (décision du 2026-10-20)', () => {
+  const texte = (item: string, surChapitre = '') =>
+    `{"format_version":2,"classeur":{"name":"C"},"chapters":[{"label":"A"${surChapitre},"items":[{"kind":"document","title":"T"${item}}]}]}`
+
+  it('relu sur un élément et sur un chapitre, `true` seul', () => {
+    const f = parseImportJson(texte(',"supprimer":true', ',"supprimer":true'))
+    expect(f.chapters[0].supprimer).toBe(true)
+    expect(f.chapters[0].items[0].supprimer).toBe(true)
+    for (const v of ['false', '"true"', '1', 'null']) {
+      const g = parseImportJson(texte(`,"supprimer":${v}`, `,"supprimer":${v}`))
+      expect('supprimer' in g.chapters[0], v).toBe(false)
+      expect('supprimer' in g.chapters[0].items[0], v).toBe(false)
+    }
+    expect('supprimer' in parseImportJson(texte('')).chapters[0].items[0]).toBe(
+      false,
+    )
+  })
+
+  it('jamais écrit par un export', () => {
+    const A = chapitre({ id: 10, label: 'Accueil' })
+    const e = construireExport(
+      classeur(),
+      [A],
+      etat([A], {
+        documents: [document({ id: 1, chapter_id: 10, title: 'Doc' })],
+      }).content,
+      PERIODICITES,
+    )
+    expect(JSON.stringify({ ...e, _metadata: undefined })).not.toContain(
+      'supprimer',
+    )
+  })
+})
+
 describe('parseImportJson — refus', () => {
   const cas: Array<[string, string, string]> = [
-    ['JSON illisible', '{ pas du json', 'JSON valide'],
+    ['JSON illisible', '{ pas du json', 'pas lisible en entier'],
     ['pas un objet', '[1, 2]', 'objet attendu'],
     ['format_version absent', '{"chapters":[]}', 'format_version'],
     [
@@ -533,7 +568,8 @@ describe('construireExport — forme exacte de do_export_json', () => {
     expect(texte).not.toContain("Le merge n'efface jamais de données")
     expect(texte).not.toContain("informative, ignorée à l'import")
     expect(texte).toMatch(/Registre : le merge n'efface jamais/)
-    expect(texte).toMatch(/remplacement \(classeur complet\) supprime/)
+    expect(texte).toMatch(/absent du JSON n'est jamais supprimé/)
+    expect(texte).toContain(String.raw`\"supprimer\": true`)
     expect(texte).toMatch(/par son LIBELLÉ/)
     expect(texte).toMatch(/lignes à signer/)
   })

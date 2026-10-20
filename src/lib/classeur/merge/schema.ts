@@ -107,6 +107,16 @@ export interface ItemJson {
    * l'ignore aussi (pas de `deny_unknown_fields` sur `ItemJson`).
    */
   periodicite?: string
+  /**
+   * Demande EXPLICITE de suppression (décision utilisateur du 2026-10-20) :
+   * l'élément reste dans le fichier, marqué `"supprimer": true`, et l'import
+   * le met à la corbeille (suppression douce, refusable dans l'aperçu). Un
+   * élément ABSENT du fichier n'est jamais supprimé. Relu seulement s'il vaut
+   * `true` ; jamais écrit par un export ; ignoré par Registre (pas de
+   * `deny_unknown_fields`) et par tout autre chemin que l'import dans un
+   * classeur existant (`planifierImport`).
+   */
+  supprimer?: true
 }
 
 export interface ChapterJson {
@@ -118,6 +128,8 @@ export interface ChapterJson {
   description: string
   sort_order: number
   items: ItemJson[]
+  /** Comme `ItemJson.supprimer` : le chapitre part à la corbeille avec son contenu. */
+  supprimer?: true
 }
 
 export interface ClasseurJson {
@@ -339,7 +351,7 @@ export const SCHEMA_DESCRIPTIF = {
     move_detection:
       "Registre : un item trouvé par UUID dans un chapitre différent n'est pas re-déplacé, son contenu est mis à jour si plus récent. Back Office : quand le fichier l'emporte, l'item est aussi déplacé dans le chapitre du fichier.",
     no_deletion:
-      "Registre : le merge n'efface jamais, les items locaux absents du JSON sont conservés. Back Office : la fusion n'efface rien non plus ; le remplacement (classeur complet) supprime, en corbeille restaurable, les items et chapitres absents du JSON ; à l'import d'un fichier rendu par une IA ou d'un chapitre, un item absent n'est supprimé que si l'option est cochée.",
+      'Registre : le merge n\'efface jamais, les items locaux absents du JSON sont conservés. Back Office : un item ou un chapitre absent du JSON n\'est jamais supprimé non plus ; pour en supprimer un, le garder avec "supprimer": true (il part en corbeille restaurable).',
   },
 } as const
 
@@ -463,6 +475,8 @@ function lireItem(v: unknown, contexte: string, position: number): ItemJson {
   // l'export, relu tel quel s'il est un texte (sinon ignoré).
   if (kind === 'tracking_sheet' && typeof v.periodicite === 'string')
     item.periodicite = v.periodicite
+  // Suppression demandée : `true` seul (toute autre valeur est ignorée).
+  if (v.supprimer === true) item.supprimer = true
   return item
 }
 
@@ -497,6 +511,7 @@ function lireChapitre(v: unknown, position: number): ChapterJson {
   }
   const uuid = chaine(v, 'uuid', undefined, ctxLabel)
   if (uuid !== undefined) chapitre.uuid = uuid
+  if (v.supprimer === true) chapitre.supprimer = true
   return chapitre
 }
 
@@ -578,7 +593,9 @@ export function parseImportJson(texte: string): ClasseurJson {
   try {
     brut = JSON.parse(texte)
   } catch {
-    throw new Error("Ce fichier n'est pas un JSON valide.")
+    throw new Error(
+      "Ce texte n'est pas lisible en entier. Collez toute la réponse de l'IA, ou choisissez le fichier exporté.",
+    )
   }
   if (!estObjet(brut)) {
     throw new Error(

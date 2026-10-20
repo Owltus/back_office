@@ -480,7 +480,7 @@ export function ClasseurDashboard({
                 {canWrite && onImporter && (
                   <LigneAction
                     icon={survolDepot ? Upload : FileDown}
-                    title="Importer un JSON"
+                    title="Importer"
                     description="Réponse d'une IA ou fichier"
                     titreOccupe="Import en cours..."
                     onClick={action(onImporter)}

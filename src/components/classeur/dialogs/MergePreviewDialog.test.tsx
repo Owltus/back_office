@@ -18,12 +18,10 @@ import {
   etat,
 } from '#/lib/classeur/merge/fixtures.ts'
 import {
-  controlerPorteeClasseur,
-  planifierImportIa,
+  destinationImport,
+  planifierVers,
 } from '#/lib/classeur/merge/importIa.ts'
-import type { OptionsImportIa } from '#/lib/classeur/merge/importIa.ts'
-import { planifierFusion } from '#/lib/classeur/merge/merge.ts'
-import type { OptionsFusion, PlanFusion } from '#/lib/classeur/merge/merge.ts'
+import type { ContexteImport } from '#/lib/classeur/merge/importIa.ts'
 import {
   chapitresDesLignes,
   construireExportChapitre,
@@ -31,17 +29,17 @@ import {
 } from '#/lib/classeur/merge/portee.ts'
 import { construireExport } from '#/lib/classeur/merge/schema.ts'
 import type { ClasseurJson } from '#/lib/classeur/merge/schema.ts'
+import { planAvecValidation } from '#/lib/classeur/merge/validationImport.ts'
 
 /*
- * Import JSON du classeur COMPLET (audit du 2026-10-04) : même aperçu que
- * le réimport d'un chapitre, groupé par chapitre. Le VRAI planificateur sur
- * un état local écrit ici ; seules la lecture de la base, la médiathèque et
- * l'écriture sont simulées. Oracles posés à la main.
+ * Import dans le classeur COMPLET (ligne Importer de l'accueil). Le VRAI
+ * planificateur sur un état local écrit ici ; seules la lecture de la base,
+ * la médiathèque et l'écriture sont simulées. Oracles posés à la main.
  *
- * Étape 5 du plan `classeur-echange-ia-2026-10-19` : « Fichier rendu par une
- * IA » par défaut (le fichier fait foi, rien n'est supprimé sans la case),
- * « Fichier de Registre ou d'un autre poste » garde fusion et remplacement ;
- * la réponse de l'IA peut être COLLÉE.
+ * Décision utilisateur du 2026-10-20 (étape 9 du plan
+ * `classeur-echange-ia-2026-10-19`) : AUCUN choix à l'écran, ni provenance
+ * ni case de suppression ; rien d'absent n'est supprimé ; `"supprimer":
+ * true` met à la corbeille, refusable ; la portée est déduite du fichier.
  */
 
 const A = chapitre({ id: 10, label: 'Accueil', sort_order: 1 })
@@ -73,40 +71,34 @@ const local = etat([A, B], { documents: [d1, d2, d3] })
 const PLUS_TARD = '2026-05-01T00:00:00+00:00'
 
 const appliquer = vi.fn()
-const appliquerIa = vi.fn()
 let retenir: Promise<void> | null = null
 
-const apercu = (plan: PlanFusion) => ({
-  plan,
-  lignes: lignesImport(local, plan),
-  chapitres: chapitresDesLignes(local, plan),
-})
-
 vi.mock('#/lib/classeur/merge/apply.ts', () => ({
-  previsualiserFusionComplete: async (
+  // Même composition que `apply.ts::planImport` (portée déduite, validation,
+  // plan de la destination).
+  previsualiserImport: async (
     _id: number,
     fichier: ClasseurJson,
-    options: OptionsFusion,
+    contexte: ContexteImport,
   ) => {
     if (retenir) await retenir
-    return apercu(planifierFusion(local, fichier, options))
+    const destination = destinationImport(local, fichier, classeur(), contexte)
+    const brut = planAvecValidation(local, fichier, (f) =>
+      planifierVers(local, f, destination.cible),
+    )
+    const plan = {
+      ...brut,
+      warnings: [...destination.avertissements, ...brut.warnings],
+    }
+    return {
+      plan,
+      lignes: lignesImport(local, plan),
+      chapitres: chapitresDesLignes(local, plan),
+      cible: destination.cible,
+      note: destination.note,
+    }
   },
-  // Même composition que `apply.ts` (portée contrôlée, puis le plan IA).
-  previsualiserImportIa: async (
-    _id: number,
-    fichier: ClasseurJson,
-    options: OptionsImportIa,
-  ) => {
-    if (retenir) await retenir
-    const avertissements = controlerPorteeClasseur(fichier, classeur())
-    const plan = planifierImportIa(local, fichier, options)
-    return apercu({
-      ...plan,
-      warnings: [...avertissements, ...plan.warnings],
-    })
-  },
-  appliquerFusion: (...args: unknown[]) => appliquer(...args),
-  appliquerImportIa: (...args: unknown[]) => appliquerIa(...args),
+  appliquerImport: (...args: unknown[]) => appliquer(...args),
 }))
 vi.mock('#/components/classeur/hooks/useClasseur.ts', () => ({
   useInvaliderClasseur: () => () => Promise.resolve(),
@@ -116,7 +108,7 @@ vi.mock('#/components/classeur/hooks/useImages.ts', () => ({
 }))
 vi.mock('#/lib/supabase.ts', () => ({ supabase: {} }))
 
-const { MergePreviewDialog, VERROU_CHAPITRE_SUPPRIME } =
+const { MergePreviewDialog } =
   await import('#/components/classeur/dialogs/MergePreviewDialog.tsx')
 
 /** Le classeur exporté, retravaillé : d1 réécrit, d3 en forme seule, un chapitre neuf. */
@@ -162,7 +154,6 @@ function texteLlm(over: (f: ClasseurJson) => void = () => {}): string {
 afterEach(cleanup)
 beforeEach(() => {
   appliquer.mockReset()
-  appliquerIa.mockReset()
   retenir = null
 })
 
@@ -185,14 +176,8 @@ function ouvrir(file: File | null) {
 const bouton = () =>
   screen.getByRole<HTMLButtonElement>('button', { name: /^Importer|^Aucun/ })
 
-const choisirRegistre = () =>
-  fireEvent.click(
-    screen.getByLabelText("Fichier de Registre ou d'un autre poste"),
-  )
-
-async function ouvrirAvecApercu(file = fichierLlm(), registre = false) {
+async function ouvrirAvecApercu(file = fichierLlm()) {
   ouvrir(file)
-  if (registre) choisirRegistre()
   await waitFor(() => screen.getByLabelText('Importer Check-in'), {
     timeout: 3000,
   })
@@ -214,8 +199,8 @@ describe('MergePreviewDialog — aperçu du classeur complet', () => {
     expect(screen.queryByText('Check-out')).toBeNull()
   })
 
-  it('le compteur suit les cases ; les refus partent à l’import (Registre)', async () => {
-    await ouvrirAvecApercu(fichierLlm(), true)
+  it('le compteur suit les cases ; les refus partent à l’import', async () => {
+    await ouvrirAvecApercu()
     expect(bouton().textContent).toBe('Importer 3 documents')
     fireEvent.click(screen.getByLabelText('Importer Check-in'))
     expect(bouton().textContent).toBe('Importer 2 documents')
@@ -232,14 +217,16 @@ describe('MergePreviewDialog — aperçu du classeur complet', () => {
     })
     fireEvent.click(bouton())
     await waitFor(() => expect(appliquer).toHaveBeenCalledTimes(1))
-    const [id, , options] = appliquer.mock.calls[0] as [
+    const [id, , contexte, options] = appliquer.mock.calls[0] as [
       number,
       unknown,
-      { replace: boolean; exclus: ReadonlySet<string> },
+      ContexteImport,
+      { exclus: ReadonlySet<string>; sourceName: string },
     ]
     expect(id).toBe(1)
-    expect(options.replace).toBe(false)
+    expect(contexte).toEqual({ type: 'classeur' })
     expect([...options.exclus]).toEqual(['document:1'])
+    expect(options.sourceName).toBe('classeur.json')
     await waitFor(() => expect(onDone).toHaveBeenCalled())
     expect((onDone.mock.calls[0][0] as { ignores: number }).ignores).toBe(1)
   })
@@ -285,7 +272,7 @@ describe('MergePreviewDialog — aperçu du classeur complet', () => {
       lacher = r
     })
     ouvrir(fichierLlm())
-    await screen.findByText(/Lecture du fichier/)
+    await screen.findByText(/Lecture et calcul/)
     expect(bouton().textContent).toBe('Importer')
     expect(bouton().disabled).toBe(true)
     lacher()
@@ -293,83 +280,83 @@ describe('MergePreviewDialog — aperçu du classeur complet', () => {
       expect(bouton().textContent).toBe('Importer 3 documents'),
     )
   })
-
-  it('remplacement : un document supprimé AVEC son chapitre ne peut pas être refusé', async () => {
-    ouvrir(fichierLlm((f) => f.chapters.splice(1, 1)))
-    choisirRegistre()
-    fireEvent.click(await screen.findByRole('switch'))
-    await waitFor(() => screen.getByText(VERROU_CHAPITRE_SUPPRIME))
-    const caseExt = screen.getByLabelText<HTMLInputElement>(
-      'Importer Extincteur',
-    )
-    expect(caseExt.disabled).toBe(true)
-    expect(caseExt.checked).toBe(true)
-  })
 })
 
-describe('MergePreviewDialog — fichier rendu par une IA (étape 5)', () => {
-  /** L'IA a gardé l'`updated_at` de l'export : rien n'est « plus récent ». */
-  const dateExport = (f: ClasseurJson) => {
-    f.chapters[0].items[0].updated_at = '2020-01-01T00:00:00+00:00'
-    f.chapters[1].items[0].updated_at = '2020-01-01T00:00:00+00:00'
-  }
-
-  it('choix par défaut : IA ; un horodatage ancien n’empêche rien', async () => {
-    await ouvrirAvecApercu(fichierLlm(dateExport))
-    expect(
-      screen.getByLabelText<HTMLInputElement>('Fichier rendu par une IA')
-        .checked,
-    ).toBe(true)
-    expect(bouton().textContent).toBe('Importer 3 documents')
-    // Le même fichier en fusion Registre : les deux modifications, plus
-    // anciennes que le local, sont ignorées (R7).
-    choisirRegistre()
-    await waitFor(() =>
-      expect(bouton().textContent).toBe('Importer 1 document'),
-    )
-  })
-
-  it('l’import part en mode IA, sans suppression par défaut', async () => {
+describe('MergePreviewDialog — un seul comportement (décision du 2026-10-20)', () => {
+  it('aucun choix ni jargon à l’écran', async () => {
     await ouvrirAvecApercu()
-    appliquerIa.mockResolvedValue({
-      inserted: 2,
-      updated: 1,
-      unchanged: 2,
-      skipped: 0,
-      deleted: 0,
-      ignores: 0,
-    })
-    fireEvent.click(bouton())
-    await waitFor(() => expect(appliquerIa).toHaveBeenCalledTimes(1))
-    expect(appliquer).not.toHaveBeenCalled()
-    const [id, , options] = appliquerIa.mock.calls[0] as [
-      number,
-      unknown,
-      { supprimerAbsents: boolean; sourceName: string },
-    ]
-    expect(id).toBe(1)
-    expect(options.supprimerAbsents).toBe(false)
-    expect(options.sourceName).toBe('classeur.json')
+    expect(screen.queryAllByRole('radio')).toHaveLength(0)
+    expect(screen.queryAllByRole('switch')).toHaveLength(0)
+    const texte = window.document.body.textContent
+    for (const mot of [
+      'Registre',
+      'JSON',
+      'LLM',
+      'fusion',
+      'remplacement',
+      'Remplacer',
+      'uuid',
+      'Supprimer ce qui',
+    ])
+      expect(texte, mot).not.toContain(mot)
   })
 
-  it('un chapitre retiré par l’IA : rien supprimé, sauf case cochée', async () => {
-    await ouvrirAvecApercu(fichierLlm((f) => f.chapters.splice(1, 1)))
-    expect(screen.queryByText('Extincteur')).toBeNull()
-    expect(screen.queryByText(/suppression/)).toBeNull()
-    fireEvent.click(
-      screen.getByRole('switch', {
-        name: "Supprimer ce qui n'est plus dans le fichier",
+  it('un horodatage ancien (recopié par l’IA) n’empêche rien', async () => {
+    await ouvrirAvecApercu(
+      fichierLlm((f) => {
+        f.chapters[0].items[0].updated_at = '2020-01-01T00:00:00+00:00'
+        f.chapters[1].items[0].updated_at = '2020-01-01T00:00:00+00:00'
       }),
     )
-    await waitFor(() => screen.getByText(VERROU_CHAPITRE_SUPPRIME))
-    expect(screen.getByText(/2 suppressions/)).toBeTruthy()
+    expect(bouton().textContent).toBe('Importer 3 documents')
+  })
+
+  it('un chapitre ABSENT de la réponse : rien n’est supprimé', async () => {
+    await ouvrirAvecApercu(fichierLlm((f) => f.chapters.splice(1, 1)))
+    expect(screen.queryByText('Extincteur')).toBeNull()
+    expect(screen.queryByText(/corbeille/)).toBeNull()
+    expect(bouton().textContent).toBe('Importer 2 documents')
+  })
+
+  it('`"supprimer": true` : « mis à la corbeille », refusable comme le reste', async () => {
+    await ouvrirAvecApercu(
+      fichierLlm((f) => {
+        f.chapters[0].items[1].supprimer = true
+        f.chapters[1].supprimer = true
+      }),
+    )
+    // Check-out : une ligne à case.
+    const accueil = screen.getByRole('list', { name: 'Accueil' })
+    expect(within(accueil).getByText('Check-out')).toBeTruthy()
+    // Le chapitre Sécurité : refusable, son document le suit sans ligne.
+    const caseChapitre =
+      screen.getByLabelText<HTMLInputElement>('Importer Sécurité')
+    expect(caseChapitre.disabled).toBe(false)
+    expect(screen.queryByText('Extincteur')).toBeNull()
+    expect(screen.getAllByText('mis à la corbeille')).toHaveLength(2)
+    expect(screen.getByText(/2 mis à la corbeille/)).toBeTruthy()
+    fireEvent.click(caseChapitre)
+    appliquer.mockResolvedValue({
+      inserted: 1,
+      updated: 1,
+      unchanged: 3,
+      skipped: 0,
+      deleted: 1,
+      ignores: 1,
+    })
+    fireEvent.click(bouton())
+    await waitFor(() => expect(appliquer).toHaveBeenCalledTimes(1))
+    const options = appliquer.mock.calls[0][3] as {
+      exclus: ReadonlySet<string>
+    }
+    expect([...options.exclus]).toEqual(['chapitre:20'])
   })
 
   it('la réponse de l’IA se COLLE, même entourée de texte', async () => {
     ouvrir(null)
     expect(bouton().disabled).toBe(true)
     const bloc = '```'
-    fireEvent.change(screen.getByLabelText('JSON à importer'), {
+    fireEvent.change(screen.getByLabelText("Réponse de l'IA à importer"), {
       target: {
         value: `Voici le classeur :\n${bloc}json\n${texteLlm()}\n${bloc}\nBonne journée.`,
       },
@@ -378,33 +365,38 @@ describe('MergePreviewDialog — fichier rendu par une IA (étape 5)', () => {
       timeout: 3000,
     })
     expect(bouton().textContent).toBe('Importer 3 documents')
-    appliquerIa.mockResolvedValue({
+    appliquer.mockResolvedValue({
       inserted: 0,
       updated: 0,
       unchanged: 0,
       skipped: 0,
       deleted: 0,
+      ignores: 0,
     })
     fireEvent.click(bouton())
-    await waitFor(() => expect(appliquerIa).toHaveBeenCalledTimes(1))
-    const options = appliquerIa.mock.calls[0][2] as { sourceName: string }
+    await waitFor(() => expect(appliquer).toHaveBeenCalledTimes(1))
+    const options = appliquer.mock.calls[0][3] as { sourceName: string }
     expect(options.sourceName).toBe('Réponse collée d’une IA')
   })
 
-  it('l’export d’un chapitre est refusé ici', async () => {
+  it('l’export d’un chapitre de ce classeur : appliqué à ce chapitre, et dit', async () => {
     const f = construireExportChapitre(
       classeur(),
       A,
       local.content,
       PERIODICITES,
     )
+    f.chapters[0].items[0].content = 'Réécrit'
     ouvrir(new File([JSON.stringify(f)], 'chapitre.json'))
     expect(
-      await screen.findByText(/export du chapitre Accueil/, undefined, {
-        timeout: 3000,
-      }),
+      await screen.findByText(
+        'Ce fichier concerne le chapitre Accueil. Le reste du classeur ne change pas.',
+        undefined,
+        { timeout: 3000 },
+      ),
     ).toBeTruthy()
-    expect(bouton().disabled).toBe(true)
+    expect(bouton().textContent).toBe('Importer 1 document')
+    expect(bouton().disabled).toBe(false)
   })
 
   it('D10 : le fichier d’un autre classeur est accepté avec un avertissement', async () => {

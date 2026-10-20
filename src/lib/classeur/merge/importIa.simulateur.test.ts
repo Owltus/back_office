@@ -25,8 +25,9 @@ vi.mock('#/lib/supabase.ts', () => ({
   },
 }))
 
-const { appliquerImportIa, previsualiserImportIa } =
+const { appliquerImport, previsualiserImport } =
   await import('#/lib/classeur/merge/apply.ts')
+const CLASSEUR_CTX = { type: 'classeur' } as const
 const { construireExportChapitre } =
   await import('#/lib/classeur/merge/portee.ts')
 const { construireExport, parseImportJson } =
@@ -131,10 +132,9 @@ beforeEach(() => {
   etat.sim = sim
 })
 
-describe('appliquerImportIa, contre le simulateur', () => {
+describe('appliquerImport (classeur), contre le simulateur', () => {
   it('point → écriture ; horodatage de l’export ignoré ; rien supprimé', async () => {
-    const r = await appliquerImportIa(1, fichierIa(), {
-      supprimerAbsents: false,
+    const r = await appliquerImport(1, fichierIa(), CLASSEUR_CTX, {
       sourceName: 'Réponse collée d’une IA',
     })
     expect(r).toMatchObject({ inserted: 0, updated: 1, deleted: 0 })
@@ -157,25 +157,49 @@ describe('appliquerImportIa, contre le simulateur', () => {
     })
   })
 
-  it('case cochée : le chapitre absent part à la corbeille, APRÈS le point', async () => {
-    const r = await appliquerImportIa(1, fichierIa(), {
-      supprimerAbsents: true,
-      sourceName: 's',
-    })
-    expect(r.deleted).toBe(2)
+  it('chapitre marqué « supprimer » : à la corbeille (douce), APRÈS le point', async () => {
+    const f = parseImportJson(
+      JSON.stringify(construireExport(CLASSEUR, [A, B], CONTENU, PERIODICITES)),
+    )
+    f.chapters[0].items[0].content = 'Réécrit'
+    f.chapters[1].supprimer = true
+    const r = await appliquerImport(1, f, CLASSEUR_CTX, { sourceName: 's' })
+    expect(r.deleted).toBe(1)
     expect(ecritures(sim).map((j) => j.cible)).toEqual([
       'classeur_merge_history',
       'classeur_documents',
-      'classeur_documents',
       'classeur_chapters',
     ])
+    // Suppression DOUCE : la ligne existe encore, datée (corbeille).
     expect(ligne(sim, 'classeur_chapters', 20).deleted_at).not.toBeNull()
+    // Son document le suit avec lui, sans écriture à part.
+    expect(ligne(sim, 'classeur_documents', 2).deleted_at).toBeNull()
+  })
+
+  it('élément marqué « supprimer » : refusé dans l’aperçu, rien n’est écrit', async () => {
+    const f = parseImportJson(
+      JSON.stringify(construireExport(CLASSEUR, [A, B], CONTENU, PERIODICITES)),
+    )
+    f.chapters[1].items[0].supprimer = true
+    const a = await previsualiserImport(1, f, CLASSEUR_CTX)
+    expect(a.lignes.map((l) => [l.cle, l.genre])).toEqual([
+      ['document:2', 'suppression'],
+    ])
+    const r = await appliquerImport(1, f, CLASSEUR_CTX, {
+      sourceName: 's',
+      exclus: new Set(['document:2']),
+    })
+    expect(r.ignores).toBe(1)
+    expect(ecritures(sim)).toEqual([])
+    const accepte = await appliquerImport(1, f, CLASSEUR_CTX, {
+      sourceName: 's',
+    })
+    expect(accepte.deleted).toBe(1)
     expect(ligne(sim, 'classeur_documents', 2).deleted_at).not.toBeNull()
   })
 
   it('tout refuser : aucune écriture, aucun point de restauration', async () => {
-    const r = await appliquerImportIa(1, fichierIa(), {
-      supprimerAbsents: false,
+    const r = await appliquerImport(1, fichierIa(), CLASSEUR_CTX, {
       sourceName: 's',
       exclus: new Set(['document:1']),
     })
@@ -188,27 +212,32 @@ describe('appliquerImportIa, contre le simulateur', () => {
     const f = parseImportJson(
       JSON.stringify(construireExport(CLASSEUR, [A, B], CONTENU, PERIODICITES)),
     )
-    const r = await appliquerImportIa(1, f, {
-      supprimerAbsents: true,
-      sourceName: 's',
-    })
+    const r = await appliquerImport(1, f, CLASSEUR_CTX, { sourceName: 's' })
     expect(r).toMatchObject({ inserted: 0, updated: 0, deleted: 0 })
     expect(ecritures(sim)).toEqual([])
   })
 
-  it('l’export d’un chapitre : refusé avant toute écriture', async () => {
+  it('l’export d’un chapitre importé depuis l’accueil : appliqué à CE chapitre seulement', async () => {
     const f = parseImportJson(
       JSON.stringify(
         construireExportChapitre(CLASSEUR, A, CONTENU, PERIODICITES),
       ),
     )
-    await expect(
-      appliquerImportIa(1, f, { supprimerAbsents: true, sourceName: 's' }),
-    ).rejects.toThrow(/export du chapitre Accueil/)
-    await expect(
-      previsualiserImportIa(1, f, { supprimerAbsents: false }),
-    ).rejects.toThrow(/export du chapitre Accueil/)
+    f.chapters[0].items[0].content = 'Réécrit'
+    const a = await previsualiserImport(1, f, CLASSEUR_CTX)
+    expect(a.cible).toEqual({ type: 'chapitre', chapitreId: 10 })
+    expect(a.note).toBe(
+      'Ce fichier concerne le chapitre Accueil. Le reste du classeur ne change pas.',
+    )
     expect(ecritures(sim)).toEqual([])
+    await appliquerImport(1, f, CLASSEUR_CTX, { sourceName: 's' })
+    expect(ecritures(sim).map((j) => j.cible)).toEqual([
+      'classeur_merge_history',
+      'classeur_documents',
+    ])
+    expect(ligne(sim, 'classeur_documents', 1).content).toBe('Réécrit')
+    expect(ligne(sim, 'classeur_chapters', 20).deleted_at).toBeNull()
+    expect(ligne(sim, 'classeur_documents', 2).deleted_at).toBeNull()
   })
 
   it('aperçu : l’avertissement d’un autre classeur arrive dans le plan', async () => {
@@ -218,7 +247,7 @@ describe('appliquerImportIa, contre le simulateur', () => {
       classeur_uuid: 'autre',
       classeur_name: 'Carnet sanitaire',
     }
-    const a = await previsualiserImportIa(1, f, { supprimerAbsents: false })
+    const a = await previsualiserImport(1, f, CLASSEUR_CTX)
     expect(a.plan.warnings[0]).toMatch(/vient du classeur Carnet sanitaire/)
     expect(a.lignes).toHaveLength(1)
     expect(ecritures(sim)).toEqual([])
