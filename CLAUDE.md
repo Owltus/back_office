@@ -743,11 +743,13 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
      (14 tests, mutations vérifiées) : `planifierFusion` en REMPLACEMENT
      (le LLM ne met pas `updated_at` à jour : en fusion « le plus récent
      gagne », ses modifications seraient ignorées) puis FILTRÉ à la portée —
-     jamais d'autre chapitre, position du chapitre conservée, suppression des
-     absents seulement sur option (un LLM tronque parfois), chapitre ignoré
-     pour un document ; `updated_at` du fichier RETIRÉ (sinon le document
-     reprendrait sa date d'export et un éditeur ouvert avant écraserait le
-     travail sans conflit). Refus clair d'un JSON d'un autre chapitre/document.
+     jamais d'autre chapitre, position du chapitre conservée, AUCUN absent
+     supprimé (depuis le 2026-10-20 ; seul `"supprimer": true` met à la
+     corbeille), chapitre ignoré pour un document ; `updated_at` du fichier
+     RETIRÉ (sinon le document reprendrait sa date d'export et un éditeur
+     ouvert avant écraserait le travail sans conflit). Un fichier d'un autre
+     chapitre ou document du classeur s'applique à lui (portée déduite, voir
+     « Échange avec une IA »).
      Application : `appliquerFusionPortee` = même circuit que la fusion
      (point `fusion` AVANT toute écriture, élagage). Vérifié navigateur sans
      écrire (aperçus chapitre, option de suppression, mauvais chapitre,
@@ -801,18 +803,63 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
     sur les trois chemins (`restauration.ts`, `apply.ts`, `history.ts`) ; les
     cinq clés de Registre restent. Leur téléchargement depuis l'Historique est
     une sauvegarde (infobulle « Télécharger cette sauvegarde »).
-  - **Import d'un classeur complet** (`MergePreviewDialog`, ligne Importer un
-    JSON, réponse COLLÉE ou fichier) : choix « Fichier rendu par une IA »
-    (défaut, D1) / « Fichier de Registre ou d'un autre poste » (D2, fusion /
-    remplacement INCHANGÉS). Mode IA = `merge/importIa.ts`,
-    `planifierImportIa` : `sansHorodatage` (déplacé de `portee.ts`) puis
-    remplacement, suppressions (éléments ET chapitres) retirées tant que la
-    case « Supprimer ce qui n'est plus dans le fichier » n'est pas cochée
-    (décochée par défaut). Couche AU-DESSUS de `planifierFusion` : R7, R8,
-    R11 intacts. `controlerPorteeClasseur` : export de chapitre ou de
-    document refusé, autre classeur averti (D10). Même circuit
-    (`appliquerImportIa` → `appliquerPlanifie`) : plan recalculé, refus
-    filtrés, point `fusion` AVANT la première écriture.
+  - **IMPORT SIMPLIFIÉ (décision utilisateur du 2026-10-20 : aucun choix de
+    provenance, aucune case de suppression, portée déduite ; ne pas les
+    réintroduire)** — retour : « très complexe pour rien… fichier de
+    Registre c'est quoi ce terme… supprimer ce qui n'est pas dans le
+    fichier, très destructeur… sois logique, sans friction ». Étape 9 du
+    plan. UN comportement pour tout import dans un classeur existant
+    (`MergePreviewDialog` ligne « Importer » de l'accueil, ET
+    `EchangeJsonDialog` d'un chapitre ou d'un document) : coller ou
+    choisir / déposer un fichier → aperçu → Importer.
+    - Le fichier fait foi pour ce qu'il contient, sans dépendre des dates
+      (`planifierImportIa` : `sansHorodatage` puis remplacement).
+    - Ce qui est ABSENT du fichier est TOUJOURS gardé. Une suppression n'a
+      lieu que si le fichier la demande : élément (ou chapitre) GARDÉ et
+      marqué `"supprimer": true` (`ItemJson.supprimer`, `ChapterJson.supprimer`,
+      relus par `lireItem`/`lireChapitre` seulement s'ils valent `true`,
+      jamais écrits par un export, ignorés par Registre et par la
+      restauration et l'import en nouveau classeur).
+      `planSuppressionsDemandees` (`portee.ts`) calcule le plan BRUT deux
+      fois (fichier sans les marqués, fichier complet) : une suppression du
+      premier absente du second vise exactement ce qu'un marqué appariait
+      (mêmes règles R1/R5/E7/E9, aucune seconde version de l'appariement) ;
+      toutes les autres sont retirées. Suppression DOUCE (corbeille), ligne
+      « mis à la corbeille » dans l'aperçu, refusable (clé `kind:id` ;
+      `chapitre:id` pour un chapitre, désormais refusable) ; un élément d'un
+      chapitre mis à la corbeille le suit sans action à part. Un marqué
+      n'est pas validé (V6 ne le touche pas).
+    - Portée DÉDUITE (`destinationImport`, `importIa.ts`), jamais d'erreur :
+      fichier de chapitre ou de document de CE classeur → appliqué à lui
+      (`planifierFusionPortee`), d'où qu'on l'importe, avec la ligne « Ce
+      fichier concerne le chapitre X. Le reste du classeur ne change pas. » ;
+      fichier sans portée → classeur complet (sans danger : rien d'absent
+      n'est supprimé) ; autre classeur → avertissement (D10) ; chapitre ou
+      document introuvable ici → classeur complet + avertissement.
+    - Couche AU-DESSUS de `planifierFusion` : R7, R8, R11 et les oracles
+      intacts (`porteeAvantRefus.oracle.ts` garde son `OptionsPortee`, les
+      comparaisons se font sans la case). Circuit `apply.ts::planImport` →
+      `previsualiserImport` / `appliquerImport` → `appliquerPlanifie` : plan
+      recalculé, validation V1-V8, refus filtrés, point `fusion` AVANT la
+      première écriture ; tout refuser = rien d'écrit. RETIRÉS :
+      `previsualiserFusionComplete`, `previsualiserImportIa`,
+      `appliquerImportIa`, `previsualiserFusionPortee`,
+      `appliquerFusionPortee`, `controlerPorteeClasseur`, `verrousFusion`,
+      `ProvenanceImport`, `useAppliquerFusion(Portee)` (→ `useAppliquerImport`).
+      `appliquerFusion` (fusion / remplacement) reste pour les tests et
+      l'audit P1-P10, plus aucun appelant à l'écran ; la restauration d'un
+      point garde son circuit (`history.ts`).
+    - Écrans : aucun mot « Registre », « JSON », « LLM », « fusion »,
+      « remplacement », « uuid » (tests de rendu) ; ligne « Importer » sur
+      l'accueil (le libellé « Exporter en JSON » reste : il nomme le
+      format) ; résumé `resumerImport` (« N mis à la corbeille ») ; message
+      d'un texte illisible : « Collez toute la réponse de l'IA ». Points de
+      restauration nommés « Import dans le chapitre X ».
+    - Consignes : « Ne retire JAMAIS un élément du fichier ; pour en
+      supprimer un, garde-le et ajoute `"supprimer": true` », et ce qui est
+      créé à partir du contenu reste dans la conversation sauf ajout voulu
+      (5 890 octets au plus, sur 6 000). `_metadata.schema.rules.no_deletion`
+      dit la même règle.
   - **Validation V1-V8** (`merge/validationImport.ts`, pure) AVANT le plan,
     donc avant le point de restauration : `nombre` borné 1..60, uuid non UUID
     retiré (22P02), `periodicite_id` inconnu retiré, libellé différent averti,
@@ -826,10 +873,9 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
     (Créer le classeur / Annuler) avant de créer ; fichier propre = créé
     aussitôt.
   - **Écarts assumés** : `importerCommeNouveauClasseur` ne valide pas
-    lui-même (c'est l'appelant, `ClasseurListActions`) ; le mode Registre
-    n'est pas validé (D2, inchangé) ; un `nombre` non entier est déjà refusé
+    lui-même (c'est l'appelant, `ClasseurListActions`) ; un `nombre` non entier est déjà refusé
     à la lecture (`parseImportJson`), la branche « non entier » de V1 ne sert
-    que d'appoint ; en mode IA, un élément supprimé localement que le fichier
+    que d'appoint ; à l'import, un élément supprimé localement que le fichier
     contient encore (avec son uuid) est RESTAURÉ (le fichier fait foi).
   - Libellés visibles « LLM » remplacés par « IA » le 2026-10-20 (bouton
     `{}`, dialogue, message d'image inventée, aide de la mise en forme) ;
@@ -1517,7 +1563,7 @@ AccesClasseurDialog.tsx` (bouclier dans la barre du haut de l'accueil,
   `primary`, pas de pointillé ; Images du classeur) ; **Imprimer** (Classeur
   complet = aperçu couverture + sommaire + chapitres, puis Télécharger le
   PDF / Imprimer ; Sommaire, lui aussi un aperçu) ; **Échanger et
-  sauvegarder** (Exporter en JSON, Importer un JSON avec dépôt de fichier :
+  sauvegarder** (Exporter en JSON, Importer (libellé « Importer un JSON » jusqu'au 2026-10-20) avec dépôt de fichier :
   fond `primary/10` et « Déposez le fichier ici », Exporter en Markdown) ;
   **Historique et sécurité** (Points de restauration, Corbeille si
   écriture). `LigneAction` : `h-14` (`h-16` au doigt) pour TOUTES, carré

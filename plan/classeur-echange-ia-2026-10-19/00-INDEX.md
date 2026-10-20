@@ -1,6 +1,6 @@
 # Plan — Classeur : échange JSON avec une IA, refait pour des non-initiés
 
-> **TERMINÉ.** Plan écrit le 2026-10-19. Étapes 1 à 4 faites le 2026-10-19, 5 à 8 le 2026-10-20 (réponses par défaut de D-decisions.md, partie B, à revoir avec l'utilisateur). Rien n'est poussé. Bilan de clôture en fin de fichier.
+> **TERMINÉ.** Plan écrit le 2026-10-19. Étapes 1 à 4 faites le 2026-10-19, 5 à 8 le 2026-10-20 (réponses par défaut de D-decisions.md, partie B, à revoir avec l'utilisateur). **Révision du 2026-10-20, étape 9** : l'utilisateur a trouvé l'import trop complexe ; choix de provenance et case de suppression RETIRÉS, portée déduite (D1, D2, D10 renversées). Rien n'est poussé. Bilan de clôture en fin de fichier.
 
 ---
 
@@ -59,6 +59,7 @@ référence (l'utilisateur demande par numéro ; ne jamais renuméroter).
 | 6   | [6-validation-avant-ecriture.md](./6-validation-avant-ecriture.md) | Validation avant toute écriture           | 5         | P0       | 3 h    | FAIT a7f16a0 : V1-V8 avant le plan et le point, fichier valide intact, réglages en clair, nouveau classeur validé     | ⚠        |
 | 7   | [7-relecture-quatrieme-mur.md](./7-relecture-quatrieme-mur.md)     | Relecture : quatrième mur et 4 natures    | 5         | P1       | 3 h    | FAIT 65cb569 : liste fermée sans faux positif sur la base locale, toutes natures, éditeur, relecture avant création   |          |
 | 8   | [8-cloture.md](./8-cloture.md)                                     | Aide, CLAUDE.md, contrôle global          | 1-7       | P0       | 2 h    | FAIT 5533fc0 : aide, libellés IA, un seul classeur dans les consignes ; puis CLAUDE.md et bilan (commit de doc)       | ⚠        |
+| 9   | [9-import-simplifie.md](./9-import-simplifie.md)                   | Import simplifié (révision du 2026-10-20) | 5-8       | P0       | 4 h    | FAIT : aucun choix ni case ; absent toujours gardé ; `"supprimer": true` ; portée déduite (renverse D1, D2, D10)      | ⚠        |
 
 ---
 
