@@ -34,7 +34,7 @@ import type { SourceImport } from '#/lib/classeur/sourceImport.ts'
 /*
  * Import dans un classeur EXISTANT, depuis son accueil (ligne Importer).
  * Décision utilisateur du 2026-10-20 (« trop complexe pour rien ») : aucun
- * choix à faire. Coller la réponse de l'IA, ou déposer / choisir un fichier,
+ * choix à faire. Coller la réponse du LLM, ou déposer / choisir un fichier,
  * voir ce qui change, Importer.
  *
  * Un seul comportement (`importIa.ts`) : le fichier fait foi pour ce qu'il
@@ -44,7 +44,7 @@ import type { SourceImport } from '#/lib/classeur/sourceImport.ts'
  * que ce chapitre ou ce document, et une ligne le dit.
  *
  * Deux états (refonte du 2026-10-20, « vraiment mal fait ») : la SAISIE
- * (`SaisieImport`, une grande zone : coller, déposer, choisir), puis
+ * (`SaisieImport`, deux zones : coller, déposer ou choisir), puis
  * l'APERÇU (`CorpsImport` : résumé en compteurs, note de portée,
  * avertissements, liste seule à défiler), la saisie repliée en une ligne
  * avec Changer. Même corps que le dialogue d'un chapitre, GROUPÉ ici par
@@ -84,7 +84,7 @@ export function MergePreviewDialog({
   classeurId: number
   /**
    * Fichier déposé sur la ligne Importer ; `null` : le dialogue s'ouvre sur
-   * la zone où coller la réponse de l'IA (ou déposer, choisir un fichier).
+   * les deux zones : coller la réponse du LLM, ou déposer, choisir un fichier.
    */
   file: File | null
   /** Appelé après un import réussi, avec ses compteurs (`ignores` compris). */
@@ -170,7 +170,7 @@ export function MergePreviewDialog({
         sourceName:
           source?.type === 'fichier'
             ? source.file.name
-            : 'Réponse collée d’une IA',
+            : 'Réponse collée d’un LLM',
       },
       {
         onSuccess: (result) => {

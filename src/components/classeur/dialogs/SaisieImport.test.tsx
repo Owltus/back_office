@@ -11,20 +11,21 @@ import {
 import { useState } from 'react'
 
 import {
-  LIBELLE_ZONE,
+  LIBELLE_CHOISIR,
+  LIBELLE_COLLER,
+  LIBELLE_DEPOSER,
   SaisieImport,
 } from '#/components/classeur/dialogs/SaisieImport.tsx'
 import type { SourceImport } from '#/lib/classeur/sourceImport.ts'
 
 /*
- * Saisie partagée des deux imports (refonte du 2026-10-20) : coller
- * (Ctrl + V hors champ, bouton Coller, champ de secours si le navigateur
- * refuse), déposer, choisir un fichier ; puis la ligne repliée et Changer.
+ * Saisie partagée des deux imports. Depuis le 2026-10-20 (demande
+ * utilisateur) : DEUX zones, Coller (champ visible + bouton) et Déposer
+ * (glisser-déposer, clic pour choisir) ; puis la ligne repliée et Changer.
  */
 
 const MOTS_INTERDITS = [
   'JSON',
-  'LLM',
   'fusion',
   'remplacement',
   'uuid',
@@ -64,61 +65,105 @@ function texteSource(s: SourceImport | null | undefined): string | null {
   return s?.type === 'texte' ? s.texte : null
 }
 
-describe('SaisieImport — la grande zone', () => {
-  it('une icône, une phrase, Coller et Choisir un fichier ; rien d’autre', () => {
-    render(<Banc />)
-    expect(screen.getByText(LIBELLE_ZONE)).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Coller' })).toBeTruthy()
-    expect(
-      screen.getByRole('button', { name: 'Choisir un fichier' }),
-    ).toBeTruthy()
-    expect(screen.queryByRole('textbox')).toBeNull()
-    const texte = document.body.textContent
-    for (const mot of MOTS_INTERDITS) expect(texte, mot).not.toContain(mot)
+const champ = () =>
+  screen.getByRole<HTMLTextAreaElement>('textbox', { name: LIBELLE_COLLER })
+const zoneDepot = () =>
+  screen.getByRole<HTMLButtonElement>('button', {
+    name: `${LIBELLE_DEPOSER}, ${LIBELLE_CHOISIR}`,
   })
 
-  it('Ctrl + V hors de tout champ : la réponse devient la source, la zone se replie', () => {
+describe('SaisieImport — deux zones', () => {
+  it('Coller (champ visible, libellé, bouton) et Déposer (zone, consigne)', () => {
     render(<Banc />)
-    collerSur(document.body, '{"a": 1}')
+    expect(champ().getAttribute('placeholder')).toBe('Ctrl + V ici')
+    expect(screen.getByText(LIBELLE_COLLER).tagName).toBe('LABEL')
+    expect(screen.getByRole('button', { name: 'Coller' })).toBeTruthy()
+    expect(zoneDepot().textContent).toContain(LIBELLE_DEPOSER)
+    expect(zoneDepot().textContent).toContain(LIBELLE_CHOISIR)
+    const texte = document.body.textContent
+    for (const mot of MOTS_INTERDITS) expect(texte, mot).not.toContain(mot)
+    expect(texte).not.toMatch(/\bIA\b/)
+  })
+
+  it('les deux zones ont la même hauteur minimale, côte à côte dès sm', () => {
+    render(<Banc />)
+    const coller = document.querySelector('[data-zone="coller"]')
+    const deposer = document.querySelector('[data-zone="deposer"]')
+    expect(coller?.className).toContain('min-h-56')
+    expect(deposer?.className).toContain('min-h-56')
+    expect(coller?.parentElement?.className).toContain('sm:grid-cols-2')
+    expect(coller?.parentElement).toBe(deposer?.parentElement)
+  })
+})
+
+describe('SaisieImport — zone Coller', () => {
+  it('un collage dans le champ devient la source tout de suite, la saisie se replie', () => {
+    render(<Banc />)
+    champ().focus()
+    collerSur(champ(), '{"a": 1}')
     expect(recu).toHaveLength(1)
     expect(texteSource(recu[0])).toBe('{"a": 1}')
     expect(screen.getByText('Réponse collée')).toBeTruthy()
     expect(screen.getByText('8 octets')).toBeTruthy()
-    expect(screen.queryByText(LIBELLE_ZONE)).toBeNull()
+    expect(screen.queryByRole('textbox')).toBeNull()
+    expect(screen.queryByText(LIBELLE_DEPOSER)).toBeNull()
   })
 
-  it('Ctrl + V dans un autre champ : ignoré (il garde son collage)', () => {
+  it('une frappe devient la source une fois finie (délai)', () => {
+    vi.useFakeTimers()
+    try {
+      render(<Banc />)
+      fireEvent.change(champ(), { target: { value: 'tapé' } })
+      act(() => vi.advanceTimersByTime(300))
+      expect(recu).toHaveLength(0)
+      act(() => vi.advanceTimersByTime(400))
+      expect(texteSource(recu[0])).toBe('tapé')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('Ctrl + V hors de tout champ : pris aussi', () => {
+    render(<Banc />)
+    collerSur(document.body, 'réponse')
+    expect(texteSource(recu[0])).toBe('réponse')
+  })
+
+  it('Ctrl + V dans un AUTRE champ : ignoré (il garde son collage)', () => {
     render(
       <>
         <input aria-label="Recherche" />
         <Banc />
       </>,
     )
-    const champ = screen.getByLabelText('Recherche')
-    champ.focus()
-    collerSur(champ, 'texte')
+    const autre = screen.getByLabelText('Recherche')
+    autre.focus()
+    collerSur(autre, 'texte')
     expect(recu).toHaveLength(0)
-    expect(screen.getByText(LIBELLE_ZONE)).toBeTruthy()
+    expect(champ()).toBeTruthy()
   })
 
   it('un collage vide ne donne rien', () => {
     render(<Banc />)
+    collerSur(champ(), '   ')
     collerSur(document.body, '   ')
-    expect(recu).toHaveLength(0)
-  })
-
-  it('désactivée : le collage est ignoré', () => {
-    render(<Banc disabled />)
-    collerSur(document.body, 'texte')
     expect(recu).toHaveLength(0)
   })
 
   it('un fichier copié puis collé est pris comme fichier', () => {
     render(<Banc />)
     const f = new File(['{}'], 'reponse.json')
-    collerSur(document.body, '', [f])
+    collerSur(champ(), '', [f])
     expect(recu[0]).toEqual({ type: 'fichier', file: f })
     expect(screen.getByText('reponse.json')).toBeTruthy()
+  })
+
+  it('désactivée : champ et boutons inertes, collage ignoré', () => {
+    render(<Banc disabled />)
+    expect(champ().disabled).toBe(true)
+    expect(zoneDepot().disabled).toBe(true)
+    collerSur(document.body, 'texte')
+    expect(recu).toHaveLength(0)
   })
 })
 
@@ -133,69 +178,42 @@ describe('SaisieImport — bouton Coller', () => {
   })
 
   it('lit le presse-papiers', async () => {
-    lire.mockResolvedValue('réponse de l’IA')
+    lire.mockResolvedValue('réponse du LLM')
     render(<Banc />)
     fireEvent.click(screen.getByRole('button', { name: 'Coller' }))
     await screen.findByText('Réponse collée')
-    expect(texteSource(recu[0])).toBe('réponse de l’IA')
+    expect(texteSource(recu[0])).toBe('réponse du LLM')
   })
 
-  it('refusé : un champ sélectionné apparaît, sans message, et reçoit le collage', async () => {
+  it('refusé : le champ prend le focus, sans message', async () => {
     lire.mockRejectedValue(new Error('NotAllowedError'))
     render(<Banc />)
     const avant = document.body.textContent
     fireEvent.click(screen.getByRole('button', { name: 'Coller' }))
-    const champ = await screen.findByRole('textbox', {
-      name: "Réponse de l'IA",
-    })
-    await waitFor(() => expect(document.activeElement).toBe(champ))
+    await waitFor(() => expect(document.activeElement).toBe(champ()))
     expect(recu).toHaveLength(0)
-    // Aucun message d'erreur : seul le champ s'ajoute.
-    expect(document.body.textContent).toBe(
-      avant.replace('CollerChoisir un fichier', ''),
-    )
-    collerSur(champ, 'collé à la main')
+    expect(document.body.textContent).toBe(avant)
+    collerSur(champ(), 'collé à la main')
     expect(texteSource(recu[0])).toBe('collé à la main')
-    expect(screen.getByText('Réponse collée')).toBeTruthy()
   })
 
-  it('presse-papiers vide : le champ aussi', async () => {
+  it('presse-papiers vide : le champ prend le focus aussi', async () => {
     lire.mockResolvedValue('')
     render(<Banc />)
     fireEvent.click(screen.getByRole('button', { name: 'Coller' }))
-    await screen.findByRole('textbox', { name: "Réponse de l'IA" })
+    await waitFor(() => expect(document.activeElement).toBe(champ()))
     expect(recu).toHaveLength(0)
-  })
-
-  it('champ de secours : une frappe devient la source une fois finie', async () => {
-    vi.useFakeTimers()
-    try {
-      lire.mockRejectedValue(new Error('refus'))
-      render(<Banc />)
-      fireEvent.click(screen.getByRole('button', { name: 'Coller' }))
-      await act(async () => {
-        await Promise.resolve()
-      })
-      const champ = screen.getByRole('textbox', { name: "Réponse de l'IA" })
-      fireEvent.change(champ, { target: { value: 'tapé' } })
-      act(() => vi.advanceTimersByTime(300))
-      expect(recu).toHaveLength(0)
-      act(() => vi.advanceTimersByTime(400))
-      expect(texteSource(recu[0])).toBe('tapé')
-    } finally {
-      vi.useRealTimers()
-    }
   })
 })
 
-describe('SaisieImport — fichier', () => {
+describe('SaisieImport — zone Déposer', () => {
   it('déposé : survol visible, puis la source', () => {
     render(<Banc />)
-    const zone = screen.getByText(LIBELLE_ZONE).parentElement as HTMLElement
+    const zone = zoneDepot()
     const f = new File(['x'.repeat(12 * 1024)], 'chapitre.json')
     fireEvent.dragEnter(zone, { dataTransfer: { files: [f] } })
-    expect(screen.getByText('Déposez le fichier ici')).toBeTruthy()
     expect(zone.getAttribute('data-survol')).toBe('true')
+    expect(screen.getByText('Relâchez pour importer')).toBeTruthy()
     fireEvent.drop(zone, {
       dataTransfer: { files: [f], getData: () => '' },
     })
@@ -204,33 +222,53 @@ describe('SaisieImport — fichier', () => {
     expect(screen.getByText('12 ko')).toBeTruthy()
   })
 
-  it('le survol s’efface en quittant la zone', () => {
+  it('déposé sur la zone Coller : accepté aussi', () => {
     render(<Banc />)
-    const zone = screen.getByText(LIBELLE_ZONE).parentElement as HTMLElement
-    fireEvent.dragEnter(zone, { dataTransfer: { files: [] } })
-    fireEvent.dragLeave(zone, { relatedTarget: document.body })
-    expect(screen.getByText(LIBELLE_ZONE)).toBeTruthy()
-    expect(zone.getAttribute('data-survol')).toBeNull()
-  })
-
-  it('choisi : la source', () => {
-    render(<Banc />)
-    const f = new File(['{}'], 'reponse.txt')
-    fireEvent.change(screen.getByLabelText('Choisir un fichier'), {
-      target: { files: [f] },
+    const f = new File(['{}'], 'reponse.json')
+    fireEvent.drop(champ(), {
+      dataTransfer: { files: [f], getData: () => '' },
     })
     expect(recu[0]).toEqual({ type: 'fichier', file: f })
+  })
+
+  it('le survol s’efface en quittant la zone', () => {
+    render(<Banc />)
+    const zone = zoneDepot()
+    fireEvent.dragEnter(zone, { dataTransfer: { files: [] } })
+    fireEvent.dragLeave(zone.parentElement as HTMLElement, {
+      relatedTarget: document.body,
+    })
+    expect(zone.getAttribute('data-survol')).toBeNull()
+    expect(screen.getByText(LIBELLE_CHOISIR)).toBeTruthy()
+  })
+
+  it('clic sur la zone : ouvre le choix d’un fichier ; choisi = la source', () => {
+    render(<Banc />)
+    const input = screen.getByLabelText<HTMLInputElement>('Choisir un fichier')
+    const ouvrir = vi.spyOn(input, 'click')
+    fireEvent.click(zoneDepot())
+    expect(ouvrir).toHaveBeenCalledTimes(1)
+    const f = new File(['{}'], 'reponse.txt')
+    fireEvent.change(input, { target: { files: [f] } })
+    expect(recu[0]).toEqual({ type: 'fichier', file: f })
+  })
+
+  it('la zone est un vrai bouton (Entrée et Espace au clavier)', () => {
+    render(<Banc />)
+    expect(zoneDepot().tagName).toBe('BUTTON')
+    expect(zoneDepot().getAttribute('type')).toBe('button')
   })
 })
 
 describe('SaisieImport — ligne repliée', () => {
-  it('Changer rend la grande zone', () => {
+  it('Changer rend les deux zones', () => {
     render(<Banc />)
-    collerSur(document.body, 'texte')
+    collerSur(champ(), 'texte')
     fireEvent.click(screen.getByRole('button', { name: 'Changer' }))
     expect(recu).toEqual([{ type: 'texte', texte: 'texte' }, null])
-    expect(screen.getByText(LIBELLE_ZONE)).toBeTruthy()
-    // La zone écoute de nouveau.
+    expect(champ().value).toBe('')
+    expect(zoneDepot()).toBeTruthy()
+    // La saisie écoute de nouveau.
     collerSur(document.body, 'autre')
     expect(texteSource(recu[2])).toBe('autre')
   })

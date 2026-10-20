@@ -96,7 +96,7 @@ export function ClasseurListHelpPanel({
       <Section title="Le menu d'un classeur">
         <GestureRow side="right">
           {fort('Clic droit')} sur une ligne : ouvrir, modifier le nom et
-          l'icône, régler les accès, copier pour une IA, exporter en JSON ou
+          l'icône, régler les accès, copier pour un LLM, exporter en JSON ou
           supprimer.
         </GestureRow>
         <p>
@@ -131,17 +131,17 @@ export function ClasseurListHelpPanel({
         )}
       </Section>
 
-      <Section title="Travailler avec une IA">
+      <Section title="Travailler avec un LLM">
         <GestureRow side="right">
-          {fort('Clic droit')} sur une ligne, puis {fort('Copier pour une IA')}{' '}
-          : tout le classeur est copié, avec un mode d'emploi pour l'IA. Dans un
-          classeur, la ligne Exporter en JSON a le même bouton Copier.
+          {fort('Clic droit')} sur une ligne, puis {fort('Copier pour un LLM')}{' '}
+          : tout le classeur est copié, avec un mode d'emploi pour le LLM. Dans
+          un classeur, la ligne Exporter en JSON a le même bouton Copier.
         </GestureRow>
         <p>
-          Collez dans la conversation avec l'IA. Elle vous demande ce que vous
+          Collez dans la conversation avec le LLM. Il vous demande ce que vous
           voulez faire : poser une question, corriger, ajouter un chapitre ou
-          une feuille. Elle rappelle ses limites dans la conversation, jamais
-          dans le classeur.
+          une feuille. Il rappelle ses limites dans la conversation, jamais dans
+          le classeur.
         </p>
         {canWrite && (
           <>
@@ -164,8 +164,8 @@ export function ClasseurListHelpPanel({
         <Section title="Créer ou importer">
           <p>
             {fort('Nouveau classeur')} en crée un vide. Le bouton Importer crée
-            un nouveau classeur à partir d'un fichier exporté ou rendu par une
-            IA. Vous pouvez aussi déposer le fichier directement sur le bouton.
+            un nouveau classeur à partir d'un fichier exporté ou rendu par un
+            LLM. Vous pouvez aussi déposer le fichier directement sur le bouton.
             Si le fichier pose question, vous le voyez avant la création.
           </p>
         </Section>

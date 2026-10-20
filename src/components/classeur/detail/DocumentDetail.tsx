@@ -530,7 +530,7 @@ export function DocumentDetail() {
                     }
                   />
                   <IconAction
-                    label="Échange avec une IA : exporter, réimporter"
+                    label="Échange avec un LLM : exporter, réimporter"
                     icon={<Braces />}
                     onClick={() => setJsonOuvert(true)}
                     disabled={!page.chapter}

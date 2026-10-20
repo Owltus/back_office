@@ -21,7 +21,7 @@ import { construireExport } from '#/lib/classeur/merge/schema.ts'
 import type { DbClasseur } from '#/lib/classeur/types.ts'
 
 /*
- * « Copier pour une IA » depuis le menu de la liste des classeurs (étape 3
+ * « Copier pour un LLM » depuis le menu de la liste des classeurs (étape 3
  * du plan `classeur-echange-ia-2026-10-19`). Oracles : le texte copié est
  * exactement l'export du classeur ; un double clic ne lit le contenu qu'une
  * fois ; un refus du navigateur télécharge le fichier et le dit en une
@@ -68,7 +68,7 @@ vi.mock('#/components/classeur/ClasseurList.tsx', () => ({
     onImporterJson: (f: File) => void
   }) => (
     <>
-      <button onClick={() => onCopierJson(C)}>Copier pour une IA</button>
+      <button onClick={() => onCopierJson(C)}>Copier pour un LLM</button>
       <button onClick={() => onExporterJson(C)}>Exporter en JSON</button>
       <button onClick={() => aImporter && onImporterJson(aImporter)}>
         Importer
@@ -119,10 +119,10 @@ async function lectureFinie() {
   })
 }
 
-describe('ClasseurListActions — Copier pour une IA', () => {
+describe('ClasseurListActions — Copier pour un LLM', () => {
   it('le texte copié est exactement l’export du classeur ; « Copié » s’affiche', async () => {
     rendre()
-    fireEvent.click(screen.getByText('Copier pour une IA'))
+    fireEvent.click(screen.getByText('Copier pour un LLM'))
     await lectureFinie()
     await waitFor(() => expect(ecrit).toHaveBeenCalledTimes(1))
     const attendu = JSON.stringify(
@@ -137,8 +137,8 @@ describe('ClasseurListActions — Copier pour une IA', () => {
 
   it('double clic : le contenu n’est lu qu’une fois, une seule copie', async () => {
     rendre()
-    fireEvent.click(screen.getByText('Copier pour une IA'))
-    fireEvent.click(screen.getByText('Copier pour une IA'))
+    fireEvent.click(screen.getByText('Copier pour un LLM'))
+    fireEvent.click(screen.getByText('Copier pour un LLM'))
     await lectureFinie()
     await waitFor(() => expect(ecrit).toHaveBeenCalledTimes(1))
     expect(lectures).toHaveBeenCalledTimes(1)
@@ -147,7 +147,7 @@ describe('ClasseurListActions — Copier pour une IA', () => {
   it('copie refusée : une phrase, le fichier téléchargé, aucune erreur affichée', async () => {
     ecrit.mockRejectedValue(new Error('NotAllowedError'))
     rendre()
-    fireEvent.click(screen.getByText('Copier pour une IA'))
+    fireEvent.click(screen.getByText('Copier pour un LLM'))
     await lectureFinie()
     await screen.findByText(MESSAGE_COPIE_REFUSEE)
     expect(telecharge).toHaveBeenCalledTimes(1)
@@ -218,7 +218,7 @@ describe('import en nouveau classeur : validation et relecture (étapes 6 et 7, 
     expect(screen.getByText('1 élément a des points à vérifier.')).toBeTruthy()
     expect(
       screen.getByText(
-        /Phrase sur l'IA dans le texte\. Elle serait imprimée\./,
+        /Phrase sur le LLM dans le texte\. Elle serait imprimée\./,
       ),
     ).toBeTruthy()
     fireEvent.click(screen.getByText('Créer le classeur'))

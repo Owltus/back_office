@@ -10,7 +10,7 @@ import {
 import { construireExport } from '#/lib/classeur/merge/schema.ts'
 
 /*
- * Copier pour une IA (étape 3 du plan `classeur-echange-ia-2026-10-19`).
+ * Copier pour un LLM (étape 3 du plan `classeur-echange-ia-2026-10-19`).
  * Oracles : le texte est EXACTEMENT `serialiserExport(construireExport(…))` ;
  * un presse-papiers qui refuse, ou absent (page non sécurisée), donne le
  * fichier téléchargé, sans exception.

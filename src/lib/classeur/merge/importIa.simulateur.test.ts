@@ -135,7 +135,7 @@ beforeEach(() => {
 describe('appliquerImport (classeur), contre le simulateur', () => {
   it('point → écriture ; horodatage de l’export ignoré ; rien supprimé', async () => {
     const r = await appliquerImport(1, fichierIa(), CLASSEUR_CTX, {
-      sourceName: 'Réponse collée d’une IA',
+      sourceName: 'Réponse collée d’un LLM',
     })
     expect(r).toMatchObject({ inserted: 0, updated: 1, deleted: 0 })
     expect(ecritures(sim)).toEqual([
@@ -153,7 +153,7 @@ describe('appliquerImport (classeur), contre le simulateur', () => {
     expect(ligne(sim, 'classeur_documents', 2).deleted_at).toBeNull()
     expect(sim.table('classeur_merge_history')[0]).toMatchObject({
       kind: 'fusion',
-      label: 'Réponse collée d’une IA',
+      label: 'Réponse collée d’un LLM',
     })
   })
 

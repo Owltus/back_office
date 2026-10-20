@@ -594,7 +594,7 @@ export function parseImportJson(texte: string): ClasseurJson {
     brut = JSON.parse(texte)
   } catch {
     throw new Error(
-      "Ce texte n'est pas lisible en entier. Collez toute la réponse de l'IA, ou choisissez le fichier exporté.",
+      "Ce texte n'est pas lisible en entier. Collez toute la réponse du LLM, ou choisissez le fichier exporté.",
     )
   }
   if (!estObjet(brut)) {
@@ -647,7 +647,7 @@ export const NOTE_EXPORT =
 export const DESCRIPTION_INSTANTANE =
   "Point de restauration d'un classeur du Back Office (page Classeur), au format d'échange Registre."
 export const NOTE_INSTANTANE =
-  "Sauvegarde : ce bloc _metadata est informatif. Pour travailler avec une IA, exportez le classeur depuis l'application."
+  "Sauvegarde : ce bloc _metadata est informatif. Pour travailler avec un LLM, exportez le classeur depuis l'application."
 
 /**
  * Options de `construireExport` (étape 4 du plan

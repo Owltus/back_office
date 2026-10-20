@@ -109,7 +109,7 @@ import { cn } from '#/lib/utils.ts'
  *
  * MENU D'UN CLASSEUR (2026-10-19, demande utilisateur) : clic droit sur la
  * ligne, rien d'autre (aucun bouton « ⋯ », décision utilisateur). Ouvrir,
- * Modifier le classeur, Accès, Copier pour une IA, Exporter en JSON,
+ * Modifier le classeur, Accès, Copier pour un LLM, Exporter en JSON,
  * Supprimer : toujours listés, grisés avec leur
  * raison quand le niveau EFFECTIF ne les permet pas (`capacites`, miroir
  * des RLS). La base reste juge : le menu ne fait que le montrer.
@@ -121,7 +121,7 @@ export function ClasseurList({
 }: {
   onImporterJson?: (file: File) => void | Promise<void>
   onExporterJson?: (classeur: DbClasseur) => void | Promise<void>
-  /** Copier pour une IA (étape 3 du plan `classeur-echange-ia-2026-10-19`). */
+  /** Copier pour un LLM (étape 3 du plan `classeur-echange-ia-2026-10-19`). */
   onCopierJson?: (classeur: DbClasseur) => void | Promise<void>
 }) {
   const { user } = useAuth()
@@ -572,11 +572,11 @@ function entreesMenu(
       raison: raison(peut?.gererAcces, 'Gestion seule'),
     },
   ]
-  // Copier pour une IA et Exporter en JSON : mêmes droits (lire suffit).
+  // Copier pour un LLM et Exporter en JSON : mêmes droits (lire suffit).
   if (actions.copier)
     entrees.push({
       cle: 'copier',
-      libelle: 'Copier pour une IA',
+      libelle: 'Copier pour un LLM',
       icone: Copy,
       action: actions.copier,
       raison: null,

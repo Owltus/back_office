@@ -69,10 +69,10 @@ export function bilanFusion(r: ResultatFusion): string {
  *   - Sommaire et Exporter en PDF ouvrent un `PrintPreview` (impression via
  *     iframe, « Enregistrer en PDF » dans le dialogue du navigateur) ;
  *   - Exporter en Markdown télécharge l'archive ZIP ; Exporter en JSON ouvre
- *     son dialogue (`ExportJsonClasseurDialog` : Copier pour une IA ou
+ *     son dialogue (`ExportJsonClasseurDialog` : Copier pour un LLM ou
  *     Télécharger le fichier v2, sans aucun choix) ;
  *   - Importer ouvre le dialogue d'import (`MergePreviewDialog`) :
- *     coller la réponse d'une IA ou choisir un fichier (un fichier déposé sur
+ *     coller la réponse d'un LLM ou choisir un fichier (un fichier déposé sur
  *     la ligne l'ouvre déjà chargé), aperçu, puis un point de restauration
  *     avant toute écriture ; Historique ouvre les instantanés restaurables.
  *
@@ -90,7 +90,7 @@ export function ClasseurDashboardActions({
   const [apercu, setApercu] = useState<Apercu>(null)
   const [periodicites, setPeriodicites] = useState<DbPeriodicite[]>([])
   // Import du classeur : dialogue ouvert, avec le fichier déposé s'il y en a
-  // un (sinon la personne y colle la réponse de l'IA ou choisit un fichier).
+  // un (sinon la personne y colle la réponse du LLM ou choisit un fichier).
   const [importOuvert, setImportOuvert] = useState(false)
   const [fichierImport, setFichierImport] = useState<File | null>(null)
   const [historiqueOuvert, setHistoriqueOuvert] = useState(false)

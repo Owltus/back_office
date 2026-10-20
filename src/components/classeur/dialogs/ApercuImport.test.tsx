@@ -101,7 +101,7 @@ describe('ApercuImport — relecture', () => {
     rendre('pret', new Map(), new Set(), new Set(['document:1']))
     const liste = screen.getByRole('list', { name: '2 points à vérifier' })
     expect(liste.textContent).toContain(
-      "Image introuvable dans la médiathèque : 24/inexistant.webp (inventée par l'IA ?).",
+      'Image introuvable dans la médiathèque : 24/inexistant.webp (inventée par le LLM ?).',
     )
     expect(liste.textContent).toContain('cases en trop')
     expect(
@@ -209,7 +209,7 @@ describe('ApercuImport — quatrième mur (étape 7)', () => {
     ).toBeTruthy()
     const liste = screen.getByRole('list', { name: '1 point à vérifier' })
     expect(liste.textContent).toBe(
-      "Titre · Phrase sur l'IA dans le texte. Elle serait imprimée.",
+      'Titre · Phrase sur le LLM dans le texte. Elle serait imprimée.',
     )
     // Pas de note de mise en page pour une feuille.
     expect(screen.queryByText(/sera vérifiée dans/)).toBeNull()

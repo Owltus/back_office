@@ -313,7 +313,7 @@ describe('ClasseurDashboard — en-tête fixe et panneau', () => {
     expect(ligne.textContent).toContain('Déposez le fichier ici')
     expect(ligne.className).toContain('bg-primary/10')
     fireEvent.dragLeave(ligne)
-    expect(ligne.textContent).toContain("Réponse d'une IA ou fichier")
+    expect(ligne.textContent).toContain("Réponse d'un LLM ou fichier")
   })
 
   it('écriture : quatre sections, neuf lignes, comme la silhouette', () => {
@@ -338,8 +338,8 @@ describe('ClasseurDashboard — en-tête fixe et panneau', () => {
       {
         titre: 'Échanger et sauvegarder',
         cartes: [
-          expect.stringMatching(/Exporter en JSON.*À coller dans une IA/),
-          expect.stringMatching(/^Importer.*Réponse d'une IA ou fichier/),
+          expect.stringMatching(/Exporter en JSON.*À coller dans un LLM/),
+          expect.stringMatching(/^Importer.*Réponse d'un LLM ou fichier/),
           expect.stringContaining('Exporter en Markdown'),
         ],
         reservees: 0,

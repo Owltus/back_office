@@ -30,7 +30,7 @@ import type {
 /*
  * Export JSON du classeur COMPLET (ligne « Exporter en JSON » de l'accueil).
  * Deux gestes, aucun choix (étape 3 du plan `classeur-echange-ia-2026-10-19`) :
- * Copier (à coller dans une IA, qui lit son mode d'emploi dans le fichier et
+ * Copier (à coller dans un LLM, qui lit son mode d'emploi dans le fichier et
  * guide la personne) et Télécharger. Les deux rendent EXACTEMENT le même
  * texte (`texteExportClasseur`). Les demandes à cocher du 2026-10-04 sont
  * retirées (« exporter simplement »). Rien n'est mémorisé.
@@ -89,7 +89,7 @@ export function ExportJsonClasseurDialog({
           <DialogDescription>
             {sujet === null
               ? 'Classeur en cours de lecture.'
-              : `Le classeur ${sujet.classeur.name} au complet. Collez-le dans une IA : elle vous guide.`}
+              : `Le classeur ${sujet.classeur.name} au complet. Collez-le dans un LLM : il vous guide.`}
           </DialogDescription>
         </DialogHeader>
 

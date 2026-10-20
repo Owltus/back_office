@@ -321,7 +321,7 @@ export function AideMiseEnFormeDialog({
               la page montre un <Term>cadre gris</Term> « Image à insérer » à la
               place de la photo, avec la description en légende. Quand la photo
               est prise, <Term>cliquez sur le cadre gris</Term> dans l'aperçu :
-              elle prend sa place. Un document préparé par une IA peut en
+              elle prend sa place. Un document préparé par un LLM peut en
               contenir.
             </p>
             <Exemple

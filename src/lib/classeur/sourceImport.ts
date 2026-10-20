@@ -3,7 +3,7 @@ import { MAX_JSON_BYTES, fileTooLarge } from '#/lib/shared/files.ts'
 /*
  * Ce que la personne donne à un import (refonte du 2026-10-20 de la saisie,
  * partagée par l'import d'un classeur et celui d'un chapitre ou d'un
- * document) : un fichier, ou le texte collé de la réponse d'une IA. Pur, sans
+ * document) : un fichier, ou le texte collé de la réponse d'un LLM. Pur, sans
  * React : la lecture applique la même borne de taille aux deux.
  */
 

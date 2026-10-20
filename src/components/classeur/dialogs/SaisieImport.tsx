@@ -8,24 +8,30 @@ import type { SourceImport } from '#/lib/classeur/sourceImport.ts'
 import { cn } from '#/lib/utils.ts'
 
 /*
- * Saisie d'un import (refonte du 2026-10-20, « zéro friction ») : UNE zone
- * qui reçoit la réponse de l'IA de toutes les façons naturelles.
- *   - Ctrl + V n'importe où dans le dialogue quand aucun champ n'a le focus
- *     (un fichier copié dans l'explorateur est pris aussi) ;
- *   - le bouton Coller lit le presse-papiers ; si le navigateur refuse, un
- *     champ apparaît, déjà sélectionné, où coller soi-même (sans message :
- *     rien n'a échoué du point de vue de la personne) ;
- *   - un fichier déposé sur la zone, ou choisi par le bouton.
- * Une fois la source donnée, la zone se replie en une ligne (Réponse collée
- * ou nom du fichier, poids) avec Changer. Le dialogue décide du reste.
+ * Saisie d'un import, partagée par les deux dialogues. Depuis le 2026-10-20
+ * (demande utilisateur), DEUX zones côte à côte, empilées sur écran étroit :
+ *   - Coller : un vrai champ, toujours visible. Un collage y devient la
+ *     source aussitôt, une frappe une fois finie (`ATTENTE_FRAPPE_MS`). Le
+ *     bouton Coller lit le presse-papiers ; si le navigateur refuse, le champ
+ *     prend le focus, sans message (rien n'a échoué pour la personne).
+ *     Ctrl + V hors de tout champ est pris aussi (un fichier copié compris).
+ *   - Déposer : zone pointillée ; un clic, Entrée ou Espace ouvre le choix
+ *     d'un fichier. Un dépôt sur l'une ou l'autre zone est accepté.
+ * Une fois la source donnée, la saisie se replie en une ligne (Réponse
+ * collée ou nom du fichier, poids) avec Changer. Le dialogue décide du reste.
  */
 
-export const LIBELLE_ZONE = "Collez la réponse de l'IA ou déposez le fichier"
+export const LIBELLE_COLLER = 'Coller la réponse du LLM'
+export const LIBELLE_DEPOSER = 'Déposer le fichier ici'
+export const LIBELLE_CHOISIR = 'ou cliquer pour choisir'
 
-/** Après la dernière frappe dans le champ de secours, la source est donnée. */
+/** Après la dernière frappe dans le champ, la source est donnée. */
 const ATTENTE_FRAPPE_MS = 600
 
 const ACCEPTE = '.json,.txt,application/json,text/plain'
+
+/** Hauteur commune des deux zones. */
+const HAUTEUR_ZONE = 'min-h-56'
 
 function estChampSaisie(el: Element | null): boolean {
   if (el === null) return false
@@ -54,26 +60,27 @@ export function SaisieImport({
   onSource,
   disabled = false,
 }: {
-  /** `null` : la grande zone ; sinon la ligne repliée. */
+  /** `null` : les deux zones ; sinon la ligne repliée. */
   source: SourceImport | null
   /** Une source donnée, ou `null` (Changer). */
   onSource: (source: SourceImport | null) => void
   disabled?: boolean
 }) {
   const [survol, setSurvol] = useState(false)
-  // Champ de secours, affiché quand le presse-papiers est refusé.
-  const [champ, setChamp] = useState(false)
   const [brouillon, setBrouillon] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   const champRef = useRef<HTMLTextAreaElement>(null)
-  const idConsigne = useId()
+  const idChamp = useId()
   const actif = source === null && !disabled
 
   // Ctrl + V ailleurs que dans un champ : la réponse est prise telle quelle.
+  // Un collage dans NOTRE champ est déjà traité par lui (`defaultPrevented`).
   useEffect(() => {
     if (!actif) return
     function surCollage(e: ClipboardEvent) {
-      if (estChampSaisie(document.activeElement)) return
+      if (e.defaultPrevented) return
+      const focus = document.activeElement
+      if (focus !== champRef.current && estChampSaisie(focus)) return
       const s = sourceDepuis(e.clipboardData)
       if (s === null) return
       e.preventDefault()
@@ -83,7 +90,7 @@ export function SaisieImport({
     return () => document.removeEventListener('paste', surCollage)
   }, [actif, onSource])
 
-  // Champ de secours : la frappe devient la source une fois finie.
+  // La frappe dans le champ devient la source une fois finie.
   useEffect(() => {
     if (brouillon.trim() === '') return
     const minuteur = window.setTimeout(() => {
@@ -92,16 +99,11 @@ export function SaisieImport({
     return () => window.clearTimeout(minuteur)
   }, [brouillon, onSource])
 
-  // Une source arrive (ou Changer) : la zone repart propre.
+  // Une source arrive (ou Changer) : les zones repartent propres.
   useEffect(() => {
-    setChamp(false)
     setBrouillon('')
     setSurvol(false)
   }, [source])
-
-  useEffect(() => {
-    if (champ) champRef.current?.focus()
-  }, [champ])
 
   async function coller() {
     try {
@@ -113,7 +115,7 @@ export function SaisieImport({
     } catch {
       // Refus du navigateur : on passe au champ, sans message.
     }
-    setChamp(true)
+    champRef.current?.focus()
   }
 
   const depot = {
@@ -141,21 +143,6 @@ export function SaisieImport({
       if (s !== null) onSource(s)
     },
   }
-
-  const choixFichier = (
-    <input
-      ref={inputRef}
-      type="file"
-      accept={ACCEPTE}
-      className="hidden"
-      aria-label="Choisir un fichier"
-      onChange={(e) => {
-        const f = e.target.files?.[0]
-        e.target.value = ''
-        if (f) onSource({ type: 'fichier', file: f })
-      }}
-    />
-  )
 
   if (source !== null) {
     const Icone = source.type === 'fichier' ? FileText : ClipboardCheck
@@ -195,28 +182,47 @@ export function SaisieImport({
   return (
     <div
       {...depot}
-      data-survol={survol || undefined}
-      className={cn(
-        'flex min-h-56 flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed border-border bg-muted/30 px-4 py-6 text-center transition-colors',
-        survol && 'border-primary bg-primary/10',
-        disabled && 'opacity-60',
-      )}
+      data-saisie-import
+      className={cn('grid gap-3 sm:grid-cols-2', disabled && 'opacity-60')}
     >
-      {choixFichier}
-      <span
+      <input
+        ref={inputRef}
+        type="file"
+        accept={ACCEPTE}
+        className="hidden"
+        aria-label="Choisir un fichier"
+        onChange={(e) => {
+          const f = e.target.files?.[0]
+          e.target.value = ''
+          if (f) onSource({ type: 'fichier', file: f })
+        }}
+      />
+
+      <div
+        data-zone="coller"
         className={cn(
-          'flex size-12 items-center justify-center rounded-full bg-background text-muted-foreground shadow-xs',
-          survol && 'text-primary',
+          'flex flex-col gap-2 rounded-xl border bg-muted/30 p-3',
+          HAUTEUR_ZONE,
         )}
       >
-        <FileUp className="size-6" aria-hidden />
-      </span>
-      <p id={idConsigne} className="max-w-xs text-sm font-medium">
-        {survol ? 'Déposez le fichier ici' : LIBELLE_ZONE}
-      </p>
-      {champ ? (
+        <div className="flex items-center justify-between gap-2">
+          <label htmlFor={idChamp} className="text-sm font-medium">
+            {LIBELLE_COLLER}
+          </label>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-10 shrink-0"
+            onClick={() => void coller()}
+            disabled={disabled}
+          >
+            <ClipboardPaste />
+            Coller
+          </Button>
+        </div>
         <Textarea
           ref={champRef}
+          id={idChamp}
           value={brouillon}
           onChange={(e) => setBrouillon(e.target.value)}
           onPaste={(e) => {
@@ -225,36 +231,43 @@ export function SaisieImport({
             e.preventDefault()
             onSource(s)
           }}
-          placeholder="Ctrl + V pour coller ici"
-          aria-label="Réponse de l'IA"
-          aria-describedby={idConsigne}
+          placeholder="Ctrl + V ici"
           spellCheck={false}
           disabled={disabled}
-          className="h-28 w-full max-w-md resize-none bg-background text-sm [field-sizing:fixed]"
+          className="min-h-32 flex-1 resize-none bg-background text-sm [field-sizing:fixed]"
         />
-      ) : (
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          <Button
-            type="button"
-            className="h-10"
-            onClick={() => void coller()}
-            disabled={disabled}
-          >
-            <ClipboardPaste />
-            Coller
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            className="h-10"
-            onClick={() => inputRef.current?.click()}
-            disabled={disabled}
-          >
-            <FileUp />
-            Choisir un fichier
-          </Button>
-        </div>
-      )}
+      </div>
+
+      <button
+        type="button"
+        data-zone="deposer"
+        data-survol={survol || undefined}
+        aria-label={`${LIBELLE_DEPOSER}, ${LIBELLE_CHOISIR}`}
+        onClick={() => inputRef.current?.click()}
+        disabled={disabled}
+        className={cn(
+          'flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-border bg-muted/30 px-4 py-6 text-center transition-colors outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed',
+          'hover:border-primary/60 hover:bg-muted/50',
+          HAUTEUR_ZONE,
+          survol &&
+            'border-primary bg-primary/10 hover:border-primary hover:bg-primary/10',
+        )}
+      >
+        <span
+          className={cn(
+            'flex size-12 items-center justify-center rounded-full bg-background text-muted-foreground shadow-xs',
+            survol && 'text-primary',
+          )}
+        >
+          <FileUp className="size-6" aria-hidden />
+        </span>
+        <span className="flex flex-col gap-1">
+          <span className="text-sm font-medium">{LIBELLE_DEPOSER}</span>
+          <span className="text-sm text-muted-foreground">
+            {survol ? 'Relâchez pour importer' : LIBELLE_CHOISIR}
+          </span>
+        </span>
+      </button>
     </div>
   )
 }

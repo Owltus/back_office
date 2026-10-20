@@ -78,7 +78,7 @@ function pressePapiersDuNavigateur(): PressePapiers | undefined {
 }
 
 /**
- * « Copier pour une IA » (étape 3 du plan `classeur-echange-ia-2026-10-19`,
+ * « Copier pour un LLM » (étape 3 du plan `classeur-echange-ia-2026-10-19`,
  * D3 : TOUT le JSON, mode d'emploi compris, l'IA guide dès le collage).
  * Copie `texte` dans le presse-papiers ; si le navigateur refuse (API
  * absente, page non sécurisée, permission, activation perdue après une

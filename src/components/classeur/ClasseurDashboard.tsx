@@ -470,7 +470,7 @@ export function ClasseurDashboard({
                   <LigneAction
                     icon={FileUp}
                     title="Exporter en JSON"
-                    description="À coller dans une IA, ou en fichier"
+                    description="À coller dans un LLM, ou en fichier"
                     titreOccupe="Export en cours..."
                     onClick={action(onExporterJson)}
                     disabled={!pret || busy !== null}
@@ -481,7 +481,7 @@ export function ClasseurDashboard({
                   <LigneAction
                     icon={survolDepot ? Upload : FileDown}
                     title="Importer"
-                    description="Réponse d'une IA ou fichier"
+                    description="Réponse d'un LLM ou fichier"
                     titreOccupe="Import en cours..."
                     onClick={action(onImporter)}
                     disabled={!pret || busy !== null}

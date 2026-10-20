@@ -57,10 +57,10 @@ import type {
 /*
  * « JSON pour un LLM » d'un chapitre ou d'un document (demande utilisateur du
  * 2026-09-29). Deux temps dans une seule fenêtre :
- *   1. EXPORTER : copier (le plus direct pour une IA) ou télécharger le
+ *   1. EXPORTER : copier (le plus direct pour un LLM) ou télécharger le
  *      fichier, qui embarque son mode d'emploi (`_metadata.instructions`) ;
  *      un refus du presse-papiers télécharge le fichier à la place ;
- *   2. RÉIMPORTER (droit d'écriture) : coller la réponse de l'IA, déposer ou
+ *   2. RÉIMPORTER (droit d'écriture) : coller la réponse du LLM, déposer ou
  *      choisir un fichier, voir l'aperçu, puis appliquer. Aucun réglage
  *      (décision utilisateur du 2026-10-20) : rien d'absent n'est supprimé,
  *      et la portée est DÉDUITE du fichier (`destinationImport`) : un
@@ -100,7 +100,7 @@ export function EchangeJsonDialog({
 }) {
   const periodicitesQ = usePeriodicites()
   // Médiathèque, lue à l'ouverture seulement : la relecture de l'aperçu
-  // y cherche les images citées par l'IA.
+  // y cherche les images citées par le LLM.
   const { images: imagesConnues, etatImages } = useImagesRelecture(
     classeur?.id ?? null,
     open,
@@ -203,7 +203,7 @@ export function EchangeJsonDialog({
       : `le document ${sujet.document.title}`
 
   // Les périodicités nomment les feuilles de suivi et listent les `id` que
-  // l'IA peut choisir : pas d'export sans elles.
+  // le LLM peut choisir : pas d'export sans elles.
   const pret = classeur !== null && periodicitesQ.data !== undefined
 
   /**
@@ -317,7 +317,7 @@ export function EchangeJsonDialog({
     >
       <DialogContent className="flex max-h-[90dvh] flex-col gap-4 overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Échange avec une IA</DialogTitle>
+          <DialogTitle>Échange avec un LLM</DialogTitle>
           <DialogDescription>
             Exporter {libelle}, le faire retravailler, puis le réimporter.
           </DialogDescription>
@@ -327,7 +327,7 @@ export function EchangeJsonDialog({
           <div className="flex min-w-0 flex-col gap-0.5">
             <h3 className="text-sm font-medium">1. Exporter</h3>
             <p className="text-sm text-muted-foreground">
-              Collez-le dans une IA : elle vous guide.
+              Collez-le dans un LLM : il vous guide.
             </p>
           </div>
           <div className="flex shrink-0 gap-2">

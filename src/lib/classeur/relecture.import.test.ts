@@ -46,7 +46,7 @@ describe('relecture — contexte import (exemples écrits à la main)', () => {
         ligne: 1,
         image: true,
         message:
-          "Image introuvable dans la médiathèque : 24/inexistant.webp (inventée par l'IA ?).",
+          'Image introuvable dans la médiathèque : 24/inexistant.webp (inventée par le LLM ?).',
       },
       {
         ligne: 5,
@@ -75,7 +75,7 @@ describe('relecture — contexte import (exemples écrits à la main)', () => {
     const a = relireImport('![Plan](https://exemple.fr/plan.png)', new Map())
     expect(a).toHaveLength(1)
     expect(a[0].image).toBe(true)
-    expect(a[0].message).toContain("inventée par l'IA")
+    expect(a[0].message).toContain('inventée par le LLM')
   })
 
   it('médiathèque pas encore chargée : aucune alerte d’image', () => {
@@ -118,7 +118,7 @@ describe('relireLigneImport', () => {
     for (const genre of ['creation', 'modification', 'restauration']) {
       const a = relireLigneImport(ligne('document', genre), new Map())
       expect(a).toHaveLength(1)
-      expect(a?.[0].message).toContain("inventée par l'IA")
+      expect(a?.[0].message).toContain('inventée par le LLM')
     }
   })
 

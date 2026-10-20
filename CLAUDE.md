@@ -729,8 +729,8 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   (appariement par titre désormais consommé un à un). Règle de méthode :
   « fidèle au Rust » n'est pas « correct » — le Rust avait ces défauts.
 - **JSON d'un chapitre ou d'un document pour une IA (2026-09-29, demande
-  utilisateur ; refait le 2026-10-19, voir « Échange avec une IA » plus
-  bas)** : bouton accolades `{}` « Échange avec une IA » (libellé « JSON
+  utilisateur ; refait le 2026-10-19, voir « Échange avec un LLM » plus
+  bas)** : bouton accolades `{}` « Échange avec un LLM » (libellé « JSON
   pour un LLM » jusqu'au 2026-10-20) sur la page d'un chapitre (et menu
   « ⋯ ») et d'un document → `dialogs/EchangeJsonDialog.tsx` :
   1. exporter (Copier / Télécharger, aucun choix), 2) réimporter (coller la
@@ -749,7 +749,7 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
      RETIRÉ (sinon le document reprendrait sa date d'export et un éditeur
      ouvert avant écraserait le travail sans conflit). Un fichier d'un autre
      chapitre ou document du classeur s'applique à lui (portée déduite, voir
-     « Échange avec une IA »).
+     « Échange avec un LLM »).
      Application : `appliquerFusionPortee` = même circuit que la fusion
      (point `fusion` AVANT toute écriture, élagage). Vérifié navigateur sans
      écrire (aperçus chapitre, option de suppression, mauvais chapitre,
@@ -768,9 +768,16 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
      ajoutée à la page doit l'être ici, et le test la réclame. Le libellé du
      bouton `{}` est CITÉ dans les consignes (où importer) : le changer, c'est
      changer `consignes.ts` aussi.
-- **Échange avec une IA (2026-10-19, plan `plan/classeur-echange-ia-2026-10-19/`,
+- **Échange avec un LLM (2026-10-19, plan `plan/classeur-echange-ia-2026-10-19/`,
   exécuté avec les réponses par défaut de `D-decisions.md` partie B, à revoir
-  avec l'utilisateur)**. Demande : exporter SIMPLEMENT (cases « Demandes au
+  avec l'utilisateur)**. ⚠ **Décision utilisateur du 2026-10-20 : « LLM » et
+  non « IA » dans l'UI** (« IA est trop un abus de langage ») : titre et bouton
+  `{}` « Échange avec un LLM », « Copier pour un LLM », aide, messages de
+  relecture, nom des points de restauration ; figé par des tests (aucun mot
+  « IA » dans les dialogues d'export et d'import). Le filet du quatrième mur
+  détecte « LLM » comme « IA ». Saisie d'un import en DEUX zones côte à côte
+  (même demande) : Coller (vrai champ + bouton Coller) et Déposer (zone
+  pointillée, clic pour choisir). Demande : exporter SIMPLEMENT (cases « Demandes au
   LLM » retirées), un fichier qui dit à l'IA tout ce qu'elle doit savoir pour
   guider du personnel non initié, retour par un fichier réimportable, jamais
   plusieurs classeurs.
@@ -788,12 +795,12 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
     (tout est imprimé). Filet : `relecture.ts`, liste FERMÉE `EXPRESSIONS_IA`
     (27 tournures, texte normalisé, mots entiers, code ignoré ; « à vérifier »
     seul jamais visé — 0 alerte sur les 107 documents de la base locale),
-    message « Phrase sur l'IA dans le texte. Elle serait imprimée. », non
+    message « Phrase sur le LLM dans le texte. Elle serait imprimée. », non
     bloquant, à l'import (titres et descriptions de toutes les natures) comme
     dans l'éditeur.
   - **Export** : Copier / Télécharger partout (`texteExportClasseur`,
     `copierOuTelecharger` : refus du presse-papiers = téléchargement),
-    « Copier pour une IA » au clic droit d'une ligne de la liste. D3 : Copier
+    « Copier pour un LLM » au clic droit d'une ligne de la liste. D3 : Copier
     met TOUT (mode d'emploi compris) ; D5 : l'export d'un document reste au
     document. Chaque feuille de suivi exportée porte le LIBELLÉ `periodicite`
     (D8), relu par `lireItem` et contrôlé (V4), ignoré par Registre.
@@ -813,9 +820,10 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
     `EchangeJsonDialog` d'un chapitre ou d'un document) : coller ou
     choisir / déposer un fichier → aperçu → Importer.
     **Frontend refait le 2026-10-20** (« vraiment mal fait ») : saisie
-    PARTAGÉE `dialogs/SaisieImport.tsx` (une grande zone : Ctrl + V hors
-    champ, bouton Coller par `clipboard.readText` avec champ de secours
-    sans message si refusé, dépôt, choix ; repliée ensuite en une ligne
+    PARTAGÉE `dialogs/SaisieImport.tsx` (DEUX zones depuis le même jour :
+    champ Coller visible + bouton Coller par `clipboard.readText`, focus sur
+    le champ sans message si refusé, Ctrl + V hors champ ; zone Déposer,
+    clic pour choisir ; repliée ensuite en une ligne
     avec Changer) et corps partagé `dialogs/EtatImport.tsx` à DEUX états
     (saisie ; aperçu = squelette pendant le calcul, résumé en compteurs,
     note de portée, avertissements repliés s'ils sont plusieurs, liste seule
@@ -1721,7 +1729,7 @@ group-hover:` étaient INVISIBLES mais CLIQUABLES au doigt →
     prêtes (`llmDemandes.ts`, `_metadata.demande`)~~ **RETIRÉES le
     2026-10-19** à la demande de l'utilisateur (« pénibles ») : fichiers
     supprimés, une clé `demande` d'un ancien fichier est ignorée (voir
-    « Échange avec une IA »).
+    « Échange avec un LLM »).
   - **Fusion — E9 à E11** (en tête de `merge.ts`) : un élément ou un chapitre
     local n'est apparié qu'UNE fois (un LLM qui coupe un document en deux
     gardait l'uuid sur les deux moitiés : la 2e écrasait la 1re, moitié
@@ -1819,7 +1827,7 @@ group-hover:` étaient INVISIBLES mais CLIQUABLES au doigt →
       demandes LLM à l'export complet, `ExportJsonClasseurDialog`,
       `DemandesLlm.tsx` — demandes et `DemandesLlm.tsx` RETIRÉS le
       2026-10-19, l'import du classeur complet a désormais un mode « Fichier
-      rendu par une IA », voir « Échange avec une IA »), D27 (zoom aussi en lecture et dans l'aperçu
+      rendu par une IA », voir « Échange avec un LLM »), D27 (zoom aussi en lecture et dans l'aperçu
       d'impression, ajusté à la largeur sur téléphone). ⚠ Page d'un document :
       AUCUN contrôle de zoom à l'écran (barre retirée à la demande de
       l'utilisateur), Ctrl + molette et Ctrl + 0 seulement, comme la grille

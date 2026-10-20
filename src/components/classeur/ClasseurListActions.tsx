@@ -38,7 +38,7 @@ const STALE_60S = 60_000
  *   - export JSON (étape 5) : le contenu du classeur est lu par `fetchQuery`
  *     (cache `classeurItems` réutilisé s'il est frais, sinon une lecture),
  *     puis téléchargé au format v2 ;
- *   - copier pour une IA (étape 3 du plan `classeur-echange-ia-2026-10-19`) :
+ *   - copier pour un LLM (étape 3 du plan `classeur-echange-ia-2026-10-19`) :
  *     le MÊME texte, mis dans le presse-papiers ; un refus du navigateur
  *     (fréquent après une lecture réseau, l'activation du clic étant perdue)
  *     télécharge le fichier à la place. Un second clic pendant la copie est

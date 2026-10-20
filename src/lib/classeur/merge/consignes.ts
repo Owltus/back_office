@@ -11,7 +11,7 @@
  *   1. à qui tu parles ;   2. répondre à une question ;   3. modifier ;
  *   4. proposer des idées ;   5. l'application ;   6. les limites.
  * La partie 6 porte la règle du « quatrième mur » (décision utilisateur) :
- * aucune mention de l'IA, d'une vérification ou d'un doute DANS le contenu
+ * aucune mention du LLM ou de l'IA, d'une vérification ou d'un doute DANS le contenu
  * du classeur, qui est imprimé tel quel ; ces rappels restent dans la
  * conversation.
  *
@@ -56,7 +56,7 @@ const APPLICATION: string[] = [
 
 /** 6. Les limites, et la règle du quatrième mur. */
 const LIMITES =
-  "6. LIMITES : rappelle, quand c'est utile, qu'une IA peut se tromper et qu'un document réglementaire se relit avant d'être imprimé. Ces rappels restent DANS LA CONVERSATION : n'écris jamais dans un titre, une description ou un contenu du classeur une mention de l'IA, d'une vérification à faire, d'un brouillon ou d'un doute (généré par IA, à vérifier, brouillon) : tout ce qui est dans le fichier est imprimé tel quel."
+  "6. LIMITES : rappelle, quand c'est utile, qu'un LLM peut se tromper et qu'un document réglementaire se relit avant d'être imprimé. Ces rappels restent DANS LA CONVERSATION : n'écris jamais dans un titre, une description ou un contenu du classeur une mention du LLM ou de l'IA, d'une vérification à faire, d'un brouillon ou d'un doute (généré par IA, à vérifier, brouillon) : tout ce qui est dans le fichier est imprimé tel quel."
 
 /** Ajouter un élément : forme commune aux portées qui le permettent. */
 const AJOUT_ELEMENT =
@@ -97,7 +97,7 @@ export function consignesClasseur(nom: string): string[] {
 export function consignesChapitre(label: string): string[] {
   return assembler(
     `PORTÉE : le chapitre « ${label} » et ses éléments. Seul ce chapitre sera modifié à l'import ; pour ajouter un chapitre, il faut l'export du classeur entier.`,
-    "dans l'application, sur la page du chapitre, bouton accolades {} (Échange avec une IA), partie Réimporter : coller le bloc.",
+    "dans l'application, sur la page du chapitre, bouton accolades {} (Échange avec un LLM), partie Réimporter : coller le bloc.",
     [AJOUT_ELEMENT],
   )
 }
@@ -106,7 +106,7 @@ export function consignesChapitre(label: string): string[] {
 export function consignesDocument(titre: string, chapitre: string): string[] {
   return assembler(
     `PORTÉE : le seul document « ${titre} » (chapitre « ${chapitre} »). Seul ce document sera modifié à l'import ; le chapitre n'est là que pour le contexte. \`items\` contient exactement CE document, avec son \`uuid\` : n'en ajoute pas, n'en retire pas.`,
-    "dans l'application, sur la page du document, bouton accolades {} (Échange avec une IA), partie Réimporter : coller le bloc.",
+    "dans l'application, sur la page du document, bouton accolades {} (Échange avec un LLM), partie Réimporter : coller le bloc.",
     [],
     `${REPONDRE} Ce fichier ne contient qu'un document : pour une question plus large, ou pour ajouter un document ou une feuille, demande l'export du chapitre (bouton {} de sa page) ou du classeur entier (accueil du classeur, Exporter en JSON).`,
   )

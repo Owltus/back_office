@@ -227,8 +227,8 @@ describe('ClasseurList — tableau', () => {
     expect(screen.queryByText('Créer ou importer')).toBeNull()
     expect(screen.queryByText(/changer l'ordre/)).toBeNull()
     expect(screen.queryByText('Tous le lisent.')).toBeNull()
-    // Copier pour une IA est ouvert à la lecture ; reprendre ses modifications non.
-    expect(screen.getByText('Travailler avec une IA')).toBeTruthy()
+    // Copier pour un LLM est ouvert à la lecture ; reprendre ses modifications non.
+    expect(screen.getByText('Travailler avec un LLM')).toBeTruthy()
     expect(screen.getByText(/jamais dans le classeur/)).toBeTruthy()
     expect(screen.queryByText(/Pour reprendre ses modifications/)).toBeNull()
   })
@@ -272,7 +272,7 @@ describe('ClasseurList — tableau', () => {
       Ouvrir: 'actif',
       'Modifier le classeur': 'actif',
       Accès: 'actif',
-      'Copier pour une IA': 'actif',
+      'Copier pour un LLM': 'actif',
       'Exporter en JSON': 'actif',
       Supprimer: 'actif',
     })
@@ -285,7 +285,7 @@ describe('ClasseurList — tableau', () => {
       Ouvrir: 'actif',
       'Modifier le classeur': 'actif',
       'AccèsGestion seule': 'grisé',
-      'Copier pour une IA': 'actif',
+      'Copier pour un LLM': 'actif',
       'Exporter en JSON': 'actif',
       'SupprimerGestion seule': 'grisé',
     })
@@ -302,7 +302,7 @@ describe('ClasseurList — tableau', () => {
       Ouvrir: 'actif',
       'Modifier le classeurLecture seule': 'grisé',
       'AccèsGestion seule': 'grisé',
-      'Copier pour une IA': 'actif',
+      'Copier pour un LLM': 'actif',
       'Exporter en JSON': 'actif',
       'SupprimerGestion seule': 'grisé',
     })
@@ -318,7 +318,7 @@ describe('ClasseurList — tableau', () => {
     expect(etat.copier).not.toHaveBeenCalled()
     await menuDe(2)
     fireEvent.click(
-      screen.getByRole('menuitem', { name: 'Copier pour une IA' }),
+      screen.getByRole('menuitem', { name: 'Copier pour un LLM' }),
     )
     expect(etat.copier).toHaveBeenCalledWith(expect.objectContaining({ id: 5 }))
     expect(etat.exporter).toHaveBeenCalledTimes(1)

@@ -104,12 +104,12 @@ const PARTIES: Array<[string, string[]]> = [
   [
     '6. LIMITES',
     [
-      'une IA peut se tromper',
+      'un LLM peut se tromper',
       'un document réglementaire se relit avant',
       'DANS LA CONVERSATION',
       // Le quatrième mur : jamais dans le contenu, qui est imprimé.
       "n'écris jamais dans un titre, une description ou un contenu du classeur",
-      "une mention de l'IA, d'une vérification à faire, d'un brouillon ou d'un doute",
+      "une mention du LLM ou de l'IA, d'une vérification à faire, d'un brouillon ou d'un doute",
       'imprimé tel quel',
     ],
   ],

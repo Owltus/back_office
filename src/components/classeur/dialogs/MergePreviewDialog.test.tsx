@@ -10,6 +10,7 @@ import {
   within,
 } from '@testing-library/react'
 
+import { LIBELLE_COLLER } from '#/components/classeur/dialogs/SaisieImport.tsx'
 import {
   PERIODICITES,
   chapitre,
@@ -196,6 +197,31 @@ async function ouvrirAvecApercu(file = fichierLlm()) {
   })
 }
 
+/**
+ * Tout le texte affiché du document (contenu, infobulles, libellés
+ * accessibles, textes d'aide des champs). Décision utilisateur du
+ * 2026-10-20 : « LLM » et non « IA » dans l'interface.
+ */
+function textesAffiches(): string {
+  const morceaux = [window.document.body.textContent]
+  for (const el of window.document.querySelectorAll('*'))
+    for (const a of ['aria-label', 'title', 'placeholder', 'alt'])
+      morceaux.push(el.getAttribute(a) ?? '')
+  return morceaux.join(' ')
+}
+const MOT_IA = /(?<![\p{L}\d])IA(?![\p{L}\d])/u
+
+describe('MergePreviewDialog — LLM et non IA (2026-10-20)', () => {
+  it('ni en saisie, ni avec l’aperçu, « IA » n’apparaît comme mot', async () => {
+    ouvrir(null)
+    expect(textesAffiches()).toContain('LLM')
+    expect(textesAffiches()).not.toMatch(MOT_IA)
+    cleanup()
+    await ouvrirAvecApercu()
+    expect(textesAffiches()).not.toMatch(MOT_IA)
+  })
+})
+
 describe('MergePreviewDialog — aperçu du classeur complet', () => {
   it('groupé par chapitre, chapitre neuf en ligne à part sans case', async () => {
     await ouvrirAvecApercu()
@@ -320,7 +346,6 @@ describe('MergePreviewDialog — un seul comportement (décision du 2026-10-20)'
     for (const mot of [
       'Registre',
       'JSON',
-      'LLM',
       'fusion',
       'remplacement',
       'Remplacer',
@@ -403,7 +428,7 @@ describe('MergePreviewDialog — un seul comportement (décision du 2026-10-20)'
     fireEvent.click(bouton())
     await waitFor(() => expect(appliquer).toHaveBeenCalledTimes(1))
     const options = appliquer.mock.calls[0][3] as { sourceName: string }
-    expect(options.sourceName).toBe('Réponse collée d’une IA')
+    expect(options.sourceName).toBe('Réponse collée d’un LLM')
   })
 
   it('l’export d’un chapitre de ce classeur : appliqué à ce chapitre, et dit', async () => {
@@ -448,9 +473,7 @@ describe('MergePreviewDialog — deux états (refonte du 2026-10-20)', () => {
 
   it('saisie : la grande zone seule, aucun aperçu ; aperçu : ligne repliée, résumé, liste', async () => {
     ouvrir(null)
-    expect(
-      screen.getByText("Collez la réponse de l'IA ou déposez le fichier"),
-    ).toBeTruthy()
+    expect(screen.getByText(LIBELLE_COLLER)).toBeTruthy()
     expect(resumeAbsent()).toBe(true)
     expect(screen.queryByText('Lecture en cours…')).toBeNull()
     expect(screen.queryByText(/point de restauration/)).toBeNull()
@@ -459,9 +482,7 @@ describe('MergePreviewDialog — deux états (refonte du 2026-10-20)', () => {
       timeout: 3000,
     })
     expect(screen.getByText('Réponse collée')).toBeTruthy()
-    expect(
-      screen.queryByText("Collez la réponse de l'IA ou déposez le fichier"),
-    ).toBeNull()
+    expect(screen.queryByText(LIBELLE_COLLER)).toBeNull()
     expect(resumeAbsent()).toBe(false)
     // Changer : retour à la saisie, l'aperçu disparaît.
     fireEvent.click(screen.getByRole('button', { name: 'Changer' }))
@@ -505,17 +526,10 @@ describe('MergePreviewDialog — deux états (refonte du 2026-10-20)', () => {
     ouvrir(null)
     const verifier = () => {
       const texte = window.document.body.textContent
-      for (const mot of [
-        'JSON',
-        'LLM',
-        'fusion',
-        'uuid',
-        'Registre',
-        '—',
-        '«',
-        '»',
-      ])
+      for (const mot of ['JSON', 'fusion', 'uuid', 'Registre', '—', '«', '»'])
         expect(texte, mot).not.toContain(mot)
+      // LLM et non IA (décision du 2026-10-20).
+      expect(texte).not.toMatch(MOT_IA)
     }
     verifier()
     coller(texteLlm())

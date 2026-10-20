@@ -80,13 +80,33 @@ const attendu = () =>
 const copier = () =>
   fireEvent.click(screen.getByRole('button', { name: /^Copier$/ }))
 
+/**
+ * Tout le texte affiché du document (contenu, infobulles, libellés
+ * accessibles, textes d'aide des champs). Décision utilisateur du
+ * 2026-10-20 : « LLM » et non « IA » dans l'interface.
+ */
+function textesAffiches(): string {
+  const morceaux = [window.document.body.textContent]
+  for (const el of window.document.querySelectorAll('*'))
+    for (const a of ['aria-label', 'title', 'placeholder', 'alt'])
+      morceaux.push(el.getAttribute(a) ?? '')
+  return morceaux.join(' ')
+}
+const MOT_IA = /(?<![\p{L}\d])IA(?![\p{L}\d])/u
+
 describe('ExportJsonClasseurDialog', () => {
+  it('LLM et non IA dans tout le texte affiché (2026-10-20)', () => {
+    render(dialogue(true))
+    expect(textesAffiches()).toContain('LLM')
+    expect(textesAffiches()).not.toMatch(MOT_IA)
+  })
+
   it('deux gestes seulement, aucune case à cocher, une phrase', () => {
     render(dialogue(true))
     expect(screen.queryAllByRole('checkbox')).toHaveLength(0)
     expect(screen.getByRole('button', { name: /^Copier$/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: /Télécharger/ })).toBeTruthy()
-    expect(screen.getByText(/Collez-le dans une IA : elle vous guide\./))
+    expect(screen.getByText(/Collez-le dans un LLM : il vous guide\./))
   })
 
   it('Télécharger : le fichier est exactement l’export, nommé d’après le classeur', () => {

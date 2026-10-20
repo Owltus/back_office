@@ -120,7 +120,8 @@ function nomNiveau(n: number): string {
 // ---------------------------------------------------------------------------
 
 /** Message unique d'une phrase sur l'IA (décision D9 : jamais bloquant). */
-export const MESSAGE_IA = "Phrase sur l'IA dans le texte. Elle serait imprimée."
+export const MESSAGE_IA =
+  'Phrase sur le LLM dans le texte. Elle serait imprimée.'
 
 /**
  * Minuscules, SANS ACCENTS, apostrophes droites, emphase Markdown retirée,
@@ -155,8 +156,8 @@ export const EXPRESSIONS_IA: readonly string[] = [
   `(?:redige|ecrit|cree|produit|traduit|reformule|resume)(?:e|s|es)? (?:par|avec|grace a) ${IA_STRICTE}`,
   '(?:contenu|texte|brouillon|resume|reponse)s? genere(?:e|s|es)?',
   "en tant qu'(?:ia|intelligence artificielle|assistant (?:virtuel|ia|numerique))",
-  "en tant que (?:modele de langage|modele d'ia|intelligence artificielle)",
-  'je suis (?:une ia|une intelligence artificielle|un assistant (?:virtuel|ia|numerique)|un modele de langage)',
+  "en tant que (?:llm|modele de langage|modele d'ia|intelligence artificielle)",
+  'je suis (?:une ia|un llm|une intelligence artificielle|un assistant (?:virtuel|ia|numerique)|un modele de langage)',
   'modele de langage',
   'je (?:peux|pourrais|suis susceptible de) (?:me tromper|faire des erreurs|commettre des erreurs)',
   '(?:ce|le|cette) (?:texte|contenu|resume|reponse|brouillon|document) (?:peut|pourrait) contenir des (?:erreurs|inexactitudes|approximations|imprecisions)',
@@ -165,15 +166,16 @@ export const EXPRESSIONS_IA: readonly string[] = [
   "(?:verifie|relu|valide|controle|verification|relecture|validation)(?:e|s|es)? (?:par un |d'un )?(?:etre )?humain(?:e|s)?",
   '(?:verification|relecture|validation) humaine',
   '(?:est|ceci est) un brouillon',
-  'brouillon (?:genere|ia|automatique|a verifier|a relire|a valider)',
+  'brouillon (?:genere|ia|llm|automatique|a verifier|a relire|a valider)',
   '[\\[(]brouillon[\\])]',
   'a (?:verifier|relire|valider) avant (?:impression|publication|diffusion)',
   'selon mes (?:connaissances|informations)',
   'date (?:de coupure|limite) de (?:mes )?connaissances',
   "j'ai (?:genere|reformule|restructure|reorganise|resume)",
-  "(?:note|remarque|avertissement) (?:de l'ia|de l'assistant ia|du modele)",
+  "(?:note|remarque|avertissement) (?:de l'ia|du llm|de l'assistant ia|du modele)",
   '(?:texte|contenu|informations?) non verifiee?s?',
   'as an ai',
+  'as an llm',
   'ai[- ]generated',
   'generated (?:by|with) (?:an )?ai',
   'language model',
@@ -290,7 +292,7 @@ export function alertesRelecture(
           ligne,
           message:
             contexte === 'import'
-              ? `Image introuvable dans la médiathèque : ${extrait(src)} (inventée par l'IA ?).`
+              ? `Image introuvable dans la médiathèque : ${extrait(src)} (inventée par le LLM ?).`
               : 'Image introuvable : elle a été supprimée de la médiathèque.',
           image: true,
         })

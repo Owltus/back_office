@@ -154,6 +154,41 @@ const bouton = () =>
 /** Nom accessible du bouton : le libellé visible reste « Importer ». */
 const nomBouton = () => bouton().getAttribute('aria-label')
 
+/**
+ * Tout le texte affiché du document (contenu, infobulles, libellés
+ * accessibles, textes d'aide des champs). Décision utilisateur du
+ * 2026-10-20 : « LLM » et non « IA » dans l'interface.
+ */
+function textesAffiches(): string {
+  const morceaux = [window.document.body.textContent]
+  for (const el of window.document.querySelectorAll('*'))
+    for (const a of ['aria-label', 'title', 'placeholder', 'alt'])
+      morceaux.push(el.getAttribute(a) ?? '')
+  return morceaux.join(' ')
+}
+const MOT_IA = /(?<![\p{L}\d])IA(?![\p{L}\d])/u
+
+describe('EchangeJsonDialog — LLM et non IA (2026-10-20)', () => {
+  it('export, saisie de l’import puis aperçu : « IA » n’apparaît comme mot nulle part', async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <EchangeJsonDialog
+          open
+          onOpenChange={() => {}}
+          classeur={classeur()}
+          sujet={{ type: 'chapitre', chapitre: A, contenu: contenuA }}
+          canWrite
+        />
+      </QueryClientProvider>,
+    )
+    expect(screen.getByText('Échange avec un LLM')).toBeTruthy()
+    expect(textesAffiches()).not.toMatch(MOT_IA)
+    cleanup()
+    await ouvrirAvecApercu()
+    expect(textesAffiches()).not.toMatch(MOT_IA)
+  })
+})
+
 describe('EchangeJsonDialog — aperçu, refus, import', () => {
   it('le compteur du bouton suit les cases ; désactivé à 0', async () => {
     await ouvrirAvecApercu()
@@ -271,7 +306,7 @@ describe('EchangeJsonDialog — export en un clic (étape 3, 2026-10-19)', () =>
   it('aucune case ; une phrase ; Copier et Télécharger rendent exactement l’export du chapitre', async () => {
     render(dialogue(true))
     expect(screen.queryAllByRole('checkbox')).toHaveLength(0)
-    expect(screen.getByText('Collez-le dans une IA : elle vous guide.'))
+    expect(screen.getByText('Collez-le dans un LLM : il vous guide.'))
     copier()
     await waitFor(() => expect(ecrit).toHaveBeenCalledTimes(1))
     const texte = ecrit.mock.calls[0][0]
@@ -393,8 +428,10 @@ describe('EchangeJsonDialog — sans case, portée déduite (2026-10-20)', () =>
     const copie = window.document.body.cloneNode(true) as HTMLElement
     for (const t of copie.querySelectorAll('textarea')) t.remove()
     const texte = copie.textContent
-    for (const mot of ['Supprimer ce qui', 'JSON', 'LLM', 'uuid'])
+    for (const mot of ['Supprimer ce qui', 'JSON', 'uuid'])
       expect(texte, mot).not.toContain(mot)
+    // LLM et non IA (décision du 2026-10-20).
+    expect(texte).not.toMatch(MOT_IA)
   })
 
   it('un document absent de la réponse : gardé ; marqué « supprimer » : mis à la corbeille', async () => {
