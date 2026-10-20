@@ -7,6 +7,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react'
 
 import {
@@ -117,6 +118,19 @@ beforeEach(() => {
   appliquer.mockReset()
 })
 
+/** Ctrl + V dans le dialogue, aucun champ sélectionné. */
+function collerDansDialogue(texte: string) {
+  fireEvent.paste(screen.getByRole('dialog'), {
+    clipboardData: { getData: () => texte, files: [] },
+  })
+}
+
+/** Les compteurs du résumé, dans l'ordre. */
+const resume = () =>
+  within(screen.getByRole('list', { name: 'Résumé de l’import' }))
+    .getAllByRole('listitem')
+    .map((li) => li.textContent)
+
 async function ouvrirAvecApercu() {
   render(
     <QueryClientProvider client={new QueryClient()}>
@@ -129,9 +143,7 @@ async function ouvrirAvecApercu() {
       />
     </QueryClientProvider>,
   )
-  fireEvent.change(screen.getByLabelText("Réponse de l'IA à réimporter"), {
-    target: { value: jsonLlm() },
-  })
+  collerDansDialogue(jsonLlm())
   await waitFor(() => screen.getByLabelText('Importer Check-in'), {
     timeout: 3000,
   })
@@ -139,24 +151,27 @@ async function ouvrirAvecApercu() {
 
 const bouton = () =>
   screen.getByRole<HTMLButtonElement>('button', { name: /^Importer/ })
+/** Nom accessible du bouton : le libellé visible reste « Importer ». */
+const nomBouton = () => bouton().getAttribute('aria-label')
 
 describe('EchangeJsonDialog — aperçu, refus, import', () => {
   it('le compteur du bouton suit les cases ; désactivé à 0', async () => {
     await ouvrirAvecApercu()
-    expect(bouton().textContent).toBe('Importer 2 documents')
+    expect(nomBouton()).toBe('Importer 2 documents')
     expect(bouton().disabled).toBe(false)
 
     fireEvent.click(screen.getByLabelText('Importer Check-out'))
-    expect(bouton().textContent).toBe('Importer 1 document')
+    expect(nomBouton()).toBe('Importer 1 document')
     // Refusé : la ligne le dit.
-    expect(screen.getByText('ignoré')).toBeTruthy()
+    expect(screen.getByText('Ignoré')).toBeTruthy()
 
     fireEvent.click(screen.getByLabelText('Importer Check-in'))
-    expect(bouton().textContent).toBe('Importer 0 document')
+    expect(nomBouton()).toBe('Importer')
+    expect(screen.getByText('Rien à importer : tout est ignoré.')).toBeTruthy()
     expect(bouton().disabled).toBe(true)
 
     fireEvent.click(screen.getByLabelText('Importer Check-out'))
-    expect(bouton().textContent).toBe('Importer 1 document')
+    expect(nomBouton()).toBe('Importer 1 document')
     expect(bouton().disabled).toBe(false)
   })
 
@@ -298,11 +313,11 @@ describe('EchangeJsonDialog — export en un clic (étape 3, 2026-10-19)', () =>
 describe('EchangeJsonDialog — résumé du plan (relecture adverse 2026-10-04)', () => {
   it('le résumé sous l’aperçu compte les refus', async () => {
     await ouvrirAvecApercu()
-    expect(screen.getByText(/0 ajout, 2 modifications/)).toBeTruthy()
+    expect(resume()).toEqual(['2 modifiés', '1 inchangé'])
     fireEvent.click(screen.getByLabelText('Importer Check-out'))
-    expect(screen.queryByText(/2 modifications/)).toBeNull()
+    expect(resume()).toEqual(['1 modifié', '1 inchangé', '1 non importé'])
     expect(
-      screen.getByText(/^0 ajout, 1 modification, 2 inchangés. Un point/),
+      screen.getByText('Un point de restauration est pris avant.'),
     ).toBeTruthy()
   })
 })
@@ -330,16 +345,12 @@ describe('EchangeJsonDialog — audit du 2026-10-04 (B8, C4)', () => {
         />
       </QueryClientProvider>,
     )
-    expect(bouton().textContent).toBe('Importer')
+    expect(nomBouton()).toBe('Importer')
     expect(bouton().disabled).toBe(true)
-    fireEvent.change(screen.getByLabelText("Réponse de l'IA à réimporter"), {
-      target: { value: jsonLlm() },
-    })
+    collerDansDialogue(jsonLlm())
     // Pendant l'attente puis la lecture : toujours neutre.
-    expect(bouton().textContent).toBe('Importer')
-    await waitFor(() =>
-      expect(bouton().textContent).toBe('Importer 2 documents'),
-    )
+    expect(nomBouton()).toBe('Importer')
+    await waitFor(() => expect(nomBouton()).toBe('Importer 2 documents'))
   })
 
   it('C4 : l’aperçu est amené à l’écran quand il apparaît', async () => {
@@ -368,10 +379,12 @@ describe('EchangeJsonDialog — sans case, portée déduite (2026-10-20)', () =>
       </QueryClientProvider>,
     )
   }
-  const coller = (texte: string) =>
-    fireEvent.change(screen.getByLabelText("Réponse de l'IA à réimporter"), {
-      target: { value: texte },
-    })
+  const coller = (texte: string) => {
+    // Changer : la zone revient, puis le collage.
+    const changer = screen.queryByRole('button', { name: 'Changer' })
+    if (changer) fireEvent.click(changer)
+    collerDansDialogue(texte)
+  }
 
   it('aucune case « supprimer », aucun mot technique', async () => {
     await ouvrirAvecApercu()
@@ -389,11 +402,9 @@ describe('EchangeJsonDialog — sans case, portée déduite (2026-10-20)', () =>
     const f = construireExportChapitre(classeur(), A, contenuA, PERIODICITES)
     f.chapters[0].items = [f.chapters[0].items[0]]
     coller(JSON.stringify(f))
-    await screen.findByText(
-      'Aucun changement : le contenu est identique.',
-      undefined,
-      { timeout: 3000 },
-    )
+    await screen.findByText('Tout est déjà à jour.', undefined, {
+      timeout: 3000,
+    })
     const g = construireExportChapitre(classeur(), A, contenuA, PERIODICITES)
     g.chapters[0].items[1].supprimer = true
     coller(JSON.stringify(g))
@@ -401,7 +412,7 @@ describe('EchangeJsonDialog — sans case, portée déduite (2026-10-20)', () =>
       timeout: 3000,
     })
     expect(screen.getByText('mis à la corbeille')).toBeTruthy()
-    expect(screen.getByText(/1 mis à la corbeille/)).toBeTruthy()
+    expect(resume()).toContain('1 à la corbeille')
   })
 
   it('le fichier d’un AUTRE chapitre de ce classeur : appliqué à lui, et dit', async () => {
@@ -447,6 +458,6 @@ describe('EchangeJsonDialog — sans case, portée déduite (2026-10-20)', () =>
       undefined,
       { timeout: 3000 },
     )
-    expect(bouton().textContent).toBe('Importer 1 document')
+    expect(nomBouton()).toBe('Importer 1 document')
   })
 })

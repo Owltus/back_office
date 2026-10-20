@@ -174,7 +174,20 @@ function ouvrir(file: File | null) {
 }
 
 const bouton = () =>
-  screen.getByRole<HTMLButtonElement>('button', { name: /^Importer|^Aucun/ })
+  screen.getByRole<HTMLButtonElement>('button', { name: /^Importer/ })
+/** Nom accessible du bouton : le libellé visible reste « Importer ». */
+const nom = () => bouton().getAttribute('aria-label')
+/** Les compteurs du résumé, dans l'ordre. */
+const resume = () =>
+  within(screen.getByRole('list', { name: 'Résumé de l’import' }))
+    .getAllByRole('listitem')
+    .map((li) => li.textContent)
+/** Ctrl + V dans le dialogue, aucun champ sélectionné. */
+function coller(texte: string) {
+  fireEvent.paste(screen.getByRole('dialog'), {
+    clipboardData: { getData: () => texte, files: [] },
+  })
+}
 
 async function ouvrirAvecApercu(file = fichierLlm()) {
   ouvrir(file)
@@ -201,11 +214,21 @@ describe('MergePreviewDialog — aperçu du classeur complet', () => {
 
   it('le compteur suit les cases ; les refus partent à l’import', async () => {
     await ouvrirAvecApercu()
-    expect(bouton().textContent).toBe('Importer 3 documents')
+    expect(nom()).toBe('Importer 3 documents')
+    // Libellé STABLE, le nombre en badge.
+    expect(bouton().textContent).toBe('Importer3')
+    expect(resume()).toEqual(['2 ajoutés', '2 modifiés', '3 inchangés'])
     fireEvent.click(screen.getByLabelText('Importer Check-in'))
-    expect(bouton().textContent).toBe('Importer 2 documents')
+    expect(nom()).toBe('Importer 2 documents')
+    expect(bouton().textContent).toBe('Importer2')
+    expect(resume()).toEqual([
+      '2 ajoutés',
+      '1 modifié',
+      '3 inchangés',
+      '1 non importé',
+    ])
     expect(
-      screen.getByText(/2 ajouts, 1 modification, 4 inchangés/),
+      screen.getByText('Un point de restauration est pris avant.'),
     ).toBeTruthy()
     appliquer.mockResolvedValue({
       inserted: 2,
@@ -235,7 +258,7 @@ describe('MergePreviewDialog — aperçu du classeur complet', () => {
     await ouvrirAvecApercu()
     for (const t of ['Check-in', 'Extincteur', 'Plan du hall'])
       fireEvent.click(screen.getByLabelText(`Importer ${t}`))
-    expect(bouton().textContent).toBe('Importer les chapitres')
+    expect(nom()).toBe('Importer les chapitres')
     expect(bouton().disabled).toBe(false)
   })
 
@@ -243,8 +266,12 @@ describe('MergePreviewDialog — aperçu du classeur complet', () => {
     await ouvrirAvecApercu(fichierLlm((f) => f.chapters.pop()))
     for (const t of ['Check-in', 'Extincteur'])
       fireEvent.click(screen.getByLabelText(`Importer ${t}`))
-    expect(bouton().textContent).toBe('Importer 0 document')
+    expect(nom()).toBe('Importer')
+    expect(bouton().textContent).toBe('Importer')
     expect(bouton().disabled).toBe(true)
+    // La raison est dite, le point de restauration n'est plus annoncé.
+    expect(screen.getByText('Rien à importer : tout est ignoré.')).toBeTruthy()
+    expect(screen.queryByText(/point de restauration/)).toBeNull()
   })
 
   it('C5 : une retouche de forme annonce « version inchangée (3.1) »', async () => {
@@ -272,13 +299,15 @@ describe('MergePreviewDialog — aperçu du classeur complet', () => {
       lacher = r
     })
     ouvrir(fichierLlm())
-    await screen.findByText(/Lecture et calcul/)
-    expect(bouton().textContent).toBe('Importer')
+    // Le squelette, jamais un aperçu vide.
+    await screen.findByText('Lecture en cours…')
+    expect(
+      screen.queryByRole('list', { name: 'Résumé de l’import' }),
+    ).toBeNull()
+    expect(nom()).toBe('Importer')
     expect(bouton().disabled).toBe(true)
     lacher()
-    await waitFor(() =>
-      expect(bouton().textContent).toBe('Importer 3 documents'),
-    )
+    await waitFor(() => expect(nom()).toBe('Importer 3 documents'))
   })
 })
 
@@ -308,14 +337,14 @@ describe('MergePreviewDialog — un seul comportement (décision du 2026-10-20)'
         f.chapters[1].items[0].updated_at = '2020-01-01T00:00:00+00:00'
       }),
     )
-    expect(bouton().textContent).toBe('Importer 3 documents')
+    expect(nom()).toBe('Importer 3 documents')
   })
 
   it('un chapitre ABSENT de la réponse : rien n’est supprimé', async () => {
     await ouvrirAvecApercu(fichierLlm((f) => f.chapters.splice(1, 1)))
     expect(screen.queryByText('Extincteur')).toBeNull()
     expect(screen.queryByText(/corbeille/)).toBeNull()
-    expect(bouton().textContent).toBe('Importer 2 documents')
+    expect(nom()).toBe('Importer 2 documents')
   })
 
   it('`"supprimer": true` : « mis à la corbeille », refusable comme le reste', async () => {
@@ -334,7 +363,7 @@ describe('MergePreviewDialog — un seul comportement (décision du 2026-10-20)'
     expect(caseChapitre.disabled).toBe(false)
     expect(screen.queryByText('Extincteur')).toBeNull()
     expect(screen.getAllByText('mis à la corbeille')).toHaveLength(2)
-    expect(screen.getByText(/2 mis à la corbeille/)).toBeTruthy()
+    expect(resume()).toContain('2 à la corbeille')
     fireEvent.click(caseChapitre)
     appliquer.mockResolvedValue({
       inserted: 1,
@@ -356,15 +385,13 @@ describe('MergePreviewDialog — un seul comportement (décision du 2026-10-20)'
     ouvrir(null)
     expect(bouton().disabled).toBe(true)
     const bloc = '```'
-    fireEvent.change(screen.getByLabelText("Réponse de l'IA à importer"), {
-      target: {
-        value: `Voici le classeur :\n${bloc}json\n${texteLlm()}\n${bloc}\nBonne journée.`,
-      },
-    })
+    coller(
+      `Voici le classeur :\n${bloc}json\n${texteLlm()}\n${bloc}\nBonne journée.`,
+    )
     await waitFor(() => screen.getByLabelText('Importer Check-in'), {
       timeout: 3000,
     })
-    expect(bouton().textContent).toBe('Importer 3 documents')
+    expect(nom()).toBe('Importer 3 documents')
     appliquer.mockResolvedValue({
       inserted: 0,
       updated: 0,
@@ -395,7 +422,7 @@ describe('MergePreviewDialog — un seul comportement (décision du 2026-10-20)'
         { timeout: 3000 },
       ),
     ).toBeTruthy()
-    expect(bouton().textContent).toBe('Importer 1 document')
+    expect(nom()).toBe('Importer 1 document')
     expect(bouton().disabled).toBe(false)
   })
 
@@ -412,5 +439,89 @@ describe('MergePreviewDialog — un seul comportement (décision du 2026-10-20)'
       screen.getByText(/vient du classeur Carnet sanitaire, pas de celui-ci/),
     ).toBeTruthy()
     expect(bouton().disabled).toBe(false)
+  })
+})
+
+describe('MergePreviewDialog — deux états (refonte du 2026-10-20)', () => {
+  const resumeAbsent = () =>
+    screen.queryByRole('list', { name: 'Résumé de l’import' }) === null
+
+  it('saisie : la grande zone seule, aucun aperçu ; aperçu : ligne repliée, résumé, liste', async () => {
+    ouvrir(null)
+    expect(
+      screen.getByText("Collez la réponse de l'IA ou déposez le fichier"),
+    ).toBeTruthy()
+    expect(resumeAbsent()).toBe(true)
+    expect(screen.queryByText('Lecture en cours…')).toBeNull()
+    expect(screen.queryByText(/point de restauration/)).toBeNull()
+    coller(texteLlm())
+    await waitFor(() => screen.getByLabelText('Importer Check-in'), {
+      timeout: 3000,
+    })
+    expect(screen.getByText('Réponse collée')).toBeTruthy()
+    expect(
+      screen.queryByText("Collez la réponse de l'IA ou déposez le fichier"),
+    ).toBeNull()
+    expect(resumeAbsent()).toBe(false)
+    // Changer : retour à la saisie, l'aperçu disparaît.
+    fireEvent.click(screen.getByRole('button', { name: 'Changer' }))
+    expect(resumeAbsent()).toBe(true)
+    expect(screen.queryByLabelText('Importer Check-in')).toBeNull()
+    expect(bouton().disabled).toBe(true)
+  })
+
+  it('lecture impossible : message court, la zone revient pour réessayer', async () => {
+    ouvrir(null)
+    coller('Je ne peux pas faire ça.')
+    expect(
+      await screen.findByText(/Lecture impossible/, undefined, {
+        timeout: 3000,
+      }),
+    ).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Coller' })).toBeTruthy()
+    expect(screen.queryByText('Réponse collée')).toBeNull()
+    expect(bouton().disabled).toBe(true)
+    coller(texteLlm())
+    await waitFor(() => screen.getByLabelText('Importer Check-in'), {
+      timeout: 3000,
+    })
+    expect(screen.queryByText(/Lecture impossible/)).toBeNull()
+  })
+
+  it('un seul avertissement : en clair, pas replié', async () => {
+    await ouvrirAvecApercu(
+      fichierLlm((f) => {
+        if (f._metadata?.portee?.type === 'classeur') {
+          f._metadata.portee.classeur_uuid = 'autre-uuid'
+          f._metadata.portee.classeur_name = 'Carnet sanitaire'
+        }
+      }),
+    )
+    const w = screen.getByText(/vient du classeur Carnet sanitaire/)
+    expect(w.closest('details')).toBeNull()
+  })
+
+  it('aucun mot interdit, ni tiret cadratin ni guillemets, dans les deux états', async () => {
+    ouvrir(null)
+    const verifier = () => {
+      const texte = window.document.body.textContent
+      for (const mot of [
+        'JSON',
+        'LLM',
+        'fusion',
+        'uuid',
+        'Registre',
+        '—',
+        '«',
+        '»',
+      ])
+        expect(texte, mot).not.toContain(mot)
+    }
+    verifier()
+    coller(texteLlm())
+    await waitFor(() => screen.getByLabelText('Importer Check-in'), {
+      timeout: 3000,
+    })
+    verifier()
   })
 })

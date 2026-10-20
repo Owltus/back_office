@@ -812,6 +812,18 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
     (`MergePreviewDialog` ligne « Importer » de l'accueil, ET
     `EchangeJsonDialog` d'un chapitre ou d'un document) : coller ou
     choisir / déposer un fichier → aperçu → Importer.
+    **Frontend refait le 2026-10-20** (« vraiment mal fait ») : saisie
+    PARTAGÉE `dialogs/SaisieImport.tsx` (une grande zone : Ctrl + V hors
+    champ, bouton Coller par `clipboard.readText` avec champ de secours
+    sans message si refusé, dépôt, choix ; repliée ensuite en une ligne
+    avec Changer) et corps partagé `dialogs/EtatImport.tsx` à DEUX états
+    (saisie ; aperçu = squelette pendant le calcul, résumé en compteurs,
+    note de portée, avertissements repliés s'ils sont plusieurs, liste seule
+    à défiler ; erreur de lecture = la zone revient). Bouton « Importer » au
+    libellé STABLE (compte en badge, nom accessible « Importer 3 documents »),
+    raison ou point de restauration dessous ; refus par pastille
+    « À importer / Ignoré » (case `Importer <titre>` gardée).
+    Source = `lib/classeur/sourceImport.ts`. Logique métier inchangée.
     - Le fichier fait foi pour ce qu'il contient, sans dépendre des dates
       (`planifierImportIa` : `sansHorodatage` puis remplacement).
     - Ce qui est ABSENT du fichier est TOUJOURS gardé. Une suppression n'a

@@ -1,5 +1,5 @@
 import { Fragment, useId, useMemo } from 'react'
-import { ChevronRight, TriangleAlert } from 'lucide-react'
+import { Ban, Check, ChevronRight, TriangleAlert } from 'lucide-react'
 
 import {
   ChampsDiff,
@@ -85,6 +85,10 @@ export function texteVersion(l: LigneImport): string | null {
   )
     return `version inchangée (${libelleVersion(l.numero)})${e.raison === '' ? '' : ` · ${e.raison}`}`
   return `version prévue ${libelleVersion(e.suivante)}${e.raison === '' ? '' : ` · ${e.raison}`}`
+}
+
+function pluriel(n: number, singulier: string, plurielForme: string): string {
+  return `${String(n)} ${n > 1 ? plurielForme : singulier}`
 }
 
 function points(n: number): string {
@@ -253,13 +257,13 @@ export function ApercuImport({
       )}
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs text-muted-foreground">
-          Décochez un élément pour ne pas l'importer.
+          {pluriel(lignes.length, 'changement', 'changements')}
         </p>
         <Button
           type="button"
           size="sm"
           variant="ghost"
-          className="pointer-coarse:min-h-11"
+          className="h-10"
           onClick={() => onOuvertes(toutOuvert ? new Set() : new Set(ids))}
         >
           {toutOuvert ? 'Tout replier' : 'Tout déplier'}
@@ -370,38 +374,29 @@ function LigneApercu({
   const cle = ligne.cle
   return (
     <li className={cn('flex flex-col', refusee && 'bg-muted/40')}>
-      <div className="flex items-center gap-1 pr-2">
-        {cle !== null ? (
-          <label className="flex size-9 shrink-0 cursor-pointer items-center justify-center pointer-coarse:size-11">
-            <input
-              type="checkbox"
-              checked={!refusee}
-              onChange={() => onBasculerRefus(cle)}
-              disabled={disabled || verrou !== undefined}
-              aria-label={`Importer ${titre}`}
-              className="size-4 accent-primary"
-            />
-          </label>
-        ) : (
-          <span className="size-9 shrink-0 pointer-coarse:size-11" />
-        )}
+      <div className="flex items-start gap-2 p-1.5 sm:items-center">
         <button
           type="button"
           onClick={onBasculer}
           aria-expanded={ouverte}
           aria-controls={idDetail}
-          className="flex min-w-0 flex-1 items-center gap-2 rounded py-1.5 text-left text-sm hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:min-h-11"
+          className="flex min-h-10 min-w-0 flex-1 items-start gap-2.5 rounded-md px-1.5 py-1.5 text-left text-sm hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <ChevronRight
-            className={cn(
-              'size-4 shrink-0 text-muted-foreground transition-transform',
-              ouverte && 'rotate-90',
-            )}
-          />
-          <span className="flex min-w-0 flex-1 flex-col">
+          <span
+            aria-hidden
+            className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md border bg-background text-muted-foreground"
+          >
+            <ChevronRight
+              className={cn(
+                'size-3.5 transition-transform',
+                ouverte && 'rotate-90',
+              )}
+            />
+          </span>
+          <span className="flex min-w-0 flex-1 flex-col gap-1">
             <span
               className={cn(
-                'truncate',
+                'truncate font-medium',
                 refusee && 'text-muted-foreground line-through',
               )}
             >
@@ -421,22 +416,58 @@ function LigneApercu({
                 ) &&
                 ` · ${ligne.reglage}`}
             </span>
-          </span>
-          {b !== null && (b.ajouts > 0 || b.retraits > 0) && (
-            <span className="shrink-0 font-mono text-xs tabular-nums">
-              +{b.ajouts} −{b.retraits}
+            <span className="flex flex-wrap items-center gap-1.5">
+              <span
+                className={cn(
+                  'inline-block rounded-full px-2 py-0.5 text-xs first-letter:uppercase',
+                  ligne.genre === 'suppression'
+                    ? 'border border-destructive/40 text-destructive'
+                    : 'bg-muted text-foreground',
+                )}
+              >
+                {etiquette(ligne)}
+              </span>
+              {b !== null && (b.ajouts > 0 || b.retraits > 0) && (
+                <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                  +{b.ajouts} −{b.retraits}
+                </span>
+              )}
+              {alertes !== null && alertes.length > 0 && (
+                <span className="flex items-center gap-1 whitespace-nowrap rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-xs text-amber-700 dark:text-amber-300">
+                  <TriangleAlert className="size-3" aria-hidden />
+                  {points(alertes.length)}
+                </span>
+              )}
             </span>
-          )}
-          {alertes !== null && alertes.length > 0 && (
-            <span className="flex shrink-0 items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-xs text-amber-700 dark:text-amber-300">
-              <TriangleAlert className="size-3" aria-hidden />
-              {points(alertes.length)}
-            </span>
-          )}
-          <span className="shrink-0 text-xs text-muted-foreground">
-            {refusee ? 'ignoré' : etiquette(ligne)}
           </span>
         </button>
+        {cle !== null && (
+          <label
+            className={cn(
+              'relative inline-flex size-10 shrink-0 cursor-pointer select-none items-center justify-center gap-1.5 rounded-full border text-xs sm:w-auto sm:px-3 font-medium transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60',
+              refusee
+                ? 'border-dashed text-muted-foreground'
+                : 'border-primary/40 bg-primary/10 text-foreground',
+            )}
+          >
+            <input
+              type="checkbox"
+              checked={!refusee}
+              onChange={() => onBasculerRefus(cle)}
+              disabled={disabled || verrou !== undefined}
+              aria-label={`Importer ${titre}`}
+              className="peer sr-only"
+            />
+            {refusee ? (
+              <Ban className="size-3.5" aria-hidden />
+            ) : (
+              <Check className="size-3.5 text-primary" aria-hidden />
+            )}
+            <span aria-hidden className="max-sm:hidden">
+              {refusee ? 'Ignoré' : 'À importer'}
+            </span>
+          </label>
+        )}
       </div>
       {verrou !== undefined && (
         <p className="px-3 pb-2 text-xs text-muted-foreground">{verrou}</p>
