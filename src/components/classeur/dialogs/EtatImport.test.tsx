@@ -12,6 +12,7 @@ import {
   AvertissementsImport,
   LIGNE_RESTAURATION,
   PiedImport,
+  ResumeImport,
   compteursImport,
   etatBoutonImport,
 } from '#/components/classeur/dialogs/EtatImport.tsx'
@@ -181,5 +182,21 @@ describe('PiedImport', () => {
     })
     expect(b.disabled).toBe(true)
     expect(b.textContent).toBe('Importer')
+  })
+})
+
+describe('ResumeImport — écran étroit', () => {
+  it('un libellé long passe à la ligne au lieu d’être coupé (« non impor… » à 375 px)', () => {
+    render(
+      <ResumeImport
+        compteurs={[
+          { cle: 'inchange', nombre: 13, libelle: 'inchangés', ton: 'neutre' },
+          { cle: 'ecarte', nombre: 3, libelle: 'non importés', ton: 'attenue' },
+        ]}
+      />,
+    )
+    const libelle = screen.getByText('non importés')
+    expect(libelle.className).not.toMatch(/\btruncate\b/)
+    expect(libelle.className).toMatch(/break-words/)
   })
 })

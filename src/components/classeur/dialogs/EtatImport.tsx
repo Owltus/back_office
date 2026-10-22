@@ -130,7 +130,7 @@ export function ResumeImport({ compteurs }: { compteurs: Compteur[] }) {
             <span className="text-xl font-semibold leading-tight tabular-nums">
               {c.nombre}
             </span>{' '}
-            <span className="truncate text-xs text-muted-foreground">
+            <span className="text-xs leading-tight break-words text-muted-foreground">
               {c.libelle}
             </span>
           </li>
