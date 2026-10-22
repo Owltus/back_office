@@ -5,6 +5,7 @@ import { Loader2 } from 'lucide-react'
 
 import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { homeTarget } from '#/lib/auth/homeTarget.ts'
+import { connexionVersAccueil, readLastActive } from '#/lib/auth/inactivity.ts'
 import { supabase } from '#/lib/supabase.ts'
 import { Logo } from '#/components/Logo.tsx'
 import { Button } from '#/components/ui/button.tsx'
@@ -26,7 +27,12 @@ export const Route = createFileRoute('/login')({
       supabase.auth.getSession().then(({ data }) => data.session),
       new Promise<null>((resolve) => setTimeout(() => resolve(null), 2_000)),
     ])
-    if (session) {
+    // Une session fermée pour INACTIVITÉ n'en est plus une : sans ce test,
+    // la garde globale renvoie ici (utilisateur vidé par AuthContext) pendant
+    // que la session est encore stockée, et l'on repart vers l'accueil, en
+    // boucle (constaté en production le 2026-10-23 : onglet figé après 81 h
+    // d'inactivité, session renouvelée mais jamais effacée).
+    if (connexionVersAccueil(session !== null, readLastActive(), Date.now())) {
       throw redirect({ to: homeTarget() })
     }
   },

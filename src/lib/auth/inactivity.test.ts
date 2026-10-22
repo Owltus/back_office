@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   INACTIVITY_LIMIT_MS,
+  connexionVersAccueil,
   isInactiveTooLong,
 } from '#/lib/auth/inactivity.ts'
 
@@ -31,5 +32,22 @@ describe('isInactiveTooLong', () => {
   it('limite personnalisable', () => {
     expect(isInactiveTooLong(0, 10, 5)).toBe(true)
     expect(isInactiveTooLong(0, 4, 5)).toBe(false)
+  })
+})
+
+describe('connexionVersAccueil (boucle connexion / accueil, 2026-10-23)', () => {
+  const now = 200 * H
+  it('session récente : la connexion renvoie vers l accueil', () => {
+    expect(connexionVersAccueil(true, now - H, now)).toBe(true)
+  })
+  it('session fermée pour inactivité : le formulaire reste affiché', () => {
+    expect(connexionVersAccueil(true, now - 81 * H, now)).toBe(false)
+  })
+  it('aucune session : jamais de renvoi', () => {
+    expect(connexionVersAccueil(false, now - H, now)).toBe(false)
+    expect(connexionVersAccueil(false, null, now)).toBe(false)
+  })
+  it('session sans horodatage (premier passage) : renvoi', () => {
+    expect(connexionVersAccueil(true, null, now)).toBe(true)
   })
 })

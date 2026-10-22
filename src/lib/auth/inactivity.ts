@@ -27,6 +27,20 @@ export function isInactiveTooLong(
   return now - lastActiveAt > limitMs
 }
 
+/**
+ * La page de connexion renvoie-t-elle vers l'accueil ? Seulement pour une
+ * session présente ET non fermée par inactivité : sinon la garde globale
+ * (utilisateur vidé) et la connexion (session encore stockée) se renvoient
+ * l'une à l'autre en boucle (production, 2026-10-23).
+ */
+export function connexionVersAccueil(
+  sessionPresente: boolean,
+  lastActiveAt: number | null,
+  now: number,
+): boolean {
+  return sessionPresente && !isInactiveTooLong(lastActiveAt, now)
+}
+
 export function readLastActive(): number | null {
   try {
     const raw = localStorage.getItem(LAST_ACTIVE_KEY)

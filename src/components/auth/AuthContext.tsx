@@ -352,7 +352,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null)
       userIdRef.current = null
       setLoading(false)
-      void fermerSessionInactive(supabase.auth, () => window.localStorage)
+      // HORS de l'appel en cours : `fermerParInactivite` peut être déclenchée
+      // depuis `onAuthStateChange`, qu'auth-js émet en tenant son verrou (par
+      // exemple pendant le renouvellement du jeton au démarrage). Un
+      // `signOut()` lancé là attend ce même verrou et ne finit jamais (blocage
+      // documenté par Supabase) : la session restait stockée et la page de
+      // connexion repartait vers l'accueil, en boucle (production, 2026-10-23).
+      window.setTimeout(() => {
+        void fermerSessionInactive(supabase.auth, () => window.localStorage)
+      }, 0)
     }
 
     function applyUser(nextUser: User | null) {
@@ -480,6 +488,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const signIn = async (email: string, password: string) => {
+    // Une connexion volontaire repart d'un horodatage NEUF : l'ancien (session
+    // fermée pour inactivité, déconnexion pas encore aboutie) ferait éjecter le
+    // compte dès `SIGNED_IN`, émis avant le retour de `signInWithPassword`.
+    clearLastActive()
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
