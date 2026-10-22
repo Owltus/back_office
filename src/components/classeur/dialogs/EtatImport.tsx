@@ -298,6 +298,16 @@ export interface DonneesApercu {
   lignes: readonly LigneImport[]
   chapitres?: readonly ChapitreLigne[]
   note: string | null
+  /** Éléments changés dans l'application depuis l'export (proposés refusés). */
+  changesDepuisExport?: readonly string[]
+}
+
+/** Note au-dessus de l'aperçu quand des éléments ont changé depuis l'export. */
+export function noteDepuisExport(n: number): string | null {
+  if (n === 0) return null
+  return n > 1
+    ? `${String(n)} éléments ont changé dans l'application depuis l'export. Ils ne sont pas importés, pour garder ces changements. Cochez-les pour prendre quand même la version du fichier.`
+    : "1 élément a changé dans l'application depuis l'export. Il n'est pas importé, pour garder ce changement. Cochez-le pour prendre quand même la version du fichier."
 }
 
 /**
@@ -371,6 +381,11 @@ export function CorpsImport({
             />
           )}
           {apercu.note != null && <NoteImport>{apercu.note}</NoteImport>}
+          {(apercu.changesDepuisExport?.length ?? 0) > 0 && (
+            <NoteImport>
+              {noteDepuisExport(apercu.changesDepuisExport?.length ?? 0)}
+            </NoteImport>
+          )}
           <AvertissementsImport avertissements={apercu.plan.warnings} />
           {apercu.lignes.length > 0 && (
             <div className="-mr-1 min-h-32 flex-1 overflow-y-auto pr-1">

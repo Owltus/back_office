@@ -584,6 +584,11 @@ export interface LigneImport {
    * encore) ne se lit pas « modifié » (trouvé au navigateur le 2026-10-22).
    */
   actionChapitre?: 'creation' | 'restauration' | 'modification'
+  /**
+   * Élément changé dans l'application depuis l'export dont vient le fichier
+   * (`clesChangeesDepuisExport`) : proposé non importé.
+   */
+  depuisExport?: true
 }
 
 const TEXTE_VIDE: EtatTexte = { title: '', description: '', content: '' }

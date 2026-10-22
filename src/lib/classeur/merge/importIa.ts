@@ -31,9 +31,11 @@
  */
 
 import type { DbClasseur } from '#/lib/classeur/types.ts'
+import { flattenItems } from '#/lib/classeur/types.ts'
 import { planifierFusion } from '#/lib/classeur/merge/merge.ts'
 import type { EtatLocal, PlanFusion } from '#/lib/classeur/merge/merge.ts'
 import {
+  clesActions,
   planSuppressionsDemandees,
   planifierFusionPortee,
   sansHorodatage,
@@ -241,4 +243,75 @@ export function planifierVers(
   return cible.type === 'classeur'
     ? planifierImportIa(local, fichier)
     : planifierFusionPortee(local, fichier, cible)
+}
+
+// ---------------------------------------------------------------------------
+// Éléments changés dans l'application depuis l'export
+// ---------------------------------------------------------------------------
+
+/**
+ * Instant en millisecondes d'un horodatage de la base ou du fichier
+ * (`2026-10-22T20:05:42.585489+00:00` : microsecondes ramenées à la
+ * milliseconde, que `Date.parse` ne garantit pas) ; `null` si illisible.
+ */
+function instant(texte: string): number | null {
+  const m = /^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(?:\.(\d+))?(.*)$/.exec(
+    texte.trim(),
+  )
+  if (m === null) return null
+  const ms = (m[2] ?? '').slice(0, 3).padEnd(3, '0')
+  const t = Date.parse(`${m[1]}.${ms}${m[3] === '' ? 'Z' : m[3]}`)
+  return Number.isNaN(t) ? null : t
+}
+
+/**
+ * Clés (`clesActions`) des MODIFICATIONS d'éléments qui ont changé dans
+ * l'application APRÈS l'export dont vient le fichier : l'élément porte, dans
+ * le fichier, l'horodatage de l'export (le LLM le recopie, les consignes le
+ * lui demandent), et la base en a un plus récent.
+ *
+ * Trouvé au navigateur le 2026-10-22 : une personne exporte, demande un quiz
+ * au LLM, et entre-temps un collègue (ou un autre import) améliore deux
+ * documents. Le fichier du quiz porte encore les ANCIENS textes : l'importer
+ * tel quel effaçait ces améliorations (« 4 étapes retirées ») pour ajouter
+ * un quiz. L'aperçu propose donc ces éléments NON importés (refusés
+ * d'avance, la personne peut les reprendre) : rien n'est perdu sans un
+ * geste exprès. Le fichier fait toujours foi pour le reste (règle 1) : un
+ * élément inchangé dans l'application depuis l'export prend la version du
+ * fichier, quel que soit son horodatage.
+ *
+ * Sans horodatage dans le fichier (ancien export, LLM qui l'a retiré),
+ * rien n'est signalé. Pur.
+ */
+export function clesChangeesDepuisExport(
+  local: EtatLocal,
+  fichier: ClasseurJson,
+  plan: PlanFusion,
+): string[] {
+  const exporte = new Map<string, number>()
+  for (const c of fichier.chapters)
+    for (const it of c.items) {
+      if (it.uuid === undefined || it.updated_at === undefined) continue
+      const t = instant(it.updated_at)
+      if (t !== null) exporte.set(it.uuid, t)
+    }
+  if (exporte.size === 0) return []
+  const locaux = new Map(
+    flattenItems(local.content).map((it) => [
+      `${it.kind}:${String(it.data.id)}`,
+      it,
+    ]),
+  )
+  const cles = clesActions(plan.actions)
+  const resultat: string[] = []
+  plan.actions.forEach((a, i) => {
+    const cle = cles[i]
+    if (a.type !== 'modifierItem' || cle === null) return
+    const loc = locaux.get(`${a.item.kind}:${String(a.id)}`)
+    if (loc === undefined) return
+    const t = exporte.get(loc.data.uuid)
+    const l = instant(loc.data.updated_at)
+    if (t !== undefined && l !== null && l > t) resultat.push(cle)
+  })
+  return resultat
 }

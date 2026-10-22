@@ -10,27 +10,20 @@ import {
   within,
 } from '@testing-library/react'
 
+import { MESSAGE_DEPUIS_EXPORT } from '#/components/classeur/dialogs/ApercuImport.tsx'
 import { LIBELLE_COLLER } from '#/components/classeur/dialogs/SaisieImport.tsx'
 import {
   PERIODICITES,
+  T0,
   chapitre,
   classeur,
   document,
   etat,
 } from '#/lib/classeur/merge/fixtures.ts'
-import {
-  destinationImport,
-  planifierVers,
-} from '#/lib/classeur/merge/importIa.ts'
 import type { ContexteImport } from '#/lib/classeur/merge/importIa.ts'
-import {
-  chapitresDesLignes,
-  construireExportChapitre,
-  lignesImport,
-} from '#/lib/classeur/merge/portee.ts'
+import { construireExportChapitre } from '#/lib/classeur/merge/portee.ts'
 import { construireExport } from '#/lib/classeur/merge/schema.ts'
 import type { ClasseurJson } from '#/lib/classeur/merge/schema.ts'
-import { planAvecValidation } from '#/lib/classeur/merge/validationImport.ts'
 
 /*
  * Import dans le classeur COMPLET (ligne Importer de l'accueil). Le VRAI
@@ -69,38 +62,29 @@ const d3 = document({
   version_mineure: 1,
 })
 const local = etat([A, B], { documents: [d1, d2, d3] })
+/** État lu par l'aperçu (un test peut le remplacer). */
+let localCourant = local
 const PLUS_TARD = '2026-05-01T00:00:00+00:00'
 
 const appliquer = vi.fn()
 let retenir: Promise<void> | null = null
 
-vi.mock('#/lib/classeur/merge/apply.ts', () => ({
-  // Même composition que `apply.ts::planImport` (portée déduite, validation,
-  // plan de la destination).
-  previsualiserImport: async (
-    _id: number,
-    fichier: ClasseurJson,
-    contexte: ContexteImport,
-  ) => {
-    if (retenir) await retenir
-    const destination = destinationImport(local, fichier, classeur(), contexte)
-    const brut = planAvecValidation(local, fichier, (f) =>
-      planifierVers(local, f, destination.cible),
-    )
-    const plan = {
-      ...brut,
-      warnings: [...destination.avertissements, ...brut.warnings],
-    }
-    return {
-      plan,
-      lignes: lignesImport(local, plan),
-      chapitres: chapitresDesLignes(local, plan),
-      cible: destination.cible,
-      note: destination.note,
-    }
-  },
-  appliquerImport: (...args: unknown[]) => appliquer(...args),
-}))
+vi.mock('#/lib/classeur/merge/apply.ts', async (original) => {
+  // L'aperçu RÉEL (`construireApercu`, pur) sur l'état local écrit ici ;
+  // seules la lecture de la base et l'écriture sont simulées.
+  const reel = await original<typeof import('#/lib/classeur/merge/apply.ts')>()
+  return {
+    previsualiserImport: async (
+      _id: number,
+      fichier: ClasseurJson,
+      contexte: ContexteImport,
+    ) => {
+      if (retenir) await retenir
+      return reel.construireApercu(localCourant, classeur(), fichier, contexte)
+    },
+    appliquerImport: (...args: unknown[]) => appliquer(...args),
+  }
+})
 vi.mock('#/components/classeur/hooks/useClasseur.ts', () => ({
   useInvaliderClasseur: () => () => Promise.resolve(),
 }))
@@ -358,13 +342,37 @@ describe('MergePreviewDialog — un seul comportement (décision du 2026-10-20)'
       expect(texte, mot).not.toContain(mot)
   })
 
-  it('un horodatage ancien (recopié par l’IA) n’empêche rien', async () => {
+  it('l’horodatage de l’export recopié par le LLM n’empêche rien', async () => {
+    // Le LLM recopie la date de l'export, égale à celle de la base tant que
+    // personne n'a touché l'élément depuis : le fichier fait foi.
     await ouvrirAvecApercu(
       fichierLlm((f) => {
-        f.chapters[0].items[0].updated_at = '2020-01-01T00:00:00+00:00'
-        f.chapters[1].items[0].updated_at = '2020-01-01T00:00:00+00:00'
+        f.chapters[0].items[0].updated_at = T0
+        f.chapters[1].items[0].updated_at = T0
       }),
     )
+    expect(nom()).toBe('Importer 3 documents')
+    expect(screen.queryByText(/depuis l’export|depuis l'export/)).toBeNull()
+  })
+
+  it('changé dans l’application depuis l’export : proposé non importé, repris d’un clic', async () => {
+    // Trouvé au navigateur le 2026-10-22 : un fichier pris AVANT qu'un
+    // collègue améliore Check-in effaçait cette amélioration en silence.
+    await ouvrirAvecApercu(
+      fichierLlm((f) => {
+        f.chapters[0].items[0].updated_at = '2025-12-01T00:00:00+00:00'
+        f.chapters[1].items[0].updated_at = T0
+      }),
+    )
+    expect(nom()).toBe('Importer 2 documents')
+    expect(
+      (screen.getByLabelText('Importer Check-in') as HTMLInputElement).checked,
+    ).toBe(false)
+    expect(screen.getByText(MESSAGE_DEPUIS_EXPORT)).toBeTruthy()
+    expect(
+      screen.getByText(/1 élément a changé dans l'application depuis l'export/),
+    ).toBeTruthy()
+    fireEvent.click(screen.getByLabelText('Importer Check-in'))
     expect(nom()).toBe('Importer 3 documents')
   })
 

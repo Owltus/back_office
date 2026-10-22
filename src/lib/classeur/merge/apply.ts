@@ -42,6 +42,7 @@ import type {
 } from '#/lib/classeur/merge/merge.ts'
 import { planifierFusion } from '#/lib/classeur/merge/merge.ts'
 import {
+  clesChangeesDepuisExport,
   destinationImport,
   planifierVers,
 } from '#/lib/classeur/merge/importIa.ts'
@@ -421,6 +422,11 @@ export interface ApercuFusion {
   cible: ContexteImport
   /** « Ce fichier concerne le chapitre X. » ; `null` si c'est d'où l'on importe. */
   note: string | null
+  /**
+   * Clés des modifications d'éléments changés dans l'application depuis
+   * l'export (`clesChangeesDepuisExport`) : l'aperçu les propose refusées.
+   */
+  changesDepuisExport: string[]
 }
 
 /**
@@ -463,13 +469,32 @@ export async function previsualiserImport(
     chargerEtatLocal(classeurId),
   ])
   if (classeur === null) throw new Error('Classeur introuvable ou supprimé.')
+  return construireApercu(local, classeur, fichier, contexte)
+}
+
+/**
+ * L'aperçu, pur : plan (`planImport`), une ligne par action, le chapitre de
+ * chaque ligne, la note de portée, et les éléments changés dans
+ * l'application depuis l'export (marqués, proposés refusés).
+ */
+export function construireApercu(
+  local: EtatLocal,
+  classeur: Pick<DbClasseur, 'uuid' | 'name'>,
+  fichier: ClasseurJson,
+  contexte: ContexteImport,
+): ApercuFusion {
   const { plan, destination } = planImport(local, classeur, fichier, contexte)
+  const changes = clesChangeesDepuisExport(local, fichier, plan)
+  const marques = new Set(changes)
   return {
     plan,
-    lignes: lignesImport(local, plan),
+    lignes: lignesImport(local, plan).map((l) =>
+      l.cle !== null && marques.has(l.cle) ? { ...l, depuisExport: true } : l,
+    ),
     chapitres: chapitresDesLignes(local, plan),
     cible: destination.cible,
     note: destination.note,
+    changesDepuisExport: changes,
   }
 }
 

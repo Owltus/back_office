@@ -111,6 +111,10 @@ function nombreLignes(texte: string): number {
 }
 
 /** Libellé court de ce que fait la ligne. */
+/** Sous une ligne changée dans l'application depuis l'export. */
+export const MESSAGE_DEPUIS_EXPORT =
+  "Changé dans l'application depuis l'export : la version du fichier est plus ancienne."
+
 function etiquette(l: LigneImport): string {
   switch (l.genre) {
     case 'creation':
@@ -479,6 +483,11 @@ function LigneApercu({
       </div>
       {verrou !== undefined && (
         <p className="px-3 pb-2 text-xs text-muted-foreground">{verrou}</p>
+      )}
+      {ligne.depuisExport === true && (
+        <p className="px-3 pb-2 text-xs text-muted-foreground">
+          {MESSAGE_DEPUIS_EXPORT}
+        </p>
       )}
       {refusee && ligne.ordreChange && (
         <p className="px-3 pb-2 text-xs text-muted-foreground">

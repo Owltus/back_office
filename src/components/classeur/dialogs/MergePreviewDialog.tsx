@@ -116,6 +116,13 @@ export function MergePreviewDialog({
     else lancerPreparation(source)
   }, [open, source, classeurId, lancerPreparation, oublierPreparation])
 
+  // Un aperçu arrive : les éléments changés dans l'application depuis
+  // l'export sont proposés NON importés (`clesChangeesDepuisExport`).
+  const changesDepuisExport = preparation.data?.changesDepuisExport
+  useEffect(() => {
+    setRefuses(new Set(changesDepuisExport ?? []))
+  }, [changesDepuisExport])
+
   // Une autre source : les refus de la précédente n'ont plus de sens.
   useEffect(() => {
     setRefuses(new Set())
