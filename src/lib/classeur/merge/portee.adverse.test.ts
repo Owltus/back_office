@@ -161,4 +161,68 @@ describe('extraireJson face à une accolade avant le JSON', () => {
     const reponse = `J'ai gardé les lignes \`:::etape{photo=gauche}\` intactes.\n\`\`\`json\n${json}\n\`\`\`\nN'hésitez pas.`
     expect(() => parseImportJson(extraireJson(reponse))).not.toThrow()
   })
+
+  // Réponses RÉELLES d'un LLM sur la base locale (2026-10-22) : nos
+  // consignes lui font écrire « bouton accolades {} » APRÈS le bloc.
+  const avecProse = (json: string, apres = '') =>
+    `C'est fait.
+
+\`\`\`json
+${json}
+\`\`\`
+
+${apres}`
+
+  it('des accolades {} dans la prose APRÈS le bloc', () => {
+    const json = exportJson()
+    const reponse = avecProse(
+      json,
+      'Cliquez sur le bouton accolades {} (Échange avec un LLM), puis collez.',
+    )
+    expect(extraireJson(reponse)).toBe(json)
+  })
+
+  it('des accolades dans une chaîne du JSON ne coupent pas le fichier', () => {
+    const brut = JSON.parse(exportJson()) as {
+      chapters: { items: { content?: string }[] }[]
+    }
+    brut.chapters[0].items[0].content = 'Bloc :::etape{photo=gauche} } { "x'
+    const json = JSON.stringify(brut, null, 2)
+    expect(extraireJson(avecProse(json, 'bouton {}'))).toBe(json)
+  })
+
+  it('une réponse coupée le dit, sans jargon', () => {
+    const json = exportJson()
+    expect(() =>
+      extraireJson(avecProse(json.slice(0, json.length - 40), '')),
+    ).toThrow(/coupée/)
+    expect(() => extraireJson(json.slice(0, 300))).toThrow(/coupée/)
+  })
+
+  it('deux versions différentes : refus ; deux fois la même : acceptée', () => {
+    const json = exportJson()
+    const autre = json.replace('"Réception"', '"Accueil"')
+    expect(() =>
+      extraireJson(`Avant :
+${json}
+Après :
+${autre}
+bouton {}`),
+    ).toThrow(/plusieurs versions/)
+    expect(
+      extraireJson(`${json}
+de nouveau :
+${json}`),
+    ).toBe(json)
+  })
+
+  it('un texte sans fichier le dit', () => {
+    expect(() =>
+      extraireJson('Voici la procédure : appeler le 18, sortir.'),
+    ).toThrow(/ne contient pas de fichier/)
+  })
+
+  it('un JSON qui n’est pas un export passe à la lecture, qui dira pourquoi', () => {
+    expect(extraireJson('voici {"a": 1} fin')).toBe('{"a": 1}')
+  })
 })

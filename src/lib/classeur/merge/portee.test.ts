@@ -309,7 +309,7 @@ describe('extraireJson', () => {
       extraireJson('Voici le fichier corrigé :\n' + json + '\nBonne journée !'),
     ).toBe(json)
     expect(extraireJson('  ' + json + '  ')).toBe(json)
-    expect(extraireJson('rien ici')).toBe('rien ici')
+    expect(() => extraireJson('rien ici')).toThrow(/ne contient pas de fichier/)
   })
 })
 

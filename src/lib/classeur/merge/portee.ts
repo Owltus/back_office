@@ -206,21 +206,112 @@ export function lirePortee(texte: string): Portee | null {
 }
 
 /**
- * Le JSON d'une réponse de LLM COLLÉE : les modèles l'entourent souvent de
- * ```json … ``` ou d'une phrase (« Voici le fichier : »). On garde du premier
- * `{` au dernier `}` ; un texte sans accolades est rendu tel quel (le parse
- * dira pourquoi il échoue).
+ * Le JSON d'une réponse de LLM COLLÉE : les modèles l'entourent de
+ * ```json … ``` et de phrases, AVANT (« Voici le fichier : ») comme APRÈS
+ * (« cliquez sur le bouton accolades {} » : c'est ce que nos propres
+ * consignes leur font écrire).
  *
- * Une accolade AVANT le JSON (relecture adverse du 2026-10-04) : un LLM qui
- * cite `:::etape{photo=gauche}` dans sa phrase d'introduction faisait échouer
- * l'import. Si la
- * tranche depuis la première `{` n'est pas du JSON, on essaie les suivantes
- * (au plus `ESSAIS_EXTRACTION`) ; aucune ne l'est : la première, pour que le
- * message d'erreur porte sur le vrai texte.
+ * On cherche, accolade par accolade, un objet ÉQUILIBRÉ (les accolades dans
+ * les chaînes JSON ne comptent pas) qui se lit comme un export de classeur
+ * (`chapters` ou `format_version`). Une accolade de la prose, avant ou après,
+ * est sautée : `:::etape{photo=gauche}` (relecture adverse du 2026-10-04),
+ * `{}` (2026-10-22, une vraie réponse ne s'importait pas : l'ancienne
+ * méthode prenait du premier `{` au DERNIER `}`, celui de la prose).
+ *
+ * Jette une `Error` au message destiné à la personne :
+ *   - plusieurs exports DIFFÉRENTS (deux blocs, avant / après) ;
+ *   - un export qui commence mais ne se ferme pas : réponse coupée ;
+ *   - aucune accolade : pas de fichier dans la réponse.
+ * Rien de tout cela (un JSON qui n'est pas un export, un texte abîmé) : le
+ * texte est rendu, et la lecture (`parseImportJson`) dira ce qui ne va pas.
+ */
+export function extraireJson(texte: string): string {
+  if (!texte.includes('{')) throw new Error(MESSAGE_SANS_FICHIER)
+  const exports: string[] = []
+  const formes = new Set<string>()
+  let coupe = false
+  let i = texte.indexOf('{')
+  while (i !== -1) {
+    if (ouvreObjet(texte, i)) {
+      const fin = finObjet(texte, i)
+      if (fin === -1) {
+        if (DEBUT_EXPORT.test(texte.slice(i, i + 200))) coupe = true
+      } else {
+        const tranche = texte.slice(i, fin + 1)
+        const valeur = lireObjet(tranche)
+        if (valeur !== null && estExport(valeur)) {
+          exports.push(tranche)
+          formes.add(JSON.stringify(valeur))
+          i = texte.indexOf('{', fin + 1)
+          continue
+        }
+      }
+    }
+    i = texte.indexOf('{', i + 1)
+  }
+  if (formes.size > 1) throw new Error(MESSAGE_PLUSIEURS)
+  if (exports.length > 0) return exports[0]
+  if (coupe) throw new Error(MESSAGE_COUPE)
+  return extraireAncien(texte)
+}
+
+export const MESSAGE_SANS_FICHIER =
+  'Cette réponse ne contient pas de fichier à importer. Demandez au LLM le fichier complet, dans un seul bloc.'
+export const MESSAGE_COUPE =
+  'La réponse est coupée : la fin du fichier manque. Demandez au LLM de le renvoyer en entier, dans un seul bloc.'
+export const MESSAGE_PLUSIEURS =
+  'Cette réponse contient plusieurs versions du fichier. Collez seulement celle à importer, ou demandez au LLM un seul bloc.'
+
+/** Premières clés d'un export (ordre de `construireExport`, ou d'un LLM). */
+const DEBUT_EXPORT = /^\{\s*"(format_version|_metadata|classeur|chapters)"/
+
+/** `{` qui ouvre un objet JSON : suivie d'une clé ou d'une fermeture. */
+function ouvreObjet(texte: string, i: number): boolean {
+  return /^\{\s*["}]/.test(texte.slice(i, i + 64))
+}
+
+/** Indice de l'accolade qui ferme l'objet ouvert en `debut`, ou -1. */
+function finObjet(texte: string, debut: number): number {
+  let profondeur = 0
+  let chaine = false
+  for (let j = debut; j < texte.length; j++) {
+    const c = texte[j]
+    if (chaine) {
+      if (c === '\\') j++
+      else if (c === '"') chaine = false
+    } else if (c === '"') chaine = true
+    else if (c === '{') profondeur++
+    else if (c === '}') {
+      profondeur--
+      if (profondeur === 0) return j
+    }
+  }
+  return -1
+}
+
+function lireObjet(tranche: string): Record<string, unknown> | null {
+  try {
+    const v: unknown = JSON.parse(tranche)
+    return typeof v === 'object' && v !== null && !Array.isArray(v)
+      ? (v as Record<string, unknown>)
+      : null
+  } catch {
+    return null
+  }
+}
+
+function estExport(v: Record<string, unknown>): boolean {
+  return Array.isArray(v.chapters) || typeof v.format_version === 'number'
+}
+
+/**
+ * Repli : aucune tranche ne se lit comme un export. Du premier `{` au
+ * dernier `}`, en essayant les accolades suivantes (au plus
+ * `ESSAIS_EXTRACTION`), pour que la lecture parle du vrai texte.
  */
 const ESSAIS_EXTRACTION = 50
 
-export function extraireJson(texte: string): string {
+function extraireAncien(texte: string): string {
   const debut = texte.indexOf('{')
   const fin = texte.lastIndexOf('}')
   if (debut === -1 || fin <= debut) return texte.trim()
