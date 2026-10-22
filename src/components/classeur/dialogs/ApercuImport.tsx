@@ -418,7 +418,7 @@ function LigneApercu({
                   : ligne.actionChapitre === 'creation'
                     ? 'Nouveau chapitre'
                     : ligne.actionChapitre === 'restauration'
-                      ? 'Retiré de la corbeille'
+                      ? 'Retiré de la corbeille, avec son contenu'
                       : 'Libellé ou description'
                 : nature}
               {version !== null && ` · ${version}`}

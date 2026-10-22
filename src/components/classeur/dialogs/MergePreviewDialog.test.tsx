@@ -587,3 +587,24 @@ describe('MergePreviewDialog — utilisateur pressé (navigateur, 2026-10-22)', 
     expect(appliquer).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('MergePreviewDialog — fichier pris avant une suppression', () => {
+  afterEach(() => {
+    localCourant = local
+  })
+
+  it('le chapitre ramené de la corbeille se dit restauré, avec son contenu', async () => {
+    // Sécurité mis à la corbeille APRÈS l'export : ses éléments y restent
+    // rangés (non supprimés) et reviennent avec lui.
+    localCourant = etat(
+      [A, { ...B, deleted_at: '2026-06-01T00:00:00+00:00' }],
+      { documents: [d1, d2, d3] },
+    )
+    await ouvrirAvecApercu()
+    const securite = screen.getByRole('list', { name: 'Sécurité' })
+    expect(
+      within(securite).getByText('Retiré de la corbeille, avec son contenu'),
+    ).toBeTruthy()
+    expect(within(securite).getByText('restauré')).toBeTruthy()
+  })
+})
