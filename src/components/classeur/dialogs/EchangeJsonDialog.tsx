@@ -311,7 +311,7 @@ export function EchangeJsonDialog({
     <Dialog
       open={open}
       onOpenChange={(o) => {
-        if (!o && fusion.isPending) return
+        if (!o && (fusion.isPending || fusion.enVol())) return
         onOpenChange(o)
       }}
     >

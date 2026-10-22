@@ -39,10 +39,15 @@ const STALE_60S = 60_000
  * minuterie, donc le second clic voit encore `isPending === false`. Un
  * verrou synchrone (ref) écarte tout `mutate` lancé pendant qu'un autre est
  * en vol ; il se relâche au règlement de celui-ci.
+ *
+ * `enVol()` lit ce verrou À L'INSTANT : un dialogue s'en sert pour refuser
+ * de se fermer (Échap juste après Importer fermait le dialogue, faute de
+ * `isPending` à jour, et l'import se terminait sans que la personne le
+ * sache).
  */
 export function useEcritureUnique<TData, TVars>(
   options: UseMutationOptions<TData, Error, TVars>,
-): UseMutationResult<TData, Error, TVars> {
+): UseMutationResult<TData, Error, TVars> & { enVol: () => boolean } {
   const verrou = useRef(false)
   // Relâché au niveau de la MUTATION (toujours appelé, même après un
   // `reset()` ou un démontage), pas seulement par le rappel de l'appel.
@@ -62,7 +67,8 @@ export function useEcritureUnique<TData, TVars>(
     },
     [lancer],
   )
-  return { ...mutation, mutate }
+  const enVol = useCallback(() => verrou.current, [])
+  return { ...mutation, mutate, enVol }
 }
 
 /** Entrées d'historique d'un classeur (sans les instantanés), plus récente en tête. */

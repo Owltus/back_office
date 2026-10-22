@@ -185,7 +185,7 @@ export function MergePreviewDialog({
     <Dialog
       open={open}
       onOpenChange={(o) => {
-        if (!o && importer.isPending) return
+        if (!o && (importer.isPending || importer.enVol())) return
         onOpenChange(o)
       }}
     >

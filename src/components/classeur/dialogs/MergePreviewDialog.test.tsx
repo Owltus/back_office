@@ -539,3 +539,40 @@ describe('MergePreviewDialog — deux états (refonte du 2026-10-20)', () => {
     verifier()
   })
 })
+
+describe('MergePreviewDialog — utilisateur pressé (navigateur, 2026-10-22)', () => {
+  it('double clic puis Échap : un seul import, le dialogue reste ouvert', async () => {
+    const changer = vi.fn()
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <MergePreviewDialog
+          open
+          onOpenChange={changer}
+          classeurId={1}
+          file={fichierLlm()}
+        />
+      </QueryClientProvider>,
+    )
+    await waitFor(() => screen.getByLabelText('Importer Check-in'), {
+      timeout: 3000,
+    })
+    let finir: (v: unknown) => void = () => {}
+    appliquer.mockImplementation(() => new Promise((r) => (finir = r)))
+    // Trois gestes dans le même rendu : `isPending` n'est pas encore à jour.
+    fireEvent.click(bouton())
+    fireEvent.click(bouton())
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+    await waitFor(() => expect(appliquer).toHaveBeenCalled())
+    expect(changer).not.toHaveBeenCalledWith(false)
+    finir({
+      inserted: 2,
+      updated: 2,
+      unchanged: 3,
+      skipped: 0,
+      deleted: 0,
+      ignores: 0,
+    })
+    await waitFor(() => expect(changer).toHaveBeenCalledWith(false))
+    expect(appliquer).toHaveBeenCalledTimes(1)
+  })
+})
