@@ -316,49 +316,53 @@ export function ClasseurList({
       ) : classeurs.isError ? null : (
         <div className={TABLEAU_CLASSEURS.carte}>
           <div className={TABLEAU_CLASSEURS.defilement}>
-            <table className="w-full text-sm">
-              <thead className={TABLEAU_CLASSEURS.thead}>
-                <tr>
-                  <th className={cn(TABLEAU_CLASSEURS.th, 'text-left')}>
-                    Classeur
-                  </th>
-                  <th
-                    className={cn(
-                      TABLEAU_CLASSEURS.th,
-                      'hidden w-24 text-center sm:table-cell',
-                    )}
-                  >
-                    Modifié le
-                  </th>
-                  {colonnes.acces && (
+            {/* `DndContext` HORS du tableau : il rend des `<div>` d'annonce pour
+                les lecteurs d'écran, interdits dans un `<tbody>` (erreur
+                d'hydratation). Seul `SortableContext`, qui ne rend rien, reste
+                dans le corps. */}
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <table className="w-full text-sm">
+                <thead className={TABLEAU_CLASSEURS.thead}>
+                  <tr>
+                    <th className={cn(TABLEAU_CLASSEURS.th, 'text-left')}>
+                      Classeur
+                    </th>
                     <th
                       className={cn(
                         TABLEAU_CLASSEURS.th,
-                        'hidden w-12 sm:table-cell',
+                        'hidden w-24 text-center sm:table-cell',
                       )}
                     >
-                      <span className="sr-only">Accès</span>
+                      Modifié le
                     </th>
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {liste.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={3}
-                      className="px-4 py-8 text-center text-sm text-muted-foreground"
-                    >
-                      Aucun classeur.
-                      {canWrite ? ' Créez-en un pour commencer.' : ''}
-                    </td>
+                    {colonnes.acces && (
+                      <th
+                        className={cn(
+                          TABLEAU_CLASSEURS.th,
+                          'hidden w-12 sm:table-cell',
+                        )}
+                      >
+                        <span className="sr-only">Accès</span>
+                      </th>
+                    )}
                   </tr>
-                ) : (
-                  <DndContext
-                    sensors={sensors}
-                    collisionDetection={closestCenter}
-                    onDragEnd={handleDragEnd}
-                  >
+                </thead>
+                <tbody>
+                  {liste.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={3}
+                        className="px-4 py-8 text-center text-sm text-muted-foreground"
+                      >
+                        Aucun classeur.
+                        {canWrite ? ' Créez-en un pour commencer.' : ''}
+                      </td>
+                    </tr>
+                  ) : (
                     <SortableContext
                       items={liste.map((c) => c.id)}
                       strategy={verticalListSortingStrategy}
@@ -409,10 +413,10 @@ export function ClasseurList({
                         />
                       ))}
                     </SortableContext>
-                  </DndContext>
-                )}
-              </tbody>
-            </table>
+                  )}
+                </tbody>
+              </table>
+            </DndContext>
           </div>
         </div>
       )}
