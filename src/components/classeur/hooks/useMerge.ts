@@ -1,4 +1,10 @@
+import { useCallback, useRef } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
+import type {
+  UseMutateFunction,
+  UseMutationOptions,
+  UseMutationResult,
+} from '@tanstack/react-query'
 
 import { useInvaliderClasseur } from '#/components/classeur/hooks/useClasseur.ts'
 import { classeurKeys } from '#/lib/classeur/keys.ts'
@@ -24,6 +30,40 @@ import { fetchMergeHistory } from '#/lib/classeur/service.ts'
  */
 
 const STALE_60S = 60_000
+
+/**
+ * Une ÉCRITURE qui ne part qu'une fois à la fois (trouvé au navigateur le
+ * 2026-10-22 : un double clic sur Importer appliquait le fichier DEUX fois,
+ * deux points de restauration et chaque feuille ajoutée en double).
+ * `isPending` ne suffit pas : TanStack Query notifie l'observateur par une
+ * minuterie, donc le second clic voit encore `isPending === false`. Un
+ * verrou synchrone (ref) écarte tout `mutate` lancé pendant qu'un autre est
+ * en vol ; il se relâche au règlement de celui-ci.
+ */
+export function useEcritureUnique<TData, TVars>(
+  options: UseMutationOptions<TData, Error, TVars>,
+): UseMutationResult<TData, Error, TVars> {
+  const verrou = useRef(false)
+  // Relâché au niveau de la MUTATION (toujours appelé, même après un
+  // `reset()` ou un démontage), pas seulement par le rappel de l'appel.
+  const mutation = useMutation({
+    ...options,
+    onSettled: (...args) => {
+      verrou.current = false
+      return options.onSettled?.(...args)
+    },
+  })
+  const { mutate: lancer } = mutation
+  const mutate = useCallback<UseMutateFunction<TData, Error, TVars>>(
+    (...args) => {
+      if (verrou.current) return
+      verrou.current = true
+      lancer(...args)
+    },
+    [lancer],
+  )
+  return { ...mutation, mutate }
+}
 
 /** Entrées d'historique d'un classeur (sans les instantanés), plus récente en tête. */
 export function useMergeHistory(classeurId: number) {
@@ -55,7 +95,7 @@ export interface ImportArgs {
  */
 export function useAppliquerImport() {
   const invalider = useInvaliderClasseur()
-  return useMutation({
+  return useEcritureUnique({
     mutationFn: ({
       classeurId,
       fichier,
@@ -71,7 +111,7 @@ export function useAppliquerImport() {
 /** Restaure l'instantané d'une entrée ; `data === null` = déjà à jour. */
 export function useRestaurerInstantane() {
   const invalider = useInvaliderClasseur()
-  return useMutation({
+  return useEcritureUnique({
     mutationFn: (entryId: number) => restaurerInstantane(entryId),
     onSettled: () => invalider(),
   })
@@ -89,7 +129,7 @@ export function useSupprimerEntree() {
 /** Crée un classeur à partir d'un fichier lu et validé ; rend son identifiant. */
 export function useImporterNouveauClasseur() {
   const invalider = useInvaliderClasseur()
-  return useMutation({
+  return useEcritureUnique({
     mutationFn: (fichier: ClasseurJson) =>
       importerCommeNouveauClasseur(fichier),
     onSettled: () => invalider(),
@@ -102,7 +142,7 @@ export function useImporterNouveauClasseur() {
  */
 export function useCreerPointRestauration() {
   const invalider = useInvaliderClasseur()
-  return useMutation({
+  return useEcritureUnique({
     mutationFn: ({
       classeurId,
       label,
