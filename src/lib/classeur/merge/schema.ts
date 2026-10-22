@@ -359,6 +359,33 @@ export const SCHEMA_DESCRIPTIF = {
 // Lecture et validation
 // ---------------------------------------------------------------------------
 
+/**
+ * Les champs du fichier, dits avec des mots (les messages de lecture
+ * s'adressent à une personne, pas à un développeur : jamais `title`,
+ * `chapters` ni `format_version` à l'écran).
+ */
+const NOMS_CHAMPS: Record<string, string> = {
+  name: 'le nom',
+  icon: "l'icône",
+  etablissement: "l'établissement",
+  etablissement_complement: 'le complément',
+  uid: 'le repère',
+  uuid: "l'identifiant",
+  label: 'le nom',
+  description: 'la description',
+  title: 'le titre',
+  content: 'le texte',
+  kind: 'la nature',
+  periodicite_id: 'la périodicité',
+  nombre: 'le nombre de lignes',
+  updated_at: 'la date',
+  sort_order: "l'ordre",
+}
+
+function nomChamp(cle: string): string {
+  return Object.hasOwn(NOMS_CHAMPS, cle) ? NOMS_CHAMPS[cle] : 'une information'
+}
+
 function estObjet(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
 }
@@ -377,7 +404,7 @@ function chaine(
   const v = obj[cle]
   if (v === undefined || v === null) return defaut
   if (typeof v !== 'string') {
-    throw new Error(`${contexte} : le champ '${cle}' doit être un texte.`)
+    throw new Error(`${contexte} : ${nomChamp(cle)} doit être un texte.`)
   }
   return v
 }
@@ -393,7 +420,7 @@ function entier(
   if (v === null) return null
   if (!estEntier(v)) {
     throw new Error(
-      `${contexte} : le champ '${cle}' doit être un nombre entier.`,
+      `${contexte} : ${nomChamp(cle)} doit être un nombre entier.`,
     )
   }
   return v
@@ -401,7 +428,7 @@ function entier(
 
 function lireClasseur(v: unknown): ClasseurDataJson {
   const obj = estObjet(v) ? v : {}
-  const ctx = "Bloc 'classeur'"
+  const ctx = 'Le classeur'
   return {
     name: chaine(obj, 'name', DEFAUTS.classeur.name, ctx) as string,
     icon: chaine(obj, 'icon', DEFAUTS.classeur.icon, ctx) as string,
@@ -422,21 +449,24 @@ function lireClasseur(v: unknown): ClasseurDataJson {
  * communs. Les défauts du schéma sont appliqués aux champs spécifiques
  * absents ou nuls (`nombre` null → 14, `description` absente → '').
  */
-function lireItem(v: unknown, contexte: string, position: number): ItemJson {
+function lireItem(v: unknown, chapitre: string, position: number): ItemJson {
   if (!estObjet(v)) {
-    throw new Error(
-      `${contexte} : l'élément n° ${position} n'est pas un objet.`,
-    )
+    throw new Error(`${chapitre} : l'élément n° ${position} est mal écrit.`)
   }
+  const titre = typeof v.title === 'string' ? v.title.trim() : ''
+  const contexte =
+    titre === ''
+      ? `${chapitre}, élément n° ${position}`
+      : `${chapitre}, élément ${titre}`
   const kind = chaine(v, 'kind', undefined, contexte)
   if (kind === undefined) {
     throw new Error(
-      `${contexte} : l'élément n° ${position} n'a pas de champ 'kind'.`,
+      `${chapitre} : l'élément n° ${position} n'a pas de nature (document, feuille de suivi, feuille de signature ou intercalaire).`,
     )
   }
   const title = chaine(v, 'title', undefined, contexte)
   if (title === undefined) {
-    throw new Error(`${contexte} : l'élément n° ${position} n'a pas de titre.`)
+    throw new Error(`${chapitre} : l'élément n° ${position} n'a pas de titre.`)
   }
   const item: ItemJson = { kind, title, sort_order: position }
   const uuid = chaine(v, 'uuid', undefined, contexte)
@@ -482,17 +512,17 @@ function lireItem(v: unknown, contexte: string, position: number): ItemJson {
 
 function lireChapitre(v: unknown, position: number): ChapterJson {
   if (!estObjet(v)) {
-    throw new Error(`Le chapitre n° ${position} n'est pas un objet.`)
+    throw new Error(`Le chapitre n° ${position} est mal écrit.`)
   }
   const ctx = `Chapitre n° ${position}`
   const label = chaine(v, 'label', undefined, ctx)
   if (label === undefined) {
-    throw new Error(`${ctx} : aucun libellé ('label').`)
+    throw new Error(`${ctx} : il n'a pas de nom.`)
   }
-  const ctxLabel = `Chapitre '${label}'`
+  const ctxLabel = `Chapitre ${label}`
   const itemsBruts = v.items === undefined || v.items === null ? [] : v.items
   if (!Array.isArray(itemsBruts)) {
-    throw new Error(`${ctxLabel} : le champ 'items' doit être une liste.`)
+    throw new Error(`${ctxLabel} : sa liste d'éléments est mal écrite.`)
   }
   const sort_order = entier(v, 'sort_order', ctxLabel)
   const chapitre: ChapterJson = {
@@ -598,27 +628,27 @@ export function parseImportJson(texte: string): ClasseurJson {
     )
   }
   if (!estObjet(brut)) {
-    throw new Error(
-      "Ce fichier n'est pas un export de classeur (objet attendu).",
-    )
+    throw new Error("Ce fichier n'est pas un export de classeur.")
   }
   const version = brut.format_version
   if (!estEntier(version)) {
     throw new Error(
-      "Ce fichier n'est pas un export de classeur : 'format_version' manquant.",
+      "Ce fichier n'est pas un export de classeur : son numéro de version manque.",
     )
   }
   if (version > FORMAT_VERSION) {
     throw new Error(
-      `Ce fichier a été produit par une version plus récente (format ${version}) ; cette application lit les formats 1 et 2.`,
+      `Ce fichier vient d'une version plus récente (format ${version}). Cette application lit les formats 1 et 2.`,
     )
   }
   if (version < 1) {
-    throw new Error(`Version de format non supportée : ${version}.`)
+    throw new Error(
+      `Ce fichier a un numéro de version inconnu (${version}). Cette application lit les formats 1 et 2.`,
+    )
   }
   if (!Array.isArray(brut.chapters)) {
     throw new Error(
-      "Ce fichier n'est pas un export de classeur : liste 'chapters' absente.",
+      "Ce fichier n'est pas un export de classeur : il n'a pas de liste de chapitres.",
     )
   }
 

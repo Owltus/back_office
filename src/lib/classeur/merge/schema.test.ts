@@ -265,24 +265,24 @@ describe('parseImportJson — `"supprimer": true` (décision du 2026-10-20)', ()
 describe('parseImportJson — refus', () => {
   const cas: Array<[string, string, string]> = [
     ['JSON illisible', '{ pas du json', 'pas lisible en entier'],
-    ['pas un objet', '[1, 2]', 'objet attendu'],
-    ['format_version absent', '{"chapters":[]}', 'format_version'],
+    ['pas un objet', '[1, 2]', "n'est pas un export de classeur."],
+    ['format_version absent', '{"chapters":[]}', 'numéro de version manque'],
     [
       'format_version 3',
       '{"format_version":3,"chapters":[]}',
       'plus récente (format 3)',
     ],
-    ['format_version 0', '{"format_version":0,"chapters":[]}', 'non supportée'],
-    ['chapters absent', '{"format_version":2}', "'chapters' absente"],
+    ['format_version 0', '{"format_version":0,"chapters":[]}', 'inconnu (0)'],
+    ['chapters absent', '{"format_version":2}', 'pas de liste de chapitres'],
     [
       'chapitre sans label',
       '{"format_version":2,"chapters":[{"items":[]}]}',
-      'aucun libellé',
+      "Chapitre n° 1 : il n'a pas de nom.",
     ],
     [
       'élément sans kind',
       '{"format_version":2,"chapters":[{"label":"A","items":[{"title":"x"}]}]}',
-      "n'a pas de champ 'kind'",
+      "Chapitre A : l'élément n° 1 n'a pas de nature",
     ],
     [
       'élément sans titre',
@@ -292,17 +292,51 @@ describe('parseImportJson — refus', () => {
     [
       'sort_order non entier',
       '{"format_version":2,"chapters":[{"label":"A","sort_order":"1"}]}',
-      'nombre entier',
+      "Chapitre A : l'ordre doit être un nombre entier.",
+    ],
+    [
+      'nombre non entier, élément nommé',
+      '{"format_version":2,"chapters":[{"label":"A","items":[{"kind":"signature_sheet","title":"Formation","nombre":"vingt"}]}]}',
+      'Chapitre A, élément Formation : le nombre de lignes doit être un nombre entier.',
+    ],
+    [
+      'titre non texte',
+      '{"format_version":2,"chapters":[{"label":"A","items":[{"kind":"document","title":3}]}]}',
+      'Chapitre A, élément n° 1 : le titre doit être un texte.',
     ],
     [
       'items pas une liste',
       '{"format_version":2,"chapters":[{"label":"A","items":{}}]}',
-      'doit être une liste',
+      "Chapitre A : sa liste d'éléments est mal écrite.",
+    ],
+    [
+      'élément pas un objet',
+      '{"format_version":2,"chapters":[{"label":"A","items":[3]}]}',
+      "Chapitre A : l'élément n° 1 est mal écrit.",
+    ],
+    [
+      'classeur abîmé',
+      '{"format_version":2,"classeur":{"name":4},"chapters":[]}',
+      'Le classeur : le nom doit être un texte.',
     ],
   ]
   it.each(cas)('%s → message français lisible', (_nom, texte, attendu) => {
     // Oracle : parse_import_json refuse (« JSON invalide », « Version de format non supportée »).
     expect(() => parseImportJson(texte)).toThrow(attendu)
+  })
+
+  // Les messages s'adressent à une personne : aucun nom de champ du
+  // fichier, ni entre apostrophes droites comme avant le 2026-10-22.
+  it.each(cas)('%s → aucun nom de champ du fichier', (_nom, texte) => {
+    let message = ''
+    try {
+      parseImportJson(texte)
+    } catch (e) {
+      message = (e as Error).message
+    }
+    expect(message).not.toMatch(
+      /format_version|chapters|\bitems\b|\bkind\b|\blabel\b|\btitle\b|sort_order|periodicite_id|objet attendu|Bloc|'[a-z_]+'/,
+    )
   })
 })
 
