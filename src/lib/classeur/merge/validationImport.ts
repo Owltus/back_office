@@ -34,6 +34,12 @@
  *      référentiel de l'application, avec un avertissement. Un fichier d'une
  *      autre base (Registre : ids différents) n'est pas touché.
  *   V8 `sort_order` hors des entiers de la base (int4) : ramené dans la borne.
+ *   V9 `kind` changé : l'uuid d'un élément existant porté par une AUTRE
+ *      nature (un LLM qui transforme un document en feuille de suivi,
+ *      trouvé au navigateur le 2026-10-22). La fusion y voyait un élément
+ *      NEUF : un doublon au titre identique, l'original gardé. Une nature ne
+ *      change pas : l'élément du fichier est ignoré, l'existant reste tel
+ *      quel (protégé), avec un avertissement.
  *
  * Un fichier valide est rendu TEL QUEL (même objet), sans avertissement :
  * le plan d'un fichier valide est exactement celui d'avant cette étape.
@@ -128,6 +134,10 @@ export function validerFichierImport(
       .filter((it) => it.data.uuid)
       .map((it) => [`${it.kind}:${it.data.uuid}`, it]),
   )
+  // V9 : l'uuid d'un élément existant, quelle que soit sa nature.
+  const parUuidSeul = new Map(
+    itemsLocaux.filter((it) => it.data.uuid).map((it) => [it.data.uuid, it]),
+  )
   const suivisParTitre = new Set(
     local.content.tracking_sheets
       .filter((t) => t.deleted_at === null)
@@ -215,6 +225,16 @@ export function validerFichierImport(
           `Chapitre ${chapitre} : un élément sans titre a été ignoré.`,
         )
       }
+      return null
+    }
+    // V9
+    const autre =
+      item.uuid === undefined ? undefined : parUuidSeul.get(item.uuid)
+    if (autre !== undefined && autre.kind !== item.kind) {
+      proteges.add(autre.data.uuid)
+      avertissements.push(
+        `${nature(autre.kind)} ${autre.data.title} : le fichier change sa nature en ${nature(item.kind).toLowerCase()}. Impossible : l'élément est laissé tel quel.`,
+      )
       return null
     }
     let it = item

@@ -450,3 +450,42 @@ describe('le cas du plan : nombre 100, uuid « doc-1 », périodicité 999', () 
     }
   })
 })
+
+describe('V9 — nature changée par le fichier', () => {
+  it('document devenu feuille de suivi : ignoré, protégé, un message', () => {
+    // Trouvé au navigateur le 2026-10-22 : la fusion créait une feuille de
+    // suivi « Check-in » en plus du document, gardé.
+    const f = avec([
+      itJson({ kind: 'tracking_sheet', title: 'Check-in', uuid: U(1) }),
+    ])
+    const v = validerFichierImport(f, local)
+    expect(v.fichier.chapters[0].items).toEqual([])
+    expect([...v.proteges]).toEqual([U(1)])
+    expect(v.avertissements).toEqual([
+      "Document Check-in : le fichier change sa nature en feuille de suivi. Impossible : l'élément est laissé tel quel.",
+    ])
+  })
+
+  it('dans le plan : aucune création, le document reste', () => {
+    const f = avec([
+      itJson({ kind: 'tracking_sheet', title: 'Check-in', uuid: U(1) }),
+    ])
+    const plan = planAvecValidation(local, f, (x) =>
+      planifierImportIa(local, x),
+    )
+    expect(plan.actions.some((a) => a.type === 'creerItem')).toBe(false)
+    expect(
+      plan.actions.some(
+        (a) => a.type === 'supprimerItem' && a.kind === 'document',
+      ),
+    ).toBe(false)
+  })
+
+  it('même nature : rien à dire', () => {
+    expect(
+      messages(
+        avec([itJson({ kind: 'document', title: 'Check-in', uuid: U(1) })]),
+      ),
+    ).toEqual([])
+  })
+})
