@@ -16,7 +16,11 @@ import {
   construireExportChapitre,
   construireExportDocument,
 } from '#/lib/classeur/merge/portee.ts'
-import { construireExport } from '#/lib/classeur/merge/schema.ts'
+import {
+  NOTE_EXPORT,
+  construireExport,
+  parseImportJson,
+} from '#/lib/classeur/merge/schema.ts'
 
 /*
  * Mode d'emploi pour une IA (étape 2 du plan `classeur-echange-ia-2026-10-19`).
@@ -244,5 +248,43 @@ describe("mode d'emploi — taille", () => {
       const octets = new TextEncoder().encode(JSON.stringify(i)).length
       expect(octets, nom).toBeLessThan(6000)
     }
+  })
+})
+
+describe("mode d'emploi — réponse courte (navigateur, 2026-10-22)", () => {
+  // Quatre LLM sur quatre recopiaient tout `_metadata` (schéma et mode
+  // d'emploi : 14 ko sur 22) : sur un gros classeur, une réponse coupée.
+  it.each(Object.entries(LES_TROIS))(
+    '%s : ne garder de `_metadata` que `portee` et `periodicites`',
+    (_nom, instructions) => {
+      expect(texte(instructions)).toContain(
+        "dans ta réponse, n'en garde que `portee` et `periodicites`",
+      )
+    },
+  )
+
+  it('la note du bloc dit la même chose (plus « Ne modifie pas ce bloc »)', () => {
+    expect(NOTE_EXPORT).toContain('ne garde de ce bloc que `portee`')
+    expect(NOTE_EXPORT).not.toContain('Ne modifie pas')
+  })
+
+  it('une réponse au `_metadata` réduit garde sa portée', () => {
+    const complet = construireExportDocument(classeur(), A, doc, PERIODICITES)
+    const reduit = {
+      ...complet,
+      _metadata: {
+        portee: complet._metadata?.portee,
+        periodicites: complet._metadata?.periodicites,
+      },
+    }
+    const lu = parseImportJson(JSON.stringify(reduit))
+    expect(lu._metadata?.portee).toEqual(complet._metadata?.portee)
+    expect(lu._metadata?.periodicites).toEqual(complet._metadata?.periodicites)
+  })
+
+  it('« supprimer » vaut aussi pour un chapitre', () => {
+    expect(texte(LES_TROIS.classeur)).toContain(
+      'pour en supprimer un (ou un chapitre)',
+    )
   })
 })

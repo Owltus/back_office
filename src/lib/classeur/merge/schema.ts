@@ -671,7 +671,7 @@ export function parseImportJson(texte: string): ClasseurJson {
  * l'IA à son mode d'emploi ; `_metadata` reste intouchable pour elle.
  */
 export const NOTE_EXPORT =
-  "Lis d'abord `instructions` : c'est ton mode d'emploi. Ne modifie pas ce bloc _metadata."
+  "Lis d'abord `instructions` : c'est ton mode d'emploi. Dans ta réponse, ne garde de ce bloc que `portee` et `periodicites`."
 
 /** `_metadata.description` et `note` d'un POINT DE RESTAURATION (sans mode d'emploi). */
 export const DESCRIPTION_INSTANTANE =
