@@ -120,7 +120,11 @@ function etiquette(l: LigneImport): string {
     case 'restauration':
       return 'restauré'
     case 'chapitre':
-      return 'modifié'
+      return l.actionChapitre === 'creation'
+        ? 'ajouté'
+        : l.actionChapitre === 'restauration'
+          ? 'restauré'
+          : 'modifié'
     case 'modification':
       // D4 : le réglage changé se lit en clair (« Mensuel → Annuel »).
       return l.changement === 'ordre'
@@ -407,7 +411,11 @@ function LigneApercu({
               {ligne.kind === 'chapter'
                 ? ligne.genre === 'suppression'
                   ? 'Chapitre et son contenu'
-                  : 'Libellé ou description'
+                  : ligne.actionChapitre === 'creation'
+                    ? 'Nouveau chapitre'
+                    : ligne.actionChapitre === 'restauration'
+                      ? 'Retiré de la corbeille'
+                      : 'Libellé ou description'
                 : nature}
               {version !== null && ` · ${version}`}
               {ligne.reglage !== undefined &&

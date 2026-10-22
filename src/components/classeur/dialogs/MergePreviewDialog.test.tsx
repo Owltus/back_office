@@ -231,6 +231,9 @@ describe('MergePreviewDialog — aperçu du classeur complet', () => {
     expect(within(securite).getByText('Extincteur')).toBeTruthy()
     const annexes = screen.getByRole('list', { name: 'Annexes' })
     expect(within(annexes).getByText(/Chapitre : Annexes/)).toBeTruthy()
+    // Un chapitre neuf se dit neuf, jamais « modifié » (2026-10-22).
+    expect(within(annexes).getByText('Nouveau chapitre')).toBeTruthy()
+    expect(within(annexes).queryByText('Libellé ou description')).toBeNull()
     expect(within(annexes).getByText('Plan du hall')).toBeTruthy()
     // Une seule case par document, aucune pour le chapitre.
     expect(within(annexes).getAllByRole('checkbox')).toHaveLength(1)

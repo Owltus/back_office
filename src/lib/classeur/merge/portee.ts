@@ -578,6 +578,12 @@ export interface LigneImport {
    * feuille créée. Absent sinon.
    */
   reglage?: string
+  /**
+   * Ligne d'un chapitre : ce qui lui arrive. Un chapitre CRÉÉ ou RETIRÉ DE
+   * LA CORBEILLE (un fichier exporté avant sa suppression le contient
+   * encore) ne se lit pas « modifié » (trouvé au navigateur le 2026-10-22).
+   */
+  actionChapitre?: 'creation' | 'restauration' | 'modification'
 }
 
 const TEXTE_VIDE: EtatTexte = { title: '', description: '', content: '' }
@@ -693,6 +699,16 @@ export function lignesImport(
         changement: memesTextes(avant, apres) ? 'autre' : 'texte',
         ordreChange: false,
         numero: null,
+        ...(corbeille
+          ? {}
+          : {
+              actionChapitre:
+                a.type === 'creerChapitre'
+                  ? ('creation' as const)
+                  : a.type === 'restaurerChapitre'
+                    ? ('restauration' as const)
+                    : ('modification' as const),
+            }),
       })
       return
     }
