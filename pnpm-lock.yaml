@@ -96,7 +96,7 @@ importers:
         specifier: ^4.4.0
         version: 4.4.0
       dompurify:
-        specifier: ^3.4.17
+        specifier: '>=3.4.17'
         version: 3.4.17
       echarts:
         specifier: ^6.1.0
@@ -108,7 +108,7 @@ importers:
         specifier: ^3.10.2
         version: 3.10.2
       katex:
-        specifier: ^0.18.10
+        specifier: '>=0.18.9 <0.19'
         version: 0.18.10
       lucide-react:
         specifier: ^0.577.0
