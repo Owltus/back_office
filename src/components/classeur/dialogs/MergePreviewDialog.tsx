@@ -24,10 +24,12 @@ import type {
   ApercuFusion,
   ResultatImport,
 } from '#/lib/classeur/merge/apply.ts'
-import type { ContexteImport } from '#/lib/classeur/merge/importIa.ts'
+import type {
+  ContexteImport,
+  FichierChangements,
+} from '#/lib/classeur/merge/changements.ts'
+import { lireChangements } from '#/lib/classeur/merge/changements.ts'
 import { extraireJson, filtrerPlan } from '#/lib/classeur/merge/portee.ts'
-import { parseImportJson } from '#/lib/classeur/merge/schema.ts'
-import type { ClasseurJson } from '#/lib/classeur/merge/schema.ts'
 import { lireSource } from '#/lib/classeur/sourceImport.ts'
 import type { SourceImport } from '#/lib/classeur/sourceImport.ts'
 
@@ -37,11 +39,11 @@ import type { SourceImport } from '#/lib/classeur/sourceImport.ts'
  * choix à faire. Coller la réponse du LLM, ou déposer / choisir un fichier,
  * voir ce qui change, Importer.
  *
- * Un seul comportement (`importIa.ts`) : le fichier fait foi pour ce qu'il
- * contient, rien d'absent n'est supprimé (seul un élément marqué
- * `"supprimer": true` part à la corbeille), la portée est DÉDUITE du
- * fichier : celui d'un chapitre ou d'un document de ce classeur ne touche
- * que ce chapitre ou ce document, et une ligne le dit.
+ * Un seul comportement (`changements.ts`, décision du 2026-10-23) : la
+ * réponse du LLM est une liste de changements balisés (modifier, supprimer,
+ * déplacer, ajouter) ; ce qui n'y est pas ne change pas ; sa portée borne
+ * ce qui change, et une ligne le dit. Un classeur entier est refusé avec un
+ * message (une sauvegarde se reprend par les points de restauration).
  *
  * Deux états (refonte du 2026-10-20, « vraiment mal fait ») : la SAISIE
  * (`SaisieImport`, deux zones : coller, déposer ou choisir), puis
@@ -58,7 +60,7 @@ import type { SourceImport } from '#/lib/classeur/sourceImport.ts'
  */
 
 interface Preparation extends ApercuFusion {
-  fichier: ClasseurJson
+  fichier: FichierChangements
 }
 
 const CONTEXTE: ContexteImport = { type: 'classeur' }
@@ -67,7 +69,7 @@ async function preparer(
   classeurId: number,
   source: SourceImport,
 ): Promise<Preparation> {
-  const fichier = parseImportJson(extraireJson(await lireSource(source)))
+  const fichier = lireChangements(extraireJson(await lireSource(source)))
   const apercu = await previsualiserImport(classeurId, fichier, CONTEXTE)
   return { fichier, ...apercu }
 }

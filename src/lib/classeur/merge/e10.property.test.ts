@@ -15,11 +15,6 @@ import { ancienPlanifierFusion } from '#/lib/classeur/merge/fusionAvantE10.oracl
 import { planifierFusion } from '#/lib/classeur/merge/merge.ts'
 import type { EtatLocal } from '#/lib/classeur/merge/merge.ts'
 import {
-  construireExportChapitre,
-  planifierFusionPortee,
-} from '#/lib/classeur/merge/portee.ts'
-import { ancienPlanifierFusionPortee } from '#/lib/classeur/merge/porteeAvantRefus.oracle.ts'
-import {
   construireExport,
   parseImportJson,
 } from '#/lib/classeur/merge/schema.ts'
@@ -36,7 +31,6 @@ import { ITEM_KINDS } from '#/lib/classeur/types.ts'
  * export NORMAL — uuids uniques, aucun uuid étranger à la portée —, le plan
  * est EXACTEMENT celui d'avant le correctif. Oracles : `merge.ts` copié au
  * commit 2b91650 (`fusionAvantE10.oracle.ts`) pour la fusion complète,
- * `porteeAvantRefus.oracle.ts` pour la portée chapitre.
  *
  * Les dérivations imitent ce qu'un humain ou un LLM fait d'un export :
  * textes et titres changés, éléments retirés, éléments ajoutés (avec un uuid
@@ -248,41 +242,6 @@ describe('E10 / portée — un export normal donne EXACTEMENT le plan d’avant'
         f = relire(f)
         expect(planifierFusion(local, f, { replace: d.replace })).toEqual(
           ancienPlanifierFusion(local, f, { replace: d.replace }),
-        )
-      }),
-      { numRuns: NUM_RUNS, seed: SEED },
-    )
-  })
-
-  it('portée chapitre (export d’un chapitre retravaillé)', () => {
-    fc.assert(
-      fc.property(descArb, (d) => {
-        const local = construireLocal(d)
-        const visibles = local.chapters.filter((c) => c.deleted_at === null)
-        fc.pre(visibles.length > 0)
-        const cible = visibles[0]
-        const sorts = sortsParUuid(d, local)
-        const exporte = relire(
-          construireExportChapitre(
-            classeur(),
-            cible,
-            local.content,
-            PERIODICITES,
-          ),
-        )
-        const items = deriverItems(exporte.chapters[0].items, sorts)
-        d.nouveaux.forEach((n, rang) => items.push(nouvelItem(n, rang)))
-        const f = relire({
-          ...exporte,
-          chapters: [{ ...exporte.chapters[0], items }],
-        })
-        // Depuis le 2026-10-20, un absent n'est jamais supprimé : l'ancien
-        // plan sans la case est la référence.
-        const ciblePortee = { type: 'chapitre', chapitreId: cible.id } as const
-        expect(planifierFusionPortee(local, f, ciblePortee)).toEqual(
-          ancienPlanifierFusionPortee(local, f, ciblePortee, {
-            supprimerAbsents: false,
-          }),
         )
       }),
       { numRuns: NUM_RUNS, seed: SEED },

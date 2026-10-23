@@ -16,11 +16,8 @@ import {
   construireExportChapitre,
   construireExportDocument,
 } from '#/lib/classeur/merge/portee.ts'
-import {
-  NOTE_EXPORT,
-  construireExport,
-  parseImportJson,
-} from '#/lib/classeur/merge/schema.ts'
+import { lireChangements } from '#/lib/classeur/merge/changements.ts'
+import { NOTE_EXPORT, construireExport } from '#/lib/classeur/merge/schema.ts'
 
 /*
  * Mode d'emploi pour une IA (étape 2 du plan `classeur-echange-ia-2026-10-19`).
@@ -77,6 +74,11 @@ const PARTIES: Array<[string, string[]]> = [
       'propose un plan court',
       "attends l'accord",
       'dans un seul bloc de code',
+      'À SUPPRIMER',
+      'À DÉPLACER',
+      'À MODIFIER',
+      'À AJOUTER',
+      'qui disent exactement la même chose que la liste',
       "comment l'importer",
       'montre chaque changement avant de valider',
     ],
@@ -159,7 +161,7 @@ describe("mode d'emploi pour une IA — les six parties dans les TROIS exports",
       expect(phrase).not.toContain('periodicite_id')
       expect(phrase).not.toContain('`nombre`')
       const permis = t.slice(
-        t.indexOf('Tu peux modifier'),
+        t.indexOf('Tu peux changer'),
         t.indexOf('Ne modifie JAMAIS'),
       )
       expect(permis).toContain('`periodicite_id`')
@@ -217,15 +219,27 @@ describe("mode d'emploi — un seul classeur (décision utilisateur)", () => {
   })
 })
 
-describe("mode d'emploi — suppression explicite (décision du 2026-10-20)", () => {
+describe("mode d'emploi — changements balisés (décision du 2026-10-23)", () => {
   it.each(Object.entries(LES_TROIS))(
-    '%s : ne jamais retirer, marquer `"supprimer": true`',
+    '%s : seulement les changements, chacun avec son action',
     (_nom, instructions) => {
       const t = texte(instructions)
-      expect(t).toContain('Ne retire JAMAIS un élément du fichier')
-      expect(t).toContain('garde-le et ajoute `"supprimer": true`')
+      expect(t).toContain(
+        'Ne renvoie JAMAIS le classeur ni ce qui ne change pas',
+      )
+      for (const a of ['"modifier"', '"supprimer"', '"deplacer"', '"ajouter"'])
+        expect(t, a).toContain(`\`${a}\``)
+      expect(t).toContain('les SEULS champs qui changent')
+      expect(t).toContain('le `title` actuel')
+      // Essai à blanc du 2026-10-23 : deux LLM sur deux hésitaient pour un chapitre.
+      expect(t).toContain('`title` (ou `label`) actuel')
+      expect(t).toContain('jamais un numéro')
+      expect(t).toContain('Un changement sans `action` est ignoré')
       expect(t).toContain('corbeille')
-      // Plus aucune case ni choix de provenance à l'import.
+      // L'ancien format a disparu.
+      expect(t).not.toContain('"supprimer": true')
+      expect(t).not.toContain('Ne retire JAMAIS un élément du fichier')
+      expect(t).not.toMatch(/fichier COMPLET|Garde dans ta réponse TOUS/)
       expect(t).not.toMatch(
         /coche l'option|option à l'import|Fichier de Registre|Importer un JSON/,
       )
@@ -240,13 +254,21 @@ describe("mode d'emploi — suppression explicite (décision du 2026-10-20)", ()
       expect(t).toContain("sauf si elle veut l'ajouter au classeur")
     },
   )
+
+  it('la liste en clair précède le bloc, et parle à la personne', () => {
+    const t = texte(LES_TROIS.classeur)
+    expect(t.indexOf('À SUPPRIMER')).toBeLessThan(
+      t.indexOf('un seul bloc de code'),
+    )
+    expect(t).toContain('sans titre vide')
+  })
 })
 
 describe("mode d'emploi — taille", () => {
-  it('moins de 6 ko par export (JSON sérialisé)', () => {
+  it('moins de 7 ko par export (JSON sérialisé)', () => {
     for (const [nom, i] of Object.entries(LES_TROIS)) {
       const octets = new TextEncoder().encode(JSON.stringify(i)).length
-      expect(octets, nom).toBeLessThan(6000)
+      expect(octets, nom).toBeLessThan(7000)
     }
   })
 })
@@ -255,10 +277,10 @@ describe("mode d'emploi — réponse courte (navigateur, 2026-10-22)", () => {
   // Quatre LLM sur quatre recopiaient tout `_metadata` (schéma et mode
   // d'emploi : 14 ko sur 22) : sur un gros classeur, une réponse coupée.
   it.each(Object.entries(LES_TROIS))(
-    '%s : ne garder de `_metadata` que `portee` et `periodicites`',
+    '%s : ne garder de `_metadata` que `portee`, `periodicites` et `generated_at`',
     (_nom, instructions) => {
       expect(texte(instructions)).toContain(
-        "dans ta réponse, n'en garde que `portee` et `periodicites`",
+        '`{ "_metadata": { "portee", "periodicites", "generated_at" }, "changements": [ … ] }`',
       )
     },
   )
@@ -268,23 +290,29 @@ describe("mode d'emploi — réponse courte (navigateur, 2026-10-22)", () => {
     expect(NOTE_EXPORT).not.toContain('Ne modifie pas')
   })
 
-  it('une réponse au `_metadata` réduit garde sa portée', () => {
+  it('une réponse au `_metadata` réduit garde sa portée et sa date', () => {
     const complet = construireExportDocument(classeur(), A, doc, PERIODICITES)
-    const reduit = {
-      ...complet,
-      _metadata: {
-        portee: complet._metadata?.portee,
-        periodicites: complet._metadata?.periodicites,
-      },
-    }
-    const lu = parseImportJson(JSON.stringify(reduit))
-    expect(lu._metadata?.portee).toEqual(complet._metadata?.portee)
-    expect(lu._metadata?.periodicites).toEqual(complet._metadata?.periodicites)
+    const lu = lireChangements(
+      JSON.stringify({
+        _metadata: {
+          portee: complet._metadata.portee,
+          periodicites: complet._metadata.periodicites,
+          generated_at: complet._metadata.generated_at,
+        },
+        changements: [],
+      }),
+    )
+    expect(lu.portee).toEqual(complet._metadata.portee)
+    expect(lu.periodicites).toEqual(complet._metadata.periodicites)
+    expect(lu.exporteLe).toBe(complet._metadata.generated_at)
   })
 
-  it('« supprimer » vaut aussi pour un chapitre', () => {
-    expect(texte(LES_TROIS.classeur)).toContain(
-      'pour en supprimer un (ou un chapitre)',
+  it('un chapitre se supprime, se déplace et s’ajoute depuis le classeur', () => {
+    const t = texte(LES_TROIS.classeur)
+    expect(t).toContain('Supprimer un chapitre emporte ses éléments')
+    expect(t).toContain('`"chapitre": "nouveau-1"`')
+    expect(texte(LES_TROIS.chapitre)).toContain(
+      "pour ajouter, supprimer ou déplacer un chapitre, il faut l'export du classeur entier",
     )
   })
 })

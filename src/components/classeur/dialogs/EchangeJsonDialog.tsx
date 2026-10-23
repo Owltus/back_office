@@ -35,16 +35,18 @@ import {
 } from '#/lib/classeur/exportJson.ts'
 import { previsualiserImport } from '#/lib/classeur/merge/apply.ts'
 import type { ApercuFusion } from '#/lib/classeur/merge/apply.ts'
-import type { ContexteImport } from '#/lib/classeur/merge/importIa.ts'
-import type { CiblePortee } from '#/lib/classeur/merge/portee.ts'
+import type {
+  ContexteImport,
+  FichierChangements,
+} from '#/lib/classeur/merge/changements.ts'
+import { lireChangements } from '#/lib/classeur/merge/changements.ts'
+import type { CiblePortee } from '#/lib/classeur/merge/changements.ts'
 import {
   construireExportChapitre,
   construireExportDocument,
   extraireJson,
   filtrerPlan,
 } from '#/lib/classeur/merge/portee.ts'
-import { parseImportJson } from '#/lib/classeur/merge/schema.ts'
-import type { ClasseurJson } from '#/lib/classeur/merge/schema.ts'
 import { lireSource } from '#/lib/classeur/sourceImport.ts'
 import type { SourceImport } from '#/lib/classeur/sourceImport.ts'
 import type {
@@ -78,7 +80,7 @@ export type SujetJson =
   | { type: 'document'; chapitre: DbChapter; document: DbDocument }
 
 interface Preparation extends ApercuFusion {
-  fichier: ClasseurJson
+  fichier: FichierChangements
 }
 
 function pluriel(n: number, singulier: string, plurielForme: string): string {
@@ -132,7 +134,7 @@ export function EchangeJsonDialog({
       contexte: ContexteImport
       classeurId: number
     }): Promise<Preparation> => {
-      const fichier = parseImportJson(
+      const fichier = lireChangements(
         extraireJson(await lireSource(args.source)),
       )
       const apercu = await previsualiserImport(

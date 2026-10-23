@@ -1,14 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  PERIODICITES,
-  chJson,
   chapitre,
   classeur,
   document,
   etat,
-  fichier,
-  itJson,
   intercalaire,
   signature,
   suivi,
@@ -22,13 +18,12 @@ import {
   alignerApercu,
   cleAction,
   clesActions,
-  construireExportChapitre,
   filtrerPlan,
   lignesImport,
-  planifierFusionPortee,
 } from '#/lib/classeur/merge/portee.ts'
 import type { LigneImport } from '#/lib/classeur/merge/portee.ts'
-import { parseImportJson } from '#/lib/classeur/merge/schema.ts'
+import { planifierChangements } from '#/lib/classeur/merge/changements.ts'
+import type { FichierChangements } from '#/lib/classeur/merge/changements.ts'
 
 /*
  * Refus d'un élément à l'import JSON (étape 1 du plan
@@ -168,38 +163,47 @@ const d3 = document({
 })
 const local = etat([A], { documents: [d1, d2, d3] })
 
-/** Le JSON du chapitre, retravaillé comme le ferait un LLM. */
-function fichierRetravaille() {
-  const f = parseImportJson(
-    JSON.stringify(
-      construireExportChapitre(classeur(), A, local.content, PERIODICITES),
-    ),
-  )
-  const items = f.chapters[0].items
-  items[0].content = 'Accueillir avec le sourire\nRemettre la clé'
-  items[1].sort_order = 5 // Check-out déplacé, texte inchangé
-  f.chapters[0].items = [
-    items[0],
-    items[1],
-    // Ancien : gardé dans le fichier, marqué pour la corbeille (2026-10-20).
-    { ...items[2], supprimer: true },
-    {
-      kind: 'document',
-      title: 'Nouveau',
-      description: '',
-      content: 'L1\nL2',
-      sort_order: 4,
+/**
+ * Les changements qu'un LLM rendrait pour ce chapitre : le chapitre renommé,
+ * Check-in réécrit, Check-out remis en tête (texte inchangé), Ancien à la
+ * corbeille, un document Nouveau à la fin.
+ */
+function fichierRetravaille(): FichierChangements {
+  return {
+    portee: {
+      type: 'chapitre',
+      chapitre_uuid: A.uuid,
+      chapitre_label: A.label,
     },
-  ]
-  f.chapters[0].label = 'Accueil et départ'
-  return f
+    periodicites: [],
+    avertissements: [],
+    changements: [
+      { action: 'modifier', uuid: A.uuid, label: 'Accueil et départ' },
+      {
+        action: 'modifier',
+        uuid: d1.uuid,
+        content: 'Accueillir avec le sourire\nRemettre la clé',
+      },
+      { action: 'deplacer', uuid: d2.uuid, title: 'Check-out', apres: null },
+      { action: 'supprimer', uuid: d3.uuid, title: 'Ancien' },
+      {
+        action: 'ajouter',
+        kind: 'document',
+        title: 'Nouveau',
+        content: 'L1\nL2',
+      },
+    ],
+  }
 }
 
-describe('lignesImport : avant / après de chaque action', () => {
-  const plan = planifierFusionPortee(local, fichierRetravaille(), {
+const planRetravaille = () =>
+  planifierChangements(local, classeur(), fichierRetravaille(), {
     type: 'chapitre',
     chapitreId: 10,
-  })
+  }).plan
+
+describe('lignesImport : avant / après de chaque action', () => {
+  const plan = planRetravaille()
   const lignes = lignesImport(local, plan)
   const parCle = new Map(lignes.map((l) => [l.cle, l]))
 
@@ -552,10 +556,7 @@ describe('lignesImport : autres familles et cas limites', () => {
 // ---------------------------------------------------------------------------
 
 describe('filtrerPlan : exemples', () => {
-  const plan = planifierFusionPortee(local, fichierRetravaille(), {
-    type: 'chapitre',
-    chapitreId: 10,
-  })
+  const plan = planRetravaille()
 
   it('le plan de départ (vérifié à la main)', () => {
     expect(plan.resultat).toEqual({
@@ -756,40 +757,33 @@ describe('alignerApercu', () => {
   })
 })
 
-describe('planifierFusionPortee(…, exclus) : document seul', () => {
-  it('refuser le document : plan vide, compté inchangé', () => {
+describe('planifierChangements(…, exclus) : document seul', () => {
+  it('refuser le document : plan vide, un changement ignoré', () => {
     const loc = etat([A], { documents: [d1] })
-    const f = parseImportJson(
-      JSON.stringify(
-        fichier([
-          chJson({
-            label: 'Accueil',
-            uuid: A.uuid,
-            items: [
-              itJson({
-                kind: 'document',
-                title: 'Check-in',
-                uuid: d1.uuid,
-                content: 'Autre',
-              }),
-            ],
-          }),
-        ]),
-      ),
-    )
+    const f: FichierChangements = {
+      portee: {
+        type: 'document',
+        document_uuid: d1.uuid,
+        document_title: d1.title,
+        chapitre_label: A.label,
+      },
+      periodicites: [],
+      avertissements: [],
+      changements: [{ action: 'modifier', uuid: d1.uuid, content: 'Autre' }],
+    }
     const cible = { type: 'document' as const, documentId: 1 }
-    const plein = planifierFusionPortee(loc, f, cible)
-    expect(clesActions(plein.actions)).toEqual(['document:1'])
-    const vide = planifierFusionPortee(loc, f, cible, new Set(['document:1']))
-    expect(vide.actions).toEqual([])
-    expect(vide.apercu).toEqual([])
-    expect(vide.resultat).toEqual({
-      inserted: 0,
-      updated: 0,
-      unchanged: 1,
-      skipped: 0,
-      deleted: 0,
-    })
+    const plein = planifierChangements(loc, classeur(), f, cible)
+    expect(clesActions(plein.plan.actions)).toEqual(['document:1'])
+    const vide = planifierChangements(
+      loc,
+      classeur(),
+      f,
+      cible,
+      new Set(['document:1']),
+    )
+    expect(vide.plan.actions).toEqual([])
+    expect(vide.plan.apercu).toEqual([])
+    expect(vide.ignores).toBe(1)
   })
 })
 

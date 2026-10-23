@@ -280,6 +280,9 @@ function ecritureAttendue(a: ActionFusion): Ecriture {
       return ['restaurerItem', `${a.item.kind}:${String(a.id)}`]
     case 'supprimerItem':
       return ['softDeleteItem', `${a.kind}:${String(a.id)}`]
+    case 'ordonnerItem':
+    case 'ordonnerChapitre':
+      throw new Error('Une fusion ne pose jamais de renumérotation seule.')
   }
 }
 

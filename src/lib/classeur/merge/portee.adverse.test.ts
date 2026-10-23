@@ -14,7 +14,6 @@ import { planifierFusion } from '#/lib/classeur/merge/merge.ts'
 import {
   construireExportChapitre,
   extraireJson,
-  planifierFusionPortee,
 } from '#/lib/classeur/merge/portee.ts'
 import { parseImportJson } from '#/lib/classeur/merge/schema.ts'
 
@@ -33,43 +32,6 @@ const docX = document({
 })
 
 describe('un même élément local ne peut être apparié deux fois', () => {
-  it('LLM qui scinde un document en gardant le uuid sur les deux moitiés : pas deux modifications du même document', () => {
-    const f = fichier([
-      chJson({
-        label: 'Réception',
-        uuid: 'ch-1',
-        items: [
-          itJson({
-            kind: 'document',
-            uuid: 'doc-5',
-            title: 'Check-in (1/2)',
-            content: 'première moitié',
-            sort_order: 1,
-          }),
-          itJson({
-            kind: 'document',
-            uuid: 'doc-5',
-            title: 'Check-in (2/2)',
-            content: 'seconde moitié',
-            sort_order: 2,
-          }),
-        ],
-      }),
-    ])
-    const plan = planifierFusionPortee(etat([ch], { documents: [docX] }), f, {
-      type: 'chapitre',
-      chapitreId: 1,
-    })
-    const modifs = plan.actions.filter(
-      (a) => a.type === 'modifierItem' && a.id === 5,
-    )
-    expect(modifs).toHaveLength(1)
-    const creations = plan.actions.filter((a) => a.type === 'creerItem')
-    expect(creations).toHaveLength(1)
-    // uuid unique en base : la copie est créée SANS le uuid déjà pris.
-    expect(creations[0]).toMatchObject({ uuid: null })
-  })
-
   it('élément sans uuid au titre d’un élément déjà apparié par uuid : créé, pas fusionné dans le premier', () => {
     const f = fichier([
       chJson({
@@ -208,7 +170,7 @@ ${json}
 Après :
 ${autre}
 bouton {}`),
-    ).toThrow(/plusieurs versions/)
+    ).toThrow(/plusieurs listes/)
     expect(
       extraireJson(`${json}
 de nouveau :
@@ -219,7 +181,7 @@ ${json}`),
   it('un texte sans fichier le dit', () => {
     expect(() =>
       extraireJson('Voici la procédure : appeler le 18, sortir.'),
-    ).toThrow(/ne contient pas de fichier/)
+    ).toThrow(/ne contient pas de changements/)
   })
 
   it('un JSON qui n’est pas un export passe à la lecture, qui dira pourquoi', () => {

@@ -13,20 +13,11 @@
  *   - `instructions` : le mode d'emploi pour un LLM (ce qu'il peut modifier,
  *     ce qu'il ne doit JAMAIS toucher, les conventions Markdown de la page).
  *
- * Réimport LIMITÉ à la portée (`planifierFusionPortee`) :
- *   - le fichier FAIT FOI pour les éléments qu'il contient, horodatages
- *     ignorés : un LLM ne met pas `updated_at` à jour, la règle « le plus
- *     récent gagne » ignorerait donc toutes ses modifications ;
- *   - RIEN hors de la portée n'est touché : ni les autres chapitres, ni les
- *     autres documents, ni la position du chapitre dans le classeur ;
- *   - un élément ABSENT du fichier n'est JAMAIS supprimé (décision
- *     utilisateur du 2026-10-20 : plus de case « supprimer ce qui n'est plus
- *     dans le fichier », une IA tronque parfois sa réponse). Seul un élément
- *     marqué `"supprimer": true` part à la corbeille
- *     (`planSuppressionsDemandees`), et seulement dans ce chapitre.
- * Le plan est celui de `planifierFusion` en mode remplacement, FILTRÉ : on
- * réutilise ses règles d'appariement (uuid, puis titre), ses périodicités et
- * son aperçu plutôt que d'en écrire une seconde version.
+ * La RÉPONSE du LLM n'est plus ce fichier (décision utilisateur du
+ * 2026-10-23) : une liste de changements balisés, planifiée par
+ * `changements.ts`, qui borne ce qui change à la portée. Ce module garde
+ * l'export, la lecture d'une réponse collée (`extraireJson`) et ce que
+ * partagent l'aperçu et les refus (clés, lignes avant / après, filtrage).
  *
  * Pur : ni React, ni Supabase.
  */
@@ -52,11 +43,9 @@ import {
 } from '#/lib/classeur/merge/schema.ts'
 import type {
   ClasseurJson,
-  ItemJson,
   MetadataJson,
   Portee,
 } from '#/lib/classeur/merge/schema.ts'
-import { planifierFusion } from '#/lib/classeur/merge/merge.ts'
 import { numeroDocument } from '#/lib/classeur/versionDocument.ts'
 import type { NumeroVersion } from '#/lib/classeur/versionDocument.ts'
 
@@ -256,14 +245,15 @@ export function extraireJson(texte: string): string {
 }
 
 export const MESSAGE_SANS_FICHIER =
-  'Cette réponse ne contient pas de fichier à importer. Demandez au LLM le fichier complet, dans un seul bloc.'
+  'Cette réponse ne contient pas de changements à importer. Demandez au LLM la liste des changements, dans un seul bloc.'
 export const MESSAGE_COUPE =
-  'La réponse est coupée : la fin du fichier manque. Demandez au LLM de le renvoyer en entier, dans un seul bloc.'
+  'La réponse est coupée : la fin de la liste manque. Demandez au LLM de la renvoyer en entier, dans un seul bloc.'
 export const MESSAGE_PLUSIEURS =
-  'Cette réponse contient plusieurs versions du fichier. Collez seulement celle à importer, ou demandez au LLM un seul bloc.'
+  'Cette réponse contient plusieurs listes de changements. Collez seulement celle à importer, ou demandez au LLM un seul bloc.'
 
 /** Premières clés d'un export (ordre de `construireExport`, ou d'un LLM). */
-const DEBUT_EXPORT = /^\{\s*"(format_version|_metadata|classeur|chapters)"/
+const DEBUT_EXPORT =
+  /^\{\s*"(format_version|_metadata|classeur|chapters|changements)"/
 
 /** `{` qui ouvre un objet JSON : suivie d'une clé ou d'une fermeture. */
 function ouvreObjet(texte: string, i: number): boolean {
@@ -301,7 +291,11 @@ function lireObjet(tranche: string): Record<string, unknown> | null {
 }
 
 function estExport(v: Record<string, unknown>): boolean {
-  return Array.isArray(v.chapters) || typeof v.format_version === 'number'
+  return (
+    Array.isArray(v.changements) ||
+    Array.isArray(v.chapters) ||
+    typeof v.format_version === 'number'
+  )
 }
 
 /**
@@ -333,59 +327,7 @@ function extraireAncien(texte: string): string {
   return premier
 }
 
-// ---------------------------------------------------------------------------
-// Fusion limitée à la portée
-// ---------------------------------------------------------------------------
-
-/** Où l'on réimporte : un chapitre ou un document du classeur. */
-export type CiblePortee =
-  | { type: 'chapitre'; chapitreId: number }
-  | { type: 'document'; documentId: number }
-
-/**
- * Horodatage du fichier RETIRÉ : la base date l'import à `now()`. En
- * remplacement, la fusion recopie l'`updated_at` du fichier (E6) — un
- * élément importé aurait repris sa date d'EXPORT, et un éditeur ouvert avant
- * l'import (sauvegarde conditionnée à cette date) aurait écrasé le travail
- * de l'IA sans voir de conflit.
- */
-export function sansHorodatage(item: ItemJson): ItemJson {
-  const { updated_at: _ignore, ...reste } = item
-  return reste
-}
-
 const cleItem = (kind: string, id: number) => `${kind}:${id}`
-
-/**
- * Plan d'un réimport limité à `cible`. Jette une `Error` au message destiné
- * à l'utilisateur si le fichier ne correspond pas à la cible (autre
- * chapitre, autre document, plusieurs chapitres…).
- *
- * `exclus` : clés (`clesActions`) des éléments que l'utilisateur a refusés
- * dans l'aperçu ; leurs actions sont retirées du plan (`filtrerPlan`). Sans
- * `exclus`, ou vide, le plan est exactement celui d'avant le refus.
- *
- * L'interface passe par `planifierImport` (`importIa.ts`), qui DÉDUIT la
- * cible du fichier : elle n'arrive jamais ici avec un fichier d'une autre
- * portée.
- */
-export function planifierFusionPortee(
-  local: EtatLocal,
-  fichier: ClasseurJson,
-  cible: CiblePortee,
-  exclus?: ReadonlySet<string>,
-): PlanFusion {
-  if (fichier.chapters.length !== 1) {
-    throw new Error(
-      `Ce fichier contient ${fichier.chapters.length} chapitres : un export de chapitre ou de document n'en contient qu'un. Pour un classeur complet, utilisez l'import depuis l'accueil du classeur.`,
-    )
-  }
-  const plan =
-    cible.type === 'chapitre'
-      ? planChapitre(local, fichier, cible.chapitreId)
-      : planDocument(local, fichier, cible.documentId)
-  return exclus === undefined ? plan : filtrerPlan(plan, exclus).plan
-}
 
 // ---------------------------------------------------------------------------
 // Refus d'un élément dans l'aperçu (étape 1 du plan classeur-fonctions)
@@ -398,8 +340,11 @@ export function planifierFusionPortee(
  *   - modification, restauration, suppression : `kind:id` (l'id local) ;
  *   - création (ni id, souvent ni uuid quand un LLM l'invente) : la position
  *     et le titre du fichier, `nouveau:kind:position:titre` ;
- *   - mise à la corbeille d'un chapitre (demandée par `"supprimer": true`) :
- *     `chapitre:id`, refusable comme un élément ;
+ *   - mise à la corbeille d'un chapitre : `chapitre:id`, refusable comme un
+ *     élément ;
+ *   - création imposée par un changement (`creerItem.cle`) : celle-ci ;
+ *   - renumérotation seule (`ordonnerItem`, `ordonnerChapitre`) : `null`,
+ *     elle suit les changements qui l'imposent (`causes`) ;
  *   - autre action de chapitre : `null`, jamais refusable (le libellé ou la
  *     description du chapitre suivent le fichier).
  */
@@ -411,7 +356,10 @@ export function cleAction(a: ActionFusion): string | null {
     case 'supprimerItem':
       return cleItem(a.kind, a.id)
     case 'creerItem':
-      return `nouveau:${a.item.kind}:${String(a.sort_order)}:${a.item.input.title}`
+      return (
+        a.cle ??
+        `nouveau:${a.item.kind}:${String(a.sort_order)}:${a.item.input.title}`
+      )
     case 'supprimerChapitre':
       return `chapitre:${String(a.id)}`
     default:
@@ -438,9 +386,15 @@ export function clesActions(
   })
 }
 
-/** Ligne d'aperçu attendue pour une action : son `action` et son `kind`. */
-function signatureApercu(a: ActionFusion): [ActionApercu, string] {
+/**
+ * Ligne d'aperçu attendue pour une action : son `action` et son `kind` ;
+ * `null` pour une renumérotation, qui n'a pas de ligne.
+ */
+function signatureApercu(a: ActionFusion): [ActionApercu, string] | null {
   switch (a.type) {
+    case 'ordonnerItem':
+    case 'ordonnerChapitre':
+      return null
     case 'creerChapitre':
     case 'restaurerChapitre':
       return ['insert', 'chapter']
@@ -470,7 +424,9 @@ export function alignerApercu(
 ): number[] {
   let curseur = 0
   return actions.map((a) => {
-    const [action, kind] = signatureApercu(a)
+    const signature = signatureApercu(a)
+    if (signature === null) return -1
+    const [action, kind] = signature
     for (let i = curseur; i < apercu.length; i++) {
       if (apercu[i].action === action && apercu[i].kind === kind) {
         curseur = i + 1
@@ -504,10 +460,22 @@ export function filtrerPlan(
     if (cle !== null && exclus.has(cle)) retirees.add(i)
   })
   if (retirees.size === 0) return { plan, ignores: 0 }
+  const ignores = retirees.size
+  // Une renumérotation dont TOUS les changements qui l'imposaient sont
+  // refusés n'a plus lieu d'être (le plan appliqué est recalculé sans eux).
+  plan.actions.forEach((a, i) => {
+    if (
+      (a.type === 'ordonnerItem' || a.type === 'ordonnerChapitre') &&
+      a.causes.length > 0 &&
+      a.causes.every((c) => exclus.has(c))
+    )
+      retirees.add(i)
+  })
 
   const resultat = { ...plan.resultat }
   for (const i of retirees) {
     const a = plan.actions[i]
+    if (a.type === 'ordonnerItem' || a.type === 'ordonnerChapitre') continue
     if (a.type === 'modifierItem') {
       resultat.updated -= 1
       resultat.unchanged += 1
@@ -530,7 +498,7 @@ export function filtrerPlan(
       resultat,
       apercu: plan.apercu.filter((_, i) => !lignesRetirees.has(i)),
     },
-    ignores: retirees.size,
+    ignores,
   }
 }
 
@@ -583,7 +551,12 @@ export interface LigneImport {
    * LA CORBEILLE (un fichier exporté avant sa suppression le contient
    * encore) ne se lit pas « modifié » (trouvé au navigateur le 2026-10-22).
    */
-  actionChapitre?: 'creation' | 'restauration' | 'modification'
+  actionChapitre?: 'creation' | 'restauration' | 'modification' | 'deplacement'
+  /**
+   * Élément qui change de chapitre : le libellé du chapitre qu'il QUITTE
+   * (« déplacé depuis X » ; la ligne est rangée sous celui où il arrive).
+   */
+  provenance?: string
   /**
    * Élément changé dans l'application depuis l'export dont vient le fichier
    * (`clesChangeesDepuisExport`) : proposé non importé.
@@ -675,6 +648,8 @@ export function lignesImport(
   const lignes: LigneImport[] = []
   plan.actions.forEach((a, i) => {
     const cle = cles[i]
+    // Une renumérotation n'a pas de ligne (`chapitresDesLignes` non plus).
+    if (a.type === 'ordonnerItem' || a.type === 'ordonnerChapitre') return
     if (
       a.type === 'creerChapitre' ||
       a.type === 'restaurerChapitre' ||
@@ -712,7 +687,12 @@ export function lignesImport(
                   ? ('creation' as const)
                   : a.type === 'restaurerChapitre'
                     ? ('restauration' as const)
-                    : ('modification' as const),
+                    : a.sort_order !== undefined &&
+                        ch !== undefined &&
+                        ch.icon === a.icon &&
+                        memesTextes(avant, apres)
+                      ? ('deplacement' as const)
+                      : ('modification' as const),
             }),
       })
       return
@@ -765,7 +745,14 @@ export function lignesImport(
           ordreChange
         ? 'ordre'
         : 'autre'
+    const provenance =
+      a.type === 'modifierItem' &&
+      a.chapitre !== undefined &&
+      existant !== undefined
+        ? local.chapters.find((c) => c.id === existant.data.chapter_id)?.label
+        : undefined
     lignes.push({
+      ...(provenance === undefined ? {} : { provenance }),
       cle,
       genre: a.type === 'modifierItem' ? 'modification' : 'restauration',
       kind: a.item.kind,
@@ -818,9 +805,12 @@ export function chapitresDesLignes(
       : `nouveau:${String(ref.index)}`
   const deLocal = (id: number | undefined) =>
     id === undefined ? 'local:?' : `local:${String(id)}`
-  return plan.actions.map((a) => {
+  return plan.actions.flatMap((a) => {
     let cle: string
     switch (a.type) {
+      case 'ordonnerItem':
+      case 'ordonnerChapitre':
+        return []
       case 'creerChapitre':
         cle = `nouveau:${String(a.index)}`
         break
@@ -843,204 +833,8 @@ export function chapitresDesLignes(
         cle = deLocal(items.get(cleItem(a.kind, a.id))?.data.chapter_id)
         break
     }
-    return { cle, libelle: libelles.get(cle) ?? 'Sans chapitre' }
+    return [{ cle, libelle: libelles.get(cle) ?? 'Sans chapitre' }]
   })
-}
-
-function planChapitre(
-  local: EtatLocal,
-  fichier: ClasseurJson,
-  chapitreId: number,
-): PlanFusion {
-  const chapitre = local.chapters.find(
-    (c) => c.id === chapitreId && c.deleted_at === null,
-  )
-  if (chapitre === undefined)
-    throw new Error('Chapitre introuvable ou supprimé.')
-  const chJson = fichier.chapters[0]
-  if (chJson.uuid !== undefined && chJson.uuid !== chapitre.uuid) {
-    throw new Error(
-      `Ce fichier concerne un autre chapitre (${chJson.label}), pas celui-ci (${chapitre.label}).`,
-    )
-  }
-  // Un élément du fichier qui porte l'uuid d'un élément HORS du chapitre
-  // (relecture adverse du 2026-10-04) : la fusion l'appariait par uuid
-  // (R5, tout le classeur), le déplaçait ici et l'écrasait. Rien hors de la
-  // portée n'est touché : uuid retiré (unique en base), l'élément est créé.
-  // Marqué `supprimer`, il est écarté : rien n'est supprimé hors du chapitre.
-  const horsPortee = new Set(
-    flattenItems(local.content)
-      .filter((it) => it.data.chapter_id !== chapitre.id && it.data.uuid)
-      .map((it) => it.data.uuid),
-  )
-  const avertissements: string[] = []
-  const itemsCibles = chJson.items.flatMap((item) => {
-    const propre = sansHorodatage(item)
-    if (item.uuid === undefined || !horsPortee.has(item.uuid)) return [propre]
-    if (item.supprimer === true) {
-      avertissements.push(
-        `${item.title.trim() === '' ? 'Un élément' : item.title} appartient à un autre chapitre : il n'est pas supprimé.`,
-      )
-      return []
-    }
-    const { uuid: _etranger, ...sansUuid } = propre
-    avertissements.push(
-      item.title.trim() === ''
-        ? "Un élément sans titre portait l'identifiant d'un élément d'un autre chapitre : ignoré"
-        : `${item.title} portait l'identifiant d'un élément d'un autre chapitre : créé comme nouvel élément`,
-    )
-    return [sansUuid]
-  })
-  // Le chapitre du fichier EST le chapitre ouvert (même sans uuid, fichier
-  // v1 ou uuid retiré) ; sa position dans le classeur n'est pas à lui.
-  const fichierCible: ClasseurJson = {
-    ...fichier,
-    chapters: [
-      {
-        ...chJson,
-        uuid: chapitre.uuid,
-        sort_order: chapitre.sort_order,
-        items: itemsCibles,
-      },
-    ],
-  }
-  const plan = planSuppressionsDemandees(
-    local,
-    fichierCible,
-    (f) => planifierFusion(local, f, { replace: true }),
-    false,
-  )
-  // Garde-fou : aucune suppression hors du chapitre (les autres chapitres,
-  // absents du fichier, ne sont jamais « demandés », mais on ne le suppose pas).
-  const items = indexItems(local.content)
-  const garde = garderActions(
-    plan,
-    (a) =>
-      a.type === 'supprimerChapitre'
-        ? a.id === chapitre.id
-        : a.type === 'supprimerItem'
-          ? items.get(cleItem(a.kind, a.id))?.data.chapter_id === chapitre.id
-          : true,
-    false,
-  )
-  // Compteurs : ceux de la fusion, avec les seules suppressions retenues.
-  // Lignes d'aperçu des éléments mis à la corbeille : sous le libellé du
-  // chapitre du FICHIER, comme les autres lignes (et comme avant le
-  // 2026-10-20).
-  return {
-    ...garde,
-    apercu: garde.apercu.map((l) =>
-      l.action === 'delete' && l.kind !== 'chapter'
-        ? { ...l, chapter_label: chJson.label, icon: chJson.icon }
-        : l,
-    ),
-    warnings: [...avertissements, ...garde.warnings],
-    resultat: {
-      ...garde.resultat,
-      deleted: garde.actions.filter((a) => cleSuppression(a) !== null).length,
-    },
-  }
-}
-
-function planDocument(
-  local: EtatLocal,
-  fichier: ClasseurJson,
-  documentId: number,
-): PlanFusion {
-  const document = local.content.documents.find(
-    (d) => d.id === documentId && d.deleted_at === null,
-  )
-  if (document === undefined)
-    throw new Error('Document introuvable ou supprimé.')
-  const chapitre = local.chapters.find((c) => c.id === document.chapter_id)
-  if (chapitre === undefined)
-    throw new Error('Chapitre du document introuvable.')
-
-  const docs = fichier.chapters[0].items.filter((i) => i.kind === 'document')
-  if (docs.length !== 1 || fichier.chapters[0].items.length !== 1) {
-    throw new Error(
-      'Un export de document doit contenir exactement un document. Pour un chapitre entier, importez depuis la page du chapitre.',
-    )
-  }
-  const docJson = docs[0]
-  if (docJson.uuid !== document.uuid) {
-    throw new Error(
-      docJson.uuid === undefined
-        ? "Le document du fichier n'a plus d'identifiant (uuid) : impossible de savoir qu'il s'agit de celui-ci."
-        : `Ce fichier concerne un autre document (${docJson.title}), pas celui-ci (${document.title}).`,
-    )
-  }
-  // Suppression DEMANDÉE (`"supprimer": true`) : le document part à la
-  // corbeille, rien d'autre ne change.
-  if (docJson.supprimer === true) {
-    return {
-      actions: [{ type: 'supprimerItem', kind: 'document', id: document.id }],
-      warnings: [],
-      resultat: {
-        inserted: 0,
-        updated: 0,
-        unchanged: 0,
-        skipped: 0,
-        deleted: 1,
-      },
-      apercu: [
-        {
-          action: 'delete',
-          kind: 'document',
-          title: document.title,
-          chapter_label: chapitre.label,
-          icon: chapitre.icon,
-        },
-      ],
-    }
-  }
-  // Chapitre et position LOCAUX : seul le document peut changer.
-  const fichierCible: ClasseurJson = {
-    ...fichier,
-    chapters: [
-      {
-        uid: 'document',
-        uuid: chapitre.uuid,
-        label: chapitre.label,
-        icon: chapitre.icon,
-        description: chapitre.description,
-        sort_order: chapitre.sort_order,
-        items: [
-          { ...sansHorodatage(docJson), sort_order: document.sort_order },
-        ],
-      },
-    ],
-  }
-  const plan = planifierFusion(local, fichierCible, { replace: true })
-  const actions = plan.actions.filter(
-    (a) =>
-      (a.type === 'modifierItem' || a.type === 'restaurerItem') &&
-      a.id === document.id &&
-      a.item.kind === 'document',
-  )
-  const modifie = actions.length > 0
-  return {
-    actions,
-    warnings: plan.warnings,
-    resultat: {
-      inserted: 0,
-      updated: modifie ? 1 : 0,
-      unchanged: modifie ? 0 : 1,
-      skipped: 0,
-      deleted: 0,
-    },
-    apercu: modifie
-      ? [
-          {
-            action: 'update',
-            kind: 'document',
-            title: docJson.title,
-            chapter_label: chapitre.label,
-            icon: chapitre.icon,
-          },
-        ]
-      : [],
-  }
 }
 
 function indexItems(content: ChapterContent): Map<string, ChapterItem> {
@@ -1048,120 +842,4 @@ function indexItems(content: ChapterContent): Map<string, ChapterItem> {
   for (const it of flattenItems(content))
     m.set(cleItem(it.kind, it.data.id), it)
   return m
-}
-
-// ---------------------------------------------------------------------------
-// Suppressions demandées par le fichier (décision utilisateur du 2026-10-20)
-// ---------------------------------------------------------------------------
-
-/** Clé d'une suppression (`kind:id`, `chapitre:id`) ; `null` pour une autre action. */
-function cleSuppression(a: ActionFusion): string | null {
-  if (a.type === 'supprimerItem') return cleItem(a.kind, a.id)
-  if (a.type === 'supprimerChapitre') return `chapitre:${String(a.id)}`
-  return null
-}
-
-/**
- * Le fichier sans ses éléments ni ses chapitres marqués `supprimer` ; le
- * MÊME objet s'il n'y en a aucun.
- */
-export function sansMarquesSupprimer(fichier: ClasseurJson): ClasseurJson {
-  const marque = fichier.chapters.some(
-    (c) => c.supprimer === true || c.items.some((i) => i.supprimer === true),
-  )
-  if (!marque) return fichier
-  return {
-    ...fichier,
-    chapters: fichier.chapters
-      .filter((c) => c.supprimer !== true)
-      .map((c) =>
-        c.items.some((i) => i.supprimer === true)
-          ? { ...c, items: c.items.filter((i) => i.supprimer !== true) }
-          : c,
-      ),
-  }
-}
-
-/**
- * Garde les actions retenues par `garder`, et leurs lignes d'aperçu
- * (`alignerApercu`). Une suppression retirée laisse l'élément tel quel :
- * comptée `unchanged` si `compterGardes`, sinon les compteurs restent ceux
- * du plan d'origine (l'appelant les recalcule). Rien de retiré : le plan
- * TEL QUEL (même objet).
- */
-export function garderActions(
-  plan: PlanFusion,
-  garder: (a: ActionFusion) => boolean,
-  compterGardes = true,
-): PlanFusion {
-  const retirees = new Set<number>()
-  plan.actions.forEach((a, i) => {
-    if (!garder(a)) retirees.add(i)
-  })
-  if (retirees.size === 0) return plan
-  const lignes = new Set(
-    alignerApercu(plan.actions, plan.apercu).filter((_, i) => retirees.has(i)),
-  )
-  const suppressions = [...retirees].filter(
-    (i) => cleSuppression(plan.actions[i]) !== null,
-  ).length
-  return {
-    actions: plan.actions.filter((_, i) => !retirees.has(i)),
-    warnings: plan.warnings,
-    resultat: compterGardes
-      ? {
-          ...plan.resultat,
-          deleted: plan.resultat.deleted - suppressions,
-          unchanged: plan.resultat.unchanged + suppressions,
-        }
-      : plan.resultat,
-    apercu: plan.apercu.filter((_, i) => !lignes.has(i)),
-  }
-}
-
-/**
- * Plan d'un import où RIEN d'absent n'est supprimé, et où un élément (ou un
- * chapitre) marqué `"supprimer": true` part à la corbeille.
- *
- * `planifier` est le plan BRUT en remplacement (R11 : tout absent y est
- * supprimé). Il est calculé sur le fichier sans les marqués (`sans`) puis,
- * s'il y en a, sur le fichier complet (`plein`). Une suppression de `sans`
- * absente de `plein` vise exactement ce qu'un marqué appariait (mêmes règles
- * R1, R5, E7, E9 que le reste : aucune seconde version de l'appariement) ;
- * toutes les autres visent des absents et sont retirées. Un élément d'un
- * chapitre mis à la corbeille le suit sans action à part, comme la
- * suppression d'un chapitre à l'écran. Un marqué qui n'apparie rien
- * (nouveau, ou déjà à la corbeille) ne fait rien.
- */
-export function planSuppressionsDemandees(
-  local: EtatLocal,
-  fichier: ClasseurJson,
-  planifier: (fichier: ClasseurJson) => PlanFusion,
-  compterGardes = true,
-): PlanFusion {
-  const reduit = sansMarquesSupprimer(fichier)
-  const sans = planifier(reduit)
-  const demandees = new Set<string>()
-  if (reduit !== fichier) {
-    const plein = new Set(
-      planifier(fichier).actions.flatMap((a) => cleSuppression(a) ?? []),
-    )
-    for (const a of sans.actions) {
-      const c = cleSuppression(a)
-      if (c !== null && !plein.has(c)) demandees.add(c)
-    }
-  }
-  const items = indexItems(local.content)
-  return garderActions(
-    sans,
-    (a) => {
-      const c = cleSuppression(a)
-      if (c === null) return true
-      if (!demandees.has(c)) return false
-      if (a.type !== 'supprimerItem') return true
-      const ch = items.get(c)?.data.chapter_id
-      return ch === undefined || !demandees.has(`chapitre:${String(ch)}`)
-    },
-    compterGardes,
-  )
 }

@@ -62,8 +62,7 @@ vi.mock('#/lib/classeur/service.ts', async (importOriginal) => {
 const { reinitialiserPointsAuto } =
   await import('#/lib/classeur/restauration.ts')
 const { restaurerInstantane } = await import('#/lib/classeur/merge/history.ts')
-const { appliquerFusion, appliquerImport } =
-  await import('#/lib/classeur/merge/apply.ts')
+const { appliquerFusion } = await import('#/lib/classeur/merge/apply.ts')
 const { construireExport } = await import('#/lib/classeur/merge/schema.ts')
 const {
   fetchClasseur,
@@ -242,30 +241,7 @@ describe('fusion dans Y de l’export de X : uuid déjà pris ailleurs', () => {
   })
 })
 
-describe('fusion de PORTÉE et restauration passent par le même repli', () => {
-  it('portée chapitre : un élément au uuid d’un autre classeur est créé, avertissement au singulier', async () => {
-    const fichier = await exporter(5)
-    fichier.chapters[0].items.push({
-      kind: 'document',
-      uuid: U_DOC100,
-      title: 'Copie',
-      content: 'x',
-      sort_order: 2,
-    })
-    // Portée = un seul chapitre : garder celui d'Arrivée.
-    fichier.chapters = fichier.chapters.slice(0, 1)
-    const r = await appliquerImport(
-      5,
-      fichier,
-      { type: 'chapitre', chapitreId: 50 },
-      { sourceName: 's' },
-    )
-    expect(r.avertissements).toEqual([
-      '1 élément a reçu un nouvel identifiant : il existait ailleurs.',
-    ])
-    expect(docsDe(50).map((d) => d.title)).toEqual(['Accueil', 'Copie'])
-  })
-
+describe('la restauration passe par le même repli', () => {
   it('restauration : un élément dont l’uuid vit désormais ailleurs revient avec un uuid neuf', async () => {
     const instantane = await exporter(5)
     const pointId = await insertMergeHistory({

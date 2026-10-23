@@ -128,14 +128,19 @@ function etiquette(l: LigneImport): string {
         ? 'ajouté'
         : l.actionChapitre === 'restauration'
           ? 'restauré'
-          : 'modifié'
+          : l.actionChapitre === 'deplacement'
+            ? 'déplacé'
+            : 'modifié'
     case 'modification':
       // D4 : le réglage changé se lit en clair (« Mensuel → Annuel »).
+      // Changement de chapitre ET de texte : les deux se disent.
       return l.changement === 'ordre'
         ? 'déplacé'
         : l.changement === 'autre'
           ? (l.reglage ?? 'réglage modifié')
-          : 'modifié'
+          : l.provenance !== undefined
+            ? 'modifié et déplacé'
+            : 'modifié'
   }
 }
 
@@ -419,8 +424,12 @@ function LigneApercu({
                     ? 'Nouveau chapitre'
                     : ligne.actionChapitre === 'restauration'
                       ? 'Retiré de la corbeille, avec son contenu'
-                      : 'Libellé ou description'
+                      : ligne.actionChapitre === 'deplacement'
+                        ? 'Nouvelle place dans le classeur'
+                        : 'Libellé ou description'
                 : nature}
+              {ligne.provenance !== undefined &&
+                ` · venu du chapitre ${ligne.provenance}`}
               {version !== null && ` · ${version}`}
               {ligne.reglage !== undefined &&
                 !(
@@ -491,7 +500,7 @@ function LigneApercu({
       )}
       {refusee && ligne.ordreChange && (
         <p className="px-3 pb-2 text-xs text-muted-foreground">
-          Il garde sa place actuelle : l'ordre du chapitre peut devenir ambigu.
+          Il garde sa place actuelle.
         </p>
       )}
       {ouverte && (
@@ -499,7 +508,9 @@ function LigneApercu({
           <ChampsDiff avant={avant} apres={apres} />
           {ligne.changement === 'ordre' ? (
             <p className="text-xs text-muted-foreground">
-              Seule sa place dans le chapitre change, pas son texte.
+              {ligne.provenance !== undefined
+                ? `Il passe du chapitre ${ligne.provenance} à celui-ci, son texte ne change pas.`
+                : 'Seule sa place dans le chapitre change, pas son texte.'}
             </p>
           ) : ligne.changement === 'autre' &&
             avant.content === apres.content ? (

@@ -107,16 +107,6 @@ export interface ItemJson {
    * l'ignore aussi (pas de `deny_unknown_fields` sur `ItemJson`).
    */
   periodicite?: string
-  /**
-   * Demande EXPLICITE de suppression (décision utilisateur du 2026-10-20) :
-   * l'élément reste dans le fichier, marqué `"supprimer": true`, et l'import
-   * le met à la corbeille (suppression douce, refusable dans l'aperçu). Un
-   * élément ABSENT du fichier n'est jamais supprimé. Relu seulement s'il vaut
-   * `true` ; jamais écrit par un export ; ignoré par Registre (pas de
-   * `deny_unknown_fields`) et par tout autre chemin que l'import dans un
-   * classeur existant (`planifierImport`).
-   */
-  supprimer?: true
 }
 
 export interface ChapterJson {
@@ -128,8 +118,6 @@ export interface ChapterJson {
   description: string
   sort_order: number
   items: ItemJson[]
-  /** Comme `ItemJson.supprimer` : le chapitre part à la corbeille avec son contenu. */
-  supprimer?: true
 }
 
 export interface ClasseurJson {
@@ -341,17 +329,19 @@ export const SCHEMA_DESCRIPTIF = {
     _description: "Règles de validation et de comportement à l'import.",
     format_version: 'Accepte 1 ou 2.',
     metadata_ignored:
-      "Registre ignore le bloc _metadata à l'import. Le Back Office en lit periodicites (voir ce bloc) et portee (ce que l'export représente : un fichier de chapitre ou de document n'est importé que dans sa portée, celui d'un autre classeur est signalé) ; le reste est informatif.",
+      "Registre ignore le bloc _metadata à l'import. Le Back Office en lit periodicites (voir ce bloc), portee (ce que l'export représente : une réponse de LLM ne change que sa portée, celle d'un autre classeur est refusée) et generated_at (date de l'export, pour signaler ce qui a changé depuis) ; le reste est informatif.",
     matching_priority:
       '1) UUID si présent → recherche dans tout le classeur. 2) Fallback slug+titre (v1).',
     last_write_wins:
-      "Fusion : si un item est trouvé par UUID, la version la plus récente (updated_at) gagne. Back Office, en remplacement, à l'import d'un fichier rendu par une IA et à l'import d'un chapitre ou d'un document : le fichier fait foi, horodatages ignorés.",
+      'Fusion : si un item est trouvé par UUID, la version la plus récente (updated_at) gagne. Back Office : restauration d’un point en remplacement, le point fait foi.',
     soft_delete_respected:
       "Fusion : un item supprimé localement (soft delete) n'est pas recréé, compté comme 'skipped'. Back Office, en remplacement : il est restauré.",
     move_detection:
-      "Registre : un item trouvé par UUID dans un chapitre différent n'est pas re-déplacé, son contenu est mis à jour si plus récent. Back Office : quand le fichier l'emporte, l'item est aussi déplacé dans le chapitre du fichier.",
+      "Registre : un item trouvé par UUID dans un chapitre différent n'est pas re-déplacé, son contenu est mis à jour si plus récent. Back Office : quand le fichier l'emporte, l'item est aussi déplacé dans le chapitre du fichier ; dans une réponse de LLM, un déplacement est un changement \"deplacer\".",
     no_deletion:
-      'Registre : le merge n\'efface jamais, les items locaux absents du JSON sont conservés. Back Office : un item ou un chapitre absent du JSON n\'est jamais supprimé non plus ; pour en supprimer un, le garder avec "supprimer": true (il part en corbeille restaurable).',
+      "Registre : le merge n'efface jamais, les items locaux absents du JSON sont conservés.",
+    llm_response:
+      'Back Office : la réponse d\'un LLM n\'est PAS ce fichier mais { "_metadata": { "portee", "periodicites", "generated_at" }, "changements": [...] }, chaque changement marqué "action": "modifier" | "supprimer" | "deplacer" | "ajouter" (voir _metadata.instructions). Ce qui n\'est pas dans la liste ne change pas ; un fichier complet n\'est pas accepté dans un classeur existant.',
   },
 } as const
 
@@ -505,8 +495,6 @@ function lireItem(v: unknown, chapitre: string, position: number): ItemJson {
   // l'export, relu tel quel s'il est un texte (sinon ignoré).
   if (kind === 'tracking_sheet' && typeof v.periodicite === 'string')
     item.periodicite = v.periodicite
-  // Suppression demandée : `true` seul (toute autre valeur est ignorée).
-  if (v.supprimer === true) item.supprimer = true
   return item
 }
 
@@ -541,7 +529,6 @@ function lireChapitre(v: unknown, position: number): ChapterJson {
   }
   const uuid = chaine(v, 'uuid', undefined, ctxLabel)
   if (uuid !== undefined) chapitre.uuid = uuid
-  if (v.supprimer === true) chapitre.supprimer = true
   return chapitre
 }
 
@@ -671,7 +658,7 @@ export function parseImportJson(texte: string): ClasseurJson {
  * l'IA à son mode d'emploi ; `_metadata` reste intouchable pour elle.
  */
 export const NOTE_EXPORT =
-  "Lis d'abord `instructions` : c'est ton mode d'emploi. Dans ta réponse, ne garde de ce bloc que `portee` et `periodicites`."
+  "Lis d'abord `instructions` : c'est ton mode d'emploi. Dans ta réponse, ne garde de ce bloc que `portee`, `periodicites` et `generated_at`, puis la liste `changements`."
 
 /** `_metadata.description` et `note` d'un POINT DE RESTAURATION (sans mode d'emploi). */
 export const DESCRIPTION_INSTANTANE =

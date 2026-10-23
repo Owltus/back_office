@@ -220,6 +220,11 @@ export type ActionFusion =
       /** Horodatage du fichier, en ISO ; absent si le fichier n'en a pas. */
       updated_at?: string
       item: ChampsItem
+      /**
+       * Clé de refus imposée (import de changements : elle vient du
+       * changement, pas de la position calculée). Absente : `cleAction`.
+       */
+      cle?: string
     }
   | {
       type: 'modifierItem'
@@ -242,6 +247,26 @@ export type ActionFusion =
       updated_at?: string
     }
   | { type: 'supprimerItem'; kind: ItemKind; id: number }
+  /*
+   * Renumérotation SEULE (import de changements, `changements.ts`) : un
+   * élément ou un chapitre qui n'est pas lui-même changé mais que l'arrivée
+   * d'un voisin oblige à renuméroter. Aucune ligne d'aperçu, aucune clé de
+   * refus ; `causes` = clés des changements qui l'imposent (refusés tous,
+   * elle n'a plus lieu d'être : `filtrerPlan`). La fusion ne les pose jamais.
+   */
+  | {
+      type: 'ordonnerItem'
+      kind: ItemKind
+      id: number
+      sort_order: number
+      causes: string[]
+    }
+  | {
+      type: 'ordonnerChapitre'
+      id: number
+      sort_order: number
+      causes: string[]
+    }
 
 export interface PlanFusion {
   actions: ActionFusion[]
@@ -303,7 +328,7 @@ export function fichierPlusRecent(
  */
 export function resoudrePeriodicite(
   idFichier: number | null | undefined,
-  fichier: ClasseurJson,
+  fichier: Pick<ClasseurJson, '_metadata'>,
   locales: DbPeriodicite[] | undefined,
 ): { id: number | null; libelle: string | null } {
   if (idFichier === null || idFichier === undefined)

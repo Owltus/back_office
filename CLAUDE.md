@@ -781,6 +781,32 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
   LLM » retirées), un fichier qui dit à l'IA tout ce qu'elle doit savoir pour
   guider du personnel non initié, retour par un fichier réimportable, jamais
   plusieurs classeurs.
+  - **RÉPONSE EN CHANGEMENTS BALISÉS (décision utilisateur du 2026-10-23 ; REMPLACE
+    l'import d'un fichier complet et les marques `"supprimer": true` décrits
+    plus bas : « bien tagué à supprimer et où déplacer… tu n'as pas besoin
+    de tout me renvoyer »)**. Le LLM écrit d'abord EN CLAIR la liste groupée
+    À SUPPRIMER / À DÉPLACER / À MODIFIER / À AJOUTER, puis un bloc
+    `{ "_metadata": { portee, periodicites, generated_at }, "changements": [...] }`,
+    chaque entrée avec son `action` (`modifier` = champs changés seulement ;
+    `supprimer` / `deplacer` exigent `uuid` ET le titre actuel ; `ajouter`
+    sans uuid, `ref` pour un chapitre ajouté ; place par `apres` = l'élément
+    qui précède, `null` en tête, jamais un numéro). Moteur PUR
+    `lib/classeur/merge/changements.ts` (règles C1-C9 en tête) : sans action =
+    IGNORÉ avec avertissement (décision utilisateur) ; ce qui n'est pas listé
+    ne change pas ; portée = borne (export d'un autre classeur, ou d'un
+    chapitre / document absent : refusé) ; refus appliqués AU CHANGEMENT
+    avant le calcul des places ; numéros gardés quand il y a la place, sinon
+    renumérotation 1..n par actions `ordonnerItem` / `ordonnerChapitre` (sans
+    ligne d'aperçu, `causes` pour `filtrerPlan`). Un classeur entier collé
+    dans Importer est REFUSÉ (`MESSAGE_CLASSEUR_COMPLET` : passer par les
+    points de restauration) ; l'import en NOUVEAU classeur depuis la liste
+    garde le fichier complet. RETIRÉS : `importIa.ts`, `planifierFusionPortee`,
+    `planSuppressionsDemandees`, `planAvecValidation`, `ItemJson.supprimer`.
+    Consignes ≤ 7 000 octets (6 902). Vérifié : 3 020 tests, simulateur
+    (`changements.simulateur.test.ts`), propriété d'ordre (1 000 cas), et un
+    ESSAI À BLANC : deux LLM (sonnet, haiku) n'ayant que l'export ont rendu
+    une réponse importée exactement comme demandé, sans avertissement. Non
+    fait : un essai avec un vrai LLM grand public par l'utilisateur.
   - **Mode d'emploi** `_metadata.instructions` (`consignes.ts`) : portée en
     tête (« un seul classeur par fichier »), puis 6 parties — à qui tu parles
     (proposer 4 choix), répondre à une question depuis le contenu seul en
@@ -810,7 +836,10 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
     sur les trois chemins (`restauration.ts`, `apply.ts`, `history.ts`) ; les
     cinq clés de Registre restent. Leur téléchargement depuis l'Historique est
     une sauvegarde (infobulle « Télécharger cette sauvegarde »).
-  - **IMPORT SIMPLIFIÉ (décision utilisateur du 2026-10-20 : aucun choix de
+  - ⚠ HISTORIQUE, remplacé le 2026-10-23 par les changements balisés (voir
+    plus haut) pour ce qui touche au fichier complet et à `"supprimer": true` ;
+    l'écran (deux zones, aperçu, refus) reste valable.
+    **IMPORT SIMPLIFIÉ (décision utilisateur du 2026-10-20 : aucun choix de
     provenance, aucune case de suppression, portée déduite ; ne pas les
     réintroduire)** — retour : « très complexe pour rien… fichier de
     Registre c'est quoi ce terme… supprimer ce qui n'est pas dans le

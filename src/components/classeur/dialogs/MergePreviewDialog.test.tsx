@@ -14,26 +14,27 @@ import { MESSAGE_DEPUIS_EXPORT } from '#/components/classeur/dialogs/ApercuImpor
 import { LIBELLE_COLLER } from '#/components/classeur/dialogs/SaisieImport.tsx'
 import {
   PERIODICITES,
-  T0,
   chapitre,
   classeur,
   document,
   etat,
 } from '#/lib/classeur/merge/fixtures.ts'
-import type { ContexteImport } from '#/lib/classeur/merge/importIa.ts'
-import { construireExportChapitre } from '#/lib/classeur/merge/portee.ts'
+import { MESSAGE_CLASSEUR_COMPLET } from '#/lib/classeur/merge/changements.ts'
+import type {
+  ContexteImport,
+  FichierChangements,
+} from '#/lib/classeur/merge/changements.ts'
 import { construireExport } from '#/lib/classeur/merge/schema.ts'
-import type { ClasseurJson } from '#/lib/classeur/merge/schema.ts'
 
 /*
  * Import dans le classeur COMPLET (ligne Importer de l'accueil). Le VRAI
  * planificateur sur un état local écrit ici ; seules la lecture de la base,
  * la médiathèque et l'écriture sont simulées. Oracles posés à la main.
  *
- * Décision utilisateur du 2026-10-20 (étape 9 du plan
- * `classeur-echange-ia-2026-10-19`) : AUCUN choix à l'écran, ni provenance
- * ni case de suppression ; rien d'absent n'est supprimé ; `"supprimer":
- * true` met à la corbeille, refusable ; la portée est déduite du fichier.
+ * Décision utilisateur du 2026-10-20 : AUCUN choix à l'écran. Depuis le
+ * 2026-10-23, la réponse du LLM est une liste de CHANGEMENTS balisés
+ * (`changements.ts`) : ce qui n'y est pas ne change pas ; une suppression
+ * se refuse comme le reste ; un classeur entier est refusé avec un message.
  */
 
 const A = chapitre({ id: 10, label: 'Accueil', sort_order: 1 })
@@ -76,7 +77,7 @@ vi.mock('#/lib/classeur/merge/apply.ts', async (original) => {
   return {
     previsualiserImport: async (
       _id: number,
-      fichier: ClasseurJson,
+      fichier: FichierChangements,
       contexte: ContexteImport,
     ) => {
       if (retenir) await retenir
@@ -96,42 +97,57 @@ vi.mock('#/lib/supabase.ts', () => ({ supabase: {} }))
 const { MergePreviewDialog } =
   await import('#/components/classeur/dialogs/MergePreviewDialog.tsx')
 
-/** Le classeur exporté, retravaillé : d1 réécrit, d3 en forme seule, un chapitre neuf. */
-function fichierLlm(over: (f: ClasseurJson) => void = () => {}): File {
-  return new File([texteLlm(over)], 'classeur.json', {
+/** La réponse d'un LLM, telle qu'elle arrive (JSON nu, modifiable par un test). */
+interface Reponse {
+  _metadata: Record<string, unknown>
+  changements: Array<Record<string, unknown>>
+}
+
+/** Check-in et Extincteur réécrits, un chapitre Annexes et son document ajoutés. */
+function reponseLlm(): Reponse {
+  const m = construireExport(
+    classeur(),
+    [A, B],
+    local.content,
+    PERIODICITES,
+  )._metadata
+  return {
+    _metadata: {
+      portee: m?.portee,
+      periodicites: m?.periodicites,
+      generated_at: m?.generated_at,
+    },
+    changements: [
+      {
+        action: 'modifier',
+        uuid: d1.uuid,
+        content: 'Accueillir le client avec le sourire\nRemettre la clé',
+      },
+      {
+        action: 'modifier',
+        uuid: d3.uuid,
+        content: 'Vérifier la **pression** chaque mois',
+      },
+      { action: 'ajouter', kind: 'chapitre', ref: 'annexes', label: 'Annexes' },
+      {
+        action: 'ajouter',
+        kind: 'document',
+        chapitre: 'annexes',
+        title: 'Plan du hall',
+        content: 'Voici le plan.\n\n![](a-inserer-pas)\n',
+      },
+    ],
+  }
+}
+
+function fichierLlm(over: (f: Reponse) => void = () => {}): File {
+  return new File([texteLlm(over)], 'reponse.json', {
     type: 'application/json',
   })
 }
 
-function texteLlm(over: (f: ClasseurJson) => void = () => {}): string {
-  const f = construireExport(classeur(), [A, B], local.content, PERIODICITES)
-  const [ca, cb] = f.chapters
-  ca.items[0] = {
-    ...ca.items[0],
-    content: 'Accueillir le client avec le sourire\nRemettre la clé',
-    updated_at: PLUS_TARD,
-  }
-  cb.items[0] = {
-    ...cb.items[0],
-    content: 'Vérifier la **pression** chaque mois',
-    updated_at: PLUS_TARD,
-  }
-  f.chapters.push({
-    uid: 'annexes',
-    label: 'Annexes',
-    icon: 'FileText',
-    description: '',
-    sort_order: 3,
-    items: [
-      {
-        kind: 'document',
-        title: 'Plan du hall',
-        description: '',
-        content: 'Voici le plan.\n\n![](a-inserer-pas)\n',
-        sort_order: 1,
-      },
-    ],
-  })
+function texteLlm(over: (f: Reponse) => void = () => {}): string {
+  const f = reponseLlm()
   over(f)
   return JSON.stringify(f)
 }
@@ -230,16 +246,11 @@ describe('MergePreviewDialog — aperçu du classeur complet', () => {
     expect(nom()).toBe('Importer 3 documents')
     // Libellé STABLE, le nombre en badge.
     expect(bouton().textContent).toBe('Importer3')
-    expect(resume()).toEqual(['2 ajoutés', '2 modifiés', '3 inchangés'])
+    expect(resume()).toEqual(['2 ajoutés', '2 modifiés'])
     fireEvent.click(screen.getByLabelText('Importer Check-in'))
     expect(nom()).toBe('Importer 2 documents')
     expect(bouton().textContent).toBe('Importer2')
-    expect(resume()).toEqual([
-      '2 ajoutés',
-      '1 modifié',
-      '3 inchangés',
-      '1 non importé',
-    ])
+    expect(resume()).toEqual(['2 ajoutés', '1 modifié', '1 non importé'])
     expect(
       screen.getByText('Un point de restauration est pris avant.'),
     ).toBeTruthy()
@@ -262,7 +273,7 @@ describe('MergePreviewDialog — aperçu du classeur complet', () => {
     expect(id).toBe(1)
     expect(contexte).toEqual({ type: 'classeur' })
     expect([...options.exclus]).toEqual(['document:1'])
-    expect(options.sourceName).toBe('classeur.json')
+    expect(options.sourceName).toBe('reponse.json')
     await waitFor(() => expect(onDone).toHaveBeenCalled())
     expect((onDone.mock.calls[0][0] as { ignores: number }).ignores).toBe(1)
   })
@@ -276,7 +287,7 @@ describe('MergePreviewDialog — aperçu du classeur complet', () => {
   })
 
   it('tout décoché sans action de chapitre : désactivé', async () => {
-    await ouvrirAvecApercu(fichierLlm((f) => f.chapters.pop()))
+    await ouvrirAvecApercu(fichierLlm((f) => f.changements.splice(2, 2)))
     for (const t of ['Check-in', 'Extincteur'])
       fireEvent.click(screen.getByLabelText(`Importer ${t}`))
     expect(nom()).toBe('Importer')
@@ -296,7 +307,7 @@ describe('MergePreviewDialog — aperçu du classeur complet', () => {
   it('C3 : l’alerte d’image propose un geste possible APRÈS l’import', async () => {
     await ouvrirAvecApercu(
       fichierLlm((f) => {
-        f.chapters[2].items[0].content = 'Le hall.\n\n![](24/plan.webp)\n'
+        f.changements[3].content = 'Le hall.\n\n![](24/plan.webp)\n'
       }),
     )
     fireEvent.click(screen.getByText('Plan du hall'))
@@ -342,28 +353,18 @@ describe('MergePreviewDialog — un seul comportement (décision du 2026-10-20)'
       expect(texte, mot).not.toContain(mot)
   })
 
-  it('l’horodatage de l’export recopié par le LLM n’empêche rien', async () => {
-    // Le LLM recopie la date de l'export, égale à celle de la base tant que
-    // personne n'a touché l'élément depuis : le fichier fait foi.
-    await ouvrirAvecApercu(
-      fichierLlm((f) => {
-        f.chapters[0].items[0].updated_at = T0
-        f.chapters[1].items[0].updated_at = T0
-      }),
-    )
-    expect(nom()).toBe('Importer 3 documents')
-    expect(screen.queryByText(/depuis l’export|depuis l'export/)).toBeNull()
-  })
-
   it('changé dans l’application depuis l’export : proposé non importé, repris d’un clic', async () => {
-    // Trouvé au navigateur le 2026-10-22 : un fichier pris AVANT qu'un
+    // Trouvé au navigateur le 2026-10-22 : une réponse faite AVANT qu'un
     // collègue améliore Check-in effaçait cette amélioration en silence.
+    localCourant = etat([A, B], {
+      documents: [{ ...d1, updated_at: PLUS_TARD }, d2, d3],
+    })
     await ouvrirAvecApercu(
       fichierLlm((f) => {
-        f.chapters[0].items[0].updated_at = '2025-12-01T00:00:00+00:00'
-        f.chapters[1].items[0].updated_at = T0
+        f._metadata.generated_at = '2026-03-01T00:00:00Z'
       }),
     )
+    localCourant = local
     expect(nom()).toBe('Importer 2 documents')
     expect(
       (screen.getByLabelText('Importer Check-in') as HTMLInputElement).checked,
@@ -376,18 +377,21 @@ describe('MergePreviewDialog — un seul comportement (décision du 2026-10-20)'
     expect(nom()).toBe('Importer 3 documents')
   })
 
-  it('un chapitre ABSENT de la réponse : rien n’est supprimé', async () => {
-    await ouvrirAvecApercu(fichierLlm((f) => f.chapters.splice(1, 1)))
+  it('ce qui n’est pas dans la liste ne change pas, et n’est pas montré', async () => {
+    await ouvrirAvecApercu(fichierLlm((f) => f.changements.splice(1, 1)))
     expect(screen.queryByText('Extincteur')).toBeNull()
     expect(screen.queryByText(/corbeille/)).toBeNull()
     expect(nom()).toBe('Importer 2 documents')
   })
 
-  it('`"supprimer": true` : « mis à la corbeille », refusable comme le reste', async () => {
+  it('« supprimer » : mis à la corbeille, refusable comme le reste', async () => {
     await ouvrirAvecApercu(
       fichierLlm((f) => {
-        f.chapters[0].items[1].supprimer = true
-        f.chapters[1].supprimer = true
+        f.changements.splice(1, 1)
+        f.changements.push(
+          { action: 'supprimer', uuid: d2.uuid, title: 'Check-out' },
+          { action: 'supprimer', uuid: B.uuid, label: 'Sécurité' },
+        )
       }),
     )
     // Check-out : une ligne à case.
@@ -402,9 +406,9 @@ describe('MergePreviewDialog — un seul comportement (décision du 2026-10-20)'
     expect(resume()).toContain('2 à la corbeille')
     fireEvent.click(caseChapitre)
     appliquer.mockResolvedValue({
-      inserted: 1,
+      inserted: 2,
       updated: 1,
-      unchanged: 3,
+      unchanged: 0,
       skipped: 0,
       deleted: 1,
       ignores: 1,
@@ -417,12 +421,41 @@ describe('MergePreviewDialog — un seul comportement (décision du 2026-10-20)'
     expect([...options.exclus]).toEqual(['chapitre:20'])
   })
 
+  it('un déplacement vers un autre chapitre : rangé sous l’arrivée, provenance dite', async () => {
+    await ouvrirAvecApercu(
+      fichierLlm((f) => {
+        f.changements.push({
+          action: 'deplacer',
+          uuid: d2.uuid,
+          title: 'Check-out',
+          chapitre: B.uuid,
+        })
+      }),
+    )
+    const securite = screen.getByRole('list', { name: 'Sécurité' })
+    expect(within(securite).getByText('Check-out')).toBeTruthy()
+    expect(within(securite).getByText('déplacé')).toBeTruthy()
+    expect(within(securite).getByText(/venu du chapitre Accueil/)).toBeTruthy()
+  })
+
+  it('un changement sans action : ignoré, et dit', async () => {
+    await ouvrirAvecApercu(
+      fichierLlm((f) => {
+        f.changements.push({ uuid: d2.uuid, content: 'Réécrit en silence' })
+      }),
+    )
+    expect(screen.queryByText('Check-out')).toBeNull()
+    expect(
+      screen.getByText(/Le document Check-out : aucune action n'est indiquée/),
+    ).toBeTruthy()
+  })
+
   it('la réponse de l’IA se COLLE, même entourée de texte', async () => {
     ouvrir(null)
     expect(bouton().disabled).toBe(true)
     const bloc = '```'
     coller(
-      `Voici le classeur :\n${bloc}json\n${texteLlm()}\n${bloc}\nBonne journée.`,
+      `À MODIFIER : Check-in, Extincteur.\n${bloc}json\n${texteLlm()}\n${bloc}\nBonne journée.`,
     )
     await waitFor(() => screen.getByLabelText('Importer Check-in'), {
       timeout: 3000,
@@ -442,15 +475,18 @@ describe('MergePreviewDialog — un seul comportement (décision du 2026-10-20)'
     expect(options.sourceName).toBe('Réponse collée d’un LLM')
   })
 
-  it('l’export d’un chapitre de ce classeur : appliqué à ce chapitre, et dit', async () => {
-    const f = construireExportChapitre(
-      classeur(),
-      A,
-      local.content,
-      PERIODICITES,
-    )
-    f.chapters[0].items[0].content = 'Réécrit'
-    ouvrir(new File([JSON.stringify(f)], 'chapitre.json'))
+  it('la réponse pour un chapitre de ce classeur : appliquée à ce chapitre, et dit', async () => {
+    const reponse = {
+      _metadata: {
+        portee: {
+          type: 'chapitre',
+          chapitre_uuid: A.uuid,
+          chapitre_label: 'Accueil',
+        },
+      },
+      changements: [{ action: 'modifier', uuid: d1.uuid, content: 'Réécrit' }],
+    }
+    ouvrir(new File([JSON.stringify(reponse)], 'chapitre.json'))
     expect(
       await screen.findByText(
         'Ce fichier concerne le chapitre Accueil. Le reste du classeur ne change pas.',
@@ -462,19 +498,44 @@ describe('MergePreviewDialog — un seul comportement (décision du 2026-10-20)'
     expect(bouton().disabled).toBe(false)
   })
 
-  it('D10 : le fichier d’un autre classeur est accepté avec un avertissement', async () => {
-    await ouvrirAvecApercu(
+  it('la réponse pour un autre classeur est refusée, et dit pourquoi', async () => {
+    ouvrir(
       fichierLlm((f) => {
-        if (f._metadata?.portee?.type === 'classeur') {
-          f._metadata.portee.classeur_uuid = 'autre-uuid'
-          f._metadata.portee.classeur_name = 'Carnet sanitaire'
+        f._metadata.portee = {
+          type: 'classeur',
+          classeur_uuid: 'autre-uuid',
+          classeur_name: 'Carnet sanitaire',
         }
       }),
     )
     expect(
-      screen.getByText(/vient du classeur Carnet sanitaire, pas de celui-ci/),
+      await screen.findByText(
+        /vient du classeur Carnet sanitaire, pas de celui-ci/,
+        undefined,
+        { timeout: 3000 },
+      ),
     ).toBeTruthy()
-    expect(bouton().disabled).toBe(false)
+    expect(bouton().disabled).toBe(true)
+  })
+
+  it('un classeur entier (sauvegarde, ancien export) est refusé, avec la voie à suivre', async () => {
+    const complet = construireExport(
+      classeur(),
+      [A, B],
+      local.content,
+      PERIODICITES,
+    )
+    ouvrir(new File([JSON.stringify(complet)], 'classeur.json'))
+    expect(
+      await screen.findByText(
+        MESSAGE_CLASSEUR_COMPLET,
+        { exact: false },
+        {
+          timeout: 3000,
+        },
+      ),
+    ).toBeTruthy()
+    expect(bouton().disabled).toBe(true)
   })
 })
 
@@ -523,13 +584,10 @@ describe('MergePreviewDialog — deux états (refonte du 2026-10-20)', () => {
   it('un seul avertissement : en clair, pas replié', async () => {
     await ouvrirAvecApercu(
       fichierLlm((f) => {
-        if (f._metadata?.portee?.type === 'classeur') {
-          f._metadata.portee.classeur_uuid = 'autre-uuid'
-          f._metadata.portee.classeur_name = 'Carnet sanitaire'
-        }
+        f.changements.push({ uuid: d2.uuid, content: 'x' })
       }),
     )
-    const w = screen.getByText(/vient du classeur Carnet sanitaire/)
+    const w = screen.getByText(/aucune action n'est indiquée/)
     expect(w.closest('details')).toBeNull()
   })
 
@@ -578,7 +636,7 @@ describe('MergePreviewDialog — utilisateur pressé (navigateur, 2026-10-22)', 
     finir({
       inserted: 2,
       updated: 2,
-      unchanged: 3,
+      unchanged: 0,
       skipped: 0,
       deleted: 0,
       ignores: 0,
@@ -588,23 +646,20 @@ describe('MergePreviewDialog — utilisateur pressé (navigateur, 2026-10-22)', 
   })
 })
 
-describe('MergePreviewDialog — fichier pris avant une suppression', () => {
+describe('MergePreviewDialog — réponse faite avant une suppression', () => {
   afterEach(() => {
     localCourant = local
   })
 
-  it('le chapitre ramené de la corbeille se dit restauré, avec son contenu', async () => {
-    // Sécurité mis à la corbeille APRÈS l'export : ses éléments y restent
-    // rangés (non supprimés) et reviennent avec lui.
+  it('un élément d’un chapitre mis à la corbeille depuis : ignoré, et dit', async () => {
     localCourant = etat(
       [A, { ...B, deleted_at: '2026-06-01T00:00:00+00:00' }],
       { documents: [d1, d2, d3] },
     )
     await ouvrirAvecApercu()
-    const securite = screen.getByRole('list', { name: 'Sécurité' })
+    expect(screen.queryByText('Extincteur')).toBeNull()
     expect(
-      within(securite).getByText('Retiré de la corbeille, avec son contenu'),
+      screen.getByText(/Extincteur : son chapitre est à la corbeille/),
     ).toBeTruthy()
-    expect(within(securite).getByText('restauré')).toBeTruthy()
   })
 })

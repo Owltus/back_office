@@ -43,14 +43,12 @@ import type {
 import { planifierFusion } from '#/lib/classeur/merge/merge.ts'
 import {
   clesChangeesDepuisExport,
-  destinationImport,
-  planifierVers,
-} from '#/lib/classeur/merge/importIa.ts'
+  planifierChangements,
+} from '#/lib/classeur/merge/changements.ts'
 import type {
   ContexteImport,
-  DestinationImport,
-} from '#/lib/classeur/merge/importIa.ts'
-import { planAvecValidation } from '#/lib/classeur/merge/validationImport.ts'
+  FichierChangements,
+} from '#/lib/classeur/merge/changements.ts'
 import {
   chapitresDesLignes,
   filtrerPlan,
@@ -254,6 +252,16 @@ export async function executerPlan(
       case 'supprimerItem':
         await ecrivain.softDeleteItem(action.kind, action.id)
         break
+      case 'ordonnerItem':
+        await ecrivain.updateItem(action.kind, action.id, {
+          sort_order: action.sort_order,
+        })
+        break
+      case 'ordonnerChapitre':
+        await ecrivain.updateChapter(action.id, {
+          sort_order: action.sort_order,
+        })
+        break
     }
   }
   return idsNouveaux
@@ -406,7 +414,7 @@ export async function appliquerFusion(
 }
 
 // ---------------------------------------------------------------------------
-// Import d'un fichier dans un classeur existant (décision du 2026-10-20)
+// Import des changements d'un LLM dans un classeur existant (2026-10-23)
 // ---------------------------------------------------------------------------
 
 /**
@@ -418,7 +426,7 @@ export interface ApercuFusion {
   lignes: LigneImport[]
   /** Chapitre de chaque ligne (même ordre que `lignes`), pour les grouper. */
   chapitres: ChapitreLigne[]
-  /** Ce que le fichier modifie : sa portée déduite (`destinationImport`). */
+  /** Ce que le fichier peut changer : sa portée (`destinationImport`). */
   cible: ContexteImport
   /** « Ce fichier concerne le chapitre X. » ; `null` si c'est d'où l'on importe. */
   note: string | null
@@ -429,39 +437,10 @@ export interface ApercuFusion {
   changesDepuisExport: string[]
 }
 
-/**
- * Plan de l'import de `fichier` depuis `contexte` : portée DÉDUITE du
- * fichier (`destinationImport`), validation (étape 6 : ce que la base
- * refuserait est corrigé AVANT le plan, donc avant le point de
- * restauration), puis le plan de la destination (`planifierVers`). Les
- * avertissements de portée passent en tête. Pur.
- */
-export function planImport(
-  local: EtatLocal,
-  classeur: Pick<DbClasseur, 'uuid' | 'name'>,
-  fichier: ClasseurJson,
-  contexte: ContexteImport,
-): { plan: PlanFusion; destination: DestinationImport } {
-  const destination = destinationImport(local, fichier, classeur, contexte)
-  const plan = planAvecValidation(local, fichier, (f) =>
-    planifierVers(local, f, destination.cible),
-  )
-  return {
-    destination,
-    plan:
-      destination.avertissements.length === 0
-        ? plan
-        : {
-            ...plan,
-            warnings: [...destination.avertissements, ...plan.warnings],
-          },
-  }
-}
-
 /** Aperçu de l'import d'un fichier, sans aucune écriture. */
 export async function previsualiserImport(
   classeurId: number,
-  fichier: ClasseurJson,
+  fichier: FichierChangements,
   contexte: ContexteImport,
 ): Promise<ApercuFusion> {
   const [classeur, local] = await Promise.all([
@@ -473,17 +452,22 @@ export async function previsualiserImport(
 }
 
 /**
- * L'aperçu, pur : plan (`planImport`), une ligne par action, le chapitre de
- * chaque ligne, la note de portée, et les éléments changés dans
+ * L'aperçu, pur : plan (`planifierChangements`), une ligne par action, le
+ * chapitre de chaque ligne, la note de portée, et les éléments changés dans
  * l'application depuis l'export (marqués, proposés refusés).
  */
 export function construireApercu(
   local: EtatLocal,
   classeur: Pick<DbClasseur, 'uuid' | 'name'>,
-  fichier: ClasseurJson,
+  fichier: FichierChangements,
   contexte: ContexteImport,
 ): ApercuFusion {
-  const { plan, destination } = planImport(local, classeur, fichier, contexte)
+  const { plan, destination } = planifierChangements(
+    local,
+    classeur,
+    fichier,
+    contexte,
+  )
   const changes = clesChangeesDepuisExport(local, fichier, plan)
   const marques = new Set(changes)
   return {
@@ -505,21 +489,21 @@ export interface OptionsImport {
   exclus?: ReadonlySet<string>
 }
 
-/** Compteurs d'un import, plus les actions refusées dans l'aperçu. */
+/** Compteurs d'un import, plus les changements refusés dans l'aperçu. */
 export interface ResultatImport extends MergeResult {
   ignores: number
 }
 
 /**
- * Applique un fichier au classeur : MÊME circuit que `appliquerFusion`
- * (plan recalculé sur l'état relu, jamais repris de l'aperçu ; refus filtrés
- * DANS le planificateur, donc avant le test « aucune action » ; point de
- * restauration AVANT la première écriture ; élagage). Tout refuser n'écrit
- * rien, pas même un point.
+ * Applique les changements au classeur : MÊME circuit que `appliquerFusion`
+ * (plan recalculé sur l'état relu, jamais repris de l'aperçu ; refus
+ * appliqués AU CHANGEMENT, avant le calcul des places, donc avant le test
+ * « aucune action » ; point de restauration AVANT la première écriture ;
+ * élagage). Tout refuser n'écrit rien, pas même un point.
  */
 export async function appliquerImport(
   classeurId: number,
-  fichier: ClasseurJson,
+  fichier: FichierChangements,
   contexte: ContexteImport,
   options: OptionsImport,
 ): Promise<ResultatImport> {
@@ -527,12 +511,15 @@ export async function appliquerImport(
   const resultat = await appliquerPlanifie(
     classeurId,
     (local, classeur) => {
-      const filtre = filtrerPlan(
-        planImport(local, classeur, fichier, contexte).plan,
+      const r = planifierChangements(
+        local,
+        classeur,
+        fichier,
+        contexte,
         options.exclus ?? new Set(),
       )
-      ignores = filtre.ignores
-      return filtre.plan
+      ignores = r.ignores
+      return r.plan
     },
     options.sourceName,
   )

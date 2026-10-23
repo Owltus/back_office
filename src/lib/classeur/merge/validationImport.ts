@@ -1,4 +1,8 @@
 /*
+ * Depuis le 2026-10-23, sert l'import d'un fichier complet comme NOUVEAU
+ * classeur ; la réponse d'un LLM (liste de changements) est contrôlée par
+ * `changements.ts`, règles C1 à C9.
+ *
  * Validation d'un fichier AVANT toute écriture (étape 6 du plan
  * `classeur-echange-ia-2026-10-19`). L'import n'a pas de transaction : les
  * écritures partent une à une, et une seule refusée par la base (CHECK,
@@ -26,8 +30,7 @@
  *      uuid), celui-ci reste tel quel, et n'est jamais supprimé (`proteges` ;
  *      depuis le 2026-10-20 un absent n'est de toute façon jamais supprimé,
  *      le filet reste). Un élément DÉJÀ sans titre en base passe tel quel
- *      (E8). Un élément marqué `"supprimer": true` n'est pas contrôlé : il
- *      ne sert qu'à désigner ce qui part à la corbeille, rien n'en est écrit.
+ *      (E8).
  *   V7 `_metadata.periodicites` retouché (E3 apparie les périodicités par ce
  *      bloc) : quand il vient de cette base (au moins une entrée identique au
  *      référentiel) mais qu'une entrée a changé, il est remplacé par le
@@ -54,8 +57,7 @@ import {
   periodiciteParDefaut,
   resoudrePeriodicite,
 } from '#/lib/classeur/merge/merge.ts'
-import type { EtatLocal, PlanFusion } from '#/lib/classeur/merge/merge.ts'
-import { filtrerPlan } from '#/lib/classeur/merge/portee.ts'
+import type { EtatLocal } from '#/lib/classeur/merge/merge.ts'
 import { DEFAUTS } from '#/lib/classeur/merge/schema.ts'
 import type {
   ChapterJson,
@@ -203,7 +205,6 @@ export function validerFichierImport(
   }
 
   function validerItem(item: ItemJson, chapitre: string): ItemJson | null {
-    if (item.supprimer === true) return item
     const titre = item.title.trim()
     // V6
     if (titre === '') {
@@ -319,41 +320,6 @@ export function validerFichierImport(
       }
     }
     return it
-  }
-}
-
-/**
- * Le plan d'un import, précédé de la validation : `planifier` reçoit le
- * fichier CORRIGÉ ; les avertissements passent en tête du plan ; un élément
- * protégé (V6) n'est jamais supprimé (même filtre qu'un refus de l'aperçu).
- * Fichier valide : `planifier(fichier)` tel quel.
- */
-export function planAvecValidation(
-  local: EtatLocal,
-  fichier: ClasseurJson,
-  planifier: (fichier: ClasseurJson) => PlanFusion,
-): PlanFusion {
-  const v = validerFichierImport(fichier, local)
-  const plan = planifier(v.fichier)
-  if (v.avertissements.length === 0 && v.proteges.size === 0) return plan
-  // Seules les SUPPRESSIONS d'un élément protégé sont retirées (sa clé
-  // `kind:id` est celle de `clesActions` pour une suppression).
-  const proteges = new Set(
-    flattenItems(local.content)
-      .filter((it) => v.proteges.has(it.data.uuid))
-      .map((it) => `${it.kind}:${String(it.data.id)}`),
-  )
-  const cles = new Set(
-    plan.actions.flatMap((a) =>
-      a.type === 'supprimerItem' && proteges.has(`${a.kind}:${String(a.id)}`)
-        ? [`${a.kind}:${String(a.id)}`]
-        : [],
-    ),
-  )
-  const filtre = cles.size === 0 ? plan : filtrerPlan(plan, cles).plan
-  return {
-    ...filtre,
-    warnings: [...v.avertissements, ...filtre.warnings],
   }
 }
 

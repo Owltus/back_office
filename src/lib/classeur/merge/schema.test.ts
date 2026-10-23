@@ -12,7 +12,6 @@ import {
   chapitre,
   classeur,
   document,
-  etat,
   intercalaire,
   signature,
   suivi,
@@ -225,40 +224,6 @@ describe('parseImportJson — format v1 et défauts du schéma', () => {
     expect(relu.chapters).toHaveLength(1)
     expect(relu._metadata).toBeDefined()
     expect('demande' in (relu._metadata as object)).toBe(false)
-  })
-})
-
-describe('parseImportJson — `"supprimer": true` (décision du 2026-10-20)', () => {
-  const texte = (item: string, surChapitre = '') =>
-    `{"format_version":2,"classeur":{"name":"C"},"chapters":[{"label":"A"${surChapitre},"items":[{"kind":"document","title":"T"${item}}]}]}`
-
-  it('relu sur un élément et sur un chapitre, `true` seul', () => {
-    const f = parseImportJson(texte(',"supprimer":true', ',"supprimer":true'))
-    expect(f.chapters[0].supprimer).toBe(true)
-    expect(f.chapters[0].items[0].supprimer).toBe(true)
-    for (const v of ['false', '"true"', '1', 'null']) {
-      const g = parseImportJson(texte(`,"supprimer":${v}`, `,"supprimer":${v}`))
-      expect('supprimer' in g.chapters[0], v).toBe(false)
-      expect('supprimer' in g.chapters[0].items[0], v).toBe(false)
-    }
-    expect('supprimer' in parseImportJson(texte('')).chapters[0].items[0]).toBe(
-      false,
-    )
-  })
-
-  it('jamais écrit par un export', () => {
-    const A = chapitre({ id: 10, label: 'Accueil' })
-    const e = construireExport(
-      classeur(),
-      [A],
-      etat([A], {
-        documents: [document({ id: 1, chapter_id: 10, title: 'Doc' })],
-      }).content,
-      PERIODICITES,
-    )
-    expect(JSON.stringify({ ...e, _metadata: undefined })).not.toContain(
-      'supprimer',
-    )
   })
 })
 
@@ -602,8 +567,12 @@ describe('construireExport — forme exacte de do_export_json', () => {
     expect(texte).not.toContain("Le merge n'efface jamais de données")
     expect(texte).not.toContain("informative, ignorée à l'import")
     expect(texte).toMatch(/Registre : le merge n'efface jamais/)
-    expect(texte).toMatch(/absent du JSON n'est jamais supprimé/)
-    expect(texte).toContain(String.raw`\"supprimer\": true`)
+    // 2026-10-23 : la réponse d'un LLM est une liste de changements balisés.
+    expect(texte).toContain(String.raw`\"changements\": [...]`)
+    expect(texte).toContain(
+      String.raw`\"action\": \"modifier\" | \"supprimer\" | \"deplacer\" | \"ajouter\"`,
+    )
+    expect(texte).not.toContain('"supprimer": true')
     expect(texte).toMatch(/par son LIBELLÉ/)
     expect(texte).toMatch(/lignes à signer/)
   })

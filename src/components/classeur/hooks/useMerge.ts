@@ -16,7 +16,10 @@ import {
   restaurerInstantane,
   supprimerEntreeHistorique,
 } from '#/lib/classeur/merge/history.ts'
-import type { ContexteImport } from '#/lib/classeur/merge/importIa.ts'
+import type {
+  ContexteImport,
+  FichierChangements,
+} from '#/lib/classeur/merge/changements.ts'
 import type { ClasseurJson } from '#/lib/classeur/merge/schema.ts'
 import { creerPoint } from '#/lib/classeur/restauration.ts'
 import { fetchMergeHistory } from '#/lib/classeur/service.ts'
@@ -83,7 +86,7 @@ export function useMergeHistory(classeurId: number) {
 
 export interface ImportArgs {
   classeurId: number
-  fichier: ClasseurJson
+  fichier: FichierChangements
   /**
    * D'où l'on importe (accueil du classeur, page d'un chapitre ou d'un
    * document). La portée réelle est déduite du fichier (`destinationImport`).

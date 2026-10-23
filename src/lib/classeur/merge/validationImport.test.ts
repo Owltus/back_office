@@ -14,14 +14,11 @@ import {
   signature,
   suivi,
 } from '#/lib/classeur/merge/fixtures.ts'
-import { planifierImportIa } from '#/lib/classeur/merge/importIa.ts'
 import { planifierFusion } from '#/lib/classeur/merge/merge.ts'
-import { planifierFusionPortee } from '#/lib/classeur/merge/portee.ts'
 import { construireExport } from '#/lib/classeur/merge/schema.ts'
 import type { ClasseurJson } from '#/lib/classeur/merge/schema.ts'
 import {
   estUuid,
-  planAvecValidation,
   validerFichierImport,
 } from '#/lib/classeur/merge/validationImport.ts'
 import type { ChapterContent, DbChapter } from '#/lib/classeur/types.ts'
@@ -74,6 +71,17 @@ const avec = (items: ClasseurJson['chapters'][number]['items']) =>
 
 const messages = (f: ClasseurJson) =>
   validerFichierImport(f, local).avertissements
+
+/**
+ * Le plan d'un fichier complet validé (fusion, avertissements en tête) :
+ * la validation sert désormais l'import en nouveau classeur et le contrôle
+ * d'un fichier complet, plus l'import de changements (`changements.ts`).
+ */
+function planValide(l: typeof local, f: ClasseurJson) {
+  const v = validerFichierImport(f, l)
+  const plan = planifierFusion(l, v.fichier, { replace: false })
+  return { ...plan, warnings: [...v.avertissements, ...plan.warnings] }
+}
 
 describe('validerFichierImport — un fichier valide passe TEL QUEL', () => {
   it('l’export lui-même : même objet, aucun avertissement', () => {
@@ -148,9 +156,6 @@ describe('validerFichierImport — un fichier valide passe TEL QUEL', () => {
         const v = validerFichierImport(f, l)
         expect(v.fichier).toBe(f)
         expect(v.avertissements).toEqual([])
-        // Et le plan validé est celui d'avant l'étape 6.
-        const planifier = (x: ClasseurJson) => planifierImportIa(l, x)
-        expect(planAvecValidation(l, f, planifier)).toEqual(planifier(f))
       }),
       { numRuns: 1000, seed: 20261020 },
     )
@@ -247,9 +252,7 @@ describe('V3, V4, V5 — périodicités', () => {
       'Feuille de suivi Relevé : périodicité n° 999 inconnue, la périodicité actuelle est gardée.',
     ])
     // Et le plan ne change pas la périodicité.
-    const plan = planAvecValidation(local, f, (x) =>
-      planifierImportIa(local, x),
-    )
+    const plan = planValide(local, f)
     expect(plan.actions).toEqual([])
   })
 
@@ -321,34 +324,6 @@ describe('V6 — titre vide', () => {
     expect(v.avertissements).toEqual([
       'Document Check-in : titre vide dans le fichier, élément laissé tel quel.',
     ])
-  })
-
-  it('protégé : jamais supprimé ; les marqués « supprimer » le sont', () => {
-    const f = avec([
-      itJson({ kind: 'document', title: '', uuid: U(1) }),
-      itJson({
-        kind: 'tracking_sheet',
-        title: 'Relevé',
-        uuid: U(3),
-        supprimer: true,
-      }),
-      // Marqué ET titre vidé : la marque l'emporte (V6 ne la contrôle pas).
-      itJson({
-        kind: 'signature_sheet',
-        title: '',
-        uuid: U(4),
-        supprimer: true,
-      }),
-    ])
-    const plan = planAvecValidation(local, f, (x) =>
-      planifierFusionPortee(local, x, { type: 'chapitre', chapitreId: 10 }),
-    )
-    const supprimes = plan.actions.flatMap((a) =>
-      a.type === 'supprimerItem' ? [`${a.kind}:${String(a.id)}`] : [],
-    )
-    expect(supprimes).toEqual(['tracking_sheet:3', 'signature_sheet:4'])
-    expect(plan.resultat.deleted).toBe(2)
-    expect(plan.warnings[0]).toMatch(/titre vide dans le fichier/)
   })
 
   it('sans élément existant : ignoré, un message', () => {
@@ -432,9 +407,7 @@ describe('le cas du plan : nombre 100, uuid « doc-1 », périodicité 999', () 
       itJson({ kind: 'document', title: 'Plan', uuid: 'doc-1', content: '' }),
       itJson({ kind: 'tracking_sheet', title: 'Neuve', periodicite_id: 999 }),
     ])
-    const plan = planAvecValidation(local, f, (x) =>
-      planifierImportIa(local, x),
-    )
+    const plan = planValide(local, f)
     expect(plan.warnings).toEqual([
       'Feuille de signature Émargement : 100 lignes demandées, 60 au plus.',
       'Document Plan : identifiant invalide, retiré.',
@@ -470,9 +443,7 @@ describe('V9 — nature changée par le fichier', () => {
     const f = avec([
       itJson({ kind: 'tracking_sheet', title: 'Check-in', uuid: U(1) }),
     ])
-    const plan = planAvecValidation(local, f, (x) =>
-      planifierImportIa(local, x),
-    )
+    const plan = planValide(local, f)
     expect(plan.actions.some((a) => a.type === 'creerItem')).toBe(false)
     expect(
       plan.actions.some(

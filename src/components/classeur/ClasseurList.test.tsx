@@ -241,9 +241,7 @@ describe('ClasseurList — tableau', () => {
     expect(screen.getByText(/changer l'ordre/)).toBeTruthy()
     expect(screen.getByText('Tous le lisent.')).toBeTruthy()
     expect(screen.getByText(/Pour reprendre ses modifications/)).toBeTruthy()
-    expect(
-      screen.getByText(/Ce que la réponse ne contient pas est gardé/),
-    ).toBeTruthy()
+    expect(screen.getByText(/Le LLM ne renvoie que ce qui change/)).toBeTruthy()
     expect(
       screen.getByText(/point de restauration est pris avant/),
     ).toBeTruthy()

@@ -140,8 +140,9 @@ export function ClasseurListHelpPanel({
         <p>
           Collez dans la conversation avec le LLM. Il vous demande ce que vous
           voulez faire : poser une question, corriger, ajouter un chapitre ou
-          une feuille. Il rappelle ses limites dans la conversation, jamais dans
-          le classeur.
+          une feuille. Avant une modification, il vous dit ce qu'il va
+          supprimer, déplacer, modifier ou ajouter. Il rappelle ses limites dans
+          la conversation, jamais dans le classeur.
         </p>
         {canWrite && (
           <>
@@ -151,10 +152,10 @@ export function ClasseurListHelpPanel({
               chapitre ou un document ne change que lui.
             </p>
             <p>
-              Ce que la réponse ne contient pas est gardé. Vous voyez chaque
-              changement avant de valider, et vous pouvez en refuser un. Ce qui
-              est retiré va à la corbeille. Un point de restauration est pris
-              avant la première modification.
+              Le LLM ne renvoie que ce qui change : le reste ne bouge pas. Vous
+              voyez chaque changement avant de valider, et vous pouvez en
+              refuser un. Ce qui est supprimé va à la corbeille. Un point de
+              restauration est pris avant la première modification.
             </p>
           </>
         )}
@@ -164,9 +165,9 @@ export function ClasseurListHelpPanel({
         <Section title="Créer ou importer">
           <p>
             {fort('Nouveau classeur')} en crée un vide. Le bouton Importer crée
-            un nouveau classeur à partir d'un fichier exporté ou rendu par un
-            LLM. Vous pouvez aussi déposer le fichier directement sur le bouton.
-            Si le fichier pose question, vous le voyez avant la création.
+            un nouveau classeur à partir d'un fichier exporté. Vous pouvez aussi
+            déposer le fichier directement sur le bouton. Si le fichier pose
+            question, vous le voyez avant la création.
           </p>
         </Section>
       )}

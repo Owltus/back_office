@@ -8,6 +8,7 @@ import {
   resoudreChapitre,
 } from '#/lib/classeur/merge/apply.ts'
 import type { Ecrivain } from '#/lib/classeur/merge/apply.ts'
+import type { FichierChangements } from '#/lib/classeur/merge/changements.ts'
 import {
   PERIODICITES,
   chJson,
@@ -280,9 +281,21 @@ const fichierDoc = () =>
     }),
   ])
 
+/** La réponse d'un LLM : une seule modification, celle du document. */
+const changementsDoc = (): FichierChangements => ({
+  portee: {
+    type: 'document',
+    document_uuid: d1.uuid,
+    document_title: d1.title,
+    chapitre_label: A.label,
+  },
+  periodicites: [],
+  avertissements: [],
+  changements: [{ action: 'modifier', uuid: d1.uuid, content: 'après' }],
+})
 describe('previsualiserImport', () => {
   it('rend le plan et une ligne avant / après par action, sans écrire', async () => {
-    const r = await previsualiserImport(1, fichierDoc(), {
+    const r = await previsualiserImport(1, changementsDoc(), {
       type: 'document',
       documentId: 1,
     })
@@ -305,7 +318,7 @@ describe('appliquerImport : instantané', () => {
     mocks.fetchPeriodicites.mockResolvedValue(undefined as never)
     await appliquerImport(
       1,
-      fichierDoc(),
+      changementsDoc(),
       { type: 'document', documentId: 1 },
       {
         sourceName: 'Import',
