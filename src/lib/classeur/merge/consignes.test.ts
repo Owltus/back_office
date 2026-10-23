@@ -21,7 +21,7 @@ import { NOTE_EXPORT, construireExport } from '#/lib/classeur/merge/schema.ts'
 
 /*
  * Mode d'emploi pour une IA (étape 2 du plan `classeur-echange-ia-2026-10-19`).
- * Oracle : la demande de l'utilisateur du 2026-10-19, découpée en six parties
+ * Oracle : la demande de l'utilisateur du 2026-10-19, découpée en sept parties
  * (à qui tu parles, répondre, modifier, proposer, l'application, les limites)
  * et la règle du « quatrième mur ». Chaque partie est réclamée par des
  * MARQUEURS dans les TROIS exports ; le test « les TROIS exports » de
@@ -56,6 +56,11 @@ const PARTIES: Array<[string, string[]]> = [
       'mettre à jour ou corriger',
       'ajouter un chapitre, un document ou une feuille',
       'créer quelque chose à partir du contenu',
+      // Questions et contrôle (2026-10-23).
+      'pose UNE question à la fois',
+      'des choix courts (A ou B ?)',
+      'qui lira le document',
+      'ne pose que la question la plus importante',
     ],
   ],
   [
@@ -65,6 +70,10 @@ const PARTIES: Array<[string, string[]]> = [
       "en citant le chapitre et le titre de l'élément",
       "Si l'information n'y est pas, dis-le",
       'Pas de JSON dans ce cas',
+      "n'invente JAMAIS un fait",
+      'numéro de téléphone',
+      'règle légale',
+      'demande-le à la personne',
     ],
   ],
   [
@@ -73,6 +82,9 @@ const PARTIES: Array<[string, string[]]> = [
       'reformule ce que tu as compris',
       'propose un plan court',
       "attends l'accord",
+      "accord d'avance (faites directement), passe au résultat sans plan",
+      "si un point est flou, pose d'abord ta question",
+      "Une suppression que la personne n'a pas nommée elle-même se confirme à part",
       'dans un seul bloc de code',
       'À SUPPRIMER',
       'À DÉPLACER',
@@ -84,7 +96,26 @@ const PARTIES: Array<[string, string[]]> = [
     ],
   ],
   [
-    '4. PROPOSER DES IDÉES',
+    '4. COHÉRENCE',
+    [
+      'relis tout le fichier comme un contrôleur',
+      'gauche ici, droite là',
+      'un doublon',
+      'une étape qui manque ou dans le désordre',
+      'rangé dans le mauvais chapitre',
+      'Dis précisément où (chapitre, élément, étape)',
+      'ne tranche jamais seul',
+      'Une modification ne doit créer aucune contradiction',
+      'les autres endroits qui la citent',
+      // Essai à blanc du 2026-10-23 : trois hésitations levées.
+      'mets-les à jour dans les mêmes changements et dis-le dans la liste',
+      'sans bloc de code',
+      'fais cet audit en entier',
+      'le plus grave en premier',
+    ],
+  ],
+  [
+    '5. PROPOSER DES IDÉES',
     [
       'un document qui manque',
       'une étape floue',
@@ -96,7 +127,7 @@ const PARTIES: Array<[string, string[]]> = [
     ],
   ],
   [
-    "5. L'APPLICATION",
+    "6. L'APPLICATION",
     [
       '4 natures',
       '`document`',
@@ -108,7 +139,7 @@ const PARTIES: Array<[string, string[]]> = [
     ],
   ],
   [
-    '6. LIMITES',
+    '7. LIMITES',
     [
       'un LLM peut se tromper',
       'un document réglementaire se relit avant',
@@ -121,7 +152,7 @@ const PARTIES: Array<[string, string[]]> = [
   ],
 ]
 
-describe("mode d'emploi pour une IA — les six parties dans les TROIS exports", () => {
+describe("mode d'emploi pour une IA — les sept parties dans les TROIS exports", () => {
   it.each(Object.entries(LES_TROIS))(
     '%s : chaque partie, ses marqueurs, dans l’ordre',
     (_nom, instructions) => {
@@ -265,10 +296,10 @@ describe("mode d'emploi — changements balisés (décision du 2026-10-23)", () 
 })
 
 describe("mode d'emploi — taille", () => {
-  it('moins de 7 ko par export (JSON sérialisé)', () => {
+  it('moins de 9 ko par export (JSON sérialisé)', () => {
     for (const [nom, i] of Object.entries(LES_TROIS)) {
       const octets = new TextEncoder().encode(JSON.stringify(i)).length
-      expect(octets, nom).toBeLessThan(7000)
+      expect(octets, nom).toBeLessThan(9000)
     }
   })
 })

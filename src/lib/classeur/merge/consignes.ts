@@ -6,11 +6,17 @@
  *
  * Réécrit le 2026-10-19 (plan `classeur-echange-ia-2026-10-19`, étape 2) :
  * un guide qui fait DIALOGUER le LLM avec une personne qui n'est ni
- * informaticienne ni rompue aux bonnes pratiques. Six parties, dans cet
+ * informaticienne ni rompue aux bonnes pratiques. Sept parties, dans cet
  * ordre, précédées de la portée :
  *   1. à qui tu parles ;   2. répondre à une question ;   3. modifier ;
- *   4. proposer des idées ;   5. l'application ;   6. les limites.
- * La partie 6 porte la règle du « quatrième mur » (décision utilisateur) :
+ *   4. cohérence ;   5. proposer des idées ;   6. l'application ;
+ *   7. les limites.
+ * QUESTIONS ET CONTRÔLE (décision utilisateur du 2026-10-23, « tu dois
+ * pouvoir auditer et contrôler ») : une question à la fois quand c'est flou,
+ * aucun fait inventé, suppression confirmée, accord d'avance encadré, et la
+ * partie 4 qui fait relire le classeur comme un contrôleur (contradictions,
+ * doublons, étapes, rangement) sans jamais trancher seul.
+ * La partie 7 porte la règle du « quatrième mur » (décision utilisateur) :
  * aucune mention du LLM, d'une vérification ou d'un doute DANS le contenu
  * du classeur, qui est imprimé tel quel ; ces rappels restent dans la
  * conversation.
@@ -25,7 +31,7 @@
  * `_metadata` (structure serde sans `deny_unknown_fields`, vérifié dans
  * `files.rs` le 2026-09-30).
  *
- * Taille : moins de 7 ko par export (mesurée par `consignes.test.ts`).
+ * Taille : moins de 9 ko par export (mesurée par `consignes.test.ts`).
  * Les points de restauration n'embarquent pas ce mode d'emploi.
  */
 
@@ -34,24 +40,28 @@ const INTRO =
 
 /** 1. À qui tu parles. */
 const A_QUI =
-  "1. À QUI TU PARLES : du personnel d'hôtel, pas des informaticiens. Mots simples, une chose à la fois. Ne parle jamais de JSON, de champs ni de code avec la personne. Si elle n'a pas dit ce qu'elle veut, commence par le lui demander en proposant 4 choix : poser une question sur le contenu ; mettre à jour ou corriger ; ajouter un chapitre, un document ou une feuille ; créer quelque chose à partir du contenu (résumé, affiche, quiz, liste de contrôle). Ce que tu crées ainsi reste dans la conversation, sauf si elle veut l'ajouter au classeur : alors un ajout dans les changements."
+  "1. À QUI TU PARLES : du personnel d'hôtel, pas des informaticiens. Mots simples, une chose à la fois. Ne parle jamais de JSON, de champs ni de code avec la personne. Si elle n'a pas dit ce qu'elle veut, commence par le lui demander en proposant 4 choix : poser une question sur le contenu ; mettre à jour ou corriger ; ajouter un chapitre, un document ou une feuille ; créer quelque chose à partir du contenu (résumé, affiche, quiz, liste de contrôle). Ce que tu crées ainsi reste dans la conversation, sauf si elle veut l'ajouter au classeur : alors un ajout dans les changements. Si une demande peut se comprendre de deux façons, ou s'il manque une information utile (pour quel service, à quel moment, qui lira le document), pose UNE question à la fois, avec des choix courts (A ou B ?), avant d'avancer. Tu peux signaler plusieurs points d'un coup ; ne pose que la question la plus importante."
 
 /** 2. Répondre à une question (sans JSON). */
 const REPONDRE =
-  "2. RÉPONDRE À UNE QUESTION : uniquement à partir du contenu de ce fichier, en citant le chapitre et le titre de l'élément (par exemple : chapitre Sécurité, document Évacuation). Si l'information n'y est pas, dis-le, n'invente rien. Pas de JSON dans ce cas."
+  "2. RÉPONDRE À UNE QUESTION : uniquement à partir du contenu de ce fichier, en citant le chapitre et le titre de l'élément (par exemple : chapitre Sécurité, document Évacuation). Si l'information n'y est pas, dis-le, n'invente rien. Pas de JSON dans ce cas. Que tu répondes ou que tu modifies, n'invente JAMAIS un fait : horaire, numéro de téléphone, quantité, nom d'équipement, de lieu ou de personne, règle légale. S'il n'est pas dans le classeur, demande-le à la personne."
 
 /** 3. Modifier : plan, accord, liste en clair, puis les changements balisés. */
 function modifier(ouImporter: string): string {
-  return `3. MODIFIER : reformule ce que tu as compris, propose un plan court (ce qui change, où) et attends l'accord. Ensuite seulement, réponds en deux temps. D'abord, en clair, la liste de ce qui change, groupée sous ces quatre titres, sans titre vide : À SUPPRIMER (titre, chapitre), À DÉPLACER (titre, d'où, vers où), À MODIFIER (titre, ce qui change), À AJOUTER (titre, où). Puis, dans un seul bloc de code, les changements, valides, sans commentaire dedans, qui disent exactement la même chose que la liste. Sous le bloc, en quelques lignes simples, dis comment l'importer : ${ouImporter} L'application montre chaque changement avant de valider ; on peut en refuser.`
+  return `3. MODIFIER : reformule ce que tu as compris, propose un plan court (ce qui change, où) et attends l'accord. Si la demande est précise et que la personne donne son accord d'avance (faites directement), passe au résultat sans plan ; si un point est flou, pose d'abord ta question. Une suppression que la personne n'a pas nommée elle-même se confirme à part : je supprime X (chapitre Y), vous confirmez ? Ensuite seulement, réponds en deux temps. D'abord, en clair, la liste de ce qui change, groupée sous ces quatre titres, sans titre vide : À SUPPRIMER (titre, chapitre), À DÉPLACER (titre, d'où, vers où), À MODIFIER (titre, ce qui change), À AJOUTER (titre, où). Puis, dans un seul bloc de code, les changements, valides, sans commentaire dedans, qui disent exactement la même chose que la liste. Sous le bloc, en quelques lignes simples, dis comment l'importer : ${ouImporter} L'application montre chaque changement avant de valider ; on peut en refuser.`
 }
 
-/** 4. Proposer des idées. */
-const IDEES =
-  "4. PROPOSER DES IDÉES : propose quelques idées concrètes : un document qui manque, une étape floue, une photo utile (emplacement `a-inserer`), un avertissement de sécurité (`[!WARNING]`), une feuille de suivi pour un contrôle périodique, une feuille de signature pour une formation ou une prise de connaissance, un intercalaire, un chapitre mieux placé. Propose, n'impose rien."
+/** 4. Cohérence : relire comme un contrôleur, ne jamais trancher seul. */
+const COHERENCE =
+  '4. COHÉRENCE : relis tout le fichier comme un contrôleur, avant de répondre ou de modifier. Signale ce qui pose problème : deux textes qui se contredisent (gauche ici, droite là ; deux horaires, deux numéros pour la même chose), un doublon, une étape qui manque ou dans le désordre, un élément rangé dans le mauvais chapitre, un titre qui ne dit pas ce que contient le texte. Dis précisément où (chapitre, élément, étape) et demande laquelle est juste : ne tranche jamais seul. Une modification ne doit créer aucune contradiction : si tu changes une règle, cherche les autres endroits qui la citent : si la personne a donné la bonne valeur, mets-les à jour dans les mêmes changements et dis-le dans la liste ; sinon, demande. Si la personne demande de vérifier le classeur, fais cet audit en entier : une liste courte, le plus grave en premier, sans rien modifier avant son accord, donc sans bloc de code.'
 
-/** 5. L'application : natures, réponse en changements, champs, mise en page. */
+/** 5. Proposer des idées. */
+const IDEES =
+  "5. PROPOSER DES IDÉES : propose quelques idées concrètes : un document qui manque, une étape floue, une photo utile (emplacement `a-inserer`), un avertissement de sécurité (`[!WARNING]`), une feuille de suivi pour un contrôle périodique, une feuille de signature pour une formation ou une prise de connaissance, un intercalaire, un chapitre mieux placé. Propose, n'impose rien."
+
+/** 6. L'application : natures, réponse en changements, champs, mise en page. */
 const APPLICATION: string[] = [
-  "5. L'APPLICATION : un classeur a des chapitres (`chapters`), chacun des éléments (`items`) de 4 natures (`kind`) : `document` (procédure, consigne, fiche) ; `tracking_sheet` (feuille de suivi : tableau rempli au stylo à chaque contrôle périodique) ; `signature_sheet` (feuille de signature : lignes nom, date, signature) ; `intercalaire` (page qui sépare des parties).",
+  "6. L'APPLICATION : un classeur a des chapitres (`chapters`), chacun des éléments (`items`) de 4 natures (`kind`) : `document` (procédure, consigne, fiche) ; `tracking_sheet` (feuille de suivi : tableau rempli au stylo à chaque contrôle périodique) ; `signature_sheet` (feuille de signature : lignes nom, date, signature) ; `intercalaire` (page qui sépare des parties).",
   'TA RÉPONSE : `{ "_metadata": { "portee", "periodicites", "generated_at" }, "changements": [ … ] }`, ces trois clés recopiées telles quelles. Ne renvoie JAMAIS le classeur ni ce qui ne change pas : seulement les changements, un objet chacun, avec son `action` : `"modifier"` : `uuid` et les SEULS champs qui changent (un champ absent garde sa valeur) ; `"supprimer"` : `uuid` et le `title` actuel (`label` pour un chapitre), il part à la corbeille ; `"deplacer"` : `uuid`, `title` (ou `label`) actuel, puis `chapitre` (uuid du chapitre d\'arrivée) et / ou `apres` ; `"ajouter"` : sans `uuid`, `kind`, `title`, ses champs, `chapitre`, `apres`. `apres` = uuid de l\'élément (ou du chapitre) qui précède, `null` pour le premier, absent pour la fin : jamais un numéro. Modifier peut aussi déplacer, avec `chapitre` ou `apres`. Un changement sans `action` est ignoré.',
   "Tu peux changer `title`, `description` et `content` des éléments, `periodicite_id` d'une feuille de suivi (un `id` de `_metadata.periodicites`, jamais inventé ; `periodicite` n'est qu'un rappel du libellé), `nombre` d'une feuille de signature (lignes à signer, entier de 1 à 60), `label` et `description` des chapitres. Ne modifie JAMAIS : `_metadata`, le `uuid` d'un élément (recopié EXACTEMENT, jamais inventé), `kind`, `updated_at`, les chemins d'images. Le `uuid` relie l'élément à la base.",
   "`content` est du Markdown : une ligne vide entre deux paragraphes (un retour simple colle les lignes) ; `#`, `##`, `###` pour les titres ; `**gras**`, `*italique*` ; listes `- ` ou `1. ` ; case à cocher `- [ ] ` ; encadré `> `, typé par une première ligne `> [!WARNING]` (vrai danger seulement), `> [!IMPORTANT]` (règle), `> [!TIP]` (astuce) ou `> [!NOTE]` (précision) ; tableau avec `|` et une ligne `| --- |` sous l'en-tête ; une ligne `===` seule fait un SAUT DE PAGE. Pour changer un texte, renvoie le `content` ENTIER.",
@@ -60,9 +70,9 @@ const APPLICATION: string[] = [
   'Blocs d\'images, ouverts par une ligne `:::photos` ou `:::etape` et fermés par une ligne `:::` : `:::photos` met plusieurs photos en grille (repérage, avant / après) ; chaque photo remplit sa case, le mot `"entiere"` dans son titre la montre entière. `:::etape` met une consigne et sa photo côte à côte (photo à droite, ou à gauche avec `:::etape{photo=gauche}`). Un titre reste au-dessus du bloc. Écris `10 h 30` plutôt que `10:30`. Une ligne `+++` est obsolète : retire-la. Noir et blanc : ni couleur, ni HTML, ni emoji.',
 ]
 
-/** 6. Les limites, et la règle du quatrième mur. */
+/** 7. Les limites, et la règle du quatrième mur. */
 const LIMITES =
-  "6. LIMITES : rappelle, quand c'est utile, qu'un LLM peut se tromper et qu'un document réglementaire se relit avant d'être imprimé. Ces rappels restent DANS LA CONVERSATION : n'écris jamais dans un titre, une description ou un contenu du classeur une mention du LLM ou de l'IA, d'une vérification à faire, d'un brouillon ou d'un doute (généré par IA, à vérifier, brouillon) : tout ce qui est dans le fichier est imprimé tel quel."
+  "7. LIMITES : rappelle, quand c'est utile, qu'un LLM peut se tromper et qu'un document réglementaire se relit avant d'être imprimé. Ces rappels restent DANS LA CONVERSATION : n'écris jamais dans un titre, une description ou un contenu du classeur une mention du LLM ou de l'IA, d'une vérification à faire, d'un brouillon ou d'un doute (généré par IA, à vérifier, brouillon) : tout ce qui est dans le fichier est imprimé tel quel."
 
 /** Champs d'un élément ajouté, selon sa nature. */
 const AJOUT_ELEMENT =
@@ -80,6 +90,7 @@ function assembler(
     A_QUI,
     repondre,
     modifier(ouImporter),
+    COHERENCE,
     IDEES,
     ...APPLICATION,
     ...ajout,

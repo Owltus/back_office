@@ -802,7 +802,16 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
     points de restauration) ; l'import en NOUVEAU classeur depuis la liste
     garde le fichier complet. RETIRÉS : `importIa.ts`, `planifierFusionPortee`,
     `planSuppressionsDemandees`, `planAvecValidation`, `ItemJson.supprimer`.
-    Consignes ≤ 7 000 octets (6 902). Vérifié : 3 020 tests, simulateur
+    Consignes ≤ 9 000 octets (8 679) depuis l'ajout, le même jour, de
+    QUESTIONS ET CONTRÔLE (décision utilisateur : « tu dois pouvoir auditer
+    et contrôler… gauche / droite ») : sept parties, dont 4. COHÉRENCE
+    (relire comme un contrôleur, contradictions, doublons, étapes,
+    rangement, ne jamais trancher seul, audit complet sur demande sans bloc,
+    une règle changée = tous les endroits qui la citent) ; une question à la
+    fois quand c'est flou ; aucun fait inventé (horaire, numéro, règle
+    légale) ; « faites directement » encadré ; suppression non nommée
+    confirmée à part. Essai à blanc sur un classeur piégé (gauche / droite) :
+    5 réponses sur 5 conformes (audit, demande floue, règle citée deux fois). Vérifié : 3 020 tests, simulateur
     (`changements.simulateur.test.ts`), propriété d'ordre (1 000 cas), et un
     ESSAI À BLANC : deux LLM (sonnet, haiku) n'ayant que l'export ont rendu
     une réponse importée exactement comme demandé, sans avertissement. Non
