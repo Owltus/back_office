@@ -811,7 +811,19 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
     fois quand c'est flou ; aucun fait inventé (horaire, numéro, règle
     légale) ; « faites directement » encadré ; suppression non nommée
     confirmée à part. Essai à blanc sur un classeur piégé (gauche / droite) :
-    5 réponses sur 5 conformes (audit, demande floue, règle citée deux fois). Vérifié : 3 020 tests, simulateur
+    5 réponses sur 5 conformes (audit, demande floue, règle citée deux fois).
+    IMAGES (même jour, décision utilisateur : « mettre en place des images
+    vides… de manière logique et cohérente », et remettre en page les images
+    existantes par leurs chemins) : le LLM ne voit pas les images ; il place
+    des images À VENIR (`a-inserer`) là où elles aident (geste, repérage,
+    réglage, écran, avant / après ; jamais pour décorer) et choisit la MISE
+    EN PAGE, la même pour une image réelle ou à venir : consigne + photo →
+    `:::etape`, photos à comparer → `:::photos`, capture à lire → `"pleine"`,
+    sinon image seule sans taille ; légende gardée sauf texte explicite.
+    Consignes ≤ 11 000 octets (~9 700). Essai à blanc (sonnet, haiku ×
+    placer / remettre en page) : 4 sur 4 importés sans avertissement, aucun
+    mot perdu, aucun chemin inventé, rendu réel conforme (chaque étape a sa
+    photo, aucun bloc imbriqué). Vérifié : 3 020 tests, simulateur
     (`changements.simulateur.test.ts`), propriété d'ordre (1 000 cas), et un
     ESSAI À BLANC : deux LLM (sonnet, haiku) n'ayant que l'export ont rendu
     une réponse importée exactement comme demandé, sans avertissement. Non

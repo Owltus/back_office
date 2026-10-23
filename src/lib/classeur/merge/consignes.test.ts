@@ -112,6 +112,7 @@ const PARTIES: Array<[string, string[]]> = [
       'sans bloc de code',
       'fais cet audit en entier',
       'le plus grave en premier',
+      "une légende d'image qui ne correspond pas au texte",
     ],
   ],
   [
@@ -136,6 +137,23 @@ const PARTIES: Array<[string, string[]]> = [
       '`intercalaire`',
       '`_metadata.periodicites`, jamais inventé',
       'entier de 1 à 60',
+      // Images (2026-10-23) : à venir, mise en page logique, chemins repris.
+      'tu ne vois pas les images',
+      "n'en invente jamais",
+      'même vers un autre élément de ce fichier',
+      'sinon, demande',
+      'IMAGE À VENIR',
+      'jamais pour décorer',
+      'MISE EN PAGE, la même pour une image du classeur et une image à venir',
+      'une consigne qui va avec sa photo → bloc `:::etape`',
+      'plusieurs photos à comparer ou à repérer → bloc `:::photos`',
+      'une capture d\'écran à lire → image seule, `"pleine"`',
+      "le titre de l'étape reste AU-DESSUS du bloc",
+      'jamais un bloc dans un autre',
+      'elle règle la largeur de la colonne photo',
+      'Dans `:::photos`, pas de taille',
+      // Essai à blanc du 2026-10-23 : la syntaxe de la taille n'était pas montrée.
+      'entre guillemets après le chemin (`![légende](chemin "pleine")`)',
     ],
   ],
   [
@@ -296,10 +314,10 @@ describe("mode d'emploi — changements balisés (décision du 2026-10-23)", () 
 })
 
 describe("mode d'emploi — taille", () => {
-  it('moins de 9 ko par export (JSON sérialisé)', () => {
+  it('moins de 11 ko par export (JSON sérialisé)', () => {
     for (const [nom, i] of Object.entries(LES_TROIS)) {
       const octets = new TextEncoder().encode(JSON.stringify(i)).length
-      expect(octets, nom).toBeLessThan(9000)
+      expect(octets, nom).toBeLessThan(11000)
     }
   })
 })
