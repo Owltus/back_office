@@ -89,6 +89,13 @@ describe('relecture — contexte import (exemples écrits à la main)', () => {
         ligne: 1,
         image: true,
         message: 'Image introuvable : elle a été supprimée de la médiathèque.',
+        // Dans l'éditeur, l'image disparue devient un emplacement à remplir.
+        correction: {
+          libelle: 'Mettre un emplacement à remplir',
+          debut: 1,
+          avant: [`![x](${manquante})`],
+          apres: ['![x](a-inserer)'],
+        },
       },
     ])
     expect(alertesRelecture('![x](24/inexistant.webp)', new Map())).toEqual([])

@@ -113,6 +113,7 @@ const PARTIES: Array<[string, string[]]> = [
       'fais cet audit en entier',
       'le plus grave en premier',
       "une légende d'image qui ne correspond pas au texte",
+      "ce qui s'imprime mal (les règles d'écriture de la partie 6",
     ],
   ],
   [
@@ -152,6 +153,12 @@ const PARTIES: Array<[string, string[]]> = [
       'jamais un bloc dans un autre',
       'elle règle la largeur de la colonne photo',
       'Dans `:::photos`, pas de taille',
+      // Règles d'écriture (2026-10-24), miroir de la relecture de l'app.
+      "RÈGLES D'ÉCRITURE",
+      'une action par étape, 35 mots au plus',
+      'jamais une ligne en gras seule',
+      'pas de niveau de titre sauté',
+      "chaque image a une légende qui dit ce qu'elle montre",
       // Essai à blanc du 2026-10-23 : la syntaxe de la taille n'était pas montrée.
       'entre guillemets après le chemin (`![légende](chemin "pleine")`)',
     ],

@@ -1494,7 +1494,19 @@ editionTextarea.ts`) : `execCommand('insertText')` une fois le dialogue
     masquer/afficher l'aperçu (≥ lg). 18 : `lib/classeur/relecture.ts`
     (image supprimée, lien vide, tableau aux cases en trop ou au séparateur
     invalide, titre sauté ; blocs de code ignorés), repliable sous la barre,
-    clic = aller à la ligne, jamais bloquant. 19 : « N pages » discret
+    clic = aller à la ligne, jamais bloquant.
+    CORRECTIONS MÉCANIQUES (2026-10-24, demande utilisateur : « si elle sait
+    reconnaître un souci, elle peut sûrement le corriger ») : un point qui n'a
+    qu'une bonne réponse porte `Alerte.correction` (lignes `avant` gardées
+    comme garde, `apres`), bouton à côté du point et « Corriger les N points
+    simples » en tête, appliqués par `appliquerCorrections` en UNE édition
+    (Ctrl + Z) : gras → titre, titre sauté, émoji, lien vide, bloc mal écrit
+    ou mal nommé, texte sorti d'une planche, `===` inutile, image disparue →
+    emplacement, image très haute → taille auto, tableaux (séparateur, null,
+    ligne courte). Jamais à l'import. Ce qui demande le sens (étape longue,
+    légende, recadrage, phrase sur le LLM) n'en a pas : c'est le LLM, à qui
+    les RÈGLES D'ÉCRITURE de `consignes.ts` (miroir, 35 mots par étape)
+    demandent de les respecter et de les signaler à l'audit. 19 : « N pages » discret
     (`onPageCount` de `DocumentPages`). 23 refusé.
     Point 22 FAIT : `mentionVersion` = LA DATE SEULE « jj/mm/aaaa » (fuseau
     de Paris ; l'utilisateur a refusé tout texte et l'heure) ; date du jour

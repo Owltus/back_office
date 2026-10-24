@@ -45,12 +45,13 @@ import { useZoomApercu } from '#/components/classeur/hooks/useZoomApercu.ts'
 import { AlertesRelecture } from '#/components/classeur/detail/AlertesRelecture.tsx'
 import {
   allerALigne,
+  appliquerDansEditeur,
   ligneDePosition,
 } from '#/components/classeur/detail/editionTextarea.ts'
 import { useImages } from '#/components/classeur/hooks/useImages.ts'
 import { BarreImage } from '#/components/classeur/detail/BarreImage.tsx'
 import type { CibleBarre } from '#/components/classeur/detail/BarreImage.tsx'
-import { dispositionImage } from '#/lib/classeur/disposition.ts'
+import { dispositionImage, editionEntre } from '#/lib/classeur/disposition.ts'
 import { IMAGE_A_INSERER, trouverImage } from '#/lib/classeur/images.ts'
 import { AbandonModificationsDialog } from '#/components/classeur/dialogs/AbandonModificationsDialog.tsx'
 import { ConflitDocumentDialog } from '#/components/classeur/dialogs/ConflitDocumentDialog.tsx'
@@ -72,8 +73,12 @@ import {
   ligneRendueVersSource,
   ligneSourceVersRendue,
 } from '#/lib/classeur/print/lignesSource.ts'
-import { alertesChampsIa, alertesRelecture } from '#/lib/classeur/relecture.ts'
-import type { InfoPage } from '#/lib/classeur/relecture.ts'
+import {
+  alertesChampsIa,
+  alertesRelecture,
+  appliquerCorrections,
+} from '#/lib/classeur/relecture.ts'
+import type { Correction, InfoPage } from '#/lib/classeur/relecture.ts'
 import type { PageData } from '#/lib/classeur/print/paginate.ts'
 import { mentionVersion } from '#/lib/classeur/print/mentionVersion.ts'
 import { nomFichierImpression } from '#/lib/classeur/print/nomFichierImpression.ts'
@@ -220,6 +225,15 @@ export function DocumentDetail() {
     if (!ta) return
     defilementPilote.current = performance.now()
     allerALigne(ta, ligne)
+  }, [])
+
+  /** Corrections mécaniques de la relecture : une modification, Ctrl + Z. */
+  const corriger = useCallback((corrections: readonly Correction[]) => {
+    const ta = editeurRef.current
+    if (!ta) return
+    const nouveau = appliquerCorrections(ta.value, corrections)
+    if (nouveau === ta.value) return
+    appliquerDansEditeur(ta, editionEntre(ta.value, nouveau))
   }, [])
 
   // 16. Aperçu → texte : un clic sur un bloc de l'aperçu amène le curseur
@@ -672,6 +686,7 @@ export function DocumentDetail() {
                   alertes={alertes}
                   onAller={allerA}
                   onChamp={() => setTitreOuvert(true)}
+                  onCorriger={corriger}
                 />
               </div>
             )}

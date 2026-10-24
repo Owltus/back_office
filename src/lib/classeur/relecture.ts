@@ -41,9 +41,12 @@
  */
 
 import {
+  IMAGE_A_INSERER,
+  ajustementDepuisTitre,
   cadreDepuisTitre,
   estCheminImage,
   estImageAInserer,
+  jetonImage,
   tailleDepuisTitre,
 } from '#/lib/classeur/images.ts'
 import { estLegendeGenerique } from '#/lib/classeur/legende.ts'
@@ -65,6 +68,69 @@ export interface Alerte {
    * haute, bandeau) : jamais émise tant qu'elle n'est pas chargée.
    */
   image?: true
+  /**
+   * Correction MÉCANIQUE (2026-10-24, demande utilisateur : « si elle sait
+   * reconnaître un souci, elle peut sûrement le corriger ») : posée
+   * seulement quand il n'y a qu'une bonne réponse. Ce qui demande de
+   * comprendre le sens (étape longue, légende, recadrage) n'en a pas.
+   */
+  correction?: Correction
+}
+
+/**
+ * Remplacement de lignes ENTIÈRES du texte relu. `avant` sert de garde : si
+ * le texte a changé depuis la relecture, la correction est ignorée.
+ */
+export interface Correction {
+  /** Ce que fait le bouton, en clair (« En faire un titre »). */
+  libelle: string
+  /** Première ligne remplacée (1 = première). */
+  debut: number
+  /** Lignes remplacées, telles qu'à la relecture. */
+  avant: readonly string[]
+  /** Lignes qui les remplacent (vide = lignes retirées). */
+  apres: readonly string[]
+}
+
+/**
+ * Applique des corrections au texte, de la DERNIÈRE à la première (les
+ * numéros de ligne restent justes). Une correction caduque (texte changé
+ * depuis) ou qui chevauche une correction déjà appliquée est sautée : la
+ * relecture suivante la reproposera.
+ */
+export function appliquerCorrections(
+  markdown: string,
+  corrections: readonly Correction[],
+): string {
+  const lignes = markdown.split('\n')
+  let borne = Number.POSITIVE_INFINITY
+  const triees = [...corrections].sort((a, b) => b.debut - a.debut)
+  for (const c of triees) {
+    const i = c.debut - 1
+    const fin = i + c.avant.length
+    if (fin > borne || i < 0 || fin > lignes.length) continue
+    if (c.avant.some((l, k) => lignes[i + k] !== l)) continue
+    lignes.splice(i, c.avant.length, ...c.apres)
+    borne = i
+  }
+  return lignes.join('\n')
+}
+
+/** Nom de bloc reconnu malgré une faute (« photo », « étapes »), sinon null. */
+function blocVoisin(nom: string): string | null {
+  const n = nom
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/s$/, '')
+  if (n === 'photo') return 'photos'
+  if (n === 'etape') return 'etape'
+  return null
+}
+
+/** Une ligne de tableau réécrite à partir de ses cases. */
+function ligneTableau(cases: readonly string[]): string {
+  return `| ${cases.map((c) => c.replace(/\|/g, '\\|')).join(' | ')} |`
 }
 
 /**
@@ -97,6 +163,7 @@ export interface InfoPage {
 const REMPLISSAGE_MIN = 0.6
 
 /** Une étape de plus de ce nombre de mots est signalée (une action par étape). */
+// Miroir dans `merge/consignes.ts` (RÈGLES D'ÉCRITURE) : le LLM suit la même règle.
 const MOTS_PAR_ETAPE = 35
 
 /** Pictogrammes et émojis (pas les flèches ni les signes typographiques). */
@@ -230,6 +297,9 @@ export function alertesRelecture(
   const alertes: Alerte[] = []
   let dansCode = false
   let niveauPrecedent = 0
+  // Niveau du titre précédent UNE FOIS CORRIGÉ (titre sauté ramené) : une
+  // ligne en gras devient un titre juste en dessous, même corrigée d'un coup.
+  let niveauCorrige = 0
   const pile: { nom: string; ligne: number }[] = []
   const sansLegende: number[] = []
   const aInserer: number[] = []
@@ -243,6 +313,18 @@ export function alertesRelecture(
     return dansCode ? '' : l
   })
 
+  /** Correction qui remplace la ligne `ligne` (1 = première). */
+  const remplacer = (
+    ligne: number,
+    libelle: string,
+    apres: readonly string[],
+  ): Correction => ({
+    libelle,
+    debut: ligne,
+    avant: [lignes[ligne - 1]],
+    apres,
+  })
+
   utiles.forEach((l, i) => {
     const ligne = i + 1
 
@@ -254,17 +336,31 @@ export function alertesRelecture(
         if (/^\s*:{3,}\s*$/.test(l)) {
           if (pile.length > 0) pile.pop()
         } else {
+          const colle = l.replace(/^(\s*:{3,})\s+/, '$1')
+          const nomColle = /^\s*:{3,}([^\s{[]*)/.exec(colle)?.[1] ?? ''
+          const voisin = blocVoisin(nomColle)
           alertes.push({
             ligne,
             message: `Bloc mal écrit : « ${extrait(l)} ». Écrivez « :::photos » ou « :::etape » sans espace après les deux-points.`,
+            ...(voisin !== null && {
+              correction: remplacer(ligne, "Retirer l'espace", [
+                colle.replace(/^(\s*:{3,})[^\s{[]*/, `$1${voisin}`),
+              ]),
+            }),
           })
         }
       } else if ((BLOCS as readonly string[]).includes(nom)) {
         pile.push({ nom, ligne })
       } else {
+        const voisin = blocVoisin(nom)
         alertes.push({
           ligne,
           message: `Bloc inconnu « :::${extrait(nom, 20)} » : seuls « :::photos » et « :::etape » existent, cette ligne sera imprimée telle quelle.`,
+          ...(voisin !== null && {
+            correction: remplacer(ligne, `Écrire :::${voisin}`, [
+              l.replace(/^(\s*:{3,})[^\s{[]*/, `$1${voisin}`),
+            ]),
+          }),
         })
       }
       return
@@ -290,6 +386,18 @@ export function alertesRelecture(
       if (!info) {
         alertes.push({
           ligne,
+          correction: remplacer(ligne, 'Mettre un emplacement à remplir', [
+            lignes[i].replace(
+              m[0],
+              jetonImage(
+                alt,
+                IMAGE_A_INSERER,
+                tailleDepuisTitre(titre),
+                null,
+                ajustementDepuisTitre(titre),
+              ),
+            ),
+          ]),
           message:
             contexte === 'import'
               ? `Image introuvable dans la médiathèque : ${extrait(src)} (inventée par le LLM ?).`
@@ -333,9 +441,24 @@ export function alertesRelecture(
         })
       }
       if (boite.hauteur > DEMI_PAGE_MM) {
+        const imposee = tailleDepuisTitre(titre) !== 'auto'
         alertes.push({
           ligne,
           image: true,
+          ...(imposee && {
+            correction: remplacer(ligne, 'Taille automatique', [
+              lignes[i].replace(
+                m[0],
+                jetonImage(
+                  alt,
+                  src,
+                  'auto',
+                  cadreDepuisTitre(titre),
+                  ajustementDepuisTitre(titre),
+                ),
+              ),
+            ]),
+          }),
           message:
             tailleDepuisTitre(titre) === 'auto'
               ? `Capture très haute (environ ${String(Math.round(boite.hauteur / 10))} cm, plus d'une demi-page) : ${contexte === 'import' ? "après l'import, recadrez-la dans l'éditeur sur la partie utile." : "cliquez dessus dans l'aperçu et recadrez sur la partie utile."}`
@@ -346,8 +469,15 @@ export function alertesRelecture(
 
     // Du texte rangé dans une planche : une rangée entière à lui seul.
     if (bloc === 'photos' && jetons.length === 0 && l.trim() !== '') {
+      const ouverture = pile[pile.length - 1].ligne
       alertes.push({
         ligne,
+        correction: {
+          libelle: 'Le mettre au-dessus',
+          debut: ouverture,
+          avant: lignes.slice(ouverture - 1, ligne),
+          apres: [lignes[i], '', ...lignes.slice(ouverture - 1, ligne - 1)],
+        },
         message:
           'Planche de photos : ce texte occupera une rangée entière. Placez-le plutôt au-dessus de la planche, ou en légende d’une photo.',
       })
@@ -357,8 +487,14 @@ export function alertesRelecture(
     // finie par « : » n'en est pas un).
     const faux = /^\s*(\*\*|__)([^*_]{1,80})\1\s*$/.exec(l)
     if (faux && !faux[2].trim().endsWith(':')) {
+      const niveau = Math.min(6, Math.max(2, niveauCorrige + 1))
       alertes.push({
         ligne,
+        ...(bloc === null && {
+          correction: remplacer(ligne, 'En faire un titre', [
+            `${'#'.repeat(niveau)} ${faux[2].trim()}`,
+          ]),
+        }),
         message: `Ligne en gras utilisée comme titre : « ${extrait(faux[2])} ». Utilisez le bouton Sous-titre : un vrai titre ne reste jamais seul en bas de page.`,
       })
     }
@@ -393,8 +529,15 @@ export function alertesRelecture(
 
     // Émojis.
     if (EMOJI.test(l)) {
+      const sans = lignes[i]
+        .replace(
+          /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B50}\u{2B55}][\u{FE0F}\u{200D}]*\s?/gu,
+          '',
+        )
+        .replace(/(\S) {2,}/g, '$1 ')
       alertes.push({
         ligne,
+        correction: remplacer(ligne, "Retirer l'émoji", [sans]),
         message:
           "Émoji : il s'imprime mal en noir et blanc. Remplacez-le par un mot, ou par un encadré Attention, Important ou Astuce.",
       })
@@ -405,6 +548,9 @@ export function alertesRelecture(
       if (m[1] === '!') continue
       alertes.push({
         ligne,
+        correction: remplacer(ligne, 'Garder le texte seul', [
+          lignes[i].replace(m[0], m[2]),
+        ]),
         message: `Lien sans adresse : « ${extrait(m[2] || 'lien')} ».`,
       })
     }
@@ -416,9 +562,16 @@ export function alertesRelecture(
       if (niveauPrecedent > 0 && niveau > niveauPrecedent + 1) {
         alertes.push({
           ligne,
+          correction: remplacer(ligne, 'Corriger le niveau', [
+            `${'#'.repeat(niveauPrecedent + 1)} ${titre[2]}`,
+          ]),
           message: `Titre sauté : « ${extrait(titre[2])} » est un ${nomNiveau(niveau)} placé après un ${nomNiveau(niveauPrecedent)}.`,
         })
       }
+      niveauCorrige =
+        niveauPrecedent > 0 && niveau > niveauCorrige + 1
+          ? niveauCorrige + 1
+          : niveau
       niveauPrecedent = niveau
     }
   })
@@ -460,6 +613,7 @@ export function alertesRelecture(
     if (ligne === undefined) continue
     alertes.push({
       ligne,
+      correction: remplacer(ligne, 'Retirer le saut de page', []),
       message: `Saut de page : la page d'avant n'est remplie qu'à ${String(Math.round(p.remplissage * 100))} %. Retirez-le si rien ne l'impose, la mise en page s'en charge.`,
     })
   }
@@ -503,8 +657,13 @@ export function alertesRelecture(
       const sep = decouperLigne(bloc[1]).length
       if (sep !== n) {
         // GFM exige autant de marques que de colonnes, sinon pas de tableau.
+        const marques = decouperLigne(bloc[1]).slice(0, n)
+        while (marques.length < n) marques.push('---')
         alertes.push({
           ligne: i + 2,
+          correction: remplacer(i + 2, 'Réparer le tableau', [
+            ligneTableau(marques),
+          ]),
           message: `Tableau : la ligne de séparation a ${String(sep)} « --- » pour ${String(n)} colonnes, il sera imprimé comme du texte.`,
         })
       }
@@ -513,6 +672,13 @@ export function alertesRelecture(
         if (decouperLigne(l).some((c) => /^null$/i.test(c.trim()))) {
           alertes.push({
             ligne: i + k + 1,
+            correction: remplacer(i + k + 1, 'Vider la case', [
+              ligneTableau(
+                decouperLigne(lignes[i + k]).map((c) =>
+                  /^null$/i.test(c) ? '' : c,
+                ),
+              ),
+            ]),
             message:
               'Tableau : une case contient « null ». Laissez-la vide, ou écrivez ce qui manque.',
           })
@@ -525,8 +691,13 @@ export function alertesRelecture(
             message: `Tableau : cette ligne a ${String(cases)} cases pour ${String(n)} colonnes, les cases en trop n'apparaîtront pas.`,
           })
         } else if (cases < n) {
+          const completes = decouperLigne(lignes[i + k])
+          while (completes.length < n) completes.push('')
           alertes.push({
             ligne: i + k + 1,
+            correction: remplacer(i + k + 1, 'Compléter la ligne', [
+              ligneTableau(completes),
+            ]),
             message: `Tableau : cette ligne a ${String(cases)} ${cases > 1 ? 'cases' : 'case'} pour ${String(n)} colonnes.`,
           })
         }
@@ -535,8 +706,15 @@ export function alertesRelecture(
       bloc.length >= 2 &&
       bloc.every((l) => l.trim().startsWith('|'))
     ) {
+      const n = decouperLigne(bloc[0]).length
       alertes.push({
         ligne: i + 1,
+        correction: {
+          libelle: 'Ajouter la ligne de séparation',
+          debut: i + 1,
+          avant: [lignes[i]],
+          apres: [lignes[i], ligneTableau(Array<string>(n).fill('---'))],
+        },
         message:
           'Tableau sans ligne de séparation « | --- | » sous l’en-tête : il sera imprimé comme du texte.',
       })
@@ -544,6 +722,8 @@ export function alertesRelecture(
     i = fin + 1
   }
 
+  // Un import ne s'édite pas : ses points n'ont pas de correction.
+  if (contexte === 'import') for (const a of alertes) delete a.correction
   return alertes.sort((a, b) => a.ligne - b.ligne)
 }
 

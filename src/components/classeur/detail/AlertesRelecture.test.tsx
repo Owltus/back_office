@@ -48,3 +48,51 @@ describe('AlertesRelecture — champs', () => {
     expect(onAller).toHaveBeenCalledWith(1)
   })
 })
+
+describe('AlertesRelecture — corrections (2026-10-24)', () => {
+  const gras = {
+    libelle: 'En faire un titre',
+    debut: 2,
+    avant: ['**A**'],
+    apres: ['## A'],
+  }
+  const alertes = [
+    { ligne: 2, message: 'Ligne en gras', correction: gras },
+    { ligne: 5, message: 'Étape longue' },
+  ]
+
+  it('« Corriger le point simple » envoie les seules corrections', () => {
+    const onCorriger = vi.fn()
+    render(
+      <AlertesRelecture
+        alertes={alertes}
+        onAller={vi.fn()}
+        onCorriger={onCorriger}
+      />,
+    )
+    fireEvent.click(screen.getByText('Corriger le point simple'))
+    expect(onCorriger).toHaveBeenCalledWith([gras])
+  })
+
+  it('bouton par point, seulement sur un point corrigeable', () => {
+    const onCorriger = vi.fn()
+    const onAller = vi.fn()
+    render(
+      <AlertesRelecture
+        alertes={alertes}
+        onAller={onAller}
+        onCorriger={onCorriger}
+      />,
+    )
+    fireEvent.click(screen.getByText('2 points à vérifier'))
+    expect(screen.getAllByText('En faire un titre')).toHaveLength(1)
+    fireEvent.click(screen.getByText('En faire un titre'))
+    expect(onCorriger).toHaveBeenCalledWith([gras])
+    expect(onAller).not.toHaveBeenCalled()
+  })
+
+  it('sans onCorriger : aucun bouton de correction', () => {
+    render(<AlertesRelecture alertes={alertes} onAller={vi.fn()} />)
+    expect(screen.queryByText('Corriger le point simple')).toBeNull()
+  })
+})
