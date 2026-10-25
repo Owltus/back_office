@@ -820,7 +820,14 @@ sanitaire) structurés par chapitres, prêts à imprimer. Plan et décisions :
     EN PAGE, la même pour une image réelle ou à venir : consigne + photo →
     `:::etape`, photos à comparer → `:::photos`, capture à lire → `"pleine"`,
     sinon image seule sans taille ; légende gardée sauf texte explicite.
-    Consignes ≤ 11 000 octets (~9 700). Essai à blanc (sonnet, haiku ×
+    Consignes ≤ 11 000 octets (~9 700). SANS FRICTION (2026-10-25,
+    demande utilisateur : « mes utilisateurs ne vont pas savoir comment ça
+    fonctionne ») : chaque question passe par l'outil de questions à choix
+    cliquables s'il existe (Claude), sinon des choix numérotés, conseillé en
+    premier, jamais de consigne à écrire ; dès sa première réponse, le LLM
+    compte les points à corriger et propose « tout corriger, voir la liste,
+    ou plus tard », et après une modification ce qui reste (10 726 octets).
+    Essai à blanc (sonnet, haiku ×
     placer / remettre en page) : 4 sur 4 importés sans avertissement, aucun
     mot perdu, aucun chemin inventé, rendu réel conforme (chaque étape a sa
     photo, aucun bloc imbriqué). Vérifié : 3 020 tests, simulateur

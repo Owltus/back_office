@@ -61,6 +61,11 @@ const PARTIES: Array<[string, string[]]> = [
       'des choix courts (A ou B ?)',
       'qui lira le document',
       'ne pose que la question la plus importante',
+      // Sans friction (2026-10-25) : choix cliquables quand l'outil existe.
+      'questions à choix cliquables (Claude en a un)',
+      'ton choix conseillé en premier',
+      "numérote les choix pour qu'on réponde d'un chiffre",
+      "Ne demande jamais à la personne d'écrire elle-même une consigne",
     ],
   ],
   [
@@ -110,6 +115,11 @@ const PARTIES: Array<[string, string[]]> = [
       // Essai à blanc du 2026-10-23 : trois hésitations levées.
       'mets-les à jour dans les mêmes changements et dis-le dans la liste',
       'sans bloc de code',
+      // Sans friction (2026-10-25) : le LLM propose de lui-même.
+      "N'attends pas qu'on te le demande : dès ta première réponse",
+      'tout corriger, voir la liste, ou plus tard',
+      'propose de même ce qui reste',
+      'Rien ne change sans son accord',
       'fais cet audit en entier',
       'le plus grave en premier',
       "une légende d'image qui ne correspond pas au texte",
