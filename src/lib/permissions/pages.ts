@@ -3,6 +3,7 @@ import {
   ArrowLeftRight,
   Banknote,
   BedDouble,
+  CalendarDays,
   ClipboardList,
   Coffee,
   Monitor,
@@ -23,6 +24,7 @@ export type PageKey =
   | 'facturation'
   | 'literie'
   | 'classeur'
+  | 'planning'
 
 export interface PageDef {
   key: PageKey
@@ -44,12 +46,33 @@ export const PAGES: PageDef[] = [
   { key: 'repjour', label: 'RepJour', route: '/repjour', icon: ClipboardList },
   { key: 'pdj', label: 'PDJ', route: '/pdj', icon: Coffee },
   { key: 'parking', label: 'Parking', route: '/parking', icon: SquareParking },
-  { key: 'rapro', label: 'Rapprochement', route: '/rapro', icon: ArrowLeftRight },
+  {
+    key: 'rapro',
+    label: 'Rapprochement',
+    route: '/rapro',
+    icon: ArrowLeftRight,
+  },
   { key: 'caisse', label: 'Caisse', route: '/caisse', icon: Banknote },
   { key: 'affichage', label: 'Affichage', route: '/affichage', icon: Monitor },
-  { key: 'facturation', label: 'Facturation', route: '/facturation', icon: Stamp },
+  {
+    key: 'facturation',
+    label: 'Facturation',
+    route: '/facturation',
+    icon: Stamp,
+  },
   { key: 'literie', label: 'Literie', route: '/literie', icon: BedDouble },
-  { key: 'classeur', label: 'Classeur', route: '/classeur', icon: NotebookTabs },
+  {
+    key: 'classeur',
+    label: 'Classeur',
+    route: '/classeur',
+    icon: NotebookTabs,
+  },
+  {
+    key: 'planning',
+    label: 'Planning',
+    route: '/planning',
+    icon: CalendarDays,
+  },
 ]
 
 export const PAGE_BY_KEY: Record<PageKey, PageDef> = Object.fromEntries(

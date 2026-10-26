@@ -490,11 +490,11 @@ describe('données fictives', () => {
     const droits = lignes(trouverTable(d, 'public.user_page_permissions'))
     const de = (cle: string) =>
       droits.filter((x) => x.user_id === COMPTES.find((c) => c.cle === cle)!.id)
-    expect(de('gestion').map((x) => x.level)).toEqual(Array(9).fill('gestion'))
+    expect(de('gestion').map((x) => x.level)).toEqual(Array(10).fill('gestion'))
     expect(de('ecriture').map((x) => x.level)).toEqual(
-      Array(9).fill('ecriture'),
+      Array(10).fill('ecriture'),
     )
-    expect(de('lecture').map((x) => x.level)).toEqual(Array(9).fill('lecture'))
+    expect(de('lecture').map((x) => x.level)).toEqual(Array(10).fill('lecture'))
     expect(de('aucun')).toEqual([])
     expect(
       lignes(trouverTable(d, 'public.profiles')).filter(

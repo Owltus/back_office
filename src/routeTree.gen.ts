@@ -20,6 +20,7 @@ import { Route as LiterieRouteImport } from './routes/literie'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ParkingRouteImport } from './routes/parking'
 import { Route as PdjRouteImport } from './routes/pdj'
+import { Route as PlanningRouteImport } from './routes/planning'
 import { Route as ProfilRouteImport } from './routes/profil'
 import { Route as RaproRouteImport } from './routes/rapro'
 import { Route as RepjourRouteImport } from './routes/repjour'
@@ -104,6 +105,11 @@ const ParkingRoute = ParkingRouteImport.update({
 const PdjRoute = PdjRouteImport.update({
   id: '/pdj',
   path: '/pdj',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlanningRoute = PlanningRouteImport.update({
+  id: '/planning',
+  path: '/planning',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProfilRoute = ProfilRouteImport.update({
@@ -279,6 +285,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/parking': typeof ParkingRouteWithChildren
   '/pdj': typeof PdjRouteWithChildren
+  '/planning': typeof PlanningRoute
   '/profil': typeof ProfilRoute
   '/rapro': typeof RaproRouteWithChildren
   '/repjour': typeof RepjourRouteWithChildren
@@ -317,6 +324,7 @@ export interface FileRoutesByTo {
   '/easter-eggs': typeof EasterEggsRoute
   '/gestion': typeof GestionRoute
   '/login': typeof LoginRoute
+  '/planning': typeof PlanningRoute
   '/profil': typeof ProfilRoute
   '/facturation/galaxie': typeof FacturationGalaxieRoute
   '/caisse': typeof CaisseIndexRoute
@@ -357,6 +365,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/parking': typeof ParkingRouteWithChildren
   '/pdj': typeof PdjRouteWithChildren
+  '/planning': typeof PlanningRoute
   '/profil': typeof ProfilRoute
   '/rapro': typeof RaproRouteWithChildren
   '/repjour': typeof RepjourRouteWithChildren
@@ -402,6 +411,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/parking'
     | '/pdj'
+    | '/planning'
     | '/profil'
     | '/rapro'
     | '/repjour'
@@ -440,6 +450,7 @@ export interface FileRouteTypes {
     | '/easter-eggs'
     | '/gestion'
     | '/login'
+    | '/planning'
     | '/profil'
     | '/facturation/galaxie'
     | '/caisse'
@@ -479,6 +490,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/parking'
     | '/pdj'
+    | '/planning'
     | '/profil'
     | '/rapro'
     | '/repjour'
@@ -523,6 +535,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   ParkingRoute: typeof ParkingRouteWithChildren
   PdjRoute: typeof PdjRouteWithChildren
+  PlanningRoute: typeof PlanningRoute
   ProfilRoute: typeof ProfilRoute
   RaproRoute: typeof RaproRouteWithChildren
   RepjourRoute: typeof RepjourRouteWithChildren
@@ -607,6 +620,13 @@ declare module '@tanstack/react-router' {
       path: '/pdj'
       fullPath: '/pdj'
       preLoaderRoute: typeof PdjRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/planning': {
+      id: '/planning'
+      path: '/planning'
+      fullPath: '/planning'
+      preLoaderRoute: typeof PlanningRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/profil': {
@@ -973,6 +993,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   ParkingRoute: ParkingRouteWithChildren,
   PdjRoute: PdjRouteWithChildren,
+  PlanningRoute: PlanningRoute,
   ProfilRoute: ProfilRoute,
   RaproRoute: RaproRouteWithChildren,
   RepjourRoute: RepjourRouteWithChildren,

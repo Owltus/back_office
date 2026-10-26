@@ -195,6 +195,13 @@ tourne dessus) : la prudence reste de mise.
   `navigation*.test.ts`, `authorization.property.test.ts`). Pas de squelette
   dédié tant qu'elle n'a pas de forme. Quand elle aura des tables : policies
   sur `private.get_page_level('classeur')`, RPC privilégiées dans `private`.
+  **Page `planning` (2026-10-27, demande utilisateur : « prépare les choses,
+  une page vide »)**, même geste : `pages.ts` (icône `CalendarDays`),
+  `routes/planning.tsx` (`PageGuard page="planning"`),
+  `components/planning/PlanningBoard.tsx` (vide), migration
+  `20261027100000_page_planning.sql` (les deux CHECK, borne `page_order` à
+  10), seed `generer.ts`, tests `registres` / `navigation` à 10 pages.
+  Squelette = repli `board`. Pas encore de table.
 - **Expiration par inactivité (2026-09-06)** : 24 h sans ouvrir l'app →
   déconnexion, appliquée par l'app (`lib/auth/inactivity.ts`, horodatage
   `bo.auth.lastActive.v1`, contrôle au démarrage et à chaque retour d'onglet

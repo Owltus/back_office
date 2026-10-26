@@ -67,7 +67,7 @@ describe('registre des grades', () => {
 
 describe('registre des pages', () => {
   /*
-   * Les neuf clés, recopiées à la main. Toute page ajoutée ici doit AUSSI être
+   * Les dix clés, recopiées à la main. Toute page ajoutée ici doit AUSSI être
    * ajoutée aux deux contrôles en base (`user_page_permissions.page` et
    * `profiles.page_order`), sans quoi le compte qui reçoit le droit se verra
    * refuser l'écriture par la base.
@@ -82,9 +82,10 @@ describe('registre des pages', () => {
     'facturation',
     'literie',
     'classeur',
+    'planning',
   ]
 
-  it('contient exactement les neuf pages connues', () => {
+  it('contient exactement les dix pages connues', () => {
     expect(PAGES.map((p) => p.key)).toEqual(CLES_ATTENDUES)
   })
 

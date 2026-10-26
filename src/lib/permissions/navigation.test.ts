@@ -106,10 +106,10 @@ describe('orderedPages', () => {
     expect(keys({}, ['pdj', 'caisse'])).toEqual([])
   })
 
-  it('un admin voit les 9 pages, sans aucune ligne de permission', () => {
+  it('un admin voit les 10 pages, sans aucune ligne de permission', () => {
     // L'admin n'a AUCUNE ligne dans user_page_permissions : son accès total
     // vient du grade. C'est pourquoi la préférence vit sur `profiles`.
-    expect(orderedPages({}, 'admin', ['literie', 'caisse'])).toHaveLength(9)
+    expect(orderedPages({}, 'admin', ['literie', 'caisse'])).toHaveLength(10)
     expect(orderedPages({}, 'admin', ['literie', 'caisse'])[0].key).toBe(
       'literie',
     )

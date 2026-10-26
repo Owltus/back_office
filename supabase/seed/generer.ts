@@ -48,6 +48,7 @@ export const PAGES = [
   'facturation',
   'literie',
   'classeur',
+  'planning',
 ] as const
 export type Page = (typeof PAGES)[number]
 export type Niveau = 'lecture' | 'ecriture' | 'gestion'
