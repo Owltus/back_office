@@ -226,7 +226,8 @@ export function CalendrierEcole({
 
   return (
     <section
-      className="planning-ecole flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-3"
+      data-partie="École"
+      className="planning-ecole flex scroll-mt-12 flex-col gap-3 rounded-lg border border-border bg-muted/30 p-3"
       style={
         {
           '--planning-ecole': ecole.couleur,

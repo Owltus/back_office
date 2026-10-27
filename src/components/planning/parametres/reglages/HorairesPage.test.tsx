@@ -79,7 +79,7 @@ beforeEach(() => {
       observe() {}
       unobserve() {}
       disconnect() {}
-    } as unknown as typeof ResizeObserver
+    }
   etat.referentiel = referentielDemo()
   etat.droits = { pret: true, lire: true, ecrire: true, gerer: true }
   for (const f of Object.values(service)) f.mockReset()

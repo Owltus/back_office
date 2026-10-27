@@ -105,7 +105,10 @@ export function Section({
   children: ReactNode
 }) {
   return (
-    <section className="flex flex-col gap-3 border-t border-border pt-4 first:border-t-0 first:pt-0">
+    <section
+      data-partie={typeof titre === 'string' ? titre : undefined}
+      className="flex scroll-mt-12 flex-col gap-3 border-t border-border pt-4 first:border-t-0 first:pt-0"
+    >
       <h3 className="text-sm font-semibold">{titre}</h3>
       {aide != null && <p className="text-xs text-muted-foreground">{aide}</p>}
       {children}

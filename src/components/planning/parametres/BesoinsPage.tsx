@@ -154,22 +154,41 @@ export function BesoinsPage() {
     >
       {data && (
         <>
-          <p className="max-w-3xl text-sm text-muted-foreground">
-            La semaine type de l'hôtel : pour chaque poste et chaque code
-            horaire, le nombre minimum de personnes autonomes, les places de
-            soutien pour stagiaires et apprentis, et les places en plus,
-            facultatives (un middle quand il y a du travail).
-          </p>
           <div className="flex items-start gap-2 rounded-lg border bg-muted/50 px-3 py-2.5 text-sm">
             <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" />
             <span>
-              Les effectifs minimum sont garantis par le moteur : 1 personne en
-              réception et 1 au club le matin et l'après-midi, 1 veilleur la
-              nuit. Les places en plus ne sont jamais à pourvoir : le planning
-              les remplit seulement si quelqu'un manque d'heures. Les profils
-              soutien viennent en plus, jamais seuls.
+              La semaine type de l'hôtel, poste par poste et code par code : le
+              minimum de personnes autonomes (garanti par le moteur), les places
+              de soutien pour apprentis et stagiaires (jamais seuls), et les
+              places en plus, remplies seulement si quelqu'un manque d'heures.
             </span>
           </div>
+          {data.postes.length > 1 && (
+            <nav
+              aria-label="Aller à un poste"
+              className="flex flex-wrap items-center gap-1.5 text-sm"
+            >
+              <span className="text-xs text-muted-foreground">Aller à :</span>
+              {data.postes.map((poste) => (
+                <button
+                  key={poste.id}
+                  type="button"
+                  className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs transition-colors hover:bg-muted"
+                  onClick={() =>
+                    document
+                      .getElementById(`besoins-poste-${poste.id}`)
+                      ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                  }
+                >
+                  <span
+                    className="size-2 rounded-full"
+                    style={{ background: poste.couleur }}
+                  />
+                  {poste.nom}
+                </button>
+              ))}
+            </nav>
+          )}
           <ConsignesPresence referentiel={data} modifiable={modifiable} />
           {!data.postes.length && (
             <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
@@ -253,7 +272,7 @@ function CartePoste({
   return (
     <section
       aria-labelledby={titreId}
-      className="flex min-w-0 flex-col gap-3 rounded-xl border border-t-4 bg-card p-4"
+      className="flex min-w-0 scroll-mt-2 flex-col gap-3 rounded-xl border border-t-4 bg-card p-4"
       style={{ borderTopColor: poste.couleur }}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">

@@ -59,6 +59,7 @@ import {
   messageShiftsRetires,
 } from '#/components/planning/parametres/equipe/ecole.ts'
 import { SectionIdentite } from '#/components/planning/parametres/equipe/SectionIdentite.tsx'
+import { SommaireFiche } from '#/components/planning/parametres/equipe/SommaireFiche.tsx'
 import {
   SectionAbsences,
   SectionCompetences,
@@ -494,6 +495,7 @@ function CorpsFiche({
       return true
     })) ?? false
 
+  const zone = useRef<HTMLDivElement>(null)
   const titre =
     b.id !== null ? nomBrouillon(initial) || 'Fiche du staff' : 'Nouveau membre'
   const proprietes = { b, maj, referentiel, disabled: desactive }
@@ -515,7 +517,24 @@ function CorpsFiche({
         <BoutonFermer onFermer={() => demandeFermeture.current()} />
       </SheetHeader>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-4">
+      <div
+        ref={zone}
+        className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-4 [scrollbar-gutter:stable]"
+      >
+        <SommaireFiche
+          zone={zone}
+          parties={[
+            { libelle: 'Identité', partie: 'Identité et contrat' },
+            ...(alternance && ecole
+              ? [{ libelle: 'École', partie: 'École' }]
+              : []),
+            { libelle: 'Postes', partie: 'Compétences' },
+            { libelle: 'Horaires', partie: 'Horaires autorisés' },
+            { libelle: 'Semaine type', partie: 'Semaine type' },
+            { libelle: 'Absences', partie: 'Absences' },
+            { libelle: 'Règles', partie: 'Règles HCR appliquées' },
+          ]}
+        />
         <SectionIdentite
           {...proprietes}
           aujourdhui={aujourdhui}
