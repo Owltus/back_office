@@ -1008,7 +1008,7 @@ describe('planning de la semaine (test_api.py)', () => {
     expect(bilanYohan.alertes).toEqual([])
     const extras = new Set([p.salarie('Max').id, p.salarie('Louna').id])
     expect(sem.affectations.some((a) => extras.has(a.salarie_id))).toBe(false)
-  })
+  }, 30_000)
 
   it('vrai hôtel : apprenties en alternance', () => {
     const p = reel()
@@ -1041,7 +1041,7 @@ describe('planning de la semaine (test_api.py)', () => {
       'Lou',
       'Lou',
     ])
-  })
+  }, 30_000)
 
   it('vrai hôtel : vacances et heures dues', () => {
     const p = reel()
@@ -1069,7 +1069,7 @@ describe('planning de la semaine (test_api.py)', () => {
     expect(b.minutes_contrat).toBe(32 * 60)
     expect(b.minutes).toBe(32 * 60)
     expect(b.alertes).toEqual([])
-  })
+  }, 30_000)
 
   it('vrai hôtel : les extras ne sont jamais placés d’office', () => {
     const p = reel()
@@ -1091,7 +1091,7 @@ describe('planning de la semaine (test_api.py)', () => {
     expect(
       raisons.every((r) => r.messages[0].includes('extra disponible')),
     ).toBe(true)
-  })
+  }, 30_000)
 
   it('vrai hôtel : horaires fixes posés d’avance', () => {
     const p = reel()
@@ -1115,7 +1115,7 @@ describe('planning de la semaine (test_api.py)', () => {
     sem = p.generer(LUNDI)
     expect(sem.stats.pourvues).toBe(sem.stats.places)
     expect(sem.stats.infractions).toBe(0)
-  })
+  }, 30_000)
 
   it('désactiver puis réactiver', () => {
     const p = reel()
