@@ -1977,6 +1977,15 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   semaine, paramètres en sous-routes (`/planning/equipe|postes|horaires|besoins`),
   fil de messages propre à la page (`Messages.tsx`, le back office n'a pas de
   toasts). Horaires fixes posés à l'ouverture d'une semaine à venir (écriture).
+- **Paramètres (audit UI/UX du 2026-10-28, « des scroll bars dans tous les sens »)** :
+  les quatre écrans sont dans `PageAvecEnTete` (déplacé du Classeur vers
+  `components/shared/`) : en-tête fixe, UNE zone qui défile, barre au bord droit,
+  gouttière stable. Codes, motifs et postes = listes compactes
+  (`reglages/ListeCompacte.tsx`), le réglage s'ouvre dans un VOLET ; codes à
+  choisir par `ChoixCodes` (rangés par famille) ; fiche d'une personne avec un
+  sommaire collant (`SommaireFiche`) ; Besoins : tableaux adaptatifs par requête
+  de conteneur (aucune barre horizontale dès 1 024 px), rangée « Aller à ».
+  Mesuré : Horaires 9 300 → 2 700 px. Ne pas revenir à des cartes toujours ouvertes.
 - **École des apprentis** (2026-10-27, décision utilisateur : « pas toujours une
   semaine sur deux, pas toujours stable ») : calendrier JOUR PAR JOUR sur l'année
   scolaire dans la fiche (`equipe/ecole.ts`, `CalendrierEcole.tsx`), samedi compris ;

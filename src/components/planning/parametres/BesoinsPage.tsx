@@ -301,63 +301,69 @@ function CartePoste({
           Aucun besoin pour ce poste. Affichez tous les codes pour en ajouter.
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border">
-          <table className="w-full min-w-[56rem] border-collapse text-sm">
-            <thead className="bg-muted/50 text-xs text-muted-foreground">
-              <tr>
-                <th className="px-3 py-2 text-left font-medium">Horaire</th>
-                {JOURS.map((j) => (
-                  <th key={j} className="px-1 py-2 text-center font-medium">
-                    {j.slice(0, 3)}.
+        <>
+          <p className="-mt-1 text-xs text-muted-foreground">
+            Dans chaque case : le minimum de personnes autonomes, puis «
+            +soutien » (apprentis, stagiaires), puis « +en plus » (facultatif).
+          </p>
+          <div className="@container overflow-x-auto rounded-lg border">
+            <table className="w-full min-w-[40rem] border-collapse text-sm">
+              <thead className="bg-muted/50 text-xs text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2 text-left font-medium">Horaire</th>
+                  {JOURS.map((j) => (
+                    <th key={j} className="px-1 py-2 text-center font-medium">
+                      {j.slice(0, 3)}.
+                    </th>
+                  ))}
+                  <th className="px-2 py-2">
+                    <span className="sr-only">Recopier</span>
                   </th>
+                </tr>
+              </thead>
+              <tbody>
+                {lignes.map((ligne) => (
+                  <LigneTableau
+                    key={ligne.cle}
+                    poste={poste}
+                    ligne={ligne}
+                    referentiel={referentiel}
+                    permise={
+                      ligne.horaire_id === null ||
+                      possibles.some((h) => h.id === ligne.horaire_id)
+                    }
+                    modifiable={modifiable}
+                    affiche={affiche}
+                    regler={regler}
+                  />
                 ))}
-                <th className="px-2 py-2">
-                  <span className="sr-only">Recopier</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {lignes.map((ligne) => (
-                <LigneTableau
-                  key={ligne.cle}
-                  poste={poste}
-                  ligne={ligne}
-                  referentiel={referentiel}
-                  permise={
-                    ligne.horaire_id === null ||
-                    possibles.some((h) => h.id === ligne.horaire_id)
-                  }
-                  modifiable={modifiable}
-                  affiche={affiche}
-                  regler={regler}
-                />
-              ))}
-            </tbody>
-            <tfoot className="bg-muted/50 text-xs">
-              <tr>
-                <th
-                  scope="row"
-                  className="px-3 py-2 text-left font-medium text-muted-foreground"
-                >
-                  Total du jour
-                </th>
-                {parJour.map((t, j) => (
-                  <td key={j} className="px-1 py-2 text-center tabular-nums">
-                    <span className="font-semibold">{t.effectif}</span>
-                    {(t.soutien > 0 || t.renfort > 0) && (
-                      <span className="block text-[10px] text-muted-foreground">
-                        {t.soutien > 0 && `+${t.soutien} soutien`}
-                        {t.soutien > 0 && t.renfort > 0 && ' · '}
-                        {t.renfort > 0 && `+${t.renfort} en plus`}
-                      </span>
-                    )}
-                  </td>
-                ))}
-                <td />
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+              </tbody>
+              <tfoot className="bg-muted/50 text-xs">
+                <tr>
+                  <th
+                    scope="row"
+                    className="px-3 py-2 text-left font-medium text-muted-foreground"
+                  >
+                    Total du jour
+                  </th>
+                  {parJour.map((t, j) => (
+                    <td key={j} className="px-1 py-2 text-center tabular-nums">
+                      <span className="font-semibold">{t.effectif}</span>
+                      {(t.soutien > 0 || t.renfort > 0) && (
+                        <span className="block text-[10px] text-muted-foreground">
+                          {t.soutien > 0 && `+${t.soutien} soutien`}
+                          {t.soutien > 0 && t.renfort > 0 && ' · '}
+                          {t.renfort > 0 && `+${t.renfort} en plus`}
+                        </span>
+                      )}
+                    </td>
+                  ))}
+                  <td />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </>
       )}
     </section>
   )
@@ -502,7 +508,9 @@ function LigneTableau({
               }
             >
               <ChevronsRight />
-              Toute la semaine
+              <span className="hidden @min-[62rem]:inline">
+                Toute la semaine
+              </span>
             </Button>
           </Tip>
         )}

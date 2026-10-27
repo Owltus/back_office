@@ -146,7 +146,12 @@ export function Compteur({
         )}
       >
         {mini ? `+${valeur}` : valeur}
-        {suffixe ? ` ${suffixe}` : null}
+        {/* Le texte ne s'affiche que si le tableau qui le contient (un
+            conteneur `@container`) a la place ; la légende du tableau le
+            rappelle sinon. */}
+        {suffixe ? (
+          <span className="hidden @min-[62rem]:inline"> {suffixe}</span>
+        ) : null}
       </span>
       <button
         type="button"
