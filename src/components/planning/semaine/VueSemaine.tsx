@@ -682,6 +682,8 @@ export function VueSemaine({
           onPrecedente: () => onLundi(ajouterJours(lundi, -7)),
           onSuivante: () => onLundi(ajouterJours(lundi, 7)),
           onCetteSemaine: () => onLundi(lundiCourant),
+          onDate: (d) => onLundi(lundiDe(d)),
+          aujourdhui,
           onVerrou: () => setConfirmation('verrou'),
           onAlertes: () => setAlertesOuvertes(true),
           onCompleter: () => void lancerGeneration({}),

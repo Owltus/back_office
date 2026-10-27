@@ -21,7 +21,15 @@ function PlanningPage() {
         <FilMessages>
           <PlanningBoard
             search={search}
-            onSearch={(s) => void navigate({ search: s, replace: true })}
+            onSearch={(s) =>
+              // Changer de vue (mois ↔ semaine) ajoute une étape à
+              // l'historique : le retour arrière ramène au mois d'où l'on
+              // vient. Avancer d'un mois ou d'une semaine la remplace.
+              void navigate({
+                search: s,
+                replace: (s.vue ?? 'mois') === (search.vue ?? 'mois'),
+              })
+            }
           />
         </FilMessages>
       </PageContainer>

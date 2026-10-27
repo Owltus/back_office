@@ -23,6 +23,7 @@ import {
 import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { HelpGlyph } from '#/components/shared/HelpGlyph.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
+import { DatePickerButton } from '#/components/form/fields.tsx'
 import { StepNav } from '#/components/shared/StepNav.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
@@ -60,6 +61,9 @@ export interface ActionsEnTete {
   onPrecedente: () => void
   onSuivante: () => void
   onCetteSemaine: () => void
+  /** Un jour choisi au calendrier : sa semaine s'affiche. */
+  onDate: (date: string) => void
+  aujourdhui: string
   onVerrou: () => void
   onAlertes: () => void
   onCompleter: () => void
@@ -219,7 +223,8 @@ export function EnTeteSemaine({
 
   return (
     <PageHeader
-      title={`Semaine ${numero}`}
+      // L'année de la semaine est celle de son jeudi (semaines ISO).
+      title={`Semaine ${numero} · ${dates[3].slice(0, 4)}`}
       badge={
         verrou ? (
           <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs text-muted-foreground">
@@ -470,23 +475,16 @@ export function EnTeteSemaine({
               nextLabel="Semaine suivante"
               enlargeOnNarrow={false}
             >
-              <Tip label="Revenir à cette semaine">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="tabular-nums"
-                  onClick={actions.onCetteSemaine}
-                  aria-label={`Du ${dateCourte(dates[0])} au ${dateCourte(dates[6])}, revenir à cette semaine`}
-                >
-                  {dateCourte(dates[0])} - {dateCourte(dates[6])}
-                  {verrou && (
-                    <Lock
-                      className="size-3 text-muted-foreground"
-                      aria-label="Verrouillée"
-                    />
-                  )}
-                </Button>
-              </Tip>
+              {/* Calendrier comme RepJour (décision utilisateur du
+                  2026-10-28) : un jour choisi ouvre sa semaine, « Aujourd'hui »
+                  la semaine en cours. */}
+              <DatePickerButton
+                value={dates[0]}
+                onChange={actions.onDate}
+                todayValue={actions.aujourdhui}
+                ariaLabel={`Choisir une semaine (du ${dateCourte(dates[0])} au ${dateCourte(dates[6])})`}
+                enlargeOnNarrow={false}
+              />
             </StepNav>
           </div>
 

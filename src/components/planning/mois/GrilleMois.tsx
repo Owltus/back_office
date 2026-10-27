@@ -563,7 +563,7 @@ function LigneMois({
           key={date}
           colSpan={longueur}
           className={cn(
-            'relative h-10 border-b p-0.5',
+            'relative h-10 border-b p-0.5 group-hover/ligne:bg-muted/50',
             lundiCase && 'border-l border-l-foreground/25',
           )}
         >
@@ -581,7 +581,7 @@ function LigneMois({
           <div className="relative z-[1] h-8">
             <div
               className={cn(
-                'planning-mois-bande pointer-events-none absolute inset-0 flex items-center justify-center gap-1.5 overflow-hidden rounded-md px-1 text-[10.5px] font-medium',
+                'planning-mois-bande @container pointer-events-none absolute inset-0 flex items-center justify-center gap-1.5 overflow-hidden rounded-md px-1 text-[10.5px] font-medium',
                 c.type === 'hors' && 'planning-mois-hors',
                 c.type === 'repos' && 'planning-mois-repos',
                 longueur === 1 && 'flex-col gap-0 text-[10px] leading-none',
@@ -589,7 +589,21 @@ function LigneMois({
               style={{ '--couleur': couleur } as CSSProperties}
             >
               <Icone className={longueur === 1 ? 'size-3' : 'size-3.5'} />
-              <span className="truncate">{libelle}</span>
+              {c.type === 'absence' && c.motif?.code ? (
+                // Pas la place pour « Congé payé » (un jour seul) : son code,
+                // « CP » (demande utilisateur du 2026-10-28). Le bandeau mesure
+                // sa propre largeur (requête de conteneur).
+                <>
+                  <span className="hidden truncate @min-[4.5rem]:inline">
+                    {libelle}
+                  </span>
+                  <span className="truncate @min-[4.5rem]:hidden">
+                    {c.motif.code}
+                  </span>
+                </>
+              ) : (
+                <span className="truncate">{libelle}</span>
+              )}
             </div>
             <div className="absolute inset-0 flex">
               {couverts.map((d) => (
@@ -713,7 +727,7 @@ function LigneMois({
         </Tip>
       </td>
       {cellules}
-      <td className="border-b border-l px-2 text-center text-xs tabular-nums">
+      <td className="border-b border-l px-2 text-center text-xs tabular-nums group-hover/ligne:bg-muted/50">
         {s.forfait_jours ? (
           <Tip label="Forfait jours : journées travaillées dans le mois">
             <span tabIndex={0}>
@@ -746,7 +760,8 @@ function CaseJour({
     <td
       ref={setNodeRef}
       className={cn(
-        'h-10 border-b p-0.5',
+        // Toute la ligne s'éclaire au survol, comme la case du nom.
+        'h-10 border-b p-0.5 group-hover/ligne:bg-muted/50',
         classe,
         indice && classesIndice[indice],
         isOver && 'bg-primary/20',

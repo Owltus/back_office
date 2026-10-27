@@ -707,8 +707,7 @@ export function VueMois({
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
       <PageHeader
-        title="Planning"
-        meta={`Vue mois · ${nomDuMois}`}
+        title={nomDuMois.charAt(0).toUpperCase() + nomDuMois.slice(1)}
         actionsAlign="end"
         actions={
           <BarreMois
@@ -720,7 +719,7 @@ export function VueMois({
             verrou={verrou}
             completer={{
               inactif: raisonEcriture ?? aucuneOuverte,
-              aide: `Semi-auto : recalcule les propositions (nouveau tirage à chaque clic) ; le validé ne bouge pas.\n${portee}`,
+              aide: `Compléter le mois : recalcule les propositions (nouveau tirage à chaque clic) ; le validé ne bouge pas.\n${portee}`,
               onClick: completerLeMois,
             }}
             groupes={groupes}
@@ -729,8 +728,9 @@ export function VueMois({
             nomDuMois={nomDuMois}
             onPrecedent={() => onMois(moisDecale(mois, -1))}
             onSuivant={() => onMois(moisDecale(mois, 1))}
-            onCeMois={() => onMois(ceMois)}
-            estCeMois={mois === ceMois}
+            date={mois === ceMois ? aujourdhui : `${mois}-01`}
+            aujourdhui={aujourdhui}
+            onDate={(d) => onMois(d.slice(0, 7))}
           />
         }
       />

@@ -22,6 +22,7 @@ import {
 
 import { MenuParametres } from '#/components/planning/EnTeteParametres.tsx'
 import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
+import { DatePickerButton } from '#/components/form/fields.tsx'
 import { StepNav } from '#/components/shared/StepNav.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
@@ -173,8 +174,9 @@ export function BarreMois({
   nomDuMois,
   onPrecedent,
   onSuivant,
-  onCeMois,
-  estCeMois,
+  date,
+  aujourdhui,
+  onDate,
 }: {
   compteurs: Compteurs | null
   occupe: boolean
@@ -191,8 +193,11 @@ export function BarreMois({
   nomDuMois: string
   onPrecedent: () => void
   onSuivant: () => void
-  onCeMois: () => void
-  estCeMois: boolean
+  /** Jour montré par le calendrier (aujourd'hui dans le mois en cours). */
+  date: string
+  aujourdhui: string
+  /** Un jour choisi au calendrier : son mois s'affiche. */
+  onDate: (date: string) => void
 }) {
   return (
     <>
@@ -267,13 +272,15 @@ export function BarreMois({
           desactive={!!completer.inactif}
           label={completer.inactif ?? completer.aide}
         >
+          {/* Étincelles seules (décision utilisateur du 2026-10-28) : le nom
+              reste pour les lecteurs d'écran, l'infobulle dit ce qu'il fait. */}
           <Button
-            size="sm"
+            size="icon-sm"
             disabled={!!completer.inactif}
             onClick={completer.onClick}
+            aria-label="Compléter le mois"
           >
             {occupe ? <Loader2 className="animate-spin" /> : <Sparkles />}
-            Compléter le mois
           </Button>
         </AvecRaison>
         <DropdownMenu>
@@ -329,21 +336,14 @@ export function BarreMois({
         prevLabel="Mois précédent"
         nextLabel="Mois suivant"
       >
-        <AvecRaison
-          desactive={estCeMois}
-          label={estCeMois ? 'Mois en cours' : 'Revenir à ce mois'}
-        >
-          <Button
-            variant="outline"
-            size="sm"
-            className="min-w-32 capitalize"
-            onClick={onCeMois}
-            disabled={estCeMois}
-            aria-label={`${nomDuMois} : revenir à ce mois`}
-          >
-            {nomDuMois}
-          </Button>
-        </AvecRaison>
+        {/* Calendrier comme RepJour (décision utilisateur du 2026-10-28) ; son
+            bouton « Aujourd'hui » ramène au mois en cours. */}
+        <DatePickerButton
+          value={date}
+          onChange={onDate}
+          todayValue={aujourdhui}
+          ariaLabel={`Choisir un mois (${nomDuMois})`}
+        />
       </StepNav>
       <MenuParametres />
     </>
