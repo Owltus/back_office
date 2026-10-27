@@ -119,8 +119,7 @@ export function caseDe(
       fixe: bilan.absences_semaine_type.includes(jour),
     }
   }
-  const planifiee = sem.affectations.some((a) => a.salarie_id === salarieId)
-  return jourDeRepos(bilan, jour, planifiee)
+  return jourDeRepos(bilan, jour)
     ? { type: 'repos', fixe: bilan.repos_fixes.includes(jour) }
     : null
 }

@@ -252,7 +252,6 @@ export function VueSemaine({
         lignes.set(s.id, deja.ligne)
         continue
       }
-      const planifiee = siens.length > 0
       const ligne: DonneesLigne = {
         salarie: s,
         bilan,
@@ -265,7 +264,7 @@ export function VueSemaine({
               }
             : {
                 shift: null,
-                statut: statutDuJour(bilan, j, planifiee, referentiel.motifs),
+                statut: statutDuJour(bilan, j, referentiel.motifs),
               }
         }),
       }

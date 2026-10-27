@@ -120,14 +120,13 @@ describe('statutDuJour', () => {
     const s = statutDuJour(
       bilan({ hors_contrat: [2], absences: { 2: 1 } }),
       2,
-      true,
       MOTIFS,
     )
     expect(s).toMatchObject({ genre: 'hors', fixe: true })
   })
   it('absence ou école, fixe si semaine type', () => {
     expect(
-      statutDuJour(bilan({ absences: { 1: 1 } }), 1, false, MOTIFS),
+      statutDuJour(bilan({ absences: { 1: 1 } }), 1, MOTIFS),
     ).toMatchObject({
       nom: 'Congés',
       genre: 'absence',
@@ -137,29 +136,19 @@ describe('statutDuJour', () => {
       statutDuJour(
         bilan({ absences: { 1: 2 }, absences_semaine_type: [1] }),
         1,
-        false,
         MOTIFS,
       ),
     ).toMatchObject({ genre: 'ecole', fixe: true })
   })
-  it('repos seulement si la personne est organisée (ou repos fixe)', () => {
-    expect(statutDuJour(bilan(), 3, false, MOTIFS)).toBeNull()
-    expect(statutDuJour(bilan(), 3, true, MOTIFS)).toMatchObject({
-      genre: 'repos',
-      fixe: false,
-    })
+  it('repos seulement s’il est sûr : fiche ou semaine complète', () => {
+    expect(statutDuJour(bilan(), 3, MOTIFS)).toBeNull()
     expect(
-      statutDuJour(bilan({ repos_fixes: [3] }), 3, false, MOTIFS),
-    ).toMatchObject({
+      statutDuJour(bilan({ repos_deduits: [3] }), 3, MOTIFS),
+    ).toMatchObject({ genre: 'repos', fixe: false })
+    expect(statutDuJour(bilan({ repos_fixes: [3] }), 3, MOTIFS)).toMatchObject({
       genre: 'repos',
       fixe: true,
     })
-  })
-  it('un extra n’a pas de repos : ses jours vides restent non attribués', () => {
-    expect(statutDuJour(bilan({ extra: true }), 3, true, MOTIFS)).toBeNull()
-    expect(
-      statutDuJour(bilan({ extra: true, repos_fixes: [3] }), 3, true, MOTIFS),
-    ).toMatchObject({ genre: 'repos', fixe: true })
   })
 })
 
@@ -187,7 +176,7 @@ describe('indiceDe', () => {
     expect(indiceDe(vol, salarie(), 1, bilan({ repos_fixes: [1] }), null)).toBe(
       'deconseille',
     )
-    const hors = statutDuJour(bilan({ hors_contrat: [1] }), 1, false, MOTIFS)
+    const hors = statutDuJour(bilan({ hors_contrat: [1] }), 1, MOTIFS)
     expect(indiceDe(vol, salarie(), 1, bilan(), hors)).toBe('deconseille')
   })
   it('un repos ne va pas chez quelqu’un d’autre', () => {

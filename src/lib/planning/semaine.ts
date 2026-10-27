@@ -114,8 +114,6 @@ export interface BilanOut {
   repos_fixes: number[]
   hors_contrat: number[]
   repos_deduits: number[]
-  /** Extra : vient à la demande, ses jours vides ne sont jamais des repos. */
-  extra?: boolean
 }
 
 export interface SemaineOut {
@@ -808,7 +806,6 @@ export function analyser(d: DonneesSemaine): SemaineOut {
       repos_fixes: [...sol.reposFixes].sort((a, b) => a - b),
       hors_contrat: [...sol.horsContrat].sort((a, b) => a - b),
       repos_deduits: reposDeduits(x, sol, siens, lundi, ctx.absences),
-      ...(x.type_contrat === 'extra' && { extra: true }),
     })
   }
 

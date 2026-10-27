@@ -89,14 +89,14 @@ describe('cases et compteurs', () => {
     })
   })
 
-  it('une case lit le shift, et un repos fait un bandeau', () => {
+  it('une case lit le shift, un jour vide non sûr reste non attribué', () => {
     expect(caseDe(semaines, referentiel.motifs, 3, '2026-10-26')?.type).toBe(
       'shift',
     )
-    // Lucas a des shifts cette semaine : ses autres jours sont des repos.
-    const repos = caseDe(semaines, referentiel.motifs, 3, '2026-10-28')
-    expect(repos?.type).toBe('repos')
-    expect(cleBandeau(repos)).toBe('repos')
+    // Lucas a des shifts cette semaine, mais pas sa semaine complète : ses
+    // autres jours restent « non attribués » (un repos n'est pas posé).
+    expect(caseDe(semaines, referentiel.motifs, 3, '2026-10-28')).toBeNull()
+    expect(cleBandeau({ type: 'repos', fixe: false })).toBe('repos')
     expect(
       cleBandeau(caseDe(semaines, referentiel.motifs, 3, '2026-10-26')),
     ).toBeNull()

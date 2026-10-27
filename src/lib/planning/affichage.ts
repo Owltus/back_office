@@ -161,17 +161,11 @@ export function parGroupe<T extends Pick<Salarie, 'groupe_id'>>(
 }
 
 /** Un jour sans shift ni absence est un repos (pas « non attribué ») quand
- * la personne est organisée cette semaine, sauf pour un extra. */
-export function jourDeRepos(
-  b: BilanOut,
-  jour: number,
-  planifiee: boolean,
-): boolean {
-  if (
-    b.repos_fixes.includes(jour) ||
-    b.repos_deduits.includes(jour) ||
-    (planifiee && !b.extra)
-  )
+ * c'est sûr : repos de la fiche, ou semaine déjà complète (repos déduits).
+ * Sinon la case reste « non attribué » (décision utilisateur du 2026-10-27 :
+ * retirer un shift doit remettre la case à vide, un repos n'est pas posé). */
+export function jourDeRepos(b: BilanOut, jour: number): boolean {
+  if (b.repos_fixes.includes(jour) || b.repos_deduits.includes(jour))
     return true
   return b.minutes_contrat === 0 && Object.keys(b.absences).length > 0
 }

@@ -66,7 +66,6 @@ export function absenceDe(
 export function statutDuJour(
   bilan: BilanOut | undefined,
   jour: number,
-  planifiee: boolean,
   motifs: Motif[],
 ): ContenuStatut | null {
   if (!bilan) return null
@@ -89,9 +88,8 @@ export function statutDuJour(
       genre: m && estEcole(m) ? 'ecole' : 'absence',
     }
   }
-  // Personne sans aucun shift cette semaine : pas encore organisée, ses jours
-  // libres sont « non attribués » ; seuls les repos fixes de la fiche restent.
-  if (!jourDeRepos(bilan, jour, planifiee)) return null
+  // Repos seulement s'il est sûr (fiche, semaine complète) : sinon « non attribué ».
+  if (!jourDeRepos(bilan, jour)) return null
   return {
     nom: 'Repos',
     couleur: NEUTRE,
