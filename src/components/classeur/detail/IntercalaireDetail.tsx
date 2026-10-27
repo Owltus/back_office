@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-import { PageAvecEnTete } from '#/components/classeur/PageAvecEnTete.tsx'
+import { PageAvecEnTete } from '#/components/shared/PageAvecEnTete.tsx'
 import {
   DetailActions,
   DetailErreur,

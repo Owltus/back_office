@@ -97,10 +97,14 @@ describe('EquipePage', () => {
   it('range le staff par catégorie, avec contrats et départs', async () => {
     rendre()
     const hoteliers = await screen.findByRole('region', { name: 'Hôteliers' })
+    // Parti ou désactivé : rangé dans « Anciens membres », replié en bas.
     expect(
-      within(hoteliers).getByRole('button', { name: /Lucas Petit/ }),
+      within(hoteliers).queryByRole('button', { name: /Lucas Petit/ }),
+    ).toBeNull()
+    expect(
+      screen.getByText(/10 membres dans l'équipe · 2 anciens/),
     ).toBeTruthy()
-    expect(screen.getByText(/12 membres/)).toBeTruthy()
+    fireEvent.click(screen.getByText('Anciens membres'))
     // Ordre des catégories : Direction, Hôteliers, Apprentis, Stagiaires.
     const titres = screen
       .getAllByRole('heading', { level: 2 })

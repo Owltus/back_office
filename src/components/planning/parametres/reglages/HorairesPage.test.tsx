@@ -73,6 +73,12 @@ const { monter, referentielDemo } =
   await import('#/components/planning/parametres/reglages/test/monter.tsx')
 
 beforeEach(() => {
+  // Le volet (Radix) mesure ses éléments : jsdom n'a pas ResizeObserver.
+  globalThis.ResizeObserver ??= class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver
   etat.referentiel = referentielDemo()
   etat.droits = { pret: true, lire: true, ecrire: true, gerer: true }
   for (const f of Object.values(service)) f.mockReset()
@@ -82,13 +88,32 @@ beforeEach(() => {
 })
 afterEach(cleanup)
 
-const carteMatin = () => screen.getByRole('region', { name: 'Code M' })
+// Les codes et les motifs sont des lignes compactes ; un clic ouvre leur
+// réglage dans un volet (refonte du 2026-10-28).
+const ouvrir = (nom: RegExp) => {
+  const ligne = [
+    ...document.querySelectorAll<HTMLButtonElement>('button[aria-label]'),
+  ].find((x) => nom.test(x.getAttribute('aria-label') ?? ''))
+  if (!ligne) throw new Error(`Aucune ligne ${nom}`)
+  fireEvent.click(ligne)
+}
+const carteMatin = () => {
+  if (!screen.queryByRole('region', { name: 'Code M' })) ouvrir(/^Régler M,/)
+  return screen.getByRole('region', { name: 'Code M' })
+}
+const carteMaladie = () => {
+  if (!screen.queryByRole('region', { name: 'Motif Maladie' }))
+    ouvrir(/^Régler .*, Maladie$/)
+  return screen.getByRole('region', { name: 'Motif Maladie' })
+}
 
 describe('Horaires et absences', () => {
   it('en lecture (ou écriture) : tout se lit, rien ne se modifie', () => {
     etat.droits = { pret: true, lire: true, ecrire: true, gerer: false }
     monter(<HorairesPage />)
     expect(screen.getByText(/Lecture seule/)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Nouveau/ })).toBeNull()
+    carteMatin()
     for (const champ of screen.getAllByRole('textbox')) {
       expect((champ as HTMLInputElement).disabled).toBe(true)
     }
@@ -235,7 +260,7 @@ describe('Horaires et absences', () => {
   it('motif : nature et compté dans les heures, envoyés à Enregistrer', async () => {
     service.enregistrerMotif.mockResolvedValue(3)
     monter(<HorairesPage />)
-    const carte = within(screen.getByRole('region', { name: 'Motif Maladie' }))
+    const carte = within(carteMaladie())
     fireEvent.click(carte.getByRole('radio', { name: 'École' }))
     fireEvent.click(
       carte.getByRole('switch', { name: 'Compté dans les heures' }),
@@ -265,7 +290,7 @@ describe('Horaires et absences', () => {
     ])
     service.supprimerMotif.mockResolvedValue(undefined)
     monter(<HorairesPage />)
-    const carte = within(screen.getByRole('region', { name: 'Motif Maladie' }))
+    const carte = within(carteMaladie())
     expect(await carte.findByText('Utilisé par 2 personnes')).toBeTruthy()
     fireEvent.click(carte.getByRole('button', { name: 'Supprimer' }))
     expect(
@@ -273,7 +298,10 @@ describe('Horaires et absences', () => {
         /3 jours d'absence posés avec ce motif seront effacés du planning/,
       ),
     ).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }))
+    // La confirmation s'ouvre par-dessus le volet : son bouton est le dernier.
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Supprimer' }).at(-1)!,
+    )
     await waitFor(() => expect(service.supprimerMotif).toHaveBeenCalledWith(3))
   })
 })

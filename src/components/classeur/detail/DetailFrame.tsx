@@ -12,7 +12,7 @@ import {
 
 import { ChapterDrawerButton } from '#/components/classeur/ChapterDrawer.tsx'
 import { IconAction } from '#/components/classeur/IconAction.tsx'
-import { PageAvecEnTete } from '#/components/classeur/PageAvecEnTete.tsx'
+import { PageAvecEnTete } from '#/components/shared/PageAvecEnTete.tsx'
 import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'

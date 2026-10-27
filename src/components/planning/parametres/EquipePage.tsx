@@ -6,7 +6,7 @@
 
 import { useState } from 'react'
 import type { ReactNode } from 'react'
-import { Layers, UserPlus } from 'lucide-react'
+import { ChevronRight, Layers, UserPlus } from 'lucide-react'
 
 import {
   MenuParametres,
@@ -24,6 +24,7 @@ import {
 import { GestionCategories } from '#/components/planning/parametres/equipe/GestionCategories.tsx'
 import { FicheSalarie } from '#/components/planning/parametres/FicheSalarie.tsx'
 import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
+import { PageAvecEnTete } from '#/components/shared/PageAvecEnTete.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
@@ -74,98 +75,132 @@ export function EquipePage() {
     </Button>
   )
 
-  return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
-      <PageHeader
-        leading={<RetourPlanning />}
-        title="Équipe"
-        meta={
-          ref.data
-            ? `${salaries.length} membre${salaries.length > 1 ? 's' : ''}. Chaque fiche décrit le contrat, les postes tenus, la semaine type et les absences : le moteur s'en sert pour générer le planning.`
-            : undefined
-        }
-        actionsAlign="end"
-        actions={
-          <>
-            <ButtonGroup>
-              <Tip label="Catégories du staff : rangement et postes autorisés">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={!ref.data}
-                  onClick={() => setCategories(true)}
-                >
-                  <Layers /> Catégories
-                </Button>
-              </Tip>
-            </ButtonGroup>
-            {gerer ? (
-              ajouter
-            ) : (
-              <Tip label="Lecture seule : seule la gestion du planning ajoute un membre">
-                <span tabIndex={0}>{ajouter}</span>
-              </Tip>
-            )}
-            <MenuParametres actif="/planning/equipe" />
-          </>
-        }
-      />
+  // Les membres partis ou désactivés vont dans une section repliée en bas :
+  // la page montre d'abord l'équipe actuelle.
+  const actifs = salaries.filter((s) => estActuel(s, aujourdhui))
+  const anciens = salaries.filter((s) => !estActuel(s, aujourdhui))
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        {ref.isPending ? (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {Array.from({ length: 6 }, (_, i) => (
-              <Skeleton key={i} className="h-28 rounded-xl" />
-            ))}
-          </div>
-        ) : ref.isError ? (
-          <div className="flex flex-col items-start gap-2 rounded-xl border bg-card p-4 text-sm">
-            L'équipe n'a pas pu être lue.
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => void ref.refetch()}
+  return (
+    <PageAvecEnTete
+      entete={
+        <PageHeader
+          leading={<RetourPlanning />}
+          title="Équipe"
+          meta={
+            ref.data
+              ? `${actifs.length} membre${actifs.length > 1 ? 's' : ''} dans l'équipe${anciens.length ? ` · ${anciens.length} ancien${anciens.length > 1 ? 's' : ''}` : ''}`
+              : undefined
+          }
+          actionsAlign="end"
+          actions={
+            <>
+              <ButtonGroup>
+                <Tip label="Catégories du staff : rangement et postes autorisés">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!ref.data}
+                    onClick={() => setCategories(true)}
+                  >
+                    <Layers /> Catégories
+                  </Button>
+                </Tip>
+              </ButtonGroup>
+              {gerer ? (
+                ajouter
+              ) : (
+                <Tip label="Lecture seule : seule la gestion du planning ajoute un membre">
+                  <span tabIndex={0}>{ajouter}</span>
+                </Tip>
+              )}
+              <MenuParametres actif="/planning/equipe" />
+            </>
+          }
+        />
+      }
+    >
+      {ref.isPending ? (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 6 }, (_, i) => (
+            <Skeleton key={i} className="h-28 rounded-xl" />
+          ))}
+        </div>
+      ) : ref.isError ? (
+        <div className="flex flex-col items-start gap-2 rounded-xl border bg-card p-4 text-sm">
+          L'équipe n'a pas pu être lue.
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void ref.refetch()}
+          >
+            Réessayer
+          </Button>
+        </div>
+      ) : salaries.length === 0 ? (
+        <div className="rounded-xl border bg-card p-4 text-sm text-muted-foreground">
+          Personne dans l'équipe pour l'instant.
+          {gerer && ' Ajoutez un membre pour commencer.'}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-6">
+          <p className="text-sm text-muted-foreground">
+            Chaque fiche décrit le contrat, les postes tenus, la semaine type et
+            les absences : le moteur s'en sert pour générer le planning.
+          </p>
+          {parGroupe(actifs, ref.data.groupes).map((g) => (
+            <section
+              key={g.id}
+              aria-label={g.nom}
+              className="flex flex-col gap-2"
             >
-              Réessayer
-            </Button>
-          </div>
-        ) : salaries.length === 0 ? (
-          <div className="rounded-xl border bg-card p-4 text-sm text-muted-foreground">
-            Personne dans l'équipe pour l'instant.
-            {gerer && ' Ajoutez un membre pour commencer.'}
-          </div>
-        ) : (
-          <div className="flex flex-col gap-6 pb-4">
-            {parGroupe(salaries, ref.data.groupes).map((g) => (
-              <section
-                key={g.id}
-                aria-label={g.nom}
-                className="flex flex-col gap-2"
-              >
-                <h2 className="flex items-baseline gap-2 text-sm font-semibold">
-                  {g.nom}
-                  <span className="text-xs font-normal text-muted-foreground">
-                    {g.membres.length}
-                  </span>
-                </h2>
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  {g.membres.map((s) => (
-                    <CarteMembre
-                      key={s.id}
-                      s={s}
-                      postes={ref.data.postes}
-                      aujourdhui={aujourdhui}
-                      onOuvrir={() =>
-                        setFiche({ id: s.id, groupeId: s.groupe_id })
-                      }
-                    />
-                  ))}
-                </div>
-              </section>
-            ))}
-          </div>
-        )}
-      </div>
+              <h2 className="flex items-baseline gap-2 text-sm font-semibold">
+                {g.nom}
+                <span className="text-xs font-normal text-muted-foreground">
+                  {g.membres.length}
+                </span>
+              </h2>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {g.membres.map((s) => (
+                  <CarteMembre
+                    key={s.id}
+                    s={s}
+                    postes={ref.data.postes}
+                    aujourdhui={aujourdhui}
+                    onOuvrir={() =>
+                      setFiche({ id: s.id, groupeId: s.groupe_id })
+                    }
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
+          {anciens.length > 0 && (
+            <details className="group flex flex-col gap-2">
+              <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-muted-foreground [&::-webkit-details-marker]:hidden">
+                <ChevronRight className="size-4 transition-transform group-open:rotate-90" />
+                Anciens membres
+                <span className="text-xs font-normal">{anciens.length}</span>
+                <span className="text-xs font-normal">
+                  (partis ou désactivés, gardés pour l'historique)
+                </span>
+              </summary>
+              <div className="mt-2 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {anciens.map((s) => (
+                  <CarteMembre
+                    key={s.id}
+                    s={s}
+                    postes={ref.data.postes}
+                    aujourdhui={aujourdhui}
+                    onOuvrir={() =>
+                      setFiche({ id: s.id, groupeId: s.groupe_id })
+                    }
+                  />
+                ))}
+              </div>
+            </details>
+          )}
+        </div>
+      )}
 
       <FicheSalarie
         salarieId={fiche?.id ?? null}
@@ -182,9 +217,13 @@ export function EquipePage() {
           salaries={salaries}
         />
       )}
-    </div>
+    </PageAvecEnTete>
   )
 }
+
+/** Dans l'équipe aujourd'hui : actif et sans fin de contrat passée. */
+const estActuel = (s: Salarie, aujourdhui: string) =>
+  s.actif && (!s.date_sortie || s.date_sortie >= aujourdhui)
 
 function Puce({
   children,

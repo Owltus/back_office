@@ -3,8 +3,9 @@ import type { ComponentProps, ReactNode } from 'react'
 import { cn } from '#/lib/utils.ts'
 
 /**
- * Cadre « en-tête fixe + contenu qui défile » de la page d'un chapitre et
- * des quatre pages de détail (décision utilisateur du 2026-10-04 : « que la
+ * Cadre « en-tête fixe + contenu qui défile » : page d'un chapitre et
+ * quatre pages de détail du Classeur, écrans de paramètres du Planning
+ * (2026-10-28) (décision utilisateur du 2026-10-04 : « que la
  * barre de défilement soit dans le contenu, en dehors de la zone de la barre
  * d'outils »).
  *

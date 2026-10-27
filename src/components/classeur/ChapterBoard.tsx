@@ -78,7 +78,7 @@ import {
   DropdownMenuTrigger,
 } from '#/components/ui/dropdown-menu.tsx'
 import { useSelection } from '#/components/classeur/hooks/useSelection.ts'
-import { PageAvecEnTete } from '#/components/classeur/PageAvecEnTete.tsx'
+import { PageAvecEnTete } from '#/components/shared/PageAvecEnTete.tsx'
 import { IconAction } from '#/components/classeur/IconAction.tsx'
 import {
   ChapterPrintPages,

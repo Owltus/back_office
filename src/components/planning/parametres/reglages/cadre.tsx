@@ -17,6 +17,7 @@ import {
 import type { CheminParametre } from '#/components/planning/EnTeteParametres.tsx'
 import { MentionLectureSeule } from '#/components/planning/parametres/reglages/controles.tsx'
 import { memes } from '#/components/planning/parametres/reglages/validation.ts'
+import { PageAvecEnTete } from '#/components/shared/PageAvecEnTete.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { Skeleton } from '#/components/ui/skeleton.tsx'
@@ -43,46 +44,49 @@ export function CadreReglages({
   children: ReactNode
 }) {
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
-      <PageHeader
-        leading={<RetourPlanning />}
-        title={titre}
-        actionsAlign="end"
-        actions={
-          <>
-            {actions}
-            <MenuParametres actif={actif} />
-          </>
-        }
-      />
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="flex flex-col gap-6 pb-6">
-          {!modifiable && !chargement && !erreur && (
-            <MentionLectureSeule pret={pret} />
-          )}
-          {erreur ? (
-            <div className="flex flex-col items-start gap-3 rounded-xl border bg-card p-4 text-sm">
-              Les réglages du planning n'ont pas pu être lus.
-              <Button variant="outline" size="sm" onClick={onReessayer}>
-                <RotateCw />
-                Réessayer
-              </Button>
-            </div>
-          ) : chargement ? (
-            <div
-              className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
-              aria-busy="true"
-            >
-              {[0, 1, 2].map((i) => (
-                <Skeleton key={i} className="h-64 rounded-xl" />
-              ))}
-            </div>
-          ) : (
-            children
-          )}
-        </div>
+    // En-tête fixe, contenu qui défile avec sa barre au bord droit de la
+    // fenêtre (même cadre que le Classeur, `PageAvecEnTete`).
+    <PageAvecEnTete
+      entete={
+        <PageHeader
+          leading={<RetourPlanning />}
+          title={titre}
+          actionsAlign="end"
+          actions={
+            <>
+              {actions}
+              <MenuParametres actif={actif} />
+            </>
+          }
+        />
+      }
+    >
+      <div className="flex flex-col gap-6">
+        {!modifiable && !chargement && !erreur && (
+          <MentionLectureSeule pret={pret} />
+        )}
+        {erreur ? (
+          <div className="flex flex-col items-start gap-3 rounded-xl border bg-card p-4 text-sm">
+            Les réglages du planning n'ont pas pu être lus.
+            <Button variant="outline" size="sm" onClick={onReessayer}>
+              <RotateCw />
+              Réessayer
+            </Button>
+          </div>
+        ) : chargement ? (
+          <div
+            className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
+            aria-busy="true"
+          >
+            {[0, 1, 2].map((i) => (
+              <Skeleton key={i} className="h-64 rounded-xl" />
+            ))}
+          </div>
+        ) : (
+          children
+        )}
       </div>
-    </div>
+    </PageAvecEnTete>
   )
 }
 

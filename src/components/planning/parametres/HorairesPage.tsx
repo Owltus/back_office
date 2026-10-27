@@ -11,7 +11,7 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Moon, Plus, Trash2 } from 'lucide-react'
+import { ChevronRight, Moon, Plus, Trash2 } from 'lucide-react'
 
 import {
   useDroitsPlanning,
@@ -52,8 +52,16 @@ import { ConfirmDialog } from '#/components/shared/ConfirmDialog.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '#/components/ui/sheet.tsx'
 import { Switch } from '#/components/ui/switch.tsx'
 import {
+  dureeHoraire,
   grouperHoraires,
   heures,
   ROUGE_CODE,
@@ -168,6 +176,25 @@ export function HorairesPage() {
     staleTime: 0,
   })
 
+  // Un code ou un motif ouvert dans le volet (id null : nouveau).
+  const [ouvert, setOuvert] = useState<{
+    type: 'horaire' | 'motif'
+    id: number | null
+  } | null>(null)
+  const horaireOuvert =
+    ouvert?.type === 'horaire' && ouvert.id !== null
+      ? data?.horaires.find((h) => h.id === ouvert.id)
+      : undefined
+  const motifOuvert =
+    ouvert?.type === 'motif' && ouvert.id !== null
+      ? data?.motifs.find((m) => m.id === ouvert.id)
+      : undefined
+  const fermer = () => {
+    setOuvert(null)
+    setNouvelHoraire(null)
+    setNouveauMotif(null)
+  }
+
   const creerHoraire = () => {
     if (!data) return
     setNouvelHoraire({
@@ -213,12 +240,15 @@ export function HorairesPage() {
             <div id="titre-codes-horaires">
               <EnTeteSection
                 titre="Codes horaires"
-                texte="Les horaires types de l'hôtel (matin, middle, après-midi, nuit…). Chacun a sa couleur, reprise sur les cartes du planning. La pause compte dans la présence mais pas dans les heures. La journée courte finit plus tôt (39 h = 4 × 8 h + 1 × 7 h, choisie par le planning). Modifier un horaire met à jour les shifts déjà posés avec ce code, sauf dans les semaines verrouillées."
+                texte="Rangés par famille, comme dans les menus du planning. Un clic sur un code ouvre son réglage. La pause compte dans la présence mais pas dans les heures ; modifier les heures d'un code met à jour les shifts à venir posés avec lui."
                 actions={
                   modifiable && (
                     <Button
                       size="sm"
-                      onClick={creerHoraire}
+                      onClick={() => {
+                        creerHoraire()
+                        setOuvert({ type: 'horaire', id: null })
+                      }}
                       disabled={!!nouvelHoraire}
                     >
                       <Plus />
@@ -228,42 +258,23 @@ export function HorairesPage() {
                 }
               />
             </div>
-            {nouvelHoraire && (
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                <CarteHoraire
-                  key="nouveau"
-                  id={null}
-                  enregistre={nouvelHoraire}
-                  referentiel={data}
-                  modifiable={modifiable}
-                  onFin={() => setNouvelHoraire(null)}
-                />
-              </div>
-            )}
-            {grouperHoraires(data.horaires).map((g) => {
-              const liste = g.horaires
-              return (
-                <div key={g.libelle} className="flex flex-col gap-3">
-                  <h3 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-                    {g.libelle}
-                    <span className="rounded-full bg-muted px-2 text-xs tabular-nums">
-                      {liste.length}
-                    </span>
-                  </h3>
-                  <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                    {liste.map((h) => (
-                      <CarteHoraire
-                        key={h.id}
-                        id={h.id}
-                        enregistre={saisieHoraire(h)}
-                        referentiel={data}
-                        modifiable={modifiable}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )
-            })}
+            <div className="grid items-start gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+              {grouperHoraires(data.horaires).map((g) => (
+                <ListeCompacte
+                  key={g.libelle}
+                  titre={g.libelle}
+                  nombre={g.horaires.length}
+                >
+                  {g.horaires.map((h) => (
+                    <LigneCode
+                      key={h.id}
+                      h={h}
+                      onOuvrir={() => setOuvert({ type: 'horaire', id: h.id })}
+                    />
+                  ))}
+                </ListeCompacte>
+              ))}
+            </div>
             {data.horaires.length > 0 && <Frise horaires={data.horaires} />}
           </section>
 
@@ -274,13 +285,16 @@ export function HorairesPage() {
             <div id="titre-motifs">
               <EnTeteSection
                 titre="Absences et école"
-                texte="Chaque motif a sa couleur, se pose sur une case du planning comme un horaire et s'utilise dans les fiches. Absences : vacances, repos exceptionnels, sans solde, maladie… École : la formation hors établissement des apprentis, qui n'est pas une absence."
+                texte="Chaque motif a sa couleur et se pose sur une case du planning comme un horaire. L'école est la formation hors établissement des apprentis et des stagiaires, ce n'est pas une absence."
                 actions={
                   modifiable && (
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={creerMotif}
+                      onClick={() => {
+                        creerMotif()
+                        setOuvert({ type: 'motif', id: null })
+                      }}
                       disabled={!!nouveauMotif}
                     >
                       <Plus />
@@ -290,56 +304,207 @@ export function HorairesPage() {
                 }
               />
             </div>
-            {[
-              { titre: 'Absences', nature: 'absence' as const },
-              { titre: 'École', nature: 'ecole' as const },
-            ].map((g) => {
-              const liste = data.motifs.filter((m) => m.nature === g.nature)
-              const brouillonIci = nouveauMotif && g.nature === 'absence'
-              if (!liste.length && g.nature === 'ecole') return null
-              return (
-                <div key={g.nature} className="flex flex-col gap-3">
-                  <h3 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-                    {g.titre}
-                    <span className="rounded-full bg-muted px-2 text-xs tabular-nums">
-                      {liste.length}
-                    </span>
-                  </h3>
-                  <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                    {brouillonIci && (
-                      <CarteMotif
-                        key="nouveau"
-                        id={null}
-                        enregistre={nouveauMotif}
-                        referentiel={data}
-                        absences={absences.data}
-                        modifiable={modifiable}
-                        onFin={() => setNouveauMotif(null)}
-                      />
-                    )}
+            <div className="grid items-start gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+              {[
+                { titre: 'Absences', nature: 'absence' as const },
+                { titre: 'École', nature: 'ecole' as const },
+              ].map((g) => {
+                const liste = data.motifs.filter((m) => m.nature === g.nature)
+                if (!liste.length) return null
+                return (
+                  <ListeCompacte
+                    key={g.nature}
+                    titre={g.titre}
+                    nombre={liste.length}
+                  >
                     {liste.map((m) => (
-                      <CarteMotif
+                      <LigneMotif
                         key={m.id}
-                        id={m.id}
-                        enregistre={saisieMotif(m)}
-                        referentiel={data}
-                        absences={absences.data}
-                        modifiable={modifiable}
+                        m={m}
+                        usage={
+                          absences.data
+                            ? usageMotif(m.id, data.salaries, absences.data)
+                                .jours
+                            : undefined
+                        }
+                        onOuvrir={() => setOuvert({ type: 'motif', id: m.id })}
                       />
                     ))}
-                    {!liste.length && !brouillonIci && (
-                      <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
-                        Aucun motif d'absence.
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
+                  </ListeCompacte>
+                )
+              })}
+            </div>
           </section>
+
+          <Sheet
+            open={
+              !!ouvert &&
+              (ouvert.id === null || !!horaireOuvert || !!motifOuvert)
+            }
+            onOpenChange={(o) => !o && fermer()}
+          >
+            <SheetContent className="w-full gap-0 overflow-y-auto sm:max-w-lg">
+              <SheetHeader className="border-b">
+                <SheetTitle>
+                  {ouvert?.type === 'motif'
+                    ? ouvert.id === null
+                      ? 'Nouveau motif'
+                      : `Motif ${motifOuvert?.code ?? ''}`
+                    : ouvert?.id === null
+                      ? 'Nouveau code horaire'
+                      : `Code ${horaireOuvert?.code ?? ''}`}
+                </SheetTitle>
+                <SheetDescription>
+                  {ouvert?.type === 'motif'
+                    ? (motifOuvert?.nom ?? 'Absence ou école')
+                    : (horaireOuvert?.nom ??
+                      'Heures, pause, famille et couleur')}
+                </SheetDescription>
+              </SheetHeader>
+              <div className="p-4">
+                {ouvert?.type === 'horaire' &&
+                  (ouvert.id === null
+                    ? nouvelHoraire && (
+                        <CarteHoraire
+                          key="nouveau"
+                          id={null}
+                          enregistre={nouvelHoraire}
+                          referentiel={data}
+                          modifiable={modifiable}
+                          onFin={fermer}
+                        />
+                      )
+                    : horaireOuvert && (
+                        <CarteHoraire
+                          key={horaireOuvert.id}
+                          id={horaireOuvert.id}
+                          enregistre={saisieHoraire(horaireOuvert)}
+                          referentiel={data}
+                          modifiable={modifiable}
+                          onFin={fermer}
+                        />
+                      ))}
+                {ouvert?.type === 'motif' &&
+                  (ouvert.id === null
+                    ? nouveauMotif && (
+                        <CarteMotif
+                          key="nouveau"
+                          id={null}
+                          enregistre={nouveauMotif}
+                          referentiel={data}
+                          absences={absences.data}
+                          modifiable={modifiable}
+                          onFin={fermer}
+                        />
+                      )
+                    : motifOuvert && (
+                        <CarteMotif
+                          key={motifOuvert.id}
+                          id={motifOuvert.id}
+                          enregistre={saisieMotif(motifOuvert)}
+                          referentiel={data}
+                          absences={absences.data}
+                          modifiable={modifiable}
+                          onFin={fermer}
+                        />
+                      ))}
+              </div>
+            </SheetContent>
+          </Sheet>
         </>
       )}
     </CadreReglages>
+  )
+}
+
+// ------------------------------------------------------- listes compactes
+
+/** Une famille de codes (ou de motifs) : une carte, une ligne par élément. */
+function ListeCompacte({
+  titre,
+  nombre,
+  children,
+}: {
+  titre: string
+  nombre: number
+  children: ReactNode
+}) {
+  return (
+    <div className="overflow-hidden rounded-xl border bg-card">
+      <h3 className="flex items-center gap-2 border-b bg-muted/40 px-3 py-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+        {titre}
+        <span className="rounded-full bg-muted px-2 text-xs normal-case tabular-nums">
+          {nombre}
+        </span>
+      </h3>
+      <ul className="divide-y">{children}</ul>
+    </div>
+  )
+}
+
+const LIGNE_COMPACTE =
+  'flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition-colors outline-none hover:bg-muted/50 focus-visible:bg-muted/50'
+
+function LigneCode({ h, onOuvrir }: { h: Horaire; onOuvrir: () => void }) {
+  return (
+    <li>
+      <button
+        type="button"
+        className={LIGNE_COMPACTE}
+        onClick={onOuvrir}
+        aria-label={`Régler ${h.code}, ${h.nom}`}
+      >
+        <span
+          className="min-w-12 shrink-0 rounded px-1.5 py-0.5 text-center text-xs font-semibold"
+          style={{
+            background: h.couleur,
+            color: h.code_rouge ? ROUGE_CODE : texteSur(h.couleur),
+          }}
+        >
+          {h.code}
+        </span>
+        <span className="min-w-0 flex-1 truncate">{h.nom}</span>
+        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+          {heures(dureeHoraire(h.debut, h.fin) - h.pause)}
+          {h.raccourci > 0 && ' · étoile'}
+        </span>
+        <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+      </button>
+    </li>
+  )
+}
+
+function LigneMotif({
+  m,
+  usage,
+  onOuvrir,
+}: {
+  m: Motif
+  usage: number | undefined
+  onOuvrir: () => void
+}) {
+  return (
+    <li>
+      <button
+        type="button"
+        className={LIGNE_COMPACTE}
+        onClick={onOuvrir}
+        aria-label={`Régler ${m.code}, ${m.nom}`}
+      >
+        <span
+          className="min-w-12 shrink-0 rounded px-1.5 py-0.5 text-center text-xs font-semibold"
+          style={{ background: m.couleur, color: texteSur(m.couleur) }}
+        >
+          {m.code}
+        </span>
+        <span className="min-w-0 flex-1 truncate">{m.nom}</span>
+        <span className="shrink-0 text-xs text-muted-foreground">
+          {m.decompte ? 'compte dans les heures' : 'hors heures'}
+          {usage !== undefined && ` · ${usage} j`}
+        </span>
+        <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+      </button>
+    </li>
   )
 }
 

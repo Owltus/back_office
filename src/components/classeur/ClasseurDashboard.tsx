@@ -41,7 +41,7 @@ import {
 } from '#/components/classeur/hooks/useDroitsClasseur.ts'
 import { IconAction } from '#/components/classeur/IconAction.tsx'
 import { LigneAction } from '#/components/classeur/LigneAction.tsx'
-import { PageAvecEnTete } from '#/components/classeur/PageAvecEnTete.tsx'
+import { PageAvecEnTete } from '#/components/shared/PageAvecEnTete.tsx'
 import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { ConfirmDialog } from '#/components/shared/ConfirmDialog.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
