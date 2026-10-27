@@ -1,7 +1,7 @@
 /*
  * Cartes d'une case du planning (prototype `CarteShift.tsx`) : le shift, à la
  * couleur de son code horaire, et le jour non travaillé (repos, absence,
- * école, hors contrat), hachuré. Les versions déplaçables enveloppent la
+ * école, hors contrat), teinté. Les versions déplaçables enveloppent la
  * carte dans un `useDraggable`.
  */
 

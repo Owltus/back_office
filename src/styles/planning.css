@@ -1,13 +1,13 @@
 /*
  * Styles propres à la page Planning (préfixe .planning-). Tailwind d abord :
- * ce fichier ne porte que ce que les classes expriment mal (hachures des
- * semaines verrouillées, dégradés des cartes de shift).
+ * ce fichier ne porte que ce que les classes expriment mal (dégradés des
+ * cartes de shift).
  */
 
 /* ------------------------------------------------------------ Vue mois
  * (components/planning/mois/). Pastille d'un shift à la couleur de son code
  * horaire (variable --couleur posée par la case), bandeaux de repos,
- * d'absence et de hors contrat, hachures des semaines verrouillées. */
+ * d'absence et de hors contrat. */
 
 .planning-mois-pastille {
   border-color: color-mix(in srgb, var(--couleur) 70%, transparent);
@@ -28,7 +28,7 @@
 }
 
 /* Bandeau : absence ou école à la couleur du motif, repos et hors contrat
- * en gris hachuré. */
+ * en gris uni. */
 .planning-mois-bande {
   background: color-mix(in srgb, var(--couleur) 14%, transparent);
   border: 1px solid color-mix(in srgb, var(--couleur) 35%, transparent);
@@ -52,28 +52,20 @@
 }
 
 .planning-mois-bande.planning-mois-hors {
-  background: repeating-linear-gradient(
-    -45deg,
-    color-mix(in srgb, var(--color-muted-foreground) 14%, transparent) 0 4px,
-    transparent 4px 8px
-  );
+  background: color-mix(in srgb, var(--color-muted-foreground) 8%, transparent);
 }
 
-/* Semaine verrouillée (planning réalisé) : hachures, curseur par défaut. */
+/* Semaine verrouillée (planning réalisé) : curseur par défaut. Plus de
+ * hachures (retirées le 2026-10-27, décision utilisateur : « pas très beau,
+ * ajoute de la confusion ») ; le cadenas de l'en-tête suffit. */
 .planning-mois-verrouillee {
   cursor: default;
-  background-image: repeating-linear-gradient(
-    45deg,
-    color-mix(in srgb, var(--color-muted-foreground) 12%, transparent) 0 3px,
-    transparent 3px 9px
-  );
 }
 
 /* ---------------------------------------------------------- Vue semaine
  * (components/planning/semaine/). Carte d'un shift : dégradé et liseré à la
  * couleur du code horaire (--couleur), pointillés pour une proposition ;
- * carte d'un jour non travaillé hachurée ; indices pendant un glisser ;
- * hachures d'une semaine verrouillée. */
+ * carte d'un jour non travaillé teintée ; indices pendant un glisser. */
 
 .planning-carte {
   --couleur: #94a3b8;
@@ -278,15 +270,6 @@
 
 .planning-grille[data-glisser] .planning-ajouter {
   display: none;
-}
-
-/* Semaine verrouillée : cases hachurées, aucun « + » (gestes coupés). */
-.planning-grille[data-verrou] .planning-cellule {
-  background-image: repeating-linear-gradient(
-    -45deg,
-    transparent 0 6px,
-    color-mix(in srgb, var(--color-muted-foreground) 9%, transparent) 6px 7px
-  );
 }
 
 /* ---------------------------------------------------------------- Équipe */
