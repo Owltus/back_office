@@ -15,7 +15,7 @@ import {
   pointsAttention,
   resumePoints,
 } from '#/components/planning/attention.ts'
-import type { PointPersonne } from '#/components/planning/attention.ts'
+import type { PointPersonne, Portee } from '#/components/planning/attention.ts'
 import { ecartTexte } from '#/components/planning/semaine/Presence.tsx'
 import {
   Sheet,
@@ -106,7 +106,7 @@ export function PanneauAlertes({
   salaries,
   postes,
   periode,
-  garder,
+  portee,
   infractionsSeules = false,
 }: {
   ouvert: boolean
@@ -116,12 +116,12 @@ export function PanneauAlertes({
   postes: Poste[]
   /** « Cette semaine », « En novembre »… */
   periode: string
-  /** Jours retenus (`aVenir`, `aVenirDansLeMois`). */
-  garder?: (date: string) => boolean
+  /** Ce que l'écran montre (`porteeSemaine`, `porteeMois`). */
+  portee?: Portee
   /** Bouclier « règles HCR » : les seules infractions, passé compris. */
   infractionsSeules?: boolean
 }) {
-  const p = pointsAttention(semaines, salaries, postes, garder)
+  const p = pointsAttention(semaines, salaries, postes, portee)
   const shifts = p.aPourvoir.flatMap((j) => j.shifts)
   const compte = (l: PointPersonne[]) =>
     l.reduce((n, x) => n + x.messages.length, 0)

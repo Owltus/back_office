@@ -110,7 +110,7 @@ export function Indicateurs({ c }: { c: Compteurs }) {
         </Tip>
       )}
       <Tip
-        label={`Couverture des semaines affichées, en entier : ${c.pourvues} places pourvues sur ${c.places}`}
+        label={`Couverture du mois : ${c.pourvues} places pourvues sur ${c.places}`}
       >
         <span tabIndex={0} className="inline-flex items-center gap-1.5">
           <span className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">

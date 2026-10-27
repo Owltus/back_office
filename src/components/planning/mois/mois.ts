@@ -189,6 +189,21 @@ export function placesAPourvoir(
   return n
 }
 
+function sommeJoursDuMois(
+  mois: string,
+  semaines: SemaineOut[],
+  parJour: (s: SemaineOut) => number[] | undefined,
+): number {
+  let n = 0
+  for (const s of semaines) {
+    const valeurs = parJour(s) ?? []
+    valeurs.forEach((v, j) => {
+      if (ajouterJours(s.lundi, j).startsWith(mois)) n += v
+    })
+  }
+  return n
+}
+
 export function compter(mois: string, semaines: SemaineOut[]): Compteurs {
   let propositions = 0
   let valides = 0
@@ -205,8 +220,10 @@ export function compter(mois: string, semaines: SemaineOut[]): Compteurs {
     propositions,
     valides,
     verrouilles,
-    places: semaines.reduce((n, s) => n + s.stats.places, 0),
-    pourvues: semaines.reduce((n, s) => n + s.stats.pourvues, 0),
+    // Couverture : les seuls jours du mois (une semaine à cheval ne compte
+    // que sa part ; décision utilisateur du 2026-10-28).
+    places: sommeJoursDuMois(mois, semaines, (s) => s.stats.places_jour),
+    pourvues: sommeJoursDuMois(mois, semaines, (s) => s.stats.pourvues_jour),
     infractions: semaines.reduce((n, s) => n + s.stats.infractions, 0),
     alertes: semaines.reduce(
       (n, s) =>

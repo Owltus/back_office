@@ -119,3 +119,32 @@ describe('placesAPourvoir', () => {
     expect(placesAPourvoir('2026-11', '2026-11-05', semaines)).toBe(1)
   })
 })
+
+describe('couverture du mois', () => {
+  it('une semaine à cheval ne compte que ses jours du mois', () => {
+    const sem = (lundi: string, places: number[], pourvues: number[]) =>
+      ({
+        lundi,
+        affectations: [],
+        a_pourvoir: [],
+        presence: [],
+        bilan: [],
+        stats: {
+          places: 0,
+          pourvues: 0,
+          places_jour: places,
+          pourvues_jour: pourvues,
+          infractions: 0,
+          alertes_organisation: 0,
+        },
+      }) as unknown as SemaineOut
+    // Semaine du 26 octobre : seul le dimanche 1er est en novembre.
+    const s1 = sem('2026-10-26', [5, 5, 5, 5, 5, 5, 5], [0, 5, 5, 5, 5, 5, 4])
+    const s2 = sem('2026-11-02', [5, 5, 5, 5, 5, 5, 5], [5, 5, 5, 5, 5, 5, 5])
+    expect(compter('2026-11', [s1, s2])).toMatchObject({
+      places: 40,
+      pourvues: 39,
+    })
+    expect(compter('2026-10', [s1])).toMatchObject({ places: 30, pourvues: 25 })
+  })
+})

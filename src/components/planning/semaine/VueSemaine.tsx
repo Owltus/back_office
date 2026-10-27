@@ -67,7 +67,10 @@ import type {
 } from '#/components/planning/semaine/GrilleSemaine.tsx'
 import { MenuCase } from '#/components/planning/semaine/MenuCase.tsx'
 import type { OuvertureMenu } from '#/components/planning/semaine/MenuCase.tsx'
-import { aVenir, pointsAttention } from '#/components/planning/attention.ts'
+import {
+  pointsAttention,
+  porteeSemaine,
+} from '#/components/planning/attention.ts'
 import { PanneauAlertes } from '#/components/planning/semaine/PanneauAlertes.tsx'
 import {
   absenceDe,
@@ -551,7 +554,7 @@ export function VueSemaine({
           [affichee],
           referentiel.salaries,
           referentiel.postes,
-          aVenir(aujourdhui),
+          porteeSemaine(aujourdhui),
         ).total
       : 0
 
@@ -848,7 +851,7 @@ export function VueSemaine({
           salaries={referentiel.salaries}
           postes={referentiel.postes}
           periode="Cette semaine"
-          garder={aVenir(aujourdhui)}
+          portee={porteeSemaine(aujourdhui)}
         />
       )}
 

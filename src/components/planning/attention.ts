@@ -11,7 +11,7 @@
  */
 
 import type { SemaineOut } from '#/lib/planning/semaine.ts'
-import { ajouterJours, lundiDe } from '#/lib/planning/temps.ts'
+import { ajouterJours } from '#/lib/planning/temps.ts'
 import type { Poste, Salarie } from '#/lib/planning/types.ts'
 
 const RAISON_EXTRA = 'extra disponible'
@@ -60,43 +60,46 @@ export interface PointsAttention {
   aVerifier: PointPersonne[]
 }
 
-/** Jours retenus par la vue semaine : à partir d'aujourd'hui. Un jour passé
- * ne se génère plus : le signaler n'aide pas (décision utilisateur du
- * 2026-10-28, « bien plus court »). */
-export const aVenir =
-  (aujourdhui: string) =>
-  (date: string): boolean =>
-    date >= aujourdhui
+/** Ce qu'un écran montre : les JOURS retenus (places, présence) et les
+ * SEMAINES retenues (alertes d'une personne, qui portent sur sa semaine).
+ * Décision utilisateur du 2026-10-28 : un mois ne montre que ce qui le
+ * concerne, une semaine que ce qui la concerne. */
+export interface Portee {
+  jour: (date: string) => boolean
+  semaine: (lundi: string) => boolean
+}
 
-/** Jours retenus par la vue mois : à venir, dans une semaine du mois. Une
- * semaine appartient au mois de son jeudi (règle des semaines ISO) : celle du
- * 26 octobre au 1er novembre est d'octobre, ses points n'arrivent pas en
- * novembre. */
-export const aVenirDansLeMois =
-  (mois: string, aujourdhui: string) =>
-  (date: string): boolean =>
-    date >= aujourdhui && ajouterJours(lundiDe(date), 3).startsWith(mois)
+/** Vue semaine : à partir d'aujourd'hui (un jour passé ne se génère plus). */
+export const porteeSemaine = (aujourdhui: string): Portee => ({
+  jour: (d) => d >= aujourdhui,
+  semaine: (l) => ajouterJours(l, 6) >= aujourdhui,
+})
 
-/** Jours des semaines du mois (au mois de leur jeudi), passé compris : le
- * bouclier « règles HCR » montre aussi ce qui a été réalisé. */
-export const semainesDuMois =
-  (mois: string) =>
-  (date: string): boolean =>
-    ajouterJours(lundiDe(date), 3).startsWith(mois)
+/** Vue mois : les jours du mois ; les semaines du mois, une semaine
+ * appartenant au mois de son jeudi (semaines ISO). Avec `aujourdhui` : à
+ * partir d'aujourd'hui (« Points d'attention ») ; sans : passé compris
+ * (bouclier « règles HCR », une semaine réalisée reste contrôlable). */
+export const porteeMois = (mois: string, aujourdhui?: string): Portee => ({
+  jour: (d) => d.startsWith(mois) && (!aujourdhui || d >= aujourdhui),
+  semaine: (l) =>
+    ajouterJours(l, 3).startsWith(mois) &&
+    (!aujourdhui || ajouterJours(l, 6) >= aujourdhui),
+})
+
+const TOUT: Portee = { jour: () => true, semaine: () => true }
 
 /** Nombre d'infractions à la loi retenues (le chiffre du bouclier). */
 export const nombreInfractions = (p: PointsAttention) =>
   p.infractions.reduce((n, x) => n + x.messages.length, 0)
 
-/** `garder` : jours retenus (voir `aVenir`, `aVenirDansLeMois`). Les alertes
- * d'une personne, qui portent sur sa semaine, comptent si un de ses jours est
- * retenu. */
+/** `portee` : ce que l'écran montre (`porteeSemaine`, `porteeMois`). */
 export function pointsAttention(
   semaines: SemaineOut[],
   salaries: Salarie[],
   postes: Poste[],
-  garder: (date: string) => boolean = () => true,
+  portee: Portee = TOUT,
 ): PointsAttention {
+  const garder = portee.jour
   const parId = new Map(salaries.map((s) => [s.id, s]))
   const nom = (id: number) => parId.get(id)?.prenom ?? 'Inconnu'
 
@@ -151,11 +154,8 @@ export function pointsAttention(
     else aPourvoir.push({ date: t.date, shifts: [t] })
   }
 
-  // Alertes des personnes : par semaine (elles n'ont pas de jour). Une semaine
-  // compte dès qu'un de ses jours est retenu.
-  const retenues = semaines.filter((s) =>
-    [0, 1, 2, 3, 4, 5, 6].some((j) => garder(ajouterJours(s.lundi, j))),
-  )
+  // Alertes des personnes : par semaine (elles n'ont pas de jour).
+  const retenues = semaines.filter((s) => portee.semaine(s.lundi))
   const plusieurs = retenues.length > 1
   const infractions: PointPersonne[] = []
   const aVerifier: PointPersonne[] = []

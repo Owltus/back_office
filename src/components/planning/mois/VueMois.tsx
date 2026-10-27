@@ -74,10 +74,9 @@ import {
 } from '#/components/planning/mois/mois.ts'
 import type { EtatSemaine } from '#/components/planning/mois/mois.ts'
 import {
-  aVenirDansLeMois,
   nombreInfractions,
   pointsAttention,
-  semainesDuMois,
+  porteeMois,
 } from '#/components/planning/attention.ts'
 import { PanneauAlertes } from '#/components/planning/semaine/PanneauAlertes.tsx'
 import {
@@ -647,7 +646,7 @@ export function VueMois({
   const nomSeul = MOIS_SEUL.format(new Date(`${mois}-01T12:00:00Z`))
   // Points d'attention : jours à venir des semaines du mois ; le bouton
   // compte ce que le panneau montre.
-  const dansLeMois = aVenirDansLeMois(mois, aujourdhui)
+  const dansLeMois = porteeMois(mois, aujourdhui)
   const nbAlertes = referentiel
     ? pointsAttention(
         liste,
@@ -726,7 +725,7 @@ export function VueMois({
                         liste,
                         referentiel.salaries,
                         referentiel.postes,
-                        semainesDuMois(mois),
+                        porteeMois(mois),
                       ),
                     ),
                   }
@@ -938,7 +937,7 @@ export function VueMois({
           salaries={referentiel.salaries}
           postes={referentiel.postes}
           periode={`En ${MOIS_SEUL.format(new Date(`${mois}-01T12:00:00Z`))}`}
-          garder={dansLeMois}
+          portee={dansLeMois}
         />
       )}
 
@@ -950,7 +949,7 @@ export function VueMois({
           salaries={referentiel.salaries}
           postes={referentiel.postes}
           periode={`Semaines ${/^[aeiouy]/i.test(nomSeul) ? "d'" : 'de '}${nomSeul}`}
-          garder={semainesDuMois(mois)}
+          portee={porteeMois(mois)}
           infractionsSeules
         />
       )}

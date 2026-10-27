@@ -127,6 +127,10 @@ export interface SemaineOut {
   stats: {
     places: number
     pourvues: number
+    /** Places et places pourvues, jour par jour (0 = lundi) : la vue mois ne
+     * compte que les jours du mois. */
+    places_jour: number[]
+    pourvues_jour: number[]
     infractions: number
     alertes_organisation: number
   }
@@ -838,6 +842,17 @@ export function analyser(d: DonneesSemaine): SemaineOut {
       pourvues: besoins.reduce(
         (t, b) => t + Math.min(pourvus.get(b.id) ?? 0, b.effectif),
         0,
+      ),
+      places_jour: [0, 1, 2, 3, 4, 5, 6].map((j) =>
+        besoins.filter((b) => b.jour === j).reduce((t, b) => t + b.effectif, 0),
+      ),
+      pourvues_jour: [0, 1, 2, 3, 4, 5, 6].map((j) =>
+        besoins
+          .filter((b) => b.jour === j)
+          .reduce(
+            (t, b) => t + Math.min(pourvus.get(b.id) ?? 0, b.effectif),
+            0,
+          ),
       ),
       infractions,
       alertes_organisation:

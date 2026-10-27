@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  aVenir,
-  aVenirDansLeMois,
   nombreInfractions,
   pointsAttention,
+  porteeMois,
+  porteeSemaine,
   resumePoints,
-  semainesDuMois,
 } from '#/components/planning/attention.ts'
 import type { SemaineOut } from '#/lib/planning/semaine.ts'
 import type { Poste, Salarie } from '#/lib/planning/types.ts'
@@ -112,16 +111,6 @@ describe('points d’attention', () => {
     expect(p.total).toBe(5)
   })
 
-  it('vue mois : seulement les jours du mois', () => {
-    const p = pointsAttention([SEM], SALARIES, POSTES, (d) =>
-      d.startsWith('2026-11'),
-    )
-    expect(p.aPourvoir.map((j) => j.date)).toEqual(['2026-11-01'])
-    expect(p.presence).toEqual([])
-    // Les alertes d'une semaine à cheval restent : elles n'ont pas de jour.
-    expect(p.total).toBe(3)
-  })
-
   it('résumé en une phrase', () => {
     expect(
       resumePoints(pointsAttention([semaine('2026-11-02')], SALARIES, POSTES)),
@@ -132,40 +121,60 @@ describe('points d’attention', () => {
   })
 })
 
-describe('jours retenus', () => {
-  it('semaine : à partir d’aujourd’hui', () => {
-    const garder = aVenir('2026-10-27')
-    expect(garder('2026-10-26')).toBe(false)
-    expect(garder('2026-10-27')).toBe(true)
+describe('portée : un écran ne montre que ce qui le concerne', () => {
+  // SEM = semaine du 26 octobre : places vides le lundi 26 et le dimanche
+  // 1er novembre, présence du lundi 26, deux alertes de la semaine.
+  it('mois de novembre : le dimanche 1er seulement, pas les alertes d’octobre', () => {
+    const p = pointsAttention([SEM], SALARIES, POSTES, porteeMois('2026-11'))
+    expect(p.aPourvoir.map((j) => j.date)).toEqual(['2026-11-01'])
+    expect(p.presence).toEqual([])
+    // Semaine du jeudi 29 octobre : ses alertes sont d'octobre (Johanna).
+    expect(p.infractions).toEqual([])
+    expect(p.aVerifier).toEqual([])
+    expect(p.total).toBe(1)
   })
 
-  it('mois : une semaine est au mois de son jeudi, jours passés exclus', () => {
-    const novembre = aVenirDansLeMois('2026-11', '2026-10-27')
-    // Semaine du 26 octobre (jeudi 29) : en octobre, même son dimanche 1er.
-    expect(novembre('2026-11-01')).toBe(false)
-    expect(novembre('2026-11-02')).toBe(true)
-    // Semaine du 30 novembre (jeudi 3 décembre) : en décembre.
-    expect(novembre('2026-11-30')).toBe(false)
-    const octobre = aVenirDansLeMois('2026-10', '2026-10-27')
-    expect(octobre('2026-10-26')).toBe(false)
-    expect(octobre('2026-11-01')).toBe(true)
-    // Les alertes de Johanna (semaine du 26 octobre) ne vont pas en novembre.
-    expect(pointsAttention([SEM], SALARIES, POSTES, novembre).total).toBe(0)
-  })
-})
-
-describe('bouclier HCR', () => {
-  it('semaines du mois, passé compris ; le chiffre compte les infractions', () => {
-    const octobre = semainesDuMois('2026-10')
-    expect(octobre('2026-10-26')).toBe(true) // passé, gardé
-    expect(octobre('2026-11-01')).toBe(true) // semaine du jeudi 29 octobre
-    expect(semainesDuMois('2026-11')('2026-11-01')).toBe(false)
+  it('mois d’octobre : ses jours et les alertes de la semaine', () => {
     expect(
-      nombreInfractions(pointsAttention([SEM], SALARIES, POSTES, octobre)),
+      pointsAttention([SEM], SALARIES, POSTES, porteeMois('2026-10')).total,
+    ).toBe(4)
+    // À partir du 27 : le lundi 26 passé disparaît, les alertes restent.
+    const p = pointsAttention(
+      [SEM],
+      SALARIES,
+      POSTES,
+      porteeMois('2026-10', '2026-10-27'),
+    )
+    expect(p.aPourvoir).toEqual([])
+    expect(p.presence).toEqual([])
+    expect(p.total).toBe(2)
+  })
+
+  it('semaine : à partir d’aujourd’hui', () => {
+    const p = pointsAttention(
+      [SEM],
+      SALARIES,
+      POSTES,
+      porteeSemaine('2026-10-27'),
+    )
+    expect(p.aPourvoir.map((j) => j.date)).toEqual(['2026-11-01'])
+    expect(p.total).toBe(3)
+    // Une semaine entièrement passée : rien.
+    expect(
+      pointsAttention([SEM], SALARIES, POSTES, porteeSemaine('2026-11-02'))
+        .total,
+    ).toBe(0)
+  })
+
+  it('bouclier HCR : les semaines du mois, passé compris', () => {
+    expect(
+      nombreInfractions(
+        pointsAttention([SEM], SALARIES, POSTES, porteeMois('2026-10')),
+      ),
     ).toBe(1)
     expect(
       nombreInfractions(
-        pointsAttention([SEM], SALARIES, POSTES, semainesDuMois('2026-11')),
+        pointsAttention([SEM], SALARIES, POSTES, porteeMois('2026-11')),
       ),
     ).toBe(0)
   })
