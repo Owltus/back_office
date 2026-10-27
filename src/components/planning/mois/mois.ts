@@ -170,6 +170,25 @@ export interface Compteurs {
   alertes: number
 }
 
+/** Places encore à pourvoir que la génération du mois pouvait remplir : jours
+ * du mois, à partir d'aujourd'hui. Un jour passé ou du mois voisin (semaine
+ * à cheval) ne compte pas. Les extras n'y sont pour rien : le moteur ne les
+ * place jamais, on les appelle au besoin. */
+export function placesAPourvoir(
+  mois: string,
+  aujourdhui: string,
+  semaines: SemaineOut[],
+): number {
+  let n = 0
+  for (const s of semaines) {
+    for (const a of s.a_pourvoir) {
+      const date = ajouterJours(s.lundi, a.jour)
+      if (date.startsWith(mois) && date >= aujourdhui) n += a.manquant
+    }
+  }
+  return n
+}
+
 export function compter(mois: string, semaines: SemaineOut[]): Compteurs {
   let propositions = 0
   let valides = 0

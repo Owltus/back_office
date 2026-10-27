@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { analyser } from '#/lib/planning/semaine.ts'
+import type { SemaineOut } from '#/lib/planning/semaine.ts'
 import { hotelDemo } from '#/lib/planning/test/hotelDemo.ts'
 import type { Affectation } from '#/lib/planning/types.ts'
 import {
@@ -12,6 +13,7 @@ import {
   listeSemaines,
   lundisDe,
   moisDecale,
+  placesAPourvoir,
 } from '#/components/planning/mois/mois.ts'
 
 describe('calendrier du mois', () => {
@@ -100,5 +102,20 @@ describe('cases et compteurs', () => {
     expect(
       cleBandeau(caseDe(semaines, referentiel.motifs, 3, '2026-10-26')),
     ).toBeNull()
+  })
+})
+
+describe('placesAPourvoir', () => {
+  it('seulement les jours du mois, à partir d’aujourd’hui', () => {
+    const sem = (lundi: string, jours: number[]) =>
+      ({
+        lundi,
+        a_pourvoir: jours.map((jour) => ({ jour, manquant: 1 })),
+      }) as unknown as SemaineOut
+    // Semaine du 26/10 au 01/11 : lundi 26 passé, dimanche 1er en novembre.
+    const semaines = [sem('2026-10-26', [0, 1, 6]), sem('2026-11-02', [0, 3])]
+    expect(placesAPourvoir('2026-11', '2026-10-27', semaines)).toBe(3)
+    expect(placesAPourvoir('2026-10', '2026-10-27', semaines)).toBe(1)
+    expect(placesAPourvoir('2026-11', '2026-11-05', semaines)).toBe(1)
   })
 })

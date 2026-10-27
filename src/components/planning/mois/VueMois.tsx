@@ -67,6 +67,7 @@ import {
   etatSemaine,
   listeSemaines,
   moisDecale,
+  placesAPourvoir,
   pluriel,
   presentsDuMois,
   reperer,
@@ -285,10 +286,13 @@ export function VueMois({
         faites.set(l, r.semaine)
       })
       if (!ok) return
-      const trous = lundis
-        .map((l) => faites.get(l) ?? avant.get(l))
-        .filter((s): s is SemaineOut => !!s)
-        .reduce((n, s) => n + s.stats.places - s.stats.pourvues, 0)
+      const trous = placesAPourvoir(
+        mois,
+        aujourdhui,
+        lundis
+          .map((l) => faites.get(l) ?? avant.get(l))
+          .filter((s): s is SemaineOut => !!s),
+      )
       notifier(
         (trous
           ? `Mois généré · ${pluriel(trous, 'place')} à pourvoir`
