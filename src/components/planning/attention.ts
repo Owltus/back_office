@@ -77,6 +77,17 @@ export const aVenirDansLeMois =
   (date: string): boolean =>
     date >= aujourdhui && ajouterJours(lundiDe(date), 3).startsWith(mois)
 
+/** Jours des semaines du mois (au mois de leur jeudi), passé compris : le
+ * bouclier « règles HCR » montre aussi ce qui a été réalisé. */
+export const semainesDuMois =
+  (mois: string) =>
+  (date: string): boolean =>
+    ajouterJours(lundiDe(date), 3).startsWith(mois)
+
+/** Nombre d'infractions à la loi retenues (le chiffre du bouclier). */
+export const nombreInfractions = (p: PointsAttention) =>
+  p.infractions.reduce((n, x) => n + x.messages.length, 0)
+
 /** `garder` : jours retenus (voir `aVenir`, `aVenirDansLeMois`). Les alertes
  * d'une personne, qui portent sur sa semaine, comptent si un de ses jours est
  * retenu. */

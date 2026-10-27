@@ -11,6 +11,7 @@ import type { ReactNode } from 'react'
 import { ChevronRight, CircleCheck } from 'lucide-react'
 
 import {
+  nombreInfractions,
   pointsAttention,
   resumePoints,
 } from '#/components/planning/attention.ts'
@@ -106,6 +107,7 @@ export function PanneauAlertes({
   postes,
   periode,
   garder,
+  infractionsSeules = false,
 }: {
   ouvert: boolean
   onFermer: () => void
@@ -116,26 +118,39 @@ export function PanneauAlertes({
   periode: string
   /** Jours retenus (`aVenir`, `aVenirDansLeMois`). */
   garder?: (date: string) => boolean
+  /** Bouclier « règles HCR » : les seules infractions, passé compris. */
+  infractionsSeules?: boolean
 }) {
   const p = pointsAttention(semaines, salaries, postes, garder)
   const shifts = p.aPourvoir.flatMap((j) => j.shifts)
   const compte = (l: PointPersonne[]) =>
     l.reduce((n, x) => n + x.messages.length, 0)
+  const nbInfractions = nombreInfractions(p)
+  const autres = !infractionsSeules
+  const ok = infractionsSeules ? nbInfractions === 0 : p.total === 0
 
   return (
     <Sheet open={ouvert} onOpenChange={(o) => !o && onFermer()}>
       <SheetContent className="w-full gap-0 sm:max-w-md">
         <SheetHeader className="border-b">
-          <SheetTitle>Points d'attention</SheetTitle>
-          <SheetDescription>{periode}, à partir d'aujourd'hui</SheetDescription>
+          <SheetTitle>
+            {infractionsSeules ? 'Règles HCR' : "Points d'attention"}
+          </SheetTitle>
+          <SheetDescription>
+            {infractionsSeules ? periode : `${periode}, à partir d'aujourd'hui`}
+          </SheetDescription>
           <p
             className={cn(
               'mt-1 flex items-center gap-2 text-sm font-medium',
-              p.total === 0 && 'text-emerald-600 dark:text-emerald-400',
+              ok && 'text-emerald-600 dark:text-emerald-400',
             )}
           >
-            {p.total === 0 && <CircleCheck className="size-4" />}
-            {resumePoints(p)}
+            {ok && <CircleCheck className="size-4" />}
+            {infractionsSeules
+              ? nbInfractions
+                ? `${nbInfractions} infraction${nbInfractions > 1 ? 's' : ''} à corriger.`
+                : 'Conforme aux règles HCR.'
+              : resumePoints(p)}
           </p>
         </SheetHeader>
         <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-4">
@@ -147,7 +162,10 @@ export function PanneauAlertes({
             <Personnes liste={p.infractions} />
           </Famille>
 
-          <Famille titre="Shifts à pourvoir" nombre={shifts.length}>
+          <Famille
+            titre="Shifts à pourvoir"
+            nombre={autres ? shifts.length : 0}
+          >
             {shifts.map((t) => (
               <li key={t.cle}>
                 <details className="group/raison">
@@ -202,7 +220,7 @@ export function PanneauAlertes({
 
           <Famille
             titre="Présence du matin et du soir"
-            nombre={p.presence.length}
+            nombre={autres ? p.presence.length : 0}
           >
             {p.presence.map((e) => (
               <li key={e.cle} className={LIGNE}>
@@ -227,7 +245,7 @@ export function PanneauAlertes({
             ))}
           </Famille>
 
-          <Famille titre="À vérifier" nombre={compte(p.aVerifier)}>
+          <Famille titre="À vérifier" nombre={autres ? compte(p.aVerifier) : 0}>
             <Personnes liste={p.aVerifier} />
           </Famille>
         </div>

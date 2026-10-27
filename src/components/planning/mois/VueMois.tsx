@@ -75,7 +75,9 @@ import {
 import type { EtatSemaine } from '#/components/planning/mois/mois.ts'
 import {
   aVenirDansLeMois,
+  nombreInfractions,
   pointsAttention,
+  semainesDuMois,
 } from '#/components/planning/attention.ts'
 import { PanneauAlertes } from '#/components/planning/semaine/PanneauAlertes.tsx'
 import {
@@ -145,6 +147,7 @@ export function VueMois({
     edition: Edition
   } | null>(null)
   const [alertesOuvertes, setAlertesOuvertes] = useState(false)
+  const [infractionsOuvertes, setInfractionsOuvertes] = useState(false)
   const [fiche, setFiche] = useState<number | null>(null)
   const [confirmation, setConfirmation] = useState<Confirmation>(null)
 
@@ -641,6 +644,7 @@ export function VueMois({
 
   const nomDuMois = NOM_MOIS.format(new Date(`${mois}-01T12:00:00Z`))
   const ceMois = aujourdhui.slice(0, 7)
+  const nomSeul = MOIS_SEUL.format(new Date(`${mois}-01T12:00:00Z`))
   // Points d'attention : jours à venir des semaines du mois ; le bouton
   // compte ce que le panneau montre.
   const dansLeMois = aVenirDansLeMois(mois, aujourdhui)
@@ -711,7 +715,24 @@ export function VueMois({
         actionsAlign="end"
         actions={
           <BarreMois
-            compteurs={compteurs}
+            compteurs={
+              // Le bouclier compte ce que son panneau montre : les semaines du
+              // mois, passé compris.
+              compteurs && referentiel
+                ? {
+                    ...compteurs,
+                    infractions: nombreInfractions(
+                      pointsAttention(
+                        liste,
+                        referentiel.salaries,
+                        referentiel.postes,
+                        semainesDuMois(mois),
+                      ),
+                    ),
+                  }
+                : compteurs
+            }
+            onInfractions={() => setInfractionsOuvertes(true)}
             occupe={occupe}
             progression={enCours}
             nbAlertes={nbAlertes}
@@ -918,6 +939,19 @@ export function VueMois({
           postes={referentiel.postes}
           periode={`En ${MOIS_SEUL.format(new Date(`${mois}-01T12:00:00Z`))}`}
           garder={dansLeMois}
+        />
+      )}
+
+      {referentiel && (
+        <PanneauAlertes
+          ouvert={infractionsOuvertes}
+          onFermer={() => setInfractionsOuvertes(false)}
+          semaines={liste}
+          salaries={referentiel.salaries}
+          postes={referentiel.postes}
+          periode={`Semaines ${/^[aeiouy]/i.test(nomSeul) ? "d'" : 'de '}${nomSeul}`}
+          garder={semainesDuMois(mois)}
+          infractionsSeules
         />
       )}
 

@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest'
 import {
   aVenir,
   aVenirDansLeMois,
+  nombreInfractions,
   pointsAttention,
   resumePoints,
+  semainesDuMois,
 } from '#/components/planning/attention.ts'
 import type { SemaineOut } from '#/lib/planning/semaine.ts'
 import type { Poste, Salarie } from '#/lib/planning/types.ts'
@@ -149,5 +151,22 @@ describe('jours retenus', () => {
     expect(octobre('2026-11-01')).toBe(true)
     // Les alertes de Johanna (semaine du 26 octobre) ne vont pas en novembre.
     expect(pointsAttention([SEM], SALARIES, POSTES, novembre).total).toBe(0)
+  })
+})
+
+describe('bouclier HCR', () => {
+  it('semaines du mois, passé compris ; le chiffre compte les infractions', () => {
+    const octobre = semainesDuMois('2026-10')
+    expect(octobre('2026-10-26')).toBe(true) // passé, gardé
+    expect(octobre('2026-11-01')).toBe(true) // semaine du jeudi 29 octobre
+    expect(semainesDuMois('2026-11')('2026-11-01')).toBe(false)
+    expect(
+      nombreInfractions(pointsAttention([SEM], SALARIES, POSTES, octobre)),
+    ).toBe(1)
+    expect(
+      nombreInfractions(
+        pointsAttention([SEM], SALARIES, POSTES, semainesDuMois('2026-11')),
+      ),
+    ).toBe(0)
   })
 })

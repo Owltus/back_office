@@ -66,6 +66,8 @@ export interface ActionsEnTete {
   aujourdhui: string
   onVerrou: () => void
   onAlertes: () => void
+  /** Le bouclier rouge : détail des infractions HCR. */
+  onInfractions: () => void
   onCompleter: () => void
   onFullAuto: () => void
   onValiderSemaine: (epinglee: boolean) => void
@@ -294,29 +296,31 @@ export function EnTeteSemaine({
               <Tip
                 label={
                   stats.infractions
-                    ? `${stats.infractions} infraction(s) aux règles HCR : voir les alertes`
+                    ? `${stats.infractions} infraction(s) aux règles HCR : cliquer pour le détail`
                     : 'Conforme aux règles HCR'
                 }
               >
-                <span
-                  tabIndex={0}
-                  className={cn(
-                    'inline-flex items-center gap-1 rounded-md px-1 font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                    stats.infractions ? 'text-destructive' : 'text-emerald-500',
-                  )}
-                  aria-label={
-                    stats.infractions
-                      ? `${stats.infractions} infraction(s) aux règles HCR`
-                      : 'Conforme aux règles HCR'
-                  }
-                >
-                  {stats.infractions ? (
+                {stats.infractions ? (
+                  // Cliquable comme « Points d'attention » : le détail.
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1 px-2 font-semibold text-destructive hover:text-destructive"
+                    onClick={actions.onInfractions}
+                    aria-label={`${stats.infractions} infraction${stats.infractions > 1 ? 's' : ''} aux règles HCR : voir le détail`}
+                  >
                     <ShieldAlert className="size-4" />
-                  ) : (
+                    {stats.infractions}
+                  </Button>
+                ) : (
+                  <span
+                    tabIndex={0}
+                    className="inline-flex items-center gap-1 rounded-md px-1 font-semibold text-emerald-500 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label="Conforme aux règles HCR"
+                  >
                     <ShieldCheck className="size-4" />
-                  )}
-                  {stats.infractions > 0 && stats.infractions}
-                </span>
+                  </span>
+                )}
               </Tip>
             </div>
           )}

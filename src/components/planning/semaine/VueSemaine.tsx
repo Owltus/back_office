@@ -192,6 +192,7 @@ export function VueSemaine({
   const [edition, setEdition] = useState<Edition | null>(null)
   const [ficheId, setFicheId] = useState<number | null>(null)
   const [alertesOuvertes, setAlertesOuvertes] = useState(false)
+  const [infractionsOuvertes, setInfractionsOuvertes] = useState(false)
   const [menu, setMenu] = useState<OuvertureMenu | null>(null)
   const [confirmation, setConfirmation] = useState<Confirmation>(null)
   const [enGeneration, setEnGeneration] = useState(false)
@@ -683,6 +684,7 @@ export function VueSemaine({
           onSuivante: () => onLundi(ajouterJours(lundi, 7)),
           onCetteSemaine: () => onLundi(lundiCourant),
           onDate: (d) => onLundi(lundiDe(d)),
+          onInfractions: () => setInfractionsOuvertes(true),
           aujourdhui,
           onVerrou: () => setConfirmation('verrou'),
           onAlertes: () => setAlertesOuvertes(true),
@@ -847,6 +849,18 @@ export function VueSemaine({
           postes={referentiel.postes}
           periode="Cette semaine"
           garder={aVenir(aujourdhui)}
+        />
+      )}
+
+      {semaine && referentiel && (
+        <PanneauAlertes
+          ouvert={infractionsOuvertes}
+          onFermer={() => setInfractionsOuvertes(false)}
+          semaines={[semaine]}
+          salaries={referentiel.salaries}
+          postes={referentiel.postes}
+          periode="Cette semaine"
+          infractionsSeules
         />
       )}
 
