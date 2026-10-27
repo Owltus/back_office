@@ -2388,6 +2388,410 @@ function genererClasseurs(
 }
 
 // ---------------------------------------------------------------------------
+// Planning : l'hôtel FICTIF des tests du prototype (`backend/src/planning/
+// demo.py`). Les vrais noms de l'équipe ne sont jamais dans le dépôt : ils
+// arrivent par l'import du prototype (gestion), plan planning-portage D8.
+// ---------------------------------------------------------------------------
+
+/** (code, nom, début, fin, couleur, pause, raccourci) */
+const PL_HORAIRES: ReadonlyArray<
+  readonly [string, string, string, string, string, number, number]
+> = [
+  ['M', 'Matin', '07:00', '15:45', '#f59e0b', 45, 60],
+  ['MI', 'Middle', '09:00', '17:45', '#14b8a6', 45, 60],
+  ['AM', 'Après-midi', '15:00', '23:45', '#6366f1', 45, 60],
+  ['N', 'Nuit', '23:00', '07:45', '#7c3aed', 45, 60],
+  ['D', 'Direction', '08:00', '18:00', '#475569', 60, 0],
+  ['T', 'Technique', '08:00', '16:45', '#f97316', 45, 0],
+  ['TV', 'Technique vendredi', '08:00', '15:45', '#fb923c', 45, 0],
+]
+/** (code, nom, couleur, compté dans les heures, nature) */
+const PL_MOTIFS: ReadonlyArray<
+  readonly [string, string, string, boolean, 'absence' | 'ecole']
+> = [
+  ['CP', 'Congés', '#0ea5e9', true, 'absence'],
+  ['EC', 'École', '#a855f7', true, 'ecole'],
+  ['MA', 'Maladie', '#ef4444', true, 'absence'],
+  ['RP', 'Repos', '#64748b', true, 'absence'],
+  ['FO', 'Formation', '#84cc16', true, 'absence'],
+]
+/** (nom, catégorie réglementaire, couleur, codes horaires possibles) */
+const PL_POSTES: ReadonlyArray<
+  readonly [string, string, string, readonly string[]]
+> = [
+  ['Direction', 'autre', '#475569', ['D']],
+  ['Réception', 'reception', '#3b82f6', ['M', 'MI', 'AM']],
+  ['Club', 'autre', '#ec4899', ['M', 'MI', 'AM']],
+  ['Veille de nuit', 'veille_nuit', '#8b5cf6', ['N']],
+  ['Responsable technique', 'autre', '#f97316', ['T', 'TV']],
+]
+const PL_TOUS = [0, 1, 2, 3, 4, 5, 6]
+const PL_SEMAINE = [0, 1, 2, 3, 4]
+/** (poste, code horaire, jours, effectif, renfort) */
+const PL_BESOINS: ReadonlyArray<
+  readonly [string, string, readonly number[], number, number]
+> = [
+  ['Réception', 'M', PL_TOUS, 1, 0],
+  ['Réception', 'MI', PL_TOUS, 0, 1],
+  ['Réception', 'AM', PL_TOUS, 1, 0],
+  ['Club', 'M', PL_TOUS, 1, 0],
+  ['Club', 'AM', PL_TOUS, 1, 0],
+  ['Veille de nuit', 'N', PL_TOUS, 1, 0],
+  ['Direction', 'D', PL_SEMAINE, 0, 1],
+  ['Responsable technique', 'T', [0, 1, 2, 3], 0, 1],
+  ['Responsable technique', 'TV', [4], 0, 1],
+]
+const PL_GROUPES: ReadonlyArray<readonly [string, string, readonly string[]]> =
+  [
+    [
+      'direction',
+      'Direction',
+      [
+        'Direction',
+        'Réception',
+        'Club',
+        'Veille de nuit',
+        'Responsable technique',
+      ],
+    ],
+    ['hotelier', 'Hôteliers', ['Réception', 'Club', 'Veille de nuit']],
+    ['apprenti', 'Apprentis', ['Réception', 'Club']],
+    ['stagiaire', 'Stagiaires', ['Réception', 'Club']],
+  ]
+interface PlOptions {
+  forfait?: boolean
+  repos?: number[]
+  horaires?: string[]
+  impose?: Record<number, string>
+  /** (de, à, motif) en jours depuis le lundi prochain. */
+  absence?: readonly [number, number, string]
+  /** (décalage, semaines d'école, semaines à l'hôtel) depuis le lundi prochain. */
+  alternance?: readonly [number, number, number]
+}
+/** (catégorie, prénom, nom, contrat, heures, compétences, options) */
+const PL_STAFF: ReadonlyArray<
+  readonly [
+    string,
+    string,
+    string,
+    string,
+    number,
+    Record<string, string>,
+    PlOptions,
+  ]
+> = [
+  [
+    'direction',
+    'Claire',
+    'Martin',
+    'cdi',
+    39,
+    { Direction: 'titulaire' },
+    {
+      forfait: true,
+      repos: [5, 6],
+      horaires: ['D'],
+      impose: { 0: 'D', 1: 'D', 2: 'D', 3: 'D', 4: 'D' },
+    },
+  ],
+  [
+    'direction',
+    'Sophie',
+    'Bernard',
+    'cdi',
+    39,
+    { Réception: 'titulaire', Club: 'occasionnel' },
+    {},
+  ],
+  [
+    'hotelier',
+    'Lucas',
+    'Petit',
+    'cdi',
+    39,
+    { Réception: 'titulaire', Club: 'titulaire' },
+    {},
+  ],
+  [
+    'hotelier',
+    'Nadia',
+    'Haddad',
+    'cdi',
+    39,
+    { Réception: 'titulaire', Club: 'titulaire' },
+    {},
+  ],
+  [
+    'hotelier',
+    'Emma',
+    'Durand',
+    'cdi',
+    39,
+    { Réception: 'titulaire', Club: 'occasionnel' },
+    { absence: [2, 2, 'CP'] },
+  ],
+  [
+    'hotelier',
+    'Thomas',
+    'Moreau',
+    'cdi',
+    39,
+    { Club: 'titulaire', Réception: 'occasionnel' },
+    {
+      repos: [0, 6],
+      horaires: ['AM'],
+      impose: { 1: 'AM', 2: 'AM', 3: 'AM', 4: 'AM', 5: 'AM' },
+    },
+  ],
+  [
+    'hotelier',
+    'Karim',
+    'Benali',
+    'cdi',
+    39,
+    { 'Veille de nuit': 'titulaire' },
+    { horaires: ['N'] },
+  ],
+  [
+    'hotelier',
+    'Yannis',
+    'Roux',
+    'cdi',
+    39,
+    { 'Veille de nuit': 'titulaire', Réception: 'titulaire' },
+    {
+      repos: [0, 6],
+      horaires: ['AM', 'N'],
+      impose: { 1: 'AM', 2: 'AM', 3: 'AM', 4: 'N', 5: 'N' },
+    },
+  ],
+  [
+    'direction',
+    'Marc',
+    'Leroy',
+    'cdi',
+    39,
+    { 'Responsable technique': 'titulaire' },
+    {
+      repos: [5, 6],
+      horaires: ['T', 'TV'],
+      impose: { 0: 'T', 1: 'T', 2: 'T', 3: 'T', 4: 'TV' },
+    },
+  ],
+  [
+    'stagiaire',
+    'Léa',
+    'Fontaine',
+    'stagiaire',
+    35,
+    { Réception: 'soutien', Club: 'soutien' },
+    { absence: [14, 18, 'EC'] },
+  ],
+  [
+    'apprenti',
+    'Chloé',
+    'Lambert',
+    'apprenti',
+    35,
+    { Réception: 'titulaire', Club: 'soutien' },
+    { alternance: [0, 2, 2] },
+  ],
+  [
+    'apprenti',
+    'Inès',
+    'Garnier',
+    'apprenti',
+    35,
+    { Club: 'titulaire', Réception: 'soutien' },
+    { alternance: [2, 2, 2] },
+  ],
+]
+
+function genererPlanning(f: Fenetre, tables: Table[], apres: string[]): void {
+  // Lundi prochain (comme `demo.lundi_prochain`) : jourSemaine 0 = dimanche.
+  const lundi = f.aujourdhui + ((8 - jourSemaine(f.aujourdhui)) % 7 || 7)
+  const horaires = table('public.planning_horaires', [
+    'id',
+    'code',
+    'nom',
+    'debut',
+    'fin',
+    'couleur',
+    'pause',
+    'raccourci',
+  ])
+  horaires.identiteForcee = true
+  const idHoraire = new Map<string, number>()
+  PL_HORAIRES.forEach(
+    ([code, nom, debut, fin, couleur, pause, raccourci], i) => {
+      idHoraire.set(code, i + 1)
+      horaires.lignes.push([
+        i + 1,
+        code,
+        nom,
+        debut,
+        fin,
+        couleur,
+        pause,
+        raccourci,
+      ])
+    },
+  )
+  const motifs = table('public.planning_motifs', [
+    'id',
+    'code',
+    'nom',
+    'couleur',
+    'decompte',
+    'nature',
+  ])
+  motifs.identiteForcee = true
+  const idMotif = new Map<string, number>()
+  PL_MOTIFS.forEach(([code, nom, couleur, decompte, nature], i) => {
+    idMotif.set(code, i + 1)
+    motifs.lignes.push([i + 1, code, nom, couleur, decompte, nature])
+  })
+  const postes = table('public.planning_postes', [
+    'id',
+    'nom',
+    'categorie',
+    'couleur',
+    'horaires_autorises',
+  ])
+  postes.identiteForcee = true
+  const idPoste = new Map<string, number>()
+  PL_POSTES.forEach(([nom, categorie, couleur, codes], i) => {
+    idPoste.set(nom, i + 1)
+    postes.lignes.push([
+      i + 1,
+      nom,
+      categorie,
+      couleur,
+      `{${codes.map((c) => idHoraire.get(c)).join(',')}}`,
+    ])
+  })
+  const groupes = table('public.planning_groupes', [
+    'id',
+    'nom',
+    'ordre',
+    'postes_autorises',
+  ])
+  groupes.identiteForcee = true
+  const idGroupe = new Map<string, number>()
+  PL_GROUPES.forEach(([code, nom, permis], i) => {
+    idGroupe.set(code, i + 1)
+    groupes.lignes.push([
+      i + 1,
+      nom,
+      i,
+      `{${permis.map((p) => idPoste.get(p)).join(',')}}`,
+    ])
+  })
+  const besoins = table('public.planning_besoins', [
+    'poste_id',
+    'jour',
+    'horaire_id',
+    'debut',
+    'fin',
+    'effectif',
+    'soutien',
+    'renfort',
+  ])
+  for (const [poste, code, jours, effectif, renfort] of PL_BESOINS) {
+    const h = PL_HORAIRES.find((x) => x[0] === code)
+    if (!h) throw new Error(`Code horaire inconnu : ${code}`)
+    for (const j of jours) {
+      besoins.lignes.push([
+        idPoste.get(poste) ?? null,
+        j,
+        idHoraire.get(code) ?? null,
+        h[2],
+        h[3],
+        effectif,
+        1,
+        renfort,
+      ])
+    }
+  }
+  const salaries = table('public.planning_salaries', [
+    'id',
+    'prenom',
+    'nom',
+    'groupe_id',
+    'type_contrat',
+    'heures_hebdo',
+    'forfait_jours',
+    'competences',
+    'semaine_type',
+    'shifts_autorises',
+  ])
+  salaries.identiteForcee = true
+  const absences = table('public.planning_absences', [
+    'salarie_id',
+    'jour',
+    'motif_id',
+  ])
+  PL_STAFF.forEach(
+    ([groupe, prenom, nom, contrat, heures, competences, opt], i) => {
+      const id = i + 1
+      const semaine = PL_TOUS.map((j) => {
+        const impose = opt.impose?.[j]
+        if (impose)
+          return { mode: 'travail', type_shift_id: idHoraire.get(impose) }
+        if (opt.repos?.includes(j)) return { mode: 'repos' }
+        return { mode: 'auto' }
+      })
+      salaries.lignes.push([
+        id,
+        prenom,
+        nom,
+        idGroupe.get(groupe) ?? null,
+        contrat,
+        heures,
+        opt.forfait ?? false,
+        JSON.stringify(
+          Object.entries(competences).map(([p, niveau]) => ({
+            poste_id: idPoste.get(p),
+            niveau,
+          })),
+        ),
+        JSON.stringify(semaine),
+        `{${(opt.horaires ?? []).map((c) => idHoraire.get(c)).join(',')}}`,
+      ])
+      const jours = new Map<number, number>()
+      if (opt.absence) {
+        const [de, a, code] = opt.absence
+        for (let j = de; j <= a; j++)
+          jours.set(lundi + j, idMotif.get(code) ?? 0)
+      }
+      if (opt.alternance) {
+        const [decalage, ecole, hotel] = opt.alternance
+        for (let k = 0; k < 26; k++) {
+          if (k >= decalage && (k - decalage) % (ecole + hotel) < ecole) {
+            for (let j = 0; j < 5; j++)
+              jours.set(lundi + 7 * k + j, idMotif.get('EC') ?? 0)
+          }
+        }
+      }
+      for (const [jour, motif] of jours)
+        absences.lignes.push([id, versIso(jour), motif])
+    },
+  )
+  tables.push(horaires, motifs, postes, groupes, besoins, salaries, absences)
+  for (const t of [
+    'planning_horaires',
+    'planning_motifs',
+    'planning_postes',
+    'planning_groupes',
+    'planning_salaries',
+  ]) {
+    apres.push(
+      `select setval(pg_get_serial_sequence('public.${t}', 'id'), (select max(id) from public.${t}));`,
+    )
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Assemblage
 // ---------------------------------------------------------------------------
 
@@ -2417,6 +2821,7 @@ export function genererDonnees(opts: Options): Donnees {
   genererLiterie(f, sejours, graine, tables, apres)
   genererFacturation(f, graine, tables)
   genererClasseurs(f, graine, tables, apres)
+  genererPlanning(f, tables, apres)
   return { graine, fenetre: f, tables, apres }
 }
 
