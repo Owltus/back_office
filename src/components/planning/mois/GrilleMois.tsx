@@ -654,18 +654,18 @@ function LigneMois({
         >
           {shift && (
             // Début et fin en entier (« 08 » se lisait comme « 8 heures »),
-            // l'un sous l'autre au centre ; l'étoile au centre de la marge
-            // gauche, pour que les horaires restent alignés d'une case à
-            // l'autre.
+            // l'un sous l'autre au centre ; l'étoile en pastille au coin haut
+            // droit, hors de la grille : les horaires restent alignés.
             <span className="grid w-full grid-cols-[1fr_auto_1fr] items-center text-[9.5px] leading-[1.15] font-semibold tabular-nums">
-              <span className="grid place-items-center">
-                {journeeEtoile(s, shift) && (
-                  <Star
-                    className="size-2.5 fill-amber-400 text-amber-400"
-                    aria-label="journée étoile"
-                  />
-                )}
-              </span>
+              {journeeEtoile(s, shift) && (
+                <span
+                  className="planning-etoile-badge"
+                  aria-label="journée étoile"
+                >
+                  <Star aria-hidden />
+                </span>
+              )}
+              <span />
               <span
                 className="grid justify-items-end"
                 style={h?.code_rouge ? { color: ROUGE_CODE } : undefined}
@@ -792,7 +792,7 @@ function Pastille({
         onClick={onClick}
         style={{ '--couleur': couleur } as CSSProperties}
         className={cn(
-          'grid h-8 w-full touch-manipulation place-items-center rounded-md border border-transparent select-none hover:bg-accent/60',
+          'relative grid h-8 w-full touch-manipulation place-items-center rounded-md border border-transparent select-none hover:bg-accent/60',
           !actif && 'cursor-pointer',
           classe,
           isDragging && 'opacity-35',
