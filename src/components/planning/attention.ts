@@ -11,7 +11,7 @@
  */
 
 import type { SemaineOut } from '#/lib/planning/semaine.ts'
-import { ajouterJours } from '#/lib/planning/temps.ts'
+import { ajouterJours, lundiDe } from '#/lib/planning/temps.ts'
 import type { Poste, Salarie } from '#/lib/planning/types.ts'
 
 const RAISON_EXTRA = 'extra disponible'
@@ -60,7 +60,26 @@ export interface PointsAttention {
   aVerifier: PointPersonne[]
 }
 
-/** `garder` : jours retenus (la vue mois ne garde que ceux du mois). */
+/** Jours retenus par la vue semaine : à partir d'aujourd'hui. Un jour passé
+ * ne se génère plus : le signaler n'aide pas (décision utilisateur du
+ * 2026-10-28, « bien plus court »). */
+export const aVenir =
+  (aujourdhui: string) =>
+  (date: string): boolean =>
+    date >= aujourdhui
+
+/** Jours retenus par la vue mois : à venir, dans une semaine du mois. Une
+ * semaine appartient au mois de son jeudi (règle des semaines ISO) : celle du
+ * 26 octobre au 1er novembre est d'octobre, ses points n'arrivent pas en
+ * novembre. */
+export const aVenirDansLeMois =
+  (mois: string, aujourdhui: string) =>
+  (date: string): boolean =>
+    date >= aujourdhui && ajouterJours(lundiDe(date), 3).startsWith(mois)
+
+/** `garder` : jours retenus (voir `aVenir`, `aVenirDansLeMois`). Les alertes
+ * d'une personne, qui portent sur sa semaine, comptent si un de ses jours est
+ * retenu. */
 export function pointsAttention(
   semaines: SemaineOut[],
   salaries: Salarie[],

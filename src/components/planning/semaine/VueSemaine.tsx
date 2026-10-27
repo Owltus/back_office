@@ -67,6 +67,7 @@ import type {
 } from '#/components/planning/semaine/GrilleSemaine.tsx'
 import { MenuCase } from '#/components/planning/semaine/MenuCase.tsx'
 import type { OuvertureMenu } from '#/components/planning/semaine/MenuCase.tsx'
+import { aVenir, pointsAttention } from '#/components/planning/attention.ts'
 import { PanneauAlertes } from '#/components/planning/semaine/PanneauAlertes.tsx'
 import {
   absenceDe,
@@ -541,6 +542,18 @@ export function VueSemaine({
     [enVol, affichee],
   )
 
+  // Points d'attention : jours à venir ; le bouton compte ce que le panneau
+  // montre.
+  const nbAlertes =
+    affichee && referentiel
+      ? pointsAttention(
+          [affichee],
+          referentiel.salaries,
+          referentiel.postes,
+          aVenir(aujourdhui),
+        ).total
+      : 0
+
   // ------------------------------------------------------- clic droit
 
   const ouvrirMenu = (e: EvenementSouris) => {
@@ -656,6 +669,7 @@ export function VueSemaine({
         numero={numero}
         dates={dates}
         semaine={pret ? affichee : null}
+        nbAlertes={nbAlertes}
         pret={pret}
         ecrire={droits.ecrire}
         gerer={droits.gerer}
@@ -830,6 +844,7 @@ export function VueSemaine({
           salaries={referentiel.salaries}
           postes={referentiel.postes}
           periode="Cette semaine"
+          garder={aVenir(aujourdhui)}
         />
       )}
 

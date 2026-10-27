@@ -39,10 +39,7 @@ import { MenuParametres } from '#/components/planning/EnTeteParametres.tsx'
 import { dateCourte } from '#/lib/planning/affichage.ts'
 import type { SemaineOut } from '#/lib/planning/semaine.ts'
 import { cn } from '#/lib/utils.ts'
-import {
-  compteurs,
-  nombreAlertes,
-} from '#/components/planning/semaine/edition.ts'
+import { compteurs } from '#/components/planning/semaine/edition.ts'
 
 export const AIDE_VALIDATION = [
   'Proposition (pointillés) : proposée par le moteur, recalculée à chaque génération',
@@ -129,6 +126,7 @@ export function EnTeteSemaine({
   numero,
   dates,
   semaine,
+  nbAlertes,
   pret,
   ecrire,
   gerer,
@@ -141,6 +139,8 @@ export function EnTeteSemaine({
   numero: number
   dates: string[]
   semaine: SemaineOut | null
+  /** Points d'attention, comptés comme le panneau les montre. */
+  nbAlertes: number
   /** Droits lus et semaine affichée chargée. */
   pret: boolean
   ecrire: boolean
@@ -155,7 +155,7 @@ export function EnTeteSemaine({
   const verrou = !!semaine?.verrouillee
   const stats = semaine?.stats
   const nb = semaine ? compteurs(semaine) : null
-  const nbAlertes = semaine ? nombreAlertes(semaine) : 0
+
   const couverture =
     stats && stats.places
       ? Math.round((stats.pourvues / stats.places) * 100)

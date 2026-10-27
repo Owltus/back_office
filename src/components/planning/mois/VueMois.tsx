@@ -73,7 +73,10 @@ import {
   reperer,
 } from '#/components/planning/mois/mois.ts'
 import type { EtatSemaine } from '#/components/planning/mois/mois.ts'
-import { pointsAttention } from '#/components/planning/attention.ts'
+import {
+  aVenirDansLeMois,
+  pointsAttention,
+} from '#/components/planning/attention.ts'
 import { PanneauAlertes } from '#/components/planning/semaine/PanneauAlertes.tsx'
 import {
   absenceDe,
@@ -638,9 +641,9 @@ export function VueMois({
 
   const nomDuMois = NOM_MOIS.format(new Date(`${mois}-01T12:00:00Z`))
   const ceMois = aujourdhui.slice(0, 7)
-  // Points d'attention : seulement les jours du mois affiché ; le bouton
+  // Points d'attention : jours à venir des semaines du mois ; le bouton
   // compte ce que le panneau montre.
-  const dansLeMois = (date: string) => date.startsWith(mois)
+  const dansLeMois = aVenirDansLeMois(mois, aujourdhui)
   const nbAlertes = referentiel
     ? pointsAttention(
         liste,

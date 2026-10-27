@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  aVenir,
+  aVenirDansLeMois,
   pointsAttention,
   resumePoints,
 } from '#/components/planning/attention.ts'
@@ -125,5 +127,27 @@ describe('points d’attention', () => {
     expect(resumePoints(pointsAttention([SEM], SALARIES, POSTES))).toBe(
       '5 points : 1 infraction, 2 shifts à pourvoir, 1 consigne de présence, 1 à vérifier.',
     )
+  })
+})
+
+describe('jours retenus', () => {
+  it('semaine : à partir d’aujourd’hui', () => {
+    const garder = aVenir('2026-10-27')
+    expect(garder('2026-10-26')).toBe(false)
+    expect(garder('2026-10-27')).toBe(true)
+  })
+
+  it('mois : une semaine est au mois de son jeudi, jours passés exclus', () => {
+    const novembre = aVenirDansLeMois('2026-11', '2026-10-27')
+    // Semaine du 26 octobre (jeudi 29) : en octobre, même son dimanche 1er.
+    expect(novembre('2026-11-01')).toBe(false)
+    expect(novembre('2026-11-02')).toBe(true)
+    // Semaine du 30 novembre (jeudi 3 décembre) : en décembre.
+    expect(novembre('2026-11-30')).toBe(false)
+    const octobre = aVenirDansLeMois('2026-10', '2026-10-27')
+    expect(octobre('2026-10-26')).toBe(false)
+    expect(octobre('2026-11-01')).toBe(true)
+    // Les alertes de Johanna (semaine du 26 octobre) ne vont pas en novembre.
+    expect(pointsAttention([SEM], SALARIES, POSTES, novembre).total).toBe(0)
   })
 })
