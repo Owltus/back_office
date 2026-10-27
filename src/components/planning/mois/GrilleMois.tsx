@@ -675,7 +675,6 @@ function LigneMois({
           <Tip label="Forfait jours : journées travaillées dans le mois">
             <span tabIndex={0}>
               <strong>{shifts.length} j</strong>
-              <span className="text-muted-foreground"> · forfait</span>
             </span>
           </Tip>
         ) : (
