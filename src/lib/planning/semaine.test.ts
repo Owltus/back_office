@@ -283,16 +283,18 @@ describe('semi-auto (test_semi_auto.py, hôtel réel)', () => {
     expect(complete.stats.pourvues).toBe(complete.stats.places)
   })
 
-  it('le week-end entre deux semaines d’école est un repos', () => {
+  // Écart assumé au prototype (décision utilisateur du 2026-10-27) : le
+  // week-end entre deux semaines d'école n'est plus un repos imposé.
+  it('le week-end entre deux semaines d’école n’est pas un repos imposé', () => {
     const p = reel('2026-10-27')
     const eleve = p.salarie('Élise').id
     const bilan = (lundi: string) => bilanDe(p.analyser(lundi), eleve)
-    const r16 = new Set(bilan('2026-11-16').repos_fixes)
-    expect(r16.has(5) && r16.has(6)).toBe(true)
-    const r23 = new Set(bilan('2026-11-23').repos_fixes)
-    expect(r23.has(5) || r23.has(6)).toBe(false)
+    expect(bilan('2026-11-16').repos_fixes).toEqual([])
+    expect(bilan('2026-11-23').repos_fixes).toEqual([])
     const sem = p.generer('2026-11-16')
-    expect(sem.affectations.some((a) => a.salarie_id === eleve)).toBe(false)
+    const siens = sem.affectations.filter((a) => a.salarie_id === eleve)
+    expect(siens.every((a) => a.jour >= 5)).toBe(true)
+    expect(sem.stats.infractions).toBe(0)
   })
 })
 
@@ -357,8 +359,10 @@ describe('garde-fous (test_garde_fous.py)', () => {
     expect(estEcole(motif('absence', 'SS', 'Sans solde'))).toBe(false)
   })
 
+  // Écart assumé au prototype (décision utilisateur du 2026-10-27) : plus de
+  // repos imposé, école comme absence.
   it.each([
-    ['ecole', [5, 6]],
+    ['ecole', []],
     ['absence', []],
   ] as const)(
     'le week-end entre deux semaines « %s » : repos %j',

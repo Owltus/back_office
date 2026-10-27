@@ -258,27 +258,6 @@ export function joursAbsents(
   return r
 }
 
-/** Samedi et dimanche entre deux semaines d'école : des repos. */
-export function weekendEntreEcoles(
-  x: Salarie,
-  lundi: string,
-  ecole: Set<number>,
-  absences: Map<number, Map<string, number>>,
-): Set<number> {
-  if (!ecole.size) return new Set()
-  const cette = joursAbsents(x, lundi, absences)
-  const suivante = joursAbsents(x, ajouterJours(lundi, 7), absences)
-  const toute = (m: Map<number, number | null>) =>
-    [0, 1, 2, 3, 4].every((j) => {
-      const motif = m.get(j)
-      return motif !== undefined && motif !== null && ecole.has(motif)
-    })
-  if (toute(cette) && toute(suivante)) {
-    return new Set([5, 6].filter((j) => !cette.has(j)))
-  }
-  return new Set()
-}
-
 /** Repos fixe ou absence de la semaine type : se change dans la fiche. */
 export function jourFixe(x: Salarie, jour: number): boolean {
   const e = x.semaine_type.at(jour)
@@ -324,8 +303,9 @@ export function fiche(
   semaine.forEach((e, j) => {
     if (e.mode === 'repos') reposFixes.add(j)
   })
-  for (const j of weekendEntreEcoles(x, lundi, ctx.ecole, ctx.absences))
-    reposFixes.add(j)
+  // Plus de repos imposé le week-end entre deux semaines d'école (règle du
+  // prototype retirée le 2026-10-27, décision utilisateur : ce repos « fixe
+  // mais pas vraiment » paraissait arbitraire). Les règles HCR suffisent.
   const travailFixe = new Set<number>()
   const shiftImpose: Array<readonly [number, string]> = []
   const etoile = new Set<number>()

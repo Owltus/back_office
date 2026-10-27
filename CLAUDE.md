@@ -1983,6 +1983,11 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   « Dates du CFA » colle le document de l'école (`lireDatesCfa`), qui fait foi sur la
   plage qu'il couvre ; le rythme N/M qui écrasait tout est RETIRÉ (ne pas le remettre) ;
   un shift posé sur un nouveau jour d'école est annoncé puis signalé à l'enregistrement.
+  Aucun repos n'est imposé ni affiché d'office aux apprentis, stagiaires et extras
+  (décision utilisateur du 2026-10-27) : le week-end entre deux semaines d'école
+  n'est plus un repos fixe (règle du prototype retirée), pas de repos déduits ;
+  une case vide n'est « Repos » que s'il est posé dans la fiche ou, pour les autres,
+  si la semaine est complète. Ne pas remettre ces repos automatiques.
 - **Consignes de présence matin / soir** (2026-10-27, demande utilisateur :
   « lundi 2 et 2… samedi 3 ou 4 le matin ») : table `planning_consignes`
   (jour, période, minimum, maximum), `planning_horaires.periode`

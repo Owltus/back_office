@@ -165,9 +165,10 @@ export function parGroupe<T extends Pick<Salarie, 'groupe_id'>>(
  * Sinon la case reste « non attribué » (décision utilisateur du 2026-10-27 :
  * retirer un shift doit remettre la case à vide, un repos n'est pas posé). */
 export function jourDeRepos(b: BilanOut, jour: number): boolean {
-  if (b.repos_fixes.includes(jour) || b.repos_deduits.includes(jour))
-    return true
-  return b.minutes_contrat === 0 && Object.keys(b.absences).length > 0
+  // Une semaine couverte par l'école ou les congés passe par les repos
+  // déduits du moteur (qui n'en donne ni aux extras, ni aux apprentis, ni aux
+  // stagiaires) : plus de seconde règle ici.
+  return b.repos_fixes.includes(jour) || b.repos_deduits.includes(jour)
 }
 
 /** Sous contrat ce jour-là et proposé au planning. */
