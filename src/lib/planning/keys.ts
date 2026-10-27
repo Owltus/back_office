@@ -15,4 +15,7 @@ export const planningKeys = {
     ['planning', 'mois', premierLundi, nbSemaines] as const,
   /** Jours d'absence d'une personne (fiche). */
   absences: (salarieId: number) => ['planning', 'absences', salarieId] as const,
+  /** Shifts à venir d'une personne (fiche). */
+  shiftsSalarie: (salarieId: number) =>
+    ['planning', 'shifts-salarie', salarieId] as const,
 }

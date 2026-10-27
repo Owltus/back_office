@@ -11,7 +11,7 @@
 
 import { refusDroits } from '#/lib/planning/erreurs.ts'
 import type { NouveauShift } from '#/lib/planning/semaine.ts'
-import { ajouterJours } from '#/lib/planning/temps.ts'
+import { ajouterJours, lundiDe } from '#/lib/planning/temps.ts'
 import type {
   Absence,
   Affectation,
@@ -156,6 +156,23 @@ export async function fetchAbsencesSalarie(
       .from('planning_absences')
       .select(COL_ABSENCE)
       .eq('salarie_id', salarieId)
+      .order('jour'),
+  )
+}
+
+/** Shifts d'une personne à partir de la semaine de `depuis` (fiche : ceux
+ * qu'un jour d'école posé retirerait). */
+export async function fetchShiftsSalarie(
+  salarieId: number,
+  depuis: string,
+): Promise<Affectation[]> {
+  return verifier(
+    await supabase
+      .from('planning_affectations')
+      .select(COL_AFFECTATION)
+      .eq('salarie_id', salarieId)
+      .gte('lundi', lundiDe(depuis))
+      .order('lundi')
       .order('jour'),
   )
 }

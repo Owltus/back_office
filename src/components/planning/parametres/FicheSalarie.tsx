@@ -53,6 +53,11 @@ import type {
   PlanEvolution,
 } from '#/components/planning/parametres/equipe/brouillon.ts'
 import { CalendrierEcole } from '#/components/planning/parametres/equipe/CalendrierEcole.tsx'
+import {
+  dateShift,
+  joursEcole,
+  messageShiftsRetires,
+} from '#/components/planning/parametres/equipe/ecole.ts'
 import { SectionIdentite } from '#/components/planning/parametres/equipe/SectionIdentite.tsx'
 import {
   SectionAbsences,
@@ -79,10 +84,11 @@ import { estEcole } from '#/lib/planning/semaine.ts'
 import {
   enregistrerSalarie,
   fetchAbsencesSalarie,
+  fetchShiftsSalarie,
   poserAbsences,
   supprimerSalarie,
 } from '#/lib/planning/service.ts'
-import type { Absence, Referentiel } from '#/lib/planning/types.ts'
+import type { Absence, Affectation, Referentiel } from '#/lib/planning/types.ts'
 
 /** Pose puis retire les jours qui changent (une transaction par appel). */
 async function appliquerAbsences(
@@ -255,6 +261,18 @@ function CorpsFiche({
   // Jours d'absence à l'ouverture : seul l'écart entre eux et la saisie est
   // appliqué à la base relue.
   const [joursInitiaux] = useState(() => joursDesPeriodes(initial.absences))
+  const [ecoleInitiale] = useState(() => {
+    const motif = referentiel.motifs.find(estEcole)
+    return motif ? joursEcole(initial.absences, motif.id) : new Set<string>()
+  })
+  // Ses shifts à venir : le calendrier d'école montre ceux qu'un jour
+  // d'école retirerait.
+  const shifts = useQuery({
+    queryKey: planningKeys.shiftsSalarie(initial.id ?? 0),
+    queryFn: () => fetchShiftsSalarie(initial.id as number, aujourdhui),
+    enabled: initial.id !== null,
+    staleTime: 0,
+  })
   const [confirmerAbandon, setConfirmerAbandon] = useState(false)
   const [confirmerSuppression, setConfirmerSuppression] = useState(false)
   // Un enregistrement à la fois : un double clic ne crée pas deux fiches.
@@ -318,6 +336,7 @@ function CorpsFiche({
       // Créée : un nouvel essai ne doit pas en créer une seconde.
       setB((x) => ({ ...x, id: idFiche }))
       let gardes = 0
+      let retires: Affectation[] = []
       const r2 = await ecrire(async () => {
         const base = b.id === null ? [] : await absencesEnBase(idFiche)
         const { diff, gardes: jours } = horsSemainesVerrouillees(
@@ -329,14 +348,26 @@ function CorpsFiche({
           verrous(),
         )
         gardes = jours.length
-        if (!diffVide(diff)) await appliquerAbsences(idFiche, diff)
+        if (diffVide(diff)) return
+        // Un jour d'absence posé retire le shift du jour (trigger) : relus
+        // juste avant, pour le dire.
+        const poses = new Set([...diff.poser.values()].flat())
+        if (b.id !== null && poses.size) {
+          const depuis = [...poses].sort()[0]
+          const avant = await fetchShiftsSalarie(idFiche, depuis)
+          retires = avant.filter((s) => poses.has(dateShift(s)))
+        }
+        await appliquerAbsences(idFiche, diff)
       }, "Fiche enregistrée, mais ses absences n'ont pas pu l'être")
       if (!r2.ok) {
         notifier(r2.message, 'danger')
         return
       }
-      if (gardes)
-        notifier(`Fiche enregistrée.${messageJoursGardes(gardes)}`, 'attention')
+      if (gardes || retires.length)
+        notifier(
+          `Fiche enregistrée.${messageJoursGardes(gardes)}${messageShiftsRetires(retires)}`,
+          'attention',
+        )
       else notifier('Fiche enregistrée')
       onFermer()
     })
@@ -498,6 +529,10 @@ function CorpsFiche({
             semaineType={b.semaine_type}
             aujourdhui={aujourdhui}
             disabled={desactive}
+            verrous={referentiel.verrous}
+            joursAvant={ecoleInitiale}
+            shifts={shifts.data ?? []}
+            postes={referentiel.postes}
             onAbsences={(absences) => maj((x) => ({ ...x, absences }))}
             onSemaineType={(semaine_type) =>
               maj((x) => ({ ...x, semaine_type }))

@@ -14,7 +14,7 @@ import { FilMessages } from '#/components/planning/Messages.tsx'
 import { TooltipProvider } from '#/components/ui/tooltip.tsx'
 import { planningKeys } from '#/lib/planning/keys.ts'
 import { hotelDemo } from '#/lib/planning/test/hotelDemo.ts'
-import type { Absence } from '#/lib/planning/types.ts'
+import type { Absence, Affectation } from '#/lib/planning/types.ts'
 
 /*
  * Fiche d'un membre du staff contre un service simulé (la base n'est pas
@@ -28,6 +28,7 @@ const etat = vi.hoisted(() => ({
   niveau: 'gestion',
   absences: [] as Absence[],
   verrous: [] as string[],
+  shifts: [] as Affectation[],
 }))
 const service = vi.hoisted(() => ({
   enregistrerSalarie: vi.fn(async (_v: unknown, id: number | null) => id ?? 99),
@@ -59,6 +60,8 @@ vi.mock('#/lib/planning/service.ts', () => ({
   }),
   fetchAbsencesSalarie: async (id: number) =>
     etat.absences.filter((a) => a.salarie_id === id),
+  fetchShiftsSalarie: async (id: number) =>
+    etat.shifts.filter((a) => a.salarie_id === id),
   fetchSemaine: vi.fn(),
   fetchEtatSemaine: vi.fn(),
   appliquerGeneration: vi.fn(),
@@ -79,6 +82,7 @@ beforeEach(() => {
   etat.niveau = 'gestion'
   etat.absences = []
   etat.verrous = []
+  etat.shifts = []
   vi.clearAllMocks()
   service.enregistrerSalarie.mockImplementation(
     async (_v: unknown, id: number | null) => id ?? 99,
@@ -306,14 +310,29 @@ describe('FicheSalarie', () => {
     expect(onFermer).toHaveBeenCalled()
   })
 
-  it('le bloc École remplit les semaines par rythme (apprentie)', async () => {
+  it('le bloc École : une semaine, un samedi seul, puis les dates du CFA (apprentie)', async () => {
     // Chloé Lambert, apprentie : le bloc École gère ses jours d'école.
     ouvrir(11)
     expect(await screen.findByRole('region', { name: 'École' })).toBeTruthy()
-    fireEvent.change(screen.getByLabelText("Semaines à l'hôtel"), {
-      target: { value: '0' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'Remplir' }))
+    // S45 : du lundi 2 au vendredi 6 novembre 2026.
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Semaine 45 : école du lundi au vendredi',
+      }),
+    )
+    // Un samedi d'examen, seul.
+    fireEvent.click(screen.getByRole('button', { name: /^sam\. 7 nov\. 2026/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Dates du CFA/ }))
+    fireEvent.change(
+      await screen.findByRole('textbox', { name: 'Dates du CFA' }),
+      {
+        target: {
+          value: 'En entreprise du 09/11 au 13/11\ndu 16/11 au 18/11/2026',
+        },
+      },
+    )
+    expect(screen.getByText(/1 période, 3 jours d'école/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Appliquer' }))
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
     await waitFor(() => expect(service.poserAbsences).toHaveBeenCalled())
     const ecole = demo.referentiel.motifs.find((m) => m.code === 'EC')!.id
@@ -323,13 +342,50 @@ describe('FicheSalarie', () => {
       number,
     ]
     expect(motif).toBe(ecole)
-    // 26 semaines de 5 jours, aucune le week-end.
-    expect(jours).toHaveLength(26 * 5)
+    expect([...jours].sort()).toEqual([
+      '2026-11-02',
+      '2026-11-03',
+      '2026-11-04',
+      '2026-11-05',
+      '2026-11-06',
+      '2026-11-07',
+      '2026-11-16',
+      '2026-11-17',
+      '2026-11-18',
+    ])
+  })
+
+  it('un shift déjà posé sur un nouveau jour d école est annoncé, puis signalé à l enregistrement', async () => {
+    etat.shifts = [
+      {
+        id: 501,
+        lundi: '2026-11-09',
+        salarie_id: 11,
+        poste_id: demo.referentiel.postes[0].id,
+        jour: 1,
+        horaire_id: null,
+        debut: '07:00',
+        fin: '15:00',
+        epinglee: true,
+        court: false,
+        pause: 0,
+      },
+    ]
+    ouvrir(11)
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Semaine 46 : école du lundi au vendredi',
+      }),
+    )
     expect(
-      jours.every(
-        (j) => ![0, 6].includes(new Date(`${j}T12:00:00Z`).getUTCDay()),
+      await screen.findByText(/1 shift déjà posé tombe sur l'école/),
+    ).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+    expect(
+      await screen.findByText(
+        /1 shift est retiré pour son absence ou son école : mar\. 10 nov\. 2026/,
       ),
-    ).toBe(true)
+    ).toBeTruthy()
   })
 
   it('aperçu des règles : suit le contrat', async () => {
