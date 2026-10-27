@@ -1984,10 +1984,11 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   plage qu'il couvre ; le rythme N/M qui écrasait tout est RETIRÉ (ne pas le remettre) ;
   un shift posé sur un nouveau jour d'école est annoncé puis signalé à l'enregistrement.
   Repos des apprentis et stagiaires (décisions utilisateur du 2026-10-27) : leur
-  ligne est vide sauf l'école ; leurs repos n'apparaissent qu'avec LEURS shifts
-  posés (génération ou à la main) et 5 jours pris, école comprise. Jamais d'après
-  les shifts des autres (une ligne purgée reste vide), jamais pour une semaine
-  couverte par l'école seule. Le week-end entre deux semaines d'école n'est plus un repos
+  ligne est vide sauf l'école tant que la semaine n'est pas REMPLIE
+  (`semaineRemplie` : un shift qui n'est pas un horaire fixe de la semaine type,
+  posé par la génération ou à la main ; après une purge, il ne reste que les
+  fixes) ; une fois remplie, leurs jours libres sont des repos comme pour les
+  autres, week-end d'une semaine entière d'école compris. Le week-end entre deux semaines d'école n'est plus un repos
   fixe du moteur (règle du prototype retirée). Un extra n'a jamais de repos
   déduits. Une case vide n'est « Repos » que si c'est posé dans la fiche ou déduit.
 - **Consignes de présence matin / soir** (2026-10-27, demande utilisateur :

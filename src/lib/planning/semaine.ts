@@ -600,11 +600,11 @@ export function avecSemainesVoisines(
 
 /** Jours libres qui sont du repos : heures dues couvertes par l'école ou les
  * absences, ou 5 jours déjà pris. Jamais pour un extra. Pour un apprenti ou
- * un stagiaire : sa ligne est vide sauf l'école, ses repos n'apparaissent
- * qu'avec SES shifts posés (génération ou à la main) et 5 jours pris, école
- * comprise ; jamais pour une semaine couverte par l'école seule (décisions
- * utilisateur du 2026-10-27). Affichage seulement : le moteur garde ses
- * règles de repos et l'école. */
+ * un stagiaire, seulement sur une semaine REMPLIE (`semaineRemplie`) : sa
+ * ligne vide sauf l'école tant qu'on n'a ni généré ni posé à la main, puis
+ * ses jours libres en repos comme pour les autres, week-end d'une semaine
+ * entière d'école compris (décisions utilisateur du 2026-10-27). Affichage
+ * seulement : le moteur garde ses règles de repos et l'école. */
 const ALTERNANCE: ReadonlySet<Salarie['type_contrat']> = new Set([
   'apprenti',
   'stagiaire',
@@ -616,13 +616,12 @@ export function reposDeduits(
   siens: Creneau[],
   lundi: string,
   absences: Map<number, Map<string, number>>,
+  remplie = true,
 ): number[] {
   if (x.type_contrat === 'extra') return []
-  const alternance = ALTERNANCE.has(x.type_contrat)
-  if (alternance && siens.length === 0) return []
+  if (ALTERNANCE.has(x.type_contrat) && !remplie) return []
   const pris = new Set([...siens.map(jourDe), ...sol.joursHorsSite])
   const couvert =
-    !alternance &&
     !sol.contratIndicatif &&
     Number(x.heures_hebdo) > 0 &&
     sol.minutesHebdoContrat === 0
@@ -636,11 +635,25 @@ export function reposDeduits(
   return [0, 1, 2, 3, 4, 5, 6].filter((j) => !occupes.has(j))
 }
 
+/** La semaine a été remplie (génération ou à la main) : au moins un shift qui
+ * n'est pas un horaire fixe de la semaine type. Les fixes se posent tout seuls
+ * à l'ouverture d'une semaine : après une purge, il ne reste qu'eux. */
+export function semaineRemplie(
+  affectations: readonly Affectation[],
+  salaries: readonly Salarie[],
+): boolean {
+  const parId = new Map(salaries.map((x) => [x.id, x]))
+  return affectations.some(
+    (a) => parId.get(a.salarie_id)?.semaine_type.at(a.jour)?.mode !== 'travail',
+  )
+}
+
 // ----------------------------------------------------------------- analyse
 
 export function analyser(d: DonneesSemaine): SemaineOut {
   const ctx = contexte(d)
   const lundi = ctx.lundi
+  const remplie = semaineRemplie(ctx.affectations, d.referentiel.salaries)
   const { valides: besoins, alertes: alertesBesoins } = besoinsValides(ctx)
   let salaries = new Map(
     ctx.staff.map((x) => [x.id, versSolveur(fiche(x, lundi, ctx))]),
@@ -798,7 +811,7 @@ export function analyser(d: DonneesSemaine): SemaineOut {
       ),
       repos_fixes: [...sol.reposFixes].sort((a, b) => a - b),
       hors_contrat: [...sol.horsContrat].sort((a, b) => a - b),
-      repos_deduits: reposDeduits(x, sol, siens, lundi, ctx.absences),
+      repos_deduits: reposDeduits(x, sol, siens, lundi, ctx.absences, remplie),
     })
   }
 

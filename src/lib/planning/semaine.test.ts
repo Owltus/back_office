@@ -16,7 +16,11 @@ import type {
   Probleme,
   SalarieSolveur,
 } from '#/lib/planning/modele.ts'
-import { estEcole, preparerGeneration } from '#/lib/planning/semaine.ts'
+import {
+  estEcole,
+  preparerGeneration,
+  semaineRemplie,
+} from '#/lib/planning/semaine.ts'
 import type { SemaineOut } from '#/lib/planning/semaine.ts'
 import { hotelDemo } from '#/lib/planning/test/hotelDemo.ts'
 import { hotelReel } from '#/lib/planning/test/hotelReel.ts'
@@ -535,7 +539,7 @@ describe('garde-fous (test_garde_fous.py)', () => {
     )
   })
 
-  it('apprenti : une semaine entière d’école, même remplie, ne pose aucun repos', () => {
+  it('apprenti : semaine entière d’école, week-end en repos une fois la semaine remplie', () => {
     const lundi = '2026-11-09'
     const p = demo()
     const avecAbsence = new Set(p.absences.map((a) => a.salarie_id))
@@ -548,9 +552,27 @@ describe('garde-fous (test_garde_fous.py)', () => {
     )!
     eleve.type_contrat = 'apprenti'
     p.absent(eleve.id, '2026-11-09', '2026-11-13', 'EC')
+    expect(bilanDe(p.analyser(lundi), eleve.id).repos_deduits).toEqual([])
     const sem = p.generer(lundi)
     expect(sem.affectations.length).toBeGreaterThan(0)
-    expect(bilanDe(sem, eleve.id).repos_deduits).toEqual([])
+    expect(bilanDe(sem, eleve.id).repos_deduits).toEqual([5, 6])
+  })
+
+  it('semaineRemplie : les horaires fixes seuls ne remplissent pas la semaine', () => {
+    const p = demo()
+    const [fixe, libre] = p.referentiel.salaries
+    fixe.semaine_type = fixe.semaine_type.map((e, j) =>
+      j === 0 ? { ...e, mode: 'travail' } : e,
+    )
+    libre.semaine_type = libre.semaine_type.map((e) => ({ ...e, mode: 'auto' }))
+    const shift = (salarie_id: number) =>
+      ({ salarie_id, jour: 0 }) as unknown as Affectation
+    const salaries = p.referentiel.salaries
+    expect(semaineRemplie([], salaries)).toBe(false)
+    expect(semaineRemplie([shift(fixe.id)], salaries)).toBe(false)
+    expect(semaineRemplie([shift(fixe.id), shift(libre.id)], salaries)).toBe(
+      true,
+    )
   })
 
   it('apprenti et stagiaire : école respectée, repos placés une fois la semaine remplie', () => {
@@ -571,13 +593,16 @@ describe('garde-fous (test_garde_fous.py)', () => {
       expect(bilanDe(p.analyser(lundi), eleve.id).repos_deduits).toEqual([])
       const sem = p.generer(lundi)
       const jours = joursDe(sem, eleve.id)
-      // Les autres ont des shifts, pas lui (sa ligne purgée) : aucun repos.
+      // Semaine purgée (il ne reste que les horaires fixes) : aucun repos.
       const tous = p.shifts(lundi)
+      const parId = new Map(p.referentiel.salaries.map((x) => [x.id, x]))
       p.semaines.set(
         lundi,
-        tous.filter((x) => x.salarie_id !== eleve.id),
+        tous.filter(
+          (x) =>
+            parId.get(x.salarie_id)?.semaine_type[x.jour].mode === 'travail',
+        ),
       )
-      expect(p.shifts(lundi).length).toBeGreaterThan(0)
       expect(bilanDe(p.analyser(lundi), eleve.id).repos_deduits).toEqual([])
       p.semaines.set(lundi, tous)
       for (const j of [1, 2, 3]) expect(jours.has(j)).toBe(false)
