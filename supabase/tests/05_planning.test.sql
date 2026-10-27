@@ -119,7 +119,7 @@ create function pg_temp.q(p text) returns text language sql as $$
     ':M', (select m from t_ids)::text);
 $$;
 
-select plan(32);
+select plan(35);
 
 -- -------------------------------------------------------------- lecture ---
 select is(pg_temp.essai('aucun', array[pg_temp.q('select count(*) from public.planning_salaries where nom = ''PLANNING''')]),
@@ -241,6 +241,14 @@ select is(pg_temp.essai('gestion', array[
 select is(pg_temp.essai('gestion', array[
   'select public.planning_supprimer_horaire((select id from public.planning_horaires where code = ''XM'' and nom = ''Matin test''))']),
   'err=PL409', 'code horaire seul permis d''un poste : ne se supprime pas');
+
+-- --------------------------------------------------- import du prototype ---
+select is(pg_temp.essai('ecriture', array['select public.planning_importer(''{"format": "planning-prototype-v20"}''::jsonb)']),
+  'err=42501', 'import : réservé à la gestion');
+select is(pg_temp.essai('gestion', array['select public.planning_importer(''{"format": "autre"}''::jsonb)']),
+  'err=PL400', 'import : un fichier qui n''est pas un export du prototype est refusé');
+select is(pg_temp.essai('gestion', array['select public.planning_importer(''{"format": "planning-prototype-v20"}''::jsonb)']),
+  'err=PL409', 'import : jamais dans un planning qui a déjà des données');
 
 select * from finish();
 rollback;

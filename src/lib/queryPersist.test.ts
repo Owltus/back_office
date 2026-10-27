@@ -46,6 +46,8 @@ describe('estSensible — ce qui ne doit jamais toucher le disque', () => {
 
   it('refuse l’historique des documents du Classeur (noms des collègues)', () => {
     expect(estSensible(['classeur', 'versions', 17])).toBe(true)
+    expect(estSensible(['planning', 'semaine', '2026-11-02'])).toBe(true)
+    expect(estSensible(['planning', 'referentiel'])).toBe(true)
     expect(estSensible(['classeur', 'items', 3])).toBe(false)
   })
 
