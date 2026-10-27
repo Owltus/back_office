@@ -103,6 +103,11 @@ describe('fonctions pures', () => {
     expect(periodePresence(oui, undefined, '13:00')).toBe('soir')
     expect(periodePresence(non, { periode: 'matin' }, '07:00')).toBeNull()
     expect(periodePresence(undefined, undefined, '07:00')).toBeNull()
+    // Middle et court : selon l'heure de début, comme un horaire libre.
+    expect(periodePresence(oui, { periode: 'middle' }, '11:00')).toBe('matin')
+    expect(periodePresence(oui, { periode: 'middle' }, '13:00')).toBe('soir')
+    expect(periodePresence(oui, { periode: 'court' }, '07:00')).toBe('matin')
+    expect(periodePresence(oui, { periode: 'court' }, '19:00')).toBe('soir')
   })
 
   it('écart à une consigne', () => {

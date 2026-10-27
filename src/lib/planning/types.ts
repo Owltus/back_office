@@ -15,7 +15,7 @@ export type Categorie =
   'reception' | 'veille_nuit' | 'cuisine' | 'administratif_hors_site' | 'autre'
 export type TypeContrat = 'cdi' | 'cdd' | 'extra' | 'stagiaire' | 'apprenti'
 /** Période d'un code horaire (consignes de présence). */
-export type Periode = 'matin' | 'soir' | 'nuit'
+export type Periode = 'matin' | 'middle' | 'soir' | 'nuit' | 'court'
 
 export interface Horaire {
   id: number

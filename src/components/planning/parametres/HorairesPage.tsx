@@ -108,7 +108,7 @@ const saisieHoraire = (h: Horaire): SaisieHoraire => ({
   code_rouge: h.code_rouge,
 })
 
-/** Période d'un code (consignes de présence) ; « aucune » : ni matin ni soir. */
+/** Famille d'un code (consignes de présence, couleur) ; « aucune » : à part. */
 const PERIODES: ReadonlyArray<{
   valeur: Periode | 'aucune'
   libelle: string
@@ -119,12 +119,22 @@ const PERIODES: ReadonlyArray<{
     libelle: 'Matin',
     aide: 'Compte dans la présence du matin',
   },
+  {
+    valeur: 'middle',
+    libelle: 'Middle',
+    aide: 'À cheval entre le matin et le soir : compte selon son heure de début',
+  },
   { valeur: 'soir', libelle: 'Soir', aide: 'Compte dans la présence du soir' },
   { valeur: 'nuit', libelle: 'Nuit', aide: 'Nuit : hors des consignes' },
   {
+    valeur: 'court',
+    libelle: 'Court',
+    aide: 'Moins de 7 h de travail : compte selon son heure de début',
+  },
+  {
     valeur: 'aucune',
-    libelle: 'Aucune',
-    aide: 'Ni matin ni soir (direction…) : hors des consignes',
+    libelle: 'À part',
+    aide: 'À part (direction, supervision…) : hors des consignes',
   },
 ]
 
@@ -132,9 +142,11 @@ const PERIODES: ReadonlyArray<{
 const GROUPES_CODES: ReadonlyArray<{ titre: string; periode: Periode | null }> =
   [
     { titre: 'Matin', periode: 'matin' },
+    { titre: 'Middle', periode: 'middle' },
     { titre: 'Soir', periode: 'soir' },
     { titre: 'Nuit', periode: 'nuit' },
-    { titre: 'Sans période', periode: null },
+    { titre: 'Court', periode: 'court' },
+    { titre: 'À part', periode: null },
   ]
 
 const saisieMotif = (m: Motif): SaisieMotif => ({
@@ -709,9 +721,9 @@ function CarteHoraire({
       )}
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <span className="text-sm text-muted-foreground">Période</span>
+        <span className="text-sm text-muted-foreground">Famille</span>
         <Segmente
-          etiquette="Période du code"
+          etiquette="Famille du code"
           valeur={h.periode ?? 'aucune'}
           options={PERIODES}
           disabled={desactive}

@@ -6,15 +6,17 @@
  * sur un poste qui compte dans la présence (`Poste.presence`, Réception et
  * Club à l'hôtel), selon la période de leur shift.
  *
- * Période d'un shift : celle de son code (`Horaire.periode`) ; sans code,
- * elle se déduit de l'heure de début (`periodeLibre`).
+ * Période d'un shift : celle de son code (`Horaire.periode`) ; sans code, ou
+ * pour un code « middle » ou « court » (familles du 2026-10-28, qui ne
+ * changent pas les consignes), elle se déduit de l'heure de début
+ * (`periodeLibre`).
  */
 
 import { minutes } from '#/lib/planning/temps.ts'
-import type { Consigne, Horaire, Periode, Poste } from '#/lib/planning/types.ts'
+import type { Consigne, Horaire, Poste } from '#/lib/planning/types.ts'
 
 /** Période d'un horaire libre : nuit de 22 h à 5 h, matin avant 12 h 30. */
-export function periodeLibre(debut: string): Periode {
+export function periodeLibre(debut: string): 'matin' | 'soir' | 'nuit' {
   const m = minutes(debut)
   if (m >= 22 * 60 || m < 5 * 60) return 'nuit'
   return m < 12 * 60 + 30 ? 'matin' : 'soir'
@@ -28,7 +30,11 @@ export function periodePresence(
   debut: string,
 ): 'matin' | 'soir' | null {
   if (!poste?.presence) return null
-  const p = horaire ? horaire.periode : periodeLibre(debut)
+  const famille = horaire ? horaire.periode : null
+  const p =
+    !horaire || famille === 'middle' || famille === 'court'
+      ? periodeLibre(debut)
+      : famille
   return p === 'matin' || p === 'soir' ? p : null
 }
 

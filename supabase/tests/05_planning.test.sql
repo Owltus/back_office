@@ -122,7 +122,7 @@ create function pg_temp.q(p text) returns text language sql as $$
     ':M', (select m from t_ids)::text);
 $$;
 
-select plan(45);
+select plan(47);
 
 -- -------------------------------------------------------------- lecture ---
 select is(pg_temp.essai('aucun', array[pg_temp.q('select count(*) from public.planning_salaries where nom = ''PLANNING''')]),
@@ -293,6 +293,15 @@ select is(pg_temp.essai('gestion', array[
   'delete from public.planning_consignes',
   'insert into public.planning_consignes (jour, periode, minimum) values (0, ''nuit'', 1)']),
   'err=23514', 'consignes : seulement matin et soir');
+
+-- ------------------------------ familles des codes horaires (2026-10-28) ---
+select is(pg_temp.essai('gestion', array[
+  'update public.planning_horaires set periode = ''middle'' where code = ''XM'' and nom = ''Matin test''',
+  'select periode from public.planning_horaires where code = ''XM'' and nom = ''Matin test''']),
+  'middle', 'familles : un code se range en middle (court de même)');
+select is(pg_temp.essai('gestion', array[
+  'update public.planning_horaires set periode = ''midi'' where code = ''XM'' and nom = ''Matin test''']),
+  'err=23514', 'familles : une famille inconnue est refusée');
 
 select * from finish();
 rollback;
