@@ -18,6 +18,9 @@ describe('remplacements : pas destructifs', () => {
     'drop trigger if exists x on public.t; create trigger x before update on public.t for each row execute function f();',
     'create or replace function public.f() returns trigger language plpgsql as $$ begin return new; end $$; revoke all on function public.f() from public;',
     'create function private.g() returns void language sql as $$ select 1 $$; revoke execute on function private.g() from public, anon, authenticated;',
+    // Décision utilisateur du 2026-10-27 : une contrainte CHECK recréée.
+    'alter table public.t drop constraint if exists t_c_check; alter table public.t add constraint t_c_check check (c in (1, 2));',
+    'alter table t\n  drop constraint "Ma_regle";\nalter table only t\n  add constraint "Ma_regle"\n  check (c > 0);',
   ])('%s', (sql) => {
     expect(lignesDestructrices(sql)).toEqual([])
   })
@@ -43,6 +46,13 @@ describe('vrais retraits : toujours détectés', () => {
     'do $$ begin delete from public.t; end $$;',
     'drop table public.t;',
     'alter table public.t drop column c;',
+    // Contrainte retirée sans être recréée, recréée ailleurs, sous un autre
+    // nom, ou recréée autrement qu'en CHECK.
+    'alter table public.t drop constraint t_c_check;',
+    'alter table public.t drop constraint t_c_check; alter table public.u add constraint t_c_check check (c > 0);',
+    'alter table public.t drop constraint t_c_check; alter table public.t add constraint t_d_check check (c > 0);',
+    'alter table public.t drop constraint t_fk; alter table public.t add constraint t_fk foreign key (c) references public.u (id);',
+    'alter table public.t drop constraint t_c_check cascade; alter table public.t add constraint t_c_check check (c > 0);',
   ])('%s', (sql) => {
     expect(lignesDestructrices(sql).length).toBeGreaterThan(0)
   })
@@ -61,6 +71,17 @@ describe('migrations du 2026-10-17 : livrables sans clavier', () => {
     '20261017120000_auth_mot_de_passe_et_wordpool.sql',
   ])('%s', (nom) => {
     const sql = readFileSync(`supabase/migrations/${nom}`, 'utf8')
+    expect(lignesDestructrices(sql)).toEqual([])
+    expect(lignesDonnees(sql)).toEqual([])
+  })
+})
+
+describe('migration de la page Planning (2026-10-27) : livrable sans clavier', () => {
+  it('ses deux contraintes de pages sont recréées, rien n est retiré', () => {
+    const sql = readFileSync(
+      'supabase/migrations/20261027100000_page_planning.sql',
+      'utf8',
+    )
     expect(lignesDestructrices(sql)).toEqual([])
     expect(lignesDonnees(sql)).toEqual([])
   })

@@ -167,6 +167,9 @@ const tronquer = (s) => (s.length > 160 ? `${s.slice(0, 157)}…` : s)
 // policy ou un trigger retiré puis RECRÉÉ sous le même nom dans la même
 // migration est un remplacement ; un `revoke` sur une fonction que la
 // migration crée elle-même n'enlève rien dont l'ancien code dépende.
+// Même règle, décision utilisateur du 2026-10-27 (page Planning) : une
+// contrainte CHECK retirée puis RECRÉÉE sous le même nom, sur la même
+// table, dans la même migration (une liste de valeurs élargie).
 const CREE_ROUTINE = /^create\s+(?:or\s+replace\s+)?(?:function|procedure)\b/i
 
 /** Le masque à chercher : sans le corps d'une fonction créée. */
@@ -184,6 +187,14 @@ const CREE_OBJET = new RegExp(
 )
 const RETIRE_OBJET = new RegExp(
   String.raw`^drop\s+(policy|trigger)\s+(?:if\s+exists\s+)?${NOM}\s+on\s+${NOM}\s*(?:restrict)?$`,
+  'i',
+)
+const CREE_CHECK = new RegExp(
+  String.raw`^alter\s+table\s+(?:if\s+exists\s+)?(?:only\s+)?${NOM}\s+add\s+constraint\s+${NOM}\s+check\s*\(`,
+  'i',
+)
+const RETIRE_CONTRAINTE = new RegExp(
+  String.raw`^alter\s+table\s+(?:if\s+exists\s+)?(?:only\s+)?${NOM}\s+drop\s+constraint\s+(?:if\s+exists\s+)?${NOM}\s*(?:restrict)?$`,
   'i',
 )
 const CREE_FONCTION = new RegExp(
@@ -215,6 +226,8 @@ export function lignesDestructrices(sql) {
     if (o) recrees.add(`${o[1].toLowerCase()} ${nomSql(o[2])} ${nomSql(o[3])}`)
     const f = CREE_FONCTION.exec(texte)
     if (f) fonctions.add(nomSql(f[1]))
+    const c = CREE_CHECK.exec(texte)
+    if (c) recrees.add(`check ${nomSql(c[1])} ${nomSql(c[2])}`)
   }
   const remplacement = ({ texte }) => {
     const r = RETIRE_OBJET.exec(texte)
@@ -222,6 +235,8 @@ export function lignesDestructrices(sql) {
       return recrees.has(
         `${r[1].toLowerCase()} ${nomSql(r[2])} ${nomSql(r[3])}`,
       )
+    const c = RETIRE_CONTRAINTE.exec(texte)
+    if (c) return recrees.has(`check ${nomSql(c[1])} ${nomSql(c[2])}`)
     const v = REVOKE_FONCTION.exec(texte)
     return Boolean(v && fonctions.has(nomSql(v[1])))
   }
