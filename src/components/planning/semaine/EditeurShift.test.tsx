@@ -74,6 +74,13 @@ afterEach(() => {
 })
 
 describe('EditeurShift', () => {
+  it('« Non attribué » vide la case', () => {
+    const { onSupprimer } = rendre()
+    fireEvent.click(screen.getByRole('button', { name: /Non attribué/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Vider la case' }))
+    expect(onSupprimer).toHaveBeenCalledWith(7)
+  })
+
   it('la suppression en deux temps se désarme après 4 s', () => {
     vi.useFakeTimers()
     const { onSupprimer } = rendre()

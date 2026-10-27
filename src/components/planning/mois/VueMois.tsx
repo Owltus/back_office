@@ -775,6 +775,15 @@ export function VueMois({
             }
           }
           etoile={etoileMenu}
+          onVider={
+            shiftMenu &&
+            (() =>
+              void executer(
+                reperesMenu.lundi,
+                () => supprimerShift(shiftMenu.id),
+                'Suppression impossible',
+              ))
+          }
           onSemaine={() => onSemaine(reperesMenu.lundi)}
           onFermer={fermerMenu}
         />

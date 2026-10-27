@@ -597,6 +597,16 @@ export function VueSemaine({
             () => void executer(etoile.basculer, 'Journée étoile non posée', o),
           ),
       },
+      vider: shift
+        ? () =>
+            siOuverte(
+              () =>
+                void executer(
+                  () => service.supprimerShift(shift.id),
+                  'Suppression impossible',
+                ),
+            )
+        : undefined,
     })
   }
 

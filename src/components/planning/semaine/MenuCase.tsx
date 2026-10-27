@@ -5,7 +5,7 @@
  * du `ContextMenu` de shadcn.
  */
 
-import { BadgeCheck, Check, Star, Undo2 } from 'lucide-react'
+import { BadgeCheck, Check, Eraser, Star, Undo2 } from 'lucide-react'
 
 import {
   ContextMenuContent,
@@ -29,6 +29,8 @@ export interface OuvertureMenu {
   posteId: number | undefined
   validation?: { active: boolean; onBasculer: () => void }
   etoile?: { active: boolean; onBasculer: () => void }
+  /** La case a un shift : la remettre à « Non attribué ». */
+  vider?: () => void
 }
 
 export function MenuCase({
@@ -39,7 +41,7 @@ export function MenuCase({
   onHoraire: (h: Horaire, posteId: number) => void
 }) {
   if (!ouverture) return null
-  const { proposes, actuel, posteId, validation, etoile } = ouverture
+  const { proposes, actuel, posteId, validation, etoile, vider } = ouverture
   return (
     <ContextMenuContent className="min-w-64">
       <ContextMenuLabel className="text-xs text-muted-foreground">
@@ -76,6 +78,15 @@ export function MenuCase({
           )}
         </ContextMenuItem>
       ))}
+      {vider && (
+        <ContextMenuItem onSelect={vider}>
+          <Eraser />
+          <span className="font-medium">Non attribué</span>
+          <span className="ml-auto pl-3 text-xs text-muted-foreground">
+            vider la case
+          </span>
+        </ContextMenuItem>
+      )}
       {validation && (
         <>
           <ContextMenuSeparator />

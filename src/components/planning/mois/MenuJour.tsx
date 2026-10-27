@@ -6,7 +6,14 @@
  */
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { BadgeCheck, CalendarRange, Check, Star, Undo2 } from 'lucide-react'
+import {
+  BadgeCheck,
+  CalendarRange,
+  Check,
+  Eraser,
+  Star,
+  Undo2,
+} from 'lucide-react'
 
 import {
   dureeHoraire,
@@ -73,6 +80,7 @@ export function MenuJour({
   onHoraire,
   validation,
   etoile,
+  onVider,
   onSemaine,
   onFermer,
 }: {
@@ -86,6 +94,8 @@ export function MenuJour({
   onHoraire: (h: Horaire, posteId: number) => void
   validation?: { active: boolean; onBasculer: () => void }
   etoile?: { active: boolean; onBasculer: () => void }
+  /** La case a un shift : la remettre à « Non attribué ». */
+  onVider?: () => void
   onSemaine: () => void
   onFermer: () => void
 }) {
@@ -182,6 +192,18 @@ export function MenuJour({
             )}
           </button>
         ))}
+        {ecrire && onVider && (
+          <button
+            type="button"
+            role="menuitem"
+            className={ITEM}
+            onClick={choisir(onVider)}
+          >
+            <Eraser className="size-4" />
+            <span className="flex-1 font-medium">Non attribué</span>
+            <span className="text-xs text-muted-foreground">vider la case</span>
+          </button>
+        )}
         {ecrire && validation && (
           <>
             <div className="-mx-1 my-1 h-px bg-border" />

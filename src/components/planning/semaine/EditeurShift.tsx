@@ -153,6 +153,8 @@ export function EditeurShift({
   )
   const [epinglee, setEpinglee] = useState(existant?.epinglee ?? true)
   const [motif, setMotif] = useState<number | null>(null)
+  // « Non attribué » choisi : la case redevient vide à l'enregistrement.
+  const [vider, setVider] = useState(false)
   const [confirmerSuppression, setConfirmerSuppression] = useState(false)
   // Suppression en deux temps : sans confirmation dans les 4 s, elle se désarme.
   useEffect(() => {
@@ -269,6 +271,7 @@ export function EditeurShift({
   }
 
   const valider = () => {
+    if (vider && existant) return onSupprimer(existant.id)
     if (bloque) return
     if (motif !== null) return onPoserAbsence(b.salarie_id, b.jour, motif)
     const v = valeurs()
@@ -296,8 +299,9 @@ export function EditeurShift({
         ? "Jour d'école"
         : "Jour d'absence"
       : 'Planifier le jour'
-  const libellePrincipal =
-    motif !== null
+  const libellePrincipal = vider
+    ? 'Vider la case'
+    : motif !== null
       ? motifChoisi && estEcole(motifChoisi)
         ? "Poser l'école"
         : "Poser l'absence"
@@ -373,8 +377,11 @@ export function EditeurShift({
                   code={h.code}
                   titre={h.nom}
                   detail={`${heureAffichee(h.debut)}-${heureAffichee(h.fin)}${h.pause > 0 ? ` · ${heures(travailCode(h))} de travail` : ''}`}
-                  choisi={motif === null && !libre && b.horaire_id === h.id}
+                  choisi={
+                    !vider && motif === null && !libre && b.horaire_id === h.id
+                  }
                   onClick={() => {
+                    setVider(false)
                     setLibre(false)
                     setMotif(null)
                     maj({
@@ -391,12 +398,26 @@ export function EditeurShift({
                 code="•"
                 titre="Horaire spécifique"
                 detail="heures libres"
-                choisi={motif === null && libre}
+                choisi={!vider && motif === null && libre}
                 onClick={() => {
+                  setVider(false)
                   setLibre(true)
                   setMotif(null)
                 }}
               />
+              {existant && (
+                <Choix
+                  couleur={NEUTRE}
+                  code="—"
+                  titre="Non attribué"
+                  detail="la case redevient vide"
+                  choisi={vider}
+                  onClick={() => {
+                    setVider(true)
+                    setMotif(null)
+                  }}
+                />
+              )}
             </div>
 
             {[
@@ -426,7 +447,10 @@ export function EditeurShift({
                         titre={m.nom}
                         detail={g.aide}
                         choisi={motif === m.id}
-                        onClick={() => setMotif(m.id)}
+                        onClick={() => {
+                          setVider(false)
+                          setMotif(m.id)
+                        }}
                       />
                     ))}
                   </div>
