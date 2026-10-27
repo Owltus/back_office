@@ -11,7 +11,7 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronRight, Moon, Plus, Trash2 } from 'lucide-react'
+import { Moon, Plus, Trash2 } from 'lucide-react'
 
 import {
   useDroitsPlanning,
@@ -24,6 +24,12 @@ import {
   usageMotif,
 } from '#/components/planning/parametres/reglages/absencesParMotif.ts'
 import type { LigneAbsence } from '#/components/planning/parametres/reglages/absencesParMotif.ts'
+import {
+  COLONNES_LISTES,
+  LigneCompacte,
+  ListeCompacte,
+  PastilleCode,
+} from '#/components/planning/parametres/reglages/ListeCompacte.tsx'
 import {
   CadreReglages,
   EnTeteSection,
@@ -258,7 +264,7 @@ export function HorairesPage() {
                 }
               />
             </div>
-            <div className="grid items-start gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+            <div className={COLONNES_LISTES}>
               {grouperHoraires(data.horaires).map((g) => (
                 <ListeCompacte
                   key={g.libelle}
@@ -304,7 +310,7 @@ export function HorairesPage() {
                 }
               />
             </div>
-            <div className="grid items-start gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+            <div className={COLONNES_LISTES}>
               {[
                 { titre: 'Absences', nature: 'absence' as const },
                 { titre: 'École', nature: 'ecole' as const },
@@ -419,58 +425,21 @@ export function HorairesPage() {
 
 // ------------------------------------------------------- listes compactes
 
-/** Une famille de codes (ou de motifs) : une carte, une ligne par élément. */
-function ListeCompacte({
-  titre,
-  nombre,
-  children,
-}: {
-  titre: string
-  nombre: number
-  children: ReactNode
-}) {
-  return (
-    <div className="overflow-hidden rounded-xl border bg-card">
-      <h3 className="flex items-center gap-2 border-b bg-muted/40 px-3 py-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-        {titre}
-        <span className="rounded-full bg-muted px-2 text-xs normal-case tabular-nums">
-          {nombre}
-        </span>
-      </h3>
-      <ul className="divide-y">{children}</ul>
-    </div>
-  )
-}
-
-const LIGNE_COMPACTE =
-  'flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition-colors outline-none hover:bg-muted/50 focus-visible:bg-muted/50'
-
 function LigneCode({ h, onOuvrir }: { h: Horaire; onOuvrir: () => void }) {
   return (
-    <li>
-      <button
-        type="button"
-        className={LIGNE_COMPACTE}
-        onClick={onOuvrir}
-        aria-label={`Régler ${h.code}, ${h.nom}`}
-      >
-        <span
-          className="min-w-12 shrink-0 rounded px-1.5 py-0.5 text-center text-xs font-semibold"
-          style={{
-            background: h.couleur,
-            color: h.code_rouge ? ROUGE_CODE : texteSur(h.couleur),
-          }}
-        >
-          {h.code}
-        </span>
-        <span className="min-w-0 flex-1 truncate">{h.nom}</span>
-        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-          {heures(dureeHoraire(h.debut, h.fin) - h.pause)}
-          {h.raccourci > 0 && ' · étoile'}
-        </span>
-        <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
-      </button>
-    </li>
+    <LigneCompacte
+      etiquette={`Régler ${h.code}, ${h.nom}`}
+      pastille={
+        <PastilleCode
+          code={h.code}
+          couleur={h.couleur}
+          texte={h.code_rouge ? ROUGE_CODE : undefined}
+        />
+      }
+      libelle={h.nom}
+      detail={`${heures(dureeHoraire(h.debut, h.fin) - h.pause)}${h.raccourci > 0 ? ' · étoile' : ''}`}
+      onOuvrir={onOuvrir}
+    />
   )
 }
 
@@ -484,27 +453,13 @@ function LigneMotif({
   onOuvrir: () => void
 }) {
   return (
-    <li>
-      <button
-        type="button"
-        className={LIGNE_COMPACTE}
-        onClick={onOuvrir}
-        aria-label={`Régler ${m.code}, ${m.nom}`}
-      >
-        <span
-          className="min-w-12 shrink-0 rounded px-1.5 py-0.5 text-center text-xs font-semibold"
-          style={{ background: m.couleur, color: texteSur(m.couleur) }}
-        >
-          {m.code}
-        </span>
-        <span className="min-w-0 flex-1 truncate">{m.nom}</span>
-        <span className="shrink-0 text-xs text-muted-foreground">
-          {m.decompte ? 'compte dans les heures' : 'hors heures'}
-          {usage !== undefined && ` · ${usage} j`}
-        </span>
-        <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
-      </button>
-    </li>
+    <LigneCompacte
+      etiquette={`Régler ${m.code}, ${m.nom}`}
+      pastille={<PastilleCode code={m.code} couleur={m.couleur} />}
+      libelle={m.nom}
+      detail={`${m.decompte ? 'compte dans les heures' : 'hors heures'}${usage !== undefined ? ` · ${usage} j` : ''}`}
+      onOuvrir={onOuvrir}
+    />
   )
 }
 

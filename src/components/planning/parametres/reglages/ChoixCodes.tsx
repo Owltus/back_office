@@ -6,6 +6,8 @@
  * entier.
  */
 
+import { Check } from 'lucide-react'
+
 import { Tip } from '#/components/shared/Tip.tsx'
 import { grouperHoraires, texteSur } from '#/lib/planning/affichage.ts'
 import { heureAffichee } from '#/lib/planning/temps.ts'
@@ -66,10 +68,11 @@ export function ChoixCodes({
                       className={cn(
                         'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs tabular-nums transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed',
                         choisi
-                          ? 'border-foreground/60 bg-accent text-foreground'
-                          : 'text-muted-foreground hover:text-foreground',
+                          ? 'border-primary bg-primary/15 text-foreground ring-1 ring-primary'
+                          : 'border-dashed text-muted-foreground opacity-70 hover:text-foreground hover:opacity-100',
                       )}
                     >
+                      {choisi && <Check className="size-3 text-primary" />}
                       <span
                         className="rounded px-1 text-[10px] font-semibold"
                         style={{

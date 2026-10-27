@@ -8,6 +8,7 @@
  */
 
 import { useState } from 'react'
+import type { ReactNode } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 
 import {
@@ -34,6 +35,14 @@ import {
 import type { SaisiePoste } from '#/components/planning/parametres/reglages/validation.ts'
 import { ConfirmDialog } from '#/components/shared/ConfirmDialog.tsx'
 import { ChoixCodes } from '#/components/planning/parametres/reglages/ChoixCodes.tsx'
+import { LigneCompacte } from '#/components/planning/parametres/reglages/ListeCompacte.tsx'
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '#/components/ui/sheet.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
 import { Label } from '#/components/ui/label.tsx'
@@ -66,8 +75,20 @@ export function PostesPage() {
   const modifiable = droits.pret && droits.gerer
   const [nouveau, setNouveau] = useState<SaisiePoste | null>(null)
 
+  // Poste ouvert dans le volet (null : nouveau ; undefined : aucun).
+  const [ouvert, setOuvert] = useState<number | null | undefined>(undefined)
+  const posteOuvert =
+    typeof ouvert === 'number'
+      ? ref.data?.postes.find((p) => p.id === ouvert)
+      : undefined
+  const fermer = () => {
+    setOuvert(undefined)
+    setNouveau(null)
+  }
+
   const creer = () => {
     if (!ref.data) return
+    setOuvert(null)
     setNouveau({
       nom: 'Nouveau poste',
       categorie: 'autre',
@@ -100,38 +121,104 @@ export function PostesPage() {
         <>
           <EnTeteSection
             titre="Les postes de l'hôtel"
-            texte="Créez les postes dont l'hôtel a besoin. La catégorie réglementaire fixe la durée maximale d'un service selon la convention HCR."
+            texte="Un clic sur un poste ouvre son réglage : nom, catégorie réglementaire (elle fixe la durée maximale d'un service selon la convention HCR), couleur et horaires possibles."
           />
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {nouveau && (
-              <CartePoste
-                key="nouveau"
-                id={null}
-                enregistre={nouveau}
-                referentiel={ref.data}
-                modifiable={modifiable}
-                onFin={() => setNouveau(null)}
-              />
-            )}
-            {ref.data.postes.map((p) => (
-              <CartePoste
-                key={p.id}
-                id={p.id}
-                enregistre={saisieDe(p)}
-                referentiel={ref.data}
-                modifiable={modifiable}
-              />
-            ))}
-            {!ref.data.postes.length && !nouveau && (
-              <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+          <div className="overflow-hidden rounded-xl border bg-card">
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b bg-muted/40 px-3 py-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+              <span>Poste</span>
+              <span>Horaires · personnes</span>
+            </div>
+            <ul className="divide-y">
+              {ref.data.postes.map((p) => (
+                <LigneCompacte
+                  key={p.id}
+                  etiquette={`Régler le poste ${p.nom}`}
+                  pastille={
+                    <span
+                      className="size-3 shrink-0 rounded-full"
+                      style={{ background: p.couleur }}
+                    />
+                  }
+                  libelle={
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="truncate font-medium">{p.nom}</span>
+                      {p.a_part && <Etiquette>à part</Etiquette>}
+                      {p.presence && <Etiquette>présence</Etiquette>}
+                    </span>
+                  }
+                  detail={resumePoste(p, ref.data)}
+                  onOuvrir={() => setOuvert(p.id)}
+                />
+              ))}
+            </ul>
+            {!ref.data.postes.length && (
+              <p className="p-4 text-sm text-muted-foreground">
                 Aucun poste pour l'instant.
               </p>
             )}
           </div>
+
+          <Sheet
+            open={ouvert !== undefined && (ouvert === null || !!posteOuvert)}
+            onOpenChange={(o) => !o && fermer()}
+          >
+            <SheetContent className="w-full gap-0 overflow-y-auto sm:max-w-lg">
+              <SheetHeader className="border-b">
+                <SheetTitle>
+                  {ouvert === null
+                    ? 'Nouveau poste'
+                    : `Poste ${posteOuvert?.nom ?? ''}`}
+                </SheetTitle>
+                <SheetDescription>
+                  Nom, catégorie, couleur et horaires possibles
+                </SheetDescription>
+              </SheetHeader>
+              <div className="p-4">
+                {ouvert === null
+                  ? nouveau && (
+                      <CartePoste
+                        key="nouveau"
+                        id={null}
+                        enregistre={nouveau}
+                        referentiel={ref.data}
+                        modifiable={modifiable}
+                        onFin={fermer}
+                      />
+                    )
+                  : posteOuvert && (
+                      <CartePoste
+                        key={posteOuvert.id}
+                        id={posteOuvert.id}
+                        enregistre={saisieDe(posteOuvert)}
+                        referentiel={ref.data}
+                        modifiable={modifiable}
+                        onFin={fermer}
+                      />
+                    )}
+              </div>
+            </SheetContent>
+          </Sheet>
         </>
       )}
     </CadreReglages>
   )
+}
+
+function Etiquette({ children }: { children: ReactNode }) {
+  return (
+    <span className="shrink-0 rounded-full border px-1.5 text-[10px] text-muted-foreground">
+      {children}
+    </span>
+  )
+}
+
+/** « 2 codes · 3 personnes » : ce qu'un poste permet et qui le tient. */
+function resumePoste(p: Poste, r: Referentiel): string {
+  const codes = p.horaires_autorises.length
+  const personnes = r.salaries.filter(
+    (s) => s.actif && s.competences.some((c) => c.poste_id === p.id),
+  ).length
+  return `${codes ? `${codes} code${codes > 1 ? 's' : ''}` : 'tous les codes'} · ${personnes} personne${personnes > 1 ? 's' : ''}`
 }
 
 function CartePoste({

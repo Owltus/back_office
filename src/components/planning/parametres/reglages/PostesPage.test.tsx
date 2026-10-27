@@ -67,18 +67,27 @@ beforeEach(() => {
 })
 afterEach(cleanup)
 
-const carte = (nom: string) =>
-  within(screen.getByRole('region', { name: `Poste ${nom}` }))
+// Les postes sont des lignes ; un clic ouvre leur réglage dans un volet
+// (refonte du 2026-10-28).
+const carte = (nom: string) => {
+  if (!screen.queryByRole('region', { name: `Poste ${nom}` }))
+    fireEvent.click(
+      screen.getByRole('button', { name: `Régler le poste ${nom}` }),
+    )
+  return within(screen.getByRole('region', { name: `Poste ${nom}` }))
+}
 
 describe('Postes', () => {
   it('en lecture : tout se lit, rien ne se modifie', () => {
     etat.droits = { pret: true, lire: true, ecrire: false, gerer: false }
     monter(<PostesPage />)
     expect(screen.getByText(/Lecture seule/)).toBeTruthy()
-    for (const champ of screen.getAllByRole('textbox')) {
+    expect(screen.queryByRole('button', { name: /Nouveau/ })).toBeNull()
+    const r = carte('Réception')
+    for (const champ of r.getAllByRole('textbox')) {
       expect((champ as HTMLInputElement).disabled).toBe(true)
     }
-    for (const b of screen.getAllByRole('button')) {
+    for (const b of r.getAllByRole('button')) {
       expect((b as HTMLButtonElement).disabled).toBe(true)
     }
     for (const s of screen.getAllByRole('switch'))

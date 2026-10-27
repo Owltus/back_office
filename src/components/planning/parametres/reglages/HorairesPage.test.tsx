@@ -74,11 +74,12 @@ const { monter, referentielDemo } =
 
 beforeEach(() => {
   // Le volet (Radix) mesure ses éléments : jsdom n'a pas ResizeObserver.
-  globalThis.ResizeObserver ??= class {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  } as unknown as typeof ResizeObserver
+  if (!('ResizeObserver' in globalThis))
+    globalThis.ResizeObserver = class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver
   etat.referentiel = referentielDemo()
   etat.droits = { pret: true, lire: true, ecrire: true, gerer: true }
   for (const f of Object.values(service)) f.mockReset()
