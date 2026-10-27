@@ -656,6 +656,12 @@ export function VueMois({
           (a) => a.salarie_id === menu.salarieId && a.jour === reperesMenu.jour,
         )
       : undefined
+  // Absence ou école du jour (la semaine type la rend fixe : pas d'ici).
+  const caseMenu =
+    menu && referentiel && !shiftMenu
+      ? caseDe(semaines, referentiel.motifs, menu.salarieId, menu.date)
+      : null
+  const absenceMenu = caseMenu?.type === 'absence' ? caseMenu : null
   // Même écriture que la semaine : une seule journée étoile, et début et fin
   // recalculés à chaque bascule (la base enregistre les heures telles quelles).
   const etoile =
@@ -788,13 +794,21 @@ export function VueMois({
           }
           etoile={etoileMenu}
           onVider={
-            shiftMenu &&
-            (() =>
-              void executer(
-                reperesMenu.lundi,
-                () => supprimerShift(shiftMenu.id),
-                'Suppression impossible',
-              ))
+            shiftMenu
+              ? () =>
+                  void executer(
+                    reperesMenu.lundi,
+                    () => supprimerShift(shiftMenu.id),
+                    'Suppression impossible',
+                  )
+              : absenceMenu && !absenceMenu.fixe
+                ? () =>
+                    void executer(
+                      reperesMenu.lundi,
+                      () => poserAbsences(menu.salarieId, [menu.date], null),
+                      'Absence non retirée',
+                    )
+                : undefined
           }
           onSemaine={() => onSemaine(reperesMenu.lundi)}
           onFermer={fermerMenu}

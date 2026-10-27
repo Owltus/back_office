@@ -81,6 +81,36 @@ describe('EditeurShift', () => {
     expect(onSupprimer).toHaveBeenCalledWith(7)
   })
 
+  it('« Non attribué » retire une absence posée, pas celle de la semaine type', () => {
+    const rendreAbsence = (fixe: boolean) => {
+      const onRetirerAbsence = vi.fn()
+      render(
+        <TooltipProvider>
+          <EditeurShift
+            edition={{ mode: 'creation', salarie_id: 3, jour: 2 }}
+            lundi={LUNDI}
+            referentiel={referentiel}
+            absence={{ motif_id: referentiel.motifs[0].id, fixe }}
+            onFermer={vi.fn()}
+            onCreer={vi.fn()}
+            onModifier={vi.fn()}
+            onSupprimer={vi.fn()}
+            onPoserAbsence={vi.fn()}
+            onRetirerAbsence={onRetirerAbsence}
+          />
+        </TooltipProvider>,
+      )
+      return onRetirerAbsence
+    }
+    const retirer = rendreAbsence(false)
+    fireEvent.click(screen.getByRole('button', { name: /Non attribué/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Vider la case' }))
+    expect(retirer).toHaveBeenCalledWith(3, 2)
+    cleanup()
+    rendreAbsence(true)
+    expect(screen.queryByRole('button', { name: /Non attribué/ })).toBeNull()
+  })
+
   it('la suppression en deux temps se désarme après 4 s', () => {
     vi.useFakeTimers()
     const { onSupprimer } = rendre()

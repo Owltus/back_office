@@ -565,6 +565,10 @@ export function VueSemaine({
     const shift = shiftDe(affichee, o)
     const posteId = posteDeReference(p, shift, referentiel.postes)
     const etoile = etoileProposee(affichee, p, referentiel.horaires, o)
+    // Absence ou école posée ici (pas celle de la semaine type) : se retire.
+    const st = shift ? null : statutDe(sid, j)
+    const absenceRetirable =
+      !!st && (st.genre === 'absence' || st.genre === 'ecole') && !st.fixe
     setMenu({
       ...o,
       nom: nomComplet(p),
@@ -606,7 +610,21 @@ export function VueSemaine({
                   'Suppression impossible',
                 ),
             )
-        : undefined,
+        : absenceRetirable
+          ? () =>
+              siOuverte(
+                () =>
+                  void executer(
+                    () =>
+                      service.poserAbsences(
+                        sid,
+                        [ajouterJours(lundi, j)],
+                        null,
+                      ),
+                    'Absence non retirée',
+                  ),
+              )
+          : undefined,
     })
   }
 

@@ -272,6 +272,8 @@ export function EditeurShift({
 
   const valider = () => {
     if (vider && existant) return onSupprimer(existant.id)
+    if (vider && absence && !absence.fixe)
+      return onRetirerAbsence(b.salarie_id, b.jour)
     if (bloque) return
     if (motif !== null) return onPoserAbsence(b.salarie_id, b.jour, motif)
     const v = valeurs()
@@ -370,7 +372,7 @@ export function EditeurShift({
           <section className="space-y-2">
             <h3 className="text-sm font-semibold">Horaire</h3>
             <div className="grid grid-cols-2 gap-1.5">
-              {existant && (
+              {(existant || (absence && !absence.fixe)) && (
                 <Choix
                   couleur={NEUTRE}
                   code="—"
