@@ -7,7 +7,6 @@
 
 import type { ReactNode } from 'react'
 import {
-  BadgeCheck,
   ChevronDown,
   CircleHelp,
   Loader2,
@@ -16,13 +15,13 @@ import {
   ShieldAlert,
   ShieldCheck,
   Sparkles,
-  SquareDashed,
   TriangleAlert,
 } from 'lucide-react'
 
 import { MenuParametres } from '#/components/planning/EnTeteParametres.tsx'
 import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { DatePickerButton } from '#/components/form/fields.tsx'
+import { CompteursValidation } from '#/components/planning/CompteursValidation.tsx'
 import { StepNav } from '#/components/shared/StepNav.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
@@ -69,46 +68,15 @@ function AvecRaison({
   )
 }
 
-const AIDE_VALIDATION = [
-  'Shifts des jours de ce mois :',
-  'Proposition (pointillés) : proposée par le moteur, recalculée à chaque génération',
-  'Validé (✓) : gardé par les générations, encore modifiable à la main',
-  'Verrouillé (cadenas) : semaine réalisée, rien ne bouge',
-].join('\n')
-
 export function Indicateurs({ c }: { c: Compteurs }) {
   const taux = c.places ? (c.pourvues / c.places) * 100 : 100
   return (
     <div className="flex items-center gap-3 text-xs">
-      {(c.propositions > 0 || c.valides > 0 || c.verrouilles > 0) && (
-        <Tip
-          label={<span className="whitespace-pre-line">{AIDE_VALIDATION}</span>}
-        >
-          <span
-            tabIndex={0}
-            className="inline-flex items-center gap-2 rounded-md border px-2 py-1"
-          >
-            {c.propositions > 0 && (
-              <span className="inline-flex items-center gap-1 text-muted-foreground">
-                <SquareDashed className="size-3.5" />
-                {c.propositions} proposition{c.propositions > 1 ? 's' : ''}
-              </span>
-            )}
-            {c.valides > 0 && (
-              <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
-                <BadgeCheck className="size-3.5" />
-                {c.valides} validé{c.valides > 1 ? 's' : ''}
-              </span>
-            )}
-            {c.verrouilles > 0 && (
-              <span className="inline-flex items-center gap-1 text-muted-foreground">
-                <Lock className="size-3" />
-                {c.verrouilles} verrouillé{c.verrouilles > 1 ? 's' : ''}
-              </span>
-            )}
-          </span>
-        </Tip>
-      )}
+      <CompteursValidation
+        propositions={c.propositions}
+        valides={c.valides}
+        verrouilles={c.verrouilles}
+      />
       <Tip
         label={`Couverture du mois : ${c.pourvues} places pourvues sur ${c.places}`}
       >

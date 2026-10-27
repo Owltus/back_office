@@ -311,3 +311,40 @@
   width: 10px;
   height: 10px;
 }
+
+/* ------------------------------------------ Survol des compteurs de l'en-tête
+ * (`CompteursValidation`, 2026-10-28) : l'en-tête pose data-planning-focus sur
+ * <html> ; ce qui est survolé reste net, le reste s'estompe. Vue mois : une
+ * proposition porte .planning-mois-proposition, une semaine verrouillée
+ * .planning-mois-verrouillee sur sa case. Vue semaine : [data-proposition] sur
+ * la carte, [data-verrou] sur la grille. */
+.planning-mois-pastille,
+.planning-mois-bande,
+.planning-carte,
+.planning-statut {
+  transition: opacity 0.15s;
+}
+
+[data-planning-focus] .planning-mois-bande,
+[data-planning-focus] .planning-statut,
+[data-planning-focus='propositions']
+  .planning-mois-pastille:not(.planning-mois-proposition),
+[data-planning-focus='propositions']
+  .planning-mois-verrouillee
+  .planning-mois-pastille,
+[data-planning-focus='valides'] .planning-mois-proposition,
+[data-planning-focus='valides']
+  .planning-mois-verrouillee
+  .planning-mois-pastille,
+[data-planning-focus='verrouilles']
+  td:not(.planning-mois-verrouillee)
+  .planning-mois-pastille,
+[data-planning-focus='propositions'] .planning-carte:not([data-proposition]),
+[data-planning-focus='propositions'] [data-verrou] .planning-carte,
+[data-planning-focus='valides'] .planning-carte[data-proposition],
+[data-planning-focus='valides'] [data-verrou] .planning-carte,
+[data-planning-focus='verrouilles']
+  .planning-grille:not([data-verrou])
+  .planning-carte {
+  opacity: 0.15;
+}

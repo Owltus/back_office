@@ -7,14 +7,12 @@
 
 import type { ReactNode } from 'react'
 import {
-  BadgeCheck,
   CalendarDays,
   ChevronDown,
   Loader2,
   Lock,
   LockOpen,
   Sparkles,
-  SquareDashed,
   TriangleAlert,
 } from 'lucide-react'
 
@@ -22,6 +20,7 @@ import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
 import { HelpGlyph } from '#/components/shared/HelpGlyph.tsx'
 import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { DatePickerButton } from '#/components/form/fields.tsx'
+import { CompteursValidation } from '#/components/planning/CompteursValidation.tsx'
 import { StepNav } from '#/components/shared/StepNav.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
@@ -239,37 +238,11 @@ export function EnTeteSemaine({
         <>
           {stats && nb && (
             <div className="flex items-center gap-3 text-sm">
-              {(nb.propositions > 0 ||
-                nb.valides > 0 ||
-                nb.verrouilles > 0) && (
-                <Tip label={<Lignes lignes={AIDE_VALIDATION} />}>
-                  <span
-                    tabIndex={0}
-                    className="inline-flex items-center gap-2.5 rounded-md px-1 text-xs text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    {nb.propositions > 0 && (
-                      <span className="inline-flex items-center gap-1">
-                        <SquareDashed className="size-3.5" />
-                        {nb.propositions} proposition
-                        {nb.propositions > 1 ? 's' : ''}
-                      </span>
-                    )}
-                    {nb.valides > 0 && (
-                      <span className="inline-flex items-center gap-1 text-emerald-500">
-                        <BadgeCheck className="size-3.5" />
-                        {nb.valides} validé{nb.valides > 1 ? 's' : ''}
-                      </span>
-                    )}
-                    {nb.verrouilles > 0 && (
-                      <span className="inline-flex items-center gap-1">
-                        <Lock className="size-3" />
-                        {nb.verrouilles} verrouillé
-                        {nb.verrouilles > 1 ? 's' : ''}
-                      </span>
-                    )}
-                  </span>
-                </Tip>
-              )}
+              <CompteursValidation
+                propositions={nb.propositions}
+                valides={nb.valides}
+                verrouilles={nb.verrouilles}
+              />
               <Tip
                 label={`Couverture des besoins : ${stats.pourvues} places pourvues sur ${stats.places}`}
               >
