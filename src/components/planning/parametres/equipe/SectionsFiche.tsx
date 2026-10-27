@@ -22,10 +22,15 @@ import {
   Section,
 } from '#/components/planning/parametres/equipe/Champs.tsx'
 import { Segmente } from '#/components/planning/parametres/equipe/Segmente.tsx'
+import { ChoixCodes } from '#/components/planning/parametres/reglages/ChoixCodes.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
-import { NIVEAUX, postesDuGroupe } from '#/lib/planning/affichage.ts'
+import {
+  horairesDuPoste,
+  NIVEAUX,
+  postesDuGroupe,
+} from '#/lib/planning/affichage.ts'
 import { resume } from '#/lib/planning/regles.ts'
 import type { LigneRegle } from '#/lib/planning/regles.ts'
 import { estEcole } from '#/lib/planning/semaine.ts'
@@ -173,46 +178,41 @@ export function SectionHoraires({
   referentiel,
   disabled,
 }: PropsSection) {
+  // Seulement les codes que ses postes permettent (décision utilisateur du
+  // 2026-10-28) : un hôtelier ne voit ni D ni SR. Un code déjà coché reste
+  // visible pour pouvoir le retirer.
+  const permis = new Set(
+    b.competences.flatMap((c) =>
+      horairesDuPoste(
+        referentiel.horaires,
+        referentiel.postes.find((p) => p.id === c.poste_id),
+      ).map((h) => h.id),
+    ),
+  )
+  const proposes = referentiel.horaires.filter(
+    (h) =>
+      !b.competences.length ||
+      permis.has(h.id) ||
+      b.shifts_autorises.includes(h.id),
+  )
   return (
     <Section
       titre="Horaires autorisés"
-      aide={`Les horaires qu'elle fait, toute la semaine : par exemple Après-midi et Middle pour quelqu'un qui ne fait jamais le matin, ou Nuit seule pour un veilleur à temps plein. ${
+      aide={`Les horaires qu'elle fait, parmi ceux de ses postes : par exemple seulement le soir pour quelqu'un qui ne fait jamais le matin, ou la nuit seule pour un veilleur. ${
         b.shifts_autorises.length
-          ? 'Seuls les horaires sélectionnés lui seront proposés.'
-          : 'Aucun sélectionné : tous les horaires sont possibles.'
+          ? 'Seuls les horaires cochés lui seront proposés.'
+          : 'Aucun coché : tous les horaires de ses postes sont possibles.'
       }`}
     >
-      <div className="flex flex-wrap gap-1.5">
-        {referentiel.horaires.map((h) => {
-          const choisi = b.shifts_autorises.includes(h.id)
-          return (
-            <button
-              key={h.id}
-              type="button"
-              disabled={disabled}
-              aria-pressed={choisi}
-              onClick={() =>
-                maj((x) => ({
-                  ...x,
-                  shifts_autorises: choisi
-                    ? x.shifts_autorises.filter((id) => id !== h.id)
-                    : [...x.shifts_autorises, h.id],
-                }))
-              }
-              className={cn(
-                'flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors disabled:opacity-60',
-                choisi
-                  ? 'border-2 bg-accent text-foreground'
-                  : 'border-border text-muted-foreground hover:text-foreground',
-              )}
-              style={choisi ? { borderColor: h.couleur } : undefined}
-            >
-              {pastille(h.couleur)}
-              {h.nom} {heureAffichee(h.debut)}-{heureAffichee(h.fin)}
-            </button>
-          )
-        })}
-      </div>
+      <ChoixCodes
+        etiquette="Horaires autorisés"
+        horaires={proposes}
+        choisis={b.shifts_autorises}
+        onChange={(shifts_autorises) =>
+          maj((x) => ({ ...x, shifts_autorises }))
+        }
+        disabled={disabled}
+      />
     </Section>
   )
 }

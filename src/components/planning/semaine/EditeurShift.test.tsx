@@ -111,6 +111,20 @@ describe('EditeurShift', () => {
     expect(screen.queryByRole('button', { name: /Non attribué/ })).toBeNull()
   })
 
+  it('seulement les postes que la personne tient', () => {
+    rendre()
+    expect(screen.queryByText('non tenu')).toBeNull()
+    const tenus = referentiel.salaries
+      .find((x) => x.id === 3)!
+      .competences.map((c) => c.poste_id)
+    for (const p of referentiel.postes) {
+      const bouton = screen.queryByRole('button', {
+        name: new RegExp(`^${p.nom}`),
+      })
+      expect(!!bouton).toBe(tenus.includes(p.id) || p.id === SHIFT.poste_id)
+    }
+  })
+
   it('la suppression en deux temps se désarme après 4 s', () => {
     vi.useFakeTimers()
     const { onSupprimer } = rendre()

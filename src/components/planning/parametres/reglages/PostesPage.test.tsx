@@ -95,7 +95,7 @@ describe('Postes', () => {
       r.getByText('Un service dure au plus 12h sur ce poste (convention HCR).'),
     ).toBeTruthy()
     expect(
-      r.getByText('Seuls ces horaires sont proposés pour ce poste.'),
+      r.getByText('Seuls ces horaires sont proposés et placés sur ce poste.'),
     ).toBeTruthy()
   })
 

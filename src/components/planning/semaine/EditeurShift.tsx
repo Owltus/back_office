@@ -36,7 +36,6 @@ import {
   disponibleLe,
   grouperHoraires,
   heures,
-  horairesDuPoste,
   NIVEAUX,
   texteSur,
 } from '#/lib/planning/affichage.ts'
@@ -285,16 +284,22 @@ export function EditeurShift({
     }
   }
 
-  const codes = horairesDuPoste(
-    horaires,
-    postes.find((p) => p.id === b.poste_id),
-  )
+  // Même règle que le clic droit (décision utilisateur du 2026-10-28 : « que
+  // tout soit bien attribué ») : les codes du poste, réduits à ceux de la
+  // fiche de la personne s'il y en a ; l'horaire actuel reste visible.
+  const qui = salaries.find((s) => s.id === b.salarie_id)
+  const codes = horairesPermis(b.poste_id, qui, b.jour, horaires, postes)
     .concat(horaires.filter((h) => h.id === existant?.type_shift_id))
     .filter((h, i, l) => l.findIndex((x) => x.id === h.id) === i)
-  const postesTries = [...postes].sort(
-    (x, y) =>
-      Number(niveau(y.id) !== undefined) - Number(niveau(x.id) !== undefined),
+  // Seulement les postes qu'elle tient (et celui du shift, s'il n'en est
+  // pas) : un hôtelier ne voit plus Supervision ni Direction.
+  const tenus = postes.filter(
+    (p) =>
+      niveau(p.id) !== undefined ||
+      p.id === b.poste_id ||
+      p.id === existant?.poste_id,
   )
+  const postesTries = tenus.length ? tenus : postes
   const titre = existant
     ? 'Modifier le shift'
     : absence

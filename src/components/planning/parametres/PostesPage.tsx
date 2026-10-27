@@ -33,7 +33,7 @@ import {
 } from '#/components/planning/parametres/reglages/validation.ts'
 import type { SaisiePoste } from '#/components/planning/parametres/reglages/validation.ts'
 import { ConfirmDialog } from '#/components/shared/ConfirmDialog.tsx'
-import { Tip } from '#/components/shared/Tip.tsx'
+import { ChoixCodes } from '#/components/planning/parametres/reglages/ChoixCodes.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
 import { Label } from '#/components/ui/label.tsx'
@@ -45,12 +45,11 @@ import {
   SelectValue,
 } from '#/components/ui/select.tsx'
 import { Switch } from '#/components/ui/switch.tsx'
-import { dureeHoraire, heures, texteSur } from '#/lib/planning/affichage.ts'
+import { dureeHoraire, heures } from '#/lib/planning/affichage.ts'
 import { JOUR_MAX_CATEGORIE } from '#/lib/planning/regles.ts'
 import { enregistrerPoste, supprimerPoste } from '#/lib/planning/service.ts'
 import { CATEGORIES } from '#/lib/planning/types.ts'
 import type { Poste, Referentiel } from '#/lib/planning/types.ts'
-import { cn } from '#/lib/utils.ts'
 
 const saisieDe = (p: Poste): SaisiePoste => ({
   nom: p.nom,
@@ -298,54 +297,23 @@ function CartePoste({
 
       <div className="flex flex-col gap-1.5">
         <span className="text-sm font-medium">Horaires possibles</span>
-        <div
-          role="group"
-          aria-label="Horaires possibles"
-          className="flex flex-wrap gap-1.5"
-        >
-          {referentiel.horaires.map((h) => {
-            const choisi = p.horaires_autorises.includes(h.id)
-            return (
-              <Tip key={h.id} label={`${h.nom} ${h.debut} à ${h.fin}`}>
-                <button
-                  type="button"
-                  aria-pressed={choisi}
-                  aria-label={`${h.code} ${h.nom}`}
-                  disabled={!modifiable}
-                  onClick={() =>
-                    changer({
-                      horaires_autorises: choisi
-                        ? p.horaires_autorises.filter((x) => x !== h.id)
-                        : [...p.horaires_autorises, h.id],
-                    })
-                  }
-                  className={cn(
-                    'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed',
-                    choisi
-                      ? 'border-foreground/60 bg-accent text-foreground'
-                      : 'text-muted-foreground hover:text-foreground',
-                  )}
-                >
-                  <span
-                    className="rounded px-1 text-[10px] font-semibold"
-                    style={{
-                      background: h.couleur,
-                      color: texteSur(h.couleur),
-                    }}
-                  >
-                    {h.code}
-                  </span>
-                  {h.nom}
-                </button>
-              </Tip>
-            )
-          })}
-        </div>
-        <span className="text-xs text-muted-foreground">
-          {p.horaires_autorises.length
-            ? 'Seuls ces horaires sont proposés pour ce poste.'
-            : 'Aucun choisi : tous les horaires sont possibles.'}
-        </span>
+        <ChoixCodes
+          etiquette="Horaires possibles"
+          horaires={referentiel.horaires}
+          choisis={p.horaires_autorises}
+          onChange={(horaires_autorises) => changer({ horaires_autorises })}
+          disabled={!modifiable}
+        />
+        {p.horaires_autorises.length ? (
+          <span className="text-xs text-muted-foreground">
+            Seuls ces horaires sont proposés et placés sur ce poste.
+          </span>
+        ) : (
+          <span className="text-xs text-amber-600 dark:text-amber-400">
+            Aucun horaire coché : ce poste accepte tous les codes. Cochez les
+            siens pour éviter qu'un mauvais code lui soit attribué.
+          </span>
+        )}
       </div>
 
       {!neuf && (
