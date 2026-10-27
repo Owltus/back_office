@@ -741,6 +741,18 @@ export function VueMois({
           onSemaine={onSemaine}
           onFiche={setFiche}
           onJour={ouvrirJour}
+          onVerrou={
+            droits.gerer
+              ? (l) => {
+                  const verrouillee = !!etats.get(l)?.verrouillee
+                  void executer(
+                    l,
+                    () => verrouiller(l, !verrouillee),
+                    "Le verrou n'a pas pu changer",
+                  )
+                }
+              : undefined
+          }
           onDeposer={deposer}
         />
       )}

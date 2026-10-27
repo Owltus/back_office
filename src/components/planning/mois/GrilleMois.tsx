@@ -31,6 +31,7 @@ import {
   Coffee,
   GraduationCap,
   Lock,
+  LockOpen,
   Star,
   TriangleAlert,
   UserX,
@@ -113,6 +114,7 @@ export function GrilleMois({
   onFiche,
   onJour,
   onDeposer,
+  onVerrou,
 }: {
   mois: string
   jours: string[]
@@ -135,6 +137,8 @@ export function GrilleMois({
     clicDroit: boolean,
   ) => void
   onDeposer: (d: Depot) => void
+  /** Gestion : verrouiller ou déverrouiller une semaine d'un clic. */
+  onVerrou?: (lundi: string) => void
 }) {
   const { motifs, horaires, groupes } = referentiel
   const [enVol, setEnVol] = useState<EnVol | null>(null)
@@ -284,34 +288,70 @@ export function GrilleMois({
                     colSpan={dedans.length}
                     className="sticky top-0 z-20 h-7 border-b border-l border-l-foreground/25 bg-muted p-0"
                   >
-                    <Tip
-                      label={
-                        <span className="whitespace-pre-line">
-                          {`Semaine ${n} : du ${dateMoyenne(l)} au ${dateMoyenne(ajouterJours(l, 6))}`}
-                          {raison
-                            ? `\nSemaine ${raison}`
-                            : '\nOuverte : les actions du mois la touchent'}
-                          {'\nCliquer pour l’ouvrir en vue semaine'}
-                        </span>
-                      }
-                    >
-                      <button
-                        type="button"
-                        onClick={() => onSemaine(l)}
-                        aria-label={`Ouvrir la semaine ${n}`}
-                        className={cn(
-                          'inline-flex h-7 w-full items-center justify-center gap-1 text-[11px] font-semibold tracking-wide hover:bg-accent hover:text-primary',
-                          raison
-                            ? 'text-muted-foreground/70'
-                            : 'text-foreground',
-                        )}
+                    <div className="flex h-7">
+                      <Tip
+                        label={
+                          <span className="whitespace-pre-line">
+                            {`Semaine ${n} : du ${dateMoyenne(l)} au ${dateMoyenne(ajouterJours(l, 6))}`}
+                            {raison
+                              ? `\nSemaine ${raison}`
+                              : '\nOuverte : les actions du mois la touchent'}
+                            {'\nCliquer pour l’ouvrir en vue semaine'}
+                          </span>
+                        }
                       >
-                        S{n}
-                        {etat?.verrouillee && (
-                          <Lock className="size-2.5" aria-label="verrouillée" />
-                        )}
-                      </button>
-                    </Tip>
+                        <button
+                          type="button"
+                          onClick={() => onSemaine(l)}
+                          aria-label={`Ouvrir la semaine ${n}`}
+                          className={cn(
+                            'inline-flex h-7 min-w-0 flex-1 items-center justify-center gap-1 text-[11px] font-semibold tracking-wide hover:bg-accent hover:text-primary',
+                            raison
+                              ? 'text-muted-foreground/70'
+                              : 'text-foreground',
+                          )}
+                        >
+                          S{n}
+                          {!onVerrou && etat?.verrouillee && (
+                            <Lock
+                              className="size-2.5"
+                              aria-label="verrouillée"
+                            />
+                          )}
+                        </button>
+                      </Tip>
+                      {onVerrou && (
+                        <Tip
+                          label={
+                            etat?.verrouillee
+                              ? `Semaine ${n} verrouillée : cliquer pour la déverrouiller et la modifier`
+                              : `Verrouiller la semaine ${n} : plus de modification ni de génération`
+                          }
+                        >
+                          <button
+                            type="button"
+                            onClick={() => onVerrou(l)}
+                            aria-label={
+                              etat?.verrouillee
+                                ? `Déverrouiller la semaine ${n}`
+                                : `Verrouiller la semaine ${n}`
+                            }
+                            className={cn(
+                              'grid w-6 shrink-0 place-items-center hover:bg-accent hover:text-primary',
+                              etat?.verrouillee
+                                ? 'text-foreground'
+                                : 'text-muted-foreground/50',
+                            )}
+                          >
+                            {etat?.verrouillee ? (
+                              <Lock className="size-3" />
+                            ) : (
+                              <LockOpen className="size-3" />
+                            )}
+                          </button>
+                        </Tip>
+                      )}
+                    </div>
                   </th>
                 )
               })}
