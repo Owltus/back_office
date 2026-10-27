@@ -1971,6 +1971,12 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   semaine, paramètres en sous-routes (`/planning/equipe|postes|horaires|besoins`),
   fil de messages propre à la page (`Messages.tsx`, le back office n'a pas de
   toasts). Horaires fixes posés à l'ouverture d'une semaine à venir (écriture).
+- **École des apprentis** (2026-10-27, décision utilisateur : « pas toujours une
+  semaine sur deux, pas toujours stable ») : calendrier JOUR PAR JOUR sur l'année
+  scolaire dans la fiche (`equipe/ecole.ts`, `CalendrierEcole.tsx`), samedi compris ;
+  « Dates du CFA » colle le document de l'école (`lireDatesCfa`), qui fait foi sur la
+  plage qu'il couvre ; le rythme N/M qui écrasait tout est RETIRÉ (ne pas le remettre) ;
+  un shift posé sur un nouveau jour d'école est annoncé puis signalé à l'enregistrement.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), jours fériés (décision utilisateur relayée par le binôme), scénario
   « exclus » à l'écran (retiré du prototype aussi).
