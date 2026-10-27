@@ -600,11 +600,11 @@ export function avecSemainesVoisines(
 
 /** Jours libres qui sont du repos : heures dues couvertes par l'école ou les
  * absences, ou 5 jours déjà pris. Jamais pour un extra. Pour un apprenti ou
- * un stagiaire, seulement une fois la semaine REMPLIE (au moins un shift posé,
- * pour quiconque) : une semaine vide ne leur affiche aucun repos, une semaine
- * remplie les place comme pour les autres (décisions utilisateur du
- * 2026-10-27). Affichage seulement : le moteur garde ses règles de repos et
- * l'école. */
+ * un stagiaire : sa ligne est vide sauf l'école, ses repos n'apparaissent
+ * qu'avec SES shifts posés (génération ou à la main) et 5 jours pris, école
+ * comprise ; jamais pour une semaine couverte par l'école seule (décisions
+ * utilisateur du 2026-10-27). Affichage seulement : le moteur garde ses
+ * règles de repos et l'école. */
 const ALTERNANCE: ReadonlySet<Salarie['type_contrat']> = new Set([
   'apprenti',
   'stagiaire',
@@ -616,12 +616,13 @@ export function reposDeduits(
   siens: Creneau[],
   lundi: string,
   absences: Map<number, Map<string, number>>,
-  semaineRemplie = true,
 ): number[] {
   if (x.type_contrat === 'extra') return []
-  if (ALTERNANCE.has(x.type_contrat) && !semaineRemplie) return []
+  const alternance = ALTERNANCE.has(x.type_contrat)
+  if (alternance && siens.length === 0) return []
   const pris = new Set([...siens.map(jourDe), ...sol.joursHorsSite])
   const couvert =
+    !alternance &&
     !sol.contratIndicatif &&
     Number(x.heures_hebdo) > 0 &&
     sol.minutesHebdoContrat === 0
@@ -797,14 +798,7 @@ export function analyser(d: DonneesSemaine): SemaineOut {
       ),
       repos_fixes: [...sol.reposFixes].sort((a, b) => a - b),
       hors_contrat: [...sol.horsContrat].sort((a, b) => a - b),
-      repos_deduits: reposDeduits(
-        x,
-        sol,
-        siens,
-        lundi,
-        ctx.absences,
-        ctx.affectations.length > 0,
-      ),
+      repos_deduits: reposDeduits(x, sol, siens, lundi, ctx.absences),
     })
   }
 

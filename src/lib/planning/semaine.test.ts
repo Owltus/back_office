@@ -535,6 +535,24 @@ describe('garde-fous (test_garde_fous.py)', () => {
     )
   })
 
+  it('apprenti : une semaine entière d’école, même remplie, ne pose aucun repos', () => {
+    const lundi = '2026-11-09'
+    const p = demo()
+    const avecAbsence = new Set(p.absences.map((a) => a.salarie_id))
+    const eleve = p.referentiel.salaries.find(
+      (x) =>
+        x.semaine_type.every((e) => e.mode === 'auto') &&
+        x.type_contrat !== 'extra' &&
+        !x.forfait_jours &&
+        !avecAbsence.has(x.id),
+    )!
+    eleve.type_contrat = 'apprenti'
+    p.absent(eleve.id, '2026-11-09', '2026-11-13', 'EC')
+    const sem = p.generer(lundi)
+    expect(sem.affectations.length).toBeGreaterThan(0)
+    expect(bilanDe(sem, eleve.id).repos_deduits).toEqual([])
+  })
+
   it('apprenti et stagiaire : école respectée, repos placés une fois la semaine remplie', () => {
     const lundi = '2026-11-09'
     for (const type of ['apprenti', 'stagiaire'] as const) {
@@ -553,6 +571,15 @@ describe('garde-fous (test_garde_fous.py)', () => {
       expect(bilanDe(p.analyser(lundi), eleve.id).repos_deduits).toEqual([])
       const sem = p.generer(lundi)
       const jours = joursDe(sem, eleve.id)
+      // Les autres ont des shifts, pas lui (sa ligne purgée) : aucun repos.
+      const tous = p.shifts(lundi)
+      p.semaines.set(
+        lundi,
+        tous.filter((x) => x.salarie_id !== eleve.id),
+      )
+      expect(p.shifts(lundi).length).toBeGreaterThan(0)
+      expect(bilanDe(p.analyser(lundi), eleve.id).repos_deduits).toEqual([])
+      p.semaines.set(lundi, tous)
       for (const j of [1, 2, 3]) expect(jours.has(j)).toBe(false)
       expect(jours.size).toBeGreaterThan(0)
       // Semaine remplie : ses jours libres (ni shift, ni école) sont des repos.

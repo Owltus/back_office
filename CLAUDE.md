@@ -1983,10 +1983,11 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   « Dates du CFA » colle le document de l'école (`lireDatesCfa`), qui fait foi sur la
   plage qu'il couvre ; le rythme N/M qui écrasait tout est RETIRÉ (ne pas le remettre) ;
   un shift posé sur un nouveau jour d'école est annoncé puis signalé à l'enregistrement.
-  Repos des apprentis et stagiaires (décisions utilisateur du 2026-10-27) : sur
-  une semaine VIDE, aucun repos affiché ; dès que la semaine est remplie (un shift
-  posé, pour quiconque), leurs jours libres sont des repos comme pour les autres
-  (repos déduits). Le week-end entre deux semaines d'école n'est plus un repos
+  Repos des apprentis et stagiaires (décisions utilisateur du 2026-10-27) : leur
+  ligne est vide sauf l'école ; leurs repos n'apparaissent qu'avec LEURS shifts
+  posés (génération ou à la main) et 5 jours pris, école comprise. Jamais d'après
+  les shifts des autres (une ligne purgée reste vide), jamais pour une semaine
+  couverte par l'école seule. Le week-end entre deux semaines d'école n'est plus un repos
   fixe du moteur (règle du prototype retirée). Un extra n'a jamais de repos
   déduits. Une case vide n'est « Repos » que si c'est posé dans la fiche ou déduit.
 - **Consignes de présence matin / soir** (2026-10-27, demande utilisateur :
