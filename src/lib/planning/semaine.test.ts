@@ -535,7 +535,7 @@ describe('garde-fous (test_garde_fous.py)', () => {
     )
   })
 
-  it('apprenti et stagiaire : école respectée, aucun repos déduit', () => {
+  it('apprenti et stagiaire : école respectée, repos placés une fois la semaine remplie', () => {
     const lundi = '2026-11-09'
     for (const type of ['apprenti', 'stagiaire'] as const) {
       const p = demo()
@@ -549,11 +549,16 @@ describe('garde-fous (test_garde_fous.py)', () => {
       )!
       eleve.type_contrat = type
       p.absent(eleve.id, '2026-11-10', '2026-11-12', 'EC')
+      // Semaine vide : aucun repos affiché.
+      expect(bilanDe(p.analyser(lundi), eleve.id).repos_deduits).toEqual([])
       const sem = p.generer(lundi)
       const jours = joursDe(sem, eleve.id)
       for (const j of [1, 2, 3]) expect(jours.has(j)).toBe(false)
       expect(jours.size).toBeGreaterThan(0)
-      expect(bilanDe(sem, eleve.id).repos_deduits).toEqual([])
+      // Semaine remplie : ses jours libres (ni shift, ni école) sont des repos.
+      expect(bilanDe(sem, eleve.id).repos_deduits).toEqual(
+        range(7).filter((j) => !jours.has(j) && ![1, 2, 3].includes(j)),
+      )
     }
   })
 })

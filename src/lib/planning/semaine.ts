@@ -599,12 +599,13 @@ export function avecSemainesVoisines(
 }
 
 /** Jours libres qui sont du repos : heures dues couvertes par l'école ou les
- * absences, ou 5 jours déjà pris. Jamais pour un extra, un apprenti ou un
- * stagiaire (décision utilisateur du 2026-10-27 : ces repos paraissaient
- * arbitraires ; leurs jours libres restent « non attribués »). Affichage
- * seulement : le moteur garde ses règles de repos et l'école. */
-const SANS_REPOS_DEDUITS: ReadonlySet<Salarie['type_contrat']> = new Set([
-  'extra',
+ * absences, ou 5 jours déjà pris. Jamais pour un extra. Pour un apprenti ou
+ * un stagiaire, seulement une fois la semaine REMPLIE (au moins un shift posé,
+ * pour quiconque) : une semaine vide ne leur affiche aucun repos, une semaine
+ * remplie les place comme pour les autres (décisions utilisateur du
+ * 2026-10-27). Affichage seulement : le moteur garde ses règles de repos et
+ * l'école. */
+const ALTERNANCE: ReadonlySet<Salarie['type_contrat']> = new Set([
   'apprenti',
   'stagiaire',
 ])
@@ -615,8 +616,10 @@ export function reposDeduits(
   siens: Creneau[],
   lundi: string,
   absences: Map<number, Map<string, number>>,
+  semaineRemplie = true,
 ): number[] {
-  if (SANS_REPOS_DEDUITS.has(x.type_contrat)) return []
+  if (x.type_contrat === 'extra') return []
+  if (ALTERNANCE.has(x.type_contrat) && !semaineRemplie) return []
   const pris = new Set([...siens.map(jourDe), ...sol.joursHorsSite])
   const couvert =
     !sol.contratIndicatif &&
@@ -794,7 +797,14 @@ export function analyser(d: DonneesSemaine): SemaineOut {
       ),
       repos_fixes: [...sol.reposFixes].sort((a, b) => a - b),
       hors_contrat: [...sol.horsContrat].sort((a, b) => a - b),
-      repos_deduits: reposDeduits(x, sol, siens, lundi, ctx.absences),
+      repos_deduits: reposDeduits(
+        x,
+        sol,
+        siens,
+        lundi,
+        ctx.absences,
+        ctx.affectations.length > 0,
+      ),
     })
   }
 
