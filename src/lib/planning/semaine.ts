@@ -619,7 +619,16 @@ export function avecSemainesVoisines(
 }
 
 /** Jours libres qui sont du repos : heures dues couvertes par l'école ou les
- * absences, ou 5 jours déjà pris. */
+ * absences, ou 5 jours déjà pris. Jamais pour un extra, un apprenti ou un
+ * stagiaire (décision utilisateur du 2026-10-27 : ces repos paraissaient
+ * arbitraires ; leurs jours libres restent « non attribués »). Affichage
+ * seulement : le moteur garde ses règles de repos et l'école. */
+const SANS_REPOS_DEDUITS: ReadonlySet<Salarie['type_contrat']> = new Set([
+  'extra',
+  'apprenti',
+  'stagiaire',
+])
+
 export function reposDeduits(
   x: Salarie,
   sol: SalarieSolveur,
@@ -627,7 +636,7 @@ export function reposDeduits(
   lundi: string,
   absences: Map<number, Map<string, number>>,
 ): number[] {
-  if (x.type_contrat === 'extra') return []
+  if (SANS_REPOS_DEDUITS.has(x.type_contrat)) return []
   const pris = new Set([...siens.map(jourDe), ...sol.joursHorsSite])
   const couvert =
     !sol.contratIndicatif &&

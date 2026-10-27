@@ -513,7 +513,7 @@ describe('garde-fous (test_garde_fous.py)', () => {
         !x.semaine_type.some((e) =>
           ['repos', 'travail', 'absence'].includes(e.mode),
         ) &&
-        x.type_contrat !== 'extra' &&
+        !['extra', 'apprenti', 'stagiaire'].includes(x.type_contrat) &&
         !avecAbsence.has(x.id),
     )
     const [eleve, temoin] = staff
@@ -529,6 +529,28 @@ describe('garde-fous (test_garde_fous.py)', () => {
     expect(bilanDe(sem, temoin.id).repos_deduits).toEqual(
       range(7).filter((j) => !joursTemoin.has(j)),
     )
+  })
+
+  it('apprenti et stagiaire : école respectée, aucun repos déduit', () => {
+    const lundi = '2026-11-09'
+    for (const type of ['apprenti', 'stagiaire'] as const) {
+      const p = demo()
+      const avecAbsence = new Set(p.absences.map((a) => a.salarie_id))
+      const eleve = p.referentiel.salaries.find(
+        (x) =>
+          x.semaine_type.every((e) => e.mode === 'auto') &&
+          x.type_contrat !== 'extra' &&
+          !x.forfait_jours &&
+          !avecAbsence.has(x.id),
+      )!
+      eleve.type_contrat = type
+      p.absent(eleve.id, '2026-11-10', '2026-11-12', 'EC')
+      const sem = p.generer(lundi)
+      const jours = joursDe(sem, eleve.id)
+      for (const j of [1, 2, 3]) expect(jours.has(j)).toBe(false)
+      expect(jours.size).toBeGreaterThan(0)
+      expect(bilanDe(sem, eleve.id).repos_deduits).toEqual([])
+    }
   })
 })
 
