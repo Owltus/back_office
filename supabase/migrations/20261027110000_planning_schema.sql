@@ -26,9 +26,9 @@
 -- verrouillée ne change (trigger, errcode PL423), gestion comprise : on
 -- déverrouille d'abord. Les cascades (suppression d'un poste, d'un salarié,
 -- d'un code horaire) s'y heurtent aussi : c'est voulu, un planning réalisé ne
--- se détruit pas (le prototype refusait en 409 avec le même sens). Contexte
--- système (auth.uid() nul : SQL d'administration, seed) non bloqué, comme les
--- triggers voisins.
+-- se détruit pas (le prototype refusait en 409 avec le même sens). PAS de
+-- passe-droit pour un contexte sans utilisateur (clé service_role) : seul le
+-- drapeau de transaction `planning.admin = 'on'` le lève.
 --
 -- Codes d'erreur propres (lus par `lib/planning/erreurs.ts`) :
 --   PL423  semaine verrouillée          PL409  passé, ou planning changé entre-temps
@@ -338,8 +338,19 @@ declare
   v_avant date;
   v_apres date;
 begin
-  if auth.uid() is null then
+  -- Aucune porte dérobée « sans utilisateur » (une fonction serveur à la clé
+  -- service_role ne détruit pas plus un planning réalisé) : seul un drapeau
+  -- posé exprès, le temps d'une transaction d'administration, la lève
+  -- (`set local planning.admin = 'on'`). Revue du binôme du 2026-10-27.
+  if current_setting('planning.admin', true) = 'on' then
     return case when tg_op = 'DELETE' then old else new end;
+  end if;
+  -- Seule la trace de l'auteur change (compte supprimé : FK `set null`) :
+  -- ce n'est pas une retouche du planning, sinon supprimer un compte qui a
+  -- posé un shift réalisé deviendrait impossible.
+  if tg_op = 'UPDATE'
+     and (to_jsonb(new) - 'created_by' - 'updated_at') = (to_jsonb(old) - 'created_by' - 'updated_at') then
+    return new;
   end if;
   if tg_table_name = 'planning_affectations' then
     if tg_op <> 'INSERT' then v_avant := old.lundi; end if;
@@ -646,9 +657,12 @@ grant execute on function private.planning_depuis(date) to authenticated, servic
 --   2. pose les nouveaux shifts (non validés), en sautant un jour devenu absent.
 -- p_etat : `planning_etat_semaine` lu par le client au départ ; s'il a changé,
 -- refus (quelqu'un a modifié le planning pendant le calcul).
+-- p_depuis : premier jour que le client a cru pouvoir créer ; s'il diffère de
+-- celui de la base (horloge du poste, minuit passé pendant le calcul), refus :
+-- sinon la base effacerait des propositions que le client a gardées.
 create or replace function public.planning_appliquer_generation(
-  p_lundi date, p_etat text, p_tout boolean, p_exclus bigint[], p_sans_effacer boolean,
-  p_nouvelles jsonb)
+  p_lundi date, p_etat text, p_depuis integer, p_tout boolean, p_exclus bigint[],
+  p_sans_effacer boolean, p_nouvelles jsonb)
   returns integer
   language plpgsql security invoker
   set search_path to ''
@@ -665,6 +679,9 @@ begin
     raise exception 'Semaine verrouillée : c''est un planning réalisé.' using errcode = 'PL423';
   end if;
   v_depuis := private.planning_depuis(p_lundi);
+  if p_depuis is distinct from v_depuis then
+    raise exception 'La date du jour a changé pendant le calcul : relancez.' using errcode = 'PL409';
+  end if;
   if p_etat is distinct from private.planning_etat(p_lundi) then
     raise exception 'Le planning a changé pendant le calcul : relancez.' using errcode = 'PL409';
   end if;
@@ -725,15 +742,23 @@ create or replace function public.planning_modifier_shift(p_id bigint, p_maj jso
 as $$
 declare
   a public.planning_affectations;
+  v_lundi date;
   v_occupant bigint;
   v_salarie bigint;
   v_jour smallint;
 begin
+  -- Même ordre de verrous que la génération et « vider » (consultatif de la
+  -- semaine, PUIS les lignes) : sinon un glisser-déposer pendant un
+  -- « Compléter » peut finir en interblocage.
+  select lundi into v_lundi from public.planning_affectations where id = p_id;
+  if not found then
+    raise exception 'Ce shift n''existe plus : rechargez la semaine.' using errcode = 'PL409';
+  end if;
+  perform pg_advisory_xact_lock(hashtext('planning:' || v_lundi::text));
   select * into a from public.planning_affectations where id = p_id for update;
   if not found then
     raise exception 'Ce shift n''existe plus : rechargez la semaine.' using errcode = 'PL409';
   end if;
-  perform pg_advisory_xact_lock(hashtext('planning:' || a.lundi::text));
   v_salarie := coalesce((p_maj ->> 'salarie_id')::bigint, a.salarie_id);
   v_jour := coalesce((p_maj ->> 'jour')::smallint, a.jour);
   if (v_salarie, v_jour) is distinct from (a.salarie_id, a.jour) then
@@ -995,7 +1020,7 @@ begin
 end $$;
 
 revoke all on function public.planning_etat_semaine(date) from public, anon;
-revoke all on function public.planning_appliquer_generation(date, text, boolean, bigint[], boolean, jsonb) from public, anon;
+revoke all on function public.planning_appliquer_generation(date, text, integer, boolean, bigint[], boolean, jsonb) from public, anon;
 revoke all on function public.planning_vider(date, boolean) from public, anon;
 revoke all on function public.planning_modifier_shift(bigint, jsonb) from public, anon;
 revoke all on function public.planning_deplacer_statut(date, bigint, integer, bigint, integer) from public, anon;
@@ -1006,7 +1031,7 @@ revoke all on function public.planning_supprimer_poste(bigint) from public, anon
 revoke all on function public.planning_supprimer_motif(bigint) from public, anon;
 revoke all on function public.planning_supprimer_salarie(bigint) from public, anon;
 grant execute on function public.planning_etat_semaine(date) to authenticated, service_role;
-grant execute on function public.planning_appliquer_generation(date, text, boolean, bigint[], boolean, jsonb) to authenticated, service_role;
+grant execute on function public.planning_appliquer_generation(date, text, integer, boolean, bigint[], boolean, jsonb) to authenticated, service_role;
 grant execute on function public.planning_vider(date, boolean) to authenticated, service_role;
 grant execute on function public.planning_modifier_shift(bigint, jsonb) to authenticated, service_role;
 grant execute on function public.planning_deplacer_statut(date, bigint, integer, bigint, integer) to authenticated, service_role;

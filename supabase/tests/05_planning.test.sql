@@ -119,7 +119,7 @@ create function pg_temp.q(p text) returns text language sql as $$
     ':M', (select m from t_ids)::text);
 $$;
 
-select plan(35);
+select plan(37);
 
 -- -------------------------------------------------------------- lecture ---
 select is(pg_temp.essai('aucun', array[pg_temp.q('select count(*) from public.planning_salaries where nom = ''PLANNING''')]),
@@ -182,17 +182,17 @@ select is(pg_temp.essai('gestion', array[pg_temp.q(
 
 -- --------------------------------------------------------------- passé ---
 select is(pg_temp.essai('ecriture', array[pg_temp.q(
-  'select public.planning_appliquer_generation(:P, public.planning_etat_semaine(:P), false, ''{}'', false, ''[]'')')]),
+  'select public.planning_appliquer_generation(:P, public.planning_etat_semaine(:P), 0, false, ''{}'', false, ''[]'')')]),
   'err=PL409', 'passé : on ne génère pas une semaine terminée');
 select is(pg_temp.essai('ecriture', array[pg_temp.q('select public.planning_vider(:P, false)')]),
   'err=PL409', 'passé : on ne vide pas une semaine terminée');
 
 -- ------------------------------------------------------------ génération ---
 select is(pg_temp.essai('ecriture', array[pg_temp.q(
-  'select public.planning_appliquer_generation(:F, ''pas le bon état'', false, ''{}'', false, ''[]'')')]),
+  'select public.planning_appliquer_generation(:F, ''pas le bon état'', 0, false, ''{}'', false, ''[]'')')]),
   'err=PL409', 'génération : refusée si le planning a changé pendant le calcul');
 select is(pg_temp.essai('ecriture', array[
-  pg_temp.q('select public.planning_appliquer_generation(:F, public.planning_etat_semaine(:F), false, ''{}'', false, '
+  pg_temp.q('select public.planning_appliquer_generation(:F, public.planning_etat_semaine(:F), 0, false, ''{}'', false, '
     || quote_literal(json_build_array(
          json_build_object('salarie_id', (select s3 from t_ids), 'poste_id', (select pa from t_ids), 'jour', 2,
                            'horaire_id', (select h from t_ids), 'debut', '07:00', 'fin', '15:45', 'pause', 45))::text) || ')'),
@@ -241,6 +241,15 @@ select is(pg_temp.essai('gestion', array[
 select is(pg_temp.essai('gestion', array[
   'select public.planning_supprimer_horaire((select id from public.planning_horaires where code = ''XM'' and nom = ''Matin test''))']),
   'err=PL409', 'code horaire seul permis d''un poste : ne se supprime pas');
+
+-- ------------------------------------- aucune porte dérobée sur le réalisé ---
+-- Contexte sans utilisateur (comme une fonction serveur à la clé service_role) :
+-- le verrou tient quand même (revue du binôme du 2026-10-27).
+select throws_ok(pg_temp.q('delete from public.planning_affectations where lundi = :L'),
+  'PL423', null, 'verrouillée : refusée aussi sans utilisateur (clé serveur)');
+-- La seule trace de l'auteur effacée (compte supprimé) n'est pas une retouche.
+select lives_ok(pg_temp.q('update public.planning_affectations set created_by = null where lundi = :L'),
+  'verrouillée : l''auteur peut être effacé (suppression d''un compte)');
 
 -- --------------------------------------------------- import du prototype ---
 select is(pg_temp.essai('ecriture', array['select public.planning_importer(''{"format": "planning-prototype-v20"}''::jsonb)']),

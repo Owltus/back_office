@@ -247,6 +247,7 @@ export async function vider(
 export async function appliquerGeneration(args: {
   lundi: string
   etat: string
+  depuis: number
   tout: boolean
   exclus: number[]
   sansEffacer: boolean
@@ -256,6 +257,7 @@ export async function appliquerGeneration(args: {
     await supabase.rpc('planning_appliquer_generation', {
       p_lundi: args.lundi,
       p_etat: args.etat,
+      p_depuis: args.depuis,
       p_tout: args.tout,
       p_exclus: args.exclus,
       p_sans_effacer: args.sansEffacer,

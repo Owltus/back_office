@@ -222,6 +222,7 @@ export function useGenerer() {
       const poses = await appliquerGeneration({
         lundi,
         etat,
+        depuis: g.depuis,
         tout: !!options.tout,
         exclus: [...(options.exclus ?? [])],
         sansEffacer: !!options.sansEffacer,
