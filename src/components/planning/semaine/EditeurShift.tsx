@@ -34,6 +34,7 @@ import { Switch } from '#/components/ui/switch.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
 import {
   disponibleLe,
+  grouperHoraires,
   heures,
   horairesDuPoste,
   NIVEAUX,
@@ -385,29 +386,43 @@ export function EditeurShift({
                   }}
                 />
               )}
-              {codes.map((h) => (
-                <Choix
-                  key={h.id}
-                  couleur={h.couleur}
-                  code={h.code}
-                  titre={h.nom}
-                  detail={`${heureAffichee(h.debut)}-${heureAffichee(h.fin)}${h.pause > 0 ? ` · ${heures(travailCode(h))} de travail` : ''}`}
-                  choisi={
-                    !vider && motif === null && !libre && b.horaire_id === h.id
-                  }
-                  onClick={() => {
-                    setVider(false)
-                    setLibre(false)
-                    setMotif(null)
-                    maj({
-                      horaire_id: h.id,
-                      debut: h.debut,
-                      fin: h.fin,
-                      pause: h.pause,
-                    })
-                  }}
-                />
-              ))}
+              {grouperHoraires(codes).map((g) => [
+                <span
+                  key={`titre-${g.libelle}`}
+                  className="col-span-2 pt-1.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase"
+                >
+                  {g.libelle}
+                </span>,
+                ...g.horaires.map((h) => (
+                  <Choix
+                    key={h.id}
+                    couleur={h.couleur}
+                    code={h.code}
+                    titre={h.nom}
+                    detail={`${heureAffichee(h.debut)}-${heureAffichee(h.fin)}${h.pause > 0 ? ` · ${heures(travailCode(h))} de travail` : ''}`}
+                    choisi={
+                      !vider &&
+                      motif === null &&
+                      !libre &&
+                      b.horaire_id === h.id
+                    }
+                    onClick={() => {
+                      setVider(false)
+                      setLibre(false)
+                      setMotif(null)
+                      maj({
+                        horaire_id: h.id,
+                        debut: h.debut,
+                        fin: h.fin,
+                        pause: h.pause,
+                      })
+                    }}
+                  />
+                )),
+              ])}
+              <span className="col-span-2 pt-1.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                Autre
+              </span>
               <Choix
                 couleur={NEUTRE}
                 code="•"

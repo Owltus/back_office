@@ -9,11 +9,17 @@ import { BadgeCheck, Check, Eraser, Star, Undo2 } from 'lucide-react'
 
 import {
   ContextMenuContent,
+  ContextMenuGroup,
   ContextMenuItem,
   ContextMenuLabel,
   ContextMenuSeparator,
 } from '#/components/ui/context-menu.tsx'
-import { heures, ROUGE_CODE, texteSur } from '#/lib/planning/affichage.ts'
+import {
+  grouperHoraires,
+  heures,
+  ROUGE_CODE,
+  texteSur,
+} from '#/lib/planning/affichage.ts'
 import { heureAffichee } from '#/lib/planning/temps.ts'
 import { JOURS } from '#/lib/planning/types.ts'
 import type { Horaire } from '#/lib/planning/types.ts'
@@ -99,36 +105,45 @@ export function MenuCase({
           Aucun horaire prévu pour ce poste
         </ContextMenuItem>
       )}
-      {proposes.map((h) => (
-        <ContextMenuItem
-          key={h.id}
-          aria-label={`${h.code}, ${h.nom}`}
-          onSelect={() => {
-            if (actuel !== h.id && posteId !== undefined) onHoraire(h, posteId)
-          }}
-        >
-          <span
-            className="min-w-12 shrink-0 rounded px-1.5 py-0.5 text-center text-xs font-semibold"
-            style={{
-              background: h.couleur,
-              color: h.code_rouge ? ROUGE_CODE : texteSur(h.couleur),
-            }}
-          >
-            {h.code}
-          </span>
-          <span className="flex-1 pl-1 text-sm tabular-nums">
-            {heureAffichee(h.debut)}-{heureAffichee(h.fin)} ·{' '}
-            {heures(travailCode(h))}
-          </span>
-          {actuel === h.id ? (
-            <Check
-              className="size-3.5 text-primary"
-              aria-label="Horaire actuel"
-            />
-          ) : (
-            <span className="size-3.5" />
-          )}
-        </ContextMenuItem>
+      {grouperHoraires(proposes).map((g, i) => (
+        <ContextMenuGroup key={g.libelle} aria-label={g.libelle}>
+          {i > 0 && <ContextMenuSeparator />}
+          <ContextMenuLabel className="pt-1 pb-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+            {g.libelle}
+          </ContextMenuLabel>
+          {g.horaires.map((h) => (
+            <ContextMenuItem
+              key={h.id}
+              aria-label={`${h.code}, ${h.nom}`}
+              onSelect={() => {
+                if (actuel !== h.id && posteId !== undefined)
+                  onHoraire(h, posteId)
+              }}
+            >
+              <span
+                className="min-w-12 shrink-0 rounded px-1.5 py-0.5 text-center text-xs font-semibold"
+                style={{
+                  background: h.couleur,
+                  color: h.code_rouge ? ROUGE_CODE : texteSur(h.couleur),
+                }}
+              >
+                {h.code}
+              </span>
+              <span className="flex-1 pl-1 text-sm tabular-nums">
+                {heureAffichee(h.debut)}-{heureAffichee(h.fin)} ·{' '}
+                {heures(travailCode(h))}
+              </span>
+              {actuel === h.id ? (
+                <Check
+                  className="size-3.5 text-primary"
+                  aria-label="Horaire actuel"
+                />
+              ) : (
+                <span className="size-3.5" />
+              )}
+            </ContextMenuItem>
+          ))}
+        </ContextMenuGroup>
       ))}
     </ContextMenuContent>
   )

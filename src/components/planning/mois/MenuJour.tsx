@@ -17,10 +17,12 @@ import {
 
 import {
   dureeHoraire,
+  grouperHoraires,
   heures,
   horairesDuPoste,
   ROUGE_CODE,
   texteSur,
+  trierHoraires,
 } from '#/lib/planning/affichage.ts'
 import type { ShiftOut } from '#/lib/planning/semaine.ts'
 import { heureAffichee } from '#/lib/planning/temps.ts'
@@ -60,10 +62,11 @@ export function horairesProposes(
   const deLaFiche = duPoste.filter((h) =>
     personne.shifts_autorises.includes(h.id),
   )
-  return (deLaFiche.length ? deLaFiche : duPoste)
-    .concat(horaires.filter((h) => h.id === shift?.type_shift_id))
-    .filter((h, i, l) => l.findIndex((x) => x.id === h.id) === i)
-    .sort((a, b) => a.debut.localeCompare(b.debut))
+  return trierHoraires(
+    (deLaFiche.length ? deLaFiche : duPoste)
+      .concat(horaires.filter((h) => h.id === shift?.type_shift_id))
+      .filter((h, i, l) => l.findIndex((x) => x.id === h.id) === i),
+  )
 }
 
 const ITEM =
@@ -232,36 +235,43 @@ export function MenuJour({
             {ecrire ? 'poste, absence, école…' : 'voir le détail'}
           </span>
         </button>
-        {proposes.length > 0 && <div className="-mx-1 my-1 h-px bg-border" />}
-        {proposes.map((h) => (
-          <button
-            key={h.id}
-            type="button"
-            role="menuitem"
-            aria-label={`${h.code}, ${h.nom}`}
-            className={ITEM}
-            onClick={choisir(() => {
-              if (shift?.type_shift_id !== h.id && posteId !== undefined)
-                onHoraire(h, posteId)
-            })}
-          >
-            <span
-              className="min-w-12 shrink-0 rounded px-1.5 py-0.5 text-center text-xs font-semibold"
-              style={{
-                background: h.couleur,
-                color: h.code_rouge ? ROUGE_CODE : texteSur(h.couleur),
-              }}
-            >
-              {h.code}
-            </span>
-            <span className="flex-1 text-sm tabular-nums">
-              {heureAffichee(h.debut)}–{heureAffichee(h.fin)} ·{' '}
-              {heures(dureeHoraire(h.debut, h.fin) - h.pause)}
-            </span>
-            {shift?.type_shift_id === h.id && (
-              <Check className="size-4 text-primary" />
-            )}
-          </button>
+        {grouperHoraires(proposes).map((g) => (
+          <div key={g.libelle} role="group" aria-label={g.libelle}>
+            <div className="-mx-1 my-1 h-px bg-border" />
+            <div className="px-2 pt-1 pb-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+              {g.libelle}
+            </div>
+            {g.horaires.map((h) => (
+              <button
+                key={h.id}
+                type="button"
+                role="menuitem"
+                aria-label={`${h.code}, ${h.nom}`}
+                className={ITEM}
+                onClick={choisir(() => {
+                  if (shift?.type_shift_id !== h.id && posteId !== undefined)
+                    onHoraire(h, posteId)
+                })}
+              >
+                <span
+                  className="min-w-12 shrink-0 rounded px-1.5 py-0.5 text-center text-xs font-semibold"
+                  style={{
+                    background: h.couleur,
+                    color: h.code_rouge ? ROUGE_CODE : texteSur(h.couleur),
+                  }}
+                >
+                  {h.code}
+                </span>
+                <span className="flex-1 text-sm tabular-nums">
+                  {heureAffichee(h.debut)}–{heureAffichee(h.fin)} ·{' '}
+                  {heures(dureeHoraire(h.debut, h.fin) - h.pause)}
+                </span>
+                {shift?.type_shift_id === h.id && (
+                  <Check className="size-4 text-primary" />
+                )}
+              </button>
+            ))}
+          </div>
         ))}
       </div>
     </>

@@ -9,6 +9,7 @@ import type {
   Horaire,
   Motif,
   Niveau,
+  Periode,
   Poste,
   Salarie,
 } from '#/lib/planning/types.ts'
@@ -95,6 +96,59 @@ export function horairesDuPoste<T extends { id: number }>(
   return autorises.length
     ? horaires.filter((h) => autorises.includes(h.id))
     : horaires
+}
+
+/** Familles de codes, dans l'ordre de la journée, puis « à part » (direction,
+ * supervision). Ordre des menus, du volet et de la page Horaires
+ * (demande utilisateur du 2026-10-28 : « bien carré, par couleur, par
+ * période »). */
+export const FAMILLES: ReadonlyArray<{
+  periode: Periode | null
+  libelle: string
+}> = [
+  { periode: 'matin', libelle: 'Matin' },
+  { periode: 'middle', libelle: 'Middle' },
+  { periode: 'soir', libelle: 'Soir' },
+  { periode: 'nuit', libelle: 'Nuit' },
+  { periode: 'court', libelle: 'Court' },
+  { periode: null, libelle: 'À part' },
+]
+
+const rangFamille = (p: Periode | null | undefined) =>
+  FAMILLES.findIndex((f) => f.periode === (p ?? null))
+
+/** Heure de début sur une journée de travail : minuit à 5 h vient APRÈS
+ * 23 h (une nuit qui commence à minuit suit celle de 23 h). */
+const debutDansLaJournee = (debut: string) => {
+  const m = minutes(debut)
+  return m < 5 * 60 ? m + 24 * 60 : m
+}
+
+/** Codes rangés : par famille, puis du plus tôt au plus tard, puis du plus
+ * court au plus long. */
+export function trierHoraires<
+  T extends Pick<Horaire, 'periode' | 'debut' | 'fin' | 'code'>,
+>(horaires: readonly T[]): T[] {
+  return [...horaires].sort(
+    (a, b) =>
+      rangFamille(a.periode) - rangFamille(b.periode) ||
+      debutDansLaJournee(a.debut) - debutDansLaJournee(b.debut) ||
+      dureeHoraire(a.debut, a.fin) - dureeHoraire(b.debut, b.fin) ||
+      a.code.localeCompare(b.code),
+  )
+}
+
+/** Codes rangés et regroupés par famille (familles vides omises). */
+export function grouperHoraires<
+  T extends Pick<Horaire, 'periode' | 'debut' | 'fin' | 'code'>,
+>(
+  horaires: readonly T[],
+): Array<{ periode: Periode | null; libelle: string; horaires: T[] }> {
+  const tries = trierHoraires(horaires)
+  return FAMILLES.map((f) => ({
+    ...f,
+    horaires: tries.filter((h) => (h.periode ?? null) === f.periode),
+  })).filter((g) => g.horaires.length > 0)
 }
 
 /** Postes proposés dans la fiche d'un membre de cette catégorie. */

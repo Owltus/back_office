@@ -53,7 +53,12 @@ import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
 import { Switch } from '#/components/ui/switch.tsx'
-import { heures, ROUGE_CODE, texteSur } from '#/lib/planning/affichage.ts'
+import {
+  grouperHoraires,
+  heures,
+  ROUGE_CODE,
+  texteSur,
+} from '#/lib/planning/affichage.ts'
 import {
   enregistrerHoraire,
   enregistrerMotif,
@@ -139,15 +144,6 @@ const PERIODES: ReadonlyArray<{
 ]
 
 /** Les codes rangés par période, dans l'ordre de la journée. */
-const GROUPES_CODES: ReadonlyArray<{ titre: string; periode: Periode | null }> =
-  [
-    { titre: 'Matin', periode: 'matin' },
-    { titre: 'Middle', periode: 'middle' },
-    { titre: 'Soir', periode: 'soir' },
-    { titre: 'Nuit', periode: 'nuit' },
-    { titre: 'Court', periode: 'court' },
-    { titre: 'À part', periode: null },
-  ]
 
 const saisieMotif = (m: Motif): SaisieMotif => ({
   code: m.code,
@@ -244,15 +240,12 @@ export function HorairesPage() {
                 />
               </div>
             )}
-            {GROUPES_CODES.map((g) => {
-              const liste = data.horaires.filter(
-                (h) => (h.periode ?? null) === g.periode,
-              )
-              if (!liste.length) return null
+            {grouperHoraires(data.horaires).map((g) => {
+              const liste = g.horaires
               return (
-                <div key={g.titre} className="flex flex-col gap-3">
+                <div key={g.libelle} className="flex flex-col gap-3">
                   <h3 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-                    {g.titre}
+                    {g.libelle}
                     <span className="rounded-full bg-muted px-2 text-xs tabular-nums">
                       {liste.length}
                     </span>

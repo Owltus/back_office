@@ -10,6 +10,7 @@ import {
   heures,
   horairesDuPoste,
   jourDeRepos,
+  trierHoraires,
 } from '#/lib/planning/affichage.ts'
 import { estEcole } from '#/lib/planning/semaine.ts'
 import type { BilanOut, SemaineOut, ShiftOut } from '#/lib/planning/semaine.ts'
@@ -162,10 +163,11 @@ export function horairesProposes(
   const deLaFiche = duPoste.filter((h) =>
     personne.shifts_autorises.includes(h.id),
   )
-  return (deLaFiche.length ? deLaFiche : duPoste)
-    .concat(horaires.filter((h) => h.id === shift?.type_shift_id))
-    .filter((h, i, l) => l.findIndex((x) => x.id === h.id) === i)
-    .sort((a, b) => a.debut.localeCompare(b.debut))
+  return trierHoraires(
+    (deLaFiche.length ? deLaFiche : duPoste)
+      .concat(horaires.filter((h) => h.id === shift?.type_shift_id))
+      .filter((h, i, l) => l.findIndex((x) => x.id === h.id) === i),
+  )
 }
 
 /** Codes permis pour une personne sur un poste, celui de sa semaine type ce
