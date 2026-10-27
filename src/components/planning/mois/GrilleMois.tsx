@@ -38,6 +38,7 @@ import {
 
 import { Tip } from '#/components/shared/Tip.tsx'
 import {
+  couleurShift,
   heures,
   journeeEtoile,
   numeroSemaine,
@@ -159,8 +160,12 @@ export function GrilleMois({
 
   const horaireDe = (id: number | null) =>
     id === null ? undefined : horaires.find((h) => h.id === id)
-  const couleurShift = (a: ShiftOut) =>
-    horaireDe(a.type_shift_id)?.couleur ?? GRIS
+  const couleurDe = (a: ShiftOut) =>
+    couleurShift(
+      horaireDe(a.type_shift_id),
+      referentiel.postes.find((p) => p.id === a.poste_id),
+      GRIS,
+    )
   const verrouillee = (lundi: string) => !!etats.get(lundi)?.verrouillee
 
   const alertesDe = (sid: number): AlerteOut[] => {
@@ -203,7 +208,7 @@ export function GrilleMois({
           lundi,
           date,
           shift,
-          couleur: couleurShift(shift),
+          couleur: couleurDe(shift),
         })
       return
     }
@@ -370,6 +375,7 @@ export function GrilleMois({
                   lire={lire}
                   alertes={alertesDe(s.id)}
                   horaireDe={horaireDe}
+                  couleurDe={couleurDe}
                   verrouillee={verrouillee}
                   aujourdhui={aujourdhui}
                   glisser={glisser}
@@ -423,6 +429,7 @@ function LigneMois({
   lire,
   alertes,
   horaireDe,
+  couleurDe,
   verrouillee,
   aujourdhui,
   glisser,
@@ -436,6 +443,7 @@ function LigneMois({
   lire: (sid: number, date: string) => CaseMois | null
   alertes: AlerteOut[]
   horaireDe: (id: number | null) => Horaire | undefined
+  couleurDe: (a: ShiftOut) => string
   verrouillee: (lundi: string) => boolean
   aujourdhui: string
   glisser: boolean
@@ -571,7 +579,7 @@ function LigneMois({
     const h = shift ? horaireDe(shift.type_shift_id) : undefined
     const quand = dateLongue(date)
     const resume = shift
-      ? `${quand} · ${h?.nom ?? 'Horaire spécifique'} ${heureAffichee(shift.debut)}–${heureAffichee(shift.fin)}${s.forfait_jours ? '' : ` · ${heures(shift.duree)}`} · ${shift.epinglee ? 'validé' : 'proposition'}`
+      ? `${quand} · ${h ? `${h.code} · ${h.nom}` : 'Horaire spécifique'} ${heureAffichee(shift.debut)}–${heureAffichee(shift.fin)}${s.forfait_jours ? '' : ` · ${heures(shift.duree)}`} · ${shift.epinglee ? 'validé' : 'proposition'}`
       : `${quand} · Non attribué`
     const alertesShift = shift?.alertes ?? []
     cellules.push(
@@ -590,7 +598,7 @@ function LigneMois({
             shift ? `shift:${shift.id}:${date}` : `statut:${s.id}:${date}`
           }
           actif={glisser && !!shift && !verrouillee(reperer(date).lundi)}
-          couleur={h?.couleur ?? GRIS}
+          couleur={shift ? couleurDe(shift) : GRIS}
           classe={cn(
             shift && 'planning-mois-pastille',
             shift && !shift.epinglee && 'planning-mois-proposition',

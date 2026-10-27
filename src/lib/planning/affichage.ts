@@ -59,6 +59,21 @@ export function nomComplet(s: Pick<Salarie, 'prenom' | 'nom'>): string {
   return `${s.prenom} ${s.nom}`.trim()
 }
 
+/**
+ * Couleur d'un shift à l'écran : celle de son POSTE quand le poste ne compte
+ * pas dans la présence (direction, adjointes, supervision, technique, nuit),
+ * sinon celle de son code (hôteliers : jaune le matin, vert le soir).
+ * Décision utilisateur du 2026-10-27.
+ */
+export function couleurShift(
+  horaire: { couleur: string } | undefined,
+  poste: { couleur: string; presence: boolean } | undefined,
+  defaut: string,
+): string {
+  if (poste && !poste.presence) return poste.couleur
+  return horaire?.couleur ?? defaut
+}
+
 /** Couleur du texte d'un code « écrit en rouge » (`code_rouge`). */
 export const ROUGE_CODE = '#dc2626'
 

@@ -22,7 +22,7 @@ import {
 } from 'lucide-react'
 
 import { Tip } from '#/components/shared/Tip.tsx'
-import { heures, ROUGE_CODE } from '#/lib/planning/affichage.ts'
+import { couleurShift, heures, ROUGE_CODE } from '#/lib/planning/affichage.ts'
 import type { AlerteOut } from '#/lib/planning/semaine.ts'
 import { heureAffichee } from '#/lib/planning/temps.ts'
 import type { Horaire, Poste } from '#/lib/planning/types.ts'
@@ -45,7 +45,7 @@ export interface ContenuCarte {
 
 export function texteCarte(c: ContenuCarte): string[] {
   return [
-    `${c.horaire?.nom ?? 'Horaire spécifique'} · ${heureAffichee(c.debut)}-${heureAffichee(c.fin)}`,
+    `${c.horaire ? `${c.horaire.code} · ${c.horaire.nom}` : 'Horaire spécifique'} · ${heureAffichee(c.debut)}-${heureAffichee(c.fin)}`,
     c.poste?.nom,
     c.etoile && 'Journée étoile : une heure de moins',
     c.role === 'soutien' && 'En soutien (jamais seul)',
@@ -78,7 +78,11 @@ export function CarteShift({ c, enVol }: { c: ContenuCarte; enVol?: boolean }) {
     <div
       className={cn('planning-carte', enVol && 'planning-carte-vol')}
       data-proposition={c.epinglee ? undefined : ''}
-      style={{ '--couleur': c.horaire?.couleur ?? NEUTRE } as CSSProperties}
+      style={
+        {
+          '--couleur': couleurShift(c.horaire, c.poste, NEUTRE),
+        } as CSSProperties
+      }
     >
       <span className="planning-carte-debut" style={rouge}>
         {heureAffichee(c.debut)}

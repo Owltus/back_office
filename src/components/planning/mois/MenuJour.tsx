@@ -12,6 +12,8 @@ import {
   dureeHoraire,
   heures,
   horairesDuPoste,
+  ROUGE_CODE,
+  texteSur,
 } from '#/lib/planning/affichage.ts'
 import type { ShiftOut } from '#/lib/planning/semaine.ts'
 import { heureAffichee } from '#/lib/planning/temps.ts'
@@ -155,6 +157,7 @@ export function MenuJour({
             key={h.id}
             type="button"
             role="menuitem"
+            aria-label={`${h.code}, ${h.nom}`}
             className={ITEM}
             onClick={choisir(() => {
               if (shift?.type_shift_id !== h.id && posteId !== undefined)
@@ -162,11 +165,15 @@ export function MenuJour({
             })}
           >
             <span
-              className="size-2.5 shrink-0 rounded-full"
-              style={{ background: h.couleur }}
-            />
-            <span className="flex-1 font-medium">{h.nom}</span>
-            <span className="text-xs text-muted-foreground tabular-nums">
+              className="min-w-12 shrink-0 rounded px-1.5 py-0.5 text-center text-xs font-semibold"
+              style={{
+                background: h.couleur,
+                color: h.code_rouge ? ROUGE_CODE : texteSur(h.couleur),
+              }}
+            >
+              {h.code}
+            </span>
+            <span className="flex-1 text-sm tabular-nums">
               {heureAffichee(h.debut)}–{heureAffichee(h.fin)} ·{' '}
               {heures(dureeHoraire(h.debut, h.fin) - h.pause)}
             </span>
