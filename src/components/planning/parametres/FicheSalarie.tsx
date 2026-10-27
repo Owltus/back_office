@@ -8,9 +8,11 @@
  * du paramétrage, y compris ses absences, même si la base laisse l'écriture
  * poser une absence au planning).
  *
- * Absences : un jour par ligne en base. La fiche les montre en périodes et,
- * à l'enregistrement, ne pose ou ne retire que les jours qui changent, lus
- * à nouveau juste avant (`diffAbsences`).
+ * Absences : un jour par ligne en base. La fiche s'ouvre sur une lecture
+ * FRAÎCHE, les montre en périodes et, à l'enregistrement, n'applique à la
+ * base relue que les jours que la saisie a changés (`fusionnerAbsences`) :
+ * un jour posé depuis le planning entre-temps est gardé. Les jours des
+ * semaines verrouillées ne sont jamais réécrits (la base refuserait tout).
  */
 
 import { useRef, useState } from 'react'
@@ -34,8 +36,12 @@ import {
   enAlternance,
   erreurBrouillon,
   erreurEvolution,
+  fusionnerAbsences,
+  horsSemainesVerrouillees,
   joursDesPeriodes,
   joursEnBase,
+  joursFusionnes,
+  messageJoursGardes,
   nomBrouillon,
   planEvolution,
   valeursSalarie,
@@ -44,6 +50,7 @@ import type {
   Brouillon,
   DiffAbsences,
   Evolution,
+  PlanEvolution,
 } from '#/components/planning/parametres/equipe/brouillon.ts'
 import { CalendrierEcole } from '#/components/planning/parametres/equipe/CalendrierEcole.tsx'
 import { SectionIdentite } from '#/components/planning/parametres/equipe/SectionIdentite.tsx'
@@ -115,7 +122,16 @@ export function FicheSalarie({
     salarieId === null
       ? null
       : ref.data?.salaries.find((s) => s.id === salarieId)
-  const pret = !!ref.data && (salarieId === null || absences.isSuccess)
+  // Le corps ne s'ouvre que sur une lecture FRAÎCHE des absences (le cache
+  // peut dater d'avant une absence posée au planning). Une fois ouvert, il le
+  // reste : une relecture après une écriture ne le démonte pas.
+  const [montee, setMontee] = useState<number | null>(null)
+  const fraiche = absences.isSuccess && !absences.isFetching
+  const pret =
+    !!ref.data && (salarieId === null || montee === salarieId || fraiche)
+  if (!ouvert && montee !== null) setMontee(null)
+  else if (ouvert && pret && salarieId !== null && montee !== salarieId)
+    setMontee(salarieId)
 
   return (
     <Sheet open={ouvert} onOpenChange={(o) => !o && demandeFermeture.current()}>
@@ -236,6 +252,9 @@ function CorpsFiche({
   const qc = useQueryClient()
   const [b, setB] = useState<Brouillon>(initial)
   const [reference] = useState(() => empreinte(initial))
+  // Jours d'absence à l'ouverture : seul l'écart entre eux et la saisie est
+  // appliqué à la base relue.
+  const [joursInitiaux] = useState(() => joursDesPeriodes(initial.absences))
   const [confirmerAbandon, setConfirmerAbandon] = useState(false)
   const [confirmerSuppression, setConfirmerSuppression] = useState(false)
   // Un enregistrement à la fois : un double clic ne crée pas deux fiches.
@@ -275,6 +294,10 @@ function CorpsFiche({
       queryFn: () => fetchAbsencesSalarie(id),
       staleTime: 0,
     })
+  /** Semaines verrouillées, d'après le référentiel relu par la dernière écriture. */
+  const verrous = () =>
+    qc.getQueryData<Referentiel>(planningKeys.referentiel())?.verrous ??
+    referentiel.verrous
 
   const enregistrer = () =>
     uneFois(async () => {
@@ -294,19 +317,27 @@ function CorpsFiche({
       const idFiche = id
       // Créée : un nouvel essai ne doit pas en créer une seconde.
       setB((x) => ({ ...x, id: idFiche }))
+      let gardes = 0
       const r2 = await ecrire(async () => {
         const base = b.id === null ? [] : await absencesEnBase(idFiche)
-        const diff = diffAbsences(
-          joursEnBase(base),
-          joursDesPeriodes(b.absences),
+        const { diff, gardes: jours } = horsSemainesVerrouillees(
+          fusionnerAbsences(
+            joursEnBase(base),
+            joursInitiaux,
+            joursDesPeriodes(b.absences),
+          ),
+          verrous(),
         )
+        gardes = jours.length
         if (!diffVide(diff)) await appliquerAbsences(idFiche, diff)
       }, "Fiche enregistrée, mais ses absences n'ont pas pu l'être")
       if (!r2.ok) {
         notifier(r2.message, 'danger')
         return
       }
-      notifier('Fiche enregistrée')
+      if (gardes)
+        notifier(`Fiche enregistrée.${messageJoursGardes(gardes)}`, 'attention')
+      else notifier('Fiche enregistrée')
       onFermer()
     })
 
@@ -336,19 +367,28 @@ function CorpsFiche({
         return false
       }
       const id = b.id
-      const plan = planEvolution(
-        { ...b, id },
-        e,
-        referentiel.postes,
-        referentiel.groupes,
-        referentiel.motifs,
-      )
+      // Le contrat tel qu'enregistré (pas la saisie) : c'est lui qu'on rétablit.
+      const enregistre = referentiel.salaries.find((s) => s.id === id)
       const fini = async () => {
         await qc.invalidateQueries({ queryKey: planningKeys.all })
       }
       let base: Absence[]
+      let plan: PlanEvolution
       try {
         base = await absencesEnBase(id)
+        // Les jours à répartir : la base relue, avec les changements saisis.
+        plan = planEvolution(
+          { ...b, id },
+          e,
+          referentiel.postes,
+          referentiel.groupes,
+          referentiel.motifs,
+          joursFusionnes(
+            joursEnBase(base),
+            joursInitiaux,
+            joursDesPeriodes(b.absences),
+          ),
+        )
         await enregistrerSalarie(plan.ancien, id)
       } catch (x) {
         notifier(messageErreur(x, "L'évolution du contrat a échoué"), 'danger')
@@ -362,7 +402,10 @@ function CorpsFiche({
         // L'ancien contrat est déjà fermé : on le rouvre tel qu'il était.
         const raison = messageErreur(x, 'Création refusée')
         try {
-          await enregistrerSalarie(valeursSalarie(b), id)
+          await enregistrerSalarie(
+            valeursSalarie(enregistre ? brouillonDe(enregistre, []) : initial),
+            id,
+          )
           notifier(
             `Le nouveau contrat n'a pas pu être créé ; le contrat actuel est rétabli tel quel. ${raison}`,
             'danger',
@@ -376,26 +419,45 @@ function CorpsFiche({
         await fini()
         return false
       }
-      try {
-        const ancien = diffAbsences(joursEnBase(base), plan.joursAncien)
-        if (!diffVide(ancien)) await appliquerAbsences(id, ancien)
-        const nouveau = diffAbsences(new Map(), plan.joursNouveau)
-        if (!diffVide(nouveau)) await appliquerAbsences(nouveauId, nouveau)
-      } catch (x) {
-        notifier(
-          messageErreur(
-            x,
-            "Nouveau contrat créé, mais ses absences à venir n'ont pas pu être reprises",
-          ),
-          'danger',
-        )
+      // D'abord posées sur le nouveau contrat, puis seulement retirées de
+      // l'ancien : un échec en route ne perd aucun jour. Les jours des
+      // semaines verrouillées restent où ils sont.
+      const nouveau = horsSemainesVerrouillees(
+        diffAbsences(new Map(), plan.joursNouveau),
+        verrous(),
+      )
+      const ancien = horsSemainesVerrouillees(
+        diffAbsences(joursEnBase(base), plan.joursAncien),
+        verrous(),
+      )
+      const echec = async (x: unknown, action: string) => {
+        notifier(messageErreur(x, action), 'danger')
         await fini()
         onFermer()
         return true
       }
+      try {
+        if (!diffVide(nouveau.diff))
+          await appliquerAbsences(nouveauId, nouveau.diff)
+      } catch (x) {
+        return echec(
+          x,
+          "Nouveau contrat créé, mais ses absences à venir n'ont pas pu être reprises : elles restent sur le contrat actuel",
+        )
+      }
+      try {
+        if (!diffVide(ancien.diff)) await appliquerAbsences(id, ancien.diff)
+      } catch (x) {
+        return echec(
+          x,
+          "Nouveau contrat créé avec ses absences à venir, mais elles n'ont pas pu être retirées du contrat actuel",
+        )
+      }
       await fini()
+      const gardes = new Set([...nouveau.gardes, ...ancien.gardes]).size
       notifier(
-        `${b.prenom.trim()} : nouveau contrat à partir du ${dateFr(e.date)}`,
+        `${b.prenom.trim()} : nouveau contrat à partir du ${dateFr(e.date)}${gardes ? `.${messageJoursGardes(gardes)}` : ''}`,
+        gardes ? 'attention' : 'info',
       )
       onFermer()
       return true

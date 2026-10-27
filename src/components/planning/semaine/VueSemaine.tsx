@@ -209,6 +209,7 @@ export function VueSemaine({
     droits.ecrire && !!semaine && !verrou,
     aujourdhui,
     notifierDanger,
+    pendant,
   )
 
   const affichee = useMemo(

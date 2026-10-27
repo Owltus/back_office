@@ -257,6 +257,32 @@ describe('poserHoraire', () => {
       }),
     )
   })
+  it('le shift refusé : l’absence retirée est remise, avec son motif', async () => {
+    const refus = Object.assign(new Error('refus'), { code: '23505' })
+    service.ajouterShift.mockImplementationOnce(() => Promise.reject(refus))
+    await expect(
+      poserHoraire(
+        '2026-11-02',
+        o,
+        undefined,
+        { fixe: false, motif_id: 3 },
+        MATIN,
+        10,
+      )(),
+    ).rejects.toBe(refus)
+    expect(service.poserAbsences).toHaveBeenNthCalledWith(
+      1,
+      1,
+      ['2026-11-04'],
+      null,
+    )
+    expect(service.poserAbsences).toHaveBeenNthCalledWith(
+      2,
+      1,
+      ['2026-11-04'],
+      3,
+    )
+  })
   it('une absence fixe ne se retire pas d’ici', async () => {
     await poserHoraire('2026-11-02', o, undefined, { fixe: true }, MATIN, 10)()
     expect(service.poserAbsences).not.toHaveBeenCalled()

@@ -42,7 +42,6 @@ import {
   ajouterShift,
   deplacerStatut,
   modifierShift,
-  poserAbsences,
   supprimerShift,
   valider,
   verrouiller,
@@ -73,6 +72,10 @@ import {
 import type { EtatSemaine } from '#/components/planning/mois/mois.ts'
 import { PanneauAlertesMois } from '#/components/planning/mois/PanneauAlertesMois.tsx'
 import {
+  etoileProposee,
+  poserHoraire as poserHoraireCase,
+} from '#/components/planning/semaine/edition.ts'
+import {
   useMois,
   usePoserFixesMois,
 } from '#/components/planning/mois/useMois.ts'
@@ -95,7 +98,7 @@ const MSG_CALCUL = 'Calcul en cours : réessayez dans un instant.'
 const MSG_DOUBLON =
   'Cette personne a déjà un shift ce jour-là : un seul par jour.'
 
-type Confirmation = 'effacer' | 'remettre' | null
+type Confirmation = 'effacer' | 'remettre' | 'verrou' | null
 
 const AUCUN_VERROU: string[] = []
 
@@ -295,10 +298,14 @@ export function VueMois({
 
   const moisVerrouille =
     lundis.length > 0 && lundis.every((l) => etats.get(l)?.verrouillee)
+  // Semaines que le cadenas du mois changerait (les autres le sont déjà).
+  const viseesVerrou = lundis.filter(
+    (l) => !!etats.get(l)?.verrouillee === moisVerrouille,
+  )
   const basculerMois = () => {
     if (pasMaintenant()) return
     const fermer = !moisVerrouille
-    const visees = lundis.filter((l) => !!etats.get(l)?.verrouillee !== fermer)
+    const visees = [...viseesVerrou]
     void pendant(async () => {
       const ok = await parSemaine(
         fermer ? 'Verrouillage du mois' : 'Déverrouillage du mois',
@@ -362,28 +369,18 @@ export function VueMois({
   ) => {
     const { lundi, jour } = reperer(date)
     const c = caseDe(semaines, referentiel?.motifs ?? [], salarieId, date)
-    const valeurs = {
-      horaire_id: h.id,
-      debut: h.debut,
-      fin: h.fin,
-      court: false,
-      pause: h.pause,
-    }
+    // Même écriture que la semaine : une absence posée à la main est retirée
+    // avant de planifier le jour, et remise si le shift est refusé.
     void executer(
       lundi,
-      async () => {
-        if (c?.type === 'shift') return modifierShift(c.shift.id, valeurs)
-        // Une absence posée à la main est retirée avant de planifier le jour.
-        if (c?.type === 'absence' && !c.fixe)
-          await poserAbsences(salarieId, [date], null)
-        return ajouterShift(lundi, {
-          salarie_id: salarieId,
-          poste_id: posteId,
-          jour,
-          epinglee: true,
-          ...valeurs,
-        })
-      },
+      poserHoraireCase(
+        lundi,
+        { salarie_id: salarieId, jour },
+        c?.type === 'shift' ? c.shift : undefined,
+        c?.type === 'absence' ? { fixe: c.fixe, motif_id: c.motifId } : null,
+        h,
+        posteId,
+      ),
       "L'horaire n'a pas été posé",
       { salarieId, jour },
     )
@@ -578,8 +575,12 @@ export function VueMois({
           : occupe
             ? 'Calcul en cours…'
             : undefined,
-    onClick: basculerMois,
+    onClick: () => {
+      if (!pasMaintenant()) setConfirmation('verrou')
+    },
   }
+  const plusieursVerrou = viseesVerrou.length > 1
+  const semainesVerrou = `${plusieursVerrou ? 'Les semaines' : 'La semaine'} ${listeSemaines(viseesVerrou, numeroSemaine)}`
 
   const nomDuMois = NOM_MOIS.format(new Date(`${mois}-01T12:00:00Z`))
   const ceMois = aujourdhui.slice(0, 7)
@@ -606,35 +607,23 @@ export function VueMois({
           (a) => a.salarie_id === menu.salarieId && a.jour === reperesMenu.jour,
         )
       : undefined
-  const horaireMenu = shiftMenu
-    ? referentiel?.horaires.find((h) => h.id === shiftMenu.type_shift_id)
-    : undefined
+  // Même écriture que la semaine : une seule journée étoile, et début et fin
+  // recalculés à chaque bascule (la base enregistre les heures telles quelles).
+  const etoile =
+    shiftMenu && semaineMenu && personneMenu && referentiel
+      ? etoileProposee(semaineMenu, personneMenu, referentiel.horaires, {
+          salarie_id: shiftMenu.salarie_id,
+          jour: shiftMenu.jour,
+        })
+      : undefined
   const etoileMenu =
-    shiftMenu &&
-    personneMenu &&
-    !personneMenu.forfait_jours &&
-    personneMenu.heures_hebdo > 35 &&
-    horaireMenu?.raccourci
+    etoile && shiftMenu && reperesMenu
       ? {
-          active: shiftMenu.court,
+          active: etoile.active,
           onBasculer: () =>
             void executer(
-              reperesMenu!.lundi,
-              async () => {
-                if (shiftMenu.court)
-                  return modifierShift(shiftMenu.id, { court: false })
-                // Une seule journée étoile dans la semaine : elle quitte l'autre jour.
-                for (const a of semaineMenu?.affectations ?? []) {
-                  if (
-                    a.salarie_id === shiftMenu.salarie_id &&
-                    a.court &&
-                    a.id !== shiftMenu.id
-                  ) {
-                    await modifierShift(a.id, { court: false })
-                  }
-                }
-                return modifierShift(shiftMenu.id, { court: true })
-              },
+              reperesMenu.lundi,
+              etoile.basculer,
               "La journée étoile n'a pas été changée",
               { salarieId: shiftMenu.salarie_id, jour: shiftMenu.jour },
             ),
@@ -786,6 +775,20 @@ export function VueMois({
             'Le mois est remis en proposition',
           )
         }
+      />
+      <ConfirmDialog
+        open={confirmation === 'verrou'}
+        onOpenChange={(o) => !o && setConfirmation(null)}
+        title={
+          moisVerrouille ? 'Déverrouiller le mois ?' : 'Verrouiller le mois ?'
+        }
+        description={
+          moisVerrouille
+            ? `${semainesVerrou} ${plusieursVerrou ? 'redeviennent modifiables' : 'redevient modifiable'}, et la génération peut de nouveau ${plusieursVerrou ? 'les' : 'la'} changer.`
+            : `${semainesVerrou} ${plusieursVerrou ? 'deviennent' : 'devient'} un planning réalisé : plus aucune modification ni génération, jusqu'à ce que la gestion ${plusieursVerrou ? 'les' : 'la'} rouvre.`
+        }
+        confirmLabel={moisVerrouille ? 'Déverrouiller' : 'Verrouiller'}
+        onConfirm={basculerMois}
       />
     </div>
   )

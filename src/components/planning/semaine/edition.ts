@@ -200,13 +200,15 @@ export const travailCode = (h: Pick<Horaire, 'debut' | 'fin' | 'pause'>) =>
 /**
  * Pose ou change l'horaire d'une case (clic droit). Un shift : il prend ce
  * code (journée étoile retirée). Un jour d'absence non fixe : l'absence est
- * retirée, puis le shift posé. Sinon : un shift validé sur le poste de référence.
+ * retirée, puis le shift posé ; si le shift est refusé, l'absence est remise
+ * avec son motif (deux appels, pas une transaction : rien ne doit se perdre).
+ * Sinon : un shift validé sur le poste de référence.
  */
 export function poserHoraire(
   lundi: string,
   o: CaseJour,
   shift: ShiftOut | undefined,
-  absence: { fixe: boolean } | null,
+  absence: { fixe: boolean; motif_id?: number | null } | null,
   h: Horaire,
   posteId: number,
 ): () => Promise<void> {
@@ -219,19 +221,28 @@ export function poserHoraire(
   }
   if (shift) return () => service.modifierShift(shift.id, valeurs)
   return async () => {
-    if (absence && !absence.fixe) {
-      await service.poserAbsences(
-        o.salarie_id,
-        [ajouterJours(lundi, o.jour)],
-        null,
-      )
+    const date = ajouterJours(lundi, o.jour)
+    const retiree = absence && !absence.fixe
+    if (retiree) await service.poserAbsences(o.salarie_id, [date], null)
+    try {
+      await service.ajouterShift(lundi, {
+        ...o,
+        poste_id: posteId,
+        ...valeurs,
+        epinglee: true,
+      })
+    } catch (err) {
+      if (retiree && absence.motif_id != null) {
+        try {
+          await service.poserAbsences(o.salarie_id, [date], absence.motif_id)
+        } catch {
+          throw new Error(
+            "le shift a été refusé et l'absence du jour n'a pas pu être remise : posez-la de nouveau",
+          )
+        }
+      }
+      throw err
     }
-    await service.ajouterShift(lundi, {
-      ...o,
-      poste_id: posteId,
-      ...valeurs,
-      epinglee: true,
-    })
   }
 }
 

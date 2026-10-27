@@ -14,7 +14,7 @@ import {
 } from '#/lib/planning/affichage.ts'
 import type { Fiche } from '#/lib/planning/regles.ts'
 import { estEcole } from '#/lib/planning/semaine.ts'
-import { ajouterJours, ecartJours } from '#/lib/planning/temps.ts'
+import { ajouterJours, ecartJours, lundiDe } from '#/lib/planning/temps.ts'
 import type {
   Absence,
   Competence,
@@ -34,6 +34,10 @@ export interface PeriodeBrouillon {
   debut: string
   fin: string
   motif_id: number
+  /** La période telle que lue en base (`empreintePeriode`) ; absente pour
+   * une période ajoutée dans la fiche. Une période qui la garde n'a pas été
+   * touchée : la base l'a acceptée, la fiche ne la refuse jamais. */
+  lue?: string
 }
 
 export interface Brouillon extends Omit<Salarie, 'id'> {
@@ -88,6 +92,15 @@ export function brouillonVierge(groupeId: number | null = null): Brouillon {
   }
 }
 
+const empreintePeriode = (
+  p: Pick<PeriodeBrouillon, 'debut' | 'fin' | 'motif_id'>,
+) => `${p.debut}|${p.fin}|${p.motif_id}`
+
+/** La période est encore telle que lue en base (ni ajoutée ni retouchée). */
+export const periodeDeLaBase = (
+  p: Pick<PeriodeBrouillon, 'debut' | 'fin' | 'motif_id' | 'lue'>,
+) => p.lue === empreintePeriode(p)
+
 /** Les jours d'absence lus en base, regroupés en périodes de même motif. */
 export function periodesDe(absences: Absence[]): PeriodeBrouillon[] {
   return enPeriodes(absences).map((p) => ({
@@ -95,6 +108,7 @@ export function periodesDe(absences: Absence[]): PeriodeBrouillon[] {
     debut: p.debut,
     fin: p.fin,
     motif_id: p.motif_id,
+    lue: empreintePeriode(p),
   }))
 }
 
@@ -143,17 +157,31 @@ export function dateValide(iso: string | null | undefined): iso is string {
   )
 }
 
-/** Deux vraies dates, dans l'ordre, sur moins de trois ans. Une période en
- * cours de saisie (date effacée, année à moitié tapée) n'en est pas une. */
+/** Durée maximale d'une période SAISIE dans la fiche (une année à moitié
+ * tapée ferait des milliers de jours). */
+const JOURS_MAX_PERIODE = 3 * 366
+
+/** Ce qui rend une période inutilisable (null : rien). Une période lue en
+ * base et non retouchée n'est jamais refusée pour sa longueur. */
+export function erreurPeriode(
+  p: Pick<PeriodeBrouillon, 'debut' | 'fin' | 'motif_id' | 'lue'>,
+): string | null {
+  if (!dateValide(p.debut) || !dateValide(p.fin))
+    return "Une période d'absence est incomplète : indiquez ses deux dates."
+  if (p.debut > p.fin)
+    return "Une période d'absence finit avant de commencer : vérifiez ses dates."
+  if (!periodeDeLaBase(p) && ecartJours(p.debut, p.fin) > JOURS_MAX_PERIODE)
+    return "Une période d'absence dépasse trois ans : découpez-la en plusieurs périodes."
+  return null
+}
+
+/** Deux vraies dates, dans l'ordre, et pas plus de trois ans pour une
+ * période saisie. Une période en cours de saisie (date effacée, année à
+ * moitié tapée) n'en est pas une. */
 export function periodeLisible(
-  p: Pick<PeriodeBrouillon, 'debut' | 'fin'>,
+  p: Pick<PeriodeBrouillon, 'debut' | 'fin' | 'motif_id' | 'lue'>,
 ): boolean {
-  return (
-    dateValide(p.debut) &&
-    dateValide(p.fin) &&
-    p.debut <= p.fin &&
-    ecartJours(p.debut, p.fin) <= 3 * 366
-  )
+  return erreurPeriode(p) === null
 }
 
 /** Jour → motif, d'après les périodes (une période plus bas l'emporte). */
@@ -195,6 +223,69 @@ export function diffAbsences(
 
 export const diffVide = (d: DiffAbsences) =>
   d.poser.size === 0 && d.retirer.length === 0
+
+/**
+ * Ce qu'il faut écrire pour appliquer la saisie à la base RELUE : seuls les
+ * jours que la fiche a changés (de `initial`, ses jours à l'ouverture, à
+ * `voulu`) sont posés ou retirés. Un jour posé depuis le planning pendant
+ * que la fiche était ouverte n'est donc jamais effacé.
+ */
+export function fusionnerAbsences(
+  base: Map<string, number>,
+  initial: Map<string, number>,
+  voulu: Map<string, number>,
+): DiffAbsences {
+  const changes = diffAbsences(initial, voulu)
+  const poser = new Map<number, string[]>()
+  for (const [motif, jours] of changes.poser) {
+    const aPoser = jours.filter((j) => base.get(j) !== motif)
+    if (aPoser.length) poser.set(motif, aPoser)
+  }
+  return { poser, retirer: changes.retirer.filter((j) => base.has(j)) }
+}
+
+/** Les jours ainsi changés, appliqués à la base relue. */
+export function joursFusionnes(
+  base: Map<string, number>,
+  initial: Map<string, number>,
+  voulu: Map<string, number>,
+): Map<string, number> {
+  const r = new Map(base)
+  const d = fusionnerAbsences(base, initial, voulu)
+  for (const j of d.retirer) r.delete(j)
+  for (const [motif, jours] of d.poser) for (const j of jours) r.set(j, motif)
+  return r
+}
+
+/** Le changement sans les jours des semaines verrouillées (la base refuserait
+ * tout l'appel), et les jours ainsi gardés tels quels. */
+export function horsSemainesVerrouillees(
+  diff: DiffAbsences,
+  verrous: string[],
+): { diff: DiffAbsences; gardes: string[] } {
+  const verrouille = (j: string) => verrous.includes(lundiDe(j))
+  const gardes: string[] = []
+  const garder = (jours: string[]) => {
+    gardes.push(...jours.filter(verrouille))
+    return jours.filter((j) => !verrouille(j))
+  }
+  const poser = new Map<number, string[]>()
+  for (const [motif, jours] of diff.poser) {
+    const libres = garder(jours)
+    if (libres.length) poser.set(motif, libres)
+  }
+  const retirer = garder(diff.retirer)
+  return { diff: { poser, retirer }, gardes: [...new Set(gardes)].sort() }
+}
+
+/** Suite du message d'enregistrement : les jours de semaine verrouillée
+ * gardés (vide s'il n'y en a pas). */
+export function messageJoursGardes(gardes: number): string {
+  if (!gardes) return ''
+  return gardes > 1
+    ? ` ${gardes} jours d'absence en semaine verrouillée sont gardés tels quels : rouvrez ces semaines pour les changer.`
+    : " 1 jour d'absence en semaine verrouillée est gardé tel quel : rouvrez cette semaine pour le changer."
+}
 
 /** Les jours d'une carte : filtrés par un prédicat. */
 export function filtrerJours(
@@ -334,8 +425,9 @@ export function erreurBrouillon(b: Brouillon): string | null {
   if (b.date_entree && b.date_sortie && b.date_sortie < b.date_entree) {
     return "La fin de contrat ne peut pas précéder l'arrivée."
   }
-  if (b.absences.some((p) => !periodeLisible(p))) {
-    return "Une période d'absence est incomplète : indiquez ses deux dates."
+  for (const p of b.absences) {
+    const e = erreurPeriode(p)
+    if (e) return e
   }
   return null
 }
@@ -391,7 +483,9 @@ export interface PlanEvolution {
  * (sauf s'il était déjà fini avant), le nouveau s'ouvre à la date choisie,
  * relié par `suite_de`, avec ses postes (soutien → titulaire hors
  * alternance), ses congés à venir (sans l'école hors alternance) et sa
- * semaine type (jours d'école remis en Libre hors alternance).
+ * semaine type (jours d'école remis en Libre hors alternance). `jours` :
+ * les jours d'absence à répartir (par défaut ceux du brouillon ; la fiche
+ * passe ceux de la base relue, avec ses propres changements).
  */
 export function planEvolution(
   b: Brouillon & { id: number },
@@ -399,6 +493,7 @@ export function planEvolution(
   postes: Poste[],
   groupes: Groupe[],
   motifs: Motif[],
+  jours: Map<string, number> = joursDesPeriodes(b.absences),
 ): PlanEvolution {
   const veille = ajouterJours(e.date, -1)
   const finAncien =
@@ -410,7 +505,6 @@ export function planEvolution(
   )
   const ecoleId = (id: number | null | undefined) =>
     !!motifs.find((m) => m.id === id && estEcole(m))
-  const jours = joursDesPeriodes(b.absences)
   const base = valeursSalarie(b)
   const ancien: ValeursSalarie = { ...base, date_sortie: finAncien }
   const nouveau: ValeursSalarie = {

@@ -271,6 +271,11 @@ describe('VueMois', () => {
     monter()
     await charge()
     fireEvent.click(screen.getByRole('button', { name: 'Verrouiller le mois' }))
+    // Une confirmation nomme les semaines touchées, avant toute écriture.
+    expect(await screen.findByText('Verrouiller le mois ?')).toBeTruthy()
+    expect(screen.getByText(/S45, S46, S47, S48 et S49/)).toBeTruthy()
+    expect(service.verrouiller).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Verrouiller' }))
     await waitFor(() => expect(service.verrouiller).toHaveBeenCalledTimes(5))
     // La semaine déjà verrouillée n'est pas reverrouillée.
     expect(service.verrouiller.mock.calls.map((c) => c[0])).toEqual([
@@ -280,5 +285,79 @@ describe('VueMois', () => {
       '2026-11-23',
       '2026-11-30',
     ])
+  })
+
+  it('journée étoile : début et fin recalculés pour chaque shift touché', async () => {
+    droits = { pret: true, lire: true, ecrire: true, gerer: false }
+    const base = {
+      lundi: '2026-11-16',
+      salarie_id: 3,
+      poste_id: 2,
+      horaire_id: 1,
+      epinglee: true,
+      pause: 45,
+    }
+    affectations = [
+      { ...base, id: 1, jour: 0, debut: '07:00', fin: '15:45', court: false },
+      { ...base, id: 2, jour: 2, debut: '07:00', fin: '14:45', court: true },
+    ]
+    monter()
+    await charge()
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /^Lucas Petit, .*16.* · Matin 07:00–15:45/,
+      }),
+    )
+    fireEvent.click(
+      await screen.findByRole('menuitem', { name: /Journée étoile/ }),
+    )
+    await waitFor(() => expect(service.modifierShift).toHaveBeenCalledTimes(2))
+    // L'ancienne journée courte reprend ses heures pleines, la nouvelle les perd.
+    expect(service.modifierShift).toHaveBeenNthCalledWith(1, 2, {
+      court: false,
+      debut: '07:00',
+      fin: '15:45',
+    })
+    expect(service.modifierShift).toHaveBeenNthCalledWith(2, 1, {
+      court: true,
+      debut: '07:00',
+      fin: '14:45',
+    })
+  })
+
+  it('poser un horaire sur une absence : refusé, l’absence est remise', async () => {
+    droits = { pret: true, lire: true, ecrire: true, gerer: false }
+    const conges = demo.referentiel.motifs.find((m) => m.code === 'CP')!.id
+    service.fetchShifts.mockImplementation(() =>
+      Promise.resolve({
+        affectations,
+        absences: [
+          ...demo.absences,
+          { id: 999, salarie_id: 3, jour: '2026-11-18', motif_id: conges },
+        ],
+      }),
+    )
+    service.ajouterShift.mockImplementationOnce(() =>
+      Promise.reject(Object.assign(new Error('refus'), { code: 'PL400' })),
+    )
+    monter()
+    await charge()
+    fireEvent.click(
+      screen.getByRole('button', { name: /^Lucas Petit, .*18.* : Congés/ }),
+    )
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Matin/ }))
+    await waitFor(() => expect(service.poserAbsences).toHaveBeenCalledTimes(2))
+    expect(service.poserAbsences).toHaveBeenNthCalledWith(
+      1,
+      3,
+      ['2026-11-18'],
+      null,
+    )
+    expect(service.poserAbsences).toHaveBeenNthCalledWith(
+      2,
+      3,
+      ['2026-11-18'],
+      conges,
+    )
   })
 })

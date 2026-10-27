@@ -8,6 +8,11 @@ import {
   waitFor,
 } from '@testing-library/react'
 
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+
+import { FilMessages } from '#/components/planning/Messages.tsx'
+import { TooltipProvider } from '#/components/ui/tooltip.tsx'
+import { planningKeys } from '#/lib/planning/keys.ts'
 import { hotelDemo } from '#/lib/planning/test/hotelDemo.ts'
 import type { Absence } from '#/lib/planning/types.ts'
 
@@ -22,6 +27,7 @@ import type { Absence } from '#/lib/planning/types.ts'
 const etat = vi.hoisted(() => ({
   niveau: 'gestion',
   absences: [] as Absence[],
+  verrous: [] as string[],
 }))
 const service = vi.hoisted(() => ({
   enregistrerSalarie: vi.fn(async (_v: unknown, id: number | null) => id ?? 99),
@@ -47,7 +53,10 @@ vi.mock('#/components/auth/AuthContext.tsx', () => ({
   }),
 }))
 vi.mock('#/lib/planning/service.ts', () => ({
-  fetchReferentiel: async () => structuredClone(demo.referentiel),
+  fetchReferentiel: async () => ({
+    ...structuredClone(demo.referentiel),
+    verrous: [...etat.verrous],
+  }),
   fetchAbsencesSalarie: async (id: number) =>
     etat.absences.filter((a) => a.salarie_id === id),
   fetchSemaine: vi.fn(),
@@ -69,7 +78,12 @@ afterEach(cleanup)
 beforeEach(() => {
   etat.niveau = 'gestion'
   etat.absences = []
+  etat.verrous = []
   vi.clearAllMocks()
+  service.enregistrerSalarie.mockImplementation(
+    async (_v: unknown, id: number | null) => id ?? 99,
+  )
+  service.poserAbsences.mockImplementation(async () => {})
 })
 
 const onFermer = vi.fn()
@@ -84,6 +98,30 @@ function ouvrir(salarieId: number | null) {
 
 // Lucas Petit : hôtelier CDI 39 h, Réception et Club titulaire, sans absence.
 const LUCAS = 3
+
+const jourAbsent = (jour: string, motif_id = 1, id = 0): Absence => ({
+  id,
+  salarie_id: LUCAS,
+  jour,
+  motif_id,
+})
+
+/** Les jours d'absence de `debut` à `fin` (compris). */
+function joursEntre(debut: string, fin: string): string[] {
+  const r: string[] = []
+  for (
+    let d = new Date(`${debut}T12:00:00Z`);
+    d.toISOString().slice(0, 10) <= fin;
+    d = new Date(d.getTime() + 86_400_000)
+  )
+    r.push(d.toISOString().slice(0, 10))
+  return r
+}
+
+const enregistrerEtAttendre = async () => {
+  fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+  await waitFor(() => expect(onFermer).toHaveBeenCalled())
+}
 
 describe('FicheSalarie', () => {
   it('en lecture : champs grisés, ni Enregistrer actif ni Supprimer', async () => {
@@ -305,5 +343,154 @@ describe('FicheSalarie', () => {
     expect(
       screen.getByRole('list', { name: 'Règles HCR appliquées' }).textContent,
     ).toContain('R-NUIT-MINEUR')
+  })
+
+  it("s'ouvre sur les absences RELUES, pas sur celles du cache", async () => {
+    // Le cache dit « aucune absence » ; depuis, le planning en a posé une.
+    etat.absences = [jourAbsent('2026-11-10')]
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    // Référentiel déjà en cache aussi : rien n'attend le réseau pour s'ouvrir.
+    qc.setQueryData(
+      planningKeys.referentiel(),
+      structuredClone(demo.referentiel),
+    )
+    qc.setQueryData(planningKeys.absences(LUCAS), [])
+    render(
+      <QueryClientProvider client={qc}>
+        <TooltipProvider>
+          <FilMessages>
+            <FicheSalarie salarieId={LUCAS} ouvert onFermer={onFermer} />
+          </FilMessages>
+        </TooltipProvider>
+      </QueryClientProvider>,
+    )
+    const au = await screen.findByLabelText<HTMLInputElement>('Au')
+    expect(au.value).toBe('2026-11-10')
+    fireEvent.change(screen.getByLabelText('Prénom'), {
+      target: { value: 'Luc' },
+    })
+    await enregistrerEtAttendre()
+    expect(service.poserAbsences).not.toHaveBeenCalled()
+  })
+
+  it('un jour posé depuis le planning pendant la saisie est gardé', async () => {
+    ouvrir(LUCAS)
+    const prenom = await screen.findByLabelText<HTMLInputElement>('Prénom')
+    // Fiche ouverte sans absence ; le planning en pose une entre-temps.
+    etat.absences = [jourAbsent('2026-11-10')]
+    fireEvent.change(prenom, { target: { value: 'Luc' } })
+    await enregistrerEtAttendre()
+    expect(service.poserAbsences).not.toHaveBeenCalled()
+  })
+
+  it('les jours des semaines verrouillées ne sont pas touchés, et le message le dit', async () => {
+    etat.verrous = ['2026-11-02']
+    etat.absences = [
+      ...['2026-11-02', '2026-11-03', '2026-11-04'].map((j, i) =>
+        jourAbsent(j, 1, i + 1),
+      ),
+      jourAbsent('2026-11-10', 1, 4),
+    ]
+    ouvrir(LUCAS)
+    await screen.findAllByLabelText('Au')
+    for (const b of screen.getAllByRole('button', {
+      name: "Retirer l'absence",
+    }))
+      fireEvent.click(b)
+    await enregistrerEtAttendre()
+    expect(service.poserAbsences).toHaveBeenCalledTimes(1)
+    expect(service.poserAbsences).toHaveBeenCalledWith(
+      LUCAS,
+      ['2026-11-10'],
+      null,
+    )
+    expect(await screen.findByText(/en semaine verrouillée/)).toBeTruthy()
+  })
+
+  it('une longue absence lue en base ne bloque pas l’enregistrement', async () => {
+    etat.absences = joursEntre('2026-11-02', '2030-11-15').map((j, i) =>
+      jourAbsent(j, 1, i + 1),
+    )
+    ouvrir(LUCAS)
+    fireEvent.change(await screen.findByLabelText('Prénom'), {
+      target: { value: 'Luc' },
+    })
+    await enregistrerEtAttendre()
+    expect(service.enregistrerSalarie).toHaveBeenCalledTimes(1)
+    expect(service.poserAbsences).not.toHaveBeenCalled()
+  })
+
+  /** Ouvre le bloc Nouveau contrat au 04/01/2027 et le valide. */
+  async function evoluerAu4Janvier() {
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Faire évoluer le contrat/ }),
+    )
+    fireEvent.change(screen.getByLabelText('À partir du'), {
+      target: { value: '2027-01-04' },
+    })
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Créer le nouveau contrat' }),
+    )
+  }
+
+  it('évolution : les absences sont posées sur le nouveau contrat AVANT d’être retirées de l’ancien', async () => {
+    etat.absences = [jourAbsent('2027-02-10')]
+    ouvrir(LUCAS)
+    await evoluerAu4Janvier()
+    await waitFor(() => expect(service.poserAbsences).toHaveBeenCalledTimes(2))
+    expect(service.poserAbsences).toHaveBeenNthCalledWith(
+      1,
+      99,
+      ['2027-02-10'],
+      1,
+    )
+    expect(service.poserAbsences).toHaveBeenNthCalledWith(
+      2,
+      LUCAS,
+      ['2027-02-10'],
+      null,
+    )
+  })
+
+  it('évolution : la pose sur le nouveau contrat échoue, l’ancien garde ses absences', async () => {
+    etat.absences = [jourAbsent('2027-02-10')]
+    service.poserAbsences.mockImplementation(async (...a: unknown[]) => {
+      if (a[0] === 99) throw new Error('refus')
+    })
+    ouvrir(LUCAS)
+    await evoluerAu4Janvier()
+    await waitFor(() => expect(onFermer).toHaveBeenCalled())
+    expect(service.poserAbsences).toHaveBeenCalledTimes(1)
+    expect(service.poserAbsences).not.toHaveBeenCalledWith(
+      LUCAS,
+      expect.anything(),
+      null,
+    )
+  })
+
+  it('évolution refusée : le contrat est rétabli tel qu’enregistré, pas tel que saisi', async () => {
+    service.enregistrerSalarie.mockImplementation(
+      async (_v: unknown, id: number | null) => {
+        if (id === null) throw new Error('refus')
+        return id
+      },
+    )
+    ouvrir(LUCAS)
+    fireEvent.change(await screen.findByLabelText('Prénom'), {
+      target: { value: 'Luc' },
+    })
+    await evoluerAu4Janvier()
+    await waitFor(() =>
+      expect(service.enregistrerSalarie).toHaveBeenCalledTimes(3),
+    )
+    const [valeurs, id] = service.enregistrerSalarie.mock.calls[2] as [
+      { prenom: string; date_sortie: string | null },
+      number,
+    ]
+    expect(id).toBe(LUCAS)
+    expect(valeurs.prenom).toBe('Lucas')
+    expect(valeurs.date_sortie).toBeNull()
   })
 })

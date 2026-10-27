@@ -11,7 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { useAuth } from '#/components/auth/AuthContext.tsx'
-import { messageErreur } from '#/lib/planning/erreurs.ts'
+import { codeErreur, messageErreur } from '#/lib/planning/erreurs.ts'
 import { planningKeys } from '#/lib/planning/keys.ts'
 import {
   analyser,
@@ -247,7 +247,10 @@ export function useGenerer() {
  * Horaires fixes toujours posés (prototype `poser_fixes`) : à l'ouverture
  * d'une semaine à venir, avec le droit d'écriture, le personnel à jours fixes
  * qui n'y a encore rien est posé d'après sa fiche, sans rien retirer. Une
- * seule tentative par semaine et par montage.
+ * seule tentative par semaine et par montage. `pendant` (de `useOccupation`)
+ * marque la page occupée le temps du calcul : une saisie faite entre-temps
+ * ferait refuser la pose (PL409, le planning a changé). Ce refus est réessayé
+ * UNE fois, `generer` relisant l'état de la base avant de recalculer.
  */
 export function usePoserFixes(
   lundi: string,
@@ -255,6 +258,7 @@ export function usePoserFixes(
   ecrire: boolean,
   aujourdhui: string,
   surMessage: (texte: string) => void,
+  pendant?: <T>(action: () => Promise<T>) => Promise<T>,
 ) {
   const generer = useGenerer()
   const tentees = useRef(new Set<string>())
@@ -264,13 +268,23 @@ export function usePoserFixes(
     const aPoser = aPoserFixes(donnees, aujourdhui)
     if (!aPoser.size) return
     tentees.current.add(lundi)
-    generer(lundi, {
-      seulement: aPoser,
-      sansEffacer: true,
-      titulairesSeulement: true,
-      aujourdhui,
-    }).catch((err: unknown) => {
-      surMessage(messageErreur(err, 'Horaires fixes non posés'))
-    })
-  }, [lundi, donnees, ecrire, aujourdhui, generer, surMessage])
+    const poser = () =>
+      generer(lundi, {
+        seulement: aPoser,
+        sansEffacer: true,
+        titulairesSeulement: true,
+        aujourdhui,
+      })
+    const travail = async () => {
+      try {
+        await poser().catch((err: unknown) => {
+          if (codeErreur(err) !== 'PL409') throw err
+          return poser()
+        })
+      } catch (err) {
+        surMessage(messageErreur(err, 'Horaires fixes non posés'))
+      }
+    }
+    void (pendant ? pendant(travail) : travail())
+  }, [lundi, donnees, ecrire, aujourdhui, generer, surMessage, pendant])
 }
