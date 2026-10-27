@@ -18,17 +18,20 @@ import {
   ChevronRight,
   ClipboardPaste,
   GraduationCap,
+  Undo2,
 } from 'lucide-react'
 
 import { DatesCfaDialog } from '#/components/planning/parametres/equipe/DatesCfaDialog.tsx'
 import type { PeriodeBrouillon } from '#/components/planning/parametres/equipe/brouillon.ts'
 import {
   anneeScolaire,
+  appliquerPlage,
   avecJoursEcole,
   basculerJourEcole,
   basculerSemaine,
   dateLongue,
   dateShift,
+  ecart,
   ecoleFixe,
   etatSemaine,
   joursEcole,
@@ -61,10 +64,28 @@ const MOIS = new Intl.DateTimeFormat('fr-FR', {
 })
 const nomMois = (mois: string) => MOIS.format(new Date(`${mois}-15T12:00:00Z`))
 
-interface Trace {
+interface Geste {
   depart: string
+  courant: string
+  /** Vrai : la plage passe à l'école ; faux : elle revient à l'hôtel. */
   ecole: boolean
-  avant: Set<string>
+}
+
+/** Ce que fera le geste en cours, en clair. */
+function resumer(g: Geste, n: number): string {
+  const [debut, fin] =
+    g.depart <= g.courant ? [g.depart, g.courant] : [g.courant, g.depart]
+  const quoi =
+    n === 0
+      ? 'aucun jour ne change'
+      : g.ecole
+        ? n > 1
+          ? `${n} jours passent à l'école`
+          : "1 jour passe à l'école"
+        : n > 1
+          ? `${n} jours reviennent à l'hôtel`
+          : "1 jour revient à l'hôtel"
+  return `${periodeTexte({ debut, fin })} : ${quoi}. Relâchez pour valider, Échap pour abandonner.`
 }
 
 export function CalendrierEcole({
@@ -105,43 +126,97 @@ export function CalendrierEcole({
   const enregistrer = (j: Set<string>) =>
     onAbsences(avecJoursEcole(absences, ecole.id, j))
 
-  // Glisser à la souris : la plage depuis le premier jour, appliquée sur
-  // l'état d'avant le glisser (revenir en arrière la défait).
-  const trace = useRef<Trace | null>(null)
-  const parSouris = useRef(false)
-  useEffect(() => {
-    const terminer = () => {
-      trace.current = null
-    }
-    window.addEventListener('pointerup', terminer)
-    window.addEventListener('pointercancel', terminer)
-    return () => {
-      window.removeEventListener('pointerup', terminer)
-      window.removeEventListener('pointercancel', terminer)
-    }
-  }, [])
-  const commencer = (e: EvenementPointeur, j: string) => {
-    if (disabled || e.pointerType !== 'mouse' || e.button !== 0) return
-    e.preventDefault()
-    parSouris.current = true
-    trace.current = { depart: j, ecole: !jours.has(j), avant: jours }
-    enregistrer(peindre(jours, [j], !jours.has(j), modifiable))
+  // Chaque changement garde l'état d'avant : « Défaire » le défait (une
+  // mauvaise manipulation se rattrape sans tout refaire).
+  const [historique, setHistorique] = useState<Array<Set<string>>>([])
+  const changer = (suite: Set<string>) => {
+    if (!ecart(jours, suite)) return
+    setHistorique((h) => [...h.slice(-29), jours])
+    enregistrer(suite)
   }
-  const etendre = (j: string) => {
-    const t = trace.current
-    if (!t) return
-    enregistrer(peindre(t.avant, plage(t.depart, j), t.ecole, modifiable))
-  }
-  const cliquer = (j: string) => {
-    // Le clic qui suit un appui à la souris est déjà traité.
-    if (parSouris.current) {
-      parSouris.current = false
-      return
-    }
-    enregistrer(peindre(jours, [j], !jours.has(j), modifiable))
+  const annuler = () => {
+    const precedent = historique.at(-1)
+    if (!precedent) return
+    setHistorique((h) => h.slice(0, -1))
+    enregistrer(precedent)
   }
 
-  const dansAnnee = [...jours].filter((j) => j >= debut && j <= fin)
+  // Plage d'un geste : appuyer sur un jour, relâcher sur un autre (même
+  // dans un autre mois, dans un sens ou dans l'autre). Partir d'un jour
+  // d'école la retire. Aperçu pendant le geste, appliqué au relâcher ;
+  // Échap l'abandonne.
+  const [geste, setGeste] = useState<Geste | null>(null)
+  const apercu = geste
+    ? appliquerPlage(
+        jours,
+        geste.depart,
+        geste.courant,
+        geste.ecole,
+        modifiable,
+      )
+    : jours
+  const dansGeste = new Set(geste ? plage(geste.depart, geste.courant) : [])
+  const appliquer = useRef<() => void>(() => undefined)
+  appliquer.current = () => {
+    if (!geste) return
+    changer(apercu)
+    setGeste(null)
+  }
+  const enGeste = geste !== null
+  useEffect(() => {
+    if (!enGeste) return
+    const relacher = () => appliquer.current()
+    const abandonner = () => setGeste(null)
+    const clavier = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      e.preventDefault()
+      e.stopPropagation()
+      abandonner()
+    }
+    window.addEventListener('pointerup', relacher)
+    window.addEventListener('pointercancel', abandonner)
+    // En capture : Échap pendant un geste ne ferme pas la fiche.
+    window.addEventListener('keydown', clavier, true)
+    return () => {
+      window.removeEventListener('pointerup', relacher)
+      window.removeEventListener('pointercancel', abandonner)
+      window.removeEventListener('keydown', clavier, true)
+    }
+  }, [enGeste])
+  // Dernier jour touché : Maj + clic prend la plage depuis lui.
+  const ancre = useRef<string | null>(null)
+  // Dernier pointeur appuyé : un clic de souris est déjà traité à l'appui.
+  const pointeur = useRef('')
+  const commencer = (e: EvenementPointeur, j: string) => {
+    pointeur.current = e.pointerType
+    if (disabled || e.pointerType !== 'mouse' || e.button !== 0) return
+    e.preventDefault()
+    if (e.shiftKey && ancre.current) {
+      changer(
+        appliquerPlage(jours, ancre.current, j, !jours.has(j), modifiable),
+      )
+    } else {
+      setGeste({ depart: j, courant: j, ecole: !jours.has(j) })
+    }
+    ancre.current = j
+  }
+  const etendre = (j: string) => {
+    if (geste && geste.courant !== j) setGeste({ ...geste, courant: j })
+  }
+  const cliquer = (j: string, maj: boolean, pointe: boolean) => {
+    // Un clic de souris (pointé, pas le clavier) est déjà traité à l'appui.
+    if (pointe && pointeur.current === 'mouse') return
+    // Clavier ou doigt.
+    changer(
+      maj && ancre.current
+        ? appliquerPlage(jours, ancre.current, j, !jours.has(j), modifiable)
+        : peindre(jours, [j], !jours.has(j), modifiable),
+    )
+    ancre.current = j
+  }
+  const resumeGeste = geste ? resumer(geste, ecart(jours, apercu)) : null
+
+  const dansAnnee = [...apercu].filter((j) => j >= debut && j <= fin)
   const prochaine = prochainePeriode(jours, aujourdhui)
   const retires = shiftsSurEcole(shifts, joursAvant, jours).filter((s) =>
     modifiable(dateShift(s)),
@@ -175,9 +250,10 @@ export function CalendrierEcole({
         </Button>
       </div>
       <p className="text-xs text-muted-foreground">
-        Cliquez sur ses jours d'école, ou glissez pour en prendre plusieurs. Le
-        numéro de semaine prend du lundi au vendredi. Le moteur ne la planifie
-        jamais ces jours-là.
+        Un clic pose ou retire un jour. Pour une plage, appuyez sur le premier
+        jour et relâchez sur le dernier, même dans un autre mois : le week-end
+        n'est pris que si vous le visez. Partir d'un jour d'école retire la
+        plage. Le numéro de semaine prend du lundi au vendredi.
       </p>
       <p className="text-xs">
         {prochaine ? (
@@ -224,13 +300,24 @@ export function CalendrierEcole({
         >
           <ChevronLeft />
         </Button>
-        <span className="text-xs font-medium">
+        <span className="flex flex-wrap items-center justify-center gap-x-2 text-xs font-medium">
           Année {debut.slice(0, 4)}-{fin.slice(0, 4)}
-          <span className="ml-2 font-normal text-muted-foreground">
+          <span className="font-normal text-muted-foreground">
             {dansAnnee.length > 1
               ? `${dansAnnee.length} jours d'école`
               : `${dansAnnee.length} jour d'école`}
           </span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs"
+            disabled={disabled || !historique.length}
+            onClick={annuler}
+            aria-label="Défaire le dernier changement du calendrier"
+          >
+            <Undo2 /> Défaire
+          </Button>
         </span>
         <Button
           type="button"
@@ -242,6 +329,13 @@ export function CalendrierEcole({
           <ChevronRight />
         </Button>
       </div>
+
+      <p
+        className="min-h-4 text-xs font-medium text-primary"
+        aria-live="polite"
+      >
+        {resumeGeste}
+      </p>
 
       <div className="grid grid-cols-1 gap-x-4 gap-y-3 select-none min-[480px]:grid-cols-2 sm:grid-cols-3">
         {mois.map((m) => (
@@ -258,7 +352,7 @@ export function CalendrierEcole({
               ))}
             </div>
             {m.semaines.map((s) => {
-              const etat = etatSemaine(jours, s.lundi)
+              const etat = etatSemaine(apercu, s.lundi)
               const fermee = verrouille(s.lundi)
               return (
                 <div
@@ -280,7 +374,7 @@ export function CalendrierEcole({
                       aria-label={`Semaine ${numeroSemaine(s.lundi)} : école du lundi au vendredi`}
                       aria-pressed={etat === 'ecole'}
                       onClick={() =>
-                        enregistrer(basculerSemaine(jours, s.lundi, modifiable))
+                        changer(basculerSemaine(jours, s.lundi, modifiable))
                       }
                       className="h-6 rounded text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50 disabled:hover:bg-transparent"
                     >
@@ -294,7 +388,8 @@ export function CalendrierEcole({
                       <JourEcole
                         key={j}
                         jour={j}
-                        ecole={jours.has(j)}
+                        ecole={apercu.has(j)}
+                        dansGeste={dansGeste.has(j)}
                         weekend={i >= 5}
                         aujourdhui={j === aujourdhui}
                         verrouille={fermee}
@@ -302,7 +397,7 @@ export function CalendrierEcole({
                         disabled={disabled}
                         onPointerDown={(e) => commencer(e, j)}
                         onPointerEnter={() => etendre(j)}
-                        onClick={() => cliquer(j)}
+                        onClick={(maj, pointe) => cliquer(j, maj, pointe)}
                       />
                     ),
                   )}
@@ -361,7 +456,7 @@ export function CalendrierEcole({
         jours={jours}
         aujourdhui={aujourdhui}
         modifiable={modifiable}
-        onAppliquer={enregistrer}
+        onAppliquer={changer}
       />
     </section>
   )
@@ -374,6 +469,7 @@ function JourEcole({
   aujourdhui,
   verrouille,
   retire,
+  dansGeste,
   disabled,
   onPointerDown,
   onPointerEnter,
@@ -381,6 +477,7 @@ function JourEcole({
 }: {
   jour: string
   ecole: boolean
+  dansGeste: boolean
   weekend: boolean
   aujourdhui: boolean
   verrouille: boolean
@@ -388,7 +485,8 @@ function JourEcole({
   disabled?: boolean
   onPointerDown: (e: EvenementPointeur) => void
   onPointerEnter: () => void
-  onClick: () => void
+  /** `pointe` : clic d'un pointeur (souris, doigt), pas du clavier. */
+  onClick: (maj: boolean, pointe: boolean) => void
 }) {
   const texte = `${dateLongue(jour)} : ${ecole ? 'école' : "à l'hôtel"}${
     verrouille ? ', semaine verrouillée' : ''
@@ -403,13 +501,14 @@ function JourEcole({
       data-ecole={ecole || undefined}
       onPointerDown={onPointerDown}
       onPointerEnter={onPointerEnter}
-      onClick={onClick}
+      onClick={(e) => onClick(e.shiftKey, e.detail > 0)}
       className={cn(
         'relative h-6 rounded text-[11px] tabular-nums disabled:cursor-not-allowed disabled:opacity-50',
         ecole
           ? 'planning-ecole-plein font-semibold'
           : cn('hover:bg-accent', weekend && 'text-muted-foreground'),
         aujourdhui && 'ring-1 ring-foreground ring-inset',
+        dansGeste && 'ring-2 ring-primary ring-inset',
       )}
     >
       {Number(jour.slice(8))}

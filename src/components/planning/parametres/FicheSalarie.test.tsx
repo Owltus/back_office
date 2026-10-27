@@ -355,6 +355,51 @@ describe('FicheSalarie', () => {
     ])
   }, 20_000)
 
+  it('le bloc École : appuyer sur un jour, relâcher sur un autre prend la plage ; Échap abandonne, Défaire revient en arrière', async () => {
+    ouvrir(11)
+    const jour = (nom: RegExp) => screen.getByRole('button', { name: nom })
+    const ecole = () =>
+      document.querySelectorAll('.planning-ecole [data-ecole]').length
+    await screen.findByRole('region', { name: 'École' })
+    const souris = { pointerType: 'mouse', button: 0 }
+    // Du vendredi 27 au lundi 16 novembre, à l'envers : 10 jours.
+    fireEvent.pointerDown(jour(/^ven\. 27 nov\. 2026/), souris)
+    fireEvent.pointerEnter(jour(/^mer\. 18 nov\. 2026/), souris)
+    fireEvent.pointerEnter(jour(/^lun\. 16 nov\. 2026/), souris)
+    expect(screen.getByText(/10 jours passent à l'école/)).toBeTruthy()
+    fireEvent.pointerUp(window, souris)
+    expect(ecole()).toBe(10)
+    // Un geste abandonné par Échap ne change rien.
+    fireEvent.pointerDown(jour(/^lun\. 7 déc\. 2026/), souris)
+    fireEvent.pointerEnter(jour(/^ven\. 11 déc\. 2026/), souris)
+    fireEvent.keyDown(window, { key: 'Escape' })
+    fireEvent.pointerUp(window, souris)
+    expect(ecole()).toBe(10)
+    // Partir d'un jour d'école retire la plage.
+    fireEvent.pointerDown(jour(/^mar\. 17 nov\. 2026/), souris)
+    fireEvent.pointerEnter(jour(/^jeu\. 19 nov\. 2026/), souris)
+    expect(screen.getByText(/3 jours reviennent à l'hôtel/)).toBeTruthy()
+    fireEvent.pointerUp(window, souris)
+    expect(ecole()).toBe(7)
+    // Défaire revient sur le dernier geste, puis sur le premier.
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Défaire le dernier changement du calendrier',
+      }),
+    )
+    expect(ecole()).toBe(10)
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Défaire le dernier changement du calendrier',
+      }),
+    )
+    expect(ecole()).toBe(0)
+    // Maj + clic : la plage depuis le dernier jour touché.
+    fireEvent.click(jour(/^lun\. 4 janv\. 2027/))
+    fireEvent.click(jour(/^ven\. 8 janv\. 2027/), { shiftKey: true })
+    expect(ecole()).toBe(5)
+  }, 20_000)
+
   it('un shift déjà posé sur un nouveau jour d école est annoncé, puis signalé à l enregistrement', async () => {
     etat.shifts = [
       {

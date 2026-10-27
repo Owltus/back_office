@@ -137,6 +137,35 @@ export function plage(a: string, b: string): string[] {
   )
 }
 
+/** Les jours d'une plage choisie d'un geste (glisser, Maj + clic, document
+ * du CFA). Pour POSER l'école : du lundi au vendredi, un samedi ou un
+ * dimanche seulement s'il est au bout de la plage (on l'a visé). Pour la
+ * RETIRER : tous les jours, week-end compris (nettoyer une erreur). */
+export function joursDePlage(a: string, b: string, ecole: boolean): string[] {
+  const jours = plage(a, b)
+  if (!ecole) return jours
+  return jours.filter((j) => jourDeLaSemaine(j) < 5 || j === a || j === b)
+}
+
+/** Le calendrier après une plage posée ou retirée. */
+export function appliquerPlage(
+  jours: Set<string>,
+  a: string,
+  b: string,
+  ecole: boolean,
+  modifiable?: (jour: string) => boolean,
+): Set<string> {
+  return peindre(jours, joursDePlage(a, b, ecole), ecole, modifiable)
+}
+
+/** Nombre de jours qui changent entre deux calendriers. */
+export function ecart(avant: Set<string>, apres: Set<string>): number {
+  let n = 0
+  for (const j of apres) if (!avant.has(j)) n++
+  for (const j of avant) if (!apres.has(j)) n++
+  return n
+}
+
 /** Les périodes de la fiche avec ces jours d'école ; les périodes illisibles
  * (en cours de saisie) restent telles quelles avec les autres absences. */
 export function avecJoursEcole(
@@ -293,14 +322,6 @@ function avecAnnee(d: DateLue, aujourdhui: string): string | null {
   return null
 }
 
-/** Jours d'école d'une période « du … au … » : du lundi au vendredi ; un
- * samedi ou un dimanche seulement s'il est écrit (début ou fin). */
-function joursDePeriode(debut: string, fin: string): string[] {
-  return plage(debut, fin).filter(
-    (j) => jourDeLaSemaine(j) < 5 || j === debut || j === fin,
-  )
-}
-
 /**
  * Lit les dates collées depuis le document du CFA : une période ou un jour
  * par ligne, dans les formes courantes (« du 28/09 au 02/10/2026 »,
@@ -346,7 +367,7 @@ export function lireDatesCfa(texte: string, aujourdhui: string): DatesCfa {
       if (!debut || !fin || debut > fin || ecartJours(debut, fin) > 120) {
         illisibles.push(ligne)
       } else {
-        for (const j of joursDePeriode(debut, fin)) jours.add(j)
+        for (const j of joursDePlage(debut, fin, true)) jours.add(j)
       }
       i++
     }

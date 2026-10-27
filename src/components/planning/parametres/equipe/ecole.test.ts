@@ -9,9 +9,12 @@ import {
 import {
   anneeScolaire,
   appliquerCfa,
+  appliquerPlage,
   avecJoursEcole,
   basculerSemaine,
+  ecart,
   etatSemaine,
+  joursDePlage,
   joursEcole,
   lireDatesCfa,
   moisEntre,
@@ -135,6 +138,39 @@ describe('calendrier d école', () => {
     expect(prochainePeriode(j, AUJ)?.debut).toBe('2026-10-26')
     expect(prochainePeriode(j, '2026-10-31')?.debut).toBe('2026-11-17')
     expect(prochainePeriode(j, '2026-11-18')).toBeNull()
+  })
+})
+
+describe('plage d un geste', () => {
+  it('poser : du lundi au vendredi, le week-end seulement s il est au bout', () => {
+    // Du lundi 16 au vendredi 27 novembre : 10 jours, sans le week-end.
+    expect(joursDePlage('2026-11-16', '2026-11-27', true)).toHaveLength(10)
+    // Jusqu'au samedi 21 : il est visé, il compte.
+    expect(joursDePlage('2026-11-16', '2026-11-21', true)).toEqual(
+      plage('2026-11-16', '2026-11-21'),
+    )
+    // Dans l'autre sens, la même plage.
+    expect(joursDePlage('2026-11-27', '2026-11-16', true)).toEqual(
+      joursDePlage('2026-11-16', '2026-11-27', true),
+    )
+  })
+
+  it('retirer : tous les jours, week-end compris (nettoyer une erreur)', () => {
+    const avant = new Set(['2026-11-20', '2026-11-21', '2026-11-23'])
+    expect(appliquerPlage(avant, '2026-11-23', '2026-11-20', false).size).toBe(
+      0,
+    )
+  })
+
+  it('une plage sur deux mois et à cheval sur l année', () => {
+    const j = appliquerPlage(new Set(), '2026-12-28', '2027-01-08', true)
+    expect(j.size).toBe(10)
+    expect(j.has('2027-01-02')).toBe(false) // samedi
+  })
+
+  it('l écart compte les jours qui changent dans les deux sens', () => {
+    expect(ecart(new Set(['a', 'b']), new Set(['b', 'c']))).toBe(2)
+    expect(ecart(new Set(['a']), new Set(['a']))).toBe(0)
   })
 })
 
