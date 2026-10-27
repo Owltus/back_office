@@ -155,6 +155,12 @@ describe('statutDuJour', () => {
       fixe: true,
     })
   })
+  it('un extra n’a pas de repos : ses jours vides restent non attribués', () => {
+    expect(statutDuJour(bilan({ extra: true }), 3, true, MOTIFS)).toBeNull()
+    expect(
+      statutDuJour(bilan({ extra: true, repos_fixes: [3] }), 3, true, MOTIFS),
+    ).toMatchObject({ genre: 'repos', fixe: true })
+  })
 })
 
 describe('indiceDe', () => {

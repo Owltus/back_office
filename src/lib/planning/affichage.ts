@@ -161,7 +161,7 @@ export function parGroupe<T extends Pick<Salarie, 'groupe_id'>>(
 }
 
 /** Un jour sans shift ni absence est un repos (pas « non attribué ») quand
- * la personne est organisée cette semaine. */
+ * la personne est organisée cette semaine, sauf pour un extra. */
 export function jourDeRepos(
   b: BilanOut,
   jour: number,
@@ -170,7 +170,7 @@ export function jourDeRepos(
   if (
     b.repos_fixes.includes(jour) ||
     b.repos_deduits.includes(jour) ||
-    planifiee
+    (planifiee && !b.extra)
   )
     return true
   return b.minutes_contrat === 0 && Object.keys(b.absences).length > 0
