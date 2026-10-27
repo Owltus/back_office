@@ -136,7 +136,9 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-describe('VueMois', () => {
+// Rendu d'un mois entier (~450 cases) dans jsdom : lent sous la charge de la
+// batterie complète, d'où un délai plus large que les 5 s par défaut.
+describe('VueMois', { timeout: 20_000 }, () => {
   it('charge le mois en UNE lecture, semaines voisines comprises', async () => {
     droits = { pret: true, lire: true, ecrire: false, gerer: false }
     monter()
