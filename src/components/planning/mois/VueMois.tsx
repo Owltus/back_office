@@ -73,7 +73,8 @@ import {
   reperer,
 } from '#/components/planning/mois/mois.ts'
 import type { EtatSemaine } from '#/components/planning/mois/mois.ts'
-import { PanneauAlertesMois } from '#/components/planning/mois/PanneauAlertesMois.tsx'
+import { pointsAttention } from '#/components/planning/attention.ts'
+import { PanneauAlertes } from '#/components/planning/semaine/PanneauAlertes.tsx'
 import {
   absenceDe,
   etoileProposee,
@@ -637,6 +638,17 @@ export function VueMois({
 
   const nomDuMois = NOM_MOIS.format(new Date(`${mois}-01T12:00:00Z`))
   const ceMois = aujourdhui.slice(0, 7)
+  // Points d'attention : seulement les jours du mois affiché ; le bouton
+  // compte ce que le panneau montre.
+  const dansLeMois = (date: string) => date.startsWith(mois)
+  const nbAlertes = referentiel
+    ? pointsAttention(
+        liste,
+        referentiel.salaries,
+        referentiel.postes,
+        dansLeMois,
+      ).total
+    : 0
 
   const enCours = progression ? (
     <span
@@ -700,7 +712,7 @@ export function VueMois({
             compteurs={compteurs}
             occupe={occupe}
             progression={enCours}
-            nbAlertes={compteurs?.alertes ?? 0}
+            nbAlertes={nbAlertes}
             onAlertes={() => setAlertesOuvertes(true)}
             verrou={verrou}
             completer={{
@@ -895,12 +907,14 @@ export function VueMois({
       )}
 
       {referentiel && (
-        <PanneauAlertesMois
+        <PanneauAlertes
           ouvert={alertesOuvertes}
           onFermer={() => setAlertesOuvertes(false)}
           semaines={liste}
-          referentiel={referentiel}
-          periode={`sur les semaines de ${MOIS_SEUL.format(new Date(`${mois}-01T12:00:00Z`))}`}
+          salaries={referentiel.salaries}
+          postes={referentiel.postes}
+          periode={`En ${MOIS_SEUL.format(new Date(`${mois}-01T12:00:00Z`))}`}
+          garder={dansLeMois}
         />
       )}
 

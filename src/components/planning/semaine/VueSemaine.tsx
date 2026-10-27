@@ -829,7 +829,7 @@ export function VueSemaine({
           semaines={[semaine]}
           salaries={referentiel.salaries}
           postes={referentiel.postes}
-          periode="cette semaine"
+          periode="Cette semaine"
         />
       )}
 
