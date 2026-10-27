@@ -41,9 +41,10 @@
   color: color-mix(in srgb, var(--couleur) 85%, var(--foreground));
 }
 
+/* Repos en trait plein : le pointillé veut dire « proposition, pas encore
+ * validée » (décision utilisateur du 2026-10-27). */
 .planning-mois-bande.planning-mois-repos {
   background: transparent;
-  border-style: dashed;
   border-color: color-mix(
     in srgb,
     var(--color-muted-foreground) 35%,
@@ -192,7 +193,6 @@
 }
 
 .planning-statut[data-repos] {
-  border-style: dashed;
   border-left-width: 1px;
   background: transparent;
 }
