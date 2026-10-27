@@ -76,14 +76,7 @@ const AIDE_VALIDATION = [
   'Verrouillé (cadenas) : semaine réalisée, rien ne bouge',
 ].join('\n')
 
-export function Indicateurs({
-  c,
-  onInfractions,
-}: {
-  c: Compteurs
-  /** Le bouclier rouge s'ouvre sur les infractions (comme « Points d'attention »). */
-  onInfractions?: () => void
-}) {
+export function Indicateurs({ c }: { c: Compteurs }) {
   const taux = c.places ? (c.pourvues / c.places) * 100 : 100
   return (
     <div className="flex items-center gap-3 text-xs">
@@ -134,49 +127,48 @@ export function Indicateurs({
           </strong>
         </span>
       </Tip>
-      <Tip
-        label={
-          c.infractions
-            ? `${c.infractions} infraction${c.infractions > 1 ? 's' : ''} aux règles HCR sur les semaines du mois : cliquer pour le détail`
-            : 'Conforme aux règles HCR sur les semaines du mois'
-        }
+    </div>
+  )
+}
+
+/** Bouclier « règles HCR », dans le groupe de boutons comme « Points
+ * d'attention » (décision utilisateur du 2026-10-28) : rouge avec le nombre
+ * d'infractions, vert si tout est conforme ; un clic ouvre le détail. */
+export function BoutonHcr({
+  infractions,
+  onClick,
+  disabled,
+}: {
+  infractions: number
+  onClick: () => void
+  disabled?: boolean
+}) {
+  const libelle = infractions
+    ? `${infractions} infraction${infractions > 1 ? 's' : ''} aux règles HCR`
+    : 'Conforme aux règles HCR'
+  return (
+    <Tip label={libelle}>
+      <Button
+        variant="outline"
+        size="icon-sm"
+        className={cn(
+          'relative',
+          infractions
+            ? 'text-destructive hover:text-destructive'
+            : 'text-emerald-600 hover:text-emerald-600 dark:text-emerald-400',
+        )}
+        disabled={disabled}
+        onClick={onClick}
+        aria-label={libelle}
       >
-        {c.infractions && onInfractions ? (
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1 px-2 font-semibold text-destructive hover:text-destructive"
-            onClick={onInfractions}
-            aria-label={`${c.infractions} infraction${c.infractions > 1 ? 's' : ''} aux règles HCR : voir le détail`}
-          >
-            <ShieldAlert className="size-4" />
-            {c.infractions}
-          </Button>
-        ) : (
-          <span
-            tabIndex={0}
-            className={cn(
-              'inline-flex items-center gap-1 font-semibold',
-              c.infractions
-                ? 'text-destructive'
-                : 'text-emerald-600 dark:text-emerald-400',
-            )}
-            aria-label={
-              c.infractions
-                ? `${c.infractions} infraction(s) HCR`
-                : 'Conforme aux règles HCR'
-            }
-          >
-            {c.infractions ? (
-              <ShieldAlert className="size-4" />
-            ) : (
-              <ShieldCheck className="size-4" />
-            )}
-            {c.infractions > 0 && c.infractions}
+        {infractions ? <ShieldAlert /> : <ShieldCheck />}
+        {infractions > 0 && (
+          <span className="absolute -top-1.5 -right-1.5 min-w-4 rounded-full bg-destructive px-1 text-[10px] leading-4 font-semibold text-white tabular-nums">
+            {infractions}
           </span>
         )}
-      </Tip>
-    </div>
+      </Button>
+    </Tip>
   )
 }
 
@@ -225,7 +217,7 @@ export function BarreMois({
   return (
     <>
       {progression}
-      {compteurs && <Indicateurs c={compteurs} onInfractions={onInfractions} />}
+      {compteurs && <Indicateurs c={compteurs} />}
       <ButtonGroup>
         <Tip
           label={
@@ -289,6 +281,10 @@ export function BarreMois({
             )}
           </Button>
         </Tip>
+        <BoutonHcr
+          infractions={compteurs?.infractions ?? 0}
+          onClick={onInfractions}
+        />
       </ButtonGroup>
       <ButtonGroup>
         <AvecRaison

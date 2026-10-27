@@ -13,8 +13,6 @@ import {
   Loader2,
   Lock,
   LockOpen,
-  ShieldAlert,
-  ShieldCheck,
   Sparkles,
   SquareDashed,
   TriangleAlert,
@@ -37,6 +35,7 @@ import {
   DropdownMenuTrigger,
 } from '#/components/ui/dropdown-menu.tsx'
 import { MenuParametres } from '#/components/planning/EnTeteParametres.tsx'
+import { BoutonHcr } from '#/components/planning/mois/BarreMois.tsx'
 import { dateCourte } from '#/lib/planning/affichage.ts'
 import type { SemaineOut } from '#/lib/planning/semaine.ts'
 import { cn } from '#/lib/utils.ts'
@@ -293,35 +292,6 @@ export function EnTeteSemaine({
                   </strong>
                 </span>
               </Tip>
-              <Tip
-                label={
-                  stats.infractions
-                    ? `${stats.infractions} infraction(s) aux règles HCR : cliquer pour le détail`
-                    : 'Conforme aux règles HCR'
-                }
-              >
-                {stats.infractions ? (
-                  // Cliquable comme « Points d'attention » : le détail.
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-1 px-2 font-semibold text-destructive hover:text-destructive"
-                    onClick={actions.onInfractions}
-                    aria-label={`${stats.infractions} infraction${stats.infractions > 1 ? 's' : ''} aux règles HCR : voir le détail`}
-                  >
-                    <ShieldAlert className="size-4" />
-                    {stats.infractions}
-                  </Button>
-                ) : (
-                  <span
-                    tabIndex={0}
-                    className="inline-flex items-center gap-1 rounded-md px-1 font-semibold text-emerald-500 outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    aria-label="Conforme aux règles HCR"
-                  >
-                    <ShieldCheck className="size-4" />
-                  </span>
-                )}
-              </Tip>
             </div>
           )}
 
@@ -366,6 +336,11 @@ export function EnTeteSemaine({
                 </span>
               )}
             </BoutonBarre>
+            <BoutonHcr
+              infractions={stats?.infractions ?? 0}
+              disabled={!semaine}
+              onClick={actions.onInfractions}
+            />
           </ButtonGroup>
 
           <ButtonGroup>
