@@ -21,6 +21,7 @@ import {
   UserX,
 } from 'lucide-react'
 
+import { iconeMotif } from '#/components/planning/iconeMotif.ts'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { couleurShift, heures, ROUGE_CODE } from '#/lib/planning/affichage.ts'
 import type { AlerteOut } from '#/lib/planning/semaine.ts'
@@ -209,7 +210,11 @@ export function CarteStatut({
   s: ContenuStatut
   enVol?: boolean
 }) {
-  const Icone = ICONES[s.genre]
+  // Une absence prend l'icône de son motif (palmier pour les congés…).
+  const Icone =
+    s.genre === 'absence'
+      ? iconeMotif({ code: '', nom: s.nom })
+      : ICONES[s.genre]
   return (
     <div
       className={cn('planning-statut', enVol && 'planning-carte-vol')}

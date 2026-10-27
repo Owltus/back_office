@@ -36,6 +36,7 @@ import {
   UserX,
 } from 'lucide-react'
 
+import { iconeMotif } from '#/components/planning/iconeMotif.ts'
 import { Tip } from '#/components/shared/Tip.tsx'
 import {
   couleurShift,
@@ -493,7 +494,9 @@ function LigneMois({
         c.type === 'absence'
           ? c.motif && estEcole(c.motif)
             ? GraduationCap
-            : CalendarOff
+            : c.motif
+              ? iconeMotif(c.motif)
+              : CalendarOff
           : c.type === 'hors'
             ? UserX
             : Coffee
@@ -538,7 +541,7 @@ function LigneMois({
           <div className="relative z-[1] h-8">
             <div
               className={cn(
-                'planning-mois-bande pointer-events-none absolute inset-0 flex items-center justify-center gap-1.5 overflow-hidden rounded-md px-1 text-[10.5px] font-medium text-muted-foreground',
+                'planning-mois-bande pointer-events-none absolute inset-0 flex items-center justify-center gap-1.5 overflow-hidden rounded-md px-1 text-[10.5px] font-medium',
                 c.type === 'hors' && 'planning-mois-hors',
                 c.type === 'repos' && 'planning-mois-repos',
                 longueur === 1 && 'flex-col gap-0 text-[10px] leading-none',
