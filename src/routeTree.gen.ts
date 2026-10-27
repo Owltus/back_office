@@ -32,6 +32,11 @@ import { Route as FacturationGalaxieRouteImport } from './routes/facturation/gal
 import { Route as LiterieIndexRouteImport } from './routes/literie/index'
 import { Route as ParkingIndexRouteImport } from './routes/parking/index'
 import { Route as PdjIndexRouteImport } from './routes/pdj/index'
+import { Route as PlanningIndexRouteImport } from './routes/planning/index'
+import { Route as PlanningBesoinsRouteImport } from './routes/planning/besoins'
+import { Route as PlanningEquipeRouteImport } from './routes/planning/equipe'
+import { Route as PlanningHorairesRouteImport } from './routes/planning/horaires'
+import { Route as PlanningPostesRouteImport } from './routes/planning/postes'
 import { Route as RaproIndexRouteImport } from './routes/rapro/index'
 import { Route as RepjourIndexRouteImport } from './routes/repjour/index'
 import { Route as CaisseAnalytiqueIndexRouteImport } from './routes/caisse/analytique.index'
@@ -167,6 +172,31 @@ const PdjIndexRoute = PdjIndexRouteImport.update({
   path: '/',
   getParentRoute: () => PdjRoute,
 } as any)
+const PlanningIndexRoute = PlanningIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => PlanningRoute,
+} as any)
+const PlanningBesoinsRoute = PlanningBesoinsRouteImport.update({
+  id: '/besoins',
+  path: '/besoins',
+  getParentRoute: () => PlanningRoute,
+} as any)
+const PlanningEquipeRoute = PlanningEquipeRouteImport.update({
+  id: '/equipe',
+  path: '/equipe',
+  getParentRoute: () => PlanningRoute,
+} as any)
+const PlanningHorairesRoute = PlanningHorairesRouteImport.update({
+  id: '/horaires',
+  path: '/horaires',
+  getParentRoute: () => PlanningRoute,
+} as any)
+const PlanningPostesRoute = PlanningPostesRouteImport.update({
+  id: '/postes',
+  path: '/postes',
+  getParentRoute: () => PlanningRoute,
+} as any)
 const RaproIndexRoute = RaproIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -285,18 +315,23 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/parking': typeof ParkingRouteWithChildren
   '/pdj': typeof PdjRouteWithChildren
-  '/planning': typeof PlanningRoute
+  '/planning': typeof PlanningRouteWithChildren
   '/profil': typeof ProfilRoute
   '/rapro': typeof RaproRouteWithChildren
   '/repjour': typeof RepjourRouteWithChildren
   '/classeur/$classeurId': typeof ClasseurClasseurIdRouteWithChildren
   '/facturation/galaxie': typeof FacturationGalaxieRoute
+  '/planning/besoins': typeof PlanningBesoinsRoute
+  '/planning/equipe': typeof PlanningEquipeRoute
+  '/planning/horaires': typeof PlanningHorairesRoute
+  '/planning/postes': typeof PlanningPostesRoute
   '/caisse/': typeof CaisseIndexRoute
   '/classeur/': typeof ClasseurIndexRoute
   '/facturation/': typeof FacturationIndexRoute
   '/literie/': typeof LiterieIndexRoute
   '/parking/': typeof ParkingIndexRoute
   '/pdj/': typeof PdjIndexRoute
+  '/planning/': typeof PlanningIndexRoute
   '/rapro/': typeof RaproIndexRoute
   '/repjour/': typeof RepjourIndexRoute
   '/classeur/$classeurId/$chapterId': typeof ClasseurClasseurIdChapterIdRouteWithChildren
@@ -324,15 +359,19 @@ export interface FileRoutesByTo {
   '/easter-eggs': typeof EasterEggsRoute
   '/gestion': typeof GestionRoute
   '/login': typeof LoginRoute
-  '/planning': typeof PlanningRoute
   '/profil': typeof ProfilRoute
   '/facturation/galaxie': typeof FacturationGalaxieRoute
+  '/planning/besoins': typeof PlanningBesoinsRoute
+  '/planning/equipe': typeof PlanningEquipeRoute
+  '/planning/horaires': typeof PlanningHorairesRoute
+  '/planning/postes': typeof PlanningPostesRoute
   '/caisse': typeof CaisseIndexRoute
   '/classeur': typeof ClasseurIndexRoute
   '/facturation': typeof FacturationIndexRoute
   '/literie': typeof LiterieIndexRoute
   '/parking': typeof ParkingIndexRoute
   '/pdj': typeof PdjIndexRoute
+  '/planning': typeof PlanningIndexRoute
   '/rapro': typeof RaproIndexRoute
   '/repjour': typeof RepjourIndexRoute
   '/caisse/analytique': typeof CaisseAnalytiqueIndexRoute
@@ -365,18 +404,23 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/parking': typeof ParkingRouteWithChildren
   '/pdj': typeof PdjRouteWithChildren
-  '/planning': typeof PlanningRoute
+  '/planning': typeof PlanningRouteWithChildren
   '/profil': typeof ProfilRoute
   '/rapro': typeof RaproRouteWithChildren
   '/repjour': typeof RepjourRouteWithChildren
   '/classeur/$classeurId': typeof ClasseurClasseurIdRouteWithChildren
   '/facturation/galaxie': typeof FacturationGalaxieRoute
+  '/planning/besoins': typeof PlanningBesoinsRoute
+  '/planning/equipe': typeof PlanningEquipeRoute
+  '/planning/horaires': typeof PlanningHorairesRoute
+  '/planning/postes': typeof PlanningPostesRoute
   '/caisse/': typeof CaisseIndexRoute
   '/classeur/': typeof ClasseurIndexRoute
   '/facturation/': typeof FacturationIndexRoute
   '/literie/': typeof LiterieIndexRoute
   '/parking/': typeof ParkingIndexRoute
   '/pdj/': typeof PdjIndexRoute
+  '/planning/': typeof PlanningIndexRoute
   '/rapro/': typeof RaproIndexRoute
   '/repjour/': typeof RepjourIndexRoute
   '/classeur/$classeurId/$chapterId': typeof ClasseurClasseurIdChapterIdRouteWithChildren
@@ -417,12 +461,17 @@ export interface FileRouteTypes {
     | '/repjour'
     | '/classeur/$classeurId'
     | '/facturation/galaxie'
+    | '/planning/besoins'
+    | '/planning/equipe'
+    | '/planning/horaires'
+    | '/planning/postes'
     | '/caisse/'
     | '/classeur/'
     | '/facturation/'
     | '/literie/'
     | '/parking/'
     | '/pdj/'
+    | '/planning/'
     | '/rapro/'
     | '/repjour/'
     | '/classeur/$classeurId/$chapterId'
@@ -450,15 +499,19 @@ export interface FileRouteTypes {
     | '/easter-eggs'
     | '/gestion'
     | '/login'
-    | '/planning'
     | '/profil'
     | '/facturation/galaxie'
+    | '/planning/besoins'
+    | '/planning/equipe'
+    | '/planning/horaires'
+    | '/planning/postes'
     | '/caisse'
     | '/classeur'
     | '/facturation'
     | '/literie'
     | '/parking'
     | '/pdj'
+    | '/planning'
     | '/rapro'
     | '/repjour'
     | '/caisse/analytique'
@@ -496,12 +549,17 @@ export interface FileRouteTypes {
     | '/repjour'
     | '/classeur/$classeurId'
     | '/facturation/galaxie'
+    | '/planning/besoins'
+    | '/planning/equipe'
+    | '/planning/horaires'
+    | '/planning/postes'
     | '/caisse/'
     | '/classeur/'
     | '/facturation/'
     | '/literie/'
     | '/parking/'
     | '/pdj/'
+    | '/planning/'
     | '/rapro/'
     | '/repjour/'
     | '/classeur/$classeurId/$chapterId'
@@ -535,7 +593,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   ParkingRoute: typeof ParkingRouteWithChildren
   PdjRoute: typeof PdjRouteWithChildren
-  PlanningRoute: typeof PlanningRoute
+  PlanningRoute: typeof PlanningRouteWithChildren
   ProfilRoute: typeof ProfilRoute
   RaproRoute: typeof RaproRouteWithChildren
   RepjourRoute: typeof RepjourRouteWithChildren
@@ -705,6 +763,41 @@ declare module '@tanstack/react-router' {
       fullPath: '/pdj/'
       preLoaderRoute: typeof PdjIndexRouteImport
       parentRoute: typeof PdjRoute
+    }
+    '/planning/': {
+      id: '/planning/'
+      path: '/'
+      fullPath: '/planning/'
+      preLoaderRoute: typeof PlanningIndexRouteImport
+      parentRoute: typeof PlanningRoute
+    }
+    '/planning/besoins': {
+      id: '/planning/besoins'
+      path: '/besoins'
+      fullPath: '/planning/besoins'
+      preLoaderRoute: typeof PlanningBesoinsRouteImport
+      parentRoute: typeof PlanningRoute
+    }
+    '/planning/equipe': {
+      id: '/planning/equipe'
+      path: '/equipe'
+      fullPath: '/planning/equipe'
+      preLoaderRoute: typeof PlanningEquipeRouteImport
+      parentRoute: typeof PlanningRoute
+    }
+    '/planning/horaires': {
+      id: '/planning/horaires'
+      path: '/horaires'
+      fullPath: '/planning/horaires'
+      preLoaderRoute: typeof PlanningHorairesRouteImport
+      parentRoute: typeof PlanningRoute
+    }
+    '/planning/postes': {
+      id: '/planning/postes'
+      path: '/postes'
+      fullPath: '/planning/postes'
+      preLoaderRoute: typeof PlanningPostesRouteImport
+      parentRoute: typeof PlanningRoute
     }
     '/rapro/': {
       id: '/rapro/'
@@ -952,6 +1045,26 @@ const PdjRouteChildren: PdjRouteChildren = {
 
 const PdjRouteWithChildren = PdjRoute._addFileChildren(PdjRouteChildren)
 
+interface PlanningRouteChildren {
+  PlanningBesoinsRoute: typeof PlanningBesoinsRoute
+  PlanningEquipeRoute: typeof PlanningEquipeRoute
+  PlanningHorairesRoute: typeof PlanningHorairesRoute
+  PlanningPostesRoute: typeof PlanningPostesRoute
+  PlanningIndexRoute: typeof PlanningIndexRoute
+}
+
+const PlanningRouteChildren: PlanningRouteChildren = {
+  PlanningBesoinsRoute: PlanningBesoinsRoute,
+  PlanningEquipeRoute: PlanningEquipeRoute,
+  PlanningHorairesRoute: PlanningHorairesRoute,
+  PlanningPostesRoute: PlanningPostesRoute,
+  PlanningIndexRoute: PlanningIndexRoute,
+}
+
+const PlanningRouteWithChildren = PlanningRoute._addFileChildren(
+  PlanningRouteChildren,
+)
+
 interface RaproRouteChildren {
   RaproIndexRoute: typeof RaproIndexRoute
   RaproAnalytiqueIndexRoute: typeof RaproAnalytiqueIndexRoute
@@ -993,7 +1106,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   ParkingRoute: ParkingRouteWithChildren,
   PdjRoute: PdjRouteWithChildren,
-  PlanningRoute: PlanningRoute,
+  PlanningRoute: PlanningRouteWithChildren,
   ProfilRoute: ProfilRoute,
   RaproRoute: RaproRouteWithChildren,
   RepjourRoute: RepjourRouteWithChildren,

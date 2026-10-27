@@ -1,14 +1,13 @@
 import highsLoader from 'highs'
 import { beforeAll, describe, expect, it } from 'vitest'
 
-import { generer, type Highs } from '#/lib/planning/generateur.ts'
-import {
-  creneau,
-  probleme,
-  salarieSolveur,
-  type AffectationSolveur,
-  type Creneau,
-  type SalarieSolveur,
+import { generer } from '#/lib/planning/generateur.ts'
+import type { Highs } from '#/lib/planning/generateur.ts'
+import { creneau, probleme, salarieSolveur } from '#/lib/planning/modele.ts'
+import type {
+  AffectationSolveur,
+  Creneau,
+  SalarieSolveur,
 } from '#/lib/planning/modele.ts'
 import {
   alerteBesoin,
@@ -16,15 +15,15 @@ import {
   presenceMaxPoste,
   resume,
   versSolveur,
-  type Fiche,
 } from '#/lib/planning/regles.ts'
+import type { Fiche } from '#/lib/planning/regles.ts'
 import {
   manquants,
   raisonsBlocage,
   violations,
   violationsSalarie,
-  type Violation,
 } from '#/lib/planning/verificateur.ts'
+import type { Violation } from '#/lib/planning/verificateur.ts'
 
 /*
  * Port de `backend/tests/test_verificateur.py` (prototype) : le vérificateur

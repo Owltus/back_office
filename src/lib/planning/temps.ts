@@ -18,8 +18,8 @@ const MS_MINUTE = 60_000
 const MS_JOUR = 86_400_000
 
 /** « 07:30 » → 450. « 24:00 » → 1440. */
-export function minutes(hhmm: string): number {
-  const [h, m] = hhmm.split(':')
+export function minutes(heure: string): number {
+  const [h, m] = heure.split(':')
   return Number(h) * 60 + Number(m)
 }
 

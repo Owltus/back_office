@@ -1,0 +1,291 @@
+/*
+ * Styles propres à la page Planning (préfixe .planning-). Tailwind d abord :
+ * ce fichier ne porte que ce que les classes expriment mal (hachures des
+ * semaines verrouillées, dégradés des cartes de shift).
+ */
+
+/* ------------------------------------------------------------ Vue mois
+ * (components/planning/mois/). Pastille d'un shift à la couleur de son code
+ * horaire (variable --couleur posée par la case), bandeaux de repos,
+ * d'absence et de hors contrat, hachures des semaines verrouillées. */
+
+.planning-mois-pastille {
+  border-color: color-mix(in srgb, var(--couleur) 70%, transparent);
+  border-left: 3px solid var(--couleur);
+  background: color-mix(in srgb, var(--couleur) 24%, transparent);
+}
+
+/* Proposition du moteur : pointillés et fond pâle. */
+.planning-mois-pastille.planning-mois-proposition {
+  border-style: dashed;
+  border-left-style: dashed;
+  background: color-mix(in srgb, var(--couleur) 10%, transparent);
+}
+
+/* Règle HCR enfreinte : anneau rouge. */
+.planning-mois-pastille.planning-mois-infraction {
+  box-shadow: 0 0 0 2px var(--color-destructive);
+}
+
+/* Bandeau : absence ou école à la couleur du motif, repos et hors contrat
+ * en gris hachuré. */
+.planning-mois-bande {
+  background: color-mix(in srgb, var(--couleur) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--couleur) 40%, transparent);
+}
+
+.planning-mois-bande.planning-mois-repos {
+  background: transparent;
+  border-style: dashed;
+  border-color: color-mix(
+    in srgb,
+    var(--color-muted-foreground) 35%,
+    transparent
+  );
+}
+
+.planning-mois-bande.planning-mois-hors {
+  background: repeating-linear-gradient(
+    -45deg,
+    color-mix(in srgb, var(--color-muted-foreground) 14%, transparent) 0 4px,
+    transparent 4px 8px
+  );
+}
+
+/* Semaine verrouillée (planning réalisé) : hachures, curseur par défaut. */
+.planning-mois-verrouillee {
+  cursor: default;
+  background-image: repeating-linear-gradient(
+    45deg,
+    color-mix(in srgb, var(--color-muted-foreground) 12%, transparent) 0 3px,
+    transparent 3px 9px
+  );
+}
+
+/* ---------------------------------------------------------- Vue semaine
+ * (components/planning/semaine/). Carte d'un shift : dégradé et liseré à la
+ * couleur du code horaire (--couleur), pointillés pour une proposition ;
+ * carte d'un jour non travaillé hachurée ; indices pendant un glisser ;
+ * hachures d'une semaine verrouillée. */
+
+.planning-carte {
+  --couleur: #94a3b8;
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  align-content: center;
+  column-gap: 6px;
+  row-gap: 1px;
+  min-height: 0;
+  padding: 4px 6px 4px 9px;
+  border-radius: 7px;
+  overflow: hidden;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--couleur) 22%, var(--card)),
+    color-mix(in srgb, var(--couleur) 8%, var(--card))
+  );
+  border: 1px solid color-mix(in srgb, var(--couleur) 40%, transparent);
+  transition:
+    transform 0.1s,
+    box-shadow 0.1s;
+}
+
+.planning-carte::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--couleur);
+}
+
+/* Proposition du moteur : pointillés, fond plus pâle. */
+.planning-carte[data-proposition] {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--couleur) 70%, transparent);
+  background: color-mix(in srgb, var(--couleur) 9%, var(--card));
+}
+
+.planning-carte[data-proposition]::before {
+  opacity: 0.55;
+}
+
+.planning-deplacable:hover .planning-carte {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px -4px rgb(0 0 0 / 0.45);
+}
+
+.planning-carte-vol {
+  width: 140px;
+  height: 52px;
+  cursor: grabbing;
+  transform: rotate(-1.5deg) scale(1.03);
+  box-shadow: 0 12px 24px -8px rgb(0 0 0 / 0.55);
+}
+
+.planning-carte-debut {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in srgb, var(--couleur) 30%, var(--foreground));
+}
+
+.planning-carte-fin {
+  grid-column: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
+}
+
+.planning-carte-duree {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+  background: color-mix(in srgb, var(--couleur) 26%, transparent);
+  color: color-mix(in srgb, var(--couleur) 25%, var(--foreground));
+}
+
+.planning-carte-icones {
+  grid-column: 2;
+  grid-row: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  color: var(--muted-foreground);
+}
+
+/* Jour non travaillé : hachuré à la couleur du motif, nom au centre. */
+.planning-statut {
+  --couleur: #94a3b8;
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  padding: 0 6px;
+  border-radius: 7px;
+  border: 1px solid color-mix(in srgb, var(--couleur) 35%, transparent);
+  background: repeating-linear-gradient(
+    45deg,
+    color-mix(in srgb, var(--couleur) 16%, var(--card)) 0 5px,
+    color-mix(in srgb, var(--couleur) 6%, var(--card)) 5px 10px
+  );
+}
+
+.planning-statut[data-repos] {
+  border-style: dashed;
+}
+
+.planning-statut-nom {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--couleur) 70%, var(--foreground));
+}
+
+.planning-statut[data-repos] .planning-statut-nom {
+  color: var(--muted-foreground);
+}
+
+/* Pastilles de compétence : pleine = titulaire, anneau = dépannage,
+ * pointillés = soutien. */
+.planning-point-poste {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--couleur);
+}
+
+.planning-point-poste[data-niveau='occasionnel'] {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--couleur);
+}
+
+.planning-point-poste[data-niveau='soutien'] {
+  background: transparent;
+  border: 2px dotted var(--couleur);
+}
+
+/* Indices pendant un glisser : vert = convient, orange = dépannage, rouge =
+ * déconseillé ; renforcés sur la case survolée. Purement visuels. */
+.planning-grille[data-glisser] .planning-cellule[data-indice='ok'] {
+  box-shadow: inset 0 0 0 1px rgb(16 185 129 / 0.45);
+}
+
+.planning-grille[data-glisser] .planning-cellule[data-indice='depannage'] {
+  box-shadow: inset 0 0 0 1px rgb(245 158 11 / 0.45);
+}
+
+.planning-grille[data-glisser] .planning-cellule[data-indice='deconseille'] {
+  background-color: color-mix(
+    in srgb,
+    var(--color-destructive) 7%,
+    transparent
+  );
+}
+
+.planning-grille .planning-cellule[data-survol][data-indice='ok'] {
+  background-color: rgb(16 185 129 / 0.12);
+  box-shadow: inset 0 0 0 2px rgb(16 185 129);
+}
+
+.planning-grille .planning-cellule[data-survol][data-indice='depannage'] {
+  background-color: rgb(245 158 11 / 0.12);
+  box-shadow: inset 0 0 0 2px rgb(245 158 11);
+}
+
+.planning-grille .planning-cellule[data-survol][data-indice='deconseille'] {
+  background-color: color-mix(
+    in srgb,
+    var(--color-destructive) 14%,
+    transparent
+  );
+  box-shadow: inset 0 0 0 2px var(--color-destructive);
+}
+
+.planning-grille[data-glisser] .planning-ajouter {
+  display: none;
+}
+
+/* Semaine verrouillée : cases hachurées, aucun « + » (gestes coupés). */
+.planning-grille[data-verrou] .planning-cellule {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent 0 6px,
+    color-mix(in srgb, var(--color-muted-foreground) 9%, transparent) 6px 7px
+  );
+}
+
+/* ---------------------------------------------------------------- Équipe */
+/* Bloc École de la fiche : la couleur du motif école (--planning-ecole,
+   posée par CalendrierEcole) pour les jours et les semaines d'école. */
+.planning-ecole .planning-ecole-plein {
+  background: var(--planning-ecole);
+  border-color: var(--planning-ecole);
+  color: var(--planning-ecole-texte, #fff);
+}
+.planning-ecole .planning-ecole-partiel {
+  background: repeating-linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--planning-ecole) 45%, transparent) 0 4px,
+    transparent 4px 8px
+  );
+  border-color: var(--planning-ecole);
+}

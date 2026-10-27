@@ -12,8 +12,8 @@ import {
   useMemo,
   useRef,
   useState,
-  type ReactNode,
 } from 'react'
+import type { ReactNode } from 'react'
 import { CircleAlert, Info, TriangleAlert, X } from 'lucide-react'
 
 import { cn } from '#/lib/utils.ts'

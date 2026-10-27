@@ -17,17 +17,19 @@ import {
   analyser,
   aPoserFixes,
   preparerGeneration,
-  type DonneesSemaine,
-  type OptionsGeneration,
-  type SemaineOut,
+} from '#/lib/planning/semaine.ts'
+import type {
+  DonneesSemaine,
+  OptionsGeneration,
+  SemaineOut,
 } from '#/lib/planning/semaine.ts'
 import {
   appliquerGeneration,
   fetchEtatSemaine,
   fetchReferentiel,
   fetchSemaine,
-  type DonneesShifts,
 } from '#/lib/planning/service.ts'
+import type { DonneesShifts } from '#/lib/planning/service.ts'
 import { resoudre } from '#/lib/planning/solveur.ts'
 import { ajouterJours, aujourdhuiParis, lundiDe } from '#/lib/planning/temps.ts'
 import type { Referentiel } from '#/lib/planning/types.ts'

@@ -1,22 +1,23 @@
 import highsLoader from 'highs'
 import { beforeAll, describe, expect, it } from 'vitest'
 
-import { compatible, generer, type Highs } from '#/lib/planning/generateur.ts'
+import { compatible, generer } from '#/lib/planning/generateur.ts'
+import type { Highs } from '#/lib/planning/generateur.ts'
 import {
   cle,
   creneau as creneauModele,
   probleme,
   salarieSolveur,
-  type AffectationSolveur,
-  type Creneau,
-  type SalarieSolveur,
 } from '#/lib/planning/modele.ts'
-import { heuresDues, versSolveur, type Fiche } from '#/lib/planning/regles.ts'
-import {
-  contexte,
-  creneauAffectation,
-  type SemaineOut,
-} from '#/lib/planning/semaine.ts'
+import type {
+  AffectationSolveur,
+  Creneau,
+  SalarieSolveur,
+} from '#/lib/planning/modele.ts'
+import { heuresDues, versSolveur } from '#/lib/planning/regles.ts'
+import type { Fiche } from '#/lib/planning/regles.ts'
+import { contexte, creneauAffectation } from '#/lib/planning/semaine.ts'
+import type { SemaineOut } from '#/lib/planning/semaine.ts'
 import { hotelReel } from '#/lib/planning/test/hotelReel.ts'
 import { PlanningMemoire } from '#/lib/planning/test/planningMemoire.ts'
 import { ajouterJours, bornes, MINUTES_PAR_JOUR } from '#/lib/planning/temps.ts'

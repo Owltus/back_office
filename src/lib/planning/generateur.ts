@@ -31,12 +31,14 @@ import {
   role,
   toucheLaNuit,
   travail,
-  type AffectationSolveur,
-  type Creneau,
-  type Manque,
-  type Probleme,
-  type Resultat,
-  type SalarieSolveur,
+} from '#/lib/planning/modele.ts'
+import type {
+  AffectationSolveur,
+  Creneau,
+  Manque,
+  Probleme,
+  Resultat,
+  SalarieSolveur,
 } from '#/lib/planning/modele.ts'
 
 export const POIDS_MANQUE = 100
@@ -50,10 +52,10 @@ export const POIDS_DEJA_PROPOSE = 5
 
 /** Le solveur HiGHS tel que le rend `highs` (API historique). */
 export interface Highs {
-  solve(
+  solve: (
     lp: string,
     options?: Record<string, string | number | boolean>,
-  ): {
+  ) => {
     Status: string
     Columns: Record<string, { Primal?: number }>
   }
@@ -761,7 +763,10 @@ export function generer(p: Probleme, highs: Highs): Resultat {
     random_seed: Math.abs(p.graine) % 2_147_483_647,
     output_flag: false,
   })
-  const valeur = (v: string) => Math.round(solution.Columns[v]?.Primal ?? 0)
+  const valeur = (v: string) =>
+    Math.round(
+      (solution.Columns[v] as { Primal?: number } | undefined)?.Primal ?? 0,
+    )
   const aSolution = Object.keys(solution.Columns).length > 0
   const statut =
     solution.Status === 'Optimal'

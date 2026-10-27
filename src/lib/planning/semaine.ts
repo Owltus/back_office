@@ -17,19 +17,21 @@ import {
   travail,
   cle,
   cleAEviter,
-  type AffectationSolveur,
-  type Creneau,
-  type Probleme,
-  type Resultat,
-  type Role,
-  type SalarieSolveur,
+} from '#/lib/planning/modele.ts'
+import type {
+  AffectationSolveur,
+  Creneau,
+  Probleme,
+  Resultat,
+  Role,
+  SalarieSolveur,
 } from '#/lib/planning/modele.ts'
 import {
   alerteBesoin,
   presenceMaxPoste,
   versSolveur,
-  type Fiche,
 } from '#/lib/planning/regles.ts'
+import type { Fiche } from '#/lib/planning/regles.ts'
 import {
   MINUTES_PAR_JOUR,
   ajouterJours,
@@ -42,16 +44,16 @@ import {
   toucheLaNuit,
   versJour,
 } from '#/lib/planning/temps.ts'
-import {
-  JOURS,
-  type Absence,
-  type Affectation,
-  type Besoin,
-  type Horaire,
-  type Motif,
-  type Poste,
-  type Referentiel,
-  type Salarie,
+import { JOURS } from '#/lib/planning/types.ts'
+import type {
+  Absence,
+  Affectation,
+  Besoin,
+  Horaire,
+  Motif,
+  Poste,
+  Referentiel,
+  Salarie,
 } from '#/lib/planning/types.ts'
 import { raisonsBlocage, violations } from '#/lib/planning/verificateur.ts'
 
@@ -212,7 +214,7 @@ export function contexte(d: DonneesSemaine): Contexte {
 /** Jours d'absence fixes de la semaine type, avec leur motif. */
 export function absencesSemaineType(x: Salarie): Map<number, number | null> {
   const r = new Map<number, number | null>()
-  ;(x.semaine_type ?? []).forEach((e, j) => {
+  x.semaine_type.forEach((e, j) => {
     if (e.mode === 'absence') r.set(j, e.type_absence_id ?? null)
   })
   return r
@@ -272,15 +274,13 @@ export function weekendEntreEcoles(
 
 /** Repos fixe ou absence de la semaine type : se change dans la fiche. */
 export function jourFixe(x: Salarie, jour: number): boolean {
-  const e = x.semaine_type?.[jour]
+  const e = x.semaine_type.at(jour)
   return e?.mode === 'repos' || e?.mode === 'absence'
 }
 
 /** Personnel à jours fixes : sa semaine type a des jours « Travaille » ou « Repos ». */
 export function aJoursFixes(x: Salarie): boolean {
-  return (x.semaine_type ?? []).some(
-    (e) => e.mode === 'travail' || e.mode === 'repos',
-  )
+  return x.semaine_type.some((e) => e.mode === 'travail' || e.mode === 'repos')
 }
 
 /** Début (le jour d'arrivée à 00:00) ou fin (le lendemain du dernier jour)
@@ -301,12 +301,11 @@ export function fiche(
   ctx: Pick<Contexte, 'sansDecompte' | 'ecole' | 'absences'>,
   exclu = false,
 ): Fiche {
-  const semaine = x.semaine_type ?? []
+  const semaine = x.semaine_type
   const absents = joursAbsents(x, lundi, ctx.absences)
   const hors = joursHorsContrat(x, lundi)
   const niveaux = new Map<string, string>()
-  for (const c of x.competences)
-    niveaux.set(String(c.poste_id), c.niveau ?? 'titulaire')
+  for (const c of x.competences) niveaux.set(String(c.poste_id), c.niveau)
   const postes = [...niveaux]
     .filter(([, n]) => n === 'titulaire' || n === 'occasionnel')
     .map(([p]) => p)
@@ -370,7 +369,7 @@ export function fiche(
 // --------------------------------------------------------------- créneaux
 
 export function horairePrevu(poste: Poste, horaireId: number | null): boolean {
-  const autorises = poste.horaires_autorises ?? []
+  const autorises = poste.horaires_autorises
   return (
     !autorises.length || horaireId === null || autorises.includes(horaireId)
   )
@@ -508,7 +507,7 @@ export function personnes(salaries: Salarie[]): Map<number, string> {
     return r
   }
   for (const x of salaries) {
-    if (x.suite_de !== null && x.suite_de !== undefined) {
+    if (x.suite_de !== null) {
       const a = racine(x.id)
       const b = racine(x.suite_de)
       if (a !== b) parent.set(Math.max(a, b), Math.min(a, b))

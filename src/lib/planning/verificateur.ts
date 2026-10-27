@@ -13,10 +13,12 @@ import {
   role,
   toucheLaNuit,
   travail,
-  type AffectationSolveur,
-  type Creneau,
-  type Probleme,
-  type SalarieSolveur,
+} from '#/lib/planning/modele.ts'
+import type {
+  AffectationSolveur,
+  Creneau,
+  Probleme,
+  SalarieSolveur,
 } from '#/lib/planning/modele.ts'
 import { heuresLisibles as h } from '#/lib/planning/temps.ts'
 

@@ -1,23 +1,23 @@
 import highsLoader from 'highs'
 import { beforeAll, describe, expect, it } from 'vitest'
 
-import { generer, type Highs } from '#/lib/planning/generateur.ts'
+import { generer } from '#/lib/planning/generateur.ts'
+import type { Highs } from '#/lib/planning/generateur.ts'
 import {
   cle,
   cleAEviter,
   creneau as creneauModele,
   probleme,
   salarieSolveur,
-  type AffectationSolveur,
-  type Creneau,
-  type Probleme,
-  type SalarieSolveur,
 } from '#/lib/planning/modele.ts'
-import {
-  estEcole,
-  preparerGeneration,
-  type SemaineOut,
-} from '#/lib/planning/semaine.ts'
+import type {
+  AffectationSolveur,
+  Creneau,
+  Probleme,
+  SalarieSolveur,
+} from '#/lib/planning/modele.ts'
+import { estEcole, preparerGeneration } from '#/lib/planning/semaine.ts'
+import type { SemaineOut } from '#/lib/planning/semaine.ts'
 import { hotelDemo } from '#/lib/planning/test/hotelDemo.ts'
 import { hotelReel } from '#/lib/planning/test/hotelReel.ts'
 import { PlanningMemoire } from '#/lib/planning/test/planningMemoire.ts'

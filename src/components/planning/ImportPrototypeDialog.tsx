@@ -43,7 +43,9 @@ function lireApercu(texte: string): Apercu | string {
     return 'Ce fichier ne se lit pas : choisissez le fichier produit par l’export du prototype.'
   }
   const o = d as Record<string, unknown>
-  if (o?.format !== 'planning-prototype-v20') {
+  if (
+    (o as Record<string, unknown> | null)?.format !== 'planning-prototype-v20'
+  ) {
     return 'Ce fichier n’est pas un export du prototype de planning.'
   }
   const n = (k: string) =>

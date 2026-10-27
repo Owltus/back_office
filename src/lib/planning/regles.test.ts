@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  alerteBesoin,
-  resume,
-  versSolveur,
-  type Fiche,
-} from '#/lib/planning/regles.ts'
+import { alerteBesoin, resume, versSolveur } from '#/lib/planning/regles.ts'
+import type { Fiche } from '#/lib/planning/regles.ts'
 
 /*
  * Port de `backend/tests/test_regles.py` (prototype) : la traduction des

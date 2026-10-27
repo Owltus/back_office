@@ -7,7 +7,8 @@
 import highsLoader from 'highs'
 import wasmUrl from 'highs/runtime?url'
 
-import { generer, type Highs } from '#/lib/planning/generateur.ts'
+import { generer } from '#/lib/planning/generateur.ts'
+import type { Highs } from '#/lib/planning/generateur.ts'
 import type { Probleme } from '#/lib/planning/modele.ts'
 
 let highs: Promise<Highs> | null = null

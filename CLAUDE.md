@@ -1928,6 +1928,53 @@ group-hover:` étaient INVISIBLES mais CLIQUABLES au doigt →
   ouvert depuis le `leading` du PageHeader sous `lg` et nom du classeur en
   sous-titre de Navbar (`useNavbarSubtitle`), pages A4 encadrées `bg-card`.
 
+## Planning du staff — portage du prototype (2026-10-27)
+
+Page `/planning` : portage du prototype `C:\Users\Pierre-Louis\Desktop\planning`
+(FastAPI + OR-Tools CP-SAT + SQLite, convention HCR). Plan, décisions D1-D11 et
+spécification du front : `plan/planning-portage-2026-10-27/` (00-INDEX, A-spec,
+B-conventions-ui). Fait en binôme avec la session du prototype, qui reste la
+référence des règles (`docs/regles-hcr.md` là-bas).
+
+- **Moteur** (`lib/planning/`, pur) : `temps.ts` (minutes RÉELLES depuis le lundi,
+  Europe/Paris codée à la main, règle UE, comme Python `fold=0`), `regles.ts` (SEUL
+  endroit des chiffres HCR), `verificateur.ts` (oracle indépendant), `semaine.ts`
+  (`analyser`, `preparerGeneration`, `aPoserFixes` ; sorties aux noms de l'API du
+  prototype), `generateur.ts` = le modèle CP-SAT traduit en MIP (mêmes contraintes,
+  mêmes poids) résolu par **HiGHS** (`highs@1.15.3` exact, WebAssembly 3,5 Mo) dans
+  `solveur.worker.ts`. ⚠ Une règle changée = `regles.ts` + `generateur.ts` +
+  `verificateur.ts` + un test accepté ET refusé, comme dans le prototype.
+- **Preuves** : 134 tests portés de pytest ; oracle différentiel HORS DÉPÔT (il lit
+  la vraie base) : `analyser` rend exactement ce que rend le Python sur 7 semaines
+  réelles, et trois semaines générées à la suite ont la même couverture (35/35),
+  0 infraction, un écart aux contrats pas plus grand. Pour le rejouer : copier
+  `planning.db`, `PLANNING_DB=<copie> python -m uv run python <script>` côté
+  prototype, comparer au TypeScript (scripts dans le scratchpad de la session du
+  2026-10-27, à réécrire au besoin ; ne JAMAIS commiter ce qui lit les vraies données).
+- **Base** (migrations `20261027110000_planning_schema`, `…120000_planning_import`) :
+  9 tables `planning_*`, absences UNE LIGNE PAR JOUR. Droits de la page `planning` :
+  lecture = voir ; écriture = faire le planning (shifts, jours d'absence, générer,
+  valider, vider) ; gestion = + paramétrage et verrous. Semaine verrouillée figée
+  par trigger pour TOUS (PL423), passé refusé (PL409), un shift par personne et par
+  jour (contrainte différable : échange en une transaction), un jour d'absence
+  retire le shift du jour, un code horaire modifié fait suivre les shifts à venir.
+  Opérations multi-lignes en RPC `security invoker`. Erreurs PL400/409/423 écrites
+  en clair pour être montrées telles quelles (`lib/planning/erreurs.ts`). Tests
+  pgTAP `05_planning` (35) ; les aides `private.planning_*` sont listées dans
+  `00_socle` et `verif_advisor` (n° 9).
+- **Données** : les VRAIS NOMS ne vont jamais dans le dépôt (seed = hôtel fictif de
+  `demo.py` ; tests = pseudonymes). Import : `node scripts/planning-exporter-prototype.mjs`
+  (lecture seule de `planning.db`, JSON sur le Bureau, ignoré par git), puis
+  engrenage → « Importer le prototype » (gestion, planning vide, une transaction).
+- **Cache** : `['planning']` dans `PREFIXES_SENSIBLES` (noms, absences dont maladie).
+- **Écrans** (`components/planning/`) : vue mois (défaut, comme le prototype), vue
+  semaine, paramètres en sous-routes (`/planning/equipe|postes|horaires|besoins`),
+  fil de messages propre à la page (`Messages.tsx`, le back office n'a pas de
+  toasts). Horaires fixes posés à l'ouverture d'une semaine à venir (écriture).
+- **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
+  (D10), jours fériés (décision utilisateur relayée par le binôme), scénario
+  « exclus » à l'écran (retiré du prototype aussi).
+
 ## Audit complet du 2026-09-28 (relecture de code, 6 zones)
 
 Six relectures en parallèle (auth, RepJour, PDJ/Parking/Literie,

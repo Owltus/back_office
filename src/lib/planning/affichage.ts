@@ -52,7 +52,7 @@ export function dateCourte(iso: string): string {
 }
 
 export function initiales(s: Pick<Salarie, 'prenom' | 'nom'>): string {
-  return `${s.prenom[0] ?? ''}${s.nom[0] ?? ''}`.toUpperCase()
+  return `${s.prenom.charAt(0)}${s.nom.charAt(0)}`.toUpperCase()
 }
 
 export function nomComplet(s: Pick<Salarie, 'prenom' | 'nom'>): string {
@@ -201,7 +201,7 @@ export function enPeriodes(
     jours: string[]
   }> = []
   for (const j of tries) {
-    const dernier = r[r.length - 1]
+    const dernier = r.at(-1)
     if (
       dernier &&
       dernier.motif_id === j.motif_id &&
@@ -226,4 +226,9 @@ export function datesEntre(debut: string, fin: string): string[] {
   const r: string[] = []
   for (let d = debut; d <= fin; d = ajouterJours(d, 1)) r.push(d)
   return r
+}
+
+/** « de Thomas », « d'Alice », « d'Yves » : la préposition avant un prénom. */
+export function deNom(nom: string): string {
+  return /^[aeiouyhàâäéèêëîïôöùûü]/i.test(nom) ? `d'${nom}` : `de ${nom}`
 }

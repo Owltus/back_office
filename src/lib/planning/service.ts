@@ -18,7 +18,6 @@ import type {
   Besoin,
   Groupe,
   Horaire,
-  JourType,
   Motif,
   Poste,
   Referentiel,
@@ -46,7 +45,7 @@ function verifier<T>(r: { data: T | null; error: unknown }): T {
 
 /** Une écriture qui doit toucher au moins une ligne. */
 function auMoinsUne<T>(r: { data: T[] | null; error: unknown }): T[] {
-  const lignes = verifier(r) ?? []
+  const lignes = (verifier(r) as T[] | null) ?? []
   if (lignes.length === 0) throw refusDroits()
   return lignes
 }
@@ -57,9 +56,9 @@ function normaliserSalarie(x: Salarie): Salarie {
   return {
     ...x,
     heures_hebdo: num(x.heures_hebdo),
-    competences: x.competences ?? [],
-    semaine_type: (x.semaine_type ?? []) as JourType[],
-    shifts_autorises: (x.shifts_autorises ?? []).map(num),
+    competences: x.competences,
+    semaine_type: x.semaine_type,
+    shifts_autorises: x.shifts_autorises.map(num),
   }
 }
 
@@ -92,18 +91,18 @@ export async function fetchReferentiel(): Promise<Referentiel> {
         .order('lundi'),
     ])
   return {
-    horaires: verifier(horaires) as Horaire[],
-    motifs: verifier(motifs) as Motif[],
+    horaires: verifier(horaires),
+    motifs: verifier(motifs),
     postes: (verifier(postes) as Poste[]).map((p) => ({
       ...p,
-      horaires_autorises: (p.horaires_autorises ?? []).map(num),
+      horaires_autorises: p.horaires_autorises.map(num),
     })),
     groupes: (verifier(groupes) as Groupe[]).map((g) => ({
       ...g,
-      postes_autorises: (g.postes_autorises ?? []).map(num),
+      postes_autorises: g.postes_autorises.map(num),
     })),
     salaries: (verifier(salaries) as Salarie[]).map(normaliserSalarie),
-    besoins: verifier(besoins) as Besoin[],
+    besoins: verifier(besoins),
     verrous: (verifier(verrous) as Array<{ lundi: string }>).map(
       (v) => v.lundi,
     ),
@@ -135,8 +134,8 @@ export async function fetchShifts(
       .order('jour'),
   ])
   return {
-    affectations: verifier(affectations) as Affectation[],
-    absences: verifier(absences) as Absence[],
+    affectations: verifier(affectations),
+    absences: verifier(absences),
   }
 }
 
@@ -158,7 +157,7 @@ export async function fetchAbsencesSalarie(
       .select(COL_ABSENCE)
       .eq('salarie_id', salarieId)
       .order('jour'),
-  ) as Absence[]
+  )
 }
 
 /** État du planning d'une semaine, lu par la base : la génération le rend

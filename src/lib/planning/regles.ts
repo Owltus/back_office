@@ -6,7 +6,8 @@
  * Le solveur ne connaît pas la convention : il applique des nombres.
  */
 
-import { salarieSolveur, type SalarieSolveur } from '#/lib/planning/modele.ts'
+import { salarieSolveur } from '#/lib/planning/modele.ts'
+import type { SalarieSolveur } from '#/lib/planning/modele.ts'
 import { heuresLisibles } from '#/lib/planning/temps.ts'
 import type { Categorie, TypeContrat } from '#/lib/planning/types.ts'
 

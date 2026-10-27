@@ -1,17 +1,20 @@
 import highsLoader from 'highs'
 import { beforeAll, describe, expect, it } from 'vitest'
 
-import { generer, type Highs } from '#/lib/planning/generateur.ts'
+import { generer } from '#/lib/planning/generateur.ts'
+import type { Highs } from '#/lib/planning/generateur.ts'
 import {
   cle,
   creneau as creneauModele,
   probleme,
   salarieSolveur,
-  type AffectationSolveur,
-  type Creneau,
-  type Probleme,
-  type Resultat,
-  type SalarieSolveur,
+} from '#/lib/planning/modele.ts'
+import type {
+  AffectationSolveur,
+  Creneau,
+  Probleme,
+  Resultat,
+  SalarieSolveur,
 } from '#/lib/planning/modele.ts'
 import { MINUTES_PAR_JOUR } from '#/lib/planning/temps.ts'
 import {

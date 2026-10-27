@@ -1,0 +1,351 @@
+/*
+ * Barre du haut de la vue mois (prototype `VueMois.tsx`, lignes 516-660, et
+ * `PlanningPage.tsx`, lignes 468-494) : indicateurs du mois, aide, cadenas
+ * du mois, points d'attention, « Compléter le mois » et son menu,
+ * navigation de mois en mois, puis l'engrenage des paramètres.
+ */
+
+import type { ReactNode } from 'react'
+import {
+  BadgeCheck,
+  ChevronDown,
+  CircleHelp,
+  Loader2,
+  Lock,
+  LockOpen,
+  ShieldAlert,
+  ShieldCheck,
+  Sparkles,
+  SquareDashed,
+  TriangleAlert,
+} from 'lucide-react'
+
+import { MenuParametres } from '#/components/planning/EnTeteParametres.tsx'
+import { ButtonGroup } from '#/components/shared/ButtonGroup.tsx'
+import { StepNav } from '#/components/shared/StepNav.tsx'
+import { Tip } from '#/components/shared/Tip.tsx'
+import { Button } from '#/components/ui/button.tsx'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '#/components/ui/dropdown-menu.tsx'
+import { cn } from '#/lib/utils.ts'
+import type { Compteurs } from '#/components/planning/mois/mois.ts'
+
+export interface ActionMois {
+  libelle: string
+  aide: string
+  /** Raison de l'inaction (affichée à la place de l'aide). */
+  inactif?: string
+  danger?: boolean
+  onClick: () => void
+}
+
+/** Un bouton grisé garde son infobulle (span porteur, cf. Tip). */
+function AvecRaison({
+  label,
+  desactive,
+  children,
+}: {
+  label: ReactNode
+  desactive: boolean
+  children: ReactNode
+}) {
+  return (
+    <Tip label={<span className="whitespace-pre-line">{label}</span>}>
+      {desactive ? (
+        <span tabIndex={0} className="inline-flex">
+          {children}
+        </span>
+      ) : (
+        children
+      )}
+    </Tip>
+  )
+}
+
+const AIDE_VALIDATION = [
+  'Shifts des jours de ce mois :',
+  'Proposition (pointillés) : proposée par le moteur, recalculée à chaque génération',
+  'Validé (✓) : gardé par les générations, encore modifiable à la main',
+  'Verrouillé (cadenas) : semaine réalisée, rien ne bouge',
+].join('\n')
+
+export function Indicateurs({ c }: { c: Compteurs }) {
+  const taux = c.places ? (c.pourvues / c.places) * 100 : 100
+  return (
+    <div className="flex items-center gap-3 text-xs">
+      {(c.propositions > 0 || c.valides > 0 || c.verrouilles > 0) && (
+        <Tip
+          label={<span className="whitespace-pre-line">{AIDE_VALIDATION}</span>}
+        >
+          <span
+            tabIndex={0}
+            className="inline-flex items-center gap-2 rounded-md border px-2 py-1"
+          >
+            {c.propositions > 0 && (
+              <span className="inline-flex items-center gap-1 text-muted-foreground">
+                <SquareDashed className="size-3.5" />
+                {c.propositions} proposition{c.propositions > 1 ? 's' : ''}
+              </span>
+            )}
+            {c.valides > 0 && (
+              <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                <BadgeCheck className="size-3.5" />
+                {c.valides} validé{c.valides > 1 ? 's' : ''}
+              </span>
+            )}
+            {c.verrouilles > 0 && (
+              <span className="inline-flex items-center gap-1 text-muted-foreground">
+                <Lock className="size-3" />
+                {c.verrouilles} verrouillé{c.verrouilles > 1 ? 's' : ''}
+              </span>
+            )}
+          </span>
+        </Tip>
+      )}
+      <Tip
+        label={`Couverture des semaines affichées, en entier : ${c.pourvues} places pourvues sur ${c.places}`}
+      >
+        <span tabIndex={0} className="inline-flex items-center gap-1.5">
+          <span className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
+            <span
+              className={cn(
+                'block h-full rounded-full',
+                c.pourvues === c.places ? 'bg-emerald-500' : 'bg-amber-500',
+              )}
+              style={{ width: `${taux}%` }}
+            />
+          </span>
+          <strong className="tabular-nums">
+            {c.pourvues}/{c.places}
+          </strong>
+        </span>
+      </Tip>
+      <Tip
+        label={
+          c.infractions
+            ? `${c.infractions} infraction${c.infractions > 1 ? 's' : ''} aux règles HCR sur les semaines affichées`
+            : 'Conforme aux règles HCR sur les semaines affichées'
+        }
+      >
+        <span
+          tabIndex={0}
+          className={cn(
+            'inline-flex items-center gap-1 font-semibold',
+            c.infractions
+              ? 'text-destructive'
+              : 'text-emerald-600 dark:text-emerald-400',
+          )}
+          aria-label={
+            c.infractions
+              ? `${c.infractions} infraction(s) HCR`
+              : 'Conforme aux règles HCR'
+          }
+        >
+          {c.infractions ? (
+            <ShieldAlert className="size-4" />
+          ) : (
+            <ShieldCheck className="size-4" />
+          )}
+          {c.infractions > 0 && c.infractions}
+        </span>
+      </Tip>
+    </div>
+  )
+}
+
+export function BarreMois({
+  compteurs,
+  occupe,
+  progression,
+  nbAlertes,
+  onAlertes,
+  verrou,
+  completer,
+  groupes,
+  menuInactif,
+  portee,
+  nomDuMois,
+  onPrecedent,
+  onSuivant,
+  onCeMois,
+  estCeMois,
+}: {
+  compteurs: Compteurs | null
+  occupe: boolean
+  progression: ReactNode
+  nbAlertes: number
+  onAlertes: () => void
+  /** Cadenas du mois (gestion seule). */
+  verrou: { verrouille: boolean; inactif?: string; onClick: () => void }
+  completer: { inactif?: string; aide: string; onClick: () => void }
+  groupes: Array<{ titre: string; actions: ActionMois[] }>
+  /** Raison pour laquelle le menu ⌄ est fermé (droits, chargement, calcul). */
+  menuInactif?: string
+  portee: string
+  nomDuMois: string
+  onPrecedent: () => void
+  onSuivant: () => void
+  onCeMois: () => void
+  estCeMois: boolean
+}) {
+  return (
+    <>
+      {progression}
+      {compteurs && <Indicateurs c={compteurs} />}
+      <ButtonGroup>
+        <Tip
+          label={
+            <span className="whitespace-pre-line">
+              {[
+                'Clic : changer l’horaire, valider, journée étoile',
+                'Pour le poste, une absence ou l’école : ouvrir la semaine',
+                'Glisser un shift : le déplacer, même vers une autre semaine (Alt : le dupliquer)',
+                'Glisser un repos, une absence ou l’école : dans sa semaine',
+                'S45 : ouvrir la semaine en vue semaine',
+              ].join('\n')}
+            </span>
+          }
+        >
+          <Button variant="outline" size="icon-sm" aria-label="Aide">
+            <CircleHelp />
+          </Button>
+        </Tip>
+        <AvecRaison
+          desactive={!!verrou.inactif}
+          label={
+            verrou.inactif ??
+            (verrou.verrouille
+              ? 'Mois verrouillé (plannings réalisés) : cliquer pour le déverrouiller'
+              : 'Verrouiller tout le mois : plus de modification ni de génération.\nLes semaines à cheval sur deux mois sont verrouillées en entier.')
+          }
+        >
+          <Button
+            variant={verrou.verrouille ? 'secondary' : 'outline'}
+            size="icon-sm"
+            disabled={!!verrou.inactif}
+            onClick={verrou.onClick}
+            aria-label={
+              verrou.verrouille
+                ? 'Déverrouiller le mois'
+                : 'Verrouiller le mois'
+            }
+          >
+            {verrou.verrouille ? <Lock /> : <LockOpen />}
+          </Button>
+        </AvecRaison>
+        <Tip
+          label={
+            nbAlertes
+              ? `Points d'attention du mois (${nbAlertes})`
+              : "Points d'attention : rien à signaler"
+          }
+        >
+          <Button
+            variant="outline"
+            size="icon-sm"
+            className="relative"
+            onClick={onAlertes}
+            aria-label="Points d'attention"
+          >
+            <TriangleAlert />
+            {nbAlertes > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 min-w-4 rounded-full bg-destructive px-1 text-[10px] leading-4 font-semibold text-white">
+                {nbAlertes}
+              </span>
+            )}
+          </Button>
+        </Tip>
+      </ButtonGroup>
+      <ButtonGroup>
+        <AvecRaison
+          desactive={!!completer.inactif}
+          label={completer.inactif ?? completer.aide}
+        >
+          <Button
+            size="sm"
+            disabled={!!completer.inactif}
+            onClick={completer.onClick}
+          >
+            {occupe ? <Loader2 className="animate-spin" /> : <Sparkles />}
+            Compléter le mois
+          </Button>
+        </AvecRaison>
+        <DropdownMenu>
+          <AvecRaison
+            desactive={!!menuInactif}
+            label={menuInactif ?? 'Générer, valider, effacer'}
+          >
+            <DropdownMenuTrigger asChild disabled={!!menuInactif}>
+              <Button
+                size="icon-sm"
+                aria-label="Autres actions"
+                disabled={!!menuInactif}
+              >
+                <ChevronDown />
+              </Button>
+            </DropdownMenuTrigger>
+          </AvecRaison>
+          <DropdownMenuContent align="end" className="w-80">
+            {groupes.map((g, i) => (
+              <div key={g.titre} role="group" aria-label={g.titre}>
+                {i > 0 && <DropdownMenuSeparator />}
+                <DropdownMenuLabel className="text-xs text-muted-foreground">
+                  {g.titre}
+                </DropdownMenuLabel>
+                {g.actions.map((a) => (
+                  <DropdownMenuItem
+                    key={a.libelle}
+                    disabled={!!a.inactif}
+                    onSelect={a.onClick}
+                    className={cn(
+                      'flex-col items-start gap-0',
+                      a.danger && 'text-destructive',
+                    )}
+                  >
+                    <span className="font-medium">{a.libelle}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {a.inactif ?? a.aide}
+                    </span>
+                  </DropdownMenuItem>
+                ))}
+              </div>
+            ))}
+            <DropdownMenuSeparator />
+            <p className="px-2 py-1.5 text-xs text-muted-foreground">
+              {portee}
+            </p>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </ButtonGroup>
+      <StepNav
+        onPrev={onPrecedent}
+        onNext={onSuivant}
+        prevLabel="Mois précédent"
+        nextLabel="Mois suivant"
+      >
+        <AvecRaison
+          desactive={estCeMois}
+          label={estCeMois ? 'Mois en cours' : 'Revenir à ce mois'}
+        >
+          <Button
+            variant="outline"
+            size="sm"
+            className="min-w-32 capitalize"
+            onClick={onCeMois}
+            disabled={estCeMois}
+            aria-label={`${nomDuMois} : revenir à ce mois`}
+          >
+            {nomDuMois}
+          </Button>
+        </AvecRaison>
+      </StepNav>
+      <MenuParametres />
+    </>
+  )
+}

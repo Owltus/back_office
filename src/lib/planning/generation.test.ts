@@ -1,14 +1,14 @@
 import highsLoader from 'highs'
 import { beforeAll, describe, expect, it } from 'vitest'
 
-import { generer, type Highs } from '#/lib/planning/generateur.ts'
+import { generer } from '#/lib/planning/generateur.ts'
+import type { Highs } from '#/lib/planning/generateur.ts'
 import {
   analyser,
   aPoserFixes,
   preparerGeneration,
-  type DonneesSemaine,
-  type NouveauShift,
 } from '#/lib/planning/semaine.ts'
+import type { DonneesSemaine, NouveauShift } from '#/lib/planning/semaine.ts'
 import { hotelDemo } from '#/lib/planning/test/hotelDemo.ts'
 import type { Affectation } from '#/lib/planning/types.ts'
 

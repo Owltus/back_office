@@ -6,14 +6,17 @@
  * contrôles d'accès, verrous et refus 409/423 vivent en base : pas ici.
  */
 
-import { generer, type Highs } from '#/lib/planning/generateur.ts'
+import { generer } from '#/lib/planning/generateur.ts'
+import type { Highs } from '#/lib/planning/generateur.ts'
 import {
   analyser,
   aPoserFixes,
   preparerGeneration,
-  type DonneesSemaine,
-  type OptionsGeneration,
-  type SemaineOut,
+} from '#/lib/planning/semaine.ts'
+import type {
+  DonneesSemaine,
+  OptionsGeneration,
+  SemaineOut,
 } from '#/lib/planning/semaine.ts'
 import {
   ajouterJours,
