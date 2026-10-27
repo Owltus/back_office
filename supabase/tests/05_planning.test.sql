@@ -63,9 +63,12 @@ end $$;
 -- ---------------------------------------------------------------- données ---
 -- Semaines : P passée, F à venir (dans deux semaines), L verrouillée (après F).
 create temp table t_sem as
+-- F et L loin dans l'avenir (dans environ 6 ans) : aucune donnée réelle n'y
+-- est, même sur une copie de la prod ; les requêtes filtrent aussi sur les
+-- fiches du test.
 select private.planning_lundi(private.planning_aujourdhui()) - 7 as p,
-       private.planning_lundi(private.planning_aujourdhui()) + 14 as f,
-       private.planning_lundi(private.planning_aujourdhui()) + 21 as l;
+       private.planning_lundi(private.planning_aujourdhui()) + 7 * 300 as f,
+       private.planning_lundi(private.planning_aujourdhui()) + 7 * 301 as l;
 
 insert into public.planning_horaires (code, nom, debut, fin, pause, raccourci)
   overriding system value
@@ -119,7 +122,7 @@ create function pg_temp.q(p text) returns text language sql as $$
     ':M', (select m from t_ids)::text);
 $$;
 
-select plan(37);
+select plan(39);
 
 -- -------------------------------------------------------------- lecture ---
 select is(pg_temp.essai('aucun', array[pg_temp.q('select count(*) from public.planning_salaries where nom = ''PLANNING''')]),
@@ -177,7 +180,7 @@ select is(pg_temp.essai('gestion', array[pg_temp.q('select public.planning_suppr
   'err=PL409', 'verrouillée : une personne d''un planning réalisé ne se supprime pas');
 select is(pg_temp.essai('gestion', array[pg_temp.q(
   'delete from public.planning_semaines_verrouillees where lundi = :L'),
-  pg_temp.q('delete from public.planning_affectations where lundi = :L')]),
+  pg_temp.q('delete from public.planning_affectations where lundi = :L and salarie_id in (:S1, :S2, :S3)')]),
   '1', 'déverrouillée d''abord : le shift se supprime');
 
 -- --------------------------------------------------------------- passé ---
@@ -196,19 +199,19 @@ select is(pg_temp.essai('ecriture', array[
     || quote_literal(json_build_array(
          json_build_object('salarie_id', (select s3 from t_ids), 'poste_id', (select pa from t_ids), 'jour', 2,
                            'horaire_id', (select h from t_ids), 'debut', '07:00', 'fin', '15:45', 'pause', 45))::text) || ')'),
-  pg_temp.q('select string_agg(salarie_id || ''/'' || jour || ''/'' || epinglee, '','' order by salarie_id, jour) from public.planning_affectations where lundi = :F')]),
+  pg_temp.q('select string_agg(salarie_id || ''/'' || jour || ''/'' || epinglee, '','' order by salarie_id, jour) from public.planning_affectations where lundi = :F and salarie_id in (:S1, :S2, :S3)')]),
   (select s1 || '/0/true,' || s3 || '/2/false' from t_ids),
   'génération : la proposition de s2 est remplacée, le validé de s1 reste');
 select is(pg_temp.essai('ecriture', array[
   pg_temp.q('select public.planning_vider(:F, true)'),
-  pg_temp.q('select count(*) from public.planning_affectations where lundi = :F')]),
+  pg_temp.q('select count(*) from public.planning_affectations where lundi = :F and salarie_id in (:S1, :S2, :S3)')]),
   '1', 'vider en gardant les validés');
 
 -- ------------------------------------------------- échange de deux shifts ---
 -- s1 lundi (validé) déposé sur la case de s2 mardi (occupée) : ils s'échangent.
 select is(pg_temp.essai('ecriture', array[
   pg_temp.q('select public.planning_modifier_shift((select id from public.planning_affectations where lundi = :F and salarie_id = :S1), ''{"salarie_id": :S2, "jour": 1}''::jsonb)'),
-  pg_temp.q('select string_agg(salarie_id || ''/'' || jour || ''/'' || epinglee, '','' order by salarie_id, jour) from public.planning_affectations where lundi = :F')]),
+  pg_temp.q('select string_agg(salarie_id || ''/'' || jour || ''/'' || epinglee, '','' order by salarie_id, jour) from public.planning_affectations where lundi = :F and salarie_id in (:S1, :S2, :S3)')]),
   (select s1 || '/0/true,' || s2 || '/1/true' from t_ids),
   'échange : chacun prend la case de l''autre, les deux validés');
 select is(pg_temp.essai('ecriture', array[pg_temp.q(
@@ -250,6 +253,16 @@ select throws_ok(pg_temp.q('delete from public.planning_affectations where lundi
 -- La seule trace de l'auteur effacée (compte supprimé) n'est pas une retouche.
 select lives_ok(pg_temp.q('update public.planning_affectations set created_by = null where lundi = :L'),
   'verrouillée : l''auteur peut être effacé (suppression d''un compte)');
+
+-- ------------------------------------------ heures recalées sur le code ---
+select is(pg_temp.essai('ecriture', array[
+  pg_temp.q('insert into public.planning_affectations (lundi, salarie_id, poste_id, jour, horaire_id, debut, fin, court, pause) values (:F, :S3, :PA, 4, (select id from public.planning_horaires where code = ''XM'' and nom = ''Matin test''), ''09:00'', ''10:00'', true, 0)'),
+  pg_temp.q('select debut || ''-'' || fin || ''/'' || pause || ''/'' || court from public.planning_affectations where lundi = :F and salarie_id = :S3 and jour = 4')]),
+  '07:00-14:45/45/true', 'un shift codé prend les heures de son code (journée courte comprise)');
+select is(pg_temp.essai('ecriture', array[
+  pg_temp.q('update public.planning_affectations set court = false where lundi = :F and salarie_id = :S1 and jour = 0'),
+  pg_temp.q('select debut || ''-'' || fin from public.planning_affectations where lundi = :F and salarie_id = :S1 and jour = 0')]),
+  '07:00-15:45', 'retirer la journée courte remet les heures pleines');
 
 -- --------------------------------------------------- import du prototype ---
 select is(pg_temp.essai('ecriture', array['select public.planning_importer(''{"format": "planning-prototype-v20"}''::jsonb)']),

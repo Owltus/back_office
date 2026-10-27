@@ -466,6 +466,35 @@ revoke all on function private.planning_horaire_de(text, text, integer, integer,
 grant execute on function private.planning_horaire_de(text, text, integer, integer, boolean)
   to authenticated, service_role;
 
+-- Un shift codé prend les heures et la pause de son code (prototype
+-- `_caler_sur_code`, appelé à chaque pose et retouche) : la base ne fait pas
+-- confiance aux heures envoyées par l'écran. Journée courte gardée seulement
+-- si le code a un raccourci ; sans code, les heures saisies restent. Revue du
+-- 2026-10-27 (une étoile posée depuis la vue mois gardait ses heures pleines).
+create or replace function private.planning_caler_sur_code() returns trigger
+  language plpgsql
+  set search_path to ''
+as $$
+declare
+  h public.planning_horaires;
+begin
+  if new.horaire_id is null then
+    new.court := false;
+    return new;
+  end if;
+  select * into h from public.planning_horaires where id = new.horaire_id;
+  if not found then return new; end if;
+  new.court := new.court and h.raccourci > 0;
+  select d.debut, d.fin into new.debut, new.fin
+    from private.planning_horaire_de(h.debut, h.fin, h.raccourci, h.raccourci_debut, new.court) d;
+  new.pause := h.pause;
+  return new;
+end $$;
+revoke all on function private.planning_caler_sur_code() from public, anon, authenticated;
+create trigger planning_affectations_caler
+  before insert or update of horaire_id, court, debut, fin, pause on public.planning_affectations
+  for each row execute function private.planning_caler_sur_code();
+
 create or replace function private.planning_horaires_suivent() returns trigger
   language plpgsql
   set search_path to ''
