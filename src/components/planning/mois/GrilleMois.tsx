@@ -593,18 +593,24 @@ function LigneMois({
           onClick={ouvrir(date, false)}
         >
           {shift && (
-            // Début et fin en entier : « 08 » se lisait comme « 8 heures ».
-            <span className="grid text-[9.5px] leading-[1.15] font-semibold tabular-nums">
-              <span>{heureAffichee(shift.debut)}</span>
-              <span className="inline-flex items-center justify-center gap-px opacity-80">
-                {heureAffichee(shift.fin)}
+            // Début et fin en entier (« 08 » se lisait comme « 8 heures »),
+            // l'un sous l'autre au centre ; l'étoile au centre de la marge
+            // gauche, pour que les horaires restent alignés d'une case à
+            // l'autre.
+            <span className="grid w-full grid-cols-[1fr_auto_1fr] items-center text-[9.5px] leading-[1.15] font-semibold tabular-nums">
+              <span className="grid place-items-center">
                 {journeeEtoile(s, shift) && (
                   <Star
-                    className="size-2 fill-amber-400 text-amber-400"
+                    className="size-2.5 fill-amber-400 text-amber-400"
                     aria-label="journée étoile"
                   />
                 )}
               </span>
+              <span className="grid justify-items-end">
+                <span>{heureAffichee(shift.debut)}</span>
+                <span className="opacity-80">{heureAffichee(shift.fin)}</span>
+              </span>
+              <span />
             </span>
           )}
         </Pastille>

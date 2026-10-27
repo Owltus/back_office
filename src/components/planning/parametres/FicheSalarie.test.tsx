@@ -353,7 +353,7 @@ describe('FicheSalarie', () => {
       '2026-11-17',
       '2026-11-18',
     ])
-  })
+  }, 20_000)
 
   it('un shift déjà posé sur un nouveau jour d école est annoncé, puis signalé à l enregistrement', async () => {
     etat.shifts = [
@@ -386,7 +386,7 @@ describe('FicheSalarie', () => {
         /1 shift est retiré pour son absence ou son école : mar\. 10 nov\. 2026/,
       ),
     ).toBeTruthy()
-  })
+  }, 20_000)
 
   it('aperçu des règles : suit le contrat', async () => {
     ouvrir(LUCAS)

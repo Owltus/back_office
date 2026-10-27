@@ -145,7 +145,7 @@
 .planning-carte-duree {
   grid-column: 2;
   grid-row: 1;
-  justify-self: end;
+  justify-self: center;
   padding: 0 5px;
   border-radius: 999px;
   font-size: 10.5px;
@@ -156,9 +156,19 @@
   color: color-mix(in srgb, var(--couleur) 25%, var(--foreground));
 }
 
-.planning-carte-icones {
+/* Journée étoile : sous la durée, centrée sur elle. */
+.planning-carte-etoile {
   grid-column: 2;
   grid-row: 2;
+  justify-self: center;
+  align-self: center;
+}
+
+/* Validé, dépannage, alertes : au bout de la ligne de fin. */
+.planning-carte-icones {
+  grid-column: 1;
+  grid-row: 2;
+  justify-self: end;
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;

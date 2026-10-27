@@ -91,13 +91,14 @@ export function CarteShift({ c, enVol }: { c: ContenuCarte; enVol?: boolean }) {
         <ArrowRight className="size-2.5" aria-hidden />
         {heureAffichee(c.fin)}
       </span>
+      {c.etoile && (
+        // Sous la durée, au centre : l'étoile dit « une heure de moins ».
+        <Star
+          className="planning-carte-etoile size-3.5 fill-amber-400 text-amber-400"
+          aria-label="Journée étoile"
+        />
+      )}
       <span className="planning-carte-icones">
-        {c.etoile && (
-          <Star
-            className="size-3 fill-amber-400 text-amber-400"
-            aria-label="Journée étoile"
-          />
-        )}
         {c.epinglee && (
           <BadgeCheck
             className="size-3.5 text-emerald-500"
