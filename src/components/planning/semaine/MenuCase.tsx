@@ -13,7 +13,7 @@ import {
   ContextMenuLabel,
   ContextMenuSeparator,
 } from '#/components/ui/context-menu.tsx'
-import { heures } from '#/lib/planning/affichage.ts'
+import { heures, ROUGE_CODE, texteSur } from '#/lib/planning/affichage.ts'
 import { heureAffichee } from '#/lib/planning/temps.ts'
 import { JOURS } from '#/lib/planning/types.ts'
 import type { Horaire } from '#/lib/planning/types.ts'
@@ -47,37 +47,6 @@ export function MenuCase({
       <ContextMenuLabel className="text-xs text-muted-foreground">
         {ouverture.nom} · {JOURS[ouverture.jour]}
       </ContextMenuLabel>
-      {proposes.length === 0 && (
-        <ContextMenuItem disabled>
-          Aucun horaire prévu pour ce poste
-        </ContextMenuItem>
-      )}
-      {proposes.map((h) => (
-        <ContextMenuItem
-          key={h.id}
-          onSelect={() => {
-            if (actuel !== h.id && posteId !== undefined) onHoraire(h, posteId)
-          }}
-        >
-          <span
-            className="size-2.5 shrink-0 rounded-full"
-            style={{ background: h.couleur }}
-          />
-          <span className="font-medium">{h.nom}</span>
-          <span className="ml-auto pl-3 text-xs text-muted-foreground tabular-nums">
-            {heureAffichee(h.debut)}-{heureAffichee(h.fin)} ·{' '}
-            {heures(travailCode(h))}
-          </span>
-          {actuel === h.id ? (
-            <Check
-              className="size-3.5 text-primary"
-              aria-label="Horaire actuel"
-            />
-          ) : (
-            <span className="size-3.5" />
-          )}
-        </ContextMenuItem>
-      ))}
       {vider && (
         <ContextMenuItem onSelect={vider}>
           <Eraser />
@@ -89,7 +58,7 @@ export function MenuCase({
       )}
       {validation && (
         <>
-          <ContextMenuSeparator />
+          {vider && <ContextMenuSeparator />}
           <ContextMenuItem onSelect={validation.onBasculer}>
             {validation.active ? (
               <Undo2 />
@@ -124,6 +93,43 @@ export function MenuCase({
           </ContextMenuItem>
         </>
       )}
+      <ContextMenuSeparator />
+      {proposes.length === 0 && (
+        <ContextMenuItem disabled>
+          Aucun horaire prévu pour ce poste
+        </ContextMenuItem>
+      )}
+      {proposes.map((h) => (
+        <ContextMenuItem
+          key={h.id}
+          aria-label={`${h.code}, ${h.nom}`}
+          onSelect={() => {
+            if (actuel !== h.id && posteId !== undefined) onHoraire(h, posteId)
+          }}
+        >
+          <span
+            className="min-w-12 shrink-0 rounded px-1.5 py-0.5 text-center text-xs font-semibold"
+            style={{
+              background: h.couleur,
+              color: h.code_rouge ? ROUGE_CODE : texteSur(h.couleur),
+            }}
+          >
+            {h.code}
+          </span>
+          <span className="flex-1 pl-1 text-sm tabular-nums">
+            {heureAffichee(h.debut)}-{heureAffichee(h.fin)} ·{' '}
+            {heures(travailCode(h))}
+          </span>
+          {actuel === h.id ? (
+            <Check
+              className="size-3.5 text-primary"
+              aria-label="Horaire actuel"
+            />
+          ) : (
+            <span className="size-3.5" />
+          )}
+        </ContextMenuItem>
+      ))}
     </ContextMenuContent>
   )
 }

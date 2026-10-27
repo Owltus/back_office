@@ -162,36 +162,6 @@ export function MenuJour({
         <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
           {titre}
         </div>
-        {proposes.map((h) => (
-          <button
-            key={h.id}
-            type="button"
-            role="menuitem"
-            aria-label={`${h.code}, ${h.nom}`}
-            className={ITEM}
-            onClick={choisir(() => {
-              if (shift?.type_shift_id !== h.id && posteId !== undefined)
-                onHoraire(h, posteId)
-            })}
-          >
-            <span
-              className="min-w-12 shrink-0 rounded px-1.5 py-0.5 text-center text-xs font-semibold"
-              style={{
-                background: h.couleur,
-                color: h.code_rouge ? ROUGE_CODE : texteSur(h.couleur),
-              }}
-            >
-              {h.code}
-            </span>
-            <span className="flex-1 text-sm tabular-nums">
-              {heureAffichee(h.debut)}–{heureAffichee(h.fin)} ·{' '}
-              {heures(dureeHoraire(h.debut, h.fin) - h.pause)}
-            </span>
-            {shift?.type_shift_id === h.id && (
-              <Check className="size-4 text-primary" />
-            )}
-          </button>
-        ))}
         {ecrire && onVider && (
           <button
             type="button"
@@ -262,6 +232,37 @@ export function MenuJour({
             {ecrire ? 'poste, absence, école…' : 'voir le détail'}
           </span>
         </button>
+        {proposes.length > 0 && <div className="-mx-1 my-1 h-px bg-border" />}
+        {proposes.map((h) => (
+          <button
+            key={h.id}
+            type="button"
+            role="menuitem"
+            aria-label={`${h.code}, ${h.nom}`}
+            className={ITEM}
+            onClick={choisir(() => {
+              if (shift?.type_shift_id !== h.id && posteId !== undefined)
+                onHoraire(h, posteId)
+            })}
+          >
+            <span
+              className="min-w-12 shrink-0 rounded px-1.5 py-0.5 text-center text-xs font-semibold"
+              style={{
+                background: h.couleur,
+                color: h.code_rouge ? ROUGE_CODE : texteSur(h.couleur),
+              }}
+            >
+              {h.code}
+            </span>
+            <span className="flex-1 text-sm tabular-nums">
+              {heureAffichee(h.debut)}–{heureAffichee(h.fin)} ·{' '}
+              {heures(dureeHoraire(h.debut, h.fin) - h.pause)}
+            </span>
+            {shift?.type_shift_id === h.id && (
+              <Check className="size-4 text-primary" />
+            )}
+          </button>
+        ))}
       </div>
     </>
   )

@@ -370,6 +370,19 @@ export function EditeurShift({
           <section className="space-y-2">
             <h3 className="text-sm font-semibold">Horaire</h3>
             <div className="grid grid-cols-2 gap-1.5">
+              {existant && (
+                <Choix
+                  couleur={NEUTRE}
+                  code="—"
+                  titre="Non attribué"
+                  detail="la case redevient vide"
+                  choisi={vider}
+                  onClick={() => {
+                    setVider(true)
+                    setMotif(null)
+                  }}
+                />
+              )}
               {codes.map((h) => (
                 <Choix
                   key={h.id}
@@ -405,19 +418,6 @@ export function EditeurShift({
                   setMotif(null)
                 }}
               />
-              {existant && (
-                <Choix
-                  couleur={NEUTRE}
-                  code="—"
-                  titre="Non attribué"
-                  detail="la case redevient vide"
-                  choisi={vider}
-                  onClick={() => {
-                    setVider(true)
-                    setMotif(null)
-                  }}
-                />
-              )}
             </div>
 
             {[
