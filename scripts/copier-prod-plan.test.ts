@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { fc, test } from '@fast-check/vitest'
 
@@ -20,6 +21,19 @@ import {
 // sans Mailpit ni sur un arbre sale.
 
 describe('ce qui est copié', () => {
+  it('le planning du staff est copié tel quel, vrais noms compris (décision du 2026-10-27)', () => {
+    // Aucune table du planning n'est exclue de la copie…
+    expect(EXCLUES.some((t) => t.includes('planning'))).toBe(false)
+    expect(SCHEMAS).toContain('public')
+    // … et l'anonymisation n'en touche aucune (commentaires ôtés : seul le
+    // SQL qui s'exécute compte).
+    const sql = readFileSync('supabase/anonymiser.sql', 'utf8')
+      .split('\n')
+      .map((l) => l.replace(/--.*$/, ''))
+      .join('\n')
+    expect(sql).not.toMatch(/planning_/i)
+  })
+
   it('nos schémas seulement ; de auth, les comptes et rien d’autre', () => {
     expect(SCHEMAS).toEqual(['public', 'private'])
     expect(COMPTES).toEqual(['auth.users', 'auth.identities'])

@@ -22,6 +22,10 @@
 -- égale au nom), adresses des destinataires du rapport (e-mails locaux →
 -- Mailpit, D12), contenu des classeurs (documents internes, PAS des données
 -- de client), textes d'affichage, apprentissage de facturation hors mots.
+-- Planning du staff (tables `planning_*`) : copié TEL QUEL, vrais noms et
+-- prénoms, contrats, absences, shifts (décision utilisateur du 2026-10-27 :
+-- « garde les vrais noms, sinon c'est confusant »). Ce fichier ne doit
+-- jamais toucher une table `planning_*` (`copier-prod-plan.test.ts`).
 --
 -- `copier-prod` retire les lignes `begin;` et `commit;` de ce fichier pour le
 -- jouer DANS la transaction du chargement : un échec ici annule aussi le

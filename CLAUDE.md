@@ -1968,6 +1968,10 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   `demo.py` ; tests = pseudonymes). Import : `node scripts/planning-exporter-prototype.mjs`
   (lecture seule de `planning.db`, JSON sur le Bureau, ignoré par git), puis
   engrenage → « Importer le prototype » (gestion, planning vide, une transaction).
+- **Copie de la prod en dev** : le planning est copié TEL QUEL, vrais noms compris
+  (décision utilisateur du 2026-10-27 : « sinon c'est confusant »). `anonymiser.sql`
+  ne touche jamais une table `planning_*` (figé par `copier-prod-plan.test.ts`).
+  Depuis la livraison du 2026-10-27, la PROD est la référence du planning.
 - **Cache** : `['planning']` dans `PREFIXES_SENSIBLES` (noms, absences dont maladie).
 - **Écrans** (`components/planning/`) : vue mois (défaut, comme le prototype), vue
   semaine, paramètres en sous-routes (`/planning/equipe|postes|horaires|besoins`),
