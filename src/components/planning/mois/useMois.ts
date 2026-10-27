@@ -10,9 +10,11 @@ import { useQuery } from '@tanstack/react-query'
 
 import {
   donneesSemaine,
+  signatureFixes,
   useGenerer,
   useReferentiel,
 } from '#/components/planning/hooks/usePlanning.ts'
+import { useRelireAuRetour } from '#/components/planning/hooks/auRetour.ts'
 import { messageErreur } from '#/lib/planning/erreurs.ts'
 import { planningKeys } from '#/lib/planning/keys.ts'
 import { analyser, aPoserFixes } from '#/lib/planning/semaine.ts'
@@ -31,6 +33,8 @@ export function useMois(mois: string) {
   const premier = lundis[0]
   const dernier = lundis[lundis.length - 1]
   const ref = useReferentiel()
+  // Relu au retour sur l'onglet (au plus toutes les 2 s, voir auRetour.ts).
+  useRelireAuRetour()
   const shifts = useQuery({
     queryKey: planningKeys.mois(premier, lundis.length),
     queryFn: () =>
@@ -69,9 +73,11 @@ export function useMois(mois: string) {
 /**
  * Horaires fixes toujours posés (prototype `semaineAvecFixes`, appelé pour
  * chaque semaine du mois) : à l'ouverture du mois, avec le droit d'écriture,
- * chaque semaine à venir ni verrouillée ni déjà réalisée reçoit, DANS
- * L'ORDRE, les horaires fixes du personnel qui n'y a encore rien. Une seule
- * tentative par semaine et par montage ; sans rien retirer.
+ * chaque semaine à venir non verrouillée reçoit, DANS L'ORDRE, les horaires
+ * fixes du personnel qui n'y a encore rien, sans rien retirer. Comme le
+ * prototype (`poser_fixes`), une semaine d'avant le dernier planning réalisé
+ * n'est pas sautée : seuls le passé et le verrou arrêtent la pose. Une
+ * tentative par semaine ET par état des fiches concernées (`signatureFixes`).
  */
 export function usePoserFixesMois(args: {
   donnees: Map<string, DonneesSemaine>
@@ -83,16 +89,18 @@ export function usePoserFixesMois(args: {
 }) {
   const { donnees, verrous, ecrire, aujourdhui, pendant, surMessage } = args
   const generer = useGenerer()
-  const tentees = useRef(new Set<string>())
+  const tentees = useRef(new Map<string, string>())
   useEffect(() => {
     if (!ecrire) return
     const aFaire: Array<{ lundi: string; seulement: Set<number> }> = []
     for (const [lundi, d] of donnees) {
-      if (tentees.current.has(lundi) || lundi < lundiDe(aujourdhui)) continue
-      if (!etatSemaine(lundi, verrous, aujourdhui).ouverte) continue
+      const signature = signatureFixes(d.referentiel.salaries)
+      if (tentees.current.get(lundi) === signature) continue
+      if (lundi < lundiDe(aujourdhui)) continue
+      if (etatSemaine(lundi, verrous, aujourdhui).verrouillee) continue
       const seulement = aPoserFixes(d, aujourdhui)
       if (!seulement.size) continue
-      tentees.current.add(lundi)
+      tentees.current.set(lundi, signature)
       aFaire.push({ lundi, seulement })
     }
     if (!aFaire.length) return

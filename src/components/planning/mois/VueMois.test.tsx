@@ -303,7 +303,8 @@ describe('VueMois', () => {
     ]
     monter()
     await charge()
-    fireEvent.click(
+    // Clic droit : le menu rapide (le clic ouvre l'éditeur complet).
+    fireEvent.contextMenu(
       screen.getByRole('button', {
         name: /^Lucas Petit, .*16.* · Matin 07:00–15:45/,
       }),
@@ -342,7 +343,7 @@ describe('VueMois', () => {
     )
     monter()
     await charge()
-    fireEvent.click(
+    fireEvent.contextMenu(
       screen.getByRole('button', { name: /^Lucas Petit, .*18.* : Congés/ }),
     )
     fireEvent.click(await screen.findByRole('menuitem', { name: /Matin/ }))
@@ -359,5 +360,95 @@ describe('VueMois', () => {
       ['2026-11-18'],
       conges,
     )
+  })
+
+  it('clic sur un jour : l’éditeur complet, date en toutes lettres, écrit dans la semaine du jour', async () => {
+    droits = { pret: true, lire: true, ecrire: true, gerer: false }
+    monter()
+    await charge()
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /^Lucas Petit, .*18.* · Non attribué/,
+      }),
+    )
+    expect(await screen.findByText('Planifier le jour')).toBeTruthy()
+    expect(screen.getByText(/mercredi 18 novembre 2026/)).toBeTruthy()
+    // Une absence se pose aussi depuis la vue mois.
+    fireEvent.click(screen.getByRole('button', { name: /Congés/ }))
+    fireEvent.click(screen.getByRole('button', { name: "Poser l'absence" }))
+    await waitFor(() => expect(service.poserAbsences).toHaveBeenCalledTimes(1))
+    const conges = demo.referentiel.motifs.find((m) => m.code === 'CP')!.id
+    expect(service.poserAbsences).toHaveBeenCalledWith(
+      3,
+      ['2026-11-18'],
+      conges,
+    )
+  })
+
+  it('clic sur un shift : l’éditeur complet, suppression en deux temps', async () => {
+    droits = { pret: true, lire: true, ecrire: true, gerer: false }
+    affectations = [
+      {
+        id: 7,
+        lundi: '2026-11-23',
+        salarie_id: 3,
+        poste_id: 2,
+        jour: 1,
+        horaire_id: 1,
+        debut: '07:00',
+        fin: '15:45',
+        epinglee: true,
+        court: false,
+        pause: 45,
+      },
+    ]
+    monter()
+    await charge()
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /^Lucas Petit, .*24.* · Matin 07:00–15:45/,
+      }),
+    )
+    expect(await screen.findByText('Modifier le shift')).toBeTruthy()
+    expect(screen.getByText(/mardi 24 novembre 2026/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }))
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Confirmer la suppression' }),
+    )
+    await waitFor(() => expect(service.supprimerShift).toHaveBeenCalledWith(7))
+  })
+
+  it('clic sur un jour d’une semaine verrouillée : rien ne s’ouvre', async () => {
+    droits = { pret: true, lire: true, ecrire: true, gerer: true }
+    referentiel = { ...demo.referentiel, verrous: ['2026-11-16'] }
+    monter()
+    await charge()
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /^Lucas Petit, .*18.* · Non attribué/,
+      }),
+    )
+    expect(await screen.findByText(/Semaine verrouillée/)).toBeTruthy()
+    expect(screen.queryByText('Planifier le jour')).toBeNull()
+  })
+
+  it('arrêt d’une action du mois : la semaine est citée avant le message de la base', async () => {
+    droits = { pret: true, lire: true, ecrire: true, gerer: false }
+    generer.mockImplementationOnce(() =>
+      Promise.reject(
+        Object.assign(new Error('x'), {
+          code: 'PL409',
+          message: 'Le planning a changé entre-temps.',
+        }),
+      ),
+    )
+    monter()
+    await charge()
+    fireEvent.click(screen.getByRole('button', { name: 'Compléter le mois' }))
+    expect(
+      await screen.findByText(
+        'Génération du mois : arrêt à la semaine S45 (du 02/11). Le planning a changé entre-temps.',
+      ),
+    ).toBeTruthy()
   })
 })

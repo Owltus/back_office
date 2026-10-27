@@ -10,6 +10,7 @@
 
 import { useState } from 'react'
 import type { ReactNode } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Moon, Plus, Trash2 } from 'lucide-react'
 
 import {
@@ -18,6 +19,11 @@ import {
   useReferentiel,
 } from '#/components/planning/hooks/usePlanning.ts'
 import { useNotifier } from '#/components/planning/Messages.tsx'
+import {
+  compterAbsencesParMotif,
+  usageMotif,
+} from '#/components/planning/parametres/reglages/absencesParMotif.ts'
+import type { LigneAbsence } from '#/components/planning/parametres/reglages/absencesParMotif.ts'
 import {
   CadreReglages,
   EnTeteSection,
@@ -114,6 +120,13 @@ export function HorairesPage() {
   const [nouvelHoraire, setNouvelHoraire] = useState<SaisieHoraire | null>(null)
   const [nouveauMotif, setNouveauMotif] = useState<SaisieMotif | null>(null)
   const data = ref.data
+  // Jours d'absence posés, pour l'usage des motifs (clé `planning` : relue
+  // après chaque écriture, jamais sur disque).
+  const absences = useQuery({
+    queryKey: ['planning', 'absences-par-motif'],
+    queryFn: compterAbsencesParMotif,
+    staleTime: 0,
+  })
 
   const creerHoraire = () => {
     if (!data) return
@@ -242,6 +255,7 @@ export function HorairesPage() {
                         id={null}
                         enregistre={nouveauMotif}
                         referentiel={data}
+                        absences={absences.data}
                         modifiable={modifiable}
                         onFin={() => setNouveauMotif(null)}
                       />
@@ -252,6 +266,7 @@ export function HorairesPage() {
                         id={m.id}
                         enregistre={saisieMotif(m)}
                         referentiel={data}
+                        absences={absences.data}
                         modifiable={modifiable}
                       />
                     ))}
@@ -692,12 +707,15 @@ function CarteMotif({
   id,
   enregistre,
   referentiel,
+  absences,
   modifiable,
   onFin,
 }: {
   id: number | null
   enregistre: SaisieMotif
   referentiel: Referentiel
+  /** Jours d'absence posés (undefined : pas encore lus, ou lecture en échec). */
+  absences: LigneAbsence[] | undefined
   modifiable: boolean
   onFin?: () => void
 }) {
@@ -750,14 +768,15 @@ function CarteMotif({
     )
   }
 
-  // Le référentiel ne porte pas les jours d'absence : on compte la semaine
-  // type (le prototype comptait aussi les absences posées).
-  const utilise =
+  // Comme le prototype : semaine type ET jours posés. Tant que les jours
+  // posés ne sont pas lus, seule la semaine type est comptée, et la
+  // confirmation de suppression ne cite pas de nombre de jours.
+  const usage =
     id === null
-      ? 0
-      : referentiel.salaries.filter((s) =>
-          s.semaine_type.some((e) => e.type_absence_id === id),
-        ).length
+      ? { personnes: 0, jours: 0 }
+      : usageMotif(id, referentiel.salaries, absences ?? [])
+  const utilise = usage.personnes
+  const joursConnus = absences !== undefined
   const nature = NATURES.find((n) => n.valeur === m.nature) ?? NATURES[0]
 
   return (
@@ -835,8 +854,10 @@ function CarteMotif({
         libelleCreer="Créer le motif"
         info={
           utilise
-            ? `Dans la semaine type de ${utilise} personne${utilise > 1 ? 's' : ''}`
-            : 'Absent des semaines types'
+            ? `Utilisé par ${utilise} personne${utilise > 1 ? 's' : ''}`
+            : joursConnus
+              ? 'Non utilisé'
+              : 'Absent des semaines types'
         }
         onSupprimer={() => setSuppression(true)}
         onAnnuler={() => (neuf ? onFin?.() : annuler())}
@@ -847,7 +868,13 @@ function CarteMotif({
         open={suppression}
         onOpenChange={setSuppression}
         title={`Supprimer le motif ${enregistre.nom} ?`}
-        description="Les jours posés avec ce motif sont retirés du planning, et les semaines types qui l'utilisent repassent en libre. Impossible s'il figure dans un planning réalisé (semaine verrouillée)."
+        description={`${
+          !joursConnus
+            ? 'Les jours posés avec ce motif sont retirés du planning'
+            : usage.jours
+              ? `${usage.jours} jour${usage.jours > 1 ? 's' : ''} d'absence posé${usage.jours > 1 ? 's' : ''} avec ce motif ${usage.jours > 1 ? 'seront effacés' : 'sera effacé'} du planning`
+              : "Aucun jour d'absence n'est posé avec ce motif"
+        }, et les semaines types qui l'utilisent repassent en libre. Impossible s'il figure dans un planning réalisé (semaine verrouillée).`}
         confirmLabel="Supprimer"
         destructive
         onConfirm={() => void supprimer()}

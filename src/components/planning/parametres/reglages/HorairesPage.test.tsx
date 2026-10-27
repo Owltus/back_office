@@ -30,6 +30,16 @@ const service = vi.hoisted(() => ({
 }))
 
 vi.mock('#/lib/supabase.ts', () => ({ supabase: {} }))
+const absences = vi.hoisted(() => ({
+  compterAbsencesParMotif: vi.fn(),
+}))
+vi.mock(
+  '#/components/planning/parametres/reglages/absencesParMotif.ts',
+  async (original) => ({
+    ...(await original<Record<string, unknown>>()),
+    compterAbsencesParMotif: absences.compterAbsencesParMotif,
+  }),
+)
 vi.mock('#/lib/planning/service.ts', () => service)
 vi.mock('#/components/planning/EnTeteParametres.tsx', () => ({
   MenuParametres: () => null,
@@ -67,6 +77,8 @@ beforeEach(() => {
   etat.droits = { pret: true, lire: true, ecrire: true, gerer: true }
   for (const f of Object.values(service)) f.mockReset()
   service.enregistrerHoraire.mockResolvedValue(1)
+  absences.compterAbsencesParMotif.mockReset()
+  absences.compterAbsencesParMotif.mockResolvedValue([])
 })
 afterEach(cleanup)
 
@@ -237,5 +249,27 @@ describe('Horaires et absences', () => {
         3,
       ),
     )
+  })
+
+  it('motif : usage compté sur la semaine type ET les jours posés, nombre de jours à la suppression', async () => {
+    // Maladie (id 3) : absente des semaines types, posée 3 jours sur 2 personnes.
+    absences.compterAbsencesParMotif.mockResolvedValue([
+      { motif_id: 3, salarie_id: 1 },
+      { motif_id: 3, salarie_id: 1 },
+      { motif_id: 3, salarie_id: 2 },
+      { motif_id: 1, salarie_id: 4 },
+    ])
+    service.supprimerMotif.mockResolvedValue(undefined)
+    monter(<HorairesPage />)
+    const carte = within(screen.getByRole('region', { name: 'Motif Maladie' }))
+    expect(await carte.findByText('Utilisé par 2 personnes')).toBeTruthy()
+    fireEvent.click(carte.getByRole('button', { name: 'Supprimer' }))
+    expect(
+      await screen.findByText(
+        /3 jours d'absence posés avec ce motif seront effacés du planning/,
+      ),
+    ).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }))
+    await waitFor(() => expect(service.supprimerMotif).toHaveBeenCalledWith(3))
   })
 })

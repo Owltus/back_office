@@ -14,6 +14,7 @@ import { useAuth } from '#/components/auth/AuthContext.tsx'
 import { codeErreur, messageErreur } from '#/lib/planning/erreurs.ts'
 import { planningKeys } from '#/lib/planning/keys.ts'
 import {
+  aJoursFixes,
   analyser,
   aPoserFixes,
   preparerGeneration,
@@ -32,7 +33,8 @@ import {
 import type { DonneesShifts } from '#/lib/planning/service.ts'
 import { resoudre } from '#/lib/planning/solveur.ts'
 import { ajouterJours, aujourdhuiParis, lundiDe } from '#/lib/planning/temps.ts'
-import type { Referentiel } from '#/lib/planning/types.ts'
+import type { Referentiel, Salarie } from '#/lib/planning/types.ts'
+import { useRelireAuRetour } from '#/components/planning/hooks/auRetour.ts'
 
 export interface DroitsPlanning {
   /** Droits lus (tant que non, tout est grisé). */
@@ -71,6 +73,8 @@ export function useAujourdhui(): string {
 }
 
 export function useReferentiel() {
+  // Relu au retour sur l'onglet (au plus toutes les 2 s, voir auRetour.ts).
+  useRelireAuRetour()
   return useQuery({
     queryKey: planningKeys.referentiel(),
     queryFn: fetchReferentiel,
@@ -80,6 +84,7 @@ export function useReferentiel() {
 }
 
 export function useShiftsSemaine(lundi: string) {
+  useRelireAuRetour()
   return useQuery({
     queryKey: planningKeys.semaine(lundi),
     queryFn: () => fetchSemaine(lundi),
@@ -247,7 +252,9 @@ export function useGenerer() {
  * Horaires fixes toujours posés (prototype `poser_fixes`) : à l'ouverture
  * d'une semaine à venir, avec le droit d'écriture, le personnel à jours fixes
  * qui n'y a encore rien est posé d'après sa fiche, sans rien retirer. Une
- * seule tentative par semaine et par montage. `pendant` (de `useOccupation`)
+ * tentative par semaine ET par état des fiches concernées
+ * (`signatureFixes`) : modifier une fiche relance la pose une fois, comme le
+ * prototype qui la refaisait au rechargement du staff. `pendant` (de `useOccupation`)
  * marque la page occupée le temps du calcul : une saisie faite entre-temps
  * ferait refuser la pose (PL409, le planning a changé). Ce refus est réessayé
  * UNE fois, `generer` relisant l'état de la base avant de recalculer.
@@ -261,13 +268,15 @@ export function usePoserFixes(
   pendant?: <T>(action: () => Promise<T>) => Promise<T>,
 ) {
   const generer = useGenerer()
-  const tentees = useRef(new Set<string>())
+  const tentees = useRef(new Map<string, string>())
   useEffect(() => {
-    if (!ecrire || !donnees || tentees.current.has(lundi)) return
+    if (!ecrire || !donnees) return
+    const signature = signatureFixes(donnees.referentiel.salaries)
+    if (tentees.current.get(lundi) === signature) return
     if (lundi < lundiDe(aujourdhui)) return
     const aPoser = aPoserFixes(donnees, aujourdhui)
     if (!aPoser.size) return
-    tentees.current.add(lundi)
+    tentees.current.set(lundi, signature)
     const poser = () =>
       generer(lundi, {
         seulement: aPoser,
@@ -287,4 +296,30 @@ export function usePoserFixes(
     }
     void (pendant ? pendant(travail) : travail())
   }, [lundi, donnees, ecrire, aujourdhui, generer, surMessage, pendant])
+}
+
+/**
+ * Empreinte des fiches qui comptent pour les horaires fixes (personnel à
+ * jours fixes : semaine type, contrat, postes, horaires permis, présence).
+ * Elle change quand une de ces fiches change, ou quand une personne entre ou
+ * sort de ce personnel ; le reste du staff n'y entre pas.
+ */
+export function signatureFixes(salaries: Salarie[]): string {
+  return JSON.stringify(
+    salaries
+      .filter(aJoursFixes)
+      .map((x) => [
+        x.id,
+        x.actif,
+        x.semaine_type,
+        x.type_contrat,
+        x.heures_hebdo,
+        x.forfait_jours,
+        x.mineur,
+        x.competences,
+        x.shifts_autorises,
+        x.date_entree,
+        x.date_sortie,
+      ]),
+  )
 }

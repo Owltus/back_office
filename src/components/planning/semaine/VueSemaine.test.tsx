@@ -243,4 +243,28 @@ describe('VueSemaine', () => {
       screen.queryAllByRole('button', { name: 'Ajouter un shift' }),
     ).toHaveLength(0)
   })
+
+  it('les points de compétence portent une infobulle Poste · niveau', async () => {
+    etat.droits = { pret: true, lire: true, ecrire: false, gerer: false }
+    rendre()
+    const point = screen.getAllByRole('img', { name: /^Veille de nuit · / })[0]
+    // Déclencheur d'infobulle (Tip), pas d'attribut title natif.
+    expect(point.getAttribute('data-slot')).toBe('tooltip-trigger')
+    expect(point.getAttribute('title')).toBeNull()
+    globalThis.ResizeObserver = class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    fireEvent.pointerMove(point, { pointerType: 'mouse' })
+    expect(
+      (
+        await screen.findAllByText(
+          /^Veille de nuit · (Titulaire|Dépannage|Soutien)$/,
+          {},
+          { timeout: 3000 },
+        )
+      ).length,
+    ).toBeGreaterThan(0)
+  })
 })

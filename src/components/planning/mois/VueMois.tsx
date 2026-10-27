@@ -1,9 +1,10 @@
 /*
  * Vue mois du planning (prototype `pages/planning/VueMois.tsx`, spec §3).
  * Vue d'ensemble de toutes les semaines qui couvrent le mois, retouchable :
- * clic sur un jour pour l'horaire, la validation et la journée étoile (le
- * poste, une absence ou l'école se règlent dans la semaine), glisser pour
- * déplacer, et les actions du mois (compléter, valider, effacer, cadenas).
+ * clic sur un jour pour l'éditeur complet du shift (horaire, poste,
+ * absence, école…, celui de la semaine), clic droit pour le menu rapide
+ * (horaire, validation, journée étoile), glisser pour déplacer, et les
+ * actions du mois (compléter, valider, effacer, cadenas).
  *
  * Périmètres (anomalie 9 de la spec) : grille et compteur de validation =
  * jours du mois ; jauge, bouclier, points d'attention et actions = semaines
@@ -42,6 +43,7 @@ import {
   ajouterShift,
   deplacerStatut,
   modifierShift,
+  poserAbsences,
   supprimerShift,
   valider,
   verrouiller,
@@ -72,9 +74,13 @@ import {
 import type { EtatSemaine } from '#/components/planning/mois/mois.ts'
 import { PanneauAlertesMois } from '#/components/planning/mois/PanneauAlertesMois.tsx'
 import {
+  absenceDe,
   etoileProposee,
   poserHoraire as poserHoraireCase,
 } from '#/components/planning/semaine/edition.ts'
+import { EditeurShift } from '#/components/planning/semaine/EditeurShift.tsx'
+import type { Edition } from '#/components/planning/semaine/EditeurShift.tsx'
+import { ajouterJours } from '#/lib/planning/temps.ts'
 import {
   useMois,
   usePoserFixesMois,
@@ -127,6 +133,12 @@ export function VueMois({
     n: number
   } | null>(null)
   const [menu, setMenu] = useState<OuvertureMenu | null>(null)
+  // Éditeur complet d'un jour : la semaine (lundi de la date cliquée) que
+  // visent ses écritures.
+  const [edition, setEdition] = useState<{
+    lundi: string
+    edition: Edition
+  } | null>(null)
   const [alertesOuvertes, setAlertesOuvertes] = useState(false)
   const [fiche, setFiche] = useState<number | null>(null)
   const [confirmation, setConfirmation] = useState<Confirmation>(null)
@@ -229,8 +241,11 @@ export function VueMois({
         try {
           await action(l)
         } catch (err) {
+          // L'arrêt est toujours situé, même quand la base écrit son propre
+          // message (PL400, PL409, PL423) : il vient après.
           notifier(
-            `${libelle} : ${messageErreur(err, `arrêt à la semaine ${numeroSemaine(l)} (du ${dateCourte(l)})`)}` +
+            `${libelle} : arrêt à la semaine S${numeroSemaine(l)} (du ${dateCourte(l)}). ` +
+              messageErreur(err, 'Semaine non traitée') +
               (i
                 ? ` ${i > 1 ? `Les ${i} semaines d'avant sont faites.` : "La semaine d'avant est faite."}`
                 : ''),
@@ -344,8 +359,42 @@ export function VueMois({
       return notifier(MSG_HORS, 'attention')
     }
     if (pasMaintenant()) return
-    setMenu({ salarieId, date, x, y })
+    if (clicDroit) return setMenu({ salarieId, date, x, y })
+    const { jour } = reperer(date)
+    const shift = semaines
+      .get(lundi)
+      ?.affectations.find((a) => a.salarie_id === salarieId && a.jour === jour)
+    setEdition({
+      lundi,
+      edition: shift
+        ? { mode: 'modification', shift }
+        : { mode: 'creation', salarie_id: salarieId, jour },
+    })
   }
+
+  /** Écriture lancée depuis l'éditeur : mêmes gardes qu'à l'ouverture, la
+   * semaine ayant pu être verrouillée entre-temps. */
+  const depuisEditeur = (
+    lundi: string,
+    action: () => Promise<unknown>,
+    echec: string,
+    touche?: { salarieId: number; jour: number },
+  ) => {
+    setEdition(null)
+    if (!droits.ecrire) return
+    if (etats.get(lundi)?.verrouillee) return notifier(MSG_VERROU, 'attention')
+    if (pasMaintenant()) return
+    void executer(lundi, action, echec, touche)
+  }
+  const horsContrat = (lundi: string, salarieId: number, jour: number) =>
+    caseDe(
+      semaines,
+      referentiel?.motifs ?? [],
+      salarieId,
+      ajouterJours(lundi, jour),
+    )?.type === 'hors'
+  const bilanDe = (lundi: string, salarieId: number) =>
+    semaines.get(lundi)?.bilan.find((b) => b.salarie_id === salarieId)
 
   const fermerMenu = useCallback(() => setMenu(null), [])
 
@@ -728,6 +777,81 @@ export function VueMois({
           etoile={etoileMenu}
           onSemaine={() => onSemaine(reperesMenu.lundi)}
           onFermer={fermerMenu}
+        />
+      )}
+
+      {edition && referentiel && (
+        <EditeurShift
+          key={
+            edition.edition.mode === 'modification'
+              ? `m${edition.edition.shift.id}`
+              : `c${edition.edition.salarie_id}:${edition.lundi}:${edition.edition.jour}`
+          }
+          edition={edition.edition}
+          lundi={edition.lundi}
+          referentiel={referentiel}
+          dateEnLettres
+          absence={
+            edition.edition.mode === 'creation'
+              ? absenceDe(
+                  bilanDe(edition.lundi, edition.edition.salarie_id),
+                  edition.edition.jour,
+                )
+              : null
+          }
+          onFermer={() => setEdition(null)}
+          onCreer={(s) => {
+            const { lundi } = edition
+            if (horsContrat(lundi, s.salarie_id, s.jour)) {
+              setEdition(null)
+              return notifier(MSG_HORS, 'attention')
+            }
+            depuisEditeur(
+              lundi,
+              () => ajouterShift(lundi, s),
+              'Ajout impossible',
+              { salarieId: s.salarie_id, jour: s.jour },
+            )
+          }}
+          onModifier={(id, v) => {
+            const { lundi } = edition
+            depuisEditeur(
+              lundi,
+              () => modifierShift(id, v),
+              'Modification impossible',
+              v.salarie_id !== undefined && v.jour !== undefined
+                ? { salarieId: v.salarie_id, jour: v.jour }
+                : undefined,
+            )
+          }}
+          onSupprimer={(id) => {
+            const { lundi } = edition
+            depuisEditeur(
+              lundi,
+              () => supprimerShift(id),
+              'Suppression impossible',
+            )
+          }}
+          onPoserAbsence={(sid, jour, motifId) => {
+            const { lundi } = edition
+            if (horsContrat(lundi, sid, jour)) {
+              setEdition(null)
+              return notifier(MSG_HORS, 'attention')
+            }
+            depuisEditeur(
+              lundi,
+              () => poserAbsences(sid, [ajouterJours(lundi, jour)], motifId),
+              'Absence non posée',
+            )
+          }}
+          onRetirerAbsence={(sid, jour) => {
+            const { lundi } = edition
+            depuisEditeur(
+              lundi,
+              () => poserAbsences(sid, [ajouterJours(lundi, jour)], null),
+              'Absence non retirée',
+            )
+          }}
         />
       )}
 

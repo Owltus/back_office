@@ -10,6 +10,9 @@ import { useAujourdhui } from '#/components/planning/hooks/usePlanning.ts'
 import type { PlanningSearch } from '#/lib/planning/recherche.ts'
 import { ajouterJours, lundiDe } from '#/lib/planning/temps.ts'
 
+/** Le mois qu'ouvre le planning sans période dans l'URL : celui du jour. */
+export const moisParDefaut = (aujourdhui: string) => aujourdhui.slice(0, 7)
+
 export function PlanningBoard({
   search,
   onSearch,
@@ -31,8 +34,8 @@ export function PlanningBoard({
       />
     )
   }
-  // Mois par défaut : celui qui contient le jeudi de la semaine prochaine.
-  const mois = search.mois ?? ajouterJours(lundiParDefaut, 3).slice(0, 7)
+  // Mois par défaut : le mois en cours (prototype `PlanningPage`).
+  const mois = search.mois ?? moisParDefaut(aujourdhui)
   return (
     <VueMois
       mois={mois}

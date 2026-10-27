@@ -3,10 +3,12 @@
  * modifier un shift (code horaire ou heures libres avec pause, journée
  * courte, poste, personne, jour, validé), ou poser une absence à la place,
  * ou supprimer le shift. Le tiroir se ferme aussitôt l'action lancée : le
- * résultat arrive par le fil de messages.
+ * résultat arrive par le fil de messages. Partagé par la vue semaine et la
+ * vue mois (`dateEnLettres` : le jour s'y lit en toutes lettres, prototype
+ * `quand`).
  */
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { BadgeCheck, Trash2, Undo2 } from 'lucide-react'
 
@@ -63,6 +65,20 @@ export type Edition =
 
 const PAUSES = [0, 15, 20, 30, 45, 60, 90]
 
+const EN_LETTRES = new Intl.DateTimeFormat('fr-FR', {
+  weekday: 'long',
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+  timeZone: 'UTC',
+})
+/** « mercredi 18 novembre 2026 ». */
+export const dateEnLettres = (iso: string) =>
+  EN_LETTRES.format(new Date(`${iso}T12:00:00Z`))
+
+/** Délai après lequel « Confirmer la suppression » se désarme. */
+export const DESARMEMENT_MS = 4000
+
 interface Brouillon {
   salarie_id: number
   poste_id: number
@@ -85,9 +101,12 @@ export function EditeurShift({
   onSupprimer,
   onPoserAbsence,
   onRetirerAbsence,
+  dateEnLettres: enLettres = false,
 }: {
   edition: Edition
   lundi: string
+  /** Vue mois : la date en toutes lettres plutôt que le jour de la semaine. */
+  dateEnLettres?: boolean
   referentiel: Referentiel
   /** Absence déjà posée sur le jour (création). */
   absence: { motif_id: number | null; fixe: boolean } | null
@@ -135,6 +154,15 @@ export function EditeurShift({
   const [epinglee, setEpinglee] = useState(existant?.epinglee ?? true)
   const [motif, setMotif] = useState<number | null>(null)
   const [confirmerSuppression, setConfirmerSuppression] = useState(false)
+  // Suppression en deux temps : sans confirmation dans les 4 s, elle se désarme.
+  useEffect(() => {
+    if (!confirmerSuppression) return
+    const t = window.setTimeout(
+      () => setConfirmerSuppression(false),
+      DESARMEMENT_MS,
+    )
+    return () => window.clearTimeout(t)
+  }, [confirmerSuppression])
 
   const maj = (champs: Partial<Brouillon>) => setB((x) => ({ ...x, ...champs }))
   const code = libre ? undefined : horaires.find((h) => h.id === b.horaire_id)
@@ -290,7 +318,9 @@ export function EditeurShift({
           <SheetTitle>{titre}</SheetTitle>
           <SheetDescription>
             {personne ? `${personne.prenom} ${personne.nom}` : ''} ·{' '}
-            {JOURS[b.jour]}
+            {enLettres
+              ? dateEnLettres(ajouterJours(lundi, b.jour))
+              : JOURS[b.jour]}
           </SheetDescription>
         </SheetHeader>
 

@@ -40,8 +40,9 @@ vi.mock('#/lib/planning/semaine.ts', async (importOriginal) => ({
   }),
 }))
 
-const { usePoserFixes } =
+const { signatureFixes, usePoserFixes } =
   await import('#/components/planning/hooks/usePlanning.ts')
+const { hotelDemo } = await import('#/lib/planning/test/hotelDemo.ts')
 
 function enveloppe({ children }: { children: ReactNode }) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -53,7 +54,7 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-const donnees = {} as DonneesSemaine
+const donnees = { referentiel: { salaries: [] } } as unknown as DonneesSemaine
 
 describe('usePoserFixes', () => {
   it('marque la page occupée et réessaie une fois après un PL409', async () => {
@@ -101,5 +102,68 @@ describe('usePoserFixes', () => {
     )
     await waitFor(() => expect(surMessage).toHaveBeenCalledTimes(1))
     expect(service.appliquerGeneration).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('usePoserFixes : nouvelle tentative quand les fiches changent', () => {
+  const { referentiel } = hotelDemo('2026-11-09')
+  const avec = (salaries: typeof referentiel.salaries) =>
+    ({ referentiel: { ...referentiel, salaries } }) as unknown as DonneesSemaine
+
+  it('une fois par semaine et par état des fiches à jours fixes', async () => {
+    const surMessage = vi.fn()
+    const { rerender } = renderHook(
+      ({ d }: { d: DonneesSemaine }) =>
+        usePoserFixes('2026-11-09', d, true, '2026-11-04', surMessage),
+      { wrapper: enveloppe, initialProps: { d: avec(referentiel.salaries) } },
+    )
+    await waitFor(() =>
+      expect(service.appliquerGeneration).toHaveBeenCalledTimes(1),
+    )
+    // Mêmes fiches, données relues : pas de seconde pose.
+    rerender({ d: avec(referentiel.salaries.map((x) => ({ ...x }))) })
+    // Fiche d'une personne SANS jours fixes : rien ne change non plus.
+    const sansFixes = referentiel.salaries.findIndex(
+      (x) =>
+        !x.semaine_type.some((e) => e.mode === 'travail' || e.mode === 'repos'),
+    )
+    const autre = referentiel.salaries.map((x, i) =>
+      i === sansFixes ? { ...x, nom: `${x.nom} bis` } : x,
+    )
+    if (sansFixes >= 0) rerender({ d: avec(autre) })
+    await new Promise((r) => setTimeout(r, 20))
+    expect(service.appliquerGeneration).toHaveBeenCalledTimes(1)
+    // Fiche à jours fixes modifiée : une nouvelle tentative.
+    const fixe = referentiel.salaries.findIndex((x) =>
+      x.semaine_type.some((e) => e.mode === 'travail' || e.mode === 'repos'),
+    )
+    expect(fixe).toBeGreaterThanOrEqual(0)
+    rerender({
+      d: avec(
+        referentiel.salaries.map((x, i) =>
+          i === fixe ? { ...x, heures_hebdo: x.heures_hebdo + 1 } : x,
+        ),
+      ),
+    })
+    await waitFor(() =>
+      expect(service.appliquerGeneration).toHaveBeenCalledTimes(2),
+    )
+  })
+
+  it('l’empreinte ignore le personnel sans jours fixes', () => {
+    const base = signatureFixes(referentiel.salaries)
+    const libres = referentiel.salaries.filter(
+      (x) =>
+        !x.semaine_type.some((e) => e.mode === 'travail' || e.mode === 'repos'),
+    )
+    for (const x of libres) {
+      expect(
+        signatureFixes(
+          referentiel.salaries.map((y) =>
+            y.id === x.id ? { ...y, heures_hebdo: 1 } : y,
+          ),
+        ),
+      ).toBe(base)
+    }
   })
 })

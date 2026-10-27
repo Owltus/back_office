@@ -249,15 +249,21 @@ const LigneStaff = memo(function LigneStaff({
             <span className="flex min-w-0 items-center gap-1">
               {s.competences.map((c) => {
                 const p = postes.find((x) => x.id === c.poste_id)
+                // Prototype : chaque point dit son poste et son niveau au survol.
                 return p ? (
-                  <span
+                  <Tip
                     key={c.poste_id}
-                    className="planning-point-poste"
-                    data-niveau={c.niveau}
-                    style={{ '--couleur': p.couleur } as CSSProperties}
-                    aria-label={`${p.nom} · ${NIVEAUX[c.niveau].libelle}`}
-                    role="img"
-                  />
+                    side="top"
+                    label={`${p.nom} · ${NIVEAUX[c.niveau].libelle}`}
+                  >
+                    <span
+                      className="planning-point-poste"
+                      data-niveau={c.niveau}
+                      style={{ '--couleur': p.couleur } as CSSProperties}
+                      aria-label={`${p.nom} · ${NIVEAUX[c.niveau].libelle}`}
+                      role="img"
+                    />
+                  </Tip>
                 ) : null
               })}
               <span className="ml-0.5 truncate text-xs text-muted-foreground">
