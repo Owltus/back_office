@@ -29,6 +29,53 @@ le navigateur et dans Supabase.
 | D10 | « Réinitialiser l'hôtel » et le mode prototype **non portés**                                                                                                                                                                                                                                                          | En production, rien ne détruit le réalisé (décision du prototype).                                                                                                                                         |
 | D11 | Jours fériés non modélisés                                                                                                                                                                                                                                                                                             | Décision de l'utilisateur relayée par le binôme.                                                                                                                                                           |
 
+## Bilan au matin du 2026-10-27
+
+Toutes les étapes sont faites, dans ces commits locaux, rien n'est poussé :
+
+| Commit  | Contenu                                                                        |
+| ------- | ------------------------------------------------------------------------------ |
+| 0cff5d8 | Page Planning vide (droits de page)                                            |
+| b52b387 | Schéma, RLS, verrous, RPC, pgTAP, seed fictif                                  |
+| c358488 | Moteur TS + HiGHS, 134 tests portés, import du prototype                       |
+| 04ca691 | Verrou sans passe-droit, ordre des verrous, date du jour (relecture du binôme) |
+| d669468 | Écrans semaine, mois, équipe, postes, horaires, besoins                        |
+| a8d199f | La base recale un shift codé sur son code horaire                              |
+| 45dd5bc | 8 défauts de la relecture adverse corrigés                                     |
+| e2667b2 | Fonctions du prototype qui manquaient (audit de couverture)                    |
+| 899ed94 | Délai des tests de rendu du mois                                               |
+
+Preuves :
+
+- 3 288 tests du projet au vert, dont 249 pour le planning ;
+- 39 contrôles pgTAP ;
+- build OK ; aucune dérive entre la base locale et les migrations ;
+- oracle différentiel, hors dépôt : l'analyse est identique au Python sur 7 vraies semaines ;
+- essais dans Chrome sur localhost : import réel, « Compléter le mois », verrou, échange
+  de shifts, droits en lecture, création et suppression d'un poste et d'une fiche, refus de
+  supprimer un poste d'un planning réalisé, éditeur de shift.
+
+État de la base LOCALE : l'export réel du prototype y est importé. Novembre a été complété
+par le moteur (propositions) ; en S45, deux shifts ont été échangés pendant l'essai, et sont
+donc validés. Les comptes de test sont supprimés.
+
+### Questions pour l'utilisateur
+
+1. **Congés le week-end** (relevé par le binôme) : un congé du vendredi au dimanche compte
+   3 jours dans les heures dues (39 h → 16 h dues), comme dans le prototype. Est-ce voulu ?
+   Si non, on change les deux applications ensemble.
+2. **École après fin avril 2027** : le calendrier d'alternance importé s'arrête là. Il se
+   reprolonge depuis la fiche (bloc École, remplissage par rythme).
+3. **Postes à part** : l'écran Équipe les propose dans un groupe séparé (comme le
+   prototype) ; la règle « seulement s'il le tient déjà » n'existe pas dans le prototype.
+4. **Décisions D1-D11** ci-dessus, prises par l'assistant : notamment écriture = faire le
+   planning, gestion = paramétrer et verrouiller ; la fiche d'un salarié (et ses absences)
+   n'est modifiable qu'en gestion.
+5. **Livraison** : deux migrations (`…110000_planning_schema`, `…120000_planning_import`) en
+   plus de `…100000_page_planning`. Après « push », importer les données en prod depuis
+   l'engrenage (gestion), avec le fichier produit par
+   `node scripts/planning-exporter-prototype.mjs`.
+
 ## Étapes (un commit ou plus chacune)
 
 1. Schéma, RLS, triggers, RPC + tests pgTAP (`05_planning.test.sql`) + seed fictif.
