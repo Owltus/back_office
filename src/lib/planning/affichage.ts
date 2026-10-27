@@ -59,6 +59,9 @@ export function nomComplet(s: Pick<Salarie, 'prenom' | 'nom'>): string {
   return `${s.prenom} ${s.nom}`.trim()
 }
 
+/** Couleur du texte d'un code « écrit en rouge » (`code_rouge`). */
+export const ROUGE_CODE = '#dc2626'
+
 /** Texte lisible (noir ou blanc) sur un fond donné. */
 export function texteSur(couleur: string): string {
   const n = parseInt(couleur.slice(1), 16)

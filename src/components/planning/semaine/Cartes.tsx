@@ -22,7 +22,7 @@ import {
 } from 'lucide-react'
 
 import { Tip } from '#/components/shared/Tip.tsx'
-import { heures } from '#/lib/planning/affichage.ts'
+import { heures, ROUGE_CODE } from '#/lib/planning/affichage.ts'
 import type { AlerteOut } from '#/lib/planning/semaine.ts'
 import { heureAffichee } from '#/lib/planning/temps.ts'
 import type { Horaire, Poste } from '#/lib/planning/types.ts'
@@ -72,13 +72,17 @@ function Infobulle({ lignes }: { lignes: string[] }) {
 /** La carte d'un shift. `enVol` : le fantôme qui suit la souris. */
 export function CarteShift({ c, enVol }: { c: ContenuCarte; enVol?: boolean }) {
   const loi = c.alertes.some((a) => a.nature === 'loi')
+  // Code « écrit en rouge » (petit shift à part) : ses heures en rouge.
+  const rouge = c.horaire?.code_rouge ? { color: ROUGE_CODE } : undefined
   return (
     <div
       className={cn('planning-carte', enVol && 'planning-carte-vol')}
       data-proposition={c.epinglee ? undefined : ''}
       style={{ '--couleur': c.horaire?.couleur ?? NEUTRE } as CSSProperties}
     >
-      <span className="planning-carte-debut">{heureAffichee(c.debut)}</span>
+      <span className="planning-carte-debut" style={rouge}>
+        {heureAffichee(c.debut)}
+      </span>
       {c.duree !== undefined && (
         <span
           className="planning-carte-duree"
@@ -87,7 +91,7 @@ export function CarteShift({ c, enVol }: { c: ContenuCarte; enVol?: boolean }) {
           {heures(c.duree)}
         </span>
       )}
-      <span className="planning-carte-fin">
+      <span className="planning-carte-fin" style={rouge}>
         <ArrowRight className="size-2.5" aria-hidden />
         {heureAffichee(c.fin)}
       </span>

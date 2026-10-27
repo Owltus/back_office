@@ -7,6 +7,7 @@
 
 import { ChevronRight } from 'lucide-react'
 
+import { SectionPresence } from '#/components/planning/semaine/Presence.tsx'
 import {
   Sheet,
   SheetContent,
@@ -140,6 +141,7 @@ export function PanneauAlertes({
               )
             })}
           </section>
+          <SectionPresence semaines={semaines} />
           <section className="space-y-2">
             <h3 className="text-sm font-semibold">
               Par personne ({personnes.length})

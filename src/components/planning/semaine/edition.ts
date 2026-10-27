@@ -310,11 +310,13 @@ export function compteurs(semaine: SemaineOut) {
   return { propositions: total - valides, valides, verrouilles: 0 }
 }
 
-/** Nombre de points d'attention : alertes des bilans et places à pourvoir. */
+/** Nombre de points d'attention : alertes des bilans, places à pourvoir et
+ * consignes de présence non tenues. */
 export function nombreAlertes(semaine: SemaineOut): number {
   return (
     semaine.bilan.reduce((n, b) => n + b.alertes.length, 0) +
-    semaine.a_pourvoir.length
+    semaine.a_pourvoir.length +
+    semaine.presence.filter((p) => p.ecart !== 0).length
   )
 }
 

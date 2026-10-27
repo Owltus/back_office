@@ -16,6 +16,7 @@ import type {
   Absence,
   Affectation,
   Besoin,
+  Consigne,
   Groupe,
   Horaire,
   Motif,
@@ -26,9 +27,11 @@ import type {
 import { supabase } from '#/lib/supabase.ts'
 
 const COL_HORAIRE =
-  'id, code, nom, debut, fin, couleur, pause, raccourci, raccourci_debut'
+  'id, code, nom, debut, fin, couleur, pause, raccourci, raccourci_debut, periode, code_rouge'
 const COL_MOTIF = 'id, code, nom, couleur, decompte, nature'
-const COL_POSTE = 'id, nom, categorie, couleur, horaires_autorises, a_part'
+const COL_POSTE =
+  'id, nom, categorie, couleur, horaires_autorises, a_part, presence'
+const COL_CONSIGNE = 'id, jour, periode, minimum, maximum'
 const COL_GROUPE = 'id, nom, ordre, postes_autorises'
 const COL_SALARIE =
   'id, prenom, nom, groupe_id, type_contrat, heures_hebdo, forfait_jours, mineur, competences, semaine_type, shifts_autorises, date_entree, date_sortie, actif, suite_de'
@@ -65,31 +68,44 @@ function normaliserSalarie(x: Salarie): Salarie {
 // ---------------------------------------------------------------- lectures
 
 export async function fetchReferentiel(): Promise<Referentiel> {
-  const [horaires, motifs, postes, groupes, salaries, besoins, verrous] =
-    await Promise.all([
-      supabase
-        .from('planning_horaires')
-        .select(COL_HORAIRE)
-        .order('debut')
-        .order('id'),
-      supabase.from('planning_motifs').select(COL_MOTIF).order('id'),
-      supabase.from('planning_postes').select(COL_POSTE).order('id'),
-      supabase
-        .from('planning_groupes')
-        .select(COL_GROUPE)
-        .order('ordre')
-        .order('id'),
-      supabase.from('planning_salaries').select(COL_SALARIE).order('id'),
-      supabase
-        .from('planning_besoins')
-        .select(COL_BESOIN)
-        .order('jour')
-        .order('debut'),
-      supabase
-        .from('planning_semaines_verrouillees')
-        .select('lundi')
-        .order('lundi'),
-    ])
+  const [
+    horaires,
+    motifs,
+    postes,
+    groupes,
+    salaries,
+    besoins,
+    consignes,
+    verrous,
+  ] = await Promise.all([
+    supabase
+      .from('planning_horaires')
+      .select(COL_HORAIRE)
+      .order('debut')
+      .order('id'),
+    supabase.from('planning_motifs').select(COL_MOTIF).order('id'),
+    supabase.from('planning_postes').select(COL_POSTE).order('id'),
+    supabase
+      .from('planning_groupes')
+      .select(COL_GROUPE)
+      .order('ordre')
+      .order('id'),
+    supabase.from('planning_salaries').select(COL_SALARIE).order('id'),
+    supabase
+      .from('planning_besoins')
+      .select(COL_BESOIN)
+      .order('jour')
+      .order('debut'),
+    supabase
+      .from('planning_consignes')
+      .select(COL_CONSIGNE)
+      .order('jour')
+      .order('periode'),
+    supabase
+      .from('planning_semaines_verrouillees')
+      .select('lundi')
+      .order('lundi'),
+  ])
   return {
     horaires: verifier(horaires),
     motifs: verifier(motifs),
@@ -103,6 +119,7 @@ export async function fetchReferentiel(): Promise<Referentiel> {
     })),
     salaries: (verifier(salaries) as Salarie[]).map(normaliserSalarie),
     besoins: verifier(besoins),
+    consignes: verifier(consignes),
     verrous: (verifier(verrous) as Array<{ lundi: string }>).map(
       (v) => v.lundi,
     ),
@@ -439,6 +456,41 @@ export async function reglerBesoin(
     )
   } else {
     auMoinsUne(await supabase.from('planning_besoins').insert(v).select('id'))
+  }
+}
+
+/**
+ * Fixe la consigne de présence d'un (jour, période) : crée, modifie, ou
+ * supprime quand il n'y a plus ni minimum ni maximum (0 et 0 : aucune
+ * consigne). `existante` : la
+ * consigne déjà en base, lue dans le référentiel.
+ */
+export async function reglerConsigne(
+  v: SansId<Consigne>,
+  existante: Consigne | undefined,
+): Promise<void> {
+  if (v.minimum === 0 && !v.maximum) {
+    if (existante) {
+      auMoinsUne(
+        await supabase
+          .from('planning_consignes')
+          .delete()
+          .eq('id', existante.id)
+          .select('id'),
+      )
+    }
+    return
+  }
+  if (existante) {
+    auMoinsUne(
+      await supabase
+        .from('planning_consignes')
+        .update({ minimum: v.minimum, maximum: v.maximum })
+        .eq('id', existante.id)
+        .select('id'),
+    )
+  } else {
+    auMoinsUne(await supabase.from('planning_consignes').insert(v).select('id'))
   }
 }
 

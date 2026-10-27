@@ -249,6 +249,8 @@ export function hotelReel(): { referentiel: Referentiel; absences: Absence[] } {
       pause,
       raccourci,
       raccourci_debut: rd ?? 0,
+      periode: null,
+      code_rouge: false,
     }),
   )
   const idH = (c: string) => (horaires.find((h) => h.code === c) as Horaire).id
@@ -268,6 +270,7 @@ export function hotelReel(): { referentiel: Referentiel; absences: Absence[] } {
     couleur: '#000000',
     horaires_autorises: codes.map(idH),
     a_part: aPart,
+    presence: false,
   }))
   const idP = (n: string) => (postes.find((p) => p.nom === n) as Poste).id
   const groupes: Groupe[] = GROUPES.map(([, nom, permis], i) => ({
@@ -361,6 +364,7 @@ export function hotelReel(): { referentiel: Referentiel; absences: Absence[] } {
       groupes,
       salaries,
       besoins,
+      consignes: [],
       verrous: [],
     },
     absences,

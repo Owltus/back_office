@@ -223,6 +223,8 @@ export function hotelDemo(lundi: string): {
       pause,
       raccourci,
       raccourci_debut: 0,
+      periode: null,
+      code_rouge: false,
     }),
   )
   const idH = (c: string) => (horaires.find((h) => h.code === c) as Horaire).id
@@ -242,6 +244,7 @@ export function hotelDemo(lundi: string): {
     couleur: '#000000',
     horaires_autorises: codes.map(idH),
     a_part: false,
+    presence: false,
   }))
   const idP = (n: string) => (postes.find((p) => p.nom === n) as Poste).id
   const groupes: Groupe[] = GROUPES.map(([, nom, permis], i) => ({
@@ -328,6 +331,7 @@ export function hotelDemo(lundi: string): {
       groupes,
       salaries,
       besoins,
+      consignes: [],
       verrous: [],
     },
     absences,

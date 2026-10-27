@@ -11,6 +11,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '#/components/ui/sheet.tsx'
+import { SectionPresence } from '#/components/planning/semaine/Presence.tsx'
 import type { SemaineOut } from '#/lib/planning/semaine.ts'
 import { ajouterJours, heureAffichee } from '#/lib/planning/temps.ts'
 import type { Referentiel } from '#/lib/planning/types.ts'
@@ -116,6 +117,7 @@ export function PanneauAlertesMois({
               </details>
             ))}
           </section>
+          <SectionPresence semaines={semaines} />
           <section className="flex flex-col gap-2">
             <h3 className="text-sm font-semibold">
               Par personne ({personnes.length})

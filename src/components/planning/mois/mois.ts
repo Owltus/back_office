@@ -194,6 +194,7 @@ export function compter(mois: string, semaines: SemaineOut[]): Compteurs {
       (n, s) =>
         n +
         s.a_pourvoir.length +
+        s.presence.filter((p) => p.ecart !== 0).length +
         s.bilan.reduce((m, b) => m + b.alertes.length, 0),
       0,
     ),

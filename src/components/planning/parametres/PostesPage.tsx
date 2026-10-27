@@ -58,6 +58,7 @@ const saisieDe = (p: Poste): SaisiePoste => ({
   couleur: p.couleur,
   horaires_autorises: [...p.horaires_autorises],
   a_part: p.a_part,
+  presence: p.presence,
 })
 
 export function PostesPage() {
@@ -74,6 +75,7 @@ export function PostesPage() {
       couleur: PALETTE[ref.data.postes.length % PALETTE.length],
       horaires_autorises: [],
       a_part: false,
+      presence: false,
     })
   }
 
@@ -276,6 +278,21 @@ function CartePoste({
           {p.a_part
             ? 'Poste à part : proposé seulement dans la fiche de qui le tient.'
             : 'Poste courant : proposé à toute la catégorie.'}
+        </span>
+      </label>
+
+      <label className="flex items-start gap-2 text-sm">
+        <Switch
+          checked={p.presence}
+          disabled={!modifiable}
+          onCheckedChange={(presence) => changer({ presence })}
+          aria-label="Compte dans la présence matin et soir"
+          className="mt-0.5"
+        />
+        <span className="text-muted-foreground">
+          {p.presence
+            ? 'Compte dans la présence du matin et du soir (consignes des besoins).'
+            : 'Ne compte pas dans la présence du matin et du soir.'}
         </span>
       </label>
 

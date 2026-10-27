@@ -18,6 +18,7 @@ import {
   NIVEAUX,
   deNom,
 } from '#/lib/planning/affichage.ts'
+import type { PresenceOut } from '#/lib/planning/presence.ts'
 import type { BilanOut } from '#/lib/planning/semaine.ts'
 import { JOURS } from '#/lib/planning/types.ts'
 import type { Poste, Salarie } from '#/lib/planning/types.ts'
@@ -27,6 +28,7 @@ import {
   CarteStatutDeplacable,
 } from '#/components/planning/semaine/Cartes.tsx'
 import type { ContenuCarte } from '#/components/planning/semaine/Cartes.tsx'
+import { PastillesPresence } from '#/components/planning/semaine/Presence.tsx'
 import {
   etatHeures,
   titreHeures,
@@ -71,6 +73,7 @@ export function GrilleSemaine({
   validerJourActif,
   indice,
   rappels,
+  presence,
 }: {
   dates: string[]
   aujourdhui: string
@@ -88,6 +91,8 @@ export function GrilleSemaine({
   validerJourActif: boolean
   indice: (s: Salarie, jour: number, statut: ContenuStatut | null) => Indice
   rappels: RappelsGrille
+  /** Consignes de présence de la semaine (pastilles sous chaque jour). */
+  presence: PresenceOut[]
 }) {
   return (
     <table
@@ -131,6 +136,9 @@ export function GrilleSemaine({
                         <span className="sr-only"> (aujourd'hui)</span>
                       )}
                     </span>
+                    <PastillesPresence
+                      presence={presence.filter((p) => p.jour === j)}
+                    />
                   </div>
                   {joursAValider[j] && (
                     <Tip

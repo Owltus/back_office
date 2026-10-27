@@ -712,6 +712,7 @@ export function VueSemaine({
                   validerJourActif={!occupe}
                   indice={indice}
                   rappels={rappels}
+                  presence={semaine?.presence ?? []}
                 />
               </div>
             </ContextMenuTrigger>

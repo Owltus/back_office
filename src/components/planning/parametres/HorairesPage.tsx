@@ -53,7 +53,7 @@ import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
 import { Switch } from '#/components/ui/switch.tsx'
-import { heures, texteSur } from '#/lib/planning/affichage.ts'
+import { heures, ROUGE_CODE, texteSur } from '#/lib/planning/affichage.ts'
 import {
   enregistrerHoraire,
   enregistrerMotif,
@@ -70,6 +70,7 @@ import type {
   Horaire,
   Motif,
   NatureMotif,
+  Periode,
   Referentiel,
 } from '#/lib/planning/types.ts'
 
@@ -103,7 +104,38 @@ const saisieHoraire = (h: Horaire): SaisieHoraire => ({
   pause: h.pause,
   raccourci: h.raccourci,
   raccourci_debut: h.raccourci_debut,
+  periode: h.periode,
+  code_rouge: h.code_rouge,
 })
+
+/** Période d'un code (consignes de présence) ; « aucune » : ni matin ni soir. */
+const PERIODES: ReadonlyArray<{
+  valeur: Periode | 'aucune'
+  libelle: string
+  aide: string
+}> = [
+  {
+    valeur: 'matin',
+    libelle: 'Matin',
+    aide: 'Compte dans la présence du matin',
+  },
+  { valeur: 'soir', libelle: 'Soir', aide: 'Compte dans la présence du soir' },
+  { valeur: 'nuit', libelle: 'Nuit', aide: 'Nuit : hors des consignes' },
+  {
+    valeur: 'aucune',
+    libelle: 'Aucune',
+    aide: 'Ni matin ni soir (direction…) : hors des consignes',
+  },
+]
+
+/** Les codes rangés par période, dans l'ordre de la journée. */
+const GROUPES_CODES: ReadonlyArray<{ titre: string; periode: Periode | null }> =
+  [
+    { titre: 'Matin', periode: 'matin' },
+    { titre: 'Soir', periode: 'soir' },
+    { titre: 'Nuit', periode: 'nuit' },
+    { titre: 'Sans période', periode: null },
+  ]
 
 const saisieMotif = (m: Motif): SaisieMotif => ({
   code: m.code,
@@ -139,6 +171,8 @@ export function HorairesPage() {
       pause: 45,
       raccourci: 60,
       raccourci_debut: 0,
+      periode: null,
+      code_rouge: false,
     })
   }
   const creerMotif = () => {
@@ -186,8 +220,8 @@ export function HorairesPage() {
                 }
               />
             </div>
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {nouvelHoraire && (
+            {nouvelHoraire && (
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 <CarteHoraire
                   key="nouveau"
                   id={null}
@@ -196,17 +230,35 @@ export function HorairesPage() {
                   modifiable={modifiable}
                   onFin={() => setNouvelHoraire(null)}
                 />
-              )}
-              {data.horaires.map((h) => (
-                <CarteHoraire
-                  key={h.id}
-                  id={h.id}
-                  enregistre={saisieHoraire(h)}
-                  referentiel={data}
-                  modifiable={modifiable}
-                />
-              ))}
-            </div>
+              </div>
+            )}
+            {GROUPES_CODES.map((g) => {
+              const liste = data.horaires.filter(
+                (h) => (h.periode ?? null) === g.periode,
+              )
+              if (!liste.length) return null
+              return (
+                <div key={g.titre} className="flex flex-col gap-3">
+                  <h3 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+                    {g.titre}
+                    <span className="rounded-full bg-muted px-2 text-xs tabular-nums">
+                      {liste.length}
+                    </span>
+                  </h3>
+                  <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                    {liste.map((h) => (
+                      <CarteHoraire
+                        key={h.id}
+                        id={h.id}
+                        enregistre={saisieHoraire(h)}
+                        referentiel={data}
+                        modifiable={modifiable}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
             {data.horaires.length > 0 && <Frise horaires={data.horaires} />}
           </section>
 
@@ -520,7 +572,10 @@ function CarteHoraire({
           disabled={desactive}
           onChange={(e) => changer({ code: e.target.value.toUpperCase() })}
           className="h-9 w-16 shrink-0 border-transparent text-center font-semibold uppercase"
-          style={{ background: h.couleur, color: texteSur(h.couleur) }}
+          style={{
+            background: h.couleur,
+            color: h.code_rouge ? ROUGE_CODE : texteSur(h.couleur),
+          }}
         />
         <Input
           aria-label="Nom de l'horaire"
@@ -653,6 +708,17 @@ function CarteHoraire({
         </div>
       )}
 
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <span className="text-sm text-muted-foreground">Période</span>
+        <Segmente
+          etiquette="Période du code"
+          valeur={h.periode ?? 'aucune'}
+          options={PERIODES}
+          disabled={desactive}
+          onChange={(v) => changer({ periode: v === 'aucune' ? null : v })}
+        />
+      </div>
+
       <div className="flex flex-col gap-1.5">
         <span className="text-sm font-medium">Couleur</span>
         <Nuancier
@@ -661,6 +727,15 @@ function CarteHoraire({
           etiquette="Couleur du code horaire"
           onChange={(couleur) => changer({ couleur })}
         />
+        <label className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Switch
+            checked={h.code_rouge}
+            disabled={desactive}
+            onCheckedChange={(code_rouge) => changer({ code_rouge })}
+            aria-label="Code écrit en rouge"
+          />
+          Code écrit en rouge
+        </label>
       </div>
 
       <ErreursSaisie erreurs={modifiable ? erreurs : []} />

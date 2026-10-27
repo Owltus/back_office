@@ -70,6 +70,8 @@ const MATIN: Horaire = {
   pause: 45,
   raccourci: 60,
   raccourci_debut: 0,
+  periode: null,
+  code_rouge: false,
 }
 
 const shift = (s: Partial<ShiftOut> = {}): ShiftOut => ({

@@ -32,6 +32,8 @@ export interface Creneau {
   presenceMax: number | null
   /** Empiète sur 22 h → 6 h en heure locale ; null : calculé ici. */
   nuit: boolean | null
+  /** Consigne de présence où ce créneau compte (poste et période), ou null. */
+  presence: 'matin' | 'soir' | null
 }
 
 export function creneau(
@@ -48,6 +50,7 @@ export function creneau(
     ferme: false,
     presenceMax: null,
     nuit: null,
+    presence: null,
     ...c,
   }
 }
@@ -188,6 +191,14 @@ export function role(s: SalarieSolveur, poste: string): Role | null {
   return s.postesSoutien.has(poste) ? 'soutien' : null
 }
 
+/** Consigne de présence d'un jour de la période (`presence.ts`). */
+export interface ConsigneSolveur {
+  jour: number
+  periode: 'matin' | 'soir'
+  minimum: number
+  maximum: number | null
+}
+
 export interface Probleme {
   salaries: SalarieSolveur[]
   creneaux: Creneau[]
@@ -201,6 +212,8 @@ export interface Probleme {
   courtes: ReadonlySet<string>
   /** Propositions de la génération précédente « salarié|jour|poste|code ». */
   aEviter: ReadonlySet<string>
+  /** Consignes de présence du matin et du soir, jour par jour. */
+  consignes: ConsigneSolveur[]
 }
 
 export const cle = (salarie: string, creneauId: string) =>
@@ -216,6 +229,7 @@ export function probleme(
     imposees: new Set(),
     courtes: new Set(),
     aEviter: new Set(),
+    consignes: [],
     ...p,
   }
 }

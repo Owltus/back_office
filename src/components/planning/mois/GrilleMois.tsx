@@ -42,6 +42,7 @@ import {
   journeeEtoile,
   numeroSemaine,
   parGroupe,
+  ROUGE_CODE,
 } from '#/lib/planning/affichage.ts'
 import { estEcole } from '#/lib/planning/semaine.ts'
 import type { AlerteOut, SemaineOut, ShiftOut } from '#/lib/planning/semaine.ts'
@@ -49,6 +50,7 @@ import { ajouterJours, heureAffichee } from '#/lib/planning/temps.ts'
 import type { Horaire, Referentiel, Salarie } from '#/lib/planning/types.ts'
 import { JOURS } from '#/lib/planning/types.ts'
 import { cn } from '#/lib/utils.ts'
+import { PointsPresence } from '#/components/planning/semaine/Presence.tsx'
 import {
   caseDe,
   cleBandeau,
@@ -334,6 +336,13 @@ export function GrilleMois({
                     <span className="block text-xs font-medium tabular-nums">
                       {Number(d.slice(8))}
                     </span>
+                    <PointsPresence
+                      presence={
+                        semaines
+                          .get(reperer(d).lundi)
+                          ?.presence.filter((p) => p.jour === jour) ?? []
+                      }
+                    />
                   </th>
                 )
               })}
@@ -606,7 +615,10 @@ function LigneMois({
                   />
                 )}
               </span>
-              <span className="grid justify-items-end">
+              <span
+                className="grid justify-items-end"
+                style={h?.code_rouge ? { color: ROUGE_CODE } : undefined}
+              >
                 <span>{heureAffichee(shift.debut)}</span>
                 <span className="opacity-80">{heureAffichee(shift.fin)}</span>
               </span>

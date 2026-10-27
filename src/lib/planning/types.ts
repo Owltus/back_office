@@ -14,6 +14,8 @@ export type NatureMotif = 'absence' | 'ecole'
 export type Categorie =
   'reception' | 'veille_nuit' | 'cuisine' | 'administratif_hors_site' | 'autre'
 export type TypeContrat = 'cdi' | 'cdd' | 'extra' | 'stagiaire' | 'apprenti'
+/** Période d'un code horaire (consignes de présence). */
+export type Periode = 'matin' | 'soir' | 'nuit'
 
 export interface Horaire {
   id: number
@@ -25,6 +27,8 @@ export interface Horaire {
   pause: number // minutes comprises dans la présence, hors temps de travail
   raccourci: number // minutes en moins en journée courte
   raccourci_debut: number // dont au début : la journée courte commence plus tard
+  periode: Periode | null // null : ni matin ni soir (direction…)
+  code_rouge: boolean // code écrit en rouge (petit shift à part)
 }
 
 export interface Motif {
@@ -43,6 +47,7 @@ export interface Poste {
   couleur: string
   horaires_autorises: number[] // vide = tous
   a_part: boolean
+  presence: boolean // compte dans les consignes de présence matin et soir
 }
 
 export interface Groupe {
@@ -80,6 +85,17 @@ export interface Salarie {
   date_sortie: string | null
   actif: boolean
   suite_de: number | null
+}
+
+/** Combien de personnes le matin ou le soir d'un jour de la semaine type,
+ * sur les postes qui comptent dans la présence. `maximum` null : pas de
+ * plafond. « 3 ou 4 » : minimum 3, maximum 4. */
+export interface Consigne {
+  id: number
+  jour: number // 0 = lundi
+  periode: 'matin' | 'soir'
+  minimum: number
+  maximum: number | null
 }
 
 /** Un jour d'absence (une ligne par jour). */
@@ -125,6 +141,7 @@ export interface Referentiel {
   groupes: Groupe[]
   salaries: Salarie[]
   besoins: Besoin[]
+  consignes: Consigne[]
   /** Lundis des semaines verrouillées (AAAA-MM-JJ). */
   verrous: string[]
 }

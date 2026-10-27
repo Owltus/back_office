@@ -29,6 +29,7 @@ import {
 } from '#/components/planning/hooks/usePlanning.ts'
 import { useNotifier } from '#/components/planning/Messages.tsx'
 import { CadreReglages } from '#/components/planning/parametres/reglages/cadre.tsx'
+import { ConsignesPresence } from '#/components/planning/parametres/reglages/ConsignesPresence.tsx'
 import { Compteur } from '#/components/planning/parametres/reglages/controles.tsx'
 import {
   lignesDuPoste,
@@ -169,6 +170,7 @@ export function BesoinsPage() {
               soutien viennent en plus, jamais seuls.
             </span>
           </div>
+          <ConsignesPresence referentiel={data} modifiable={modifiable} />
           {!data.postes.length && (
             <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
               Aucun poste : créez d'abord les postes de l'hôtel.

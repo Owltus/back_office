@@ -1983,6 +1983,21 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   « Dates du CFA » colle le document de l'école (`lireDatesCfa`), qui fait foi sur la
   plage qu'il couvre ; le rythme N/M qui écrasait tout est RETIRÉ (ne pas le remettre) ;
   un shift posé sur un nouveau jour d'école est annoncé puis signalé à l'enregistrement.
+- **Consignes de présence matin / soir** (2026-10-27, demande utilisateur :
+  « lundi 2 et 2… samedi 3 ou 4 le matin ») : table `planning_consignes`
+  (jour, période, minimum, maximum), `planning_horaires.periode`
+  (matin / soir / nuit / null) et `code_rouge`, `planning_postes.presence`
+  (Réception et Club). Compte les personnes AUTONOMES (pas les soutiens) des
+  postes cochés, selon la période du code (sans code : heure de début,
+  `presence.ts`). Générateur : contrainte souple des deux côtés,
+  `POIDS_PRESENCE` = un besoin de 8 h, sous le coût des heures de contrat (un
+  CDI dû reste placé, au pire en trop). Écrans : carte « Présence du matin et
+  du soir » en tête des Besoins, pastilles sous chaque jour (semaine), points
+  sous chaque jour (mois), section dans « Points d'attention ». Données de
+  l'hôtel (33 codes, consignes, adjoints sur M6 / M9, historique juillet →
+  25/10 tiré des PDF) injectées en DEV seulement : une copie de la prod ou un
+  `db:reset` les efface ; rien n'est en prod tant que l'utilisateur ne l'a pas
+  décidé.
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), jours fériés (décision utilisateur relayée par le binôme), scénario
   « exclus » à l'écran (retiré du prototype aussi).

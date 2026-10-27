@@ -32,6 +32,8 @@ import {
   versSolveur,
 } from '#/lib/planning/regles.ts'
 import type { Fiche } from '#/lib/planning/regles.ts'
+import { bilanPresence, periodePresence } from '#/lib/planning/presence.ts'
+import type { PresenceOut } from '#/lib/planning/presence.ts'
 import {
   MINUTES_PAR_JOUR,
   ajouterJours,
@@ -49,6 +51,7 @@ import type {
   Absence,
   Affectation,
   Besoin,
+  Consigne,
   Horaire,
   Motif,
   Poste,
@@ -119,6 +122,8 @@ export interface SemaineOut {
   a_pourvoir: APourvoirOut[]
   bilan: BilanOut[]
   alertes_besoins: Array<{ besoin_id: number; message: string }>
+  /** Consignes de présence du matin et du soir, et ce que la semaine en fait. */
+  presence: PresenceOut[]
   stats: {
     places: number
     pourvues: number
@@ -150,6 +155,7 @@ export interface Contexte {
   postes: Map<number, Poste>
   staff: Salarie[]
   besoins: Besoin[] // horaires déjà résolus depuis leur code
+  consignes: Consigne[]
   affectations: Affectation[]
   sansDecompte: Set<number>
   ecole: Set<number>
@@ -200,6 +206,7 @@ export function contexte(d: DonneesSemaine): Contexte {
       .sort((a, b) => a.id - b.id)
       .filter((x) => x.actif || presents.has(x.id)),
     besoins,
+    consignes: d.referentiel.consignes,
     affectations: d.affectations,
     sansDecompte: new Set(
       d.referentiel.motifs.filter((m) => !m.decompte).map((m) => m.id),
@@ -375,6 +382,18 @@ export function horairePrevu(poste: Poste, horaireId: number | null): boolean {
   )
 }
 
+/** Consigne de présence où compte un shift ou un besoin (`presence.ts`). */
+function presenceDe(
+  ctx: Contexte,
+  x: { poste_id: number; horaire_id: number | null; debut: string },
+): 'matin' | 'soir' | null {
+  return periodePresence(
+    ctx.postes.get(x.poste_id),
+    x.horaire_id !== null ? ctx.horaires.get(x.horaire_id) : undefined,
+    x.debut,
+  )
+}
+
 function presenceMaxDe(ctx: Contexte, posteId: number): number | null {
   const p = ctx.postes.get(posteId)
   return p ? presenceMaxPoste(p.categorie) : null
@@ -402,6 +421,7 @@ export function creneauBesoin(
     jourPlanning: b.jour,
     presenceMax: presenceMaxDe(ctx, b.poste_id),
     nuit: toucheLaNuit(b.jour, b.debut, b.fin),
+    presence: presenceDe(ctx, b),
   })
 }
 
@@ -421,6 +441,7 @@ export function creneauAffectation(ctx: Contexte, a: Affectation): Creneau {
     ferme: true,
     presenceMax: presenceMaxDe(ctx, a.poste_id),
     nuit: toucheLaNuit(a.jour, a.debut, a.fin),
+    presence: presenceDe(ctx, a),
   })
 }
 
@@ -787,6 +808,16 @@ export function analyser(d: DonneesSemaine): SemaineOut {
     })
   }
 
+  // Présence : personnes autonomes sur les postes qui comptent.
+  const presents: Array<{ jour: number; periode: 'matin' | 'soir' }> = []
+  for (const a of ctx.affectations) {
+    const periode = presenceDe(ctx, a)
+    const sol = salaries.get(a.salarie_id)
+    if (!periode || (sol && role(sol, String(a.poste_id)) === 'soutien'))
+      continue
+    presents.push({ jour: a.jour, periode })
+  }
+
   const infractions = toutes.filter((v) => v.nature === 'loi').length
   return {
     lundi,
@@ -794,6 +825,7 @@ export function analyser(d: DonneesSemaine): SemaineOut {
     a_pourvoir: aPourvoir,
     bilan,
     alertes_besoins: alertesBesoins,
+    presence: bilanPresence(ctx.consignes, presents),
     stats: {
       places: besoins.reduce((t, b) => t + b.effectif, 0),
       pourvues: besoins.reduce(
@@ -972,6 +1004,12 @@ export function preparerGeneration(
     imposees,
     courtes,
     aEviter,
+    consignes: ctx.consignes.map((c) => ({
+      jour: c.jour,
+      periode: c.periode,
+      minimum: c.minimum,
+      maximum: c.maximum,
+    })),
     tempsMaxSecondes: o.tempsMaxSecondes ?? 10,
   })
   const parId = new Map(besoins.map((b) => [`b${b.id}`, b]))

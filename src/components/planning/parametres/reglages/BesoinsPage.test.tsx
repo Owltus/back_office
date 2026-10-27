@@ -22,7 +22,10 @@ const etat = vi.hoisted(() => ({
   droits: { pret: true, lire: true, ecrire: true, gerer: true },
   referentiel: null as Referentiel | null,
 }))
-const service = vi.hoisted(() => ({ reglerBesoin: vi.fn() }))
+const service = vi.hoisted(() => ({
+  reglerBesoin: vi.fn(),
+  reglerConsigne: vi.fn(),
+}))
 
 vi.mock('#/lib/supabase.ts', () => ({ supabase: {} }))
 vi.mock('#/lib/planning/service.ts', () => service)
@@ -61,6 +64,7 @@ beforeEach(() => {
   etat.referentiel = referentielDemo()
   etat.droits = { pret: true, lire: true, ecrire: true, gerer: true }
   service.reglerBesoin.mockReset().mockResolvedValue(undefined)
+  service.reglerConsigne.mockReset().mockResolvedValue(undefined)
 })
 afterEach(cleanup)
 
@@ -218,5 +222,71 @@ describe('Besoins', () => {
     expect(
       poste('Réception').getByText('122h30 de présence / semaine'),
     ).toBeTruthy()
+  })
+
+  it('consignes de présence : au moins et au plus, le plafond suit', async () => {
+    const lundiSoir = {
+      id: 7,
+      jour: 0,
+      periode: 'soir' as const,
+      minimum: 2,
+      maximum: 2,
+    }
+    etat.referentiel = { ...referentielDemo(), consignes: [lundiSoir] }
+    monter(<BesoinsPage />)
+    const carte = within(
+      screen.getByRole('region', { name: 'Présence du matin et du soir' }),
+    )
+    fireEvent.click(
+      carte.getByRole('button', {
+        name: 'Matin du samedi : au moins : un de plus',
+      }),
+    )
+    await waitFor(() =>
+      expect(service.reglerConsigne).toHaveBeenCalledWith(
+        { jour: 5, periode: 'matin', minimum: 1, maximum: 1 },
+        undefined,
+      ),
+    )
+    fireEvent.click(
+      carte.getByRole('button', {
+        name: 'Soir du lundi : au plus : un de plus',
+      }),
+    )
+    // Affiché tout de suite, avant la réponse.
+    expect(carte.getByText('2 ou 3')).toBeTruthy()
+    await waitFor(() =>
+      expect(service.reglerConsigne).toHaveBeenLastCalledWith(
+        { jour: 0, periode: 'soir', minimum: 2, maximum: 3 },
+        lundiSoir,
+      ),
+    )
+    // Réponse reçue : la base (simulée, inchangée) fait foi. Le plafond
+    // descend sous le minimum : le minimum suit.
+    await waitFor(() =>
+      expect(carte.getAllByText('2').length).toBeGreaterThan(0),
+    )
+    fireEvent.click(
+      carte.getByRole('button', {
+        name: 'Soir du lundi : au plus : un de moins',
+      }),
+    )
+    await waitFor(() =>
+      expect(service.reglerConsigne).toHaveBeenLastCalledWith(
+        { jour: 0, periode: 'soir', minimum: 1, maximum: 1 },
+        lundiSoir,
+      ),
+    )
+  })
+
+  it('en écriture (sans gestion) : consignes en lecture seule', () => {
+    etat.droits = { pret: true, lire: true, ecrire: true, gerer: false }
+    monter(<BesoinsPage />)
+    const carte = within(
+      screen.getByRole('region', { name: 'Présence du matin et du soir' }),
+    )
+    for (const b of carte.getAllByRole('button')) {
+      expect((b as HTMLButtonElement).disabled).toBe(true)
+    }
   })
 })

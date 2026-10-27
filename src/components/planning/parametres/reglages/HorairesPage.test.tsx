@@ -112,6 +112,8 @@ describe('Horaires et absences', () => {
     fireEvent.change(carte.getByLabelText('Fin'), {
       target: { value: '15:30' },
     })
+    fireEvent.click(carte.getByRole('radio', { name: 'Matin' }))
+    fireEvent.click(carte.getByRole('switch', { name: 'Code écrit en rouge' }))
     expect(service.enregistrerHoraire).not.toHaveBeenCalled()
     expect(
       carte.getByText(/les shifts déjà posés avec ce code prennent ces heures/),
@@ -130,6 +132,8 @@ describe('Horaires et absences', () => {
         pause: 30,
         raccourci: 60,
         raccourci_debut: 0,
+        periode: 'matin',
+        code_rouge: true,
       },
       1,
     )

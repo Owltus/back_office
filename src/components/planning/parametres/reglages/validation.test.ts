@@ -22,6 +22,8 @@ const matin: SaisieHoraire = {
   pause: 45,
   raccourci: 60,
   raccourci_debut: 0,
+  periode: null,
+  code_rouge: false,
 }
 
 describe('contrôles de saisie (miroir des contraintes de la base)', () => {
@@ -95,6 +97,7 @@ describe('contrôles de saisie (miroir des contraintes de la base)', () => {
       couleur: '#22c55e',
       horaires_autorises: [],
       a_part: false,
+      presence: false,
     }
     expect(erreursPoste(poste)).toEqual([])
     expect(erreursPoste({ ...poste, nom: '' })).toContain(

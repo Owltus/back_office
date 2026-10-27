@@ -122,7 +122,7 @@ create function pg_temp.q(p text) returns text language sql as $$
     ':M', (select m from t_ids)::text);
 $$;
 
-select plan(39);
+select plan(45);
 
 -- -------------------------------------------------------------- lecture ---
 select is(pg_temp.essai('aucun', array[pg_temp.q('select count(*) from public.planning_salaries where nom = ''PLANNING''')]),
@@ -271,6 +271,28 @@ select is(pg_temp.essai('gestion', array['select public.planning_importer(''{"fo
   'err=PL400', 'import : un fichier qui n''est pas un export du prototype est refusé');
 select is(pg_temp.essai('gestion', array['select public.planning_importer(''{"format": "planning-prototype-v20"}''::jsonb)']),
   'err=PL409', 'import : jamais dans un planning qui a déjà des données');
+
+-- ------------------------------------ consignes de présence (2026-10-28) ---
+select is(pg_temp.essai('aucun', array['select count(*) from public.planning_consignes']),
+  '0', 'consignes : aucun ne les lit');
+select is(pg_temp.essai('lecture', array['select count(*) from public.planning_consignes']),
+  (select count(*)::text from public.planning_consignes), 'consignes : la lecture les lit toutes');
+select is(pg_temp.essai('ecriture', array[
+  'insert into public.planning_consignes (jour, periode, minimum) values (0, ''matin'', 1)']),
+  'err=42501', 'consignes : l''écriture ne les règle pas');
+select is(pg_temp.essai('gestion', array[
+  'delete from public.planning_consignes',
+  'insert into public.planning_consignes (jour, periode, minimum, maximum) values (5, ''matin'', 3, 4)',
+  'select minimum || ''-'' || maximum from public.planning_consignes']),
+  '3-4', 'consignes : la gestion les règle (3 ou 4 le samedi matin)');
+select is(pg_temp.essai('gestion', array[
+  'delete from public.planning_consignes',
+  'insert into public.planning_consignes (jour, periode, minimum, maximum) values (0, ''soir'', 3, 2)']),
+  'err=23514', 'consignes : un plafond sous le minimum est refusé');
+select is(pg_temp.essai('gestion', array[
+  'delete from public.planning_consignes',
+  'insert into public.planning_consignes (jour, periode, minimum) values (0, ''nuit'', 1)']),
+  'err=23514', 'consignes : seulement matin et soir');
 
 select * from finish();
 rollback;

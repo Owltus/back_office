@@ -605,6 +605,8 @@ describe('planning de la semaine (test_api.py)', () => {
       pause: 0,
       raccourci: 0,
       raccourci_debut: 0,
+      periode: null,
+      code_rouge: false,
     }
     ref.horaires.push(horaire)
     const poste = {
@@ -614,6 +616,7 @@ describe('planning de la semaine (test_api.py)', () => {
       couleur: '#000000',
       horaires_autorises: [],
       a_part: false,
+      presence: false,
     }
     ref.postes.push(poste)
     ref.besoins.push({
@@ -1174,6 +1177,8 @@ describe('shift sans code (test_audit_api.py)', () => {
       pause: 60,
       raccourci: 0,
       raccourci_debut: 0,
+      periode: null,
+      code_rouge: false,
     })
     const x = p.salarie('Clara')
     let sem = p.poser(LUNDI, x.id, x.competences[0].poste_id, 0, { code: 'Z' })

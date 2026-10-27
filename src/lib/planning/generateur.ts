@@ -49,6 +49,10 @@ export const POIDS_REPOS_SEPARES = 1_000
 export const POIDS_SUR_CONTRAT = 50
 export const POIDS_SIXIEME_JOUR = 15_000
 export const POIDS_DEJA_PROPOSE = 5
+/** Une personne de moins (ou de plus) qu'une consigne de présence : comme
+ * un besoin de 8 h non pourvu. Moins que des heures de contrat non faites
+ * (400 par minute) : une personne due reste placée, au pire en trop. */
+export const POIDS_PRESENCE = POIDS_MANQUE * 480
 
 /** Le solveur HiGHS tel que le rend `highs` (API historique). */
 export interface Highs {
@@ -336,6 +340,30 @@ export function construire(p: Probleme): Construit {
           m.ajoute([[1, v], ...autonomes.map((a) => [-1, a] as Terme)], '<=', 0)
         }
       }
+    }
+  }
+
+  // Consignes de présence : personnes autonomes sur les créneaux qui
+  // comptent, ce jour et à cette période. Souples des deux côtés (le modèle
+  // reste toujours réalisable) : un manque ou un surplus se paie.
+  for (const k of p.consignes) {
+    const termes: Terme[] = []
+    for (const c of p.creneaux) {
+      if (c.presence !== k.periode || jourDe(c) !== k.jour) continue
+      for (const s of p.salaries) {
+        const v = x.get(cle(s.id, c.id))
+        if (v && role(s, c.poste) !== 'soutien') termes.push([1, v])
+      }
+    }
+    if (k.minimum > 0) {
+      const vm = m.entier(0, k.minimum)
+      m.ajoute([...termes, [1, vm]], '>=', k.minimum)
+      m.cout(POIDS_PRESENCE, vm)
+    }
+    if (k.maximum !== null && termes.length > k.maximum) {
+      const vp = m.entier(0, termes.length)
+      m.ajoute([...termes, [-1, vp]], '<=', k.maximum)
+      m.cout(POIDS_PRESENCE, vp)
     }
   }
 

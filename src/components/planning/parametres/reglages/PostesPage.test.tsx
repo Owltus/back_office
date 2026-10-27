@@ -104,6 +104,9 @@ describe('Postes', () => {
     const r = carte('Réception')
     fireEvent.click(r.getByRole('button', { name: 'N Nuit' }))
     fireEvent.click(r.getByRole('switch', { name: 'Poste à part' }))
+    fireEvent.click(
+      r.getByRole('switch', { name: 'Compte dans la présence matin et soir' }),
+    )
     expect(service.enregistrerPoste).not.toHaveBeenCalled()
     fireEvent.click(r.getByRole('button', { name: 'Enregistrer' }))
     await waitFor(() =>
@@ -114,6 +117,7 @@ describe('Postes', () => {
           couleur: '#000000',
           horaires_autorises: [1, 2, 3, 4],
           a_part: true,
+          presence: true,
         },
         2,
       ),
