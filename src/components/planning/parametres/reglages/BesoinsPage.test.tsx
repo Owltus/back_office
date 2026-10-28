@@ -115,7 +115,12 @@ describe('Besoins', () => {
     const club = poste('Club')
     expect(club.queryByText('Middle')).toBeNull()
     fireEvent.click(
-      club.getByRole('button', { name: 'Afficher tous les codes (+1)' }),
+      club.getByRole('button', { name: 'Ajouter un horaire au poste Club' }),
+    )
+    fireEvent.click(
+      within(
+        screen.getByRole('list', { name: 'Horaires à ajouter' }),
+      ).getByRole('button', { name: /Middle/ }),
     )
     fireEvent.click(
       club.getByRole('button', {
@@ -151,7 +156,12 @@ describe('Besoins', () => {
     monter(<BesoinsPage />)
     const club = poste('Club')
     fireEvent.click(
-      club.getByRole('button', { name: 'Afficher tous les codes (+1)' }),
+      club.getByRole('button', { name: 'Ajouter un horaire au poste Club' }),
+    )
+    fireEvent.click(
+      within(
+        screen.getByRole('list', { name: 'Horaires à ajouter' }),
+      ).getByRole('button', { name: /Middle/ }),
     )
     const plus = club.getByRole('button', {
       name: 'Personnes nécessaires Jeudi, Middle : un de plus',

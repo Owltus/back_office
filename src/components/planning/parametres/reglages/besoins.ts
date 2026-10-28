@@ -37,24 +37,29 @@ export function trouverBesoin(
   )
 }
 
+/** Un besoin qui demande au moins une personne (0 / 0 / 0 ne compte pas). */
+const demande = (b: Besoin) => b.effectif + b.soutien + b.renfort > 0
+
 /**
- * Les codes permis pour le poste qui ont au moins un besoin (ou tous si
- * `tous`), PLUS les codes non permis qui portent encore un besoin (le
- * prototype les masquait : ils sont montrés, signalés), plus les horaires
- * spécifiques regroupés par début et fin. Tri par heure de début.
+ * Les horaires où le poste a VRAIMENT besoin de monde (un besoin non nul),
+ * plus ceux que l'utilisateur vient d'ajouter ou de régler dans la séance
+ * (`gardees`, clés de ligne : une ligne remise à 0 ne disparaît pas sous ses
+ * doigts). Depuis le 2026-10-28, une ligne à 0 partout n'est plus montrée, et
+ * les autres codes permis s'ajoutent un par un (`horairesAAjouter`) au lieu
+ * d'être tous dépliés. Un code non permis qui porte encore un besoin reste
+ * montré, signalé. Horaires spécifiques regroupés par début et fin. Tri par
+ * heure de début.
  */
 export function lignesDuPoste(
   siens: Besoin[],
   horaires: Horaire[],
-  possibles: Horaire[],
-  tous: boolean,
+  gardees: ReadonlySet<string>,
 ): LigneBesoin[] {
-  const permis = new Set(possibles.map((h) => h.id))
   const lignes: LigneBesoin[] = horaires
-    .filter((h) =>
-      permis.has(h.id)
-        ? tous || siens.some((b) => b.horaire_id === h.id)
-        : siens.some((b) => b.horaire_id === h.id),
+    .filter(
+      (h) =>
+        gardees.has(`t${h.id}`) ||
+        siens.some((b) => b.horaire_id === h.id && demande(b)),
     )
     .map((h) => ({
       cle: `t${h.id}`,
@@ -64,8 +69,9 @@ export function lignesDuPoste(
     }))
   const specifiques = new Map<string, LigneBesoin>()
   for (const b of siens) {
-    if (b.horaire_id === null) {
-      const cle = `h${b.debut}-${b.fin}`
+    if (b.horaire_id !== null) continue
+    const cle = `h${b.debut}-${b.fin}`
+    if (demande(b) || gardees.has(cle)) {
       specifiques.set(cle, {
         cle,
         horaire_id: null,
@@ -77,4 +83,16 @@ export function lignesDuPoste(
   return [...lignes, ...specifiques.values()].sort(
     (a, b) => a.debut.localeCompare(b.debut) || a.cle.localeCompare(b.cle),
   )
+}
+
+/** Les codes permis pour le poste qui n'ont pas encore de ligne, par heure. */
+export function horairesAAjouter(
+  possibles: Horaire[],
+  lignes: LigneBesoin[],
+): Horaire[] {
+  return possibles
+    .filter((h) => !lignes.some((l) => l.horaire_id === h.id))
+    .sort(
+      (a, b) => a.debut.localeCompare(b.debut) || a.code.localeCompare(b.code),
+    )
 }

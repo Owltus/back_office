@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { lignesDuPoste } from '#/components/planning/parametres/reglages/besoins.ts'
+import {
+  horairesAAjouter,
+  lignesDuPoste,
+} from '#/components/planning/parametres/reglages/besoins.ts'
 import {
   erreursHoraire,
   erreursMotif,
@@ -121,7 +124,7 @@ describe('contrôles de saisie (miroir des contraintes de la base)', () => {
 })
 
 describe('lignes du tableau des besoins', () => {
-  it('codes permis utilisés, tous sur demande, et les non permis encore utilisés', () => {
+  it('horaires demandés, gardés dans la séance, et non permis encore demandés', () => {
     const ref = referentielDemo()
     const club = ref.postes.find((p) => p.nom === 'Club')
     if (!club) throw new Error('Club')
@@ -129,16 +132,23 @@ describe('lignes du tableau des besoins', () => {
     const possibles = ref.horaires.filter((h) =>
       club.horaires_autorises.includes(h.id),
     )
+    const rien = new Set<string>()
+    const lignes = lignesDuPoste(siens, ref.horaires, rien)
+    expect(lignes.map((l) => l.cle)).toEqual(['t1', 't3'])
+    expect(horairesAAjouter(possibles, lignes).map((h) => h.id)).toEqual([2])
+    // Ajouté par l'utilisateur : sa ligne apparaît, vide.
     expect(
-      lignesDuPoste(siens, ref.horaires, possibles, false).map((l) => l.cle),
-    ).toEqual(['t1', 't3'])
-    expect(
-      lignesDuPoste(siens, ref.horaires, possibles, true).map((l) => l.cle),
+      lignesDuPoste(siens, ref.horaires, new Set(['t2'])).map((l) => l.cle),
     ).toEqual(['t1', 't2', 't3'])
-    // M retiré des codes permis : sa ligne reste (elle porte des besoins).
-    const sansMatin = possibles.filter((h) => h.code !== 'M')
+    // Remis à 0 partout : la ligne n'est plus montrée, sauf si gardée.
+    const aZero = siens.map((b) =>
+      b.horaire_id === 1 ? { ...b, effectif: 0, soutien: 0, renfort: 0 } : b,
+    )
+    expect(lignesDuPoste(aZero, ref.horaires, rien).map((l) => l.cle)).toEqual([
+      't3',
+    ])
     expect(
-      lignesDuPoste(siens, ref.horaires, sansMatin, false).map((l) => l.cle),
+      lignesDuPoste(aZero, ref.horaires, new Set(['t1'])).map((l) => l.cle),
     ).toEqual(['t1', 't3'])
     // Un horaire spécifique : sa propre ligne, triée par début.
     const specifique = {
@@ -149,7 +159,7 @@ describe('lignes du tableau des besoins', () => {
       fin: '14:00',
     }
     expect(
-      lignesDuPoste([...siens, specifique], ref.horaires, possibles, false).map(
+      lignesDuPoste([...siens, specifique], ref.horaires, rien).map(
         (l) => l.cle,
       ),
     ).toEqual(['t1', 'h12:00-14:00', 't3'])

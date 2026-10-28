@@ -10,6 +10,10 @@
  * suite à l'écran ; les écritures partent l'une après l'autre, chacune avec
  * le besoin RELU en base (deux clics rapides ne créent pas deux besoins).
  *
+ * Seuls les horaires où il faut du monde sont montrés ; les autres codes
+ * permis du poste s'ajoutent un par un (« Ajouter un horaire », 2026-10-28,
+ * « il y a sûrement une logique mais je ne comprends pas »).
+ *
  * Points d'attention, absents du prototype : un besoin plus long que le
  * maximum HCR de la catégorie du poste (`alerteBesoin`), et un besoin sur un
  * code horaire que le poste ne permet pas (le prototype le masquait).
@@ -17,7 +21,7 @@
 
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { ChevronsRight, Eye, EyeOff, TriangleAlert } from 'lucide-react'
+import { ChevronsRight, Plus, TriangleAlert } from 'lucide-react'
 
 import {
   useDroitsPlanning,
@@ -32,6 +36,7 @@ import {
   Segmente,
 } from '#/components/planning/parametres/reglages/controles.tsx'
 import {
+  horairesAAjouter,
   lignesDuPoste,
   trouverBesoin,
 } from '#/components/planning/parametres/reglages/besoins.ts'
@@ -41,13 +46,23 @@ import type {
 } from '#/components/planning/parametres/reglages/besoins.ts'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { Button } from '#/components/ui/button.tsx'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '#/components/ui/popover.tsx'
 import { heures, horairesDuPoste, texteSur } from '#/lib/planning/affichage.ts'
 import { planningKeys } from '#/lib/planning/keys.ts'
 import { alerteBesoin } from '#/lib/planning/regles.ts'
 import { reglerBesoin } from '#/lib/planning/service.ts'
 import { heureAffichee, presence } from '#/lib/planning/temps.ts'
 import { JOURS } from '#/lib/planning/types.ts'
-import type { Besoin, Poste, Referentiel } from '#/lib/planning/types.ts'
+import type {
+  Besoin,
+  Horaire,
+  Poste,
+  Referentiel,
+} from '#/lib/planning/types.ts'
 import { cn } from '#/lib/utils.ts'
 
 const RIEN: Reglage = { effectif: 0, soutien: 0, renfort: 0 }
@@ -98,7 +113,17 @@ export function BesoinsPage() {
   const dernier = useRef<Referentiel | undefined>(undefined)
   dernier.current = ref.data
 
-  const [tousLesCodes, setTousLesCodes] = useState<Set<number>>(new Set())
+  // Lignes gardées dans la séance, par poste : ajoutées, ou réglées (une
+  // ligne remise à 0 ne disparaît pas sous les doigts).
+  const [gardees, setGardees] = useState<Map<number, Set<string>>>(new Map())
+  const garder = useCallback((posteId: number, cle: string) => {
+    setGardees((m) => {
+      if (m.get(posteId)?.has(cle)) return m
+      const suite = new Map(m)
+      suite.set(posteId, new Set([...(m.get(posteId) ?? []), cle]))
+      return suite
+    })
+  }, [])
   const [vue, setVue] = useState<Vue>('postes')
   const [couche, setCouche] = useState<Couche>('effectif')
 
@@ -134,6 +159,7 @@ export function BesoinsPage() {
     reglages: Array<{ jour: number } & Reglage>,
   ) => {
     if (!modifiable) return
+    garder(poste.id, ligne.cle)
     setLocaux((m) => {
       const suite = new Map(m)
       for (const { jour, effectif, soutien, renfort } of reglages) {
@@ -196,7 +222,7 @@ export function BesoinsPage() {
             />
             <p className="text-sm text-muted-foreground">
               {vue === 'postes'
-                ? 'Combien de personnes il faut, chaque jour, sur chaque horaire de chaque poste. Le planning automatique part de là.'
+                ? 'Pour chaque poste, une ligne par horaire où il faut du monde, et le nombre de personnes chaque jour. Le planning automatique place les gens sur ces lignes.'
                 : "Combien de personnes au total le matin et le soir, tous postes de l'accueil confondus. Le planning automatique essaie de s'y tenir."}
             </p>
           </div>
@@ -258,15 +284,8 @@ export function BesoinsPage() {
                   poste={poste}
                   referentiel={data}
                   couche={couche}
-                  tous={tousLesCodes.has(poste.id)}
-                  basculer={() =>
-                    setTousLesCodes((s) => {
-                      const suite = new Set(s)
-                      if (suite.has(poste.id)) suite.delete(poste.id)
-                      else suite.add(poste.id)
-                      return suite
-                    })
-                  }
+                  gardees={gardees.get(poste.id) ?? AUCUNE}
+                  ajouter={(cle) => garder(poste.id, cle)}
                   modifiable={modifiable}
                   affiche={affiche}
                   regler={regler}
@@ -301,12 +320,14 @@ function allerAuPoste(depuis: HTMLElement, posteId: number) {
   zone.scrollTo({ top: haut, behavior: 'smooth' })
 }
 
+const AUCUNE: ReadonlySet<string> = new Set()
+
 function CartePoste({
   poste,
   referentiel,
   couche,
-  tous,
-  basculer,
+  gardees,
+  ajouter,
   modifiable,
   affiche,
   regler,
@@ -314,8 +335,8 @@ function CartePoste({
   poste: Poste
   referentiel: Referentiel
   couche: Couche
-  tous: boolean
-  basculer: () => void
+  gardees: ReadonlySet<string>
+  ajouter: (cle: string) => void
   modifiable: boolean
   affiche: (posteId: number, ligne: LigneBesoin, jour: number) => Reglage
   regler: (
@@ -329,10 +350,9 @@ function CartePoste({
     [referentiel.besoins, poste.id],
   )
   const possibles = horairesDuPoste(referentiel.horaires, poste)
-  const lignes = lignesDuPoste(siens, referentiel.horaires, possibles, tous)
-  const cachees = possibles.filter(
-    (h) => !lignes.some((l) => l.horaire_id === h.id),
-  ).length
+  const lignes = lignesDuPoste(siens, referentiel.horaires, gardees)
+  const aAjouter = horairesAAjouter(possibles, lignes)
+  const restreint = poste.horaires_autorises.length > 0
 
   // Totaux : présence par semaine (effectif × durée, pause non déduite, comme
   // le prototype) et, par jour, les personnes demandées.
@@ -367,17 +387,25 @@ function CartePoste({
             {heures(presenceSemaine)} de présence / semaine
           </span>
         </div>
-        <Button variant="ghost" size="sm" onClick={basculer}>
-          {tous ? <EyeOff /> : <Eye />}
-          {tous
-            ? 'Masquer les codes non utilisés'
-            : `Afficher tous les codes${cachees > 0 ? ` (+${cachees})` : ''}`}
-        </Button>
+        {modifiable && aAjouter.length > 0 && (
+          <AjoutHoraire
+            poste={poste}
+            horaires={aAjouter}
+            onChoisir={(h) => ajouter(`t${h.id}`)}
+          />
+        )}
       </div>
+      <p className="-mt-1 text-xs text-muted-foreground">
+        {restreint
+          ? `Les horaires proposés sont ceux choisis pour ce poste dans Postes (${possibles.length}).`
+          : `Aucun horaire choisi pour ce poste dans Postes : les ${possibles.length} codes sont proposés.`}
+      </p>
 
       {lignes.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          Aucun besoin pour ce poste. Affichez tous les codes pour en ajouter.
+        <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
+          {modifiable
+            ? "Ce poste n'a besoin de personne pour l'instant. Ajoutez un horaire pour en demander."
+            : "Ce poste n'a besoin de personne pour l'instant."}
         </p>
       ) : (
         <div className="@container overflow-x-auto rounded-lg border">
@@ -444,6 +472,65 @@ function CartePoste({
   )
 }
 
+/** Liste des codes permis qui n'ont pas encore de ligne, rangés par heure. */
+function AjoutHoraire({
+  poste,
+  horaires,
+  onChoisir,
+}: {
+  poste: Poste
+  horaires: Horaire[]
+  onChoisir: (h: Horaire) => void
+}) {
+  const [ouvert, setOuvert] = useState(false)
+  return (
+    <Popover open={ouvert} onOpenChange={setOuvert}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          aria-label={`Ajouter un horaire au poste ${poste.nom}`}
+        >
+          <Plus />
+          Ajouter un horaire
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-80 p-1">
+        <ul
+          aria-label="Horaires à ajouter"
+          className="flex max-h-80 flex-col overflow-y-auto"
+        >
+          {horaires.map((h) => (
+            <li key={h.id}>
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
+                onClick={() => {
+                  onChoisir(h)
+                  setOuvert(false)
+                }}
+              >
+                <span
+                  className="w-10 shrink-0 rounded px-1 text-center text-[11px] font-semibold"
+                  style={{ background: h.couleur, color: texteSur(h.couleur) }}
+                >
+                  {h.code}
+                </span>
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate">{h.nom}</span>
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    {heureAffichee(h.debut)} à {heureAffichee(h.fin)}
+                  </span>
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
 function LigneTableau({
   poste,
   ligne,
@@ -472,6 +559,13 @@ function LigneTableau({
   const trop = alerteBesoin(poste.categorie, presence(ligne.debut, ligne.fin))
   const lundi = affiche(poste.id, ligne, 0)
   const desactive = !modifiable
+  // Ce qui est réglé dans les AUTRES choix : une ligne à 0 ici n'a pas
+  // l'air d'un oubli quand elle porte des places ailleurs.
+  const ailleurs = COUCHES.filter(
+    (c) =>
+      c.valeur !== couche &&
+      JOURS.some((_, j) => affiche(poste.id, ligne, j)[c.valeur] > 0),
+  ).map((c) => c.libelle.toLowerCase())
 
   return (
     <tr className="border-t">
@@ -492,6 +586,11 @@ function LigneTableau({
               <p className="mt-1 flex items-start gap-1 text-xs text-amber-500">
                 <TriangleAlert className="mt-px size-3 shrink-0" />
                 Trop long : {trop}.
+              </p>
+            )}
+            {ailleurs.length > 0 && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Réglé aussi : {ailleurs.join(', ')}.
               </p>
             )}
             {!permise && (
