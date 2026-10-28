@@ -281,7 +281,6 @@ export function HorairesPage() {
                 </ListeCompacte>
               ))}
             </div>
-            {data.horaires.length > 0 && <Frise horaires={data.horaires} />}
           </section>
 
           <section
@@ -1080,64 +1079,5 @@ function CarteMotif({
         onConfirm={() => void supprimer()}
       />
     </CarteReglage>
-  )
-}
-
-// --------------------------------------------------------- frise journée type
-
-function Frise({ horaires }: { horaires: Horaire[] }) {
-  return (
-    <div className="rounded-xl border bg-card p-4">
-      <h3 className="mb-3 text-sm font-semibold">Journée type</h3>
-      <div className="relative mb-2 h-4 text-[10px] text-muted-foreground">
-        {[0, 3, 6, 9, 12, 15, 18, 21, 24].map((x) => (
-          <span
-            key={x}
-            className="absolute -translate-x-1/2 tabular-nums"
-            style={{ left: `${(x / 24) * 100}%` }}
-          >
-            {x}h
-          </span>
-        ))}
-      </div>
-      <div className="flex flex-col gap-1">
-        {horaires.map((h) => {
-          if (!heureValide(h.debut) || !heureValide(h.fin)) return null
-          const d = minutes(h.debut)
-          const duree = presence(h.debut, h.fin)
-          // Un horaire de nuit se coupe en deux barres : jusqu'à minuit, puis le matin.
-          const morceaux: Array<[number, number]> =
-            d + duree > 1440
-              ? [
-                  [d, 1440 - d],
-                  [0, d + duree - 1440],
-                ]
-              : [[d, duree]]
-          return (
-            <div key={h.id} className="relative h-6 rounded bg-muted/50">
-              {morceaux.map(([debut, longueur], i) => (
-                <Tip
-                  key={i}
-                  label={`${h.nom} ${heureAffichee(h.debut)} à ${heureAffichee(h.fin)}`}
-                >
-                  <div
-                    tabIndex={0}
-                    className="absolute inset-y-0 truncate rounded px-1.5 text-[11px] leading-6 font-medium"
-                    style={{
-                      left: `${(debut / 1440) * 100}%`,
-                      width: `${(longueur / 1440) * 100}%`,
-                      background: h.couleur,
-                      color: texteSur(h.couleur),
-                    }}
-                  >
-                    {i === 0 && `${h.code} · ${h.nom}`}
-                  </div>
-                </Tip>
-              ))}
-            </div>
-          )
-        })}
-      </div>
-    </div>
   )
 }
