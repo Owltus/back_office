@@ -1983,8 +1983,11 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   gouttière stable. Codes, motifs et postes = listes compactes
   (`reglages/ListeCompacte.tsx`), le réglage s'ouvre dans un VOLET ; codes à
   choisir par `ChoixCodes` (rangés par famille) ; fiche d'une personne avec un
-  sommaire collant (`SommaireFiche`) ; Besoins : tableaux adaptatifs par requête
-  de conteneur (aucune barre horizontale dès 1 024 px), rangée « Aller à ».
+  sommaire collant (`SommaireFiche`) ; Besoins (refait le même jour, « utile mais
+  mal présenté ») : deux vues « Par poste » / « Matin et soir », et on choisit CE
+  QU'ON RÈGLE (personnes nécessaires / apprentis et stagiaires / en plus si besoin ;
+  au moins / au plus) : UN compteur par case, jamais trois empilés ; Équipe en
+  tableau par catégorie.
   Mesuré : Horaires 9 300 → 2 700 px. Ne pas revenir à des cartes toujours ouvertes.
 - **École des apprentis** (2026-10-27, décision utilisateur : « pas toujours une
   semaine sur deux, pas toujours stable ») : calendrier JOUR PAR JOUR sur l'année

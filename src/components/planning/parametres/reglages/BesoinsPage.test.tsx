@@ -80,9 +80,7 @@ describe('Besoins', () => {
     })) {
       expect((b as HTMLButtonElement).disabled).toBe(true)
     }
-    expect(
-      screen.queryByRole('button', { name: /Toute la semaine|Recopier/ }),
-    ).toBeNull()
+    expect(screen.queryByRole('button', { name: /Recopier/ })).toBeNull()
   })
 
   it('un compteur appelle reglerBesoin avec le besoin existant', async () => {
@@ -93,7 +91,7 @@ describe('Besoins', () => {
     expect(existant).toBeTruthy()
     fireEvent.click(
       poste('Réception').getByRole('button', {
-        name: 'Effectif minimum Lundi, Matin : un de plus',
+        name: 'Personnes nécessaires Lundi, Matin : un de plus',
       }),
     )
     await waitFor(() => expect(service.reglerBesoin).toHaveBeenCalledTimes(1))
@@ -121,7 +119,7 @@ describe('Besoins', () => {
     )
     fireEvent.click(
       club.getByRole('button', {
-        name: 'Effectif minimum Mardi, Middle : un de plus',
+        name: 'Personnes nécessaires Mardi, Middle : un de plus',
       }),
     )
     await waitFor(() =>
@@ -156,7 +154,7 @@ describe('Besoins', () => {
       club.getByRole('button', { name: 'Afficher tous les codes (+1)' }),
     )
     const plus = club.getByRole('button', {
-      name: 'Effectif minimum Jeudi, Middle : un de plus',
+      name: 'Personnes nécessaires Jeudi, Middle : un de plus',
     })
     fireEvent.click(plus)
     fireEvent.click(plus)
@@ -168,12 +166,13 @@ describe('Besoins', () => {
     expect(second[1]).toBe(cree)
   })
 
-  it('Toute la semaine recopie le lundi sur les six autres jours', async () => {
+  it('Recopier recopie le lundi sur les six autres jours', async () => {
     monter(<BesoinsPage />)
+    fireEvent.click(screen.getByRole('radio', { name: 'En plus si besoin' }))
     const r = poste('Réception')
     fireEvent.click(
       r.getByRole('button', {
-        name: 'Places en plus, facultatives Lundi, Matin : un de plus',
+        name: 'En plus si besoin Lundi, Matin : un de plus',
       }),
     )
     fireEvent.click(
@@ -234,6 +233,7 @@ describe('Besoins', () => {
     }
     etat.referentiel = { ...referentielDemo(), consignes: [lundiSoir] }
     monter(<BesoinsPage />)
+    fireEvent.click(screen.getByRole('radio', { name: 'Matin et soir' }))
     const carte = within(
       screen.getByRole('region', { name: 'Présence du matin et du soir' }),
     )
@@ -248,6 +248,7 @@ describe('Besoins', () => {
         undefined,
       ),
     )
+    fireEvent.click(carte.getByRole('radio', { name: 'Au plus' }))
     fireEvent.click(
       carte.getByRole('button', {
         name: 'Soir du lundi : au plus : un de plus',
@@ -282,10 +283,13 @@ describe('Besoins', () => {
   it('en écriture (sans gestion) : consignes en lecture seule', () => {
     etat.droits = { pret: true, lire: true, ecrire: true, gerer: false }
     monter(<BesoinsPage />)
+    fireEvent.click(screen.getByRole('radio', { name: 'Matin et soir' }))
     const carte = within(
       screen.getByRole('region', { name: 'Présence du matin et du soir' }),
     )
-    for (const b of carte.getAllByRole('button')) {
+    for (const b of carte.getAllByRole('button', {
+      name: /un de (plus|moins)$/,
+    })) {
       expect((b as HTMLButtonElement).disabled).toBe(true)
     }
   })

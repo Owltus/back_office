@@ -1,8 +1,11 @@
 /*
  * Paramètres du Planning : la semaine type des besoins (prototype
  * `BesoinsPage.tsx`, spec §5.3). Une carte par poste, une ligne par code
- * horaire (ou horaire spécifique), une case par jour : effectif minimum,
- * places de soutien, places en plus. Chaque compteur s'enregistre aussitôt
+ * horaire (ou horaire spécifique), une case par jour. Refait le 2026-10-28
+ * (« utile mais mal présenté ») : deux vues (par poste, matin et soir), et
+ * on choisit CE QU'ON RÈGLE (personnes nécessaires, apprentis et
+ * stagiaires, en plus si besoin) : une case = un seul compteur, au lieu de
+ * trois empilés. Chaque compteur s'enregistre aussitôt
  * (`reglerBesoin` : crée, modifie, ou supprime à 0 / 0 / 0), affiché tout de
  * suite à l'écran ; les écritures partent l'une après l'autre, chacune avec
  * le besoin RELU en base (deux clics rapides ne créent pas deux besoins).
@@ -14,13 +17,7 @@
 
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import {
-  ChevronsRight,
-  Eye,
-  EyeOff,
-  ShieldCheck,
-  TriangleAlert,
-} from 'lucide-react'
+import { ChevronsRight, Eye, EyeOff, TriangleAlert } from 'lucide-react'
 
 import {
   useDroitsPlanning,
@@ -30,7 +27,10 @@ import {
 import { useNotifier } from '#/components/planning/Messages.tsx'
 import { CadreReglages } from '#/components/planning/parametres/reglages/cadre.tsx'
 import { ConsignesPresence } from '#/components/planning/parametres/reglages/ConsignesPresence.tsx'
-import { Compteur } from '#/components/planning/parametres/reglages/controles.tsx'
+import {
+  Compteur,
+  Segmente,
+} from '#/components/planning/parametres/reglages/controles.tsx'
 import {
   lignesDuPoste,
   trouverBesoin,
@@ -51,6 +51,34 @@ import type { Besoin, Poste, Referentiel } from '#/lib/planning/types.ts'
 import { cn } from '#/lib/utils.ts'
 
 const RIEN: Reglage = { effectif: 0, soutien: 0, renfort: 0 }
+
+type Couche = keyof Reglage
+const COUCHES: ReadonlyArray<{
+  valeur: Couche
+  libelle: string
+  aide: string
+}> = [
+  {
+    valeur: 'effectif',
+    libelle: 'Personnes nécessaires',
+    aide: 'Le minimum de personnes autonomes. Le planning automatique le garantit.',
+  },
+  {
+    valeur: 'soutien',
+    libelle: 'Apprentis et stagiaires',
+    aide: "Les places pour un apprenti ou un stagiaire. Il n'est jamais seul : il faut au moins une personne nécessaire.",
+  },
+  {
+    valeur: 'renfort',
+    libelle: 'En plus si besoin',
+    aide: "Des places facultatives. Elles servent seulement si quelqu'un manque d'heures dans sa semaine.",
+  },
+]
+const LIBELLE_COUCHE = Object.fromEntries(
+  COUCHES.map((c) => [c.valeur, c.libelle]),
+) as Record<Couche, string>
+
+type Vue = 'postes' | 'presence'
 const cleCase = (posteId: number, ligne: LigneBesoin, jour: number) =>
   `${posteId}|${ligne.cle}|${jour}`
 
@@ -71,6 +99,8 @@ export function BesoinsPage() {
   dernier.current = ref.data
 
   const [tousLesCodes, setTousLesCodes] = useState<Set<number>>(new Set())
+  const [vue, setVue] = useState<Vue>('postes')
+  const [couche, setCouche] = useState<Couche>('effectif')
 
   /** Le besoin enregistré en base pour cette case, d'après la dernière lecture. */
   const enBase = useCallback(
@@ -154,75 +184,127 @@ export function BesoinsPage() {
     >
       {data && (
         <>
-          <div className="flex items-start gap-2 rounded-lg border bg-muted/50 px-3 py-2.5 text-sm">
-            <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" />
-            <span>
-              La semaine type de l'hôtel, poste par poste et code par code : le
-              minimum de personnes autonomes (garanti par le moteur), les places
-              de soutien pour apprentis et stagiaires (jamais seuls), et les
-              places en plus, remplies seulement si quelqu'un manque d'heures.
-            </span>
+          <div className="flex flex-col items-start gap-1">
+            <Segmente
+              etiquette="Ce que montre la page"
+              valeur={vue}
+              onChange={setVue}
+              options={[
+                { valeur: 'postes', libelle: 'Par poste' },
+                { valeur: 'presence', libelle: 'Matin et soir' },
+              ]}
+            />
+            <p className="text-sm text-muted-foreground">
+              {vue === 'postes'
+                ? 'Combien de personnes il faut, chaque jour, sur chaque horaire de chaque poste. Le planning automatique part de là.'
+                : "Combien de personnes au total le matin et le soir, tous postes de l'accueil confondus. Le planning automatique essaie de s'y tenir."}
+            </p>
           </div>
-          {data.postes.length > 1 && (
-            <nav
-              aria-label="Aller à un poste"
-              className="flex flex-wrap items-center gap-1.5 text-sm"
-            >
-              <span className="text-xs text-muted-foreground">Aller à :</span>
-              {data.postes.map((poste) => (
-                <button
-                  key={poste.id}
-                  type="button"
-                  className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs transition-colors hover:bg-muted"
-                  onClick={() =>
-                    document
-                      .getElementById(`besoins-poste-${poste.id}`)
-                      ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                  }
-                >
-                  <span
-                    className="size-2 rounded-full"
-                    style={{ background: poste.couleur }}
-                  />
-                  {poste.nom}
-                </button>
-              ))}
-            </nav>
-          )}
-          <ConsignesPresence referentiel={data} modifiable={modifiable} />
-          {!data.postes.length && (
+
+          {vue === 'presence' ? (
+            <ConsignesPresence referentiel={data} modifiable={modifiable} />
+          ) : !data.postes.length ? (
             <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
               Aucun poste : créez d'abord les postes de l'hôtel.
             </p>
+          ) : (
+            <>
+              {/* Collé en haut de la zone qui défile : le choix reste sous
+                  la main quand on descend dans les postes. */}
+              <div
+                data-barre-besoins
+                className="sticky -top-4 z-10 -mx-4 flex flex-col gap-2 border-b bg-background/95 px-4 py-3 backdrop-blur"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-medium">Vous réglez :</span>
+                  <Segmente
+                    etiquette="Ce que vous réglez"
+                    valeur={couche}
+                    onChange={setCouche}
+                    options={COUCHES.map(({ valeur, libelle }) => ({
+                      valeur,
+                      libelle,
+                    }))}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {COUCHES.find((c) => c.valeur === couche)?.aide}
+                </p>
+                {data.postes.length > 1 && (
+                  <nav
+                    aria-label="Aller à un poste"
+                    className="flex flex-wrap items-center gap-1.5"
+                  >
+                    {data.postes.map((poste) => (
+                      <button
+                        key={poste.id}
+                        type="button"
+                        className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs transition-colors hover:bg-muted"
+                        onClick={(e) => allerAuPoste(e.currentTarget, poste.id)}
+                      >
+                        <span
+                          className="size-2 rounded-full"
+                          style={{ background: poste.couleur }}
+                        />
+                        {poste.nom}
+                      </button>
+                    ))}
+                  </nav>
+                )}
+              </div>
+              {data.postes.map((poste) => (
+                <CartePoste
+                  key={poste.id}
+                  poste={poste}
+                  referentiel={data}
+                  couche={couche}
+                  tous={tousLesCodes.has(poste.id)}
+                  basculer={() =>
+                    setTousLesCodes((s) => {
+                      const suite = new Set(s)
+                      if (suite.has(poste.id)) suite.delete(poste.id)
+                      else suite.add(poste.id)
+                      return suite
+                    })
+                  }
+                  modifiable={modifiable}
+                  affiche={affiche}
+                  regler={regler}
+                />
+              ))}
+            </>
           )}
-          {data.postes.map((poste) => (
-            <CartePoste
-              key={poste.id}
-              poste={poste}
-              referentiel={data}
-              tous={tousLesCodes.has(poste.id)}
-              basculer={() =>
-                setTousLesCodes((s) => {
-                  const suite = new Set(s)
-                  if (suite.has(poste.id)) suite.delete(poste.id)
-                  else suite.add(poste.id)
-                  return suite
-                })
-              }
-              modifiable={modifiable}
-              affiche={affiche}
-              regler={regler}
-            />
-          ))}
         </>
       )}
     </CadreReglages>
   )
 }
 
+/*
+ * Défile la SEULE zone de contenu jusqu'au poste, sous la barre collée
+ * (`scrollIntoView` faisait aussi défiler la fenêtre, en-tête compris).
+ */
+function allerAuPoste(depuis: HTMLElement, posteId: number) {
+  const cible = document.getElementById(`besoins-poste-${posteId}`)
+  const barre = depuis.closest<HTMLElement>('[data-barre-besoins]')
+  let zone = cible?.parentElement ?? null
+  while (zone && !/(auto|scroll)/.test(getComputedStyle(zone).overflowY)) {
+    zone = zone.parentElement
+  }
+  if (!cible || !zone) return
+  const haut =
+    cible.getBoundingClientRect().top -
+    zone.getBoundingClientRect().top +
+    zone.scrollTop -
+    (barre?.offsetHeight ?? 0) -
+    8
+  zone.scrollTo({ top: haut, behavior: 'smooth' })
+}
+
 function CartePoste({
   poste,
   referentiel,
+  couche,
   tous,
   basculer,
   modifiable,
@@ -231,6 +313,7 @@ function CartePoste({
 }: {
   poste: Poste
   referentiel: Referentiel
+  couche: Couche
   tous: boolean
   basculer: () => void
   modifiable: boolean
@@ -255,24 +338,20 @@ function CartePoste({
   // le prototype) et, par jour, les personnes demandées.
   let presenceSemaine = 0
   const parJour = JOURS.map((_, j) => {
-    let effectif = 0
-    let soutien = 0
-    let renfort = 0
+    let total = 0
     for (const l of lignes) {
       const r = affiche(poste.id, l, j)
-      effectif += r.effectif
-      soutien += r.soutien
-      renfort += r.renfort
+      total += r[couche]
       presenceSemaine += r.effectif * presence(l.debut, l.fin)
     }
-    return { effectif, soutien, renfort }
+    return total
   })
   const titreId = `besoins-poste-${poste.id}`
 
   return (
     <section
       aria-labelledby={titreId}
-      className="flex min-w-0 scroll-mt-2 flex-col gap-3 rounded-xl border border-t-4 bg-card p-4"
+      className="flex min-w-0 flex-col gap-3 rounded-xl border border-t-4 bg-card p-4"
       style={{ borderTopColor: poste.couleur }}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -284,7 +363,7 @@ function CartePoste({
           <h2 id={titreId} className="text-base font-semibold">
             {poste.nom}
           </h2>
-          <span className="rounded-full bg-muted px-2 py-0.5 text-xs tabular-nums">
+          <span className="text-xs text-muted-foreground tabular-nums">
             {heures(presenceSemaine)} de présence / semaine
           </span>
         </div>
@@ -301,69 +380,65 @@ function CartePoste({
           Aucun besoin pour ce poste. Affichez tous les codes pour en ajouter.
         </p>
       ) : (
-        <>
-          <p className="-mt-1 text-xs text-muted-foreground">
-            Dans chaque case : le minimum de personnes autonomes, puis «
-            +soutien » (apprentis, stagiaires), puis « +en plus » (facultatif).
-          </p>
-          <div className="@container overflow-x-auto rounded-lg border">
-            <table className="w-full min-w-[40rem] border-collapse text-sm">
-              <thead className="bg-muted/50 text-xs text-muted-foreground">
-                <tr>
-                  <th className="px-3 py-2 text-left font-medium">Horaire</th>
-                  {JOURS.map((j) => (
-                    <th key={j} className="px-1 py-2 text-center font-medium">
-                      {j.slice(0, 3)}.
-                    </th>
-                  ))}
-                  <th className="px-2 py-2">
-                    <span className="sr-only">Recopier</span>
+        <div className="@container overflow-x-auto rounded-lg border">
+          <table className="w-full min-w-[40rem] table-fixed border-collapse text-sm">
+            <thead className="bg-muted/50 text-xs text-muted-foreground">
+              <tr>
+                <th className="w-[13rem] px-3 py-2 text-left font-medium @min-[62rem]:w-[16rem]">
+                  Horaire
+                </th>
+                {JOURS.map((j) => (
+                  <th key={j} className="px-1 py-2 text-center font-medium">
+                    {j.slice(0, 3)}.
                   </th>
-                </tr>
-              </thead>
-              <tbody>
-                {lignes.map((ligne) => (
-                  <LigneTableau
-                    key={ligne.cle}
-                    poste={poste}
-                    ligne={ligne}
-                    referentiel={referentiel}
-                    permise={
-                      ligne.horaire_id === null ||
-                      possibles.some((h) => h.id === ligne.horaire_id)
-                    }
-                    modifiable={modifiable}
-                    affiche={affiche}
-                    regler={regler}
-                  />
                 ))}
-              </tbody>
-              <tfoot className="bg-muted/50 text-xs">
-                <tr>
-                  <th
-                    scope="row"
-                    className="px-3 py-2 text-left font-medium text-muted-foreground"
+                <th className="w-12 px-2 py-2">
+                  <span className="sr-only">Recopier</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {lignes.map((ligne) => (
+                <LigneTableau
+                  key={ligne.cle}
+                  poste={poste}
+                  ligne={ligne}
+                  referentiel={referentiel}
+                  couche={couche}
+                  permise={
+                    ligne.horaire_id === null ||
+                    possibles.some((h) => h.id === ligne.horaire_id)
+                  }
+                  modifiable={modifiable}
+                  affiche={affiche}
+                  regler={regler}
+                />
+              ))}
+            </tbody>
+            <tfoot className="bg-muted/50 text-xs">
+              <tr>
+                <th
+                  scope="row"
+                  className="px-3 py-2 text-left font-medium text-muted-foreground"
+                >
+                  Total du jour
+                </th>
+                {parJour.map((t, j) => (
+                  <td
+                    key={j}
+                    className={cn(
+                      'px-1 py-2 text-center font-semibold tabular-nums',
+                      t === 0 && 'text-muted-foreground/60',
+                    )}
                   >
-                    Total du jour
-                  </th>
-                  {parJour.map((t, j) => (
-                    <td key={j} className="px-1 py-2 text-center tabular-nums">
-                      <span className="font-semibold">{t.effectif}</span>
-                      {(t.soutien > 0 || t.renfort > 0) && (
-                        <span className="block text-[10px] text-muted-foreground">
-                          {t.soutien > 0 && `+${t.soutien} soutien`}
-                          {t.soutien > 0 && t.renfort > 0 && ' · '}
-                          {t.renfort > 0 && `+${t.renfort} en plus`}
-                        </span>
-                      )}
-                    </td>
-                  ))}
-                  <td />
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        </>
+                    {t}
+                  </td>
+                ))}
+                <td />
+              </tr>
+            </tfoot>
+          </table>
+        </div>
       )}
     </section>
   )
@@ -373,6 +448,7 @@ function LigneTableau({
   poste,
   ligne,
   referentiel,
+  couche,
   permise,
   modifiable,
   affiche,
@@ -381,6 +457,7 @@ function LigneTableau({
   poste: Poste
   ligne: LigneBesoin
   referentiel: Referentiel
+  couche: Couche
   permise: boolean
   modifiable: boolean
   affiche: (posteId: number, ligne: LigneBesoin, jour: number) => Reglage
@@ -397,7 +474,7 @@ function LigneTableau({
   const desactive = !modifiable
 
   return (
-    <tr className="border-t align-top">
+    <tr className="border-t">
       <td className="px-3 py-2">
         <div className="flex items-start gap-2">
           <span
@@ -427,72 +504,55 @@ function LigneTableau({
         </div>
       </td>
       {JOURS.map((nom, j) => {
-        const { effectif, soutien, renfort } = affiche(poste.id, ligne, j)
-        const existe = effectif > 0 || soutien > 0 || renfort > 0
+        const r = affiche(poste.id, ligne, j)
+        const existe = r.effectif > 0 || r.soutien > 0 || r.renfort > 0
         const libelle = `${nom}, ${h?.nom ?? 'horaire spécifique'}`
+        const valeur = r[couche]
+        // Un apprenti n'est jamais seul : pas de place sans personne nécessaire.
+        const sansBase = couche === 'soutien' && r.effectif === 0
         return (
-          <td key={nom} className="px-1 py-2">
-            <div
-              className={cn(
-                'flex flex-col items-center gap-1 rounded-md py-1',
-                existe ? 'bg-muted/40' : 'opacity-80',
-              )}
-            >
+          <td key={nom} className="px-1 py-2 text-center">
+            {sansBase ? (
+              <Tip label="Mettez d'abord une personne nécessaire sur ce jour">
+                <span
+                  tabIndex={0}
+                  className="inline-block py-0.5 text-muted-foreground/50"
+                >
+                  —
+                </span>
+              </Tip>
+            ) : (
               <Compteur
-                valeur={effectif}
-                etiquette={`Effectif minimum ${libelle}`}
+                valeur={valeur}
+                max={couche === 'effectif' ? 20 : 5}
+                attenue={valeur === 0}
+                etiquette={`${LIBELLE_COUCHE[couche]} ${libelle}`}
                 disabled={desactive}
                 onChange={(v) =>
                   regler(poste, ligne, [
-                    {
-                      jour: j,
-                      effectif: v,
-                      // Un nouveau besoin ouvre par défaut une place de soutien.
-                      soutien: existe ? soutien : v > 0 ? 1 : 0,
-                      renfort,
-                    },
+                    couche === 'effectif'
+                      ? {
+                          jour: j,
+                          effectif: v,
+                          // Un nouveau besoin ouvre par défaut une place de
+                          // soutien ; plus personne : plus de soutien.
+                          soutien: v === 0 ? 0 : existe ? r.soutien : 1,
+                          renfort: r.renfort,
+                        }
+                      : { jour: j, ...r, [couche]: v },
                   ])
                 }
               />
-              {(existe || effectif > 0) && (
-                <Compteur
-                  taille="mini"
-                  valeur={soutien}
-                  max={5}
-                  suffixe="soutien"
-                  etiquette={`Places de soutien ${libelle}`}
-                  disabled={desactive}
-                  onChange={(v) =>
-                    regler(poste, ligne, [
-                      { jour: j, effectif, soutien: v, renfort },
-                    ])
-                  }
-                />
-              )}
-              <Compteur
-                taille="mini"
-                valeur={renfort}
-                max={5}
-                suffixe="en plus"
-                attenue={renfort === 0}
-                etiquette={`Places en plus, facultatives ${libelle}`}
-                disabled={desactive}
-                onChange={(v) =>
-                  regler(poste, ligne, [
-                    { jour: j, effectif, soutien, renfort: v },
-                  ])
-                }
-              />
-            </div>
+            )}
           </td>
         )
       })}
       <td className="px-2 py-2">
         {modifiable && (
-          <Tip label="Recopier le réglage du lundi sur toute la semaine">
+          <Tip label="Recopier le lundi sur toute la semaine (les trois réglages)">
             <Button
               variant="ghost"
-              size="sm"
+              size="icon-sm"
               aria-label={`Recopier le lundi sur toute la semaine, ${h?.nom ?? 'horaire spécifique'}`}
               onClick={() =>
                 regler(
@@ -508,9 +568,6 @@ function LigneTableau({
               }
             >
               <ChevronsRight />
-              <span className="hidden @min-[62rem]:inline">
-                Toute la semaine
-              </span>
             </Button>
           </Tip>
         )}
