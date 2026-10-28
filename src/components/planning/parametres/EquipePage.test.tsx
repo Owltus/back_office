@@ -115,21 +115,15 @@ describe('EquipePage', () => {
       'Apprentis',
       'Stagiaires',
     ])
-    const lucas = screen.getByRole('button', { name: /Lucas Petit/ })
+    const ligne = (nom: RegExp) =>
+      screen.getByRole('button', { name: nom }).closest('tr')!
+    const lucas = ligne(/Lucas Petit/)
     expect(lucas.getAttribute('data-parti')).toBe('true')
     expect(lucas.textContent).toContain('Parti(e) le 31/01/2020')
-    expect(
-      screen.getByRole('button', { name: /Nadia Haddad/ }).textContent,
-    ).toContain('Désactivé')
-    expect(
-      screen.getByRole('button', { name: /Emma Durand/ }).textContent,
-    ).toContain('Arrive le 01/03/2099')
-    expect(
-      screen.getByRole('button', { name: /Claire Martin/ }).textContent,
-    ).toContain('Forfait jours')
-    expect(
-      screen.getByRole('button', { name: /Léa Fontaine/ }).textContent,
-    ).toContain('Stagiaire')
+    expect(ligne(/Nadia Haddad/).textContent).toContain('Désactivé')
+    expect(ligne(/Emma Durand/).textContent).toContain('Arrive le 01/03/2099')
+    expect(ligne(/Claire Martin/).textContent).toContain('Forfait jours')
+    expect(ligne(/Léa Fontaine/).textContent).toContain('Stagiaire')
   })
 
   it('en lecture : Ajouter grisé, catégories en lecture seule', async () => {
