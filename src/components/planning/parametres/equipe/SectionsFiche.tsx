@@ -92,7 +92,7 @@ export function SectionCompetences({
   return (
     <Section
       titre="Compétences"
-      aide="Les postes qu'elle tient, et comment. Titulaire : seule sur le poste. Dépannage : seule aussi, mais le moteur préfère un titulaire. Soutien (apprenti, stagiaire) : en renfort, jamais seule."
+      aide="Les postes qu'elle tient, et comment. Titulaire : seule sur le poste. Dépannage : seule aussi, mais le moteur préfère un titulaire. Soutien (apprenti, stagiaire) : ne compte pas seule, toujours avec une personne autonome."
     >
       {tenus.length === 0 && (
         <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">
@@ -110,7 +110,7 @@ export function SectionCompetences({
               {pastille(p.couleur)}
               <span className="truncate">{p.nom}</span>
               {p.a_part && (
-                <small className="text-muted-foreground">· poste à part</small>
+                <small className="text-muted-foreground">· rangé à part</small>
               )}
             </span>
             <span className="flex items-center gap-1">
@@ -157,7 +157,8 @@ export function SectionCompetences({
               })),
             },
             {
-              titre: 'Postes à part (direction, supervision, technique…)',
+              titre:
+                'Postes rangés à part (direction, supervision, technique…)',
               options: aPart.map((p) => ({
                 valeur: String(p.id),
                 libelle: p.nom,
@@ -230,7 +231,7 @@ export function SectionSemaineType({
   return (
     <Section
       titre="Semaine type"
-      aide={`Libre : le moteur décide si elle travaille ; avec un horaire choisi, ce sera celui-là les jours où elle travaille (de nuit le week-end, par exemple). Travaille : elle travaille toujours ce jour-là. Repos et Absence (congé, ou école d'un apprenti) : jamais planifiée ce jour-là.${
+      aide={`Libre : le moteur décide si elle travaille ; avec un horaire choisi, ce sera celui-là les jours où elle travaille (de nuit le week-end, par exemple). Travaille : elle travaille toujours ce jour-là. Repos et Absence : jamais planifiée ce jour-là. École : jour hors de l'hôtel, compté comme du temps de travail.${
         etoile
           ? ' ★ : journée étoile (la journée courte) fixée ce jour-là ; sans étoile, le moteur la place selon les besoins.'
           : ''

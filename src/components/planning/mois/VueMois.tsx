@@ -34,7 +34,11 @@ import { PageHeader } from '#/components/shared/PageHeader.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { ConfirmDialog } from '#/components/shared/ConfirmDialog.tsx'
 import { Skeleton } from '#/components/ui/skeleton.tsx'
-import { dateCourte, numeroSemaine } from '#/lib/planning/affichage.ts'
+import {
+  dateCourte,
+  messageGeneration,
+  numeroSemaine,
+} from '#/lib/planning/affichage.ts'
 import { messageErreur } from '#/lib/planning/erreurs.ts'
 import { planningKeys } from '#/lib/planning/keys.ts'
 import { analyser } from '#/lib/planning/semaine.ts'
@@ -270,7 +274,7 @@ export function VueMois({
 
   const nonTouchees = lundis.length - ouvertes.length
   const noteNonTouchees = nonTouchees
-    ? ` (${pluriel(nonTouchees, 'semaine')} passée, verrouillée ou déjà réalisée, non touchée${nonTouchees > 1 ? 's' : ''})`
+    ? ` ${pluriel(nonTouchees, 'semaine')} passée${nonTouchees > 1 ? 's' : ''}, verrouillée${nonTouchees > 1 ? 's' : ''} ou déjà réalisée${nonTouchees > 1 ? 's' : ''} : non touchée${nonTouchees > 1 ? 's' : ''}.`
     : ''
 
   const completerLeMois = () => {
@@ -300,9 +304,7 @@ export function VueMois({
           .filter((s): s is SemaineOut => !!s),
       )
       notifier(
-        (trous
-          ? `Mois généré · ${pluriel(trous, 'place')} à pourvoir`
-          : 'Mois complet généré') + noteNonTouchees,
+        messageGeneration(trous, 'Mois') + noteNonTouchees,
         trous ? 'attention' : 'info',
       )
     })
@@ -567,7 +569,7 @@ export function VueMois({
       actions: [
         {
           libelle: 'Compléter le mois',
-          aide: 'Semi-auto : propose autour de ce qui est validé',
+          aide: 'Propose le reste autour de ce qui est validé',
           inactif: aucuneOuverte,
           onClick: completerLeMois,
         },

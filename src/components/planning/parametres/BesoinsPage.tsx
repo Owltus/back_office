@@ -76,17 +76,17 @@ const COUCHES: ReadonlyArray<{
   {
     valeur: 'effectif',
     libelle: 'Personnes nécessaires',
-    aide: 'Le minimum de personnes autonomes. Le planning automatique le garantit.',
+    aide: 'Le minimum de personnes autonomes. Le planning automatique les place en priorité.',
   },
   {
     valeur: 'soutien',
     libelle: 'Apprentis et stagiaires',
-    aide: "Les places pour un apprenti ou un stagiaire. Il n'est jamais seul : il faut au moins une personne nécessaire.",
+    aide: 'Les places pour un apprenti ou un stagiaire. Ils ne comptent pas seuls : il faut au moins une personne nécessaire.',
   },
   {
     valeur: 'renfort',
     libelle: 'En plus si besoin',
-    aide: "Des places facultatives. Elles servent seulement si quelqu'un manque d'heures dans sa semaine.",
+    aide: "Des places facultatives, en renfort. Elles servent si quelqu'un manque d'heures dans sa semaine ou pour tenir le matin et le soir.",
   },
 ]
 const LIBELLE_COUCHE = Object.fromEntries(
@@ -224,6 +224,11 @@ export function BesoinsPage() {
               {vue === 'postes'
                 ? 'Pour chaque poste, une ligne par horaire où il faut du monde, et le nombre de personnes chaque jour. Le planning automatique place les gens sur ces lignes.'
                 : "Combien de personnes au total le matin et le soir, tous postes de l'accueil confondus. Le planning automatique essaie de s'y tenir."}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Dans quel ordre le planning automatique décide : la loi d'abord,
+              puis les personnes nécessaires, puis les contrats, puis le confort
+              (repos groupés, jours habituels, équité).
             </p>
           </div>
 

@@ -108,9 +108,9 @@ const NATURES: ReadonlyArray<{
   {
     valeur: 'ecole',
     libelle: 'École',
-    aide: 'École : formation hors établissement (apprentis)',
+    aide: "École : jour hors de l'hôtel, compté comme du temps de travail",
     texte:
-      "Formation hors établissement : comptée comme du travail, ce n'est pas une absence.",
+      "Jour hors de l'hôtel, compté comme du temps de travail. Ce n'est pas une absence.",
   },
 ]
 
@@ -290,7 +290,7 @@ export function HorairesPage() {
             <div id="titre-motifs">
               <EnTeteSection
                 titre="Absences et école"
-                texte="Chaque motif a sa couleur et se pose sur une case du planning comme un horaire. L'école est la formation hors établissement des apprentis et des stagiaires, ce n'est pas une absence."
+                texte="Chaque motif a sa couleur et se pose sur une case du planning comme un horaire. Pour les apprentis et les stagiaires, l'école est un jour hors de l'hôtel, compté comme du temps de travail. Ce n'est pas une absence."
                 actions={
                   modifiable && (
                     <Button

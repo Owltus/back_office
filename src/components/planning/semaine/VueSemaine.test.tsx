@@ -181,9 +181,11 @@ describe('VueSemaine', () => {
     const n = SEMAINE.a_pourvoir.reduce((t, x) => t + x.manquant, 0)
     expect(
       await screen.findByText(
-        n
-          ? `Planning généré en 12 ms · ${n} place(s) à pourvoir`
-          : 'Planning complet généré en 12 ms',
+        n === 0
+          ? 'Planning complet généré.'
+          : n === 1
+            ? 'Planning généré. 1 place reste à pourvoir.'
+            : `Planning généré. ${n} places restent à pourvoir.`,
       ),
     ).toBeTruthy()
   })

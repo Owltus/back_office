@@ -450,7 +450,7 @@ export function EditeurShift({
               },
               {
                 titre: "Ou l'école",
-                aide: 'formation hors établissement',
+                aide: "jour hors de l'hôtel, compté comme du temps de travail",
                 liste: motifs.filter(estEcole),
               },
             ]
@@ -606,7 +606,7 @@ export function EditeurShift({
             <h3 className="text-sm font-semibold">Qui et quand</h3>
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-1">
-                <Label htmlFor="planning-qui">Membre du staff</Label>
+                <Label htmlFor="planning-qui">Personne</Label>
                 <Select
                   value={String(b.salarie_id)}
                   onValueChange={(v) => changerQui({ salarie_id: Number(v) })}

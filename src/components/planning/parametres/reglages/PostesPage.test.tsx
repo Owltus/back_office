@@ -112,7 +112,11 @@ describe('Postes', () => {
     monter(<PostesPage />)
     const r = carte('Réception')
     fireEvent.click(r.getByRole('button', { name: 'N Nuit' }))
-    fireEvent.click(r.getByRole('switch', { name: 'Poste à part' }))
+    fireEvent.click(
+      r.getByRole('switch', {
+        name: "Ranger à part dans la liste de l'équipe",
+      }),
+    )
     fireEvent.click(
       r.getByRole('switch', { name: 'Compte dans la présence matin et soir' }),
     )

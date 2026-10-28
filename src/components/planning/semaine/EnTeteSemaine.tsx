@@ -51,7 +51,7 @@ export const AIDE_GESTES = [
   'Glisser un shift : le déplacer (Alt maintenu : le dupliquer)',
   "Clic droit sur une case : changer l'horaire, valider, journée étoile",
   'Clic sur un shift : tout modifier',
-  'Semi-auto : posez et validez quelques shifts, Compléter fait le reste',
+  'Posez et validez quelques shifts : Compléter fait le reste',
 ]
 
 export interface ActionsEnTete {
@@ -320,7 +320,7 @@ export function EnTeteSemaine({
             <Tip
               label={
                 raisonCompleter ??
-                'Semi-auto : recalcule les propositions (nouveau tirage à chaque clic) ; le validé ne bouge pas'
+                'Recalcule les propositions (nouveau tirage à chaque clic) ; le validé ne bouge pas'
               }
             >
               {raisonCompleter ? (

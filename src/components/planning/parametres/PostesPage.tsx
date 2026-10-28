@@ -1,7 +1,7 @@
 /*
  * Paramètres du Planning : les postes (prototype `PostesPage.tsx`, spec §5.1).
- * Une carte par poste : nom, catégorie réglementaire (qui fixe la durée
- * maximale d'un service, convention HCR), couleur, poste à part, codes
+ * Une carte par poste : nom, catégorie HCR (qui fixe la durée maximale
+ * d'un service, convention HCR), couleur, rangement à part, codes
  * horaires possibles (aucun = tous). Enregistrement explicite par carte ;
  * un nouveau poste est une carte brouillon, créée en base à Enregistrer.
  * Seule la gestion modifie ; lecture et écriture voient les réglages.
@@ -121,7 +121,7 @@ export function PostesPage() {
         <>
           <EnTeteSection
             titre="Les postes de l'hôtel"
-            texte="Un clic sur un poste ouvre son réglage : nom, catégorie réglementaire (elle fixe la durée maximale d'un service selon la convention HCR), couleur et horaires possibles."
+            texte="Un clic sur un poste ouvre son réglage : nom, catégorie HCR (elle fixe la durée maximale d'un service selon la convention HCR), couleur et horaires possibles."
           />
           <div className="overflow-hidden rounded-xl border bg-card">
             <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b bg-muted/40 px-3 py-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
@@ -142,7 +142,7 @@ export function PostesPage() {
                   libelle={
                     <span className="flex min-w-0 items-center gap-2">
                       <span className="truncate font-medium">{p.nom}</span>
-                      {p.a_part && <Etiquette>à part</Etiquette>}
+                      {p.a_part && <Etiquette>rangé à part</Etiquette>}
                       {p.presence && <Etiquette>présence</Etiquette>}
                     </span>
                   }
@@ -170,7 +170,7 @@ export function PostesPage() {
                     : `Poste ${posteOuvert?.nom ?? ''}`}
                 </SheetTitle>
                 <SheetDescription>
-                  Nom, catégorie, couleur et horaires possibles
+                  Nom, catégorie HCR, couleur et horaires possibles
                 </SheetDescription>
               </SheetHeader>
               <div className="p-4">
@@ -315,7 +315,7 @@ function CartePoste({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <Label>Catégorie réglementaire</Label>
+        <Label>Catégorie HCR</Label>
         <Select
           value={p.categorie}
           disabled={!modifiable}
@@ -323,10 +323,7 @@ function CartePoste({
             changer({ categorie: v as SaisiePoste['categorie'] })
           }
         >
-          <SelectTrigger
-            className="w-full"
-            aria-label="Catégorie réglementaire"
-          >
+          <SelectTrigger className="w-full" aria-label="Catégorie HCR">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -357,13 +354,18 @@ function CartePoste({
           checked={p.a_part}
           disabled={!modifiable}
           onCheckedChange={(a_part) => changer({ a_part })}
-          aria-label="Poste à part"
+          aria-label="Ranger à part dans la liste de l'équipe"
           className="mt-0.5"
         />
-        <span className="text-muted-foreground">
-          {p.a_part
-            ? 'Poste à part : proposé seulement dans la fiche de qui le tient.'
-            : 'Poste courant : proposé à toute la catégorie.'}
+        <span className="flex flex-col gap-0.5">
+          <span className="font-medium">
+            Ranger à part dans la liste de l'équipe
+          </span>
+          <span className="text-xs text-muted-foreground">
+            Dans la fiche d'une personne, ce poste est proposé sous les postes
+            courants, avec la direction, la supervision ou la technique. Le
+            planning automatique le traite comme les autres.
+          </span>
         </span>
       </label>
 
@@ -466,7 +468,7 @@ function CartePoste({
         open={suppression}
         onOpenChange={setSuppression}
         title={`Supprimer le poste ${nomAffiche} ?`}
-        description="Ses besoins et ses shifts sont supprimés avec lui, et il est retiré des fiches et des catégories. Les plannings réalisés (semaines verrouillées) empêchent la suppression."
+        description="Ses besoins et ses shifts sont supprimés avec lui, et il est retiré des fiches et des groupes. Les plannings réalisés (semaines verrouillées) empêchent la suppression."
         confirmLabel="Supprimer"
         destructive
         onConfirm={() => void supprimer()}

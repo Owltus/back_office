@@ -95,14 +95,14 @@ export function EquipePage() {
           actions={
             <>
               <ButtonGroup>
-                <Tip label="Catégories du staff : rangement et postes autorisés">
+                <Tip label="Groupes de l'équipe : rangement et postes autorisés">
                   <Button
                     variant="outline"
                     size="sm"
                     disabled={!ref.data}
                     onClick={() => setCategories(true)}
                   >
-                    <Layers /> Catégories
+                    <Layers /> Groupes
                   </Button>
                 </Tip>
               </ButtonGroup>

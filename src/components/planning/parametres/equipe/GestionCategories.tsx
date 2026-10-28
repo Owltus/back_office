@@ -1,5 +1,5 @@
 /*
- * Catégories du staff, en tiroir (prototype `GestionCategories`) : ajouter,
+ * Groupes de l'équipe (table des catégories), en tiroir (prototype `GestionCategories`) : ajouter,
  * renommer, ranger, supprimer, et choisir les postes que chacune peut tenir.
  * Lisible par tous, modifiable par la gestion seule.
  *
@@ -104,17 +104,14 @@ export function GestionCategories({
     if (!propre || propre === g.nom) return
     void action(
       () => enregistrerGroupe(valeurs(g, { nom: propre }), g.id),
-      'Catégorie non renommée',
+      'Groupe non renommé',
     )
   }
 
   const deplacer = (i: number, sens: -1 | 1) => {
     const ids = liste.map((g) => g.id)
     ;[ids[i], ids[i + sens]] = [ids[i + sens], ids[i]]
-    void action(
-      () => ordonnerGroupes(ids),
-      'Ordre des catégories non enregistré',
-    )
+    void action(() => ordonnerGroupes(ids), 'Ordre des groupes non enregistré')
   }
 
   const basculerPoste = async (g: Groupe, p: Poste) => {
@@ -126,7 +123,7 @@ export function GestionCategories({
     if (perte.competences > 0) {
       const ok = await confirm({
         title: `Restreindre les postes de ${g.nom} ?`,
-        description: `${perte.personnes} personne${perte.personnes > 1 ? 's' : ''} de cette catégorie perd${perte.personnes > 1 ? 'ent' : ''} ${perte.competences} compétence${perte.competences > 1 ? 's' : ''} sur des postes qu'elle ne permettra plus.`,
+        description: `${perte.personnes} personne${perte.personnes > 1 ? 's' : ''} de ce groupe perd${perte.personnes > 1 ? 'ent' : ''} ${perte.competences} compétence${perte.competences > 1 ? 's' : ''} sur des postes qu'il ne permettra plus.`,
         confirmLabel: 'Restreindre',
         destructive: true,
       })
@@ -134,25 +131,23 @@ export function GestionCategories({
     }
     void action(
       () => enregistrerGroupe(valeurs(g, { postes_autorises: permis }), g.id),
-      'Postes de la catégorie non enregistrés',
+      'Postes du groupe non enregistrés',
     )
   }
 
   const supprimer = async (g: Groupe) => {
     const membres = salaries.filter((s) => s.groupe_id === g.id).length
     const ok = await confirm({
-      title: `Supprimer la catégorie ${g.nom} ?`,
+      title: `Supprimer le groupe ${g.nom} ?`,
       description: membres
-        ? `Ses ${membres} membre${membres > 1 ? 's' : ''} passe${membres > 1 ? 'nt' : ''} sans catégorie. Leur fiche est gardée.`
-        : 'Elle ne compte aucun membre.',
+        ? `Ses ${membres} membre${membres > 1 ? 's' : ''} passe${membres > 1 ? 'nt' : ''} sans groupe. Leur fiche est gardée.`
+        : 'Il ne compte aucun membre.',
       confirmLabel: 'Supprimer',
       destructive: true,
     })
     if (!ok) return
-    if (await action(() => supprimerGroupe(g.id), 'Catégorie non supprimée')) {
-      notifier(
-        `Catégorie ${g.nom} supprimée : ses membres passent sans catégorie`,
-      )
+    if (await action(() => supprimerGroupe(g.id), 'Groupe non supprimé')) {
+      notifier(`Groupe ${g.nom} supprimé : ses membres passent sans groupe`)
     }
   }
 
@@ -162,13 +157,13 @@ export function GestionCategories({
       await action(
         () =>
           enregistrerGroupe(
-            { nom: 'Nouvelle catégorie', ordre, postes_autorises: [] },
+            { nom: 'Nouveau groupe', ordre, postes_autorises: [] },
             null,
           ),
-        'Catégorie non ajoutée',
+        'Groupe non ajouté',
       )
     ) {
-      notifier('Catégorie ajoutée en dernier : renommez-la')
+      notifier('Groupe ajouté en dernier : renommez-le')
     }
   }
 
@@ -180,7 +175,7 @@ export function GestionCategories({
       >
         <SheetHeader className="flex-row items-start justify-between gap-3 border-b">
           <div className="flex flex-col gap-1">
-            <SheetTitle>Catégories du staff</SheetTitle>
+            <SheetTitle>Groupes de l'équipe</SheetTitle>
             <SheetDescription>
               Rangement du planning et de l'équipe, de haut en bas
               {!gerer && (
@@ -201,15 +196,15 @@ export function GestionCategories({
         </SheetHeader>
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
           <p className="text-xs text-muted-foreground">
-            Une catégorie range les personnes et dit quels postes elles peuvent
+            Un groupe range les personnes et dit quels postes elles peuvent
             tenir : la fiche ne propose que ceux-là (un hôtelier ne tient pas la
-            direction). Aucun poste choisi : tous sont possibles. La catégorie
-            de chacun se choisit dans sa fiche. Retirer un poste à une catégorie
-            le retire aussi de la fiche de ses membres.
+            direction). Aucun poste choisi : tous sont possibles. Le groupe de
+            chacun se choisit dans sa fiche. Retirer un poste à un groupe le
+            retire aussi de la fiche de ses membres.
           </p>
           {liste.length === 0 && (
             <p className="text-sm text-muted-foreground">
-              Aucune catégorie pour l'instant.
+              Aucun groupe pour l'instant.
             </p>
           )}
           <ul className="flex flex-col gap-3">
@@ -226,7 +221,7 @@ export function GestionCategories({
                     <Input
                       key={`${g.id}-${g.nom}`}
                       defaultValue={g.nom}
-                      aria-label={`Nom de la catégorie ${g.nom}`}
+                      aria-label={`Nom du groupe ${g.nom}`}
                       disabled={!gerer}
                       maxLength={80}
                       className="h-8"
@@ -262,7 +257,7 @@ export function GestionCategories({
                             <ArrowDown />
                           </Button>
                         </Tip>
-                        <Tip label="Supprimer la catégorie">
+                        <Tip label="Supprimer le groupe">
                           <Button
                             variant="ghost"
                             size="icon-sm"
@@ -321,7 +316,7 @@ export function GestionCategories({
                 disabled={enCours}
                 onClick={() => void ajouter()}
               >
-                <Plus /> Ajouter une catégorie
+                <Plus /> Ajouter un groupe
               </Button>
             </div>
           )}

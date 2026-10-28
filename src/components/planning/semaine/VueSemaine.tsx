@@ -41,6 +41,7 @@ import {
 import { useNotifier } from '#/components/planning/Messages.tsx'
 import { FicheSalarie } from '#/components/planning/parametres/FicheSalarie.tsx'
 import {
+  messageGeneration,
   nomComplet,
   numeroSemaine,
   parGroupe,
@@ -371,12 +372,7 @@ export function VueSemaine({
         try {
           const r = await generer(lundi, options)
           const n = trous(r.semaine)
-          notifier(
-            n
-              ? `Planning généré en ${r.dureeMs} ms · ${n} place(s) à pourvoir`
-              : `Planning complet généré en ${r.dureeMs} ms`,
-            n ? 'attention' : 'info',
-          )
+          notifier(messageGeneration(n), n ? 'attention' : 'info')
         } catch (err) {
           notifier(messageErreur(err, 'Génération impossible'), 'danger')
         }

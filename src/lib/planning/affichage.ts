@@ -23,7 +23,10 @@ export const NIVEAUX: Record<Niveau, { libelle: string; aide: string }> = {
     libelle: 'Dépannage',
     aide: 'Peut le tenir seul, à éviter si possible',
   },
-  soutien: { libelle: 'Soutien', aide: 'En renfort uniquement, jamais seul' },
+  soutien: {
+    libelle: 'Soutien',
+    aide: 'Apprenti ou stagiaire : ne compte pas seul',
+  },
 }
 
 /** « 7h45 », « 8h » (format court des cartes et du bilan). */
@@ -190,7 +193,7 @@ export function metier(
   return [...new Set(noms)].join(' · ')
 }
 
-/** Range le staff par catégorie (ordre choisi), puis « Sans catégorie ». */
+/** Range le staff par groupe (ordre choisi), puis « Sans groupe ». */
 export function parGroupe<T extends Pick<Salarie, 'groupe_id'>>(
   salaries: T[],
   groupes: Groupe[],
@@ -206,12 +209,25 @@ export function parGroupe<T extends Pick<Salarie, 'groupe_id'>>(
       })),
     {
       id: 0,
-      nom: 'Sans catégorie',
+      nom: 'Sans groupe',
       membres: salaries.filter(
         (s) => s.groupe_id === null || !connus.has(s.groupe_id),
       ),
     },
   ].filter((g) => g.membres.length > 0)
+}
+
+/** Message de fin de génération. « Complet » seulement s'il ne reste aucune
+ * place à pourvoir : la génération est une meilleure tentative, jamais une
+ * garantie. `quoi` : « Planning » (semaine) ou « Mois ». */
+export function messageGeneration(
+  aPourvoir: number,
+  quoi = 'Planning',
+): string {
+  if (aPourvoir <= 0) return `${quoi} complet généré.`
+  return aPourvoir === 1
+    ? `${quoi} généré. 1 place reste à pourvoir.`
+    : `${quoi} généré. ${aPourvoir} places restent à pourvoir.`
 }
 
 /** Un jour sans shift ni absence est un repos (pas « non attribué ») quand

@@ -99,7 +99,7 @@ export function erreursPoste(p: SaisiePoste): string[] {
   const erreurs: string[] = []
   controlerNom(p.nom, 'au poste', erreurs)
   if (!CATEGORIES.some((c) => c.code === p.categorie)) {
-    erreurs.push('Choisissez la catégorie réglementaire.')
+    erreurs.push('Choisissez la catégorie HCR.')
   }
   controlerCouleur(p.couleur, erreurs)
   return erreurs

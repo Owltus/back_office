@@ -83,7 +83,7 @@ beforeEach(() => {
 
 async function ouvrirCategories() {
   await screen.findByRole('region', { name: 'Hôteliers' })
-  fireEvent.click(screen.getByRole('button', { name: /Catégories/ }))
+  fireEvent.click(screen.getByRole('button', { name: /Groupes/ }))
 }
 
 const rendre = () =>
@@ -133,20 +133,18 @@ describe('EquipePage', () => {
     expect(
       screen.getByRole('button', { name: /Ajouter/ }).hasAttribute('disabled'),
     ).toBe(true)
-    fireEvent.click(screen.getByRole('button', { name: /Catégories/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Groupes/ }))
     expect(
-      await screen.findByRole('heading', { name: 'Catégories du staff' }),
+      await screen.findByRole('heading', { name: "Groupes de l'équipe" }),
     ).toBeTruthy()
     expect(
       screen.queryByRole('button', { name: /Supprimer Direction/ }),
     ).toBeNull()
     expect(
-      screen.queryByRole('button', { name: /Ajouter une catégorie/ }),
+      screen.queryByRole('button', { name: /Ajouter un groupe/ }),
     ).toBeNull()
     expect(
-      screen
-        .getByLabelText('Nom de la catégorie Direction')
-        .hasAttribute('disabled'),
+      screen.getByLabelText('Nom du groupe Direction').hasAttribute('disabled'),
     ).toBe(true)
     // Ouvrir une fiche reste possible.
     fireEvent.click(screen.getByRole('button', { name: 'Terminé' }))
@@ -176,7 +174,7 @@ describe('EquipePage', () => {
       await screen.findByRole('button', { name: 'Supprimer Apprentis' }),
     )
     expect(
-      await screen.findByText(/Ses 2 membres passent sans catégorie/),
+      await screen.findByText(/Ses 2 membres passent sans groupe/),
     ).toBeTruthy()
     expect(service.supprimerGroupe).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }))
@@ -194,9 +192,7 @@ describe('EquipePage', () => {
       within(postes).getByRole('button', { name: /Veille de nuit/ }),
     )
     expect(
-      await screen.findByText(
-        /2 personnes de cette catégorie perdent 2 compétences/,
-      ),
+      await screen.findByText(/2 personnes de ce groupe perdent 2 compétences/),
     ).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Restreindre' }))
     await waitFor(() =>
@@ -211,11 +207,11 @@ describe('EquipePage', () => {
     rendre()
     await ouvrirCategories()
     fireEvent.click(
-      await screen.findByRole('button', { name: /Ajouter une catégorie/ }),
+      await screen.findByRole('button', { name: /Ajouter un groupe/ }),
     )
     await waitFor(() =>
       expect(service.enregistrerGroupe).toHaveBeenCalledWith(
-        { nom: 'Nouvelle catégorie', ordre: 4, postes_autorises: [] },
+        { nom: 'Nouveau groupe', ordre: 4, postes_autorises: [] },
         null,
       ),
     )

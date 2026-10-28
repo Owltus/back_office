@@ -189,7 +189,7 @@ function EtatFiche({
   return (
     <>
       <SheetHeader className="flex-row items-start justify-between border-b">
-        <SheetTitle>Fiche du staff</SheetTitle>
+        <SheetTitle>Fiche de la personne</SheetTitle>
         <BoutonFermer onFermer={onFermer} />
       </SheetHeader>
       <div className="flex flex-col gap-3 p-4">
@@ -497,7 +497,9 @@ function CorpsFiche({
 
   const zone = useRef<HTMLDivElement>(null)
   const titre =
-    b.id !== null ? nomBrouillon(initial) || 'Fiche du staff' : 'Nouveau membre'
+    b.id !== null
+      ? nomBrouillon(initial) || 'Fiche de la personne'
+      : 'Nouveau membre'
   const proprietes = { b, maj, referentiel, disabled: desactive }
 
   return (
@@ -506,7 +508,7 @@ function CorpsFiche({
         <div className="flex min-w-0 flex-col gap-1">
           <SheetTitle className="truncate">{titre}</SheetTitle>
           <SheetDescription>
-            {groupe?.nom ?? 'Fiche du staff'}
+            {groupe?.nom ?? 'Fiche de la personne'}
             {!gerer && (
               <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
                 Lecture seule

@@ -49,7 +49,7 @@ export function texteCarte(c: ContenuCarte): string[] {
     `${c.horaire ? `${c.horaire.code} · ${c.horaire.nom}` : 'Horaire spécifique'} · ${heureAffichee(c.debut)}-${heureAffichee(c.fin)}`,
     c.poste?.nom,
     c.etoile && 'Journée étoile : une heure de moins',
-    c.role === 'soutien' && 'En soutien (jamais seul)',
+    c.role === 'soutien' && 'En soutien (ne compte pas seul)',
     c.role === 'occasionnel' && 'En dépannage sur ce poste',
     c.epinglee
       ? 'Validé : gardé lors des générations'

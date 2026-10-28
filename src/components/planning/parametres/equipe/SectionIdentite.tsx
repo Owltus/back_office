@@ -74,7 +74,7 @@ export function SectionIdentite({
   const notifier = useNotifier()
   const { groupes, postes } = referentiel
   const optionsGroupe = [
-    { valeur: 'aucune', libelle: 'Sans catégorie' },
+    { valeur: 'aucune', libelle: 'Sans groupe' },
     ...groupes.map((g) => ({ valeur: String(g.id), libelle: g.nom })),
   ]
   const [evolution, setEvolution] = useState<Evolution | null>(null)
@@ -85,7 +85,7 @@ export function SectionIdentite({
     maj(() => r.brouillon)
     if (r.perdues) {
       notifier(
-        `${r.perdues} compétence${r.perdues > 1 ? 's' : ''} retirée${r.perdues > 1 ? 's' : ''} : poste non prévu pour cette catégorie`,
+        `${r.perdues} compétence${r.perdues > 1 ? 's' : ''} retirée${r.perdues > 1 ? 's' : ''} : poste non prévu pour ce groupe`,
         'attention',
       )
     }
@@ -123,7 +123,7 @@ export function SectionIdentite({
           )}
         </Champ>
         <Liste
-          label="Catégorie"
+          label="Groupe"
           valeur={b.groupe_id === null ? 'aucune' : String(b.groupe_id)}
           options={optionsGroupe}
           onChange={choisirCategorie}
@@ -289,14 +289,14 @@ function BlocEvolution({
           }
         />
         <Liste
-          label="Catégorie du nouveau contrat"
+          label="Groupe du nouveau contrat"
           valeur={
             evolution.groupe_id === null
               ? 'aucune'
               : String(evolution.groupe_id)
           }
           options={[
-            { valeur: 'aucune', libelle: 'Sans catégorie' },
+            { valeur: 'aucune', libelle: 'Sans groupe' },
             ...referentiel.groupes.map((g) => ({
               valeur: String(g.id),
               libelle: g.nom,

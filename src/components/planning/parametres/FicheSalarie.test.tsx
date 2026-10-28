@@ -248,7 +248,7 @@ describe('FicheSalarie', () => {
         name: 'Niveau sur Responsable technique',
       }),
     ).toBeTruthy()
-    choisir('Catégorie', 'Hôteliers')
+    choisir('Groupe', 'Hôteliers')
     expect(
       screen.queryByRole('radiogroup', {
         name: 'Niveau sur Responsable technique',
