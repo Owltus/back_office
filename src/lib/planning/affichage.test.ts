@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   messageGeneration,
+  nomsCourts,
   parGroupe,
   resumeEquite,
 } from '#/lib/planning/affichage.ts'
@@ -83,5 +84,28 @@ describe('resumeEquite', () => {
     ]
     const semaines = [semaine(shift(1, 5), shift(2, 0), shift(3, 6))]
     expect(resumeEquite(semaines, salaries, postes)).toBe('')
+  })
+})
+
+describe('nomsCourts', () => {
+  const p = (id: number, prenom: string, nom: string) => ({ id, prenom, nom })
+  it('le prénom seul, sauf quand il est partagé', () => {
+    const n = nomsCourts([
+      p(1, 'Léa', 'Bernard'),
+      p(2, 'léa ', 'Martin'),
+      p(3, 'Paul', 'Durand'),
+    ])
+    expect([...n.values()]).toEqual(['Léa B.', 'léa M.', 'Paul'])
+  })
+  it("l'initiale ne suffit pas : le nom entier", () => {
+    const n = nomsCourts([
+      p(1, 'Léa', 'Bernard'),
+      p(2, 'Léa', 'Blanc'),
+      p(3, 'Léa', 'Martin'),
+    ])
+    expect([...n.values()]).toEqual(['Léa Bernard', 'Léa Blanc', 'Léa M.'])
+  })
+  it('sans nom : le prénom', () => {
+    expect(nomsCourts([p(1, 'Léa', ''), p(2, 'Léa', 'Roy')]).get(1)).toBe('Léa')
   })
 })

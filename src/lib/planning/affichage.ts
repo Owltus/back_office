@@ -65,6 +65,42 @@ export function nomComplet(s: Pick<Salarie, 'prenom' | 'nom'>): string {
 }
 
 /**
+ * Le nom court de chaque personne : son prénom, suivi de l'initiale du nom
+ * quand un autre a le même prénom (« Léa B. », « Léa M. »), et du nom entier
+ * si l'initiale ne suffit pas. Les listes qui ne montrent que les prénoms
+ * (points d'attention, personnes libres) restent ainsi lisibles.
+ */
+export function nomsCourts(
+  salaries: ReadonlyArray<Pick<Salarie, 'id' | 'prenom' | 'nom'>>,
+): Map<number, string> {
+  const cle = (t: string) => t.trim().toLocaleLowerCase('fr')
+  const compter = (cles: string[]) => {
+    const n = new Map<string, number>()
+    for (const c of cles) n.set(c, (n.get(c) ?? 0) + 1)
+    return n
+  }
+  const parPrenom = compter(salaries.map((s) => cle(s.prenom)))
+  const avecInitiale = (s: Pick<Salarie, 'prenom' | 'nom'>) => {
+    const i = s.nom.trim().charAt(0).toLocaleUpperCase('fr')
+    return i ? `${s.prenom.trim()} ${i}.` : s.prenom.trim()
+  }
+  const doubles = salaries.filter(
+    (s) => (parPrenom.get(cle(s.prenom)) ?? 0) > 1,
+  )
+  const parInitiale = compter(doubles.map((s) => cle(avecInitiale(s))))
+  return new Map(
+    salaries.map((s) => {
+      if ((parPrenom.get(cle(s.prenom)) ?? 0) < 2) return [s.id, s.prenom]
+      const court = avecInitiale(s)
+      return [
+        s.id,
+        (parInitiale.get(cle(court)) ?? 0) < 2 ? court : nomComplet(s),
+      ]
+    }),
+  )
+}
+
+/**
  * Couleur d'un shift à l'écran : celle de son POSTE quand le poste ne compte
  * pas dans la présence (direction, adjointes, supervision, technique, nuit),
  * sinon celle de son code (hôteliers : jaune le matin, vert le soir).

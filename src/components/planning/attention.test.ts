@@ -26,6 +26,7 @@ const salarie = (
   ({
     id,
     prenom,
+    nom: `Nom${id}`,
     type_contrat,
     competences: [{ poste_id: 9, niveau }],
   }) as unknown as Salarie
@@ -335,5 +336,21 @@ describe('places regroupées (même poste, même code, plusieurs jours)', () => 
     expect(joursDesPlaces(['2026-11-07', '2026-11-10'])).toBe(
       'samedi 7 et mardi 10',
     )
+  })
+})
+
+describe('noms : deux personnes au même prénom restent distinctes', () => {
+  it("l'initiale du nom s'ajoute, partout dans le panneau", () => {
+    const deux = [
+      { ...SALARIES[0], nom: 'Bernard' },
+      { ...SALARIES[2], id: 3, prenom: 'Léa', nom: 'Martin' },
+    ] as Salarie[]
+    const p = pointsAttention([SEM], deux, POSTES)
+    const noms = p.aPourvoir.flatMap((j) =>
+      j.shifts.flatMap((t) => t.personnes.map((x) => x.nom)),
+    )
+    expect(noms).toContain('Léa B.')
+    expect(noms).toContain('Léa M.')
+    expect(noms).not.toContain('Léa')
   })
 })

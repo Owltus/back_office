@@ -10,6 +10,7 @@
  * tiennent sur une ligne.
  */
 
+import { nomsCourts } from '#/lib/planning/affichage.ts'
 import { estPossible, raisonsClaires } from '#/lib/planning/raisonsPlaces.ts'
 import type { RaisonClaire } from '#/lib/planning/raisonsPlaces.ts'
 import type { SemaineOut } from '#/lib/planning/semaine.ts'
@@ -129,7 +130,9 @@ export function pointsAttention(
 ): PointsAttention {
   const garder = portee.jour
   const parId = new Map(salaries.map((s) => [s.id, s]))
-  const nom = (id: number) => parId.get(id)?.prenom ?? 'Inconnu'
+  // Prénom, avec l'initiale du nom quand deux personnes le partagent.
+  const courts = nomsCourts(salaries)
+  const nom = (id: number) => courts.get(id) ?? 'Inconnu'
 
   const shifts: ShiftAPourvoir[] = []
   const presence: EcartPresence[] = []
@@ -222,9 +225,10 @@ export function pointsAttention(
         ;(a.nature === 'loi' ? loi : autre).push(m)
       }
     }
-    if (loi.length) infractions.push({ id: x.id, nom: x.prenom, messages: loi })
+    if (loi.length)
+      infractions.push({ id: x.id, nom: nom(x.id), messages: loi })
     if (autre.length)
-      aRegarder.push({ id: x.id, nom: x.prenom, messages: autre })
+      aRegarder.push({ id: x.id, nom: nom(x.id), messages: autre })
   }
 
   const compte = (l: PointPersonne[]) =>
