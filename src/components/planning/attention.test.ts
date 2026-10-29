@@ -154,7 +154,7 @@ describe('points d’attention', () => {
     expect(p.infractions.map((x) => x.messages[0].texte)).toEqual([
       'repos de 11 h non tenu',
     ])
-    expect(p.aVerifier.map((x) => x.messages[0].texte)).toEqual([
+    expect(p.aRegarder.map((x) => x.messages[0].texte)).toEqual([
       'il manque 7 h',
     ])
     // Le total compte exactement ce qui est listé : 2 + 1 + 1 + 1.
@@ -166,7 +166,7 @@ describe('points d’attention', () => {
       resumePoints(pointsAttention([semaine('2026-11-02')], SALARIES, POSTES)),
     ).toBe('Tout est en ordre.')
     expect(resumePoints(pointsAttention([SEM], SALARIES, POSTES))).toBe(
-      '5 points : 1 infraction, 2 shifts à pourvoir, 1 consigne de présence, 1 à vérifier.',
+      '5 points : 1 infraction, 2 shifts à pourvoir, 1 consigne de présence, 1 à regarder.',
     )
   })
 })
@@ -180,7 +180,7 @@ describe('portée : un écran ne montre que ce qui le concerne', () => {
     expect(p.presence).toEqual([])
     // Semaine du jeudi 29 octobre : ses alertes sont d'octobre (Johanna).
     expect(p.infractions).toEqual([])
-    expect(p.aVerifier).toEqual([])
+    expect(p.aRegarder).toEqual([])
     expect(p.total).toBe(1)
   })
 

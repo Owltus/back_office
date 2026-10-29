@@ -255,8 +255,8 @@ export function PanneauAlertes({
             ))}
           </Famille>
 
-          <Famille titre="À vérifier" nombre={autres ? compte(p.aVerifier) : 0}>
-            <Personnes liste={p.aVerifier} />
+          <Famille titre="À regarder" nombre={autres ? compte(p.aRegarder) : 0}>
+            <Personnes liste={p.aRegarder} />
           </Famille>
         </div>
       </SheetContent>

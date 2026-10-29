@@ -85,7 +85,7 @@ export interface PointsAttention {
   infractions: PointPersonne[]
   aPourvoir: Array<{ date: string; shifts: ShiftAPourvoir[] }>
   presence: EcartPresence[]
-  aVerifier: PointPersonne[]
+  aRegarder: PointPersonne[]
 }
 
 /** Ce qu'un écran montre : les JOURS retenus (places, présence) et les
@@ -211,7 +211,7 @@ export function pointsAttention(
   const retenues = semaines.filter((s) => portee.semaine(s.lundi))
   const plusieurs = retenues.length > 1
   const infractions: PointPersonne[] = []
-  const aVerifier: PointPersonne[] = []
+  const aRegarder: PointPersonne[] = []
   for (const x of salaries) {
     const loi: PointPersonne['messages'] = []
     const autre: PointPersonne['messages'] = []
@@ -224,18 +224,18 @@ export function pointsAttention(
     }
     if (loi.length) infractions.push({ id: x.id, nom: x.prenom, messages: loi })
     if (autre.length)
-      aVerifier.push({ id: x.id, nom: x.prenom, messages: autre })
+      aRegarder.push({ id: x.id, nom: x.prenom, messages: autre })
   }
 
   const compte = (l: PointPersonne[]) =>
     l.reduce((n, p) => n + p.messages.length, 0)
   return {
     total:
-      compte(infractions) + shifts.length + presence.length + compte(aVerifier),
+      compte(infractions) + shifts.length + presence.length + compte(aRegarder),
     infractions,
     aPourvoir,
     presence,
-    aVerifier,
+    aRegarder,
   }
 }
 
@@ -251,8 +251,8 @@ export function resumePoints(p: PointsAttention): string {
   if (shifts) morceaux.push(`${pluriel(shifts, 'shift')} à pourvoir`)
   if (p.presence.length)
     morceaux.push(pluriel(p.presence.length, 'consigne') + ' de présence')
-  const autres = p.aVerifier.reduce((n, x) => n + x.messages.length, 0)
-  if (autres) morceaux.push(`${autres} à vérifier`)
+  const autres = p.aRegarder.reduce((n, x) => n + x.messages.length, 0)
+  if (autres) morceaux.push(`${autres} à regarder`)
   return `${pluriel(p.total, 'point')} : ${morceaux.join(', ')}.`
 }
 
