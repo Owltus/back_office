@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 
 import {
   aDesBloquants,
+  besoinsDemandes,
   grouperPoints,
   listeJours,
+  ordonnerPoints,
   verifierReglages,
 } from '#/lib/planning/coherence.ts'
 import type { PointReglage } from '#/lib/planning/coherence.ts'
@@ -564,5 +566,511 @@ describe('listeJours', () => {
     expect(listeJours([2])).toBe('mercredi')
     expect(listeJours([1, 0, 1])).toBe('lundi et mardi')
     expect(listeJours([4, 0, 2])).toBe('lundi, mercredi et vendredi')
+  })
+})
+
+/*
+ * Étape 12 : points que le test de mutation laissait passer. Chaque test
+ * écrit le point ENTIER attendu (gravité, écran, texte, lien), ou le cas
+ * limite qu'une condition doit trancher.
+ */
+describe('verifierReglages, points complets (test de mutation)', () => {
+  const point = (
+    id: string,
+    ecran: PointReglage['ecran'],
+    texte: string,
+    lien: PointReglage['lien'],
+    gravite: PointReglage['gravite'] = 'a-voir',
+  ): PointReglage => ({ id, gravite, ecran, texte, lien })
+  const bloquant = (r: Referentiel) =>
+    verifierReglages(r).find((x) => x.gravite === 'bloquant')
+
+  it('bloquants : textes exacts', () => {
+    const r: Referentiel = {
+      ...propre(),
+      horaires: [],
+      postes: [],
+      salaries: [],
+      besoins: [],
+      consignes: [],
+    }
+    expect(verifierReglages(r)).toEqual([
+      point(
+        'bloquant:horaires',
+        'horaires',
+        "Aucun code horaire. Créez d'abord les horaires de l'hôtel.",
+        { page: '/planning/horaires' },
+        'bloquant',
+      ),
+      point(
+        'bloquant:postes',
+        'postes',
+        "Aucun poste. Créez les postes de l'hôtel.",
+        { page: '/planning/postes' },
+        'bloquant',
+      ),
+    ])
+    const e = propre()
+    for (const x of e.salaries) x.competences = []
+    e.postes[0].presence = false
+    expect(verifierReglages(e)[0]).toEqual(
+      point(
+        'bloquant:equipe',
+        'equipe',
+        "Personne n'est placé sur un poste. Indiquez dans chaque fiche les postes tenus.",
+        { page: '/planning/equipe' },
+        'bloquant',
+      ),
+    )
+  })
+
+  it('besoins écartés à zéro personne nécessaire ou sur un poste supprimé : aucun besoin', () => {
+    const r = propre()
+    r.consignes = []
+    r.besoins = [
+      besoin(1, 0, null, {
+        debut: '06:00',
+        fin: '20:00',
+        effectif: 0,
+        renfort: 1,
+      }),
+      besoin(9, 1, null, { debut: '06:00', fin: '20:00' }),
+    ]
+    expect(ids(verifierReglages(r))).toEqual([
+      'bloquant:besoins',
+      'besoin-duree:1:06:00-20:00',
+    ])
+  })
+
+  it('besoins écartés par leur durée : ne conviennent plus', () => {
+    const r = propre()
+    r.consignes = []
+    r.besoins = [
+      besoin(1, 0, null, { debut: '06:00', fin: '20:00' }),
+      besoin(1, 1, null, { debut: '06:00', fin: '20:00' }),
+    ]
+    expect(bloquant(r)?.texte).toBe(
+      'Les 2 besoins sont ignorés : leurs horaires ne conviennent plus à leur poste. Corrigez les besoins ou les horaires du poste.',
+    )
+    r.besoins = [besoin(1, 0, null, { debut: '06:00', fin: '20:00' })]
+    expect(bloquant(r)?.texte).toBe(
+      'Le seul besoin est ignoré : son horaire ne convient plus à son poste. Corrigez-le ou changez les horaires du poste.',
+    )
+    // Un écarté par le code, un par la durée : pas « plus prévus ».
+    r.besoins = [
+      besoin(1, 0, null, { debut: '06:00', fin: '20:00' }),
+      besoin(1, 1, hS),
+    ]
+    r.postes[0].horaires_autorises = [M]
+    expect(bloquant(r)?.texte).toContain('ne conviennent plus')
+  })
+
+  it('besoin trop long : texte avec ses heures', () => {
+    const r = propre()
+    r.besoins.push(
+      besoin(1, 2, null, {
+        debut: '06:00',
+        fin: '20:00',
+        effectif: 0,
+        renfort: 1,
+      }),
+    )
+    expect(seul(r)).toEqual(
+      point(
+        'besoin-duree:1:06:00-20:00',
+        'besoins',
+        "Sur le poste Réception, l'horaire 06:00 - 20:00 dure plus longtemps qu'un service de sa catégorie HCR ne le permet (mercredi). Ces besoins sont ignorés.",
+        { page: '/planning/besoins', cible: 'poste-1' },
+      ),
+    )
+  })
+
+  it('besoin écarté sur un poste supprimé : aucun point, sans planter', () => {
+    const r = propre()
+    r.besoins.push(besoin(9, 0, hM, { effectif: 0, renfort: 1 }))
+    expect(verifierReglages(r)).toEqual([])
+  })
+
+  it('code sans période : texte et lien', () => {
+    const r = propre()
+    r.postes[0].horaires_autorises = [M, S, D]
+    expect(seul(r)).toEqual(
+      point(
+        `periode:${D}`,
+        'horaires',
+        "L'horaire D n'a pas de période (matin, soir ou nuit). Il ne compte pas dans le matin et le soir de Réception.",
+        { page: '/planning/horaires', cible: `horaire-${D}` },
+      ),
+    )
+  })
+
+  it('code sans période demandé sur un poste hors présence : rien', () => {
+    const r = propre()
+    r.postes.push(poste(2, 'Bar'))
+    r.salaries[0].competences.push({ poste_id: 2, niveau: 'titulaire' })
+    r.besoins.push(besoin(2, 0, HORAIRES[4], { effectif: 0, renfort: 1 }))
+    expect(verifierReglages(r)).toEqual([])
+  })
+
+  it('un apprenti seul ne tient pas un poste : sans autonome', () => {
+    const r = propre()
+    r.postes.push(poste(2, 'Bar'))
+    r.besoins.push(besoin(2, 1, hM))
+    r.salaries[0].competences.push({ poste_id: 2, niveau: 'soutien' })
+    expect(seul(r)).toEqual(
+      point(
+        'sans-autonome:2',
+        'equipe',
+        "Le poste Bar a des besoins, mais personne n'y est titulaire ni en dépannage.",
+        { page: '/planning/postes', cible: 'poste-2' },
+      ),
+    )
+  })
+
+  it('présence : un dépannage ne remplace pas un titulaire', () => {
+    const r = propre()
+    r.postes.push(poste(2, 'Club', { presence: true }))
+    r.salaries[0].competences.push({ poste_id: 2, niveau: 'occasionnel' })
+    expect(seul(r)).toEqual(
+      point(
+        'presence-sans-titulaire:2',
+        'equipe',
+        "Le poste Club compte dans le matin et le soir, mais personne n'y est titulaire.",
+        { page: '/planning/postes', cible: 'poste-2' },
+      ),
+    )
+  })
+
+  it('partie le jour même : encore dans l’équipe ce jour-là', () => {
+    const r = propre()
+    r.postes.push(poste(2, 'Club', { presence: true }))
+    r.salaries.push(
+      salarie(15, {
+        date_sortie: '2026-03-01',
+        competences: [{ poste_id: 2, niveau: 'titulaire' }],
+      }),
+    )
+    expect(verifierReglages(r, { aujourdhui: '2026-03-01' })).toEqual([])
+    expect(ids(verifierReglages(r, { aujourdhui: '2026-03-02' }))).toEqual([
+      'presence-sans-titulaire:2',
+    ])
+  })
+
+  it('besoin intenable : une personne nommée, ou toutes les fiches', () => {
+    const r = propre()
+    r.postes.push(poste(2, 'Bar'))
+    r.salaries[0].competences.push({ poste_id: 2, niveau: 'titulaire' })
+    r.salaries[0].shifts_autorises = [M, S]
+    r.besoins.push(besoin(2, 3, HORAIRES[3]))
+    expect(seul(r)).toEqual(
+      point(
+        `besoin-sans-personne:2:${J}`,
+        'equipe',
+        "Sur le poste Bar, personne ne peut tenir l'horaire J demandé par les besoins (jeudi) : la fiche de Personne10 Essai ne le permet pas (horaires autorisés ou semaine type).",
+        { page: '/planning/equipe', cible: 'salarie-10.horaires' },
+      ),
+    )
+    r.salaries[1].competences.push({ poste_id: 2, niveau: 'titulaire' })
+    r.salaries[1].shifts_autorises = [M, S]
+    expect(seul(r)).toEqual(
+      point(
+        `besoin-sans-personne:2:${J}`,
+        'equipe',
+        "Sur le poste Bar, personne ne peut tenir l'horaire J demandé par les besoins (jeudi) : aucune fiche de ce poste ne le permet (horaires autorisés ou semaine type).",
+        { page: '/planning/equipe' },
+      ),
+    )
+  })
+
+  it('besoin intenable : absence fixe de tous ; semaine type courte sans planter', () => {
+    const r = propre()
+    for (const x of r.salaries) x.semaine_type[4] = { mode: 'absence' }
+    expect(ids(verifierReglages(r))).toEqual([
+      `besoin-sans-personne:1:${M}`,
+      `besoin-sans-personne:1:${S}`,
+    ])
+    const c = propre()
+    for (const x of c.salaries) x.semaine_type = []
+    expect(verifierReglages(c)).toEqual([])
+  })
+
+  it('codes morts : texte, et un poste qui n’est pas le sien ne les fait pas revivre', () => {
+    const r = propre()
+    r.postes[0].horaires_autorises = [M, S]
+    r.postes.push(poste(2, 'Bar', { horaires_autorises: [N] }))
+    r.salaries[1].shifts_autorises = [N]
+    expect(seul(r)).toEqual(
+      point(
+        'codes-morts:11',
+        'equipe',
+        "Personne11 Essai : aucun des horaires cochés dans sa fiche n'est permis sur ses postes. Le planning automatique ne peut pas placer cette personne.",
+        { page: '/planning/equipe', cible: 'salarie-11.horaires' },
+      ),
+    )
+  })
+
+  it('un code vivant parmi des codes morts : pas de point', () => {
+    const r = propre()
+    r.postes[0].horaires_autorises = [M, S]
+    r.salaries[1].shifts_autorises = [M, S, N]
+    expect(verifierReglages(r)).toEqual([])
+  })
+
+  it('codes cochés sans aucun poste : pas codes morts', () => {
+    const r = propre()
+    r.salaries.push(salarie(13, { competences: [], shifts_autorises: [N] }))
+    expect(verifierReglages(r)).toEqual([])
+  })
+
+  it('sans code sur un poste : texte exact', () => {
+    const r = propre()
+    r.postes.push(poste(2, 'Bar', { horaires_autorises: [M] }))
+    r.salaries[0].competences.push({ poste_id: 2, niveau: 'titulaire' })
+    r.salaries[0].shifts_autorises = [S]
+    expect(seul(r).texte).toBe(
+      'Personne10 Essai : aucun horaire utilisable sur le poste Bar, entre sa fiche et ce poste.',
+    )
+  })
+
+  it('compétence sur un poste supprimé et code fixé : il manque le poste', () => {
+    const r = propre()
+    const st = SEMAINE_TYPE_VIDE.map((e) => ({ ...e }))
+    st[0] = { mode: 'travail', type_shift_id: M }
+    r.salaries.push(
+      salarie(13, {
+        competences: [{ poste_id: 9, niveau: 'titulaire' }],
+        semaine_type: st,
+      }),
+    )
+    expect(seul(r)).toEqual(
+      point(
+        'sans-poste-code-fixe:13',
+        'equipe',
+        "Personne13 Essai n'a aucun poste : sa semaine type fixe un horaire le lundi, que le planning automatique ne pourra pas poser. Indiquez ses postes dans sa fiche.",
+        { page: '/planning/equipe', cible: 'salarie-13.postes' },
+      ),
+    )
+  })
+
+  it('code fixé hors poste : texte exact', () => {
+    const r = propre()
+    r.postes[0].horaires_autorises = [M, S]
+    r.salaries[2].semaine_type[0] = { mode: 'travail', type_shift_id: N }
+    expect(seul(r)).toEqual(
+      point(
+        'code-fixe:12:0',
+        'equipe',
+        "Personne12 Essai : l'horaire N fixé le lundi par sa semaine type n'est permis sur aucun de ses postes.",
+        { page: '/planning/equipe', cible: 'salarie-12.semaine' },
+      ),
+    )
+  })
+
+  it('un horaire noté sur un jour de repos ne fixe rien', () => {
+    const r = propre()
+    r.salaries[2].semaine_type[0] = { mode: 'repos', type_shift_id: N }
+    expect(verifierReglages(r)).toEqual([])
+  })
+
+  it('code fixé sans besoin ce jour-là : un besoin d’un autre jour ne compte pas', () => {
+    const r = propre()
+    r.besoins = r.besoins.filter((b) => !(b.jour === 0 && b.horaire_id === S))
+    r.consignes = []
+    r.salaries[0].semaine_type[0] = { mode: 'travail', type_shift_id: S }
+    expect(seul(r)).toEqual(
+      point(
+        'code-fixe:10:0',
+        'equipe',
+        "Personne10 Essai : l'horaire S est fixé le lundi par sa semaine type, mais aucun besoin ne le demande ce jour-là sur ses postes. Le planning automatique ne pourra pas placer cette personne ce jour-là.",
+        { page: '/planning/equipe', cible: 'salarie-10.semaine' },
+      ),
+    )
+  })
+
+  it('code fixé : un besoin vide ne le demande pas, un besoin d’apprenti si', () => {
+    const r = propre()
+    r.besoins = r.besoins.filter((b) => !(b.jour === 0 && b.horaire_id === S))
+    r.consignes = []
+    r.salaries[0].semaine_type[0] = { mode: 'travail', type_shift_id: S }
+    r.besoins.push(besoin(1, 0, hS, { effectif: 0 }))
+    expect(ids(verifierReglages(r))).toEqual(['code-fixe:10:0'])
+    r.besoins.pop()
+    r.besoins.push(besoin(1, 0, hS, { effectif: 0, soutien: 1 }))
+    expect(ids(verifierReglages(r))).not.toContain('code-fixe:10:0')
+  })
+
+  it('heures par poste : texte exact, seuls les titulaires comptent', () => {
+    const r = propre()
+    for (const x of r.salaries) x.heures_hebdo = 30
+    // Un dépannage en extra : ni compté dans les heures, ni cause d'un
+    // poste « non jugé ».
+    r.salaries.push(
+      salarie(13, {
+        type_contrat: 'extra',
+        heures_hebdo: 39,
+        competences: [{ poste_id: 1, niveau: 'occasionnel' }],
+      }),
+    )
+    expect(seul(r)).toEqual(
+      point(
+        'heures:1',
+        'besoins',
+        'Le poste Réception demande 112 h par semaine ; ses titulaires ont 90 h de contrat. Il manque 22 h.',
+        { page: '/planning/besoins', cible: 'poste-1' },
+      ),
+    )
+  })
+
+  it('heures : exactement 10 % d’écart ne se signale pas', () => {
+    const r = propre()
+    // 100 h demandées, 90 h de contrat : 10 h, la borne.
+    r.besoins = Array.from({ length: 10 }, (_, j) =>
+      besoin(1, j % 7, null, {
+        debut: j < 7 ? '07:00' : '13:00',
+        fin: j < 7 ? '17:00' : '23:00',
+      }),
+    )
+    r.consignes = []
+    r.postes[0].presence = false
+    r.salaries = [salarie(10, { heures_hebdo: 90 })]
+    expect(ids(verifierReglages(r))).not.toContain('heures:1')
+    r.salaries[0].heures_hebdo = 89.9
+    expect(ids(verifierReglages(r))).toContain('heures:1')
+  })
+
+  it('heures sur l’hôtel : texte exact, sans extra ni dépannage', () => {
+    const r = propre()
+    r.postes.push(poste(2, 'Bar'))
+    for (const x of r.salaries) {
+      x.competences.push({ poste_id: 2, niveau: 'titulaire' })
+    }
+    for (let j = 0; j < 7; j++) r.besoins.push(besoin(2, j, hM))
+    r.salaries.push(
+      salarie(13, {
+        heures_hebdo: 39,
+        competences: [{ poste_id: 2, niveau: 'occasionnel' }],
+      }),
+      salarie(14, {
+        type_contrat: 'extra',
+        heures_hebdo: 39,
+        competences: [{ poste_id: 9, niveau: 'titulaire' }],
+      }),
+    )
+    expect(seul(r)).toEqual(
+      point(
+        'heures:total',
+        'besoins',
+        'Les besoins demandent 168 h par semaine ; les titulaires ont 117 h de contrat. Il manque 51 h.',
+        { page: '/planning/besoins' },
+      ),
+    )
+  })
+
+  it('apprentis demandés : seulement sur le poste qui les demande', () => {
+    const r = propre()
+    r.postes.push(poste(2, 'Bar'))
+    r.salaries[0].competences.push({ poste_id: 2, niveau: 'titulaire' })
+    r.salaries[0].competences.push({ poste_id: 1, niveau: 'soutien' })
+    r.besoins.push(besoin(2, 0, hM, { effectif: 0, renfort: 1 }))
+    r.besoins.push(besoin(2, 2, hM, { effectif: 0, soutien: 1 }))
+    expect(seul(r)).toEqual(
+      point(
+        'soutien:2',
+        'besoins',
+        "Le poste Bar demande des apprentis ou stagiaires (mercredi), mais personne n'y est inscrit à ce niveau.",
+        { page: '/planning/besoins', cible: 'soutien-2' },
+      ),
+    )
+  })
+
+  it('matin et soir : textes, pluriel, et ordre par jour puis matin avant soir', () => {
+    const r = propre()
+    r.consignes = [
+      { id: 3, jour: 1, periode: 'soir', minimum: 3, maximum: null },
+      { id: 4, jour: 1, periode: 'matin', minimum: 0, maximum: 0 },
+      { id: 5, jour: 0, periode: 'soir', minimum: 2, maximum: null },
+    ]
+    const lien = { page: '/planning/besoins' as const, cible: 'presence' }
+    expect(verifierReglages(r)).toEqual([
+      point(
+        'presence:0:soir',
+        'besoins',
+        'Lundi soir : les besoins demandent 1 personne, la consigne en veut au moins 2.',
+        lien,
+      ),
+      point(
+        'presence:1:matin',
+        'besoins',
+        'Mardi matin : les besoins demandent 1 personne, la consigne en veut au plus 0.',
+        lien,
+      ),
+      point(
+        'presence:1:soir',
+        'besoins',
+        'Mardi soir : les besoins demandent 1 personne, la consigne en veut au moins 3.',
+        lien,
+      ),
+    ])
+    r.besoins.push(besoin(1, 1, hS))
+    expect(
+      verifierReglages(r).find((x) => x.id === 'presence:1:soir')?.texte,
+    ).toBe(
+      'Mardi soir : les besoins demandent 2 personnes, la consigne en veut au moins 3.',
+    )
+  })
+
+  it('besoinsDemandes : seulement les besoins à personne nécessaire', () => {
+    const r = propre()
+    r.besoins = [
+      besoin(1, 0, hM),
+      besoin(1, 1, hM, { effectif: 0, soutien: 1 }),
+      besoin(1, 2, hM, { effectif: 0, renfort: 1 }),
+    ]
+    expect(besoinsDemandes(r).map((b) => b.jour)).toEqual([0])
+  })
+})
+
+describe('ordonnerPoints et aDesBloquants', () => {
+  const p = (
+    id: string,
+    ecran: PointReglage['ecran'],
+    gravite: PointReglage['gravite'] = 'a-voir',
+  ): PointReglage => ({
+    id,
+    gravite,
+    ecran,
+    texte: id,
+    lien: { page: '/planning/besoins' },
+  })
+
+  it('écrans dans l’ordre de réglage, bloquants d’abord, ordre gardé sinon', () => {
+    const l = [
+      p('b1', 'besoins'),
+      p('e1', 'equipe'),
+      p('b2', 'besoins', 'bloquant'),
+      p('h1', 'horaires'),
+      p('b3', 'besoins'),
+      p('e2', 'equipe', 'bloquant'),
+      p('p1', 'postes'),
+    ]
+    expect(ordonnerPoints(l).map((x) => x.id)).toEqual([
+      'h1',
+      'p1',
+      'e2',
+      'e1',
+      'b2',
+      'b1',
+      'b3',
+    ])
+    // Pur : la liste donnée n'est pas réordonnée.
+    expect(l[0].id).toBe('b1')
+  })
+
+  it('aDesBloquants : un seul suffit, aucun = faux', () => {
+    expect(aDesBloquants([])).toBe(false)
+    expect(aDesBloquants([p('a', 'besoins'), p('b', 'equipe')])).toBe(false)
+    expect(
+      aDesBloquants([p('a', 'besoins'), p('b', 'equipe', 'bloquant')]),
+    ).toBe(true)
   })
 })

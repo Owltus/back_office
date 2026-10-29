@@ -245,3 +245,208 @@ describe('raisons des places à pourvoir', () => {
     ).toBe(false)
   })
 })
+
+/*
+ * Étape 12 : la table complète, écrite à la main (clé, phrase, issue), pour
+ * chaque règle et chaque sens. Le test de mutation laissait passer les clés
+ * de regroupement et les règles qui tombaient sans bruit dans le cas par
+ * défaut.
+ */
+describe('table complète des raisons (test de mutation)', () => {
+  const lien = (partie: string | null, action: string) => ({
+    genre: 'lien',
+    lien: {
+      page: '/planning/equipe',
+      cible: partie ? `salarie-3.${partie}` : 'salarie-3',
+    },
+    action,
+  })
+  const mention = (m: Mention) => ({ genre: 'mention', mention: m })
+  const CAS: Array<[string, string, string, string, unknown]> = [
+    [
+      'POSTE',
+      'ne tient pas ce poste',
+      'POSTE',
+      'Ne tient pas ce poste',
+      lien('postes', 'Postes de la fiche'),
+    ],
+    [
+      'HORS-CONTRAT',
+      'x',
+      'HORS-CONTRAT',
+      'Hors des dates de son contrat',
+      lien('identite', 'Dates du contrat'),
+    ],
+    [
+      'ABSENCE',
+      'x',
+      'ABSENCE',
+      "Absent ou à l'école ce jour-là",
+      mention('absence posée'),
+    ],
+    [
+      'REPOS-FIXE',
+      'x',
+      'REPOS-FIXE',
+      'En repos fixe ce jour-là',
+      lien('semaine', 'Semaine type'),
+    ],
+    [
+      'HORAIRE-PERSO',
+      'un autre horaire est prévu ce jour-là',
+      'HORAIRE-PERSO:impose',
+      'Un autre code est fixé ce jour-là',
+      lien('semaine', 'Semaine type'),
+    ],
+    [
+      'HORAIRE-PERSO',
+      'cet horaire ne fait pas partie des siens',
+      'HORAIRE-PERSO:fiche',
+      "Ce code n'est pas dans ses codes",
+      lien('horaires', 'Codes de la fiche'),
+    ],
+    [
+      'R-JOUR-MAX',
+      'journée de 11 h, maximum 10 h 30',
+      'R-JOUR-MAX',
+      'Journée trop longue (maximum 10 h 30)',
+      mention('limite légale'),
+    ],
+    [
+      'R-JOUR-MAX',
+      'journée trop longue',
+      'R-JOUR-MAX',
+      'Journée trop longue',
+      mention('limite légale'),
+    ],
+    [
+      'R-NUIT-MINEUR',
+      'x',
+      'R-NUIT-MINEUR',
+      'Mineur : pas de travail de nuit',
+      mention('limite légale'),
+    ],
+    [
+      'R-REPOS-QUOTIDIEN',
+      'x',
+      'R-REPOS-QUOTIDIEN',
+      'Pas assez de repos avec un autre shift',
+      mention('limite légale'),
+    ],
+    [
+      'CHEVAUCHEMENT',
+      'x',
+      'CHEVAUCHEMENT',
+      'Déjà en service à cette heure',
+      mention('déjà placé'),
+    ],
+    [
+      'UN-SERVICE-PAR-JOUR',
+      'x',
+      'UN-SERVICE-PAR-JOUR',
+      'A déjà un shift ce jour-là',
+      mention('déjà placé'),
+    ],
+    [
+      'R-SIX-JOURS-MAX',
+      '7 jours travaillés, maximum 6',
+      'R-SIX-JOURS-MAX',
+      'Trop de jours dans la semaine (maximum 6 jours)',
+      mention('limite légale'),
+    ],
+    [
+      'R-SIX-JOURS-MAX',
+      'trop de jours',
+      'R-SIX-JOURS-MAX',
+      'Trop de jours dans la semaine',
+      mention('limite légale'),
+    ],
+    [
+      'R-REPOS-HEBDO-HCR',
+      '11 jours sur deux semaines',
+      'R-REPOS-HEBDO-HCR:deux',
+      'Trop de jours sur deux semaines',
+      mention('limite légale'),
+    ],
+    [
+      'SIXIEME-JOUR',
+      'x',
+      'SIXIEME-JOUR',
+      'Ce serait un 6e jour',
+      mention('au-delà de son contrat'),
+    ],
+    [
+      'R-SEMAINE-MAX',
+      'trop d’heures',
+      'R-SEMAINE-MAX',
+      'Heures de la semaine atteintes',
+      mention('limite légale'),
+    ],
+    [
+      'R-JOURNEE-ETOILE',
+      'sa journée étoile (courte) est fixée ce jour-là',
+      'R-JOURNEE-ETOILE:fixee',
+      'Sa journée courte est fixée ce jour-là',
+      lien('semaine', 'Semaine type'),
+    ],
+    [
+      'R-JOURNEE-ETOILE',
+      '2 journées courtes',
+      'R-JOURNEE-ETOILE:nombre',
+      'Une seule journée courte au contrat',
+      mention('au-delà de son contrat'),
+    ],
+    [
+      'R-REPOS-HEBDO-35H',
+      'x',
+      'R-REPOS-HEBDO-35H',
+      'Pas de repos de 35 h dans la semaine',
+      mention('limite légale'),
+    ],
+    [
+      'R-REPOS-HEBDO-MINEUR',
+      'x',
+      'R-REPOS-HEBDO-MINEUR',
+      'Mineur : deux jours de repos de suite',
+      mention('limite légale'),
+    ],
+    ['EXTRA', 'x', 'EXTRA', 'Extra libre', mention('à appeler')],
+    [
+      'INCONNUE',
+      'règle à venir',
+      'INCONNUE|règle à venir',
+      'Règle à venir',
+      lien(null, 'Fiche'),
+    ],
+    ['LIBRE', '', 'LIBRE', 'Libre ce jour-là', mention('à placer')],
+  ]
+
+  it.each(CAS)('%s (%s)', (regle, message, cle, phrase, issue) => {
+    expect(raisonClaire(regle, message, 3)).toEqual({ cle, phrase, issue })
+  })
+
+  it('RAISON_LIBRE vaut LIBRE', () => {
+    expect(RAISON_LIBRE).toBe('LIBRE')
+  })
+
+  it('raisonsClaires : doublons retirés, règle manquante = message seul', () => {
+    const l = raisonsClaires(
+      3,
+      ['ABSENCE', 'ABSENCE', 'POSTE'],
+      ['absent', 'absent encore', 'ne tient pas ce poste', 'cas sans règle'],
+    )
+    expect(l.map((r) => r.cle)).toEqual(['ABSENCE', 'POSTE', '|cas sans règle'])
+    expect(l[2].phrase).toBe('Cas sans règle')
+  })
+
+  it('estPossible : toutes les raisons doivent le permettre', () => {
+    const libre = raisonClaire('LIBRE', '', 3)
+    const sixieme = raisonClaire('SIXIEME-JOUR', 'x', 3)
+    const loi = raisonClaire('R-NUIT-MINEUR', 'x', 3)
+    const poste = raisonClaire('POSTE', 'x', 3)
+    expect(estPossible([libre, sixieme])).toBe(true)
+    expect(estPossible([sixieme, loi])).toBe(false)
+    expect(estPossible([poste])).toBe(false)
+    expect(estPossible([raisonClaire('EXTRA', 'x', 3)])).toBe(true)
+  })
+})

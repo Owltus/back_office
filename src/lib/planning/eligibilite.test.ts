@@ -11,9 +11,11 @@ import {
   codeImposeRespecte,
   codePrevuAuPoste,
   codesDuPoste,
+  codesImposes,
   codesPermis,
   coupureRespectee,
   posteDeReference,
+  TEXTE_RAISON,
 } from '#/lib/planning/eligibilite.ts'
 import type { Voisin } from '#/lib/planning/eligibilite.ts'
 import {
@@ -794,5 +796,86 @@ describe('oracle écrit à la main : poste ∩ fiche ∩ code imposé', () => {
       ),
       { numRuns: 500 },
     )
+  })
+})
+
+describe('bords tués par le test de mutation (étape 12)', () => {
+  const base = { horaires: TOUS, jour: 2 }
+
+  it('codes imposés : seulement Libre ou Travaille avec un horaire', () => {
+    const semaine: JourType[] = [
+      { mode: 'auto', type_shift_id: 1 },
+      { mode: 'travail', type_shift_id: 2 },
+      { mode: 'repos', type_shift_id: 3 },
+      { mode: 'absence', type_shift_id: 4 },
+      { mode: 'auto' },
+      { mode: 'travail', type_shift_id: null },
+      libre,
+    ]
+    expect(codesImposes(semaine)).toEqual([
+      [0, '1'],
+      [1, '2'],
+    ])
+  })
+
+  it('poste de référence : rien à proposer sans compétence ni poste', () => {
+    expect(posteDeReference({ competences: [] }, [])).toBeUndefined()
+  })
+
+  it('semaine type plus courte que le jour visé : jour libre', () => {
+    const r = codesPermis({
+      ...base,
+      personne: salarie({ semaine_type: [] }),
+      poste: poste(1),
+    })
+    expect(ids(r.codes)).toEqual(ids(TOUS))
+    expect(r.raison).toBeNull()
+  })
+
+  it('avec le lundi mais sans voisin : rien d’écarté', () => {
+    const r = codesPermis({
+      ...base,
+      personne: salarie(),
+      poste: poste(1),
+      lundi: LUNDI,
+    })
+    expect(ids(r.codes)).toEqual(ids(TOUS))
+    expect(r.ecartes).toEqual([])
+  })
+
+  it('un shift posé le même jour n’est pas un voisin', () => {
+    // C'est le shift de la case elle-même (ou son remplacement) : la
+    // coupure ne se mesure qu'avec la veille et le lendemain.
+    const r = codesPermis({
+      ...base,
+      personne: salarie(),
+      poste: poste(1),
+      lundi: LUNDI,
+      voisins: [{ jour: 2, debut: '07:00', fin: '15:00' }],
+    })
+    expect(ids(r.codes)).toEqual(ids(TOUS))
+    expect(r.ecartes).toEqual([])
+  })
+
+  it('un code écarté porte la raison coupure-11h', () => {
+    const r = codesPermis({
+      ...base,
+      personne: salarie(),
+      poste: poste(1),
+      lundi: LUNDI,
+      voisins: [{ jour: 1, debut: '15:00', fin: '23:00' }],
+    })
+    expect(r.ecartes.length).toBeGreaterThan(0)
+    for (const e of r.ecartes) expect(e.raison).toBe('coupure-11h')
+  })
+
+  it('chaque raison a une phrase à afficher', () => {
+    for (const [raison, texte] of Object.entries(TEXTE_RAISON)) {
+      expect(texte.length, raison).toBeGreaterThan(10)
+      expect(texte).not.toMatch(/[«»—]/)
+    }
+    expect(TEXTE_RAISON['hors-contrat']).toBe('En dehors de son contrat')
+    expect(TEXTE_RAISON['code-fixe-hors-poste']).toMatch(/semaine type/)
+    expect(TEXTE_RAISON['coupure-11h']).toMatch(/repos/)
   })
 })
