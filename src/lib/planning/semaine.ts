@@ -352,6 +352,8 @@ export function fiche(
             .filter(([j, m]) => m !== null && ctx.ecole.has(m) && !hors.has(j))
             .map(([j]) => j),
         ),
+    // R-ECOLE-HEURES (L6222-24) : chaque jour d'école compte cette durée.
+    minutesEcoleJour: x.heures_ecole_jour,
     reposFixes,
     travailFixe,
     shiftImpose: codesImposes(semaine),

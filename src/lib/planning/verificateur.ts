@@ -219,11 +219,16 @@ export function violationsSalarie(
         'organisation',
       )
     }
-    const total = semaine.reduce((t, c) => t + travail(c), 0)
-    if (total > s.minutesHebdoMax) {
+    // R-ECOLE-HEURES (L6222-24) : les heures d'école comptent dans la semaine.
+    const ecole =
+      jours.filter((j) => s.joursHorsSite.has(j)).length * s.minutesEcoleJour
+    const total = semaine.reduce((t, c) => t + travail(c), 0) + ecole
+    if (semaine.length && total > s.minutesHebdoMax) {
       ajoute(
         'R-SEMAINE-MAX',
-        `${h(total)} dans la semaine, maximum ${h(s.minutesHebdoMax)}`,
+        ecole
+          ? `${h(total)} dans la semaine, école comprise (${h(ecole)}), maximum ${h(s.minutesHebdoMax)}`
+          : `${h(total)} dans la semaine, maximum ${h(s.minutesHebdoMax)}`,
         semaine,
       )
     }

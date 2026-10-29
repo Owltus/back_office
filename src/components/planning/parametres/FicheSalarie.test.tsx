@@ -186,6 +186,7 @@ describe('FicheSalarie', () => {
         type_absence_id: null,
       })),
       shifts_autorises: [],
+      heures_ecole_jour: 420,
       date_entree: null,
       date_sortie: null,
       actif: true,
@@ -468,6 +469,27 @@ describe('FicheSalarie', () => {
       '2026-11-18',
     ])
   }, 20_000)
+
+  it('le bloc École : la durée d’une journée d’école part avec la fiche', async () => {
+    ouvrir(11)
+    const champ = await screen.findByLabelText("Une journée d'école compte")
+    expect((champ as HTMLInputElement).value).toBe('7')
+    fireEvent.change(champ, { target: { value: '6.5' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }))
+    await waitFor(() =>
+      expect(service.enregistrerSalarie).toHaveBeenCalledTimes(1),
+    )
+    const [valeurs] = service.enregistrerSalarie.mock.calls[0] as unknown as [
+      { heures_ecole_jour: number },
+    ]
+    expect(valeurs.heures_ecole_jour).toBe(390)
+  })
+
+  it('pas de durée d’école sur la fiche d’un CDI', async () => {
+    ouvrir(LUCAS)
+    await screen.findByLabelText('Nom')
+    expect(screen.queryByLabelText("Une journée d'école compte")).toBeNull()
+  })
 
   it('le bloc École : appuyer sur un jour, relâcher sur un autre prend la plage ; Échap abandonne, Défaire revient en arrière', async () => {
     ouvrir(11)

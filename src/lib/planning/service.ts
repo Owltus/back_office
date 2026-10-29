@@ -10,6 +10,7 @@
  */
 
 import { refusDroits } from '#/lib/planning/erreurs.ts'
+import { MINUTES_ECOLE_JOUR } from '#/lib/planning/regles.ts'
 import type { NouveauShift } from '#/lib/planning/semaine.ts'
 import { ajouterJours, lundiDe } from '#/lib/planning/temps.ts'
 import type {
@@ -34,7 +35,7 @@ const COL_POSTE =
 const COL_CONSIGNE = 'id, jour, periode, minimum, maximum'
 const COL_GROUPE = 'id, nom, ordre, postes_autorises'
 const COL_SALARIE =
-  'id, prenom, nom, groupe_id, type_contrat, heures_hebdo, forfait_jours, mineur, competences, semaine_type, shifts_autorises, date_entree, date_sortie, actif, suite_de'
+  'id, prenom, nom, groupe_id, type_contrat, heures_hebdo, forfait_jours, mineur, competences, semaine_type, shifts_autorises, heures_ecole_jour, date_entree, date_sortie, actif, suite_de'
 const COL_BESOIN =
   'id, poste_id, jour, horaire_id, debut, fin, effectif, soutien, renfort'
 const COL_AFFECTATION =
@@ -62,6 +63,7 @@ function normaliserSalarie(x: Salarie): Salarie {
     competences: x.competences,
     semaine_type: x.semaine_type,
     shifts_autorises: x.shifts_autorises.map(num),
+    heures_ecole_jour: num(x.heures_ecole_jour ?? MINUTES_ECOLE_JOUR),
   }
 }
 

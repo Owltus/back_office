@@ -486,11 +486,14 @@ export function construire(p: Probleme): Construit {
         const vc = court.get(cle(s.id, c.id))
         if (vc) minutes.push([-c.raccourci, vc])
       }
+      // R-ECOLE-HEURES (L6222-24) : les heures d'école de la semaine sont
+      // une constante de la somme ; des fixes déjà au-delà restent tenables.
+      const minutesEcole = ecole.size * s.minutesEcoleJour
       m.ajoute(
         minutes,
         '<=',
         Math.max(
-          s.minutesHebdoMax,
+          s.minutesHebdoMax - minutesEcole,
           fixesSemaine.reduce((t, c) => t + travail(c), 0),
         ),
       )

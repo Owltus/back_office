@@ -44,6 +44,13 @@ export const STAGE_JOUR_MAX = 10 * H // R-STAGE-TEMPS (prototype, À VÉRIFIER)
 export const MINEUR_JOUR_MAX = 8 * H // R-MINEUR-JOUR-MAX
 export const MINEUR_SEMAINE_MAX = 35 * H // R-MINEUR-SEMAINE-MAX
 export const MINEUR_REPOS_QUOTIDIEN = 12 * H // R-REPOS-QUOTIDIEN-MINEUR
+/** R-ECOLE-HEURES (Code du travail L6222-24) : le temps passé au CFA est du
+ * temps de travail. Une journée d'école compte cette durée dans les plafonds
+ * de la semaine (R-SEMAINE-MAX, R-MINEUR-SEMAINE-MAX). Réglable par personne
+ * (`planning_salaries.heures_ecole_jour`), de 0 à 10 h. Écart voulu avec le
+ * prototype, qui ne comptait que le JOUR d'école, pas ses heures. */
+export const MINUTES_ECOLE_JOUR = 7 * H
+export const MINUTES_ECOLE_JOUR_MAX = 10 * H
 
 /** Repos quotidien dû (R-REPOS-QUOTIDIEN, R-REPOS-QUOTIDIEN-MINEUR). */
 export function reposQuotidienMin(mineur: boolean | undefined): number {
@@ -68,6 +75,8 @@ export interface Fiche {
   /** Jours d'absence de la semaine comptés dans les heures. */
   joursAbsenceDecomptes?: number
   joursEcole?: ReadonlySet<number>
+  /** Durée d'une journée d'école (R-ECOLE-HEURES), `MINUTES_ECOLE_JOUR` sinon. */
+  minutesEcoleJour?: number
   horsContrat?: ReadonlySet<number>
   etoileFixe?: ReadonlySet<number>
   contratDebut?: number | null
@@ -175,6 +184,7 @@ export function versSolveur(f: Fiche): SalarieSolveur {
     personne: f.personne ?? null,
     indisponibilites: new Set([...(f.indisponibilites ?? vide), ...ecole]),
     joursHorsSite: ecole,
+    minutesEcoleJour: f.minutesEcoleJour ?? MINUTES_ECOLE_JOUR,
     reposConsecutifs: !!f.mineur,
     nuitInterdite: !!f.mineur, // R-NUIT-MINEUR
     reposFixes: f.reposFixes ?? vide,
@@ -258,6 +268,12 @@ export function resume(f: Fiche): LigneRegle[] {
     lignes.push([
       'R-STAGE-TEMPS',
       'Stagiaire : mêmes durées et repos que les salariés',
+    ])
+  }
+  if (f.typeContrat === 'apprenti' || f.joursEcole?.size) {
+    lignes.push([
+      'R-ECOLE-HEURES',
+      `Une journée d'école compte ${heuresLisibles(s.minutesEcoleJour)} de travail dans la semaine`,
     ])
   }
   if (f.mineur) {

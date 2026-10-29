@@ -613,7 +613,7 @@ export function SectionAbsences({
 // ----------------------------------------------------------- règles HCR
 
 export function SectionRegles({ b }: Pick<PropsSection, 'b'>) {
-  const cle = `${b.type_contrat}|${b.heures_hebdo}|${b.forfait_jours}|${b.mineur}`
+  const cle = `${b.type_contrat}|${b.heures_hebdo}|${b.forfait_jours}|${b.mineur}|${b.heures_ecole_jour}`
   const regles = useMemo<LigneRegle[]>(() => {
     try {
       return resume(ficheApercu(b))
