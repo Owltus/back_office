@@ -42,6 +42,7 @@ import { Skeleton } from '#/components/ui/skeleton.tsx'
 import {
   dateCourte,
   messageGeneration,
+  resumeEquite,
   numeroSemaine,
 } from '#/lib/planning/affichage.ts'
 import { messageErreur } from '#/lib/planning/erreurs.ts'
@@ -311,8 +312,18 @@ export function VueMois({
           .map((l) => faites.get(l) ?? avant.get(l))
           .filter((s): s is SemaineOut => !!s),
       )
+      // Équité (D15) : combien de week-ends chacun, sur les semaines faites.
+      const equite = referentiel
+        ? resumeEquite(
+            [...faites.values()],
+            referentiel.salaries,
+            referentiel.postes,
+          )
+        : ''
       notifier(
-        messageGeneration(trous, 'Mois') + noteNonTouchees,
+        messageGeneration(trous, 'Mois') +
+          (equite ? ` ${equite}` : '') +
+          noteNonTouchees,
         trous ? 'attention' : 'info',
       )
     })

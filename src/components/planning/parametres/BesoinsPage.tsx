@@ -282,7 +282,8 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
             </p>
             <p className="text-xs text-muted-foreground">
               Dans quel ordre le planning automatique décide : la loi d'abord,
-              puis les personnes nécessaires, puis les contrats, puis le confort
+              puis les personnes nécessaires, puis le matin et le soir et les
+              contrats, puis un titulaire avant un dépannage, puis le confort
               (repos groupés, jours habituels, équité).
             </p>
           </div>
