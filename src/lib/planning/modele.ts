@@ -34,6 +34,11 @@ export interface Creneau {
   nuit: boolean | null
   /** Consigne de présence où ce créneau compte (poste et période), ou null. */
   presence: 'matin' | 'soir' | null
+  /** Équité (D15) : un soir (période soir du code). */
+  soir: boolean
+  /** Équité (D15) : un matin tôt (début à l'heure la plus tôt des matins
+   * du poste). */
+  matinTot: boolean
 }
 
 export function creneau(
@@ -51,6 +56,8 @@ export function creneau(
     presenceMax: null,
     nuit: null,
     presence: null,
+    soir: false,
+    matinTot: false,
     ...c,
   }
 }
@@ -113,6 +120,10 @@ export interface SalarieSolveur {
   etoileFixe: ReadonlySet<number>
   finServicePrecedent: number | null
   debutServiceSuivant: number | null
+  /** R-REPOS-HEBDO-35H d'une semaine à l'autre : début au plus tôt du
+   * premier service, quand la semaine d'avant n'a son repos de 35 h qu'en
+   * le prolongeant sur celle-ci ; null : pas de borne. */
+  debutAuPlusTot: number | null
   joursPreferesSemaine: number
   reposDeuxSemaines: number
   joursSemainePrecedente: number | null
@@ -122,7 +133,21 @@ export interface SalarieSolveur {
   contratDebut: number | null
   contratFin: number | null
   personne: string | null
+  /** Équité (D15) : personnes comparées entre elles (poste principal) ;
+   * null : hors équité (extra, forfait jours, sans poste tenu seul). */
+  groupeEquite: string | null
+  /** Équité : ce qui est déjà fait avant la période générée (semaine
+   * d'avant), compté avec elle. */
+  equiteAvant: EquiteFaite
 }
+
+export interface EquiteFaite {
+  weekends: number
+  soirs: number
+  matinsTot: number
+}
+
+export const EQUITE_VIDE: EquiteFaite = { weekends: 0, soirs: 0, matinsTot: 0 }
 
 export function salarieSolveur(
   s: Partial<SalarieSolveur> &
@@ -158,6 +183,7 @@ export function salarieSolveur(
     etoileFixe: vide,
     finServicePrecedent: null,
     debutServiceSuivant: null,
+    debutAuPlusTot: null,
     joursPreferesSemaine: 7,
     reposDeuxSemaines: 0,
     joursSemainePrecedente: null,
@@ -167,6 +193,8 @@ export function salarieSolveur(
     contratDebut: null,
     contratFin: null,
     personne: null,
+    groupeEquite: null,
+    equiteAvant: EQUITE_VIDE,
     ...s,
   }
 }

@@ -2,7 +2,8 @@
  * Aides d'affichage du planning, pures (prototype `frontend/src/api.ts`).
  */
 
-import type { BilanOut } from '#/lib/planning/semaine.ts'
+import { posteEquite } from '#/lib/planning/semaine.ts'
+import type { BilanOut, SemaineOut } from '#/lib/planning/semaine.ts'
 import { ajouterJours, minutes, versJour } from '#/lib/planning/temps.ts'
 import type {
   Groupe,
@@ -217,6 +218,52 @@ export function messageGeneration(
   return aPourvoir === 1
     ? `${quoi} généré. 1 place reste à pourvoir.`
     : `${quoi} généré. ${aPourvoir} places restent à pourvoir.`
+}
+
+/**
+ * Équité (D15) en une ligne, pour le message de fin d'une génération de
+ * plusieurs semaines : combien de week-ends chacun travaille, par poste
+ * principal (le même groupe que le moteur). Seules comptent les personnes
+ * qui ont au moins un shift sur la période ; un poste à une seule personne
+ * n'apparaît pas. Vide s'il n'y a rien à comparer.
+ * « Week-ends travaillés par personne : Réception de 1 à 3, Club 2 chacun. »
+ */
+export function resumeEquite(
+  semaines: ReadonlyArray<Pick<SemaineOut, 'affectations'>>,
+  salaries: Salarie[],
+  postes: Poste[],
+): string {
+  const presents = new Set<number>()
+  const weekends = new Map<number, number>()
+  for (const s of semaines) {
+    const ceWeekend = new Set<number>()
+    for (const a of s.affectations) {
+      presents.add(a.salarie_id)
+      if (a.jour >= 5) ceWeekend.add(a.salarie_id)
+    }
+    for (const id of ceWeekend) weekends.set(id, (weekends.get(id) ?? 0) + 1)
+  }
+  const parPoste = new Map<number, number[]>()
+  for (const x of salaries) {
+    const p = posteEquite(x)
+    if (p === null || !presents.has(x.id)) continue
+    parPoste.set(p, [...(parPoste.get(p) ?? []), weekends.get(x.id) ?? 0])
+  }
+  const morceaux: string[] = []
+  for (const poste of postes) {
+    const n = parPoste.get(poste.id)
+    if (!n || n.length < 2) continue
+    const min = Math.min(...n)
+    const max = Math.max(...n)
+    morceaux.push(
+      min === max
+        ? `${poste.nom} ${min} chacun`
+        : `${poste.nom} de ${min} à ${max}`,
+    )
+  }
+  return morceaux.length
+    ? `Week-ends travaillés par personne : ${morceaux.join(', ')}.`
+    : ''
 }
 
 /** Un jour sans shift ni absence est un repos (pas « non attribué ») quand

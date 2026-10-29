@@ -30,6 +30,16 @@ export function periodePresence(
   debut: string,
 ): 'matin' | 'soir' | null {
   if (!poste?.presence) return null
+  return periodeShift(horaire, debut)
+}
+
+/** Période d'un shift, sur tout poste : celle de son code, ou son heure de
+ * début (sans code, ou code « middle » / « court »). Null : nuit ou code
+ * sans période. Sert aux consignes et à l'équité du générateur (D15). */
+export function periodeShift(
+  horaire: Pick<Horaire, 'periode'> | undefined,
+  debut: string,
+): 'matin' | 'soir' | null {
   const famille = horaire ? horaire.periode : null
   const p =
     !horaire || famille === 'middle' || famille === 'court'

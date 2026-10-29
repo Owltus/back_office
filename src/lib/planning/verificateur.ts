@@ -116,6 +116,17 @@ export function violationsSalarie(
       ])
     }
   }
+  if (
+    liste.length &&
+    s.debutAuPlusTot !== null &&
+    liste[0].debut < s.debutAuPlusTot
+  ) {
+    ajoute(
+      'R-REPOS-HEBDO-35H',
+      'reprend trop tôt : la semaine précédente perdrait son repos de 35 h consécutives',
+      [liste[0]],
+    )
+  }
   if (liste.length && s.finServicePrecedent !== null) {
     const ecart = liste[0].debut - s.finServicePrecedent
     if (ecart < s.reposQuotidienMin) {

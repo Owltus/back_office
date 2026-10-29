@@ -30,6 +30,7 @@ import type {
   Resultat,
   Role,
   SalarieSolveur,
+  EquiteFaite,
 } from '#/lib/planning/modele.ts'
 import {
   alerteBesoin,
@@ -37,7 +38,11 @@ import {
   versSolveur,
 } from '#/lib/planning/regles.ts'
 import type { Fiche } from '#/lib/planning/regles.ts'
-import { bilanPresence, periodePresence } from '#/lib/planning/presence.ts'
+import {
+  bilanPresence,
+  periodePresence,
+  periodeShift,
+} from '#/lib/planning/presence.ts'
 import type { PresenceOut } from '#/lib/planning/presence.ts'
 import {
   MINUTES_PAR_JOUR,
@@ -48,6 +53,7 @@ import {
   horaireDe,
   lundiDe,
   minuteReelle,
+  minutes,
   toucheLaNuit,
   versJour,
 } from '#/lib/planning/temps.ts'
@@ -63,7 +69,11 @@ import type {
   Referentiel,
   Salarie,
 } from '#/lib/planning/types.ts'
-import { raisonsBlocage, violations } from '#/lib/planning/verificateur.ts'
+import {
+  raisonsBlocage,
+  reposHebdoTrouve,
+  violations,
+} from '#/lib/planning/verificateur.ts'
 
 // ----------------------------------------------------------------- sorties
 
@@ -378,6 +388,42 @@ function presenceDe(
   )
 }
 
+/** Début (minutes du jour) des matins les plus tôt de chaque poste, d'après
+ * ses besoins : la borne des « matins tôt » de l'équité (D15). */
+const matinsTotParBesoins = new WeakMap<Besoin[], Map<number, number>>()
+function debutsMatinTot(ctx: Contexte): Map<number, number> {
+  let r = matinsTotParBesoins.get(ctx.besoins)
+  if (!r) {
+    r = new Map()
+    for (const b of ctx.besoins) {
+      const h =
+        b.horaire_id !== null ? ctx.horaires.get(b.horaire_id) : undefined
+      if (periodeShift(h, b.debut) !== 'matin') continue
+      const m = minutes(b.debut)
+      r.set(b.poste_id, Math.min(r.get(b.poste_id) ?? m, m))
+    }
+    matinsTotParBesoins.set(ctx.besoins, r)
+  }
+  return r
+}
+
+/** Équité (D15) : un shift ou un besoin est-il un soir, un matin tôt ? Soir
+ * = période soir de son code (sans code : l'heure de début) ; matin tôt =
+ * un matin qui commence au plus tôt des matins prévus pour ce poste. */
+export function equiteDe(
+  ctx: Contexte,
+  x: { poste_id: number; horaire_id: number | null; debut: string },
+): { soir: boolean; matinTot: boolean } {
+  const h = x.horaire_id !== null ? ctx.horaires.get(x.horaire_id) : undefined
+  const periode = periodeShift(h, x.debut)
+  const tot = debutsMatinTot(ctx).get(x.poste_id)
+  return {
+    soir: periode === 'soir',
+    matinTot:
+      periode === 'matin' && tot !== undefined && minutes(x.debut) <= tot,
+  }
+}
+
 function presenceMaxDe(ctx: Contexte, posteId: number): number | null {
   const p = ctx.postes.get(posteId)
   return p ? presenceMaxPoste(p.categorie) : null
@@ -406,6 +452,7 @@ export function creneauBesoin(
     presenceMax: presenceMaxDe(ctx, b.poste_id),
     nuit: toucheLaNuit(b.jour, b.debut, b.fin),
     presence: presenceDe(ctx, b),
+    ...equiteDe(ctx, b),
   })
 }
 
@@ -426,6 +473,7 @@ export function creneauAffectation(ctx: Contexte, a: Affectation): Creneau {
     presenceMax: presenceMaxDe(ctx, a.poste_id),
     nuit: toucheLaNuit(a.jour, a.debut, a.fin),
     presence: presenceDe(ctx, a),
+    ...equiteDe(ctx, a),
   })
 }
 
@@ -552,11 +600,22 @@ export function avecSemainesVoisines(
     s.add(j)
     m.set(key, s)
   }
+  const servicesAvant = new Map<number | string, Creneau[]>()
   for (const a of d.avant) {
-    const fin = bornes(ctx.lundi, a.jour - 7, a.debut, a.fin)[1]
+    const [debut, fin] = bornes(ctx.lundi, a.jour - 7, a.debut, a.fin)
     const key = k(a.salarie_id)
     fins.set(key, Math.max(fins.get(key) ?? fin, fin))
     ajoute(joursAvant, key, a.jour)
+    servicesAvant.set(key, [
+      ...(servicesAvant.get(key) ?? []),
+      creneau({
+        id: `avant${a.id}`,
+        poste: String(a.poste_id),
+        debut,
+        fin,
+        jourPlanning: a.jour - 7,
+      }),
+    ])
   }
   for (const a of d.apres) {
     const debut = bornes(ctx.lundi, a.jour + 7, a.debut, a.fin)[0]
@@ -597,7 +656,63 @@ export function avecSemainesVoisines(
       joursSemaineSuivante: d.apres.length
         ? (joursApres.get(key)?.size ?? 0)
         : null,
+      debutAuPlusTot: debutApresReposHebdo(
+        x,
+        servicesAvant.get(key) ?? [],
+        joursAvant.get(key) ?? new Set(),
+      ),
     })
+  }
+  return r
+}
+
+/** R-REPOS-HEBDO-35H d'une semaine à l'autre. Si la semaine d'avant n'a de
+ * repos de 35 h consécutives qu'en se prolongeant sur celle-ci (jours libres
+ * après son dernier service, aucun autre repos assez long), le premier
+ * service d'ici ne commence pas avant sa fin + 35 h. Sans cette borne, la
+ * génération du mois, semaine après semaine, cassait le repos de la semaine
+ * qu'elle venait de faire (mesuré le 2026-10-29). La semaine d'avant-avant
+ * n'est pas lue : un jour libre en tête de semaine compte comme repos. */
+export function debutApresReposHebdo(
+  s: SalarieSolveur,
+  services: Creneau[],
+  joursTravailles: ReadonlySet<number>,
+): number | null {
+  if (!s.reposHebdoMin || !services.length || joursTravailles.has(6))
+    return null
+  const fin = Math.max(...services.map((c) => c.fin))
+  const seule = reposHebdoTrouve(
+    { ...s, finServicePrecedent: null, debutServiceSuivant: fin },
+    services,
+    [-7, -6, -5, -4, -3, -2, -1],
+    new Set([...joursTravailles].map((j) => j - 7)),
+  )
+  return seule ? null : fin + s.reposHebdoMin
+}
+
+/** Équité (D15) : le poste principal, celui où l'on compare une personne
+ * aux autres (le premier tenu en titulaire). Null : hors équité (extra,
+ * forfait jours, sans poste tenu en titulaire). */
+export function posteEquite(x: Salarie): number | null {
+  if (x.type_contrat === 'extra' || x.forfait_jours) return null
+  return x.competences.find((c) => c.niveau === 'titulaire')?.poste_id ?? null
+}
+
+/** Ce que chacun a déjà fait la semaine d'avant (week-end, soirs, matins
+ * tôt) : compté avec la semaine générée. En génération du mois, chaque
+ * semaine voit celle qu'on vient de faire, d'où la rotation. */
+export function equiteAvant(
+  ctx: Contexte,
+  avant: Affectation[],
+  salarieId: number,
+): EquiteFaite {
+  const siens = avant.filter((a) => a.salarie_id === salarieId)
+  const r = { weekends: 0, soirs: 0, matinsTot: 0 }
+  if (siens.some((a) => a.jour >= 5)) r.weekends = 1
+  for (const a of siens) {
+    const e = equiteDe(ctx, a)
+    if (e.soir) r.soirs++
+    if (e.matinTot) r.matinsTot++
   }
   return r
 }
@@ -988,6 +1103,16 @@ export function preparerGeneration(
     )
   }
   salaries = avecSemainesVoisines(d2, ctx, salaries)
+  for (const x of ctx.staff) {
+    const sol = salaries.get(x.id)
+    const groupe = posteEquite(x)
+    if (sol && groupe !== null)
+      salaries.set(x.id, {
+        ...sol,
+        groupeEquite: String(groupe),
+        equiteAvant: equiteAvant(ctx, d2.avant, x.id),
+      })
+  }
   const { lien, soutien: enSoutien } = correspondances(ctx, besoins, salaries)
   const deja = new Map<number, number>()
   const dejaSoutien = new Map<number, number>()

@@ -1,7 +1,8 @@
 /*
  * Génération d'un planning (prototype `solveur/generateur.py`, OR-Tools
  * CP-SAT) traduite en programme linéaire en nombres entiers, résolu par
- * HiGHS (WebAssembly, `highs`). Même modèle, mêmes poids : une variable
+ * HiGHS (WebAssembly, `highs`). Même modèle (poids revus depuis, voir
+ * l'ORDRE DE DÉCISION plus bas) : une variable
  * booléenne par couple (salarié, créneau), 1 si le salarié le tient. Les
  * règles légales sont des contraintes dures ; la couverture est souple (s'il
  * manque du monde, le meilleur planning légal et la liste des trous).
@@ -46,18 +47,106 @@ import type {
   SalarieSolveur,
 } from '#/lib/planning/modele.ts'
 
-export const POIDS_MANQUE = 100
-export const POIDS_JOUR_FIXE = 20_000
-export const POIDS_OCCASIONNEL = 3_000
-export const POIDS_SOUS_CONTRAT = 400
+/*
+ * ORDRE DE DÉCISION (étape 10 du plan « réglages cohérents », D3 = A,
+ * D1 = A, D13, D14, D15). La phrase de la page Besoins le dit : la loi
+ * d'abord, puis les personnes nécessaires, puis le matin et le soir et les
+ * contrats, puis un titulaire avant un dépannage, puis le confort.
+ *
+ *   P0  la loi : contraintes DURES (repos de 11 h, 6 jours, 48 h, nuit des
+ *       mineurs, soutien jamais seul, code fixé…). Aucun poids ne la passe.
+ *   P1  une place « nécessaire » vide : `coutPlaceVide`, DÉRIVÉ des poids
+ *       ci-dessous (pas posé à la main).
+ *   P2  le matin et le soir (consignes) : `POIDS_PRESENCE_MINUTE` par
+ *       personne et par minute de la période.
+ *   P3  les contrats : heures dues (`POIDS_SOUS_CONTRAT`) > 6e jour > heures
+ *       au-delà (`POIDS_SUR_CONTRAT`).
+ *   P4  titulaire avant dépannage : `POIDS_DEPANNAGE_MINUTE`.
+ *   P5  le confort : jours habituels, repos accolés, équité.
+ *
+ * P1 : ajouter UNE personne libre (rien d'autre ne bouge) sur un créneau `c`
+ * coûte au pire, tous termes de l'objectif confondus :
+ *     (POIDS_SUR_CONTRAT + POIDS_DEPANNAGE_MINUTE) × durée(c)   heures en plus, dépannage
+ *   + POIDS_SIXIEME_JOUR                                        un jour de plus = au plus un 6e jour
+ *   + POIDS_REPOS_SEPARES                                       la paire de repos accolés perdue
+ *   + max des consignes (P2)                                    une personne au-delà d'un « au plus »
+ *   + EQUITE_MAX_PAR_SHIFT                                      équité, au pire
+ *   + POIDS_DEJA_PROPOSE + BRUIT_MAX                            rebattre, hasard
+ * (les heures dues ne peuvent que baisser ; travail(c) <= durée(c) ; un
+ * contrat indicatif coûte 1 par minute <= POIDS_SUR_CONTRAT). La place vide
+ * coûte strictement plus : à l'optimum, une place nécessaire n'est vide que
+ * si PERSONNE ne peut y être ajouté sans enfreindre une règle dure — ce que
+ * dit `raisonsBlocage`. L'inégalité tient quels que soient les poids, parce
+ * que `coutPlaceVide` les relit.
+ *
+ * P2 sous P1 : `coutPlaceVide` contient le plus cher des P2. P2 par minute
+ * (100) > heures au-delà (50) : pour un shift de 8 h, une personne qui
+ * manque le matin passe avant un 6e jour et 8 h en plus (39 000 < 48 000).
+ * Mais P2 < heures dues (400 par minute) : une personne due reste placée,
+ * au pire en trop sur un « au plus » (choix du 2026-10-27, gardé).
+ *
+ * P4 sous P3 : dépannage 10 par minute < heures au-delà 50 par minute, et
+ * < 6e jour pour tout shift de moins de 25 h : un titulaire qui ferait des
+ * heures en plus ou un 6e jour laisse la place au dépannage ; un titulaire
+ * libre passe devant. P4 sous P1 : une place tenue en dépannage vaut mieux
+ * qu'une place vide (D13, D14).
+ *
+ * P5 sous P4 : jour habituel 2 000, repos accolés 1 000, équité 100 par jour
+ * d'écart, sous le dépannage d'un shift de 4 h (2 400) ; l'équité, la plus
+ * faible, ne fait faire ni une heure en plus (3 000) ni un dépannage.
+ *
+ * Les coefficients restent sous 1e6 (place vide de 12 h ~ 1,3e5) : sûr pour
+ * HiGHS. ÉCART VOULU avec le prototype (`generateur.py`) : ses poids
+ * laissaient un trou de 4 h (24 000) plutôt qu'un 6e jour + 4 h en plus
+ * (27 000), et ignoraient l'équité.
+ */
+
+// P5 — confort.
+/** Par jour d'écart à sa part (week-ends, soirs, matins tôt). */
+export const POIDS_EQUITE = 100
 export const POIDS_REPOS_SEPARES = 1_000
+/** Travailler un jour habituel (semaine type « travail »). */
+export const POIDS_JOUR_FIXE = 2_000
+// P4 — titulaire avant dépannage.
+export const POIDS_DEPANNAGE_MINUTE = 10
+// P3 — contrats.
 export const POIDS_SUR_CONTRAT = 50
 export const POIDS_SIXIEME_JOUR = 15_000
+export const POIDS_SOUS_CONTRAT = 400
+// P2 — matin et soir.
+/** Une personne de moins (ou de plus) qu'une consigne, par minute de la
+ * période (durée du plus long créneau qui y compte ce jour-là). */
+export const POIDS_PRESENCE_MINUTE = 100
+// Départage.
 export const POIDS_DEJA_PROPOSE = 5
-/** Une personne de moins (ou de plus) qu'une consigne de présence : comme
- * un besoin de 8 h non pourvu. Moins que des heures de contrat non faites
- * (400 par minute) : une personne due reste placée, au pire en trop. */
-export const POIDS_PRESENCE = POIDS_MANQUE * 480
+/** Bruit de la graine : 0 à 3 par affectation. */
+export const BRUIT_MAX = 3
+/** Soirs et matins tôt : rattrapage compté au plus sur une semaine. */
+export const EQUITE_RATTRAPAGE_MAX = 7
+/** Le pire que coûte l'équité pour UN shift ajouté : le week-end déplace la
+ * somme des écarts d'au plus 2 (son écart de 1 - part, ceux des autres de
+ * part au total) ; un soir et un matin tôt, au plus le rattrapage chacun. */
+export const EQUITE_MAX_PAR_SHIFT =
+  2 * POIDS_EQUITE + 2 * EQUITE_RATTRAPAGE_MAX * POIDS_EQUITE
+
+/** Le pire que coûte l'ajout d'une personne libre sur `c` (voir P1). */
+export function pireCoutRemplir(c: Creneau, presenceLaPlusChere: number) {
+  return (
+    (POIDS_SUR_CONTRAT + POIDS_DEPANNAGE_MINUTE) * duree(c) +
+    POIDS_SIXIEME_JOUR +
+    POIDS_REPOS_SEPARES +
+    presenceLaPlusChere +
+    EQUITE_MAX_PAR_SHIFT +
+    POIDS_DEJA_PROPOSE +
+    BRUIT_MAX
+  )
+}
+
+/** P1 : une personne qui manque sur une place nécessaire, strictement plus
+ * que tout ce qu'il faudrait payer pour la remplir. */
+export function coutPlaceVide(c: Creneau, presenceLaPlusChere: number) {
+  return pireCoutRemplir(c, presenceLaPlusChere) + 1
+}
 
 /** Le solveur HiGHS tel que le rend `highs` (API historique). */
 export interface Highs {
@@ -99,7 +188,8 @@ export function compatible(s: SalarieSolveur, c: Creneau): boolean {
     !(s.nuitInterdite && toucheLaNuit(c)) &&
     codeDeLaFiche(s, c.typeShift) &&
     codeImposeRespecte(s, j, c.typeShift) &&
-    reposAvecVoisins(s, c)
+    reposAvecVoisins(s, c) &&
+    (s.debutAuPlusTot === null || c.debut >= s.debutAuPlusTot)
   )
 }
 
@@ -302,6 +392,18 @@ export function construire(p: Probleme): Construit {
   const ecarts: Array<[string, string]> = []
   const manque = new Map<string, string>()
 
+  // P2 : coût d'une personne de moins (ou de plus) pour chaque consigne,
+  // proportionnel à la durée de la période (son plus long créneau ce jour).
+  const coutConsigne = p.consignes.map((k) => {
+    let periode = 0
+    for (const c of p.creneaux) {
+      if (c.presence === k.periode && jourDe(c) === k.jour)
+        periode = Math.max(periode, duree(c))
+    }
+    return POIDS_PRESENCE_MINUTE * periode
+  })
+  const presenceLaPlusChere = Math.max(0, ...coutConsigne)
+
   // Couverture.
   for (const c of p.creneaux) {
     if (c.ferme) continue
@@ -313,7 +415,8 @@ export function construire(p: Probleme): Construit {
       const r = role(s, c.poste)
       if (r === 'soutien') soutiens.push([s, v])
       else autonomes.push(v)
-      if (r === 'occasionnel') m.cout(POIDS_OCCASIONNEL, v)
+      // P4 : un dépannage coûte, un titulaire libre passe devant (D13).
+      if (r === 'occasionnel') m.cout(POIDS_DEPANNAGE_MINUTE * duree(c), v)
     }
     const vm = m.entier(0, c.effectif)
     manque.set(c.id, vm)
@@ -327,7 +430,7 @@ export function construire(p: Probleme): Construit {
       '<=',
       c.effectif + c.facultatif,
     )
-    m.cout(POIDS_MANQUE * duree(c), vm)
+    m.cout(coutPlaceVide(c, presenceLaPlusChere), vm)
     if (soutiens.length) {
       const nbImposes = p.salaries.filter(
         (s) => imposees.has(cle(s.id, c.id)) && role(s, c.poste) === 'soutien',
@@ -348,7 +451,8 @@ export function construire(p: Probleme): Construit {
   // Consignes de présence : personnes autonomes sur les créneaux qui
   // comptent, ce jour et à cette période. Souples des deux côtés (le modèle
   // reste toujours réalisable) : un manque ou un surplus se paie.
-  for (const k of p.consignes) {
+  p.consignes.forEach((k, i) => {
+    const cout = coutConsigne[i]
     const termes: Terme[] = []
     for (const c of p.creneaux) {
       if (c.presence !== k.periode || jourDe(c) !== k.jour) continue
@@ -360,19 +464,20 @@ export function construire(p: Probleme): Construit {
     if (k.minimum > 0) {
       const vm = m.entier(0, k.minimum)
       m.ajoute([...termes, [1, vm]], '>=', k.minimum)
-      m.cout(POIDS_PRESENCE, vm)
+      m.cout(cout, vm)
     }
     if (k.maximum !== null && termes.length > k.maximum) {
       const vp = m.entier(0, termes.length)
       m.ajoute([...termes, [-1, vp]], '<=', k.maximum)
-      m.cout(POIDS_PRESENCE, vp)
+      m.cout(cout, vp)
     }
-  }
+  })
 
   // Une « expression » : termes + constante.
   type Expr = { termes: Terme[]; constante: number }
   const semainesJours = new Map<string, Expr>()
   const figes = new Map<string, number>()
+  const travailleDe = new Map<string, Map<number, string>>()
 
   for (const s of p.salaries) {
     const siens = p.creneaux.filter((c) => x.has(cle(s.id, c.id)))
@@ -385,6 +490,7 @@ export function construire(p: Probleme): Construit {
       parJour.set(j, [...(parJour.get(j) ?? []), c])
     }
     const travaille = new Map<number, string>()
+    travailleDe.set(s.id, travaille)
     for (const [jour, liste] of parJour) {
       const nbFixes = fixes.filter((c) => jourDe(c) === jour).length
       m.ajoute(
@@ -657,6 +763,8 @@ export function construire(p: Probleme): Construit {
     }
   }
 
+  equite(m, p, x, travailleDe, nbSemaines)
+
   // Rebattre : refaire la même proposition coûte un peu.
   if (p.aEviter.size) {
     for (const [k, v] of x) {
@@ -674,6 +782,123 @@ export function construire(p: Probleme): Construit {
   }
 
   return { modele: m, x, court, manque, ecarts }
+}
+
+/**
+ * Équité (D15), au mieux, jamais obligatoire, entre personnes d'un même
+ * groupe (`groupeEquite`, le poste principal). Rien de dur.
+ *
+ * Week-ends travaillés (samedi ou dimanche), semaine d'avant comprise
+ * (`equiteAvant`) : chacun doit suivre sa part (ses heures dues sur celles
+ * du groupe, un temps partiel en fait moins). Coût sur l'écart à cette part :
+ *   total = Σ n_j ;  e_i >= n_i - part_i × total ;  e_i >= part_i × total - n_i
+ * coût POIDS_EQUITE × e_i.
+ *
+ * Soirs et matins tôt : la même forme, mesurée sur l'hôtel de démo, rendait
+ * la résolution dix fois plus longue (des milliers de plannings équivalents
+ * à départager). Forme SIMPLIFIÉE, linéaire : chaque soir (matin tôt) coûte
+ * POIDS_EQUITE × ce que la personne en a fait de plus que le moins chargé
+ * du groupe la semaine d'avant (au plus `EQUITE_RATTRAPAGE_MAX`). La
+ * rotation se fait d'une semaine à l'autre, pas dans la semaine.
+ */
+function equite(
+  m: Modele,
+  p: Probleme,
+  x: Map<string, string>,
+  travailleDe: Map<string, Map<number, string>>,
+  nbSemaines: number,
+): void {
+  const groupes = new Map<string, SalarieSolveur[]>()
+  for (const s of p.salaries) {
+    if (s.groupeEquite === null) continue
+    groupes.set(s.groupeEquite, [...(groupes.get(s.groupeEquite) ?? []), s])
+  }
+  for (const membres of groupes.values()) {
+    if (membres.length < 2) continue
+    weekendsEquitables(m, p, membres, travailleDe, nbSemaines)
+    for (const [garde, avant] of [
+      [(c: Creneau) => c.soir, (s: SalarieSolveur) => s.equiteAvant.soirs],
+      [
+        (c: Creneau) => c.matinTot,
+        (s: SalarieSolveur) => s.equiteAvant.matinsTot,
+      ],
+    ] as const) {
+      const moins = Math.min(...membres.map(avant))
+      for (const s of membres) {
+        const ecart = Math.min(EQUITE_RATTRAPAGE_MAX, avant(s) - moins)
+        if (ecart <= 0) continue
+        for (const c of p.creneaux) {
+          const v = x.get(cle(s.id, c.id))
+          if (v && garde(c)) m.cout(POIDS_EQUITE * ecart, v)
+        }
+      }
+    }
+  }
+}
+
+function weekendsEquitables(
+  m: Modele,
+  p: Probleme,
+  membres: SalarieSolveur[],
+  travailleDe: Map<string, Map<number, string>>,
+  nbSemaines: number,
+): void {
+  const heures = membres.reduce(
+    (t, s) => t + Math.max(0, s.minutesHebdoContrat),
+    0,
+  )
+  if (heures <= 0) return
+  const n = membres.map((s) => {
+    const termes: Terme[] = []
+    const travaille = travailleDe.get(s.id) ?? new Map<number, string>()
+    for (let k = 0; k < nbSemaines; k++) {
+      const vars = [7 * k + 5, 7 * k + 6]
+        .filter((j) => j < p.nbJours)
+        .map((j) => travaille.get(j))
+        .filter((v): v is string => !!v)
+      if (vars.length === 1) termes.push([1, vars[0]])
+      else if (vars.length === 2) {
+        // we = samedi OU dimanche.
+        const we = m.bool()
+        for (const v of vars)
+          m.ajoute(
+            [
+              [1, we],
+              [-1, v],
+            ],
+            '>=',
+            0,
+          )
+        m.ajoute([[1, we], ...vars.map((v) => [-1, v] as Terme)], '<=', 0)
+        termes.push([1, we])
+      }
+    }
+    return { termes, constante: s.equiteAvant.weekends }
+  })
+  if (n.every((e) => e.termes.length === 0)) return
+  const total = m.continu(0, 1e6)
+  m.ajoute(
+    [
+      [1, total],
+      ...n.flatMap((e) => e.termes.map(([c, v]) => [-c, v] as Terme)),
+    ],
+    '=',
+    n.reduce((t, e) => t + e.constante, 0),
+  )
+  membres.forEach((s, i) => {
+    const part =
+      Math.round((Math.max(0, s.minutesHebdoContrat) / heures) * 1e6) / 1e6
+    const e = m.continu(0, 1e6)
+    // e >= n_i - part × total
+    m.ajoute(
+      [[1, e], ...n[i].termes.map(([c, v]) => [-c, v] as Terme), [part, total]],
+      '>=',
+      n[i].constante,
+    )
+    // e >= part × total - n_i
+    m.ajoute([[1, e], ...n[i].termes, [-part, total]], '>=', -n[i].constante)
+    m.cout(POIDS_EQUITE, e)
+  })
 }
 
 function reposHebdo(

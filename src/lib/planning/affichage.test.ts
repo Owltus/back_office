@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { messageGeneration, parGroupe } from '#/lib/planning/affichage.ts'
+import {
+  messageGeneration,
+  parGroupe,
+  resumeEquite,
+} from '#/lib/planning/affichage.ts'
+import type { SemaineOut } from '#/lib/planning/semaine.ts'
+import type { Poste, Salarie } from '#/lib/planning/types.ts'
 
 describe('messageGeneration', () => {
   it('complet seulement sans place à pourvoir', () => {
@@ -28,5 +34,54 @@ describe('parGroupe', () => {
         membres: [{ groupe_id: null }, { groupe_id: 9 }],
       },
     ])
+  })
+})
+
+describe('resumeEquite', () => {
+  const sal = (id: number, poste: number, kw: Partial<Salarie> = {}) =>
+    ({
+      id,
+      type_contrat: 'cdi',
+      forfait_jours: false,
+      competences: [{ poste_id: poste, niveau: 'titulaire' }],
+      ...kw,
+    }) as Salarie
+  const postes = [
+    { id: 1, nom: 'Réception' },
+    { id: 2, nom: 'Club' },
+    { id: 3, nom: 'Veille de nuit' },
+  ] as Poste[]
+  const shift = (salarie_id: number, jour: number) => ({ salarie_id, jour })
+  const semaine = (...a: Array<{ salarie_id: number; jour: number }>) =>
+    ({ affectations: a }) as unknown as Pick<SemaineOut, 'affectations'>
+
+  it('compte les week-ends par personne et par poste principal', () => {
+    const salaries = [sal(1, 1), sal(2, 1), sal(3, 2), sal(4, 2), sal(5, 3)]
+    const semaines = [
+      // Samedi ET dimanche : un seul week-end.
+      semaine(
+        shift(1, 5),
+        shift(1, 6),
+        shift(2, 0),
+        shift(3, 6),
+        shift(4, 5),
+        shift(5, 6),
+      ),
+      semaine(shift(1, 6), shift(2, 1), shift(3, 5), shift(4, 6)),
+    ]
+    expect(resumeEquite(semaines, salaries, postes)).toBe(
+      'Week-ends travaillés par personne : Réception de 0 à 2, Club 2 chacun.',
+    )
+  })
+
+  it('ignore extras, forfaits jours, absents de la période et postes à une personne', () => {
+    const salaries = [
+      sal(1, 1),
+      sal(2, 1, { type_contrat: 'extra' }),
+      sal(3, 1, { forfait_jours: true }),
+      sal(4, 1),
+    ]
+    const semaines = [semaine(shift(1, 5), shift(2, 0), shift(3, 6))]
+    expect(resumeEquite(semaines, salaries, postes)).toBe('')
   })
 })
