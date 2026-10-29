@@ -2010,14 +2010,53 @@ référence des règles (`docs/regles-hcr.md` là-bas).
   (Réception et Club). Compte les personnes AUTONOMES (pas les soutiens) des
   postes cochés, selon la période du code (sans code : heure de début,
   `presence.ts`). Générateur : contrainte souple des deux côtés,
-  `POIDS_PRESENCE` = un besoin de 8 h, sous le coût des heures de contrat (un
-  CDI dû reste placé, au pire en trop). Écrans : carte « Présence du matin et
+  `POIDS_PRESENCE_MINUTE` par minute, `coutConsigne` plafonné sous le coût des
+  heures dues (un CDI dû reste placé, au pire en trop) ; depuis le 2026-10-29
+  les consignes sont un CONTRÔLE de la somme des besoins (D1, voir plus bas),
+  pas un second système de besoins. Écrans : carte « Présence du matin et
   du soir » en tête des Besoins, pastilles sous chaque jour (semaine), points
   sous chaque jour (mois), section dans « Points d'attention ». Données de
   l'hôtel (33 codes, consignes, adjoints sur M6 / M9, historique juillet →
   25/10 tiré des PDF) injectées en DEV seulement : une copie de la prod ou un
   `db:reset` les efface ; rien n'est en prod tant que l'utilisateur ne l'a pas
   décidé.
+- **Réglages cohérents (2026-10-28/29, plan `plan/planning-coherence-2026-10-28/`,
+  décisions D1-D19 de l'utilisateur dans `D-decisions.md`)** : chaque réglage a
+  UN endroit et un sens écrit, l'app dit elle-même ce qui ne colle pas.
+  - **Codes permis** : UNE fonction, `eligibilite.ts` (`codesPermis`), pour le
+    moteur, le vérificateur, les menus, la fiche et la semaine type ; poste ∩
+    fiche, SANS repli. Liste vide = « Tous » (`TousOuCertains` : « Tous » /
+    « Seulement ceux-ci », jamais un vide implicite ; pas de migration). La
+    fiche ne choisit que parmi l'union des codes de ses postes. Code fixé =
+    strict et signalé (D12).
+  - **Contrôle** : `coherence.ts` (`verifierReglages` → points { gravité,
+    écran, texte, lien }), pastille + panneau « À vérifier » groupé par écran
+    (`ControleReglages`, `PanneauControle`), liens `?ouvrir=` vers le volet et
+    `salarie-<id>.<partie>` vers la partie de la fiche. Menu des paramètres
+    dans l'ordre de réglage, numéroté et coché ; « Prêt à générer ».
+  - **Places à pourvoir** : `raisonsPlaces.ts` (une phrase + un lien par
+    règle), « Placer quelqu'un » sur le poste et le code de la place.
+  - **Données à ranger** : `donneesARanger.ts`, shifts qui contredisent les
+    réglages (aperçu puis Confirmer, semaines verrouillées exclues, jamais un
+    poste tenu en soutien).
+  - **École** : `planning_salaries.heures_ecole_jour` (7 h par défaut,
+    `MINUTES_ECOLE_JOUR`), comptée dans R-SEMAINE-MAX (vérificateur ET
+    générateur, L6222-24) ; `heuresDues` retire les heures d'école ; école +
+    absences sur les 5 jours du contrat = rien de dû. ⚠ Export / import du
+    prototype ne porte pas `heures_ecole_jour`.
+  - **Ordre de décision du générateur** (en tête de `generateur.ts`, écrit à
+    l'écran) : loi (dur) > place nécessaire (`coutPlaceVide`, DÉRIVÉ des
+    autres poids) > matin / soir > contrats (heures dues > 6e jour > heures en
+    plus) > titulaire avant dépannage (`coutDepannage` = par minute +
+    `PART_FIXE_DEPANNAGE` au-dessus de tout le confort, aucune prime de jour
+    habituel sur un dépannage) > confort (équité week-ends, soirs, matins
+    tôt ; repos accolés). Soutien jamais seul (D13-D14). Un poids changé :
+    relire `coutPlaceVide` et les tests de paliers. Repos de 35 h lu avec la
+    semaine d'avant-avant (`avantAvant`) ; non chargée = borne prudente
+    (lundi 0 h de la semaine d'avant). Écart voulu avec le prototype : le
+    différentiel ne tient plus sur l'école et les paliers.
+  - Une modification à la main qui casse les 11 h est REFUSÉE avec sa raison
+    (D16) ; la génération propose, l'utilisateur valide (D18).
 - **Non porté, volontairement** : réinitialisation de l'hôtel et mode prototype
   (D10), jours fériés (décision utilisateur relayée par le binôme), scénario
   « exclus » à l'écran (retiré du prototype aussi).

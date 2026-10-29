@@ -6,9 +6,9 @@ sorte que la complexité soit limitée… configurable, mais pas débilement dur
 comprendre… je ne vois pas d'inconvénient à s'embêter à bien configurer les
 choses pour que ensuite ça se fasse tout seul. »
 
-> **EN ATTENTE DU GO.** Décisions D1 à D19 tranchées par l'utilisateur le
-> 2026-10-29 (questionnaire), voir [D-decisions.md](./D-decisions.md) parties B et C. Tout en local, commit
-> par `pnpm commit`, aucun push sans demande.
+> **TERMINÉ le 2026-10-29, NON poussé.** Décisions D1 à D19 tranchées par
+> l'utilisateur (questionnaire), voir [D-decisions.md](./D-decisions.md) parties B et C. Bilan en fin
+> de fichier. La migration `heures_ecole_jour` partira avec le prochain push.
 
 ---
 
@@ -70,7 +70,7 @@ Agendrix, Sling ; Code du travail L6222-24.
 | 9   | [9-heures-ecole.md](./9-heures-ecole.md)                   | Heures d'école dans les plafonds                    | 1         | P1       | 5 h    | FAIT 6975a7a : `heures_ecole_jour` (migration additive, 7 h par défaut), école comptée dans R-SEMAINE-MAX au vérificateur et au générateur, champ dans le bloc École ; relecture corrigée 442f586 (heures dues moins les heures d'école, pgTAP 20-21)                                                                                                                                                                                                                        | ⚠        |
 | 10  | [10-priorites-generateur.md](./10-priorites-generateur.md) | Ordre de décision du générateur, écrit et tenu      | 6         | P1       | 6 h    | FAIT 3c0927c : paliers dérivés (`coutPlaceVide` > 6e jour + heures en plus + dépannage + consigne + équité), dépannage par minute, équité week-ends / soirs / matins tôt, repos de 35 h entre deux semaines, phrase et résumé du mois ; relecture corrigée : repos de 35 h lu avec la semaine d'avant-avant (prudent si non lue), dépannage sans prime de jour habituel et avec une part fixe au-dessus de tout le confort, coût des consignes plafonné sous les heures dues | ⚠        |
 | 11  | [11-donnees-a-ranger.md](./11-donnees-a-ranger.md)         | Ranger les données qui contredisent les réglages    | 5         | P2       | 2 h    | FAIT 36b9cfe : `donneesARanger.ts`, section Données à ranger du volet, rattacher au code / passer sur le poste, aperçu puis Confirmer, semaines verrouillées exclues ; relecture corrigée 442f586 (jamais un poste tenu en soutien)                                                                                                                                                                                                                                          |          |
-| 12  | [12-cloture.md](./12-cloture.md)                           | Vérification d'ensemble                             | tout      | P0       | 3 h    | Martin, borg, essai navigateur, bilan                                                                                                                                                                                                                                                                                                                                                                                                                                        | ⚠        |
+| 12  | [12-cloture.md](./12-cloture.md)                           | Vérification d'ensemble                             | tout      | P0       | 3 h    | FAIT : essai navigateur, relectures adverses (2-7, 9, 10), mutation 79 → 96 %, textes alignés, 10 correctifs d'écran (3f54889 → e6e3a08), bilan ci-dessous                                                                                                                                                                                                                                                                                                                   | ⚠        |
 
 ## Ordre d'exécution
 
@@ -143,3 +143,33 @@ journée d'école), D3 (une place nécessaire passe-t-elle avant un 6e jour).
 | Paramètres                 | `EnTeteParametres.tsx`, `PostesPage.tsx`, `BesoinsPage.tsx`, `ConsignesPresence.tsx`, `SectionsFiche.tsx`, `SectionIdentite.tsx`, `GestionCategories.tsx`, `HorairesPage.tsx`, `ChoixCodes` | `ControleReglages.tsx`                     |
 | Base                       | —                                                                                                                                                                                           | une migration à l'étape 9 (selon D2)       |
 | **Total**                  | **environ 25 modifiés**                                                                                                                                                                     | **environ 6 nouveaux**                     |
+
+---
+
+## Bilan (2026-10-29)
+
+Commits : 74c5012 (plan) → e6e3a08, tous locaux.
+
+| Mesure                                                                    | Avant                | Après               |
+| ------------------------------------------------------------------------- | -------------------- | ------------------- |
+| Tests vitest (tout le dépôt)                                              | —                    | 3 694 / 3 694       |
+| Tests planning                                                            | 544 (avant étape 12) | 646                 |
+| Score de mutation (eligibilite, coherence, raisonsPlaces, donneesARanger) | 79,4 %               | 96,3 %              |
+| Couverture des places nécessaires en dev (0 / 2 / 3 titulaires retirés)   | —                    | 100 / 94,3 / 94,3 % |
+| Infractions à la loi dans les semaines générées                           | —                    | 0                   |
+| Temps de calcul d'une semaine                                             | —                    | 1,3 à 2,1 s         |
+
+Contrôles : `tsc` propre ; pgTAP `05_planning` 50/50 ; `01` à `04` en échec
+en local parce que la base locale porte les données de l'hôtel et non le seed
+(1 compte au lieu de 7), sans lien avec le planning ; lint planning : seules
+les erreurs antérieures de `FicheSalarie.tsx` et `semaine.test.ts`.
+
+Relectures adverses : 3 défauts trouvés à l'étape 10 et corrigés (7a3a209) ;
+correctifs des étapes 3-7, 8, 9, 11 (56e4c59, 442f586, 1f57c33). Essai
+navigateur : 6 défauts et 8 remarques, tous corrigés sauf « Close » en
+anglais (primitive ui, non retouchée).
+
+Décisions prises par l'assistant, à confirmer : famille « À regarder »,
+mention « à placer », une place « en plus » compte à côté d'un apprenti,
+seule la raison décisive d'une place vide est montrée, message de génération
+gardé tant qu'il reste des places vides.
