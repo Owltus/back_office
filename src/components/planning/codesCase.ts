@@ -256,23 +256,32 @@ export function ligneDe(
 
 /**
  * Poste DÉDUIT pour un code (décision utilisateur du 2026-10-30, « je ne
- * dois voir qu'une seule fois chaque code ») : le poste préféré (celui du
- * shift existant, ou de la place à pourvoir) s'il permet ce code ; sinon le
- * premier poste de la fiche qui le permet, dans l'ordre des rubriques
- * (titulaire, dépannage, soutien, puis ordre des postes). undefined : aucun
- * poste ne le permet.
+ * dois voir qu'une seule fois chaque code ») :
+ * 1. le poste IMPOSÉ (celui de la place à pourvoir) s'il permet ce code ;
+ * 2. sinon le meilleur NIVEAU de la fiche qui le permet (titulaire, puis
+ *    dépannage, puis soutien) : M6 / M9 d'une adjointe vont toujours sur
+ *    Adjoint, même si son shift du jour est en Réception ;
+ * 3. à niveau égal, le poste préféré (celui du shift existant) : un shift du
+ *    Club changé en S4 reste au Club ; sinon l'ordre de la fiche.
+ * undefined : aucun poste ne le permet.
  */
 export function posteDeduit(
   rubriques: readonly Rubrique[],
   horaireId: number,
   prefere?: number,
+  impose?: number,
 ): Poste | undefined {
-  const permet = (r: Rubrique) =>
-    r.lignes.some((l) => l.horaire.id === horaireId)
-  return (
-    rubriques.find((r) => r.poste.id === prefere && permet(r)) ??
-    rubriques.find(permet)
-  )?.poste
+  const candidats = rubriques.filter((r) =>
+    r.lignes.some((l) => l.horaire.id === horaireId),
+  )
+  const premier = candidats.at(0)
+  if (!premier) return undefined
+  const force = candidats.find((r) => r.poste.id === impose)
+  if (force) return force.poste
+  // Les rubriques sont déjà triées par niveau : le premier candidat a le
+  // meilleur niveau.
+  const memeNiveau = candidats.filter((r) => r.niveau === premier.niveau)
+  return (memeNiveau.find((r) => r.poste.id === prefere) ?? premier).poste
 }
 
 /** Un code de la liste unique. */
@@ -306,13 +315,14 @@ export function codesUniques(
   personne: Pick<Salarie, 'competences'>,
   postes: ReadonlyArray<{ id: number }>,
   prefere?: number,
+  impose?: number,
 ): CodesUniquesCase {
   const habituel = posteDeReference(personne, postes)
   const vus = new Map<number, Horaire>()
   for (const rub of r.rubriques)
     for (const l of rub.lignes) vus.set(l.horaire.id, l.horaire)
   const codes = trierHoraires([...vus.values()]).flatMap((h): CodeUnique[] => {
-    const poste = posteDeduit(r.rubriques, h.id, prefere)
+    const poste = posteDeduit(r.rubriques, h.id, prefere, impose)
     if (!poste) return []
     const ligne = ligneDe(r, poste.id, h.id)
     return [

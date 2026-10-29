@@ -118,14 +118,16 @@ export function MenuJour({
 
   // Tous les codes de la personne, chacun une fois (union de ses postes,
   // règle unique par poste, coupure de repos choisissable avec son alerte),
-  // le poste déduit : celui du shift, ou de la place, s'il le permet.
+  // le poste déduit : celui de la place s'il le permet, sinon le meilleur
+  // niveau de la fiche, à niveau égal celui du shift (`posteDeduit`).
   const placePoste = shift ? undefined : ouverture.posteId
   const u = ecrire
     ? codesUniques(
         rubriquesDeLaCase({ referentiel, personne, jour, source, shift }),
         personne,
         referentiel.postes,
-        shift?.poste_id ?? placePoste,
+        shift?.poste_id,
+        placePoste,
       )
     : null
   // Le code de la place à pourvoir, s'il est permis sur son poste : en tête
@@ -168,7 +170,7 @@ export function MenuJour({
           {h.code}
         </span>
         <span className="grid flex-1">
-          <span className="text-sm tabular-nums">
+          <span className="text-sm whitespace-nowrap tabular-nums">
             {heureAffichee(h.debut)}–{heureAffichee(h.fin)} ·{' '}
             {heures(dureeHoraire(h.debut, h.fin) - h.pause)}
           </span>
@@ -203,7 +205,7 @@ export function MenuJour({
         role="menu"
         aria-label={titre}
         style={pos}
-        className="fixed z-50 max-h-[80dvh] min-w-64 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+        className="fixed z-50 max-h-[80dvh] min-w-80 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
       >
         <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
           {titre}

@@ -60,7 +60,7 @@ export function MenuCase({
   const horsPermis = codes.actuel
   const parId = new Map(codes.codes.map((c) => [c.horaire.id, c]))
   return (
-    <ContextMenuContent className="min-w-64">
+    <ContextMenuContent className="min-w-80">
       <ContextMenuLabel className="text-xs text-muted-foreground">
         {ouverture.nom} · {JOURS[ouverture.jour]}
       </ContextMenuLabel>
@@ -138,7 +138,7 @@ export function MenuCase({
                   {h.code}
                 </span>
                 <span className="grid flex-1 pl-1">
-                  <span className="text-sm tabular-nums">
+                  <span className="text-sm whitespace-nowrap tabular-nums">
                     {heureAffichee(h.debut)}-{heureAffichee(h.fin)} ·{' '}
                     {heures(travailCode(h))}
                   </span>

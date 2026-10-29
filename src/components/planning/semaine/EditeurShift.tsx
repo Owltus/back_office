@@ -372,16 +372,22 @@ export function EditeurShift({
       : null
   // Même règle que le clic droit et que le moteur (`codesPermis`) : les
   // codes par casquette, et pour l'horaire spécifique celle du poste choisi.
-  // Chaque code une seule fois, son poste déduit (celui choisi s'il le
-  // permet, sinon le premier de la fiche) ; s'il en a plusieurs, un petit
-  // choix de poste apparaît sous la liste.
+  // Chaque code une seule fois, son poste déduit (`posteDeduit` : celui de
+  // la place à pourvoir s'il le permet, sinon le meilleur niveau de la
+  // fiche, à niveau égal celui choisi) ; s'il en a plusieurs, un petit choix
+  // de poste apparaît sous la liste.
   const rubriques = rubriquesPour(b.salarie_id, b.jour)
+  const fichePersonne = salaries.find((s) => s.id === b.salarie_id) ?? {
+    competences: [],
+  }
   const uniques = codesUniques(
     rubriques,
-    salaries.find((s) => s.id === b.salarie_id) ?? { competences: [] },
+    fichePersonne,
     postes,
     b.poste_id,
+    b.poste_id === posteDemande ? posteDemande : undefined,
   )
+  const habituel = posteDeReference(fichePersonne, postes)
   const parId = new Map(uniques.codes.map((c) => [c.horaire.id, c]))
   const enCours = !vider && motif === null && !libre
   const choisiUnique = parId.get(b.horaire_id ?? -1)
@@ -576,6 +582,12 @@ export function EditeurShift({
                 </span>,
                 ...g.horaires.map((h) => {
                   const c = parId.get(h.id)!
+                  // Le code choisi montre le poste retenu (choix « Sur le
+                  // poste » compris), les autres leur poste déduit.
+                  const affiche =
+                    enCours && b.horaire_id === h.id
+                      ? (postes.find((p) => p.id === b.poste_id) ?? c.poste)
+                      : c.poste
                   return (
                     <Choix
                       key={h.id}
@@ -584,7 +596,7 @@ export function EditeurShift({
                       titre={h.nom}
                       detail={`${heureAffichee(h.debut)}-${heureAffichee(h.fin)}${h.pause > 0 ? ` · ${heures(travailCode(h))} de travail` : ''}`}
                       alerte={c.alerte}
-                      etiquette={c.horsHabituel ? c.poste : undefined}
+                      etiquette={affiche.id !== habituel ? affiche : undefined}
                       choisi={enCours && b.horaire_id === h.id}
                       onClick={() => {
                         setVider(false)

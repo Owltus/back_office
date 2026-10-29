@@ -308,10 +308,19 @@ describe('codesUniques : chaque code une fois, poste déduit', () => {
           )
           expect([...ids].sort()).toEqual([...union].sort())
           for (const c of u.codes) {
-            // Le poste déduit permet le code, et c'est le préféré s'il le
-            // permet.
+            // Le poste déduit permet le code, au MEILLEUR niveau de la fiche ;
+            // à ce niveau, c'est le préféré s'il le permet.
             expect(ligneDe(r, c.poste.id, c.horaire.id)).not.toBeNull()
-            if (ligneDe(r, prefere ?? -1, c.horaire.id))
+            const candidats = r.rubriques.filter((x) =>
+              x.lignes.some((l) => l.horaire.id === c.horaire.id),
+            )
+            const niveau = (id: number) =>
+              candidats.find((x) => x.poste.id === id)?.niveau
+            expect(niveau(c.poste.id)).toBe(candidats[0]?.niveau)
+            if (
+              prefere !== undefined &&
+              niveau(prefere) === candidats[0]?.niveau
+            )
               expect(c.poste.id).toBe(prefere)
           }
         },
@@ -341,6 +350,32 @@ describe('codesUniques : chaque code une fois, poste déduit', () => {
     expect(posteDeduit(r.rubriques, idH('N'))).toBeUndefined()
   })
 
+  it('le niveau passe avant le poste du shift : M d’une titulaire Réception, shift au Club en dépannage', () => {
+    const p = personne({
+      competences: fiche(['Réception', 'titulaire'], ['Club', 'occasionnel']),
+    })
+    const r = rubriquesDe(p, { poste_id: idP('Club'), type_shift_id: idH('M') })
+    // Le shift du jour est au Club, mais M est un code de son métier
+    // habituel : il va en Réception.
+    expect(posteDeduit(r.rubriques, idH('M'), idP('Club'))?.nom).toBe(
+      'Réception',
+    )
+  })
+
+  it('poste imposé (place à pourvoir) : il passe avant le niveau', () => {
+    const p = personne({
+      competences: fiche(['Réception', 'titulaire'], ['Club', 'occasionnel']),
+    })
+    const r = rubriquesDe(p)
+    expect(
+      posteDeduit(r.rubriques, idH('M'), undefined, idP('Club'))?.nom,
+    ).toBe('Club')
+    // Imposé qui ne permet pas le code : la règle du niveau reprend.
+    expect(
+      posteDeduit(r.rubriques, idH('M'), undefined, idP('Veille de nuit'))?.nom,
+    ).toBe('Réception')
+  })
+
   it('place à pourvoir : son poste d’abord s’il permet le code', () => {
     const r = rubriquesDe(BASE)
     const u = codesUniques(r, BASE, referentiel.postes, idP('Club'))
@@ -353,10 +388,12 @@ describe('codesUniques : chaque code une fois, poste déduit', () => {
     })
     const surReception = codesUniques(rubriquesDe(p), p, referentiel.postes)
     expect(surReception.codes.every((c) => !c.horsHabituel)).toBe(true)
+    // Place à pourvoir au Club : le poste est imposé, l'étiquette le dit.
     const surClub = codesUniques(
       rubriquesDe(p),
       p,
       referentiel.postes,
+      undefined,
       idP('Club'),
     )
     expect(surClub.codes.every((c) => c.horsHabituel)).toBe(true)
