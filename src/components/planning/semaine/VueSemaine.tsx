@@ -38,7 +38,7 @@ import {
   usePoserFixes,
   useSemaine,
 } from '#/components/planning/hooks/usePlanning.ts'
-import { useNotifier } from '#/components/planning/Messages.tsx'
+import { GARDER, useNotifier } from '#/components/planning/Messages.tsx'
 import { FicheSalarie } from '#/components/planning/parametres/FicheSalarie.tsx'
 import {
   messageGeneration,
@@ -394,7 +394,13 @@ export function VueSemaine({
         try {
           const r = await generer(lundi, options)
           const n = trous(r.semaine)
-          notifier(messageGeneration(n), n ? 'attention' : 'info')
+          // Des places restées vides : le message reste jusqu'à ce qu'on le
+          // ferme (il dit quoi faire ensuite).
+          notifier(
+            messageGeneration(n, 'Planning', r.poses),
+            n ? 'attention' : 'info',
+            n ? GARDER : undefined,
+          )
         } catch (err) {
           notifier(messageErreur(err, 'Génération impossible'), 'danger')
         }

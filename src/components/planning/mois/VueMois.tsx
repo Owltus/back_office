@@ -20,7 +20,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 
-import { useNotifier } from '#/components/planning/Messages.tsx'
+import { GARDER, useNotifier } from '#/components/planning/Messages.tsx'
 import {
   GardeDemarrage,
   useConfirmationGeneration,
@@ -299,10 +299,12 @@ export function VueMois({
     const avant = new Map(semaines)
     void pendant(async () => {
       const faites = new Map<string, SemaineOut>()
+      let proposes = 0
       // Dans l'ordre : chaque semaine voit la précédente (repos de 11 h).
       const ok = await parSemaine('Génération du mois', visees, async (l) => {
         const r = await generer(l, { aujourdhui })
         faites.set(l, r.semaine)
+        proposes += r.poses
       })
       if (!ok) return
       const trous = placesAPourvoir(
@@ -320,11 +322,14 @@ export function VueMois({
             referentiel.postes,
           )
         : ''
+      // Places vides ou équité à relire : le message reste jusqu'à ce
+      // qu'on le ferme.
       notifier(
-        messageGeneration(trous, 'Mois') +
+        messageGeneration(trous, 'Mois', proposes) +
           (equite ? ` ${equite}` : '') +
           noteNonTouchees,
         trous ? 'attention' : 'info',
+        trous || equite ? GARDER : undefined,
       )
     })
   }

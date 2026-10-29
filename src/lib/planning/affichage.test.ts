@@ -9,6 +9,18 @@ import type { SemaineOut } from '#/lib/planning/semaine.ts'
 import type { Poste, Salarie } from '#/lib/planning/types.ts'
 
 describe('messageGeneration', () => {
+  it('résumé des shifts proposés, avant les places restées vides', () => {
+    expect(messageGeneration(0, 'Planning', 12)).toBe(
+      'Planning complet généré. 12 shifts proposés.',
+    )
+    expect(messageGeneration(2, 'Mois', 1)).toBe(
+      'Mois généré. 1 shift proposé. 2 places restent à pourvoir.',
+    )
+    expect(messageGeneration(1, 'Planning', 0)).toBe(
+      'Planning généré. Aucun shift proposé. 1 place reste à pourvoir.',
+    )
+  })
+
   it('complet seulement sans place à pourvoir', () => {
     expect(messageGeneration(0)).toBe('Planning complet généré.')
     expect(messageGeneration(0, 'Mois')).toBe('Mois complet généré.')

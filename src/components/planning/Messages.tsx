@@ -1,7 +1,7 @@
 /*
  * Fil de messages de la page Planning : le retour d'une action (planning
  * généré, règle HCR touchée, refus de la base), en bas à droite, qui
- * s'efface seul. Le back office n'a pas de toasts globaux : ce fil est propre
+ * s'efface seul (sauf `GARDER`). Le back office n'a pas de toasts globaux : ce fil est propre
  * à la page (le prototype en faisait des toasts).
  */
 
@@ -26,7 +26,13 @@ interface Message {
   ton: Ton
 }
 
+/** `dureeMs` : `GARDER` (0) garde le message jusqu'à ce qu'on le ferme (ou
+ * qu'il soit poussé par les suivants : quatre au plus). Pour un message qui
+ * porte une information à relire (places restées vides après une
+ * génération), pas pour un simple retour d'action. */
 type Notifier = (texte: ReactNode, ton?: Ton, dureeMs?: number) => void
+
+export const GARDER = 0
 
 const Contexte = createContext<Notifier | null>(null)
 
@@ -53,6 +59,7 @@ export function FilMessages({ children }: { children: ReactNode }) {
     (texte, ton = 'info', dureeMs) => {
       const id = ++suivant.current
       setMessages((ms) => [...ms.slice(-3), { id, texte, ton }])
+      if (dureeMs === GARDER) return
       window.setTimeout(
         () => retirer(id),
         dureeMs ?? (ton === 'info' ? 5000 : 9000),

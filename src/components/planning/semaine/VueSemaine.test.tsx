@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -207,15 +208,47 @@ describe('VueSemaine', () => {
     )
     await waitFor(() => expect(etat.generer).toHaveBeenCalledWith(LUNDI, {}))
     const n = SEMAINE.a_pourvoir.reduce((t, x) => t + x.manquant, 0)
+    // Le bouchon de `generer` rend 3 shifts posés.
     expect(
       await screen.findByText(
         n === 0
-          ? 'Planning complet généré.'
+          ? 'Planning complet généré. 3 shifts proposés.'
           : n === 1
-            ? 'Planning généré. 1 place reste à pourvoir.'
-            : `Planning généré. ${n} places restent à pourvoir.`,
+            ? 'Planning généré. 3 shifts proposés. 1 place reste à pourvoir.'
+            : `Planning généré. 3 shifts proposés. ${n} places restent à pourvoir.`,
       ),
     ).toBeTruthy()
+  })
+
+  it('places restées vides : le message de fin reste jusqu’à ce qu’on le ferme', async () => {
+    etat.droits = { pret: true, lire: true, ecrire: true, gerer: false }
+    const n = SEMAINE.a_pourvoir.reduce((t, x) => t + x.manquant, 0)
+    expect(n).toBeGreaterThan(0)
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      rendre()
+      fireEvent.click(bouton('Compléter le planning'))
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Générer quand même' }),
+      )
+      const texte = await screen.findByText(
+        /^Planning généré. 3 shifts proposés/,
+      )
+      await act(async () => {
+        vi.advanceTimersByTime(60_000)
+        await Promise.resolve()
+      })
+      expect(texte.isConnected).toBe(true)
+      const message = texte.closest('div.pointer-events-auto') as HTMLElement
+      fireEvent.click(
+        within(message).getByRole('button', { name: 'Fermer le message' }),
+      )
+      expect(
+        screen.queryByText(/^Planning généré. 3 shifts proposés/),
+      ).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('écriture : le + ouvre l’éditeur, qui ajoute un shift validé', async () => {

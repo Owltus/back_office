@@ -245,15 +245,27 @@ export function parGroupe<T extends Pick<Salarie, 'groupe_id'>>(
 
 /** Message de fin de génération. « Complet » seulement s'il ne reste aucune
  * place à pourvoir : la génération est une meilleure tentative, jamais une
- * garantie. `quoi` : « Planning » (semaine) ou « Mois ». */
+ * garantie. `quoi` : « Planning » (semaine) ou « Mois ». `proposes` : les
+ * shifts que la génération vient de proposer (le résumé en tête, D18). */
 export function messageGeneration(
   aPourvoir: number,
   quoi = 'Planning',
+  proposes?: number,
 ): string {
-  if (aPourvoir <= 0) return `${quoi} complet généré.`
-  return aPourvoir === 1
-    ? `${quoi} généré. 1 place reste à pourvoir.`
-    : `${quoi} généré. ${aPourvoir} places restent à pourvoir.`
+  const resume =
+    proposes === undefined
+      ? ''
+      : proposes === 0
+        ? ' Aucun shift proposé.'
+        : proposes === 1
+          ? ' 1 shift proposé.'
+          : ` ${proposes} shifts proposés.`
+  if (aPourvoir <= 0) return `${quoi} complet généré.${resume}`
+  const reste =
+    aPourvoir === 1
+      ? '1 place reste à pourvoir.'
+      : `${aPourvoir} places restent à pourvoir.`
+  return `${quoi} généré.${resume} ${reste}`
 }
 
 /**
