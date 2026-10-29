@@ -54,6 +54,7 @@ export function MenuJour({
   jour,
   source,
   shift,
+  repos = null,
   ecrire,
   onHoraire,
   validation,
@@ -71,6 +72,8 @@ export function MenuJour({
   /** La semaine de la case et ses voisines (codes permis, coupure de repos). */
   source: SourceCase
   shift?: ShiftOut
+  /** Jour de repos (fixé par la semaine type, ou déduit) : dit en tête. */
+  repos?: { fixe: boolean } | null
   ecrire: boolean
   onHoraire: (h: Horaire, posteId: number) => void
   validation?: { active: boolean; onBasculer: () => void }
@@ -188,6 +191,14 @@ export function MenuJour({
         <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
           {titre}
         </div>
+        {repos && (
+          <div className="px-2 pb-1.5 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">Repos</span>
+            {repos.fixe
+              ? ' : vient de la semaine type.'
+              : ' : un horaire choisi ici le remplace.'}
+          </div>
+        )}
         {codePlace && (
           <div role="group" aria-label="Place à pourvoir">
             <div className="px-2 pt-1 pb-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">

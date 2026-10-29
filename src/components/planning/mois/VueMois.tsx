@@ -729,6 +729,7 @@ export function VueMois({
       ? caseDe(semaines, referentiel.motifs, menu.salarieId, menu.date)
       : null
   const absenceMenu = caseMenu?.type === 'absence' ? caseMenu : null
+  const reposMenu = caseMenu?.type === 'repos' ? caseMenu : null
   // Même écriture que la semaine : une seule journée étoile, et début et fin
   // recalculés à chaque bascule (la base enregistre les heures telles quelles).
   const etoile =
@@ -863,6 +864,7 @@ export function VueMois({
           jour={reperesMenu.jour}
           source={sourceDe(reperesMenu.lundi)}
           shift={shiftMenu}
+          repos={reposMenu && { fixe: reposMenu.fixe }}
           ecrire={droits.ecrire}
           onHoraire={(h, posteId) =>
             poserHoraire(menu.salarieId, menu.date, h, posteId)

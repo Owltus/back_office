@@ -125,6 +125,41 @@ describe('MenuJour : code actuel non permis', () => {
     expect(screen.queryByRole('group', { name: 'Place à pourvoir' })).toBeNull()
   })
 
+  it('jour de repos : le menu le dit, sans le cacher', () => {
+    const semaine = analyser({
+      lundi: LUNDI,
+      referentiel,
+      absences,
+      affectations: [],
+      avant: [],
+      apres: [],
+    })
+    const monter = (repos: { fixe: boolean } | null) =>
+      render(
+        <MenuJour
+          ouverture={{ salarieId: 3, date: '2026-11-04', x: 0, y: 0 }}
+          titre="Essai"
+          personne={referentiel.salaries.find((s) => s.id === 3)!}
+          referentiel={referentiel}
+          jour={2}
+          source={{ semaine }}
+          repos={repos}
+          ecrire
+          onHoraire={vi.fn()}
+          onSemaine={vi.fn()}
+          onFermer={vi.fn()}
+        />,
+      )
+    monter({ fixe: false })
+    expect(screen.getByText(/un horaire choisi ici le remplace/)).toBeTruthy()
+    cleanup()
+    monter({ fixe: true })
+    expect(screen.getByText(/vient de la semaine type/)).toBeTruthy()
+    cleanup()
+    monter(null)
+    expect(screen.queryByText('Repos')).toBeNull()
+  })
+
   it('code encore permis : pas de ligne « actuel »', () => {
     rendre(referentiel)
     expect(screen.queryByRole('menuitem', { name: /actuel/ })).toBeNull()
