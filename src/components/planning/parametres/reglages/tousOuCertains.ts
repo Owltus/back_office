@@ -59,3 +59,15 @@ export function modificationPermise(
 ): number[] | null {
   return suivante.some((id) => proposes.includes(id)) ? [...suivante] : null
 }
+
+/** Cocher ou décocher des éléments d'un coup (un code, ou une famille
+ * entière par « tout cocher / tout décocher »). */
+export function basculerIds(
+  choisis: readonly number[],
+  ids: readonly number[],
+  cocher: boolean,
+): number[] {
+  return cocher
+    ? [...new Set([...choisis, ...ids])]
+    : choisis.filter((id) => !ids.includes(id))
+}

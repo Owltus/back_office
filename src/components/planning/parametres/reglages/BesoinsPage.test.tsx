@@ -429,7 +429,7 @@ describe('Besoins', () => {
       ).toBeNull()
     })
 
-    it('au plus : un dépassement se signale quand on règle le plafond', () => {
+    it('au plus : un dépassement se signale, quel que soit le compteur réglé', () => {
       const ref = avecConsigne()
       ref.consignes = [
         { id: 1, jour: 0, periode: 'matin', minimum: 1, maximum: 2 },
@@ -447,7 +447,14 @@ describe('Besoins', () => {
       fireEvent.click(screen.getByRole('radio', { name: 'Matin et soir' }))
       expect(sommeAttendue(ref, 0)).toBe(3)
       expect(caseBesoins('0:matin')?.textContent).toBe('Besoins : 3')
-      expect(caseBesoins('0:matin')?.dataset.ecart).toBeUndefined()
+      // En « Au moins » (vue par défaut, celle du lien du contrôle), le
+      // plafond dépassé se voit déjà, avec Ajuster.
+      expect(caseBesoins('0:matin')?.dataset.ecart).toBe('true')
+      expect(
+        screen.getByRole('button', {
+          name: 'Ajuster les besoins du lundi matin',
+        }),
+      ).toBeTruthy()
       fireEvent.click(screen.getByRole('radio', { name: 'Au plus' }))
       expect(caseBesoins('0:matin')?.dataset.ecart).toBe('true')
     })

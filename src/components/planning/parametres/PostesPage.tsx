@@ -96,10 +96,11 @@ export function PostesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
     !!ref.data,
     (cible) => {
       const id = idCible(cible, 'poste')
-      if (id !== undefined && ref.data?.postes.some((p) => p.id === id)) {
-        setNouveau(null)
-        setOuvert(id)
-      }
+      if (id === undefined || !ref.data?.postes.some((p) => p.id === id))
+        return false
+      setNouveau(null)
+      setOuvert(id)
+      return true
     },
     onOuvert,
   )

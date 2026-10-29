@@ -194,7 +194,7 @@ describe('verifierReglages', () => {
     expect(seul(r)).toMatchObject({
       id: 'sans-autonome:2',
       ecran: 'equipe',
-      lien: { page: '/planning/equipe' },
+      lien: { page: '/planning/postes', cible: 'poste-2' },
     })
   })
 
@@ -323,7 +323,7 @@ describe('verifierReglages', () => {
     expect(seul(r)).toMatchObject({
       id: 'presence-sans-titulaire:2',
       ecran: 'equipe',
-      lien: { page: '/planning/equipe' },
+      lien: { page: '/planning/postes', cible: 'poste-2' },
     })
   })
 
@@ -412,6 +412,124 @@ describe('verifierReglages', () => {
     r.besoins = r.besoins.map((b) => ({ ...b, effectif: 0, renfort: 1 }))
     r.consignes = []
     expect(ids(verifierReglages(r))).toEqual(['bloquant:besoins'])
+  })
+
+  it('besoins tous écartés : bloquant distinct de « aucun besoin »', () => {
+    const r = propre()
+    r.postes[0].horaires_autorises = [J]
+    r.consignes = []
+    const p = verifierReglages(r)
+    expect(ids(p)).toContain('bloquant:besoins-ignores')
+    expect(ids(p)).not.toContain('bloquant:besoins')
+    const b = p.find((x) => x.id === 'bloquant:besoins-ignores')!
+    expect(b).toMatchObject({
+      gravite: 'bloquant',
+      lien: { page: '/planning/besoins' },
+    })
+    expect(b.texte).toContain(
+      'Les 14 besoins sont ignorés : leurs horaires ne sont plus prévus pour leur poste.',
+    )
+  })
+
+  it('un seul besoin, écarté : phrase au singulier', () => {
+    const r = propre()
+    r.besoins = [besoin(1, 0, hS)]
+    r.postes[0].horaires_autorises = [M]
+    r.consignes = []
+    const b = verifierReglages(r).find((x) => x.gravite === 'bloquant')!
+    expect(b.id).toBe('bloquant:besoins-ignores')
+    expect(b.texte).toMatch(/^Le seul besoin est ignoré : son horaire/)
+  })
+
+  it('besoin que personne ne peut tenir : fiches toutes restreintes', () => {
+    const r = propre()
+    for (const s of r.salaries) s.shifts_autorises = [M]
+    const p = seul(r)
+    expect(p).toMatchObject({
+      id: `besoin-sans-personne:1:${S}`,
+      gravite: 'a-voir',
+      ecran: 'equipe',
+      lien: { page: '/planning/equipe' },
+    })
+    expect(p.texte).toContain("l'horaire S")
+    expect(p.texte).toContain('lundi, mardi')
+  })
+
+  it('une seule personne garde le code : aucun point', () => {
+    const r = propre()
+    r.salaries[0].shifts_autorises = [M]
+    r.salaries[1].shifts_autorises = [M]
+    expect(verifierReglages(r)).toEqual([])
+  })
+
+  it('besoin que personne ne peut tenir : repos fixe de tous ce jour-là', () => {
+    const r = propre()
+    for (const s of r.salaries) s.semaine_type[6] = { mode: 'repos' }
+    expect(ids(verifierReglages(r))).toEqual([
+      `besoin-sans-personne:1:${M}`,
+      `besoin-sans-personne:1:${S}`,
+    ])
+  })
+
+  it('besoin sans code face à une fiche restreinte, seule personne : sa fiche', () => {
+    const r = propre()
+    r.postes.push(poste(2, 'Bar'))
+    r.salaries.push(
+      salarie(13, {
+        heures_hebdo: 35,
+        competences: [{ poste_id: 2, niveau: 'titulaire' }],
+        shifts_autorises: [M],
+      }),
+    )
+    r.besoins.push(besoin(2, 2, null, { debut: '10:00', fin: '14:00' }))
+    expect(seul(r)).toMatchObject({
+      id: 'besoin-sans-personne:2:10:00-14:00',
+      lien: { page: '/planning/equipe', cible: 'salarie-13' },
+    })
+    r.salaries[3].shifts_autorises = []
+    expect(verifierReglages(r)).toEqual([])
+  })
+
+  it('aucun code horaire : pas de point « aucun horaire utilisable »', () => {
+    const r = propre()
+    r.horaires = []
+    r.besoins = []
+    r.consignes = []
+    r.postes[0].presence = false
+    r.salaries[0].shifts_autorises = [M]
+    expect(ids(verifierReglages(r))).toEqual([
+      'bloquant:horaires',
+      'bloquant:besoins',
+    ])
+  })
+
+  it('heures : un extra, un forfait jours ou un contrat à 0 h ne font pas juger le poste', () => {
+    for (const retouche of [
+      (s: Salarie) => (s.type_contrat = 'extra'),
+      (s: Salarie) => (s.forfait_jours = true),
+      (s: Salarie) => (s.heures_hebdo = 0),
+    ]) {
+      const r = propre()
+      for (const s of r.salaries) s.heures_hebdo = 30
+      expect(ids(verifierReglages(r))).toEqual(['heures:1'])
+      retouche(r.salaries[0])
+      expect(ids(verifierReglages(r))).toEqual([])
+    }
+  })
+
+  it('personne sans aucun poste, code fixé : un seul point qui le dit', () => {
+    const r = propre()
+    const st = SEMAINE_TYPE_VIDE.map((e) => ({ ...e }))
+    st[0] = { mode: 'travail', type_shift_id: M }
+    st[2] = { mode: 'auto', type_shift_id: S }
+    r.salaries.push(salarie(13, { competences: [], semaine_type: st }))
+    const p = seul(r)
+    expect(p).toMatchObject({
+      id: 'sans-poste-code-fixe:13',
+      lien: { page: '/planning/equipe', cible: 'salarie-13' },
+    })
+    expect(p.texte).toContain("n'a aucun poste")
+    expect(p.texte).toContain('lundi et mercredi')
   })
 
   it('ids stables et uniques sur un hôtel complet', () => {

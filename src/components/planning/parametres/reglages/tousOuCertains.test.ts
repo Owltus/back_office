@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import fc from 'fast-check'
 
 import {
+  basculerIds,
   basculerMode,
   modeDe,
   modificationPermise,
@@ -71,6 +72,66 @@ describe('tous ou certains', () => {
             choisis = modificationPermise(suivante, proposes) ?? choisis
             expect(choisis.length).toBeGreaterThan(0)
             expect(modeDe(choisis)).toBe('certains')
+          }
+        },
+      ),
+    )
+  })
+})
+
+describe('tous ou certains : codes morts et familles', () => {
+  it('Seulement sans rien à proposer reste sur Tous', () => {
+    const b = basculerMode('certains', [], [], [])
+    expect(b.choisis).toEqual([])
+    expect(modeDe(b.choisis)).toBe('tous')
+  })
+
+  it('tout décocher la seule famille encore proposée est refusé', () => {
+    // 9 est un code mort (plus proposé) : il ne retient pas la liste.
+    const choisis = [1, 2, 9]
+    expect(
+      modificationPermise(basculerIds(choisis, [1, 2], false), [1, 2]),
+    ).toBeNull()
+    expect(
+      modificationPermise(basculerIds(choisis, [1], false), [1, 2]),
+    ).toEqual([2, 9])
+  })
+
+  it('propriété : codes morts, codes seuls et familles entières, jamais une liste vide ni sans code vivant', () => {
+    fc.assert(
+      fc.property(
+        fc.uniqueArray(fc.integer({ min: 1, max: 40 }), {
+          minLength: 1,
+          maxLength: 12,
+        }),
+        // Codes morts déjà cochés (plus proposés).
+        fc.uniqueArray(fc.integer({ min: 41, max: 60 }), { maxLength: 4 }),
+        // Familles : un découpage des codes proposés.
+        fc.array(fc.nat({ max: 3 }), { minLength: 12, maxLength: 12 }),
+        fc.array(
+          fc.record({
+            famille: fc.boolean(),
+            n: fc.nat(),
+            cocher: fc.boolean(),
+          }),
+          { maxLength: 30 },
+        ),
+        (proposes, morts, rangs, coups) => {
+          const familles = [0, 1, 2, 3]
+            .map((f) => proposes.filter((_, i) => rangs[i] === f))
+            .filter((f) => f.length)
+          let choisis = [
+            ...basculerMode('certains', [], [], proposes).choisis,
+            ...morts,
+          ]
+          for (const c of coups) {
+            const ids = c.famille
+              ? familles[c.n % familles.length]
+              : [proposes[c.n % proposes.length]]
+            const suivante = basculerIds(choisis, ids, c.cocher)
+            choisis = modificationPermise(suivante, proposes) ?? choisis
+            expect(modeDe(choisis)).toBe('certains')
+            expect(choisis.some((id) => proposes.includes(id))).toBe(true)
           }
         },
       ),

@@ -210,11 +210,12 @@ export function HorairesPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
     !!data,
     (cible) => {
       const id = idCible(cible, 'horaire')
-      if (id !== undefined && data?.horaires.some((h) => h.id === id)) {
-        setNouvelHoraire(null)
-        setNouveauMotif(null)
-        setOuvert({ type: 'horaire', id })
-      }
+      if (id === undefined || !data?.horaires.some((h) => h.id === id))
+        return false
+      setNouvelHoraire(null)
+      setNouveauMotif(null)
+      setOuvert({ type: 'horaire', id })
+      return true
     },
     onOuvert,
   )

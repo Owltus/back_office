@@ -112,8 +112,6 @@ vi.mock('#/components/planning/hooks/usePlanning.ts', async (original) => {
 const { VueSemaine } =
   await import('#/components/planning/semaine/VueSemaine.tsx')
 const { FilMessages } = await import('#/components/planning/Messages.tsx')
-const { oublierConfirmationsGeneration } =
-  await import('#/components/planning/PretAGenerer.tsx')
 
 function rendre() {
   return render(
@@ -133,7 +131,6 @@ beforeEach(() => {
     Promise.resolve({ poses: 3, dureeMs: 12, semaine: SEMAINE }),
   )
   for (const f of Object.values(service)) f.mockClear()
-  oublierConfirmationsGeneration()
   vue.donnees = DONNEES
   vue.semaine = SEMAINE
 })

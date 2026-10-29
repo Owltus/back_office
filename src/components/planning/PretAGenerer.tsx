@@ -2,17 +2,22 @@
  * Prêt à générer (plan `planning-coherence-2026-10-28`, étape 7, D6 = A,
  * D17, D18). Relit les points de `verifierReglages` pour la page Planning :
  *
- * - tant qu'un point BLOQUANT reste (aucun code, aucun poste, personne sur
- *   un poste, aucun besoin), une semaine ou un mois SANS shift montre la
- *   carte « Pour commencer » à la place de la grille vide : les quatre
- *   réglages dans l'ordre, chacun coché ou avec son bouton. Un planning déjà
- *   rempli reste visible, avec un bandeau compact au-dessus ;
+ * - tant qu'il manque un code, un poste ou une personne sur un poste (on ne
+ *   pourrait rien poser), une semaine ou un mois SANS shift montre la carte
+ *   « Pour commencer » à la place de la grille vide : les quatre réglages
+ *   dans l'ordre, chacun coché ou avec son bouton (« Voir » sans droit de
+ *   régler). Sinon (aucun besoin, ou besoins tous écartés ; planning déjà
+ *   rempli), la grille reste visible et utilisable à la main, avec un
+ *   bandeau compact au-dessus ;
  * - le bouton de génération est grisé, la raison écrite (infobulle et texte
  *   lu par les lecteurs d'écran), le lien est sur la carte ou le bandeau ;
  * - s'il reste des points « à voir », la génération demande d'abord une
  *   confirmation légère (points repliés, « Générer quand même »). Une fois
- *   confirmée, la même liste de points ne la redemande plus jusqu'au
- *   rechargement de la page : on ne repose pas la question à chaque clic.
+ *   confirmée, la même liste de points (mêmes points, mêmes textes) ne la
+ *   redemande plus tant que la vue est ouverte : on ne repose pas la
+ *   question à chaque semaine. L'accord vit dans l'état de la vue, jamais
+ *   au niveau du module : un autre compte, ou une autre ouverture, le
+ *   redemande.
  *   Sans point à voir, la génération part directement, comme avant.
  */
 
@@ -40,6 +45,7 @@ import {
   LIBELLE_ECRAN,
   ORDRE_ECRANS,
   PAGE_ECRAN,
+  besoinsDemandes,
   ordonnerPoints,
 } from '#/lib/planning/coherence.ts'
 import type {
@@ -86,7 +92,8 @@ export function etapesDemarrage(
   const nbPlaces = new Set(
     r.salaries.filter((s) => s.competences.length).map((s) => s.id),
   ).size
-  const nbBesoins = r.besoins.filter((b) => b.effectif > 0).length
+  // Les besoins que le moteur retient, comme le point bloquant.
+  const nbBesoins = besoinsDemandes(r).length
   const reglees: Record<EcranReglage, string> = {
     horaires: pluriel(r.horaires.length, 'code horaire'),
     postes: pluriel(r.postes.length, 'poste'),
@@ -138,7 +145,20 @@ export interface EtatGeneration {
   points: PointReglage[] | null
   etapes: EtapeDemarrage[]
   blocage: Blocage | null
+  /** Il manque un code, un poste ou une personne sur un poste : la grille
+   * ne permettrait de rien poser. */
+  grilleInutile: boolean
   aVoir: PointReglage[]
+}
+
+/** Écrans dont un bloquant rend la grille inutile (rien à poser). Un
+ * besoin qui manque n'empêche pas de poser à la main. */
+const SANS_GRILLE: readonly EcranReglage[] = ['horaires', 'postes', 'equipe']
+
+export function grilleInutile(points: readonly PointReglage[]): boolean {
+  return points.some(
+    (p) => p.gravite === 'bloquant' && SANS_GRILLE.includes(p.ecran),
+  )
 }
 
 /** Ce que la page Planning doit savoir des réglages avant de générer. */
@@ -152,6 +172,7 @@ export function usePretAGenerer(
       points,
       etapes: referentiel && points ? etapesDemarrage(referentiel, points) : [],
       blocage: points ? blocageGeneration(points) : null,
+      grilleInutile: points ? grilleInutile(points) : false,
       aVoir: points ? points.filter((p) => p.gravite === 'a-voir') : [],
     }),
     [referentiel, points],
@@ -174,10 +195,14 @@ export function useAllerAuReglage() {
 export function PourCommencer({
   etapes,
   onAller,
+  modifiable = true,
 }: {
   etapes: EtapeDemarrage[]
   onAller: (lien: LienReglage) => void
+  /** Droit de régler les paramètres ; sans lui, « Voir ». */
+  modifiable?: boolean
 }) {
+  const verbe = modifiable ? 'Régler' : 'Voir'
   const suivante = etapes.find((e) => !e.fait)
   return (
     <section
@@ -189,15 +214,17 @@ export function PourCommencer({
           Pour commencer
         </h2>
         <p className="text-sm text-muted-foreground">
-          Réglez ces quatre points, dans l’ordre. Le planning automatique pourra
-          ensuite proposer les shifts.
+          {modifiable
+            ? 'Réglez ces quatre points, dans l’ordre. Le planning automatique pourra ensuite proposer les shifts.'
+            : 'Ces quatre points sont à régler, dans l’ordre, par un responsable du planning. Vous pouvez les consulter.'}
         </p>
       </div>
       <ol className="divide-y overflow-hidden rounded-lg border">
         {etapes.map((e) => (
           <li
             key={e.ecran}
-            aria-label={`${e.numero}. ${e.libelle}${e.fait ? ', réglé' : ', à régler'}`}
+            data-etape={e.ecran}
+            data-fait={e.fait || undefined}
             className="flex items-center gap-3 px-3 py-3"
           >
             <span
@@ -212,7 +239,13 @@ export function PourCommencer({
               {e.fait ? <Check className="size-4" /> : e.numero}
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium">{e.libelle}</p>
+              <p className="text-sm font-medium">
+                <span className="sr-only">{`Étape ${e.numero} : `}</span>
+                {e.libelle}
+                <span className="sr-only">
+                  {e.fait ? ', réglé.' : ', à régler.'}
+                </span>
+              </p>
               <p className="text-xs text-muted-foreground">
                 {e.fait ? e.etat : `${e.aide} ${e.etat}`}
               </p>
@@ -226,10 +259,10 @@ export function PourCommencer({
                 size="sm"
                 variant={e === suivante ? 'default' : 'outline'}
                 className="shrink-0"
-                aria-label={`Régler : ${e.libelle}`}
+                aria-label={`${verbe} : ${e.libelle}`}
                 onClick={() => onAller(e.lien)}
               >
-                Régler
+                {verbe}
               </Button>
             )}
           </li>
@@ -274,16 +307,27 @@ export function BandeauReglages({
 export function GardeDemarrage({
   etat,
   vide,
+  modifiable = true,
   children,
 }: {
   etat: EtatGeneration
   /** Aucun shift dans ce qui est affiché. */
   vide: boolean
+  /** Droit de régler les paramètres (sinon « Voir »). */
+  modifiable?: boolean
   children: ReactNode
 }) {
   const aller = useAllerAuReglage()
   if (!etat.blocage) return <>{children}</>
-  if (vide) return <PourCommencer etapes={etat.etapes} onAller={aller} />
+  if (vide && etat.grilleInutile) {
+    return (
+      <PourCommencer
+        etapes={etat.etapes}
+        onAller={aller}
+        modifiable={modifiable}
+      />
+    )
+  }
   return (
     <>
       <BandeauReglages blocage={etat.blocage} onAller={aller} />
@@ -294,18 +338,13 @@ export function GardeDemarrage({
 
 // ------------------------------------------------------------ confirmation
 
-/** Listes de points déjà acceptées (« Générer quand même ») depuis le
- * chargement de la page. */
-const acceptees = new Set<string>()
-const signature = (points: readonly PointReglage[]) =>
-  points
-    .map((p) => p.id)
+/** Ce qu'on a accepté : chaque point, avec son texte (un point dont le
+ * chiffre change, il manque 12 h devenu 40 h, redemande). */
+export function signaturePoints(points: readonly PointReglage[]): string {
+  return points
+    .map((p) => `${p.id}\u0000${p.texte}`)
     .sort()
-    .join('|')
-
-/** Pour les tests : oublie les confirmations données. */
-export function oublierConfirmationsGeneration() {
-  acceptees.clear()
+    .join('\u0001')
 }
 
 /**
@@ -317,12 +356,15 @@ export function useConfirmationGeneration(etat: EtatGeneration) {
   const notifier = useNotifier()
   const aller = useAllerAuReglage()
   const [attente, setAttente] = useState<(() => void) | null>(null)
+  // Dernière liste acceptée, dans l'état de la vue (semaine ou mois) : elle
+  // survit au changement de semaine, pas à la fermeture de la vue.
+  const [acceptee, setAcceptee] = useState<string | null>(null)
   const demander = (lancer: () => void) => {
     if (etat.blocage) {
       notifier(etat.blocage.texte, 'attention')
       return
     }
-    if (!etat.aVoir.length || acceptees.has(signature(etat.aVoir))) {
+    if (!etat.aVoir.length || acceptee === signaturePoints(etat.aVoir)) {
       lancer()
       return
     }
@@ -335,7 +377,7 @@ export function useConfirmationGeneration(etat: EtatGeneration) {
       onFermer={() => setAttente(null)}
       onGenerer={() => {
         const lancer = attente
-        acceptees.add(signature(etat.aVoir))
+        setAcceptee(signaturePoints(etat.aVoir))
         setAttente(null)
         lancer?.()
       }}
@@ -394,7 +436,13 @@ export function ConfirmationGeneration({
           <ChevronDown
             className={cn('transition-transform', deplie && 'rotate-180')}
           />
-          {deplie ? 'Masquer les points' : `Voir les ${resume}`}
+          {deplie
+            ? n > 1
+              ? 'Masquer les points'
+              : 'Masquer le point'
+            : n > 1
+              ? `Voir les ${resume}`
+              : 'Voir le point à vérifier'}
         </Button>
         {deplie && (
           <div className="min-h-0 overflow-y-auto">

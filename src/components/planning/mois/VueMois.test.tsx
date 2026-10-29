@@ -85,8 +85,6 @@ vi.mock(
 
 const { VueMois } = await import('#/components/planning/mois/VueMois.tsx')
 const { FilMessages } = await import('#/components/planning/Messages.tsx')
-const { oublierConfirmationsGeneration } =
-  await import('#/components/planning/PretAGenerer.tsx')
 
 /** « Compléter le mois » : l'hôtel fictif a des points à voir dans ses
  * réglages, la génération les montre d'abord (étape 7). */
@@ -121,7 +119,6 @@ beforeEach(() => {
   }
   Element.prototype.scrollIntoView = () => {}
   Element.prototype.hasPointerCapture = () => false
-  oublierConfirmationsGeneration()
   referentiel = demo.referentiel
   affectations = []
   service.fetchShifts.mockImplementation(() =>

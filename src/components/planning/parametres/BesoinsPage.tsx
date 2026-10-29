@@ -165,15 +165,17 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
     (cible) => {
       if (cible === 'presence') {
         setVue('presence')
-        return
+        return true
       }
       const soutien = idCible(cible, 'soutien')
       const id = soutien ?? idCible(cible, 'poste')
-      if (id === undefined) return
+      if (id === undefined || !ref.data?.postes.some((p) => p.id === id))
+        return false
       setVue('postes')
       if (soutien !== undefined) setCouche('soutien')
       // Après le rendu de la vue par poste.
       window.setTimeout(() => allerAuPoste(id), 0)
+      return true
     },
     onOuvert,
   )

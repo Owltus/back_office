@@ -1,5 +1,13 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+} from '@testing-library/react'
+import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { verifierReglages } from '#/lib/planning/coherence.ts'
@@ -9,13 +17,22 @@ import { SEMAINE_TYPE_VIDE } from '#/lib/planning/types.ts'
 import type { Referentiel, Salarie } from '#/lib/planning/types.ts'
 
 vi.mock('#/lib/supabase.ts', () => ({ supabase: {} }))
+const navigate = vi.fn()
+vi.mock('@tanstack/react-router', async (orig) => ({
+  ...(await orig<typeof import('@tanstack/react-router')>()),
+  useNavigate: () => navigate,
+}))
 
 const {
   ConfirmationGeneration,
+  GardeDemarrage,
   PourCommencer,
   blocageGeneration,
   etapesDemarrage,
+  grilleInutile,
+  useConfirmationGeneration,
 } = await import('#/components/planning/PretAGenerer.tsx')
+const { FilMessages } = await import('#/components/planning/Messages.tsx')
 
 afterEach(cleanup)
 
@@ -101,15 +118,16 @@ function apres(n: number): Referentiel {
   return r
 }
 
-const LIGNES = ['1. Horaires', '2. Postes', '3. Équipe', '4. Besoins']
+const LIGNES = ['horaires', 'postes', 'equipe', 'besoins']
 
+/** Ce qu'un lecteur d'écran entend de chaque ligne : réglée ou non, aide
+ * comprise (aucun aria-label ne masque le contenu). */
 function lignesReglees(): boolean[] {
-  return LIGNES.map((debut) =>
-    screen
-      .getByRole('listitem', { name: new RegExp(`^${debut}`) })
-      .getAttribute('aria-label')!
-      .endsWith('réglé'),
-  )
+  return LIGNES.map((ecran) => {
+    const li = document.querySelector(`li[data-etape="${ecran}"]`)!
+    expect(li.hasAttribute('aria-label')).toBe(false)
+    return li.textContent!.includes(', réglé.')
+  })
 }
 
 describe('PourCommencer', () => {
@@ -171,6 +189,31 @@ describe('PourCommencer', () => {
     expect(onAller).toHaveBeenCalledWith({ page: '/planning/equipe' })
   })
 
+  it('lecture seule : Voir au lieu de Régler', () => {
+    const onAller = vi.fn()
+    const r = apres(1)
+    render(
+      <PourCommencer
+        etapes={etapesDemarrage(r, verifierReglages(r))}
+        onAller={onAller}
+        modifiable={false}
+      />,
+    )
+    expect(screen.queryByRole('button', { name: /^Régler/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Voir : Postes' }))
+    expect(onAller).toHaveBeenCalledWith({ page: '/planning/postes' })
+  })
+
+  it('le compte des besoins vient des besoins retenus par le moteur', () => {
+    const r = apres(4)
+    // Un besoin sur un code que le poste ne prévoit pas : ignoré.
+    r.horaires.push({ ...r.horaires[0], id: 2, code: 'S' })
+    r.postes[0].horaires_autorises = [1]
+    r.besoins.push({ ...r.besoins[0], id: 2, horaire_id: 2, jour: 1 })
+    const etapes = etapesDemarrage(r, verifierReglages(r))
+    expect(etapes[3].etat).toBe('1 besoin')
+  })
+
   it('le seed fictif est prêt : tout coché, rien ne bloque', () => {
     const { referentiel } = hotelDemo('2026-11-02')
     const points = verifierReglages(referentiel)
@@ -221,5 +264,138 @@ describe('ConfirmationGeneration', () => {
     expect(screen.getByText('Point 0')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Générer quand même' }))
     expect(onGenerer).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('GardeDemarrage', () => {
+  const etat = (r: Referentiel) => {
+    const points = verifierReglages(r)
+    return {
+      points,
+      etapes: etapesDemarrage(r, points),
+      blocage: blocageGeneration(points),
+      grilleInutile: grilleInutile(points),
+      aVoir: points.filter((p) => p.gravite === 'a-voir'),
+    }
+  }
+  const garde = (r: Referentiel) =>
+    render(
+      <GardeDemarrage etat={etat(r)} vide>
+        <div>grille</div>
+      </GardeDemarrage>,
+    )
+
+  it('semaine vide, besoins tous écartés : grille visible et bandeau', () => {
+    const r = apres(4)
+    r.horaires.push({ ...r.horaires[0], id: 2, code: 'S' })
+    r.postes[0].horaires_autorises = [2]
+    garde(r)
+    expect(screen.getByText('grille')).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: 'Pour commencer' })).toBeNull()
+    expect(screen.getByRole('status').textContent).toMatch(
+      /Le seul besoin est ignoré/,
+    )
+  })
+
+  it('semaine vide, aucun besoin : grille visible (planning à la main)', () => {
+    garde(apres(3))
+    expect(screen.getByText('grille')).toBeTruthy()
+    expect(screen.getByRole('status').textContent).toMatch(/Aucun besoin/)
+  })
+
+  it('semaine vide, personne sur un poste : la carte remplace la grille', () => {
+    garde(apres(2))
+    expect(screen.queryByText('grille')).toBeNull()
+    expect(screen.getByRole('heading', { name: 'Pour commencer' })).toBeTruthy()
+  })
+})
+
+describe('useConfirmationGeneration : mémoire de l accord', () => {
+  const point = (texte: string): PointReglage => ({
+    id: 'heures:1',
+    gravite: 'a-voir',
+    ecran: 'besoins',
+    texte,
+    lien: { page: '/planning/besoins' },
+  })
+  const etatAvec = (p: PointReglage[]) => ({
+    points: p,
+    etapes: [],
+    blocage: null,
+    grilleInutile: false,
+    aVoir: p,
+  })
+  const enveloppe = ({ children }: { children: ReactNode }) => (
+    <FilMessages>{children}</FilMessages>
+  )
+
+  it('acceptée une fois, la même liste passe ; un texte changé redemande', () => {
+    const lancer = vi.fn()
+    const { result, rerender } = renderHook(
+      ({ e }) => useConfirmationGeneration(e),
+      {
+        wrapper: enveloppe,
+        initialProps: { e: etatAvec([point('Il manque 12 h.')]) },
+      },
+    )
+    // Première demande : la boîte s'ouvre, rien n'est lancé.
+    act(() => result.current.demander(lancer))
+    expect(lancer).not.toHaveBeenCalled()
+    const boite = render(result.current.dialogue, { wrapper: enveloppe })
+    fireEvent.click(screen.getByRole('button', { name: 'Générer quand même' }))
+    expect(lancer).toHaveBeenCalledTimes(1)
+    boite.unmount()
+
+    // Même liste : lancée directement.
+    act(() => result.current.demander(lancer))
+    expect(lancer).toHaveBeenCalledTimes(2)
+
+    // Même point, texte changé : la question revient.
+    rerender({ e: etatAvec([point('Il manque 40 h.')]) })
+    act(() => result.current.demander(lancer))
+    expect(lancer).toHaveBeenCalledTimes(2)
+  })
+
+  it('une autre ouverture (autre compte, page rechargée) redemande', () => {
+    const lancer = vi.fn()
+    const e = etatAvec([point('Il manque 12 h.')])
+    const a = renderHook(() => useConfirmationGeneration(e), {
+      wrapper: enveloppe,
+    })
+    act(() => a.result.current.demander(lancer))
+    render(a.result.current.dialogue, { wrapper: enveloppe })
+    fireEvent.click(screen.getByRole('button', { name: 'Générer quand même' }))
+    expect(lancer).toHaveBeenCalledTimes(1)
+    cleanup()
+    const b = renderHook(() => useConfirmationGeneration(e), {
+      wrapper: enveloppe,
+    })
+    act(() => b.result.current.demander(lancer))
+    expect(lancer).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('ConfirmationGeneration : un seul point', () => {
+  it('Voir le point à vérifier, au singulier', () => {
+    render(
+      <ConfirmationGeneration
+        ouvert
+        points={[
+          {
+            id: 'p',
+            gravite: 'a-voir',
+            ecran: 'equipe',
+            texte: 'Un point',
+            lien: { page: '/planning/equipe' },
+          },
+        ]}
+        onFermer={vi.fn()}
+        onGenerer={vi.fn()}
+        onAller={vi.fn()}
+      />,
+    )
+    expect(
+      screen.getByRole('button', { name: 'Voir le point à vérifier' }),
+    ).toBeTruthy()
   })
 })

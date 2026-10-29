@@ -807,6 +807,7 @@ export function VueMois({
         <GardeDemarrage
           etat={pretGen}
           vide={liste.every((s) => !s.affectations.length)}
+          modifiable={droits.gerer}
         >
           <GrilleMois
             mois={mois}

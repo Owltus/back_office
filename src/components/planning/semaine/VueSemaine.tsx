@@ -753,7 +753,11 @@ export function VueSemaine({
           ))}
         </div>
       ) : (
-        <GardeDemarrage etat={pretGen} vide={!affichee.affectations.length}>
+        <GardeDemarrage
+          etat={pretGen}
+          vide={!affichee.affectations.length}
+          modifiable={droits.gerer}
+        >
           <DndContext
             // Capteurs constants (React exige une liste de même taille) : ce sont
             // les cartes qui se désactivent, hors droits et pendant un calcul.

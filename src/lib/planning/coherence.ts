@@ -15,15 +15,22 @@
  * haute, donc jamais de fausse alerte), restent sous les heures que ses
  * besoins demandent de plus de `SEUIL_HEURES` (10 %). Le même calcul sur
  * tout l'hôtel donne un point global, montré seulement si aucun poste ne
- * l'est déjà.
+ * l'est déjà. Un poste dont un titulaire a un contrat qui ne mesure pas ses
+ * heures (forfait jours, extra, 0 h) n'est pas jugé.
+ *
+ * Correctifs de la relecture adverse (2026-10-29) : besoins tous écartés
+ * distingués de « aucun besoin », besoin que personne ne peut tenir (fiche
+ * ou semaine type), personne sans poste avec un code fixé.
  */
 
 import { nomComplet } from '#/lib/planning/affichage.ts'
 import {
   codeDeLaFiche,
+  codeImposeRespecte,
   codePrevuAuPoste,
   codesDeLaFiche,
   codesDuPoste,
+  codesImposes,
   codesPermis,
 } from '#/lib/planning/eligibilite.ts'
 import { travail } from '#/lib/planning/modele.ts'
@@ -144,7 +151,41 @@ export function besoinsPresence(r: Referentiel): Map<string, number> {
   )
 }
 
+/** Besoins valides qui demandent au moins une personne autonome : ceux que
+ * compte « N besoins » de Pour commencer, comme le point bloquant. */
+export function besoinsDemandes(r: Referentiel): Besoin[] {
+  const ctx = contexte({
+    lundi: LUNDI_TYPE,
+    referentiel: r,
+    absences: [],
+    affectations: [],
+    avant: [],
+    apres: [],
+  })
+  return besoinsValides(ctx).valides.filter((b) => b.effectif > 0)
+}
+
 const autonome = (n: string) => n === 'titulaire' || n === 'occasionnel'
+
+/** Son contrat ne mesure pas ses heures : forfait jours (décompte en
+ * jours), extra (placé à la main, au besoin), ou 0 h. */
+const contratIndicatif = (s: Salarie) =>
+  s.forfait_jours || s.type_contrat === 'extra' || !(Number(s.heures_hebdo) > 0)
+
+/** La personne peut-elle tenir ce besoin (poste, jour, code) d'après sa
+ * fiche et sa semaine type ? Le poste est déjà vérifié par `besoinsValides`.
+ * Un besoin sans code ne peut pas être tenu par une fiche qui restreint ses
+ * codes (même règle que le moteur). */
+function peutTenir(s: Salarie, b: Besoin): boolean {
+  const jourType = s.semaine_type.at(b.jour)
+  if (jourType?.mode === 'repos' || jourType?.mode === 'absence') return false
+  const code = b.horaire_id === null ? null : String(b.horaire_id)
+  const fiche = {
+    shiftsAutorises: codesDeLaFiche(s),
+    shiftImpose: codesImposes(s.semaine_type),
+  }
+  return codeDeLaFiche(fiche, code) && codeImposeRespecte(fiche, b.jour, code)
+}
 
 /**
  * Relit les réglages et rend les points à vérifier, dans l'ordre des écrans
@@ -161,13 +202,15 @@ export function verifierReglages(
     ecran: EcranReglage,
     texte: string,
     cible?: string,
+    /** Écran où corriger, quand ce n'est pas celui du groupe. */
+    page: PageReglage = PAGE_ECRAN[ecran],
   ) =>
     points.push({
       id,
       gravite,
       ecran,
       texte,
-      lien: { page: PAGE_ECRAN[ecran], ...(cible ? { cible } : {}) },
+      lien: { page, ...(cible ? { cible } : {}) },
     })
 
   const horaires = new Map(r.horaires.map((h) => [h.id, h]))
@@ -217,12 +260,41 @@ export function verifierReglages(
     )
   }
   if (r.postes.length && !demandes.length) {
-    ajouter(
-      'bloquant:besoins',
-      'bloquant',
-      'besoins',
-      'Aucun besoin. Indiquez combien de personnes il faut sur chaque poste.',
-    )
+    // Des besoins existent peut-être, mais tous écartés par le moteur : le
+    // dire, sinon « Aucun besoin » contredit ce que montre l'écran Besoins.
+    const ecartes = alertes
+      .map((a) => parId.get(a.besoin_id))
+      .filter(
+        (b): b is Besoin => !!b && b.effectif > 0 && postes.has(b.poste_id),
+      )
+    if (ecartes.length) {
+      const parCode = ecartes.every(
+        (b) => !codePrevuAuPoste(postes.get(b.poste_id)!, b.horaire_id),
+      )
+      const n = ecartes.length
+      const raison = parCode
+        ? n > 1
+          ? 'leurs horaires ne sont plus prévus pour leur poste'
+          : "son horaire n'est plus prévu pour son poste"
+        : n > 1
+          ? 'leurs horaires ne conviennent plus à leur poste'
+          : 'son horaire ne convient plus à son poste'
+      ajouter(
+        'bloquant:besoins-ignores',
+        'bloquant',
+        'besoins',
+        n > 1
+          ? `Les ${n} besoins sont ignorés : ${raison}. Corrigez les besoins ou les horaires du poste.`
+          : `Le seul besoin est ignoré : ${raison}. Corrigez-le ou changez les horaires du poste.`,
+      )
+    } else {
+      ajouter(
+        'bloquant:besoins',
+        'bloquant',
+        'besoins',
+        'Aucun besoin. Indiquez combien de personnes il faut sur chaque poste.',
+      )
+    }
   }
 
   // ------------------------------------------------------------- horaires
@@ -307,6 +379,8 @@ export function verifierReglages(
         'a-voir',
         'equipe',
         `Le poste ${p.nom} a des besoins, mais personne n'y est titulaire ni en dépannage.`,
+        `poste-${p.id}`,
+        PAGE_ECRAN.postes,
       )
     } else if (p.presence && !tenants(p.id, (n) => n === 'titulaire').length) {
       ajouter(
@@ -314,8 +388,51 @@ export function verifierReglages(
         'a-voir',
         'equipe',
         `Le poste ${p.nom} compte dans le matin et le soir, mais personne n'y est titulaire.`,
+        `poste-${p.id}`,
+        PAGE_ECRAN.postes,
       )
     }
+  }
+
+  // Besoin que personne ne peut tenir : le poste a des autonomes, mais
+  // aucun n'a ce code permis ce jour-là (fiche, semaine type). Regroupé par
+  // poste et horaire, avec les jours.
+  const intenables = new Map<
+    string,
+    { poste: Poste; besoin: Besoin; jours: number[]; tenants: Salarie[] }
+  >()
+  for (const b of demandes) {
+    const poste = postes.get(b.poste_id)
+    if (!poste) continue
+    const autonomes = tenants(b.poste_id, autonome)
+    if (!autonomes.length) continue // déjà dit par « sans-autonome »
+    if (autonomes.some((s) => peutTenir(s, b))) continue
+    const cle = `${b.poste_id}:${b.horaire_id ?? `${b.debut}-${b.fin}`}`
+    const g = intenables.get(cle) ?? {
+      poste,
+      besoin: b,
+      jours: [],
+      tenants: autonomes,
+    }
+    g.jours.push(b.jour)
+    intenables.set(cle, g)
+  }
+  for (const [cle, g] of intenables) {
+    const h =
+      g.besoin.horaire_id !== null
+        ? horaires.get(g.besoin.horaire_id)
+        : undefined
+    const libelle = h
+      ? `l'horaire ${h.code}`
+      : `l'horaire ${g.besoin.debut} - ${g.besoin.fin}`
+    const seule = g.tenants.length === 1 ? g.tenants[0] : undefined
+    ajouter(
+      `besoin-sans-personne:${cle}`,
+      'a-voir',
+      'equipe',
+      `Sur le poste ${g.poste.nom}, personne ne peut tenir ${libelle} demandé par les besoins (${listeJours(g.jours)}) : ${seule ? `la fiche de ${nomComplet(seule)} ne le permet pas (horaires autorisés ou semaine type)` : 'aucune fiche de ce poste ne le permet (horaires autorisés ou semaine type)'}.`,
+      seule ? `salarie-${seule.id}` : undefined,
+    )
   }
 
   const codesVivants = (s: Salarie) =>
@@ -333,6 +450,7 @@ export function verifierReglages(
       )
     const vivants = codesVivants(s)
     const tousMorts =
+      r.horaires.length > 0 &&
       s.shifts_autorises.length > 0 &&
       tenus.length > 0 &&
       !s.shifts_autorises.some((id) => vivants.has(id))
@@ -344,7 +462,8 @@ export function verifierReglages(
         `${nom} : aucun des horaires cochés dans sa fiche n'est permis sur ses postes. Le planning automatique ne peut pas placer cette personne.`,
         `salarie-${s.id}`,
       )
-    } else {
+    } else if (r.horaires.length) {
+      // Sans aucun code, le point bloquant des horaires suffit.
       const fiche = { shiftsAutorises: codesDeLaFiche(s) }
       for (const { poste } of tenus) {
         const utilisables = codesDuPoste(poste, r.horaires).filter((h) =>
@@ -361,7 +480,20 @@ export function verifierReglages(
       }
     }
 
-    // Code fixé par la semaine type (D12 : règle stricte).
+    // Code fixé par la semaine type (D12 : règle stricte). Sans aucun poste,
+    // un seul point : c'est le poste qui manque, pas le code.
+    const fixes = codesImposes(s.semaine_type)
+    if (!tenus.length && fixes.length) {
+      ajouter(
+        `sans-poste-code-fixe:${s.id}`,
+        'a-voir',
+        'equipe',
+        `${nom} n'a aucun poste : sa semaine type fixe un horaire le ${listeJours(fixes.map(([j]) => j))}, que le planning automatique ne pourra pas poser. Indiquez ses postes dans sa fiche.`,
+        `salarie-${s.id}`,
+      )
+    }
+    if (!tenus.length) continue
+
     s.semaine_type.forEach((e, j) => {
       if ((e.mode !== 'auto' && e.mode !== 'travail') || !e.type_shift_id)
         return
@@ -418,10 +550,20 @@ export function verifierReglages(
     demandeesPoste.set(b.poste_id, (demandeesPoste.get(b.poste_id) ?? 0) + m)
   }
   let signale = false
+  // Un poste dont un titulaire a un contrat qui ne mesure pas ses heures
+  // (forfait jours, extra, 0 h) n'est pas jugé : on ne saurait pas dire ce
+  // qui manque. Il sort aussi du total.
+  const nonJuges = new Set(
+    r.postes
+      .filter((p) =>
+        tenants(p.id, (n) => n === 'titulaire').some(contratIndicatif),
+      )
+      .map((p) => p.id),
+  )
   for (const p of r.postes) {
     const demandees = demandeesPoste.get(p.id) ?? 0
     const titulaires = tenants(p.id, (n) => n === 'titulaire')
-    if (!demandees || !titulaires.length) continue
+    if (!demandees || !titulaires.length || nonJuges.has(p.id)) continue
     const contrat = titulaires.reduce((t, s) => t + minutesContrat(s), 0)
     if (demandees - contrat > demandees * SEUIL_HEURES) {
       signale = true
@@ -434,9 +576,15 @@ export function verifierReglages(
       )
     }
   }
-  const totalDemande = [...demandeesPoste.values()].reduce((a, b) => a + b, 0)
+  const totalDemande = [...demandeesPoste]
+    .filter(([id]) => !nonJuges.has(id))
+    .reduce((a, [, m]) => a + m, 0)
   const totalContrat = equipe
-    .filter((s) => s.competences.some((c) => c.niveau === 'titulaire'))
+    .filter(
+      (s) =>
+        !contratIndicatif(s) &&
+        s.competences.some((c) => c.niveau === 'titulaire'),
+    )
     .reduce((t, s) => t + minutesContrat(s), 0)
   if (
     !signale &&

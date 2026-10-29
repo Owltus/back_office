@@ -36,6 +36,13 @@ export function useNotifier(): Notifier {
   return n
 }
 
+/** Comme `useNotifier`, mais sans fil (écran rendu seul, en test) ne dit
+ * rien au lieu de lever. */
+export function useNotifierOptionnel(): Notifier {
+  return useContext(Contexte) ?? rien
+}
+const rien: Notifier = () => {}
+
 export function FilMessages({ children }: { children: ReactNode }) {
   const [messages, setMessages] = useState<Message[]>([])
   const suivant = useRef(0)

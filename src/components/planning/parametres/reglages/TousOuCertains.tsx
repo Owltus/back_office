@@ -16,6 +16,7 @@ import {
   modificationPermise,
 } from '#/components/planning/parametres/reglages/tousOuCertains.ts'
 import type { ModeListe } from '#/components/planning/parametres/reglages/tousOuCertains.ts'
+import { cn } from '#/lib/utils.ts'
 
 export interface ListeGardee {
   choisis: number[]
@@ -50,21 +51,32 @@ export function TousOuCertains({
   const mode = modeDe(choisis)
   // Sélection mise de côté par « Tous », le temps de la séance.
   const [memoire, setMemoire] = useState<number[]>([])
-  const [refus, setRefus] = useState(false)
+  // Ce qui vient d'être refusé : décocher le dernier, ou « Seulement
+  // ceux-ci » sans rien à proposer.
+  const [refus, setRefus] = useState<'dernier' | 'rien' | null>(null)
 
   const changerMode = (m: ModeListe) => {
     if (m === mode) return
     const b = basculerMode(m, choisis, memoire, proposes)
     setMemoire(b.memoire)
-    setRefus(false)
+    setRefus(m === 'certains' && !b.choisis.length ? 'rien' : null)
     if (b.choisis.length || m === 'tous') onChange(b.choisis)
   }
 
   const changerListe = (suivante: number[]) => {
     const permise = modificationPermise(suivante, proposes)
-    setRefus(permise === null)
+    setRefus(permise === null ? 'dernier' : null)
     if (permise) onChange(permise)
   }
+
+  const phraseRefus =
+    refus === 'dernier'
+      ? `Gardez au moins un ${quoi}, ou choisissez Tous.`
+      : refus === 'rien'
+        ? quoi === 'code'
+          ? 'Aucun code à choisir ici : créez des horaires, ou ouvrez-en sur ses postes. La liste reste sur Tous.'
+          : 'Aucun poste à choisir : créez des postes. La liste reste sur Tous.'
+        : ''
 
   return (
     <div className="flex flex-col gap-2">
@@ -84,15 +96,19 @@ export function TousOuCertains({
       {mode === 'tous' ? (
         <span className="text-sm text-muted-foreground">{texteTous}</span>
       ) : (
-        <>
-          {children({ choisis, onChange: changerListe })}
-          {refus && (
-            <span className="text-xs text-amber-600 dark:text-amber-400">
-              Gardez au moins un {quoi}, ou choisissez Tous.
-            </span>
-          )}
-        </>
+        children({ choisis, onChange: changerListe })
       )}
+      {/* Zone toujours montée : un lecteur d'écran annonce la phrase quand
+          elle apparaît. */}
+      <span
+        role="status"
+        className={cn(
+          'text-xs text-amber-600 dark:text-amber-400',
+          !phraseRefus && 'sr-only',
+        )}
+      >
+        {phraseRefus}
+      </span>
     </div>
   )
 }

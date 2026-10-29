@@ -185,7 +185,7 @@ function GroupeControle({
             {p.gravite === 'bloquant' && (
               <OctagonAlert
                 className="mt-0.5 size-4 shrink-0 text-destructive"
-                aria-label="Bloquant"
+                aria-hidden
               />
             )}
             <p className="min-w-0 flex-1 text-sm">

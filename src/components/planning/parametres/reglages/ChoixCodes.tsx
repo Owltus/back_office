@@ -8,6 +8,7 @@
 
 import { Check } from 'lucide-react'
 
+import { basculerIds } from '#/components/planning/parametres/reglages/tousOuCertains.ts'
 import { Tip } from '#/components/shared/Tip.tsx'
 import { grouperHoraires, texteSur } from '#/lib/planning/affichage.ts'
 import { heureAffichee } from '#/lib/planning/temps.ts'
@@ -29,11 +30,7 @@ export function ChoixCodes({
   etiquette: string
 }) {
   const basculer = (ids: number[], cocher: boolean) =>
-    onChange(
-      cocher
-        ? [...new Set([...choisis, ...ids])]
-        : choisis.filter((id) => !ids.includes(id)),
-    )
+    onChange(basculerIds(choisis, ids, cocher))
   return (
     <div role="group" aria-label={etiquette} className="flex flex-col gap-2.5">
       {grouperHoraires(horaires).map((g) => {

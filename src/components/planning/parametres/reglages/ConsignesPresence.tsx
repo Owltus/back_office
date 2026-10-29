@@ -67,15 +67,12 @@ export function nouvellesBornes(
   return { minimum: Math.min(avant.minimum, valeur), maximum: valeur }
 }
 
-/** La somme des besoins ne tient pas ce qu'on règle : moins que « au
- * moins », ou plus que « au plus » quand on règle le plafond. */
-export function besoinsEnEcart(
-  besoins: number,
-  b: Bornes,
-  champ: 'minimum' | 'maximum',
-): boolean {
+/** La somme des besoins ne tient pas la consigne : moins que « au moins »,
+ * ou plus que « au plus », quel que soit le compteur affiché (le point « au
+ * plus » du contrôle mène ici, il doit s'y voir). */
+export function besoinsEnEcart(besoins: number, b: Bornes): boolean {
   if (besoins < b.minimum) return true
-  return champ === 'maximum' && b.maximum !== null && besoins > b.maximum
+  return b.maximum !== null && besoins > b.maximum
 }
 
 export function ConsignesPresence({
@@ -200,7 +197,7 @@ export function ConsignesPresence({
                   const fourchette =
                     b.maximum !== null && b.maximum !== b.minimum
                   const n = besoins.get(clePresence(jour, periode)) ?? 0
-                  const ecart = besoinsEnEcart(n, b, champ)
+                  const ecart = besoinsEnEcart(n, b)
                   const moment = `${nomJour.toLowerCase()} ${libelle.toLowerCase()}`
                   return (
                     <td key={nomJour} className="px-1 py-3 text-center">

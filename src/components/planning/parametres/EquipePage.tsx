@@ -76,6 +76,7 @@ export function EquipePage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
       const id = idCible(cible, 'salarie')
       const s = ref.data?.salaries.find((x) => x.id === id)
       if (s) setFiche({ id: s.id, groupeId: s.groupe_id })
+      return !!s
     },
     onOuvert,
   )
