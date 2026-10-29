@@ -59,12 +59,19 @@ import {
 import { heures, texteSur } from '#/lib/planning/affichage.ts'
 import { codesDuPoste } from '#/lib/planning/eligibilite.ts'
 import { planningKeys } from '#/lib/planning/keys.ts'
+import { besoinsPresence } from '#/lib/planning/coherence.ts'
+import {
+  clePresence,
+  libelleConsigne,
+  periodePresence,
+} from '#/lib/planning/presence.ts'
 import { alerteBesoin } from '#/lib/planning/regles.ts'
 import { reglerBesoin } from '#/lib/planning/service.ts'
 import { heureAffichee, presence } from '#/lib/planning/temps.ts'
 import { JOURS } from '#/lib/planning/types.ts'
 import type {
   Besoin,
+  Consigne,
   Horaire,
   Poste,
   Referentiel,
@@ -100,6 +107,10 @@ const LIBELLE_COUCHE = Object.fromEntries(
 ) as Record<Couche, string>
 
 type Vue = 'postes' | 'presence'
+interface Evidence {
+  jour: number
+  periode: 'matin' | 'soir'
+}
 const cleCase = (posteId: number, ligne: LigneBesoin, jour: number) =>
   `${posteId}|${ligne.cle}|${jour}`
 
@@ -130,8 +141,22 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
       return suite
     })
   }, [])
-  const [vue, setVue] = useState<Vue>('postes')
+  const [vue, setVueBrute] = useState<Vue>('postes')
   const [couche, setCouche] = useState<Couche>('effectif')
+  // « Ajuster » depuis la vue matin et soir : le moment dont on complète les
+  // besoins, ses lignes et son jour mis en évidence dans la vue par poste.
+  const [evidence, setEvidence] = useState<Evidence | null>(null)
+  const setVue = (v: Vue) => {
+    setVueBrute(v)
+    if (v === 'presence') setEvidence(null)
+  }
+  const ajuster = (jour: number, periode: 'matin' | 'soir') => {
+    setVueBrute('postes')
+    setCouche('effectif')
+    setEvidence({ jour, periode })
+    const premier = ref.data?.postes.find((p) => p.presence)
+    if (premier) window.setTimeout(() => allerAuPoste(premier.id), 0)
+  }
   // Lien d'un point « À vérifier » : la vue matin et soir, ou un poste
   // (réglage des apprentis et stagiaires pour `soutien-<id>`).
   useOuvrirCible(
@@ -223,6 +248,10 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
   }
 
   const data = ref.data
+  const sommePresence = useMemo(
+    () => (data ? besoinsPresence(data) : new Map<string, number>()),
+    [data],
+  )
 
   return (
     <CadreReglages
@@ -259,7 +288,11 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
           </div>
 
           {vue === 'presence' ? (
-            <ConsignesPresence referentiel={data} modifiable={modifiable} />
+            <ConsignesPresence
+              referentiel={data}
+              modifiable={modifiable}
+              onAjuster={ajuster}
+            />
           ) : !data.postes.length ? (
             <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
               Aucun poste : créez d'abord les postes de l'hôtel.
@@ -287,6 +320,22 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
                 <p className="text-xs text-muted-foreground">
                   {COUCHES.find((c) => c.valeur === couche)?.aide}
                 </p>
+                {evidence && (
+                  <BandeauAjustement
+                    evidence={evidence}
+                    besoins={
+                      sommePresence.get(
+                        clePresence(evidence.jour, evidence.periode),
+                      ) ?? 0
+                    }
+                    consigne={data.consignes.find(
+                      (c) =>
+                        c.jour === evidence.jour &&
+                        c.periode === evidence.periode,
+                    )}
+                    onFermer={() => setEvidence(null)}
+                  />
+                )}
                 {data.postes.length > 1 && (
                   <nav
                     aria-label="Aller à un poste"
@@ -318,6 +367,7 @@ export function BesoinsPage({ ouvrir: lien, onOuvert }: PropsOuvrir = {}) {
                   gardees={gardees.get(poste.id) ?? AUCUNE}
                   ajouter={(cle) => garder(poste.id, cle)}
                   modifiable={modifiable}
+                  evidence={evidence}
                   affiche={affiche}
                   regler={regler}
                 />
@@ -353,6 +403,49 @@ function allerAuPoste(posteId: number) {
 
 const AUCUNE: ReadonlySet<string> = new Set()
 
+/** Rappel en tête de la vue par poste après « Ajuster » : le moment visé,
+ * ce que donnent les besoins (recalculé à chaque réglage) et la consigne. */
+function BandeauAjustement({
+  evidence,
+  besoins,
+  consigne,
+  onFermer,
+}: {
+  evidence: Evidence
+  besoins: number
+  consigne: Consigne | undefined
+  onFermer: () => void
+}) {
+  const moment = `${JOURS[evidence.jour]} ${evidence.periode}`
+  const voulu = consigne
+    ? libelleConsigne(consigne.minimum, consigne.maximum)
+    : '0'
+  const tenu =
+    !consigne ||
+    (besoins >= consigne.minimum &&
+      (consigne.maximum === null || besoins <= consigne.maximum))
+  return (
+    <div
+      role="status"
+      aria-label="Moment à ajuster"
+      className={cn(
+        'flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm',
+        tenu ? 'border-border' : 'border-amber-500/60 bg-amber-500/10',
+      )}
+    >
+      <p>
+        {moment} : les besoins donnent {besoins}, la consigne en veut {voulu}.{' '}
+        {tenu
+          ? "C'est bon."
+          : 'Réglez les personnes nécessaires sur les lignes en surbrillance, colonne encadrée.'}
+      </p>
+      <Button variant="outline" size="sm" onClick={onFermer}>
+        Terminé
+      </Button>
+    </div>
+  )
+}
+
 function CartePoste({
   poste,
   referentiel,
@@ -360,6 +453,7 @@ function CartePoste({
   gardees,
   ajouter,
   modifiable,
+  evidence,
   affiche,
   regler,
 }: {
@@ -369,6 +463,7 @@ function CartePoste({
   gardees: ReadonlySet<string>
   ajouter: (cle: string) => void
   modifiable: boolean
+  evidence: Evidence | null
   affiche: (posteId: number, ligne: LigneBesoin, jour: number) => Reglage
   regler: (
     poste: Poste,
@@ -469,6 +564,7 @@ function CartePoste({
                     possibles.some((h) => h.id === ligne.horaire_id)
                   }
                   modifiable={modifiable}
+                  evidence={evidence}
                   affiche={affiche}
                   regler={regler}
                 />
@@ -569,6 +665,7 @@ function LigneTableau({
   couche,
   permise,
   modifiable,
+  evidence,
   affiche,
   regler,
 }: {
@@ -578,6 +675,7 @@ function LigneTableau({
   couche: Couche
   permise: boolean
   modifiable: boolean
+  evidence: Evidence | null
   affiche: (posteId: number, ligne: LigneBesoin, jour: number) => Reglage
   regler: (
     poste: Poste,
@@ -589,6 +687,10 @@ function LigneTableau({
   const couleur = h?.couleur ?? '#98a2b3'
   const trop = alerteBesoin(poste.categorie, presence(ligne.debut, ligne.fin))
   const lundi = affiche(poste.id, ligne, 0)
+  // « Ajuster » : la ligne compte pour le moment à compléter.
+  const compte =
+    evidence !== null &&
+    periodePresence(poste, h, ligne.debut) === evidence.periode
   const desactive = !modifiable
   // Ce qui est réglé dans les AUTRES choix : une ligne à 0 ici n'a pas
   // l'air d'un oubli quand elle porte des places ailleurs.
@@ -599,7 +701,10 @@ function LigneTableau({
   ).map((c) => c.libelle.toLowerCase())
 
   return (
-    <tr className="border-t">
+    <tr
+      className={cn('border-t', compte && 'bg-primary/10')}
+      data-evidence={compte || undefined}
+    >
       <td className="px-3 py-2">
         <div className="flex items-start gap-2">
           <span
@@ -641,7 +746,16 @@ function LigneTableau({
         // Un apprenti n'est jamais seul : pas de place sans personne nécessaire.
         const sansBase = couche === 'soutien' && r.effectif === 0
         return (
-          <td key={nom} className="px-1 py-2 text-center">
+          <td
+            key={nom}
+            className={cn(
+              'px-1 py-2 text-center',
+              compte &&
+                j === evidence?.jour &&
+                'rounded-md ring-2 ring-primary ring-inset',
+            )}
+            data-jour-ajuste={(compte && j === evidence?.jour) || undefined}
+          >
             {sansBase ? (
               <Tip label="Mettez d'abord une personne nécessaire sur ce jour">
                 <span

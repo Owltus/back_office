@@ -303,4 +303,153 @@ describe('Besoins', () => {
       expect((b as HTMLButtonElement).disabled).toBe(true)
     }
   })
+
+  describe('matin et soir face aux besoins', () => {
+    // Réception et Club comptent ; samedi matin, au moins 3.
+    const avecConsigne = (): Referentiel => {
+      const ref = referentielDemo()
+      for (const p of ref.postes) {
+        p.presence = p.nom === 'Réception' || p.nom === 'Club'
+      }
+      // M du matin, AM du soir, MI « middle » (moment lu sur l'heure).
+      const periodes = { M: 'matin', MI: 'middle', AM: 'soir' } as const
+      for (const h of ref.horaires) {
+        h.periode = periodes[h.code as keyof typeof periodes] ?? null
+      }
+      ref.consignes = [
+        { id: 1, jour: 5, periode: 'matin', minimum: 3, maximum: null },
+      ]
+      return ref
+    }
+    // Oracle indépendant : un code du matin compte le matin ; un middle,
+    // le matin s'il commence de 5 h à 12 h 30 ; un code sans période jamais.
+    const sommeAttendue = (ref: Referentiel, jour: number) => {
+      const comptent = new Set(
+        ref.postes.filter((p) => p.presence).map((p) => p.id),
+      )
+      let n = 0
+      for (const b of ref.besoins) {
+        if (b.jour !== jour || !comptent.has(b.poste_id)) continue
+        const h = ref.horaires.find((x) => x.id === b.horaire_id)
+        const matin =
+          h?.periode === 'matin' ||
+          (h?.periode === 'middle' && b.debut >= '05:00' && b.debut < '12:30')
+        if (matin) n += b.effectif
+      }
+      return n
+    }
+    const caseBesoins = (cle: string) =>
+      document.querySelector<HTMLElement>(`[data-besoins="${cle}"]`)
+    const momentAjuste = () =>
+      screen.getByRole('status', { name: 'Moment à ajuster' }).textContent
+
+    it('affiche la somme des besoins et signale le samedi matin', () => {
+      const ref = avecConsigne()
+      etat.referentiel = ref
+      monter(<BesoinsPage />)
+      fireEvent.click(screen.getByRole('radio', { name: 'Matin et soir' }))
+      expect(
+        screen.getByText(/Les besoins par poste font le planning/),
+      ).toBeTruthy()
+      const attendu = sommeAttendue(ref, 5)
+      expect(attendu).toBe(2)
+      expect(caseBesoins('5:matin')?.textContent).toBe(`Besoins : ${attendu}`)
+      expect(caseBesoins('5:matin')?.dataset.ecart).toBe('true')
+      // Les autres jours n'ont pas de consigne : neutres.
+      for (let j = 0; j < 7; j++) {
+        for (const periode of ['matin', 'soir']) {
+          if (j === 5 && periode === 'matin') continue
+          expect(caseBesoins(`${j}:${periode}`)?.dataset.ecart).toBeUndefined()
+        }
+      }
+      expect(caseBesoins('0:matin')?.textContent).toBe(
+        `Besoins : ${sommeAttendue(ref, 0)}`,
+      )
+      expect(
+        screen.getAllByRole('button', { name: /^Ajuster les besoins/ }),
+      ).toHaveLength(1)
+    })
+
+    it('Ajuster ouvre la vue par poste sur le moment ; un besoin de plus efface l écart', async () => {
+      etat.referentiel = avecConsigne()
+      service.reglerBesoin.mockImplementation(async (v) => {
+        // La base crée le besoin ; la relecture rend un nouveau référentiel.
+        const r = etat.referentiel as Referentiel
+        etat.referentiel = { ...r, besoins: [...r.besoins, { id: 999, ...v }] }
+      })
+      monter(<BesoinsPage />)
+      fireEvent.click(screen.getByRole('radio', { name: 'Matin et soir' }))
+      fireEvent.click(
+        screen.getByRole('button', {
+          name: 'Ajuster les besoins du samedi matin',
+        }),
+      )
+      expect(
+        screen
+          .getByRole('radio', { name: 'Par poste' })
+          .getAttribute('aria-checked'),
+      ).toBe('true')
+      expect(
+        screen
+          .getByRole('radio', { name: 'Personnes nécessaires' })
+          .getAttribute('aria-checked'),
+      ).toBe('true')
+      expect(momentAjuste()).toContain(
+        'Samedi matin : les besoins donnent 2, la consigne en veut au moins 3.',
+      )
+      // Les lignes du matin des postes qui comptent, rien d'autre.
+      const lignes = [
+        ...document.querySelectorAll<HTMLElement>('tr[data-evidence]'),
+      ].map((tr) => [
+        tr.closest('section')?.querySelector('h2')?.textContent,
+        tr.querySelector('td div.truncate')?.textContent,
+      ])
+      expect(lignes).toEqual([
+        ['Réception', 'Matin'],
+        ['Réception', 'Middle'],
+        ['Club', 'Matin'],
+      ])
+      expect(document.querySelectorAll('[data-jour-ajuste]')).toHaveLength(3)
+      expect(service.reglerBesoin).not.toHaveBeenCalled()
+
+      fireEvent.click(
+        poste('Réception').getByRole('button', {
+          name: 'Personnes nécessaires Samedi, Middle : un de plus',
+        }),
+      )
+      await waitFor(() =>
+        expect(momentAjuste()).toContain('les besoins donnent 3'),
+      )
+      fireEvent.click(screen.getByRole('radio', { name: 'Matin et soir' }))
+      expect(sommeAttendue(etat.referentiel as Referentiel, 5)).toBe(3)
+      expect(caseBesoins('5:matin')?.textContent).toBe('Besoins : 3')
+      expect(caseBesoins('5:matin')?.dataset.ecart).toBeUndefined()
+      expect(
+        screen.queryByRole('button', { name: /^Ajuster les besoins/ }),
+      ).toBeNull()
+    })
+
+    it('au plus : un dépassement se signale quand on règle le plafond', () => {
+      const ref = avecConsigne()
+      ref.consignes = [
+        { id: 1, jour: 0, periode: 'matin', minimum: 1, maximum: 2 },
+      ]
+      // Deux personnes nécessaires le lundi matin en Réception : la somme
+      // compte les personnes, pas les lignes.
+      const m = ref.horaires.find((h) => h.code === 'M')
+      for (const b of ref.besoins) {
+        if (b.poste_id === 2 && b.jour === 0 && b.horaire_id === m?.id) {
+          b.effectif = 2
+        }
+      }
+      etat.referentiel = ref
+      monter(<BesoinsPage />)
+      fireEvent.click(screen.getByRole('radio', { name: 'Matin et soir' }))
+      expect(sommeAttendue(ref, 0)).toBe(3)
+      expect(caseBesoins('0:matin')?.textContent).toBe('Besoins : 3')
+      expect(caseBesoins('0:matin')?.dataset.ecart).toBeUndefined()
+      fireEvent.click(screen.getByRole('radio', { name: 'Au plus' }))
+      expect(caseBesoins('0:matin')?.dataset.ecart).toBe('true')
+    })
+  })
 })

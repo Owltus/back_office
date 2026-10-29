@@ -27,7 +27,7 @@ import {
   codesPermis,
 } from '#/lib/planning/eligibilite.ts'
 import { travail } from '#/lib/planning/modele.ts'
-import { periodePresence } from '#/lib/planning/presence.ts'
+import { clePresence, sommeBesoinsPresence } from '#/lib/planning/presence.ts'
 import {
   besoinsValides,
   contexte,
@@ -123,6 +123,25 @@ const pluriel = (n: number, mot: string) => `${n} ${mot}${n > 1 ? 's' : ''}`
 function presentDans(s: Salarie, aujourdhui?: string): boolean {
   if (!s.actif) return false
   return !aujourdhui || !s.date_sortie || s.date_sortie >= aujourdhui
+}
+
+/** Personnes nécessaires des besoins valides, par moment matin et soir
+ * (`clePresence`) : la somme que `verifierReglages` compare aux consignes,
+ * reprise par la vue Matin et soir des Besoins. */
+export function besoinsPresence(r: Referentiel): Map<string, number> {
+  const ctx = contexte({
+    lundi: LUNDI_TYPE,
+    referentiel: r,
+    absences: [],
+    affectations: [],
+    avant: [],
+    apres: [],
+  })
+  return sommeBesoinsPresence(
+    besoinsValides(ctx).valides,
+    new Map(r.postes.map((p) => [p.id, p])),
+    new Map(r.horaires.map((h) => [h.id, h])),
+  )
 }
 
 const autonome = (n: string) => n === 'titulaire' || n === 'occasionnel'
@@ -449,21 +468,11 @@ export function verifierReglages(
 
   // Matin et soir : les personnes nécessaires des postes qui comptent,
   // face à la consigne du jour.
-  const somme = new Map<string, number>()
-  for (const b of demandes) {
-    const periode = periodePresence(
-      postes.get(b.poste_id),
-      b.horaire_id !== null ? horaires.get(b.horaire_id) : undefined,
-      b.debut,
-    )
-    if (!periode) continue
-    const cle = `${b.jour}:${periode}`
-    somme.set(cle, (somme.get(cle) ?? 0) + b.effectif)
-  }
+  const somme = sommeBesoinsPresence(demandes, postes, horaires)
   for (const c of [...r.consignes].sort(
     (a, b) => a.jour - b.jour || (a.periode === 'matin' ? -1 : 1),
   )) {
-    const n = somme.get(`${c.jour}:${c.periode}`) ?? 0
+    const n = somme.get(clePresence(c.jour, c.periode)) ?? 0
     const moment = `${JOURS[c.jour]} ${c.periode}`
     if (n < c.minimum) {
       ajouter(

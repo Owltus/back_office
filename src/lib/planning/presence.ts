@@ -13,7 +13,7 @@
  */
 
 import { minutes } from '#/lib/planning/temps.ts'
-import type { Consigne, Horaire, Poste } from '#/lib/planning/types.ts'
+import type { Besoin, Consigne, Horaire, Poste } from '#/lib/planning/types.ts'
 
 /** Période d'un horaire libre : nuit de 22 h à 5 h, matin avant 12 h 30. */
 export function periodeLibre(debut: string): 'matin' | 'soir' | 'nuit' {
@@ -92,4 +92,33 @@ export function libelleConsigne(
   return maximum === minimum + 1
     ? `${minimum} ou ${maximum}`
     : `${minimum} à ${maximum}`
+}
+
+/** Clé d'un moment de la semaine type : `5:matin`. */
+export const clePresence = (jour: number, periode: 'matin' | 'soir') =>
+  `${jour}:${periode}`
+
+/** Somme des personnes nécessaires (`effectif`) des besoins qui comptent dans
+ * le matin et le soir, par moment (`clePresence`). Seule source de cette
+ * somme : contrôle des réglages (`coherence.ts`) et vue Matin et soir. */
+export function sommeBesoinsPresence(
+  besoins: ReadonlyArray<
+    Pick<Besoin, 'poste_id' | 'jour' | 'horaire_id' | 'debut' | 'effectif'>
+  >,
+  postes: ReadonlyMap<number, Pick<Poste, 'presence'>>,
+  horaires: ReadonlyMap<number, Pick<Horaire, 'periode'>>,
+): Map<string, number> {
+  const somme = new Map<string, number>()
+  for (const b of besoins) {
+    if (b.effectif <= 0) continue
+    const periode = periodePresence(
+      postes.get(b.poste_id),
+      b.horaire_id !== null ? horaires.get(b.horaire_id) : undefined,
+      b.debut,
+    )
+    if (!periode) continue
+    const cle = clePresence(b.jour, periode)
+    somme.set(cle, (somme.get(cle) ?? 0) + b.effectif)
+  }
+  return somme
 }

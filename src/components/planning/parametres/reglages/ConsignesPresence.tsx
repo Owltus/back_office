@@ -8,9 +8,15 @@
  * avec la consigne RELUE. Depuis le 2026-10-28, on règle « au moins » OU
  * « au plus » (un compteur par case, comme les besoins), la fourchette
  * s'affiche sous la case quand les deux diffèrent.
+ *
+ * Depuis le 2026-10-29 (étape 6 du plan « réglages cohérents », D1 = A) :
+ * sous chaque case, ce que donnent les besoins par poste (`besoinsPresence`,
+ * la même somme que le contrôle des réglages), en couleur d'alerte quand ça
+ * ne tient pas la consigne, avec « Ajuster » qui renvoie vers la vue par
+ * poste (`onAjuster`) ; rien n'est écrit tout seul.
  */
 
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Sun, Sunset } from 'lucide-react'
@@ -22,7 +28,8 @@ import {
   Segmente,
 } from '#/components/planning/parametres/reglages/controles.tsx'
 import { planningKeys } from '#/lib/planning/keys.ts'
-import { libelleConsigne } from '#/lib/planning/presence.ts'
+import { besoinsPresence } from '#/lib/planning/coherence.ts'
+import { clePresence, libelleConsigne } from '#/lib/planning/presence.ts'
 import { reglerConsigne } from '#/lib/planning/service.ts'
 import { JOURS } from '#/lib/planning/types.ts'
 import type { Consigne, Referentiel } from '#/lib/planning/types.ts'
@@ -60,12 +67,26 @@ export function nouvellesBornes(
   return { minimum: Math.min(avant.minimum, valeur), maximum: valeur }
 }
 
+/** La somme des besoins ne tient pas ce qu'on règle : moins que « au
+ * moins », ou plus que « au plus » quand on règle le plafond. */
+export function besoinsEnEcart(
+  besoins: number,
+  b: Bornes,
+  champ: 'minimum' | 'maximum',
+): boolean {
+  if (besoins < b.minimum) return true
+  return champ === 'maximum' && b.maximum !== null && besoins > b.maximum
+}
+
 export function ConsignesPresence({
   referentiel,
   modifiable,
+  onAjuster,
 }: {
   referentiel: Referentiel
   modifiable: boolean
+  /** Ouvre la vue par poste sur ce jour et ce moment. */
+  onAjuster?: (jour: number, periode: PeriodeConsigne) => void
 }) {
   const ecrire = useEcriture()
   const notifier = useNotifier()
@@ -111,6 +132,7 @@ export function ConsignesPresence({
   }
 
   const comptent = referentiel.postes.filter((p) => p.presence)
+  const besoins = useMemo(() => besoinsPresence(referentiel), [referentiel])
   const [champ, setChamp] = useState<'minimum' | 'maximum'>('minimum')
   const mot = champ === 'minimum' ? 'au moins' : 'au plus'
 
@@ -124,6 +146,11 @@ export function ConsignesPresence({
           <h2 id="titre-consignes" className="text-base font-semibold">
             Présence du matin et du soir
           </h2>
+          <p className="text-sm">
+            Les besoins par poste font le planning. Le matin et le soir
+            vérifient qu'il y a assez de monde, et le planning automatique
+            essaie de les tenir.
+          </p>
           <p className="text-sm text-muted-foreground">
             {comptent.length
               ? `Comptent les personnes autonomes en ${comptent.map((p) => p.nom).join(', ')}. Les apprentis viennent en plus.`
@@ -172,6 +199,9 @@ export function ConsignesPresence({
                     champ === 'minimum' ? b.minimum : (b.maximum ?? b.minimum)
                   const fourchette =
                     b.maximum !== null && b.maximum !== b.minimum
+                  const n = besoins.get(clePresence(jour, periode)) ?? 0
+                  const ecart = besoinsEnEcart(n, b, champ)
+                  const moment = `${nomJour.toLowerCase()} ${libelle.toLowerCase()}`
                   return (
                     <td key={nomJour} className="px-1 py-3 text-center">
                       <div className="flex flex-col items-center gap-1">
@@ -187,6 +217,30 @@ export function ConsignesPresence({
                         <Fourchette visible={fourchette}>
                           {libelleConsigne(b.minimum, b.maximum)}
                         </Fourchette>
+                        <span
+                          data-besoins={clePresence(jour, periode)}
+                          data-ecart={ecart || undefined}
+                          className={cn(
+                            'h-4 text-[11px] tabular-nums',
+                            ecart
+                              ? 'font-medium text-amber-500'
+                              : 'text-muted-foreground',
+                          )}
+                        >
+                          Besoins : {n}
+                        </span>
+                        {ecart && modifiable && onAjuster ? (
+                          <button
+                            type="button"
+                            aria-label={`Ajuster les besoins du ${moment}`}
+                            className="h-5 rounded px-1 text-[11px] text-primary underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                            onClick={() => onAjuster(jour, periode)}
+                          >
+                            Ajuster
+                          </button>
+                        ) : (
+                          <span className="h-5" aria-hidden />
+                        )}
                       </div>
                     </td>
                   )
