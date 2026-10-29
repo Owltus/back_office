@@ -51,13 +51,10 @@ const JOUR = new Intl.DateTimeFormat('fr-FR', {
 const jourCourt = (date: string) => JOUR.format(new Date(`${date}T12:00:00Z`))
 const majuscule = (t: string) => t.charAt(0).toUpperCase() + t.slice(1)
 
-export function CodeRegle({ regle }: { regle: string }) {
-  if (!regle.startsWith('R-')) return null
-  return (
-    <span className="ml-1.5 rounded border px-1 py-px font-mono text-[10px] text-muted-foreground">
-      {regle}
-    </span>
-  )
+/** Code de la règle (R-…) au survol seulement : la phrase suffit à l'écran
+ * (décision utilisateur du 2026-10-29). */
+export function titreRegle(regle: string) {
+  return regle.startsWith('R-') ? regle : undefined
 }
 
 /** Une famille de points : une ligne repliée, son nombre, puis la liste. */

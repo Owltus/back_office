@@ -570,12 +570,18 @@ describe('FicheSalarie', () => {
     const regles = await screen.findByRole('list', {
       name: 'Règles HCR appliquées',
     })
-    expect(regles.textContent).toContain('R-SEMAINE-MAX')
-    expect(regles.textContent).not.toContain('R-NUIT-MINEUR')
+    // Le code n'est plus écrit à l'écran, seulement au survol (title).
+    const codes = () =>
+      [
+        ...screen
+          .getByRole('list', { name: 'Règles HCR appliquées' })
+          .querySelectorAll('li'),
+      ].map((li) => li.title)
+    expect(regles.textContent).not.toContain('R-SEMAINE-MAX')
+    expect(codes()).toContain('R-SEMAINE-MAX')
+    expect(codes()).not.toContain('R-NUIT-MINEUR')
     fireEvent.click(screen.getByLabelText('Mineur (16-18 ans)'))
-    expect(
-      screen.getByRole('list', { name: 'Règles HCR appliquées' }).textContent,
-    ).toContain('R-NUIT-MINEUR')
+    expect(codes()).toContain('R-NUIT-MINEUR')
   })
 
   it("s'ouvre sur les absences RELUES, pas sur celles du cache", async () => {

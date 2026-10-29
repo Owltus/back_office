@@ -54,7 +54,7 @@ import {
 import { JOURS } from '#/lib/planning/types.ts'
 import type { Horaire, Referentiel } from '#/lib/planning/types.ts'
 import { cn } from '#/lib/utils.ts'
-import { CodeRegle } from '#/components/planning/semaine/PanneauAlertes.tsx'
+import { titreRegle } from '#/components/planning/semaine/PanneauAlertes.tsx'
 import { NEUTRE, travailCode } from '#/components/planning/semaine/edition.ts'
 import { codesDeLaCase } from '#/components/planning/codesCase.ts'
 import type { SourceCase } from '#/components/planning/codesCase.ts'
@@ -443,10 +443,10 @@ export function EditeurShift({
               {existant.alertes.map((a, i) => (
                 <div
                   key={i}
+                  title={titreRegle(a.regle)}
                   className={cn(a.nature === 'loi' && 'text-destructive')}
                 >
                   {a.message}
-                  <CodeRegle regle={a.regle} />
                 </div>
               ))}
             </div>

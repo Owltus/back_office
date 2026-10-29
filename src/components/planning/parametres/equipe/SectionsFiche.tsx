@@ -32,6 +32,7 @@ import { ChoixCodes } from '#/components/planning/parametres/reglages/ChoixCodes
 import { modificationPermise } from '#/components/planning/parametres/reglages/tousOuCertains.ts'
 import { TousOuCertains } from '#/components/planning/parametres/reglages/TousOuCertains.tsx'
 import { Tip } from '#/components/shared/Tip.tsx'
+import { titreRegle } from '#/components/planning/semaine/PanneauAlertes.tsx'
 import { Button } from '#/components/ui/button.tsx'
 import { Input } from '#/components/ui/input.tsx'
 import {
@@ -626,16 +627,8 @@ export function SectionRegles({ b }: Pick<PropsSection, 'b'>) {
     <Section titre="Règles HCR appliquées">
       <ul className="flex flex-col gap-1" aria-label="Règles HCR appliquées">
         {regles.map((r) => (
-          <li
-            key={r.regle}
-            className="flex items-start justify-between gap-3 text-sm"
-          >
-            <span>{r.texte}</span>
-            {r.regle.startsWith('R-') && (
-              <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-                {r.regle}
-              </span>
-            )}
+          <li key={r.regle} title={titreRegle(r.regle)} className="text-sm">
+            {r.texte}
           </li>
         ))}
       </ul>
