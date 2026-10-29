@@ -78,6 +78,13 @@ function donneesDemo(): DonneesSemaine {
 }
 const DONNEES = donneesDemo()
 const SEMAINE = analyser(DONNEES)
+// Ce que lit la vue : la semaine de démo, sauf pour les tests de démarrage.
+const vue = vi.hoisted(() => ({
+  donnees: null as unknown,
+  semaine: null as unknown,
+}))
+vue.donnees = DONNEES
+vue.semaine = SEMAINE
 
 vi.mock('#/components/planning/hooks/usePlanning.ts', async (original) => {
   const reel = await original<Record<string, unknown>>()
@@ -86,9 +93,9 @@ vi.mock('#/components/planning/hooks/usePlanning.ts', async (original) => {
     useDroitsPlanning: () => etat.droits,
     useAujourdhui: () => '2026-10-27',
     useSemaine: () => ({
-      referentiel: DONNEES.referentiel,
-      donnees: DONNEES,
-      semaine: SEMAINE,
+      referentiel: (vue.donnees as DonneesSemaine).referentiel,
+      donnees: vue.donnees,
+      semaine: vue.semaine,
       isPending: false,
       isError: false,
       refetch: () => Promise.resolve([]),
@@ -105,6 +112,8 @@ vi.mock('#/components/planning/hooks/usePlanning.ts', async (original) => {
 const { VueSemaine } =
   await import('#/components/planning/semaine/VueSemaine.tsx')
 const { FilMessages } = await import('#/components/planning/Messages.tsx')
+const { oublierConfirmationsGeneration } =
+  await import('#/components/planning/PretAGenerer.tsx')
 
 function rendre() {
   return render(
@@ -124,7 +133,24 @@ beforeEach(() => {
     Promise.resolve({ poses: 3, dureeMs: 12, semaine: SEMAINE }),
   )
   for (const f of Object.values(service)) f.mockClear()
+  oublierConfirmationsGeneration()
+  vue.donnees = DONNEES
+  vue.semaine = SEMAINE
 })
+
+/** La démo avec des réglages retouchés (et, au choix, sans shift). */
+function avecReglages(
+  retouche: Partial<DonneesSemaine['referentiel']>,
+  sansShift = false,
+) {
+  const d: DonneesSemaine = {
+    ...DONNEES,
+    referentiel: { ...DONNEES.referentiel, ...retouche },
+    affectations: sansShift ? [] : DONNEES.affectations,
+  }
+  vue.donnees = d
+  vue.semaine = analyser(d)
+}
 afterEach(cleanup)
 
 describe('VueSemaine', () => {
@@ -177,6 +203,11 @@ describe('VueSemaine', () => {
       (bouton('Verrouiller la semaine') as HTMLButtonElement).disabled,
     ).toBe(true)
     fireEvent.click(bouton('Compléter le planning'))
+    // L'hôtel fictif a des points à voir : la génération les montre d'abord.
+    expect(etat.generer).not.toHaveBeenCalled()
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Générer quand même' }),
+    )
     await waitFor(() => expect(etat.generer).toHaveBeenCalledWith(LUNDI, {}))
     const n = SEMAINE.a_pourvoir.reduce((t, x) => t + x.manquant, 0)
     expect(
@@ -268,5 +299,96 @@ describe('VueSemaine', () => {
         )
       ).length,
     ).toBeGreaterThan(0)
+  })
+
+  describe('prêt à générer (étape 7)', () => {
+    const VIDE = { horaires: [], postes: [], salaries: [], besoins: [] }
+
+    it('référentiel vide : la carte Pour commencer remplace la grille, Compléter grisé avec sa raison', () => {
+      etat.droits = { pret: true, lire: true, ecrire: true, gerer: true }
+      avecReglages({ ...VIDE, consignes: [] }, true)
+      rendre()
+      expect(
+        screen.getByRole('heading', { name: 'Pour commencer' }),
+      ).toBeTruthy()
+      expect(
+        screen.queryAllByRole('button', { name: 'Ajouter un shift' }),
+      ).toHaveLength(0)
+      const completer = bouton('Compléter le planning') as HTMLButtonElement
+      expect(completer.disabled).toBe(true)
+      // La raison est lue sans survol : description accessible.
+      const id = completer.getAttribute('aria-describedby')!
+      expect(document.getElementById(id)?.textContent).toMatch(
+        /^Génération impossible, un réglage manque : Aucun code horaire/,
+      )
+      fireEvent.click(completer)
+      expect(etat.generer).not.toHaveBeenCalled()
+    })
+
+    it('planning déjà rempli : la grille reste, un bandeau dit ce qui manque', () => {
+      etat.droits = { pret: true, lire: true, ecrire: true, gerer: false }
+      avecReglages({ besoins: [] })
+      rendre()
+      expect(screen.queryByRole('heading', { name: 'Pour commencer' })).toBe(
+        null,
+      )
+      expect(
+        screen.getByRole('button', { name: /Nuit · 23:00-07:45/ }),
+      ).toBeTruthy()
+      expect(
+        screen
+          .getAllByRole('status')
+          .some((s) => /Aucun besoin/.test(s.textContent ?? '')),
+      ).toBe(true)
+      expect(
+        (bouton('Compléter le planning') as HTMLButtonElement).disabled,
+      ).toBe(true)
+    })
+
+    it('seed prêt : Compléter actif, sans description de blocage ; Annuler ne génère pas', async () => {
+      etat.droits = { pret: true, lire: true, ecrire: true, gerer: false }
+      rendre()
+      const completer = bouton('Compléter le planning') as HTMLButtonElement
+      expect(completer.disabled).toBe(false)
+      expect(completer.getAttribute('aria-describedby')).toBeNull()
+      fireEvent.click(completer)
+      const dialogue = await screen.findByRole('dialog')
+      expect(
+        within(dialogue).getByText(/3 points à vérifier dans les réglages/),
+      ).toBeTruthy()
+      fireEvent.click(within(dialogue).getByRole('button', { name: 'Annuler' }))
+      expect(etat.generer).not.toHaveBeenCalled()
+    })
+
+    it('liste acceptée : le clic suivant génère sans redemander', async () => {
+      etat.droits = { pret: true, lire: true, ecrire: true, gerer: false }
+      rendre()
+      fireEvent.click(bouton('Compléter le planning'))
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Générer quand même' }),
+      )
+      await waitFor(() => expect(etat.generer).toHaveBeenCalledTimes(1))
+      await waitFor(() =>
+        expect(
+          (bouton('Compléter le planning') as HTMLButtonElement).disabled,
+        ).toBe(false),
+      )
+      fireEvent.click(bouton('Compléter le planning'))
+      await waitFor(() => expect(etat.generer).toHaveBeenCalledTimes(2))
+      expect(screen.queryByRole('dialog')).toBeNull()
+    })
+
+    it('aucun point à voir : la génération part directement', async () => {
+      etat.droits = { pret: true, lire: true, ecrire: true, gerer: false }
+      // Les points à voir de la démo portent sur les apprentis : sans besoin
+      // de soutien, il n'en reste aucun.
+      avecReglages({
+        besoins: DONNEES.referentiel.besoins.map((b) => ({ ...b, soutien: 0 })),
+      })
+      rendre()
+      fireEvent.click(bouton('Compléter le planning'))
+      await waitFor(() => expect(etat.generer).toHaveBeenCalledTimes(1))
+      expect(screen.queryByRole('dialog')).toBeNull()
+    })
   })
 })

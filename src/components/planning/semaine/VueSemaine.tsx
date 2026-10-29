@@ -61,6 +61,11 @@ import type { ContenuCarte } from '#/components/planning/semaine/Cartes.tsx'
 import { EditeurShift } from '#/components/planning/semaine/EditeurShift.tsx'
 import type { Edition } from '#/components/planning/semaine/EditeurShift.tsx'
 import { EnTeteSemaine } from '#/components/planning/semaine/EnTeteSemaine.tsx'
+import {
+  GardeDemarrage,
+  useConfirmationGeneration,
+  usePretAGenerer,
+} from '#/components/planning/PretAGenerer.tsx'
 import { GrilleSemaine } from '#/components/planning/semaine/GrilleSemaine.tsx'
 import type {
   DonneesLigne,
@@ -180,6 +185,9 @@ export function VueSemaine({
   const ecrire = useEcriture()
   const generer = useGenerer()
   const { occupe, estOccupe, pendant } = useOccupation()
+  // Réglages avant de générer (étape 7 du plan planning-coherence).
+  const pretGen = usePretAGenerer(referentiel)
+  const confirmGen = useConfirmationGeneration(pretGen)
 
   const lundiCourant = lundiDe(aujourdhui)
   const passee = lundi < lundiCourant
@@ -697,6 +705,7 @@ export function VueSemaine({
         enGeneration={enGeneration}
         passee={passee}
         enCours={enCours}
+        blocage={pretGen.blocage?.texte}
         actions={{
           onMois: () => onMois(ajouterJours(lundi, 3).slice(0, 7)),
           onPrecedente: () => onLundi(ajouterJours(lundi, -7)),
@@ -707,7 +716,8 @@ export function VueSemaine({
           aujourdhui,
           onVerrou: () => setConfirmation('verrou'),
           onAlertes: () => setAlertesOuvertes(true),
-          onCompleter: () => void lancerGeneration({}),
+          onCompleter: () =>
+            confirmGen.demander(() => void lancerGeneration({})),
           onFullAuto: () => setConfirmation('fullauto'),
           onValiderSemaine: (epinglee) =>
             action(
@@ -743,50 +753,54 @@ export function VueSemaine({
           ))}
         </div>
       ) : (
-        <DndContext
-          // Capteurs constants (React exige une liste de même taille) : ce sont
-          // les cartes qui se désactivent, hors droits et pendant un calcul.
-          sensors={capteurs}
-          onDragStart={debutVol}
-          onDragEnd={finVol}
-          onDragCancel={() => setEnVol(null)}
-        >
-          <ContextMenu
-            onOpenChange={(o) => {
-              if (!o) setMenu(null)
-            }}
+        <GardeDemarrage etat={pretGen} vide={!affichee.affectations.length}>
+          <DndContext
+            // Capteurs constants (React exige une liste de même taille) : ce sont
+            // les cartes qui se désactivent, hors droits et pendant un calcul.
+            sensors={capteurs}
+            onDragStart={debutVol}
+            onDragEnd={finVol}
+            onDragCancel={() => setEnVol(null)}
           >
-            <ContextMenuTrigger
-              asChild
-              disabled={!droits.ecrire || !pret}
-              onContextMenu={droits.ecrire && pret ? ouvrirMenu : undefined}
+            <ContextMenu
+              onOpenChange={(o) => {
+                if (!o) setMenu(null)
+              }}
             >
-              <div className="min-h-0 min-w-0 flex-1 overflow-auto rounded-xl border bg-card">
-                <GrilleSemaine
-                  dates={dates}
-                  aujourdhui={aujourdhui}
-                  groupes={groupes}
-                  nbPersonnes={nbPersonnes}
-                  postes={referentiel.postes}
-                  gestes={gestes && !occupe}
-                  cliquable={pret && droits.ecrire}
-                  verrou={verrou}
-                  enGlisser={!!enVol}
-                  joursAValider={joursAValider}
-                  validerJourActif={!occupe}
-                  indice={indice}
-                  rappels={rappels}
-                  presence={semaine?.presence ?? []}
-                />
-              </div>
-            </ContextMenuTrigger>
-            <MenuCase ouverture={menu} onHoraire={choisirHoraire} />
-          </ContextMenu>
-          <DragOverlay dropAnimation={null}>
-            {enVol?.type === 'statut' && <CarteStatut s={enVol.statut} enVol />}
-            {contenuVol && <CarteShift c={contenuVol} enVol />}
-          </DragOverlay>
-        </DndContext>
+              <ContextMenuTrigger
+                asChild
+                disabled={!droits.ecrire || !pret}
+                onContextMenu={droits.ecrire && pret ? ouvrirMenu : undefined}
+              >
+                <div className="min-h-0 min-w-0 flex-1 overflow-auto rounded-xl border bg-card">
+                  <GrilleSemaine
+                    dates={dates}
+                    aujourdhui={aujourdhui}
+                    groupes={groupes}
+                    nbPersonnes={nbPersonnes}
+                    postes={referentiel.postes}
+                    gestes={gestes && !occupe}
+                    cliquable={pret && droits.ecrire}
+                    verrou={verrou}
+                    enGlisser={!!enVol}
+                    joursAValider={joursAValider}
+                    validerJourActif={!occupe}
+                    indice={indice}
+                    rappels={rappels}
+                    presence={semaine?.presence ?? []}
+                  />
+                </div>
+              </ContextMenuTrigger>
+              <MenuCase ouverture={menu} onHoraire={choisirHoraire} />
+            </ContextMenu>
+            <DragOverlay dropAnimation={null}>
+              {enVol?.type === 'statut' && (
+                <CarteStatut s={enVol.statut} enVol />
+              )}
+              {contenuVol && <CarteShift c={contenuVol} enVol />}
+            </DragOverlay>
+          </DndContext>
+        </GardeDemarrage>
       )}
 
       {edition && referentiel && (
@@ -854,6 +868,8 @@ export function VueSemaine({
         />
       )}
 
+      {confirmGen.dialogue}
+
       <FicheSalarie
         salarieId={ficheId}
         ouvert={ficheId !== null}
@@ -913,7 +929,9 @@ export function VueSemaine({
         title="Tout recalculer ?"
         description="Full auto repart de zéro : les shifts validés sont eux aussi recalculés."
         confirmLabel="Full auto"
-        onConfirm={() => void lancerGeneration({ tout: true })}
+        onConfirm={() =>
+          confirmGen.demander(() => void lancerGeneration({ tout: true }))
+        }
       />
       <ConfirmDialog
         open={confirmation === 'verrou'}

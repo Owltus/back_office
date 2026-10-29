@@ -85,6 +85,17 @@ vi.mock(
 
 const { VueMois } = await import('#/components/planning/mois/VueMois.tsx')
 const { FilMessages } = await import('#/components/planning/Messages.tsx')
+const { oublierConfirmationsGeneration } =
+  await import('#/components/planning/PretAGenerer.tsx')
+
+/** « Compléter le mois » : l'hôtel fictif a des points à voir dans ses
+ * réglages, la génération les montre d'abord (étape 7). */
+async function completerLeMois() {
+  fireEvent.click(screen.getByRole('button', { name: 'Compléter le mois' }))
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Générer quand même' }),
+  )
+}
 
 function monter() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -110,6 +121,7 @@ beforeEach(() => {
   }
   Element.prototype.scrollIntoView = () => {}
   Element.prototype.hasPointerCapture = () => false
+  oublierConfirmationsGeneration()
   referentiel = demo.referentiel
   affectations = []
   service.fetchShifts.mockImplementation(() =>
@@ -198,7 +210,7 @@ describe('VueMois', { timeout: 20_000 }, () => {
         name: 'Verrouiller le mois',
       }).disabled,
     ).toBe(true)
-    fireEvent.click(screen.getByRole('button', { name: 'Compléter le mois' }))
+    await completerLeMois()
     await waitFor(() => expect(generer).toHaveBeenCalledTimes(5))
     expect(generer.mock.calls.map((c) => c[0])).toEqual([
       '2026-11-02',
@@ -215,7 +227,7 @@ describe('VueMois', { timeout: 20_000 }, () => {
     referentiel = { ...demo.referentiel, verrous: ['2026-11-09'] }
     monter()
     await charge()
-    fireEvent.click(screen.getByRole('button', { name: 'Compléter le mois' }))
+    await completerLeMois()
     await waitFor(() => expect(generer).toHaveBeenCalledTimes(3))
     expect(generer.mock.calls.map((c) => c[0])).toEqual([
       '2026-11-16',
@@ -487,11 +499,73 @@ describe('VueMois', { timeout: 20_000 }, () => {
     )
     monter()
     await charge()
-    fireEvent.click(screen.getByRole('button', { name: 'Compléter le mois' }))
+    await completerLeMois()
     expect(
       await screen.findByText(
         'Génération du mois : arrêt à la semaine S45 (du 02/11). Le planning a changé entre-temps.',
       ),
     ).toBeTruthy()
+  })
+
+  it('réglages vides : la carte Pour commencer remplace la grille, Compléter grisé', async () => {
+    droits = { pret: true, lire: true, ecrire: true, gerer: true }
+    referentiel = {
+      ...demo.referentiel,
+      horaires: [],
+      postes: [],
+      salaries: [],
+      besoins: [],
+      consignes: [],
+    }
+    monter()
+    expect(
+      await screen.findByRole('heading', { name: 'Pour commencer' }),
+    ).toBeTruthy()
+    expect(
+      screen.queryByRole('button', { name: 'Ouvrir la semaine 45' }),
+    ).toBeNull()
+    const completer = screen.getByRole<HTMLButtonElement>('button', {
+      name: 'Compléter le mois',
+    })
+    expect(completer.disabled).toBe(true)
+    const id = completer.getAttribute('aria-describedby')!
+    expect(document.getElementById(id)?.textContent).toMatch(
+      /^Génération impossible, un réglage manque/,
+    )
+    expect(generer).not.toHaveBeenCalled()
+  })
+
+  it('aucun besoin mais des shifts posés : la grille reste, avec le bandeau', async () => {
+    droits = { pret: true, lire: true, ecrire: true, gerer: false }
+    referentiel = { ...demo.referentiel, besoins: [] }
+    const nuit = referentiel.horaires.find((h) => h.code === 'N')!
+    affectations = [
+      {
+        id: 1,
+        lundi: '2026-11-09',
+        salarie_id: 2,
+        poste_id: referentiel.postes.find((p) => p.nom === 'Veille de nuit')!
+          .id,
+        jour: 0,
+        horaire_id: nuit.id,
+        debut: nuit.debut,
+        fin: nuit.fin,
+        epinglee: true,
+        court: false,
+        pause: nuit.pause,
+      },
+    ]
+    monter()
+    await charge()
+    expect(
+      screen
+        .getAllByRole('status')
+        .some((s) => /Aucun besoin/.test(s.textContent ?? '')),
+    ).toBe(true)
+    expect(
+      screen.getByRole<HTMLButtonElement>('button', {
+        name: 'Compléter le mois',
+      }).disabled,
+    ).toBe(true)
   })
 })

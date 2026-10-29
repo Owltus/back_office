@@ -138,6 +138,7 @@ export function EnTeteSemaine({
   enGeneration,
   passee,
   enCours,
+  blocage,
   actions,
 }: {
   numero: number
@@ -154,6 +155,8 @@ export function EnTeteSemaine({
   passee: boolean
   /** La semaine affichée est la semaine en cours. */
   enCours: boolean
+  /** Réglage qui manque pour générer (étape 7) : la raison du bouton grisé. */
+  blocage?: string | null
   actions: ActionsEnTete
 }) {
   const verrou = !!semaine?.verrouillee
@@ -185,7 +188,7 @@ export function EnTeteSemaine({
           ? 'Semaine verrouillée : pas de génération'
           : occupe
             ? 'Calcul en cours…'
-            : null
+            : (blocage ?? null)
   const raisonVerrou = !pret
     ? 'Chargement en cours'
     : !gerer
@@ -204,6 +207,9 @@ export function EnTeteSemaine({
       disabled={!!raisonCompleter}
       onClick={actions.onCompleter}
       aria-label="Compléter le planning"
+      aria-describedby={
+        raisonCompleter ? 'completer-semaine-raison' : undefined
+      }
     >
       {enGeneration ? <Loader2 className="animate-spin" /> : <Sparkles />}
       Compléter
@@ -352,7 +358,7 @@ export function EnTeteSemaine({
                     inactif={
                       passee
                         ? 'Semaine passée : on ne génère pas le passé'
-                        : undefined
+                        : (blocage ?? undefined)
                     }
                     onSelect={actions.onFullAuto}
                   />
@@ -411,6 +417,12 @@ export function EnTeteSemaine({
               </DropdownMenuContent>
             </DropdownMenu>
           </ButtonGroup>
+          {/* La raison du bouton grisé, lue aussi sans survol (étape 7). */}
+          {raisonCompleter && (
+            <span id="completer-semaine-raison" className="sr-only">
+              {raisonCompleter}
+            </span>
+          )}
 
           <div className="flex items-center gap-2">
             <BoutonBarre

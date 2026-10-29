@@ -21,6 +21,11 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 
 import { useNotifier } from '#/components/planning/Messages.tsx'
+import {
+  GardeDemarrage,
+  useConfirmationGeneration,
+  usePretAGenerer,
+} from '#/components/planning/PretAGenerer.tsx'
 import { FicheSalarie } from '#/components/planning/parametres/FicheSalarie.tsx'
 import {
   donneesSemaine,
@@ -136,6 +141,9 @@ export function VueMois({
   const qc = useQueryClient()
   const m = useMois(mois)
   const { jours, lundis, semaines, referentiel, charge } = m
+  // Réglages avant de générer (étape 7 du plan planning-coherence).
+  const pretGen = usePretAGenerer(referentiel)
+  const confirmGen = useConfirmationGeneration(pretGen)
 
   const [progression, setProgression] = useState<{
     libelle: string
@@ -579,8 +587,8 @@ export function VueMois({
         {
           libelle: 'Compléter le mois',
           aide: 'Propose le reste autour de ce qui est validé',
-          inactif: aucuneOuverte,
-          onClick: completerLeMois,
+          inactif: aucuneOuverte ?? pretGen.blocage?.texte,
+          onClick: () => confirmGen.demander(completerLeMois),
         },
       ],
     },
@@ -749,9 +757,10 @@ export function VueMois({
             onAlertes={() => setAlertesOuvertes(true)}
             verrou={verrou}
             completer={{
-              inactif: raisonEcriture ?? aucuneOuverte,
+              inactif:
+                raisonEcriture ?? aucuneOuverte ?? pretGen.blocage?.texte,
               aide: `Compléter le mois : recalcule les propositions (nouveau tirage à chaque clic) ; le validé ne bouge pas.\n${portee}`,
-              onClick: completerLeMois,
+              onClick: () => confirmGen.demander(completerLeMois),
             }}
             groupes={groupes}
             menuInactif={raisonEcriture}
@@ -784,33 +793,38 @@ export function VueMois({
           ))}
         </div>
       ) : (
-        <GrilleMois
-          mois={mois}
-          jours={jours}
-          lundis={lundis}
-          semaines={semaines}
-          etats={etats}
-          referentiel={referentiel}
-          presents={presents}
-          aujourdhui={aujourdhui}
-          glisser={droits.ecrire && !occupe}
-          onSemaine={onSemaine}
-          onFiche={setFiche}
-          onJour={ouvrirJour}
-          onVerrou={
-            droits.gerer
-              ? (l) => {
-                  const verrouillee = !!etats.get(l)?.verrouillee
-                  void executer(
-                    l,
-                    () => verrouiller(l, !verrouillee),
-                    "Le verrou n'a pas pu changer",
-                  )
-                }
-              : undefined
-          }
-          onDeposer={deposer}
-        />
+        <GardeDemarrage
+          etat={pretGen}
+          vide={liste.every((s) => !s.affectations.length)}
+        >
+          <GrilleMois
+            mois={mois}
+            jours={jours}
+            lundis={lundis}
+            semaines={semaines}
+            etats={etats}
+            referentiel={referentiel}
+            presents={presents}
+            aujourdhui={aujourdhui}
+            glisser={droits.ecrire && !occupe}
+            onSemaine={onSemaine}
+            onFiche={setFiche}
+            onJour={ouvrirJour}
+            onVerrou={
+              droits.gerer
+                ? (l) => {
+                    const verrouillee = !!etats.get(l)?.verrouillee
+                    void executer(
+                      l,
+                      () => verrouiller(l, !verrouillee),
+                      "Le verrou n'a pas pu changer",
+                    )
+                  }
+                : undefined
+            }
+            onDeposer={deposer}
+          />
+        </GardeDemarrage>
       )}
 
       {menu && personneMenu && referentiel && reperesMenu && (
@@ -973,6 +987,8 @@ export function VueMois({
           infractionsSeules
         />
       )}
+
+      {confirmGen.dialogue}
 
       <FicheSalarie
         salarieId={fiche}

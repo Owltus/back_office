@@ -266,6 +266,9 @@ export function BarreMois({
             disabled={!!completer.inactif}
             onClick={completer.onClick}
             aria-label="Compléter le mois"
+            aria-describedby={
+              completer.inactif ? 'completer-mois-raison' : undefined
+            }
           >
             {occupe ? <Loader2 className="animate-spin" /> : <Sparkles />}
           </Button>
@@ -317,6 +320,12 @@ export function BarreMois({
           </DropdownMenuContent>
         </DropdownMenu>
       </ButtonGroup>
+      {/* La raison du bouton grisé, lue aussi sans survol (étape 7). */}
+      {completer.inactif && (
+        <span id="completer-mois-raison" className="sr-only">
+          {completer.inactif}
+        </span>
+      )}
       <StepNav
         onPrev={onPrecedent}
         onNext={onSuivant}
