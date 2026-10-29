@@ -869,6 +869,13 @@ export function VueSemaine({
           postes={referentiel.postes}
           periode="Cette semaine"
           portee={porteeSemaine(aujourdhui)}
+          horaires={referentiel.horaires}
+          // Étape 8 : « Placer quelqu'un » ouvre la case, comme un clic.
+          onPlacer={
+            droits.ecrire && pret && !verrou
+              ? (d) => rappelsRef.current?.ajouter(d.salarieId, d.jour)
+              : undefined
+          }
         />
       )}
 

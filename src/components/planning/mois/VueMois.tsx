@@ -951,6 +951,13 @@ export function VueMois({
           postes={referentiel.postes}
           periode={`En ${MOIS_SEUL.format(new Date(`${mois}-01T12:00:00Z`))}`}
           portee={dansLeMois}
+          horaires={referentiel.horaires}
+          // Étape 8 : « Placer quelqu'un » ouvre le menu du jour sur la case.
+          onPlacer={
+            droits.ecrire
+              ? (d) => ouvrirJour(d.salarieId, d.date, d.x, d.y, true)
+              : undefined
+          }
         />
       )}
 

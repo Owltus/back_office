@@ -21,6 +21,7 @@ import {
   preparerGeneration,
   semaineRemplie,
 } from '#/lib/planning/semaine.ts'
+import { REGLES_BLOCAGE } from '#/lib/planning/raisonsPlaces.ts'
 import type { SemaineOut } from '#/lib/planning/semaine.ts'
 import { hotelDemo } from '#/lib/planning/test/hotelDemo.ts'
 import { hotelReel } from '#/lib/planning/test/hotelReel.ts'
@@ -1177,6 +1178,14 @@ describe('planning de la semaine (test_api.py)', () => {
     expect(
       raisons.every((r) => r.messages[0].includes('extra disponible')),
     ).toBe(true)
+    // Étape 8 : chaque message porte l'identifiant de sa règle, connue de
+    // `raisonsPlaces.ts` (phrase et lien à l'écran).
+    const toutes = sem.a_pourvoir.flatMap((t) => t.raisons)
+    expect(toutes.some((r) => r.regles.length > 0)).toBe(true)
+    for (const r of toutes) {
+      expect(r.regles).toHaveLength(r.messages.length)
+      for (const regle of r.regles) expect(REGLES_BLOCAGE).toContain(regle)
+    }
   }, 30_000)
 
   it('vrai hôtel : horaires fixes posés d’avance', () => {

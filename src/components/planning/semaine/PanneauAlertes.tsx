@@ -4,18 +4,30 @@
  * plus court, beaucoup trop verbeux »). Une phrase de résumé, puis une ligne
  * repliée par famille avec son nombre (seules les infractions sont
  * ouvertes) ; dedans, un point par ligne. Jours passés ignorés. Le calcul
- * est dans `attention.ts`, le chiffre du bouton aussi. Lecture seule.
+ * est dans `attention.ts`, le chiffre du bouton aussi.
+ *
+ * Shifts à pourvoir (étape 8, 2026-10-29) : places identiques regroupées,
+ * chaque raison avec son lien vers le réglage (`PlacesAPourvoir.tsx`) et,
+ * avec `onPlacer`, « Placer quelqu'un » qui ouvre la case dans la vue.
  */
 
 import type { ReactNode } from 'react'
+import { useRouter } from '@tanstack/react-router'
 import { ChevronRight, CircleCheck } from 'lucide-react'
 
 import {
   nombreInfractions,
   pointsAttention,
+  regrouperPlaces,
   resumePoints,
 } from '#/components/planning/attention.ts'
-import type { PointPersonne, Portee } from '#/components/planning/attention.ts'
+import type {
+  GroupePlaces,
+  PointPersonne,
+  Portee,
+} from '#/components/planning/attention.ts'
+import { PlacesAPourvoir } from '#/components/planning/semaine/PlacesAPourvoir.tsx'
+import type { DemandePlacement } from '#/components/planning/semaine/PlacesAPourvoir.tsx'
 import { ecartTexte } from '#/components/planning/semaine/Presence.tsx'
 import {
   Sheet,
@@ -27,8 +39,7 @@ import {
 import { numeroSemaine } from '#/lib/planning/affichage.ts'
 import { libelleConsigne } from '#/lib/planning/presence.ts'
 import type { SemaineOut } from '#/lib/planning/semaine.ts'
-import { heureAffichee } from '#/lib/planning/temps.ts'
-import type { Poste, Salarie } from '#/lib/planning/types.ts'
+import type { Horaire, Poste, Salarie } from '#/lib/planning/types.ts'
 import { cn } from '#/lib/utils.ts'
 
 const JOUR = new Intl.DateTimeFormat('fr-FR', {
@@ -83,6 +94,35 @@ function Famille({
 
 const LIGNE = 'flex items-baseline gap-2 px-3 py-1'
 
+/** Les liens des places mènent aux réglages : le panneau se ferme, puis
+ * l'écran s'ouvre sur le réglage (`?ouvrir=`). */
+function PlacesNavigables({
+  groupes,
+  onFermer,
+  onPlacer,
+}: {
+  groupes: GroupePlaces[]
+  onFermer: () => void
+  onPlacer?: (d: DemandePlacement) => void
+}) {
+  // Sans avertissement hors routeur (tests des vues) : le lien ne sert
+  // qu'au clic.
+  const router = useRouter({ warn: false })
+  return (
+    <PlacesAPourvoir
+      groupes={groupes}
+      onPlacer={onPlacer}
+      onAller={(lien) => {
+        onFermer()
+        void router?.navigate({
+          to: lien.page,
+          search: lien.cible ? { ouvrir: lien.cible } : {},
+        })
+      }}
+    />
+  )
+}
+
 function Personnes({ liste }: { liste: PointPersonne[] }) {
   return liste.flatMap((p) =>
     p.messages.map((m, i) => (
@@ -108,6 +148,8 @@ export function PanneauAlertes({
   periode,
   portee,
   infractionsSeules = false,
+  horaires,
+  onPlacer,
 }: {
   ouvert: boolean
   onFermer: () => void
@@ -120,6 +162,11 @@ export function PanneauAlertes({
   portee?: Portee
   /** Bouclier « règles HCR » : les seules infractions, passé compris. */
   infractionsSeules?: boolean
+  /** Codes des horaires, pour nommer une place (« Club, M1 »). */
+  horaires?: Pick<Horaire, 'id' | 'code'>[]
+  /** « Placer quelqu'un » : la vue ouvre la case choisie. Sans lui (lecture
+   * seule), pas de bouton. */
+  onPlacer?: (d: DemandePlacement) => void
 }) {
   const p = pointsAttention(semaines, salaries, postes, portee)
   const shifts = p.aPourvoir.flatMap((j) => j.shifts)
@@ -166,56 +213,17 @@ export function PanneauAlertes({
             titre="Shifts à pourvoir"
             nombre={autres ? shifts.length : 0}
           >
-            {shifts.map((t) => (
-              <li key={t.cle}>
-                <details className="group/raison">
-                  <summary
-                    className={cn(
-                      LIGNE,
-                      'cursor-pointer list-none hover:bg-muted/50 [&::-webkit-details-marker]:hidden',
-                    )}
-                  >
-                    <span className="w-24 shrink-0 text-muted-foreground">
-                      {jourCourt(t.date)}
-                    </span>
-                    <span
-                      className="size-2 shrink-0 self-center rounded-full"
-                      style={{ background: t.poste?.couleur }}
-                    />
-                    <strong className="truncate">
-                      {t.poste?.nom ?? 'Poste'}
-                    </strong>
-                    <span className="text-muted-foreground tabular-nums">
-                      {heureAffichee(t.debut)}-{heureAffichee(t.fin)}
-                    </span>
-                    {t.manquant > 1 && (
-                      <span className="text-xs font-semibold">
-                        ×{t.manquant}
-                      </span>
-                    )}
-                    <ChevronRight className="ml-auto size-3.5 shrink-0 self-center text-muted-foreground transition-transform group-open/raison:rotate-90" />
-                  </summary>
-                  <div className="flex flex-col gap-0.5 px-3 pb-1.5 pl-[7.25rem] text-xs text-muted-foreground">
-                    {t.extras.length > 0 && (
-                      <span>
-                        <strong className="text-foreground">
-                          Extras à appeler :
-                        </strong>{' '}
-                        {t.extras.join(', ')}
-                      </span>
-                    )}
-                    {t.raisons.map((r) => (
-                      <span key={r.message}>
-                        {majuscule(r.message)} : {r.noms.join(', ')}
-                      </span>
-                    ))}
-                    {!t.extras.length && !t.raisons.length && (
-                      <span>Personne ne tient ce poste seul.</span>
-                    )}
-                  </div>
-                </details>
-              </li>
-            ))}
+            <PlacesNavigables
+              groupes={regrouperPlaces(shifts, horaires)}
+              onFermer={onFermer}
+              onPlacer={
+                onPlacer &&
+                ((d) => {
+                  onFermer()
+                  onPlacer(d)
+                })
+              }
+            />
           </Famille>
 
           <Famille

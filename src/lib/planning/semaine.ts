@@ -93,6 +93,10 @@ export interface ShiftOut {
 export interface RaisonOut {
   salarie_id: number
   messages: string[]
+  /** Identifiant de la règle de chaque message, dans le même ordre
+   * (`raisonsPlaces.ts` en fait une phrase et un lien). Ajouté le
+   * 2026-10-29 ; absent de l'API du prototype. */
+  regles: string[]
 }
 
 export interface APourvoirOut {
@@ -743,6 +747,7 @@ export function analyser(d: DonneesSemaine): SemaineOut {
       raisons: [...raisons].map(([sid, vs]) => ({
         salarie_id: Number(sid),
         messages: vs.map((v) => v.message),
+        regles: vs.map((v) => v.regle),
       })),
     })
   }

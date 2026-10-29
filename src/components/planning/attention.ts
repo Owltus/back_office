@@ -10,9 +10,12 @@
  * tiennent sur une ligne.
  */
 
+import { estPossible, raisonsClaires } from '#/lib/planning/raisonsPlaces.ts'
+import type { RaisonClaire } from '#/lib/planning/raisonsPlaces.ts'
 import type { SemaineOut } from '#/lib/planning/semaine.ts'
 import { ajouterJours } from '#/lib/planning/temps.ts'
-import type { Poste, Salarie } from '#/lib/planning/types.ts'
+import { JOURS } from '#/lib/planning/types.ts'
+import type { Horaire, Poste, Salarie } from '#/lib/planning/types.ts'
 
 const RAISON_EXTRA = 'extra disponible'
 const SANS_RAISON = 'disponible, au détriment de ses heures'
@@ -22,9 +25,32 @@ export interface Raison {
   noms: string[]
 }
 
+/** Titulaire, puis dépannage, puis extra (D13 : le moteur préfère un
+ * titulaire ; l'extra s'appelle). */
+export type RolePlace = 'titulaire' | 'occasionnel' | 'extra'
+const ORDRE_ROLE: Record<RolePlace, number> = {
+  titulaire: 0,
+  occasionnel: 1,
+  extra: 2,
+}
+
+/** Une personne qui tient le poste, face à UNE place. */
+export interface PersonnePlace {
+  id: number
+  nom: string
+  role: RolePlace
+  raisons: RaisonClaire[]
+  /** Rien ne l'empêche de prendre la place, sinon ses heures ou un appel. */
+  possible: boolean
+}
+
 export interface ShiftAPourvoir {
   cle: string
   date: string
+  /** Jour dans sa semaine (0 = lundi). */
+  jour: number
+  posteId: number
+  horaireId: number | null
   poste: Poste | undefined
   debut: string
   fin: string
@@ -33,6 +59,8 @@ export interface ShiftAPourvoir {
   extras: string[]
   /** Pourquoi les autres ne le prennent pas, une ligne par raison. */
   raisons: Raison[]
+  /** Chaque personne qui tient le poste, titulaires d'abord (D13). */
+  personnes: PersonnePlace[]
 }
 
 export interface EcartPresence {
@@ -111,7 +139,25 @@ export function pointsAttention(
       if (!garder(date)) continue
       const extras: string[] = []
       const parRaison = new Map<string, string[]>()
+      const personnes: PersonnePlace[] = []
       for (const r of t.raisons) {
+        const x = parId.get(r.salarie_id)
+        const niveau = x?.competences?.find(
+          (c) => c.poste_id === t.poste_id,
+        )?.niveau
+        const claires = raisonsClaires(r.salarie_id, r.regles ?? [], r.messages)
+        personnes.push({
+          id: r.salarie_id,
+          nom: nom(r.salarie_id),
+          role:
+            x?.type_contrat === 'extra'
+              ? 'extra'
+              : niveau === 'occasionnel'
+                ? 'occasionnel'
+                : 'titulaire',
+          raisons: claires,
+          possible: estPossible(claires),
+        })
         if (parId.get(r.salarie_id)?.type_contrat === 'extra') {
           extras.push(nom(r.salarie_id))
           continue
@@ -124,6 +170,9 @@ export function pointsAttention(
       shifts.push({
         cle: `${s.lundi}-${t.besoin_id}`,
         date,
+        jour: t.jour,
+        posteId: t.poste_id,
+        horaireId: t.type_shift_id,
         poste: postes.find((p) => p.id === t.poste_id),
         debut: t.debut,
         fin: t.fin,
@@ -132,6 +181,10 @@ export function pointsAttention(
         raisons: [...parRaison]
           .map(([message, noms]) => ({ message, noms }))
           .sort((a, b) => b.noms.length - a.noms.length),
+        // Tri stable : l'ordre du référentiel tient à rôle égal.
+        personnes: personnes.sort(
+          (a, b) => ORDRE_ROLE[a.role] - ORDRE_ROLE[b.role],
+        ),
       })
     }
     for (const p of s.presence) {
@@ -201,4 +254,123 @@ export function resumePoints(p: PointsAttention): string {
   const autres = p.aVerifier.reduce((n, x) => n + x.messages.length, 0)
   if (autres) morceaux.push(`${autres} à vérifier`)
   return `${pluriel(p.total, 'point')} : ${morceaux.join(', ')}.`
+}
+
+// ------------------------------------------------------------- regroupement
+
+/** Une raison d'une personne, sur une partie des jours du groupe ou tous
+ * (`dates` null). */
+export interface RaisonGroupe extends RaisonClaire {
+  dates: string[] | null
+}
+
+export interface PersonneGroupe {
+  id: number
+  nom: string
+  role: RolePlace
+  raisons: RaisonGroupe[]
+}
+
+/** Places identiques (même poste, même code, mêmes heures) sur plusieurs
+ * jours : une ligne « Club, M1 : lundi, mardi et jeudi ». */
+export interface GroupePlaces {
+  cle: string
+  poste: Poste | undefined
+  posteId: number
+  /** Code de l'horaire, ou null (place sans code : on montre les heures). */
+  code: string | null
+  debut: string
+  fin: string
+  /** Une par jour, dans l'ordre des dates. */
+  places: ShiftAPourvoir[]
+  /** Toutes les personnes vues sur les places, titulaires d'abord. */
+  personnes: PersonneGroupe[]
+}
+
+const JOURS_LONGS = JOURS.map((j) => j.toLowerCase())
+const enDate = (x: string) => new Date(`${x}T12:00:00Z`)
+const rangJour = (x: string) => (enDate(x).getUTCDay() + 6) % 7
+
+/** Les jours d'un groupe : le nom seul dans une même semaine (« lundi,
+ * mardi et jeudi »), avec le numéro sinon (« lundi 2 et lundi 9 »). */
+export function joursDesPlaces(dates: readonly string[]): string {
+  const l = [...new Set(dates)].sort()
+  if (!l.length) return ''
+  const premier = l[0]
+  const dernier = l[l.length - 1]
+  const ecart = (enDate(dernier).getTime() - enDate(premier).getTime()) / 864e5
+  const memeSemaine = ecart < 7 && rangJour(dernier) >= rangJour(premier)
+  const n = l.map((x) =>
+    memeSemaine
+      ? JOURS_LONGS[rangJour(x)]
+      : `${JOURS_LONGS[rangJour(x)]} ${enDate(x).getUTCDate()}`,
+  )
+  return n.length === 1
+    ? n[0]
+    : `${n.slice(0, -1).join(', ')} et ${n[n.length - 1]}`
+}
+
+/** Regroupe les places identiques ; groupes dans l'ordre de leur première
+ * date, puis de l'heure. `horaires` donne le code affiché. */
+export function regrouperPlaces(
+  shifts: readonly ShiftAPourvoir[],
+  horaires: readonly Pick<Horaire, 'id' | 'code'>[] = [],
+): GroupePlaces[] {
+  const codes = new Map(horaires.map((h) => [h.id, h.code]))
+  const groupes = new Map<string, GroupePlaces>()
+  const tries = [...shifts].sort(
+    (a, b) => a.date.localeCompare(b.date) || a.debut.localeCompare(b.debut),
+  )
+  for (const t of tries) {
+    const cle = `${t.posteId}|${t.horaireId ?? ''}|${t.debut}|${t.fin}`
+    let g = groupes.get(cle)
+    if (!g) {
+      g = {
+        cle,
+        poste: t.poste,
+        posteId: t.posteId,
+        code: t.horaireId === null ? null : (codes.get(t.horaireId) ?? null),
+        debut: t.debut,
+        fin: t.fin,
+        places: [],
+        personnes: [],
+      }
+      groupes.set(cle, g)
+    }
+    g.places.push(t)
+  }
+  for (const g of groupes.values()) {
+    const nbDates = new Set(g.places.map((p) => p.date)).size
+    const parPersonne = new Map<
+      number,
+      { p: PersonneGroupe; raisons: Map<string, RaisonGroupe> }
+    >()
+    for (const place of g.places) {
+      for (const x of place.personnes) {
+        let e = parPersonne.get(x.id)
+        if (!e) {
+          e = {
+            p: { id: x.id, nom: x.nom, role: x.role, raisons: [] },
+            raisons: new Map(),
+          }
+          parPersonne.set(x.id, e)
+        }
+        for (const r of x.raisons) {
+          const deja = e.raisons.get(r.cle)
+          if (deja) deja.dates?.push(place.date)
+          else e.raisons.set(r.cle, { ...r, dates: [place.date] })
+        }
+      }
+    }
+    g.personnes = [...parPersonne.values()]
+      .map(({ p, raisons }) => ({
+        ...p,
+        raisons: [...raisons.values()].map((r) => ({
+          ...r,
+          dates: r.dates && new Set(r.dates).size === nbDates ? null : r.dates,
+        })),
+      }))
+      .sort((a, b) => ORDRE_ROLE[a.role] - ORDRE_ROLE[b.role])
+  }
+  return [...groupes.values()]
 }
