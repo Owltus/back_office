@@ -244,6 +244,73 @@ describe('raisons des places à pourvoir', () => {
       ),
     ).toBe(false)
   })
+
+  it('code hors de sa fiche : la seule raison montrée, le reste en découle', () => {
+    const regles = [
+      'HORAIRE-PERSO',
+      'R-JOUR-MAX',
+      'R-REPOS-QUOTIDIEN',
+      'R-SEMAINE-MAX',
+      'SIXIEME-JOUR',
+      'UN-SERVICE-PAR-JOUR',
+    ]
+    const l = raisonsClaires(
+      1,
+      regles,
+      regles.map((r) => MESSAGES[r as keyof typeof MESSAGES][0]),
+    )
+    expect(l.map((r) => r.phrase)).toEqual(["Ce code n'est pas dans ses codes"])
+    expect(estPossible(l)).toBe(false)
+  })
+
+  it('deux raisons de fiche : les deux restent, sans les limites', () => {
+    const l = raisonsClaires(
+      1,
+      ['ABSENCE', 'R-JOUR-MAX', 'HORAIRE-PERSO'],
+      [
+        MESSAGES.ABSENCE[0],
+        MESSAGES['R-JOUR-MAX'][0],
+        MESSAGES['HORAIRE-PERSO'][1],
+      ],
+    )
+    expect(l.map((r) => r.cle)).toEqual(['ABSENCE', 'HORAIRE-PERSO:impose'])
+  })
+
+  it('déjà placé : une seule phrase, et rien des limites qui en découlent', () => {
+    const l = raisonsClaires(
+      1,
+      [
+        'CHEVAUCHEMENT',
+        'UN-SERVICE-PAR-JOUR',
+        'R-JOUR-MAX',
+        'R-REPOS-QUOTIDIEN',
+      ],
+      [
+        MESSAGES.CHEVAUCHEMENT[0],
+        MESSAGES['UN-SERVICE-PAR-JOUR'][0],
+        MESSAGES['R-JOUR-MAX'][0],
+        MESSAGES['R-REPOS-QUOTIDIEN'][2],
+      ],
+    )
+    expect(l.map((r) => r.phrase)).toEqual(['A déjà un shift ce jour-là'])
+    // Le chevauchement seul (shift de la veille qui déborde) reste dit.
+    expect(
+      raisonsClaires(
+        1,
+        ['CHEVAUCHEMENT', 'R-REPOS-QUOTIDIEN'],
+        [MESSAGES.CHEVAUCHEMENT[0], MESSAGES['R-REPOS-QUOTIDIEN'][2]],
+      ).map((r) => r.phrase),
+    ).toEqual(['Déjà en service à cette heure'])
+  })
+
+  it('sans raison décisive : toutes les limites restent', () => {
+    const l = raisonsClaires(
+      1,
+      ['R-JOUR-MAX', 'R-SEMAINE-MAX'],
+      [MESSAGES['R-JOUR-MAX'][0], MESSAGES['R-SEMAINE-MAX'][0]],
+    )
+    expect(l).toHaveLength(2)
+  })
 })
 
 /*
@@ -432,10 +499,14 @@ describe('table complète des raisons (test de mutation)', () => {
   it('raisonsClaires : doublons retirés, règle manquante = message seul', () => {
     const l = raisonsClaires(
       3,
-      ['ABSENCE', 'ABSENCE', 'POSTE'],
-      ['absent', 'absent encore', 'ne tient pas ce poste', 'cas sans règle'],
+      ['R-NUIT-MINEUR', 'R-NUIT-MINEUR', 'R-JOUR-MAX'],
+      ['nuit', 'nuit encore', 'journée de 11 h', 'cas sans règle'],
     )
-    expect(l.map((r) => r.cle)).toEqual(['ABSENCE', 'POSTE', '|cas sans règle'])
+    expect(l.map((r) => r.cle)).toEqual([
+      'R-NUIT-MINEUR',
+      'R-JOUR-MAX',
+      '|cas sans règle',
+    ])
     expect(l[2].phrase).toBe('Cas sans règle')
   })
 

@@ -206,8 +206,27 @@ export function raisonClaire(
   }
 }
 
-/** Les raisons d'une personne, sans doublon (même clé). Aucune règle :
- * `RAISON_LIBRE`. */
+/** Raisons DÉCISIVES, par ordre : la première famille présente suffit à
+ * dire pourquoi, les autres raisons ne sont que la conséquence d'un shift
+ * imaginé là quand même (passage navigateur du 2026-10-29 : « Ce code n'est
+ * pas dans ses codes » suivi de cinq limites du même shift). D'abord ce qui
+ * se règle dans la fiche ou ferme le jour, puis le fait d'être déjà placé. */
+const DECISIVES: ReadonlyArray<ReadonlySet<string>> = [
+  new Set([
+    'POSTE',
+    'HORS-CONTRAT',
+    'ABSENCE',
+    'REPOS-FIXE',
+    'HORAIRE-PERSO:impose',
+    'HORAIRE-PERSO:fiche',
+  ]),
+  new Set(['UN-SERVICE-PAR-JOUR', 'CHEVAUCHEMENT']),
+]
+
+/** Les raisons d'une personne, sans doublon (même clé), réduites aux
+ * raisons décisives quand il y en a (`DECISIVES`). « A déjà un shift ce
+ * jour-là » couvre « Déjà en service à cette heure » : une seule des deux.
+ * Aucune règle : `RAISON_LIBRE`. */
 export function raisonsClaires(
   salarieId: number,
   regles: readonly string[],
@@ -219,7 +238,13 @@ export function raisonsClaires(
     const c = raisonClaire(regles[i] ?? '', m, salarieId)
     if (!vues.has(c.cle)) vues.set(c.cle, c)
   })
-  return [...vues.values()]
+  if (vues.has('UN-SERVICE-PAR-JOUR')) vues.delete('CHEVAUCHEMENT')
+  const toutes = [...vues.values()]
+  for (const famille of DECISIVES) {
+    const decisives = toutes.filter((r) => famille.has(r.cle))
+    if (decisives.length) return decisives
+  }
+  return toutes
 }
 
 /** La personne peut prendre la place : rien ne l'en empêche, sinon ses
